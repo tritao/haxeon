@@ -21,7 +21,7 @@ class HlModuleAssembler {
         var ordered=new IrProgram(program.entryPoint);
         ordered.natives=program.natives;
         ordered.functions=cache.ordered();
-        var changed=[];
+        var changed:Array<Int>=[];
         if(initialized) for(name in regenerated) { var index=cache.indices.get(name);if(index!=null)changed.push(index); }
         changed.sort(function(a,b)return a-b);
         var reload=initialized && signatureChanges.length>0;

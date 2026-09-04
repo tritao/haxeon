@@ -1,0 +1,4 @@
+-cp src
+-cp tests
+-main HotReloadMain
+-hl out/hot-reload-test.hl

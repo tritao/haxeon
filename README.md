@@ -36,15 +36,24 @@ types, strings, and constants. Compilation reports changed function indices
 and whether a structural edit requires reload. Removed functions retain a
 tombstone slot until `Compiler.compact()` performs a deterministic full rebuild.
 
+The runtime proof of concept loads compiler-produced HLB bytes in-process and
+calls functions through compiler-owned stable slots. A compatible edit is JIT
+compiled as a retained module generation, validated in full, and then committed
+by redirecting the selected slots. Failed compilation, malformed bytecode, and
+structural edits leave the live generation untouched. `vendor/hashlink` tracks
+our HashLink fork, which exports the module lifecycle needed by the runtime
+bridge; names and debug metadata are deliberately not used as function identity.
+
 ## Run the proof of concept
 
 ```sh
 ./scripts/bootstrap-tools.sh
 ./scripts/test-poc.sh
+./test-hot-reload.sh
 ```
 
-Bootstrap/reference Haxe and HashLink binaries are downloaded or built below
-`.tools/`; they are not system-installed or committed. Normal development will
+Bootstrap/reference Haxe is downloaded below `.tools/`, while the runtime is
+built from the pinned `vendor/hashlink` submodule. Normal development will
 eventually use the checked-in bootstrap compiler instead of official Haxe.
 
 The writer currently targets bytecode format version 6, matching the current
