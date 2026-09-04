@@ -15,6 +15,12 @@ import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
+import compiler.ir.IrGenerator;
+import compiler.ir.SsaBuilder;
+import compiler.ir.Cfg.CfgInstruction;
+import compiler.Lexer;
+import compiler.Parser;
+import compiler.types.Typer;
 import haxe.io.BytesInput;
 
 class TestMain {
@@ -97,6 +103,15 @@ class TestMain {
         var ssa=Frontend.compile('function main():Int { var value = 0; while (value < 2) { value = value + 1; } return value; }'),hasPhi=false;
         for(fn in ssa.functions)for(block in fn.blocks)for(instruction in block.instructions)switch instruction{case compiler.ir.Ir.IrInstruction.Phi(_,_):hasPhi=true;default:}
         if(!hasPhi)throw "Mutable loop did not construct an SSA phi";
+        var mutableSource='function main():Int { var outer = 0; while (outer < 2) { var inner = 0; while (inner < 2) { inner = inner + 1; } outer = outer + inner; } return outer; }';
+        var ast=new Parser(new Lexer(new SourceFile("ssa.hx",mutableSource)).tokenize()).parseProgram();
+        var typed=Typer.type(ast),cfg=IrGenerator.generateCfg(typed.functions[0]),loads=0,stores=0;
+        for(block in cfg.blocks)for(instruction in block.instructions)switch instruction{case LoadLocal(_,_):loads++;case StoreLocal(_,_):stores++;default:}
+        if(loads==0||stores==0)throw "Typed AST did not lower through mutable-local CFG";
+        var built=SsaBuilder.build(cfg),phis=0;
+        for(block in built.blocks)for(instruction in block.instructions)switch instruction{case compiler.ir.Ir.IrInstruction.Phi(_,_):phis++;default:}
+        if(phis!=2)throw 'Pruned SSA expected two live loop phis, got $phis';
+        Sys.println("PASS: mutable CFG lowers through pruned dominance-based SSA");
         Sys.println("PASS: typer rejects invalid names, calls, conditions, and return paths");
 
         try {
