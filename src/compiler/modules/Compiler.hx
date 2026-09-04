@@ -163,7 +163,7 @@ class Compiler {
         case If(c,y,n,span): If(canonicalExpression(c,module,entry,locals),[for(x in y) canonicalStatement(x,module,entry,locals)],[for(x in n) canonicalStatement(x,module,entry,locals)],span);
     }
     static function canonicalExpression(e,module,entry,locals):AstExpression return switch e {
-        case IntegerLiteral(_,_), Variable(_,_): e;
+        case IntegerLiteral(_,_),FloatLiteral(_,_),StringLiteral(_,_),Variable(_,_): e;
         case Add(a,b,s): Add(canonicalExpression(a,module,entry,locals),canonicalExpression(b,module,entry,locals),s);
         case Sub(a,b,s): Sub(canonicalExpression(a,module,entry,locals),canonicalExpression(b,module,entry,locals),s);
         case Less(a,b,s): Less(canonicalExpression(a,module,entry,locals),canonicalExpression(b,module,entry,locals),s);

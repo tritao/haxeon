@@ -5,6 +5,8 @@ import compiler.Source.SourceSpan;
 enum AstType {
     IntType;
     BoolType;
+    FloatType;
+    StringType;
 }
 
 typedef AstArgument = {
@@ -15,6 +17,8 @@ typedef AstArgument = {
 
 enum AstExpression {
     IntegerLiteral(value:Int, span:SourceSpan);
+    FloatLiteral(value:Float, span:SourceSpan);
+    StringLiteral(value:String, span:SourceSpan);
     Variable(name:String, span:SourceSpan);
     Add(left:AstExpression, right:AstExpression, span:SourceSpan);
     Sub(left:AstExpression, right:AstExpression, span:SourceSpan);

@@ -105,6 +105,8 @@ class Parser {
     function parsePrimary():AstExpression {
         if (match(TokenKind.Integer))
             return IntegerLiteral(Std.parseInt(previous().text), previous().span);
+        if(match(TokenKind.Float))return FloatLiteral(Std.parseFloat(previous().text),previous().span);
+        if(match(TokenKind.StringLiteral))return StringLiteral(decodeString(previous().text),previous().span);
         if (match(TokenKind.Identifier)) {
             var name = previous().text;
             var start = previous().span;
@@ -131,8 +133,9 @@ class Parser {
 
     function parseType():AstType {
         if (match(TokenKind.TypeInt)) return IntType;
-        consume(TokenKind.TypeBool);
-        return BoolType;
+        if(match(TokenKind.TypeBool))return BoolType;
+        if(match(TokenKind.TypeFloat))return FloatType;
+        consume(TokenKind.TypeString);return StringType;
     }
 
     function parseStatementOrBlock():Array<AstStatement> {
@@ -171,7 +174,13 @@ class Parser {
         throw new CompileError(new Diagnostic("E0002", message, token.span));
 
     static function expressionSpan(expression:AstExpression) return switch expression {
-        case IntegerLiteral(_, span), Variable(_, span), Add(_, _, span), Sub(_, _, span), Less(_, _, span), LessEqual(_, _, span), Equal(_, _, span), Call(_, _, span): span;
+        case IntegerLiteral(_, span), FloatLiteral(_,span), StringLiteral(_,span), Variable(_, span), Add(_, _, span), Sub(_, _, span), Less(_, _, span), LessEqual(_, _, span), Equal(_, _, span), Call(_, _, span): span;
+    }
+
+    static function decodeString(text:String):String {
+        var out=new StringBuf(),i=1;
+        while(i<text.length-1){var c=text.charAt(i++);if(c!="\\"){out.add(c);continue;}var escaped=text.charAt(i++);out.add(switch escaped{case "n":"\n";case "r":"\r";case "t":"\t";case "\"":"\"";case "\\":"\\";default:escaped;});}
+        return out.toString();
     }
 
     static function statementSpan(statement:AstStatement) return switch statement {

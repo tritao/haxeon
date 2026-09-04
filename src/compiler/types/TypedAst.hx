@@ -12,6 +12,8 @@ class TypedExpression {
 
 enum TypedExpressionKind {
     TIntLiteral(value:Int);
+    TFloatLiteral(value:Float);
+    TStringLiteral(value:String);
     TLocal(name:String);
     TAdd(left:TypedExpression, right:TypedExpression);
     TSub(left:TypedExpression, right:TypedExpression);

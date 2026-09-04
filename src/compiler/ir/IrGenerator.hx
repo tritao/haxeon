@@ -57,6 +57,8 @@ class IrGenerator {
 
     static function lowerExpression(expression:TypedExpression, builder:IrBuilder, values:Map<String, IrValue>):IrValue return switch expression.expression {
         case TIntLiteral(value): builder.constInt(value);
+        case TFloatLiteral(value):builder.constFloat(value);
+        case TStringLiteral(value):builder.constString(value);
         case TLocal(name): var value = values.get(name); if (value == null) throw 'Missing typed local "$name"'; value;
         case TAdd(a,b): builder.add(lowerExpression(a,builder,values), lowerExpression(b,builder,values));
         case TSub(a,b): builder.sub(lowerExpression(a,builder,values), lowerExpression(b,builder,values));
@@ -77,5 +79,5 @@ class IrGenerator {
         }
         return false;
     }
-    static function lowerType(type:CompilerType):IrType return switch type { case TInt:I32; case TBool:Bool; case TVoid:Void; };
+    static function lowerType(type:CompilerType):IrType return switch type {case TInt:I32;case TBool:Bool;case TFloat:F64;case TString:Bytes;case TVoid:Void;};
 }

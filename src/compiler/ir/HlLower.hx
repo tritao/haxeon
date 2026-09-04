@@ -30,7 +30,7 @@ class HlLower {
     function new(symbols:HlSymbolTable, indices:Null<Map<String,Int>>) {
         this.symbols=symbols;
         code = new HlCode();
-        code.ints=symbols.ints;code.strings=symbols.strings;code.types=symbols.types;
+        code.ints=symbols.ints;code.floats=symbols.floats;code.strings=symbols.strings;code.types=symbols.types;
         if(indices!=null)for(name=>index in indices)functionIndices.set(name,index);
     }
 
@@ -47,7 +47,7 @@ class HlLower {
             code.functions.push(lowerFunction(fn));
 
         code.entryPoint = requireFunction(program.entryPoint);
-        code.ints=code.ints.copy();code.strings=code.strings.copy();code.types=code.types.copy();
+        code.ints=code.ints.copy();code.floats=code.floats.copy();code.strings=code.strings.copy();code.types=code.types.copy();
         return code;
     }
 
@@ -74,6 +74,8 @@ class HlLower {
             switch instruction {
                 case ConstInt(output, value):
                     instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes), internInt(value)));
+                case ConstFloat(output,value):instructions.push(HlInstruction.LoadFloat(defineRegister(output,registers,registerTypes),symbols.internFloat(value)));
+                case ConstString(output,value):instructions.push(HlInstruction.LoadString(defineRegister(output,registers,registerTypes),internString(value)));
                 case Add(output, left, right):
                     instructions.push(HlInstruction.Add(
                         defineRegister(output, registers, registerTypes),

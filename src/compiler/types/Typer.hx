@@ -71,6 +71,8 @@ class Typer {
 
     function typeExpression(expression:AstExpression, scope:Scope):TypedExpression return switch expression {
         case IntegerLiteral(value, span): new TypedExpression(TIntLiteral(value), TInt, span);
+        case FloatLiteral(value,span):new TypedExpression(TFloatLiteral(value),TFloat,span);
+        case StringLiteral(value,span):new TypedExpression(TStringLiteral(value),TString,span);
         case Variable(name, span):
             var type = scope.resolve(name);
             if (type == null) fail("E1005", 'Unknown variable "$name"', span);
@@ -91,8 +93,8 @@ class Typer {
 
     function arithmetic(a, b, scope, add, span):TypedExpression {
         var left = typeExpression(a, scope), right = typeExpression(b, scope);
-        if (left.type != TInt || right.type != TInt) fail("E1010", "Arithmetic requires Int operands", span);
-        return new TypedExpression(add ? TAdd(left, right) : TSub(left, right), TInt, span);
+        if (left.type != right.type || (left.type != TInt && left.type != TFloat)) fail("E1010", "Arithmetic requires matching Int or Float operands", span);
+        return new TypedExpression(add ? TAdd(left, right) : TSub(left, right), left.type, span);
     }
 
     function comparison(a, b, scope, operation, span):TypedExpression {
@@ -110,6 +112,6 @@ class Typer {
         return false;
     }
 
-    static function lowerType(type:AstType):CompilerType return switch type { case IntType: TInt; case BoolType: TBool; };
+    static function lowerType(type:AstType):CompilerType return switch type { case IntType:TInt;case BoolType:TBool;case FloatType:TFloat;case StringType:TString; };
     static function fail(code:String, message:String, span:SourceSpan):Void throw new CompileError(new Diagnostic(code, message, span));
 }

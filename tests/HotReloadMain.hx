@@ -20,6 +20,7 @@ class HotReloadMain {
         compiler.update("Value.hx", "function value():Int { return 42; }");
         compiler.update("Probe.hx", "function read():Int { return Value.value(); }");
         compiler.update("Worker.hx", "function fib(n:Int):Int { if (n <= 1) return n; return fib(n - 1) + fib(n - 2); } function run():Int { return fib(38); }");
+        compiler.update("Seed.hx", "function ratio():Float { return 1.0 + 0.5; } function label():String { return \"initial\"; }");
         compiler.update("Main.hx", "function main():Int { return Probe.read(); }");
         var initial = compiler.compile("Main");
         var liveRevision = initial.revision;
@@ -29,12 +30,16 @@ class HotReloadMain {
         if (Runtime.callInt(loaded, valueIndex) != 42) throw "initial generation did not return 42";
         if (Runtime.callInt(loaded, readIndex) != 42) throw "initial internal call did not return 42";
 
-        compiler.update("Value.hx", "function value():Int { return 43; }");
+        compiler.update("Value.hx", "function value():Int { var ratio:Float = 2.75; var label:String = \"patched source\"; return 43; }");
         var changed = compiler.compile("Main");
         var decoded=HlPatchReader.decode(changed.patchBytes);
         if(decoded.moduleId.compare(initial.runtimeIdentity.sub(4,16))!=0)throw "HLP module identity does not match its load manifest";
         if(decoded.baseInts!=initial.module.ints.length||decoded.ints.length!=1||decoded.ints[0]!=43)
             throw "HLP did not encode the integer symbol delta";
+        if(decoded.baseFloats!=initial.module.floats.length||decoded.floats.length!=1||decoded.floats[0]!=2.75)
+            throw "HLP did not encode the source float symbol delta";
+        if(decoded.baseStrings!=initial.module.strings.length||decoded.strings.indexOf("patched source")<0)
+            throw "HLP did not encode the source string symbol delta";
         var nativeDecoded=Runtime.inspectPatch(changed.patchBytes);
         if(nativeDecoded.baseRevision!=decoded.baseRevision||nativeDecoded.revision!=decoded.revision||nativeDecoded.functionCount!=decoded.functions.length)
             throw 'native and Haxe HLP decoders disagree: ${nativeDecoded.baseRevision}/${nativeDecoded.revision}/${nativeDecoded.functionCount} vs ${decoded.baseRevision}/${decoded.revision}/${decoded.functions.length}';

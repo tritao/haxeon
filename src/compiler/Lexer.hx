@@ -23,6 +23,12 @@ class Lexer {
                 continue;
             }
             var start = position;
+            if(code==34){
+                position++;var escaped=false,closed=false;
+                while(position<source.length){var current=source.charCodeAt(position++);if(escaped){escaped=false;continue;}if(current==92){escaped=true;continue;}if(current==34){closed=true;break;}}
+                if(!closed)throw new CompileError(new Diagnostic("E0001","Unterminated string literal",file.span(start,position)));
+                tokens.push(new Token(TokenKind.StringLiteral,source.substring(start,position),file.span(start,position)));continue;
+            }
             if (isIdentifierStart(code)) {
                 position++;
                 while (position < source.length && isIdentifierPart(source.charCodeAt(position)))
@@ -35,7 +41,9 @@ class Lexer {
                 position++;
                 while (position < source.length && isDigit(source.charCodeAt(position)))
                     position++;
-                tokens.push(new Token(TokenKind.Integer, source.substring(start, position), file.span(start, position)));
+                var kind=TokenKind.Integer;
+                if(position+1<source.length&&source.charAt(position)=="."&&isDigit(source.charCodeAt(position+1))){kind=TokenKind.Float;position++;while(position<source.length&&isDigit(source.charCodeAt(position)))position++;}
+                tokens.push(new Token(kind, source.substring(start, position), file.span(start, position)));
                 continue;
             }
             position++;
@@ -78,6 +86,8 @@ class Lexer {
             case "else": TokenKind.Else;
             case "Int": TokenKind.TypeInt;
             case "Bool": TokenKind.TypeBool;
+            case "Float": TokenKind.TypeFloat;
+            case "String": TokenKind.TypeString;
             default: TokenKind.Identifier;
         }
     }

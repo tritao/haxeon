@@ -10,8 +10,12 @@ enum TokenKind {
     Else;
     TypeInt;
     TypeBool;
+    TypeFloat;
+    TypeString;
     Identifier;
     Integer;
+    Float;
+    StringLiteral;
     LeftParen;
     RightParen;
     LeftBrace;

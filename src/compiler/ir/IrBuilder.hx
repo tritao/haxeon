@@ -14,8 +14,10 @@ class IrBuilder {
         var value = new IrValue(nextValue++, name, type); arguments.push(value); return value;
     }
     public function constInt(value:Int):IrValue { var out=temporary(I32); emit(ConstInt(out,value)); return out; }
-    public function add(a:IrValue,b:IrValue):IrValue { var out=temporary(I32); emit(Add(out,a,b)); return out; }
-    public function sub(a:IrValue,b:IrValue):IrValue { var out=temporary(I32); emit(Sub(out,a,b)); return out; }
+    public function constFloat(value:Float):IrValue {var out=temporary(F64);emit(ConstFloat(out,value));return out;}
+    public function constString(value:String):IrValue {var out=temporary(Bytes);emit(ConstString(out,value));return out;}
+    public function add(a:IrValue,b:IrValue):IrValue { var out=temporary(a.type); emit(Add(out,a,b)); return out; }
+    public function sub(a:IrValue,b:IrValue):IrValue { var out=temporary(a.type); emit(Sub(out,a,b)); return out; }
     public function less(a:IrValue,b:IrValue):IrValue return compare(a,b,0);
     public function lessEqual(a:IrValue,b:IrValue):IrValue return compare(a,b,1);
     public function equal(a:IrValue,b:IrValue):IrValue return compare(a,b,2);

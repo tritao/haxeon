@@ -89,6 +89,8 @@ class TestMain {
             'Function main does not return on every path');
         expectCompileError('function main():Int { if (1) return 1; else return 2; }',
             'If condition must be Bool');
+        expectCompileError('function text():String { return "hello"; } function main():Int { var value:Float = 1.25; var wrong:String = value; return 0; }',
+            'Type mismatch for local "wrong"');
         Sys.println("PASS: typer rejects invalid names, calls, conditions, and return paths");
 
         try {

@@ -1,6 +1,6 @@
 package compiler.ir;
 
-enum IrType { Void; I32; Bool; }
+enum IrType { Void; I32; Bool; F64; Bytes; }
 abstract ValueId(Int) from Int to Int {}
 abstract BlockId(Int) from Int to Int {}
 
@@ -13,6 +13,8 @@ class IrValue {
 
 enum IrInstruction {
     ConstInt(output:IrValue, value:Int);
+    ConstFloat(output:IrValue,value:Float);
+    ConstString(output:IrValue,value:String);
     Add(output:IrValue, left:IrValue, right:IrValue);
     Sub(output:IrValue, left:IrValue, right:IrValue);
     Less(output:IrValue, left:IrValue, right:IrValue);

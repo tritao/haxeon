@@ -12,9 +12,12 @@ function/type/register indices, interns constants and native names, and lowers
 the IR to the serialized HashLink model.
 
 The frontend is split into parsing, declaration/type checking, and IR
-generation. The current subset supports `Int`, `Bool`, local variables,
-functions, calls, arithmetic, comparisons, nested `if`/`else`, and recursive
-functions.
+generation. The current subset supports `Int`, `Bool`, `Float`, `String`, local
+variables, functions, calls, numeric addition/subtraction, integer comparisons,
+nested `if`/`else`, and recursive functions. String literals support the common
+quote, slash, newline, carriage-return, and tab escapes. Source edits that add
+new float or string constants flow through ordinary incremental compilation
+into transactional HLP symbol deltas.
 
 IR values and control-flow blocks have numeric identities independent of
 source names. Functions contain explicit basic blocks terminated by `Return`,
