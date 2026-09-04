@@ -42,7 +42,10 @@ compiled as a retained module generation, validated in full, and then committed
 by redirecting the selected slots. Failed compilation, malformed bytecode, and
 structural edits leave the live generation untouched. `vendor/hashlink` tracks
 our HashLink fork, which exports the module lifecycle needed by the runtime
-bridge; names and debug metadata are deliberately not used as function identity.
+bridge and provides an opt-in `HL_MODULE_PATCHABLE` JIT mode. Calls in that mode
+dispatch through the module function table, so already-JITed callers immediately
+observe a committed replacement. Names and debug metadata are deliberately not
+used as function identity.
 
 ## Run the proof of concept
 
