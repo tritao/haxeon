@@ -3,6 +3,7 @@ package compiler.ir;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedProgram;
+import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
@@ -10,17 +11,23 @@ import compiler.ir.Ir.IrValue;
 
 class IrGenerator {
     public static function generate(typed:TypedProgram):IrProgram {
+        return assemble([for (fn in typed.functions) generateFunction(fn)]);
+    }
+
+    public static function generateFunction(fn:TypedFunction):IrFunction {
+        var builder = new IrBuilder(), values:Map<String, IrValue> = [];
+        for (argument in fn.arguments) {
+            var value = builder.argument(argument.name, lowerType(argument.type));
+            values.set(argument.name, value);
+        }
+        lowerStatements(fn.statements, builder, values);
+        return new IrFunction(fn.name, builder.arguments, lowerType(fn.result), builder.blocks);
+    }
+
+    public static function assemble(functions:Array<IrFunction>):IrProgram {
         var program = new IrProgram("__entry");
         program.natives.push({name:"__exit", library:"std", symbol:"sys_exit", arguments:[I32], result:Void});
-        for (fn in typed.functions) {
-            var builder = new IrBuilder(), values:Map<String, IrValue> = [];
-            for (argument in fn.arguments) {
-                var value = builder.argument(argument.name, lowerType(argument.type));
-                values.set(argument.name, value);
-            }
-            lowerStatements(fn.statements, builder, values);
-            program.functions.push(new IrFunction(fn.name, builder.arguments, lowerType(fn.result), builder.blocks));
-        }
+        for (fn in functions) program.functions.push(fn);
         var entry = new IrBuilder();
         var result = entry.call("main", [], I32);
         var exited = entry.call("__exit", [result], Void);

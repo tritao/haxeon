@@ -3,7 +3,7 @@ package compiler.modules;
 import compiler.Ast.AstProgram;
 import compiler.Diagnostic;
 import compiler.Source.SourceFile;
-import compiler.ir.Ir.IrProgram;
+import compiler.ir.IrFunction;
 import compiler.types.TypedAst.TypedFunction;
 
 class ModuleState {
@@ -14,12 +14,15 @@ class ModuleState {
     public var typeVersion:Int = 0;
     public var tokens:Array<Token>;
     public var ast:Null<AstProgram>;
-    public var typed:Array<TypedFunction>;
     public var dependencies:Array<String> = [];
     public var diagnostics:Array<Diagnostic> = [];
-    public var ir:Null<IrProgram>;
+    public var signatureFingerprints:Map<String,String> = [];
+    public var bodyFingerprints:Map<String,String> = [];
+    public var typedFunctions:Map<String,TypedFunction> = [];
+    public var irFunctions:Map<String,IrFunction> = [];
+    public var irVersions:Map<String,Int> = [];
+    public var dirty:Bool = true;
 
     public function new(name, source) { this.name = name; this.source = source; }
-    public function update(source:SourceFile):Void { this.source=source; revision++; tokens=null; ast=null; typed=null; ir=null; diagnostics=[]; }
-    public function invalidateTyped():Void { typed=null; ir=null; }
+    public function update(source:SourceFile):Void { this.source=source; revision++; tokens=null; ast=null; diagnostics=[]; dirty=true; }
 }

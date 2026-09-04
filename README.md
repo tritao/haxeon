@@ -26,6 +26,11 @@ dependencies, diagnostics, and generated IR per module. Qualified calls such
 as `Math.add(20, 22)` create dependency edges; updating a module invalidates
 its typed dependents while unrelated parsed and typed state is reused.
 
+Function signatures and bodies have separate fingerprints. Body edits replace
+only that function's typed and IR artifacts; signature edits propagate through
+the function call graph. Cached IR objects for unaffected functions are reused
+when the executable module is assembled.
+
 ## Run the proof of concept
 
 ```sh

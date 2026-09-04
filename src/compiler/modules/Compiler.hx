@@ -14,7 +14,7 @@ import compiler.ir.IrGenerator;
 import compiler.types.Typer;
 import compiler.types.TypedAst.TypedProgram;
 
-typedef CompileResult = { final ir:IrProgram; final retyped:Array<String>; }
+typedef CompileResult = { final ir:IrProgram; final retyped:Array<String>; final regenerated:Array<String>; }
 
 class Compiler {
     public final modules:Map<String, ModuleState> = [];
@@ -26,18 +26,15 @@ class Compiler {
         var name = ModulePath.fromFile(path), file = new SourceFile(path, source);
         var state = modules.get(name);
         if (state == null) { state = new ModuleState(name, file); modules.set(name, state); }
-        else {
-            var invalid = graph.dependents(name);
-            state.update(file);
-            for (dependent in invalid) modules.get(dependent).invalidateTyped();
-        }
+        else state.update(file);
         return state;
     }
 
     public function compile(entryModule:String):CompileResult {
         if (!modules.exists(entryModule)) throw 'Missing entry module "$entryModule"';
         var names = [for (name in modules.keys()) name]; names.sort(Reflect.compare);
-        for (name in names) parse(modules.get(name));
+        var bodyChanged:Map<String,Bool>=[], signatureChanged:Map<String,Bool>=[];
+        for (name in names) parse(modules.get(name), entryModule, bodyChanged, signatureChanged);
         graph.rebuild(modules);
         for (name in names) for (dependency in modules.get(name).dependencies)
             if (!modules.exists(dependency)) {
@@ -47,16 +44,23 @@ class Compiler {
                 throw new CompileError(diagnostic);
             }
 
-        var functions:Array<AstFunction> = [], selected:Map<String,Bool> = [];
+        var functions:Array<AstFunction> = [], owners:Map<String,String>=[], reverseCalls:Map<String,Array<String>>=[];
         for (name in names) {
             var state=modules.get(name), locals:Map<String,Bool>=[];
             for(fn in state.ast.functions) locals.set(fn.name,true);
             for(fn in state.ast.functions) {
                 var canonical=canonicalFunction(fn,name,entryModule,locals);
                 functions.push(canonical);
-                if(state.typed==null) selected.set(canonical.name,true);
+                owners.set(canonical.name,name);
+                var calls:Map<String,Bool>=[]; for(statement in canonical.statements) scanCalls(statement,calls);
+                for(callee in calls.keys()) { var callers=reverseCalls.get(callee);if(callers==null){callers=[];reverseCalls.set(callee,callers);}callers.push(canonical.name); }
             }
         }
+        var invalid:Map<String,Bool>=[];
+        for(name in bodyChanged.keys()) invalid.set(name,true);
+        var work=[for(name in signatureChanged.keys()) name];
+        while(work.length>0){var changed=work.pop();if(invalid.exists(changed)){}else invalid.set(changed,true);var callers=reverseCalls.get(changed);if(callers!=null)for(caller in callers)if(!invalid.exists(caller))work.push(caller);}
+        var selected:Map<String,Bool>=[]; for(fn in functions) if(invalid.exists(fn.name)) selected.set(fn.name,true);
         var typedNew:TypedProgram;
         try typedNew = Typer.typeSelected({functions:functions}, selected) catch(error:CompileError) {
             for(name in names) {
@@ -65,22 +69,27 @@ class Compiler {
             }
             throw error;
         }
-        var retyped=[];
-        for (name in names) {
-            var state=modules.get(name);
-            if (state.typed == null) {
-                state.typeVersion++; retyped.push(name);
-                state.typed = [for(fn in typedNew.functions) if (owner(fn.name,entryModule)==name) fn];
-            }
+        var retyped=[], regenerated=[];
+        var touchedModules:Map<String,Bool>=[];
+        for(fn in typedNew.functions) {
+            var module=owners.get(fn.name), state=modules.get(module);
+            state.typedFunctions.set(fn.name,fn); retyped.push(fn.name); touchedModules.set(module,true);
+            state.irFunctions.set(fn.name,IrGenerator.generateFunction(fn)); regenerated.push(fn.name);
+            var version=state.irVersions.get(fn.name);state.irVersions.set(fn.name,version==null?1:version+1);
         }
-        var typed:TypedProgram={functions:[]};
-        for(name in names) for(fn in modules.get(name).typed) typed.functions.push(fn);
-        var ir=IrGenerator.generate(typed);
-        for(name in retyped) modules.get(name).ir=ir;
-        return {ir:ir,retyped:retyped};
+        for(module in touchedModules.keys()) modules.get(module).typeVersion++;
+        for(name in names) {
+            var state=modules.get(name), valid:Map<String,Bool>=[];
+            for(fn in functions) if(owners.get(fn.name)==name) valid.set(fn.name,true);
+            for(cached in state.typedFunctions.keys()) if(!valid.exists(cached)){state.typedFunctions.remove(cached);state.irFunctions.remove(cached);state.irVersions.remove(cached);}
+        }
+        retyped.sort(Reflect.compare);regenerated.sort(Reflect.compare);
+        var cached=[]; for(fn in functions) cached.push(modules.get(owners.get(fn.name)).irFunctions.get(fn.name));
+        var ir=IrGenerator.assemble(cached);
+        return {ir:ir,retyped:retyped,regenerated:regenerated};
     }
 
-    function parse(state:ModuleState):Void {
+    function parse(state:ModuleState, entry:String, bodyChanged:Map<String,Bool>, signatureChanged:Map<String,Bool>):Void {
         if (state.ast != null) return;
         try {
             state.tokens=new Lexer(state.source).tokenize();
@@ -91,6 +100,16 @@ class Compiler {
         var dependencies:Map<String,Bool>=[];
         for(fn in state.ast.functions) for(statement in fn.statements) scanStatement(statement,dependencies);
         state.dependencies=[for(name in dependencies.keys()) name]; state.dependencies.sort(Reflect.compare);
+        var signatures:Map<String,String>=[], bodies:Map<String,String>=[];
+        for(fn in state.ast.functions){
+            var canonical=state.name==entry&&fn.name=="main"?"main":state.name+"."+fn.name;
+            var signature=signatureFingerprint(fn), body=state.source.text.substring(fn.span.start,fn.span.end);
+            signatures.set(fn.name,signature);bodies.set(fn.name,body);
+            if(state.signatureFingerprints.get(fn.name)!=signature)signatureChanged.set(canonical,true);
+            else if(state.bodyFingerprints.get(fn.name)!=body)bodyChanged.set(canonical,true);
+        }
+        for(old in state.signatureFingerprints.keys())if(!signatures.exists(old)){var canonical=state.name==entry&&old=="main"?"main":state.name+"."+old;signatureChanged.set(canonical,true);}
+        state.signatureFingerprints=signatures;state.bodyFingerprints=bodies;state.dirty=false;
     }
 
     static function canonicalFunction(fn:AstFunction,module:String,entry:String,locals:Map<String,Bool>):AstFunction {
@@ -124,5 +143,15 @@ class Compiler {
         case Call(name,args,_): var dot=name.indexOf(".");if(dot>0)dependencies.set(name.substr(0,dot),true);for(a in args)scanExpression(a,dependencies);
         default:
     }
+    static function scanCalls(statement:AstStatement,calls:Map<String,Bool>):Void switch statement {
+        case VarDeclaration(_,_,e,_),Return(e,_):scanCallExpression(e,calls);
+        case If(c,y,n,_):scanCallExpression(c,calls);for(s in y)scanCalls(s,calls);for(s in n)scanCalls(s,calls);
+    }
+    static function scanCallExpression(e:AstExpression,calls:Map<String,Bool>):Void switch e {
+        case Call(name,args,_):calls.set(name,true);for(a in args)scanCallExpression(a,calls);
+        case Add(a,b,_),Sub(a,b,_),Less(a,b,_),LessEqual(a,b,_),Equal(a,b,_):scanCallExpression(a,calls);scanCallExpression(b,calls);
+        default:
+    }
+    static function signatureFingerprint(fn:AstFunction):String return fn.name+"("+[for(a in fn.arguments) Std.string(a.type)].join(",")+")->"+Std.string(fn.result);
     static function owner(name:String,entry:String):String { var dot=name.indexOf("."); return dot<0?entry:name.substr(0,dot); }
 }
