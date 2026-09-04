@@ -128,5 +128,6 @@ class IrGenerator {
 			case TFloat: F64;
 			case TString: Bytes;
 			case TVoid: Void;
+			case TClass(name): throw 'Class type "$name" is not lowered yet';
 		};
 }

@@ -6,4 +6,5 @@ enum CompilerType {
 	TFloat;
 	TString;
 	TVoid;
+	TClass(name:String);
 }

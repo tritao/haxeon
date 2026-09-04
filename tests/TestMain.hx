@@ -210,13 +210,18 @@ class TestMain {
 			throw "Package and import declarations were not preserved in the AST";
 		Sys.println("PASS: package and import declarations are represented in the frontend");
 		var classProgram = new Parser(new Lexer(new SourceFile("Box.hx",
-			"package demo; class Box { public final value:Int; public function new(value:Int) { } public function get():Int { return 42; } }")).tokenize())
-			.parseProgram();
+			"package demo; class Box { public final value:Int; public function new(value:Int) { } public function get():Int { return 42; } } function main():Int { return 42; }"))
+			.tokenize()).parseProgram();
 		if (classProgram.classes.length != 1
 			|| classProgram.classes[0].fields[0].name != "value"
 			|| classProgram.classes[0].methods.length != 2
 			|| classProgram.classes[0].methods[0].name != "new")
 			throw "Minimal class declarations were not preserved in the AST";
+		var typedClass = Typer.type(classProgram);
+		if (typedClass.classes.length != 1
+			|| typedClass.classes[0].fields[0].type != compiler.types.Type.CompilerType.TInt
+			|| typedClass.classes[0].methods[1].result != compiler.types.Type.CompilerType.TInt)
+			throw "Minimal class declarations were not type checked";
 		Sys.println("PASS: class fields, methods, and constructors parse as nominal declarations");
 		Sys.println("PASS: typer rejects invalid names, calls, conditions, and return paths");
 

@@ -6,9 +6,12 @@ import compiler.Ast.AstFunction;
 import compiler.Ast.AstProgram;
 import compiler.Ast.AstStatement;
 import compiler.Ast.AstType;
+import compiler.Ast.AstClass;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedFunction;
+import compiler.types.TypedAst.TypedClass;
+import compiler.types.TypedAst.TypedField;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.Diagnostic;
@@ -30,6 +33,12 @@ class Typer {
 		this.externals = externals == null ? [] : externals;
 
 	function typeProgram(program:AstProgram, selected:Null<Map<String, Bool>>):TypedProgram {
+		var classes:Map<String, AstClass> = [];
+		for (classDecl in program.classes) {
+			if (classes.exists(classDecl.name))
+				fail("E1000", 'Duplicate class "${classDecl.name}"', classDecl.span);
+			classes.set(classDecl.name, classDecl);
+		}
 		for (fn in program.functions) {
 			if (signatures.exists(fn.name))
 				fail("E1000", 'Duplicate function "${fn.name}"', fn.span);
@@ -41,6 +50,7 @@ class Typer {
 		if (main == null || main.arguments.length != 0 || lowerType(main.result) != TInt)
 			throw "Program must define function main():Int";
 		return {
+			classes: [for (classDecl in program.classes) typeClass(classDecl, classes)],
 			functions: [
 				for (fn in program.functions)
 					if (selected == null || selected.exists(fn.name)) typeFunction(fn)
@@ -48,7 +58,33 @@ class Typer {
 		};
 	}
 
-	function typeFunction(fn:AstFunction):TypedFunction {
+	function typeClass(classDecl:AstClass, classes:Map<String, AstClass>):TypedClass {
+		var fields = [], fieldNames:Map<String, Bool> = [];
+		for (field in classDecl.fields) {
+			if (fieldNames.exists(field.name))
+				fail("E1000", 'Duplicate field "${classDecl.name}.${field.name}"', field.span);
+			var type = lowerType(field.type);
+			if (type == TVoid)
+				fail("E1002", 'Field "${classDecl.name}.${field.name}" cannot have type Void', field.span);
+			fieldNames.set(field.name, true);
+			fields.push({
+				name: field.name,
+				type: type,
+				isStatic: field.isStatic,
+				isFinal: field.isFinal,
+				span: field.span
+			});
+		}
+		return {
+			name: classDecl.name,
+			base: classDecl.base,
+			fields: fields,
+			methods: [for (method in classDecl.methods) typeFunction(method, classDecl.name + ".")],
+			span: classDecl.span
+		};
+	}
+
+	function typeFunction(fn:AstFunction, ?prefix:String = ""):TypedFunction {
 		var scope = new Scope();
 		var arguments = [];
 		for (argument in fn.arguments) {
@@ -58,10 +94,10 @@ class Typer {
 		}
 		var result = lowerType(fn.result);
 		var statements = typeStatements(fn.statements, scope, result);
-		if (!alwaysReturns(statements))
+		if (result != TVoid && !alwaysReturns(statements))
 			fail("E1006", 'Function ${fn.name} does not return on every path', fn.span);
 		return {
-			name: fn.name,
+			name: prefix + fn.name,
 			arguments: arguments,
 			result: result,
 			statements: statements,
@@ -189,7 +225,7 @@ class Typer {
 			case BoolType: TBool;
 			case FloatType: TFloat;
 			case StringType: TString;
-			case VoidType: throw "Void is not a value type in the current frontend";
+			case VoidType: TVoid;
 			case NamedType(name): throw 'Named type "$name" is not implemented yet';
 		};
 

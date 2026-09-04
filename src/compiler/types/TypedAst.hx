@@ -47,4 +47,14 @@ typedef TypedFunction = {
 	final span:SourceSpan;
 }
 
-typedef TypedProgram = {final functions:Array<TypedFunction>;}
+typedef TypedField = {final name:String; final type:CompilerType; final isStatic:Bool; final isFinal:Bool; final span:SourceSpan;}
+
+typedef TypedClass = {
+	final name:String;
+	final base:Null<String>;
+	final fields:Array<TypedField>;
+	final methods:Array<TypedFunction>;
+	final span:SourceSpan;
+}
+
+typedef TypedProgram = {final classes:Array<TypedClass>; final functions:Array<TypedFunction>;}
