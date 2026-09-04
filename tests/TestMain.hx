@@ -1,5 +1,7 @@
 import compiler.hl.HlCode;
 import compiler.Frontend;
+import compiler.Diagnostic.CompileError;
+import compiler.Source.SourceFile;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction;
 import compiler.hl.HlFunction.HlInstruction;
@@ -68,6 +70,15 @@ class TestMain {
         expectCompileError('function main():Int { if (1) return 1; else return 2; }',
             'If condition must be Bool');
         Sys.println("PASS: typer rejects invalid names, calls, conditions, and return paths");
+
+        try {
+            Frontend.compileFile(new SourceFile("broken.hx", "function main():Int { return @; }"));
+            throw "compiler accepted invalid character";
+        } catch (error:CompileError) {
+            if (error.diagnostic.code != "E0001" || error.diagnostic.span.file.path != "broken.hx" || error.diagnostic.span.start != 29)
+                throw "structured source diagnostic has the wrong code or span";
+        }
+        Sys.println("PASS: syntax diagnostics retain file-aware source spans");
     }
 
     static function baseControlFlowModule():HlCode {

@@ -1,5 +1,7 @@
 package compiler;
 
+import compiler.Source.SourceSpan;
+
 enum TokenKind {
     Function;
     Var;
@@ -29,11 +31,13 @@ enum TokenKind {
 class Token {
     public final kind:TokenKind;
     public final text:String;
-    public final offset:Int;
+    public final span:SourceSpan;
+    public var offset(get, never):Int;
 
-    public function new(kind:TokenKind, text:String, offset:Int) {
+    public function new(kind:TokenKind, text:String, span:SourceSpan) {
         this.kind = kind;
         this.text = text;
-        this.offset = offset;
+        this.span = span;
     }
+    inline function get_offset():Int return span.start;
 }

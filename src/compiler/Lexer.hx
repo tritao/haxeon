@@ -1,13 +1,17 @@
 package compiler;
 
 import compiler.Token.TokenKind;
+import compiler.Source.SourceFile;
+import compiler.Diagnostic.CompileError;
 
 class Lexer {
+    final file:SourceFile;
     final source:String;
     var position:Int = 0;
 
-    public function new(source:String) {
-        this.source = source;
+    public function new(file:SourceFile) {
+        this.file = file;
+        this.source = file.text;
     }
 
     public function tokenize():Array<Token> {
@@ -24,14 +28,14 @@ class Lexer {
                 while (position < source.length && isIdentifierPart(source.charCodeAt(position)))
                     position++;
                 var text = source.substring(start, position);
-                tokens.push(new Token(keyword(text), text, start));
+                tokens.push(new Token(keyword(text), text, file.span(start, position)));
                 continue;
             }
             if (isDigit(code)) {
                 position++;
                 while (position < source.length && isDigit(source.charCodeAt(position)))
                     position++;
-                tokens.push(new Token(TokenKind.Integer, source.substring(start, position), start));
+                tokens.push(new Token(TokenKind.Integer, source.substring(start, position), file.span(start, position)));
                 continue;
             }
             position++;
@@ -56,11 +60,11 @@ class Lexer {
                     } else TokenKind.Less;
                 case "+": TokenKind.Plus;
                 case "-": TokenKind.Minus;
-                default: throw 'Unexpected character "${String.fromCharCode(code)}" at offset $start';
+                default: throw new CompileError(new Diagnostic("E0001", 'Unexpected character "${String.fromCharCode(code)}"', file.span(start, position)));
             }
-            tokens.push(new Token(kind, source.substring(start, position), start));
+            tokens.push(new Token(kind, source.substring(start, position), file.span(start, position)));
         }
-        tokens.push(new Token(TokenKind.Eof, "", position));
+        tokens.push(new Token(TokenKind.Eof, "", file.span(position, position)));
         return tokens;
     }
 

@@ -31,9 +31,9 @@ class IrGenerator {
 
     static function lowerStatements(statements:Array<TypedStatement>, builder:IrBuilder, values:Map<String, IrValue>):Void {
         for (statement in statements) switch statement {
-            case TVar(name, initializer): values.set(name, lowerExpression(initializer, builder, values));
-            case TReturn(expression): builder.returnValue(lowerExpression(expression, builder, values));
-            case TIf(condition, thenBranch, elseBranch):
+            case TVar(name, initializer, _): values.set(name, lowerExpression(initializer, builder, values));
+            case TReturn(expression, _): builder.returnValue(lowerExpression(expression, builder, values));
+            case TIf(condition, thenBranch, elseBranch, _):
                 var thenLabel = builder.newLabel(), endLabel = builder.newLabel();
                 builder.branchTrue(lowerExpression(condition, builder, values), thenLabel);
                 lowerStatements(elseBranch, builder, copy(values));
@@ -61,8 +61,8 @@ class IrGenerator {
     }
     static function alwaysReturns(statements:Array<TypedStatement>):Bool {
         for (statement in statements) switch statement {
-            case TReturn(_): return true;
-            case TIf(_, yes, no): if (no.length > 0 && alwaysReturns(yes) && alwaysReturns(no)) return true;
+            case TReturn(_, _): return true;
+            case TIf(_, yes, no, _): if (no.length > 0 && alwaysReturns(yes) && alwaysReturns(no)) return true;
             default:
         }
         return false;

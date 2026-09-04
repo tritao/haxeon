@@ -1,11 +1,13 @@
 package compiler.types;
 
 import compiler.types.Type.CompilerType;
+import compiler.Source.SourceSpan;
 
 class TypedExpression {
     public final expression:TypedExpressionKind;
     public final type:CompilerType;
-    public function new(expression, type) { this.expression = expression; this.type = type; }
+    public final span:SourceSpan;
+    public function new(expression, type, span) { this.expression = expression; this.type = type; this.span = span; }
 }
 
 enum TypedExpressionKind {
@@ -20,9 +22,9 @@ enum TypedExpressionKind {
 }
 
 enum TypedStatement {
-    TVar(name:String, initializer:TypedExpression);
-    TReturn(expression:TypedExpression);
-    TIf(condition:TypedExpression, thenBranch:Array<TypedStatement>, elseBranch:Array<TypedStatement>);
+    TVar(name:String, initializer:TypedExpression, span:SourceSpan);
+    TReturn(expression:TypedExpression, span:SourceSpan);
+    TIf(condition:TypedExpression, thenBranch:Array<TypedStatement>, elseBranch:Array<TypedStatement>, span:SourceSpan);
 }
 
 typedef TypedFunction = {
@@ -30,6 +32,7 @@ typedef TypedFunction = {
     final arguments:Array<{name:String, type:CompilerType}>;
     final result:CompilerType;
     final statements:Array<TypedStatement>;
+    final span:SourceSpan;
 }
 
 typedef TypedProgram = { final functions:Array<TypedFunction>; }

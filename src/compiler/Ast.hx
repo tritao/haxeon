@@ -1,5 +1,7 @@
 package compiler;
 
+import compiler.Source.SourceSpan;
+
 enum AstType {
     IntType;
     BoolType;
@@ -8,23 +10,24 @@ enum AstType {
 typedef AstArgument = {
     final name:String;
     final type:AstType;
+    final span:SourceSpan;
 }
 
 enum AstExpression {
-    IntegerLiteral(value:Int);
-    Variable(name:String);
-    Add(left:AstExpression, right:AstExpression);
-    Sub(left:AstExpression, right:AstExpression);
-    Less(left:AstExpression, right:AstExpression);
-    LessEqual(left:AstExpression, right:AstExpression);
-    Equal(left:AstExpression, right:AstExpression);
-    Call(name:String, arguments:Array<AstExpression>);
+    IntegerLiteral(value:Int, span:SourceSpan);
+    Variable(name:String, span:SourceSpan);
+    Add(left:AstExpression, right:AstExpression, span:SourceSpan);
+    Sub(left:AstExpression, right:AstExpression, span:SourceSpan);
+    Less(left:AstExpression, right:AstExpression, span:SourceSpan);
+    LessEqual(left:AstExpression, right:AstExpression, span:SourceSpan);
+    Equal(left:AstExpression, right:AstExpression, span:SourceSpan);
+    Call(name:String, arguments:Array<AstExpression>, span:SourceSpan);
 }
 
 enum AstStatement {
-    VarDeclaration(name:String, ?type:AstType, initializer:AstExpression);
-    Return(expression:AstExpression);
-    If(condition:AstExpression, thenBranch:Array<AstStatement>, elseBranch:Array<AstStatement>);
+    VarDeclaration(name:String, ?type:AstType, initializer:AstExpression, span:SourceSpan);
+    Return(expression:AstExpression, span:SourceSpan);
+    If(condition:AstExpression, thenBranch:Array<AstStatement>, elseBranch:Array<AstStatement>, span:SourceSpan);
 }
 
 typedef AstFunction = {
@@ -32,6 +35,7 @@ typedef AstFunction = {
     final arguments:Array<AstArgument>;
     final result:AstType;
     final statements:Array<AstStatement>;
+    final span:SourceSpan;
 }
 
 typedef AstProgram = {
