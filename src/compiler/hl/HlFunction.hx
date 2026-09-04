@@ -15,6 +15,7 @@ class HlFunction {
 }
 
 enum HlInstruction {
+    Move(destination:Int,source:Int);
     LoadInt(destination:Int, constant:Int);
     LoadFloat(destination:Int, constant:Int);
     LoadString(destination:Int, constant:Int);

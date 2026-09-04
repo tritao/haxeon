@@ -176,6 +176,7 @@ class Compiler {
     }
     static function canonicalStatement(s,module,entry,locals):AstStatement return switch s {
         case VarDeclaration(n,t,e,span): VarDeclaration(n,t,canonicalExpression(e,module,entry,locals),span);
+        case Assignment(n,e,span):Assignment(n,canonicalExpression(e,module,entry,locals),span);
         case Return(e,span): Return(canonicalExpression(e,module,entry,locals),span);
         case If(c,y,n,span): If(canonicalExpression(c,module,entry,locals),[for(x in y) canonicalStatement(x,module,entry,locals)],[for(x in n) canonicalStatement(x,module,entry,locals)],span);
         case While(c,b,span):While(canonicalExpression(c,module,entry,locals),[for(x in b)canonicalStatement(x,module,entry,locals)],span);
@@ -196,7 +197,7 @@ class Compiler {
             Call(resolved,[for(a in args) canonicalExpression(a,module,entry,locals)],s);
     }
     static function scanStatement(s,dependencies):Void switch s {
-        case VarDeclaration(_,_,e,_), Return(e,_): scanExpression(e,dependencies);
+        case VarDeclaration(_,_,e,_),Assignment(_,e,_),Return(e,_): scanExpression(e,dependencies);
         case If(c,y,n,_): scanExpression(c,dependencies);for(x in y)scanStatement(x,dependencies);for(x in n)scanStatement(x,dependencies);
         case While(c,b,_):scanExpression(c,dependencies);for(x in b)scanStatement(x,dependencies);
         case Expression(e,_):scanExpression(e,dependencies);
@@ -207,7 +208,7 @@ class Compiler {
         default:
     }
     static function scanCalls(statement:AstStatement,calls:Map<String,Bool>):Void switch statement {
-        case VarDeclaration(_,_,e,_),Return(e,_):scanCallExpression(e,calls);
+        case VarDeclaration(_,_,e,_),Assignment(_,e,_),Return(e,_):scanCallExpression(e,calls);
         case If(c,y,n,_):scanCallExpression(c,calls);for(s in y)scanCalls(s,calls);for(s in n)scanCalls(s,calls);
         case While(c,b,_):scanCallExpression(c,calls);for(s in b)scanCalls(s,calls);
         case Expression(e,_):scanCallExpression(e,calls);

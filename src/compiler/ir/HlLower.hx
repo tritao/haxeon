@@ -66,12 +66,21 @@ class HlLower {
         for (argument in fn.arguments)
             defineRegister(argument, registers, registerTypes);
 
+        var edges:Map<String,Array<{destination:IrValue,source:IrValue}>>=[];
+        for(block in fn.blocks)for(instruction in block.instructions)switch instruction{
+            case Phi(output,inputs):
+                defineRegister(output,registers,registerTypes);
+                for(input in inputs){var key=edgeKey(input.block,block.id),moves=edges.get(key);if(moves==null){moves=[];edges.set(key,moves);}moves.push({destination:output,source:input.value});}
+            default:
+        }
+
         var instructions:Array<HlInstruction> = [];
         for (block in fn.blocks) {
             if (block.instructions.length == 0 && block.terminator == null) continue;
             instructions.push(HlInstruction.Label('block_${block.id}'));
             for (instruction in block.instructions) {
             switch instruction {
+                case Phi(_, _):
                 case ConstInt(output, value):
                     instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes), internInt(value)));
                 case ConstFloat(output,value):instructions.push(HlInstruction.LoadFloat(defineRegister(output,registers,registerTypes),symbols.internFloat(value)));
@@ -111,8 +120,11 @@ class HlLower {
             if (block.terminator == null) throw 'Reachable IR block ${block.id} has no terminator';
             switch block.terminator {
                 case Return(value): instructions.push(HlInstruction.Return(requireRegister(value, registers)));
-                case Jump(target): instructions.push(HlInstruction.Jump('block_$target'));
+                case Jump(target):
+                    emitPhiMoves(edges.get(edgeKey(block.id,target)),registers,registerTypes,instructions);
+                    instructions.push(HlInstruction.Jump('block_$target'));
                 case Branch(condition, yes, no):
+                    if(edges.exists(edgeKey(block.id,yes))||edges.exists(edgeKey(block.id,no)))throw "Phi elimination requires split critical edges";
                     instructions.push(HlInstruction.JumpTrue(requireRegister(condition, registers), 'block_$yes'));
                     instructions.push(HlInstruction.Jump('block_$no'));
             }
@@ -124,6 +136,15 @@ class HlLower {
             registerTypes,
             instructions
         );
+    }
+
+    static function edgeKey(from:Int,to:Int):String return '$from:$to';
+    function emitPhiMoves(moves:Null<Array<{destination:IrValue,source:IrValue}>>,registers:Map<Int,Int>,registerTypes:Array<Int>,instructions:Array<HlInstruction>):Void {
+        if(moves==null)return;
+        if(moves.length==1){var destination=requireRegister(moves[0].destination,registers),source=requireRegister(moves[0].source,registers);if(destination!=source)instructions.push(HlInstruction.Move(destination,source));return;}
+        var temporaries=[];
+        for(move in moves){var temporary=registerTypes.length;registerTypes.push(internType(move.source.type));temporaries.push(temporary);instructions.push(HlInstruction.Move(temporary,requireRegister(move.source,registers)));}
+        for(i in 0...moves.length)instructions.push(HlInstruction.Move(requireRegister(moves[i].destination,registers),temporaries[i]));
     }
 
     function lowerComparison(output:IrValue, left:IrValue, right:IrValue, operation:Int,
@@ -158,6 +179,7 @@ class HlLower {
             throw 'IR value ${value.id} is used before definition';
         return index;
     }
+
 
     function internInt(value:Int):Int {
         return symbols.internInt(value);

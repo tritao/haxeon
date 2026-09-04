@@ -1,12 +1,13 @@
-function ping():Int {
-    return 1;
-}
-
 function main():Int {
-    var value = 6 * 8;
-    while (value < 0) {
-        ping();
+    var outer = 0;
+    var total = 0;
+    while (outer < 6) {
+        var inner = 0;
+        while (inner < 7) {
+            total = total + 1;
+            inner = inner + 1;
+        }
+        outer = outer + 1;
     }
-    ping();
-    return value - 12 / 2;
+    return total * 2 / 2;
 }

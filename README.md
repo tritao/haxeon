@@ -11,6 +11,13 @@ The example is expressed as typed, register-independent IR. `HlLower` assigns
 function/type/register indices, interns constants and native names, and lowers
 the IR to the serialized HashLink model.
 
+IR values are immutable SSA definitions. Assignments create new values;
+condition joins and mutable loop headers receive explicit, predecessor-complete
+phi nodes. The HL backend eliminates phis on their incoming edges with parallel
+copy snapshots, emits actual HashLink `OLabel` block markers, and leaves no SSA
+constructs in HLB/HLP. This supports nested mutable loops and values assigned on
+only one conditional branch without making HashLink aware of compiler SSA.
+
 The frontend is split into parsing, declaration/type checking, and IR
 generation. The current subset supports `Int`, `Bool`, `Float`, `String`, local
 variables, functions, calls, numeric addition/subtraction, integer comparisons,

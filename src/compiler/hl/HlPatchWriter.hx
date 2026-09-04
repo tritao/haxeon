@@ -41,7 +41,7 @@ class HlPatchWriter {
     static function callRelocations(fn:HlFunction,stableIdsBySlot:Map<Int,Int>):Array<{instruction:Int,stableId:Int}> {
         var result=[],instruction=0;
         for(op in fn.opcodes)switch op {
-            case Label(_):
+            case Label(_):instruction++;
             case Call0(_,target),Call1(_,target,_),Call2(_,target,_,_):var stableId=stableIdsBySlot.get(target);if(stableId!=null)result.push({instruction:instruction,stableId:stableId});instruction++;
             default:instruction++;
         }

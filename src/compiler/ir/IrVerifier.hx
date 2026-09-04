@@ -26,6 +26,7 @@ class IrVerifier {
             var block = blocks.get(id);
             if (block == null) throw 'Unknown IR block $id in ${fn.name}';
             reachable.set(id, true);
+            for(instruction in block.instructions)switch instruction{case Phi(out,_):define(values,out);default:}
             for (instruction in block.instructions) verifyInstruction(instruction, values, signatures);
             if (block.terminator == null) throw 'Reachable IR block $id in ${fn.name} has no terminator';
             switch block.terminator {
@@ -37,9 +38,13 @@ class IrVerifier {
                     work.push(yes); work.push(no);
             }
         }
+        var predecessors:Map<Int,Map<Int,Bool>>=[];
+        for(block in fn.blocks)if(reachable.exists(block.id)&&block.terminator!=null)switch block.terminator{case Jump(target):addPredecessor(predecessors,target,block.id);case Branch(_,yes,no):addPredecessor(predecessors,yes,block.id);addPredecessor(predecessors,no,block.id);default:}
+        for(block in fn.blocks)if(reachable.exists(block.id))for(instruction in block.instructions)switch instruction{case Phi(out,inputs):var expected=predecessors.get(block.id),seen:Map<Int,Bool>=[];if(expected==null||inputs.length!=countKeys(expected))throw 'Phi ${out.id} does not cover every predecessor';for(input in inputs){if(!expected.exists(input.block)||seen.exists(input.block))throw 'Invalid phi predecessor ${input.block}';seen.set(input.block,true);require(values,input.value);if(input.value.type!=out.type)throw 'Wrong phi input type for ${out.id}';}default:}
     }
 
     static function verifyInstruction(instruction:IrInstruction, values:Map<Int, IrType>, signatures):Void switch instruction {
+        case Phi(_, _):
         case ConstInt(out, _): expect(out, I32); define(values, out);
         case ConstFloat(out,_):expect(out,F64);define(values,out);
         case ConstString(out,_):expect(out,Bytes);define(values,out);
@@ -51,6 +56,9 @@ class IrVerifier {
             for (i in 0...args.length) { require(values,args[i]); if (args[i].type != signature.arguments[i]) throw 'Wrong IR argument type for "$name"'; }
             if (out.type != signature.result) throw 'Wrong IR result type for "$name"'; define(values,out);
     }
+
+    static function addPredecessor(map:Map<Int,Map<Int,Bool>>,target:Int,source:Int):Void{var found=map.get(target);if(found==null){found=[];map.set(target,found);}found.set(source,true);}
+    static function countKeys(map:Map<Int,Bool>):Int{var count=0;for(_ in map.keys())count++;return count;}
 
     static function addSignature(map, name, arguments, result):Void {
         if (map.exists(name)) throw 'Duplicate IR function "$name"'; map.set(name, {arguments:arguments, result:result});

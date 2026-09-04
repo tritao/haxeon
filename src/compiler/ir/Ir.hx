@@ -11,7 +11,10 @@ class IrValue {
     public function new(id, name, type) { this.id = id; this.name = name; this.type = type; }
 }
 
+typedef IrPhiInput = {final block:BlockId;final value:IrValue;}
+
 enum IrInstruction {
+    Phi(output:IrValue,inputs:Array<IrPhiInput>);
     ConstInt(output:IrValue, value:Int);
     ConstFloat(output:IrValue,value:Float);
     ConstString(output:IrValue,value:String);

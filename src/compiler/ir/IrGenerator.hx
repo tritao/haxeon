@@ -9,6 +9,7 @@ import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
 import compiler.ir.Ir.IrNative;
+import compiler.ir.Ir.IrPhiInput;
 
 class IrGenerator {
     public static function generate(typed:TypedProgram):IrProgram {
@@ -38,26 +39,34 @@ class IrGenerator {
         return program;
     }
 
-    static function lowerStatements(statements:Array<TypedStatement>, builder:IrBuilder, values:Map<String, IrValue>):Void {
-        for (statement in statements) switch statement {
+    static function lowerStatements(statements:Array<TypedStatement>, builder:IrBuilder, values:Map<String, IrValue>):Map<String,IrValue> {
+        for (statement in statements) {
+            if(builder.isTerminated())break;
+            switch statement {
             case TVar(name, initializer, _): values.set(name, lowerExpression(initializer, builder, values));
+            case TAssign(name,value,_):values.set(name,lowerExpression(value,builder,values));
             case TReturn(expression, _): builder.returnValue(lowerExpression(expression, builder, values));
             case TIf(condition, thenBranch, elseBranch, _):
-                var thenBlock = builder.createBlock(), elseBlock = builder.createBlock();
-                var needsJoin = !alwaysReturns(thenBranch) || !alwaysReturns(elseBranch);
-                var joinBlock = needsJoin ? builder.createBlock() : null;
+                var incoming=copy(values),thenBlock=builder.createBlock(),elseBlock=builder.createBlock(),joinBlock=builder.createBlock();
                 builder.branch(lowerExpression(condition, builder, values), thenBlock, elseBlock);
                 builder.select(thenBlock);
-                lowerStatements(thenBranch, builder, copy(values));
-                if (!builder.isTerminated()) builder.jump(joinBlock);
+                var thenValues=lowerStatements(thenBranch,builder,copy(incoming)),thenActive=!builder.isTerminated(),thenPredecessor=builder.currentBlock().id;
+                if(thenActive)builder.jump(joinBlock);
                 builder.select(elseBlock);
-                lowerStatements(elseBranch, builder, copy(values));
-                if (!builder.isTerminated()) builder.jump(joinBlock);
-                if (needsJoin) builder.select(joinBlock);
+                var elseValues=lowerStatements(elseBranch,builder,copy(incoming)),elseActive=!builder.isTerminated(),elsePredecessor=builder.currentBlock().id;
+                if(elseActive)builder.jump(joinBlock);
+                if(thenActive||elseActive){builder.select(joinBlock);for(name in incoming.keys()){var yes=thenValues.get(name),no=elseValues.get(name);if(!thenActive)values.set(name,no);else if(!elseActive)values.set(name,yes);else if(yes.id==no.id)values.set(name,yes);else values.set(name,builder.phi(yes.type,[{block:thenPredecessor,value:yes},{block:elsePredecessor,value:no}]));}}
             case TWhile(condition,body,_):
-                var conditionBlock=builder.createBlock(),bodyBlock=builder.createBlock(),afterBlock=builder.createBlock();builder.jump(conditionBlock);builder.select(conditionBlock);builder.branch(lowerExpression(condition,builder,values),bodyBlock,afterBlock);builder.select(bodyBlock);lowerStatements(body,builder,copy(values));if(!builder.isTerminated())builder.jump(conditionBlock);builder.select(afterBlock);
+                var entry=builder.currentBlock().id,conditionBlock=builder.createBlock(),bodyBlock=builder.createBlock(),afterBlock=builder.createBlock(),assigned=assignedNames(body);builder.jump(conditionBlock);builder.select(conditionBlock);
+                var loopValues=copy(values),phis:Map<String,{output:IrValue,inputs:Array<IrPhiInput>}>=[];
+                for(name in assigned.keys())if(values.exists(name)){var inputs=[{block:entry,value:values.get(name)}],output=builder.phi(values.get(name).type,inputs);phis.set(name,{output:output,inputs:inputs});loopValues.set(name,output);}
+                builder.branch(lowerExpression(condition,builder,loopValues),bodyBlock,afterBlock);builder.select(bodyBlock);var bodyValues=lowerStatements(body,builder,copy(loopValues));
+                if(!builder.isTerminated()){var backedge=builder.currentBlock().id;for(name=>phi in phis)phi.inputs.push({block:backedge,value:bodyValues.get(name)});builder.jump(conditionBlock);}
+                builder.select(afterBlock);for(name=>phi in phis)values.set(name,phi.output);
             case TExpression(expression,_):lowerExpression(expression,builder,values);
+            }
         }
+        return values;
     }
 
     static function lowerExpression(expression:TypedExpression, builder:IrBuilder, values:Map<String, IrValue>):IrValue return switch expression.expression {
@@ -78,6 +87,7 @@ class IrGenerator {
     static function copy(values:Map<String, IrValue>):Map<String, IrValue> {
         var result:Map<String, IrValue> = []; for (name => value in values) result.set(name, value); return result;
     }
+    static function assignedNames(statements:Array<TypedStatement>):Map<String,Bool>{var result:Map<String,Bool>=[];for(statement in statements)switch statement{case TAssign(name,_,_):result.set(name,true);case TIf(_,yes,no,_):for(name in assignedNames(yes).keys())result.set(name,true);for(name in assignedNames(no).keys())result.set(name,true);case TWhile(_,body,_):for(name in assignedNames(body).keys())result.set(name,true);default:}return result;}
     static function alwaysReturns(statements:Array<TypedStatement>):Bool {
         for (statement in statements) switch statement {
             case TReturn(_, _): return true;

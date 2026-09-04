@@ -91,6 +91,12 @@ class TestMain {
             'If condition must be Bool');
         expectCompileError('function text():String { return "hello"; } function main():Int { var value:Float = 1.25; var wrong:String = value; return 0; }',
             'Type mismatch for local "wrong"');
+        expectCompileError('function main():Int { missing = 1; return 0; }','Unknown variable "missing"');
+        expectCompileError('function main():Int { var value:Int = 1; value = "wrong"; return value; }','Type mismatch for local "value"');
+        expectCompileError('function main():Int { return 1; var unreachable = 2; }','Unreachable statement');
+        var ssa=Frontend.compile('function main():Int { var value = 0; while (value < 2) { value = value + 1; } return value; }'),hasPhi=false;
+        for(fn in ssa.functions)for(block in fn.blocks)for(instruction in block.instructions)switch instruction{case compiler.ir.Ir.IrInstruction.Phi(_,_):hasPhi=true;default:}
+        if(!hasPhi)throw "Mutable loop did not construct an SSA phi";
         Sys.println("PASS: typer rejects invalid names, calls, conditions, and return paths");
 
         try {

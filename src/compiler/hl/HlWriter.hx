@@ -86,6 +86,7 @@ class HlWriter {
         var labels = collectLabels(fn);
         for (instruction in fn.opcodes) {
             switch instruction {
+                case Move(destination,source):requireRegister(fn,destination);requireRegister(fn,source);
                 case LoadInt(destination, constant):
                     requireRegister(fn, destination);
                     if (constant < 0 || constant >= code.ints.length)
@@ -148,6 +149,7 @@ class HlWriter {
                     if (labels.exists(name))
                         throw 'Duplicate label "$name" in function ${fn.functionIndex}';
                     labels.set(name, position);
+                    position++;
                 default:
                     position++;
             }
@@ -257,6 +259,7 @@ class HlWriter {
         var result:Array<EncodedInstruction> = [];
         for (instruction in fn.opcodes) {
             var encoded:EncodedInstruction = switch instruction {
+                case Move(destination,source):{opcode:HlOpcode.Mov,operands:[destination,source]};
                 case LoadInt(destination, constant):
                     {opcode: HlOpcode.Int, operands: [destination, constant]};
                 case LoadFloat(destination, constant):
@@ -292,8 +295,7 @@ class HlWriter {
                 case Jump(target):
                     var targetPosition = labels.get(target);
                     {opcode: HlOpcode.JAlways, operands: [targetPosition - (result.length + 1)]};
-                case Label(_):
-                    null;
+                case Label(_):{opcode:HlOpcode.Label,operands:[]};
                 case Return(register):
                     {opcode: HlOpcode.Ret, operands: [register]};
             }

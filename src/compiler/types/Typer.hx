@@ -51,7 +51,9 @@ class Typer {
 
     function typeStatements(statements:Array<AstStatement>, scope:Scope, result:CompilerType):Array<TypedStatement> {
         var output = [];
-        for (statement in statements) switch statement {
+        for (statement in statements) {
+            if(alwaysReturns(output))fail("E1012","Unreachable statement",statementSpan(statement));
+            switch statement {
             case VarDeclaration(name, declared, initializer, span):
                 var value = typeExpression(initializer, scope);
                 if (declared != null && lowerType(declared) != value.type) fail("E1002", 'Type mismatch for local "$name"', span);
@@ -61,6 +63,8 @@ class Typer {
                 var value = typeExpression(expression, scope);
                 if (value.type != result) fail("E1003", "Return type mismatch", span);
                 output.push(TReturn(value, span));
+            case Assignment(name,expression,span):
+                var expected=scope.resolve(name);if(expected==null)fail("E1005",'Unknown variable "$name"',span);var value=typeExpression(expression,scope);if(value.type!=expected)fail("E1002",'Type mismatch for local "$name"',span);output.push(TAssign(name,value,span));
             case If(condition, thenBranch, elseBranch, span):
                 var typedCondition = typeExpression(condition, scope);
                 if (typedCondition.type != TBool) fail("E1004", "If condition must be Bool", span);
@@ -71,6 +75,7 @@ class Typer {
                 var typedCondition=typeExpression(condition,scope);if(typedCondition.type!=TBool)fail("E1004","While condition must be Bool",span);
                 output.push(TWhile(typedCondition,typeStatements(body,new Scope(scope),result),span));
             case Expression(expression,span):output.push(TExpression(typeExpression(expression,scope),span));
+            }
         }
         return output;
     }
@@ -123,5 +128,6 @@ class Typer {
     }
 
     static function lowerType(type:AstType):CompilerType return switch type { case IntType:TInt;case BoolType:TBool;case FloatType:TFloat;case StringType:TString; };
+    static function statementSpan(statement:AstStatement):SourceSpan return switch statement{case VarDeclaration(_,_,_,span),Assignment(_,_,span),Return(_,span),If(_,_,_,span),While(_,_,span),Expression(_,span):span;}
     static function fail(code:String, message:String, span:SourceSpan):Void throw new CompileError(new Diagnostic(code, message, span));
 }

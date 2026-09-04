@@ -16,6 +16,7 @@ class IrBuilder {
     public function constInt(value:Int):IrValue { var out=temporary(I32); emit(ConstInt(out,value)); return out; }
     public function constFloat(value:Float):IrValue {var out=temporary(F64);emit(ConstFloat(out,value));return out;}
     public function constString(value:String):IrValue {var out=temporary(Bytes);emit(ConstString(out,value));return out;}
+    public function phi(type:IrType,inputs:Array<IrPhiInput>):IrValue {var out=temporary(type);emit(Phi(out,inputs));return out;}
     public function add(a:IrValue,b:IrValue):IrValue { var out=temporary(a.type); emit(Add(out,a,b)); return out; }
     public function sub(a:IrValue,b:IrValue):IrValue { var out=temporary(a.type); emit(Sub(out,a,b)); return out; }
     public function mul(a:IrValue,b:IrValue):IrValue {var out=temporary(a.type);emit(Mul(out,a,b));return out;}
@@ -33,6 +34,7 @@ class IrBuilder {
         current.terminator = value;
     }
     public function isTerminated():Bool return current.terminator != null;
+    public function currentBlock():IrBlock return current;
     public function returnValue(value:IrValue):Void terminate(Return(value));
     public function jump(target:IrBlock):Void terminate(Jump(target.id));
     public function branch(condition:IrValue, yes:IrBlock, no:IrBlock):Void terminate(Branch(condition, yes.id, no.id));
