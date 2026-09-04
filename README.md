@@ -91,9 +91,15 @@ HLP version 4 is a length-delimited section container; unknown sections can be
 skipped while required symbol and function sections are validated strictly.
 It represents symbol tables as an expected live prefix count and FNV-1a content
 hash followed by append-only records, preventing equal-length but different
-symbol tables from accepting the same patch. Integer additions are staged and published with the code
-transaction; unsupported future float, string, or type additions currently fail
-closed rather than corrupting stable indices.
+symbol tables from accepting the same patch. Integer, float, and UTF-8 string
+additions are deep-copied, staged, JIT-compiled, and published with the code
+transaction. Appended strings own their UTF-16 cache independently so failed
+staging rolls back cleanly and committed code retains valid constants. Repeated
+mixed-symbol patches retain bounded JIT allocations. Type-table growth still
+fails closed: HashLink stores direct `hl_type*` pointers throughout initialized
+modules, so moving the type array would invalidate live code. New function or
+structural types therefore remain a domain-reload boundary until the fork has a
+non-moving type arena.
 
 ## Run the proof of concept
 

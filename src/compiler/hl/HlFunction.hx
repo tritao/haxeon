@@ -16,6 +16,8 @@ class HlFunction {
 
 enum HlInstruction {
     LoadInt(destination:Int, constant:Int);
+    LoadFloat(destination:Int, constant:Int);
+    LoadString(destination:Int, constant:Int);
     LoadBool(destination:Int, value:Bool);
     Add(destination:Int, left:Int, right:Int);
     Sub(destination:Int, left:Int, right:Int);

@@ -4,7 +4,9 @@ package compiler.hl;
 enum abstract HlOpcode(Int) from Int to Int {
     var Mov = 0;
     var Int = 1;
+    var Float = 2;
     var Bool = 3;
+    var String = 5;
     var Add = 7;
     var Sub = 8;
     var Call0 = 24;

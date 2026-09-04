@@ -1,6 +1,13 @@
 import compiler.Diagnostic.CompileError;
 import compiler.hl.HlWriter;
 import compiler.hl.HlPatchReader;
+import compiler.hl.HlPatchWriter;
+import compiler.hl.HlRuntimeIdentity;
+import compiler.hl.HlCode;
+import compiler.hl.HlCode.HlTypeDef;
+import compiler.hl.HlFunction;
+import compiler.hl.HlFunction.HlInstruction;
+import compiler.hl.HlType;
 import compiler.modules.Compiler;
 import runtime.Runtime;
 import runtime.RuntimeError;
@@ -30,7 +37,7 @@ class HotReloadMain {
             throw "HLP did not encode the integer symbol delta";
         var nativeDecoded=Runtime.inspectPatch(changed.patchBytes);
         if(nativeDecoded.baseRevision!=decoded.baseRevision||nativeDecoded.revision!=decoded.revision||nativeDecoded.functionCount!=decoded.functions.length)
-            throw "native and Haxe HLP decoders disagree";
+            throw 'native and Haxe HLP decoders disagree: ${nativeDecoded.baseRevision}/${nativeDecoded.revision}/${nativeDecoded.functionCount} vs ${decoded.baseRevision}/${decoded.revision}/${decoded.functions.length}';
         try {Runtime.inspectPatch(changed.patchBytes.sub(0,changed.patchBytes.length-1));throw "native decoder accepted truncated HLP";}catch(error:String){if(error!="HashLink rejected the HLP bytes")throw error;}
         var compilerIndex = changed.functionIds.get("Value.value");
         if (changed.changedFunctions.length != 1 || changed.changedFunctions[0] != compilerIndex)
@@ -133,7 +140,34 @@ class HotReloadMain {
         }
         if(Runtime.callInt(loaded,valueIndex)!=47)throw "foreign patch damaged the live generation";
         Runtime.dispose(loaded);
+        testAppendedFloatAndStringSymbols();
         Sys.println("PASS: selective HLP patches are atomic and retain bounded JIT code");
+    }
+
+    static function testAppendedFloatAndStringSymbols():Void {
+        var moduleId=haxe.io.Bytes.alloc(16);moduleId.set(0,77);
+        var code=new HlCode();
+        code.ints=[1];code.types=[Simple(HlType.Void),Simple(HlType.I32),Simple(HlType.F64),Simple(HlType.Bytes),Function([],1)];
+        code.functions=[new HlFunction(4,0,[1],[LoadInt(0,0),Return(0)])];code.entryPoint=0;
+        var indices:Map<String,Int>=[],ids:Map<String,Int>=[],bySlot:Map<Int,Int>=[];
+        indices.set("value",0);ids.set("value",70000);bySlot.set(0,70000);
+        var loaded=Runtime.load(HlWriter.encode(code),HlRuntimeIdentity.encode(moduleId,indices,ids));
+        code.ints.push(2);code.floats.push(3.5);code.strings.push("new symbol");
+        code.functions=[new HlFunction(4,0,[2,3,1],[LoadFloat(0,0),LoadString(1,0),LoadInt(2,1),Return(2)])];
+        var bytes=HlPatchWriter.encode(code,moduleId,[0],bySlot,1,2,1,0,0,5);
+        Runtime.patchSet(loaded,new PatchSet(1,2,bytes,[70000],false));
+        if(Runtime.callInt(loaded,70000)!=2)throw "patch using appended float and string symbols returned the wrong value";
+        var revision=2;
+        for(i in 0...20){
+            var baseInts=code.ints.length,baseFloats=code.floats.length,baseStrings=code.strings.length;
+            code.ints.push(3+i);code.floats.push(i+0.25);code.strings.push('symbol-$i');
+            code.functions=[new HlFunction(4,0,[2,3,1],[LoadFloat(0,code.floats.length-1),LoadString(1,code.strings.length-1),LoadInt(2,code.ints.length-1),Return(2)])];
+            var patch=HlPatchWriter.encode(code,moduleId,[0],bySlot,revision,revision+1,baseInts,baseFloats,baseStrings,5);
+            Runtime.patchSet(loaded,new PatchSet(revision,revision+1,patch,[70000],false));revision++;
+            if(Runtime.callInt(loaded,70000)!=3+i)throw 'non-integer symbol stress patch $i returned the wrong value';
+        }
+        if(Runtime.retainedCodeAllocationCount(loaded)!=2)throw "non-integer symbol patch retained extra JIT allocations";
+        Runtime.dispose(loaded);
     }
 
     static function skipIndex(bytes:haxe.io.Bytes,position:Int):Int {

@@ -90,6 +90,12 @@ class HlWriter {
                     requireRegister(fn, destination);
                     if (constant < 0 || constant >= code.ints.length)
                         throw 'Invalid integer constant $constant in function ${fn.functionIndex}';
+                case LoadFloat(destination, constant):
+                    requireRegister(fn,destination);
+                    if(constant<0||constant>=code.floats.length)throw 'Invalid float constant $constant in function ${fn.functionIndex}';
+                case LoadString(destination, constant):
+                    requireRegister(fn,destination);
+                    requireString(code,constant,'function ${fn.functionIndex}');
                 case LoadBool(destination, _): requireRegister(fn, destination);
                 case Add(destination, left, right):
                     requireRegister(fn, destination);
@@ -252,6 +258,10 @@ class HlWriter {
             var encoded:EncodedInstruction = switch instruction {
                 case LoadInt(destination, constant):
                     {opcode: HlOpcode.Int, operands: [destination, constant]};
+                case LoadFloat(destination, constant):
+                    {opcode: HlOpcode.Float, operands: [destination, constant]};
+                case LoadString(destination, constant):
+                    {opcode: HlOpcode.String, operands: [destination, constant]};
                 case LoadBool(destination, value):
                     {opcode: HlOpcode.Bool, operands: [destination, value ? 1 : 0]};
                 case Add(destination, left, right):
