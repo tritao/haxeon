@@ -23,14 +23,40 @@ class TestMain {
         invalid.types = [Simple(HlType.Void), Function([], 0)];
         invalid.functions = [new HlFunction(1, 0, [0], [Return(0)])];
         invalid.entryPoint = 1;
+        expectError(invalid, "Entry point 1 is not a function");
+
+        var unknownLabel = baseControlFlowModule();
+        unknownLabel.functions = [new HlFunction(2, 0, [1, 1], [
+            JumpSignedLessOrEqual(0, 1, "missing"),
+            Return(0),
+        ])];
+        expectError(unknownLabel, 'Unknown label "missing" in function 0');
+
+        var duplicateLabel = baseControlFlowModule();
+        duplicateLabel.functions = [new HlFunction(2, 0, [1], [
+            Label("same"),
+            Label("same"),
+            Return(0),
+        ])];
+        expectError(duplicateLabel, 'Duplicate label "same" in function 0');
+        Sys.println("PASS: malformed module is rejected before serialization");
+    }
+
+    static function baseControlFlowModule():HlCode {
+        var code = new HlCode();
+        code.types = [Simple(HlType.Void), Simple(HlType.I32), Function([], 1)];
+        code.entryPoint = 0;
+        return code;
+    }
+
+    static function expectError(code:HlCode, expected:String):Void {
         try {
-            HlWriter.encode(invalid);
-            throw "writer accepted a missing entry point";
+            HlWriter.encode(code);
+            throw 'writer accepted invalid module; expected "$expected"';
         } catch (error:String) {
-            if (error != "Entry point 1 is not a function")
+            if (error != expected)
                 throw error;
         }
-        Sys.println("PASS: malformed module is rejected before serialization");
     }
 
     static function decodeIndex(input:BytesInput):Int {

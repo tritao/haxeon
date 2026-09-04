@@ -2,10 +2,11 @@
 
 An experimental Haxe-compatible realtime compiler targeting HashLink only.
 
-The proof of concept writes HashLink bytecode directly from Haxe. It builds an
-`add` function and an entry point that calls `add(20, 22)`, then passes the
-result to HashLink's `std@sys_exit` native. Exiting with status 42 proves that
-HashLink decoded, linked, and executed both generated functions.
+The proof of concept writes HashLink bytecode directly from Haxe. It builds a
+recursive `fib` function with symbolic labels and an entry point that calls
+`fib(10)`, then passes the result to HashLink's `std@sys_exit` native. Exiting
+with status 55 proves that HashLink decoded, linked, branched, and recursively
+executed the generated functions.
 
 ## Run the proof of concept
 

@@ -6,6 +6,11 @@ import haxe.io.Encoding;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction.HlInstruction;
 
+private typedef EncodedInstruction = {
+    final opcode:HlOpcode;
+    final operands:Array<Int>;
+}
+
 class HlWriter {
     final output:BytesOutput;
 
@@ -71,6 +76,7 @@ class HlWriter {
     }
 
     static function validateInstructions(code:HlCode, fn:HlFunction, functionIndices:Map<Int, Bool>):Void {
+        var labels = collectLabels(fn);
         for (instruction in fn.opcodes) {
             switch instruction {
                 case LoadInt(destination, constant):
@@ -78,6 +84,10 @@ class HlWriter {
                     if (constant < 0 || constant >= code.ints.length)
                         throw 'Invalid integer constant $constant in function ${fn.functionIndex}';
                 case Add(destination, left, right):
+                    requireRegister(fn, destination);
+                    requireRegister(fn, left);
+                    requireRegister(fn, right);
+                case Sub(destination, left, right):
                     requireRegister(fn, destination);
                     requireRegister(fn, left);
                     requireRegister(fn, right);
@@ -90,10 +100,32 @@ class HlWriter {
                     requireRegister(fn, argument1);
                     requireRegister(fn, argument2);
                     requireCallable(functionIndices, functionIndex, fn.functionIndex);
+                case JumpSignedLessOrEqual(left, right, target):
+                    requireRegister(fn, left);
+                    requireRegister(fn, right);
+                    if (!labels.exists(target))
+                        throw 'Unknown label "$target" in function ${fn.functionIndex}';
+                case Label(_):
                 case Return(register):
                     requireRegister(fn, register);
             }
         }
+    }
+
+    static function collectLabels(fn:HlFunction):Map<String, Int> {
+        var labels = new Map<String, Int>();
+        var position = 0;
+        for (instruction in fn.opcodes) {
+            switch instruction {
+                case Label(name):
+                    if (labels.exists(name))
+                        throw 'Duplicate label "$name" in function ${fn.functionIndex}';
+                    labels.set(name, position);
+                default:
+                    position++;
+            }
+        }
+        return labels;
     }
 
     static function requireCallable(indices:Map<Int, Bool>, callee:Int, caller:Int):Void {
@@ -182,29 +214,44 @@ class HlWriter {
     }
 
     function writeFunction(fn:HlFunction):Void {
+        var instructions = lowerInstructions(fn);
         writeIndex(fn.type);
         writeUnsignedIndex(fn.functionIndex);
         writeUnsignedIndex(fn.registers.length);
-        writeUnsignedIndex(fn.opcodes.length);
+        writeUnsignedIndex(instructions.length);
         for (type in fn.registers)
             writeIndex(type);
-        for (instruction in fn.opcodes)
-            writeInstruction(instruction);
+        for (instruction in instructions)
+            writeOpcode(instruction.opcode, instruction.operands);
     }
 
-    function writeInstruction(instruction:HlInstruction):Void {
-        switch instruction {
-            case LoadInt(destination, constant):
-                writeOpcode(HlOpcode.Int, [destination, constant]);
-            case Add(destination, left, right):
-                writeOpcode(HlOpcode.Add, [destination, left, right]);
-            case Call1(destination, functionIndex, argument):
-                writeOpcode(HlOpcode.Call1, [destination, functionIndex, argument]);
-            case Call2(destination, functionIndex, argument1, argument2):
-                writeOpcode(HlOpcode.Call2, [destination, functionIndex, argument1, argument2]);
-            case Return(register):
-                writeOpcode(HlOpcode.Ret, [register]);
+    function lowerInstructions(fn:HlFunction):Array<EncodedInstruction> {
+        var labels = collectLabels(fn);
+        var result:Array<EncodedInstruction> = [];
+        for (instruction in fn.opcodes) {
+            var encoded:EncodedInstruction = switch instruction {
+                case LoadInt(destination, constant):
+                    {opcode: HlOpcode.Int, operands: [destination, constant]};
+                case Add(destination, left, right):
+                    {opcode: HlOpcode.Add, operands: [destination, left, right]};
+                case Sub(destination, left, right):
+                    {opcode: HlOpcode.Sub, operands: [destination, left, right]};
+                case Call1(destination, functionIndex, argument):
+                    {opcode: HlOpcode.Call1, operands: [destination, functionIndex, argument]};
+                case Call2(destination, functionIndex, argument1, argument2):
+                    {opcode: HlOpcode.Call2, operands: [destination, functionIndex, argument1, argument2]};
+                case JumpSignedLessOrEqual(left, right, target):
+                    var targetPosition = labels.get(target);
+                    {opcode: HlOpcode.JSLte, operands: [left, right, targetPosition - (result.length + 1)]};
+                case Label(_):
+                    null;
+                case Return(register):
+                    {opcode: HlOpcode.Ret, operands: [register]};
+            }
+            if (encoded != null)
+                result.push(encoded);
         }
+        return result;
     }
 
     function writeOpcode(opcode:HlOpcode, operands:Array<Int>):Void {
