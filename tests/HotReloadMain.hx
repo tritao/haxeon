@@ -1,5 +1,6 @@
 import compiler.Diagnostic.CompileError;
 import compiler.hl.HlWriter;
+import compiler.hl.HlPatchReader;
 import compiler.ir.HlLower;
 import compiler.ir.Ir.IrProgram;
 import compiler.modules.Compiler;
@@ -35,6 +36,11 @@ class HotReloadMain {
 
         compiler.update("Value.hx", "function value():Int { return 43; }");
         var changed = compiler.compile("Main");
+        var decoded=HlPatchReader.decode(changed.patchBytes);
+        var nativeDecoded=Runtime.inspectPatch(changed.patchBytes);
+        if(nativeDecoded.baseRevision!=decoded.baseRevision||nativeDecoded.revision!=decoded.revision||nativeDecoded.functionCount!=decoded.functions.length)
+            throw "native and Haxe HLP decoders disagree";
+        try {Runtime.inspectPatch(changed.patchBytes.sub(0,changed.patchBytes.length-1));throw "native decoder accepted truncated HLP";}catch(error:String){if(error!="HashLink rejected the HLP bytes")throw error;}
         var compilerIndex = changed.functionIndices.get("Value.value");
         if (changed.changedFunctions.length != 1 || changed.changedFunctions[0] != compilerIndex)
             throw 'compiler reported unexpected changed functions: ${changed.changedFunctions}';

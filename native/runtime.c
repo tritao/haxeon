@@ -116,8 +116,22 @@ HL_PRIM void HL_NAME(dispose)(realtime_module *loaded) {
 	free(loaded);
 }
 
+HL_PRIM int HL_NAME(inspect_patch)(vbyte *bytes, int length) {
+	const char *error = NULL;
+	hl_patch *patch = hl_patch_read(bytes,length,&error);
+	int summary;
+	if (patch == NULL || patch->base_revision > 0x3FF || patch->revision > 0x3FF || patch->function_count > 0xFFF) {
+		hl_patch_free(patch);
+		return -1;
+	}
+	summary = (patch->base_revision << 22) | (patch->revision << 12) | patch->function_count;
+	hl_patch_free(patch);
+	return summary;
+}
+
 DEFINE_PRIM(_ABSTRACT(realtime_module), load, _BYTES _I32);
 DEFINE_PRIM(_I32, call_i32, _ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_BOOL, patch, _ABSTRACT(realtime_module) _BYTES _I32 _ARR _I32 _I32);
 DEFINE_PRIM(_I32, generation_count, _ABSTRACT(realtime_module));
 DEFINE_PRIM(_VOID, dispose, _ABSTRACT(realtime_module));
+DEFINE_PRIM(_I32, inspect_patch, _BYTES _I32);

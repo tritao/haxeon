@@ -58,7 +58,9 @@ updates are rejected before loading or changing live dispatch state.
 Compatible incremental builds also emit versioned `HLP` bytes. The patch format
 contains the stable symbol/type requirements and only the changed function
 definitions, with a strict Haxe decoder serving as the protocol oracle for the
-native HashLink decoder.
+native HashLink decoder. The fork exposes owned `hl_patch_read`/`hl_patch_free`
+APIs with strict bounds, version, opcode, function-length, and trailing-data
+validation; integration tests feed identical bytes through both decoders.
 
 ## Run the proof of concept
 
