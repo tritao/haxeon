@@ -209,6 +209,15 @@ class TestMain {
 		if (packaged.packageName != "editor.core" || packaged.imports.length != 1 || packaged.imports[0] != "editor.util")
 			throw "Package and import declarations were not preserved in the AST";
 		Sys.println("PASS: package and import declarations are represented in the frontend");
+		var classProgram = new Parser(new Lexer(new SourceFile("Box.hx",
+			"package demo; class Box { public final value:Int; public function new(value:Int) { } public function get():Int { return 42; } }")).tokenize())
+			.parseProgram();
+		if (classProgram.classes.length != 1
+			|| classProgram.classes[0].fields[0].name != "value"
+			|| classProgram.classes[0].methods.length != 2
+			|| classProgram.classes[0].methods[0].name != "new")
+			throw "Minimal class declarations were not preserved in the AST";
+		Sys.println("PASS: class fields, methods, and constructors parse as nominal declarations");
 		Sys.println("PASS: typer rejects invalid names, calls, conditions, and return paths");
 
 		try {

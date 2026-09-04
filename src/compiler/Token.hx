@@ -5,6 +5,14 @@ import compiler.Source.SourceSpan;
 enum TokenKind {
 	Package;
 	Import;
+	Class;
+	Extends;
+	Public;
+	Private;
+	Static;
+	Final;
+	New;
+	Void;
 	Function;
 	Var;
 	Return;

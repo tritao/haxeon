@@ -2,9 +2,11 @@ package compiler;
 
 import compiler.Ast.AstExpression;
 import compiler.Ast.AstFunction;
+import compiler.Ast.AstClass;
 import compiler.Ast.AstProgram;
 import compiler.Ast.AstStatement;
 import compiler.Ast.AstType;
+import compiler.Source.SourceSpan;
 import compiler.Token.TokenKind;
 import compiler.Diagnostic.CompileError;
 
@@ -26,10 +28,19 @@ class Parser {
 			imports.push(parseQualifiedName());
 			consume(TokenKind.Semicolon);
 		}
-		var functions = [];
-		while (!check(TokenKind.Eof))
-			functions.push(parseFunction());
-		return {packageName: packageName, imports: imports, functions: functions};
+		var functions = [], classes = [];
+		while (!check(TokenKind.Eof)) {
+			if (check(TokenKind.Class))
+				classes.push(parseClass());
+			else
+				functions.push(parseFunction(false));
+		}
+		return {
+			packageName: packageName,
+			imports: imports,
+			classes: classes,
+			functions: functions
+		};
 	}
 
 	function parseQualifiedName():String {
@@ -39,9 +50,13 @@ class Parser {
 		return name;
 	}
 
-	function parseFunction():AstFunction {
-		var start = consume(TokenKind.Function).span;
-		var name = consume(TokenKind.Identifier).text;
+	function parseFunction(allowMissingReturn:Bool):AstFunction {
+		var start = consume(TokenKind.Function).span,
+			name = check(TokenKind.New) ? advance().text : consume(TokenKind.Identifier).text;
+		return parseFunctionBody(start, name, allowMissingReturn);
+	}
+
+	function parseFunctionBody(start:SourceSpan, name:String, allowMissingReturn:Bool):AstFunction {
 		consume(TokenKind.LeftParen);
 		var arguments = [];
 		if (!check(TokenKind.RightParen)) {
@@ -52,8 +67,8 @@ class Parser {
 			} while (match(TokenKind.Comma));
 		}
 		consume(TokenKind.RightParen);
-		consume(TokenKind.Colon);
-		var result = parseType();
+		var result = match(TokenKind.Colon) ? parseType() : allowMissingReturn
+			&& name == "new" ? VoidType : failType("Expected return type");
 		consume(TokenKind.LeftBrace);
 		var statements = [];
 		while (!check(TokenKind.RightBrace))
@@ -64,6 +79,63 @@ class Parser {
 			arguments: arguments,
 			result: result,
 			statements: statements,
+			span: start.merge(end)
+		};
+	}
+
+	function parseClass():AstClass {
+		var start = consume(TokenKind.Class).span,
+			name = consume(TokenKind.Identifier).text,
+			base:Null<String> = null;
+		if (match(TokenKind.Extends))
+			base = parseQualifiedName();
+		consume(TokenKind.LeftBrace);
+		var fields = [], methods = [];
+		while (!check(TokenKind.RightBrace)) {
+			var isStatic = false, isFinal = false;
+			while (true) {
+				switch current().kind {
+					case TokenKind.Public, TokenKind.Private:
+						advance();
+					case TokenKind.Static:
+						advance();
+						isStatic = true;
+					case TokenKind.Final:
+						advance();
+						isFinal = true;
+					default:
+						break;
+				}
+				if (current().kind != TokenKind.Public && current().kind != TokenKind.Private && current().kind != TokenKind.Static
+					&& current().kind != TokenKind.Final)
+					break;
+			}
+			if (match(TokenKind.Function)) {
+				var functionStart = previous().span,
+					methodName = check(TokenKind.New) ? advance().text : consume(TokenKind.Identifier).text;
+				methods.push(parseFunctionBody(functionStart, methodName, true));
+			} else {
+				var fieldStart = current().span;
+				match(TokenKind.Var);
+				var fieldName = consume(TokenKind.Identifier).text;
+				consume(TokenKind.Colon);
+				var fieldType = parseType(),
+					end = consume(TokenKind.Semicolon).span;
+				fields.push({
+					name: fieldName,
+					type: fieldType,
+					isStatic: isStatic,
+					isFinal: isFinal,
+					span: fieldStart.merge(end)
+				});
+			}
+		}
+		var end = consume(TokenKind.RightBrace).span;
+		return {
+			name: name,
+			base: base,
+			fields: fields,
+			methods: methods,
 			span: start.merge(end)
 		};
 	}
@@ -191,8 +263,19 @@ class Parser {
 			return BoolType;
 		if (match(TokenKind.TypeFloat))
 			return FloatType;
-		consume(TokenKind.TypeString);
-		return StringType;
+		if (match(TokenKind.TypeString))
+			return StringType;
+		if (match(TokenKind.Void))
+			return VoidType;
+		if (check(TokenKind.Identifier))
+			return NamedType(parseQualifiedName());
+		fail(current(), 'Expected type, got ${current().kind}');
+		return null;
+	}
+
+	function failType(message:String):AstType {
+		fail(current(), message);
+		return null;
 	}
 
 	function parseStatementOrBlock():Array<AstStatement> {

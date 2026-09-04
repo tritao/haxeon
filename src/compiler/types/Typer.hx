@@ -189,6 +189,8 @@ class Typer {
 			case BoolType: TBool;
 			case FloatType: TFloat;
 			case StringType: TString;
+			case VoidType: throw "Void is not a value type in the current frontend";
+			case NamedType(name): throw 'Named type "$name" is not implemented yet';
 		};
 
 	static function statementSpan(statement:AstStatement):SourceSpan

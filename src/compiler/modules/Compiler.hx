@@ -155,7 +155,12 @@ class Compiler {
 				selected.set(fn.name, true);
 		var typedNew:TypedProgram;
 		try
-			typedNew = Typer.typeSelected({packageName: null, imports: [], functions: functions}, selected, nativeSignatures())
+			typedNew = Typer.typeSelected({
+				packageName: null,
+				imports: [],
+				classes: [],
+				functions: functions
+			}, selected, nativeSignatures())
 		catch (error:CompileError) {
 			for (name in names) {
 				var state = modules.get(name);

@@ -7,11 +7,29 @@ enum AstType {
 	BoolType;
 	FloatType;
 	StringType;
+	VoidType;
+	NamedType(name:String);
 }
 
 typedef AstArgument = {
 	final name:String;
 	final type:AstType;
+	final span:SourceSpan;
+}
+
+typedef AstField = {
+	final name:String;
+	final type:AstType;
+	final isStatic:Bool;
+	final isFinal:Bool;
+	final span:SourceSpan;
+}
+
+typedef AstClass = {
+	final name:String;
+	final base:Null<String>;
+	final fields:Array<AstField>;
+	final methods:Array<AstFunction>;
 	final span:SourceSpan;
 }
 
@@ -50,5 +68,6 @@ typedef AstFunction = {
 typedef AstProgram = {
 	final packageName:Null<String>;
 	final imports:Array<String>;
+	final classes:Array<AstClass>;
 	final functions:Array<AstFunction>;
 }
