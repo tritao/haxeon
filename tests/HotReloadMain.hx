@@ -17,21 +17,22 @@ class HotReloadMain {
         var initial = compiler.compile("Main");
         var liveRevision = initial.revision;
 
-        var valueIndex=initial.functionIndices.get("Value.value"),readIndex=initial.functionIndices.get("Probe.read"),workIndex=initial.functionIndices.get("Worker.run");
-        var loaded = Runtime.load(HlWriter.encode(initial.module));
+        var valueIndex=initial.functionIds.get("Value.value"),readIndex=initial.functionIds.get("Probe.read"),workIndex=initial.functionIds.get("Worker.run");
+        var loaded = Runtime.load(HlWriter.encode(initial.module),initial.runtimeIdentity);
         if (Runtime.callInt(loaded, valueIndex) != 42) throw "initial generation did not return 42";
         if (Runtime.callInt(loaded, readIndex) != 42) throw "initial internal call did not return 42";
 
         compiler.update("Value.hx", "function value():Int { return 43; }");
         var changed = compiler.compile("Main");
         var decoded=HlPatchReader.decode(changed.patchBytes);
+        if(decoded.moduleId.compare(initial.runtimeIdentity.sub(4,16))!=0)throw "HLP module identity does not match its load manifest";
         if(decoded.baseInts!=initial.module.ints.length||decoded.ints.length!=1||decoded.ints[0]!=43)
             throw "HLP did not encode the integer symbol delta";
         var nativeDecoded=Runtime.inspectPatch(changed.patchBytes);
         if(nativeDecoded.baseRevision!=decoded.baseRevision||nativeDecoded.revision!=decoded.revision||nativeDecoded.functionCount!=decoded.functions.length)
             throw "native and Haxe HLP decoders disagree";
         try {Runtime.inspectPatch(changed.patchBytes.sub(0,changed.patchBytes.length-1));throw "native decoder accepted truncated HLP";}catch(error:String){if(error!="HashLink rejected the HLP bytes")throw error;}
-        var compilerIndex = changed.functionIndices.get("Value.value");
+        var compilerIndex = changed.functionIds.get("Value.value");
         if (changed.changedFunctions.length != 1 || changed.changedFunctions[0] != compilerIndex)
             throw 'compiler reported unexpected changed functions: ${changed.changedFunctions}';
         Runtime.patchSet(loaded, new PatchSet(liveRevision, changed.revision, changed.patchBytes, changed.changedFunctions, changed.requiresReload));
@@ -107,6 +108,21 @@ class HotReloadMain {
             if (error.status != RuntimeStatus.Incompatible) throw error;
         }
         if (Runtime.callInt(loaded, valueIndex) != 47) throw "structural rejection damaged the live generation";
+
+        var foreign=new Compiler();
+        foreign.update("Value.hx", "function value():Int { return 47; }");
+        foreign.update("Probe.hx", "function read():Int { return Value.value(); }");
+        foreign.update("Main.hx", "function main():Int { return Probe.read(); }");
+        foreign.compile("Main");
+        foreign.update("Value.hx", "function value():Int { return 99; }");
+        var foreignPatch=foreign.compile("Main");
+        try {
+            Runtime.patchSet(loaded,new PatchSet(liveRevision,liveRevision+1,foreignPatch.patchBytes,foreignPatch.changedFunctions,false));
+            throw "foreign-module patch unexpectedly succeeded";
+        } catch(error:RuntimeError) {
+            if(error.status!=RuntimeStatus.Incompatible)throw error;
+        }
+        if(Runtime.callInt(loaded,valueIndex)!=47)throw "foreign patch damaged the live generation";
         Runtime.dispose(loaded);
         Sys.println("PASS: selective HLP patches are atomic and retain bounded JIT code");
     }

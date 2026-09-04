@@ -2,9 +2,9 @@
 #include <hl.h>
 #include <hlmodule.h>
 
-HL_PRIM hl_runtime_module *HL_NAME(load)( vbyte *bytes, int length ) {
+HL_PRIM hl_runtime_module *HL_NAME(load)( vbyte *bytes, int length, vbyte *identity, int identity_length ) {
 	hl_runtime_module *runtime = NULL;
-	return hl_runtime_module_load(bytes,length,&runtime) == HL_RUNTIME_OK ? runtime : NULL;
+	return hl_runtime_module_load(bytes,length,identity,identity_length,&runtime) == HL_RUNTIME_OK ? runtime : NULL;
 }
 
 HL_PRIM int HL_NAME(call_i32)( hl_runtime_module *runtime, int stable_id ) {
@@ -39,7 +39,7 @@ HL_PRIM int HL_NAME(inspect_patch)( vbyte *bytes, int length ) {
 	return (base_revision << 22) | (revision << 12) | function_count;
 }
 
-DEFINE_PRIM(_ABSTRACT(realtime_module),load,_BYTES _I32);
+DEFINE_PRIM(_ABSTRACT(realtime_module),load,_BYTES _I32 _BYTES _I32);
 DEFINE_PRIM(_I32,call_i32,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_I32,patch,_ABSTRACT(realtime_module) _BYTES _I32);
 DEFINE_PRIM(_I32,allocation_count,_ABSTRACT(realtime_module));

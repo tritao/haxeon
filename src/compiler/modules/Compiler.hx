@@ -16,6 +16,7 @@ import compiler.types.TypedAst.TypedProgram;
 import compiler.hl.HlCode;
 import compiler.hl.HlModuleAssembler;
 import compiler.hl.HlPatchWriter;
+import compiler.hl.HlRuntimeIdentity;
 import haxe.io.Bytes;
 
 typedef CompileResult = {
@@ -23,6 +24,8 @@ typedef CompileResult = {
     final retyped:Array<String>; final regenerated:Array<String>;
     final changedFunctions:Array<Int>; final requiresReload:Bool;
     final functionIndices:Map<String,Int>;
+    final functionIds:Map<String,Int>;
+    final runtimeIdentity:Bytes;
     final revision:Int;
     final patchBytes:Null<Bytes>;
 }
@@ -31,11 +34,12 @@ class Compiler {
     public final modules:Map<String, ModuleState> = [];
     final graph = new ModuleGraph();
     var assembler = new HlModuleAssembler();
+    final moduleId:Bytes;
 
-    public function new() {}
+    public function new(?moduleId:Bytes) { this.moduleId=moduleId==null?HlRuntimeIdentity.createModuleId():moduleId; }
 
     public function compact(entryModule:String):CompileResult {
-        assembler = new HlModuleAssembler();
+        assembler = new HlModuleAssembler(assembler.cache.stableIds);
         return compile(entryModule);
     }
 
@@ -106,11 +110,18 @@ class Compiler {
         var signatureChanges=[for(name in signatureChanged.keys())name];signatureChanges.sort(Reflect.compare);
         var assembly=assembler.assemble(ir,regenerated,signatureChanges);
         var patchBytes=assembly.requiresReload||assembly.changedFunctions.length==0?null:
-            HlPatchWriter.encode(assembly.module,assembly.changedFunctions,assembly.revision-1,assembly.revision,
+            HlPatchWriter.encode(assembly.module,moduleId,assembly.changedSlots,stableIdsBySlot(),assembly.revision-1,assembly.revision,
                 assembly.baseInts,assembly.baseFloats,assembly.baseStrings,assembly.baseTypes);
         return {ir:ir,module:assembly.module,retyped:retyped,regenerated:regenerated,
             changedFunctions:assembly.changedFunctions,requiresReload:assembly.requiresReload,
-            functionIndices:copyIndices(assembler.cache.indices),revision:assembly.revision,patchBytes:patchBytes};
+            functionIndices:copyIndices(assembler.cache.indices),functionIds:copyIndices(assembler.cache.stableIds),
+            runtimeIdentity:HlRuntimeIdentity.encode(moduleId,assembler.cache.indices,assembler.cache.stableIds),revision:assembly.revision,patchBytes:patchBytes};
+    }
+
+    function stableIdsBySlot():Map<Int,Int> {
+        var result:Map<Int,Int>=[];
+        for(name=>id in assembler.cache.stableIds)result.set(assembler.cache.indices.get(name),id);
+        return result;
     }
 
     function parse(state:ModuleState, entry:String, bodyChanged:Map<String,Bool>, signatureChanged:Map<String,Bool>):Void {

@@ -32,7 +32,9 @@ the function call graph. Cached IR objects for unaffected functions are reused
 when the executable module is assembled.
 
 The session-scoped HL assembler assigns append-only indices to functions,
-types, strings, and constants. Compilation reports changed function indices
+types, strings, and constants. Independently, it assigns persistent stable
+function IDs that survive insertion, removal, bytecode reordering, and explicit
+assembler compaction. Compilation reports changed stable function IDs
 and whether a structural edit requires reload. Removed functions retain a
 tombstone slot until `Compiler.compact()` performs a deterministic full rebuild.
 
@@ -55,6 +57,14 @@ operations return stable status codes, surfaced in Haxe as `RuntimeStatus` and
 `RuntimeError`, so malformed, stale, and incompatible patches remain distinct
 without coupling callers to native error strings.
 
+Initial module loading includes an `HLI` identity manifest alongside the
+standard, unmodified HLB bytes. The manifest binds a 128-bit module ID and
+stable function IDs to that generation's HashLink slots. HLP version 3 carries
+the module ID and identifies replacement bodies by stable ID; HashLink resolves
+the current slot internally and rejects patches from another module before
+revision checking or JIT staging. Keeping identity outside HLB preserves normal
+`.hl` compatibility with HashLink.
+
 Calls and commits are synchronized. Each stable slot records its owning JIT
 allocation; replacing its last referenced slot reclaims that allocation after
 protected calls finish. Failed staging is discarded before publication, keeping
@@ -71,7 +81,7 @@ validation; integration tests feed identical bytes through both decoders.
 `hl_module_apply_patch` resolves those records against the live module and JITs
 only their functions. Tests instrument the JIT to prove one changed function
 causes one compilation and two-function patches publish as a single transaction.
-HLP version 2 represents symbol tables as an expected live prefix count followed
+HLP version 3 represents symbol tables as an expected live prefix count followed
 by append-only records. Integer additions are staged and published with the code
 transaction; unsupported future float, string, or type additions currently fail
 closed rather than corrupting stable indices.

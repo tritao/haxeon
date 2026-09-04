@@ -1,6 +1,7 @@
 package compiler.hl;
 
 typedef HlPatch = {
+    final moduleId:haxe.io.Bytes;
     final baseRevision:Int;
     final revision:Int;
     final baseInts:Int; final baseFloats:Int; final baseStrings:Int; final baseTypes:Int;

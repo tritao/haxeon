@@ -4,7 +4,7 @@ import haxe.io.Bytes;
 
 @:hlNative("realtime_runtime")
 private class RuntimeNative {
-    public static function load(bytes:hl.Bytes, length:Int):hl.Abstract<"realtime_module"> return null;
+    public static function load(bytes:hl.Bytes, length:Int, identity:hl.Bytes, identityLength:Int):hl.Abstract<"realtime_module"> return null;
     public static function call_i32(module:hl.Abstract<"realtime_module">, index:Int):Int return 0;
     public static function patch(module:hl.Abstract<"realtime_module">, bytes:hl.Bytes, length:Int):Int return -1;
     public static function allocation_count(module:hl.Abstract<"realtime_module">):Int return 0;
@@ -19,8 +19,8 @@ class Runtime {
         if(summary<0)throw "HashLink rejected the HLP bytes";
         return {baseRevision:summary>>>22,revision:(summary>>>12)&0x3FF,functionCount:summary&0xFFF};
     }
-    public static function load(bytes:Bytes):LoadedModule {
-        var module = RuntimeNative.load(bytes.getData(), bytes.length);
+    public static function load(bytes:Bytes, identity:Bytes):LoadedModule {
+        var module = RuntimeNative.load(bytes.getData(), bytes.length, identity.getData(), identity.length);
         if (module == null) throw "HashLink rejected the module bytes";
         return cast module;
     }

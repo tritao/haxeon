@@ -5,26 +5,31 @@ import haxe.io.BytesOutput;
 import compiler.hl.HlCode.HlTypeDef;
 
 class HlPatchWriter {
-    public static inline final VERSION=2;
+    public static inline final VERSION=3;
 
-    public static function encode(code:HlCode, changedFunctions:Array<Int>, baseRevision:Int, revision:Int,
+    public static function encode(code:HlCode, moduleId:Bytes, changedSlots:Array<Int>, stableIdsBySlot:Map<Int,Int>, baseRevision:Int, revision:Int,
         baseInts:Int=0, baseFloats:Int=0, baseStrings:Int=0, baseTypes:Int=0):Bytes {
         if(baseRevision<0 || revision<=baseRevision)throw "Invalid patch revision range";
         var selected:Array<HlFunction>=[];
-        for(index in changedFunctions) {
+        if(moduleId.length!=16)throw "Module ID must contain 16 bytes";
+        for(index in changedSlots) {
             var found=null;
             for(fn in code.functions)if(fn.functionIndex==index){found=fn;break;}
             if(found==null)throw 'Patch references missing function $index';
             selected.push(found);
         }
         var out=new BytesOutput();out.bigEndian=false;
-        out.writeString("HLP");out.writeByte(VERSION);writeIndex(out,baseRevision);writeIndex(out,revision);
+        out.writeString("HLP");out.writeByte(VERSION);out.write(moduleId);writeIndex(out,baseRevision);writeIndex(out,revision);
         checkBase(baseInts,code.ints.length);writeIndex(out,baseInts);writeIndex(out,code.ints.length-baseInts);for(i in baseInts...code.ints.length)out.writeInt32(code.ints[i]);
         checkBase(baseFloats,code.floats.length);writeIndex(out,baseFloats);writeIndex(out,code.floats.length-baseFloats);for(i in baseFloats...code.floats.length)out.writeDouble(code.floats[i]);
         checkBase(baseStrings,code.strings.length);writeIndex(out,baseStrings);writeIndex(out,code.strings.length-baseStrings);for(i in baseStrings...code.strings.length){var b=Bytes.ofString(code.strings[i]);writeIndex(out,b.length);out.write(b);}
         checkBase(baseTypes,code.types.length);writeIndex(out,baseTypes);writeIndex(out,code.types.length-baseTypes);for(i in baseTypes...code.types.length)writeType(out,code.types[i]);
         writeIndex(out,selected.length);
-        for(fn in selected){var bytes=HlWriter.encodeFunction(fn);writeIndex(out,bytes.length);out.write(bytes);}
+        for(fn in selected){
+            var stableId=stableIdsBySlot.get(fn.functionIndex);if(stableId==null)throw 'Missing stable ID for function slot ${fn.functionIndex}';
+            var body=HlWriter.encodeFunction(fn), bytes=new BytesOutput();bytes.bigEndian=false;writeIndex(bytes,stableId);bytes.write(body);
+            var encoded=bytes.getBytes();writeIndex(out,encoded.length);out.write(encoded);
+        }
         return out.getBytes();
     }
     static function checkBase(base:Int,total:Int):Void if(base<0||base>total)throw "Invalid HLP symbol base";

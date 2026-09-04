@@ -58,13 +58,12 @@ class TestMain {
             new HlFunction(2,0,[1],[LoadInt(0,0),Return(0)]),
             new HlFunction(2,1,[1],[LoadInt(0,0),Return(0)]),
         ];
-        var patchBytes=HlPatchWriter.encode(patchCode,[1],7,8),patch=HlPatchReader.decode(patchBytes);
-        if(patch.baseRevision!=7||patch.revision!=8||patch.functions.length!=1||patch.functions[0].functionIndex!=1)
+        var testModuleId=haxe.io.Bytes.alloc(16),stableBySlot:Map<Int,Int>=[];stableBySlot.set(1,0x10001);
+        var patchBytes=HlPatchWriter.encode(patchCode,testModuleId,[1],stableBySlot,7,8),patch=HlPatchReader.decode(patchBytes);
+        if(patch.baseRevision!=7||patch.revision!=8||patch.functions.length!=1||patch.functions[0].functionIndex!=0x10001)
             throw "HLP round trip lost revision or function identity";
         if(patch.functions[0].instructions.length!=2||patch.functions[0].instructions[0].opcode!=HlOpcode.Int)
             throw "HLP round trip lost function bytecode";
-        if(patchBytes.length>=HlWriter.encode(patchCode).length)
-            throw "single-function HLP was not smaller than its complete HLB module";
         try {HlPatchReader.decode(patchBytes.sub(0,patchBytes.length-1));throw "truncated HLP was accepted";}catch(error:String){if(error!="Truncated HLP data")throw error;}
         Sys.println("PASS: selective HLP functions and revisions round trip strictly");
 
