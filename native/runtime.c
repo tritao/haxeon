@@ -6,8 +6,8 @@
 
 typedef struct {
 	hl_module *base;
-	hl_module **generations;
-	int generation_count;
+	hl_module *generation;
+	hl_mutex *lock;
 } realtime_module;
 
 static hl_function *find_function(hl_module *module, int findex) {
@@ -43,8 +43,9 @@ HL_PRIM realtime_module *HL_NAME(load)(vbyte *bytes, int length) {
 	if (module == NULL) return NULL;
 	loaded = (realtime_module *)malloc(sizeof(realtime_module));
 	loaded->base = module;
-	loaded->generations = NULL;
-	loaded->generation_count = 0;
+	loaded->generation = NULL;
+	loaded->lock = hl_mutex_alloc(true);
+	hl_add_root(&loaded->lock);
 	return loaded;
 }
 
@@ -52,16 +53,22 @@ HL_PRIM int HL_NAME(call_i32)(realtime_module *loaded, int findex) {
 	hl_function *function;
 	vclosure closure;
 	vdynamic *result;
+	bool is_exception = false;
 	if (loaded == NULL) hl_error("Runtime module is null");
+	hl_mutex_acquire(loaded->lock);
 	function = find_function(loaded->base, findex);
 	if (function == NULL || function->type->kind != HFUN ||
-		function->type->fun->nargs != 0 || function->type->fun->ret->kind != HI32)
+		function->type->fun->nargs != 0 || function->type->fun->ret->kind != HI32) {
+		hl_mutex_release(loaded->lock);
 		hl_error("Stable slot is not a zero-argument Int function");
+	}
 	closure.t = function->type;
 	closure.fun = loaded->base->functions_ptrs[findex];
 	closure.hasValue = 0;
 	closure.value = NULL;
-	result = hl_dyn_call(&closure, NULL, 0);
+	result = hl_dyn_call_safe(&closure, NULL, 0, &is_exception);
+	hl_mutex_release(loaded->lock);
+	if (is_exception) hl_throw(result);
 	return result->v.i;
 }
 
@@ -69,17 +76,41 @@ HL_PRIM bool HL_NAME(patch)(realtime_module *loaded, vbyte *bytes, int length, v
 	hl_module *generation;
 	if (loaded == NULL || indices == NULL || indices->at->kind != HI32 || indices->size == 0)
 		return false;
+	hl_mutex_acquire(loaded->lock);
 	generation = load_generation(bytes, length);
-	if (generation == NULL) return false;
+	if (generation == NULL) {
+		hl_mutex_release(loaded->lock);
+		return false;
+	}
 
-	if (!hl_module_patch_slots(loaded->base, generation,
-		hl_aptr(indices, int), indices->size)) return false;
-	loaded->generations = (hl_module **)realloc(loaded->generations,
-		sizeof(hl_module *) * (loaded->generation_count + 1));
-	loaded->generations[loaded->generation_count++] = generation;
+	if (!hl_module_patch_generation(loaded->base, generation)) {
+		hl_module_unload(generation);
+		hl_mutex_release(loaded->lock);
+		return false;
+	}
+	if (loaded->generation != NULL) hl_module_unload(loaded->generation);
+	loaded->generation = generation;
+	hl_mutex_release(loaded->lock);
 	return true;
+}
+
+HL_PRIM int HL_NAME(generation_count)(realtime_module *loaded) {
+	return loaded == NULL ? 0 : 1 + (loaded->generation != NULL);
+}
+
+HL_PRIM void HL_NAME(dispose)(realtime_module *loaded) {
+	if (loaded == NULL) return;
+	hl_mutex_acquire(loaded->lock);
+	if (loaded->generation != NULL) hl_module_unload(loaded->generation);
+	hl_module_unload(loaded->base);
+	hl_mutex_release(loaded->lock);
+	hl_remove_root(&loaded->lock);
+	hl_mutex_free(loaded->lock);
+	free(loaded);
 }
 
 DEFINE_PRIM(_ABSTRACT(realtime_module), load, _BYTES _I32);
 DEFINE_PRIM(_I32, call_i32, _ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_BOOL, patch, _ABSTRACT(realtime_module) _BYTES _I32 _ARR);
+DEFINE_PRIM(_I32, generation_count, _ABSTRACT(realtime_module));
+DEFINE_PRIM(_VOID, dispose, _ABSTRACT(realtime_module));

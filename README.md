@@ -47,6 +47,12 @@ dispatch through the module function table, so already-JITed callers immediately
 observe a committed replacement. Names and debug metadata are deliberately not
 used as function identity.
 
+Complete generations are switched as a transaction so every live slot points
+at one generation. Calls and commits are synchronized; once protected calls
+finish, the previous generation is unregistered and its JIT memory is released.
+Rejected generations are unloaded immediately, keeping repeated editor reloads
+bounded. Runtime modules also support explicit disposal at plugin-domain exit.
+
 ## Run the proof of concept
 
 ```sh
