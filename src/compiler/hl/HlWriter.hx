@@ -4,6 +4,7 @@ import haxe.io.Bytes;
 import haxe.io.BytesOutput;
 import haxe.io.Encoding;
 import compiler.hl.HlCode.HlTypeDef;
+import compiler.hl.HlFunction.HlInstruction;
 
 class HlWriter {
     final output:BytesOutput;
@@ -14,9 +15,105 @@ class HlWriter {
     }
 
     public static function encode(code:HlCode):Bytes {
+        validate(code);
         var writer = new HlWriter();
         writer.writeCode(code);
         return writer.output.getBytes();
+    }
+
+    /** Public because index encoding is part of the HLB format contract. */
+    public static function encodeIndex(value:Int):Bytes {
+        var writer = new HlWriter();
+        writer.writeIndex(value);
+        return writer.output.getBytes();
+    }
+
+    static function validate(code:HlCode):Void {
+        if (code.types.length == 0)
+            throw "HL module has no types";
+
+        for (type in code.types) {
+            switch type {
+                case Simple(_):
+                case Function(arguments, result):
+                    for (argument in arguments)
+                        requireType(code, argument, "function type argument");
+                    requireType(code, result, "function type result");
+            }
+        }
+
+        var functionIndices = new Map<Int, Bool>();
+        for (native in code.natives) {
+            requireType(code, native.type, 'native ${native.functionIndex}');
+            requireString(code, native.library, 'native library');
+            requireString(code, native.name, 'native name');
+            addFunctionIndex(functionIndices, native.functionIndex);
+        }
+        for (fn in code.functions) {
+            requireType(code, fn.type, 'function ${fn.functionIndex}');
+            addFunctionIndex(functionIndices, fn.functionIndex);
+        }
+        for (fn in code.functions) {
+            for (registerType in fn.registers)
+                requireType(code, registerType, 'register in function ${fn.functionIndex}');
+            validateInstructions(code, fn, functionIndices);
+        }
+        if (!functionIndices.exists(code.entryPoint))
+            throw 'Entry point ${code.entryPoint} is not a function';
+    }
+
+    static function addFunctionIndex(indices:Map<Int, Bool>, index:Int):Void {
+        if (index < 0)
+            throw 'Negative function index $index';
+        if (indices.exists(index))
+            throw 'Duplicate function index $index';
+        indices.set(index, true);
+    }
+
+    static function validateInstructions(code:HlCode, fn:HlFunction, functionIndices:Map<Int, Bool>):Void {
+        for (instruction in fn.opcodes) {
+            switch instruction {
+                case LoadInt(destination, constant):
+                    requireRegister(fn, destination);
+                    if (constant < 0 || constant >= code.ints.length)
+                        throw 'Invalid integer constant $constant in function ${fn.functionIndex}';
+                case Add(destination, left, right):
+                    requireRegister(fn, destination);
+                    requireRegister(fn, left);
+                    requireRegister(fn, right);
+                case Call1(destination, functionIndex, argument):
+                    requireRegister(fn, destination);
+                    requireRegister(fn, argument);
+                    requireCallable(functionIndices, functionIndex, fn.functionIndex);
+                case Call2(destination, functionIndex, argument1, argument2):
+                    requireRegister(fn, destination);
+                    requireRegister(fn, argument1);
+                    requireRegister(fn, argument2);
+                    requireCallable(functionIndices, functionIndex, fn.functionIndex);
+                case Return(register):
+                    requireRegister(fn, register);
+            }
+        }
+    }
+
+    static function requireCallable(indices:Map<Int, Bool>, callee:Int, caller:Int):Void {
+        if (!indices.exists(callee))
+            throw 'Function $caller calls unknown function $callee';
+    }
+
+    static function requireRegister(fn:HlFunction, register:Int):Void {
+        if (register < 0 || register >= fn.registers.length)
+            throw 'Invalid register $register in function ${fn.functionIndex}';
+    }
+
+    static function requireType(code:HlCode, type:Int, context:String):Void {
+        if (type < 0 || type >= code.types.length)
+            throw 'Invalid type $type for $context';
+    }
+
+    static function requireString(code:HlCode, string:Int, context:String):Void {
+        if (string < 0 || string >= code.strings.length)
+            throw 'Invalid string $string for $context';
     }
 
     function writeCode(code:HlCode):Void {
@@ -91,11 +188,29 @@ class HlWriter {
         writeUnsignedIndex(fn.opcodes.length);
         for (type in fn.registers)
             writeIndex(type);
-        for (instruction in fn.opcodes) {
-            output.writeByte(instruction.opcode);
-            for (operand in instruction.operands)
-                writeIndex(operand);
+        for (instruction in fn.opcodes)
+            writeInstruction(instruction);
+    }
+
+    function writeInstruction(instruction:HlInstruction):Void {
+        switch instruction {
+            case LoadInt(destination, constant):
+                writeOpcode(HlOpcode.Int, [destination, constant]);
+            case Add(destination, left, right):
+                writeOpcode(HlOpcode.Add, [destination, left, right]);
+            case Call1(destination, functionIndex, argument):
+                writeOpcode(HlOpcode.Call1, [destination, functionIndex, argument]);
+            case Call2(destination, functionIndex, argument1, argument2):
+                writeOpcode(HlOpcode.Call2, [destination, functionIndex, argument1, argument2]);
+            case Return(register):
+                writeOpcode(HlOpcode.Ret, [register]);
         }
+    }
+
+    function writeOpcode(opcode:HlOpcode, operands:Array<Int>):Void {
+        output.writeByte(opcode);
+        for (operand in operands)
+            writeIndex(operand);
     }
 
     function writeUnsignedIndex(value:Int):Void {

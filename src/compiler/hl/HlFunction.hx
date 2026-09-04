@@ -14,12 +14,10 @@ class HlFunction {
     }
 }
 
-class HlInstruction {
-    public final opcode:HlOpcode;
-    public final operands:Array<Int>;
-
-    public function new(opcode:HlOpcode, operands:Array<Int>) {
-        this.opcode = opcode;
-        this.operands = operands;
-    }
+enum HlInstruction {
+    LoadInt(destination:Int, constant:Int);
+    Add(destination:Int, left:Int, right:Int);
+    Call1(destination:Int, functionIndex:Int, argument:Int);
+    Call2(destination:Int, functionIndex:Int, argument1:Int, argument2:Int);
+    Return(register:Int);
 }
