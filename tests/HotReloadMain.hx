@@ -23,6 +23,8 @@ class HotReloadMain {
         compiler.update("Value.hx", "function value():Int { return 43; }");
         var changed = compiler.compile("Main");
         var decoded=HlPatchReader.decode(changed.patchBytes);
+        if(decoded.baseInts!=initial.module.ints.length||decoded.ints.length!=1||decoded.ints[0]!=43)
+            throw "HLP did not encode the integer symbol delta";
         var nativeDecoded=Runtime.inspectPatch(changed.patchBytes);
         if(nativeDecoded.baseRevision!=decoded.baseRevision||nativeDecoded.revision!=decoded.revision||nativeDecoded.functionCount!=decoded.functions.length)
             throw "native and Haxe HLP decoders disagree";

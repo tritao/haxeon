@@ -63,6 +63,10 @@ validation; integration tests feed identical bytes through both decoders.
 `hl_module_apply_patch` resolves those records against the live module and JITs
 only their functions. Tests instrument the JIT to prove one changed function
 causes one compilation and two-function patches publish as a single transaction.
+HLP version 2 represents symbol tables as an expected live prefix count followed
+by append-only records. Integer additions are staged and published with the code
+transaction; unsupported future float, string, or type additions currently fail
+closed rather than corrupting stable indices.
 
 ## Run the proof of concept
 

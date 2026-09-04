@@ -3,6 +3,7 @@ package compiler.hl;
 typedef HlPatch = {
     final baseRevision:Int;
     final revision:Int;
+    final baseInts:Int; final baseFloats:Int; final baseStrings:Int; final baseTypes:Int;
     final ints:Array<Int>;
     final floats:Array<Float>;
     final strings:Array<String>;

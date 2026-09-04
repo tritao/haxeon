@@ -8,6 +8,7 @@ typedef HlAssemblyResult = {
     final changedFunctions:Array<Int>;
     final requiresReload:Bool;
     final revision:Int;
+    final baseInts:Int; final baseFloats:Int; final baseStrings:Int; final baseTypes:Int;
 }
 
 class HlModuleAssembler {
@@ -15,6 +16,7 @@ class HlModuleAssembler {
     public final cache = new HlFunctionCache();
     var initialized:Bool=false;
     var revision:Int=0;
+    var publishedInts=0; var publishedFloats=0; var publishedStrings=0; var publishedTypes=0;
 
     public function new() {}
 
@@ -28,8 +30,11 @@ class HlModuleAssembler {
         changed.sort(function(a,b)return a-b);
         var reload=initialized && signatureChanges.length>0;
         var module=HlLower.lowerStable(ordered,symbols,cache.indices);
+        var baseInts=publishedInts,baseFloats=publishedFloats,baseStrings=publishedStrings,baseTypes=publishedTypes;
+        publishedInts=module.ints.length;publishedFloats=module.floats.length;publishedStrings=module.strings.length;publishedTypes=module.types.length;
         revision++;
         initialized=true;
-        return {module:module,changedFunctions:changed,requiresReload:reload,revision:revision};
+        return {module:module,changedFunctions:changed,requiresReload:reload,revision:revision,
+            baseInts:baseInts,baseFloats:baseFloats,baseStrings:baseStrings,baseTypes:baseTypes};
     }
 }

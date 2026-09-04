@@ -12,13 +12,13 @@ class HlPatchReader {
             if(input.readString(3)!="HLP")throw "Invalid HLP magic";
             if(input.readByte()!=HlPatchWriter.VERSION)throw "Unsupported HLP version";
             var base=readUnsigned(input),revision=readUnsigned(input);if(revision<=base)throw "Invalid patch revision range";
-            var ints=[for(_ in 0...readUnsigned(input))input.readInt32()];
-            var floats=[for(_ in 0...readUnsigned(input))input.readDouble()];
-            var strings=[for(_ in 0...readUnsigned(input))input.readString(readUnsigned(input))];
-            var types=[];for(_ in 0...readUnsigned(input))types.push(readType(input));
+            var baseInts=readUnsigned(input),ints=[for(_ in 0...readUnsigned(input))input.readInt32()];
+            var baseFloats=readUnsigned(input),floats=[for(_ in 0...readUnsigned(input))input.readDouble()];
+            var baseStrings=readUnsigned(input),strings=[for(_ in 0...readUnsigned(input))input.readString(readUnsigned(input))];
+            var baseTypes=readUnsigned(input),types=[];for(_ in 0...readUnsigned(input))types.push(readType(input));
             var functions=[];for(_ in 0...readUnsigned(input)){var length=readUnsigned(input),end=input.position+length;functions.push(readFunction(input));if(input.position!=end)throw "Invalid patch function length";}
             if(input.position!=bytes.length)throw "Trailing HLP data";
-            return {baseRevision:base,revision:revision,ints:ints,floats:floats,strings:strings,types:types,functions:functions};
+            return {baseRevision:base,revision:revision,baseInts:baseInts,baseFloats:baseFloats,baseStrings:baseStrings,baseTypes:baseTypes,ints:ints,floats:floats,strings:strings,types:types,functions:functions};
         } catch(error:haxe.io.Eof) {throw "Truncated HLP data";}
     }
     static function readType(input:BytesInput):HlTypeDef {var tag=input.readByte();return if(tag==HlType.Fun){var n=input.readByte();Function([for(_ in 0...n)readIndex(input)],readIndex(input));}else Simple(cast tag);}

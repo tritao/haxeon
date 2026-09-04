@@ -5,9 +5,10 @@ import haxe.io.BytesOutput;
 import compiler.hl.HlCode.HlTypeDef;
 
 class HlPatchWriter {
-    public static inline final VERSION=1;
+    public static inline final VERSION=2;
 
-    public static function encode(code:HlCode, changedFunctions:Array<Int>, baseRevision:Int, revision:Int):Bytes {
+    public static function encode(code:HlCode, changedFunctions:Array<Int>, baseRevision:Int, revision:Int,
+        baseInts:Int=0, baseFloats:Int=0, baseStrings:Int=0, baseTypes:Int=0):Bytes {
         if(baseRevision<0 || revision<=baseRevision)throw "Invalid patch revision range";
         var selected:Array<HlFunction>=[];
         for(index in changedFunctions) {
@@ -18,14 +19,15 @@ class HlPatchWriter {
         }
         var out=new BytesOutput();out.bigEndian=false;
         out.writeString("HLP");out.writeByte(VERSION);writeIndex(out,baseRevision);writeIndex(out,revision);
-        writeIndex(out,code.ints.length);for(v in code.ints)out.writeInt32(v);
-        writeIndex(out,code.floats.length);for(v in code.floats)out.writeDouble(v);
-        writeIndex(out,code.strings.length);for(v in code.strings){var b=Bytes.ofString(v);writeIndex(out,b.length);out.write(b);}
-        writeIndex(out,code.types.length);for(t in code.types)writeType(out,t);
+        checkBase(baseInts,code.ints.length);writeIndex(out,baseInts);writeIndex(out,code.ints.length-baseInts);for(i in baseInts...code.ints.length)out.writeInt32(code.ints[i]);
+        checkBase(baseFloats,code.floats.length);writeIndex(out,baseFloats);writeIndex(out,code.floats.length-baseFloats);for(i in baseFloats...code.floats.length)out.writeDouble(code.floats[i]);
+        checkBase(baseStrings,code.strings.length);writeIndex(out,baseStrings);writeIndex(out,code.strings.length-baseStrings);for(i in baseStrings...code.strings.length){var b=Bytes.ofString(code.strings[i]);writeIndex(out,b.length);out.write(b);}
+        checkBase(baseTypes,code.types.length);writeIndex(out,baseTypes);writeIndex(out,code.types.length-baseTypes);for(i in baseTypes...code.types.length)writeType(out,code.types[i]);
         writeIndex(out,selected.length);
         for(fn in selected){var bytes=HlWriter.encodeFunction(fn);writeIndex(out,bytes.length);out.write(bytes);}
         return out.getBytes();
     }
+    static function checkBase(base:Int,total:Int):Void if(base<0||base>total)throw "Invalid HLP symbol base";
 
     static function writeType(out:BytesOutput,type:HlTypeDef):Void switch type {
         case Simple(kind):out.writeByte(kind);

@@ -106,7 +106,8 @@ class Compiler {
         var signatureChanges=[for(name in signatureChanged.keys())name];signatureChanges.sort(Reflect.compare);
         var assembly=assembler.assemble(ir,regenerated,signatureChanges);
         var patchBytes=assembly.requiresReload||assembly.changedFunctions.length==0?null:
-            HlPatchWriter.encode(assembly.module,assembly.changedFunctions,assembly.revision-1,assembly.revision);
+            HlPatchWriter.encode(assembly.module,assembly.changedFunctions,assembly.revision-1,assembly.revision,
+                assembly.baseInts,assembly.baseFloats,assembly.baseStrings,assembly.baseTypes);
         return {ir:ir,module:assembly.module,retyped:retyped,regenerated:regenerated,
             changedFunctions:assembly.changedFunctions,requiresReload:assembly.requiresReload,
             functionIndices:copyIndices(assembler.cache.indices),revision:assembly.revision,patchBytes:patchBytes};
