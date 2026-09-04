@@ -35,6 +35,12 @@ class HotReloadMain {
         var compilerIndex = changed.functionIds.get("Value.value");
         if (changed.changedFunctions.length != 1 || changed.changedFunctions[0] != compilerIndex)
             throw 'compiler reported unexpected changed functions: ${changed.changedFunctions}';
+        var corruptHash=changed.patchBytes.sub(0,changed.patchBytes.length),hashPosition=skipIndex(corruptHash,24);
+        corruptHash.set(hashPosition,corruptHash.get(hashPosition)^1);
+        try {
+            Runtime.patchSet(loaded,new PatchSet(liveRevision,changed.revision,corruptHash,changed.changedFunctions,false));
+            throw "mismatched symbol prefix unexpectedly succeeded";
+        } catch(error:RuntimeError) {if(error.status!=RuntimeStatus.Incompatible)throw error;}
         Runtime.patchSet(loaded, new PatchSet(liveRevision, changed.revision, changed.patchBytes, changed.changedFunctions, changed.requiresReload));
         liveRevision = changed.revision;
         if(Runtime.patchJitCount(loaded)!=1)throw "one-function patch did not JIT exactly one function";
@@ -57,6 +63,9 @@ class HotReloadMain {
         compiler.update("Probe.hx", "function read():Int { var result = Value.value(); return result; }");
         var pair=compiler.compile("Main");
         if(pair.changedFunctions.length!=2)throw "two-function edit did not produce an atomic pair";
+        var pairDecoded=HlPatchReader.decode(pair.patchBytes),hasRelocation=false;
+        for(patchedFunction in pairDecoded.functions)if(patchedFunction.relocations.length>0)hasRelocation=true;
+        if(!hasRelocation)throw "patched calls were not encoded as stable-ID relocations";
         Runtime.patchSet(loaded,new PatchSet(liveRevision,pair.revision,pair.patchBytes,pair.changedFunctions,pair.requiresReload));
         liveRevision=pair.revision;
         if(Runtime.patchJitCount(loaded)-beforePair!=2)throw "two-function patch did not JIT exactly two functions";
@@ -125,5 +134,11 @@ class HotReloadMain {
         if(Runtime.callInt(loaded,valueIndex)!=47)throw "foreign patch damaged the live generation";
         Runtime.dispose(loaded);
         Sys.println("PASS: selective HLP patches are atomic and retain bounded JIT code");
+    }
+
+    static function skipIndex(bytes:haxe.io.Bytes,position:Int):Int {
+        var first=bytes.get(position++);
+        if((first&0x80)==0)return position;
+        return position+((first&0x40)==0?1:3);
     }
 }

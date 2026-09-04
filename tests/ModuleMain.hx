@@ -67,6 +67,12 @@ class ModuleMain {
         var compacted=compiler.compact("Main");
         if(compacted.functionIndices.exists("Temp.oldValue"))throw "Compact build retained tombstone";
         if(compacted.functionIds.get("Math.add")!=mathId)throw "Compaction changed a live function identity";
+        var resumed=new Compiler(compiler.exportIdentityState());
+        resumed.update("Math.hx", "function add(a:Int, b:Int):Int { return a + b; }");
+        resumed.update("Main.hx", "function main():Int { return Math.add(20, 22); }");
+        var resumedBuild=resumed.compile("Main");
+        if(resumedBuild.functionIds.get("Math.add")!=mathId||resumedBuild.runtimeIdentity.sub(4,16).compare(compacted.runtimeIdentity.sub(4,16))!=0)
+            throw "Serialized compiler identity did not survive restart";
         File.saveBytes(output,HlWriter.encode(compacted.module));
 
         var missing=new Compiler();

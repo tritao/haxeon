@@ -59,11 +59,17 @@ without coupling callers to native error strings.
 
 Initial module loading includes an `HLI` identity manifest alongside the
 standard, unmodified HLB bytes. The manifest binds a 128-bit module ID and
-stable function IDs to that generation's HashLink slots. HLP version 3 carries
+stable function IDs to that generation's HashLink slots. HLP version 4 carries
 the module ID and identifies replacement bodies by stable ID; HashLink resolves
 the current slot internally and rejects patches from another module before
 revision checking or JIT staging. Keeping identity outside HLB preserves normal
 `.hl` compatibility with HashLink.
+
+Compiler identity state can be serialized with `Compiler.exportIdentityState()`
+and supplied to a new compiler instance, preserving the module ID and stable-ID
+registry across editor or compiler restarts. Patch call sites also carry
+stable-target relocations, so HashLink resolves user-function calls against the
+loaded generation instead of trusting an old HLB function index.
 
 Calls and commits are synchronized. Each stable slot records its owning JIT
 allocation; replacing its last referenced slot reclaims that allocation after
@@ -81,8 +87,11 @@ validation; integration tests feed identical bytes through both decoders.
 `hl_module_apply_patch` resolves those records against the live module and JITs
 only their functions. Tests instrument the JIT to prove one changed function
 causes one compilation and two-function patches publish as a single transaction.
-HLP version 3 represents symbol tables as an expected live prefix count followed
-by append-only records. Integer additions are staged and published with the code
+HLP version 4 is a length-delimited section container; unknown sections can be
+skipped while required symbol and function sections are validated strictly.
+It represents symbol tables as an expected live prefix count and FNV-1a content
+hash followed by append-only records, preventing equal-length but different
+symbol tables from accepting the same patch. Integer additions are staged and published with the code
 transaction; unsupported future float, string, or type additions currently fail
 closed rather than corrupting stable indices.
 

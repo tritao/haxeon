@@ -33,10 +33,15 @@ typedef CompileResult = {
 class Compiler {
     public final modules:Map<String, ModuleState> = [];
     final graph = new ModuleGraph();
-    var assembler = new HlModuleAssembler();
+    var assembler:HlModuleAssembler;
     final moduleId:Bytes;
 
-    public function new(?moduleId:Bytes) { this.moduleId=moduleId==null?HlRuntimeIdentity.createModuleId():moduleId; }
+    public function new(?identityState:Bytes) {
+        if(identityState==null){moduleId=HlRuntimeIdentity.createModuleId();assembler=new HlModuleAssembler();}
+        else {var identity=HlRuntimeIdentity.decodePersistent(identityState);moduleId=identity.moduleId;assembler=new HlModuleAssembler(identity.stableIds);}
+    }
+
+    public function exportIdentityState():Bytes return HlRuntimeIdentity.encodePersistent(moduleId,assembler.cache.stableIds);
 
     public function compact(entryModule:String):CompileResult {
         assembler = new HlModuleAssembler(assembler.cache.stableIds);
