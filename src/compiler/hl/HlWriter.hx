@@ -33,6 +33,13 @@ class HlWriter {
         return writer.output.getBytes();
     }
 
+    /** Encodes one function using its canonical HLB function representation. */
+    public static function encodeFunction(fn:HlFunction):Bytes {
+        var writer = new HlWriter();
+        writer.writeFunction(fn);
+        return writer.output.getBytes();
+    }
+
     static function validate(code:HlCode):Void {
         if (code.types.length == 0)
             throw "HL module has no types";

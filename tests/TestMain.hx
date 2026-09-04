@@ -7,6 +7,9 @@ import compiler.hl.HlFunction;
 import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlType;
 import compiler.hl.HlWriter;
+import compiler.hl.HlPatchWriter;
+import compiler.hl.HlPatchReader;
+import compiler.hl.HlOpcode;
 import compiler.ir.HlLower;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
@@ -48,6 +51,22 @@ class TestMain {
         ])];
         expectError(duplicateLabel, 'Duplicate label "same" in function 0');
         Sys.println("PASS: malformed module is rejected before serialization");
+
+        var patchCode=baseControlFlowModule();
+        patchCode.ints=[42];
+        patchCode.functions=[
+            new HlFunction(2,0,[1],[LoadInt(0,0),Return(0)]),
+            new HlFunction(2,1,[1],[LoadInt(0,0),Return(0)]),
+        ];
+        var patchBytes=HlPatchWriter.encode(patchCode,[1],7,8),patch=HlPatchReader.decode(patchBytes);
+        if(patch.baseRevision!=7||patch.revision!=8||patch.functions.length!=1||patch.functions[0].functionIndex!=1)
+            throw "HLP round trip lost revision or function identity";
+        if(patch.functions[0].instructions.length!=2||patch.functions[0].instructions[0].opcode!=HlOpcode.Int)
+            throw "HLP round trip lost function bytecode";
+        if(patchBytes.length>=HlWriter.encode(patchCode).length)
+            throw "single-function HLP was not smaller than its complete HLB module";
+        try {HlPatchReader.decode(patchBytes.sub(0,patchBytes.length-1));throw "truncated HLP was accepted";}catch(error:String){if(error!="Truncated HLP data")throw error;}
+        Sys.println("PASS: selective HLP functions and revisions round trip strictly");
 
         var ir = new IrProgram("main");
         var builder = new IrBuilder();

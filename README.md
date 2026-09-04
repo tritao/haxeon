@@ -55,6 +55,11 @@ bounded. Runtime modules also support explicit disposal at plugin-domain exit.
 Patch sets carry expected-base and replacement revisions; stale or replayed
 updates are rejected before loading or changing live dispatch state.
 
+Compatible incremental builds also emit versioned `HLP` bytes. The patch format
+contains the stable symbol/type requirements and only the changed function
+definitions, with a strict Haxe decoder serving as the protocol oracle for the
+native HashLink decoder.
+
 ## Run the proof of concept
 
 ```sh

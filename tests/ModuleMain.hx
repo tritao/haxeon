@@ -1,4 +1,5 @@
 import compiler.hl.HlWriter;
+import compiler.hl.HlPatchReader;
 import compiler.ir.HlLower;
 import compiler.modules.Compiler;
 import compiler.Diagnostic.CompileError;
@@ -25,6 +26,10 @@ class ModuleMain {
         if (compiler.modules.get("Main").typeVersion != 1) throw "Body edit retyped dependent module";
         if (compiler.modules.get("Math").irVersions.get("Math.add") != 2) throw "Edited function IR was not regenerated";
         if(result.changedFunctions.length!=1 || result.changedFunctions[0]!=mathIndex)throw 'Wrong changed HL functions: ${result.changedFunctions}';
+        if(result.patchBytes==null)throw "Compatible body edit did not emit HLP bytes";
+        var decodedPatch=HlPatchReader.decode(result.patchBytes);
+        if(decodedPatch.functions.length!=1||decodedPatch.functions[0].functionIndex!=mathIndex)
+            throw "Compiler HLP did not contain exactly the changed function";
         if(result.requiresReload)throw "Body edit unexpectedly requires reload";
         if (compiler.modules.get("Unused").parseVersion != 1 || compiler.modules.get("Unused").typeVersion != 1)
             throw "Unrelated module was not reused";

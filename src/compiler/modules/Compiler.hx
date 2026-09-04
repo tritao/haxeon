@@ -15,6 +15,8 @@ import compiler.types.Typer;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.hl.HlCode;
 import compiler.hl.HlModuleAssembler;
+import compiler.hl.HlPatchWriter;
+import haxe.io.Bytes;
 
 typedef CompileResult = {
     final ir:IrProgram; final module:HlCode;
@@ -22,6 +24,7 @@ typedef CompileResult = {
     final changedFunctions:Array<Int>; final requiresReload:Bool;
     final functionIndices:Map<String,Int>;
     final revision:Int;
+    final patchBytes:Null<Bytes>;
 }
 
 class Compiler {
@@ -102,9 +105,11 @@ class Compiler {
         var ir=IrGenerator.assemble(cached);
         var signatureChanges=[for(name in signatureChanged.keys())name];signatureChanges.sort(Reflect.compare);
         var assembly=assembler.assemble(ir,regenerated,signatureChanges);
+        var patchBytes=assembly.requiresReload||assembly.changedFunctions.length==0?null:
+            HlPatchWriter.encode(assembly.module,assembly.changedFunctions,assembly.revision-1,assembly.revision);
         return {ir:ir,module:assembly.module,retyped:retyped,regenerated:regenerated,
             changedFunctions:assembly.changedFunctions,requiresReload:assembly.requiresReload,
-            functionIndices:copyIndices(assembler.cache.indices),revision:assembly.revision};
+            functionIndices:copyIndices(assembler.cache.indices),revision:assembly.revision,patchBytes:patchBytes};
     }
 
     function parse(state:ModuleState, entry:String, bodyChanged:Map<String,Bool>, signatureChanged:Map<String,Bool>):Void {
