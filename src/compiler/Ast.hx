@@ -48,5 +48,7 @@ typedef AstFunction = {
 }
 
 typedef AstProgram = {
+	final packageName:Null<String>;
+	final imports:Array<String>;
 	final functions:Array<AstFunction>;
 }

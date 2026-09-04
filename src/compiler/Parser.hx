@@ -17,10 +17,26 @@ class Parser {
 	}
 
 	public function parseProgram():AstProgram {
+		var packageName:Null<String> = null, imports = [];
+		if (match(TokenKind.Package)) {
+			packageName = parseQualifiedName();
+			consume(TokenKind.Semicolon);
+		}
+		while (match(TokenKind.Import)) {
+			imports.push(parseQualifiedName());
+			consume(TokenKind.Semicolon);
+		}
 		var functions = [];
 		while (!check(TokenKind.Eof))
 			functions.push(parseFunction());
-		return {functions: functions};
+		return {packageName: packageName, imports: imports, functions: functions};
+	}
+
+	function parseQualifiedName():String {
+		var name = consume(TokenKind.Identifier).text;
+		while (match(TokenKind.Dot))
+			name += "." + consume(TokenKind.Identifier).text;
+		return name;
 	}
 
 	function parseFunction():AstFunction {

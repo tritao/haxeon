@@ -155,7 +155,7 @@ class Compiler {
 				selected.set(fn.name, true);
 		var typedNew:TypedProgram;
 		try
-			typedNew = Typer.typeSelected({functions: functions}, selected, nativeSignatures())
+			typedNew = Typer.typeSelected({packageName: null, imports: [], functions: functions}, selected, nativeSignatures())
 		catch (error:CompileError) {
 			for (name in names) {
 				var state = modules.get(name);
@@ -272,6 +272,9 @@ class Compiler {
 			throw error;
 		}
 		var dependencies:Map<String, Bool> = [];
+		if (state.ast.imports != null)
+			for (dependency in state.ast.imports)
+				dependencies.set(dependency, true);
 		for (fn in state.ast.functions)
 			for (statement in fn.statements)
 				scanStatement(statement, dependencies);

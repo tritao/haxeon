@@ -204,6 +204,11 @@ class TestMain {
 		if (restoredType.id != stableTypeId || restoredType.fields[0].id != stableFieldId || restoredType.methods[0].id != stableMethodId)
 			throw "Type identities did not survive persistence and restart";
 		Sys.println("PASS: stable nominal identities and layout compatibility survive restart");
+		var packaged = new Parser(new Lexer(new SourceFile("pkg.hx",
+			"package editor.core; import editor.util; function main():Int { return 42; }")).tokenize()).parseProgram();
+		if (packaged.packageName != "editor.core" || packaged.imports.length != 1 || packaged.imports[0] != "editor.util")
+			throw "Package and import declarations were not preserved in the AST";
+		Sys.println("PASS: package and import declarations are represented in the frontend");
 		Sys.println("PASS: typer rejects invalid names, calls, conditions, and return paths");
 
 		try {

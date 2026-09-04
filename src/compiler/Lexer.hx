@@ -103,6 +103,8 @@ class Lexer {
 
 	static function keyword(text:String):TokenKind {
 		return switch text {
+			case "package": TokenKind.Package;
+			case "import": TokenKind.Import;
 			case "function": TokenKind.Function;
 			case "var": TokenKind.Var;
 			case "return": TokenKind.Return;

@@ -3,6 +3,8 @@ package compiler;
 import compiler.Source.SourceSpan;
 
 enum TokenKind {
+	Package;
+	Import;
 	Function;
 	Var;
 	Return;
