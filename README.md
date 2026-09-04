@@ -48,6 +48,13 @@ assembler compaction. Compilation reports changed stable function IDs
 and whether a structural edit requires reload. Removed functions retain a
 tombstone slot until `Compiler.compact()` performs a deterministic full rebuild.
 
+User-function slots and stable IDs live in a compiler registry that contains no
+natives. During HL assembly, the backend independently lays out the frozen native
+registry followed by cached bytecode-function slots and produces the transient
+`findex` map. Consequently, changing host-native configuration between separate
+build domains can change HLB layout without changing persistent source-function
+identity.
+
 The runtime proof of concept loads compiler-produced HLB bytes in-process and
 calls functions through compiler-owned stable slots. A compatible edit arrives
 as HLP, is validated and JIT compiled privately, and then commits all selected

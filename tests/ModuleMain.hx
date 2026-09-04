@@ -76,6 +76,13 @@ class ModuleMain {
         var resumedBuild=resumed.compile("Main");
         if(resumedBuild.functionIds.get("Math.add")!=mathId||resumedBuild.runtimeIdentity.sub(4,16).compare(compacted.runtimeIdentity.sub(4,16))!=0)
             throw "Serialized compiler identity did not survive restart";
+        var layoutA=new Compiler(),layoutB=new Compiler();
+        layoutA.registerNative("clock","std","sys_time",[],TFloat);
+        layoutB.registerNative("clock","std","sys_time",[],TFloat);layoutB.registerNative("print","std","sys_print",[TString],TVoid);
+        layoutA.update("Main.hx","function main():Int { return 1; }");layoutB.update("Main.hx","function main():Int { return 1; }");
+        var buildA=layoutA.compile("Main"),buildB=layoutB.compile("Main");
+        if(buildA.functionIds.get("main")!=buildB.functionIds.get("main"))throw "Native layout changed persistent user-function identity";
+        if(buildA.functionIndices.get("main")==buildB.functionIndices.get("main"))throw "Test did not exercise distinct backend native layouts";
         File.saveBytes(output,HlWriter.encode(compacted.module));
 
         var missing=new Compiler();

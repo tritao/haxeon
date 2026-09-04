@@ -53,12 +53,10 @@ class Compiler {
         if(compiledOnce)throw "Native registrations are frozen after the first compilation";
         if(natives.exists(name))throw 'Native "$name" is already registered';
         natives.set(name,{name:name,library:library,symbol:symbol,arguments:arguments.copy(),result:result});
-        assembler.cache.registerNative(name);
     }
 
     public function compact(entryModule:String):CompileResult {
         assembler = new HlModuleAssembler(assembler.cache.stableIds);
-        for(name in natives.keys())assembler.cache.registerNative(name);
         return compile(entryModule);
     }
 
@@ -130,21 +128,21 @@ class Compiler {
         var assembly=assembler.assemble(ir,regenerated,signatureChanges);
         compiledOnce=true;
         var patchBytes=assembly.requiresReload||assembly.changedFunctions.length==0?null:
-            HlPatchWriter.encode(assembly.module,moduleId,assembly.changedSlots,stableIdsBySlot(),assembly.revision-1,assembly.revision,
+            HlPatchWriter.encode(assembly.module,moduleId,assembly.changedSlots,stableIdsBySlot(assembly.functionIndices),assembly.revision-1,assembly.revision,
                 assembly.baseInts,assembly.baseFloats,assembly.baseStrings,assembly.baseTypes);
         return {ir:ir,module:assembly.module,retyped:retyped,regenerated:regenerated,
             changedFunctions:assembly.changedFunctions,requiresReload:assembly.requiresReload,
-            functionIndices:copyIndices(assembler.cache.indices),functionIds:copyIndices(assembler.cache.stableIds),
-            runtimeIdentity:HlRuntimeIdentity.encode(moduleId,assembler.cache.indices,assembler.cache.stableIds),revision:assembly.revision,patchBytes:patchBytes};
+            functionIndices:copyIndices(assembly.functionIndices),functionIds:copyIndices(assembler.cache.stableIds),
+            runtimeIdentity:HlRuntimeIdentity.encode(moduleId,assembly.functionIndices,assembler.cache.stableIds),revision:assembly.revision,patchBytes:patchBytes};
     }
 
     function nativeSignatures():Map<String,{arguments:Array<CompilerType>,result:CompilerType}>{var result:Map<String,{arguments:Array<CompilerType>,result:CompilerType}>=[];for(name=>native in natives)result.set(name,{arguments:native.arguments,result:native.result});return result;}
     function irNatives():Array<IrNative>{var names=[for(name in natives.keys())name];names.sort(Reflect.compare);return [for(name in names){var native=natives.get(name);{name:native.name,library:native.library,symbol:native.symbol,arguments:[for(type in native.arguments)irType(type)],result:irType(native.result)}}];}
     static function irType(type:CompilerType):compiler.ir.Ir.IrType return switch type {case TInt:I32;case TBool:Bool;case TFloat:F64;case TString:Bytes;case TVoid:Void;};
 
-    function stableIdsBySlot():Map<Int,Int> {
+    function stableIdsBySlot(layout:Map<String,Int>):Map<Int,Int> {
         var result:Map<Int,Int>=[];
-        for(name=>id in assembler.cache.stableIds)result.set(assembler.cache.indices.get(name),id);
+        for(name=>id in assembler.cache.stableIds)if(layout.exists(name))result.set(layout.get(name),id);
         return result;
     }
 
