@@ -129,6 +129,8 @@ non-moving type arena.
 
 ```sh
 ./scripts/bootstrap-tools.sh
+./scripts/format.sh
+./scripts/format.sh --check
 ./scripts/test-poc.sh
 ./test-hot-reload.sh
 ```
@@ -139,3 +141,7 @@ eventually use the checked-in bootstrap compiler instead of official Haxe.
 
 The writer currently targets bytecode format version 6, matching the current
 HashLink decoder in `src/code.c`.
+
+Haxe sources are formatted with the repository-pinned Haxe Formatter. Run
+`./scripts/format.sh` to apply formatting; `./scripts/format.sh --check` is part
+of the proof-of-concept test suite.
