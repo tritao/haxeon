@@ -25,6 +25,8 @@ import compiler.ir.CfgVerifier;
 import compiler.Lexer;
 import compiler.Parser;
 import compiler.types.Typer;
+import compiler.types.TypeRegistry;
+import compiler.types.TypeRegistry.TypeCompatibility;
 import haxe.io.BytesInput;
 
 class TestMain {
@@ -182,6 +184,26 @@ class TestMain {
 		crossBlockB.terminator = compiler.ir.Cfg.CfgTerminator.Return(crossValue);
 		expectCfgError(new CfgFunction("bad", [], I32, [crossBlockA, crossBlockB], []), "CFG value 0 is used outside its defining block or before definition");
 		Sys.println("PASS: CFG verifier rejects malformed blocks, edges, and values");
+		var types = new TypeRegistry();
+		var firstType = types.declareClass("demo.Box", null, [{name: "value", type: "Int"}], [{name: "get", signature: "():Int"}]);
+		if (firstType.compatibility != NewType || firstType.descriptor.fields[0].slot != 0)
+			throw "Initial type declaration was not classified or laid out correctly";
+		var stableTypeId = firstType.descriptor.id,
+			stableFieldId = firstType.descriptor.fields[0].id,
+			stableMethodId = firstType.descriptor.methods[0].id;
+		var compatible = types.declareClass("demo.Box", null, [{name: "value", type: "Int"}], [{name: "get", signature: "():Int"}]);
+		if (compatible.compatibility != Compatible)
+			throw "Unchanged type was not classified as compatible";
+		if (types.declareClass("demo.Box", null, [{name: "value", type: "Int"}], [{name: "get", signature: "():String"}])
+			.compatibility != MethodSignatureChanged)
+			throw "Method signature change was not classified as reload-incompatible";
+		if (types.declareClass("demo.Box", null, [{name: "value", type: "String"}], [{name: "get", signature: "():Int"}]).compatibility != LayoutChanged)
+			throw "Field layout change was not classified as reload-incompatible";
+		var restored = new TypeRegistry(types.exportState()),
+			restoredType = restored.declareClass("demo.Box", null, [{name: "value", type: "Int"}], [{name: "get", signature: "():Int"}]).descriptor;
+		if (restoredType.id != stableTypeId || restoredType.fields[0].id != stableFieldId || restoredType.methods[0].id != stableMethodId)
+			throw "Type identities did not survive persistence and restart";
+		Sys.println("PASS: stable nominal identities and layout compatibility survive restart");
 		Sys.println("PASS: typer rejects invalid names, calls, conditions, and return paths");
 
 		try {
