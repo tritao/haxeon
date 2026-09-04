@@ -1,6 +1,9 @@
 package compiler.types;
 
 import compiler.types.Type.CompilerType;
+import compiler.Source.SourceSpan;
+import compiler.Diagnostic;
+import compiler.Diagnostic.CompileError;
 
 class Scope {
     final parent:Null<Scope>;
@@ -8,8 +11,8 @@ class Scope {
 
     public function new(?parent:Scope) this.parent = parent;
 
-    public function define(name:String, type:CompilerType):Void {
-        if (values.exists(name)) throw 'Duplicate local "$name"';
+    public function define(name:String, type:CompilerType, span:SourceSpan):Void {
+        if (values.exists(name)) throw new CompileError(new Diagnostic("E1001", 'Duplicate local "$name"', span));
         values.set(name, type);
     }
 

@@ -102,8 +102,8 @@ class TestMain {
         try {
             Frontend.compile(source);
             throw 'compiler accepted invalid source; expected "$expected"';
-        } catch (error:String) {
-            if (error != expected) throw error;
+        } catch (error:CompileError) {
+            if (error.diagnostic.message != expected) throw error;
         }
     }
 

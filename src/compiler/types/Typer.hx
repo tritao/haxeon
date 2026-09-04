@@ -11,6 +11,9 @@ import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedStatement;
+import compiler.Diagnostic;
+import compiler.Diagnostic.CompileError;
+import compiler.Source.SourceSpan;
 
 class Typer {
     final signatures:Map<String, AstFunction> = [];
@@ -20,7 +23,7 @@ class Typer {
 
     function typeProgram(program:AstProgram):TypedProgram {
         for (fn in program.functions) {
-            if (signatures.exists(fn.name)) throw 'Duplicate function "${fn.name}"';
+            if (signatures.exists(fn.name)) fail("E1000", 'Duplicate function "${fn.name}"', fn.span);
             signatures.set(fn.name, fn);
         }
         var main = signatures.get("main");
@@ -34,12 +37,12 @@ class Typer {
         var arguments = [];
         for (argument in fn.arguments) {
             var type = lowerType(argument.type);
-            scope.define(argument.name, type);
+            scope.define(argument.name, type, argument.span);
             arguments.push({name: argument.name, type: type});
         }
         var result = lowerType(fn.result);
         var statements = typeStatements(fn.statements, scope, result);
-        if (!alwaysReturns(statements)) throw 'Function ${fn.name} does not return on every path';
+        if (!alwaysReturns(statements)) fail("E1006", 'Function ${fn.name} does not return on every path', fn.span);
         return {name: fn.name, arguments: arguments, result: result, statements: statements, span: fn.span};
     }
 
@@ -48,16 +51,16 @@ class Typer {
         for (statement in statements) switch statement {
             case VarDeclaration(name, declared, initializer, span):
                 var value = typeExpression(initializer, scope);
-                if (declared != null && lowerType(declared) != value.type) throw 'Type mismatch for local "$name"';
-                scope.define(name, value.type);
+                if (declared != null && lowerType(declared) != value.type) fail("E1002", 'Type mismatch for local "$name"', span);
+                scope.define(name, value.type, span);
                 output.push(TVar(name, value, span));
             case Return(expression, span):
                 var value = typeExpression(expression, scope);
-                if (value.type != result) throw "Return type mismatch";
+                if (value.type != result) fail("E1003", "Return type mismatch", span);
                 output.push(TReturn(value, span));
             case If(condition, thenBranch, elseBranch, span):
                 var typedCondition = typeExpression(condition, scope);
-                if (typedCondition.type != TBool) throw "If condition must be Bool";
+                if (typedCondition.type != TBool) fail("E1004", "If condition must be Bool", span);
                 output.push(TIf(typedCondition,
                     typeStatements(thenBranch, new Scope(scope), result),
                     typeStatements(elseBranch, new Scope(scope), result), span));
@@ -69,7 +72,7 @@ class Typer {
         case IntegerLiteral(value, span): new TypedExpression(TIntLiteral(value), TInt, span);
         case Variable(name, span):
             var type = scope.resolve(name);
-            if (type == null) throw 'Unknown variable "$name"';
+            if (type == null) fail("E1005", 'Unknown variable "$name"', span);
             new TypedExpression(TLocal(name), type, span);
         case Add(left, right, span): arithmetic(left, right, scope, true, span);
         case Sub(left, right, span): arithmetic(left, right, scope, false, span);
@@ -78,22 +81,22 @@ class Typer {
         case Equal(left, right, span): comparison(left, right, scope, 2, span);
         case Call(name, arguments, span):
             var signature = signatures.get(name);
-            if (signature == null) throw 'Unknown function "$name"';
-            if (arguments.length != signature.arguments.length) throw 'Function "$name" expects ${signature.arguments.length} arguments, got ${arguments.length}';
+            if (signature == null) fail("E1007", 'Unknown function "$name"', span);
+            if (arguments.length != signature.arguments.length) fail("E1008", 'Function "$name" expects ${signature.arguments.length} arguments, got ${arguments.length}', span);
             var typed = [for (argument in arguments) typeExpression(argument, scope)];
-            for (i in 0...typed.length) if (typed[i].type != lowerType(signature.arguments[i].type)) throw 'Argument ${i + 1} to "$name" has the wrong type';
+            for (i in 0...typed.length) if (typed[i].type != lowerType(signature.arguments[i].type)) fail("E1009", 'Argument ${i + 1} to "$name" has the wrong type', typed[i].span);
             new TypedExpression(TCall(name, typed), lowerType(signature.result), span);
     }
 
     function arithmetic(a, b, scope, add, span):TypedExpression {
         var left = typeExpression(a, scope), right = typeExpression(b, scope);
-        if (left.type != TInt || right.type != TInt) throw "Arithmetic requires Int operands";
+        if (left.type != TInt || right.type != TInt) fail("E1010", "Arithmetic requires Int operands", span);
         return new TypedExpression(add ? TAdd(left, right) : TSub(left, right), TInt, span);
     }
 
     function comparison(a, b, scope, operation, span):TypedExpression {
         var left = typeExpression(a, scope), right = typeExpression(b, scope);
-        if (left.type != TInt || right.type != TInt) throw "Comparison requires Int operands";
+        if (left.type != TInt || right.type != TInt) fail("E1011", "Comparison requires Int operands", span);
         return new TypedExpression(switch operation { case 0: TLess(left,right); case 1: TLessEqual(left,right); default: TEqual(left,right); }, TBool, span);
     }
 
@@ -107,4 +110,5 @@ class Typer {
     }
 
     static function lowerType(type:AstType):CompilerType return switch type { case IntType: TInt; case BoolType: TBool; };
+    static function fail(code:String, message:String, span:SourceSpan):Void throw new CompileError(new Diagnostic(code, message, span));
 }
