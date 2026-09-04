@@ -6,7 +6,7 @@ import haxe.io.Bytes;
 private class RuntimeNative {
     public static function load(bytes:hl.Bytes, length:Int):hl.Abstract<"realtime_module"> return null;
     public static function call_i32(module:hl.Abstract<"realtime_module">, index:Int):Int return 0;
-    public static function patch(module:hl.Abstract<"realtime_module">, bytes:hl.Bytes, length:Int):Bool return false;
+    public static function patch(module:hl.Abstract<"realtime_module">, bytes:hl.Bytes, length:Int):Int return -1;
     public static function allocation_count(module:hl.Abstract<"realtime_module">):Int return 0;
     public static function patch_jit_count(module:hl.Abstract<"realtime_module">):Int return 0;
     public static function dispose(module:hl.Abstract<"realtime_module">):Void {}
@@ -38,9 +38,13 @@ class Runtime {
         RuntimeNative.dispose(cast module);
 
     public static function patchSet(module:LoadedModule, patch:PatchSet):Void {
-        if (patch.requiresReload) throw "Patch changes module structure and requires a domain reload";
+        if (patch.requiresReload)
+            throw new RuntimeError(RuntimeStatus.Incompatible, "Patch changes module structure and requires a domain reload");
         if (patch.changedFunctions.length == 0) return;
-        if (!RuntimeNative.patch(cast module, patch.bytes.getData(), patch.bytes.length))
-            throw "HashLink rejected the patch transaction";
+        var status:RuntimeStatus = RuntimeNative.patch(cast module, patch.bytes.getData(), patch.bytes.length);
+        if(status!=RuntimeStatus.Ok) {
+            var statusCode:Int = status;
+            throw new RuntimeError(status, 'HashLink rejected the patch transaction (status $statusCode)');
+        }
     }
 }

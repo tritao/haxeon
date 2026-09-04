@@ -47,6 +47,14 @@ dispatch through the module function table, so already-JITed callers immediately
 observe a committed replacement. Names and debug metadata are deliberately not
 used as function identity.
 
+The lifecycle is exposed as an opaque `hl_runtime_module` owned by HashLink.
+Loading, calls, patch decoding/application, synchronization, revision state,
+allocation statistics, and destruction stay behind that API; the project HDLL
+is only an FFI adapter and does not inspect `hl_module` or `hl_patch`. Runtime
+operations return stable status codes, surfaced in Haxe as `RuntimeStatus` and
+`RuntimeError`, so malformed, stale, and incompatible patches remain distinct
+without coupling callers to native error strings.
+
 Calls and commits are synchronized. Each stable slot records its owning JIT
 allocation; replacing its last referenced slot reclaims that allocation after
 protected calls finish. Failed staging is discarded before publication, keeping

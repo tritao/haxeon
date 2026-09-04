@@ -3,6 +3,8 @@ import compiler.hl.HlWriter;
 import compiler.hl.HlPatchReader;
 import compiler.modules.Compiler;
 import runtime.Runtime;
+import runtime.RuntimeError;
+import runtime.RuntimeStatus;
 import runtime.PatchSet;
 
 class HotReloadMain {
@@ -85,24 +87,24 @@ class HotReloadMain {
         try {
             Runtime.patchSet(loaded, new PatchSet(liveRevision, liveRevision + 1, haxe.io.Bytes.ofString("not HLP"), [valueIndex], false));
             throw "malformed patch unexpectedly succeeded";
-        } catch (error:String) {
-            if (error != "HashLink rejected the patch transaction") throw error;
+        } catch (error:RuntimeError) {
+            if (error.status != RuntimeStatus.BadFormat) throw error;
         }
         if (Runtime.callInt(loaded, valueIndex) != 47) throw "rejected patch damaged the live generation";
 
         try {
             Runtime.patchSet(loaded, new PatchSet(liveRevision - 1, concurrentPatch.revision, concurrentPatch.patchBytes, concurrentPatch.changedFunctions, false));
             throw "stale patch unexpectedly succeeded";
-        } catch (error:String) {
-            if (error != "HashLink rejected the patch transaction") throw error;
+        } catch (error:RuntimeError) {
+            if (error.status != RuntimeStatus.StalePatch) throw error;
         }
         if (Runtime.callInt(loaded, valueIndex) != 47) throw "stale patch damaged the live generation";
 
         try {
             Runtime.patchSet(loaded, new PatchSet(liveRevision, liveRevision + 1, concurrentPatch.patchBytes, [valueIndex], true));
             throw "structural patch unexpectedly succeeded";
-        } catch (error:String) {
-            if (error != "Patch changes module structure and requires a domain reload") throw error;
+        } catch (error:RuntimeError) {
+            if (error.status != RuntimeStatus.Incompatible) throw error;
         }
         if (Runtime.callInt(loaded, valueIndex) != 47) throw "structural rejection damaged the live generation";
         Runtime.dispose(loaded);
