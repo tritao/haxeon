@@ -38,6 +38,12 @@ class Typer {
 			if (classes.exists(classDecl.name))
 				fail("E1000", 'Duplicate class "${classDecl.name}"', classDecl.span);
 			classes.set(classDecl.name, classDecl);
+			for (method in classDecl.methods) {
+				var qualified = classDecl.name + "." + method.name;
+				if (signatures.exists(qualified))
+					fail("E1000", 'Duplicate method "$qualified"', method.span);
+				signatures.set(qualified, method);
+			}
 		}
 		for (fn in program.functions) {
 			if (signatures.exists(fn.name))
@@ -49,12 +55,18 @@ class Typer {
 		var main = signatures.get("main");
 		if (main == null || main.arguments.length != 0 || lowerType(main.result) != TInt)
 			throw "Program must define function main():Int";
+		var typedClasses = [for (classDecl in program.classes) typeClass(classDecl, classes)],
+			typedFunctions:Array<TypedFunction> = [];
+		for (fn in program.functions)
+			if (selected == null || selected.exists(fn.name))
+				typedFunctions.push(typeFunction(fn));
+		for (classDecl in typedClasses)
+			for (method in classDecl.methods)
+				if (selected == null || selected.exists(method.name))
+					typedFunctions.push(method);
 		return {
-			classes: [for (classDecl in program.classes) typeClass(classDecl, classes)],
-			functions: [
-				for (fn in program.functions)
-					if (selected == null || selected.exists(fn.name)) typeFunction(fn)
-			]
+			classes: typedClasses,
+			functions: typedFunctions
 		};
 	}
 

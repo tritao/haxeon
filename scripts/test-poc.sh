@@ -40,6 +40,7 @@ run_program bool-if 42
 run_program fib 55
 run_program while-arithmetic 42
 run_program branch-assignment 42
+run_program static-class 42
 
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ModuleMain "$root_dir/out/modules.hl"
 set +e

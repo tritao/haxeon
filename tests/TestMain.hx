@@ -222,6 +222,13 @@ class TestMain {
 			|| typedClass.classes[0].fields[0].type != compiler.types.Type.CompilerType.TInt
 			|| typedClass.classes[0].methods[1].result != compiler.types.Type.CompilerType.TInt)
 			throw "Minimal class declarations were not type checked";
+		var staticClass = Frontend.compile("class Math { public static function add(a:Int, b:Int):Int { return a + b; } } function main():Int { return Math.add(20, 22); }");
+		var foundStatic = false;
+		for (fn in staticClass.functions)
+			if (fn.name == "Math.add")
+				foundStatic = true;
+		if (!foundStatic)
+			throw "Static class method was not lowered as a callable function";
 		Sys.println("PASS: class fields, methods, and constructors parse as nominal declarations");
 		Sys.println("PASS: typer rejects invalid names, calls, conditions, and return paths");
 
