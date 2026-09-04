@@ -20,7 +20,7 @@ class SsaBuilder {
     var temporaries:Map<Int,IrValue> = [];
     var nextValue:Int = 0;
 
-    public static function build(cfg:CfgFunction):IrFunction return new SsaBuilder(cfg).run();
+    public static function build(cfg:CfgFunction):IrFunction {CfgVerifier.verify(cfg);return new SsaBuilder(cfg).run();}
     function new(cfg) this.cfg = cfg;
 
     function run():IrFunction {

@@ -18,6 +18,10 @@ import compiler.ir.IrFunction;
 import compiler.ir.IrGenerator;
 import compiler.ir.SsaBuilder;
 import compiler.ir.Cfg.CfgInstruction;
+import compiler.ir.Cfg.CfgBlock;
+import compiler.ir.Cfg.CfgFunction;
+import compiler.ir.Cfg.CfgValue;
+import compiler.ir.CfgVerifier;
 import compiler.Lexer;
 import compiler.Parser;
 import compiler.types.Typer;
@@ -112,6 +116,18 @@ class TestMain {
         for(block in built.blocks)for(instruction in block.instructions)switch instruction{case compiler.ir.Ir.IrInstruction.Phi(_,_):phis++;default:}
         if(phis!=2)throw 'Pruned SSA expected two live loop phis, got $phis';
         Sys.println("PASS: mutable CFG lowers through pruned dominance-based SSA");
+
+        var unterminated=new CfgBlock(0);
+        expectCfgError(new CfgFunction("bad",[],I32,[unterminated],[]),"Reachable CFG block 0 in bad has no terminator");
+        var badTarget=new CfgBlock(0);badTarget.terminator=compiler.ir.Cfg.CfgTerminator.Jump(4);
+        expectCfgError(new CfgFunction("bad",[],I32,[badTarget],[]),"Unknown CFG block 4");
+        var duplicate=new CfgBlock(0),first=new CfgValue(0,I32),again=new CfgValue(0,I32);
+        duplicate.instructions.push(ConstInt(first,1));duplicate.instructions.push(ConstInt(again,2));duplicate.terminator=compiler.ir.Cfg.CfgTerminator.Return(again);
+        expectCfgError(new CfgFunction("bad",[],I32,[duplicate],[]),"Duplicate CFG value 0");
+        var crossBlockA=new CfgBlock(0),crossBlockB=new CfgBlock(1),crossValue=new CfgValue(0,I32);
+        crossBlockA.instructions.push(ConstInt(crossValue,1));crossBlockA.terminator=compiler.ir.Cfg.CfgTerminator.Jump(1);crossBlockB.terminator=compiler.ir.Cfg.CfgTerminator.Return(crossValue);
+        expectCfgError(new CfgFunction("bad",[],I32,[crossBlockA,crossBlockB],[]),"CFG value 0 is used outside its defining block or before definition");
+        Sys.println("PASS: CFG verifier rejects malformed blocks, edges, and values");
         Sys.println("PASS: typer rejects invalid names, calls, conditions, and return paths");
 
         try {
@@ -148,6 +164,11 @@ class TestMain {
         } catch (error:CompileError) {
             if (error.diagnostic.message != expected) throw error;
         }
+    }
+
+    static function expectCfgError(cfg:CfgFunction,expected:String):Void {
+        try {CfgVerifier.verify(cfg);throw 'CFG verifier accepted invalid graph; expected "$expected"';}
+        catch(error:String){if(error!=expected)throw error;}
     }
 
     static function decodeIndex(input:BytesInput):Int {
