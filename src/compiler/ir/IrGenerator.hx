@@ -1,0 +1,71 @@
+package compiler.ir;
+
+import compiler.types.Type.CompilerType;
+import compiler.types.TypedAst.TypedExpression;
+import compiler.types.TypedAst.TypedProgram;
+import compiler.types.TypedAst.TypedStatement;
+import compiler.ir.Ir.IrProgram;
+import compiler.ir.Ir.IrType;
+import compiler.ir.Ir.IrValue;
+
+class IrGenerator {
+    public static function generate(typed:TypedProgram):IrProgram {
+        var program = new IrProgram("__entry");
+        program.natives.push({name:"__exit", library:"std", symbol:"sys_exit", arguments:[I32], result:Void});
+        for (fn in typed.functions) {
+            var builder = new IrBuilder(), values:Map<String, IrValue> = [], arguments = [];
+            for (argument in fn.arguments) {
+                var value = new IrValue(argument.name, lowerType(argument.type));
+                values.set(argument.name, value); arguments.push(value);
+            }
+            lowerStatements(fn.statements, builder, values);
+            program.functions.push(new IrFunction(fn.name, arguments, lowerType(fn.result), builder.instructions));
+        }
+        var entry = new IrBuilder();
+        var result = entry.call("main", [], I32);
+        var exited = entry.call("__exit", [result], Void);
+        entry.returnValue(exited);
+        program.functions.push(new IrFunction("__entry", [], Void, entry.instructions));
+        return program;
+    }
+
+    static function lowerStatements(statements:Array<TypedStatement>, builder:IrBuilder, values:Map<String, IrValue>):Void {
+        for (statement in statements) switch statement {
+            case TVar(name, initializer): values.set(name, lowerExpression(initializer, builder, values));
+            case TReturn(expression): builder.returnValue(lowerExpression(expression, builder, values));
+            case TIf(condition, thenBranch, elseBranch):
+                var thenLabel = builder.newLabel(), endLabel = builder.newLabel();
+                builder.branchTrue(lowerExpression(condition, builder, values), thenLabel);
+                lowerStatements(elseBranch, builder, copy(values));
+                var needsJoin = !alwaysReturns(thenBranch) || !alwaysReturns(elseBranch);
+                if (needsJoin) builder.jump(endLabel);
+                builder.label(thenLabel);
+                lowerStatements(thenBranch, builder, copy(values));
+                if (needsJoin) builder.label(endLabel);
+        }
+    }
+
+    static function lowerExpression(expression:TypedExpression, builder:IrBuilder, values:Map<String, IrValue>):IrValue return switch expression.expression {
+        case TIntLiteral(value): builder.constInt(value);
+        case TLocal(name): var value = values.get(name); if (value == null) throw 'Missing typed local "$name"'; value;
+        case TAdd(a,b): builder.add(lowerExpression(a,builder,values), lowerExpression(b,builder,values));
+        case TSub(a,b): builder.sub(lowerExpression(a,builder,values), lowerExpression(b,builder,values));
+        case TLess(a,b): builder.less(lowerExpression(a,builder,values), lowerExpression(b,builder,values));
+        case TLessEqual(a,b): builder.lessEqual(lowerExpression(a,builder,values), lowerExpression(b,builder,values));
+        case TEqual(a,b): builder.equal(lowerExpression(a,builder,values), lowerExpression(b,builder,values));
+        case TCall(name,args): builder.call(name, [for (arg in args) lowerExpression(arg,builder,values)], lowerType(expression.type));
+    }
+
+    static function copy(values:Map<String, IrValue>):Map<String, IrValue> {
+        var result:Map<String, IrValue> = []; for (name => value in values) result.set(name, value); return result;
+    }
+    static function alwaysReturns(statements:Array<TypedStatement>):Bool {
+        for (statement in statements) switch statement {
+            case TReturn(_): return true;
+            case TIf(_, yes, no): if (no.length > 0 && alwaysReturns(yes) && alwaysReturns(no)) return true;
+            default:
+        }
+        return false;
+    }
+    static function lowerType(type:CompilerType):IrType return switch type { case TInt:I32; case TBool:Bool; case TVoid:Void; };
+}

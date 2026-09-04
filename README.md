@@ -11,6 +11,11 @@ The example is expressed as typed, register-independent IR. `HlLower` assigns
 function/type/register indices, interns constants and native names, and lowers
 the IR to the serialized HashLink model.
 
+The frontend is split into parsing, declaration/type checking, and IR
+generation. The current subset supports `Int`, `Bool`, local variables,
+functions, calls, arithmetic, comparisons, nested `if`/`else`, and recursive
+functions.
+
 ## Run the proof of concept
 
 ```sh

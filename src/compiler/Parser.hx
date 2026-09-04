@@ -59,11 +59,33 @@ class Parser {
             consume(TokenKind.Semicolon);
             return Return(expression);
         }
+        if (match(TokenKind.If)) {
+            consume(TokenKind.LeftParen);
+            var condition = parseExpression();
+            consume(TokenKind.RightParen);
+            var thenBranch = parseStatementOrBlock();
+            var elseBranch = match(TokenKind.Else) ? parseStatementOrBlock() : [];
+            return If(condition, thenBranch, elseBranch);
+        }
         fail(current(), "Expected statement");
         return null;
     }
 
     function parseExpression():AstExpression {
+        var expression = parseAdditive();
+        if (check(TokenKind.Less) || check(TokenKind.LessEqual) || check(TokenKind.EqualEqual)) {
+            var operation = advance().kind;
+            var right = parseAdditive();
+            expression = switch operation {
+                case TokenKind.Less: Less(expression, right);
+                case TokenKind.LessEqual: LessEqual(expression, right);
+                default: Equal(expression, right);
+            }
+        }
+        return expression;
+    }
+
+    function parseAdditive():AstExpression {
         var expression = parsePrimary();
         while (check(TokenKind.Plus) || check(TokenKind.Minus)) {
             var operation = advance().kind;
@@ -97,8 +119,17 @@ class Parser {
     }
 
     function parseType():AstType {
-        consume(TokenKind.TypeInt);
-        return IntType;
+        if (match(TokenKind.TypeInt)) return IntType;
+        consume(TokenKind.TypeBool);
+        return BoolType;
+    }
+
+    function parseStatementOrBlock():Array<AstStatement> {
+        if (!match(TokenKind.LeftBrace)) return [parseStatement()];
+        var statements = [];
+        while (!check(TokenKind.RightBrace)) statements.push(parseStatement());
+        consume(TokenKind.RightBrace);
+        return statements;
     }
 
     function match(kind:TokenKind):Bool {

@@ -15,6 +15,7 @@ mkdir -p "$root_dir/out"
 
 run_program() {
     local name=$1
+    local expected=$2
     local source_file="$root_dir/tests/programs/$name.hx"
     local output="$root_dir/out/$name.hl"
     "$haxe" --cwd "$root_dir" -cp src --run Main "$source_file" "$output"
@@ -23,12 +24,14 @@ run_program() {
     LD_LIBRARY_PATH="$root_dir/.tools/hashlink" "$hl" "$output"
     local status=$?
     set -e
-    if [[ $status -ne 42 ]]; then
-        echo "$name: expected exit 42, got $status" >&2
+    if [[ $status -ne $expected ]]; then
+        echo "$name: expected exit $expected, got $status" >&2
         exit 1
     fi
-    echo "PASS: $name source compiled and executed (exit 42)"
+    echo "PASS: $name source compiled and executed (exit $expected)"
 }
 
-run_program add
-run_program function-call
+run_program add 42
+run_program function-call 42
+run_program bool-if 42
+run_program fib 55

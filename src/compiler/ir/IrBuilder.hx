@@ -29,6 +29,16 @@ class IrBuilder {
         return output;
     }
 
+    public function less(left:IrValue, right:IrValue):IrValue return compare(left, right, 0);
+    public function lessEqual(left:IrValue, right:IrValue):IrValue return compare(left, right, 1);
+    public function equal(left:IrValue, right:IrValue):IrValue return compare(left, right, 2);
+
+    function compare(left:IrValue, right:IrValue, operation:Int):IrValue {
+        var output = temporary(IrType.Bool);
+        instructions.push(switch operation { case 0: Less(output,left,right); case 1: LessEqual(output,left,right); default: Equal(output,left,right); });
+        return output;
+    }
+
     public function call(functionName:String, arguments:Array<IrValue>, result:IrType):IrValue {
         var output = temporary(result);
         instructions.push(Call(output, functionName, arguments));
@@ -39,12 +49,16 @@ class IrBuilder {
         instructions.push(BranchLessOrEqual(left, right, target));
     }
 
+    public function branchTrue(condition:IrValue, target:String):Void instructions.push(BranchTrue(condition, target));
+
+    public function newLabel(?hint:String):String return hint == null ? 'label${nextLabel++}' : hint;
+
     public function jump(target:String):Void {
         instructions.push(Jump(target));
     }
 
     public function label(?hint:String):String {
-        var name = hint == null ? 'label${nextLabel++}' : hint;
+        var name = newLabel(hint);
         instructions.push(Label(name));
         return name;
     }

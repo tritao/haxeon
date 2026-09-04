@@ -35,7 +35,8 @@ class Lexer {
                 continue;
             }
             position++;
-            var kind = switch String.fromCharCode(code) {
+            var character = String.fromCharCode(code);
+            var kind = switch character {
                 case "(": TokenKind.LeftParen;
                 case ")": TokenKind.RightParen;
                 case "{": TokenKind.LeftBrace;
@@ -43,7 +44,16 @@ class Lexer {
                 case ":": TokenKind.Colon;
                 case ";": TokenKind.Semicolon;
                 case ",": TokenKind.Comma;
-                case "=": TokenKind.Assign;
+                case "=":
+                    if (position < source.length && source.charAt(position) == "=") {
+                        position++;
+                        TokenKind.EqualEqual;
+                    } else TokenKind.Assign;
+                case "<":
+                    if (position < source.length && source.charAt(position) == "=") {
+                        position++;
+                        TokenKind.LessEqual;
+                    } else TokenKind.Less;
                 case "+": TokenKind.Plus;
                 case "-": TokenKind.Minus;
                 default: throw 'Unexpected character "${String.fromCharCode(code)}" at offset $start';
@@ -59,7 +69,10 @@ class Lexer {
             case "function": TokenKind.Function;
             case "var": TokenKind.Var;
             case "return": TokenKind.Return;
+            case "if": TokenKind.If;
+            case "else": TokenKind.Else;
             case "Int": TokenKind.TypeInt;
+            case "Bool": TokenKind.TypeBool;
             default: TokenKind.Identifier;
         }
     }

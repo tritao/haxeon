@@ -74,6 +74,12 @@ class HlLower {
                         requireRegister(left, registers),
                         requireRegister(right, registers)
                     ));
+                case Less(output, left, right):
+                    lowerComparison(output, left, right, 0, registers, registerTypes, instructions);
+                case LessEqual(output, left, right):
+                    lowerComparison(output, left, right, 1, registers, registerTypes, instructions);
+                case Equal(output, left, right):
+                    lowerComparison(output, left, right, 2, registers, registerTypes, instructions);
                 case Call(output, functionName, arguments):
                     var destination = defineRegister(output, registers, registerTypes);
                     var functionIndex = requireFunction(functionName);
@@ -90,6 +96,8 @@ class HlLower {
                         requireRegister(right, registers),
                         target
                     ));
+                case BranchTrue(condition, target):
+                    instructions.push(HlInstruction.JumpTrue(requireRegister(condition, registers), target));
                 case Jump(target):
                     instructions.push(HlInstruction.Jump(target));
                 case Label(name):
@@ -105,6 +113,23 @@ class HlLower {
             registerTypes,
             instructions
         );
+    }
+
+    function lowerComparison(output:IrValue, left:IrValue, right:IrValue, operation:Int,
+        registers:Map<String, Int>, registerTypes:Array<Int>, instructions:Array<HlInstruction>):Void {
+        var destination = defineRegister(output, registers, registerTypes);
+        var leftReg = requireRegister(left, registers), rightReg = requireRegister(right, registers);
+        var trueLabel = '__cmp_true_${output.name}', endLabel = '__cmp_end_${output.name}';
+        instructions.push(switch operation {
+            case 0: HlInstruction.JumpSignedLess(leftReg, rightReg, trueLabel);
+            case 1: HlInstruction.JumpSignedLessOrEqual(leftReg, rightReg, trueLabel);
+            default: HlInstruction.JumpEqual(leftReg, rightReg, trueLabel);
+        });
+        instructions.push(HlInstruction.LoadBool(destination, false));
+        instructions.push(HlInstruction.Jump(endLabel));
+        instructions.push(HlInstruction.Label(trueLabel));
+        instructions.push(HlInstruction.LoadBool(destination, true));
+        instructions.push(HlInstruction.Label(endLabel));
     }
 
     function defineRegister(value:IrValue, registers:Map<String, Int>, types:Array<Int>):Int {
@@ -152,6 +177,7 @@ class HlLower {
         code.types.push(Simple(switch type {
             case Void: HlType.Void;
             case I32: HlType.I32;
+            case Bool: HlType.Bool;
         }));
         typeIndices.set(key, index);
         return index;
@@ -174,6 +200,7 @@ class HlLower {
         return switch type {
             case Void: "void";
             case I32: "i32";
+            case Bool: "bool";
         }
     }
 

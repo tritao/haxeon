@@ -83,6 +83,7 @@ class HlWriter {
                     requireRegister(fn, destination);
                     if (constant < 0 || constant >= code.ints.length)
                         throw 'Invalid integer constant $constant in function ${fn.functionIndex}';
+                case LoadBool(destination, _): requireRegister(fn, destination);
                 case Add(destination, left, right):
                     requireRegister(fn, destination);
                     requireRegister(fn, left);
@@ -108,6 +109,12 @@ class HlWriter {
                     requireRegister(fn, right);
                     if (!labels.exists(target))
                         throw 'Unknown label "$target" in function ${fn.functionIndex}';
+                case JumpSignedLess(left, right, target), JumpEqual(left, right, target):
+                    requireRegister(fn, left); requireRegister(fn, right);
+                    if (!labels.exists(target)) throw 'Unknown label "$target" in function ${fn.functionIndex}';
+                case JumpTrue(condition, target):
+                    requireRegister(fn, condition);
+                    if (!labels.exists(target)) throw 'Unknown label "$target" in function ${fn.functionIndex}';
                 case Jump(target):
                     if (!labels.exists(target))
                         throw 'Unknown label "$target" in function ${fn.functionIndex}';
@@ -238,6 +245,8 @@ class HlWriter {
             var encoded:EncodedInstruction = switch instruction {
                 case LoadInt(destination, constant):
                     {opcode: HlOpcode.Int, operands: [destination, constant]};
+                case LoadBool(destination, value):
+                    {opcode: HlOpcode.Bool, operands: [destination, value ? 1 : 0]};
                 case Add(destination, left, right):
                     {opcode: HlOpcode.Add, operands: [destination, left, right]};
                 case Sub(destination, left, right):
@@ -251,6 +260,15 @@ class HlWriter {
                 case JumpSignedLessOrEqual(left, right, target):
                     var targetPosition = labels.get(target);
                     {opcode: HlOpcode.JSLte, operands: [left, right, targetPosition - (result.length + 1)]};
+                case JumpSignedLess(left, right, target):
+                    var targetPosition = labels.get(target);
+                    {opcode: HlOpcode.JSLt, operands: [left, right, targetPosition - (result.length + 1)]};
+                case JumpEqual(left, right, target):
+                    var targetPosition = labels.get(target);
+                    {opcode: HlOpcode.JEq, operands: [left, right, targetPosition - (result.length + 1)]};
+                case JumpTrue(condition, target):
+                    var targetPosition = labels.get(target);
+                    {opcode: HlOpcode.JTrue, operands: [condition, targetPosition - (result.length + 1)]};
                 case Jump(target):
                     var targetPosition = labels.get(target);
                     {opcode: HlOpcode.JAlways, operands: [targetPosition - (result.length + 1)]};

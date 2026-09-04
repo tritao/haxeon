@@ -1,4 +1,5 @@
 import compiler.hl.HlCode;
+import compiler.Frontend;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction;
 import compiler.hl.HlFunction.HlInstruction;
@@ -58,6 +59,15 @@ class TestMain {
         if (lowered.functions[0].registers.length != 2)
             throw "IR lowering did not allocate registers for temporary values";
         Sys.println("PASS: IR lowering allocates registers and deduplicates constants");
+
+        expectCompileError('function main():Int { return missing; }', 'Unknown variable "missing"');
+        expectCompileError('function add(a:Int, b:Int):Int { return a+b; } function main():Int { return add(1); }',
+            'Function "add" expects 2 arguments, got 1');
+        expectCompileError('function main():Int { if (1 < 2) return 1; }',
+            'Function main does not return on every path');
+        expectCompileError('function main():Int { if (1) return 1; else return 2; }',
+            'If condition must be Bool');
+        Sys.println("PASS: typer rejects invalid names, calls, conditions, and return paths");
     }
 
     static function baseControlFlowModule():HlCode {
@@ -74,6 +84,15 @@ class TestMain {
         } catch (error:String) {
             if (error != expected)
                 throw error;
+        }
+    }
+
+    static function expectCompileError(source:String, expected:String):Void {
+        try {
+            Frontend.compile(source);
+            throw 'compiler accepted invalid source; expected "$expected"';
+        } catch (error:String) {
+            if (error != expected) throw error;
         }
     }
 

@@ -4,12 +4,16 @@ package compiler.hl;
 enum abstract HlOpcode(Int) from Int to Int {
     var Mov = 0;
     var Int = 1;
+    var Bool = 3;
     var Add = 7;
     var Sub = 8;
     var Call0 = 24;
     var Call1 = 25;
     var Call2 = 26;
+    var JTrue = 44;
+    var JSLt = 48;
     var JSLte = 51;
-    var JAlways = 59;
+    var JEq = 56;
+    var JAlways = 58;
     var Ret = 67;
 }

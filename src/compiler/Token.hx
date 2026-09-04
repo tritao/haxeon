@@ -4,7 +4,10 @@ enum TokenKind {
     Function;
     Var;
     Return;
+    If;
+    Else;
     TypeInt;
+    TypeBool;
     Identifier;
     Integer;
     LeftParen;
@@ -17,6 +20,9 @@ enum TokenKind {
     Assign;
     Plus;
     Minus;
+    Less;
+    LessEqual;
+    EqualEqual;
     Eof;
 }
 

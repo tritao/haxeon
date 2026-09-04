@@ -3,6 +3,7 @@ package compiler.ir;
 enum IrType {
     Void;
     I32;
+    Bool;
 }
 
 class IrValue {
@@ -19,8 +20,12 @@ enum IrInstruction {
     ConstInt(output:IrValue, value:Int);
     Add(output:IrValue, left:IrValue, right:IrValue);
     Sub(output:IrValue, left:IrValue, right:IrValue);
+    Less(output:IrValue, left:IrValue, right:IrValue);
+    LessEqual(output:IrValue, left:IrValue, right:IrValue);
+    Equal(output:IrValue, left:IrValue, right:IrValue);
     Call(output:IrValue, functionName:String, arguments:Array<IrValue>);
     BranchLessOrEqual(left:IrValue, right:IrValue, target:String);
+    BranchTrue(condition:IrValue, target:String);
     Jump(target:String);
     Label(name:String);
     Return(value:IrValue);
