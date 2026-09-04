@@ -6,9 +6,7 @@
 
 typedef struct {
 	hl_module *base;
-	hl_module *generation;
 	hl_mutex *lock;
-	int revision;
 } realtime_module;
 
 static hl_function *find_function(hl_module *module, int findex) {
@@ -44,9 +42,7 @@ HL_PRIM realtime_module *HL_NAME(load)(vbyte *bytes, int length) {
 	if (module == NULL) return NULL;
 	loaded = (realtime_module *)malloc(sizeof(realtime_module));
 	loaded->base = module;
-	loaded->generation = NULL;
 	loaded->lock = hl_mutex_alloc(true);
-	loaded->revision = 1;
 	hl_add_root(&loaded->lock);
 	return loaded;
 }
@@ -74,41 +70,31 @@ HL_PRIM int HL_NAME(call_i32)(realtime_module *loaded, int findex) {
 	return result->v.i;
 }
 
-HL_PRIM bool HL_NAME(patch)(realtime_module *loaded, vbyte *bytes, int length, varray *indices, int base_revision, int revision) {
-	hl_module *generation;
-	if (loaded == NULL || indices == NULL || indices->at->kind != HI32 || indices->size == 0)
+HL_PRIM bool HL_NAME(patch)(realtime_module *loaded, vbyte *bytes, int length) {
+	const char *error = NULL;
+	hl_patch *patch;
+	bool result;
+	if (loaded == NULL)
 		return false;
 	hl_mutex_acquire(loaded->lock);
-	if (loaded->revision != base_revision || revision <= base_revision) {
-		hl_mutex_release(loaded->lock);
-		return false;
-	}
-	generation = load_generation(bytes, length);
-	if (generation == NULL) {
-		hl_mutex_release(loaded->lock);
-		return false;
-	}
-
-	if (!hl_module_patch_generation(loaded->base, generation)) {
-		hl_module_unload(generation);
-		hl_mutex_release(loaded->lock);
-		return false;
-	}
-	if (loaded->generation != NULL) hl_module_unload(loaded->generation);
-	loaded->generation = generation;
-	loaded->revision = revision;
+	patch=hl_patch_read(bytes,length,&error);
+	result=patch!=NULL && hl_module_apply_patch(loaded->base,patch,&error);
+	hl_patch_free(patch);
 	hl_mutex_release(loaded->lock);
-	return true;
+	return result;
 }
 
-HL_PRIM int HL_NAME(generation_count)(realtime_module *loaded) {
-	return loaded == NULL ? 0 : 1 + (loaded->generation != NULL);
+HL_PRIM int HL_NAME(allocation_count)(realtime_module *loaded) {
+	return loaded == NULL ? 0 : 1 + hl_module_patch_allocation_count(loaded->base);
+}
+
+HL_PRIM int HL_NAME(patch_jit_count)(realtime_module *loaded) {
+	return loaded == NULL ? 0 : loaded->base->patch_jit_count;
 }
 
 HL_PRIM void HL_NAME(dispose)(realtime_module *loaded) {
 	if (loaded == NULL) return;
 	hl_mutex_acquire(loaded->lock);
-	if (loaded->generation != NULL) hl_module_unload(loaded->generation);
 	hl_module_unload(loaded->base);
 	hl_mutex_release(loaded->lock);
 	hl_remove_root(&loaded->lock);
@@ -131,7 +117,8 @@ HL_PRIM int HL_NAME(inspect_patch)(vbyte *bytes, int length) {
 
 DEFINE_PRIM(_ABSTRACT(realtime_module), load, _BYTES _I32);
 DEFINE_PRIM(_I32, call_i32, _ABSTRACT(realtime_module) _I32);
-DEFINE_PRIM(_BOOL, patch, _ABSTRACT(realtime_module) _BYTES _I32 _ARR _I32 _I32);
-DEFINE_PRIM(_I32, generation_count, _ABSTRACT(realtime_module));
+DEFINE_PRIM(_BOOL, patch, _ABSTRACT(realtime_module) _BYTES _I32);
+DEFINE_PRIM(_I32, allocation_count, _ABSTRACT(realtime_module));
+DEFINE_PRIM(_I32, patch_jit_count, _ABSTRACT(realtime_module));
 DEFINE_PRIM(_VOID, dispose, _ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32, inspect_patch, _BYTES _I32);

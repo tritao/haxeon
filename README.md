@@ -37,21 +37,20 @@ and whether a structural edit requires reload. Removed functions retain a
 tombstone slot until `Compiler.compact()` performs a deterministic full rebuild.
 
 The runtime proof of concept loads compiler-produced HLB bytes in-process and
-calls functions through compiler-owned stable slots. A compatible edit is JIT
-compiled as a retained module generation, validated in full, and then committed
-by redirecting the selected slots. Failed compilation, malformed bytecode, and
-structural edits leave the live generation untouched. `vendor/hashlink` tracks
+calls functions through compiler-owned stable slots. A compatible edit arrives
+as HLP, is validated and JIT compiled privately, and then commits all selected
+slots atomically. Failed compilation, malformed bytecode, and structural edits
+leave the live code untouched. `vendor/hashlink` tracks
 our HashLink fork, which exports the module lifecycle needed by the runtime
 bridge and provides an opt-in `HL_MODULE_PATCHABLE` JIT mode. Calls in that mode
 dispatch through the module function table, so already-JITed callers immediately
 observe a committed replacement. Names and debug metadata are deliberately not
 used as function identity.
 
-Complete generations are switched as a transaction so every live slot points
-at one generation. Calls and commits are synchronized; once protected calls
-finish, the previous generation is unregistered and its JIT memory is released.
-Rejected generations are unloaded immediately, keeping repeated editor reloads
-bounded. Runtime modules also support explicit disposal at plugin-domain exit.
+Calls and commits are synchronized. Each stable slot records its owning JIT
+allocation; replacing its last referenced slot reclaims that allocation after
+protected calls finish. Failed staging is discarded before publication, keeping
+repeated editor reloads bounded. Runtime modules also support explicit disposal.
 Patch sets carry expected-base and replacement revisions; stale or replayed
 updates are rejected before loading or changing live dispatch state.
 
@@ -61,6 +60,9 @@ definitions, with a strict Haxe decoder serving as the protocol oracle for the
 native HashLink decoder. The fork exposes owned `hl_patch_read`/`hl_patch_free`
 APIs with strict bounds, version, opcode, function-length, and trailing-data
 validation; integration tests feed identical bytes through both decoders.
+`hl_module_apply_patch` resolves those records against the live module and JITs
+only their functions. Tests instrument the JIT to prove one changed function
+causes one compilation and two-function patches publish as a single transaction.
 
 ## Run the proof of concept
 
