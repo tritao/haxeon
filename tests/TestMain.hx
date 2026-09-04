@@ -4,6 +4,11 @@ import compiler.hl.HlFunction;
 import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlType;
 import compiler.hl.HlWriter;
+import compiler.ir.HlLower;
+import compiler.ir.Ir.IrProgram;
+import compiler.ir.Ir.IrType;
+import compiler.ir.IrBuilder;
+import compiler.ir.IrFunction;
 import haxe.io.BytesInput;
 
 class TestMain {
@@ -40,6 +45,19 @@ class TestMain {
         ])];
         expectError(duplicateLabel, 'Duplicate label "same" in function 0');
         Sys.println("PASS: malformed module is rejected before serialization");
+
+        var ir = new IrProgram("main");
+        var builder = new IrBuilder();
+        builder.constInt(7);
+        var repeated = builder.constInt(7);
+        builder.returnValue(repeated);
+        ir.functions.push(new IrFunction("main", [], IrType.I32, builder.instructions));
+        var lowered = HlLower.lower(ir);
+        if (lowered.ints.length != 1 || lowered.ints[0] != 7)
+            throw "IR lowering did not deduplicate integer constants";
+        if (lowered.functions[0].registers.length != 2)
+            throw "IR lowering did not allocate registers for temporary values";
+        Sys.println("PASS: IR lowering allocates registers and deduplicates constants");
     }
 
     static function baseControlFlowModule():HlCode {

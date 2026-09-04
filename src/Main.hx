@@ -1,58 +1,50 @@
-import compiler.hl.HlCode;
-import compiler.hl.HlCode.HlTypeDef;
-import compiler.hl.HlFunction;
-import compiler.hl.HlFunction.HlInstruction;
-import compiler.hl.HlType;
 import compiler.hl.HlWriter;
+import compiler.ir.HlLower;
+import compiler.ir.Ir.IrProgram;
+import compiler.ir.Ir.IrType;
+import compiler.ir.Ir.IrValue;
+import compiler.ir.IrBuilder;
+import compiler.ir.IrFunction;
 import sys.io.File;
 
 class Main {
     static function main():Void {
         var path = Sys.args().length == 0 ? "out/handmade.hl" : Sys.args()[0];
-        var code = makeFibProgram();
+        var code = HlLower.lower(makeFibProgram());
         File.saveBytes(path, HlWriter.encode(code));
         Sys.println('wrote $path');
     }
 
-    static function makeFibProgram():HlCode {
-        var code = new HlCode();
-        code.ints = [1, 2, 10];
-        code.strings = ["std", "sys_exit"];
-        code.types = [
-            Simple(HlType.Void),            // 0
-            Simple(HlType.I32),             // 1
-            Function([1], 1),               // 2: (I32) -> I32
-            Function([1], 0),               // 3: (I32) -> Void
-            Function([], 0),                // 4: () -> Void
-        ];
-        code.natives = [{
-            library: 0,
-            name: 1,
-            type: 3,
-            functionIndex: 0,
-        }];
-        code.functions = [
-            new HlFunction(2, 1, [1, 1, 1, 1, 1, 1, 1, 1], [
-                LoadInt(1, 0),
-                JumpSignedLessOrEqual(0, 1, "base_case"),
-                LoadInt(4, 1),
-                Sub(2, 0, 1),
-                Call1(3, 1, 2),
-                Sub(5, 0, 4),
-                Call1(6, 1, 5),
-                Add(7, 3, 6),
-                Return(7),
-                Label("base_case"),
-                Return(0),
-            ]),
-            new HlFunction(4, 2, [1, 1, 0], [
-                LoadInt(0, 2),
-                Call1(1, 1, 0),
-                Call1(2, 0, 1),
-                Return(2),
-            ]),
-        ];
-        code.entryPoint = 2;
-        return code;
+    static function makeFibProgram():IrProgram {
+        var program = new IrProgram("main");
+        program.natives.push({
+            name: "exit",
+            library: "std",
+            symbol: "sys_exit",
+            arguments: [IrType.I32],
+            result: IrType.Void,
+        });
+
+        var n = new IrValue("n", IrType.I32);
+        var fib = new IrBuilder();
+        var one = fib.constInt(1);
+        fib.branchLessOrEqual(n, one, "base_case");
+        var two = fib.constInt(2);
+        var nMinusOne = fib.sub(n, one);
+        var first = fib.call("fib", [nMinusOne], IrType.I32);
+        var nMinusTwo = fib.sub(n, two);
+        var second = fib.call("fib", [nMinusTwo], IrType.I32);
+        fib.returnValue(fib.add(first, second));
+        fib.label("base_case");
+        fib.returnValue(n);
+        program.functions.push(new IrFunction("fib", [n], IrType.I32, fib.instructions));
+
+        var main = new IrBuilder();
+        var ten = main.constInt(10);
+        var result = main.call("fib", [ten], IrType.I32);
+        var exited = main.call("exit", [result], IrType.Void);
+        main.returnValue(exited);
+        program.functions.push(new IrFunction("main", [], IrType.Void, main.instructions));
+        return program;
     }
 }

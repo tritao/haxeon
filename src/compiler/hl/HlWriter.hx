@@ -105,6 +105,9 @@ class HlWriter {
                     requireRegister(fn, right);
                     if (!labels.exists(target))
                         throw 'Unknown label "$target" in function ${fn.functionIndex}';
+                case Jump(target):
+                    if (!labels.exists(target))
+                        throw 'Unknown label "$target" in function ${fn.functionIndex}';
                 case Label(_):
                 case Return(register):
                     requireRegister(fn, register);
@@ -243,6 +246,9 @@ class HlWriter {
                 case JumpSignedLessOrEqual(left, right, target):
                     var targetPosition = labels.get(target);
                     {opcode: HlOpcode.JSLte, operands: [left, right, targetPosition - (result.length + 1)]};
+                case Jump(target):
+                    var targetPosition = labels.get(target);
+                    {opcode: HlOpcode.JAlways, operands: [targetPosition - (result.length + 1)]};
                 case Label(_):
                     null;
                 case Return(register):

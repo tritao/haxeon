@@ -8,6 +8,10 @@ recursive `fib` function with symbolic labels and an entry point that calls
 with status 55 proves that HashLink decoded, linked, branched, and recursively
 executed the generated functions.
 
+The example is expressed as typed, register-independent IR. `HlLower` assigns
+function/type/register indices, interns constants and native names, and lowers
+the IR to the serialized HashLink model.
+
 ## Run the proof of concept
 
 ```sh
