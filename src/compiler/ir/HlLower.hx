@@ -79,9 +79,10 @@ class HlLower {
                     var functionIndex = requireFunction(functionName);
                     var args = [for (argument in arguments) requireRegister(argument, registers)];
                     switch args.length {
+                        case 0: instructions.push(HlInstruction.Call0(destination, functionIndex));
                         case 1: instructions.push(HlInstruction.Call1(destination, functionIndex, args[0]));
                         case 2: instructions.push(HlInstruction.Call2(destination, functionIndex, args[0], args[1]));
-                        default: throw 'HL lowering supports only one- and two-argument calls, got ${args.length}';
+                        default: throw 'HL lowering supports at most two call arguments, got ${args.length}';
                     }
                 case BranchLessOrEqual(left, right, target):
                     instructions.push(HlInstruction.JumpSignedLessOrEqual(

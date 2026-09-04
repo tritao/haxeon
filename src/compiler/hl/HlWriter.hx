@@ -91,6 +91,9 @@ class HlWriter {
                     requireRegister(fn, destination);
                     requireRegister(fn, left);
                     requireRegister(fn, right);
+                case Call0(destination, functionIndex):
+                    requireRegister(fn, destination);
+                    requireCallable(functionIndices, functionIndex, fn.functionIndex);
                 case Call1(destination, functionIndex, argument):
                     requireRegister(fn, destination);
                     requireRegister(fn, argument);
@@ -239,6 +242,8 @@ class HlWriter {
                     {opcode: HlOpcode.Add, operands: [destination, left, right]};
                 case Sub(destination, left, right):
                     {opcode: HlOpcode.Sub, operands: [destination, left, right]};
+                case Call0(destination, functionIndex):
+                    {opcode: HlOpcode.Call0, operands: [destination, functionIndex]};
                 case Call1(destination, functionIndex, argument):
                     {opcode: HlOpcode.Call1, operands: [destination, functionIndex, argument]};
                 case Call2(destination, functionIndex, argument1, argument2):

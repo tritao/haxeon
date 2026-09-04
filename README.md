@@ -2,11 +2,10 @@
 
 An experimental Haxe-compatible realtime compiler targeting HashLink only.
 
-The proof of concept writes HashLink bytecode directly from Haxe. It builds a
-recursive `fib` function with symbolic labels and an entry point that calls
-`fib(10)`, then passes the result to HashLink's `std@sys_exit` native. Exiting
-with status 55 proves that HashLink decoded, linked, branched, and recursively
-executed the generated functions.
+The proof of concept compiles a small Haxe-compatible source file through a
+lexer, parser, AST, typed IR, and HashLink backend. The generated entry point
+passes the source `main()` result to HashLink's `std@sys_exit` native, making
+the result observable to the integration test.
 
 The example is expressed as typed, register-independent IR. `HlLower` assigns
 function/type/register indices, interns constants and native names, and lowers
