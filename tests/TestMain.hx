@@ -27,6 +27,7 @@ import compiler.Parser;
 import compiler.types.Typer;
 import compiler.types.TypeRegistry;
 import compiler.types.TypeRegistry.TypeCompatibility;
+import compiler.modules.Compiler;
 import haxe.io.BytesInput;
 
 class TestMain {
@@ -203,6 +204,11 @@ class TestMain {
 			restoredType = restored.declareClass("demo.Box", null, [{name: "value", type: "Int"}], [{name: "get", signature: "():Int"}]).descriptor;
 		if (restoredType.id != stableTypeId || restoredType.fields[0].id != stableFieldId || restoredType.methods[0].id != stableMethodId)
 			throw "Type identities did not survive persistence and restart";
+		var identityCompiler = new Compiler();
+		var identityDeclaration = identityCompiler.types.declareClass("demo.Persistent", null, [{name: "value", type: "Int"}], []);
+		var resumedTypes = new Compiler(identityCompiler.exportIdentityState()).types;
+		if (resumedTypes.declareClass("demo.Persistent", null, [{name: "value", type: "Int"}], []).descriptor.id != identityDeclaration.descriptor.id)
+			throw "Compiler identity state did not preserve nominal type IDs";
 		Sys.println("PASS: stable nominal identities and layout compatibility survive restart");
 		var packaged = new Parser(new Lexer(new SourceFile("pkg.hx",
 			"package editor.core; import editor.util; function main():Int { return 42; }")).tokenize()).parseProgram();

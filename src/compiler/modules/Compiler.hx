@@ -20,6 +20,7 @@ import compiler.hl.HlRuntimeIdentity;
 import haxe.io.Bytes;
 import compiler.types.Type.CompilerType;
 import compiler.ir.Ir.IrNative;
+import compiler.types.TypeRegistry;
 
 typedef NativeFunction = {final name:String; final library:String; final symbol:String; final arguments:Array<CompilerType>; final result:CompilerType;}
 
@@ -43,6 +44,9 @@ class Compiler {
 	final graph = new ModuleGraph();
 	var assembler:HlModuleAssembler;
 	final moduleId:Bytes;
+
+	public final types:TypeRegistry;
+
 	final natives:Map<String, NativeFunction> = [];
 	var compiledOnce = false;
 
@@ -50,15 +54,17 @@ class Compiler {
 		if (identityState == null) {
 			moduleId = HlRuntimeIdentity.createModuleId();
 			assembler = new HlModuleAssembler();
+			types = new TypeRegistry();
 		} else {
 			var identity = HlRuntimeIdentity.decodePersistent(identityState);
 			moduleId = identity.moduleId;
 			assembler = new HlModuleAssembler(identity.stableIds);
+			types = new TypeRegistry(identity.typeState);
 		}
 	}
 
 	public function exportIdentityState():Bytes
-		return HlRuntimeIdentity.encodePersistent(moduleId, assembler.cache.stableIds);
+		return HlRuntimeIdentity.encodePersistent(moduleId, assembler.cache.stableIds, types.exportState());
 
 	public function registerNative(name:String, library:String, symbol:String, arguments:Array<CompilerType>, result:CompilerType):Void {
 		if (compiledOnce)

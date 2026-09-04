@@ -4,10 +4,11 @@ import haxe.io.Bytes;
 import haxe.io.BytesOutput;
 import haxe.io.BytesInput;
 
-typedef HlPersistentIdentity = {final moduleId:Bytes; final stableIds:Map<String, Int>;}
+typedef HlPersistentIdentity = {final moduleId:Bytes; final stableIds:Map<String, Int>; final typeState:Null<Bytes>;}
 
 class HlRuntimeIdentity {
-	public static inline final VERSION = 1;
+	public static inline final VERSION = 2;
+	public static inline final RUNTIME_VERSION = 1;
 	static var sequence = 1;
 
 	public static function createModuleId():Bytes {
@@ -27,7 +28,7 @@ class HlRuntimeIdentity {
 		var out = new BytesOutput();
 		out.bigEndian = false;
 		out.writeString("HLI");
-		out.writeByte(VERSION);
+		out.writeByte(RUNTIME_VERSION);
 		out.write(moduleId);
 		out.writeInt32(names.length);
 		for (name in names) {
@@ -37,13 +38,13 @@ class HlRuntimeIdentity {
 		return out.getBytes();
 	}
 
-	public static function encodePersistent(moduleId:Bytes, stableIds:Map<String, Int>):Bytes {
+	public static function encodePersistent(moduleId:Bytes, stableIds:Map<String, Int>, ?typeState:Bytes):Bytes {
 		var names = [for (name in stableIds.keys()) name];
 		names.sort(Reflect.compare);
 		var out = new BytesOutput();
 		out.bigEndian = false;
 		out.writeString("HCS");
-		out.writeByte(1);
+		out.writeByte(VERSION);
 		out.write(moduleId);
 		out.writeInt32(names.length);
 		for (name in names) {
@@ -52,6 +53,9 @@ class HlRuntimeIdentity {
 			out.writeInt32(bytes.length);
 			out.write(bytes);
 		}
+		var types = typeState == null ? Bytes.alloc(0) : typeState;
+		out.writeInt32(types.length);
+		out.write(types);
 		return out.getBytes();
 	}
 
@@ -59,7 +63,10 @@ class HlRuntimeIdentity {
 		var input = new BytesInput(bytes);
 		input.bigEndian = false;
 		try {
-			if (input.readString(3) != "HCS" || input.readByte() != 1)
+			if (input.readString(3) != "HCS")
+				throw "Invalid compiler identity state";
+			var version = input.readByte();
+			if (version != 1 && version != VERSION)
 				throw "Invalid compiler identity state";
 			var moduleId = input.read(16),
 				count = input.readInt32(),
@@ -75,9 +82,16 @@ class HlRuntimeIdentity {
 					throw "Duplicate compiler identity name";
 				stableIds.set(name, id);
 			}
+			var typeState:Null<Bytes> = null;
+			if (version >= 2) {
+				var typeLength = input.readInt32();
+				if (typeLength < 0 || typeLength > 0x10000000 || typeLength > bytes.length - input.position)
+					throw "Invalid compiler type identity state";
+				typeState = input.read(typeLength);
+			}
 			if (input.position != bytes.length)
 				throw "Trailing compiler identity data";
-			return {moduleId: moduleId, stableIds: stableIds};
+			return {moduleId: moduleId, stableIds: stableIds, typeState: typeState};
 		} catch (error:haxe.io.Eof) {
 			throw "Truncated compiler identity state";
 		}
