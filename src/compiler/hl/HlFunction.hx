@@ -1,37 +1,37 @@
 package compiler.hl;
 
 class HlFunction {
-    public final type:Int;
-    public final functionIndex:Int;
-    public final registers:Array<Int>;
-    public final opcodes:Array<HlInstruction>;
+	public final type:Int;
+	public final functionIndex:Int;
+	public final registers:Array<Int>;
+	public final opcodes:Array<HlInstruction>;
 
-    public function new(type:Int, functionIndex:Int, registers:Array<Int>, opcodes:Array<HlInstruction>) {
-        this.type = type;
-        this.functionIndex = functionIndex;
-        this.registers = registers;
-        this.opcodes = opcodes;
-    }
+	public function new(type:Int, functionIndex:Int, registers:Array<Int>, opcodes:Array<HlInstruction>) {
+		this.type = type;
+		this.functionIndex = functionIndex;
+		this.registers = registers;
+		this.opcodes = opcodes;
+	}
 }
 
 enum HlInstruction {
-    Move(destination:Int,source:Int);
-    LoadInt(destination:Int, constant:Int);
-    LoadFloat(destination:Int, constant:Int);
-    LoadString(destination:Int, constant:Int);
-    LoadBool(destination:Int, value:Bool);
-    Add(destination:Int, left:Int, right:Int);
-    Sub(destination:Int, left:Int, right:Int);
-    Mul(destination:Int,left:Int,right:Int);
-    Div(destination:Int,left:Int,right:Int);
-    Call0(destination:Int, functionIndex:Int);
-    Call1(destination:Int, functionIndex:Int, argument:Int);
-    Call2(destination:Int, functionIndex:Int, argument1:Int, argument2:Int);
-    JumpSignedLessOrEqual(left:Int, right:Int, target:String);
-    JumpSignedLess(left:Int, right:Int, target:String);
-    JumpEqual(left:Int, right:Int, target:String);
-    JumpTrue(condition:Int, target:String);
-    Jump(target:String);
-    Label(name:String);
-    Return(register:Int);
+	Move(destination:Int, source:Int);
+	LoadInt(destination:Int, constant:Int);
+	LoadFloat(destination:Int, constant:Int);
+	LoadString(destination:Int, constant:Int);
+	LoadBool(destination:Int, value:Bool);
+	Add(destination:Int, left:Int, right:Int);
+	Sub(destination:Int, left:Int, right:Int);
+	Mul(destination:Int, left:Int, right:Int);
+	Div(destination:Int, left:Int, right:Int);
+	Call0(destination:Int, functionIndex:Int);
+	Call1(destination:Int, functionIndex:Int, argument:Int);
+	Call2(destination:Int, functionIndex:Int, argument1:Int, argument2:Int);
+	JumpSignedLessOrEqual(left:Int, right:Int, target:String);
+	JumpSignedLess(left:Int, right:Int, target:String);
+	JumpEqual(left:Int, right:Int, target:String);
+	JumpTrue(condition:Int, target:String);
+	Jump(target:String);
+	Label(name:String);
+	Return(register:Int);
 }

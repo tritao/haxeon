@@ -5,40 +5,127 @@ import compiler.ir.Ir.IrType;
 
 /** Enforces the mutable CFG contract before dominance and SSA construction. */
 class CfgVerifier {
-    public static function verify(fn:CfgFunction):Void {
-        if(fn.blocks.length==0)throw 'CFG function ${fn.name} has no entry block';
-        var blocks:Map<Int,CfgBlock>=[],defined:Map<Int,Bool>=[],arguments:Map<String,Bool>=[];
-        for(i in 0...fn.blocks.length){var block=fn.blocks[i];if(block.id!=i||blocks.exists(block.id))throw 'Invalid CFG block ${block.id} in ${fn.name}';blocks.set(block.id,block);}
-        for(argument in fn.arguments){if(arguments.exists(argument.name))throw 'Duplicate CFG argument "${argument.name}"';arguments.set(argument.name,true);var local=fn.localTypes.get(argument.name);if(local==null||local!=argument.type)throw 'Wrong CFG type for argument "${argument.name}"';}
-        for(block in fn.blocks)verifyBlock(fn,block,blocks,defined);
-        var reachable:Map<Int,Bool>=[],work=[0];
-        while(work.length>0){var id=work.pop();if(reachable.exists(id))continue;reachable.set(id,true);var block=blocks.get(id);if(block.terminator==null)throw 'Reachable CFG block $id in ${fn.name} has no terminator';switch block.terminator{case Jump(target):work.push(target);case Branch(_,yes,no):work.push(yes);work.push(no);case Return(_):}}
-    }
+	public static function verify(fn:CfgFunction):Void {
+		if (fn.blocks.length == 0)
+			throw 'CFG function ${fn.name} has no entry block';
+		var blocks:Map<Int, CfgBlock> = [],
+			defined:Map<Int, Bool> = [],
+			arguments:Map<String, Bool> = [];
+		for (i in 0...fn.blocks.length) {
+			var block = fn.blocks[i];
+			if (block.id != i || blocks.exists(block.id))
+				throw 'Invalid CFG block ${block.id} in ${fn.name}';
+			blocks.set(block.id, block);
+		}
+		for (argument in fn.arguments) {
+			if (arguments.exists(argument.name))
+				throw 'Duplicate CFG argument "${argument.name}"';
+			arguments.set(argument.name, true);
+			var local = fn.localTypes.get(argument.name);
+			if (local == null || local != argument.type)
+				throw 'Wrong CFG type for argument "${argument.name}"';
+		}
+		for (block in fn.blocks)
+			verifyBlock(fn, block, blocks, defined);
+		var reachable:Map<Int, Bool> = [], work = [0];
+		while (work.length > 0) {
+			var id = work.pop();
+			if (reachable.exists(id))
+				continue;
+			reachable.set(id, true);
+			var block = blocks.get(id);
+			if (block.terminator == null)
+				throw 'Reachable CFG block $id in ${fn.name} has no terminator';
+			switch block.terminator {
+				case Jump(target):
+					work.push(target);
+				case Branch(_, yes, no):
+					work.push(yes);
+					work.push(no);
+				case Return(_):
+			}
+		}
+	}
 
-    static function verifyBlock(fn:CfgFunction,block:CfgBlock,blocks:Map<Int,CfgBlock>,defined:Map<Int,Bool>):Void {
-        var available:Map<Int,Bool>=[];
-        for(instruction in block.instructions)switch instruction {
-            case ConstInt(out,_):expect(out,I32);define(out,defined,available);
-            case ConstFloat(out,_):expect(out,F64);define(out,defined,available);
-            case ConstString(out,_):expect(out,Bytes);define(out,defined,available);
-            case LoadLocal(out,name):var type=local(fn,name);if(out.type!=type)throw 'Wrong CFG load type for local "$name"';define(out,defined,available);
-            case StoreLocal(name,value):require(value,available);if(value.type!=local(fn,name))throw 'Wrong CFG store type for local "$name"';
-            case Add(out,a,b),Sub(out,a,b),Mul(out,a,b),Div(out,a,b):
-                require(a,available);require(b,available);if(out.type!=a.type||a.type!=b.type||(a.type!=I32&&a.type!=F64))throw "CFG arithmetic requires matching numeric values";define(out,defined,available);
-            case Less(out,a,b),LessEqual(out,a,b),Equal(out,a,b):
-                require(a,available);require(b,available);expect(out,Bool);expect(a,I32);expect(b,I32);define(out,defined,available);
-            case Call(out,_,arguments):for(argument in arguments)require(argument,available);define(out,defined,available);
-        }
-        if(block.terminator!=null)switch block.terminator {
-            case Return(value):require(value,available);if(value.type!=fn.result)throw 'Wrong CFG return type in ${fn.name}';
-            case Jump(target):targetBlock(target,blocks);
-            case Branch(condition,yes,no):require(condition,available);expect(condition,Bool);targetBlock(yes,blocks);targetBlock(no,blocks);
-        }
-    }
+	static function verifyBlock(fn:CfgFunction, block:CfgBlock, blocks:Map<Int, CfgBlock>, defined:Map<Int, Bool>):Void {
+		var available:Map<Int, Bool> = [];
+		for (instruction in block.instructions)
+			switch instruction {
+				case ConstInt(out, _):
+					expect(out, I32);
+					define(out, defined, available);
+				case ConstFloat(out, _):
+					expect(out, F64);
+					define(out, defined, available);
+				case ConstString(out, _):
+					expect(out, Bytes);
+					define(out, defined, available);
+				case LoadLocal(out, name):
+					var type = local(fn, name);
+					if (out.type != type)
+						throw 'Wrong CFG load type for local "$name"';
+					define(out, defined, available);
+				case StoreLocal(name, value):
+					require(value, available);
+					if (value.type != local(fn, name))
+						throw 'Wrong CFG store type for local "$name"';
+				case Add(out, a, b), Sub(out, a, b), Mul(out, a, b), Div(out, a, b):
+					require(a, available);
+					require(b, available);
+					if (out.type != a.type || a.type != b.type || (a.type != I32 && a.type != F64))
+						throw "CFG arithmetic requires matching numeric values";
+					define(out, defined, available);
+				case Less(out, a, b), LessEqual(out, a, b), Equal(out, a, b):
+					require(a, available);
+					require(b, available);
+					expect(out, Bool);
+					expect(a, I32);
+					expect(b, I32);
+					define(out, defined, available);
+				case Call(out, _, arguments):
+					for (argument in arguments)
+						require(argument, available);
+					define(out, defined, available);
+			}
+		if (block.terminator != null)
+			switch block.terminator {
+				case Return(value):
+					require(value, available);
+					if (value.type != fn.result)
+						throw 'Wrong CFG return type in ${fn.name}';
+				case Jump(target):
+					targetBlock(target, blocks);
+				case Branch(condition, yes, no):
+					require(condition, available);
+					expect(condition, Bool);
+					targetBlock(yes, blocks);
+					targetBlock(no, blocks);
+			}
+	}
 
-    static function local(fn:CfgFunction,name:String):IrType {var type=fn.localTypes.get(name);if(type==null)throw 'Unknown CFG local "$name"';return type;}
-    static function targetBlock(id:Int,blocks:Map<Int,CfgBlock>):Void if(!blocks.exists(id))throw 'Unknown CFG block $id';
-    static function define(value:CfgValue,global:Map<Int,Bool>,available:Map<Int,Bool>):Void {if(global.exists(value.id))throw 'Duplicate CFG value ${value.id}';global.set(value.id,true);available.set(value.id,true);}
-    static function require(value:CfgValue,available:Map<Int,Bool>):Void if(!available.exists(value.id))throw 'CFG value ${value.id} is used outside its defining block or before definition';
-    static function expect(value:CfgValue,type:IrType):Void if(value.type!=type)throw 'CFG value ${value.id} has the wrong type';
+	static function local(fn:CfgFunction, name:String):IrType {
+		var type = fn.localTypes.get(name);
+		if (type == null)
+			throw 'Unknown CFG local "$name"';
+		return type;
+	}
+
+	static function targetBlock(id:Int, blocks:Map<Int, CfgBlock>):Void
+		if (!blocks.exists(id))
+			throw 'Unknown CFG block $id';
+
+	static function define(value:CfgValue, global:Map<Int, Bool>, available:Map<Int, Bool>):Void {
+		if (global.exists(value.id))
+			throw 'Duplicate CFG value ${value.id}';
+		global.set(value.id, true);
+		available.set(value.id, true);
+	}
+
+	static function require(value:CfgValue, available:Map<Int, Bool>):Void
+		if (!available.exists(value.id))
+			throw 'CFG value ${value.id} is used outside its defining block or before definition';
+
+	static function expect(value:CfgValue, type:IrType):Void
+		if (value.type != type)
+			throw 'CFG value ${value.id} has the wrong type';
 }
