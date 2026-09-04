@@ -13,19 +13,19 @@ class IrGenerator {
         var program = new IrProgram("__entry");
         program.natives.push({name:"__exit", library:"std", symbol:"sys_exit", arguments:[I32], result:Void});
         for (fn in typed.functions) {
-            var builder = new IrBuilder(), values:Map<String, IrValue> = [], arguments = [];
+            var builder = new IrBuilder(), values:Map<String, IrValue> = [];
             for (argument in fn.arguments) {
-                var value = new IrValue(argument.name, lowerType(argument.type));
-                values.set(argument.name, value); arguments.push(value);
+                var value = builder.argument(argument.name, lowerType(argument.type));
+                values.set(argument.name, value);
             }
             lowerStatements(fn.statements, builder, values);
-            program.functions.push(new IrFunction(fn.name, arguments, lowerType(fn.result), builder.instructions));
+            program.functions.push(new IrFunction(fn.name, builder.arguments, lowerType(fn.result), builder.blocks));
         }
         var entry = new IrBuilder();
         var result = entry.call("main", [], I32);
         var exited = entry.call("__exit", [result], Void);
         entry.returnValue(exited);
-        program.functions.push(new IrFunction("__entry", [], Void, entry.instructions));
+        program.functions.push(new IrFunction("__entry", [], Void, entry.blocks));
         return program;
     }
 
@@ -34,14 +34,17 @@ class IrGenerator {
             case TVar(name, initializer, _): values.set(name, lowerExpression(initializer, builder, values));
             case TReturn(expression, _): builder.returnValue(lowerExpression(expression, builder, values));
             case TIf(condition, thenBranch, elseBranch, _):
-                var thenLabel = builder.newLabel(), endLabel = builder.newLabel();
-                builder.branchTrue(lowerExpression(condition, builder, values), thenLabel);
-                lowerStatements(elseBranch, builder, copy(values));
+                var thenBlock = builder.createBlock(), elseBlock = builder.createBlock();
                 var needsJoin = !alwaysReturns(thenBranch) || !alwaysReturns(elseBranch);
-                if (needsJoin) builder.jump(endLabel);
-                builder.label(thenLabel);
+                var joinBlock = needsJoin ? builder.createBlock() : null;
+                builder.branch(lowerExpression(condition, builder, values), thenBlock, elseBlock);
+                builder.select(thenBlock);
                 lowerStatements(thenBranch, builder, copy(values));
-                if (needsJoin) builder.label(endLabel);
+                if (!builder.isTerminated()) builder.jump(joinBlock);
+                builder.select(elseBlock);
+                lowerStatements(elseBranch, builder, copy(values));
+                if (!builder.isTerminated()) builder.jump(joinBlock);
+                if (needsJoin) builder.select(joinBlock);
         }
     }
 

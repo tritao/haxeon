@@ -1,73 +1,37 @@
 package compiler.ir;
 
-import compiler.ir.Ir.IrInstruction;
-import compiler.ir.Ir.IrType;
-import compiler.ir.Ir.IrValue;
+import compiler.ir.Ir;
 
 class IrBuilder {
-    public final instructions:Array<IrInstruction> = [];
+    public final blocks:Array<IrBlock> = [];
+    public final arguments:Array<IrValue> = [];
+    var current:IrBlock;
     var nextValue:Int = 0;
-    var nextLabel:Int = 0;
 
-    public function new() {}
+    public function new() current = createBlock();
 
-    public function constInt(value:Int):IrValue {
-        var output = temporary(IrType.I32);
-        instructions.push(ConstInt(output, value));
-        return output;
+    public function argument(name:String, type:IrType):IrValue {
+        var value = new IrValue(nextValue++, name, type); arguments.push(value); return value;
     }
+    public function constInt(value:Int):IrValue { var out=temporary(I32); emit(ConstInt(out,value)); return out; }
+    public function add(a:IrValue,b:IrValue):IrValue { var out=temporary(I32); emit(Add(out,a,b)); return out; }
+    public function sub(a:IrValue,b:IrValue):IrValue { var out=temporary(I32); emit(Sub(out,a,b)); return out; }
+    public function less(a:IrValue,b:IrValue):IrValue return compare(a,b,0);
+    public function lessEqual(a:IrValue,b:IrValue):IrValue return compare(a,b,1);
+    public function equal(a:IrValue,b:IrValue):IrValue return compare(a,b,2);
+    function compare(a:IrValue,b:IrValue,op:Int):IrValue { var out=temporary(Bool); emit(switch op {case 0:Less(out,a,b);case 1:LessEqual(out,a,b);default:Equal(out,a,b);}); return out; }
+    public function call(name:String,args:Array<IrValue>,result:IrType):IrValue { var out=temporary(result); emit(Call(out,name,args)); return out; }
 
-    public function add(left:IrValue, right:IrValue):IrValue {
-        var output = temporary(IrType.I32);
-        instructions.push(Add(output, left, right));
-        return output;
+    public function createBlock():IrBlock { var block=new IrBlock(blocks.length); blocks.push(block); return block; }
+    public function select(block:IrBlock):Void current = block;
+    public function terminate(value:IrTerminator):Void {
+        if (current.terminator != null) throw 'IR block ${current.id} already has a terminator';
+        current.terminator = value;
     }
-
-    public function sub(left:IrValue, right:IrValue):IrValue {
-        var output = temporary(IrType.I32);
-        instructions.push(Sub(output, left, right));
-        return output;
-    }
-
-    public function less(left:IrValue, right:IrValue):IrValue return compare(left, right, 0);
-    public function lessEqual(left:IrValue, right:IrValue):IrValue return compare(left, right, 1);
-    public function equal(left:IrValue, right:IrValue):IrValue return compare(left, right, 2);
-
-    function compare(left:IrValue, right:IrValue, operation:Int):IrValue {
-        var output = temporary(IrType.Bool);
-        instructions.push(switch operation { case 0: Less(output,left,right); case 1: LessEqual(output,left,right); default: Equal(output,left,right); });
-        return output;
-    }
-
-    public function call(functionName:String, arguments:Array<IrValue>, result:IrType):IrValue {
-        var output = temporary(result);
-        instructions.push(Call(output, functionName, arguments));
-        return output;
-    }
-
-    public function branchLessOrEqual(left:IrValue, right:IrValue, target:String):Void {
-        instructions.push(BranchLessOrEqual(left, right, target));
-    }
-
-    public function branchTrue(condition:IrValue, target:String):Void instructions.push(BranchTrue(condition, target));
-
-    public function newLabel(?hint:String):String return hint == null ? 'label${nextLabel++}' : hint;
-
-    public function jump(target:String):Void {
-        instructions.push(Jump(target));
-    }
-
-    public function label(?hint:String):String {
-        var name = newLabel(hint);
-        instructions.push(Label(name));
-        return name;
-    }
-
-    public function returnValue(value:IrValue):Void {
-        instructions.push(Return(value));
-    }
-
-    function temporary(type:IrType):IrValue {
-        return new IrValue('t${nextValue++}', type);
-    }
+    public function isTerminated():Bool return current.terminator != null;
+    public function returnValue(value:IrValue):Void terminate(Return(value));
+    public function jump(target:IrBlock):Void terminate(Jump(target.id));
+    public function branch(condition:IrValue, yes:IrBlock, no:IrBlock):Void terminate(Branch(condition, yes.id, no.id));
+    function emit(instruction:IrInstruction):Void { if (isTerminated()) throw "Cannot emit after terminator"; current.instructions.push(instruction); }
+    function temporary(type:IrType):IrValue return new IrValue(nextValue++, 'v$nextValue', type);
 }

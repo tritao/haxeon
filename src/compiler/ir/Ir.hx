@@ -1,19 +1,14 @@
 package compiler.ir;
 
-enum IrType {
-    Void;
-    I32;
-    Bool;
-}
+enum IrType { Void; I32; Bool; }
+abstract ValueId(Int) from Int to Int {}
+abstract BlockId(Int) from Int to Int {}
 
 class IrValue {
+    public final id:ValueId;
     public final name:String;
     public final type:IrType;
-
-    public function new(name:String, type:IrType) {
-        this.name = name;
-        this.type = type;
-    }
+    public function new(id, name, type) { this.id = id; this.name = name; this.type = type; }
 }
 
 enum IrInstruction {
@@ -24,27 +19,29 @@ enum IrInstruction {
     LessEqual(output:IrValue, left:IrValue, right:IrValue);
     Equal(output:IrValue, left:IrValue, right:IrValue);
     Call(output:IrValue, functionName:String, arguments:Array<IrValue>);
-    BranchLessOrEqual(left:IrValue, right:IrValue, target:String);
-    BranchTrue(condition:IrValue, target:String);
-    Jump(target:String);
-    Label(name:String);
+}
+
+enum IrTerminator {
     Return(value:IrValue);
+    Jump(target:BlockId);
+    Branch(condition:IrValue, whenTrue:BlockId, whenFalse:BlockId);
+}
+
+class IrBlock {
+    public final id:BlockId;
+    public final instructions:Array<IrInstruction> = [];
+    public var terminator:Null<IrTerminator>;
+    public function new(id) this.id = id;
 }
 
 typedef IrNative = {
-    final name:String;
-    final library:String;
-    final symbol:String;
-    final arguments:Array<IrType>;
-    final result:IrType;
+    final name:String; final library:String; final symbol:String;
+    final arguments:Array<IrType>; final result:IrType;
 }
 
 class IrProgram {
     public var natives:Array<IrNative> = [];
     public var functions:Array<IrFunction> = [];
     public var entryPoint:String;
-
-    public function new(entryPoint:String) {
-        this.entryPoint = entryPoint;
-    }
+    public function new(entryPoint:String) this.entryPoint = entryPoint;
 }

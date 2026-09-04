@@ -54,7 +54,7 @@ class TestMain {
         builder.constInt(7);
         var repeated = builder.constInt(7);
         builder.returnValue(repeated);
-        ir.functions.push(new IrFunction("main", [], IrType.I32, builder.instructions));
+        ir.functions.push(new IrFunction("main", [], IrType.I32, builder.blocks));
         var lowered = HlLower.lower(ir);
         if (lowered.ints.length != 1 || lowered.ints[0] != 7)
             throw "IR lowering did not deduplicate integer constants";

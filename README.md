@@ -16,6 +16,11 @@ generation. The current subset supports `Int`, `Bool`, local variables,
 functions, calls, arithmetic, comparisons, nested `if`/`else`, and recursive
 functions.
 
+IR values and control-flow blocks have numeric identities independent of
+source names. Functions contain explicit basic blocks terminated by `Return`,
+`Jump`, or `Branch`, and an IR verifier checks the graph and types before HL
+lowering.
+
 ## Run the proof of concept
 
 ```sh

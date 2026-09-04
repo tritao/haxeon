@@ -19,6 +19,7 @@ class HlLower {
     final functionIndices:Map<String, Int> = [];
 
     public static function lower(program:IrProgram):HlCode {
+        IrVerifier.verify(program);
         return new HlLower().lowerProgram(program);
     }
 
@@ -52,13 +53,16 @@ class HlLower {
     }
 
     function lowerFunction(fn:IrFunction):HlFunction {
-        var registers:Map<String, Int> = [];
+        var registers:Map<Int, Int> = [];
         var registerTypes:Array<Int> = [];
         for (argument in fn.arguments)
             defineRegister(argument, registers, registerTypes);
 
         var instructions:Array<HlInstruction> = [];
-        for (instruction in fn.instructions) {
+        for (block in fn.blocks) {
+            if (block.instructions.length == 0 && block.terminator == null) continue;
+            instructions.push(HlInstruction.Label('block_${block.id}'));
+            for (instruction in block.instructions) {
             switch instruction {
                 case ConstInt(output, value):
                     instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes), internInt(value)));
@@ -90,20 +94,15 @@ class HlLower {
                         case 2: instructions.push(HlInstruction.Call2(destination, functionIndex, args[0], args[1]));
                         default: throw 'HL lowering supports at most two call arguments, got ${args.length}';
                     }
-                case BranchLessOrEqual(left, right, target):
-                    instructions.push(HlInstruction.JumpSignedLessOrEqual(
-                        requireRegister(left, registers),
-                        requireRegister(right, registers),
-                        target
-                    ));
-                case BranchTrue(condition, target):
-                    instructions.push(HlInstruction.JumpTrue(requireRegister(condition, registers), target));
-                case Jump(target):
-                    instructions.push(HlInstruction.Jump(target));
-                case Label(name):
-                    instructions.push(HlInstruction.Label(name));
-                case Return(value):
-                    instructions.push(HlInstruction.Return(requireRegister(value, registers)));
+            }
+            }
+            if (block.terminator == null) throw 'Reachable IR block ${block.id} has no terminator';
+            switch block.terminator {
+                case Return(value): instructions.push(HlInstruction.Return(requireRegister(value, registers)));
+                case Jump(target): instructions.push(HlInstruction.Jump('block_$target'));
+                case Branch(condition, yes, no):
+                    instructions.push(HlInstruction.JumpTrue(requireRegister(condition, registers), 'block_$yes'));
+                    instructions.push(HlInstruction.Jump('block_$no'));
             }
         }
 
@@ -116,10 +115,10 @@ class HlLower {
     }
 
     function lowerComparison(output:IrValue, left:IrValue, right:IrValue, operation:Int,
-        registers:Map<String, Int>, registerTypes:Array<Int>, instructions:Array<HlInstruction>):Void {
+        registers:Map<Int, Int>, registerTypes:Array<Int>, instructions:Array<HlInstruction>):Void {
         var destination = defineRegister(output, registers, registerTypes);
         var leftReg = requireRegister(left, registers), rightReg = requireRegister(right, registers);
-        var trueLabel = '__cmp_true_${output.name}', endLabel = '__cmp_end_${output.name}';
+        var trueLabel = '__cmp_true_${output.id}', endLabel = '__cmp_end_${output.id}';
         instructions.push(switch operation {
             case 0: HlInstruction.JumpSignedLess(leftReg, rightReg, trueLabel);
             case 1: HlInstruction.JumpSignedLessOrEqual(leftReg, rightReg, trueLabel);
@@ -132,19 +131,19 @@ class HlLower {
         instructions.push(HlInstruction.Label(endLabel));
     }
 
-    function defineRegister(value:IrValue, registers:Map<String, Int>, types:Array<Int>):Int {
-        if (registers.exists(value.name))
-            throw 'IR value "${value.name}" is defined more than once';
+    function defineRegister(value:IrValue, registers:Map<Int, Int>, types:Array<Int>):Int {
+        if (registers.exists(value.id))
+            throw 'IR value ${value.id} is defined more than once';
         var index = types.length;
-        registers.set(value.name, index);
+        registers.set(value.id, index);
         types.push(internType(value.type));
         return index;
     }
 
-    function requireRegister(value:IrValue, registers:Map<String, Int>):Int {
-        var index = registers.get(value.name);
+    function requireRegister(value:IrValue, registers:Map<Int, Int>):Int {
+        var index = registers.get(value.id);
         if (index == null)
-            throw 'IR value "${value.name}" is used before definition';
+            throw 'IR value ${value.id} is used before definition';
         return index;
     }
 
