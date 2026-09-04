@@ -18,6 +18,10 @@ import compiler.hl.HlModuleAssembler;
 import compiler.hl.HlPatchWriter;
 import compiler.hl.HlRuntimeIdentity;
 import haxe.io.Bytes;
+import compiler.types.Type.CompilerType;
+import compiler.ir.Ir.IrNative;
+
+typedef NativeFunction = {final name:String;final library:String;final symbol:String;final arguments:Array<CompilerType>;final result:CompilerType;}
 
 typedef CompileResult = {
     final ir:IrProgram; final module:HlCode;
@@ -35,6 +39,8 @@ class Compiler {
     final graph = new ModuleGraph();
     var assembler:HlModuleAssembler;
     final moduleId:Bytes;
+    final natives:Map<String,NativeFunction>=[];
+    var compiledOnce=false;
 
     public function new(?identityState:Bytes) {
         if(identityState==null){moduleId=HlRuntimeIdentity.createModuleId();assembler=new HlModuleAssembler();}
@@ -43,8 +49,16 @@ class Compiler {
 
     public function exportIdentityState():Bytes return HlRuntimeIdentity.encodePersistent(moduleId,assembler.cache.stableIds);
 
+    public function registerNative(name:String,library:String,symbol:String,arguments:Array<CompilerType>,result:CompilerType):Void {
+        if(compiledOnce)throw "Native registrations are frozen after the first compilation";
+        if(natives.exists(name))throw 'Native "$name" is already registered';
+        natives.set(name,{name:name,library:library,symbol:symbol,arguments:arguments.copy(),result:result});
+        assembler.cache.registerNative(name);
+    }
+
     public function compact(entryModule:String):CompileResult {
         assembler = new HlModuleAssembler(assembler.cache.stableIds);
+        for(name in natives.keys())assembler.cache.registerNative(name);
         return compile(entryModule);
     }
 
@@ -88,7 +102,7 @@ class Compiler {
         while(work.length>0){var changed=work.pop();if(invalid.exists(changed)){}else invalid.set(changed,true);var callers=reverseCalls.get(changed);if(callers!=null)for(caller in callers)if(!invalid.exists(caller))work.push(caller);}
         var selected:Map<String,Bool>=[]; for(fn in functions) if(invalid.exists(fn.name)) selected.set(fn.name,true);
         var typedNew:TypedProgram;
-        try typedNew = Typer.typeSelected({functions:functions}, selected) catch(error:CompileError) {
+        try typedNew = Typer.typeSelected({functions:functions}, selected,nativeSignatures()) catch(error:CompileError) {
             for(name in names) {
                 var state=modules.get(name);
                 if(state.source.path==error.diagnostic.span.file.path) state.diagnostics.push(error.diagnostic);
@@ -111,9 +125,10 @@ class Compiler {
         }
         retyped.sort(Reflect.compare);regenerated.sort(Reflect.compare);
         var cached=[]; for(fn in functions) cached.push(modules.get(owners.get(fn.name)).irFunctions.get(fn.name));
-        var ir=IrGenerator.assemble(cached);
+        var ir=IrGenerator.assemble(cached,irNatives());
         var signatureChanges=[for(name in signatureChanged.keys())name];signatureChanges.sort(Reflect.compare);
         var assembly=assembler.assemble(ir,regenerated,signatureChanges);
+        compiledOnce=true;
         var patchBytes=assembly.requiresReload||assembly.changedFunctions.length==0?null:
             HlPatchWriter.encode(assembly.module,moduleId,assembly.changedSlots,stableIdsBySlot(),assembly.revision-1,assembly.revision,
                 assembly.baseInts,assembly.baseFloats,assembly.baseStrings,assembly.baseTypes);
@@ -122,6 +137,10 @@ class Compiler {
             functionIndices:copyIndices(assembler.cache.indices),functionIds:copyIndices(assembler.cache.stableIds),
             runtimeIdentity:HlRuntimeIdentity.encode(moduleId,assembler.cache.indices,assembler.cache.stableIds),revision:assembly.revision,patchBytes:patchBytes};
     }
+
+    function nativeSignatures():Map<String,{arguments:Array<CompilerType>,result:CompilerType}>{var result:Map<String,{arguments:Array<CompilerType>,result:CompilerType}>=[];for(name=>native in natives)result.set(name,{arguments:native.arguments,result:native.result});return result;}
+    function irNatives():Array<IrNative>{var names=[for(name in natives.keys())name];names.sort(Reflect.compare);return [for(name in names){var native=natives.get(name);{name:native.name,library:native.library,symbol:native.symbol,arguments:[for(type in native.arguments)irType(type)],result:irType(native.result)}}];}
+    static function irType(type:CompilerType):compiler.ir.Ir.IrType return switch type {case TInt:I32;case TBool:Bool;case TFloat:F64;case TString:Bytes;case TVoid:Void;};
 
     function stableIdsBySlot():Map<Int,Int> {
         var result:Map<Int,Int>=[];
@@ -161,11 +180,15 @@ class Compiler {
         case VarDeclaration(n,t,e,span): VarDeclaration(n,t,canonicalExpression(e,module,entry,locals),span);
         case Return(e,span): Return(canonicalExpression(e,module,entry,locals),span);
         case If(c,y,n,span): If(canonicalExpression(c,module,entry,locals),[for(x in y) canonicalStatement(x,module,entry,locals)],[for(x in n) canonicalStatement(x,module,entry,locals)],span);
+        case While(c,b,span):While(canonicalExpression(c,module,entry,locals),[for(x in b)canonicalStatement(x,module,entry,locals)],span);
+        case Expression(e,span):Expression(canonicalExpression(e,module,entry,locals),span);
     }
     static function canonicalExpression(e,module,entry,locals):AstExpression return switch e {
         case IntegerLiteral(_,_),FloatLiteral(_,_),StringLiteral(_,_),Variable(_,_): e;
         case Add(a,b,s): Add(canonicalExpression(a,module,entry,locals),canonicalExpression(b,module,entry,locals),s);
         case Sub(a,b,s): Sub(canonicalExpression(a,module,entry,locals),canonicalExpression(b,module,entry,locals),s);
+        case Mul(a,b,s):Mul(canonicalExpression(a,module,entry,locals),canonicalExpression(b,module,entry,locals),s);
+        case Div(a,b,s):Div(canonicalExpression(a,module,entry,locals),canonicalExpression(b,module,entry,locals),s);
         case Less(a,b,s): Less(canonicalExpression(a,module,entry,locals),canonicalExpression(b,module,entry,locals),s);
         case LessEqual(a,b,s): LessEqual(canonicalExpression(a,module,entry,locals),canonicalExpression(b,module,entry,locals),s);
         case Equal(a,b,s): Equal(canonicalExpression(a,module,entry,locals),canonicalExpression(b,module,entry,locals),s);
@@ -177,19 +200,23 @@ class Compiler {
     static function scanStatement(s,dependencies):Void switch s {
         case VarDeclaration(_,_,e,_), Return(e,_): scanExpression(e,dependencies);
         case If(c,y,n,_): scanExpression(c,dependencies);for(x in y)scanStatement(x,dependencies);for(x in n)scanStatement(x,dependencies);
+        case While(c,b,_):scanExpression(c,dependencies);for(x in b)scanStatement(x,dependencies);
+        case Expression(e,_):scanExpression(e,dependencies);
     }
     static function scanExpression(e,dependencies):Void switch e {
-        case Add(a,b,_),Sub(a,b,_),Less(a,b,_),LessEqual(a,b,_),Equal(a,b,_):scanExpression(a,dependencies);scanExpression(b,dependencies);
+        case Add(a,b,_),Sub(a,b,_),Mul(a,b,_),Div(a,b,_),Less(a,b,_),LessEqual(a,b,_),Equal(a,b,_):scanExpression(a,dependencies);scanExpression(b,dependencies);
         case Call(name,args,_): var dot=name.indexOf(".");if(dot>0)dependencies.set(name.substr(0,dot),true);for(a in args)scanExpression(a,dependencies);
         default:
     }
     static function scanCalls(statement:AstStatement,calls:Map<String,Bool>):Void switch statement {
         case VarDeclaration(_,_,e,_),Return(e,_):scanCallExpression(e,calls);
         case If(c,y,n,_):scanCallExpression(c,calls);for(s in y)scanCalls(s,calls);for(s in n)scanCalls(s,calls);
+        case While(c,b,_):scanCallExpression(c,calls);for(s in b)scanCalls(s,calls);
+        case Expression(e,_):scanCallExpression(e,calls);
     }
     static function scanCallExpression(e:AstExpression,calls:Map<String,Bool>):Void switch e {
         case Call(name,args,_):calls.set(name,true);for(a in args)scanCallExpression(a,calls);
-        case Add(a,b,_),Sub(a,b,_),Less(a,b,_),LessEqual(a,b,_),Equal(a,b,_):scanCallExpression(a,calls);scanCallExpression(b,calls);
+        case Add(a,b,_),Sub(a,b,_),Mul(a,b,_),Div(a,b,_),Less(a,b,_),LessEqual(a,b,_),Equal(a,b,_):scanCallExpression(a,calls);scanCallExpression(b,calls);
         default:
     }
     static function signatureFingerprint(fn:AstFunction):String return fn.name+"("+[for(a in fn.arguments) Std.string(a.type)].join(",")+")->"+Std.string(fn.result);

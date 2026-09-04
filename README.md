@@ -19,6 +19,13 @@ quote, slash, newline, carriage-return, and tab escapes. Source edits that add
 new float or string constants flow through ordinary incremental compilation
 into transactional HLP symbol deltas.
 
+The expression subset also includes multiplication, signed division, call or
+value expression statements, and `while` control-flow. Hosts can register typed
+HashLink natives through `Compiler.registerNative()` before the first build;
+source calls remain ordinary Haxe-compatible calls while the backend emits the
+configured library/symbol binding. Registrations freeze after compilation so a
+native-table layout cannot silently change beneath a live module.
+
 IR values and control-flow blocks have numeric identities independent of
 source names. Functions contain explicit basic blocks terminated by `Return`,
 `Jump`, or `Branch`, and an IR verifier checks the graph and types before HL

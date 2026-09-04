@@ -21,6 +21,8 @@ enum HlInstruction {
     LoadBool(destination:Int, value:Bool);
     Add(destination:Int, left:Int, right:Int);
     Sub(destination:Int, left:Int, right:Int);
+    Mul(destination:Int,left:Int,right:Int);
+    Div(destination:Int,left:Int,right:Int);
     Call0(destination:Int, functionIndex:Int);
     Call1(destination:Int, functionIndex:Int, argument:Int);
     Call2(destination:Int, functionIndex:Int, argument1:Int, argument2:Int);

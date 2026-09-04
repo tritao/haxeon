@@ -9,6 +9,8 @@ enum abstract HlOpcode(Int) from Int to Int {
     var String = 5;
     var Add = 7;
     var Sub = 8;
+    var Mul=9;
+    var SDiv=10;
     var Call0 = 24;
     var Call1 = 25;
     var Call2 = 26;

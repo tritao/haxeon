@@ -42,7 +42,7 @@ class HlPatchReader {
         var relocations=[for(_ in 0...readUnsigned(input)){instruction:readUnsigned(input),stableId:readUnsigned(input)}];
         return {type:type,functionIndex:stableId,registers:registers,instructions:instructions,relocations:relocations};
     }
-    static function operandCount(op:Int):Int return switch op {case 1,2,3,5,58,67:2-(op==58||op==67?1:0);case 7,8,25,44:3-(op==44?1:0);case 24:2;case 26:4;case 48,51,56:3;default:throw 'Unsupported patch opcode $op';}
+    static function operandCount(op:Int):Int return switch op {case 1,2,3,5,58,67:2-(op==58||op==67?1:0);case 7,8,9,10,25,44:3-(op==44?1:0);case 24:2;case 26:4;case 48,51,56:3;default:throw 'Unsupported patch opcode $op';}
     static function readUnsigned(input:BytesInput):Int {var v=readIndex(input);if(v<0)throw "Negative unsigned HLP index";return v;}
     static function readIndex(input:BytesInput):Int {var first=input.readByte();if((first&0x80)==0)return first&0x7F;if((first&0x40)==0){var v=input.readByte()|((first&31)<<8);return(first&0x20)==0?v:-v;}var v=((first&31)<<24)|(input.readByte()<<16)|(input.readByte()<<8)|input.readByte();return(first&0x20)==0?v:-v;}
 }

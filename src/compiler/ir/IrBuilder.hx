@@ -18,6 +18,8 @@ class IrBuilder {
     public function constString(value:String):IrValue {var out=temporary(Bytes);emit(ConstString(out,value));return out;}
     public function add(a:IrValue,b:IrValue):IrValue { var out=temporary(a.type); emit(Add(out,a,b)); return out; }
     public function sub(a:IrValue,b:IrValue):IrValue { var out=temporary(a.type); emit(Sub(out,a,b)); return out; }
+    public function mul(a:IrValue,b:IrValue):IrValue {var out=temporary(a.type);emit(Mul(out,a,b));return out;}
+    public function div(a:IrValue,b:IrValue):IrValue {var out=temporary(a.type);emit(Div(out,a,b));return out;}
     public function less(a:IrValue,b:IrValue):IrValue return compare(a,b,0);
     public function lessEqual(a:IrValue,b:IrValue):IrValue return compare(a,b,1);
     public function equal(a:IrValue,b:IrValue):IrValue return compare(a,b,2);

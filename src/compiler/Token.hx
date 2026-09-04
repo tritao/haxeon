@@ -8,6 +8,7 @@ enum TokenKind {
     Return;
     If;
     Else;
+    While;
     TypeInt;
     TypeBool;
     TypeFloat;
@@ -27,6 +28,8 @@ enum TokenKind {
     Assign;
     Plus;
     Minus;
+    Star;
+    Slash;
     Less;
     LessEqual;
     EqualEqual;

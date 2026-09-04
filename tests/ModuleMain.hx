@@ -4,14 +4,17 @@ import compiler.ir.HlLower;
 import compiler.modules.Compiler;
 import compiler.Diagnostic.CompileError;
 import sys.io.File;
+import compiler.types.Type.CompilerType;
 
 class ModuleMain {
     static function main():Void {
         var output=Sys.args()[0], compiler=new Compiler();
+        compiler.registerNative("print","std","sys_print",[TString],TVoid);
         compiler.update("Math.hx", "function add(a:Int, b:Int):Int { return a + b; }");
-        compiler.update("Main.hx", "function main():Int { return Math.add(20, 22); }");
+        compiler.update("Main.hx", "function main():Int { print(\"native registration works\\n\"); return Math.add(20, 22); }");
         compiler.update("Unused.hx", "function identity(x:Int):Int { return x; }");
         var first=compiler.compile("Main");
+        try{compiler.registerNative("late","std","sys_time",[],TFloat);throw "late native registration was accepted";}catch(error:String){if(error!="Native registrations are frozen after the first compilation")throw error;}
         var mathIndex=first.functionIndices.get("Math.add"),mathId=first.functionIds.get("Math.add");
         var twentyIndex=first.module.ints.indexOf(20);
         compiler.update("Aardvark.hx", "function helper(x:Int):Int { return x + 7; }");

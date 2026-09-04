@@ -72,8 +72,10 @@ class Parser {
             var end = elseBranch.length > 0 ? statementSpan(elseBranch[elseBranch.length - 1]) : statementSpan(thenBranch[thenBranch.length - 1]);
             return If(condition, thenBranch, elseBranch, start.merge(end));
         }
-        fail(current(), "Expected statement");
-        return null;
+        if(match(TokenKind.While)){
+            var start=previous().span;consume(TokenKind.LeftParen);var condition=parseExpression();consume(TokenKind.RightParen);var body=parseStatementOrBlock();var end=statementSpan(body[body.length-1]);return While(condition,body,start.merge(end));
+        }
+        var expression=parseExpression(),end=consume(TokenKind.Semicolon).span;return Expression(expression,expressionSpan(expression).merge(end));
     }
 
     function parseExpression():AstExpression {
@@ -92,13 +94,19 @@ class Parser {
     }
 
     function parseAdditive():AstExpression {
-        var expression = parsePrimary();
+        var expression = parseMultiplicative();
         while (check(TokenKind.Plus) || check(TokenKind.Minus)) {
             var operation = advance().kind;
-            var right = parsePrimary();
+            var right = parseMultiplicative();
             var span = expressionSpan(expression).merge(expressionSpan(right));
             expression = operation == TokenKind.Plus ? Add(expression, right, span) : Sub(expression, right, span);
         }
+        return expression;
+    }
+
+    function parseMultiplicative():AstExpression {
+        var expression=parsePrimary();
+        while(check(TokenKind.Star)||check(TokenKind.Slash)){var operation=advance().kind,right=parsePrimary(),span=expressionSpan(expression).merge(expressionSpan(right));expression=operation==TokenKind.Star?Mul(expression,right,span):Div(expression,right,span);}
         return expression;
     }
 
@@ -174,7 +182,7 @@ class Parser {
         throw new CompileError(new Diagnostic("E0002", message, token.span));
 
     static function expressionSpan(expression:AstExpression) return switch expression {
-        case IntegerLiteral(_, span), FloatLiteral(_,span), StringLiteral(_,span), Variable(_, span), Add(_, _, span), Sub(_, _, span), Less(_, _, span), LessEqual(_, _, span), Equal(_, _, span), Call(_, _, span): span;
+        case IntegerLiteral(_, span), FloatLiteral(_,span), StringLiteral(_,span), Variable(_, span), Add(_, _, span), Sub(_, _, span), Mul(_,_,span), Div(_,_,span), Less(_, _, span), LessEqual(_, _, span), Equal(_, _, span), Call(_, _, span): span;
     }
 
     static function decodeString(text:String):String {
@@ -184,6 +192,6 @@ class Parser {
     }
 
     static function statementSpan(statement:AstStatement) return switch statement {
-        case VarDeclaration(_, _, _, span), Return(_, span), If(_, _, _, span): span;
+        case VarDeclaration(_, _, _, span), Return(_, span), If(_, _, _, span), While(_,_,span), Expression(_,span): span;
     }
 }

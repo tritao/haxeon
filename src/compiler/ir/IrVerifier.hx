@@ -43,7 +43,7 @@ class IrVerifier {
         case ConstInt(out, _): expect(out, I32); define(values, out);
         case ConstFloat(out,_):expect(out,F64);define(values,out);
         case ConstString(out,_):expect(out,Bytes);define(values,out);
-        case Add(out,a,b), Sub(out,a,b): if(out.type!=a.type||a.type!=b.type||(a.type!=I32&&a.type!=F64))throw "IR arithmetic requires matching numeric values";require(values,a);require(values,b);define(values,out);
+        case Add(out,a,b),Sub(out,a,b),Mul(out,a,b),Div(out,a,b):if(out.type!=a.type||a.type!=b.type||(a.type!=I32&&a.type!=F64))throw "IR arithmetic requires matching numeric values";require(values,a);require(values,b);define(values,out);
         case Less(out,a,b), LessEqual(out,a,b), Equal(out,a,b): expect(out,Bool); expect(a,I32); expect(b,I32); require(values,a); require(values,b); define(values,out);
         case Call(out,name,args):
             var signature = signatures.get(name); if (signature == null) throw 'Unknown IR call "$name"';

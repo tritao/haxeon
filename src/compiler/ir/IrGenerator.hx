@@ -8,6 +8,7 @@ import compiler.types.TypedAst.TypedStatement;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
+import compiler.ir.Ir.IrNative;
 
 class IrGenerator {
     public static function generate(typed:TypedProgram):IrProgram {
@@ -24,9 +25,10 @@ class IrGenerator {
         return new IrFunction(fn.name, builder.arguments, lowerType(fn.result), builder.blocks);
     }
 
-    public static function assemble(functions:Array<IrFunction>):IrProgram {
+    public static function assemble(functions:Array<IrFunction>,?natives:Array<IrNative>):IrProgram {
         var program = new IrProgram("__entry");
         program.natives.push({name:"__exit", library:"std", symbol:"sys_exit", arguments:[I32], result:Void});
+        if(natives!=null)for(native in natives)program.natives.push(native);
         for (fn in functions) program.functions.push(fn);
         var entry = new IrBuilder();
         var result = entry.call("main", [], I32);
@@ -52,6 +54,9 @@ class IrGenerator {
                 lowerStatements(elseBranch, builder, copy(values));
                 if (!builder.isTerminated()) builder.jump(joinBlock);
                 if (needsJoin) builder.select(joinBlock);
+            case TWhile(condition,body,_):
+                var conditionBlock=builder.createBlock(),bodyBlock=builder.createBlock(),afterBlock=builder.createBlock();builder.jump(conditionBlock);builder.select(conditionBlock);builder.branch(lowerExpression(condition,builder,values),bodyBlock,afterBlock);builder.select(bodyBlock);lowerStatements(body,builder,copy(values));if(!builder.isTerminated())builder.jump(conditionBlock);builder.select(afterBlock);
+            case TExpression(expression,_):lowerExpression(expression,builder,values);
         }
     }
 
@@ -62,6 +67,8 @@ class IrGenerator {
         case TLocal(name): var value = values.get(name); if (value == null) throw 'Missing typed local "$name"'; value;
         case TAdd(a,b): builder.add(lowerExpression(a,builder,values), lowerExpression(b,builder,values));
         case TSub(a,b): builder.sub(lowerExpression(a,builder,values), lowerExpression(b,builder,values));
+        case TMul(a,b):builder.mul(lowerExpression(a,builder,values),lowerExpression(b,builder,values));
+        case TDiv(a,b):builder.div(lowerExpression(a,builder,values),lowerExpression(b,builder,values));
         case TLess(a,b): builder.less(lowerExpression(a,builder,values), lowerExpression(b,builder,values));
         case TLessEqual(a,b): builder.lessEqual(lowerExpression(a,builder,values), lowerExpression(b,builder,values));
         case TEqual(a,b): builder.equal(lowerExpression(a,builder,values), lowerExpression(b,builder,values));

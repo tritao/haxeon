@@ -17,6 +17,8 @@ enum TypedExpressionKind {
     TLocal(name:String);
     TAdd(left:TypedExpression, right:TypedExpression);
     TSub(left:TypedExpression, right:TypedExpression);
+    TMul(left:TypedExpression,right:TypedExpression);
+    TDiv(left:TypedExpression,right:TypedExpression);
     TLess(left:TypedExpression, right:TypedExpression);
     TLessEqual(left:TypedExpression, right:TypedExpression);
     TEqual(left:TypedExpression, right:TypedExpression);
@@ -27,6 +29,8 @@ enum TypedStatement {
     TVar(name:String, initializer:TypedExpression, span:SourceSpan);
     TReturn(expression:TypedExpression, span:SourceSpan);
     TIf(condition:TypedExpression, thenBranch:Array<TypedStatement>, elseBranch:Array<TypedStatement>, span:SourceSpan);
+    TWhile(condition:TypedExpression,body:Array<TypedStatement>,span:SourceSpan);
+    TExpression(expression:TypedExpression,span:SourceSpan);
 }
 
 typedef TypedFunction = {

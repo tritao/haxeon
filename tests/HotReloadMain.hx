@@ -30,11 +30,11 @@ class HotReloadMain {
         if (Runtime.callInt(loaded, valueIndex) != 42) throw "initial generation did not return 42";
         if (Runtime.callInt(loaded, readIndex) != 42) throw "initial internal call did not return 42";
 
-        compiler.update("Value.hx", "function value():Int { var ratio:Float = 2.75; var label:String = \"patched source\"; return 43; }");
+        compiler.update("Value.hx", "function value():Int { var ratio:Float = 2.75; var label:String = \"patched source\"; return 86 / 2; }");
         var changed = compiler.compile("Main");
         var decoded=HlPatchReader.decode(changed.patchBytes);
         if(decoded.moduleId.compare(initial.runtimeIdentity.sub(4,16))!=0)throw "HLP module identity does not match its load manifest";
-        if(decoded.baseInts!=initial.module.ints.length||decoded.ints.length!=1||decoded.ints[0]!=43)
+        if(decoded.baseInts!=initial.module.ints.length||decoded.ints.indexOf(86)<0)
             throw "HLP did not encode the integer symbol delta";
         if(decoded.baseFloats!=initial.module.floats.length||decoded.floats.length!=1||decoded.floats[0]!=2.75)
             throw "HLP did not encode the source float symbol delta";

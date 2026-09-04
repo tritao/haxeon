@@ -69,6 +69,8 @@ class Lexer {
                     } else TokenKind.Less;
                 case "+": TokenKind.Plus;
                 case "-": TokenKind.Minus;
+                case "*":TokenKind.Star;
+                case "/":TokenKind.Slash;
                 default: throw new CompileError(new Diagnostic("E0001", 'Unexpected character "${String.fromCharCode(code)}"', file.span(start, position)));
             }
             tokens.push(new Token(kind, source.substring(start, position), file.span(start, position)));
@@ -84,6 +86,7 @@ class Lexer {
             case "return": TokenKind.Return;
             case "if": TokenKind.If;
             case "else": TokenKind.Else;
+            case "while":TokenKind.While;
             case "Int": TokenKind.TypeInt;
             case "Bool": TokenKind.TypeBool;
             case "Float": TokenKind.TypeFloat;
