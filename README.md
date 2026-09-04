@@ -21,6 +21,11 @@ source names. Functions contain explicit basic blocks terminated by `Return`,
 `Jump`, or `Branch`, and an IR verifier checks the graph and types before HL
 lowering.
 
+`compiler.modules.Compiler` retains source, tokens, syntax trees, typed trees,
+dependencies, diagnostics, and generated IR per module. Qualified calls such
+as `Math.add(20, 22)` create dependency edges; updating a module invalidates
+its typed dependents while unrelated parsed and typed state is reused.
+
 ## Run the proof of concept
 
 ```sh

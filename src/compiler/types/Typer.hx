@@ -18,10 +18,11 @@ import compiler.Source.SourceSpan;
 class Typer {
     final signatures:Map<String, AstFunction> = [];
 
-    public static function type(program:AstProgram):TypedProgram return new Typer().typeProgram(program);
+    public static function type(program:AstProgram):TypedProgram return new Typer().typeProgram(program, null);
+    public static function typeSelected(program:AstProgram, selected:Map<String, Bool>):TypedProgram return new Typer().typeProgram(program, selected);
     function new() {}
 
-    function typeProgram(program:AstProgram):TypedProgram {
+    function typeProgram(program:AstProgram, selected:Null<Map<String, Bool>>):TypedProgram {
         for (fn in program.functions) {
             if (signatures.exists(fn.name)) fail("E1000", 'Duplicate function "${fn.name}"', fn.span);
             signatures.set(fn.name, fn);
@@ -29,7 +30,7 @@ class Typer {
         var main = signatures.get("main");
         if (main == null || main.arguments.length != 0 || lowerType(main.result) != TInt)
             throw "Program must define function main():Int";
-        return {functions: [for (fn in program.functions) typeFunction(fn)]};
+        return {functions: [for (fn in program.functions) if (selected == null || selected.exists(fn.name)) typeFunction(fn)]};
     }
 
     function typeFunction(fn:AstFunction):TypedFunction {

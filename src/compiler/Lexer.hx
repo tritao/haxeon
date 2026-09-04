@@ -48,6 +48,7 @@ class Lexer {
                 case ":": TokenKind.Colon;
                 case ";": TokenKind.Semicolon;
                 case ",": TokenKind.Comma;
+                case ".": TokenKind.Dot;
                 case "=":
                     if (position < source.length && source.charAt(position) == "=") {
                         position++;

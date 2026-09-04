@@ -36,3 +36,14 @@ run_program function-call 42
 run_program name-collision 42
 run_program bool-if 42
 run_program fib 55
+
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run ModuleMain "$root_dir/out/modules.hl"
+set +e
+LD_LIBRARY_PATH="$root_dir/.tools/hashlink" "$hl" "$root_dir/out/modules.hl"
+module_status=$?
+set -e
+if [[ $module_status -ne 42 ]]; then
+    echo "modules: expected exit 42, got $module_status" >&2
+    exit 1
+fi
+echo "PASS: incrementally rebuilt multi-module program executed (exit 42)"

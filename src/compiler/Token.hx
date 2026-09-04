@@ -19,6 +19,7 @@ enum TokenKind {
     Colon;
     Semicolon;
     Comma;
+    Dot;
     Assign;
     Plus;
     Minus;

@@ -108,6 +108,9 @@ class Parser {
         if (match(TokenKind.Identifier)) {
             var name = previous().text;
             var start = previous().span;
+            while (match(TokenKind.Dot)) {
+                name += "." + consume(TokenKind.Identifier).text;
+            }
             if (!match(TokenKind.LeftParen))
                 return Variable(name, start);
             var arguments = [];
