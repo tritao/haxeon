@@ -31,6 +31,11 @@ only that function's typed and IR artifacts; signature edits propagate through
 the function call graph. Cached IR objects for unaffected functions are reused
 when the executable module is assembled.
 
+The session-scoped HL assembler assigns append-only indices to functions,
+types, strings, and constants. Compilation reports changed function indices
+and whether a structural edit requires reload. Removed functions retain a
+tombstone slot until `Compiler.compact()` performs a deterministic full rebuild.
+
 ## Run the proof of concept
 
 ```sh

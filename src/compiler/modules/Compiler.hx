@@ -13,14 +13,27 @@ import compiler.ir.Ir.IrProgram;
 import compiler.ir.IrGenerator;
 import compiler.types.Typer;
 import compiler.types.TypedAst.TypedProgram;
+import compiler.hl.HlCode;
+import compiler.hl.HlModuleAssembler;
 
-typedef CompileResult = { final ir:IrProgram; final retyped:Array<String>; final regenerated:Array<String>; }
+typedef CompileResult = {
+    final ir:IrProgram; final module:HlCode;
+    final retyped:Array<String>; final regenerated:Array<String>;
+    final changedFunctions:Array<Int>; final requiresReload:Bool;
+    final functionIndices:Map<String,Int>;
+}
 
 class Compiler {
     public final modules:Map<String, ModuleState> = [];
     final graph = new ModuleGraph();
+    var assembler = new HlModuleAssembler();
 
     public function new() {}
+
+    public function compact(entryModule:String):CompileResult {
+        assembler = new HlModuleAssembler();
+        return compile(entryModule);
+    }
 
     public function update(path:String, source:String):ModuleState {
         var name = ModulePath.fromFile(path), file = new SourceFile(path, source);
@@ -86,7 +99,11 @@ class Compiler {
         retyped.sort(Reflect.compare);regenerated.sort(Reflect.compare);
         var cached=[]; for(fn in functions) cached.push(modules.get(owners.get(fn.name)).irFunctions.get(fn.name));
         var ir=IrGenerator.assemble(cached);
-        return {ir:ir,retyped:retyped,regenerated:regenerated};
+        var signatureChanges=[for(name in signatureChanged.keys())name];signatureChanges.sort(Reflect.compare);
+        var assembly=assembler.assemble(ir,regenerated,signatureChanges);
+        return {ir:ir,module:assembly.module,retyped:retyped,regenerated:regenerated,
+            changedFunctions:assembly.changedFunctions,requiresReload:assembly.requiresReload,
+            functionIndices:copyIndices(assembler.cache.indices)};
     }
 
     function parse(state:ModuleState, entry:String, bodyChanged:Map<String,Bool>, signatureChanged:Map<String,Bool>):Void {
@@ -154,4 +171,5 @@ class Compiler {
     }
     static function signatureFingerprint(fn:AstFunction):String return fn.name+"("+[for(a in fn.arguments) Std.string(a.type)].join(",")+")->"+Std.string(fn.result);
     static function owner(name:String,entry:String):String { var dot=name.indexOf("."); return dot<0?entry:name.substr(0,dot); }
+    static function copyIndices(source:Map<String,Int>):Map<String,Int>{var result:Map<String,Int>=[];for(name=>index in source)result.set(name,index);return result;}
 }

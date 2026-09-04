@@ -5,6 +5,7 @@ import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction;
 import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlType;
+import compiler.hl.HlSymbolTable;
 import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.Ir.IrProgram;
@@ -13,26 +14,32 @@ import compiler.ir.Ir.IrValue;
 
 class HlLower {
     final code:HlCode;
-    final typeIndices:Map<String, Int> = [];
-    final stringIndices:Map<String, Int> = [];
-    final intIndices:Map<Int, Int> = [];
+    final symbols:HlSymbolTable;
     final functionIndices:Map<String, Int> = [];
 
     public static function lower(program:IrProgram):HlCode {
         IrVerifier.verify(program);
-        return new HlLower().lowerProgram(program);
+        return new HlLower(new HlSymbolTable(), null).lowerProgram(program);
     }
 
-    function new() {
+    public static function lowerStable(program:IrProgram, symbols:HlSymbolTable, indices:Map<String,Int>):HlCode {
+        IrVerifier.verify(program);
+        return new HlLower(symbols, indices).lowerProgram(program);
+    }
+
+    function new(symbols:HlSymbolTable, indices:Null<Map<String,Int>>) {
+        this.symbols=symbols;
         code = new HlCode();
+        code.ints=symbols.ints;code.strings=symbols.strings;code.types=symbols.types;
+        if(indices!=null)for(name=>index in indices)functionIndices.set(name,index);
     }
 
     function lowerProgram(program:IrProgram):HlCode {
-        var nextFunction = 0;
-        for (native in program.natives)
-            addFunctionName(native.name, nextFunction++);
-        for (fn in program.functions)
-            addFunctionName(fn.name, nextFunction++);
+        if(functionIndices.keys().hasNext()==false) {
+            var nextFunction = 0;
+            for (native in program.natives) addFunctionName(native.name, nextFunction++);
+            for (fn in program.functions) addFunctionName(fn.name, nextFunction++);
+        }
 
         for (native in program.natives)
             lowerNative(native);
@@ -40,6 +47,7 @@ class HlLower {
             code.functions.push(lowerFunction(fn));
 
         code.entryPoint = requireFunction(program.entryPoint);
+        code.ints=code.ints.copy();code.strings=code.strings.copy();code.types=code.types.copy();
         return code;
     }
 
@@ -148,59 +156,19 @@ class HlLower {
     }
 
     function internInt(value:Int):Int {
-        var existing = intIndices.get(value);
-        if (existing != null)
-            return existing;
-        var index = code.ints.length;
-        code.ints.push(value);
-        intIndices.set(value, index);
-        return index;
+        return symbols.internInt(value);
     }
 
     function internString(value:String):Int {
-        var existing = stringIndices.get(value);
-        if (existing != null)
-            return existing;
-        var index = code.strings.length;
-        code.strings.push(value);
-        stringIndices.set(value, index);
-        return index;
+        return symbols.internString(value);
     }
 
     function internType(type:IrType):Int {
-        var key = typeKey(type);
-        var existing = typeIndices.get(key);
-        if (existing != null)
-            return existing;
-        var index = code.types.length;
-        code.types.push(Simple(switch type {
-            case Void: HlType.Void;
-            case I32: HlType.I32;
-            case Bool: HlType.Bool;
-        }));
-        typeIndices.set(key, index);
-        return index;
+        return symbols.internType(type);
     }
 
     function internFunctionType(arguments:Array<IrType>, result:IrType):Int {
-        var key = 'fun(${[for (argument in arguments) typeKey(argument)].join(",")})->${typeKey(result)}';
-        var existing = typeIndices.get(key);
-        if (existing != null)
-            return existing;
-        var argumentTypes = [for (argument in arguments) internType(argument)];
-        var resultType = internType(result);
-        var index = code.types.length;
-        code.types.push(Function(argumentTypes, resultType));
-        typeIndices.set(key, index);
-        return index;
-    }
-
-    function typeKey(type:IrType):String {
-        return switch type {
-            case Void: "void";
-            case I32: "i32";
-            case Bool: "bool";
-        }
+        return symbols.internFunction(arguments,result);
     }
 
     function addFunctionName(name:String, index:Int):Void {
