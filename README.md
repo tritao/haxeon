@@ -131,6 +131,7 @@ non-moving type arena.
 ./scripts/bootstrap-tools.sh
 ./scripts/format.sh
 ./scripts/format.sh --check
+./scripts/bootstrap-status.sh
 ./scripts/test-poc.sh
 ./test-hot-reload.sh
 ```
@@ -145,3 +146,7 @@ HashLink decoder in `src/code.c`.
 Haxe sources are formatted with the repository-pinned Haxe Formatter. Run
 `./scripts/format.sh` to apply formatting; `./scripts/format.sh --check` is part
 of the proof-of-concept test suite.
+
+`./scripts/bootstrap-status.sh` runs the real lexer, parser, and typer over the
+compiler source tree and reports bootstrap progress. Add `--json` for a
+machine-readable dashboard.
