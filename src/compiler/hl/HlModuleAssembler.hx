@@ -7,12 +7,14 @@ typedef HlAssemblyResult = {
     final module:HlCode;
     final changedFunctions:Array<Int>;
     final requiresReload:Bool;
+    final revision:Int;
 }
 
 class HlModuleAssembler {
     public final symbols = new HlSymbolTable();
     public final cache = new HlFunctionCache();
     var initialized:Bool=false;
+    var revision:Int=0;
 
     public function new() {}
 
@@ -26,7 +28,8 @@ class HlModuleAssembler {
         changed.sort(function(a,b)return a-b);
         var reload=initialized && signatureChanges.length>0;
         var module=HlLower.lowerStable(ordered,symbols,cache.indices);
+        revision++;
         initialized=true;
-        return {module:module,changedFunctions:changed,requiresReload:reload};
+        return {module:module,changedFunctions:changed,requiresReload:reload,revision:revision};
     }
 }

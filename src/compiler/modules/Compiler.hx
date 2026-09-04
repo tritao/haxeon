@@ -21,6 +21,7 @@ typedef CompileResult = {
     final retyped:Array<String>; final regenerated:Array<String>;
     final changedFunctions:Array<Int>; final requiresReload:Bool;
     final functionIndices:Map<String,Int>;
+    final revision:Int;
 }
 
 class Compiler {
@@ -103,7 +104,7 @@ class Compiler {
         var assembly=assembler.assemble(ir,regenerated,signatureChanges);
         return {ir:ir,module:assembly.module,retyped:retyped,regenerated:regenerated,
             changedFunctions:assembly.changedFunctions,requiresReload:assembly.requiresReload,
-            functionIndices:copyIndices(assembler.cache.indices)};
+            functionIndices:copyIndices(assembler.cache.indices),revision:assembly.revision};
     }
 
     function parse(state:ModuleState, entry:String, bodyChanged:Map<String,Bool>, signatureChanged:Map<String,Bool>):Void {

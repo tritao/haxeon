@@ -52,6 +52,8 @@ at one generation. Calls and commits are synchronized; once protected calls
 finish, the previous generation is unregistered and its JIT memory is released.
 Rejected generations are unloaded immediately, keeping repeated editor reloads
 bounded. Runtime modules also support explicit disposal at plugin-domain exit.
+Patch sets carry expected-base and replacement revisions; stale or replayed
+updates are rejected before loading or changing live dispatch state.
 
 ## Run the proof of concept
 
