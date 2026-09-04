@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root_dir=$(cd "$(dirname "$0")/.." && pwd)
+haxe="$root_dir/.tools/haxe/haxe"
+hl="$root_dir/.tools/hashlink/hl"
+output="$root_dir/out/handmade.hl"
+
+if [[ ! -x "$haxe" || ! -x "$hl" ]]; then
+    echo "missing local toolchain; run ./scripts/bootstrap-tools.sh first" >&2
+    exit 1
+fi
+
+mkdir -p "$root_dir/out"
+"$haxe" --cwd "$root_dir" -cp src --run Main "$output"
+
+set +e
+LD_LIBRARY_PATH="$root_dir/.tools/hashlink" "$hl" "$output"
+status=$?
+set -e
+
+if [[ $status -ne 42 ]]; then
+    echo "expected generated program to exit 42, got $status" >&2
+    exit 1
+fi
+
+echo "PASS: HashLink executed the hand-generated function (exit status 42)"
