@@ -234,17 +234,17 @@ class Typer {
 					};
 					if (className == null)
 						fail("E1007", 'Cannot call method on non-object "$receiverName"', span);
-					var methodKey = className + "." + methodName,
-						info = methodInfo.get(methodKey);
-					if (info == null || info.isStatic)
-						fail("E1007", 'Unknown instance method "$methodKey"', span);
+					var methodInfoResult = findMethod(className, methodName);
+					if (methodInfoResult == null || methodInfoResult.isStatic)
+						fail("E1007", 'Unknown instance method "$className.$methodName"', span);
+					var methodKey = methodInfoResult.owner + "." + methodName;
 					var method = signatures.get(methodKey),
 						expected = [for (argument in method.arguments) lowerType(argument.type)],
 						typed = [for (argument in arguments) typeExpression(argument, scope)];
 					if (typed.length != expected.length)
 						fail("E1008", 'Function "$methodKey" expects ${expected.length} arguments, got ${typed.length}', span);
 					checkArguments(typed, expected, methodKey);
-					new TypedExpression(TMethodCall(typeExpression(Variable(receiverName, span), scope), methodName, typed), lowerType(method.result), span);
+					new TypedExpression(TMethodCall(typeExpression(Variable(receiverName, span), scope), methodKey, typed), lowerType(method.result), span);
 				} else {
 					var signature = signatures.get(name);
 					var external = externals.get(name),
@@ -264,6 +264,14 @@ class Typer {
 		for (i in 0...arguments.length)
 			if (!sameType(arguments[i].type, expected[i]))
 				fail("E1009", 'Argument ${i + 1} to "$name" has the wrong type', arguments[i].span);
+	}
+
+	function findMethod(className:String, name:String):Null<{owner:String, isStatic:Bool, isConstructor:Bool}> {
+		var info = methodInfo.get(className + "." + name);
+		if (info != null)
+			return info;
+		var classDecl = classDecls.get(className);
+		return classDecl != null && classDecl.base != null ? findMethod(classDecl.base, name) : null;
 	}
 
 	function fieldType(type:CompilerType, name:String, span:SourceSpan):CompilerType {

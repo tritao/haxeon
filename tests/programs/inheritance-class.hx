@@ -4,6 +4,10 @@ class Box {
 	public function new(value:Int) {
 		this.value = value;
 	}
+
+	public function get():Int {
+		return this.value;
+	}
 }
 
 class Child extends Box {
@@ -17,5 +21,5 @@ class Child extends Box {
 
 function main():Int {
 	var box = new Child(42);
-	return box.value + box.extra;
+	return box.get() + box.extra;
 }

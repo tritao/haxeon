@@ -30,7 +30,7 @@ enum TypedExpressionKind {
 	TCall(name:String, arguments:Array<TypedExpression>);
 	TNew(typeName:String, arguments:Array<TypedExpression>);
 	TField(object:TypedExpression, name:String);
-	TMethodCall(object:TypedExpression, name:String, arguments:Array<TypedExpression>);
+	TMethodCall(object:TypedExpression, functionName:String, arguments:Array<TypedExpression>);
 }
 
 enum TypedStatement {

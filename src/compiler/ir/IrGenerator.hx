@@ -160,14 +160,10 @@ class IrGenerator {
 			case TField(object, name): builder.fieldGet(lowerExpression(object, builder, localTypes), name, lowerType(expression.type));
 			case TMethodCall(object, name, args):
 				var receiver = lowerExpression(object, builder, localTypes),
-					callArgs = [receiver],
-					className = switch object.type {
-						case TClass(value): value;
-						default: throw 'Method receiver is not an object';
-					};
+					callArgs = [receiver];
 				for (arg in args)
 					callArgs.push(lowerExpression(arg, builder, localTypes));
-				builder.call('$className.$name', callArgs, lowerType(expression.type));
+				builder.call(name, callArgs, lowerType(expression.type));
 		}
 
 	static function implicitArguments(fn:TypedFunction):Array<{name:String, type:IrType}> {

@@ -134,7 +134,7 @@ class IrVerifier {
 					throw 'Wrong IR argument count for "$name"';
 				for (i in 0...args.length) {
 					require(values, args[i]);
-					if (!sameType(args[i].type, signature.arguments[i]))
+					if (!compatibleType(args[i].type, signature.arguments[i], objects))
 						throw 'Wrong IR argument type for "$name"';
 				}
 				if (!sameType(out.type, signature.result))
@@ -231,4 +231,14 @@ class IrVerifier {
 			case [Obj(a), Obj(b)]: a == b;
 			default: left == right;
 		};
+
+	static function compatibleType(actual:IrType, expected:IrType, objects:Map<String, IrObject>):Bool {
+		if (sameType(actual, expected))
+			return true;
+		return switch [actual, expected] {
+			case [Obj(actualName), Obj(expectedName)]: var object = objects.get(actualName); object != null && object.base != null && compatibleType(Obj(object.base),
+					expected, objects);
+			default: false;
+		};
+	}
 }
