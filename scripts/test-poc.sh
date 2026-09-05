@@ -139,11 +139,11 @@ set +e
 LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$compiler_array_output"
 compiler_array_status=$?
 set -e
-if [[ $compiler_array_status -ne 45 ]]; then
-	echo "compiler array: expected exit 45, got $compiler_array_status" >&2
+if [[ $compiler_array_status -ne 47 ]]; then
+	echo "compiler array: expected exit 47, got $compiler_array_status" >&2
 	exit 1
 fi
-echo "PASS: compiler-owned Int/Float/String array allocation executed (exit 45)"
+echo "PASS: compiler-owned Int/Float/Bool/String array allocation executed (exit 47)"
 
 import_output="$root_dir/out/import.hl"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ImportMain "$import_output"

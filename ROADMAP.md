@@ -31,7 +31,7 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 - [x] Capturing closures and instance closures (read-only captures; mutable
   capture cells remain future work).
 - [~] `Array<Int>` typing, indexed reads/writes, `.length`, and compiler-owned
-	`Int`/`Float`/`String` allocation lower directly to HashLink array
+	`Int`/`Float`/`Bool`/`String` allocation lower directly to HashLink array
 	operations and the runtime ABI. Object arrays, maps, enums, nullable values,
 	and pattern matching remain future work. Our HashLink fork enforces bounds in
 	the JIT.

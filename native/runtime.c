@@ -29,6 +29,10 @@ HL_PRIM varray *HL_NAME(__array_alloc_bytes)( int length ) {
 	return hl_alloc_array(&hlt_bytes, length);
 }
 
+HL_PRIM varray *HL_NAME(__array_alloc_bool)( int length ) {
+	return hl_alloc_array(&hlt_bool, length);
+}
+
 HL_PRIM void HL_NAME(array_int_init)( vobj *object ) {
 	*array_int_storage(object) = hl_alloc_bytes(0);
 	*array_int_length(object) = 0;
@@ -108,3 +112,4 @@ DEFINE_PRIM(_ARR,array_int_alloc,_I32);
 DEFINE_PRIM(_ARR,__array_alloc_i32,_I32);
 DEFINE_PRIM(_ARR,__array_alloc_f64,_I32);
 DEFINE_PRIM(_ARR,__array_alloc_bytes,_I32);
+DEFINE_PRIM(_ARR,__array_alloc_bool,_I32);

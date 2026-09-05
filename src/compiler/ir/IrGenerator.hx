@@ -126,6 +126,13 @@ class IrGenerator {
 				arguments: [I32],
 				result: Array(Bytes)
 			});
+			program.natives.push({
+				name: "__array_alloc_bool",
+				library: "realtime_runtime",
+				symbol: "__array_alloc_bool",
+				arguments: [I32],
+				result: Array(Bool)
+			});
 		}
 		if (natives != null)
 			for (native in natives)
@@ -276,6 +283,7 @@ class IrGenerator {
 			case TInt: "__array_alloc_i32";
 			case TFloat: "__array_alloc_f64";
 			case TString: "__array_alloc_bytes";
-			default: throw "Compiler-owned allocation currently supports Int, Float, and String arrays";
+			case TBool: "__array_alloc_bool";
+			default: throw "Compiler-owned allocation currently supports Int, Float, Bool, and String arrays";
 		};
 }
