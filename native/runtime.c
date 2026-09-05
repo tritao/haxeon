@@ -456,6 +456,29 @@ HL_PRIM int HL_NAME(call_i32)( hl_runtime_module *runtime, int stable_id ) {
 	return result;
 }
 
+HL_PRIM void HL_NAME(call_void)( hl_runtime_module *runtime, int stable_id ) {
+	vdynamic *exception = NULL;
+	hl_runtime_status status = hl_runtime_module_call_void(runtime,stable_id,&exception);
+	if( status == HL_RUNTIME_EXCEPTION ) hl_throw(exception);
+	if( status != HL_RUNTIME_OK ) hl_error("Invalid runtime void function call (status %d)",status);
+}
+
+HL_PRIM vbyte *HL_NAME(call_bytes)( hl_runtime_module *runtime, int stable_id ) {
+	vbyte *result = NULL;
+	vdynamic *exception = NULL;
+	hl_runtime_status status = hl_runtime_module_call_bytes(runtime,stable_id,&result,&exception);
+	if( status == HL_RUNTIME_EXCEPTION ) hl_throw(exception);
+	if( status != HL_RUNTIME_OK ) hl_error("Invalid runtime string function call (status %d)",status);
+	return result;
+}
+
+HL_PRIM void HL_NAME(call_bytes1)( hl_runtime_module *runtime, int stable_id, vbyte *argument ) {
+	vdynamic *exception = NULL;
+	hl_runtime_status status = hl_runtime_module_call_bytes1(runtime,stable_id,argument,&exception);
+	if( status == HL_RUNTIME_EXCEPTION ) hl_throw(exception);
+	if( status != HL_RUNTIME_OK ) hl_error("Invalid runtime string argument function call (status %d)",status);
+}
+
 HL_PRIM int HL_NAME(patch)( hl_runtime_module *runtime, vbyte *bytes, int length ) {
 	return hl_runtime_module_apply_hlp(runtime,bytes,length);
 }
@@ -481,6 +504,9 @@ HL_PRIM int HL_NAME(inspect_patch)( vbyte *bytes, int length ) {
 
 DEFINE_PRIM(_ABSTRACT(realtime_module),load,_BYTES _I32 _BYTES _I32);
 DEFINE_PRIM(_I32,call_i32,_ABSTRACT(realtime_module) _I32);
+DEFINE_PRIM(_VOID,call_void,_ABSTRACT(realtime_module) _I32);
+DEFINE_PRIM(_BYTES,call_bytes,_ABSTRACT(realtime_module) _I32);
+DEFINE_PRIM(_VOID,call_bytes1,_ABSTRACT(realtime_module) _I32 _BYTES);
 DEFINE_PRIM(_I32,patch,_ABSTRACT(realtime_module) _BYTES _I32);
 DEFINE_PRIM(_I32,allocation_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,patch_jit_count,_ABSTRACT(realtime_module));

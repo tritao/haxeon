@@ -100,12 +100,15 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 	on structural edits (`plugin-test.hxml`).
 - [ ] Non-moving type arena for compatible type-table growth.
 - [~] Structural class layout/base changes are classified as full-reload
-	generations and rebuild HashLink type metadata; explicit per-plugin domains
-	remain.
-- [~] Plugin lifecycle/state migration and staged native-module ownership are
-	tested in the host `RuntimeDomain`; native type-arena integration remains.
+	generations and rebuild HashLink type metadata; non-moving type-arena support
+	remains.
+- [x] Loaded modules expose typed lifecycle calls by stable function ID, and
+	`LoadedPlugin` exercises activation, deactivation, state save/restore, staged
+	disposal, and recovery through `RuntimeDomain`.
 - [x] In-memory module loading and patching without temporary `.hl` files.
-- [ ] Crash-safe diagnostics and recovery when a patch fails in native code.
+- [~] Native runtime call/patch failures return typed status codes and preserve
+	last-good domain ownership; crash-safe diagnostics and automatic recovery for
+	all native faults remain.
 
 ### D. Language service
 

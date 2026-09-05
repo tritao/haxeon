@@ -10,6 +10,13 @@ private class RuntimeNative {
 	public static function call_i32(module:hl.Abstract<"realtime_module">, index:Int):Int
 		return 0;
 
+	public static function call_void(module:hl.Abstract<"realtime_module">, index:Int):Void {}
+
+	public static function call_bytes(module:hl.Abstract<"realtime_module">, index:Int):hl.Bytes
+		return null;
+
+	public static function call_bytes1(module:hl.Abstract<"realtime_module">, index:Int, argument:hl.Bytes):Void {}
+
 	public static function patch(module:hl.Abstract<"realtime_module">, bytes:hl.Bytes, length:Int):Int
 		return -1;
 
@@ -42,6 +49,19 @@ class Runtime {
 
 	public static function callInt(module:LoadedModule, stableIndex:Int):Int
 		return RuntimeNative.call_i32(cast module, stableIndex);
+
+	public static function callVoid(module:LoadedModule, stableIndex:Int):Void
+		RuntimeNative.call_void(cast module, stableIndex);
+
+	public static function callString(module:LoadedModule, stableIndex:Int):String {
+		var bytes = RuntimeNative.call_bytes(cast module, stableIndex);
+		if (bytes == null)
+			return null;
+		return @:privateAccess String.__alloc__(bytes, bytes.ucs2Length(0));
+	}
+
+	public static function callStringArg(module:LoadedModule, stableIndex:Int, argument:String):Void
+		RuntimeNative.call_bytes1(cast module, stableIndex, @:privateAccess argument.bytes);
 
 	public static function retainedCodeAllocationCount(module:LoadedModule):Int
 		return RuntimeNative.allocation_count(cast module);
