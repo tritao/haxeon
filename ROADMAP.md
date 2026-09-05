@@ -37,9 +37,11 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 	to HashLink array operations and the runtime ABI; `for (item in array)` is
 	lowered to a bounds-checked SSA loop with `break`/`continue` control edges.
 	Immutable `copy`, `concat`, `slice`, and primitive/String `indexOf` are
-	now ABI-backed and tested. ABI-backed `Map<String,Int|Bool|Float|String>`
-	and `Map<Int,Int|Bool|Float|String>` specializations support construction,
+	now ABI-backed and tested. ABI-backed primitive/string maps and reference-valued
+	`Map<String,T>`/`Map<Int,T>` specializations support construction,
 	indexed set/get, `set`, `exists`, key-array iteration, `remove`, and `clear`;
+	reference-valued maps for classes, interfaces, arrays, and function values
+	use the same dynamic pointer representation;
 	immutable array operations cover primitive, string, and reference arrays;
 	primitive/String/reference `push` and `pop` now use capacity-aware HashLink
 	arrays; `push` rebinds local array variables, while field/alias mutation and

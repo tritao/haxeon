@@ -117,6 +117,15 @@ static varray *realtime_typed_values(varray *dynamicValues, hl_type *valueType) 
 	return result;
 }
 
+static varray *realtime_ref_values(varray *dynamicValues) {
+	varray *result = hl_alloc_array(&hlt_dyn, dynamicValues->size);
+	vdynamic **source = hl_aptr(dynamicValues, vdynamic *);
+	void **target = hl_aptr(result, void *);
+	for (int i = 0; i < dynamicValues->size; i++)
+		target[i] = source[i];
+	return result;
+}
+
 #define DEFINE_ARRAY_COPY(SUFFIX) \
 HL_PRIM varray *HL_NAME(__array_copy_##SUFFIX)( varray *array ) { return realtime_array_copy(array); } \
 HL_PRIM varray *HL_NAME(__array_concat_##SUFFIX)( varray *left, varray *right ) { return realtime_array_concat(left, right); } \
@@ -278,6 +287,26 @@ DEFINE_STRING_MAP_SIZE(bytes)
 
 #undef DEFINE_STRING_MAP_SIZE
 
+#define DEFINE_STRING_REF_MAP() \
+HL_PRIM realtime_string_map *HL_NAME(__map_string_ref_alloc)( void ) { return hl_hballoc(); } \
+HL_PRIM void HL_NAME(__map_string_ref_set)( realtime_string_map *map, vbyte *key, void *value ) { \
+	hl_hbset(map, (uchar *)key, (vdynamic *)value); \
+} \
+HL_PRIM bool HL_NAME(__map_string_ref_exists)( realtime_string_map *map, vbyte *key ) { return hl_hbexists(map, (uchar *)key); } \
+HL_PRIM vdynamic *HL_NAME(__map_string_ref_get)( realtime_string_map *map, vbyte *key ) { \
+	vdynamic *dynamic = hl_hbget(map, (uchar *)key); \
+	return dynamic; \
+} \
+HL_PRIM varray *HL_NAME(__map_string_ref_keys)( realtime_string_map *map ) { return hl_hbkeys(map); } \
+HL_PRIM varray *HL_NAME(__map_string_ref_values)( realtime_string_map *map ) { return realtime_ref_values(hl_hbvalues(map)); } \
+HL_PRIM bool HL_NAME(__map_string_ref_remove)( realtime_string_map *map, vbyte *key ) { return hl_hbremove(map, (uchar *)key); } \
+HL_PRIM void HL_NAME(__map_string_ref_clear)( realtime_string_map *map ) { hl_hbclear(map); } \
+HL_PRIM int HL_NAME(__map_string_ref_size)( realtime_string_map *map ) { return hl_hbsize(map); }
+
+DEFINE_STRING_REF_MAP()
+
+#undef DEFINE_STRING_REF_MAP
+
 #define DEFINE_INT_MAP(SUFFIX, VALUE_TYPE, VALUE_FIELD, VALUE_HLTYPE, DEFAULT_VALUE) \
 HL_PRIM realtime_int_map *HL_NAME(__map_int_##SUFFIX##_alloc)( void ) { return hl_hialloc(); } \
 HL_PRIM void HL_NAME(__map_int_##SUFFIX##_set)( realtime_int_map *map, int key, VALUE_TYPE value ) { \
@@ -322,6 +351,26 @@ DEFINE_INT_MAP_SIZE(f64)
 DEFINE_INT_MAP_SIZE(bytes)
 
 #undef DEFINE_INT_MAP_SIZE
+
+#define DEFINE_INT_REF_MAP() \
+HL_PRIM realtime_int_map *HL_NAME(__map_int_ref_alloc)( void ) { return hl_hialloc(); } \
+HL_PRIM void HL_NAME(__map_int_ref_set)( realtime_int_map *map, int key, void *value ) { \
+	hl_hiset(map, key, (vdynamic *)value); \
+} \
+HL_PRIM bool HL_NAME(__map_int_ref_exists)( realtime_int_map *map, int key ) { return hl_hiexists(map, key); } \
+HL_PRIM vdynamic *HL_NAME(__map_int_ref_get)( realtime_int_map *map, int key ) { \
+	vdynamic *dynamic = hl_higet(map, key); \
+	return dynamic; \
+} \
+HL_PRIM varray *HL_NAME(__map_int_ref_keys)( realtime_int_map *map ) { return hl_hikeys(map); } \
+HL_PRIM varray *HL_NAME(__map_int_ref_values)( realtime_int_map *map ) { return realtime_ref_values(hl_hivalues(map)); } \
+HL_PRIM bool HL_NAME(__map_int_ref_remove)( realtime_int_map *map, int key ) { return hl_hiremove(map, key); } \
+HL_PRIM void HL_NAME(__map_int_ref_clear)( realtime_int_map *map ) { hl_hiclear(map); } \
+HL_PRIM int HL_NAME(__map_int_ref_size)( realtime_int_map *map ) { return hl_hisize(map); }
+
+DEFINE_INT_REF_MAP()
+
+#undef DEFINE_INT_REF_MAP
 
 #undef DEFINE_INT_MAP
 
@@ -518,6 +567,15 @@ DEFINE_PRIM(_I32,__map_string_i32_size,_ABSTRACT(map_string_i32));
 DEFINE_PRIM(_I32,__map_string_bool_size,_ABSTRACT(map_string_bool));
 DEFINE_PRIM(_I32,__map_string_f64_size,_ABSTRACT(map_string_f64));
 DEFINE_PRIM(_I32,__map_string_bytes_size,_ABSTRACT(map_string_bytes));
+DEFINE_PRIM(_ABSTRACT(map_string_ref),__map_string_ref_alloc,_NO_ARG);
+DEFINE_PRIM(_VOID,__map_string_ref_set,_ABSTRACT(map_string_ref) _BYTES _DYN);
+DEFINE_PRIM(_BOOL,__map_string_ref_exists,_ABSTRACT(map_string_ref) _BYTES);
+DEFINE_PRIM(_DYN,__map_string_ref_get,_ABSTRACT(map_string_ref) _BYTES);
+DEFINE_PRIM(_ARR,__map_string_ref_keys,_ABSTRACT(map_string_ref));
+DEFINE_PRIM(_ARR,__map_string_ref_values,_ABSTRACT(map_string_ref));
+DEFINE_PRIM(_BOOL,__map_string_ref_remove,_ABSTRACT(map_string_ref) _BYTES);
+DEFINE_PRIM(_VOID,__map_string_ref_clear,_ABSTRACT(map_string_ref));
+DEFINE_PRIM(_I32,__map_string_ref_size,_ABSTRACT(map_string_ref));
 DEFINE_PRIM(_ABSTRACT(map_int_i32),__map_int_i32_alloc,_NO_ARG);
 DEFINE_PRIM(_VOID,__map_int_i32_set,_ABSTRACT(map_int_i32) _I32 _I32);
 DEFINE_PRIM(_BOOL,__map_int_i32_exists,_ABSTRACT(map_int_i32) _I32);
@@ -554,6 +612,15 @@ DEFINE_PRIM(_I32,__map_int_i32_size,_ABSTRACT(map_int_i32));
 DEFINE_PRIM(_I32,__map_int_bool_size,_ABSTRACT(map_int_bool));
 DEFINE_PRIM(_I32,__map_int_f64_size,_ABSTRACT(map_int_f64));
 DEFINE_PRIM(_I32,__map_int_bytes_size,_ABSTRACT(map_int_bytes));
+DEFINE_PRIM(_ABSTRACT(map_int_ref),__map_int_ref_alloc,_NO_ARG);
+DEFINE_PRIM(_VOID,__map_int_ref_set,_ABSTRACT(map_int_ref) _I32 _DYN);
+DEFINE_PRIM(_BOOL,__map_int_ref_exists,_ABSTRACT(map_int_ref) _I32);
+DEFINE_PRIM(_DYN,__map_int_ref_get,_ABSTRACT(map_int_ref) _I32);
+DEFINE_PRIM(_ARR,__map_int_ref_keys,_ABSTRACT(map_int_ref));
+DEFINE_PRIM(_ARR,__map_int_ref_values,_ABSTRACT(map_int_ref));
+DEFINE_PRIM(_BOOL,__map_int_ref_remove,_ABSTRACT(map_int_ref) _I32);
+DEFINE_PRIM(_VOID,__map_int_ref_clear,_ABSTRACT(map_int_ref));
+DEFINE_PRIM(_I32,__map_int_ref_size,_ABSTRACT(map_int_ref));
 DEFINE_PRIM(_BYTES,__string_concat,_BYTES _BYTES);
 DEFINE_PRIM(_I32,__string_length,_BYTES);
 DEFINE_PRIM(_BOOL,__string_equal,_BYTES _BYTES);

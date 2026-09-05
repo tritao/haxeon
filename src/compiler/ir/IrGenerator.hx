@@ -233,14 +233,15 @@ class IrGenerator {
 		mapNames.sort(Reflect.compare);
 		for (mapName in mapNames) {
 			var valueType = RuntimeType.mapValueType(mapName);
-			if (valueType == null)
+			var isReferenceMap = StringTools.endsWith(mapName, "_ref");
+			if (valueType == null && !isReferenceMap)
 				throw 'Unknown compiler map ABI "$mapName"';
 			var keyType = RuntimeType.mapKeyType(mapName);
 			if (keyType == null)
 				throw 'Unknown compiler map key ABI "$mapName"';
 			var mapType = Abstract(mapName),
 				keyIrType = lowerType(keyType),
-				valueIrType = lowerType(valueType);
+				valueIrType = isReferenceMap ? Dyn : lowerType(valueType);
 			program.natives.push({
 				name: '__${mapName}_alloc',
 				library: "realtime_runtime",

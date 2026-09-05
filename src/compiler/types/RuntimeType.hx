@@ -35,10 +35,12 @@ class RuntimeType {
 			case [TString, TBool]: "map_string_bool";
 			case [TString, TFloat]: "map_string_f64";
 			case [TString, TString]: "map_string_bytes";
+			case [TString, TClass(_)], [TString, TInterface(_)], [TString, TArray(_)], [TString, TFunction(_, _)]: "map_string_ref";
 			case [TInt, TInt]: "map_int_i32";
 			case [TInt, TBool]: "map_int_bool";
 			case [TInt, TFloat]: "map_int_f64";
 			case [TInt, TString]: "map_int_bytes";
+			case [TInt, TClass(_)], [TInt, TInterface(_)], [TInt, TArray(_)], [TInt, TFunction(_, _)]: "map_int_ref";
 			default: null;
 		};
 

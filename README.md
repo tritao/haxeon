@@ -58,16 +58,17 @@ String addition, equality, `.length`, `indexOf`, and `substring` use the same
 compiler-owned runtime ABI, keeping source code independent from native symbol
 names.
 
-Compiler-owned maps currently cover `Map<String,Int>`, `Map<String,Bool>`,
-`Map<String,Float>`, and `Map<String,String>` with construction, indexed
-set/get, `set`, `exists`, `remove`, `clear`, `size`, `keys`, and typed `values`;
+Compiler-owned maps currently cover primitive/string maps plus reference-valued
+`Map<String,T>` and `Map<Int,T>` forms for classes, interfaces, arrays, and
+function values. They support construction, indexed set/get, `set`, `exists`,
+`remove`, `clear`, `size`, `keys`, and typed `values`;
 each HashLink abstract type and native function family is versioned with the
 compiler ABI. Array `copy`, `concat`, `slice`, and primitive/String `indexOf`
 are also compiler-owned operations, and primitive/String/reference `push`/`pop`
 use the fork's capacity-aware arrays. Local `push` rebinding is supported;
-field/alias mutation and other key/value combinations still produce an explicit
-typed unsupported-ABI diagnostic rather than silently falling back to dynamic
-behavior.
+field/alias mutation and nullable/enum key/value combinations still produce an
+explicit typed unsupported-ABI diagnostic rather than silently falling back to
+dynamic behavior.
 
 IR values and control-flow blocks have numeric identities independent of
 source names. Functions contain explicit basic blocks terminated by `Return`,
