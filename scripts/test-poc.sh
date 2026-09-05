@@ -116,6 +116,18 @@ if [[ $array_status -ne 42 ]]; then
 fi
 echo "PASS: first-class Array<Int> indexing executed (exit 42)"
 
+import_output="$root_dir/out/import.hl"
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run ImportMain "$import_output"
+set +e
+LD_LIBRARY_PATH="$root_dir/.tools/hashlink" "$hl" "$import_output"
+import_status=$?
+set -e
+if [[ $import_status -ne 42 ]]; then
+	echo "package import: expected exit 42, got $import_status" >&2
+	exit 1
+fi
+echo "PASS: package-qualified import executed (exit 42)"
+
 instance_module_output="$root_dir/out/instance-module.hl"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run InstanceModuleMain "$instance_module_output"
 set +e

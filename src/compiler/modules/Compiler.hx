@@ -126,11 +126,13 @@ class Compiler {
 			generatedByModule:Map<String, Map<String, Bool>> = [],
 			reverseCalls:Map<String, Array<String>> = [];
 		for (name in names) {
-			var state = modules.get(name), locals:Map<String, Bool> = [];
+			var state = modules.get(name),
+				locals:Map<String, Bool> = [],
+				aliases = importAliases(state.ast.imports);
 			for (fn in state.ast.functions)
 				locals.set(fn.name, true);
 			for (fn in state.ast.functions) {
-				var canonical = canonicalFunction(fn, name, entryModule, locals);
+				var canonical = canonicalFunction(fn, name, entryModule, locals, null, aliases);
 				functions.push(canonical);
 				programFunctions.push(canonical);
 				owners.set(canonical.name, name);
@@ -151,7 +153,7 @@ class Compiler {
 			for (classDecl in state.ast.classes) {
 				var classMethods:Array<AstFunction> = [];
 				for (method in classDecl.methods) {
-					var canonical = canonicalFunction(method, name, entryModule, locals, classDecl.name + "." + method.name);
+					var canonical = canonicalFunction(method, name, entryModule, locals, classDecl.name + "." + method.name, aliases);
 					functions.push(canonical);
 					classMethods.push({
 						name: method.name,
@@ -355,6 +357,11 @@ class Compiler {
 				scanStatement(statement, dependencies);
 		for (classDecl in state.ast.classes)
 			dependencies.remove(classDecl.name);
+		for (importPath in state.ast.imports) {
+			var dot = importPath.lastIndexOf("."),
+				alias = dot < 0 ? importPath : importPath.substr(dot + 1);
+			dependencies.remove(alias);
+		}
 		state.dependencies = [for (name in dependencies.keys()) name];
 		state.dependencies.sort(Reflect.compare);
 		var signatures:Map<String, String> = [],
@@ -402,7 +409,8 @@ class Compiler {
 		state.dirty = false;
 	}
 
-	static function canonicalFunction(fn:AstFunction, module:String, entry:String, locals:Map<String, Bool>, ?explicitName:String):AstFunction {
+	static function canonicalFunction(fn:AstFunction, module:String, entry:String, locals:Map<String, Bool>, ?explicitName:String,
+			?aliases:Map<String, String>):AstFunction {
 		var name = explicitName != null ? explicitName : module == entry && fn.name == "main" ? "main" : module + "." + fn.name;
 		return {
 			name: name,
@@ -410,7 +418,7 @@ class Compiler {
 			arguments: fn.arguments,
 			result: fn.result,
 			span: fn.span,
-			statements: [for (s in fn.statements) canonicalStatement(s, module, entry, locals)]
+			statements: [for (s in fn.statements) canonicalStatement(s, module, entry, locals, aliases)]
 		};
 	}
 
@@ -429,45 +437,67 @@ class Compiler {
 			case FunctionType(arguments, result): '(' + [for (argument in arguments) astTypeName(argument)].join(',') + ')->' + astTypeName(result);
 		};
 
-	static function canonicalStatement(s, module, entry, locals):AstStatement
+	static function canonicalStatement(s, module, entry, locals, ?aliases):AstStatement
 		return switch s {
-			case VarDeclaration(n, t, e, span): VarDeclaration(n, t, canonicalExpression(e, module, entry, locals), span);
-			case Assignment(n, e, span): Assignment(n, canonicalExpression(e, module, entry, locals), span);
+			case VarDeclaration(n, t, e, span): VarDeclaration(n, t, canonicalExpression(e, module, entry, locals, aliases), span);
+			case Assignment(n, e, span): Assignment(n, canonicalExpression(e, module, entry, locals, aliases), span);
 			case IndexAssignment(array, offset, e,
-				span): IndexAssignment(canonicalExpression(array, module, entry, locals), canonicalExpression(offset, module, entry, locals),
-					canonicalExpression(e, module, entry, locals), span);
-			case Return(e, span): Return(canonicalExpression(e, module, entry, locals), span);
+				span): IndexAssignment(canonicalExpression(array, module, entry, locals, aliases),
+					canonicalExpression(offset, module, entry, locals, aliases), canonicalExpression(e, module, entry, locals, aliases), span);
+			case Return(e, span): Return(canonicalExpression(e, module, entry, locals, aliases), span);
 			case ReturnVoid(span): ReturnVoid(span);
 			case If(c, y, n,
-				span): If(canonicalExpression(c, module, entry, locals), [for (x in y) canonicalStatement(x, module, entry, locals)],
-					[for (x in n) canonicalStatement(x, module, entry, locals)], span);
-			case While(c, b, span): While(canonicalExpression(c, module, entry, locals), [for (x in b) canonicalStatement(x, module, entry, locals)], span);
-			case Expression(e, span): Expression(canonicalExpression(e, module, entry, locals), span);
+				span): If(canonicalExpression(c, module, entry, locals, aliases), [for (x in y) canonicalStatement(x, module, entry, locals, aliases)],
+					[for (x in n) canonicalStatement(x, module, entry, locals, aliases)], span);
+			case While(c, b,
+				span): While(canonicalExpression(c, module, entry, locals, aliases), [for (x in b) canonicalStatement(x, module, entry, locals, aliases)],
+					span);
+			case Expression(e, span): Expression(canonicalExpression(e, module, entry, locals, aliases), span);
 		}
 
-	static function canonicalExpression(e, module, entry, locals):AstExpression
+	static function canonicalExpression(e, module, entry, locals, ?aliases):AstExpression
 		return switch e {
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _): e;
 			case Variable(name, span):
 				if (name.indexOf(".") < 0 && locals.exists(name)) Variable(module == entry
 					&& name == "main" ? "main" : module + "." + name, span); else e;
-			case Add(a, b, s): Add(canonicalExpression(a, module, entry, locals), canonicalExpression(b, module, entry, locals), s);
-			case Sub(a, b, s): Sub(canonicalExpression(a, module, entry, locals), canonicalExpression(b, module, entry, locals), s);
-			case Mul(a, b, s): Mul(canonicalExpression(a, module, entry, locals), canonicalExpression(b, module, entry, locals), s);
-			case Div(a, b, s): Div(canonicalExpression(a, module, entry, locals), canonicalExpression(b, module, entry, locals), s);
-			case Less(a, b, s): Less(canonicalExpression(a, module, entry, locals), canonicalExpression(b, module, entry, locals), s);
-			case LessEqual(a, b, s): LessEqual(canonicalExpression(a, module, entry, locals), canonicalExpression(b, module, entry, locals), s);
-			case Equal(a, b, s): Equal(canonicalExpression(a, module, entry, locals), canonicalExpression(b, module, entry, locals), s);
+			case Add(a, b, s): Add(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
+			case Sub(a, b, s): Sub(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
+			case Mul(a, b, s): Mul(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
+			case Div(a, b, s): Div(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
+			case Less(a, b, s): Less(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
+			case LessEqual(a, b,
+				s): LessEqual(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
+			case Equal(a, b, s): Equal(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
 			case Call(name, args, s):
 				var resolved = name;
-				if (name.indexOf(".") < 0 && locals.exists(name))
+				var dot = name.indexOf("."),
+					prefix = dot < 0 ? name : name.substr(0, dot),
+					imported = aliases == null ? null : aliases.get(prefix);
+				if (imported != null)
+					resolved = imported + (dot < 0 ? "" : name.substr(dot));
+				else if (name.indexOf(".") < 0 && locals.exists(name))
 					resolved = module == entry && name == "main" ? "main" : module + "." + name;
-				Call(resolved, [for (a in args) canonicalExpression(a, module, entry, locals)], s);
-			case New(typeName, args, s): New(typeName, [for (a in args) canonicalExpression(a, module, entry, locals)], s);
-			case Index(array, offset, s): Index(canonicalExpression(array, module, entry, locals), canonicalExpression(offset, module, entry, locals), s);
+				Call(resolved, [for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
+			case New(typeName, args, s): New(typeName, [for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
+			case Index(array, offset,
+				s): Index(canonicalExpression(array, module, entry, locals, aliases), canonicalExpression(offset, module, entry, locals, aliases), s);
 			case Lambda(arguments, body, s):
-				Lambda(arguments, [for (statement in body) canonicalStatement(statement, module, entry, locals)], s);
+				Lambda(arguments, [
+					for (statement in body)
+						canonicalStatement(statement, module, entry, locals, aliases)
+				], s);
 		}
+
+	static function importAliases(imports:Array<String>):Map<String, String> {
+		var aliases:Map<String, String> = [];
+		for (path in imports) {
+			var dot = path.lastIndexOf("."),
+				alias = dot < 0 ? path : path.substr(dot + 1);
+			aliases.set(alias, path);
+		}
+		return aliases;
+	}
 
 	static function scanStatement(s, dependencies):Void
 		switch s {

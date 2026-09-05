@@ -44,7 +44,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 - [x] Separate signature/body fingerprints and selective regeneration.
 - [x] Stable function IDs, tombstones, compaction, and identity persistence.
 - [x] Typed function-value dependency invalidation.
-- [ ] Import-aware symbol resolution with package-qualified nominal names.
+- [~] Package-qualified module paths and imported function/module aliases are
+  resolved incrementally; imported classes and nominal names remain.
 - [ ] Source edits represented as transactions with diagnostics and rollback.
 - [ ] Parallel parse/type work with deterministic assembly on the editor thread.
 - [ ] Memory and latency budgets measured on a realistic Pragtical project.
@@ -89,8 +90,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
    rules used by the runtime bridge.
 3. Add interfaces and virtual method prototypes; direct calls remain an
    optimization, never the semantic contract.
-4. Add package/import resolution, then migrate a small Pragtical utility
-   plugin as the first real multi-module workload.
+4. Complete package/import resolution for nominal types, then migrate a small
+   Pragtical utility plugin as the first real multi-module workload.
 5. Expose compiler snapshots as the editor language service.
 6. Add structural reload domains and state migration, then move larger editor
    subsystems and finally the editor core.
