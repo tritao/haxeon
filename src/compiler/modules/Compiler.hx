@@ -974,6 +974,7 @@ class Compiler {
 			case FloatType: "Float";
 			case StringType: "String";
 			case VoidType: "Void";
+			case InferredType: "_";
 			case NamedType(name): name;
 			case ArrayType(element): 'Array<${astTypeName(element)}>';
 			case MapType(key, value): 'Map<${astTypeName(key)},${astTypeName(value)}>';
@@ -1205,7 +1206,7 @@ class Compiler {
 			case AnonymousType(fields):
 				for (field in fields)
 					addTypeDependency(result, owner, kind, field.type, aliases);
-			case IntType, BoolType, FloatType, StringType, VoidType:
+			case IntType, BoolType, FloatType, StringType, VoidType, InferredType:
 		}
 
 	static function addBodyDependencies(result:Map<String, Array<SemanticDependency>>, owner:String, statements:Array<AstStatement>, module:String,

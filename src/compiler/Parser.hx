@@ -123,8 +123,7 @@ class Parser {
 			do {
 				var optional = match(TokenKind.Question),
 					argumentToken = consume(TokenKind.Identifier);
-				consume(TokenKind.Colon);
-				var argumentType = parseType(),
+				var argumentType = match(TokenKind.Colon) ? parseType() : InferredType,
 					defaultValue = match(TokenKind.Assign) ? parseExpression() : null;
 				arguments.push({
 					name: argumentToken.text,
@@ -136,8 +135,7 @@ class Parser {
 			} while (match(TokenKind.Comma));
 		}
 		consume(TokenKind.RightParen);
-		var result = match(TokenKind.Colon) ? parseType() : allowMissingReturn
-			&& name == "new" ? VoidType : failType("Expected return type");
+		var result = match(TokenKind.Colon) ? parseType() : allowMissingReturn && name == "new" ? VoidType : InferredType;
 		var statements = [], end:SourceSpan;
 		if (match(TokenKind.LeftBrace)) {
 			while (!check(TokenKind.RightBrace))

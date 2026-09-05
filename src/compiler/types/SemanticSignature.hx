@@ -47,6 +47,7 @@ class SemanticSignature {
 			case FloatType: "Float";
 			case StringType: "String";
 			case VoidType: "Void";
+			case InferredType: "_";
 			case NamedType(name):
 				var alias = aliases.get(name);
 				if (alias == null || resolving.exists(name)) name; else {

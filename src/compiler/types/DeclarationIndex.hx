@@ -91,6 +91,9 @@ class DeclarationIndex {
 			case FloatType: TFloat;
 			case StringType: TString;
 			case VoidType: TVoid;
+			case InferredType:
+				fail("Unresolved inferred type", span);
+				TDynamic;
 			case NamedType("Dynamic"): TDynamic;
 			case NamedType(name):
 				var substitution = substitutions.get(name),

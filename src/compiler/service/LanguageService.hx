@@ -785,6 +785,7 @@ class LanguageService {
 			case FloatType: "Float";
 			case StringType: "String";
 			case VoidType: "Void";
+			case InferredType: "_";
 			case NamedType(name): name;
 			case ArrayType(element): 'Array<${typeName(element)}>';
 			case MapType(key, value): 'Map<${typeName(key)},${typeName(value)}>';
