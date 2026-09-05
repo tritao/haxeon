@@ -310,7 +310,12 @@ class LanguageService {
 		if (local != null)
 			return {
 				key: 'local:${state.name}:${local.functionSpan.start}:${local.declaration.start}',
-				location: {path: path, span: local.declaration},
+				location: {
+					path: path,
+					span: local.declaration,
+					revision: snapshotRevision(state),
+					stale: snapshotRevision(state) != state.revision
+				},
 				functionSpan: local.functionSpan
 			};
 		var declaration = declarationSymbol(state, tokens, tokenIndex, token.text);

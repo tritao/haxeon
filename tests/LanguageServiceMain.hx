@@ -138,6 +138,21 @@ class LanguageServiceMain {
 			|| importedReferences.length != 2
 			|| importedEdits.length != 2)
 			throw "language service imported symbol resolution failed";
+		var hierarchyService = new LanguageService(),
+			hierarchySource = "typedef ParentAlias = Parent; class Parent { public function value():Int { return 42; } } class Child extends Parent { } function main():Int { var child:Child = new Child(); return child.value(); }";
+		hierarchyService.update("Hierarchy.hx", hierarchySource);
+		hierarchyService.compile("Hierarchy");
+		var inheritedUse = hierarchySource.lastIndexOf("value"),
+			inheritedDefinition = hierarchyService.definition("Hierarchy.hx", inheritedUse),
+			inheritedRename = hierarchyService.rename("Hierarchy.hx", inheritedUse, "score"),
+			aliasUse = hierarchySource.indexOf("ParentAlias =") + "ParentAlias = ".length,
+			aliasDefinition = hierarchyService.definition("Hierarchy.hx", aliasUse);
+		if (inheritedDefinition == null
+			|| inheritedDefinition.span.start > hierarchySource.indexOf("value")
+			|| inheritedRename.length != 2
+			|| aliasDefinition == null
+			|| aliasDefinition.span.start > hierarchySource.indexOf("class Parent"))
+			throw "language service did not resolve inheritance and alias navigation";
 		service.update("Main.hx", "function main(:Int { return 0; }");
 		try {
 			service.compile("Main");
