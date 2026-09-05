@@ -372,7 +372,8 @@ class Typer {
 
 	function typeStatements(statements:Array<AstStatement>, scope:Scope, result:CompilerType):Array<TypedStatement> {
 		var output = [];
-		for (statement in statements) {
+		for (statementIndex in 0...statements.length) {
+			var statement = statements[statementIndex];
 			if (alwaysReturns(output))
 				fail("E1012", "Unreachable statement", statementSpan(statement));
 			switch statement {
@@ -383,7 +384,8 @@ class Typer {
 					scope.define(name, declaredType, span, false);
 					output.push(TDeclare(scope.resolveId(name), declaredType, span));
 				case VarDeclaration(name, declared, initializer, span):
-					var declaredType = declared == null ? null : lowerType(declared),
+					var declaredType = declared == null ? expectedLocalInitializerType(name, initializer, statements, statementIndex + 1,
+						result) : lowerType(declared),
 						predeclared = declaredType != null && switch initializer {
 							case Lambda(_, _, _): true;
 							default: false;
@@ -708,6 +710,34 @@ class Typer {
 			}
 		}
 		return output;
+	}
+
+	function expectedLocalInitializerType(name:String, initializer:AstExpression, statements:Array<AstStatement>, start:Int,
+			result:CompilerType):Null<CompilerType> {
+		var canUseResult = switch initializer {
+			case ArrayLiteral(values, _): values.length == 0 && switch result {
+					case TArray(_): true;
+					default: false;
+				};
+			case MapLiteral(entries, _): entries.length == 0 && switch result {
+					case TMap(_, _): true;
+					default: false;
+				};
+			default: false;
+		};
+		if (!canUseResult)
+			return null;
+		for (index in start...statements.length)
+			switch statements[index] {
+				case Return(Variable(returned, _), _) if (returned == name):
+					return result;
+				case VarDeclaration(shadowed, _, _, _) if (shadowed == name):
+					return null;
+				case UninitializedDeclaration(shadowed, _, _) if (shadowed == name):
+					return null;
+				default:
+			}
+		return null;
 	}
 
 	function typeEnumPattern(value:AstExpression, expected:CompilerType, scope:Scope):Null<{
