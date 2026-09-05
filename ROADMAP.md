@@ -43,9 +43,10 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   interface values now lower through `OToVirtual`, support inherited interface
   slots, and dispatch through `OCallMethod`; generic interfaces, nullable
   values, and advanced variance remain future work.
-- [ ] A documented runtime library ABI for strings, collections, IO, and time
-  (typed `trace` and a native-backed `IntArray` ABI probe are exercised
-  end-to-end; the public generic collection ABI remains future work).
+- [~] A documented runtime library ABI for strings, collections, IO, and time
+	(compiler-owned string concatenation, length, equality, search, slicing, and
+	typed `trace` are exercised end-to-end; generic collections, IO, and time
+	remain future work).
 
 ### B. Incremental compiler service
 
