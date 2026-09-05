@@ -33,18 +33,21 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   capture cells remain future work).
 - [~] `Array<Int>` typing, indexed reads/writes, `.length`, and compiler-owned
 	`Int`/`Float`/`Bool`/`String` allocation lower directly to HashLink array
-	operations and the runtime ABI. Object arrays, maps, nullable values,
-	and pattern matching remain future work. Our HashLink fork enforces bounds in
-	the JIT.
+	operations and the runtime ABI. Object arrays, maps, and pattern matching
+	remain future work. Our HashLink fork enforces bounds in the JIT.
+- [~] Explicit `Null<T>` values for reference types lower to HashLink's native
+	null representation, support equality, and reject implicit untyped null
+	locals; nullable dereference narrowing and migration-safe object arrays remain
+	future work.
 - [~] Payload-free enums lower to stable integer tags and support typed case
 	values/equality; payload constructors and pattern matching remain future work.
 - [~] Primitive and array type aliases resolve in the frontend; cross-module
 	alias identity and generic aliases remain future work.
 - [~] Prototype-dispatched instance calls and inheritance are live, including
   stable override slots and arbitrary fixed-arity calls. Basic HashLink virtual
-  interface values now lower through `OToVirtual`, support inherited interface
-  slots, and dispatch through `OCallMethod`; generic interfaces, nullable
-  values, and advanced variance remain future work.
+	interface values now lower through `OToVirtual`, support inherited interface
+	slots, and dispatch through `OCallMethod`; generic interfaces and advanced
+	variance remain future work.
 - [~] A documented runtime library ABI for strings, collections, IO, and time
 	(compiler-owned string concatenation, length, equality, search, slicing, and
 	typed `trace` are exercised end-to-end; generic collections, IO, and time
@@ -105,8 +108,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 1. Extend the first-class `Array<T>` runtime type from the current
 	`Int`/`Float`/`String` allocation slice to object arrays and compiler-owned
 	collection operations; keep bounds checks in the HashLink operation contract.
-2. Add enums/nullable values and pattern matching on the same tagged-value
-   rules used by the runtime bridge.
+2. Add payload enums and pattern matching on the same tagged-value rules used
+	   by the runtime bridge; nullable reference values are already supported but
+	   need flow-sensitive narrowing.
 3. Complete package/import resolution for nominal types, then migrate a small
    Pragtical utility plugin as the first real multi-module workload.
 4. Expose compiler snapshots as the editor language service.

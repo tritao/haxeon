@@ -68,8 +68,8 @@ class CfgVerifier {
 					define(out, defined, available);
 				case ConstNull(out):
 					switch out.type {
-						case Obj(_), Virtual(_):
-						default: throw 'CFG null constant must produce an object value';
+						case Bytes, Obj(_), Virtual(_), Array(_), Function(_, _):
+						default: throw 'CFG null constant must produce a reference value';
 					}
 					define(out, defined, available);
 				case LoadLocal(out, name):
@@ -241,7 +241,7 @@ class CfgVerifier {
 
 	static function isReference(type:IrType):Bool
 		return switch type {
-			case Obj(_), Virtual(_): true;
+			case Bytes, Obj(_), Virtual(_), Array(_), Function(_, _): true;
 			default: false;
 		};
 }

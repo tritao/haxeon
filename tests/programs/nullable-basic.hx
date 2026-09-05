@@ -10,5 +10,8 @@ function main():Int {
 	var present:Null<Box> = new Box();
 	if (present == null)
 		return 0;
+	var maybeText:Null<String> = null;
+	if (maybeText == null)
+		return 42;
 	return 42;
 }

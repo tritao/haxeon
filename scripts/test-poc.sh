@@ -41,7 +41,7 @@ run_program() {
     "$haxe" --cwd "$root_dir" -cp src --run Main "$source_file" "$output"
 
     set +e
-	LD_LIBRARY_PATH="$root_dir/vendor/hashlink" "$hl" "$output"
+	LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$output"
     local status=$?
     set -e
     if [[ $status -ne $expected ]]; then

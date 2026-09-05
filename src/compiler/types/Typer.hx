@@ -587,7 +587,7 @@ class Typer {
 			return switch [value.type, expected] {
 				case [TClass(_), TInterface(name)], [TInterface(_), TInterface(name)]:
 					new TypedExpression(TToInterface(value, name), expected, value.span);
-				case [TNull, TNullable(_)], [TClass(_), TNullable(_)], [TInterface(_), TNullable(_)], [TNullable(_), TNullable(_)]:
+				case [_, TNullable(_)]:
 					new TypedExpression(TNullableWrap(value), expected, value.span);
 				default: value;
 			};
@@ -603,9 +603,7 @@ class Typer {
 			case [TClass(actualName), TInterface(expectedName)]: classImplements(actualName, expectedName);
 			case [TInterface(actualName), TInterface(expectedName)]: interfaceExtends(actualName, expectedName);
 			case [TNull, TNullable(_)]: true;
-			case [TClass(actualName), TNullable(TClass(expectedName))]: actualName == expectedName || classImplements(actualName, expectedName);
-			case [TInterface(actualName), TNullable(TInterface(expectedName))]: actualName == expectedName || interfaceExtends(actualName, expectedName);
-			case [TNullable(actual), TNullable(expected)]: sameType(actual, expected);
+			case [actual, TNullable(expected)]: isReference(actual) && (sameType(actual, expected) || isAssignable(actual, expected));
 			case [TArray(actualElement), TArray(expectedElement)]: sameType(actualElement, expectedElement);
 			default: false;
 		};
@@ -790,6 +788,12 @@ class Typer {
 	static function isNullable(type:CompilerType):Bool
 		return switch type {
 			case TNullable(_): true;
+			default: false;
+		};
+
+	static function isReference(type:CompilerType):Bool
+		return switch type {
+			case TString, TClass(_), TInterface(_), TArray(_), TFunction(_): true;
 			default: false;
 		};
 

@@ -127,8 +127,8 @@ class IrVerifier {
 				define(values, out);
 			case ConstNull(out):
 				switch out.type {
-					case Obj(_), Virtual(_):
-					default: throw 'IR null constant must produce an object value';
+					case Bytes, Obj(_), Virtual(_), Array(_), Function(_, _):
+					default: throw 'IR null constant must produce a reference value';
 				}
 				define(values, out);
 			case Add(out, a, b), Sub(out, a, b), Mul(out, a, b), Div(out, a, b):
@@ -397,7 +397,7 @@ class IrVerifier {
 
 	static function isReference(type:IrType):Bool
 		return switch type {
-			case Obj(_), Virtual(_): true;
+			case Bytes, Obj(_), Virtual(_), Array(_), Function(_, _): true;
 			default: false;
 		};
 
