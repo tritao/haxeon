@@ -121,11 +121,15 @@ class Parser {
 		consume(TokenKind.RightParen);
 		var result = match(TokenKind.Colon) ? parseType() : allowMissingReturn
 			&& name == "new" ? VoidType : failType("Expected return type");
-		consume(TokenKind.LeftBrace);
-		var statements = [];
-		while (!check(TokenKind.RightBrace))
+		var statements = [], end:SourceSpan;
+		if (match(TokenKind.LeftBrace)) {
+			while (!check(TokenKind.RightBrace))
+				appendStatements(statements, parseStatements());
+			end = consume(TokenKind.RightBrace).span;
+		} else {
 			appendStatements(statements, parseStatements());
-		var end = consume(TokenKind.RightBrace).span;
+			end = statementSpan(statements[statements.length - 1]);
+		}
 		return {
 			name: name,
 			isStatic: isStatic,
