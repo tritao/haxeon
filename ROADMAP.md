@@ -101,8 +101,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 - [~] Persistent AST snapshots, diagnostics, document symbols, completion,
   hover, definition, references, and rename are exposed through
   `LanguageService`; typed local member completion now covers classes,
-  interfaces, arrays, maps, and strings, local rename/reference scope is
-  function-aware, and full semantic resolution remains.
+  interfaces, arrays, maps, and strings, and semantic symbol identity now
+  follows local bindings, class/interface members, and imported module
+  functions. Full semantic resolution remains.
 - [ ] Definition, references, rename, and full type-aware navigation from
   compiler state.
 - [~] Completion-safe partial parsing and error recovery through last-good

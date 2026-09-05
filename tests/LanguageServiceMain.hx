@@ -96,6 +96,20 @@ class LanguageServiceMain {
 			|| localReferences.length != 2
 			|| localEdits.length != 2)
 			throw "language service local symbol scope was not preserved";
+		var importService = new LanguageService();
+		importService.update("editor/util/Math.hx", "package editor.util; function add(a:Int, b:Int):Int { return a + b; }");
+		var importSource = "package editor; import editor.util.Math; function main():Int { return Math.add(20, 22); }";
+		importService.update("editor/Main.hx", importSource);
+		importService.compile("editor.Main");
+		var importedPosition = importSource.indexOf("Math.add") + "Math.".length,
+			importedDefinition = importService.definition("editor/Main.hx", importedPosition),
+			importedReferences = importService.references("editor/Main.hx", importedPosition),
+			importedEdits = importService.rename("editor/Main.hx", importedPosition, "sum");
+		if (importedDefinition == null
+			|| importedDefinition.path != "editor/util/Math.hx"
+			|| importedReferences.length != 2
+			|| importedEdits.length != 2)
+			throw "language service imported symbol resolution failed";
 		service.update("Main.hx", "function main(:Int { return 0; }");
 		try {
 			service.compile("Main");

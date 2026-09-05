@@ -37,6 +37,12 @@ typedef TextEdit = {
 	final replacement:String;
 }
 
+typedef SemanticSymbol = {
+	final key:String;
+	final location:SymbolLocation;
+	final functionSpan:Null<SourceSpan>;
+}
+
 /** Read-only editor queries backed by the persistent compiler state. */
 class LanguageService {
 	public final compiler:Compiler;
@@ -211,66 +217,24 @@ class LanguageService {
 	}
 
 	public function definition(path:String, position:Int):Null<SymbolLocation> {
-		var name = symbolAt(path, position);
-		if (name == null)
-			return null;
-		var local = localSymbol(path, position, name);
-		if (local != null)
-			return {path: path, span: local.declaration};
-		for (state in compiler.modules) {
-			var ast = effectiveAst(state);
-			if (ast != null) {
-				for (alias in ast.aliases)
-					if (alias.name == name)
-						return {path: state.source.path, span: alias.span};
-				for (enumDecl in ast.enums) {
-					if (enumDecl.name == name)
-						return {path: state.source.path, span: enumDecl.span};
-					for (caseDecl in enumDecl.cases)
-						if (caseDecl.name == name)
-							return {path: state.source.path, span: caseDecl.span};
-				}
-				for (fn in ast.functions)
-					if (fn.name == name)
-						return {path: state.source.path, span: fn.span};
-				for (interfaceDecl in ast.interfaces) {
-					if (interfaceDecl.name == name)
-						return {path: state.source.path, span: interfaceDecl.span};
-					for (method in interfaceDecl.methods)
-						if (method.name == name)
-							return {path: state.source.path, span: method.span};
-				}
-				for (classDecl in ast.classes) {
-					if (classDecl.name == name)
-						return {path: state.source.path, span: classDecl.span};
-					for (field in classDecl.fields)
-						if (field.name == name)
-							return {path: state.source.path, span: field.span};
-					for (method in classDecl.methods)
-						if (method.name == name)
-							return {path: state.source.path, span: method.span};
-				}
-			}
-		}
-		return null;
+		var symbol = resolveSymbol(path, position);
+		return symbol == null ? null : symbol.location;
 	}
 
 	public function references(path:String, position:Int):Array<SymbolLocation> {
-		var name = symbolAt(path, position), result:Array<SymbolLocation> = [];
-		if (name == null)
+		var target = resolveSymbol(path, position),
+			result:Array<SymbolLocation> = [];
+		if (target == null)
 			return result;
-		var local = localSymbol(path, position, name);
 		for (state in compiler.modules) {
 			var tokens = effectiveTokens(state);
 			if (tokens != null)
 				for (token in tokens)
-					if (token.kind == Identifier
-						&& token.text == name
-						&& (local == null
-							|| (state.source.path == path
-								&& token.span.start >= local.functionSpan.start
-								&& token.span.end <= local.functionSpan.end)))
-						result.push({path: state.source.path, span: token.span});
+					if (token.kind == Identifier) {
+						var candidate = resolveSymbol(state.source.path, token.span.start + 1);
+						if (candidate != null && candidate.key == target.key)
+							result.push({path: state.source.path, span: token.span});
+					}
 		}
 		result.sort(function(a, b) {
 			var pathOrder = Reflect.compare(a.path, b.path);
@@ -296,6 +260,176 @@ class LanguageService {
 		for (token in tokens)
 			if (token.kind == Identifier && position >= token.span.start && position <= token.span.end)
 				return token.text;
+		return null;
+	}
+
+	function resolveSymbol(path:String, position:Int):Null<SemanticSymbol> {
+		var state = stateFor(path),
+			tokens = state == null ? null : effectiveTokens(state),
+			ast = state == null ? null : effectiveAst(state);
+		if (state == null || tokens == null || ast == null)
+			return null;
+		var tokenIndex = -1;
+		for (i in 0...tokens.length)
+			if (tokens[i].kind == Identifier && position >= tokens[i].span.start && position <= tokens[i].span.end) {
+				tokenIndex = i;
+				break;
+			}
+		if (tokenIndex < 0)
+			return null;
+		var token = tokens[tokenIndex],
+			local = localSymbol(path, position, token.text);
+		if (local != null)
+			return {
+				key: 'local:${state.name}:${local.functionSpan.start}:${token.text}',
+				location: {path: path, span: local.declaration},
+				functionSpan: local.functionSpan
+			};
+		var declaration = declarationSymbol(state, tokens, tokenIndex, token.text);
+		if (declaration != null)
+			return declaration;
+		var qualifier = tokenIndex >= 2
+			&& tokens[tokenIndex - 1].kind == Dot
+			&& tokens[tokenIndex - 2].kind == Identifier ? tokens[tokenIndex - 2].text : null;
+		if (qualifier != null) {
+			var receiverType = qualifierType(path, qualifier, position);
+			if (receiverType != null) {
+				var member = memberSymbol(receiverType, token.text);
+				if (member != null)
+					return member;
+			}
+			var imported = importedModule(state, qualifier);
+			if (imported != null) {
+				var importedSymbol = globalSymbol(imported, token.text);
+				if (importedSymbol != null)
+					return importedSymbol;
+			}
+		}
+		return globalSymbol(state, token.text);
+	}
+
+	function declarationSymbol(state:ModuleState, tokens:Array<compiler.Token>, tokenIndex:Int, name:String):Null<SemanticSymbol> {
+		var previous = tokenIndex > 0 ? tokens[tokenIndex - 1].kind : null,
+			ast = effectiveAst(state);
+		if (ast == null)
+			return null;
+		if (previous == TokenKind.Class)
+			for (classDecl in ast.classes)
+				if (classDecl.name == name)
+					return symbol(state, 'class:$name', classDecl.span, null);
+		if (previous == TokenKind.Interface)
+			for (interfaceDecl in ast.interfaces)
+				if (interfaceDecl.name == name)
+					return symbol(state, 'interface:$name', interfaceDecl.span, null);
+		if (previous == TokenKind.Enum)
+			for (enumDecl in ast.enums)
+				if (enumDecl.name == name)
+					return symbol(state, 'enum:$name', enumDecl.span, null);
+		if (previous == TokenKind.Function) {
+			for (fn in ast.functions)
+				if (fn.name == name)
+					return symbol(state, 'function:$name', fn.span, null);
+			for (classDecl in ast.classes)
+				for (method in classDecl.methods)
+					if (method.name == name && tokenIndexInside(tokens[tokenIndex].span.start, method.span))
+						return symbol(state, 'class:${classDecl.name}:method:$name', method.span, null);
+		}
+		if (previous == TokenKind.Var)
+			for (classDecl in ast.classes)
+				for (field in classDecl.fields)
+					if (field.name == name)
+						return symbol(state, 'class:${classDecl.name}:field:$name', field.span, null);
+		return null;
+	}
+
+	static function tokenIndexInside(position:Int, span:SourceSpan):Bool
+		return position >= span.start && position <= span.end;
+
+	function symbol(state:ModuleState, key:String, span:SourceSpan, ?functionSpan:SourceSpan):SemanticSymbol
+		return {key: '${state.name}:$key', location: {path: state.source.path, span: span}, functionSpan: functionSpan};
+
+	function globalSymbol(state:ModuleState, name:String):Null<SemanticSymbol> {
+		var visible = [state];
+		for (dependency in state.dependencies) {
+			var imported = compiler.modules.get(dependency);
+			if (imported != null)
+				visible.push(imported);
+		}
+		for (candidate in visible) {
+			var ast = effectiveAst(candidate);
+			if (ast == null)
+				continue;
+			for (alias in ast.aliases)
+				if (alias.name == name)
+					return symbol(candidate, 'alias:$name', alias.span, null);
+			for (fn in ast.functions)
+				if (fn.name == name)
+					return symbol(candidate, 'function:$name', fn.span, null);
+			for (classDecl in ast.classes)
+				if (classDecl.name == name)
+					return symbol(candidate, 'class:$name', classDecl.span, null);
+			for (interfaceDecl in ast.interfaces)
+				if (interfaceDecl.name == name)
+					return symbol(candidate, 'interface:$name', interfaceDecl.span, null);
+			for (enumDecl in ast.enums)
+				if (enumDecl.name == name)
+					return symbol(candidate, 'enum:$name', enumDecl.span, null);
+		}
+		return null;
+	}
+
+	function importedModule(state:ModuleState, name:String):Null<ModuleState> {
+		var ast = effectiveAst(state);
+		if (ast == null)
+			return null;
+		for (path in ast.imports) {
+			var parts = path.split(".");
+			if (parts[parts.length - 1] == name) {
+				var imported = compiler.modules.get(path);
+				if (imported != null)
+					return imported;
+			}
+		}
+		return null;
+	}
+
+	function memberSymbol(type:CompilerType, name:String):Null<SemanticSymbol> {
+		switch type {
+			case TNullable(element):
+				return memberSymbol(element, name);
+			case TClass(className):
+				for (state in compiler.modules) {
+					var ast = effectiveAst(state);
+					if (ast == null)
+						continue;
+					for (classDecl in ast.classes)
+						if (classDecl.name == className) {
+							for (field in classDecl.fields)
+								if (field.name == name)
+									return symbol(state, 'class:$className:field:$name', field.span, null);
+							for (method in classDecl.methods)
+								if (method.name == name)
+									return symbol(state, 'class:$className:method:$name', method.span, null);
+							if (classDecl.base != null) {
+								var inherited = memberSymbol(TClass(classDecl.base), name);
+								if (inherited != null)
+									return inherited;
+							}
+						}
+				}
+			case TInterface(interfaceName):
+				for (state in compiler.modules) {
+					var ast = effectiveAst(state);
+					if (ast == null)
+						continue;
+					for (interfaceDecl in ast.interfaces)
+						if (interfaceDecl.name == interfaceName)
+							for (method in interfaceDecl.methods)
+								if (method.name == name)
+									return symbol(state, 'interface:$interfaceName:method:$name', method.span, null);
+				}
+			default:
+		}
 		return null;
 	}
 
