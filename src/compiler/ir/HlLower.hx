@@ -115,20 +115,17 @@ class HlLower {
 	function lowerFunction(fn:IrFunction):HlFunction {
 		var registers:Map<Int, Int> = [];
 		var registerTypes:Array<Int> = [];
-		var registerIrTypes:Array<IrType> = [];
 		var catchValues:Map<Int, IrValue> = [];
 		for (argument in fn.arguments)
-			defineRegister(argument, registers, registerTypes, registerIrTypes);
-		var argumentCount = registerTypes.length, hasTrap = false;
+			defineRegister(argument, registers, registerTypes);
+		var hasTrap = false;
 
 		var edges:Map<String, Array<{destination:IrValue, source:IrValue}>> = [];
 		for (block in fn.blocks)
-			for (instruction in block.instructions) {
-				var output = instructionOutput(instruction);
-				if (output != null)
-					defineRegister(output, registers, registerTypes, registerIrTypes);
+			for (instruction in block.instructions)
 				switch instruction {
 					case Phi(output, inputs):
+						defineRegister(output, registers, registerTypes);
 						for (input in inputs) {
 							var key = edgeKey(input.block, block.id),
 								moves = edges.get(key);
@@ -140,26 +137,13 @@ class HlLower {
 						}
 					case Catch(output):
 						catchValues.set(block.id, output);
+						defineRegister(output, registers, registerTypes);
 					case BeginTry(_, _):
 						hasTrap = true;
 					default:
 				}
-			}
 
 		var instructions:Array<HlInstruction> = [];
-		if (hasTrap)
-			for (register in argumentCount...registerTypes.length)
-				switch registerIrTypes[register] {
-					case Void:
-					case I32:
-						instructions.push(HlInstruction.LoadInt(register, internInt(0)));
-					case F64:
-						instructions.push(HlInstruction.LoadFloat(register, symbols.internFloat(0)));
-					case Bool:
-						instructions.push(HlInstruction.LoadBool(register, false));
-					case Bytes, Dyn, Array(_), Enum(_), Obj(_), Abstract(_), Virtual(_), Function(_, _):
-						instructions.push(HlInstruction.LoadNull(register));
-				}
 		for (block in (hasTrap ? orderedBlocks(fn) : fn.blocks)) {
 			if (block.instructions.length == 0 && block.terminator == null)
 				continue;
@@ -405,26 +389,12 @@ class HlLower {
 		instructions.push(HlInstruction.Label(endLabel));
 	}
 
-	static function instructionOutput(instruction:IrInstruction):Null<IrValue>
-		return switch instruction {
-			case Phi(output, _), ConstVoid(output), ConstInt(output, _), ConstFloat(output, _), ConstString(output, _), ConstBool(output, _),
-				ConstNull(output), ToDyn(output, _), Catch(output), GlobalGet(output, _), Add(output, _, _), Sub(output, _, _), Mul(output, _, _),
-				Div(output, _, _), Mod(output, _, _), Less(output, _, _), LessEqual(output, _, _), Equal(output, _, _), Call(output, _, _),
-				StaticClosure(output, _), InstanceClosure(output, _, _), CallClosure(output, _, _), ToVirtual(output, _), MethodCall(output, _, _, _),
-				NewObject(output, _), FieldGet(output, _, _), ArrayGet(output, _, _), ArraySize(output, _), MakeEnum(output, _, _, _), EnumIndex(output, _),
-				EnumField(output, _, _, _): output;
-			case BeginTry(_, _), EndTry, GlobalSet(_, _), FieldSet(_, _, _), ArraySet(_, _, _): null;
-		};
-
-	function defineRegister(value:IrValue, registers:Map<Int, Int>, types:Array<Int>, ?irTypes:Array<IrType>):Int {
-		var existing = registers.get(value.id);
-		if (existing != null)
-			return existing;
+	function defineRegister(value:IrValue, registers:Map<Int, Int>, types:Array<Int>):Int {
+		if (registers.exists(value.id))
+			throw 'IR value ${value.id} is defined more than once';
 		var index = types.length;
 		registers.set(value.id, index);
 		types.push(internType(value.type));
-		if (irTypes != null)
-			irTypes.push(value.type);
 		return index;
 	}
 

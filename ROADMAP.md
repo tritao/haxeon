@@ -76,7 +76,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 	(compiler-owned string concatenation, length, equality, search, slicing, and
 	typed `trace` plus the standard `Sys` time/filesystem/process surface are
 	exercised end-to-end; typed `throw` and catch-all `try`/`catch` now lower
-	through HashLink's dynamic exception ABI, while typed catch filters, file
+	through HashLink's dynamic exception ABI. Locals mutated across a handler
+	boundary use selective stable cells rather than blanket register spills, and
+	HashLink validates branch and trap targets before JIT compilation. Typed catch filters, file
 	handles, generic collections, and richer IO remain future work).
 
 ### B. Incremental compiler service
@@ -205,6 +207,9 @@ second compiler or a second runtime.
 	together. Typed `throw` and catch-all `try`/`catch` are the first exception
 	ABI milestones; finish typed filters and uncaught-exception diagnostics
 	before migration.
+- Keep exceptional state explicit at the typed-local boundary: values mutated
+  in a protected region and observed by its handler use stable cells, while SSA
+  remains responsible for ordinary control-flow merging.
 - Finish the non-moving type arena and explicit reload domains in the fork.
 - Add in-memory module load/patch APIs, failure recovery, and state migration
   hooks; preserve ordinary `.hl` compatibility for non-realtime builds.

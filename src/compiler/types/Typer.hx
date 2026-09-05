@@ -289,6 +289,7 @@ class Typer {
 		collectDeclaredLocals(fn.statements, declared);
 		var mutableCandidates:Map<String, Bool> = [];
 		collectMutableCaptureCandidates(fn.statements, declared, mutableCandidates);
+		collectExceptionCellCandidates(fn.statements, declared, mutableCandidates);
 		for (name in mutableCandidates.keys())
 			currentCells.set(name, '$' + 'cell:' + currentFunctionName + ':' + name);
 		var scope = new Scope();
@@ -1323,7 +1324,8 @@ class Typer {
 					collectVariables(tryBranch, names);
 					collectVariables(catchBranch, names);
 				case Break(_), Continue(_):
-				case Increment(_, _, _):
+				case Increment(name, _, _):
+					names.set(name, true);
 			}
 	}
 
@@ -1357,6 +1359,36 @@ class Typer {
 					collectMutableCaptureCandidates(tryBranch, outerDeclared, result);
 					collectMutableCaptureCandidates(catchBranch, outerDeclared, result);
 				case ReturnVoid(_), Break(_), Continue(_), Increment(_, _, _):
+			}
+	}
+
+	/**
+		Locals mutated in a protected region and observed by its handler need stable
+		storage: an exception can bypass SSA edge moves at any throwing instruction.
+	**/
+	static function collectExceptionCellCandidates(statements:Array<AstStatement>, declared:Map<String, Bool>, result:Map<String, Bool>):Void {
+		for (statement in statements)
+			switch statement {
+				case Try(tryBranch, _, _, catchBranch, _):
+					var assigned:Map<String, Bool> = [],
+						observed:Map<String, Bool> = [];
+					collectAssignedLocals(tryBranch, assigned);
+					collectVariables(catchBranch, observed);
+					for (name in observed.keys())
+						if (assigned.exists(name) && declared.exists(name))
+							result.set(name, true);
+					collectExceptionCellCandidates(tryBranch, declared, result);
+					collectExceptionCellCandidates(catchBranch, declared, result);
+				case If(_, yes, no, _):
+					collectExceptionCellCandidates(yes, declared, result);
+					collectExceptionCellCandidates(no, declared, result);
+				case While(_, body, _), ForIn(_, _, body, _):
+					collectExceptionCellCandidates(body, declared, result);
+				case Switch(_, cases, defaultBranch, _, _):
+					for (switchCase in cases)
+						collectExceptionCellCandidates(switchCase.statements, declared, result);
+					collectExceptionCellCandidates(defaultBranch, declared, result);
+				default:
 			}
 	}
 
