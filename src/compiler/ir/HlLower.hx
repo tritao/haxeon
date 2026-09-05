@@ -157,6 +157,11 @@ class HlLower {
 							case 2: instructions.push(HlInstruction.Call2(destination, functionIndex, args[0], args[1]));
 							default: throw 'HL lowering supports at most two call arguments, got ${args.length}';
 						}
+					case StaticClosure(output, functionName):
+						instructions.push(HlInstruction.StaticClosure(defineRegister(output, registers, registerTypes), requireFunction(functionName)));
+					case CallClosure(output, closure, arguments):
+						instructions.push(HlInstruction.CallClosure(defineRegister(output, registers, registerTypes), requireRegister(closure, registers),
+							[for (argument in arguments) requireRegister(argument, registers)]));
 					case NewObject(output, typeName):
 						instructions.push(HlInstruction.New(defineRegister(output, registers, registerTypes), requireObjectType(typeName), 0));
 					case FieldGet(output, object, fieldName):
@@ -256,7 +261,10 @@ class HlLower {
 	}
 
 	function internType(type:IrType):Int {
-		return symbols.internType(type);
+		return switch type {
+			case Function(arguments, result): symbols.internFunction(arguments, result);
+			default: symbols.internType(type);
+		};
 	}
 
 	function internFunctionType(arguments:Array<IrType>, result:IrType):Int {

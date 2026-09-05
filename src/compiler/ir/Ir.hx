@@ -7,6 +7,7 @@ enum IrType {
 	F64;
 	Bytes;
 	Obj(name:String);
+	Function(arguments:Array<IrType>, result:IrType);
 }
 
 abstract ValueId(Int) from Int to Int {}
@@ -40,6 +41,8 @@ enum IrInstruction {
 	LessEqual(output:IrValue, left:IrValue, right:IrValue);
 	Equal(output:IrValue, left:IrValue, right:IrValue);
 	Call(output:IrValue, functionName:String, arguments:Array<IrValue>);
+	StaticClosure(output:IrValue, functionName:String);
+	CallClosure(output:IrValue, closure:IrValue, arguments:Array<IrValue>);
 	NewObject(output:IrValue, typeName:String);
 	FieldGet(output:IrValue, object:IrValue, fieldName:String);
 	FieldSet(object:IrValue, fieldName:String, value:IrValue);

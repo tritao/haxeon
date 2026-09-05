@@ -91,6 +91,18 @@ class IrBuilder {
 		return out;
 	}
 
+	public function staticClosure(name:String, type:IrType):IrValue {
+		var out = temporary(type);
+		emit(StaticClosure(out, name));
+		return out;
+	}
+
+	public function callClosure(closure:IrValue, args:Array<IrValue>, result:IrType):IrValue {
+		var out = temporary(result);
+		emit(CallClosure(out, closure, args));
+		return out;
+	}
+
 	public function newObject(typeName:String):IrValue {
 		var out = temporary(Obj(typeName));
 		emit(NewObject(out, typeName));

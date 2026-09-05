@@ -140,6 +140,29 @@ class IrVerifier {
 				if (!sameType(out.type, signature.result))
 					throw 'Wrong IR result type for "$name"';
 				define(values, out);
+			case StaticClosure(out, name):
+				var signature = signatures.get(name);
+				if (signature == null)
+					throw 'Unknown IR closure target "$name"';
+				if (!sameType(out.type, Function(signature.arguments, signature.result)))
+					throw 'Wrong IR closure type for "$name"';
+				define(values, out);
+			case CallClosure(out, closure, args):
+				require(values, closure);
+				var functionType = switch closure.type {
+					case Function(arguments, result): {arguments: arguments, result: result};
+					default: throw 'IR closure value ${closure.id} is not callable';
+				};
+				if (args.length != functionType.arguments.length)
+					throw 'Wrong IR closure argument count';
+				for (i in 0...args.length) {
+					require(values, args[i]);
+					if (!sameType(args[i].type, functionType.arguments[i]))
+						throw 'Wrong IR closure argument type';
+				}
+				if (!sameType(out.type, functionType.result))
+					throw 'Wrong IR closure result type';
+				define(values, out);
 			case NewObject(out, typeName):
 				if (!objects.exists(typeName) || !isObjectType(out.type, typeName))
 					throw 'Unknown or mismatched IR object "$typeName"';
@@ -229,6 +252,10 @@ class IrVerifier {
 	static function sameType(left:IrType, right:IrType):Bool
 		return switch [left, right] {
 			case [Obj(a), Obj(b)]: a == b;
+			case [Function(aArgs, aResult), Function(bArgs, bResult)]: aArgs.length == bArgs.length && [
+					for (i in 0...aArgs.length)
+						sameType(aArgs[i], bArgs[i])
+				].indexOf(false) < 0 && sameType(aResult, bResult);
 			default: left == right;
 		};
 

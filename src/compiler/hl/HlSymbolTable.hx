@@ -63,6 +63,7 @@ class HlSymbolTable {
 			case F64: HlType.F64;
 			case Bytes: HlType.Bytes;
 			case Obj(name): throw 'Object type "$name" must be registered before use';
+			case Function(_, _): throw 'Function type must be interned with internFunction';
 		}));
 		typeIndices.set(key, index);
 		return index;
@@ -110,5 +111,6 @@ class HlSymbolTable {
 			case F64: "f64";
 			case Bytes: "bytes";
 			case Obj(name): 'obj:$name';
+			case Function(arguments, result): 'fun(${[for (argument in arguments) typeKey(argument)].join(",")})->${typeKey(result)}';
 		};
 }

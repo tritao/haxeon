@@ -57,6 +57,18 @@ if [[ $object_status -ne 42 ]]; then
 fi
 echo "PASS: object allocation and field access executed (exit 42)"
 
+closure_output="$root_dir/out/closure.hl"
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run ClosureMain "$closure_output"
+set +e
+LD_LIBRARY_PATH="$root_dir/.tools/hashlink" "$hl" "$closure_output"
+closure_status=$?
+set -e
+if [[ $closure_status -ne 42 ]]; then
+	echo "closure IR: expected exit 42, got $closure_status" >&2
+	exit 1
+fi
+echo "PASS: static closure allocation and invocation executed (exit 42)"
+
 instance_module_output="$root_dir/out/instance-module.hl"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run InstanceModuleMain "$instance_module_output"
 set +e

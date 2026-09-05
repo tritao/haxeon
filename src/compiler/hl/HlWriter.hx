@@ -143,6 +143,14 @@ class HlWriter {
 					requireRegister(fn, argument1);
 					requireRegister(fn, argument2);
 					requireCallable(functionIndices, functionIndex, fn.functionIndex);
+				case StaticClosure(destination, functionIndex):
+					requireRegister(fn, destination);
+					requireCallable(functionIndices, functionIndex, fn.functionIndex);
+				case CallClosure(destination, closure, arguments):
+					requireRegister(fn, destination);
+					requireRegister(fn, closure);
+					for (argument in arguments)
+						requireRegister(fn, argument);
 				case New(destination, type, _):
 					requireRegister(fn, destination);
 					requireType(code, type, 'object allocation in function ${fn.functionIndex}');
@@ -347,6 +355,10 @@ class HlWriter {
 					{opcode: HlOpcode.Call1, operands: [destination, functionIndex, argument]};
 				case Call2(destination, functionIndex, argument1, argument2):
 					{opcode: HlOpcode.Call2, operands: [destination, functionIndex, argument1, argument2]};
+				case StaticClosure(destination, functionIndex):
+					{opcode: HlOpcode.StaticClosure, operands: [destination, functionIndex]};
+				case CallClosure(destination, closure, arguments):
+					{opcode: HlOpcode.CallClosure, operands: [destination, closure, arguments.length].concat(arguments)};
 				case New(destination, _, _):
 					// ONew has no encoded type operand. HashLink derives the
 					// allocation type from the destination register's type.

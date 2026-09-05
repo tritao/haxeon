@@ -27,6 +27,8 @@ enum HlInstruction {
 	Call0(destination:Int, functionIndex:Int);
 	Call1(destination:Int, functionIndex:Int, argument:Int);
 	Call2(destination:Int, functionIndex:Int, argument1:Int, argument2:Int);
+	StaticClosure(destination:Int, functionIndex:Int);
+	CallClosure(destination:Int, closure:Int, arguments:Array<Int>);
 	New(destination:Int, type:Int, extra:Int);
 	FieldGet(destination:Int, object:Int, field:Int);
 	FieldSet(object:Int, field:Int, source:Int);
