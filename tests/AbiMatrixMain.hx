@@ -2,6 +2,8 @@ import compiler.abi.PatchPlanner;
 import compiler.abi.PatchPlanner.AbiChange;
 import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
+import compiler.Diagnostic.CompileError;
+import compiler.modules.Compiler;
 
 typedef AbiFixture = {
 	final name:String;
@@ -13,6 +15,20 @@ typedef AbiFixture = {
 enum ExpectedDecision {
 	Patch;
 	Reload(reason:AbiChange);
+}
+
+typedef SourceFixture = {
+	final name:String;
+	final before:String;
+	final after:String;
+	final expected:SourceDecision;
+}
+
+enum SourceDecision {
+	NoOp;
+	BodyPatch;
+	ReloadFor(reason:AbiChange);
+	RejectWith(code:String);
 }
 
 class AbiMatrixMain {
@@ -45,6 +61,28 @@ class AbiMatrixMain {
 		for (fixture in fixtures)
 			assertDecision(fixture);
 		Sys.println('PASS: ${fixtures.length} ABI compatibility policy fixtures');
+		var sourceFixtures:Array<SourceFixture> = [
+			sourceFixture("no-op", "function main():Int { return 40; }", "function main():Int { return 40; }", NoOp),
+			sourceFixture("body edit", "function main():Int { return 40; }", "function main():Int { return 42; }", BodyPatch),
+			sourceFixture("function addition", "function main():Int { return 40; }", "function helper():Int { return 2; } function main():Int { return 40; }",
+				ReloadFor(FunctionAdded("Main.helper"))),
+			sourceFixture("function removal", "function helper():Int { return 2; } function main():Int { return 40; }", "function main():Int { return 40; }",
+				ReloadFor(FunctionRemoved("Main.helper"))),
+			sourceFixture("function signature", "function helper(value:Int):Int { return value; } function main():Int { return 40; }",
+				"function helper(value:Float):Int { return 2; } function main():Int { return 40; }", ReloadFor(FunctionSignatureChanged("Main.helper"))),
+			sourceFixture("instance field addition",
+				"class Editor { public var value:Int; public function new():Void { this.value = 40; } } function main():Int { return new Editor().value; }",
+				"class Editor { public var value:Int; public var generation:Int; public function new():Void { this.value = 40; this.generation = 1; } } function main():Int { return new Editor().value; }",
+				ReloadFor(ObjectLayoutChanged("Editor"))),
+			sourceFixture("enum case addition", "enum Result { Ok; } function main():Int { return 40; }",
+				"enum Result { Ok; Error; } function main():Int { return 40; }", ReloadFor(EnumChanged("Result"))),
+			sourceFixture("static field type", "class State { public static var value:Int; } function main():Int { return 40; }",
+				"class State { public static var value:Float; } function main():Int { return 40; }", ReloadFor(GlobalLayoutChanged("State.value"))),
+			sourceFixture("invalid return", "function main():Int { return 40; }", "function main():Int { return \"bad\"; }", RejectWith("E1003"))
+		];
+		for (fixture in sourceFixtures)
+			assertSourceDecision(fixture);
+		Sys.println('PASS: ${sourceFixtures.length} source ABI decision fixtures');
 	}
 
 	static function fixture(name:String, previous:Null<RuntimeAbiDescriptor>, next:RuntimeAbiDescriptor, expected:ExpectedDecision):AbiFixture
@@ -73,5 +111,48 @@ class AbiMatrixMain {
 			case [_, _]:
 				throw '${fixture.name}: expected ${fixture.expected}, got $actual';
 		}
+	}
+
+	static function sourceFixture(name:String, before:String, after:String, expected:SourceDecision):SourceFixture
+		return {
+			name: name,
+			before: before,
+			after: after,
+			expected: expected
+		};
+
+	static function assertSourceDecision(fixture:SourceFixture):Void {
+		var compiler = new Compiler();
+		compiler.update("Main.hx", fixture.before);
+		compiler.compile("Main");
+		var baseline = compiler.exportIdentityState();
+		compiler.update("Main.hx", fixture.after);
+		try {
+			var result = compiler.compile("Main");
+			switch fixture.expected {
+				case NoOp if (!result.requiresReload && result.changedFunctions.length == 0 && result.patchBytes == null):
+				case BodyPatch if (!result.requiresReload && result.changedFunctions.length > 0 && result.patchBytes != null):
+				case ReloadFor(reason) if (result.requiresReload
+					&& result.patchBytes == null
+					&& containsReason(result.reloadReasons, reason)):
+				case _:
+					throw '${fixture.name}: unexpected compiler artifact decision';
+			}
+		} catch (error:CompileError) {
+			switch fixture.expected {
+				case RejectWith(code) if (error.diagnostic.code == code):
+					if (compiler.exportIdentityState().compare(baseline) != 0)
+						throw '${fixture.name}: rejected edit changed committed state';
+				case _:
+					throw error;
+			}
+		}
+	}
+
+	static function containsReason(reasons:Array<AbiChange>, expected:AbiChange):Bool {
+		for (reason in reasons)
+			if (Type.enumEq(reason, expected))
+				return true;
+		return false;
 	}
 }
