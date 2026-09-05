@@ -141,6 +141,9 @@ class HlWriter {
 				case ToDyn(destination, source):
 					requireRegister(fn, destination);
 					requireRegister(fn, source);
+				case SafeCast(destination, source):
+					requireRegister(fn, destination);
+					requireRegister(fn, source);
 				case Trap(destination, target):
 					requireRegister(fn, destination);
 					if (!labels.exists(target))
@@ -265,7 +268,7 @@ class HlWriter {
 				case Label(_):
 				case Return(register):
 					requireRegister(fn, register);
-				case Throw(register):
+				case Throw(register), Rethrow(register):
 					requireRegister(fn, register);
 			}
 		}
@@ -456,6 +459,8 @@ class HlWriter {
 					{opcode: HlOpcode.Null, operands: [destination]};
 				case ToDyn(destination, source):
 					{opcode: HlOpcode.ToDyn, operands: [destination, source]};
+				case SafeCast(destination, source):
+					{opcode: HlOpcode.SafeCast, operands: [destination, source]};
 				case GlobalGet(destination, global):
 					{opcode: HlOpcode.GetGlobal, operands: [destination, global]};
 				case GlobalSet(global, source):
@@ -530,6 +535,8 @@ class HlWriter {
 					{opcode: HlOpcode.Ret, operands: [register]};
 				case Throw(register):
 					{opcode: HlOpcode.Throw, operands: [register]};
+				case Rethrow(register):
+					{opcode: HlOpcode.Rethrow, operands: [register]};
 			}
 			if (encoded != null)
 				result.push(encoded);

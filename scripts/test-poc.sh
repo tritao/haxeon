@@ -149,6 +149,9 @@ run_program try-loop-control 42
 run_program try-outer-local 42
 run_program try-branch-local 42
 run_program try-call-local 42
+run_program try-typed-class 42
+run_program try-typed-mismatch 42
+run_program try-typed-int 42
 run_program dynamic-argument 42
 
 object_output="$root_dir/out/object.hl"

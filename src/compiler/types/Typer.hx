@@ -383,13 +383,15 @@ class Typer {
 					output.push(TThrow(value, span));
 				case Try(tryBranch, catchName, catchType, catchBranch, span):
 					var loweredCatchType = lowerType(catchType);
-					if (!sameType(loweredCatchType, TDynamic))
-						fail("E1022", "Catch bindings currently require Dynamic", span);
+					switch loweredCatchType {
+						case TDynamic, TInt, TFloat, TBool, TString, TClass(_):
+						default: fail("E1022", "Unsupported catch binding type", span);
+					}
 					var typedTry = typeStatements(tryBranch, new Scope(scope), result),
 						catchScope = new Scope(scope);
-					catchScope.define(catchName, TDynamic, span);
+					catchScope.define(catchName, loweredCatchType, span);
 					var typedCatch = typeStatements(catchBranch, catchScope, result);
-					output.push(TTry(typedTry, catchName, typedCatch, span));
+					output.push(TTry(typedTry, catchName, loweredCatchType, typedCatch, span));
 				case Break(span):
 					if (loopDepth == 0)
 						fail("E1017", "break is only valid inside a loop", span);
@@ -1690,7 +1692,7 @@ class Typer {
 				case TIf(_, yes, no, _):
 					if (no.length > 0 && alwaysReturns(yes) && alwaysReturns(no))
 						return true;
-				case TTry(tryBranch, _, catchBranch, _):
+				case TTry(tryBranch, _, _, catchBranch, _):
 					if (alwaysReturns(tryBranch) && alwaysReturns(catchBranch))
 						return true;
 				case TSwitch(expression, cases, defaultBranch, hasDefault, _):

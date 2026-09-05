@@ -89,6 +89,12 @@ class IrVerifier {
 						throw 'Wrong return type in ${fn.name}';
 				case Throw(value):
 					require(values, value);
+					if (value.type != Dyn)
+						throw 'IR throw value is not Dyn';
+				case Rethrow(value):
+					require(values, value);
+					if (value.type != Dyn)
+						throw 'IR rethrow value is not Dyn';
 				case Jump(target):
 					work.push(target);
 				case Branch(condition, yes, no):
@@ -160,6 +166,11 @@ class IrVerifier {
 				require(values, value);
 				if (out.type != Dyn)
 					throw 'IR dynamic conversion must produce Dyn';
+				define(values, out);
+			case SafeCast(out, value):
+				require(values, value);
+				if (value.type != Dyn)
+					throw 'IR safe cast source must be Dyn';
 				define(values, out);
 			case BeginTry(catchBlock, afterBlock):
 			case EndTry:

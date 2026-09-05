@@ -41,6 +41,7 @@ enum IrInstruction {
 	ConstBool(output:IrValue, value:Bool);
 	ConstNull(output:IrValue);
 	ToDyn(output:IrValue, value:IrValue);
+	SafeCast(output:IrValue, value:IrValue);
 	BeginTry(catchBlock:BlockId, afterBlock:BlockId);
 	EndTry;
 	Catch(output:IrValue);
@@ -74,6 +75,7 @@ enum IrInstruction {
 enum IrTerminator {
 	Return(value:IrValue);
 	Throw(value:IrValue);
+	Rethrow(value:IrValue);
 	Jump(target:BlockId);
 	Branch(condition:IrValue, whenTrue:BlockId, whenFalse:BlockId);
 }

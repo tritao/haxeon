@@ -179,12 +179,15 @@ class IrGenerator {
 		var program = new IrProgram("__entry");
 		var needsArrayRuntime = false,
 			needsStringRuntime = false,
+			needsExceptionRuntime = false,
 			mapRuntimeNames:Map<String, Bool> = [];
 		for (fn in functions)
 			for (block in fn.blocks)
 				for (instruction in block.instructions)
 					switch instruction {
 						case Call(_, name, _):
+							if (name == "__exception_matches")
+								needsExceptionRuntime = true;
 							if (StringTools.startsWith(name, "__array_"))
 								needsArrayRuntime = true;
 							if (name == "__string_concat" || name == "__string_length" || name == "__string_equal" || name == "__string_index_of"
@@ -208,6 +211,14 @@ class IrGenerator {
 			arguments: [I32],
 			result: Void
 		});
+		if (needsExceptionRuntime)
+			program.natives.push({
+				name: "__exception_matches",
+				library: "realtime_runtime",
+				symbol: "__exception_matches",
+				arguments: [Dyn, Bytes],
+				result: Bool
+			});
 		if (needsArrayRuntime) {
 			program.natives.push({
 				name: "__array_alloc_i32",
@@ -492,7 +503,7 @@ class IrGenerator {
 					builder.returnVoid();
 				case TThrow(expression, _):
 					builder.throwValue(builder.toDyn(lowerExpression(expression, builder, localTypes)));
-				case TTry(tryBranch, catchName, catchBranch, _):
+				case TTry(tryBranch, catchName, catchType, catchBranch, _):
 					var catchBlock = builder.createBlock(),
 						afterBlock = builder.createBlock();
 					builder.beginTry(catchBlock, afterBlock);
@@ -506,8 +517,22 @@ class IrGenerator {
 					}
 					builder.select(catchBlock);
 					var exception = builder.catchValue();
-					localTypes.set(catchName, Dyn);
-					builder.store(catchName, exception);
+					var catchIrType = lowerType(catchType);
+					if (catchType != TDynamic) {
+						var handlerBlock = builder.createBlock(),
+							mismatchBlock = builder.createBlock(),
+							exceptionLocal = '$' + 'exception:${catchBlock}';
+						localTypes.set(exceptionLocal, Dyn);
+						builder.store(exceptionLocal, exception);
+						builder.branch(builder.call("__exception_matches", [exception, builder.constString(exceptionTypeName(catchType))], Bool),
+							handlerBlock, mismatchBlock);
+						builder.select(mismatchBlock);
+						builder.rethrowValue(builder.load(exceptionLocal, Dyn));
+						builder.select(handlerBlock);
+						exception = builder.load(exceptionLocal, Dyn);
+					}
+					localTypes.set(catchName, catchIrType);
+					builder.store(catchName, catchType == TDynamic ? exception : builder.safeCast(exception, catchIrType));
 					lowerStatements(catchBranch, builder, localTypes, loops);
 					var catchActive = !builder.isTerminated();
 					if (catchActive)
@@ -683,6 +708,16 @@ class IrGenerator {
 			}
 		}
 	}
+
+	static function exceptionTypeName(type:CompilerType):String
+		return switch type {
+			case TInt: "Int";
+			case TFloat: "Float";
+			case TBool: "Bool";
+			case TString: "String";
+			case TClass(name), TInterface(name): name;
+			default: throw "Unsupported typed catch";
+		};
 
 	static function exhaustiveEnumSwitch(type:CompilerType, cases:Array<TypedSwitchCase>):Bool {
 		switch type {

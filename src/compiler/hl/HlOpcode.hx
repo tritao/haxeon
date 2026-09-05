@@ -41,7 +41,9 @@ enum abstract HlOpcode(Int) from Int to Int {
 	var JAlways = 58;
 	var Ret = 67;
 	var ToDyn = 59;
+	var SafeCast = 63;
 	var Throw = 68;
+	var Rethrow = 69;
 	var Trap = 72;
 	var EndTrap = 73;
 	var ToVirtual = 65;

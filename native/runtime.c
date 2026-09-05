@@ -25,6 +25,25 @@ extern int hl_hisize( realtime_int_map *map );
 extern bool hl_hiremove( realtime_int_map *map, int key );
 extern void hl_hiclear( realtime_int_map *map );
 
+static bool exception_matches( vdynamic *value, vbyte *name ) {
+	if( value == NULL || name == NULL ) return false;
+	hl_type *type = value->t;
+	char *target = hl_to_utf8((uchar*)name);
+	if( strcmp(target,"Int") == 0 ) return type->kind == HI32;
+	if( strcmp(target,"Float") == 0 ) return type->kind == HF64 || type->kind == HF32;
+	if( strcmp(target,"Bool") == 0 ) return type->kind == HBOOL;
+	if( strcmp(target,"String") == 0 ) return type->kind == HBYTES;
+	while( type != NULL && (type->kind == HOBJ || type->kind == HSTRUCT) ) {
+		if( strcmp(hl_to_utf8(type->obj->name),target) == 0 ) return true;
+		type = type->obj->super;
+	}
+	return false;
+}
+
+HL_PRIM bool HL_NAME(__exception_matches)( vdynamic *value, vbyte *name ) {
+	return exception_matches(value,name);
+}
+
 static vbyte **array_int_storage(vobj *object) {
 	hl_runtime_obj *runtime = hl_get_obj_rt(object->t);
 	return (vbyte **)((char *)object + runtime->fields_indexes[0]);
@@ -646,3 +665,4 @@ DEFINE_PRIM(_I32,__string_length,_BYTES);
 DEFINE_PRIM(_BOOL,__string_equal,_BYTES _BYTES);
 DEFINE_PRIM(_I32,__string_index_of,_BYTES _BYTES);
 DEFINE_PRIM(_BYTES,__string_substring,_BYTES _I32 _I32);
+DEFINE_PRIM(_BOOL,__exception_matches,_DYN _BYTES);

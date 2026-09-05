@@ -22,6 +22,7 @@ enum CfgInstruction {
 	ConstBool(output:CfgValue, value:Bool);
 	ConstNull(output:CfgValue);
 	ToDyn(output:CfgValue, value:CfgValue);
+	SafeCast(output:CfgValue, value:CfgValue);
 	BeginTry(catchBlock:Int, afterBlock:Int);
 	EndTry;
 	Catch(output:CfgValue);
@@ -57,6 +58,7 @@ enum CfgInstruction {
 enum CfgTerminator {
 	Return(value:CfgValue);
 	Throw(value:CfgValue);
+	Rethrow(value:CfgValue);
 	Jump(target:Int);
 	Branch(condition:CfgValue, whenTrue:Int, whenFalse:Int);
 }

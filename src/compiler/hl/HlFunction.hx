@@ -22,6 +22,7 @@ enum HlInstruction {
 	LoadBool(destination:Int, value:Bool);
 	LoadNull(destination:Int);
 	ToDyn(destination:Int, source:Int);
+	SafeCast(destination:Int, source:Int);
 	Trap(destination:Int, target:String);
 	EndTrap(destination:Int);
 	GlobalGet(destination:Int, global:Int);
@@ -57,4 +58,5 @@ enum HlInstruction {
 	Label(name:String);
 	Return(register:Int);
 	Throw(register:Int);
+	Rethrow(register:Int);
 }

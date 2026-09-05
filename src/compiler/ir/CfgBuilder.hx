@@ -53,6 +53,9 @@ class CfgBuilder {
 	public function throwValue(value:CfgValue):Void
 		terminate(Throw(value));
 
+	public function rethrowValue(value:CfgValue):Void
+		terminate(Rethrow(value));
+
 	/** Seal a block that is unreachable from the function entry. */
 	public function markUnreachable():Void
 		if (!isTerminated())
@@ -95,6 +98,12 @@ class CfgBuilder {
 	public function catchValue():CfgValue {
 		var out = temporary(Dyn);
 		emit(Catch(out));
+		return out;
+	}
+
+	public function safeCast(value:CfgValue, type:IrType):CfgValue {
+		var out = temporary(type);
+		emit(SafeCast(out, value));
 		return out;
 	}
 

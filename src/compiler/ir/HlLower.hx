@@ -165,6 +165,8 @@ class HlLower {
 						instructions.push(HlInstruction.LoadNull(defineRegister(output, registers, registerTypes)));
 					case ToDyn(output, value):
 						instructions.push(HlInstruction.ToDyn(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
+					case SafeCast(output, value):
+						instructions.push(HlInstruction.SafeCast(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
 					case BeginTry(catchBlock, _):
 						var handlerValue = catchValues.get(catchBlock);
 						if (handlerValue == null)
@@ -264,6 +266,8 @@ class HlLower {
 					instructions.push(HlInstruction.Return(requireRegister(value, registers)));
 				case Throw(value):
 					instructions.push(HlInstruction.Throw(requireRegister(value, registers)));
+				case Rethrow(value):
+					instructions.push(HlInstruction.Rethrow(requireRegister(value, registers)));
 				case Jump(target):
 					emitPhiMoves(edges.get(edgeKey(block.id, target)), registers, registerTypes, instructions);
 					instructions.push(HlInstruction.Jump('block_$target'));
@@ -300,7 +304,7 @@ class HlLower {
 			return switch block.terminator {
 				case Jump(next): canReach(next, target, checked);
 				case Branch(_, yes, no): canReach(yes, target, checked) || canReach(no, target, checked);
-				case Return(_), Throw(_), null: false;
+				case Return(_), Throw(_), Rethrow(_), null: false;
 			};
 		}
 		function visit(id:Int, stop:Null<Int>):Void {
@@ -321,7 +325,7 @@ class HlLower {
 			var successors:Array<Int> = switch block.terminator {
 				case Jump(target): [target];
 				case Branch(_, yes, no): [yes, no];
-				case Return(_), Throw(_), null: [];
+				case Return(_), Throw(_), Rethrow(_), null: [];
 			};
 			// Preserve reducible loops as backward branches for HashLink's JIT.
 			successors.sort(function(a, b) {

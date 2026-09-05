@@ -50,7 +50,7 @@ class CfgVerifier {
 				case Branch(_, yes, no):
 					work.push(yes);
 					work.push(no);
-				case Return(_), Throw(_):
+				case Return(_), Throw(_), Rethrow(_):
 			}
 		}
 	}
@@ -83,6 +83,10 @@ class CfgVerifier {
 				case ToDyn(out, value):
 					require(value, available);
 					expect(out, Dyn);
+					define(out, defined, available);
+				case SafeCast(out, value):
+					require(value, available);
+					expect(value, Dyn);
 					define(out, defined, available);
 				case BeginTry(catchBlock, afterBlock):
 					targetBlock(catchBlock, blocks);
@@ -245,8 +249,9 @@ class CfgVerifier {
 					require(value, available);
 					if (!sameType(value.type, fn.result))
 						throw 'Wrong CFG return type in ${fn.name}';
-				case Throw(value):
+				case Throw(value), Rethrow(value):
 					require(value, available);
+					expect(value, Dyn);
 				case Jump(target):
 					targetBlock(target, blocks);
 				case Branch(condition, yes, no):
