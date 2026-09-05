@@ -66,10 +66,10 @@ class RuntimeDomain {
 			throw new RuntimeError(RuntimeStatus.Incompatible, 'Runtime domain "$name" requires explicit shutdown after failure');
 		var previous = current,
 			previousModule = currentModule,
-			state:Null<String> = null;
+			state:Null<RuntimeStateEnvelope> = null;
 		try {
 			if (previous is ReloadablePlugin)
-				state = cast(previous, ReloadablePlugin).saveState();
+				state = new RuntimeStateEnvelope(cast(previous, ReloadablePlugin).saveState());
 		} catch (error:Dynamic) {
 			dispose(module);
 			throw error;
@@ -86,7 +86,7 @@ class RuntimeDomain {
 			plugin.activate();
 			candidateActivated = true;
 			if (state != null && plugin is ReloadablePlugin)
-				cast(plugin, ReloadablePlugin).restoreState(state);
+				cast(plugin, ReloadablePlugin).restoreState(state.payload);
 		} catch (error:Dynamic) {
 			if (candidateActivated)
 				try

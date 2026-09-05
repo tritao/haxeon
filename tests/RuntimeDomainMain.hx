@@ -2,9 +2,11 @@ import runtime.Plugin;
 import runtime.ReloadablePlugin;
 import runtime.RuntimeDomain;
 import runtime.RuntimeDomain.RuntimeDomainStatus;
+import runtime.RuntimeStateEnvelope;
 
 class RuntimeDomainMain {
 	static function main():Void {
+		testStateEnvelope();
 		var events:Array<String> = [], domain = new RuntimeDomain("search");
 		var first = new TestPlugin("first", events),
 			second = new TestPlugin("second", events);
@@ -67,6 +69,22 @@ class RuntimeDomainMain {
 		testRestoreFailure(events);
 		testRecoveryFailure(events);
 		Sys.println("PASS: runtime domain lifecycle and state migration contract");
+	}
+
+	static function testStateEnvelope():Void {
+		var encoded = new RuntimeStateEnvelope("cursor:4").encode();
+		if (RuntimeStateEnvelope.decode(encoded).payload != "cursor:4"
+			|| encoded.compare(new RuntimeStateEnvelope("cursor:4").encode()) != 0)
+			throw "runtime state envelope did not round trip deterministically";
+		var unsupported = encoded.sub(0, encoded.length);
+		unsupported.set(3, RuntimeStateEnvelope.VERSION + 1);
+		try {
+			RuntimeStateEnvelope.decode(unsupported);
+			throw "runtime state envelope accepted an unknown version";
+		} catch (error:String) {
+			if (error != "Unsupported runtime state envelope")
+				throw error;
+		}
 	}
 
 	static function testRestoreFailure(events:Array<String>):Void {
