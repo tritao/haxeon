@@ -755,6 +755,14 @@ class Compiler {
 		for (dependency in [for (dependency in dependencies.keys()) dependency])
 			if (nativePrefixExists(dependency))
 				dependencies.remove(dependency);
+		for (dependency in [for (dependency in dependencies.keys()) dependency]) {
+			var sourceModule = sourceModuleForDependency(dependency);
+			if (sourceModule != null && sourceModule != dependency) {
+				dependencies.remove(dependency);
+				dependencies.set(sourceModule, true);
+			} else if (sourceModule == null && isPlatformDependency(dependency))
+				dependencies.remove(dependency);
+		}
 		state.dependencies = [for (name in dependencies.keys()) name];
 		state.dependencies.sort(Reflect.compare);
 		var typeAliases = importAliases(state.ast.imports, state.ast.importAliases);
@@ -1523,6 +1531,24 @@ class Compiler {
 				return true;
 		}
 		return false;
+	}
+
+	function sourceModuleForDependency(path:String):Null<String> {
+		var candidate = path;
+		while (true) {
+			if (modules.exists(candidate))
+				return candidate;
+			var separator = candidate.lastIndexOf(".");
+			if (separator < 0)
+				return null;
+			candidate = candidate.substr(0, separator);
+		}
+	}
+
+	static function isPlatformDependency(path:String):Bool {
+		var root = path.split(".")[0];
+		return root == "haxe" || root == "sys" || root == "hl" || root == "Array" || root == "Math" || root == "Reflect" || root == "Std"
+			|| root == "StringTools" || root == "Type";
 	}
 
 	static function scanQualifiedDependency(name:String, dependencies:Map<String, Bool>):Void {
