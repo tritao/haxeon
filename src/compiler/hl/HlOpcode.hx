@@ -13,6 +13,12 @@ enum abstract HlOpcode(Int) from Int to Int {
 	var Mul = 9;
 	var SDiv = 10;
 	var SMod = 12;
+	var Shl = 14;
+	var SShr = 15;
+	var UShr = 16;
+	var And = 17;
+	var Or = 18;
+	var Xor = 19;
 	var Label = 66;
 	var Call0 = 24;
 	var Call1 = 25;

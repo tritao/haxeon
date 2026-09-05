@@ -220,6 +220,24 @@ class HlLower {
 					case Mod(output, left, right):
 						instructions.push(HlInstruction.Mod(defineRegister(output, registers, registerTypes), requireRegister(left, registers),
 							requireRegister(right, registers)));
+					case BitAnd(output, left, right):
+						instructions.push(HlInstruction.BitAnd(defineRegister(output, registers, registerTypes), requireRegister(left, registers),
+							requireRegister(right, registers)));
+					case BitXor(output, left, right):
+						instructions.push(HlInstruction.BitXor(defineRegister(output, registers, registerTypes), requireRegister(left, registers),
+							requireRegister(right, registers)));
+					case BitOr(output, left, right):
+						instructions.push(HlInstruction.BitOr(defineRegister(output, registers, registerTypes), requireRegister(left, registers),
+							requireRegister(right, registers)));
+					case ShiftLeft(output, left, right):
+						instructions.push(HlInstruction.ShiftLeft(defineRegister(output, registers, registerTypes), requireRegister(left, registers),
+							requireRegister(right, registers)));
+					case ShiftRight(output, left, right):
+						instructions.push(HlInstruction.ShiftRight(defineRegister(output, registers, registerTypes), requireRegister(left, registers),
+							requireRegister(right, registers)));
+					case UnsignedShiftRight(output, left, right):
+						instructions.push(HlInstruction.UnsignedShiftRight(defineRegister(output, registers, registerTypes), requireRegister(left, registers),
+							requireRegister(right, registers)));
 					case Less(output, left, right):
 						lowerComparison(output, left, right, 0, registers, registerTypes, instructions);
 					case LessEqual(output, left, right):

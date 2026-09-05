@@ -197,7 +197,8 @@ class IrVerifier {
 				require(values, a);
 				require(values, b);
 				define(values, out);
-			case Mod(out, a, b):
+			case Mod(out, a, b), BitAnd(out, a, b), BitXor(out, a, b), BitOr(out, a, b), ShiftLeft(out, a, b), ShiftRight(out, a, b),
+				UnsignedShiftRight(out, a, b):
 				expect(out, I32);
 				expect(a, I32);
 				expect(b, I32);

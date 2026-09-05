@@ -184,6 +184,24 @@ class CfgBuilder {
 	public function mod(a, b):CfgValue
 		return binary(a, b, 7);
 
+	public function bitAnd(a, b):CfgValue
+		return binary(a, b, 8);
+
+	public function bitXor(a, b):CfgValue
+		return binary(a, b, 9);
+
+	public function bitOr(a, b):CfgValue
+		return binary(a, b, 10);
+
+	public function shiftLeft(a, b):CfgValue
+		return binary(a, b, 11);
+
+	public function shiftRight(a, b):CfgValue
+		return binary(a, b, 12);
+
+	public function unsignedShiftRight(a, b):CfgValue
+		return binary(a, b, 13);
+
 	public function less(a, b):CfgValue
 		return binary(a, b, 4, Bool);
 
@@ -285,6 +303,12 @@ class CfgBuilder {
 			case 2: Mul(out, a, b);
 			case 3: Div(out, a, b);
 			case 7: Mod(out, a, b);
+			case 8: BitAnd(out, a, b);
+			case 9: BitXor(out, a, b);
+			case 10: BitOr(out, a, b);
+			case 11: ShiftLeft(out, a, b);
+			case 12: ShiftRight(out, a, b);
+			case 13: UnsignedShiftRight(out, a, b);
 			case 4: Less(out, a, b);
 			case 5: LessEqual(out, a, b);
 			default: Equal(out, a, b);

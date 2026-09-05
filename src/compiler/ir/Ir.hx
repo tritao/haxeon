@@ -54,6 +54,12 @@ enum IrInstruction {
 	Mul(output:IrValue, left:IrValue, right:IrValue);
 	Div(output:IrValue, left:IrValue, right:IrValue);
 	Mod(output:IrValue, left:IrValue, right:IrValue);
+	BitAnd(output:IrValue, left:IrValue, right:IrValue);
+	BitXor(output:IrValue, left:IrValue, right:IrValue);
+	BitOr(output:IrValue, left:IrValue, right:IrValue);
+	ShiftLeft(output:IrValue, left:IrValue, right:IrValue);
+	ShiftRight(output:IrValue, left:IrValue, right:IrValue);
+	UnsignedShiftRight(output:IrValue, left:IrValue, right:IrValue);
 	Less(output:IrValue, left:IrValue, right:IrValue);
 	LessEqual(output:IrValue, left:IrValue, right:IrValue);
 	Equal(output:IrValue, left:IrValue, right:IrValue);

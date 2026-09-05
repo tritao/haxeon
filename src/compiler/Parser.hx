@@ -683,21 +683,48 @@ class Parser {
 	}
 
 	function parseAnd():AstExpression {
-		var expression = parseComparison();
+		var expression = parseBitOr();
 		while (match(TokenKind.AndAnd)) {
-			var right = parseComparison(),
+			var right = parseBitOr(),
 				span = expressionSpan(expression).merge(expressionSpan(right));
 			expression = And(expression, right, span);
 		}
 		return expression;
 	}
 
+	function parseBitOr():AstExpression {
+		var expression = parseBitXor();
+		while (match(TokenKind.Pipe)) {
+			var right = parseBitXor();
+			expression = BitOr(expression, right, expressionSpan(expression).merge(expressionSpan(right)));
+		}
+		return expression;
+	}
+
+	function parseBitXor():AstExpression {
+		var expression = parseBitAnd();
+		while (match(TokenKind.Caret)) {
+			var right = parseBitAnd();
+			expression = BitXor(expression, right, expressionSpan(expression).merge(expressionSpan(right)));
+		}
+		return expression;
+	}
+
+	function parseBitAnd():AstExpression {
+		var expression = parseComparison();
+		while (match(TokenKind.Ampersand)) {
+			var right = parseComparison();
+			expression = BitAnd(expression, right, expressionSpan(expression).merge(expressionSpan(right)));
+		}
+		return expression;
+	}
+
 	function parseComparison():AstExpression {
-		var expression = parseAdditive();
+		var expression = parseShift();
 		if (check(TokenKind.Less) || check(TokenKind.LessEqual) || check(TokenKind.Greater) || check(TokenKind.GreaterEqual) || check(TokenKind.EqualEqual)
 			|| check(TokenKind.NotEqual)) {
 			var operation = advance().kind;
-			var right = parseAdditive();
+			var right = parseShift();
 			var span = expressionSpan(expression).merge(expressionSpan(right));
 			expression = switch operation {
 				case TokenKind.Less: Less(expression, right, span);
@@ -710,6 +737,29 @@ class Parser {
 		}
 		return expression;
 	}
+
+	function parseShift():AstExpression {
+		var expression = parseAdditive();
+		while (isAdjacentPair(TokenKind.Less) || isAdjacentPair(TokenKind.Greater)) {
+			var leftShift = check(TokenKind.Less),
+				unsigned = !leftShift && isAdjacentTriple(TokenKind.Greater);
+			advance();
+			advance();
+			if (unsigned)
+				advance();
+			var right = parseAdditive(),
+				span = expressionSpan(expression).merge(expressionSpan(right));
+			expression = leftShift ? ShiftLeft(expression, right,
+				span) : unsigned ? UnsignedShiftRight(expression, right, span) : ShiftRight(expression, right, span);
+		}
+		return expression;
+	}
+
+	function isAdjacentPair(kind:TokenKind):Bool
+		return check(kind) && peekKind(1) == kind && current().span.end == tokens[position + 1].span.start;
+
+	function isAdjacentTriple(kind:TokenKind):Bool
+		return isAdjacentPair(kind) && peekKind(2) == kind && tokens[position + 1].span.end == tokens[position + 2].span.start;
 
 	function parseAdditive():AstExpression {
 		var expression = parseMultiplicative();
@@ -1313,11 +1363,12 @@ class Parser {
 	static function expressionSpan(expression:AstExpression)
 		return switch expression {
 			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), BoolLiteral(_, span), NullLiteral(span), Variable(_, span),
-				Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span), Div(_, _, span), Mod(_, _, span), Negate(_, span), Less(_, _, span),
-				LessEqual(_, _, span), Greater(_, _, span), GreaterEqual(_, _, span), Equal(_, _, span), NotEqual(_, _, span), Not(_, span), Call(_, _, span),
-				MethodCall(_, _, _, span), New(_, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span), PostfixIncrement(_, _, span),
-				Lambda(_, _, span), And(_, _, span), Or(_, _, span), Conditional(_, _, _, span), BlockExpression(_, _, span), ThrowExpression(_, span),
-				SwitchExpression(_, _, _, span), Cast(_, _, span): span;
+				Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span), Div(_, _, span), Mod(_, _, span), BitAnd(_, _, span),
+				BitXor(_, _, span), BitOr(_, _, span), ShiftLeft(_, _, span), ShiftRight(_, _, span), UnsignedShiftRight(_, _, span), Negate(_, span),
+				Less(_, _, span), LessEqual(_, _, span), Greater(_, _, span), GreaterEqual(_, _, span), Equal(_, _, span), NotEqual(_, _, span), Not(_, span),
+				Call(_, _, span), MethodCall(_, _, _, span), New(_, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span),
+				PostfixIncrement(_, _, span), Lambda(_, _, span), And(_, _, span), Or(_, _, span), Conditional(_, _, _, span), BlockExpression(_, _, span),
+				ThrowExpression(_, span), SwitchExpression(_, _, _, span), Cast(_, _, span): span;
 			case ObjectLiteral(_, span), ArrayLiteral(_, span), ArrayComprehension(_, _, _, _, _, span), Range(_, _, span): span;
 		}
 

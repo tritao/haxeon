@@ -1117,6 +1117,15 @@ class Compiler {
 			case Mul(a, b, s): Mul(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
 			case Div(a, b, s): Div(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
 			case Mod(a, b, s): Mod(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
+			case BitAnd(a, b, s): BitAnd(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
+			case BitXor(a, b, s): BitXor(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
+			case BitOr(a, b, s): BitOr(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
+			case ShiftLeft(a, b,
+				s): ShiftLeft(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
+			case ShiftRight(a, b,
+				s): ShiftRight(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
+			case UnsignedShiftRight(a, b, s):
+				UnsignedShiftRight(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
 			case Negate(value, s): Negate(canonicalExpression(value, module, entry, locals, aliases), s);
 			case Less(a, b, s): Less(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
 			case LessEqual(a, b,
@@ -1396,8 +1405,9 @@ class Compiler {
 
 	static function scanExpression(e, dependencies):Void
 		switch e {
-			case Add(a, b, _), Sub(a, b, _), Mul(a, b, _), Div(a, b, _), Mod(a, b, _), Less(a, b, _), LessEqual(a, b, _), Greater(a, b, _),
-				GreaterEqual(a, b, _), Equal(a, b, _), NotEqual(a, b, _):
+			case Add(a, b, _), Sub(a, b, _), Mul(a, b, _), Div(a, b, _), Mod(a, b, _), BitAnd(a, b, _), BitXor(a, b, _), BitOr(a, b, _), ShiftLeft(a, b, _),
+				ShiftRight(a, b, _), UnsignedShiftRight(a, b, _), Less(a, b, _), LessEqual(a, b, _), Greater(a, b, _), GreaterEqual(a, b, _), Equal(a, b, _),
+				NotEqual(a, b, _):
 				scanExpression(a, dependencies);
 				scanExpression(b, dependencies);
 			case Not(value, _):
@@ -1565,8 +1575,9 @@ class Compiler {
 			case Variable(name, _):
 				if (name.indexOf(".") >= 0)
 					calls.set(name, true);
-			case Add(a, b, _), Sub(a, b, _), Mul(a, b, _), Div(a, b, _), Mod(a, b, _), Less(a, b, _), LessEqual(a, b, _), Greater(a, b, _),
-				GreaterEqual(a, b, _), Equal(a, b, _), NotEqual(a, b, _):
+			case Add(a, b, _), Sub(a, b, _), Mul(a, b, _), Div(a, b, _), Mod(a, b, _), BitAnd(a, b, _), BitXor(a, b, _), BitOr(a, b, _), ShiftLeft(a, b, _),
+				ShiftRight(a, b, _), UnsignedShiftRight(a, b, _), Less(a, b, _), LessEqual(a, b, _), Greater(a, b, _), GreaterEqual(a, b, _), Equal(a, b, _),
+				NotEqual(a, b, _):
 				scanCallExpression(a, calls, aliases);
 				scanCallExpression(b, calls, aliases);
 			case Not(value, _):
@@ -1699,8 +1710,10 @@ class Compiler {
 					collectLambdaExpression(argument, functionName, module, generatedByModule);
 			case Member(object, _, _):
 				collectLambdaExpression(object, functionName, module, generatedByModule);
-			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), Less(left, right, _),
-				LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _), NotEqual(left, right, _):
+			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _),
+				BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _), UnsignedShiftRight(left, right, _),
+				Less(left, right, _), LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _),
+				NotEqual(left, right, _):
 				collectLambdaExpression(left, functionName, module, generatedByModule);
 				collectLambdaExpression(right, functionName, module, generatedByModule);
 			case Not(value, _):

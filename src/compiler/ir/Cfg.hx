@@ -36,6 +36,12 @@ enum CfgInstruction {
 	Mul(output:CfgValue, left:CfgValue, right:CfgValue);
 	Div(output:CfgValue, left:CfgValue, right:CfgValue);
 	Mod(output:CfgValue, left:CfgValue, right:CfgValue);
+	BitAnd(output:CfgValue, left:CfgValue, right:CfgValue);
+	BitXor(output:CfgValue, left:CfgValue, right:CfgValue);
+	BitOr(output:CfgValue, left:CfgValue, right:CfgValue);
+	ShiftLeft(output:CfgValue, left:CfgValue, right:CfgValue);
+	ShiftRight(output:CfgValue, left:CfgValue, right:CfgValue);
+	UnsignedShiftRight(output:CfgValue, left:CfgValue, right:CfgValue);
 	Less(output:CfgValue, left:CfgValue, right:CfgValue);
 	LessEqual(output:CfgValue, left:CfgValue, right:CfgValue);
 	Equal(output:CfgValue, left:CfgValue, right:CfgValue);

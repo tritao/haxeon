@@ -66,6 +66,50 @@ class IrBuilder {
 		return out;
 	}
 
+	public function mod(a:IrValue, b:IrValue):IrValue {
+		var out = temporary(I32);
+		emit(Mod(out, a, b));
+		return out;
+	}
+
+	public function bitAnd(a:IrValue, b:IrValue):IrValue
+		return bitwise(a, b, 0);
+
+	public function bitXor(a:IrValue, b:IrValue):IrValue
+		return bitwise(a, b, 1);
+
+	public function bitOr(a:IrValue, b:IrValue):IrValue
+		return bitwise(a, b, 2);
+
+	public function shiftLeft(a:IrValue, b:IrValue):IrValue
+		return shift(a, b, 0);
+
+	public function shiftRight(a:IrValue, b:IrValue):IrValue
+		return shift(a, b, 1);
+
+	public function unsignedShiftRight(a:IrValue, b:IrValue):IrValue
+		return shift(a, b, 2);
+
+	function bitwise(a:IrValue, b:IrValue, operation:Int):IrValue {
+		var out = temporary(I32);
+		emit(switch operation {
+			case 0: BitAnd(out, a, b);
+			case 1: BitXor(out, a, b);
+			default: BitOr(out, a, b);
+		});
+		return out;
+	}
+
+	function shift(a:IrValue, b:IrValue, operation:Int):IrValue {
+		var out = temporary(I32);
+		emit(switch operation {
+			case 0: ShiftLeft(out, a, b);
+			case 1: ShiftRight(out, a, b);
+			default: UnsignedShiftRight(out, a, b);
+		});
+		return out;
+	}
+
 	public function less(a:IrValue, b:IrValue):IrValue
 		return compare(a, b, 0);
 

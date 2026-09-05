@@ -103,6 +103,12 @@ enum AstExpression {
 	Mul(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Div(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Mod(left:AstExpression, right:AstExpression, span:SourceSpan);
+	BitAnd(left:AstExpression, right:AstExpression, span:SourceSpan);
+	BitXor(left:AstExpression, right:AstExpression, span:SourceSpan);
+	BitOr(left:AstExpression, right:AstExpression, span:SourceSpan);
+	ShiftLeft(left:AstExpression, right:AstExpression, span:SourceSpan);
+	ShiftRight(left:AstExpression, right:AstExpression, span:SourceSpan);
+	UnsignedShiftRight(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Negate(value:AstExpression, span:SourceSpan);
 	Less(left:AstExpression, right:AstExpression, span:SourceSpan);
 	LessEqual(left:AstExpression, right:AstExpression, span:SourceSpan);

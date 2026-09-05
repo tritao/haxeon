@@ -873,6 +873,12 @@ class IrGenerator {
 			case TMul(a, b): builder.mul(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TDiv(a, b): builder.div(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TMod(a, b): builder.mod(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
+			case TBitAnd(a, b): builder.bitAnd(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
+			case TBitXor(a, b): builder.bitXor(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
+			case TBitOr(a, b): builder.bitOr(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
+			case TShiftLeft(a, b): builder.shiftLeft(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
+			case TShiftRight(a, b): builder.shiftRight(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
+			case TUnsignedShiftRight(a, b): builder.unsignedShiftRight(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TNegate(value):
 				var typed = lowerExpression(value, builder, localTypes);
 				value.type == TInt ? builder.sub(builder.constInt(0), typed) : builder.sub(builder.constFloat(0), typed);

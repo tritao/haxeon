@@ -117,7 +117,8 @@ class CfgVerifier {
 					if (!sameType(out.type, a.type) || !sameType(a.type, b.type) || (!sameType(a.type, I32) && !sameType(a.type, F64)))
 						throw "CFG arithmetic requires matching numeric values";
 					define(out, defined, available);
-				case Mod(out, a, b):
+				case Mod(out, a, b), BitAnd(out, a, b), BitXor(out, a, b), BitOr(out, a, b), ShiftLeft(out, a, b), ShiftRight(out, a, b),
+					UnsignedShiftRight(out, a, b):
 					require(a, available);
 					require(b, available);
 					expect(out, I32);

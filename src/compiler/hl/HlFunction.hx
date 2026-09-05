@@ -33,6 +33,12 @@ enum HlInstruction {
 	Mul(destination:Int, left:Int, right:Int);
 	Div(destination:Int, left:Int, right:Int);
 	Mod(destination:Int, left:Int, right:Int);
+	BitAnd(destination:Int, left:Int, right:Int);
+	BitXor(destination:Int, left:Int, right:Int);
+	BitOr(destination:Int, left:Int, right:Int);
+	ShiftLeft(destination:Int, left:Int, right:Int);
+	ShiftRight(destination:Int, left:Int, right:Int);
+	UnsignedShiftRight(destination:Int, left:Int, right:Int);
 	Call0(destination:Int, functionIndex:Int);
 	Call1(destination:Int, functionIndex:Int, argument:Int);
 	Call2(destination:Int, functionIndex:Int, argument1:Int, argument2:Int);

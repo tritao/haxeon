@@ -31,6 +31,12 @@ class IrInstructionCodec {
 		"Mul" => true,
 		"Div" => true,
 		"Mod" => true,
+		"BitAnd" => true,
+		"BitXor" => true,
+		"BitOr" => true,
+		"ShiftLeft" => true,
+		"ShiftRight" => true,
+		"UnsignedShiftRight" => true,
 		"Less" => true,
 		"LessEqual" => true,
 		"Equal" => true,
@@ -159,6 +165,24 @@ class IrInstructionCodec {
 			case "Mod":
 				arity(3);
 				Mod(readValue(input, values), readValue(input, values), readValue(input, values));
+			case "BitAnd":
+				arity(3);
+				BitAnd(readValue(input, values), readValue(input, values), readValue(input, values));
+			case "BitXor":
+				arity(3);
+				BitXor(readValue(input, values), readValue(input, values), readValue(input, values));
+			case "BitOr":
+				arity(3);
+				BitOr(readValue(input, values), readValue(input, values), readValue(input, values));
+			case "ShiftLeft":
+				arity(3);
+				ShiftLeft(readValue(input, values), readValue(input, values), readValue(input, values));
+			case "ShiftRight":
+				arity(3);
+				ShiftRight(readValue(input, values), readValue(input, values), readValue(input, values));
+			case "UnsignedShiftRight":
+				arity(3);
+				UnsignedShiftRight(readValue(input, values), readValue(input, values), readValue(input, values));
 			case "Less":
 				arity(3);
 				Less(readValue(input, values), readValue(input, values), readValue(input, values));

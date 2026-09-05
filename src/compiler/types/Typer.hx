@@ -926,6 +926,12 @@ class Typer {
 			case Mul(left, right, span): numeric(left, right, scope, 2, span);
 			case Div(left, right, span): numeric(left, right, scope, 3, span);
 			case Mod(left, right, span): modulo(left, right, scope, span);
+			case BitAnd(left, right, span): bitwise(left, right, scope, 0, span);
+			case BitXor(left, right, span): bitwise(left, right, scope, 1, span);
+			case BitOr(left, right, span): bitwise(left, right, scope, 2, span);
+			case ShiftLeft(left, right, span): bitwise(left, right, scope, 3, span);
+			case ShiftRight(left, right, span): bitwise(left, right, scope, 4, span);
+			case UnsignedShiftRight(left, right, span): bitwise(left, right, scope, 5, span);
 			case Negate(value, span):
 				var typedValue = typeExpression(value, scope);
 				if (!sameType(typedValue.type, TInt) && !sameType(typedValue.type, TFloat))
@@ -1885,9 +1891,10 @@ class Typer {
 			case Call(_, arguments, _):
 				for (argument in arguments)
 					collectMutableCaptureExpression(argument, outerDeclared, result);
-			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), Less(left, right, _),
-				LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _), NotEqual(left, right, _),
-				And(left, right, _), Or(left, right, _):
+			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _),
+				BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _), UnsignedShiftRight(left, right, _),
+				Less(left, right, _), LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _),
+				NotEqual(left, right, _), And(left, right, _), Or(left, right, _):
 				collectMutableCaptureExpression(left, outerDeclared, result);
 				collectMutableCaptureExpression(right, outerDeclared, result);
 			case Negate(value, _), Not(value, _):
@@ -1953,8 +1960,10 @@ class Typer {
 					names.set(name.substr(0, separator), true);
 				for (argument in arguments)
 					collectExpressionVariables(argument, names);
-			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), Less(left, right, _),
-				LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _), NotEqual(left, right, _):
+			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _),
+				BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _), UnsignedShiftRight(left, right, _),
+				Less(left, right, _), LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _),
+				NotEqual(left, right, _):
 				collectExpressionVariables(left, names);
 				collectExpressionVariables(right, names);
 			case Negate(value, _):
@@ -2181,6 +2190,21 @@ class Typer {
 		if (!sameType(left.type, TInt) || !sameType(right.type, TInt))
 			fail("E1010", "Modulo requires matching Int operands", span);
 		return new TypedExpression(TMod(left, right), TInt, span);
+	}
+
+	function bitwise(a, b, scope, operation:Int, span):TypedExpression {
+		var left = typeExpression(a, scope), right = typeExpression(b, scope);
+		if (!sameType(left.type, TInt) || !sameType(right.type, TInt))
+			fail("E1010", "Bitwise operators require Int operands", span);
+		var expression = switch operation {
+			case 0: TBitAnd(left, right);
+			case 1: TBitXor(left, right);
+			case 2: TBitOr(left, right);
+			case 3: TShiftLeft(left, right);
+			case 4: TShiftRight(left, right);
+			default: TUnsignedShiftRight(left, right);
+		};
+		return new TypedExpression(expression, TInt, span);
 	}
 
 	function comparison(a, b, scope, operation, span):TypedExpression {

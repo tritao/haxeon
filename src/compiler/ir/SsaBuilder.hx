@@ -330,6 +330,24 @@ class SsaBuilder {
 				case Mod(out, a, b):
 					var result = define(out);
 					target.instructions.push(Mod(result, resolve(a), resolve(b)));
+				case BitAnd(out, a, b):
+					var result = define(out);
+					target.instructions.push(BitAnd(result, resolve(a), resolve(b)));
+				case BitXor(out, a, b):
+					var result = define(out);
+					target.instructions.push(BitXor(result, resolve(a), resolve(b)));
+				case BitOr(out, a, b):
+					var result = define(out);
+					target.instructions.push(BitOr(result, resolve(a), resolve(b)));
+				case ShiftLeft(out, a, b):
+					var result = define(out);
+					target.instructions.push(ShiftLeft(result, resolve(a), resolve(b)));
+				case ShiftRight(out, a, b):
+					var result = define(out);
+					target.instructions.push(ShiftRight(result, resolve(a), resolve(b)));
+				case UnsignedShiftRight(out, a, b):
+					var result = define(out);
+					target.instructions.push(UnsignedShiftRight(result, resolve(a), resolve(b)));
 				case Less(out, a, b):
 					var result = define(out);
 					target.instructions.push(Less(result, resolve(a), resolve(b)));
