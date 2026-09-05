@@ -19,6 +19,7 @@ import compiler.ir.IrGenerator;
 import compiler.ir.IrTypeCodec;
 import compiler.ir.IrValueTableCodec;
 import compiler.ir.IrTerminatorCodec;
+import compiler.ir.IrInstructionCodec;
 import compiler.ir.SsaBuilder;
 import compiler.ir.Cfg.CfgInstruction;
 import compiler.ir.Cfg.CfgBlock;
@@ -33,6 +34,7 @@ import compiler.types.TypeRegistry.TypeCompatibility;
 import compiler.modules.Compiler;
 import haxe.io.Bytes as HaxeBytes;
 import haxe.io.BytesInput;
+import Type as HaxeType;
 
 class TestMain {
 	static function main():Void {
@@ -244,6 +246,24 @@ class TestMain {
 		referenceBytes.writeInt32(99);
 		expectStringError(function() IrValueTableCodec.readReference(new BytesInput(referenceBytes.getBytes()), badReference), "Unknown IR value reference");
 		Sys.println("PASS: canonical IR value tables preserve identity and reject unknown references");
+		var instructionProgram = Frontend.compile("function add(a:Int, b:Int):Int { var sum = a + b; return sum; } function main():Int { return add(20, 22); }");
+		for (fn in instructionProgram.functions) {
+			var instructionValues:Map<Int, compiler.ir.Ir.IrValue> = [];
+			for (argument in fn.arguments)
+				instructionValues.set(argument.id, argument);
+			for (block in fn.blocks)
+				for (instruction in block.instructions)
+					for (parameter in HaxeType.enumParameters(instruction))
+						collectInstructionValues(parameter, instructionValues);
+			for (block in fn.blocks)
+				for (instruction in block.instructions) {
+					var encoded = IrInstructionCodec.encode(instruction),
+						decoded = IrInstructionCodec.decode(encoded, instructionValues);
+					if (Std.string(decoded) != Std.string(instruction))
+						throw "IR instruction did not round trip";
+				}
+		}
+		Sys.println("PASS: explicit IR instructions round trip through canonical value references");
 		var terminatorOutput = new haxe.io.BytesOutput(),
 			terminatorBlocks:Map<Int, Bool> = [];
 		terminatorOutput.bigEndian = false;
@@ -450,6 +470,15 @@ class TestMain {
 			if (error != expected)
 				throw error;
 		}
+	}
+
+	static function collectInstructionValues(value:Dynamic, values:Map<Int, compiler.ir.Ir.IrValue>):Void {
+		if (Std.isOfType(value, compiler.ir.Ir.IrValue)) {
+			var irValue:compiler.ir.Ir.IrValue = cast value;
+			values.set(irValue.id, irValue);
+		} else if (Std.isOfType(value, Array))
+			for (item in (cast value : Array<Dynamic>))
+				collectInstructionValues(Reflect.hasField(item, "value") ? Reflect.field(item, "value") : item, values);
 	}
 
 	static function decodeIndex(input:BytesInput):Int {
