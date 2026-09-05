@@ -691,9 +691,10 @@ class Parser {
 			var end = consume(TokenKind.RightBrace).span;
 			return parsePostfix(ObjectLiteral(fields, start.merge(end)));
 		}
-		if (match(TokenKind.Identifier)) {
-			var name = previous().text;
-			var start = previous().span;
+		if (isNameToken(current().kind)) {
+			var nameToken = consumeName(),
+				name = nameToken.text,
+				start = nameToken.span;
 			while (match(TokenKind.Dot)) {
 				name += "." + consumeName().text;
 			}
@@ -908,11 +909,17 @@ class Parser {
 	}
 
 	function consumeName():Token {
-		return switch current().kind {
-			case TokenKind.Identifier, TokenKind.TypeInt, TokenKind.TypeBool, TokenKind.TypeFloat, TokenKind.TypeString, TokenKind.Void: advance();
+		return if (isNameToken(current().kind)) advance(); else {
+			fail(current(), 'Expected name, got ${current().kind}');
+			null;
+		};
+	}
+
+	static function isNameToken(kind:TokenKind):Bool {
+		return switch kind {
+			case TokenKind.Identifier, TokenKind.TypeInt, TokenKind.TypeBool, TokenKind.TypeFloat, TokenKind.TypeString, TokenKind.Void: true;
 			default:
-				fail(current(), 'Expected name, got ${current().kind}');
-				null;
+				false;
 		};
 	}
 
