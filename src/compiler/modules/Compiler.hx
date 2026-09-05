@@ -674,6 +674,7 @@ class Compiler {
 			case TString: Bytes;
 			case TDynamic: Dyn;
 			case TNever: throw "Never is not a runtime ABI type";
+			case TRange: throw "Range is not a runtime ABI type";
 			case TVoid: Void;
 			case TClass(name): Obj(name);
 			case TMap(_, _): Abstract("map_string_i32");
@@ -1090,6 +1091,8 @@ class Compiler {
 			case ArrayComprehension(keyName, valueName, iterable, value, s):
 				ArrayComprehension(keyName, valueName, canonicalExpression(iterable, module, entry, locals, aliases),
 					canonicalExpression(value, module, entry, locals, aliases), s);
+			case Range(start, end,
+				s): Range(canonicalExpression(start, module, entry, locals, aliases), canonicalExpression(end, module, entry, locals, aliases), s);
 			case Call(name, args, s):
 				var resolved = name;
 				var dot = name.indexOf("."),
@@ -1355,6 +1358,9 @@ class Compiler {
 			case ArrayComprehension(_, _, iterable, value, _):
 				scanExpression(iterable, dependencies);
 				scanExpression(value, dependencies);
+			case Range(start, end, _):
+				scanExpression(start, dependencies);
+				scanExpression(end, dependencies);
 			case Index(array, offset, _):
 				scanExpression(array, dependencies);
 				scanExpression(offset, dependencies);
@@ -1514,6 +1520,9 @@ class Compiler {
 			case ArrayComprehension(_, _, iterable, value, _):
 				scanCallExpression(iterable, calls, aliases);
 				scanCallExpression(value, calls, aliases);
+			case Range(start, end, _):
+				scanCallExpression(start, calls, aliases);
+				scanCallExpression(end, calls, aliases);
 			case New(typeName, args, _):
 				calls.set(typeName + ".new", true);
 				for (a in args)
@@ -1637,6 +1646,9 @@ class Compiler {
 			case ArrayComprehension(_, _, iterable, value, _):
 				collectLambdaExpression(iterable, functionName, module, generatedByModule);
 				collectLambdaExpression(value, functionName, module, generatedByModule);
+			case Range(start, end, _):
+				collectLambdaExpression(start, functionName, module, generatedByModule);
+				collectLambdaExpression(end, functionName, module, generatedByModule);
 			case New(_, args, _):
 				for (argument in args)
 					collectLambdaExpression(argument, functionName, module, generatedByModule);

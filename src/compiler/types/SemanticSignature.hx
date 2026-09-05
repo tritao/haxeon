@@ -15,6 +15,7 @@ class SemanticSignature {
 			case TString: "String";
 			case TDynamic: "Dynamic";
 			case TNever: "Never";
+			case TRange: "Range";
 			case TVoid: "Void";
 			case TClass(name): 'class:$name';
 			case TInterface(name): 'interface:$name';

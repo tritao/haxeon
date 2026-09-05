@@ -87,6 +87,7 @@ enum AstExpression {
 	ObjectLiteral(fields:Array<AstObjectField>, span:SourceSpan);
 	ArrayLiteral(values:Array<AstExpression>, span:SourceSpan);
 	ArrayComprehension(keyName:String, valueName:Null<String>, iterable:AstExpression, value:AstExpression, span:SourceSpan);
+	Range(start:AstExpression, end:AstExpression, span:SourceSpan);
 	Call(name:String, arguments:Array<AstExpression>, span:SourceSpan);
 	MethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan);
 	New(typeName:String, arguments:Array<AstExpression>, span:SourceSpan);

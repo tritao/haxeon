@@ -503,6 +503,13 @@ class Parser {
 
 	function parseExpression():AstExpression {
 		var expression = parseOr();
+		if (check(TokenKind.Dot) && peekKind(1) == TokenKind.Dot && peekKind(2) == TokenKind.Dot) {
+			advance();
+			advance();
+			advance();
+			var end = parseOr();
+			expression = Range(expression, end, expressionSpan(expression).merge(expressionSpan(end)));
+		}
 		if (match(TokenKind.Question)) {
 			var whenTrue = parseExpression();
 			consume(TokenKind.Colon);
@@ -1034,7 +1041,7 @@ class Parser {
 				MethodCall(_, _, _, span), New(_, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span), PostfixIncrement(_, _, span),
 				Lambda(_, _, span), And(_, _, span), Or(_, _, span), Conditional(_, _, _, span), BlockExpression(_, _, span), ThrowExpression(_, span),
 				SwitchExpression(_, _, _, span): span;
-			case ObjectLiteral(_, span), ArrayLiteral(_, span), ArrayComprehension(_, _, _, _, span): span;
+			case ObjectLiteral(_, span), ArrayLiteral(_, span), ArrayComprehension(_, _, _, _, span), Range(_, _, span): span;
 		}
 
 	static function decodeString(text:String):String {

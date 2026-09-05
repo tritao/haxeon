@@ -574,6 +574,7 @@ class Typer {
 						originalIterable = typedIterable,
 						element = switch typedIterable.type {
 							case TArray(element): element;
+							case TRange: TInt;
 							case TMap(key, value):
 								var mapName = RuntimeType.mapName(key, value);
 								if (mapName == null)
@@ -1102,6 +1103,10 @@ class Typer {
 						if (valueName != null)
 							fail("E1014", "Key/value array comprehension requires a Map", span);
 						keyType = element;
+					case TRange:
+						if (valueName != null)
+							fail("E1014", "Key/value array comprehension requires a Map", span);
+						keyType = TInt;
 					case TMap(key, mapValue):
 						if (RuntimeType.mapName(key, mapValue) == null)
 							fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
@@ -1125,6 +1130,12 @@ class Typer {
 				new TypedExpression(TArrayComprehension(loopScope.resolveId(keyName), valueName == null ? null : loopScope.resolveId(valueName),
 					valueName == null ? typedIterable : originalIterable, typedValue),
 					TArray(elementType), span);
+			case Range(start, end, span):
+				var typedStart = typeExpression(start, scope, TInt),
+					typedEnd = typeExpression(end, scope, TInt);
+				if (typedStart.type != TInt || typedEnd.type != TInt)
+					fail("E1014", "Range bounds must be Int values", span);
+				new TypedExpression(TRange(typedStart, typedEnd), TRange, span);
 			case New(typeName, arguments, span):
 				if (!classDecls.exists(typeName) || interfaceDecls.exists(typeName))
 					fail("E1007", 'Unknown class "$typeName"', span);
@@ -1872,6 +1883,9 @@ class Typer {
 			case ArrayComprehension(_, _, iterable, value, _):
 				collectMutableCaptureExpression(iterable, outerDeclared, result);
 				collectMutableCaptureExpression(value, outerDeclared, result);
+			case Range(start, end, _):
+				collectMutableCaptureExpression(start, outerDeclared, result);
+				collectMutableCaptureExpression(end, outerDeclared, result);
 			case Variable(_, _), IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), NewMap(_, _, _):
 		}
 
@@ -1927,6 +1941,9 @@ class Typer {
 			case ArrayComprehension(_, _, iterable, value, _):
 				collectExpressionVariables(iterable, names);
 				collectExpressionVariables(value, names);
+			case Range(start, end, _):
+				collectExpressionVariables(start, names);
+				collectExpressionVariables(end, names);
 			case New(_, arguments, _):
 				for (argument in arguments)
 					collectExpressionVariables(argument, names);

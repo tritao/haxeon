@@ -53,6 +53,7 @@ enum TypedExpressionKind {
 	TObjectLiteral(name:String, fields:Array<TypedObjectField>);
 	TArrayLiteral(values:Array<TypedExpression>);
 	TArrayComprehension(keyName:String, valueName:Null<String>, iterable:TypedExpression, value:TypedExpression);
+	TRange(start:TypedExpression, end:TypedExpression);
 	TCall(name:String, arguments:Array<TypedExpression>);
 	TCollectionCall(receiver:TypedExpression, operation:String, arguments:Array<TypedExpression>);
 	TClosureCall(callee:TypedExpression, arguments:Array<TypedExpression>);

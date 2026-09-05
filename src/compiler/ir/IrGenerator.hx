@@ -704,6 +704,7 @@ class IrGenerator {
 						arrayType = valueName == null ? lowerType(iterable.type) : Array(lowerType(mapTypes.key)),
 						elementType = switch iterable.type {
 							case TArray(element): lowerType(element);
+							case TRange: I32;
 							case TMap(key, _): lowerType(key);
 							default: throw 'For-in iterable is not an array';
 						};
@@ -1031,6 +1032,7 @@ class IrGenerator {
 					},
 					keyType = valueName == null ? switch iterable.type {
 						case TArray(element): element;
+						case TRange: TInt;
 						default: throw "Array comprehension requires an array iterable";
 					} : mapTypes.key,
 					inputType = Array(lowerType(keyType)),
@@ -1070,6 +1072,46 @@ class IrGenerator {
 						builder.load(keyName, lowerType(keyType))
 					], lowerType(mapTypes.value)));
 				builder.arraySet(builder.load(resultName, resultType), builder.load(indexName, I32), lowerExpression(value, builder, localTypes));
+				builder.store(indexName, builder.add(builder.load(indexName, I32), builder.constInt(1)));
+				builder.jump(conditionBlock);
+				builder.select(afterBlock);
+				builder.load(resultName, resultType);
+			case TRange(start, end):
+				var startName = '$' + 'range-start:${expression.span.start}',
+					endName = '$' + 'range-end:${expression.span.start}',
+					differenceName = '$' + 'range-difference:${expression.span.start}',
+					lengthName = '$' + 'range-length:${expression.span.start}',
+					resultName = '$' + 'range-result:${expression.span.start}',
+					indexName = '$' + 'range-index:${expression.span.start}',
+					resultType = Array(I32);
+				for (name in [startName, endName, differenceName, lengthName, indexName])
+					localTypes.set(name, I32);
+				localTypes.set(resultName, resultType);
+				builder.store(startName, lowerExpression(start, builder, localTypes));
+				builder.store(endName, lowerExpression(end, builder, localTypes));
+				builder.store(differenceName, builder.sub(builder.load(endName, I32), builder.load(startName, I32)));
+				var positiveLength = builder.createBlock(),
+					emptyLength = builder.createBlock(),
+					allocateBlock = builder.createBlock();
+				builder.branch(builder.less(builder.load(differenceName, I32), builder.constInt(0)), emptyLength, positiveLength);
+				builder.select(emptyLength);
+				builder.store(lengthName, builder.constInt(0));
+				builder.jump(allocateBlock);
+				builder.select(positiveLength);
+				builder.store(lengthName, builder.load(differenceName, I32));
+				builder.jump(allocateBlock);
+				builder.select(allocateBlock);
+				builder.store(resultName, builder.call(arrayAllocatorName(TInt), [builder.load(lengthName, I32)], resultType));
+				builder.store(indexName, builder.constInt(0));
+				var conditionBlock = builder.createBlock(),
+					bodyBlock = builder.createBlock(),
+					afterBlock = builder.createBlock();
+				builder.jump(conditionBlock);
+				builder.select(conditionBlock);
+				builder.branch(builder.less(builder.load(indexName, I32), builder.load(lengthName, I32)), bodyBlock, afterBlock);
+				builder.select(bodyBlock);
+				builder.arraySet(builder.load(resultName, resultType), builder.load(indexName, I32),
+					builder.add(builder.load(startName, I32), builder.load(indexName, I32)));
 				builder.store(indexName, builder.add(builder.load(indexName, I32), builder.constInt(1)));
 				builder.jump(conditionBlock);
 				builder.select(afterBlock);
@@ -1183,6 +1225,7 @@ class IrGenerator {
 			case TString: Bytes;
 			case TDynamic: Dyn;
 			case TNever: throw "Never must be coerced before lowering";
+			case TRange: Array(I32);
 			case TVoid: Void;
 			case TClass(name): Obj(name);
 			case TMap(key, value): Abstract(RuntimeType.mapName(key, value));

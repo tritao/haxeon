@@ -139,6 +139,7 @@ class DeclarationIndex {
 			case TString: "String";
 			case TDynamic: "Dynamic";
 			case TNever: "Never";
+			case TRange: "Range";
 			case TVoid: "Void";
 			case TClass(name), TInterface(name), TEnum(name): name;
 			case TNull: "null";

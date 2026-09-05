@@ -7,6 +7,7 @@ enum CompilerType {
 	TString;
 	TDynamic;
 	TNever;
+	TRange;
 	TVoid;
 	TClass(name:String);
 	TInterface(name:String);
