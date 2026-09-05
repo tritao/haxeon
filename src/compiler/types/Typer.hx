@@ -721,23 +721,32 @@ class Typer {
 
 	function expectedLocalInitializerType(name:String, initializer:AstExpression, statements:Array<AstStatement>, start:Int,
 			result:CompilerType):Null<CompilerType> {
-		var canUseResult = switch initializer {
-			case ArrayLiteral(values, _): values.length == 0 && switch result {
-					case TArray(_): true;
-					default: false;
-				};
-			case MapLiteral(entries, _): entries.length == 0 && switch result {
-					case TMap(_, _): true;
-					default: false;
-				};
+		var emptyCollection = switch initializer {
+			case ArrayLiteral(values, _): values.length == 0;
+			case MapLiteral(entries, _): entries.length == 0;
 			default: false;
 		};
-		if (!canUseResult)
+		if (!emptyCollection)
 			return null;
 		for (index in start...statements.length)
 			switch statements[index] {
 				case Return(Variable(returned, _), _) if (returned == name):
-					return result;
+					if (collectionTypeMatches(initializer, result))
+						return result;
+				case Return(ObjectLiteral(fields, _), _):
+					var expectedFields = switch result {
+						case TAnonymous(_, values): values;
+						default: null;
+					};
+					if (expectedFields != null)
+						for (field in fields)
+							switch field.value {
+								case Variable(returned, _) if (returned == name):
+									var expectedField = anonymousField(expectedFields, field.name);
+									if (expectedField != null
+										&& collectionTypeMatches(initializer, expectedField.type)) return expectedField.type;
+								default:
+							}
 				case VarDeclaration(shadowed, _, _, _) if (shadowed == name):
 					return null;
 				case UninitializedDeclaration(shadowed, _, _) if (shadowed == name):
@@ -746,6 +755,19 @@ class Typer {
 			}
 		return null;
 	}
+
+	function collectionTypeMatches(initializer:AstExpression, expected:CompilerType):Bool
+		return switch initializer {
+			case ArrayLiteral(_, _): switch expected {
+					case TArray(_): true;
+					default: false;
+				};
+			case MapLiteral(_, _): switch expected {
+					case TMap(_, _): true;
+					default: false;
+				};
+			default: false;
+		};
 
 	function typeEnumPattern(value:AstExpression, expected:CompilerType, scope:Scope):Null<{
 		value:TypedExpression,
@@ -1180,6 +1202,11 @@ class Typer {
 				registerAnonymousTypes(resultType);
 				new TypedExpression(TObjectLiteral(typeName, typedFields), resultType, span);
 			case ArrayLiteral(values, span):
+				if (values.length == 0)
+					switch expectedType {
+						case TMap(_, _): return new TypedExpression(TMapLiteral([]), expectedType, span);
+						default:
+					}
 				var expectedElement = switch expectedType {
 					case TArray(element): element;
 					default: null;
