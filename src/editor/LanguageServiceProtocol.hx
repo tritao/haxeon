@@ -59,6 +59,7 @@ class LanguageServiceProtocol {
 						regenerated: build.regenerated,
 						changedFunctions: build.changedFunctions,
 						requiresReload: build.requiresReload,
+						reloadReasons: [for (reason in build.reloadReasons) Std.string(reason)],
 						patchAvailable: build.patchBytes != null,
 						moduleBase64: Base64.encode(HlWriter.encode(build.module)),
 						patchBase64: build.patchBytes == null ? null : Base64.encode(build.patchBytes),

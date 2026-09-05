@@ -71,8 +71,8 @@ class ModuleMain {
 		}
 		compiler.update("Math.hx", "function add(a:Int, b:Int):Int { return a + b; }");
 		var restored = compiler.compile("Main");
-		if (!restored.requiresReload)
-			throw "Signature restoration did not require reload";
+		if (restored.requiresReload)
+			throw "Restoring an unpublished invalid signature required reload";
 		var mainIr = compiler.modules.get("Main").irFunctions.get("main");
 		var mathIr = compiler.modules.get("Math").irFunctions.get("Math.add");
 		compiler.update("Unused.hx", "function identity(x:Int):Int { var copy = x; return copy; }");
@@ -213,7 +213,9 @@ class ModuleMain {
 		structuralCompiler.update("Main.hx",
 			"class Editor { public var value:Int; public var generation:Int; public function new():Void { this.value = 42; this.generation = 1; } } function main():Int { var editor = new Editor(); return editor.value; }");
 		var structuralBuild = structuralCompiler.compile("Main");
-		if (!structuralBuild.requiresReload || structuralBuild.patchBytes != null)
+		if (!structuralBuild.requiresReload
+			|| structuralBuild.patchBytes != null
+			|| [for (reason in structuralBuild.reloadReasons) Std.string(reason)].indexOf("ObjectLayoutChanged(Editor)") < 0)
 			throw "Class layout edit did not require a full reload";
 		Sys.println("PASS: function fingerprints selectively retyped and regenerated cached artifacts");
 	}

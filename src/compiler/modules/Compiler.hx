@@ -24,6 +24,11 @@ import compiler.ir.Ir.IrObject;
 import compiler.types.TypeRegistry;
 import compiler.types.TypeRegistry.TypeCompatibility;
 import compiler.service.CancellationToken;
+import compiler.abi.RuntimeAbi;
+import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
+import compiler.abi.PatchPlanner;
+import compiler.abi.PatchPlanner.AbiChange;
+import compiler.abi.PatchPlanner.PatchDecision;
 
 typedef NativeFunction = {final name:String; final library:String; final symbol:String; final arguments:Array<CompilerType>; final result:CompilerType;}
 
@@ -34,6 +39,7 @@ typedef CompileResult = {
 	final regenerated:Array<String>;
 	final changedFunctions:Array<Int>;
 	final requiresReload:Bool;
+	final reloadReasons:Array<AbiChange>;
 	final functionIndices:Map<String, Int>;
 	final functionIds:Map<String, Int>;
 	final runtimeIdentity:Bytes;
@@ -72,6 +78,7 @@ class Compiler {
 
 	final natives:Map<String, NativeFunction> = [];
 	final objectCache:Map<String, IrObject> = [];
+	var publishedAbi:Null<RuntimeAbiDescriptor>;
 	var compiledOnce = false;
 
 	public function new(?identityState:Bytes) {
@@ -429,15 +436,23 @@ class Compiler {
 		objectNames.sort(Reflect.compare);
 		var ir = IrGenerator.assemble(cached, irNatives(), [for (name in objectNames) objectCache.get(name)], IrGenerator.interfacesFrom(typedNew),
 			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew), IrGenerator.staticInitializerFrom(typedNew, initializationClasses));
-		var signatureChanges = [for (name in signatureChanged.keys()) name];
-		signatureChanges.sort(Reflect.compare);
-		var forceReload = compiledOnce && structuralChanged.keys().hasNext();
-		if (forceReload)
+		var nextAbi = RuntimeAbi.describe(ir),
+			decision = PatchPlanner.plan(publishedAbi, nextAbi),
+			reloadReasons:Array<AbiChange> = switch decision {
+				case Patch: [];
+				case ReloadDomain(reasons): reasons;
+				case Reject(diagnostics): throw diagnostics.join("; ");
+			};
+		reloadReasons.sort(function(a, b) return Reflect.compare(Std.string(a), Std.string(b)));
+		if (reloadReasons.length > 0)
+			decision = ReloadDomain(reloadReasons);
+		if (compiledOnce && PatchPlanner.requiresFreshLayout(decision))
 			assembler = new HlModuleAssembler(copyIndices(assembler.cache.stableIds));
-		var assembly = assembler.assemble(ir, regenerated, signatureChanges, forceReload);
+		var assembly = assembler.assemble(ir, regenerated, decision);
 		if (token != null)
 			token.check();
 		lastTypedProgram = typedNew;
+		publishedAbi = nextAbi;
 		for (name in names) {
 			var state = modules.get(name);
 			state.lastGoodTokens = state.tokens;
@@ -445,7 +460,7 @@ class Compiler {
 			state.lastGoodSource = state.source;
 		}
 		compiledOnce = true;
-		var patchBytes = assembly.requiresReload
+		var patchBytes = reloadReasons.length > 0
 			|| assembly.changedFunctions.length == 0 ? null : HlPatchWriter.encode(assembly.module, moduleId, assembly.changedSlots,
 				stableIdsBySlot(assembly.functionIndices), assembly.revision - 1, assembly.revision, assembly.baseInts, assembly.baseFloats,
 				assembly.baseStrings, assembly.baseTypes);
@@ -456,6 +471,7 @@ class Compiler {
 			regenerated: regenerated,
 			changedFunctions: assembly.changedFunctions,
 			requiresReload: assembly.requiresReload,
+			reloadReasons: reloadReasons,
 			functionIndices: copyIndices(assembly.functionIndices),
 			functionIds: copyIndices(assembler.cache.stableIds),
 			runtimeIdentity: HlRuntimeIdentity.encode(moduleId, assembly.functionIndices, assembler.cache.stableIds),

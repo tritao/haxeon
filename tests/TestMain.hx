@@ -294,8 +294,8 @@ class TestMain {
 				throw error;
 		}
 		interfaceCompiler.update("Main.hx", interfaceV1);
-		if (!interfaceCompiler.compile("Main").requiresReload)
-			throw "Interface contract restoration did not require reload";
+		if (interfaceCompiler.compile("Main").requiresReload)
+			throw "Restoring an unpublished invalid interface contract required reload";
 		var staticClass = Frontend.compile("class Math { public static function add(a:Int, b:Int):Int { return a + b; } } function main():Int { return Math.add(20, 22); }");
 		var foundStatic = false;
 		for (fn in staticClass.functions)

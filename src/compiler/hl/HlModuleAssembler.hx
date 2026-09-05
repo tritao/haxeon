@@ -2,6 +2,7 @@ package compiler.hl;
 
 import compiler.ir.HlLower;
 import compiler.ir.Ir.IrProgram;
+import compiler.abi.PatchPlanner.PatchDecision;
 
 typedef HlAssemblyResult = {
 	final module:HlCode;
@@ -31,7 +32,7 @@ class HlModuleAssembler {
 		cache = new HlFunctionCache(stableIds);
 	}
 
-	public function assemble(program:IrProgram, regenerated:Array<String>, signatureChanges:Array<String>, forceReload:Bool = false):HlAssemblyResult {
+	public function assemble(program:IrProgram, regenerated:Array<String>, decision:PatchDecision):HlAssemblyResult {
 		cache.update(program.functions);
 		var ordered = new IrProgram(program.entryPoint);
 		ordered.natives = program.natives;
@@ -57,7 +58,11 @@ class HlModuleAssembler {
 			}
 		changed.sort(function(a, b) return a - b);
 		changedSlots.sort(function(a, b) return a - b);
-		var reload = forceReload || initialized && signatureChanges.length > 0;
+		var reload = switch decision {
+			case Patch: false;
+			case ReloadDomain(_): true;
+			case Reject(diagnostics): throw diagnostics.join("; ");
+		};
 		var module = HlLower.lowerStable(ordered, symbols, layout);
 		var baseInts = publishedInts,
 			baseFloats = publishedFloats,
