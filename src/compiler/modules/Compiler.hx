@@ -173,6 +173,7 @@ class Compiler {
 
 		var functions:Array<AstFunction> = [],
 			programFunctions:Array<AstFunction> = [],
+			typeAliases:Array<compiler.Ast.AstTypeAlias> = [],
 			interfaces:Array<compiler.Ast.AstInterface> = [],
 			classes:Array<compiler.Ast.AstClass> = [],
 			owners:Map<String, String> = [],
@@ -184,6 +185,8 @@ class Compiler {
 				aliases = importAliases(state.ast.imports);
 			for (interfaceDecl in state.ast.interfaces)
 				interfaces.push(interfaceDecl);
+			for (alias in state.ast.aliases)
+				typeAliases.push(alias);
 			for (fn in state.ast.functions)
 				locals.set(fn.name, true);
 			for (fn in state.ast.functions) {
@@ -287,6 +290,7 @@ class Compiler {
 			typedNew = Typer.typeSelected({
 				packageName: null,
 				imports: [],
+				aliases: typeAliases,
 				interfaces: interfaces,
 				classes: classes,
 				functions: programFunctions

@@ -5,6 +5,7 @@ import compiler.Source.SourceSpan;
 enum TokenKind {
 	Package;
 	Import;
+	Typedef;
 	Class;
 	Interface;
 	Extends;

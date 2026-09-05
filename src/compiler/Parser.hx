@@ -4,6 +4,7 @@ import compiler.Ast.AstExpression;
 import compiler.Ast.AstFunction;
 import compiler.Ast.AstClass;
 import compiler.Ast.AstInterface;
+import compiler.Ast.AstTypeAlias;
 import compiler.Ast.AstProgram;
 import compiler.Ast.AstStatement;
 import compiler.Ast.AstType;
@@ -29,9 +30,11 @@ class Parser {
 			imports.push(parseQualifiedName());
 			consume(TokenKind.Semicolon);
 		}
-		var functions = [], interfaces:Array<AstInterface> = [], classes = [];
+		var functions = [], aliases:Array<AstTypeAlias> = [], interfaces:Array<AstInterface> = [], classes = [];
 		while (!check(TokenKind.Eof)) {
-			if (check(TokenKind.Interface))
+			if (match(TokenKind.Typedef))
+				aliases.push(parseTypeAlias(previous().span));
+			else if (check(TokenKind.Interface))
 				interfaces.push(parseInterface());
 			else if (check(TokenKind.Class))
 				classes.push(parseClass());
@@ -41,10 +44,18 @@ class Parser {
 		return {
 			packageName: packageName,
 			imports: imports,
+			aliases: aliases,
 			interfaces: interfaces,
 			classes: classes,
 			functions: functions
 		};
+	}
+
+	function parseTypeAlias(start:SourceSpan):AstTypeAlias {
+		var name = consume(TokenKind.Identifier).text;
+		consume(TokenKind.Assign);
+		var type = parseType(), end = consume(TokenKind.Semicolon).span;
+		return {name: name, type: type, span: start.merge(end)};
 	}
 
 	function parseQualifiedName():String {

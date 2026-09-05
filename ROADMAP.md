@@ -35,6 +35,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 	operations and the runtime ABI. Object arrays, maps, enums, nullable values,
 	and pattern matching remain future work. Our HashLink fork enforces bounds in
 	the JIT.
+- [~] Primitive and array type aliases resolve in the frontend; cross-module
+	alias identity and generic aliases remain future work.
 - [~] Prototype-dispatched instance calls and inheritance are live, including
   stable override slots and arbitrary fixed-arity calls. Basic HashLink virtual
   interface values now lower through `OToVirtual`, support inherited interface

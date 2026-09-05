@@ -25,6 +25,7 @@ class Typer {
 	final externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>;
 	var classDecls:Map<String, AstClass> = [];
 	var interfaceDecls:Map<String, AstInterface> = [];
+	var aliases:Map<String, AstType> = [];
 	final generated:Array<TypedFunction> = [];
 	final generatedClasses:Array<TypedClass> = [];
 	var currentFunctionName:String = "";
@@ -40,6 +41,11 @@ class Typer {
 		this.externals = externals == null ? [] : externals;
 
 	function typeProgram(program:AstProgram, selected:Null<Map<String, Bool>>):TypedProgram {
+		for (alias in program.aliases) {
+			if (aliases.exists(alias.name) || classDecls.exists(alias.name) || interfaceDecls.exists(alias.name))
+				fail("E1000", 'Duplicate type name "${alias.name}"', alias.span);
+			aliases.set(alias.name, alias.type);
+		}
 		var classes:Map<String, AstClass> = [];
 		for (interfaceDecl in program.interfaces) {
 			if (interfaceDecls.exists(interfaceDecl.name))
@@ -690,7 +696,9 @@ class Typer {
 			case FloatType: TFloat;
 			case StringType: TString;
 			case VoidType: TVoid;
-			case NamedType(name): interfaceDecls.exists(name) ? TInterface(name) : TClass(name);
+			case NamedType(name):
+				var alias = aliases.get(name);
+				alias == null ? (interfaceDecls.exists(name) ? TInterface(name) : TClass(name)) : lowerType(alias);
 			case ArrayType(element): TArray(lowerType(element));
 			case FunctionType(arguments, result): TFunction([for (argument in arguments) lowerType(argument)], lowerType(result));
 		};

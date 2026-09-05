@@ -26,6 +26,9 @@ quote, slash, newline, carriage-return, and tab escapes. Source edits that add
 new float or string constants flow through ordinary incremental compilation
 into transactional HLP symbol deltas.
 
+Simple `typedef` aliases are resolved before type checking, so editor-facing
+APIs can introduce stable names without changing the backend type ABI.
+
 The expression subset also includes multiplication, signed division, call or
 value expression statements, and `while` control-flow. Hosts can register typed
 HashLink natives through `Compiler.registerNative()` before the first build;

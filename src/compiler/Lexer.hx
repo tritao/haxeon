@@ -112,6 +112,7 @@ class Lexer {
 		return switch text {
 			case "package": TokenKind.Package;
 			case "import": TokenKind.Import;
+			case "typedef": TokenKind.Typedef;
 			case "class": TokenKind.Class;
 			case "interface": TokenKind.Interface;
 			case "extends": TokenKind.Extends;

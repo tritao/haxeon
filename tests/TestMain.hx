@@ -215,6 +215,12 @@ class TestMain {
 		if (packaged.packageName != "editor.core" || packaged.imports.length != 1 || packaged.imports[0] != "editor.util")
 			throw "Package and import declarations were not preserved in the AST";
 		Sys.println("PASS: package and import declarations are represented in the frontend");
+		var aliasProgram = new Parser(new Lexer(new SourceFile("aliases.hx",
+			"typedef Number = Int; function add(value:Number):Number { return value; } function main():Int { return add(42); }")).tokenize()).parseProgram();
+		if (aliasProgram.aliases.length != 1
+			|| Typer.type(aliasProgram).functions[0].arguments[0].type != compiler.types.Type.CompilerType.TInt)
+			throw "Type aliases were not resolved by the typer";
+		Sys.println("PASS: primitive type aliases resolve through the typed AST");
 		var classProgram = new Parser(new Lexer(new SourceFile("Box.hx",
 			"package demo; class Box { public final value:Int; public function new(value:Int) { } public function get():Int { return 42; } } function main():Int { return 42; }"))
 			.tokenize()).parseProgram();
