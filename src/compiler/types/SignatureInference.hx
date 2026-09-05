@@ -14,6 +14,11 @@ class SignatureInference {
 		var enums:Map<String, AstEnum> = [];
 		for (enumDecl in program.enums)
 			enums.set(enumDecl.name, enumDecl);
+		var constructors:Map<String, AstFunction> = [];
+		for (classDecl in program.classes)
+			for (method in classDecl.methods)
+				if (method.name == "new")
+					constructors.set(classDecl.name, inferFieldBoundArguments(method, classDecl));
 		return {
 			packageName: program.packageName,
 			imports: program.imports,
@@ -32,10 +37,7 @@ class SignatureInference {
 						base: classDecl.base,
 						interfaces: classDecl.interfaces,
 						fields: classDecl.fields,
-						methods: [
-							for (method in classDecl.methods)
-								inferFunction(inferFieldBoundArguments(method, classDecl), enums)
-						],
+						methods: inferClassMethods(classDecl, enums, constructors),
 						span: classDecl.span
 					}
 			],
@@ -43,7 +45,54 @@ class SignatureInference {
 		};
 	}
 
-	static function inferFunction(fn:AstFunction, enums:Map<String, AstEnum>):AstFunction {
+	static function inferClassMethods(classDecl:AstClass, enums:Map<String, AstEnum>, constructors:Map<String, AstFunction>):Array<AstFunction> {
+		var methods = [for (method in classDecl.methods) inferFieldBoundArguments(method, classDecl)],
+			byName:Map<String, AstFunction> = [];
+		for (method in methods)
+			byName.set(method.name, method);
+		var constrained = [for (method in methods) inferCallBoundArguments(method, byName, constructors)];
+		for (method in constrained)
+			byName.set(method.name, method);
+		return [for (method in constrained) inferFunction(method, enums, byName)];
+	}
+
+	static function inferCallBoundArguments(fn:AstFunction, methods:Map<String, AstFunction>, constructors:Map<String, AstFunction>):AstFunction {
+		var inferred:Map<String, AstType> = [];
+		for (statement in fn.statements)
+			switch statement {
+				case Return(Call(name, arguments, _), _), Expression(Call(name, arguments, _), _):
+					var callee = methods.get(localMethodName(name));
+					if (callee != null)
+						for (index in 0...arguments.length)
+							if (index < callee.arguments.length && callee.arguments[index].type != InferredType)
+								switch arguments[index] {
+									case Variable(argumentName, _): inferred.set(argumentName, callee.arguments[index].type);
+									default:
+								}
+				case Return(MethodCall(_, name, arguments, _), _), Expression(MethodCall(_, name, arguments, _), _):
+					var callee = methods.get(name);
+					if (callee != null)
+						for (index in 0...arguments.length)
+							if (index < callee.arguments.length && callee.arguments[index].type != InferredType)
+								switch arguments[index] {
+									case Variable(argumentName, _): inferred.set(argumentName, callee.arguments[index].type);
+									default:
+								}
+				case Return(New(name, arguments, _), _), Expression(New(name, arguments, _), _):
+					var constructor = constructors.get(name);
+					if (constructor != null)
+						for (index in 0...arguments.length)
+							if (index < constructor.arguments.length && constructor.arguments[index].type != InferredType)
+								switch arguments[index] {
+									case Variable(argumentName, _): inferred.set(argumentName, constructor.arguments[index].type);
+									default:
+								}
+				default:
+			}
+		return replaceArguments(fn, inferred);
+	}
+
+	static function inferFunction(fn:AstFunction, enums:Map<String, AstEnum>, ?methods:Map<String, AstFunction>):AstFunction {
 		if (fn.result != InferredType)
 			return fn;
 		var environment:Map<String, AstType> = [];
@@ -54,7 +103,7 @@ class SignatureInference {
 		for (statement in fn.statements)
 			switch statement {
 				case Return(expression, _):
-					var candidate = inferExpression(expression, environment, enums);
+					var candidate = inferExpression(expression, environment, enums, methods);
 					if (candidate != null && (inferred == null || sameType(inferred, candidate)))
 						inferred = candidate;
 				default:
@@ -72,7 +121,8 @@ class SignatureInference {
 		};
 	}
 
-	static function inferExpression(expression:AstExpression, environment:Map<String, AstType>, enums:Map<String, AstEnum>):Null<AstType>
+	static function inferExpression(expression:AstExpression, environment:Map<String, AstType>, enums:Map<String, AstEnum>,
+			?methods:Map<String, AstFunction>):Null<AstType>
 		return switch expression {
 			case IntegerLiteral(_, _): IntType;
 			case FloatLiteral(_, _): FloatType;
@@ -81,18 +131,19 @@ class SignatureInference {
 			case Variable(name, _): environment.get(name);
 			case New(name, _, _): NamedType(name);
 			case NewArray(element, _, _): ArrayType(element);
+			case Call(name, _, _): var method = methods == null ? null : methods.get(localMethodName(name)); method == null || method.result == InferredType ? null : method.result;
 			case SwitchExpression(subject, cases, fallback, _):
-				var subjectType = inferExpression(subject, environment, enums),
+				var subjectType = inferExpression(subject, environment, enums, methods),
 					inferred:Null<AstType> = null;
 				for (switchCase in cases) {
 					var caseEnvironment = copyTypes(environment);
 					bindPattern(switchCase.value, subjectType, caseEnvironment, enums);
-					var candidate = inferExpression(switchCase.result, caseEnvironment, enums);
+					var candidate = inferExpression(switchCase.result, caseEnvironment, enums, methods);
 					if (candidate != null && (inferred == null || sameType(inferred, candidate)))
 						inferred = candidate;
 				}
 				if (fallback != null) {
-					var candidate = inferExpression(fallback, environment, enums);
+					var candidate = inferExpression(fallback, environment, enums, methods);
 					if (candidate != null && (inferred == null || sameType(inferred, candidate)))
 						inferred = candidate;
 				}
@@ -129,6 +180,11 @@ class SignatureInference {
 	static function sameType(left:AstType, right:AstType):Bool
 		return Std.string(left) == Std.string(right);
 
+	static function localMethodName(name:String):String {
+		var separator = name.lastIndexOf(".");
+		return separator < 0 ? name : name.substr(separator + 1);
+	}
+
 	static function copyTypes(source:Map<String, AstType>):Map<String, AstType> {
 		var result:Map<String, AstType> = [];
 		for (name => type in source)
@@ -146,6 +202,10 @@ class SignatureInference {
 					constrainFromField(inferred, argumentName, fieldPath.substr("this.".length), classDecl);
 				default:
 			}
+		return replaceArguments(fn, inferred);
+	}
+
+	static function replaceArguments(fn:AstFunction, inferred:Map<String, AstType>):AstFunction {
 		var changed = false, arguments = [
 			for (argument in fn.arguments) {
 				var inferredType = argument.type == InferredType ? inferred.get(argument.name) : null;
