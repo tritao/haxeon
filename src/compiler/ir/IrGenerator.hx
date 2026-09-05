@@ -1020,6 +1020,60 @@ class IrGenerator {
 				for (index in 0...values.length)
 					builder.arraySet(array, builder.constInt(index), lowerExpression(values[index], builder, localTypes));
 				array;
+			case TArrayComprehension(keyName, valueName, iterable, value):
+				var inputName = '$' + 'comprehension-input:${expression.span.start}',
+					mapName = '$' + 'comprehension-map:${expression.span.start}',
+					resultName = '$' + 'comprehension-result:${expression.span.start}',
+					indexName = '$' + 'comprehension-index:${expression.span.start}',
+					mapTypes = switch iterable.type {
+						case TMap(key, mapValue): {key: key, value: mapValue};
+						default: null;
+					},
+					keyType = valueName == null ? switch iterable.type {
+						case TArray(element): element;
+						default: throw "Array comprehension requires an array iterable";
+					} : mapTypes.key,
+					inputType = Array(lowerType(keyType)),
+					resultElement = switch expression.type {
+						case TArray(element): element;
+						default: throw "Array comprehension requires an array result";
+					},
+					resultType = Array(lowerType(resultElement));
+				localTypes.set(inputName, inputType);
+				localTypes.set(resultName, resultType);
+				localTypes.set(indexName, I32);
+				localTypes.set(keyName, lowerType(keyType));
+				if (valueName == null)
+					builder.store(inputName, lowerExpression(iterable, builder, localTypes));
+				else {
+					var loweredMapType = lowerType(iterable.type);
+					localTypes.set(mapName, loweredMapType);
+					localTypes.set(valueName, lowerType(mapTypes.value));
+					builder.store(mapName, lowerExpression(iterable, builder, localTypes));
+					builder.store(inputName,
+						builder.call(RuntimeType.mapNative(mapTypes.key, mapTypes.value, "keys"), [builder.load(mapName, loweredMapType)], inputType));
+				}
+				builder.store(resultName, builder.call(arrayAllocatorName(resultElement), [builder.arraySize(builder.load(inputName, inputType))], resultType));
+				builder.store(indexName, builder.constInt(0));
+				var conditionBlock = builder.createBlock(),
+					bodyBlock = builder.createBlock(),
+					afterBlock = builder.createBlock();
+				builder.jump(conditionBlock);
+				builder.select(conditionBlock);
+				var index = builder.load(indexName, I32);
+				builder.branch(builder.less(index, builder.arraySize(builder.load(inputName, inputType))), bodyBlock, afterBlock);
+				builder.select(bodyBlock);
+				builder.store(keyName, builder.arrayGet(builder.load(inputName, inputType), builder.load(indexName, I32), lowerType(keyType)));
+				if (valueName != null)
+					builder.store(valueName, builder.call(RuntimeType.mapNative(mapTypes.key, mapTypes.value, "get"), [
+						builder.load(mapName, lowerType(iterable.type)),
+						builder.load(keyName, lowerType(keyType))
+					], lowerType(mapTypes.value)));
+				builder.arraySet(builder.load(resultName, resultType), builder.load(indexName, I32), lowerExpression(value, builder, localTypes));
+				builder.store(indexName, builder.add(builder.load(indexName, I32), builder.constInt(1)));
+				builder.jump(conditionBlock);
+				builder.select(afterBlock);
+				builder.load(resultName, resultType);
 			case TNewArray(element, length):
 				builder.call(arrayAllocatorName(element), [lowerExpression(length, builder, localTypes)], Array(lowerType(element)));
 			case TNewMap(key, value): builder.call(RuntimeType.mapNative(key, value, "alloc"), [], Abstract(RuntimeType.mapName(key, value)));

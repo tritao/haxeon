@@ -1092,6 +1092,39 @@ class Typer {
 					typedValues.push(coerce(typedValue, elementType, "array element", "E1003"));
 				}
 				new TypedExpression(TArrayLiteral(typedValues), TArray(elementType), span);
+			case ArrayComprehension(keyName, valueName, iterable, value, span):
+				var typedIterable = typeExpression(iterable, scope),
+					originalIterable = typedIterable,
+					loopScope = new Scope(scope),
+					keyType:CompilerType;
+				switch typedIterable.type {
+					case TArray(element):
+						if (valueName != null)
+							fail("E1014", "Key/value array comprehension requires a Map", span);
+						keyType = element;
+					case TMap(key, mapValue):
+						if (RuntimeType.mapName(key, mapValue) == null)
+							fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+						keyType = key;
+						if (valueName == null) typedIterable = new TypedExpression(TCollectionCall(typedIterable, "keys", []), TArray(key), span);
+					default:
+						fail("E1014", "Array comprehension iterable must be an Array or Map", span);
+						keyType = TInt;
+				}
+				loopScope.define(keyName, keyType, span);
+				if (valueName != null)
+					switch originalIterable.type {
+						case TMap(_, mapValue): loopScope.define(valueName, mapValue, span);
+						default:
+					}
+				var expectedElement = switch expectedType {
+					case TArray(element): element;
+					default: null;
+				}, typedValue = typeExpression(value, loopScope, expectedElement), elementType = expectedElement == null ? typedValue.type : expectedElement;
+				typedValue = coerce(typedValue, elementType, "array comprehension value", "E1003");
+				new TypedExpression(TArrayComprehension(loopScope.resolveId(keyName), valueName == null ? null : loopScope.resolveId(valueName),
+					valueName == null ? typedIterable : originalIterable, typedValue),
+					TArray(elementType), span);
 			case New(typeName, arguments, span):
 				if (!classDecls.exists(typeName) || interfaceDecls.exists(typeName))
 					fail("E1007", 'Unknown class "$typeName"', span);
@@ -1836,6 +1869,9 @@ class Typer {
 			case ArrayLiteral(values, _):
 				for (value in values)
 					collectMutableCaptureExpression(value, outerDeclared, result);
+			case ArrayComprehension(_, _, iterable, value, _):
+				collectMutableCaptureExpression(iterable, outerDeclared, result);
+				collectMutableCaptureExpression(value, outerDeclared, result);
 			case Variable(_, _), IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), NewMap(_, _, _):
 		}
 
@@ -1888,6 +1924,9 @@ class Typer {
 			case ArrayLiteral(values, _):
 				for (value in values)
 					collectExpressionVariables(value, names);
+			case ArrayComprehension(_, _, iterable, value, _):
+				collectExpressionVariables(iterable, names);
+				collectExpressionVariables(value, names);
 			case New(_, arguments, _):
 				for (argument in arguments)
 					collectExpressionVariables(argument, names);

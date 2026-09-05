@@ -1087,6 +1087,9 @@ class Compiler {
 						{name: field.name, value: canonicalExpression(field.value, module, entry, locals, aliases), span: field.span}
 				], s);
 			case ArrayLiteral(values, s): ArrayLiteral([for (value in values) canonicalExpression(value, module, entry, locals, aliases)], s);
+			case ArrayComprehension(keyName, valueName, iterable, value, s):
+				ArrayComprehension(keyName, valueName, canonicalExpression(iterable, module, entry, locals, aliases),
+					canonicalExpression(value, module, entry, locals, aliases), s);
 			case Call(name, args, s):
 				var resolved = name;
 				var dot = name.indexOf("."),
@@ -1349,6 +1352,9 @@ class Compiler {
 			case ArrayLiteral(values, _):
 				for (value in values)
 					scanExpression(value, dependencies);
+			case ArrayComprehension(_, _, iterable, value, _):
+				scanExpression(iterable, dependencies);
+				scanExpression(value, dependencies);
 			case Index(array, offset, _):
 				scanExpression(array, dependencies);
 				scanExpression(offset, dependencies);
@@ -1505,6 +1511,9 @@ class Compiler {
 			case ArrayLiteral(values, _):
 				for (value in values)
 					scanCallExpression(value, calls, aliases);
+			case ArrayComprehension(_, _, iterable, value, _):
+				scanCallExpression(iterable, calls, aliases);
+				scanCallExpression(value, calls, aliases);
 			case New(typeName, args, _):
 				calls.set(typeName + ".new", true);
 				for (a in args)
@@ -1625,6 +1634,9 @@ class Compiler {
 			case ArrayLiteral(values, _):
 				for (value in values)
 					collectLambdaExpression(value, functionName, module, generatedByModule);
+			case ArrayComprehension(_, _, iterable, value, _):
+				collectLambdaExpression(iterable, functionName, module, generatedByModule);
+				collectLambdaExpression(value, functionName, module, generatedByModule);
 			case New(_, args, _):
 				for (argument in args)
 					collectLambdaExpression(argument, functionName, module, generatedByModule);
