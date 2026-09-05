@@ -763,24 +763,33 @@ class Typer {
 
 	function narrowedScope(scope:Scope, condition:TypedExpression, truthy:Bool):Scope {
 		var result = new Scope(scope), comparison = nullComparison(condition);
-		if (comparison != null)
-			result.refine(comparison.name, truthy ? TNull : comparison.nonNullType);
+		if (comparison != null) {
+			var nonNull = truthy == comparison.nonNullWhenTrue;
+			result.refine(comparison.name, nonNull ? comparison.nonNullType : TNull);
+		}
 		return result;
 	}
 
 	function refineAfterGuard(scope:Scope, condition:TypedExpression):Void {
 		var comparison = nullComparison(condition);
 		if (comparison != null)
-			scope.refine(comparison.name, comparison.nonNullType);
+			scope.refine(comparison.name, comparison.nonNullWhenTrue ? TNull : comparison.nonNullType);
 	}
 
-	function nullComparison(condition:TypedExpression):Null<{name:String, nonNullType:CompilerType}> {
+	function nullComparison(condition:TypedExpression):Null<{name:String, nonNullType:CompilerType, nonNullWhenTrue:Bool}> {
 		return switch condition.expression {
 			case TEqual(left, right): var local = nullableLocal(left),
 					other = isNullValue(right) ? true : false; if (local == null) {
 					local = nullableLocal(right);
 					other = isNullValue(left);
-				} local == null || !other ? null : local;
+				} local == null || !other ? null : {name: local.name, nonNullType: local.nonNullType, nonNullWhenTrue: false};
+			case TNot(value):
+				var comparison = nullComparison(value);
+				comparison == null ? null : {
+					name: comparison.name,
+					nonNullType: comparison.nonNullType,
+					nonNullWhenTrue: !comparison.nonNullWhenTrue
+				};
 			default: null;
 		};
 	}
@@ -1048,7 +1057,9 @@ class Typer {
 	}
 
 	function logical(a, b, scope, and, span):TypedExpression {
-		var left = typeExpression(a, scope), right = typeExpression(b, scope);
+		var left = typeExpression(a, scope),
+			rightScope = narrowedScope(scope, left, and),
+			right = typeExpression(b, rightScope);
 		if (!sameType(left.type, TBool) || !sameType(right.type, TBool))
 			fail("E1011", "Logical operators require Bool operands", span);
 		return new TypedExpression(and ? TAnd(left, right) : TOr(left, right), TBool, span);

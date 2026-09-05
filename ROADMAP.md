@@ -42,9 +42,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 	Our HashLink fork
 	enforces bounds in the JIT.
 - [~] Explicit `Null<T>` values for reference types lower to HashLink's native
-	null representation, support equality, and reject implicit untyped null
-	locals; simple null-guard narrowing is supported, while migration-safe
-	object arrays remain future work.
+	 null representation, support equality, and reject implicit untyped null
+	 locals; null-guard narrowing now flows through `&&`, `||`, and `!=`, while migration-safe
+	 object arrays remain future work.
 - [x] Enums lower to HashLink tagged values, including payload constructors,
 	payload extraction, equality by constructor tag, and typed enum/int `switch`
 	cases. Exhaustiveness checking and richer pattern forms remain future work.
