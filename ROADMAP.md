@@ -34,7 +34,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   to HashLink array operations; allocation and other element kinds remain.
   Our HashLink fork now enforces bounds in the JIT. Maps, enums, nullable
   values, and pattern matching are still future work.
-- [ ] Interfaces, virtual dispatch, and basic generics.
+- [~] Prototype-dispatched instance calls and inheritance are live, including
+  stable override slots and arbitrary fixed-arity calls; interface contracts,
+  interface-typed values, and basic generics remain.
 - [ ] A documented runtime library ABI for strings, collections, IO, and time
   (typed `trace` and a native-backed `IntArray` ABI probe are exercised
   end-to-end; the public generic collection ABI remains future work).
@@ -91,8 +93,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
    keep bounds checks in the HashLink operation contract.
 2. Add enums/nullable values and pattern matching on the same tagged-value
    rules used by the runtime bridge.
-3. Add interfaces and virtual method prototypes; direct calls remain an
-   optimization, never the semantic contract.
+3. Add interface declarations and interface-typed values on the same
+   prototype-slot ABI; direct calls remain an optimization, never the
+   semantic contract.
 4. Complete package/import resolution for nominal types, then migrate a small
    Pragtical utility plugin as the first real multi-module workload.
 5. Expose compiler snapshots as the editor language service.
@@ -107,3 +110,90 @@ function edits patch in place; class-layout edits reload only that plugin
 domain; diagnostics and completion come from the same compiler snapshot; a
 clean build works from the checked-in bootstrap compiler; and the differential
 suite covers every language feature used by the migrated code.
+
+## Long-term delivery sequence
+
+This is the order in which the project should spend complexity budget. Each
+stage has a usable exit condition; later stages must not silently become a
+second compiler or a second runtime.
+
+### 0. Contract and instrumentation
+
+- Keep the supported syntax/type/runtime subset explicit and reject everything
+  else with source diagnostics.
+- Pin Haxe Formatter, the reference Haxe toolchain, and the HashLink fork.
+- Keep HLB/HLP readers, writers, and the native fork under differential tests.
+- Add latency, allocation, patch-size, and JIT-reclamation measurements to the
+  normal test run before optimizing.
+
+### 1. Language kernel
+
+- Finish nominal interfaces, nullable values, enums, pattern matching, and
+  compiler-owned array/map operations.
+- Add type aliases and the small generic forms needed by editor APIs; defer
+  macros, abstracts, build-time metaprogramming, and cross-target semantics.
+- Make diagnostics and source spans stable enough for editor edits while a
+  file is incomplete.
+- Keep every new feature represented as typed AST -> SSA IR -> HL lowering;
+  no feature-specific AST-to-native shortcuts.
+
+### 2. Runtime/ABI hardening
+
+- Define the supported runtime ABI for strings, arrays, maps, IO, time, and
+  exceptions, with Haxe declarations and native implementations versioned
+  together.
+- Finish the non-moving type arena and explicit reload domains in the fork.
+- Add in-memory module load/patch APIs, failure recovery, and state migration
+  hooks; preserve ordinary `.hl` compatibility for non-realtime builds.
+- Make structural changes report a domain boundary before any native staging,
+  so a failed patch cannot disturb the running editor.
+
+### 3. Persistent compiler and language service
+
+- Turn edits into transactions: parse/type/codegen failures retain the last
+  good snapshot and return diagnostics without mutating live compiler state.
+- Add dependency-aware parallel work with deterministic assembly on the editor
+  thread, plus measured budgets for a representative Pragtical workspace.
+- Complete definition, references, rename, semantic completion, hover, and
+  document symbols from one compiler snapshot.
+- Add a small protocol adapter for Pragtical and keep it deliberately thinner
+  than the compiler service.
+
+### 4. Plugin-first migration
+
+- Select one small, representative Pragtical plugin and make it compile with
+  the supported subset and runtime ABI.
+- Run it in a reload domain with activate/deactivate and optional state
+  save/restore; exercise body edits, signature edits, and class-layout edits.
+- Migrate utility modules and shared editor services incrementally, maintaining
+  an official-Haxe differential build until each feature is covered.
+- Keep the editor process authoritative: a bad edit must leave the previous
+  plugin generation running and diagnostics visible.
+
+### 5. Editor integration
+
+- Embed the persistent compiler service in a Pragtical-like host, wire save
+  events to transactional compile/patch, and expose diagnostics/completion.
+- Add a REPL/evaluate-expression path against the current editor snapshot.
+- Measure end-to-end save latency, memory growth, patch churn, and recovery
+  behavior under realistic multi-module edits.
+- Expand domains from plugins to selected editor subsystems only after the
+  plugin workflow is boring and repeatable.
+
+### 6. Bootstrap and self-hosting
+
+- Constrain compiler sources to the implemented subset and track unsupported
+  syntax in the bootstrap dashboard.
+- Build compiler A with official Haxe, then compiler B with A; compare HLB,
+  diagnostics, and differential behavior rather than requiring byte identity.
+- Check in a reproducible bootstrap compiler and make official Haxe optional
+  for normal development and release builds.
+
+### 7. Production conversion
+
+- Convert the remaining Pragtical services and editor core in dependency order,
+  retaining a fallback build while each domain is validated.
+- Freeze the runtime/compiler protocol versions, document extension points, and
+  publish compatibility and rollback procedures.
+- Treat optimization (SSA quality, JIT tuning, parallelism) as a measured
+  follow-up after correctness, reload safety, and editor UX are stable.
