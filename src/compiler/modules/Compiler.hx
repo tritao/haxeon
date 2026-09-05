@@ -12,6 +12,7 @@ import compiler.Source.SourceFile;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.IrGenerator;
 import compiler.types.Typer;
+import compiler.types.SemanticSignature;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.hl.HlCode;
 import compiler.hl.HlModuleAssembler;
@@ -708,7 +709,7 @@ class Compiler {
 		for (interfaceDecl in state.ast.interfaces) {
 			var signature = interfaceDecl.name + " extends " + interfaceDecl.bases.join(",") + " {" + [
 				for (method in interfaceDecl.methods)
-					method.name + ":" + signatureFingerprint(method)
+					method.name + ":" + signatureFingerprint(method, state.ast.aliases)
 			].join(";") + "}";
 			interfaces.set(interfaceDecl.name, signature);
 			if (state.interfaceFingerprints.get(interfaceDecl.name) != signature)
@@ -795,7 +796,7 @@ class Compiler {
 		state.instanceInitializerFingerprints = instanceInitializers;
 		for (fn in state.ast.functions) {
 			var canonical = state.name == entry && fn.name == "main" ? "main" : state.name + "." + fn.name;
-			var signature = signatureFingerprint(fn),
+			var signature = signatureFingerprint(fn, state.ast.aliases),
 				body = state.source.text.substring(fn.span.start, fn.span.end);
 			signatures.set(fn.name, signature);
 			bodies.set(fn.name, body);
@@ -812,7 +813,7 @@ class Compiler {
 					{name: field.name, type: astTypeName(canonicalType(field.type, typeAliases))}
 			], classMethods = [
 				for (method in classDecl.methods)
-					{name: method.name, signature: signatureFingerprint(method)}
+					{name: method.name, signature: signatureFingerprint(method, state.ast.aliases)}
 				];
 			var typeResult = types.declareClass(className, baseName, classFields, classMethods);
 			if (compiledOnce && typeResult.compatibility != Compatible)
@@ -820,7 +821,7 @@ class Compiler {
 			for (method in classDecl.methods) {
 				var localName = className + "." + method.name,
 					canonical = localName,
-					signature = signatureFingerprint(method),
+					signature = signatureFingerprint(method, state.ast.aliases),
 					body = state.source.text.substring(method.span.start, method.span.end);
 				signatures.set(localName, signature);
 				bodies.set(localName, body);
@@ -1332,8 +1333,8 @@ class Compiler {
 			default:
 		}
 
-	static function signatureFingerprint(fn:AstFunction):String
-		return fn.name + "(" + [for (a in fn.arguments) Std.string(a.type)].join(",") + ")->" + Std.string(fn.result);
+	static function signatureFingerprint(fn:AstFunction, aliases:Array<compiler.Ast.AstTypeAlias>):String
+		return SemanticSignature.parsedFunction(fn, aliases);
 
 	static function owner(name:String, entry:String):String {
 		var dot = name.indexOf(".");
