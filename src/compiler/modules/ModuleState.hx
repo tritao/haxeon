@@ -18,6 +18,7 @@ class ModuleState {
 	public var diagnostics:Array<Diagnostic> = [];
 	public var signatureFingerprints:Map<String, String> = [];
 	public var interfaceFingerprints:Map<String, String> = [];
+	public var aliasFingerprints:Map<String, String> = [];
 	public var bodyFingerprints:Map<String, String> = [];
 	public var typedFunctions:Map<String, TypedFunction> = [];
 	public var irFunctions:Map<String, IrFunction> = [];

@@ -263,7 +263,7 @@ class Compiler {
 				owners.set(lambdaName, module);
 		var invalid:Map<String, Bool> = [], interfaceChanged = false;
 		for (change in structuralChanged.keys())
-			if (StringTools.startsWith(change, "interface:"))
+			if (StringTools.startsWith(change, "interface:") || StringTools.startsWith(change, "alias:"))
 				interfaceChanged = true;
 		if (interfaceChanged)
 			for (fn in functions)
@@ -464,6 +464,17 @@ class Compiler {
 			if (!interfaces.exists(old))
 				structuralChanged.set('interface:$old', true);
 		state.interfaceFingerprints = interfaces;
+		var aliases:Map<String, String> = [];
+		for (alias in state.ast.aliases) {
+			var signature = alias.name + "=" + astTypeName(alias.type);
+			aliases.set(alias.name, signature);
+			if (state.aliasFingerprints.get(alias.name) != signature)
+				structuralChanged.set('alias:${alias.name}', true);
+		}
+		for (old in state.aliasFingerprints.keys())
+			if (!aliases.exists(old))
+				structuralChanged.set('alias:$old', true);
+		state.aliasFingerprints = aliases;
 		for (fn in state.ast.functions) {
 			var canonical = state.name == entry && fn.name == "main" ? "main" : state.name + "." + fn.name;
 			var signature = signatureFingerprint(fn),
