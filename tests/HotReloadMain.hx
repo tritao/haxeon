@@ -10,6 +10,7 @@ import compiler.hl.HlOpcode;
 import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlType;
 import compiler.modules.Compiler;
+import compiler.modules.CompilerPublication.ReconnectDecision;
 import compiler.ir.IrFunctionStateCodec;
 import compiler.hl.HlFunctionCacheStateCodec;
 import compiler.hl.HlSymbolStateCodec;
@@ -25,6 +26,7 @@ class HotReloadMain {
 	static function main():Void {
 		testDecodedIrLifetime();
 		testBackendStateLifetime();
+		testCompilerRestart();
 		var compiler = new Compiler();
 		compiler.update("Value.hx", "function value():Int { return 42; }");
 		compiler.update("Probe.hx", "function read():Int { return Value.value(); }");
@@ -239,6 +241,39 @@ class HotReloadMain {
 		testAppendedFloatAndStringSymbols();
 		testNonMovingTypeArena();
 		Sys.println("PASS: selective HLP patches are atomic and retain bounded JIT code");
+	}
+
+	static function testCompilerRestart():Void {
+		var compiler = new Compiler();
+		compiler.enablePublicationTracking();
+		compiler.update("Main.hx", "function helper():Int { return 1; } function main():Int { return 40 + helper() - 1; }");
+		var initial = compiler.compile("Main"),
+			mainId = initial.functionIds.get("main"),
+			helperId = initial.functionIds.get("Main.helper"),
+			loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
+		compiler.acknowledgePublication(initial.revision);
+		var state = compiler.exportIdentityState();
+		if (state.compare(compiler.exportIdentityState()) != 0)
+			throw "Acknowledged compiler state was not deterministic";
+		var resumed = new Compiler(state);
+		switch resumed.reconcileRuntime(initial.runtimeIdentity.sub(4, 16), initial.revision) {
+			case ContinuePatching:
+			case ReloadDomain(reason):
+				throw 'Restored compiler required reload: $reason';
+		}
+		resumed.update("Main.hx", "function helper():Int { return 1; } function main():Int { return 42 + helper() - 1; }");
+		var changed = resumed.compile("Main");
+		if (changed.revision != initial.revision + 1
+			|| changed.changedFunctions.length != 1
+			|| changed.changedFunctions[0] != mainId
+			|| changed.changedFunctions[0] == helperId
+			|| changed.patchBytes == null)
+			throw "Restarted compiler did not emit one revision-2 body patch";
+		Runtime.patchSet(loaded, new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions, false));
+		resumed.acknowledgePublication(changed.revision);
+		if (Runtime.callInt(loaded, mainId) != 42)
+			throw "Surviving runtime did not execute the restarted compiler patch";
+		Runtime.dispose(loaded);
 	}
 
 	static function testBackendStateLifetime():Void {

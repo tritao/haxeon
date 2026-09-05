@@ -17,6 +17,7 @@ import compiler.hl.HlCode;
 import compiler.hl.HlModuleAssembler;
 import compiler.hl.HlPatchWriter;
 import compiler.hl.HlRuntimeIdentity;
+import compiler.hl.HlAssemblerStateCodec;
 import haxe.io.Bytes;
 import compiler.types.Type.CompilerType;
 import compiler.ir.Ir.IrNative;
@@ -94,18 +95,27 @@ class Compiler {
 		} else {
 			var identity = HlRuntimeIdentity.decodePersistent(identityState);
 			moduleId = identity.moduleId;
-			assembler = new HlModuleAssembler(identity.stableIds);
+			assembler = identity.assemblerState == null ? new HlModuleAssembler(identity.stableIds) : HlAssemblerStateCodec.decode(identity.assemblerState);
+			for (name => id in identity.stableIds)
+				if (assembler.cache.stableIds.get(name) != id)
+					throw "Assembler stable identities do not match compiler state";
+			for (name => id in assembler.cache.stableIds)
+				if (identity.stableIds.get(name) != id)
+					throw "Assembler stable identities do not match compiler state";
 			types = new TypeRegistry(identity.typeState);
 			publishedAbi = identity.publishedAbi;
 			if (identity.publicationTracking)
-				publication.enable(identity.acknowledgedRevision, identity.acknowledgedAbi);
+				publication.enable(identity.acknowledgedRevision, identity.acknowledgedAbi, identity.assemblerState != null);
+			if (identity.assemblerState != null)
+				beginRehydration(assembler);
 		}
 	}
 
 	public function exportIdentityState():Bytes {
 		var state = publication.persistence();
+		var backend = state.tracking && state.revision > 0 ? HlAssemblerStateCodec.encode(assembler) : null;
 		return HlRuntimeIdentity.encodePersistent(moduleId, assembler.cache.stableIds, types.exportState(), publishedAbi, state.tracking, state.revision,
-			state.abi);
+			state.abi, backend);
 	}
 
 	public function enablePublicationTracking():Void {

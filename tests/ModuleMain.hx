@@ -250,8 +250,8 @@ class ModuleMain {
 			throw "Compiler restart lost the acknowledged publication baseline";
 		switch resumedPublicationCompiler.reconcileRuntime(publicationInitial.runtimeIdentity.sub(4, 16), publicationInitial.revision) {
 			case ContinuePatching:
-				throw "Restart guessed an unavailable backend baseline";
-			case ReloadDomain(_):
+			case ReloadDomain(reason):
+				throw 'Restored backend baseline required reload: $reason';
 		}
 		publicationCompiler.update("Main.hx", "function main():Int { return 41; }");
 		var rejectedPublication = publicationCompiler.compile("Main");

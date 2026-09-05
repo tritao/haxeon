@@ -14,10 +14,11 @@ typedef HlPersistentIdentity = {
 	final publicationTracking:Bool;
 	final acknowledgedRevision:Int;
 	final acknowledgedAbi:Null<RuntimeAbiDescriptor>;
+	final assemblerState:Null<Bytes>;
 }
 
 class HlRuntimeIdentity {
-	public static inline final VERSION = 4;
+	public static inline final VERSION = 5;
 	public static inline final RUNTIME_VERSION = 1;
 	static var sequence = 1;
 
@@ -49,12 +50,13 @@ class HlRuntimeIdentity {
 	}
 
 	public static function encodePersistent(moduleId:Bytes, stableIds:Map<String, Int>, ?typeState:Bytes, ?publishedAbi:RuntimeAbiDescriptor,
-			?publicationTracking:Bool = false, ?acknowledgedRevision:Int = 0, ?acknowledgedAbi:RuntimeAbiDescriptor):Bytes {
+			?publicationTracking:Bool = false, ?acknowledgedRevision:Int = 0, ?acknowledgedAbi:RuntimeAbiDescriptor, ?assemblerState:Bytes):Bytes {
 		if (moduleId.length != 16)
 			throw "Module ID must contain 16 bytes";
 		if (acknowledgedRevision < 0
 			|| (!publicationTracking && (acknowledgedRevision != 0 || acknowledgedAbi != null))
-			|| (acknowledgedRevision > 0 && acknowledgedAbi == null))
+			|| (acknowledgedRevision > 0 && (acknowledgedAbi == null || assemblerState == null))
+			|| (acknowledgedRevision == 0 && assemblerState != null))
 			throw "Invalid acknowledged publication state";
 		var names = [for (name in stableIds.keys()) name];
 		names.sort(Reflect.compare);
@@ -81,6 +83,9 @@ class HlRuntimeIdentity {
 		var acknowledged = acknowledgedAbi == null ? Bytes.alloc(0) : RuntimeAbiCodec.encode(acknowledgedAbi);
 		out.writeInt32(acknowledged.length);
 		out.write(acknowledged);
+		var backend = assemblerState == null ? Bytes.alloc(0) : assemblerState;
+		out.writeInt32(backend.length);
+		out.write(backend);
 		return out.getBytes();
 	}
 
@@ -132,6 +137,12 @@ class HlRuntimeIdentity {
 			if ((!publicationTracking && (acknowledgedRevision != 0 || acknowledgedAbi != null))
 				|| (acknowledgedRevision > 0 && acknowledgedAbi == null))
 				throw "Invalid acknowledged publication state";
+			var assemblerLength = input.readInt32();
+			if (assemblerLength < 0 || assemblerLength > 0x10000000 || assemblerLength > bytes.length - input.position)
+				throw "Invalid assembler baseline state";
+			var assemblerState:Null<Bytes> = assemblerLength == 0 ? null : input.read(assemblerLength);
+			if ((acknowledgedRevision > 0 && assemblerState == null) || (acknowledgedRevision == 0 && assemblerState != null))
+				throw "Invalid acknowledged assembler baseline";
 			if (input.position != bytes.length)
 				throw "Trailing compiler identity data";
 			return {
@@ -141,7 +152,8 @@ class HlRuntimeIdentity {
 				publishedAbi: publishedAbi,
 				publicationTracking: publicationTracking,
 				acknowledgedRevision: acknowledgedRevision,
-				acknowledgedAbi: acknowledgedAbi
+				acknowledgedAbi: acknowledgedAbi,
+				assemblerState: assemblerState
 			};
 		} catch (error:haxe.io.Eof) {
 			throw "Truncated compiler identity state";
