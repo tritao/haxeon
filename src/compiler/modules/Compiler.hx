@@ -121,6 +121,7 @@ class Compiler {
 			programFunctions:Array<AstFunction> = [],
 			classes:Array<compiler.Ast.AstClass> = [],
 			owners:Map<String, String> = [],
+			generatedByModule:Map<String, Map<String, Bool>> = [],
 			reverseCalls:Map<String, Array<String>> = [];
 		for (name in names) {
 			var state = modules.get(name), locals:Map<String, Bool> = [];
@@ -135,6 +136,7 @@ class Compiler {
 				var aliases:Map<String, String> = [];
 				for (statement in canonical.statements)
 					scanCalls(statement, calls, aliases);
+				collectLambdas(canonical.statements, canonical.name, name, generatedByModule);
 				for (callee in calls.keys()) {
 					var callers = reverseCalls.get(callee);
 					if (callers == null) {
@@ -162,6 +164,7 @@ class Compiler {
 					var aliases:Map<String, String> = [];
 					for (statement in canonical.statements)
 						scanCalls(statement, calls, aliases);
+					collectLambdas(canonical.statements, canonical.name, name, generatedByModule);
 					for (callee in calls.keys()) {
 						var callers = reverseCalls.get(callee);
 						if (callers == null) {
@@ -180,6 +183,9 @@ class Compiler {
 				});
 			}
 		}
+		for (module => lambdaNames in generatedByModule)
+			for (lambdaName in lambdaNames.keys())
+				owners.set(lambdaName, module);
 		var invalid:Map<String, Bool> = [];
 		for (name in bodyChanged.keys())
 			invalid.set(name, true);
@@ -233,6 +239,10 @@ class Compiler {
 			for (fn in functions)
 				if (owners.get(fn.name) == name)
 					valid.set(fn.name, true);
+			var lambdaNames = generatedByModule.get(name);
+			if (lambdaNames != null)
+				for (lambdaName in lambdaNames.keys())
+					valid.set(lambdaName, true);
 			for (cached in state.typedFunctions.keys())
 				if (!valid.exists(cached)) {
 					state.typedFunctions.remove(cached);
@@ -242,9 +252,15 @@ class Compiler {
 		}
 		retyped.sort(Reflect.compare);
 		regenerated.sort(Reflect.compare);
-		var cached = [];
-		for (fn in functions)
-			cached.push(modules.get(owners.get(fn.name)).irFunctions.get(fn.name));
+		var cachedNames = [for (fn in functions) fn.name];
+		for (lambdaNames in generatedByModule)
+			for (lambdaName in lambdaNames.keys())
+				cachedNames.push(lambdaName);
+		cachedNames.sort(Reflect.compare);
+		var cached = [
+			for (functionName in cachedNames)
+				modules.get(owners.get(functionName)).irFunctions.get(functionName)
+		];
 		var ir = IrGenerator.assemble(cached, irNatives(), IrGenerator.objectsFrom(typedNew));
 		var signatureChanges = [for (name in signatureChanged.keys()) name];
 		signatureChanges.sort(Reflect.compare);
@@ -528,6 +544,44 @@ class Compiler {
 				aliases.set(name, resolved == null ? target : resolved);
 			default:
 				aliases.remove(name);
+		}
+
+	static function collectLambdas(statements:Array<AstStatement>, functionName:String, module:String, generatedByModule:Map<String, Map<String, Bool>>):Void {
+		for (statement in statements)
+			switch statement {
+				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Expression(expression, _):
+					collectLambdaExpression(expression, functionName, module, generatedByModule);
+				case If(condition, yes, no, _):
+					collectLambdaExpression(condition, functionName, module, generatedByModule);
+					collectLambdas(yes, functionName, module, generatedByModule);
+					collectLambdas(no, functionName, module, generatedByModule);
+				case While(condition, body, _):
+					collectLambdaExpression(condition, functionName, module, generatedByModule);
+					collectLambdas(body, functionName, module, generatedByModule);
+			}
+	}
+
+	static function collectLambdaExpression(expression:AstExpression, functionName:String, module:String, generatedByModule:Map<String, Map<String, Bool>>):Void
+		switch expression {
+			case Lambda(_, body, span):
+				var names = generatedByModule.get(module);
+				if (names == null) {
+					names = [];
+					generatedByModule.set(module, names);
+				}
+				names.set('$' + 'lambda:' + functionName + ':' + span.start, true);
+				collectLambdas(body, functionName, module, generatedByModule);
+			case Call(_, args, _):
+				for (argument in args)
+					collectLambdaExpression(argument, functionName, module, generatedByModule);
+			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Less(left, right, _), LessEqual(left, right, _),
+				Equal(left, right, _):
+				collectLambdaExpression(left, functionName, module, generatedByModule);
+				collectLambdaExpression(right, functionName, module, generatedByModule);
+			case New(_, args, _):
+				for (argument in args)
+					collectLambdaExpression(argument, functionName, module, generatedByModule);
+			default:
 		}
 
 	static function signatureFingerprint(fn:AstFunction):String

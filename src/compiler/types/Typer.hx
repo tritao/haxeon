@@ -24,7 +24,7 @@ class Typer {
 	final externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>;
 	var classDecls:Map<String, AstClass> = [];
 	final generated:Array<TypedFunction> = [];
-	var lambdaCounter:Int = 0;
+	var currentFunctionName:String = "";
 
 	public static function type(program:AstProgram):TypedProgram
 		return new Typer(null).typeProgram(program, null);
@@ -112,6 +112,8 @@ class Typer {
 	}
 
 	function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool = false):TypedFunction {
+		var previousFunctionName = currentFunctionName;
+		currentFunctionName = owner == null ? fn.name : owner + "." + fn.name;
 		var scope = new Scope();
 		var isConstructor = owner != null && fn.name == "new";
 		if (owner != null && !isStatic)
@@ -126,7 +128,7 @@ class Typer {
 		var statements = typeStatements(fn.statements, scope, result);
 		if (result != TVoid && !alwaysReturns(statements))
 			fail("E1006", 'Function ${fn.name} does not return on every path', fn.span);
-		return {
+		var resultFunction:TypedFunction = {
 			name: owner == null ? fn.name : owner + "." + fn.name,
 			owner: owner,
 			isStatic: isStatic,
@@ -136,6 +138,8 @@ class Typer {
 			statements: statements,
 			span: fn.span
 		};
+		currentFunctionName = previousFunctionName;
+		return resultFunction;
 	}
 
 	function typeStatements(statements:Array<AstStatement>, scope:Scope, result:CompilerType):Array<TypedStatement> {
@@ -233,7 +237,7 @@ class Typer {
 				var typedBodyScope = new Scope();
 				for (argument in lambdaArguments)
 					typedBodyScope.define(argument.name, argument.type, span);
-				var lambdaName = '$' + 'lambda' + lambdaCounter++,
+				var lambdaName = '$' + 'lambda:' + currentFunctionName + ':' + span.start,
 					typedBody = typeStatements(body, typedBodyScope, inferredResult);
 				if (inferredResult != TVoid && !alwaysReturns(typedBody))
 					fail("E1006", 'Function $lambdaName does not return on every path', span);

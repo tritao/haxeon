@@ -147,6 +147,19 @@ class ModuleMain {
 		}
 		if (functionValueFirst.ir.functions.length == 0 || functionValueMain == null)
 			throw "Function-value incremental setup did not compile";
+		var lambdaCompiler = new Compiler();
+		lambdaCompiler.update("Main.hx", "function main():Int { var f = () -> { return 42; }; return f(); }");
+		var lambdaFirst = lambdaCompiler.compile("Main"),
+			lambdaId = lambdaFirst.functionIds.get("$lambda:main:30");
+		if (lambdaId == null)
+			throw "Generated lambda did not receive a stable function identity";
+		var lambdaUnchanged = lambdaCompiler.compile("Main");
+		if (lambdaUnchanged.changedFunctions.length != 0)
+			throw "Unchanged lambda build reported changes";
+		lambdaCompiler.update("Main.hx", "function main():Int { var f = () -> { return 41 + 1; }; return f(); }");
+		var lambdaBody = lambdaCompiler.compile("Main");
+		if (lambdaBody.functionIds.get("$lambda:main:30") != lambdaId || lambdaBody.retyped.length != 2)
+			throw "Lambda body edit did not preserve or regenerate its generated function";
 		Sys.println("PASS: function fingerprints selectively retyped and regenerated cached artifacts");
 	}
 }
