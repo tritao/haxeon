@@ -172,6 +172,17 @@ class ModuleMain {
 		}
 		if (functionValueFirst.ir.functions.length == 0 || functionValueMain == null)
 			throw "Function-value incremental setup did not compile";
+		var semanticInvalidation = new Compiler();
+		semanticInvalidation.update("Main.hx",
+			"typedef Value = Int; function use(value:Value):Value { return value; } function idle():Int { return 1; } function main():Int { return use(42); }");
+		semanticInvalidation.compile("Main");
+		semanticInvalidation.update("Main.hx",
+			"typedef Value = Bool; function use(value:Value):Value { return value; } function idle():Int { return 1; } function main():Int { use(true); return 42; }");
+		var semanticEdit = semanticInvalidation.compile("Main");
+		if (semanticEdit.retyped.indexOf("Main.idle") >= 0
+			|| semanticEdit.retyped.indexOf("Main.use") < 0
+			|| semanticEdit.retyped.indexOf("main") < 0)
+			throw 'Semantic alias edit invalidated ${semanticEdit.retyped}';
 		var lambdaCompiler = new Compiler();
 		lambdaCompiler.update("Main.hx", "function main():Int { var f = () -> { return 42; }; return f(); }");
 		var lambdaFirst = lambdaCompiler.compile("Main"),

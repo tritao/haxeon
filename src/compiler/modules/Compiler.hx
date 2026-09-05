@@ -397,15 +397,24 @@ class Compiler {
 		for (module => lambdaNames in generatedByModule)
 			for (lambdaName in lambdaNames.keys())
 				owners.set(lambdaName, module);
-		var invalid:Map<String, Bool> = [], interfaceChanged = false;
-		for (change in structuralChanged.keys())
-			if (StringTools.startsWith(change, "interface:")
-				|| StringTools.startsWith(change, "alias:")
-				|| StringTools.startsWith(change, "enum:"))
-				interfaceChanged = true;
-		if (interfaceChanged)
-			for (fn in functions)
-				invalid.set(fn.name, true);
+		var invalid:Map<String, Bool> = [];
+		for (change in structuralChanged.keys()) {
+			var separator = change.indexOf(":"),
+				target = separator < 0 ? change : change.substr(separator + 1);
+			for (state in modules)
+				for (owner => dependencies in state.semanticDependencies)
+					for (dependency in dependencies)
+						if (sameDependencyTarget(dependency.target, target)) {
+							var matchedFunction = false;
+							for (fn in functions)
+								if (fn.name == owner || StringTools.startsWith(fn.name, owner + ".")) {
+									invalid.set(fn.name, true);
+									matchedFunction = true;
+								}
+							if (matchedFunction)
+								break;
+						}
+		}
 		for (name in bodyChanged.keys())
 			invalid.set(name, true);
 		var work = [for (name in signatureChanged.keys()) name];
@@ -1158,6 +1167,9 @@ class Compiler {
 				return;
 		dependencies.push({kind: kind, target: target});
 	}
+
+	static function sameDependencyTarget(dependency:String, changed:String):Bool
+		return dependency == changed || StringTools.endsWith(dependency, "." + changed) || StringTools.endsWith(changed, "." + dependency);
 
 	static function scanStatement(s, dependencies):Void
 		switch s {
