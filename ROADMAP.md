@@ -49,8 +49,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 - [x] Separate signature/body fingerprints and selective regeneration.
 - [x] Stable function IDs, tombstones, compaction, and identity persistence.
 - [x] Typed function-value dependency invalidation.
-- [~] Package-qualified module paths and imported function/module aliases are
-  resolved incrementally; imported classes and nominal names remain.
+- [~] Package-qualified module paths and imported function/module aliases plus
+	imported class names/type annotations resolve incrementally; deeper nominal
+	namespace identity remains.
 - [~] Unsaved edits can be validated transactionally against a forked compiler
   snapshot without mutating the live source; shared snapshots and one-pass
   commit/rollback remain.

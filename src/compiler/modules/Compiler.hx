@@ -197,8 +197,8 @@ class Compiler {
 					classMethods.push({
 						name: method.name,
 						isStatic: method.isStatic,
-						arguments: method.arguments,
-						result: method.result,
+						arguments: canonical.arguments,
+						result: canonical.result,
 						span: method.span,
 						statements: canonical.statements
 					});
@@ -219,9 +219,21 @@ class Compiler {
 				}
 				classes.push({
 					name: classDecl.name,
-					base: classDecl.base,
-					interfaces: classDecl.interfaces,
-					fields: classDecl.fields,
+					base: classDecl.base == null ? null : resolveTypeName(classDecl.base, aliases),
+					interfaces: [
+						for (interfaceName in classDecl.interfaces)
+							resolveTypeName(interfaceName, aliases)
+					],
+					fields: [
+						for (field in classDecl.fields)
+							{
+								name: field.name,
+								type: canonicalType(field.type, aliases),
+								isStatic: field.isStatic,
+								isFinal: field.isFinal,
+								span: field.span
+							}
+					],
 					methods: classMethods,
 					span: classDecl.span
 				});
@@ -456,8 +468,11 @@ class Compiler {
 		return {
 			name: name,
 			isStatic: fn.isStatic,
-			arguments: fn.arguments,
-			result: fn.result,
+			arguments: [
+				for (argument in fn.arguments)
+					{name: argument.name, type: canonicalType(argument.type, aliases), span: argument.span}
+			],
+			result: canonicalType(fn.result, aliases),
 			span: fn.span,
 			statements: [for (s in fn.statements) canonicalStatement(s, module, entry, locals, aliases)]
 		};
@@ -480,7 +495,8 @@ class Compiler {
 
 	static function canonicalStatement(s, module, entry, locals, ?aliases):AstStatement
 		return switch s {
-			case VarDeclaration(n, t, e, span): VarDeclaration(n, t, canonicalExpression(e, module, entry, locals, aliases), span);
+			case VarDeclaration(n, t, e,
+				span): VarDeclaration(n, t == null ? null : canonicalType(t, aliases), canonicalExpression(e, module, entry, locals, aliases), span);
 			case Assignment(n, e, span): Assignment(n, canonicalExpression(e, module, entry, locals, aliases), span);
 			case IndexAssignment(array, offset, e,
 				span): IndexAssignment(canonicalExpression(array, module, entry, locals, aliases),
@@ -520,7 +536,7 @@ class Compiler {
 				else if (name.indexOf(".") < 0 && locals.exists(name))
 					resolved = module == entry && name == "main" ? "main" : module + "." + name;
 				Call(resolved, [for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
-			case New(typeName, args, s): New(typeName, [for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
+			case New(typeName, args, s): New(resolveTypeName(typeName, aliases), [for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
 			case NewArray(element, length, s): NewArray(element, canonicalExpression(length, module, entry, locals, aliases), s);
 			case Index(array, offset,
 				s): Index(canonicalExpression(array, module, entry, locals, aliases), canonicalExpression(offset, module, entry, locals, aliases), s);
@@ -540,6 +556,22 @@ class Compiler {
 		}
 		return aliases;
 	}
+
+	static function resolveTypeName(name:String, aliases:Null<Map<String, String>>):String {
+		var imported = aliases == null ? null : aliases.get(name);
+		if (imported == null)
+			return name;
+		var dot = imported.lastIndexOf(".");
+		return dot < 0 ? imported : imported.substr(dot + 1);
+	}
+
+	static function canonicalType(type:compiler.Ast.AstType, aliases:Null<Map<String, String>>):compiler.Ast.AstType
+		return switch type {
+			case NamedType(name): NamedType(resolveTypeName(name, aliases));
+			case ArrayType(element): ArrayType(canonicalType(element, aliases));
+			case FunctionType(arguments, result): FunctionType([for (argument in arguments) canonicalType(argument, aliases)], canonicalType(result, aliases));
+			default: type;
+		};
 
 	static function scanStatement(s, dependencies):Void
 		switch s {
