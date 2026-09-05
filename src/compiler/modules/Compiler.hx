@@ -1264,7 +1264,11 @@ class Compiler {
 		return switch e {
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_): e;
 			case Variable(name, span):
-				if (name.indexOf(".") < 0 && locals.exists(name)) Variable(module == entry
+				var dot = name.indexOf("."),
+					prefix = dot < 0 ? name : name.substr(0, dot),
+					imported = aliases == null || locals.exists(prefix) ? null : aliases.get(prefix);
+				if (imported != null) Variable(imported + (dot < 0 ? "" : name.substr(dot)),
+					span); else if (dot < 0 && locals.exists(name)) Variable(module == entry
 					&& name == "main" ? "main" : module + "." + name, span); else e;
 			case Member(object, name, s): Member(canonicalExpression(object, module, entry, locals, aliases), name, s);
 			case Add(a, b, s): Add(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);

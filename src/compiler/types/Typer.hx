@@ -837,17 +837,20 @@ class Typer {
 							var parts = name.split("."),
 								objectName = parts[0],
 								fieldName = parts[1],
-								enumDecl = enumDecls.get(objectName);
-							if (enumDecl != null && parts.length == 2) {
+								lastDot = name.lastIndexOf("."),
+								enumName = name.substr(0, lastDot),
+								enumCaseName = name.substr(lastDot + 1),
+								enumDecl = enumDecls.get(enumName);
+							if (enumDecl != null) {
 								var index = -1;
 								for (i in 0...enumDecl.cases.length)
-									if (enumDecl.cases[i].name == fieldName)
+									if (enumDecl.cases[i].name == enumCaseName)
 										index = i;
 								if (index < 0)
 									fail("E1005", 'Unknown enum case "$name"', span);
 								if (enumDecl.cases[index].params.length > 0)
 									fail("E1008", 'Enum case "$name" requires constructor arguments', span);
-								return new TypedExpression(TEnumLiteral(objectName, index), TEnum(objectName), span);
+								return new TypedExpression(TEnumLiteral(enumName, index), TEnum(enumName), span);
 							}
 							var object = typeExpression(Variable(objectName, span), scope);
 							for (index in 1...parts.length)
