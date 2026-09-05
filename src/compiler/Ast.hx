@@ -64,7 +64,7 @@ typedef AstInterface = {
 	final span:SourceSpan;
 }
 
-typedef AstTypeAlias = {final name:String; final type:AstType; final span:SourceSpan;}
+typedef AstTypeAlias = {final name:String; final type:AstType; final isPrivate:Bool; final span:SourceSpan;}
 typedef AstEnumParameter = {final name:Null<String>; final type:AstType; final optional:Bool; final span:SourceSpan;}
 typedef AstEnumCase = {final name:String; final params:Array<AstEnumParameter>; final span:SourceSpan;}
 typedef AstEnum = {final name:String; final cases:Array<AstEnumCase>; final span:SourceSpan;}

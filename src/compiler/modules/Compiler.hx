@@ -944,7 +944,12 @@ class Compiler {
 	}
 
 	static function canonicalAlias(alias:compiler.Ast.AstTypeAlias, aliases:Map<String, String>, packageName:Null<String>):compiler.Ast.AstTypeAlias
-		return {name: qualifiedTypeName(packageName, alias.name), type: canonicalType(alias.type, aliases), span: alias.span};
+		return {
+			name: qualifiedTypeName(packageName, alias.name),
+			type: canonicalType(alias.type, aliases),
+			isPrivate: alias.isPrivate,
+			span: alias.span
+		};
 
 	static function canonicalEnum(enumDecl:compiler.Ast.AstEnum, aliases:Map<String, String>, packageName:Null<String>):compiler.Ast.AstEnum
 		return {

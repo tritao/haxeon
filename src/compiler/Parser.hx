@@ -45,8 +45,12 @@ class Parser {
 		var functions = [], aliases:Array<AstTypeAlias> = [], enums:Array<AstEnum> = [], enumAbstracts:Array<AstEnumAbstract> = [],
 			abstracts:Array<AstAbstract> = [], interfaces:Array<AstInterface> = [], classes = [];
 		while (!check(TokenKind.Eof)) {
+			var visibility = match(TokenKind.Private) ? previous() : match(TokenKind.Public) ? previous() : null;
 			if (match(TokenKind.Typedef))
-				aliases.push(parseTypeAlias(previous().span));
+				aliases.push(parseTypeAlias(visibility == null ? previous()
+					.span : visibility.span, visibility != null && visibility.kind == TokenKind.Private));
+			else if (visibility != null)
+				fail(current(), "Top-level visibility modifier is not supported for this declaration");
 			else if (match(TokenKind.Enum)) {
 				var start = previous().span;
 				if (check(TokenKind.Identifier) && current().text == "abstract") {
@@ -156,7 +160,7 @@ class Parser {
 		};
 	}
 
-	function parseTypeAlias(start:SourceSpan):AstTypeAlias {
+	function parseTypeAlias(start:SourceSpan, isPrivate:Bool):AstTypeAlias {
 		var name = consume(TokenKind.Identifier).text;
 		consume(TokenKind.Assign);
 		var type = parseType(), end = previous().span;
@@ -167,7 +171,12 @@ class Parser {
 			default:
 				end = consume(TokenKind.Semicolon).span;
 		}
-		return {name: name, type: type, span: start.merge(end)};
+		return {
+			name: name,
+			type: type,
+			isPrivate: isPrivate,
+			span: start.merge(end)
+		};
 	}
 
 	function parseEnum(start:SourceSpan):AstEnum {

@@ -64,6 +64,9 @@ class TestMain {
 		Frontend.compile('function main():Int { var values = [20, 22]; var empty:Array<Int> = []; return values[0] + values[1] + empty.length; }');
 		new Parser(new Lexer(new SourceFile("expression-block-statements.hx",
 			'function main():Int return if (true) { var value = 0; if (true) value = 42; value; } else 0;')).tokenize()).parseProgram();
+		var privateAlias = new Parser(new Lexer(new SourceFile("private-alias.hx", "private typedef Internal = Int;")).tokenize()).parseProgram();
+		if (!privateAlias.aliases[0].isPrivate)
+			throw "Private type alias visibility was not preserved";
 		Frontend.compile('function main():Int { switch 0 { case 0: return 42; default: return 0; }; }');
 		expectCompileError('function main():Int { var values = []; return 0; }', 'Empty array literal requires an expected element type');
 		Frontend.compile('function main():Int { var value:Int; do { value = 42; } while (false); return value; }');
