@@ -26,6 +26,7 @@ class HotReloadMain {
 	static function main():Void {
 		testDecodedIrLifetime();
 		testBackendStateLifetime();
+		testLiveAbiPatchMatrix();
 		testCompilerRestart();
 		var compiler = new Compiler();
 		compiler.update("Value.hx", "function value():Int { return 42; }");
@@ -241,6 +242,41 @@ class HotReloadMain {
 		testAppendedFloatAndStringSymbols();
 		testNonMovingTypeArena();
 		Sys.println("PASS: selective HLP patches are atomic and retain bounded JIT code");
+	}
+
+	static function testLiveAbiPatchMatrix():Void {
+		var fixtures = [
+			{
+				name: "top-level body",
+				before: "function main():Int { return 40; }",
+				after: "function main():Int { return 42; }"
+			},
+			{
+				name: "callee body",
+				before: "function value():Int { return 40; } function main():Int { return value(); }",
+				after: "function value():Int { return 42; } function main():Int { return value(); }"
+			},
+			{
+				name: "method body",
+				before: "class Value { public function read():Int { return 40; } } function main():Int { return new Value().read(); }",
+				after: "class Value { public function read():Int { return 42; } } function main():Int { return new Value().read(); }"
+			}
+		];
+		for (fixture in fixtures) {
+			var compiler = new Compiler();
+			compiler.update("Main.hx", fixture.before);
+			var initial = compiler.compile("Main"),
+				mainId = initial.functionIds.get("main");
+			var loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
+			compiler.update("Main.hx", fixture.after);
+			var changed = compiler.compile("Main");
+			if (changed.requiresReload || changed.patchBytes == null || changed.changedFunctions.length == 0)
+				throw '${fixture.name}: compiler did not emit a body patch';
+			Runtime.patchSet(loaded, new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions, changed.requiresReload));
+			if (Runtime.callInt(loaded, mainId) != 42)
+				throw '${fixture.name}: live runtime did not execute the patched behavior';
+			Runtime.dispose(loaded);
+		}
 	}
 
 	static function testCompilerRestart():Void {
