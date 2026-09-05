@@ -61,6 +61,9 @@ class ModuleMain {
 		var secondBytes = HlWriter.encode(result.module);
 		if (firstBytes.compare(secondBytes) != 0)
 			throw "Equivalent incremental builds were not deterministic";
+		var committedIdentity = compiler.exportIdentityState(),
+			committedMathIr = compiler.modules.get("Math").irFunctions.get("Math.add"),
+			committedMathTypeVersion = compiler.modules.get("Math").typeVersion;
 		compiler.update("Math.hx", "function add(a:Int, b:Int):Bool { return a < b; }");
 		try {
 			compiler.compile("Main");
@@ -69,9 +72,18 @@ class ModuleMain {
 			if (error.diagnostic.code != "E1003")
 				throw error;
 		}
+		if (compiler.exportIdentityState().compare(committedIdentity) != 0
+			|| compiler.modules.get("Math").irFunctions.get("Math.add") != committedMathIr
+			|| compiler.modules.get("Math").typeVersion != committedMathTypeVersion)
+			throw "Failed compilation changed committed compiler state";
+		var failedDiagnosticCount = 0;
+		for (state in compiler.modules)
+			failedDiagnosticCount += state.diagnostics.length;
+		if (compiler.modules.get("Math").source.text.indexOf(":Bool") < 0 || failedDiagnosticCount == 0)
+			throw "Failed compilation did not retain the current document and diagnostic";
 		compiler.update("Math.hx", "function add(a:Int, b:Int):Int { return a + b; }");
 		var restored = compiler.compile("Main");
-		if (restored.requiresReload)
+		if (restored.requiresReload || restored.revision != result.revision + 1)
 			throw "Restoring an unpublished invalid signature required reload";
 		var mainIr = compiler.modules.get("Main").irFunctions.get("main");
 		var mathIr = compiler.modules.get("Math").irFunctions.get("Math.add");

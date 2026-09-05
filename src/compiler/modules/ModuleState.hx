@@ -44,4 +44,37 @@ class ModuleState {
 		diagnostics = [];
 		dirty = true;
 	}
+
+	public function copy():ModuleState {
+		var result = new ModuleState(name, source);
+		result.revision = revision;
+		result.parseVersion = parseVersion;
+		result.typeVersion = typeVersion;
+		result.tokens = tokens;
+		result.ast = ast;
+		result.lastGoodTokens = lastGoodTokens;
+		result.lastGoodAst = lastGoodAst;
+		result.lastGoodSource = lastGoodSource;
+		result.dependencies = dependencies.copy();
+		result.diagnostics = diagnostics.copy();
+		result.signatureFingerprints = copyMap(signatureFingerprints);
+		result.interfaceFingerprints = copyMap(interfaceFingerprints);
+		result.aliasFingerprints = copyMap(aliasFingerprints);
+		result.enumFingerprints = copyMap(enumFingerprints);
+		result.staticInitializerFingerprints = copyMap(staticInitializerFingerprints);
+		result.instanceInitializerFingerprints = copyMap(instanceInitializerFingerprints);
+		result.bodyFingerprints = copyMap(bodyFingerprints);
+		result.typedFunctions = copyMap(typedFunctions);
+		result.irFunctions = copyMap(irFunctions);
+		result.irVersions = copyMap(irVersions);
+		result.dirty = dirty;
+		return result;
+	}
+
+	static function copyMap<T>(source:Map<String, T>):Map<String, T> {
+		var result:Map<String, T> = [];
+		for (name => value in source)
+			result.set(name, value);
+		return result;
+	}
 }

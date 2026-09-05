@@ -79,6 +79,16 @@ class TypeRegistry {
 			importState(state);
 	}
 
+	public function copy():TypeRegistry {
+		var result = new TypeRegistry();
+		for (name => id in ids)
+			result.ids.set(name, id);
+		for (name => descriptor in descriptors)
+			result.descriptors.set(name, descriptor);
+		result.nextId = nextId;
+		return result;
+	}
+
 	public function declareClass(name:String, base:Null<String>, fields:Array<DeclaredField>, methods:Array<DeclaredMethod>):TypeDeclarationResult {
 		var typeId:StableTypeId = idFor("type:" + name);
 		var typeFields = [];

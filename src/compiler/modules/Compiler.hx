@@ -64,6 +64,15 @@ typedef ValidationResult = {
 	final diagnostic:Null<Diagnostic>;
 }
 
+private typedef CompilerSnapshot = {
+	final modules:Map<String, ModuleState>;
+	final types:TypeRegistry;
+	final objectCache:Map<String, IrObject>;
+	final lastTypedProgram:Null<TypedProgram>;
+	final publishedAbi:Null<RuntimeAbiDescriptor>;
+	final compiledOnce:Bool;
+}
+
 class Compiler {
 	public final modules:Map<String, ModuleState> = [];
 
@@ -74,10 +83,10 @@ class Compiler {
 	var assembler:HlModuleAssembler;
 	final moduleId:Bytes;
 
-	public final types:TypeRegistry;
+	public var types(default, null):TypeRegistry;
 
 	final natives:Map<String, NativeFunction> = [];
-	final objectCache:Map<String, IrObject> = [];
+	var objectCache:Map<String, IrObject> = [];
 	var publishedAbi:Null<RuntimeAbiDescriptor>;
 	var compiledOnce = false;
 
@@ -186,6 +195,22 @@ class Compiler {
 	}
 
 	public function compile(entryModule:String, ?token:CancellationToken):CompileResult {
+		var snapshot = snapshot();
+		try
+			return compileCandidate(entryModule, token)
+		catch (error:Dynamic) {
+			var failedDiagnostics:Map<String, Array<Diagnostic>> = [];
+			for (name => state in modules)
+				failedDiagnostics.set(name, state.diagnostics.copy());
+			restore(snapshot);
+			for (name => diagnostics in failedDiagnostics)
+				if (modules.exists(name))
+					modules.get(name).diagnostics = diagnostics;
+			throw error;
+		}
+	}
+
+	function compileCandidate(entryModule:String, ?token:CancellationToken):CompileResult {
 		var startedAt = haxe.Timer.stamp();
 		if (token != null)
 			token.check();
@@ -490,6 +515,35 @@ class Compiler {
 				patchBytes: patchBytes == null ? 0 : patchBytes.length
 			}
 		};
+	}
+
+	function snapshot():CompilerSnapshot {
+		var moduleCopies:Map<String, ModuleState> = [],
+			objectCopies:Map<String, IrObject> = [];
+		for (name => state in modules)
+			moduleCopies.set(name, state.copy());
+		for (name => object in objectCache)
+			objectCopies.set(name, object);
+		return {
+			modules: moduleCopies,
+			types: types.copy(),
+			objectCache: objectCopies,
+			lastTypedProgram: lastTypedProgram,
+			publishedAbi: publishedAbi,
+			compiledOnce: compiledOnce
+		};
+	}
+
+	function restore(snapshot:CompilerSnapshot):Void {
+		for (name in [for (name in modules.keys()) name])
+			modules.remove(name);
+		for (name => state in snapshot.modules)
+			modules.set(name, state);
+		types = snapshot.types;
+		objectCache = snapshot.objectCache;
+		lastTypedProgram = snapshot.lastTypedProgram;
+		publishedAbi = snapshot.publishedAbi;
+		compiledOnce = snapshot.compiledOnce;
 	}
 
 	function nativeSignatures():Map<String, {arguments:Array<CompilerType>, result:CompilerType}> {
