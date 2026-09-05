@@ -788,15 +788,15 @@ class Parser {
 			return Not(value, start.merge(expressionSpan(value)));
 		}
 		if (match(TokenKind.Integer))
-			return IntegerLiteral(Std.parseInt(previous().text), previous().span);
+			return parsePostfix(IntegerLiteral(Std.parseInt(previous().text), previous().span));
 		if (match(TokenKind.Float))
-			return FloatLiteral(Std.parseFloat(previous().text), previous().span);
+			return parsePostfix(FloatLiteral(Std.parseFloat(previous().text), previous().span));
 		if (match(TokenKind.StringLiteral))
-			return StringLiteral(decodeString(previous().text), previous().span);
+			return parsePostfix(StringLiteral(decodeString(previous().text), previous().span));
 		if (match(TokenKind.BoolTrue))
-			return BoolLiteral(true, previous().span);
+			return parsePostfix(BoolLiteral(true, previous().span));
 		if (match(TokenKind.BoolFalse))
-			return BoolLiteral(false, previous().span);
+			return parsePostfix(BoolLiteral(false, previous().span));
 		if (match(TokenKind.LeftBracket)) {
 			var start = previous().span, values = [];
 			if (match(TokenKind.For)) {
@@ -828,7 +828,7 @@ class Parser {
 		}
 		if (check(TokenKind.Identifier) && current().text == "null") {
 			var nullToken = advance();
-			return NullLiteral(nullToken.span);
+			return parsePostfix(NullLiteral(nullToken.span));
 		}
 		if (match(TokenKind.New)) {
 			var start = previous().span;
