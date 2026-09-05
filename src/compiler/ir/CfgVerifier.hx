@@ -95,6 +95,13 @@ class CfgVerifier {
 						default: throw 'CFG static closure must produce a function';
 					}
 					define(out, defined, available);
+				case InstanceClosure(out, _, receiver):
+					require(receiver, available);
+					switch out.type {
+						case Function(_, _):
+						default: throw 'CFG instance closure must produce a function';
+					}
+					define(out, defined, available);
 				case CallClosure(out, closure, arguments):
 					require(closure, available);
 					switch closure.type {

@@ -108,6 +108,12 @@ class CfgBuilder {
 		return out;
 	}
 
+	public function instanceClosure(name:String, receiver:CfgValue, type:IrType):CfgValue {
+		var out = temporary(type);
+		emit(InstanceClosure(out, name, receiver));
+		return out;
+	}
+
 	public function newObject(typeName:String):CfgValue {
 		var out = temporary(Obj(typeName));
 		emit(NewObject(out, typeName));

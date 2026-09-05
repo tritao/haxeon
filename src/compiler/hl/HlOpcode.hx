@@ -17,6 +17,7 @@ enum abstract HlOpcode(Int) from Int to Int {
 	var Call2 = 26;
 	var CallClosure = 32;
 	var StaticClosure = 33;
+	var InstanceClosure = 34;
 	var Field = 38;
 	var SetField = 39;
 	var New = 82;

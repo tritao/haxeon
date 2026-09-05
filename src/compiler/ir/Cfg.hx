@@ -30,6 +30,7 @@ enum CfgInstruction {
 	Equal(output:CfgValue, left:CfgValue, right:CfgValue);
 	Call(output:CfgValue, functionName:String, arguments:Array<CfgValue>);
 	StaticClosure(output:CfgValue, functionName:String);
+	InstanceClosure(output:CfgValue, functionName:String, receiver:CfgValue);
 	CallClosure(output:CfgValue, closure:CfgValue, arguments:Array<CfgValue>);
 	NewObject(output:CfgValue, typeName:String);
 	FieldGet(output:CfgValue, object:CfgValue, fieldName:String);

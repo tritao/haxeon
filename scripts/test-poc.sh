@@ -70,6 +70,18 @@ if [[ $closure_status -ne 42 ]]; then
 fi
 echo "PASS: static closure allocation and invocation executed (exit 42)"
 
+instance_closure_output="$root_dir/out/instance-closure.hl"
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run InstanceClosureMain "$instance_closure_output"
+set +e
+LD_LIBRARY_PATH="$root_dir/.tools/hashlink" "$hl" "$instance_closure_output"
+instance_closure_status=$?
+set -e
+if [[ $instance_closure_status -ne 42 ]]; then
+	echo "instance closure IR: expected exit 42, got $instance_closure_status" >&2
+	exit 1
+fi
+echo "PASS: instance closure capture ABI executed (exit 42)"
+
 instance_module_output="$root_dir/out/instance-module.hl"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run InstanceModuleMain "$instance_module_output"
 set +e

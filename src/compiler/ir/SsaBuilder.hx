@@ -286,6 +286,9 @@ class SsaBuilder {
 				case StaticClosure(out, name):
 					var result = define(out);
 					target.instructions.push(StaticClosure(result, name));
+				case InstanceClosure(out, name, receiver):
+					var result = define(out);
+					target.instructions.push(InstanceClosure(result, name, resolve(receiver)));
 				case CallClosure(out, closure, args):
 					var result = define(out);
 					target.instructions.push(CallClosure(result, resolve(closure), [for (arg in args) resolve(arg)]));

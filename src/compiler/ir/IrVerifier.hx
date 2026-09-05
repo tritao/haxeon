@@ -147,6 +147,17 @@ class IrVerifier {
 				if (!sameType(out.type, Function(signature.arguments, signature.result)))
 					throw 'Wrong IR closure type for "$name"';
 				define(values, out);
+			case InstanceClosure(out, name, receiver):
+				var signature = signatures.get(name);
+				if (signature == null || signature.arguments.length == 0)
+					throw 'Unknown or receiver-less IR closure target "$name"';
+				require(values, receiver);
+				if (!compatibleType(receiver.type, signature.arguments[0], objects))
+					throw 'Wrong IR instance closure receiver type';
+				var closureType = Function(signature.arguments.slice(1), signature.result);
+				if (!sameType(out.type, closureType))
+					throw 'Wrong IR instance closure type for "$name"';
+				define(values, out);
 			case CallClosure(out, closure, args):
 				require(values, closure);
 				var functionType = switch closure.type {

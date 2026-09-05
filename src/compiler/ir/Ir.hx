@@ -42,6 +42,7 @@ enum IrInstruction {
 	Equal(output:IrValue, left:IrValue, right:IrValue);
 	Call(output:IrValue, functionName:String, arguments:Array<IrValue>);
 	StaticClosure(output:IrValue, functionName:String);
+	InstanceClosure(output:IrValue, functionName:String, receiver:IrValue);
 	CallClosure(output:IrValue, closure:IrValue, arguments:Array<IrValue>);
 	NewObject(output:IrValue, typeName:String);
 	FieldGet(output:IrValue, object:IrValue, fieldName:String);

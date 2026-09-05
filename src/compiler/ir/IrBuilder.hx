@@ -103,6 +103,12 @@ class IrBuilder {
 		return out;
 	}
 
+	public function instanceClosure(name:String, receiver:IrValue, type:IrType):IrValue {
+		var out = temporary(type);
+		emit(InstanceClosure(out, name, receiver));
+		return out;
+	}
+
 	public function newObject(typeName:String):IrValue {
 		var out = temporary(Obj(typeName));
 		emit(NewObject(out, typeName));

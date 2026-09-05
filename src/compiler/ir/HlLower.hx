@@ -159,6 +159,9 @@ class HlLower {
 						}
 					case StaticClosure(output, functionName):
 						instructions.push(HlInstruction.StaticClosure(defineRegister(output, registers, registerTypes), requireFunction(functionName)));
+					case InstanceClosure(output, functionName, receiver):
+						instructions.push(HlInstruction.InstanceClosure(defineRegister(output, registers, registerTypes), requireFunction(functionName),
+							requireRegister(receiver, registers)));
 					case CallClosure(output, closure, arguments):
 						instructions.push(HlInstruction.CallClosure(defineRegister(output, registers, registerTypes), requireRegister(closure, registers),
 							[for (argument in arguments) requireRegister(argument, registers)]));
