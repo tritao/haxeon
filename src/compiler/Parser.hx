@@ -808,9 +808,14 @@ class Parser {
 		if (match(TokenKind.LeftBrace)) {
 			var fields = [];
 			while (!check(TokenKind.RightBrace)) {
-				var optional = match(TokenKind.Question);
-				match(TokenKind.Final);
-				match(TokenKind.Var);
+				var optional = false;
+				while (check(TokenKind.Question) || check(TokenKind.Final) || check(TokenKind.Var))
+					if (match(TokenKind.Question)) {
+						if (optional)
+							fail(previous(), "Duplicate optional field marker");
+						optional = true;
+					} else
+						advance();
 				var name = consume(TokenKind.Identifier);
 				consume(TokenKind.Colon);
 				var type = parseType();
