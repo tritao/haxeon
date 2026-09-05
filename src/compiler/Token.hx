@@ -72,6 +72,9 @@ enum TokenKind {
 	Not;
 	AndAnd;
 	OrOr;
+	Ampersand;
+	Pipe;
+	Caret;
 	LeftBracket;
 	RightBracket;
 	Question;
