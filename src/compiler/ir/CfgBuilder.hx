@@ -36,6 +36,12 @@ class CfgBuilder {
 	public function returnValue(value:CfgValue):Void
 		terminate(Return(value));
 
+	public function returnVoid():Void {
+		var out = temporary(Void);
+		emit(ConstVoid(out));
+		terminate(Return(out));
+	}
+
 	public function load(name:String, type:IrType):CfgValue {
 		var out = temporary(type);
 		emit(LoadLocal(out, name));
@@ -89,6 +95,21 @@ class CfgBuilder {
 		emit(Call(out, name, args));
 		return out;
 	}
+
+	public function newObject(typeName:String):CfgValue {
+		var out = temporary(Obj(typeName));
+		emit(NewObject(out, typeName));
+		return out;
+	}
+
+	public function fieldGet(object:CfgValue, fieldName:String, type:IrType):CfgValue {
+		var out = temporary(type);
+		emit(FieldGet(out, object, fieldName));
+		return out;
+	}
+
+	public function fieldSet(object:CfgValue, fieldName:String, value:CfgValue):Void
+		emit(FieldSet(object, fieldName, value));
 
 	function binary(a:CfgValue, b:CfgValue, kind:Int, ?type:IrType):CfgValue {
 		var out = temporary(type == null ? a.type : type);

@@ -247,6 +247,9 @@ class SsaBuilder {
 				case StoreLocal(name, value):
 					push(name, resolve(value));
 					pushed.push(name);
+				case ConstVoid(out):
+					var result = define(out);
+					target.instructions.push(ConstVoid(result));
 				case ConstInt(out, value):
 					var result = define(out);
 					target.instructions.push(ConstInt(result, value));
@@ -280,6 +283,14 @@ class SsaBuilder {
 				case Call(out, name, args):
 					var result = define(out);
 					target.instructions.push(Call(result, name, [for (arg in args) resolve(arg)]));
+				case NewObject(out, typeName):
+					var result = define(out);
+					target.instructions.push(NewObject(result, typeName));
+				case FieldGet(out, object, fieldName):
+					var result = define(out);
+					target.instructions.push(FieldGet(result, resolve(object), fieldName));
+				case FieldSet(object, fieldName, value):
+					target.instructions.push(FieldSet(resolve(object), fieldName, resolve(value)));
 			}
 		target.terminator = switch block.terminator {
 			case Return(value): Return(resolve(value));

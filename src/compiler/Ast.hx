@@ -46,6 +46,7 @@ enum AstExpression {
 	LessEqual(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Equal(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Call(name:String, arguments:Array<AstExpression>, span:SourceSpan);
+	New(typeName:String, arguments:Array<AstExpression>, span:SourceSpan);
 }
 
 enum AstStatement {
@@ -59,6 +60,7 @@ enum AstStatement {
 
 typedef AstFunction = {
 	final name:String;
+	final isStatic:Bool;
 	final arguments:Array<AstArgument>;
 	final result:AstType;
 	final statements:Array<AstStatement>;

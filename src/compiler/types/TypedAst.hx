@@ -28,11 +28,15 @@ enum TypedExpressionKind {
 	TLessEqual(left:TypedExpression, right:TypedExpression);
 	TEqual(left:TypedExpression, right:TypedExpression);
 	TCall(name:String, arguments:Array<TypedExpression>);
+	TNew(typeName:String, arguments:Array<TypedExpression>);
+	TField(object:TypedExpression, name:String);
+	TMethodCall(object:TypedExpression, name:String, arguments:Array<TypedExpression>);
 }
 
 enum TypedStatement {
 	TVar(name:String, initializer:TypedExpression, span:SourceSpan);
 	TAssign(name:String, value:TypedExpression, span:SourceSpan);
+	TFieldAssign(object:TypedExpression, name:String, value:TypedExpression, span:SourceSpan);
 	TReturn(expression:TypedExpression, span:SourceSpan);
 	TIf(condition:TypedExpression, thenBranch:Array<TypedStatement>, elseBranch:Array<TypedStatement>, span:SourceSpan);
 	TWhile(condition:TypedExpression, body:Array<TypedStatement>, span:SourceSpan);
@@ -41,6 +45,9 @@ enum TypedStatement {
 
 typedef TypedFunction = {
 	final name:String;
+	final owner:Null<String>;
+	final isStatic:Bool;
+	final isConstructor:Bool;
 	final arguments:Array<{name:String, type:CompilerType}>;
 	final result:CompilerType;
 	final statements:Array<TypedStatement>;

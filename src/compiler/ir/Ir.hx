@@ -28,6 +28,7 @@ typedef IrPhiInput = {final block:BlockId; final value:IrValue;}
 
 enum IrInstruction {
 	Phi(output:IrValue, inputs:Array<IrPhiInput>);
+	ConstVoid(output:IrValue);
 	ConstInt(output:IrValue, value:Int);
 	ConstFloat(output:IrValue, value:Float);
 	ConstString(output:IrValue, value:String);

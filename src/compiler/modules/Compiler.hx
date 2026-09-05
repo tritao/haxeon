@@ -278,7 +278,7 @@ class Compiler {
 			case TFloat: F64;
 			case TString: Bytes;
 			case TVoid: Void;
-			case TClass(name): throw 'Class type "$name" is not lowered yet';
+			case TClass(name): Obj(name);
 		};
 
 	function stableIdsBySlot(layout:Map<String, Int>):Map<Int, Int> {
@@ -360,6 +360,7 @@ class Compiler {
 		var name = explicitName != null ? explicitName : module == entry && fn.name == "main" ? "main" : module + "." + fn.name;
 		return {
 			name: name,
+			isStatic: fn.isStatic,
 			arguments: fn.arguments,
 			result: fn.result,
 			span: fn.span,
@@ -407,6 +408,7 @@ class Compiler {
 				if (name.indexOf(".") < 0 && locals.exists(name))
 					resolved = module == entry && name == "main" ? "main" : module + "." + name;
 				Call(resolved, [for (a in args) canonicalExpression(a, module, entry, locals)], s);
+			case New(typeName, args, s): New(typeName, [for (a in args) canonicalExpression(a, module, entry, locals)], s);
 		}
 
 	static function scanStatement(s, dependencies):Void

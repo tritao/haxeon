@@ -112,6 +112,7 @@ class Lexer {
 			case "static": TokenKind.Static;
 			case "final": TokenKind.Final;
 			case "new": TokenKind.New;
+			case "this": TokenKind.This;
 			case "Void": TokenKind.Void;
 			case "function": TokenKind.Function;
 			case "var": TokenKind.Var;

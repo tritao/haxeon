@@ -111,6 +111,8 @@ class HlLower {
 			for (instruction in block.instructions) {
 				switch instruction {
 					case Phi(_, _):
+					case ConstVoid(output):
+						defineRegister(output, registers, registerTypes);
 					case ConstInt(output, value):
 						instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes), internInt(value)));
 					case ConstFloat(output, value):

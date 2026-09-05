@@ -10,11 +10,24 @@ import compiler.ir.Cfg.CfgValue;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrNative;
+import compiler.ir.Ir.IrObject;
 
 /** Lowers typed syntax to a mutable-local CFG; SsaBuilder owns all SSA policy. */
 class IrGenerator {
-	public static function generate(typed:TypedProgram):IrProgram
-		return assemble([for (fn in typed.functions) generateFunction(fn)]);
+	public static function generate(typed:TypedProgram):IrProgram {
+		var objects = [
+			for (classDecl in typed.classes)
+				{
+					name: classDecl.name,
+					base: classDecl.base,
+					fields: [
+						for (field in classDecl.fields)
+							if (!field.isStatic) {name: field.name, type: lowerType(field.type)}
+					]
+				}
+		];
+		return assemble([for (fn in typed.functions) generateFunction(fn)], null, objects);
+	}
 
 	public static function generateFunction(fn:TypedFunction):IrFunction
 		return SsaBuilder.build(generateCfg(fn));
@@ -22,18 +35,31 @@ class IrGenerator {
 	public static function generateCfg(fn:TypedFunction):CfgFunction {
 		var builder = new CfgBuilder(), localTypes:Map<String, IrType> = [];
 		var arguments = [
+			for (argument in implicitArguments(fn)) {
+				localTypes.set(argument.name, argument.type);
+				{name: argument.name, type: argument.type};
+			}
+		];
+		arguments = arguments.concat([
 			for (argument in fn.arguments) {
 				var type = lowerType(argument.type);
 				localTypes.set(argument.name, type);
 				{name: argument.name, type: type};
 			}
-		];
+		]);
 		lowerStatements(fn.statements, builder, localTypes);
+		if (!builder.isTerminated()) {
+			if (lowerType(fn.result) == Void)
+				builder.returnVoid();
+			else
+				throw 'Function ${fn.name} does not return on every path';
+		}
 		return new CfgFunction(fn.name, arguments, lowerType(fn.result), builder.blocks, localTypes);
 	}
 
-	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>):IrProgram {
+	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>):IrProgram {
 		var program = new IrProgram("__entry");
+		program.objects = objects == null ? [] : objects;
 		program.natives.push({
 			name: "__exit",
 			library: "std",
@@ -64,6 +90,8 @@ class IrGenerator {
 					builder.store(name, lowerExpression(initializer, builder, localTypes));
 				case TAssign(name, value, _):
 					builder.store(name, lowerExpression(value, builder, localTypes));
+				case TFieldAssign(object, name, value, _):
+					builder.fieldSet(lowerExpression(object, builder, localTypes), name, lowerExpression(value, builder, localTypes));
 				case TReturn(expression, _):
 					builder.returnValue(lowerExpression(expression, builder, localTypes));
 				case TIf(condition, thenBranch, elseBranch, _):
@@ -119,7 +147,31 @@ class IrGenerator {
 			case TLessEqual(a, b): builder.lessEqual(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TEqual(a, b): builder.equal(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TCall(name, args): builder.call(name, [for (arg in args) lowerExpression(arg, builder, localTypes)], lowerType(expression.type));
+			case TNew(typeName, args):
+				var object = builder.newObject(typeName);
+				var constructorArgs = [object];
+				for (arg in args)
+					constructorArgs.push(lowerExpression(arg, builder, localTypes));
+				builder.call('$typeName.new', constructorArgs, Void);
+				object;
+			case TField(object, name): builder.fieldGet(lowerExpression(object, builder, localTypes), name, lowerType(expression.type));
+			case TMethodCall(object, name, args):
+				var receiver = lowerExpression(object, builder, localTypes),
+					callArgs = [receiver],
+					className = switch object.type {
+						case TClass(value): value;
+						default: throw 'Method receiver is not an object';
+					};
+				for (arg in args)
+					callArgs.push(lowerExpression(arg, builder, localTypes));
+				builder.call('$className.$name', callArgs, lowerType(expression.type));
 		}
+
+	static function implicitArguments(fn:TypedFunction):Array<{name:String, type:IrType}> {
+		if (fn.owner == null || fn.isStatic)
+			return [];
+		return [{name: "this", type: Obj(fn.owner)}];
+	}
 
 	public static function lowerType(type:CompilerType):IrType
 		return switch type {
@@ -128,6 +180,6 @@ class IrGenerator {
 			case TFloat: F64;
 			case TString: Bytes;
 			case TVoid: Void;
-			case TClass(name): throw 'Class type "$name" is not lowered yet';
+			case TClass(name): Obj(name);
 		};
 }

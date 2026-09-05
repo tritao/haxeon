@@ -15,6 +15,7 @@ class CfgValue {
 }
 
 enum CfgInstruction {
+	ConstVoid(output:CfgValue);
 	ConstInt(output:CfgValue, value:Int);
 	ConstFloat(output:CfgValue, value:Float);
 	ConstString(output:CfgValue, value:String);
@@ -28,6 +29,9 @@ enum CfgInstruction {
 	LessEqual(output:CfgValue, left:CfgValue, right:CfgValue);
 	Equal(output:CfgValue, left:CfgValue, right:CfgValue);
 	Call(output:CfgValue, functionName:String, arguments:Array<CfgValue>);
+	NewObject(output:CfgValue, typeName:String);
+	FieldGet(output:CfgValue, object:CfgValue, fieldName:String);
+	FieldSet(object:CfgValue, fieldName:String, value:CfgValue);
 }
 
 enum CfgTerminator {

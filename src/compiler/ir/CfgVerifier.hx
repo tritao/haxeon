@@ -22,7 +22,7 @@ class CfgVerifier {
 				throw 'Duplicate CFG argument "${argument.name}"';
 			arguments.set(argument.name, true);
 			var local = fn.localTypes.get(argument.name);
-			if (local == null || local != argument.type)
+			if (local == null || !sameType(local, argument.type))
 				throw 'Wrong CFG type for argument "${argument.name}"';
 		}
 		for (block in fn.blocks)
@@ -51,6 +51,9 @@ class CfgVerifier {
 		var available:Map<Int, Bool> = [];
 		for (instruction in block.instructions)
 			switch instruction {
+				case ConstVoid(out):
+					expect(out, Void);
+					define(out, defined, available);
 				case ConstInt(out, _):
 					expect(out, I32);
 					define(out, defined, available);
@@ -62,17 +65,17 @@ class CfgVerifier {
 					define(out, defined, available);
 				case LoadLocal(out, name):
 					var type = local(fn, name);
-					if (out.type != type)
+					if (!sameType(out.type, type))
 						throw 'Wrong CFG load type for local "$name"';
 					define(out, defined, available);
 				case StoreLocal(name, value):
 					require(value, available);
-					if (value.type != local(fn, name))
+					if (!sameType(value.type, local(fn, name)))
 						throw 'Wrong CFG store type for local "$name"';
 				case Add(out, a, b), Sub(out, a, b), Mul(out, a, b), Div(out, a, b):
 					require(a, available);
 					require(b, available);
-					if (out.type != a.type || a.type != b.type || (a.type != I32 && a.type != F64))
+					if (!sameType(out.type, a.type) || !sameType(a.type, b.type) || (!sameType(a.type, I32) && !sameType(a.type, F64)))
 						throw "CFG arithmetic requires matching numeric values";
 					define(out, defined, available);
 				case Less(out, a, b), LessEqual(out, a, b), Equal(out, a, b):
@@ -86,12 +89,24 @@ class CfgVerifier {
 					for (argument in arguments)
 						require(argument, available);
 					define(out, defined, available);
+				case NewObject(out, _):
+					switch out.type {
+						case Obj(_):
+						default: throw 'CFG object allocation must produce an object';
+					}
+					define(out, defined, available);
+				case FieldGet(out, object, _):
+					require(object, available);
+					define(out, defined, available);
+				case FieldSet(object, _, value):
+					require(object, available);
+					require(value, available);
 			}
 		if (block.terminator != null)
 			switch block.terminator {
 				case Return(value):
 					require(value, available);
-					if (value.type != fn.result)
+					if (!sameType(value.type, fn.result))
 						throw 'Wrong CFG return type in ${fn.name}';
 				case Jump(target):
 					targetBlock(target, blocks);
@@ -126,6 +141,12 @@ class CfgVerifier {
 			throw 'CFG value ${value.id} is used outside its defining block or before definition';
 
 	static function expect(value:CfgValue, type:IrType):Void
-		if (value.type != type)
+		if (!sameType(value.type, type))
 			throw 'CFG value ${value.id} has the wrong type';
+
+	static function sameType(left:IrType, right:IrType):Bool
+		return switch [left, right] {
+			case [Obj(a), Obj(b)]: a == b;
+			default: left == right;
+		};
 }

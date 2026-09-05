@@ -53,10 +53,10 @@ class Parser {
 	function parseFunction(allowMissingReturn:Bool):AstFunction {
 		var start = consume(TokenKind.Function).span,
 			name = check(TokenKind.New) ? advance().text : consume(TokenKind.Identifier).text;
-		return parseFunctionBody(start, name, allowMissingReturn);
+		return parseFunctionBody(start, name, allowMissingReturn, false);
 	}
 
-	function parseFunctionBody(start:SourceSpan, name:String, allowMissingReturn:Bool):AstFunction {
+	function parseFunctionBody(start:SourceSpan, name:String, allowMissingReturn:Bool, isStatic:Bool = false):AstFunction {
 		consume(TokenKind.LeftParen);
 		var arguments = [];
 		if (!check(TokenKind.RightParen)) {
@@ -76,6 +76,7 @@ class Parser {
 		var end = consume(TokenKind.RightBrace).span;
 		return {
 			name: name,
+			isStatic: isStatic,
 			arguments: arguments,
 			result: result,
 			statements: statements,
@@ -113,7 +114,7 @@ class Parser {
 			if (match(TokenKind.Function)) {
 				var functionStart = previous().span,
 					methodName = check(TokenKind.New) ? advance().text : consume(TokenKind.Identifier).text;
-				methods.push(parseFunctionBody(functionStart, methodName, true));
+				methods.push(parseFunctionBody(functionStart, methodName, true, isStatic));
 			} else {
 				var fieldStart = current().span;
 				match(TokenKind.Var);
@@ -156,12 +157,20 @@ class Parser {
 			var end = consume(TokenKind.Semicolon).span;
 			return Return(expression, start.merge(end));
 		}
-		if (check(TokenKind.Identifier) && tokens[position + 1].kind == TokenKind.Assign) {
-			var start = advance().span, name = previous().text;
-			advance();
-			var value = parseExpression(),
-				end = consume(TokenKind.Semicolon).span;
-			return Assignment(name, value, start.merge(end));
+		if (check(TokenKind.Identifier) || check(TokenKind.This)) {
+			var saved = position, target = parseExpression();
+			if (match(TokenKind.Assign)) {
+				var value = parseExpression(),
+					end = consume(TokenKind.Semicolon).span,
+					name = switch target {
+						case Variable(path, _): path;
+						default:
+							throw new CompileError(new Diagnostic("E0002", "Assignment target must be a variable or field", expressionSpan(target)));
+							"";
+					};
+				return Assignment(name, value, expressionSpan(target).merge(end));
+			}
+			position = saved;
 		}
 		if (match(TokenKind.If)) {
 			var start = previous().span;
@@ -231,6 +240,23 @@ class Parser {
 			return FloatLiteral(Std.parseFloat(previous().text), previous().span);
 		if (match(TokenKind.StringLiteral))
 			return StringLiteral(decodeString(previous().text), previous().span);
+		if (match(TokenKind.New)) {
+			var start = previous().span, typeName = parseQualifiedName();
+			consume(TokenKind.LeftParen);
+			var arguments = [];
+			if (!check(TokenKind.RightParen)) {
+				do
+					arguments.push(parseExpression()) while (match(TokenKind.Comma));
+			}
+			var end = consume(TokenKind.RightParen).span;
+			return New(typeName, arguments, start.merge(end));
+		}
+		if (match(TokenKind.This)) {
+			var start = previous().span, name = "this";
+			while (match(TokenKind.Dot))
+				name += "." + consume(TokenKind.Identifier).text;
+			return Variable(name, start);
+		}
 		if (match(TokenKind.Identifier)) {
 			var name = previous().text;
 			var start = previous().span;
@@ -320,7 +346,7 @@ class Parser {
 	static function expressionSpan(expression:AstExpression)
 		return switch expression {
 			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), Variable(_, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span),
-				Div(_, _, span), Less(_, _, span), LessEqual(_, _, span), Equal(_, _, span), Call(_, _, span): span;
+				Div(_, _, span), Less(_, _, span), LessEqual(_, _, span), Equal(_, _, span), Call(_, _, span), New(_, _, span): span;
 		}
 
 	static function decodeString(text:String):String {

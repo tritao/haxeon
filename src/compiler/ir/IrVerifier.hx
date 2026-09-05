@@ -54,13 +54,13 @@ class IrVerifier {
 			switch block.terminator {
 				case Return(value):
 					require(values, value);
-					if (value.type != fn.result)
+					if (!sameType(value.type, fn.result))
 						throw 'Wrong return type in ${fn.name}';
 				case Jump(target):
 					work.push(target);
 				case Branch(condition, yes, no):
 					require(values, condition);
-					if (condition.type != Bool)
+					if (!sameType(condition.type, Bool))
 						throw 'IR branch condition is not Bool';
 					work.push(yes);
 					work.push(no);
@@ -91,7 +91,7 @@ class IrVerifier {
 									throw 'Invalid phi predecessor ${input.block}';
 								seen.set(input.block, true);
 								require(values, input.value);
-								if (input.value.type != out.type)
+								if (!sameType(input.value.type, out.type))
 									throw 'Wrong phi input type for ${out.id}';
 							}
 						default:
@@ -101,6 +101,9 @@ class IrVerifier {
 	static function verifyInstruction(instruction:IrInstruction, values:Map<Int, IrType>, signatures, objects:Map<String, IrObject>):Void
 		switch instruction {
 			case Phi(_, _):
+			case ConstVoid(out):
+				expect(out, Void);
+				define(values, out);
 			case ConstInt(out, _):
 				expect(out, I32);
 				define(values, out);
@@ -111,7 +114,7 @@ class IrVerifier {
 				expect(out, Bytes);
 				define(values, out);
 			case Add(out, a, b), Sub(out, a, b), Mul(out, a, b), Div(out, a, b):
-				if (out.type != a.type || a.type != b.type || (a.type != I32 && a.type != F64))
+				if (!sameType(out.type, a.type) || !sameType(a.type, b.type) || (!sameType(a.type, I32) && !sameType(a.type, F64)))
 					throw "IR arithmetic requires matching numeric values";
 				require(values, a);
 				require(values, b);
@@ -131,10 +134,10 @@ class IrVerifier {
 					throw 'Wrong IR argument count for "$name"';
 				for (i in 0...args.length) {
 					require(values, args[i]);
-					if (args[i].type != signature.arguments[i])
+					if (!sameType(args[i].type, signature.arguments[i]))
 						throw 'Wrong IR argument type for "$name"';
 				}
-				if (out.type != signature.result)
+				if (!sameType(out.type, signature.result))
 					throw 'Wrong IR result type for "$name"';
 				define(values, out);
 			case NewObject(out, typeName):
@@ -144,13 +147,13 @@ class IrVerifier {
 			case FieldGet(out, object, fieldName):
 				var objectType = requireObject(object, values, objects),
 					field = findField(objectType, fieldName);
-				if (field == null || out.type != field.type)
+				if (field == null || !sameType(out.type, field.type))
 					throw 'Unknown or mismatched IR field "${objectType.name}.$fieldName"';
 				define(values, out);
 			case FieldSet(object, fieldName, value):
 				var objectType = requireObject(object, values, objects),
 					field = findField(objectType, fieldName);
-				if (field == null || field.type != value.type)
+				if (field == null || !sameType(field.type, value.type))
 					throw 'Unknown or mismatched IR field "${objectType.name}.$fieldName"';
 				require(values, value);
 		}
@@ -214,7 +217,13 @@ class IrVerifier {
 	}
 
 	static function expect(value:IrValue, type:IrType):Void {
-		if (value.type != type)
+		if (!sameType(value.type, type))
 			throw 'IR value ${value.id} has the wrong type';
 	}
+
+	static function sameType(left:IrType, right:IrType):Bool
+		return switch [left, right] {
+			case [Obj(a), Obj(b)]: a == b;
+			default: left == right;
+		};
 }

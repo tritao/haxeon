@@ -12,6 +12,7 @@ enum TokenKind {
 	Static;
 	Final;
 	New;
+	This;
 	Void;
 	Function;
 	Var;
