@@ -140,6 +140,23 @@ class Compiler {
 					callers.push(canonical.name);
 				}
 			}
+			for (classDecl in state.ast.classes)
+				for (method in classDecl.methods) {
+					var canonical = canonicalFunction(method, name, entryModule, locals, classDecl.name + "." + method.name);
+					functions.push(canonical);
+					owners.set(canonical.name, name);
+					var calls:Map<String, Bool> = [];
+					for (statement in canonical.statements)
+						scanCalls(statement, calls);
+					for (callee in calls.keys()) {
+						var callers = reverseCalls.get(callee);
+						if (callers == null) {
+							callers = [];
+							reverseCalls.set(callee, callers);
+						}
+						callers.push(canonical.name);
+					}
+				}
 		}
 		var invalid:Map<String, Bool> = [];
 		for (name in bodyChanged.keys())
@@ -290,6 +307,8 @@ class Compiler {
 		for (fn in state.ast.functions)
 			for (statement in fn.statements)
 				scanStatement(statement, dependencies);
+		for (classDecl in state.ast.classes)
+			dependencies.remove(classDecl.name);
 		state.dependencies = [for (name in dependencies.keys()) name];
 		state.dependencies.sort(Reflect.compare);
 		var signatures:Map<String, String> = [],
@@ -305,9 +324,31 @@ class Compiler {
 			else if (state.bodyFingerprints.get(fn.name) != body)
 				bodyChanged.set(canonical, true);
 		}
+		for (classDecl in state.ast.classes) {
+			var classFields = [
+				for (field in classDecl.fields)
+					{name: field.name, type: astTypeName(field.type)}
+			], classMethods = [
+				for (method in classDecl.methods)
+					{name: method.name, signature: signatureFingerprint(method)}
+				];
+			types.declareClass(classDecl.name, classDecl.base, classFields, classMethods);
+			for (method in classDecl.methods) {
+				var localName = classDecl.name + "." + method.name,
+					canonical = localName,
+					signature = signatureFingerprint(method),
+					body = state.source.text.substring(method.span.start, method.span.end);
+				signatures.set(localName, signature);
+				bodies.set(localName, body);
+				if (state.signatureFingerprints.get(localName) != signature)
+					signatureChanged.set(canonical, true);
+				else if (state.bodyFingerprints.get(localName) != body)
+					bodyChanged.set(canonical, true);
+			}
+		}
 		for (old in state.signatureFingerprints.keys())
 			if (!signatures.exists(old)) {
-				var canonical = state.name == entry && old == "main" ? "main" : state.name + "." + old;
+				var canonical = canonicalName(state.name, entry, old);
 				signatureChanged.set(canonical, true);
 			}
 		state.signatureFingerprints = signatures;
@@ -315,8 +356,8 @@ class Compiler {
 		state.dirty = false;
 	}
 
-	static function canonicalFunction(fn:AstFunction, module:String, entry:String, locals:Map<String, Bool>):AstFunction {
-		var name = module == entry && fn.name == "main" ? "main" : module + "." + fn.name;
+	static function canonicalFunction(fn:AstFunction, module:String, entry:String, locals:Map<String, Bool>, ?explicitName:String):AstFunction {
+		var name = explicitName != null ? explicitName : module == entry && fn.name == "main" ? "main" : module + "." + fn.name;
 		return {
 			name: name,
 			arguments: fn.arguments,
@@ -325,6 +366,19 @@ class Compiler {
 			statements: [for (s in fn.statements) canonicalStatement(s, module, entry, locals)]
 		};
 	}
+
+	static function canonicalName(module:String, entry:String, local:String):String
+		return module == entry && local == "main" ? "main" : local.indexOf(".") >= 0 ? local : module + "." + local;
+
+	static function astTypeName(type:compiler.Ast.AstType):String
+		return switch type {
+			case IntType: "Int";
+			case BoolType: "Bool";
+			case FloatType: "Float";
+			case StringType: "String";
+			case VoidType: "Void";
+			case NamedType(name): name;
+		};
 
 	static function canonicalStatement(s, module, entry, locals):AstStatement
 		return switch s {

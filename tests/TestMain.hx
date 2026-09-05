@@ -235,6 +235,12 @@ class TestMain {
 				foundStatic = true;
 		if (!foundStatic)
 			throw "Static class method was not lowered as a callable function";
+		var incrementalClass = new Compiler();
+		incrementalClass.update("Main.hx",
+			"class Math { public static function add(a:Int, b:Int):Int { return a + b; } } function main():Int { return Math.add(20, 22); }");
+		var incrementalResult = incrementalClass.compile("Main");
+		if (!incrementalResult.functionIndices.exists("Math.add") || incrementalResult.retyped.join(",") != "Math.add,main")
+			throw "Incremental compiler did not retain the static class method as a function";
 		Sys.println("PASS: class fields, methods, and constructors parse as nominal declarations");
 		Sys.println("PASS: typer rejects invalid names, calls, conditions, and return paths");
 
