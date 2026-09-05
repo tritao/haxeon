@@ -10,6 +10,7 @@ class BodyContext {
 	public final cells:Map<String, String> = [];
 	public final cellTypes:Map<String, CompilerType> = [];
 	public final cellKinds:Map<String, compiler.types.TypedAst.CellStorageKind> = [];
+	public final localExpectedTypes:Map<String, CompilerType> = [];
 	public var loopDepth:Int = 0;
 	public final loopEarlyExits:Array<Bool> = [];
 	public var resultType:CompilerType = TVoid;

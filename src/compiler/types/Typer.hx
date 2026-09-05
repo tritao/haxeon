@@ -341,6 +341,7 @@ class Typer {
 		}
 		var result = lowerType(fn.result);
 		context.resultType = result;
+		inferBodyLocalTypes(fn.statements, result);
 		var statements = typeStatements(fn.statements, scope, result);
 		if (result != TVoid && !alwaysReturns(statements))
 			fail("E1006", 'Function ${fn.name} does not return on every path', fn.span);
@@ -384,8 +385,7 @@ class Typer {
 					scope.define(name, declaredType, span, false);
 					output.push(TDeclare(scope.resolveId(name), declaredType, span));
 				case VarDeclaration(name, declared, initializer, span):
-					var declaredType = declared == null ? expectedLocalInitializerType(name, initializer, statements, statementIndex + 1,
-						result) : lowerType(declared),
+					var declaredType = declared == null ? context.localExpectedTypes.get(name) : lowerType(declared),
 						predeclared = declaredType != null && switch initializer {
 							case Lambda(_, _, _): true;
 							default: false;
@@ -719,55 +719,78 @@ class Typer {
 		return output;
 	}
 
-	function expectedLocalInitializerType(name:String, initializer:AstExpression, statements:Array<AstStatement>, start:Int,
-			result:CompilerType):Null<CompilerType> {
-		var emptyCollection = switch initializer {
-			case ArrayLiteral(values, _): values.length == 0;
-			case MapLiteral(entries, _): entries.length == 0;
-			default: false;
-		};
-		if (!emptyCollection)
-			return null;
-		for (index in start...statements.length)
-			switch statements[index] {
-				case Return(Variable(returned, _), _) if (returned == name):
-					if (collectionTypeMatches(initializer, result))
-						return result;
-				case Return(ObjectLiteral(fields, _), _):
-					var expectedFields = switch result {
-						case TAnonymous(_, values): values;
-						default: null;
-					};
-					if (expectedFields != null)
-						for (field in fields)
-							switch field.value {
-								case Variable(returned, _) if (returned == name):
-									var expectedField = anonymousField(expectedFields, field.name);
-									if (expectedField != null
-										&& collectionTypeMatches(initializer, expectedField.type)) return expectedField.type;
-								default:
-							}
-				case VarDeclaration(shadowed, _, _, _) if (shadowed == name):
-					return null;
-				case UninitializedDeclaration(shadowed, _, _) if (shadowed == name):
-					return null;
-				default:
-			}
-		return null;
+	function inferBodyLocalTypes(statements:Array<AstStatement>, result:CompilerType):Void {
+		var changed = true;
+		while (changed) {
+			changed = inferBodyStatementConstraints(statements, result);
+		}
 	}
 
-	function collectionTypeMatches(initializer:AstExpression, expected:CompilerType):Bool
-		return switch initializer {
-			case ArrayLiteral(_, _): switch expected {
-					case TArray(_): true;
-					default: false;
-				};
-			case MapLiteral(_, _): switch expected {
-					case TMap(_, _): true;
-					default: false;
-				};
+	function inferBodyStatementConstraints(statements:Array<AstStatement>, result:CompilerType):Bool {
+		var changed = false;
+		for (statement in statements)
+			switch statement {
+				case VarDeclaration(name, declared, initializer, _):
+					if (declared != null)
+						changed = constrainLocal(name, lowerType(declared)) || changed;
+					var expected = context.localExpectedTypes.get(name);
+					if (expected != null)
+						changed = constrainLocalExpression(initializer, expected) || changed;
+				case Return(expression, _):
+					changed = constrainLocalExpression(expression, result) || changed;
+				case Expression(MethodCall(Variable(receiver, _), "push", arguments, _), _) if (arguments.length == 1):
+					changed = constrainPushedValue(receiver, arguments[0]) || changed;
+				case Expression(Call(name, arguments, _), _) if (arguments.length == 1 && StringTools.endsWith(name, ".push")):
+					changed = constrainPushedValue(name.substr(0, name.length - 5), arguments[0]) || changed;
+				case If(_, thenBranch, elseBranch, _):
+					changed = inferBodyStatementConstraints(thenBranch, result)
+						|| inferBodyStatementConstraints(elseBranch, result)
+						|| changed;
+				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _):
+					changed = inferBodyStatementConstraints(body, result) || changed;
+				case Try(tryBranch, catches, _):
+					changed = inferBodyStatementConstraints(tryBranch, result) || changed;
+					for (catchClause in catches)
+						changed = inferBodyStatementConstraints(catchClause.statements, result) || changed;
+				case Switch(_, cases, defaultBranch, _, _):
+					for (switchCase in cases)
+						changed = inferBodyStatementConstraints(switchCase.statements, result) || changed;
+					changed = inferBodyStatementConstraints(defaultBranch, result) || changed;
+				default:
+			}
+		return changed;
+	}
+
+	function constrainPushedValue(receiver:String, value:AstExpression):Bool
+		return switch context.localExpectedTypes.get(receiver) {
+			case TArray(element): constrainLocalExpression(value, element);
 			default: false;
 		};
+
+	function constrainLocalExpression(expression:AstExpression, expected:CompilerType):Bool
+		return switch expression {
+			case Variable(name, _): constrainLocal(name, expected);
+			case ObjectLiteral(fields, _):
+				var expectedFields = switch expected {
+					case TAnonymous(_, values): values;
+					default: null;
+				}, changed = false;
+				if (expectedFields != null)
+					for (field in fields) {
+						var expectedField = anonymousField(expectedFields, field.name);
+						if (expectedField != null)
+							changed = constrainLocalExpression(field.value, expectedField.type) || changed;
+					}
+				changed;
+			default: false;
+		};
+
+	function constrainLocal(name:String, expected:CompilerType):Bool {
+		if (context.localExpectedTypes.exists(name) || expected == TVoid)
+			return false;
+		context.localExpectedTypes.set(name, expected);
+		return true;
+	}
 
 	function commonConditionalType(left:CompilerType, right:CompilerType):Null<CompilerType> {
 		if (left == TNever)
@@ -1735,7 +1758,7 @@ class Typer {
 				fail("E1008", "Array.push expects one argument", span);
 			if (!isRebindableArrayReceiver(receiver))
 				fail("E1016", "Array.push requires a mutable local or field array", span);
-			var value = coerce(typeExpression(arguments[0], scope), element, "array element", "E1002");
+			var value = coerce(typeExpression(arguments[0], scope, element), element, "array element", "E1002");
 			return new TypedExpression(TArrayPush(receiver, value), TInt, span);
 		}
 		if (name == "pop") {
