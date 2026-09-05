@@ -63,7 +63,7 @@ class TestMain {
 		Frontend.compile('typedef Options = { final ?name:String; ?final count:Int; } function main():Int { return 42; }');
 		Frontend.compile('function main():Int { var values = [20, 22]; var empty:Array<Int> = []; return values[0] + values[1] + empty.length; }');
 		new Parser(new Lexer(new SourceFile("expression-block-statements.hx",
-			'function main():Int return if (true) { var value = 0; if (true) value = 42; value; } else 0;')).tokenize()).parseProgram();
+			'function main():Int return if (true) { var value = 0; if (true) value = 21; else value = 0; value + 21; } else 0;')).tokenize()).parseProgram();
 		var privateAlias = new Parser(new Lexer(new SourceFile("private-alias.hx", "private typedef Internal = Int;")).tokenize()).parseProgram();
 		if (!privateAlias.aliases[0].isPrivate)
 			throw "Private type alias visibility was not preserved";

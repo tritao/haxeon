@@ -1037,12 +1037,12 @@ class Parser {
 			return parseExpression();
 		var start = previous().span, statements = [];
 		while (!check(TokenKind.RightBrace)) {
-			if (isStatementOnlyStart(current().kind) || check(TokenKind.If) && !hasBranchElse()) {
+			if (isStatementOnlyStart(current().kind)) {
 				appendStatements(statements, parseStatements());
 				continue;
 			}
-			var saved = position, candidate = parseExpression();
-			if (check(TokenKind.RightBrace)) {
+			var saved = position, candidate = tryParseExpression();
+			if (candidate != null && check(TokenKind.RightBrace)) {
 				var end = consume(TokenKind.RightBrace).span;
 				return BlockExpression(statements, candidate, start.merge(end));
 			}
@@ -1091,19 +1091,19 @@ class Parser {
 	function parseSwitchExpressionBranch():AstExpression {
 		var statements = [], start = current().span;
 		while (true) {
-			if (isStatementOnlyStart(current().kind) || check(TokenKind.If) && !hasBranchElse()) {
+			if (isStatementOnlyStart(current().kind)) {
 				appendStatements(statements, parseStatements());
 				continue;
 			}
-			var saved = position, result = parseExpression();
-			if (match(TokenKind.Semicolon)) {
+			var saved = position, result = tryParseExpression();
+			if (result != null && match(TokenKind.Semicolon)) {
 				if (atSwitchBranchEnd())
 					return statements.length == 0 ? result : BlockExpression(statements, result, start.merge(expressionSpan(result)));
 				position = saved;
 				appendStatements(statements, parseStatements());
 				continue;
 			}
-			if (atSwitchBranchEnd())
+			if (result != null && atSwitchBranchEnd())
 				return statements.length == 0 ? result : BlockExpression(statements, result, start.merge(expressionSpan(result)));
 			position = saved;
 			appendStatements(statements, parseStatements());
@@ -1119,33 +1119,14 @@ class Parser {
 			default: false;
 		};
 
-	function hasBranchElse():Bool {
-		var parentheses = 0, braces = 0, brackets = 0, tokenCount = tokens.length;
-		for (index in position...tokenCount) {
-			var kind = tokens[index].kind;
-			if (parentheses == 0 && braces == 0 && brackets == 0) {
-				if (kind == TokenKind.Else)
-					return true;
-				if (kind == TokenKind.Case || kind == TokenKind.Default || kind == TokenKind.RightBrace)
-					return false;
-			}
-			switch kind {
-				case TokenKind.LeftParen:
-					parentheses++;
-				case TokenKind.RightParen:
-					parentheses--;
-				case TokenKind.LeftBrace:
-					braces++;
-				case TokenKind.RightBrace:
-					braces--;
-				case TokenKind.LeftBracket:
-					brackets++;
-				case TokenKind.RightBracket:
-					brackets--;
-				default:
-			}
+	function tryParseExpression():Null<AstExpression> {
+		var saved = position;
+		try {
+			return parseExpression();
+		} catch (_:CompileError) {
+			position = saved;
+			return null;
 		}
-		return false;
 	}
 
 	function parsePostfix(expression:AstExpression):AstExpression {
