@@ -1025,6 +1025,11 @@ class Parser {
 				return Lambda(arguments, body, start.merge(body.length == 0 ? previous().span : statementSpan(body[body.length - 1])));
 			}
 			position = saved;
+			advance();
+			var grouped = parseExpression();
+			consume(TokenKind.Colon);
+			var target = parseType(), end = consume(TokenKind.RightParen).span;
+			return parsePostfix(Cast(grouped, target, start.merge(end)));
 		}
 		if (match(TokenKind.This)) {
 			var start = previous().span, name = "this";
