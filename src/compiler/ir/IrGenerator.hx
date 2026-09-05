@@ -1117,6 +1117,78 @@ class IrGenerator {
 				builder.jump(conditionBlock);
 				builder.select(afterBlock);
 				builder.load(resultName, resultType);
+			case TMapComprehension(keyName, valueName, iterable, condition, key, value):
+				var inputName = '$' + 'map-comprehension-input:${expression.span.start}',
+					sourceMapName = '$' + 'map-comprehension-source:${expression.span.start}',
+					resultName = '$' + 'map-comprehension-result:${expression.span.start}',
+					indexName = '$' + 'map-comprehension-index:${expression.span.start}',
+					sourceMapTypes = switch iterable.type {
+						case TMap(mapKey, mapValue): {key: mapKey, value: mapValue};
+						default: null;
+					},
+					itemType = valueName == null ? switch iterable.type {
+						case TArray(element): element;
+						case TRange: TInt;
+						default: throw "Map comprehension requires an array iterable";
+					} : sourceMapTypes.key,
+					inputType = Array(lowerType(itemType)),
+					resultTypes = switch expression.type {
+						case TMap(mapKey, mapValue): {key: mapKey, value: mapValue};
+						default: throw "Map comprehension requires a map result";
+					},
+					resultType = lowerType(expression.type);
+				localTypes.set(inputName, inputType);
+				localTypes.set(resultName, resultType);
+				localTypes.set(indexName, I32);
+				localTypes.set(keyName, lowerType(itemType));
+				if (valueName == null)
+					builder.store(inputName, lowerExpression(iterable, builder, localTypes));
+				else {
+					var sourceMapType = lowerType(iterable.type);
+					localTypes.set(sourceMapName, sourceMapType);
+					localTypes.set(valueName, lowerType(sourceMapTypes.value));
+					builder.store(sourceMapName, lowerExpression(iterable, builder, localTypes));
+					builder.store(inputName,
+						builder.call(RuntimeType.mapNative(sourceMapTypes.key, sourceMapTypes.value, "keys"), [builder.load(sourceMapName, sourceMapType)],
+							inputType));
+				}
+				builder.store(resultName, builder.call(RuntimeType.mapNative(resultTypes.key, resultTypes.value, "alloc"), [], resultType));
+				builder.store(indexName, builder.constInt(0));
+				var conditionBlock = builder.createBlock(),
+					bodyBlock = builder.createBlock(),
+					afterBlock = builder.createBlock();
+				builder.jump(conditionBlock);
+				builder.select(conditionBlock);
+				builder.branch(builder.less(builder.load(indexName, I32), builder.arraySize(builder.load(inputName, inputType))), bodyBlock, afterBlock);
+				builder.select(bodyBlock);
+				builder.store(keyName, builder.arrayGet(builder.load(inputName, inputType), builder.load(indexName, I32), lowerType(itemType)));
+				if (valueName != null)
+					builder.store(valueName, builder.call(RuntimeType.mapNative(sourceMapTypes.key, sourceMapTypes.value, "get"), [
+						builder.load(sourceMapName, lowerType(iterable.type)),
+						builder.load(keyName, lowerType(itemType))
+					], lowerType(sourceMapTypes.value)));
+				var includeBlock = condition == null ? null : builder.createBlock(),
+					excludeBlock = condition == null ? null : builder.createBlock(),
+					nextBlock = condition == null ? null : builder.createBlock();
+				if (condition != null) {
+					builder.branch(lowerExpression(condition, builder, localTypes), includeBlock, excludeBlock);
+					builder.select(excludeBlock);
+					builder.jump(nextBlock);
+					builder.select(includeBlock);
+				}
+				builder.call(RuntimeType.mapNative(resultTypes.key, resultTypes.value, "set"), [
+					builder.load(resultName, resultType),
+					lowerExpression(key, builder, localTypes),
+					lowerExpression(value, builder, localTypes)
+				], Void);
+				if (condition != null) {
+					builder.jump(nextBlock);
+					builder.select(nextBlock);
+				}
+				builder.store(indexName, builder.add(builder.load(indexName, I32), builder.constInt(1)));
+				builder.jump(conditionBlock);
+				builder.select(afterBlock);
+				builder.load(resultName, resultType);
 			case TRange(start, end):
 				var startName = '$' + 'range-start:${expression.span.start}',
 					endName = '$' + 'range-end:${expression.span.start}',

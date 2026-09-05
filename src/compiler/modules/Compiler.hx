@@ -1175,6 +1175,10 @@ class Compiler {
 				ArrayComprehension(keyName, valueName, canonicalExpression(iterable, module, entry, locals, aliases),
 					condition == null ? null : canonicalExpression(condition, module, entry, locals, aliases),
 					canonicalExpression(value, module, entry, locals, aliases), s);
+			case MapComprehension(keyName, valueName, iterable, condition, key, value, s):
+				MapComprehension(keyName, valueName, canonicalExpression(iterable, module, entry, locals, aliases),
+					condition == null ? null : canonicalExpression(condition, module, entry, locals, aliases),
+					canonicalExpression(key, module, entry, locals, aliases), canonicalExpression(value, module, entry, locals, aliases), s);
 			case Range(start, end,
 				s): Range(canonicalExpression(start, module, entry, locals, aliases), canonicalExpression(end, module, entry, locals, aliases), s);
 			case Call(name, args, s):
@@ -1461,6 +1465,12 @@ class Compiler {
 				if (condition != null)
 					scanExpression(condition, dependencies);
 				scanExpression(value, dependencies);
+			case MapComprehension(_, _, iterable, condition, key, value, _):
+				scanExpression(iterable, dependencies);
+				if (condition != null)
+					scanExpression(condition, dependencies);
+				scanExpression(key, dependencies);
+				scanExpression(value, dependencies);
 			case Range(start, end, _):
 				scanExpression(start, dependencies);
 				scanExpression(end, dependencies);
@@ -1636,6 +1646,12 @@ class Compiler {
 				if (condition != null)
 					scanCallExpression(condition, calls, aliases);
 				scanCallExpression(value, calls, aliases);
+			case MapComprehension(_, _, iterable, condition, key, value, _):
+				scanCallExpression(iterable, calls, aliases);
+				if (condition != null)
+					scanCallExpression(condition, calls, aliases);
+				scanCallExpression(key, calls, aliases);
+				scanCallExpression(value, calls, aliases);
 			case Range(start, end, _):
 				scanCallExpression(start, calls, aliases);
 				scanCallExpression(end, calls, aliases);
@@ -1775,6 +1791,12 @@ class Compiler {
 				collectLambdaExpression(iterable, functionName, module, generatedByModule);
 				if (condition != null)
 					collectLambdaExpression(condition, functionName, module, generatedByModule);
+				collectLambdaExpression(value, functionName, module, generatedByModule);
+			case MapComprehension(_, _, iterable, condition, key, value, _):
+				collectLambdaExpression(iterable, functionName, module, generatedByModule);
+				if (condition != null)
+					collectLambdaExpression(condition, functionName, module, generatedByModule);
+				collectLambdaExpression(key, functionName, module, generatedByModule);
 				collectLambdaExpression(value, functionName, module, generatedByModule);
 			case Range(start, end, _):
 				collectLambdaExpression(start, functionName, module, generatedByModule);

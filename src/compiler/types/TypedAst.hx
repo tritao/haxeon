@@ -61,6 +61,8 @@ enum TypedExpressionKind {
 	TArrayLiteral(values:Array<TypedExpression>);
 	TMapLiteral(entries:Array<TypedMapEntry>);
 	TArrayComprehension(keyName:String, valueName:Null<String>, iterable:TypedExpression, condition:Null<TypedExpression>, value:TypedExpression);
+	TMapComprehension(keyName:String, valueName:Null<String>, iterable:TypedExpression, condition:Null<TypedExpression>, key:TypedExpression,
+		value:TypedExpression);
 	TRange(start:TypedExpression, end:TypedExpression);
 	TCall(name:String, arguments:Array<TypedExpression>);
 	TCollectionCall(receiver:TypedExpression, operation:String, arguments:Array<TypedExpression>);

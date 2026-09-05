@@ -1195,6 +1195,51 @@ class Typer {
 				new TypedExpression(TArrayComprehension(loopScope.resolveId(keyName), valueName == null ? null : loopScope.resolveId(valueName),
 					valueName == null ? typedIterable : originalIterable, typedCondition, typedValue),
 					TArray(elementType), span);
+			case MapComprehension(keyName, valueName, iterable, condition, key, value, span):
+				var typedIterable = typeExpression(iterable, scope),
+					originalIterable = typedIterable,
+					loopScope = new Scope(scope),
+					itemType:CompilerType;
+				switch typedIterable.type {
+					case TArray(element):
+						if (valueName != null)
+							fail("E1014", "Key/value map comprehension requires a Map", span);
+						itemType = element;
+					case TRange:
+						if (valueName != null)
+							fail("E1014", "Key/value map comprehension requires a Map", span);
+						itemType = TInt;
+					case TMap(mapKey, mapValue):
+						if (RuntimeType.mapName(mapKey, mapValue) == null)
+							fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+						itemType = mapKey;
+						if (valueName == null) typedIterable = new TypedExpression(TCollectionCall(typedIterable, "keys", []), TArray(mapKey), span);
+					default:
+						fail("E1014", "Map comprehension iterable must be an Array or Map", span);
+						itemType = TInt;
+				}
+				loopScope.define(keyName, itemType, span);
+				if (valueName != null)
+					switch originalIterable.type {
+						case TMap(_, mapValue): loopScope.define(valueName, mapValue, span);
+						default:
+					}
+				var typedCondition = condition == null ? null : typeExpression(condition, loopScope, TBool);
+				if (typedCondition != null && typedCondition.type != TBool)
+					fail("E1004", "Map comprehension condition must be Bool", span);
+				var expected = switch expectedType {
+					case TMap(expectedKey, expectedValue): {key: expectedKey, value: expectedValue};
+					default: null;
+				}, typedKey = typeExpression(key, loopScope,
+					expected == null ? null : expected.key), typedValue = typeExpression(value, loopScope,
+						expected == null ? null : expected.value), resultKey = expected == null ? typedKey.type : expected.key, resultValue = expected == null ? typedValue.type : expected.value;
+				typedKey = coerce(typedKey, resultKey, "map comprehension key", "E1003");
+				typedValue = coerce(typedValue, resultValue, "map comprehension value", "E1003");
+				if (RuntimeType.mapName(resultKey, resultValue) == null)
+					fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+				new TypedExpression(TMapComprehension(loopScope.resolveId(keyName), valueName == null ? null : loopScope.resolveId(valueName),
+					valueName == null ? typedIterable : originalIterable, typedCondition, typedKey, typedValue),
+					TMap(resultKey, resultValue), span);
 			case Range(start, end, span):
 				var typedStart = typeExpression(start, scope, TInt),
 					typedEnd = typeExpression(end, scope, TInt);
@@ -1970,6 +2015,12 @@ class Typer {
 				if (condition != null)
 					collectMutableCaptureExpression(condition, outerDeclared, result);
 				collectMutableCaptureExpression(value, outerDeclared, result);
+			case MapComprehension(_, _, iterable, condition, key, value, _):
+				collectMutableCaptureExpression(iterable, outerDeclared, result);
+				if (condition != null)
+					collectMutableCaptureExpression(condition, outerDeclared, result);
+				collectMutableCaptureExpression(key, outerDeclared, result);
+				collectMutableCaptureExpression(value, outerDeclared, result);
 			case Range(start, end, _):
 				collectMutableCaptureExpression(start, outerDeclared, result);
 				collectMutableCaptureExpression(end, outerDeclared, result);
@@ -2038,6 +2089,12 @@ class Typer {
 				collectExpressionVariables(iterable, names);
 				if (condition != null)
 					collectExpressionVariables(condition, names);
+				collectExpressionVariables(value, names);
+			case MapComprehension(_, _, iterable, condition, key, value, _):
+				collectExpressionVariables(iterable, names);
+				if (condition != null)
+					collectExpressionVariables(condition, names);
+				collectExpressionVariables(key, names);
 				collectExpressionVariables(value, names);
 			case Range(start, end, _):
 				collectExpressionVariables(start, names);
