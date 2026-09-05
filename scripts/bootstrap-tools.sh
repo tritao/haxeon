@@ -5,6 +5,7 @@ root_dir=$(cd "$(dirname "$0")/.." && pwd)
 tools_dir="$root_dir/.tools"
 haxe_dir="$tools_dir/haxe"
 hashlink_dir="$tools_dir/hashlink"
+hashlink_source="$root_dir/vendor/hashlink"
 formatter_dir="$tools_dir/formatter"
 formatter_version="1.18.0"
 formatter_sha256="2d29c9b56e54b2643e07ee64003c3fc30a5bc133bdcb4cc15c48f09acda7a047"
@@ -20,10 +21,14 @@ if [[ ! -x "$haxe_dir/haxe" ]]; then
     rmdir "$unpack_dir"
 fi
 
-if [[ ! -x "$hashlink_dir/hl" ]]; then
-    git clone https://github.com/HaxeFoundation/hashlink.git "$hashlink_dir"
-    git -C "$hashlink_dir" checkout 864721a5fca5ac2f5f5cfdf34639274b5b34a4bc
-    make -C "$hashlink_dir" -j"$(nproc)" hl
+hashlink_commit=$(git -C "$hashlink_source" rev-parse HEAD)
+hashlink_stamp="$hashlink_dir/.tritao-source-commit"
+if [[ ! -x "$hashlink_dir/hl" || ! -f "$hashlink_stamp" || "$(<"$hashlink_stamp")" != "$hashlink_commit" ]]; then
+    make -C "$hashlink_source" -j"$(nproc)" hl
+    mkdir -p "$hashlink_dir"
+    cp "$hashlink_source/hl" "$hashlink_dir/hl"
+    cp "$hashlink_source/libhl.so" "$hashlink_dir/libhl.so"
+    printf '%s\n' "$hashlink_commit" > "$hashlink_stamp"
 fi
 
 if [[ ! -f "$formatter_dir/run.js" ]]; then
