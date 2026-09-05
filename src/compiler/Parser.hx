@@ -45,12 +45,11 @@ class Parser {
 		var functions = [], aliases:Array<AstTypeAlias> = [], enums:Array<AstEnum> = [], enumAbstracts:Array<AstEnumAbstract> = [],
 			abstracts:Array<AstAbstract> = [], interfaces:Array<AstInterface> = [], classes = [];
 		while (!check(TokenKind.Eof)) {
+			var metadata = parseMetadata();
 			var visibility = match(TokenKind.Private) ? previous() : match(TokenKind.Public) ? previous() : null;
 			if (match(TokenKind.Typedef))
 				aliases.push(parseTypeAlias(visibility == null ? previous()
 					.span : visibility.span, visibility != null && visibility.kind == TokenKind.Private));
-			else if (visibility != null)
-				fail(current(), "Top-level visibility modifier is not supported for this declaration");
 			else if (match(TokenKind.Enum)) {
 				var start = previous().span;
 				if (check(TokenKind.Identifier) && current().text == "abstract") {
@@ -61,7 +60,9 @@ class Parser {
 			} else if (check(TokenKind.Interface))
 				interfaces.push(parseInterface());
 			else if (check(TokenKind.Class))
-				classes.push(parseClass());
+				classes.push(parseClass(visibility != null && visibility.kind == TokenKind.Private, metadata));
+			else if (visibility != null)
+				fail(current(), "Top-level visibility modifier is not supported for this declaration");
 			else if (check(TokenKind.Identifier) && current().text == "abstract") {
 				var start = advance().span;
 				abstracts.push(parseAbstract(start));
@@ -80,6 +81,24 @@ class Parser {
 			classes: classes,
 			functions: functions
 		};
+	}
+
+	function parseMetadata():Array<compiler.Ast.AstMetadata> {
+		var result = [];
+		while (match(TokenKind.At)) {
+			var start = previous().span;
+			consume(TokenKind.Colon);
+			var name = parseQualifiedName(), arguments = [];
+			if (match(TokenKind.LeftParen)) {
+				if (!check(TokenKind.RightParen))
+					do
+						arguments.push(parseExpression()) while (match(TokenKind.Comma));
+				var end = consume(TokenKind.RightParen).span;
+				result.push({name: name, arguments: arguments, span: start.merge(end)});
+			} else
+				result.push({name: name, arguments: arguments, span: start.merge(previous().span)});
+		}
+		return result;
 	}
 
 	function parseAbstract(start:SourceSpan):AstAbstract {
@@ -280,7 +299,7 @@ class Parser {
 		return result;
 	}
 
-	function parseClass():AstClass {
+	function parseClass(isPrivate:Bool, metadata:Array<compiler.Ast.AstMetadata>):AstClass {
 		var start = consume(TokenKind.Class).span,
 			name = consume(TokenKind.Identifier).text,
 			base:Null<String> = null,
@@ -295,6 +314,7 @@ class Parser {
 		consume(TokenKind.LeftBrace);
 		var fields = [], methods = [];
 		while (!check(TokenKind.RightBrace)) {
+			parseMetadata();
 			var isStatic = false, isFinal = false;
 			while (true) {
 				switch current().kind {
@@ -352,6 +372,8 @@ class Parser {
 		var end = consume(TokenKind.RightBrace).span;
 		return {
 			name: name,
+			isPrivate: isPrivate,
+			metadata: metadata,
 			base: base,
 			interfaces: interfaces,
 			fields: fields,
@@ -821,6 +843,10 @@ class Parser {
 	}
 
 	function parsePrimary():AstExpression {
+		if (check(TokenKind.At)) {
+			parseMetadata();
+			return parsePrimary();
+		}
 		if (match(TokenKind.Switch))
 			return parseSwitchExpression(previous().span);
 		if (match(TokenKind.Throw)) {

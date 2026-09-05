@@ -50,12 +50,16 @@ typedef AstField = {
 
 typedef AstClass = {
 	final name:String;
+	final isPrivate:Bool;
+	final metadata:Array<AstMetadata>;
 	final base:Null<String>;
 	final interfaces:Array<String>;
 	final fields:Array<AstField>;
 	final methods:Array<AstFunction>;
 	final span:SourceSpan;
 }
+
+typedef AstMetadata = {final name:String; final arguments:Array<AstExpression>; final span:SourceSpan;}
 
 typedef AstInterface = {
 	final name:String;

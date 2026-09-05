@@ -379,6 +379,8 @@ class Compiler {
 				}
 				classes.push({
 					name: className,
+					isPrivate: classDecl.isPrivate,
+					metadata: classDecl.metadata,
 					base: classDecl.base == null ? null : resolveTypeName(classDecl.base, aliases),
 					interfaces: [
 						for (interfaceName in classDecl.interfaces)

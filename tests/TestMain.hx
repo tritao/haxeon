@@ -454,6 +454,14 @@ class TestMain {
 			|| packaged.importAliases.get("HaxeBytes") != "haxe.io.Bytes")
 			throw "Package and import declarations were not preserved in the AST";
 		Sys.println("PASS: package and import declarations are represented in the frontend");
+		var metadataProgram = new Parser(new Lexer(new SourceFile("Native.hx",
+			'@:hlNative("sample") private class Native { @:noCompletion public static function read():Int return @:privateAccess 42; }')).tokenize())
+			.parseProgram();
+		if (!metadataProgram.classes[0].isPrivate
+			|| metadataProgram.classes[0].metadata[0].name != "hlNative"
+			|| metadataProgram.classes[0].metadata[0].arguments.length != 1)
+			throw "Class metadata and top-level visibility were not preserved";
+		Sys.println("PASS: declaration and expression metadata parse explicitly");
 		var nativeHandleProgram = new Parser(new Lexer(new SourceFile("NativeHandle.hx",
 			'function identity(value:hl.Abstract<"module">):hl.Abstract<"module"> { return value; }')).tokenize()).parseProgram(),
 			nativeHandleTyped = Typer.typeLibrary(nativeHandleProgram),
