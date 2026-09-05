@@ -299,6 +299,14 @@ class IrGenerator {
 					arguments: [arrayType],
 					result: arrayType
 				});
+				if (entry.name == "bytes")
+					program.natives.push({
+						name: "__array_join_bytes",
+						library: "realtime_runtime",
+						symbol: "__array_join_bytes",
+						arguments: [arrayType, Bytes],
+						result: Bytes
+					});
 				program.natives.push({
 					name: '__array_concat_${entry.name}',
 					library: "realtime_runtime",

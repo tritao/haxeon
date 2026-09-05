@@ -2024,6 +2024,14 @@ class Typer {
 				comparator = coerce(typeExpression(arguments[0], scope, comparatorType), comparatorType, "array comparator", "E1002");
 			return new TypedExpression(TArraySort(receiver, comparator), TVoid, span);
 		}
+		if (name == "join") {
+			if (!sameType(element, TString))
+				fail("E1016", "Array.join currently requires String elements", span);
+			if (arguments.length != 1)
+				fail("E1008", "Array.join expects one separator", span);
+			var separator = coerce(typeExpression(arguments[0], scope, TString), TString, "join separator", "E1002");
+			return new TypedExpression(TCollectionCall(receiver, "join", [separator]), TString, span);
+		}
 		if (name == "indexOf") {
 			switch element {
 				case TInt, TFloat, TBool, TString:

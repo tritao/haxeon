@@ -2,6 +2,7 @@
 #include <hl.h>
 #include <hlmodule.h>
 #include <string.h>
+#include <stdlib.h>
 
 typedef struct realtime_string_map realtime_string_map;
 extern realtime_string_map *hl_hballoc( void );
@@ -433,6 +434,61 @@ HL_PRIM vbyte *HL_NAME(__string_from_char_code)( int code ) {
 	return result;
 }
 
+HL_PRIM int HL_NAME(__std_parse_int)( vbyte *value ) {
+	return value == NULL ? 0 : (int)strtol(hl_to_utf8((const uchar *)value), NULL, 0);
+}
+
+HL_PRIM double HL_NAME(__std_parse_float)( vbyte *value ) {
+	return value == NULL ? 0.0 : strtod(hl_to_utf8((const uchar *)value), NULL);
+}
+
+HL_PRIM vbyte *HL_NAME(__std_string)( vdynamic *value ) {
+	return (vbyte *)hl_to_string(value);
+}
+
+HL_PRIM int HL_NAME(__reflect_compare)( vdynamic *left, vdynamic *right ) {
+	return hl_dyn_compare(left, right);
+}
+
+HL_PRIM bool HL_NAME(__string_starts_with)( vbyte *value, vbyte *prefix ) {
+	int value_length = value == NULL ? 0 : (int)ustrlen((const uchar *)value);
+	int prefix_length = prefix == NULL ? 0 : (int)ustrlen((const uchar *)prefix);
+	return prefix_length <= value_length && memcmp(value, prefix, prefix_length * sizeof(uchar)) == 0;
+}
+
+HL_PRIM bool HL_NAME(__string_ends_with)( vbyte *value, vbyte *suffix ) {
+	int value_length = value == NULL ? 0 : (int)ustrlen((const uchar *)value);
+	int suffix_length = suffix == NULL ? 0 : (int)ustrlen((const uchar *)suffix);
+	return suffix_length <= value_length
+		&& memcmp(value + (value_length - suffix_length) * sizeof(uchar), suffix, suffix_length * sizeof(uchar)) == 0;
+}
+
+HL_PRIM vbyte *HL_NAME(__array_join_bytes)( varray *array, vbyte *separator ) {
+	int separator_length = separator == NULL ? 0 : (int)ustrlen((const uchar *)separator);
+	int length = separator_length * (array->size > 0 ? array->size - 1 : 0);
+	for( int i = 0; i < array->size; i++ ) {
+		vbyte *value = hl_aptr(array,vbyte*)[i];
+		if( value != NULL ) length += (int)ustrlen((const uchar *)value);
+	}
+	vbyte *result = hl_alloc_bytes((length + 1) * (int)sizeof(uchar));
+	uchar *output = (uchar *)result;
+	int offset = 0;
+	for( int i = 0; i < array->size; i++ ) {
+		if( i > 0 && separator_length > 0 ) {
+			memcpy(output + offset, separator, separator_length * sizeof(uchar));
+			offset += separator_length;
+		}
+		vbyte *value = hl_aptr(array,vbyte*)[i];
+		int value_length = value == NULL ? 0 : (int)ustrlen((const uchar *)value);
+		if( value_length > 0 ) {
+			memcpy(output + offset, value, value_length * sizeof(uchar));
+			offset += value_length;
+		}
+	}
+	output[offset] = 0;
+	return result;
+}
+
 HL_PRIM vbyte *HL_NAME(__string_substring)( vbyte *value, int start, int end ) {
 	int length = value == NULL ? 0 : (int)ustrlen((const uchar *)value);
 	if( start < 0 ) start = 0;
@@ -745,5 +801,12 @@ DEFINE_PRIM(_I32,__string_index_of,_BYTES _BYTES);
 DEFINE_PRIM(_I32,__string_char_code_at,_BYTES _I32);
 DEFINE_PRIM(_BYTES,__string_char_at,_BYTES _I32);
 DEFINE_PRIM(_BYTES,__string_from_char_code,_I32);
+DEFINE_PRIM(_I32,__std_parse_int,_BYTES);
+DEFINE_PRIM(_F64,__std_parse_float,_BYTES);
+DEFINE_PRIM(_BYTES,__std_string,_DYN);
+DEFINE_PRIM(_I32,__reflect_compare,_DYN _DYN);
+DEFINE_PRIM(_BOOL,__string_starts_with,_BYTES _BYTES);
+DEFINE_PRIM(_BOOL,__string_ends_with,_BYTES _BYTES);
+DEFINE_PRIM(_BYTES,__array_join_bytes,_ARR _BYTES);
 DEFINE_PRIM(_BYTES,__string_substring,_BYTES _I32 _I32);
 DEFINE_PRIM(_BOOL,__exception_matches,_DYN _TYPE);

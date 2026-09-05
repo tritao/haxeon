@@ -5,6 +5,7 @@ import compiler.Parser;
 import compiler.Token.TokenKind;
 import compiler.Source.SourceFile;
 import compiler.modules.Compiler;
+import compiler.RuntimeAbi as CompilerRuntimeAbi;
 import compiler.Diagnostic.CompileError;
 import haxe.Json;
 import sys.FileSystem;
@@ -158,6 +159,7 @@ class BootstrapStatus {
 			};
 
 		var compiler = new Compiler();
+		CompilerRuntimeAbi.register(compiler);
 		for (path in paths)
 			compiler.update(projectPath(path, roots), File.getContent(path));
 		try {
