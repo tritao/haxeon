@@ -15,7 +15,11 @@ import compiler.ir.Ir.IrObject;
 /** Lowers typed syntax to a mutable-local CFG; SsaBuilder owns all SSA policy. */
 class IrGenerator {
 	public static function generate(typed:TypedProgram):IrProgram {
-		var objects = [
+		return assemble([for (fn in typed.functions) generateFunction(fn)], null, objectsFrom(typed));
+	}
+
+	public static function objectsFrom(typed:TypedProgram):Array<IrObject> {
+		return [
 			for (classDecl in typed.classes)
 				{
 					name: classDecl.name,
@@ -26,7 +30,6 @@ class IrGenerator {
 					]
 				}
 		];
-		return assemble([for (fn in typed.functions) generateFunction(fn)], null, objects);
 	}
 
 	public static function generateFunction(fn:TypedFunction):IrFunction

@@ -118,6 +118,8 @@ class Compiler {
 				}
 
 		var functions:Array<AstFunction> = [],
+			programFunctions:Array<AstFunction> = [],
+			classes:Array<compiler.Ast.AstClass> = [],
 			owners:Map<String, String> = [],
 			reverseCalls:Map<String, Array<String>> = [];
 		for (name in names) {
@@ -127,6 +129,7 @@ class Compiler {
 			for (fn in state.ast.functions) {
 				var canonical = canonicalFunction(fn, name, entryModule, locals);
 				functions.push(canonical);
+				programFunctions.push(canonical);
 				owners.set(canonical.name, name);
 				var calls:Map<String, Bool> = [];
 				for (statement in canonical.statements)
@@ -140,10 +143,19 @@ class Compiler {
 					callers.push(canonical.name);
 				}
 			}
-			for (classDecl in state.ast.classes)
+			for (classDecl in state.ast.classes) {
+				var classMethods:Array<AstFunction> = [];
 				for (method in classDecl.methods) {
 					var canonical = canonicalFunction(method, name, entryModule, locals, classDecl.name + "." + method.name);
 					functions.push(canonical);
+					classMethods.push({
+						name: method.name,
+						isStatic: method.isStatic,
+						arguments: method.arguments,
+						result: method.result,
+						span: method.span,
+						statements: canonical.statements
+					});
 					owners.set(canonical.name, name);
 					var calls:Map<String, Bool> = [];
 					for (statement in canonical.statements)
@@ -157,6 +169,14 @@ class Compiler {
 						callers.push(canonical.name);
 					}
 				}
+				classes.push({
+					name: classDecl.name,
+					base: classDecl.base,
+					fields: classDecl.fields,
+					methods: classMethods,
+					span: classDecl.span
+				});
+			}
 		}
 		var invalid:Map<String, Bool> = [];
 		for (name in bodyChanged.keys())
@@ -181,8 +201,8 @@ class Compiler {
 			typedNew = Typer.typeSelected({
 				packageName: null,
 				imports: [],
-				classes: [],
-				functions: functions
+				classes: classes,
+				functions: programFunctions
 			}, selected, nativeSignatures())
 		catch (error:CompileError) {
 			for (name in names) {
@@ -223,7 +243,7 @@ class Compiler {
 		var cached = [];
 		for (fn in functions)
 			cached.push(modules.get(owners.get(fn.name)).irFunctions.get(fn.name));
-		var ir = IrGenerator.assemble(cached, irNatives());
+		var ir = IrGenerator.assemble(cached, irNatives(), IrGenerator.objectsFrom(typedNew));
 		var signatureChanges = [for (name in signatureChanged.keys()) name];
 		signatureChanges.sort(Reflect.compare);
 		var assembly = assembler.assemble(ir, regenerated, signatureChanges);
@@ -436,8 +456,13 @@ class Compiler {
 				scanExpression(b, dependencies);
 			case Call(name, args, _):
 				var dot = name.indexOf(".");
-				if (dot > 0)
-					dependencies.set(name.substr(0, dot), true);
+				if (dot > 0) {
+					var prefix = name.substr(0, dot);
+					// Lowercase dotted calls are instance calls on locals (for
+					// example box.get), not module dependencies.
+					if (prefix.length > 0 && prefix.charCodeAt(0) >= 65 && prefix.charCodeAt(0) <= 90)
+						dependencies.set(prefix, true);
+				}
 				for (a in args)
 					scanExpression(a, dependencies);
 			default:

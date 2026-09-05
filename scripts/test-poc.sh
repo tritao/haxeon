@@ -55,6 +55,18 @@ if [[ $object_status -ne 42 ]]; then
 fi
 echo "PASS: object allocation and field access executed (exit 42)"
 
+instance_module_output="$root_dir/out/instance-module.hl"
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run InstanceModuleMain "$instance_module_output"
+set +e
+LD_LIBRARY_PATH="$root_dir/.tools/hashlink" "$hl" "$instance_module_output"
+instance_module_status=$?
+set -e
+if [[ $instance_module_status -ne 42 ]]; then
+	echo "incremental instance class: expected exit 42, got $instance_module_status" >&2
+	exit 1
+fi
+echo "PASS: incremental instance class executed (exit 42)"
+
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ModuleMain "$root_dir/out/modules.hl"
 set +e
 LD_LIBRARY_PATH="$root_dir/.tools/hashlink" "$hl" "$root_dir/out/modules.hl"
