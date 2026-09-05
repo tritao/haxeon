@@ -216,7 +216,7 @@ class IrGenerator {
 				name: "__exception_matches",
 				library: "realtime_runtime",
 				symbol: "__exception_matches",
-				arguments: [Dyn, Bytes],
+				arguments: [Dyn, TypeRef],
 				result: Bool
 			});
 		if (needsArrayRuntime) {
@@ -530,10 +530,8 @@ class IrGenerator {
 							var handlerBlock = builder.createBlock(),
 								mismatchBlock = builder.createBlock();
 							nextDispatch = mismatchBlock;
-							builder.branch(builder.call("__exception_matches", [
-								builder.load(exceptionLocal, Dyn),
-								builder.constString(exceptionTypeName(catchClause.type))
-							], Bool), handlerBlock, mismatchBlock);
+							builder.branch(builder.call("__exception_matches", [builder.load(exceptionLocal, Dyn), builder.typeValue(catchIrType)], Bool),
+								handlerBlock, mismatchBlock);
 							builder.select(handlerBlock);
 						} else
 							hasDynamicCatch = true;
@@ -730,16 +728,6 @@ class IrGenerator {
 			}
 		}
 	}
-
-	static function exceptionTypeName(type:CompilerType):String
-		return switch type {
-			case TInt: "Int";
-			case TFloat: "Float";
-			case TBool: "Bool";
-			case TString: "String";
-			case TClass(name), TInterface(name): name;
-			default: throw "Unsupported typed catch";
-		};
 
 	static function exhaustiveEnumSwitch(type:CompilerType, cases:Array<TypedSwitchCase>):Bool {
 		switch type {

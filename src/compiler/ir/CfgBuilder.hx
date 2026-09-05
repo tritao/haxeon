@@ -108,6 +108,12 @@ class CfgBuilder {
 		return out;
 	}
 
+	public function typeValue(type:IrType):CfgValue {
+		var out = temporary(TypeRef);
+		emit(TypeValue(out, type));
+		return out;
+	}
+
 	public function pushLocalAlias(name:String, internalName:String):Void {
 		var aliases = localAliases.get(name);
 		if (aliases == null) {

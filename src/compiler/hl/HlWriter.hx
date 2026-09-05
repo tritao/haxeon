@@ -138,6 +138,9 @@ class HlWriter {
 					requireRegister(fn, destination);
 				case LoadNull(destination):
 					requireRegister(fn, destination);
+				case LoadType(destination, type):
+					requireRegister(fn, destination);
+					requireType(code, type, 'type literal in function ${fn.functionIndex}');
 				case ToDyn(destination, source):
 					requireRegister(fn, destination);
 					requireRegister(fn, source);
@@ -457,6 +460,8 @@ class HlWriter {
 					{opcode: HlOpcode.Bool, operands: [destination, value ? 1 : 0]};
 				case LoadNull(destination):
 					{opcode: HlOpcode.Null, operands: [destination]};
+				case LoadType(destination, type):
+					{opcode: HlOpcode.Type, operands: [destination, type]};
 				case ToDyn(destination, source):
 					{opcode: HlOpcode.ToDyn, operands: [destination, source]};
 				case SafeCast(destination, source):

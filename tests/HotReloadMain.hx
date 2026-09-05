@@ -96,7 +96,8 @@ class HotReloadMain {
 			hasTrap = false,
 			hasThrow = false,
 			hasSafeCast = false,
-			hasRethrow = false;
+			hasRethrow = false,
+			hasType = false;
 		for (fn in exceptionDecoded.functions)
 			for (instruction in fn.instructions) {
 				if (instruction.opcode == HlOpcode.Trap)
@@ -107,9 +108,11 @@ class HotReloadMain {
 					hasSafeCast = true;
 				if (instruction.opcode == HlOpcode.Rethrow)
 					hasRethrow = true;
+				if (instruction.opcode == HlOpcode.Type)
+					hasType = true;
 			}
-		if (!hasTrap || !hasThrow || !hasSafeCast || !hasRethrow)
-			throw "typed exception HLP omitted trap, throw, cast, or rethrow opcodes";
+		if (!hasTrap || !hasThrow || !hasSafeCast || !hasRethrow || !hasType)
+			throw "typed exception HLP omitted trap, throw, type, cast, or rethrow opcodes";
 		Runtime.patchSet(loaded,
 			new PatchSet(liveRevision, exceptionPatch.revision, exceptionPatch.patchBytes, exceptionPatch.changedFunctions, exceptionPatch.requiresReload));
 		liveRevision = exceptionPatch.revision;

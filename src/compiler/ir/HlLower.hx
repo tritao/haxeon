@@ -163,6 +163,8 @@ class HlLower {
 						instructions.push(HlInstruction.LoadBool(defineRegister(output, registers, registerTypes), value));
 					case ConstNull(output):
 						instructions.push(HlInstruction.LoadNull(defineRegister(output, registers, registerTypes)));
+					case TypeValue(output, type):
+						instructions.push(HlInstruction.LoadType(defineRegister(output, registers, registerTypes), internType(type)));
 					case ToDyn(output, value):
 						instructions.push(HlInstruction.ToDyn(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
 					case SafeCast(output, value):

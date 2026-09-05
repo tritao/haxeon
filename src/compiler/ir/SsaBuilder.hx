@@ -294,6 +294,9 @@ class SsaBuilder {
 				case ConstNull(out):
 					var result = define(out);
 					target.instructions.push(ConstNull(result));
+				case TypeValue(out, type):
+					var result = define(out);
+					target.instructions.push(TypeValue(result, type));
 				case ToDyn(out, value):
 					var result = define(out);
 					target.instructions.push(ToDyn(result, resolve(value)));

@@ -80,6 +80,7 @@ class HlSymbolTable {
 					case F64: HlType.F64;
 					case Bytes: HlType.Bytes;
 					case Dyn: HlType.Dyn;
+					case TypeRef: HlType.Type;
 					case Array(_): HlType.Array;
 					case Obj(name): throw 'Object type "$name" must be registered before use';
 					case Abstract(name): throw 'Abstract type "$name" must be handled by the outer type switch';
@@ -237,6 +238,7 @@ class HlSymbolTable {
 			case F64: "f64";
 			case Bytes: "bytes";
 			case Dyn: "dyn";
+			case TypeRef: "type";
 			case Array(element): 'array:${typeKey(element)}';
 			case Obj(name): 'obj:$name';
 			case Abstract(name): 'abstract:$name';

@@ -21,6 +21,7 @@ enum HlInstruction {
 	LoadString(destination:Int, constant:Int);
 	LoadBool(destination:Int, value:Bool);
 	LoadNull(destination:Int);
+	LoadType(destination:Int, type:Int);
 	ToDyn(destination:Int, source:Int);
 	SafeCast(destination:Int, source:Int);
 	Trap(destination:Int, target:String);

@@ -162,6 +162,9 @@ class IrVerifier {
 					default: throw 'IR null constant must produce a reference value';
 				}
 				define(values, out);
+			case TypeValue(out, _):
+				expect(out, TypeRef);
+				define(values, out);
 			case ToDyn(out, value):
 				require(values, value);
 				if (out.type != Dyn)

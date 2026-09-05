@@ -7,6 +7,7 @@ enum IrType {
 	F64;
 	Bytes;
 	Dyn;
+	TypeRef;
 	Array(element:IrType);
 	Enum(name:String);
 	Obj(name:String);
@@ -40,6 +41,7 @@ enum IrInstruction {
 	ConstString(output:IrValue, value:String);
 	ConstBool(output:IrValue, value:Bool);
 	ConstNull(output:IrValue);
+	TypeValue(output:IrValue, type:IrType);
 	ToDyn(output:IrValue, value:IrValue);
 	SafeCast(output:IrValue, value:IrValue);
 	BeginTry(catchBlock:BlockId, afterBlock:BlockId);

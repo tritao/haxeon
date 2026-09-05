@@ -80,6 +80,9 @@ class CfgVerifier {
 						default: throw 'CFG null constant must produce a reference value';
 					}
 					define(out, defined, available);
+				case TypeValue(out, _):
+					expect(out, TypeRef);
+					define(out, defined, available);
 				case ToDyn(out, value):
 					require(value, available);
 					expect(out, Dyn);

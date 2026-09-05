@@ -21,6 +21,7 @@ enum CfgInstruction {
 	ConstString(output:CfgValue, value:String);
 	ConstBool(output:CfgValue, value:Bool);
 	ConstNull(output:CfgValue);
+	TypeValue(output:CfgValue, type:IrType);
 	ToDyn(output:CfgValue, value:CfgValue);
 	SafeCast(output:CfgValue, value:CfgValue);
 	BeginTry(catchBlock:Int, afterBlock:Int);
