@@ -20,8 +20,9 @@ enum TypedExpressionKind {
 	TFloatLiteral(value:Float);
 	TStringLiteral(value:String);
 	TLocal(name:String);
+	TCaptured(name:String);
 	TFunctionRef(name:String);
-	TLambda(name:String);
+	TLambda(name:String, environment:Null<String>, captures:Array<String>);
 	TAdd(left:TypedExpression, right:TypedExpression);
 	TSub(left:TypedExpression, right:TypedExpression);
 	TMul(left:TypedExpression, right:TypedExpression);

@@ -20,6 +20,7 @@ import compiler.hl.HlRuntimeIdentity;
 import haxe.io.Bytes;
 import compiler.types.Type.CompilerType;
 import compiler.ir.Ir.IrNative;
+import compiler.ir.Ir.IrObject;
 import compiler.types.TypeRegistry;
 
 typedef NativeFunction = {final name:String; final library:String; final symbol:String; final arguments:Array<CompilerType>; final result:CompilerType;}
@@ -48,6 +49,7 @@ class Compiler {
 	public final types:TypeRegistry;
 
 	final natives:Map<String, NativeFunction> = [];
+	final objectCache:Map<String, IrObject> = [];
 	var compiledOnce = false;
 
 	public function new(?identityState:Bytes) {
@@ -221,6 +223,8 @@ class Compiler {
 			throw error;
 		}
 		var retyped = [], regenerated = [];
+		for (object in IrGenerator.objectsFrom(typedNew))
+			objectCache.set(object.name, object);
 		var touchedModules:Map<String, Bool> = [];
 		for (fn in typedNew.functions) {
 			var module = owners.get(fn.name), state = modules.get(module);
@@ -261,7 +265,9 @@ class Compiler {
 			for (functionName in cachedNames)
 				modules.get(owners.get(functionName)).irFunctions.get(functionName)
 		];
-		var ir = IrGenerator.assemble(cached, irNatives(), IrGenerator.objectsFrom(typedNew));
+		var objectNames = [for (name in objectCache.keys()) name];
+		objectNames.sort(Reflect.compare);
+		var ir = IrGenerator.assemble(cached, irNatives(), [for (name in objectNames) objectCache.get(name)]);
 		var signatureChanges = [for (name in signatureChanged.keys()) name];
 		signatureChanges.sort(Reflect.compare);
 		var assembly = assembler.assemble(ir, regenerated, signatureChanges);

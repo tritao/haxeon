@@ -24,6 +24,7 @@ class Typer {
 	final externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>;
 	var classDecls:Map<String, AstClass> = [];
 	final generated:Array<TypedFunction> = [];
+	final generatedClasses:Array<TypedClass> = [];
 	var currentFunctionName:String = "";
 
 	public static function type(program:AstProgram):TypedProgram
@@ -77,7 +78,7 @@ class Typer {
 		for (lambda in generated)
 			typedFunctions.push(lambda);
 		return {
-			classes: typedClasses,
+			classes: typedClasses.concat(generatedClasses),
 			functions: typedFunctions
 		};
 	}
@@ -166,6 +167,8 @@ class Typer {
 						var expected = scope.resolve(name);
 						if (expected == null)
 							fail("E1005", 'Unknown variable "$name"', span);
+						if (scope.isCapture(name))
+							fail("E1013", 'Captured variable "$name" cannot be assigned in a lambda yet', span);
 						if (!sameType(value.type, expected))
 							fail("E1002", 'Type mismatch for local "$name"', span);
 						output.push(TAssign(name, value, span));
@@ -203,7 +206,7 @@ class Typer {
 			case StringLiteral(value, span): new TypedExpression(TStringLiteral(value), TString, span);
 			case Variable(name, span):
 				var type = scope.resolve(name);
-				if (type != null) new TypedExpression(TLocal(name), type, span); else {
+				if (type != null) new TypedExpression(scope.isCapture(name) ? TCaptured(name) : TLocal(name), type, span); else {
 					var signature = signatures.get(name);
 					if (signature != null)
 						new TypedExpression(TFunctionRef(name), functionType(signature), span);
@@ -222,9 +225,23 @@ class Typer {
 				var lambdaArguments = [
 					for (argument in arguments)
 						{name: argument.name, type: lowerType(argument.type)}
-				], lambdaScope = new Scope();
-				for (argument in lambdaArguments)
+				], lambdaScope = new Scope(), declared:Map<String, Bool> = [];
+				for (argument in lambdaArguments) {
 					lambdaScope.define(argument.name, argument.type, span);
+					declared.set(argument.name, true);
+				}
+				collectDeclaredLocals(body, declared);
+				var freeVariables:Map<String, Bool> = [];
+				collectVariables(body, freeVariables);
+				var captures = [];
+				for (name in freeVariables.keys())
+					if (!declared.exists(name)) {
+						var capturedType = scope.resolve(name);
+						if (capturedType != null) {
+							lambdaScope.defineCapture(name, capturedType, span);
+							captures.push(name);
+						}
+					}
 				var inferredResult:CompilerType = TVoid;
 				for (statement in body)
 					switch statement {
@@ -237,21 +254,42 @@ class Typer {
 				var typedBodyScope = new Scope();
 				for (argument in lambdaArguments)
 					typedBodyScope.define(argument.name, argument.type, span);
+				for (name in captures)
+					typedBodyScope.defineCapture(name, scope.resolve(name), span);
 				var lambdaName = '$' + 'lambda:' + currentFunctionName + ':' + span.start,
 					typedBody = typeStatements(body, typedBodyScope, inferredResult);
 				if (inferredResult != TVoid && !alwaysReturns(typedBody))
 					fail("E1006", 'Function $lambdaName does not return on every path', span);
+				var environment = captures.length == 0 ? null : '$' + 'lambda-env:' + currentFunctionName + ':' + span.start;
+				if (environment != null)
+					generatedClasses.push({
+						name: environment,
+						base: null,
+						fields: [
+							for (name in captures)
+								{
+									name: name,
+									type: scope.resolve(name),
+									isStatic: false,
+									isFinal: false,
+									span: span
+								}
+						],
+						methods: [],
+						span: span
+					});
 				generated.push({
 					name: lambdaName,
-					owner: null,
-					isStatic: true,
+					owner: environment,
+					isStatic: environment == null,
 					isConstructor: false,
 					arguments: lambdaArguments,
 					result: inferredResult,
 					statements: typedBody,
 					span: span
 				});
-				new TypedExpression(TLambda(lambdaName), TFunction([for (argument in lambdaArguments) argument.type], inferredResult), span);
+				new TypedExpression(TLambda(lambdaName, environment, captures), TFunction([for (argument in lambdaArguments) argument.type], inferredResult),
+					span);
 			case Add(left, right, span): arithmetic(left, right, scope, true, span);
 			case Sub(left, right, span): arithmetic(left, right, scope, false, span);
 			case Mul(left, right, span): numeric(left, right, scope, 2, span);
@@ -324,6 +362,59 @@ class Typer {
 
 	function functionType(fn:AstFunction):CompilerType
 		return TFunction([for (argument in fn.arguments) lowerType(argument.type)], lowerType(fn.result));
+
+	static function collectDeclaredLocals(statements:Array<AstStatement>, names:Map<String, Bool>):Void {
+		for (statement in statements)
+			switch statement {
+				case VarDeclaration(name, _, _, _):
+					names.set(name, true);
+				case If(_, yes, no, _):
+					collectDeclaredLocals(yes, names);
+					collectDeclaredLocals(no, names);
+				case While(_, body, _):
+					collectDeclaredLocals(body, names);
+				default:
+			}
+	}
+
+	static function collectVariables(statements:Array<AstStatement>, names:Map<String, Bool>):Void {
+		for (statement in statements)
+			switch statement {
+				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Expression(expression, _):
+					collectExpressionVariables(expression, names);
+				case If(condition, yes, no, _):
+					collectExpressionVariables(condition, names);
+					collectVariables(yes, names);
+					collectVariables(no, names);
+				case While(condition, body, _):
+					collectExpressionVariables(condition, names);
+					collectVariables(body, names);
+			}
+	}
+
+	static function collectExpressionVariables(expression:AstExpression, names:Map<String, Bool>):Void
+		switch expression {
+			case Variable(name, _):
+				names.set(name, true);
+			case Call(_, arguments, _):
+				for (argument in arguments)
+					collectExpressionVariables(argument, names);
+			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Less(left, right, _), LessEqual(left, right, _),
+				Equal(left, right, _):
+				collectExpressionVariables(left, names);
+				collectExpressionVariables(right, names);
+			case New(_, arguments, _):
+				for (argument in arguments)
+					collectExpressionVariables(argument, names);
+			case Lambda(_, _, _):
+				return;
+			case IntegerLiteral(_, _):
+				return;
+			case FloatLiteral(_, _):
+				return;
+			case StringLiteral(_, _):
+				return;
+		}
 
 	function checkArguments(arguments:Array<TypedExpression>, expected:Array<CompilerType>, name:String):Void {
 		for (i in 0...arguments.length)

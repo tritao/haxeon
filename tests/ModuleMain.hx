@@ -160,6 +160,18 @@ class ModuleMain {
 		var lambdaBody = lambdaCompiler.compile("Main");
 		if (lambdaBody.functionIds.get("$lambda:main:30") != lambdaId || lambdaBody.retyped.length != 2)
 			throw "Lambda body edit did not preserve or regenerate its generated function";
+		var capturedCompiler = new Compiler();
+		capturedCompiler.update("Main.hx", "function main():Int { var offset = 21; var f = (value:Int) -> { return value + offset; }; return f(21); }");
+		var capturedFirst = capturedCompiler.compile("Main"),
+			capturedLambdaId:Null<Int> = null;
+		for (name => id in capturedFirst.functionIds)
+			if (StringTools.startsWith(name, "$lambda:"))
+				capturedLambdaId = id;
+		if (capturedLambdaId == null || capturedFirst.ir.objects.length == 0)
+			throw "Captured lambda did not retain its generated environment type";
+		var capturedUnchanged = capturedCompiler.compile("Main");
+		if (capturedUnchanged.changedFunctions.length != 0)
+			throw "Unchanged captured lambda build reported changes";
 		Sys.println("PASS: function fingerprints selectively retyped and regenerated cached artifacts");
 	}
 }

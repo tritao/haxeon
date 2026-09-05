@@ -8,6 +8,7 @@ import compiler.Diagnostic.CompileError;
 class Scope {
 	final parent:Null<Scope>;
 	final values:Map<String, CompilerType> = [];
+	final captures:Map<String, Bool> = [];
 
 	public function new(?parent:Scope)
 		this.parent = parent;
@@ -17,6 +18,14 @@ class Scope {
 			throw new CompileError(new Diagnostic("E1001", 'Duplicate local "$name"', span));
 		values.set(name, type);
 	}
+
+	public function defineCapture(name:String, type:CompilerType, span:SourceSpan):Void {
+		define(name, type, span);
+		captures.set(name, true);
+	}
+
+	public function isCapture(name:String):Bool
+		return captures.exists(name);
 
 	public function resolve(name:String):Null<CompilerType> {
 		var value = values.get(name);

@@ -142,8 +142,19 @@ class IrGenerator {
 				if (type == null)
 					throw 'Missing typed local "$name"';
 				builder.load(name, type);
+			case TCaptured(name):
+				var owner = localTypes.get("this");
+				if (owner == null)
+					throw 'Captured value "$name" has no environment';
+				builder.fieldGet(builder.load("this", owner), name, lowerType(expression.type));
 			case TFunctionRef(name): builder.staticClosure(name, lowerType(expression.type));
-			case TLambda(name): builder.staticClosure(name, lowerType(expression.type));
+			case TLambda(name, environment, captures):
+				if (environment == null) builder.staticClosure(name, lowerType(expression.type)); else {
+					var object = builder.newObject(environment);
+					for (capture in captures)
+						builder.fieldSet(object, capture, builder.load(capture, localTypes.get(capture)));
+					builder.instanceClosure(name, object, lowerType(expression.type));
+				}
 			case TAdd(a, b): builder.add(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TSub(a, b): builder.sub(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TMul(a, b): builder.mul(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
