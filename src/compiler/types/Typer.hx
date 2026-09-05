@@ -813,6 +813,11 @@ class Typer {
 		return switch value {
 			case Call(name, arguments, span):
 				var info = enumCaseInfo(name);
+				if (info == null && name.indexOf(".") < 0)
+					switch expected {
+						case TEnum(enumName): info = enumCaseInfo(enumName + "." + name);
+						default:
+					}
 				if (info == null)
 					return null;
 				if (!sameType(expected, TEnum(info.enumName)))
@@ -2380,7 +2385,7 @@ class Typer {
 	}
 
 	function enumCaseInfo(name:String):Null<{enumName:String, index:Int, params:Array<compiler.Ast.AstEnumParameter>}> {
-		var dot = name.indexOf(".");
+		var dot = name.lastIndexOf(".");
 		if (dot <= 0)
 			return null;
 		var enumName = name.substr(0, dot),
