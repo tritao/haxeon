@@ -4,6 +4,8 @@ function main():Int {
 	values.set(9, 1);
 	if (!values.exists(7))
 		return 0;
+	if (values.values().indexOf(42) < 0)
+		return 0;
 	var sum = 0;
 	for (key in values.keys())
 		sum = sum + values.get(key);

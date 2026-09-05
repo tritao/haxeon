@@ -815,6 +815,11 @@ class Typer {
 				fail("E1008", "Map.keys expects no arguments", span);
 			return new TypedExpression(TCall(RuntimeType.mapNative(mapType.key, mapType.value, "keys"), [receiver]), TArray(mapType.key), span);
 		}
+		if (name == "values") {
+			if (arguments.length != 0)
+				fail("E1008", "Map.values expects no arguments", span);
+			return new TypedExpression(TCall(RuntimeType.mapNative(mapType.key, mapType.value, "values"), [receiver]), TArray(mapType.value), span);
+		}
 		if (name == "clear") {
 			if (arguments.length != 0)
 				fail("E1008", "Map.clear expects no arguments", span);

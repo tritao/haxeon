@@ -263,6 +263,13 @@ class IrGenerator {
 				result: Array(keyIrType)
 			});
 			program.natives.push({
+				name: '__${mapName}_values',
+				library: "realtime_runtime",
+				symbol: '__${mapName}_values',
+				arguments: [mapType],
+				result: Array(valueIrType)
+			});
+			program.natives.push({
 				name: '__${mapName}_remove',
 				library: "realtime_runtime",
 				symbol: '__${mapName}_remove',

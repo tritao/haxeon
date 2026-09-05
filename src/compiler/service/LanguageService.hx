@@ -456,6 +456,7 @@ class LanguageService {
 				addMember("set", "method", "set(key,value):Void", prefix, result);
 				addMember("exists", "method", "exists(key):Bool", prefix, result);
 				addMember("keys", "method", "keys():Array", prefix, result);
+				addMember("values", "method", "values():Array", prefix, result);
 				addMember("remove", "method", "remove(key):Bool", prefix, result);
 				addMember("clear", "method", "clear():Void", prefix, result);
 				addMember("size", "method", "size():Int", prefix, result);

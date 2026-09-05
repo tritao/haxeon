@@ -4,11 +4,16 @@ function main():Int {
 	values.set("other", 7);
 	if (values.size() != 2)
 		return 0;
+	var initialValues = values.values();
+	if (initialValues.length != 2 || initialValues.indexOf(42) < 0 || initialValues.indexOf(7) < 0)
+		return 0;
 	if (!values.remove("other") || values.exists("other"))
 		return 0;
 	if (values.size() != 1)
 		return 0;
 	values.set("other", 7);
+	if (values.values().indexOf(42) < 0)
+		return 0;
 	if (values.exists("answer"))
 		for (key in values.keys())
 			if (key == "answer")
