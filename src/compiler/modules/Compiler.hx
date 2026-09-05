@@ -275,9 +275,12 @@ class Compiler {
 				token.check();
 		for (name in names)
 			parse(modules.get(name), entryModule, bodyChanged, signatureChanged, structuralChanged);
+		for (name in names)
+			addTypeDependencies(modules.get(name));
 		if (token != null)
 			token.check();
 		graph.rebuild(modules);
+		names = reachableModules(entryModule);
 		for (name in names)
 			if (token != null)
 				token.check();
@@ -652,6 +655,102 @@ class Compiler {
 				patchBytes: patchBytes == null ? 0 : patchBytes.length
 			}
 		};
+	}
+
+	function reachableModules(entryModule:String):Array<String> {
+		var seen:Map<String, Bool> = [], pending = [entryModule];
+		while (pending.length > 0) {
+			var name = pending.pop();
+			if (seen.exists(name))
+				continue;
+			seen.set(name, true);
+			var state = modules.get(name);
+			if (state != null)
+				for (dependency in state.dependencies)
+					if (modules.exists(dependency) && !seen.exists(dependency))
+						pending.push(dependency);
+		}
+		var result = [for (name in seen.keys()) name];
+		result.sort(Reflect.compare);
+		return result;
+	}
+
+	function addTypeDependencies(state:ModuleState):Void {
+		var dependencies:Map<String, Bool> = [];
+		for (name in state.dependencies)
+			dependencies.set(name, true);
+		function add(type:compiler.Ast.AstType):Void
+			switch type {
+				case NamedType(name):
+					var owner = sourceModuleForType(name, state.ast.packageName);
+					if (owner != null && owner != state.name)
+						dependencies.set(owner, true);
+				case ArrayType(element), NullableType(element):
+					add(element);
+				case MapType(key, value):
+					add(key);
+					add(value);
+				case FunctionType(arguments, result):
+					for (argument in arguments)
+						add(argument);
+					add(result);
+				case AnonymousType(fields):
+					for (field in fields)
+						add(field.type);
+				default:
+			}
+		function addFunction(fn:AstFunction):Void {
+			for (argument in fn.arguments)
+				add(argument.type);
+			add(fn.result);
+		}
+		for (alias in state.ast.aliases)
+			add(alias.type);
+		for (enumDecl in state.ast.enums)
+			for (caseDecl in enumDecl.cases)
+				for (parameter in caseDecl.params)
+					add(parameter.type);
+		for (interfaceDecl in state.ast.interfaces)
+			for (method in interfaceDecl.methods)
+				addFunction(method);
+		for (classDecl in state.ast.classes) {
+			if (classDecl.base != null) {
+				var owner = sourceModuleForType(classDecl.base, state.ast.packageName);
+				if (owner != null && owner != state.name)
+					dependencies.set(owner, true);
+			}
+			for (field in classDecl.fields)
+				add(compiler.types.FieldInference.parsedType(field));
+			for (method in classDecl.methods)
+				addFunction(method);
+		}
+		for (fn in state.ast.functions)
+			addFunction(fn);
+		state.dependencies = [for (name in dependencies.keys()) name];
+		state.dependencies.sort(Reflect.compare);
+	}
+
+	function sourceModuleForType(typeName:String, packageName:Null<String>):Null<String> {
+		var qualified = typeName.indexOf(".") < 0 && packageName != null ? packageName + "." + typeName : typeName,
+			module = sourceModuleForDependency(qualified);
+		if (module != null)
+			return module;
+		for (name => state in modules) {
+			var prefix = state.ast.packageName == null ? "" : state.ast.packageName + ".";
+			for (declaration in state.ast.aliases)
+				if (prefix + declaration.name == qualified)
+					return name;
+			for (declaration in state.ast.enums)
+				if (prefix + declaration.name == qualified)
+					return name;
+			for (declaration in state.ast.interfaces)
+				if (prefix + declaration.name == qualified)
+					return name;
+			for (declaration in state.ast.classes)
+				if (prefix + declaration.name == qualified)
+					return name;
+		}
+		return null;
 	}
 
 	function rehydratedChanges(regenerated:Array<String>, program:IrProgram):Array<String> {
