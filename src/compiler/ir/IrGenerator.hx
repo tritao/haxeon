@@ -1460,12 +1460,5 @@ class IrGenerator {
 	}
 
 	static function arrayAllocatorName(element:CompilerType):String
-		return switch element {
-			case TInt: "__array_alloc_i32";
-			case TFloat: "__array_alloc_f64";
-			case TString: "__array_alloc_bytes";
-			case TBool: "__array_alloc_bool";
-			case TClass(_), TInterface(_), TArray(_), TFunction(_): "__array_alloc_ref";
-			default: throw "Compiler-owned allocation currently supports primitive and reference arrays";
-		};
+		return "__array_alloc_" + RuntimeType.arrayName(element);
 }

@@ -592,19 +592,17 @@ class Typer {
 					}
 				case IndexAssignment(array, offset, expression, span):
 					var typedArray = typeExpression(array, scope),
-						typedIndex = typeExpression(offset, scope),
-						value = typeExpression(expression, scope);
+						typedIndex = typeExpression(offset, scope);
 					switch typedArray.type {
 						case TMap(key, mapValue):
 							typedIndex = coerce(typedIndex, key, "map key", "E1002");
-							value = coerce(value, mapValue, "map value", "E1002");
+							var value = coerce(typeExpression(expression, scope, mapValue), mapValue, "map value", "E1002");
 							output.push(TMapAssign(typedArray, typedIndex, value, span));
 						default:
 							if (typedIndex.type != TInt)
 								fail("E1014", "Array index must be Int", typedIndex.span);
 							var element = arrayElementType(typedArray.type, span);
-							if (!sameType(value.type, element))
-								fail("E1002", "Array element assignment has the wrong type", span);
+							var value = coerce(typeExpression(expression, scope, element), element, "array element", "E1002");
 							output.push(TIndexAssign(typedArray, typedIndex, value, span));
 					}
 				case FieldAssignment(objectExpression, fieldName, expression, span):
@@ -1220,13 +1218,15 @@ class Typer {
 						typedValue = pattern == null ? coerce(typeExpression(switchCase.value, scope), typedSubject.type, "switch case",
 							"E1019") : pattern.value,
 						typedGuard = switchCase.guard == null ? null : coerce(typeExpression(switchCase.guard, caseScope), TBool, "switch guard", "E1003"),
-						typedResult = typeExpression(switchCase.result, caseScope, resultType),
+						typedResult = typeExpression(switchCase.result, caseScope, expectedType == null ? resultType : expectedType),
 						enumName:Null<String> = pattern == null ? null : pattern.enumName,
 						constructorIndex = pattern == null ? -1 : pattern.index;
-					if (resultType == null && typedResult.type != TNever)
-						resultType = typedResult.type;
-					if (resultType != null)
-						typedResult = coerce(typedResult, resultType, "switch branch", "E1003");
+					if (expectedType == null && typedResult.type != TNever) {
+						var joined = resultType == null ? typedResult.type : commonConditionalType(resultType, typedResult.type);
+						if (joined == null)
+							fail("E1003", "Switch branches must have matching types", switchCase.span);
+						resultType = joined;
+					}
 					if (pattern == null)
 						switch typedValue.expression {
 							case TEnumLiteral(name, index):
@@ -1254,12 +1254,15 @@ class Typer {
 						bindings: pattern == null ? [] : pattern.bindings
 					});
 				}
-				var typedDefault = defaultExpression == null ? null : typeExpression(defaultExpression, scope, resultType);
+				var typedDefault = defaultExpression == null ? null : typeExpression(defaultExpression, scope,
+					expectedType == null ? resultType : expectedType);
 				if (typedDefault != null) {
-					if (resultType == null && typedDefault.type != TNever)
-						resultType = typedDefault.type;
-					if (resultType != null)
-						typedDefault = coerce(typedDefault, resultType, "switch branch", "E1003");
+					if (expectedType == null && typedDefault.type != TNever) {
+						var joined = resultType == null ? typedDefault.type : commonConditionalType(resultType, typedDefault.type);
+						if (joined == null)
+							fail("E1003", "Switch branches must have matching types", span);
+						resultType = joined;
+					}
 				}
 				if (resultType == null)
 					fail("E1003", "Switch expression has no result branches", span);
