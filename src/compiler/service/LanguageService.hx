@@ -454,6 +454,7 @@ class LanguageService {
 				addMember("keys", "method", "keys():Array", prefix, result);
 				addMember("remove", "method", "remove(key):Bool", prefix, result);
 				addMember("clear", "method", "clear():Void", prefix, result);
+				addMember("size", "method", "size():Int", prefix, result);
 			case TString:
 				addMember("length", "field", "length:Int", prefix, result);
 				addMember("indexOf", "method", "indexOf(needle):Int", prefix, result);

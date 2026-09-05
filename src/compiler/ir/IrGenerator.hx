@@ -261,6 +261,13 @@ class IrGenerator {
 				arguments: [mapType],
 				result: Void
 			});
+			program.natives.push({
+				name: '__${mapName}_size',
+				library: "realtime_runtime",
+				symbol: '__${mapName}_size',
+				arguments: [mapType],
+				result: I32
+			});
 		}
 		if (needsStringRuntime)
 			program.natives.push({
