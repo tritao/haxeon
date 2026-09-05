@@ -36,6 +36,13 @@ class CfgVerifier {
 			var block = blocks.get(id);
 			if (block.terminator == null)
 				throw 'Reachable CFG block $id in ${fn.name} has no terminator';
+			for (instruction in block.instructions)
+				switch instruction {
+					case BeginTry(catchBlock):
+						targetBlock(catchBlock, blocks);
+						work.push(catchBlock);
+					default:
+				}
 			switch block.terminator {
 				case Jump(target):
 					work.push(target);
@@ -74,6 +81,12 @@ class CfgVerifier {
 					define(out, defined, available);
 				case ToDyn(out, value):
 					require(value, available);
+					expect(out, Dyn);
+					define(out, defined, available);
+				case BeginTry(catchBlock):
+					targetBlock(catchBlock, blocks);
+				case EndTry:
+				case Catch(out):
 					expect(out, Dyn);
 					define(out, defined, available);
 				case LoadLocal(out, name):

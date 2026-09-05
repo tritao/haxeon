@@ -22,6 +22,8 @@ enum TokenKind {
 	Var;
 	Return;
 	Throw;
+	Try;
+	Catch;
 	If;
 	Else;
 	While;

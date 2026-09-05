@@ -504,6 +504,7 @@ class Compiler {
 			case TBool: Bool;
 			case TFloat: F64;
 			case TString: Bytes;
+			case TDynamic: Dyn;
 			case TVoid: Void;
 			case TClass(name): Obj(name);
 			case TMap(_, _): Abstract("map_string_i32");
@@ -795,6 +796,9 @@ class Compiler {
 					canonicalExpression(offset, module, entry, locals, aliases), canonicalExpression(e, module, entry, locals, aliases), span);
 			case Return(e, span): Return(canonicalExpression(e, module, entry, locals, aliases), span);
 			case Throw(e, span): Throw(canonicalExpression(e, module, entry, locals, aliases), span);
+			case Try(tryBranch, catchName, catchType, catchBranch,
+				span): Try([for (x in tryBranch) canonicalStatement(x, module, entry, locals, aliases)], catchName, canonicalType(catchType, aliases),
+					[for (x in catchBranch) canonicalStatement(x, module, entry, locals, aliases)], span);
 			case ReturnVoid(span): ReturnVoid(span);
 			case Break(span): Break(span);
 			case Continue(span): Continue(span);
@@ -904,6 +908,11 @@ class Compiler {
 		switch s {
 			case VarDeclaration(_, _, e, _), Assignment(_, e, _), Return(e, _), Throw(e, _):
 				scanExpression(e, dependencies);
+			case Try(tryBranch, _, _, catchBranch, _):
+				for (x in tryBranch)
+					scanStatement(x, dependencies);
+				for (x in catchBranch)
+					scanStatement(x, dependencies);
 			case IndexAssignment(array, offset, e, _):
 				scanExpression(array, dependencies);
 				scanExpression(offset, dependencies);
@@ -1013,6 +1022,11 @@ class Compiler {
 				scanCallExpression(e, calls, aliases);
 			case Throw(e, _):
 				scanCallExpression(e, calls, aliases);
+			case Try(tryBranch, _, _, catchBranch, _):
+				for (s in tryBranch)
+					scanCalls(s, calls, aliases);
+				for (s in catchBranch)
+					scanCalls(s, calls, aliases);
 			case ReturnVoid(_):
 			case Break(_), Continue(_):
 			case Increment(_, _, _):
@@ -1099,6 +1113,9 @@ class Compiler {
 			switch statement {
 				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
 					collectLambdaExpression(expression, functionName, module, generatedByModule);
+				case Try(tryBranch, _, _, catchBranch, _):
+					collectLambdas(tryBranch, functionName, module, generatedByModule);
+					collectLambdas(catchBranch, functionName, module, generatedByModule);
 				case IndexAssignment(array, offset, expression, _):
 					collectLambdaExpression(array, functionName, module, generatedByModule);
 					collectLambdaExpression(offset, functionName, module, generatedByModule);

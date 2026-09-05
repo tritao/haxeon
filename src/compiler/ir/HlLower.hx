@@ -114,6 +114,7 @@ class HlLower {
 	function lowerFunction(fn:IrFunction):HlFunction {
 		var registers:Map<Int, Int> = [];
 		var registerTypes:Array<Int> = [];
+		var catchValues:Map<Int, IrValue> = [];
 		for (argument in fn.arguments)
 			defineRegister(argument, registers, registerTypes);
 
@@ -132,6 +133,9 @@ class HlLower {
 							}
 							moves.push({destination: output, source: input.value});
 						}
+					case Catch(output):
+						catchValues.set(block.id, output);
+						defineRegister(output, registers, registerTypes);
 					default:
 				}
 
@@ -157,6 +161,14 @@ class HlLower {
 						instructions.push(HlInstruction.LoadNull(defineRegister(output, registers, registerTypes)));
 					case ToDyn(output, value):
 						instructions.push(HlInstruction.ToDyn(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
+					case BeginTry(catchBlock):
+						var handlerValue = catchValues.get(catchBlock);
+						if (handlerValue == null)
+							throw 'Try block $block.id has no catch value in block $catchBlock';
+						instructions.push(HlInstruction.Trap(requireRegister(handlerValue, registers), 'block_$catchBlock'));
+					case EndTry:
+						instructions.push(HlInstruction.EndTrap(0));
+					case Catch(_):
 					case GlobalGet(output, name):
 						var global = symbols.globalIndex(name);
 						if (global == null)

@@ -262,6 +262,18 @@ class Parser {
 				end = consume(TokenKind.Semicolon).span;
 			return Throw(expression, start.merge(end));
 		}
+		if (match(TokenKind.Try)) {
+			var start = previous().span, tryBranch = parseStatementOrBlock();
+			consume(TokenKind.Catch);
+			consume(TokenKind.LeftParen);
+			var catchName = consume(TokenKind.Identifier).text;
+			consume(TokenKind.Colon);
+			var catchType = parseType();
+			consume(TokenKind.RightParen);
+			var catchBranch = parseStatementOrBlock(),
+				end = catchBranch.length == 0 ? previous().span : statementSpan(catchBranch[catchBranch.length - 1]);
+			return Try(tryBranch, catchName, catchType, catchBranch, start.merge(end));
+		}
 		if (match(TokenKind.Switch)) {
 			var start = previous().span;
 			consume(TokenKind.LeftParen);
@@ -722,7 +734,7 @@ class Parser {
 	static function statementSpan(statement:AstStatement)
 		return switch statement {
 			case VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), Throw(_, span),
-				If(_, _, _, span), While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span), Switch(_, _, _, _, span), Increment(_, _, span),
-				Expression(_, span): span;
+				Try(_, _, _, _, span), If(_, _, _, span), While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span), Switch(_, _, _, _, span),
+				Increment(_, _, span), Expression(_, span): span;
 		}
 }

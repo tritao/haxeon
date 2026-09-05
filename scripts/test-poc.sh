@@ -139,6 +139,11 @@ run_program interface-dispatch 42
 run_program interface-inheritance 43
 run_program interface-upcast 5
 run_program throw-string 1
+run_program try-catch 42
+run_program try-rethrow 1
+run_program try-array-bounds 42
+run_program try-nested 42
+run_program try-return 42
 
 object_output="$root_dir/out/object.hl"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ObjectMain "$object_output"

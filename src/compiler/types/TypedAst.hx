@@ -75,6 +75,7 @@ enum TypedStatement {
 	TReturn(expression:TypedExpression, span:SourceSpan);
 	TReturnVoid(span:SourceSpan);
 	TThrow(expression:TypedExpression, span:SourceSpan);
+	TTry(tryBranch:Array<TypedStatement>, catchName:String, catchBranch:Array<TypedStatement>, span:SourceSpan);
 	TIf(condition:TypedExpression, thenBranch:Array<TypedStatement>, elseBranch:Array<TypedStatement>, span:SourceSpan);
 	TWhile(condition:TypedExpression, body:Array<TypedStatement>, span:SourceSpan);
 	TForIn(name:String, iterable:TypedExpression, body:Array<TypedStatement>, span:SourceSpan);

@@ -480,20 +480,48 @@ class IrGenerator {
 					lowerExpression(new TypedExpression(TCall(RuntimeType.mapNative(mapType.key, mapType.value, "set"), [map, key, value]), TVoid, map.span),
 						builder, localTypes);
 				case TReturn(expression, _):
-					builder.returnValue(lowerExpression(expression, builder, localTypes));
+					var returnValue = lowerExpression(expression, builder, localTypes);
+					builder.closeTrapsForExit();
+					builder.returnValue(returnValue);
 				case TReturnVoid(_):
+					builder.closeTrapsForExit();
 					builder.returnVoid();
 				case TThrow(expression, _):
 					builder.throwValue(builder.toDyn(lowerExpression(expression, builder, localTypes)));
+				case TTry(tryBranch, catchName, catchBranch, _):
+					var catchBlock = builder.createBlock(),
+						afterBlock = builder.createBlock();
+					builder.beginTry(catchBlock);
+					lowerStatements(tryBranch, builder, localTypes, loops);
+					var tryActive = !builder.isTerminated();
+					if (!tryActive)
+						builder.discardTry();
+					else {
+						builder.endTry();
+						builder.jump(afterBlock);
+					}
+					builder.select(catchBlock);
+					var exception = builder.catchValue();
+					localTypes.set(catchName, Dyn);
+					builder.store(catchName, exception);
+					lowerStatements(catchBranch, builder, localTypes, loops);
+					var catchActive = !builder.isTerminated();
+					if (catchActive)
+						builder.jump(afterBlock);
+					builder.select(afterBlock);
+					if (!tryActive && !catchActive)
+						builder.markUnreachable();
 				case TBreak(_):
 					if (loops.length == 0)
 						throw "break outside loop";
+					builder.closeTrapsForExit();
 					var loop = loops[loops.length - 1];
 					builder.store(loop.breakFlag, builder.constBool(true));
 					builder.jump(loop.continueBlock);
 				case TContinue(_):
 					if (loops.length == 0)
 						throw "continue outside loop";
+					builder.closeTrapsForExit();
 					builder.jump(loops[loops.length - 1].continueBlock);
 				case TIncrement(name, delta, _):
 					var type = localTypes.get(name);
@@ -811,6 +839,7 @@ class IrGenerator {
 			case TBool: Bool;
 			case TFloat: F64;
 			case TString: Bytes;
+			case TDynamic: Dyn;
 			case TVoid: Void;
 			case TClass(name): Obj(name);
 			case TMap(key, value): Abstract(RuntimeType.mapName(key, value));

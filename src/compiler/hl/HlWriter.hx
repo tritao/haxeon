@@ -141,6 +141,12 @@ class HlWriter {
 				case ToDyn(destination, source):
 					requireRegister(fn, destination);
 					requireRegister(fn, source);
+				case Trap(destination, target):
+					requireRegister(fn, destination);
+					if (!labels.exists(target))
+						throw 'Unknown label "$target" in function ${fn.functionIndex}';
+				case EndTrap(destination):
+					requireRegister(fn, destination);
 				case GlobalGet(destination, global):
 					requireRegister(fn, destination);
 					requireGlobal(code, global, 'function ${fn.functionIndex}');
@@ -514,6 +520,11 @@ class HlWriter {
 				case Jump(target):
 					var targetPosition = labels.get(target);
 					{opcode: HlOpcode.JAlways, operands: [targetPosition - (result.length + 1)]};
+				case Trap(destination, target):
+					var targetPosition = labels.get(target);
+					{opcode: HlOpcode.Trap, operands: [destination, targetPosition - (result.length + 1)]};
+				case EndTrap(destination):
+					{opcode: HlOpcode.EndTrap, operands: [destination]};
 				case Label(_): {opcode: HlOpcode.Label, operands: []};
 				case Return(register):
 					{opcode: HlOpcode.Ret, operands: [register]};

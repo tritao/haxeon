@@ -22,6 +22,9 @@ enum CfgInstruction {
 	ConstBool(output:CfgValue, value:Bool);
 	ConstNull(output:CfgValue);
 	ToDyn(output:CfgValue, value:CfgValue);
+	BeginTry(catchBlock:Int);
+	EndTry;
+	Catch(output:CfgValue);
 	LoadLocal(output:CfgValue, name:String);
 	StoreLocal(name:String, value:CfgValue);
 	GlobalGet(output:CfgValue, name:String);

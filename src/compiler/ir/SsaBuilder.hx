@@ -16,9 +16,11 @@ class SsaBuilder {
 	var frontiers:Map<Int, Map<Int, Bool>> = [];
 	var liveIn:Map<Int, Map<String, Bool>> = [];
 	var phis:Map<Int, Map<String, {output:IrValue, inputs:Array<IrPhiInput>}>> = [];
+	var roots:Array<Int> = [];
 	var stacks:Map<String, Array<IrValue>> = [];
 	var temporaries:Map<Int, IrValue> = [];
 	var nextValue:Int = 0;
+	var renamed:Map<Int, Bool> = [];
 
 	public static function build(cfg:CfgFunction):IrFunction {
 		CfgVerifier.verify(cfg);
@@ -41,11 +43,18 @@ class SsaBuilder {
 			arguments.push(value);
 			push(argument.name, value);
 		}
-		rename(0);
+		var orderedRoots = roots.copy();
+		orderedRoots.sort(function(a, b) return a - b);
+		for (root in orderedRoots)
+			rename(root);
+		for (block in cfg.blocks)
+			if (reachable.exists(block.id) && roots.indexOf(block.id) < 0 && immediate.exists(block.id) && immediate.get(block.id) == -1)
+				rename(block.id);
 		return new IrFunction(cfg.name, arguments, cfg.result, output);
 	}
 
 	function buildGraph():Void {
+		roots = [0];
 		var work = [0];
 		while (work.length > 0) {
 			var id = work.pop();
@@ -55,6 +64,14 @@ class SsaBuilder {
 			var block = cfg.blocks[id];
 			if (block == null)
 				throw 'Unknown CFG block $id';
+			for (instruction in block.instructions)
+				switch instruction {
+					case BeginTry(catchBlock):
+						if (roots.indexOf(catchBlock) < 0)
+							roots.push(catchBlock);
+						work.push(catchBlock);
+					default:
+				}
 			var next:Array<Int> = switch block.terminator {
 				case Jump(target): [target];
 				case Branch(_, yes, no): [yes, no];
@@ -81,15 +98,17 @@ class SsaBuilder {
 				all.set(block.id, true);
 		for (block in cfg.blocks)
 			if (reachable.exists(block.id))
-				dominators.set(block.id, block.id == 0 ? singleton(0) : copySet(all));
+				dominators.set(block.id, roots.indexOf(block.id) >= 0 ? singleton(block.id) : copySet(all));
 		var changed = true;
 		while (changed) {
 			changed = false;
 			for (block in cfg.blocks) {
 				var id = block.id;
-				if (reachable.exists(id) && id != 0) {
-					var preds = predecessors.get(id),
-						next:Map<Int, Bool> = null;
+				if (reachable.exists(id) && roots.indexOf(id) < 0) {
+					var preds = predecessors.get(id);
+					if (preds == null || preds.length == 0)
+						throw 'Reachable SSA block $id has no predecessor or handler root';
+					var next:Map<Int, Bool> = null;
 					for (pred in preds)
 						next = next == null ? copySet(dominators.get(pred)) : intersect(next, dominators.get(pred));
 					next.set(id, true);
@@ -102,7 +121,7 @@ class SsaBuilder {
 		}
 		for (block in cfg.blocks) {
 			var id = block.id;
-			if (reachable.exists(id) && id != 0) {
+			if (reachable.exists(id) && roots.indexOf(id) < 0) {
 				var best = -1, bestDepth = -1;
 				for (candidate in sortedIntKeys(dominators.get(id)))
 					if (candidate != id) {
@@ -137,10 +156,15 @@ class SsaBuilder {
 			for (pred in preds) {
 				var runner = pred;
 				while (runner != immediate.get(block)) {
-					frontiers.get(runner).set(block, true);
-					if (runner == 0)
+					var frontier = frontiers.get(runner);
+					if (frontier != null)
+						frontier.set(block, true);
+					if (runner == 0 || roots.indexOf(runner) >= 0)
 						break;
-					runner = immediate.get(runner);
+					var next = immediate.get(runner);
+					if (next == null)
+						break;
+					runner = next;
 				}
 			}
 		}
@@ -229,6 +253,9 @@ class SsaBuilder {
 	}
 
 	function rename(id:Int):Void {
+		if (renamed.exists(id))
+			return;
+		renamed.set(id, true);
 		var block = cfg.blocks[id],
 			target = output[id],
 			pushed:Array<String> = [];
@@ -268,6 +295,13 @@ class SsaBuilder {
 				case ToDyn(out, value):
 					var result = define(out);
 					target.instructions.push(ToDyn(result, resolve(value)));
+				case BeginTry(catchBlock):
+					target.instructions.push(BeginTry(catchBlock));
+				case EndTry:
+					target.instructions.push(EndTry);
+				case Catch(out):
+					var result = define(out);
+					target.instructions.push(Catch(result));
 				case GlobalGet(out, name):
 					var result = define(out);
 					target.instructions.push(GlobalGet(result, name));

@@ -41,6 +41,9 @@ enum IrInstruction {
 	ConstBool(output:IrValue, value:Bool);
 	ConstNull(output:IrValue);
 	ToDyn(output:IrValue, value:IrValue);
+	BeginTry(catchBlock:BlockId);
+	EndTry;
+	Catch(output:IrValue);
 	GlobalGet(output:IrValue, name:String);
 	GlobalSet(name:String, value:IrValue);
 	Add(output:IrValue, left:IrValue, right:IrValue);

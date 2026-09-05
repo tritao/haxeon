@@ -22,6 +22,8 @@ enum HlInstruction {
 	LoadBool(destination:Int, value:Bool);
 	LoadNull(destination:Int);
 	ToDyn(destination:Int, source:Int);
+	Trap(destination:Int, target:String);
+	EndTrap(destination:Int);
 	GlobalGet(destination:Int, global:Int);
 	GlobalSet(global:Int, source:Int);
 	Add(destination:Int, left:Int, right:Int);

@@ -8,6 +8,7 @@ class CfgBuilder {
 
 	var current:CfgBlock;
 	var nextValue:Int = 0;
+	var activeTraps:Int = 0;
 
 	public function new()
 		current = createBlock();
@@ -51,6 +52,41 @@ class CfgBuilder {
 
 	public function throwValue(value:CfgValue):Void
 		terminate(Throw(value));
+
+	/** Seal a block that is unreachable from the function entry. */
+	public function markUnreachable():Void
+		if (!isTerminated())
+			current.terminator = Jump(current.id);
+
+	public function beginTry(catchBlock:CfgBlock):Void {
+		emit(BeginTry(catchBlock.id));
+		activeTraps++;
+	}
+
+	public function endTry():Void {
+		if (activeTraps == 0)
+			throw "No active try block";
+		emit(EndTry);
+		activeTraps--;
+	}
+
+	/** Forget a trap after all paths in the current block have terminated. */
+	public function discardTry():Void {
+		if (activeTraps == 0)
+			throw "No active try block";
+		activeTraps--;
+	}
+
+	/** Close traps on a terminating path without changing the lexical stack. */
+	public function closeTrapsForExit():Void
+		for (_ in 0...activeTraps)
+			emit(EndTry);
+
+	public function catchValue():CfgValue {
+		var out = temporary(Dyn);
+		emit(Catch(out));
+		return out;
+	}
 
 	public function load(name:String, type:IrType):CfgValue {
 		var out = temporary(type);
@@ -101,6 +137,8 @@ class CfgBuilder {
 	}
 
 	public function toDyn(value:CfgValue):CfgValue {
+		if (value.type == Dyn)
+			return value;
 		var out = temporary(Dyn);
 		emit(ToDyn(out, value));
 		return out;

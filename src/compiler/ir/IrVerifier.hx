@@ -64,6 +64,14 @@ class IrVerifier {
 			reachable.set(id, true);
 			for (instruction in block.instructions)
 				switch instruction {
+					case BeginTry(catchBlock):
+						if (!blocks.exists(catchBlock))
+							throw 'Unknown IR block $catchBlock in ${fn.name}';
+						work.push(catchBlock);
+					default:
+				}
+			for (instruction in block.instructions)
+				switch instruction {
 					case Phi(out, _):
 						define(values, out);
 					default:
@@ -150,6 +158,12 @@ class IrVerifier {
 				require(values, value);
 				if (out.type != Dyn)
 					throw 'IR dynamic conversion must produce Dyn';
+				define(values, out);
+			case BeginTry(catchBlock):
+			case EndTry:
+			case Catch(out):
+				if (out.type != Dyn)
+					throw 'IR catch value must be Dyn';
 				define(values, out);
 			case GlobalGet(out, name):
 				var type = globals.get(name);

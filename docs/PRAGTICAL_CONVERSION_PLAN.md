@@ -45,8 +45,8 @@ The profile is deliberately smaller than Haxe and larger than the current POC:
 - enums with payloads and expression/statement `switch`;
 - nominal typedefs and a small structural-record form for data transfer;
 - package-qualified nominal identities, imports, deterministic diagnostics, and source-span recovery;
-- typed `throw` through HashLink's dynamic exception ABI; `try`/`catch` follows
-  once handler control flow and uncaught-exception diagnostics are stable.
+- typed `throw` and catch-all `try`/`catch` through HashLink's dynamic exception
+  ABI; typed filters and uncaught-exception diagnostics remain before migration.
 
 Deferred until the editor is already running on the profile: macros,
 `@:genericBuild`, arbitrary abstracts, compiler plugins, cross-target behavior,

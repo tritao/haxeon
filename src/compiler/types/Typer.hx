@@ -378,6 +378,15 @@ class Typer {
 					if (sameType(value.type, TVoid))
 						fail("E1021", "Cannot throw a Void value", span);
 					output.push(TThrow(value, span));
+				case Try(tryBranch, catchName, catchType, catchBranch, span):
+					var loweredCatchType = lowerType(catchType);
+					if (!sameType(loweredCatchType, TDynamic))
+						fail("E1022", "Catch bindings currently require Dynamic", span);
+					var typedTry = typeStatements(tryBranch, new Scope(scope), result),
+						catchScope = new Scope(scope);
+					catchScope.define(catchName, TDynamic, span);
+					var typedCatch = typeStatements(catchBranch, catchScope, result);
+					output.push(TTry(typedTry, catchName, typedCatch, span));
 				case Break(span):
 					if (loopDepth == 0)
 						fail("E1017", "break is only valid inside a loop", span);
@@ -964,6 +973,9 @@ class Typer {
 					seedLambdaScope(no, scope);
 				case While(_, body, _), ForIn(_, _, body, _):
 					seedLambdaScope(body, scope);
+				case Try(tryBranch, _, _, catchBranch, _):
+					seedLambdaScope(tryBranch, scope);
+					seedLambdaScope(catchBranch, scope);
 				case Switch(_, cases, defaultBranch, _, _):
 					for (switchCase in cases)
 						seedLambdaScope(switchCase.statements, scope);
@@ -1245,6 +1257,9 @@ class Typer {
 					for (switchCase in cases)
 						collectAssignedLocals(switchCase.statements, names);
 					collectAssignedLocals(defaultBranch, names);
+				case Try(tryBranch, _, _, catchBranch, _):
+					collectAssignedLocals(tryBranch, names);
+					collectAssignedLocals(catchBranch, names);
 				default:
 			}
 	}
@@ -1266,6 +1281,9 @@ class Typer {
 					for (switchCase in cases)
 						collectDeclaredLocals(switchCase.statements, names);
 					collectDeclaredLocals(defaultBranch, names);
+				case Try(tryBranch, _, _, catchBranch, _):
+					collectDeclaredLocals(tryBranch, names);
+					collectDeclaredLocals(catchBranch, names);
 				case Break(_), Continue(_):
 				case Increment(_, _, _):
 				default:
@@ -1299,6 +1317,9 @@ class Typer {
 						collectVariables(switchCase.statements, names);
 					}
 					collectVariables(defaultBranch, names);
+				case Try(tryBranch, _, _, catchBranch, _):
+					collectVariables(tryBranch, names);
+					collectVariables(catchBranch, names);
 				case Break(_), Continue(_):
 				case Increment(_, _, _):
 			}
@@ -1330,6 +1351,9 @@ class Typer {
 						collectMutableCaptureCandidates(switchCase.statements, outerDeclared, result);
 					}
 					collectMutableCaptureCandidates(defaultBranch, outerDeclared, result);
+				case Try(tryBranch, _, _, catchBranch, _):
+					collectMutableCaptureCandidates(tryBranch, outerDeclared, result);
+					collectMutableCaptureCandidates(catchBranch, outerDeclared, result);
 				case ReturnVoid(_), Break(_), Continue(_), Increment(_, _, _):
 			}
 	}
@@ -1449,6 +1473,7 @@ class Typer {
 		if (sameType(actual, expected))
 			return true;
 		return switch [actual, expected] {
+			case [_, TDynamic]: true;
 			case [TClass(actualName), TClass(expectedName)]: classImplements(actualName, expectedName);
 			case [TClass(actualName), TInterface(expectedName)]: classImplements(actualName, expectedName);
 			case [TInterface(actualName), TInterface(expectedName)]: interfaceExtends(actualName, expectedName);
@@ -1629,6 +1654,9 @@ class Typer {
 				case TIf(_, yes, no, _):
 					if (no.length > 0 && alwaysReturns(yes) && alwaysReturns(no))
 						return true;
+				case TTry(tryBranch, _, catchBranch, _):
+					if (alwaysReturns(tryBranch) && alwaysReturns(catchBranch))
+						return true;
 				case TSwitch(expression, cases, defaultBranch, hasDefault, _):
 					if ((hasDefault ? alwaysReturns(defaultBranch) : exhaustiveEnum(expression.type, cases))
 						&& [for (switchCase in cases) alwaysReturns(switchCase.statements)].indexOf(false) < 0)
@@ -1665,7 +1693,7 @@ class Typer {
 			case VoidType: TVoid;
 			case NamedType(name):
 				var alias = aliases.get(name);
-				alias == null ? (interfaceDecls.exists(name) ? TInterface(name) : enumDecls.exists(name) ? TEnum(name) : TClass(name)) : lowerType(alias);
+				alias == null ? (name == "Dynamic" ? TDynamic : interfaceDecls.exists(name) ? TInterface(name) : enumDecls.exists(name) ? TEnum(name) : TClass(name)) : lowerType(alias);
 			case ArrayType(element): TArray(lowerType(element));
 			case MapType(key, value): TMap(lowerType(key), lowerType(value));
 			case NullableType(element): TNullable(lowerType(element));
@@ -1709,15 +1737,15 @@ class Typer {
 
 	static function isReference(type:CompilerType):Bool
 		return switch type {
-			case TString, TClass(_), TInterface(_), TArray(_), TFunction(_), TMap(_, _): true;
+			case TString, TDynamic, TClass(_), TInterface(_), TArray(_), TFunction(_), TMap(_, _): true;
 			default: false;
 		};
 
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
 			case VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), Throw(_, span),
-				If(_, _, _, span), While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span), Switch(_, _, _, _, span), Increment(_, _, span),
-				Expression(_, span): span;
+				Try(_, _, _, _, span), If(_, _, _, span), While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span), Switch(_, _, _, _, span),
+				Increment(_, _, span), Expression(_, span): span;
 		}
 
 	static function fail(code:String, message:String, span:SourceSpan):Void
