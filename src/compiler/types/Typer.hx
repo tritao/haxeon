@@ -853,6 +853,23 @@ class Typer {
 							parameterType = TNullable(parameterType);
 						changed = constrainLocalExpression(arguments[index], parameterType) || changed;
 					}
+				else {
+					var signatureName = name;
+					if (name.indexOf(".") < 0) {
+						var separator = context.name.lastIndexOf("."),
+							owner = separator < 0 ? null : context.name.substr(0, separator),
+							method = owner == null ? null : findMethod(owner, name);
+						if (method != null)
+							signatureName = method.owner + "." + name;
+					}
+					var signature = signatures.get(signatureName);
+					if (signature != null && !isGeneric(signature))
+						for (index in 0...arguments.length) {
+							if (index >= signature.arguments.length)
+								break;
+							changed = constrainLocalExpression(arguments[index], argumentType(signature.arguments[index])) || changed;
+						}
+				}
 				changed;
 			case ObjectLiteral(fields, _):
 				var expectedFields = switch expected {
