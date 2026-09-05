@@ -25,6 +25,7 @@ enum TypedExpressionKind {
 	TEnumConstruct(name:String, index:Int, arguments:Array<TypedExpression>);
 	TNullLiteral;
 	TNullableWrap(value:TypedExpression);
+	TToDynamic(value:TypedExpression);
 	TLocal(name:String);
 	TCellLocal(name:String, cellClass:String);
 	TCaptured(name:String);

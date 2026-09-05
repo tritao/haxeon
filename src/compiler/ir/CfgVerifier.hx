@@ -38,8 +38,9 @@ class CfgVerifier {
 				throw 'Reachable CFG block $id in ${fn.name} has no terminator';
 			for (instruction in block.instructions)
 				switch instruction {
-					case BeginTry(catchBlock):
+					case BeginTry(catchBlock, afterBlock):
 						targetBlock(catchBlock, blocks);
+						targetBlock(afterBlock, blocks);
 						work.push(catchBlock);
 					default:
 				}
@@ -83,8 +84,9 @@ class CfgVerifier {
 					require(value, available);
 					expect(out, Dyn);
 					define(out, defined, available);
-				case BeginTry(catchBlock):
+				case BeginTry(catchBlock, afterBlock):
 					targetBlock(catchBlock, blocks);
+					targetBlock(afterBlock, blocks);
 				case EndTry:
 				case Catch(out):
 					expect(out, Dyn);

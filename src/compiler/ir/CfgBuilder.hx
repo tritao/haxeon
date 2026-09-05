@@ -58,8 +58,8 @@ class CfgBuilder {
 		if (!isTerminated())
 			current.terminator = Jump(current.id);
 
-	public function beginTry(catchBlock:CfgBlock):Void {
-		emit(BeginTry(catchBlock.id));
+	public function beginTry(catchBlock:CfgBlock, afterBlock:CfgBlock):Void {
+		emit(BeginTry(catchBlock.id, afterBlock.id));
 		activeTraps++;
 	}
 
@@ -79,8 +79,18 @@ class CfgBuilder {
 
 	/** Close traps on a terminating path without changing the lexical stack. */
 	public function closeTrapsForExit():Void
-		for (_ in 0...activeTraps)
+		closeTrapsToDepth(0);
+
+	public function trapDepth():Int
+		return activeTraps;
+
+	/** Close traps opened inside a destination scope without mutating lexical state. */
+	public function closeTrapsToDepth(depth:Int):Void {
+		if (depth < 0 || depth > activeTraps)
+			throw 'Invalid trap depth $depth';
+		for (_ in depth...activeTraps)
 			emit(EndTry);
+	}
 
 	public function catchValue():CfgValue {
 		var out = temporary(Dyn);

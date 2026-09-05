@@ -432,8 +432,12 @@ class IrGenerator {
 		return program;
 	}
 
-	static function lowerStatements(statements:Array<TypedStatement>, builder:CfgBuilder, localTypes:Map<String, IrType>,
-			?loops:Array<{breakBlock:CfgBlock, continueBlock:CfgBlock, breakFlag:String}>):Void {
+	static function lowerStatements(statements:Array<TypedStatement>, builder:CfgBuilder, localTypes:Map<String, IrType>, ?loops:Array<{
+		breakBlock:CfgBlock,
+		continueBlock:CfgBlock,
+		breakFlag:String,
+		trapDepth:Int
+	}>):Void {
 		if (loops == null)
 			loops = [];
 		for (statement in statements) {
@@ -491,7 +495,7 @@ class IrGenerator {
 				case TTry(tryBranch, catchName, catchBranch, _):
 					var catchBlock = builder.createBlock(),
 						afterBlock = builder.createBlock();
-					builder.beginTry(catchBlock);
+					builder.beginTry(catchBlock, afterBlock);
 					lowerStatements(tryBranch, builder, localTypes, loops);
 					var tryActive = !builder.isTerminated();
 					if (!tryActive)
@@ -514,15 +518,16 @@ class IrGenerator {
 				case TBreak(_):
 					if (loops.length == 0)
 						throw "break outside loop";
-					builder.closeTrapsForExit();
 					var loop = loops[loops.length - 1];
+					builder.closeTrapsToDepth(loop.trapDepth);
 					builder.store(loop.breakFlag, builder.constBool(true));
 					builder.jump(loop.continueBlock);
 				case TContinue(_):
 					if (loops.length == 0)
 						throw "continue outside loop";
-					builder.closeTrapsForExit();
-					builder.jump(loops[loops.length - 1].continueBlock);
+					var loop = loops[loops.length - 1];
+					builder.closeTrapsToDepth(loop.trapDepth);
+					builder.jump(loop.continueBlock);
 				case TIncrement(name, delta, _):
 					var type = localTypes.get(name);
 					if (type == null)
@@ -576,7 +581,12 @@ class IrGenerator {
 					builder.select(checkBlock);
 					builder.branch(lowerExpression(condition, builder, localTypes), bodyBlock, afterBlock);
 					builder.select(bodyBlock);
-					loops.push({breakBlock: afterBlock, continueBlock: conditionBlock, breakFlag: breakFlag});
+					loops.push({
+						breakBlock: afterBlock,
+						continueBlock: conditionBlock,
+						breakFlag: breakFlag,
+						trapDepth: builder.trapDepth()
+					});
 					lowerStatements(body, builder, localTypes, loops);
 					loops.pop();
 					if (!builder.isTerminated())
@@ -614,7 +624,12 @@ class IrGenerator {
 					var bodyArray = builder.load(arrayName, arrayType),
 						bodyIndex = builder.load(indexName, I32);
 					builder.store(name, builder.arrayGet(bodyArray, bodyIndex, elementType));
-					loops.push({breakBlock: afterBlock, continueBlock: conditionBlock, breakFlag: breakFlag});
+					loops.push({
+						breakBlock: afterBlock,
+						continueBlock: conditionBlock,
+						breakFlag: breakFlag,
+						trapDepth: builder.trapDepth()
+					});
 					lowerStatements(body, builder, localTypes, loops);
 					loops.pop();
 					if (!builder.isTerminated()) {
@@ -695,6 +710,7 @@ class IrGenerator {
 					case TNullLiteral: builder.constNull(lowerType(expression.type));
 					default: lowerExpression(value, builder, localTypes);
 				}
+			case TToDynamic(value): builder.toDyn(lowerExpression(value, builder, localTypes));
 			case TLocal(name):
 				var type = localTypes.get(name);
 				if (type == null)

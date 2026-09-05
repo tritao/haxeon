@@ -22,7 +22,7 @@ enum CfgInstruction {
 	ConstBool(output:CfgValue, value:Bool);
 	ConstNull(output:CfgValue);
 	ToDyn(output:CfgValue, value:CfgValue);
-	BeginTry(catchBlock:Int);
+	BeginTry(catchBlock:Int, afterBlock:Int);
 	EndTry;
 	Catch(output:CfgValue);
 	LoadLocal(output:CfgValue, name:String);

@@ -377,6 +377,8 @@ class Typer {
 					var value = typeExpression(expression, scope);
 					if (sameType(value.type, TVoid))
 						fail("E1021", "Cannot throw a Void value", span);
+					if (sameType(value.type, TNull))
+						fail("E1021", "Cannot throw null", span);
 					output.push(TThrow(value, span));
 				case Try(tryBranch, catchName, catchType, catchBranch, span):
 					var loweredCatchType = lowerType(catchType);
@@ -1459,6 +1461,8 @@ class Typer {
 			return value;
 		if (isAssignable(value.type, expected))
 			return switch [value.type, expected] {
+				case [_, TDynamic]:
+					new TypedExpression(TToDynamic(value), expected, value.span);
 				case [TClass(_), TInterface(name)], [TInterface(_), TInterface(name)]:
 					new TypedExpression(TToInterface(value, name), expected, value.span);
 				case [_, TNullable(_)]:

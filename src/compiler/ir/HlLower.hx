@@ -7,6 +7,7 @@ import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlType;
 import compiler.hl.HlSymbolTable;
 import compiler.ir.Ir.IrInstruction;
+import compiler.ir.Ir.IrBlock;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrProgram;
@@ -114,16 +115,20 @@ class HlLower {
 	function lowerFunction(fn:IrFunction):HlFunction {
 		var registers:Map<Int, Int> = [];
 		var registerTypes:Array<Int> = [];
+		var registerIrTypes:Array<IrType> = [];
 		var catchValues:Map<Int, IrValue> = [];
 		for (argument in fn.arguments)
-			defineRegister(argument, registers, registerTypes);
+			defineRegister(argument, registers, registerTypes, registerIrTypes);
+		var argumentCount = registerTypes.length, hasTrap = false;
 
 		var edges:Map<String, Array<{destination:IrValue, source:IrValue}>> = [];
 		for (block in fn.blocks)
-			for (instruction in block.instructions)
+			for (instruction in block.instructions) {
+				var output = instructionOutput(instruction);
+				if (output != null)
+					defineRegister(output, registers, registerTypes, registerIrTypes);
 				switch instruction {
 					case Phi(output, inputs):
-						defineRegister(output, registers, registerTypes);
 						for (input in inputs) {
 							var key = edgeKey(input.block, block.id),
 								moves = edges.get(key);
@@ -135,12 +140,27 @@ class HlLower {
 						}
 					case Catch(output):
 						catchValues.set(block.id, output);
-						defineRegister(output, registers, registerTypes);
+					case BeginTry(_, _):
+						hasTrap = true;
 					default:
 				}
+			}
 
 		var instructions:Array<HlInstruction> = [];
-		for (block in fn.blocks) {
+		if (hasTrap)
+			for (register in argumentCount...registerTypes.length)
+				switch registerIrTypes[register] {
+					case Void:
+					case I32:
+						instructions.push(HlInstruction.LoadInt(register, internInt(0)));
+					case F64:
+						instructions.push(HlInstruction.LoadFloat(register, symbols.internFloat(0)));
+					case Bool:
+						instructions.push(HlInstruction.LoadBool(register, false));
+					case Bytes, Dyn, Array(_), Enum(_), Obj(_), Abstract(_), Virtual(_), Function(_, _):
+						instructions.push(HlInstruction.LoadNull(register));
+				}
+		for (block in (hasTrap ? orderedBlocks(fn) : fn.blocks)) {
 			if (block.instructions.length == 0 && block.terminator == null)
 				continue;
 			instructions.push(HlInstruction.Label('block_${block.id}'));
@@ -161,7 +181,7 @@ class HlLower {
 						instructions.push(HlInstruction.LoadNull(defineRegister(output, registers, registerTypes)));
 					case ToDyn(output, value):
 						instructions.push(HlInstruction.ToDyn(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
-					case BeginTry(catchBlock):
+					case BeginTry(catchBlock, _):
 						var handlerValue = catchValues.get(catchBlock);
 						if (handlerValue == null)
 							throw 'Try block $block.id has no catch value in block $catchBlock';
@@ -275,6 +295,72 @@ class HlLower {
 			instructions);
 	}
 
+	/**
+		HashLink traps are lexical in the bytecode stream. CFG block identifiers are
+		allocation details, so lay each protected region out before its handler and
+		its continuation regardless of block creation order.
+	**/
+	static function orderedBlocks(fn:IrFunction):Array<IrBlock> {
+		var byId:Map<Int, IrBlock> = [for (block in fn.blocks) block.id => block],
+			seen:Map<Int, Bool> = [],
+			output:Array<IrBlock> = [];
+		function canReach(from:Int, target:Int, checked:Map<Int, Bool>):Bool {
+			if (from == target)
+				return true;
+			if (checked.exists(from))
+				return false;
+			checked.set(from, true);
+			var block = byId.get(from);
+			if (block == null)
+				return false;
+			return switch block.terminator {
+				case Jump(next): canReach(next, target, checked);
+				case Branch(_, yes, no): canReach(yes, target, checked) || canReach(no, target, checked);
+				case Return(_), Throw(_), null: false;
+			};
+		}
+		function visit(id:Int, stop:Null<Int>):Void {
+			if (stop != null && id == stop || seen.exists(id))
+				return;
+			var block = byId.get(id);
+			if (block == null)
+				return;
+			seen.set(id, true);
+			output.push(block);
+			var region:Null<{catchBlock:Int, afterBlock:Int}> = null;
+			for (instruction in block.instructions)
+				switch instruction {
+					case BeginTry(catchBlock, afterBlock):
+						region = {catchBlock: catchBlock, afterBlock: afterBlock};
+					default:
+				}
+			var successors:Array<Int> = switch block.terminator {
+				case Jump(target): [target];
+				case Branch(_, yes, no): [yes, no];
+				case Return(_), Throw(_), null: [];
+			};
+			// Preserve reducible loops as backward branches for HashLink's JIT.
+			successors.sort(function(a, b) {
+				var aLoops = canReach(a, id, []), bLoops = canReach(b, id, []);
+				return aLoops == bLoops ? 0 : (aLoops ? -1 : 1);
+			});
+			if (region == null) {
+				for (successor in successors)
+					visit(successor, stop);
+				return;
+			}
+			for (successor in successors)
+				visit(successor, region.afterBlock);
+			visit(region.catchBlock, region.afterBlock);
+			visit(region.afterBlock, stop);
+		}
+		visit(fn.blocks[0].id, null);
+		for (block in fn.blocks)
+			if (!seen.exists(block.id) && (block.instructions.length > 0 || block.terminator != null))
+				visit(block.id, null);
+		return output;
+	}
+
 	static function edgeKey(from:Int, to:Int):String
 		return '$from:$to';
 
@@ -319,12 +405,26 @@ class HlLower {
 		instructions.push(HlInstruction.Label(endLabel));
 	}
 
-	function defineRegister(value:IrValue, registers:Map<Int, Int>, types:Array<Int>):Int {
-		if (registers.exists(value.id))
-			throw 'IR value ${value.id} is defined more than once';
+	static function instructionOutput(instruction:IrInstruction):Null<IrValue>
+		return switch instruction {
+			case Phi(output, _), ConstVoid(output), ConstInt(output, _), ConstFloat(output, _), ConstString(output, _), ConstBool(output, _),
+				ConstNull(output), ToDyn(output, _), Catch(output), GlobalGet(output, _), Add(output, _, _), Sub(output, _, _), Mul(output, _, _),
+				Div(output, _, _), Mod(output, _, _), Less(output, _, _), LessEqual(output, _, _), Equal(output, _, _), Call(output, _, _),
+				StaticClosure(output, _), InstanceClosure(output, _, _), CallClosure(output, _, _), ToVirtual(output, _), MethodCall(output, _, _, _),
+				NewObject(output, _), FieldGet(output, _, _), ArrayGet(output, _, _), ArraySize(output, _), MakeEnum(output, _, _, _), EnumIndex(output, _),
+				EnumField(output, _, _, _): output;
+			case BeginTry(_, _), EndTry, GlobalSet(_, _), FieldSet(_, _, _), ArraySet(_, _, _): null;
+		};
+
+	function defineRegister(value:IrValue, registers:Map<Int, Int>, types:Array<Int>, ?irTypes:Array<IrType>):Int {
+		var existing = registers.get(value.id);
+		if (existing != null)
+			return existing;
 		var index = types.length;
 		registers.set(value.id, index);
 		types.push(internType(value.type));
+		if (irTypes != null)
+			irTypes.push(value.type);
 		return index;
 	}
 

@@ -72,9 +72,19 @@ class TestMain {
 
 		var patchCode = baseControlFlowModule();
 		patchCode.ints = [42];
+		patchCode.types.push(Simple(HlType.Dyn));
+		patchCode.types.push(Function([], 1));
 		patchCode.functions = [
 			new HlFunction(2, 0, [1], [LoadInt(0, 0), Return(0)]),
-			new HlFunction(2, 1, [1], [LoadInt(0, 0), Return(0)]),
+			new HlFunction(4, 1, [1, 3, 3], [
+				LoadInt(0, 0),
+				ToDyn(1, 0),
+				Trap(2, "catch"),
+				EndTrap(2),
+				Return(0),
+				Label("catch"),
+				Throw(2)
+			]),
 		];
 		var testModuleId = haxe.io.Bytes.alloc(16),
 			stableBySlot:Map<Int, Int> = [];
@@ -86,7 +96,11 @@ class TestMain {
 			|| patch.functions.length != 1
 			|| patch.functions[0].functionIndex != 0x10001)
 			throw "HLP round trip lost revision or function identity";
-		if (patch.functions[0].instructions.length != 2 || patch.functions[0].instructions[0].opcode != HlOpcode.Int)
+		if (patch.functions[0].instructions.length != 7
+			|| patch.functions[0].instructions[1].opcode != HlOpcode.ToDyn
+			|| patch.functions[0].instructions[2].opcode != HlOpcode.Trap
+			|| patch.functions[0].instructions[3].opcode != HlOpcode.EndTrap
+			|| patch.functions[0].instructions[6].opcode != HlOpcode.Throw)
 			throw "HLP round trip lost function bytecode";
 		try {
 			HlPatchReader.decode(patchBytes.sub(0, patchBytes.length - 1));
@@ -129,6 +143,7 @@ class TestMain {
 		expectCompileError('function main():Int { var value:Int = 1; value = "wrong"; return value; }', 'Type mismatch for local "value"');
 		expectCompileError('function main():Int { throw; }', 'Expected expression');
 		expectCompileError('function noop():Void { return; } function main():Int { throw noop(); }', 'Cannot throw a Void value');
+		expectCompileError('function main():Int { throw null; }', 'Cannot throw null');
 		expectCompileError('function main():Int { try { return 42; } catch (error:String) { return 0; } }', 'Catch bindings currently require Dynamic');
 		expectCompileError('class Box { public function values():Array<Int> { return new Array<Int>(0); } public function add():Void { this.values().push(1); } } function main():Int { return 0; }',
 			'Array.push requires a mutable local or field array');

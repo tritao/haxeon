@@ -144,6 +144,10 @@ run_program try-rethrow 1
 run_program try-array-bounds 42
 run_program try-nested 42
 run_program try-return 42
+run_program try-branch 42
+run_program try-loop-control 42
+run_program try-outer-local 42
+run_program dynamic-argument 42
 
 object_output="$root_dir/out/object.hl"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ObjectMain "$object_output"

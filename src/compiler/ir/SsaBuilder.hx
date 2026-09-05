@@ -64,12 +64,11 @@ class SsaBuilder {
 			var block = cfg.blocks[id];
 			if (block == null)
 				throw 'Unknown CFG block $id';
+			var handlers:Array<Int> = [];
 			for (instruction in block.instructions)
 				switch instruction {
-					case BeginTry(catchBlock):
-						if (roots.indexOf(catchBlock) < 0)
-							roots.push(catchBlock);
-						work.push(catchBlock);
+					case BeginTry(catchBlock, _):
+						handlers.push(catchBlock);
 					default:
 				}
 			var next:Array<Int> = switch block.terminator {
@@ -78,6 +77,9 @@ class SsaBuilder {
 				case Return(_), Throw(_): [];
 				case null: throw 'Reachable CFG block $id has no terminator';
 			};
+			for (handler in handlers)
+				if (next.indexOf(handler) < 0)
+					next.push(handler);
 			successors.set(id, next);
 			for (target in next) {
 				var found = predecessors.get(target);
@@ -295,8 +297,8 @@ class SsaBuilder {
 				case ToDyn(out, value):
 					var result = define(out);
 					target.instructions.push(ToDyn(result, resolve(value)));
-				case BeginTry(catchBlock):
-					target.instructions.push(BeginTry(catchBlock));
+				case BeginTry(catchBlock, afterBlock):
+					target.instructions.push(BeginTry(catchBlock, afterBlock));
 				case EndTry:
 					target.instructions.push(EndTry);
 				case Catch(out):
