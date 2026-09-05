@@ -865,7 +865,10 @@ class IrGenerator {
 				arguments): builder.makeEnum(name, index, [for (argument in arguments) lowerExpression(argument, builder, localTypes)]);
 			case TNullLiteral: throw "Uncoerced null literal";
 			case TUnreachable: unreachableValue(lowerType(expression.type), builder);
-			case TNoReturn(value): lowerExpression(value, builder, localTypes);
+			case TNoReturn(value):
+				var lowered = lowerExpression(value, builder, localTypes);
+				builder.markUnreachable();
+				lowered;
 			case TClassRef(_): throw "Class references are only valid for static members";
 			case TStaticField(name, field): builder.globalGet(name + "." + field, lowerType(expression.type));
 			case TNullableWrap(value):

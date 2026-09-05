@@ -75,6 +75,8 @@ class TestMain {
 		Frontend.compile('class Value { public function new() { } } function main():Int { var value = true ? new Value() : null; return value == null ? 0 : 42; }');
 		Frontend.compile('class Value { public final number:Int = 42; public function new() { } } function fail():Void throw "missing"; function main():Int { var value:Null<Value> = new Value(); if (value == null) fail(); return value.number; }');
 		Frontend.compile('function make():String return "value"; function main():Int { var value = null; if (true) value = make(); return value == null ? 0 : 42; }');
+		Frontend.compile('function make():String return "value"; function main():Int { var values = []; values.push(make()); return values.length; }');
+		Frontend.compile('function fail():Void throw "failure"; function value():String { fail(); return null; } function main():Int return 42;');
 		Frontend.compile('function values():Array<Int> { var result = []; result.push(42); return result; } function main():Int { return values()[0]; }');
 		Frontend.compile('typedef Result = { values:Array<Int> }; function values():Result { var values = []; return { values: values }; } function main():Int return values().values.length;');
 		new Parser(new Lexer(new SourceFile("expression-block-statements.hx",

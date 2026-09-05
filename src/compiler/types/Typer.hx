@@ -425,8 +425,11 @@ class Typer {
 		var output = [];
 		for (statementIndex in 0...statements.length) {
 			var statement = statements[statementIndex];
-			if (alwaysReturns(output))
+			if (alwaysReturns(output)) {
+				if (isNoReturnPlaceholder(output, statement))
+					continue;
 				fail("E1012", "Unreachable statement", statementSpan(statement));
+			}
 			switch statement {
 				case UninitializedDeclaration(name, declared, span):
 					var declaredType = lowerType(declared);
@@ -767,15 +770,60 @@ class Typer {
 		return output;
 	}
 
+	static function isNoReturnPlaceholder(output:Array<TypedStatement>, statement:AstStatement):Bool {
+		if (output.length == 0)
+			return false;
+		var previousIsNoReturn = switch output[output.length - 1] {
+			case TExpression(expression, _): expression.type == TNever;
+			default: false;
+		};
+		return previousIsNoReturn && switch statement {
+			case Return(NullLiteral(_), _), ReturnVoid(_): true;
+			default: false;
+		};
+	}
+
 	function expectedInitializerType(name:String, initializer:AstExpression, statements:Array<AstStatement>, start:Int):Null<CompilerType> {
 		switch initializer {
 			case NullLiteral(_):
 				var assigned = assignedLocalType(name, statements, start);
 				if (assigned != null)
 					return TNullable(assigned);
+			case ArrayLiteral(values, _) if (values.length == 0):
+				var element = pushedElementType(name, statements, start);
+				if (element != null)
+					return TArray(element);
 			default:
 		}
 		return usesLocalExpectedType(initializer) ? context.localExpectedTypes.get(name) : null;
+	}
+
+	function pushedElementType(name:String, statements:Array<AstStatement>, start:Int):Null<CompilerType> {
+		for (index in start...statements.length)
+			switch statements[index] {
+				case Expression(MethodCall(Variable(receiver, _), "push", arguments, _), _) if (receiver == name && arguments.length == 1):
+					var type = knownExpressionType(arguments[0]);
+					if (type != null)
+						return type;
+				case Expression(Call(callName, arguments, _), _) if (callName == name + ".push" && arguments.length == 1):
+					var type = knownExpressionType(arguments[0]);
+					if (type != null)
+						return type;
+				case If(_, yes, no, _):
+					var type = pushedElementType(name, yes, 0);
+					if (type == null)
+						type = pushedElementType(name, no, 0);
+					if (type != null)
+						return type;
+				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _):
+					var type = pushedElementType(name, body, 0);
+					if (type != null)
+						return type;
+				case VarDeclaration(shadowed, _, _, _), UninitializedDeclaration(shadowed, _, _) if (shadowed == name):
+					return null;
+				default:
+			}
+		return null;
 	}
 
 	function assignedLocalType(name:String, statements:Array<AstStatement>, start:Int):Null<CompilerType> {
@@ -815,6 +863,7 @@ class Typer {
 			case IntegerLiteral(_, _): TInt;
 			case FloatLiteral(_, _): TFloat;
 			case BoolLiteral(_, _): TBool;
+			case New(typeName, _, _): classDecls.exists(typeName) ? TClass(typeName) : null;
 			default: null;
 		};
 
