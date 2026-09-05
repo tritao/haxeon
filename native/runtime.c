@@ -1,6 +1,44 @@
 #define HL_NAME(n) realtime_##n
 #include <hl.h>
 #include <hlmodule.h>
+#include <string.h>
+
+static vbyte **array_int_storage(vobj *object) {
+	hl_runtime_obj *runtime = hl_get_obj_rt(object->t);
+	return (vbyte **)((char *)object + runtime->fields_indexes[0]);
+}
+
+static int *array_int_length(vobj *object) {
+	hl_runtime_obj *runtime = hl_get_obj_rt(object->t);
+	return (int *)((char *)object + runtime->fields_indexes[1]);
+}
+
+HL_PRIM void HL_NAME(array_int_init)( vobj *object ) {
+	*array_int_storage(object) = hl_alloc_bytes(0);
+	*array_int_length(object) = 0;
+}
+
+HL_PRIM void HL_NAME(array_int_push)( vobj *object, int value ) {
+	int length = *array_int_length(object);
+	vbyte *old_storage = *array_int_storage(object);
+	vbyte *new_storage = hl_alloc_bytes((length + 1) * (int)sizeof(int));
+	if (length > 0)
+		memcpy(new_storage, old_storage, length * sizeof(int));
+	((int *)new_storage)[length] = value;
+	*array_int_storage(object) = new_storage;
+	*array_int_length(object) = length + 1;
+}
+
+HL_PRIM int HL_NAME(array_int_get)( vobj *object, int index ) {
+	int length = *array_int_length(object);
+	if (index < 0 || index >= length)
+		hl_error("IntArray index out of bounds");
+	return ((int *)*array_int_storage(object))[index];
+}
+
+HL_PRIM int HL_NAME(array_int_length)( vobj *object ) {
+	return *array_int_length(object);
+}
 
 HL_PRIM hl_runtime_module *HL_NAME(load)( vbyte *bytes, int length, vbyte *identity, int identity_length ) {
 	hl_runtime_module *runtime = NULL;
@@ -46,3 +84,7 @@ DEFINE_PRIM(_I32,allocation_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,patch_jit_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_VOID,dispose,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,inspect_patch,_BYTES _I32);
+DEFINE_PRIM(_VOID,array_int_init,_OBJ(_BYTES _I32));
+DEFINE_PRIM(_VOID,array_int_push,_OBJ(_BYTES _I32) _I32);
+DEFINE_PRIM(_I32,array_int_get,_OBJ(_BYTES _I32) _I32);
+DEFINE_PRIM(_I32,array_int_length,_OBJ(_BYTES _I32));

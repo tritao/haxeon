@@ -13,6 +13,12 @@ if [[ ! -x "$haxe" || ! -x "$hl" ]]; then
 fi
 
 mkdir -p "$root_dir/out"
+cc -shared -fPIC -DHL_NAME\(n\)=realtime_##n \
+	-I "$root_dir/vendor/hashlink/src" \
+	"$root_dir/native/runtime.c" \
+	-L "$root_dir/vendor/hashlink" -lhl \
+	-Wl,-rpath,"$root_dir/vendor/hashlink" \
+	-o "$root_dir/out/realtime_runtime.hdll"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run TestMain
 
 run_program() {
@@ -85,6 +91,18 @@ if [[ $instance_closure_status -ne 42 ]]; then
 	exit 1
 fi
 echo "PASS: instance closure capture ABI executed (exit 42)"
+
+collection_output="$root_dir/out/collection.hl"
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run CollectionMain "$collection_output"
+set +e
+LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink" "$hl" "$collection_output"
+collection_status=$?
+set -e
+if [[ $collection_status -ne 42 ]]; then
+	echo "native collection: expected exit 42, got $collection_status" >&2
+	exit 1
+fi
+echo "PASS: native-backed collection object executed (exit 42)"
 
 instance_module_output="$root_dir/out/instance-module.hl"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run InstanceModuleMain "$instance_module_output"

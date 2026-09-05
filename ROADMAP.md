@@ -33,7 +33,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 - [ ] Arrays, maps, enums, nullable values, and pattern matching.
 - [ ] Interfaces, virtual dispatch, and basic generics.
 - [ ] A documented runtime library ABI for strings, collections, IO, and time
-  (the first typed `trace` native is now exercised end-to-end).
+  (typed `trace` and a native-backed `IntArray` ABI probe are exercised
+  end-to-end; the public generic collection ABI remains future work).
 
 ### B. Incremental compiler service
 
@@ -79,18 +80,16 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 
 ## Feature order after the current milestone
 
-1. Add capturing closures using generated environment objects plus
-   `OInstanceClosure`; keep closure layout private to the compiler/runtime ABI.
-2. Add a first-class `Array<T>` runtime type and bounds-checked indexing using
+1. Add a first-class `Array<T>` runtime type and bounds-checked indexing using
    HashLink array operations. Start with `Int`, `Float`, and object arrays.
-3. Add enums/nullable values and pattern matching on the same tagged-value
+2. Add enums/nullable values and pattern matching on the same tagged-value
    rules used by the runtime bridge.
-4. Add interfaces and virtual method prototypes; direct calls remain an
+3. Add interfaces and virtual method prototypes; direct calls remain an
    optimization, never the semantic contract.
-5. Add package/import resolution, then migrate a small Pragtical utility
+4. Add package/import resolution, then migrate a small Pragtical utility
    plugin as the first real multi-module workload.
-6. Expose compiler snapshots as the editor language service.
-7. Add structural reload domains and state migration, then move larger editor
+5. Expose compiler snapshots as the editor language service.
+6. Add structural reload domains and state migration, then move larger editor
    subsystems and finally the editor core.
 
 ## Definition of Pragtical-ready
