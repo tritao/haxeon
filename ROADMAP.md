@@ -29,7 +29,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   recursion.
 - [x] Typed locals, nominal classes, fields, constructors, inheritance.
 - [x] Static fields and unqualified static access lower to persistent HashLink
-	globals; compatible body patches preserve global state.
+	globals; literal and expression initializers run through a stable `__init`
+	entry at normal startup and live-module load, while compatible body patches
+	preserve global state.
 - [x] SSA construction, verification, phi elimination, deterministic lowering.
 - [x] Function values for non-capturing references.
 - [x] Capturing closures and instance closures, including shared generated

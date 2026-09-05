@@ -83,6 +83,7 @@ run_program while-arithmetic 42
 run_program branch-assignment 42
 run_program static-class 42
 run_program static-field 81
+run_program static-field-init 42
 run_program instance-class 42
 run_program default-constructor-class 42
 run_program inheritance-class 43

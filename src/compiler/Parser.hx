@@ -166,10 +166,12 @@ class Parser {
 				var fieldName = consume(TokenKind.Identifier).text;
 				consume(TokenKind.Colon);
 				var fieldType = parseType(),
+					initializer = match(TokenKind.Assign) ? parseExpression() : null,
 					end = consume(TokenKind.Semicolon).span;
 				fields.push({
 					name: fieldName,
 					type: fieldType,
+					initializer: initializer,
 					isStatic: isStatic,
 					isFinal: isFinal,
 					span: fieldStart.merge(end)

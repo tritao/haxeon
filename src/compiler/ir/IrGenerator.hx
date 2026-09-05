@@ -22,7 +22,33 @@ import compiler.ir.Ir.IrStaticField;
 class IrGenerator {
 	public static function generate(typed:TypedProgram):IrProgram {
 		return assemble([for (fn in typed.functions) generateFunction(fn)], null, objectsFrom(typed), interfacesFrom(typed), enumsFrom(typed),
-			staticFieldsFrom(typed));
+			staticFieldsFrom(typed), staticInitializerFrom(typed));
+	}
+
+	/** Build the module boot function from static field initializers. */
+	public static function staticInitializerFrom(typed:TypedProgram):Null<IrFunction> {
+		var statements:Array<TypedStatement> = [], firstSpan = null;
+		for (classDecl in typed.classes)
+			for (field in classDecl.fields)
+				if (field.isStatic && field.initializer != null) {
+					if (firstSpan == null)
+						firstSpan = field.span;
+					statements.push(TStaticFieldAssign(classDecl.name, field.name, field.initializer, field.span));
+				}
+		if (statements.length == 0)
+			return null;
+		return generateFunction({
+			name: "__init",
+			owner: null,
+			isStatic: true,
+			isConstructor: false,
+			arguments: [],
+			result: TVoid,
+			statements: statements,
+			cells: [],
+			cellCaptures: [],
+			span: firstSpan
+		});
 	}
 
 	public static function enumsFrom(typed:TypedProgram):Array<IrEnum>
@@ -127,7 +153,7 @@ class IrGenerator {
 	}
 
 	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>,
-			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>):IrProgram {
+			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializer:IrFunction):IrProgram {
 		var program = new IrProgram("__entry");
 		var needsArrayRuntime = false,
 			needsStringRuntime = false,
@@ -369,9 +395,14 @@ class IrGenerator {
 		if (natives != null)
 			for (native in natives)
 				program.natives.push(native);
-		for (fn in functions)
+		var allFunctions = functions.copy();
+		if (staticInitializer != null)
+			allFunctions.unshift(staticInitializer);
+		for (fn in allFunctions)
 			program.functions.push(fn);
 		var entry = new IrBuilder();
+		if (staticInitializer != null)
+			entry.call("__init", [], Void);
 		var result = entry.call("main", [], I32);
 		var exited = entry.call("__exit", [result], Void);
 		entry.returnValue(exited);

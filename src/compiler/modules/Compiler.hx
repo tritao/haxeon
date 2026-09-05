@@ -293,6 +293,7 @@ class Compiler {
 							{
 								name: field.name,
 								type: canonicalType(field.type, aliases),
+								initializer: field.initializer == null ? null : canonicalExpression(field.initializer, name, entryModule, locals, aliases),
 								isStatic: field.isStatic,
 								isFinal: field.isFinal,
 								span: field.span
@@ -407,7 +408,7 @@ class Compiler {
 		var objectNames = [for (name in objectCache.keys()) name];
 		objectNames.sort(Reflect.compare);
 		var ir = IrGenerator.assemble(cached, irNatives(), [for (name in objectNames) objectCache.get(name)], IrGenerator.interfacesFrom(typedNew),
-			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew));
+			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew), IrGenerator.staticInitializerFrom(typedNew));
 		var signatureChanges = [for (name in signatureChanged.keys()) name];
 		signatureChanges.sort(Reflect.compare);
 		var forceReload = compiledOnce && structuralChanged.keys().hasNext();
@@ -522,6 +523,10 @@ class Compiler {
 			for (statement in fn.statements)
 				scanStatement(statement, dependencies);
 		for (classDecl in state.ast.classes)
+			for (field in classDecl.fields)
+				if (field.initializer != null)
+					scanExpression(field.initializer, dependencies);
+		for (classDecl in state.ast.classes)
 			dependencies.remove(classDecl.name);
 		for (enumDecl in state.ast.enums)
 			dependencies.remove(enumDecl.name);
@@ -583,6 +588,27 @@ class Compiler {
 			if (!enums.exists(old))
 				structuralChanged.set('enum:$old', true);
 		state.enumFingerprints = enums;
+		var staticInitializers:Map<String, String> = [];
+		for (classDecl in state.ast.classes) {
+			var className = qualifiedTypeName(state.ast.packageName, classDecl.name);
+			for (field in classDecl.fields) {
+				switch field.initializer {
+					case null:
+					case expression:
+						if (field.isStatic) {
+							var fieldName = className + "." + field.name,
+								initializer = state.source.text.substring(field.span.start, field.span.end);
+							staticInitializers.set(fieldName, initializer);
+							if (state.staticInitializerFingerprints.get(fieldName) != initializer)
+								structuralChanged.set('static:$fieldName', true);
+						}
+				}
+			}
+		}
+		for (old in state.staticInitializerFingerprints.keys())
+			if (!staticInitializers.exists(old))
+				structuralChanged.set('static:$old', true);
+		state.staticInitializerFingerprints = staticInitializers;
 		for (fn in state.ast.functions) {
 			var canonical = state.name == entry && fn.name == "main" ? "main" : state.name + "." + fn.name;
 			var signature = signatureFingerprint(fn),

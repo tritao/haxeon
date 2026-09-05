@@ -159,10 +159,20 @@ class Typer {
 			var type = lowerType(field.type);
 			if (type == TVoid)
 				fail("E1002", 'Field "${classDecl.name}.${field.name}" cannot have type Void', field.span);
+			var initializer:Null<TypedExpression> = null;
+			if (field.initializer != null) {
+				if (!field.isStatic)
+					fail("E1020", 'Instance field initializers are not supported for "${classDecl.name}.${field.name}"', field.span);
+				var previousFunctionName = currentFunctionName;
+				currentFunctionName = classDecl.name + ".__init";
+				initializer = coerce(typeExpression(field.initializer, new Scope()), type, 'static field "${classDecl.name}.${field.name}"', "E1002");
+				currentFunctionName = previousFunctionName;
+			}
 			fieldNames.set(field.name, true);
 			fields.push({
 				name: field.name,
 				type: type,
+				initializer: initializer,
 				isStatic: field.isStatic,
 				isFinal: field.isFinal,
 				span: field.span
@@ -271,6 +281,7 @@ class Typer {
 						{
 							name: "value",
 							type: cellType,
+							initializer: null,
 							isStatic: false,
 							isFinal: false,
 							span: fn.span
@@ -680,6 +691,7 @@ class Typer {
 									{
 										name: name,
 										type: captureCells.exists(name) ? TClass(captureCells.get(name)) : scope.resolve(name),
+										initializer: null,
 										isStatic: false,
 										isFinal: false,
 										span: span
@@ -711,6 +723,7 @@ class Typer {
 									{
 										name: "value",
 										type: cellType,
+										initializer: null,
 										isStatic: false,
 										isFinal: false,
 										span: span

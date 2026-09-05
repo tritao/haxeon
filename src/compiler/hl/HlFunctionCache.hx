@@ -3,6 +3,8 @@ package compiler.hl;
 import compiler.ir.IrFunction;
 
 class HlFunctionCache {
+	public static inline final INIT_STABLE_ID:Int = 0x7FFF0000;
+
 	public final userSlots:Map<String, Int> = [];
 	public final stableIds:Map<String, Int> = [];
 	public final slots:Array<String> = [];
@@ -25,7 +27,7 @@ class HlFunctionCache {
 			if (!userSlots.exists(fn.name)) {
 				userSlots.set(fn.name, slots.length);
 				if (!stableIds.exists(fn.name))
-					stableIds.set(fn.name, nextStableId++);
+					stableIds.set(fn.name, fn.name == "__init" ? INIT_STABLE_ID : nextStableId++);
 				slots.push(fn.name);
 			}
 			functions.set(fn.name, fn);

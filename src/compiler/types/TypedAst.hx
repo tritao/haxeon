@@ -112,7 +112,7 @@ typedef TypedFunction = {
 	final span:SourceSpan;
 }
 
-typedef TypedField = {final name:String; final type:CompilerType; final isStatic:Bool; final isFinal:Bool; final span:SourceSpan;}
+typedef TypedField = {final name:String; final type:CompilerType; final initializer:Null<TypedExpression>; final isStatic:Bool; final isFinal:Bool; final span:SourceSpan;}
 
 typedef TypedClass = {
 	final name:String;
