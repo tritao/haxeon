@@ -20,6 +20,7 @@ import compiler.ir.IrTypeCodec;
 import compiler.ir.IrValueTableCodec;
 import compiler.ir.IrTerminatorCodec;
 import compiler.ir.IrInstructionCodec;
+import compiler.ir.IrFunctionStateCodec;
 import compiler.ir.SsaBuilder;
 import compiler.ir.Cfg.CfgInstruction;
 import compiler.ir.Cfg.CfgBlock;
@@ -247,6 +248,7 @@ class TestMain {
 		expectStringError(function() IrValueTableCodec.readReference(new BytesInput(referenceBytes.getBytes()), badReference), "Unknown IR value reference");
 		Sys.println("PASS: canonical IR value tables preserve identity and reject unknown references");
 		var instructionProgram = Frontend.compile("function add(a:Int, b:Int):Int { var sum = a + b; return sum; } function main():Int { return add(20, 22); }");
+		var decodedFunctions = [];
 		for (fn in instructionProgram.functions) {
 			var instructionValues:Map<Int, compiler.ir.Ir.IrValue> = [];
 			for (argument in fn.arguments)
@@ -264,6 +266,17 @@ class TestMain {
 				}
 		}
 		Sys.println("PASS: explicit IR instructions round trip through canonical value references");
+		for (fn in instructionProgram.functions) {
+			var encodedFunction = IrFunctionStateCodec.encode(fn),
+				decodedFunction = IrFunctionStateCodec.decode(encodedFunction);
+			if (decodedFunction.name != fn.name
+				|| decodedFunction.blocks.length != fn.blocks.length
+				|| encodedFunction.compare(IrFunctionStateCodec.encode(decodedFunction)) != 0)
+				throw "IR function state did not round trip deterministically";
+			decodedFunctions.push(decodedFunction);
+		}
+		IrFunctionStateCodec.verify(decodedFunctions, instructionProgram);
+		Sys.println("PASS: complete IR functions persist deterministically");
 		var terminatorOutput = new haxe.io.BytesOutput(),
 			terminatorBlocks:Map<Int, Bool> = [];
 		terminatorOutput.bigEndian = false;
