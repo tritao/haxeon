@@ -221,7 +221,7 @@ class Typer {
 					fail("E1008", 'Constructor "$typeName" expects ${expected.length} arguments, got ${arguments.length}', span);
 				var typed = [for (argument in arguments) typeExpression(argument, scope)];
 				checkArguments(typed, expected, typeName + ".new");
-				new TypedExpression(TNew(typeName, typed), TClass(typeName), span);
+				new TypedExpression(TNew(typeName, typed, constructor != null), TClass(typeName), span);
 			case Call(name, arguments, span):
 				var dot = name.indexOf("."),
 					receiverName = dot < 0 ? null : name.substr(0, dot),

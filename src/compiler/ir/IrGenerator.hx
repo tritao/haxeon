@@ -150,12 +150,14 @@ class IrGenerator {
 			case TLessEqual(a, b): builder.lessEqual(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TEqual(a, b): builder.equal(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TCall(name, args): builder.call(name, [for (arg in args) lowerExpression(arg, builder, localTypes)], lowerType(expression.type));
-			case TNew(typeName, args):
+			case TNew(typeName, args, hasConstructor):
 				var object = builder.newObject(typeName);
-				var constructorArgs = [object];
-				for (arg in args)
-					constructorArgs.push(lowerExpression(arg, builder, localTypes));
-				builder.call('$typeName.new', constructorArgs, Void);
+				if (hasConstructor) {
+					var constructorArgs = [object];
+					for (arg in args)
+						constructorArgs.push(lowerExpression(arg, builder, localTypes));
+					builder.call('$typeName.new', constructorArgs, Void);
+				}
 				object;
 			case TField(object, name): builder.fieldGet(lowerExpression(object, builder, localTypes), name, lowerType(expression.type));
 			case TMethodCall(object, name, args):

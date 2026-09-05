@@ -28,7 +28,7 @@ enum TypedExpressionKind {
 	TLessEqual(left:TypedExpression, right:TypedExpression);
 	TEqual(left:TypedExpression, right:TypedExpression);
 	TCall(name:String, arguments:Array<TypedExpression>);
-	TNew(typeName:String, arguments:Array<TypedExpression>);
+	TNew(typeName:String, arguments:Array<TypedExpression>, hasConstructor:Bool);
 	TField(object:TypedExpression, name:String);
 	TMethodCall(object:TypedExpression, functionName:String, arguments:Array<TypedExpression>);
 }
