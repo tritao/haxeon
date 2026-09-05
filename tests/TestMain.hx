@@ -244,6 +244,15 @@ class TestMain {
 			|| typedClass.classes[0].fields[0].type != compiler.types.Type.CompilerType.TInt
 			|| typedClass.classes[0].methods[1].result != compiler.types.Type.CompilerType.TInt)
 			throw "Minimal class declarations were not type checked";
+		var libraryProgram = new Parser(new Lexer(new SourceFile("Library.hx",
+			"class LibraryBox { public function get():Int { return 42; } } function helper(value:Int):Int { return value; }")).tokenize()).parseProgram();
+		var typedLibrary = Typer.typeLibrary(libraryProgram),
+			hasHelper = false;
+		for (fn in typedLibrary.functions)
+			if (fn.name == "helper")
+				hasHelper = true;
+		if (typedLibrary.classes.length != 1 || !hasHelper)
+			throw "Library modules were not type checked without an executable main";
 		var interfaceSource = "interface Plugin { function activate():Void; function score(value:Int):Int; } class SearchPlugin implements Plugin { public function activate():Void { } public function score(value:Int):Int { return value; } } function consume(plugin:Plugin):Int { plugin.activate(); return plugin.score(42); } function main():Int { var plugin:Plugin = new SearchPlugin(); return consume(plugin); }",
 			interfaceProgram = new Parser(new Lexer(new SourceFile("Plugin.hx", interfaceSource)).tokenize()).parseProgram();
 		if (interfaceProgram.interfaces.length != 1 || interfaceProgram.classes[0].interfaces[0] != "Plugin")

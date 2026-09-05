@@ -83,7 +83,7 @@ class BootstrapStatus {
 				parsed = true;
 				functions = program.functions.length;
 				try {
-					Typer.type(program);
+					Typer.typeLibrary(program);
 					typed = true;
 				} catch (failure:Dynamic)
 					error = Std.string(failure);

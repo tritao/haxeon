@@ -42,16 +42,20 @@ class Typer {
 	var loopDepth:Int = 0;
 
 	public static function type(program:AstProgram):TypedProgram
-		return new Typer(null).typeProgram(program, null);
+		return new Typer(null).typeProgram(program, null, true);
+
+	/** Type a reusable module without requiring an executable main function. */
+	public static function typeLibrary(program:AstProgram):TypedProgram
+		return new Typer(null).typeProgram(program, null, false);
 
 	public static function typeSelected(program:AstProgram, selected:Map<String, Bool>,
 			?externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>):TypedProgram
-		return new Typer(externals).typeProgram(program, selected);
+		return new Typer(externals).typeProgram(program, selected, true);
 
 	function new(externals)
 		this.externals = externals == null ? [] : externals;
 
-	function typeProgram(program:AstProgram, selected:Null<Map<String, Bool>>):TypedProgram {
+	function typeProgram(program:AstProgram, selected:Null<Map<String, Bool>>, requireMain:Bool):TypedProgram {
 		for (alias in program.aliases) {
 			if (aliases.exists(alias.name) || classDecls.exists(alias.name) || interfaceDecls.exists(alias.name))
 				fail("E1000", 'Duplicate type name "${alias.name}"', alias.span);
@@ -101,9 +105,11 @@ class Typer {
 				fail("E1000", 'Function "${fn.name}" conflicts with a registered native', fn.span);
 			signatures.set(fn.name, fn);
 		}
-		var main = signatures.get("main");
-		if (main == null || main.arguments.length != 0 || lowerType(main.result) != TInt)
-			throw "Program must define function main():Int";
+		if (requireMain) {
+			var main = signatures.get("main");
+			if (main == null || main.arguments.length != 0 || lowerType(main.result) != TInt)
+				throw "Program must define function main():Int";
+		}
 		var typedEnums = [
 			for (enumDecl in program.enums)
 				{
