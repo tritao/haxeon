@@ -483,6 +483,25 @@ HL_PRIM void HL_NAME(call_bytes1)( hl_runtime_module *runtime, int stable_id, vb
 	if( status != HL_RUNTIME_OK ) hl_error("Invalid runtime string argument function call (status %d)",status);
 }
 
+HL_PRIM vdynamic *HL_NAME(call_closure)( hl_runtime_module *runtime, int stable_id ) {
+	vclosure *result = NULL;
+	vdynamic *exception = NULL;
+	hl_runtime_status status = hl_runtime_module_call_closure(runtime,stable_id,&result,&exception);
+	if( status == HL_RUNTIME_EXCEPTION ) hl_throw(exception);
+	if( status != HL_RUNTIME_OK ) hl_error("Invalid runtime closure function call (status %d)",status);
+	return (vdynamic*)result;
+}
+
+HL_PRIM int HL_NAME(call_closure_i32)( vclosure *closure ) {
+	vdynamic *result;
+	bool raised = false;
+	if( closure == NULL || closure->t->kind != HFUN || closure->t->fun->nargs != 0 || closure->t->fun->ret->kind != HI32 )
+		hl_error("Invalid retained runtime closure");
+	result = hl_dyn_call_safe(closure,NULL,0,&raised);
+	if( raised ) hl_throw(result);
+	return result->v.i;
+}
+
 HL_PRIM int HL_NAME(patch)( hl_runtime_module *runtime, vbyte *bytes, int length ) {
 	return hl_runtime_module_apply_hlp(runtime,bytes,length);
 }
@@ -493,6 +512,10 @@ HL_PRIM int HL_NAME(allocation_count)( hl_runtime_module *runtime ) {
 
 HL_PRIM int HL_NAME(patch_jit_count)( hl_runtime_module *runtime ) {
 	return hl_runtime_module_jit_count(runtime);
+}
+
+HL_PRIM int HL_NAME(retired_allocation_count)( hl_runtime_module *runtime ) {
+	return hl_runtime_module_retired_allocation_count(runtime);
 }
 
 HL_PRIM void HL_NAME(dispose)( hl_runtime_module *runtime ) {
@@ -511,9 +534,12 @@ DEFINE_PRIM(_I32,call_i32,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_VOID,call_void,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_BYTES,call_bytes,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_VOID,call_bytes1,_ABSTRACT(realtime_module) _I32 _BYTES);
+DEFINE_PRIM(_DYN,call_closure,_ABSTRACT(realtime_module) _I32);
+DEFINE_PRIM(_I32,call_closure_i32,_DYN);
 DEFINE_PRIM(_I32,patch,_ABSTRACT(realtime_module) _BYTES _I32);
 DEFINE_PRIM(_I32,allocation_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,patch_jit_count,_ABSTRACT(realtime_module));
+DEFINE_PRIM(_I32,retired_allocation_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_VOID,dispose,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,inspect_patch,_BYTES _I32);
 DEFINE_PRIM(_VOID,array_int_init,_OBJ(_BYTES _I32));

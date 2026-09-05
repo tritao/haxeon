@@ -28,6 +28,7 @@ class HotReloadMain {
 		testDecodedIrLifetime();
 		testBackendStateLifetime();
 		testLiveAbiPatchMatrix();
+		testRetainedPatchedClosure();
 		testCompilerRestart();
 		var compiler = new Compiler();
 		compiler.update("Value.hx", "function value():Int { return 42; }");
@@ -229,6 +230,30 @@ class HotReloadMain {
 		testAppendedFloatAndStringSymbols();
 		testNonMovingTypeArena();
 		Sys.println("PASS: selective HLP patches are atomic and retain bounded JIT code");
+	}
+
+	static function testRetainedPatchedClosure():Void {
+		var compiler = new Compiler();
+		compiler.update("Main.hx", "function value():Int { return 40; } function make():() -> Int { return value; } function main():Int { return value(); }");
+		var initial = compiler.compile("Main"),
+			loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
+		var makeId = initial.functionIds.get("Main.make");
+		compiler.update("Main.hx",
+			"function value():Int { return 41; } function make():() -> Int { var marker = 1; return value; } function main():Int { return value(); }");
+		var first = compiler.compile("Main");
+		Runtime.patchSet(loaded, new PatchSet(initial.revision, first.revision, first.patchBytes, first.changedFunctions));
+		var retained = Runtime.retainClosure(loaded, makeId);
+		if (Runtime.callRetainedClosureInt(retained) != 41)
+			throw "patched closure did not capture the published function";
+		compiler.update("Main.hx",
+			"function value():Int { return 42; } function make():() -> Int { var marker = 2; return value; } function main():Int { return value(); }");
+		var second = compiler.compile("Main");
+		Runtime.patchSet(loaded, new PatchSet(first.revision, second.revision, second.patchBytes, second.changedFunctions));
+		if (Runtime.callRetainedClosureInt(retained) != 41)
+			throw "replacing patch owners invalidated an escaped closure";
+		if (Runtime.retiredCodeAllocationCount(loaded) != 1)
+			throw "escaped closure JIT owner was not tracked as retired";
+		Runtime.dispose(loaded);
 	}
 
 	static function testPatchContract():Void {

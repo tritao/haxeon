@@ -17,6 +17,12 @@ private class RuntimeNative {
 
 	public static function call_bytes1(module:hl.Abstract<"realtime_module">, index:Int, argument:hl.Bytes):Void {}
 
+	public static function call_closure(module:hl.Abstract<"realtime_module">, index:Int):Dynamic
+		return null;
+
+	public static function call_closure_i32(closure:Dynamic):Int
+		return 0;
+
 	public static function patch(module:hl.Abstract<"realtime_module">, bytes:hl.Bytes, length:Int):Int
 		return -1;
 
@@ -24,6 +30,9 @@ private class RuntimeNative {
 		return 0;
 
 	public static function patch_jit_count(module:hl.Abstract<"realtime_module">):Int
+		return 0;
+
+	public static function retired_allocation_count(module:hl.Abstract<"realtime_module">):Int
 		return 0;
 
 	public static function dispose(module:hl.Abstract<"realtime_module">):Void {}
@@ -63,11 +72,20 @@ class Runtime {
 	public static function callStringArg(module:LoadedModule, stableIndex:Int, argument:String):Void
 		RuntimeNative.call_bytes1(cast module, stableIndex, @:privateAccess argument.bytes);
 
+	public static function retainClosure(module:LoadedModule, stableIndex:Int):Dynamic
+		return RuntimeNative.call_closure(cast module, stableIndex);
+
+	public static function callRetainedClosureInt(closure:Dynamic):Int
+		return RuntimeNative.call_closure_i32(closure);
+
 	public static function retainedCodeAllocationCount(module:LoadedModule):Int
 		return RuntimeNative.allocation_count(cast module);
 
 	public static function patchJitCount(module:LoadedModule):Int
 		return RuntimeNative.patch_jit_count(cast module);
+
+	public static function retiredCodeAllocationCount(module:LoadedModule):Int
+		return RuntimeNative.retired_allocation_count(cast module);
 
 	public static function dispose(module:LoadedModule):Void
 		RuntimeNative.dispose(cast module);
