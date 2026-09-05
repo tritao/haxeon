@@ -28,6 +28,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   modulo and unary negation), branches, loops,
   recursion.
 - [x] Typed locals, nominal classes, fields, constructors, inheritance.
+- [x] Static fields and unqualified static access lower to persistent HashLink
+	globals; compatible body patches preserve global state.
 - [x] SSA construction, verification, phi elimination, deterministic lowering.
 - [x] Function values for non-capturing references.
 - [x] Capturing closures and instance closures, including shared generated

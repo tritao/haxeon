@@ -18,6 +18,7 @@ class HlSymbolTable {
 	final stringIndices:Map<String, Int> = [];
 	final floatIndices:Map<String, Int> = [];
 	final typeIndices:Map<String, Int> = [];
+	final globalIndices:Map<String, Int> = [];
 	final objectIndices:Map<String, Int> = [];
 	final objectMethodIndices:Map<String, Map<String, Int>> = [];
 	final interfaceMethodIndices:Map<String, Map<String, Int>> = [];
@@ -191,6 +192,19 @@ class HlSymbolTable {
 
 	public function typeIndex(key:String):Null<Int>
 		return typeIndices.get(key);
+
+	public function internGlobal(name:String, type:IrType):Int {
+		var found = globalIndices.get(name);
+		if (found != null)
+			return found;
+		var index = globals.length;
+		globals.push(internType(type));
+		globalIndices.set(name, index);
+		return index;
+	}
+
+	public function globalIndex(name:String):Null<Int>
+		return globalIndices.get(name);
 
 	public function objectMethodIndex(objectName:String, methodName:String):Null<Int> {
 		var methods = objectMethodIndices.get(objectName);

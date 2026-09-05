@@ -286,10 +286,8 @@ class Parser {
 					end = consume(TokenKind.Semicolon).span;
 				return switch target {
 					case Variable(name, _):
-						if (name.indexOf(".") < 0) Increment(name, delta,
-							expressionSpan(target).merge(end)); else throw new CompileError(new Diagnostic("E0002",
-							"Increment target must be a local variable", expressionSpan(target)));
-					default: throw new CompileError(new Diagnostic("E0002", "Increment target must be a local variable", expressionSpan(target)));
+						Increment(name, delta, expressionSpan(target).merge(end));
+					default: throw new CompileError(new Diagnostic("E0002", "Increment target must be a variable", expressionSpan(target)));
 				};
 			}
 			var assignmentKind = match(TokenKind.Assign) ? 0 : match(TokenKind.PlusAssign) ? 1 : match(TokenKind.MinusAssign) ? 2 : -1;

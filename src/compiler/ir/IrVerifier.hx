@@ -29,14 +29,20 @@ class IrVerifier {
 				throw 'Duplicate IR enum "${enumDecl.name}"';
 			enums.set(enumDecl.name, enumDecl);
 		}
+		var globals:Map<String, IrType> = [];
+		for (field in program.staticFields) {
+			if (globals.exists(field.name))
+				throw 'Duplicate IR static field "${field.name}"';
+			globals.set(field.name, field.type);
+		}
 		if (!signatures.exists(program.entryPoint))
 			throw 'Unknown IR entry point "${program.entryPoint}"';
 		for (fn in program.functions)
-			verifyFunction(fn, signatures, objects, interfaces, enums);
+			verifyFunction(fn, signatures, objects, interfaces, enums, globals);
 	}
 
 	static function verifyFunction(fn:IrFunction, signatures:Map<String, {arguments:Array<IrType>, result:IrType}>, objects:Map<String, IrObject>,
-			interfaces:Map<String, IrInterface>, enums:Map<String, IrEnum>):Void {
+			interfaces:Map<String, IrInterface>, enums:Map<String, IrEnum>, globals:Map<String, IrType>):Void {
 		if (fn.blocks.length == 0)
 			throw 'IR function ${fn.name} has no entry block';
 		var blocks:Map<Int, IrBlock> = [], values:Map<Int, IrType> = [];
@@ -63,7 +69,7 @@ class IrVerifier {
 					default:
 				}
 			for (instruction in block.instructions)
-				verifyInstruction(instruction, values, signatures, objects, interfaces, enums);
+				verifyInstruction(instruction, values, signatures, objects, interfaces, enums, globals);
 			if (block.terminator == null)
 				throw 'Reachable IR block $id in ${fn.name} has no terminator';
 			switch block.terminator {
@@ -114,7 +120,7 @@ class IrVerifier {
 	}
 
 	static function verifyInstruction(instruction:IrInstruction, values:Map<Int, IrType>, signatures, objects:Map<String, IrObject>,
-			interfaces:Map<String, IrInterface>, enums:Map<String, IrEnum>):Void
+			interfaces:Map<String, IrInterface>, enums:Map<String, IrEnum>, globals:Map<String, IrType>):Void
 		switch instruction {
 			case Phi(_, _):
 			case ConstVoid(out):
@@ -138,6 +144,16 @@ class IrVerifier {
 					default: throw 'IR null constant must produce a reference value';
 				}
 				define(values, out);
+			case GlobalGet(out, name):
+				var type = globals.get(name);
+				if (type == null || !sameType(out.type, type))
+					throw 'Unknown or mismatched IR static field "$name" (declared=${type == null ? "missing" : Std.string(type)}, actual=${Std.string(out.type)})';
+				define(values, out);
+			case GlobalSet(name, value):
+				var type = globals.get(name);
+				if (type == null || !sameType(value.type, type))
+					throw 'Unknown or mismatched IR static field "$name" (declared=${type == null ? "missing" : Std.string(type)}, actual=${Std.string(value.type)})';
+				require(values, value);
 			case Add(out, a, b), Sub(out, a, b), Mul(out, a, b), Div(out, a, b):
 				if (!sameType(out.type, a.type) || !sameType(a.type, b.type) || (!sameType(a.type, I32) && !sameType(a.type, F64)))
 					throw "IR arithmetic requires matching numeric values";

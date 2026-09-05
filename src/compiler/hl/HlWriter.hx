@@ -138,6 +138,12 @@ class HlWriter {
 					requireRegister(fn, destination);
 				case LoadNull(destination):
 					requireRegister(fn, destination);
+				case GlobalGet(destination, global):
+					requireRegister(fn, destination);
+					requireGlobal(code, global, 'function ${fn.functionIndex}');
+				case GlobalSet(global, source):
+					requireGlobal(code, global, 'function ${fn.functionIndex}');
+					requireRegister(fn, source);
 				case Add(destination, left, right):
 					requireRegister(fn, destination);
 					requireRegister(fn, left);
@@ -296,6 +302,11 @@ class HlWriter {
 			throw 'Invalid string $string for $context';
 	}
 
+	static function requireGlobal(code:HlCode, global:Int, context:String):Void {
+		if (global < 0 || global >= code.globals.length)
+			throw 'Invalid global $global for $context';
+	}
+
 	function writeCode(code:HlCode):Void {
 		output.writeString("HLB", Encoding.UTF8);
 		output.writeByte(HlCode.VERSION);
@@ -432,6 +443,10 @@ class HlWriter {
 					{opcode: HlOpcode.Bool, operands: [destination, value ? 1 : 0]};
 				case LoadNull(destination):
 					{opcode: HlOpcode.Null, operands: [destination]};
+				case GlobalGet(destination, global):
+					{opcode: HlOpcode.GetGlobal, operands: [destination, global]};
+				case GlobalSet(global, source):
+					{opcode: HlOpcode.SetGlobal, operands: [global, source]};
 				case Add(destination, left, right):
 					{opcode: HlOpcode.Add, operands: [destination, left, right]};
 				case Sub(destination, left, right):

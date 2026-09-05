@@ -40,6 +40,8 @@ enum IrInstruction {
 	ConstString(output:IrValue, value:String);
 	ConstBool(output:IrValue, value:Bool);
 	ConstNull(output:IrValue);
+	GlobalGet(output:IrValue, name:String);
+	GlobalSet(name:String, value:IrValue);
 	Add(output:IrValue, left:IrValue, right:IrValue);
 	Sub(output:IrValue, left:IrValue, right:IrValue);
 	Mul(output:IrValue, left:IrValue, right:IrValue);
@@ -95,6 +97,7 @@ typedef IrInterfaceMethod = {final name:String; final arguments:Array<IrType>; f
 typedef IrInterface = {final name:String; final bases:Array<String>; final methods:Array<IrInterfaceMethod>;}
 typedef IrEnumCase = {final name:String; final params:Array<IrType>;}
 typedef IrEnum = {final name:String; final cases:Array<IrEnumCase>;}
+typedef IrStaticField = {final name:String; final type:IrType;}
 
 class IrProgram {
 	public var natives:Array<IrNative> = [];
@@ -102,6 +105,7 @@ class IrProgram {
 	public var objects:Array<IrObject> = [];
 	public var interfaces:Array<IrInterface> = [];
 	public var enums:Array<IrEnum> = [];
+	public var staticFields:Array<IrStaticField> = [];
 	public var entryPoint:String;
 
 	public function new(entryPoint:String)

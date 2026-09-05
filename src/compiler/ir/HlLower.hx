@@ -86,6 +86,8 @@ class HlLower {
 			if (!progressed)
 				throw 'Unable to order object bases';
 		}
+		for (field in program.staticFields)
+			symbols.internGlobal(field.name, field.type);
 		for (native in program.natives)
 			lowerNative(native);
 		for (fn in program.functions)
@@ -153,6 +155,16 @@ class HlLower {
 						instructions.push(HlInstruction.LoadBool(defineRegister(output, registers, registerTypes), value));
 					case ConstNull(output):
 						instructions.push(HlInstruction.LoadNull(defineRegister(output, registers, registerTypes)));
+					case GlobalGet(output, name):
+						var global = symbols.globalIndex(name);
+						if (global == null)
+							throw 'Unknown static field global "$name"';
+						instructions.push(HlInstruction.GlobalGet(defineRegister(output, registers, registerTypes), global));
+					case GlobalSet(name, source):
+						var global = symbols.globalIndex(name);
+						if (global == null)
+							throw 'Unknown static field global "$name"';
+						instructions.push(HlInstruction.GlobalSet(global, requireRegister(source, registers)));
 					case Add(output, left, right):
 						instructions.push(HlInstruction.Add(defineRegister(output, registers, registerTypes), requireRegister(left, registers),
 							requireRegister(right, registers)));

@@ -265,6 +265,11 @@ class SsaBuilder {
 				case ConstNull(out):
 					var result = define(out);
 					target.instructions.push(ConstNull(result));
+				case GlobalGet(out, name):
+					var result = define(out);
+					target.instructions.push(GlobalGet(result, name));
+				case GlobalSet(name, value):
+					target.instructions.push(GlobalSet(name, resolve(value)));
 				case Add(out, a, b):
 					var result = define(out);
 					target.instructions.push(Add(result, resolve(a), resolve(b)));

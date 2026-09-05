@@ -323,9 +323,23 @@ class Typer {
 					output.push(TContinue(span));
 				case Increment(name, delta, span):
 					var current = scope.resolve(name);
-					if (current == null || (!sameType(current, TInt) && !sameType(current, TFloat)))
+					if (current == null) {
+						var dot = name.indexOf("."),
+							ownerSeparator = currentFunctionName.lastIndexOf("."),
+							owner = dot < 0 ? (ownerSeparator < 0 ? null : currentFunctionName.substr(0, ownerSeparator)) : name.substr(0, dot),
+							fieldName = dot < 0 ? name : name.substr(dot + 1),
+							staticField = owner == null ? null : findStaticFieldNullable(owner, fieldName);
+						if (staticField == null || (!sameType(staticField.type, TInt) && !sameType(staticField.type, TFloat)))
+							fail("E1018", 'Increment requires a numeric local or static field "$name"', span);
+						var oldValue = new TypedExpression(TStaticField(staticField.owner, fieldName), staticField.type, span),
+							one:TypedExpression = sameType(staticField.type,
+								TInt) ? new TypedExpression(TIntLiteral(1), TInt, span) : new TypedExpression(TFloatLiteral(1), TFloat, span),
+							updated = delta > 0 ? new TypedExpression(TAdd(oldValue, one), staticField.type,
+								span) : new TypedExpression(TSub(oldValue, one), staticField.type, span);
+						output.push(TStaticFieldAssign(staticField.owner, fieldName, updated, span));
+					} else if (!sameType(current, TInt) && !sameType(current, TFloat))
 						fail("E1018", 'Increment requires a numeric local "$name"', span);
-					if (scope.isCapture(name)) {
+					else if (scope.isCapture(name)) {
 						if (!scope.isCellCapture(name))
 							fail("E1013", 'Captured variable "$name" requires mutable capture cells', span);
 						output.push(TCellCapturedIncrement(name, scope.cellClass(name), current, delta, span));
@@ -338,24 +352,40 @@ class Typer {
 						value = typeExpression(expression, scope);
 					if (dot < 0) {
 						var expected = scope.resolve(name);
-						if (expected == null)
-							fail("E1005", 'Unknown variable "$name"', span);
-						value = coerce(value, expected, 'local "$name"', "E1002");
-						if (scope.isCapture(name)) {
-							if (!scope.isCellCapture(name))
-								fail("E1013", 'Captured variable "$name" requires mutable capture cells', span);
-							output.push(TCellCapturedAssign(name, scope.cellClass(name), value, span));
-						} else if (currentCells.exists(name))
-							output.push(TCellAssign(name, currentCells.get(name), value, span));
-						else
-							output.push(TAssign(name, value, span));
+						if (expected == null) {
+							var ownerSeparator = currentFunctionName.lastIndexOf("."),
+								owner = ownerSeparator < 0 ? null : currentFunctionName.substr(0, ownerSeparator),
+								staticField = owner == null ? null : findStaticFieldNullable(owner, name);
+							if (staticField == null)
+								fail("E1005", 'Unknown variable "$name"', span);
+							value = coerce(value, staticField.type, 'field "$name"', "E1002");
+							output.push(TStaticFieldAssign(staticField.owner, name, value, span));
+						} else {
+							value = coerce(value, expected, 'local "$name"', "E1002");
+							if (scope.isCapture(name)) {
+								if (!scope.isCellCapture(name))
+									fail("E1013", 'Captured variable "$name" requires mutable capture cells', span);
+								output.push(TCellCapturedAssign(name, scope.cellClass(name), value, span));
+							} else if (currentCells.exists(name))
+								output.push(TCellAssign(name, currentCells.get(name), value, span));
+							else
+								output.push(TAssign(name, value, span));
+						}
 					} else {
 						var objectName = name.substr(0, dot),
 							fieldName = name.substr(dot + 1),
 							object = typeExpression(Variable(objectName, span), scope),
-							expected = fieldType(object.type, fieldName, span);
-						value = coerce(value, expected, 'field "$name"', "E1002");
-						output.push(TFieldAssign(object, fieldName, value, span));
+							expected:CompilerType;
+						switch object.expression {
+							case TClassRef(className):
+								var staticField = findStaticField(className, fieldName, span);
+								value = coerce(value, staticField.type, 'field "$name"', "E1002");
+								output.push(TStaticFieldAssign(staticField.owner, fieldName, value, span));
+							default:
+								expected = fieldType(object.type, fieldName, span);
+								value = coerce(value, expected, 'field "$name"', "E1002");
+								output.push(TFieldAssign(object, fieldName, value, span));
+						}
 					}
 				case IndexAssignment(array, offset, expression, span):
 					var typedArray = typeExpression(array, scope),
@@ -528,7 +558,14 @@ class Typer {
 					var signature = signatures.get(name);
 					if (signature != null)
 						new TypedExpression(TFunctionRef(name), functionType(signature), span);
+					else if (classDecls.exists(name))
+						new TypedExpression(TClassRef(name), TClass(name), span);
 					else {
+						var ownerSeparator = currentFunctionName.lastIndexOf("."),
+							owner = ownerSeparator < 0 ? null : currentFunctionName.substr(0, ownerSeparator),
+							staticField = owner == null ? null : findStaticFieldNullable(owner, name);
+						if (staticField != null)
+							return new TypedExpression(TStaticField(staticField.owner, name), staticField.type, span);
 						var dot = name.indexOf(".");
 						if (dot <= 0) {
 							var thisType = scope.resolve("this"),
@@ -865,11 +902,35 @@ class Typer {
 	}
 
 	function typedMember(typedObject:TypedExpression, name:String, span:SourceSpan):TypedExpression {
+		switch typedObject.expression {
+			case TClassRef(className):
+				var staticField = findStaticField(className, name, span);
+				return new TypedExpression(TStaticField(staticField.owner, name), staticField.type, span);
+			default:
+		}
 		if (name == "length" && isArray(typedObject.type))
 			return new TypedExpression(TArrayLength(typedObject), TInt, span);
 		if (name == "length" && sameType(typedObject.type, TString))
 			return new TypedExpression(TStringLength(typedObject), TInt, span);
 		return new TypedExpression(TField(typedObject, name), fieldType(typedObject.type, name, span), span);
+	}
+
+	function findStaticField(className:String, name:String, span:SourceSpan):{owner:String, type:CompilerType} {
+		var result = findStaticFieldNullable(className, name);
+		if (result != null)
+			return result;
+		fail("E1005", 'Unknown static field "$className.$name"', span);
+		return {owner: className, type: TVoid};
+	}
+
+	function findStaticFieldNullable(className:String, name:String):Null<{owner:String, type:CompilerType}> {
+		var classDecl = classDecls.get(className);
+		if (classDecl == null)
+			return null;
+		for (field in classDecl.fields)
+			if (field.name == name && field.isStatic)
+				return {owner: className, type: lowerType(field.type)};
+		return classDecl.base == null ? null : findStaticFieldNullable(classDecl.base, name);
 	}
 
 	function typeMethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {

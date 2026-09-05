@@ -407,7 +407,7 @@ class Compiler {
 		var objectNames = [for (name in objectCache.keys()) name];
 		objectNames.sort(Reflect.compare);
 		var ir = IrGenerator.assemble(cached, irNatives(), [for (name in objectNames) objectCache.get(name)], IrGenerator.interfacesFrom(typedNew),
-			IrGenerator.enumsFrom(typedNew));
+			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew));
 		var signatureChanges = [for (name in signatureChanged.keys()) name];
 		signatureChanges.sort(Reflect.compare);
 		var forceReload = compiledOnce && structuralChanged.keys().hasNext();

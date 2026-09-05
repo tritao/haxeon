@@ -89,7 +89,7 @@ references.
 
 ### 3. Runtime ABI and reload safety
 
-Version strings, arrays, maps, IO, time, exceptions, type tables, and native
+Version strings, arrays, maps, static globals, IO, time, exceptions, type tables, and native
 registration as one ABI. Finish the non-moving type arena and make compatible
 patches atomic. Structural edits must be classified before native staging and
 must never disturb the previous generation on failure.

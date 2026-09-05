@@ -29,6 +29,8 @@ enum TypedExpressionKind {
 	TCellLocal(name:String, cellClass:String);
 	TCaptured(name:String);
 	TCellCaptured(name:String, cellClass:String);
+	TClassRef(name:String);
+	TStaticField(name:String, field:String);
 	TFunctionRef(name:String);
 	TLambda(name:String, environment:Null<String>, captures:Array<String>);
 	TAdd(left:TypedExpression, right:TypedExpression);
@@ -67,6 +69,7 @@ enum TypedStatement {
 	TCellAssign(name:String, cellClass:String, value:TypedExpression, span:SourceSpan);
 	TCellCapturedAssign(name:String, cellClass:String, value:TypedExpression, span:SourceSpan);
 	TFieldAssign(object:TypedExpression, name:String, value:TypedExpression, span:SourceSpan);
+	TStaticFieldAssign(name:String, field:String, value:TypedExpression, span:SourceSpan);
 	TIndexAssign(array:TypedExpression, index:TypedExpression, value:TypedExpression, span:SourceSpan);
 	TMapAssign(map:TypedExpression, key:TypedExpression, value:TypedExpression, span:SourceSpan);
 	TReturn(expression:TypedExpression, span:SourceSpan);

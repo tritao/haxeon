@@ -23,6 +23,8 @@ enum CfgInstruction {
 	ConstNull(output:CfgValue);
 	LoadLocal(output:CfgValue, name:String);
 	StoreLocal(name:String, value:CfgValue);
+	GlobalGet(output:CfgValue, name:String);
+	GlobalSet(name:String, value:CfgValue);
 	Add(output:CfgValue, left:CfgValue, right:CfgValue);
 	Sub(output:CfgValue, left:CfgValue, right:CfgValue);
 	Mul(output:CfgValue, left:CfgValue, right:CfgValue);

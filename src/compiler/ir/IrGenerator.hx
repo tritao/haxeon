@@ -16,11 +16,13 @@ import compiler.ir.Ir.IrNative;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrInterface;
 import compiler.ir.Ir.IrEnum;
+import compiler.ir.Ir.IrStaticField;
 
 /** Lowers typed syntax to a mutable-local CFG; SsaBuilder owns all SSA policy. */
 class IrGenerator {
 	public static function generate(typed:TypedProgram):IrProgram {
-		return assemble([for (fn in typed.functions) generateFunction(fn)], null, objectsFrom(typed), interfacesFrom(typed), enumsFrom(typed));
+		return assemble([for (fn in typed.functions) generateFunction(fn)], null, objectsFrom(typed), interfacesFrom(typed), enumsFrom(typed),
+			staticFieldsFrom(typed));
 	}
 
 	public static function enumsFrom(typed:TypedProgram):Array<IrEnum>
@@ -71,6 +73,17 @@ class IrGenerator {
 		];
 	}
 
+	public static function staticFieldsFrom(typed:TypedProgram):Array<IrStaticField> {
+		var result = [];
+		for (classDecl in typed.classes)
+			for (field in classDecl.fields) {
+				if (field.isStatic)
+					result.push({name: classDecl.name + "." + field.name, type: lowerType(field.type)});
+			}
+		result.sort(function(a, b) return Reflect.compare(a.name, b.name));
+		return result;
+	}
+
 	public static function generateFunction(fn:TypedFunction):IrFunction
 		return SsaBuilder.build(generateCfg(fn));
 
@@ -114,7 +127,7 @@ class IrGenerator {
 	}
 
 	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>,
-			?enums:Array<IrEnum>):IrProgram {
+			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>):IrProgram {
 		var program = new IrProgram("__entry");
 		var needsArrayRuntime = false,
 			needsStringRuntime = false,
@@ -139,6 +152,7 @@ class IrGenerator {
 		program.objects = objects == null ? [] : objects;
 		program.interfaces = interfaces == null ? [] : interfaces;
 		program.enums = enums == null ? [] : enums;
+		program.staticFields = staticFields == null ? [] : staticFields;
 		program.natives.push({
 			name: "__exit",
 			library: "std",
@@ -400,6 +414,8 @@ class IrGenerator {
 					builder.fieldSet(cell, "value", lowerExpression(value, builder, localTypes));
 				case TFieldAssign(object, name, value, _):
 					builder.fieldSet(lowerExpression(object, builder, localTypes), name, lowerExpression(value, builder, localTypes));
+				case TStaticFieldAssign(name, field, value, _):
+					builder.globalSet(name + "." + field, lowerExpression(value, builder, localTypes));
 				case TIndexAssign(array, index, value, _):
 					builder.arraySet(lowerExpression(array, builder, localTypes), lowerExpression(index, builder, localTypes),
 						lowerExpression(value, builder, localTypes));
@@ -589,6 +605,8 @@ class IrGenerator {
 			case TEnumConstruct(name, index,
 				arguments): builder.makeEnum(name, index, [for (argument in arguments) lowerExpression(argument, builder, localTypes)]);
 			case TNullLiteral: throw "Uncoerced null literal";
+			case TClassRef(_): throw "Class references are only valid for static members";
+			case TStaticField(name, field): builder.globalGet(name + "." + field, lowerType(expression.type));
 			case TNullableWrap(value):
 				switch value.expression {
 					case TNullLiteral: builder.constNull(lowerType(expression.type));

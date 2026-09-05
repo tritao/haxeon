@@ -58,6 +58,15 @@ class CfgBuilder {
 	public function store(name:String, value:CfgValue):Void
 		emit(StoreLocal(name, value));
 
+	public function globalGet(name:String, type:IrType):CfgValue {
+		var out = temporary(type);
+		emit(GlobalGet(out, name));
+		return out;
+	}
+
+	public function globalSet(name:String, value:CfgValue):Void
+		emit(GlobalSet(name, value));
+
 	public function constInt(value:Int):CfgValue {
 		var out = temporary(I32);
 		emit(ConstInt(out, value));

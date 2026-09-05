@@ -82,6 +82,7 @@ run_program fib 55
 run_program while-arithmetic 42
 run_program branch-assignment 42
 run_program static-class 42
+run_program static-field 81
 run_program instance-class 42
 run_program default-constructor-class 42
 run_program inheritance-class 43
@@ -246,6 +247,16 @@ if [[ $instance_module_status -ne 42 ]]; then
 	exit 1
 fi
 echo "PASS: incremental instance class executed (exit 42)"
+
+"$haxe" --cwd "$root_dir" "$root_dir/static-field-test.hxml"
+set +e
+LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$root_dir/out/static-field-test.hl"
+static_field_status=$?
+set -e
+if [[ $static_field_status -ne 0 ]]; then
+	echo "static field runtime: expected exit 0, got $static_field_status" >&2
+	exit 1
+fi
 
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ModuleMain "$root_dir/out/modules.hl"
 set +e

@@ -81,6 +81,10 @@ class CfgVerifier {
 					require(value, available);
 					if (!sameType(value.type, local(fn, name)))
 						throw 'Wrong CFG store type for local "$name"';
+				case GlobalGet(out, _):
+					define(out, defined, available);
+				case GlobalSet(_, value):
+					require(value, available);
 				case Add(out, a, b), Sub(out, a, b), Mul(out, a, b), Div(out, a, b):
 					require(a, available);
 					require(b, available);

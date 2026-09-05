@@ -1,0 +1,4 @@
+-cp src
+-cp tests
+-main StaticFieldMain
+-hl out/static-field-test.hl

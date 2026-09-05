@@ -38,6 +38,7 @@ class HlModuleAssembler {
 		ordered.objects = program.objects;
 		ordered.interfaces = program.interfaces;
 		ordered.enums = program.enums;
+		ordered.staticFields = program.staticFields;
 		ordered.functions = cache.ordered();
 		var layout:Map<String, Int> = [], next = 0;
 		for (native in ordered.natives)
