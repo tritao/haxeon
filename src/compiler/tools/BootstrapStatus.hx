@@ -4,7 +4,7 @@ import compiler.Lexer;
 import compiler.Parser;
 import compiler.Token.TokenKind;
 import compiler.Source.SourceFile;
-import compiler.types.Typer;
+import compiler.modules.Compiler;
 import haxe.Json;
 import sys.FileSystem;
 import sys.io.File;
@@ -14,9 +14,16 @@ typedef FileStatus = {
 	final bytes:Int;
 	final lexed:Bool;
 	final parsed:Bool;
-	final typed:Bool;
 	final functions:Int;
 	final featurePressure:Map<String, Int>;
+	final failedStage:Null<String>;
+	final error:Null<String>;
+}
+
+typedef ProjectStatus = {
+	final entryModule:String;
+	final attempted:Bool;
+	final compiled:Bool;
 	final error:Null<String>;
 }
 
@@ -25,20 +32,23 @@ typedef BootstrapReport = {
 	final files:Int;
 	final lexed:Int;
 	final parsed:Int;
-	final typed:Int;
 	final functions:Int;
+	final project:ProjectStatus;
 	final featurePressure:Array<{name:String, occurrences:Int}>;
-	final failures:Array<{path:String, error:Null<String>}>;
+	final failures:Array<{path:String, failedStage:String, error:String}>;
 }
 
 /** Measures bootstrap readiness by executing the real frontend on source files. */
 class BootstrapStatus {
 	public static function run(arguments:Array<String>):Void {
 		var json = false;
+		var entryModule = "Main";
 		var roots = [];
 		for (argument in arguments) {
 			if (argument == "--json")
 				json = true;
+			else if (StringTools.startsWith(argument, "--entry="))
+				entryModule = argument.substr("--entry=".length);
 			else
 				roots.push(argument);
 		}
@@ -50,7 +60,7 @@ class BootstrapStatus {
 			collect(root, paths);
 		paths.sort(Reflect.compare);
 		var files = [for (path in paths) inspect(path)];
-		var report = summarize(roots, files);
+		var report = summarize(roots, files, inspectProject(roots, paths, files, entryModule));
 		if (json)
 			Sys.println(Json.stringify(report, null, "\t"));
 		else
@@ -74,7 +84,7 @@ class BootstrapStatus {
 	static function inspect(path:String):FileStatus {
 		var source = File.getContent(path),
 			file = new SourceFile(path, source);
-		var pressure = featurePressure(source), lexed = false, parsed = false, typed = false, functions = 0, error:Null<String> = null;
+		var pressure = featurePressure(source), lexed = false, parsed = false, functions = 0, failedStage:Null<String> = null, error:Null<String> = null;
 		try {
 			var tokens = new Lexer(file).tokenize();
 			lexed = true;
@@ -82,28 +92,70 @@ class BootstrapStatus {
 				var program = new Parser(tokens).parseProgram();
 				parsed = true;
 				functions = program.functions.length;
-				try {
-					Typer.typeLibrary(program);
-					typed = true;
-				} catch (failure:Dynamic)
-					error = Std.string(failure);
-			} catch (failure:Dynamic)
+			} catch (failure:Dynamic) {
+				failedStage = "parse";
 				error = Std.string(failure);
-		} catch (failure:Dynamic)
+			}
+		} catch (failure:Dynamic) {
+			failedStage = "lex";
 			error = Std.string(failure);
+		}
 		return {
 			path: path,
 			bytes: source.length,
 			lexed: lexed,
 			parsed: parsed,
-			typed: typed,
 			functions: functions,
 			featurePressure: pressure,
+			failedStage: failedStage,
 			error: error
 		};
 	}
 
-	static function summarize(roots:Array<String>, files:Array<FileStatus>):BootstrapReport {
+	static function inspectProject(roots:Array<String>, paths:Array<String>, files:Array<FileStatus>, entryModule:String):ProjectStatus {
+		var parseFailures = files.length - countFiles(files, function(file) return file.parsed);
+		if (parseFailures > 0)
+			return {
+				entryModule: entryModule,
+				attempted: false,
+				compiled: false,
+				error: 'Blocked by $parseFailures file(s) that do not parse'
+			};
+
+		var compiler = new Compiler();
+		for (path in paths)
+			compiler.update(projectPath(path, roots), File.getContent(path));
+		try {
+			compiler.compile(entryModule);
+			return {
+				entryModule: entryModule,
+				attempted: true,
+				compiled: true,
+				error: null
+			};
+		} catch (failure:Dynamic) {
+			return {
+				entryModule: entryModule,
+				attempted: true,
+				compiled: false,
+				error: Std.string(failure)
+			};
+		}
+	}
+
+	static function projectPath(path:String, roots:Array<String>):String {
+		var normalized = path.split("\\").join("/");
+		for (root in roots) {
+			var prefix = root.split("\\").join("/");
+			if (!StringTools.endsWith(prefix, "/"))
+				prefix += "/";
+			if (StringTools.startsWith(normalized, prefix))
+				return normalized.substr(prefix.length);
+		}
+		return normalized;
+	}
+
+	static function summarize(roots:Array<String>, files:Array<FileStatus>, project:ProjectStatus):BootstrapReport {
 		var pressure:Map<String, Int> = [];
 		for (file in files)
 			for (name => count in file.featurePressure)
@@ -116,13 +168,14 @@ class BootstrapStatus {
 			files: files.length,
 			lexed: countFiles(files, function(file) return file.lexed),
 			parsed: countFiles(files, function(file) return file.parsed),
-			typed: countFiles(files, function(file) return file.typed),
 			functions: sumFunctions(files),
+			project: project,
 			featurePressure: sortedPressure,
 			failures: [
 				for (file in files)
 					if (file.error != null) {
 						path: file.path,
+						failedStage: file.failedStage,
 						error: file.error
 					}
 			]
@@ -134,15 +187,18 @@ class BootstrapStatus {
 		Sys.println('  files:    ${report.files}');
 		Sys.println('  lexed:    ${report.lexed}/${report.files}');
 		Sys.println('  parsed:   ${report.parsed}/${report.files}');
-		Sys.println('  typed:    ${report.typed}/${report.files}');
 		Sys.println('  functions:${report.functions}');
+		var projectState = report.project.compiled ? "compiled" : report.project.attempted ? "failed" : "blocked";
+		Sys.println('  project:  $projectState (entry ${report.project.entryModule})');
+		if (report.project.error != null)
+			Sys.println('            ${report.project.error}');
 		Sys.println("Feature pressure:");
 		for (feature in report.featurePressure)
 			Sys.println('  ${feature.name}: ${feature.occurrences}');
 		if (report.failures.length > 0) {
 			Sys.println("Failures:");
 			for (failure in report.failures)
-				Sys.println('  ${failure.path}: ${failure.error}');
+				Sys.println('  ${failure.path} [${failure.failedStage}]: ${failure.error}');
 		}
 	}
 
