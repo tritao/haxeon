@@ -941,7 +941,12 @@ class Parser {
 			if (!isLambda) {
 				advance();
 				var grouped = parseExpression();
-				consume(TokenKind.RightParen);
+				if (match(TokenKind.Colon)) {
+					var target = parseType(),
+						end = consume(TokenKind.RightParen).span;
+					grouped = Cast(grouped, target, start.merge(end));
+				} else
+					consume(TokenKind.RightParen);
 				return parsePostfix(grouped);
 			}
 			advance();

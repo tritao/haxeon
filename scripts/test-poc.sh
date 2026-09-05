@@ -102,6 +102,7 @@ run_program transparent-abstract 42
 run_program computed-field-assignment 42
 run_program literal-postfix 42
 run_program bitwise 42
+run_program type-annotation 42
 run_program captured-lambda 42
 run_program mutable-capture 78
 run_program nested-mutable-capture 3
