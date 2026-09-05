@@ -639,6 +639,8 @@ class Typer {
 
 	function arithmetic(a, b, scope, add, span):TypedExpression {
 		var left = typeExpression(a, scope), right = typeExpression(b, scope);
+		if (add && sameType(left.type, TString) && sameType(right.type, TString))
+			return new TypedExpression(TAdd(left, right), TString, span);
 		if (!sameType(left.type, right.type) || (!sameType(left.type, TInt) && !sameType(left.type, TFloat)))
 			fail("E1010", "Arithmetic requires matching Int or Float operands", span);
 		return new TypedExpression(add ? TAdd(left, right) : TSub(left, right), left.type, span);

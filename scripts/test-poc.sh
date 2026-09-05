@@ -145,6 +145,18 @@ if [[ $compiler_array_status -ne 47 ]]; then
 fi
 echo "PASS: compiler-owned Int/Float/Bool/String array allocation executed (exit 47)"
 
+string_output="$root_dir/out/string.hl"
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run StringMain "$string_output"
+set +e
+LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$string_output"
+string_status=$?
+set -e
+if [[ $string_status -ne 42 ]]; then
+	echo "string concat: expected exit 42, got $string_status" >&2
+	exit 1
+fi
+echo "PASS: compiler-owned string concatenation executed (exit 42)"
+
 import_output="$root_dir/out/import.hl"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ImportMain "$import_output"
 set +e

@@ -85,7 +85,7 @@ class IrGenerator {
 
 	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>):IrProgram {
 		var program = new IrProgram("__entry");
-		var needsArrayRuntime = false;
+		var needsArrayRuntime = false, needsStringRuntime = false;
 		for (fn in functions)
 			for (block in fn.blocks)
 				for (instruction in block.instructions)
@@ -93,6 +93,8 @@ class IrGenerator {
 						case Call(_, name, _):
 							if (StringTools.startsWith(name, "__array_alloc_"))
 								needsArrayRuntime = true;
+							if (name == "__string_concat")
+								needsStringRuntime = true;
 						default:
 					}
 		program.objects = objects == null ? [] : objects;
@@ -134,6 +136,14 @@ class IrGenerator {
 				result: Array(Bool)
 			});
 		}
+		if (needsStringRuntime)
+			program.natives.push({
+				name: "__string_concat",
+				library: "realtime_runtime",
+				symbol: "__string_concat",
+				arguments: [Bytes, Bytes],
+				result: Bytes
+			});
 		if (natives != null)
 			for (native in natives)
 				program.natives.push(native);
@@ -224,7 +234,10 @@ class IrGenerator {
 						builder.fieldSet(object, capture, builder.load(capture, localTypes.get(capture)));
 					builder.instanceClosure(name, object, lowerType(expression.type));
 				}
-			case TAdd(a, b): builder.add(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
+			case TAdd(a, b):
+				var left = lowerExpression(a, builder, localTypes),
+					right = lowerExpression(b, builder, localTypes);
+				lowerType(expression.type) == Bytes ? builder.call("__string_concat", [left, right], Bytes) : builder.add(left, right);
 			case TSub(a, b): builder.sub(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TMul(a, b): builder.mul(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TDiv(a, b): builder.div(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));

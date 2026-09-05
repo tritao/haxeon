@@ -33,6 +33,18 @@ HL_PRIM varray *HL_NAME(__array_alloc_bool)( int length ) {
 	return hl_alloc_array(&hlt_bool, length);
 }
 
+HL_PRIM vbyte *HL_NAME(__string_concat)( vbyte *left, vbyte *right ) {
+	int left_length = left == NULL ? 0 : (int)ustrlen((const uchar *)left);
+	int right_length = right == NULL ? 0 : (int)ustrlen((const uchar *)right);
+	vbyte *result = hl_alloc_bytes((left_length + right_length + 1) * (int)sizeof(uchar));
+	if (left_length > 0)
+		memcpy(result, left, left_length * sizeof(uchar));
+	if (right_length > 0)
+		memcpy(result + left_length * sizeof(uchar), right, right_length * sizeof(uchar));
+	((uchar *)result)[left_length + right_length] = 0;
+	return result;
+}
+
 HL_PRIM void HL_NAME(array_int_init)( vobj *object ) {
 	*array_int_storage(object) = hl_alloc_bytes(0);
 	*array_int_length(object) = 0;
@@ -113,3 +125,4 @@ DEFINE_PRIM(_ARR,__array_alloc_i32,_I32);
 DEFINE_PRIM(_ARR,__array_alloc_f64,_I32);
 DEFINE_PRIM(_ARR,__array_alloc_bytes,_I32);
 DEFINE_PRIM(_ARR,__array_alloc_bool,_I32);
+DEFINE_PRIM(_BYTES,__string_concat,_BYTES _BYTES);
