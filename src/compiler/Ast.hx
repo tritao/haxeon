@@ -126,6 +126,7 @@ enum AstExpression {
 	SwitchExpression(expression:AstExpression, cases:Array<AstSwitchExpressionCase>, defaultExpression:Null<AstExpression>, span:SourceSpan);
 	ObjectLiteral(fields:Array<AstObjectField>, span:SourceSpan);
 	ArrayLiteral(values:Array<AstExpression>, span:SourceSpan);
+	MapLiteral(entries:Array<AstMapEntry>, span:SourceSpan);
 	ArrayComprehension(keyName:String, valueName:Null<String>, iterable:AstExpression, condition:Null<AstExpression>, value:AstExpression, span:SourceSpan);
 	Range(start:AstExpression, end:AstExpression, span:SourceSpan);
 	Call(name:String, arguments:Array<AstExpression>, span:SourceSpan);
@@ -139,6 +140,7 @@ enum AstExpression {
 }
 
 typedef AstObjectField = {final name:String; final value:AstExpression; final span:SourceSpan;}
+typedef AstMapEntry = {final key:AstExpression; final value:AstExpression; final span:SourceSpan;}
 typedef AstSwitchExpressionCase = {final value:AstExpression; final result:AstExpression; final span:SourceSpan;}
 
 enum AstStatement {

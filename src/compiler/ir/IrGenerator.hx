@@ -1032,6 +1032,18 @@ class IrGenerator {
 				for (index in 0...values.length)
 					builder.arraySet(array, builder.constInt(index), lowerExpression(values[index], builder, localTypes));
 				array;
+			case TMapLiteral(entries):
+				var types = switch expression.type {
+					case TMap(key, value): {key: key, value: value};
+					default: throw "Map literal requires a map type";
+				}, resultType = lowerType(expression.type), map = builder.call(RuntimeType.mapNative(types.key, types.value, "alloc"), [], resultType);
+				for (entry in entries)
+					builder.call(RuntimeType.mapNative(types.key, types.value, "set"), [
+						map,
+						lowerExpression(entry.key, builder, localTypes),
+						lowerExpression(entry.value, builder, localTypes)
+					], Void);
+				map;
 			case TArrayComprehension(keyName, valueName, iterable, condition, value):
 				var inputName = '$' + 'comprehension-input:${expression.span.start}',
 					mapName = '$' + 'comprehension-map:${expression.span.start}',

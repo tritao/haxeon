@@ -59,6 +59,7 @@ enum TypedExpressionKind {
 	TSwitchExpression(expression:TypedExpression, cases:Array<TypedSwitchExpressionCase>, defaultExpression:Null<TypedExpression>);
 	TObjectLiteral(name:String, fields:Array<TypedObjectField>);
 	TArrayLiteral(values:Array<TypedExpression>);
+	TMapLiteral(entries:Array<TypedMapEntry>);
 	TArrayComprehension(keyName:String, valueName:Null<String>, iterable:TypedExpression, condition:Null<TypedExpression>, value:TypedExpression);
 	TRange(start:TypedExpression, end:TypedExpression);
 	TCall(name:String, arguments:Array<TypedExpression>);
@@ -87,6 +88,7 @@ enum TypedExpressionKind {
 }
 
 typedef TypedObjectField = {final name:String; final value:TypedExpression;}
+typedef TypedMapEntry = {final key:TypedExpression; final value:TypedExpression;}
 
 typedef TypedSwitchExpressionCase = {
 	final value:TypedExpression;

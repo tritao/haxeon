@@ -1135,6 +1135,26 @@ class Typer {
 					typedValues.push(coerce(typedValue, elementType, "array element", "E1003"));
 				}
 				new TypedExpression(TArrayLiteral(typedValues), TArray(elementType), span);
+			case MapLiteral(entries, span):
+				var expected = switch expectedType {
+					case TMap(key, value): {key: key, value: value};
+					default: null;
+				}, keyType = expected == null ? null : expected.key, valueType = expected == null ? null : expected.value, typedEntries = [];
+				for (entry in entries) {
+					var key = typeExpression(entry.key, scope, keyType),
+						value = typeExpression(entry.value, scope, valueType);
+					if (keyType == null)
+						keyType = key.type;
+					if (valueType == null)
+						valueType = value.type;
+					typedEntries.push({
+						key: coerce(key, keyType, "map key", "E1003"),
+						value: coerce(value, valueType, "map value", "E1003")
+					});
+				}
+				if (RuntimeType.mapName(keyType, valueType) == null)
+					fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+				new TypedExpression(TMapLiteral(typedEntries), TMap(keyType, valueType), span);
 			case ArrayComprehension(keyName, valueName, iterable, condition, value, span):
 				var typedIterable = typeExpression(iterable, scope),
 					originalIterable = typedIterable,
@@ -1940,6 +1960,11 @@ class Typer {
 			case ArrayLiteral(values, _):
 				for (value in values)
 					collectMutableCaptureExpression(value, outerDeclared, result);
+			case MapLiteral(entries, _):
+				for (entry in entries) {
+					collectMutableCaptureExpression(entry.key, outerDeclared, result);
+					collectMutableCaptureExpression(entry.value, outerDeclared, result);
+				}
 			case ArrayComprehension(_, _, iterable, condition, value, _):
 				collectMutableCaptureExpression(iterable, outerDeclared, result);
 				if (condition != null)
@@ -2004,6 +2029,11 @@ class Typer {
 			case ArrayLiteral(values, _):
 				for (value in values)
 					collectExpressionVariables(value, names);
+			case MapLiteral(entries, _):
+				for (entry in entries) {
+					collectExpressionVariables(entry.key, names);
+					collectExpressionVariables(entry.value, names);
+				}
 			case ArrayComprehension(_, _, iterable, condition, value, _):
 				collectExpressionVariables(iterable, names);
 				if (condition != null)

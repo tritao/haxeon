@@ -1163,6 +1163,14 @@ class Compiler {
 						{name: field.name, value: canonicalExpression(field.value, module, entry, locals, aliases), span: field.span}
 				], s);
 			case ArrayLiteral(values, s): ArrayLiteral([for (value in values) canonicalExpression(value, module, entry, locals, aliases)], s);
+			case MapLiteral(entries, s): MapLiteral([
+					for (mapEntry in entries)
+						{
+							key: canonicalExpression(mapEntry.key, module, entry, locals, aliases),
+							value: canonicalExpression(mapEntry.value, module, entry, locals, aliases),
+							span: mapEntry.span
+						}
+				], s);
 			case ArrayComprehension(keyName, valueName, iterable, condition, value, s):
 				ArrayComprehension(keyName, valueName, canonicalExpression(iterable, module, entry, locals, aliases),
 					condition == null ? null : canonicalExpression(condition, module, entry, locals, aliases),
@@ -1443,6 +1451,11 @@ class Compiler {
 			case ArrayLiteral(values, _):
 				for (value in values)
 					scanExpression(value, dependencies);
+			case MapLiteral(entries, _):
+				for (mapEntry in entries) {
+					scanExpression(mapEntry.key, dependencies);
+					scanExpression(mapEntry.value, dependencies);
+				}
 			case ArrayComprehension(_, _, iterable, condition, value, _):
 				scanExpression(iterable, dependencies);
 				if (condition != null)
@@ -1613,6 +1626,11 @@ class Compiler {
 			case ArrayLiteral(values, _):
 				for (value in values)
 					scanCallExpression(value, calls, aliases);
+			case MapLiteral(entries, _):
+				for (mapEntry in entries) {
+					scanCallExpression(mapEntry.key, calls, aliases);
+					scanCallExpression(mapEntry.value, calls, aliases);
+				}
 			case ArrayComprehension(_, _, iterable, condition, value, _):
 				scanCallExpression(iterable, calls, aliases);
 				if (condition != null)
@@ -1748,6 +1766,11 @@ class Compiler {
 			case ArrayLiteral(values, _):
 				for (value in values)
 					collectLambdaExpression(value, functionName, module, generatedByModule);
+			case MapLiteral(entries, _):
+				for (mapEntry in entries) {
+					collectLambdaExpression(mapEntry.key, functionName, module, generatedByModule);
+					collectLambdaExpression(mapEntry.value, functionName, module, generatedByModule);
+				}
 			case ArrayComprehension(_, _, iterable, condition, value, _):
 				collectLambdaExpression(iterable, functionName, module, generatedByModule);
 				if (condition != null)
