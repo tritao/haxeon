@@ -168,6 +168,9 @@ class Lexer {
 			case "in": TokenKind.In;
 			case "break": TokenKind.Break;
 			case "continue": TokenKind.Continue;
+			case "switch": TokenKind.Switch;
+			case "case": TokenKind.Case;
+			case "default": TokenKind.Default;
 			case "true": TokenKind.BoolTrue;
 			case "false": TokenKind.BoolFalse;
 			case "Int": TokenKind.TypeInt;
