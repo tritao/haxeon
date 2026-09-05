@@ -542,15 +542,14 @@ class Typer {
 					else
 						output.push(TIncrement(scope.resolveId(name), delta, span));
 				case Assignment(name, expression, span):
-					var dot = name.indexOf("."),
-						value = typeExpression(expression, scope);
+					var dot = name.indexOf(".");
 					if (dot < 0) {
 						var expected = scope.resolveDeclared(name);
 						if (expected == null) {
 							var thisType = scope.resolve("this"),
 								instanceField = thisType == null ? null : findFieldType(thisType, name);
 							if (instanceField != null) {
-								value = coerce(value, instanceField, 'field "$name"', "E1002");
+								var value = coerce(typeExpression(expression, scope, instanceField), instanceField, 'field "$name"', "E1002");
 								output.push(TFieldAssign(new TypedExpression(TLocal("this"), thisType, span), name, value, span));
 							} else {
 								var ownerSeparator = context.name.lastIndexOf("."),
@@ -558,11 +557,11 @@ class Typer {
 									staticField = owner == null ? null : findStaticFieldNullable(owner, name);
 								if (staticField == null)
 									fail("E1005", 'Unknown variable "$name"', span);
-								value = coerce(value, staticField.type, 'field "$name"', "E1002");
+								var value = coerce(typeExpression(expression, scope, staticField.type), staticField.type, 'field "$name"', "E1002");
 								output.push(TStaticFieldAssign(staticField.owner, name, value, span));
 							}
 						} else {
-							value = coerce(value, expected, 'local "$name"', "E1002");
+							var value = coerce(typeExpression(expression, scope, expected), expected, 'local "$name"', "E1002");
 							if (scope.isCapture(name)) {
 								if (!scope.isCellCapture(name))
 									fail("E1013", 'Captured variable "$name" requires mutable capture cells', span);
@@ -582,11 +581,11 @@ class Typer {
 						switch object.expression {
 							case TClassRef(className):
 								var staticField = findStaticField(className, fieldName, span);
-								value = coerce(value, staticField.type, 'field "$name"', "E1002");
+								var value = coerce(typeExpression(expression, scope, staticField.type), staticField.type, 'field "$name"', "E1002");
 								output.push(TStaticFieldAssign(staticField.owner, fieldName, value, span));
 							default:
 								expected = fieldType(object.type, fieldName, span);
-								value = coerce(value, expected, 'field "$name"', "E1002");
+								var value = coerce(typeExpression(expression, scope, expected), expected, 'field "$name"', "E1002");
 								output.push(TFieldAssign(object, fieldName, value, span));
 						}
 					}
