@@ -109,6 +109,7 @@ class DeclarationIndex {
 			case InferredType:
 				fail("Unresolved inferred type", span);
 				TDynamic;
+			case NativeAbstractType(name): TNativeAbstract(name);
 			case NamedType("Dynamic"): TDynamic;
 			case NamedType(name):
 				var substitution = substitutions.get(name),
@@ -158,6 +159,7 @@ class DeclarationIndex {
 			case TFloat: "Float";
 			case TString: "String";
 			case TDynamic: "Dynamic";
+			case TNativeAbstract(name): 'hl.Abstract<$name>';
 			case TNever: "Never";
 			case TRange: "Range";
 			case TVoid: "Void";

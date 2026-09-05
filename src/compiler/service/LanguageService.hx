@@ -786,6 +786,7 @@ class LanguageService {
 			case StringType: "String";
 			case VoidType: "Void";
 			case InferredType: "_";
+			case NativeAbstractType(name): 'hl.Abstract<"$name">';
 			case NamedType(name): name;
 			case ArrayType(element): 'Array<${typeName(element)}>';
 			case MapType(key, value): 'Map<${typeName(key)},${typeName(value)}>';

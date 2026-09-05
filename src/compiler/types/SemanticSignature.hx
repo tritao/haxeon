@@ -14,6 +14,7 @@ class SemanticSignature {
 			case TFloat: "Float";
 			case TString: "String";
 			case TDynamic: "Dynamic";
+			case TNativeAbstract(name): 'hl.Abstract<"$name">';
 			case TNever: "Never";
 			case TRange: "Range";
 			case TVoid: "Void";
@@ -48,6 +49,7 @@ class SemanticSignature {
 			case StringType: "String";
 			case VoidType: "Void";
 			case InferredType: "_";
+			case NativeAbstractType(name): 'hl.Abstract<"$name">';
 			case NamedType(name):
 				var alias = aliases.get(name);
 				if (alias == null || resolving.exists(name)) name; else {

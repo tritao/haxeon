@@ -9,6 +9,7 @@ enum AstType {
 	StringType;
 	VoidType;
 	InferredType;
+	NativeAbstractType(name:String);
 	NamedType(name:String);
 	ArrayType(element:AstType);
 	MapType(key:AstType, value:AstType);

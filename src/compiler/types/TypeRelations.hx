@@ -49,7 +49,7 @@ class TypeRelations {
 
 	public static function equals(left:CompilerType, right:CompilerType):Bool
 		return switch [left, right] {
-			case [TClass(a), TClass(b)], [TInterface(a), TInterface(b)], [TEnum(a), TEnum(b)]: a == b;
+			case [TClass(a), TClass(b)], [TInterface(a), TInterface(b)], [TEnum(a), TEnum(b)], [TNativeAbstract(a), TNativeAbstract(b)]: a == b;
 			case [TNullable(a), TNullable(b)], [TArray(a), TArray(b)]: equals(a, b);
 			case [TMap(ak, av), TMap(bk, bv)]: equals(ak, bk) && equals(av, bv);
 			case [TFunction(aa, ar), TFunction(ba, br)]: aa.length == ba.length && [
@@ -62,7 +62,7 @@ class TypeRelations {
 
 	public static function isReference(type:CompilerType):Bool
 		return switch type {
-			case TString, TDynamic, TClass(_), TInterface(_), TAnonymous(_, _), TArray(_), TFunction(_), TMap(_, _): true;
+			case TString, TDynamic, TNativeAbstract(_), TClass(_), TInterface(_), TAnonymous(_, _), TArray(_), TFunction(_), TMap(_, _): true;
 			default: false;
 		};
 

@@ -1209,7 +1209,14 @@ class Parser {
 				consume(TokenKind.Greater);
 				return NullableType(element);
 			}
-		return NamedType(parseQualifiedName());
+		var name = parseQualifiedName();
+		if (name == "hl.Abstract" && match(TokenKind.Less)) {
+			var tag = consume(TokenKind.StringLiteral),
+				value = decodeString(tag.text);
+			consume(TokenKind.Greater);
+			return NativeAbstractType(value);
+		}
+		return NamedType(name);
 		fail(current(), 'Expected type, got ${current().kind}');
 		return null;
 	}

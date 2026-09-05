@@ -684,6 +684,7 @@ class Compiler {
 			case TFloat: F64;
 			case TString: Bytes;
 			case TDynamic: Dyn;
+			case TNativeAbstract(name): Abstract(name);
 			case TNever: throw "Never is not a runtime ABI type";
 			case TRange: throw "Range is not a runtime ABI type";
 			case TVoid: Void;
@@ -1029,6 +1030,7 @@ class Compiler {
 			case StringType: "String";
 			case VoidType: "Void";
 			case InferredType: "_";
+			case NativeAbstractType(name): 'hl.Abstract<"$name">';
 			case NamedType(name): name;
 			case ArrayType(element): 'Array<${astTypeName(element)}>';
 			case MapType(key, value): 'Map<${astTypeName(key)},${astTypeName(value)}>';
@@ -1197,6 +1199,7 @@ class Compiler {
 
 	static function canonicalType(type:compiler.Ast.AstType, aliases:Null<Map<String, String>>):compiler.Ast.AstType
 		return switch type {
+			case NativeAbstractType(name): NativeAbstractType(name);
 			case NamedType(name): NamedType(resolveTypeName(name, aliases));
 			case ArrayType(element): ArrayType(canonicalType(element, aliases));
 			case MapType(key, value): MapType(canonicalType(key, aliases), canonicalType(value, aliases));
@@ -1262,7 +1265,7 @@ class Compiler {
 			case AnonymousType(fields):
 				for (field in fields)
 					addTypeDependency(result, owner, kind, field.type, aliases);
-			case IntType, BoolType, FloatType, StringType, VoidType, InferredType:
+			case IntType, BoolType, FloatType, StringType, VoidType, InferredType, NativeAbstractType(_):
 		}
 
 	static function addBodyDependencies(result:Map<String, Array<SemanticDependency>>, owner:String, statements:Array<AstStatement>, module:String,

@@ -1247,6 +1247,7 @@ class IrGenerator {
 			case TFloat: F64;
 			case TString: Bytes;
 			case TDynamic: Dyn;
+			case TNativeAbstract(name): Abstract(name);
 			case TNever: throw "Never must be coerced before lowering";
 			case TRange: Array(I32);
 			case TVoid: Void;
