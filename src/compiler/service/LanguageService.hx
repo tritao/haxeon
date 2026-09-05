@@ -140,6 +140,9 @@ class LanguageService {
 			return null;
 		for (state in compiler.modules)
 			if (state.ast != null) {
+				for (alias in state.ast.aliases)
+					if (alias.name == name)
+						return {path: state.source.path, span: alias.span};
 				for (fn in state.ast.functions)
 					if (fn.name == name)
 						return {path: state.source.path, span: fn.span};
