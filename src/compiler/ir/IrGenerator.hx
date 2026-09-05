@@ -267,6 +267,12 @@ class IrGenerator {
 					if (loops.length == 0)
 						throw "continue outside loop";
 					builder.jump(loops[loops.length - 1].continueBlock);
+				case TIncrement(name, delta, _):
+					var type = localTypes.get(name);
+					if (type == null)
+						throw 'Missing increment local "$name"';
+					var one = type == I32 ? builder.constInt(1) : builder.constFloat(1);
+					builder.store(name, delta > 0 ? builder.add(builder.load(name, type), one) : builder.sub(builder.load(name, type), one));
 				case TIf(condition, thenBranch, elseBranch, _):
 					var thenBlock = builder.createBlock(),
 						elseBlock = builder.createBlock(),

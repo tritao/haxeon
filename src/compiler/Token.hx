@@ -49,6 +49,8 @@ enum TokenKind {
 	Assign;
 	PlusAssign;
 	MinusAssign;
+	Increment;
+	Decrement;
 	Plus;
 	Minus;
 	Arrow;

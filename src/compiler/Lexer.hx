@@ -96,6 +96,9 @@ class Lexer {
 					if (position < source.length && source.charAt(position) == "=") {
 						position++;
 						TokenKind.PlusAssign;
+					} else if (position < source.length && source.charAt(position) == "+") {
+						position++;
+						TokenKind.Increment;
 					} else TokenKind.Plus;
 				case "-":
 					if (position < source.length && source.charAt(position) == ">") {
@@ -104,6 +107,9 @@ class Lexer {
 					} else if (position < source.length && source.charAt(position) == "=") {
 						position++;
 						TokenKind.MinusAssign;
+					} else if (position < source.length && source.charAt(position) == "-") {
+						position++;
+						TokenKind.Decrement;
 					} else TokenKind.Minus;
 				case "*": TokenKind.Star;
 				case "/": TokenKind.Slash;

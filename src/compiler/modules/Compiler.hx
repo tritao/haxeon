@@ -588,6 +588,7 @@ class Compiler {
 			case ReturnVoid(span): ReturnVoid(span);
 			case Break(span): Break(span);
 			case Continue(span): Continue(span);
+			case Increment(name, delta, span): Increment(name, delta, span);
 			case If(c, y, n,
 				span): If(canonicalExpression(c, module, entry, locals, aliases), [for (x in y) canonicalStatement(x, module, entry, locals, aliases)],
 					[for (x in n) canonicalStatement(x, module, entry, locals, aliases)], span);
@@ -678,6 +679,7 @@ class Compiler {
 				scanExpression(e, dependencies);
 			case ReturnVoid(_):
 			case Break(_), Continue(_):
+			case Increment(_, _, _):
 			case If(c, y, n, _):
 				scanExpression(c, dependencies);
 				for (x in y)
@@ -743,6 +745,7 @@ class Compiler {
 				scanCallExpression(e, calls, aliases);
 			case ReturnVoid(_):
 			case Break(_), Continue(_):
+			case Increment(_, _, _):
 			case If(c, y, n, _):
 				scanCallExpression(c, calls, aliases);
 				for (s in y)
@@ -814,6 +817,7 @@ class Compiler {
 					collectLambdaExpression(expression, functionName, module, generatedByModule);
 				case ReturnVoid(_):
 				case Break(_), Continue(_):
+				case Increment(_, _, _):
 				case If(condition, yes, no, _):
 					collectLambdaExpression(condition, functionName, module, generatedByModule);
 					collectLambdas(yes, functionName, module, generatedByModule);

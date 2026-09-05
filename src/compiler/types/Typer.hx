@@ -249,6 +249,11 @@ class Typer {
 					if (loopDepth == 0)
 						fail("E1017", "continue is only valid inside a loop", span);
 					output.push(TContinue(span));
+				case Increment(name, delta, span):
+					var current = scope.resolve(name);
+					if (current == null || (!sameType(current, TInt) && !sameType(current, TFloat)))
+						fail("E1018", 'Increment requires a numeric local "$name"', span);
+					output.push(TIncrement(name, delta, span));
 				case Assignment(name, expression, span):
 					var dot = name.indexOf("."),
 						value = typeExpression(expression, scope);
@@ -685,6 +690,7 @@ class Typer {
 					names.set(name, true);
 					collectDeclaredLocals(body, names);
 				case Break(_), Continue(_):
+				case Increment(_, _, _):
 				default:
 			}
 	}
@@ -710,6 +716,7 @@ class Typer {
 					collectExpressionVariables(iterable, names);
 					collectVariables(body, names);
 				case Break(_), Continue(_):
+				case Increment(_, _, _):
 			}
 	}
 
@@ -985,7 +992,7 @@ class Typer {
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
 			case VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), If(_, _, _, span),
-				While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span), Expression(_, span): span;
+				While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span), Increment(_, _, span), Expression(_, span): span;
 		}
 
 	static function fail(code:String, message:String, span:SourceSpan):Void

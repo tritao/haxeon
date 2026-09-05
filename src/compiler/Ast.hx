@@ -83,6 +83,7 @@ enum AstStatement {
 	ForIn(name:String, iterable:AstExpression, body:Array<AstStatement>, span:SourceSpan);
 	Break(span:SourceSpan);
 	Continue(span:SourceSpan);
+	Increment(name:String, delta:Int, span:SourceSpan);
 	Expression(expression:AstExpression, span:SourceSpan);
 }
 

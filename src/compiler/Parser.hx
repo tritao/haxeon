@@ -248,6 +248,17 @@ class Parser {
 		}
 		if (check(TokenKind.Identifier) || check(TokenKind.This)) {
 			var saved = position, target = parseExpression();
+			if (match(TokenKind.Increment) || match(TokenKind.Decrement)) {
+				var delta = previous().kind == TokenKind.Increment ? 1 : -1,
+					end = consume(TokenKind.Semicolon).span;
+				return switch target {
+					case Variable(name, _):
+						if (name.indexOf(".") < 0) Increment(name, delta,
+							expressionSpan(target).merge(end)); else throw new CompileError(new Diagnostic("E0002",
+							"Increment target must be a local variable", expressionSpan(target)));
+					default: throw new CompileError(new Diagnostic("E0002", "Increment target must be a local variable", expressionSpan(target)));
+				};
+			}
 			var assignmentKind = match(TokenKind.Assign) ? 0 : match(TokenKind.PlusAssign) ? 1 : match(TokenKind.MinusAssign) ? 2 : -1;
 			if (assignmentKind >= 0) {
 				var value = parseExpression(),
@@ -616,6 +627,6 @@ class Parser {
 	static function statementSpan(statement:AstStatement)
 		return switch statement {
 			case VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), If(_, _, _, span),
-				While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span), Expression(_, span): span;
+				While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span), Increment(_, _, span), Expression(_, span): span;
 		}
 }

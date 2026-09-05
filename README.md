@@ -44,6 +44,8 @@ registration. Indexed operations and `.length` remain ordinary typed
 expressions and use HashLink's bounds-checked array operations. Array iteration
 with `for (item in values)` lowers to the same checked indexed loop in SSA;
 `break` and `continue` retain structured loop targets.
+Numeric locals also support `++` and `--` through the ordinary typed arithmetic
+and assignment path.
 
 String addition, equality, `.length`, `indexOf`, and `substring` use the same
 compiler-owned runtime ABI, keeping source code independent from native symbol
