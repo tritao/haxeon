@@ -3,6 +3,7 @@ package compiler.service;
 import compiler.Ast.AstType;
 import compiler.Diagnostic;
 import compiler.Source.SourceSpan;
+import compiler.Token.TokenKind;
 import compiler.modules.Compiler;
 import compiler.modules.ModulePath;
 import compiler.modules.ModuleState;
@@ -19,6 +20,17 @@ typedef CompletionItem = {
 	final label:String;
 	final kind:String;
 	final detail:String;
+}
+
+typedef SymbolLocation = {
+	final path:String;
+	final span:SourceSpan;
+}
+
+typedef TextEdit = {
+	final path:String;
+	final span:SourceSpan;
+	final replacement:String;
 }
 
 /** Read-only editor queries backed by the persistent compiler state. */
@@ -97,6 +109,71 @@ class LanguageService {
 		for (symbol in documentSymbols(path))
 			if (symbol.name == name)
 				return symbol.detail;
+		return null;
+	}
+
+	public function definition(path:String, position:Int):Null<SymbolLocation> {
+		var name = symbolAt(path, position);
+		if (name == null)
+			return null;
+		for (state in compiler.modules)
+			if (state.ast != null) {
+				for (fn in state.ast.functions)
+					if (fn.name == name)
+						return {path: state.source.path, span: fn.span};
+				for (interfaceDecl in state.ast.interfaces) {
+					if (interfaceDecl.name == name)
+						return {path: state.source.path, span: interfaceDecl.span};
+					for (method in interfaceDecl.methods)
+						if (method.name == name)
+							return {path: state.source.path, span: method.span};
+				}
+				for (classDecl in state.ast.classes) {
+					if (classDecl.name == name)
+						return {path: state.source.path, span: classDecl.span};
+					for (field in classDecl.fields)
+						if (field.name == name)
+							return {path: state.source.path, span: field.span};
+					for (method in classDecl.methods)
+						if (method.name == name)
+							return {path: state.source.path, span: method.span};
+				}
+			}
+		return null;
+	}
+
+	public function references(path:String, position:Int):Array<SymbolLocation> {
+		var name = symbolAt(path, position), result:Array<SymbolLocation> = [];
+		if (name == null)
+			return result;
+		for (state in compiler.modules)
+			if (state.tokens != null)
+				for (token in state.tokens)
+					if (token.kind == Identifier && token.text == name)
+						result.push({path: state.source.path, span: token.span});
+		result.sort(function(a, b) {
+			var pathOrder = Reflect.compare(a.path, b.path);
+			return pathOrder == 0 ? Reflect.compare(a.span.start, b.span.start) : pathOrder;
+		});
+		return result;
+	}
+
+	public function rename(path:String, position:Int, replacement:String):Array<TextEdit> {
+		var name = symbolAt(path, position), result:Array<TextEdit> = [];
+		if (name == null || replacement.length == 0)
+			return result;
+		for (reference in references(path, position))
+			result.push({path: reference.path, span: reference.span, replacement: replacement});
+		return result;
+	}
+
+	function symbolAt(path:String, position:Int):Null<String> {
+		var state = stateFor(path);
+		if (state == null || state.tokens == null)
+			return null;
+		for (token in state.tokens)
+			if (token.kind == Identifier && position >= token.span.start && position <= token.span.end)
+				return token.text;
 		return null;
 	}
 

@@ -73,8 +73,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 ### D. Language service
 
 - [~] Persistent AST snapshots, diagnostics, document symbols, completion,
-  and hover are exposed through `LanguageService`; token/type snapshots and
-  navigation/rename queries remain.
+  hover, definition, references, and rename are exposed through
+  `LanguageService`; token/type snapshots and semantic disambiguation remain.
 - [ ] Definition, references, rename, and full type-aware completion from
   compiler state.
 - [ ] Completion-safe partial parsing and error recovery.

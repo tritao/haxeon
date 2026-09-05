@@ -3,7 +3,8 @@ import compiler.service.LanguageService;
 class LanguageServiceMain {
 	static function main():Void {
 		var service = new LanguageService();
-		service.update("Main.hx", "class Editor { public var active:Int; public function open():Void { return; } } function main():Int { return 42; }");
+		service.update("Main.hx",
+			"class Editor { public var active:Int; public function open():Void { return; } } function main():Int { var editor = new Editor(); editor.open(); return 42; }");
 		service.compile("Main");
 		var symbols = service.documentSymbols("Main.hx"),
 			foundClass = false,
@@ -25,6 +26,19 @@ class LanguageServiceMain {
 				hasMain = true;
 		if (!hasMain || service.hover("Main.hx", hoverPosition) != "main():Int")
 			throw "language service completion or hover failed";
+		var methodPosition = source.lastIndexOf("open") + 2,
+			definition = service.definition("Main.hx", methodPosition);
+		if (definition == null
+			|| definition.path != "Main.hx"
+			|| definition.span.start > source.indexOf("open")
+			|| definition.span.end < source.indexOf("open"))
+			throw "language service definition query failed";
+		var references = service.references("Main.hx", methodPosition);
+		if (references.length != 2)
+			throw 'language service references expected declaration and call, got ${references.length}';
+		var edits = service.rename("Main.hx", methodPosition, "show");
+		if (edits.length != 2 || edits[0].replacement != "show" || edits[1].replacement != "show")
+			throw "language service rename query failed";
 		Sys.println("PASS: compiler-backed language service snapshot works");
 	}
 }
