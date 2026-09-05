@@ -13,6 +13,8 @@ import compiler.hl.HlOpcode;
 import compiler.hl.HlSymbolTable;
 import compiler.hl.HlTypeDefStateCodec;
 import compiler.hl.HlSymbolStateCodec;
+import compiler.hl.HlFunctionCache;
+import compiler.hl.HlFunctionCacheStateCodec;
 import compiler.ir.HlLower;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
@@ -279,6 +281,13 @@ class TestMain {
 			decodedFunctions.push(decodedFunction);
 		}
 		IrFunctionStateCodec.verify(decodedFunctions, instructionProgram);
+		var functionCache = new HlFunctionCache();
+		functionCache.update(instructionProgram.functions);
+		var functionCacheBytes = HlFunctionCacheStateCodec.encode(functionCache.exportState()),
+			restoredFunctionCache = HlFunctionCacheStateCodec.restore(functionCacheBytes);
+		if (functionCacheBytes.compare(HlFunctionCacheStateCodec.encode(restoredFunctionCache.exportState())) != 0
+			|| restoredFunctionCache.slots.length != functionCache.slots.length)
+			throw "HashLink function cache did not round trip deterministically";
 		Sys.println("PASS: complete IR functions persist deterministically");
 		var symbolTable = new HlSymbolTable();
 		var intIndex = symbolTable.internInt(42),
