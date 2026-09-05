@@ -52,6 +52,9 @@ class ModuleMain {
 			throw "Dependent module was reparsed";
 		if (compiler.modules.get("Main").typeVersion != 1)
 			throw "Body edit retyped dependent module";
+		if (compiler.modules.get("Main").irSourceRevisions.get("main") != 1
+			|| compiler.modules.get("Math").irSourceRevisions.get("Math.add") != 2)
+			throw "Cached IR was not tied to its source revision";
 		if (compiler.modules.get("Math").irVersions.get("Math.add") != 2)
 			throw "Edited function IR was not regenerated";
 		if (result.changedFunctions.length != 1 || result.changedFunctions[0] != result.functionIds.get("Math.add"))

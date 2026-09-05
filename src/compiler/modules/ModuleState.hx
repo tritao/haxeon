@@ -38,7 +38,9 @@ class ModuleState {
 	public var instanceInitializerFingerprints:Map<String, String> = [];
 	public var bodyFingerprints:Map<String, String> = [];
 	public var typedFunctions:Map<String, TypedFunction> = [];
+	public var typedSourceRevisions:Map<String, Int> = [];
 	public var irFunctions:Map<String, IrFunction> = [];
+	public var irSourceRevisions:Map<String, Int> = [];
 	public var irVersions:Map<String, Int> = [];
 	public var dirty:Bool = true;
 
@@ -78,7 +80,9 @@ class ModuleState {
 		result.instanceInitializerFingerprints = copyMap(instanceInitializerFingerprints);
 		result.bodyFingerprints = copyMap(bodyFingerprints);
 		result.typedFunctions = copyMap(typedFunctions);
+		result.typedSourceRevisions = copyMap(typedSourceRevisions);
 		result.irFunctions = copyMap(irFunctions);
+		result.irSourceRevisions = copyMap(irSourceRevisions);
 		result.irVersions = copyMap(irVersions);
 		result.dirty = dirty;
 		return result;

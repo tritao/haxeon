@@ -463,9 +463,11 @@ class Compiler {
 				token.check();
 			var module = owners.get(fn.name), state = modules.get(module);
 			state.typedFunctions.set(fn.name, fn);
+			state.typedSourceRevisions.set(fn.name, state.revision);
 			retyped.push(fn.name);
 			touchedModules.set(module, true);
 			state.irFunctions.set(fn.name, IrGenerator.generateFunction(fn));
+			state.irSourceRevisions.set(fn.name, state.revision);
 			regenerated.push(fn.name);
 			var version = state.irVersions.get(fn.name);
 			state.irVersions.set(fn.name, version == null ? 1 : version + 1);
@@ -499,7 +501,9 @@ class Compiler {
 			for (cached in state.typedFunctions.keys())
 				if (!valid.exists(cached)) {
 					state.typedFunctions.remove(cached);
+					state.typedSourceRevisions.remove(cached);
 					state.irFunctions.remove(cached);
+					state.irSourceRevisions.remove(cached);
 					state.irVersions.remove(cached);
 				}
 		}
