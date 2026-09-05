@@ -15,6 +15,9 @@ import compiler.hl.HlTypeDefStateCodec;
 import compiler.hl.HlSymbolStateCodec;
 import compiler.hl.HlFunctionCache;
 import compiler.hl.HlFunctionCacheStateCodec;
+import compiler.hl.HlModuleAssembler;
+import compiler.hl.HlAssemblerStateCodec;
+import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.ir.HlLower;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
@@ -288,6 +291,12 @@ class TestMain {
 		if (functionCacheBytes.compare(HlFunctionCacheStateCodec.encode(restoredFunctionCache.exportState())) != 0
 			|| restoredFunctionCache.slots.length != functionCache.slots.length)
 			throw "HashLink function cache did not round trip deterministically";
+		var persistedAssembler = new HlModuleAssembler();
+		persistedAssembler.assemble(instructionProgram, [for (fn in instructionProgram.functions) fn.name], Patch);
+		var assemblerBytes = HlAssemblerStateCodec.encode(persistedAssembler),
+			restoredAssembler = HlAssemblerStateCodec.decode(assemblerBytes);
+		if (assemblerBytes.compare(HlAssemblerStateCodec.encode(restoredAssembler)) != 0)
+			throw "HashLink assembler baseline did not round trip deterministically";
 		Sys.println("PASS: complete IR functions persist deterministically");
 		var symbolTable = new HlSymbolTable();
 		var intIndex = symbolTable.internInt(42),

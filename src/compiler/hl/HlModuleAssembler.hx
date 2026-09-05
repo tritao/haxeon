@@ -4,6 +4,17 @@ import compiler.ir.HlLower;
 import compiler.ir.Ir.IrProgram;
 import compiler.abi.PatchPlanner.PatchDecision;
 
+typedef HlAssemblerState = {
+	final initialized:Bool;
+	final revision:Int;
+	final publishedInts:Int;
+	final publishedFloats:Int;
+	final publishedStrings:Int;
+	final publishedTypes:Int;
+	final symbols:haxe.io.Bytes;
+	final cache:haxe.io.Bytes;
+}
+
 typedef HlAssemblyResult = {
 	final module:HlCode;
 	final changedFunctions:Array<Int>;
@@ -42,6 +53,43 @@ class HlModuleAssembler {
 		result.publishedFloats = publishedFloats;
 		result.publishedStrings = publishedStrings;
 		result.publishedTypes = publishedTypes;
+		return result;
+	}
+
+	public function exportState():HlAssemblerState
+		return {
+			initialized: initialized,
+			revision: revision,
+			publishedInts: publishedInts,
+			publishedFloats: publishedFloats,
+			publishedStrings: publishedStrings,
+			publishedTypes: publishedTypes,
+			symbols: HlSymbolStateCodec.encode(symbols.exportState()),
+			cache: HlFunctionCacheStateCodec.encode(cache.exportState())
+		};
+
+	public static function fromState(state:HlAssemblerState):HlModuleAssembler {
+		var result = new HlModuleAssembler();
+		result.symbols = HlSymbolStateCodec.restore(state.symbols);
+		result.cache = HlFunctionCacheStateCodec.restore(state.cache);
+		if (state.revision < 0
+			|| state.publishedInts < 0
+			|| state.publishedFloats < 0
+			|| state.publishedStrings < 0
+			|| state.publishedTypes < 0
+			|| state.publishedInts > result.symbols.ints.length
+			|| state.publishedFloats > result.symbols.floats.length
+			|| state.publishedStrings > result.symbols.strings.length
+			|| state.publishedTypes > result.symbols.types.length
+			|| (!state.initialized && state.revision != 0)
+			|| (state.initialized && state.revision == 0))
+			throw "Invalid HashLink assembler baseline";
+		result.initialized = state.initialized;
+		result.revision = state.revision;
+		result.publishedInts = state.publishedInts;
+		result.publishedFloats = state.publishedFloats;
+		result.publishedStrings = state.publishedStrings;
+		result.publishedTypes = state.publishedTypes;
 		return result;
 	}
 
