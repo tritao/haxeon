@@ -261,7 +261,6 @@ class Typer {
 	}
 
 	function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool = false):TypedFunction {
-		Scope.resetLocalIds();
 		var previousFunctionName = currentFunctionName;
 		var previousAssigned = currentAssigned;
 		var previousCells = currentCells;

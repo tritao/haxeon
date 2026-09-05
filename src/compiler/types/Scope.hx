@@ -6,9 +6,8 @@ import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 
 class Scope {
-	static var nextLocalId:Int = 0;
-
 	final parent:Null<Scope>;
+	var nextLocalId:Int = 0;
 	final values:Map<String, {
 		source:String,
 		declared:CompilerType,
@@ -22,9 +21,6 @@ class Scope {
 	public function new(?parent:Scope)
 		this.parent = parent;
 
-	public static function resetLocalIds():Void
-		nextLocalId = 0;
-
 	public function define(name:String, type:CompilerType, span:SourceSpan):Void {
 		if (values.exists(name))
 			throw new CompileError(new Diagnostic("E1001", 'Duplicate local "$name"', span));
@@ -32,7 +28,7 @@ class Scope {
 			source: name,
 			declared: type,
 			type: type,
-			id: '$' + 'l${nextLocalId++}:$name'
+			id: '$' + 'l${allocateLocalId()}:$name'
 		});
 	}
 
@@ -124,4 +120,7 @@ class Scope {
 				return value;
 		return parent == null ? null : parent.resolveById(id);
 	}
+
+	function allocateLocalId():Int
+		return parent == null ? nextLocalId++ : parent.allocateLocalId();
 }
