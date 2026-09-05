@@ -424,6 +424,7 @@ class Compiler {
 			case StringType: "String";
 			case VoidType: "Void";
 			case NamedType(name): name;
+			case FunctionType(arguments, result): '(' + [for (argument in arguments) astTypeName(argument)].join(',') + ')->' + astTypeName(result);
 		};
 
 	static function canonicalStatement(s, module, entry, locals):AstStatement

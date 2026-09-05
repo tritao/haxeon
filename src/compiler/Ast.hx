@@ -9,6 +9,7 @@ enum AstType {
 	StringType;
 	VoidType;
 	NamedType(name:String);
+	FunctionType(arguments:Array<AstType>, result:AstType);
 }
 
 typedef AstArgument = {

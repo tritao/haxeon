@@ -212,13 +212,19 @@ class Typer {
 						new TypedExpression(TFunctionRef(name), functionType(signature), span);
 					else {
 						var dot = name.indexOf(".");
-						if (dot <= 0)
-							fail("E1005", 'Unknown variable "$name"', span);
-						var objectName = name.substr(0, dot),
-							fieldName = name.substr(dot + 1),
-							object = typeExpression(Variable(objectName, span), scope),
-							field = fieldType(object.type, fieldName, span);
-						new TypedExpression(TField(object, fieldName), field, span);
+						if (dot <= 0) {
+							var thisType = scope.resolve("this"),
+								field = thisType == null ? null : findFieldType(thisType, name);
+							if (field == null)
+								fail("E1005", 'Unknown variable "$name"', span);
+							new TypedExpression(TField(new TypedExpression(TLocal("this"), thisType, span), name), field, span);
+						} else {
+							var objectName = name.substr(0, dot),
+								fieldName = name.substr(dot + 1),
+								object = typeExpression(Variable(objectName, span), scope),
+								field = fieldType(object.type, fieldName, span);
+							new TypedExpression(TField(object, fieldName), field, span);
+						}
 					}
 				}
 			case Lambda(arguments, body, span):
@@ -324,7 +330,8 @@ class Typer {
 				} else {
 					var dot = name.indexOf("."),
 						receiverName = dot < 0 ? null : name.substr(0, dot),
-						receiverType = receiverName == null ? null : scope.resolve(receiverName),
+						receiver = receiverName == null ? null : resolveReceiver(receiverName, span, scope),
+						receiverType = receiver == null ? null : receiver.type,
 						methodName = dot < 0 ? null : name.substr(dot + 1);
 					if (receiverType != null && methodName != null) {
 						var className = switch receiverType {
@@ -343,7 +350,7 @@ class Typer {
 						if (typed.length != expected.length)
 							fail("E1008", 'Function "$methodKey" expects ${expected.length} arguments, got ${typed.length}', span);
 						checkArguments(typed, expected, methodKey);
-						new TypedExpression(TMethodCall(typeExpression(Variable(receiverName, span), scope), methodKey, typed), lowerType(method.result), span);
+						new TypedExpression(TMethodCall(receiver, methodKey, typed), lowerType(method.result), span);
 					} else {
 						var signature = signatures.get(name);
 						var external = externals.get(name),
@@ -448,6 +455,31 @@ class Typer {
 		return TVoid;
 	}
 
+	function resolveReceiver(name:String, span:SourceSpan, scope:Scope):Null<TypedExpression> {
+		if (scope.resolve(name) != null)
+			return typeExpression(Variable(name, span), scope);
+		var thisType = scope.resolve("this");
+		if (thisType != null && findFieldType(thisType, name) != null)
+			return typeExpression(Variable(name, span), scope);
+		return null;
+	}
+
+	function findFieldType(type:CompilerType, name:String):Null<CompilerType>
+		return switch type {
+			case TClass(className):
+				var classDecl = classDecls.get(className),
+					found:Null<CompilerType> = null;
+				if (classDecl != null) {
+					for (field in classDecl.fields)
+						if (field.name == name && !field.isStatic)
+							found = lowerType(field.type);
+					if (found == null && classDecl.base != null)
+						found = findFieldType(TClass(classDecl.base), name);
+				}
+				found;
+			default: null;
+		};
+
 	function arithmetic(a, b, scope, add, span):TypedExpression {
 		var left = typeExpression(a, scope), right = typeExpression(b, scope);
 		if (!sameType(left.type, right.type) || (!sameType(left.type, TInt) && !sameType(left.type, TFloat)))
@@ -494,6 +526,7 @@ class Typer {
 			case StringType: TString;
 			case VoidType: TVoid;
 			case NamedType(name): TClass(name);
+			case FunctionType(arguments, result): TFunction([for (argument in arguments) lowerType(argument)], lowerType(result));
 		};
 
 	static function statementSpan(statement:AstStatement):SourceSpan

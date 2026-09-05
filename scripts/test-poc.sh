@@ -39,6 +39,7 @@ run_program function-value 42
 run_program lambda 42
 run_program captured-lambda 42
 run_program trace 42
+run_program callback-method 42
 run_program name-collision 42
 run_program bool-if 42
 run_program fib 55

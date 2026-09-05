@@ -302,6 +302,26 @@ class Parser {
 	}
 
 	function parseType():AstType {
+		if (match(TokenKind.LeftParen)) {
+			var arguments = [];
+			if (!check(TokenKind.RightParen)) {
+				do
+					arguments.push(parseType()) while (match(TokenKind.Comma));
+			}
+			consume(TokenKind.RightParen);
+			consume(TokenKind.Arrow);
+			return FunctionType(arguments, parseType());
+		}
+		var atomic = parseAtomicType();
+		if (match(TokenKind.Arrow))
+			return FunctionType(switch atomic {
+				case VoidType: [];
+				default: [atomic];
+			}, parseType());
+		return atomic;
+	}
+
+	function parseAtomicType():AstType {
 		if (match(TokenKind.TypeInt))
 			return IntType;
 		if (match(TokenKind.TypeBool))
