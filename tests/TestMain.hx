@@ -12,6 +12,7 @@ import compiler.hl.HlPatchReader;
 import compiler.hl.HlOpcode;
 import compiler.hl.HlSymbolTable;
 import compiler.hl.HlTypeDefStateCodec;
+import compiler.hl.HlSymbolStateCodec;
 import compiler.ir.HlLower;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
@@ -293,6 +294,10 @@ class TestMain {
 		if (Std.string(decodedTypes) != Std.string(symbolTable.types)
 			|| encodedTypes.compare(HlTypeDefStateCodec.encode(decodedTypes)) != 0)
 			throw "HashLink type definitions did not round trip deterministically";
+		var symbolBytes = HlSymbolStateCodec.encode(symbolTable.exportState()),
+			binarySymbols = HlSymbolStateCodec.restore(symbolBytes);
+		if (symbolBytes.compare(HlSymbolStateCodec.encode(binarySymbols.exportState())) != 0 || binarySymbols.internInt(42) != intIndex)
+			throw "HashLink symbol binary state did not round trip deterministically";
 		Sys.println("PASS: HashLink symbol state restores canonical lookup indices");
 		var terminatorOutput = new haxe.io.BytesOutput(),
 			terminatorBlocks:Map<Int, Bool> = [];
