@@ -8,6 +8,8 @@ import compiler.modules.Compiler;
 import compiler.modules.ModulePath;
 import compiler.modules.ModuleState;
 import compiler.modules.Compiler.CompileResult;
+import compiler.Ast.AstFunction;
+import compiler.Ast.AstStatement;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedStatement;
 
@@ -212,6 +214,9 @@ class LanguageService {
 		var name = symbolAt(path, position);
 		if (name == null)
 			return null;
+		var local = localSymbol(path, position, name);
+		if (local != null)
+			return {path: path, span: local.declaration};
 		for (state in compiler.modules) {
 			var ast = effectiveAst(state);
 			if (ast != null) {
@@ -254,11 +259,17 @@ class LanguageService {
 		var name = symbolAt(path, position), result:Array<SymbolLocation> = [];
 		if (name == null)
 			return result;
+		var local = localSymbol(path, position, name);
 		for (state in compiler.modules) {
 			var tokens = effectiveTokens(state);
 			if (tokens != null)
 				for (token in tokens)
-					if (token.kind == Identifier && token.text == name)
+					if (token.kind == Identifier
+						&& token.text == name
+						&& (local == null
+							|| (state.source.path == path
+								&& token.span.start >= local.functionSpan.start
+								&& token.span.end <= local.functionSpan.end)))
 						result.push({path: state.source.path, span: token.span});
 		}
 		result.sort(function(a, b) {
@@ -285,6 +296,63 @@ class LanguageService {
 		for (token in tokens)
 			if (token.kind == Identifier && position >= token.span.start && position <= token.span.end)
 				return token.text;
+		return null;
+	}
+
+	function localSymbol(path:String, position:Int, name:String):Null<{functionSpan:SourceSpan, declaration:SourceSpan}> {
+		var state = stateFor(path),
+			ast = state == null ? null : effectiveAst(state);
+		if (state == null || ast == null)
+			return null;
+		for (fn in ast.functions)
+			if (position >= fn.span.start && position <= fn.span.end) {
+				for (argument in fn.arguments)
+					if (argument.name == name)
+						return {functionSpan: fn.span, declaration: argument.span};
+				var declaration = localDeclaration(fn.statements, name);
+				if (declaration != null)
+					return {functionSpan: fn.span, declaration: declaration};
+			}
+		for (classDecl in ast.classes)
+			for (method in classDecl.methods)
+				if (position >= method.span.start && position <= method.span.end) {
+					for (argument in method.arguments)
+						if (argument.name == name)
+							return {functionSpan: method.span, declaration: argument.span};
+					var declaration = localDeclaration(method.statements, name);
+					if (declaration != null)
+						return {functionSpan: method.span, declaration: declaration};
+				}
+		return null;
+	}
+
+	static function localDeclaration(statements:Array<AstStatement>, name:String):Null<SourceSpan> {
+		for (statement in statements)
+			switch statement {
+				case VarDeclaration(local, _, _, span):
+					if (local == name)
+						return span;
+				case If(_, yes, no, _):
+					var declaration = localDeclaration(yes, name);
+					if (declaration == null)
+						declaration = localDeclaration(no, name);
+					if (declaration != null)
+						return declaration;
+				case While(_, body, _), ForIn(_, _, body, _):
+					var declaration = localDeclaration(body, name);
+					if (declaration != null)
+						return declaration;
+				case Switch(_, cases, defaultBranch, _, _):
+					for (switchCase in cases) {
+						var declaration = localDeclaration(switchCase.statements, name);
+						if (declaration != null)
+							return declaration;
+					}
+					var declaration = localDeclaration(defaultBranch, name);
+					if (declaration != null)
+						return declaration;
+				default:
+			}
 		return null;
 	}
 

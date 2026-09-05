@@ -81,6 +81,21 @@ class LanguageServiceMain {
 		var edits = service.rename("Main.hx", methodPosition, "show");
 		if (edits.length != 2 || edits[0].replacement != "show" || edits[1].replacement != "show")
 			throw "language service rename query failed";
+		var localService = new LanguageService(),
+			localSource = "function first(value:Int):Int { return value; } function second(value:Int):Int { return value; } function main():Int { return first(42); }";
+		localService.update("Locals.hx", localSource);
+		localService.compile("Locals");
+		var localPosition = localSource.indexOf("return value") + "return ".length,
+			localDefinition = localService.definition("Locals.hx", localPosition),
+			localReferences = localService.references("Locals.hx", localPosition),
+			localEdits = localService.rename("Locals.hx", localPosition, "item");
+		var firstValue = localSource.indexOf("value");
+		if (localDefinition == null
+			|| localDefinition.span.start > firstValue
+			|| localDefinition.span.end < firstValue
+			|| localReferences.length != 2
+			|| localEdits.length != 2)
+			throw "language service local symbol scope was not preserved";
 		service.update("Main.hx", "function main(:Int { return 0; }");
 		try {
 			service.compile("Main");

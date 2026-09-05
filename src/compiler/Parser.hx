@@ -99,9 +99,10 @@ class Parser {
 		var arguments = [];
 		if (!check(TokenKind.RightParen)) {
 			do {
-				var argumentName = consume(TokenKind.Identifier).text;
+				var argumentToken = consume(TokenKind.Identifier);
 				consume(TokenKind.Colon);
-				arguments.push({name: argumentName, type: parseType(), span: previous().span});
+				var argumentType = parseType();
+				arguments.push({name: argumentToken.text, type: argumentType, span: argumentToken.span.merge(previous().span)});
 			} while (match(TokenKind.Comma));
 		}
 		consume(TokenKind.RightParen);
