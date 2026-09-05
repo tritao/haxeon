@@ -340,7 +340,7 @@ class Parser {
 				consume(TokenKind.LeftParen);
 				var length = parseExpression();
 				var end = consume(TokenKind.RightParen).span;
-				return NewArray(element, length, start.merge(end));
+				return parsePostfix(NewArray(element, length, start.merge(end)));
 			}
 			var typeName = parseQualifiedName();
 			consume(TokenKind.LeftParen);
@@ -350,7 +350,7 @@ class Parser {
 					arguments.push(parseExpression()) while (match(TokenKind.Comma));
 			}
 			var end = consume(TokenKind.RightParen).span;
-			return New(typeName, arguments, start.merge(end));
+			return parsePostfix(New(typeName, arguments, start.merge(end)));
 		}
 		if (check(TokenKind.LeftParen)) {
 			var saved = position, start = current().span;
@@ -376,12 +376,7 @@ class Parser {
 			while (match(TokenKind.Dot))
 				name += "." + consume(TokenKind.Identifier).text;
 			var expression:AstExpression = Variable(name, start);
-			while (match(TokenKind.LeftBracket)) {
-				var offset = parseExpression(),
-					end = consume(TokenKind.RightBracket).span;
-				expression = Index(expression, offset, expressionSpan(expression).merge(end));
-			}
-			return expression;
+			return parsePostfix(expression);
 		}
 		if (match(TokenKind.Identifier)) {
 			var name = previous().text;
@@ -399,20 +394,43 @@ class Parser {
 				var end = consume(TokenKind.RightParen).span;
 				expression = Call(name, arguments, start.merge(end));
 			}
-			while (match(TokenKind.LeftBracket)) {
-				var offset = parseExpression(),
-					end = consume(TokenKind.RightBracket).span;
-				expression = Index(expression, offset, expressionSpan(expression).merge(end));
-			}
-			return expression;
+			return parsePostfix(expression);
 		}
 		if (match(TokenKind.LeftParen)) {
 			var expression = parseExpression();
 			consume(TokenKind.RightParen);
-			return expression;
+			return parsePostfix(expression);
 		}
 		fail(current(), "Expected expression");
 		return null;
+	}
+
+	function parsePostfix(expression:AstExpression):AstExpression {
+		while (true) {
+			if (match(TokenKind.LeftBracket)) {
+				var offset = parseExpression(),
+					end = consume(TokenKind.RightBracket).span;
+				expression = Index(expression, offset, expressionSpan(expression).merge(end));
+				continue;
+			}
+			if (match(TokenKind.Dot)) {
+				var nameToken = consume(TokenKind.Identifier),
+					name = nameToken.text;
+				if (match(TokenKind.LeftParen)) {
+					var arguments = [];
+					if (!check(TokenKind.RightParen)) {
+						do
+							arguments.push(parseExpression()) while (match(TokenKind.Comma));
+					}
+					var end = consume(TokenKind.RightParen).span;
+					expression = MethodCall(expression, name, arguments, expressionSpan(expression).merge(end));
+				} else
+					expression = Member(expression, name, expressionSpan(expression).merge(nameToken.span));
+				continue;
+			}
+			break;
+		}
+		return expression;
 	}
 
 	function parseType():AstType {
@@ -512,8 +530,9 @@ class Parser {
 	static function expressionSpan(expression:AstExpression)
 		return switch expression {
 			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), BoolLiteral(_, span), NullLiteral(span), Variable(_, span),
-				Add(_, _, span), Sub(_, _, span), Mul(_, _, span), Div(_, _, span), Less(_, _, span), LessEqual(_, _, span), Equal(_, _, span),
-				Call(_, _, span), New(_, _, span), NewArray(_, _, span), Index(_, _, span), Lambda(_, _, span): span;
+				Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span), Div(_, _, span), Less(_, _, span), LessEqual(_, _, span),
+				Equal(_, _,
+					span), Call(_, _, span), MethodCall(_, _, _, span), New(_, _, span), NewArray(_, _, span), Index(_, _, span), Lambda(_, _, span): span;
 		}
 
 	static function decodeString(text:String):String {

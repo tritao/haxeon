@@ -404,6 +404,7 @@ class Typer {
 				});
 				new TypedExpression(TLambda(lambdaName, environment, captures), TFunction([for (argument in lambdaArguments) argument.type], inferredResult),
 					span);
+			case Member(object, name, span): typeMember(object, name, span, scope);
 			case Add(left, right, span): arithmetic(left, right, scope, true, span);
 			case Sub(left, right, span): arithmetic(left, right, scope, false, span);
 			case Mul(left, right, span): numeric(left, right, scope, 2, span);
@@ -503,7 +504,55 @@ class Typer {
 						new TypedExpression(TCall(name, typed), result, span);
 					}
 				}
+			case MethodCall(object, name, arguments, span): typeMethodCall(object, name, arguments, span, scope);
 		}
+
+	function typeMember(object:AstExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression {
+		var typedObject = typeExpression(object, scope);
+		if (name == "length" && isArray(typedObject.type))
+			return new TypedExpression(TArrayLength(typedObject), TInt, span);
+		if (name == "length" && sameType(typedObject.type, TString))
+			return new TypedExpression(TStringLength(typedObject), TInt, span);
+		return new TypedExpression(TField(typedObject, name), fieldType(typedObject.type, name, span), span);
+	}
+
+	function typeMethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
+		var receiver = typeExpression(object, scope);
+		if (sameType(receiver.type, TString) && name == "indexOf") {
+			if (arguments.length != 1)
+				fail("E1008", 'Function "String.indexOf" expects 1 argument, got ${arguments.length}', span);
+			var needle = typeExpression(arguments[0], scope);
+			if (!sameType(needle.type, TString))
+				fail("E1009", "String.indexOf expects a String needle", needle.span);
+			return new TypedExpression(TStringIndexOf(receiver, needle), TInt, span);
+		}
+		if (sameType(receiver.type, TString) && name == "substring") {
+			if (arguments.length != 2)
+				fail("E1008", 'Function "String.substring" expects 2 arguments, got ${arguments.length}', span);
+			var start = typeExpression(arguments[0], scope),
+				end = typeExpression(arguments[1], scope);
+			if (!sameType(start.type, TInt) || !sameType(end.type, TInt))
+				fail("E1009", "String.substring expects Int bounds", span);
+			return new TypedExpression(TStringSubstring(receiver, start, end), TString, span);
+		}
+		var className = switch receiver.type {
+			case TClass(value), TInterface(value): value;
+			default: null;
+		};
+		if (className == null)
+			fail("E1007", 'Cannot call method on non-object "$name"', span);
+		var methodInfoResult = findMethod(className, name);
+		if (methodInfoResult == null || methodInfoResult.isStatic)
+			fail("E1007", 'Unknown instance method "$className.$name"', span);
+		var methodKey = methodInfoResult.owner + "." + name,
+			method = signatures.get(methodKey),
+			expected = [for (argument in method.arguments) lowerType(argument.type)],
+			typed = [for (argument in arguments) typeExpression(argument, scope)];
+		if (typed.length != expected.length)
+			fail("E1008", 'Function "$methodKey" expects ${expected.length} arguments, got ${typed.length}', span);
+		typed = coerceArguments(typed, expected, methodKey);
+		return new TypedExpression(TMethodCall(receiver, methodKey, typed), lowerType(method.result), span);
+	}
 
 	function functionType(fn:AstFunction):CompilerType
 		return TFunction([for (argument in fn.arguments) lowerType(argument.type)], lowerType(fn.result));
@@ -546,6 +595,12 @@ class Typer {
 		switch expression {
 			case Variable(name, _):
 				names.set(name, true);
+			case Member(object, _, _):
+				collectExpressionVariables(object, names);
+			case MethodCall(object, _, arguments, _):
+				collectExpressionVariables(object, names);
+				for (argument in arguments)
+					collectExpressionVariables(argument, names);
 			case Call(_, arguments, _):
 				for (argument in arguments)
 					collectExpressionVariables(argument, names);

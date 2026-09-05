@@ -54,6 +54,7 @@ enum AstExpression {
 	BoolLiteral(value:Bool, span:SourceSpan);
 	NullLiteral(span:SourceSpan);
 	Variable(name:String, span:SourceSpan);
+	Member(object:AstExpression, name:String, span:SourceSpan);
 	Add(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Sub(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Mul(left:AstExpression, right:AstExpression, span:SourceSpan);
@@ -62,6 +63,7 @@ enum AstExpression {
 	LessEqual(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Equal(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Call(name:String, arguments:Array<AstExpression>, span:SourceSpan);
+	MethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan);
 	New(typeName:String, arguments:Array<AstExpression>, span:SourceSpan);
 	NewArray(element:AstType, length:AstExpression, span:SourceSpan);
 	Index(array:AstExpression, index:AstExpression, span:SourceSpan);

@@ -598,6 +598,7 @@ class Compiler {
 			case Variable(name, span):
 				if (name.indexOf(".") < 0 && locals.exists(name)) Variable(module == entry
 					&& name == "main" ? "main" : module + "." + name, span); else e;
+			case Member(object, name, s): Member(canonicalExpression(object, module, entry, locals, aliases), name, s);
 			case Add(a, b, s): Add(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
 			case Sub(a, b, s): Sub(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
 			case Mul(a, b, s): Mul(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
@@ -616,6 +617,9 @@ class Compiler {
 				else if (name.indexOf(".") < 0 && locals.exists(name))
 					resolved = module == entry && name == "main" ? "main" : module + "." + name;
 				Call(resolved, [for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
+			case MethodCall(object, name, args,
+				s): MethodCall(canonicalExpression(object, module, entry, locals, aliases), name,
+					[for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
 			case New(typeName, args, s): New(resolveTypeName(typeName, aliases), [for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
 			case NewArray(element, length, s): NewArray(element, canonicalExpression(length, module, entry, locals, aliases), s);
 			case Index(array, offset,
@@ -685,6 +689,12 @@ class Compiler {
 			case Index(array, offset, _):
 				scanExpression(array, dependencies);
 				scanExpression(offset, dependencies);
+			case Member(object, _, _):
+				scanExpression(object, dependencies);
+			case MethodCall(object, _, args, _):
+				scanExpression(object, dependencies);
+				for (a in args)
+					scanExpression(a, dependencies);
 			case Call(name, args, _):
 				var dot = name.indexOf(".");
 				if (dot > 0) {
@@ -736,6 +746,12 @@ class Compiler {
 				calls.set(aliases.get(name) == null ? name : aliases.get(name), true);
 				for (a in args)
 					scanCallExpression(a, calls, aliases);
+			case MethodCall(object, _, args, _):
+				scanCallExpression(object, calls, aliases);
+				for (a in args)
+					scanCallExpression(a, calls, aliases);
+			case Member(object, _, _):
+				scanCallExpression(object, calls, aliases);
 			case Variable(name, _):
 				if (name.indexOf(".") >= 0)
 					calls.set(name, true);
@@ -798,6 +814,12 @@ class Compiler {
 			case Call(_, args, _):
 				for (argument in args)
 					collectLambdaExpression(argument, functionName, module, generatedByModule);
+			case MethodCall(object, _, args, _):
+				collectLambdaExpression(object, functionName, module, generatedByModule);
+				for (argument in args)
+					collectLambdaExpression(argument, functionName, module, generatedByModule);
+			case Member(object, _, _):
+				collectLambdaExpression(object, functionName, module, generatedByModule);
 			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Less(left, right, _), LessEqual(left, right, _),
 				Equal(left, right, _):
 				collectLambdaExpression(left, functionName, module, generatedByModule);
