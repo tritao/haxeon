@@ -44,6 +44,12 @@ class LanguageServiceProtocol {
 						requiresReload: build.requiresReload,
 						patchAvailable: build.patchBytes != null
 					};
+				case "validate":
+					var validation = service.validate(requiredString(request, "path"), requiredString(request, "source"), requiredString(request, "entry"));
+					result = cast {
+						valid: validation.valid,
+						diagnostic: validation.diagnostic == null ? null : diagnosticJson(validation.diagnostic)
+					};
 				case "diagnostics":
 					result = cast [
 						for (diagnostic in service.diagnostics(requiredString(request, "path")))

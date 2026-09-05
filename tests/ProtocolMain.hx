@@ -21,13 +21,23 @@ class ProtocolMain {
 		}
 		if (!hasActive)
 			throw "protocol completion response was incomplete";
-		var diagnostics:Dynamic = Json.parse(protocol.handle('{"id":4,"method":"diagnostics","path":"Main.hx"}'));
+		var validation:Dynamic = Json.parse(protocol.handle('{"id":4,"method":"validate","path":"Main.hx","entry":"Main","source":'
+			+ Json.stringify(source)
+			+ '}'));
+		if (!validation.ok || !validation.result.valid || validation.result.diagnostic != null)
+			throw "protocol validation did not accept a valid snapshot";
+		var invalidValidation:Dynamic = Json.parse(protocol.handle('{"id":5,"method":"validate","path":"Main.hx","entry":"Main","source":'
+			+ Json.stringify("function main(:Int { return 0; }")
+			+ '}'));
+		if (!invalidValidation.ok || invalidValidation.result.valid || invalidValidation.result.diagnostic == null)
+			throw "protocol validation did not return an edit diagnostic";
+		var diagnostics:Dynamic = Json.parse(protocol.handle('{"id":6,"method":"diagnostics","path":"Main.hx"}'));
 		if (!diagnostics.ok || diagnostics.result.length != 0)
 			throw "protocol diagnostics response was not empty";
-		var invalid:Dynamic = Json.parse(protocol.handle('{"id":5,"method":"update","path":"Main.hx","source":"function main(:Int { return 0; }"}'));
+		var invalid:Dynamic = Json.parse(protocol.handle('{"id":7,"method":"update","path":"Main.hx","source":"function main(:Int { return 0; }"}'));
 		if (!invalid.ok)
 			throw "protocol update should acknowledge unsaved edits";
-		var failed:Dynamic = Json.parse(protocol.handle('{"id":6,"method":"compile","entry":"Main"}'));
+		var failed:Dynamic = Json.parse(protocol.handle('{"id":8,"method":"compile","entry":"Main"}'));
 		if (failed.ok || failed.error.code == null || failed.error.message == null)
 			throw "protocol compile did not return a structured diagnostic";
 		var malformed:Dynamic = Json.parse(protocol.handle("not-json"));

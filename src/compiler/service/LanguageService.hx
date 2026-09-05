@@ -56,6 +56,9 @@ class LanguageService {
 	public function compile(entryModule:String):CompileResult
 		return compiler.compile(entryModule);
 
+	public function validate(path:String, source:String, entryModule:String):compiler.modules.Compiler.ValidationResult
+		return compiler.validate(path, source, entryModule);
+
 	public function diagnostics(path:String):Array<Diagnostic> {
 		var state = stateFor(path);
 		return state == null ? [] : state.diagnostics.copy();

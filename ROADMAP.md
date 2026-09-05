@@ -75,8 +75,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 	imported class names/type annotations resolve incrementally; deeper nominal
 	namespace identity remains.
 - [~] Unsaved edits can be validated transactionally against a forked compiler
-  snapshot without mutating the live source; shared snapshots and one-pass
-  commit/rollback remain.
+  snapshot without mutating the live source, including through the JSON-lines
+  protocol; shared snapshots and one-pass commit/rollback remain.
 - [ ] Parallel parse/type work with deterministic assembly on the editor thread.
 - [ ] Memory and latency budgets measured on a realistic Pragtical project.
 
@@ -93,7 +93,7 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 	remain.
 - [~] Plugin lifecycle/state migration API is defined and tested in the host
 	`RuntimeDomain`; native module ownership and type-arena integration remain.
-- [ ] In-memory module loading and patching without temporary `.hl` files.
+- [x] In-memory module loading and patching without temporary `.hl` files.
 - [ ] Crash-safe diagnostics and recovery when a patch fails in native code.
 
 ### D. Language service
