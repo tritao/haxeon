@@ -163,6 +163,7 @@ run_program switch-expression 42
 run_program throw-expression 42
 run_program array-literal 42
 run_program array-comprehension 42
+run_program filtered-array-comprehension 42
 run_program range-iteration 42
 run_program cast-expression 42
 run_program do-while 42

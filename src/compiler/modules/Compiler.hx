@@ -1089,8 +1089,9 @@ class Compiler {
 						{name: field.name, value: canonicalExpression(field.value, module, entry, locals, aliases), span: field.span}
 				], s);
 			case ArrayLiteral(values, s): ArrayLiteral([for (value in values) canonicalExpression(value, module, entry, locals, aliases)], s);
-			case ArrayComprehension(keyName, valueName, iterable, value, s):
+			case ArrayComprehension(keyName, valueName, iterable, condition, value, s):
 				ArrayComprehension(keyName, valueName, canonicalExpression(iterable, module, entry, locals, aliases),
+					condition == null ? null : canonicalExpression(condition, module, entry, locals, aliases),
 					canonicalExpression(value, module, entry, locals, aliases), s);
 			case Range(start, end,
 				s): Range(canonicalExpression(start, module, entry, locals, aliases), canonicalExpression(end, module, entry, locals, aliases), s);
@@ -1358,8 +1359,10 @@ class Compiler {
 			case ArrayLiteral(values, _):
 				for (value in values)
 					scanExpression(value, dependencies);
-			case ArrayComprehension(_, _, iterable, value, _):
+			case ArrayComprehension(_, _, iterable, condition, value, _):
 				scanExpression(iterable, dependencies);
+				if (condition != null)
+					scanExpression(condition, dependencies);
 				scanExpression(value, dependencies);
 			case Range(start, end, _):
 				scanExpression(start, dependencies);
@@ -1522,8 +1525,10 @@ class Compiler {
 			case ArrayLiteral(values, _):
 				for (value in values)
 					scanCallExpression(value, calls, aliases);
-			case ArrayComprehension(_, _, iterable, value, _):
+			case ArrayComprehension(_, _, iterable, condition, value, _):
 				scanCallExpression(iterable, calls, aliases);
+				if (condition != null)
+					scanCallExpression(condition, calls, aliases);
 				scanCallExpression(value, calls, aliases);
 			case Range(start, end, _):
 				scanCallExpression(start, calls, aliases);
@@ -1650,8 +1655,10 @@ class Compiler {
 			case ArrayLiteral(values, _):
 				for (value in values)
 					collectLambdaExpression(value, functionName, module, generatedByModule);
-			case ArrayComprehension(_, _, iterable, value, _):
+			case ArrayComprehension(_, _, iterable, condition, value, _):
 				collectLambdaExpression(iterable, functionName, module, generatedByModule);
+				if (condition != null)
+					collectLambdaExpression(condition, functionName, module, generatedByModule);
 				collectLambdaExpression(value, functionName, module, generatedByModule);
 			case Range(start, end, _):
 				collectLambdaExpression(start, functionName, module, generatedByModule);

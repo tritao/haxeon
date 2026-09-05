@@ -645,9 +645,15 @@ class Parser {
 				consume(TokenKind.In);
 				var iterable = parseExpression();
 				consume(TokenKind.RightParen);
+				var condition = null;
+				if (match(TokenKind.If)) {
+					consume(TokenKind.LeftParen);
+					condition = parseExpression();
+					consume(TokenKind.RightParen);
+				}
 				var value = parseExpression(),
 					end = consume(TokenKind.RightBracket).span;
-				return parsePostfix(ArrayComprehension(keyName, valueName, iterable, value, start.merge(end)));
+				return parsePostfix(ArrayComprehension(keyName, valueName, iterable, condition, value, start.merge(end)));
 			}
 			if (!check(TokenKind.RightBracket))
 				do
@@ -1057,7 +1063,7 @@ class Parser {
 				MethodCall(_, _, _, span), New(_, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span), PostfixIncrement(_, _, span),
 				Lambda(_, _, span), And(_, _, span), Or(_, _, span), Conditional(_, _, _, span), BlockExpression(_, _, span), ThrowExpression(_, span),
 				SwitchExpression(_, _, _, span), Cast(_, _, span): span;
-			case ObjectLiteral(_, span), ArrayLiteral(_, span), ArrayComprehension(_, _, _, _, span), Range(_, _, span): span;
+			case ObjectLiteral(_, span), ArrayLiteral(_, span), ArrayComprehension(_, _, _, _, _, span), Range(_, _, span): span;
 		}
 
 	static function decodeString(text:String):String {

@@ -1098,7 +1098,7 @@ class Typer {
 					typedValues.push(coerce(typedValue, elementType, "array element", "E1003"));
 				}
 				new TypedExpression(TArrayLiteral(typedValues), TArray(elementType), span);
-			case ArrayComprehension(keyName, valueName, iterable, value, span):
+			case ArrayComprehension(keyName, valueName, iterable, condition, value, span):
 				var typedIterable = typeExpression(iterable, scope),
 					originalIterable = typedIterable,
 					loopScope = new Scope(scope),
@@ -1127,13 +1127,16 @@ class Typer {
 						case TMap(_, mapValue): loopScope.define(valueName, mapValue, span);
 						default:
 					}
+				var typedCondition = condition == null ? null : typeExpression(condition, loopScope, TBool);
+				if (typedCondition != null && typedCondition.type != TBool)
+					fail("E1004", "Array comprehension condition must be Bool", span);
 				var expectedElement = switch expectedType {
 					case TArray(element): element;
 					default: null;
 				}, typedValue = typeExpression(value, loopScope, expectedElement), elementType = expectedElement == null ? typedValue.type : expectedElement;
 				typedValue = coerce(typedValue, elementType, "array comprehension value", "E1003");
 				new TypedExpression(TArrayComprehension(loopScope.resolveId(keyName), valueName == null ? null : loopScope.resolveId(valueName),
-					valueName == null ? typedIterable : originalIterable, typedValue),
+					valueName == null ? typedIterable : originalIterable, typedCondition, typedValue),
 					TArray(elementType), span);
 			case Range(start, end, span):
 				var typedStart = typeExpression(start, scope, TInt),
@@ -1887,8 +1890,10 @@ class Typer {
 			case ArrayLiteral(values, _):
 				for (value in values)
 					collectMutableCaptureExpression(value, outerDeclared, result);
-			case ArrayComprehension(_, _, iterable, value, _):
+			case ArrayComprehension(_, _, iterable, condition, value, _):
 				collectMutableCaptureExpression(iterable, outerDeclared, result);
+				if (condition != null)
+					collectMutableCaptureExpression(condition, outerDeclared, result);
 				collectMutableCaptureExpression(value, outerDeclared, result);
 			case Range(start, end, _):
 				collectMutableCaptureExpression(start, outerDeclared, result);
@@ -1947,8 +1952,10 @@ class Typer {
 			case ArrayLiteral(values, _):
 				for (value in values)
 					collectExpressionVariables(value, names);
-			case ArrayComprehension(_, _, iterable, value, _):
+			case ArrayComprehension(_, _, iterable, condition, value, _):
 				collectExpressionVariables(iterable, names);
+				if (condition != null)
+					collectExpressionVariables(condition, names);
 				collectExpressionVariables(value, names);
 			case Range(start, end, _):
 				collectExpressionVariables(start, names);

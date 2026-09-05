@@ -87,7 +87,7 @@ enum AstExpression {
 	SwitchExpression(expression:AstExpression, cases:Array<AstSwitchExpressionCase>, defaultExpression:Null<AstExpression>, span:SourceSpan);
 	ObjectLiteral(fields:Array<AstObjectField>, span:SourceSpan);
 	ArrayLiteral(values:Array<AstExpression>, span:SourceSpan);
-	ArrayComprehension(keyName:String, valueName:Null<String>, iterable:AstExpression, value:AstExpression, span:SourceSpan);
+	ArrayComprehension(keyName:String, valueName:Null<String>, iterable:AstExpression, condition:Null<AstExpression>, value:AstExpression, span:SourceSpan);
 	Range(start:AstExpression, end:AstExpression, span:SourceSpan);
 	Call(name:String, arguments:Array<AstExpression>, span:SourceSpan);
 	MethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan);

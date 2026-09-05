@@ -1026,7 +1026,7 @@ class IrGenerator {
 				for (index in 0...values.length)
 					builder.arraySet(array, builder.constInt(index), lowerExpression(values[index], builder, localTypes));
 				array;
-			case TArrayComprehension(keyName, valueName, iterable, value):
+			case TArrayComprehension(keyName, valueName, iterable, condition, value):
 				var inputName = '$' + 'comprehension-input:${expression.span.start}',
 					mapName = '$' + 'comprehension-map:${expression.span.start}',
 					resultName = '$' + 'comprehension-result:${expression.span.start}',
@@ -1060,7 +1060,8 @@ class IrGenerator {
 					builder.store(inputName,
 						builder.call(RuntimeType.mapNative(mapTypes.key, mapTypes.value, "keys"), [builder.load(mapName, loweredMapType)], inputType));
 				}
-				builder.store(resultName, builder.call(arrayAllocatorName(resultElement), [builder.arraySize(builder.load(inputName, inputType))], resultType));
+				var capacity = condition == null ? builder.arraySize(builder.load(inputName, inputType)) : builder.constInt(0);
+				builder.store(resultName, builder.call(arrayAllocatorName(resultElement), [capacity], resultType));
 				builder.store(indexName, builder.constInt(0));
 				var conditionBlock = builder.createBlock(),
 					bodyBlock = builder.createBlock(),
@@ -1076,7 +1077,24 @@ class IrGenerator {
 						builder.load(mapName, lowerType(iterable.type)),
 						builder.load(keyName, lowerType(keyType))
 					], lowerType(mapTypes.value)));
-				builder.arraySet(builder.load(resultName, resultType), builder.load(indexName, I32), lowerExpression(value, builder, localTypes));
+				var includeBlock = condition == null ? null : builder.createBlock(),
+					excludeBlock = condition == null ? null : builder.createBlock(),
+					nextBlock = condition == null ? null : builder.createBlock();
+				if (condition != null) {
+					builder.branch(lowerExpression(condition, builder, localTypes), includeBlock, excludeBlock);
+					builder.select(excludeBlock);
+					builder.jump(nextBlock);
+					builder.select(includeBlock);
+				}
+				var loweredValue = lowerExpression(value, builder, localTypes);
+				if (condition == null)
+					builder.arraySet(builder.load(resultName, resultType), builder.load(indexName, I32), loweredValue);
+				else {
+					var grown = builder.call(RuntimeType.arrayNative(resultElement, "push"), [builder.load(resultName, resultType), loweredValue], resultType);
+					builder.store(resultName, grown);
+					builder.jump(nextBlock);
+					builder.select(nextBlock);
+				}
 				builder.store(indexName, builder.add(builder.load(indexName, I32), builder.constInt(1)));
 				builder.jump(conditionBlock);
 				builder.select(afterBlock);
