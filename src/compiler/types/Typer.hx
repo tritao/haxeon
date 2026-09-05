@@ -30,8 +30,9 @@ class Typer {
 	final externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>;
 	var classDecls:Map<String, AstClass> = [];
 	var interfaceDecls:Map<String, AstInterface> = [];
-	var aliases:Map<String, AstType> = [];
 	var enumDecls:Map<String, AstEnum> = [];
+	var declarations:DeclarationIndex;
+	var relations:TypeRelations;
 	final generated:Array<TypedFunction> = [];
 	final generatedClasses:Array<TypedClass> = [];
 	final lambdaCache:Map<String, TypedExpression> = [];
@@ -56,21 +57,12 @@ class Typer {
 		this.externals = externals == null ? [] : externals;
 
 	function typeProgram(program:AstProgram, selected:Null<Map<String, Bool>>, requireMain:Bool):TypedProgram {
-		for (alias in program.aliases) {
-			if (aliases.exists(alias.name) || classDecls.exists(alias.name) || interfaceDecls.exists(alias.name))
-				fail("E1000", 'Duplicate type name "${alias.name}"', alias.span);
-			aliases.set(alias.name, alias.type);
-		}
-		for (enumDecl in program.enums) {
-			if (enumDecls.exists(enumDecl.name) || aliases.exists(enumDecl.name))
-				fail("E1000", 'Duplicate type name "${enumDecl.name}"', enumDecl.span);
-			enumDecls.set(enumDecl.name, enumDecl);
-		}
-		var classes:Map<String, AstClass> = [];
+		declarations = new DeclarationIndex(program);
+		relations = new TypeRelations(declarations);
+		enumDecls = declarations.enums;
+		interfaceDecls = declarations.interfaces;
+		classDecls = declarations.classes;
 		for (interfaceDecl in program.interfaces) {
-			if (interfaceDecls.exists(interfaceDecl.name))
-				fail("E1000", 'Duplicate interface "${interfaceDecl.name}"', interfaceDecl.span);
-			interfaceDecls.set(interfaceDecl.name, interfaceDecl);
 			for (method in interfaceDecl.methods) {
 				var qualified = interfaceDecl.name + "." + method.name;
 				if (signatures.exists(qualified))
@@ -80,11 +72,6 @@ class Typer {
 			}
 		}
 		for (classDecl in program.classes) {
-			if (classes.exists(classDecl.name))
-				fail("E1000", 'Duplicate class "${classDecl.name}"', classDecl.span);
-			if (interfaceDecls.exists(classDecl.name))
-				fail("E1000", 'Class and interface share the name "${classDecl.name}"', classDecl.span);
-			classes.set(classDecl.name, classDecl);
 			for (method in classDecl.methods) {
 				var qualified = classDecl.name + "." + method.name;
 				if (signatures.exists(qualified))
@@ -97,7 +84,6 @@ class Typer {
 				});
 			}
 		}
-		classDecls = classes;
 		for (fn in program.functions) {
 			if (signatures.exists(fn.name))
 				fail("E1000", 'Duplicate function "${fn.name}"', fn.span);
@@ -134,7 +120,7 @@ class Typer {
 							{name: method.name, arguments: [for (argument in method.arguments) lowerType(argument.type)], result: lowerType(method.result)}
 					]
 				}
-			], typedClasses = [for (classDecl in program.classes) typeClass(classDecl, classes)], typedFunctions:Array<TypedFunction> = [];
+			], typedClasses = [for (classDecl in program.classes) typeClass(classDecl, classDecls)], typedFunctions:Array<TypedFunction> = [];
 		for (fn in program.functions)
 			if (selected == null || selected.exists(fn.name))
 				typedFunctions.push(typeFunction(fn));
@@ -265,11 +251,11 @@ class Typer {
 		}
 	}
 
-	static function sameSignature(left:AstFunction, right:AstFunction):Bool {
-		if (left.arguments.length != right.arguments.length || Std.string(left.result) != Std.string(right.result))
+	function sameSignature(left:AstFunction, right:AstFunction):Bool {
+		if (left.arguments.length != right.arguments.length || !TypeRelations.equals(lowerType(left.result), lowerType(right.result)))
 			return false;
 		for (i in 0...left.arguments.length)
-			if (Std.string(left.arguments[i].type) != Std.string(right.arguments[i].type))
+			if (!TypeRelations.equals(lowerType(left.arguments[i].type), lowerType(right.arguments[i].type)))
 				return false;
 		return true;
 	}
@@ -1520,57 +1506,22 @@ class Typer {
 	}
 
 	function coerce(value:TypedExpression, expected:CompilerType, context:String, code:String = "E1009"):TypedExpression {
-		if (sameType(value.type, expected))
-			return value;
-		if (isAssignable(value.type, expected))
-			return switch [value.type, expected] {
-				case [_, TDynamic]:
-					new TypedExpression(TToDynamic(value), expected, value.span);
-				case [TClass(_), TInterface(name)], [TInterface(_), TInterface(name)]:
-					new TypedExpression(TToInterface(value, name), expected, value.span);
-				case [_, TNullable(_)]:
-					new TypedExpression(TNullableWrap(value), expected, value.span);
-				default: value;
-			};
-		fail(code, 'Type mismatch for $context', value.span);
-		return value;
-	}
-
-	function isAssignable(actual:CompilerType, expected:CompilerType):Bool {
-		if (sameType(actual, expected))
-			return true;
-		return switch [actual, expected] {
-			case [_, TDynamic]: true;
-			case [TClass(actualName), TClass(expectedName)]: classImplements(actualName, expectedName);
-			case [TClass(actualName), TInterface(expectedName)]: classImplements(actualName, expectedName);
-			case [TInterface(actualName), TInterface(expectedName)]: interfaceExtends(actualName, expectedName);
-			case [TNull, TNullable(_)]: true;
-			case [actual, TNullable(expected)]: isReference(actual) && (sameType(actual, expected) || isAssignable(actual, expected));
-			case [TArray(actualElement), TArray(expectedElement)]: sameType(actualElement, expectedElement);
-			default: false;
+		return switch relations.conversion(value.type, expected) {
+			case Identity: value;
+			case ToDynamic:
+				new TypedExpression(TToDynamic(value), expected, value.span);
+			case ToInterface(name):
+				new TypedExpression(TToInterface(value, name), expected, value.span);
+			case WrapNullable:
+				new TypedExpression(TNullableWrap(value), expected, value.span);
+			case Incompatible:
+				fail(code, 'Type mismatch for $context', value.span);
+				value;
 		};
 	}
 
-	function classImplements(actualName:String, expectedName:String):Bool {
-		var actualClass = classDecls.get(actualName);
-		if (actualClass == null)
-			return interfaceExtends(actualName, expectedName);
-		if (actualClass.base != null && classImplements(actualClass.base, expectedName))
-			return true;
-		for (interfaceName in actualClass.interfaces)
-			if (interfaceName == expectedName || interfaceExtends(interfaceName, expectedName))
-				return true;
-		return false;
-	}
-
-	function interfaceExtends(actualName:String, expectedName:String):Bool {
-		var actualInterface = interfaceDecls.get(actualName);
-		if (actualInterface == null)
-			return false;
-		for (base in actualInterface.bases)
-			if (base == expectedName || interfaceExtends(base, expectedName))
-				return true;
-		return false;
+	function isAssignable(actual:CompilerType, expected:CompilerType):Bool {
+		return relations.isAssignable(actual, expected);
 	}
 
 	function findMethod(className:String, name:String):Null<{owner:String, isStatic:Bool, isConstructor:Bool}> {
@@ -1759,20 +1710,7 @@ class Typer {
 	}
 
 	function lowerType(type:AstType):CompilerType
-		return switch type {
-			case IntType: TInt;
-			case BoolType: TBool;
-			case FloatType: TFloat;
-			case StringType: TString;
-			case VoidType: TVoid;
-			case NamedType(name):
-				var alias = aliases.get(name);
-				alias == null ? (name == "Dynamic" ? TDynamic : interfaceDecls.exists(name) ? TInterface(name) : enumDecls.exists(name) ? TEnum(name) : TClass(name)) : lowerType(alias);
-			case ArrayType(element): TArray(lowerType(element));
-			case MapType(key, value): TMap(lowerType(key), lowerType(value));
-			case NullableType(element): TNullable(lowerType(element));
-			case FunctionType(arguments, result): TFunction([for (argument in arguments) lowerType(argument)], lowerType(result));
-		};
+		return declarations.resolve(type);
 
 	function arrayElementType(type:CompilerType, span:SourceSpan):CompilerType
 		return switch type {
@@ -1826,17 +1764,5 @@ class Typer {
 		throw new CompileError(new Diagnostic(code, message, span));
 
 	static function sameType(left:CompilerType, right:CompilerType):Bool
-		return switch [left, right] {
-			case [TClass(a), TClass(b)]: a == b;
-			case [TInterface(a), TInterface(b)]: a == b;
-			case [TEnum(a), TEnum(b)]: a == b;
-			case [TNullable(a), TNullable(b)]: sameType(a, b);
-			case [TMap(aKey, aValue), TMap(bKey, bValue)]: sameType(aKey, bKey) && sameType(aValue, bValue);
-			case [TArray(a), TArray(b)]: sameType(a, b);
-			case [TFunction(aArgs, aResult), TFunction(bArgs, bResult)]: aArgs.length == bArgs.length && [
-					for (i in 0...aArgs.length)
-						sameType(aArgs[i], bArgs[i])
-				].indexOf(false) < 0 && sameType(aResult, bResult);
-			default: left == right;
-		};
+		return TypeRelations.equals(left, right);
 }
