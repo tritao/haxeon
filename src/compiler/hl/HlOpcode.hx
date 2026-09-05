@@ -7,6 +7,7 @@ enum abstract HlOpcode(Int) from Int to Int {
 	var Float = 2;
 	var Bool = 3;
 	var String = 5;
+	var Null = 6;
 	var Add = 7;
 	var Sub = 8;
 	var Mul = 9;

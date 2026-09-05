@@ -227,6 +227,8 @@ class Typer {
 					if (declared != null) {
 						var expected = lowerType(declared);
 						value = coerce(value, expected, 'local "$name"', "E1002");
+					} else if (sameType(value.type, TNull)) {
+						fail("E1002", 'Null requires an explicit nullable type for local "$name"', span);
 					}
 					scope.define(name, value.type, span);
 					output.push(TVar(name, value, span));
@@ -291,6 +293,7 @@ class Typer {
 			case FloatLiteral(value, span): new TypedExpression(TFloatLiteral(value), TFloat, span);
 			case StringLiteral(value, span): new TypedExpression(TStringLiteral(value), TString, span);
 			case BoolLiteral(value, span): new TypedExpression(TBoolLiteral(value), TBool, span);
+			case NullLiteral(span): new TypedExpression(TNullLiteral, TNull, span);
 			case Variable(name, span):
 				var type = scope.resolve(name);
 				if (type != null) new TypedExpression(scope.isCapture(name) ? TCaptured(name) : TLocal(name), type, span); else {
@@ -566,7 +569,7 @@ class Typer {
 				return;
 			case StringLiteral(_, _):
 				return;
-			case BoolLiteral(_, _):
+			case BoolLiteral(_, _), NullLiteral(_):
 				return;
 		}
 
@@ -584,6 +587,8 @@ class Typer {
 			return switch [value.type, expected] {
 				case [TClass(_), TInterface(name)], [TInterface(_), TInterface(name)]:
 					new TypedExpression(TToInterface(value, name), expected, value.span);
+				case [TNull, TNullable(_)], [TClass(_), TNullable(_)], [TInterface(_), TNullable(_)], [TNullable(_), TNullable(_)]:
+					new TypedExpression(TNullableWrap(value), expected, value.span);
 				default: value;
 			};
 		fail(code, 'Type mismatch for $context', value.span);
@@ -597,6 +602,10 @@ class Typer {
 			case [TClass(actualName), TClass(expectedName)]: classImplements(actualName, expectedName);
 			case [TClass(actualName), TInterface(expectedName)]: classImplements(actualName, expectedName);
 			case [TInterface(actualName), TInterface(expectedName)]: interfaceExtends(actualName, expectedName);
+			case [TNull, TNullable(_)]: true;
+			case [TClass(actualName), TNullable(TClass(expectedName))]: actualName == expectedName || classImplements(actualName, expectedName);
+			case [TInterface(actualName), TNullable(TInterface(expectedName))]: actualName == expectedName || interfaceExtends(actualName, expectedName);
+			case [TNullable(actual), TNullable(expected)]: sameType(actual, expected);
 			case [TArray(actualElement), TArray(expectedElement)]: sameType(actualElement, expectedElement);
 			default: false;
 		};
@@ -702,13 +711,25 @@ class Typer {
 
 	function comparison(a, b, scope, operation, span):TypedExpression {
 		var left = typeExpression(a, scope), right = typeExpression(b, scope);
+		if (operation == 2) {
+			if (sameType(left.type, TNull) && isNullable(right.type))
+				left = coerce(left, right.type, "null comparison");
+			else if (sameType(right.type, TNull) && isNullable(left.type))
+				right = coerce(right, left.type, "null comparison");
+		}
 		if (operation == 2 && sameType(left.type, TString) && sameType(right.type, TString))
 			return new TypedExpression(TEqual(left, right), TBool, span);
 		if (operation == 2 && sameType(left.type, TBool) && sameType(right.type, TBool))
 			return new TypedExpression(TEqual(left, right), TBool, span);
+		if (operation == 2 && (sameType(left.type, TNull) || sameType(right.type, TNull)))
+			switch [left.type, right.type] {
+				case [TNull, TNullable(_)], [TNullable(_), TNull], [TNullable(_), TNullable(_)]:
+					return new TypedExpression(TEqual(left, right), TBool, span);
+				default:
+			}
 		if (operation == 2 && sameType(left.type, right.type))
 			switch left.type {
-				case TEnum(_):
+				case TEnum(_), TNullable(_):
 					return new TypedExpression(TEqual(left, right), TBool, span);
 				default:
 			}
@@ -745,6 +766,7 @@ class Typer {
 				var alias = aliases.get(name);
 				alias == null ? (interfaceDecls.exists(name) ? TInterface(name) : enumDecls.exists(name) ? TEnum(name) : TClass(name)) : lowerType(alias);
 			case ArrayType(element): TArray(lowerType(element));
+			case NullableType(element): TNullable(lowerType(element));
 			case FunctionType(arguments, result): TFunction([for (argument in arguments) lowerType(argument)], lowerType(result));
 		};
 
@@ -765,6 +787,12 @@ class Typer {
 			default: false;
 		};
 
+	static function isNullable(type:CompilerType):Bool
+		return switch type {
+			case TNullable(_): true;
+			default: false;
+		};
+
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
 			case VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), If(_, _, _, span),
@@ -779,6 +807,7 @@ class Typer {
 			case [TClass(a), TClass(b)]: a == b;
 			case [TInterface(a), TInterface(b)]: a == b;
 			case [TEnum(a), TEnum(b)]: a == b;
+			case [TNullable(a), TNullable(b)]: sameType(a, b);
 			case [TArray(a), TArray(b)]: sameType(a, b);
 			case [TFunction(aArgs, aResult), TFunction(bArgs, bResult)]: aArgs.length == bArgs.length && [
 					for (i in 0...aArgs.length)

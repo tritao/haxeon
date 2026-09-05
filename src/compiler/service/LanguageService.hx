@@ -246,6 +246,7 @@ class LanguageService {
 			case VoidType: "Void";
 			case NamedType(name): name;
 			case ArrayType(element): 'Array<${typeName(element)}>';
+			case NullableType(element): 'Null<${typeName(element)}>';
 			case FunctionType(arguments, result): '(${[for (argument in arguments) typeName(argument)].join(",")})->${typeName(result)}';
 		};
 }

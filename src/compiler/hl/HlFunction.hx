@@ -20,6 +20,7 @@ enum HlInstruction {
 	LoadFloat(destination:Int, constant:Int);
 	LoadString(destination:Int, constant:Int);
 	LoadBool(destination:Int, value:Bool);
+	LoadNull(destination:Int);
 	Add(destination:Int, left:Int, right:Int);
 	Sub(destination:Int, left:Int, right:Int);
 	Mul(destination:Int, left:Int, right:Int);

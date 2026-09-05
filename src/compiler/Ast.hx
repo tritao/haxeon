@@ -10,6 +10,7 @@ enum AstType {
 	VoidType;
 	NamedType(name:String);
 	ArrayType(element:AstType);
+	NullableType(element:AstType);
 	FunctionType(arguments:Array<AstType>, result:AstType);
 }
 
@@ -51,6 +52,7 @@ enum AstExpression {
 	FloatLiteral(value:Float, span:SourceSpan);
 	StringLiteral(value:String, span:SourceSpan);
 	BoolLiteral(value:Bool, span:SourceSpan);
+	NullLiteral(span:SourceSpan);
 	Variable(name:String, span:SourceSpan);
 	Add(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Sub(left:AstExpression, right:AstExpression, span:SourceSpan);

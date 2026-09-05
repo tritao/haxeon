@@ -251,6 +251,12 @@ class IrGenerator {
 			case TStringLiteral(value): builder.constString(value);
 			case TBoolLiteral(value): builder.constBool(value);
 			case TEnumLiteral(_, index): builder.constInt(index);
+			case TNullLiteral: throw "Uncoerced null literal";
+			case TNullableWrap(value):
+				switch value.expression {
+					case TNullLiteral: builder.constNull(lowerType(expression.type));
+					default: lowerExpression(value, builder, localTypes);
+				}
 			case TLocal(name):
 				var type = localTypes.get(name);
 				if (type == null)
@@ -339,6 +345,8 @@ class IrGenerator {
 			case TClass(name): Obj(name);
 			case TInterface(name): Virtual(name);
 			case TEnum(_): I32;
+			case TNull: Void;
+			case TNullable(element): lowerType(element);
 			case TArray(element): Array(lowerType(element));
 			case TFunction(arguments, result): Function([for (argument in arguments) lowerType(argument)], lowerType(result));
 		};

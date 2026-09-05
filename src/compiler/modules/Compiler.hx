@@ -415,6 +415,8 @@ class Compiler {
 			case TClass(name): Obj(name);
 			case TInterface(name): Virtual(name);
 			case TEnum(_): I32;
+			case TNull: Void;
+			case TNullable(element): irType(element);
 			case TArray(element): Array(irType(element));
 			case TFunction(arguments, result): Function([for (argument in arguments) irType(argument)], irType(result));
 		};
@@ -566,6 +568,7 @@ class Compiler {
 			case VoidType: "Void";
 			case NamedType(name): name;
 			case ArrayType(element): 'Array<${astTypeName(element)}>';
+			case NullableType(element): 'Null<${astTypeName(element)}>';
 			case FunctionType(arguments, result): '(' + [for (argument in arguments) astTypeName(argument)].join(',') + ')->' + astTypeName(result);
 		};
 
@@ -590,7 +593,7 @@ class Compiler {
 
 	static function canonicalExpression(e, module, entry, locals, ?aliases):AstExpression
 		return switch e {
-			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _): e;
+			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_): e;
 			case Variable(name, span):
 				if (name.indexOf(".") < 0 && locals.exists(name)) Variable(module == entry
 					&& name == "main" ? "main" : module + "." + name, span); else e;
@@ -645,6 +648,7 @@ class Compiler {
 		return switch type {
 			case NamedType(name): NamedType(resolveTypeName(name, aliases));
 			case ArrayType(element): ArrayType(canonicalType(element, aliases));
+			case NullableType(element): NullableType(canonicalType(element, aliases));
 			case FunctionType(arguments, result): FunctionType([for (argument in arguments) canonicalType(argument, aliases)], canonicalType(result, aliases));
 			default: type;
 		};

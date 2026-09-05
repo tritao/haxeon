@@ -147,6 +147,8 @@ class HlLower {
 						instructions.push(HlInstruction.LoadString(defineRegister(output, registers, registerTypes), internString(value)));
 					case ConstBool(output, value):
 						instructions.push(HlInstruction.LoadBool(defineRegister(output, registers, registerTypes), value));
+					case ConstNull(output):
+						instructions.push(HlInstruction.LoadNull(defineRegister(output, registers, registerTypes)));
 					case Add(output, left, right):
 						instructions.push(HlInstruction.Add(defineRegister(output, registers, registerTypes), requireRegister(left, registers),
 							requireRegister(right, registers)));

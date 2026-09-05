@@ -21,6 +21,8 @@ enum TypedExpressionKind {
 	TStringLiteral(value:String);
 	TBoolLiteral(value:Bool);
 	TEnumLiteral(name:String, index:Int);
+	TNullLiteral;
+	TNullableWrap(value:TypedExpression);
 	TLocal(name:String);
 	TCaptured(name:String);
 	TFunctionRef(name:String);

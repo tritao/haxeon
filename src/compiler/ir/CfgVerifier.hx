@@ -66,6 +66,12 @@ class CfgVerifier {
 				case ConstBool(out, _):
 					expect(out, Bool);
 					define(out, defined, available);
+				case ConstNull(out):
+					switch out.type {
+						case Obj(_), Virtual(_):
+						default: throw 'CFG null constant must produce an object value';
+					}
+					define(out, defined, available);
 				case LoadLocal(out, name):
 					var type = local(fn, name);
 					if (!sameType(out.type, type))
@@ -92,8 +98,8 @@ class CfgVerifier {
 					require(a, available);
 					require(b, available);
 					expect(out, Bool);
-					if (!sameType(a.type, b.type) || (!sameType(a.type, I32) && !sameType(a.type, Bool)))
-						throw 'CFG equality requires matching Int or Bool values';
+					if (!sameType(a.type, b.type) || (!sameType(a.type, I32) && !sameType(a.type, Bool) && !isReference(a.type)))
+						throw 'CFG equality requires matching primitive or reference values';
 					define(out, defined, available);
 				case Call(out, _, arguments):
 					for (argument in arguments)
@@ -231,5 +237,11 @@ class CfgVerifier {
 						sameType(aArgs[i], bArgs[i])
 				].indexOf(false) < 0 && sameType(aResult, bResult);
 			default: left == right;
+		};
+
+	static function isReference(type:IrType):Bool
+		return switch type {
+			case Obj(_), Virtual(_): true;
+			default: false;
 		};
 }

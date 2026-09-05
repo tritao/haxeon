@@ -135,7 +135,7 @@ class HlPatchReader {
 				for (_ in 0...count)
 					operands.push(readIndex(input));
 				operands;
-			case 0, 1, 2, 3, 5, 33, 58, 65, 67, 82, 83:
+			case 0, 1, 2, 3, 5, 6, 33, 58, 65, 67, 82, 83:
 				[for (_ in 0...(op == 58 || op == 67 || op == 82 ? 1 : 2)) readIndex(input)];
 			case 7, 8, 9, 10, 25, 34, 38, 39, 44, 77, 81:
 				[for (_ in 0...(3 - (op == 44 ? 1 : 0))) readIndex(input)];

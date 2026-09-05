@@ -125,6 +125,12 @@ class IrVerifier {
 			case ConstBool(out, _):
 				expect(out, Bool);
 				define(values, out);
+			case ConstNull(out):
+				switch out.type {
+					case Obj(_), Virtual(_):
+					default: throw 'IR null constant must produce an object value';
+				}
+				define(values, out);
 			case Add(out, a, b), Sub(out, a, b), Mul(out, a, b), Div(out, a, b):
 				if (!sameType(out.type, a.type) || !sameType(a.type, b.type) || (!sameType(a.type, I32) && !sameType(a.type, F64)))
 					throw "IR arithmetic requires matching numeric values";
@@ -142,8 +148,8 @@ class IrVerifier {
 				expect(out, Bool);
 				require(values, a);
 				require(values, b);
-				if (!sameType(a.type, b.type) || (!sameType(a.type, I32) && !sameType(a.type, Bool)))
-					throw 'IR equality requires matching Int or Bool values';
+				if (!sameType(a.type, b.type) || (!sameType(a.type, I32) && !sameType(a.type, Bool) && !isReference(a.type)))
+					throw 'IR equality requires matching primitive or reference values';
 				define(values, out);
 			case Call(out, name, args):
 				var signature = signatures.get(name);
@@ -387,6 +393,12 @@ class IrVerifier {
 						sameType(aArgs[i], bArgs[i])
 				].indexOf(false) < 0 && sameType(aResult, bResult);
 			default: left == right;
+		};
+
+	static function isReference(type:IrType):Bool
+		return switch type {
+			case Obj(_), Virtual(_): true;
+			default: false;
 		};
 
 	static function compatibleType(actual:IrType, expected:IrType, objects:Map<String, IrObject>, interfaces:Map<String, IrInterface>):Bool {

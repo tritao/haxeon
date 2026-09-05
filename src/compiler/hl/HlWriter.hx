@@ -125,6 +125,8 @@ class HlWriter {
 					requireString(code, constant, 'function ${fn.functionIndex}');
 				case LoadBool(destination, _):
 					requireRegister(fn, destination);
+				case LoadNull(destination):
+					requireRegister(fn, destination);
 				case Add(destination, left, right):
 					requireRegister(fn, destination);
 					requireRegister(fn, left);
@@ -385,6 +387,8 @@ class HlWriter {
 					{opcode: HlOpcode.String, operands: [destination, constant]};
 				case LoadBool(destination, value):
 					{opcode: HlOpcode.Bool, operands: [destination, value ? 1 : 0]};
+				case LoadNull(destination):
+					{opcode: HlOpcode.Null, operands: [destination]};
 				case Add(destination, left, right):
 					{opcode: HlOpcode.Add, operands: [destination, left, right]};
 				case Sub(destination, left, right):

@@ -20,6 +20,7 @@ enum CfgInstruction {
 	ConstFloat(output:CfgValue, value:Float);
 	ConstString(output:CfgValue, value:String);
 	ConstBool(output:CfgValue, value:Bool);
+	ConstNull(output:CfgValue);
 	LoadLocal(output:CfgValue, name:String);
 	StoreLocal(name:String, value:CfgValue);
 	Add(output:CfgValue, left:CfgValue, right:CfgValue);

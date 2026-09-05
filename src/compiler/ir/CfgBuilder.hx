@@ -75,6 +75,12 @@ class CfgBuilder {
 		return out;
 	}
 
+	public function constNull(type:IrType):CfgValue {
+		var out = temporary(type);
+		emit(ConstNull(out));
+		return out;
+	}
+
 	public function add(a, b):CfgValue
 		return binary(a, b, 0);
 
