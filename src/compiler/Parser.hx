@@ -862,13 +862,16 @@ class Parser {
 		}
 		if (match(TokenKind.LeftBrace)) {
 			var start = previous().span, fields = [];
-			if (!check(TokenKind.RightBrace))
-				do {
+			if (!check(TokenKind.RightBrace)) {
+				while (true) {
 					var name = consume(TokenKind.Identifier);
 					consume(TokenKind.Colon);
 					var value = parseExpression();
 					fields.push({name: name.text, value: value, span: name.span.merge(expressionSpan(value))});
-				} while (match(TokenKind.Comma));
+					if (!match(TokenKind.Comma) || check(TokenKind.RightBrace))
+						break;
+				}
+			}
 			var end = consume(TokenKind.RightBrace).span;
 			return parsePostfix(ObjectLiteral(fields, start.merge(end)));
 		}
