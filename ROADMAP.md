@@ -35,10 +35,12 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 - [~] `Array<T>` typing, indexed reads/writes, `.length`, and compiler-owned
 	`Int`/`Float`/`Bool`/`String` plus reference-array allocation lower directly
 	to HashLink array operations and the runtime ABI; `for (item in array)` is
-	lowered to a bounds-checked SSA loop with `break`/`continue` control edges. ABI-backed `Map<String,Int|Bool|Float|String>`
+	lowered to a bounds-checked SSA loop with `break`/`continue` control edges.
+	Immutable `copy`, `concat`, `slice`, and primitive/String `indexOf` are
+	now ABI-backed and tested. ABI-backed `Map<String,Int|Bool|Float|String>`
 	and `Map<Int,Int|Bool|Float|String>` specializations support construction,
 	indexed set/get, `set`, `exists`, key-array iteration, `remove`, and `clear`;
-	immutable `copy`/`concat` now cover primitive, string, and reference arrays;
+	immutable array operations cover primitive, string, and reference arrays;
 	growable mutation and broader key/value collections remain future work.
 	Our HashLink fork
 	enforces bounds in the JIT.

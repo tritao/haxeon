@@ -190,6 +190,21 @@ class IrGenerator {
 					arguments: [arrayType, arrayType],
 					result: arrayType
 				});
+				program.natives.push({
+					name: '__array_slice_${entry.name}',
+					library: "realtime_runtime",
+					symbol: '__array_slice_${entry.name}',
+					arguments: [arrayType, I32, I32],
+					result: arrayType
+				});
+				if (entry.name != "ref")
+					program.natives.push({
+						name: '__array_index_of_${entry.name}',
+						library: "realtime_runtime",
+						symbol: '__array_index_of_${entry.name}',
+						arguments: [arrayType, entry.type],
+						result: I32
+					});
 			}
 		}
 		if (needsStringRuntime)

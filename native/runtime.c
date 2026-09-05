@@ -76,9 +76,40 @@ static varray *realtime_array_concat(varray *left, varray *right) {
 	return result;
 }
 
+static int realtime_array_index(varray *array, int index) {
+	if (index < 0) return 0;
+	if (index > array->size) return array->size;
+	return index;
+}
+
+static void realtime_array_slice_bounds(varray *array, int *start, int *end) {
+	int normalizedStart = *start < 0 ? array->size + *start : *start;
+	int normalizedEnd = *end < 0 ? array->size + *end : *end;
+	*start = realtime_array_index(array, normalizedStart);
+	*end = realtime_array_index(array, normalizedEnd);
+	if (*end < *start) *end = *start;
+}
+
+static varray *realtime_array_slice(varray *array, int start, int end) {
+	realtime_array_slice_bounds(array, &start, &end);
+	varray *result = hl_alloc_array(array->at, end - start);
+	int stride = hl_type_size(array->at);
+	if (end > start)
+		memcpy(hl_aptr(result, vbyte), hl_aptr(array, vbyte) + start * stride, (size_t)(end - start) * stride);
+	return result;
+}
+
+static bool realtime_bytes_equal(vbyte *left, vbyte *right) {
+	int leftLength = left == NULL ? 0 : (int)ustrlen((const uchar *)left);
+	int rightLength = right == NULL ? 0 : (int)ustrlen((const uchar *)right);
+	return leftLength == rightLength
+		&& (leftLength == 0 || memcmp(left, right, leftLength * (int)sizeof(uchar)) == 0);
+}
+
 #define DEFINE_ARRAY_COPY(SUFFIX) \
 HL_PRIM varray *HL_NAME(__array_copy_##SUFFIX)( varray *array ) { return realtime_array_copy(array); } \
-HL_PRIM varray *HL_NAME(__array_concat_##SUFFIX)( varray *left, varray *right ) { return realtime_array_concat(left, right); }
+HL_PRIM varray *HL_NAME(__array_concat_##SUFFIX)( varray *left, varray *right ) { return realtime_array_concat(left, right); } \
+HL_PRIM varray *HL_NAME(__array_slice_##SUFFIX)( varray *array, int start, int end ) { return realtime_array_slice(array, start, end); }
 
 DEFINE_ARRAY_COPY(i32)
 DEFINE_ARRAY_COPY(f64)
@@ -87,6 +118,20 @@ DEFINE_ARRAY_COPY(bool)
 DEFINE_ARRAY_COPY(ref)
 
 #undef DEFINE_ARRAY_COPY
+
+#define DEFINE_ARRAY_INDEX_OF(SUFFIX, VALUE_TYPE, EQUALS) \
+HL_PRIM int HL_NAME(__array_index_of_##SUFFIX)( varray *array, VALUE_TYPE value ) { \
+	VALUE_TYPE *values = hl_aptr(array, VALUE_TYPE); \
+	for (int i = 0; i < array->size; i++) if (EQUALS) return i; \
+	return -1; \
+}
+
+DEFINE_ARRAY_INDEX_OF(i32, int, values[i] == value)
+DEFINE_ARRAY_INDEX_OF(f64, double, values[i] == value)
+DEFINE_ARRAY_INDEX_OF(bool, bool, values[i] == value)
+DEFINE_ARRAY_INDEX_OF(bytes, vbyte *, realtime_bytes_equal(values[i], value))
+
+#undef DEFINE_ARRAY_INDEX_OF
 
 HL_PRIM realtime_string_map *HL_NAME(__map_string_i32_alloc)( void ) {
 	return hl_hballoc();
@@ -368,6 +413,15 @@ DEFINE_PRIM(_ARR,__array_concat_f64,_ARR _ARR);
 DEFINE_PRIM(_ARR,__array_concat_bytes,_ARR _ARR);
 DEFINE_PRIM(_ARR,__array_concat_bool,_ARR _ARR);
 DEFINE_PRIM(_ARR,__array_concat_ref,_ARR _ARR);
+DEFINE_PRIM(_ARR,__array_slice_i32,_ARR _I32 _I32);
+DEFINE_PRIM(_ARR,__array_slice_f64,_ARR _I32 _I32);
+DEFINE_PRIM(_ARR,__array_slice_bytes,_ARR _I32 _I32);
+DEFINE_PRIM(_ARR,__array_slice_bool,_ARR _I32 _I32);
+DEFINE_PRIM(_ARR,__array_slice_ref,_ARR _I32 _I32);
+DEFINE_PRIM(_I32,__array_index_of_i32,_ARR _I32);
+DEFINE_PRIM(_I32,__array_index_of_f64,_ARR _F64);
+DEFINE_PRIM(_I32,__array_index_of_bytes,_ARR _BYTES);
+DEFINE_PRIM(_I32,__array_index_of_bool,_ARR _BOOL);
 DEFINE_PRIM(_ABSTRACT(map_string_i32),__map_string_i32_alloc,_NO_ARG);
 DEFINE_PRIM(_VOID,__map_string_i32_set,_ABSTRACT(map_string_i32) _BYTES _I32);
 DEFINE_PRIM(_BOOL,__map_string_i32_exists,_ABSTRACT(map_string_i32) _BYTES);

@@ -773,6 +773,25 @@ class Typer {
 				fail("E1002", "Array.concat expects matching element types", span);
 			return new TypedExpression(TCall(RuntimeType.arrayNative(element, "concat"), [receiver, other]), TArray(element), span);
 		}
+		if (name == "slice") {
+			if (arguments.length < 1 || arguments.length > 2)
+				fail("E1008", "Array.slice expects a start and optional end", span);
+			var start = coerce(typeExpression(arguments[0], scope), TInt, "slice start", "E1002"),
+				end = arguments.length == 2 ? coerce(typeExpression(arguments[1], scope), TInt, "slice end",
+					"E1002") : new TypedExpression(TArrayLength(receiver), TInt, span);
+			return new TypedExpression(TCall(RuntimeType.arrayNative(element, "slice"), [receiver, start, end]), TArray(element), span);
+		}
+		if (name == "indexOf") {
+			switch element {
+				case TInt, TFloat, TBool, TString:
+				default:
+					fail("E1016", "Array.indexOf currently supports primitive and String arrays only", span);
+			}
+			if (arguments.length != 1)
+				fail("E1008", "Array.indexOf expects one argument", span);
+			var value = coerce(typeExpression(arguments[0], scope), element, "array element", "E1002");
+			return new TypedExpression(TCall(RuntimeType.arrayNative(element, "index_of"), [receiver, value]), TInt, span);
+		}
 		fail("E1007", 'Unknown array method "$name"', span);
 		return new TypedExpression(TNullLiteral, TVoid, span);
 	}

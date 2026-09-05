@@ -448,6 +448,10 @@ class LanguageService {
 				}
 			case TArray(_):
 				addMember("length", "field", "length:Int", prefix, result);
+				addMember("copy", "method", "copy():Array", prefix, result);
+				addMember("concat", "method", "concat(other):Array", prefix, result);
+				addMember("slice", "method", "slice(start,end):Array", prefix, result);
+				addMember("indexOf", "method", "indexOf(value):Int", prefix, result);
 			case TMap(_, _):
 				addMember("set", "method", "set(key,value):Void", prefix, result);
 				addMember("exists", "method", "exists(key):Bool", prefix, result);
