@@ -108,6 +108,12 @@ class CfgBuilder {
 		return out;
 	}
 
+	public function toVirtual(value:CfgValue, type:IrType):CfgValue {
+		var out = temporary(type);
+		emit(ToVirtual(out, value));
+		return out;
+	}
+
 	public function methodCall(object:CfgValue, methodName:String, args:Array<CfgValue>, result:IrType):CfgValue {
 		var out = temporary(result);
 		emit(MethodCall(out, object, methodName, args));

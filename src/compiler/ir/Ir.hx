@@ -8,6 +8,7 @@ enum IrType {
 	Bytes;
 	Array(element:IrType);
 	Obj(name:String);
+	Virtual(name:String);
 	Function(arguments:Array<IrType>, result:IrType);
 }
 
@@ -45,6 +46,7 @@ enum IrInstruction {
 	StaticClosure(output:IrValue, functionName:String);
 	InstanceClosure(output:IrValue, functionName:String, receiver:IrValue);
 	CallClosure(output:IrValue, closure:IrValue, arguments:Array<IrValue>);
+	ToVirtual(output:IrValue, value:IrValue);
 	MethodCall(output:IrValue, object:IrValue, methodName:String, arguments:Array<IrValue>);
 	NewObject(output:IrValue, typeName:String);
 	FieldGet(output:IrValue, object:IrValue, fieldName:String);
@@ -79,12 +81,15 @@ typedef IrNative = {
 
 typedef IrObjectField = {final name:String; final type:IrType;}
 typedef IrObjectMethod = {final name:String; final functionName:String;}
-typedef IrObject = {final name:String; final base:Null<String>; final fields:Array<IrObjectField>; final methods:Array<IrObjectMethod>;}
+typedef IrObject = {final name:String; final base:Null<String>; final interfaces:Array<String>; final fields:Array<IrObjectField>; final methods:Array<IrObjectMethod>;}
+typedef IrInterfaceMethod = {final name:String; final arguments:Array<IrType>; final result:IrType;}
+typedef IrInterface = {final name:String; final bases:Array<String>; final methods:Array<IrInterfaceMethod>;}
 
 class IrProgram {
 	public var natives:Array<IrNative> = [];
 	public var functions:Array<IrFunction> = [];
 	public var objects:Array<IrObject> = [];
+	public var interfaces:Array<IrInterface> = [];
 	public var entryPoint:String;
 
 	public function new(entryPoint:String)

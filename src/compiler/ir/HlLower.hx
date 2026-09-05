@@ -51,6 +51,23 @@ class HlLower {
 			for (fn in program.functions)
 				addFunctionName(fn.name, nextFunction++);
 		}
+		var pendingInterfaces = program.interfaces.copy();
+		while (pendingInterfaces.length > 0) {
+			var progressed = false;
+			for (interfaceDecl in pendingInterfaces.copy()) {
+				var ready = true;
+				for (base in interfaceDecl.bases)
+					if (symbols.typeIndex('virt:$base') == null)
+						ready = false;
+				if (!ready)
+					continue;
+				symbols.internInterface(interfaceDecl);
+				pendingInterfaces.remove(interfaceDecl);
+				progressed = true;
+			}
+			if (!progressed)
+				throw 'Unable to order interface bases';
+		}
 		var pending = program.objects.copy();
 		while (pending.length > 0) {
 			var progressed = false;
@@ -164,6 +181,8 @@ class HlLower {
 					case CallClosure(output, closure, arguments):
 						instructions.push(HlInstruction.CallClosure(defineRegister(output, registers, registerTypes), requireRegister(closure, registers),
 							[for (argument in arguments) requireRegister(argument, registers)]));
+					case ToVirtual(output, value):
+						instructions.push(HlInstruction.ToVirtual(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
 					case MethodCall(output, object, methodName, arguments):
 						var receiver = requireRegister(object, registers),
 							methodArguments = [receiver].concat([for (argument in arguments) requireRegister(argument, registers)]);
@@ -326,6 +345,11 @@ class HlLower {
 	function requireObjectMethod(value:IrValue, name:String):Int {
 		var typeName = switch value.type {
 			case Obj(value): value;
+			case Virtual(value):
+				var virtualIndex = symbols.interfaceMethodIndex(value, name);
+				if (virtualIndex == null)
+					throw 'Unknown IR method "$value.$name"';
+				return virtualIndex;
 			default: throw 'IR value ${value.id} is not an object';
 		};
 		var index = symbols.objectMethodIndex(typeName, name);

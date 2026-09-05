@@ -11,11 +11,26 @@ import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.Ir.IrObject;
+import compiler.ir.Ir.IrInterface;
 
 /** Lowers typed syntax to a mutable-local CFG; SsaBuilder owns all SSA policy. */
 class IrGenerator {
 	public static function generate(typed:TypedProgram):IrProgram {
-		return assemble([for (fn in typed.functions) generateFunction(fn)], null, objectsFrom(typed));
+		return assemble([for (fn in typed.functions) generateFunction(fn)], null, objectsFrom(typed), interfacesFrom(typed));
+	}
+
+	public static function interfacesFrom(typed:TypedProgram):Array<IrInterface> {
+		return [
+			for (interfaceDecl in typed.interfaces)
+				{
+					name: interfaceDecl.name,
+					bases: interfaceDecl.bases,
+					methods: [
+						for (method in interfaceDecl.methods)
+							{name: method.name, arguments: [for (argument in method.arguments) lowerType(argument)], result: lowerType(method.result)}
+					]
+				}
+		];
 	}
 
 	public static function objectsFrom(typed:TypedProgram):Array<IrObject> {
@@ -24,6 +39,7 @@ class IrGenerator {
 				{
 					name: classDecl.name,
 					base: classDecl.base,
+					interfaces: classDecl.interfaces,
 					fields: [
 						for (field in classDecl.fields)
 							if (!field.isStatic) {name: field.name, type: lowerType(field.type)}
@@ -67,7 +83,7 @@ class IrGenerator {
 		return new CfgFunction(fn.name, arguments, lowerType(fn.result), builder.blocks, localTypes);
 	}
 
-	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>):IrProgram {
+	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>):IrProgram {
 		var program = new IrProgram("__entry");
 		var needsArrayRuntime = false;
 		for (fn in functions)
@@ -80,6 +96,7 @@ class IrGenerator {
 						default:
 					}
 		program.objects = objects == null ? [] : objects;
+		program.interfaces = interfaces == null ? [] : interfaces;
 		program.natives.push({
 			name: "__exit",
 			library: "std",
@@ -211,6 +228,8 @@ class IrGenerator {
 			case TClosureCall(callee, args):
 				builder.callClosure(lowerExpression(callee, builder, localTypes), [for (arg in args) lowerExpression(arg, builder, localTypes)],
 					lowerType(expression.type));
+			case TToInterface(value, name):
+				builder.toVirtual(lowerExpression(value, builder, localTypes), Virtual(name));
 			case TNew(typeName, args, hasConstructor):
 				var object = builder.newObject(typeName);
 				if (hasConstructor) {
@@ -247,6 +266,7 @@ class IrGenerator {
 			case TString: Bytes;
 			case TVoid: Void;
 			case TClass(name): Obj(name);
+			case TInterface(name): Virtual(name);
 			case TArray(element): Array(lowerType(element));
 			case TFunction(arguments, result): Function([for (argument in arguments) lowerType(argument)], lowerType(result));
 		};

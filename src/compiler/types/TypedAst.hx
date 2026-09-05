@@ -32,6 +32,7 @@ enum TypedExpressionKind {
 	TEqual(left:TypedExpression, right:TypedExpression);
 	TCall(name:String, arguments:Array<TypedExpression>);
 	TClosureCall(callee:TypedExpression, arguments:Array<TypedExpression>);
+	TToInterface(value:TypedExpression, name:String);
 	TNew(typeName:String, arguments:Array<TypedExpression>, hasConstructor:Bool);
 	TNewArray(element:CompilerType, length:TypedExpression);
 	TField(object:TypedExpression, name:String);
@@ -74,4 +75,6 @@ typedef TypedClass = {
 	final span:SourceSpan;
 }
 
-typedef TypedProgram = {final classes:Array<TypedClass>; final functions:Array<TypedFunction>;}
+typedef TypedInterfaceMethod = {final name:String; final arguments:Array<CompilerType>; final result:CompilerType;}
+typedef TypedInterface = {final name:String; final bases:Array<String>; final methods:Array<TypedInterfaceMethod>;}
+typedef TypedProgram = {final interfaces:Array<TypedInterface>; final classes:Array<TypedClass>; final functions:Array<TypedFunction>;}

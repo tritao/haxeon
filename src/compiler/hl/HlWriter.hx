@@ -67,6 +67,11 @@ class HlWriter {
 						if (method.prototype < 0)
 							throw 'Invalid object method prototype ${method.prototype}';
 					}
+				case Virtual(fields):
+					for (field in fields) {
+						requireString(code, field.name, "virtual field name");
+						requireType(code, field.type, "virtual field type");
+					}
 			}
 		}
 		for (global in code.globals)
@@ -161,6 +166,9 @@ class HlWriter {
 					requireRegister(fn, closure);
 					for (argument in arguments)
 						requireRegister(fn, argument);
+				case ToVirtual(destination, source):
+					requireRegister(fn, destination);
+					requireRegister(fn, source);
 				case CallMethod(destination, method, arguments):
 					requireRegister(fn, destination);
 					if (method < 0)
@@ -341,6 +349,13 @@ class HlWriter {
 				}
 				for (binding in bindings)
 					writeUnsignedIndex(binding);
+			case Virtual(fields):
+				output.writeByte(HlType.Virtual);
+				writeUnsignedIndex(fields.length);
+				for (field in fields) {
+					writeIndex(field.name);
+					writeIndex(field.type);
+				}
 		}
 	}
 
@@ -390,6 +405,8 @@ class HlWriter {
 					{opcode: HlOpcode.InstanceClosure, operands: [destination, functionIndex, receiver]};
 				case CallClosure(destination, closure, arguments):
 					{opcode: HlOpcode.CallClosure, operands: [destination, closure, arguments.length].concat(arguments)};
+				case ToVirtual(destination, source):
+					{opcode: HlOpcode.ToVirtual, operands: [destination, source]};
 				case CallMethod(destination, method, arguments):
 					{opcode: HlOpcode.CallMethod, operands: [destination, method, arguments.length].concat(arguments)};
 				case New(destination, _, _):

@@ -109,6 +109,12 @@ class IrBuilder {
 		return out;
 	}
 
+	public function toVirtual(value:IrValue, type:IrType):IrValue {
+		var out = temporary(type);
+		emit(ToVirtual(out, value));
+		return out;
+	}
+
 	public function newObject(typeName:String):IrValue {
 		var out = temporary(Obj(typeName));
 		emit(NewObject(out, typeName));

@@ -36,6 +36,7 @@ class HlModuleAssembler {
 		var ordered = new IrProgram(program.entryPoint);
 		ordered.natives = program.natives;
 		ordered.objects = program.objects;
+		ordered.interfaces = program.interfaces;
 		ordered.functions = cache.ordered();
 		var layout:Map<String, Int> = [], next = 0;
 		for (native in ordered.natives)

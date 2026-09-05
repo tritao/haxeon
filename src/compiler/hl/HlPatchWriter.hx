@@ -186,6 +186,13 @@ class HlPatchWriter {
 					h = hashBytes(intBytes(bindings.length), h);
 					for (binding in bindings)
 						h = hashBytes(intBytes(binding), h);
+				case Virtual(fields):
+					h = hashBytes(intBytes(HlType.Virtual), h);
+					h = hashBytes(intBytes(fields.length), h);
+					for (field in fields) {
+						h = hashBytes(intBytes(field.name), h);
+						h = hashBytes(intBytes(field.type), h);
+					}
 			}
 		return h;
 	}
@@ -206,6 +213,8 @@ class HlPatchWriter {
 				writeSignedIndex(out, result);
 			case Object(_, _, _, _, _, _):
 				throw "Object type patches require a structural reload";
+			case Virtual(_):
+				throw "Virtual type patches require a structural reload";
 		}
 
 	static function writeIndex(out:BytesOutput, v:Int):Void {

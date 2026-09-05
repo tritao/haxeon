@@ -82,8 +82,17 @@ class Typer {
 		var main = signatures.get("main");
 		if (main == null || main.arguments.length != 0 || lowerType(main.result) != TInt)
 			throw "Program must define function main():Int";
-		var typedClasses = [for (classDecl in program.classes) typeClass(classDecl, classes)],
-			typedFunctions:Array<TypedFunction> = [];
+		var typedInterfaces = [
+			for (interfaceDecl in program.interfaces)
+				{
+					name: interfaceDecl.name,
+					bases: interfaceDecl.bases,
+					methods: [
+						for (method in interfaceDecl.methods)
+							{name: method.name, arguments: [for (argument in method.arguments) lowerType(argument.type)], result: lowerType(method.result)}
+					]
+				}
+		], typedClasses = [for (classDecl in program.classes) typeClass(classDecl, classes)], typedFunctions:Array<TypedFunction> = [];
 		for (fn in program.functions)
 			if (selected == null || selected.exists(fn.name))
 				typedFunctions.push(typeFunction(fn));
@@ -94,6 +103,7 @@ class Typer {
 		for (lambda in generated)
 			typedFunctions.push(lambda);
 		return {
+			interfaces: typedInterfaces,
 			classes: typedClasses.concat(generatedClasses),
 			functions: typedFunctions
 		};
@@ -201,14 +211,15 @@ class Typer {
 			switch statement {
 				case VarDeclaration(name, declared, initializer, span):
 					var value = typeExpression(initializer, scope);
-					if (declared != null && !isAssignable(value.type, lowerType(declared)))
-						fail("E1002", 'Type mismatch for local "$name"', span);
+					if (declared != null) {
+						var expected = lowerType(declared);
+						value = coerce(value, expected, 'local "$name"', "E1002");
+					}
 					scope.define(name, value.type, span);
 					output.push(TVar(name, value, span));
 				case Return(expression, span):
 					var value = typeExpression(expression, scope);
-					if (!isAssignable(value.type, result))
-						fail("E1003", "Return type mismatch", span);
+					value = coerce(value, result, "return", "E1003");
 					output.push(TReturn(value, span));
 				case ReturnVoid(span):
 					if (result != TVoid)
@@ -223,16 +234,14 @@ class Typer {
 							fail("E1005", 'Unknown variable "$name"', span);
 						if (scope.isCapture(name))
 							fail("E1013", 'Captured variable "$name" cannot be assigned in a lambda yet', span);
-						if (!isAssignable(value.type, expected))
-							fail("E1002", 'Type mismatch for local "$name"', span);
+						value = coerce(value, expected, 'local "$name"', "E1002");
 						output.push(TAssign(name, value, span));
 					} else {
 						var objectName = name.substr(0, dot),
 							fieldName = name.substr(dot + 1),
 							object = typeExpression(Variable(objectName, span), scope),
 							expected = fieldType(object.type, fieldName, span);
-						if (!isAssignable(value.type, expected))
-							fail("E1002", 'Type mismatch for field "$name"', span);
+						value = coerce(value, expected, 'field "$name"', "E1002");
 						output.push(TFieldAssign(object, fieldName, value, span));
 					}
 				case IndexAssignment(array, offset, expression, span):
@@ -379,7 +388,7 @@ class Typer {
 				if (arguments.length != expected.length)
 					fail("E1008", 'Constructor "$typeName" expects ${expected.length} arguments, got ${arguments.length}', span);
 				var typed = [for (argument in arguments) typeExpression(argument, scope)];
-				checkArguments(typed, expected, typeName + ".new");
+				typed = coerceArguments(typed, expected, typeName + ".new");
 				new TypedExpression(TNew(typeName, typed, constructor != null), TClass(typeName), span);
 			case NewArray(element, length, span):
 				var typedLength = typeExpression(length, scope);
@@ -406,7 +415,7 @@ class Typer {
 					var typed = [for (argument in arguments) typeExpression(argument, scope)];
 					if (typed.length != functionType.arguments.length)
 						fail("E1008", 'Function value "$name" expects ${functionType.arguments.length} arguments, got ${typed.length}', span);
-					checkArguments(typed, functionType.arguments, name);
+					typed = coerceArguments(typed, functionType.arguments, name);
 					new TypedExpression(TClosureCall(new TypedExpression(TLocal(name), callable, span), typed), functionType.result, span);
 				} else {
 					var dot = name.indexOf("."),
@@ -416,7 +425,7 @@ class Typer {
 						methodName = dot < 0 ? null : name.substr(dot + 1);
 					if (receiverType != null && methodName != null) {
 						var className = switch receiverType {
-							case TClass(value): value;
+							case TClass(value), TInterface(value): value;
 							default: null;
 						};
 						if (className == null)
@@ -430,7 +439,7 @@ class Typer {
 							typed = [for (argument in arguments) typeExpression(argument, scope)];
 						if (typed.length != expected.length)
 							fail("E1008", 'Function "$methodKey" expects ${expected.length} arguments, got ${typed.length}', span);
-						checkArguments(typed, expected, methodKey);
+						typed = coerceArguments(typed, expected, methodKey);
 						new TypedExpression(TMethodCall(receiver, methodKey, typed), lowerType(method.result), span);
 					} else {
 						var signature = signatures.get(name);
@@ -442,7 +451,7 @@ class Typer {
 						if (arguments.length != expectedArguments.length)
 							fail("E1008", 'Function "$name" expects ${expectedArguments.length} arguments, got ${arguments.length}', span);
 						var typed = [for (argument in arguments) typeExpression(argument, scope)];
-						checkArguments(typed, expectedArguments, name);
+						typed = coerceArguments(typed, expectedArguments, name);
 						new TypedExpression(TCall(name, typed), result, span);
 					}
 				}
@@ -514,10 +523,24 @@ class Typer {
 				return;
 		}
 
-	function checkArguments(arguments:Array<TypedExpression>, expected:Array<CompilerType>, name:String):Void {
+	function coerceArguments(arguments:Array<TypedExpression>, expected:Array<CompilerType>, name:String):Array<TypedExpression> {
+		var output = [];
 		for (i in 0...arguments.length)
-			if (!isAssignable(arguments[i].type, expected[i]))
-				fail("E1009", 'Argument ${i + 1} to "$name" has the wrong type', arguments[i].span);
+			output.push(coerce(arguments[i], expected[i], 'argument ${i + 1} to "$name"'));
+		return output;
+	}
+
+	function coerce(value:TypedExpression, expected:CompilerType, context:String, code:String = "E1009"):TypedExpression {
+		if (sameType(value.type, expected))
+			return value;
+		if (isAssignable(value.type, expected))
+			return switch [value.type, expected] {
+				case [TClass(_), TInterface(name)], [TInterface(_), TInterface(name)]:
+					new TypedExpression(TToInterface(value, name), expected, value.span);
+				default: value;
+			};
+		fail(code, 'Type mismatch for $context', value.span);
+		return value;
 	}
 
 	function isAssignable(actual:CompilerType, expected:CompilerType):Bool {
@@ -525,6 +548,8 @@ class Typer {
 			return true;
 		return switch [actual, expected] {
 			case [TClass(actualName), TClass(expectedName)]: classImplements(actualName, expectedName);
+			case [TClass(actualName), TInterface(expectedName)]: classImplements(actualName, expectedName);
+			case [TInterface(actualName), TInterface(expectedName)]: interfaceExtends(actualName, expectedName);
 			case [TArray(actualElement), TArray(expectedElement)]: sameType(actualElement, expectedElement);
 			default: false;
 		};
@@ -657,7 +682,7 @@ class Typer {
 			case FloatType: TFloat;
 			case StringType: TString;
 			case VoidType: TVoid;
-			case NamedType(name): TClass(name);
+			case NamedType(name): interfaceDecls.exists(name) ? TInterface(name) : TClass(name);
 			case ArrayType(element): TArray(lowerType(element));
 			case FunctionType(arguments, result): TFunction([for (argument in arguments) lowerType(argument)], lowerType(result));
 		};
@@ -691,6 +716,7 @@ class Typer {
 	static function sameType(left:CompilerType, right:CompilerType):Bool
 		return switch [left, right] {
 			case [TClass(a), TClass(b)]: a == b;
+			case [TInterface(a), TInterface(b)]: a == b;
 			case [TArray(a), TArray(b)]: sameType(a, b);
 			case [TFunction(aArgs, aResult), TFunction(bArgs, bResult)]: aArgs.length == bArgs.length && [
 					for (i in 0...aArgs.length)

@@ -1,6 +1,7 @@
 package compiler.ir;
 
 import compiler.ir.Ir;
+import compiler.ir.Ir.IrInterface;
 
 class IrVerifier {
 	public static function verify(program:IrProgram):Void {
@@ -10,18 +11,25 @@ class IrVerifier {
 		for (fn in program.functions)
 			addSignature(signatures, fn.name, [for (a in fn.arguments) a.type], fn.result);
 		var objects:Map<String, IrObject> = [];
+		var interfaces:Map<String, IrInterface> = [];
 		for (object in program.objects) {
 			if (objects.exists(object.name))
 				throw 'Duplicate IR object "${object.name}"';
 			objects.set(object.name, object);
 		}
+		for (interfaceDecl in program.interfaces) {
+			if (interfaces.exists(interfaceDecl.name))
+				throw 'Duplicate IR interface "${interfaceDecl.name}"';
+			interfaces.set(interfaceDecl.name, interfaceDecl);
+		}
 		if (!signatures.exists(program.entryPoint))
 			throw 'Unknown IR entry point "${program.entryPoint}"';
 		for (fn in program.functions)
-			verifyFunction(fn, signatures, objects);
+			verifyFunction(fn, signatures, objects, interfaces);
 	}
 
-	static function verifyFunction(fn:IrFunction, signatures:Map<String, {arguments:Array<IrType>, result:IrType}>, objects:Map<String, IrObject>):Void {
+	static function verifyFunction(fn:IrFunction, signatures:Map<String, {arguments:Array<IrType>, result:IrType}>, objects:Map<String, IrObject>,
+			interfaces:Map<String, IrInterface>):Void {
 		if (fn.blocks.length == 0)
 			throw 'IR function ${fn.name} has no entry block';
 		var blocks:Map<Int, IrBlock> = [], values:Map<Int, IrType> = [];
@@ -48,7 +56,7 @@ class IrVerifier {
 					default:
 				}
 			for (instruction in block.instructions)
-				verifyInstruction(instruction, values, signatures, objects);
+				verifyInstruction(instruction, values, signatures, objects, interfaces);
 			if (block.terminator == null)
 				throw 'Reachable IR block $id in ${fn.name} has no terminator';
 			switch block.terminator {
@@ -98,7 +106,8 @@ class IrVerifier {
 					}
 	}
 
-	static function verifyInstruction(instruction:IrInstruction, values:Map<Int, IrType>, signatures, objects:Map<String, IrObject>):Void
+	static function verifyInstruction(instruction:IrInstruction, values:Map<Int, IrType>, signatures, objects:Map<String, IrObject>,
+			interfaces:Map<String, IrInterface>):Void
 		switch instruction {
 			case Phi(_, _):
 			case ConstVoid(out):
@@ -134,7 +143,7 @@ class IrVerifier {
 					throw 'Wrong IR argument count for "$name"';
 				for (i in 0...args.length) {
 					require(values, args[i]);
-					if (!compatibleType(args[i].type, signature.arguments[i], objects))
+					if (!compatibleType(args[i].type, signature.arguments[i], objects, interfaces))
 						throw 'Wrong IR argument type for "$name"';
 				}
 				if (!sameType(out.type, signature.result))
@@ -152,7 +161,7 @@ class IrVerifier {
 				if (signature == null || signature.arguments.length == 0)
 					throw 'Unknown or receiver-less IR closure target "$name"';
 				require(values, receiver);
-				if (!compatibleType(receiver.type, signature.arguments[0], objects))
+				if (!compatibleType(receiver.type, signature.arguments[0], objects, interfaces))
 					throw 'Wrong IR instance closure receiver type';
 				var closureType = Function(signature.arguments.slice(1), signature.result);
 				if (!sameType(out.type, closureType))
@@ -174,17 +183,22 @@ class IrVerifier {
 				if (!sameType(out.type, functionType.result))
 					throw 'Wrong IR closure result type';
 				define(values, out);
+			case ToVirtual(out, value):
+				require(values, value);
+				switch out.type {
+					case Virtual(_):
+					default: throw 'IR virtual conversion must produce a virtual value';
+				}
+				define(values, out);
 			case MethodCall(out, object, methodName, args):
-				var objectType = requireObject(object, values, objects),
-					functionName = findMethodFunction(objectType, methodName, objects),
-					signature = functionName == null ? null : signatures.get(functionName);
+				var signature = methodSignature(object.type, methodName, signatures, objects, interfaces);
 				if (signature == null || signature.arguments.length != args.length + 1)
 					throw 'Unknown or mismatched IR method "$methodName"';
-				if (!compatibleType(object.type, signature.arguments[0], objects))
+				if (!compatibleType(object.type, signature.arguments[0], objects, interfaces))
 					throw 'Wrong IR method receiver type';
 				for (i in 0...args.length) {
 					require(values, args[i]);
-					if (!compatibleType(args[i].type, signature.arguments[i + 1], objects))
+					if (!compatibleType(args[i].type, signature.arguments[i + 1], objects, interfaces))
 						throw 'Wrong IR method argument type';
 				}
 				if (!sameType(out.type, signature.result))
@@ -273,6 +287,49 @@ class IrVerifier {
 		return object.base == null ? null : findMethodFunction(objects.get(object.base), name, objects);
 	}
 
+	static function methodSignature(type:IrType, name:String, signatures, objects:Map<String, IrObject>,
+			interfaces:Map<String, IrInterface>):Null<{arguments:Array<IrType>, result:IrType}> {
+		return switch type {
+			case Obj(_):
+				var object = requireObjectType(type, objects),
+					functionName = findMethodFunction(object, name, objects);
+				functionName == null ? null : signatures.get(functionName);
+			case Virtual(interfaceName):
+				var interfaceDecl = interfaces.get(interfaceName);
+				if (interfaceDecl == null) null; else {
+					var method = findInterfaceMethod(interfaceDecl, name, interfaces);
+					method == null ? null : {arguments: [Virtual(interfaceName)].concat(method.arguments), result: method.result};
+				}
+			default: null;
+		};
+	}
+
+	static function findInterfaceMethod(interfaceDecl:IrInterface, name:String, interfaces:Map<String, IrInterface>):Null<IrInterfaceMethod> {
+		for (method in interfaceDecl.methods)
+			if (method.name == name)
+				return method;
+		for (base in interfaceDecl.bases) {
+			var baseDecl = interfaces.get(base);
+			if (baseDecl != null) {
+				var found = findInterfaceMethod(baseDecl, name, interfaces);
+				if (found != null)
+					return found;
+			}
+		}
+		return null;
+	}
+
+	static function requireObjectType(type:IrType, objects:Map<String, IrObject>):IrObject {
+		return switch type {
+			case Obj(name):
+				var object = objects.get(name);
+				if (object == null)
+					throw 'Unknown IR object "$name"';
+				object;
+			default: throw "IR method receiver is not an object";
+		};
+	}
+
 	static function addPredecessor(map:Map<Int, Map<Int, Bool>>, target:Int, source:Int):Void {
 		var found = map.get(target);
 		if (found == null) {
@@ -322,14 +379,27 @@ class IrVerifier {
 			default: left == right;
 		};
 
-	static function compatibleType(actual:IrType, expected:IrType, objects:Map<String, IrObject>):Bool {
+	static function compatibleType(actual:IrType, expected:IrType, objects:Map<String, IrObject>, interfaces:Map<String, IrInterface>):Bool {
 		if (sameType(actual, expected))
 			return true;
 		return switch [actual, expected] {
 			case [Obj(actualName), Obj(expectedName)]: var object = objects.get(actualName); object != null && object.base != null && compatibleType(Obj(object.base),
-					expected, objects);
+					expected, objects, interfaces);
+			case [Virtual(actualName), Virtual(expectedName)]: interfaceExtends(actualName, expectedName, interfaces);
 			case [Array(actualElement), Array(expectedElement)]: sameType(actualElement, expectedElement);
 			default: false;
 		};
+	}
+
+	static function interfaceExtends(actual:String, expected:String, interfaces:Map<String, IrInterface>):Bool {
+		if (actual == expected)
+			return true;
+		var declaration = interfaces.get(actual);
+		if (declaration == null)
+			return false;
+		for (base in declaration.bases)
+			if (interfaceExtends(base, expected, interfaces))
+				return true;
+		return false;
 	}
 }

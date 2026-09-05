@@ -25,6 +25,7 @@ class ObjectMain {
 		program.objects.push({
 			name: "Box",
 			base: null,
+			interfaces: [],
 			fields: [{name: "value", type: IrType.I32}],
 			methods: []
 		});

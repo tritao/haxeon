@@ -36,9 +36,10 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 	and pattern matching remain future work. Our HashLink fork enforces bounds in
 	the JIT.
 - [~] Prototype-dispatched instance calls and inheritance are live, including
-  stable override slots and arbitrary fixed-arity calls; interface declarations
-  and implementation contracts are typed, while interface ABI values and basic
-  generics remain.
+  stable override slots and arbitrary fixed-arity calls. Basic HashLink virtual
+  interface values now lower through `OToVirtual`, support inherited interface
+  slots, and dispatch through `OCallMethod`; generic interfaces, nullable
+  values, and advanced variance remain future work.
 - [ ] A documented runtime library ABI for strings, collections, IO, and time
   (typed `trace` and a native-backed `IntArray` ABI probe are exercised
   end-to-end; the public generic collection ABI remains future work).
@@ -100,13 +101,10 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 	collection operations; keep bounds checks in the HashLink operation contract.
 2. Add enums/nullable values and pattern matching on the same tagged-value
    rules used by the runtime bridge.
-3. Add interface declarations and interface-typed values on the same
-   prototype-slot ABI; direct calls remain an optimization, never the
-   semantic contract.
-4. Complete package/import resolution for nominal types, then migrate a small
+3. Complete package/import resolution for nominal types, then migrate a small
    Pragtical utility plugin as the first real multi-module workload.
-5. Expose compiler snapshots as the editor language service.
-6. Add structural reload domains and state migration, then move larger editor
+4. Expose compiler snapshots as the editor language service.
+5. Add structural reload domains and state migration, then move larger editor
    subsystems and finally the editor core.
 
 ## Definition of Pragtical-ready

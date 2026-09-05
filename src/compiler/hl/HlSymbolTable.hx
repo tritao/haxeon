@@ -1,8 +1,10 @@
 package compiler.hl;
 
 import compiler.hl.HlCode.HlTypeDef;
+import compiler.hl.HlCode.HlVirtualField;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrObject;
+import compiler.ir.Ir.IrInterface;
 
 class HlSymbolTable {
 	public final ints:Array<Int> = [];
@@ -17,6 +19,7 @@ class HlSymbolTable {
 	final typeIndices:Map<String, Int> = [];
 	final objectIndices:Map<String, Int> = [];
 	final objectMethodIndices:Map<String, Map<String, Int>> = [];
+	final interfaceMethodIndices:Map<String, Map<String, Int>> = [];
 
 	public function new() {}
 
@@ -57,6 +60,8 @@ class HlSymbolTable {
 		switch type {
 			case Function(arguments, result):
 				return internFunction(arguments, result);
+			case Virtual(name):
+				throw 'Virtual type "$name" must be registered before use';
 			default:
 		}
 		var index = types.length;
@@ -70,9 +75,53 @@ class HlSymbolTable {
 			case Bytes: HlType.Bytes;
 			case Array(_): HlType.Array;
 			case Obj(name): throw 'Object type "$name" must be registered before use';
+			case Virtual(name): throw 'Virtual type "$name" must be registered before use';
 			case Function(_, _): throw 'Function type must be interned with internFunction';
 		}));
 		typeIndices.set(key, index);
+		return index;
+	}
+
+	public function internInterface(interfaceDecl:IrInterface):Int {
+		var name = interfaceDecl.name,
+			key = 'virt:$name',
+			found = typeIndices.get(key);
+		if (found != null)
+			return found;
+		var fields:Array<Null<HlVirtualField>> = [], slots:Map<String, Int> = [], next = 0;
+		for (base in interfaceDecl.bases) {
+			var inherited = interfaceMethodIndices.get(base);
+			if (inherited != null)
+				for (methodName => slot in inherited) {
+					slots.set(methodName, slot);
+					if (slot >= next)
+						next = slot + 1;
+					var baseIndex = typeIndices.get('virt:$base');
+					if (baseIndex != null)
+						switch types[baseIndex] {
+							case Virtual(baseFields):
+								if (slot < baseFields.length)
+									fields[slot] = baseFields[slot];
+							default:
+						}
+				}
+		}
+		for (method in interfaceDecl.methods) {
+			var slot = slots.get(method.name);
+			if (slot == null) {
+				slot = next++;
+				slots.set(method.name, slot);
+			}
+			var type = internFunction(method.arguments, method.result);
+			fields[slot] = {name: internString(method.name), type: type};
+		}
+		for (field in fields)
+			if (field == null)
+				throw 'Interface "$name" has an unassigned virtual slot';
+		var index = types.length;
+		types.push(Virtual([for (field in fields) field]));
+		typeIndices.set(key, index);
+		interfaceMethodIndices.set(name, slots);
 		return index;
 	}
 
@@ -125,6 +174,11 @@ class HlSymbolTable {
 		return methods == null ? null : methods.get(methodName);
 	}
 
+	public function interfaceMethodIndex(interfaceName:String, methodName:String):Null<Int> {
+		var methods = interfaceMethodIndices.get(interfaceName);
+		return methods == null ? null : methods.get(methodName);
+	}
+
 	public function internFunction(arguments:Array<IrType>, result:IrType):Int {
 		var key = 'fun(${[for (a in arguments) typeKey(a)].join(",")})->${typeKey(result)}',
 			found = typeIndices.get(key);
@@ -147,6 +201,7 @@ class HlSymbolTable {
 			case Bytes: "bytes";
 			case Array(element): 'array:${typeKey(element)}';
 			case Obj(name): 'obj:$name';
+			case Virtual(name): 'virt:$name';
 			case Function(arguments, result): 'fun(${[for (argument in arguments) typeKey(argument)].join(",")})->${typeKey(result)}';
 		};
 }

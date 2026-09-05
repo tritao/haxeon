@@ -116,6 +116,13 @@ class CfgVerifier {
 						default: throw 'CFG closure call requires a function value';
 					}
 					define(out, defined, available);
+				case ToVirtual(out, value):
+					require(value, available);
+					switch out.type {
+						case Virtual(_):
+						default: throw 'CFG virtual conversion must produce a virtual value';
+					}
+					define(out, defined, available);
 				case MethodCall(out, object, _, arguments):
 					require(object, available);
 					for (argument in arguments)
@@ -207,6 +214,7 @@ class CfgVerifier {
 	static function sameType(left:IrType, right:IrType):Bool
 		return switch [left, right] {
 			case [Obj(a), Obj(b)]: a == b;
+			case [Virtual(a), Virtual(b)]: a == b;
 			case [Array(a), Array(b)]: sameType(a, b);
 			case [Function(aArgs, aResult), Function(bArgs, bResult)]: aArgs.length == bArgs.length && [
 					for (i in 0...aArgs.length)

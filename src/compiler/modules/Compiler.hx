@@ -337,7 +337,7 @@ class Compiler {
 		];
 		var objectNames = [for (name in objectCache.keys()) name];
 		objectNames.sort(Reflect.compare);
-		var ir = IrGenerator.assemble(cached, irNatives(), [for (name in objectNames) objectCache.get(name)]);
+		var ir = IrGenerator.assemble(cached, irNatives(), [for (name in objectNames) objectCache.get(name)], IrGenerator.interfacesFrom(typedNew));
 		var signatureChanges = [for (name in signatureChanged.keys()) name];
 		signatureChanges.sort(Reflect.compare);
 		var forceReload = compiledOnce && structuralChanged.keys().hasNext();
@@ -396,6 +396,7 @@ class Compiler {
 			case TString: Bytes;
 			case TVoid: Void;
 			case TClass(name): Obj(name);
+			case TInterface(name): Virtual(name);
 			case TArray(element): Array(irType(element));
 			case TFunction(arguments, result): Function([for (argument in arguments) irType(argument)], irType(result));
 		};
