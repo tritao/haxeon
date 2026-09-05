@@ -1065,6 +1065,11 @@ class Compiler {
 			case Conditional(condition, whenTrue, whenFalse, s):
 				Conditional(canonicalExpression(condition, module, entry, locals, aliases), canonicalExpression(whenTrue, module, entry, locals, aliases),
 					canonicalExpression(whenFalse, module, entry, locals, aliases), s);
+			case BlockExpression(statements, value, s):
+				BlockExpression([
+					for (statement in statements)
+						canonicalStatement(statement, module, entry, locals, aliases)
+				], canonicalExpression(value, module, entry, locals, aliases), s);
 			case SwitchExpression(subject, cases, fallback, s):
 				SwitchExpression(canonicalExpression(subject, module, entry, locals, aliases), [
 					for (switchCase in cases)
@@ -1322,6 +1327,10 @@ class Compiler {
 				scanExpression(condition, dependencies);
 				scanExpression(whenTrue, dependencies);
 				scanExpression(whenFalse, dependencies);
+			case BlockExpression(statements, value, _):
+				for (statement in statements)
+					scanStatement(statement, dependencies);
+				scanExpression(value, dependencies);
 			case SwitchExpression(subject, cases, fallback, _):
 				scanExpression(subject, dependencies);
 				for (switchCase in cases) {
@@ -1472,6 +1481,10 @@ class Compiler {
 				scanCallExpression(condition, calls, aliases);
 				scanCallExpression(whenTrue, calls, aliases);
 				scanCallExpression(whenFalse, calls, aliases);
+			case BlockExpression(statements, value, _):
+				for (statement in statements)
+					scanCalls(statement, calls, aliases);
+				scanCallExpression(value, calls, aliases);
 			case SwitchExpression(subject, cases, fallback, _):
 				scanCallExpression(subject, calls, aliases);
 				for (switchCase in cases) {
@@ -1587,6 +1600,9 @@ class Compiler {
 				collectLambdaExpression(condition, functionName, module, generatedByModule);
 				collectLambdaExpression(whenTrue, functionName, module, generatedByModule);
 				collectLambdaExpression(whenFalse, functionName, module, generatedByModule);
+			case BlockExpression(statements, value, _):
+				collectLambdas(statements, functionName, module, generatedByModule);
+				collectLambdaExpression(value, functionName, module, generatedByModule);
 			case SwitchExpression(subject, cases, fallback, _):
 				collectLambdaExpression(subject, functionName, module, generatedByModule);
 				for (switchCase in cases) {

@@ -47,6 +47,7 @@ enum TypedExpressionKind {
 	TAnd(left:TypedExpression, right:TypedExpression);
 	TOr(left:TypedExpression, right:TypedExpression);
 	TConditional(condition:TypedExpression, whenTrue:TypedExpression, whenFalse:TypedExpression);
+	TBlockExpression(statements:Array<TypedStatement>, result:TypedExpression);
 	TSwitchExpression(expression:TypedExpression, cases:Array<TypedSwitchExpressionCase>, defaultExpression:Null<TypedExpression>);
 	TObjectLiteral(name:String, fields:Array<TypedObjectField>);
 	TArrayLiteral(values:Array<TypedExpression>);

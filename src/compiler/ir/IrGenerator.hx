@@ -900,6 +900,9 @@ class IrGenerator {
 				builder.jump(afterBlock);
 				builder.select(afterBlock);
 				builder.load(localName, resultType);
+			case TBlockExpression(statements, result):
+				lowerStatements(statements, builder, localTypes, []);
+				lowerExpression(result, builder, localTypes);
 			case TSwitchExpression(subject, cases, defaultExpression):
 				var subjectName = '$' + 'switch-expression-subject:${expression.span.start}',
 					resultName = '$' + 'switch-expression-result:${expression.span.start}',

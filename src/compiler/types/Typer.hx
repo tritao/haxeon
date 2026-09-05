@@ -328,6 +328,7 @@ class Typer {
 			arguments.push({name: context.cells.exists(argument.name) ? argument.name : scope.resolveId(argument.name), type: type});
 		}
 		var result = lowerType(fn.result);
+		context.resultType = result;
 		var statements = typeStatements(fn.statements, scope, result);
 		if (result != TVoid && !alwaysReturns(statements))
 			fail("E1006", 'Function ${fn.name} does not return on every path', fn.span);
@@ -830,6 +831,7 @@ class Typer {
 					var lambdaName = '$' + 'lambda:' + context.name + ':' + span.start,
 						previousContext = context;
 					context = new BodyContext(lambdaName, previousContext.typeSubstitutions);
+					context.resultType = inferredResult;
 					collectAssignedLocals(body, context.assigned);
 					var lambdaDeclared:Map<String, Bool> = [];
 					for (argument in arguments)
@@ -923,6 +925,11 @@ class Typer {
 				typedTrue = coerce(typedTrue, resultType, "conditional branch", "E1003");
 				typedFalse = coerce(typedFalse, resultType, "conditional branch", "E1003");
 				new TypedExpression(TConditional(typedCondition, typedTrue, typedFalse), resultType, span);
+			case BlockExpression(statements, result, span):
+				var blockScope = new Scope(scope),
+					typedStatements = typeStatements(statements, blockScope, context.resultType),
+					typedResult = typeExpression(result, blockScope, expectedType);
+				new TypedExpression(TBlockExpression(typedStatements, typedResult), typedResult.type, span);
 			case PostfixIncrement(target, delta, span):
 				var typedTarget = typeExpression(target, scope);
 				if (!sameType(typedTarget.type, TInt) && !sameType(typedTarget.type, TFloat))
@@ -1779,6 +1786,9 @@ class Typer {
 			case Conditional(condition, whenTrue, whenFalse, _):
 				for (item in [condition, whenTrue, whenFalse])
 					collectMutableCaptureExpression(item, outerDeclared, result);
+			case BlockExpression(statements, value, _):
+				collectMutableCaptureCandidates(statements, outerDeclared, result);
+				collectMutableCaptureExpression(value, outerDeclared, result);
 			case SwitchExpression(subject, cases, fallback, _):
 				collectMutableCaptureExpression(subject, outerDeclared, result);
 				for (switchCase in cases) {
@@ -1826,6 +1836,9 @@ class Typer {
 			case Conditional(condition, whenTrue, whenFalse, _):
 				for (item in [condition, whenTrue, whenFalse])
 					collectExpressionVariables(item, names);
+			case BlockExpression(statements, value, _):
+				collectVariables(statements, names);
+				collectExpressionVariables(value, names);
 			case SwitchExpression(subject, cases, fallback, _):
 				collectExpressionVariables(subject, names);
 				for (switchCase in cases) {

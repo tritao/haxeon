@@ -565,6 +565,16 @@ class Parser {
 	function parsePrimary():AstExpression {
 		if (match(TokenKind.Switch))
 			return parseSwitchExpression(previous().span);
+		if (match(TokenKind.If)) {
+			var start = previous().span;
+			consume(TokenKind.LeftParen);
+			var condition = parseExpression();
+			consume(TokenKind.RightParen);
+			var whenTrue = parseExpressionBranch();
+			consume(TokenKind.Else);
+			var whenFalse = parseExpressionBranch();
+			return Conditional(condition, whenTrue, whenFalse, start.merge(expressionSpan(whenFalse)));
+		}
 		if (match(TokenKind.Minus)) {
 			var start = previous().span, value = parsePrimary();
 			return Negate(value, start.merge(expressionSpan(value)));
@@ -716,6 +726,31 @@ class Parser {
 			return parsePostfix(expression);
 		}
 		fail(current(), "Expected expression");
+		return null;
+	}
+
+	function parseExpressionBranch():AstExpression {
+		if (!match(TokenKind.LeftBrace))
+			return parseExpression();
+		var start = previous().span, statements = [];
+		while (!check(TokenKind.RightBrace)) {
+			var saved = position, candidate = parseExpression();
+			if (check(TokenKind.RightBrace)) {
+				var end = consume(TokenKind.RightBrace).span;
+				return BlockExpression(statements, candidate, start.merge(end));
+			}
+			position = saved;
+			appendStatements(statements, parseStatements());
+		}
+		if (statements.length > 0)
+			switch statements[statements.length - 1] {
+				case Expression(result, _):
+					statements.pop();
+					var end = consume(TokenKind.RightBrace).span;
+					return BlockExpression(statements, result, start.merge(end));
+				default:
+			}
+		fail(current(), "Expression block requires a result expression");
 		return null;
 	}
 
@@ -947,7 +982,8 @@ class Parser {
 				Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span), Div(_, _, span), Mod(_, _, span), Negate(_, span), Less(_, _, span),
 				LessEqual(_, _, span), Greater(_, _, span), GreaterEqual(_, _, span), Equal(_, _, span), NotEqual(_, _, span), Not(_, span), Call(_, _, span),
 				MethodCall(_, _, _, span), New(_, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span), PostfixIncrement(_, _, span),
-				Lambda(_, _, span), And(_, _, span), Or(_, _, span), Conditional(_, _, _, span), SwitchExpression(_, _, _, span): span;
+				Lambda(_, _,
+					span), And(_, _, span), Or(_, _, span), Conditional(_, _, _, span), BlockExpression(_, _, span), SwitchExpression(_, _, _, span): span;
 			case ObjectLiteral(_, span), ArrayLiteral(_, span): span;
 		}
 

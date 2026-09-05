@@ -12,6 +12,7 @@ class BodyContext {
 	public final cellKinds:Map<String, compiler.types.TypedAst.CellStorageKind> = [];
 	public var loopDepth:Int = 0;
 	public final loopEarlyExits:Array<Bool> = [];
+	public var resultType:CompilerType = TVoid;
 
 	public function new(name:String, ?typeSubstitutions:Map<String, CompilerType>) {
 		this.name = name;

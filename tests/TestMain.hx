@@ -233,6 +233,7 @@ class TestMain {
 					}
 		if (!conditionalHasPhi)
 			throw "Conditional expression did not merge branch values through SSA";
+		Frontend.compile('function main():Int { var sideEffect = 0; var value = if (true) { sideEffect++; 40; } else { 2; }; return value + sideEffect; }');
 		new Parser(new Lexer(new SourceFile("contextual-expression-name.hx",
 			'function main():Int { return String.fromCharCode(42).length; }')).tokenize()).parseProgram();
 		var mutableSource = 'function main():Int { var outer = 0; while (outer < 2) { var inner = 0; while (inner < 2) { inner = inner + 1; } outer = outer + inner; } return outer; }';
