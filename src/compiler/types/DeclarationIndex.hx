@@ -166,7 +166,7 @@ class DeclarationIndex {
 		for (decl in program.enums)
 			for (caseDecl in decl.cases)
 				for (parameter in caseDecl.params)
-					resolve(parameter, caseDecl.span);
+					resolve(parameter.type, parameter.span);
 		for (decl in program.interfaces)
 			for (method in decl.methods)
 				resolveFunction(method);

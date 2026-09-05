@@ -58,6 +58,8 @@ class TestMain {
 			throw "Hexadecimal integer literals were not tokenized";
 		Frontend.compile('function main():Int { return 0x2A; }');
 		Frontend.compile('enum Kind { Void; Float; } function main():Int { var value:Kind = Kind.Float; return switch value { case Kind.Void: 0; case Kind.Float: 42; }; }');
+		Frontend.compile('enum Result { Value(value:Int, ?message:String); } function main():Int { var result:Result = Result.Value(42); switch result { case Result.Value(value): return value; } }');
+		Frontend.compile('enum Mixed { Value(?first:String, second:Int); } function main():Int { var value:Mixed = Mixed.Value(null, 42); return 42; }');
 		Frontend.compile('typedef Options = { final ?name:String; ?final count:Int; } function main():Int { return 42; }');
 		Frontend.compile('function main():Int { var values = [20, 22]; var empty:Array<Int> = []; return values[0] + values[1] + empty.length; }');
 		expectCompileError('function main():Int { var values = []; return 0; }', 'Empty array literal requires an expected element type');

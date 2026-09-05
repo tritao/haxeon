@@ -73,15 +73,25 @@ class Parser {
 		var name = consume(TokenKind.Identifier).text, cases = [];
 		consume(TokenKind.LeftBrace);
 		while (!check(TokenKind.RightBrace)) {
-			var caseToken = consumeName(), params:Array<AstType> = [];
+			var caseToken = consumeName(),
+				params:Array<compiler.Ast.AstEnumParameter> = [];
 			if (match(TokenKind.LeftParen)) {
 				if (!check(TokenKind.RightParen))
 					do {
+						var optional = match(TokenKind.Question),
+							parameterStart = current().span,
+							name:Null<String> = null;
 						if (check(TokenKind.Identifier) && peekKind(1) == TokenKind.Colon) {
-							advance();
+							name = advance().text;
 							advance();
 						}
-						params.push(parseType());
+						var type = parseType();
+						params.push({
+							name: name,
+							type: type,
+							optional: optional,
+							span: parameterStart.merge(previous().span)
+						});
 					} while (match(TokenKind.Comma));
 				consume(TokenKind.RightParen);
 			}

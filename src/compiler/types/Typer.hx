@@ -106,7 +106,10 @@ class Typer {
 						for (caseDecl in enumDecl.cases)
 							{
 								name: caseDecl.name,
-								params: [for (param in caseDecl.params) lowerType(param)],
+								params: [
+									for (param in caseDecl.params)
+										param.optional ? TNullable(lowerType(param.type)) : lowerType(param.type)
+								],
 								span: caseDecl.span
 							}
 					],
@@ -676,11 +679,13 @@ class Typer {
 					return null;
 				if (!sameType(expected, TEnum(info.enumName)))
 					fail("E1019", "Enum switch case has the wrong enum type", span);
-				if (arguments.length != info.params.length)
-					fail("E1019", 'Enum switch case "$name" expects ${info.params.length} bindings', span);
+				var required = requiredEnumParameters(info.params);
+				if (arguments.length < required || arguments.length > info.params.length)
+					fail("E1019", 'Enum switch case "$name" expects $required to ${info.params.length} bindings', span);
 				var bindings = [];
 				for (index in 0...arguments.length) {
-					var parameterType = lowerType(info.params[index]);
+					var parameter = info.params[index],
+						parameterType = parameter.optional ? TNullable(lowerType(parameter.type)) : lowerType(parameter.type);
 					switch arguments[index] {
 						case Variable(binding, bindingSpan):
 							if (binding != "_") {
@@ -1117,10 +1122,16 @@ class Typer {
 					var receiverType = receiver == null ? null : receiver.type;
 					var enumCase = enumCaseInfo(name);
 					if (enumCase != null) {
-						var expected = [for (param in enumCase.params) lowerType(param)];
-						if (arguments.length != expected.length)
-							fail("E1008", 'Enum constructor "$name" expects ${expected.length} arguments, got ${arguments.length}', span);
+						var expected = [
+							for (param in enumCase.params)
+								param.optional ? TNullable(lowerType(param.type)) : lowerType(param.type)
+						];
+						var required = requiredEnumParameters(enumCase.params);
+						if (arguments.length < required || arguments.length > expected.length)
+							fail("E1008", 'Enum constructor "$name" expects $required to ${expected.length} arguments, got ${arguments.length}', span);
 						var typedArguments = [for (argument in arguments) typeExpression(argument, scope)];
+						while (typedArguments.length < expected.length)
+							typedArguments.push(new TypedExpression(TNullLiteral, TNull, span));
 						typedArguments = coerceArguments(typedArguments, expected, name);
 						return new TypedExpression(TEnumConstruct(enumCase.enumName, enumCase.index, typedArguments), TEnum(enumCase.enumName), span);
 					}
@@ -1895,7 +1906,7 @@ class Typer {
 		return null;
 	}
 
-	function enumCaseInfo(name:String):Null<{enumName:String, index:Int, params:Array<AstType>}> {
+	function enumCaseInfo(name:String):Null<{enumName:String, index:Int, params:Array<compiler.Ast.AstEnumParameter>}> {
 		var dot = name.indexOf(".");
 		if (dot <= 0)
 			return null;
@@ -1908,6 +1919,14 @@ class Typer {
 			if (declaration.cases[index].name == caseName)
 				return {enumName: enumName, index: index, params: declaration.cases[index].params};
 		return null;
+	}
+
+	static function requiredEnumParameters(parameters:Array<compiler.Ast.AstEnumParameter>):Int {
+		var minimum = 0;
+		for (index in 0...parameters.length)
+			if (!parameters[index].optional)
+				minimum = index + 1;
+		return minimum;
 	}
 
 	function fieldType(type:CompilerType, name:String, span:SourceSpan):CompilerType {

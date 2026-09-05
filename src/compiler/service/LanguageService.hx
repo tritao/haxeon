@@ -121,7 +121,7 @@ class LanguageService {
 				result.push({
 					name: caseDecl.name,
 					kind: "enumCase",
-					detail: '${enumDecl.name}.${caseDecl.name}(${[for (param in caseDecl.params) typeName(param)].join(",")})',
+					detail: '${enumDecl.name}.${caseDecl.name}(${[for (param in caseDecl.params) (param.optional ? "?" : "") + typeName(param.type)].join(",")})',
 					span: caseDecl.span
 				});
 		}
@@ -168,7 +168,7 @@ class LanguageService {
 							result.push({
 								label: caseDecl.name,
 								kind: "enumCase",
-								detail: '${enumDecl.name}.${caseDecl.name}(${[for (param in caseDecl.params) typeName(param)].join(",")})'
+								detail: '${enumDecl.name}.${caseDecl.name}(${[for (param in caseDecl.params) (param.optional ? "?" : "") + typeName(param.type)].join(",")})'
 							});
 			for (classDecl in ast.classes)
 				if (classDecl.name == qualifier) {
@@ -213,7 +213,8 @@ class LanguageService {
 				if (enumDecl.name == qualifier)
 					for (caseDecl in enumDecl.cases)
 						if (caseDecl.name == name)
-							return '${enumDecl.name}.${caseDecl.name}(${[for (param in caseDecl.params) typeName(param)].join(",")})';
+							return
+								'${enumDecl.name}.${caseDecl.name}(${[for (param in caseDecl.params) (param.optional ? "?" : "") + typeName(param.type)].join(",")})';
 			for (classDecl in ast.classes)
 				if (classDecl.name == qualifier)
 					for (field in classDecl.fields)

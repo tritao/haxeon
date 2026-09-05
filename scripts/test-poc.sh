@@ -162,6 +162,7 @@ run_program switch-expression 42
 run_program array-literal 42
 run_program do-while 42
 run_program postfix-increment 42
+run_program optional-enum-parameter 42
 run_program generic-functions 42
 
 object_output="$root_dir/out/object.hl"

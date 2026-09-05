@@ -772,7 +772,7 @@ class Compiler {
 					for (caseDecl in enumDecl.cases)
 						caseDecl.name + "(" + [
 							for (param in caseDecl.params)
-								SemanticSignature.parsed(param, state.ast.aliases)
+								(param.optional ? "?" : "") + SemanticSignature.parsed(param.type, state.ast.aliases)
 						].join(",") + ")"
 				].join(";") + "}";
 			enums.set(enumName, signature);
@@ -926,7 +926,19 @@ class Compiler {
 			name: qualifiedTypeName(packageName, enumDecl.name),
 			cases: [
 				for (caseDecl in enumDecl.cases)
-					{name: caseDecl.name, params: [for (param in caseDecl.params) canonicalType(param, aliases)], span: caseDecl.span}
+					{
+						name: caseDecl.name,
+						params: [
+							for (param in caseDecl.params)
+								{
+									name: param.name,
+									type: canonicalType(param.type, aliases),
+									optional: param.optional,
+									span: param.span
+								}
+						],
+						span: caseDecl.span
+					}
 			],
 			span: enumDecl.span
 		};

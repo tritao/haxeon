@@ -941,7 +941,8 @@ class IrGenerator {
 					builder.select(bodyBlock);
 					for (binding in switchCase.bindings) {
 						localTypes.set(binding.name, lowerType(binding.type));
-						builder.store(binding.name, builder.enumField(subjectValue, switchCase.constructorIndex, binding.index, lowerType(binding.type)));
+						builder.store(binding.name,
+							builder.enumField(builder.load(subjectName, subjectType), switchCase.constructorIndex, binding.index, lowerType(binding.type)));
 					}
 					builder.store(resultName, lowerExpression(switchCase.result, builder, localTypes));
 					builder.jump(afterBlock);
