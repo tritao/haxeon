@@ -155,6 +155,8 @@ class HlLower {
 						instructions.push(HlInstruction.LoadBool(defineRegister(output, registers, registerTypes), value));
 					case ConstNull(output):
 						instructions.push(HlInstruction.LoadNull(defineRegister(output, registers, registerTypes)));
+					case ToDyn(output, value):
+						instructions.push(HlInstruction.ToDyn(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
 					case GlobalGet(output, name):
 						var global = symbols.globalIndex(name);
 						if (global == null)
@@ -244,6 +246,8 @@ class HlLower {
 			switch block.terminator {
 				case Return(value):
 					instructions.push(HlInstruction.Return(requireRegister(value, registers)));
+				case Throw(value):
+					instructions.push(HlInstruction.Throw(requireRegister(value, registers)));
 				case Jump(target):
 					emitPhiMoves(edges.get(edgeKey(block.id, target)), registers, registerTypes, instructions);
 					instructions.push(HlInstruction.Jump('block_$target'));

@@ -58,7 +58,7 @@ class SsaBuilder {
 			var next:Array<Int> = switch block.terminator {
 				case Jump(target): [target];
 				case Branch(_, yes, no): [yes, no];
-				case Return(_): [];
+				case Return(_), Throw(_): [];
 				case null: throw 'Reachable CFG block $id has no terminator';
 			};
 			successors.set(id, next);
@@ -265,6 +265,9 @@ class SsaBuilder {
 				case ConstNull(out):
 					var result = define(out);
 					target.instructions.push(ConstNull(result));
+				case ToDyn(out, value):
+					var result = define(out);
+					target.instructions.push(ToDyn(result, resolve(value)));
 				case GlobalGet(out, name):
 					var result = define(out);
 					target.instructions.push(GlobalGet(result, name));
@@ -340,6 +343,7 @@ class SsaBuilder {
 			}
 		target.terminator = switch block.terminator {
 			case Return(value): Return(resolve(value));
+			case Throw(value): Throw(resolve(value));
 			case Jump(to): Jump(to);
 			case Branch(condition, yes, no): Branch(resolve(condition), yes, no);
 			case null: null;

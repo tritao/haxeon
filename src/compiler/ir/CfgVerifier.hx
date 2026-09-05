@@ -42,7 +42,7 @@ class CfgVerifier {
 				case Branch(_, yes, no):
 					work.push(yes);
 					work.push(no);
-				case Return(_):
+				case Return(_), Throw(_):
 			}
 		}
 	}
@@ -71,6 +71,10 @@ class CfgVerifier {
 						case Bytes, Abstract(_), Obj(_), Enum(_), Virtual(_), Array(_), Function(_, _):
 						default: throw 'CFG null constant must produce a reference value';
 					}
+					define(out, defined, available);
+				case ToDyn(out, value):
+					require(value, available);
+					expect(out, Dyn);
 					define(out, defined, available);
 				case LoadLocal(out, name):
 					var type = local(fn, name);
@@ -226,6 +230,8 @@ class CfgVerifier {
 					require(value, available);
 					if (!sameType(value.type, fn.result))
 						throw 'Wrong CFG return type in ${fn.name}';
+				case Throw(value):
+					require(value, available);
 				case Jump(target):
 					targetBlock(target, blocks);
 				case Branch(condition, yes, no):

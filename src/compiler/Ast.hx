@@ -88,6 +88,7 @@ enum AstStatement {
 	IndexAssignment(array:AstExpression, index:AstExpression, expression:AstExpression, span:SourceSpan);
 	Return(expression:AstExpression, span:SourceSpan);
 	ReturnVoid(span:SourceSpan);
+	Throw(expression:AstExpression, span:SourceSpan);
 	If(condition:AstExpression, thenBranch:Array<AstStatement>, elseBranch:Array<AstStatement>, span:SourceSpan);
 	While(condition:AstExpression, body:Array<AstStatement>, span:SourceSpan);
 	ForIn(name:String, iterable:AstExpression, body:Array<AstStatement>, span:SourceSpan);

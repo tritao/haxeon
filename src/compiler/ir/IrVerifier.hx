@@ -77,6 +77,8 @@ class IrVerifier {
 					require(values, value);
 					if (!sameType(value.type, fn.result))
 						throw 'Wrong return type in ${fn.name}';
+				case Throw(value):
+					require(values, value);
 				case Jump(target):
 					work.push(target);
 				case Branch(condition, yes, no):
@@ -143,6 +145,11 @@ class IrVerifier {
 					case Bytes, Abstract(_), Obj(_), Enum(_), Virtual(_), Array(_), Function(_, _):
 					default: throw 'IR null constant must produce a reference value';
 				}
+				define(values, out);
+			case ToDyn(out, value):
+				require(values, value);
+				if (out.type != Dyn)
+					throw 'IR dynamic conversion must produce Dyn';
 				define(values, out);
 			case GlobalGet(out, name):
 				var type = globals.get(name);

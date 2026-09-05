@@ -138,6 +138,7 @@ run_program enum-exhaustive 42
 run_program interface-dispatch 42
 run_program interface-inheritance 43
 run_program interface-upcast 5
+run_program throw-string 1
 
 object_output="$root_dir/out/object.hl"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ObjectMain "$object_output"

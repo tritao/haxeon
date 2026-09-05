@@ -483,6 +483,8 @@ class IrGenerator {
 					builder.returnValue(lowerExpression(expression, builder, localTypes));
 				case TReturnVoid(_):
 					builder.returnVoid();
+				case TThrow(expression, _):
+					builder.throwValue(builder.toDyn(lowerExpression(expression, builder, localTypes)));
 				case TBreak(_):
 					if (loops.length == 0)
 						throw "break outside loop";

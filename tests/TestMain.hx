@@ -127,6 +127,8 @@ class TestMain {
 			'Type mismatch for local "wrong"');
 		expectCompileError('function main():Int { missing = 1; return 0; }', 'Unknown variable "missing"');
 		expectCompileError('function main():Int { var value:Int = 1; value = "wrong"; return value; }', 'Type mismatch for local "value"');
+		expectCompileError('function main():Int { throw; }', 'Expected expression');
+		expectCompileError('function noop():Void { return; } function main():Int { throw noop(); }', 'Cannot throw a Void value');
 		expectCompileError('class Box { public function values():Array<Int> { return new Array<Int>(0); } public function add():Void { this.values().push(1); } } function main():Int { return 0; }',
 			'Array.push requires a mutable local or field array');
 		expectCompileError('function main():Int { return 1; var unreachable = 2; }', 'Unreachable statement');

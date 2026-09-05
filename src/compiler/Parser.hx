@@ -256,6 +256,12 @@ class Parser {
 			var end = consume(TokenKind.Semicolon).span;
 			return Return(expression, start.merge(end));
 		}
+		if (match(TokenKind.Throw)) {
+			var start = previous().span,
+				expression = parseExpression(),
+				end = consume(TokenKind.Semicolon).span;
+			return Throw(expression, start.merge(end));
+		}
 		if (match(TokenKind.Switch)) {
 			var start = previous().span;
 			consume(TokenKind.LeftParen);
@@ -715,8 +721,8 @@ class Parser {
 
 	static function statementSpan(statement:AstStatement)
 		return switch statement {
-			case VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), If(_, _, _, span),
-				While(_, _,
-					span), ForIn(_, _, _, span), Break(span), Continue(span), Switch(_, _, _, _, span), Increment(_, _, span), Expression(_, span): span;
+			case VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), Throw(_, span),
+				If(_, _, _, span), While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span), Switch(_, _, _, _, span), Increment(_, _, span),
+				Expression(_, span): span;
 		}
 }

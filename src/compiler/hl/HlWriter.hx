@@ -138,6 +138,9 @@ class HlWriter {
 					requireRegister(fn, destination);
 				case LoadNull(destination):
 					requireRegister(fn, destination);
+				case ToDyn(destination, source):
+					requireRegister(fn, destination);
+					requireRegister(fn, source);
 				case GlobalGet(destination, global):
 					requireRegister(fn, destination);
 					requireGlobal(code, global, 'function ${fn.functionIndex}');
@@ -255,6 +258,8 @@ class HlWriter {
 						throw 'Unknown label "$target" in function ${fn.functionIndex}';
 				case Label(_):
 				case Return(register):
+					requireRegister(fn, register);
+				case Throw(register):
 					requireRegister(fn, register);
 			}
 		}
@@ -443,6 +448,8 @@ class HlWriter {
 					{opcode: HlOpcode.Bool, operands: [destination, value ? 1 : 0]};
 				case LoadNull(destination):
 					{opcode: HlOpcode.Null, operands: [destination]};
+				case ToDyn(destination, source):
+					{opcode: HlOpcode.ToDyn, operands: [destination, source]};
 				case GlobalGet(destination, global):
 					{opcode: HlOpcode.GetGlobal, operands: [destination, global]};
 				case GlobalSet(global, source):
@@ -510,6 +517,8 @@ class HlWriter {
 				case Label(_): {opcode: HlOpcode.Label, operands: []};
 				case Return(register):
 					{opcode: HlOpcode.Ret, operands: [register]};
+				case Throw(register):
+					{opcode: HlOpcode.Throw, operands: [register]};
 			}
 			if (encoded != null)
 				result.push(encoded);

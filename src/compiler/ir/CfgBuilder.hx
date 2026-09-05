@@ -49,6 +49,9 @@ class CfgBuilder {
 		terminate(Return(out));
 	}
 
+	public function throwValue(value:CfgValue):Void
+		terminate(Throw(value));
+
 	public function load(name:String, type:IrType):CfgValue {
 		var out = temporary(type);
 		emit(LoadLocal(out, name));
@@ -94,6 +97,12 @@ class CfgBuilder {
 	public function constNull(type:IrType):CfgValue {
 		var out = temporary(type);
 		emit(ConstNull(out));
+		return out;
+	}
+
+	public function toDyn(value:CfgValue):CfgValue {
+		var out = temporary(Dyn);
+		emit(ToDyn(out, value));
 		return out;
 	}
 

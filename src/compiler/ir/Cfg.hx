@@ -21,6 +21,7 @@ enum CfgInstruction {
 	ConstString(output:CfgValue, value:String);
 	ConstBool(output:CfgValue, value:Bool);
 	ConstNull(output:CfgValue);
+	ToDyn(output:CfgValue, value:CfgValue);
 	LoadLocal(output:CfgValue, name:String);
 	StoreLocal(name:String, value:CfgValue);
 	GlobalGet(output:CfgValue, name:String);
@@ -52,6 +53,7 @@ enum CfgInstruction {
 
 enum CfgTerminator {
 	Return(value:CfgValue);
+	Throw(value:CfgValue);
 	Jump(target:Int);
 	Branch(condition:CfgValue, whenTrue:Int, whenFalse:Int);
 }

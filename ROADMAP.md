@@ -75,8 +75,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 - [~] A documented runtime library ABI for strings, collections, IO, and time
 	(compiler-owned string concatenation, length, equality, search, slicing, and
 	typed `trace` plus the standard `Sys` time/filesystem/process surface are
-	exercised end-to-end; file handles, generic collections, and richer IO remain
-	future work).
+	exercised end-to-end; typed `throw` now lowers primitive/reference values
+	through HashLink's dynamic exception ABI, while `try`/`catch`, file handles,
+	generic collections, and richer IO remain future work).
 
 ### B. Incremental compiler service
 
@@ -200,8 +201,9 @@ second compiler or a second runtime.
 ### 2. Runtime/ABI hardening
 
 - Define the supported runtime ABI for strings, arrays, maps, IO, time, and
-  exceptions, with Haxe declarations and native implementations versioned
-  together.
+	exceptions, with Haxe declarations and native implementations versioned
+	together. Typed `throw` is the first exception ABI milestone; finish
+	`try`/`catch` and uncaught-exception diagnostics before migration.
 - Finish the non-moving type arena and explicit reload domains in the fork.
 - Add in-memory module load/patch APIs, failure recovery, and state migration
   hooks; preserve ordinary `.hl` compatibility for non-realtime builds.

@@ -40,6 +40,7 @@ enum IrInstruction {
 	ConstString(output:IrValue, value:String);
 	ConstBool(output:IrValue, value:Bool);
 	ConstNull(output:IrValue);
+	ToDyn(output:IrValue, value:IrValue);
 	GlobalGet(output:IrValue, name:String);
 	GlobalSet(name:String, value:IrValue);
 	Add(output:IrValue, left:IrValue, right:IrValue);
@@ -69,6 +70,7 @@ enum IrInstruction {
 
 enum IrTerminator {
 	Return(value:IrValue);
+	Throw(value:IrValue);
 	Jump(target:BlockId);
 	Branch(condition:IrValue, whenTrue:BlockId, whenFalse:BlockId);
 }

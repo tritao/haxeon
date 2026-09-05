@@ -373,6 +373,11 @@ class Typer {
 					if (result != TVoid)
 						fail("E1003", "Return type mismatch", span);
 					output.push(TReturnVoid(span));
+				case Throw(expression, span):
+					var value = typeExpression(expression, scope);
+					if (sameType(value.type, TVoid))
+						fail("E1021", "Cannot throw a Void value", span);
+					output.push(TThrow(value, span));
 				case Break(span):
 					if (loopDepth == 0)
 						fail("E1017", "break is only valid inside a loop", span);
@@ -1270,7 +1275,7 @@ class Typer {
 	static function collectVariables(statements:Array<AstStatement>, names:Map<String, Bool>):Void {
 		for (statement in statements)
 			switch statement {
-				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Expression(expression, _):
+				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
 					collectExpressionVariables(expression, names);
 				case IndexAssignment(array, offset, expression, _):
 					collectExpressionVariables(array, names);
@@ -1302,7 +1307,7 @@ class Typer {
 	static function collectMutableCaptureCandidates(statements:Array<AstStatement>, outerDeclared:Map<String, Bool>, result:Map<String, Bool>):Void {
 		for (statement in statements)
 			switch (statement) {
-				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Expression(expression, _):
+				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
 					collectMutableCaptureExpression(expression, outerDeclared, result);
 				case IndexAssignment(array, offset, expression, _):
 					collectMutableCaptureExpression(array, outerDeclared, result);
@@ -1619,7 +1624,7 @@ class Typer {
 	function alwaysReturns(statements:Array<TypedStatement>):Bool {
 		for (statement in statements)
 			switch statement {
-				case TReturn(_, _), TReturnVoid(_):
+				case TReturn(_, _), TReturnVoid(_), TThrow(_, _):
 					return true;
 				case TIf(_, yes, no, _):
 					if (no.length > 0 && alwaysReturns(yes) && alwaysReturns(no))
@@ -1710,9 +1715,9 @@ class Typer {
 
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
-			case VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), If(_, _, _, span),
-				While(_, _,
-					span), ForIn(_, _, _, span), Break(span), Continue(span), Switch(_, _, _, _, span), Increment(_, _, span), Expression(_, span): span;
+			case VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), Throw(_, span),
+				If(_, _, _, span), While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span), Switch(_, _, _, _, span), Increment(_, _, span),
+				Expression(_, span): span;
 		}
 
 	static function fail(code:String, message:String, span:SourceSpan):Void

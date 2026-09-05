@@ -794,6 +794,7 @@ class Compiler {
 				span): IndexAssignment(canonicalExpression(array, module, entry, locals, aliases),
 					canonicalExpression(offset, module, entry, locals, aliases), canonicalExpression(e, module, entry, locals, aliases), span);
 			case Return(e, span): Return(canonicalExpression(e, module, entry, locals, aliases), span);
+			case Throw(e, span): Throw(canonicalExpression(e, module, entry, locals, aliases), span);
 			case ReturnVoid(span): ReturnVoid(span);
 			case Break(span): Break(span);
 			case Continue(span): Continue(span);
@@ -901,7 +902,7 @@ class Compiler {
 
 	static function scanStatement(s, dependencies):Void
 		switch s {
-			case VarDeclaration(_, _, e, _), Assignment(_, e, _), Return(e, _):
+			case VarDeclaration(_, _, e, _), Assignment(_, e, _), Return(e, _), Throw(e, _):
 				scanExpression(e, dependencies);
 			case IndexAssignment(array, offset, e, _):
 				scanExpression(array, dependencies);
@@ -1010,6 +1011,8 @@ class Compiler {
 				scanCallExpression(e, calls, aliases);
 			case Return(e, _):
 				scanCallExpression(e, calls, aliases);
+			case Throw(e, _):
+				scanCallExpression(e, calls, aliases);
 			case ReturnVoid(_):
 			case Break(_), Continue(_):
 			case Increment(_, _, _):
@@ -1094,7 +1097,7 @@ class Compiler {
 	static function collectLambdas(statements:Array<AstStatement>, functionName:String, module:String, generatedByModule:Map<String, Map<String, Bool>>):Void {
 		for (statement in statements)
 			switch statement {
-				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Expression(expression, _):
+				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
 					collectLambdaExpression(expression, functionName, module, generatedByModule);
 				case IndexAssignment(array, offset, expression, _):
 					collectLambdaExpression(array, functionName, module, generatedByModule);
