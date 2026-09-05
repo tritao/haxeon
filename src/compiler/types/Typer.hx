@@ -117,7 +117,7 @@ class Typer {
 							{name: method.name, arguments: [for (argument in method.arguments) lowerType(argument.type)], result: lowerType(method.result)}
 					]
 				}
-			], typedClasses = [for (classDecl in program.classes) typeClass(classDecl, classDecls)], typedFunctions:Array<TypedFunction> = [];
+			], typedClasses = [for (classDecl in program.classes) typeClass(classDecl, classDecls, selected)], typedFunctions:Array<TypedFunction> = [];
 		for (fn in program.functions)
 			if (selected == null || selected.exists(fn.name))
 				typedFunctions.push(typeFunction(fn));
@@ -137,7 +137,7 @@ class Typer {
 		};
 	}
 
-	function typeClass(classDecl:AstClass, classes:Map<String, AstClass>):TypedClass {
+	function typeClass(classDecl:AstClass, classes:Map<String, AstClass>, selected:Null<Map<String, Bool>>):TypedClass {
 		var fields:Array<TypedField> = [], fieldNames:Map<String, Bool> = [];
 		for (field in classDecl.fields) {
 			if (fieldNames.exists(field.name))
@@ -178,15 +178,17 @@ class Typer {
 			if (!field.isStatic && field.initializer != null)
 				instanceInitializers.push(field);
 		for (method in classDecl.methods) {
-			var typedMethod = typeFunction(method, classDecl.name, method.isStatic);
+			var qualified = classDecl.name + "." + method.name,
+				typeBody = selected == null || selected.exists(qualified),
+				typedMethod = typeBody ? typeFunction(method, classDecl.name, method.isStatic) : methodSignature(method, classDecl.name);
 			if (method.name == "new") {
 				hasConstructor = true;
-				if (instanceInitializers.length > 0)
+				if (typeBody && instanceInitializers.length > 0)
 					typedMethod = prependInstanceInitializers(typedMethod, classDecl.name, instanceInitializers);
 			}
 			typedMethods.push(typedMethod);
 		}
-		if (!hasConstructor && instanceInitializers.length > 0)
+		if (!hasConstructor && instanceInitializers.length > 0 && (selected == null || selected.exists(classDecl.name + ".new")))
 			typedMethods.push({
 				name: classDecl.name + ".new",
 				owner: classDecl.name,
@@ -211,6 +213,26 @@ class Typer {
 			span: classDecl.span
 		};
 	}
+
+	function methodSignature(method:AstFunction, owner:String):TypedFunction
+		return {
+			name: owner + "." + method.name,
+			owner: owner,
+			isStatic: method.isStatic,
+			isConstructor: method.name == "new",
+			arguments: [
+				for (argument in method.arguments)
+					{
+						name: argument.name,
+						type: lowerType(argument.type)
+					}
+			],
+			result: lowerType(method.result),
+			statements: [],
+			cells: [],
+			cellCaptures: [],
+			span: method.span
+		};
 
 	function prependInstanceInitializers(method:TypedFunction, className:String, fields:Array<TypedField>):TypedFunction {
 		var statements:Array<TypedStatement> = [
