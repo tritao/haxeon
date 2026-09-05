@@ -235,6 +235,17 @@ class TestMain {
 				foundStatic = true;
 		if (!foundStatic)
 			throw "Static class method was not lowered as a callable function";
+		var objectCode = new HlCode();
+		objectCode.ints = [42];
+		objectCode.strings = ["Box", "value"];
+		objectCode.types = [
+			                                                        Simple(HlType.Void), Simple(HlType.I32),
+			compiler.hl.HlCode.HlTypeDef.Object(0, -1, 0, [{name: 1, type: 1}], [], []),    Function([], 1)
+		];
+		objectCode.functions = [new HlFunction(3, 0, [1], [LoadInt(0, 0), Return(0)])];
+		objectCode.entryPoint = 0;
+		if (HlWriter.encode(objectCode).length == 0)
+			throw "HashLink object type did not serialize";
 		var incrementalClass = new Compiler();
 		incrementalClass.update("Main.hx",
 			"class Math { public static function add(a:Int, b:Int):Int { return a + b; } } function main():Int { return Math.add(20, 22); }");

@@ -89,6 +89,8 @@ class HlPatchReader {
 
 	static function readType(input:BytesInput):HlTypeDef {
 		var tag = input.readByte();
+		if (tag == HlType.Obj)
+			throw "Object type patches require a structural reload";
 		return if (tag == HlType.Fun) {
 			var n = input.readByte();
 			Function([for (_ in 0...n) readIndex(input)], readIndex(input));

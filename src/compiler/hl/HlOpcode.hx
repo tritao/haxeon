@@ -15,6 +15,9 @@ enum abstract HlOpcode(Int) from Int to Int {
 	var Call0 = 24;
 	var Call1 = 25;
 	var Call2 = 26;
+	var Field = 38;
+	var SetField = 39;
+	var New = 82;
 	var JTrue = 44;
 	var JSLt = 48;
 	var JSLte = 51;

@@ -27,6 +27,9 @@ enum HlInstruction {
 	Call0(destination:Int, functionIndex:Int);
 	Call1(destination:Int, functionIndex:Int, argument:Int);
 	Call2(destination:Int, functionIndex:Int, argument1:Int, argument2:Int);
+	New(destination:Int, type:Int);
+	FieldGet(destination:Int, object:Int, field:Int);
+	FieldSet(object:Int, field:Int, source:Int);
 	JumpSignedLessOrEqual(left:Int, right:Int, target:String);
 	JumpSignedLess(left:Int, right:Int, target:String);
 	JumpEqual(left:Int, right:Int, target:String);

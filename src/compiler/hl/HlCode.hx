@@ -7,6 +7,7 @@ class HlCode {
 	public var floats:Array<Float> = [];
 	public var strings:Array<String> = [];
 	public var types:Array<HlTypeDef> = [];
+	public var globals:Array<Int> = [];
 	public var natives:Array<HlNative> = [];
 	public var functions:Array<HlFunction> = [];
 	public var entryPoint:Int = 0;
@@ -17,7 +18,11 @@ class HlCode {
 enum HlTypeDef {
 	Simple(kind:HlType);
 	Function(arguments:Array<Int>, result:Int);
+	Object(name:Int, base:Int, global:Int, fields:Array<HlObjectField>, methods:Array<HlObjectMethod>, bindings:Array<Int>);
 }
+
+typedef HlObjectField = {final name:Int; final type:Int;}
+typedef HlObjectMethod = {final name:Int; final functionIndex:Int; final prototype:Int;}
 
 typedef HlNative = {
 	final library:Int;

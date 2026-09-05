@@ -167,6 +167,8 @@ class HlPatchWriter {
 					for (a in args)
 						h = hashBytes(intBytes(a), h);
 					h = hashBytes(intBytes(result), h);
+				case Object(_, _, _, _, _, _):
+					throw "Object type growth requires a structural reload";
 			}
 		return h;
 	}
@@ -185,6 +187,8 @@ class HlPatchWriter {
 				for (a in args)
 					writeSignedIndex(out, a);
 				writeSignedIndex(out, result);
+			case Object(_, _, _, _, _, _):
+				throw "Object type patches require a structural reload";
 		}
 
 	static function writeIndex(out:BytesOutput, v:Int):Void {

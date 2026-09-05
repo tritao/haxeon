@@ -51,8 +51,25 @@ class HlWriter {
 					for (argument in arguments)
 						requireType(code, argument, "function type argument");
 					requireType(code, result, "function type result");
+				case Object(name, base, global, fields, methods, bindings):
+					requireString(code, name, "object name");
+					if (base >= 0)
+						requireType(code, base, "object base");
+					if (global >= code.globals.length && global != 0)
+						throw 'Invalid object global $global';
+					for (field in fields) {
+						requireString(code, field.name, "object field name");
+						requireType(code, field.type, "object field type");
+					}
+					for (method in methods) {
+						requireString(code, method.name, "object method name");
+						requireFunctionIndex(code, method.functionIndex, "object method");
+						requireType(code, method.prototype, "object method prototype");
+					}
 			}
 		}
+		for (global in code.globals)
+			requireType(code, global, "global");
 
 		var functionIndices = new Map<Int, Bool>();
 		for (native in code.natives) {
@@ -126,6 +143,19 @@ class HlWriter {
 					requireRegister(fn, argument1);
 					requireRegister(fn, argument2);
 					requireCallable(functionIndices, functionIndex, fn.functionIndex);
+				case New(destination, type):
+					requireRegister(fn, destination);
+					requireType(code, type, 'object allocation in function ${fn.functionIndex}');
+				case FieldGet(destination, object, field):
+					requireRegister(fn, destination);
+					requireRegister(fn, object);
+					if (field < 0)
+						throw 'Invalid object field $field in function ${fn.functionIndex}';
+				case FieldSet(object, field, source):
+					requireRegister(fn, object);
+					requireRegister(fn, source);
+					if (field < 0)
+						throw 'Invalid object field $field in function ${fn.functionIndex}';
 				case JumpSignedLessOrEqual(left, right, target):
 					requireRegister(fn, left);
 					requireRegister(fn, right);
@@ -172,6 +202,11 @@ class HlWriter {
 			throw 'Function $caller calls unknown function $callee';
 	}
 
+	static function requireFunctionIndex(code:HlCode, index:Int, context:String):Void {
+		if (index < 0)
+			throw 'Invalid function index $index for $context';
+	}
+
 	static function requireRegister(fn:HlFunction, register:Int):Void {
 		if (register < 0 || register >= fn.registers.length)
 			throw 'Invalid register $register in function ${fn.functionIndex}';
@@ -196,7 +231,7 @@ class HlWriter {
 		writeUnsignedIndex(code.strings.length);
 		writeUnsignedIndex(0); // byte blobs
 		writeUnsignedIndex(code.types.length);
-		writeUnsignedIndex(0); // globals
+		writeUnsignedIndex(code.globals.length);
 		writeUnsignedIndex(code.natives.length);
 		writeUnsignedIndex(code.functions.length);
 		writeUnsignedIndex(0); // constants
@@ -217,6 +252,8 @@ class HlWriter {
 			writeIndex(native.type);
 			writeUnsignedIndex(native.functionIndex);
 		}
+		for (global in code.globals)
+			writeIndex(global);
 		for (fn in code.functions)
 			writeFunction(fn);
 	}
@@ -249,6 +286,25 @@ class HlWriter {
 				for (argument in arguments)
 					writeIndex(argument);
 				writeIndex(result);
+			case Object(name, base, global, fields, methods, bindings):
+				output.writeByte(HlType.Obj);
+				writeIndex(name);
+				writeIndex(base);
+				writeUnsignedIndex(global);
+				writeUnsignedIndex(fields.length);
+				writeUnsignedIndex(methods.length);
+				writeUnsignedIndex(Std.int(bindings.length / 2));
+				for (field in fields) {
+					writeIndex(field.name);
+					writeIndex(field.type);
+				}
+				for (method in methods) {
+					writeIndex(method.name);
+					writeUnsignedIndex(method.functionIndex);
+					writeIndex(method.prototype);
+				}
+				for (binding in bindings)
+					writeUnsignedIndex(binding);
 		}
 	}
 
@@ -290,6 +346,12 @@ class HlWriter {
 					{opcode: HlOpcode.Call1, operands: [destination, functionIndex, argument]};
 				case Call2(destination, functionIndex, argument1, argument2):
 					{opcode: HlOpcode.Call2, operands: [destination, functionIndex, argument1, argument2]};
+				case New(destination, type):
+					{opcode: HlOpcode.New, operands: [destination, type]};
+				case FieldGet(destination, object, field):
+					{opcode: HlOpcode.Field, operands: [destination, object, field]};
+				case FieldSet(object, field, source):
+					{opcode: HlOpcode.SetField, operands: [object, field, source]};
 				case JumpSignedLessOrEqual(left, right, target):
 					var targetPosition = labels.get(target);
 					{opcode: HlOpcode.JSLte, operands: [left, right, targetPosition - (result.length + 1)]};
