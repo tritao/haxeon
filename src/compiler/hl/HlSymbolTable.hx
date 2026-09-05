@@ -25,6 +25,37 @@ class HlSymbolTable {
 
 	public function new() {}
 
+	public function copy():HlSymbolTable {
+		var result = new HlSymbolTable();
+		for (value in ints)
+			result.internInt(value);
+		for (value in strings)
+			result.internString(value);
+		for (value in floats)
+			result.internFloat(value);
+		for (index in 0...types.length)
+			result.types.push(types[index]);
+		for (index in 0...globals.length)
+			result.globals.push(globals[index]);
+		copyMap(typeIndices, result.typeIndices);
+		copyMap(globalIndices, result.globalIndices);
+		copyMap(objectIndices, result.objectIndices);
+		copyNestedMap(objectMethodIndices, result.objectMethodIndices);
+		copyNestedMap(interfaceMethodIndices, result.interfaceMethodIndices);
+		return result;
+	}
+
+	static function copyMap(source:Map<String, Int>, target:Map<String, Int>):Void
+		for (key => value in source)
+			target.set(key, value);
+
+	static function copyNestedMap(source:Map<String, Map<String, Int>>, target:Map<String, Map<String, Int>>):Void
+		for (name => values in source) {
+			var copied:Map<String, Int> = [];
+			copyMap(values, copied);
+			target.set(name, copied);
+		}
+
 	public function internInt(value:Int):Int {
 		var found = intIndices.get(value);
 		if (found != null)

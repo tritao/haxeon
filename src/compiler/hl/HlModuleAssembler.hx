@@ -18,8 +18,8 @@ typedef HlAssemblyResult = {
 }
 
 class HlModuleAssembler {
-	public final symbols = new HlSymbolTable();
-	public final cache:HlFunctionCache;
+	public var symbols(default, null) = new HlSymbolTable();
+	public var cache(default, null):HlFunctionCache;
 
 	var initialized:Bool = false;
 	var revision:Int = 0;
@@ -30,6 +30,19 @@ class HlModuleAssembler {
 
 	public function new(?stableIds:Map<String, Int>) {
 		cache = new HlFunctionCache(stableIds);
+	}
+
+	public function copy():HlModuleAssembler {
+		var result = new HlModuleAssembler();
+		result.symbols = symbols.copy();
+		result.cache = cache.copy();
+		result.initialized = initialized;
+		result.revision = revision;
+		result.publishedInts = publishedInts;
+		result.publishedFloats = publishedFloats;
+		result.publishedStrings = publishedStrings;
+		result.publishedTypes = publishedTypes;
+		return result;
 	}
 
 	public function assemble(program:IrProgram, regenerated:Array<String>, decision:PatchDecision):HlAssemblyResult {

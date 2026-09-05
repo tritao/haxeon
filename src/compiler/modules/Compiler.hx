@@ -447,13 +447,18 @@ class Compiler {
 		reloadReasons.sort(function(a, b) return Reflect.compare(Std.string(a), Std.string(b)));
 		if (reloadReasons.length > 0)
 			decision = ReloadDomain(reloadReasons);
-		if (compiledOnce && PatchPlanner.requiresFreshLayout(decision))
-			assembler = new HlModuleAssembler(copyIndices(assembler.cache.stableIds));
-		var assembly = assembler.assemble(ir, regenerated, decision);
+		var candidateAssembler = compiledOnce
+			&& PatchPlanner.requiresFreshLayout(decision) ? new HlModuleAssembler(copyIndices(assembler.cache.stableIds)) : assembler.copy();
+		var assembly = candidateAssembler.assemble(ir, regenerated, decision);
 		if (token != null)
 			token.check();
+		var patchBytes = reloadReasons.length > 0
+			|| assembly.changedFunctions.length == 0 ? null : HlPatchWriter.encode(assembly.module, moduleId, assembly.changedSlots,
+				stableIdsBySlot(candidateAssembler, assembly.functionIndices), assembly.revision - 1, assembly.revision, assembly.baseInts,
+				assembly.baseFloats, assembly.baseStrings, assembly.baseTypes);
 		lastTypedProgram = typedNew;
 		publishedAbi = nextAbi;
+		assembler = candidateAssembler;
 		for (name in names) {
 			var state = modules.get(name);
 			state.lastGoodTokens = state.tokens;
@@ -461,10 +466,6 @@ class Compiler {
 			state.lastGoodSource = state.source;
 		}
 		compiledOnce = true;
-		var patchBytes = reloadReasons.length > 0
-			|| assembly.changedFunctions.length == 0 ? null : HlPatchWriter.encode(assembly.module, moduleId, assembly.changedSlots,
-				stableIdsBySlot(assembly.functionIndices), assembly.revision - 1, assembly.revision, assembly.baseInts, assembly.baseFloats,
-				assembly.baseStrings, assembly.baseTypes);
 		return {
 			ir: ir,
 			module: assembly.module,
@@ -533,9 +534,9 @@ class Compiler {
 			case TFunction(arguments, result): Function([for (argument in arguments) irType(argument)], irType(result));
 		};
 
-	function stableIdsBySlot(layout:Map<String, Int>):Map<Int, Int> {
+	function stableIdsBySlot(sourceAssembler:HlModuleAssembler, layout:Map<String, Int>):Map<Int, Int> {
 		var result:Map<Int, Int> = [];
-		for (name => id in assembler.cache.stableIds)
+		for (name => id in sourceAssembler.cache.stableIds)
 			if (layout.exists(name))
 				result.set(layout.get(name), id);
 		return result;

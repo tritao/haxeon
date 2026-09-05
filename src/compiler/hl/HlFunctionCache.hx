@@ -22,6 +22,22 @@ class HlFunctionCache {
 			}
 	}
 
+	public function copy():HlFunctionCache {
+		var result = new HlFunctionCache();
+		for (name => slot in userSlots)
+			result.userSlots.set(name, slot);
+		for (name => id in stableIds)
+			result.stableIds.set(name, id);
+		for (name in slots)
+			result.slots.push(name);
+		for (name => fn in functions)
+			result.functions.set(name, fn);
+		for (name => signature in signatures)
+			result.signatures.set(name, signature);
+		result.nextStableId = nextStableId;
+		return result;
+	}
+
 	public function update(incoming:Array<IrFunction>):Void {
 		for (fn in incoming) {
 			if (!userSlots.exists(fn.name)) {
