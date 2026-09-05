@@ -28,10 +28,12 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 - [x] Typed locals, nominal classes, fields, constructors, inheritance.
 - [x] SSA construction, verification, phi elimination, deterministic lowering.
 - [x] Function values for non-capturing references.
-- [ ] Capturing closures and instance closures.
+- [x] Capturing closures and instance closures (read-only captures; mutable
+  capture cells remain future work).
 - [ ] Arrays, maps, enums, nullable values, and pattern matching.
 - [ ] Interfaces, virtual dispatch, and basic generics.
-- [ ] A documented runtime library ABI for strings, collections, IO, and time.
+- [ ] A documented runtime library ABI for strings, collections, IO, and time
+  (the first typed `trace` native is now exercised end-to-end).
 
 ### B. Incremental compiler service
 
@@ -99,4 +101,3 @@ function edits patch in place; class-layout edits reload only that plugin
 domain; diagnostics and completion come from the same compiler snapshot; a
 clean build works from the checked-in bootstrap compiler; and the differential
 suite covers every language feature used by the migrated code.
-
