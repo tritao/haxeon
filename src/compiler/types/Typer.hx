@@ -818,6 +818,16 @@ class Typer {
 							return new TypedExpression(TStaticField(staticField.owner, name), staticField.type, span);
 						var dot = name.indexOf(".");
 						if (dot <= 0) {
+							var expectedEnum = switch expectedType {
+								case TEnum(enumName): enumDecls.get(enumName);
+								default: null;
+							};
+							if (expectedEnum != null)
+								for (index in 0...expectedEnum.cases.length) {
+									var enumCase = expectedEnum.cases[index];
+									if (enumCase.name == name && enumCase.params.length == 0)
+										return new TypedExpression(TEnumLiteral(expectedEnum.name, index), TEnum(expectedEnum.name), span);
+								}
 							var thisType = scope.resolve("this"),
 								field = thisType == null ? null : findFieldType(thisType, name);
 							if (field == null)
