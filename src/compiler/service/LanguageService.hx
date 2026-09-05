@@ -52,24 +52,26 @@ class LanguageService {
 	}
 
 	public function documentSymbols(path:String):Array<DocumentSymbol> {
-		var state = stateFor(path), result:Array<DocumentSymbol> = [];
-		if (state == null || state.ast == null)
+		var state = stateFor(path),
+			result:Array<DocumentSymbol> = [],
+			ast = state == null ? null : effectiveAst(state);
+		if (state == null || ast == null)
 			return result;
-		for (fn in state.ast.functions)
+		for (fn in ast.functions)
 			result.push({
 				name: fn.name,
 				kind: "function",
 				detail: '${fn.name}():${typeName(fn.result)}',
 				span: fn.span
 			});
-		for (alias in state.ast.aliases)
+		for (alias in ast.aliases)
 			result.push({
 				name: alias.name,
 				kind: "type",
 				detail: 'typedef ${alias.name}=${typeName(alias.type)}',
 				span: alias.span
 			});
-		for (interfaceDecl in state.ast.interfaces) {
+		for (interfaceDecl in ast.interfaces) {
 			result.push({
 				name: interfaceDecl.name,
 				kind: "interface",
@@ -84,7 +86,7 @@ class LanguageService {
 					span: method.span
 				});
 		}
-		for (enumDecl in state.ast.enums) {
+		for (enumDecl in ast.enums) {
 			result.push({
 				name: enumDecl.name,
 				kind: "enum",
@@ -95,11 +97,11 @@ class LanguageService {
 				result.push({
 					name: caseDecl.name,
 					kind: "enumCase",
-					detail: '${enumDecl.name}.${caseDecl.name}',
+					detail: '${enumDecl.name}.${caseDecl.name}(${[for (param in caseDecl.params) typeName(param)].join(",")})',
 					span: caseDecl.span
 				});
 		}
-		for (classDecl in state.ast.classes) {
+		for (classDecl in ast.classes) {
 			result.push({
 				name: classDecl.name,
 				kind: "class",
@@ -126,10 +128,41 @@ class LanguageService {
 	}
 
 	public function complete(path:String, position:Int):Array<CompletionItem> {
-		var state = stateFor(path), result:Array<CompletionItem> = [];
-		if (state == null || state.ast == null)
+		var state = stateFor(path),
+			result:Array<CompletionItem> = [],
+			ast = state == null ? null : effectiveAst(state);
+		if (state == null || ast == null)
 			return result;
 		var prefix = identifierPrefix(state.source.text, position);
+		var qualifier = memberQualifier(state.source.text, position);
+		if (qualifier != null) {
+			for (enumDecl in ast.enums)
+				if (enumDecl.name == qualifier)
+					for (caseDecl in enumDecl.cases)
+						if (prefix.length == 0 || StringTools.startsWith(caseDecl.name, prefix))
+							result.push({
+								label: caseDecl.name,
+								kind: "enumCase",
+								detail: '${enumDecl.name}.${caseDecl.name}(${[for (param in caseDecl.params) typeName(param)].join(",")})'
+							});
+			for (classDecl in ast.classes)
+				if (classDecl.name == qualifier) {
+					for (field in classDecl.fields)
+						if (field.isStatic && (prefix.length == 0 || StringTools.startsWith(field.name, prefix)))
+							result.push({label: field.name, kind: "field", detail: '${field.name}:${typeName(field.type)}'});
+					for (method in classDecl.methods)
+						if (method.isStatic && (prefix.length == 0 || StringTools.startsWith(method.name, prefix)))
+							result.push({
+								label: method.name,
+								kind: "method",
+								detail: '${method.name}(${[for (argument in method.arguments) typeName(argument.type)].join(",")}):${typeName(method.result)}'
+							});
+				}
+			if (result.length > 0) {
+				result.sort(function(a, b) return Reflect.compare(a.label, b.label));
+				return result;
+			}
+		}
 		for (symbol in documentSymbols(path))
 			if (prefix.length == 0 || StringTools.startsWith(symbol.name, prefix))
 				result.push({label: symbol.name, kind: symbol.kind, detail: symbol.detail});
@@ -137,12 +170,26 @@ class LanguageService {
 	}
 
 	public function hover(path:String, position:Int):Null<String> {
-		var state = stateFor(path);
-		if (state == null || state.ast == null)
+		var state = stateFor(path),
+			ast = state == null ? null : effectiveAst(state);
+		if (state == null || ast == null)
 			return null;
 		var name = identifierPrefix(state.source.text, position);
 		if (name.length == 0)
 			return null;
+		var qualifier = memberQualifier(state.source.text, position);
+		if (qualifier != null) {
+			for (enumDecl in ast.enums)
+				if (enumDecl.name == qualifier)
+					for (caseDecl in enumDecl.cases)
+						if (caseDecl.name == name)
+							return '${enumDecl.name}.${caseDecl.name}(${[for (param in caseDecl.params) typeName(param)].join(",")})';
+			for (classDecl in ast.classes)
+				if (classDecl.name == qualifier)
+					for (field in classDecl.fields)
+						if (field.name == name && field.isStatic)
+							return '${field.name}:${typeName(field.type)}';
+		}
 		for (symbol in documentSymbols(path))
 			if (symbol.name == name)
 				return symbol.detail;
@@ -153,29 +200,30 @@ class LanguageService {
 		var name = symbolAt(path, position);
 		if (name == null)
 			return null;
-		for (state in compiler.modules)
-			if (state.ast != null) {
-				for (alias in state.ast.aliases)
+		for (state in compiler.modules) {
+			var ast = effectiveAst(state);
+			if (ast != null) {
+				for (alias in ast.aliases)
 					if (alias.name == name)
 						return {path: state.source.path, span: alias.span};
-				for (enumDecl in state.ast.enums) {
+				for (enumDecl in ast.enums) {
 					if (enumDecl.name == name)
 						return {path: state.source.path, span: enumDecl.span};
 					for (caseDecl in enumDecl.cases)
 						if (caseDecl.name == name)
 							return {path: state.source.path, span: caseDecl.span};
 				}
-				for (fn in state.ast.functions)
+				for (fn in ast.functions)
 					if (fn.name == name)
 						return {path: state.source.path, span: fn.span};
-				for (interfaceDecl in state.ast.interfaces) {
+				for (interfaceDecl in ast.interfaces) {
 					if (interfaceDecl.name == name)
 						return {path: state.source.path, span: interfaceDecl.span};
 					for (method in interfaceDecl.methods)
 						if (method.name == name)
 							return {path: state.source.path, span: method.span};
 				}
-				for (classDecl in state.ast.classes) {
+				for (classDecl in ast.classes) {
 					if (classDecl.name == name)
 						return {path: state.source.path, span: classDecl.span};
 					for (field in classDecl.fields)
@@ -186,6 +234,7 @@ class LanguageService {
 							return {path: state.source.path, span: method.span};
 				}
 			}
+		}
 		return null;
 	}
 
@@ -193,11 +242,13 @@ class LanguageService {
 		var name = symbolAt(path, position), result:Array<SymbolLocation> = [];
 		if (name == null)
 			return result;
-		for (state in compiler.modules)
-			if (state.tokens != null)
-				for (token in state.tokens)
+		for (state in compiler.modules) {
+			var tokens = effectiveTokens(state);
+			if (tokens != null)
+				for (token in tokens)
 					if (token.kind == Identifier && token.text == name)
 						result.push({path: state.source.path, span: token.span});
+		}
 		result.sort(function(a, b) {
 			var pathOrder = Reflect.compare(a.path, b.path);
 			return pathOrder == 0 ? Reflect.compare(a.span.start, b.span.start) : pathOrder;
@@ -216,9 +267,10 @@ class LanguageService {
 
 	function symbolAt(path:String, position:Int):Null<String> {
 		var state = stateFor(path);
-		if (state == null || state.tokens == null)
+		var tokens = state == null ? null : effectiveTokens(state);
+		if (state == null || tokens == null)
 			return null;
-		for (token in state.tokens)
+		for (token in tokens)
 			if (token.kind == Identifier && position >= token.span.start && position <= token.span.end)
 				return token.text;
 		return null;
@@ -227,11 +279,29 @@ class LanguageService {
 	function stateFor(path:String):Null<ModuleState>
 		return compiler.modules.get(ModulePath.fromFile(path));
 
+	static function effectiveAst(state:ModuleState):Null<compiler.Ast.AstProgram>
+		return state.ast == null ? state.lastGoodAst : state.ast;
+
+	static function effectiveTokens(state:ModuleState):Null<Array<compiler.Token>>
+		return state.tokens == null ? state.lastGoodTokens : state.tokens;
+
 	static function identifierPrefix(source:String, position:Int):String {
 		var end = position < 0 ? 0 : position > source.length ? source.length : position, start = end;
 		while (start > 0 && isIdentifierPart(source.charCodeAt(start - 1)))
 			start--;
 		return source.substring(start, end);
+	}
+
+	static function memberQualifier(source:String, position:Int):Null<String> {
+		var end = position < 0 ? 0 : position > source.length ? source.length : position, start = end;
+		while (start > 0 && isIdentifierPart(source.charCodeAt(start - 1)))
+			start--;
+		if (start == 0 || source.charAt(start - 1) != ".")
+			return null;
+		var qualifierEnd = start - 1, qualifierStart = qualifierEnd;
+		while (qualifierStart > 0 && isIdentifierPart(source.charCodeAt(qualifierStart - 1)))
+			qualifierStart--;
+		return source.substring(qualifierStart, qualifierEnd);
 	}
 
 	static inline function isIdentifierPart(code:Int):Bool

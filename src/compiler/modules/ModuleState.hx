@@ -14,6 +14,9 @@ class ModuleState {
 	public var typeVersion:Int = 0;
 	public var tokens:Array<Token>;
 	public var ast:Null<AstProgram>;
+	public var lastGoodTokens:Array<Token>;
+	public var lastGoodAst:Null<AstProgram>;
+	public var lastGoodSource:Null<SourceFile>;
 	public var dependencies:Array<String> = [];
 	public var diagnostics:Array<Diagnostic> = [];
 	public var signatureFingerprints:Map<String, String> = [];

@@ -1,10 +1,11 @@
 import compiler.service.LanguageService;
+import compiler.Diagnostic.CompileError;
 
 class LanguageServiceMain {
 	static function main():Void {
 		var service = new LanguageService();
 		service.update("Main.hx",
-			"typedef Count = Int; enum Kind { One; } interface Plugin { function activate():Void; } class Editor { public var active:Int; public function open():Void { return; } } function main():Int { var editor = new Editor(); editor.open(); return 42; }");
+			"typedef Count = Int; enum Kind { One; Two(Int); } interface Plugin { function activate():Void; } class Editor { public static var version:Int; public static function make():Int { return 1; } public var active:Int; public function open():Void { return; } } function main():Int { var editor = new Editor(); editor.open(); var kind:Kind = Kind.One; Editor.make(); return 42; }");
 		service.compile("Main");
 		var symbols = service.documentSymbols("Main.hx"),
 			foundClass = false,
@@ -35,6 +36,21 @@ class LanguageServiceMain {
 				hasMain = true;
 		if (!hasMain || service.hover("Main.hx", hoverPosition) != "main():Int")
 			throw "language service completion or hover failed";
+		var kindStart = source.indexOf("Kind.One"), kindCompletionPosition = kindStart + "Kind.".length, kindPosition = kindStart + "Kind.One".length,
+			kindCompletion = service.complete("Main.hx", kindCompletionPosition), hasTwo = false;
+		for (item in kindCompletion)
+			if (item.label == "Two" && item.detail == "Kind.Two(Int)")
+				hasTwo = true;
+		if (!hasTwo || service.hover("Main.hx", kindPosition) != "Kind.One()")
+			throw "language service member completion or enum hover failed";
+		var classPosition = source.indexOf("Editor.make") + "Editor.".length,
+			classCompletion = service.complete("Main.hx", classPosition),
+			hasMake = false;
+		for (item in classCompletion)
+			if (item.label == "make" && item.detail == "make():Int")
+				hasMake = true;
+		if (!hasMake)
+			throw "language service static member completion failed";
 		var methodPosition = source.lastIndexOf("open") + 2,
 			definition = service.definition("Main.hx", methodPosition);
 		if (definition == null
@@ -48,6 +64,13 @@ class LanguageServiceMain {
 		var edits = service.rename("Main.hx", methodPosition, "show");
 		if (edits.length != 2 || edits[0].replacement != "show" || edits[1].replacement != "show")
 			throw "language service rename query failed";
+		service.update("Main.hx", "function main(:Int { return 0; }");
+		try {
+			service.compile("Main");
+			throw "invalid edit unexpectedly compiled";
+		} catch (error:CompileError) {}
+		if (service.documentSymbols("Main.hx").length == 0 || service.complete("Main.hx", 0).length == 0)
+			throw "failed edit discarded the last good language-service snapshot";
 		Sys.println("PASS: compiler-backed language service snapshot works");
 	}
 }

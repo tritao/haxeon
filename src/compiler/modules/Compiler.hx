@@ -48,6 +48,9 @@ typedef ValidationResult = {
 class Compiler {
 	public final modules:Map<String, ModuleState> = [];
 
+	/** Last successfully assembled typed program; failed edits never replace it. */
+	public var lastTypedProgram:Null<TypedProgram> = null;
+
 	final graph = new ModuleGraph();
 	var assembler:HlModuleAssembler;
 	final moduleId:Bytes;
@@ -372,6 +375,13 @@ class Compiler {
 		if (forceReload)
 			assembler = new HlModuleAssembler(copyIndices(assembler.cache.stableIds));
 		var assembly = assembler.assemble(ir, regenerated, signatureChanges, forceReload);
+		lastTypedProgram = typedNew;
+		for (name in names) {
+			var state = modules.get(name);
+			state.lastGoodTokens = state.tokens;
+			state.lastGoodAst = state.ast;
+			state.lastGoodSource = state.source;
+		}
 		compiledOnce = true;
 		var patchBytes = assembly.requiresReload
 			|| assembly.changedFunctions.length == 0 ? null : HlPatchWriter.encode(assembly.module, moduleId, assembly.changedSlots,
