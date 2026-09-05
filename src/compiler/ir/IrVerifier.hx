@@ -139,8 +139,8 @@ class IrVerifier {
 				define(values, out);
 			case Less(out, a, b), LessEqual(out, a, b):
 				expect(out, Bool);
-				expect(a, I32);
-				expect(b, I32);
+				if (!sameType(a.type, b.type) || (a.type != I32 && a.type != F64))
+					throw 'IR ordered comparison requires matching Int or Float values';
 				require(values, a);
 				require(values, b);
 				define(values, out);
@@ -148,7 +148,8 @@ class IrVerifier {
 				expect(out, Bool);
 				require(values, a);
 				require(values, b);
-				if (!sameType(a.type, b.type) || (!sameType(a.type, I32) && !sameType(a.type, Bool) && !isReference(a.type)))
+				if (!sameType(a.type, b.type)
+					|| (!sameType(a.type, I32) && !sameType(a.type, F64) && !sameType(a.type, Bool) && !isReference(a.type)))
 					throw 'IR equality requires matching primitive or reference values';
 				define(values, out);
 			case Call(out, name, args):

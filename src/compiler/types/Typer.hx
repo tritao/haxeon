@@ -919,8 +919,8 @@ class Typer {
 					return new TypedExpression(TEqual(left, right), TBool, span);
 				default:
 			}
-		if (!sameType(left.type, TInt) || !sameType(right.type, TInt))
-			fail("E1011", "Comparison requires Int operands", span);
+		if (!sameType(left.type, right.type) || (left.type != TInt && left.type != TFloat))
+			fail("E1011", "Comparison requires matching Int or Float operands", span);
 		return new TypedExpression(switch operation {
 			case 0: TLess(left, right);
 			case 1: TLessEqual(left, right);

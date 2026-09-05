@@ -4,6 +4,8 @@ function main():Int {
 	var ratios = new Map<String, Float>();
 	ratios["answer"] = 42.5;
 	var ratio = ratios.get("answer");
+	if (ratio < 42.0)
+		return 0;
 	var labels = new Map<String, String>();
 	labels["answer"] = "forty-two";
 	if (flags.exists("enabled") == false)

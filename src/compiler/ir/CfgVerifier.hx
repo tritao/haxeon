@@ -91,14 +91,15 @@ class CfgVerifier {
 					require(a, available);
 					require(b, available);
 					expect(out, Bool);
-					expect(a, I32);
-					expect(b, I32);
+					if (!sameType(a.type, b.type) || (a.type != I32 && a.type != F64))
+						throw "CFG ordered comparison requires matching Int or Float values";
 					define(out, defined, available);
 				case Equal(out, a, b):
 					require(a, available);
 					require(b, available);
 					expect(out, Bool);
-					if (!sameType(a.type, b.type) || (!sameType(a.type, I32) && !sameType(a.type, Bool) && !isReference(a.type)))
+					if (!sameType(a.type, b.type)
+						|| (!sameType(a.type, I32) && !sameType(a.type, F64) && !sameType(a.type, Bool) && !isReference(a.type)))
 						throw 'CFG equality requires matching primitive or reference values';
 					define(out, defined, available);
 				case Call(out, _, arguments):
