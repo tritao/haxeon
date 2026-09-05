@@ -30,6 +30,13 @@ class CfgBuilder {
 	public function jump(target:CfgBlock):Void
 		terminate(Jump(target.id));
 
+	/** Attach a forward edge after both branch bodies have been lowered. */
+	public function jumpFrom(source:CfgBlock, target:CfgBlock):Void {
+		if (source.terminator != null)
+			throw 'CFG block ${source.id} already has a terminator';
+		source.terminator = Jump(target.id);
+	}
+
 	public function branch(condition:CfgValue, yes:CfgBlock, no:CfgBlock):Void
 		terminate(Branch(condition, yes.id, no.id));
 

@@ -623,7 +623,12 @@ class Compiler {
 			case Less(a, b, s): Less(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
 			case LessEqual(a, b,
 				s): LessEqual(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
+			case Greater(a, b, s): Greater(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
+			case GreaterEqual(a, b,
+				s): GreaterEqual(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
 			case Equal(a, b, s): Equal(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
+			case NotEqual(a, b, s): NotEqual(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
+			case Not(value, s): Not(canonicalExpression(value, module, entry, locals, aliases), s);
 			case Call(name, args, s):
 				var resolved = name;
 				var dot = name.indexOf("."),
@@ -708,9 +713,12 @@ class Compiler {
 
 	static function scanExpression(e, dependencies):Void
 		switch e {
-			case Add(a, b, _), Sub(a, b, _), Mul(a, b, _), Div(a, b, _), Less(a, b, _), LessEqual(a, b, _), Equal(a, b, _):
+			case Add(a, b, _), Sub(a, b, _), Mul(a, b, _), Div(a, b, _), Less(a, b, _), LessEqual(a, b, _), Greater(a, b, _), GreaterEqual(a, b, _),
+				Equal(a, b, _), NotEqual(a, b, _):
 				scanExpression(a, dependencies);
 				scanExpression(b, dependencies);
+			case Not(value, _):
+				scanExpression(value, dependencies);
 			case Index(array, offset, _):
 				scanExpression(array, dependencies);
 				scanExpression(offset, dependencies);
@@ -787,9 +795,12 @@ class Compiler {
 			case Variable(name, _):
 				if (name.indexOf(".") >= 0)
 					calls.set(name, true);
-			case Add(a, b, _), Sub(a, b, _), Mul(a, b, _), Div(a, b, _), Less(a, b, _), LessEqual(a, b, _), Equal(a, b, _):
+			case Add(a, b, _), Sub(a, b, _), Mul(a, b, _), Div(a, b, _), Less(a, b, _), LessEqual(a, b, _), Greater(a, b, _), GreaterEqual(a, b, _),
+				Equal(a, b, _), NotEqual(a, b, _):
 				scanCallExpression(a, calls, aliases);
 				scanCallExpression(b, calls, aliases);
+			case Not(value, _):
+				scanCallExpression(value, calls, aliases);
 			case New(_, args, _):
 				for (a in args)
 					scanCallExpression(a, calls, aliases);
@@ -859,9 +870,11 @@ class Compiler {
 			case Member(object, _, _):
 				collectLambdaExpression(object, functionName, module, generatedByModule);
 			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Less(left, right, _), LessEqual(left, right, _),
-				Equal(left, right, _):
+				Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _), NotEqual(left, right, _):
 				collectLambdaExpression(left, functionName, module, generatedByModule);
 				collectLambdaExpression(right, functionName, module, generatedByModule);
+			case Not(value, _):
+				collectLambdaExpression(value, functionName, module, generatedByModule);
 			case New(_, args, _):
 				for (argument in args)
 					collectLambdaExpression(argument, functionName, module, generatedByModule);

@@ -290,19 +290,21 @@ class IrGenerator {
 					builder.store(name, delta > 0 ? builder.add(builder.load(name, type), one) : builder.sub(builder.load(name, type), one));
 				case TIf(condition, thenBranch, elseBranch, _):
 					var thenBlock = builder.createBlock(),
-						elseBlock = builder.createBlock(),
-						joinBlock = builder.createBlock();
+						elseBlock = builder.createBlock();
 					builder.branch(lowerExpression(condition, builder, localTypes), thenBlock, elseBlock);
 					builder.select(thenBlock);
 					lowerStatements(thenBranch, builder, localTypes, loops);
-					var thenActive = !builder.isTerminated();
-					if (thenActive)
-						builder.jump(joinBlock);
+					var thenActive = !builder.isTerminated(),
+						thenExit = builder.currentBlock();
 					builder.select(elseBlock);
 					lowerStatements(elseBranch, builder, localTypes, loops);
-					var elseActive = !builder.isTerminated();
+					var elseActive = !builder.isTerminated(),
+						elseExit = builder.currentBlock(),
+						joinBlock = builder.createBlock();
+					if (thenActive)
+						builder.jumpFrom(thenExit, joinBlock);
 					if (elseActive)
-						builder.jump(joinBlock);
+						builder.jumpFrom(elseExit, joinBlock);
 					if (thenActive || elseActive)
 						builder.select(joinBlock);
 				case TWhile(condition, body, span):
@@ -410,6 +412,7 @@ class IrGenerator {
 			case TDiv(a, b): builder.div(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TLess(a, b): builder.less(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TLessEqual(a, b): builder.lessEqual(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
+			case TNot(value): builder.equal(lowerExpression(value, builder, localTypes), builder.constBool(false));
 			case TEqual(a, b):
 				var left = lowerExpression(a, builder, localTypes),
 					right = lowerExpression(b, builder, localTypes);

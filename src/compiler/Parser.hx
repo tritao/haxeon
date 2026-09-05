@@ -314,13 +314,17 @@ class Parser {
 
 	function parseExpression():AstExpression {
 		var expression = parseAdditive();
-		if (check(TokenKind.Less) || check(TokenKind.LessEqual) || check(TokenKind.EqualEqual)) {
+		if (check(TokenKind.Less) || check(TokenKind.LessEqual) || check(TokenKind.Greater) || check(TokenKind.GreaterEqual) || check(TokenKind.EqualEqual)
+			|| check(TokenKind.NotEqual)) {
 			var operation = advance().kind;
 			var right = parseAdditive();
 			var span = expressionSpan(expression).merge(expressionSpan(right));
 			expression = switch operation {
 				case TokenKind.Less: Less(expression, right, span);
 				case TokenKind.LessEqual: LessEqual(expression, right, span);
+				case TokenKind.Greater: Greater(expression, right, span);
+				case TokenKind.GreaterEqual: GreaterEqual(expression, right, span);
+				case TokenKind.NotEqual: NotEqual(expression, right, span);
 				default: Equal(expression, right, span);
 			}
 		}
@@ -350,6 +354,10 @@ class Parser {
 	}
 
 	function parsePrimary():AstExpression {
+		if (match(TokenKind.Not)) {
+			var start = previous().span, value = parsePrimary();
+			return Not(value, start.merge(expressionSpan(value)));
+		}
 		if (match(TokenKind.Integer))
 			return IntegerLiteral(Std.parseInt(previous().text), previous().span);
 		if (match(TokenKind.Float))
@@ -599,8 +607,8 @@ class Parser {
 		return switch expression {
 			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), BoolLiteral(_, span), NullLiteral(span), Variable(_, span),
 				Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span), Div(_, _, span), Less(_, _, span), LessEqual(_, _, span),
-				Equal(_, _, span), Call(_, _, span), MethodCall(_, _, _, span), New(_, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span),
-				Lambda(_, _, span): span;
+				Greater(_, _, span), GreaterEqual(_, _, span), Equal(_, _, span), NotEqual(_, _, span), Not(_, span), Call(_, _, span),
+				MethodCall(_, _, _, span), New(_, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span), Lambda(_, _, span): span;
 		}
 
 	static function decodeString(text:String):String {

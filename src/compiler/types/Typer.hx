@@ -450,7 +450,17 @@ class Typer {
 			case Div(left, right, span): numeric(left, right, scope, 3, span);
 			case Less(left, right, span): comparison(left, right, scope, 0, span);
 			case LessEqual(left, right, span): comparison(left, right, scope, 1, span);
+			case Greater(left, right, span): comparison(right, left, scope, 0, span);
+			case GreaterEqual(left, right, span): comparison(right, left, scope, 1, span);
 			case Equal(left, right, span): comparison(left, right, scope, 2, span);
+			case NotEqual(left, right, span):
+				var equality = comparison(left, right, scope, 2, span);
+				new TypedExpression(TNot(equality), TBool, span);
+			case Not(value, span):
+				var typedValue = typeExpression(value, scope);
+				if (!sameType(typedValue.type, TBool))
+					fail("E1011", "Logical negation requires a Bool operand", span);
+				new TypedExpression(TNot(typedValue), TBool, span);
 			case New(typeName, arguments, span):
 				if (!classDecls.exists(typeName) || interfaceDecls.exists(typeName))
 					fail("E1007", 'Unknown class "$typeName"', span);
@@ -737,9 +747,11 @@ class Typer {
 				for (argument in arguments)
 					collectExpressionVariables(argument, names);
 			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Less(left, right, _), LessEqual(left, right, _),
-				Equal(left, right, _):
+				Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _), NotEqual(left, right, _):
 				collectExpressionVariables(left, names);
 				collectExpressionVariables(right, names);
+			case Not(value, _):
+				collectExpressionVariables(value, names);
 			case New(_, arguments, _):
 				for (argument in arguments)
 					collectExpressionVariables(argument, names);

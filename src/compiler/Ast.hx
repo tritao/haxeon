@@ -62,7 +62,11 @@ enum AstExpression {
 	Div(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Less(left:AstExpression, right:AstExpression, span:SourceSpan);
 	LessEqual(left:AstExpression, right:AstExpression, span:SourceSpan);
+	Greater(left:AstExpression, right:AstExpression, span:SourceSpan);
+	GreaterEqual(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Equal(left:AstExpression, right:AstExpression, span:SourceSpan);
+	NotEqual(left:AstExpression, right:AstExpression, span:SourceSpan);
+	Not(value:AstExpression, span:SourceSpan);
 	Call(name:String, arguments:Array<AstExpression>, span:SourceSpan);
 	MethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan);
 	New(typeName:String, arguments:Array<AstExpression>, span:SourceSpan);

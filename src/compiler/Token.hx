@@ -59,7 +59,10 @@ enum TokenKind {
 	Less;
 	Greater;
 	LessEqual;
+	GreaterEqual;
 	EqualEqual;
+	NotEqual;
+	Not;
 	LeftBracket;
 	RightBracket;
 	Eof;

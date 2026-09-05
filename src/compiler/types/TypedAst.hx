@@ -34,6 +34,7 @@ enum TypedExpressionKind {
 	TLess(left:TypedExpression, right:TypedExpression);
 	TLessEqual(left:TypedExpression, right:TypedExpression);
 	TEqual(left:TypedExpression, right:TypedExpression);
+	TNot(value:TypedExpression);
 	TCall(name:String, arguments:Array<TypedExpression>);
 	TClosureCall(callee:TypedExpression, arguments:Array<TypedExpression>);
 	TToInterface(value:TypedExpression, name:String);
