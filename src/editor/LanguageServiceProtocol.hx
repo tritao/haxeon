@@ -9,6 +9,8 @@ import compiler.service.LanguageService.SymbolLocation;
 import compiler.service.LanguageService.TextEdit;
 import compiler.hl.HlWriter;
 import compiler.abi.AbiChangeSchema;
+import compiler.modules.CompilerPublication.ReconnectDecision;
+import compiler.modules.CompilerPublication.ReconnectReason;
 import haxe.crypto.Base64;
 import haxe.Json;
 
@@ -21,8 +23,10 @@ class LanguageServiceProtocol {
 	final service:LanguageService;
 	final activeRequests:Map<String, CancellationToken> = [];
 
-	public function new(?service:LanguageService)
+	public function new(?service:LanguageService) {
 		this.service = service == null ? new LanguageService() : service;
+		this.service.compiler.enablePublicationTracking();
+	}
 
 	public function handle(line:String):String
 		return handleWithToken(line, new CancellationToken());
@@ -60,7 +64,7 @@ class LanguageServiceProtocol {
 						compatibility: {
 							schemaVersion: AbiChangeSchema.VERSION,
 							decision: build.requiresReload ? "reload_domain" : initialLoad ? "initial_load" : "patch",
-							baseRevision: build.revision - 1,
+							baseRevision: artifactKind == "patch" ? build.revision - 1 : 0,
 							targetRevision: build.revision,
 							domainIdentity: Base64.encode(build.runtimeIdentity.sub(4, 16)),
 							artifactKind: artifactKind,
@@ -77,6 +81,15 @@ class LanguageServiceProtocol {
 						runtimeIdentityBase64: Base64.encode(build.runtimeIdentity),
 						metrics: build.metrics
 					};
+				case "acknowledge":
+					service.compiler.acknowledgePublication(requiredInt(request, "revision"));
+					result = cast publicationJson();
+				case "reject":
+					service.compiler.rejectPublication(requiredInt(request, "revision"));
+					result = cast publicationJson();
+				case "reconnect":
+					var identity = Base64.decode(requiredString(request, "domainIdentity"));
+					result = cast reconnectJson(service.compiler.reconcileRuntime(identity, requiredInt(request, "revision")));
 				case "validate":
 					var validation = service.validate(requiredString(request, "path"), requiredString(request, "source"), requiredString(request, "entry"),
 						token);
@@ -184,6 +197,33 @@ class LanguageServiceProtocol {
 
 	static function locationJson(location:Null<SymbolLocation>):Dynamic
 		return location == null ? null : {path: location.path, start: location.span.start, end: location.span.end};
+
+	function publicationJson():Dynamic {
+		var status = service.compiler.publicationStatus();
+		return {
+			acknowledgedRevision: status.acknowledgedRevision,
+			pendingRevision: status.pendingRevision
+		};
+	}
+
+	static function reconnectJson(decision:ReconnectDecision):Dynamic
+		return switch decision {
+			case ContinuePatching: {decision: "continue_patching", reason: null};
+			case ReloadDomain(reason): {decision: "reload_domain", reason: reconnectReasonJson(reason)};
+		};
+
+	static function reconnectReasonJson(reason:ReconnectReason):Dynamic
+		return switch reason {
+			case PublicationTrackingDisabled: {code: "publication_tracking_disabled"};
+			case PublicationPending(revision): {code: "publication_pending", revision: revision};
+			case RuntimeRevisionMismatch(runtimeRevision, acknowledgedRevision): {
+					code: "runtime_revision_mismatch",
+					runtimeRevision: runtimeRevision,
+					acknowledgedRevision: acknowledgedRevision
+				};
+			case BackendBaselineUnavailable: {code: "backend_baseline_unavailable"};
+			case ModuleIdentityMismatch: {code: "module_identity_mismatch"};
+		};
 
 	static function failureDiagnostic(id:Dynamic, diagnostic):String
 		return Json.stringify({id: id, ok: false, error: diagnosticJson(diagnostic)});

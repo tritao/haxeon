@@ -33,6 +33,7 @@ import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.modules.CompilerPublication.CompilerSnapshot;
 import compiler.modules.CompilerPublication.PublicationStatus;
 import compiler.modules.CompilerPublication.ReconnectDecision;
+import compiler.modules.CompilerPublication.ReconnectReason;
 
 typedef NativeFunction = {final name:String; final library:String; final symbol:String; final arguments:Array<CompilerType>; final result:CompilerType;}
 
@@ -127,7 +128,7 @@ class Compiler {
 
 	public function reconcileRuntime(runtimeModuleId:Bytes, runtimeRevision:Int):ReconnectDecision {
 		if (runtimeModuleId.length != moduleId.length || runtimeModuleId.compare(moduleId) != 0)
-			return ReloadDomain("runtime module identity does not match compiler state");
+			return ReloadDomain(ModuleIdentityMismatch);
 		return publication.reconcile(runtimeRevision);
 	}
 

@@ -24,6 +24,27 @@ class ProtocolMain {
 			|| compiled.result.metrics == null
 			|| compiled.result.patchBase64 != null)
 			throw "protocol compile response was incomplete";
+		var pendingReconnect:Dynamic = Json.parse(protocol.handle(Json.stringify({
+			id: 21,
+			method: "reconnect",
+			domainIdentity: compiled.result.compatibility.domainIdentity,
+			revision: 1
+		})));
+		if (!pendingReconnect.ok
+			|| pendingReconnect.result.decision != "reload_domain"
+			|| pendingReconnect.result.reason.code != "publication_pending")
+			throw "protocol reconnect ignored a pending publication";
+		var acknowledged:Dynamic = Json.parse(protocol.handle('{"id":22,"method":"acknowledge","revision":1}'));
+		if (!acknowledged.ok || acknowledged.result.acknowledgedRevision != 1 || acknowledged.result.pendingRevision != null)
+			throw "protocol did not acknowledge initial publication";
+		var connected:Dynamic = Json.parse(protocol.handle(Json.stringify({
+			id: 23,
+			method: "reconnect",
+			domainIdentity: compiled.result.compatibility.domainIdentity,
+			revision: 1
+		})));
+		if (!connected.ok || connected.result.decision != "continue_patching" || connected.result.reason != null)
+			throw "protocol rejected the acknowledged runtime baseline";
 		var source = "class Editor { public var active:Int; public function new() { } } function main():Int { var editor = new Editor(); editor.active; return 42; }",
 			completion:Dynamic = Json.parse(protocol.handle('{"id":3,"method":"complete","path":"Main.hx","position":'
 				+ (source.indexOf("editor.active") + "editor.".length)
@@ -63,17 +84,38 @@ class ProtocolMain {
 			|| patched.result.compatibility.targetRevision != 2
 			|| patched.result.compatibility.artifactKind != "patch")
 			throw "protocol compile did not transport a compatible patch";
+		var rejected:Dynamic = Json.parse(protocol.handle('{"id":83,"method":"reject","revision":2}'));
+		if (!rejected.ok || rejected.result.acknowledgedRevision != 1 || rejected.result.pendingRevision != null)
+			throw "protocol did not restore the acknowledged baseline after rejection";
+		var retried:Dynamic = Json.parse(protocol.handle('{"id":831,"method":"compile","entry":"Main"}'));
+		if (!retried.ok || retried.result.revision != 2 || retried.result.patchBase64 != patched.result.patchBase64)
+			throw "protocol retry disagreed with the rejected patch";
+		assertOk(protocol.handle('{"id":832,"method":"acknowledge","revision":2}'));
+		var mismatched:Dynamic = Json.parse(protocol.handle(Json.stringify({
+			id: 833,
+			method: "reconnect",
+			domainIdentity: compiled.result.compatibility.domainIdentity,
+			revision: 9
+		})));
+		if (!mismatched.ok
+			|| mismatched.result.decision != "reload_domain"
+			|| mismatched.result.reason.code != "runtime_revision_mismatch"
+			|| mismatched.result.reason.acknowledgedRevision != 2)
+			throw "protocol reconnect accepted a stale runtime revision";
 		var structuralSource = StringTools.replace(editedSource, "public var active:Int;", "public var active:Int; public var generation:Int;");
 		assertOk(protocol.handle('{"id":81,"method":"update","path":"Main.hx","source":' + Json.stringify(structuralSource) + '}'));
 		var reload:Dynamic = Json.parse(protocol.handle('{"id":82,"method":"compile","entry":"Main"}'));
 		if (!reload.ok
 			|| reload.result.compatibility.decision != "reload_domain"
+			|| reload.result.compatibility.baseRevision != 0
+			|| reload.result.compatibility.targetRevision != 1
 			|| reload.result.compatibility.artifactKind != "module"
 			|| reload.result.compatibility.reasons.length == 0
 			|| reload.result.compatibility.reasons[0].code != "object_layout_changed"
 			|| reload.result.compatibility.reasons[0].entityKind != "object"
 			|| reload.result.compatibility.reasons[0].entityId != "Editor")
 			throw "protocol compile did not return a structured reload decision";
+		assertOk(protocol.handle('{"id":84,"method":"acknowledge","revision":1}'));
 		var invalid:Dynamic = Json.parse(protocol.handle('{"id":9,"method":"update","path":"Main.hx","source":"function main(:Int { return 0; }"}'));
 		if (!invalid.ok)
 			throw "protocol update should acknowledge unsaved edits";

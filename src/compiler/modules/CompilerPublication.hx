@@ -51,7 +51,15 @@ enum PublicationState {
 
 enum ReconnectDecision {
 	ContinuePatching;
-	ReloadDomain(reason:String);
+	ReloadDomain(reason:ReconnectReason);
+}
+
+enum ReconnectReason {
+	PublicationTrackingDisabled;
+	PublicationPending(revision:Int);
+	RuntimeRevisionMismatch(runtimeRevision:Int, acknowledgedRevision:Int);
+	BackendBaselineUnavailable;
+	ModuleIdentityMismatch;
 }
 
 /** Owns valid compiler-to-runtime publication transitions and revision checks. */
@@ -125,12 +133,12 @@ class CompilerPublication {
 
 	public function reconcile(runtimeRevision:Int):ReconnectDecision
 		return switch state {
-			case Untracked: ReloadDomain("publication tracking is disabled");
-			case Pending(candidate): ReloadDomain('publication revision ${candidate.revision} is unacknowledged');
+			case Untracked: ReloadDomain(PublicationTrackingDisabled);
+			case Pending(candidate): ReloadDomain(PublicationPending(candidate.revision));
 			case Ready(baseline):
-				if (runtimeRevision != baseline.revision)
-					ReloadDomain('runtime revision $runtimeRevision does not match acknowledged revision ${baseline.revision}'); else if (baseline.revision > 0
-					&& !baseline.backendAvailable) ReloadDomain("acknowledged backend baseline is unavailable after restart"); else ContinuePatching;
+				if (runtimeRevision != baseline.revision) ReloadDomain(RuntimeRevisionMismatch(runtimeRevision,
+					baseline.revision)); else if (baseline.revision > 0 && !baseline.backendAvailable) ReloadDomain(BackendBaselineUnavailable); else
+					ContinuePatching;
 		};
 
 	function requirePending(revision:Int):PendingPublication
