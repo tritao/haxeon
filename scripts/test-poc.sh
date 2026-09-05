@@ -37,6 +37,16 @@ if [[ $repl_status -ne 0 ]]; then
 	exit 1
 fi
 
+"$haxe" --cwd "$root_dir" "$root_dir/plugin-test.hxml"
+set +e
+LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$root_dir/out/plugin-test.hl" "$root_dir/out/plugin-runtime.hl"
+plugin_status=$?
+set -e
+if [[ $plugin_status -ne 0 ]]; then
+	echo "plugin workload: expected exit 0, got $plugin_status" >&2
+	exit 1
+fi
+
 run_program() {
     local name=$1
     local expected=$2

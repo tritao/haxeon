@@ -117,6 +117,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 - [x] A small JSON-lines protocol adapter for Pragtical; it exposes diagnostics,
   semantic queries, transactional validation, and base64 HLB/HLP payloads with
   runtime identity. There is no second typechecker.
+- [x] Representative multi-module plugin workload with an editor facade,
+	interface lifecycle, arrays/maps, callbacks, incremental body patching, and
+	class-layout reload classification (`plugin-test.hxml`).
 
 ### E. Self-hosting and release engineering
 
@@ -135,8 +138,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 1. Extend the first-class `Array<T>` and map runtime types with broader key/value
 	operations and iterator compatibility; keep bounds checks in the HashLink
 	operation contract.
-2. Complete package/import resolution for nominal types, then migrate a small
-	Pragtical utility plugin as the first real multi-module workload.
+2. Complete package/import resolution for nominal types, then migrate the
+	fixture into a real Pragtical utility plugin.
 3. Expose compiler snapshots through a thin editor protocol adapter and finish
 	semantic definition/references/rename.
 4. Add structural reload domains and state migration, then move larger editor
