@@ -182,6 +182,8 @@ class TestMain {
 		expectCompileError('function main():Int { var value:Int; return value; }', 'Local "value" may be used before assignment');
 		expectCompileError('function main():Int { var value:Int; if (true) value = 42; return value; }', 'Local "value" may be used before assignment');
 		expectCompileError('function main():Int { var value:Int; value++; return value; }', 'Local "value" may be used before assignment');
+		Frontend.compile('class Box { public var value:Int; public function new() { this.value = 1; } } function main():Int { var box = new Box(); var old = box.value++; return old + box.value; }');
+		expectCompileError('function main():Int { var text = "x"; return text++; }', 'Postfix increment requires a numeric target');
 		expectCompileError('function main():Int { var value; return 0; }', 'Uninitialized local "value" requires an explicit type');
 		expectCompileError('class Invalid { static final value; } function main():Int { return 0; }', 'Field "value" requires a type or initializer');
 		expectCompileError('class Invalid { static final value = 20 + 22; } function main():Int { return 0; }',

@@ -775,6 +775,12 @@ class Parser {
 					expression = Member(expression, name, expressionSpan(expression).merge(nameToken.span));
 				continue;
 			}
+			if (match(TokenKind.Increment) || match(TokenKind.Decrement)) {
+				var end = previous().span,
+					delta = previous().kind == TokenKind.Increment ? 1 : -1;
+				expression = PostfixIncrement(expression, delta, expressionSpan(expression).merge(end));
+				break;
+			}
 			break;
 		}
 		return expression;
@@ -911,8 +917,8 @@ class Parser {
 			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), BoolLiteral(_, span), NullLiteral(span), Variable(_, span),
 				Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span), Div(_, _, span), Mod(_, _, span), Negate(_, span), Less(_, _, span),
 				LessEqual(_, _, span), Greater(_, _, span), GreaterEqual(_, _, span), Equal(_, _, span), NotEqual(_, _, span), Not(_, span), Call(_, _, span),
-				MethodCall(_, _, _, span), New(_, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span), Lambda(_, _, span), And(_, _, span),
-				Or(_, _, span), Conditional(_, _, _, span), SwitchExpression(_, _, _, span): span;
+				MethodCall(_, _, _, span), New(_, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span), PostfixIncrement(_, _, span),
+				Lambda(_, _, span), And(_, _, span), Or(_, _, span), Conditional(_, _, _, span), SwitchExpression(_, _, _, span): span;
 			case ObjectLiteral(_, span), ArrayLiteral(_, span): span;
 		}
 

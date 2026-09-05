@@ -1086,6 +1086,7 @@ class Compiler {
 			case NewMap(key, value, s): NewMap(key, value, s);
 			case Index(array, offset,
 				s): Index(canonicalExpression(array, module, entry, locals, aliases), canonicalExpression(offset, module, entry, locals, aliases), s);
+			case PostfixIncrement(target, delta, s): PostfixIncrement(canonicalExpression(target, module, entry, locals, aliases), delta, s);
 			case Lambda(arguments, body, s):
 				Lambda(arguments, [
 					for (statement in body)
@@ -1326,6 +1327,8 @@ class Compiler {
 			case Index(array, offset, _):
 				scanExpression(array, dependencies);
 				scanExpression(offset, dependencies);
+			case PostfixIncrement(target, _, _):
+				scanExpression(target, dependencies);
 			case Member(object, _, _):
 				scanExpression(object, dependencies);
 			case Variable(name, _):
@@ -1481,6 +1484,8 @@ class Compiler {
 			case Index(array, offset, _):
 				scanCallExpression(array, calls, aliases);
 				scanCallExpression(offset, calls, aliases);
+			case PostfixIncrement(target, _, _):
+				scanCallExpression(target, calls, aliases);
 			case Lambda(_, body, _):
 				for (statement in body)
 					scanCalls(statement, calls, aliases);
@@ -1593,6 +1598,8 @@ class Compiler {
 			case Index(array, offset, _):
 				collectLambdaExpression(array, functionName, module, generatedByModule);
 				collectLambdaExpression(offset, functionName, module, generatedByModule);
+			case PostfixIncrement(target, _, _):
+				collectLambdaExpression(target, functionName, module, generatedByModule);
 			default:
 		}
 

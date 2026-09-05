@@ -990,6 +990,45 @@ class IrGenerator {
 				builder.methodCall(receiver, name.substr(name.lastIndexOf(".") + 1), callArgs, lowerType(expression.type));
 			case TIndex(array, index):
 				builder.arrayGet(lowerExpression(array, builder, localTypes), lowerExpression(index, builder, localTypes), lowerType(expression.type));
+			case TPostfixLocal(name, delta):
+				var type = lowerType(expression.type),
+					oldValue = builder.load(name, type),
+					one = incrementOne(expression.type, builder);
+				builder.store(name, delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one));
+				oldValue;
+			case TPostfixCellLocal(name, cellClass, delta):
+				var cell = builder.load('$' + 'cell:$name', Obj(cellClass)),
+					oldValue = builder.fieldGet(cell, "value", lowerType(expression.type)),
+					one = incrementOne(expression.type, builder);
+				builder.fieldSet(cell, "value", delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one));
+				oldValue;
+			case TPostfixCellCaptured(name, cellClass, delta):
+				var owner = localTypes.get("this");
+				if (owner == null)
+					throw 'Captured increment "$name" has no environment';
+				var cell = builder.fieldGet(builder.load("this", owner), name, Obj(cellClass)),
+					oldValue = builder.fieldGet(cell, "value", lowerType(expression.type)),
+					one = incrementOne(expression.type, builder);
+				builder.fieldSet(cell, "value", delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one));
+				oldValue;
+			case TPostfixStaticField(owner, name, delta):
+				var oldValue = builder.globalGet(owner + "." + name, lowerType(expression.type)),
+					one = incrementOne(expression.type, builder);
+				builder.globalSet(owner + "." + name, delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one));
+				oldValue;
+			case TPostfixField(object, name, delta):
+				var receiver = lowerExpression(object, builder, localTypes),
+					oldValue = builder.fieldGet(receiver, name, lowerType(expression.type)),
+					one = incrementOne(expression.type, builder);
+				builder.fieldSet(receiver, name, delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one));
+				oldValue;
+			case TPostfixIndex(array, index, delta):
+				var receiver = lowerExpression(array, builder, localTypes),
+					offset = lowerExpression(index, builder, localTypes),
+					oldValue = builder.arrayGet(receiver, offset, lowerType(expression.type)),
+					one = incrementOne(expression.type, builder);
+				builder.arraySet(receiver, offset, delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one));
+				oldValue;
 			case TMapGet(map, key):
 				var mapType = switch map.type {
 					case TMap(keyType, valueType): {key: keyType, value: valueType};
@@ -1060,6 +1099,9 @@ class IrGenerator {
 			case TFunction(arguments, result): Function([for (argument in arguments) lowerType(argument)], lowerType(result));
 			case TAnonymous(name, _): Obj(name);
 		};
+
+	static function incrementOne(type:CompilerType, builder:CfgBuilder):CfgValue
+		return type == TInt ? builder.constInt(1) : builder.constFloat(1);
 
 	static function lowerLogical(left:TypedExpression, right:TypedExpression, and:Bool, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
 		var resultName = '$' + 'logical:' + left.span.start + ':' + right.span.end;

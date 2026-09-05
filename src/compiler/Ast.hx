@@ -89,6 +89,7 @@ enum AstExpression {
 	NewArray(element:AstType, length:AstExpression, span:SourceSpan);
 	NewMap(key:AstType, value:AstType, span:SourceSpan);
 	Index(array:AstExpression, index:AstExpression, span:SourceSpan);
+	PostfixIncrement(target:AstExpression, delta:Int, span:SourceSpan);
 	Lambda(arguments:Array<AstArgument>, statements:Array<AstStatement>, span:SourceSpan);
 }
 

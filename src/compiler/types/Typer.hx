@@ -12,6 +12,7 @@ import compiler.Ast.AstEnum;
 import compiler.types.Type.CompilerType;
 import compiler.types.RuntimeType;
 import compiler.types.TypedAst.TypedExpression;
+import compiler.types.TypedAst.TypedExpressionKind;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedClass;
 import compiler.types.TypedAst.TypedCatch;
@@ -917,6 +918,22 @@ class Typer {
 				typedTrue = coerce(typedTrue, resultType, "conditional branch", "E1003");
 				typedFalse = coerce(typedFalse, resultType, "conditional branch", "E1003");
 				new TypedExpression(TConditional(typedCondition, typedTrue, typedFalse), resultType, span);
+			case PostfixIncrement(target, delta, span):
+				var typedTarget = typeExpression(target, scope);
+				if (!sameType(typedTarget.type, TInt) && !sameType(typedTarget.type, TFloat))
+					fail("E1018", "Postfix increment requires a numeric target", span);
+				var operation = switch typedTarget.expression {
+					case TLocal(name): TPostfixLocal(name, delta);
+					case TCellLocal(name, cellClass): TPostfixCellLocal(name, cellClass, delta);
+					case TCellCaptured(name, cellClass): TPostfixCellCaptured(name, cellClass, delta);
+					case TStaticField(owner, name): TPostfixStaticField(owner, name, delta);
+					case TField(object, name): TPostfixField(object, name, delta);
+					case TIndex(array, index): TPostfixIndex(array, index, delta);
+					default:
+						fail("E1018", "Postfix increment target is not assignable", span);
+						TPostfixLocal("", delta);
+				};
+				new TypedExpression(operation, typedTarget.type, span);
 			case SwitchExpression(expression, cases, defaultExpression, span):
 				var typedSubject = typeExpression(expression, scope);
 				if (!sameType(typedSubject.type, TInt) && !sameType(typedSubject.type, TString) && !isEnum(typedSubject.type))
@@ -1746,6 +1763,8 @@ class Typer {
 			case Index(array, offset, _):
 				collectMutableCaptureExpression(array, outerDeclared, result);
 				collectMutableCaptureExpression(offset, outerDeclared, result);
+			case PostfixIncrement(target, _, _):
+				collectMutableCaptureExpression(target, outerDeclared, result);
 			case Conditional(condition, whenTrue, whenFalse, _):
 				for (item in [condition, whenTrue, whenFalse])
 					collectMutableCaptureExpression(item, outerDeclared, result);
@@ -1819,6 +1838,8 @@ class Typer {
 			case Index(array, offset, _):
 				collectExpressionVariables(array, names);
 				collectExpressionVariables(offset, names);
+			case PostfixIncrement(target, _, _):
+				collectExpressionVariables(target, names);
 			case Lambda(_, body, _):
 				collectVariables(body, names);
 			case IntegerLiteral(_, _):

@@ -60,6 +60,12 @@ enum TypedExpressionKind {
 	TField(object:TypedExpression, name:String);
 	TMethodCall(object:TypedExpression, functionName:String, arguments:Array<TypedExpression>);
 	TIndex(array:TypedExpression, index:TypedExpression);
+	TPostfixLocal(name:String, delta:Int);
+	TPostfixCellLocal(name:String, cellClass:String, delta:Int);
+	TPostfixCellCaptured(name:String, cellClass:String, delta:Int);
+	TPostfixStaticField(owner:String, name:String, delta:Int);
+	TPostfixField(object:TypedExpression, name:String, delta:Int);
+	TPostfixIndex(array:TypedExpression, index:TypedExpression, delta:Int);
 	TMapGet(map:TypedExpression, key:TypedExpression);
 	TArrayLength(array:TypedExpression);
 	TStringLength(value:TypedExpression);
