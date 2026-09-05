@@ -562,6 +562,14 @@ class Parser {
 			return BoolLiteral(true, previous().span);
 		if (match(TokenKind.BoolFalse))
 			return BoolLiteral(false, previous().span);
+		if (match(TokenKind.LeftBracket)) {
+			var start = previous().span, values = [];
+			if (!check(TokenKind.RightBracket))
+				do
+					values.push(parseExpression()) while (match(TokenKind.Comma));
+			var end = consume(TokenKind.RightBracket).span;
+			return parsePostfix(ArrayLiteral(values, start.merge(end)));
+		}
 		if (check(TokenKind.Identifier) && current().text == "null") {
 			var nullToken = advance();
 			return NullLiteral(nullToken.span);
@@ -893,7 +901,7 @@ class Parser {
 				LessEqual(_, _, span), Greater(_, _, span), GreaterEqual(_, _, span), Equal(_, _, span), NotEqual(_, _, span), Not(_, span), Call(_, _, span),
 				MethodCall(_, _, _, span), New(_, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span), Lambda(_, _, span), And(_, _, span),
 				Or(_, _, span), Conditional(_, _, _, span), SwitchExpression(_, _, _, span): span;
-			case ObjectLiteral(_, span): span;
+			case ObjectLiteral(_, span), ArrayLiteral(_, span): span;
 		}
 
 	static function decodeString(text:String):String {

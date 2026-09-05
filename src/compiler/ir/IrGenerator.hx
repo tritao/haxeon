@@ -938,6 +938,14 @@ class IrGenerator {
 				for (field in fields)
 					builder.fieldSet(object, field.name, lowerExpression(field.value, builder, localTypes));
 				object;
+			case TArrayLiteral(values):
+				var element = switch expression.type {
+					case TArray(element): element;
+					default: throw "Array literal requires an array type";
+				}, array = builder.call(arrayAllocatorName(element), [builder.constInt(values.length)], Array(lowerType(element)));
+				for (index in 0...values.length)
+					builder.arraySet(array, builder.constInt(index), lowerExpression(values[index], builder, localTypes));
+				array;
 			case TNewArray(element, length):
 				builder.call(arrayAllocatorName(element), [lowerExpression(length, builder, localTypes)], Array(lowerType(element)));
 			case TNewMap(key, value): builder.call(RuntimeType.mapNative(key, value, "alloc"), [], Abstract(RuntimeType.mapName(key, value)));

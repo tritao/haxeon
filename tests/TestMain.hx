@@ -57,6 +57,8 @@ class TestMain {
 		if (hexTokens[0].text != "0x2A" || hexTokens[1].text != "0Xff")
 			throw "Hexadecimal integer literals were not tokenized";
 		Frontend.compile('function main():Int { return 0x2A; }');
+		Frontend.compile('function main():Int { var values = [20, 22]; var empty:Array<Int> = []; return values[0] + values[1] + empty.length; }');
+		expectCompileError('function main():Int { var values = []; return 0; }', 'Empty array literal requires an expected element type');
 		var values = [
 			-0x1FFFFFFF,
 			-0x2000,

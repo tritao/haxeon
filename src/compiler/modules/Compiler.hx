@@ -1064,6 +1064,7 @@ class Compiler {
 					for (field in fields)
 						{name: field.name, value: canonicalExpression(field.value, module, entry, locals, aliases), span: field.span}
 				], s);
+			case ArrayLiteral(values, s): ArrayLiteral([for (value in values) canonicalExpression(value, module, entry, locals, aliases)], s);
 			case Call(name, args, s):
 				var resolved = name;
 				var dot = name.indexOf("."),
@@ -1309,6 +1310,9 @@ class Compiler {
 			case ObjectLiteral(fields, _):
 				for (field in fields)
 					scanExpression(field.value, dependencies);
+			case ArrayLiteral(values, _):
+				for (value in values)
+					scanExpression(value, dependencies);
 			case Index(array, offset, _):
 				scanExpression(array, dependencies);
 				scanExpression(offset, dependencies);
@@ -1450,6 +1454,9 @@ class Compiler {
 			case ObjectLiteral(fields, _):
 				for (field in fields)
 					scanCallExpression(field.value, calls, aliases);
+			case ArrayLiteral(values, _):
+				for (value in values)
+					scanCallExpression(value, calls, aliases);
 			case New(typeName, args, _):
 				calls.set(typeName + ".new", true);
 				for (a in args)
@@ -1557,6 +1564,9 @@ class Compiler {
 			case ObjectLiteral(fields, _):
 				for (field in fields)
 					collectLambdaExpression(field.value, functionName, module, generatedByModule);
+			case ArrayLiteral(values, _):
+				for (value in values)
+					collectLambdaExpression(value, functionName, module, generatedByModule);
 			case New(_, args, _):
 				for (argument in args)
 					collectLambdaExpression(argument, functionName, module, generatedByModule);

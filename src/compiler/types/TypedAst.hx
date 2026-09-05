@@ -49,6 +49,7 @@ enum TypedExpressionKind {
 	TConditional(condition:TypedExpression, whenTrue:TypedExpression, whenFalse:TypedExpression);
 	TSwitchExpression(expression:TypedExpression, cases:Array<TypedSwitchExpressionCase>, defaultExpression:Null<TypedExpression>);
 	TObjectLiteral(name:String, fields:Array<TypedObjectField>);
+	TArrayLiteral(values:Array<TypedExpression>);
 	TCall(name:String, arguments:Array<TypedExpression>);
 	TCollectionCall(receiver:TypedExpression, operation:String, arguments:Array<TypedExpression>);
 	TClosureCall(callee:TypedExpression, arguments:Array<TypedExpression>);

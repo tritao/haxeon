@@ -1001,6 +1001,21 @@ class Typer {
 				};
 				registerAnonymousTypes(resultType);
 				new TypedExpression(TObjectLiteral(typeName, typedFields), resultType, span);
+			case ArrayLiteral(values, span):
+				var expectedElement = switch expectedType {
+					case TArray(element): element;
+					default: null;
+				};
+				if (values.length == 0 && expectedElement == null)
+					fail("E1003", "Empty array literal requires an expected element type", span);
+				var typedValues = [], elementType = expectedElement;
+				for (value in values) {
+					var typedValue = typeExpression(value, scope, elementType);
+					if (elementType == null)
+						elementType = typedValue.type;
+					typedValues.push(coerce(typedValue, elementType, "array element", "E1003"));
+				}
+				new TypedExpression(TArrayLiteral(typedValues), TArray(elementType), span);
 			case New(typeName, arguments, span):
 				if (!classDecls.exists(typeName) || interfaceDecls.exists(typeName))
 					fail("E1007", 'Unknown class "$typeName"', span);
@@ -1715,6 +1730,9 @@ class Typer {
 			case ObjectLiteral(fields, _):
 				for (field in fields)
 					collectMutableCaptureExpression(field.value, outerDeclared, result);
+			case ArrayLiteral(values, _):
+				for (value in values)
+					collectMutableCaptureExpression(value, outerDeclared, result);
 			case Variable(_, _), IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), NewMap(_, _, _):
 		}
 
@@ -1759,6 +1777,9 @@ class Typer {
 			case ObjectLiteral(fields, _):
 				for (field in fields)
 					collectExpressionVariables(field.value, names);
+			case ArrayLiteral(values, _):
+				for (value in values)
+					collectExpressionVariables(value, names);
 			case New(_, arguments, _):
 				for (argument in arguments)
 					collectExpressionVariables(argument, names);
