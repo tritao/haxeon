@@ -32,7 +32,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   capture cells remain future work).
 - [~] `Array<Int>` typing, indexed reads/writes, and `.length` lower directly
   to HashLink array operations; allocation and other element kinds remain.
-  Maps, enums, nullable values, and pattern matching are still future work.
+  Our HashLink fork now enforces bounds in the JIT. Maps, enums, nullable
+  values, and pattern matching are still future work.
 - [ ] Interfaces, virtual dispatch, and basic generics.
 - [ ] A documented runtime library ABI for strings, collections, IO, and time
   (typed `trace` and a native-backed `IntArray` ABI probe are exercised

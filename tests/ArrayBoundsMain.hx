@@ -1,0 +1,14 @@
+import compiler.hl.HlWriter;
+import compiler.modules.Compiler;
+import compiler.types.Type.CompilerType;
+import sys.io.File;
+
+class ArrayBoundsMain {
+	static function main():Void {
+		var compiler = new Compiler();
+		compiler.registerNative("array_int_alloc", "realtime_runtime", "array_int_alloc", [CompilerType.TInt], CompilerType.TArray(CompilerType.TInt));
+		compiler.update("Main.hx", "function main():Int { var values:Array<Int> = array_int_alloc(1); return values[1]; }");
+		var result = compiler.compile("Main");
+		File.saveBytes(Sys.args()[0], HlWriter.encode(result.module));
+	}
+}
