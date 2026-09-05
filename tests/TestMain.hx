@@ -236,6 +236,7 @@ class TestMain {
 		Frontend.compile('function main():Int { var sideEffect = 0; var value = if (true) { sideEffect++; 40; } else { 2; }; return value + sideEffect; }');
 		Frontend.compile('function main():Int { return switch 1 { case 1: 42; default: throw "unexpected"; }; }');
 		Frontend.compile('function main():Int { return if (true) 42 else throw "unexpected"; }');
+		Frontend.compile('function main():Int { var value = switch 1 { case 1: 42; default: 0; } return value; }');
 		new Parser(new Lexer(new SourceFile("contextual-expression-name.hx",
 			'function main():Int { return String.fromCharCode(42).length; }')).tokenize()).parseProgram();
 		var mutableSource = 'function main():Int { var outer = 0; while (outer < 2) { var inner = 0; while (inner < 2) { inner = inner + 1; } outer = outer + inner; } return outer; }';

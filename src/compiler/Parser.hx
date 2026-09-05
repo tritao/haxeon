@@ -308,7 +308,7 @@ class Parser {
 			var type = match(TokenKind.Colon) ? parseType() : null;
 			consume(TokenKind.Assign);
 			var initializer = parseExpression();
-			var end = consume(TokenKind.Semicolon).span;
+			var end = expressionEnd(initializer);
 			return VarDeclaration(name, type, initializer, start.merge(end));
 		}
 		if (match(TokenKind.Return)) {
@@ -316,13 +316,13 @@ class Parser {
 			if (check(TokenKind.Semicolon))
 				return ReturnVoid(start.merge(consume(TokenKind.Semicolon).span));
 			var expression = parseExpression();
-			var end = consume(TokenKind.Semicolon).span;
+			var end = expressionEnd(expression);
 			return Return(expression, start.merge(end));
 		}
 		if (match(TokenKind.Throw)) {
 			var start = previous().span,
 				expression = parseExpression(),
-				end = consume(TokenKind.Semicolon).span;
+				end = expressionEnd(expression);
 			return Throw(expression, start.merge(end));
 		}
 		if (match(TokenKind.Try)) {
@@ -393,7 +393,7 @@ class Parser {
 			var assignmentKind = match(TokenKind.Assign) ? 0 : match(TokenKind.PlusAssign) ? 1 : match(TokenKind.MinusAssign) ? 2 : -1;
 			if (assignmentKind >= 0) {
 				var value = parseExpression(),
-					end = consume(TokenKind.Semicolon).span,
+					end = expressionEnd(value),
 					assigned = assignmentKind == 0 ? value : assignmentKind == 1 ? Add(target, value,
 						expressionSpan(target).merge(expressionSpan(value))) : Sub(target, value, expressionSpan(target).merge(expressionSpan(value))),
 					assignment = switch target {
@@ -447,8 +447,7 @@ class Parser {
 				end = statementSpan(body[body.length - 1]);
 			return ForIn(name, iterable, body, start.merge(end));
 		}
-		var expression = parseExpression(),
-			end = consume(TokenKind.Semicolon).span;
+		var expression = parseExpression(), end = expressionEnd(expression);
 		return Expression(expression, expressionSpan(expression).merge(end));
 	}
 
@@ -468,7 +467,11 @@ class Parser {
 				declarations.push(UninitializedDeclaration(nameToken.text, type, start.merge(previous().span)));
 			}
 		} while (match(TokenKind.Comma));
-		var end = consume(TokenKind.Semicolon).span;
+		var lastInitializer = switch declarations[declarations.length - 1] {
+			case VarDeclaration(_, _, initializer, _): initializer;
+			default: null;
+		};
+		var end = lastInitializer != null ? expressionEnd(lastInitializer) : consume(TokenKind.Semicolon).span;
 		if (declarations.length > 0) {
 			var last = declarations.length - 1;
 			switch declarations[last] {
@@ -953,6 +956,21 @@ class Parser {
 			null;
 		};
 	}
+
+	function expressionEnd(expression:AstExpression):SourceSpan {
+		if (match(TokenKind.Semicolon))
+			return previous().span;
+		if (isBracedExpression(expression))
+			return expressionSpan(expression);
+		return consume(TokenKind.Semicolon).span;
+	}
+
+	static function isBracedExpression(expression:AstExpression):Bool
+		return switch expression {
+			case SwitchExpression(_, _, _, _), BlockExpression(_, _, _): true;
+			case Conditional(_, whenTrue, whenFalse, _): isBracedExpression(whenTrue) || isBracedExpression(whenFalse);
+			default: false;
+		};
 
 	static function isNameToken(kind:TokenKind):Bool {
 		return switch kind {
