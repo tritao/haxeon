@@ -14,6 +14,7 @@ enum TokenKind {
 	Public;
 	Private;
 	Static;
+	Inline;
 	Final;
 	New;
 	This;

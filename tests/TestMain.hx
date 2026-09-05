@@ -167,6 +167,11 @@ class TestMain {
 		expectCompileError('function main():Int { var value:Int; if (true) value = 42; return value; }', 'Local "value" may be used before assignment');
 		expectCompileError('function main():Int { var value:Int; value++; return value; }', 'Local "value" may be used before assignment');
 		expectCompileError('function main():Int { var value; return 0; }', 'Uninitialized local "value" requires an explicit type');
+		expectCompileError('class Invalid { static final value; } function main():Int { return 0; }', 'Field "value" requires a type or initializer');
+		expectCompileError('class Invalid { static final value = 20 + 22; } function main():Int { return 0; }',
+			'Cannot infer type of field "value" from this initializer');
+		expectCompileError('class Invalid { static final value:Int = "wrong"; } function main():Int { return 0; }',
+			'Type mismatch for static field "Invalid.value"');
 		expectCompileError('function main():Int { var value:Int = 1; value = "wrong"; return value; }', 'Type mismatch for local "value"');
 		expectCompileError('function main():Int { throw; }', 'Expected expression');
 		expectCompileError('function noop():Void { return; } function main():Int { throw noop(); }', 'Cannot throw a Void value');
@@ -434,6 +439,7 @@ class TestMain {
 		Frontend.compile('function main():Int { var value:Int; try { value = 42; } catch (error:Dynamic) { throw "failed"; } return value; }');
 		Frontend.compile('function main():Int { while (true) { var value:Int; try { value = 42; } catch (error:Dynamic) { break; } return value; } return 0; }');
 		Frontend.compile("class Math { public static function answer():Int return 42; } function main():Int return Math.answer();");
+		Frontend.compile('class Constants { public static inline final ANSWER = 42; static inline final LABEL = "answer"; static final VALUES = new Array<Int>(0); } function main():Int return Constants.ANSWER;');
 		Frontend.compile("function main():Int { var convert:(Int) -> Dynamic = (value:Int) -> { return value; }; convert(42); return 42; }");
 		expectCompileError("class Box { public var value:Int; } function main():Int { var box:Null<Box> = new Box(); if (box != null) { box = null; return box.value; } return 0; }",
 			'Field "value" requires an object');

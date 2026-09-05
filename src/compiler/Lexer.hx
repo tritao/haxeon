@@ -177,6 +177,7 @@ class Lexer {
 			case "public": TokenKind.Public;
 			case "private": TokenKind.Private;
 			case "static": TokenKind.Static;
+			case "inline": TokenKind.Inline;
 			case "final": TokenKind.Final;
 			case "new": TokenKind.New;
 			case "this": TokenKind.This;

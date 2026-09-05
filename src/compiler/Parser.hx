@@ -163,6 +163,8 @@ class Parser {
 					case TokenKind.Static:
 						advance();
 						isStatic = true;
+					case TokenKind.Inline:
+						advance();
 					case TokenKind.Final:
 						advance();
 						isFinal = true;
@@ -170,7 +172,7 @@ class Parser {
 						break;
 				}
 				if (current().kind != TokenKind.Public && current().kind != TokenKind.Private && current().kind != TokenKind.Static
-					&& current().kind != TokenKind.Final)
+					&& current().kind != TokenKind.Inline && current().kind != TokenKind.Final)
 					break;
 			}
 			if (match(TokenKind.Function)) {
@@ -181,10 +183,14 @@ class Parser {
 				var fieldStart = current().span;
 				match(TokenKind.Var);
 				var fieldName = consume(TokenKind.Identifier).text;
-				consume(TokenKind.Colon);
-				var fieldType = parseType(),
-					initializer = match(TokenKind.Assign) ? parseExpression() : null,
-					end = consume(TokenKind.Semicolon).span;
+				var fieldType = match(TokenKind.Colon) ? parseType() : null,
+					initializer = match(TokenKind.Assign) ? parseExpression() : null;
+				if (fieldType == null) {
+					if (initializer == null)
+						fail(current(), 'Field "$fieldName" requires a type or initializer');
+					fieldType = inferredFieldType(fieldName, initializer);
+				}
+				var end = consume(TokenKind.Semicolon).span;
 				fields.push({
 					name: fieldName,
 					type: fieldType,
@@ -205,6 +211,20 @@ class Parser {
 			span: start.merge(end)
 		};
 	}
+
+	function inferredFieldType(name:String, initializer:AstExpression):AstType
+		return switch initializer {
+			case IntegerLiteral(_, _): IntType;
+			case FloatLiteral(_, _): FloatType;
+			case StringLiteral(_, _): StringType;
+			case BoolLiteral(_, _): BoolType;
+			case New(typeName, _, _): NamedType(typeName);
+			case NewArray(element, _, _): ArrayType(element);
+			case NewMap(key, value, _): MapType(key, value);
+			default:
+				fail(current(), 'Cannot infer type of field "$name" from this initializer');
+				return null;
+		};
 
 	function parseInterface():AstInterface {
 		var start = consume(TokenKind.Interface).span, name = consume(TokenKind.Identifier).text, bases = [];
