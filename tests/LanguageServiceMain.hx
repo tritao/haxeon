@@ -5,7 +5,7 @@ class LanguageServiceMain {
 	static function main():Void {
 		var service = new LanguageService();
 		service.update("Main.hx",
-			"typedef Count = Int; enum Kind { One; Two(Int); } interface Plugin { function activate():Void; } class Editor { public static var version:Int; public static function make():Int { return 1; } public var active:Int; public function open():Void { return; } } function main():Int { var editor = new Editor(); editor.open(); var kind:Kind = Kind.One; Editor.make(); return 42; }");
+			"typedef Count = Int; enum Kind { One; Two(Int); } interface Plugin { function activate():Void; } class Editor { public static var version:Int; public static function make():Int { return 1; } public var active:Int; public function open():Void { return; } } function main():Int { var editor = new Editor(); editor.open(); var text:String = \"x\"; text.length; var kind:Kind = Kind.One; Editor.make(); return 42; }");
 		service.compile("Main");
 		var symbols = service.documentSymbols("Main.hx"),
 			foundClass = false,
@@ -51,6 +51,22 @@ class LanguageServiceMain {
 				hasMake = true;
 		if (!hasMake)
 			throw "language service static member completion failed";
+		var instancePosition = source.indexOf("editor.open") + "editor.".length,
+			instanceCompletion = service.complete("Main.hx", instancePosition),
+			hasOpen = false;
+		for (item in instanceCompletion)
+			if (item.label == "open" && item.detail == "open():Void")
+				hasOpen = true;
+		if (!hasOpen || service.hover("Main.hx", instancePosition + 2) != "open():Void")
+			throw "language service typed instance completion failed";
+		var stringPosition = source.indexOf("text.length") + "text.".length,
+			stringCompletion = service.complete("Main.hx", stringPosition),
+			hasLength = false;
+		for (item in stringCompletion)
+			if (item.label == "length" && item.detail == "length:Int")
+				hasLength = true;
+		if (!hasLength || service.hover("Main.hx", stringPosition + 3) != "length:Int")
+			throw "language service typed string completion failed";
 		var methodPosition = source.lastIndexOf("open") + 2,
 			definition = service.definition("Main.hx", methodPosition);
 		if (definition == null

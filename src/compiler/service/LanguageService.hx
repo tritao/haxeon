@@ -8,6 +8,8 @@ import compiler.modules.Compiler;
 import compiler.modules.ModulePath;
 import compiler.modules.ModuleState;
 import compiler.modules.Compiler.CompileResult;
+import compiler.types.Type.CompilerType;
+import compiler.types.TypedAst.TypedStatement;
 
 typedef DocumentSymbol = {
 	final name:String;
@@ -158,6 +160,9 @@ class LanguageService {
 								detail: '${method.name}(${[for (argument in method.arguments) typeName(argument.type)].join(",")}):${typeName(method.result)}'
 							});
 				}
+			var receiverType = qualifierType(path, qualifier, position);
+			if (receiverType != null)
+				addInstanceMembers(receiverType, prefix, result);
 			if (result.length > 0) {
 				result.sort(function(a, b) return Reflect.compare(a.label, b.label));
 				return result;
@@ -189,6 +194,13 @@ class LanguageService {
 					for (field in classDecl.fields)
 						if (field.name == name && field.isStatic)
 							return '${field.name}:${typeName(field.type)}';
+			var receiverType = qualifierType(path, qualifier, position),
+				members:Array<CompletionItem> = [];
+			if (receiverType != null) {
+				addInstanceMembers(receiverType, name, members);
+				if (members.length > 0)
+					return members[0].detail;
+			}
 		}
 		for (symbol in documentSymbols(path))
 			if (symbol.name == name)
@@ -274,6 +286,117 @@ class LanguageService {
 			if (token.kind == Identifier && position >= token.span.start && position <= token.span.end)
 				return token.text;
 		return null;
+	}
+
+	function qualifierType(path:String, qualifier:String, position:Int):Null<CompilerType> {
+		var state = stateFor(path);
+		if (state == null)
+			return null;
+		for (fn in state.typedFunctions)
+			if (position >= fn.span.start && position <= fn.span.end) {
+				if (qualifier == "this" && fn.owner != null)
+					return TClass(fn.owner);
+				for (argument in fn.arguments)
+					if (argument.name == qualifier)
+						return argument.type;
+				var local = localType(fn.statements, qualifier);
+				if (local != null)
+					return local;
+			}
+		return null;
+	}
+
+	static function localType(statements:Array<TypedStatement>, name:String):Null<CompilerType> {
+		for (statement in statements)
+			switch statement {
+				case TVar(local, initializer, _):
+					if (local == name)
+						return initializer.type;
+				case TForIn(local, iterable, body, _):
+					if (local == name)
+						return switch iterable.type {
+							case TArray(element): element;
+							default: null;
+						};
+					var loopType = localType(body, name);
+					if (loopType != null)
+						return loopType;
+				case TIf(_, yes, no, _):
+					var branchType = localType(yes, name);
+					if (branchType == null)
+						branchType = localType(no, name);
+					if (branchType != null)
+						return branchType;
+				case TWhile(_, body, _):
+					var loopType = localType(body, name);
+					if (loopType != null)
+						return loopType;
+				case TSwitch(_, cases, defaultBranch, _, _):
+					for (switchCase in cases) {
+						var caseType = localType(switchCase.statements, name);
+						if (caseType != null)
+							return caseType;
+					}
+					var defaultType = localType(defaultBranch, name);
+					if (defaultType != null)
+						return defaultType;
+				default:
+			}
+		return null;
+	}
+
+	function addInstanceMembers(type:CompilerType, prefix:String, result:Array<CompletionItem>):Void {
+		switch type {
+			case TNullable(element):
+				addInstanceMembers(element, prefix, result);
+			case TClass(name):
+				for (state in compiler.modules) {
+					var ast = effectiveAst(state);
+					if (ast != null)
+						for (classDecl in ast.classes)
+							if (classDecl.name == name) {
+								for (field in classDecl.fields)
+									if (!field.isStatic)
+										addMember(field.name, "field", '${field.name}:${typeName(field.type)}', prefix, result);
+								for (method in classDecl.methods)
+									if (!method.isStatic)
+										addMember(method.name, "method",
+											'${method.name}(${[for (argument in method.arguments) typeName(argument.type)].join(",")}):${typeName(method.result)}',
+											prefix, result);
+								if (classDecl.base != null)
+									addInstanceMembers(TClass(classDecl.base), prefix, result);
+							}
+				}
+			case TInterface(name):
+				for (state in compiler.modules) {
+					var ast = effectiveAst(state);
+					if (ast != null)
+						for (interfaceDecl in ast.interfaces)
+							if (interfaceDecl.name == name)
+								for (method in interfaceDecl.methods)
+									addMember(method.name, "method",
+										'${method.name}(${[for (argument in method.arguments) typeName(argument.type)].join(",")}):${typeName(method.result)}',
+										prefix, result);
+				}
+			case TArray(_):
+				addMember("length", "field", "length:Int", prefix, result);
+			case TMap(_, _):
+				addMember("set", "method", "set(key,value):Void", prefix, result);
+				addMember("exists", "method", "exists(key):Bool", prefix, result);
+				addMember("keys", "method", "keys():Array", prefix, result);
+				addMember("remove", "method", "remove(key):Bool", prefix, result);
+				addMember("clear", "method", "clear():Void", prefix, result);
+			case TString:
+				addMember("length", "field", "length:Int", prefix, result);
+				addMember("indexOf", "method", "indexOf(needle):Int", prefix, result);
+				addMember("substring", "method", "substring(start,end):String", prefix, result);
+			default:
+		}
+	}
+
+	static function addMember(label:String, kind:String, detail:String, prefix:String, result:Array<CompletionItem>):Void {
+		if ((prefix.length == 0 || StringTools.startsWith(label, prefix)) && [for (item in result) item.label].indexOf(label) < 0)
+			result.push({label: label, kind: kind, detail: detail});
 	}
 
 	function stateFor(path:String):Null<ModuleState>
