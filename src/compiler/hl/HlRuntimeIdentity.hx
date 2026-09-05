@@ -19,7 +19,7 @@ typedef HlPersistentIdentity = {
 
 class HlRuntimeIdentity {
 	public static inline final VERSION = 5;
-	public static inline final RUNTIME_VERSION = 1;
+	public static inline final RUNTIME_VERSION = 2;
 	static var sequence = 1;
 
 	public static function createModuleId():Bytes {
@@ -31,9 +31,11 @@ class HlRuntimeIdentity {
 		return out;
 	}
 
-	public static function encode(moduleId:Bytes, indices:Map<String, Int>, stableIds:Map<String, Int>):Bytes {
+	public static function encode(moduleId:Bytes, revision:Int, indices:Map<String, Int>, stableIds:Map<String, Int>):Bytes {
 		if (moduleId.length != 16)
 			throw "Module ID must contain 16 bytes";
+		if (revision < 0)
+			throw "Runtime revision cannot be negative";
 		var names = [for (name in stableIds.keys()) if (indices.exists(name)) name];
 		names.sort(Reflect.compare);
 		var out = new BytesOutput();
@@ -41,6 +43,7 @@ class HlRuntimeIdentity {
 		out.writeString("HLI");
 		out.writeByte(RUNTIME_VERSION);
 		out.write(moduleId);
+		out.writeInt32(revision);
 		out.writeInt32(names.length);
 		for (name in names) {
 			out.writeInt32(stableIds.get(name));

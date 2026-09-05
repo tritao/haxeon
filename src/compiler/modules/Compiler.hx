@@ -86,7 +86,7 @@ class Compiler {
 	var publishedAbi:Null<RuntimeAbiDescriptor>;
 	var compiledOnce = false;
 	final publication = new CompilerPublication();
-	var rehydrationBaseline:Null<Map<String, compiler.ir.IrFunction>>;
+	var rehydrationBaseline:Null<Map<String, Bytes>>;
 
 	public function new(?identityState:Bytes) {
 		if (identityState == null) {
@@ -107,8 +107,10 @@ class Compiler {
 			publishedAbi = identity.publishedAbi;
 			if (identity.publicationTracking)
 				publication.enable(identity.acknowledgedRevision, identity.acknowledgedAbi, identity.assemblerState != null);
-			if (identity.assemblerState != null)
+			if (identity.assemblerState != null) {
+				compiledOnce = true;
 				beginRehydration(assembler);
+			}
 		}
 	}
 
@@ -135,7 +137,7 @@ class Compiler {
 	function beginRehydration(restored:HlModuleAssembler):Void {
 		rehydrationBaseline = [];
 		for (name => fn in restored.cache.functions)
-			rehydrationBaseline.set(name, fn);
+			rehydrationBaseline.set(name, compiler.ir.IrFunctionStateCodec.encode(fn));
 	}
 
 	public function acknowledgePublication(revision:Int):Void
@@ -546,7 +548,7 @@ class Compiler {
 			reloadReasons: reloadReasons,
 			functionIndices: copyIndices(assembly.functionIndices),
 			functionIds: copyIndices(assembler.cache.stableIds),
-			runtimeIdentity: HlRuntimeIdentity.encode(moduleId, assembly.functionIndices, assembler.cache.stableIds),
+			runtimeIdentity: HlRuntimeIdentity.encode(moduleId, assembly.revision, assembly.functionIndices, assembler.cache.stableIds),
 			revision: assembly.revision,
 			patchBytes: patchBytes,
 			metrics: {
@@ -570,9 +572,7 @@ class Compiler {
 			current.set(fn.name, fn);
 		for (name in regenerated) {
 			var old = rehydrationBaseline.get(name), next = current.get(name);
-			if (old == null
-				|| next == null
-				|| compiler.ir.IrFunctionStateCodec.encode(old).compare(compiler.ir.IrFunctionStateCodec.encode(next)) != 0)
+			if (old == null || next == null || old.compare(compiler.ir.IrFunctionStateCodec.encode(next)) != 0)
 				changed.push(name);
 		}
 		return changed;
