@@ -1,0 +1,70 @@
+import runtime.Plugin;
+import runtime.ReloadablePlugin;
+import runtime.RuntimeDomain;
+
+class RuntimeDomainMain {
+	static function main():Void {
+		var events:Array<String> = [], domain = new RuntimeDomain("search");
+		var first = new TestPlugin("first", events),
+			second = new TestPlugin("second", events);
+		first.state = "cursor:4";
+		domain.activate(first);
+		if (!domain.active || domain.generation != 1 || events.join(",") != "first.activate")
+			throw "runtime domain did not activate the first generation";
+		try {
+			domain.activate(second);
+			throw "runtime domain accepted a second activation";
+		} catch (error:runtime.RuntimeError) {}
+		domain.reload(second);
+		if (!domain.active
+			|| domain.generation != 2
+			|| second.state != "cursor:4"
+			|| events.join(",") != "first.activate,first.save,first.deactivate,second.activate,second.restore")
+			throw "runtime domain did not migrate state in order";
+		var failing = new TestPlugin("failing", events);
+		failing.failActivation = true;
+		try {
+			domain.reload(failing);
+			throw "runtime domain accepted a failed generation";
+		} catch (error:String) {}
+		if (domain.generation != 2 || !domain.active || events[events.length - 1] != "second.activate")
+			throw "runtime domain did not recover the previous generation";
+		domain.deactivate();
+		if (domain.active || domain.generation != 2)
+			throw "runtime domain did not deactivate cleanly";
+		Sys.println("PASS: runtime domain lifecycle and state migration contract");
+	}
+}
+
+private class TestPlugin implements ReloadablePlugin {
+	public final name:String;
+
+	final events:Array<String>;
+
+	public var state:String = "";
+	public var failActivation:Bool = false;
+
+	public function new(name:String, events:Array<String>) {
+		this.name = name;
+		this.events = events;
+	}
+
+	public function activate():Void {
+		events.push('$name.activate');
+		if (failActivation)
+			throw 'activation failed for $name';
+	}
+
+	public function deactivate():Void
+		events.push('$name.deactivate');
+
+	public function saveState():String {
+		events.push('$name.save');
+		return state;
+	}
+
+	public function restoreState(value:String):Void {
+		events.push('$name.restore');
+		state = value;
+	}
+}
