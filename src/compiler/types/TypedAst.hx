@@ -130,7 +130,13 @@ typedef TypedClass = {
 
 typedef TypedInterfaceMethod = {final name:String; final arguments:Array<CompilerType>; final result:CompilerType;}
 typedef TypedInterface = {final name:String; final bases:Array<String>; final methods:Array<TypedInterfaceMethod>;}
-typedef TypedCell = {final name:String; final valueType:CompilerType;}
+
+enum CellStorageKind {
+	MutableCapture;
+	ExceptionEdge;
+}
+
+typedef TypedCell = {final name:String; final valueType:CompilerType; final kind:CellStorageKind;}
 typedef TypedCaptureEnvironment = {final name:String; final fields:Array<{name:String, type:CompilerType}>;}
 
 typedef TypedProgram = {

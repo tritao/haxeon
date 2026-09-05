@@ -409,6 +409,10 @@ class TestMain {
 			throw "Semantic typing manufactured a runtime helper class";
 		if ([for (object in captureObjects) object.name].indexOf(captureTyped.captureEnvironments[0].name) < 0)
 			throw "Lowering did not materialize the capture environment";
+		var exceptionStorage = Typer.type(new Parser(new Lexer(new SourceFile("exception-storage.hx",
+			"function main():Int { var value = 1; try { value = 42; throw \"stop\"; } catch (error:String) { return value; } }")).tokenize()).parseProgram());
+		if (exceptionStorage.cells.length != 1 || exceptionStorage.cells[0].kind != compiler.types.TypedAst.CellStorageKind.ExceptionEdge)
+			throw "Exception-edge storage was confused with mutable capture storage";
 		Sys.println("PASS: declaration resolution rejects unknown types and cycles and resolves semantic signatures");
 		var classProgram = new Parser(new Lexer(new SourceFile("Box.hx",
 			"package demo; class Box { public final value:Int; public function new(value:Int) { } public function get():Int { return 42; } } function main():Int { return 42; }"))

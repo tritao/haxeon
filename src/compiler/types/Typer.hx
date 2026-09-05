@@ -269,9 +269,17 @@ class Typer {
 		collectDeclaredLocals(fn.statements, declared);
 		var mutableCandidates:Map<String, Bool> = [];
 		collectMutableCaptureCandidates(fn.statements, declared, mutableCandidates);
-		collectExceptionCellCandidates(fn.statements, declared, mutableCandidates);
-		for (name in mutableCandidates.keys())
+		var exceptionCandidates:Map<String, Bool> = [];
+		collectExceptionCellCandidates(fn.statements, declared, exceptionCandidates);
+		for (name in mutableCandidates.keys()) {
 			context.cells.set(name, '$' + 'cell:' + context.name + ':' + name);
+			context.cellKinds.set(name, MutableCapture);
+		}
+		for (name in exceptionCandidates.keys()) {
+			context.cells.set(name, '$' + 'cell:' + context.name + ':' + name);
+			if (!context.cellKinds.exists(name))
+				context.cellKinds.set(name, ExceptionEdge);
+		}
 		var scope = new Scope();
 		var isConstructor = owner != null && fn.name == "new";
 		if (owner != null && !isStatic)
@@ -303,7 +311,7 @@ class Typer {
 		for (name in context.cells.keys()) {
 			var cellType = context.cellTypes.get(name);
 			if (cellType != null)
-				generatedCells.push({name: context.cells.get(name), valueType: cellType});
+				generatedCells.push({name: context.cells.get(name), valueType: cellType, kind: context.cellKinds.get(name)});
 		}
 		context = previousContext;
 		return resultFunction;
@@ -685,6 +693,7 @@ class Typer {
 									cellClass = '$' + 'cell:' + context.name + ':' + name;
 									context.cells.set(name, cellClass);
 									context.cellTypes.set(name, capturedType);
+									context.cellKinds.set(name, MutableCapture);
 								}
 								lambdaScope.defineCapture(name, capturedType, span, cellClass != null, cellClass);
 								if (cellClass != null)
@@ -720,11 +729,14 @@ class Typer {
 					collectDeclaredLocals(body, lambdaDeclared);
 					var lambdaCandidates:Map<String, Bool> = [];
 					collectMutableCaptureCandidates(body, lambdaDeclared, lambdaCandidates);
-					for (name in lambdaCandidates.keys())
+					for (name in lambdaCandidates.keys()) {
 						context.cells.set(name, '$' + 'cell:' + lambdaName + ':' + name);
+						context.cellKinds.set(name, MutableCapture);
+					}
 					var typedBody = typeStatements(body, typedBodyScope, inferredResult);
 					var lambdaCells = context.cells.copy(),
-						lambdaCellTypes = context.cellTypes.copy();
+						lambdaCellTypes = context.cellTypes.copy(),
+						lambdaCellKinds = context.cellKinds.copy();
 					for (i in 0...lambdaArguments.length)
 						if (lambdaCells.exists(arguments[i].name))
 							lambdaArguments[i] = {name: arguments[i].name, type: lambdaArguments[i].type};
@@ -758,7 +770,7 @@ class Typer {
 					for (name in lambdaCells.keys()) {
 						var cellType = lambdaCellTypes.get(name);
 						if (cellType != null)
-							generatedCells.push({name: lambdaCells.get(name), valueType: cellType});
+							generatedCells.push({name: lambdaCells.get(name), valueType: cellType, kind: lambdaCellKinds.get(name)});
 					}
 					var lambdaResult = new TypedExpression(TLambda(lambdaName, environment, captures),
 						TFunction([for (argument in lambdaArguments) argument.type], inferredResult), span);
