@@ -4,13 +4,14 @@ class LanguageServiceMain {
 	static function main():Void {
 		var service = new LanguageService();
 		service.update("Main.hx",
-			"typedef Count = Int; interface Plugin { function activate():Void; } class Editor { public var active:Int; public function open():Void { return; } } function main():Int { var editor = new Editor(); editor.open(); return 42; }");
+			"typedef Count = Int; enum Kind { One; } interface Plugin { function activate():Void; } class Editor { public var active:Int; public function open():Void { return; } } function main():Int { var editor = new Editor(); editor.open(); return 42; }");
 		service.compile("Main");
 		var symbols = service.documentSymbols("Main.hx"),
 			foundClass = false,
 			foundMethod = false,
 			foundAlias = false,
-			foundInterface = false;
+			foundInterface = false,
+			foundEnum = false;
 		for (symbol in symbols) {
 			if (symbol.name == "Editor" && symbol.kind == "class")
 				foundClass = true;
@@ -20,8 +21,10 @@ class LanguageServiceMain {
 				foundAlias = true;
 			if (symbol.name == "Plugin" && symbol.kind == "interface")
 				foundInterface = true;
+			if (symbol.name == "Kind" && symbol.kind == "enum")
+				foundEnum = true;
 		}
-		if (!foundClass || !foundMethod || !foundAlias || !foundInterface)
+		if (!foundClass || !foundMethod || !foundAlias || !foundInterface || !foundEnum)
 			throw "language service did not expose document symbols";
 		var source = service.compiler.modules.get("Main").source.text,
 			completion = service.complete("Main.hx", source.length),
