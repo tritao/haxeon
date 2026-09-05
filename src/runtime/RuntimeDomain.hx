@@ -63,9 +63,11 @@ class RuntimeDomain {
 		}
 		var previous = current,
 			previousModule = currentModule,
-			state:Null<String> = previous is ReloadablePlugin ? cast(previous, ReloadablePlugin).saveState() : null,
+			state:Null<String> = null,
 			activated = false;
 		try {
+			if (previous is ReloadablePlugin)
+				state = cast(previous, ReloadablePlugin).saveState();
 			previous.deactivate();
 			plugin.activate();
 			activated = true;
