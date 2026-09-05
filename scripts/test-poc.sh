@@ -223,6 +223,18 @@ if [[ $import_class_status -ne 42 ]]; then
 fi
 echo "PASS: imported nominal class executed (exit 42)"
 
+namespace_output="$root_dir/out/namespace.hl"
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run NamespaceMain "$namespace_output"
+set +e
+LD_LIBRARY_PATH="$root_dir/vendor/hashlink" "$hl" "$namespace_output"
+namespace_status=$?
+set -e
+if [[ $namespace_status -ne 42 ]]; then
+	echo "qualified nominal namespace: expected exit 42, got $namespace_status" >&2
+	exit 1
+fi
+echo "PASS: qualified nominal namespaces executed (exit 42)"
+
 instance_module_output="$root_dir/out/instance-module.hl"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run InstanceModuleMain "$instance_module_output"
 set +e

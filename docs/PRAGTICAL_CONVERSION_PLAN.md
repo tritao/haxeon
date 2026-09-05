@@ -44,7 +44,7 @@ The profile is deliberately smaller than Haxe and larger than the current POC:
   identity-safe mutation;
 - enums with payloads and expression/statement `switch`;
 - nominal typedefs and a small structural-record form for data transfer;
-- packages, imports, deterministic diagnostics, and source-span recovery;
+- package-qualified nominal identities, imports, deterministic diagnostics, and source-span recovery;
 - `throw`/`try` after the runtime exception ABI is stable.
 
 Deferred until the editor is already running on the profile: macros,

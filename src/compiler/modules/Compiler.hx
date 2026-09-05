@@ -211,12 +211,13 @@ class Compiler {
 			var state = modules.get(name),
 				locals:Map<String, Bool> = [],
 				aliases = importAliases(state.ast.imports);
+			addDeclaredTypeAliases(aliases, state.ast, state.ast.packageName);
 			for (interfaceDecl in state.ast.interfaces)
-				interfaces.push(interfaceDecl);
+				interfaces.push(canonicalInterface(interfaceDecl, aliases, state.ast.packageName));
 			for (alias in state.ast.aliases)
-				typeAliases.push(alias);
+				typeAliases.push(canonicalAlias(alias, aliases, state.ast.packageName));
 			for (enumDecl in state.ast.enums)
-				enums.push(enumDecl);
+				enums.push(canonicalEnum(enumDecl, aliases, state.ast.packageName));
 			for (fn in state.ast.functions)
 				locals.set(fn.name, true);
 			for (fn in state.ast.functions) {
@@ -239,9 +240,10 @@ class Compiler {
 				}
 			}
 			for (classDecl in state.ast.classes) {
+				var className = qualifiedTypeName(state.ast.packageName, classDecl.name);
 				var classMethods:Array<AstFunction> = [];
 				for (method in classDecl.methods) {
-					var canonical = canonicalFunction(method, name, entryModule, locals, classDecl.name + "." + method.name, aliases);
+					var canonical = canonicalFunction(method, name, entryModule, locals, className + "." + method.name, aliases);
 					functions.push(canonical);
 					classMethods.push({
 						name: method.name,
@@ -267,7 +269,7 @@ class Compiler {
 					}
 				}
 				classes.push({
-					name: classDecl.name,
+					name: className,
 					base: classDecl.base == null ? null : resolveTypeName(classDecl.base, aliases),
 					interfaces: [
 						for (interfaceName in classDecl.interfaces)
@@ -511,6 +513,8 @@ class Compiler {
 				dependencies.remove(dependency);
 		state.dependencies = [for (name in dependencies.keys()) name];
 		state.dependencies.sort(Reflect.compare);
+		var typeAliases = importAliases(state.ast.imports);
+		addDeclaredTypeAliases(typeAliases, state.ast, state.ast.packageName);
 		var signatures:Map<String, String> = [],
 			bodies:Map<String, String> = [];
 		var interfaces:Map<String, String> = [];
@@ -529,10 +533,11 @@ class Compiler {
 		state.interfaceFingerprints = interfaces;
 		var aliases:Map<String, String> = [];
 		for (alias in state.ast.aliases) {
-			var signature = alias.name + "=" + astTypeName(alias.type);
-			aliases.set(alias.name, signature);
-			if (state.aliasFingerprints.get(alias.name) != signature)
-				structuralChanged.set('alias:${alias.name}', true);
+			var aliasName = qualifiedTypeName(state.ast.packageName, alias.name),
+				signature = aliasName + "=" + astTypeName(canonicalType(alias.type, typeAliases));
+			aliases.set(aliasName, signature);
+			if (state.aliasFingerprints.get(aliasName) != signature)
+				structuralChanged.set('alias:$aliasName', true);
 		}
 		for (old in state.aliasFingerprints.keys())
 			if (!aliases.exists(old))
@@ -540,13 +545,14 @@ class Compiler {
 		state.aliasFingerprints = aliases;
 		var enums:Map<String, String> = [];
 		for (enumDecl in state.ast.enums) {
-			var signature = enumDecl.name + "{" + [
-				for (caseDecl in enumDecl.cases)
-					caseDecl.name + "(" + [for (param in caseDecl.params) astTypeName(param)].join(",") + ")"
-			].join(";") + "}";
-			enums.set(enumDecl.name, signature);
-			if (state.enumFingerprints.get(enumDecl.name) != signature)
-				structuralChanged.set('enum:${enumDecl.name}', true);
+			var enumName = qualifiedTypeName(state.ast.packageName, enumDecl.name),
+				signature = enumName + "{" + [
+					for (caseDecl in enumDecl.cases)
+						caseDecl.name + "(" + [for (param in caseDecl.params) astTypeName(canonicalType(param, typeAliases))].join(",") + ")"
+				].join(";") + "}";
+			enums.set(enumName, signature);
+			if (state.enumFingerprints.get(enumName) != signature)
+				structuralChanged.set('enum:$enumName', true);
 		}
 		for (old in state.enumFingerprints.keys())
 			if (!enums.exists(old))
@@ -564,18 +570,20 @@ class Compiler {
 				bodyChanged.set(canonical, true);
 		}
 		for (classDecl in state.ast.classes) {
+			var className = qualifiedTypeName(state.ast.packageName, classDecl.name),
+				baseName = classDecl.base == null ? null : resolveTypeName(classDecl.base, typeAliases);
 			var classFields = [
 				for (field in classDecl.fields)
-					{name: field.name, type: astTypeName(field.type)}
+					{name: field.name, type: astTypeName(canonicalType(field.type, typeAliases))}
 			], classMethods = [
 				for (method in classDecl.methods)
 					{name: method.name, signature: signatureFingerprint(method)}
 				];
-			var typeResult = types.declareClass(classDecl.name, classDecl.base, classFields, classMethods);
+			var typeResult = types.declareClass(className, baseName, classFields, classMethods);
 			if (compiledOnce && typeResult.compatibility != Compatible)
-				structuralChanged.set(classDecl.name, true);
+				structuralChanged.set(className, true);
 			for (method in classDecl.methods) {
-				var localName = classDecl.name + "." + method.name,
+				var localName = className + "." + method.name,
 					canonical = localName,
 					signature = signatureFingerprint(method),
 					body = state.source.text.substring(method.span.start, method.span.end);
@@ -615,6 +623,54 @@ class Compiler {
 
 	static function canonicalName(module:String, entry:String, local:String):String
 		return module == entry && local == "main" ? "main" : local.indexOf(".") >= 0 ? local : module + "." + local;
+
+	static function qualifiedTypeName(packageName:Null<String>, name:String):String
+		return packageName == null || packageName.length == 0 ? name : packageName + "." + name;
+
+	static function addDeclaredTypeAliases(aliases:Map<String, String>, program:compiler.Ast.AstProgram, packageName:Null<String>):Void {
+		for (alias in program.aliases)
+			aliases.set(alias.name, qualifiedTypeName(packageName, alias.name));
+		for (enumDecl in program.enums)
+			aliases.set(enumDecl.name, qualifiedTypeName(packageName, enumDecl.name));
+		for (interfaceDecl in program.interfaces)
+			aliases.set(interfaceDecl.name, qualifiedTypeName(packageName, interfaceDecl.name));
+		for (classDecl in program.classes)
+			aliases.set(classDecl.name, qualifiedTypeName(packageName, classDecl.name));
+	}
+
+	static function canonicalAlias(alias:compiler.Ast.AstTypeAlias, aliases:Map<String, String>, packageName:Null<String>):compiler.Ast.AstTypeAlias
+		return {name: qualifiedTypeName(packageName, alias.name), type: canonicalType(alias.type, aliases), span: alias.span};
+
+	static function canonicalEnum(enumDecl:compiler.Ast.AstEnum, aliases:Map<String, String>, packageName:Null<String>):compiler.Ast.AstEnum
+		return {
+			name: qualifiedTypeName(packageName, enumDecl.name),
+			cases: [
+				for (caseDecl in enumDecl.cases)
+					{name: caseDecl.name, params: [for (param in caseDecl.params) canonicalType(param, aliases)], span: caseDecl.span}
+			],
+			span: enumDecl.span
+		};
+
+	static function canonicalInterface(interfaceDecl:compiler.Ast.AstInterface, aliases:Map<String, String>, packageName:Null<String>):compiler.Ast.AstInterface
+		return {
+			name: qualifiedTypeName(packageName, interfaceDecl.name),
+			bases: [for (base in interfaceDecl.bases) resolveTypeName(base, aliases)],
+			methods: [
+				for (method in interfaceDecl.methods)
+					{
+						name: method.name,
+						isStatic: false,
+						arguments: [
+							for (argument in method.arguments)
+								{name: argument.name, type: canonicalType(argument.type, aliases), span: argument.span}
+						],
+						result: canonicalType(method.result, aliases),
+						statements: [],
+						span: method.span
+					}
+			],
+			span: interfaceDecl.span
+		};
 
 	static function astTypeName(type:compiler.Ast.AstType):String
 		return switch type {
@@ -731,8 +787,7 @@ class Compiler {
 		var imported = aliases == null ? null : aliases.get(name);
 		if (imported == null)
 			return name;
-		var dot = imported.lastIndexOf(".");
-		return dot < 0 ? imported : imported.substr(dot + 1);
+		return imported;
 	}
 
 	static function canonicalType(type:compiler.Ast.AstType, aliases:Null<Map<String, String>>):compiler.Ast.AstType
