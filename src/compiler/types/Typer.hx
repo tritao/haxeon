@@ -381,6 +381,12 @@ class Typer {
 				var typed = [for (argument in arguments) typeExpression(argument, scope)];
 				checkArguments(typed, expected, typeName + ".new");
 				new TypedExpression(TNew(typeName, typed, constructor != null), TClass(typeName), span);
+			case NewArray(element, length, span):
+				var typedLength = typeExpression(length, scope);
+				if (typedLength.type != TInt)
+					fail("E1014", "Array length must be Int", typedLength.span);
+				var loweredElement = lowerType(element);
+				new TypedExpression(TNewArray(loweredElement, typedLength), TArray(loweredElement), span);
 			case Index(array, offset, span):
 				var typedArray = typeExpression(array, scope),
 					typedIndex = typeExpression(offset, scope);
@@ -493,6 +499,8 @@ class Typer {
 			case New(_, arguments, _):
 				for (argument in arguments)
 					collectExpressionVariables(argument, names);
+			case NewArray(_, length, _):
+				collectExpressionVariables(length, names);
 			case Index(array, offset, _):
 				collectExpressionVariables(array, names);
 				collectExpressionVariables(offset, names);

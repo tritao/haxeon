@@ -30,10 +30,11 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 - [x] Function values for non-capturing references.
 - [x] Capturing closures and instance closures (read-only captures; mutable
   capture cells remain future work).
-- [~] `Array<Int>` typing, indexed reads/writes, and `.length` lower directly
-  to HashLink array operations; allocation and other element kinds remain.
-  Our HashLink fork now enforces bounds in the JIT. Maps, enums, nullable
-  values, and pattern matching are still future work.
+- [~] `Array<Int>` typing, indexed reads/writes, `.length`, and compiler-owned
+	`Int`/`Float`/`String` allocation lower directly to HashLink array
+	operations and the runtime ABI. Object arrays, maps, enums, nullable values,
+	and pattern matching remain future work. Our HashLink fork enforces bounds in
+	the JIT.
 - [~] Prototype-dispatched instance calls and inheritance are live, including
   stable override slots and arbitrary fixed-arity calls; interface declarations
   and implementation contracts are typed, while interface ABI values and basic
@@ -91,9 +92,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 
 ## Feature order after the current milestone
 
-1. Extend the first-class `Array<T>` runtime type from the current `Int`
-   indexing slice to compiler-owned allocation and `Float`/object arrays;
-   keep bounds checks in the HashLink operation contract.
+1. Extend the first-class `Array<T>` runtime type from the current
+	`Int`/`Float`/`String` allocation slice to object arrays and compiler-owned
+	collection operations; keep bounds checks in the HashLink operation contract.
 2. Add enums/nullable values and pattern matching on the same tagged-value
    rules used by the runtime bridge.
 3. Add interface declarations and interface-typed values on the same

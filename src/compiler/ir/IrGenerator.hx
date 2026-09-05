@@ -69,6 +69,16 @@ class IrGenerator {
 
 	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>):IrProgram {
 		var program = new IrProgram("__entry");
+		var needsArrayRuntime = false;
+		for (fn in functions)
+			for (block in fn.blocks)
+				for (instruction in block.instructions)
+					switch instruction {
+						case Call(_, name, _):
+							if (StringTools.startsWith(name, "__array_alloc_"))
+								needsArrayRuntime = true;
+						default:
+					}
 		program.objects = objects == null ? [] : objects;
 		program.natives.push({
 			name: "__exit",
@@ -77,6 +87,29 @@ class IrGenerator {
 			arguments: [I32],
 			result: Void
 		});
+		if (needsArrayRuntime) {
+			program.natives.push({
+				name: "__array_alloc_i32",
+				library: "realtime_runtime",
+				symbol: "__array_alloc_i32",
+				arguments: [I32],
+				result: Array(I32)
+			});
+			program.natives.push({
+				name: "__array_alloc_f64",
+				library: "realtime_runtime",
+				symbol: "__array_alloc_f64",
+				arguments: [I32],
+				result: Array(F64)
+			});
+			program.natives.push({
+				name: "__array_alloc_bytes",
+				library: "realtime_runtime",
+				symbol: "__array_alloc_bytes",
+				arguments: [I32],
+				result: Array(Bytes)
+			});
+		}
 		if (natives != null)
 			for (native in natives)
 				program.natives.push(native);
@@ -187,6 +220,8 @@ class IrGenerator {
 					builder.call('$typeName.new', constructorArgs, Void);
 				}
 				object;
+			case TNewArray(element, length):
+				builder.call(arrayAllocatorName(element), [lowerExpression(length, builder, localTypes)], Array(lowerType(element)));
 			case TField(object, name): builder.fieldGet(lowerExpression(object, builder, localTypes), name, lowerType(expression.type));
 			case TMethodCall(object, name, args):
 				var receiver = lowerExpression(object, builder, localTypes),
@@ -214,5 +249,13 @@ class IrGenerator {
 			case TClass(name): Obj(name);
 			case TArray(element): Array(lowerType(element));
 			case TFunction(arguments, result): Function([for (argument in arguments) lowerType(argument)], lowerType(result));
+		};
+
+	static function arrayAllocatorName(element:CompilerType):String
+		return switch element {
+			case TInt: "__array_alloc_i32";
+			case TFloat: "__array_alloc_f64";
+			case TString: "__array_alloc_bytes";
+			default: throw "Compiler-owned allocation currently supports Int, Float, and String arrays";
 		};
 }

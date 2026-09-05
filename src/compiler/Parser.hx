@@ -296,7 +296,18 @@ class Parser {
 		if (match(TokenKind.StringLiteral))
 			return StringLiteral(decodeString(previous().text), previous().span);
 		if (match(TokenKind.New)) {
-			var start = previous().span, typeName = parseQualifiedName();
+			var start = previous().span;
+			if (check(TokenKind.Identifier) && current().text == "Array") {
+				advance();
+				consume(TokenKind.Less);
+				var element = parseType();
+				consume(TokenKind.Greater);
+				consume(TokenKind.LeftParen);
+				var length = parseExpression();
+				var end = consume(TokenKind.RightParen).span;
+				return NewArray(element, length, start.merge(end));
+			}
+			var typeName = parseQualifiedName();
 			consume(TokenKind.LeftParen);
 			var arguments = [];
 			if (!check(TokenKind.RightParen)) {
@@ -460,8 +471,8 @@ class Parser {
 	static function expressionSpan(expression:AstExpression)
 		return switch expression {
 			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), Variable(_, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span),
-				Div(_, _, span), Less(_, _, span), LessEqual(_, _, span), Equal(_, _, span), Call(_, _, span), New(_, _, span), Index(_, _, span),
-				Lambda(_, _, span): span;
+				Div(_, _, span), Less(_, _, span), LessEqual(_, _, span), Equal(_, _, span), Call(_, _, span), New(_, _, span), NewArray(_, _, span),
+				Index(_, _, span), Lambda(_, _, span): span;
 		}
 
 	static function decodeString(text:String):String {

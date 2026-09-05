@@ -33,6 +33,7 @@ enum TypedExpressionKind {
 	TCall(name:String, arguments:Array<TypedExpression>);
 	TClosureCall(callee:TypedExpression, arguments:Array<TypedExpression>);
 	TNew(typeName:String, arguments:Array<TypedExpression>, hasConstructor:Bool);
+	TNewArray(element:CompilerType, length:TypedExpression);
 	TField(object:TypedExpression, name:String);
 	TMethodCall(object:TypedExpression, functionName:String, arguments:Array<TypedExpression>);
 	TIndex(array:TypedExpression, index:TypedExpression);

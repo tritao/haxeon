@@ -121,6 +121,18 @@ if [[ $array_status -ne 42 ]]; then
 fi
 echo "PASS: first-class Array<Int> indexing executed (exit 42)"
 
+compiler_array_output="$root_dir/out/compiler-array.hl"
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run ArrayAllocMain "$compiler_array_output"
+set +e
+LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$compiler_array_output"
+compiler_array_status=$?
+set -e
+if [[ $compiler_array_status -ne 45 ]]; then
+	echo "compiler array: expected exit 45, got $compiler_array_status" >&2
+	exit 1
+fi
+echo "PASS: compiler-owned Int/Float/String array allocation executed (exit 45)"
+
 import_output="$root_dir/out/import.hl"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ImportMain "$import_output"
 set +e

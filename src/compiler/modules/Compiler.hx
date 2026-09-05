@@ -76,6 +76,8 @@ class Compiler {
 	public function registerNative(name:String, library:String, symbol:String, arguments:Array<CompilerType>, result:CompilerType):Void {
 		if (compiledOnce)
 			throw "Native registrations are frozen after the first compilation";
+		if (name == "__exit" || name == "__array_alloc_i32" || name == "__array_alloc_f64" || name == "__array_alloc_bytes")
+			throw 'Native "$name" is reserved by the compiler runtime ABI';
 		if (natives.exists(name))
 			throw 'Native "$name" is already registered';
 		natives.set(name, {
@@ -519,6 +521,7 @@ class Compiler {
 					resolved = module == entry && name == "main" ? "main" : module + "." + name;
 				Call(resolved, [for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
 			case New(typeName, args, s): New(typeName, [for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
+			case NewArray(element, length, s): NewArray(element, canonicalExpression(length, module, entry, locals, aliases), s);
 			case Index(array, offset,
 				s): Index(canonicalExpression(array, module, entry, locals, aliases), canonicalExpression(offset, module, entry, locals, aliases), s);
 			case Lambda(arguments, body, s):
@@ -580,6 +583,8 @@ class Compiler {
 				}
 				for (a in args)
 					scanExpression(a, dependencies);
+			case NewArray(_, length, _):
+				scanExpression(length, dependencies);
 			default:
 		}
 
@@ -627,6 +632,8 @@ class Compiler {
 			case New(_, args, _):
 				for (a in args)
 					scanCallExpression(a, calls, aliases);
+			case NewArray(_, length, _):
+				scanCallExpression(length, calls, aliases);
 			case Index(array, offset, _):
 				scanCallExpression(array, calls, aliases);
 				scanCallExpression(offset, calls, aliases);
@@ -685,6 +692,8 @@ class Compiler {
 			case New(_, args, _):
 				for (argument in args)
 					collectLambdaExpression(argument, functionName, module, generatedByModule);
+			case NewArray(_, length, _):
+				collectLambdaExpression(length, functionName, module, generatedByModule);
 			case Index(array, offset, _):
 				collectLambdaExpression(array, functionName, module, generatedByModule);
 				collectLambdaExpression(offset, functionName, module, generatedByModule);
