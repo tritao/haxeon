@@ -769,6 +769,18 @@ class Typer {
 			default: false;
 		};
 
+	function commonConditionalType(left:CompilerType, right:CompilerType):Null<CompilerType> {
+		if (left == TNever)
+			return right;
+		if (right == TNever || sameType(left, right))
+			return left;
+		return switch [left, right] {
+			case [TNull, value], [value, TNull] if (value != TVoid): TNullable(value);
+			case [TNullable(inner), value], [value, TNullable(inner)] if (sameType(inner, value)): TNullable(inner);
+			default: null;
+		};
+	}
+
 	function typeEnumPattern(value:AstExpression, expected:CompilerType, scope:Scope):Null<{
 		value:TypedExpression,
 		enumName:String,
@@ -1043,11 +1055,8 @@ class Typer {
 					fail("E1011", "Conditional expression requires a Bool condition", span);
 				var typedTrue = typeExpression(whenTrue, narrowedScope(scope, typedCondition, true), expectedType),
 					typedFalse = typeExpression(whenFalse, narrowedScope(scope, typedCondition, false), expectedType),
-					resultType = expectedType == null ? (typedTrue.type == TNever ? typedFalse.type : typedTrue.type) : expectedType;
-				if (expectedType == null
-					&& typedTrue.type != TNever
-					&& typedFalse.type != TNever
-					&& !sameType(typedTrue.type, typedFalse.type))
+					resultType = expectedType == null ? commonConditionalType(typedTrue.type, typedFalse.type) : expectedType;
+				if (resultType == null)
 					fail("E1003", "Conditional branches must have matching types", span);
 				typedTrue = coerce(typedTrue, resultType, "conditional branch", "E1003");
 				typedFalse = coerce(typedFalse, resultType, "conditional branch", "E1003");

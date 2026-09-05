@@ -67,6 +67,7 @@ class TestMain {
 		Frontend.compile('function main():Int { return "A".charCodeAt(0); }');
 		Frontend.compile('function main():Int { return "A".charAt(0) == "A" ? 42 : 0; }');
 		Frontend.compile('function main():Int { return String.fromCharCode(65) == "A" ? 42 : 0; }');
+		Frontend.compile('class Value { public function new() { } } function main():Int { var value = true ? new Value() : null; return value == null ? 0 : 42; }');
 		Frontend.compile('function values():Array<Int> { var result = []; result.push(42); return result; } function main():Int { return values()[0]; }');
 		Frontend.compile('typedef Result = { values:Array<Int> }; function values():Result { var values = []; return { values: values }; } function main():Int return values().values.length;');
 		new Parser(new Lexer(new SourceFile("expression-block-statements.hx",
