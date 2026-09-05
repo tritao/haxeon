@@ -192,7 +192,50 @@ class HotReloadMain {
 			throw "foreign patch damaged the live generation";
 		Runtime.dispose(loaded);
 		testAppendedFloatAndStringSymbols();
+		testNonMovingTypeArena();
 		Sys.println("PASS: selective HLP patches are atomic and retain bounded JIT code");
+	}
+
+	static function testNonMovingTypeArena():Void {
+		var moduleId = haxe.io.Bytes.alloc(16);
+		moduleId.set(0, 91);
+		var code = new HlCode();
+		code.ints = [42];
+		code.types = [Simple(HlType.Void), Simple(HlType.I32), Function([], 1)];
+		code.functions = [new HlFunction(2, 0, [1], [LoadInt(0, 0), Return(0)])];
+		code.entryPoint = 0;
+		var indices:Map<String, Int> = [],
+			ids:Map<String, Int> = [],
+			bySlot:Map<Int, Int> = [];
+		indices.set("value", 0);
+		ids.set("value", 71000);
+		bySlot.set(0, 71000);
+		var loaded = Runtime.load(HlWriter.encode(code), HlRuntimeIdentity.encode(moduleId, indices, ids));
+		var revision = 1;
+		for (i in 0...100) {
+			var baseTypes = code.types.length;
+			code.types.push(Function([1], 1));
+			code.functions = [new HlFunction(2, 0, [1, baseTypes], [LoadInt(0, 0), Return(0)])];
+			var patch = HlPatchWriter.encode(code, moduleId, [0], bySlot, revision, revision + 1, 1, 0, 0, baseTypes);
+			Runtime.patchSet(loaded, new PatchSet(revision, revision + 1, patch, [71000], false));
+			revision++;
+			if (Runtime.callInt(loaded, 71000) != 42)
+				throw 'type arena patch $i damaged the live function';
+		}
+		var baseTypes = code.types.length;
+		code.types.push(Function([999999], 1));
+		var invalid = HlPatchWriter.encode(code, moduleId, [0], bySlot, revision, revision + 1, 1, 0, 0, baseTypes);
+		try {
+			Runtime.patchSet(loaded, new PatchSet(revision, revision + 1, invalid, [71000], false));
+			throw "invalid appended type unexpectedly succeeded";
+		} catch (error:RuntimeError) {
+			if (error.status != RuntimeStatus.Incompatible)
+				throw error;
+		}
+		code.types.pop();
+		if (Runtime.callInt(loaded, 71000) != 42)
+			throw "failed type transaction damaged the live module";
+		Runtime.dispose(loaded);
 	}
 
 	static function testAppendedFloatAndStringSymbols():Void {

@@ -108,10 +108,11 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 - [x] A representative multi-module plugin now loads through the native runtime,
 	patches compatible closure/method bodies in place, and replaces the live module
 	on structural edits (`plugin-test.hxml`).
-- [ ] Non-moving type arena for compatible type-table growth.
+- [x] Non-moving type arena for compatible primitive, abstract, and function
+  type-table growth, with transactional publication and domain-owned cleanup.
 - [~] Structural class layout/base changes are classified as full-reload
-	generations and rebuild HashLink type metadata; non-moving type-arena support
-	remains.
+	generations and rebuild HashLink type metadata; compatible appended metadata
+	retains stable addresses within the live domain arena.
 - [x] Loaded modules expose typed lifecycle calls by stable function ID, and
 	`LoadedPlugin` exercises activation, deactivation, state save/restore, staged
 	disposal, and recovery through `RuntimeDomain`.
