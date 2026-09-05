@@ -23,6 +23,12 @@ private class RuntimeNative {
 	public static function call_closure_i32(closure:Dynamic):Int
 		return 0;
 
+	public static function call_object(module:hl.Abstract<"realtime_module">, index:Int):Dynamic
+		return null;
+
+	public static function call_i32_object(module:hl.Abstract<"realtime_module">, index:Int, argument:Dynamic):Int
+		return 0;
+
 	public static function patch(module:hl.Abstract<"realtime_module">, bytes:hl.Bytes, length:Int):Int
 		return -1;
 
@@ -77,6 +83,12 @@ class Runtime {
 
 	public static function callRetainedClosureInt(closure:Dynamic):Int
 		return RuntimeNative.call_closure_i32(closure);
+
+	public static function retainObject(module:LoadedModule, stableIndex:Int):Dynamic
+		return RuntimeNative.call_object(cast module, stableIndex);
+
+	public static function callIntObject(module:LoadedModule, stableIndex:Int, argument:Dynamic):Int
+		return RuntimeNative.call_i32_object(cast module, stableIndex, argument);
 
 	public static function retainedCodeAllocationCount(module:LoadedModule):Int
 		return RuntimeNative.allocation_count(cast module);

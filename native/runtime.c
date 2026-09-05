@@ -502,6 +502,23 @@ HL_PRIM int HL_NAME(call_closure_i32)( vclosure *closure ) {
 	return result->v.i;
 }
 
+HL_PRIM vdynamic *HL_NAME(call_object)( hl_runtime_module *runtime, int stable_id ) {
+	vdynamic *result = NULL, *exception = NULL;
+	hl_runtime_status status = hl_runtime_module_call_object(runtime,stable_id,&result,&exception);
+	if( status == HL_RUNTIME_EXCEPTION ) hl_throw(exception);
+	if( status != HL_RUNTIME_OK ) hl_error("Invalid runtime object function call (status %d)",status);
+	return result;
+}
+
+HL_PRIM int HL_NAME(call_i32_object)( hl_runtime_module *runtime, int stable_id, vdynamic *argument ) {
+	int result = 0;
+	vdynamic *exception = NULL;
+	hl_runtime_status status = hl_runtime_module_call_i32_object(runtime,stable_id,argument,&result,&exception);
+	if( status == HL_RUNTIME_EXCEPTION ) hl_throw(exception);
+	if( status != HL_RUNTIME_OK ) hl_error("Invalid runtime object argument call (status %d)",status);
+	return result;
+}
+
 HL_PRIM int HL_NAME(patch)( hl_runtime_module *runtime, vbyte *bytes, int length ) {
 	return hl_runtime_module_apply_hlp(runtime,bytes,length);
 }
@@ -536,6 +553,8 @@ DEFINE_PRIM(_BYTES,call_bytes,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_VOID,call_bytes1,_ABSTRACT(realtime_module) _I32 _BYTES);
 DEFINE_PRIM(_DYN,call_closure,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_I32,call_closure_i32,_DYN);
+DEFINE_PRIM(_DYN,call_object,_ABSTRACT(realtime_module) _I32);
+DEFINE_PRIM(_I32,call_i32_object,_ABSTRACT(realtime_module) _I32 _DYN);
 DEFINE_PRIM(_I32,patch,_ABSTRACT(realtime_module) _BYTES _I32);
 DEFINE_PRIM(_I32,allocation_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,patch_jit_count,_ABSTRACT(realtime_module));

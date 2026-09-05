@@ -29,6 +29,7 @@ class HotReloadMain {
 		testBackendStateLifetime();
 		testLiveAbiPatchMatrix();
 		testRetainedPatchedClosure();
+		testRetainedObject();
 		testCompilerRestart();
 		var compiler = new Compiler();
 		compiler.update("Value.hx", "function value():Int { return 42; }");
@@ -230,6 +231,22 @@ class HotReloadMain {
 		testAppendedFloatAndStringSymbols();
 		testNonMovingTypeArena();
 		Sys.println("PASS: selective HLP patches are atomic and retain bounded JIT code");
+	}
+
+	static function testRetainedObject():Void {
+		var compiler = new Compiler();
+		compiler.update("Main.hx",
+			"class Box { public var value:Int; public function new(value:Int):Void { this.value = value; } } function make():Box { return new Box(40); } function read(box:Box):Int { return box.value; } function main():Int { return read(make()); }");
+		var initial = compiler.compile("Main"),
+			loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
+		var retained = Runtime.retainObject(loaded, initial.functionIds.get("Main.make"));
+		compiler.update("Main.hx",
+			"class Box { public var value:Int; public function new(value:Int):Void { this.value = value; } } function make():Box { return new Box(40); } function read(box:Box):Int { return box.value + 2; } function main():Int { return read(make()); }");
+		var changed = compiler.compile("Main");
+		Runtime.patchSet(loaded, new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+		if (Runtime.callIntObject(loaded, initial.functionIds.get("Main.read"), retained) != 42)
+			throw "patched code could not consume a retained object with the same layout";
+		Runtime.dispose(loaded);
 	}
 
 	static function testRetainedPatchedClosure():Void {
