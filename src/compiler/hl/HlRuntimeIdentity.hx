@@ -3,11 +3,18 @@ package compiler.hl;
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
 import haxe.io.BytesInput;
+import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
+import compiler.abi.RuntimeAbiCodec;
 
-typedef HlPersistentIdentity = {final moduleId:Bytes; final stableIds:Map<String, Int>; final typeState:Null<Bytes>;}
+typedef HlPersistentIdentity = {
+	final moduleId:Bytes;
+	final stableIds:Map<String, Int>;
+	final typeState:Null<Bytes>;
+	final publishedAbi:Null<RuntimeAbiDescriptor>;
+}
 
 class HlRuntimeIdentity {
-	public static inline final VERSION = 2;
+	public static inline final VERSION = 3;
 	public static inline final RUNTIME_VERSION = 1;
 	static var sequence = 1;
 
@@ -38,7 +45,9 @@ class HlRuntimeIdentity {
 		return out.getBytes();
 	}
 
-	public static function encodePersistent(moduleId:Bytes, stableIds:Map<String, Int>, ?typeState:Bytes):Bytes {
+	public static function encodePersistent(moduleId:Bytes, stableIds:Map<String, Int>, ?typeState:Bytes, ?publishedAbi:RuntimeAbiDescriptor):Bytes {
+		if (moduleId.length != 16)
+			throw "Module ID must contain 16 bytes";
 		var names = [for (name in stableIds.keys()) name];
 		names.sort(Reflect.compare);
 		var out = new BytesOutput();
@@ -56,6 +65,9 @@ class HlRuntimeIdentity {
 		var types = typeState == null ? Bytes.alloc(0) : typeState;
 		out.writeInt32(types.length);
 		out.write(types);
+		var abi = publishedAbi == null ? Bytes.alloc(0) : RuntimeAbiCodec.encode(publishedAbi);
+		out.writeInt32(abi.length);
+		out.write(abi);
 		return out.getBytes();
 	}
 
@@ -66,7 +78,7 @@ class HlRuntimeIdentity {
 			if (input.readString(3) != "HCS")
 				throw "Invalid compiler identity state";
 			var version = input.readByte();
-			if (version != 1 && version != VERSION)
+			if (version != VERSION)
 				throw "Invalid compiler identity state";
 			var moduleId = input.read(16),
 				count = input.readInt32(),
@@ -82,16 +94,24 @@ class HlRuntimeIdentity {
 					throw "Duplicate compiler identity name";
 				stableIds.set(name, id);
 			}
-			var typeState:Null<Bytes> = null;
-			if (version >= 2) {
-				var typeLength = input.readInt32();
-				if (typeLength < 0 || typeLength > 0x10000000 || typeLength > bytes.length - input.position)
-					throw "Invalid compiler type identity state";
-				typeState = input.read(typeLength);
-			}
+			var typeLength = input.readInt32();
+			if (typeLength < 0 || typeLength > 0x10000000 || typeLength > bytes.length - input.position)
+				throw "Invalid compiler type identity state";
+			var typeState:Null<Bytes> = input.read(typeLength);
+			var publishedAbi:Null<RuntimeAbiDescriptor> = null;
+			var abiLength = input.readInt32();
+			if (abiLength < 0 || abiLength > 0x10000000 || abiLength > bytes.length - input.position)
+				throw "Invalid published ABI state";
+			if (abiLength > 0)
+				publishedAbi = RuntimeAbiCodec.decode(input.read(abiLength));
 			if (input.position != bytes.length)
 				throw "Trailing compiler identity data";
-			return {moduleId: moduleId, stableIds: stableIds, typeState: typeState};
+			return {
+				moduleId: moduleId,
+				stableIds: stableIds,
+				typeState: typeState,
+				publishedAbi: publishedAbi
+			};
 		} catch (error:haxe.io.Eof) {
 			throw "Truncated compiler identity state";
 		}

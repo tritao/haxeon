@@ -28,6 +28,7 @@ import compiler.types.Typer;
 import compiler.types.TypeRegistry;
 import compiler.types.TypeRegistry.TypeCompatibility;
 import compiler.modules.Compiler;
+import haxe.io.Bytes as HaxeBytes;
 import haxe.io.BytesInput;
 
 class TestMain {
@@ -237,6 +238,23 @@ class TestMain {
 		var resumedTypes = new Compiler(identityCompiler.exportIdentityState()).types;
 		if (resumedTypes.declareClass("demo.Persistent", null, [{name: "value", type: "Int"}], []).descriptor.id != identityDeclaration.descriptor.id)
 			throw "Compiler identity state did not preserve nominal type IDs";
+		var abiCompiler = new Compiler();
+		abiCompiler.update("Main.hx", "class Box { public var value:Int; } function main():Int { return 42; }");
+		abiCompiler.compile("Main");
+		var abiState = abiCompiler.exportIdentityState();
+		if (abiState.compare(abiCompiler.exportIdentityState()) != 0)
+			throw "Published ABI persistence was not deterministic";
+		var resumedAbiCompiler = new Compiler(abiState);
+		resumedAbiCompiler.update("Main.hx", "class Box { public var value:String; } function main():Int { return 42; }");
+		if (!resumedAbiCompiler.compile("Main").requiresReload)
+			throw "Compiler restart lost the published ABI compatibility baseline";
+		var trailingAbiState = HaxeBytes.alloc(abiState.length + 1);
+		trailingAbiState.blit(0, abiState, 0, abiState.length);
+		expectIdentityError(trailingAbiState, "Trailing compiler identity data");
+		var unsupportedAbiState = HaxeBytes.alloc(abiState.length);
+		unsupportedAbiState.blit(0, abiState, 0, abiState.length);
+		unsupportedAbiState.set(3, 2);
+		expectIdentityError(unsupportedAbiState, "Invalid compiler identity state");
 		Sys.println("PASS: stable nominal identities and layout compatibility survive restart");
 		var packaged = new Parser(new Lexer(new SourceFile("pkg.hx",
 			"package editor.core; import editor.util; function main():Int { return 42; }")).tokenize()).parseProgram();
@@ -364,6 +382,16 @@ class TestMain {
 		try {
 			CfgVerifier.verify(cfg);
 			throw 'CFG verifier accepted invalid graph; expected "$expected"';
+		} catch (error:String) {
+			if (error != expected)
+				throw error;
+		}
+	}
+
+	static function expectIdentityError(state:HaxeBytes, expected:String):Void {
+		try {
+			new Compiler(state);
+			throw 'compiler accepted invalid identity state; expected "$expected"';
 		} catch (error:String) {
 			if (error != expected)
 				throw error;

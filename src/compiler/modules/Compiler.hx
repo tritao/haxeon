@@ -91,11 +91,12 @@ class Compiler {
 			moduleId = identity.moduleId;
 			assembler = new HlModuleAssembler(identity.stableIds);
 			types = new TypeRegistry(identity.typeState);
+			publishedAbi = identity.publishedAbi;
 		}
 	}
 
 	public function exportIdentityState():Bytes
-		return HlRuntimeIdentity.encodePersistent(moduleId, assembler.cache.stableIds, types.exportState());
+		return HlRuntimeIdentity.encodePersistent(moduleId, assembler.cache.stableIds, types.exportState(), publishedAbi);
 
 	public function registerNative(name:String, library:String, symbol:String, arguments:Array<CompilerType>, result:CompilerType):Void {
 		if (compiledOnce)
