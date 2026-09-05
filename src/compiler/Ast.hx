@@ -120,6 +120,7 @@ typedef AstSwitchCase = {
 typedef AstFunction = {
 	final name:String;
 	final isStatic:Bool;
+	final ?typeParameters:Array<String>;
 	final arguments:Array<AstArgument>;
 	final result:AstType;
 	final statements:Array<AstStatement>;

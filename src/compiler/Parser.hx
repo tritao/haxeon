@@ -107,6 +107,7 @@ class Parser {
 	}
 
 	function parseFunctionBody(start:SourceSpan, name:String, allowMissingReturn:Bool, isStatic:Bool = false):AstFunction {
+		var typeParameters = parseTypeParameters();
 		consume(TokenKind.LeftParen);
 		var arguments = [];
 		if (!check(TokenKind.RightParen)) {
@@ -140,11 +141,26 @@ class Parser {
 		return {
 			name: name,
 			isStatic: isStatic,
+			typeParameters: typeParameters,
 			arguments: arguments,
 			result: result,
 			statements: statements,
 			span: start.merge(end)
 		};
+	}
+
+	function parseTypeParameters():Array<String> {
+		var result = [];
+		if (!match(TokenKind.Less))
+			return result;
+		do {
+			var parameter = consume(TokenKind.Identifier);
+			if (result.indexOf(parameter.text) >= 0)
+				fail(parameter, 'Duplicate type parameter "${parameter.text}"');
+			result.push(parameter.text);
+		} while (match(TokenKind.Comma));
+		consume(TokenKind.Greater);
+		return result;
 	}
 
 	function parseClass():AstClass {
@@ -245,6 +261,7 @@ class Parser {
 		while (!check(TokenKind.RightBrace)) {
 			var methodStart = consume(TokenKind.Function).span,
 				methodName = consume(TokenKind.Identifier).text;
+			var typeParameters = parseTypeParameters();
 			consume(TokenKind.LeftParen);
 			var arguments = [];
 			if (!check(TokenKind.RightParen))
@@ -266,6 +283,7 @@ class Parser {
 			methods.push({
 				name: methodName,
 				isStatic: false,
+				typeParameters: typeParameters,
 				arguments: arguments,
 				result: result,
 				statements: [],

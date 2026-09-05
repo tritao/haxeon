@@ -868,6 +868,7 @@ class Compiler {
 		return {
 			name: name,
 			isStatic: fn.isStatic,
+			typeParameters: fn.typeParameters,
 			arguments: [
 				for (argument in fn.arguments)
 					{
@@ -923,6 +924,7 @@ class Compiler {
 					{
 						name: method.name,
 						isStatic: false,
+						typeParameters: method.typeParameters,
 						arguments: [
 							for (argument in method.arguments)
 								{name: argument.name, type: canonicalType(argument.type, aliases), span: argument.span}

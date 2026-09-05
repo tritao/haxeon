@@ -30,6 +30,7 @@ class SemanticSignature {
 	public static function parsedFunction(fn:AstFunction, aliases:Array<AstTypeAlias>):String {
 		var definitions = [for (alias in aliases) alias.name => alias.type];
 		return fn.name
+			+ (fn.typeParameters == null || fn.typeParameters.length == 0 ? "" : '<${fn.typeParameters.join(",")}>')
 			+ "("
 			+ [for (argument in fn.arguments) parsedType(argument.type, definitions, [])].join(",") + ")->" + parsedType(fn.result, definitions, []);
 	}

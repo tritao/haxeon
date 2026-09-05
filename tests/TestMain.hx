@@ -442,6 +442,10 @@ class TestMain {
 		Frontend.compile('class Constants { public static inline final ANSWER = 42; static inline final LABEL = "answer"; static final VALUES = new Array<Int>(0); } function main():Int return Constants.ANSWER;');
 		Frontend.compile('typedef Pair = { final left:Int; final right:Int; }; function sum(pair:Pair):Int return pair.left + pair.right; function main():Int return sum({left: 20, right: 22});');
 		Frontend.compile('typedef Entry = {name:String, ?count:Int}; function read(entry:Entry):String return entry.name; function main():Int return 0;');
+		var genericAst = new Parser(new Lexer(new SourceFile("generic.hx", "function identity<T>(value:T):T return value;")).tokenize()).parseProgram();
+		if (genericAst.functions[0].typeParameters == null || genericAst.functions[0].typeParameters.join(",") != "T")
+			throw "Generic function type parameters were not preserved";
+		expectParserError("function invalid<T,T>(value:T):T return value;", 'Duplicate type parameter "T"');
 		expectCompileError('typedef Invalid = { value:Int; value:String; }; function main():Int return 0;', 'Duplicate anonymous field "value"');
 		expectCompileError('typedef Pair = {left:Int, right:Int}; function consume(pair:Pair):Int return pair.left; function main():Int return consume({left: 42});',
 			'Type mismatch for argument 1 to "consume"');
@@ -568,6 +572,16 @@ class TestMain {
 		try {
 			Frontend.compile(source);
 			throw 'compiler accepted invalid source; expected "$expected"';
+		} catch (error:CompileError) {
+			if (error.diagnostic.message != expected)
+				throw error;
+		}
+	}
+
+	static function expectParserError(source:String, expected:String):Void {
+		try {
+			new Parser(new Lexer(new SourceFile("invalid.hx", source)).tokenize()).parseProgram();
+			throw 'parser accepted invalid source; expected "$expected"';
 		} catch (error:CompileError) {
 			if (error.diagnostic.message != expected)
 				throw error;
