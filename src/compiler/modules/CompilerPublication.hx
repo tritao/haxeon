@@ -14,6 +14,7 @@ typedef CompilerSnapshot = {
 	final lastTypedProgram:Null<TypedProgram>;
 	final publishedAbi:Null<RuntimeAbiDescriptor>;
 	final compiledOnce:Bool;
+	final rehydrationBaseline:Null<Map<String, compiler.ir.IrFunction>>;
 }
 
 typedef PublishedBaseline = {

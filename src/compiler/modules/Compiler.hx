@@ -84,6 +84,7 @@ class Compiler {
 	var publishedAbi:Null<RuntimeAbiDescriptor>;
 	var compiledOnce = false;
 	final publication = new CompilerPublication();
+	var rehydrationBaseline:Null<Map<String, compiler.ir.IrFunction>>;
 
 	public function new(?identityState:Bytes) {
 		if (identityState == null) {
@@ -118,6 +119,12 @@ class Compiler {
 		if (runtimeModuleId.length != moduleId.length || runtimeModuleId.compare(moduleId) != 0)
 			return ReloadDomain("runtime module identity does not match compiler state");
 		return publication.reconcile(runtimeRevision);
+	}
+
+	function beginRehydration(restored:HlModuleAssembler):Void {
+		rehydrationBaseline = [];
+		for (name => fn in restored.cache.functions)
+			rehydrationBaseline.set(name, fn);
 	}
 
 	public function acknowledgePublication(revision:Int):Void
@@ -500,7 +507,7 @@ class Compiler {
 			decision = ReloadDomain(reloadReasons);
 		var candidateAssembler = compiledOnce
 			&& PatchPlanner.requiresFreshLayout(decision) ? new HlModuleAssembler(copyIndices(assembler.cache.stableIds)) : assembler.copy();
-		var assembly = candidateAssembler.assemble(ir, regenerated, decision);
+		var assembly = candidateAssembler.assemble(ir, rehydratedChanges(regenerated, ir), decision);
 		if (token != null)
 			token.check();
 		var patchBytes = reloadReasons.length > 0
@@ -510,6 +517,7 @@ class Compiler {
 		lastTypedProgram = typedNew;
 		publishedAbi = nextAbi;
 		assembler = candidateAssembler;
+		rehydrationBaseline = null;
 		for (name in names) {
 			var state = modules.get(name);
 			state.lastGoodTokens = state.tokens;
@@ -543,6 +551,22 @@ class Compiler {
 		};
 	}
 
+	function rehydratedChanges(regenerated:Array<String>, program:IrProgram):Array<String> {
+		if (rehydrationBaseline == null)
+			return regenerated;
+		var current:Map<String, compiler.ir.IrFunction> = [], changed = [];
+		for (fn in program.functions)
+			current.set(fn.name, fn);
+		for (name in regenerated) {
+			var old = rehydrationBaseline.get(name), next = current.get(name);
+			if (old == null
+				|| next == null
+				|| compiler.ir.IrFunctionStateCodec.encode(old).compare(compiler.ir.IrFunctionStateCodec.encode(next)) != 0)
+				changed.push(name);
+		}
+		return changed;
+	}
+
 	function snapshot():CompilerSnapshot {
 		var moduleCopies:Map<String, ModuleState> = [],
 			objectCopies:Map<String, IrObject> = [];
@@ -556,7 +580,8 @@ class Compiler {
 			objectCache: objectCopies,
 			lastTypedProgram: lastTypedProgram,
 			publishedAbi: publishedAbi,
-			compiledOnce: compiledOnce
+			compiledOnce: compiledOnce,
+			rehydrationBaseline: rehydrationBaseline
 		};
 	}
 
@@ -570,6 +595,7 @@ class Compiler {
 		lastTypedProgram = snapshot.lastTypedProgram;
 		publishedAbi = snapshot.publishedAbi;
 		compiledOnce = snapshot.compiledOnce;
+		rehydrationBaseline = snapshot.rehydrationBaseline;
 	}
 
 	function nativeSignatures():Map<String, {arguments:Array<CompilerType>, result:CompilerType}> {
