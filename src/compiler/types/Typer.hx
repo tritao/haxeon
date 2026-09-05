@@ -738,6 +738,11 @@ class Typer {
 				value = coerce(typeExpression(arguments[1], scope), mapType.value, "map value", "E1002");
 			return new TypedExpression(TCall(RuntimeType.mapNative(mapType.key, mapType.value, "set"), [receiver, key, value]), TVoid, span);
 		}
+		if (name == "keys") {
+			if (arguments.length != 0)
+				fail("E1008", "Map.keys expects no arguments", span);
+			return new TypedExpression(TCall(RuntimeType.mapNative(mapType.key, mapType.value, "keys"), [receiver]), TArray(mapType.key), span);
+		}
 		if (arguments.length != 1)
 			fail("E1008", 'Map.$name expects one argument', span);
 		var key = coerce(typeExpression(arguments[0], scope), mapType.key, "map key", "E1002");

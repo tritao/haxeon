@@ -37,8 +37,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 	to HashLink array operations and the runtime ABI; `for (item in array)` is
 	lowered to a bounds-checked SSA loop with `break`/`continue` control edges. ABI-backed `Map<String,Int|Bool|Float|String>`
 	and `Map<Int,Int|Bool|Float|String>` specializations support construction,
-	indexed set/get, `set`, and `exists`; broader key/value maps and collection
-	iteration remain future work. Our HashLink fork
+	indexed set/get, `set`, `exists`, and key-array iteration; broader key/value
+	collections and iterator compatibility remain future work. Our HashLink fork
 	enforces bounds in the JIT.
 - [~] Explicit `Null<T>` values for reference types lower to HashLink's native
 	null representation, support equality, and reject implicit untyped null
@@ -112,7 +112,7 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 ## Feature order after the current milestone
 
 1. Extend the first-class `Array<T>` and map runtime types with broader key/value
-	operations and collection iteration; keep bounds checks in the HashLink
+	operations and iterator compatibility; keep bounds checks in the HashLink
 	operation contract.
 2. Add exhaustiveness checking and richer pattern matching on the tagged-value
 	rules used by the runtime bridge; extend nullable narrowing to compound

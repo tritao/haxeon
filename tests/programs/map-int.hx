@@ -4,6 +4,9 @@ function main():Int {
 	values.set(9, 1);
 	if (!values.exists(7))
 		return 0;
+	var sum = 0;
+	for (key in values.keys())
+		sum = sum + values.get(key);
 	var flags = new Map<Int, Bool>();
 	flags[7] = true;
 	var ratios = new Map<Int, Float>();
@@ -12,5 +15,5 @@ function main():Int {
 	labels[7] = "ok";
 	if (!flags.get(7) || ratios.get(7) < 0.5 || labels.get(7) != "ok")
 		return 0;
-	return values.get(7) + values.get(9) - 1;
+	return sum - 1;
 }

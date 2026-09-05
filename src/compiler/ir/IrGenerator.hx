@@ -216,6 +216,13 @@ class IrGenerator {
 				arguments: [mapType, keyIrType],
 				result: valueIrType
 			});
+			program.natives.push({
+				name: '__${mapName}_keys',
+				library: "realtime_runtime",
+				symbol: '__${mapName}_keys',
+				arguments: [mapType],
+				result: Array(keyIrType)
+			});
 		}
 		if (needsStringRuntime)
 			program.natives.push({
