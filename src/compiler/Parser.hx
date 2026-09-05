@@ -73,8 +73,7 @@ class Parser {
 		var name = consume(TokenKind.Identifier).text, cases = [];
 		consume(TokenKind.LeftBrace);
 		while (!check(TokenKind.RightBrace)) {
-			var caseToken = consume(TokenKind.Identifier),
-				params:Array<AstType> = [];
+			var caseToken = consumeName(), params:Array<AstType> = [];
 			if (match(TokenKind.LeftParen)) {
 				if (!check(TokenKind.RightParen))
 					do {
@@ -94,9 +93,9 @@ class Parser {
 	}
 
 	function parseQualifiedName():String {
-		var name = consume(TokenKind.Identifier).text;
+		var name = consumeName().text;
 		while (match(TokenKind.Dot))
-			name += "." + consume(TokenKind.Identifier).text;
+			name += "." + consumeName().text;
 		return name;
 	}
 
@@ -666,7 +665,7 @@ class Parser {
 		if (match(TokenKind.This)) {
 			var start = previous().span, name = "this";
 			while (match(TokenKind.Dot))
-				name += "." + consume(TokenKind.Identifier).text;
+				name += "." + consumeName().text;
 			var expression:AstExpression = Variable(name, start);
 			return parsePostfix(expression);
 		}
@@ -686,7 +685,7 @@ class Parser {
 			var name = previous().text;
 			var start = previous().span;
 			while (match(TokenKind.Dot)) {
-				name += "." + consume(TokenKind.Identifier).text;
+				name += "." + consumeName().text;
 			}
 			var expression:AstExpression = Variable(name, start);
 			if (match(TokenKind.LeftParen)) {
@@ -761,8 +760,7 @@ class Parser {
 				continue;
 			}
 			if (match(TokenKind.Dot)) {
-				var nameToken = consume(TokenKind.Identifier),
-					name = nameToken.text;
+				var nameToken = consumeName(), name = nameToken.text;
 				if (match(TokenKind.LeftParen)) {
 					var arguments = [];
 					if (!check(TokenKind.RightParen)) {
@@ -892,6 +890,15 @@ class Parser {
 			return advance();
 		fail(current(), 'Expected $kind, got ${current().kind}');
 		return null;
+	}
+
+	function consumeName():Token {
+		return switch current().kind {
+			case TokenKind.Identifier, TokenKind.TypeInt, TokenKind.TypeBool, TokenKind.TypeFloat, TokenKind.TypeString, TokenKind.Void: advance();
+			default:
+				fail(current(), 'Expected name, got ${current().kind}');
+				null;
+		};
 	}
 
 	function check(kind:TokenKind):Bool
