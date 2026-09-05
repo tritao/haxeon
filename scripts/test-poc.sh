@@ -23,6 +23,7 @@ cc -shared -fPIC -DHL_NAME\(n\)=realtime_##n \
 	-o "$root_dir/out/realtime_runtime.hdll"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run TestMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run LanguageServiceMain
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run ProtocolMain
 "$haxe" --cwd "$root_dir" "$root_dir/repl-test.hxml"
 set +e
 LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$root_dir/out/repl-test.hl"
