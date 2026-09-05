@@ -309,6 +309,7 @@ class Compiler {
 					methods: classMethods,
 					span: classDecl.span
 				});
+				owners.set(className + ".new", name);
 			}
 		}
 		for (module => lambdaNames in generatedByModule)
@@ -339,9 +340,8 @@ class Compiler {
 						work.push(caller);
 		}
 		var selected:Map<String, Bool> = [];
-		for (fn in functions)
-			if (invalid.exists(fn.name))
-				selected.set(fn.name, true);
+		for (name in invalid.keys())
+			selected.set(name, true);
 		var typedNew:TypedProgram;
 		try {
 			if (token != null)
@@ -392,6 +392,19 @@ class Compiler {
 			if (lambdaNames != null)
 				for (lambdaName in lambdaNames.keys())
 					valid.set(lambdaName, true);
+			for (classDecl in state.ast.classes) {
+				var className = qualifiedTypeName(state.ast.packageName, classDecl.name),
+					hasInstanceInitializer = false,
+					hasConstructor = false;
+				for (field in classDecl.fields)
+					if (!field.isStatic && field.initializer != null)
+						hasInstanceInitializer = true;
+				for (method in classDecl.methods)
+					if (method.name == "new")
+						hasConstructor = true;
+				if (hasInstanceInitializer || hasConstructor)
+					valid.set(className + ".new", true);
+			}
 			for (cached in state.typedFunctions.keys())
 				if (!valid.exists(cached)) {
 					state.typedFunctions.remove(cached);
@@ -401,10 +414,10 @@ class Compiler {
 		}
 		retyped.sort(Reflect.compare);
 		regenerated.sort(Reflect.compare);
-		var cachedNames = [for (fn in functions) fn.name];
-		for (lambdaNames in generatedByModule)
-			for (lambdaName in lambdaNames.keys())
-				cachedNames.push(lambdaName);
+		var cachedNames:Array<String> = [];
+		for (state in modules)
+			for (functionName in state.irFunctions.keys())
+				cachedNames.push(functionName);
 		cachedNames.sort(Reflect.compare);
 		var cached = [
 			for (functionName in cachedNames)
@@ -596,19 +609,24 @@ class Compiler {
 			if (!enums.exists(old))
 				structuralChanged.set('enum:$old', true);
 		state.enumFingerprints = enums;
-		var staticInitializers:Map<String, String> = [];
+		var staticInitializers:Map<String, String> = [],
+			instanceInitializers:Map<String, String> = [];
 		for (classDecl in state.ast.classes) {
 			var className = qualifiedTypeName(state.ast.packageName, classDecl.name);
 			for (field in classDecl.fields) {
 				switch field.initializer {
 					case null:
 					case expression:
+						var fieldName = className + "." + field.name,
+							initializer = state.source.text.substring(field.span.start, field.span.end);
 						if (field.isStatic) {
-							var fieldName = className + "." + field.name,
-								initializer = state.source.text.substring(field.span.start, field.span.end);
 							staticInitializers.set(fieldName, initializer);
 							if (state.staticInitializerFingerprints.get(fieldName) != initializer)
 								structuralChanged.set('static:$fieldName', true);
+						} else {
+							instanceInitializers.set(fieldName, initializer);
+							if (state.instanceInitializerFingerprints.get(fieldName) != initializer)
+								bodyChanged.set(className + ".new", true);
 						}
 				}
 			}
@@ -617,6 +635,10 @@ class Compiler {
 			if (!staticInitializers.exists(old))
 				structuralChanged.set('static:$old', true);
 		state.staticInitializerFingerprints = staticInitializers;
+		for (old in state.instanceInitializerFingerprints.keys())
+			if (!instanceInitializers.exists(old))
+				bodyChanged.set(old.substr(0, old.lastIndexOf(".")) + ".new", true);
+		state.instanceInitializerFingerprints = instanceInitializers;
 		for (fn in state.ast.functions) {
 			var canonical = state.name == entry && fn.name == "main" ? "main" : state.name + "." + fn.name;
 			var signature = signatureFingerprint(fn),

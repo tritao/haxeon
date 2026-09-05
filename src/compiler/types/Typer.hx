@@ -152,7 +152,7 @@ class Typer {
 	}
 
 	function typeClass(classDecl:AstClass, classes:Map<String, AstClass>):TypedClass {
-		var fields = [], fieldNames:Map<String, Bool> = [];
+		var fields:Array<TypedField> = [], fieldNames:Map<String, Bool> = [];
 		for (field in classDecl.fields) {
 			if (fieldNames.exists(field.name))
 				fail("E1000", 'Duplicate field "${classDecl.name}.${field.name}"', field.span);
@@ -161,11 +161,13 @@ class Typer {
 				fail("E1002", 'Field "${classDecl.name}.${field.name}" cannot have type Void', field.span);
 			var initializer:Null<TypedExpression> = null;
 			if (field.initializer != null) {
-				if (!field.isStatic)
-					fail("E1020", 'Instance field initializers are not supported for "${classDecl.name}.${field.name}"', field.span);
 				var previousFunctionName = currentFunctionName;
 				currentFunctionName = classDecl.name + ".__init";
-				initializer = coerce(typeExpression(field.initializer, new Scope()), type, 'static field "${classDecl.name}.${field.name}"', "E1002");
+				var scope = new Scope();
+				if (!field.isStatic)
+					scope.define("this", TClass(classDecl.name), field.span);
+				initializer = coerce(typeExpression(field.initializer, scope), type,
+					(field.isStatic ? 'static field "${classDecl.name}.${field.name}"' : 'field "${classDecl.name}.${field.name}"'), "E1002");
 				currentFunctionName = previousFunctionName;
 			}
 			fieldNames.set(field.name, true);
@@ -183,16 +185,63 @@ class Typer {
 				fail("E1007", 'Unknown interface "$interfaceName"', classDecl.span);
 			validateInterfaceImplementation(classDecl, interfaceName, classDecl.span);
 		}
+		var typedMethods:Array<TypedFunction> = [],
+			instanceInitializers:Array<TypedField> = [],
+			hasConstructor = false;
+		for (field in fields)
+			if (!field.isStatic && field.initializer != null)
+				instanceInitializers.push(field);
+		for (method in classDecl.methods) {
+			var typedMethod = typeFunction(method, classDecl.name, method.isStatic);
+			if (method.name == "new") {
+				hasConstructor = true;
+				if (instanceInitializers.length > 0)
+					typedMethod = prependInstanceInitializers(typedMethod, classDecl.name, instanceInitializers);
+			}
+			typedMethods.push(typedMethod);
+		}
+		if (!hasConstructor && instanceInitializers.length > 0)
+			typedMethods.push({
+				name: classDecl.name + ".new",
+				owner: classDecl.name,
+				isStatic: false,
+				isConstructor: true,
+				arguments: [],
+				result: TVoid,
+				statements: [
+					for (field in instanceInitializers)
+						TFieldAssign(new TypedExpression(TLocal("this"), TClass(classDecl.name), field.span), field.name, field.initializer, field.span)
+				],
+				cells: [],
+				cellCaptures: [],
+				span: classDecl.span
+			});
 		return {
 			name: classDecl.name,
 			base: classDecl.base,
 			interfaces: classDecl.interfaces,
 			fields: fields,
-			methods: [
-				for (method in classDecl.methods)
-					typeFunction(method, classDecl.name, method.isStatic)
-			],
+			methods: typedMethods,
 			span: classDecl.span
+		};
+	}
+
+	function prependInstanceInitializers(method:TypedFunction, className:String, fields:Array<TypedField>):TypedFunction {
+		var statements:Array<TypedStatement> = [
+			for (field in fields)
+				TFieldAssign(new TypedExpression(TLocal("this"), TClass(className), field.span), field.name, field.initializer, field.span)
+		];
+		return {
+			name: method.name,
+			owner: method.owner,
+			isStatic: method.isStatic,
+			isConstructor: method.isConstructor,
+			arguments: method.arguments,
+			result: method.result,
+			statements: statements.concat(method.statements),
+			cells: method.cells,
+			cellCaptures: method.cellCaptures,
+			span: method.span
 		};
 	}
 
@@ -768,12 +817,16 @@ class Typer {
 				if (!classDecls.exists(typeName) || interfaceDecls.exists(typeName))
 					fail("E1007", 'Unknown class "$typeName"', span);
 				var constructor = signatures.get(typeName + ".new"),
+					implicitConstructor = constructor == null && [
+						for (field in classDecls.get(typeName).fields)
+							if (!field.isStatic && field.initializer != null) field
+					].length > 0,
 					expected = constructor == null ? [] : [for (argument in constructor.arguments) lowerType(argument.type)];
 				if (arguments.length != expected.length)
 					fail("E1008", 'Constructor "$typeName" expects ${expected.length} arguments, got ${arguments.length}', span);
 				var typed = [for (argument in arguments) typeExpression(argument, scope)];
 				typed = coerceArguments(typed, expected, typeName + ".new");
-				new TypedExpression(TNew(typeName, typed, constructor != null), TClass(typeName), span);
+				new TypedExpression(TNew(typeName, typed, constructor != null || implicitConstructor), TClass(typeName), span);
 			case NewArray(element, length, span):
 				var typedLength = typeExpression(length, scope);
 				if (typedLength.type != TInt)

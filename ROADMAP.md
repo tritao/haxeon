@@ -27,7 +27,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 - [x] Integer/float/string/bool expressions and literals, arithmetic (including
   modulo and unary negation), branches, loops,
   recursion.
-- [x] Typed locals, nominal classes, fields, constructors, inheritance.
+- [x] Typed locals, nominal classes, fields, constructors, inheritance, and
+	instance field initializers injected into explicit or implicit constructors.
 - [x] Static fields and unqualified static access lower to persistent HashLink
 	globals; literal and expression initializers run through a stable `__init`
 	entry at normal startup and live-module load, while compatible body patches

@@ -24,6 +24,7 @@ class ModuleState {
 	public var aliasFingerprints:Map<String, String> = [];
 	public var enumFingerprints:Map<String, String> = [];
 	public var staticInitializerFingerprints:Map<String, String> = [];
+	public var instanceInitializerFingerprints:Map<String, String> = [];
 	public var bodyFingerprints:Map<String, String> = [];
 	public var typedFunctions:Map<String, TypedFunction> = [];
 	public var irFunctions:Map<String, IrFunction> = [];

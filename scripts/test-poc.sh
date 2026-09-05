@@ -95,6 +95,8 @@ run_program static-class 42
 run_program static-field 81
 run_program static-field-init 42
 run_program instance-class 42
+run_program instance-field-init 42
+run_program instance-field-init-constructor 42
 run_program default-constructor-class 42
 run_program inheritance-class 43
 run_program virtual-dispatch 71
