@@ -29,6 +29,8 @@ import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.abi.PatchPlanner;
 import compiler.abi.PatchPlanner.AbiChange;
 import compiler.abi.PatchPlanner.PatchDecision;
+import compiler.modules.CompilerPublication.CompilerSnapshot;
+import compiler.modules.CompilerPublication.PublicationStatus;
 
 typedef NativeFunction = {final name:String; final library:String; final symbol:String; final arguments:Array<CompilerType>; final result:CompilerType;}
 
@@ -64,15 +66,6 @@ typedef ValidationResult = {
 	final diagnostic:Null<Diagnostic>;
 }
 
-private typedef CompilerSnapshot = {
-	final modules:Map<String, ModuleState>;
-	final types:TypeRegistry;
-	final objectCache:Map<String, IrObject>;
-	final lastTypedProgram:Null<TypedProgram>;
-	final publishedAbi:Null<RuntimeAbiDescriptor>;
-	final compiledOnce:Bool;
-}
-
 class Compiler {
 	public final modules:Map<String, ModuleState> = [];
 
@@ -89,6 +82,7 @@ class Compiler {
 	var objectCache:Map<String, IrObject> = [];
 	var publishedAbi:Null<RuntimeAbiDescriptor>;
 	var compiledOnce = false;
+	final publication = new CompilerPublication();
 
 	public function new(?identityState:Bytes) {
 		if (identityState == null) {
@@ -106,6 +100,22 @@ class Compiler {
 
 	public function exportIdentityState():Bytes
 		return HlRuntimeIdentity.encodePersistent(moduleId, assembler.cache.stableIds, types.exportState(), publishedAbi);
+
+	public function enablePublicationTracking():Void {
+		publication.enable();
+	}
+
+	public function publicationStatus():PublicationStatus
+		return publication.status();
+
+	public function acknowledgePublication(revision:Int):Void
+		publication.acknowledge(revision);
+
+	public function rejectPublication(revision:Int):Void {
+		var candidate = publication.reject(revision);
+		restore(candidate.snapshot);
+		assembler = candidate.assembler;
+	}
 
 	public function registerNative(name:String, library:String, symbol:String, arguments:Array<CompilerType>, result:CompilerType):Void {
 		if (compiledOnce)
@@ -195,10 +205,14 @@ class Compiler {
 	}
 
 	public function compile(entryModule:String, ?token:CancellationToken):CompileResult {
+		publication.beforeCompile();
 		var snapshot = snapshot();
-		try
-			return compileCandidate(entryModule, token)
-		catch (error:Dynamic) {
+		var previousAssembler = assembler;
+		try {
+			var result = compileCandidate(entryModule, token);
+			publication.candidate(result.revision, publishedAbi, snapshot, previousAssembler);
+			return result;
+		} catch (error:Dynamic) {
 			var failedDiagnostics:Map<String, Array<Diagnostic>> = [];
 			for (name => state in modules)
 				failedDiagnostics.set(name, state.diagnostics.copy());

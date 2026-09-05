@@ -218,6 +218,32 @@ class ModuleMain {
 			throw "Transactional validation mutated the live source snapshot";
 		if (!validationCompiler.validate("Main.hx", previousSource, "Main").valid)
 			throw "Valid transactional edit was rejected";
+		var publicationCompiler = new Compiler();
+		publicationCompiler.enablePublicationTracking();
+		publicationCompiler.update("Main.hx", "function main():Int { return 40; }");
+		var publicationInitial = publicationCompiler.compile("Main");
+		if (publicationCompiler.publicationStatus().acknowledgedRevision != 0
+			|| publicationCompiler.publicationStatus().pendingRevision != publicationInitial.revision)
+			throw "Emitted initial build advanced the acknowledged runtime baseline";
+		try {
+			publicationCompiler.compile("Main");
+			throw "Compiler accepted a second build while publication was pending";
+		} catch (error:String) {
+			if (error.indexOf("is still pending") < 0)
+				throw error;
+		}
+		publicationCompiler.acknowledgePublication(publicationInitial.revision);
+		publicationCompiler.update("Main.hx", "function main():Int { return 41; }");
+		var rejectedPublication = publicationCompiler.compile("Main");
+		publicationCompiler.rejectPublication(rejectedPublication.revision);
+		if (publicationCompiler.publicationStatus().acknowledgedRevision != publicationInitial.revision
+			|| publicationCompiler.publicationStatus().pendingRevision != null)
+			throw "Rejected build advanced or left the runtime publication baseline pending";
+		var retriedPublication = publicationCompiler.compile("Main");
+		if (retriedPublication.revision != rejectedPublication.revision
+			|| retriedPublication.patchBytes.compare(rejectedPublication.patchBytes) != 0)
+			throw "Retry after runtime rejection disagreed with the rejected candidate";
+		publicationCompiler.acknowledgePublication(retriedPublication.revision);
 		var structuralCompiler = new Compiler();
 		structuralCompiler.update("Main.hx",
 			"class Editor { public var value:Int; public function new():Void { this.value = 42; } } function main():Int { var editor = new Editor(); return editor.value; }");
