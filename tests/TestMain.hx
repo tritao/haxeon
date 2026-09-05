@@ -160,6 +160,9 @@ class TestMain {
 		expectCompileError('function main():Int { if (1) return 1; else return 2; }', 'If condition must be Bool');
 		expectCompileError('function main():Int { return 1 ? 2 : 3; }', 'Conditional expression requires a Bool condition');
 		expectCompileError('function main():Int { var value = true ? 1 : "wrong"; return 0; }', 'Conditional branches must have matching types');
+		expectCompileError('function main():Int { return switch 1 { case 1: 42; }; }', 'Switch expression requires a default branch');
+		expectCompileError('function main():Int { return switch 1 { case 1: 42; default: "wrong"; }; }', 'Type mismatch for switch branch');
+		expectCompileError('function main():Int { return switch 1 { case 1: 40; case 1: 2; default: 0; }; }', 'Duplicate switch case');
 		expectCompileError('function text():String { return "hello"; } function main():Int { var value:Float = 1.25; var wrong:String = value; return 0; }',
 			'Type mismatch for local "wrong"');
 		expectCompileError('function main():Int { missing = 1; return 0; }', 'Unknown variable "missing"');

@@ -1050,6 +1050,16 @@ class Compiler {
 			case Conditional(condition, whenTrue, whenFalse, s):
 				Conditional(canonicalExpression(condition, module, entry, locals, aliases), canonicalExpression(whenTrue, module, entry, locals, aliases),
 					canonicalExpression(whenFalse, module, entry, locals, aliases), s);
+			case SwitchExpression(subject, cases, fallback, s):
+				SwitchExpression(canonicalExpression(subject, module, entry, locals, aliases), [
+					for (switchCase in cases)
+						{
+							value: canonicalExpression(switchCase.value, module, entry, locals, aliases),
+							result: canonicalExpression(switchCase.result, module, entry, locals, aliases),
+							span: switchCase.span
+						}
+				],
+					fallback == null ? null : canonicalExpression(fallback, module, entry, locals, aliases), s);
 			case ObjectLiteral(fields, s): ObjectLiteral([
 					for (field in fields)
 						{name: field.name, value: canonicalExpression(field.value, module, entry, locals, aliases), span: field.span}
@@ -1288,6 +1298,14 @@ class Compiler {
 				scanExpression(condition, dependencies);
 				scanExpression(whenTrue, dependencies);
 				scanExpression(whenFalse, dependencies);
+			case SwitchExpression(subject, cases, fallback, _):
+				scanExpression(subject, dependencies);
+				for (switchCase in cases) {
+					scanExpression(switchCase.value, dependencies);
+					scanExpression(switchCase.result, dependencies);
+				}
+				if (fallback != null)
+					scanExpression(fallback, dependencies);
 			case ObjectLiteral(fields, _):
 				for (field in fields)
 					scanExpression(field.value, dependencies);
@@ -1421,6 +1439,14 @@ class Compiler {
 				scanCallExpression(condition, calls, aliases);
 				scanCallExpression(whenTrue, calls, aliases);
 				scanCallExpression(whenFalse, calls, aliases);
+			case SwitchExpression(subject, cases, fallback, _):
+				scanCallExpression(subject, calls, aliases);
+				for (switchCase in cases) {
+					scanCallExpression(switchCase.value, calls, aliases);
+					scanCallExpression(switchCase.result, calls, aliases);
+				}
+				if (fallback != null)
+					scanCallExpression(fallback, calls, aliases);
 			case ObjectLiteral(fields, _):
 				for (field in fields)
 					scanCallExpression(field.value, calls, aliases);
@@ -1520,6 +1546,14 @@ class Compiler {
 				collectLambdaExpression(condition, functionName, module, generatedByModule);
 				collectLambdaExpression(whenTrue, functionName, module, generatedByModule);
 				collectLambdaExpression(whenFalse, functionName, module, generatedByModule);
+			case SwitchExpression(subject, cases, fallback, _):
+				collectLambdaExpression(subject, functionName, module, generatedByModule);
+				for (switchCase in cases) {
+					collectLambdaExpression(switchCase.value, functionName, module, generatedByModule);
+					collectLambdaExpression(switchCase.result, functionName, module, generatedByModule);
+				}
+				if (fallback != null)
+					collectLambdaExpression(fallback, functionName, module, generatedByModule);
 			case ObjectLiteral(fields, _):
 				for (field in fields)
 					collectLambdaExpression(field.value, functionName, module, generatedByModule);

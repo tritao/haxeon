@@ -539,6 +539,8 @@ class Parser {
 	}
 
 	function parsePrimary():AstExpression {
+		if (match(TokenKind.Switch))
+			return parseSwitchExpression(previous().span);
 		if (match(TokenKind.Minus)) {
 			var start = previous().span, value = parsePrimary();
 			return Negate(value, start.merge(expressionSpan(value)));
@@ -682,6 +684,32 @@ class Parser {
 		}
 		fail(current(), "Expected expression");
 		return null;
+	}
+
+	function parseSwitchExpression(start:SourceSpan):AstExpression {
+		var subject:AstExpression;
+		if (match(TokenKind.LeftParen)) {
+			subject = parseExpression();
+			consume(TokenKind.RightParen);
+		} else
+			subject = parseExpression();
+		consume(TokenKind.LeftBrace);
+		var cases = [];
+		while (match(TokenKind.Case)) {
+			var caseStart = previous().span, value = parseExpression();
+			consume(TokenKind.Colon);
+			var result = parseExpression();
+			match(TokenKind.Semicolon);
+			cases.push({value: value, result: result, span: caseStart.merge(expressionSpan(result))});
+		}
+		var fallback = null;
+		if (match(TokenKind.Default)) {
+			consume(TokenKind.Colon);
+			fallback = parseExpression();
+			match(TokenKind.Semicolon);
+		}
+		var end = consume(TokenKind.RightBrace).span;
+		return parsePostfix(SwitchExpression(subject, cases, fallback, start.merge(end)));
 	}
 
 	function parsePostfix(expression:AstExpression):AstExpression {
@@ -858,7 +886,7 @@ class Parser {
 				Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span), Div(_, _, span), Mod(_, _, span), Negate(_, span), Less(_, _, span),
 				LessEqual(_, _, span), Greater(_, _, span), GreaterEqual(_, _, span), Equal(_, _, span), NotEqual(_, _, span), Not(_, span), Call(_, _, span),
 				MethodCall(_, _, _, span), New(_, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span), Lambda(_, _, span), And(_, _, span),
-				Or(_, _, span), Conditional(_, _, _, span): span;
+				Or(_, _, span), Conditional(_, _, _, span), SwitchExpression(_, _, _, span): span;
 			case ObjectLiteral(_, span): span;
 		}
 

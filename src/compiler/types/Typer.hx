@@ -897,6 +897,73 @@ class Typer {
 				typedTrue = coerce(typedTrue, resultType, "conditional branch", "E1003");
 				typedFalse = coerce(typedFalse, resultType, "conditional branch", "E1003");
 				new TypedExpression(TConditional(typedCondition, typedTrue, typedFalse), resultType, span);
+			case SwitchExpression(expression, cases, defaultExpression, span):
+				var typedSubject = typeExpression(expression, scope);
+				if (!sameType(typedSubject.type, TInt) && !sameType(typedSubject.type, TString) && !isEnum(typedSubject.type))
+					fail("E1019", "Switch requires an Int, String, or enum value", typedSubject.span);
+				var typedCases = [],
+					seenCases:Map<String, Bool> = [],
+					resultType = expectedType;
+				for (switchCase in cases) {
+					var caseScope = new Scope(scope),
+						pattern = typeEnumPattern(switchCase.value, typedSubject.type, caseScope),
+						typedValue = pattern == null ? coerce(typeExpression(switchCase.value, scope), typedSubject.type, "switch case",
+							"E1019") : pattern.value,
+						typedResult = typeExpression(switchCase.result, caseScope, resultType),
+						enumName:Null<String> = pattern == null ? null : pattern.enumName,
+						constructorIndex = pattern == null ? -1 : pattern.index;
+					if (resultType == null)
+						resultType = typedResult.type;
+					typedResult = coerce(typedResult, resultType, "switch branch", "E1003");
+					if (pattern == null)
+						switch typedValue.expression {
+							case TEnumLiteral(name, index):
+								enumName = name;
+								constructorIndex = index;
+							default:
+						}
+					var caseKey = switch typedValue.expression {
+						case TIntLiteral(value): 'int:$value';
+						case TStringLiteral(value): 'string:$value';
+						case TEnumLiteral(name, index): 'enum:$name:$index';
+						default: null;
+					};
+					if (caseKey != null) {
+						if (seenCases.exists(caseKey))
+							fail("E1020", "Duplicate switch case", switchCase.span);
+						seenCases.set(caseKey, true);
+					}
+					typedCases.push({
+						value: typedValue,
+						result: typedResult,
+						enumName: enumName,
+						constructorIndex: constructorIndex,
+						bindings: pattern == null ? [] : pattern.bindings
+					});
+				}
+				var typedDefault = defaultExpression == null ? null : typeExpression(defaultExpression, scope, resultType);
+				if (typedDefault != null) {
+					if (resultType == null)
+						resultType = typedDefault.type;
+					typedDefault = coerce(typedDefault, resultType, "switch branch", "E1003");
+				}
+				if (resultType == null)
+					fail("E1003", "Switch expression has no result branches", span);
+				if (typedDefault == null && !isEnum(typedSubject.type))
+					fail("E1021", "Switch expression requires a default branch", span);
+				if (isEnum(typedSubject.type) && typedDefault == null) {
+					var enumName = switch typedSubject.type {
+						case TEnum(name): name;
+						default: "";
+					}, enumDecl = enumDecls.get(enumName), missing = [];
+					if (enumDecl != null)
+						for (index in 0...enumDecl.cases.length)
+							if (!seenCases.exists('enum:$enumName:$index'))
+								missing.push(enumDecl.cases[index].name);
+					if (missing.length > 0)
+						fail("E1021", 'Enum switch is missing cases: ${missing.join(", ")}', span);
+				}
+				new TypedExpression(TSwitchExpression(typedSubject, typedCases, typedDefault), resultType, span);
 			case ObjectLiteral(fields, span):
 				var expectedFields = switch expectedType {
 					case TAnonymous(_, values): values;
@@ -1637,6 +1704,14 @@ class Typer {
 			case Conditional(condition, whenTrue, whenFalse, _):
 				for (item in [condition, whenTrue, whenFalse])
 					collectMutableCaptureExpression(item, outerDeclared, result);
+			case SwitchExpression(subject, cases, fallback, _):
+				collectMutableCaptureExpression(subject, outerDeclared, result);
+				for (switchCase in cases) {
+					collectMutableCaptureExpression(switchCase.value, outerDeclared, result);
+					collectMutableCaptureExpression(switchCase.result, outerDeclared, result);
+				}
+				if (fallback != null)
+					collectMutableCaptureExpression(fallback, outerDeclared, result);
 			case ObjectLiteral(fields, _):
 				for (field in fields)
 					collectMutableCaptureExpression(field.value, outerDeclared, result);
@@ -1673,6 +1748,14 @@ class Typer {
 			case Conditional(condition, whenTrue, whenFalse, _):
 				for (item in [condition, whenTrue, whenFalse])
 					collectExpressionVariables(item, names);
+			case SwitchExpression(subject, cases, fallback, _):
+				collectExpressionVariables(subject, names);
+				for (switchCase in cases) {
+					collectExpressionVariables(switchCase.value, names);
+					collectExpressionVariables(switchCase.result, names);
+				}
+				if (fallback != null)
+					collectExpressionVariables(fallback, names);
 			case ObjectLiteral(fields, _):
 				for (field in fields)
 					collectExpressionVariables(field.value, names);

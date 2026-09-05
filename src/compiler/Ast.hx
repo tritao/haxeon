@@ -80,6 +80,7 @@ enum AstExpression {
 	And(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Or(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Conditional(condition:AstExpression, whenTrue:AstExpression, whenFalse:AstExpression, span:SourceSpan);
+	SwitchExpression(expression:AstExpression, cases:Array<AstSwitchExpressionCase>, defaultExpression:Null<AstExpression>, span:SourceSpan);
 	ObjectLiteral(fields:Array<AstObjectField>, span:SourceSpan);
 	Call(name:String, arguments:Array<AstExpression>, span:SourceSpan);
 	MethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan);
@@ -91,6 +92,7 @@ enum AstExpression {
 }
 
 typedef AstObjectField = {final name:String; final value:AstExpression; final span:SourceSpan;}
+typedef AstSwitchExpressionCase = {final value:AstExpression; final result:AstExpression; final span:SourceSpan;}
 
 enum AstStatement {
 	UninitializedDeclaration(name:String, type:AstType, span:SourceSpan);

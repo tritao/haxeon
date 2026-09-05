@@ -47,6 +47,7 @@ enum TypedExpressionKind {
 	TAnd(left:TypedExpression, right:TypedExpression);
 	TOr(left:TypedExpression, right:TypedExpression);
 	TConditional(condition:TypedExpression, whenTrue:TypedExpression, whenFalse:TypedExpression);
+	TSwitchExpression(expression:TypedExpression, cases:Array<TypedSwitchExpressionCase>, defaultExpression:Null<TypedExpression>);
 	TObjectLiteral(name:String, fields:Array<TypedObjectField>);
 	TCall(name:String, arguments:Array<TypedExpression>);
 	TCollectionCall(receiver:TypedExpression, operation:String, arguments:Array<TypedExpression>);
@@ -68,6 +69,14 @@ enum TypedExpressionKind {
 }
 
 typedef TypedObjectField = {final name:String; final value:TypedExpression;}
+
+typedef TypedSwitchExpressionCase = {
+	final value:TypedExpression;
+	final result:TypedExpression;
+	final enumName:Null<String>;
+	final constructorIndex:Int;
+	final bindings:Array<TypedSwitchBinding>;
+}
 
 enum TypedStatement {
 	TDeclare(name:String, type:CompilerType, span:SourceSpan);

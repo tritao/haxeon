@@ -866,6 +866,59 @@ class IrGenerator {
 				builder.jump(afterBlock);
 				builder.select(afterBlock);
 				builder.load(localName, resultType);
+			case TSwitchExpression(subject, cases, defaultExpression):
+				var subjectName = '$' + 'switch-expression-subject:${expression.span.start}',
+					resultName = '$' + 'switch-expression-result:${expression.span.start}',
+					subjectType = lowerType(subject.type),
+					resultType = lowerType(expression.type),
+					entryBlock = builder.currentBlock(),
+					bodyBlocks = [],
+					checkBlocks = [entryBlock];
+				for (caseIndex in 0...cases.length) {
+					bodyBlocks.push(builder.createBlock());
+					if (caseIndex + 1 < cases.length)
+						checkBlocks.push(builder.createBlock());
+				}
+				var fallbackBlock = defaultExpression == null ? null : builder.createBlock(),
+					afterBlock = builder.createBlock();
+				builder.select(entryBlock);
+				localTypes.set(subjectName, subjectType);
+				localTypes.set(resultName, resultType);
+				builder.store(subjectName, lowerExpression(subject, builder, localTypes));
+				for (caseIndex in 0...cases.length) {
+					var switchCase = cases[caseIndex],
+						isExhaustiveFinalCase = defaultExpression == null && caseIndex == cases.length - 1,
+						bodyBlock = bodyBlocks[caseIndex],
+						nextBlock = caseIndex + 1 < cases.length ? checkBlocks[caseIndex + 1] : fallbackBlock;
+					builder.select(checkBlocks[caseIndex]);
+					var subjectValue = builder.load(subjectName, subjectType),
+						comparisonValue = switch subject.type {
+							case TEnum(_): builder.enumIndex(subjectValue);
+							default: subjectValue;
+						};
+					var caseValue = switchCase.constructorIndex >= 0 ? builder.constInt(switchCase.constructorIndex) : lowerExpression(switchCase.value,
+						builder, localTypes),
+						matches = subject.type == TString ? builder.call("__string_equal", [comparisonValue, caseValue],
+							Bool) : builder.equal(comparisonValue, caseValue);
+					if (isExhaustiveFinalCase)
+						builder.jump(bodyBlock);
+					else
+						builder.branch(matches, bodyBlock, nextBlock);
+					builder.select(bodyBlock);
+					for (binding in switchCase.bindings) {
+						localTypes.set(binding.name, lowerType(binding.type));
+						builder.store(binding.name, builder.enumField(subjectValue, switchCase.constructorIndex, binding.index, lowerType(binding.type)));
+					}
+					builder.store(resultName, lowerExpression(switchCase.result, builder, localTypes));
+					builder.jump(afterBlock);
+				}
+				if (defaultExpression != null) {
+					builder.select(fallbackBlock);
+					builder.store(resultName, lowerExpression(defaultExpression, builder, localTypes));
+					builder.jump(afterBlock);
+				}
+				builder.select(afterBlock);
+				builder.load(resultName, resultType);
 			case TClosureCall(callee, args):
 				builder.callClosure(lowerExpression(callee, builder, localTypes), [for (arg in args) lowerExpression(arg, builder, localTypes)],
 					lowerType(expression.type));
