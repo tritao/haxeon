@@ -174,6 +174,22 @@ class IrVerifier {
 				if (!sameType(out.type, functionType.result))
 					throw 'Wrong IR closure result type';
 				define(values, out);
+			case MethodCall(out, object, methodName, args):
+				var objectType = requireObject(object, values, objects),
+					functionName = findMethodFunction(objectType, methodName, objects),
+					signature = functionName == null ? null : signatures.get(functionName);
+				if (signature == null || signature.arguments.length != args.length + 1)
+					throw 'Unknown or mismatched IR method "$methodName"';
+				if (!compatibleType(object.type, signature.arguments[0], objects))
+					throw 'Wrong IR method receiver type';
+				for (i in 0...args.length) {
+					require(values, args[i]);
+					if (!compatibleType(args[i].type, signature.arguments[i + 1], objects))
+						throw 'Wrong IR method argument type';
+				}
+				if (!sameType(out.type, signature.result))
+					throw 'Wrong IR method result type';
+				define(values, out);
 			case NewObject(out, typeName):
 				if (!objects.exists(typeName) || !isObjectType(out.type, typeName))
 					throw 'Unknown or mismatched IR object "$typeName"';
@@ -248,6 +264,13 @@ class IrVerifier {
 				return findField(base, name, objects);
 		}
 		return null;
+	}
+
+	static function findMethodFunction(object:IrObject, name:String, objects:Map<String, IrObject>):Null<String> {
+		for (method in object.methods)
+			if (method.name == name)
+				return method.functionName;
+		return object.base == null ? null : findMethodFunction(objects.get(object.base), name, objects);
 	}
 
 	static function addPredecessor(map:Map<Int, Map<Int, Bool>>, target:Int, source:Int):Void {

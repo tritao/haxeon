@@ -58,6 +58,7 @@ run_program static-class 42
 run_program instance-class 42
 run_program default-constructor-class 42
 run_program inheritance-class 43
+run_program virtual-dispatch 71
 
 object_output="$root_dir/out/object.hl"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ObjectMain "$object_output"

@@ -27,6 +27,13 @@ class IrGenerator {
 					fields: [
 						for (field in classDecl.fields)
 							if (!field.isStatic) {name: field.name, type: lowerType(field.type)}
+					],
+					methods: [
+						for (method in classDecl.methods)
+							if (!method.isStatic && !method.isConstructor) {
+								name: method.name.substr(method.name.lastIndexOf(".") + 1),
+								functionName: method.name
+							}
 					]
 				}
 		];
@@ -183,10 +190,8 @@ class IrGenerator {
 			case TField(object, name): builder.fieldGet(lowerExpression(object, builder, localTypes), name, lowerType(expression.type));
 			case TMethodCall(object, name, args):
 				var receiver = lowerExpression(object, builder, localTypes),
-					callArgs = [receiver];
-				for (arg in args)
-					callArgs.push(lowerExpression(arg, builder, localTypes));
-				builder.call(name, callArgs, lowerType(expression.type));
+					callArgs = [for (arg in args) lowerExpression(arg, builder, localTypes)];
+				builder.methodCall(receiver, name.substr(name.lastIndexOf(".") + 1), callArgs, lowerType(expression.type));
 			case TIndex(array, index):
 				builder.arrayGet(lowerExpression(array, builder, localTypes), lowerExpression(index, builder, localTypes), lowerType(expression.type));
 			case TArrayLength(array):

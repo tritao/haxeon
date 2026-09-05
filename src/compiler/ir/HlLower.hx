@@ -44,20 +44,6 @@ class HlLower {
 	}
 
 	function lowerProgram(program:IrProgram):HlCode {
-		var pending = program.objects.copy();
-		while (pending.length > 0) {
-			var progressed = false;
-			for (object in pending.copy()) {
-				if (object.base != null && !objectTypeIndices.exists(object.base) && symbols.typeIndex('obj:${object.base}') == null)
-					continue;
-				objects.set(object.name, object);
-				objectTypeIndices.set(object.name, symbols.internObject(object));
-				pending.remove(object);
-				progressed = true;
-			}
-			if (!progressed)
-				throw 'Unable to order object bases';
-		}
 		if (functionIndices.keys().hasNext() == false) {
 			var nextFunction = 0;
 			for (native in program.natives)
@@ -65,7 +51,20 @@ class HlLower {
 			for (fn in program.functions)
 				addFunctionName(fn.name, nextFunction++);
 		}
-
+		var pending = program.objects.copy();
+		while (pending.length > 0) {
+			var progressed = false;
+			for (object in pending.copy()) {
+				if (object.base != null && !objectTypeIndices.exists(object.base) && symbols.typeIndex('obj:${object.base}') == null)
+					continue;
+				objects.set(object.name, object);
+				objectTypeIndices.set(object.name, symbols.internObject(object, functionIndices));
+				pending.remove(object);
+				progressed = true;
+			}
+			if (!progressed)
+				throw 'Unable to order object bases';
+		}
 		for (native in program.natives)
 			lowerNative(native);
 		for (fn in program.functions)
@@ -165,6 +164,11 @@ class HlLower {
 					case CallClosure(output, closure, arguments):
 						instructions.push(HlInstruction.CallClosure(defineRegister(output, registers, registerTypes), requireRegister(closure, registers),
 							[for (argument in arguments) requireRegister(argument, registers)]));
+					case MethodCall(output, object, methodName, arguments):
+						var receiver = requireRegister(object, registers),
+							methodArguments = [receiver].concat([for (argument in arguments) requireRegister(argument, registers)]);
+						instructions.push(HlInstruction.CallMethod(defineRegister(output, registers, registerTypes), requireObjectMethod(object, methodName),
+							methodArguments));
 					case NewObject(output, typeName):
 						instructions.push(HlInstruction.New(defineRegister(output, registers, registerTypes), requireObjectType(typeName), 0));
 					case FieldGet(output, object, fieldName):
@@ -317,6 +321,17 @@ class HlLower {
 		if (descriptor.base != null)
 			return requireObjectFieldByType(descriptor.base, name);
 		throw 'Unknown IR field "$typeName.$name"';
+	}
+
+	function requireObjectMethod(value:IrValue, name:String):Int {
+		var typeName = switch value.type {
+			case Obj(value): value;
+			default: throw 'IR value ${value.id} is not an object';
+		};
+		var index = symbols.objectMethodIndex(typeName, name);
+		if (index == null)
+			throw 'Unknown IR method "$typeName.$name"';
+		return index;
 	}
 
 	function objectFieldCount(typeName:String):Int {

@@ -106,8 +106,8 @@ class HlPatchReader {
 		var registers = [for (_ in 0...registerCount) readIndex(input)];
 		var instructions = [];
 		for (_ in 0...instructionCount) {
-			var opcode = input.readByte(), count = operandCount(opcode);
-			instructions.push({opcode: opcode, operands: [for (_ in 0...count) readIndex(input)]});
+			var opcode = input.readByte();
+			instructions.push({opcode: opcode, operands: readOperands(input, opcode)});
 		}
 		var relocations = [
 			for (_ in 0...readUnsigned(input))
@@ -122,14 +122,24 @@ class HlPatchReader {
 		};
 	}
 
-	static function operandCount(op:Int):Int
+	static function readOperands(input:BytesInput, op:Int):Array<Int>
 		return switch op {
-			case 66: 0;
-			case 0, 1, 2, 3, 5, 58, 67: 2 - (op == 58 || op == 67 ? 1 : 0);
-			case 7, 8, 9, 10, 25, 44: 3 - (op == 44 ? 1 : 0);
-			case 24: 2;
-			case 26: 4;
-			case 48, 51, 56: 3;
+			case 66: [];
+			case 29, 30, 31, 32:
+				var first = readIndex(input),
+					second = readIndex(input),
+					count = readIndex(input),
+					operands = [first, second, count];
+				for (_ in 0...count)
+					operands.push(readIndex(input));
+				operands;
+			case 0, 1, 2, 3, 5, 33, 58, 67, 82, 83:
+				[for (_ in 0...(op == 58 || op == 67 || op == 82 ? 1 : 2)) readIndex(input)];
+			case 7, 8, 9, 10, 25, 34, 38, 39, 44, 77, 81:
+				[for (_ in 0...(3 - (op == 44 ? 1 : 0))) readIndex(input)];
+			case 24: [readIndex(input), readIndex(input)];
+			case 26: [for (_ in 0...4) readIndex(input)];
+			case 48, 51, 56: [for (_ in 0...3) readIndex(input)];
 			default: throw 'Unsupported patch opcode $op';
 		}
 

@@ -45,6 +45,7 @@ enum IrInstruction {
 	StaticClosure(output:IrValue, functionName:String);
 	InstanceClosure(output:IrValue, functionName:String, receiver:IrValue);
 	CallClosure(output:IrValue, closure:IrValue, arguments:Array<IrValue>);
+	MethodCall(output:IrValue, object:IrValue, methodName:String, arguments:Array<IrValue>);
 	NewObject(output:IrValue, typeName:String);
 	FieldGet(output:IrValue, object:IrValue, fieldName:String);
 	FieldSet(object:IrValue, fieldName:String, value:IrValue);
@@ -77,7 +78,8 @@ typedef IrNative = {
 }
 
 typedef IrObjectField = {final name:String; final type:IrType;}
-typedef IrObject = {final name:String; final base:Null<String>; final fields:Array<IrObjectField>;}
+typedef IrObjectMethod = {final name:String; final functionName:String;}
+typedef IrObject = {final name:String; final base:Null<String>; final fields:Array<IrObjectField>; final methods:Array<IrObjectMethod>;}
 
 class IrProgram {
 	public var natives:Array<IrNative> = [];

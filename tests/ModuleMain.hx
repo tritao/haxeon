@@ -172,6 +172,17 @@ class ModuleMain {
 		var capturedUnchanged = capturedCompiler.compile("Main");
 		if (capturedUnchanged.changedFunctions.length != 0)
 			throw "Unchanged captured lambda build reported changes";
+		var methodCompiler = new Compiler();
+		methodCompiler.update("Main.hx",
+			"class Editor { public function get():Int { return 20; } } function main():Int { var editor = new Editor(); return editor.get() + 22; }");
+		methodCompiler.compile("Main");
+		methodCompiler.update("Main.hx",
+			"class Editor { public function get():Int { return 21; } } function main():Int { var editor = new Editor(); return editor.get() + 21; }");
+		var methodBuild = methodCompiler.compile("Main");
+		if (methodBuild.patchBytes == null)
+			throw "Dynamic method body edit did not emit HLP bytes";
+		if (HlPatchReader.decode(methodBuild.patchBytes).functions.length == 0)
+			throw "Dynamic method HLP patch was empty";
 		Sys.println("PASS: function fingerprints selectively retyped and regenerated cached artifacts");
 	}
 }

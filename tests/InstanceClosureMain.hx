@@ -32,7 +32,12 @@ class InstanceClosureMain {
 			arguments: [IrType.I32],
 			result: IrType.Void
 		});
-		program.objects.push({name: "Env", base: null, fields: [{name: "value", type: IrType.I32}]});
+		program.objects.push({
+			name: "Env",
+			base: null,
+			fields: [{name: "value", type: IrType.I32}],
+			methods: []
+		});
 		program.functions.push(new IrFunction("Env.invoke", methodBuilder.arguments, IrType.I32, methodBuilder.blocks));
 		program.functions.push(new IrFunction("main", [], IrType.I32, mainBuilder.blocks));
 		var entryBuilder = new IrBuilder(),

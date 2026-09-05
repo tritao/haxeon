@@ -167,8 +167,25 @@ class HlPatchWriter {
 					for (a in args)
 						h = hashBytes(intBytes(a), h);
 					h = hashBytes(intBytes(result), h);
-				case Object(_, _, _, _, _, _):
-					throw "Object type growth requires a structural reload";
+				case Object(name, base, global, fields, methods, bindings):
+					h = hashBytes(intBytes(HlType.Obj), h);
+					h = hashBytes(intBytes(name), h);
+					h = hashBytes(intBytes(base), h);
+					h = hashBytes(intBytes(global), h);
+					h = hashBytes(intBytes(fields.length), h);
+					for (field in fields) {
+						h = hashBytes(intBytes(field.name), h);
+						h = hashBytes(intBytes(field.type), h);
+					}
+					h = hashBytes(intBytes(methods.length), h);
+					for (method in methods) {
+						h = hashBytes(intBytes(method.name), h);
+						h = hashBytes(intBytes(method.functionIndex), h);
+						h = hashBytes(intBytes(method.prototype), h);
+					}
+					h = hashBytes(intBytes(bindings.length), h);
+					for (binding in bindings)
+						h = hashBytes(intBytes(binding), h);
 			}
 		return h;
 	}

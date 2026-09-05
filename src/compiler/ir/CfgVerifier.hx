@@ -116,6 +116,11 @@ class CfgVerifier {
 						default: throw 'CFG closure call requires a function value';
 					}
 					define(out, defined, available);
+				case MethodCall(out, object, _, arguments):
+					require(object, available);
+					for (argument in arguments)
+						require(argument, available);
+					define(out, defined, available);
 				case NewObject(out, _):
 					switch out.type {
 						case Obj(_):

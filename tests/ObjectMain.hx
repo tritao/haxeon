@@ -22,7 +22,12 @@ class ObjectMain {
 			arguments: [IrType.I32],
 			result: IrType.Void
 		});
-		program.objects.push({name: "Box", base: null, fields: [{name: "value", type: IrType.I32}]});
+		program.objects.push({
+			name: "Box",
+			base: null,
+			fields: [{name: "value", type: IrType.I32}],
+			methods: []
+		});
 		program.functions.push(new IrFunction("main", [], IrType.I32, builder.blocks));
 		var entry = new IrBuilder(),
 			mainResult = entry.call("main", [], IrType.I32),

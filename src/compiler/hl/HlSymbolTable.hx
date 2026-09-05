@@ -16,6 +16,7 @@ class HlSymbolTable {
 	final floatIndices:Map<String, Int> = [];
 	final typeIndices:Map<String, Int> = [];
 	final objectIndices:Map<String, Int> = [];
+	final objectMethodIndices:Map<String, Map<String, Int>> = [];
 
 	public function new() {}
 
@@ -75,7 +76,7 @@ class HlSymbolTable {
 		return index;
 	}
 
-	public function internObject(object:IrObject):Int {
+	public function internObject(object:IrObject, functionIndices:Map<String, Int>):Int {
 		var found = objectIndices.get(object.name);
 		if (found != null)
 			return found;
@@ -86,15 +87,43 @@ class HlSymbolTable {
 		var base = object.base == null ? -1 : typeIndices.get('obj:${object.base}');
 		if (object.base != null && base == null)
 			throw 'Object base "${object.base}" must be registered before "${object.name}"';
-		types.push(Object(internString(object.name), base == null ? -1 : base, global, fields, [], []));
+		var slots:Map<String, Int> = [], nextSlot = 0;
+		if (object.base != null) {
+			var inherited = objectMethodIndices.get(object.base);
+			if (inherited != null)
+				for (name => slot in inherited) {
+					slots.set(name, slot);
+					if (slot >= nextSlot)
+						nextSlot = slot + 1;
+				}
+		}
+		var methods = [];
+		for (method in object.methods) {
+			var slot = slots.get(method.name);
+			if (slot == null) {
+				slot = nextSlot++;
+				slots.set(method.name, slot);
+			}
+			var functionIndex = functionIndices.get(method.functionName);
+			if (functionIndex == null)
+				throw 'Unknown object method function "${method.functionName}"';
+			methods.push({name: internString(method.name), functionIndex: functionIndex, prototype: slot});
+		}
+		types.push(Object(internString(object.name), base == null ? -1 : base, global, fields, methods, []));
 		objectIndices.set(object.name, index);
 		typeIndices.set('obj:${object.name}', index);
+		objectMethodIndices.set(object.name, slots);
 		globals.push(index);
 		return index;
 	}
 
 	public function typeIndex(key:String):Null<Int>
 		return typeIndices.get(key);
+
+	public function objectMethodIndex(objectName:String, methodName:String):Null<Int> {
+		var methods = objectMethodIndices.get(objectName);
+		return methods == null ? null : methods.get(methodName);
+	}
 
 	public function internFunction(arguments:Array<IrType>, result:IrType):Int {
 		var key = 'fun(${[for (a in arguments) typeKey(a)].join(",")})->${typeKey(result)}',
