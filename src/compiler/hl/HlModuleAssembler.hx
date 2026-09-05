@@ -38,6 +38,7 @@ class HlModuleAssembler {
 	var publishedFloats = 0;
 	var publishedStrings = 0;
 	var publishedTypes = 0;
+	var restoredBaseline = false;
 
 	public function new(?stableIds:Map<String, Int>) {
 		cache = new HlFunctionCache(stableIds);
@@ -53,6 +54,7 @@ class HlModuleAssembler {
 		result.publishedFloats = publishedFloats;
 		result.publishedStrings = publishedStrings;
 		result.publishedTypes = publishedTypes;
+		result.restoredBaseline = restoredBaseline;
 		return result;
 	}
 
@@ -90,10 +92,21 @@ class HlModuleAssembler {
 		result.publishedFloats = state.publishedFloats;
 		result.publishedStrings = state.publishedStrings;
 		result.publishedTypes = state.publishedTypes;
+		result.restoredBaseline = true;
 		return result;
 	}
 
 	public function assemble(program:IrProgram, regenerated:Array<String>, decision:PatchDecision):HlAssemblyResult {
+		var actuallyRegenerated:Map<String, Bool> = [];
+		for (name in regenerated)
+			actuallyRegenerated.set(name, true);
+		if (initialized && restoredBaseline)
+			for (fn in program.functions) {
+				var previous = cache.functions.get(fn.name);
+				if (previous != null
+					&& compiler.ir.IrFunctionStateCodec.encode(previous).compare(compiler.ir.IrFunctionStateCodec.encode(fn)) == 0)
+					actuallyRegenerated.remove(fn.name);
+			}
 		cache.update(program.functions);
 		var ordered = new IrProgram(program.entryPoint);
 		ordered.natives = program.natives;
@@ -109,7 +122,7 @@ class HlModuleAssembler {
 			layout.set(name, next++);
 		var changed:Array<Int> = [], changedSlots:Array<Int> = [];
 		if (initialized)
-			for (name in regenerated) {
+			for (name in actuallyRegenerated.keys()) {
 				var index = layout.get(name),
 					stableId = cache.stableIds.get(name);
 				if (index != null && stableId != null) {
@@ -135,6 +148,7 @@ class HlModuleAssembler {
 		publishedTypes = module.types.length;
 		revision++;
 		initialized = true;
+		restoredBaseline = false;
 		return {
 			module: module,
 			changedFunctions: changed,

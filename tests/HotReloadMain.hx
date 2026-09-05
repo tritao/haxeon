@@ -259,11 +259,22 @@ class HotReloadMain {
 		for (_ in 0...100)
 			HlAssemblerStateCodec.decode(assemblerBytes);
 		probeCompiler("assembler");
-		var restoredAssembler = HlAssemblerStateCodec.decode(assemblerBytes),
+		var uninterruptedAssembler = assembler.copy(),
+			restoredAssembler = HlAssemblerStateCodec.decode(assemblerBytes),
 			editedCompiler = new Compiler();
 		editedCompiler.update("Main.hx", "function add(a:Int, b:Int):Int { return a + b; } function main():Int { return add(21, 22); }");
 		var edited = editedCompiler.compile("Main").ir;
-		restoredAssembler.assemble(edited, ["main"], Patch);
+		var uninterrupted = uninterruptedAssembler.assemble(edited, ["main"], Patch),
+			restored = restoredAssembler.assemble(edited, ["main"], Patch);
+		if (uninterrupted.revision != restored.revision
+			|| uninterrupted.baseInts != restored.baseInts
+			|| uninterrupted.baseFloats != restored.baseFloats
+			|| uninterrupted.baseStrings != restored.baseStrings
+			|| uninterrupted.baseTypes != restored.baseTypes
+			|| uninterrupted.changedFunctions.join(",") != restored.changedFunctions.join(",")
+			|| uninterrupted.changedSlots.join(",") != restored.changedSlots.join(",")
+			|| HlWriter.encode(uninterrupted.module).compare(HlWriter.encode(restored.module)) != 0)
+			throw "Restored assembler output disagreed with uninterrupted assembly";
 		probeCompiler("mutated restored assembler");
 	}
 
