@@ -62,6 +62,63 @@ HL_PRIM int HL_NAME(__map_string_i32_get)( realtime_string_map *map, vbyte *key 
 	return dynamic == NULL ? 0 : dynamic->v.i;
 }
 
+HL_PRIM realtime_string_map *HL_NAME(__map_string_bool_alloc)( void ) {
+	return hl_hballoc();
+}
+
+HL_PRIM void HL_NAME(__map_string_bool_set)( realtime_string_map *map, vbyte *key, bool value ) {
+	vdynamic *dynamic = hl_alloc_dynamic(&hlt_bool);
+	dynamic->v.b = value;
+	hl_hbset(map, (uchar *)key, dynamic);
+}
+
+HL_PRIM bool HL_NAME(__map_string_bool_exists)( realtime_string_map *map, vbyte *key ) {
+	return hl_hbexists(map, (uchar *)key);
+}
+
+HL_PRIM bool HL_NAME(__map_string_bool_get)( realtime_string_map *map, vbyte *key ) {
+	vdynamic *dynamic = hl_hbget(map, (uchar *)key);
+	return dynamic == NULL ? false : dynamic->v.b;
+}
+
+HL_PRIM realtime_string_map *HL_NAME(__map_string_f64_alloc)( void ) {
+	return hl_hballoc();
+}
+
+HL_PRIM void HL_NAME(__map_string_f64_set)( realtime_string_map *map, vbyte *key, double value ) {
+	vdynamic *dynamic = hl_alloc_dynamic(&hlt_f64);
+	dynamic->v.d = value;
+	hl_hbset(map, (uchar *)key, dynamic);
+}
+
+HL_PRIM bool HL_NAME(__map_string_f64_exists)( realtime_string_map *map, vbyte *key ) {
+	return hl_hbexists(map, (uchar *)key);
+}
+
+HL_PRIM double HL_NAME(__map_string_f64_get)( realtime_string_map *map, vbyte *key ) {
+	vdynamic *dynamic = hl_hbget(map, (uchar *)key);
+	return dynamic == NULL ? 0.0 : dynamic->v.d;
+}
+
+HL_PRIM realtime_string_map *HL_NAME(__map_string_bytes_alloc)( void ) {
+	return hl_hballoc();
+}
+
+HL_PRIM void HL_NAME(__map_string_bytes_set)( realtime_string_map *map, vbyte *key, vbyte *value ) {
+	vdynamic *dynamic = hl_alloc_dynamic(&hlt_bytes);
+	dynamic->v.bytes = value;
+	hl_hbset(map, (uchar *)key, dynamic);
+}
+
+HL_PRIM bool HL_NAME(__map_string_bytes_exists)( realtime_string_map *map, vbyte *key ) {
+	return hl_hbexists(map, (uchar *)key);
+}
+
+HL_PRIM vbyte *HL_NAME(__map_string_bytes_get)( realtime_string_map *map, vbyte *key ) {
+	vdynamic *dynamic = hl_hbget(map, (uchar *)key);
+	return dynamic == NULL ? NULL : dynamic->v.bytes;
+}
+
 HL_PRIM vbyte *HL_NAME(__string_concat)( vbyte *left, vbyte *right ) {
 	int left_length = left == NULL ? 0 : (int)ustrlen((const uchar *)left);
 	int right_length = right == NULL ? 0 : (int)ustrlen((const uchar *)right);
@@ -194,6 +251,18 @@ DEFINE_PRIM(_ABSTRACT(map_string_i32),__map_string_i32_alloc,_NO_ARG);
 DEFINE_PRIM(_VOID,__map_string_i32_set,_ABSTRACT(map_string_i32) _BYTES _I32);
 DEFINE_PRIM(_BOOL,__map_string_i32_exists,_ABSTRACT(map_string_i32) _BYTES);
 DEFINE_PRIM(_I32,__map_string_i32_get,_ABSTRACT(map_string_i32) _BYTES);
+DEFINE_PRIM(_ABSTRACT(map_string_bool),__map_string_bool_alloc,_NO_ARG);
+DEFINE_PRIM(_VOID,__map_string_bool_set,_ABSTRACT(map_string_bool) _BYTES _BOOL);
+DEFINE_PRIM(_BOOL,__map_string_bool_exists,_ABSTRACT(map_string_bool) _BYTES);
+DEFINE_PRIM(_BOOL,__map_string_bool_get,_ABSTRACT(map_string_bool) _BYTES);
+DEFINE_PRIM(_ABSTRACT(map_string_f64),__map_string_f64_alloc,_NO_ARG);
+DEFINE_PRIM(_VOID,__map_string_f64_set,_ABSTRACT(map_string_f64) _BYTES _F64);
+DEFINE_PRIM(_BOOL,__map_string_f64_exists,_ABSTRACT(map_string_f64) _BYTES);
+DEFINE_PRIM(_F64,__map_string_f64_get,_ABSTRACT(map_string_f64) _BYTES);
+DEFINE_PRIM(_ABSTRACT(map_string_bytes),__map_string_bytes_alloc,_NO_ARG);
+DEFINE_PRIM(_VOID,__map_string_bytes_set,_ABSTRACT(map_string_bytes) _BYTES _BYTES);
+DEFINE_PRIM(_BOOL,__map_string_bytes_exists,_ABSTRACT(map_string_bytes) _BYTES);
+DEFINE_PRIM(_BYTES,__map_string_bytes_get,_ABSTRACT(map_string_bytes) _BYTES);
 DEFINE_PRIM(_BYTES,__string_concat,_BYTES _BYTES);
 DEFINE_PRIM(_I32,__string_length,_BYTES);
 DEFINE_PRIM(_BOOL,__string_equal,_BYTES _BYTES);

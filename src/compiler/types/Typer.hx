@@ -10,6 +10,7 @@ import compiler.Ast.AstClass;
 import compiler.Ast.AstInterface;
 import compiler.Ast.AstEnum;
 import compiler.types.Type.CompilerType;
+import compiler.types.RuntimeType;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedClass;
@@ -469,8 +470,8 @@ class Typer {
 			case NewMap(key, value, span):
 				var loweredKey = lowerType(key),
 					loweredValue = lowerType(value);
-				if (!sameType(loweredKey, TString) || !sameType(loweredValue, TInt))
-					fail("E1016", "Only Map<String,Int> is supported by the compiler runtime", span);
+				if (RuntimeType.mapName(loweredKey, loweredValue) == null)
+					fail("E1016", "Only compiler-owned primitive Map<String,T> specializations are supported", span);
 				new TypedExpression(TNewMap(loweredKey, loweredValue), TMap(loweredKey, loweredValue), span);
 			case Index(array, offset, span):
 				var typedArray = typeExpression(array, scope),
@@ -613,18 +614,20 @@ class Typer {
 			case TMap(key, value): {key: key, value: value};
 			default: throw "Not a map";
 		};
+		if (RuntimeType.mapName(mapType.key, mapType.value) == null)
+			fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
 		if (name == "set") {
 			if (arguments.length != 2)
 				fail("E1008", "Map.set expects a key and value", span);
 			var key = coerce(typeExpression(arguments[0], scope), mapType.key, "map key", "E1002"),
 				value = coerce(typeExpression(arguments[1], scope), mapType.value, "map value", "E1002");
-			return new TypedExpression(TCall("__map_string_i32_set", [receiver, key, value]), TVoid, span);
+			return new TypedExpression(TCall(RuntimeType.mapNative(mapType.key, mapType.value, "set"), [receiver, key, value]), TVoid, span);
 		}
 		if (arguments.length != 1)
 			fail("E1008", 'Map.$name expects one argument', span);
 		var key = coerce(typeExpression(arguments[0], scope), mapType.key, "map key", "E1002");
 		return switch name {
-			case "exists": new TypedExpression(TCall("__map_string_i32_exists", [receiver, key]), TBool, span);
+			case "exists": new TypedExpression(TCall(RuntimeType.mapNative(mapType.key, mapType.value, "exists"), [receiver, key]), TBool, span);
 			case "get": new TypedExpression(TMapGet(receiver, key), mapType.value, span);
 			default:
 				fail("E1007", 'Unknown map method "$name"', span);

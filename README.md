@@ -51,9 +51,12 @@ String addition, equality, `.length`, `indexOf`, and `substring` use the same
 compiler-owned runtime ABI, keeping source code independent from native symbol
 names.
 
-The first compiler-owned map slice is `Map<String,Int>` with construction,
-indexed set/get, `set`, and `exists`; its HashLink abstract type and native
-functions are versioned with the compiler ABI.
+Compiler-owned maps currently cover `Map<String,Int>`, `Map<String,Bool>`,
+`Map<String,Float>`, and `Map<String,String>` with construction, indexed
+set/get, `set`, and `exists`; each HashLink abstract type and native function
+family is versioned with the compiler ABI. Other key/value combinations still
+produce a typed unsupported-ABI diagnostic rather than silently falling back to
+dynamic behavior.
 
 IR values and control-flow blocks have numeric identities independent of
 source names. Functions contain explicit basic blocks terminated by `Return`,

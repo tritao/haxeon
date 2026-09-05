@@ -77,10 +77,18 @@ class Compiler {
 	public function registerNative(name:String, library:String, symbol:String, arguments:Array<CompilerType>, result:CompilerType):Void {
 		if (compiledOnce)
 			throw "Native registrations are frozen after the first compilation";
-		if (name == "__exit" || name == "__array_alloc_i32" || name == "__array_alloc_f64" || name == "__array_alloc_bytes" || name == "__array_alloc_bool"
-			|| name == "__array_alloc_ref" || name == "__map_string_i32_alloc" || name == "__map_string_i32_set" || name == "__map_string_i32_exists"
-			|| name == "__map_string_i32_get" || name == "__string_concat" || name == "__string_length" || name == "__string_equal"
-			|| name == "__string_index_of" || name == "__string_substring")
+		if (name == "__exit"
+			|| name == "__array_alloc_i32"
+			|| name == "__array_alloc_f64"
+			|| name == "__array_alloc_bytes"
+			|| name == "__array_alloc_bool"
+			|| name == "__array_alloc_ref"
+			|| StringTools.startsWith(name, "__map_")
+			|| name == "__string_concat"
+			|| name == "__string_length"
+			|| name == "__string_equal"
+			|| name == "__string_index_of"
+			|| name == "__string_substring")
 			throw 'Native "$name" is reserved by the compiler runtime ABI';
 		if (natives.exists(name))
 			throw 'Native "$name" is already registered';

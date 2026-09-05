@@ -1,6 +1,7 @@
 package compiler.ir;
 
 import compiler.types.Type.CompilerType;
+import compiler.types.RuntimeType;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedFunction;
@@ -88,7 +89,7 @@ class IrGenerator {
 		var program = new IrProgram("__entry");
 		var needsArrayRuntime = false,
 			needsStringRuntime = false,
-			needsMapRuntime = false;
+			mapRuntimeNames:Map<String, Bool> = [];
 		for (fn in functions)
 			for (block in fn.blocks)
 				for (instruction in block.instructions)
@@ -99,8 +100,11 @@ class IrGenerator {
 							if (name == "__string_concat" || name == "__string_length" || name == "__string_equal" || name == "__string_index_of"
 								|| name == "__string_substring")
 								needsStringRuntime = true;
-							if (StringTools.startsWith(name, "__map_string_i32_"))
-								needsMapRuntime = true;
+							if (StringTools.startsWith(name, "__map_")) {
+								var operationStart = name.lastIndexOf("_");
+								if (operationStart > 0)
+									mapRuntimeNames.set(name.substr(2, operationStart - 2), true);
+							}
 						default:
 					}
 		program.objects = objects == null ? [] : objects;
@@ -157,35 +161,41 @@ class IrGenerator {
 				arguments: [Bytes, Bytes],
 				result: Bytes
 			});
-		if (needsMapRuntime) {
-			var mapType = Abstract("map_string_i32");
+		var mapNames = [for (name in mapRuntimeNames.keys()) name];
+		mapNames.sort(Reflect.compare);
+		for (mapName in mapNames) {
+			var valueType = RuntimeType.mapValueType(mapName);
+			if (valueType == null)
+				throw 'Unknown compiler map ABI "$mapName"';
+			var mapType = Abstract(mapName),
+				valueIrType = lowerType(valueType);
 			program.natives.push({
-				name: "__map_string_i32_alloc",
+				name: '__${mapName}_alloc',
 				library: "realtime_runtime",
-				symbol: "__map_string_i32_alloc",
+				symbol: '__${mapName}_alloc',
 				arguments: [],
 				result: mapType
 			});
 			program.natives.push({
-				name: "__map_string_i32_set",
+				name: '__${mapName}_set',
 				library: "realtime_runtime",
-				symbol: "__map_string_i32_set",
-				arguments: [mapType, Bytes, I32],
+				symbol: '__${mapName}_set',
+				arguments: [mapType, Bytes, valueIrType],
 				result: Void
 			});
 			program.natives.push({
-				name: "__map_string_i32_exists",
+				name: '__${mapName}_exists',
 				library: "realtime_runtime",
-				symbol: "__map_string_i32_exists",
+				symbol: '__${mapName}_exists',
 				arguments: [mapType, Bytes],
 				result: Bool
 			});
 			program.natives.push({
-				name: "__map_string_i32_get",
+				name: '__${mapName}_get',
 				library: "realtime_runtime",
-				symbol: "__map_string_i32_get",
+				symbol: '__${mapName}_get',
 				arguments: [mapType, Bytes],
-				result: I32
+				result: valueIrType
 			});
 		}
 		if (needsStringRuntime)
@@ -252,7 +262,12 @@ class IrGenerator {
 					builder.arraySet(lowerExpression(array, builder, localTypes), lowerExpression(index, builder, localTypes),
 						lowerExpression(value, builder, localTypes));
 				case TMapAssign(map, key, value, _):
-					lowerExpression(new TypedExpression(TCall("__map_string_i32_set", [map, key, value]), TVoid, map.span), builder, localTypes);
+					var mapType = switch map.type {
+						case TMap(keyType, valueType): {key: keyType, value: valueType};
+						default: throw "Map assignment requires a map value";
+					};
+					lowerExpression(new TypedExpression(TCall(RuntimeType.mapNative(mapType.key, mapType.value, "set"), [map, key, value]), TVoid, map.span),
+						builder, localTypes);
 				case TReturn(expression, _):
 					builder.returnValue(lowerExpression(expression, builder, localTypes));
 				case TReturnVoid(_):
@@ -416,7 +431,7 @@ class IrGenerator {
 				object;
 			case TNewArray(element, length):
 				builder.call(arrayAllocatorName(element), [lowerExpression(length, builder, localTypes)], Array(lowerType(element)));
-			case TNewMap(_, _): builder.call("__map_string_i32_alloc", [], Abstract("map_string_i32"));
+			case TNewMap(key, value): builder.call(RuntimeType.mapNative(key, value, "alloc"), [], Abstract(RuntimeType.mapName(key, value)));
 			case TField(object, name): builder.fieldGet(lowerExpression(object, builder, localTypes), name, lowerType(expression.type));
 			case TMethodCall(object, name, args):
 				var receiver = lowerExpression(object, builder, localTypes),
@@ -425,10 +440,14 @@ class IrGenerator {
 			case TIndex(array, index):
 				builder.arrayGet(lowerExpression(array, builder, localTypes), lowerExpression(index, builder, localTypes), lowerType(expression.type));
 			case TMapGet(map, key):
-				builder.call("__map_string_i32_get", [
+				var mapType = switch map.type {
+					case TMap(keyType, valueType): {key: keyType, value: valueType};
+					default: throw "Map read requires a map value";
+				};
+				builder.call(RuntimeType.mapNative(mapType.key, mapType.value, "get"), [
 					lowerExpression(map, builder, localTypes),
 					lowerExpression(key, builder, localTypes)
-				], I32);
+				], lowerType(expression.type));
 			case TArrayLength(array):
 				builder.arraySize(lowerExpression(array, builder, localTypes));
 			case TStringLength(value):
@@ -460,7 +479,7 @@ class IrGenerator {
 			case TString: Bytes;
 			case TVoid: Void;
 			case TClass(name): Obj(name);
-			case TMap(_, _): Abstract("map_string_i32");
+			case TMap(key, value): Abstract(RuntimeType.mapName(key, value));
 			case TInterface(name): Virtual(name);
 			case TEnum(_): I32;
 			case TNull: Void;

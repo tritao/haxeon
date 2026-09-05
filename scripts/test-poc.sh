@@ -74,6 +74,7 @@ run_program nullable-basic 42
 run_program object-array 42
 run_program for-in 42
 run_program map-basic 42
+run_program map-primitive-types 42
 run_program loop-control 42
 run_program increment 42
 run_program interface-dispatch 42
