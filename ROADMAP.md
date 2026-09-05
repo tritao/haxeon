@@ -35,8 +35,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   Our HashLink fork now enforces bounds in the JIT. Maps, enums, nullable
   values, and pattern matching are still future work.
 - [~] Prototype-dispatched instance calls and inheritance are live, including
-  stable override slots and arbitrary fixed-arity calls; interface contracts,
-  interface-typed values, and basic generics remain.
+  stable override slots and arbitrary fixed-arity calls; interface declarations
+  and implementation contracts are typed, while interface ABI values and basic
+  generics remain.
 - [ ] A documented runtime library ABI for strings, collections, IO, and time
   (typed `trace` and a native-backed `IntArray` ABI probe are exercised
   end-to-end; the public generic collection ABI remains future work).
