@@ -1347,6 +1347,14 @@ class Typer {
 			case Call(name, arguments, span):
 				if (name == "super")
 					return typeSuperCall(arguments, span, scope);
+				if (name == "String.fromCharCode") {
+					if (arguments.length != 1)
+						fail("E1008", 'Function "String.fromCharCode" expects 1 argument, got ${arguments.length}', span);
+					var code = typeExpression(arguments[0], scope, TInt);
+					if (!sameType(code.type, TInt))
+						fail("E1009", "String.fromCharCode expects an Int code", code.span);
+					return new TypedExpression(TStringFromCharCode(code), TString, span);
+				}
 				var callable = scope.resolve(name);
 				if (callable != null) {
 					var functionType = switch callable {

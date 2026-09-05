@@ -65,6 +65,7 @@ class TestMain {
 		Frontend.compile('function main():Int { var values = [20, 22]; var empty:Array<Int> = []; return values[0] + values[1] + empty.length; }');
 		Frontend.compile('function main():Int { return "A".charCodeAt(0); }');
 		Frontend.compile('function main():Int { return "A".charAt(0) == "A" ? 42 : 0; }');
+		Frontend.compile('function main():Int { return String.fromCharCode(65) == "A" ? 42 : 0; }');
 		Frontend.compile('function values():Array<Int> { var result = []; result.push(42); return result; } function main():Int { return values()[0]; }');
 		new Parser(new Lexer(new SourceFile("expression-block-statements.hx",
 			'function main():Int return if (true) { var value = 0; if (true) value = 21; else value = 0; value + 21; } else 0;')).tokenize()).parseProgram();

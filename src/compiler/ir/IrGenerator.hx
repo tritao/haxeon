@@ -219,7 +219,8 @@ class IrGenerator {
 							if (StringTools.startsWith(name, "__array_"))
 								needsArrayRuntime = true;
 							if (name == "__string_concat" || name == "__string_length" || name == "__string_equal" || name == "__string_index_of"
-								|| name == "__string_char_at" || name == "__string_char_code_at" || name == "__string_substring")
+								|| name == "__string_char_at" || name == "__string_char_code_at" || name == "__string_from_char_code"
+								|| name == "__string_substring")
 								needsStringRuntime = true;
 							if (StringTools.startsWith(name, "__map_")) {
 								var operationStart = name.lastIndexOf("_");
@@ -451,6 +452,14 @@ class IrGenerator {
 				library: "realtime_runtime",
 				symbol: "__string_substring",
 				arguments: [Bytes, I32, I32],
+				result: Bytes
+			});
+		if (needsStringRuntime)
+			program.natives.push({
+				name: "__string_from_char_code",
+				library: "realtime_runtime",
+				symbol: "__string_from_char_code",
+				arguments: [I32],
 				result: Bytes
 			});
 		if (needsStringRuntime)
@@ -1350,6 +1359,8 @@ class IrGenerator {
 					lowerExpression(value, builder, localTypes),
 					lowerExpression(index, builder, localTypes)
 				], Bytes);
+			case TStringFromCharCode(code):
+				builder.call("__string_from_char_code", [lowerExpression(code, builder, localTypes)], Bytes);
 			case TStringSubstring(value, start, end):
 				builder.call("__string_substring", [
 					lowerExpression(value, builder, localTypes),
