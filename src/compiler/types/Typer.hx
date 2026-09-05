@@ -31,6 +31,7 @@ class Typer {
 	final generated:Array<TypedFunction> = [];
 	final generatedClasses:Array<TypedClass> = [];
 	var currentFunctionName:String = "";
+	var loopDepth:Int = 0;
 
 	public static function type(program:AstProgram):TypedProgram
 		return new Typer(null).typeProgram(program, null);
@@ -240,6 +241,14 @@ class Typer {
 					if (result != TVoid)
 						fail("E1003", "Return type mismatch", span);
 					output.push(TReturnVoid(span));
+				case Break(span):
+					if (loopDepth == 0)
+						fail("E1017", "break is only valid inside a loop", span);
+					output.push(TBreak(span));
+				case Continue(span):
+					if (loopDepth == 0)
+						fail("E1017", "continue is only valid inside a loop", span);
+					output.push(TContinue(span));
 				case Assignment(name, expression, span):
 					var dot = name.indexOf("."),
 						value = typeExpression(expression, scope);
@@ -291,13 +300,19 @@ class Typer {
 					var typedCondition = typeExpression(condition, scope);
 					if (!sameType(typedCondition.type, TBool))
 						fail("E1004", "While condition must be Bool", span);
-					output.push(TWhile(typedCondition, typeStatements(body, new Scope(scope), result), span));
+					loopDepth++;
+					var typedBody = typeStatements(body, new Scope(scope), result);
+					loopDepth--;
+					output.push(TWhile(typedCondition, typedBody, span));
 				case ForIn(name, iterable, body, span):
 					var typedIterable = typeExpression(iterable, scope),
 						element = arrayElementType(typedIterable.type, span),
 						loopScope = new Scope(scope);
 					loopScope.define(name, element, span);
-					output.push(TForIn(name, typedIterable, typeStatements(body, loopScope, result), span));
+					loopDepth++;
+					var typedBody = typeStatements(body, loopScope, result);
+					loopDepth--;
+					output.push(TForIn(name, typedIterable, typedBody, span));
 				case Expression(expression, span):
 					output.push(TExpression(typeExpression(expression, scope), span));
 			}
@@ -669,6 +684,7 @@ class Typer {
 				case ForIn(name, _, body, _):
 					names.set(name, true);
 					collectDeclaredLocals(body, names);
+				case Break(_), Continue(_):
 				default:
 			}
 	}
@@ -693,6 +709,7 @@ class Typer {
 				case ForIn(_, iterable, body, _):
 					collectExpressionVariables(iterable, names);
 					collectVariables(body, names);
+				case Break(_), Continue(_):
 			}
 	}
 
@@ -968,7 +985,7 @@ class Typer {
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
 			case VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), If(_, _, _, span),
-				While(_, _, span), ForIn(_, _, _, span), Expression(_, span): span;
+				While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span), Expression(_, span): span;
 		}
 
 	static function fail(code:String, message:String, span:SourceSpan):Void

@@ -61,6 +61,8 @@ enum TypedStatement {
 	TIf(condition:TypedExpression, thenBranch:Array<TypedStatement>, elseBranch:Array<TypedStatement>, span:SourceSpan);
 	TWhile(condition:TypedExpression, body:Array<TypedStatement>, span:SourceSpan);
 	TForIn(name:String, iterable:TypedExpression, body:Array<TypedStatement>, span:SourceSpan);
+	TBreak(span:SourceSpan);
+	TContinue(span:SourceSpan);
 	TExpression(expression:TypedExpression, span:SourceSpan);
 }
 

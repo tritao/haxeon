@@ -42,7 +42,8 @@ Compiler-owned `new Array<Int>(length)`, `new Array<Float>(length)`,
 expressions emit the realtime runtime ABI without requiring source-level native
 registration. Indexed operations and `.length` remain ordinary typed
 expressions and use HashLink's bounds-checked array operations. Array iteration
-with `for (item in values)` lowers to the same checked indexed loop in SSA.
+with `for (item in values)` lowers to the same checked indexed loop in SSA;
+`break` and `continue` retain structured loop targets.
 
 String addition, equality, `.length`, `indexOf`, and `substring` use the same
 compiler-owned runtime ABI, keeping source code independent from native symbol

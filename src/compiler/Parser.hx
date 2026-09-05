@@ -221,6 +221,14 @@ class Parser {
 	}
 
 	function parseStatement():AstStatement {
+		if (match(TokenKind.Break)) {
+			var start = previous().span;
+			return Break(start.merge(consume(TokenKind.Semicolon).span));
+		}
+		if (match(TokenKind.Continue)) {
+			var start = previous().span;
+			return Continue(start.merge(consume(TokenKind.Semicolon).span));
+		}
 		if (match(TokenKind.Var)) {
 			var start = previous().span;
 			var name = consume(TokenKind.Identifier).text;
@@ -608,6 +616,6 @@ class Parser {
 	static function statementSpan(statement:AstStatement)
 		return switch statement {
 			case VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), If(_, _, _, span),
-				While(_, _, span), ForIn(_, _, _, span), Expression(_, span): span;
+				While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span), Expression(_, span): span;
 		}
 }

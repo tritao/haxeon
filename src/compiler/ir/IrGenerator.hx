@@ -6,6 +6,7 @@ import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.ir.Cfg.CfgFunction;
+import compiler.ir.Cfg.CfgBlock;
 import compiler.ir.Cfg.CfgValue;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
@@ -232,7 +233,10 @@ class IrGenerator {
 		return program;
 	}
 
-	static function lowerStatements(statements:Array<TypedStatement>, builder:CfgBuilder, localTypes:Map<String, IrType>):Void {
+	static function lowerStatements(statements:Array<TypedStatement>, builder:CfgBuilder, localTypes:Map<String, IrType>,
+			?loops:Array<{breakBlock:CfgBlock, continueBlock:CfgBlock, breakFlag:String}>):Void {
+		if (loops == null)
+			loops = [];
 		for (statement in statements) {
 			if (builder.isTerminated())
 				break;
@@ -253,38 +257,57 @@ class IrGenerator {
 					builder.returnValue(lowerExpression(expression, builder, localTypes));
 				case TReturnVoid(_):
 					builder.returnVoid();
+				case TBreak(_):
+					if (loops.length == 0)
+						throw "break outside loop";
+					var loop = loops[loops.length - 1];
+					builder.store(loop.breakFlag, builder.constBool(true));
+					builder.jump(loop.continueBlock);
+				case TContinue(_):
+					if (loops.length == 0)
+						throw "continue outside loop";
+					builder.jump(loops[loops.length - 1].continueBlock);
 				case TIf(condition, thenBranch, elseBranch, _):
 					var thenBlock = builder.createBlock(),
 						elseBlock = builder.createBlock(),
 						joinBlock = builder.createBlock();
 					builder.branch(lowerExpression(condition, builder, localTypes), thenBlock, elseBlock);
 					builder.select(thenBlock);
-					lowerStatements(thenBranch, builder, localTypes);
+					lowerStatements(thenBranch, builder, localTypes, loops);
 					var thenActive = !builder.isTerminated();
 					if (thenActive)
 						builder.jump(joinBlock);
 					builder.select(elseBlock);
-					lowerStatements(elseBranch, builder, localTypes);
+					lowerStatements(elseBranch, builder, localTypes, loops);
 					var elseActive = !builder.isTerminated();
 					if (elseActive)
 						builder.jump(joinBlock);
 					if (thenActive || elseActive)
 						builder.select(joinBlock);
-				case TWhile(condition, body, _):
+				case TWhile(condition, body, span):
+					var breakFlag = '$' + 'while-break:' + span.start;
+					localTypes.set(breakFlag, Bool);
+					builder.store(breakFlag, builder.constBool(false));
 					var conditionBlock = builder.createBlock(),
+						checkBlock = builder.createBlock(),
 						bodyBlock = builder.createBlock(),
 						afterBlock = builder.createBlock();
 					builder.jump(conditionBlock);
 					builder.select(conditionBlock);
+					builder.branch(builder.load(breakFlag, Bool), afterBlock, checkBlock);
+					builder.select(checkBlock);
 					builder.branch(lowerExpression(condition, builder, localTypes), bodyBlock, afterBlock);
 					builder.select(bodyBlock);
-					lowerStatements(body, builder, localTypes);
+					loops.push({breakBlock: afterBlock, continueBlock: conditionBlock, breakFlag: breakFlag});
+					lowerStatements(body, builder, localTypes, loops);
+					loops.pop();
 					if (!builder.isTerminated())
 						builder.jump(conditionBlock);
 					builder.select(afterBlock);
 				case TForIn(name, iterable, body, span):
 					var arrayName = '$' + 'for-array:' + span.start,
 						indexName = '$' + 'for-index:' + span.start,
+						breakFlag = '$' + 'for-break:' + span.start,
 						arrayType = lowerType(iterable.type),
 						elementType = switch iterable.type {
 							case TArray(element): lowerType(element);
@@ -292,25 +315,31 @@ class IrGenerator {
 						};
 					localTypes.set(arrayName, arrayType);
 					localTypes.set(indexName, I32);
+					localTypes.set(breakFlag, Bool);
 					localTypes.set(name, elementType);
 					builder.store(arrayName, lowerExpression(iterable, builder, localTypes));
-					builder.store(indexName, builder.constInt(0));
+					builder.store(indexName, builder.constInt(-1));
+					builder.store(breakFlag, builder.constBool(false));
 					var conditionBlock = builder.createBlock(),
+						checkBlock = builder.createBlock(),
 						bodyBlock = builder.createBlock(),
 						afterBlock = builder.createBlock();
 					builder.jump(conditionBlock);
 					builder.select(conditionBlock);
-					var arrayValue = builder.load(arrayName, arrayType),
-						indexValue = builder.load(indexName, I32);
+					builder.branch(builder.load(breakFlag, Bool), afterBlock, checkBlock);
+					builder.select(checkBlock);
+					var indexValue = builder.add(builder.load(indexName, I32), builder.constInt(1));
+					builder.store(indexName, indexValue);
+					var arrayValue = builder.load(arrayName, arrayType);
 					builder.branch(builder.less(indexValue, builder.arraySize(arrayValue)), bodyBlock, afterBlock);
 					builder.select(bodyBlock);
 					var bodyArray = builder.load(arrayName, arrayType),
 						bodyIndex = builder.load(indexName, I32);
 					builder.store(name, builder.arrayGet(bodyArray, bodyIndex, elementType));
-					lowerStatements(body, builder, localTypes);
+					loops.push({breakBlock: afterBlock, continueBlock: conditionBlock, breakFlag: breakFlag});
+					lowerStatements(body, builder, localTypes, loops);
+					loops.pop();
 					if (!builder.isTerminated()) {
-						var nextIndex = builder.add(builder.load(indexName, I32), builder.constInt(1));
-						builder.store(indexName, nextIndex);
 						builder.jump(conditionBlock);
 					}
 					builder.select(afterBlock);
