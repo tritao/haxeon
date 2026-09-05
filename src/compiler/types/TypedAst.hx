@@ -56,6 +56,7 @@ enum TypedExpressionKind {
 	TConditional(condition:TypedExpression, whenTrue:TypedExpression, whenFalse:TypedExpression);
 	TBlockExpression(statements:Array<TypedStatement>, result:TypedExpression);
 	TThrowExpression(expression:TypedExpression);
+	TNoReturn(expression:TypedExpression);
 	TCast(expression:TypedExpression);
 	TSwitchExpression(expression:TypedExpression, cases:Array<TypedSwitchExpressionCase>, defaultExpression:Null<TypedExpression>);
 	TObjectLiteral(name:String, fields:Array<TypedObjectField>);

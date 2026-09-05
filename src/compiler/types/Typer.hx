@@ -42,6 +42,7 @@ class Typer {
 	var context:BodyContext = new BodyContext("");
 	final anonymousTypes:Map<String, Array<compiler.types.Type.AnonymousField>> = [];
 	final genericSpecializations:Map<String, String> = [];
+	final noReturnFunctions:Map<String, Bool> = [];
 
 	public static function type(program:AstProgram):TypedProgram
 		return new Typer(null).typeProgram(program, null, true);
@@ -101,6 +102,7 @@ class Typer {
 				fail("E1000", 'Function "${fn.name}" conflicts with a registered native', fn.span);
 			signatures.set(fn.name, fn);
 		}
+		inferNoReturnFunctions();
 		if (requireMain) {
 			var main = signatures.get("main");
 			if (main == null)
@@ -154,6 +156,54 @@ class Typer {
 			captureEnvironments: generatedEnvironments,
 			anonymousTypes: orderedAnonymousTypes()
 		};
+	}
+
+	function inferNoReturnFunctions():Void {
+		var changed = true;
+		while (changed) {
+			changed = false;
+			for (name => fn in signatures)
+				if (!noReturnFunctions.exists(name) && astStatementsDoNotReturn(fn.statements, name)) {
+					noReturnFunctions.set(name, true);
+					changed = true;
+				}
+		}
+	}
+
+	function astStatementsDoNotReturn(statements:Array<AstStatement>, functionName:String):Bool {
+		for (statement in statements)
+			switch statement {
+				case Throw(_, _):
+					return true;
+				case Expression(Call(name, _, _), _):
+					var resolved = name;
+					if (name.indexOf(".") < 0) {
+						var separator = functionName.lastIndexOf(".");
+						if (separator >= 0)
+							resolved = functionName.substr(0, separator) + "." + name;
+					}
+					if (noReturnFunctions.exists(resolved))
+						return true;
+					return false;
+				case If(_, yes, no, _) if (no.length > 0
+					&& astStatementsDoNotReturn(yes, functionName)
+					&& astStatementsDoNotReturn(no, functionName)):
+					return true;
+				case Switch(_, cases, fallback, hasDefault, _) if (hasDefault && astStatementsDoNotReturn(fallback, functionName)):
+					var allExit = true;
+					for (switchCase in cases)
+						if (!astStatementsDoNotReturn(switchCase.statements, functionName))
+							allExit = false;
+					if (allExit)
+						return true;
+					return false;
+				case VarDeclaration(_, _, _, _), UninitializedDeclaration(_, _, _), Assignment(_, _, _), IndexAssignment(_, _, _, _),
+					FieldAssignment(_, _, _, _), Increment(_, _, _):
+					// Continue through statements which cannot transfer control.
+				default:
+					return false;
+			}
+		return false;
 	}
 
 	function typeClass(classDecl:AstClass, classes:Map<String, AstClass>, selected:Null<Map<String, Bool>>):TypedClass {
@@ -587,7 +637,7 @@ class Typer {
 					else if (!alwaysExits(typedElse))
 						continuing.push(elseScope);
 					scope.mergeAssignmentsFrom(continuing);
-					if (elseBranch.length == 0 && alwaysReturns(typedThen))
+					if (elseBranch.length == 0 && alwaysExits(typedThen))
 						refineAfterGuard(scope, typedCondition);
 				case While(condition, body, span):
 					var typedCondition = typeExpression(condition, scope);
@@ -1456,12 +1506,12 @@ class Typer {
 								method = signatures.get(methodKey),
 								typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span);
 							if (implicitMethod.isStatic)
-								return new TypedExpression(TCall(methodKey, typed), lowerType(method.result), span);
+								return applyCallEffect(new TypedExpression(TCall(methodKey, typed), lowerType(method.result), span), methodKey);
 							var thisType = scope.resolve("this");
 							if (thisType == null)
 								fail("E1007", 'Instance method "$methodKey" requires an object', span);
 							var receiver = new TypedExpression(TLocal("this"), thisType, span);
-							return new TypedExpression(TMethodCall(receiver, methodKey, typed), lowerType(method.result), span);
+							return applyCallEffect(new TypedExpression(TMethodCall(receiver, methodKey, typed), lowerType(method.result), span), methodKey);
 						}
 					}
 					var parts = name.split("."),
@@ -1514,7 +1564,7 @@ class Typer {
 							return new TypedExpression(TCall(specialized.name, specialized.arguments), specialized.result, span);
 						}
 						var typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span);
-						new TypedExpression(TMethodCall(receiver, methodKey, typed), lowerType(method.result), span);
+						applyCallEffect(new TypedExpression(TMethodCall(receiver, methodKey, typed), lowerType(method.result), span), methodKey);
 					} else {
 						var signature = signatures.get(name);
 						if (signature != null && isGeneric(signature)) {
@@ -1533,7 +1583,7 @@ class Typer {
 							fail("E1008", 'Function "$name" expects ${expectedArguments.length} arguments, got ${arguments.length}', span);
 						var typed = signature == null ? typeCallArguments(arguments, expectedArguments, scope,
 							name) : typeDeclaredCallArguments(arguments, signature.arguments, scope, name, span);
-						new TypedExpression(TCall(name, typed), result, span);
+						applyCallEffect(new TypedExpression(TCall(name, typed), result, span), name);
 					}
 				}
 			case MethodCall(object, name, arguments, span): typeMethodCall(object, name, arguments, span, scope);
@@ -1542,6 +1592,9 @@ class Typer {
 	function typeMember(object:AstExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression {
 		return typedMember(typeExpression(object, scope), name, span);
 	}
+
+	function applyCallEffect(call:TypedExpression, name:String):TypedExpression
+		return noReturnFunctions.exists(name) ? new TypedExpression(TNoReturn(call), TNever, call.span) : call;
 
 	function typeSuperCall(arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
 		var separator = context.name.lastIndexOf("."),
@@ -1720,7 +1773,7 @@ class Typer {
 		var methodKey = methodInfoResult.owner + "." + name,
 			method = signatures.get(methodKey),
 			typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span);
-		return new TypedExpression(TMethodCall(receiver, methodKey, typed), lowerType(method.result), span);
+		return applyCallEffect(new TypedExpression(TMethodCall(receiver, methodKey, typed), lowerType(method.result), span), methodKey);
 	}
 
 	function typeStringMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):Null<TypedExpression> {
@@ -2562,6 +2615,8 @@ class Typer {
 			switch statement {
 				case TReturn(_, _), TReturnVoid(_), TThrow(_, _):
 					return true;
+				case TExpression(expression, _) if (expression.type == TNever):
+					return true;
 				case TIf(_, yes, no, _):
 					if (no.length > 0 && alwaysReturns(yes) && alwaysReturns(no))
 						return true;
@@ -2586,6 +2641,8 @@ class Typer {
 		for (statement in statements)
 			switch statement {
 				case TReturn(_, _), TReturnVoid(_), TThrow(_, _), TBreak(_), TContinue(_):
+					return true;
+				case TExpression(expression, _) if (expression.type == TNever):
 					return true;
 				case TIf(_, yes, no, _):
 					if (no.length > 0 && alwaysExits(yes) && alwaysExits(no))
