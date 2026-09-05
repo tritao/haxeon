@@ -132,8 +132,9 @@ class Compiler {
 				programFunctions.push(canonical);
 				owners.set(canonical.name, name);
 				var calls:Map<String, Bool> = [];
+				var aliases:Map<String, String> = [];
 				for (statement in canonical.statements)
-					scanCalls(statement, calls);
+					scanCalls(statement, calls, aliases);
 				for (callee in calls.keys()) {
 					var callers = reverseCalls.get(callee);
 					if (callers == null) {
@@ -158,8 +159,9 @@ class Compiler {
 					});
 					owners.set(canonical.name, name);
 					var calls:Map<String, Bool> = [];
+					var aliases:Map<String, String> = [];
 					for (statement in canonical.statements)
-						scanCalls(statement, calls);
+						scanCalls(statement, calls, aliases);
 					for (callee in calls.keys()) {
 						var callers = reverseCalls.get(callee);
 						if (callers == null) {
@@ -472,34 +474,55 @@ class Compiler {
 			default:
 		}
 
-	static function scanCalls(statement:AstStatement, calls:Map<String, Bool>):Void
+	static function scanCalls(statement:AstStatement, calls:Map<String, Bool>, aliases:Map<String, String>):Void
 		switch statement {
-			case VarDeclaration(_, _, e, _), Assignment(_, e, _), Return(e, _):
-				scanCallExpression(e, calls);
+			case VarDeclaration(name, _, e, _):
+				scanCallExpression(e, calls, aliases);
+				rememberAlias(name, e, aliases);
+			case Assignment(name, e, _):
+				scanCallExpression(e, calls, aliases);
+				rememberAlias(name, e, aliases);
+			case Return(e, _):
+				scanCallExpression(e, calls, aliases);
 			case If(c, y, n, _):
-				scanCallExpression(c, calls);
+				scanCallExpression(c, calls, aliases);
 				for (s in y)
-					scanCalls(s, calls);
+					scanCalls(s, calls, aliases);
 				for (s in n)
-					scanCalls(s, calls);
+					scanCalls(s, calls, aliases);
 			case While(c, b, _):
-				scanCallExpression(c, calls);
+				scanCallExpression(c, calls, aliases);
 				for (s in b)
-					scanCalls(s, calls);
+					scanCalls(s, calls, aliases);
 			case Expression(e, _):
-				scanCallExpression(e, calls);
+				scanCallExpression(e, calls, aliases);
 		}
 
-	static function scanCallExpression(e:AstExpression, calls:Map<String, Bool>):Void
+	static function scanCallExpression(e:AstExpression, calls:Map<String, Bool>, aliases:Map<String, String>):Void
 		switch e {
 			case Call(name, args, _):
-				calls.set(name, true);
+				calls.set(aliases.get(name) == null ? name : aliases.get(name), true);
 				for (a in args)
-					scanCallExpression(a, calls);
+					scanCallExpression(a, calls, aliases);
+			case Variable(name, _):
+				if (name.indexOf(".") >= 0)
+					calls.set(name, true);
 			case Add(a, b, _), Sub(a, b, _), Mul(a, b, _), Div(a, b, _), Less(a, b, _), LessEqual(a, b, _), Equal(a, b, _):
-				scanCallExpression(a, calls);
-				scanCallExpression(b, calls);
+				scanCallExpression(a, calls, aliases);
+				scanCallExpression(b, calls, aliases);
+			case New(_, args, _):
+				for (a in args)
+					scanCallExpression(a, calls, aliases);
 			default:
+		}
+
+	static function rememberAlias(name:String, expression:AstExpression, aliases:Map<String, String>):Void
+		switch expression {
+			case Variable(target, _):
+				var resolved = aliases.get(target);
+				aliases.set(name, resolved == null ? target : resolved);
+			default:
+				aliases.remove(name);
 		}
 
 	static function signatureFingerprint(fn:AstFunction):String

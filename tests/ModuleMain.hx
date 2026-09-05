@@ -129,6 +129,24 @@ class ModuleMain {
 			if (missing.modules.get("Main").diagnostics.length != 1)
 				throw "module did not retain its diagnostic";
 		}
+		var functionValueCompiler = new Compiler();
+		functionValueCompiler.update("Main.hx", "function twice(value:Int):Int { return value * 2; } function main():Int { var f = twice; return f(21); }");
+		var functionValueFirst = functionValueCompiler.compile("Main"),
+			functionValueMain = functionValueCompiler.modules.get("Main").irFunctions.get("main");
+		functionValueCompiler.update("Main.hx", "function twice(value:Int):Int { return value + value; } function main():Int { var f = twice; return f(21); }");
+		var functionValueBody = functionValueCompiler.compile("Main");
+		if (functionValueBody.retyped.join(",") != "Main.twice")
+			throw 'Function-value body edit invalidated ${functionValueBody.retyped}';
+		functionValueCompiler.update("Main.hx", "function twice(value:Float):Int { return 42; } function main():Int { var f = twice; return f(21); }");
+		try {
+			functionValueCompiler.compile("Main");
+			throw "Function-value signature edit was accepted";
+		} catch (error:CompileError) {
+			if (error.diagnostic.code != "E1009")
+				throw error;
+		}
+		if (functionValueFirst.ir.functions.length == 0 || functionValueMain == null)
+			throw "Function-value incremental setup did not compile";
 		Sys.println("PASS: function fingerprints selectively retyped and regenerated cached artifacts");
 	}
 }
