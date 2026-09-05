@@ -120,8 +120,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 - [ ] Build compiler B using A and compare behavior against A.
 - [ ] Check in a reproducible `bootstrap/compiler.hl`.
 - [ ] Build/test in CI from the pinned HashLink fork and formatter version.
-- [ ] Differential suite: official HL and realtime HL must agree on behavior,
-  diagnostics where practical, and reload classifications.
+- [~] Differential suite: four paired programs currently compare official HL
+	and realtime HL behavior in the normal gate; broader collections, diagnostics,
+	and reload-classification coverage remain.
 
 ## Feature order after the current milestone
 
