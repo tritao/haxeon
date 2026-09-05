@@ -76,6 +76,7 @@ run_program enum-payload 42
 run_program nullable-basic 42
 run_program nullable-compound 42
 run_program object-array 42
+run_program array-copy-concat 42
 run_program for-in 42
 run_program map-basic 42
 run_program map-int 42

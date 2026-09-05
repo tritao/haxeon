@@ -55,6 +55,37 @@ HL_PRIM varray *HL_NAME(__array_alloc_ref)( int length ) {
 	return hl_alloc_array(&hlt_dyn, length);
 }
 
+static varray *realtime_array_copy(varray *array) {
+	varray *copy = hl_alloc_array(array->at, array->size);
+	if (array->size > 0)
+		memcpy(hl_aptr(copy, vbyte), hl_aptr(array, vbyte), (size_t)array->size * hl_type_size(array->at));
+	return copy;
+}
+
+static varray *realtime_array_concat(varray *left, varray *right) {
+	if (left->at != right->at)
+		hl_error("Array.concat element type mismatch");
+	varray *result = hl_alloc_array(left->at, left->size + right->size);
+	int stride = hl_type_size(left->at);
+	if (left->size > 0)
+		memcpy(hl_aptr(result, vbyte), hl_aptr(left, vbyte), (size_t)left->size * stride);
+	if (right->size > 0)
+		memcpy(hl_aptr(result, vbyte) + left->size * stride, hl_aptr(right, vbyte), (size_t)right->size * stride);
+	return result;
+}
+
+#define DEFINE_ARRAY_COPY(SUFFIX) \
+HL_PRIM varray *HL_NAME(__array_copy_##SUFFIX)( varray *array ) { return realtime_array_copy(array); } \
+HL_PRIM varray *HL_NAME(__array_concat_##SUFFIX)( varray *left, varray *right ) { return realtime_array_concat(left, right); }
+
+DEFINE_ARRAY_COPY(i32)
+DEFINE_ARRAY_COPY(f64)
+DEFINE_ARRAY_COPY(bytes)
+DEFINE_ARRAY_COPY(bool)
+DEFINE_ARRAY_COPY(ref)
+
+#undef DEFINE_ARRAY_COPY
+
 HL_PRIM realtime_string_map *HL_NAME(__map_string_i32_alloc)( void ) {
 	return hl_hballoc();
 }
@@ -305,6 +336,16 @@ DEFINE_PRIM(_ARR,__array_alloc_f64,_I32);
 DEFINE_PRIM(_ARR,__array_alloc_bytes,_I32);
 DEFINE_PRIM(_ARR,__array_alloc_bool,_I32);
 DEFINE_PRIM(_ARR,__array_alloc_ref,_I32);
+DEFINE_PRIM(_ARR,__array_copy_i32,_ARR);
+DEFINE_PRIM(_ARR,__array_copy_f64,_ARR);
+DEFINE_PRIM(_ARR,__array_copy_bytes,_ARR);
+DEFINE_PRIM(_ARR,__array_copy_bool,_ARR);
+DEFINE_PRIM(_ARR,__array_copy_ref,_ARR);
+DEFINE_PRIM(_ARR,__array_concat_i32,_ARR _ARR);
+DEFINE_PRIM(_ARR,__array_concat_f64,_ARR _ARR);
+DEFINE_PRIM(_ARR,__array_concat_bytes,_ARR _ARR);
+DEFINE_PRIM(_ARR,__array_concat_bool,_ARR _ARR);
+DEFINE_PRIM(_ARR,__array_concat_ref,_ARR _ARR);
 DEFINE_PRIM(_ABSTRACT(map_string_i32),__map_string_i32_alloc,_NO_ARG);
 DEFINE_PRIM(_VOID,__map_string_i32_set,_ABSTRACT(map_string_i32) _BYTES _I32);
 DEFINE_PRIM(_BOOL,__map_string_i32_exists,_ABSTRACT(map_string_i32) _BYTES);

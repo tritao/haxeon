@@ -473,6 +473,7 @@ class IrVerifier {
 			case [Obj(actualName), Obj(expectedName)]: var object = objects.get(actualName); object != null && object.base != null && compatibleType(Obj(object.base),
 					expected, objects, interfaces);
 			case [Virtual(actualName), Virtual(expectedName)]: interfaceExtends(actualName, expectedName, interfaces);
+			case [Array(actualElement), Array(Dyn)]: isReference(actualElement);
 			case [Array(actualElement), Array(expectedElement)]: sameType(actualElement, expectedElement);
 			default: false;
 		};

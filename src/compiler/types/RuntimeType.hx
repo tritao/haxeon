@@ -12,6 +12,23 @@ import compiler.types.Type.CompilerType;
  * end-to-end runtime test.
  */
 class RuntimeType {
+	public static function arrayName(element:CompilerType):Null<String>
+		return switch element {
+			case TInt: "i32";
+			case TFloat: "f64";
+			case TBool: "bool";
+			case TString: "bytes";
+			case TClass(_), TInterface(_), TArray(_), TFunction(_): "ref";
+			default: null;
+		};
+
+	public static function arrayNative(element:CompilerType, operation:String):String {
+		var name = arrayName(element);
+		if (name == null)
+			throw 'Unsupported compiler array ABI for $element';
+		return '__array_${operation}_$name';
+	}
+
 	public static function mapName(key:CompilerType, value:CompilerType):Null<String>
 		return switch [key, value] {
 			case [TString, TInt]: "map_string_i32";

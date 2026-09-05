@@ -86,6 +86,7 @@ class Compiler {
 			|| name == "__array_alloc_bytes"
 			|| name == "__array_alloc_bool"
 			|| name == "__array_alloc_ref"
+			|| StringTools.startsWith(name, "__array_")
 			|| StringTools.startsWith(name, "__map_")
 			|| name == "__string_concat"
 			|| name == "__string_length"

@@ -110,7 +110,7 @@ class IrGenerator {
 				for (instruction in block.instructions)
 					switch instruction {
 						case Call(_, name, _):
-							if (StringTools.startsWith(name, "__array_alloc_"))
+							if (StringTools.startsWith(name, "__array_"))
 								needsArrayRuntime = true;
 							if (name == "__string_concat" || name == "__string_length" || name == "__string_equal" || name == "__string_index_of"
 								|| name == "__string_substring")
@@ -168,6 +168,29 @@ class IrGenerator {
 				arguments: [I32],
 				result: Array(Dyn)
 			});
+			for (entry in [
+				{name: "i32", type: I32},
+				{name: "f64", type: F64},
+				{name: "bytes", type: Bytes},
+				{name: "bool", type: Bool},
+				{name: "ref", type: Dyn}
+			]) {
+				var arrayType = Array(entry.type);
+				program.natives.push({
+					name: '__array_copy_${entry.name}',
+					library: "realtime_runtime",
+					symbol: '__array_copy_${entry.name}',
+					arguments: [arrayType],
+					result: arrayType
+				});
+				program.natives.push({
+					name: '__array_concat_${entry.name}',
+					library: "realtime_runtime",
+					symbol: '__array_concat_${entry.name}',
+					arguments: [arrayType, arrayType],
+					result: arrayType
+				});
+			}
 		}
 		if (needsStringRuntime)
 			program.natives.push({

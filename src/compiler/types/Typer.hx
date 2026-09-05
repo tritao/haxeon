@@ -665,6 +665,8 @@ class Typer {
 						}
 						if (isMap(receiverType))
 							return typeMapMethod(receiver, methodName, arguments, span, scope);
+						if (isArray(receiverType))
+							return typeArrayMethod(receiver, methodName, arguments, span, scope);
 						var className = switch receiverType {
 							case TClass(value), TInterface(value): value;
 							default: null;
@@ -729,6 +731,8 @@ class Typer {
 		}
 		if (isMap(receiver.type))
 			return typeMapMethod(receiver, name, arguments, span, scope);
+		if (isArray(receiver.type))
+			return typeArrayMethod(receiver, name, arguments, span, scope);
 		var className = switch receiver.type {
 			case TClass(value), TInterface(value): value;
 			default: null;
@@ -746,6 +750,31 @@ class Typer {
 			fail("E1008", 'Function "$methodKey" expects ${expected.length} arguments, got ${typed.length}', span);
 		typed = coerceArguments(typed, expected, methodKey);
 		return new TypedExpression(TMethodCall(receiver, methodKey, typed), lowerType(method.result), span);
+	}
+
+	function typeArrayMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
+		var element = switch receiver.type {
+			case TArray(value): value;
+			default: throw "Not an array";
+		};
+		if (RuntimeType.arrayName(element) == null)
+			fail("E1016", "This array element type has no compiler-owned runtime ABI", span);
+		if (name == "copy") {
+			if (arguments.length != 0)
+				fail("E1008", "Array.copy expects no arguments", span);
+			return new TypedExpression(TCall(RuntimeType.arrayNative(element, "copy"), [receiver]), TArray(element), span);
+		}
+		if (name == "concat") {
+			if (arguments.length != 1)
+				fail("E1008", "Array.concat expects one argument", span);
+			var other = typeExpression(arguments[0], scope),
+				otherElement = arrayElementType(other.type, span);
+			if (!sameType(otherElement, element))
+				fail("E1002", "Array.concat expects matching element types", span);
+			return new TypedExpression(TCall(RuntimeType.arrayNative(element, "concat"), [receiver, other]), TArray(element), span);
+		}
+		fail("E1007", 'Unknown array method "$name"', span);
+		return new TypedExpression(TNullLiteral, TVoid, span);
 	}
 
 	function typeMapMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
