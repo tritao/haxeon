@@ -240,12 +240,15 @@ class Parser {
 		}
 		if (check(TokenKind.Identifier) || check(TokenKind.This)) {
 			var saved = position, target = parseExpression();
-			if (match(TokenKind.Assign)) {
+			var assignmentKind = match(TokenKind.Assign) ? 0 : match(TokenKind.PlusAssign) ? 1 : match(TokenKind.MinusAssign) ? 2 : -1;
+			if (assignmentKind >= 0) {
 				var value = parseExpression(),
 					end = consume(TokenKind.Semicolon).span,
+					assigned = assignmentKind == 0 ? value : assignmentKind == 1 ? Add(target, value,
+						expressionSpan(target).merge(expressionSpan(value))) : Sub(target, value, expressionSpan(target).merge(expressionSpan(value))),
 					assignment = switch target {
-						case Variable(name, _): Assignment(name, value, expressionSpan(target).merge(end));
-						case Index(array, offset, _): IndexAssignment(array, offset, value, expressionSpan(target).merge(end));
+						case Variable(name, _): Assignment(name, assigned, expressionSpan(target).merge(end));
+						case Index(array, offset, _): IndexAssignment(array, offset, assigned, expressionSpan(target).merge(end));
 						default:
 							throw new CompileError(new Diagnostic("E0002", "Assignment target must be a variable, field, or array element",
 								expressionSpan(target)));

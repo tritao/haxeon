@@ -5,7 +5,7 @@ function main():Int {
 	values[2] = 12;
 	var total = 0;
 	for (value in values) {
-		total = total + value;
+		total += value;
 	}
 	return total;
 }

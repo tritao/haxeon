@@ -45,6 +45,8 @@ enum TokenKind {
 	Comma;
 	Dot;
 	Assign;
+	PlusAssign;
+	MinusAssign;
 	Plus;
 	Minus;
 	Arrow;

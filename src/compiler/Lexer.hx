@@ -92,11 +92,18 @@ class Lexer {
 				case ">": TokenKind.Greater;
 				case "[": TokenKind.LeftBracket;
 				case "]": TokenKind.RightBracket;
-				case "+": TokenKind.Plus;
+				case "+":
+					if (position < source.length && source.charAt(position) == "=") {
+						position++;
+						TokenKind.PlusAssign;
+					} else TokenKind.Plus;
 				case "-":
 					if (position < source.length && source.charAt(position) == ">") {
 						position++;
 						TokenKind.Arrow;
+					} else if (position < source.length && source.charAt(position) == "=") {
+						position++;
+						TokenKind.MinusAssign;
 					} else TokenKind.Minus;
 				case "*": TokenKind.Star;
 				case "/": TokenKind.Slash;
