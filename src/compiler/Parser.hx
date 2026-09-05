@@ -461,6 +461,15 @@ class Parser {
 		return [Expression(expression, expressionSpan(expression))];
 	}
 
+	function parseAnonymousFunctionBody():Array<AstStatement> {
+		if (!check(TokenKind.LeftBrace) && match(TokenKind.Return)) {
+			var start = previous().span, value = parseExpression();
+			match(TokenKind.Semicolon);
+			return [Return(value, start.merge(expressionSpan(value)))];
+		}
+		return parseStatementOrBlock();
+	}
+
 	function parseStatements():Array<AstStatement> {
 		if (!check(TokenKind.Var))
 			return [parseStatement()];
@@ -600,6 +609,29 @@ class Parser {
 			}
 			var value = parsePrimary();
 			return Cast(value, null, start.merge(expressionSpan(value)));
+		}
+		if (match(TokenKind.Function)) {
+			var start = previous().span;
+			consume(TokenKind.LeftParen);
+			var arguments = [];
+			if (!check(TokenKind.RightParen))
+				do {
+					var optional = match(TokenKind.Question),
+						argument = consume(TokenKind.Identifier),
+						type = match(TokenKind.Colon) ? parseType() : InferredType,
+						defaultValue = match(TokenKind.Assign) ? parseExpression() : null;
+					arguments.push({
+						name: argument.text,
+						type: type,
+						span: argument.span.merge(previous().span),
+						optional: optional || defaultValue != null,
+						defaultValue: defaultValue
+					});
+				} while (match(TokenKind.Comma));
+			consume(TokenKind.RightParen);
+			var body = parseAnonymousFunctionBody(),
+				end = body.length == 0 ? previous().span : statementSpan(body[body.length - 1]);
+			return Lambda(arguments, body, start.merge(end));
 		}
 		if (match(TokenKind.If)) {
 			var start = previous().span;

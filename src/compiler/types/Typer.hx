@@ -789,7 +789,9 @@ class Typer {
 						declared:Map<String, Bool> = [];
 					for (i in 0...arguments.length) {
 						var argument = arguments[i];
-						var argumentType = lowerType(argument.type);
+						var argumentType = argument.type == InferredType ? (expectedFunction == null ? null : expectedFunction.arguments[i]) : lowerType(argument.type);
+						if (argumentType == null)
+							fail("E1003", 'Cannot infer lambda parameter "${argument.name}" without a function context', argument.span);
 						if (expectedFunction != null && !TypeRelations.equals(argumentType, expectedFunction.arguments[i]))
 							fail("E1003", "Lambda argument type does not match its context", argument.span);
 						lambdaScope.define(argument.name, argumentType, argument.span);
@@ -1155,8 +1157,7 @@ class Typer {
 					expected = constructor == null ? [] : [for (argument in constructor.arguments) lowerType(argument.type)];
 				if (arguments.length != expected.length)
 					fail("E1008", 'Constructor "$typeName" expects ${expected.length} arguments, got ${arguments.length}', span);
-				var typed = [for (argument in arguments) typeExpression(argument, scope)];
-				typed = coerceArguments(typed, expected, typeName + ".new");
+				var typed = typeCallArguments(arguments, expected, scope, typeName + ".new");
 				new TypedExpression(TNew(typeName, typed, constructor != null || implicitConstructor), TClass(typeName), span);
 			case NewArray(element, length, span):
 				var typedLength = typeExpression(length, scope);
@@ -1192,9 +1193,12 @@ class Typer {
 					};
 					if (functionType == null)
 						fail("E1007", 'Cannot call non-function "$name"', span);
-					var typed = [for (argument in arguments) typeExpression(argument, scope)];
-					if (typed.length != functionType.arguments.length)
-						fail("E1008", 'Function value "$name" expects ${functionType.arguments.length} arguments, got ${typed.length}', span);
+					if (arguments.length != functionType.arguments.length)
+						fail("E1008", 'Function value "$name" expects ${functionType.arguments.length} arguments, got ${arguments.length}', span);
+					var typed = [
+						for (i in 0...arguments.length)
+							typeExpression(arguments[i], scope, functionType.arguments[i])
+					];
 					typed = coerceArguments(typed, functionType.arguments, name);
 					new TypedExpression(TClosureCall(new TypedExpression(TLocal(scope.resolveId(name)), callable, span), typed), functionType.result, span);
 				} else {
@@ -1215,7 +1219,7 @@ class Typer {
 						var required = requiredEnumParameters(enumCase.params);
 						if (arguments.length < required || arguments.length > expected.length)
 							fail("E1008", 'Enum constructor "$name" expects $required to ${expected.length} arguments, got ${arguments.length}', span);
-						var typedArguments = [for (argument in arguments) typeExpression(argument, scope)];
+						var typedArguments = [for (i in 0...arguments.length) typeExpression(arguments[i], scope, expected[i])];
 						while (typedArguments.length < expected.length)
 							typedArguments.push(new TypedExpression(TNullLiteral, TNull, span));
 						typedArguments = coerceArguments(typedArguments, expected, name);
@@ -1253,18 +1257,18 @@ class Typer {
 						if (methodInfoResult == null || methodInfoResult.isStatic)
 							fail("E1007", 'Unknown instance method "$className.$methodName"', span);
 						var methodKey = methodInfoResult.owner + "." + methodName;
-						var method = signatures.get(methodKey),
-							typed = [for (argument in arguments) typeExpression(argument, scope)];
+						var method = signatures.get(methodKey);
 						if (isGeneric(method)) {
 							if (!methodInfoResult.isStatic)
 								fail("E1007", "Generic instance methods are not supported yet", span);
-							var specialized = specializeGeneric(methodKey, method, typed, span, methodInfoResult.owner, true);
+							var genericArguments = [for (argument in arguments) typeExpression(argument, scope)];
+							var specialized = specializeGeneric(methodKey, method, genericArguments, span, methodInfoResult.owner, true);
 							return new TypedExpression(TCall(specialized.name, specialized.arguments), specialized.result, span);
 						}
 						var expected = [for (argument in method.arguments) lowerType(argument.type)];
-						if (typed.length != expected.length)
-							fail("E1008", 'Function "$methodKey" expects ${expected.length} arguments, got ${typed.length}', span);
-						typed = coerceArguments(typed, expected, methodKey);
+						if (arguments.length != expected.length)
+							fail("E1008", 'Function "$methodKey" expects ${expected.length} arguments, got ${arguments.length}', span);
+						var typed = typeCallArguments(arguments, expected, scope, methodKey);
 						new TypedExpression(TMethodCall(receiver, methodKey, typed), lowerType(method.result), span);
 					} else {
 						var signature = signatures.get(name);
@@ -1282,8 +1286,7 @@ class Typer {
 							fail("E1007", 'Unknown function "$name"', span);
 						if (arguments.length != expectedArguments.length)
 							fail("E1008", 'Function "$name" expects ${expectedArguments.length} arguments, got ${arguments.length}', span);
-						var typed = [for (argument in arguments) typeExpression(argument, scope)];
-						typed = coerceArguments(typed, expectedArguments, name);
+						var typed = typeCallArguments(arguments, expectedArguments, scope, name);
 						new TypedExpression(TCall(name, typed), result, span);
 					}
 				}
@@ -1988,6 +1991,11 @@ class Typer {
 		for (i in 0...arguments.length)
 			output.push(coerce(arguments[i], expected[i], 'argument ${i + 1} to "$name"'));
 		return output;
+	}
+
+	function typeCallArguments(arguments:Array<AstExpression>, expected:Array<CompilerType>, scope:Scope, name:String):Array<TypedExpression> {
+		var typed = [for (i in 0...arguments.length) typeExpression(arguments[i], scope, expected[i])];
+		return coerceArguments(typed, expected, name);
 	}
 
 	function coerce(value:TypedExpression, expected:CompilerType, context:String, code:String = "E1009"):TypedExpression {
