@@ -146,13 +146,13 @@ class IrVerifier {
 				define(values, out);
 			case FieldGet(out, object, fieldName):
 				var objectType = requireObject(object, values, objects),
-					field = findField(objectType, fieldName);
+					field = findField(objectType, fieldName, objects);
 				if (field == null || !sameType(out.type, field.type))
 					throw 'Unknown or mismatched IR field "${objectType.name}.$fieldName"';
 				define(values, out);
 			case FieldSet(object, fieldName, value):
 				var objectType = requireObject(object, values, objects),
-					field = findField(objectType, fieldName);
+					field = findField(objectType, fieldName, objects);
 				if (field == null || !sameType(field.type, value.type))
 					throw 'Unknown or mismatched IR field "${objectType.name}.$fieldName"';
 				require(values, value);
@@ -176,10 +176,15 @@ class IrVerifier {
 			default: false;
 		};
 
-	static function findField(object:IrObject, name:String):Null<IrObjectField> {
+	static function findField(object:IrObject, name:String, objects:Map<String, IrObject>):Null<IrObjectField> {
 		for (field in object.fields)
 			if (field.name == name)
 				return field;
+		if (object.base != null) {
+			var base = objects.get(object.base);
+			if (base != null)
+				return findField(base, name, objects);
+		}
 		return null;
 	}
 

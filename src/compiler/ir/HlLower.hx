@@ -44,9 +44,19 @@ class HlLower {
 	}
 
 	function lowerProgram(program:IrProgram):HlCode {
-		for (object in program.objects) {
-			objects.set(object.name, object);
-			objectTypeIndices.set(object.name, symbols.internObject(object));
+		var pending = program.objects.copy();
+		while (pending.length > 0) {
+			var progressed = false;
+			for (object in pending.copy()) {
+				if (object.base != null && !objectTypeIndices.exists(object.base) && symbols.typeIndex('obj:${object.base}') == null)
+					continue;
+				objects.set(object.name, object);
+				objectTypeIndices.set(object.name, symbols.internObject(object));
+				pending.remove(object);
+				progressed = true;
+			}
+			if (!progressed)
+				throw 'Unable to order object bases';
 		}
 		if (functionIndices.keys().hasNext() == false) {
 			var nextFunction = 0;
@@ -268,10 +278,33 @@ class HlLower {
 		var descriptor = objects.get(typeName);
 		if (descriptor == null)
 			throw 'Unknown IR object "$typeName"';
+		var offset = descriptor.base == null ? 0 : objectFieldCount(descriptor.base);
 		for (index in 0...descriptor.fields.length)
 			if (descriptor.fields[index].name == name)
-				return index;
+				return offset + index;
+		if (descriptor.base != null)
+			return requireObjectFieldByType(descriptor.base, name);
 		throw 'Unknown IR field "$typeName.$name"';
+	}
+
+	function requireObjectFieldByType(typeName:String, name:String):Int {
+		var descriptor = objects.get(typeName);
+		if (descriptor == null)
+			throw 'Unknown IR object "$typeName"';
+		var offset = descriptor.base == null ? 0 : objectFieldCount(descriptor.base);
+		for (index in 0...descriptor.fields.length)
+			if (descriptor.fields[index].name == name)
+				return offset + index;
+		if (descriptor.base != null)
+			return requireObjectFieldByType(descriptor.base, name);
+		throw 'Unknown IR field "$typeName.$name"';
+	}
+
+	function objectFieldCount(typeName:String):Int {
+		var descriptor = objects.get(typeName);
+		if (descriptor == null)
+			throw 'Unknown IR object "$typeName"';
+		return descriptor.fields.length + (descriptor.base == null ? 0 : objectFieldCount(descriptor.base));
 	}
 
 	function addFunctionName(name:String, index:Int):Void {

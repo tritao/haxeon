@@ -76,12 +76,18 @@ class HlSymbolTable {
 			for (field in object.fields)
 				{name: internString(field.name), type: internType(field.type)}
 		], index = types.length, global = globals.length + 1;
-		types.push(Object(internString(object.name), -1, global, fields, [], []));
+		var base = object.base == null ? -1 : typeIndices.get('obj:${object.base}');
+		if (object.base != null && base == null)
+			throw 'Object base "${object.base}" must be registered before "${object.name}"';
+		types.push(Object(internString(object.name), base == null ? -1 : base, global, fields, [], []));
 		objectIndices.set(object.name, index);
 		typeIndices.set('obj:${object.name}', index);
 		globals.push(index);
 		return index;
 	}
+
+	public function typeIndex(key:String):Null<Int>
+		return typeIndices.get(key);
 
 	public function internFunction(arguments:Array<IrType>, result:IrType):Int {
 		var key = 'fun(${[for (a in arguments) typeKey(a)].join(",")})->${typeKey(result)}',

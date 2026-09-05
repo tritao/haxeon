@@ -270,10 +270,13 @@ class Typer {
 		switch type {
 			case TClass(className):
 				var classDecl = classDecls.get(className);
-				if (classDecl != null)
+				if (classDecl != null) {
 					for (field in classDecl.fields)
 						if (field.name == name && !field.isStatic)
 							return lowerType(field.type);
+					if (classDecl.base != null)
+						return fieldType(TClass(classDecl.base), name, span);
+				}
 				fail("E1005", 'Unknown field "$className.$name"', span);
 			default:
 				fail("E1005", 'Field "$name" requires an object', span);
