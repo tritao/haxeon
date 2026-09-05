@@ -73,10 +73,6 @@ class Runtime {
 		RuntimeNative.dispose(cast module);
 
 	public static function patchSet(module:LoadedModule, patch:PatchSet):Void {
-		if (patch.requiresReload)
-			throw new RuntimeError(RuntimeStatus.Incompatible, "Patch changes module structure and requires a domain reload");
-		if (patch.changedFunctions.length == 0)
-			return;
 		var status:RuntimeStatus = RuntimeNative.patch(cast module, patch.bytes.getData(), patch.bytes.length);
 		if (status != RuntimeStatus.Ok) {
 			var statusCode:Int = status;

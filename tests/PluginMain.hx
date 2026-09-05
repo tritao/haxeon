@@ -35,7 +35,7 @@ class PluginMain {
 		var bodyEdit = compiler.compile("Main");
 		if (bodyEdit.requiresReload || bodyEdit.patchBytes == null || bodyEdit.changedFunctions.length == 0)
 			throw "Plugin body edit did not produce a compatible patch";
-		Runtime.patchSet(live, new PatchSet(first.revision, bodyEdit.revision, bodyEdit.patchBytes, bodyEdit.changedFunctions, false));
+		Runtime.patchSet(live, new PatchSet(first.revision, bodyEdit.revision, bodyEdit.patchBytes, bodyEdit.changedFunctions));
 		if (Runtime.callInt(live, mainId) != 42)
 			throw "Patched plugin module did not execute through the live runtime";
 

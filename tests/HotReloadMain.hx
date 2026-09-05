@@ -24,6 +24,7 @@ import runtime.PatchSet;
 
 class HotReloadMain {
 	static function main():Void {
+		testPatchContract();
 		testDecodedIrLifetime();
 		testBackendStateLifetime();
 		testLiveAbiPatchMatrix();
@@ -83,13 +84,13 @@ class HotReloadMain {
 			hashPosition = skipIndex(corruptHash, 24);
 		corruptHash.set(hashPosition, corruptHash.get(hashPosition) ^ 1);
 		try {
-			Runtime.patchSet(loaded, new PatchSet(liveRevision, changed.revision, corruptHash, changed.changedFunctions, false));
+			Runtime.patchSet(loaded, new PatchSet(liveRevision, changed.revision, corruptHash, changed.changedFunctions));
 			throw "mismatched symbol prefix unexpectedly succeeded";
 		} catch (error:RuntimeError) {
 			if (error.status != RuntimeStatus.Incompatible)
 				throw error;
 		}
-		Runtime.patchSet(loaded, new PatchSet(liveRevision, changed.revision, changed.patchBytes, changed.changedFunctions, changed.requiresReload));
+		Runtime.patchSet(loaded, new PatchSet(liveRevision, changed.revision, changed.patchBytes, changed.changedFunctions));
 		liveRevision = changed.revision;
 		if (Runtime.patchJitCount(loaded) != 1)
 			throw "one-function patch did not JIT exactly one function";
@@ -124,8 +125,7 @@ class HotReloadMain {
 			}
 		if (!hasTrap || !hasThrow || !hasSafeCast || !hasRethrow || !hasType)
 			throw "typed exception HLP omitted trap, throw, type, cast, or rethrow opcodes";
-		Runtime.patchSet(loaded,
-			new PatchSet(liveRevision, exceptionPatch.revision, exceptionPatch.patchBytes, exceptionPatch.changedFunctions, exceptionPatch.requiresReload));
+		Runtime.patchSet(loaded, new PatchSet(liveRevision, exceptionPatch.revision, exceptionPatch.patchBytes, exceptionPatch.changedFunctions));
 		liveRevision = exceptionPatch.revision;
 		if (Runtime.callInt(loaded, exceptionIndex) != 42)
 			throw "hot-patched exception handler did not execute";
@@ -135,8 +135,7 @@ class HotReloadMain {
 			var expected = 44 + (i & 1);
 			compiler.update("Value.hx", 'function value():Int { return $expected; }');
 			var iteration = compiler.compile("Main");
-			Runtime.patchSet(loaded,
-				new PatchSet(liveRevision, iteration.revision, iteration.patchBytes, iteration.changedFunctions, iteration.requiresReload));
+			Runtime.patchSet(loaded, new PatchSet(liveRevision, iteration.revision, iteration.patchBytes, iteration.changedFunctions));
 			liveRevision = iteration.revision;
 			if (Runtime.callInt(loaded, readIndex) != expected)
 				throw 'stress patch $i returned the wrong value';
@@ -157,7 +156,7 @@ class HotReloadMain {
 				hasRelocation = true;
 		if (!hasRelocation)
 			throw "patched calls were not encoded as stable-ID relocations";
-		Runtime.patchSet(loaded, new PatchSet(liveRevision, pair.revision, pair.patchBytes, pair.changedFunctions, pair.requiresReload));
+		Runtime.patchSet(loaded, new PatchSet(liveRevision, pair.revision, pair.patchBytes, pair.changedFunctions));
 		liveRevision = pair.revision;
 		if (Runtime.patchJitCount(loaded) - beforePair != 2)
 			throw "two-function patch did not JIT exactly two functions";
@@ -175,8 +174,7 @@ class HotReloadMain {
 		Sys.sleep(0.01);
 		compiler.update("Value.hx", "function value():Int { return 47; }");
 		var concurrentPatch = compiler.compile("Main");
-		Runtime.patchSet(loaded,
-			new PatchSet(liveRevision, concurrentPatch.revision, concurrentPatch.patchBytes, concurrentPatch.changedFunctions, concurrentPatch.requiresReload));
+		Runtime.patchSet(loaded, new PatchSet(liveRevision, concurrentPatch.revision, concurrentPatch.patchBytes, concurrentPatch.changedFunctions));
 		liveRevision = concurrentPatch.revision;
 		if (!finished.wait(5.0) || workerResult != 39088169)
 			throw "concurrent call did not finish safely";
@@ -192,7 +190,7 @@ class HotReloadMain {
 			throw "compile failure damaged the live generation";
 
 		try {
-			Runtime.patchSet(loaded, new PatchSet(liveRevision, liveRevision + 1, haxe.io.Bytes.ofString("not HLP"), [valueIndex], false));
+			Runtime.patchSet(loaded, new PatchSet(liveRevision, liveRevision + 1, haxe.io.Bytes.ofString("not HLP"), [valueIndex]));
 			throw "malformed patch unexpectedly succeeded";
 		} catch (error:RuntimeError) {
 			if (error.status != RuntimeStatus.BadFormat)
@@ -202,8 +200,7 @@ class HotReloadMain {
 			throw "rejected patch damaged the live generation";
 
 		try {
-			Runtime.patchSet(loaded,
-				new PatchSet(liveRevision - 1, concurrentPatch.revision, concurrentPatch.patchBytes, concurrentPatch.changedFunctions, false));
+			Runtime.patchSet(loaded, new PatchSet(liveRevision - 1, concurrentPatch.revision, concurrentPatch.patchBytes, concurrentPatch.changedFunctions));
 			throw "stale patch unexpectedly succeeded";
 		} catch (error:RuntimeError) {
 			if (error.status != RuntimeStatus.StalePatch)
@@ -211,16 +208,6 @@ class HotReloadMain {
 		}
 		if (Runtime.callInt(loaded, valueIndex) != 47)
 			throw "stale patch damaged the live generation";
-
-		try {
-			Runtime.patchSet(loaded, new PatchSet(liveRevision, liveRevision + 1, concurrentPatch.patchBytes, [valueIndex], true));
-			throw "structural patch unexpectedly succeeded";
-		} catch (error:RuntimeError) {
-			if (error.status != RuntimeStatus.Incompatible)
-				throw error;
-		}
-		if (Runtime.callInt(loaded, valueIndex) != 47)
-			throw "structural rejection damaged the live generation";
 
 		var foreign = new Compiler();
 		foreign.update("Value.hx", "function value():Int { return 47; }");
@@ -230,7 +217,7 @@ class HotReloadMain {
 		foreign.update("Value.hx", "function value():Int { return 99; }");
 		var foreignPatch = foreign.compile("Main");
 		try {
-			Runtime.patchSet(loaded, new PatchSet(liveRevision, liveRevision + 1, foreignPatch.patchBytes, foreignPatch.changedFunctions, false));
+			Runtime.patchSet(loaded, new PatchSet(liveRevision, liveRevision + 1, foreignPatch.patchBytes, foreignPatch.changedFunctions));
 			throw "foreign-module patch unexpectedly succeeded";
 		} catch (error:RuntimeError) {
 			if (error.status != RuntimeStatus.Incompatible)
@@ -242,6 +229,20 @@ class HotReloadMain {
 		testAppendedFloatAndStringSymbols();
 		testNonMovingTypeArena();
 		Sys.println("PASS: selective HLP patches are atomic and retain bounded JIT code");
+	}
+
+	static function testPatchContract():Void {
+		var ids = [7], patch = new PatchSet(1, 2, haxe.io.Bytes.ofString("HLP"), ids);
+		ids[0] = 9;
+		if (patch.changedFunctions[0] != 7)
+			throw "patch contract retained caller-owned function identities";
+		try {
+			new PatchSet(2, 2, haxe.io.Bytes.ofString("HLP"), [7]);
+			throw "patch contract accepted a non-advancing revision";
+		} catch (error:RuntimeError) {
+			if (error.status != RuntimeStatus.BadArgument)
+				throw error;
+		}
 	}
 
 	static function testLiveAbiPatchMatrix():Void {
@@ -282,7 +283,7 @@ class HotReloadMain {
 			var changed = compiler.compile("Main");
 			if (changed.requiresReload || changed.patchBytes == null || changed.changedFunctions.length == 0)
 				throw '${fixture.name}: compiler did not emit a body patch';
-			Runtime.patchSet(loaded, new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions, changed.requiresReload));
+			Runtime.patchSet(loaded, new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
 			if (Runtime.callInt(loaded, mainId) != 42)
 				throw '${fixture.name}: live runtime did not execute the patched behavior';
 			Runtime.dispose(loaded);
@@ -315,7 +316,7 @@ class HotReloadMain {
 			|| changed.changedFunctions[0] == helperId
 			|| changed.patchBytes == null)
 			throw "Restarted compiler did not emit one revision-2 body patch";
-		Runtime.patchSet(loaded, new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions, false));
+		Runtime.patchSet(loaded, new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
 		resumed.acknowledgePublication(changed.revision);
 		if (Runtime.callInt(loaded, mainId) != 42)
 			throw "Surviving runtime did not execute the restarted compiler patch";
@@ -402,7 +403,7 @@ class HotReloadMain {
 			code.types.push(Function([1], 1));
 			code.functions = [new HlFunction(2, 0, [1, baseTypes], [LoadInt(0, 0), Return(0)])];
 			var patch = HlPatchWriter.encode(code, moduleId, [0], bySlot, revision, revision + 1, 1, 0, 0, baseTypes);
-			Runtime.patchSet(loaded, new PatchSet(revision, revision + 1, patch, [71000], false));
+			Runtime.patchSet(loaded, new PatchSet(revision, revision + 1, patch, [71000]));
 			revision++;
 			if (Runtime.callInt(loaded, 71000) != 42)
 				throw 'type arena patch $i damaged the live function';
@@ -411,7 +412,7 @@ class HotReloadMain {
 		code.types.push(Function([999999], 1));
 		var invalid = HlPatchWriter.encode(code, moduleId, [0], bySlot, revision, revision + 1, 1, 0, 0, baseTypes);
 		try {
-			Runtime.patchSet(loaded, new PatchSet(revision, revision + 1, invalid, [71000], false));
+			Runtime.patchSet(loaded, new PatchSet(revision, revision + 1, invalid, [71000]));
 			throw "invalid appended type unexpectedly succeeded";
 		} catch (error:RuntimeError) {
 			if (error.status != RuntimeStatus.Incompatible)
@@ -451,7 +452,7 @@ class HotReloadMain {
 			new HlFunction(4, 0, [2, 3, 1], [LoadFloat(0, 0), LoadString(1, 0), LoadInt(2, 1), Return(2)])
 		];
 		var bytes = HlPatchWriter.encode(code, moduleId, [0], bySlot, 1, 2, 1, 0, 0, 5);
-		Runtime.patchSet(loaded, new PatchSet(1, 2, bytes, [70000], false));
+		Runtime.patchSet(loaded, new PatchSet(1, 2, bytes, [70000]));
 		if (Runtime.callInt(loaded, 70000) != 2)
 			throw "patch using appended float and string symbols returned the wrong value";
 		var revision = 2;
@@ -471,7 +472,7 @@ class HotReloadMain {
 				])
 			];
 			var patch = HlPatchWriter.encode(code, moduleId, [0], bySlot, revision, revision + 1, baseInts, baseFloats, baseStrings, 5);
-			Runtime.patchSet(loaded, new PatchSet(revision, revision + 1, patch, [70000], false));
+			Runtime.patchSet(loaded, new PatchSet(revision, revision + 1, patch, [70000]));
 			revision++;
 			if (Runtime.callInt(loaded, 70000) != 3 + i)
 				throw 'non-integer symbol stress patch $i returned the wrong value';

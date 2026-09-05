@@ -18,7 +18,7 @@ class StaticFieldMain {
 		var changed = compiler.compile("Main");
 		if (changed.requiresReload || changed.patchBytes == null)
 			throw "Static field body edit did not produce a compatible patch";
-		Runtime.patchSet(live, new PatchSet(first.revision, changed.revision, changed.patchBytes, changed.changedFunctions, false));
+		Runtime.patchSet(live, new PatchSet(first.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
 		if (Runtime.callInt(live, mainId) != 43)
 			throw "Static global state was not retained across a body patch";
 		Runtime.dispose(live);
