@@ -33,12 +33,11 @@ class Typer {
 	var enumDecls:Map<String, AstEnum> = [];
 	final generated:Array<TypedFunction> = [];
 	final generatedClasses:Array<TypedClass> = [];
+	final lambdaCache:Map<String, TypedExpression> = [];
 	var currentFunctionName:String = "";
-	// Captures are currently copied into a closure environment.  Keep a
-	// function-wide record of locals that are assigned so we can reject a
-	// capture whose value would otherwise become stale after the closure is
-	// created.  Mutable capture cells will replace this guard later.
 	var currentAssigned:Map<String, Bool> = [];
+	var currentCells:Map<String, String> = [];
+	var currentCellTypes:Map<String, CompilerType> = [];
 	var loopDepth:Int = 0;
 
 	public static function type(program:AstProgram):TypedProgram
@@ -218,9 +217,21 @@ class Typer {
 	function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool = false):TypedFunction {
 		var previousFunctionName = currentFunctionName;
 		var previousAssigned = currentAssigned;
+		var previousCells = currentCells;
+		var previousCellTypes = currentCellTypes;
 		currentFunctionName = owner == null ? fn.name : owner + "." + fn.name;
 		currentAssigned = [];
 		collectAssignedLocals(fn.statements, currentAssigned);
+		currentCells = [];
+		currentCellTypes = [];
+		var declared:Map<String, Bool> = [];
+		for (argument in fn.arguments)
+			declared.set(argument.name, true);
+		collectDeclaredLocals(fn.statements, declared);
+		var mutableCandidates:Map<String, Bool> = [];
+		collectMutableCaptureCandidates(fn.statements, declared, mutableCandidates);
+		for (name in mutableCandidates.keys())
+			currentCells.set(name, '$' + 'cell:' + currentFunctionName + ':' + name);
 		var scope = new Scope();
 		var isConstructor = owner != null && fn.name == "new";
 		if (owner != null && !isStatic)
@@ -229,6 +240,8 @@ class Typer {
 		for (argument in fn.arguments) {
 			var type = lowerType(argument.type);
 			scope.define(argument.name, type, argument.span);
+			if (currentCells.exists(argument.name))
+				currentCellTypes.set(argument.name, type);
 			arguments.push({name: argument.name, type: type});
 		}
 		var result = lowerType(fn.result);
@@ -243,10 +256,34 @@ class Typer {
 			arguments: arguments,
 			result: result,
 			statements: statements,
+			cells: currentCells.copy(),
+			cellCaptures: [],
 			span: fn.span
 		};
+		for (name in currentCells.keys()) {
+			var cellType = currentCellTypes.get(name);
+			if (cellType != null)
+				generatedClasses.push({
+					name: currentCells.get(name),
+					base: null,
+					interfaces: [],
+					fields: [
+						{
+							name: "value",
+							type: cellType,
+							isStatic: false,
+							isFinal: false,
+							span: fn.span
+						}
+					],
+					methods: [],
+					span: fn.span
+				});
+		}
 		currentFunctionName = previousFunctionName;
 		currentAssigned = previousAssigned;
+		currentCells = previousCells;
+		currentCellTypes = previousCellTypes;
 		return resultFunction;
 	}
 
@@ -265,6 +302,8 @@ class Typer {
 						fail("E1002", 'Null requires an explicit nullable type for local "$name"', span);
 					}
 					scope.define(name, value.type, span);
+					if (currentCells.exists(name))
+						currentCellTypes.set(name, value.type);
 					output.push(TVar(name, value, span));
 				case Return(expression, span):
 					var value = typeExpression(expression, scope);
@@ -286,7 +325,14 @@ class Typer {
 					var current = scope.resolve(name);
 					if (current == null || (!sameType(current, TInt) && !sameType(current, TFloat)))
 						fail("E1018", 'Increment requires a numeric local "$name"', span);
-					output.push(TIncrement(name, delta, span));
+					if (scope.isCapture(name)) {
+						if (!scope.isCellCapture(name))
+							fail("E1013", 'Captured variable "$name" requires mutable capture cells', span);
+						output.push(TCellCapturedIncrement(name, scope.cellClass(name), current, delta, span));
+					} else if (currentCells.exists(name))
+						output.push(TCellIncrement(name, currentCells.get(name), current, delta, span));
+					else
+						output.push(TIncrement(name, delta, span));
 				case Assignment(name, expression, span):
 					var dot = name.indexOf("."),
 						value = typeExpression(expression, scope);
@@ -294,10 +340,15 @@ class Typer {
 						var expected = scope.resolve(name);
 						if (expected == null)
 							fail("E1005", 'Unknown variable "$name"', span);
-						if (scope.isCapture(name))
-							fail("E1013", 'Captured variable "$name" cannot be assigned in a lambda yet', span);
 						value = coerce(value, expected, 'local "$name"', "E1002");
-						output.push(TAssign(name, value, span));
+						if (scope.isCapture(name)) {
+							if (!scope.isCellCapture(name))
+								fail("E1013", 'Captured variable "$name" requires mutable capture cells', span);
+							output.push(TCellCapturedAssign(name, scope.cellClass(name), value, span));
+						} else if (currentCells.exists(name))
+							output.push(TCellAssign(name, currentCells.get(name), value, span));
+						else
+							output.push(TAssign(name, value, span));
 					} else {
 						var objectName = name.substr(0, dot),
 							fieldName = name.substr(dot + 1),
@@ -460,7 +511,9 @@ class Typer {
 			case NullLiteral(span): new TypedExpression(TNullLiteral, TNull, span);
 			case Variable(name, span):
 				var type = scope.resolve(name);
-				if (type != null) new TypedExpression(scope.isCapture(name) ? TCaptured(name) : TLocal(name), type, span); else {
+				if (type != null) new TypedExpression(scope.isCapture(name) ? (scope.isCellCapture(name) ? TCellCaptured(name,
+					scope.cellClass(name)) : TCaptured(name)) : (currentCells.exists(name) ? TCellLocal(name, currentCells.get(name)) : TLocal(name)),
+					type, span); else {
 					var signature = signatures.get(name);
 					if (signature != null)
 						new TypedExpression(TFunctionRef(name), functionType(signature), span);
@@ -496,81 +549,134 @@ class Typer {
 					}
 				}
 			case Lambda(arguments, body, span):
-				var lambdaArguments = [
-					for (argument in arguments)
-						{name: argument.name, type: lowerType(argument.type)}
-				], lambdaScope = new Scope(), declared:Map<String, Bool> = [];
-				for (argument in lambdaArguments) {
-					lambdaScope.define(argument.name, argument.type, span);
-					declared.set(argument.name, true);
-				}
-				collectDeclaredLocals(body, declared);
-				var freeVariables:Map<String, Bool> = [];
-				collectVariables(body, freeVariables);
-				var captures = [];
-				for (name in freeVariables.keys())
-					if (!declared.exists(name)) {
-						var capturedType = scope.resolve(name);
-						if (capturedType != null) {
-							if (currentAssigned.exists(name))
-								fail("E1013", 'Captured variable "$name" requires mutable capture cells', span);
-							lambdaScope.defineCapture(name, capturedType, span);
-							captures.push(name);
-						}
+				var lambdaKey = span.file.path + ":" + span.start,
+					cachedLambda = lambdaCache.get(lambdaKey);
+				if (cachedLambda != null) cachedLambda else {
+					var lambdaArguments = [
+						for (argument in arguments)
+							{name: argument.name, type: lowerType(argument.type)}
+					], lambdaScope = new Scope(), declared:Map<String, Bool> = [];
+					for (argument in lambdaArguments) {
+						lambdaScope.define(argument.name, argument.type, span);
+						declared.set(argument.name, true);
 					}
-				var inferredResult:CompilerType = TVoid;
-				for (statement in body)
-					switch statement {
-						case Return(value, _):
-							var typedValue = typeExpression(value, lambdaScope);
-							if (inferredResult == TVoid) inferredResult = typedValue.type; else if (!sameType(inferredResult,
-								typedValue.type)) fail("E1003", "Lambda return types do not match", span);
-						default:
-					}
-				var typedBodyScope = new Scope();
-				for (argument in lambdaArguments)
-					typedBodyScope.define(argument.name, argument.type, span);
-				for (name in captures)
-					typedBodyScope.defineCapture(name, scope.resolve(name), span);
-				var lambdaName = '$' + 'lambda:' + currentFunctionName + ':' + span.start,
-					previousLambdaAssigned = currentAssigned;
-				currentAssigned = [];
-				collectAssignedLocals(body, currentAssigned);
-				var typedBody = typeStatements(body, typedBodyScope, inferredResult);
-				currentAssigned = previousLambdaAssigned;
-				if (inferredResult != TVoid && !alwaysReturns(typedBody))
-					fail("E1006", 'Function $lambdaName does not return on every path', span);
-				var environment = captures.length == 0 ? null : '$' + 'lambda-env:' + currentFunctionName + ':' + span.start;
-				if (environment != null)
-					generatedClasses.push({
-						name: environment,
-						base: null,
-						interfaces: [],
-						fields: [
-							for (name in captures)
-								{
-									name: name,
-									type: scope.resolve(name),
-									isStatic: false,
-									isFinal: false,
-									span: span
+					collectDeclaredLocals(body, declared);
+					var freeVariables:Map<String, Bool> = [];
+					collectVariables(body, freeVariables);
+					var captures = [], captureCells:Map<String, String> = [];
+					for (name in freeVariables.keys())
+						if (!declared.exists(name)) {
+							var capturedType = scope.resolve(name);
+							if (capturedType != null) {
+								var cellClass = currentCells.get(name);
+								if (cellClass == null && scope.isCellCapture(name))
+									cellClass = scope.cellClass(name);
+								if (cellClass == null && currentAssigned.exists(name)) {
+									cellClass = '$' + 'cell:' + currentFunctionName + ':' + name;
+									currentCells.set(name, cellClass);
+									currentCellTypes.set(name, capturedType);
 								}
-						],
-						methods: [],
+								lambdaScope.defineCapture(name, capturedType, span, cellClass != null, cellClass);
+								if (cellClass != null)
+									captureCells.set(name, cellClass);
+								captures.push(name);
+							}
+						}
+					seedLambdaScope(body, lambdaScope);
+					var inferredResult:CompilerType = TVoid;
+					for (statement in body)
+						switch statement {
+							case Return(value, _):
+								var typedValue = typeExpression(value, lambdaScope);
+								if (inferredResult == TVoid) inferredResult = typedValue.type; else if (!sameType(inferredResult,
+									typedValue.type)) fail("E1003", "Lambda return types do not match", span);
+							default:
+						}
+					var typedBodyScope = new Scope();
+					for (argument in lambdaArguments)
+						typedBodyScope.define(argument.name, argument.type, span);
+					for (name in captures)
+						typedBodyScope.defineCapture(name, scope.resolve(name), span, captureCells.exists(name), captureCells.get(name));
+					var lambdaName = '$' + 'lambda:' + currentFunctionName + ':' + span.start,
+						previousLambdaAssigned = currentAssigned,
+						previousLambdaCells = currentCells,
+						previousLambdaCellTypes = currentCellTypes;
+					currentAssigned = [];
+					collectAssignedLocals(body, currentAssigned);
+					currentCells = [];
+					currentCellTypes = [];
+					var lambdaDeclared:Map<String, Bool> = [];
+					for (argument in lambdaArguments)
+						lambdaDeclared.set(argument.name, true);
+					collectDeclaredLocals(body, lambdaDeclared);
+					var lambdaCandidates:Map<String, Bool> = [];
+					collectMutableCaptureCandidates(body, lambdaDeclared, lambdaCandidates);
+					for (name in lambdaCandidates.keys())
+						currentCells.set(name, '$' + 'cell:' + lambdaName + ':' + name);
+					var typedBody = typeStatements(body, typedBodyScope, inferredResult);
+					var lambdaCells = currentCells.copy(),
+						lambdaCellTypes = currentCellTypes.copy();
+					currentAssigned = previousLambdaAssigned;
+					currentCells = previousLambdaCells;
+					currentCellTypes = previousLambdaCellTypes;
+					if (inferredResult != TVoid && !alwaysReturns(typedBody))
+						fail("E1006", 'Function $lambdaName does not return on every path', span);
+					var environment = captures.length == 0 ? null : '$' + 'lambda-env:' + currentFunctionName + ':' + span.start;
+					if (environment != null)
+						generatedClasses.push({
+							name: environment,
+							base: null,
+							interfaces: [],
+							fields: [
+								for (name in captures)
+									{
+										name: name,
+										type: captureCells.exists(name) ? TClass(captureCells.get(name)) : scope.resolve(name),
+										isStatic: false,
+										isFinal: false,
+										span: span
+									}
+							],
+							methods: [],
+							span: span
+						});
+					generated.push({
+						name: lambdaName,
+						owner: environment,
+						isStatic: environment == null,
+						isConstructor: false,
+						arguments: lambdaArguments,
+						result: inferredResult,
+						statements: typedBody,
+						cells: lambdaCells,
+						cellCaptures: captureCells.copy(),
 						span: span
 					});
-				generated.push({
-					name: lambdaName,
-					owner: environment,
-					isStatic: environment == null,
-					isConstructor: false,
-					arguments: lambdaArguments,
-					result: inferredResult,
-					statements: typedBody,
-					span: span
-				});
-				new TypedExpression(TLambda(lambdaName, environment, captures), TFunction([for (argument in lambdaArguments) argument.type], inferredResult),
-					span);
+					for (name in lambdaCells.keys()) {
+						var cellType = lambdaCellTypes.get(name);
+						if (cellType != null)
+							generatedClasses.push({
+								name: lambdaCells.get(name),
+								base: null,
+								interfaces: [],
+								fields: [
+									{
+										name: "value",
+										type: cellType,
+										isStatic: false,
+										isFinal: false,
+										span: span
+									}
+								],
+								methods: [],
+								span: span
+							});
+					}
+					var lambdaResult = new TypedExpression(TLambda(lambdaName, environment, captures),
+						TFunction([for (argument in lambdaArguments) argument.type], inferredResult), span);
+					lambdaCache.set(lambdaKey, lambdaResult);
+					lambdaResult;
+				}
 			case Member(object, name, span): typeMember(object, name, span, scope);
 			case Add(left, right, span): arithmetic(left, right, scope, true, span);
 			case Sub(left, right, span): arithmetic(left, right, scope, false, span);
@@ -722,6 +828,29 @@ class Typer {
 
 	function typeMember(object:AstExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression {
 		return typedMember(typeExpression(object, scope), name, span);
+	}
+
+	function seedLambdaScope(statements:Array<AstStatement>, scope:Scope):Void {
+		for (statement in statements)
+			switch (statement) {
+				case VarDeclaration(name, declared, initializer, span):
+					if (scope.resolve(name) == null) {
+						var value = typeExpression(initializer, scope);
+						if (declared != null)
+							value = coerce(value, lowerType(declared), 'local "$name"', "E1002");
+						scope.define(name, value.type, span);
+					}
+				case If(_, yes, no, _):
+					seedLambdaScope(yes, scope);
+					seedLambdaScope(no, scope);
+				case While(_, body, _), ForIn(_, _, body, _):
+					seedLambdaScope(body, scope);
+				case Switch(_, cases, defaultBranch, _, _):
+					for (switchCase in cases)
+						seedLambdaScope(switchCase.statements, scope);
+					seedLambdaScope(defaultBranch, scope);
+				default:
+			}
 	}
 
 	function typedMember(typedObject:TypedExpression, name:String, span:SourceSpan):TypedExpression {
@@ -935,7 +1064,7 @@ class Typer {
 
 	function nullableLocal(expression:TypedExpression):Null<{name:String, nonNullType:CompilerType}> {
 		return switch expression.expression {
-			case TLocal(name): switch expression.type {
+			case TLocal(name), TCellLocal(name, _): switch expression.type {
 					case TNullable(element): {name: name, nonNullType: element};
 					default: null;
 				};
@@ -1032,6 +1161,80 @@ class Typer {
 			}
 	}
 
+	static function collectMutableCaptureCandidates(statements:Array<AstStatement>, outerDeclared:Map<String, Bool>, result:Map<String, Bool>):Void {
+		for (statement in statements)
+			switch (statement) {
+				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Expression(expression, _):
+					collectMutableCaptureExpression(expression, outerDeclared, result);
+				case IndexAssignment(array, offset, expression, _):
+					collectMutableCaptureExpression(array, outerDeclared, result);
+					collectMutableCaptureExpression(offset, outerDeclared, result);
+					collectMutableCaptureExpression(expression, outerDeclared, result);
+				case If(condition, yes, no, _):
+					collectMutableCaptureExpression(condition, outerDeclared, result);
+					collectMutableCaptureCandidates(yes, outerDeclared, result);
+					collectMutableCaptureCandidates(no, outerDeclared, result);
+				case While(condition, body, _):
+					collectMutableCaptureExpression(condition, outerDeclared, result);
+					collectMutableCaptureCandidates(body, outerDeclared, result);
+				case ForIn(_, iterable, body, _):
+					collectMutableCaptureExpression(iterable, outerDeclared, result);
+					collectMutableCaptureCandidates(body, outerDeclared, result);
+				case Switch(expression, cases, defaultBranch, _, _):
+					collectMutableCaptureExpression(expression, outerDeclared, result);
+					for (switchCase in cases) {
+						collectMutableCaptureExpression(switchCase.value, outerDeclared, result);
+						collectMutableCaptureCandidates(switchCase.statements, outerDeclared, result);
+					}
+					collectMutableCaptureCandidates(defaultBranch, outerDeclared, result);
+				case ReturnVoid(_), Break(_), Continue(_), Increment(_, _, _):
+			}
+	}
+
+	static function collectMutableCaptureExpression(expression:AstExpression, outerDeclared:Map<String, Bool>, result:Map<String, Bool>):Void
+		switch (expression) {
+			case Lambda(arguments, body, _):
+				var declared:Map<String, Bool> = [];
+				for (argument in arguments)
+					declared.set(argument.name, true);
+				collectDeclaredLocals(body, declared);
+				var names:Map<String, Bool> = [],
+					assigned:Map<String, Bool> = [];
+				collectVariables(body, names);
+				collectAssignedLocals(body, assigned);
+				for (name in assigned.keys())
+					names.set(name, true);
+				for (name in names.keys())
+					if (!declared.exists(name) && outerDeclared.exists(name))
+						result.set(name, true);
+				collectMutableCaptureCandidates(body, outerDeclared, result);
+			case Member(object, _, _):
+				collectMutableCaptureExpression(object, outerDeclared, result);
+			case MethodCall(object, _, arguments, _):
+				collectMutableCaptureExpression(object, outerDeclared, result);
+				for (argument in arguments)
+					collectMutableCaptureExpression(argument, outerDeclared, result);
+			case Call(_, arguments, _):
+				for (argument in arguments)
+					collectMutableCaptureExpression(argument, outerDeclared, result);
+			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), Less(left, right, _),
+				LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _), NotEqual(left, right, _),
+				And(left, right, _), Or(left, right, _):
+				collectMutableCaptureExpression(left, outerDeclared, result);
+				collectMutableCaptureExpression(right, outerDeclared, result);
+			case Negate(value, _), Not(value, _):
+				collectMutableCaptureExpression(value, outerDeclared, result);
+			case New(_, arguments, _):
+				for (argument in arguments)
+					collectMutableCaptureExpression(argument, outerDeclared, result);
+			case NewArray(_, length, _):
+				collectMutableCaptureExpression(length, outerDeclared, result);
+			case Index(array, offset, _):
+				collectMutableCaptureExpression(array, outerDeclared, result);
+				collectMutableCaptureExpression(offset, outerDeclared, result);
+			case Variable(_, _), IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), NewMap(_, _, _):
+		}
+
 	static function collectExpressionVariables(expression:AstExpression, names:Map<String, Bool>):Void
 		switch expression {
 			case Variable(name, _):
@@ -1065,8 +1268,8 @@ class Typer {
 			case Index(array, offset, _):
 				collectExpressionVariables(array, names);
 				collectExpressionVariables(offset, names);
-			case Lambda(_, _, _):
-				return;
+			case Lambda(_, body, _):
+				collectVariables(body, names);
 			case IntegerLiteral(_, _):
 				return;
 			case FloatLiteral(_, _):

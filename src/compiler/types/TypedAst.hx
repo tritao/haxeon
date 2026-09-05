@@ -26,7 +26,9 @@ enum TypedExpressionKind {
 	TNullLiteral;
 	TNullableWrap(value:TypedExpression);
 	TLocal(name:String);
+	TCellLocal(name:String, cellClass:String);
 	TCaptured(name:String);
+	TCellCaptured(name:String, cellClass:String);
 	TFunctionRef(name:String);
 	TLambda(name:String, environment:Null<String>, captures:Array<String>);
 	TAdd(left:TypedExpression, right:TypedExpression);
@@ -62,6 +64,8 @@ enum TypedExpressionKind {
 enum TypedStatement {
 	TVar(name:String, initializer:TypedExpression, span:SourceSpan);
 	TAssign(name:String, value:TypedExpression, span:SourceSpan);
+	TCellAssign(name:String, cellClass:String, value:TypedExpression, span:SourceSpan);
+	TCellCapturedAssign(name:String, cellClass:String, value:TypedExpression, span:SourceSpan);
 	TFieldAssign(object:TypedExpression, name:String, value:TypedExpression, span:SourceSpan);
 	TIndexAssign(array:TypedExpression, index:TypedExpression, value:TypedExpression, span:SourceSpan);
 	TMapAssign(map:TypedExpression, key:TypedExpression, value:TypedExpression, span:SourceSpan);
@@ -74,6 +78,8 @@ enum TypedStatement {
 	TContinue(span:SourceSpan);
 	TSwitch(expression:TypedExpression, cases:Array<TypedSwitchCase>, defaultBranch:Array<TypedStatement>, hasDefault:Bool, span:SourceSpan);
 	TIncrement(name:String, delta:Int, span:SourceSpan);
+	TCellIncrement(name:String, cellClass:String, valueType:CompilerType, delta:Int, span:SourceSpan);
+	TCellCapturedIncrement(name:String, cellClass:String, valueType:CompilerType, delta:Int, span:SourceSpan);
 	TExpression(expression:TypedExpression, span:SourceSpan);
 }
 
@@ -98,6 +104,8 @@ typedef TypedFunction = {
 	final arguments:Array<{name:String, type:CompilerType}>;
 	final result:CompilerType;
 	final statements:Array<TypedStatement>;
+	final cells:Map<String, String>;
+	final cellCaptures:Map<String, String>;
 	final span:SourceSpan;
 }
 

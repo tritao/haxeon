@@ -18,6 +18,10 @@ copy snapshots, emits actual HashLink `OLabel` block markers, and leaves no SSA
 constructs in HLB/HLP. This supports nested mutable loops and values assigned on
 only one conditional branch without making HashLink aware of compiler SSA.
 
+Capturing closures use generated environments. Mutable locals captured by a
+closure are lowered through shared generated cell objects, so later writes are
+visible to every closure that captured the variable.
+
 The frontend is split into parsing, declaration/type checking, and IR
 generation. The current subset supports `Int`, `Bool`, `Float`, `String`, local
 variables, functions, calls, numeric addition/subtraction, string operations,

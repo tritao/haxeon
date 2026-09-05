@@ -30,8 +30,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 - [x] Typed locals, nominal classes, fields, constructors, inheritance.
 - [x] SSA construction, verification, phi elimination, deterministic lowering.
 - [x] Function values for non-capturing references.
-- [x] Capturing closures and instance closures (read-only captures; writes to
-  captured locals are rejected until mutable capture cells are implemented).
+- [x] Capturing closures and instance closures, including shared generated
+  capture cells for mutable locals.
 - [~] `Array<T>` typing, indexed reads/writes, `.length`, and compiler-owned
 	`Int`/`Float`/`Bool`/`String` plus reference-array allocation lower directly
 	to HashLink array operations and the runtime ABI; `for (item in array)` is

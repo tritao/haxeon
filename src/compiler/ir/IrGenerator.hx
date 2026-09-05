@@ -76,6 +76,13 @@ class IrGenerator {
 
 	public static function generateCfg(fn:TypedFunction):CfgFunction {
 		var builder = new CfgBuilder(), localTypes:Map<String, IrType> = [];
+		for (name => cellClass in fn.cells) {
+			var cellType = Obj(cellClass);
+			localTypes.set('__cell:$name', cellType);
+			localTypes.set('$' + 'cell:$name', cellType);
+		}
+		for (name => cellClass in fn.cellCaptures)
+			localTypes.set('__capturecell:$name', Obj(cellClass));
 		var arguments = [
 			for (argument in implicitArguments(fn)) {
 				localTypes.set(argument.name, argument.type);
@@ -89,6 +96,13 @@ class IrGenerator {
 				{name: argument.name, type: type};
 			}
 		]);
+		for (name => cellClass in fn.cells)
+			for (argument in arguments)
+				if (argument.name == name) {
+					var cell = builder.newObject(cellClass);
+					builder.fieldSet(cell, "value", builder.load(name, localTypes.get(name)));
+					builder.store('$' + 'cell:$name', cell);
+				}
 		lowerStatements(fn.statements, builder, localTypes);
 		if (!builder.isTerminated()) {
 			if (lowerType(fn.result) == Void)
@@ -360,10 +374,30 @@ class IrGenerator {
 				break;
 			switch statement {
 				case TVar(name, initializer, _):
-					localTypes.set(name, lowerType(initializer.type));
-					builder.store(name, lowerExpression(initializer, builder, localTypes));
+					var value = lowerExpression(initializer, builder, localTypes),
+						cellType = localTypes.get('__cell:$name');
+					if (cellType == null) {
+						localTypes.set(name, lowerType(initializer.type));
+						builder.store(name, value);
+					} else {
+						var cellClass = switch cellType {
+							case Obj(name): name;
+							default: throw 'Invalid capture cell type for "$name"';
+						};
+						var cell = builder.newObject(cellClass);
+						builder.fieldSet(cell, "value", value);
+						builder.store('$' + 'cell:$name', cell);
+					}
 				case TAssign(name, value, _):
 					builder.store(name, lowerExpression(value, builder, localTypes));
+				case TCellAssign(name, cellClass, value, _):
+					builder.fieldSet(builder.load('$' + 'cell:$name', Obj(cellClass)), "value", lowerExpression(value, builder, localTypes));
+				case TCellCapturedAssign(name, cellClass, value, _):
+					var owner = localTypes.get("this");
+					if (owner == null)
+						throw 'Captured assignment "$name" has no environment';
+					var cell = builder.fieldGet(builder.load("this", owner), name, Obj(cellClass));
+					builder.fieldSet(cell, "value", lowerExpression(value, builder, localTypes));
 				case TFieldAssign(object, name, value, _):
 					builder.fieldSet(lowerExpression(object, builder, localTypes), name, lowerExpression(value, builder, localTypes));
 				case TIndexAssign(array, index, value, _):
@@ -396,6 +430,19 @@ class IrGenerator {
 						throw 'Missing increment local "$name"';
 					var one = type == I32 ? builder.constInt(1) : builder.constFloat(1);
 					builder.store(name, delta > 0 ? builder.add(builder.load(name, type), one) : builder.sub(builder.load(name, type), one));
+				case TCellIncrement(name, cellClass, valueType, delta, _):
+					var cell = builder.load('$' + 'cell:$name', Obj(cellClass)),
+						value = builder.fieldGet(cell, "value", lowerType(valueType)),
+						one = valueType == TInt ? builder.constInt(1) : builder.constFloat(1);
+					builder.fieldSet(cell, "value", delta > 0 ? builder.add(value, one) : builder.sub(value, one));
+				case TCellCapturedIncrement(name, cellClass, valueType, delta, _):
+					var owner = localTypes.get("this");
+					if (owner == null)
+						throw 'Captured increment "$name" has no environment';
+					var cell = builder.fieldGet(builder.load("this", owner), name, Obj(cellClass)),
+						value = builder.fieldGet(cell, "value", lowerType(valueType)),
+						one = valueType == TInt ? builder.constInt(1) : builder.constFloat(1);
+					builder.fieldSet(cell, "value", delta > 0 ? builder.add(value, one) : builder.sub(value, one));
 				case TIf(condition, thenBranch, elseBranch, _):
 					var conditionValue = lowerExpression(condition, builder, localTypes),
 						thenBlock = builder.createBlock(),
@@ -552,17 +599,32 @@ class IrGenerator {
 				if (type == null)
 					throw 'Missing typed local "$name"';
 				builder.load(name, type);
+			case TCellLocal(name, cellClass):
+				var cell = builder.load('$' + 'cell:$name', Obj(cellClass));
+				builder.fieldGet(cell, "value", lowerType(expression.type));
 			case TCaptured(name):
 				var owner = localTypes.get("this");
 				if (owner == null)
 					throw 'Captured value "$name" has no environment';
 				builder.fieldGet(builder.load("this", owner), name, lowerType(expression.type));
+			case TCellCaptured(name, cellClass):
+				var owner = localTypes.get("this");
+				if (owner == null)
+					throw 'Captured value "$name" has no environment';
+				var cell = builder.fieldGet(builder.load("this", owner), name, Obj(cellClass));
+				builder.fieldGet(cell, "value", lowerType(expression.type));
 			case TFunctionRef(name): builder.staticClosure(name, lowerType(expression.type));
 			case TLambda(name, environment, captures):
 				if (environment == null) builder.staticClosure(name, lowerType(expression.type)); else {
 					var object = builder.newObject(environment);
-					for (capture in captures)
-						builder.fieldSet(object, capture, builder.load(capture, localTypes.get(capture)));
+					for (capture in captures) {
+						var cellType = localTypes.get('__cell:$capture');
+						var capturedCellType = localTypes.get('__capturecell:$capture');
+						var value = cellType == null ? (capturedCellType == null ? builder.load(capture,
+							localTypes.get(capture)) : builder.fieldGet(builder.load("this", localTypes.get("this")), capture,
+								capturedCellType)) : builder.load('$' + 'cell:$capture', cellType);
+						builder.fieldSet(object, capture, value);
+					}
 					builder.instanceClosure(name, object, lowerType(expression.type));
 				}
 			case TAdd(a, b):

@@ -129,10 +129,6 @@ class TestMain {
 		expectCompileError('function main():Int { var value:Int = 1; value = "wrong"; return value; }', 'Type mismatch for local "value"');
 		expectCompileError('class Box { public function values():Array<Int> { return new Array<Int>(0); } public function add():Void { this.values().push(1); } } function main():Int { return 0; }',
 			'Array.push requires a mutable local or field array');
-		expectCompileError('function main():Int { var offset = 1; var f = (value:Int) -> { return value + offset; }; offset = 2; return f(0); }',
-			'Captured variable "offset" requires mutable capture cells');
-		expectCompileError('function main():Int { var count = 1; if (count > 0) count++; var f = () -> { return count; }; return f(); }',
-			'Captured variable "count" requires mutable capture cells');
 		expectCompileError('function main():Int { return 1; var unreachable = 2; }', 'Unreachable statement');
 		expectCompileError('enum Color { Red; Blue; } function main():Int { var color:Color = Color.Red; switch (color) { case Color.Red: return 1; case Color.Red: return 2; case Color.Blue: return 3; } }',
 			"Duplicate switch case");

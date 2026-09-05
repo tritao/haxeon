@@ -9,6 +9,8 @@ class Scope {
 	final parent:Null<Scope>;
 	final values:Map<String, CompilerType> = [];
 	final captures:Map<String, Bool> = [];
+	final cellCaptures:Map<String, Bool> = [];
+	final cellClasses:Map<String, String> = [];
 
 	public function new(?parent:Scope)
 		this.parent = parent;
@@ -19,9 +21,14 @@ class Scope {
 		values.set(name, type);
 	}
 
-	public function defineCapture(name:String, type:CompilerType, span:SourceSpan):Void {
+	public function defineCapture(name:String, type:CompilerType, span:SourceSpan, cell:Bool = false, ?cellClass:String):Void {
 		define(name, type, span);
 		captures.set(name, true);
+		if (cell) {
+			cellCaptures.set(name, true);
+			if (cellClass != null)
+				cellClasses.set(name, cellClass);
+		}
 	}
 
 	public function refine(name:String, type:CompilerType):Void {
@@ -33,6 +40,12 @@ class Scope {
 
 	public function isCapture(name:String):Bool
 		return captures.exists(name);
+
+	public function isCellCapture(name:String):Bool
+		return cellCaptures.exists(name);
+
+	public function cellClass(name:String):Null<String>
+		return cellClasses.get(name);
 
 	public function resolve(name:String):Null<CompilerType> {
 		var value = values.get(name);
