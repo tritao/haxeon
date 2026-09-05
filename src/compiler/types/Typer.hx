@@ -702,8 +702,8 @@ class Typer {
 					for (switchCase in cases) {
 						var caseScope = new Scope(scope),
 							pattern = typeEnumPattern(switchCase.value, typedExpression.type, caseScope),
-							typedValue = pattern == null ? coerce(typeExpression(switchCase.value, scope), typedExpression.type, "switch case",
-								"E1019") : pattern.value,
+							typedValue = pattern == null ? coerce(typeExpression(switchCase.value, scope, typedExpression.type), typedExpression.type,
+								"switch case", "E1019") : pattern.value,
 							typedGuard = switchCase.guard == null ? null : coerce(typeExpression(switchCase.guard, caseScope), TBool, "switch guard", "E1003"),
 							typedBody = typeStatements(switchCase.statements, caseScope, result),
 							constructorIndex = pattern == null ? -1 : pattern.index,
@@ -1331,7 +1331,7 @@ class Typer {
 				for (switchCase in cases) {
 					var caseScope = new Scope(scope),
 						pattern = typeEnumPattern(switchCase.value, typedSubject.type, caseScope),
-						typedValue = pattern == null ? coerce(typeExpression(switchCase.value, scope), typedSubject.type, "switch case",
+						typedValue = pattern == null ? coerce(typeExpression(switchCase.value, scope, typedSubject.type), typedSubject.type, "switch case",
 							"E1019") : pattern.value,
 						typedGuard = switchCase.guard == null ? null : coerce(typeExpression(switchCase.guard, caseScope), TBool, "switch guard", "E1003"),
 						typedResult = typeExpression(switchCase.result, caseScope, expectedType == null ? resultType : expectedType),
