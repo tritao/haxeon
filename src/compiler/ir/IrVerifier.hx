@@ -9,13 +9,19 @@ class IrVerifier {
 			addSignature(signatures, native.name, native.arguments, native.result);
 		for (fn in program.functions)
 			addSignature(signatures, fn.name, [for (a in fn.arguments) a.type], fn.result);
+		var objects:Map<String, IrObject> = [];
+		for (object in program.objects) {
+			if (objects.exists(object.name))
+				throw 'Duplicate IR object "${object.name}"';
+			objects.set(object.name, object);
+		}
 		if (!signatures.exists(program.entryPoint))
 			throw 'Unknown IR entry point "${program.entryPoint}"';
 		for (fn in program.functions)
-			verifyFunction(fn, signatures);
+			verifyFunction(fn, signatures, objects);
 	}
 
-	static function verifyFunction(fn:IrFunction, signatures:Map<String, {arguments:Array<IrType>, result:IrType}>):Void {
+	static function verifyFunction(fn:IrFunction, signatures:Map<String, {arguments:Array<IrType>, result:IrType}>, objects:Map<String, IrObject>):Void {
 		if (fn.blocks.length == 0)
 			throw 'IR function ${fn.name} has no entry block';
 		var blocks:Map<Int, IrBlock> = [], values:Map<Int, IrType> = [];
@@ -42,7 +48,7 @@ class IrVerifier {
 					default:
 				}
 			for (instruction in block.instructions)
-				verifyInstruction(instruction, values, signatures);
+				verifyInstruction(instruction, values, signatures, objects);
 			if (block.terminator == null)
 				throw 'Reachable IR block $id in ${fn.name} has no terminator';
 			switch block.terminator {
@@ -92,7 +98,7 @@ class IrVerifier {
 					}
 	}
 
-	static function verifyInstruction(instruction:IrInstruction, values:Map<Int, IrType>, signatures):Void
+	static function verifyInstruction(instruction:IrInstruction, values:Map<Int, IrType>, signatures, objects:Map<String, IrObject>):Void
 		switch instruction {
 			case Phi(_, _):
 			case ConstInt(out, _):
@@ -131,7 +137,48 @@ class IrVerifier {
 				if (out.type != signature.result)
 					throw 'Wrong IR result type for "$name"';
 				define(values, out);
+			case NewObject(out, typeName):
+				if (!objects.exists(typeName) || !isObjectType(out.type, typeName))
+					throw 'Unknown or mismatched IR object "$typeName"';
+				define(values, out);
+			case FieldGet(out, object, fieldName):
+				var objectType = requireObject(object, values, objects),
+					field = findField(objectType, fieldName);
+				if (field == null || out.type != field.type)
+					throw 'Unknown or mismatched IR field "${objectType.name}.$fieldName"';
+				define(values, out);
+			case FieldSet(object, fieldName, value):
+				var objectType = requireObject(object, values, objects),
+					field = findField(objectType, fieldName);
+				if (field == null || field.type != value.type)
+					throw 'Unknown or mismatched IR field "${objectType.name}.$fieldName"';
+				require(values, value);
 		}
+
+	static function requireObject(value:IrValue, values:Map<Int, IrType>, objects:Map<String, IrObject>):IrObject {
+		require(values, value);
+		return switch value.type {
+			case Obj(name):
+				var object = objects.get(name);
+				if (object == null)
+					throw 'Unknown IR object "$name"';
+				object;
+			default: throw 'IR value ${value.id} is not an object';
+		};
+	}
+
+	static function isObjectType(type:IrType, name:String):Bool
+		return switch type {
+			case Obj(value): value == name;
+			default: false;
+		};
+
+	static function findField(object:IrObject, name:String):Null<IrObjectField> {
+		for (field in object.fields)
+			if (field.name == name)
+				return field;
+		return null;
+	}
 
 	static function addPredecessor(map:Map<Int, Map<Int, Bool>>, target:Int, source:Int):Void {
 		var found = map.get(target);

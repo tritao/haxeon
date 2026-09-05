@@ -2,17 +2,20 @@ package compiler.hl;
 
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.ir.Ir.IrType;
+import compiler.ir.Ir.IrObject;
 
 class HlSymbolTable {
 	public final ints:Array<Int> = [];
 	public final strings:Array<String> = [];
 	public final floats:Array<Float> = [];
 	public final types:Array<HlTypeDef> = [];
+	public final globals:Array<Int> = [];
 
 	final intIndices:Map<Int, Int> = [];
 	final stringIndices:Map<String, Int> = [];
 	final floatIndices:Map<String, Int> = [];
 	final typeIndices:Map<String, Int> = [];
+	final objectIndices:Map<String, Int> = [];
 
 	public function new() {}
 
@@ -51,14 +54,32 @@ class HlSymbolTable {
 		if (found != null)
 			return found;
 		var index = types.length;
+		if (typeKey(type).indexOf("obj:") == 0)
+			throw 'Object type "$type" must be registered before use';
 		types.push(Simple(switch type {
 			case Void: HlType.Void;
 			case I32: HlType.I32;
 			case Bool: HlType.Bool;
 			case F64: HlType.F64;
 			case Bytes: HlType.Bytes;
+			case Obj(name): throw 'Object type "$name" must be registered before use';
 		}));
 		typeIndices.set(key, index);
+		return index;
+	}
+
+	public function internObject(object:IrObject):Int {
+		var found = objectIndices.get(object.name);
+		if (found != null)
+			return found;
+		var fields = [
+			for (field in object.fields)
+				{name: internString(field.name), type: internType(field.type)}
+		], index = types.length, global = globals.length + 1;
+		types.push(Object(internString(object.name), -1, global, fields, [], []));
+		objectIndices.set(object.name, index);
+		typeIndices.set('obj:${object.name}', index);
+		globals.push(index);
 		return index;
 	}
 
@@ -82,5 +103,6 @@ class HlSymbolTable {
 			case Bool: "bool";
 			case F64: "f64";
 			case Bytes: "bytes";
+			case Obj(name): 'obj:$name';
 		};
 }

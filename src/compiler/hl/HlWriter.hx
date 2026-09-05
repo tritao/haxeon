@@ -55,7 +55,7 @@ class HlWriter {
 					requireString(code, name, "object name");
 					if (base >= 0)
 						requireType(code, base, "object base");
-					if (global >= code.globals.length && global != 0)
+					if (global > code.globals.length && global != 0)
 						throw 'Invalid object global $global';
 					for (field in fields) {
 						requireString(code, field.name, "object field name");
@@ -143,7 +143,7 @@ class HlWriter {
 					requireRegister(fn, argument1);
 					requireRegister(fn, argument2);
 					requireCallable(functionIndices, functionIndex, fn.functionIndex);
-				case New(destination, type):
+				case New(destination, type, _):
 					requireRegister(fn, destination);
 					requireType(code, type, 'object allocation in function ${fn.functionIndex}');
 				case FieldGet(destination, object, field):
@@ -246,14 +246,15 @@ class HlWriter {
 
 		for (type in code.types)
 			writeType(type);
+		// HashLink's decoder reads the global type table before natives.
+		for (global in code.globals)
+			writeIndex(global);
 		for (native in code.natives) {
 			writeIndex(native.library);
 			writeIndex(native.name);
 			writeIndex(native.type);
 			writeUnsignedIndex(native.functionIndex);
 		}
-		for (global in code.globals)
-			writeIndex(global);
 		for (fn in code.functions)
 			writeFunction(fn);
 	}
@@ -346,8 +347,10 @@ class HlWriter {
 					{opcode: HlOpcode.Call1, operands: [destination, functionIndex, argument]};
 				case Call2(destination, functionIndex, argument1, argument2):
 					{opcode: HlOpcode.Call2, operands: [destination, functionIndex, argument1, argument2]};
-				case New(destination, type):
-					{opcode: HlOpcode.New, operands: [destination, type]};
+				case New(destination, _, _):
+					// ONew has no encoded type operand. HashLink derives the
+					// allocation type from the destination register's type.
+					{opcode: HlOpcode.New, operands: [destination]};
 				case FieldGet(destination, object, field):
 					{opcode: HlOpcode.Field, operands: [destination, object, field]};
 				case FieldSet(object, field, source):

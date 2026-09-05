@@ -8,6 +8,7 @@ import compiler.hl.HlType;
 import compiler.hl.HlSymbolTable;
 import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrNative;
+import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
@@ -16,6 +17,8 @@ class HlLower {
 	final code:HlCode;
 	final symbols:HlSymbolTable;
 	final functionIndices:Map<String, Int> = [];
+	final objectTypeIndices:Map<String, Int> = [];
+	final objects:Map<String, IrObject> = [];
 
 	public static function lower(program:IrProgram):HlCode {
 		IrVerifier.verify(program);
@@ -34,12 +37,17 @@ class HlLower {
 		code.floats = symbols.floats;
 		code.strings = symbols.strings;
 		code.types = symbols.types;
+		code.globals = symbols.globals;
 		if (indices != null)
 			for (name => index in indices)
 				functionIndices.set(name, index);
 	}
 
 	function lowerProgram(program:IrProgram):HlCode {
+		for (object in program.objects) {
+			objects.set(object.name, object);
+			objectTypeIndices.set(object.name, symbols.internObject(object));
+		}
 		if (functionIndices.keys().hasNext() == false) {
 			var nextFunction = 0;
 			for (native in program.natives)
@@ -58,6 +66,7 @@ class HlLower {
 		code.floats = code.floats.copy();
 		code.strings = code.strings.copy();
 		code.types = code.types.copy();
+		code.globals = code.globals.copy();
 		return code;
 	}
 
@@ -136,6 +145,14 @@ class HlLower {
 							case 2: instructions.push(HlInstruction.Call2(destination, functionIndex, args[0], args[1]));
 							default: throw 'HL lowering supports at most two call arguments, got ${args.length}';
 						}
+					case NewObject(output, typeName):
+						instructions.push(HlInstruction.New(defineRegister(output, registers, registerTypes), requireObjectType(typeName), 0));
+					case FieldGet(output, object, fieldName):
+						instructions.push(HlInstruction.FieldGet(defineRegister(output, registers, registerTypes), requireRegister(object, registers),
+							requireObjectField(object, fieldName)));
+					case FieldSet(object, fieldName, value):
+						instructions.push(HlInstruction.FieldSet(requireRegister(object, registers), requireObjectField(object, fieldName),
+							requireRegister(value, registers)));
 				}
 			}
 			if (block.terminator == null)
@@ -232,6 +249,27 @@ class HlLower {
 
 	function internFunctionType(arguments:Array<IrType>, result:IrType):Int {
 		return symbols.internFunction(arguments, result);
+	}
+
+	function requireObjectType(name:String):Int {
+		var index = objectTypeIndices.get(name);
+		if (index == null)
+			throw 'Unknown IR object "$name"';
+		return index;
+	}
+
+	function requireObjectField(object:IrValue, name:String):Int {
+		var typeName = switch object.type {
+			case Obj(value): value;
+			default: throw 'IR value ${object.id} is not an object';
+		};
+		var descriptor = objects.get(typeName);
+		if (descriptor == null)
+			throw 'Unknown IR object "$typeName"';
+		for (index in 0...descriptor.fields.length)
+			if (descriptor.fields[index].name == name)
+				return index;
+		throw 'Unknown IR field "$typeName.$name"';
 	}
 
 	function addFunctionName(name:String, index:Int):Void {

@@ -42,6 +42,18 @@ run_program while-arithmetic 42
 run_program branch-assignment 42
 run_program static-class 42
 
+object_output="$root_dir/out/object.hl"
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run ObjectMain "$object_output"
+set +e
+LD_LIBRARY_PATH="$root_dir/.tools/hashlink" "$hl" "$object_output"
+object_status=$?
+set -e
+if [[ $object_status -ne 42 ]]; then
+	echo "object IR: expected exit 42, got $object_status" >&2
+	exit 1
+fi
+echo "PASS: object allocation and field access executed (exit 42)"
+
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ModuleMain "$root_dir/out/modules.hl"
 set +e
 LD_LIBRARY_PATH="$root_dir/.tools/hashlink" "$hl" "$root_dir/out/modules.hl"

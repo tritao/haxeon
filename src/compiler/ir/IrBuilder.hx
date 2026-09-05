@@ -91,6 +91,21 @@ class IrBuilder {
 		return out;
 	}
 
+	public function newObject(typeName:String):IrValue {
+		var out = temporary(Obj(typeName));
+		emit(NewObject(out, typeName));
+		return out;
+	}
+
+	public function fieldGet(object:IrValue, fieldName:String, type:IrType):IrValue {
+		var out = temporary(type);
+		emit(FieldGet(out, object, fieldName));
+		return out;
+	}
+
+	public function fieldSet(object:IrValue, fieldName:String, value:IrValue):Void
+		emit(FieldSet(object, fieldName, value));
+
 	public function createBlock():IrBlock {
 		var block = new IrBlock(blocks.length);
 		blocks.push(block);
