@@ -45,9 +45,10 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 	 null representation, support equality, and reject implicit untyped null
 	 locals; null-guard narrowing now flows through `&&`, `||`, and `!=`, while migration-safe
 	 object arrays remain future work.
-- [x] Enums lower to HashLink tagged values, including payload constructors,
-	payload extraction, equality by constructor tag, and typed enum/int `switch`
-	cases. Exhaustiveness checking and richer pattern forms remain future work.
+- [~] Enums lower to HashLink tagged values, including payload constructors,
+  payload extraction, equality by constructor tag, typed enum/int `switch`
+  cases, duplicate-case diagnostics, and exhaustive enum return-path analysis;
+  richer pattern forms remain future work.
 - [~] Primitive and array type aliases resolve in the frontend; cross-module
 	alias identity and generic aliases remain future work.
 - [~] Prototype-dispatched instance calls and inheritance are live, including
@@ -55,6 +56,7 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 	interface values now lower through `OToVirtual`, support inherited interface
 	slots, and dispatch through `OCallMethod`; generic interfaces and advanced
 	variance remain future work.
+
 - [~] A documented runtime library ABI for strings, collections, IO, and time
 	(compiler-owned string concatenation, length, equality, search, slicing, and
 	typed `trace` are exercised end-to-end; generic collections, IO, and time
@@ -94,8 +96,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 
 - [~] Persistent AST snapshots, diagnostics, document symbols, completion,
   hover, definition, references, and rename are exposed through
-  `LanguageService`; token/type snapshots and semantic disambiguation remain.
-- [ ] Definition, references, rename, and full type-aware completion from
+  `LanguageService`; typed local member completion now covers classes,
+  interfaces, arrays, maps, and strings, while full semantic resolution remains.
+- [ ] Definition, references, rename, and full type-aware navigation from
   compiler state.
 - [ ] Completion-safe partial parsing and error recovery.
 - [ ] A small protocol adapter for Pragtical; no second typechecker.
@@ -112,17 +115,16 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 
 ## Feature order after the current milestone
 
+
 1. Extend the first-class `Array<T>` and map runtime types with broader key/value
 	operations and iterator compatibility; keep bounds checks in the HashLink
 	operation contract.
-2. Add exhaustiveness checking and richer pattern matching on the tagged-value
-	rules used by the runtime bridge; extend nullable narrowing to compound
-	conditions.
-3. Complete package/import resolution for nominal types, then migrate a small
-   Pragtical utility plugin as the first real multi-module workload.
-4. Expose compiler snapshots as the editor language service.
-5. Add structural reload domains and state migration, then move larger editor
-   subsystems and finally the editor core.
+2. Complete package/import resolution for nominal types, then migrate a small
+	Pragtical utility plugin as the first real multi-module workload.
+3. Expose compiler snapshots through a thin editor protocol adapter and finish
+	semantic definition/references/rename.
+4. Add structural reload domains and state migration, then move larger editor
+	subsystems and finally the editor core.
 
 ## Definition of Pragtical-ready
 
