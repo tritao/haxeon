@@ -941,19 +941,77 @@ class Parser {
 			while (match(TokenKind.Comma))
 				values.push(parseExpression());
 			consume(TokenKind.Colon);
-			var result = parseExpression();
-			match(TokenKind.Semicolon);
+			var result = parseSwitchExpressionBranch();
 			for (value in values)
 				cases.push({value: value, result: result, span: caseStart.merge(expressionSpan(result))});
 		}
 		var fallback = null;
 		if (match(TokenKind.Default)) {
 			consume(TokenKind.Colon);
-			fallback = parseExpression();
-			match(TokenKind.Semicolon);
+			fallback = parseSwitchExpressionBranch();
 		}
 		var end = consume(TokenKind.RightBrace).span;
 		return parsePostfix(SwitchExpression(subject, cases, fallback, start.merge(end)));
+	}
+
+	function parseSwitchExpressionBranch():AstExpression {
+		var statements = [], start = current().span;
+		while (true) {
+			if (isStatementOnlyStart(current().kind) || check(TokenKind.If) && !hasSwitchBranchElse()) {
+				appendStatements(statements, parseStatements());
+				continue;
+			}
+			var saved = position, result = parseExpression();
+			if (match(TokenKind.Semicolon)) {
+				if (atSwitchBranchEnd())
+					return statements.length == 0 ? result : BlockExpression(statements, result, start.merge(expressionSpan(result)));
+				position = saved;
+				appendStatements(statements, parseStatements());
+				continue;
+			}
+			if (atSwitchBranchEnd())
+				return statements.length == 0 ? result : BlockExpression(statements, result, start.merge(expressionSpan(result)));
+			position = saved;
+			appendStatements(statements, parseStatements());
+		}
+	}
+
+	function atSwitchBranchEnd():Bool
+		return check(TokenKind.Case) || check(TokenKind.Default) || check(TokenKind.RightBrace);
+
+	static function isStatementOnlyStart(kind:TokenKind):Bool
+		return switch kind {
+			case TokenKind.Var, TokenKind.Return, TokenKind.Try, TokenKind.While, TokenKind.Do, TokenKind.For, TokenKind.Break, TokenKind.Continue: true;
+			default: false;
+		};
+
+	function hasSwitchBranchElse():Bool {
+		var parentheses = 0, braces = 0, brackets = 0, tokenCount = tokens.length;
+		for (index in position...tokenCount) {
+			var kind = tokens[index].kind;
+			if (parentheses == 0 && braces == 0 && brackets == 0) {
+				if (kind == TokenKind.Else)
+					return true;
+				if (kind == TokenKind.Case || kind == TokenKind.Default || kind == TokenKind.RightBrace)
+					return false;
+			}
+			switch kind {
+				case TokenKind.LeftParen:
+					parentheses++;
+				case TokenKind.RightParen:
+					parentheses--;
+				case TokenKind.LeftBrace:
+					braces++;
+				case TokenKind.RightBrace:
+					braces--;
+				case TokenKind.LeftBracket:
+					brackets++;
+				case TokenKind.RightBracket:
+					brackets--;
+				default:
+			}
+		}
+		return false;
 	}
 
 	function parsePostfix(expression:AstExpression):AstExpression {

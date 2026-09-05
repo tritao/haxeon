@@ -94,6 +94,7 @@ run_program lambda 42
 run_program anonymous-function 42
 run_program enum-abstract 42
 run_program concise-try 42
+run_program switch-expression-block 42
 run_program captured-lambda 42
 run_program mutable-capture 78
 run_program nested-mutable-capture 3
