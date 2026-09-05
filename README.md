@@ -31,7 +31,8 @@ Simple `typedef` aliases are resolved before type checking, so editor-facing
 APIs can introduce stable names without changing the backend type ABI.
 
 The expression subset also includes multiplication, signed division, call or
-value expression statements, integer modulo, unary numeric negation, and `while` control-flow. Hosts can register typed
+value expression statements, integer modulo, unary numeric negation, enum/int
+`switch` statements, and `while` control-flow. Hosts can register typed
 HashLink natives through `Compiler.registerNative()` before the first build;
 source calls remain ordinary Haxe-compatible calls while the backend emits the
 configured library/symbol binding. Registrations freeze after compilation so a

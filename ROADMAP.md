@@ -44,7 +44,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 	locals; simple null-guard narrowing is supported, while migration-safe
 	object arrays remain future work.
 - [~] Payload-free enums lower to stable integer tags and support typed case
-	values/equality; payload constructors and pattern matching remain future work.
+	values/equality plus enum/int `switch` statements; payload constructors and
+	pattern matching remain future work.
 - [~] Primitive and array type aliases resolve in the frontend; cross-module
 	alias identity and generic aliases remain future work.
 - [~] Prototype-dispatched instance calls and inheritance are live, including

@@ -367,6 +367,36 @@ class IrGenerator {
 						builder.jump(conditionBlock);
 					}
 					builder.select(afterBlock);
+				case TSwitch(expression, cases, defaultBranch, span):
+					var switchName = '$' + 'switch:' + span.start,
+						switchType = lowerType(expression.type),
+						exits:Array<CfgBlock> = [];
+					localTypes.set(switchName, switchType);
+					builder.store(switchName, lowerExpression(expression, builder, localTypes));
+					var checkBlock = builder.currentBlock();
+					for (switchCase in cases) {
+						var bodyBlock = builder.createBlock(),
+							nextBlock = builder.createBlock();
+						builder.select(checkBlock);
+						var switchValue = builder.load(switchName, switchType),
+							caseValue = lowerExpression(switchCase.value, builder, localTypes);
+						builder.branch(builder.equal(switchValue, caseValue), bodyBlock, nextBlock);
+						builder.select(bodyBlock);
+						lowerStatements(switchCase.statements, builder, localTypes, loops);
+						if (!builder.isTerminated())
+							exits.push(builder.currentBlock());
+						checkBlock = nextBlock;
+					}
+					builder.select(checkBlock);
+					lowerStatements(defaultBranch, builder, localTypes, loops);
+					if (!builder.isTerminated())
+						exits.push(builder.currentBlock());
+					if (exits.length > 0) {
+						var joinBlock = builder.createBlock();
+						for (exit in exits)
+							builder.jumpFrom(exit, joinBlock);
+						builder.select(joinBlock);
+					}
 				case TExpression(expression, _):
 					lowerExpression(expression, builder, localTypes);
 			}

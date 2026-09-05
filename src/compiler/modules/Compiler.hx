@@ -606,6 +606,19 @@ class Compiler {
 			case ForIn(name, iterable, body,
 				span): ForIn(name, canonicalExpression(iterable, module, entry, locals, aliases),
 					[for (x in body) canonicalStatement(x, module, entry, locals, aliases)], span);
+			case Switch(expression, cases, defaultBranch, span):
+				Switch(canonicalExpression(expression, module, entry, locals, aliases), [
+					for (switchCase in cases)
+						{
+							value: canonicalExpression(switchCase.value, module, entry, locals, aliases),
+							statements: [
+								for (x in switchCase.statements)
+									canonicalStatement(x, module, entry, locals, aliases)
+							],
+							span: switchCase.span
+						}
+				],
+					[for (x in defaultBranch) canonicalStatement(x, module, entry, locals, aliases)], span);
 			case Expression(e, span): Expression(canonicalExpression(e, module, entry, locals, aliases), span);
 		}
 
@@ -711,6 +724,15 @@ class Compiler {
 				scanExpression(iterable, dependencies);
 				for (x in b)
 					scanStatement(x, dependencies);
+			case Switch(expression, cases, defaultBranch, _):
+				scanExpression(expression, dependencies);
+				for (switchCase in cases) {
+					scanExpression(switchCase.value, dependencies);
+					for (x in switchCase.statements)
+						scanStatement(x, dependencies);
+				}
+				for (x in defaultBranch)
+					scanStatement(x, dependencies);
 			case Expression(e, _):
 				scanExpression(e, dependencies);
 		}
@@ -784,6 +806,15 @@ class Compiler {
 			case ForIn(_, iterable, b, _):
 				scanCallExpression(iterable, calls, aliases);
 				for (s in b)
+					scanCalls(s, calls, aliases);
+			case Switch(expression, cases, defaultBranch, _):
+				scanCallExpression(expression, calls, aliases);
+				for (switchCase in cases) {
+					scanCallExpression(switchCase.value, calls, aliases);
+					for (s in switchCase.statements)
+						scanCalls(s, calls, aliases);
+				}
+				for (s in defaultBranch)
 					scanCalls(s, calls, aliases);
 			case Expression(e, _):
 				scanCallExpression(e, calls, aliases);
@@ -861,6 +892,13 @@ class Compiler {
 				case ForIn(_, iterable, body, _):
 					collectLambdaExpression(iterable, functionName, module, generatedByModule);
 					collectLambdas(body, functionName, module, generatedByModule);
+				case Switch(expression, cases, defaultBranch, _):
+					collectLambdaExpression(expression, functionName, module, generatedByModule);
+					for (switchCase in cases) {
+						collectLambdaExpression(switchCase.value, functionName, module, generatedByModule);
+						collectLambdas(switchCase.statements, functionName, module, generatedByModule);
+					}
+					collectLambdas(defaultBranch, functionName, module, generatedByModule);
 			}
 	}
 

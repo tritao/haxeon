@@ -91,8 +91,15 @@ enum AstStatement {
 	ForIn(name:String, iterable:AstExpression, body:Array<AstStatement>, span:SourceSpan);
 	Break(span:SourceSpan);
 	Continue(span:SourceSpan);
+	Switch(expression:AstExpression, cases:Array<AstSwitchCase>, defaultBranch:Array<AstStatement>, span:SourceSpan);
 	Increment(name:String, delta:Int, span:SourceSpan);
 	Expression(expression:AstExpression, span:SourceSpan);
+}
+
+typedef AstSwitchCase = {
+	final value:AstExpression;
+	final statements:Array<AstStatement>;
+	final span:SourceSpan;
 }
 
 typedef AstFunction = {

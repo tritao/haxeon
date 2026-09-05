@@ -246,6 +246,31 @@ class Parser {
 			var end = consume(TokenKind.Semicolon).span;
 			return Return(expression, start.merge(end));
 		}
+		if (match(TokenKind.Switch)) {
+			var start = previous().span;
+			consume(TokenKind.LeftParen);
+			var expression = parseExpression();
+			consume(TokenKind.RightParen);
+			consume(TokenKind.LeftBrace);
+			var cases = [];
+			while (match(TokenKind.Case)) {
+				var caseStart = previous().span, value = parseExpression();
+				consume(TokenKind.Colon);
+				var statements = [];
+				while (!check(TokenKind.RightBrace) && !check(TokenKind.Case) && !check(TokenKind.Default))
+					statements.push(parseStatement());
+				var caseEnd = statements.length == 0 ? expressionSpan(value) : statementSpan(statements[statements.length - 1]);
+				cases.push({value: value, statements: statements, span: caseStart.merge(caseEnd)});
+			}
+			var defaultBranch = [];
+			if (match(TokenKind.Default)) {
+				consume(TokenKind.Colon);
+				while (!check(TokenKind.RightBrace))
+					defaultBranch.push(parseStatement());
+			}
+			var end = consume(TokenKind.RightBrace).span;
+			return Switch(expression, cases, defaultBranch, start.merge(end));
+		}
 		if (check(TokenKind.Identifier) || check(TokenKind.This)) {
 			var saved = position, target = parseExpression();
 			if (match(TokenKind.Increment) || match(TokenKind.Decrement)) {
@@ -669,6 +694,6 @@ class Parser {
 	static function statementSpan(statement:AstStatement)
 		return switch statement {
 			case VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), If(_, _, _, span),
-				While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span), Increment(_, _, span), Expression(_, span): span;
+				While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span), Switch(_, _, _, span), Increment(_, _, span), Expression(_, span): span;
 		}
 }

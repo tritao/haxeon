@@ -81,6 +81,7 @@ run_program logical-comparisons 42
 run_program short-circuit 42
 run_program negation 42
 run_program modulo 42
+run_program switch-enum 42
 run_program interface-dispatch 42
 run_program interface-inheritance 43
 run_program interface-upcast 5

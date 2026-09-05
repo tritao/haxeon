@@ -319,6 +319,18 @@ class Typer {
 					var typedBody = typeStatements(body, loopScope, result);
 					loopDepth--;
 					output.push(TForIn(name, typedIterable, typedBody, span));
+				case Switch(expression, cases, defaultBranch, span):
+					var typedExpression = typeExpression(expression, scope);
+					if (!sameType(typedExpression.type, TInt) && !isEnum(typedExpression.type))
+						fail("E1019", "Switch requires an Int or enum value", typedExpression.span);
+					var typedCases = [];
+					for (switchCase in cases) {
+						var typedValue = coerce(typeExpression(switchCase.value, scope), typedExpression.type, "switch case", "E1019"),
+							typedBody = typeStatements(switchCase.statements, new Scope(scope), result);
+						typedCases.push({value: typedValue, statements: typedBody, span: switchCase.span});
+					}
+					var typedDefault = typeStatements(defaultBranch, new Scope(scope), result);
+					output.push(TSwitch(typedExpression, typedCases, typedDefault, span));
 				case Expression(expression, span):
 					output.push(TExpression(typeExpression(expression, scope), span));
 			}
@@ -710,6 +722,10 @@ class Typer {
 				case ForIn(name, _, body, _):
 					names.set(name, true);
 					collectDeclaredLocals(body, names);
+				case Switch(_, cases, defaultBranch, _):
+					for (switchCase in cases)
+						collectDeclaredLocals(switchCase.statements, names);
+					collectDeclaredLocals(defaultBranch, names);
 				case Break(_), Continue(_):
 				case Increment(_, _, _):
 				default:
@@ -736,6 +752,13 @@ class Typer {
 				case ForIn(_, iterable, body, _):
 					collectExpressionVariables(iterable, names);
 					collectVariables(body, names);
+				case Switch(expression, cases, defaultBranch, _):
+					collectExpressionVariables(expression, names);
+					for (switchCase in cases) {
+						collectExpressionVariables(switchCase.value, names);
+						collectVariables(switchCase.statements, names);
+					}
+					collectVariables(defaultBranch, names);
 				case Break(_), Continue(_):
 				case Increment(_, _, _):
 			}
@@ -975,6 +998,11 @@ class Typer {
 				case TIf(_, yes, no, _):
 					if (no.length > 0 && alwaysReturns(yes) && alwaysReturns(no))
 						return true;
+				case TSwitch(_, cases, defaultBranch, _):
+					if (defaultBranch.length > 0
+						&& alwaysReturns(defaultBranch)
+						&& [for (switchCase in cases) alwaysReturns(switchCase.statements)].indexOf(false) < 0)
+						return true;
 				default:
 			}
 		return false;
@@ -1019,6 +1047,12 @@ class Typer {
 			default: false;
 		};
 
+	static function isEnum(type:CompilerType):Bool
+		return switch type {
+			case TEnum(_): true;
+			default: false;
+		};
+
 	static function isNullable(type:CompilerType):Bool
 		return switch type {
 			case TNullable(_): true;
@@ -1034,7 +1068,7 @@ class Typer {
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
 			case VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), If(_, _, _, span),
-				While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span), Increment(_, _, span), Expression(_, span): span;
+				While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span), Switch(_, _, _, span), Increment(_, _, span), Expression(_, span): span;
 		}
 
 	static function fail(code:String, message:String, span:SourceSpan):Void

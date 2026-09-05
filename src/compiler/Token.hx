@@ -28,6 +28,9 @@ enum TokenKind {
 	In;
 	Break;
 	Continue;
+	Switch;
+	Case;
+	Default;
 	BoolTrue;
 	BoolFalse;
 	TypeInt;
