@@ -2095,19 +2095,32 @@ class Typer {
 	}
 
 	function narrowedScope(scope:Scope, condition:TypedExpression, truthy:Bool):Scope {
-		var result = new Scope(scope), comparison = nullComparison(condition);
-		if (comparison != null) {
-			var nonNull = truthy == comparison.nonNullWhenTrue;
-			result.refine(comparison.name, nonNull ? comparison.nonNullType : TNull);
-		}
+		var result = new Scope(scope);
+		applyConditionNarrowing(result, condition, truthy);
 		return result;
 	}
 
-	function refineAfterGuard(scope:Scope, condition:TypedExpression):Void {
+	function applyConditionNarrowing(scope:Scope, condition:TypedExpression, truthy:Bool):Void {
+		switch condition.expression {
+			case TAnd(left, right) if (truthy):
+				applyConditionNarrowing(scope, left, true);
+				applyConditionNarrowing(scope, right, true);
+				return;
+			case TOr(left, right) if (!truthy):
+				applyConditionNarrowing(scope, left, false);
+				applyConditionNarrowing(scope, right, false);
+				return;
+			default:
+		}
 		var comparison = nullComparison(condition);
-		if (comparison != null)
-			scope.refine(comparison.name, comparison.nonNullWhenTrue ? TNull : comparison.nonNullType);
+		if (comparison != null) {
+			var nonNull = truthy == comparison.nonNullWhenTrue;
+			scope.refine(comparison.name, nonNull ? comparison.nonNullType : TNull);
+		}
 	}
+
+	function refineAfterGuard(scope:Scope, condition:TypedExpression):Void
+		applyConditionNarrowing(scope, condition, false);
 
 	function nullComparison(condition:TypedExpression):Null<{name:String, nonNullType:CompilerType, nonNullWhenTrue:Bool}> {
 		return switch condition.expression {

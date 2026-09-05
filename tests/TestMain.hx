@@ -74,6 +74,7 @@ class TestMain {
 		Frontend.compile('function main():Int { return String.fromCharCode(65) == "A" ? 42 : 0; }');
 		Frontend.compile('class Value { public function new() { } } function main():Int { var value = true ? new Value() : null; return value == null ? 0 : 42; }');
 		Frontend.compile('class Value { public final number:Int = 42; public function new() { } } function fail():Void throw "missing"; function main():Int { var value:Null<Value> = new Value(); if (value == null) fail(); return value.number; }');
+		Frontend.compile('class Value { public final number:Int = 42; public function new() { } } function main():Int { var value:Null<Value> = new Value(); if (value != null && value.number == 42) return value.number; return 0; }');
 		Frontend.compile('function make():String return "value"; function main():Int { var value = null; if (true) value = make(); return value == null ? 0 : 42; }');
 		Frontend.compile('function make():String return "value"; function main():Int { var values = []; values.push(make()); return values.length; }');
 		Frontend.compile('function fail():Void throw "failure"; function value():String { fail(); return null; } function main():Int return 42;');
