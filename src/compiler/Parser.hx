@@ -501,6 +501,8 @@ class Parser {
 					appendStatements(defaultBranch, parseStatements());
 			}
 			var end = consume(TokenKind.RightBrace).span;
+			if (match(TokenKind.Semicolon))
+				end = previous().span;
 			return Switch(expression, cases, defaultBranch, hasDefault, start.merge(end));
 		}
 		if (check(TokenKind.Identifier) || check(TokenKind.This)) {

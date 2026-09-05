@@ -64,6 +64,7 @@ class TestMain {
 		Frontend.compile('function main():Int { var values = [20, 22]; var empty:Array<Int> = []; return values[0] + values[1] + empty.length; }');
 		new Parser(new Lexer(new SourceFile("expression-block-statements.hx",
 			'function main():Int return if (true) { var value = 0; if (true) value = 42; value; } else 0;')).tokenize()).parseProgram();
+		Frontend.compile('function main():Int { switch 0 { case 0: return 42; default: return 0; }; }');
 		expectCompileError('function main():Int { var values = []; return 0; }', 'Empty array literal requires an expected element type');
 		Frontend.compile('function main():Int { var value:Int; do { value = 42; } while (false); return value; }');
 		expectCompileError('function main():Int { do { return 1; } while (1); }', 'Do-while condition must be Bool');
