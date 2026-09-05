@@ -49,7 +49,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 - [x] Typed function-value dependency invalidation.
 - [~] Package-qualified module paths and imported function/module aliases are
   resolved incrementally; imported classes and nominal names remain.
-- [ ] Source edits represented as transactions with diagnostics and rollback.
+- [~] Unsaved edits can be validated transactionally against a forked compiler
+  snapshot without mutating the live source; shared snapshots and one-pass
+  commit/rollback remain.
 - [ ] Parallel parse/type work with deterministic assembly on the editor thread.
 - [ ] Memory and latency budgets measured on a realistic Pragtical project.
 

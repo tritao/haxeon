@@ -191,6 +191,17 @@ class ModuleMain {
 			callManyPatch = HlPatchReader.decode(callManyBuild.patchBytes);
 		if (callManyPatch.functions.length != 1 || callManyPatch.functions[0].relocations.length != 1)
 			throw "OCallN stable relocation was not emitted";
+		var validationCompiler = new Compiler();
+		validationCompiler.update("Main.hx", "function main():Int { return 42; }");
+		validationCompiler.compile("Main");
+		var previousSource = validationCompiler.modules.get("Main").source.text,
+			invalidEdit = validationCompiler.validate("Main.hx", "function main():Int { return \"bad\"; }", "Main");
+		if (invalidEdit.valid || invalidEdit.diagnostic == null || invalidEdit.diagnostic.code != "E1003")
+			throw "Invalid transactional edit was accepted";
+		if (validationCompiler.modules.get("Main").source.text != previousSource)
+			throw "Transactional validation mutated the live source snapshot";
+		if (!validationCompiler.validate("Main.hx", previousSource, "Main").valid)
+			throw "Valid transactional edit was rejected";
 		Sys.println("PASS: function fingerprints selectively retyped and regenerated cached artifacts");
 	}
 }

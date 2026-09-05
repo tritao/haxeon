@@ -39,6 +39,11 @@ typedef CompileResult = {
 	final patchBytes:Null<Bytes>;
 }
 
+typedef ValidationResult = {
+	final valid:Bool;
+	final diagnostic:Null<Diagnostic>;
+}
+
 class Compiler {
 	public final modules:Map<String, ModuleState> = [];
 
@@ -97,6 +102,35 @@ class Compiler {
 		} else
 			state.update(file);
 		return state;
+	}
+
+	/**
+		Validate an unsaved edit without mutating this compiler's live snapshot.
+		The candidate is rebuilt from the persistent identity state and current
+		sources; callers can then decide whether to commit the edit normally.
+	 */
+	public function validate(path:String, source:String, entryModule:String):ValidationResult {
+		var candidate = new Compiler(exportIdentityState()),
+			moduleName = ModulePath.fromFile(path);
+		var nativeNames = [for (name in natives.keys()) name];
+		nativeNames.sort(Reflect.compare);
+		for (name in nativeNames) {
+			var native = natives.get(name);
+			candidate.registerNative(native.name, native.library, native.symbol, native.arguments, native.result);
+		}
+		var moduleNames = [for (name in modules.keys()) name];
+		moduleNames.sort(Reflect.compare);
+		for (name in moduleNames)
+			if (name != moduleName) {
+				var state = modules.get(name);
+				candidate.update(state.source.path, state.source.text);
+			}
+		candidate.update(path, source);
+		try {
+			candidate.compile(entryModule);
+			return {valid: true, diagnostic: null};
+		} catch (error:CompileError)
+			return {valid: false, diagnostic: error.diagnostic};
 	}
 
 	public function compile(entryModule:String):CompileResult {
