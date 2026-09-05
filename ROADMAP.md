@@ -91,8 +91,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 - [~] Structural class layout/base changes are classified as full-reload
 	generations and rebuild HashLink type metadata; explicit per-plugin domains
 	remain.
-- [~] Plugin lifecycle/state migration API is defined and tested in the host
-	`RuntimeDomain`; native module ownership and type-arena integration remain.
+- [~] Plugin lifecycle/state migration and staged native-module ownership are
+	tested in the host `RuntimeDomain`; native type-arena integration remains.
 - [x] In-memory module loading and patching without temporary `.hl` files.
 - [ ] Crash-safe diagnostics and recovery when a patch fails in native code.
 

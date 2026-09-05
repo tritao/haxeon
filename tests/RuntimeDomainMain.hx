@@ -32,6 +32,14 @@ class RuntimeDomainMain {
 		domain.deactivate();
 		if (domain.active || domain.generation != 2)
 			throw "runtime domain did not deactivate cleanly";
+		var disposed = 0, owned = new RuntimeDomain("owned", function(_) disposed++), firstModule:Dynamic = {}, secondModule:Dynamic = {};
+		owned.activateWithModule(new TestPlugin("owned-first", events), firstModule);
+		owned.reloadWithModule(new TestPlugin("owned-second", events), secondModule);
+		if (disposed != 1)
+			throw "runtime domain did not dispose the previous module after commit";
+		owned.deactivate();
+		if (disposed != 2)
+			throw "runtime domain did not dispose the active module on deactivate";
 		Sys.println("PASS: runtime domain lifecycle and state migration contract");
 	}
 }
