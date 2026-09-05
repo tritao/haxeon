@@ -332,8 +332,8 @@ class HotReloadMain {
 			"function value():Int { return 42; } function make():() -> Int { var marker = 2; return value; } function main():Int { return value(); }");
 		var second = compiler.compile("Main");
 		Runtime.patchSet(loaded, new PatchSet(first.revision, second.revision, second.patchBytes, second.changedFunctions));
-		if (Runtime.callRetainedClosureInt(retained) != 41)
-			throw "replacing patch owners invalidated an escaped closure";
+		if (Runtime.callRetainedClosureInt(retained) != 42)
+			throw "retained closure did not follow its stable function slot";
 		if (Runtime.retiredCodeAllocationCount(loaded) != 1)
 			throw "escaped closure JIT owner was not tracked as retired";
 		Runtime.dispose(loaded);
@@ -504,7 +504,7 @@ class HotReloadMain {
 		indices.set("value", 0);
 		ids.set("value", 71000);
 		bySlot.set(0, 71000);
-		var loaded = Runtime.load(HlWriter.encode(code), HlRuntimeIdentity.encode(moduleId, 0, indices, ids));
+		var loaded = Runtime.load(HlWriter.encode(code), HlRuntimeIdentity.encode(moduleId, 1, indices, ids));
 		var initialCapacity = Runtime.metadataTypeCapacity(loaded);
 		if (Runtime.metadataTypeCount(loaded) != code.types.length || initialCapacity - code.types.length != 65536)
 			throw "type arena did not expose its fixed append reserve";
@@ -578,7 +578,7 @@ class HotReloadMain {
 		indices.set("value", 0);
 		ids.set("value", 70000);
 		bySlot.set(0, 70000);
-		var loaded = Runtime.load(HlWriter.encode(code), HlRuntimeIdentity.encode(moduleId, 0, indices, ids));
+		var loaded = Runtime.load(HlWriter.encode(code), HlRuntimeIdentity.encode(moduleId, 1, indices, ids));
 		code.ints.push(2);
 		code.floats.push(3.5);
 		code.strings.push("new symbol");
