@@ -82,6 +82,7 @@ run_program object-array 42
 run_program array-copy-concat 42
 run_program array-slice-index 42
 run_program array-mutation 42
+run_program array-object-mutation 8
 run_program for-in 42
 run_program map-basic 42
 run_program map-int 42

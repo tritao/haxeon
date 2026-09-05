@@ -463,6 +463,7 @@ class IrVerifier {
 	static function abiCompatible(actual:IrType, expected:IrType):Bool
 		return switch [actual, expected] {
 			case [Array(element), Array(Dyn)]: isReference(element);
+			case [Bytes, Dyn], [Obj(_), Dyn], [Virtual(_), Dyn], [Array(_), Dyn], [Function(_, _), Dyn]: true;
 			default: false;
 		};
 
@@ -475,6 +476,7 @@ class IrVerifier {
 			case [Virtual(actualName), Virtual(expectedName)]: interfaceExtends(actualName, expectedName, interfaces);
 			case [Array(actualElement), Array(Dyn)]: isReference(actualElement);
 			case [Array(actualElement), Array(expectedElement)]: sameType(actualElement, expectedElement);
+			case [Bytes, Dyn], [Obj(_), Dyn], [Virtual(_), Dyn], [Array(_), Dyn], [Function(_, _), Dyn]: true;
 			default: false;
 		};
 	}

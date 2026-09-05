@@ -205,22 +205,20 @@ class IrGenerator {
 						arguments: [arrayType, entry.type],
 						result: I32
 					});
-				if (entry.name != "ref") {
-					program.natives.push({
-						name: '__array_push_${entry.name}',
-						library: "realtime_runtime",
-						symbol: '__array_push_${entry.name}',
-						arguments: [arrayType, entry.type],
-						result: arrayType
-					});
-					program.natives.push({
-						name: '__array_pop_${entry.name}',
-						library: "realtime_runtime",
-						symbol: '__array_pop_${entry.name}',
-						arguments: [arrayType],
-						result: entry.type
-					});
-				}
+				program.natives.push({
+					name: '__array_push_${entry.name}',
+					library: "realtime_runtime",
+					symbol: '__array_push_${entry.name}',
+					arguments: [arrayType, entry.type],
+					result: arrayType
+				});
+				program.natives.push({
+					name: '__array_pop_${entry.name}',
+					library: "realtime_runtime",
+					symbol: '__array_pop_${entry.name}',
+					arguments: [arrayType],
+					result: entry.type
+				});
 			}
 		}
 		if (needsStringRuntime)

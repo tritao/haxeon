@@ -786,21 +786,11 @@ class Typer {
 			if (!isLocalArrayReceiver(receiver))
 				fail("E1016", "Array.push currently requires a local array variable", span);
 			var value = coerce(typeExpression(arguments[0], scope), element, "array element", "E1002");
-			switch element {
-				case TInt, TFloat, TBool, TString:
-				default:
-					fail("E1016", "Array.push currently supports primitive and String arrays only", span);
-			}
 			return new TypedExpression(TArrayPush(receiver, value), TInt, span);
 		}
 		if (name == "pop") {
 			if (arguments.length != 0)
 				fail("E1008", "Array.pop expects no arguments", span);
-			switch element {
-				case TInt, TFloat, TBool, TString:
-				default:
-					fail("E1016", "Array.pop currently supports primitive and String arrays only", span);
-			}
 			return new TypedExpression(TArrayPop(receiver), element, span);
 		}
 		if (name == "copy") {

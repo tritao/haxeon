@@ -171,6 +171,7 @@ DEFINE_ARRAY_MUTATION(i32, int)
 DEFINE_ARRAY_MUTATION(f64, double)
 DEFINE_ARRAY_MUTATION(bytes, vbyte *)
 DEFINE_ARRAY_MUTATION(bool, bool)
+DEFINE_ARRAY_MUTATION(ref, vdynamic *)
 
 #undef DEFINE_ARRAY_MUTATION
 
@@ -479,6 +480,8 @@ DEFINE_PRIM(_ARR,__array_push_bytes,_ARR _BYTES);
 DEFINE_PRIM(_BYTES,__array_pop_bytes,_ARR);
 DEFINE_PRIM(_ARR,__array_push_bool,_ARR _BOOL);
 DEFINE_PRIM(_BOOL,__array_pop_bool,_ARR);
+DEFINE_PRIM(_ARR,__array_push_ref,_ARR _DYN);
+DEFINE_PRIM(_DYN,__array_pop_ref,_ARR);
 DEFINE_PRIM(_ABSTRACT(map_string_i32),__map_string_i32_alloc,_NO_ARG);
 DEFINE_PRIM(_VOID,__map_string_i32_set,_ABSTRACT(map_string_i32) _BYTES _I32);
 DEFINE_PRIM(_BOOL,__map_string_i32_exists,_ABSTRACT(map_string_i32) _BYTES);
