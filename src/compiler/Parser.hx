@@ -124,7 +124,7 @@ class Parser {
 		consume(TokenKind.LeftBrace);
 		var statements = [];
 		while (!check(TokenKind.RightBrace))
-			statements.push(parseStatement());
+			appendStatements(statements, parseStatements());
 		var end = consume(TokenKind.RightBrace).span;
 		return {
 			name: name,
@@ -317,7 +317,7 @@ class Parser {
 				consume(TokenKind.Colon);
 				var statements = [];
 				while (!check(TokenKind.RightBrace) && !check(TokenKind.Case) && !check(TokenKind.Default))
-					statements.push(parseStatement());
+					appendStatements(statements, parseStatements());
 				var caseEnd = statements.length == 0 ? expressionSpan(value) : statementSpan(statements[statements.length - 1]);
 				cases.push({value: value, statements: statements, span: caseStart.merge(caseEnd)});
 			}
@@ -325,7 +325,7 @@ class Parser {
 			if (hasDefault) {
 				consume(TokenKind.Colon);
 				while (!check(TokenKind.RightBrace))
-					defaultBranch.push(parseStatement());
+					appendStatements(defaultBranch, parseStatements());
 			}
 			var end = consume(TokenKind.RightBrace).span;
 			return Switch(expression, cases, defaultBranch, hasDefault, start.merge(end));
@@ -393,6 +393,33 @@ class Parser {
 			end = consume(TokenKind.Semicolon).span;
 		return Expression(expression, expressionSpan(expression).merge(end));
 	}
+
+	function parseStatements():Array<AstStatement> {
+		if (!check(TokenKind.Var))
+			return [parseStatement()];
+		var start = advance().span, declarations = [];
+		do {
+			var nameToken = consume(TokenKind.Identifier),
+				type = match(TokenKind.Colon) ? parseType() : null;
+			consume(TokenKind.Assign);
+			var initializer = parseExpression();
+			declarations.push(VarDeclaration(nameToken.text, type, initializer, start.merge(expressionSpan(initializer))));
+		} while (match(TokenKind.Comma));
+		var end = consume(TokenKind.Semicolon).span;
+		if (declarations.length > 0) {
+			var last = declarations.length - 1;
+			switch declarations[last] {
+				case VarDeclaration(name, type, initializer, _):
+					declarations[last] = VarDeclaration(name, type, initializer, start.merge(end));
+				default:
+			}
+		}
+		return declarations;
+	}
+
+	static function appendStatements(target:Array<AstStatement>, statements:Array<AstStatement>):Void
+		for (statement in statements)
+			target.push(statement);
 
 	function parseExpression():AstExpression {
 		var expression = parseOr();
@@ -711,10 +738,10 @@ class Parser {
 
 	function parseStatementOrBlock():Array<AstStatement> {
 		if (!match(TokenKind.LeftBrace))
-			return [parseStatement()];
+			return parseStatements();
 		var statements = [];
 		while (!check(TokenKind.RightBrace))
-			statements.push(parseStatement());
+			appendStatements(statements, parseStatements());
 		consume(TokenKind.RightBrace);
 		return statements;
 	}
