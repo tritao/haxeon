@@ -186,13 +186,8 @@ class HotReloadMain {
 			throw "concurrent patch was not committed";
 
 		compiler.update("Value.hx", "function value():Int { return 48; }");
-		var competingPatch = compiler.compile("Main"),
-			ready = new sys.thread.Lock(),
-			gate = new sys.thread.Lock(),
-			doneA = new sys.thread.Lock(),
-			doneB = new sys.thread.Lock(),
-			outcomeA = "",
-			outcomeB = "";
+		var competingPatch = compiler.compile("Main"), ready = new sys.thread.Lock(), gate = new sys.thread.Lock(), doneA = new sys.thread.Lock(),
+			doneB = new sys.thread.Lock(), outcomeA = "", outcomeB = "";
 		sys.thread.Thread.create(function() {
 			ready.release();
 			gate.wait();
@@ -217,12 +212,38 @@ class HotReloadMain {
 		if (Runtime.liveRevision(loaded) != liveRevision || Runtime.callInt(loaded, readIndex) != 48)
 			throw "competing patch publication was not atomic";
 
+		compiler.update("Value.hx", "function value():Int { return 49; }");
+		var failurePatch = compiler.compile("Main"),
+			beforeFailureTypes = Runtime.metadataTypeCount(loaded),
+			beforeFailureCapacity = Runtime.metadataTypeCapacity(loaded),
+			beforeFailureAllocations = Runtime.retainedCodeAllocationCount(loaded);
+		for (stage in 1...4) {
+			Runtime.injectPatchFailure(loaded, stage);
+			try {
+				Runtime.patchSet(loaded, new PatchSet(liveRevision, failurePatch.revision, failurePatch.patchBytes, failurePatch.changedFunctions));
+				throw 'injected patch failure $stage unexpectedly succeeded';
+			} catch (error:RuntimeError) {
+				if (error.status != RuntimeStatus.Incompatible)
+					throw error;
+			}
+			if (Runtime.liveRevision(loaded) != liveRevision
+				|| Runtime.metadataTypeCount(loaded) != beforeFailureTypes
+				|| Runtime.metadataTypeCapacity(loaded) != beforeFailureCapacity
+				|| Runtime.retainedCodeAllocationCount(loaded) != beforeFailureAllocations
+				|| Runtime.callInt(loaded, readIndex) != 48)
+				throw 'injected patch failure $stage changed published state';
+		}
+		Runtime.patchSet(loaded, new PatchSet(liveRevision, failurePatch.revision, failurePatch.patchBytes, failurePatch.changedFunctions));
+		liveRevision = failurePatch.revision;
+		if (Runtime.liveRevision(loaded) != liveRevision || Runtime.callInt(loaded, readIndex) != 49)
+			throw "patch did not recover after injected staging failures";
+
 		compiler.update("Value.hx", 'function value():Bool { return true; }');
 		try {
 			compiler.compile("Main");
 			throw "incompatible source unexpectedly compiled";
 		} catch (error:CompileError) {}
-		if (Runtime.callInt(loaded, valueIndex) != 48)
+		if (Runtime.callInt(loaded, valueIndex) != 49)
 			throw "compile failure damaged the live generation";
 
 		try {
@@ -232,17 +253,17 @@ class HotReloadMain {
 			if (error.status != RuntimeStatus.BadFormat)
 				throw error;
 		}
-		if (Runtime.callInt(loaded, valueIndex) != 48)
+		if (Runtime.callInt(loaded, valueIndex) != 49)
 			throw "rejected patch damaged the live generation";
 
 		try {
-			Runtime.patchSet(loaded, new PatchSet(liveRevision - 1, liveRevision, competingPatch.patchBytes, competingPatch.changedFunctions));
+			Runtime.patchSet(loaded, new PatchSet(liveRevision - 1, liveRevision, failurePatch.patchBytes, failurePatch.changedFunctions));
 			throw "stale patch unexpectedly succeeded";
 		} catch (error:RuntimeError) {
 			if (error.status != RuntimeStatus.StalePatch)
 				throw error;
 		}
-		if (Runtime.callInt(loaded, valueIndex) != 48)
+		if (Runtime.callInt(loaded, valueIndex) != 49)
 			throw "stale patch damaged the live generation";
 
 		var foreign = new Compiler();
@@ -259,7 +280,7 @@ class HotReloadMain {
 			if (error.status != RuntimeStatus.Incompatible)
 				throw error;
 		}
-		if (Runtime.callInt(loaded, valueIndex) != 48)
+		if (Runtime.callInt(loaded, valueIndex) != 49)
 			throw "foreign patch damaged the live generation";
 		Runtime.dispose(loaded);
 		testAppendedFloatAndStringSymbols();

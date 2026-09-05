@@ -24,6 +24,7 @@ complete new state.
 The repeatable hot-reload gate covers malformed bytes, bad prefix hashes, invalid
 metadata references, arena exhaustion, foreign identities, stale patches,
 exceptions, repeated replacement, a call overlapping publication, and two
-competing writers. Allocation failure is handled by every staging allocation but
-is not yet deterministically injected. Native sanitizer support and shutdown
-races remain to be added to the gate.
+competing writers. One-shot test checkpoints force rollback after symbol staging,
+type staging, and finalized JIT staging; the same patch must then succeed without
+changing its base revision. Native sanitizer support and shutdown races remain
+to be added to the gate.

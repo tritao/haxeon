@@ -50,6 +50,8 @@ private class RuntimeNative {
 	public static function revision(module:hl.Abstract<"realtime_module">):Int
 		return 0;
 
+	public static function set_patch_failure_stage(module:hl.Abstract<"realtime_module">, stage:Int):Void {}
+
 	public static function dispose(module:hl.Abstract<"realtime_module">):Void {}
 
 	public static function inspect_patch(bytes:hl.Bytes, length:Int):Int
@@ -116,6 +118,9 @@ class Runtime {
 
 	public static function liveRevision(module:LoadedModule):Int
 		return RuntimeNative.revision(cast module);
+
+	@:noCompletion public static function injectPatchFailure(module:LoadedModule, stage:Int):Void
+		RuntimeNative.set_patch_failure_stage(cast module, stage);
 
 	public static function dispose(module:LoadedModule):Void
 		RuntimeNative.dispose(cast module);
