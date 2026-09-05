@@ -76,6 +76,16 @@ class Lexer {
 			}
 			if (isDigit(code)) {
 				position++;
+				if (code == 48 && position < source.length && (source.charAt(position) == "x" || source.charAt(position) == "X")) {
+					position++;
+					var digitsStart = position;
+					while (position < source.length && isHexDigit(source.charCodeAt(position)))
+						position++;
+					if (position == digitsStart)
+						throw new CompileError(new Diagnostic("E0001", "Hexadecimal literal requires at least one digit", file.span(start, position)));
+					tokens.push(new Token(TokenKind.Integer, source.substring(start, position), file.span(start, position)));
+					continue;
+				}
 				while (position < source.length && isDigit(source.charCodeAt(position)))
 					position++;
 				var kind = TokenKind.Integer;
@@ -219,4 +229,7 @@ class Lexer {
 
 	static inline function isIdentifierPart(code:Int):Bool
 		return isIdentifierStart(code) || isDigit(code);
+
+	static inline function isHexDigit(code:Int):Bool
+		return isDigit(code) || code >= 65 && code <= 70 || code >= 97 && code <= 102;
 }

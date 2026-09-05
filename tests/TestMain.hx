@@ -53,6 +53,10 @@ class TestMain {
 			|| lexicalForms[1].kind != compiler.Token.TokenKind.Question
 			|| lexicalForms[2].kind != compiler.Token.TokenKind.At)
 			throw "Common Haxe lexical forms were not tokenized";
+		var hexTokens = new Lexer(new SourceFile("hex.hx", "0x2A 0Xff")).tokenize();
+		if (hexTokens[0].text != "0x2A" || hexTokens[1].text != "0Xff")
+			throw "Hexadecimal integer literals were not tokenized";
+		Frontend.compile('function main():Int { return 0x2A; }');
 		var values = [
 			-0x1FFFFFFF,
 			-0x2000,
