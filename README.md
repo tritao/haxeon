@@ -38,6 +38,12 @@ source calls remain ordinary Haxe-compatible calls while the backend emits the
 configured library/symbol binding. Registrations freeze after compilation so a
 native-table layout cannot silently change beneath a live module.
 
+`compiler.RuntimeAbi.register(compiler)` installs the stable host surface used
+by the command-line compiler: `trace` plus Haxe-compatible `Sys` time,
+filesystem, environment, process, and argument calls. These delegate to
+HashLink's standard library; compiler-owned realtime operations stay in the
+separately versioned `realtime_runtime` ABI.
+
 Compiler-owned `new Array<Int>(length)`, `new Array<Float>(length)`,
 `new Array<Bool>(length)`, `new Array<String>(length)`, and reference-array
 expressions emit the realtime runtime ABI without requiring source-level native

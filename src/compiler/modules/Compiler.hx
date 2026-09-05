@@ -480,6 +480,12 @@ class Compiler {
 				alias = dot < 0 ? importPath : importPath.substr(dot + 1);
 			dependencies.remove(alias);
 		}
+		// Dotted native names such as Sys.time look like module-qualified calls
+		// to the dependency scanner.  Registered natives own those prefixes and
+		// must not require a source module with the same name.
+		for (dependency in [for (dependency in dependencies.keys()) dependency])
+			if (nativePrefixExists(dependency))
+				dependencies.remove(dependency);
 		state.dependencies = [for (name in dependencies.keys()) name];
 		state.dependencies.sort(Reflect.compare);
 		var signatures:Map<String, String> = [],
@@ -792,6 +798,15 @@ class Compiler {
 			case NewMap(_, _, _):
 			default:
 		}
+
+	function nativePrefixExists(prefix:String):Bool {
+		for (name in natives.keys()) {
+			var dot = name.indexOf(".");
+			if (dot > 0 && name.substr(0, dot) == prefix)
+				return true;
+		}
+		return false;
+	}
 
 	static function scanCalls(statement:AstStatement, calls:Map<String, Bool>, aliases:Map<String, String>):Void
 		switch statement {

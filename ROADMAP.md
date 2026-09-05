@@ -62,8 +62,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 
 - [~] A documented runtime library ABI for strings, collections, IO, and time
 	(compiler-owned string concatenation, length, equality, search, slicing, and
-	typed `trace` are exercised end-to-end; generic collections, IO, and time
-	remain future work).
+	typed `trace` plus the standard `Sys` time/filesystem/process surface are
+	exercised end-to-end; file handles, generic collections, and richer IO remain
+	future work).
 
 ### B. Incremental compiler service
 

@@ -2,7 +2,7 @@ import compiler.hl.HlWriter;
 import compiler.modules.Compiler;
 import compiler.modules.ModulePath;
 import compiler.tools.BootstrapStatus;
-import compiler.types.Type.CompilerType;
+import compiler.RuntimeAbi;
 import sys.io.File;
 
 class Main {
@@ -15,7 +15,7 @@ class Main {
 		var sourcePath = arguments.length > 0 ? arguments[0] : "tests/programs/add.hx";
 		var outputPath = arguments.length > 1 ? arguments[1] : "out/program.hl";
 		var compiler = new Compiler();
-		compiler.registerNative("trace", "std", "sys_print", [CompilerType.TString], CompilerType.TVoid);
+		RuntimeAbi.register(compiler);
 		var module = ModulePath.fromFile(sourcePath);
 		compiler.update(sourcePath, File.getContent(sourcePath));
 		var result = compiler.compile(module);
