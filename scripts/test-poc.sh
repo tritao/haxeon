@@ -157,6 +157,7 @@ run_program try-multiple-catches 42
 run_program local-shadowing 42
 run_program captured-shadowing 42
 run_program dynamic-argument 42
+run_program anonymous-record 42
 
 object_output="$root_dir/out/object.hl"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ObjectMain "$object_output"

@@ -13,7 +13,10 @@ enum AstType {
 	MapType(key:AstType, value:AstType);
 	NullableType(element:AstType);
 	FunctionType(arguments:Array<AstType>, result:AstType);
+	AnonymousType(fields:Array<AstAnonymousField>);
 }
+
+typedef AstAnonymousField = {final name:String; final type:AstType; final optional:Bool; final span:SourceSpan;}
 
 typedef AstArgument = {
 	final name:String;
@@ -77,6 +80,7 @@ enum AstExpression {
 	And(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Or(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Conditional(condition:AstExpression, whenTrue:AstExpression, whenFalse:AstExpression, span:SourceSpan);
+	ObjectLiteral(fields:Array<AstObjectField>, span:SourceSpan);
 	Call(name:String, arguments:Array<AstExpression>, span:SourceSpan);
 	MethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan);
 	New(typeName:String, arguments:Array<AstExpression>, span:SourceSpan);
@@ -85,6 +89,8 @@ enum AstExpression {
 	Index(array:AstExpression, index:AstExpression, span:SourceSpan);
 	Lambda(arguments:Array<AstArgument>, statements:Array<AstStatement>, span:SourceSpan);
 }
+
+typedef AstObjectField = {final name:String; final value:AstExpression; final span:SourceSpan;}
 
 enum AstStatement {
 	UninitializedDeclaration(name:String, type:AstType, span:SourceSpan);

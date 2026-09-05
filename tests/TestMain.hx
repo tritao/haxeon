@@ -440,6 +440,11 @@ class TestMain {
 		Frontend.compile('function main():Int { while (true) { var value:Int; try { value = 42; } catch (error:Dynamic) { break; } return value; } return 0; }');
 		Frontend.compile("class Math { public static function answer():Int return 42; } function main():Int return Math.answer();");
 		Frontend.compile('class Constants { public static inline final ANSWER = 42; static inline final LABEL = "answer"; static final VALUES = new Array<Int>(0); } function main():Int return Constants.ANSWER;');
+		Frontend.compile('typedef Pair = { final left:Int; final right:Int; }; function sum(pair:Pair):Int return pair.left + pair.right; function main():Int return sum({left: 20, right: 22});');
+		Frontend.compile('typedef Entry = {name:String, ?count:Int}; function read(entry:Entry):String return entry.name; function main():Int return 0;');
+		expectCompileError('typedef Invalid = { value:Int; value:String; }; function main():Int return 0;', 'Duplicate anonymous field "value"');
+		expectCompileError('typedef Pair = {left:Int, right:Int}; function consume(pair:Pair):Int return pair.left; function main():Int return consume({left: 42});',
+			'Type mismatch for argument 1 to "consume"');
 		Frontend.compile("function main():Int { var convert:(Int) -> Dynamic = (value:Int) -> { return value; }; convert(42); return 42; }");
 		expectCompileError("class Box { public var value:Int; } function main():Int { var box:Null<Box> = new Box(); if (box != null) { box = null; return box.value; } return 0; }",
 			'Field "value" requires an object');

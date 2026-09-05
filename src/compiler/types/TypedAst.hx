@@ -47,6 +47,7 @@ enum TypedExpressionKind {
 	TAnd(left:TypedExpression, right:TypedExpression);
 	TOr(left:TypedExpression, right:TypedExpression);
 	TConditional(condition:TypedExpression, whenTrue:TypedExpression, whenFalse:TypedExpression);
+	TObjectLiteral(name:String, fields:Array<TypedObjectField>);
 	TCall(name:String, arguments:Array<TypedExpression>);
 	TCollectionCall(receiver:TypedExpression, operation:String, arguments:Array<TypedExpression>);
 	TClosureCall(callee:TypedExpression, arguments:Array<TypedExpression>);
@@ -65,6 +66,8 @@ enum TypedExpressionKind {
 	TArrayPush(array:TypedExpression, value:TypedExpression);
 	TArrayPop(array:TypedExpression);
 }
+
+typedef TypedObjectField = {final name:String; final value:TypedExpression;}
 
 enum TypedStatement {
 	TDeclare(name:String, type:CompilerType, span:SourceSpan);
@@ -140,6 +143,7 @@ enum CellStorageKind {
 
 typedef TypedCell = {final name:String; final valueType:CompilerType; final kind:CellStorageKind;}
 typedef TypedCaptureEnvironment = {final name:String; final fields:Array<{name:String, type:CompilerType}>;}
+typedef TypedAnonymous = {final name:String; final fields:Array<compiler.types.Type.AnonymousField>;}
 
 typedef TypedProgram = {
 	final enums:Array<TypedEnum>;
@@ -148,4 +152,5 @@ typedef TypedProgram = {
 	final functions:Array<TypedFunction>;
 	final cells:Array<TypedCell>;
 	final captureEnvironments:Array<TypedCaptureEnvironment>;
+	final anonymousTypes:Array<TypedAnonymous>;
 }

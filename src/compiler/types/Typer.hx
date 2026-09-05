@@ -38,6 +38,7 @@ class Typer {
 	final generatedEnvironments:Array<compiler.types.TypedAst.TypedCaptureEnvironment> = [];
 	final lambdaCache:Map<String, TypedExpression> = [];
 	var context:BodyContext = new BodyContext("");
+	final anonymousTypes:Map<String, Array<compiler.types.Type.AnonymousField>> = [];
 
 	public static function type(program:AstProgram):TypedProgram
 		return new Typer(null).typeProgram(program, null, true);
@@ -59,6 +60,8 @@ class Typer {
 		enumDecls = declarations.enums;
 		interfaceDecls = declarations.interfaces;
 		classDecls = declarations.classes;
+		for (alias in program.aliases)
+			registerAnonymousTypes(lowerType(alias.type));
 		for (interfaceDecl in program.interfaces) {
 			for (method in interfaceDecl.methods) {
 				var qualified = interfaceDecl.name + "." + method.name;
@@ -133,7 +136,8 @@ class Typer {
 			classes: typedClasses,
 			functions: typedFunctions,
 			cells: generatedCells,
-			captureEnvironments: generatedEnvironments
+			captureEnvironments: generatedEnvironments,
+			anonymousTypes: orderedAnonymousTypes()
 		};
 	}
 
@@ -883,6 +887,43 @@ class Typer {
 				typedTrue = coerce(typedTrue, resultType, "conditional branch", "E1003");
 				typedFalse = coerce(typedFalse, resultType, "conditional branch", "E1003");
 				new TypedExpression(TConditional(typedCondition, typedTrue, typedFalse), resultType, span);
+			case ObjectLiteral(fields, span):
+				var expectedFields = switch expectedType {
+					case TAnonymous(_, values): values;
+					default: null;
+				};
+				var seen:Map<String, Bool> = [], typedFields = [];
+				for (field in fields) {
+					if (seen.exists(field.name))
+						fail("E1001", 'Duplicate object field "${field.name}"', field.span);
+					seen.set(field.name, true);
+					var expectedField = anonymousField(expectedFields, field.name);
+					if (expectedFields != null && expectedField == null)
+						fail("E1002", 'Unexpected object field "${field.name}"', field.span);
+					var value = typeExpression(field.value, scope, expectedField == null ? null : expectedField.type);
+					if (expectedField != null)
+						value = coerce(value, expectedField.type, 'object field "${field.name}"', "E1002");
+					typedFields.push({name: field.name, value: value});
+				}
+				if (expectedFields != null)
+					for (field in expectedFields)
+						if (!field.optional && !seen.exists(field.name))
+							fail("E1002", 'Missing object field "${field.name}"', span);
+				typedFields.sort(function(left, right) return Reflect.compare(left.name, right.name));
+				var resultType = expectedType;
+				if (resultType == null) {
+					var inferred = [
+						for (field in typedFields)
+							{name: field.name, type: field.value.type, optional: false}
+					];
+					resultType = TAnonymous(anonymousTypeName(inferred), inferred);
+				}
+				var typeName = switch resultType {
+					case TAnonymous(name, _): name;
+					default: "";
+				};
+				registerAnonymousTypes(resultType);
+				new TypedExpression(TObjectLiteral(typeName, typedFields), resultType, span);
 			case New(typeName, arguments, span):
 				if (!classDecls.exists(typeName) || interfaceDecls.exists(typeName))
 					fail("E1007", 'Unknown class "$typeName"', span);
@@ -1503,6 +1544,9 @@ class Typer {
 			case Conditional(condition, whenTrue, whenFalse, _):
 				for (item in [condition, whenTrue, whenFalse])
 					collectMutableCaptureExpression(item, outerDeclared, result);
+			case ObjectLiteral(fields, _):
+				for (field in fields)
+					collectMutableCaptureExpression(field.value, outerDeclared, result);
 			case Variable(_, _), IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), NewMap(_, _, _):
 		}
 
@@ -1536,6 +1580,9 @@ class Typer {
 			case Conditional(condition, whenTrue, whenFalse, _):
 				for (item in [condition, whenTrue, whenFalse])
 					collectExpressionVariables(item, names);
+			case ObjectLiteral(fields, _):
+				for (field in fields)
+					collectExpressionVariables(field.value, names);
 			case New(_, arguments, _):
 				for (argument in arguments)
 					collectExpressionVariables(argument, names);
@@ -1617,6 +1664,11 @@ class Typer {
 
 	function fieldType(type:CompilerType, name:String, span:SourceSpan):CompilerType {
 		switch type {
+			case TAnonymous(_, fields):
+				for (field in fields)
+					if (field.name == name)
+						return field.type;
+				fail("E1005", 'Unknown anonymous field "$name"', span);
 			case TClass(className):
 				var classDecl = classDecls.get(className);
 				if (classDecl != null) {
@@ -1649,6 +1701,12 @@ class Typer {
 
 	function findFieldType(type:CompilerType, name:String):Null<CompilerType>
 		return switch type {
+			case TAnonymous(_, fields):
+				var found = null;
+				for (field in fields)
+					if (field.name == name)
+						found = field.type;
+				found;
 			case TClass(className):
 				var classDecl = classDecls.get(className),
 					found:Null<CompilerType> = null;
@@ -1830,9 +1888,44 @@ class Typer {
 
 	static function isReference(type:CompilerType):Bool
 		return switch type {
-			case TString, TDynamic, TClass(_), TInterface(_), TArray(_), TFunction(_), TMap(_, _): true;
+			case TString, TDynamic, TClass(_), TInterface(_), TAnonymous(_, _), TArray(_), TFunction(_), TMap(_, _): true;
 			default: false;
 		};
+
+	static function anonymousField(fields:Null<Array<compiler.types.Type.AnonymousField>>, name:String):Null<compiler.types.Type.AnonymousField> {
+		if (fields != null)
+			for (field in fields)
+				if (field.name == name)
+					return field;
+		return null;
+	}
+
+	static function anonymousTypeName(fields:Array<compiler.types.Type.AnonymousField>):String
+		return '$' + 'anon:{' + [for (field in fields) field.name + ":" + SemanticSignature.type(field.type)].join(",") + '}';
+
+	function registerAnonymousTypes(type:CompilerType):Void
+		switch type {
+			case TAnonymous(name, fields):
+				anonymousTypes.set(name, fields);
+				for (field in fields)
+					registerAnonymousTypes(field.type);
+			case TNullable(element), TArray(element):
+				registerAnonymousTypes(element);
+			case TMap(key, value):
+				registerAnonymousTypes(key);
+				registerAnonymousTypes(value);
+			case TFunction(arguments, result):
+				for (argument in arguments)
+					registerAnonymousTypes(argument);
+				registerAnonymousTypes(result);
+			default:
+		}
+
+	function orderedAnonymousTypes():Array<compiler.types.TypedAst.TypedAnonymous> {
+		var names = [for (name in anonymousTypes.keys()) name];
+		names.sort(Reflect.compare);
+		return [for (name in names) {name: name, fields: anonymousTypes.get(name)}];
+	}
 
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {

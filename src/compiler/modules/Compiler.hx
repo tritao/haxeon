@@ -666,6 +666,7 @@ class Compiler {
 			case TNullable(element): irType(element);
 			case TArray(element): Array(irType(element));
 			case TFunction(arguments, result): Function([for (argument in arguments) irType(argument)], irType(result));
+			case TAnonymous(name, _): Obj(name);
 		};
 
 	function stableIdsBySlot(sourceAssembler:HlModuleAssembler, layout:Map<String, Int>):Map<Int, Int> {
@@ -946,6 +947,10 @@ class Compiler {
 			case MapType(key, value): 'Map<${astTypeName(key)},${astTypeName(value)}>';
 			case NullableType(element): 'Null<${astTypeName(element)}>';
 			case FunctionType(arguments, result): '(' + [for (argument in arguments) astTypeName(argument)].join(',') + ')->' + astTypeName(result);
+			case AnonymousType(fields): '{' + [
+					for (field in fields)
+						(field.optional ? "?" : "") + field.name + ":" + astTypeName(field.type)
+				].join(',') + '}';
 		};
 
 	static function canonicalStatement(s, module, entry, locals, ?aliases):AstStatement
@@ -1027,6 +1032,10 @@ class Compiler {
 			case Conditional(condition, whenTrue, whenFalse, s):
 				Conditional(canonicalExpression(condition, module, entry, locals, aliases), canonicalExpression(whenTrue, module, entry, locals, aliases),
 					canonicalExpression(whenFalse, module, entry, locals, aliases), s);
+			case ObjectLiteral(fields, s): ObjectLiteral([
+					for (field in fields)
+						{name: field.name, value: canonicalExpression(field.value, module, entry, locals, aliases), span: field.span}
+				], s);
 			case Call(name, args, s):
 				var resolved = name;
 				var dot = name.indexOf("."),
@@ -1076,6 +1085,15 @@ class Compiler {
 			case MapType(key, value): MapType(canonicalType(key, aliases), canonicalType(value, aliases));
 			case NullableType(element): NullableType(canonicalType(element, aliases));
 			case FunctionType(arguments, result): FunctionType([for (argument in arguments) canonicalType(argument, aliases)], canonicalType(result, aliases));
+			case AnonymousType(fields): AnonymousType([
+					for (field in fields)
+						{
+							name: field.name,
+							type: canonicalType(field.type, aliases),
+							optional: field.optional,
+							span: field.span
+						}
+				]);
 			default: type;
 		};
 
@@ -1124,6 +1142,9 @@ class Compiler {
 				for (argument in arguments)
 					addTypeDependency(result, owner, kind, argument, aliases);
 				addTypeDependency(result, owner, kind, returnType, aliases);
+			case AnonymousType(fields):
+				for (field in fields)
+					addTypeDependency(result, owner, kind, field.type, aliases);
 			case IntType, BoolType, FloatType, StringType, VoidType:
 		}
 
@@ -1249,6 +1270,9 @@ class Compiler {
 				scanExpression(condition, dependencies);
 				scanExpression(whenTrue, dependencies);
 				scanExpression(whenFalse, dependencies);
+			case ObjectLiteral(fields, _):
+				for (field in fields)
+					scanExpression(field.value, dependencies);
 			case Index(array, offset, _):
 				scanExpression(array, dependencies);
 				scanExpression(offset, dependencies);
@@ -1379,6 +1403,9 @@ class Compiler {
 				scanCallExpression(condition, calls, aliases);
 				scanCallExpression(whenTrue, calls, aliases);
 				scanCallExpression(whenFalse, calls, aliases);
+			case ObjectLiteral(fields, _):
+				for (field in fields)
+					scanCallExpression(field.value, calls, aliases);
 			case New(typeName, args, _):
 				calls.set(typeName + ".new", true);
 				for (a in args)
@@ -1475,6 +1502,9 @@ class Compiler {
 				collectLambdaExpression(condition, functionName, module, generatedByModule);
 				collectLambdaExpression(whenTrue, functionName, module, generatedByModule);
 				collectLambdaExpression(whenFalse, functionName, module, generatedByModule);
+			case ObjectLiteral(fields, _):
+				for (field in fields)
+					collectLambdaExpression(field.value, functionName, module, generatedByModule);
 			case New(_, args, _):
 				for (argument in args)
 					collectLambdaExpression(argument, functionName, module, generatedByModule);

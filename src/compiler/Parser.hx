@@ -58,7 +58,14 @@ class Parser {
 	function parseTypeAlias(start:SourceSpan):AstTypeAlias {
 		var name = consume(TokenKind.Identifier).text;
 		consume(TokenKind.Assign);
-		var type = parseType(), end = consume(TokenKind.Semicolon).span;
+		var type = parseType(), end = previous().span;
+		switch type {
+			case AnonymousType(_):
+				if (match(TokenKind.Semicolon))
+					end = previous().span;
+			default:
+				end = consume(TokenKind.Semicolon).span;
+		}
 		return {name: name, type: type, span: start.merge(end)};
 	}
 
@@ -635,6 +642,18 @@ class Parser {
 			var expression:AstExpression = Variable(name, start);
 			return parsePostfix(expression);
 		}
+		if (match(TokenKind.LeftBrace)) {
+			var start = previous().span, fields = [];
+			if (!check(TokenKind.RightBrace))
+				do {
+					var name = consume(TokenKind.Identifier);
+					consume(TokenKind.Colon);
+					var value = parseExpression();
+					fields.push({name: name.text, value: value, span: name.span.merge(expressionSpan(value))});
+				} while (match(TokenKind.Comma));
+			var end = consume(TokenKind.RightBrace).span;
+			return parsePostfix(ObjectLiteral(fields, start.merge(end)));
+		}
 		if (match(TokenKind.Identifier)) {
 			var name = previous().text;
 			var start = previous().span;
@@ -725,6 +744,27 @@ class Parser {
 	}
 
 	function parseAtomicType():AstType {
+		if (match(TokenKind.LeftBrace)) {
+			var fields = [];
+			while (!check(TokenKind.RightBrace)) {
+				var optional = match(TokenKind.Question);
+				match(TokenKind.Final);
+				match(TokenKind.Var);
+				var name = consume(TokenKind.Identifier);
+				consume(TokenKind.Colon);
+				var type = parseType();
+				fields.push({
+					name: name.text,
+					type: type,
+					optional: optional,
+					span: name.span.merge(previous().span)
+				});
+				if (!match(TokenKind.Comma))
+					match(TokenKind.Semicolon);
+			}
+			consume(TokenKind.RightBrace);
+			return AnonymousType(fields);
+		}
 		if (match(TokenKind.TypeInt))
 			return IntType;
 		if (match(TokenKind.TypeBool))
@@ -816,6 +856,7 @@ class Parser {
 				LessEqual(_, _, span), Greater(_, _, span), GreaterEqual(_, _, span), Equal(_, _, span), NotEqual(_, _, span), Not(_, span), Call(_, _, span),
 				MethodCall(_, _, _, span), New(_, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span), Lambda(_, _, span), And(_, _, span),
 				Or(_, _, span), Conditional(_, _, _, span): span;
+			case ObjectLiteral(_, span): span;
 		}
 
 	static function decodeString(text:String):String {

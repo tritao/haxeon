@@ -111,6 +111,37 @@ class DeclarationIndex {
 			case NullableType(element): TNullable(resolveInner(element, span, resolving));
 			case FunctionType(arguments, result):
 				TFunction([for (argument in arguments) resolveInner(argument, span, resolving)], resolveInner(result, span, resolving));
+			case AnonymousType(parsedFields):
+				var fields = [
+					for (field in parsedFields)
+						{name: field.name, type: resolveInner(field.type, field.span, resolving), optional: field.optional}
+				];
+				fields.sort(function(left, right) return Reflect.compare(left.name, right.name));
+				for (i in 1...fields.length)
+					if (fields[i - 1].name == fields[i].name)
+						fail('Duplicate anonymous field "${fields[i].name}"', span);
+				var signature = [
+					for (field in fields)
+						(field.optional ? "?" : "") + field.name + ":" + typeKey(field.type)
+				].join(",");
+				TAnonymous('$' + 'anon:{$signature}', fields);
+		};
+
+	static function typeKey(type:CompilerType):String
+		return switch type {
+			case TInt: "Int";
+			case TBool: "Bool";
+			case TFloat: "Float";
+			case TString: "String";
+			case TDynamic: "Dynamic";
+			case TVoid: "Void";
+			case TClass(name), TInterface(name), TEnum(name): name;
+			case TNull: "null";
+			case TNullable(element): 'Null<${typeKey(element)}>';
+			case TArray(element): 'Array<${typeKey(element)}>';
+			case TMap(key, value): 'Map<${typeKey(key)},${typeKey(value)}>';
+			case TFunction(arguments, result): '(${[for (argument in arguments) typeKey(argument)].join(",")})->${typeKey(result)}';
+			case TAnonymous(name, _): name;
 		};
 
 	function validateCycles():Void {

@@ -776,5 +776,6 @@ class LanguageService {
 			case MapType(key, value): 'Map<${typeName(key)},${typeName(value)}>';
 			case NullableType(element): 'Null<${typeName(element)}>';
 			case FunctionType(arguments, result): '(${[for (argument in arguments) typeName(argument)].join(",")})->${typeName(result)}';
+			case AnonymousType(fields): '{${[for (field in fields) (field.optional ? "?" : "") + field.name + ":" + typeName(field.type)].join(",")}}';
 		};
 }

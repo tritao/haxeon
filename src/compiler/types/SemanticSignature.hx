@@ -23,6 +23,8 @@ class SemanticSignature {
 			case TArray(element): 'Array<${type(element)}>';
 			case TMap(key, value): 'Map<${type(key)},${type(value)}>';
 			case TFunction(arguments, result): '(${[for (argument in arguments) type(argument)].join(",")})->${type(result)}';
+			case TAnonymous(_, fields):
+				'{${[for (field in fields) (field.optional ? "?" : "") + field.name + ":" + type(field.type)].join(",")}}';
 		};
 
 	public static function parsedFunction(fn:AstFunction, aliases:Array<AstTypeAlias>):String {
@@ -55,5 +57,9 @@ class SemanticSignature {
 			case NullableType(element): 'Null<${parsedType(element, aliases, resolving)}>';
 			case FunctionType(arguments, result):
 				'(${[for (argument in arguments) parsedType(argument, aliases, resolving)].join(",")})->${parsedType(result, aliases, resolving)}';
+			case AnonymousType(fields):
+				var ordered = fields.copy();
+				ordered.sort(function(left, right) return Reflect.compare(left.name, right.name));
+				'{${[for (field in ordered) (field.optional ? "?" : "") + field.name + ":" + parsedType(field.type, aliases, resolving)].join(",")}}';
 		};
 }

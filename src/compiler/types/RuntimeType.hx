@@ -18,7 +18,7 @@ class RuntimeType {
 			case TFloat: "f64";
 			case TBool: "bool";
 			case TString: "bytes";
-			case TClass(_), TInterface(_), TArray(_), TFunction(_): "ref";
+			case TClass(_), TInterface(_), TAnonymous(_, _), TArray(_), TFunction(_): "ref";
 			default: null;
 		};
 

@@ -54,12 +54,13 @@ class TypeRelations {
 					for (i in 0...aa.length)
 						equals(aa[i], ba[i])
 				].indexOf(false) < 0 && equals(ar, br);
+			case [TAnonymous(a, _), TAnonymous(b, _)]: a == b;
 			default: left == right;
 		};
 
 	public static function isReference(type:CompilerType):Bool
 		return switch type {
-			case TString, TDynamic, TClass(_), TInterface(_), TArray(_), TFunction(_), TMap(_, _): true;
+			case TString, TDynamic, TClass(_), TInterface(_), TAnonymous(_, _), TArray(_), TFunction(_), TMap(_, _): true;
 			default: false;
 		};
 

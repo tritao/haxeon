@@ -138,6 +138,14 @@ class IrGenerator {
 				],
 				methods: []
 			});
+		for (anonymous in typed.anonymousTypes)
+			objects.push({
+				name: anonymous.name,
+				base: null,
+				interfaces: [],
+				fields: [for (field in anonymous.fields) {name: field.name, type: lowerType(field.type)}],
+				methods: []
+			});
 		return objects;
 	}
 
@@ -872,6 +880,11 @@ class IrGenerator {
 					builder.call('$typeName.new', constructorArgs, Void);
 				}
 				object;
+			case TObjectLiteral(typeName, fields):
+				var object = builder.newObject(typeName);
+				for (field in fields)
+					builder.fieldSet(object, field.name, lowerExpression(field.value, builder, localTypes));
+				object;
 			case TNewArray(element, length):
 				builder.call(arrayAllocatorName(element), [lowerExpression(length, builder, localTypes)], Array(lowerType(element)));
 			case TNewMap(key, value): builder.call(RuntimeType.mapNative(key, value, "alloc"), [], Abstract(RuntimeType.mapName(key, value)));
@@ -950,6 +963,7 @@ class IrGenerator {
 			case TNullable(element): lowerType(element);
 			case TArray(element): Array(lowerType(element));
 			case TFunction(arguments, result): Function([for (argument in arguments) lowerType(argument)], lowerType(result));
+			case TAnonymous(name, _): Obj(name);
 		};
 
 	static function lowerLogical(left:TypedExpression, right:TypedExpression, and:Bool, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
