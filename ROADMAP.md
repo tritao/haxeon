@@ -179,7 +179,8 @@ second compiler or a second runtime.
 
 - Embed the persistent compiler service in a Pragtical-like host, wire save
   events to transactional compile/patch, and expose diagnostics/completion.
-- Add a REPL/evaluate-expression path against the current editor snapshot.
+- [x] Compile and execute integer REPL expressions against a forked compiler
+  snapshot; editor-scope values and richer result types remain.
 - Measure end-to-end save latency, memory growth, patch churn, and recovery
   behavior under realistic multi-module edits.
 - Expand domains from plugins to selected editor subsystems only after the

@@ -112,8 +112,27 @@ class Compiler {
 		sources; callers can then decide whether to commit the edit normally.
 	 */
 	public function validate(path:String, source:String, entryModule:String):ValidationResult {
-		var candidate = new Compiler(exportIdentityState()),
-			moduleName = ModulePath.fromFile(path);
+		var candidate = fork(), moduleName = ModulePath.fromFile(path);
+		for (name in [for (name in candidate.modules.keys()) name])
+			if (name == moduleName)
+				candidate.modules.remove(name);
+		candidate.update(path, source);
+		try {
+			candidate.compile(entryModule);
+			return {valid: true, diagnostic: null};
+		} catch (error:CompileError)
+			return {valid: false, diagnostic: error.diagnostic};
+	}
+
+	/** Compile a temporary Int-returning expression without changing this compiler. */
+	public function compileExpressionInt(expression:String):CompileResult {
+		var candidate = fork();
+		candidate.update("__repl__.hx", 'function __repl_value():Int { return $expression; } function main():Int { return __repl_value(); }');
+		return candidate.compile("__repl__");
+	}
+
+	function fork():Compiler {
+		var candidate = new Compiler(exportIdentityState());
 		var nativeNames = [for (name in natives.keys()) name];
 		nativeNames.sort(Reflect.compare);
 		for (name in nativeNames) {
@@ -122,17 +141,11 @@ class Compiler {
 		}
 		var moduleNames = [for (name in modules.keys()) name];
 		moduleNames.sort(Reflect.compare);
-		for (name in moduleNames)
-			if (name != moduleName) {
-				var state = modules.get(name);
-				candidate.update(state.source.path, state.source.text);
-			}
-		candidate.update(path, source);
-		try {
-			candidate.compile(entryModule);
-			return {valid: true, diagnostic: null};
-		} catch (error:CompileError)
-			return {valid: false, diagnostic: error.diagnostic};
+		for (name in moduleNames) {
+			var state = modules.get(name);
+			candidate.update(state.source.path, state.source.text);
+		}
+		return candidate;
 	}
 
 	public function compile(entryModule:String):CompileResult {
