@@ -28,7 +28,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   modulo and unary negation), branches, loops,
   recursion.
 - [x] Typed locals, nominal classes, fields, constructors, inheritance, and
-	instance field initializers injected into explicit or implicit constructors.
+	instance field initializers injected into explicit or implicit constructors;
+	constructor availability changes invalidate `new` callers incrementally.
 - [x] Static fields and unqualified static access lower to persistent HashLink
 	globals; literal and expression initializers run through a stable `__init`
 	entry at normal startup and live-module load, while compatible body patches

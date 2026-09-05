@@ -625,8 +625,14 @@ class Compiler {
 								structuralChanged.set('static:$fieldName', true);
 						} else {
 							instanceInitializers.set(fieldName, initializer);
-							if (state.instanceInitializerFingerprints.get(fieldName) != initializer)
+							if (state.instanceInitializerFingerprints.get(fieldName) != initializer) {
 								bodyChanged.set(className + ".new", true);
+								if (classDecl.methods.filter(function(method) return method.name == "new").length == 0
+									&& state.instanceInitializerFingerprints.get(fieldName) == null) {
+									structuralChanged.set(className, true);
+									signatureChanged.set(className + ".new", true);
+								}
+							}
 						}
 				}
 			}
@@ -636,8 +642,20 @@ class Compiler {
 				structuralChanged.set('static:$old', true);
 		state.staticInitializerFingerprints = staticInitializers;
 		for (old in state.instanceInitializerFingerprints.keys())
-			if (!instanceInitializers.exists(old))
-				bodyChanged.set(old.substr(0, old.lastIndexOf(".")) + ".new", true);
+			if (!instanceInitializers.exists(old)) {
+				var className = old.substr(0, old.lastIndexOf(".")),
+					hasConstructor = false;
+				for (classDecl in state.ast.classes)
+					if (qualifiedTypeName(state.ast.packageName, classDecl.name) == className)
+						for (method in classDecl.methods)
+							if (method.name == "new")
+								hasConstructor = true;
+				bodyChanged.set(className + ".new", true);
+				if (!hasConstructor) {
+					structuralChanged.set(className, true);
+					signatureChanged.set(className + ".new", true);
+				}
+			}
 		state.instanceInitializerFingerprints = instanceInitializers;
 		for (fn in state.ast.functions) {
 			var canonical = state.name == entry && fn.name == "main" ? "main" : state.name + "." + fn.name;
@@ -1048,7 +1066,8 @@ class Compiler {
 			case And(left, right, _), Or(left, right, _):
 				scanCallExpression(left, calls, aliases);
 				scanCallExpression(right, calls, aliases);
-			case New(_, args, _):
+			case New(typeName, args, _):
+				calls.set(typeName + ".new", true);
 				for (a in args)
 					scanCallExpression(a, calls, aliases);
 			case NewArray(_, length, _):
