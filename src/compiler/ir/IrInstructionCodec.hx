@@ -7,6 +7,7 @@ import compiler.ir.Ir.BlockId;
 import haxe.io.Bytes as HaxeBytes;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
+import Array as HaxeArray;
 
 /** Closed, versioned encoding for every persisted IR instruction operand. */
 class IrInstructionCodec {
@@ -319,7 +320,7 @@ class IrInstructionCodec {
 		} else if (valueType.match(TClass(String))) {
 			output.writeByte(4);
 			writeString(output, value);
-		} else if (value is Array) {
+		} else if (isArrayType(valueType)) {
 			var values:Array<Dynamic> = cast value;
 			if (values.length > 0x100000)
 				throw "Invalid IR operand array";
@@ -337,6 +338,12 @@ class IrInstructionCodec {
 		} else
 			throw "Invalid IR instruction operand";
 	}
+
+	static function isArrayType(type:Type.ValueType):Bool
+		return switch type {
+			case TClass(value): value == HaxeArray;
+			default: false;
+		};
 
 	static function readOperand(input:BytesInput, totalLength:Int, values:Map<Int, IrValue>):Dynamic
 		return switch input.readByte() {

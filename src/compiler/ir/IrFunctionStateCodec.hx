@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import Array as HaxeArray;
 import compiler.ir.Ir.IrBlock;
 import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrTerminator;
@@ -126,12 +127,18 @@ class IrFunctionStateCodec {
 		for (parameter in parameters)
 			if (Std.isOfType(parameter, IrValue))
 				collectValue(cast parameter, values);
-			else if (parameter is Array)
+			else if (isArrayType(Type.typeof(parameter)))
 				for (item in (cast parameter : Array<Dynamic>))
 					if (Reflect.hasField(item, "value"))
 						collectValue(Reflect.field(item, "value"), values);
 					else if (Std.isOfType(item, IrValue))
 						collectValue(item, values);
+
+	static function isArrayType(type:Type.ValueType):Bool
+		return switch type {
+			case TClass(value): value == HaxeArray;
+			default: false;
+		};
 
 	static function collectValue(value:IrValue, values:Map<Int, IrValue>):Void {
 		var id:Int = value.id, previous = values.get(id);

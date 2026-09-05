@@ -68,7 +68,7 @@ class RuntimeDomain {
 			previousModule = currentModule,
 			state:Null<RuntimeStateEnvelope> = null;
 		try {
-			if (previous is ReloadablePlugin)
+			if (Std.isOfType(previous, ReloadablePlugin))
 				state = new RuntimeStateEnvelope(cast(previous, ReloadablePlugin).saveState());
 		} catch (error:Dynamic) {
 			dispose(module);
@@ -85,7 +85,7 @@ class RuntimeDomain {
 		try {
 			plugin.activate();
 			candidateActivated = true;
-			if (state != null && plugin is ReloadablePlugin)
+			if (state != null && Std.isOfType(plugin, ReloadablePlugin))
 				cast(plugin, ReloadablePlugin).restoreState(state.payload);
 		} catch (error:Dynamic) {
 			if (candidateActivated)
