@@ -79,13 +79,19 @@ class HlLower {
 			for (object in pending.copy()) {
 				if (object.base != null && !objectTypeIndices.exists(object.base) && symbols.typeIndex('obj:${object.base}') == null)
 					continue;
+				var fieldsReady = true;
+				for (field in object.fields)
+					if (!objectTypeReady(field.type))
+						fieldsReady = false;
+				if (!fieldsReady)
+					continue;
 				objects.set(object.name, object);
 				objectTypeIndices.set(object.name, symbols.internObject(object, functionIndices));
 				pending.remove(object);
 				progressed = true;
 			}
 			if (!progressed)
-				throw 'Unable to order object bases';
+				throw 'Unable to order object metadata dependencies';
 		}
 		for (field in program.staticFields)
 			symbols.internGlobal(field.name, field.type);
@@ -102,6 +108,18 @@ class HlLower {
 		code.globals = code.globals.copy();
 		return code;
 	}
+
+	function objectTypeReady(type:IrType):Bool
+		return switch type {
+			case Obj(name): objectTypeIndices.exists(name) || symbols.typeIndex('obj:$name') != null;
+			case Function(arguments, result):
+				var ready = objectTypeReady(result);
+				for (argument in arguments)
+					if (!objectTypeReady(argument))
+						ready = false;
+				ready;
+			default: true;
+		};
 
 	function lowerNative(native:IrNative):Void {
 		code.natives.push({

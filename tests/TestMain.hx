@@ -438,6 +438,8 @@ class TestMain {
 				foundStatic = true;
 		if (!foundStatic)
 			throw "Static class method was not lowered as a callable function";
+		Frontend.compile("class Box { public function get():Int { return 42; } } class Holder { public static var box:Box = new Box(); public static function read():Int { return box.get(); } } function main():Int { return Holder.read(); }");
+		Sys.println("PASS: static object fields retain receiver types for instance calls");
 		var objectCode = new HlCode();
 		objectCode.ints = [42];
 		objectCode.strings = ["Box", "value"];

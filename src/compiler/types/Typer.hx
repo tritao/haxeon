@@ -1474,7 +1474,10 @@ class Typer {
 				collectExpressionVariables(object, names);
 				for (argument in arguments)
 					collectExpressionVariables(argument, names);
-			case Call(_, arguments, _):
+			case Call(name, arguments, _):
+				var separator = name.indexOf(".");
+				if (separator > 0)
+					names.set(name.substr(0, separator), true);
 				for (argument in arguments)
 					collectExpressionVariables(argument, names);
 			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), Less(left, right, _),
@@ -1626,6 +1629,11 @@ class Typer {
 		var thisType = scope.resolve("this");
 		if (thisType != null && findFieldType(thisType, name) != null)
 			return typeExpression(Variable(name, span), scope);
+		var ownerSeparator = currentFunctionName.lastIndexOf("."),
+			owner = ownerSeparator < 0 ? null : currentFunctionName.substr(0, ownerSeparator),
+			staticField = owner == null ? null : findStaticFieldNullable(owner, name);
+		if (staticField != null)
+			return new TypedExpression(TStaticField(staticField.owner, name), staticField.type, span);
 		return null;
 	}
 
