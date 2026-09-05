@@ -587,9 +587,12 @@ class Typer {
 								var value = coerce(typeExpression(expression, scope, staticField.type), staticField.type, 'field "$name"', "E1002");
 								output.push(TStaticFieldAssign(staticField.owner, fieldName, value, span));
 							default:
-								expected = fieldType(object.type, fieldName, span);
+								var platformField = PlatformAbi.field(object.type, fieldName),
+									expected = fieldType(object.type, fieldName, span);
 								var value = coerce(typeExpression(expression, scope, expected), expected, 'field "$name"', "E1002");
-								output.push(TFieldAssign(object, fieldName, value, span));
+								if (platformField != null && platformField.set != null) output.push(TExpression(new TypedExpression(TCall(platformField.set,
+									[object, value]), TVoid, span),
+									span)); else output.push(TFieldAssign(object, fieldName, value, span));
 						}
 					}
 				case IndexAssignment(array, offset, expression, span):
@@ -616,9 +619,12 @@ class Typer {
 							value = coerce(value, staticField.type, 'field "$fieldName"', "E1002");
 							output.push(TStaticFieldAssign(staticField.owner, fieldName, value, span));
 						default:
-							var expected = fieldType(object.type, fieldName, span);
+							var platformField = PlatformAbi.field(object.type, fieldName),
+								expected = fieldType(object.type, fieldName, span);
 							value = coerce(value, expected, 'field "$fieldName"', "E1002");
-							output.push(TFieldAssign(object, fieldName, value, span));
+							if (platformField != null && platformField.set != null) output.push(TExpression(new TypedExpression(TCall(platformField.set,
+								[object, value]), TVoid, span),
+								span)); else output.push(TFieldAssign(object, fieldName, value, span));
 					}
 				case If(condition, thenBranch, elseBranch, span):
 					var typedCondition = typeExpression(condition, scope);
@@ -1071,7 +1077,10 @@ class Typer {
 					var signature = signatures.get(name);
 					if (signature != null)
 						new TypedExpression(TFunctionRef(name), functionType(signature), span);
-					else if (classDecls.exists(name) || enumAbstractDecls.exists(name) || PlatformAbi.isType(name))
+					else if (externals.exists(name)) {
+						var external = externals.get(name);
+						new TypedExpression(TFunctionRef(name), TFunction(external.arguments, external.result), span);
+					} else if (classDecls.exists(name) || enumAbstractDecls.exists(name) || PlatformAbi.isType(name))
 						new TypedExpression(TClassRef(name), TClass(name), span);
 					else {
 						var ownerSeparator = context.name.lastIndexOf("."),
@@ -1591,12 +1600,17 @@ class Typer {
 						for (field in classDecls.get(typeName).fields)
 							if (!field.isStatic && field.initializer != null) field
 					].length > 0,
-					expected = constructor == null ? [] : [for (argument in constructor.arguments) argumentType(argument)];
-				if (constructor == null && arguments.length != 0)
-					fail("E1008", 'Constructor "$typeName" expects 0 arguments, got ${arguments.length}', span);
+					expected = constructor == null ? PlatformAbi.constructorArguments(typeName) : [for (argument in constructor.arguments) argumentType(argument)];
+				if (expected == null)
+					expected = [];
+				if (constructor == null && arguments.length != expected.length)
+					fail("E1008", 'Constructor "$typeName" expects ${expected.length} arguments, got ${arguments.length}', span);
 				var typed = constructor == null ? typeCallArguments(arguments, expected, scope,
 					typeName + ".new") : typeDeclaredCallArguments(arguments, constructor.arguments, scope, typeName + ".new", span);
-				new TypedExpression(TNew(typeName, typed, constructor != null || implicitConstructor), TClass(typeName), span);
+				var nativeConstructor = PlatformAbi.constructorNative(typeName),
+					valueType = PlatformAbi.valueType(typeName);
+				nativeConstructor == null ? new TypedExpression(TNew(typeName, typed, constructor != null || implicitConstructor), valueType,
+					span) : new TypedExpression(TCall(nativeConstructor, typed), valueType, span);
 			case NewArray(element, length, span):
 				var typedLength = typeExpression(length, scope);
 				if (typedLength.type != TInt)
@@ -1625,6 +1639,12 @@ class Typer {
 			case Call(name, arguments, span):
 				if (name == "super")
 					return typeSuperCall(arguments, span, scope);
+				if (name == "haxe.io.Bytes.ofString") {
+					if (arguments.length < 1 || arguments.length > 2)
+						fail("E1008", 'Function "haxe.io.Bytes.ofString" expects 1 or 2 arguments, got ${arguments.length}', span);
+					var value = coerce(typeExpression(arguments[0], scope, TString), TString, "byte string", "E1002");
+					return new TypedExpression(TCall("haxe.io.Bytes.ofString", [value]), TBytes, span);
+				}
 				if (name == "String.fromCharCode") {
 					if (arguments.length != 1)
 						fail("E1008", 'Function "String.fromCharCode" expects 1 argument, got ${arguments.length}', span);
@@ -1703,6 +1723,11 @@ class Typer {
 							return typeMapMethod(receiver, methodName, arguments, span, scope);
 						if (isArray(receiverType))
 							return typeArrayMethod(receiver, methodName, arguments, span, scope);
+						var platformMethod = PlatformAbi.method(receiverType, methodName);
+						if (platformMethod != null) {
+							var typed = typeCallArguments(arguments, platformMethod.arguments, scope, methodName);
+							return new TypedExpression(TCall(platformMethod.nativeName, [receiver].concat(typed)), platformMethod.result, span);
+						}
 						var className = switch receiverType {
 							case TClass(value), TInterface(value): value;
 							default: null;
@@ -1889,6 +1914,9 @@ class Typer {
 			return new TypedExpression(TArrayLength(typedObject), TInt, span);
 		if (name == "length" && sameType(typedObject.type, TString))
 			return new TypedExpression(TStringLength(typedObject), TInt, span);
+		var platformField = PlatformAbi.field(typedObject.type, name);
+		if (platformField != null)
+			return new TypedExpression(TCall(platformField.get, [typedObject]), platformField.type, span);
 		return new TypedExpression(TField(typedObject, name), fieldType(typedObject.type, name, span), span);
 	}
 
@@ -1912,6 +1940,11 @@ class Typer {
 
 	function typeMethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
 		var receiver = typeExpression(object, scope);
+		var platformMethod = PlatformAbi.method(receiver.type, name);
+		if (platformMethod != null) {
+			var typed = typeCallArguments(arguments, platformMethod.arguments, scope, name);
+			return new TypedExpression(TCall(platformMethod.nativeName, [receiver].concat(typed)), platformMethod.result, span);
+		}
 		var stringCall = typeStringMethod(receiver, name, arguments, span, scope);
 		if (stringCall != null)
 			return stringCall;
@@ -2660,6 +2693,9 @@ class Typer {
 	}
 
 	function fieldType(type:CompilerType, name:String, span:SourceSpan):CompilerType {
+		var platformField = PlatformAbi.field(type, name);
+		if (platformField != null)
+			return platformField.type;
 		switch type {
 			case TAnonymous(_, fields):
 				for (field in fields)

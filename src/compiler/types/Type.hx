@@ -6,6 +6,7 @@ enum CompilerType {
 	TFloat;
 	TString;
 	TBytes;
+	THlBytes;
 	TDynamic;
 	TNativeAbstract(name:String);
 	TNever;

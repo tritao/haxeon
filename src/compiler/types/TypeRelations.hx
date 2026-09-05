@@ -62,7 +62,8 @@ class TypeRelations {
 
 	public static function isReference(type:CompilerType):Bool
 		return switch type {
-			case TString, TDynamic, TNativeAbstract(_), TClass(_), TInterface(_), TEnum(_), TAnonymous(_, _), TArray(_), TFunction(_), TMap(_, _): true;
+			case TString, TBytes, THlBytes, TDynamic, TNativeAbstract(_), TClass(_), TInterface(_), TEnum(_), TAnonymous(_, _), TArray(_), TFunction(_),
+				TMap(_, _): true;
 			default: false;
 		};
 

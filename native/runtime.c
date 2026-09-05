@@ -32,6 +32,217 @@ extern int hl_hisize( realtime_int_map *map );
 extern bool hl_hiremove( realtime_int_map *map, int key );
 extern void hl_hiclear( realtime_int_map *map );
 
+typedef struct {
+	void (*finalize)( void * );
+	vbyte *data;
+	int length;
+} realtime_bytes;
+
+typedef struct {
+	void (*finalize)( void * );
+	vbyte *data;
+	int length;
+	int position;
+	bool big_endian;
+} realtime_bytes_input;
+
+typedef struct {
+	void (*finalize)( void * );
+	vbyte *data;
+	int length;
+	int capacity;
+	bool big_endian;
+} realtime_bytes_output;
+
+static void realtime_bytes_finalize( void *value ) {
+	realtime_bytes *bytes = (realtime_bytes *)value;
+	free(bytes->data);
+	bytes->data = NULL;
+}
+
+static void realtime_bytes_output_finalize( void *value ) {
+	realtime_bytes_output *output = (realtime_bytes_output *)value;
+	free(output->data);
+	output->data = NULL;
+}
+
+static void realtime_bytes_input_finalize( void *value ) {
+	realtime_bytes_input *input = (realtime_bytes_input *)value;
+	free(input->data);
+	input->data = NULL;
+}
+
+static realtime_bytes *realtime_bytes_make( int length ) {
+	if( length < 0 ) hl_error("Negative byte length");
+	realtime_bytes *bytes = (realtime_bytes *)hl_gc_alloc_finalizer(sizeof(realtime_bytes));
+	bytes->finalize = realtime_bytes_finalize;
+	bytes->length = length;
+	bytes->data = length == 0 ? NULL : (vbyte *)calloc((size_t)length, 1);
+	if( length > 0 && bytes->data == NULL ) hl_error("Could not allocate bytes");
+	return bytes;
+}
+
+static void realtime_bytes_bounds( realtime_bytes *bytes, int position, int length ) {
+	if( bytes == NULL || position < 0 || length < 0 || position > bytes->length - length )
+		hl_error("Bytes access out of bounds");
+}
+
+static void realtime_bytes_output_reserve( realtime_bytes_output *output, int extra ) {
+	if( extra < 0 || output->length > 0x7FFFFFFF - extra ) hl_error("Byte output is too large");
+	int required = output->length + extra;
+	if( required <= output->capacity ) return;
+	int capacity = output->capacity == 0 ? 64 : output->capacity;
+	while( capacity < required ) {
+		if( capacity > 0x3FFFFFFF ) { capacity = required; break; }
+		capacity *= 2;
+	}
+	vbyte *data = (vbyte *)realloc(output->data, (size_t)capacity);
+	if( data == NULL ) hl_error("Could not grow byte output");
+	output->data = data;
+	output->capacity = capacity;
+}
+
+HL_PRIM realtime_bytes *HL_NAME(__bytes_alloc)( int length ) {
+	return realtime_bytes_make(length);
+}
+
+HL_PRIM realtime_bytes *HL_NAME(__bytes_of_string)( vbyte *value ) {
+	const char *utf8 = value == NULL ? "" : hl_to_utf8((const uchar *)value);
+	int length = (int)strlen(utf8);
+	realtime_bytes *bytes = realtime_bytes_make(length);
+	if( length > 0 ) memcpy(bytes->data, utf8, (size_t)length);
+	return bytes;
+}
+
+HL_PRIM int HL_NAME(__bytes_length)( realtime_bytes *bytes ) { return bytes == NULL ? 0 : bytes->length; }
+HL_PRIM int HL_NAME(__bytes_get)( realtime_bytes *bytes, int position ) {
+	realtime_bytes_bounds(bytes, position, 1);
+	return bytes->data[position];
+}
+HL_PRIM void HL_NAME(__bytes_set)( realtime_bytes *bytes, int position, int value ) {
+	realtime_bytes_bounds(bytes, position, 1);
+	bytes->data[position] = (vbyte)value;
+}
+HL_PRIM realtime_bytes *HL_NAME(__bytes_sub)( realtime_bytes *bytes, int position, int length ) {
+	realtime_bytes_bounds(bytes, position, length);
+	realtime_bytes *result = realtime_bytes_make(length);
+	if( length > 0 ) memcpy(result->data, bytes->data + position, (size_t)length);
+	return result;
+}
+HL_PRIM int HL_NAME(__bytes_compare)( realtime_bytes *left, realtime_bytes *right ) {
+	int common = left->length < right->length ? left->length : right->length;
+	int compared = common == 0 ? 0 : memcmp(left->data, right->data, (size_t)common);
+	return compared != 0 ? compared : left->length - right->length;
+}
+
+HL_PRIM realtime_bytes_input *HL_NAME(__bytes_input_new)( realtime_bytes *bytes ) {
+	realtime_bytes_input *input = (realtime_bytes_input *)hl_gc_alloc_finalizer(sizeof(realtime_bytes_input));
+	input->finalize = realtime_bytes_input_finalize;
+	input->length = bytes->length;
+	input->data = bytes->length == 0 ? NULL : (vbyte *)malloc((size_t)bytes->length);
+	if( bytes->length > 0 && input->data == NULL ) hl_error("Could not allocate byte input");
+	if( bytes->length > 0 ) memcpy(input->data, bytes->data, (size_t)bytes->length);
+	input->position = 0;
+	input->big_endian = true;
+	return input;
+}
+HL_PRIM int HL_NAME(__bytes_input_position)( realtime_bytes_input *input ) { return input->position; }
+HL_PRIM bool HL_NAME(__bytes_input_big_endian)( realtime_bytes_input *input ) { return input->big_endian; }
+HL_PRIM void HL_NAME(__bytes_input_set_big_endian)( realtime_bytes_input *input, bool value ) { input->big_endian = value; }
+HL_PRIM int HL_NAME(__bytes_input_read_byte)( realtime_bytes_input *input ) {
+	if( input->position < 0 || input->position >= input->length ) hl_error("Byte input is truncated");
+	return input->data[input->position++];
+}
+HL_PRIM int HL_NAME(__bytes_input_read_i32)( realtime_bytes_input *input ) {
+	if( input->position < 0 || input->position > input->length - 4 ) hl_error("Byte input is truncated");
+	vbyte *data = input->data + input->position;
+	input->position += 4;
+	if( input->big_endian ) return (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+	return data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24);
+}
+HL_PRIM double HL_NAME(__bytes_input_read_f64)( realtime_bytes_input *input ) {
+	union { double value; vbyte bytes[8]; } decoded;
+	if( input->position < 0 || input->position > input->length - 8 ) hl_error("Byte input is truncated");
+	for( int i = 0; i < 8; i++ ) decoded.bytes[i] = input->data[input->position + (input->big_endian ? 7 - i : i)];
+	input->position += 8;
+	return decoded.value;
+}
+HL_PRIM vbyte *HL_NAME(__bytes_input_read_string)( realtime_bytes_input *input, int length ) {
+	if( length < 0 || input->position < 0 || input->position > input->length - length ) hl_error("Byte input is truncated");
+	char *utf8 = (char *)malloc((size_t)length + 1);
+	if( utf8 == NULL ) hl_error("Could not allocate string input");
+	memcpy(utf8, input->data + input->position, (size_t)length);
+	utf8[length] = 0;
+	input->position += length;
+	int chars = hl_utf8_length((vbyte *)utf8, 0);
+	uchar *result = (uchar *)hl_alloc_bytes((chars + 1) * (int)sizeof(uchar));
+	hl_from_utf8(result, chars, utf8);
+	result[chars] = 0;
+	free(utf8);
+	return (vbyte *)result;
+}
+HL_PRIM realtime_bytes *HL_NAME(__bytes_input_read)( realtime_bytes_input *input, int length ) {
+	if( length < 0 || input->position < 0 || input->position > input->length - length ) hl_error("Byte input is truncated");
+	realtime_bytes *result = realtime_bytes_make(length);
+	if( length > 0 ) memcpy(result->data, input->data + input->position, (size_t)length);
+	input->position += length;
+	return result;
+}
+
+HL_PRIM realtime_bytes_output *HL_NAME(__bytes_output_new)( void ) {
+	realtime_bytes_output *output = (realtime_bytes_output *)hl_gc_alloc_finalizer(sizeof(realtime_bytes_output));
+	output->finalize = realtime_bytes_output_finalize;
+	output->data = NULL;
+	output->length = 0;
+	output->capacity = 0;
+	output->big_endian = true;
+	return output;
+}
+HL_PRIM bool HL_NAME(__bytes_output_big_endian)( realtime_bytes_output *output ) { return output->big_endian; }
+HL_PRIM void HL_NAME(__bytes_output_set_big_endian)( realtime_bytes_output *output, bool value ) { output->big_endian = value; }
+HL_PRIM void HL_NAME(__bytes_output_write_byte)( realtime_bytes_output *output, int value ) {
+	realtime_bytes_output_reserve(output, 1);
+	output->data[output->length++] = (vbyte)value;
+}
+HL_PRIM void HL_NAME(__bytes_output_write_i32)( realtime_bytes_output *output, int value ) {
+	realtime_bytes_output_reserve(output, 4);
+	for( int i = 0; i < 4; i++ ) output->data[output->length + i] = (vbyte)(value >> (output->big_endian ? 24 - i * 8 : i * 8));
+	output->length += 4;
+}
+HL_PRIM void HL_NAME(__bytes_output_write_f64)( realtime_bytes_output *output, double value ) {
+	union { double value; vbyte bytes[8]; } encoded;
+	encoded.value = value;
+	realtime_bytes_output_reserve(output, 8);
+	for( int i = 0; i < 8; i++ ) output->data[output->length + i] = encoded.bytes[output->big_endian ? 7 - i : i];
+	output->length += 8;
+}
+HL_PRIM void HL_NAME(__bytes_output_write_string)( realtime_bytes_output *output, vbyte *value ) {
+	const char *utf8 = value == NULL ? "" : hl_to_utf8((const uchar *)value);
+	int length = (int)strlen(utf8);
+	realtime_bytes_output_reserve(output, length);
+	if( length > 0 ) memcpy(output->data + output->length, utf8, (size_t)length);
+	output->length += length;
+}
+HL_PRIM void HL_NAME(__bytes_output_write)( realtime_bytes_output *output, realtime_bytes *bytes ) {
+	realtime_bytes_output_reserve(output, bytes->length);
+	if( bytes->length > 0 ) memcpy(output->data + output->length, bytes->data, (size_t)bytes->length);
+	output->length += bytes->length;
+}
+HL_PRIM realtime_bytes *HL_NAME(__bytes_output_get_bytes)( realtime_bytes_output *output ) {
+	realtime_bytes *bytes = realtime_bytes_make(output->length);
+	if( output->length > 0 ) memcpy(bytes->data, output->data, (size_t)output->length);
+	return bytes;
+}
+HL_PRIM void HL_NAME(__file_save_bytes)( vbyte *path, realtime_bytes *bytes ) {
+	FILE *file = fopen(hl_to_utf8((const uchar *)path), "wb");
+	if( file == NULL ) hl_error("Could not open output file");
+	if( bytes->length > 0 && fwrite(bytes->data, 1, (size_t)bytes->length, file) != (size_t)bytes->length ) {
+		fclose(file);
+		hl_error("Could not write output file");
+	}
+	if( fclose(file) != 0 ) hl_error("Could not close output file");
+}
+
 HL_PRIM bool HL_NAME(__exception_matches)( vdynamic *value, hl_type *type ) {
 	return value != NULL && type != NULL && hl_safe_cast(value->t,type);
 }
@@ -446,8 +657,12 @@ HL_PRIM vbyte *HL_NAME(__std_string)( vdynamic *value ) {
 	return (vbyte *)hl_to_string(value);
 }
 
-HL_PRIM int HL_NAME(__reflect_compare)( vdynamic *left, vdynamic *right ) {
-	return hl_dyn_compare(left, right);
+HL_PRIM int HL_NAME(__reflect_compare)( vbyte *left, vbyte *right ) {
+	if( left == NULL ) return right == NULL ? 0 : -1;
+	if( right == NULL ) return 1;
+	const uchar *a = (const uchar *)left, *b = (const uchar *)right;
+	while( *a != 0 && *a == *b ) { a++; b++; }
+	return (int)*a - (int)*b;
 }
 
 HL_PRIM bool HL_NAME(__string_starts_with)( vbyte *value, vbyte *prefix ) {
@@ -836,10 +1051,36 @@ DEFINE_PRIM(_BYTES,__string_from_char_code,_I32);
 DEFINE_PRIM(_I32,__std_parse_int,_BYTES);
 DEFINE_PRIM(_F64,__std_parse_float,_BYTES);
 DEFINE_PRIM(_BYTES,__std_string,_DYN);
-DEFINE_PRIM(_I32,__reflect_compare,_DYN _DYN);
+DEFINE_PRIM(_I32,__reflect_compare,_BYTES _BYTES);
 DEFINE_PRIM(_BOOL,__string_starts_with,_BYTES _BYTES);
 DEFINE_PRIM(_BOOL,__string_ends_with,_BYTES _BYTES);
 DEFINE_PRIM(_BYTES,__file_get_content,_BYTES);
+DEFINE_PRIM(_ABSTRACT(realtime_bytes),__bytes_alloc,_I32);
+DEFINE_PRIM(_ABSTRACT(realtime_bytes),__bytes_of_string,_BYTES);
+DEFINE_PRIM(_I32,__bytes_length,_ABSTRACT(realtime_bytes));
+DEFINE_PRIM(_I32,__bytes_get,_ABSTRACT(realtime_bytes) _I32);
+DEFINE_PRIM(_VOID,__bytes_set,_ABSTRACT(realtime_bytes) _I32 _I32);
+DEFINE_PRIM(_ABSTRACT(realtime_bytes),__bytes_sub,_ABSTRACT(realtime_bytes) _I32 _I32);
+DEFINE_PRIM(_I32,__bytes_compare,_ABSTRACT(realtime_bytes) _ABSTRACT(realtime_bytes));
+DEFINE_PRIM(_ABSTRACT(realtime_bytes_input),__bytes_input_new,_ABSTRACT(realtime_bytes));
+DEFINE_PRIM(_I32,__bytes_input_position,_ABSTRACT(realtime_bytes_input));
+DEFINE_PRIM(_BOOL,__bytes_input_big_endian,_ABSTRACT(realtime_bytes_input));
+DEFINE_PRIM(_VOID,__bytes_input_set_big_endian,_ABSTRACT(realtime_bytes_input) _BOOL);
+DEFINE_PRIM(_I32,__bytes_input_read_byte,_ABSTRACT(realtime_bytes_input));
+DEFINE_PRIM(_I32,__bytes_input_read_i32,_ABSTRACT(realtime_bytes_input));
+DEFINE_PRIM(_F64,__bytes_input_read_f64,_ABSTRACT(realtime_bytes_input));
+DEFINE_PRIM(_BYTES,__bytes_input_read_string,_ABSTRACT(realtime_bytes_input) _I32);
+DEFINE_PRIM(_ABSTRACT(realtime_bytes),__bytes_input_read,_ABSTRACT(realtime_bytes_input) _I32);
+DEFINE_PRIM(_ABSTRACT(realtime_bytes_output),__bytes_output_new,_NO_ARG);
+DEFINE_PRIM(_BOOL,__bytes_output_big_endian,_ABSTRACT(realtime_bytes_output));
+DEFINE_PRIM(_VOID,__bytes_output_set_big_endian,_ABSTRACT(realtime_bytes_output) _BOOL);
+DEFINE_PRIM(_VOID,__bytes_output_write_byte,_ABSTRACT(realtime_bytes_output) _I32);
+DEFINE_PRIM(_VOID,__bytes_output_write_i32,_ABSTRACT(realtime_bytes_output) _I32);
+DEFINE_PRIM(_VOID,__bytes_output_write_f64,_ABSTRACT(realtime_bytes_output) _F64);
+DEFINE_PRIM(_VOID,__bytes_output_write_string,_ABSTRACT(realtime_bytes_output) _BYTES);
+DEFINE_PRIM(_VOID,__bytes_output_write,_ABSTRACT(realtime_bytes_output) _ABSTRACT(realtime_bytes));
+DEFINE_PRIM(_ABSTRACT(realtime_bytes),__bytes_output_get_bytes,_ABSTRACT(realtime_bytes_output));
+DEFINE_PRIM(_VOID,__file_save_bytes,_BYTES _ABSTRACT(realtime_bytes));
 DEFINE_PRIM(_BYTES,__array_join_bytes,_ARR _BYTES);
 DEFINE_PRIM(_BYTES,__string_substring,_BYTES _I32 _I32);
 DEFINE_PRIM(_BOOL,__exception_matches,_DYN _TYPE);

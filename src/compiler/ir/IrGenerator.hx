@@ -1469,7 +1469,8 @@ class IrGenerator {
 			case TBool: Bool;
 			case TFloat: F64;
 			case TString: Bytes;
-			case TBytes: Bytes;
+			case TBytes: Abstract("realtime_bytes");
+			case THlBytes: Bytes;
 			case TDynamic: Dyn;
 			case TNativeAbstract(name): Abstract(name);
 			case TNever: throw "Never must be coerced before lowering";
