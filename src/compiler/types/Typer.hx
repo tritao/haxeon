@@ -283,6 +283,7 @@ class Typer {
 			case IntegerLiteral(value, span): new TypedExpression(TIntLiteral(value), TInt, span);
 			case FloatLiteral(value, span): new TypedExpression(TFloatLiteral(value), TFloat, span);
 			case StringLiteral(value, span): new TypedExpression(TStringLiteral(value), TString, span);
+			case BoolLiteral(value, span): new TypedExpression(TBoolLiteral(value), TBool, span);
 			case Variable(name, span):
 				var type = scope.resolve(name);
 				if (type != null) new TypedExpression(scope.isCapture(name) ? TCaptured(name) : TLocal(name), type, span); else {
@@ -530,6 +531,8 @@ class Typer {
 			case FloatLiteral(_, _):
 				return;
 			case StringLiteral(_, _):
+				return;
+			case BoolLiteral(_, _):
 				return;
 		}
 

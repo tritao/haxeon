@@ -24,7 +24,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 
 ### A. Language and backend core
 
-- [x] Integer/float/string/bool expressions, branches, loops, recursion.
+- [x] Integer/float/string/bool expressions and literals, branches, loops,
+  recursion.
 - [x] Typed locals, nominal classes, fields, constructors, inheritance.
 - [x] SSA construction, verification, phi elimination, deterministic lowering.
 - [x] Function values for non-capturing references.

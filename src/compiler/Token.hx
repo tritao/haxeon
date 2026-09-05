@@ -23,6 +23,8 @@ enum TokenKind {
 	If;
 	Else;
 	While;
+	BoolTrue;
+	BoolFalse;
 	TypeInt;
 	TypeBool;
 	TypeFloat;

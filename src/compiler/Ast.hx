@@ -49,6 +49,7 @@ enum AstExpression {
 	IntegerLiteral(value:Int, span:SourceSpan);
 	FloatLiteral(value:Float, span:SourceSpan);
 	StringLiteral(value:String, span:SourceSpan);
+	BoolLiteral(value:Bool, span:SourceSpan);
 	Variable(name:String, span:SourceSpan);
 	Add(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Sub(left:AstExpression, right:AstExpression, span:SourceSpan);

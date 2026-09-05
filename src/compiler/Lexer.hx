@@ -130,6 +130,8 @@ class Lexer {
 			case "if": TokenKind.If;
 			case "else": TokenKind.Else;
 			case "while": TokenKind.While;
+			case "true": TokenKind.BoolTrue;
+			case "false": TokenKind.BoolFalse;
 			case "Int": TokenKind.TypeInt;
 			case "Bool": TokenKind.TypeBool;
 			case "Float": TokenKind.TypeFloat;

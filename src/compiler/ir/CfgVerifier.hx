@@ -63,6 +63,9 @@ class CfgVerifier {
 				case ConstString(out, _):
 					expect(out, Bytes);
 					define(out, defined, available);
+				case ConstBool(out, _):
+					expect(out, Bool);
+					define(out, defined, available);
 				case LoadLocal(out, name):
 					var type = local(fn, name);
 					if (!sameType(out.type, type))

@@ -122,6 +122,9 @@ class IrVerifier {
 			case ConstString(out, _):
 				expect(out, Bytes);
 				define(values, out);
+			case ConstBool(out, _):
+				expect(out, Bool);
+				define(values, out);
 			case Add(out, a, b), Sub(out, a, b), Mul(out, a, b), Div(out, a, b):
 				if (!sameType(out.type, a.type) || !sameType(a.type, b.type) || (!sameType(a.type, I32) && !sameType(a.type, F64)))
 					throw "IR arithmetic requires matching numeric values";

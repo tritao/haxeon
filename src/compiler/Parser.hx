@@ -306,6 +306,10 @@ class Parser {
 			return FloatLiteral(Std.parseFloat(previous().text), previous().span);
 		if (match(TokenKind.StringLiteral))
 			return StringLiteral(decodeString(previous().text), previous().span);
+		if (match(TokenKind.BoolTrue))
+			return BoolLiteral(true, previous().span);
+		if (match(TokenKind.BoolFalse))
+			return BoolLiteral(false, previous().span);
 		if (match(TokenKind.New)) {
 			var start = previous().span;
 			if (check(TokenKind.Identifier) && current().text == "Array") {
@@ -481,9 +485,9 @@ class Parser {
 
 	static function expressionSpan(expression:AstExpression)
 		return switch expression {
-			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), Variable(_, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span),
-				Div(_, _, span), Less(_, _, span), LessEqual(_, _, span), Equal(_, _, span), Call(_, _, span), New(_, _, span), NewArray(_, _, span),
-				Index(_, _, span), Lambda(_, _, span): span;
+			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), BoolLiteral(_, span), Variable(_, span), Add(_, _, span),
+				Sub(_, _, span), Mul(_, _, span), Div(_, _, span), Less(_, _, span), LessEqual(_, _, span), Equal(_, _, span), Call(_, _, span),
+				New(_, _, span), NewArray(_, _, span), Index(_, _, span), Lambda(_, _, span): span;
 		}
 
 	static function decodeString(text:String):String {

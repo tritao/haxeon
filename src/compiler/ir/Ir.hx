@@ -35,6 +35,7 @@ enum IrInstruction {
 	ConstInt(output:IrValue, value:Int);
 	ConstFloat(output:IrValue, value:Float);
 	ConstString(output:IrValue, value:String);
+	ConstBool(output:IrValue, value:Bool);
 	Add(output:IrValue, left:IrValue, right:IrValue);
 	Sub(output:IrValue, left:IrValue, right:IrValue);
 	Mul(output:IrValue, left:IrValue, right:IrValue);

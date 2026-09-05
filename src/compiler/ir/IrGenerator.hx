@@ -232,6 +232,7 @@ class IrGenerator {
 			case TIntLiteral(value): builder.constInt(value);
 			case TFloatLiteral(value): builder.constFloat(value);
 			case TStringLiteral(value): builder.constString(value);
+			case TBoolLiteral(value): builder.constBool(value);
 			case TLocal(name):
 				var type = localTypes.get(name);
 				if (type == null)

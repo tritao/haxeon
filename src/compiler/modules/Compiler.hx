@@ -572,7 +572,7 @@ class Compiler {
 
 	static function canonicalExpression(e, module, entry, locals, ?aliases):AstExpression
 		return switch e {
-			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _): e;
+			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _): e;
 			case Variable(name, span):
 				if (name.indexOf(".") < 0 && locals.exists(name)) Variable(module == entry
 					&& name == "main" ? "main" : module + "." + name, span); else e;

@@ -20,7 +20,8 @@ only one conditional branch without making HashLink aware of compiler SSA.
 
 The frontend is split into parsing, declaration/type checking, and IR
 generation. The current subset supports `Int`, `Bool`, `Float`, `String`, local
-variables, functions, calls, numeric addition/subtraction, integer comparisons,
+variables, functions, calls, numeric addition/subtraction, string operations,
+boolean literals, integer comparisons,
 nested `if`/`else`, and recursive functions. String literals support the common
 quote, slash, newline, carriage-return, and tab escapes. Source edits that add
 new float or string constants flow through ordinary incremental compilation

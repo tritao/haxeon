@@ -69,6 +69,12 @@ class CfgBuilder {
 		return out;
 	}
 
+	public function constBool(value:Bool):CfgValue {
+		var out = temporary(Bool);
+		emit(ConstBool(out, value));
+		return out;
+	}
+
 	public function add(a, b):CfgValue
 		return binary(a, b, 0);
 

@@ -19,6 +19,7 @@ enum TypedExpressionKind {
 	TIntLiteral(value:Int);
 	TFloatLiteral(value:Float);
 	TStringLiteral(value:String);
+	TBoolLiteral(value:Bool);
 	TLocal(name:String);
 	TCaptured(name:String);
 	TFunctionRef(name:String);

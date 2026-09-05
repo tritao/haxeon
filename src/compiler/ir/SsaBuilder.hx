@@ -259,6 +259,9 @@ class SsaBuilder {
 				case ConstString(out, value):
 					var result = define(out);
 					target.instructions.push(ConstString(result, value));
+				case ConstBool(out, value):
+					var result = define(out);
+					target.instructions.push(ConstBool(result, value));
 				case Add(out, a, b):
 					var result = define(out);
 					target.instructions.push(Add(result, resolve(a), resolve(b)));
