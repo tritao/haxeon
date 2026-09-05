@@ -473,10 +473,11 @@ class Typer {
 								fail("E1005", 'Unknown variable "$name"', span);
 							new TypedExpression(TField(new TypedExpression(TLocal("this"), thisType, span), name), field, span);
 						} else {
-							var objectName = name.substr(0, dot),
-								fieldName = name.substr(dot + 1),
+							var parts = name.split("."),
+								objectName = parts[0],
+								fieldName = parts[1],
 								enumDecl = enumDecls.get(objectName);
-							if (enumDecl != null) {
+							if (enumDecl != null && parts.length == 2) {
 								var index = -1;
 								for (i in 0...enumDecl.cases.length)
 									if (enumDecl.cases[i].name == fieldName)
@@ -487,16 +488,10 @@ class Typer {
 									fail("E1008", 'Enum case "$name" requires constructor arguments', span);
 								return new TypedExpression(TEnumLiteral(objectName, index), TEnum(objectName), span);
 							}
-							var object = typeExpression(Variable(objectName, span), scope),
-								field = fieldName == "length"
-									&& isArray(object.type) ? arrayLengthType(object.type) : fieldName == "length"
-									&& object.type == TString ? TInt : fieldType(object.type, fieldName, span);
-							if (fieldName == "length" && isArray(object.type))
-								new TypedExpression(TArrayLength(object), TInt, span)
-							else if (fieldName == "length" && object.type == TString)
-								new TypedExpression(TStringLength(object), TInt, span)
-							else
-								new TypedExpression(TField(object, fieldName), field, span);
+							var object = typeExpression(Variable(objectName, span), scope);
+							for (index in 1...parts.length)
+								object = typedMember(object, parts[index], span);
+							object;
 						}
 					}
 				}
@@ -652,11 +647,14 @@ class Typer {
 					typed = coerceArguments(typed, functionType.arguments, name);
 					new TypedExpression(TClosureCall(new TypedExpression(TLocal(name), callable, span), typed), functionType.result, span);
 				} else {
-					var dot = name.indexOf("."),
-						receiverName = dot < 0 ? null : name.substr(0, dot),
+					var parts = name.split("."),
+						receiverName = parts.length < 2 ? null : parts[0],
 						receiver = receiverName == null ? null : resolveReceiver(receiverName, span, scope),
-						receiverType = receiver == null ? null : receiver.type,
-						methodName = dot < 0 ? null : name.substr(dot + 1);
+						methodName = parts.length < 2 ? null : parts[parts.length - 1];
+					if (receiver != null && parts.length > 2)
+						for (index in 1...parts.length - 1)
+							receiver = typedMember(receiver, parts[index], span);
+					var receiverType = receiver == null ? null : receiver.type;
 					var enumCase = enumCaseInfo(name);
 					if (enumCase != null) {
 						var expected = [for (param in enumCase.params) lowerType(param)];
@@ -723,7 +721,10 @@ class Typer {
 		}
 
 	function typeMember(object:AstExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression {
-		var typedObject = typeExpression(object, scope);
+		return typedMember(typeExpression(object, scope), name, span);
+	}
+
+	function typedMember(typedObject:TypedExpression, name:String, span:SourceSpan):TypedExpression {
 		if (name == "length" && isArray(typedObject.type))
 			return new TypedExpression(TArrayLength(typedObject), TInt, span);
 		if (name == "length" && sameType(typedObject.type, TString))
@@ -783,8 +784,8 @@ class Typer {
 		if (name == "push") {
 			if (arguments.length != 1)
 				fail("E1008", "Array.push expects one argument", span);
-			if (!isLocalArrayReceiver(receiver))
-				fail("E1016", "Array.push currently requires a local array variable", span);
+			if (!isRebindableArrayReceiver(receiver))
+				fail("E1016", "Array.push requires a mutable local or field array", span);
 			var value = coerce(typeExpression(arguments[0], scope), element, "array element", "E1002");
 			return new TypedExpression(TArrayPush(receiver, value), TInt, span);
 		}
@@ -830,9 +831,25 @@ class Typer {
 		return new TypedExpression(TNullLiteral, TVoid, span);
 	}
 
-	static function isLocalArrayReceiver(receiver:TypedExpression):Bool
+	function isRebindableArrayReceiver(receiver:TypedExpression):Bool
 		return switch receiver.expression {
 			case TLocal(_): true;
+			case TField(object, name): mutableField(object.type, name);
+			default: false;
+		};
+
+	function mutableField(type:CompilerType, name:String):Bool
+		return switch type {
+			case TClass(className):
+				var classDecl = classDecls.get(className), found = false;
+				if (classDecl != null) {
+					for (field in classDecl.fields)
+						if (field.name == name && !field.isStatic)
+							found = !field.isFinal;
+					if (!found && classDecl.base != null)
+						found = mutableField(TClass(classDecl.base), name);
+				}
+				found;
 			default: false;
 		};
 

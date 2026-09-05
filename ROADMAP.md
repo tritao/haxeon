@@ -44,8 +44,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 	use the same dynamic pointer representation;
 	immutable array operations cover primitive, string, and reference arrays;
 	primitive/String/reference `push` and `pop` now use capacity-aware HashLink
-	arrays; `push` rebinds local array variables, while field/alias mutation and
-	broader key/value collections remain future work.
+	arrays; `push` rebinds local and mutable-field array variables, while alias
+	mutation and broader key/value collections remain future work.
 	Our HashLink fork
 	enforces bounds in the JIT.
 - [~] Explicit `Null<T>` values for reference types lower to HashLink's native

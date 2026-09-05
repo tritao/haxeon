@@ -652,7 +652,8 @@ class IrGenerator {
 					], Array(lowerType(element)));
 				switch array.expression {
 					case TLocal(name): builder.store(name, pushed);
-					default: throw "Array.push requires a local array value";
+					case TField(object, name): builder.fieldSet(lowerExpression(object, builder, localTypes), name, pushed);
+					default: throw "Array.push requires a mutable local or field array";
 				}
 				builder.arraySize(pushed);
 			case TArrayPop(array):
