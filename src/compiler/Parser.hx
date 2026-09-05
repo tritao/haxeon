@@ -427,6 +427,33 @@ class Parser {
 	}
 
 	function parseStatement():AstStatement {
+		if (match(TokenKind.Function)) {
+			var start = previous().span,
+				name = consume(TokenKind.Identifier).text;
+			consume(TokenKind.LeftParen);
+			var arguments = [];
+			if (!check(TokenKind.RightParen))
+				do {
+					var optional = match(TokenKind.Question),
+						argument = consume(TokenKind.Identifier),
+						type = match(TokenKind.Colon) ? parseType() : InferredType,
+						defaultValue = match(TokenKind.Assign) ? parseExpression() : null;
+					arguments.push({
+						name: argument.text,
+						type: type,
+						span: argument.span.merge(previous().span),
+						optional: optional || defaultValue != null,
+						defaultValue: defaultValue
+					});
+				} while (match(TokenKind.Comma));
+			consume(TokenKind.RightParen);
+			var result = match(TokenKind.Colon) ? parseType() : null,
+				body = parseStatementOrBlock(),
+				end = body.length == 0 ? previous().span : statementSpan(body[body.length - 1]),
+				span = start.merge(end),
+				declared = result == null ? null : FunctionType([for (argument in arguments) argument.type], result);
+			return VarDeclaration(name, declared, Lambda(arguments, body, span), span);
+		}
 		if (match(TokenKind.Break)) {
 			var start = previous().span;
 			return Break(start.merge(consume(TokenKind.Semicolon).span));

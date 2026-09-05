@@ -381,13 +381,20 @@ class Typer {
 					output.push(TDeclare(scope.resolveId(name), declaredType, span));
 				case VarDeclaration(name, declared, initializer, span):
 					var declaredType = declared == null ? null : lowerType(declared),
-						value = typeExpression(initializer, scope, declaredType);
+						predeclared = declaredType != null && switch initializer {
+							case Lambda(_, _, _): true;
+							default: false;
+						};
+					if (predeclared)
+						scope.define(name, declaredType, span);
+					var value = typeExpression(initializer, scope, declaredType);
 					if (declared != null) {
 						value = coerce(value, declaredType, 'local "$name"', "E1002");
 					} else if (sameType(value.type, TNull)) {
 						fail("E1002", 'Null requires an explicit nullable type for local "$name"', span);
 					}
-					scope.define(name, value.type, span);
+					if (!predeclared)
+						scope.define(name, value.type, span);
 					if (context.cells.exists(name))
 						context.cellTypes.set(name, value.type);
 					output.push(TVar(context.cells.exists(name) ? name : scope.resolveId(name), value, span));
