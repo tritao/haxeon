@@ -24,13 +24,21 @@ class Parser {
 	}
 
 	public function parseProgram():AstProgram {
-		var packageName:Null<String> = null, imports = [];
+		var packageName:Null<String> = null, imports = [], importAliases:Map<String, String> = [];
 		if (match(TokenKind.Package)) {
 			packageName = parseQualifiedName();
 			consume(TokenKind.Semicolon);
 		}
 		while (match(TokenKind.Import)) {
-			imports.push(parseQualifiedName());
+			var path = parseQualifiedName();
+			imports.push(path);
+			if (check(TokenKind.Identifier) && current().text == "as") {
+				advance();
+				var alias = consume(TokenKind.Identifier).text;
+				if (importAliases.exists(alias))
+					fail(previous(), 'Duplicate import alias "$alias"');
+				importAliases.set(alias, path);
+			}
 			consume(TokenKind.Semicolon);
 		}
 		var functions = [], aliases:Array<AstTypeAlias> = [], enums:Array<AstEnum> = [], enumAbstracts:Array<AstEnumAbstract> = [],
@@ -55,6 +63,7 @@ class Parser {
 		return {
 			packageName: packageName,
 			imports: imports,
+			importAliases: importAliases,
 			aliases: aliases,
 			enums: enums,
 			enumAbstracts: enumAbstracts,

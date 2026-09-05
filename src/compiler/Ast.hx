@@ -164,6 +164,7 @@ typedef AstFunction = {
 typedef AstProgram = {
 	final packageName:Null<String>;
 	final imports:Array<String>;
+	final importAliases:Map<String, String>;
 	final aliases:Array<AstTypeAlias>;
 	final enums:Array<AstEnum>;
 	final enumAbstracts:Array<AstEnumAbstract>;

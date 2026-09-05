@@ -313,7 +313,7 @@ class Compiler {
 				token.check();
 			var state = modules.get(name),
 				locals:Map<String, Bool> = [],
-				aliases = importAliases(state.ast.imports);
+				aliases = importAliases(state.ast.imports, state.ast.importAliases);
 			addDeclaredTypeAliases(aliases, state.ast, state.ast.packageName);
 			for (interfaceDecl in state.ast.interfaces)
 				interfaces.push(canonicalInterface(interfaceDecl, aliases, state.ast.packageName));
@@ -446,6 +446,7 @@ class Compiler {
 			typedNew = Typer.typeSelected({
 				packageName: null,
 				imports: [],
+				importAliases: [],
 				aliases: typeAliases,
 				enums: enums,
 				enumAbstracts: enumAbstracts,
@@ -747,7 +748,7 @@ class Compiler {
 				dependencies.remove(dependency);
 		state.dependencies = [for (name in dependencies.keys()) name];
 		state.dependencies.sort(Reflect.compare);
-		var typeAliases = importAliases(state.ast.imports);
+		var typeAliases = importAliases(state.ast.imports, state.ast.importAliases);
 		addDeclaredTypeAliases(typeAliases, state.ast, state.ast.packageName);
 		state.semanticDependencies = collectSemanticDependencies(state, entry, typeAliases);
 		var signatures:Map<String, String> = [],
@@ -1153,13 +1154,15 @@ class Compiler {
 				], s);
 		}
 
-	static function importAliases(imports:Array<String>):Map<String, String> {
+	static function importAliases(imports:Array<String>, explicit:Map<String, String>):Map<String, String> {
 		var aliases:Map<String, String> = [];
 		for (path in imports) {
 			var dot = path.lastIndexOf("."),
 				alias = dot < 0 ? path : path.substr(dot + 1);
 			aliases.set(alias, path);
 		}
+		for (alias => path in explicit)
+			aliases.set(alias, path);
 		return aliases;
 	}
 

@@ -439,8 +439,11 @@ class TestMain {
 		expectIdentityError(unsupportedAbiState, "Invalid compiler identity state");
 		Sys.println("PASS: stable nominal identities and layout compatibility survive restart");
 		var packaged = new Parser(new Lexer(new SourceFile("pkg.hx",
-			"package editor.core; import editor.util; function main():Int { return 42; }")).tokenize()).parseProgram();
-		if (packaged.packageName != "editor.core" || packaged.imports.length != 1 || packaged.imports[0] != "editor.util")
+			"package editor.core; import editor.util; import haxe.io.Bytes as HaxeBytes; function main():Int { return 42; }")).tokenize()).parseProgram();
+		if (packaged.packageName != "editor.core"
+			|| packaged.imports.length != 2
+			|| packaged.imports[0] != "editor.util"
+			|| packaged.importAliases.get("HaxeBytes") != "haxe.io.Bytes")
 			throw "Package and import declarations were not preserved in the AST";
 		Sys.println("PASS: package and import declarations are represented in the frontend");
 		var aliasProgram = new Parser(new Lexer(new SourceFile("aliases.hx",
