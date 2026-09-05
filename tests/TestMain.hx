@@ -16,6 +16,7 @@ import compiler.ir.Ir.IrType;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 import compiler.ir.IrGenerator;
+import compiler.ir.IrTypeCodec;
 import compiler.ir.SsaBuilder;
 import compiler.ir.Cfg.CfgInstruction;
 import compiler.ir.Cfg.CfgBlock;
@@ -214,6 +215,18 @@ class TestMain {
 		crossBlockB.terminator = compiler.ir.Cfg.CfgTerminator.Return(crossValue);
 		expectCfgError(new CfgFunction("bad", [], I32, [crossBlockA, crossBlockB], []), "CFG value 0 is used outside its defining block or before definition");
 		Sys.println("PASS: CFG verifier rejects malformed blocks, edges, and values");
+		var persistedType = Function([I32, Array(Obj("demo.Box")), Function([Bytes], Bool)], Virtual("demo.Plugin")),
+			persistedTypeBytes = IrTypeCodec.encode(persistedType);
+		if (Std.string(IrTypeCodec.decode(persistedTypeBytes)) != Std.string(persistedType)
+			|| persistedTypeBytes.compare(IrTypeCodec.encode(persistedType)) != 0)
+			throw "IR type state did not round trip deterministically";
+		var trailingType = HaxeBytes.alloc(persistedTypeBytes.length + 1);
+		trailingType.blit(0, persistedTypeBytes, 0, persistedTypeBytes.length);
+		expectStringError(function() IrTypeCodec.decode(trailingType), "Trailing IR type state data");
+		var unknownType = persistedTypeBytes.sub(0, persistedTypeBytes.length);
+		unknownType.set(4, 255);
+		expectStringError(function() IrTypeCodec.decode(unknownType), "Unknown IR type tag");
+		Sys.println("PASS: IR types persist deterministically and reject malformed state");
 		var types = new TypeRegistry();
 		var firstType = types.declareClass("demo.Box", null, [{name: "value", type: "Int"}], [{name: "get", signature: "():Int"}]);
 		if (firstType.compatibility != NewType || firstType.descriptor.fields[0].slot != 0)
@@ -392,6 +405,16 @@ class TestMain {
 		try {
 			new Compiler(state);
 			throw 'compiler accepted invalid identity state; expected "$expected"';
+		} catch (error:String) {
+			if (error != expected)
+				throw error;
+		}
+	}
+
+	static function expectStringError(action:Void->Void, expected:String):Void {
+		try {
+			action();
+			throw 'operation succeeded; expected "$expected"';
 		} catch (error:String) {
 			if (error != expected)
 				throw error;
