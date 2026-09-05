@@ -34,6 +34,11 @@ class Typer {
 	final generated:Array<TypedFunction> = [];
 	final generatedClasses:Array<TypedClass> = [];
 	var currentFunctionName:String = "";
+	// Captures are currently copied into a closure environment.  Keep a
+	// function-wide record of locals that are assigned so we can reject a
+	// capture whose value would otherwise become stale after the closure is
+	// created.  Mutable capture cells will replace this guard later.
+	var currentAssigned:Map<String, Bool> = [];
 	var loopDepth:Int = 0;
 
 	public static function type(program:AstProgram):TypedProgram
@@ -206,7 +211,10 @@ class Typer {
 
 	function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool = false):TypedFunction {
 		var previousFunctionName = currentFunctionName;
+		var previousAssigned = currentAssigned;
 		currentFunctionName = owner == null ? fn.name : owner + "." + fn.name;
+		currentAssigned = [];
+		collectAssignedLocals(fn.statements, currentAssigned);
 		var scope = new Scope();
 		var isConstructor = owner != null && fn.name == "new";
 		if (owner != null && !isStatic)
@@ -232,6 +240,7 @@ class Typer {
 			span: fn.span
 		};
 		currentFunctionName = previousFunctionName;
+		currentAssigned = previousAssigned;
 		return resultFunction;
 	}
 
@@ -502,6 +511,8 @@ class Typer {
 					if (!declared.exists(name)) {
 						var capturedType = scope.resolve(name);
 						if (capturedType != null) {
+							if (currentAssigned.exists(name))
+								fail("E1013", 'Captured variable "$name" requires mutable capture cells', span);
 							lambdaScope.defineCapture(name, capturedType, span);
 							captures.push(name);
 						}
@@ -521,7 +532,11 @@ class Typer {
 				for (name in captures)
 					typedBodyScope.defineCapture(name, scope.resolve(name), span);
 				var lambdaName = '$' + 'lambda:' + currentFunctionName + ':' + span.start,
-					typedBody = typeStatements(body, typedBodyScope, inferredResult);
+					previousLambdaAssigned = currentAssigned;
+				currentAssigned = [];
+				collectAssignedLocals(body, currentAssigned);
+				var typedBody = typeStatements(body, typedBodyScope, inferredResult);
+				currentAssigned = previousLambdaAssigned;
 				if (inferredResult != TVoid && !alwaysReturns(typedBody))
 					fail("E1006", 'Function $lambdaName does not return on every path', span);
 				var environment = captures.length == 0 ? null : '$' + 'lambda-env:' + currentFunctionName + ':' + span.start;
@@ -895,6 +910,30 @@ class Typer {
 
 	function functionType(fn:AstFunction):CompilerType
 		return TFunction([for (argument in fn.arguments) lowerType(argument.type)], lowerType(fn.result));
+
+	static function collectAssignedLocals(statements:Array<AstStatement>, names:Map<String, Bool>):Void {
+		for (statement in statements)
+			switch (statement) {
+				case Assignment(name, _, _):
+					if (name.indexOf(".") < 0)
+						names.set(name, true);
+				case Increment(name, _, _):
+					names.set(name, true);
+				case If(_, yes, no, _):
+					collectAssignedLocals(yes, names);
+					collectAssignedLocals(no, names);
+				case While(_, body, _):
+					collectAssignedLocals(body, names);
+				case ForIn(name, _, body, _):
+					names.set(name, true);
+					collectAssignedLocals(body, names);
+				case Switch(_, cases, defaultBranch, _, _):
+					for (switchCase in cases)
+						collectAssignedLocals(switchCase.statements, names);
+					collectAssignedLocals(defaultBranch, names);
+				default:
+			}
+	}
 
 	static function collectDeclaredLocals(statements:Array<AstStatement>, names:Map<String, Bool>):Void {
 		for (statement in statements)
