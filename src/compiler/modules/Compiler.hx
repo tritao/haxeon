@@ -309,12 +309,31 @@ class Compiler {
 			owners:Map<String, String> = [],
 			generatedByModule:Map<String, Map<String, Bool>> = [],
 			reverseCalls:Map<String, Array<String>> = [];
+		var sourceTypeAliases:Map<String, String> = [];
+		for (moduleName in names) {
+			var moduleState = modules.get(moduleName),
+				program = moduleState.ast;
+			for (declaration in program.aliases)
+				sourceTypeAliases.set(moduleName + "." + declaration.name, qualifiedTypeName(program.packageName, declaration.name));
+			for (declaration in program.enums)
+				sourceTypeAliases.set(moduleName + "." + declaration.name, qualifiedTypeName(program.packageName, declaration.name));
+			for (declaration in program.enumAbstracts)
+				sourceTypeAliases.set(moduleName + "." + declaration.name, qualifiedTypeName(program.packageName, declaration.name));
+			for (declaration in program.abstracts)
+				sourceTypeAliases.set(moduleName + "." + declaration.name, qualifiedTypeName(program.packageName, declaration.name));
+			for (declaration in program.interfaces)
+				sourceTypeAliases.set(moduleName + "." + declaration.name, qualifiedTypeName(program.packageName, declaration.name));
+			for (declaration in program.classes)
+				sourceTypeAliases.set(moduleName + "." + declaration.name, qualifiedTypeName(program.packageName, declaration.name));
+		}
 		for (name in names) {
 			if (token != null)
 				token.check();
 			var state = modules.get(name),
 				locals:Map<String, Bool> = [],
 				aliases = importAliases(state.ast.imports, state.ast.importAliases);
+			for (sourceName => declarationName in sourceTypeAliases)
+				aliases.set(sourceName, declarationName);
 			addDeclaredTypeAliases(aliases, state.ast, state.ast.packageName);
 			for (interfaceDecl in state.ast.interfaces)
 				interfaces.push(canonicalInterface(interfaceDecl, aliases, state.ast.packageName));
@@ -1219,16 +1238,29 @@ class Compiler {
 				], s);
 		}
 
-	static function importAliases(imports:Array<String>, explicit:Map<String, String>):Map<String, String> {
+	function importAliases(imports:Array<String>, explicit:Map<String, String>):Map<String, String> {
 		var aliases:Map<String, String> = [];
 		for (path in imports) {
 			var dot = path.lastIndexOf("."),
 				alias = dot < 0 ? path : path.substr(dot + 1);
-			aliases.set(alias, path);
+			aliases.set(alias, importedDeclarationName(path));
+			aliases.set(path, importedDeclarationName(path));
 		}
-		for (alias => path in explicit)
-			aliases.set(alias, path);
+		for (alias => path in explicit) {
+			aliases.set(alias, importedDeclarationName(path));
+			aliases.set(path, importedDeclarationName(path));
+		}
 		return aliases;
+	}
+
+	function importedDeclarationName(path:String):String {
+		var sourceModule = sourceModuleForDependency(path);
+		if (sourceModule == null || sourceModule == path)
+			return path;
+		var moduleSeparator = sourceModule.lastIndexOf("."),
+			packageName = moduleSeparator < 0 ? "" : sourceModule.substr(0, moduleSeparator),
+			nestedName = path.substr(sourceModule.length + 1);
+		return packageName.length == 0 ? nestedName : packageName + "." + nestedName;
 	}
 
 	static function resolveTypeName(name:String, aliases:Null<Map<String, String>>):String {
