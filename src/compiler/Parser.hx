@@ -427,7 +427,7 @@ class Parser {
 			return While(condition, body, start.merge(end));
 		}
 		if (match(TokenKind.Do)) {
-			var start = previous().span, body = parseStatementOrBlock();
+			var start = previous().span, body = parseDoWhileBody();
 			consume(TokenKind.While);
 			consume(TokenKind.LeftParen);
 			var condition = parseExpression();
@@ -449,6 +449,14 @@ class Parser {
 		}
 		var expression = parseExpression(), end = expressionEnd(expression);
 		return Expression(expression, expressionSpan(expression).merge(end));
+	}
+
+	function parseDoWhileBody():Array<AstStatement> {
+		if (check(TokenKind.LeftBrace))
+			return parseStatementOrBlock();
+		var expression = parseExpression();
+		match(TokenKind.Semicolon);
+		return [Expression(expression, expressionSpan(expression))];
 	}
 
 	function parseStatements():Array<AstStatement> {
@@ -578,6 +586,7 @@ class Parser {
 			var condition = parseExpression();
 			consume(TokenKind.RightParen);
 			var whenTrue = parseExpressionBranch();
+			match(TokenKind.Semicolon);
 			consume(TokenKind.Else);
 			var whenFalse = parseExpressionBranch();
 			return Conditional(condition, whenTrue, whenFalse, start.merge(expressionSpan(whenFalse)));
