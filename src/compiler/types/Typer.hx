@@ -919,8 +919,11 @@ class Typer {
 					fail("E1011", "Conditional expression requires a Bool condition", span);
 				var typedTrue = typeExpression(whenTrue, narrowedScope(scope, typedCondition, true), expectedType),
 					typedFalse = typeExpression(whenFalse, narrowedScope(scope, typedCondition, false), expectedType),
-					resultType = expectedType == null ? typedTrue.type : expectedType;
-				if (expectedType == null && !sameType(typedTrue.type, typedFalse.type))
+					resultType = expectedType == null ? (typedTrue.type == TNever ? typedFalse.type : typedTrue.type) : expectedType;
+				if (expectedType == null
+					&& typedTrue.type != TNever
+					&& typedFalse.type != TNever
+					&& !sameType(typedTrue.type, typedFalse.type))
 					fail("E1003", "Conditional branches must have matching types", span);
 				typedTrue = coerce(typedTrue, resultType, "conditional branch", "E1003");
 				typedFalse = coerce(typedFalse, resultType, "conditional branch", "E1003");
@@ -930,6 +933,8 @@ class Typer {
 					typedStatements = typeStatements(statements, blockScope, context.resultType),
 					typedResult = typeExpression(result, blockScope, expectedType);
 				new TypedExpression(TBlockExpression(typedStatements, typedResult), typedResult.type, span);
+			case ThrowExpression(value, span):
+				new TypedExpression(TThrowExpression(typeExpression(value, scope)), TNever, span);
 			case PostfixIncrement(target, delta, span):
 				var typedTarget = typeExpression(target, scope);
 				if (!sameType(typedTarget.type, TInt) && !sameType(typedTarget.type, TFloat))
@@ -961,9 +966,10 @@ class Typer {
 						typedResult = typeExpression(switchCase.result, caseScope, resultType),
 						enumName:Null<String> = pattern == null ? null : pattern.enumName,
 						constructorIndex = pattern == null ? -1 : pattern.index;
-					if (resultType == null)
+					if (resultType == null && typedResult.type != TNever)
 						resultType = typedResult.type;
-					typedResult = coerce(typedResult, resultType, "switch branch", "E1003");
+					if (resultType != null)
+						typedResult = coerce(typedResult, resultType, "switch branch", "E1003");
 					if (pattern == null)
 						switch typedValue.expression {
 							case TEnumLiteral(name, index):
@@ -992,12 +998,25 @@ class Typer {
 				}
 				var typedDefault = defaultExpression == null ? null : typeExpression(defaultExpression, scope, resultType);
 				if (typedDefault != null) {
-					if (resultType == null)
+					if (resultType == null && typedDefault.type != TNever)
 						resultType = typedDefault.type;
-					typedDefault = coerce(typedDefault, resultType, "switch branch", "E1003");
+					if (resultType != null)
+						typedDefault = coerce(typedDefault, resultType, "switch branch", "E1003");
 				}
 				if (resultType == null)
 					fail("E1003", "Switch expression has no result branches", span);
+				typedCases = [
+					for (switchCase in typedCases)
+						{
+							value: switchCase.value,
+							result: coerce(switchCase.result, resultType, "switch branch", "E1003"),
+							enumName: switchCase.enumName,
+							constructorIndex: switchCase.constructorIndex,
+							bindings: switchCase.bindings
+						}
+				];
+				if (typedDefault != null)
+					typedDefault = coerce(typedDefault, resultType, "switch branch", "E1003");
 				if (typedDefault == null && !isEnum(typedSubject.type))
 					fail("E1021", "Switch expression requires a default branch", span);
 				if (isEnum(typedSubject.type) && typedDefault == null) {
@@ -1789,6 +1808,8 @@ class Typer {
 			case BlockExpression(statements, value, _):
 				collectMutableCaptureCandidates(statements, outerDeclared, result);
 				collectMutableCaptureExpression(value, outerDeclared, result);
+			case ThrowExpression(value, _):
+				collectMutableCaptureExpression(value, outerDeclared, result);
 			case SwitchExpression(subject, cases, fallback, _):
 				collectMutableCaptureExpression(subject, outerDeclared, result);
 				for (switchCase in cases) {
@@ -1839,6 +1860,8 @@ class Typer {
 			case BlockExpression(statements, value, _):
 				collectVariables(statements, names);
 				collectExpressionVariables(value, names);
+			case ThrowExpression(value, _):
+				collectExpressionVariables(value, names);
 			case SwitchExpression(subject, cases, fallback, _):
 				collectExpressionVariables(subject, names);
 				for (switchCase in cases) {
@@ -1884,6 +1907,8 @@ class Typer {
 	}
 
 	function coerce(value:TypedExpression, expected:CompilerType, context:String, code:String = "E1009"):TypedExpression {
+		if (value.type == TNever)
+			return new TypedExpression(value.expression, expected, value.span);
 		return switch relations.conversion(value.type, expected) {
 			case Identity: value;
 			case ToDynamic:

@@ -159,6 +159,7 @@ run_program captured-shadowing 42
 run_program dynamic-argument 42
 run_program anonymous-record 42
 run_program switch-expression 42
+run_program throw-expression 42
 run_program array-literal 42
 run_program do-while 42
 run_program postfix-increment 42

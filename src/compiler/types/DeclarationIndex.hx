@@ -138,6 +138,7 @@ class DeclarationIndex {
 			case TFloat: "Float";
 			case TString: "String";
 			case TDynamic: "Dynamic";
+			case TNever: "Never";
 			case TVoid: "Void";
 			case TClass(name), TInterface(name), TEnum(name): name;
 			case TNull: "null";

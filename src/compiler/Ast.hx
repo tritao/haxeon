@@ -82,6 +82,7 @@ enum AstExpression {
 	Or(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Conditional(condition:AstExpression, whenTrue:AstExpression, whenFalse:AstExpression, span:SourceSpan);
 	BlockExpression(statements:Array<AstStatement>, result:AstExpression, span:SourceSpan);
+	ThrowExpression(expression:AstExpression, span:SourceSpan);
 	SwitchExpression(expression:AstExpression, cases:Array<AstSwitchExpressionCase>, defaultExpression:Null<AstExpression>, span:SourceSpan);
 	ObjectLiteral(fields:Array<AstObjectField>, span:SourceSpan);
 	ArrayLiteral(values:Array<AstExpression>, span:SourceSpan);

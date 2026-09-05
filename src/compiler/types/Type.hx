@@ -6,6 +6,7 @@ enum CompilerType {
 	TFloat;
 	TString;
 	TDynamic;
+	TNever;
 	TVoid;
 	TClass(name:String);
 	TInterface(name:String);

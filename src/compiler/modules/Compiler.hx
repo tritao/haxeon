@@ -673,6 +673,7 @@ class Compiler {
 			case TFloat: F64;
 			case TString: Bytes;
 			case TDynamic: Dyn;
+			case TNever: throw "Never is not a runtime ABI type";
 			case TVoid: Void;
 			case TClass(name): Obj(name);
 			case TMap(_, _): Abstract("map_string_i32");
@@ -1070,6 +1071,7 @@ class Compiler {
 					for (statement in statements)
 						canonicalStatement(statement, module, entry, locals, aliases)
 				], canonicalExpression(value, module, entry, locals, aliases), s);
+			case ThrowExpression(value, s): ThrowExpression(canonicalExpression(value, module, entry, locals, aliases), s);
 			case SwitchExpression(subject, cases, fallback, s):
 				SwitchExpression(canonicalExpression(subject, module, entry, locals, aliases), [
 					for (switchCase in cases)
@@ -1331,6 +1333,8 @@ class Compiler {
 				for (statement in statements)
 					scanStatement(statement, dependencies);
 				scanExpression(value, dependencies);
+			case ThrowExpression(value, _):
+				scanExpression(value, dependencies);
 			case SwitchExpression(subject, cases, fallback, _):
 				scanExpression(subject, dependencies);
 				for (switchCase in cases) {
@@ -1485,6 +1489,8 @@ class Compiler {
 				for (statement in statements)
 					scanCalls(statement, calls, aliases);
 				scanCallExpression(value, calls, aliases);
+			case ThrowExpression(value, _):
+				scanCallExpression(value, calls, aliases);
 			case SwitchExpression(subject, cases, fallback, _):
 				scanCallExpression(subject, calls, aliases);
 				for (switchCase in cases) {
@@ -1602,6 +1608,8 @@ class Compiler {
 				collectLambdaExpression(whenFalse, functionName, module, generatedByModule);
 			case BlockExpression(statements, value, _):
 				collectLambdas(statements, functionName, module, generatedByModule);
+				collectLambdaExpression(value, functionName, module, generatedByModule);
+			case ThrowExpression(value, _):
 				collectLambdaExpression(value, functionName, module, generatedByModule);
 			case SwitchExpression(subject, cases, fallback, _):
 				collectLambdaExpression(subject, functionName, module, generatedByModule);

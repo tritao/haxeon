@@ -31,6 +31,8 @@ class TypeRelations {
 	}
 
 	public function isAssignable(actual:CompilerType, expected:CompilerType):Bool {
+		if (actual == TNever)
+			return true;
 		if (equals(actual, expected))
 			return true;
 		return switch [actual, expected] {

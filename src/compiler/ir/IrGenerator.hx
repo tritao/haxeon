@@ -893,16 +893,27 @@ class IrGenerator {
 				localTypes.set(localName, resultType);
 				builder.branch(lowerExpression(condition, builder, localTypes), yesBlock, noBlock);
 				builder.select(yesBlock);
-				builder.store(localName, lowerExpression(whenTrue, builder, localTypes));
-				builder.jump(afterBlock);
+				var yesValue = lowerExpression(whenTrue, builder, localTypes);
+				if (!builder.isTerminated()) {
+					builder.store(localName, yesValue);
+					builder.jump(afterBlock);
+				}
 				builder.select(noBlock);
-				builder.store(localName, lowerExpression(whenFalse, builder, localTypes));
-				builder.jump(afterBlock);
+				var noValue = lowerExpression(whenFalse, builder, localTypes);
+				if (!builder.isTerminated()) {
+					builder.store(localName, noValue);
+					builder.jump(afterBlock);
+				}
 				builder.select(afterBlock);
 				builder.load(localName, resultType);
 			case TBlockExpression(statements, result):
+				var placeholder = unreachableValue(lowerType(expression.type), builder);
 				lowerStatements(statements, builder, localTypes, []);
-				lowerExpression(result, builder, localTypes);
+				if (builder.isTerminated()) placeholder; else lowerExpression(result, builder, localTypes);
+			case TThrowExpression(value):
+				var placeholder = unreachableValue(lowerType(expression.type), builder);
+				builder.throwValue(builder.toDyn(lowerExpression(value, builder, localTypes)));
+				placeholder;
 			case TSwitchExpression(subject, cases, defaultExpression):
 				var subjectName = '$' + 'switch-expression-subject:${expression.span.start}',
 					resultName = '$' + 'switch-expression-result:${expression.span.start}',
@@ -947,13 +958,19 @@ class IrGenerator {
 						builder.store(binding.name,
 							builder.enumField(builder.load(subjectName, subjectType), switchCase.constructorIndex, binding.index, lowerType(binding.type)));
 					}
-					builder.store(resultName, lowerExpression(switchCase.result, builder, localTypes));
-					builder.jump(afterBlock);
+					var caseResult = lowerExpression(switchCase.result, builder, localTypes);
+					if (!builder.isTerminated()) {
+						builder.store(resultName, caseResult);
+						builder.jump(afterBlock);
+					}
 				}
 				if (defaultExpression != null) {
 					builder.select(fallbackBlock);
-					builder.store(resultName, lowerExpression(defaultExpression, builder, localTypes));
-					builder.jump(afterBlock);
+					var fallbackResult = lowerExpression(defaultExpression, builder, localTypes);
+					if (!builder.isTerminated()) {
+						builder.store(resultName, fallbackResult);
+						builder.jump(afterBlock);
+					}
 				}
 				builder.select(afterBlock);
 				builder.load(resultName, resultType);
@@ -1092,6 +1109,7 @@ class IrGenerator {
 			case TFloat: F64;
 			case TString: Bytes;
 			case TDynamic: Dyn;
+			case TNever: throw "Never must be coerced before lowering";
 			case TVoid: Void;
 			case TClass(name): Obj(name);
 			case TMap(key, value): Abstract(RuntimeType.mapName(key, value));
@@ -1102,6 +1120,14 @@ class IrGenerator {
 			case TArray(element): Array(lowerType(element));
 			case TFunction(arguments, result): Function([for (argument in arguments) lowerType(argument)], lowerType(result));
 			case TAnonymous(name, _): Obj(name);
+		};
+
+	static function unreachableValue(type:IrType, builder:CfgBuilder):CfgValue
+		return switch type {
+			case I32: builder.constInt(0);
+			case Bool: builder.constBool(false);
+			case F64: builder.constFloat(0);
+			default: builder.constNull(type);
 		};
 
 	static function incrementOne(type:CompilerType, builder:CfgBuilder):CfgValue
