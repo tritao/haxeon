@@ -8,6 +8,7 @@ import compiler.Ast.AstInterface;
 import compiler.Ast.AstTypeAlias;
 import compiler.Ast.AstEnum;
 import compiler.Ast.AstEnumAbstract;
+import compiler.Ast.AstAbstract;
 import compiler.Ast.AstProgram;
 import compiler.Ast.AstStatement;
 import compiler.Ast.AstType;
@@ -42,7 +43,7 @@ class Parser {
 			consume(TokenKind.Semicolon);
 		}
 		var functions = [], aliases:Array<AstTypeAlias> = [], enums:Array<AstEnum> = [], enumAbstracts:Array<AstEnumAbstract> = [],
-			interfaces:Array<AstInterface> = [], classes = [];
+			abstracts:Array<AstAbstract> = [], interfaces:Array<AstInterface> = [], classes = [];
 		while (!check(TokenKind.Eof)) {
 			if (match(TokenKind.Typedef))
 				aliases.push(parseTypeAlias(previous().span));
@@ -57,7 +58,10 @@ class Parser {
 				interfaces.push(parseInterface());
 			else if (check(TokenKind.Class))
 				classes.push(parseClass());
-			else
+			else if (check(TokenKind.Identifier) && current().text == "abstract") {
+				var start = advance().span;
+				abstracts.push(parseAbstract(start));
+			} else
 				functions.push(parseFunction(false));
 		}
 		return {
@@ -67,9 +71,51 @@ class Parser {
 			aliases: aliases,
 			enums: enums,
 			enumAbstracts: enumAbstracts,
+			abstracts: abstracts,
 			interfaces: interfaces,
 			classes: classes,
 			functions: functions
+		};
+	}
+
+	function parseAbstract(start:SourceSpan):AstAbstract {
+		var name = consume(TokenKind.Identifier).text;
+		consume(TokenKind.LeftParen);
+		var underlying = parseType();
+		consume(TokenKind.RightParen);
+		var fromTypes = [], toTypes = [];
+		while (!check(TokenKind.LeftBrace)) {
+			var conversion = consume(TokenKind.Identifier);
+			if (conversion.text != "from" && conversion.text != "to")
+				fail(conversion, 'Expected "from" or "to"');
+			var conversionType = parseType();
+			if (conversion.text == "from")
+				fromTypes.push(conversionType);
+			else
+				toTypes.push(conversionType);
+		}
+		consume(TokenKind.LeftBrace);
+		var methods = [];
+		while (!check(TokenKind.RightBrace)) {
+			var isStatic = false;
+			while (check(TokenKind.Public) || check(TokenKind.Private) || check(TokenKind.Inline) || check(TokenKind.Static)) {
+				if (match(TokenKind.Static))
+					isStatic = true;
+				else
+					advance();
+			}
+			var functionStart = consume(TokenKind.Function).span,
+				methodName = check(TokenKind.New) ? advance().text : consume(TokenKind.Identifier).text;
+			methods.push(parseFunctionBody(functionStart, methodName, true, isStatic));
+		}
+		var end = consume(TokenKind.RightBrace).span;
+		return {
+			name: name,
+			underlying: underlying,
+			fromTypes: fromTypes,
+			toTypes: toTypes,
+			methods: methods,
+			span: start.merge(end)
 		};
 	}
 

@@ -78,6 +78,15 @@ typedef AstEnumAbstract = {
 	final span:SourceSpan;
 }
 
+typedef AstAbstract = {
+	final name:String;
+	final underlying:AstType;
+	final fromTypes:Array<AstType>;
+	final toTypes:Array<AstType>;
+	final methods:Array<AstFunction>;
+	final span:SourceSpan;
+}
+
 typedef AstCatch = {final name:String; final type:AstType; final statements:Array<AstStatement>; final span:SourceSpan;}
 
 enum AstExpression {
@@ -168,6 +177,7 @@ typedef AstProgram = {
 	final aliases:Array<AstTypeAlias>;
 	final enums:Array<AstEnum>;
 	final enumAbstracts:Array<AstEnumAbstract>;
+	final abstracts:Array<AstAbstract>;
 	final interfaces:Array<AstInterface>;
 	final classes:Array<AstClass>;
 	final functions:Array<AstFunction>;

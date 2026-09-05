@@ -42,6 +42,7 @@ class DeclarationIndex {
 	public final aliases:Map<String, AstType> = [];
 	public final enums:Map<String, AstEnum> = [];
 	public final enumAbstracts:Map<String, compiler.Ast.AstEnumAbstract> = [];
+	public final abstracts:Map<String, compiler.Ast.AstAbstract> = [];
 	public final interfaces:Map<String, AstInterface> = [];
 	public final classes:Map<String, AstClass> = [];
 	public final symbols:Map<String, DeclarationSymbol> = [];
@@ -65,6 +66,12 @@ class DeclarationIndex {
 			enumAbstracts.set(decl.name, decl);
 			for (value in decl.values)
 				declare(Member, decl.name + "." + value.name, value.span);
+		}
+		for (decl in program.abstracts) {
+			declareType(decl.name, Abstract, decl.span);
+			abstracts.set(decl.name, decl);
+			for (method in decl.methods)
+				declare(Member, decl.name + "." + method.name, method.span);
 		}
 		for (decl in program.interfaces) {
 			declareType(decl.name, Interface, decl.span);
@@ -114,6 +121,7 @@ class DeclarationIndex {
 					resolving.remove(name);
 					resolved;
 				} else if (enumAbstracts.exists(name)) resolveInner(enumAbstracts.get(name).underlying, span, resolving,
+					substitutions); else if (abstracts.exists(name)) resolveInner(abstracts.get(name).underlying, span, resolving,
 					substitutions); else if (interfaces.exists(name)) TInterface(name); else if (enums.exists(name)) TEnum(name); else
 					if (classes.exists(name)) TClass(name); else {
 					fail('Unknown type "$name"', span);
@@ -177,6 +185,15 @@ class DeclarationIndex {
 	}
 
 	function validateSignatures(program:AstProgram):Void {
+		for (decl in program.abstracts) {
+			resolve(decl.underlying, decl.span);
+			for (type in decl.fromTypes)
+				resolve(type, decl.span);
+			for (type in decl.toTypes)
+				resolve(type, decl.span);
+			for (method in decl.methods)
+				resolveFunction(method);
+		}
 		for (decl in program.enumAbstracts) {
 			resolve(decl.underlying, decl.span);
 			for (type in decl.fromTypes)
@@ -261,6 +278,8 @@ class DeclarationIndex {
 			return program.enums[0].span;
 		if (program.enumAbstracts.length > 0)
 			return program.enumAbstracts[0].span;
+		if (program.abstracts.length > 0)
+			return program.abstracts[0].span;
 		if (program.interfaces.length > 0)
 			return program.interfaces[0].span;
 		if (program.classes.length > 0)

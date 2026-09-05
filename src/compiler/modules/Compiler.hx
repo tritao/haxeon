@@ -303,6 +303,7 @@ class Compiler {
 			typeAliases:Array<compiler.Ast.AstTypeAlias> = [],
 			enums:Array<compiler.Ast.AstEnum> = [],
 			enumAbstracts:Array<compiler.Ast.AstEnumAbstract> = [],
+			abstracts:Array<compiler.Ast.AstAbstract> = [],
 			interfaces:Array<compiler.Ast.AstInterface> = [],
 			classes:Array<compiler.Ast.AstClass> = [],
 			owners:Map<String, String> = [],
@@ -323,6 +324,8 @@ class Compiler {
 				enums.push(canonicalEnum(enumDecl, aliases, state.ast.packageName));
 			for (abstractDecl in state.ast.enumAbstracts)
 				enumAbstracts.push(canonicalEnumAbstract(abstractDecl, aliases, state.ast.packageName, name, entryModule, locals));
+			for (abstractDecl in state.ast.abstracts)
+				abstracts.push(canonicalAbstract(abstractDecl, aliases, state.ast.packageName, name, entryModule, locals));
 			for (fn in state.ast.functions)
 				locals.set(fn.name, true);
 			for (fn in state.ast.functions) {
@@ -450,6 +453,7 @@ class Compiler {
 				aliases: typeAliases,
 				enums: enums,
 				enumAbstracts: enumAbstracts,
+				abstracts: abstracts,
 				interfaces: interfaces,
 				classes: classes,
 				functions: programFunctions
@@ -734,6 +738,8 @@ class Compiler {
 			dependencies.remove(enumDecl.name);
 		for (abstractDecl in state.ast.enumAbstracts)
 			dependencies.remove(abstractDecl.name);
+		for (abstractDecl in state.ast.abstracts)
+			dependencies.remove(abstractDecl.name);
 		for (importPath in state.ast.imports) {
 			var dot = importPath.lastIndexOf("."),
 				alias = dot < 0 ? importPath : importPath.substr(dot + 1);
@@ -928,6 +934,8 @@ class Compiler {
 			aliases.set(enumDecl.name, qualifiedTypeName(packageName, enumDecl.name));
 		for (abstractDecl in program.enumAbstracts)
 			aliases.set(abstractDecl.name, qualifiedTypeName(packageName, abstractDecl.name));
+		for (abstractDecl in program.abstracts)
+			aliases.set(abstractDecl.name, qualifiedTypeName(packageName, abstractDecl.name));
 		for (interfaceDecl in program.interfaces)
 			aliases.set(interfaceDecl.name, qualifiedTypeName(packageName, interfaceDecl.name));
 		for (classDecl in program.classes)
@@ -973,6 +981,20 @@ class Compiler {
 						value: canonicalExpression(value.value, module, entry, locals, aliases),
 						span: value.span
 					}
+			],
+			span: decl.span
+		};
+
+	static function canonicalAbstract(decl:compiler.Ast.AstAbstract, aliases:Map<String, String>, packageName:Null<String>, module:String, entry:String,
+			locals:Map<String, Bool>):compiler.Ast.AstAbstract
+		return {
+			name: qualifiedTypeName(packageName, decl.name),
+			underlying: canonicalType(decl.underlying, aliases),
+			fromTypes: [for (type in decl.fromTypes) canonicalType(type, aliases)],
+			toTypes: [for (type in decl.toTypes) canonicalType(type, aliases)],
+			methods: [
+				for (method in decl.methods)
+					canonicalFunction(method, module, entry, locals, qualifiedTypeName(packageName, decl.name) + "." + method.name, aliases)
 			],
 			span: decl.span
 		};
