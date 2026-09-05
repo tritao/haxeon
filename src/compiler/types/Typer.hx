@@ -496,13 +496,20 @@ class Typer {
 					if (dot < 0) {
 						var expected = scope.resolveDeclared(name);
 						if (expected == null) {
-							var ownerSeparator = context.name.lastIndexOf("."),
-								owner = ownerSeparator < 0 ? null : context.name.substr(0, ownerSeparator),
-								staticField = owner == null ? null : findStaticFieldNullable(owner, name);
-							if (staticField == null)
-								fail("E1005", 'Unknown variable "$name"', span);
-							value = coerce(value, staticField.type, 'field "$name"', "E1002");
-							output.push(TStaticFieldAssign(staticField.owner, name, value, span));
+							var thisType = scope.resolve("this"),
+								instanceField = thisType == null ? null : findFieldType(thisType, name);
+							if (instanceField != null) {
+								value = coerce(value, instanceField, 'field "$name"', "E1002");
+								output.push(TFieldAssign(new TypedExpression(TLocal("this"), thisType, span), name, value, span));
+							} else {
+								var ownerSeparator = context.name.lastIndexOf("."),
+									owner = ownerSeparator < 0 ? null : context.name.substr(0, ownerSeparator),
+									staticField = owner == null ? null : findStaticFieldNullable(owner, name);
+								if (staticField == null)
+									fail("E1005", 'Unknown variable "$name"', span);
+								value = coerce(value, staticField.type, 'field "$name"', "E1002");
+								output.push(TStaticFieldAssign(staticField.owner, name, value, span));
+							}
 						} else {
 							value = coerce(value, expected, 'local "$name"', "E1002");
 							if (scope.isCapture(name)) {
@@ -1344,6 +1351,23 @@ class Typer {
 					typed = coerceArguments(typed, functionType.arguments, name);
 					new TypedExpression(TClosureCall(new TypedExpression(TLocal(scope.resolveId(name)), callable, span), typed), functionType.result, span);
 				} else {
+					if (name.indexOf(".") < 0) {
+						var ownerSeparator = context.name.lastIndexOf("."),
+							owner = ownerSeparator < 0 ? null : context.name.substr(0, ownerSeparator),
+							implicitMethod = owner == null ? null : findMethod(owner, name);
+						if (implicitMethod != null) {
+							var methodKey = implicitMethod.owner + "." + name,
+								method = signatures.get(methodKey),
+								typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span);
+							if (implicitMethod.isStatic)
+								return new TypedExpression(TCall(methodKey, typed), lowerType(method.result), span);
+							var thisType = scope.resolve("this");
+							if (thisType == null)
+								fail("E1007", 'Instance method "$methodKey" requires an object', span);
+							var receiver = new TypedExpression(TLocal("this"), thisType, span);
+							return new TypedExpression(TMethodCall(receiver, methodKey, typed), lowerType(method.result), span);
+						}
+					}
 					var parts = name.split("."),
 						receiverName = parts.length < 2 || signatures.exists(name) ? null : parts[0],
 						receiver = receiverName == null ? null : resolveReceiver(receiverName, span, scope),
