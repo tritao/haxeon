@@ -463,9 +463,8 @@ class Compiler {
 			if (token != null)
 				token.check();
 			var module = owners.get(fn.name);
-			if (module == null && StringTools.startsWith(fn.name, "$generic:")) {
-				var base = fn.name.substring(9, fn.name.indexOf("<", 9));
-				module = owners.get(base);
+			if (module == null && fn.genericOrigin != null) {
+				module = owners.get(fn.genericOrigin);
 				if (module != null) {
 					owners.set(fn.name, module);
 					var generatedNames = generatedByModule.get(module);

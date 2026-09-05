@@ -40,7 +40,6 @@ class Typer {
 	var context:BodyContext = new BodyContext("");
 	final anonymousTypes:Map<String, Array<compiler.types.Type.AnonymousField>> = [];
 	final genericSpecializations:Map<String, String> = [];
-	var typeSubstitutions:Map<String, CompilerType> = [];
 
 	public static function type(program:AstProgram):TypedProgram
 		return new Typer(null).typeProgram(program, null, true);
@@ -291,11 +290,9 @@ class Typer {
 
 	function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool = false, ?substitutions:Map<String, CompilerType>,
 			?specializedName:String):TypedFunction {
-		var previousContext = context,
-			previousSubstitutions = typeSubstitutions;
-		typeSubstitutions = substitutions == null ? [] : substitutions;
+		var previousContext = context;
 		var functionName = specializedName == null ? (owner == null ? fn.name : owner + "." + fn.name) : specializedName;
-		context = new BodyContext(functionName);
+		context = new BodyContext(functionName, substitutions);
 		collectAssignedLocals(fn.statements, context.assigned);
 		var declared:Map<String, Bool> = [];
 		for (argument in fn.arguments)
@@ -332,6 +329,11 @@ class Typer {
 			fail("E1006", 'Function ${fn.name} does not return on every path', fn.span);
 		var resultFunction:TypedFunction = {
 			name: functionName,
+			genericOrigin: specializedName == null ? null : (owner == null ? fn.name : owner + "." + fn.name),
+			typeArguments: specializedName == null || fn.typeParameters == null ? null : [
+				for (parameter in fn.typeParameters)
+					context.typeSubstitutions.get(parameter)
+			],
 			owner: owner,
 			isStatic: isStatic,
 			isConstructor: isConstructor,
@@ -348,7 +350,6 @@ class Typer {
 				generatedCells.push({name: context.cells.get(name), valueType: cellType, kind: context.cellKinds.get(name)});
 		}
 		context = previousContext;
-		typeSubstitutions = previousSubstitutions;
 		return resultFunction;
 	}
 
@@ -802,7 +803,7 @@ class Typer {
 						typedBodyScope.defineCapture(name, scope.resolve(name), span, captureCells.exists(name), captureCells.get(name));
 					var lambdaName = '$' + 'lambda:' + context.name + ':' + span.start,
 						previousContext = context;
-					context = new BodyContext(lambdaName);
+					context = new BodyContext(lambdaName, previousContext.typeSubstitutions);
 					collectAssignedLocals(body, context.assigned);
 					var lambdaDeclared:Map<String, Bool> = [];
 					for (argument in arguments)
@@ -1941,7 +1942,7 @@ class Typer {
 	}
 
 	function lowerType(type:AstType):CompilerType
-		return declarations.resolve(type, null, typeSubstitutions);
+		return declarations.resolve(type, null, context.typeSubstitutions);
 
 	static function isGeneric(fn:AstFunction):Bool
 		return fn.typeParameters != null && fn.typeParameters.length > 0;

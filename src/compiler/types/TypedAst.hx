@@ -111,6 +111,8 @@ typedef TypedEnum = {final name:String; final cases:Array<TypedEnumCase>; final 
 
 typedef TypedFunction = {
 	final name:String;
+	final ?genericOrigin:String;
+	final ?typeArguments:Array<CompilerType>;
 	final owner:Null<String>;
 	final isStatic:Bool;
 	final isConstructor:Bool;
