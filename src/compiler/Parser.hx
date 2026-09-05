@@ -353,7 +353,22 @@ class Parser {
 			return parsePostfix(New(typeName, arguments, start.merge(end)));
 		}
 		if (check(TokenKind.LeftParen)) {
-			var saved = position, start = current().span;
+			var saved = position,
+				start = current().span,
+				lambdaStart = position + 1,
+				isLambda = lambdaStart < tokens.length
+					&& ((tokens[lambdaStart].kind == TokenKind.RightParen
+						&& lambdaStart + 1 < tokens.length
+						&& tokens[lambdaStart + 1].kind == TokenKind.Arrow)
+						|| (tokens[lambdaStart].kind == TokenKind.Identifier
+							&& lambdaStart + 1 < tokens.length
+							&& tokens[lambdaStart + 1].kind == TokenKind.Colon));
+			if (!isLambda) {
+				advance();
+				var grouped = parseExpression();
+				consume(TokenKind.RightParen);
+				return parsePostfix(grouped);
+			}
 			advance();
 			var arguments = [];
 			if (!check(TokenKind.RightParen)) {
