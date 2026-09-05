@@ -1051,6 +1051,9 @@ class Compiler {
 			case IndexAssignment(array, offset, e,
 				span): IndexAssignment(canonicalExpression(array, module, entry, locals, aliases),
 					canonicalExpression(offset, module, entry, locals, aliases), canonicalExpression(e, module, entry, locals, aliases), span);
+			case FieldAssignment(object, field, e,
+				span): FieldAssignment(canonicalExpression(object, module, entry, locals, aliases), field,
+					canonicalExpression(e, module, entry, locals, aliases), span);
 			case Return(e, span): Return(canonicalExpression(e, module, entry, locals, aliases), span);
 			case Throw(e, span): Throw(canonicalExpression(e, module, entry, locals, aliases), span);
 			case Try(tryBranch, catches, span): Try([for (x in tryBranch) canonicalStatement(x, module, entry, locals, aliases)], [
@@ -1283,6 +1286,9 @@ class Compiler {
 				case IndexAssignment(array, offset, expression, _):
 					for (item in [array, offset, expression])
 						addExpressionDependencies(result, owner, Body, item, module, entry);
+				case FieldAssignment(object, _, expression, _):
+					addExpressionDependencies(result, owner, Body, object, module, entry);
+					addExpressionDependencies(result, owner, Body, expression, module, entry);
 				case If(condition, yes, no, _):
 					addExpressionDependencies(result, owner, Body, condition, module, entry);
 					addBodyDependencies(result, owner, yes, module, entry);
@@ -1345,6 +1351,9 @@ class Compiler {
 			case IndexAssignment(array, offset, e, _):
 				scanExpression(array, dependencies);
 				scanExpression(offset, dependencies);
+				scanExpression(e, dependencies);
+			case FieldAssignment(object, _, e, _):
+				scanExpression(object, dependencies);
 				scanExpression(e, dependencies);
 			case ReturnVoid(_):
 			case Break(_), Continue(_):
@@ -1488,6 +1497,9 @@ class Compiler {
 			case IndexAssignment(array, offset, e, _):
 				scanCallExpression(array, calls, aliases);
 				scanCallExpression(offset, calls, aliases);
+				scanCallExpression(e, calls, aliases);
+			case FieldAssignment(object, _, e, _):
+				scanCallExpression(object, calls, aliases);
 				scanCallExpression(e, calls, aliases);
 			case Return(e, _):
 				scanCallExpression(e, calls, aliases);
@@ -1633,6 +1645,9 @@ class Compiler {
 				case IndexAssignment(array, offset, expression, _):
 					collectLambdaExpression(array, functionName, module, generatedByModule);
 					collectLambdaExpression(offset, functionName, module, generatedByModule);
+					collectLambdaExpression(expression, functionName, module, generatedByModule);
+				case FieldAssignment(object, _, expression, _):
+					collectLambdaExpression(object, functionName, module, generatedByModule);
 					collectLambdaExpression(expression, functionName, module, generatedByModule);
 				case ReturnVoid(_):
 				case Break(_), Continue(_):

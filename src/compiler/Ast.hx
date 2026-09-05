@@ -140,6 +140,7 @@ enum AstStatement {
 	VarDeclaration(name:String, ?type:AstType, initializer:AstExpression, span:SourceSpan);
 	Assignment(name:String, expression:AstExpression, span:SourceSpan);
 	IndexAssignment(array:AstExpression, index:AstExpression, expression:AstExpression, span:SourceSpan);
+	FieldAssignment(object:AstExpression, field:String, expression:AstExpression, span:SourceSpan);
 	Return(expression:AstExpression, span:SourceSpan);
 	ReturnVoid(span:SourceSpan);
 	Throw(expression:AstExpression, span:SourceSpan);

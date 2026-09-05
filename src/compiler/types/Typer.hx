@@ -537,6 +537,19 @@ class Typer {
 								fail("E1002", "Array element assignment has the wrong type", span);
 							output.push(TIndexAssign(typedArray, typedIndex, value, span));
 					}
+				case FieldAssignment(objectExpression, fieldName, expression, span):
+					var object = typeExpression(objectExpression, scope),
+						value = typeExpression(expression, scope);
+					switch object.expression {
+						case TClassRef(className):
+							var staticField = findStaticField(className, fieldName, span);
+							value = coerce(value, staticField.type, 'field "$fieldName"', "E1002");
+							output.push(TStaticFieldAssign(staticField.owner, fieldName, value, span));
+						default:
+							var expected = fieldType(object.type, fieldName, span);
+							value = coerce(value, expected, 'field "$fieldName"', "E1002");
+							output.push(TFieldAssign(object, fieldName, value, span));
+					}
 				case If(condition, thenBranch, elseBranch, span):
 					var typedCondition = typeExpression(condition, scope);
 					if (!sameType(typedCondition.type, TBool))
@@ -1739,6 +1752,9 @@ class Typer {
 					collectExpressionVariables(array, names);
 					collectExpressionVariables(offset, names);
 					collectExpressionVariables(expression, names);
+				case FieldAssignment(object, _, expression, _):
+					collectExpressionVariables(object, names);
+					collectExpressionVariables(expression, names);
 				case ReturnVoid(_):
 				case If(condition, yes, no, _):
 					collectExpressionVariables(condition, names);
@@ -1779,6 +1795,9 @@ class Typer {
 				case IndexAssignment(array, offset, expression, _):
 					collectMutableCaptureExpression(array, outerDeclared, result);
 					collectMutableCaptureExpression(offset, outerDeclared, result);
+					collectMutableCaptureExpression(expression, outerDeclared, result);
+				case FieldAssignment(object, _, expression, _):
+					collectMutableCaptureExpression(object, outerDeclared, result);
 					collectMutableCaptureExpression(expression, outerDeclared, result);
 				case If(condition, yes, no, _):
 					collectMutableCaptureExpression(condition, outerDeclared, result);
@@ -2349,9 +2368,10 @@ class Typer {
 
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
-			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span),
-				ReturnVoid(span), Throw(_, span), Try(_, _, span), If(_, _, _, span), While(_, _, span), DoWhile(_, _, span), ForIn(_, _, _, _, span),
-				Break(span), Continue(span), Switch(_, _, _, _, span), Increment(_, _, span), Expression(_, span): span;
+			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span),
+				FieldAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), Throw(_, span), Try(_, _, span), If(_, _, _, span), While(_, _, span),
+				DoWhile(_, _,
+					span), ForIn(_, _, _, _, span), Break(span), Continue(span), Switch(_, _, _, _, span), Increment(_, _, span), Expression(_, span): span;
 		}
 
 	static function fail(code:String, message:String, span:SourceSpan):Void
