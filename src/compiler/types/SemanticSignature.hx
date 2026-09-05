@@ -32,6 +32,9 @@ class SemanticSignature {
 			+ [for (argument in fn.arguments) parsedType(argument.type, definitions, [])].join(",") + ")->" + parsedType(fn.result, definitions, []);
 	}
 
+	public static function parsed(type:AstType, aliases:Array<AstTypeAlias>):String
+		return parsedType(type, [for (alias in aliases) alias.name => alias.type], []);
+
 	static function parsedType(type:AstType, aliases:Map<String, AstType>, resolving:Map<String, Bool>):String
 		return switch type {
 			case IntType: "Int";

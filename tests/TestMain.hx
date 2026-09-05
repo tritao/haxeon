@@ -397,6 +397,12 @@ class TestMain {
 			"typedef Score = Int; function consume(value:Int):Int { return value; } function main():Int { return consume(42); }");
 		if (semanticSignatureCompiler.compile("Main").requiresReload)
 			throw "Alias-equivalent function spelling changed the semantic ABI";
+		var semanticFieldCompiler = new Compiler();
+		semanticFieldCompiler.update("Main.hx", "typedef Score = Int; class Item { public var score:Score; } function main():Int { return 42; }");
+		semanticFieldCompiler.compile("Main");
+		semanticFieldCompiler.update("Main.hx", "typedef Score = Int; class Item { public var score:Int; } function main():Int { return 42; }");
+		if (semanticFieldCompiler.compile("Main").requiresReload)
+			throw "Alias-equivalent field spelling changed the semantic layout";
 		Frontend.compile("function main():Int { var value = 40; var read = () -> { var value = 2; return value; }; return read() + value; }");
 		Frontend.compile("function main():Int { var convert:(Int) -> Dynamic = (value:Int) -> { return value; }; convert(42); return 42; }");
 		expectCompileError("class Box { public var value:Int; } function main():Int { var box:Null<Box> = new Box(); if (box != null) { box = null; return box.value; } return 0; }",

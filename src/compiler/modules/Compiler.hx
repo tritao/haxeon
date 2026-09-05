@@ -726,7 +726,7 @@ class Compiler {
 		var aliases:Map<String, String> = [];
 		for (alias in state.ast.aliases) {
 			var aliasName = qualifiedTypeName(state.ast.packageName, alias.name),
-				signature = aliasName + "=" + astTypeName(canonicalType(alias.type, typeAliases));
+				signature = aliasName + "=" + SemanticSignature.parsed(alias.type, state.ast.aliases);
 			aliases.set(aliasName, signature);
 			if (state.aliasFingerprints.get(aliasName) != signature)
 				structuralChanged.set('alias:$aliasName', true);
@@ -740,7 +740,10 @@ class Compiler {
 			var enumName = qualifiedTypeName(state.ast.packageName, enumDecl.name),
 				signature = enumName + "{" + [
 					for (caseDecl in enumDecl.cases)
-						caseDecl.name + "(" + [for (param in caseDecl.params) astTypeName(canonicalType(param, typeAliases))].join(",") + ")"
+						caseDecl.name + "(" + [
+							for (param in caseDecl.params)
+								SemanticSignature.parsed(param, state.ast.aliases)
+						].join(",") + ")"
 				].join(";") + "}";
 			enums.set(enumName, signature);
 			if (state.enumFingerprints.get(enumName) != signature)
@@ -814,7 +817,7 @@ class Compiler {
 				baseName = classDecl.base == null ? null : resolveTypeName(classDecl.base, typeAliases);
 			var classFields = [
 				for (field in classDecl.fields)
-					{name: field.name, type: astTypeName(canonicalType(field.type, typeAliases))}
+					{name: field.name, type: SemanticSignature.parsed(field.type, state.ast.aliases)}
 			], classMethods = [
 				for (method in classDecl.methods)
 					{name: method.name, signature: signatureFingerprint(method, state.ast.aliases)}
