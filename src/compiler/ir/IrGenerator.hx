@@ -93,7 +93,7 @@ class IrGenerator {
 						case Call(_, name, _):
 							if (StringTools.startsWith(name, "__array_alloc_"))
 								needsArrayRuntime = true;
-							if (name == "__string_concat" || name == "__string_length")
+							if (name == "__string_concat" || name == "__string_length" || name == "__string_equal")
 								needsStringRuntime = true;
 						default:
 					}
@@ -151,6 +151,14 @@ class IrGenerator {
 				symbol: "__string_length",
 				arguments: [Bytes],
 				result: I32
+			});
+		if (needsStringRuntime)
+			program.natives.push({
+				name: "__string_equal",
+				library: "realtime_runtime",
+				symbol: "__string_equal",
+				arguments: [Bytes, Bytes],
+				result: Bool
 			});
 		if (natives != null)
 			for (native in natives)
@@ -251,7 +259,10 @@ class IrGenerator {
 			case TDiv(a, b): builder.div(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TLess(a, b): builder.less(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TLessEqual(a, b): builder.lessEqual(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
-			case TEqual(a, b): builder.equal(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
+			case TEqual(a, b):
+				var left = lowerExpression(a, builder, localTypes),
+					right = lowerExpression(b, builder, localTypes);
+				lowerType(a.type) == Bytes ? builder.call("__string_equal", [left, right], Bool) : builder.equal(left, right);
 			case TCall(name, args): builder.call(name, [for (arg in args) lowerExpression(arg, builder, localTypes)], lowerType(expression.type));
 			case TClosureCall(callee, args):
 				builder.callClosure(lowerExpression(callee, builder, localTypes), [for (arg in args) lowerExpression(arg, builder, localTypes)],

@@ -659,6 +659,8 @@ class Typer {
 
 	function comparison(a, b, scope, operation, span):TypedExpression {
 		var left = typeExpression(a, scope), right = typeExpression(b, scope);
+		if (operation == 2 && sameType(left.type, TString) && sameType(right.type, TString))
+			return new TypedExpression(TEqual(left, right), TBool, span);
 		if (!sameType(left.type, TInt) || !sameType(right.type, TInt))
 			fail("E1011", "Comparison requires Int operands", span);
 		return new TypedExpression(switch operation {

@@ -49,6 +49,13 @@ HL_PRIM int HL_NAME(__string_length)( vbyte *value ) {
 	return value == NULL ? 0 : (int)ustrlen((const uchar *)value);
 }
 
+HL_PRIM bool HL_NAME(__string_equal)( vbyte *left, vbyte *right ) {
+	int left_length = left == NULL ? 0 : (int)ustrlen((const uchar *)left);
+	int right_length = right == NULL ? 0 : (int)ustrlen((const uchar *)right);
+	return left_length == right_length
+		&& (left_length == 0 || memcmp(left, right, left_length * (int)sizeof(uchar)) == 0);
+}
+
 HL_PRIM void HL_NAME(array_int_init)( vobj *object ) {
 	*array_int_storage(object) = hl_alloc_bytes(0);
 	*array_int_length(object) = 0;
@@ -131,3 +138,4 @@ DEFINE_PRIM(_ARR,__array_alloc_bytes,_I32);
 DEFINE_PRIM(_ARR,__array_alloc_bool,_I32);
 DEFINE_PRIM(_BYTES,__string_concat,_BYTES _BYTES);
 DEFINE_PRIM(_I32,__string_length,_BYTES);
+DEFINE_PRIM(_BOOL,__string_equal,_BYTES _BYTES);
