@@ -7,6 +7,22 @@ import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrInterface;
 import compiler.ir.Ir.IrEnum;
 
+typedef HlNamedIndex = {final name:String; final index:Int;}
+typedef HlNamedSlots = {final name:String; final slots:Array<HlNamedIndex>;}
+
+typedef HlSymbolState = {
+	final ints:Array<Int>;
+	final strings:Array<String>;
+	final floats:Array<Float>;
+	final types:Array<HlTypeDef>;
+	final globals:Array<Int>;
+	final typeIndices:Array<HlNamedIndex>;
+	final globalIndices:Array<HlNamedIndex>;
+	final objectIndices:Array<HlNamedIndex>;
+	final objectMethodIndices:Array<HlNamedSlots>;
+	final interfaceMethodIndices:Array<HlNamedSlots>;
+}
+
 class HlSymbolTable {
 	public final ints:Array<Int> = [];
 	public final strings:Array<String> = [];
@@ -44,6 +60,85 @@ class HlSymbolTable {
 		copyNestedMap(interfaceMethodIndices, result.interfaceMethodIndices);
 		return result;
 	}
+
+	public function exportState():HlSymbolState
+		return {
+			ints: ints.copy(),
+			strings: strings.copy(),
+			floats: floats.copy(),
+			types: types.copy(),
+			globals: globals.copy(),
+			typeIndices: orderedMap(typeIndices),
+			globalIndices: orderedMap(globalIndices),
+			objectIndices: orderedMap(objectIndices),
+			objectMethodIndices: orderedNestedMap(objectMethodIndices),
+			interfaceMethodIndices: orderedNestedMap(interfaceMethodIndices)
+		};
+
+	public static function fromState(state:HlSymbolState):HlSymbolTable {
+		var result = new HlSymbolTable();
+		for (value in state.ints)
+			result.ints.push(value);
+		for (index in 0...state.ints.length)
+			if (result.intIndices.exists(state.ints[index]))
+				throw "Duplicate persisted integer symbol";
+			else
+				result.intIndices.set(state.ints[index], index);
+		for (value in state.strings)
+			result.strings.push(value);
+		for (index in 0...state.strings.length)
+			if (result.stringIndices.exists(state.strings[index]))
+				throw "Duplicate persisted string symbol";
+			else
+				result.stringIndices.set(state.strings[index], index);
+		for (value in state.floats)
+			result.floats.push(value);
+		for (index in 0...state.floats.length) {
+			var key = Std.string(state.floats[index]);
+			if (result.floatIndices.exists(key))
+				throw "Duplicate persisted float symbol";
+			else
+				result.floatIndices.set(key, index);
+		}
+		for (type in state.types)
+			result.types.push(type);
+		for (global in state.globals)
+			result.globals.push(global);
+		loadMap(state.typeIndices, result.typeIndices, "type");
+		loadMap(state.globalIndices, result.globalIndices, "global");
+		loadMap(state.objectIndices, result.objectIndices, "object");
+		loadNestedMap(state.objectMethodIndices, result.objectMethodIndices, "object method");
+		loadNestedMap(state.interfaceMethodIndices, result.interfaceMethodIndices, "interface method");
+		return result;
+	}
+
+	static function orderedMap(values:Map<String, Int>):Array<HlNamedIndex> {
+		var result = [for (name => index in values) {name: name, index: index}];
+		result.sort(function(a, b) return Reflect.compare(a.name, b.name));
+		return result;
+	}
+
+	static function orderedNestedMap(values:Map<String, Map<String, Int>>):Array<HlNamedSlots> {
+		var result = [for (name => slots in values) {name: name, slots: orderedMap(slots)}];
+		result.sort(function(a, b) return Reflect.compare(a.name, b.name));
+		return result;
+	}
+
+	static function loadMap(entries:Array<HlNamedIndex>, target:Map<String, Int>, kind:String):Void
+		for (entry in entries) {
+			if (entry.name.length == 0 || entry.index < 0 || target.exists(entry.name))
+				throw 'Invalid persisted $kind index';
+			target.set(entry.name, entry.index);
+		}
+
+	static function loadNestedMap(entries:Array<HlNamedSlots>, target:Map<String, Map<String, Int>>, kind:String):Void
+		for (entry in entries) {
+			if (entry.name.length == 0 || target.exists(entry.name))
+				throw 'Invalid persisted $kind owner';
+			var slots:Map<String, Int> = [];
+			loadMap(entry.slots, slots, kind);
+			target.set(entry.name, slots);
+		}
 
 	static function copyMap(source:Map<String, Int>, target:Map<String, Int>):Void
 		for (key => value in source)

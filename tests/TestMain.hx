@@ -10,6 +10,7 @@ import compiler.hl.HlWriter;
 import compiler.hl.HlPatchWriter;
 import compiler.hl.HlPatchReader;
 import compiler.hl.HlOpcode;
+import compiler.hl.HlSymbolTable;
 import compiler.ir.HlLower;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
@@ -277,6 +278,16 @@ class TestMain {
 		}
 		IrFunctionStateCodec.verify(decodedFunctions, instructionProgram);
 		Sys.println("PASS: complete IR functions persist deterministically");
+		var symbolTable = new HlSymbolTable();
+		var intIndex = symbolTable.internInt(42),
+			stringIndex = symbolTable.internString("stable"),
+			typeIndex = symbolTable.internType(I32);
+		var restoredSymbols = HlSymbolTable.fromState(symbolTable.exportState());
+		if (restoredSymbols.internInt(42) != intIndex
+			|| restoredSymbols.internString("stable") != stringIndex
+			|| restoredSymbols.internType(I32) != typeIndex)
+			throw "Restored HashLink symbol lookup changed persistent indices";
+		Sys.println("PASS: HashLink symbol state restores canonical lookup indices");
 		var terminatorOutput = new haxe.io.BytesOutput(),
 			terminatorBlocks:Map<Int, Bool> = [];
 		terminatorOutput.bigEndian = false;
