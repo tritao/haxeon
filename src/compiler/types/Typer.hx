@@ -385,7 +385,8 @@ class Typer {
 					scope.define(name, declaredType, span, false);
 					output.push(TDeclare(scope.resolveId(name), declaredType, span));
 				case VarDeclaration(name, declared, initializer, span):
-					var declaredType = declared == null ? context.localExpectedTypes.get(name) : lowerType(declared),
+					var declaredType = declared == null
+						&& usesLocalExpectedType(initializer) ? context.localExpectedTypes.get(name) : (declared == null ? null : lowerType(declared)),
 						predeclared = declaredType != null && switch initializer {
 							case Lambda(_, _, _): true;
 							default: false;
@@ -393,7 +394,7 @@ class Typer {
 					if (predeclared)
 						scope.define(name, declaredType, span);
 					var value = typeExpression(initializer, scope, declaredType);
-					if (declared != null) {
+					if (declaredType != null) {
 						value = coerce(value, declaredType, 'local "$name"', "E1002");
 					} else if (sameType(value.type, TNull)) {
 						fail("E1002", 'Null requires an explicit nullable type for local "$name"', span);
@@ -719,6 +720,16 @@ class Typer {
 		return output;
 	}
 
+	static function usesLocalExpectedType(initializer:AstExpression):Bool
+		return switch initializer {
+			case NullLiteral(_): true;
+			case ArrayLiteral(values, _): values.length == 0;
+			case MapLiteral(entries, _): entries.length == 0;
+			case Conditional(_, _, _, _): true;
+			case SwitchExpression(_, _, _, _): true;
+			default: false;
+		};
+
 	function inferBodyLocalTypes(statements:Array<AstStatement>, result:CompilerType):Void {
 		var changed = true;
 		while (changed) {
@@ -881,7 +892,7 @@ class Typer {
 						var dot = name.indexOf(".");
 						if (dot <= 0) {
 							var expectedEnum = switch expectedType {
-								case TEnum(enumName): enumDecls.get(enumName);
+								case TEnum(enumName), TNullable(TEnum(enumName)): enumDecls.get(enumName);
 								default: null;
 							};
 							if (expectedEnum != null)

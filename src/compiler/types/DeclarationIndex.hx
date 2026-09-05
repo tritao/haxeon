@@ -140,7 +140,12 @@ class DeclarationIndex {
 			case AnonymousType(parsedFields):
 				var fields = [
 					for (field in parsedFields)
-						{name: field.name, type: resolveInner(field.type, field.span, resolving, substitutions), optional: field.optional}
+						{
+							name: field.name,
+							type: field.optional ? nullable(resolveInner(field.type, field.span, resolving,
+								substitutions)) : resolveInner(field.type, field.span, resolving, substitutions),
+							optional: field.optional
+						}
 				];
 				fields.sort(function(left, right) return Reflect.compare(left.name, right.name));
 				for (i in 1...fields.length)
@@ -151,6 +156,14 @@ class DeclarationIndex {
 						(field.optional ? "?" : "") + field.name + ":" + typeKey(field.type)
 				].join(",");
 				TAnonymous('$' + 'anon:{$signature}', fields);
+		};
+
+	static function nullable(type:CompilerType):CompilerType
+		return switch type {
+			case TNullable(_): type;
+			case TString, TDynamic, TNativeAbstract(_), TClass(_), TInterface(_), TEnum(_), TAnonymous(_, _), TArray(_), TFunction(_), TMap(_, _):
+				TNullable(type);
+			default: type;
 		};
 
 	static function typeKey(type:CompilerType):String

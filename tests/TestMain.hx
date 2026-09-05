@@ -62,6 +62,7 @@ class TestMain {
 		Frontend.compile('enum Severity { Error; Warning; } function severity(?value:Severity = Error):Severity return value; function main():Int { var value = severity(); return 42; }');
 		Frontend.compile('enum Mixed { Value(?first:String, second:Int); } function main():Int { var value:Mixed = Mixed.Value(null, 42); return 42; }');
 		Frontend.compile('typedef Options = { final ?name:String; ?final count:Int; } function main():Int { return 42; }');
+		Frontend.compile('enum Value { Present; } typedef Options = { ?value:Value }; function main():Int { var options:Options = { value: null }; return 42; }');
 		Frontend.compile('function main():Int { var values = [20, 22]; var empty:Array<Int> = []; return values[0] + values[1] + empty.length; }');
 		Frontend.compile('function main():Int { var values:Map<String, Int> = []; values.set("answer", 42); return values.get("answer"); }');
 		Frontend.compile('function main():Int { return "A".charCodeAt(0); }');
