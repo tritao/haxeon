@@ -2083,20 +2083,20 @@ class Typer {
 	function isRebindableArrayReceiver(receiver:TypedExpression):Bool
 		return switch receiver.expression {
 			case TLocal(_): true;
-			case TField(object, name): mutableField(object.type, name);
+			case TField(object, name): hasInstanceField(object.type, name);
 			default: false;
 		};
 
-	function mutableField(type:CompilerType, name:String):Bool
+	function hasInstanceField(type:CompilerType, name:String):Bool
 		return switch type {
 			case TClass(className):
 				var classDecl = classDecls.get(className), found = false;
 				if (classDecl != null) {
 					for (field in classDecl.fields)
 						if (field.name == name && !field.isStatic)
-							found = !field.isFinal;
+							found = true;
 					if (!found && classDecl.base != null)
-						found = mutableField(TClass(classDecl.base), name);
+						found = hasInstanceField(TClass(classDecl.base), name);
 				}
 				found;
 			default: false;
