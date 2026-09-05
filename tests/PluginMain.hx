@@ -1,5 +1,7 @@
 import compiler.hl.HlWriter;
 import compiler.modules.Compiler;
+import runtime.PatchSet;
+import runtime.Runtime;
 import sys.io.File;
 
 class PluginMain {
@@ -18,18 +20,29 @@ class PluginMain {
 		File.saveBytes(output, HlWriter.encode(first.module));
 		if (first.metrics.modules != 5 || first.requiresReload || first.patchBytes != null)
 			throw "Initial plugin workload did not compile as a stable module";
-
+		var mainId = first.functionIds.get("main"),
+			live = Runtime.load(HlWriter.encode(first.module), first.runtimeIdentity);
+		if (Runtime.callInt(live, mainId) != 42)
+			throw "Initial plugin module did not execute through the live runtime";
 		compiler.update("pragtical/plugins/SearchPlugin.hx",
 			StringTools.replace(pluginSource, "callback(); callback();", "callback(); callback(); callback();"));
 		var bodyEdit = compiler.compile("Main");
 		if (bodyEdit.requiresReload || bodyEdit.patchBytes == null || bodyEdit.changedFunctions.length == 0)
 			throw "Plugin body edit did not produce a compatible patch";
+		Runtime.patchSet(live, new PatchSet(first.revision, bodyEdit.revision, bodyEdit.patchBytes, bodyEdit.changedFunctions, false));
+		if (Runtime.callInt(live, mainId) != 42)
+			throw "Patched plugin module did not execute through the live runtime";
 
 		compiler.update("pragtical/api/Editor.hx",
 			"package pragtical.api; import pragtical.api.Plugin; class Editor { public var commands:Array<String>; public var counts:Map<String, Int>; public var generation:Int; public function new():Void { this.commands = new Array<String>(0); this.counts = new Map<String, Int>(); this.generation = 1; } public function register(name:String):Void { this.commands.push(name); this.counts[name] = this.commands.length; } public function commandCount():Int { return this.commands.length; } }");
 		var structural = compiler.compile("Main");
 		if (!structural.requiresReload || structural.patchBytes != null)
 			throw "Plugin class-layout edit did not require a domain reload";
+		var replacement = Runtime.load(HlWriter.encode(structural.module), structural.runtimeIdentity);
+		Runtime.dispose(live);
+		if (Runtime.callInt(replacement, structural.functionIds.get("main")) != 42)
+			throw "Reloaded plugin module did not execute through the live runtime";
+		Runtime.dispose(replacement);
 		Sys.println("PASS: representative multi-module plugin workload compiled, patched, and classified");
 	}
 }

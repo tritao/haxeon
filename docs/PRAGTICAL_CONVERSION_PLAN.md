@@ -176,6 +176,7 @@ The next bounded milestones are:
 
 1. finish collection ownership and mutable capture cells; **done**;
 2. add the representative multi-module plugin fixture; **done**;
-3. integrate structural reload/state migration with that fixture;
+3. integrate structural reload/state migration with that fixture; **runtime
+   load/patch/replacement is done, state migration remains**;
 4. add latency budgets and protocol cancellation;
 5. start the first Pragtical utility migration only after those gates are green.

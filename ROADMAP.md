@@ -92,7 +92,10 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 - [x] HLP framing, strict validation, stable-target relocations, and atomic
   compatible function patching.
 - [x] Revision checks, stale-patch rejection, call synchronization, and JIT
-  allocation reclamation.
+	allocation reclamation.
+- [x] A representative multi-module plugin now loads through the native runtime,
+	patches compatible closure/method bodies in place, and replaces the live module
+	on structural edits (`plugin-test.hxml`).
 - [ ] Non-moving type arena for compatible type-table growth.
 - [~] Structural class layout/base changes are classified as full-reload
 	generations and rebuild HashLink type metadata; explicit per-plugin domains
