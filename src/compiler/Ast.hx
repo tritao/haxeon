@@ -28,7 +28,7 @@ typedef AstArgument = {
 
 typedef AstField = {
 	final name:String;
-	final type:AstType;
+	final type:Null<AstType>;
 	final initializer:Null<AstExpression>;
 	final isStatic:Bool;
 	final isFinal:Bool;

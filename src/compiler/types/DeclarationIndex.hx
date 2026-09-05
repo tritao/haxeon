@@ -172,7 +172,7 @@ class DeclarationIndex {
 				resolveFunction(method);
 		for (decl in program.classes) {
 			for (field in decl.fields)
-				resolve(field.type, field.span);
+				resolve(FieldInference.parsedType(field), field.span);
 			for (method in decl.methods)
 				resolveFunction(method);
 		}

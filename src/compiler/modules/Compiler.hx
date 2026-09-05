@@ -382,7 +382,7 @@ class Compiler {
 						for (field in classDecl.fields)
 							{
 								name: field.name,
-								type: canonicalType(field.type, aliases),
+								type: canonicalType(compiler.types.FieldInference.parsedType(field), aliases),
 								initializer: field.initializer == null ? null : canonicalExpression(field.initializer, name, entryModule, locals, aliases),
 								isStatic: field.isStatic,
 								isFinal: field.isFinal,
@@ -847,7 +847,7 @@ class Compiler {
 				baseName = classDecl.base == null ? null : resolveTypeName(classDecl.base, typeAliases);
 			var classFields = [
 				for (field in classDecl.fields)
-					{name: field.name, type: SemanticSignature.parsed(field.type, state.ast.aliases)}
+					{name: field.name, type: SemanticSignature.parsed(compiler.types.FieldInference.parsedType(field), state.ast.aliases)}
 			], classMethods = [
 				for (method in classDecl.methods)
 					{name: method.name, signature: signatureFingerprint(method, state.ast.aliases)}
@@ -1131,7 +1131,7 @@ class Compiler {
 			for (interfaceName in classDecl.interfaces)
 				addDependency(result, className, Layout, resolveTypeName(interfaceName, typeAliases));
 			for (field in classDecl.fields) {
-				addTypeDependency(result, className, Layout, field.type, typeAliases);
+				addTypeDependency(result, className, Layout, compiler.types.FieldInference.parsedType(field), typeAliases);
 				if (field.initializer != null)
 					addExpressionDependencies(result, className + "." + field.name, Initializer, field.initializer, state.name, entry);
 			}

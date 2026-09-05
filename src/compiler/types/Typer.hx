@@ -147,7 +147,7 @@ class Typer {
 		for (field in classDecl.fields) {
 			if (fieldNames.exists(field.name))
 				fail("E1000", 'Duplicate field "${classDecl.name}.${field.name}"', field.span);
-			var type = lowerType(field.type);
+			var type = lowerType(FieldInference.parsedType(field));
 			if (type == TVoid)
 				fail("E1002", 'Field "${classDecl.name}.${field.name}" cannot have type Void', field.span);
 			var initializer:Null<TypedExpression> = null;
@@ -1206,7 +1206,7 @@ class Typer {
 			return null;
 		for (field in classDecl.fields)
 			if (field.name == name && field.isStatic)
-				return {owner: className, type: lowerType(field.type)};
+				return {owner: className, type: lowerType(FieldInference.parsedType(field))};
 		return classDecl.base == null ? null : findStaticFieldNullable(classDecl.base, name);
 	}
 
@@ -1767,7 +1767,7 @@ class Typer {
 				if (classDecl != null) {
 					for (field in classDecl.fields)
 						if (field.name == name && !field.isStatic)
-							return lowerType(field.type);
+							return lowerType(FieldInference.parsedType(field));
 					if (classDecl.base != null)
 						return fieldType(TClass(classDecl.base), name, span);
 				}
@@ -1806,7 +1806,7 @@ class Typer {
 				if (classDecl != null) {
 					for (field in classDecl.fields)
 						if (field.name == name && !field.isStatic)
-							found = lowerType(field.type);
+							found = lowerType(FieldInference.parsedType(field));
 					if (found == null && classDecl.base != null)
 						found = findFieldType(TClass(classDecl.base), name);
 				}

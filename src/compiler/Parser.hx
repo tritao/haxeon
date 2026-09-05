@@ -211,7 +211,6 @@ class Parser {
 				if (fieldType == null) {
 					if (initializer == null)
 						fail(current(), 'Field "$fieldName" requires a type or initializer');
-					fieldType = inferredFieldType(fieldName, initializer);
 				}
 				var end = consume(TokenKind.Semicolon).span;
 				fields.push({
@@ -234,20 +233,6 @@ class Parser {
 			span: start.merge(end)
 		};
 	}
-
-	function inferredFieldType(name:String, initializer:AstExpression):AstType
-		return switch initializer {
-			case IntegerLiteral(_, _): IntType;
-			case FloatLiteral(_, _): FloatType;
-			case StringLiteral(_, _): StringType;
-			case BoolLiteral(_, _): BoolType;
-			case New(typeName, _, _): NamedType(typeName);
-			case NewArray(element, _, _): ArrayType(element);
-			case NewMap(key, value, _): MapType(key, value);
-			default:
-				fail(current(), 'Cannot infer type of field "$name" from this initializer');
-				return null;
-		};
 
 	function parseInterface():AstInterface {
 		var start = consume(TokenKind.Interface).span, name = consume(TokenKind.Identifier).text, bases = [];
