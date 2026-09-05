@@ -284,7 +284,7 @@ class LanguageService {
 			local = localSymbol(path, position, token.text);
 		if (local != null)
 			return {
-				key: 'local:${state.name}:${local.functionSpan.start}:${token.text}',
+				key: 'local:${state.name}:${local.functionSpan.start}:${local.declaration.start}',
 				location: {path: path, span: local.declaration},
 				functionSpan: local.functionSpan
 			};
@@ -443,25 +443,77 @@ class LanguageService {
 			return null;
 		for (fn in ast.functions)
 			if (position >= fn.span.start && position <= fn.span.end) {
+				var argumentSpan = null;
 				for (argument in fn.arguments)
 					if (argument.name == name)
-						return {functionSpan: fn.span, declaration: argument.span};
-				var declaration = localDeclaration(fn.statements, name);
+						argumentSpan = argument.span;
+				var declaration = localDeclarationAt(fn.statements, name, position, argumentSpan);
 				if (declaration != null)
 					return {functionSpan: fn.span, declaration: declaration};
 			}
 		for (classDecl in ast.classes)
 			for (method in classDecl.methods)
 				if (position >= method.span.start && position <= method.span.end) {
+					var argumentSpan = null;
 					for (argument in method.arguments)
 						if (argument.name == name)
-							return {functionSpan: method.span, declaration: argument.span};
-					var declaration = localDeclaration(method.statements, name);
+							argumentSpan = argument.span;
+					var declaration = localDeclarationAt(method.statements, name, position, argumentSpan);
 					if (declaration != null)
 						return {functionSpan: method.span, declaration: declaration};
 				}
 		return null;
 	}
+
+	static function localDeclarationAt(statements:Array<AstStatement>, name:String, position:Int, inherited:Null<SourceSpan>):Null<SourceSpan> {
+		var visible = inherited;
+		for (statement in statements) {
+			var span = statementSpan(statement);
+			if (span.start > position)
+				break;
+			switch statement {
+				case VarDeclaration(local, _, _, declaration):
+					if (local == name)
+						visible = declaration;
+				case If(_, yes, no, _):
+					var branch = containsPosition(yes, position) ? yes : (containsPosition(no, position) ? no : null);
+					if (branch != null)
+						return localDeclarationAt(branch, name, position, visible);
+				case While(_, body, _):
+					if (containsPosition(body, position))
+						return localDeclarationAt(body, name, position, visible);
+				case ForIn(local, _, body, declaration):
+					if (containsPosition(body, position))
+						return localDeclarationAt(body, name, position, local == name ? declaration : visible);
+				case Try(tryBranch, catches, _):
+					if (containsPosition(tryBranch, position))
+						return localDeclarationAt(tryBranch, name, position, visible);
+					for (catchClause in catches)
+						if (position >= catchClause.span.start && position <= catchClause.span.end)
+							return localDeclarationAt(catchClause.statements, name, position, catchClause.name == name ? catchClause.span : visible);
+				case Switch(_, cases, defaultBranch, _, _):
+					for (switchCase in cases)
+						if (containsPosition(switchCase.statements, position))
+							return localDeclarationAt(switchCase.statements, name, position, visible);
+					if (containsPosition(defaultBranch, position))
+						return localDeclarationAt(defaultBranch, name, position, visible);
+				default:
+			}
+		}
+		return visible;
+	}
+
+	static function containsPosition(statements:Array<AstStatement>, position:Int):Bool
+		return statements.length > 0
+			&& position >= statementSpan(statements[0]).start
+			&& position <= statementSpan(statements[statements.length - 1]).end;
+
+	static function statementSpan(statement:AstStatement):SourceSpan
+		return switch statement {
+			case VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), Throw(_, span),
+				Try(_, _, span), If(_, _, _, span), While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span), Switch(_, _, _, _, span),
+				Increment(_, _, span), Expression(_, span): span;
+		};
 
 	static function localDeclaration(statements:Array<AstStatement>, name:String):Null<SourceSpan> {
 		for (statement in statements)

@@ -106,6 +106,22 @@ class LanguageServiceMain {
 			|| localReferences.length != 2
 			|| localEdits.length != 2)
 			throw "language service local symbol scope was not preserved";
+		var shadowService = new LanguageService(),
+			shadowSource = "function main():Int { var value = 40; if (true) { var value = 2; value = value + 1; } return value + 2; }";
+		shadowService.update("Shadow.hx", shadowSource);
+		shadowService.compile("Shadow");
+		var innerUse = shadowSource.indexOf("value = value + 1") + "value = ".length,
+			outerUse = shadowSource.lastIndexOf("value + 2"),
+			innerDefinition = shadowService.definition("Shadow.hx", innerUse),
+			outerDefinition = shadowService.definition("Shadow.hx", outerUse),
+			innerReferences = shadowService.references("Shadow.hx", innerUse),
+			outerReferences = shadowService.references("Shadow.hx", outerUse);
+		if (innerDefinition == null
+			|| outerDefinition == null
+			|| innerDefinition.span.start == outerDefinition.span.start
+			|| innerReferences.length != 3
+			|| outerReferences.length != 2)
+			throw "language service confused shadowed local identities";
 		var importService = new LanguageService();
 		importService.update("editor/util/Math.hx", "package editor.util; function add(a:Int, b:Int):Int { return a + b; }");
 		var importSource = "package editor; import editor.util.Math; function main():Int { return Math.add(20, 22); }";
