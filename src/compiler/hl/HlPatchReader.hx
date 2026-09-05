@@ -93,6 +93,8 @@ class HlPatchReader {
 			throw "Object type patches require a structural reload";
 		if (tag == HlType.Virtual)
 			throw "Virtual type patches require a structural reload";
+		if (tag == HlType.Enum)
+			throw "Enum type patches require a structural reload";
 		if (tag == HlType.Abstract)
 			return Abstract(readIndex(input));
 		return if (tag == HlType.Fun) {
@@ -137,6 +139,16 @@ class HlPatchReader {
 				for (_ in 0...count)
 					operands.push(readIndex(input));
 				operands;
+			case 90:
+				var destination = readIndex(input),
+					constructor = readIndex(input),
+					count = readIndex(input),
+					operands = [destination, constructor, count];
+				for (_ in 0...count)
+					operands.push(readIndex(input));
+				operands;
+			case 91, 92: [readIndex(input), readIndex(input)];
+			case 93: [for (_ in 0...4) readIndex(input)];
 			case 0, 1, 2, 3, 5, 6, 33, 58, 65, 67, 82, 83:
 				[for (_ in 0...(op == 58 || op == 67 || op == 82 ? 1 : 2)) readIndex(input)];
 			case 7, 8, 9, 10, 25, 34, 38, 39, 44, 77, 81:

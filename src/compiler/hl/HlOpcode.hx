@@ -28,6 +28,10 @@ enum abstract HlOpcode(Int) from Int to Int {
 	var SetArray = 81;
 	var New = 82;
 	var ArraySize = 83;
+	var MakeEnum = 90;
+	var EnumAlloc = 91;
+	var EnumIndex = 92;
+	var EnumField = 93;
 	var JTrue = 44;
 	var JSLt = 48;
 	var JSLte = 51;

@@ -5,6 +5,7 @@ import compiler.hl.HlCode.HlVirtualField;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrInterface;
+import compiler.ir.Ir.IrEnum;
 
 class HlSymbolTable {
 	public final ints:Array<Int> = [];
@@ -60,6 +61,8 @@ class HlSymbolTable {
 		switch type {
 			case Function(arguments, result):
 				return internFunction(arguments, result);
+			case Enum(name):
+				throw 'Enum type "$name" must be registered before use';
 			case Virtual(name):
 				throw 'Virtual type "$name" must be registered before use';
 			default:
@@ -81,8 +84,23 @@ class HlSymbolTable {
 					case Abstract(name): throw 'Abstract type "$name" must be handled by the outer type switch';
 					case Virtual(name): throw 'Virtual type "$name" must be registered before use';
 					case Function(_, _): throw 'Function type must be interned with internFunction';
+					case Enum(name): throw 'Enum type "$name" must be registered before use';
 				});
 		});
+		typeIndices.set(key, index);
+		return index;
+	}
+
+	public function internEnum(enumDecl:IrEnum):Int {
+		var key = 'enum:${enumDecl.name}', found = typeIndices.get(key);
+		if (found != null)
+			return found;
+		var constructors = [
+			for (constructor in enumDecl.cases)
+				{name: internString(constructor.name), params: [for (param in constructor.params) internType(param)]}
+		];
+		var index = types.length;
+		types.push(Enum(internString(enumDecl.name), 0, constructors));
 		typeIndices.set(key, index);
 		return index;
 	}
@@ -208,6 +226,7 @@ class HlSymbolTable {
 			case Array(element): 'array:${typeKey(element)}';
 			case Obj(name): 'obj:$name';
 			case Abstract(name): 'abstract:$name';
+			case Enum(name): 'enum:$name';
 			case Virtual(name): 'virt:$name';
 			case Function(arguments, result): 'fun(${[for (argument in arguments) typeKey(argument)].join(",")})->${typeKey(result)}';
 		};

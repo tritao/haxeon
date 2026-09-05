@@ -68,7 +68,7 @@ class CfgVerifier {
 					define(out, defined, available);
 				case ConstNull(out):
 					switch out.type {
-						case Bytes, Abstract(_), Obj(_), Virtual(_), Array(_), Function(_, _):
+						case Bytes, Abstract(_), Obj(_), Enum(_), Virtual(_), Array(_), Function(_, _):
 						default: throw 'CFG null constant must produce a reference value';
 					}
 					define(out, defined, available);
@@ -192,6 +192,29 @@ class CfgVerifier {
 					}
 					expect(out, I32);
 					define(out, defined, available);
+				case MakeEnum(out, _, _, arguments):
+					switch out.type {
+						case Enum(_):
+						default: throw 'CFG enum construction must produce an enum value';
+					}
+					for (argument in arguments)
+						require(argument, available);
+					define(out, defined, available);
+				case EnumIndex(out, value):
+					expect(out, I32);
+					switch value.type {
+						case Enum(_):
+						default: throw 'CFG enum index requires an enum value';
+					}
+					require(value, available);
+					define(out, defined, available);
+				case EnumField(out, value, _, _):
+					switch value.type {
+						case Enum(_):
+						default: throw 'CFG enum field requires an enum value';
+					}
+					require(value, available);
+					define(out, defined, available);
 			}
 		if (block.terminator != null)
 			switch block.terminator {
@@ -238,6 +261,7 @@ class CfgVerifier {
 	static function sameType(left:IrType, right:IrType):Bool
 		return switch [left, right] {
 			case [Obj(a), Obj(b)]: a == b;
+			case [Enum(a), Enum(b)]: a == b;
 			case [Abstract(a), Abstract(b)]: a == b;
 			case [Virtual(a), Virtual(b)]: a == b;
 			case [Array(a), Array(b)]: sameType(a, b);
@@ -250,7 +274,7 @@ class CfgVerifier {
 
 	static function isReference(type:IrType):Bool
 		return switch type {
-			case Bytes, Dyn, Obj(_), Abstract(_), Virtual(_), Array(_), Function(_, _): true;
+			case Bytes, Dyn, Obj(_), Enum(_), Abstract(_), Virtual(_), Array(_), Function(_, _): true;
 			default: false;
 		};
 }

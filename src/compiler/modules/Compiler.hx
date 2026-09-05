@@ -364,7 +364,8 @@ class Compiler {
 		];
 		var objectNames = [for (name in objectCache.keys()) name];
 		objectNames.sort(Reflect.compare);
-		var ir = IrGenerator.assemble(cached, irNatives(), [for (name in objectNames) objectCache.get(name)], IrGenerator.interfacesFrom(typedNew));
+		var ir = IrGenerator.assemble(cached, irNatives(), [for (name in objectNames) objectCache.get(name)], IrGenerator.interfacesFrom(typedNew),
+			IrGenerator.enumsFrom(typedNew));
 		var signatureChanges = [for (name in signatureChanged.keys()) name];
 		signatureChanges.sort(Reflect.compare);
 		var forceReload = compiledOnce && structuralChanged.keys().hasNext();
@@ -425,7 +426,7 @@ class Compiler {
 			case TClass(name): Obj(name);
 			case TMap(_, _): Abstract("map_string_i32");
 			case TInterface(name): Virtual(name);
-			case TEnum(_): I32;
+			case TEnum(name): Enum(name);
 			case TNull: Void;
 			case TNullable(element): irType(element);
 			case TArray(element): Array(irType(element));
@@ -461,6 +462,8 @@ class Compiler {
 				scanStatement(statement, dependencies);
 		for (classDecl in state.ast.classes)
 			dependencies.remove(classDecl.name);
+		for (enumDecl in state.ast.enums)
+			dependencies.remove(enumDecl.name);
 		for (importPath in state.ast.imports) {
 			var dot = importPath.lastIndexOf("."),
 				alias = dot < 0 ? importPath : importPath.substr(dot + 1);

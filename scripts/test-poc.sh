@@ -70,6 +70,7 @@ run_program default-constructor-class 42
 run_program inheritance-class 43
 run_program virtual-dispatch 71
 run_program enum-basic 42
+run_program enum-payload 42
 run_program nullable-basic 42
 run_program object-array 42
 run_program for-in 42

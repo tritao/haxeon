@@ -2,6 +2,7 @@ package compiler.ir;
 
 import compiler.ir.Ir;
 import compiler.ir.Ir.IrInterface;
+import compiler.ir.Ir.IrEnum;
 
 class IrVerifier {
 	public static function verify(program:IrProgram):Void {
@@ -12,6 +13,7 @@ class IrVerifier {
 			addSignature(signatures, fn.name, [for (a in fn.arguments) a.type], fn.result);
 		var objects:Map<String, IrObject> = [];
 		var interfaces:Map<String, IrInterface> = [];
+		var enums:Map<String, IrEnum> = [];
 		for (object in program.objects) {
 			if (objects.exists(object.name))
 				throw 'Duplicate IR object "${object.name}"';
@@ -22,14 +24,19 @@ class IrVerifier {
 				throw 'Duplicate IR interface "${interfaceDecl.name}"';
 			interfaces.set(interfaceDecl.name, interfaceDecl);
 		}
+		for (enumDecl in program.enums) {
+			if (enums.exists(enumDecl.name))
+				throw 'Duplicate IR enum "${enumDecl.name}"';
+			enums.set(enumDecl.name, enumDecl);
+		}
 		if (!signatures.exists(program.entryPoint))
 			throw 'Unknown IR entry point "${program.entryPoint}"';
 		for (fn in program.functions)
-			verifyFunction(fn, signatures, objects, interfaces);
+			verifyFunction(fn, signatures, objects, interfaces, enums);
 	}
 
 	static function verifyFunction(fn:IrFunction, signatures:Map<String, {arguments:Array<IrType>, result:IrType}>, objects:Map<String, IrObject>,
-			interfaces:Map<String, IrInterface>):Void {
+			interfaces:Map<String, IrInterface>, enums:Map<String, IrEnum>):Void {
 		if (fn.blocks.length == 0)
 			throw 'IR function ${fn.name} has no entry block';
 		var blocks:Map<Int, IrBlock> = [], values:Map<Int, IrType> = [];
@@ -56,7 +63,7 @@ class IrVerifier {
 					default:
 				}
 			for (instruction in block.instructions)
-				verifyInstruction(instruction, values, signatures, objects, interfaces);
+				verifyInstruction(instruction, values, signatures, objects, interfaces, enums);
 			if (block.terminator == null)
 				throw 'Reachable IR block $id in ${fn.name} has no terminator';
 			switch block.terminator {
@@ -107,7 +114,7 @@ class IrVerifier {
 	}
 
 	static function verifyInstruction(instruction:IrInstruction, values:Map<Int, IrType>, signatures, objects:Map<String, IrObject>,
-			interfaces:Map<String, IrInterface>):Void
+			interfaces:Map<String, IrInterface>, enums:Map<String, IrEnum>):Void
 		switch instruction {
 			case Phi(_, _):
 			case ConstVoid(out):
@@ -127,7 +134,7 @@ class IrVerifier {
 				define(values, out);
 			case ConstNull(out):
 				switch out.type {
-					case Bytes, Abstract(_), Obj(_), Virtual(_), Array(_), Function(_, _):
+					case Bytes, Abstract(_), Obj(_), Enum(_), Virtual(_), Array(_), Function(_, _):
 					default: throw 'IR null constant must produce a reference value';
 				}
 				define(values, out);
@@ -272,6 +279,42 @@ class IrVerifier {
 				}
 				expect(out, I32);
 				define(values, out);
+			case MakeEnum(out, typeName, constructor, arguments):
+				if (!isEnumType(out.type, typeName, enums))
+					throw 'Unknown or mismatched IR enum "$typeName"';
+				var enumDecl = enums.get(typeName);
+				if (enumDecl == null || constructor < 0 || constructor >= enumDecl.cases.length)
+					throw 'Invalid IR enum constructor "$typeName"';
+				var constructorDecl = enumDecl.cases[constructor];
+				if (constructorDecl.params.length != arguments.length)
+					throw 'Invalid IR enum constructor "$typeName"';
+				for (i in 0...arguments.length) {
+					require(values, arguments[i]);
+					if (!sameType(arguments[i].type, constructorDecl.params[i]))
+						throw 'Wrong IR enum payload type for "$typeName"';
+				}
+				define(values, out);
+			case EnumIndex(out, value):
+				expect(out, I32);
+				require(values, value);
+				switch value.type {
+					case Enum(_):
+					default: throw 'IR enum index requires an enum value';
+				}
+				define(values, out);
+			case EnumField(out, value, constructor, field):
+				require(values, value);
+				var typeName = switch value.type {
+					case Enum(name): name;
+					default: throw 'IR enum field requires an enum value';
+				};
+				var enumDecl = enums.get(typeName);
+				if (enumDecl == null || constructor < 0 || constructor >= enumDecl.cases.length)
+					throw 'Invalid IR enum field constructor';
+				var constructorDecl = enumDecl.cases[constructor];
+				if (field < 0 || field >= constructorDecl.params.length || !sameType(out.type, constructorDecl.params[field]))
+					throw 'Invalid IR enum field';
+				define(values, out);
 		}
 
 	static function requireObject(value:IrValue, values:Map<Int, IrType>, objects:Map<String, IrObject>):IrObject {
@@ -289,6 +332,12 @@ class IrVerifier {
 	static function isObjectType(type:IrType, name:String):Bool
 		return switch type {
 			case Obj(value): value == name;
+			default: false;
+		};
+
+	static function isEnumType(type:IrType, name:String, enums:Map<String, IrEnum>):Bool
+		return switch type {
+			case Enum(value): value == name && enums.exists(name);
 			default: false;
 		};
 
@@ -395,6 +444,7 @@ class IrVerifier {
 	static function sameType(left:IrType, right:IrType):Bool
 		return switch [left, right] {
 			case [Obj(a), Obj(b)]: a == b;
+			case [Enum(a), Enum(b)]: a == b;
 			case [Abstract(a), Abstract(b)]: a == b;
 			case [Array(a), Array(b)]: sameType(a, b);
 			case [Function(aArgs, aResult), Function(bArgs, bResult)]: aArgs.length == bArgs.length && [
@@ -406,7 +456,7 @@ class IrVerifier {
 
 	static function isReference(type:IrType):Bool
 		return switch type {
-			case Bytes, Dyn, Obj(_), Abstract(_), Virtual(_), Array(_), Function(_, _): true;
+			case Bytes, Dyn, Obj(_), Enum(_), Abstract(_), Virtual(_), Array(_), Function(_, _): true;
 			default: false;
 		};
 

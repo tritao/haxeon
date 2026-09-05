@@ -12,6 +12,7 @@ import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
+import compiler.ir.Ir.IrEnum;
 
 class HlLower {
 	final code:HlCode;
@@ -19,6 +20,7 @@ class HlLower {
 	final functionIndices:Map<String, Int> = [];
 	final objectTypeIndices:Map<String, Int> = [];
 	final objects:Map<String, IrObject> = [];
+	final enumTypeIndices:Map<String, Int> = [];
 
 	public static function lower(program:IrProgram):HlCode {
 		IrVerifier.verify(program);
@@ -68,6 +70,8 @@ class HlLower {
 			if (!progressed)
 				throw 'Unable to order interface bases';
 		}
+		for (enumDecl in program.enums)
+			enumTypeIndices.set(enumDecl.name, symbols.internEnum(enumDecl));
 		var pending = program.objects.copy();
 		while (pending.length > 0) {
 			var progressed = false;
@@ -211,6 +215,16 @@ class HlLower {
 							requireRegister(value, registers)));
 					case ArraySize(output, array):
 						instructions.push(HlInstruction.ArraySize(defineRegister(output, registers, registerTypes), requireRegister(array, registers)));
+					case MakeEnum(output, typeName, constructor, arguments):
+						var destination = defineRegister(output, registers, registerTypes),
+							enumConstructor = requireEnumConstructor(typeName, output.type, constructor),
+							args = [for (argument in arguments) requireRegister(argument, registers)];
+						instructions.push(HlInstruction.MakeEnum(destination, enumConstructor, args));
+					case EnumIndex(output, value):
+						instructions.push(HlInstruction.EnumIndex(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
+					case EnumField(output, value, constructor, field):
+						instructions.push(HlInstruction.EnumField(defineRegister(output, registers, registerTypes), requireRegister(value, registers),
+							constructor, field));
 				}
 			}
 			if (block.terminator == null)
@@ -317,6 +331,20 @@ class HlLower {
 		if (index == null)
 			throw 'Unknown IR object "$name"';
 		return index;
+	}
+
+	function requireEnumConstructor(typeName:String, type:IrType, constructor:Int):Int {
+		var name = switch type {
+			case Enum(value): value;
+			default: throw 'IR value is not an enum';
+		};
+		if (name != typeName)
+			throw 'IR enum constructor type mismatch';
+		if (!enumTypeIndices.exists(name))
+			throw 'Unknown IR enum "$name"';
+		if (constructor < 0)
+			throw 'Invalid IR enum constructor $constructor';
+		return constructor;
 	}
 
 	function requireObjectField(object:IrValue, name:String):Int {

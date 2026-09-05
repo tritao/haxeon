@@ -49,6 +49,15 @@ class HlWriter {
 				case Simple(_):
 				case Abstract(name):
 					requireString(code, name, "abstract name");
+				case Enum(name, global, constructors):
+					requireString(code, name, "enum name");
+					if (global < 0)
+						throw 'Invalid enum global $global';
+					for (constructor in constructors) {
+						requireString(code, constructor.name, "enum constructor name");
+						for (param in constructor.params)
+							requireType(code, param, "enum constructor parameter");
+					}
 				case Function(arguments, result):
 					for (argument in arguments)
 						requireType(code, argument, "function type argument");
@@ -207,6 +216,20 @@ class HlWriter {
 				case ArraySize(destination, array):
 					requireRegister(fn, destination);
 					requireRegister(fn, array);
+				case MakeEnum(destination, constructor, arguments):
+					requireRegister(fn, destination);
+					if (constructor < 0)
+						throw 'Invalid enum constructor $constructor in function ${fn.functionIndex}';
+					for (argument in arguments)
+						requireRegister(fn, argument);
+				case EnumIndex(destination, value):
+					requireRegister(fn, destination);
+					requireRegister(fn, value);
+				case EnumField(destination, value, constructor, field):
+					requireRegister(fn, destination);
+					requireRegister(fn, value);
+					if (constructor < 0 || field < 0)
+						throw 'Invalid enum field ${constructor}.${field} in function ${fn.functionIndex}';
 				case JumpSignedLessOrEqual(left, right, target):
 					requireRegister(fn, left);
 					requireRegister(fn, right);
@@ -367,6 +390,17 @@ class HlWriter {
 					writeIndex(field.name);
 					writeIndex(field.type);
 				}
+			case Enum(name, global, constructors):
+				output.writeByte(HlType.Enum);
+				writeIndex(name);
+				writeUnsignedIndex(global);
+				writeUnsignedIndex(constructors.length);
+				for (constructor in constructors) {
+					writeIndex(constructor.name);
+					writeUnsignedIndex(constructor.params.length);
+					for (param in constructor.params)
+						writeIndex(param);
+				}
 		}
 	}
 
@@ -437,6 +471,12 @@ class HlWriter {
 					{opcode: HlOpcode.SetArray, operands: [array, index, source]};
 				case ArraySize(destination, array):
 					{opcode: HlOpcode.ArraySize, operands: [destination, array]};
+				case MakeEnum(destination, constructor, arguments):
+					{opcode: HlOpcode.MakeEnum, operands: [destination, constructor, arguments.length].concat(arguments)};
+				case EnumIndex(destination, value):
+					{opcode: HlOpcode.EnumIndex, operands: [destination, value]};
+				case EnumField(destination, value, constructor, field):
+					{opcode: HlOpcode.EnumField, operands: [destination, value, constructor, field]};
 				case JumpSignedLessOrEqual(left, right, target):
 					var targetPosition = labels.get(target);
 					{opcode: HlOpcode.JSLte, operands: [left, right, targetPosition - (result.length + 1)]};

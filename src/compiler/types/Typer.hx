@@ -17,6 +17,7 @@ import compiler.types.TypedAst.TypedClass;
 import compiler.types.TypedAst.TypedField;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedStatement;
+import compiler.types.TypedAst.TypedSwitchBinding;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
@@ -97,7 +98,21 @@ class Typer {
 		var main = signatures.get("main");
 		if (main == null || main.arguments.length != 0 || lowerType(main.result) != TInt)
 			throw "Program must define function main():Int";
-		var typedInterfaces = [
+		var typedEnums = [
+			for (enumDecl in program.enums)
+				{
+					name: enumDecl.name,
+					cases: [
+						for (caseDecl in enumDecl.cases)
+							{
+								name: caseDecl.name,
+								params: [for (param in caseDecl.params) lowerType(param)],
+								span: caseDecl.span
+							}
+					],
+					span: enumDecl.span
+				}
+		], typedInterfaces = [
 			for (interfaceDecl in program.interfaces)
 				{
 					name: interfaceDecl.name,
@@ -107,7 +122,7 @@ class Typer {
 							{name: method.name, arguments: [for (argument in method.arguments) lowerType(argument.type)], result: lowerType(method.result)}
 					]
 				}
-		], typedClasses = [for (classDecl in program.classes) typeClass(classDecl, classes)], typedFunctions:Array<TypedFunction> = [];
+			], typedClasses = [for (classDecl in program.classes) typeClass(classDecl, classes)], typedFunctions:Array<TypedFunction> = [];
 		for (fn in program.functions)
 			if (selected == null || selected.exists(fn.name))
 				typedFunctions.push(typeFunction(fn));
@@ -118,6 +133,7 @@ class Typer {
 		for (lambda in generated)
 			typedFunctions.push(lambda);
 		return {
+			enums: typedEnums,
 			interfaces: typedInterfaces,
 			classes: typedClasses.concat(generatedClasses),
 			functions: typedFunctions
@@ -325,9 +341,29 @@ class Typer {
 						fail("E1019", "Switch requires an Int or enum value", typedExpression.span);
 					var typedCases = [];
 					for (switchCase in cases) {
-						var typedValue = coerce(typeExpression(switchCase.value, scope), typedExpression.type, "switch case", "E1019"),
-							typedBody = typeStatements(switchCase.statements, new Scope(scope), result);
-						typedCases.push({value: typedValue, statements: typedBody, span: switchCase.span});
+						var caseScope = new Scope(scope),
+							pattern = typeEnumPattern(switchCase.value, typedExpression.type, caseScope),
+							typedValue = pattern == null ? coerce(typeExpression(switchCase.value, scope), typedExpression.type, "switch case",
+								"E1019") : pattern.value,
+							typedBody = typeStatements(switchCase.statements, caseScope, result),
+							constructorIndex = pattern == null ? -1 : pattern.index,
+							enumName:Null<String> = pattern == null ? null : pattern.enumName,
+							bindings = pattern == null ? [] : pattern.bindings;
+						if (pattern == null)
+							switch typedValue.expression {
+								case TEnumLiteral(name, index):
+									enumName = name;
+									constructorIndex = index;
+								default:
+							}
+						typedCases.push({
+							value: typedValue,
+							statements: typedBody,
+							enumName: enumName,
+							constructorIndex: constructorIndex,
+							bindings: bindings,
+							span: switchCase.span
+						});
 					}
 					var typedDefault = typeStatements(defaultBranch, new Scope(scope), result);
 					output.push(TSwitch(typedExpression, typedCases, typedDefault, span));
@@ -336,6 +372,44 @@ class Typer {
 			}
 		}
 		return output;
+	}
+
+	function typeEnumPattern(value:AstExpression, expected:CompilerType, scope:Scope):Null<{
+		value:TypedExpression,
+		enumName:String,
+		index:Int,
+		bindings:Array<TypedSwitchBinding>
+	}> {
+		return switch value {
+			case Call(name, arguments, span):
+				var info = enumCaseInfo(name);
+				if (info == null)
+					return null;
+				if (!sameType(expected, TEnum(info.enumName)))
+					fail("E1019", "Enum switch case has the wrong enum type", span);
+				if (arguments.length != info.params.length)
+					fail("E1019", 'Enum switch case "$name" expects ${info.params.length} bindings', span);
+				var bindings = [];
+				for (index in 0...arguments.length) {
+					var parameterType = lowerType(info.params[index]);
+					switch arguments[index] {
+						case Variable(binding, bindingSpan):
+							if (binding != "_") {
+								scope.define(binding, parameterType, bindingSpan);
+								bindings.push({name: binding, type: parameterType, index: index});
+							}
+						default:
+							fail("E1019", "Enum switch payloads must bind local names or '_'", span);
+					}
+				}
+				{
+					value: new TypedExpression(TEnumLiteral(info.enumName, info.index), TEnum(info.enumName), span),
+					enumName: info.enumName,
+					index: info.index,
+					bindings: bindings
+				};
+			default: null;
+		};
 	}
 
 	function typeExpression(expression:AstExpression, scope:Scope):TypedExpression
@@ -370,6 +444,8 @@ class Typer {
 										index = i;
 								if (index < 0)
 									fail("E1005", 'Unknown enum case "$name"', span);
+								if (enumDecl.cases[index].params.length > 0)
+									fail("E1008", 'Enum case "$name" requires constructor arguments', span);
 								return new TypedExpression(TEnumLiteral(objectName, index), TEnum(objectName), span);
 							}
 							var object = typeExpression(Variable(objectName, span), scope),
@@ -536,6 +612,15 @@ class Typer {
 						receiver = receiverName == null ? null : resolveReceiver(receiverName, span, scope),
 						receiverType = receiver == null ? null : receiver.type,
 						methodName = dot < 0 ? null : name.substr(dot + 1);
+					var enumCase = enumCaseInfo(name);
+					if (enumCase != null) {
+						var expected = [for (param in enumCase.params) lowerType(param)];
+						if (arguments.length != expected.length)
+							fail("E1008", 'Enum constructor "$name" expects ${expected.length} arguments, got ${arguments.length}', span);
+						var typedArguments = [for (argument in arguments) typeExpression(argument, scope)];
+						typedArguments = coerceArguments(typedArguments, expected, name);
+						return new TypedExpression(TEnumConstruct(enumCase.enumName, enumCase.index, typedArguments), TEnum(enumCase.enumName), span);
+					}
 					if (receiverType != null && methodName != null) {
 						if (receiverType == TString && methodName == "indexOf") {
 							if (arguments.length != 1)
@@ -881,6 +966,21 @@ class Typer {
 				if (inherited != null)
 					return inherited;
 			}
+		return null;
+	}
+
+	function enumCaseInfo(name:String):Null<{enumName:String, index:Int, params:Array<AstType>}> {
+		var dot = name.indexOf(".");
+		if (dot <= 0)
+			return null;
+		var enumName = name.substr(0, dot),
+			caseName = name.substr(dot + 1),
+			declaration = enumDecls.get(enumName);
+		if (declaration == null)
+			return null;
+		for (index in 0...declaration.cases.length)
+			if (declaration.cases[index].name == caseName)
+				return {enumName: enumName, index: index, params: declaration.cases[index].params};
 		return null;
 	}
 

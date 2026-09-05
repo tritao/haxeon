@@ -46,7 +46,8 @@ typedef AstInterface = {
 }
 
 typedef AstTypeAlias = {final name:String; final type:AstType; final span:SourceSpan;}
-typedef AstEnum = {final name:String; final cases:Array<{name:String, span:SourceSpan}>; final span:SourceSpan;}
+typedef AstEnumCase = {final name:String; final params:Array<AstType>; final span:SourceSpan;}
+typedef AstEnum = {final name:String; final cases:Array<AstEnumCase>; final span:SourceSpan;}
 
 enum AstExpression {
 	IntegerLiteral(value:Int, span:SourceSpan);

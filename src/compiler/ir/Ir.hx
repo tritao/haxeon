@@ -8,6 +8,7 @@ enum IrType {
 	Bytes;
 	Dyn;
 	Array(element:IrType);
+	Enum(name:String);
 	Obj(name:String);
 	Abstract(name:String);
 	Virtual(name:String);
@@ -59,6 +60,9 @@ enum IrInstruction {
 	ArrayGet(output:IrValue, array:IrValue, index:IrValue);
 	ArraySet(array:IrValue, index:IrValue, value:IrValue);
 	ArraySize(output:IrValue, array:IrValue);
+	MakeEnum(output:IrValue, typeName:String, constructor:Int, arguments:Array<IrValue>);
+	EnumIndex(output:IrValue, value:IrValue);
+	EnumField(output:IrValue, value:IrValue, constructor:Int, field:Int);
 }
 
 enum IrTerminator {
@@ -89,12 +93,15 @@ typedef IrObjectMethod = {final name:String; final functionName:String;}
 typedef IrObject = {final name:String; final base:Null<String>; final interfaces:Array<String>; final fields:Array<IrObjectField>; final methods:Array<IrObjectMethod>;}
 typedef IrInterfaceMethod = {final name:String; final arguments:Array<IrType>; final result:IrType;}
 typedef IrInterface = {final name:String; final bases:Array<String>; final methods:Array<IrInterfaceMethod>;}
+typedef IrEnumCase = {final name:String; final params:Array<IrType>;}
+typedef IrEnum = {final name:String; final cases:Array<IrEnumCase>;}
 
 class IrProgram {
 	public var natives:Array<IrNative> = [];
 	public var functions:Array<IrFunction> = [];
 	public var objects:Array<IrObject> = [];
 	public var interfaces:Array<IrInterface> = [];
+	public var enums:Array<IrEnum> = [];
 	public var entryPoint:String;
 
 	public function new(entryPoint:String)

@@ -66,8 +66,15 @@ class Parser {
 		var name = consume(TokenKind.Identifier).text, cases = [];
 		consume(TokenKind.LeftBrace);
 		while (!check(TokenKind.RightBrace)) {
-			var caseToken = consume(TokenKind.Identifier);
-			cases.push({name: caseToken.text, span: caseToken.span});
+			var caseToken = consume(TokenKind.Identifier),
+				params:Array<AstType> = [];
+			if (match(TokenKind.LeftParen)) {
+				if (!check(TokenKind.RightParen))
+					do
+						params.push(parseType()) while (match(TokenKind.Comma));
+				consume(TokenKind.RightParen);
+			}
+			cases.push({name: caseToken.text, params: params, span: caseToken.span.merge(previous().span)});
 			consume(TokenKind.Semicolon);
 		}
 		var end = consume(TokenKind.RightBrace).span;

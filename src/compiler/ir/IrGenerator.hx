@@ -14,12 +14,25 @@ import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrInterface;
+import compiler.ir.Ir.IrEnum;
 
 /** Lowers typed syntax to a mutable-local CFG; SsaBuilder owns all SSA policy. */
 class IrGenerator {
 	public static function generate(typed:TypedProgram):IrProgram {
-		return assemble([for (fn in typed.functions) generateFunction(fn)], null, objectsFrom(typed), interfacesFrom(typed));
+		return assemble([for (fn in typed.functions) generateFunction(fn)], null, objectsFrom(typed), interfacesFrom(typed), enumsFrom(typed));
 	}
+
+	public static function enumsFrom(typed:TypedProgram):Array<IrEnum>
+		return [
+			for (enumDecl in typed.enums)
+				{
+					name: enumDecl.name,
+					cases: [
+						for (caseDecl in enumDecl.cases)
+							{name: caseDecl.name, params: [for (param in caseDecl.params) lowerType(param)]}
+					]
+				}
+		];
 
 	public static function interfacesFrom(typed:TypedProgram):Array<IrInterface> {
 		return [
@@ -85,7 +98,8 @@ class IrGenerator {
 		return new CfgFunction(fn.name, arguments, lowerType(fn.result), builder.blocks, localTypes);
 	}
 
-	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>):IrProgram {
+	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>,
+			?enums:Array<IrEnum>):IrProgram {
 		var program = new IrProgram("__entry");
 		var needsArrayRuntime = false,
 			needsStringRuntime = false,
@@ -109,6 +123,7 @@ class IrGenerator {
 					}
 		program.objects = objects == null ? [] : objects;
 		program.interfaces = interfaces == null ? [] : interfaces;
+		program.enums = enums == null ? [] : enums;
 		program.natives.push({
 			name: "__exit",
 			library: "std",
@@ -378,10 +393,19 @@ class IrGenerator {
 						var bodyBlock = builder.createBlock(),
 							nextBlock = builder.createBlock();
 						builder.select(checkBlock);
-						var switchValue = builder.load(switchName, switchType),
-							caseValue = lowerExpression(switchCase.value, builder, localTypes);
+						var switchValue = switch expression.type {
+							case TEnum(_): builder.enumIndex(builder.load(switchName, switchType));
+							default: builder.load(switchName, switchType);
+						}, caseValue = switchCase.constructorIndex >= 0 ? builder.constInt(switchCase.constructorIndex) : lowerExpression(switchCase.value,
+							builder, localTypes);
 						builder.branch(builder.equal(switchValue, caseValue), bodyBlock, nextBlock);
 						builder.select(bodyBlock);
+						if (switchCase.constructorIndex >= 0)
+							for (binding in switchCase.bindings)
+								localTypes.set(binding.name, lowerType(binding.type));
+						for (binding in switchCase.bindings)
+							builder.store(binding.name,
+								builder.enumField(builder.load(switchName, switchType), switchCase.constructorIndex, binding.index, lowerType(binding.type)));
 						lowerStatements(switchCase.statements, builder, localTypes, loops);
 						if (!builder.isTerminated())
 							exits.push(builder.currentBlock());
@@ -409,7 +433,9 @@ class IrGenerator {
 			case TFloatLiteral(value): builder.constFloat(value);
 			case TStringLiteral(value): builder.constString(value);
 			case TBoolLiteral(value): builder.constBool(value);
-			case TEnumLiteral(_, index): builder.constInt(index);
+			case TEnumLiteral(name, index): builder.makeEnum(name, index, []);
+			case TEnumConstruct(name, index,
+				arguments): builder.makeEnum(name, index, [for (argument in arguments) lowerExpression(argument, builder, localTypes)]);
 			case TNullLiteral: throw "Uncoerced null literal";
 			case TNullableWrap(value):
 				switch value.expression {
@@ -453,6 +479,14 @@ class IrGenerator {
 			case TEqual(a, b):
 				var left = lowerExpression(a, builder, localTypes),
 					right = lowerExpression(b, builder, localTypes);
+				var isEnum = switch a.type {
+					case TEnum(_): true;
+					default: false;
+				};
+				if (isEnum) {
+					left = builder.enumIndex(left);
+					right = builder.enumIndex(right);
+				}
 				lowerType(a.type) == Bytes ? builder.call("__string_equal", [left, right], Bool) : builder.equal(left, right);
 			case TCall(name, args): builder.call(name, [for (arg in args) lowerExpression(arg, builder, localTypes)], lowerType(expression.type));
 			case TClosureCall(callee, args):
@@ -521,7 +555,7 @@ class IrGenerator {
 			case TClass(name): Obj(name);
 			case TMap(key, value): Abstract(RuntimeType.mapName(key, value));
 			case TInterface(name): Virtual(name);
-			case TEnum(_): I32;
+			case TEnum(name): Enum(name);
 			case TNull: Void;
 			case TNullable(element): lowerType(element);
 			case TArray(element): Array(lowerType(element));

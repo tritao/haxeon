@@ -178,6 +178,24 @@ class CfgBuilder {
 		return out;
 	}
 
+	public function makeEnum(typeName:String, constructor:Int, arguments:Array<CfgValue>):CfgValue {
+		var out = temporary(Enum(typeName));
+		emit(MakeEnum(out, typeName, constructor, arguments));
+		return out;
+	}
+
+	public function enumIndex(value:CfgValue):CfgValue {
+		var out = temporary(I32);
+		emit(EnumIndex(out, value));
+		return out;
+	}
+
+	public function enumField(value:CfgValue, constructor:Int, field:Int, type:IrType):CfgValue {
+		var out = temporary(type);
+		emit(EnumField(out, value, constructor, field));
+		return out;
+	}
+
 	function binary(a:CfgValue, b:CfgValue, kind:Int, ?type:IrType):CfgValue {
 		var out = temporary(type == null ? a.type : type);
 		emit(switch kind {

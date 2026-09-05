@@ -2,6 +2,7 @@ package compiler.types;
 
 import compiler.types.Type.CompilerType;
 import compiler.Source.SourceSpan;
+import compiler.Ast.AstType;
 
 class TypedExpression {
 	public final expression:TypedExpressionKind;
@@ -21,6 +22,7 @@ enum TypedExpressionKind {
 	TStringLiteral(value:String);
 	TBoolLiteral(value:Bool);
 	TEnumLiteral(name:String, index:Int);
+	TEnumConstruct(name:String, index:Int, arguments:Array<TypedExpression>);
 	TNullLiteral;
 	TNullableWrap(value:TypedExpression);
 	TLocal(name:String);
@@ -76,8 +78,15 @@ enum TypedStatement {
 typedef TypedSwitchCase = {
 	final value:TypedExpression;
 	final statements:Array<TypedStatement>;
+	final enumName:Null<String>;
+	final constructorIndex:Int;
+	final bindings:Array<TypedSwitchBinding>;
 	final span:SourceSpan;
 }
+
+typedef TypedSwitchBinding = {final name:String; final type:CompilerType; final index:Int;}
+typedef TypedEnumCase = {final name:String; final params:Array<CompilerType>; final span:SourceSpan;}
+typedef TypedEnum = {final name:String; final cases:Array<TypedEnumCase>; final span:SourceSpan;}
 
 typedef TypedFunction = {
 	final name:String;
@@ -103,4 +112,4 @@ typedef TypedClass = {
 
 typedef TypedInterfaceMethod = {final name:String; final arguments:Array<CompilerType>; final result:CompilerType;}
 typedef TypedInterface = {final name:String; final bases:Array<String>; final methods:Array<TypedInterfaceMethod>;}
-typedef TypedProgram = {final interfaces:Array<TypedInterface>; final classes:Array<TypedClass>; final functions:Array<TypedFunction>;}
+typedef TypedProgram = {final enums:Array<TypedEnum>; final interfaces:Array<TypedInterface>; final classes:Array<TypedClass>; final functions:Array<TypedFunction>;}

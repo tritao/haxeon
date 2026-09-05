@@ -323,6 +323,15 @@ class SsaBuilder {
 				case ArraySize(out, array):
 					var result = define(out);
 					target.instructions.push(ArraySize(result, resolve(array)));
+				case MakeEnum(out, typeName, constructor, arguments):
+					var result = define(out);
+					target.instructions.push(MakeEnum(result, typeName, constructor, [for (argument in arguments) resolve(argument)]));
+				case EnumIndex(out, value):
+					var result = define(out);
+					target.instructions.push(EnumIndex(result, resolve(value)));
+				case EnumField(out, value, constructor, field):
+					var result = define(out);
+					target.instructions.push(EnumField(result, resolve(value), constructor, field));
 			}
 		target.terminator = switch block.terminator {
 			case Return(value): Return(resolve(value));

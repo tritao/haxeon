@@ -41,6 +41,9 @@ enum HlInstruction {
 	ArrayGet(destination:Int, array:Int, index:Int);
 	ArraySet(array:Int, index:Int, source:Int);
 	ArraySize(destination:Int, array:Int);
+	MakeEnum(destination:Int, constructor:Int, arguments:Array<Int>);
+	EnumIndex(destination:Int, value:Int);
+	EnumField(destination:Int, value:Int, constructor:Int, field:Int);
 	JumpSignedLessOrEqual(left:Int, right:Int, target:String);
 	JumpSignedLess(left:Int, right:Int, target:String);
 	JumpEqual(left:Int, right:Int, target:String);

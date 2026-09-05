@@ -196,6 +196,17 @@ class HlPatchWriter {
 						h = hashBytes(intBytes(field.name), h);
 						h = hashBytes(intBytes(field.type), h);
 					}
+				case Enum(name, global, constructors):
+					h = hashBytes(intBytes(HlType.Enum), h);
+					h = hashBytes(intBytes(name), h);
+					h = hashBytes(intBytes(global), h);
+					h = hashBytes(intBytes(constructors.length), h);
+					for (constructor in constructors) {
+						h = hashBytes(intBytes(constructor.name), h);
+						h = hashBytes(intBytes(constructor.params.length), h);
+						for (param in constructor.params)
+							h = hashBytes(intBytes(param), h);
+					}
 			}
 		return h;
 	}
@@ -221,6 +232,8 @@ class HlPatchWriter {
 				throw "Object type patches require a structural reload";
 			case Virtual(_):
 				throw "Virtual type patches require a structural reload";
+			case Enum(_, _, _):
+				throw "Enum type patches require a structural reload";
 		}
 
 	static function writeIndex(out:BytesOutput, v:Int):Void {

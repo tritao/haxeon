@@ -43,9 +43,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 	null representation, support equality, and reject implicit untyped null
 	locals; simple null-guard narrowing is supported, while migration-safe
 	object arrays remain future work.
-- [~] Payload-free enums lower to stable integer tags and support typed case
-	values/equality plus enum/int `switch` statements; payload constructors and
-	pattern matching remain future work.
+- [x] Enums lower to HashLink tagged values, including payload constructors,
+	payload extraction, equality by constructor tag, and typed enum/int `switch`
+	cases. Exhaustiveness checking and richer pattern forms remain future work.
 - [~] Primitive and array type aliases resolve in the frontend; cross-module
 	alias identity and generic aliases remain future work.
 - [~] Prototype-dispatched instance calls and inheritance are live, including
@@ -113,8 +113,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 1. Extend the first-class `Array<T>` and map runtime types with broader key/value
 	operations and collection iteration; keep bounds checks in the HashLink
 	operation contract.
-2. Add payload enums and pattern matching on the same tagged-value rules used
-	   by the runtime bridge; extend nullable narrowing to compound conditions.
+2. Add exhaustiveness checking and richer pattern matching on the tagged-value
+	rules used by the runtime bridge; extend nullable narrowing to compound
+	conditions.
 3. Complete package/import resolution for nominal types, then migrate a small
    Pragtical utility plugin as the first real multi-module workload.
 4. Expose compiler snapshots as the editor language service.
