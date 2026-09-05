@@ -22,6 +22,7 @@ import compiler.types.Type.CompilerType;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.Ir.IrObject;
 import compiler.types.TypeRegistry;
+import compiler.types.TypeRegistry.TypeCompatibility;
 
 typedef NativeFunction = {final name:String; final library:String; final symbol:String; final arguments:Array<CompilerType>; final result:CompilerType;}
 
@@ -154,9 +155,10 @@ class Compiler {
 		var names = [for (name in modules.keys()) name];
 		names.sort(Reflect.compare);
 		var bodyChanged:Map<String, Bool> = [],
-			signatureChanged:Map<String, Bool> = [];
+			signatureChanged:Map<String, Bool> = [],
+			structuralChanged:Map<String, Bool> = [];
 		for (name in names)
-			parse(modules.get(name), entryModule, bodyChanged, signatureChanged);
+			parse(modules.get(name), entryModule, bodyChanged, signatureChanged, structuralChanged);
 		graph.rebuild(modules);
 		for (name in names)
 			for (dependency in modules.get(name).dependencies)
@@ -338,7 +340,10 @@ class Compiler {
 		var ir = IrGenerator.assemble(cached, irNatives(), [for (name in objectNames) objectCache.get(name)]);
 		var signatureChanges = [for (name in signatureChanged.keys()) name];
 		signatureChanges.sort(Reflect.compare);
-		var assembly = assembler.assemble(ir, regenerated, signatureChanges);
+		var forceReload = compiledOnce && structuralChanged.keys().hasNext();
+		if (forceReload)
+			assembler = new HlModuleAssembler(copyIndices(assembler.cache.stableIds));
+		var assembly = assembler.assemble(ir, regenerated, signatureChanges, forceReload);
 		compiledOnce = true;
 		var patchBytes = assembly.requiresReload
 			|| assembly.changedFunctions.length == 0 ? null : HlPatchWriter.encode(assembly.module, moduleId, assembly.changedSlots,
@@ -403,7 +408,8 @@ class Compiler {
 		return result;
 	}
 
-	function parse(state:ModuleState, entry:String, bodyChanged:Map<String, Bool>, signatureChanged:Map<String, Bool>):Void {
+	function parse(state:ModuleState, entry:String, bodyChanged:Map<String, Bool>, signatureChanged:Map<String, Bool>,
+			structuralChanged:Map<String, Bool>):Void {
 		if (state.ast != null)
 			return;
 		try {
@@ -451,7 +457,9 @@ class Compiler {
 				for (method in classDecl.methods)
 					{name: method.name, signature: signatureFingerprint(method)}
 				];
-			types.declareClass(classDecl.name, classDecl.base, classFields, classMethods);
+			var typeResult = types.declareClass(classDecl.name, classDecl.base, classFields, classMethods);
+			if (compiledOnce && typeResult.compatibility != Compatible)
+				structuralChanged.set(classDecl.name, true);
 			for (method in classDecl.methods) {
 				var localName = classDecl.name + "." + method.name,
 					canonical = localName,

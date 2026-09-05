@@ -202,6 +202,15 @@ class ModuleMain {
 			throw "Transactional validation mutated the live source snapshot";
 		if (!validationCompiler.validate("Main.hx", previousSource, "Main").valid)
 			throw "Valid transactional edit was rejected";
+		var structuralCompiler = new Compiler();
+		structuralCompiler.update("Main.hx",
+			"class Editor { public var value:Int; public function new():Void { this.value = 42; } } function main():Int { var editor = new Editor(); return editor.value; }");
+		structuralCompiler.compile("Main");
+		structuralCompiler.update("Main.hx",
+			"class Editor { public var value:Int; public var generation:Int; public function new():Void { this.value = 42; this.generation = 1; } } function main():Int { var editor = new Editor(); return editor.value; }");
+		var structuralBuild = structuralCompiler.compile("Main");
+		if (!structuralBuild.requiresReload || structuralBuild.patchBytes != null)
+			throw "Class layout edit did not require a full reload";
 		Sys.println("PASS: function fingerprints selectively retyped and regenerated cached artifacts");
 	}
 }

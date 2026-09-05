@@ -31,7 +31,7 @@ class HlModuleAssembler {
 		cache = new HlFunctionCache(stableIds);
 	}
 
-	public function assemble(program:IrProgram, regenerated:Array<String>, signatureChanges:Array<String>):HlAssemblyResult {
+	public function assemble(program:IrProgram, regenerated:Array<String>, signatureChanges:Array<String>, forceReload:Bool = false):HlAssemblyResult {
 		cache.update(program.functions);
 		var ordered = new IrProgram(program.entryPoint);
 		ordered.natives = program.natives;
@@ -54,7 +54,7 @@ class HlModuleAssembler {
 			}
 		changed.sort(function(a, b) return a - b);
 		changedSlots.sort(function(a, b) return a - b);
-		var reload = initialized && signatureChanges.length > 0;
+		var reload = forceReload || initialized && signatureChanges.length > 0;
 		var module = HlLower.lowerStable(ordered, symbols, layout);
 		var baseInts = publishedInts,
 			baseFloats = publishedFloats,
