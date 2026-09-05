@@ -123,8 +123,8 @@ class DeclarationIndex {
 					resolved;
 				} else if (enumAbstracts.exists(name)) resolveInner(enumAbstracts.get(name).underlying, span, resolving,
 					substitutions); else if (abstracts.exists(name)) resolveInner(abstracts.get(name).underlying, span, resolving,
-					substitutions); else if (interfaces.exists(name)) TInterface(name); else if (enums.exists(name)) TEnum(name); else
-					if (classes.exists(name)) TClass(name); else {
+					substitutions); else if (interfaces.exists(name)) TInterface(name); else if (enums.exists(name)) TEnum(name); else if (classes.exists(name)
+					|| PlatformAbi.isType(name)) TClass(name); else {
 					fail('Unknown type "$name"', span);
 					TVoid;
 				}
@@ -232,6 +232,8 @@ class DeclarationIndex {
 
 	function visitClass(name:String, visiting:Map<String, Bool>):Void {
 		var decl = classes.get(name);
+		if (decl == null && PlatformAbi.isType(name))
+			return;
 		if (decl == null)
 			fail('Unknown base class "$name"', fallbackSpan);
 		if (visiting.exists(name))

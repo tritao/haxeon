@@ -334,6 +334,15 @@ class Compiler {
 				aliases = importAliases(state.ast.imports, state.ast.importAliases);
 			for (sourceName => declarationName in sourceTypeAliases)
 				aliases.set(sourceName, declarationName);
+			var packagePrefix = state.ast.packageName == null ? "" : state.ast.packageName + ".";
+			for (sourceName => declarationName in sourceTypeAliases)
+				if (StringTools.startsWith(sourceName, packagePrefix) && StringTools.startsWith(declarationName, packagePrefix)) {
+					var relativeSourceName = sourceName.substr(packagePrefix.length),
+						simpleName = declarationName.substr(packagePrefix.length);
+					aliases.set(relativeSourceName, declarationName);
+					if (simpleName.indexOf(".") < 0)
+						aliases.set(simpleName, declarationName);
+				}
 			addDeclaredTypeAliases(aliases, state.ast, state.ast.packageName);
 			for (interfaceDecl in state.ast.interfaces)
 				interfaces.push(canonicalInterface(interfaceDecl, aliases, state.ast.packageName));

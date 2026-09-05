@@ -768,7 +768,7 @@ class Typer {
 					var signature = signatures.get(name);
 					if (signature != null)
 						new TypedExpression(TFunctionRef(name), functionType(signature), span);
-					else if (classDecls.exists(name) || enumAbstractDecls.exists(name))
+					else if (classDecls.exists(name) || enumAbstractDecls.exists(name) || PlatformAbi.isType(name))
 						new TypedExpression(TClassRef(name), TClass(name), span);
 					else {
 						var ownerSeparator = context.name.lastIndexOf("."),
@@ -1253,10 +1253,10 @@ class Typer {
 					fail("E1014", "Range bounds must be Int values", span);
 				new TypedExpression(TRange(typedStart, typedEnd), TRange, span);
 			case New(typeName, arguments, span):
-				if (!classDecls.exists(typeName) || interfaceDecls.exists(typeName))
+				if ((!classDecls.exists(typeName) && !PlatformAbi.isType(typeName)) || interfaceDecls.exists(typeName))
 					fail("E1007", 'Unknown class "$typeName"', span);
 				var constructor = signatures.get(typeName + ".new"),
-					implicitConstructor = constructor == null && [
+					implicitConstructor = constructor == null && classDecls.exists(typeName) && [
 						for (field in classDecls.get(typeName).fields)
 							if (!field.isStatic && field.initializer != null) field
 					].length > 0,

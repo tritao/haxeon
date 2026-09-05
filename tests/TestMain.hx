@@ -454,6 +454,13 @@ class TestMain {
 			|| packaged.importAliases.get("HaxeBytes") != "haxe.io.Bytes")
 			throw "Package and import declarations were not preserved in the AST";
 		Sys.println("PASS: package and import declarations are represented in the frontend");
+		var nestedTypeCompiler = new Compiler();
+		nestedTypeCompiler.update("sample/Types.hx", "package sample; typedef Inner = Int;");
+		nestedTypeCompiler.update("Main.hx", "import sample.Types.Inner; function main():Int { var value:Inner = 42; return value; }");
+		nestedTypeCompiler.compile("Main");
+		var platformType = new Parser(new Lexer(new SourceFile("Platform.hx", "function size(value:haxe.io.Bytes):Int return 0;")).tokenize()).parseProgram();
+		Typer.typeLibrary(platformType);
+		Sys.println("PASS: nested module and platform type names resolve canonically");
 		var metadataProgram = new Parser(new Lexer(new SourceFile("Native.hx",
 			'@:hlNative("sample") private class Native { @:noCompletion public static function read():Int return @:privateAccess 42; }')).tokenize())
 			.parseProgram();

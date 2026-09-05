@@ -168,6 +168,15 @@ class BootstrapStatus {
 				compiled: true,
 				error: null
 			};
+		} catch (failure:CompileError) {
+			var source = failure.diagnostic.span.file,
+				location = sourceLocation(source.text, failure.diagnostic.span.start);
+			return {
+				entryModule: entryModule,
+				attempted: true,
+				compiled: false,
+				error: '${source.path}:${location.line}:${location.column}: ${failure.diagnostic.message}'
+			};
 		} catch (failure:Dynamic) {
 			return {
 				entryModule: entryModule,
