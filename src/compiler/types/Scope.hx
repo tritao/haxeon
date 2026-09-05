@@ -24,6 +24,13 @@ class Scope {
 		captures.set(name, true);
 	}
 
+	public function refine(name:String, type:CompilerType):Void {
+		if (values.exists(name))
+			values.set(name, type);
+		else if (parent != null)
+			values.set(name, type);
+	}
+
 	public function isCapture(name:String):Bool
 		return captures.exists(name);
 

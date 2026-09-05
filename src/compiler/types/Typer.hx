@@ -273,8 +273,13 @@ class Typer {
 					var typedCondition = typeExpression(condition, scope);
 					if (!sameType(typedCondition.type, TBool))
 						fail("E1004", "If condition must be Bool", span);
-					output.push(TIf(typedCondition, typeStatements(thenBranch, new Scope(scope), result),
-						typeStatements(elseBranch, new Scope(scope), result), span));
+					var thenScope = narrowedScope(scope, typedCondition, true),
+						elseScope = narrowedScope(scope, typedCondition, false),
+						typedThen = typeStatements(thenBranch, thenScope, result),
+						typedElse = typeStatements(elseBranch, elseScope, result);
+					output.push(TIf(typedCondition, typedThen, typedElse, span));
+					if (elseBranch.length == 0 && alwaysReturns(typedThen))
+						refineAfterGuard(scope, typedCondition);
 				case While(condition, body, span):
 					var typedCondition = typeExpression(condition, scope);
 					if (!sameType(typedCondition.type, TBool))
@@ -553,6 +558,47 @@ class Typer {
 		typed = coerceArguments(typed, expected, methodKey);
 		return new TypedExpression(TMethodCall(receiver, methodKey, typed), lowerType(method.result), span);
 	}
+
+	function narrowedScope(scope:Scope, condition:TypedExpression, truthy:Bool):Scope {
+		var result = new Scope(scope), comparison = nullComparison(condition);
+		if (comparison != null)
+			result.refine(comparison.name, truthy ? TNull : comparison.nonNullType);
+		return result;
+	}
+
+	function refineAfterGuard(scope:Scope, condition:TypedExpression):Void {
+		var comparison = nullComparison(condition);
+		if (comparison != null)
+			scope.refine(comparison.name, comparison.nonNullType);
+	}
+
+	function nullComparison(condition:TypedExpression):Null<{name:String, nonNullType:CompilerType}> {
+		return switch condition.expression {
+			case TEqual(left, right): var local = nullableLocal(left),
+					other = isNullValue(right) ? true : false; if (local == null) {
+					local = nullableLocal(right);
+					other = isNullValue(left);
+				} local == null || !other ? null : local;
+			default: null;
+		};
+	}
+
+	function nullableLocal(expression:TypedExpression):Null<{name:String, nonNullType:CompilerType}> {
+		return switch expression.expression {
+			case TLocal(name): switch expression.type {
+					case TNullable(element): {name: name, nonNullType: element};
+					default: null;
+				};
+			default: null;
+		};
+	}
+
+	static function isNullValue(expression:TypedExpression):Bool
+		return switch expression.expression {
+			case TNullLiteral: true;
+			case TNullableWrap(value): isNullValue(value);
+			default: false;
+		};
 
 	function functionType(fn:AstFunction):CompilerType
 		return TFunction([for (argument in fn.arguments) lowerType(argument.type)], lowerType(fn.result));

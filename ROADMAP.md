@@ -37,8 +37,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 	remain future work. Our HashLink fork enforces bounds in the JIT.
 - [~] Explicit `Null<T>` values for reference types lower to HashLink's native
 	null representation, support equality, and reject implicit untyped null
-	locals; nullable dereference narrowing and migration-safe object arrays remain
-	future work.
+	locals; simple null-guard narrowing is supported, while migration-safe
+	object arrays remain future work.
 - [~] Payload-free enums lower to stable integer tags and support typed case
 	values/equality; payload constructors and pattern matching remain future work.
 - [~] Primitive and array type aliases resolve in the frontend; cross-module
@@ -108,8 +108,7 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 1. Extend the first-class `Array<T>` runtime type with map operations and
 	collection iteration; keep bounds checks in the HashLink operation contract.
 2. Add payload enums and pattern matching on the same tagged-value rules used
-	   by the runtime bridge; nullable reference values are already supported but
-	   need flow-sensitive narrowing.
+	   by the runtime bridge; extend nullable narrowing to compound conditions.
 3. Complete package/import resolution for nominal types, then migrate a small
    Pragtical utility plugin as the first real multi-module workload.
 4. Expose compiler snapshots as the editor language service.
