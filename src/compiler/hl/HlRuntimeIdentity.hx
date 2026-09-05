@@ -11,10 +11,13 @@ typedef HlPersistentIdentity = {
 	final stableIds:Map<String, Int>;
 	final typeState:Null<Bytes>;
 	final publishedAbi:Null<RuntimeAbiDescriptor>;
+	final publicationTracking:Bool;
+	final acknowledgedRevision:Int;
+	final acknowledgedAbi:Null<RuntimeAbiDescriptor>;
 }
 
 class HlRuntimeIdentity {
-	public static inline final VERSION = 3;
+	public static inline final VERSION = 4;
 	public static inline final RUNTIME_VERSION = 1;
 	static var sequence = 1;
 
@@ -45,9 +48,14 @@ class HlRuntimeIdentity {
 		return out.getBytes();
 	}
 
-	public static function encodePersistent(moduleId:Bytes, stableIds:Map<String, Int>, ?typeState:Bytes, ?publishedAbi:RuntimeAbiDescriptor):Bytes {
+	public static function encodePersistent(moduleId:Bytes, stableIds:Map<String, Int>, ?typeState:Bytes, ?publishedAbi:RuntimeAbiDescriptor,
+			?publicationTracking:Bool = false, ?acknowledgedRevision:Int = 0, ?acknowledgedAbi:RuntimeAbiDescriptor):Bytes {
 		if (moduleId.length != 16)
 			throw "Module ID must contain 16 bytes";
+		if (acknowledgedRevision < 0
+			|| (!publicationTracking && (acknowledgedRevision != 0 || acknowledgedAbi != null))
+			|| (acknowledgedRevision > 0 && acknowledgedAbi == null))
+			throw "Invalid acknowledged publication state";
 		var names = [for (name in stableIds.keys()) name];
 		names.sort(Reflect.compare);
 		var out = new BytesOutput();
@@ -68,6 +76,11 @@ class HlRuntimeIdentity {
 		var abi = publishedAbi == null ? Bytes.alloc(0) : RuntimeAbiCodec.encode(publishedAbi);
 		out.writeInt32(abi.length);
 		out.write(abi);
+		out.writeByte(publicationTracking ? 1 : 0);
+		out.writeInt32(acknowledgedRevision);
+		var acknowledged = acknowledgedAbi == null ? Bytes.alloc(0) : RuntimeAbiCodec.encode(acknowledgedAbi);
+		out.writeInt32(acknowledged.length);
+		out.write(acknowledged);
 		return out.getBytes();
 	}
 
@@ -104,13 +117,31 @@ class HlRuntimeIdentity {
 				throw "Invalid published ABI state";
 			if (abiLength > 0)
 				publishedAbi = RuntimeAbiCodec.decode(input.read(abiLength));
+			var trackingByte = input.readByte();
+			if (trackingByte != 0 && trackingByte != 1)
+				throw "Invalid publication tracking state";
+			var publicationTracking = trackingByte == 1,
+				acknowledgedRevision = input.readInt32(),
+				acknowledgedLength = input.readInt32();
+			if (acknowledgedRevision < 0
+				|| acknowledgedLength < 0
+				|| acknowledgedLength > 0x10000000
+				|| acknowledgedLength > bytes.length - input.position)
+				throw "Invalid acknowledged publication state";
+			var acknowledgedAbi:Null<RuntimeAbiDescriptor> = acknowledgedLength == 0 ? null : RuntimeAbiCodec.decode(input.read(acknowledgedLength));
+			if ((!publicationTracking && (acknowledgedRevision != 0 || acknowledgedAbi != null))
+				|| (acknowledgedRevision > 0 && acknowledgedAbi == null))
+				throw "Invalid acknowledged publication state";
 			if (input.position != bytes.length)
 				throw "Trailing compiler identity data";
 			return {
 				moduleId: moduleId,
 				stableIds: stableIds,
 				typeState: typeState,
-				publishedAbi: publishedAbi
+				publishedAbi: publishedAbi,
+				publicationTracking: publicationTracking,
+				acknowledgedRevision: acknowledgedRevision,
+				acknowledgedAbi: acknowledgedAbi
 			};
 		} catch (error:haxe.io.Eof) {
 			throw "Truncated compiler identity state";

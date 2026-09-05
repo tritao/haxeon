@@ -5,6 +5,7 @@ import compiler.modules.Compiler;
 import compiler.Diagnostic.CompileError;
 import sys.io.File;
 import compiler.types.Type.CompilerType;
+import compiler.modules.CompilerPublication.ReconnectDecision;
 
 class ModuleMain {
 	static function main():Void {
@@ -233,8 +234,34 @@ class ModuleMain {
 				throw error;
 		}
 		publicationCompiler.acknowledgePublication(publicationInitial.revision);
+		switch publicationCompiler.reconcileRuntime(publicationInitial.runtimeIdentity.sub(4, 16), publicationInitial.revision) {
+			case ContinuePatching:
+			case ReloadDomain(reason):
+				throw 'Live acknowledged compiler required reload: $reason';
+		}
+		switch publicationCompiler.reconcileRuntime(publicationInitial.runtimeIdentity.sub(4, 16), publicationInitial.revision + 1) {
+			case ContinuePatching:
+				throw "Mismatched runtime revision was accepted";
+			case ReloadDomain(_):
+		}
+		var resumedPublicationCompiler = new Compiler(publicationCompiler.exportIdentityState());
+		if (!resumedPublicationCompiler.publicationStatus().tracking
+			|| resumedPublicationCompiler.publicationStatus().acknowledgedRevision != publicationInitial.revision)
+			throw "Compiler restart lost the acknowledged publication baseline";
+		switch resumedPublicationCompiler.reconcileRuntime(publicationInitial.runtimeIdentity.sub(4, 16), publicationInitial.revision) {
+			case ContinuePatching:
+				throw "Restart guessed an unavailable backend baseline";
+			case ReloadDomain(_):
+		}
 		publicationCompiler.update("Main.hx", "function main():Int { return 41; }");
 		var rejectedPublication = publicationCompiler.compile("Main");
+		try {
+			publicationCompiler.exportIdentityState();
+			throw "Compiler persisted an unacknowledged candidate";
+		} catch (error:String) {
+			if (error.indexOf("Cannot persist pending publication") < 0)
+				throw error;
+		}
 		publicationCompiler.rejectPublication(rejectedPublication.revision);
 		if (publicationCompiler.publicationStatus().acknowledgedRevision != publicationInitial.revision
 			|| publicationCompiler.publicationStatus().pendingRevision != null)

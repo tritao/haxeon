@@ -31,6 +31,7 @@ import compiler.abi.PatchPlanner.AbiChange;
 import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.modules.CompilerPublication.CompilerSnapshot;
 import compiler.modules.CompilerPublication.PublicationStatus;
+import compiler.modules.CompilerPublication.ReconnectDecision;
 
 typedef NativeFunction = {final name:String; final library:String; final symbol:String; final arguments:Array<CompilerType>; final result:CompilerType;}
 
@@ -95,11 +96,16 @@ class Compiler {
 			assembler = new HlModuleAssembler(identity.stableIds);
 			types = new TypeRegistry(identity.typeState);
 			publishedAbi = identity.publishedAbi;
+			if (identity.publicationTracking)
+				publication.enable(identity.acknowledgedRevision, identity.acknowledgedAbi);
 		}
 	}
 
-	public function exportIdentityState():Bytes
-		return HlRuntimeIdentity.encodePersistent(moduleId, assembler.cache.stableIds, types.exportState(), publishedAbi);
+	public function exportIdentityState():Bytes {
+		var state = publication.persistence();
+		return HlRuntimeIdentity.encodePersistent(moduleId, assembler.cache.stableIds, types.exportState(), publishedAbi, state.tracking, state.revision,
+			state.abi);
+	}
 
 	public function enablePublicationTracking():Void {
 		publication.enable();
@@ -107,6 +113,12 @@ class Compiler {
 
 	public function publicationStatus():PublicationStatus
 		return publication.status();
+
+	public function reconcileRuntime(runtimeModuleId:Bytes, runtimeRevision:Int):ReconnectDecision {
+		if (runtimeModuleId.length != moduleId.length || runtimeModuleId.compare(moduleId) != 0)
+			return ReloadDomain("runtime module identity does not match compiler state");
+		return publication.reconcile(runtimeRevision);
+	}
 
 	public function acknowledgePublication(revision:Int):Void
 		publication.acknowledge(revision);

@@ -19,6 +19,7 @@ typedef CompilerSnapshot = {
 typedef PublishedBaseline = {
 	final revision:Int;
 	final abi:Null<RuntimeAbiDescriptor>;
+	final backendAvailable:Bool;
 }
 
 typedef PendingPublication = {
@@ -35,10 +36,21 @@ typedef PublicationStatus = {
 	final pendingRevision:Null<Int>;
 }
 
+typedef PublicationPersistence = {
+	final tracking:Bool;
+	final revision:Int;
+	final abi:Null<RuntimeAbiDescriptor>;
+}
+
 enum PublicationState {
 	Untracked;
 	Ready(baseline:PublishedBaseline);
 	Pending(candidate:PendingPublication);
+}
+
+enum ReconnectDecision {
+	ContinuePatching;
+	ReloadDomain(reason:String);
 }
 
 /** Owns valid compiler-to-runtime publication transitions and revision checks. */
@@ -47,9 +59,9 @@ class CompilerPublication {
 
 	public function new() {}
 
-	public function enable(?revision:Int = 0, ?abi:RuntimeAbiDescriptor):Void
+	public function enable(?revision:Int = 0, ?abi:RuntimeAbiDescriptor, ?backendAvailable:Bool = false):Void
 		state = switch state {
-			case Untracked: Ready({revision: revision, abi: abi});
+			case Untracked: Ready({revision: revision, abi: abi, backendAvailable: backendAvailable});
 			case Ready(_): state;
 			case Pending(_): throw "Cannot change publication tracking with a pending build";
 		};
@@ -76,7 +88,7 @@ class CompilerPublication {
 
 	public function acknowledge(revision:Int):Void {
 		var candidate = requirePending(revision);
-		state = Ready({revision: revision, abi: candidate.abi});
+		state = Ready({revision: revision, abi: candidate.abi, backendAvailable: true});
 	}
 
 	public function reject(revision:Int):PendingPublication {
@@ -101,6 +113,23 @@ class CompilerPublication {
 			case Untracked: null;
 			case Ready(baseline): baseline;
 			case Pending(candidate): candidate.baseline;
+		};
+
+	public function persistence():PublicationPersistence
+		return switch state {
+			case Untracked: {tracking: false, revision: 0, abi: null};
+			case Ready(baseline): {tracking: true, revision: baseline.revision, abi: baseline.abi};
+			case Pending(candidate): throw 'Cannot persist pending publication revision ${candidate.revision}';
+		};
+
+	public function reconcile(runtimeRevision:Int):ReconnectDecision
+		return switch state {
+			case Untracked: ReloadDomain("publication tracking is disabled");
+			case Pending(candidate): ReloadDomain('publication revision ${candidate.revision} is unacknowledged');
+			case Ready(baseline):
+				if (runtimeRevision != baseline.revision)
+					ReloadDomain('runtime revision $runtimeRevision does not match acknowledged revision ${baseline.revision}'); else if (baseline.revision > 0
+					&& !baseline.backendAvailable) ReloadDomain("acknowledged backend baseline is unavailable after restart"); else ContinuePatching;
 		};
 
 	function requirePending(revision:Int):PendingPublication
