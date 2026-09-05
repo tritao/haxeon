@@ -341,9 +341,12 @@ class Parser {
 		}
 		if (match(TokenKind.Switch)) {
 			var start = previous().span;
-			consume(TokenKind.LeftParen);
-			var expression = parseExpression();
-			consume(TokenKind.RightParen);
+			var expression:AstExpression;
+			if (match(TokenKind.LeftParen)) {
+				expression = parseExpression();
+				consume(TokenKind.RightParen);
+			} else
+				expression = parseExpression();
 			consume(TokenKind.LeftBrace);
 			var cases = [];
 			while (match(TokenKind.Case)) {
