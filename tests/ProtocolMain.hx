@@ -41,10 +41,16 @@ class ProtocolMain {
 		var diagnostics:Dynamic = Json.parse(protocol.handle('{"id":6,"method":"diagnostics","path":"Main.hx"}'));
 		if (!diagnostics.ok || diagnostics.result.length != 0)
 			throw "protocol diagnostics response was not empty";
-		var invalid:Dynamic = Json.parse(protocol.handle('{"id":7,"method":"update","path":"Main.hx","source":"function main(:Int { return 0; }"}'));
+		var editedSource = StringTools.replace(source, "return 42", "return 41");
+		assertOk(protocol.handle('{"id":7,"method":"update","path":"Main.hx","source":' + Json.stringify(editedSource) + '}'));
+		var patched:Dynamic = Json.parse(protocol.handle('{"id":8,"method":"compile","entry":"Main"}'));
+		if (!patched.ok || patched.result.requiresReload || !patched.result.patchAvailable || patched.result.patchBase64 == null
+			|| patched.result.patchBase64.length == 0)
+			throw "protocol compile did not transport a compatible patch";
+		var invalid:Dynamic = Json.parse(protocol.handle('{"id":9,"method":"update","path":"Main.hx","source":"function main(:Int { return 0; }"}'));
 		if (!invalid.ok)
 			throw "protocol update should acknowledge unsaved edits";
-		var failed:Dynamic = Json.parse(protocol.handle('{"id":8,"method":"compile","entry":"Main"}'));
+		var failed:Dynamic = Json.parse(protocol.handle('{"id":10,"method":"compile","entry":"Main"}'));
 		if (failed.ok || failed.error.code == null || failed.error.message == null)
 			throw "protocol compile did not return a structured diagnostic";
 		var malformed:Dynamic = Json.parse(protocol.handle("not-json"));
