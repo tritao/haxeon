@@ -225,7 +225,7 @@ class LanguageServiceProtocol {
 			case ModuleIdentityMismatch: {code: "module_identity_mismatch"};
 		};
 
-	static function failureDiagnostic(id:Dynamic, diagnostic):String
+	static function failureDiagnostic(id:Dynamic, diagnostic:compiler.Diagnostic):String
 		return Json.stringify({id: id, ok: false, error: diagnosticJson(diagnostic)});
 
 	static function failure(id:Dynamic, code:String, message:String):String

@@ -473,7 +473,7 @@ class IrVerifier {
 		return count;
 	}
 
-	static function addSignature(map, name, arguments, result):Void {
+	static function addSignature(map:Map<String, {arguments:Array<IrType>, result:IrType}>, name:String, arguments:Array<IrType>, result:IrType):Void {
 		if (map.exists(name))
 			throw 'Duplicate IR function "$name"';
 		map.set(name, {arguments: arguments, result: result});

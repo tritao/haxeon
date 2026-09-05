@@ -342,15 +342,21 @@ class Compiler {
 							if (nestedName.indexOf(".") < 0)
 								aliases.set(nestedName, declarationName);
 						}
-			var packagePrefix = state.ast.packageName == null ? "" : state.ast.packageName + ".";
-			for (sourceName => declarationName in sourceTypeAliases)
-				if (StringTools.startsWith(sourceName, packagePrefix) && StringTools.startsWith(declarationName, packagePrefix)) {
-					var relativeSourceName = sourceName.substr(packagePrefix.length),
-						simpleName = declarationName.substr(packagePrefix.length);
-					aliases.set(relativeSourceName, declarationName);
-					if (simpleName.indexOf(".") < 0)
-						aliases.set(simpleName, declarationName);
-				}
+			var visiblePackage = state.ast.packageName;
+			while (visiblePackage != null) {
+				var packagePrefix = visiblePackage.length == 0 ? "" : visiblePackage + ".";
+				for (sourceName => declarationName in sourceTypeAliases)
+					if (StringTools.startsWith(sourceName, packagePrefix) && StringTools.startsWith(declarationName, packagePrefix)) {
+						var relativeSourceName = sourceName.substr(packagePrefix.length),
+							simpleName = declarationName.substr(packagePrefix.length);
+						if (!aliases.exists(relativeSourceName))
+							aliases.set(relativeSourceName, declarationName);
+						if (simpleName.indexOf(".") < 0 && !aliases.exists(simpleName))
+							aliases.set(simpleName, declarationName);
+					}
+				var separator = visiblePackage.lastIndexOf(".");
+				visiblePackage = separator < 0 ? null : visiblePackage.substr(0, separator);
+			}
 			addDeclaredTypeAliases(aliases, state.ast, state.ast.packageName);
 			for (interfaceDecl in state.ast.interfaces)
 				interfaces.push(canonicalInterface(interfaceDecl, aliases, state.ast.packageName));
@@ -723,6 +729,7 @@ class Compiler {
 			case TBool: Bool;
 			case TFloat: F64;
 			case TString: Bytes;
+			case TBytes: Bytes;
 			case TDynamic: Dyn;
 			case TNativeAbstract(name): Abstract(name);
 			case TNever: throw "Never is not a runtime ABI type";
@@ -1095,7 +1102,7 @@ class Compiler {
 				].join(',') + '}';
 		};
 
-	static function canonicalStatement(s, module, entry, locals, ?aliases):AstStatement
+	static function canonicalStatement(s:AstStatement, module:String, entry:String, locals:Map<String, Bool>, ?aliases:Map<String, String>):AstStatement
 		return switch s {
 			case UninitializedDeclaration(n, t, span): UninitializedDeclaration(n, canonicalType(t, aliases), span);
 			case VarDeclaration(n, t, e,
@@ -1154,7 +1161,7 @@ class Compiler {
 			case Expression(e, span): Expression(canonicalExpression(e, module, entry, locals, aliases), span);
 		}
 
-	static function canonicalExpression(e, module, entry, locals, ?aliases):AstExpression
+	static function canonicalExpression(e:AstExpression, module:String, entry:String, locals:Map<String, Bool>, ?aliases:Map<String, String>):AstExpression
 		return switch e {
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_): e;
 			case Variable(name, span):
@@ -1430,7 +1437,7 @@ class Compiler {
 	static function sameDependencyTarget(dependency:String, changed:String):Bool
 		return dependency == changed || StringTools.endsWith(dependency, "." + changed) || StringTools.endsWith(changed, "." + dependency);
 
-	static function scanStatement(s, dependencies):Void
+	static function scanStatement(s:AstStatement, dependencies:Map<String, Bool>):Void
 		switch s {
 			case UninitializedDeclaration(_, _, _):
 			case VarDeclaration(_, _, e, _), Assignment(_, e, _), Return(e, _), Throw(e, _):
@@ -1484,7 +1491,7 @@ class Compiler {
 				scanExpression(e, dependencies);
 		}
 
-	static function scanExpression(e, dependencies):Void
+	static function scanExpression(e:AstExpression, dependencies:Map<String, Bool>):Void
 		switch e {
 			case Add(a, b, _), Sub(a, b, _), Mul(a, b, _), Div(a, b, _), Mod(a, b, _), BitAnd(a, b, _), BitXor(a, b, _), BitOr(a, b, _), ShiftLeft(a, b, _),
 				ShiftRight(a, b, _), UnsignedShiftRight(a, b, _), Less(a, b, _), LessEqual(a, b, _), Greater(a, b, _), GreaterEqual(a, b, _), Equal(a, b, _),
