@@ -75,6 +75,7 @@ class DeclarationIndex {
 		for (fn in program.functions)
 			declare(Function, fn.name, fn.span);
 		validateCycles();
+		validateSignatures(program);
 	}
 
 	public function resolve(type:AstType, ?span:SourceSpan):CompilerType
@@ -124,6 +125,30 @@ class DeclarationIndex {
 		}
 		for (name in interfaces.keys())
 			visitInterface(name, []);
+	}
+
+	function validateSignatures(program:AstProgram):Void {
+		for (decl in program.enums)
+			for (caseDecl in decl.cases)
+				for (parameter in caseDecl.params)
+					resolve(parameter, caseDecl.span);
+		for (decl in program.interfaces)
+			for (method in decl.methods)
+				resolveFunction(method);
+		for (decl in program.classes) {
+			for (field in decl.fields)
+				resolve(field.type, field.span);
+			for (method in decl.methods)
+				resolveFunction(method);
+		}
+		for (fn in program.functions)
+			resolveFunction(fn);
+	}
+
+	function resolveFunction(fn:AstFunction):Void {
+		for (argument in fn.arguments)
+			resolve(argument.type, argument.span);
+		resolve(fn.result, fn.span);
 	}
 
 	function visitClass(name:String, visiting:Map<String, Bool>):Void {
