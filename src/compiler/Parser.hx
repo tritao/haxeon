@@ -439,13 +439,17 @@ class Parser {
 			var start = previous().span;
 			consume(TokenKind.LeftParen);
 			match(TokenKind.Var);
-			var name = consume(TokenKind.Identifier).text;
+			var name = consume(TokenKind.Identifier).text, valueName = null;
+			if (match(TokenKind.Assign)) {
+				consume(TokenKind.Greater);
+				valueName = consume(TokenKind.Identifier).text;
+			}
 			consume(TokenKind.In);
 			var iterable = parseExpression();
 			consume(TokenKind.RightParen);
 			var body = parseStatementOrBlock(),
 				end = statementSpan(body[body.length - 1]);
-			return ForIn(name, iterable, body, start.merge(end));
+			return ForIn(name, valueName, iterable, body, start.merge(end));
 		}
 		var expression = parseExpression(), end = expressionEnd(expression);
 		return Expression(expression, expressionSpan(expression).merge(end));
@@ -1042,7 +1046,7 @@ class Parser {
 	static function statementSpan(statement:AstStatement)
 		return switch statement {
 			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span),
-				ReturnVoid(span), Throw(_, span), Try(_, _, span), If(_, _, _, span), While(_, _, span), DoWhile(_, _, span), ForIn(_, _, _, span),
+				ReturnVoid(span), Throw(_, span), Try(_, _, span), If(_, _, _, span), While(_, _, span), DoWhile(_, _, span), ForIn(_, _, _, _, span),
 				Break(span), Continue(span), Switch(_, _, _, _, span), Increment(_, _, span), Expression(_, span): span;
 		}
 }

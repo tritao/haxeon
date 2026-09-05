@@ -569,15 +569,17 @@ class Typer {
 						fail("E1004", "Do-while condition must be Bool", span);
 					output.push(TDoWhile(typedBody, typedCondition, span));
 					scope.mergeAssignmentsFrom([bodyScope]);
-				case ForIn(name, iterable, body, span):
+				case ForIn(name, valueName, iterable, body, span):
 					var typedIterable = typeExpression(iterable, scope),
+						originalIterable = typedIterable,
 						element = switch typedIterable.type {
 							case TArray(element): element;
 							case TMap(key, value):
 								var mapName = RuntimeType.mapName(key, value);
 								if (mapName == null)
 									fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
-								typedIterable = new TypedExpression(TCollectionCall(typedIterable, "keys", []), TArray(key), span);
+								if (valueName == null)
+									typedIterable = new TypedExpression(TCollectionCall(typedIterable, "keys", []), TArray(key), span);
 								key;
 							default:
 								fail("E1014", "For-in iterable must be an Array or Map", span);
@@ -585,12 +587,18 @@ class Typer {
 						},
 						loopScope = new Scope(scope);
 					loopScope.define(name, element, span);
+					if (valueName != null)
+						switch originalIterable.type {
+							case TMap(_, value): loopScope.define(valueName, value, span);
+							default: fail("E1014", "Key/value for-in requires a Map", span);
+						}
 					context.loopDepth++;
 					context.loopEarlyExits.push(true);
 					var typedBody = typeStatements(body, loopScope, result);
 					context.loopEarlyExits.pop();
 					context.loopDepth--;
-					output.push(TForIn(loopScope.resolveId(name), typedIterable, typedBody, span));
+					output.push(TForIn(loopScope.resolveId(name), valueName == null ? null : loopScope.resolveId(valueName),
+						valueName == null ? typedIterable : originalIterable, typedBody, span));
 				case Switch(expression, cases, defaultBranch, hasDefault, span):
 					var typedExpression = typeExpression(expression, scope);
 					if (!sameType(typedExpression.type, TInt) && !isEnum(typedExpression.type))
@@ -1250,7 +1258,7 @@ class Typer {
 				case If(_, yes, no, _):
 					seedLambdaScope(yes, scope);
 					seedLambdaScope(no, scope);
-				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, body, _):
+				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _):
 					seedLambdaScope(body, scope);
 				case Try(tryBranch, catches, _):
 					seedLambdaScope(tryBranch, scope);
@@ -1602,8 +1610,10 @@ class Typer {
 					collectAssignedLocals(body, names);
 				case DoWhile(body, _, _):
 					collectAssignedLocals(body, names);
-				case ForIn(name, _, body, _):
+				case ForIn(name, valueName, _, body, _):
 					names.set(name, true);
+					if (valueName != null)
+						names.set(valueName, true);
 					collectAssignedLocals(body, names);
 				case Switch(_, cases, defaultBranch, _, _):
 					for (switchCase in cases)
@@ -1631,8 +1641,10 @@ class Typer {
 					collectDeclaredLocals(body, names);
 				case DoWhile(body, _, _):
 					collectDeclaredLocals(body, names);
-				case ForIn(name, _, body, _):
+				case ForIn(name, valueName, _, body, _):
 					names.set(name, true);
+					if (valueName != null)
+						names.set(valueName, true);
 					collectDeclaredLocals(body, names);
 				case Switch(_, cases, defaultBranch, _, _):
 					for (switchCase in cases)
@@ -1669,7 +1681,7 @@ class Typer {
 				case DoWhile(body, condition, _):
 					collectVariables(body, names);
 					collectExpressionVariables(condition, names);
-				case ForIn(_, iterable, body, _):
+				case ForIn(_, _, iterable, body, _):
 					collectExpressionVariables(iterable, names);
 					collectVariables(body, names);
 				case Switch(expression, cases, defaultBranch, _, _):
@@ -1709,7 +1721,7 @@ class Typer {
 				case DoWhile(body, condition, _):
 					collectMutableCaptureCandidates(body, outerDeclared, result);
 					collectMutableCaptureExpression(condition, outerDeclared, result);
-				case ForIn(_, iterable, body, _):
+				case ForIn(_, _, iterable, body, _):
 					collectMutableCaptureExpression(iterable, outerDeclared, result);
 					collectMutableCaptureCandidates(body, outerDeclared, result);
 				case Switch(expression, cases, defaultBranch, _, _):
@@ -1749,7 +1761,7 @@ class Typer {
 				case If(_, yes, no, _):
 					collectExceptionCellCandidates(yes, declared, result);
 					collectExceptionCellCandidates(no, declared, result);
-				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, body, _):
+				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _):
 					collectExceptionCellCandidates(body, declared, result);
 				case Switch(_, cases, defaultBranch, _, _):
 					for (switchCase in cases)
@@ -2244,7 +2256,7 @@ class Typer {
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
 			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span),
-				ReturnVoid(span), Throw(_, span), Try(_, _, span), If(_, _, _, span), While(_, _, span), DoWhile(_, _, span), ForIn(_, _, _, span),
+				ReturnVoid(span), Throw(_, span), Try(_, _, span), If(_, _, _, span), While(_, _, span), DoWhile(_, _, span), ForIn(_, _, _, _, span),
 				Break(span), Continue(span), Switch(_, _, _, _, span), Increment(_, _, span), Expression(_, span): span;
 		}
 

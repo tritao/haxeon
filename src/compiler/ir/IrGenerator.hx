@@ -692,20 +692,35 @@ class IrGenerator {
 					if (!builder.isTerminated())
 						builder.jump(conditionBlock);
 					builder.select(afterBlock);
-				case TForIn(name, iterable, body, span):
+				case TForIn(name, valueName, iterable, body, span):
 					var arrayName = '$' + 'for-array:' + span.start,
+						mapName = '$' + 'for-map:' + span.start,
 						indexName = '$' + 'for-index:' + span.start,
 						breakFlag = '$' + 'for-break:' + span.start,
-						arrayType = lowerType(iterable.type),
+						mapTypes = switch iterable.type {
+							case TMap(key, value): {key: key, value: value};
+							default: null;
+						},
+						arrayType = valueName == null ? lowerType(iterable.type) : Array(lowerType(mapTypes.key)),
 						elementType = switch iterable.type {
 							case TArray(element): lowerType(element);
+							case TMap(key, _): lowerType(key);
 							default: throw 'For-in iterable is not an array';
 						};
 					localTypes.set(arrayName, arrayType);
 					localTypes.set(indexName, I32);
 					localTypes.set(breakFlag, Bool);
 					localTypes.set(name, elementType);
-					builder.store(arrayName, lowerExpression(iterable, builder, localTypes));
+					if (valueName == null)
+						builder.store(arrayName, lowerExpression(iterable, builder, localTypes));
+					else {
+						var loweredMapType = lowerType(iterable.type);
+						localTypes.set(mapName, loweredMapType);
+						localTypes.set(valueName, lowerType(mapTypes.value));
+						builder.store(mapName, lowerExpression(iterable, builder, localTypes));
+						builder.store(arrayName,
+							builder.call(RuntimeType.mapNative(mapTypes.key, mapTypes.value, "keys"), [builder.load(mapName, loweredMapType)], arrayType));
+					}
 					builder.store(indexName, builder.constInt(-1));
 					builder.store(breakFlag, builder.constBool(false));
 					var conditionBlock = builder.createBlock(),
@@ -724,6 +739,10 @@ class IrGenerator {
 					var bodyArray = builder.load(arrayName, arrayType),
 						bodyIndex = builder.load(indexName, I32);
 					builder.store(name, builder.arrayGet(bodyArray, bodyIndex, elementType));
+					if (valueName != null)
+						builder.store(valueName,
+							builder.call(RuntimeType.mapNative(mapTypes.key, mapTypes.value, "get"),
+								[builder.load(mapName, lowerType(iterable.type)), builder.load(name, elementType)], lowerType(mapTypes.value)));
 					loops.push({
 						breakBlock: afterBlock,
 						continueBlock: conditionBlock,

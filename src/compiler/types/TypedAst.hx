@@ -104,7 +104,7 @@ enum TypedStatement {
 	TIf(condition:TypedExpression, thenBranch:Array<TypedStatement>, elseBranch:Array<TypedStatement>, span:SourceSpan);
 	TWhile(condition:TypedExpression, body:Array<TypedStatement>, span:SourceSpan);
 	TDoWhile(body:Array<TypedStatement>, condition:TypedExpression, span:SourceSpan);
-	TForIn(name:String, iterable:TypedExpression, body:Array<TypedStatement>, span:SourceSpan);
+	TForIn(keyName:String, valueName:Null<String>, iterable:TypedExpression, body:Array<TypedStatement>, span:SourceSpan);
 	TBreak(span:SourceSpan);
 	TContinue(span:SourceSpan);
 	TSwitch(expression:TypedExpression, cases:Array<TypedSwitchCase>, defaultBranch:Array<TypedStatement>, hasDefault:Bool, span:SourceSpan);

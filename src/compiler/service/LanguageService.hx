@@ -535,9 +535,9 @@ class LanguageService {
 				case DoWhile(body, _, _):
 					if (containsPosition(body, position))
 						return localDeclarationAt(body, name, position, visible);
-				case ForIn(local, _, body, declaration):
+				case ForIn(local, valueLocal, _, body, declaration):
 					if (containsPosition(body, position))
-						return localDeclarationAt(body, name, position, local == name ? declaration : visible);
+						return localDeclarationAt(body, name, position, local == name || valueLocal == name ? declaration : visible);
 				case Try(tryBranch, catches, _):
 					if (containsPosition(tryBranch, position))
 						return localDeclarationAt(tryBranch, name, position, visible);
@@ -564,7 +564,7 @@ class LanguageService {
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
 			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span),
-				ReturnVoid(span), Throw(_, span), Try(_, _, span), If(_, _, _, span), While(_, _, span), DoWhile(_, _, span), ForIn(_, _, _, span),
+				ReturnVoid(span), Throw(_, span), Try(_, _, span), If(_, _, _, span), While(_, _, span), DoWhile(_, _, span), ForIn(_, _, _, _, span),
 				Break(span), Continue(span), Switch(_, _, _, _, span), Increment(_, _, span), Expression(_, span): span;
 		};
 
@@ -580,7 +580,7 @@ class LanguageService {
 						declaration = localDeclaration(no, name);
 					if (declaration != null)
 						return declaration;
-				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, body, _):
+				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _):
 					var declaration = localDeclaration(body, name);
 					if (declaration != null)
 						return declaration;
@@ -625,10 +625,16 @@ class LanguageService {
 				case TVar(local, initializer, _):
 					if (sourceLocalName(local) == name)
 						return initializer.type;
-				case TForIn(local, iterable, body, _):
+				case TForIn(local, valueLocal, iterable, body, _):
 					if (sourceLocalName(local) == name)
 						return switch iterable.type {
 							case TArray(element): element;
+							case TMap(key, _): key;
+							default: null;
+						};
+					if (valueLocal != null && sourceLocalName(valueLocal) == name)
+						return switch iterable.type {
+							case TMap(_, value): value;
 							default: null;
 						};
 					var loopType = localType(body, name);

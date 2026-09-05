@@ -1020,8 +1020,8 @@ class Compiler {
 			case DoWhile(b, c,
 				span): DoWhile([for (x in b) canonicalStatement(x, module, entry, locals, aliases)], canonicalExpression(c, module, entry, locals, aliases),
 					span);
-			case ForIn(name, iterable, body,
-				span): ForIn(name, canonicalExpression(iterable, module, entry, locals, aliases),
+			case ForIn(name, valueName, iterable, body,
+				span): ForIn(name, valueName, canonicalExpression(iterable, module, entry, locals, aliases),
 					[for (x in body) canonicalStatement(x, module, entry, locals, aliases)], span);
 			case Switch(expression, cases, defaultBranch, hasDefault, span):
 				Switch(canonicalExpression(expression, module, entry, locals, aliases), [
@@ -1225,7 +1225,7 @@ class Compiler {
 				case DoWhile(body, condition, _):
 					addBodyDependencies(result, owner, body, module, entry);
 					addExpressionDependencies(result, owner, Body, condition, module, entry);
-				case ForIn(_, iterable, body, _):
+				case ForIn(_, _, iterable, body, _):
 					addExpressionDependencies(result, owner, Body, iterable, module, entry);
 					addBodyDependencies(result, owner, body, module, entry);
 				case Try(body, catches, _):
@@ -1295,7 +1295,7 @@ class Compiler {
 				for (x in b)
 					scanStatement(x, dependencies);
 				scanExpression(c, dependencies);
-			case ForIn(_, iterable, b, _):
+			case ForIn(_, _, iterable, b, _):
 				scanExpression(iterable, dependencies);
 				for (x in b)
 					scanStatement(x, dependencies);
@@ -1438,7 +1438,7 @@ class Compiler {
 				for (s in b)
 					scanCalls(s, calls, aliases);
 				scanCallExpression(c, calls, aliases);
-			case ForIn(_, iterable, b, _):
+			case ForIn(_, _, iterable, b, _):
 				scanCallExpression(iterable, calls, aliases);
 				for (s in b)
 					scanCalls(s, calls, aliases);
@@ -1559,7 +1559,7 @@ class Compiler {
 				case DoWhile(body, condition, _):
 					collectLambdas(body, functionName, module, generatedByModule);
 					collectLambdaExpression(condition, functionName, module, generatedByModule);
-				case ForIn(_, iterable, body, _):
+				case ForIn(_, _, iterable, body, _):
 					collectLambdaExpression(iterable, functionName, module, generatedByModule);
 					collectLambdas(body, functionName, module, generatedByModule);
 				case Switch(expression, cases, defaultBranch, _, _):
