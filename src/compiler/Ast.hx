@@ -144,7 +144,13 @@ enum AstExpression {
 
 typedef AstObjectField = {final name:String; final value:AstExpression; final span:SourceSpan;}
 typedef AstMapEntry = {final key:AstExpression; final value:AstExpression; final span:SourceSpan;}
-typedef AstSwitchExpressionCase = {final value:AstExpression; final result:AstExpression; final span:SourceSpan;}
+
+typedef AstSwitchExpressionCase = {
+	final value:AstExpression;
+	final guard:Null<AstExpression>;
+	final result:AstExpression;
+	final span:SourceSpan;
+}
 
 enum AstStatement {
 	UninitializedDeclaration(name:String, type:AstType, span:SourceSpan);
@@ -169,6 +175,7 @@ enum AstStatement {
 
 typedef AstSwitchCase = {
 	final value:AstExpression;
+	final guard:Null<AstExpression>;
 	final statements:Array<AstStatement>;
 	final span:SourceSpan;
 }

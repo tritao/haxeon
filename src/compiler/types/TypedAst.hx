@@ -95,6 +95,7 @@ typedef TypedMapEntry = {final key:TypedExpression; final value:TypedExpression;
 
 typedef TypedSwitchExpressionCase = {
 	final value:TypedExpression;
+	final guard:Null<TypedExpression>;
 	final result:TypedExpression;
 	final enumName:Null<String>;
 	final constructorIndex:Int;
@@ -130,6 +131,7 @@ enum TypedStatement {
 
 typedef TypedSwitchCase = {
 	final value:TypedExpression;
+	final guard:Null<TypedExpression>;
 	final statements:Array<TypedStatement>;
 	final enumName:Null<String>;
 	final constructorIndex:Int;

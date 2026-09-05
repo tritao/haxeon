@@ -1094,6 +1094,7 @@ class Compiler {
 					for (switchCase in cases)
 						{
 							value: canonicalExpression(switchCase.value, module, entry, locals, aliases),
+							guard: switchCase.guard == null ? null : canonicalExpression(switchCase.guard, module, entry, locals, aliases),
 							statements: [
 								for (x in switchCase.statements)
 									canonicalStatement(x, module, entry, locals, aliases)
@@ -1153,6 +1154,7 @@ class Compiler {
 					for (switchCase in cases)
 						{
 							value: canonicalExpression(switchCase.value, module, entry, locals, aliases),
+							guard: switchCase.guard == null ? null : canonicalExpression(switchCase.guard, module, entry, locals, aliases),
 							result: canonicalExpression(switchCase.result, module, entry, locals, aliases),
 							span: switchCase.span
 						}
@@ -1334,8 +1336,12 @@ class Compiler {
 						addBodyDependencies(result, owner, clause.statements, module, entry);
 				case Switch(expression, cases, fallback, _, _):
 					addExpressionDependencies(result, owner, Body, expression, module, entry);
-					for (switchCase in cases)
+					for (switchCase in cases) {
+						addExpressionDependencies(result, owner, Body, switchCase.value, module, entry);
+						if (switchCase.guard != null)
+							addExpressionDependencies(result, owner, Body, switchCase.guard, module, entry);
 						addBodyDependencies(result, owner, switchCase.statements, module, entry);
+					}
 					addBodyDependencies(result, owner, fallback, module, entry);
 				case ReturnVoid(_), Break(_), Continue(_), Increment(_, _, _):
 			}
@@ -1406,6 +1412,8 @@ class Compiler {
 				scanExpression(expression, dependencies);
 				for (switchCase in cases) {
 					scanExpression(switchCase.value, dependencies);
+					if (switchCase.guard != null)
+						scanExpression(switchCase.guard, dependencies);
 					for (x in switchCase.statements)
 						scanStatement(x, dependencies);
 				}
@@ -1445,6 +1453,8 @@ class Compiler {
 				scanExpression(subject, dependencies);
 				for (switchCase in cases) {
 					scanExpression(switchCase.value, dependencies);
+					if (switchCase.guard != null)
+						scanExpression(switchCase.guard, dependencies);
 					scanExpression(switchCase.result, dependencies);
 				}
 				if (fallback != null)
@@ -1574,6 +1584,8 @@ class Compiler {
 				scanCallExpression(expression, calls, aliases);
 				for (switchCase in cases) {
 					scanCallExpression(switchCase.value, calls, aliases);
+					if (switchCase.guard != null)
+						scanCallExpression(switchCase.guard, calls, aliases);
 					for (s in switchCase.statements)
 						scanCalls(s, calls, aliases);
 				}
@@ -1626,6 +1638,8 @@ class Compiler {
 				scanCallExpression(subject, calls, aliases);
 				for (switchCase in cases) {
 					scanCallExpression(switchCase.value, calls, aliases);
+					if (switchCase.guard != null)
+						scanCallExpression(switchCase.guard, calls, aliases);
 					scanCallExpression(switchCase.result, calls, aliases);
 				}
 				if (fallback != null)
@@ -1719,6 +1733,8 @@ class Compiler {
 					collectLambdaExpression(expression, functionName, module, generatedByModule);
 					for (switchCase in cases) {
 						collectLambdaExpression(switchCase.value, functionName, module, generatedByModule);
+						if (switchCase.guard != null)
+							collectLambdaExpression(switchCase.guard, functionName, module, generatedByModule);
 						collectLambdas(switchCase.statements, functionName, module, generatedByModule);
 					}
 					collectLambdas(defaultBranch, functionName, module, generatedByModule);
@@ -1772,6 +1788,8 @@ class Compiler {
 				collectLambdaExpression(subject, functionName, module, generatedByModule);
 				for (switchCase in cases) {
 					collectLambdaExpression(switchCase.value, functionName, module, generatedByModule);
+					if (switchCase.guard != null)
+						collectLambdaExpression(switchCase.guard, functionName, module, generatedByModule);
 					collectLambdaExpression(switchCase.result, functionName, module, generatedByModule);
 				}
 				if (fallback != null)

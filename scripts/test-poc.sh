@@ -106,6 +106,7 @@ run_program type-annotation 42
 run_program local-function 42
 run_program map-literal 42
 run_program map-comprehension 42
+run_program switch-guard 42
 run_program captured-lambda 42
 run_program mutable-capture 78
 run_program nested-mutable-capture 3

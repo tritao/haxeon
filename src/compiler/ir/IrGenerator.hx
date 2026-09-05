@@ -764,7 +764,8 @@ class IrGenerator {
 					builder.store(switchName, lowerExpression(expression, builder, localTypes));
 					var checkBlock = builder.currentBlock();
 					for (switchCase in cases) {
-						var bodyBlock = builder.createBlock(),
+						var matchBlock = builder.createBlock(),
+							bodyBlock = switchCase.guard == null ? matchBlock : builder.createBlock(),
 							nextBlock = builder.createBlock();
 						builder.select(checkBlock);
 						var switchValue = switch expression.type {
@@ -772,8 +773,8 @@ class IrGenerator {
 							default: builder.load(switchName, switchType);
 						}, caseValue = switchCase.constructorIndex >= 0 ? builder.constInt(switchCase.constructorIndex) : lowerExpression(switchCase.value,
 							builder, localTypes);
-						builder.branch(builder.equal(switchValue, caseValue), bodyBlock, nextBlock);
-						builder.select(bodyBlock);
+						builder.branch(builder.equal(switchValue, caseValue), matchBlock, nextBlock);
+						builder.select(matchBlock);
 						if (switchCase.constructorIndex >= 0)
 							for (binding in switchCase.bindings) {
 								localTypes.set(binding.name, lowerType(binding.type));
@@ -781,6 +782,10 @@ class IrGenerator {
 						for (binding in switchCase.bindings)
 							builder.store(binding.name,
 								builder.enumField(builder.load(switchName, switchType), switchCase.constructorIndex, binding.index, lowerType(binding.type)));
+						if (switchCase.guard != null) {
+							builder.branch(lowerExpression(switchCase.guard, builder, localTypes), bodyBlock, nextBlock);
+							builder.select(bodyBlock);
+						}
 						lowerStatements(switchCase.statements, builder, localTypes, loops);
 						if (!builder.isTerminated())
 							exits.push(builder.currentBlock());
@@ -811,7 +816,10 @@ class IrGenerator {
 			default:
 				return false;
 		}
-		return cases.length > 0 && [for (switchCase in cases) switchCase.constructorIndex >= 0].indexOf(false) < 0;
+		return cases.length > 0 && [
+			for (switchCase in cases)
+				switchCase.constructorIndex >= 0 && switchCase.guard == null
+		].indexOf(false) < 0;
 	}
 
 	static function lowerExpression(expression:TypedExpression, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue
@@ -953,8 +961,10 @@ class IrGenerator {
 					resultType = lowerType(expression.type),
 					entryBlock = builder.currentBlock(),
 					bodyBlocks = [],
+					matchBlocks = [],
 					checkBlocks = [entryBlock];
 				for (caseIndex in 0...cases.length) {
+					matchBlocks.push(cases[caseIndex].guard == null ? null : builder.createBlock());
 					bodyBlocks.push(builder.createBlock());
 					if (caseIndex + 1 < cases.length)
 						checkBlocks.push(builder.createBlock());
@@ -967,7 +977,7 @@ class IrGenerator {
 				builder.store(subjectName, lowerExpression(subject, builder, localTypes));
 				for (caseIndex in 0...cases.length) {
 					var switchCase = cases[caseIndex],
-						isExhaustiveFinalCase = defaultExpression == null && caseIndex == cases.length - 1,
+						isExhaustiveFinalCase = defaultExpression == null && caseIndex == cases.length - 1 && switchCase.guard == null,
 						bodyBlock = bodyBlocks[caseIndex],
 						nextBlock = caseIndex + 1 < cases.length ? checkBlocks[caseIndex + 1] : fallbackBlock;
 					builder.select(checkBlocks[caseIndex]);
@@ -980,15 +990,20 @@ class IrGenerator {
 						builder, localTypes),
 						matches = subject.type == TString ? builder.call("__string_equal", [comparisonValue, caseValue],
 							Bool) : builder.equal(comparisonValue, caseValue);
+					var matchBlock = switchCase.guard == null ? bodyBlock : matchBlocks[caseIndex];
 					if (isExhaustiveFinalCase)
 						builder.jump(bodyBlock);
 					else
-						builder.branch(matches, bodyBlock, nextBlock);
-					builder.select(bodyBlock);
+						builder.branch(matches, matchBlock, nextBlock);
+					builder.select(matchBlock);
 					for (binding in switchCase.bindings) {
 						localTypes.set(binding.name, lowerType(binding.type));
 						builder.store(binding.name,
 							builder.enumField(builder.load(subjectName, subjectType), switchCase.constructorIndex, binding.index, lowerType(binding.type)));
+					}
+					if (switchCase.guard != null) {
+						builder.branch(lowerExpression(switchCase.guard, builder, localTypes), bodyBlock, nextBlock);
+						builder.select(bodyBlock);
 					}
 					var caseResult = lowerExpression(switchCase.result, builder, localTypes);
 					if (!builder.isTerminated()) {

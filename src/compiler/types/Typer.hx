@@ -641,6 +641,7 @@ class Typer {
 							pattern = typeEnumPattern(switchCase.value, typedExpression.type, caseScope),
 							typedValue = pattern == null ? coerce(typeExpression(switchCase.value, scope), typedExpression.type, "switch case",
 								"E1019") : pattern.value,
+							typedGuard = switchCase.guard == null ? null : coerce(typeExpression(switchCase.guard, caseScope), TBool, "switch guard", "E1003"),
 							typedBody = typeStatements(switchCase.statements, caseScope, result),
 							constructorIndex = pattern == null ? -1 : pattern.index,
 							enumName:Null<String> = pattern == null ? null : pattern.enumName,
@@ -658,13 +659,14 @@ class Typer {
 							case TEnumLiteral(name, index): 'enum:$name:$index';
 							default: null;
 						};
-						if (caseKey != null) {
+						if (caseKey != null && typedGuard == null) {
 							if (seenCases.exists(caseKey))
 								fail("E1020", "Duplicate switch case", switchCase.span);
 							seenCases.set(caseKey, true);
 						}
 						typedCases.push({
 							value: typedValue,
+							guard: typedGuard,
 							statements: typedBody,
 							enumName: enumName,
 							constructorIndex: constructorIndex,
@@ -1015,6 +1017,7 @@ class Typer {
 						pattern = typeEnumPattern(switchCase.value, typedSubject.type, caseScope),
 						typedValue = pattern == null ? coerce(typeExpression(switchCase.value, scope), typedSubject.type, "switch case",
 							"E1019") : pattern.value,
+						typedGuard = switchCase.guard == null ? null : coerce(typeExpression(switchCase.guard, caseScope), TBool, "switch guard", "E1003"),
 						typedResult = typeExpression(switchCase.result, caseScope, resultType),
 						enumName:Null<String> = pattern == null ? null : pattern.enumName,
 						constructorIndex = pattern == null ? -1 : pattern.index;
@@ -1035,13 +1038,14 @@ class Typer {
 						case TEnumLiteral(name, index): 'enum:$name:$index';
 						default: null;
 					};
-					if (caseKey != null) {
+					if (caseKey != null && typedGuard == null) {
 						if (seenCases.exists(caseKey))
 							fail("E1020", "Duplicate switch case", switchCase.span);
 						seenCases.set(caseKey, true);
 					}
 					typedCases.push({
 						value: typedValue,
+						guard: typedGuard,
 						result: typedResult,
 						enumName: enumName,
 						constructorIndex: constructorIndex,
@@ -1061,6 +1065,7 @@ class Typer {
 					for (switchCase in typedCases)
 						{
 							value: switchCase.value,
+							guard: switchCase.guard,
 							result: coerce(switchCase.result, resultType, "switch branch", "E1003"),
 							enumName: switchCase.enumName,
 							constructorIndex: switchCase.constructorIndex,
@@ -1852,6 +1857,8 @@ class Typer {
 					collectExpressionVariables(expression, names);
 					for (switchCase in cases) {
 						collectExpressionVariables(switchCase.value, names);
+						if (switchCase.guard != null)
+							collectExpressionVariables(switchCase.guard, names);
 						collectVariables(switchCase.statements, names);
 					}
 					collectVariables(defaultBranch, names);
@@ -1895,6 +1902,8 @@ class Typer {
 					collectMutableCaptureExpression(expression, outerDeclared, result);
 					for (switchCase in cases) {
 						collectMutableCaptureExpression(switchCase.value, outerDeclared, result);
+						if (switchCase.guard != null)
+							collectMutableCaptureExpression(switchCase.guard, outerDeclared, result);
 						collectMutableCaptureCandidates(switchCase.statements, outerDeclared, result);
 					}
 					collectMutableCaptureCandidates(defaultBranch, outerDeclared, result);
@@ -1996,6 +2005,8 @@ class Typer {
 				collectMutableCaptureExpression(subject, outerDeclared, result);
 				for (switchCase in cases) {
 					collectMutableCaptureExpression(switchCase.value, outerDeclared, result);
+					if (switchCase.guard != null)
+						collectMutableCaptureExpression(switchCase.guard, outerDeclared, result);
 					collectMutableCaptureExpression(switchCase.result, outerDeclared, result);
 				}
 				if (fallback != null)
@@ -2072,6 +2083,8 @@ class Typer {
 				collectExpressionVariables(subject, names);
 				for (switchCase in cases) {
 					collectExpressionVariables(switchCase.value, names);
+					if (switchCase.guard != null)
+						collectExpressionVariables(switchCase.guard, names);
 					collectExpressionVariables(switchCase.result, names);
 				}
 				if (fallback != null)
