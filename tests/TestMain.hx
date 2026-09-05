@@ -461,6 +461,8 @@ class TestMain {
 		var platformType = new Parser(new Lexer(new SourceFile("Platform.hx", "function size(value:haxe.io.Bytes):Int return 0;")).tokenize()).parseProgram();
 		Typer.typeLibrary(platformType);
 		Sys.println("PASS: nested module and platform type names resolve canonically");
+		Frontend.compile("class InferredConstructor { final value:Int; public function new(value) { this.value = value; } } function main():Int return new InferredConstructor(42).value;");
+		Sys.println("PASS: constructor parameters infer from declared field constraints");
 		var metadataProgram = new Parser(new Lexer(new SourceFile("Native.hx",
 			'@:hlNative("sample") private class Native { @:noCompletion public static function read():Int return @:privateAccess 42; }')).tokenize())
 			.parseProgram();

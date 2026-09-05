@@ -334,6 +334,14 @@ class Compiler {
 				aliases = importAliases(state.ast.imports, state.ast.importAliases);
 			for (sourceName => declarationName in sourceTypeAliases)
 				aliases.set(sourceName, declarationName);
+			for (importPath in state.ast.imports)
+				if (modules.exists(importPath))
+					for (sourceName => declarationName in sourceTypeAliases)
+						if (StringTools.startsWith(sourceName, importPath + ".")) {
+							var nestedName = sourceName.substr(importPath.length + 1);
+							if (nestedName.indexOf(".") < 0)
+								aliases.set(nestedName, declarationName);
+						}
 			var packagePrefix = state.ast.packageName == null ? "" : state.ast.packageName + ".";
 			for (sourceName => declarationName in sourceTypeAliases)
 				if (StringTools.startsWith(sourceName, packagePrefix) && StringTools.startsWith(declarationName, packagePrefix)) {
@@ -378,7 +386,8 @@ class Compiler {
 			for (classDecl in state.ast.classes) {
 				var className = qualifiedTypeName(state.ast.packageName, classDecl.name);
 				var classMethods:Array<AstFunction> = [];
-				for (method in classDecl.methods) {
+				for (parsedMethod in classDecl.methods) {
+					var method = compiler.types.SignatureInference.inferFieldBoundArguments(parsedMethod, classDecl);
 					var canonical = canonicalFunction(method, name, entryModule, locals, className + "." + method.name, aliases);
 					functions.push(canonical);
 					classMethods.push({
@@ -433,6 +442,7 @@ class Compiler {
 				owners.set(className + ".new", name);
 			}
 		}
+
 		for (module => lambdaNames in generatedByModule)
 			for (lambdaName in lambdaNames.keys())
 				owners.set(lambdaName, module);

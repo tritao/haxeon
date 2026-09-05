@@ -58,6 +58,7 @@ class Typer {
 		this.externals = externals == null ? [] : externals;
 
 	function typeProgram(program:AstProgram, selected:Null<Map<String, Bool>>, requireMain:Bool):TypedProgram {
+		program = SignatureInference.inferProgram(program);
 		declarations = new DeclarationIndex(program);
 		relations = new TypeRelations(declarations);
 		enumDecls = declarations.enums;
