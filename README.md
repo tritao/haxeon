@@ -54,10 +54,12 @@ names.
 
 Compiler-owned maps currently cover `Map<String,Int>`, `Map<String,Bool>`,
 `Map<String,Float>`, and `Map<String,String>` with construction, indexed
-set/get, `set`, and `exists`; each HashLink abstract type and native function
-family is versioned with the compiler ABI. Other key/value combinations still
-produce a typed unsupported-ABI diagnostic rather than silently falling back to
-dynamic behavior.
+set/get, `set`, `exists`, `remove`, `clear`, `size`, `keys`, and typed `values`;
+each HashLink abstract type and native function family is versioned with the
+compiler ABI. Array `copy`, `concat`, `slice`, and primitive/String `indexOf`
+are also compiler-owned immutable operations. Other key/value combinations
+still produce a typed unsupported-ABI diagnostic rather than silently falling
+back to dynamic behavior.
 
 IR values and control-flow blocks have numeric identities independent of
 source names. Functions contain explicit basic blocks terminated by `Return`,

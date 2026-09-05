@@ -104,8 +104,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   interfaces, arrays, maps, and strings, and semantic symbol identity now
   follows local bindings, class/interface members, and imported module
   functions. Full semantic resolution remains.
-- [ ] Definition, references, rename, and full type-aware navigation from
-  compiler state.
+- [~] Definition, references, and rename now use compiler symbol identity for
+  locals, members, and imported functions; full type-aware navigation remains.
 - [~] Completion-safe partial parsing and error recovery through last-good
   snapshots; true partial parsing remains.
 - [x] A small JSON-lines protocol adapter for Pragtical; no second typechecker.
