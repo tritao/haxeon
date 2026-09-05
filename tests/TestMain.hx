@@ -145,6 +145,8 @@ class TestMain {
 		expectCompileError('function noop():Void { return; } function main():Int { throw noop(); }', 'Cannot throw a Void value');
 		expectCompileError('function main():Int { throw null; }', 'Cannot throw null');
 		expectCompileError('function main():Int { try { return 42; } catch (error:Array<Int>) { return 0; } }', 'Unsupported catch binding type');
+		expectCompileError('function main():Int { try { return 42; } catch (error:Dynamic) { return 0; } catch (text:String) { return 1; } }',
+			'Dynamic catch must be the final catch clause');
 		expectCompileError('class Box { public function values():Array<Int> { return new Array<Int>(0); } public function add():Void { this.values().push(1); } } function main():Int { return 0; }',
 			'Array.push requires a mutable local or field array');
 		expectCompileError('function main():Int { return 1; var unreachable = 2; }', 'Unreachable statement');

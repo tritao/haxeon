@@ -9,6 +9,7 @@ class CfgBuilder {
 	var current:CfgBlock;
 	var nextValue:Int = 0;
 	var activeTraps:Int = 0;
+	var localAliases:Map<String, Array<String>> = [];
 
 	public function new()
 		current = createBlock();
@@ -107,14 +108,35 @@ class CfgBuilder {
 		return out;
 	}
 
+	public function pushLocalAlias(name:String, internalName:String):Void {
+		var aliases = localAliases.get(name);
+		if (aliases == null) {
+			aliases = [];
+			localAliases.set(name, aliases);
+		}
+		aliases.push(internalName);
+	}
+
+	public function popLocalAlias(name:String):Void {
+		var aliases = localAliases.get(name);
+		if (aliases == null || aliases.length == 0)
+			throw 'No active CFG local alias for "$name"';
+		aliases.pop();
+	}
+
 	public function load(name:String, type:IrType):CfgValue {
 		var out = temporary(type);
-		emit(LoadLocal(out, name));
+		emit(LoadLocal(out, resolveLocal(name)));
 		return out;
 	}
 
 	public function store(name:String, value:CfgValue):Void
-		emit(StoreLocal(name, value));
+		emit(StoreLocal(resolveLocal(name), value));
+
+	function resolveLocal(name:String):String {
+		var aliases = localAliases.get(name);
+		return aliases == null || aliases.length == 0 ? name : aliases[aliases.length - 1];
+	}
 
 	public function globalGet(name:String, type:IrType):CfgValue {
 		var out = temporary(type);

@@ -503,7 +503,7 @@ class IrGenerator {
 					builder.returnVoid();
 				case TThrow(expression, _):
 					builder.throwValue(builder.toDyn(lowerExpression(expression, builder, localTypes)));
-				case TTry(tryBranch, catchName, catchType, catchBranch, _):
+				case TTry(tryBranch, catches, _):
 					var catchBlock = builder.createBlock(),
 						afterBlock = builder.createBlock();
 					builder.beginTry(catchBlock, afterBlock);
@@ -516,27 +516,49 @@ class IrGenerator {
 						builder.jump(afterBlock);
 					}
 					builder.select(catchBlock);
-					var exception = builder.catchValue();
-					var catchIrType = lowerType(catchType);
-					if (catchType != TDynamic) {
-						var handlerBlock = builder.createBlock(),
-							mismatchBlock = builder.createBlock(),
-							exceptionLocal = '$' + 'exception:${catchBlock}';
-						localTypes.set(exceptionLocal, Dyn);
-						builder.store(exceptionLocal, exception);
-						builder.branch(builder.call("__exception_matches", [exception, builder.constString(exceptionTypeName(catchType))], Bool),
-							handlerBlock, mismatchBlock);
-						builder.select(mismatchBlock);
-						builder.rethrowValue(builder.load(exceptionLocal, Dyn));
-						builder.select(handlerBlock);
-						exception = builder.load(exceptionLocal, Dyn);
+					var exception = builder.catchValue(),
+						exceptionLocal = '$' + 'exception:${catchBlock}',
+						catchActive = false,
+						hasDynamicCatch = false;
+					localTypes.set(exceptionLocal, Dyn);
+					builder.store(exceptionLocal, exception);
+					for (i in 0...catches.length) {
+						var catchClause = catches[i],
+							catchIrType = lowerType(catchClause.type),
+							nextDispatch:CfgBlock = null;
+						if (catchClause.type != TDynamic) {
+							var handlerBlock = builder.createBlock(),
+								mismatchBlock = builder.createBlock();
+							nextDispatch = mismatchBlock;
+							builder.branch(builder.call("__exception_matches", [
+								builder.load(exceptionLocal, Dyn),
+								builder.constString(exceptionTypeName(catchClause.type))
+							], Bool), handlerBlock, mismatchBlock);
+							builder.select(handlerBlock);
+						} else
+							hasDynamicCatch = true;
+						var internalName = '$' + 'catch:${catchBlock}:$i:${catchClause.name}';
+						localTypes.set(internalName, catchIrType);
+						var previousCatchType = localTypes.get(catchClause.name);
+						localTypes.set(catchClause.name, catchIrType);
+						builder.pushLocalAlias(catchClause.name, internalName);
+						var caught = builder.load(exceptionLocal, Dyn);
+						builder.store(catchClause.name, catchClause.type == TDynamic ? caught : builder.safeCast(caught, catchIrType));
+						lowerStatements(catchClause.statements, builder, localTypes, loops);
+						builder.popLocalAlias(catchClause.name);
+						if (previousCatchType == null)
+							localTypes.remove(catchClause.name);
+						else
+							localTypes.set(catchClause.name, previousCatchType);
+						if (!builder.isTerminated()) {
+							catchActive = true;
+							builder.jump(afterBlock);
+						}
+						if (nextDispatch != null)
+							builder.select(nextDispatch);
 					}
-					localTypes.set(catchName, catchIrType);
-					builder.store(catchName, catchType == TDynamic ? exception : builder.safeCast(exception, catchIrType));
-					lowerStatements(catchBranch, builder, localTypes, loops);
-					var catchActive = !builder.isTerminated();
-					if (catchActive)
-						builder.jump(afterBlock);
+					if (!hasDynamicCatch)
+						builder.rethrowValue(builder.load(exceptionLocal, Dyn));
 					builder.select(afterBlock);
 					if (!tryActive && !catchActive)
 						builder.markUnreachable();

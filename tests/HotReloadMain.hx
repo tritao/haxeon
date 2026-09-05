@@ -23,7 +23,8 @@ class HotReloadMain {
 		compiler.update("Worker.hx",
 			"function fib(n:Int):Int { if (n <= 1) return n; return fib(n - 1) + fib(n - 2); } function run():Int { return fib(38); }");
 		compiler.update("Seed.hx", "function ratio():Float { return 1.0 + 0.5; } function label():String { return \"initial\"; }");
-		compiler.update("ExceptionProbe.hx", "function probe():Int { try { throw \"probe\"; } catch (error:String) { return 41; } }");
+		compiler.update("ExceptionProbe.hx",
+			"function probe():Int { try { throw \"probe\"; } catch (error:Int) { return 0; } catch (error:String) { return 41; } }");
 		compiler.update("Main.hx", "function main():Int { return Probe.read() + ExceptionProbe.probe() - 41; }");
 		var initial = compiler.compile("Main");
 		var liveRevision = initial.revision;
@@ -88,7 +89,8 @@ class HotReloadMain {
 		if (Runtime.retainedCodeAllocationCount(loaded) != 2)
 			throw "initial patch retained an unexpected number of code allocations";
 
-		compiler.update("ExceptionProbe.hx", "function probe():Int { try { throw \"probe\"; } catch (error:String) { return 42; } }");
+		compiler.update("ExceptionProbe.hx",
+			"function probe():Int { try { throw \"probe\"; } catch (error:Int) { return 0; } catch (error:String) { return 42; } }");
 		var exceptionPatch = compiler.compile("Main"),
 			exceptionDecoded = HlPatchReader.decode(exceptionPatch.patchBytes),
 			hasTrap = false,

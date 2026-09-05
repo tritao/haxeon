@@ -796,9 +796,18 @@ class Compiler {
 					canonicalExpression(offset, module, entry, locals, aliases), canonicalExpression(e, module, entry, locals, aliases), span);
 			case Return(e, span): Return(canonicalExpression(e, module, entry, locals, aliases), span);
 			case Throw(e, span): Throw(canonicalExpression(e, module, entry, locals, aliases), span);
-			case Try(tryBranch, catchName, catchType, catchBranch,
-				span): Try([for (x in tryBranch) canonicalStatement(x, module, entry, locals, aliases)], catchName, canonicalType(catchType, aliases),
-					[for (x in catchBranch) canonicalStatement(x, module, entry, locals, aliases)], span);
+			case Try(tryBranch, catches, span): Try([for (x in tryBranch) canonicalStatement(x, module, entry, locals, aliases)], [
+					for (catchClause in catches)
+						{
+							name: catchClause.name,
+							type: canonicalType(catchClause.type, aliases),
+							statements: [
+								for (x in catchClause.statements)
+									canonicalStatement(x, module, entry, locals, aliases)
+							],
+							span: catchClause.span
+						}
+				], span);
 			case ReturnVoid(span): ReturnVoid(span);
 			case Break(span): Break(span);
 			case Continue(span): Continue(span);
@@ -908,11 +917,12 @@ class Compiler {
 		switch s {
 			case VarDeclaration(_, _, e, _), Assignment(_, e, _), Return(e, _), Throw(e, _):
 				scanExpression(e, dependencies);
-			case Try(tryBranch, _, _, catchBranch, _):
+			case Try(tryBranch, catches, _):
 				for (x in tryBranch)
 					scanStatement(x, dependencies);
-				for (x in catchBranch)
-					scanStatement(x, dependencies);
+				for (catchClause in catches)
+					for (x in catchClause.statements)
+						scanStatement(x, dependencies);
 			case IndexAssignment(array, offset, e, _):
 				scanExpression(array, dependencies);
 				scanExpression(offset, dependencies);
@@ -1022,11 +1032,12 @@ class Compiler {
 				scanCallExpression(e, calls, aliases);
 			case Throw(e, _):
 				scanCallExpression(e, calls, aliases);
-			case Try(tryBranch, _, _, catchBranch, _):
+			case Try(tryBranch, catches, _):
 				for (s in tryBranch)
 					scanCalls(s, calls, aliases);
-				for (s in catchBranch)
-					scanCalls(s, calls, aliases);
+				for (catchClause in catches)
+					for (s in catchClause.statements)
+						scanCalls(s, calls, aliases);
 			case ReturnVoid(_):
 			case Break(_), Continue(_):
 			case Increment(_, _, _):
@@ -1113,9 +1124,10 @@ class Compiler {
 			switch statement {
 				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
 					collectLambdaExpression(expression, functionName, module, generatedByModule);
-				case Try(tryBranch, _, _, catchBranch, _):
+				case Try(tryBranch, catches, _):
 					collectLambdas(tryBranch, functionName, module, generatedByModule);
-					collectLambdas(catchBranch, functionName, module, generatedByModule);
+					for (catchClause in catches)
+						collectLambdas(catchClause.statements, functionName, module, generatedByModule);
 				case IndexAssignment(array, offset, expression, _):
 					collectLambdaExpression(array, functionName, module, generatedByModule);
 					collectLambdaExpression(offset, functionName, module, generatedByModule);

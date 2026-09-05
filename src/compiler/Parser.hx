@@ -263,16 +263,27 @@ class Parser {
 			return Throw(expression, start.merge(end));
 		}
 		if (match(TokenKind.Try)) {
-			var start = previous().span, tryBranch = parseStatementOrBlock();
-			consume(TokenKind.Catch);
-			consume(TokenKind.LeftParen);
-			var catchName = consume(TokenKind.Identifier).text;
-			consume(TokenKind.Colon);
-			var catchType = parseType();
-			consume(TokenKind.RightParen);
-			var catchBranch = parseStatementOrBlock(),
+			var start = previous().span,
+				tryBranch = parseStatementOrBlock(),
+				catches:Array<compiler.Ast.AstCatch> = [],
+				end = previous().span;
+			do {
+				var catchStart = consume(TokenKind.Catch).span;
+				consume(TokenKind.LeftParen);
+				var catchName = consume(TokenKind.Identifier).text;
+				consume(TokenKind.Colon);
+				var catchType = parseType();
+				consume(TokenKind.RightParen);
+				var catchBranch = parseStatementOrBlock();
 				end = catchBranch.length == 0 ? previous().span : statementSpan(catchBranch[catchBranch.length - 1]);
-			return Try(tryBranch, catchName, catchType, catchBranch, start.merge(end));
+				catches.push({
+					name: catchName,
+					type: catchType,
+					statements: catchBranch,
+					span: catchStart.merge(end)
+				});
+			} while (check(TokenKind.Catch));
+			return Try(tryBranch, catches, start.merge(end));
 		}
 		if (match(TokenKind.Switch)) {
 			var start = previous().span;
@@ -734,7 +745,7 @@ class Parser {
 	static function statementSpan(statement:AstStatement)
 		return switch statement {
 			case VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), Throw(_, span),
-				Try(_, _, _, _, span), If(_, _, _, span), While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span), Switch(_, _, _, _, span),
+				Try(_, _, span), If(_, _, _, span), While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span), Switch(_, _, _, _, span),
 				Increment(_, _, span), Expression(_, span): span;
 		}
 }

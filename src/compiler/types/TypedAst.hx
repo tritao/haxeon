@@ -76,7 +76,7 @@ enum TypedStatement {
 	TReturn(expression:TypedExpression, span:SourceSpan);
 	TReturnVoid(span:SourceSpan);
 	TThrow(expression:TypedExpression, span:SourceSpan);
-	TTry(tryBranch:Array<TypedStatement>, catchName:String, catchType:CompilerType, catchBranch:Array<TypedStatement>, span:SourceSpan);
+	TTry(tryBranch:Array<TypedStatement>, catches:Array<TypedCatch>, span:SourceSpan);
 	TIf(condition:TypedExpression, thenBranch:Array<TypedStatement>, elseBranch:Array<TypedStatement>, span:SourceSpan);
 	TWhile(condition:TypedExpression, body:Array<TypedStatement>, span:SourceSpan);
 	TForIn(name:String, iterable:TypedExpression, body:Array<TypedStatement>, span:SourceSpan);
@@ -99,6 +99,7 @@ typedef TypedSwitchCase = {
 }
 
 typedef TypedSwitchBinding = {final name:String; final type:CompilerType; final index:Int;}
+typedef TypedCatch = {final name:String; final type:CompilerType; final statements:Array<TypedStatement>; final span:SourceSpan;}
 typedef TypedEnumCase = {final name:String; final params:Array<CompilerType>; final span:SourceSpan;}
 typedef TypedEnum = {final name:String; final cases:Array<TypedEnumCase>; final span:SourceSpan;}
 

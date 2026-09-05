@@ -152,6 +152,7 @@ run_program try-call-local 42
 run_program try-typed-class 42
 run_program try-typed-mismatch 42
 run_program try-typed-int 42
+run_program try-multiple-catches 42
 run_program dynamic-argument 42
 
 object_output="$root_dir/out/object.hl"

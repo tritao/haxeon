@@ -49,6 +49,7 @@ typedef AstInterface = {
 typedef AstTypeAlias = {final name:String; final type:AstType; final span:SourceSpan;}
 typedef AstEnumCase = {final name:String; final params:Array<AstType>; final span:SourceSpan;}
 typedef AstEnum = {final name:String; final cases:Array<AstEnumCase>; final span:SourceSpan;}
+typedef AstCatch = {final name:String; final type:AstType; final statements:Array<AstStatement>; final span:SourceSpan;}
 
 enum AstExpression {
 	IntegerLiteral(value:Int, span:SourceSpan);
@@ -89,7 +90,7 @@ enum AstStatement {
 	Return(expression:AstExpression, span:SourceSpan);
 	ReturnVoid(span:SourceSpan);
 	Throw(expression:AstExpression, span:SourceSpan);
-	Try(tryBranch:Array<AstStatement>, catchName:String, catchType:AstType, catchBranch:Array<AstStatement>, span:SourceSpan);
+	Try(tryBranch:Array<AstStatement>, catches:Array<AstCatch>, span:SourceSpan);
 	If(condition:AstExpression, thenBranch:Array<AstStatement>, elseBranch:Array<AstStatement>, span:SourceSpan);
 	While(condition:AstExpression, body:Array<AstStatement>, span:SourceSpan);
 	ForIn(name:String, iterable:AstExpression, body:Array<AstStatement>, span:SourceSpan);

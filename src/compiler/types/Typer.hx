@@ -14,6 +14,7 @@ import compiler.types.RuntimeType;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedClass;
+import compiler.types.TypedAst.TypedCatch;
 import compiler.types.TypedAst.TypedField;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedStatement;
@@ -381,17 +382,27 @@ class Typer {
 					if (sameType(value.type, TNull))
 						fail("E1021", "Cannot throw null", span);
 					output.push(TThrow(value, span));
-				case Try(tryBranch, catchName, catchType, catchBranch, span):
-					var loweredCatchType = lowerType(catchType);
-					switch loweredCatchType {
-						case TDynamic, TInt, TFloat, TBool, TString, TClass(_):
-						default: fail("E1022", "Unsupported catch binding type", span);
+				case Try(tryBranch, catches, span):
+					var typedCatches:Array<TypedCatch> = [];
+					for (i in 0...catches.length) {
+						var catchClause = catches[i],
+							loweredCatchType = lowerType(catchClause.type);
+						switch loweredCatchType {
+							case TDynamic:
+								if (i != catches.length - 1) fail("E1022", "Dynamic catch must be the final catch clause", catchClause.span);
+							case TInt, TFloat, TBool, TString, TClass(_):
+							default: fail("E1022", "Unsupported catch binding type", catchClause.span);
+						}
+						var catchScope = new Scope(scope);
+						catchScope.define(catchClause.name, loweredCatchType, catchClause.span);
+						typedCatches.push({
+							name: catchClause.name,
+							type: loweredCatchType,
+							statements: typeStatements(catchClause.statements, catchScope, result),
+							span: catchClause.span
+						});
 					}
-					var typedTry = typeStatements(tryBranch, new Scope(scope), result),
-						catchScope = new Scope(scope);
-					catchScope.define(catchName, loweredCatchType, span);
-					var typedCatch = typeStatements(catchBranch, catchScope, result);
-					output.push(TTry(typedTry, catchName, loweredCatchType, typedCatch, span));
+					output.push(TTry(typeStatements(tryBranch, new Scope(scope), result), typedCatches, span));
 				case Break(span):
 					if (loopDepth == 0)
 						fail("E1017", "break is only valid inside a loop", span);
@@ -978,9 +989,10 @@ class Typer {
 					seedLambdaScope(no, scope);
 				case While(_, body, _), ForIn(_, _, body, _):
 					seedLambdaScope(body, scope);
-				case Try(tryBranch, _, _, catchBranch, _):
+				case Try(tryBranch, catches, _):
 					seedLambdaScope(tryBranch, scope);
-					seedLambdaScope(catchBranch, scope);
+					for (catchClause in catches)
+						seedLambdaScope(catchClause.statements, scope);
 				case Switch(_, cases, defaultBranch, _, _):
 					for (switchCase in cases)
 						seedLambdaScope(switchCase.statements, scope);
@@ -1262,9 +1274,10 @@ class Typer {
 					for (switchCase in cases)
 						collectAssignedLocals(switchCase.statements, names);
 					collectAssignedLocals(defaultBranch, names);
-				case Try(tryBranch, _, _, catchBranch, _):
+				case Try(tryBranch, catches, _):
 					collectAssignedLocals(tryBranch, names);
-					collectAssignedLocals(catchBranch, names);
+					for (catchClause in catches)
+						collectAssignedLocals(catchClause.statements, names);
 				default:
 			}
 	}
@@ -1286,9 +1299,10 @@ class Typer {
 					for (switchCase in cases)
 						collectDeclaredLocals(switchCase.statements, names);
 					collectDeclaredLocals(defaultBranch, names);
-				case Try(tryBranch, _, _, catchBranch, _):
+				case Try(tryBranch, catches, _):
 					collectDeclaredLocals(tryBranch, names);
-					collectDeclaredLocals(catchBranch, names);
+					for (catchClause in catches)
+						collectDeclaredLocals(catchClause.statements, names);
 				case Break(_), Continue(_):
 				case Increment(_, _, _):
 				default:
@@ -1322,9 +1336,10 @@ class Typer {
 						collectVariables(switchCase.statements, names);
 					}
 					collectVariables(defaultBranch, names);
-				case Try(tryBranch, _, _, catchBranch, _):
+				case Try(tryBranch, catches, _):
 					collectVariables(tryBranch, names);
-					collectVariables(catchBranch, names);
+					for (catchClause in catches)
+						collectVariables(catchClause.statements, names);
 				case Break(_), Continue(_):
 				case Increment(name, _, _):
 					names.set(name, true);
@@ -1357,9 +1372,10 @@ class Typer {
 						collectMutableCaptureCandidates(switchCase.statements, outerDeclared, result);
 					}
 					collectMutableCaptureCandidates(defaultBranch, outerDeclared, result);
-				case Try(tryBranch, _, _, catchBranch, _):
+				case Try(tryBranch, catches, _):
 					collectMutableCaptureCandidates(tryBranch, outerDeclared, result);
-					collectMutableCaptureCandidates(catchBranch, outerDeclared, result);
+					for (catchClause in catches)
+						collectMutableCaptureCandidates(catchClause.statements, outerDeclared, result);
 				case ReturnVoid(_), Break(_), Continue(_), Increment(_, _, _):
 			}
 	}
@@ -1371,16 +1387,18 @@ class Typer {
 	static function collectExceptionCellCandidates(statements:Array<AstStatement>, declared:Map<String, Bool>, result:Map<String, Bool>):Void {
 		for (statement in statements)
 			switch statement {
-				case Try(tryBranch, _, _, catchBranch, _):
+				case Try(tryBranch, catches, _):
 					var assigned:Map<String, Bool> = [],
 						observed:Map<String, Bool> = [];
 					collectAssignedLocals(tryBranch, assigned);
-					collectVariables(catchBranch, observed);
+					for (catchClause in catches)
+						collectVariables(catchClause.statements, observed);
 					for (name in observed.keys())
 						if (assigned.exists(name) && declared.exists(name))
 							result.set(name, true);
 					collectExceptionCellCandidates(tryBranch, declared, result);
-					collectExceptionCellCandidates(catchBranch, declared, result);
+					for (catchClause in catches)
+						collectExceptionCellCandidates(catchClause.statements, declared, result);
 				case If(_, yes, no, _):
 					collectExceptionCellCandidates(yes, declared, result);
 					collectExceptionCellCandidates(no, declared, result);
@@ -1692,8 +1710,10 @@ class Typer {
 				case TIf(_, yes, no, _):
 					if (no.length > 0 && alwaysReturns(yes) && alwaysReturns(no))
 						return true;
-				case TTry(tryBranch, _, _, catchBranch, _):
-					if (alwaysReturns(tryBranch) && alwaysReturns(catchBranch))
+				case TTry(tryBranch, catches, _):
+					if (alwaysReturns(tryBranch)
+						&& catches.length > 0
+						&& [for (catchClause in catches) alwaysReturns(catchClause.statements)].indexOf(false) < 0)
 						return true;
 				case TSwitch(expression, cases, defaultBranch, hasDefault, _):
 					if ((hasDefault ? alwaysReturns(defaultBranch) : exhaustiveEnum(expression.type, cases))
@@ -1782,7 +1802,7 @@ class Typer {
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
 			case VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), Throw(_, span),
-				Try(_, _, _, _, span), If(_, _, _, span), While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span), Switch(_, _, _, _, span),
+				Try(_, _, span), If(_, _, _, span), While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span), Switch(_, _, _, _, span),
 				Increment(_, _, span), Expression(_, span): span;
 		}
 
