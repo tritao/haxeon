@@ -396,7 +396,7 @@ class Parser {
 		}
 		if (match(TokenKind.Try)) {
 			var start = previous().span,
-				tryBranch = parseStatementOrBlock(),
+				tryBranch = parseTryBody(),
 				catches:Array<compiler.Ast.AstCatch> = [],
 				end = previous().span;
 			do {
@@ -522,6 +522,14 @@ class Parser {
 		}
 		var expression = parseExpression(), end = expressionEnd(expression);
 		return Expression(expression, expressionSpan(expression).merge(end));
+	}
+
+	function parseTryBody():Array<AstStatement> {
+		if (check(TokenKind.LeftBrace))
+			return parseStatementOrBlock();
+		var expression = parseExpression();
+		match(TokenKind.Semicolon);
+		return [Expression(expression, expressionSpan(expression))];
 	}
 
 	function parseDoWhileBody():Array<AstStatement> {
