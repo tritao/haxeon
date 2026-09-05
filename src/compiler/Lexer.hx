@@ -113,7 +113,9 @@ class Lexer {
 			case "package": TokenKind.Package;
 			case "import": TokenKind.Import;
 			case "class": TokenKind.Class;
+			case "interface": TokenKind.Interface;
 			case "extends": TokenKind.Extends;
+			case "implements": TokenKind.Implements;
 			case "public": TokenKind.Public;
 			case "private": TokenKind.Private;
 			case "static": TokenKind.Static;

@@ -67,6 +67,7 @@ typedef TypedField = {final name:String; final type:CompilerType; final isStatic
 typedef TypedClass = {
 	final name:String;
 	final base:Null<String>;
+	final interfaces:Array<String>;
 	final fields:Array<TypedField>;
 	final methods:Array<TypedFunction>;
 	final span:SourceSpan;

@@ -155,6 +155,7 @@ class Compiler {
 
 		var functions:Array<AstFunction> = [],
 			programFunctions:Array<AstFunction> = [],
+			interfaces:Array<compiler.Ast.AstInterface> = [],
 			classes:Array<compiler.Ast.AstClass> = [],
 			owners:Map<String, String> = [],
 			generatedByModule:Map<String, Map<String, Bool>> = [],
@@ -163,6 +164,8 @@ class Compiler {
 			var state = modules.get(name),
 				locals:Map<String, Bool> = [],
 				aliases = importAliases(state.ast.imports);
+			for (interfaceDecl in state.ast.interfaces)
+				interfaces.push(interfaceDecl);
 			for (fn in state.ast.functions)
 				locals.set(fn.name, true);
 			for (fn in state.ast.functions) {
@@ -215,6 +218,7 @@ class Compiler {
 				classes.push({
 					name: classDecl.name,
 					base: classDecl.base,
+					interfaces: classDecl.interfaces,
 					fields: classDecl.fields,
 					methods: classMethods,
 					span: classDecl.span
@@ -247,6 +251,7 @@ class Compiler {
 			typedNew = Typer.typeSelected({
 				packageName: null,
 				imports: [],
+				interfaces: interfaces,
 				classes: classes,
 				functions: programFunctions
 			}, selected, nativeSignatures())

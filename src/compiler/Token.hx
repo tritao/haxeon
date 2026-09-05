@@ -6,7 +6,9 @@ enum TokenKind {
 	Package;
 	Import;
 	Class;
+	Interface;
 	Extends;
+	Implements;
 	Public;
 	Private;
 	Static;

@@ -7,6 +7,7 @@ import compiler.Ast.AstProgram;
 import compiler.Ast.AstStatement;
 import compiler.Ast.AstType;
 import compiler.Ast.AstClass;
+import compiler.Ast.AstInterface;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedFunction;
@@ -23,6 +24,7 @@ class Typer {
 	final methodInfo:Map<String, {owner:String, isStatic:Bool, isConstructor:Bool}> = [];
 	final externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>;
 	var classDecls:Map<String, AstClass> = [];
+	var interfaceDecls:Map<String, AstInterface> = [];
 	final generated:Array<TypedFunction> = [];
 	final generatedClasses:Array<TypedClass> = [];
 	var currentFunctionName:String = "";
@@ -39,9 +41,23 @@ class Typer {
 
 	function typeProgram(program:AstProgram, selected:Null<Map<String, Bool>>):TypedProgram {
 		var classes:Map<String, AstClass> = [];
+		for (interfaceDecl in program.interfaces) {
+			if (interfaceDecls.exists(interfaceDecl.name))
+				fail("E1000", 'Duplicate interface "${interfaceDecl.name}"', interfaceDecl.span);
+			interfaceDecls.set(interfaceDecl.name, interfaceDecl);
+			for (method in interfaceDecl.methods) {
+				var qualified = interfaceDecl.name + "." + method.name;
+				if (signatures.exists(qualified))
+					fail("E1000", 'Duplicate interface method "$qualified"', method.span);
+				signatures.set(qualified, method);
+				methodInfo.set(qualified, {owner: interfaceDecl.name, isStatic: false, isConstructor: false});
+			}
+		}
 		for (classDecl in program.classes) {
 			if (classes.exists(classDecl.name))
 				fail("E1000", 'Duplicate class "${classDecl.name}"', classDecl.span);
+			if (interfaceDecls.exists(classDecl.name))
+				fail("E1000", 'Class and interface share the name "${classDecl.name}"', classDecl.span);
 			classes.set(classDecl.name, classDecl);
 			for (method in classDecl.methods) {
 				var qualified = classDecl.name + "." + method.name;
@@ -100,9 +116,15 @@ class Typer {
 				span: field.span
 			});
 		}
+		for (interfaceName in classDecl.interfaces) {
+			if (!interfaceDecls.exists(interfaceName))
+				fail("E1007", 'Unknown interface "$interfaceName"', classDecl.span);
+			validateInterfaceImplementation(classDecl, interfaceName, classDecl.span);
+		}
 		return {
 			name: classDecl.name,
 			base: classDecl.base,
+			interfaces: classDecl.interfaces,
 			fields: fields,
 			methods: [
 				for (method in classDecl.methods)
@@ -110,6 +132,34 @@ class Typer {
 			],
 			span: classDecl.span
 		};
+	}
+
+	function validateInterfaceImplementation(classDecl:AstClass, interfaceName:String, span:SourceSpan):Void {
+		var interfaceDecl = interfaceDecls.get(interfaceName);
+		if (interfaceDecl == null)
+			return;
+		for (base in interfaceDecl.bases) {
+			if (!interfaceDecls.exists(base))
+				fail("E1007", 'Unknown interface "$base"', span);
+			validateInterfaceImplementation(classDecl, base, span);
+		}
+		for (method in interfaceDecl.methods) {
+			var implementation = findMethod(classDecl.name, method.name);
+			if (implementation == null || implementation.isStatic)
+				fail("E1007", 'Class "${classDecl.name}" does not implement "$interfaceName.${method.name}"', span);
+			var actual = signatures.get(implementation.owner + "." + method.name);
+			if (actual == null || !sameSignature(actual, method))
+				fail("E1003", 'Method "${classDecl.name}.${method.name}" does not match interface "$interfaceName"', span);
+		}
+	}
+
+	static function sameSignature(left:AstFunction, right:AstFunction):Bool {
+		if (left.arguments.length != right.arguments.length || Std.string(left.result) != Std.string(right.result))
+			return false;
+		for (i in 0...left.arguments.length)
+			if (Std.string(left.arguments[i].type) != Std.string(right.arguments[i].type))
+				return false;
+		return true;
 	}
 
 	function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool = false):TypedFunction {
@@ -151,13 +201,13 @@ class Typer {
 			switch statement {
 				case VarDeclaration(name, declared, initializer, span):
 					var value = typeExpression(initializer, scope);
-					if (declared != null && !sameType(lowerType(declared), value.type))
+					if (declared != null && !isAssignable(value.type, lowerType(declared)))
 						fail("E1002", 'Type mismatch for local "$name"', span);
 					scope.define(name, value.type, span);
 					output.push(TVar(name, value, span));
 				case Return(expression, span):
 					var value = typeExpression(expression, scope);
-					if (!sameType(value.type, result))
+					if (!isAssignable(value.type, result))
 						fail("E1003", "Return type mismatch", span);
 					output.push(TReturn(value, span));
 				case ReturnVoid(span):
@@ -173,7 +223,7 @@ class Typer {
 							fail("E1005", 'Unknown variable "$name"', span);
 						if (scope.isCapture(name))
 							fail("E1013", 'Captured variable "$name" cannot be assigned in a lambda yet', span);
-						if (!sameType(value.type, expected))
+						if (!isAssignable(value.type, expected))
 							fail("E1002", 'Type mismatch for local "$name"', span);
 						output.push(TAssign(name, value, span));
 					} else {
@@ -181,7 +231,7 @@ class Typer {
 							fieldName = name.substr(dot + 1),
 							object = typeExpression(Variable(objectName, span), scope),
 							expected = fieldType(object.type, fieldName, span);
-						if (!sameType(value.type, expected))
+						if (!isAssignable(value.type, expected))
 							fail("E1002", 'Type mismatch for field "$name"', span);
 						output.push(TFieldAssign(object, fieldName, value, span));
 					}
@@ -288,6 +338,7 @@ class Typer {
 					generatedClasses.push({
 						name: environment,
 						base: null,
+						interfaces: [],
 						fields: [
 							for (name in captures)
 								{
@@ -321,7 +372,7 @@ class Typer {
 			case LessEqual(left, right, span): comparison(left, right, scope, 1, span);
 			case Equal(left, right, span): comparison(left, right, scope, 2, span);
 			case New(typeName, arguments, span):
-				if (!classDecls.exists(typeName))
+				if (!classDecls.exists(typeName) || interfaceDecls.exists(typeName))
 					fail("E1007", 'Unknown class "$typeName"', span);
 				var constructor = signatures.get(typeName + ".new"),
 					expected = constructor == null ? [] : [for (argument in constructor.arguments) lowerType(argument.type)];
@@ -457,8 +508,40 @@ class Typer {
 
 	function checkArguments(arguments:Array<TypedExpression>, expected:Array<CompilerType>, name:String):Void {
 		for (i in 0...arguments.length)
-			if (!sameType(arguments[i].type, expected[i]))
+			if (!isAssignable(arguments[i].type, expected[i]))
 				fail("E1009", 'Argument ${i + 1} to "$name" has the wrong type', arguments[i].span);
+	}
+
+	function isAssignable(actual:CompilerType, expected:CompilerType):Bool {
+		if (sameType(actual, expected))
+			return true;
+		return switch [actual, expected] {
+			case [TClass(actualName), TClass(expectedName)]: classImplements(actualName, expectedName);
+			case [TArray(actualElement), TArray(expectedElement)]: sameType(actualElement, expectedElement);
+			default: false;
+		};
+	}
+
+	function classImplements(actualName:String, expectedName:String):Bool {
+		var actualClass = classDecls.get(actualName);
+		if (actualClass == null)
+			return interfaceExtends(actualName, expectedName);
+		if (actualClass.base != null && classImplements(actualClass.base, expectedName))
+			return true;
+		for (interfaceName in actualClass.interfaces)
+			if (interfaceName == expectedName || interfaceExtends(interfaceName, expectedName))
+				return true;
+		return false;
+	}
+
+	function interfaceExtends(actualName:String, expectedName:String):Bool {
+		var actualInterface = interfaceDecls.get(actualName);
+		if (actualInterface == null)
+			return false;
+		for (base in actualInterface.bases)
+			if (base == expectedName || interfaceExtends(base, expectedName))
+				return true;
+		return false;
 	}
 
 	function findMethod(className:String, name:String):Null<{owner:String, isStatic:Bool, isConstructor:Bool}> {
@@ -466,7 +549,16 @@ class Typer {
 		if (info != null)
 			return info;
 		var classDecl = classDecls.get(className);
-		return classDecl != null && classDecl.base != null ? findMethod(classDecl.base, name) : null;
+		if (classDecl != null)
+			return classDecl.base == null ? null : findMethod(classDecl.base, name);
+		var interfaceDecl = interfaceDecls.get(className);
+		if (interfaceDecl != null)
+			for (base in interfaceDecl.bases) {
+				var inherited = findMethod(base, name);
+				if (inherited != null)
+					return inherited;
+			}
+		return null;
 	}
 
 	function fieldType(type:CompilerType, name:String, span:SourceSpan):CompilerType {

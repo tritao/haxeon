@@ -30,7 +30,15 @@ typedef AstField = {
 typedef AstClass = {
 	final name:String;
 	final base:Null<String>;
+	final interfaces:Array<String>;
 	final fields:Array<AstField>;
+	final methods:Array<AstFunction>;
+	final span:SourceSpan;
+}
+
+typedef AstInterface = {
+	final name:String;
+	final bases:Array<String>;
 	final methods:Array<AstFunction>;
 	final span:SourceSpan;
 }
@@ -76,6 +84,7 @@ typedef AstFunction = {
 typedef AstProgram = {
 	final packageName:Null<String>;
 	final imports:Array<String>;
+	final interfaces:Array<AstInterface>;
 	final classes:Array<AstClass>;
 	final functions:Array<AstFunction>;
 }

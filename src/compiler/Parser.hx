@@ -3,6 +3,7 @@ package compiler;
 import compiler.Ast.AstExpression;
 import compiler.Ast.AstFunction;
 import compiler.Ast.AstClass;
+import compiler.Ast.AstInterface;
 import compiler.Ast.AstProgram;
 import compiler.Ast.AstStatement;
 import compiler.Ast.AstType;
@@ -28,9 +29,11 @@ class Parser {
 			imports.push(parseQualifiedName());
 			consume(TokenKind.Semicolon);
 		}
-		var functions = [], classes = [];
+		var functions = [], interfaces:Array<AstInterface> = [], classes = [];
 		while (!check(TokenKind.Eof)) {
-			if (check(TokenKind.Class))
+			if (check(TokenKind.Interface))
+				interfaces.push(parseInterface());
+			else if (check(TokenKind.Class))
 				classes.push(parseClass());
 			else
 				functions.push(parseFunction(false));
@@ -38,6 +41,7 @@ class Parser {
 		return {
 			packageName: packageName,
 			imports: imports,
+			interfaces: interfaces,
 			classes: classes,
 			functions: functions
 		};
@@ -87,9 +91,15 @@ class Parser {
 	function parseClass():AstClass {
 		var start = consume(TokenKind.Class).span,
 			name = consume(TokenKind.Identifier).text,
-			base:Null<String> = null;
+			base:Null<String> = null,
+			interfaces = [];
 		if (match(TokenKind.Extends))
 			base = parseQualifiedName();
+		if (match(TokenKind.Implements)) {
+			interfaces.push(parseQualifiedName());
+			while (match(TokenKind.Comma))
+				interfaces.push(parseQualifiedName());
+		}
 		consume(TokenKind.LeftBrace);
 		var fields = [], methods = [];
 		while (!check(TokenKind.RightBrace)) {
@@ -135,7 +145,49 @@ class Parser {
 		return {
 			name: name,
 			base: base,
+			interfaces: interfaces,
 			fields: fields,
+			methods: methods,
+			span: start.merge(end)
+		};
+	}
+
+	function parseInterface():AstInterface {
+		var start = consume(TokenKind.Interface).span, name = consume(TokenKind.Identifier).text, bases = [];
+		if (match(TokenKind.Extends)) {
+			bases.push(parseQualifiedName());
+			while (match(TokenKind.Comma))
+				bases.push(parseQualifiedName());
+		}
+		consume(TokenKind.LeftBrace);
+		var methods = [];
+		while (!check(TokenKind.RightBrace)) {
+			var methodStart = consume(TokenKind.Function).span,
+				methodName = consume(TokenKind.Identifier).text;
+			consume(TokenKind.LeftParen);
+			var arguments = [];
+			if (!check(TokenKind.RightParen))
+				do {
+					var argumentName = consume(TokenKind.Identifier).text;
+					consume(TokenKind.Colon);
+					arguments.push({name: argumentName, type: parseType(), span: previous().span});
+				} while (match(TokenKind.Comma));
+			consume(TokenKind.RightParen);
+			var result = match(TokenKind.Colon) ? parseType() : failType("Interface methods require a return type"),
+				end = consume(TokenKind.Semicolon).span;
+			methods.push({
+				name: methodName,
+				isStatic: false,
+				arguments: arguments,
+				result: result,
+				statements: [],
+				span: methodStart.merge(end)
+			});
+		}
+		var end = consume(TokenKind.RightBrace).span;
+		return {
+			name: name,
+			bases: bases,
 			methods: methods,
 			span: start.merge(end)
 		};

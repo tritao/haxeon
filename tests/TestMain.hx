@@ -228,6 +228,15 @@ class TestMain {
 			|| typedClass.classes[0].fields[0].type != compiler.types.Type.CompilerType.TInt
 			|| typedClass.classes[0].methods[1].result != compiler.types.Type.CompilerType.TInt)
 			throw "Minimal class declarations were not type checked";
+		var interfaceSource = "interface Plugin { function activate():Void; function score(value:Int):Int; } class SearchPlugin implements Plugin { public function activate():Void { } public function score(value:Int):Int { return value; } } function consume(plugin:Plugin):Int { plugin.activate(); return plugin.score(42); } function main():Int { var plugin:Plugin = new SearchPlugin(); return consume(plugin); }",
+			interfaceProgram = new Parser(new Lexer(new SourceFile("Plugin.hx", interfaceSource)).tokenize()).parseProgram();
+		if (interfaceProgram.interfaces.length != 1 || interfaceProgram.classes[0].interfaces[0] != "Plugin")
+			throw "Interface declarations were not preserved in the AST";
+		var interfaceTyped = Typer.type(interfaceProgram);
+		if (interfaceTyped.classes[0].interfaces.length != 1)
+			throw "Class interface contracts were not retained in the typed AST";
+		expectCompileError("interface Plugin { function activate():Void; } class Missing implements Plugin { } function main():Int { return 0; }",
+			'Class "Missing" does not implement "Plugin.activate"');
 		var staticClass = Frontend.compile("class Math { public static function add(a:Int, b:Int):Int { return a + b; } } function main():Int { return Math.add(20, 22); }");
 		var foundStatic = false;
 		for (fn in staticClass.functions)
