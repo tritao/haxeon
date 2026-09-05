@@ -13,6 +13,7 @@ class ProtocolMain {
 			|| compiled.result.moduleBase64.length == 0
 			|| compiled.result.runtimeIdentityBase64 == null
 			|| compiled.result.runtimeIdentityBase64.length == 0
+			|| compiled.result.metrics == null
 			|| compiled.result.patchBase64 != null)
 			throw "protocol compile response was incomplete";
 		var source = "class Editor { public var active:Int; public function new() { } } function main():Int { var editor = new Editor(); editor.active; return 42; }",

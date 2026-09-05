@@ -157,8 +157,9 @@ second compiler or a second runtime.
   else with source diagnostics.
 - Pin Haxe Formatter, the reference Haxe toolchain, and the HashLink fork.
 - Keep HLB/HLP readers, writers, and the native fork under differential tests.
-- Add latency, allocation, patch-size, and JIT-reclamation measurements to the
-  normal test run before optimizing.
+- Add latency, module-size, patch-size, and JIT-reclamation measurements to the
+	normal test run before optimizing; compile latency and patch metrics are now
+	exposed in `CompileResult` and the editor protocol.
 
 ### 1. Language kernel
 

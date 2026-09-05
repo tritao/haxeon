@@ -38,6 +38,18 @@ typedef CompileResult = {
 	final runtimeIdentity:Bytes;
 	final revision:Int;
 	final patchBytes:Null<Bytes>;
+	final metrics:CompileMetrics;
+}
+
+typedef CompileMetrics = {
+	final elapsedMs:Float;
+	final modules:Int;
+	final retypedFunctions:Int;
+	final regeneratedFunctions:Int;
+	final changedFunctions:Int;
+	final moduleFunctions:Int;
+	final moduleNatives:Int;
+	final patchBytes:Int;
 }
 
 typedef ValidationResult = {
@@ -165,6 +177,7 @@ class Compiler {
 	}
 
 	public function compile(entryModule:String):CompileResult {
+		var startedAt = haxe.Timer.stamp();
 		if (!modules.exists(entryModule))
 			throw 'Missing entry module "$entryModule"';
 		var names = [for (name in modules.keys()) name];
@@ -399,7 +412,17 @@ class Compiler {
 			functionIds: copyIndices(assembler.cache.stableIds),
 			runtimeIdentity: HlRuntimeIdentity.encode(moduleId, assembly.functionIndices, assembler.cache.stableIds),
 			revision: assembly.revision,
-			patchBytes: patchBytes
+			patchBytes: patchBytes,
+			metrics: {
+				elapsedMs: (haxe.Timer.stamp() - startedAt) * 1000.0,
+				modules: names.length,
+				retypedFunctions: retyped.length,
+				regeneratedFunctions: regenerated.length,
+				changedFunctions: assembly.changedFunctions.length,
+				moduleFunctions: assembly.module.functions.length,
+				moduleNatives: assembly.module.natives.length,
+				patchBytes: patchBytes == null ? 0 : patchBytes.length
+			}
 		};
 	}
 

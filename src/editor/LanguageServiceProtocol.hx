@@ -47,7 +47,8 @@ class LanguageServiceProtocol {
 						patchAvailable: build.patchBytes != null,
 						moduleBase64: Base64.encode(HlWriter.encode(build.module)),
 						patchBase64: build.patchBytes == null ? null : Base64.encode(build.patchBytes),
-						runtimeIdentityBase64: Base64.encode(build.runtimeIdentity)
+						runtimeIdentityBase64: Base64.encode(build.runtimeIdentity),
+						metrics: build.metrics
 					};
 				case "validate":
 					var validation = service.validate(requiredString(request, "path"), requiredString(request, "source"), requiredString(request, "entry"));

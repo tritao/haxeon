@@ -14,6 +14,8 @@ class ModuleMain {
 		compiler.update("Main.hx", "function main():Int { print(\"native registration works\\n\"); return Math.add(20, 22); }");
 		compiler.update("Unused.hx", "function identity(x:Int):Int { return x; }");
 		var first = compiler.compile("Main");
+		if (first.metrics.modules != 3 || first.metrics.retypedFunctions == 0 || first.metrics.moduleNatives <= 1 || first.metrics.elapsedMs < 0.0)
+			throw "Compile metrics did not describe the initial module build";
 		try {
 			compiler.registerNative("late", "std", "sys_time", [], TFloat);
 			throw "late native registration was accepted";
@@ -47,6 +49,8 @@ class ModuleMain {
 			throw 'Wrong changed stable functions: ${result.changedFunctions}';
 		if (result.patchBytes == null)
 			throw "Compatible body edit did not emit HLP bytes";
+		if (result.metrics.changedFunctions != 1 || result.metrics.patchBytes != result.patchBytes.length)
+			throw "Compile metrics did not describe the compatible patch";
 		var decodedPatch = HlPatchReader.decode(result.patchBytes);
 		if (decodedPatch.functions.length != 1 || decodedPatch.functions[0].functionIndex != mathId)
 			throw "Compiler HLP did not contain exactly the changed function";
