@@ -275,6 +275,7 @@ class Typer {
 	}
 
 	function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool = false):TypedFunction {
+		Scope.resetLocalIds();
 		var previousFunctionName = currentFunctionName;
 		var previousAssigned = currentAssigned;
 		var previousCells = currentCells;
@@ -303,7 +304,7 @@ class Typer {
 			scope.define(argument.name, type, argument.span);
 			if (currentCells.exists(argument.name))
 				currentCellTypes.set(argument.name, type);
-			arguments.push({name: argument.name, type: type});
+			arguments.push({name: currentCells.exists(argument.name) ? argument.name : scope.resolveId(argument.name), type: type});
 		}
 		var result = lowerType(fn.result);
 		var statements = typeStatements(fn.statements, scope, result);
@@ -366,7 +367,7 @@ class Typer {
 					scope.define(name, value.type, span);
 					if (currentCells.exists(name))
 						currentCellTypes.set(name, value.type);
-					output.push(TVar(name, value, span));
+					output.push(TVar(currentCells.exists(name) ? name : scope.resolveId(name), value, span));
 				case Return(expression, span):
 					var value = typeExpression(expression, scope);
 					value = coerce(value, result, "return", "E1003");
@@ -396,7 +397,7 @@ class Typer {
 						var catchScope = new Scope(scope);
 						catchScope.define(catchClause.name, loweredCatchType, catchClause.span);
 						typedCatches.push({
-							name: catchClause.name,
+							name: catchScope.resolveId(catchClause.name),
 							type: loweredCatchType,
 							statements: typeStatements(catchClause.statements, catchScope, result),
 							span: catchClause.span
@@ -436,7 +437,7 @@ class Typer {
 					} else if (currentCells.exists(name))
 						output.push(TCellIncrement(name, currentCells.get(name), current, delta, span));
 					else
-						output.push(TIncrement(name, delta, span));
+						output.push(TIncrement(scope.resolveId(name), delta, span));
 				case Assignment(name, expression, span):
 					var dot = name.indexOf("."),
 						value = typeExpression(expression, scope);
@@ -459,7 +460,7 @@ class Typer {
 							} else if (currentCells.exists(name))
 								output.push(TCellAssign(name, currentCells.get(name), value, span));
 							else
-								output.push(TAssign(name, value, span));
+								output.push(TAssign(scope.resolveId(name), value, span));
 						}
 					} else {
 						var objectName = name.substr(0, dot),
@@ -532,7 +533,7 @@ class Typer {
 					loopDepth++;
 					var typedBody = typeStatements(body, loopScope, result);
 					loopDepth--;
-					output.push(TForIn(name, typedIterable, typedBody, span));
+					output.push(TForIn(loopScope.resolveId(name), typedIterable, typedBody, span));
 				case Switch(expression, cases, defaultBranch, hasDefault, span):
 					var typedExpression = typeExpression(expression, scope);
 					if (!sameType(typedExpression.type, TInt) && !isEnum(typedExpression.type))
@@ -617,7 +618,7 @@ class Typer {
 						case Variable(binding, bindingSpan):
 							if (binding != "_") {
 								scope.define(binding, parameterType, bindingSpan);
-								bindings.push({name: binding, type: parameterType, index: index});
+								bindings.push({name: scope.resolveId(binding), type: parameterType, index: index});
 							}
 						default:
 							fail("E1019", "Enum switch payloads must bind local names or '_'", span);
@@ -643,7 +644,8 @@ class Typer {
 			case Variable(name, span):
 				var type = scope.resolve(name);
 				if (type != null) new TypedExpression(scope.isCapture(name) ? (scope.isCellCapture(name) ? TCellCaptured(name,
-					scope.cellClass(name)) : TCaptured(name)) : (currentCells.exists(name) ? TCellLocal(name, currentCells.get(name)) : TLocal(name)),
+					scope.cellClass(name)) : TCaptured(name)) : (currentCells.exists(name) ? TCellLocal(name,
+						currentCells.get(name)) : TLocal(name == "this" ? name : scope.resolveId(name))),
 					type, span); else {
 					var signature = signatures.get(name);
 					if (signature != null)
@@ -690,12 +692,13 @@ class Typer {
 				var lambdaKey = span.file.path + ":" + span.start,
 					cachedLambda = lambdaCache.get(lambdaKey);
 				if (cachedLambda != null) cachedLambda else {
-					var lambdaArguments = [
-						for (argument in arguments)
-							{name: argument.name, type: lowerType(argument.type)}
-					], lambdaScope = new Scope(), declared:Map<String, Bool> = [];
-					for (argument in lambdaArguments) {
-						lambdaScope.define(argument.name, argument.type, span);
+					var lambdaArguments:Array<{name:String, type:CompilerType}> = [],
+						lambdaScope = new Scope(),
+						declared:Map<String, Bool> = [];
+					for (argument in arguments) {
+						var argumentType = lowerType(argument.type);
+						lambdaScope.define(argument.name, argumentType, argument.span);
+						lambdaArguments.push({name: lambdaScope.resolveId(argument.name), type: argumentType});
 						declared.set(argument.name, true);
 					}
 					collectDeclaredLocals(body, declared);
@@ -731,8 +734,10 @@ class Typer {
 							default:
 						}
 					var typedBodyScope = new Scope();
-					for (argument in lambdaArguments)
-						typedBodyScope.define(argument.name, argument.type, span);
+					for (i in 0...lambdaArguments.length) {
+						typedBodyScope.define(arguments[i].name, lambdaArguments[i].type, arguments[i].span);
+						lambdaArguments[i] = {name: typedBodyScope.resolveId(arguments[i].name), type: lambdaArguments[i].type};
+					}
 					for (name in captures)
 						typedBodyScope.defineCapture(name, scope.resolve(name), span, captureCells.exists(name), captureCells.get(name));
 					var lambdaName = '$' + 'lambda:' + currentFunctionName + ':' + span.start,
@@ -744,7 +749,7 @@ class Typer {
 					currentCells = [];
 					currentCellTypes = [];
 					var lambdaDeclared:Map<String, Bool> = [];
-					for (argument in lambdaArguments)
+					for (argument in arguments)
 						lambdaDeclared.set(argument.name, true);
 					collectDeclaredLocals(body, lambdaDeclared);
 					var lambdaCandidates:Map<String, Bool> = [];
@@ -754,6 +759,9 @@ class Typer {
 					var typedBody = typeStatements(body, typedBodyScope, inferredResult);
 					var lambdaCells = currentCells.copy(),
 						lambdaCellTypes = currentCellTypes.copy();
+					for (i in 0...lambdaArguments.length)
+						if (lambdaCells.exists(arguments[i].name))
+							lambdaArguments[i] = {name: arguments[i].name, type: lambdaArguments[i].type};
 					currentAssigned = previousLambdaAssigned;
 					currentCells = previousLambdaCells;
 					currentCellTypes = previousLambdaCellTypes;
@@ -895,7 +903,7 @@ class Typer {
 					if (typed.length != functionType.arguments.length)
 						fail("E1008", 'Function value "$name" expects ${functionType.arguments.length} arguments, got ${typed.length}', span);
 					typed = coerceArguments(typed, functionType.arguments, name);
-					new TypedExpression(TClosureCall(new TypedExpression(TLocal(name), callable, span), typed), functionType.result, span);
+					new TypedExpression(TClosureCall(new TypedExpression(TLocal(scope.resolveId(name)), callable, span), typed), functionType.result, span);
 				} else {
 					var parts = name.split("."),
 						receiverName = parts.length < 2 ? null : parts[0],

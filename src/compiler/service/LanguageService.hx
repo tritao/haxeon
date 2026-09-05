@@ -502,7 +502,7 @@ class LanguageService {
 				if (qualifier == "this" && fn.owner != null)
 					return TClass(fn.owner);
 				for (argument in fn.arguments)
-					if (argument.name == qualifier)
+					if (sourceLocalName(argument.name) == qualifier)
 						return argument.type;
 				var local = localType(fn.statements, qualifier);
 				if (local != null)
@@ -515,10 +515,10 @@ class LanguageService {
 		for (statement in statements)
 			switch statement {
 				case TVar(local, initializer, _):
-					if (local == name)
+					if (sourceLocalName(local) == name)
 						return initializer.type;
 				case TForIn(local, iterable, body, _):
-					if (local == name)
+					if (sourceLocalName(local) == name)
 						return switch iterable.type {
 							case TArray(element): element;
 							default: null;
@@ -548,6 +548,11 @@ class LanguageService {
 				default:
 			}
 		return null;
+	}
+
+	static function sourceLocalName(identity:String):String {
+		var separator = identity.indexOf(":");
+		return StringTools.startsWith(identity, "$l") && separator >= 0 ? identity.substr(separator + 1) : identity;
 	}
 
 	function addInstanceMembers(type:CompilerType, prefix:String, result:Array<CompletionItem>):Void {

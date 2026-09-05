@@ -9,8 +9,6 @@ class CfgBuilder {
 	var current:CfgBlock;
 	var nextValue:Int = 0;
 	var activeTraps:Int = 0;
-	var localAliases:Map<String, Array<String>> = [];
-	var nextLocal:Int = 0;
 
 	public function new()
 		current = createBlock();
@@ -115,41 +113,14 @@ class CfgBuilder {
 		return out;
 	}
 
-	public function pushLocalAlias(name:String, internalName:String):Void {
-		var aliases = localAliases.get(name);
-		if (aliases == null) {
-			aliases = [];
-			localAliases.set(name, aliases);
-		}
-		aliases.push(internalName);
-	}
-
-	public function declareLocal(name:String):String {
-		var internalName = '$' + 'local:${nextLocal++}:$name';
-		pushLocalAlias(name, internalName);
-		return internalName;
-	}
-
-	public function popLocalAlias(name:String):Void {
-		var aliases = localAliases.get(name);
-		if (aliases == null || aliases.length == 0)
-			throw 'No active CFG local alias for "$name"';
-		aliases.pop();
-	}
-
 	public function load(name:String, type:IrType):CfgValue {
 		var out = temporary(type);
-		emit(LoadLocal(out, resolveLocal(name)));
+		emit(LoadLocal(out, name));
 		return out;
 	}
 
 	public function store(name:String, value:CfgValue):Void
-		emit(StoreLocal(resolveLocal(name), value));
-
-	public function resolveLocal(name:String):String {
-		var aliases = localAliases.get(name);
-		return aliases == null || aliases.length == 0 ? name : aliases[aliases.length - 1];
-	}
+		emit(StoreLocal(name, value));
 
 	public function globalGet(name:String, type:IrType):CfgValue {
 		var out = temporary(type);
