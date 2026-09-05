@@ -237,6 +237,22 @@ class TestMain {
 			throw "Class interface contracts were not retained in the typed AST";
 		expectCompileError("interface Plugin { function activate():Void; } class Missing implements Plugin { } function main():Int { return 0; }",
 			'Class "Missing" does not implement "Plugin.activate"');
+		var interfaceCompiler = new Compiler(),
+			interfaceV1 = "interface Plugin { function score(value:Int):Int; } class SearchPlugin implements Plugin { public function score(value:Int):Int { return value; } } function consume(plugin:Plugin):Int { return plugin.score(42); } function main():Int { return consume(new SearchPlugin()); }";
+		interfaceCompiler.update("Main.hx", interfaceV1);
+		interfaceCompiler.compile("Main");
+		interfaceCompiler.update("Main.hx",
+			"interface Plugin { function changed(value:Int):Int; } class SearchPlugin implements Plugin { public function score(value:Int):Int { return value; } } function main():Int { return 0; }");
+		try {
+			interfaceCompiler.compile("Main");
+			throw "incompatible interface edit was accepted";
+		} catch (error:CompileError) {
+			if (error.diagnostic.code != "E1007")
+				throw error;
+		}
+		interfaceCompiler.update("Main.hx", interfaceV1);
+		if (!interfaceCompiler.compile("Main").requiresReload)
+			throw "Interface contract restoration did not require reload";
 		var staticClass = Frontend.compile("class Math { public static function add(a:Int, b:Int):Int { return a + b; } } function main():Int { return Math.add(20, 22); }");
 		var foundStatic = false;
 		for (fn in staticClass.functions)
