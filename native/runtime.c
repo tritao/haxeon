@@ -543,6 +543,10 @@ HL_PRIM int HL_NAME(type_capacity)( hl_runtime_module *runtime ) {
 	return hl_runtime_module_type_capacity(runtime);
 }
 
+HL_PRIM int HL_NAME(revision)( hl_runtime_module *runtime ) {
+	return hl_runtime_module_revision(runtime);
+}
+
 HL_PRIM void HL_NAME(dispose)( hl_runtime_module *runtime ) {
 	hl_runtime_module_release(runtime);
 }
@@ -569,6 +573,7 @@ DEFINE_PRIM(_I32,patch_jit_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,retired_allocation_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,type_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,type_capacity,_ABSTRACT(realtime_module));
+DEFINE_PRIM(_I32,revision,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_VOID,dispose,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,inspect_patch,_BYTES _I32);
 DEFINE_PRIM(_VOID,array_int_init,_OBJ(_BYTES _I32));

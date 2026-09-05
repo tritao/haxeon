@@ -10,6 +10,7 @@ import compiler.hl.HlOpcode;
 import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlType;
 import compiler.modules.Compiler;
+import compiler.modules.Compiler.CompileResult;
 import compiler.modules.CompilerPublication.ReconnectDecision;
 import compiler.ir.IrFunctionStateCodec;
 import compiler.hl.HlFunctionCacheStateCodec;
@@ -18,6 +19,7 @@ import compiler.hl.HlAssemblerStateCodec;
 import compiler.hl.HlModuleAssembler;
 import compiler.abi.PatchPlanner.PatchDecision;
 import runtime.Runtime;
+import runtime.LoadedModule;
 import runtime.RuntimeError;
 import runtime.RuntimeStatus;
 import runtime.PatchSet;
@@ -183,12 +185,44 @@ class HotReloadMain {
 		if (Runtime.callInt(loaded, readIndex) != 47)
 			throw "concurrent patch was not committed";
 
+		compiler.update("Value.hx", "function value():Int { return 48; }");
+		var competingPatch = compiler.compile("Main"),
+			ready = new sys.thread.Lock(),
+			gate = new sys.thread.Lock(),
+			doneA = new sys.thread.Lock(),
+			doneB = new sys.thread.Lock(),
+			outcomeA = "",
+			outcomeB = "";
+		sys.thread.Thread.create(function() {
+			ready.release();
+			gate.wait();
+			outcomeA = applyCompetingPatch(loaded, competingPatch, liveRevision);
+			doneA.release();
+		});
+		sys.thread.Thread.create(function() {
+			ready.release();
+			gate.wait();
+			outcomeB = applyCompetingPatch(loaded, competingPatch, liveRevision);
+			doneB.release();
+		});
+		ready.wait();
+		ready.wait();
+		gate.release();
+		gate.release();
+		if (!doneA.wait(5.0) || !doneB.wait(5.0))
+			throw "competing patch workers did not finish";
+		if (!((outcomeA == "ok" && outcomeB == "stale") || (outcomeA == "stale" && outcomeB == "ok")))
+			throw 'competing patches produced incoherent outcomes: $outcomeA/$outcomeB';
+		liveRevision = competingPatch.revision;
+		if (Runtime.liveRevision(loaded) != liveRevision || Runtime.callInt(loaded, readIndex) != 48)
+			throw "competing patch publication was not atomic";
+
 		compiler.update("Value.hx", 'function value():Bool { return true; }');
 		try {
 			compiler.compile("Main");
 			throw "incompatible source unexpectedly compiled";
 		} catch (error:CompileError) {}
-		if (Runtime.callInt(loaded, valueIndex) != 47)
+		if (Runtime.callInt(loaded, valueIndex) != 48)
 			throw "compile failure damaged the live generation";
 
 		try {
@@ -198,17 +232,17 @@ class HotReloadMain {
 			if (error.status != RuntimeStatus.BadFormat)
 				throw error;
 		}
-		if (Runtime.callInt(loaded, valueIndex) != 47)
+		if (Runtime.callInt(loaded, valueIndex) != 48)
 			throw "rejected patch damaged the live generation";
 
 		try {
-			Runtime.patchSet(loaded, new PatchSet(liveRevision - 1, concurrentPatch.revision, concurrentPatch.patchBytes, concurrentPatch.changedFunctions));
+			Runtime.patchSet(loaded, new PatchSet(liveRevision - 1, liveRevision, competingPatch.patchBytes, competingPatch.changedFunctions));
 			throw "stale patch unexpectedly succeeded";
 		} catch (error:RuntimeError) {
 			if (error.status != RuntimeStatus.StalePatch)
 				throw error;
 		}
-		if (Runtime.callInt(loaded, valueIndex) != 47)
+		if (Runtime.callInt(loaded, valueIndex) != 48)
 			throw "stale patch damaged the live generation";
 
 		var foreign = new Compiler();
@@ -225,12 +259,23 @@ class HotReloadMain {
 			if (error.status != RuntimeStatus.Incompatible)
 				throw error;
 		}
-		if (Runtime.callInt(loaded, valueIndex) != 47)
+		if (Runtime.callInt(loaded, valueIndex) != 48)
 			throw "foreign patch damaged the live generation";
 		Runtime.dispose(loaded);
 		testAppendedFloatAndStringSymbols();
 		testNonMovingTypeArena();
 		Sys.println("PASS: selective HLP patches are atomic and retain bounded JIT code");
+	}
+
+	static function applyCompetingPatch(loaded:LoadedModule, patch:CompileResult, baseRevision:Int):String {
+		try {
+			Runtime.patchSet(loaded, new PatchSet(baseRevision, patch.revision, patch.patchBytes, patch.changedFunctions));
+			return "ok";
+		} catch (error:RuntimeError) {
+			return error.status == RuntimeStatus.StalePatch ? "stale" : 'runtime-${error.status}';
+		} catch (error:Dynamic) {
+			return 'error-$error';
+		}
 	}
 
 	static function testRetainedObject():Void {
