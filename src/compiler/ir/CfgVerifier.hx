@@ -81,12 +81,19 @@ class CfgVerifier {
 					if (!sameType(out.type, a.type) || !sameType(a.type, b.type) || (!sameType(a.type, I32) && !sameType(a.type, F64)))
 						throw "CFG arithmetic requires matching numeric values";
 					define(out, defined, available);
-				case Less(out, a, b), LessEqual(out, a, b), Equal(out, a, b):
+				case Less(out, a, b), LessEqual(out, a, b):
 					require(a, available);
 					require(b, available);
 					expect(out, Bool);
 					expect(a, I32);
 					expect(b, I32);
+					define(out, defined, available);
+				case Equal(out, a, b):
+					require(a, available);
+					require(b, available);
+					expect(out, Bool);
+					if (!sameType(a.type, b.type) || (!sameType(a.type, I32) && !sameType(a.type, Bool)))
+						throw 'CFG equality requires matching Int or Bool values';
 					define(out, defined, available);
 				case Call(out, _, arguments):
 					for (argument in arguments)

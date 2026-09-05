@@ -43,8 +43,9 @@ requiring source-level native registration. Indexed operations and `.length`
 remain ordinary typed expressions and use HashLink's bounds-checked array
 operations.
 
-String addition, equality, and `.length` use the same compiler-owned runtime
-ABI, keeping source code independent from native symbol names.
+String addition, equality, `.length`, `indexOf`, and `substring` use the same
+compiler-owned runtime ABI, keeping source code independent from native symbol
+names.
 
 IR values and control-flow blocks have numeric identities independent of
 source names. Functions contain explicit basic blocks terminated by `Return`,

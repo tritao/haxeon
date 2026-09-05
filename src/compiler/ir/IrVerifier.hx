@@ -131,12 +131,19 @@ class IrVerifier {
 				require(values, a);
 				require(values, b);
 				define(values, out);
-			case Less(out, a, b), LessEqual(out, a, b), Equal(out, a, b):
+			case Less(out, a, b), LessEqual(out, a, b):
 				expect(out, Bool);
 				expect(a, I32);
 				expect(b, I32);
 				require(values, a);
 				require(values, b);
+				define(values, out);
+			case Equal(out, a, b):
+				expect(out, Bool);
+				require(values, a);
+				require(values, b);
+				if (!sameType(a.type, b.type) || (!sameType(a.type, I32) && !sameType(a.type, Bool)))
+					throw 'IR equality requires matching Int or Bool values';
 				define(values, out);
 			case Call(out, name, args):
 				var signature = signatures.get(name);
