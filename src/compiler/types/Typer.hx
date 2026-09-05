@@ -448,6 +448,11 @@ class Typer {
 			case Sub(left, right, span): arithmetic(left, right, scope, false, span);
 			case Mul(left, right, span): numeric(left, right, scope, 2, span);
 			case Div(left, right, span): numeric(left, right, scope, 3, span);
+			case Negate(value, span):
+				var typedValue = typeExpression(value, scope);
+				if (!sameType(typedValue.type, TInt) && !sameType(typedValue.type, TFloat))
+					fail("E1010", "Numeric negation requires an Int or Float operand", span);
+				new TypedExpression(TNegate(typedValue), typedValue.type, span);
 			case Less(left, right, span): comparison(left, right, scope, 0, span);
 			case LessEqual(left, right, span): comparison(left, right, scope, 1, span);
 			case Greater(left, right, span): comparison(right, left, scope, 0, span);
@@ -752,6 +757,8 @@ class Typer {
 				Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _), NotEqual(left, right, _):
 				collectExpressionVariables(left, names);
 				collectExpressionVariables(right, names);
+			case Negate(value, _):
+				collectExpressionVariables(value, names);
 			case Not(value, _):
 				collectExpressionVariables(value, names);
 			case And(left, right, _), Or(left, right, _):

@@ -379,6 +379,10 @@ class Parser {
 	}
 
 	function parsePrimary():AstExpression {
+		if (match(TokenKind.Minus)) {
+			var start = previous().span, value = parsePrimary();
+			return Negate(value, start.merge(expressionSpan(value)));
+		}
 		if (match(TokenKind.Not)) {
 			var start = previous().span, value = parsePrimary();
 			return Not(value, start.merge(expressionSpan(value)));
@@ -631,8 +635,8 @@ class Parser {
 	static function expressionSpan(expression:AstExpression)
 		return switch expression {
 			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), BoolLiteral(_, span), NullLiteral(span), Variable(_, span),
-				Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span), Div(_, _, span), Less(_, _, span), LessEqual(_, _, span),
-				Greater(_, _, span), GreaterEqual(_, _, span), Equal(_, _, span), NotEqual(_, _, span), Not(_, span), Call(_, _, span),
+				Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span), Div(_, _, span), Negate(_, span), Less(_, _, span),
+				LessEqual(_, _, span), Greater(_, _, span), GreaterEqual(_, _, span), Equal(_, _, span), NotEqual(_, _, span), Not(_, span), Call(_, _, span),
 				MethodCall(_, _, _, span), New(_, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span), Lambda(_, _, span), And(_, _, span),
 				Or(_, _, span): span;
 		}

@@ -411,6 +411,9 @@ class IrGenerator {
 			case TSub(a, b): builder.sub(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TMul(a, b): builder.mul(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TDiv(a, b): builder.div(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
+			case TNegate(value):
+				var typed = lowerExpression(value, builder, localTypes);
+				value.type == TInt ? builder.sub(builder.constInt(0), typed) : builder.sub(builder.constFloat(0), typed);
 			case TLess(a, b): builder.less(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TLessEqual(a, b): builder.lessEqual(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TNot(value): builder.equal(lowerExpression(value, builder, localTypes), builder.constBool(false));

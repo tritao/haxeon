@@ -620,6 +620,7 @@ class Compiler {
 			case Sub(a, b, s): Sub(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
 			case Mul(a, b, s): Mul(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
 			case Div(a, b, s): Div(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
+			case Negate(value, s): Negate(canonicalExpression(value, module, entry, locals, aliases), s);
 			case Less(a, b, s): Less(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
 			case LessEqual(a, b,
 				s): LessEqual(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
@@ -721,6 +722,8 @@ class Compiler {
 				scanExpression(b, dependencies);
 			case Not(value, _):
 				scanExpression(value, dependencies);
+			case Negate(value, _):
+				scanExpression(value, dependencies);
 			case And(left, right, _), Or(left, right, _):
 				scanExpression(left, dependencies);
 				scanExpression(right, dependencies);
@@ -806,6 +809,8 @@ class Compiler {
 				scanCallExpression(b, calls, aliases);
 			case Not(value, _):
 				scanCallExpression(value, calls, aliases);
+			case Negate(value, _):
+				scanCallExpression(value, calls, aliases);
 			case And(left, right, _), Or(left, right, _):
 				scanCallExpression(left, calls, aliases);
 				scanCallExpression(right, calls, aliases);
@@ -882,6 +887,8 @@ class Compiler {
 				collectLambdaExpression(left, functionName, module, generatedByModule);
 				collectLambdaExpression(right, functionName, module, generatedByModule);
 			case Not(value, _):
+				collectLambdaExpression(value, functionName, module, generatedByModule);
+			case Negate(value, _):
 				collectLambdaExpression(value, functionName, module, generatedByModule);
 			case And(left, right, _), Or(left, right, _):
 				collectLambdaExpression(left, functionName, module, generatedByModule);
