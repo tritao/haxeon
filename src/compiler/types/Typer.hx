@@ -1295,8 +1295,10 @@ class Typer {
 				new TypedExpression(TConditional(typedCondition, typedTrue, typedFalse), resultType, span);
 			case BlockExpression(statements, result, span):
 				var blockScope = new Scope(scope),
-					typedStatements = typeStatements(statements, blockScope, context.resultType),
-					typedResult = typeExpression(result, blockScope, expectedType);
+					typedStatements = typeStatements(statements, blockScope, context.resultType);
+				if (alwaysExits(typedStatements))
+					return new TypedExpression(TBlockExpression(typedStatements, new TypedExpression(TUnreachable, TNever, span)), TNever, span);
+				var typedResult = typeExpression(result, blockScope, expectedType);
 				new TypedExpression(TBlockExpression(typedStatements, typedResult), typedResult.type, span);
 			case ThrowExpression(value, span):
 				new TypedExpression(TThrowExpression(typeExpression(value, scope)), TNever, span);
