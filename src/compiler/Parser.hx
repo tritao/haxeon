@@ -1382,8 +1382,6 @@ class Parser {
 			return NativeAbstractType(value);
 		}
 		return NamedType(name);
-		fail(current(), 'Expected type, got ${current().kind}');
-		return null;
 	}
 
 	function failType(message:String):AstType {
