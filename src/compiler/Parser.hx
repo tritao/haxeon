@@ -541,6 +541,20 @@ class Parser {
 
 	function parsePostfix(expression:AstExpression):AstExpression {
 		while (true) {
+			if (match(TokenKind.LeftParen)) {
+				var arguments = [];
+				if (!check(TokenKind.RightParen)) {
+					do
+						arguments.push(parseExpression()) while (match(TokenKind.Comma));
+				}
+				var end = consume(TokenKind.RightParen).span;
+				expression = switch expression {
+					case Variable(name, start): Call(name, arguments, expressionSpan(expression).merge(end));
+					default:
+						throw new CompileError(new Diagnostic("E0002", "Call target must be a function or method", expressionSpan(expression)));
+				};
+				continue;
+			}
 			if (match(TokenKind.LeftBracket)) {
 				var offset = parseExpression(),
 					end = consume(TokenKind.RightBracket).span;

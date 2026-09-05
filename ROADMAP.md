@@ -41,7 +41,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 	and `Map<Int,Int|Bool|Float|String>` specializations support construction,
 	indexed set/get, `set`, `exists`, key-array iteration, `remove`, and `clear`;
 	immutable array operations cover primitive, string, and reference arrays;
-	growable mutation and broader key/value collections remain future work.
+	primitive/String `push` and `pop` now use capacity-aware HashLink arrays;
+	`push` rebinds local array variables, while field/alias mutation and broader
+	key/value collections remain future work.
 	Our HashLink fork
 	enforces bounds in the JIT.
 - [~] Explicit `Null<T>` values for reference types lower to HashLink's native

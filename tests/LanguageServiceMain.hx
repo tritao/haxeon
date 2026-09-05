@@ -5,7 +5,7 @@ class LanguageServiceMain {
 	static function main():Void {
 		var service = new LanguageService();
 		service.update("Main.hx",
-			"typedef Count = Int; enum Kind { One; Two(Int); } interface Plugin { function activate():Void; } class Editor { public static var version:Int; public static function make():Int { return 1; } public var active:Int; public function open():Void { return; } } function main():Int { var editor = new Editor(); editor.open(); editor.active; var text:String = \"x\"; text.length; var kind:Kind = Kind.One; Editor.make(); return 42; }");
+			"typedef Count = Int; enum Kind { One; Two(Int); } interface Plugin { function activate():Void; } class Editor { public static var version:Int; public static function make():Int { return 1; } public var active:Int; public function open():Void { return; } } function main():Int { var editor = new Editor(); editor.open(); editor.active; var text:String = \"x\"; text.length; var kind:Kind = Kind.One; var values = new Array<Int>(0); values.push(1); values.pop(); Editor.make(); return 42; }");
 		service.compile("Main");
 		var symbols = service.documentSymbols("Main.hx"),
 			foundClass = false,
@@ -68,6 +68,16 @@ class LanguageServiceMain {
 				hasLength = true;
 		if (!hasLength || service.hover("Main.hx", stringPosition + 3) != "length:Int")
 			throw "language service typed string completion failed";
+		var arrayPosition = source.indexOf("values.push") + "values.".length, arrayCompletion = service.complete("Main.hx", arrayPosition), hasPush = false,
+			hasPop = false;
+		for (item in arrayCompletion) {
+			if (item.label == "push" && item.detail == "push(value):Int")
+				hasPush = true;
+			if (item.label == "pop" && item.detail == "pop():Element")
+				hasPop = true;
+		}
+		if (!hasPush || !hasPop || service.hover("Main.hx", arrayPosition + 3) != "push(value):Int")
+			throw "language service typed array completion failed";
 		var methodPosition = source.lastIndexOf("open") + 2,
 			definition = service.definition("Main.hx", methodPosition);
 		if (definition == null

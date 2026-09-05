@@ -144,6 +144,36 @@ DEFINE_ARRAY_INDEX_OF(bytes, vbyte *, realtime_bytes_equal(values[i], value))
 
 #undef DEFINE_ARRAY_INDEX_OF
 
+#define DEFINE_ARRAY_MUTATION(SUFFIX, VALUE_TYPE) \
+HL_PRIM varray *HL_NAME(__array_push_##SUFFIX)( varray *array, VALUE_TYPE value ) { \
+	int stride = hl_type_size(array->at); \
+	varray *target = array; \
+	if (array->size >= array->capacity) { \
+		target = hl_alloc_array(array->at, array->size + 1); \
+		if (array->size > 0) \
+			memcpy(hl_aptr(target, vbyte), hl_aptr(array, vbyte), (size_t)array->size * stride); \
+	} else { \
+		target->size++; \
+	} \
+	((VALUE_TYPE *)hl_aptr(target, vbyte))[target->size - 1] = value; \
+	return target; \
+} \
+HL_PRIM VALUE_TYPE HL_NAME(__array_pop_##SUFFIX)( varray *array ) { \
+	if (array->size <= 0) \
+		hl_error("Array.pop on an empty array"); \
+	VALUE_TYPE value = ((VALUE_TYPE *)hl_aptr(array, vbyte))[array->size - 1]; \
+	array->size--; \
+	memset(hl_aptr(array, vbyte) + array->size * hl_type_size(array->at), 0, hl_type_size(array->at)); \
+	return value; \
+}
+
+DEFINE_ARRAY_MUTATION(i32, int)
+DEFINE_ARRAY_MUTATION(f64, double)
+DEFINE_ARRAY_MUTATION(bytes, vbyte *)
+DEFINE_ARRAY_MUTATION(bool, bool)
+
+#undef DEFINE_ARRAY_MUTATION
+
 HL_PRIM realtime_string_map *HL_NAME(__map_string_i32_alloc)( void ) {
 	return hl_hballoc();
 }
@@ -441,6 +471,14 @@ DEFINE_PRIM(_I32,__array_index_of_i32,_ARR _I32);
 DEFINE_PRIM(_I32,__array_index_of_f64,_ARR _F64);
 DEFINE_PRIM(_I32,__array_index_of_bytes,_ARR _BYTES);
 DEFINE_PRIM(_I32,__array_index_of_bool,_ARR _BOOL);
+DEFINE_PRIM(_ARR,__array_push_i32,_ARR _I32);
+DEFINE_PRIM(_I32,__array_pop_i32,_ARR);
+DEFINE_PRIM(_ARR,__array_push_f64,_ARR _F64);
+DEFINE_PRIM(_F64,__array_pop_f64,_ARR);
+DEFINE_PRIM(_ARR,__array_push_bytes,_ARR _BYTES);
+DEFINE_PRIM(_BYTES,__array_pop_bytes,_ARR);
+DEFINE_PRIM(_ARR,__array_push_bool,_ARR _BOOL);
+DEFINE_PRIM(_BOOL,__array_pop_bool,_ARR);
 DEFINE_PRIM(_ABSTRACT(map_string_i32),__map_string_i32_alloc,_NO_ARG);
 DEFINE_PRIM(_VOID,__map_string_i32_set,_ABSTRACT(map_string_i32) _BYTES _I32);
 DEFINE_PRIM(_BOOL,__map_string_i32_exists,_ABSTRACT(map_string_i32) _BYTES);

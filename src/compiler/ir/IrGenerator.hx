@@ -205,6 +205,22 @@ class IrGenerator {
 						arguments: [arrayType, entry.type],
 						result: I32
 					});
+				if (entry.name != "ref") {
+					program.natives.push({
+						name: '__array_push_${entry.name}',
+						library: "realtime_runtime",
+						symbol: '__array_push_${entry.name}',
+						arguments: [arrayType, entry.type],
+						result: arrayType
+					});
+					program.natives.push({
+						name: '__array_pop_${entry.name}',
+						library: "realtime_runtime",
+						symbol: '__array_pop_${entry.name}',
+						arguments: [arrayType],
+						result: entry.type
+					});
+				}
 			}
 		}
 		if (needsStringRuntime)
@@ -627,6 +643,25 @@ class IrGenerator {
 					lowerExpression(start, builder, localTypes),
 					lowerExpression(end, builder, localTypes)
 				], Bytes);
+			case TArrayPush(array, value):
+				var element = switch array.type {
+					case TArray(valueType): valueType;
+					default: throw "Array.push requires an array value";
+				}, pushed = builder.call(RuntimeType.arrayNative(element, "push"), [
+					lowerExpression(array, builder, localTypes),
+					lowerExpression(value, builder, localTypes)
+					], Array(lowerType(element)));
+				switch array.expression {
+					case TLocal(name): builder.store(name, pushed);
+					default: throw "Array.push requires a local array value";
+				}
+				builder.arraySize(pushed);
+			case TArrayPop(array):
+				var element = switch array.type {
+					case TArray(valueType): valueType;
+					default: throw "Array.pop requires an array value";
+				};
+				builder.call(RuntimeType.arrayNative(element, "pop"), [lowerExpression(array, builder, localTypes)], lowerType(element));
 		}
 
 	static function implicitArguments(fn:TypedFunction):Array<{name:String, type:IrType}> {

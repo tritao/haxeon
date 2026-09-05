@@ -55,6 +55,8 @@ enum TypedExpressionKind {
 	TStringLength(value:TypedExpression);
 	TStringIndexOf(value:TypedExpression, needle:TypedExpression);
 	TStringSubstring(value:TypedExpression, start:TypedExpression, end:TypedExpression);
+	TArrayPush(array:TypedExpression, value:TypedExpression);
+	TArrayPop(array:TypedExpression);
 }
 
 enum TypedStatement {

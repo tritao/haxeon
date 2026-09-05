@@ -127,6 +127,8 @@ class TestMain {
 			'Type mismatch for local "wrong"');
 		expectCompileError('function main():Int { missing = 1; return 0; }', 'Unknown variable "missing"');
 		expectCompileError('function main():Int { var value:Int = 1; value = "wrong"; return value; }', 'Type mismatch for local "value"');
+		expectCompileError('class Box { public function values():Array<Int> { return new Array<Int>(0); } public function add():Void { this.values().push(1); } } function main():Int { return 0; }',
+			'Array.push currently requires a local array variable');
 		expectCompileError('function main():Int { var offset = 1; var f = (value:Int) -> { return value + offset; }; offset = 2; return f(0); }',
 			'Captured variable "offset" requires mutable capture cells');
 		expectCompileError('function main():Int { var count = 1; if (count > 0) count++; var f = () -> { return count; }; return f(); }',

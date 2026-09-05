@@ -780,6 +780,29 @@ class Typer {
 		};
 		if (RuntimeType.arrayName(element) == null)
 			fail("E1016", "This array element type has no compiler-owned runtime ABI", span);
+		if (name == "push") {
+			if (arguments.length != 1)
+				fail("E1008", "Array.push expects one argument", span);
+			if (!isLocalArrayReceiver(receiver))
+				fail("E1016", "Array.push currently requires a local array variable", span);
+			var value = coerce(typeExpression(arguments[0], scope), element, "array element", "E1002");
+			switch element {
+				case TInt, TFloat, TBool, TString:
+				default:
+					fail("E1016", "Array.push currently supports primitive and String arrays only", span);
+			}
+			return new TypedExpression(TArrayPush(receiver, value), TInt, span);
+		}
+		if (name == "pop") {
+			if (arguments.length != 0)
+				fail("E1008", "Array.pop expects no arguments", span);
+			switch element {
+				case TInt, TFloat, TBool, TString:
+				default:
+					fail("E1016", "Array.pop currently supports primitive and String arrays only", span);
+			}
+			return new TypedExpression(TArrayPop(receiver), element, span);
+		}
 		if (name == "copy") {
 			if (arguments.length != 0)
 				fail("E1008", "Array.copy expects no arguments", span);
@@ -816,6 +839,12 @@ class Typer {
 		fail("E1007", 'Unknown array method "$name"', span);
 		return new TypedExpression(TNullLiteral, TVoid, span);
 	}
+
+	static function isLocalArrayReceiver(receiver:TypedExpression):Bool
+		return switch receiver.expression {
+			case TLocal(_): true;
+			default: false;
+		};
 
 	function typeMapMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
 		var mapType = switch receiver.type {

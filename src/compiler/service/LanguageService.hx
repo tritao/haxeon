@@ -589,6 +589,8 @@ class LanguageService {
 				addMember("concat", "method", "concat(other):Array", prefix, result);
 				addMember("slice", "method", "slice(start,end):Array", prefix, result);
 				addMember("indexOf", "method", "indexOf(value):Int", prefix, result);
+				addMember("push", "method", "push(value):Int", prefix, result);
+				addMember("pop", "method", "pop():Element", prefix, result);
 			case TMap(_, _):
 				addMember("set", "method", "set(key,value):Void", prefix, result);
 				addMember("exists", "method", "exists(key):Bool", prefix, result);
