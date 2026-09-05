@@ -65,9 +65,11 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 
 ### D. Language service
 
-- [ ] Token/AST/type snapshots keyed by source revision.
-- [ ] Diagnostics, completion, hover, definition, references, rename, and
-  document symbols from compiler state.
+- [~] Persistent AST snapshots, diagnostics, document symbols, completion,
+  and hover are exposed through `LanguageService`; token/type snapshots and
+  navigation/rename queries remain.
+- [ ] Definition, references, rename, and full type-aware completion from
+  compiler state.
 - [ ] Completion-safe partial parsing and error recovery.
 - [ ] A small protocol adapter for Pragtical; no second typechecker.
 

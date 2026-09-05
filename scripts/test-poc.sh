@@ -20,6 +20,7 @@ cc -shared -fPIC -DHL_NAME\(n\)=realtime_##n \
 	-Wl,-rpath,"$root_dir/vendor/hashlink" \
 	-o "$root_dir/out/realtime_runtime.hdll"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run TestMain
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run LanguageServiceMain
 
 run_program() {
     local name=$1
