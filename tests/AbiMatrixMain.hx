@@ -2,6 +2,8 @@ import compiler.abi.PatchPlanner;
 import compiler.abi.PatchPlanner.AbiChange;
 import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
+import compiler.abi.RuntimeAbi;
+import compiler.abi.RuntimeAbiCodec;
 import compiler.Diagnostic.CompileError;
 import compiler.modules.Compiler;
 
@@ -74,6 +76,28 @@ class AbiMatrixMain {
 				"class Editor { public var value:Int; public function new():Void { this.value = 40; } } function main():Int { return new Editor().value; }",
 				"class Editor { public var value:Int; public var generation:Int; public function new():Void { this.value = 40; this.generation = 1; } } function main():Int { return new Editor().value; }",
 				ReloadFor(ObjectLayoutChanged("Editor"))),
+			sourceFixture("instance field order",
+				"class Pair { public var left:Int; public var right:Int; public function new():Void { this.left = 1; this.right = 2; } } function main():Int { return 40; }",
+				"class Pair { public var right:Int; public var left:Int; public function new():Void { this.left = 1; this.right = 2; } } function main():Int { return 40; }",
+				ReloadFor(ObjectLayoutChanged("Pair"))),
+			sourceFixture("method addition", "class Editor { public function read():Int { return 40; } } function main():Int { return new Editor().read(); }",
+				"class Editor { public function read():Int { return 40; } public function reset():Void {} } function main():Int { return new Editor().read(); }",
+				ReloadFor(ObjectLayoutChanged("Editor"))),
+			sourceFixture("base class change", "class Node {} class Widget {} class Editor extends Node {} function main():Int { return 40; }",
+				"class Node {} class Widget {} class Editor extends Widget {} function main():Int { return 40; }", ReloadFor(ObjectLayoutChanged("Editor"))),
+			sourceFixture("interface method addition",
+				"interface Plugin { function read():Int; } class Editor implements Plugin { public function read():Int { return 40; } } function main():Int { return new Editor().read(); }",
+				"interface Plugin { function read():Int; function reset():Void; } class Editor implements Plugin { public function read():Int { return 40; } public function reset():Void {} } function main():Int { return new Editor().read(); }",
+				ReloadFor(InterfaceChanged("Plugin"))),
+			sourceFixture("closure capture change",
+				"function main():Int { var offset = 2; var more = 3; var f = (value:Int) -> { return value + offset; }; return f(38); }",
+				"function main():Int { var offset = 2; var more = 3; var f = (value:Int) -> { return value + more; }; return f(39); }",
+				ReloadFor(ClosureLayoutChanged("$lambda-env:main:60"))),
+			sourceFixture("constructor removal", "class Editor { public function new():Void {} } function main():Int { return 40; }",
+				"class Editor {} function main():Int { return 40; }", ReloadFor(FunctionRemoved("Editor.new"))),
+			sourceFixture("function declaration order",
+				"function first():Int { return 1; } function second():Int { return 2; } function main():Int { return 40; }",
+				"function second():Int { return 2; } function first():Int { return 1; } function main():Int { return 40; }", NoOp),
 			sourceFixture("enum case addition", "enum Result { Ok; } function main():Int { return 40; }",
 				"enum Result { Ok; Error; } function main():Int { return 40; }", ReloadFor(EnumChanged("Result"))),
 			sourceFixture("static field type", "class State { public static var value:Int; } function main():Int { return 40; }",
@@ -83,6 +107,7 @@ class AbiMatrixMain {
 		for (fixture in sourceFixtures)
 			assertSourceDecision(fixture);
 		Sys.println('PASS: ${sourceFixtures.length} source ABI decision fixtures');
+		assertCleanEquivalence();
 	}
 
 	static function fixture(name:String, previous:Null<RuntimeAbiDescriptor>, next:RuntimeAbiDescriptor, expected:ExpectedDecision):AbiFixture
@@ -136,7 +161,7 @@ class AbiMatrixMain {
 					&& result.patchBytes == null
 					&& containsReason(result.reloadReasons, reason)):
 				case _:
-					throw '${fixture.name}: unexpected compiler artifact decision';
+					throw '${fixture.name}: unexpected compiler artifact decision (${result.reloadReasons})';
 			}
 		} catch (error:CompileError) {
 			switch fixture.expected {
@@ -154,5 +179,26 @@ class AbiMatrixMain {
 			if (Type.enumEq(reason, expected))
 				return true;
 		return false;
+	}
+
+	static function assertCleanEquivalence():Void {
+		var before = "function value():Int { return 40; } function main():Int { return value(); }";
+		var after = "function value():Int { return 42; } function main():Int { return value(); }";
+		var incremental = new Compiler();
+		incremental.update("Main.hx", before);
+		incremental.compile("Main");
+		incremental.update("Main.hx", after);
+		var incrementalResult = incremental.compile("Main");
+		var clean = new Compiler();
+		clean.update("Main.hx", after);
+		var cleanResult = clean.compile("Main");
+		var incrementalAbi = RuntimeAbiCodec.encode(RuntimeAbi.describe(incrementalResult.ir));
+		var cleanAbi = RuntimeAbiCodec.encode(RuntimeAbi.describe(cleanResult.ir));
+		if (incrementalAbi.compare(cleanAbi) != 0)
+			throw "Incremental and clean compilation produced different runtime ABI";
+		for (name => cleanId in cleanResult.functionIds)
+			if (incrementalResult.functionIds.get(name) != cleanId)
+				throw 'Incremental and clean compilation assigned different stable ID to $name';
+		Sys.println("PASS: incremental edit agrees with clean ABI and stable identities");
 	}
 }

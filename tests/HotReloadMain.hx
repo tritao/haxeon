@@ -260,6 +260,16 @@ class HotReloadMain {
 				name: "method body",
 				before: "class Value { public function read():Int { return 40; } } function main():Int { return new Value().read(); }",
 				after: "class Value { public function read():Int { return 42; } } function main():Int { return new Value().read(); }"
+			},
+			{
+				name: "constructor body",
+				before: "class Value { public var data:Int; public function new():Void { this.data = 40; } } function main():Int { return new Value().data; }",
+				after: "class Value { public var data:Int; public function new():Void { this.data = 42; } } function main():Int { return new Value().data; }"
+			},
+			{
+				name: "fixed-layout closure body",
+				before: "function main():Int { var offset = 20; var f = (value:Int) -> { return value + offset; }; return f(20); }",
+				after: "function main():Int { var offset = 20; var f = (value:Int) -> { return value + offset + 2; }; return f(20); }"
 			}
 		];
 		for (fixture in fixtures) {
