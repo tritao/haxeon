@@ -221,7 +221,7 @@ class Typer {
 				var scope = new Scope();
 				if (!field.isStatic)
 					scope.define("this", TClass(classDecl.name), field.span);
-				initializer = coerce(typeExpression(field.initializer, scope), type,
+				initializer = coerce(typeExpression(field.initializer, scope, type), type,
 					(field.isStatic ? 'static field "${classDecl.name}.${field.name}"' : 'field "${classDecl.name}.${field.name}"'), "E1002");
 				context = previousContext;
 			}
