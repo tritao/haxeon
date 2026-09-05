@@ -102,7 +102,7 @@ class HlPatchWriter {
 			switch op {
 				case Label(_):
 					instruction++;
-				case Call0(_, target), Call1(_, target, _), Call2(_, target, _, _):
+				case Call0(_, target), Call1(_, target, _), Call2(_, target, _, _), CallN(_, target, _):
 					var stableId = stableIdsBySlot.get(target);
 					if (stableId != null)
 						result.push({instruction: instruction, stableId: stableId});

@@ -154,7 +154,7 @@ class HlLower {
 							case 0: instructions.push(HlInstruction.Call0(destination, functionIndex));
 							case 1: instructions.push(HlInstruction.Call1(destination, functionIndex, args[0]));
 							case 2: instructions.push(HlInstruction.Call2(destination, functionIndex, args[0], args[1]));
-							default: throw 'HL lowering supports at most two call arguments, got ${args.length}';
+							default: instructions.push(HlInstruction.CallN(destination, functionIndex, args));
 						}
 					case StaticClosure(output, functionName):
 						instructions.push(HlInstruction.StaticClosure(defineRegister(output, registers, registerTypes), requireFunction(functionName)));

@@ -144,6 +144,11 @@ class HlWriter {
 					requireRegister(fn, argument1);
 					requireRegister(fn, argument2);
 					requireCallable(functionIndices, functionIndex, fn.functionIndex);
+				case CallN(destination, functionIndex, arguments):
+					requireRegister(fn, destination);
+					requireCallable(functionIndices, functionIndex, fn.functionIndex);
+					for (argument in arguments)
+						requireRegister(fn, argument);
 				case StaticClosure(destination, functionIndex):
 					requireRegister(fn, destination);
 					requireCallable(functionIndices, functionIndex, fn.functionIndex);
@@ -377,6 +382,8 @@ class HlWriter {
 					{opcode: HlOpcode.Call1, operands: [destination, functionIndex, argument]};
 				case Call2(destination, functionIndex, argument1, argument2):
 					{opcode: HlOpcode.Call2, operands: [destination, functionIndex, argument1, argument2]};
+				case CallN(destination, functionIndex, arguments):
+					{opcode: HlOpcode.CallN, operands: [destination, functionIndex, arguments.length].concat(arguments)};
 				case StaticClosure(destination, functionIndex):
 					{opcode: HlOpcode.StaticClosure, operands: [destination, functionIndex]};
 				case InstanceClosure(destination, functionIndex, receiver):

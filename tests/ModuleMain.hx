@@ -183,6 +183,14 @@ class ModuleMain {
 			throw "Dynamic method body edit did not emit HLP bytes";
 		if (HlPatchReader.decode(methodBuild.patchBytes).functions.length == 0)
 			throw "Dynamic method HLP patch was empty";
+		var callManyCompiler = new Compiler();
+		callManyCompiler.update("Main.hx", "function sum(a:Int, b:Int, c:Int):Int { return a + b + c; } function main():Int { return sum(10, 20, 12); }");
+		callManyCompiler.compile("Main");
+		callManyCompiler.update("Main.hx", "function sum(a:Int, b:Int, c:Int):Int { return a + b + c; } function main():Int { return sum(11, 20, 12); }");
+		var callManyBuild = callManyCompiler.compile("Main"),
+			callManyPatch = HlPatchReader.decode(callManyBuild.patchBytes);
+		if (callManyPatch.functions.length != 1 || callManyPatch.functions[0].relocations.length != 1)
+			throw "OCallN stable relocation was not emitted";
 		Sys.println("PASS: function fingerprints selectively retyped and regenerated cached artifacts");
 	}
 }
