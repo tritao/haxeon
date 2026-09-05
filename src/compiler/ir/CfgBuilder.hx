@@ -129,6 +129,21 @@ class CfgBuilder {
 	public function fieldSet(object:CfgValue, fieldName:String, value:CfgValue):Void
 		emit(FieldSet(object, fieldName, value));
 
+	public function arrayGet(array:CfgValue, index:CfgValue, type:IrType):CfgValue {
+		var out = temporary(type);
+		emit(ArrayGet(out, array, index));
+		return out;
+	}
+
+	public function arraySet(array:CfgValue, index:CfgValue, value:CfgValue):Void
+		emit(ArraySet(array, index, value));
+
+	public function arraySize(array:CfgValue):CfgValue {
+		var out = temporary(I32);
+		emit(ArraySize(out, array));
+		return out;
+	}
+
 	function binary(a:CfgValue, b:CfgValue, kind:Int, ?type:IrType):CfgValue {
 		var out = temporary(type == null ? a.type : type);
 		emit(switch kind {

@@ -323,6 +323,7 @@ class Compiler {
 			case TString: Bytes;
 			case TVoid: Void;
 			case TClass(name): Obj(name);
+			case TArray(element): Array(irType(element));
 			case TFunction(arguments, result): Function([for (argument in arguments) irType(argument)], irType(result));
 		};
 
@@ -424,6 +425,7 @@ class Compiler {
 			case StringType: "String";
 			case VoidType: "Void";
 			case NamedType(name): name;
+			case ArrayType(element): 'Array<${astTypeName(element)}>';
 			case FunctionType(arguments, result): '(' + [for (argument in arguments) astTypeName(argument)].join(',') + ')->' + astTypeName(result);
 		};
 
@@ -431,6 +433,9 @@ class Compiler {
 		return switch s {
 			case VarDeclaration(n, t, e, span): VarDeclaration(n, t, canonicalExpression(e, module, entry, locals), span);
 			case Assignment(n, e, span): Assignment(n, canonicalExpression(e, module, entry, locals), span);
+			case IndexAssignment(array, offset, e,
+				span): IndexAssignment(canonicalExpression(array, module, entry, locals), canonicalExpression(offset, module, entry, locals),
+					canonicalExpression(e, module, entry, locals), span);
 			case Return(e, span): Return(canonicalExpression(e, module, entry, locals), span);
 			case ReturnVoid(span): ReturnVoid(span);
 			case If(c, y, n,
@@ -459,6 +464,7 @@ class Compiler {
 					resolved = module == entry && name == "main" ? "main" : module + "." + name;
 				Call(resolved, [for (a in args) canonicalExpression(a, module, entry, locals)], s);
 			case New(typeName, args, s): New(typeName, [for (a in args) canonicalExpression(a, module, entry, locals)], s);
+			case Index(array, offset, s): Index(canonicalExpression(array, module, entry, locals), canonicalExpression(offset, module, entry, locals), s);
 			case Lambda(arguments, body, s):
 				Lambda(arguments, [for (statement in body) canonicalStatement(statement, module, entry, locals)], s);
 		}
@@ -466,6 +472,10 @@ class Compiler {
 	static function scanStatement(s, dependencies):Void
 		switch s {
 			case VarDeclaration(_, _, e, _), Assignment(_, e, _), Return(e, _):
+				scanExpression(e, dependencies);
+			case IndexAssignment(array, offset, e, _):
+				scanExpression(array, dependencies);
+				scanExpression(offset, dependencies);
 				scanExpression(e, dependencies);
 			case ReturnVoid(_):
 			case If(c, y, n, _):
@@ -487,6 +497,9 @@ class Compiler {
 			case Add(a, b, _), Sub(a, b, _), Mul(a, b, _), Div(a, b, _), Less(a, b, _), LessEqual(a, b, _), Equal(a, b, _):
 				scanExpression(a, dependencies);
 				scanExpression(b, dependencies);
+			case Index(array, offset, _):
+				scanExpression(array, dependencies);
+				scanExpression(offset, dependencies);
 			case Call(name, args, _):
 				var dot = name.indexOf(".");
 				if (dot > 0) {
@@ -509,6 +522,10 @@ class Compiler {
 			case Assignment(name, e, _):
 				scanCallExpression(e, calls, aliases);
 				rememberAlias(name, e, aliases);
+			case IndexAssignment(array, offset, e, _):
+				scanCallExpression(array, calls, aliases);
+				scanCallExpression(offset, calls, aliases);
+				scanCallExpression(e, calls, aliases);
 			case Return(e, _):
 				scanCallExpression(e, calls, aliases);
 			case ReturnVoid(_):
@@ -541,6 +558,9 @@ class Compiler {
 			case New(_, args, _):
 				for (a in args)
 					scanCallExpression(a, calls, aliases);
+			case Index(array, offset, _):
+				scanCallExpression(array, calls, aliases);
+				scanCallExpression(offset, calls, aliases);
 			case Lambda(_, body, _):
 				for (statement in body)
 					scanCalls(statement, calls, aliases);
@@ -560,6 +580,10 @@ class Compiler {
 		for (statement in statements)
 			switch statement {
 				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Expression(expression, _):
+					collectLambdaExpression(expression, functionName, module, generatedByModule);
+				case IndexAssignment(array, offset, expression, _):
+					collectLambdaExpression(array, functionName, module, generatedByModule);
+					collectLambdaExpression(offset, functionName, module, generatedByModule);
 					collectLambdaExpression(expression, functionName, module, generatedByModule);
 				case ReturnVoid(_):
 				case If(condition, yes, no, _):
@@ -592,6 +616,9 @@ class Compiler {
 			case New(_, args, _):
 				for (argument in args)
 					collectLambdaExpression(argument, functionName, module, generatedByModule);
+			case Index(array, offset, _):
+				collectLambdaExpression(array, functionName, module, generatedByModule);
+				collectLambdaExpression(offset, functionName, module, generatedByModule);
 			default:
 		}
 

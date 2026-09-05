@@ -9,6 +9,7 @@ enum AstType {
 	StringType;
 	VoidType;
 	NamedType(name:String);
+	ArrayType(element:AstType);
 	FunctionType(arguments:Array<AstType>, result:AstType);
 }
 
@@ -48,12 +49,14 @@ enum AstExpression {
 	Equal(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Call(name:String, arguments:Array<AstExpression>, span:SourceSpan);
 	New(typeName:String, arguments:Array<AstExpression>, span:SourceSpan);
+	Index(array:AstExpression, index:AstExpression, span:SourceSpan);
 	Lambda(arguments:Array<AstArgument>, statements:Array<AstStatement>, span:SourceSpan);
 }
 
 enum AstStatement {
 	VarDeclaration(name:String, ?type:AstType, initializer:AstExpression, span:SourceSpan);
 	Assignment(name:String, expression:AstExpression, span:SourceSpan);
+	IndexAssignment(array:AstExpression, index:AstExpression, expression:AstExpression, span:SourceSpan);
 	Return(expression:AstExpression, span:SourceSpan);
 	ReturnVoid(span:SourceSpan);
 	If(condition:AstExpression, thenBranch:Array<AstStatement>, elseBranch:Array<AstStatement>, span:SourceSpan);

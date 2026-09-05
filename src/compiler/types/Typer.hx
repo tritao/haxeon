@@ -151,7 +151,7 @@ class Typer {
 			switch statement {
 				case VarDeclaration(name, declared, initializer, span):
 					var value = typeExpression(initializer, scope);
-					if (declared != null && lowerType(declared) != value.type)
+					if (declared != null && !sameType(lowerType(declared), value.type))
 						fail("E1002", 'Type mismatch for local "$name"', span);
 					scope.define(name, value.type, span);
 					output.push(TVar(name, value, span));
@@ -185,6 +185,16 @@ class Typer {
 							fail("E1002", 'Type mismatch for field "$name"', span);
 						output.push(TFieldAssign(object, fieldName, value, span));
 					}
+				case IndexAssignment(array, offset, expression, span):
+					var typedArray = typeExpression(array, scope),
+						typedIndex = typeExpression(offset, scope),
+						value = typeExpression(expression, scope);
+					if (typedIndex.type != TInt)
+						fail("E1014", "Array index must be Int", typedIndex.span);
+					var element = arrayElementType(typedArray.type, span);
+					if (!sameType(value.type, element))
+						fail("E1002", "Array element assignment has the wrong type", span);
+					output.push(TIndexAssign(typedArray, typedIndex, value, span));
 				case If(condition, thenBranch, elseBranch, span):
 					var typedCondition = typeExpression(condition, scope);
 					if (!sameType(typedCondition.type, TBool))
@@ -226,8 +236,11 @@ class Typer {
 							var objectName = name.substr(0, dot),
 								fieldName = name.substr(dot + 1),
 								object = typeExpression(Variable(objectName, span), scope),
-								field = fieldType(object.type, fieldName, span);
-							new TypedExpression(TField(object, fieldName), field, span);
+								field = fieldName == "length"
+									&& isArray(object.type) ? arrayLengthType(object.type) : fieldType(object.type, fieldName, span);
+							fieldName == "length"
+							&& isArray(object.type) ? new TypedExpression(TArrayLength(object), TInt,
+								span) : new TypedExpression(TField(object, fieldName), field, span);
 						}
 					}
 				}
@@ -317,6 +330,13 @@ class Typer {
 				var typed = [for (argument in arguments) typeExpression(argument, scope)];
 				checkArguments(typed, expected, typeName + ".new");
 				new TypedExpression(TNew(typeName, typed, constructor != null), TClass(typeName), span);
+			case Index(array, offset, span):
+				var typedArray = typeExpression(array, scope),
+					typedIndex = typeExpression(offset, scope);
+				if (typedIndex.type != TInt)
+					fail("E1014", "Array index must be Int", typedIndex.span);
+				var element = arrayElementType(typedArray.type, span);
+				new TypedExpression(TIndex(typedArray, typedIndex), element, span);
 			case Call(name, arguments, span):
 				var callable = scope.resolve(name);
 				if (callable != null) {
@@ -393,6 +413,10 @@ class Typer {
 			switch statement {
 				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Expression(expression, _):
 					collectExpressionVariables(expression, names);
+				case IndexAssignment(array, offset, expression, _):
+					collectExpressionVariables(array, names);
+					collectExpressionVariables(offset, names);
+					collectExpressionVariables(expression, names);
 				case ReturnVoid(_):
 				case If(condition, yes, no, _):
 					collectExpressionVariables(condition, names);
@@ -418,6 +442,9 @@ class Typer {
 			case New(_, arguments, _):
 				for (argument in arguments)
 					collectExpressionVariables(argument, names);
+			case Index(array, offset, _):
+				collectExpressionVariables(array, names);
+				collectExpressionVariables(offset, names);
 			case Lambda(_, _, _):
 				return;
 			case IntegerLiteral(_, _):
@@ -531,13 +558,31 @@ class Typer {
 			case StringType: TString;
 			case VoidType: TVoid;
 			case NamedType(name): TClass(name);
+			case ArrayType(element): TArray(lowerType(element));
 			case FunctionType(arguments, result): TFunction([for (argument in arguments) lowerType(argument)], lowerType(result));
+		};
+
+	function arrayElementType(type:CompilerType, span:SourceSpan):CompilerType
+		return switch type {
+			case TArray(element): element;
+			default:
+				fail("E1015", "Indexing requires an Array value", span);
+				TVoid;
+		};
+
+	function arrayLengthType(type:CompilerType):CompilerType
+		return isArray(type) ? TInt : TVoid;
+
+	static function isArray(type:CompilerType):Bool
+		return switch type {
+			case TArray(_): true;
+			default: false;
 		};
 
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
-			case VarDeclaration(_, _, _, span), Assignment(_, _, span), Return(_, span), ReturnVoid(span), If(_, _, _, span), While(_, _, span),
-				Expression(_, span): span;
+			case VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), If(_, _, _, span),
+				While(_, _, span), Expression(_, span): span;
 		}
 
 	static function fail(code:String, message:String, span:SourceSpan):Void
@@ -546,6 +591,7 @@ class Typer {
 	static function sameType(left:CompilerType, right:CompilerType):Bool
 		return switch [left, right] {
 			case [TClass(a), TClass(b)]: a == b;
+			case [TArray(a), TArray(b)]: sameType(a, b);
 			case [TFunction(aArgs, aResult), TFunction(bArgs, bResult)]: aArgs.length == bArgs.length && [
 					for (i in 0...aArgs.length)
 						sameType(aArgs[i], bArgs[i])

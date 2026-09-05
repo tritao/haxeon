@@ -190,6 +190,34 @@ class IrVerifier {
 				if (field == null || !sameType(field.type, value.type))
 					throw 'Unknown or mismatched IR field "${objectType.name}.$fieldName"';
 				require(values, value);
+			case ArrayGet(out, array, index):
+				require(values, array);
+				require(values, index);
+				expect(index, I32);
+				switch array.type {
+					case Array(element):
+						if (!sameType(out.type, element)) throw 'IR array read has the wrong element type';
+					default: throw 'IR array read requires an Array value';
+				}
+				define(values, out);
+			case ArraySet(array, index, value):
+				require(values, array);
+				require(values, index);
+				require(values, value);
+				expect(index, I32);
+				switch array.type {
+					case Array(element):
+						if (!sameType(value.type, element)) throw 'IR array write has the wrong element type';
+					default: throw 'IR array write requires an Array value';
+				}
+			case ArraySize(out, array):
+				require(values, array);
+				switch array.type {
+					case Array(_):
+					default: throw 'IR array size requires an Array value';
+				}
+				expect(out, I32);
+				define(values, out);
 		}
 
 	static function requireObject(value:IrValue, values:Map<Int, IrType>, objects:Map<String, IrObject>):IrObject {
@@ -263,6 +291,7 @@ class IrVerifier {
 	static function sameType(left:IrType, right:IrType):Bool
 		return switch [left, right] {
 			case [Obj(a), Obj(b)]: a == b;
+			case [Array(a), Array(b)]: sameType(a, b);
 			case [Function(aArgs, aResult), Function(bArgs, bResult)]: aArgs.length == bArgs.length && [
 					for (i in 0...aArgs.length)
 						sameType(aArgs[i], bArgs[i])
@@ -276,6 +305,7 @@ class IrVerifier {
 		return switch [actual, expected] {
 			case [Obj(actualName), Obj(expectedName)]: var object = objects.get(actualName); object != null && object.base != null && compatibleType(Obj(object.base),
 					expected, objects);
+			case [Array(actualElement), Array(expectedElement)]: sameType(actualElement, expectedElement);
 			default: false;
 		};
 	}

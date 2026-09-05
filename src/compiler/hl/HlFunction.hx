@@ -33,6 +33,9 @@ enum HlInstruction {
 	New(destination:Int, type:Int, extra:Int);
 	FieldGet(destination:Int, object:Int, field:Int);
 	FieldSet(object:Int, field:Int, source:Int);
+	ArrayGet(destination:Int, array:Int, index:Int);
+	ArraySet(array:Int, index:Int, source:Int);
+	ArraySize(destination:Int, array:Int);
 	JumpSignedLessOrEqual(left:Int, right:Int, target:String);
 	JumpSignedLess(left:Int, right:Int, target:String);
 	JumpEqual(left:Int, right:Int, target:String);

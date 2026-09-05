@@ -30,7 +30,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 - [x] Function values for non-capturing references.
 - [x] Capturing closures and instance closures (read-only captures; mutable
   capture cells remain future work).
-- [ ] Arrays, maps, enums, nullable values, and pattern matching.
+- [~] `Array<Int>` typing, indexed reads/writes, and `.length` lower directly
+  to HashLink array operations; allocation and other element kinds remain.
+  Maps, enums, nullable values, and pattern matching are still future work.
 - [ ] Interfaces, virtual dispatch, and basic generics.
 - [ ] A documented runtime library ABI for strings, collections, IO, and time
   (typed `trace` and a native-backed `IntArray` ABI probe are exercised
@@ -80,8 +82,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 
 ## Feature order after the current milestone
 
-1. Add a first-class `Array<T>` runtime type and bounds-checked indexing using
-   HashLink array operations. Start with `Int`, `Float`, and object arrays.
+1. Extend the first-class `Array<T>` runtime type from the current `Int`
+   indexing slice to compiler-owned allocation and `Float`/object arrays;
+   keep bounds checks in the HashLink operation contract.
 2. Add enums/nullable values and pattern matching on the same tagged-value
    rules used by the runtime bridge.
 3. Add interfaces and virtual method prototypes; direct calls remain an

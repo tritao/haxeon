@@ -168,6 +168,17 @@ class HlWriter {
 					requireRegister(fn, source);
 					if (field < 0)
 						throw 'Invalid object field $field in function ${fn.functionIndex}';
+				case ArrayGet(destination, array, index):
+					requireRegister(fn, destination);
+					requireRegister(fn, array);
+					requireRegister(fn, index);
+				case ArraySet(array, index, source):
+					requireRegister(fn, array);
+					requireRegister(fn, index);
+					requireRegister(fn, source);
+				case ArraySize(destination, array):
+					requireRegister(fn, destination);
+					requireRegister(fn, array);
 				case JumpSignedLessOrEqual(left, right, target):
 					requireRegister(fn, left);
 					requireRegister(fn, right);
@@ -373,6 +384,12 @@ class HlWriter {
 					{opcode: HlOpcode.Field, operands: [destination, object, field]};
 				case FieldSet(object, field, source):
 					{opcode: HlOpcode.SetField, operands: [object, field, source]};
+				case ArrayGet(destination, array, index):
+					{opcode: HlOpcode.GetArray, operands: [destination, array, index]};
+				case ArraySet(array, index, source):
+					{opcode: HlOpcode.SetArray, operands: [array, index, source]};
+				case ArraySize(destination, array):
+					{opcode: HlOpcode.ArraySize, operands: [destination, array]};
 				case JumpSignedLessOrEqual(left, right, target):
 					var targetPosition = labels.get(target);
 					{opcode: HlOpcode.JSLte, operands: [left, right, targetPosition - (result.length + 1)]};

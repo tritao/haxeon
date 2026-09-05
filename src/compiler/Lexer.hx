@@ -89,6 +89,9 @@ class Lexer {
 						position++;
 						TokenKind.LessEqual;
 					} else TokenKind.Less;
+				case ">": TokenKind.Greater;
+				case "[": TokenKind.LeftBracket;
+				case "]": TokenKind.RightBracket;
 				case "+": TokenKind.Plus;
 				case "-":
 					if (position < source.length && source.charAt(position) == ">") {

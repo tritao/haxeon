@@ -104,6 +104,18 @@ if [[ $collection_status -ne 42 ]]; then
 fi
 echo "PASS: native-backed collection object executed (exit 42)"
 
+array_output="$root_dir/out/array.hl"
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run ArrayMain "$array_output"
+set +e
+LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink" "$hl" "$array_output"
+array_status=$?
+set -e
+if [[ $array_status -ne 42 ]]; then
+	echo "native array: expected exit 42, got $array_status" >&2
+	exit 1
+fi
+echo "PASS: first-class Array<Int> indexing executed (exit 42)"
+
 instance_module_output="$root_dir/out/instance-module.hl"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run InstanceModuleMain "$instance_module_output"
 set +e

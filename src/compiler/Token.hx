@@ -43,8 +43,11 @@ enum TokenKind {
 	Star;
 	Slash;
 	Less;
+	Greater;
 	LessEqual;
 	EqualEqual;
+	LeftBracket;
+	RightBracket;
 	Eof;
 }
 

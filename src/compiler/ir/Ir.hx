@@ -6,6 +6,7 @@ enum IrType {
 	Bool;
 	F64;
 	Bytes;
+	Array(element:IrType);
 	Obj(name:String);
 	Function(arguments:Array<IrType>, result:IrType);
 }
@@ -47,6 +48,9 @@ enum IrInstruction {
 	NewObject(output:IrValue, typeName:String);
 	FieldGet(output:IrValue, object:IrValue, fieldName:String);
 	FieldSet(object:IrValue, fieldName:String, value:IrValue);
+	ArrayGet(output:IrValue, array:IrValue, index:IrValue);
+	ArraySet(array:IrValue, index:IrValue, value:IrValue);
+	ArraySize(output:IrValue, array:IrValue);
 }
 
 enum IrTerminator {

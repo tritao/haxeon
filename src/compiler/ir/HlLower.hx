@@ -173,6 +173,14 @@ class HlLower {
 					case FieldSet(object, fieldName, value):
 						instructions.push(HlInstruction.FieldSet(requireRegister(object, registers), requireObjectField(object, fieldName),
 							requireRegister(value, registers)));
+					case ArrayGet(output, array, index):
+						instructions.push(HlInstruction.ArrayGet(defineRegister(output, registers, registerTypes), requireRegister(array, registers),
+							requireRegister(index, registers)));
+					case ArraySet(array, index, value):
+						instructions.push(HlInstruction.ArraySet(requireRegister(array, registers), requireRegister(index, registers),
+							requireRegister(value, registers)));
+					case ArraySize(output, array):
+						instructions.push(HlInstruction.ArraySize(defineRegister(output, registers, registerTypes), requireRegister(array, registers)));
 				}
 			}
 			if (block.terminator == null)

@@ -35,6 +35,9 @@ enum CfgInstruction {
 	NewObject(output:CfgValue, typeName:String);
 	FieldGet(output:CfgValue, object:CfgValue, fieldName:String);
 	FieldSet(object:CfgValue, fieldName:String, value:CfgValue);
+	ArrayGet(output:CfgValue, array:CfgValue, index:CfgValue);
+	ArraySet(array:CfgValue, index:CfgValue, value:CfgValue);
+	ArraySize(output:CfgValue, array:CfgValue);
 }
 
 enum CfgTerminator {

@@ -300,6 +300,14 @@ class SsaBuilder {
 					target.instructions.push(FieldGet(result, resolve(object), fieldName));
 				case FieldSet(object, fieldName, value):
 					target.instructions.push(FieldSet(resolve(object), fieldName, resolve(value)));
+				case ArrayGet(out, array, index):
+					var result = define(out);
+					target.instructions.push(ArrayGet(result, resolve(array), resolve(index)));
+				case ArraySet(array, index, value):
+					target.instructions.push(ArraySet(resolve(array), resolve(index), resolve(value)));
+				case ArraySize(out, array):
+					var result = define(out);
+					target.instructions.push(ArraySize(result, resolve(array)));
 			}
 		target.terminator = switch block.terminator {
 			case Return(value): Return(resolve(value));

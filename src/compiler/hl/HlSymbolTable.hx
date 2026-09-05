@@ -67,6 +67,7 @@ class HlSymbolTable {
 			case Bool: HlType.Bool;
 			case F64: HlType.F64;
 			case Bytes: HlType.Bytes;
+			case Array(_): HlType.Array;
 			case Obj(name): throw 'Object type "$name" must be registered before use';
 			case Function(_, _): throw 'Function type must be interned with internFunction';
 		}));
@@ -115,6 +116,7 @@ class HlSymbolTable {
 			case Bool: "bool";
 			case F64: "f64";
 			case Bytes: "bytes";
+			case Array(element): 'array:${typeKey(element)}';
 			case Obj(name): 'obj:$name';
 			case Function(arguments, result): 'fun(${[for (argument in arguments) typeKey(argument)].join(",")})->${typeKey(result)}';
 		};

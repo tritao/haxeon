@@ -95,6 +95,9 @@ class IrGenerator {
 					builder.store(name, lowerExpression(value, builder, localTypes));
 				case TFieldAssign(object, name, value, _):
 					builder.fieldSet(lowerExpression(object, builder, localTypes), name, lowerExpression(value, builder, localTypes));
+				case TIndexAssign(array, index, value, _):
+					builder.arraySet(lowerExpression(array, builder, localTypes), lowerExpression(index, builder, localTypes),
+						lowerExpression(value, builder, localTypes));
 				case TReturn(expression, _):
 					builder.returnValue(lowerExpression(expression, builder, localTypes));
 				case TReturnVoid(_):
@@ -184,6 +187,10 @@ class IrGenerator {
 				for (arg in args)
 					callArgs.push(lowerExpression(arg, builder, localTypes));
 				builder.call(name, callArgs, lowerType(expression.type));
+			case TIndex(array, index):
+				builder.arrayGet(lowerExpression(array, builder, localTypes), lowerExpression(index, builder, localTypes), lowerType(expression.type));
+			case TArrayLength(array):
+				builder.arraySize(lowerExpression(array, builder, localTypes));
 		}
 
 	static function implicitArguments(fn:TypedFunction):Array<{name:String, type:IrType}> {
@@ -200,6 +207,7 @@ class IrGenerator {
 			case TString: Bytes;
 			case TVoid: Void;
 			case TClass(name): Obj(name);
+			case TArray(element): Array(lowerType(element));
 			case TFunction(arguments, result): Function([for (argument in arguments) lowerType(argument)], lowerType(result));
 		};
 }

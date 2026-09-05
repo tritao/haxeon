@@ -164,13 +164,14 @@ class Parser {
 			if (match(TokenKind.Assign)) {
 				var value = parseExpression(),
 					end = consume(TokenKind.Semicolon).span,
-					name = switch target {
-						case Variable(path, _): path;
+					assignment = switch target {
+						case Variable(name, _): Assignment(name, value, expressionSpan(target).merge(end));
+						case Index(array, offset, _): IndexAssignment(array, offset, value, expressionSpan(target).merge(end));
 						default:
-							throw new CompileError(new Diagnostic("E0002", "Assignment target must be a variable or field", expressionSpan(target)));
-							"";
+							throw new CompileError(new Diagnostic("E0002", "Assignment target must be a variable, field, or array element",
+								expressionSpan(target)));
 					};
-				return Assignment(name, value, expressionSpan(target).merge(end));
+				return assignment;
 			}
 			position = saved;
 		}
@@ -276,7 +277,13 @@ class Parser {
 			var start = previous().span, name = "this";
 			while (match(TokenKind.Dot))
 				name += "." + consume(TokenKind.Identifier).text;
-			return Variable(name, start);
+			var expression:AstExpression = Variable(name, start);
+			while (match(TokenKind.LeftBracket)) {
+				var offset = parseExpression(),
+					end = consume(TokenKind.RightBracket).span;
+				expression = Index(expression, offset, expressionSpan(expression).merge(end));
+			}
+			return expression;
 		}
 		if (match(TokenKind.Identifier)) {
 			var name = previous().text;
@@ -284,15 +291,22 @@ class Parser {
 			while (match(TokenKind.Dot)) {
 				name += "." + consume(TokenKind.Identifier).text;
 			}
-			if (!match(TokenKind.LeftParen))
-				return Variable(name, start);
-			var arguments = [];
-			if (!check(TokenKind.RightParen)) {
-				do
-					arguments.push(parseExpression()) while (match(TokenKind.Comma));
+			var expression:AstExpression = Variable(name, start);
+			if (match(TokenKind.LeftParen)) {
+				var arguments = [];
+				if (!check(TokenKind.RightParen)) {
+					do
+						arguments.push(parseExpression()) while (match(TokenKind.Comma));
+				}
+				var end = consume(TokenKind.RightParen).span;
+				expression = Call(name, arguments, start.merge(end));
 			}
-			var end = consume(TokenKind.RightParen).span;
-			return Call(name, arguments, start.merge(end));
+			while (match(TokenKind.LeftBracket)) {
+				var offset = parseExpression(),
+					end = consume(TokenKind.RightBracket).span;
+				expression = Index(expression, offset, expressionSpan(expression).merge(end));
+			}
+			return expression;
 		}
 		if (match(TokenKind.LeftParen)) {
 			var expression = parseExpression();
@@ -335,7 +349,14 @@ class Parser {
 		if (match(TokenKind.Void))
 			return VoidType;
 		if (check(TokenKind.Identifier))
-			return NamedType(parseQualifiedName());
+			if (current().text == "Array") {
+				advance();
+				consume(TokenKind.Less);
+				var element = parseType();
+				consume(TokenKind.Greater);
+				return ArrayType(element);
+			}
+		return NamedType(parseQualifiedName());
 		fail(current(), 'Expected type, got ${current().kind}');
 		return null;
 	}
@@ -387,7 +408,8 @@ class Parser {
 	static function expressionSpan(expression:AstExpression)
 		return switch expression {
 			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), Variable(_, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span),
-				Div(_, _, span), Less(_, _, span), LessEqual(_, _, span), Equal(_, _, span), Call(_, _, span), New(_, _, span), Lambda(_, _, span): span;
+				Div(_, _, span), Less(_, _, span), LessEqual(_, _, span), Equal(_, _, span), Call(_, _, span), New(_, _, span), Index(_, _, span),
+				Lambda(_, _, span): span;
 		}
 
 	static function decodeString(text:String):String {
@@ -413,7 +435,7 @@ class Parser {
 
 	static function statementSpan(statement:AstStatement)
 		return switch statement {
-			case VarDeclaration(_, _, _, span), Assignment(_, _, span), Return(_, span), ReturnVoid(span), If(_, _, _, span), While(_, _, span),
-				Expression(_, span): span;
+			case VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), If(_, _, _, span),
+				While(_, _, span), Expression(_, span): span;
 		}
 }

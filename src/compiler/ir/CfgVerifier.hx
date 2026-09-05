@@ -128,6 +128,34 @@ class CfgVerifier {
 				case FieldSet(object, _, value):
 					require(object, available);
 					require(value, available);
+				case ArrayGet(out, array, index):
+					require(array, available);
+					require(index, available);
+					expect(index, I32);
+					switch array.type {
+						case Array(element):
+							if (!sameType(out.type, element)) throw 'CFG array read has the wrong element type';
+						default: throw 'CFG array read requires an Array value';
+					}
+					define(out, defined, available);
+				case ArraySet(array, index, value):
+					require(array, available);
+					require(index, available);
+					require(value, available);
+					expect(index, I32);
+					switch array.type {
+						case Array(element):
+							if (!sameType(value.type, element)) throw 'CFG array write has the wrong element type';
+						default: throw 'CFG array write requires an Array value';
+					}
+				case ArraySize(out, array):
+					require(array, available);
+					switch array.type {
+						case Array(_):
+						default: throw 'CFG array size requires an Array value';
+					}
+					expect(out, I32);
+					define(out, defined, available);
 			}
 		if (block.terminator != null)
 			switch block.terminator {
@@ -174,6 +202,7 @@ class CfgVerifier {
 	static function sameType(left:IrType, right:IrType):Bool
 		return switch [left, right] {
 			case [Obj(a), Obj(b)]: a == b;
+			case [Array(a), Array(b)]: sameType(a, b);
 			case [Function(aArgs, aResult), Function(bArgs, bResult)]: aArgs.length == bArgs.length && [
 					for (i in 0...aArgs.length)
 						sameType(aArgs[i], bArgs[i])

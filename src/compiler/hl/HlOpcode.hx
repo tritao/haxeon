@@ -20,7 +20,10 @@ enum abstract HlOpcode(Int) from Int to Int {
 	var InstanceClosure = 34;
 	var Field = 38;
 	var SetField = 39;
+	var GetArray = 77;
+	var SetArray = 81;
 	var New = 82;
+	var ArraySize = 83;
 	var JTrue = 44;
 	var JSLt = 48;
 	var JSLte = 51;

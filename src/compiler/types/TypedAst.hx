@@ -35,12 +35,15 @@ enum TypedExpressionKind {
 	TNew(typeName:String, arguments:Array<TypedExpression>, hasConstructor:Bool);
 	TField(object:TypedExpression, name:String);
 	TMethodCall(object:TypedExpression, functionName:String, arguments:Array<TypedExpression>);
+	TIndex(array:TypedExpression, index:TypedExpression);
+	TArrayLength(array:TypedExpression);
 }
 
 enum TypedStatement {
 	TVar(name:String, initializer:TypedExpression, span:SourceSpan);
 	TAssign(name:String, value:TypedExpression, span:SourceSpan);
 	TFieldAssign(object:TypedExpression, name:String, value:TypedExpression, span:SourceSpan);
+	TIndexAssign(array:TypedExpression, index:TypedExpression, value:TypedExpression, span:SourceSpan);
 	TReturn(expression:TypedExpression, span:SourceSpan);
 	TReturnVoid(span:SourceSpan);
 	TIf(condition:TypedExpression, thenBranch:Array<TypedStatement>, elseBranch:Array<TypedStatement>, span:SourceSpan);
