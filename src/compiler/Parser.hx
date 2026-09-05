@@ -760,7 +760,7 @@ class Parser {
 					condition = parseExpression();
 					consume(TokenKind.RightParen);
 				}
-				var value = parseExpression(),
+				var value = parseComprehensionValue(),
 					end = consume(TokenKind.RightBracket).span;
 				return parsePostfix(ArrayComprehension(keyName, valueName, iterable, condition, value, start.merge(end)));
 			}
@@ -902,6 +902,12 @@ class Parser {
 		}
 		fail(current(), "Expected expression");
 		return null;
+	}
+
+	function parseComprehensionValue():AstExpression {
+		if (check(TokenKind.LeftBrace) && !(peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon))
+			return parseExpressionBranch();
+		return parseExpression();
 	}
 
 	function parseExpressionBranch():AstExpression {
