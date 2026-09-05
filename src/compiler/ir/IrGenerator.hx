@@ -934,6 +934,11 @@ class IrGenerator {
 				var placeholder = unreachableValue(lowerType(expression.type), builder);
 				builder.throwValue(builder.toDyn(lowerExpression(value, builder, localTypes)));
 				placeholder;
+			case TCast(value):
+				var source = lowerExpression(value, builder, localTypes),
+					target = lowerType(expression.type);
+				if (source.type == target) source; else if (source.type == Dyn) builder.safeCast(source,
+					target); else if (target == Dyn) builder.toDyn(source); else throw 'Unsupported cast from ${source.type} to $target';
 			case TSwitchExpression(subject, cases, defaultExpression):
 				var subjectName = '$' + 'switch-expression-subject:${expression.span.start}',
 					resultName = '$' + 'switch-expression-result:${expression.span.start}',

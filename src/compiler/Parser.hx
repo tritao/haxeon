@@ -591,6 +591,18 @@ class Parser {
 			var start = previous().span, value = parseExpression();
 			return ThrowExpression(value, start.merge(expressionSpan(value)));
 		}
+		if (check(TokenKind.Identifier) && current().text == "cast") {
+			var start = advance().span;
+			if (match(TokenKind.LeftParen)) {
+				var value = parseExpression(), target = null;
+				if (match(TokenKind.Comma))
+					target = parseType();
+				var end = consume(TokenKind.RightParen).span;
+				return parsePostfix(Cast(value, target, start.merge(end)));
+			}
+			var value = parsePrimary();
+			return Cast(value, null, start.merge(expressionSpan(value)));
+		}
 		if (match(TokenKind.If)) {
 			var start = previous().span;
 			consume(TokenKind.LeftParen);
@@ -1044,7 +1056,7 @@ class Parser {
 				LessEqual(_, _, span), Greater(_, _, span), GreaterEqual(_, _, span), Equal(_, _, span), NotEqual(_, _, span), Not(_, span), Call(_, _, span),
 				MethodCall(_, _, _, span), New(_, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span), PostfixIncrement(_, _, span),
 				Lambda(_, _, span), And(_, _, span), Or(_, _, span), Conditional(_, _, _, span), BlockExpression(_, _, span), ThrowExpression(_, span),
-				SwitchExpression(_, _, _, span): span;
+				SwitchExpression(_, _, _, span), Cast(_, _, span): span;
 			case ObjectLiteral(_, span), ArrayLiteral(_, span), ArrayComprehension(_, _, _, _, span), Range(_, _, span): span;
 		}
 

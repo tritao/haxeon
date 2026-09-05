@@ -1073,6 +1073,7 @@ class Compiler {
 						canonicalStatement(statement, module, entry, locals, aliases)
 				], canonicalExpression(value, module, entry, locals, aliases), s);
 			case ThrowExpression(value, s): ThrowExpression(canonicalExpression(value, module, entry, locals, aliases), s);
+			case Cast(value, target, s): Cast(canonicalExpression(value, module, entry, locals, aliases), target, s);
 			case SwitchExpression(subject, cases, fallback, s):
 				SwitchExpression(canonicalExpression(subject, module, entry, locals, aliases), [
 					for (switchCase in cases)
@@ -1341,6 +1342,8 @@ class Compiler {
 				scanExpression(value, dependencies);
 			case ThrowExpression(value, _):
 				scanExpression(value, dependencies);
+			case Cast(value, _, _):
+				scanExpression(value, dependencies);
 			case SwitchExpression(subject, cases, fallback, _):
 				scanExpression(subject, dependencies);
 				for (switchCase in cases) {
@@ -1503,6 +1506,8 @@ class Compiler {
 				scanCallExpression(value, calls, aliases);
 			case ThrowExpression(value, _):
 				scanCallExpression(value, calls, aliases);
+			case Cast(value, _, _):
+				scanCallExpression(value, calls, aliases);
 			case SwitchExpression(subject, cases, fallback, _):
 				scanCallExpression(subject, calls, aliases);
 				for (switchCase in cases) {
@@ -1628,6 +1633,8 @@ class Compiler {
 				collectLambdas(statements, functionName, module, generatedByModule);
 				collectLambdaExpression(value, functionName, module, generatedByModule);
 			case ThrowExpression(value, _):
+				collectLambdaExpression(value, functionName, module, generatedByModule);
+			case Cast(value, _, _):
 				collectLambdaExpression(value, functionName, module, generatedByModule);
 			case SwitchExpression(subject, cases, fallback, _):
 				collectLambdaExpression(subject, functionName, module, generatedByModule);

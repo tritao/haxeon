@@ -944,6 +944,11 @@ class Typer {
 				new TypedExpression(TBlockExpression(typedStatements, typedResult), typedResult.type, span);
 			case ThrowExpression(value, span):
 				new TypedExpression(TThrowExpression(typeExpression(value, scope)), TNever, span);
+			case Cast(value, target, span):
+				var targetType = target == null ? expectedType : lowerType(target);
+				if (targetType == null)
+					fail("E1003", "Untyped cast requires an expected type", span);
+				new TypedExpression(TCast(typeExpression(value, scope)), targetType, span);
 			case PostfixIncrement(target, delta, span):
 				var typedTarget = typeExpression(target, scope);
 				if (!sameType(typedTarget.type, TInt) && !sameType(typedTarget.type, TFloat))
@@ -1866,6 +1871,8 @@ class Typer {
 				collectMutableCaptureExpression(value, outerDeclared, result);
 			case ThrowExpression(value, _):
 				collectMutableCaptureExpression(value, outerDeclared, result);
+			case Cast(value, _, _):
+				collectMutableCaptureExpression(value, outerDeclared, result);
 			case SwitchExpression(subject, cases, fallback, _):
 				collectMutableCaptureExpression(subject, outerDeclared, result);
 				for (switchCase in cases) {
@@ -1923,6 +1930,8 @@ class Typer {
 				collectVariables(statements, names);
 				collectExpressionVariables(value, names);
 			case ThrowExpression(value, _):
+				collectExpressionVariables(value, names);
+			case Cast(value, _, _):
 				collectExpressionVariables(value, names);
 			case SwitchExpression(subject, cases, fallback, _):
 				collectExpressionVariables(subject, names);
