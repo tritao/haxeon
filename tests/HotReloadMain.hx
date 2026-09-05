@@ -11,6 +11,11 @@ import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlType;
 import compiler.modules.Compiler;
 import compiler.ir.IrFunctionStateCodec;
+import compiler.hl.HlFunctionCacheStateCodec;
+import compiler.hl.HlSymbolStateCodec;
+import compiler.hl.HlAssemblerStateCodec;
+import compiler.hl.HlModuleAssembler;
+import compiler.abi.PatchPlanner.PatchDecision;
 import runtime.Runtime;
 import runtime.RuntimeError;
 import runtime.RuntimeStatus;
@@ -19,6 +24,7 @@ import runtime.PatchSet;
 class HotReloadMain {
 	static function main():Void {
 		testDecodedIrLifetime();
+		testBackendStateLifetime();
 		var compiler = new Compiler();
 		compiler.update("Value.hx", "function value():Int { return 42; }");
 		compiler.update("Probe.hx", "function read():Int { return Value.value(); }");
@@ -233,6 +239,39 @@ class HotReloadMain {
 		testAppendedFloatAndStringSymbols();
 		testNonMovingTypeArena();
 		Sys.println("PASS: selective HLP patches are atomic and retain bounded JIT code");
+	}
+
+	static function testBackendStateLifetime():Void {
+		var compiler = new Compiler();
+		compiler.update("Main.hx", "function add(a:Int, b:Int):Int { return a + b; } function main():Int { return add(20, 22); }");
+		var program = compiler.compile("Main").ir,
+			assembler = new HlModuleAssembler();
+		assembler.assemble(program, [for (fn in program.functions) fn.name], Patch);
+		var cacheBytes = HlFunctionCacheStateCodec.encode(assembler.cache.exportState());
+		for (_ in 0...100)
+			HlFunctionCacheStateCodec.restore(cacheBytes);
+		probeCompiler("function cache");
+		var symbolBytes = HlSymbolStateCodec.encode(assembler.symbols.exportState());
+		for (_ in 0...100)
+			HlSymbolStateCodec.restore(symbolBytes);
+		probeCompiler("symbol table");
+		var assemblerBytes = HlAssemblerStateCodec.encode(assembler);
+		for (_ in 0...100)
+			HlAssemblerStateCodec.decode(assemblerBytes);
+		probeCompiler("assembler");
+		var restoredAssembler = HlAssemblerStateCodec.decode(assemblerBytes),
+			editedCompiler = new Compiler();
+		editedCompiler.update("Main.hx", "function add(a:Int, b:Int):Int { return a + b; } function main():Int { return add(21, 22); }");
+		var edited = editedCompiler.compile("Main").ir;
+		restoredAssembler.assemble(edited, ["main"], Patch);
+		probeCompiler("mutated restored assembler");
+	}
+
+	static function probeCompiler(after:String):Void {
+		var compiler = new Compiler();
+		compiler.update("Main.hx", "function main():Int { return 42; }");
+		if (compiler.compile("Main").ir.functions.length == 0)
+			throw 'Compiler failed after restored $after lifetime stress';
 	}
 
 	static function testDecodedIrLifetime():Void {
