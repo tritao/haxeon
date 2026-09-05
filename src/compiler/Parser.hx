@@ -1475,24 +1475,24 @@ class Parser {
 		}
 
 	static function decodeString(text:String):String {
-		var out = new StringBuf(), i = 1;
+		var out = "", i = 1;
 		while (i < text.length - 1) {
 			var c = text.charAt(i++);
 			if (c != "\\") {
-				out.add(c);
+				out += c;
 				continue;
 			}
 			var escaped = text.charAt(i++);
-			out.add(switch escaped {
+			out += switch escaped {
 				case "n": "\n";
 				case "r": "\r";
 				case "t": "\t";
 				case "\"": "\"";
 				case "\\": "\\";
 				default: escaped;
-			});
+			};
 		}
-		return out.toString();
+		return out;
 	}
 
 	static function statementSpan(statement:AstStatement)
