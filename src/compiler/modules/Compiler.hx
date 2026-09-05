@@ -35,6 +35,8 @@ import compiler.modules.CompilerPublication.CompilerSnapshot;
 import compiler.modules.CompilerPublication.PublicationStatus;
 import compiler.modules.CompilerPublication.ReconnectDecision;
 import compiler.modules.CompilerPublication.ReconnectReason;
+import compiler.modules.ModuleState.SemanticDependency;
+import compiler.modules.ModuleState.SemanticDependencyKind;
 
 typedef NativeFunction = {final name:String; final library:String; final symbol:String; final arguments:Array<CompilerType>; final result:CompilerType;}
 
@@ -704,6 +706,7 @@ class Compiler {
 		state.dependencies.sort(Reflect.compare);
 		var typeAliases = importAliases(state.ast.imports);
 		addDeclaredTypeAliases(typeAliases, state.ast, state.ast.packageName);
+		state.semanticDependencies = collectSemanticDependencies(state, entry, typeAliases);
 		var signatures:Map<String, String> = [],
 			bodies:Map<String, String> = [];
 		var interfaces:Map<String, String> = [];
@@ -1049,6 +1052,109 @@ class Compiler {
 			case FunctionType(arguments, result): FunctionType([for (argument in arguments) canonicalType(argument, aliases)], canonicalType(result, aliases));
 			default: type;
 		};
+
+	static function collectSemanticDependencies(state:ModuleState, entry:String, typeAliases:Map<String, String>):Map<String, Array<SemanticDependency>> {
+		var result:Map<String, Array<SemanticDependency>> = [];
+		for (fn in state.ast.functions) {
+			var owner = state.name == entry && fn.name == "main" ? "main" : state.name + "." + fn.name;
+			for (argument in fn.arguments)
+				addTypeDependency(result, owner, Signature, argument.type, typeAliases);
+			addTypeDependency(result, owner, Signature, fn.result, typeAliases);
+			addBodyDependencies(result, owner, fn.statements, state.name, entry);
+		}
+		for (classDecl in state.ast.classes) {
+			var className = qualifiedTypeName(state.ast.packageName, classDecl.name);
+			if (classDecl.base != null)
+				addDependency(result, className, Layout, resolveTypeName(classDecl.base, typeAliases));
+			for (interfaceName in classDecl.interfaces)
+				addDependency(result, className, Layout, resolveTypeName(interfaceName, typeAliases));
+			for (field in classDecl.fields) {
+				addTypeDependency(result, className, Layout, field.type, typeAliases);
+				if (field.initializer != null)
+					addExpressionDependencies(result, className + "." + field.name, Initializer, field.initializer, state.name, entry);
+			}
+			for (method in classDecl.methods) {
+				var owner = className + "." + method.name;
+				for (argument in method.arguments)
+					addTypeDependency(result, owner, Signature, argument.type, typeAliases);
+				addTypeDependency(result, owner, Signature, method.result, typeAliases);
+				addBodyDependencies(result, owner, method.statements, state.name, entry);
+			}
+		}
+		return result;
+	}
+
+	static function addTypeDependency(result:Map<String, Array<SemanticDependency>>, owner:String, kind:SemanticDependencyKind, type:compiler.Ast.AstType,
+			aliases:Map<String, String>):Void
+		switch type {
+			case NamedType(name):
+				addDependency(result, owner, kind, resolveTypeName(name, aliases));
+			case ArrayType(element), NullableType(element):
+				addTypeDependency(result, owner, kind, element, aliases);
+			case MapType(key, value):
+				addTypeDependency(result, owner, kind, key, aliases);
+				addTypeDependency(result, owner, kind, value, aliases);
+			case FunctionType(arguments, returnType):
+				for (argument in arguments)
+					addTypeDependency(result, owner, kind, argument, aliases);
+				addTypeDependency(result, owner, kind, returnType, aliases);
+			case IntType, BoolType, FloatType, StringType, VoidType:
+		}
+
+	static function addBodyDependencies(result:Map<String, Array<SemanticDependency>>, owner:String, statements:Array<AstStatement>, module:String,
+			entry:String):Void
+		for (statement in statements)
+			switch statement {
+				case VarDeclaration(_, type, expression, _):
+					if (type != null)
+						addTypeDependency(result, owner, Body, type, []);
+					addExpressionDependencies(result, owner, Body, expression, module, entry);
+				case Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
+					addExpressionDependencies(result, owner, Body, expression, module, entry);
+				case IndexAssignment(array, offset, expression, _):
+					for (item in [array, offset, expression])
+						addExpressionDependencies(result, owner, Body, item, module, entry);
+				case If(condition, yes, no, _):
+					addExpressionDependencies(result, owner, Body, condition, module, entry);
+					addBodyDependencies(result, owner, yes, module, entry);
+					addBodyDependencies(result, owner, no, module, entry);
+				case While(condition, body, _):
+					addExpressionDependencies(result, owner, Body, condition, module, entry);
+					addBodyDependencies(result, owner, body, module, entry);
+				case ForIn(_, iterable, body, _):
+					addExpressionDependencies(result, owner, Body, iterable, module, entry);
+					addBodyDependencies(result, owner, body, module, entry);
+				case Try(body, catches, _):
+					addBodyDependencies(result, owner, body, module, entry);
+					for (clause in catches)
+						addBodyDependencies(result, owner, clause.statements, module, entry);
+				case Switch(expression, cases, fallback, _, _):
+					addExpressionDependencies(result, owner, Body, expression, module, entry);
+					for (switchCase in cases)
+						addBodyDependencies(result, owner, switchCase.statements, module, entry);
+					addBodyDependencies(result, owner, fallback, module, entry);
+				case ReturnVoid(_), Break(_), Continue(_), Increment(_, _, _):
+			}
+
+	static function addExpressionDependencies(result:Map<String, Array<SemanticDependency>>, owner:String, kind:SemanticDependencyKind,
+			expression:AstExpression, module:String, entry:String):Void {
+		var calls:Map<String, Bool> = [], locals:Map<String, String> = [];
+		scanCallExpression(expression, calls, locals);
+		for (name in calls.keys())
+			addDependency(result, owner, kind, canonicalName(module, entry, name));
+	}
+
+	static function addDependency(result:Map<String, Array<SemanticDependency>>, owner:String, kind:SemanticDependencyKind, target:String):Void {
+		var dependencies = result.get(owner);
+		if (dependencies == null) {
+			dependencies = [];
+			result.set(owner, dependencies);
+		}
+		for (dependency in dependencies)
+			if (dependency.kind == kind && dependency.target == target)
+				return;
+		dependencies.push({kind: kind, target: target});
+	}
 
 	static function scanStatement(s, dependencies):Void
 		switch s {

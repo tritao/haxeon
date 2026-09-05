@@ -6,6 +6,7 @@ import compiler.Diagnostic.CompileError;
 import sys.io.File;
 import compiler.types.Type.CompilerType;
 import compiler.modules.CompilerPublication.ReconnectDecision;
+import compiler.modules.ModuleState.SemanticDependencyKind;
 
 class ModuleMain {
 	static function main():Void {
@@ -15,6 +16,13 @@ class ModuleMain {
 		compiler.update("Main.hx", "function main():Int { print(\"native registration works\\n\"); return Math.add(20, 22); }");
 		compiler.update("Unused.hx", "function identity(x:Int):Int { return x; }");
 		var first = compiler.compile("Main");
+		var mainDependencies = compiler.modules.get("Main").semanticDependencies.get("main"),
+			hasBodyDependency = false;
+		for (dependency in mainDependencies)
+			if (dependency.kind == Body && dependency.target == "Math.add")
+				hasBodyDependency = true;
+		if (!hasBodyDependency)
+			throw "Semantic dependency graph did not record the imported body call";
 		if (first.metrics.modules != 3 || first.metrics.retypedFunctions == 0 || first.metrics.moduleNatives <= 1 || first.metrics.elapsedMs < 0.0)
 			throw "Compile metrics did not describe the initial module build";
 		try {

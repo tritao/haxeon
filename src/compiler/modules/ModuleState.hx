@@ -6,6 +6,15 @@ import compiler.Source.SourceFile;
 import compiler.ir.IrFunction;
 import compiler.types.TypedAst.TypedFunction;
 
+enum abstract SemanticDependencyKind(String) {
+	var Signature = "signature";
+	var Body = "body";
+	var Layout = "layout";
+	var Initializer = "initializer";
+}
+
+typedef SemanticDependency = {final kind:SemanticDependencyKind; final target:String;}
+
 class ModuleState {
 	public final name:String;
 	public var source:SourceFile;
@@ -19,6 +28,7 @@ class ModuleState {
 	public var lastGoodSource:Null<SourceFile>;
 	public var lastGoodRevision:Int = 0;
 	public var dependencies:Array<String> = [];
+	public var semanticDependencies:Map<String, Array<SemanticDependency>> = [];
 	public var diagnostics:Array<Diagnostic> = [];
 	public var signatureFingerprints:Map<String, String> = [];
 	public var interfaceFingerprints:Map<String, String> = [];
@@ -58,6 +68,7 @@ class ModuleState {
 		result.lastGoodSource = lastGoodSource;
 		result.lastGoodRevision = lastGoodRevision;
 		result.dependencies = dependencies.copy();
+		result.semanticDependencies = copyDependencyMap(semanticDependencies);
 		result.diagnostics = diagnostics.copy();
 		result.signatureFingerprints = copyMap(signatureFingerprints);
 		result.interfaceFingerprints = copyMap(interfaceFingerprints);
@@ -77,6 +88,13 @@ class ModuleState {
 		var result:Map<String, T> = [];
 		for (name => value in source)
 			result.set(name, value);
+		return result;
+	}
+
+	static function copyDependencyMap(source:Map<String, Array<SemanticDependency>>):Map<String, Array<SemanticDependency>> {
+		var result:Map<String, Array<SemanticDependency>> = [];
+		for (name => dependencies in source)
+			result.set(name, dependencies.copy());
 		return result;
 	}
 }
