@@ -435,8 +435,8 @@ class Typer {
 					scope.define(name, declaredType, span, false);
 					output.push(TDeclare(scope.resolveId(name), declaredType, span));
 				case VarDeclaration(name, declared, initializer, span):
-					var declaredType = declared == null
-						&& usesLocalExpectedType(initializer) ? context.localExpectedTypes.get(name) : (declared == null ? null : lowerType(declared)),
+					var inferredExpected = declared == null ? expectedInitializerType(name, initializer, statements, statementIndex + 1) : null,
+						declaredType = declared == null ? inferredExpected : lowerType(declared),
 						predeclared = declaredType != null && switch initializer {
 							case Lambda(_, _, _): true;
 							default: false;
@@ -766,6 +766,57 @@ class Typer {
 		}
 		return output;
 	}
+
+	function expectedInitializerType(name:String, initializer:AstExpression, statements:Array<AstStatement>, start:Int):Null<CompilerType> {
+		switch initializer {
+			case NullLiteral(_):
+				var assigned = assignedLocalType(name, statements, start);
+				if (assigned != null)
+					return TNullable(assigned);
+			default:
+		}
+		return usesLocalExpectedType(initializer) ? context.localExpectedTypes.get(name) : null;
+	}
+
+	function assignedLocalType(name:String, statements:Array<AstStatement>, start:Int):Null<CompilerType> {
+		for (index in start...statements.length)
+			switch statements[index] {
+				case Assignment(assigned, expression, _) if (assigned == name):
+					var type = knownExpressionType(expression);
+					if (type != null)
+						return type;
+				case If(_, yes, no, _):
+					var type = assignedLocalType(name, yes, 0);
+					if (type == null)
+						type = assignedLocalType(name, no, 0);
+					if (type != null)
+						return type;
+				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _):
+					var type = assignedLocalType(name, body, 0);
+					if (type != null)
+						return type;
+				case VarDeclaration(shadowed, _, _, _), UninitializedDeclaration(shadowed, _, _) if (shadowed == name):
+					return null;
+				default:
+			}
+		return null;
+	}
+
+	function knownExpressionType(expression:AstExpression):Null<CompilerType>
+		return switch expression {
+			case Call(name, _, _): var signatureName = name; if (name.indexOf(".") < 0) {
+					var separator = context.name.lastIndexOf("."),
+						owner = separator < 0 ? null : context.name.substr(0, separator),
+						method = owner == null ? null : findMethod(owner, name);
+					if (method != null)
+						signatureName = method.owner + "." + name;
+				} var signature = signatures.get(signatureName); signature == null || isGeneric(signature) ? null : lowerType(signature.result);
+			case StringLiteral(_, _): TString;
+			case IntegerLiteral(_, _): TInt;
+			case FloatLiteral(_, _): TFloat;
+			case BoolLiteral(_, _): TBool;
+			default: null;
+		};
 
 	static function usesLocalExpectedType(initializer:AstExpression):Bool
 		return switch initializer {
