@@ -36,11 +36,7 @@ class Typer {
 	final generated:Array<TypedFunction> = [];
 	final generatedClasses:Array<TypedClass> = [];
 	final lambdaCache:Map<String, TypedExpression> = [];
-	var currentFunctionName:String = "";
-	var currentAssigned:Map<String, Bool> = [];
-	var currentCells:Map<String, String> = [];
-	var currentCellTypes:Map<String, CompilerType> = [];
-	var loopDepth:Int = 0;
+	var context:BodyContext = new BodyContext("");
 
 	public static function type(program:AstProgram):TypedProgram
 		return new Typer(null).typeProgram(program, null, true);
@@ -148,14 +144,14 @@ class Typer {
 				fail("E1002", 'Field "${classDecl.name}.${field.name}" cannot have type Void', field.span);
 			var initializer:Null<TypedExpression> = null;
 			if (field.initializer != null) {
-				var previousFunctionName = currentFunctionName;
-				currentFunctionName = classDecl.name + ".__init";
+				var previousContext = context;
+				context = new BodyContext(classDecl.name + ".__init");
 				var scope = new Scope();
 				if (!field.isStatic)
 					scope.define("this", TClass(classDecl.name), field.span);
 				initializer = coerce(typeExpression(field.initializer, scope), type,
 					(field.isStatic ? 'static field "${classDecl.name}.${field.name}"' : 'field "${classDecl.name}.${field.name}"'), "E1002");
-				currentFunctionName = previousFunctionName;
+				context = previousContext;
 			}
 			fieldNames.set(field.name, true);
 			fields.push({
@@ -261,15 +257,9 @@ class Typer {
 	}
 
 	function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool = false):TypedFunction {
-		var previousFunctionName = currentFunctionName;
-		var previousAssigned = currentAssigned;
-		var previousCells = currentCells;
-		var previousCellTypes = currentCellTypes;
-		currentFunctionName = owner == null ? fn.name : owner + "." + fn.name;
-		currentAssigned = [];
-		collectAssignedLocals(fn.statements, currentAssigned);
-		currentCells = [];
-		currentCellTypes = [];
+		var previousContext = context;
+		context = new BodyContext(owner == null ? fn.name : owner + "." + fn.name);
+		collectAssignedLocals(fn.statements, context.assigned);
 		var declared:Map<String, Bool> = [];
 		for (argument in fn.arguments)
 			declared.set(argument.name, true);
@@ -278,7 +268,7 @@ class Typer {
 		collectMutableCaptureCandidates(fn.statements, declared, mutableCandidates);
 		collectExceptionCellCandidates(fn.statements, declared, mutableCandidates);
 		for (name in mutableCandidates.keys())
-			currentCells.set(name, '$' + 'cell:' + currentFunctionName + ':' + name);
+			context.cells.set(name, '$' + 'cell:' + context.name + ':' + name);
 		var scope = new Scope();
 		var isConstructor = owner != null && fn.name == "new";
 		if (owner != null && !isStatic)
@@ -287,9 +277,9 @@ class Typer {
 		for (argument in fn.arguments) {
 			var type = lowerType(argument.type);
 			scope.define(argument.name, type, argument.span);
-			if (currentCells.exists(argument.name))
-				currentCellTypes.set(argument.name, type);
-			arguments.push({name: currentCells.exists(argument.name) ? argument.name : scope.resolveId(argument.name), type: type});
+			if (context.cells.exists(argument.name))
+				context.cellTypes.set(argument.name, type);
+			arguments.push({name: context.cells.exists(argument.name) ? argument.name : scope.resolveId(argument.name), type: type});
 		}
 		var result = lowerType(fn.result);
 		var statements = typeStatements(fn.statements, scope, result);
@@ -303,15 +293,15 @@ class Typer {
 			arguments: arguments,
 			result: result,
 			statements: statements,
-			cells: currentCells.copy(),
+			cells: context.cells.copy(),
 			cellCaptures: [],
 			span: fn.span
 		};
-		for (name in currentCells.keys()) {
-			var cellType = currentCellTypes.get(name);
+		for (name in context.cells.keys()) {
+			var cellType = context.cellTypes.get(name);
 			if (cellType != null)
 				generatedClasses.push({
-					name: currentCells.get(name),
+					name: context.cells.get(name),
 					base: null,
 					interfaces: [],
 					fields: [
@@ -328,10 +318,7 @@ class Typer {
 					span: fn.span
 				});
 		}
-		currentFunctionName = previousFunctionName;
-		currentAssigned = previousAssigned;
-		currentCells = previousCells;
-		currentCellTypes = previousCellTypes;
+		context = previousContext;
 		return resultFunction;
 	}
 
@@ -350,9 +337,9 @@ class Typer {
 						fail("E1002", 'Null requires an explicit nullable type for local "$name"', span);
 					}
 					scope.define(name, value.type, span);
-					if (currentCells.exists(name))
-						currentCellTypes.set(name, value.type);
-					output.push(TVar(currentCells.exists(name) ? name : scope.resolveId(name), value, span));
+					if (context.cells.exists(name))
+						context.cellTypes.set(name, value.type);
+					output.push(TVar(context.cells.exists(name) ? name : scope.resolveId(name), value, span));
 				case Return(expression, span):
 					var value = typeExpression(expression, scope);
 					value = coerce(value, result, "return", "E1003");
@@ -390,19 +377,19 @@ class Typer {
 					}
 					output.push(TTry(typeStatements(tryBranch, new Scope(scope), result), typedCatches, span));
 				case Break(span):
-					if (loopDepth == 0)
+					if (context.loopDepth == 0)
 						fail("E1017", "break is only valid inside a loop", span);
 					output.push(TBreak(span));
 				case Continue(span):
-					if (loopDepth == 0)
+					if (context.loopDepth == 0)
 						fail("E1017", "continue is only valid inside a loop", span);
 					output.push(TContinue(span));
 				case Increment(name, delta, span):
 					var current = scope.resolve(name);
 					if (current == null) {
 						var dot = name.indexOf("."),
-							ownerSeparator = currentFunctionName.lastIndexOf("."),
-							owner = dot < 0 ? (ownerSeparator < 0 ? null : currentFunctionName.substr(0, ownerSeparator)) : name.substr(0, dot),
+							ownerSeparator = context.name.lastIndexOf("."),
+							owner = dot < 0 ? (ownerSeparator < 0 ? null : context.name.substr(0, ownerSeparator)) : name.substr(0, dot),
 							fieldName = dot < 0 ? name : name.substr(dot + 1),
 							staticField = owner == null ? null : findStaticFieldNullable(owner, fieldName);
 						if (staticField == null || (!sameType(staticField.type, TInt) && !sameType(staticField.type, TFloat)))
@@ -419,8 +406,8 @@ class Typer {
 						if (!scope.isCellCapture(name))
 							fail("E1013", 'Captured variable "$name" requires mutable capture cells', span);
 						output.push(TCellCapturedIncrement(name, scope.cellClass(name), current, delta, span));
-					} else if (currentCells.exists(name))
-						output.push(TCellIncrement(name, currentCells.get(name), current, delta, span));
+					} else if (context.cells.exists(name))
+						output.push(TCellIncrement(name, context.cells.get(name), current, delta, span));
 					else
 						output.push(TIncrement(scope.resolveId(name), delta, span));
 				case Assignment(name, expression, span):
@@ -429,8 +416,8 @@ class Typer {
 					if (dot < 0) {
 						var expected = scope.resolveDeclared(name);
 						if (expected == null) {
-							var ownerSeparator = currentFunctionName.lastIndexOf("."),
-								owner = ownerSeparator < 0 ? null : currentFunctionName.substr(0, ownerSeparator),
+							var ownerSeparator = context.name.lastIndexOf("."),
+								owner = ownerSeparator < 0 ? null : context.name.substr(0, ownerSeparator),
 								staticField = owner == null ? null : findStaticFieldNullable(owner, name);
 							if (staticField == null)
 								fail("E1005", 'Unknown variable "$name"', span);
@@ -442,8 +429,8 @@ class Typer {
 								if (!scope.isCellCapture(name))
 									fail("E1013", 'Captured variable "$name" requires mutable capture cells', span);
 								output.push(TCellCapturedAssign(name, scope.cellClass(name), value, span));
-							} else if (currentCells.exists(name))
-								output.push(TCellAssign(name, currentCells.get(name), value, span));
+							} else if (context.cells.exists(name))
+								output.push(TCellAssign(name, context.cells.get(name), value, span));
 							else
 								output.push(TAssign(scope.resolveId(name), value, span));
 							scope.refine(name, value.type);
@@ -496,9 +483,9 @@ class Typer {
 					var typedCondition = typeExpression(condition, scope);
 					if (!sameType(typedCondition.type, TBool))
 						fail("E1004", "While condition must be Bool", span);
-					loopDepth++;
+					context.loopDepth++;
 					var typedBody = typeStatements(body, new Scope(scope), result);
-					loopDepth--;
+					context.loopDepth--;
 					output.push(TWhile(typedCondition, typedBody, span));
 				case ForIn(name, iterable, body, span):
 					var typedIterable = typeExpression(iterable, scope),
@@ -516,9 +503,9 @@ class Typer {
 						},
 						loopScope = new Scope(scope);
 					loopScope.define(name, element, span);
-					loopDepth++;
+					context.loopDepth++;
 					var typedBody = typeStatements(body, loopScope, result);
-					loopDepth--;
+					context.loopDepth--;
 					output.push(TForIn(loopScope.resolveId(name), typedIterable, typedBody, span));
 				case Switch(expression, cases, defaultBranch, hasDefault, span):
 					var typedExpression = typeExpression(expression, scope);
@@ -630,8 +617,8 @@ class Typer {
 			case Variable(name, span):
 				var type = scope.resolve(name);
 				if (type != null) new TypedExpression(scope.isCapture(name) ? (scope.isCellCapture(name) ? TCellCaptured(name,
-					scope.cellClass(name)) : TCaptured(name)) : (currentCells.exists(name) ? TCellLocal(name,
-						currentCells.get(name)) : TLocal(name == "this" ? name : scope.resolveId(name))),
+					scope.cellClass(name)) : TCaptured(name)) : (context.cells.exists(name) ? TCellLocal(name,
+						context.cells.get(name)) : TLocal(name == "this" ? name : scope.resolveId(name))),
 					type, span); else {
 					var signature = signatures.get(name);
 					if (signature != null)
@@ -639,8 +626,8 @@ class Typer {
 					else if (classDecls.exists(name))
 						new TypedExpression(TClassRef(name), TClass(name), span);
 					else {
-						var ownerSeparator = currentFunctionName.lastIndexOf("."),
-							owner = ownerSeparator < 0 ? null : currentFunctionName.substr(0, ownerSeparator),
+						var ownerSeparator = context.name.lastIndexOf("."),
+							owner = ownerSeparator < 0 ? null : context.name.substr(0, ownerSeparator),
 							staticField = owner == null ? null : findStaticFieldNullable(owner, name);
 						if (staticField != null)
 							return new TypedExpression(TStaticField(staticField.owner, name), staticField.type, span);
@@ -695,13 +682,13 @@ class Typer {
 						if (!declared.exists(name)) {
 							var capturedType = scope.resolve(name);
 							if (capturedType != null) {
-								var cellClass = currentCells.get(name);
+								var cellClass = context.cells.get(name);
 								if (cellClass == null && scope.isCellCapture(name))
 									cellClass = scope.cellClass(name);
-								if (cellClass == null && currentAssigned.exists(name)) {
-									cellClass = '$' + 'cell:' + currentFunctionName + ':' + name;
-									currentCells.set(name, cellClass);
-									currentCellTypes.set(name, capturedType);
+								if (cellClass == null && context.assigned.exists(name)) {
+									cellClass = '$' + 'cell:' + context.name + ':' + name;
+									context.cells.set(name, cellClass);
+									context.cellTypes.set(name, capturedType);
 								}
 								lambdaScope.defineCapture(name, capturedType, span, cellClass != null, cellClass);
 								if (cellClass != null)
@@ -726,14 +713,10 @@ class Typer {
 					}
 					for (name in captures)
 						typedBodyScope.defineCapture(name, scope.resolve(name), span, captureCells.exists(name), captureCells.get(name));
-					var lambdaName = '$' + 'lambda:' + currentFunctionName + ':' + span.start,
-						previousLambdaAssigned = currentAssigned,
-						previousLambdaCells = currentCells,
-						previousLambdaCellTypes = currentCellTypes;
-					currentAssigned = [];
-					collectAssignedLocals(body, currentAssigned);
-					currentCells = [];
-					currentCellTypes = [];
+					var lambdaName = '$' + 'lambda:' + context.name + ':' + span.start,
+						previousContext = context;
+					context = new BodyContext(lambdaName);
+					collectAssignedLocals(body, context.assigned);
 					var lambdaDeclared:Map<String, Bool> = [];
 					for (argument in arguments)
 						lambdaDeclared.set(argument.name, true);
@@ -741,19 +724,17 @@ class Typer {
 					var lambdaCandidates:Map<String, Bool> = [];
 					collectMutableCaptureCandidates(body, lambdaDeclared, lambdaCandidates);
 					for (name in lambdaCandidates.keys())
-						currentCells.set(name, '$' + 'cell:' + lambdaName + ':' + name);
+						context.cells.set(name, '$' + 'cell:' + lambdaName + ':' + name);
 					var typedBody = typeStatements(body, typedBodyScope, inferredResult);
-					var lambdaCells = currentCells.copy(),
-						lambdaCellTypes = currentCellTypes.copy();
+					var lambdaCells = context.cells.copy(),
+						lambdaCellTypes = context.cellTypes.copy();
 					for (i in 0...lambdaArguments.length)
 						if (lambdaCells.exists(arguments[i].name))
 							lambdaArguments[i] = {name: arguments[i].name, type: lambdaArguments[i].type};
-					currentAssigned = previousLambdaAssigned;
-					currentCells = previousLambdaCells;
-					currentCellTypes = previousLambdaCellTypes;
+					context = previousContext;
 					if (inferredResult != TVoid && !alwaysReturns(typedBody))
 						fail("E1006", 'Function $lambdaName does not return on every path', span);
-					var environment = captures.length == 0 ? null : '$' + 'lambda-env:' + currentFunctionName + ':' + span.start;
+					var environment = captures.length == 0 ? null : '$' + 'lambda-env:' + context.name + ':' + span.start;
 					if (environment != null)
 						generatedClasses.push({
 							name: environment,
@@ -1580,8 +1561,8 @@ class Typer {
 		var thisType = scope.resolve("this");
 		if (thisType != null && findFieldType(thisType, name) != null)
 			return typeExpression(Variable(name, span), scope);
-		var ownerSeparator = currentFunctionName.lastIndexOf("."),
-			owner = ownerSeparator < 0 ? null : currentFunctionName.substr(0, ownerSeparator),
+		var ownerSeparator = context.name.lastIndexOf("."),
+			owner = ownerSeparator < 0 ? null : context.name.substr(0, ownerSeparator),
 			staticField = owner == null ? null : findStaticFieldNullable(owner, name);
 		if (staticField != null)
 			return new TypedExpression(TStaticField(staticField.owner, name), staticField.type, span);
