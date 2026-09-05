@@ -277,6 +277,9 @@ class SsaBuilder {
 				case Div(out, a, b):
 					var result = define(out);
 					target.instructions.push(Div(result, resolve(a), resolve(b)));
+				case Mod(out, a, b):
+					var result = define(out);
+					target.instructions.push(Mod(result, resolve(a), resolve(b)));
 				case Less(out, a, b):
 					var result = define(out);
 					target.instructions.push(Less(result, resolve(a), resolve(b)));

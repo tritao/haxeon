@@ -137,6 +137,13 @@ class IrVerifier {
 				require(values, a);
 				require(values, b);
 				define(values, out);
+			case Mod(out, a, b):
+				expect(out, I32);
+				expect(a, I32);
+				expect(b, I32);
+				require(values, a);
+				require(values, b);
+				define(values, out);
 			case Less(out, a, b), LessEqual(out, a, b):
 				expect(out, Bool);
 				if (!sameType(a.type, b.type) || (a.type != I32 && a.type != F64))

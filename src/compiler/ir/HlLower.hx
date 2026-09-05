@@ -161,6 +161,9 @@ class HlLower {
 					case Div(output, left, right):
 						instructions.push(HlInstruction.Div(defineRegister(output, registers, registerTypes), requireRegister(left, registers),
 							requireRegister(right, registers)));
+					case Mod(output, left, right):
+						instructions.push(HlInstruction.Mod(defineRegister(output, registers, registerTypes), requireRegister(left, registers),
+							requireRegister(right, registers)));
 					case Less(output, left, right):
 						lowerComparison(output, left, right, 0, registers, registerTypes, instructions);
 					case LessEqual(output, left, right):

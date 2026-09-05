@@ -27,6 +27,7 @@ enum CfgInstruction {
 	Sub(output:CfgValue, left:CfgValue, right:CfgValue);
 	Mul(output:CfgValue, left:CfgValue, right:CfgValue);
 	Div(output:CfgValue, left:CfgValue, right:CfgValue);
+	Mod(output:CfgValue, left:CfgValue, right:CfgValue);
 	Less(output:CfgValue, left:CfgValue, right:CfgValue);
 	LessEqual(output:CfgValue, left:CfgValue, right:CfgValue);
 	Equal(output:CfgValue, left:CfgValue, right:CfgValue);

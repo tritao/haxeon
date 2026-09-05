@@ -369,11 +369,15 @@ class Parser {
 
 	function parseMultiplicative():AstExpression {
 		var expression = parsePrimary();
-		while (check(TokenKind.Star) || check(TokenKind.Slash)) {
+		while (check(TokenKind.Star) || check(TokenKind.Slash) || check(TokenKind.Percent)) {
 			var operation = advance().kind,
 				right = parsePrimary(),
 				span = expressionSpan(expression).merge(expressionSpan(right));
-			expression = operation == TokenKind.Star ? Mul(expression, right, span) : Div(expression, right, span);
+			expression = switch operation {
+				case TokenKind.Star: Mul(expression, right, span);
+				case TokenKind.Slash: Div(expression, right, span);
+				default: Mod(expression, right, span);
+			};
 		}
 		return expression;
 	}
@@ -635,7 +639,7 @@ class Parser {
 	static function expressionSpan(expression:AstExpression)
 		return switch expression {
 			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), BoolLiteral(_, span), NullLiteral(span), Variable(_, span),
-				Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span), Div(_, _, span), Negate(_, span), Less(_, _, span),
+				Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span), Div(_, _, span), Mod(_, _, span), Negate(_, span), Less(_, _, span),
 				LessEqual(_, _, span), Greater(_, _, span), GreaterEqual(_, _, span), Equal(_, _, span), NotEqual(_, _, span), Not(_, span), Call(_, _, span),
 				MethodCall(_, _, _, span), New(_, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span), Lambda(_, _, span), And(_, _, span),
 				Or(_, _, span): span;

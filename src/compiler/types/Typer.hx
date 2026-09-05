@@ -448,6 +448,7 @@ class Typer {
 			case Sub(left, right, span): arithmetic(left, right, scope, false, span);
 			case Mul(left, right, span): numeric(left, right, scope, 2, span);
 			case Div(left, right, span): numeric(left, right, scope, 3, span);
+			case Mod(left, right, span): modulo(left, right, scope, span);
 			case Negate(value, span):
 				var typedValue = typeExpression(value, scope);
 				if (!sameType(typedValue.type, TInt) && !sameType(typedValue.type, TFloat))
@@ -753,8 +754,8 @@ class Typer {
 			case Call(_, arguments, _):
 				for (argument in arguments)
 					collectExpressionVariables(argument, names);
-			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Less(left, right, _), LessEqual(left, right, _),
-				Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _), NotEqual(left, right, _):
+			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), Less(left, right, _),
+				LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _), NotEqual(left, right, _):
 				collectExpressionVariables(left, names);
 				collectExpressionVariables(right, names);
 			case Negate(value, _):
@@ -924,6 +925,13 @@ class Typer {
 		if (!sameType(left.type, right.type) || (!sameType(left.type, TInt) && !sameType(left.type, TFloat)))
 			fail("E1010", "Arithmetic requires matching Int or Float operands", span);
 		return new TypedExpression(operation == 2 ? TMul(left, right) : TDiv(left, right), left.type, span);
+	}
+
+	function modulo(a, b, scope, span):TypedExpression {
+		var left = typeExpression(a, scope), right = typeExpression(b, scope);
+		if (!sameType(left.type, TInt) || !sameType(right.type, TInt))
+			fail("E1010", "Modulo requires matching Int operands", span);
+		return new TypedExpression(TMod(left, right), TInt, span);
 	}
 
 	function comparison(a, b, scope, operation, span):TypedExpression {

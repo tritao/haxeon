@@ -60,6 +60,7 @@ enum AstExpression {
 	Sub(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Mul(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Div(left:AstExpression, right:AstExpression, span:SourceSpan);
+	Mod(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Negate(value:AstExpression, span:SourceSpan);
 	Less(left:AstExpression, right:AstExpression, span:SourceSpan);
 	LessEqual(left:AstExpression, right:AstExpression, span:SourceSpan);

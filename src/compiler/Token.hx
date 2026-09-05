@@ -56,6 +56,7 @@ enum TokenKind {
 	Arrow;
 	Star;
 	Slash;
+	Percent;
 	Less;
 	Greater;
 	LessEqual;

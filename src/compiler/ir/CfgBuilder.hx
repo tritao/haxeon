@@ -100,6 +100,9 @@ class CfgBuilder {
 	public function div(a, b):CfgValue
 		return binary(a, b, 3);
 
+	public function mod(a, b):CfgValue
+		return binary(a, b, 7);
+
 	public function less(a, b):CfgValue
 		return binary(a, b, 4, Bool);
 
@@ -182,6 +185,7 @@ class CfgBuilder {
 			case 1: Sub(out, a, b);
 			case 2: Mul(out, a, b);
 			case 3: Div(out, a, b);
+			case 7: Mod(out, a, b);
 			case 4: Less(out, a, b);
 			case 5: LessEqual(out, a, b);
 			default: Equal(out, a, b);

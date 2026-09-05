@@ -31,6 +31,7 @@ enum TypedExpressionKind {
 	TSub(left:TypedExpression, right:TypedExpression);
 	TMul(left:TypedExpression, right:TypedExpression);
 	TDiv(left:TypedExpression, right:TypedExpression);
+	TMod(left:TypedExpression, right:TypedExpression);
 	TNegate(value:TypedExpression);
 	TLess(left:TypedExpression, right:TypedExpression);
 	TLessEqual(left:TypedExpression, right:TypedExpression);

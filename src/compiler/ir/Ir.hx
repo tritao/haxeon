@@ -43,6 +43,7 @@ enum IrInstruction {
 	Sub(output:IrValue, left:IrValue, right:IrValue);
 	Mul(output:IrValue, left:IrValue, right:IrValue);
 	Div(output:IrValue, left:IrValue, right:IrValue);
+	Mod(output:IrValue, left:IrValue, right:IrValue);
 	Less(output:IrValue, left:IrValue, right:IrValue);
 	LessEqual(output:IrValue, left:IrValue, right:IrValue);
 	Equal(output:IrValue, left:IrValue, right:IrValue);
