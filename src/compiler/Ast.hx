@@ -27,10 +27,21 @@ typedef AstArgument = {
 	final ?defaultValue:AstExpression;
 }
 
+enum AstFieldAccess {
+	DefaultAccess;
+	NullAccess;
+	NeverAccess;
+	GetAccess;
+	SetAccess;
+	DynamicAccess;
+}
+
 typedef AstField = {
 	final name:String;
 	final type:Null<AstType>;
 	final initializer:Null<AstExpression>;
+	final readAccess:Null<AstFieldAccess>;
+	final writeAccess:Null<AstFieldAccess>;
 	final isStatic:Bool;
 	final isFinal:Bool;
 	final span:SourceSpan;

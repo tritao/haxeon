@@ -1,6 +1,7 @@
 package compiler;
 
 import compiler.Ast.AstExpression;
+import compiler.Ast.AstFieldAccess;
 import compiler.Ast.AstFunction;
 import compiler.Ast.AstClass;
 import compiler.Ast.AstInterface;
@@ -213,6 +214,13 @@ class Parser {
 				var fieldStart = current().span;
 				match(TokenKind.Var);
 				var fieldName = consume(TokenKind.Identifier).text;
+				var readAccess = null, writeAccess = null;
+				if (match(TokenKind.LeftParen)) {
+					readAccess = parseFieldAccess();
+					consume(TokenKind.Comma);
+					writeAccess = parseFieldAccess();
+					consume(TokenKind.RightParen);
+				}
 				var fieldType = match(TokenKind.Colon) ? parseType() : null,
 					initializer = match(TokenKind.Assign) ? parseExpression() : null;
 				if (fieldType == null) {
@@ -224,6 +232,8 @@ class Parser {
 					name: fieldName,
 					type: fieldType,
 					initializer: initializer,
+					readAccess: readAccess,
+					writeAccess: writeAccess,
 					isStatic: isStatic,
 					isFinal: isFinal,
 					span: fieldStart.merge(end)
@@ -239,6 +249,22 @@ class Parser {
 			methods: methods,
 			span: start.merge(end)
 		};
+	}
+
+	function parseFieldAccess():AstFieldAccess {
+		var token = advance();
+		var access:Null<AstFieldAccess> = switch token.text {
+			case "null": NullAccess;
+			case "default": DefaultAccess;
+			case "never": NeverAccess;
+			case "get": GetAccess;
+			case "set": SetAccess;
+			case "dynamic": DynamicAccess;
+			default: null;
+		};
+		if (access == null)
+			fail(token, 'Unknown property access mode "${token.text}"');
+		return access;
 	}
 
 	function parseInterface():AstInterface {

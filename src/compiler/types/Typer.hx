@@ -170,6 +170,8 @@ class Typer {
 				name: field.name,
 				type: type,
 				initializer: initializer,
+				readAccess: field.readAccess,
+				writeAccess: field.writeAccess,
 				isStatic: field.isStatic,
 				isFinal: field.isFinal,
 				span: field.span

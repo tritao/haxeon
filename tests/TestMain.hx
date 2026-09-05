@@ -505,16 +505,19 @@ class TestMain {
 			throw "Exception-edge storage was confused with mutable capture storage";
 		Sys.println("PASS: declaration resolution rejects unknown types and cycles and resolves semantic signatures");
 		var classProgram = new Parser(new Lexer(new SourceFile("Box.hx",
-			"package demo; class Box { public final value:Int; public function new(value:Int) { } public function get():Int { return 42; } } function main():Int { return 42; }"))
+			"package demo; class Box { public final value:Int; public var offset(get, never):Int; public function new(value:Int) { } public function get():Int { return 42; } function get_offset():Int { return value; } } function main():Int { return 42; }"))
 			.tokenize()).parseProgram();
 		if (classProgram.classes.length != 1
 			|| classProgram.classes[0].fields[0].name != "value"
-			|| classProgram.classes[0].methods.length != 2
+			|| classProgram.classes[0].fields[1].readAccess != compiler.Ast.AstFieldAccess.GetAccess
+			|| classProgram.classes[0].fields[1].writeAccess != compiler.Ast.AstFieldAccess.NeverAccess
+			|| classProgram.classes[0].methods.length != 3
 			|| classProgram.classes[0].methods[0].name != "new")
 			throw "Minimal class declarations were not preserved in the AST";
 		var typedClass = Typer.type(classProgram);
 		if (typedClass.classes.length != 1
 			|| typedClass.classes[0].fields[0].type != compiler.types.Type.CompilerType.TInt
+			|| typedClass.classes[0].fields[1].readAccess != compiler.Ast.AstFieldAccess.GetAccess
 			|| typedClass.classes[0].methods[1].result != compiler.types.Type.CompilerType.TInt)
 			throw "Minimal class declarations were not type checked";
 		var libraryProgram = new Parser(new Lexer(new SourceFile("Library.hx",

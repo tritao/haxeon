@@ -384,6 +384,8 @@ class Compiler {
 								name: field.name,
 								type: canonicalType(compiler.types.FieldInference.parsedType(field), aliases),
 								initializer: field.initializer == null ? null : canonicalExpression(field.initializer, name, entryModule, locals, aliases),
+								readAccess: field.readAccess,
+								writeAccess: field.writeAccess,
 								isStatic: field.isStatic,
 								isFinal: field.isFinal,
 								span: field.span
