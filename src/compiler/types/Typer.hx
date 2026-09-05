@@ -1295,6 +1295,8 @@ class Typer {
 						new TypedExpression(TIndex(typedArray, typedIndex), element, span);
 				}
 			case Call(name, arguments, span):
+				if (name == "super")
+					return typeSuperCall(arguments, span, scope);
 				var callable = scope.resolve(name);
 				if (callable != null) {
 					var functionType = switch callable {
@@ -1313,7 +1315,7 @@ class Typer {
 					new TypedExpression(TClosureCall(new TypedExpression(TLocal(scope.resolveId(name)), callable, span), typed), functionType.result, span);
 				} else {
 					var parts = name.split("."),
-						receiverName = parts.length < 2 ? null : parts[0],
+						receiverName = parts.length < 2 || signatures.exists(name) ? null : parts[0],
 						receiver = receiverName == null ? null : resolveReceiver(receiverName, span, scope),
 						methodName = parts.length < 2 ? null : parts[parts.length - 1];
 					if (receiver != null && parts.length > 2)
@@ -1403,6 +1405,25 @@ class Typer {
 
 	function typeMember(object:AstExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression {
 		return typedMember(typeExpression(object, scope), name, span);
+	}
+
+	function typeSuperCall(arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
+		var separator = context.name.lastIndexOf("."),
+			owner = separator < 0 ? null : context.name.substr(0, separator),
+			classDecl = owner == null ? null : classDecls.get(owner),
+			base = classDecl == null ? null : classDecl.base;
+		if (base == null)
+			fail("E1007", "super() requires a base-class constructor", span);
+		var constructor = signatures.get(base + ".new"),
+			expected = constructor == null ? PlatformAbi.constructorArguments(base) : [
+				for (argument in constructor.arguments)
+					argumentType(argument)
+			];
+		if (expected == null)
+			expected = [];
+		if (arguments.length != expected.length)
+			fail("E1008", 'Constructor "$base" expects ${expected.length} arguments, got ${arguments.length}', span);
+		return new TypedExpression(TSuperCall(base, typeCallArguments(arguments, expected, scope, base + ".new")), TVoid, span);
 	}
 
 	function seedLambdaScope(statements:Array<AstStatement>, scope:Scope):Void {

@@ -1,5 +1,7 @@
 package compiler.types;
 
+import compiler.types.Type.CompilerType;
+
 /** Host types whose implementation is supplied by the HashLink/Haxe platform. */
 class PlatformAbi {
 	static final types:Map<String, Bool> = [
@@ -19,4 +21,10 @@ class PlatformAbi {
 
 	public static function isType(name:String):Bool
 		return types.exists(name);
+
+	public static function constructorArguments(name:String):Null<Array<CompilerType>>
+		return switch name {
+			case "haxe.Exception": [TString];
+			default: null;
+		};
 }

@@ -74,6 +74,7 @@ enum TypedExpressionKind {
 	TNewMap(key:CompilerType, value:CompilerType);
 	TField(object:TypedExpression, name:String);
 	TMethodCall(object:TypedExpression, functionName:String, arguments:Array<TypedExpression>);
+	TSuperCall(owner:String, arguments:Array<TypedExpression>);
 	TIndex(array:TypedExpression, index:TypedExpression);
 	TPostfixLocal(name:String, delta:Int);
 	TPostfixCellLocal(name:String, cellClass:String, delta:Int);

@@ -493,6 +493,7 @@ class TestMain {
 		expectCompileError("typedef Loop = Loop; function main():Int { return 0; }", 'Cyclic type alias involving "Loop"');
 		expectCompileError("class Loop extends Loop { } function main():Int { return 0; }", 'Cyclic class inheritance involving "Loop"');
 		Frontend.compile("class Parent { } class Child extends Parent { } function consume(value:Parent):Int { return 42; } function main():Int { return consume(new Child()); }");
+		Frontend.compile("class Parent { public function new(value:Int) { } } class Child extends Parent { public function new() { super(42); } } function main():Int { var child = new Child(); return 42; }");
 		Frontend.compile("typedef Score = Int; interface Rated { function rate(value:Score):Score; } class Item implements Rated { public function rate(value:Int):Int { return value; } } function main():Int { return new Item().rate(42); }");
 		var semanticSignatureCompiler = new Compiler();
 		semanticSignatureCompiler.update("Main.hx",

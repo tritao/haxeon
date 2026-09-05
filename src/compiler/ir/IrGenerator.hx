@@ -1260,6 +1260,11 @@ class IrGenerator {
 				var receiver = lowerExpression(object, builder, localTypes),
 					callArgs = [for (arg in args) lowerExpression(arg, builder, localTypes)];
 				builder.methodCall(receiver, name.substr(name.lastIndexOf(".") + 1), callArgs, lowerType(expression.type));
+			case TSuperCall(owner, args):
+				builder.call(owner + ".new", [builder.load("this", localTypes.get("this"))].concat([
+					for (arg in args)
+						lowerExpression(arg, builder, localTypes)
+				]), Void);
 			case TIndex(array, index):
 				builder.arrayGet(lowerExpression(array, builder, localTypes), lowerExpression(index, builder, localTypes), lowerType(expression.type));
 			case TPostfixLocal(name, delta):
