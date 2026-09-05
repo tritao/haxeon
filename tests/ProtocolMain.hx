@@ -1,4 +1,5 @@
 import editor.LanguageServiceProtocol;
+import compiler.service.CancellationToken;
 import haxe.Json;
 
 class ProtocolMain {
@@ -57,6 +58,14 @@ class ProtocolMain {
 		var malformed:Dynamic = Json.parse(protocol.handle("not-json"));
 		if (malformed.ok || malformed.error.code != "E0000")
 			throw "protocol malformed request was not rejected";
+		var cancelledToken = new CancellationToken();
+		cancelledToken.cancel();
+		var cancelled:Dynamic = Json.parse(protocol.handleWithToken('{"id":11,"method":"symbols","path":"Main.hx"}', cancelledToken));
+		if (cancelled.ok || cancelled.error.code != "E_CANCELLED")
+			throw "protocol cancellation token was not propagated";
+		var unknownCancel:Dynamic = Json.parse(protocol.handle('{"id":12,"method":"cancel","requestId":"missing"}'));
+		if (!unknownCancel.ok || unknownCancel.result.cancelled)
+			throw "protocol cancelled an unknown request";
 		Sys.println("PASS: language-service JSON protocol is transactional");
 	}
 

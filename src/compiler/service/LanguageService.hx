@@ -53,11 +53,11 @@ class LanguageService {
 	public function update(path:String, source:String):ModuleState
 		return compiler.update(path, source);
 
-	public function compile(entryModule:String):CompileResult
-		return compiler.compile(entryModule);
+	public function compile(entryModule:String, ?token:CancellationToken):CompileResult
+		return compiler.compile(entryModule, token);
 
-	public function validate(path:String, source:String, entryModule:String):compiler.modules.Compiler.ValidationResult
-		return compiler.validate(path, source, entryModule);
+	public function validate(path:String, source:String, entryModule:String, ?token:CancellationToken):compiler.modules.Compiler.ValidationResult
+		return compiler.validate(path, source, entryModule, token);
 
 	public function diagnostics(path:String):Array<Diagnostic> {
 		var state = stateFor(path);

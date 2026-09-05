@@ -23,6 +23,7 @@ import compiler.ir.Ir.IrNative;
 import compiler.ir.Ir.IrObject;
 import compiler.types.TypeRegistry;
 import compiler.types.TypeRegistry.TypeCompatibility;
+import compiler.service.CancellationToken;
 
 typedef NativeFunction = {final name:String; final library:String; final symbol:String; final arguments:Array<CompilerType>; final result:CompilerType;}
 
@@ -139,14 +140,14 @@ class Compiler {
 		The candidate is rebuilt from the persistent identity state and current
 		sources; callers can then decide whether to commit the edit normally.
 	 */
-	public function validate(path:String, source:String, entryModule:String):ValidationResult {
+	public function validate(path:String, source:String, entryModule:String, ?token:CancellationToken):ValidationResult {
 		var candidate = fork(), moduleName = ModulePath.fromFile(path);
 		for (name in [for (name in candidate.modules.keys()) name])
 			if (name == moduleName)
 				candidate.modules.remove(name);
 		candidate.update(path, source);
 		try {
-			candidate.compile(entryModule);
+			candidate.compile(entryModule, token);
 			return {valid: true, diagnostic: null};
 		} catch (error:CompileError)
 			return {valid: false, diagnostic: error.diagnostic};
@@ -176,8 +177,10 @@ class Compiler {
 		return candidate;
 	}
 
-	public function compile(entryModule:String):CompileResult {
+	public function compile(entryModule:String, ?token:CancellationToken):CompileResult {
 		var startedAt = haxe.Timer.stamp();
+		if (token != null)
+			token.check();
 		if (!modules.exists(entryModule))
 			throw 'Missing entry module "$entryModule"';
 		var names = [for (name in modules.keys()) name];
@@ -186,8 +189,16 @@ class Compiler {
 			signatureChanged:Map<String, Bool> = [],
 			structuralChanged:Map<String, Bool> = [];
 		for (name in names)
+			if (token != null)
+				token.check();
+		for (name in names)
 			parse(modules.get(name), entryModule, bodyChanged, signatureChanged, structuralChanged);
+		if (token != null)
+			token.check();
 		graph.rebuild(modules);
+		for (name in names)
+			if (token != null)
+				token.check();
 		for (name in names)
 			for (dependency in modules.get(name).dependencies)
 				if (!modules.exists(dependency)) {
@@ -208,6 +219,8 @@ class Compiler {
 			generatedByModule:Map<String, Map<String, Bool>> = [],
 			reverseCalls:Map<String, Array<String>> = [];
 		for (name in names) {
+			if (token != null)
+				token.check();
 			var state = modules.get(name),
 				locals:Map<String, Bool> = [],
 				aliases = importAliases(state.ast.imports);
@@ -306,6 +319,8 @@ class Compiler {
 			invalid.set(name, true);
 		var work = [for (name in signatureChanged.keys()) name];
 		while (work.length > 0) {
+			if (token != null)
+				token.check();
 			var changed = work.pop();
 			if (invalid.exists(changed)) {} else
 				invalid.set(changed, true);
@@ -320,7 +335,9 @@ class Compiler {
 			if (invalid.exists(fn.name))
 				selected.set(fn.name, true);
 		var typedNew:TypedProgram;
-		try
+		try {
+			if (token != null)
+				token.check();
 			typedNew = Typer.typeSelected({
 				packageName: null,
 				imports: [],
@@ -329,8 +346,8 @@ class Compiler {
 				interfaces: interfaces,
 				classes: classes,
 				functions: programFunctions
-			}, selected, nativeSignatures())
-		catch (error:CompileError) {
+			}, selected, nativeSignatures());
+		} catch (error:CompileError) {
 			for (name in names) {
 				var state = modules.get(name);
 				if (state.source.path == error.diagnostic.span.file.path)
@@ -343,6 +360,8 @@ class Compiler {
 			objectCache.set(object.name, object);
 		var touchedModules:Map<String, Bool> = [];
 		for (fn in typedNew.functions) {
+			if (token != null)
+				token.check();
 			var module = owners.get(fn.name), state = modules.get(module);
 			state.typedFunctions.set(fn.name, fn);
 			retyped.push(fn.name);
@@ -355,6 +374,8 @@ class Compiler {
 		for (module in touchedModules.keys())
 			modules.get(module).typeVersion++;
 		for (name in names) {
+			if (token != null)
+				token.check();
 			var state = modules.get(name), valid:Map<String, Bool> = [];
 			for (fn in functions)
 				if (owners.get(fn.name) == name)
@@ -381,6 +402,8 @@ class Compiler {
 			for (functionName in cachedNames)
 				modules.get(owners.get(functionName)).irFunctions.get(functionName)
 		];
+		if (token != null)
+			token.check();
 		var objectNames = [for (name in objectCache.keys()) name];
 		objectNames.sort(Reflect.compare);
 		var ir = IrGenerator.assemble(cached, irNatives(), [for (name in objectNames) objectCache.get(name)], IrGenerator.interfacesFrom(typedNew),
@@ -391,6 +414,8 @@ class Compiler {
 		if (forceReload)
 			assembler = new HlModuleAssembler(copyIndices(assembler.cache.stableIds));
 		var assembly = assembler.assemble(ir, regenerated, signatureChanges, forceReload);
+		if (token != null)
+			token.check();
 		lastTypedProgram = typedNew;
 		for (name in names) {
 			var state = modules.get(name);

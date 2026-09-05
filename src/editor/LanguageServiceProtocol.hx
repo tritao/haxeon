@@ -2,6 +2,8 @@ package editor;
 
 import compiler.Diagnostic.CompileError;
 import compiler.service.LanguageService;
+import compiler.service.CancellationToken;
+import compiler.service.CancellationError;
 import compiler.service.LanguageService.DocumentSymbol;
 import compiler.service.LanguageService.SymbolLocation;
 import compiler.service.LanguageService.TextEdit;
@@ -16,11 +18,16 @@ import haxe.Json;
  */
 class LanguageServiceProtocol {
 	final service:LanguageService;
+	final activeRequests:Map<String, CancellationToken> = [];
 
 	public function new(?service:LanguageService)
 		this.service = service == null ? new LanguageService() : service;
 
-	public function handle(line:String):String {
+	public function handle(line:String):String
+		return handleWithToken(line, new CancellationToken());
+
+	/** Handle a request with a caller-owned token, suitable for a worker thread. */
+	public function handleWithToken(line:String, token:CancellationToken):String {
 		var request:Dynamic;
 		try {
 			request = Json.parse(line);
@@ -30,14 +37,22 @@ class LanguageServiceProtocol {
 			method:String = Reflect.field(request, "method");
 		if (method == null)
 			return failure(id, "E0000", "Request method is required");
+		if (method == "cancel") {
+			var target = Reflect.field(request, "requestId"),
+				cancelled = cancel(target);
+			return Json.stringify({id: id, ok: true, result: {cancelled: cancelled}});
+		}
+		var requestKey = key(id);
+		activeRequests.set(requestKey, token);
 		try {
+			token.check();
 			var result:Dynamic;
 			switch method {
 				case "update":
 					service.update(requiredString(request, "path"), requiredString(request, "source"));
 					result = cast {updated: true};
 				case "compile":
-					var build = service.compile(requiredString(request, "entry"));
+					var build = service.compile(requiredString(request, "entry"), token);
 					result = cast {
 						revision: build.revision,
 						retyped: build.retyped,
@@ -51,7 +66,8 @@ class LanguageServiceProtocol {
 						metrics: build.metrics
 					};
 				case "validate":
-					var validation = service.validate(requiredString(request, "path"), requiredString(request, "source"), requiredString(request, "entry"));
+					var validation = service.validate(requiredString(request, "path"), requiredString(request, "source"), requiredString(request, "entry"),
+						token);
 					result = cast {
 						valid: validation.valid,
 						diagnostic: validation.diagnostic == null ? null : diagnosticJson(validation.diagnostic)
@@ -93,13 +109,32 @@ class LanguageServiceProtocol {
 				default:
 					throw 'Unknown language-service method "$method"';
 			}
+			token.check();
+			activeRequests.remove(requestKey);
 			return Json.stringify({id: id, ok: true, result: result});
+		} catch (error:CancellationError) {
+			activeRequests.remove(requestKey);
+			return failure(id, "E_CANCELLED", "Request cancelled");
 		} catch (error:CompileError) {
+			activeRequests.remove(requestKey);
 			return failureDiagnostic(id, error.diagnostic);
 		} catch (error:Dynamic) {
+			activeRequests.remove(requestKey);
 			return failure(id, "E0000", Std.string(error));
 		}
 	}
+
+	/** Cancel a currently running request by its JSON id. */
+	public function cancel(requestId:Dynamic):Bool {
+		var request = activeRequests.get(key(requestId));
+		if (request == null)
+			return false;
+		request.cancel();
+		return true;
+	}
+
+	static function key(value:Dynamic):String
+		return value == null ? "null" : Std.string(value);
 
 	static function requiredString(request:Dynamic, name:String):String {
 		var value:Dynamic = Reflect.field(request, name);

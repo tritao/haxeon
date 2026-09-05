@@ -84,7 +84,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 	while wildcard/alias imports and deeper namespace semantics remain.
 - [~] Unsaved edits can be validated transactionally against a forked compiler
   snapshot without mutating the live source, including through the JSON-lines
-  protocol; shared snapshots and one-pass commit/rollback remain.
+  protocol; cooperative request cancellation now unwinds compiler phase
+  boundaries, while shared snapshots and one-pass commit/rollback remain.
 - [ ] Parallel parse/type work with deterministic assembly on the editor thread.
 - [ ] Memory and latency budgets measured on a realistic Pragtical project.
 
@@ -124,7 +125,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   snapshots; true partial parsing remains.
 - [x] A small JSON-lines protocol adapter for Pragtical; it exposes diagnostics,
   semantic queries, transactional validation, and base64 HLB/HLP payloads with
-  runtime identity. There is no second typechecker.
+  runtime identity, plus a caller-owned cancellation token and `cancel` method.
+  There is no second typechecker.
 - [x] Representative multi-module plugin workload with an editor facade,
 	interface lifecycle, arrays/maps, callbacks, incremental body patching, and
 	class-layout reload classification (`plugin-test.hxml`).

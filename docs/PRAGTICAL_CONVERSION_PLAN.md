@@ -179,5 +179,6 @@ The next bounded milestones are:
 3. integrate structural reload/state migration with that fixture; **done for
    loaded lifecycle functions and the host domain, with native type-arena work
    still pending**;
-4. add latency budgets and protocol cancellation;
+4. add latency budgets; **cooperative protocol cancellation is now wired**, but
+   measured budgets and parallel workers remain;
 5. start the first Pragtical utility migration only after those gates are green.
