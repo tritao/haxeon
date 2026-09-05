@@ -208,6 +208,13 @@ class Compiler {
 					state.diagnostics.push(diagnostic);
 					throw new CompileError(diagnostic);
 				}
+		var initializationNames = graph.initializationOrder(modules, names),
+			initializationClasses:Array<String> = [];
+		for (name in initializationNames) {
+			var state = modules.get(name);
+			for (classDecl in state.ast.classes)
+				initializationClasses.push(qualifiedTypeName(state.ast.packageName, classDecl.name));
+		}
 
 		var functions:Array<AstFunction> = [],
 			programFunctions:Array<AstFunction> = [],
@@ -408,7 +415,7 @@ class Compiler {
 		var objectNames = [for (name in objectCache.keys()) name];
 		objectNames.sort(Reflect.compare);
 		var ir = IrGenerator.assemble(cached, irNatives(), [for (name in objectNames) objectCache.get(name)], IrGenerator.interfacesFrom(typedNew),
-			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew), IrGenerator.staticInitializerFrom(typedNew));
+			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew), IrGenerator.staticInitializerFrom(typedNew, initializationClasses));
 		var signatureChanges = [for (name in signatureChanged.keys()) name];
 		signatureChanges.sort(Reflect.compare);
 		var forceReload = compiledOnce && structuralChanged.keys().hasNext();
@@ -533,7 +540,8 @@ class Compiler {
 		for (importPath in state.ast.imports) {
 			var dot = importPath.lastIndexOf("."),
 				alias = dot < 0 ? importPath : importPath.substr(dot + 1);
-			dependencies.remove(alias);
+			if (alias != importPath)
+				dependencies.remove(alias);
 		}
 		// Dotted native names such as Sys.time look like module-qualified calls
 		// to the dependency scanner.  Registered natives own those prefixes and
@@ -907,6 +915,8 @@ class Compiler {
 				scanExpression(offset, dependencies);
 			case Member(object, _, _):
 				scanExpression(object, dependencies);
+			case Variable(name, _):
+				scanQualifiedDependency(name, dependencies);
 			case MethodCall(object, _, args, _):
 				scanExpression(object, dependencies);
 				for (a in args)
@@ -935,6 +945,15 @@ class Compiler {
 				return true;
 		}
 		return false;
+	}
+
+	static function scanQualifiedDependency(name:String, dependencies:Map<String, Bool>):Void {
+		var dot = name.indexOf(".");
+		if (dot > 0) {
+			var prefix = name.substr(0, dot);
+			if (prefix.length > 0 && prefix.charCodeAt(0) >= 65 && prefix.charCodeAt(0) <= 90)
+				dependencies.set(prefix, true);
+		}
 	}
 
 	static function scanCalls(statement:AstStatement, calls:Map<String, Bool>, aliases:Map<String, String>):Void

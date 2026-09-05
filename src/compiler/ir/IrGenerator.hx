@@ -26,9 +26,10 @@ class IrGenerator {
 	}
 
 	/** Build the module boot function from static field initializers. */
-	public static function staticInitializerFrom(typed:TypedProgram):Null<IrFunction> {
+	public static function staticInitializerFrom(typed:TypedProgram, ?classOrder:Array<String>):Null<IrFunction> {
 		var statements:Array<TypedStatement> = [], firstSpan = null;
-		for (classDecl in typed.classes)
+		var classes = orderedClasses(typed.classes, classOrder);
+		for (classDecl in classes)
 			for (field in classDecl.fields)
 				if (field.isStatic && field.initializer != null) {
 					if (firstSpan == null)
@@ -49,6 +50,27 @@ class IrGenerator {
 			cellCaptures: [],
 			span: firstSpan
 		});
+	}
+
+	static function orderedClasses(classes:Array<compiler.types.TypedAst.TypedClass>, ?order:Array<String>):Array<compiler.types.TypedAst.TypedClass> {
+		if (order == null)
+			return classes;
+		var byName:Map<String, compiler.types.TypedAst.TypedClass> = [];
+		for (classDecl in classes)
+			byName.set(classDecl.name, classDecl);
+		var result:Array<compiler.types.TypedAst.TypedClass> = [],
+			seen:Map<String, Bool> = [];
+		for (name in order) {
+			var classDecl = byName.get(name);
+			if (classDecl != null) {
+				result.push(classDecl);
+				seen.set(name, true);
+			}
+		}
+		for (classDecl in classes)
+			if (!seen.exists(classDecl.name))
+				result.push(classDecl);
+		return result;
 	}
 
 	public static function enumsFrom(typed:TypedProgram):Array<IrEnum>
