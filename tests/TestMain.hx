@@ -78,6 +78,8 @@ class TestMain {
 		Frontend.compile('function make():String return "value"; function main():Int { var value = null; if (true) value = make(); return value == null ? 0 : 42; }');
 		Frontend.compile('function make():String return "value"; function main():Int { var values = []; values.push(make()); return values.length; }');
 		Frontend.compile('function fail():Void throw "failure"; function value():String { fail(); return null; } function main():Int return 42;');
+		Typer.typeLibrary(new Parser(new Lexer(new SourceFile("infinite-loop.hx",
+			"function parse():Int { while (true) { continue; } }")).tokenize()).parseProgram());
 		Frontend.compile('function values():Array<Int> { var result = []; result.push(42); return result; } function main():Int { return values()[0]; }');
 		Frontend.compile('typedef Result = { values:Array<Int> }; function values():Result { var values = []; return { values: values }; } function main():Int return values().values.length;');
 		new Parser(new Lexer(new SourceFile("expression-block-statements.hx",

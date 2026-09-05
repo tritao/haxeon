@@ -2789,6 +2789,8 @@ class Typer {
 				case TDoWhile(body, _, _):
 					if (alwaysReturns(body))
 						return true;
+				case TWhile(condition, body, _) if (isTrueLiteral(condition) && !canBreakCurrentLoop(body)):
+					return true;
 				case TTry(tryBranch, catches, _):
 					if (alwaysReturns(tryBranch)
 						&& catches.length > 0
@@ -2816,6 +2818,8 @@ class Typer {
 				case TDoWhile(body, _, _):
 					if (alwaysExits(body))
 						return true;
+				case TWhile(condition, body, _) if (isTrueLiteral(condition) && !canBreakCurrentLoop(body)):
+					return true;
 				case TTry(tryBranch, catches, _):
 					if (alwaysExits(tryBranch)
 						&& catches.length > 0
@@ -2825,6 +2829,38 @@ class Typer {
 					if ((hasDefault ? alwaysExits(defaultBranch) : exhaustiveEnum(expression.type, cases))
 						&& [for (switchCase in cases) alwaysExits(switchCase.statements)].indexOf(false) < 0)
 						return true;
+				default:
+			}
+		return false;
+	}
+
+	static function isTrueLiteral(expression:TypedExpression):Bool
+		return switch expression.expression {
+			case TBoolLiteral(true): true;
+			default: false;
+		};
+
+	function canBreakCurrentLoop(statements:Array<TypedStatement>):Bool {
+		for (statement in statements)
+			switch statement {
+				case TBreak(_):
+					return true;
+				case TIf(_, yes, no, _):
+					if (canBreakCurrentLoop(yes) || canBreakCurrentLoop(no))
+						return true;
+				case TTry(tryBranch, catches, _):
+					if (canBreakCurrentLoop(tryBranch))
+						return true;
+					for (catchClause in catches)
+						if (canBreakCurrentLoop(catchClause.statements))
+							return true;
+				case TSwitch(_, cases, fallback, _, _):
+					for (switchCase in cases)
+						if (canBreakCurrentLoop(switchCase.statements))
+							return true;
+					if (canBreakCurrentLoop(fallback))
+						return true;
+				case TWhile(_, _, _), TDoWhile(_, _, _), TForIn(_, _, _, _, _):
 				default:
 			}
 		return false;
