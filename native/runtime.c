@@ -14,6 +14,12 @@ extern int hl_hbsize( realtime_string_map *map );
 extern bool hl_hbremove( realtime_string_map *map, uchar *key );
 extern void hl_hbclear( realtime_string_map *map );
 
+static void realtime_raise_module_exception( void ) {
+	/* A module exception owns generation-specific type metadata. Never let that
+	   value escape into the host exception machinery after the call returns. */
+	hl_error("Runtime module call raised an exception");
+}
+
 typedef struct realtime_int_map realtime_int_map;
 extern realtime_int_map *hl_hialloc( void );
 extern void hl_hiset( realtime_int_map *map, int key, vdynamic *value );
@@ -455,7 +461,7 @@ HL_PRIM int HL_NAME(call_i32)( hl_runtime_module *runtime, int stable_id ) {
 	int result = 0;
 	vdynamic *exception = NULL;
 	hl_runtime_status status = hl_runtime_module_call_i32(runtime,stable_id,&result,&exception);
-	if( status == HL_RUNTIME_EXCEPTION ) hl_throw(exception);
+	if( status == HL_RUNTIME_EXCEPTION ) realtime_raise_module_exception();
 	if( status != HL_RUNTIME_OK ) hl_error("Invalid runtime function call");
 	return result;
 }
@@ -463,7 +469,7 @@ HL_PRIM int HL_NAME(call_i32)( hl_runtime_module *runtime, int stable_id ) {
 HL_PRIM void HL_NAME(call_void)( hl_runtime_module *runtime, int stable_id ) {
 	vdynamic *exception = NULL;
 	hl_runtime_status status = hl_runtime_module_call_void(runtime,stable_id,&exception);
-	if( status == HL_RUNTIME_EXCEPTION ) hl_throw(exception);
+	if( status == HL_RUNTIME_EXCEPTION ) realtime_raise_module_exception();
 	if( status != HL_RUNTIME_OK ) hl_error("Invalid runtime void function call (status %d)",status);
 }
 
@@ -471,7 +477,7 @@ HL_PRIM vbyte *HL_NAME(call_bytes)( hl_runtime_module *runtime, int stable_id ) 
 	vbyte *result = NULL;
 	vdynamic *exception = NULL;
 	hl_runtime_status status = hl_runtime_module_call_bytes(runtime,stable_id,&result,&exception);
-	if( status == HL_RUNTIME_EXCEPTION ) hl_throw(exception);
+	if( status == HL_RUNTIME_EXCEPTION ) realtime_raise_module_exception();
 	if( status != HL_RUNTIME_OK ) hl_error("Invalid runtime string function call (status %d)",status);
 	return result;
 }
@@ -479,7 +485,7 @@ HL_PRIM vbyte *HL_NAME(call_bytes)( hl_runtime_module *runtime, int stable_id ) 
 HL_PRIM void HL_NAME(call_bytes1)( hl_runtime_module *runtime, int stable_id, vbyte *argument ) {
 	vdynamic *exception = NULL;
 	hl_runtime_status status = hl_runtime_module_call_bytes1(runtime,stable_id,argument,&exception);
-	if( status == HL_RUNTIME_EXCEPTION ) hl_throw(exception);
+	if( status == HL_RUNTIME_EXCEPTION ) realtime_raise_module_exception();
 	if( status != HL_RUNTIME_OK ) hl_error("Invalid runtime string argument function call (status %d)",status);
 }
 
@@ -487,7 +493,7 @@ HL_PRIM vdynamic *HL_NAME(call_closure)( hl_runtime_module *runtime, int stable_
 	vclosure *result = NULL;
 	vdynamic *exception = NULL;
 	hl_runtime_status status = hl_runtime_module_call_closure(runtime,stable_id,&result,&exception);
-	if( status == HL_RUNTIME_EXCEPTION ) hl_throw(exception);
+	if( status == HL_RUNTIME_EXCEPTION ) realtime_raise_module_exception();
 	if( status != HL_RUNTIME_OK ) hl_error("Invalid runtime closure function call (status %d)",status);
 	return (vdynamic*)result;
 }
@@ -498,14 +504,14 @@ HL_PRIM int HL_NAME(call_closure_i32)( vclosure *closure ) {
 	if( closure == NULL || closure->t->kind != HFUN || closure->t->fun->nargs != 0 || closure->t->fun->ret->kind != HI32 )
 		hl_error("Invalid retained runtime closure");
 	result = hl_dyn_call_safe(closure,NULL,0,&raised);
-	if( raised ) hl_throw(result);
+	if( raised ) realtime_raise_module_exception();
 	return result->v.i;
 }
 
 HL_PRIM vdynamic *HL_NAME(call_object)( hl_runtime_module *runtime, int stable_id ) {
 	vdynamic *result = NULL, *exception = NULL;
 	hl_runtime_status status = hl_runtime_module_call_object(runtime,stable_id,&result,&exception);
-	if( status == HL_RUNTIME_EXCEPTION ) hl_throw(exception);
+	if( status == HL_RUNTIME_EXCEPTION ) realtime_raise_module_exception();
 	if( status != HL_RUNTIME_OK ) hl_error("Invalid runtime object function call (status %d)",status);
 	return result;
 }
@@ -514,7 +520,7 @@ HL_PRIM int HL_NAME(call_i32_object)( hl_runtime_module *runtime, int stable_id,
 	int result = 0;
 	vdynamic *exception = NULL;
 	hl_runtime_status status = hl_runtime_module_call_i32_object(runtime,stable_id,argument,&result,&exception);
-	if( status == HL_RUNTIME_EXCEPTION ) hl_throw(exception);
+	if( status == HL_RUNTIME_EXCEPTION ) realtime_raise_module_exception();
 	if( status != HL_RUNTIME_OK ) hl_error("Invalid runtime object argument call (status %d)",status);
 	return result;
 }
