@@ -775,8 +775,15 @@ class Typer {
 			case NullLiteral(_): true;
 			case ArrayLiteral(values, _): values.length == 0;
 			case MapLiteral(entries, _): entries.length == 0;
-			case Conditional(_, _, _, _): true;
+			case Conditional(_, whenTrue, whenFalse, _): containsNullLiteral(whenTrue) || containsNullLiteral(whenFalse);
 			case SwitchExpression(_, _, _, _): true;
+			default: false;
+		};
+
+	static function containsNullLiteral(expression:AstExpression):Bool
+		return switch expression {
+			case NullLiteral(_): true;
+			case Conditional(_, whenTrue, whenFalse, _): containsNullLiteral(whenTrue) || containsNullLiteral(whenFalse);
 			default: false;
 		};
 
@@ -831,6 +838,25 @@ class Typer {
 	function constrainLocalExpression(expression:AstExpression, expected:CompilerType):Bool
 		return switch expression {
 			case Variable(name, _): constrainLocal(name, expected);
+			case Call(name, arguments, _):
+				var info = enumCaseInfo(name), enumName = switch expected {
+					case TEnum(value), TNullable(TEnum(value)): value;
+					default: null;
+				};
+				if (info == null && enumName != null && name.indexOf(".") < 0)
+					info = enumCaseInfo(enumName + "." + name);
+				var changed = false;
+				if (info != null)
+					for (index in 0...arguments.length) {
+						if (index >= info.params.length)
+							break;
+						var parameter = info.params[index],
+							parameterType = lowerType(parameter.type);
+						if (parameter.optional)
+							parameterType = TNullable(parameterType);
+						changed = constrainLocalExpression(arguments[index], parameterType) || changed;
+					}
+				changed;
 			case ObjectLiteral(fields, _):
 				var expectedFields = switch expected {
 					case TAnonymous(_, values): values;
@@ -1143,7 +1169,10 @@ class Typer {
 				if (!sameType(typedCondition.type, TBool))
 					fail("E1011", "Conditional expression requires a Bool condition", span);
 				var typedTrue = typeExpression(whenTrue, narrowedScope(scope, typedCondition, true), expectedType),
-					typedFalse = typeExpression(whenFalse, narrowedScope(scope, typedCondition, false), expectedType),
+					branchExpected = expectedType == null
+						&& typedTrue.type != TNull
+						&& typedTrue.type != TNever ? (containsNullLiteral(whenFalse) ? TNullable(typedTrue.type) : typedTrue.type) : expectedType,
+					typedFalse = typeExpression(whenFalse, narrowedScope(scope, typedCondition, false), branchExpected),
 					resultType = expectedType == null ? commonConditionalType(typedTrue.type, typedFalse.type) : expectedType;
 				if (resultType == null)
 					fail("E1003", "Conditional branches must have matching types", span);
@@ -1523,6 +1552,11 @@ class Typer {
 							receiver = typedMember(receiver, parts[index], span);
 					var receiverType = receiver == null ? null : receiver.type;
 					var enumCase = enumCaseInfo(name);
+					if (enumCase == null && name.indexOf(".") < 0)
+						switch expectedType {
+							case TEnum(enumName), TNullable(TEnum(enumName)): enumCase = enumCaseInfo(enumName + "." + name);
+							default:
+						}
 					if (enumCase != null) {
 						var expected = [
 							for (param in enumCase.params)

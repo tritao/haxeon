@@ -60,6 +60,7 @@ class TestMain {
 		Frontend.compile('enum Kind { Void; Float; } function main():Int { var value:Kind = Kind.Float; return switch value { case Kind.Void: 0; case Kind.Float: 42; }; }');
 		Frontend.compile('enum Result { Value(value:Int, ?message:String); } function main():Int { var result:Result = Result.Value(42); switch result { case Result.Value(value): return value; } }');
 		Frontend.compile('enum Severity { Error; Warning; } function severity(?value:Severity = Error):Severity return value; function main():Int { var value = severity(); return 42; }');
+		Frontend.compile('enum Value { Present(value:Int); } function main():Int { var value:Null<Value> = true ? null : Present(42); return 42; }');
 		Frontend.compile('enum Mixed { Value(?first:String, second:Int); } function main():Int { var value:Mixed = Mixed.Value(null, 42); return 42; }');
 		Frontend.compile('typedef Options = { final ?name:String; ?final count:Int; } function main():Int { return 42; }');
 		Frontend.compile('enum Value { Present; } typedef Options = { ?value:Value }; function main():Int { var options:Options = { value: null }; return 42; }');
