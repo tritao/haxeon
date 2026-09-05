@@ -18,6 +18,7 @@ import compiler.ir.IrFunction;
 import compiler.ir.IrGenerator;
 import compiler.ir.IrTypeCodec;
 import compiler.ir.IrValueTableCodec;
+import compiler.ir.IrTerminatorCodec;
 import compiler.ir.SsaBuilder;
 import compiler.ir.Cfg.CfgInstruction;
 import compiler.ir.Cfg.CfgBlock;
@@ -243,6 +244,20 @@ class TestMain {
 		referenceBytes.writeInt32(99);
 		expectStringError(function() IrValueTableCodec.readReference(new BytesInput(referenceBytes.getBytes()), badReference), "Unknown IR value reference");
 		Sys.println("PASS: canonical IR value tables preserve identity and reject unknown references");
+		var terminatorOutput = new haxe.io.BytesOutput(),
+			terminatorBlocks:Map<Int, Bool> = [];
+		terminatorOutput.bigEndian = false;
+		terminatorBlocks.set(4, true);
+		terminatorBlocks.set(7, true);
+		IrTerminatorCodec.write(terminatorOutput, Branch(decodedValues[1], 4, 7));
+		var decodedTerminator = IrTerminatorCodec.read(new BytesInput(terminatorOutput.getBytes()), IrValueTableCodec.byId(decodedValues), terminatorBlocks);
+		switch decodedTerminator {
+			case Branch(condition, yes, no):
+				if ((condition.id : Int) != 9 || yes != 4 || no != 7)
+					throw "IR branch terminator did not round trip";
+			default:
+				throw "IR branch terminator decoded as the wrong variant";
+		}
 		var types = new TypeRegistry();
 		var firstType = types.declareClass("demo.Box", null, [{name: "value", type: "Int"}], [{name: "get", signature: "():Int"}]);
 		if (firstType.compatibility != NewType || firstType.descriptor.fields[0].slot != 0)
