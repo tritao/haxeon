@@ -46,5 +46,6 @@ class RuntimeAbi {
 		compiler.registerNative("Reflect.compare", "realtime_runtime", "__reflect_compare", [TDynamic, TDynamic], TInt);
 		compiler.registerNative("StringTools.startsWith", "realtime_runtime", "__string_starts_with", [TString, TString], TBool);
 		compiler.registerNative("StringTools.endsWith", "realtime_runtime", "__string_ends_with", [TString, TString], TBool);
+		compiler.registerNative("sys.io.File.getContent", "realtime_runtime", "__file_get_content", [TString], TString);
 	}
 }

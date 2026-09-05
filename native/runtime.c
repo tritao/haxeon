@@ -463,6 +463,38 @@ HL_PRIM bool HL_NAME(__string_ends_with)( vbyte *value, vbyte *suffix ) {
 		&& memcmp(value + (value_length - suffix_length) * sizeof(uchar), suffix, suffix_length * sizeof(uchar)) == 0;
 }
 
+HL_PRIM vbyte *HL_NAME(__file_get_content)( vbyte *path ) {
+	FILE *file = fopen(hl_to_utf8((const uchar *)path), "rb");
+	if( file == NULL ) hl_error("Could not open source file");
+	if( fseek(file, 0, SEEK_END) != 0 ) {
+		fclose(file);
+		hl_error("Could not seek source file");
+	}
+	long byte_length = ftell(file);
+	if( byte_length < 0 || fseek(file, 0, SEEK_SET) != 0 ) {
+		fclose(file);
+		hl_error("Could not measure source file");
+	}
+	char *utf8 = (char *)malloc((size_t)byte_length + 1);
+	if( utf8 == NULL ) {
+		fclose(file);
+		hl_error("Could not allocate source buffer");
+	}
+	if( fread(utf8, 1, (size_t)byte_length, file) != (size_t)byte_length ) {
+		free(utf8);
+		fclose(file);
+		hl_error("Could not read source file");
+	}
+	fclose(file);
+	utf8[byte_length] = 0;
+	int length = hl_utf8_length((vbyte *)utf8, 0);
+	uchar *result = (uchar *)hl_alloc_bytes((length + 1) * (int)sizeof(uchar));
+	hl_from_utf8(result, length, utf8);
+	result[length] = 0;
+	free(utf8);
+	return (vbyte *)result;
+}
+
 HL_PRIM vbyte *HL_NAME(__array_join_bytes)( varray *array, vbyte *separator ) {
 	int separator_length = separator == NULL ? 0 : (int)ustrlen((const uchar *)separator);
 	int length = separator_length * (array->size > 0 ? array->size - 1 : 0);
@@ -807,6 +839,7 @@ DEFINE_PRIM(_BYTES,__std_string,_DYN);
 DEFINE_PRIM(_I32,__reflect_compare,_DYN _DYN);
 DEFINE_PRIM(_BOOL,__string_starts_with,_BYTES _BYTES);
 DEFINE_PRIM(_BOOL,__string_ends_with,_BYTES _BYTES);
+DEFINE_PRIM(_BYTES,__file_get_content,_BYTES);
 DEFINE_PRIM(_BYTES,__array_join_bytes,_ARR _BYTES);
 DEFINE_PRIM(_BYTES,__string_substring,_BYTES _I32 _I32);
 DEFINE_PRIM(_BOOL,__exception_matches,_DYN _TYPE);
