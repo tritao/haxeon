@@ -245,6 +245,38 @@ class IrGenerator {
 					if (!builder.isTerminated())
 						builder.jump(conditionBlock);
 					builder.select(afterBlock);
+				case TForIn(name, iterable, body, span):
+					var arrayName = '$' + 'for-array:' + span.start,
+						indexName = '$' + 'for-index:' + span.start,
+						arrayType = lowerType(iterable.type),
+						elementType = switch iterable.type {
+							case TArray(element): lowerType(element);
+							default: throw 'For-in iterable is not an array';
+						};
+					localTypes.set(arrayName, arrayType);
+					localTypes.set(indexName, I32);
+					localTypes.set(name, elementType);
+					builder.store(arrayName, lowerExpression(iterable, builder, localTypes));
+					builder.store(indexName, builder.constInt(0));
+					var conditionBlock = builder.createBlock(),
+						bodyBlock = builder.createBlock(),
+						afterBlock = builder.createBlock();
+					builder.jump(conditionBlock);
+					builder.select(conditionBlock);
+					var arrayValue = builder.load(arrayName, arrayType),
+						indexValue = builder.load(indexName, I32);
+					builder.branch(builder.less(indexValue, builder.arraySize(arrayValue)), bodyBlock, afterBlock);
+					builder.select(bodyBlock);
+					var bodyArray = builder.load(arrayName, arrayType),
+						bodyIndex = builder.load(indexName, I32);
+					builder.store(name, builder.arrayGet(bodyArray, bodyIndex, elementType));
+					lowerStatements(body, builder, localTypes);
+					if (!builder.isTerminated()) {
+						var nextIndex = builder.add(builder.load(indexName, I32), builder.constInt(1));
+						builder.store(indexName, nextIndex);
+						builder.jump(conditionBlock);
+					}
+					builder.select(afterBlock);
 				case TExpression(expression, _):
 					lowerExpression(expression, builder, localTypes);
 			}

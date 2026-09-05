@@ -78,6 +78,7 @@ enum AstStatement {
 	ReturnVoid(span:SourceSpan);
 	If(condition:AstExpression, thenBranch:Array<AstStatement>, elseBranch:Array<AstStatement>, span:SourceSpan);
 	While(condition:AstExpression, body:Array<AstStatement>, span:SourceSpan);
+	ForIn(name:String, iterable:AstExpression, body:Array<AstStatement>, span:SourceSpan);
 	Expression(expression:AstExpression, span:SourceSpan);
 }
 

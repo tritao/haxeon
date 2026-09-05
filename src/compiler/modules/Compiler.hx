@@ -589,6 +589,9 @@ class Compiler {
 			case While(c, b,
 				span): While(canonicalExpression(c, module, entry, locals, aliases), [for (x in b) canonicalStatement(x, module, entry, locals, aliases)],
 					span);
+			case ForIn(name, iterable, body,
+				span): ForIn(name, canonicalExpression(iterable, module, entry, locals, aliases),
+					[for (x in body) canonicalStatement(x, module, entry, locals, aliases)], span);
 			case Expression(e, span): Expression(canonicalExpression(e, module, entry, locals, aliases), span);
 		}
 
@@ -677,6 +680,10 @@ class Compiler {
 				scanExpression(c, dependencies);
 				for (x in b)
 					scanStatement(x, dependencies);
+			case ForIn(_, iterable, b, _):
+				scanExpression(iterable, dependencies);
+				for (x in b)
+					scanStatement(x, dependencies);
 			case Expression(e, _):
 				scanExpression(e, dependencies);
 		}
@@ -734,6 +741,10 @@ class Compiler {
 					scanCalls(s, calls, aliases);
 			case While(c, b, _):
 				scanCallExpression(c, calls, aliases);
+				for (s in b)
+					scanCalls(s, calls, aliases);
+			case ForIn(_, iterable, b, _):
+				scanCallExpression(iterable, calls, aliases);
 				for (s in b)
 					scanCalls(s, calls, aliases);
 			case Expression(e, _):
@@ -797,6 +808,9 @@ class Compiler {
 					collectLambdas(no, functionName, module, generatedByModule);
 				case While(condition, body, _):
 					collectLambdaExpression(condition, functionName, module, generatedByModule);
+					collectLambdas(body, functionName, module, generatedByModule);
+				case ForIn(_, iterable, body, _):
+					collectLambdaExpression(iterable, functionName, module, generatedByModule);
 					collectLambdas(body, functionName, module, generatedByModule);
 			}
 	}

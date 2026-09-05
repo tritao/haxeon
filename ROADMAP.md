@@ -33,8 +33,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   capture cells remain future work).
 - [~] `Array<T>` typing, indexed reads/writes, `.length`, and compiler-owned
 	`Int`/`Float`/`Bool`/`String` plus reference-array allocation lower directly
-	to HashLink array operations and the runtime ABI. Maps and pattern matching
-	remain future work. Our HashLink fork enforces bounds in the JIT.
+	to HashLink array operations and the runtime ABI; `for (item in array)` is
+	lowered to a bounds-checked SSA loop. Maps and pattern matching remain future
+	work. Our HashLink fork enforces bounds in the JIT.
 - [~] Explicit `Null<T>` values for reference types lower to HashLink's native
 	null representation, support equality, and reject implicit untyped null
 	locals; simple null-guard narrowing is supported, while migration-safe

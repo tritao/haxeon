@@ -285,6 +285,12 @@ class Typer {
 					if (!sameType(typedCondition.type, TBool))
 						fail("E1004", "While condition must be Bool", span);
 					output.push(TWhile(typedCondition, typeStatements(body, new Scope(scope), result), span));
+				case ForIn(name, iterable, body, span):
+					var typedIterable = typeExpression(iterable, scope),
+						element = arrayElementType(typedIterable.type, span),
+						loopScope = new Scope(scope);
+					loopScope.define(name, element, span);
+					output.push(TForIn(name, typedIterable, typeStatements(body, loopScope, result), span));
 				case Expression(expression, span):
 					output.push(TExpression(typeExpression(expression, scope), span));
 			}
@@ -613,6 +619,9 @@ class Typer {
 					collectDeclaredLocals(no, names);
 				case While(_, body, _):
 					collectDeclaredLocals(body, names);
+				case ForIn(name, _, body, _):
+					names.set(name, true);
+					collectDeclaredLocals(body, names);
 				default:
 			}
 	}
@@ -633,6 +642,9 @@ class Typer {
 					collectVariables(no, names);
 				case While(condition, body, _):
 					collectExpressionVariables(condition, names);
+					collectVariables(body, names);
+				case ForIn(_, iterable, body, _):
+					collectExpressionVariables(iterable, names);
 					collectVariables(body, names);
 			}
 	}
@@ -901,7 +913,7 @@ class Typer {
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
 			case VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), If(_, _, _, span),
-				While(_, _, span), Expression(_, span): span;
+				While(_, _, span), ForIn(_, _, _, span), Expression(_, span): span;
 		}
 
 	static function fail(code:String, message:String, span:SourceSpan):Void

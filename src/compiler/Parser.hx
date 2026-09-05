@@ -273,6 +273,18 @@ class Parser {
 			var end = statementSpan(body[body.length - 1]);
 			return While(condition, body, start.merge(end));
 		}
+		if (match(TokenKind.For)) {
+			var start = previous().span;
+			consume(TokenKind.LeftParen);
+			match(TokenKind.Var);
+			var name = consume(TokenKind.Identifier).text;
+			consume(TokenKind.In);
+			var iterable = parseExpression();
+			consume(TokenKind.RightParen);
+			var body = parseStatementOrBlock(),
+				end = statementSpan(body[body.length - 1]);
+			return ForIn(name, iterable, body, start.merge(end));
+		}
 		var expression = parseExpression(),
 			end = consume(TokenKind.Semicolon).span;
 		return Expression(expression, expressionSpan(expression).merge(end));
@@ -574,6 +586,6 @@ class Parser {
 	static function statementSpan(statement:AstStatement)
 		return switch statement {
 			case VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), If(_, _, _, span),
-				While(_, _, span), Expression(_, span): span;
+				While(_, _, span), ForIn(_, _, _, span), Expression(_, span): span;
 		}
 }

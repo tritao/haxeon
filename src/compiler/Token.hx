@@ -24,6 +24,8 @@ enum TokenKind {
 	If;
 	Else;
 	While;
+	For;
+	In;
 	BoolTrue;
 	BoolFalse;
 	TypeInt;
