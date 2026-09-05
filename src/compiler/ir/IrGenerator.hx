@@ -451,6 +451,7 @@ class IrGenerator {
 	}>):Void {
 		if (loops == null)
 			loops = [];
+		var declaredAliases:Array<String> = [];
 		for (statement in statements) {
 			if (builder.isTerminated())
 				break;
@@ -459,7 +460,9 @@ class IrGenerator {
 					var value = lowerExpression(initializer, builder, localTypes),
 						cellType = localTypes.get('__cell:$name');
 					if (cellType == null) {
-						localTypes.set(name, lowerType(initializer.type));
+						var internalName = builder.declareLocal(name);
+						declaredAliases.push(name);
+						localTypes.set(internalName, lowerType(initializer.type));
 						builder.store(name, value);
 					} else {
 						var cellClass = switch cellType {
@@ -535,19 +538,12 @@ class IrGenerator {
 							builder.select(handlerBlock);
 						} else
 							hasDynamicCatch = true;
-						var internalName = '$' + 'catch:${catchBlock}:$i:${catchClause.name}';
+						var internalName = builder.declareLocal(catchClause.name);
 						localTypes.set(internalName, catchIrType);
-						var previousCatchType = localTypes.get(catchClause.name);
-						localTypes.set(catchClause.name, catchIrType);
-						builder.pushLocalAlias(catchClause.name, internalName);
 						var caught = builder.load(exceptionLocal, Dyn);
 						builder.store(catchClause.name, catchClause.type == TDynamic ? caught : builder.safeCast(caught, catchIrType));
 						lowerStatements(catchClause.statements, builder, localTypes, loops);
 						builder.popLocalAlias(catchClause.name);
-						if (previousCatchType == null)
-							localTypes.remove(catchClause.name);
-						else
-							localTypes.set(catchClause.name, previousCatchType);
 						if (!builder.isTerminated()) {
 							catchActive = true;
 							builder.jump(afterBlock);
@@ -574,7 +570,7 @@ class IrGenerator {
 					builder.closeTrapsToDepth(loop.trapDepth);
 					builder.jump(loop.continueBlock);
 				case TIncrement(name, delta, _):
-					var type = localTypes.get(name);
+					var type = localTypes.get(builder.resolveLocal(name));
 					if (type == null)
 						throw 'Missing increment local "$name"';
 					var one = type == I32 ? builder.constInt(1) : builder.constFloat(1);
@@ -649,7 +645,8 @@ class IrGenerator {
 					localTypes.set(arrayName, arrayType);
 					localTypes.set(indexName, I32);
 					localTypes.set(breakFlag, Bool);
-					localTypes.set(name, elementType);
+					var loopLocal = builder.declareLocal(name);
+					localTypes.set(loopLocal, elementType);
 					builder.store(arrayName, lowerExpression(iterable, builder, localTypes));
 					builder.store(indexName, builder.constInt(-1));
 					builder.store(breakFlag, builder.constBool(false));
@@ -677,6 +674,7 @@ class IrGenerator {
 					});
 					lowerStatements(body, builder, localTypes, loops);
 					loops.pop();
+					builder.popLocalAlias(name);
 					if (!builder.isTerminated()) {
 						builder.jump(conditionBlock);
 					}
@@ -700,12 +698,16 @@ class IrGenerator {
 						builder.branch(builder.equal(switchValue, caseValue), bodyBlock, nextBlock);
 						builder.select(bodyBlock);
 						if (switchCase.constructorIndex >= 0)
-							for (binding in switchCase.bindings)
-								localTypes.set(binding.name, lowerType(binding.type));
+							for (binding in switchCase.bindings) {
+								var bindingLocal = builder.declareLocal(binding.name);
+								localTypes.set(bindingLocal, lowerType(binding.type));
+							}
 						for (binding in switchCase.bindings)
 							builder.store(binding.name,
 								builder.enumField(builder.load(switchName, switchType), switchCase.constructorIndex, binding.index, lowerType(binding.type)));
 						lowerStatements(switchCase.statements, builder, localTypes, loops);
+						for (binding in switchCase.bindings)
+							builder.popLocalAlias(binding.name);
 						if (!builder.isTerminated())
 							exits.push(builder.currentBlock());
 						checkBlock = nextBlock;
@@ -727,6 +729,9 @@ class IrGenerator {
 					lowerExpression(expression, builder, localTypes);
 			}
 		}
+		declaredAliases.reverse();
+		for (name in declaredAliases)
+			builder.popLocalAlias(name);
 	}
 
 	static function exhaustiveEnumSwitch(type:CompilerType, cases:Array<TypedSwitchCase>):Bool {
@@ -757,7 +762,7 @@ class IrGenerator {
 				}
 			case TToDynamic(value): builder.toDyn(lowerExpression(value, builder, localTypes));
 			case TLocal(name):
-				var type = localTypes.get(name);
+				var type = localTypes.get(builder.resolveLocal(name));
 				if (type == null)
 					throw 'Missing typed local "$name"';
 				builder.load(name, type);

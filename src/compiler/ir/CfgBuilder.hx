@@ -10,6 +10,7 @@ class CfgBuilder {
 	var nextValue:Int = 0;
 	var activeTraps:Int = 0;
 	var localAliases:Map<String, Array<String>> = [];
+	var nextLocal:Int = 0;
 
 	public function new()
 		current = createBlock();
@@ -123,6 +124,12 @@ class CfgBuilder {
 		aliases.push(internalName);
 	}
 
+	public function declareLocal(name:String):String {
+		var internalName = '$' + 'local:${nextLocal++}:$name';
+		pushLocalAlias(name, internalName);
+		return internalName;
+	}
+
 	public function popLocalAlias(name:String):Void {
 		var aliases = localAliases.get(name);
 		if (aliases == null || aliases.length == 0)
@@ -139,7 +146,7 @@ class CfgBuilder {
 	public function store(name:String, value:CfgValue):Void
 		emit(StoreLocal(resolveLocal(name), value));
 
-	function resolveLocal(name:String):String {
+	public function resolveLocal(name:String):String {
 		var aliases = localAliases.get(name);
 		return aliases == null || aliases.length == 0 ? name : aliases[aliases.length - 1];
 	}
