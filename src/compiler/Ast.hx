@@ -67,6 +67,17 @@ typedef AstTypeAlias = {final name:String; final type:AstType; final span:Source
 typedef AstEnumParameter = {final name:Null<String>; final type:AstType; final optional:Bool; final span:SourceSpan;}
 typedef AstEnumCase = {final name:String; final params:Array<AstEnumParameter>; final span:SourceSpan;}
 typedef AstEnum = {final name:String; final cases:Array<AstEnumCase>; final span:SourceSpan;}
+typedef AstEnumAbstractValue = {final name:String; final value:AstExpression; final span:SourceSpan;}
+
+typedef AstEnumAbstract = {
+	final name:String;
+	final underlying:AstType;
+	final fromTypes:Array<AstType>;
+	final toTypes:Array<AstType>;
+	final values:Array<AstEnumAbstractValue>;
+	final span:SourceSpan;
+}
+
 typedef AstCatch = {final name:String; final type:AstType; final statements:Array<AstStatement>; final span:SourceSpan;}
 
 enum AstExpression {
@@ -155,6 +166,7 @@ typedef AstProgram = {
 	final imports:Array<String>;
 	final aliases:Array<AstTypeAlias>;
 	final enums:Array<AstEnum>;
+	final enumAbstracts:Array<AstEnumAbstract>;
 	final interfaces:Array<AstInterface>;
 	final classes:Array<AstClass>;
 	final functions:Array<AstFunction>;

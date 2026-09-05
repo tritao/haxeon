@@ -7,6 +7,7 @@ import compiler.Ast.AstClass;
 import compiler.Ast.AstInterface;
 import compiler.Ast.AstTypeAlias;
 import compiler.Ast.AstEnum;
+import compiler.Ast.AstEnumAbstract;
 import compiler.Ast.AstProgram;
 import compiler.Ast.AstStatement;
 import compiler.Ast.AstType;
@@ -32,13 +33,19 @@ class Parser {
 			imports.push(parseQualifiedName());
 			consume(TokenKind.Semicolon);
 		}
-		var functions = [], aliases:Array<AstTypeAlias> = [], enums:Array<AstEnum> = [], interfaces:Array<AstInterface> = [], classes = [];
+		var functions = [], aliases:Array<AstTypeAlias> = [], enums:Array<AstEnum> = [], enumAbstracts:Array<AstEnumAbstract> = [],
+			interfaces:Array<AstInterface> = [], classes = [];
 		while (!check(TokenKind.Eof)) {
 			if (match(TokenKind.Typedef))
 				aliases.push(parseTypeAlias(previous().span));
-			else if (match(TokenKind.Enum))
-				enums.push(parseEnum(previous().span));
-			else if (check(TokenKind.Interface))
+			else if (match(TokenKind.Enum)) {
+				var start = previous().span;
+				if (check(TokenKind.Identifier) && current().text == "abstract") {
+					advance();
+					enumAbstracts.push(parseEnumAbstract(start));
+				} else
+					enums.push(parseEnum(start));
+			} else if (check(TokenKind.Interface))
 				interfaces.push(parseInterface());
 			else if (check(TokenKind.Class))
 				classes.push(parseClass());
@@ -50,9 +57,47 @@ class Parser {
 			imports: imports,
 			aliases: aliases,
 			enums: enums,
+			enumAbstracts: enumAbstracts,
 			interfaces: interfaces,
 			classes: classes,
 			functions: functions
+		};
+	}
+
+	function parseEnumAbstract(start:SourceSpan):AstEnumAbstract {
+		var name = consume(TokenKind.Identifier).text;
+		consume(TokenKind.LeftParen);
+		var underlying = parseType();
+		consume(TokenKind.RightParen);
+		var fromTypes = [], toTypes = [];
+		while (!check(TokenKind.LeftBrace)) {
+			var conversion = consume(TokenKind.Identifier);
+			if (conversion.text != "from" && conversion.text != "to")
+				fail(conversion, 'Expected "from" or "to"');
+			var conversionType = parseType();
+			if (conversion.text == "from")
+				fromTypes.push(conversionType);
+			else
+				toTypes.push(conversionType);
+		}
+		consume(TokenKind.LeftBrace);
+		var values = [];
+		while (!check(TokenKind.RightBrace)) {
+			match(TokenKind.Var);
+			var valueName = consumeName();
+			consume(TokenKind.Assign);
+			var value = parseExpression(),
+				end = consume(TokenKind.Semicolon).span;
+			values.push({name: valueName.text, value: value, span: valueName.span.merge(end)});
+		}
+		var end = consume(TokenKind.RightBrace).span;
+		return {
+			name: name,
+			underlying: underlying,
+			fromTypes: fromTypes,
+			toTypes: toTypes,
+			values: values,
+			span: start.merge(end)
 		};
 	}
 

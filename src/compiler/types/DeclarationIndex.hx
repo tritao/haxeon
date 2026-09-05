@@ -9,6 +9,7 @@ import compiler.types.Type.CompilerType;
 enum abstract DeclarationKind(String) {
 	var Alias = "alias";
 	var Enum = "enum";
+	var Abstract = "abstract";
 	var Interface = "interface";
 	var Class = "class";
 	var Function = "function";
@@ -40,6 +41,7 @@ typedef TypeParameterSymbol = {
 class DeclarationIndex {
 	public final aliases:Map<String, AstType> = [];
 	public final enums:Map<String, AstEnum> = [];
+	public final enumAbstracts:Map<String, compiler.Ast.AstEnumAbstract> = [];
 	public final interfaces:Map<String, AstInterface> = [];
 	public final classes:Map<String, AstClass> = [];
 	public final symbols:Map<String, DeclarationSymbol> = [];
@@ -57,6 +59,12 @@ class DeclarationIndex {
 		for (decl in program.enums) {
 			declareType(decl.name, Enum, decl.span);
 			enums.set(decl.name, decl);
+		}
+		for (decl in program.enumAbstracts) {
+			declareType(decl.name, Abstract, decl.span);
+			enumAbstracts.set(decl.name, decl);
+			for (value in decl.values)
+				declare(Member, decl.name + "." + value.name, value.span);
 		}
 		for (decl in program.interfaces) {
 			declareType(decl.name, Interface, decl.span);
@@ -105,8 +113,9 @@ class DeclarationIndex {
 					var resolved = resolveInner(alias, aliasSpans.get(name), resolving, substitutions);
 					resolving.remove(name);
 					resolved;
-				} else if (interfaces.exists(name)) TInterface(name); else if (enums.exists(name)) TEnum(name); else if (classes.exists(name))
-					TClass(name); else {
+				} else if (enumAbstracts.exists(name)) resolveInner(enumAbstracts.get(name).underlying, span, resolving,
+					substitutions); else if (interfaces.exists(name)) TInterface(name); else if (enums.exists(name)) TEnum(name); else
+					if (classes.exists(name)) TClass(name); else {
 					fail('Unknown type "$name"', span);
 					TVoid;
 				}
@@ -168,6 +177,13 @@ class DeclarationIndex {
 	}
 
 	function validateSignatures(program:AstProgram):Void {
+		for (decl in program.enumAbstracts) {
+			resolve(decl.underlying, decl.span);
+			for (type in decl.fromTypes)
+				resolve(type, decl.span);
+			for (type in decl.toTypes)
+				resolve(type, decl.span);
+		}
 		for (decl in program.enums)
 			for (caseDecl in decl.cases)
 				for (parameter in caseDecl.params)
@@ -243,6 +259,8 @@ class DeclarationIndex {
 			return program.aliases[0].span;
 		if (program.enums.length > 0)
 			return program.enums[0].span;
+		if (program.enumAbstracts.length > 0)
+			return program.enumAbstracts[0].span;
 		if (program.interfaces.length > 0)
 			return program.interfaces[0].span;
 		if (program.classes.length > 0)

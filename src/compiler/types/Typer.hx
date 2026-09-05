@@ -32,6 +32,7 @@ class Typer {
 	var classDecls:Map<String, AstClass> = [];
 	var interfaceDecls:Map<String, AstInterface> = [];
 	var enumDecls:Map<String, AstEnum> = [];
+	var enumAbstractDecls:Map<String, compiler.Ast.AstEnumAbstract> = [];
 	var declarations:DeclarationIndex;
 	var relations:TypeRelations;
 	final generated:Array<TypedFunction> = [];
@@ -60,6 +61,12 @@ class Typer {
 		declarations = new DeclarationIndex(program);
 		relations = new TypeRelations(declarations);
 		enumDecls = declarations.enums;
+		enumAbstractDecls = declarations.enumAbstracts;
+		for (decl in program.enumAbstracts) {
+			var underlying = lowerType(decl.underlying);
+			for (value in decl.values)
+				coerce(typeExpression(value.value, new Scope(), underlying), underlying, 'enum abstract value "${decl.name}.${value.name}"', "E1002");
+		}
 		interfaceDecls = declarations.interfaces;
 		classDecls = declarations.classes;
 		for (alias in program.aliases)
@@ -738,7 +745,7 @@ class Typer {
 					var signature = signatures.get(name);
 					if (signature != null)
 						new TypedExpression(TFunctionRef(name), functionType(signature), span);
-					else if (classDecls.exists(name))
+					else if (classDecls.exists(name) || enumAbstractDecls.exists(name))
 						new TypedExpression(TClassRef(name), TClass(name), span);
 					else {
 						var ownerSeparator = context.name.lastIndexOf("."),
@@ -1402,6 +1409,11 @@ class Typer {
 	function typedMember(typedObject:TypedExpression, name:String, span:SourceSpan):TypedExpression {
 		switch typedObject.expression {
 			case TClassRef(className):
+				var abstractDecl = enumAbstractDecls.get(className);
+				if (abstractDecl != null)
+					for (value in abstractDecl.values)
+						if (value.name == name)
+							return typeExpression(value.value, new Scope(), lowerType(abstractDecl.underlying));
 				var staticField = findStaticField(className, name, span);
 				return new TypedExpression(TStaticField(staticField.owner, name), staticField.type, span);
 			default:
