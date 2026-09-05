@@ -417,6 +417,15 @@ HL_PRIM int HL_NAME(__string_char_code_at)( vbyte *value, int index ) {
 	return ((const uchar *)value)[index];
 }
 
+HL_PRIM vbyte *HL_NAME(__string_char_at)( vbyte *value, int index ) {
+	int length = value == NULL ? 0 : (int)ustrlen((const uchar *)value);
+	bool present = index >= 0 && index < length;
+	vbyte *result = hl_alloc_bytes((present ? 2 : 1) * (int)sizeof(uchar));
+	if( present ) ((uchar *)result)[0] = ((const uchar *)value)[index];
+	((uchar *)result)[present ? 1 : 0] = 0;
+	return result;
+}
+
 HL_PRIM vbyte *HL_NAME(__string_substring)( vbyte *value, int start, int end ) {
 	int length = value == NULL ? 0 : (int)ustrlen((const uchar *)value);
 	if( start < 0 ) start = 0;
@@ -727,5 +736,6 @@ DEFINE_PRIM(_I32,__string_length,_BYTES);
 DEFINE_PRIM(_BOOL,__string_equal,_BYTES _BYTES);
 DEFINE_PRIM(_I32,__string_index_of,_BYTES _BYTES);
 DEFINE_PRIM(_I32,__string_char_code_at,_BYTES _I32);
+DEFINE_PRIM(_BYTES,__string_char_at,_BYTES _I32);
 DEFINE_PRIM(_BYTES,__string_substring,_BYTES _I32 _I32);
 DEFINE_PRIM(_BOOL,__exception_matches,_DYN _TYPE);

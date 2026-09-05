@@ -86,6 +86,7 @@ enum TypedExpressionKind {
 	TArrayLength(array:TypedExpression);
 	TStringLength(value:TypedExpression);
 	TStringIndexOf(value:TypedExpression, needle:TypedExpression);
+	TStringCharAt(value:TypedExpression, index:TypedExpression);
 	TStringCharCodeAt(value:TypedExpression, index:TypedExpression);
 	TStringSubstring(value:TypedExpression, start:TypedExpression, end:TypedExpression);
 	TArrayPush(array:TypedExpression, value:TypedExpression);

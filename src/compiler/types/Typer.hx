@@ -1668,6 +1668,14 @@ class Typer {
 				fail("E1009", "String.charCodeAt expects an Int index", index.span);
 			return new TypedExpression(TStringCharCodeAt(receiver, index), TInt, span);
 		}
+		if (name == "charAt") {
+			if (arguments.length != 1)
+				fail("E1008", 'Function "String.charAt" expects 1 argument, got ${arguments.length}', span);
+			var index = typeExpression(arguments[0], scope, TInt);
+			if (!sameType(index.type, TInt))
+				fail("E1009", "String.charAt expects an Int index", index.span);
+			return new TypedExpression(TStringCharAt(receiver, index), TString, span);
+		}
 		return null;
 	}
 
