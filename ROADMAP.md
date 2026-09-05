@@ -105,6 +105,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   compatible function patching.
 - [x] Revision checks, stale-patch rejection, call synchronization, and JIT
 	allocation reclamation.
+- [x] Functions containing `OTrap`, `OThrow`, and handler control flow patch in
+  place and execute their replacement handlers without restarting the module.
 - [x] A representative multi-module plugin now loads through the native runtime,
 	patches compatible closure/method bodies in place, and replaces the live module
 	on structural edits (`plugin-test.hxml`).

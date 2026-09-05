@@ -6,6 +6,7 @@ import compiler.hl.HlRuntimeIdentity;
 import compiler.hl.HlCode;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction;
+import compiler.hl.HlOpcode;
 import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlType;
 import compiler.modules.Compiler;
@@ -22,18 +23,22 @@ class HotReloadMain {
 		compiler.update("Worker.hx",
 			"function fib(n:Int):Int { if (n <= 1) return n; return fib(n - 1) + fib(n - 2); } function run():Int { return fib(38); }");
 		compiler.update("Seed.hx", "function ratio():Float { return 1.0 + 0.5; } function label():String { return \"initial\"; }");
-		compiler.update("Main.hx", "function main():Int { return Probe.read(); }");
+		compiler.update("ExceptionProbe.hx", "function probe():Int { try { throw \"probe\"; } catch (error:Dynamic) { return 41; } }");
+		compiler.update("Main.hx", "function main():Int { return Probe.read() + ExceptionProbe.probe() - 41; }");
 		var initial = compiler.compile("Main");
 		var liveRevision = initial.revision;
 
 		var valueIndex = initial.functionIds.get("Value.value"),
 			readIndex = initial.functionIds.get("Probe.read"),
+			exceptionIndex = initial.functionIds.get("ExceptionProbe.probe"),
 			workIndex = initial.functionIds.get("Worker.run");
 		var loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
 		if (Runtime.callInt(loaded, valueIndex) != 42)
 			throw "initial generation did not return 42";
 		if (Runtime.callInt(loaded, readIndex) != 42)
 			throw "initial internal call did not return 42";
+		if (Runtime.callInt(loaded, exceptionIndex) != 41)
+			throw "initial exception handler returned the wrong value";
 
 		compiler.update("Value.hx",
 			"function value():Int { var ratio:Float = 2.75; var label:String = \"patched source\"; var result = 0; while (result < 43) { result = result + 1; } return result * 2 / 2; }");
@@ -83,6 +88,27 @@ class HotReloadMain {
 		if (Runtime.retainedCodeAllocationCount(loaded) != 2)
 			throw "initial patch retained an unexpected number of code allocations";
 
+		compiler.update("ExceptionProbe.hx", "function probe():Int { try { throw \"probe\"; } catch (error:Dynamic) { return 42; } }");
+		var exceptionPatch = compiler.compile("Main"),
+			exceptionDecoded = HlPatchReader.decode(exceptionPatch.patchBytes),
+			hasTrap = false,
+			hasThrow = false;
+		for (fn in exceptionDecoded.functions)
+			for (instruction in fn.instructions) {
+				if (instruction.opcode == HlOpcode.Trap)
+					hasTrap = true;
+				if (instruction.opcode == HlOpcode.Throw)
+					hasThrow = true;
+			}
+		if (!hasTrap || !hasThrow)
+			throw "exception HLP omitted trap or throw opcodes";
+		Runtime.patchSet(loaded,
+			new PatchSet(liveRevision, exceptionPatch.revision, exceptionPatch.patchBytes, exceptionPatch.changedFunctions, exceptionPatch.requiresReload));
+		liveRevision = exceptionPatch.revision;
+		if (Runtime.callInt(loaded, exceptionIndex) != 42)
+			throw "hot-patched exception handler did not execute";
+		var retainedAllocations = Runtime.retainedCodeAllocationCount(loaded);
+
 		for (i in 0...100) {
 			var expected = 44 + (i & 1);
 			compiler.update("Value.hx", 'function value():Int { return $expected; }');
@@ -92,7 +118,7 @@ class HotReloadMain {
 			liveRevision = iteration.revision;
 			if (Runtime.callInt(loaded, readIndex) != expected)
 				throw 'stress patch $i returned the wrong value';
-			if (Runtime.retainedCodeAllocationCount(loaded) != 2)
+			if (Runtime.retainedCodeAllocationCount(loaded) != retainedAllocations)
 				throw 'stress patch $i leaked a code allocation';
 		}
 
