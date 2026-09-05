@@ -830,6 +830,16 @@ class IrGenerator {
 				}
 				lowerType(a.type) == Bytes ? builder.call("__string_equal", [left, right], Bool) : builder.equal(left, right);
 			case TCall(name, args): builder.call(name, [for (arg in args) lowerExpression(arg, builder, localTypes)], lowerType(expression.type));
+			case TCollectionCall(receiver, operation, args):
+				var nativeName = switch receiver.type {
+					case TArray(element): RuntimeType.arrayNative(element, operation);
+					case TMap(key, value): RuntimeType.mapNative(key, value, operation);
+					default: throw "Collection operation requires an Array or Map receiver";
+				};
+				builder.call(nativeName, [lowerExpression(receiver, builder, localTypes)].concat([
+					for (arg in args)
+						lowerExpression(arg, builder, localTypes)
+				]), lowerType(expression.type));
 			case TClosureCall(callee, args):
 				builder.callClosure(lowerExpression(callee, builder, localTypes), [for (arg in args) lowerExpression(arg, builder, localTypes)],
 					lowerType(expression.type));

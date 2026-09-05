@@ -47,6 +47,7 @@ enum TypedExpressionKind {
 	TAnd(left:TypedExpression, right:TypedExpression);
 	TOr(left:TypedExpression, right:TypedExpression);
 	TCall(name:String, arguments:Array<TypedExpression>);
+	TCollectionCall(receiver:TypedExpression, operation:String, arguments:Array<TypedExpression>);
 	TClosureCall(callee:TypedExpression, arguments:Array<TypedExpression>);
 	TToInterface(value:TypedExpression, name:String);
 	TNew(typeName:String, arguments:Array<TypedExpression>, hasConstructor:Bool);

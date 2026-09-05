@@ -316,10 +316,10 @@ class Typer {
 				fail("E1012", "Unreachable statement", statementSpan(statement));
 			switch statement {
 				case VarDeclaration(name, declared, initializer, span):
-					var value = typeExpression(initializer, scope);
+					var declaredType = declared == null ? null : lowerType(declared),
+						value = typeExpression(initializer, scope, declaredType);
 					if (declared != null) {
-						var expected = lowerType(declared);
-						value = coerce(value, expected, 'local "$name"', "E1002");
+						value = coerce(value, declaredType, 'local "$name"', "E1002");
 					} else if (sameType(value.type, TNull)) {
 						fail("E1002", 'Null requires an explicit nullable type for local "$name"', span);
 					}
@@ -328,7 +328,7 @@ class Typer {
 						context.cellTypes.set(name, value.type);
 					output.push(TVar(context.cells.exists(name) ? name : scope.resolveId(name), value, span));
 				case Return(expression, span):
-					var value = typeExpression(expression, scope);
+					var value = typeExpression(expression, scope, result);
 					value = coerce(value, result, "return", "E1003");
 					output.push(TReturn(value, span));
 				case ReturnVoid(span):
@@ -482,7 +482,7 @@ class Typer {
 								var mapName = RuntimeType.mapName(key, value);
 								if (mapName == null)
 									fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
-								typedIterable = new TypedExpression(TCall(RuntimeType.mapNative(key, value, "keys"), [typedIterable]), TArray(key), span);
+								typedIterable = new TypedExpression(TCollectionCall(typedIterable, "keys", []), TArray(key), span);
 								key;
 							default:
 								fail("E1014", "For-in iterable must be an Array or Map", span);
@@ -594,7 +594,7 @@ class Typer {
 		};
 	}
 
-	function typeExpression(expression:AstExpression, scope:Scope):TypedExpression
+	function typeExpression(expression:AstExpression, scope:Scope, ?expectedType:CompilerType):TypedExpression
 		return switch expression {
 			case IntegerLiteral(value, span): new TypedExpression(TIntLiteral(value), TInt, span);
 			case FloatLiteral(value, span): new TypedExpression(TFloatLiteral(value), TFloat, span);
@@ -652,11 +652,20 @@ class Typer {
 				var lambdaKey = span.file.path + ":" + span.start,
 					cachedLambda = lambdaCache.get(lambdaKey);
 				if (cachedLambda != null) cachedLambda else {
+					var expectedFunction = switch expectedType {
+						case TFunction(expectedArguments, expectedResult): {arguments: expectedArguments, result: expectedResult};
+						default: null;
+					};
+					if (expectedFunction != null && expectedFunction.arguments.length != arguments.length)
+						fail("E1008", 'Lambda expects ${expectedFunction.arguments.length} arguments, got ${arguments.length}', span);
 					var lambdaArguments:Array<{name:String, type:CompilerType}> = [],
 						lambdaScope = new Scope(),
 						declared:Map<String, Bool> = [];
-					for (argument in arguments) {
+					for (i in 0...arguments.length) {
+						var argument = arguments[i];
 						var argumentType = lowerType(argument.type);
+						if (expectedFunction != null && !TypeRelations.equals(argumentType, expectedFunction.arguments[i]))
+							fail("E1003", "Lambda argument type does not match its context", argument.span);
 						lambdaScope.define(argument.name, argumentType, argument.span);
 						lambdaArguments.push({name: lambdaScope.resolveId(argument.name), type: argumentType});
 						declared.set(argument.name, true);
@@ -684,15 +693,16 @@ class Typer {
 							}
 						}
 					seedLambdaScope(body, lambdaScope);
-					var inferredResult:CompilerType = TVoid;
-					for (statement in body)
-						switch statement {
-							case Return(value, _):
-								var typedValue = typeExpression(value, lambdaScope);
-								if (inferredResult == TVoid) inferredResult = typedValue.type; else if (!sameType(inferredResult,
-									typedValue.type)) fail("E1003", "Lambda return types do not match", span);
-							default:
-						}
+					var inferredResult:CompilerType = expectedFunction == null ? TVoid : expectedFunction.result;
+					if (expectedFunction == null)
+						for (statement in body)
+							switch statement {
+								case Return(value, _):
+									var typedValue = typeExpression(value, lambdaScope);
+									if (inferredResult == TVoid) inferredResult = typedValue.type; else if (!sameType(inferredResult,
+										typedValue.type)) fail("E1003", "Lambda return types do not match", span);
+								default:
+							}
 					var typedBodyScope = new Scope();
 					for (i in 0...lambdaArguments.length) {
 						typedBodyScope.define(arguments[i].name, lambdaArguments[i].type, arguments[i].span);
@@ -1036,7 +1046,7 @@ class Typer {
 		if (name == "copy") {
 			if (arguments.length != 0)
 				fail("E1008", "Array.copy expects no arguments", span);
-			return new TypedExpression(TCall(RuntimeType.arrayNative(element, "copy"), [receiver]), TArray(element), span);
+			return new TypedExpression(TCollectionCall(receiver, "copy", []), TArray(element), span);
 		}
 		if (name == "concat") {
 			if (arguments.length != 1)
@@ -1045,7 +1055,7 @@ class Typer {
 				otherElement = arrayElementType(other.type, span);
 			if (!sameType(otherElement, element))
 				fail("E1002", "Array.concat expects matching element types", span);
-			return new TypedExpression(TCall(RuntimeType.arrayNative(element, "concat"), [receiver, other]), TArray(element), span);
+			return new TypedExpression(TCollectionCall(receiver, "concat", [other]), TArray(element), span);
 		}
 		if (name == "slice") {
 			if (arguments.length < 1 || arguments.length > 2)
@@ -1053,7 +1063,7 @@ class Typer {
 			var start = coerce(typeExpression(arguments[0], scope), TInt, "slice start", "E1002"),
 				end = arguments.length == 2 ? coerce(typeExpression(arguments[1], scope), TInt, "slice end",
 					"E1002") : new TypedExpression(TArrayLength(receiver), TInt, span);
-			return new TypedExpression(TCall(RuntimeType.arrayNative(element, "slice"), [receiver, start, end]), TArray(element), span);
+			return new TypedExpression(TCollectionCall(receiver, "slice", [start, end]), TArray(element), span);
 		}
 		if (name == "indexOf") {
 			switch element {
@@ -1064,7 +1074,7 @@ class Typer {
 			if (arguments.length != 1)
 				fail("E1008", "Array.indexOf expects one argument", span);
 			var value = coerce(typeExpression(arguments[0], scope), element, "array element", "E1002");
-			return new TypedExpression(TCall(RuntimeType.arrayNative(element, "index_of"), [receiver, value]), TInt, span);
+			return new TypedExpression(TCollectionCall(receiver, "index_of", [value]), TInt, span);
 		}
 		fail("E1007", 'Unknown array method "$name"', span);
 		return new TypedExpression(TNullLiteral, TVoid, span);
@@ -1104,34 +1114,34 @@ class Typer {
 				fail("E1008", "Map.set expects a key and value", span);
 			var key = coerce(typeExpression(arguments[0], scope), mapType.key, "map key", "E1002"),
 				value = coerce(typeExpression(arguments[1], scope), mapType.value, "map value", "E1002");
-			return new TypedExpression(TCall(RuntimeType.mapNative(mapType.key, mapType.value, "set"), [receiver, key, value]), TVoid, span);
+			return new TypedExpression(TCollectionCall(receiver, "set", [key, value]), TVoid, span);
 		}
 		if (name == "keys") {
 			if (arguments.length != 0)
 				fail("E1008", "Map.keys expects no arguments", span);
-			return new TypedExpression(TCall(RuntimeType.mapNative(mapType.key, mapType.value, "keys"), [receiver]), TArray(mapType.key), span);
+			return new TypedExpression(TCollectionCall(receiver, "keys", []), TArray(mapType.key), span);
 		}
 		if (name == "values") {
 			if (arguments.length != 0)
 				fail("E1008", "Map.values expects no arguments", span);
-			return new TypedExpression(TCall(RuntimeType.mapNative(mapType.key, mapType.value, "values"), [receiver]), TArray(mapType.value), span);
+			return new TypedExpression(TCollectionCall(receiver, "values", []), TArray(mapType.value), span);
 		}
 		if (name == "clear") {
 			if (arguments.length != 0)
 				fail("E1008", "Map.clear expects no arguments", span);
-			return new TypedExpression(TCall(RuntimeType.mapNative(mapType.key, mapType.value, "clear"), [receiver]), TVoid, span);
+			return new TypedExpression(TCollectionCall(receiver, "clear", []), TVoid, span);
 		}
 		if (name == "size") {
 			if (arguments.length != 0)
 				fail("E1008", "Map.size expects no arguments", span);
-			return new TypedExpression(TCall(RuntimeType.mapNative(mapType.key, mapType.value, "size"), [receiver]), TInt, span);
+			return new TypedExpression(TCollectionCall(receiver, "size", []), TInt, span);
 		}
 		if (arguments.length != 1)
 			fail("E1008", 'Map.$name expects one argument', span);
 		var key = coerce(typeExpression(arguments[0], scope), mapType.key, "map key", "E1002");
 		return switch name {
-			case "exists": new TypedExpression(TCall(RuntimeType.mapNative(mapType.key, mapType.value, "exists"), [receiver, key]), TBool, span);
-			case "remove": new TypedExpression(TCall(RuntimeType.mapNative(mapType.key, mapType.value, "remove"), [receiver, key]), TBool, span);
+			case "exists": new TypedExpression(TCollectionCall(receiver, "exists", [key]), TBool, span);
+			case "remove": new TypedExpression(TCollectionCall(receiver, "remove", [key]), TBool, span);
 			case "get": new TypedExpression(TMapGet(receiver, key), mapType.value, span);
 			default:
 				fail("E1007", 'Unknown map method "$name"', span);

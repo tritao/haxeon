@@ -398,6 +398,7 @@ class TestMain {
 		if (semanticSignatureCompiler.compile("Main").requiresReload)
 			throw "Alias-equivalent function spelling changed the semantic ABI";
 		Frontend.compile("function main():Int { var value = 40; var read = () -> { var value = 2; return value; }; return read() + value; }");
+		Frontend.compile("function main():Int { var convert:(Int) -> Dynamic = (value:Int) -> { return value; }; convert(42); return 42; }");
 		expectCompileError("class Box { public var value:Int; } function main():Int { var box:Null<Box> = new Box(); if (box != null) { box = null; return box.value; } return 0; }",
 			'Field "value" requires an object');
 		var captureProgram = new Parser(new Lexer(new SourceFile("capture.hx",
