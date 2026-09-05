@@ -428,7 +428,7 @@ class Typer {
 					var dot = name.indexOf("."),
 						value = typeExpression(expression, scope);
 					if (dot < 0) {
-						var expected = scope.resolve(name);
+						var expected = scope.resolveDeclared(name);
 						if (expected == null) {
 							var ownerSeparator = currentFunctionName.lastIndexOf("."),
 								owner = ownerSeparator < 0 ? null : currentFunctionName.substr(0, ownerSeparator),
@@ -447,6 +447,7 @@ class Typer {
 								output.push(TCellAssign(name, currentCells.get(name), value, span));
 							else
 								output.push(TAssign(scope.resolveId(name), value, span));
+							scope.refine(name, value.type);
 						}
 					} else {
 						var objectName = name.substr(0, dot),

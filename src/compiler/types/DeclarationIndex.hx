@@ -28,6 +28,14 @@ typedef DeclarationSymbol = {
 	final span:SourceSpan;
 }
 
+/** Reserved semantic representation; parser support for generics is intentionally deferred. */
+typedef TypeParameterSymbol = {
+	final id:DeclarationId;
+	final name:String;
+	final owner:DeclarationId;
+	final span:SourceSpan;
+}
+
 /** Shared owner of source declarations and parsed-type resolution. */
 class DeclarationIndex {
 	public final aliases:Map<String, AstType> = [];

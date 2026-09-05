@@ -389,6 +389,9 @@ class TestMain {
 		expectCompileError("class Loop extends Loop { } function main():Int { return 0; }", 'Cyclic class inheritance involving "Loop"');
 		Frontend.compile("class Parent { } class Child extends Parent { } function consume(value:Parent):Int { return 42; } function main():Int { return consume(new Child()); }");
 		Frontend.compile("typedef Score = Int; interface Rated { function rate(value:Score):Score; } class Item implements Rated { public function rate(value:Int):Int { return value; } } function main():Int { return new Item().rate(42); }");
+		Frontend.compile("function main():Int { var value = 40; var read = () -> { var value = 2; return value; }; return read() + value; }");
+		expectCompileError("class Box { public var value:Int; } function main():Int { var box:Null<Box> = new Box(); if (box != null) { box = null; return box.value; } return 0; }",
+			'Field "value" requires an object');
 		Sys.println("PASS: declaration resolution rejects unknown types and cycles and resolves semantic signatures");
 		var classProgram = new Parser(new Lexer(new SourceFile("Box.hx",
 			"package demo; class Box { public final value:Int; public function new(value:Int) { } public function get():Int { return 42; } } function main():Int { return 42; }"))
