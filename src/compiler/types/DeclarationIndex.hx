@@ -78,13 +78,13 @@ class DeclarationIndex {
 		validateSignatures(program);
 	}
 
-	public function resolve(type:AstType, ?span:SourceSpan):CompilerType
-		return resolveInner(type, span == null ? fallbackSpan : span, []);
+	public function resolve(type:AstType, ?span:SourceSpan, ?substitutions:Map<String, CompilerType>):CompilerType
+		return resolveInner(type, span == null ? fallbackSpan : span, [], substitutions == null ? [] : substitutions);
 
 	public function symbol(kind:DeclarationKind, name:String):Null<DeclarationSymbol>
 		return symbols.get('$kind:$name');
 
-	function resolveInner(type:AstType, span:SourceSpan, resolving:Map<String, Bool>):CompilerType
+	function resolveInner(type:AstType, span:SourceSpan, resolving:Map<String, Bool>, substitutions:Map<String, CompilerType>):CompilerType
 		return switch type {
 			case IntType: TInt;
 			case BoolType: TBool;
@@ -93,12 +93,13 @@ class DeclarationIndex {
 			case VoidType: TVoid;
 			case NamedType("Dynamic"): TDynamic;
 			case NamedType(name):
-				var alias = aliases.get(name);
-				if (alias != null) {
+				var substitution = substitutions.get(name),
+					alias = aliases.get(name);
+				if (substitution != null) substitution; else if (alias != null) {
 					if (resolving.exists(name))
 						fail('Cyclic type alias involving "$name"', aliasSpans.get(name));
 					resolving.set(name, true);
-					var resolved = resolveInner(alias, aliasSpans.get(name), resolving);
+					var resolved = resolveInner(alias, aliasSpans.get(name), resolving, substitutions);
 					resolving.remove(name);
 					resolved;
 				} else if (interfaces.exists(name)) TInterface(name); else if (enums.exists(name)) TEnum(name); else if (classes.exists(name))
@@ -106,15 +107,18 @@ class DeclarationIndex {
 					fail('Unknown type "$name"', span);
 					TVoid;
 				}
-			case ArrayType(element): TArray(resolveInner(element, span, resolving));
-			case MapType(key, value): TMap(resolveInner(key, span, resolving), resolveInner(value, span, resolving));
-			case NullableType(element): TNullable(resolveInner(element, span, resolving));
+			case ArrayType(element): TArray(resolveInner(element, span, resolving, substitutions));
+			case MapType(key, value): TMap(resolveInner(key, span, resolving, substitutions), resolveInner(value, span, resolving, substitutions));
+			case NullableType(element): TNullable(resolveInner(element, span, resolving, substitutions));
 			case FunctionType(arguments, result):
-				TFunction([for (argument in arguments) resolveInner(argument, span, resolving)], resolveInner(result, span, resolving));
+				TFunction([
+					for (argument in arguments)
+						resolveInner(argument, span, resolving, substitutions)
+				], resolveInner(result, span, resolving, substitutions));
 			case AnonymousType(parsedFields):
 				var fields = [
 					for (field in parsedFields)
-						{name: field.name, type: resolveInner(field.type, field.span, resolving), optional: field.optional}
+						{name: field.name, type: resolveInner(field.type, field.span, resolving, substitutions), optional: field.optional}
 				];
 				fields.sort(function(left, right) return Reflect.compare(left.name, right.name));
 				for (i in 1...fields.length)
@@ -177,9 +181,13 @@ class DeclarationIndex {
 	}
 
 	function resolveFunction(fn:AstFunction):Void {
+		var substitutions:Map<String, CompilerType> = [];
+		if (fn.typeParameters != null)
+			for (parameter in fn.typeParameters)
+				substitutions.set(parameter, TDynamic);
 		for (argument in fn.arguments)
-			resolve(argument.type, argument.span);
-		resolve(fn.result, fn.span);
+			resolve(argument.type, argument.span, substitutions);
+		resolve(fn.result, fn.span, substitutions);
 	}
 
 	function visitClass(name:String, visiting:Map<String, Bool>):Void {

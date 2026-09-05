@@ -39,6 +39,8 @@ class Typer {
 	final lambdaCache:Map<String, TypedExpression> = [];
 	var context:BodyContext = new BodyContext("");
 	final anonymousTypes:Map<String, Array<compiler.types.Type.AnonymousField>> = [];
+	final genericSpecializations:Map<String, String> = [];
+	var typeSubstitutions:Map<String, CompilerType> = [];
 
 	public static function type(program:AstProgram):TypedProgram
 		return new Typer(null).typeProgram(program, null, true);
@@ -122,7 +124,7 @@ class Typer {
 				}
 			], typedClasses = [for (classDecl in program.classes) typeClass(classDecl, classDecls, selected)], typedFunctions:Array<TypedFunction> = [];
 		for (fn in program.functions)
-			if (selected == null || selected.exists(fn.name))
+			if (!isGeneric(fn) && (selected == null || selected.exists(fn.name)))
 				typedFunctions.push(typeFunction(fn));
 		for (classDecl in typedClasses)
 			for (method in classDecl.methods)
@@ -182,6 +184,8 @@ class Typer {
 			if (!field.isStatic && field.initializer != null)
 				instanceInitializers.push(field);
 		for (method in classDecl.methods) {
+			if (isGeneric(method))
+				continue;
 			var qualified = classDecl.name + "." + method.name,
 				typeBody = selected == null || selected.exists(qualified),
 				typedMethod = typeBody ? typeFunction(method, classDecl.name, method.isStatic) : methodSignature(method, classDecl.name);
@@ -285,9 +289,13 @@ class Typer {
 		return true;
 	}
 
-	function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool = false):TypedFunction {
-		var previousContext = context;
-		context = new BodyContext(owner == null ? fn.name : owner + "." + fn.name);
+	function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool = false, ?substitutions:Map<String, CompilerType>,
+			?specializedName:String):TypedFunction {
+		var previousContext = context,
+			previousSubstitutions = typeSubstitutions;
+		typeSubstitutions = substitutions == null ? [] : substitutions;
+		var functionName = specializedName == null ? (owner == null ? fn.name : owner + "." + fn.name) : specializedName;
+		context = new BodyContext(functionName);
 		collectAssignedLocals(fn.statements, context.assigned);
 		var declared:Map<String, Bool> = [];
 		for (argument in fn.arguments)
@@ -323,7 +331,7 @@ class Typer {
 		if (result != TVoid && !alwaysReturns(statements))
 			fail("E1006", 'Function ${fn.name} does not return on every path', fn.span);
 		var resultFunction:TypedFunction = {
-			name: owner == null ? fn.name : owner + "." + fn.name,
+			name: functionName,
 			owner: owner,
 			isStatic: isStatic,
 			isConstructor: isConstructor,
@@ -340,6 +348,7 @@ class Typer {
 				generatedCells.push({name: context.cells.get(name), valueType: cellType, kind: context.cellKinds.get(name)});
 		}
 		context = previousContext;
+		typeSubstitutions = previousSubstitutions;
 		return resultFunction;
 	}
 
@@ -1028,14 +1037,27 @@ class Typer {
 							fail("E1007", 'Unknown instance method "$className.$methodName"', span);
 						var methodKey = methodInfoResult.owner + "." + methodName;
 						var method = signatures.get(methodKey),
-							expected = [for (argument in method.arguments) lowerType(argument.type)],
 							typed = [for (argument in arguments) typeExpression(argument, scope)];
+						if (isGeneric(method)) {
+							if (!methodInfoResult.isStatic)
+								fail("E1007", "Generic instance methods are not supported yet", span);
+							var specialized = specializeGeneric(methodKey, method, typed, span, methodInfoResult.owner, true);
+							return new TypedExpression(TCall(specialized.name, specialized.arguments), specialized.result, span);
+						}
+						var expected = [for (argument in method.arguments) lowerType(argument.type)];
 						if (typed.length != expected.length)
 							fail("E1008", 'Function "$methodKey" expects ${expected.length} arguments, got ${typed.length}', span);
 						typed = coerceArguments(typed, expected, methodKey);
 						new TypedExpression(TMethodCall(receiver, methodKey, typed), lowerType(method.result), span);
 					} else {
 						var signature = signatures.get(name);
+						if (signature != null && isGeneric(signature)) {
+							var typed = [for (argument in arguments) typeExpression(argument, scope)],
+								info = methodInfo.get(name),
+								specialized = specializeGeneric(name, signature, typed, span, info == null ? null : info.owner,
+									info == null ? true : info.isStatic);
+							return new TypedExpression(TCall(specialized.name, specialized.arguments), specialized.result, span);
+						}
 						var external = externals.get(name),
 							expectedArguments = signature == null ? (external == null ? null : external.arguments) : [for (argument in signature.arguments) lowerType(argument.type)],
 							result = signature == null ? (external == null ? null : external.result) : lowerType(signature.result);
@@ -1084,6 +1106,76 @@ class Typer {
 				default:
 			}
 	}
+
+	function specializeGeneric(baseName:String, fn:AstFunction, arguments:Array<TypedExpression>, span:SourceSpan, owner:Null<String>,
+			isStatic:Bool):{name:String, arguments:Array<TypedExpression>, result:CompilerType} {
+		if (arguments.length != fn.arguments.length)
+			fail("E1008", 'Function "$baseName" expects ${fn.arguments.length} arguments, got ${arguments.length}', span);
+		var substitutions:Map<String, CompilerType> = [];
+		for (i in 0...arguments.length)
+			inferTypeParameters(fn.arguments[i].type, arguments[i].type, fn.typeParameters, substitutions, arguments[i].span);
+		for (parameter in fn.typeParameters)
+			if (substitutions.get(parameter) == null)
+				fail("E1003", 'Cannot infer generic type parameter "$parameter" for "$baseName"', span);
+		var expected = [
+			for (argument in fn.arguments)
+				declarations.resolve(argument.type, argument.span, substitutions)
+		], typed = coerceArguments(arguments, expected, baseName), result = declarations.resolve(fn.result, fn.span, substitutions), key = baseName + "<" + [
+			for (parameter in fn.typeParameters)
+				SemanticSignature.type(substitutions.get(parameter))
+			].join(",") + ">", name = genericSpecializations.get(key);
+		if (name == null) {
+			name = '$' + 'generic:$key';
+			genericSpecializations.set(key, name);
+			generated.push(typeFunction(fn, owner, isStatic, substitutions, name));
+		}
+		return {name: name, arguments: typed, result: result};
+	}
+
+	function inferTypeParameters(pattern:AstType, actual:CompilerType, parameters:Array<String>, substitutions:Map<String, CompilerType>, span:SourceSpan):Void
+		switch pattern {
+			case NamedType(name) if (parameters.indexOf(name) >= 0):
+				var previous = substitutions.get(name);
+				if (previous != null && !sameType(previous, actual))
+					fail("E1003", 'Conflicting types inferred for generic parameter "$name"', span);
+				substitutions.set(name, actual);
+			case ArrayType(element):
+				switch actual {
+					case TArray(actualElement): inferTypeParameters(element, actualElement, parameters, substitutions, span);
+					default:
+				}
+			case MapType(key, value):
+				switch actual {
+					case TMap(actualKey, actualValue):
+						inferTypeParameters(key, actualKey, parameters, substitutions, span);
+						inferTypeParameters(value, actualValue, parameters, substitutions, span);
+					default:
+				}
+			case NullableType(element):
+				switch actual {
+					case TNullable(actualElement): inferTypeParameters(element, actualElement, parameters, substitutions, span);
+					default:
+				}
+			case FunctionType(patternArguments, patternResult):
+				switch actual {
+					case TFunction(actualArguments, actualResult) if (patternArguments.length == actualArguments.length):
+						for (i in 0...patternArguments.length)
+							inferTypeParameters(patternArguments[i], actualArguments[i], parameters, substitutions, span);
+						inferTypeParameters(patternResult, actualResult, parameters, substitutions, span);
+					default:
+				}
+			case AnonymousType(patternFields):
+				switch actual {
+					case TAnonymous(_, actualFields):
+						for (field in patternFields) {
+							var actualField = anonymousField(actualFields, field.name);
+							if (actualField != null)
+								inferTypeParameters(field.type, actualField.type, parameters, substitutions, span);
+						}
+					default:
+				}
+			default:
+		}
 
 	function typedMember(typedObject:TypedExpression, name:String, span:SourceSpan):TypedExpression {
 		switch typedObject.expression {
@@ -1849,7 +1941,10 @@ class Typer {
 	}
 
 	function lowerType(type:AstType):CompilerType
-		return declarations.resolve(type);
+		return declarations.resolve(type, null, typeSubstitutions);
+
+	static function isGeneric(fn:AstFunction):Bool
+		return fn.typeParameters != null && fn.typeParameters.length > 0;
 
 	function arrayElementType(type:CompilerType, span:SourceSpan):CompilerType
 		return switch type {

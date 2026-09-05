@@ -350,6 +350,7 @@ class Compiler {
 					classMethods.push({
 						name: method.name,
 						isStatic: method.isStatic,
+						typeParameters: method.typeParameters,
 						arguments: canonical.arguments,
 						result: canonical.result,
 						span: method.span,
@@ -461,7 +462,23 @@ class Compiler {
 		for (fn in typedNew.functions) {
 			if (token != null)
 				token.check();
-			var module = owners.get(fn.name), state = modules.get(module);
+			var module = owners.get(fn.name);
+			if (module == null && StringTools.startsWith(fn.name, "$generic:")) {
+				var base = fn.name.substring(9, fn.name.indexOf("<", 9));
+				module = owners.get(base);
+				if (module != null) {
+					owners.set(fn.name, module);
+					var generatedNames = generatedByModule.get(module);
+					if (generatedNames == null) {
+						generatedNames = [];
+						generatedByModule.set(module, generatedNames);
+					}
+					generatedNames.set(fn.name, true);
+				}
+			}
+			if (module == null)
+				throw 'No source module owns typed function "${fn.name}"';
+			var state = modules.get(module);
 			state.typedFunctions.set(fn.name, fn);
 			state.typedSourceRevisions.set(fn.name, state.revision);
 			retyped.push(fn.name);

@@ -446,6 +446,9 @@ class TestMain {
 		if (genericAst.functions[0].typeParameters == null || genericAst.functions[0].typeParameters.join(",") != "T")
 			throw "Generic function type parameters were not preserved";
 		expectParserError("function invalid<T,T>(value:T):T return value;", 'Duplicate type parameter "T"');
+		Frontend.compile('function identity<T>(value:T):T return value; function first<T>(values:Array<T>):T return values[0]; function main():Int { var values = new Array<Int>(1); values[0] = 42; return identity(first(values)); }');
+		expectCompileError('function choose<T>(left:T, right:T):T return left; function main():Int return choose(42, "wrong");',
+			'Conflicting types inferred for generic parameter "T"');
 		expectCompileError('typedef Invalid = { value:Int; value:String; }; function main():Int return 0;', 'Duplicate anonymous field "value"');
 		expectCompileError('typedef Pair = {left:Int, right:Int}; function consume(pair:Pair):Int return pair.left; function main():Int return consume({left: 42});',
 			'Type mismatch for argument 1 to "consume"');
