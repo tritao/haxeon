@@ -537,6 +537,7 @@ class Compiler {
 			state.lastGoodTokens = state.tokens;
 			state.lastGoodAst = state.ast;
 			state.lastGoodSource = state.source;
+			state.lastGoodRevision = state.revision;
 		}
 		compiledOnce = true;
 		return {

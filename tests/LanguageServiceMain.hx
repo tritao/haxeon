@@ -27,6 +27,8 @@ class LanguageServiceMain {
 		}
 		if (!foundClass || !foundMethod || !foundAlias || !foundInterface || !foundEnum)
 			throw "language service did not expose document symbols";
+		if (symbols[0].revision != 1 || symbols[0].stale)
+			throw "language service did not tag the current semantic snapshot";
 		var source = service.compiler.modules.get("Main").source.text,
 			completion = service.complete("Main.hx", source.length),
 			hasMain = false,
@@ -141,8 +143,12 @@ class LanguageServiceMain {
 			service.compile("Main");
 			throw "invalid edit unexpectedly compiled";
 		} catch (error:CompileError) {}
-		if (service.documentSymbols("Main.hx").length == 0 || service.complete("Main.hx", 0).length == 0)
+		var recoveredSymbols = service.documentSymbols("Main.hx"),
+			recoveredCompletion = service.complete("Main.hx", 0);
+		if (recoveredSymbols.length == 0 || recoveredCompletion.length == 0)
 			throw "failed edit discarded the last good language-service snapshot";
+		if (!recoveredSymbols[0].stale || recoveredSymbols[0].revision != 1 || !recoveredCompletion[0].stale)
+			throw "failed edit did not identify stale semantic query results";
 		Sys.println("PASS: compiler-backed language service snapshot works");
 	}
 }

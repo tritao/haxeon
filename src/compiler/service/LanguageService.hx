@@ -17,6 +17,8 @@ import compiler.types.DeclarationIndex.DeclarationKind;
 import compiler.types.TypedAst.TypedStatement;
 
 typedef DocumentSymbol = {
+	final ?revision:Int;
+	final ?stale:Bool;
 	final name:String;
 	final kind:String;
 	final detail:String;
@@ -24,17 +26,23 @@ typedef DocumentSymbol = {
 }
 
 typedef CompletionItem = {
+	final ?revision:Int;
+	final ?stale:Bool;
 	final label:String;
 	final kind:String;
 	final detail:String;
 }
 
 typedef SymbolLocation = {
+	final ?revision:Int;
+	final ?stale:Bool;
 	final path:String;
 	final span:SourceSpan;
 }
 
 typedef TextEdit = {
+	final ?revision:Int;
+	final ?stale:Bool;
 	final path:String;
 	final span:SourceSpan;
 	final replacement:String;
@@ -140,6 +148,7 @@ class LanguageService {
 				});
 		}
 		result.sort(function(a, b) return Reflect.compare(a.name, b.name));
+		tagResults(result, state);
 		return result;
 	}
 
@@ -179,12 +188,14 @@ class LanguageService {
 				addInstanceMembers(receiverType, prefix, result);
 			if (result.length > 0) {
 				result.sort(function(a, b) return Reflect.compare(a.label, b.label));
+				tagResults(result, state);
 				return result;
 			}
 		}
 		for (symbol in documentSymbols(path))
 			if (prefix.length == 0 || StringTools.startsWith(symbol.name, prefix))
 				result.push({label: symbol.name, kind: symbol.kind, detail: symbol.detail});
+		tagResults(result, state);
 		return result;
 	}
 
@@ -239,7 +250,12 @@ class LanguageService {
 					if (token.kind == Identifier) {
 						var candidate = resolveSymbol(state.source.path, token.span.start + 1);
 						if (candidate != null && candidate.key == target.key)
-							result.push({path: state.source.path, span: token.span});
+							result.push({
+								path: state.source.path,
+								span: token.span,
+								revision: snapshotRevision(state),
+								stale: snapshotRevision(state) != state.revision
+							});
 					}
 		}
 		result.sort(function(a, b) {
@@ -254,7 +270,13 @@ class LanguageService {
 		if (name == null || replacement.length == 0)
 			return result;
 		for (reference in references(path, position))
-			result.push({path: reference.path, span: reference.span, replacement: replacement});
+			result.push({
+				path: reference.path,
+				span: reference.span,
+				replacement: replacement,
+				revision: reference.revision,
+				stale: reference.stale
+			});
 		return result;
 	}
 
@@ -352,7 +374,16 @@ class LanguageService {
 		return position >= span.start && position <= span.end;
 
 	function symbol(state:ModuleState, key:String, span:SourceSpan, ?functionSpan:SourceSpan):SemanticSymbol
-		return {key: '${state.name}:$key', location: {path: state.source.path, span: span}, functionSpan: functionSpan};
+		return {
+			key: '${state.name}:$key',
+			location: {
+				path: state.source.path,
+				span: span,
+				revision: snapshotRevision(state),
+				stale: snapshotRevision(state) != state.revision
+			},
+			functionSpan: functionSpan
+		};
 
 	function globalSymbol(state:ModuleState, name:String):Null<SemanticSymbol> {
 		var visible = [state];
@@ -681,6 +712,18 @@ class LanguageService {
 		if ((prefix.length == 0 || StringTools.startsWith(label, prefix)) && [for (item in result) item.label].indexOf(label) < 0)
 			result.push({label: label, kind: kind, detail: detail});
 	}
+
+	static function tagResults<T>(results:Array<T>, state:ModuleState):Void {
+		var revision = snapshotRevision(state),
+			stale = revision != state.revision;
+		for (result in results) {
+			Reflect.setField(result, "revision", revision);
+			Reflect.setField(result, "stale", stale);
+		}
+	}
+
+	static function snapshotRevision(state:ModuleState):Int
+		return state.ast == null ? state.lastGoodRevision : state.revision;
 
 	function stateFor(path:String):Null<ModuleState>
 		return compiler.modules.get(ModulePath.fromFile(path));

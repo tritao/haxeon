@@ -17,6 +17,7 @@ class ModuleState {
 	public var lastGoodTokens:Array<Token>;
 	public var lastGoodAst:Null<AstProgram>;
 	public var lastGoodSource:Null<SourceFile>;
+	public var lastGoodRevision:Int = 0;
 	public var dependencies:Array<String> = [];
 	public var diagnostics:Array<Diagnostic> = [];
 	public var signatureFingerprints:Map<String, String> = [];
@@ -55,6 +56,7 @@ class ModuleState {
 		result.lastGoodTokens = lastGoodTokens;
 		result.lastGoodAst = lastGoodAst;
 		result.lastGoodSource = lastGoodSource;
+		result.lastGoodRevision = lastGoodRevision;
 		result.dependencies = dependencies.copy();
 		result.diagnostics = diagnostics.copy();
 		result.signatureFingerprints = copyMap(signatureFingerprints);
