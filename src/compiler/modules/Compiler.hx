@@ -174,6 +174,7 @@ class Compiler {
 		var functions:Array<AstFunction> = [],
 			programFunctions:Array<AstFunction> = [],
 			typeAliases:Array<compiler.Ast.AstTypeAlias> = [],
+			enums:Array<compiler.Ast.AstEnum> = [],
 			interfaces:Array<compiler.Ast.AstInterface> = [],
 			classes:Array<compiler.Ast.AstClass> = [],
 			owners:Map<String, String> = [],
@@ -187,6 +188,8 @@ class Compiler {
 				interfaces.push(interfaceDecl);
 			for (alias in state.ast.aliases)
 				typeAliases.push(alias);
+			for (enumDecl in state.ast.enums)
+				enums.push(enumDecl);
 			for (fn in state.ast.functions)
 				locals.set(fn.name, true);
 			for (fn in state.ast.functions) {
@@ -263,7 +266,9 @@ class Compiler {
 				owners.set(lambdaName, module);
 		var invalid:Map<String, Bool> = [], interfaceChanged = false;
 		for (change in structuralChanged.keys())
-			if (StringTools.startsWith(change, "interface:") || StringTools.startsWith(change, "alias:"))
+			if (StringTools.startsWith(change, "interface:")
+				|| StringTools.startsWith(change, "alias:")
+				|| StringTools.startsWith(change, "enum:"))
 				interfaceChanged = true;
 		if (interfaceChanged)
 			for (fn in functions)
@@ -291,6 +296,7 @@ class Compiler {
 				packageName: null,
 				imports: [],
 				aliases: typeAliases,
+				enums: enums,
 				interfaces: interfaces,
 				classes: classes,
 				functions: programFunctions
@@ -408,6 +414,7 @@ class Compiler {
 			case TVoid: Void;
 			case TClass(name): Obj(name);
 			case TInterface(name): Virtual(name);
+			case TEnum(_): I32;
 			case TArray(element): Array(irType(element));
 			case TFunction(arguments, result): Function([for (argument in arguments) irType(argument)], irType(result));
 		};
@@ -475,6 +482,17 @@ class Compiler {
 			if (!aliases.exists(old))
 				structuralChanged.set('alias:$old', true);
 		state.aliasFingerprints = aliases;
+		var enums:Map<String, String> = [];
+		for (enumDecl in state.ast.enums) {
+			var signature = enumDecl.name + "{" + [for (caseDecl in enumDecl.cases) caseDecl.name].join(";") + "}";
+			enums.set(enumDecl.name, signature);
+			if (state.enumFingerprints.get(enumDecl.name) != signature)
+				structuralChanged.set('enum:${enumDecl.name}', true);
+		}
+		for (old in state.enumFingerprints.keys())
+			if (!enums.exists(old))
+				structuralChanged.set('enum:$old', true);
+		state.enumFingerprints = enums;
 		for (fn in state.ast.functions) {
 			var canonical = state.name == entry && fn.name == "main" ? "main" : state.name + "." + fn.name;
 			var signature = signatureFingerprint(fn),

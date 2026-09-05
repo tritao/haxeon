@@ -44,6 +44,7 @@ typedef AstInterface = {
 }
 
 typedef AstTypeAlias = {final name:String; final type:AstType; final span:SourceSpan;}
+typedef AstEnum = {final name:String; final cases:Array<{name:String, span:SourceSpan}>; final span:SourceSpan;}
 
 enum AstExpression {
 	IntegerLiteral(value:Int, span:SourceSpan);
@@ -89,6 +90,7 @@ typedef AstProgram = {
 	final packageName:Null<String>;
 	final imports:Array<String>;
 	final aliases:Array<AstTypeAlias>;
+	final enums:Array<AstEnum>;
 	final interfaces:Array<AstInterface>;
 	final classes:Array<AstClass>;
 	final functions:Array<AstFunction>;

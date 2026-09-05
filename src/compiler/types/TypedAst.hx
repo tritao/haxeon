@@ -20,6 +20,7 @@ enum TypedExpressionKind {
 	TFloatLiteral(value:Float);
 	TStringLiteral(value:String);
 	TBoolLiteral(value:Bool);
+	TEnumLiteral(name:String, index:Int);
 	TLocal(name:String);
 	TCaptured(name:String);
 	TFunctionRef(name:String);

@@ -8,6 +8,7 @@ enum TokenKind {
 	Typedef;
 	Class;
 	Interface;
+	Enum;
 	Extends;
 	Implements;
 	Public;

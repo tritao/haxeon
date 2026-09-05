@@ -33,9 +33,11 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   capture cells remain future work).
 - [~] `Array<Int>` typing, indexed reads/writes, `.length`, and compiler-owned
 	`Int`/`Float`/`Bool`/`String` allocation lower directly to HashLink array
-	operations and the runtime ABI. Object arrays, maps, enums, nullable values,
+	operations and the runtime ABI. Object arrays, maps, nullable values,
 	and pattern matching remain future work. Our HashLink fork enforces bounds in
 	the JIT.
+- [~] Payload-free enums lower to stable integer tags and support typed case
+	values/equality; payload constructors and pattern matching remain future work.
 - [~] Primitive and array type aliases resolve in the frontend; cross-module
 	alias identity and generic aliases remain future work.
 - [~] Prototype-dispatched instance calls and inheritance are live, including

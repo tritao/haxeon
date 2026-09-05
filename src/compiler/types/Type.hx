@@ -8,6 +8,7 @@ enum CompilerType {
 	TVoid;
 	TClass(name:String);
 	TInterface(name:String);
+	TEnum(name:String);
 	TArray(element:CompilerType);
 	TFunction(arguments:Array<CompilerType>, result:CompilerType);
 }

@@ -5,6 +5,7 @@ import compiler.Ast.AstFunction;
 import compiler.Ast.AstClass;
 import compiler.Ast.AstInterface;
 import compiler.Ast.AstTypeAlias;
+import compiler.Ast.AstEnum;
 import compiler.Ast.AstProgram;
 import compiler.Ast.AstStatement;
 import compiler.Ast.AstType;
@@ -30,10 +31,12 @@ class Parser {
 			imports.push(parseQualifiedName());
 			consume(TokenKind.Semicolon);
 		}
-		var functions = [], aliases:Array<AstTypeAlias> = [], interfaces:Array<AstInterface> = [], classes = [];
+		var functions = [], aliases:Array<AstTypeAlias> = [], enums:Array<AstEnum> = [], interfaces:Array<AstInterface> = [], classes = [];
 		while (!check(TokenKind.Eof)) {
 			if (match(TokenKind.Typedef))
 				aliases.push(parseTypeAlias(previous().span));
+			else if (match(TokenKind.Enum))
+				enums.push(parseEnum(previous().span));
 			else if (check(TokenKind.Interface))
 				interfaces.push(parseInterface());
 			else if (check(TokenKind.Class))
@@ -45,6 +48,7 @@ class Parser {
 			packageName: packageName,
 			imports: imports,
 			aliases: aliases,
+			enums: enums,
 			interfaces: interfaces,
 			classes: classes,
 			functions: functions
@@ -56,6 +60,18 @@ class Parser {
 		consume(TokenKind.Assign);
 		var type = parseType(), end = consume(TokenKind.Semicolon).span;
 		return {name: name, type: type, span: start.merge(end)};
+	}
+
+	function parseEnum(start:SourceSpan):AstEnum {
+		var name = consume(TokenKind.Identifier).text, cases = [];
+		consume(TokenKind.LeftBrace);
+		while (!check(TokenKind.RightBrace)) {
+			var caseToken = consume(TokenKind.Identifier);
+			cases.push({name: caseToken.text, span: caseToken.span});
+			consume(TokenKind.Semicolon);
+		}
+		var end = consume(TokenKind.RightBrace).span;
+		return {name: name, cases: cases, span: start.merge(end)};
 	}
 
 	function parseQualifiedName():String {

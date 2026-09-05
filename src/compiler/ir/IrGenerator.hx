@@ -250,6 +250,7 @@ class IrGenerator {
 			case TFloatLiteral(value): builder.constFloat(value);
 			case TStringLiteral(value): builder.constString(value);
 			case TBoolLiteral(value): builder.constBool(value);
+			case TEnumLiteral(_, index): builder.constInt(index);
 			case TLocal(name):
 				var type = localTypes.get(name);
 				if (type == null)
@@ -337,6 +338,7 @@ class IrGenerator {
 			case TVoid: Void;
 			case TClass(name): Obj(name);
 			case TInterface(name): Virtual(name);
+			case TEnum(_): I32;
 			case TArray(element): Array(lowerType(element));
 			case TFunction(arguments, result): Function([for (argument in arguments) lowerType(argument)], lowerType(result));
 		};

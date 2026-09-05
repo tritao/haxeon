@@ -84,6 +84,21 @@ class LanguageService {
 					span: method.span
 				});
 		}
+		for (enumDecl in state.ast.enums) {
+			result.push({
+				name: enumDecl.name,
+				kind: "enum",
+				detail: 'enum ${enumDecl.name}',
+				span: enumDecl.span
+			});
+			for (caseDecl in enumDecl.cases)
+				result.push({
+					name: caseDecl.name,
+					kind: "enumCase",
+					detail: '${enumDecl.name}.${caseDecl.name}',
+					span: caseDecl.span
+				});
+		}
 		for (classDecl in state.ast.classes) {
 			result.push({
 				name: classDecl.name,
@@ -143,6 +158,13 @@ class LanguageService {
 				for (alias in state.ast.aliases)
 					if (alias.name == name)
 						return {path: state.source.path, span: alias.span};
+				for (enumDecl in state.ast.enums) {
+					if (enumDecl.name == name)
+						return {path: state.source.path, span: enumDecl.span};
+					for (caseDecl in enumDecl.cases)
+						if (caseDecl.name == name)
+							return {path: state.source.path, span: caseDecl.span};
+				}
 				for (fn in state.ast.functions)
 					if (fn.name == name)
 						return {path: state.source.path, span: fn.span};

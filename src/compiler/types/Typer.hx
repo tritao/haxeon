@@ -8,6 +8,7 @@ import compiler.Ast.AstStatement;
 import compiler.Ast.AstType;
 import compiler.Ast.AstClass;
 import compiler.Ast.AstInterface;
+import compiler.Ast.AstEnum;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedFunction;
@@ -26,6 +27,7 @@ class Typer {
 	var classDecls:Map<String, AstClass> = [];
 	var interfaceDecls:Map<String, AstInterface> = [];
 	var aliases:Map<String, AstType> = [];
+	var enumDecls:Map<String, AstEnum> = [];
 	final generated:Array<TypedFunction> = [];
 	final generatedClasses:Array<TypedClass> = [];
 	var currentFunctionName:String = "";
@@ -45,6 +47,11 @@ class Typer {
 			if (aliases.exists(alias.name) || classDecls.exists(alias.name) || interfaceDecls.exists(alias.name))
 				fail("E1000", 'Duplicate type name "${alias.name}"', alias.span);
 			aliases.set(alias.name, alias.type);
+		}
+		for (enumDecl in program.enums) {
+			if (enumDecls.exists(enumDecl.name) || aliases.exists(enumDecl.name))
+				fail("E1000", 'Duplicate type name "${enumDecl.name}"', enumDecl.span);
+			enumDecls.set(enumDecl.name, enumDecl);
 		}
 		var classes:Map<String, AstClass> = [];
 		for (interfaceDecl in program.interfaces) {
@@ -301,7 +308,17 @@ class Typer {
 						} else {
 							var objectName = name.substr(0, dot),
 								fieldName = name.substr(dot + 1),
-								object = typeExpression(Variable(objectName, span), scope),
+								enumDecl = enumDecls.get(objectName);
+							if (enumDecl != null) {
+								var index = -1;
+								for (i in 0...enumDecl.cases.length)
+									if (enumDecl.cases[i].name == fieldName)
+										index = i;
+								if (index < 0)
+									fail("E1005", 'Unknown enum case "$name"', span);
+								return new TypedExpression(TEnumLiteral(objectName, index), TEnum(objectName), span);
+							}
+							var object = typeExpression(Variable(objectName, span), scope),
 								field = fieldName == "length"
 									&& isArray(object.type) ? arrayLengthType(object.type) : fieldName == "length"
 									&& object.type == TString ? TInt : fieldType(object.type, fieldName, span);
@@ -689,6 +706,12 @@ class Typer {
 			return new TypedExpression(TEqual(left, right), TBool, span);
 		if (operation == 2 && sameType(left.type, TBool) && sameType(right.type, TBool))
 			return new TypedExpression(TEqual(left, right), TBool, span);
+		if (operation == 2 && sameType(left.type, right.type))
+			switch left.type {
+				case TEnum(_):
+					return new TypedExpression(TEqual(left, right), TBool, span);
+				default:
+			}
 		if (!sameType(left.type, TInt) || !sameType(right.type, TInt))
 			fail("E1011", "Comparison requires Int operands", span);
 		return new TypedExpression(switch operation {
@@ -720,7 +743,7 @@ class Typer {
 			case VoidType: TVoid;
 			case NamedType(name):
 				var alias = aliases.get(name);
-				alias == null ? (interfaceDecls.exists(name) ? TInterface(name) : TClass(name)) : lowerType(alias);
+				alias == null ? (interfaceDecls.exists(name) ? TInterface(name) : enumDecls.exists(name) ? TEnum(name) : TClass(name)) : lowerType(alias);
 			case ArrayType(element): TArray(lowerType(element));
 			case FunctionType(arguments, result): TFunction([for (argument in arguments) lowerType(argument)], lowerType(result));
 		};
@@ -755,6 +778,7 @@ class Typer {
 		return switch [left, right] {
 			case [TClass(a), TClass(b)]: a == b;
 			case [TInterface(a), TInterface(b)]: a == b;
+			case [TEnum(a), TEnum(b)]: a == b;
 			case [TArray(a), TArray(b)]: sameType(a, b);
 			case [TFunction(aArgs, aResult), TFunction(bArgs, bResult)]: aArgs.length == bArgs.length && [
 					for (i in 0...aArgs.length)
