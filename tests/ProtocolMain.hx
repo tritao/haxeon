@@ -6,7 +6,14 @@ class ProtocolMain {
 		var protocol = new LanguageServiceProtocol();
 		assertOk(protocol.handle('{"id":1,"method":"update","path":"Main.hx","source":"class Editor { public var active:Int; public function new() { } } function main():Int { var editor = new Editor(); editor.active; return 42; }"}'));
 		var compiled:Dynamic = Json.parse(protocol.handle('{"id":2,"method":"compile","entry":"Main"}'));
-		if (!compiled.ok || compiled.result.revision != 1 || compiled.result.requiresReload)
+		if (!compiled.ok
+			|| compiled.result.revision != 1
+			|| compiled.result.requiresReload
+			|| compiled.result.moduleBase64 == null
+			|| compiled.result.moduleBase64.length == 0
+			|| compiled.result.runtimeIdentityBase64 == null
+			|| compiled.result.runtimeIdentityBase64.length == 0
+			|| compiled.result.patchBase64 != null)
 			throw "protocol compile response was incomplete";
 		var source = "class Editor { public var active:Int; public function new() { } } function main():Int { var editor = new Editor(); editor.active; return 42; }",
 			completion:Dynamic = Json.parse(protocol.handle('{"id":3,"method":"complete","path":"Main.hx","position":'

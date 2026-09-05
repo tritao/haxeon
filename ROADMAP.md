@@ -108,7 +108,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   locals, members, and imported functions; full type-aware navigation remains.
 - [~] Completion-safe partial parsing and error recovery through last-good
   snapshots; true partial parsing remains.
-- [x] A small JSON-lines protocol adapter for Pragtical; no second typechecker.
+- [x] A small JSON-lines protocol adapter for Pragtical; it exposes diagnostics,
+  semantic queries, transactional validation, and base64 HLB/HLP payloads with
+  runtime identity. There is no second typechecker.
 
 ### E. Self-hosting and release engineering
 

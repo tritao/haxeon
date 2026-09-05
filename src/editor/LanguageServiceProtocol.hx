@@ -5,6 +5,8 @@ import compiler.service.LanguageService;
 import compiler.service.LanguageService.DocumentSymbol;
 import compiler.service.LanguageService.SymbolLocation;
 import compiler.service.LanguageService.TextEdit;
+import compiler.hl.HlWriter;
+import haxe.crypto.Base64;
 import haxe.Json;
 
 /** JSON-lines adapter for the persistent compiler service.
@@ -42,7 +44,10 @@ class LanguageServiceProtocol {
 						regenerated: build.regenerated,
 						changedFunctions: build.changedFunctions,
 						requiresReload: build.requiresReload,
-						patchAvailable: build.patchBytes != null
+						patchAvailable: build.patchBytes != null,
+						moduleBase64: Base64.encode(HlWriter.encode(build.module)),
+						patchBase64: build.patchBytes == null ? null : Base64.encode(build.patchBytes),
+						runtimeIdentityBase64: Base64.encode(build.runtimeIdentity)
 					};
 				case "validate":
 					var validation = service.validate(requiredString(request, "path"), requiredString(request, "source"), requiredString(request, "entry"));
