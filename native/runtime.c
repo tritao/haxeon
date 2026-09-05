@@ -56,6 +56,30 @@ HL_PRIM bool HL_NAME(__string_equal)( vbyte *left, vbyte *right ) {
 		&& (left_length == 0 || memcmp(left, right, left_length * (int)sizeof(uchar)) == 0);
 }
 
+HL_PRIM int HL_NAME(__string_index_of)( vbyte *value, vbyte *needle ) {
+	int value_length = value == NULL ? 0 : (int)ustrlen((const uchar *)value);
+	int needle_length = needle == NULL ? 0 : (int)ustrlen((const uchar *)needle);
+	if( needle_length == 0 ) return 0;
+	if( needle_length > value_length ) return -1;
+	for( int i = 0; i <= value_length - needle_length; i++ )
+		if( memcmp(value + i * sizeof(uchar), needle, needle_length * sizeof(uchar)) == 0 ) return i;
+	return -1;
+}
+
+HL_PRIM vbyte *HL_NAME(__string_substring)( vbyte *value, int start, int end ) {
+	int length = value == NULL ? 0 : (int)ustrlen((const uchar *)value);
+	if( start < 0 ) start = 0;
+	if( end < start ) end = start;
+	if( start > length ) start = length;
+	if( end > length ) end = length;
+	int count = end - start;
+	vbyte *result = hl_alloc_bytes((count + 1) * (int)sizeof(uchar));
+	if( count > 0 )
+		memcpy(result, value + start * sizeof(uchar), count * sizeof(uchar));
+	((uchar *)result)[count] = 0;
+	return result;
+}
+
 HL_PRIM void HL_NAME(array_int_init)( vobj *object ) {
 	*array_int_storage(object) = hl_alloc_bytes(0);
 	*array_int_length(object) = 0;
@@ -139,3 +163,5 @@ DEFINE_PRIM(_ARR,__array_alloc_bool,_I32);
 DEFINE_PRIM(_BYTES,__string_concat,_BYTES _BYTES);
 DEFINE_PRIM(_I32,__string_length,_BYTES);
 DEFINE_PRIM(_BOOL,__string_equal,_BYTES _BYTES);
+DEFINE_PRIM(_I32,__string_index_of,_BYTES _BYTES);
+DEFINE_PRIM(_BYTES,__string_substring,_BYTES _I32 _I32);

@@ -93,7 +93,8 @@ class IrGenerator {
 						case Call(_, name, _):
 							if (StringTools.startsWith(name, "__array_alloc_"))
 								needsArrayRuntime = true;
-							if (name == "__string_concat" || name == "__string_length" || name == "__string_equal")
+							if (name == "__string_concat" || name == "__string_length" || name == "__string_equal" || name == "__string_index_of"
+								|| name == "__string_substring")
 								needsStringRuntime = true;
 						default:
 					}
@@ -159,6 +160,22 @@ class IrGenerator {
 				symbol: "__string_equal",
 				arguments: [Bytes, Bytes],
 				result: Bool
+			});
+		if (needsStringRuntime)
+			program.natives.push({
+				name: "__string_index_of",
+				library: "realtime_runtime",
+				symbol: "__string_index_of",
+				arguments: [Bytes, Bytes],
+				result: I32
+			});
+		if (needsStringRuntime)
+			program.natives.push({
+				name: "__string_substring",
+				library: "realtime_runtime",
+				symbol: "__string_substring",
+				arguments: [Bytes, I32, I32],
+				result: Bytes
 			});
 		if (natives != null)
 			for (native in natives)
@@ -292,6 +309,17 @@ class IrGenerator {
 				builder.arraySize(lowerExpression(array, builder, localTypes));
 			case TStringLength(value):
 				builder.call("__string_length", [lowerExpression(value, builder, localTypes)], I32);
+			case TStringIndexOf(value, needle):
+				builder.call("__string_index_of", [
+					lowerExpression(value, builder, localTypes),
+					lowerExpression(needle, builder, localTypes)
+				], I32);
+			case TStringSubstring(value, start, end):
+				builder.call("__string_substring", [
+					lowerExpression(value, builder, localTypes),
+					lowerExpression(start, builder, localTypes),
+					lowerExpression(end, builder, localTypes)
+				], Bytes);
 		}
 
 	static function implicitArguments(fn:TypedFunction):Array<{name:String, type:IrType}> {

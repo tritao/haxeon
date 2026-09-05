@@ -41,6 +41,8 @@ enum TypedExpressionKind {
 	TIndex(array:TypedExpression, index:TypedExpression);
 	TArrayLength(array:TypedExpression);
 	TStringLength(value:TypedExpression);
+	TStringIndexOf(value:TypedExpression, needle:TypedExpression);
+	TStringSubstring(value:TypedExpression, start:TypedExpression, end:TypedExpression);
 }
 
 enum TypedStatement {

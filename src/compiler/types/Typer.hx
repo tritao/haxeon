@@ -435,6 +435,23 @@ class Typer {
 						receiverType = receiver == null ? null : receiver.type,
 						methodName = dot < 0 ? null : name.substr(dot + 1);
 					if (receiverType != null && methodName != null) {
+						if (receiverType == TString && methodName == "indexOf") {
+							if (arguments.length != 1)
+								fail("E1008", 'Function "String.indexOf" expects 1 argument, got ${arguments.length}', span);
+							var needle = typeExpression(arguments[0], scope);
+							if (!sameType(needle.type, TString))
+								fail("E1009", "String.indexOf expects a String needle", needle.span);
+							return new TypedExpression(TStringIndexOf(receiver, needle), TInt, span);
+						}
+						if (receiverType == TString && methodName == "substring") {
+							if (arguments.length != 2)
+								fail("E1008", 'Function "String.substring" expects 2 arguments, got ${arguments.length}', span);
+							var start = typeExpression(arguments[0], scope),
+								end = typeExpression(arguments[1], scope);
+							if (!sameType(start.type, TInt) || !sameType(end.type, TInt))
+								fail("E1009", "String.substring expects Int bounds", span);
+							return new TypedExpression(TStringSubstring(receiver, start, end), TString, span);
+						}
 						var className = switch receiverType {
 							case TClass(value), TInterface(value): value;
 							default: null;
