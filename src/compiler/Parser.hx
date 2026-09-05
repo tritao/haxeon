@@ -853,8 +853,10 @@ class Parser {
 		}
 		if (match(TokenKind.This)) {
 			var start = previous().span, name = "this";
-			while (match(TokenKind.Dot))
+			while (check(TokenKind.Dot) && peekKind(1) != TokenKind.Dot) {
+				advance();
 				name += "." + consumeName().text;
+			}
 			var expression:AstExpression = Variable(name, start);
 			return parsePostfix(expression);
 		}
@@ -874,7 +876,8 @@ class Parser {
 			var nameToken = consumeName(),
 				name = nameToken.text,
 				start = nameToken.span;
-			while (match(TokenKind.Dot)) {
+			while (check(TokenKind.Dot) && peekKind(1) != TokenKind.Dot) {
+				advance();
 				name += "." + consumeName().text;
 			}
 			var expression:AstExpression = Variable(name, start);
@@ -1016,6 +1019,8 @@ class Parser {
 
 	function parsePostfix(expression:AstExpression):AstExpression {
 		while (true) {
+			if (check(TokenKind.Dot) && peekKind(1) == TokenKind.Dot && peekKind(2) == TokenKind.Dot)
+				break;
 			if (match(TokenKind.LeftParen)) {
 				var arguments = [];
 				if (!check(TokenKind.RightParen)) {
