@@ -29,9 +29,11 @@ run_case() {
 	"$haxe" --cwd "$root_dir" -cp src --run Main "$realtime_source" "$realtime_output" >/dev/null
 
 	set +e
-	LD_LIBRARY_PATH="$root_dir/vendor/hashlink" "$hl" "$official_output" >/dev/null 2>&1
+	local official_log="$out_dir/$name.official.log"
+	local realtime_log="$out_dir/$name.realtime.log"
+	LD_LIBRARY_PATH="$root_dir/vendor/hashlink" "$hl" "$official_output" >"$official_log" 2>&1
 	local official_status=$?
-	LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$realtime_output" >/dev/null 2>&1
+	LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$realtime_output" >"$realtime_log" 2>&1
 	local realtime_status=$?
 	set -e
 
@@ -39,10 +41,36 @@ run_case() {
 		echo "$name: official=$official_status realtime=$realtime_status" >&2
 		exit 1
 	fi
+	if ! cmp -s "$official_log" "$realtime_log"; then
+		echo "$name: observable output differs" >&2
+		diff -u "$official_log" "$realtime_log" >&2 || true
+		exit 1
+	fi
 	echo "PASS: $name official and realtime behavior agree (exit $official_status)"
+}
+
+run_compile_failure() {
+	local name=$1
+	local official_dir
+	official_dir=$(mktemp -d "$out_dir/official-failure.XXXXXX")
+	cp "$root_dir/tests/differential/$name.official.hx" "$official_dir/Main.hx"
+	set +e
+	"$haxe" -cp "$official_dir" -main Main -hl "$out_dir/$name.official.hl" >/dev/null 2>&1
+	local official_status=$?
+	"$haxe" --cwd "$root_dir" -cp src --run Main "$root_dir/tests/differential/$name.realtime.hx" "$out_dir/$name.realtime.hl" >/dev/null 2>&1
+	local realtime_status=$?
+	set -e
+	rm -rf "$official_dir"
+	if [[ $official_status -eq 0 || $realtime_status -eq 0 ]]; then
+		echo "$name: expected both compilers to reject source (official=$official_status realtime=$realtime_status)" >&2
+		exit 1
+	fi
+	echo "PASS: $name official and realtime compilers both reject invalid source"
 }
 
 run_case arithmetic
 run_case fibonacci
 run_case control-flow
 run_case nullable
+run_case observable-output
+run_compile_failure type-error
