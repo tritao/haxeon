@@ -78,7 +78,7 @@ class Compiler {
 		if (compiledOnce)
 			throw "Native registrations are frozen after the first compilation";
 		if (name == "__exit" || name == "__array_alloc_i32" || name == "__array_alloc_f64" || name == "__array_alloc_bytes" || name == "__array_alloc_bool"
-			|| name == "__string_concat")
+			|| name == "__string_concat" || name == "__string_length")
 			throw 'Native "$name" is reserved by the compiler runtime ABI';
 		if (natives.exists(name))
 			throw 'Native "$name" is already registered';

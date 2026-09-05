@@ -7,7 +7,7 @@ class StringMain {
 	static function main():Void {
 		var compiler = new Compiler();
 		compiler.registerNative("trace", "std", "sys_print", [CompilerType.TString], CompilerType.TVoid);
-		compiler.update("Main.hx", 'function main():Int { trace("hello " + "world"); return 42; }');
+		compiler.update("Main.hx", 'function main():Int { var text = "hello " + "world"; trace(text); return text.length + 31; }');
 		var result = compiler.compile("Main");
 		File.saveBytes(Sys.args()[0], HlWriter.encode(result.module));
 	}

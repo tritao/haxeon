@@ -39,6 +39,7 @@ enum TypedExpressionKind {
 	TMethodCall(object:TypedExpression, functionName:String, arguments:Array<TypedExpression>);
 	TIndex(array:TypedExpression, index:TypedExpression);
 	TArrayLength(array:TypedExpression);
+	TStringLength(value:TypedExpression);
 }
 
 enum TypedStatement {

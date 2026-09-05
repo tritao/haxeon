@@ -296,10 +296,14 @@ class Typer {
 								fieldName = name.substr(dot + 1),
 								object = typeExpression(Variable(objectName, span), scope),
 								field = fieldName == "length"
-									&& isArray(object.type) ? arrayLengthType(object.type) : fieldType(object.type, fieldName, span);
-							fieldName == "length"
-							&& isArray(object.type) ? new TypedExpression(TArrayLength(object), TInt,
-								span) : new TypedExpression(TField(object, fieldName), field, span);
+									&& isArray(object.type) ? arrayLengthType(object.type) : fieldName == "length"
+									&& object.type == TString ? TInt : fieldType(object.type, fieldName, span);
+							if (fieldName == "length" && isArray(object.type))
+								new TypedExpression(TArrayLength(object), TInt, span)
+							else if (fieldName == "length" && object.type == TString)
+								new TypedExpression(TStringLength(object), TInt, span)
+							else
+								new TypedExpression(TField(object, fieldName), field, span);
 						}
 					}
 				}

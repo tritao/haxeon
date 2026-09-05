@@ -45,6 +45,10 @@ HL_PRIM vbyte *HL_NAME(__string_concat)( vbyte *left, vbyte *right ) {
 	return result;
 }
 
+HL_PRIM int HL_NAME(__string_length)( vbyte *value ) {
+	return value == NULL ? 0 : (int)ustrlen((const uchar *)value);
+}
+
 HL_PRIM void HL_NAME(array_int_init)( vobj *object ) {
 	*array_int_storage(object) = hl_alloc_bytes(0);
 	*array_int_length(object) = 0;
@@ -126,3 +130,4 @@ DEFINE_PRIM(_ARR,__array_alloc_f64,_I32);
 DEFINE_PRIM(_ARR,__array_alloc_bytes,_I32);
 DEFINE_PRIM(_ARR,__array_alloc_bool,_I32);
 DEFINE_PRIM(_BYTES,__string_concat,_BYTES _BYTES);
+DEFINE_PRIM(_I32,__string_length,_BYTES);

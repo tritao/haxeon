@@ -93,7 +93,7 @@ class IrGenerator {
 						case Call(_, name, _):
 							if (StringTools.startsWith(name, "__array_alloc_"))
 								needsArrayRuntime = true;
-							if (name == "__string_concat")
+							if (name == "__string_concat" || name == "__string_length")
 								needsStringRuntime = true;
 						default:
 					}
@@ -143,6 +143,14 @@ class IrGenerator {
 				symbol: "__string_concat",
 				arguments: [Bytes, Bytes],
 				result: Bytes
+			});
+		if (needsStringRuntime)
+			program.natives.push({
+				name: "__string_length",
+				library: "realtime_runtime",
+				symbol: "__string_length",
+				arguments: [Bytes],
+				result: I32
 			});
 		if (natives != null)
 			for (native in natives)
@@ -270,6 +278,8 @@ class IrGenerator {
 				builder.arrayGet(lowerExpression(array, builder, localTypes), lowerExpression(index, builder, localTypes), lowerType(expression.type));
 			case TArrayLength(array):
 				builder.arraySize(lowerExpression(array, builder, localTypes));
+			case TStringLength(value):
+				builder.call("__string_length", [lowerExpression(value, builder, localTypes)], I32);
 		}
 
 	static function implicitArguments(fn:TypedFunction):Array<{name:String, type:IrType}> {
