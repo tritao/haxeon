@@ -11,6 +11,7 @@ import compiler.hl.HlPatchWriter;
 import compiler.hl.HlPatchReader;
 import compiler.hl.HlOpcode;
 import compiler.hl.HlSymbolTable;
+import compiler.hl.HlTypeDefStateCodec;
 import compiler.ir.HlLower;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
@@ -287,6 +288,11 @@ class TestMain {
 			|| restoredSymbols.internString("stable") != stringIndex
 			|| restoredSymbols.internType(I32) != typeIndex)
 			throw "Restored HashLink symbol lookup changed persistent indices";
+		var encodedTypes = HlTypeDefStateCodec.encode(symbolTable.types),
+			decodedTypes = HlTypeDefStateCodec.decode(encodedTypes, symbolTable.strings.length, symbolTable.globals.length);
+		if (Std.string(decodedTypes) != Std.string(symbolTable.types)
+			|| encodedTypes.compare(HlTypeDefStateCodec.encode(decodedTypes)) != 0)
+			throw "HashLink type definitions did not round trip deterministically";
 		Sys.println("PASS: HashLink symbol state restores canonical lookup indices");
 		var terminatorOutput = new haxe.io.BytesOutput(),
 			terminatorBlocks:Map<Int, Bool> = [];
