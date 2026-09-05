@@ -36,8 +36,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 	`Int`/`Float`/`Bool`/`String` plus reference-array allocation lower directly
 	to HashLink array operations and the runtime ABI; `for (item in array)` is
 	lowered to a bounds-checked SSA loop with `break`/`continue` control edges. ABI-backed `Map<String,Int|Bool|Float|String>`
-	specializations support construction, indexed set/get, `set`, and `exists`; broader
-	key/value maps and pattern matching remain future work. Our HashLink fork
+	and `Map<Int,Int|Bool|Float|String>` specializations support construction,
+	indexed set/get, `set`, and `exists`; broader key/value maps and collection
+	iteration remain future work. Our HashLink fork
 	enforces bounds in the JIT.
 - [~] Explicit `Null<T>` values for reference types lower to HashLink's native
 	null representation, support equality, and reject implicit untyped null

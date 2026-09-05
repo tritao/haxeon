@@ -182,7 +182,11 @@ class IrGenerator {
 			var valueType = RuntimeType.mapValueType(mapName);
 			if (valueType == null)
 				throw 'Unknown compiler map ABI "$mapName"';
+			var keyType = RuntimeType.mapKeyType(mapName);
+			if (keyType == null)
+				throw 'Unknown compiler map key ABI "$mapName"';
 			var mapType = Abstract(mapName),
+				keyIrType = lowerType(keyType),
 				valueIrType = lowerType(valueType);
 			program.natives.push({
 				name: '__${mapName}_alloc',
@@ -195,21 +199,21 @@ class IrGenerator {
 				name: '__${mapName}_set',
 				library: "realtime_runtime",
 				symbol: '__${mapName}_set',
-				arguments: [mapType, Bytes, valueIrType],
+				arguments: [mapType, keyIrType, valueIrType],
 				result: Void
 			});
 			program.natives.push({
 				name: '__${mapName}_exists',
 				library: "realtime_runtime",
 				symbol: '__${mapName}_exists',
-				arguments: [mapType, Bytes],
+				arguments: [mapType, keyIrType],
 				result: Bool
 			});
 			program.natives.push({
 				name: '__${mapName}_get',
 				library: "realtime_runtime",
 				symbol: '__${mapName}_get',
-				arguments: [mapType, Bytes],
+				arguments: [mapType, keyIrType],
 				result: valueIrType
 			});
 		}

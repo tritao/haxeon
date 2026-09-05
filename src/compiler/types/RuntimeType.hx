@@ -18,8 +18,15 @@ class RuntimeType {
 			case [TString, TBool]: "map_string_bool";
 			case [TString, TFloat]: "map_string_f64";
 			case [TString, TString]: "map_string_bytes";
+			case [TInt, TInt]: "map_int_i32";
+			case [TInt, TBool]: "map_int_bool";
+			case [TInt, TFloat]: "map_int_f64";
+			case [TInt, TString]: "map_int_bytes";
 			default: null;
 		};
+
+	public static function mapKeyType(name:String):Null<CompilerType>
+		return StringTools.startsWith(name, "map_int_") ? TInt : TString;
 
 	public static function mapNative(key:CompilerType, value:CompilerType, operation:String):String {
 		var name = mapName(key, value);
@@ -34,6 +41,10 @@ class RuntimeType {
 			case "map_string_bool": TBool;
 			case "map_string_f64": TFloat;
 			case "map_string_bytes": TString;
+			case "map_int_i32": TInt;
+			case "map_int_bool": TBool;
+			case "map_int_f64": TFloat;
+			case "map_int_bytes": TString;
 			default: null;
 		};
 }
