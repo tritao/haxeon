@@ -92,7 +92,7 @@ enum AstStatement {
 	ForIn(name:String, iterable:AstExpression, body:Array<AstStatement>, span:SourceSpan);
 	Break(span:SourceSpan);
 	Continue(span:SourceSpan);
-	Switch(expression:AstExpression, cases:Array<AstSwitchCase>, defaultBranch:Array<AstStatement>, span:SourceSpan);
+	Switch(expression:AstExpression, cases:Array<AstSwitchCase>, defaultBranch:Array<AstStatement>, hasDefault:Bool, span:SourceSpan);
 	Increment(name:String, delta:Int, span:SourceSpan);
 	Expression(expression:AstExpression, span:SourceSpan);
 }

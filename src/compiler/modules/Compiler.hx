@@ -622,7 +622,7 @@ class Compiler {
 			case ForIn(name, iterable, body,
 				span): ForIn(name, canonicalExpression(iterable, module, entry, locals, aliases),
 					[for (x in body) canonicalStatement(x, module, entry, locals, aliases)], span);
-			case Switch(expression, cases, defaultBranch, span):
+			case Switch(expression, cases, defaultBranch, hasDefault, span):
 				Switch(canonicalExpression(expression, module, entry, locals, aliases), [
 					for (switchCase in cases)
 						{
@@ -634,7 +634,7 @@ class Compiler {
 							span: switchCase.span
 						}
 				],
-					[for (x in defaultBranch) canonicalStatement(x, module, entry, locals, aliases)], span);
+					[for (x in defaultBranch) canonicalStatement(x, module, entry, locals, aliases)], hasDefault, span);
 			case Expression(e, span): Expression(canonicalExpression(e, module, entry, locals, aliases), span);
 		}
 
@@ -740,7 +740,7 @@ class Compiler {
 				scanExpression(iterable, dependencies);
 				for (x in b)
 					scanStatement(x, dependencies);
-			case Switch(expression, cases, defaultBranch, _):
+			case Switch(expression, cases, defaultBranch, _, _):
 				scanExpression(expression, dependencies);
 				for (switchCase in cases) {
 					scanExpression(switchCase.value, dependencies);
@@ -823,7 +823,7 @@ class Compiler {
 				scanCallExpression(iterable, calls, aliases);
 				for (s in b)
 					scanCalls(s, calls, aliases);
-			case Switch(expression, cases, defaultBranch, _):
+			case Switch(expression, cases, defaultBranch, _, _):
 				scanCallExpression(expression, calls, aliases);
 				for (switchCase in cases) {
 					scanCallExpression(switchCase.value, calls, aliases);
@@ -908,7 +908,7 @@ class Compiler {
 				case ForIn(_, iterable, body, _):
 					collectLambdaExpression(iterable, functionName, module, generatedByModule);
 					collectLambdas(body, functionName, module, generatedByModule);
-				case Switch(expression, cases, defaultBranch, _):
+				case Switch(expression, cases, defaultBranch, _, _):
 					collectLambdaExpression(expression, functionName, module, generatedByModule);
 					for (switchCase in cases) {
 						collectLambdaExpression(switchCase.value, functionName, module, generatedByModule);

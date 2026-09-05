@@ -18,6 +18,7 @@ import compiler.types.TypedAst.TypedField;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypedAst.TypedSwitchBinding;
+import compiler.types.TypedAst.TypedSwitchCase;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
@@ -335,11 +336,11 @@ class Typer {
 					var typedBody = typeStatements(body, loopScope, result);
 					loopDepth--;
 					output.push(TForIn(name, typedIterable, typedBody, span));
-				case Switch(expression, cases, defaultBranch, span):
+				case Switch(expression, cases, defaultBranch, hasDefault, span):
 					var typedExpression = typeExpression(expression, scope);
 					if (!sameType(typedExpression.type, TInt) && !isEnum(typedExpression.type))
 						fail("E1019", "Switch requires an Int or enum value", typedExpression.span);
-					var typedCases = [];
+					var typedCases = [], seenCases:Map<String, Bool> = [];
 					for (switchCase in cases) {
 						var caseScope = new Scope(scope),
 							pattern = typeEnumPattern(switchCase.value, typedExpression.type, caseScope),
@@ -356,6 +357,16 @@ class Typer {
 									constructorIndex = index;
 								default:
 							}
+						var caseKey = switch typedValue.expression {
+							case TIntLiteral(value): 'int:$value';
+							case TEnumLiteral(name, index): 'enum:$name:$index';
+							default: null;
+						};
+						if (caseKey != null) {
+							if (seenCases.exists(caseKey))
+								fail("E1020", "Duplicate switch case", switchCase.span);
+							seenCases.set(caseKey, true);
+						}
 						typedCases.push({
 							value: typedValue,
 							statements: typedBody,
@@ -365,8 +376,21 @@ class Typer {
 							span: switchCase.span
 						});
 					}
+					if (isEnum(typedExpression.type) && !hasDefault) {
+						var enumName = switch typedExpression.type {
+							case TEnum(name): name;
+							default: "";
+						};
+						var enumDecl = enumDecls.get(enumName), missing = [];
+						if (enumDecl != null)
+							for (index in 0...enumDecl.cases.length)
+								if (!seenCases.exists('enum:$enumName:$index'))
+									missing.push(enumDecl.cases[index].name);
+						if (missing.length > 0)
+							fail("E1021", 'Enum switch is missing cases: ${missing.join(", ")}', span);
+					}
 					var typedDefault = typeStatements(defaultBranch, new Scope(scope), result);
-					output.push(TSwitch(typedExpression, typedCases, typedDefault, span));
+					output.push(TSwitch(typedExpression, typedCases, typedDefault, hasDefault, span));
 				case Expression(expression, span):
 					output.push(TExpression(typeExpression(expression, scope), span));
 			}
@@ -827,7 +851,7 @@ class Typer {
 				case ForIn(name, _, body, _):
 					names.set(name, true);
 					collectDeclaredLocals(body, names);
-				case Switch(_, cases, defaultBranch, _):
+				case Switch(_, cases, defaultBranch, _, _):
 					for (switchCase in cases)
 						collectDeclaredLocals(switchCase.statements, names);
 					collectDeclaredLocals(defaultBranch, names);
@@ -857,7 +881,7 @@ class Typer {
 				case ForIn(_, iterable, body, _):
 					collectExpressionVariables(iterable, names);
 					collectVariables(body, names);
-				case Switch(expression, cases, defaultBranch, _):
+				case Switch(expression, cases, defaultBranch, _, _):
 					collectExpressionVariables(expression, names);
 					for (switchCase in cases) {
 						collectExpressionVariables(switchCase.value, names);
@@ -1112,7 +1136,7 @@ class Typer {
 		}, TBool, span);
 	}
 
-	static function alwaysReturns(statements:Array<TypedStatement>):Bool {
+	function alwaysReturns(statements:Array<TypedStatement>):Bool {
 		for (statement in statements)
 			switch statement {
 				case TReturn(_, _), TReturnVoid(_):
@@ -1120,14 +1144,31 @@ class Typer {
 				case TIf(_, yes, no, _):
 					if (no.length > 0 && alwaysReturns(yes) && alwaysReturns(no))
 						return true;
-				case TSwitch(_, cases, defaultBranch, _):
-					if (defaultBranch.length > 0
-						&& alwaysReturns(defaultBranch)
+				case TSwitch(expression, cases, defaultBranch, hasDefault, _):
+					if ((hasDefault ? alwaysReturns(defaultBranch) : exhaustiveEnum(expression.type, cases))
 						&& [for (switchCase in cases) alwaysReturns(switchCase.statements)].indexOf(false) < 0)
 						return true;
 				default:
 			}
 		return false;
+	}
+
+	function exhaustiveEnum(type:CompilerType, cases:Array<TypedSwitchCase>):Bool {
+		var enumName = switch type {
+			case TEnum(name): name;
+			default: return false;
+		};
+		var enumDecl = enumDecls.get(enumName);
+		if (enumDecl == null)
+			return false;
+		var seen:Map<Int, Bool> = [];
+		for (switchCase in cases)
+			if (switchCase.constructorIndex >= 0)
+				seen.set(switchCase.constructorIndex, true);
+		for (index in 0...enumDecl.cases.length)
+			if (!seen.exists(index))
+				return false;
+		return true;
 	}
 
 	function lowerType(type:AstType):CompilerType
@@ -1190,7 +1231,8 @@ class Typer {
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
 			case VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), If(_, _, _, span),
-				While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span), Switch(_, _, _, span), Increment(_, _, span), Expression(_, span): span;
+				While(_, _,
+					span), ForIn(_, _, _, span), Break(span), Continue(span), Switch(_, _, _, _, span), Increment(_, _, span), Expression(_, span): span;
 		}
 
 	static function fail(code:String, message:String, span:SourceSpan):Void

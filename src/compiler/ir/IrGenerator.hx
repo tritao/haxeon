@@ -6,6 +6,7 @@ import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedStatement;
+import compiler.types.TypedAst.TypedSwitchCase;
 import compiler.ir.Cfg.CfgFunction;
 import compiler.ir.Cfg.CfgBlock;
 import compiler.ir.Cfg.CfgValue;
@@ -407,7 +408,7 @@ class IrGenerator {
 						builder.jump(conditionBlock);
 					}
 					builder.select(afterBlock);
-				case TSwitch(expression, cases, defaultBranch, span):
+				case TSwitch(expression, cases, defaultBranch, hasDefault, span):
 					var switchName = '$' + 'switch:' + span.start,
 						switchType = lowerType(expression.type),
 						exits:Array<CfgBlock> = [];
@@ -437,7 +438,10 @@ class IrGenerator {
 						checkBlock = nextBlock;
 					}
 					builder.select(checkBlock);
-					lowerStatements(defaultBranch, builder, localTypes, loops);
+					if (!hasDefault && exhaustiveEnumSwitch(expression.type, cases))
+						builder.jump(checkBlock);
+					else
+						lowerStatements(defaultBranch, builder, localTypes, loops);
 					if (!builder.isTerminated())
 						exits.push(builder.currentBlock());
 					if (exits.length > 0) {
@@ -450,6 +454,15 @@ class IrGenerator {
 					lowerExpression(expression, builder, localTypes);
 			}
 		}
+	}
+
+	static function exhaustiveEnumSwitch(type:CompilerType, cases:Array<TypedSwitchCase>):Bool {
+		switch type {
+			case TEnum(_):
+			default:
+				return false;
+		}
+		return cases.length > 0 && [for (switchCase in cases) switchCase.constructorIndex >= 0].indexOf(false) < 0;
 	}
 
 	static function lowerExpression(expression:TypedExpression, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue

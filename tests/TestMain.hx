@@ -128,6 +128,12 @@ class TestMain {
 		expectCompileError('function main():Int { missing = 1; return 0; }', 'Unknown variable "missing"');
 		expectCompileError('function main():Int { var value:Int = 1; value = "wrong"; return value; }', 'Type mismatch for local "value"');
 		expectCompileError('function main():Int { return 1; var unreachable = 2; }', 'Unreachable statement');
+		expectCompileError('enum Color { Red; Blue; } function main():Int { var color:Color = Color.Red; switch (color) { case Color.Red: return 1; case Color.Red: return 2; case Color.Blue: return 3; } }',
+			"Duplicate switch case");
+		expectCompileError('enum Color { Red; Blue; } function main():Int { var color:Color = Color.Red; switch (color) { case Color.Red: return 1; } return 0; }',
+			"Enum switch is missing cases: Blue");
+		expectCompileError('enum Color { Red; Blue; } function choose(color:Color):Int { switch (color) { case Color.Red: return 1; default: } } function main():Int { return choose(Color.Red); }',
+			'Function choose does not return on every path');
 		var ssa = Frontend.compile('function main():Int { var value = 0; while (value < 2) { value = value + 1; } return value; }'), hasPhi = false;
 		for (fn in ssa.functions)
 			for (block in fn.blocks)
