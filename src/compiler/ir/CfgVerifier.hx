@@ -68,7 +68,7 @@ class CfgVerifier {
 					define(out, defined, available);
 				case ConstNull(out):
 					switch out.type {
-						case Bytes, Obj(_), Virtual(_), Array(_), Function(_, _):
+						case Bytes, Abstract(_), Obj(_), Virtual(_), Array(_), Function(_, _):
 						default: throw 'CFG null constant must produce a reference value';
 					}
 					define(out, defined, available);
@@ -230,6 +230,7 @@ class CfgVerifier {
 	static function sameType(left:IrType, right:IrType):Bool
 		return switch [left, right] {
 			case [Obj(a), Obj(b)]: a == b;
+			case [Abstract(a), Abstract(b)]: a == b;
 			case [Virtual(a), Virtual(b)]: a == b;
 			case [Array(a), Array(b)]: sameType(a, b);
 			case [Function(aArgs, aResult), Function(bArgs, bResult)]: aArgs.length == bArgs.length && [
@@ -241,7 +242,7 @@ class CfgVerifier {
 
 	static function isReference(type:IrType):Bool
 		return switch type {
-			case Bytes, Dyn, Obj(_), Virtual(_), Array(_), Function(_, _): true;
+			case Bytes, Dyn, Obj(_), Abstract(_), Virtual(_), Array(_), Function(_, _): true;
 			default: false;
 		};
 }

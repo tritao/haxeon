@@ -78,7 +78,8 @@ class Compiler {
 		if (compiledOnce)
 			throw "Native registrations are frozen after the first compilation";
 		if (name == "__exit" || name == "__array_alloc_i32" || name == "__array_alloc_f64" || name == "__array_alloc_bytes" || name == "__array_alloc_bool"
-			|| name == "__array_alloc_ref" || name == "__string_concat" || name == "__string_length" || name == "__string_equal"
+			|| name == "__array_alloc_ref" || name == "__map_string_i32_alloc" || name == "__map_string_i32_set" || name == "__map_string_i32_exists"
+			|| name == "__map_string_i32_get" || name == "__string_concat" || name == "__string_length" || name == "__string_equal"
 			|| name == "__string_index_of" || name == "__string_substring")
 			throw 'Native "$name" is reserved by the compiler runtime ABI';
 		if (natives.exists(name))
@@ -414,6 +415,7 @@ class Compiler {
 			case TString: Bytes;
 			case TVoid: Void;
 			case TClass(name): Obj(name);
+			case TMap(_, _): Abstract("map_string_i32");
 			case TInterface(name): Virtual(name);
 			case TEnum(_): I32;
 			case TNull: Void;
@@ -569,6 +571,7 @@ class Compiler {
 			case VoidType: "Void";
 			case NamedType(name): name;
 			case ArrayType(element): 'Array<${astTypeName(element)}>';
+			case MapType(key, value): 'Map<${astTypeName(key)},${astTypeName(value)}>';
 			case NullableType(element): 'Null<${astTypeName(element)}>';
 			case FunctionType(arguments, result): '(' + [for (argument in arguments) astTypeName(argument)].join(',') + ')->' + astTypeName(result);
 		};
@@ -625,6 +628,7 @@ class Compiler {
 					[for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
 			case New(typeName, args, s): New(resolveTypeName(typeName, aliases), [for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
 			case NewArray(element, length, s): NewArray(element, canonicalExpression(length, module, entry, locals, aliases), s);
+			case NewMap(key, value, s): NewMap(key, value, s);
 			case Index(array, offset,
 				s): Index(canonicalExpression(array, module, entry, locals, aliases), canonicalExpression(offset, module, entry, locals, aliases), s);
 			case Lambda(arguments, body, s):
@@ -656,6 +660,7 @@ class Compiler {
 		return switch type {
 			case NamedType(name): NamedType(resolveTypeName(name, aliases));
 			case ArrayType(element): ArrayType(canonicalType(element, aliases));
+			case MapType(key, value): MapType(canonicalType(key, aliases), canonicalType(value, aliases));
 			case NullableType(element): NullableType(canonicalType(element, aliases));
 			case FunctionType(arguments, result): FunctionType([for (argument in arguments) canonicalType(argument, aliases)], canonicalType(result, aliases));
 			default: type;
@@ -715,6 +720,7 @@ class Compiler {
 					scanExpression(a, dependencies);
 			case NewArray(_, length, _):
 				scanExpression(length, dependencies);
+			case NewMap(_, _, _):
 			default:
 		}
 
@@ -774,6 +780,7 @@ class Compiler {
 					scanCallExpression(a, calls, aliases);
 			case NewArray(_, length, _):
 				scanCallExpression(length, calls, aliases);
+			case NewMap(_, _, _):
 			case Index(array, offset, _):
 				scanCallExpression(array, calls, aliases);
 				scanCallExpression(offset, calls, aliases);
@@ -843,6 +850,7 @@ class Compiler {
 					collectLambdaExpression(argument, functionName, module, generatedByModule);
 			case NewArray(_, length, _):
 				collectLambdaExpression(length, functionName, module, generatedByModule);
+			case NewMap(_, _, _):
 			case Index(array, offset, _):
 				collectLambdaExpression(array, functionName, module, generatedByModule);
 				collectLambdaExpression(offset, functionName, module, generatedByModule);

@@ -263,12 +263,19 @@ class Typer {
 					var typedArray = typeExpression(array, scope),
 						typedIndex = typeExpression(offset, scope),
 						value = typeExpression(expression, scope);
-					if (typedIndex.type != TInt)
-						fail("E1014", "Array index must be Int", typedIndex.span);
-					var element = arrayElementType(typedArray.type, span);
-					if (!sameType(value.type, element))
-						fail("E1002", "Array element assignment has the wrong type", span);
-					output.push(TIndexAssign(typedArray, typedIndex, value, span));
+					switch typedArray.type {
+						case TMap(key, mapValue):
+							typedIndex = coerce(typedIndex, key, "map key", "E1002");
+							value = coerce(value, mapValue, "map value", "E1002");
+							output.push(TMapAssign(typedArray, typedIndex, value, span));
+						default:
+							if (typedIndex.type != TInt)
+								fail("E1014", "Array index must be Int", typedIndex.span);
+							var element = arrayElementType(typedArray.type, span);
+							if (!sameType(value.type, element))
+								fail("E1002", "Array element assignment has the wrong type", span);
+							output.push(TIndexAssign(typedArray, typedIndex, value, span));
+					}
 				case If(condition, thenBranch, elseBranch, span):
 					var typedCondition = typeExpression(condition, scope);
 					if (!sameType(typedCondition.type, TBool))
@@ -439,13 +446,25 @@ class Typer {
 					fail("E1014", "Array length must be Int", typedLength.span);
 				var loweredElement = lowerType(element);
 				new TypedExpression(TNewArray(loweredElement, typedLength), TArray(loweredElement), span);
+			case NewMap(key, value, span):
+				var loweredKey = lowerType(key),
+					loweredValue = lowerType(value);
+				if (!sameType(loweredKey, TString) || !sameType(loweredValue, TInt))
+					fail("E1016", "Only Map<String,Int> is supported by the compiler runtime", span);
+				new TypedExpression(TNewMap(loweredKey, loweredValue), TMap(loweredKey, loweredValue), span);
 			case Index(array, offset, span):
 				var typedArray = typeExpression(array, scope),
 					typedIndex = typeExpression(offset, scope);
-				if (typedIndex.type != TInt)
-					fail("E1014", "Array index must be Int", typedIndex.span);
-				var element = arrayElementType(typedArray.type, span);
-				new TypedExpression(TIndex(typedArray, typedIndex), element, span);
+				switch typedArray.type {
+					case TMap(key, value):
+						var typedKey = coerce(typedIndex, key, "map key", "E1002");
+						new TypedExpression(TMapGet(typedArray, typedKey), value, span);
+					default:
+						if (typedIndex.type != TInt)
+							fail("E1014", "Array index must be Int", typedIndex.span);
+						var element = arrayElementType(typedArray.type, span);
+						new TypedExpression(TIndex(typedArray, typedIndex), element, span);
+				}
 			case Call(name, arguments, span):
 				var callable = scope.resolve(name);
 				if (callable != null) {
@@ -484,6 +503,8 @@ class Typer {
 								fail("E1009", "String.substring expects Int bounds", span);
 							return new TypedExpression(TStringSubstring(receiver, start, end), TString, span);
 						}
+						if (isMap(receiverType))
+							return typeMapMethod(receiver, methodName, arguments, span, scope);
 						var className = switch receiverType {
 							case TClass(value), TInterface(value): value;
 							default: null;
@@ -546,6 +567,8 @@ class Typer {
 				fail("E1009", "String.substring expects Int bounds", span);
 			return new TypedExpression(TStringSubstring(receiver, start, end), TString, span);
 		}
+		if (isMap(receiver.type))
+			return typeMapMethod(receiver, name, arguments, span, scope);
 		var className = switch receiver.type {
 			case TClass(value), TInterface(value): value;
 			default: null;
@@ -563,6 +586,30 @@ class Typer {
 			fail("E1008", 'Function "$methodKey" expects ${expected.length} arguments, got ${typed.length}', span);
 		typed = coerceArguments(typed, expected, methodKey);
 		return new TypedExpression(TMethodCall(receiver, methodKey, typed), lowerType(method.result), span);
+	}
+
+	function typeMapMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
+		var mapType = switch receiver.type {
+			case TMap(key, value): {key: key, value: value};
+			default: throw "Not a map";
+		};
+		if (name == "set") {
+			if (arguments.length != 2)
+				fail("E1008", "Map.set expects a key and value", span);
+			var key = coerce(typeExpression(arguments[0], scope), mapType.key, "map key", "E1002"),
+				value = coerce(typeExpression(arguments[1], scope), mapType.value, "map value", "E1002");
+			return new TypedExpression(TCall("__map_string_i32_set", [receiver, key, value]), TVoid, span);
+		}
+		if (arguments.length != 1)
+			fail("E1008", 'Map.$name expects one argument', span);
+		var key = coerce(typeExpression(arguments[0], scope), mapType.key, "map key", "E1002");
+		return switch name {
+			case "exists": new TypedExpression(TCall("__map_string_i32_exists", [receiver, key]), TBool, span);
+			case "get": new TypedExpression(TMapGet(receiver, key), mapType.value, span);
+			default:
+				fail("E1007", 'Unknown map method "$name"', span);
+				new TypedExpression(TNullLiteral, TVoid, span);
+		};
 	}
 
 	function narrowedScope(scope:Scope, condition:TypedExpression, truthy:Bool):Scope {
@@ -671,6 +718,7 @@ class Typer {
 					collectExpressionVariables(argument, names);
 			case NewArray(_, length, _):
 				collectExpressionVariables(length, names);
+			case NewMap(_, _, _):
 			case Index(array, offset, _):
 				collectExpressionVariables(array, names);
 				collectExpressionVariables(offset, names);
@@ -877,6 +925,7 @@ class Typer {
 				var alias = aliases.get(name);
 				alias == null ? (interfaceDecls.exists(name) ? TInterface(name) : enumDecls.exists(name) ? TEnum(name) : TClass(name)) : lowerType(alias);
 			case ArrayType(element): TArray(lowerType(element));
+			case MapType(key, value): TMap(lowerType(key), lowerType(value));
 			case NullableType(element): TNullable(lowerType(element));
 			case FunctionType(arguments, result): TFunction([for (argument in arguments) lowerType(argument)], lowerType(result));
 		};
@@ -898,6 +947,12 @@ class Typer {
 			default: false;
 		};
 
+	static function isMap(type:CompilerType):Bool
+		return switch type {
+			case TMap(_, _): true;
+			default: false;
+		};
+
 	static function isNullable(type:CompilerType):Bool
 		return switch type {
 			case TNullable(_): true;
@@ -906,7 +961,7 @@ class Typer {
 
 	static function isReference(type:CompilerType):Bool
 		return switch type {
-			case TString, TClass(_), TInterface(_), TArray(_), TFunction(_): true;
+			case TString, TClass(_), TInterface(_), TArray(_), TFunction(_), TMap(_, _): true;
 			default: false;
 		};
 
@@ -925,6 +980,7 @@ class Typer {
 			case [TInterface(a), TInterface(b)]: a == b;
 			case [TEnum(a), TEnum(b)]: a == b;
 			case [TNullable(a), TNullable(b)]: sameType(a, b);
+			case [TMap(aKey, aValue), TMap(bKey, bValue)]: sameType(aKey, bKey) && sameType(aValue, bValue);
 			case [TArray(a), TArray(b)]: sameType(a, b);
 			case [TFunction(aArgs, aResult), TFunction(bArgs, bResult)]: aArgs.length == bArgs.length && [
 					for (i in 0...aArgs.length)

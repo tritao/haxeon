@@ -93,6 +93,8 @@ class HlPatchReader {
 			throw "Object type patches require a structural reload";
 		if (tag == HlType.Virtual)
 			throw "Virtual type patches require a structural reload";
+		if (tag == HlType.Abstract)
+			return Abstract(readIndex(input));
 		return if (tag == HlType.Fun) {
 			var n = input.readByte();
 			Function([for (_ in 0...n) readIndex(input)], readIndex(input));

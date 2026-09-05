@@ -161,6 +161,9 @@ class HlPatchWriter {
 			switch values[i] {
 				case Simple(kind):
 					h = hashBytes(intBytes(kind), h);
+				case Abstract(name):
+					h = hashBytes(intBytes(HlType.Abstract), h);
+					h = hashBytes(intBytes(name), h);
 				case Function(args, result):
 					h = hashBytes(intBytes(HlType.Fun), h);
 					h = hashBytes(intBytes(args.length), h);
@@ -205,6 +208,9 @@ class HlPatchWriter {
 		switch type {
 			case Simple(kind):
 				out.writeByte(kind);
+			case Abstract(name):
+				out.writeByte(HlType.Abstract);
+				writeSignedIndex(out, name);
 			case Function(args, result):
 				out.writeByte(HlType.Fun);
 				out.writeByte(args.length);

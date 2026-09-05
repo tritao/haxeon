@@ -67,18 +67,22 @@ class HlSymbolTable {
 		var index = types.length;
 		if (typeKey(type).indexOf("obj:") == 0)
 			throw 'Object type "$type" must be registered before use';
-		types.push(Simple(switch type {
-			case Void: HlType.Void;
-			case I32: HlType.I32;
-			case Bool: HlType.Bool;
-			case F64: HlType.F64;
-			case Bytes: HlType.Bytes;
-			case Dyn: HlType.Dyn;
-			case Array(_): HlType.Array;
-			case Obj(name): throw 'Object type "$name" must be registered before use';
-			case Virtual(name): throw 'Virtual type "$name" must be registered before use';
-			case Function(_, _): throw 'Function type must be interned with internFunction';
-		}));
+		types.push(switch type {
+			case Abstract(name): HlTypeDef.Abstract(internString(name));
+			default: HlTypeDef.Simple(switch type {
+					case Void: HlType.Void;
+					case I32: HlType.I32;
+					case Bool: HlType.Bool;
+					case F64: HlType.F64;
+					case Bytes: HlType.Bytes;
+					case Dyn: HlType.Dyn;
+					case Array(_): HlType.Array;
+					case Obj(name): throw 'Object type "$name" must be registered before use';
+					case Abstract(name): throw 'Abstract type "$name" must be handled by the outer type switch';
+					case Virtual(name): throw 'Virtual type "$name" must be registered before use';
+					case Function(_, _): throw 'Function type must be interned with internFunction';
+				});
+		});
 		typeIndices.set(key, index);
 		return index;
 	}
@@ -203,6 +207,7 @@ class HlSymbolTable {
 			case Dyn: "dyn";
 			case Array(element): 'array:${typeKey(element)}';
 			case Obj(name): 'obj:$name';
+			case Abstract(name): 'abstract:$name';
 			case Virtual(name): 'virt:$name';
 			case Function(arguments, result): 'fun(${[for (argument in arguments) typeKey(argument)].join(",")})->${typeKey(result)}';
 		};

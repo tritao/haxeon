@@ -3,6 +3,12 @@
 #include <hlmodule.h>
 #include <string.h>
 
+typedef struct realtime_string_map realtime_string_map;
+extern realtime_string_map *hl_hballoc( void );
+extern void hl_hbset( realtime_string_map *map, uchar *key, vdynamic *value );
+extern bool hl_hbexists( realtime_string_map *map, uchar *key );
+extern vdynamic *hl_hbget( realtime_string_map *map, uchar *key );
+
 static vbyte **array_int_storage(vobj *object) {
 	hl_runtime_obj *runtime = hl_get_obj_rt(object->t);
 	return (vbyte **)((char *)object + runtime->fields_indexes[0]);
@@ -35,6 +41,25 @@ HL_PRIM varray *HL_NAME(__array_alloc_bool)( int length ) {
 
 HL_PRIM varray *HL_NAME(__array_alloc_ref)( int length ) {
 	return hl_alloc_array(&hlt_dyn, length);
+}
+
+HL_PRIM realtime_string_map *HL_NAME(__map_string_i32_alloc)( void ) {
+	return hl_hballoc();
+}
+
+HL_PRIM void HL_NAME(__map_string_i32_set)( realtime_string_map *map, vbyte *key, int value ) {
+	vdynamic *dynamic = hl_alloc_dynamic(&hlt_i32);
+	dynamic->v.i = value;
+	hl_hbset(map, (uchar *)key, dynamic);
+}
+
+HL_PRIM bool HL_NAME(__map_string_i32_exists)( realtime_string_map *map, vbyte *key ) {
+	return hl_hbexists(map, (uchar *)key);
+}
+
+HL_PRIM int HL_NAME(__map_string_i32_get)( realtime_string_map *map, vbyte *key ) {
+	vdynamic *dynamic = hl_hbget(map, (uchar *)key);
+	return dynamic == NULL ? 0 : dynamic->v.i;
 }
 
 HL_PRIM vbyte *HL_NAME(__string_concat)( vbyte *left, vbyte *right ) {
@@ -165,6 +190,10 @@ DEFINE_PRIM(_ARR,__array_alloc_f64,_I32);
 DEFINE_PRIM(_ARR,__array_alloc_bytes,_I32);
 DEFINE_PRIM(_ARR,__array_alloc_bool,_I32);
 DEFINE_PRIM(_ARR,__array_alloc_ref,_I32);
+DEFINE_PRIM(_ABSTRACT(map_string_i32),__map_string_i32_alloc,_NO_ARG);
+DEFINE_PRIM(_VOID,__map_string_i32_set,_ABSTRACT(map_string_i32) _BYTES _I32);
+DEFINE_PRIM(_BOOL,__map_string_i32_exists,_ABSTRACT(map_string_i32) _BYTES);
+DEFINE_PRIM(_I32,__map_string_i32_get,_ABSTRACT(map_string_i32) _BYTES);
 DEFINE_PRIM(_BYTES,__string_concat,_BYTES _BYTES);
 DEFINE_PRIM(_I32,__string_length,_BYTES);
 DEFINE_PRIM(_BOOL,__string_equal,_BYTES _BYTES);

@@ -47,6 +47,8 @@ class HlWriter {
 		for (type in code.types) {
 			switch type {
 				case Simple(_):
+				case Abstract(name):
+					requireString(code, name, "abstract name");
 				case Function(arguments, result):
 					for (argument in arguments)
 						requireType(code, argument, "function type argument");
@@ -324,6 +326,9 @@ class HlWriter {
 		switch type {
 			case Simple(kind):
 				output.writeByte(kind);
+			case Abstract(name):
+				output.writeByte(HlType.Abstract);
+				writeIndex(name);
 			case Function(arguments, result):
 				if (arguments.length > 255)
 					throw "HL function types support at most 255 arguments";

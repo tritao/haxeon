@@ -357,6 +357,17 @@ class Parser {
 				var end = consume(TokenKind.RightParen).span;
 				return parsePostfix(NewArray(element, length, start.merge(end)));
 			}
+			if (check(TokenKind.Identifier) && current().text == "Map") {
+				advance();
+				consume(TokenKind.Less);
+				var key = parseType();
+				consume(TokenKind.Comma);
+				var value = parseType();
+				consume(TokenKind.Greater);
+				consume(TokenKind.LeftParen);
+				var end = consume(TokenKind.RightParen).span;
+				return parsePostfix(NewMap(key, value, start.merge(end)));
+			}
 			var typeName = parseQualifiedName();
 			consume(TokenKind.LeftParen);
 			var arguments = [];
@@ -501,6 +512,14 @@ class Parser {
 				var element = parseType();
 				consume(TokenKind.Greater);
 				return ArrayType(element);
+			} else if (current().text == "Map") {
+				advance();
+				consume(TokenKind.Less);
+				var key = parseType();
+				consume(TokenKind.Comma);
+				var value = parseType();
+				consume(TokenKind.Greater);
+				return MapType(key, value);
 			} else if (current().text == "Null") {
 				advance();
 				consume(TokenKind.Less);
@@ -561,8 +580,8 @@ class Parser {
 		return switch expression {
 			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), BoolLiteral(_, span), NullLiteral(span), Variable(_, span),
 				Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span), Div(_, _, span), Less(_, _, span), LessEqual(_, _, span),
-				Equal(_, _,
-					span), Call(_, _, span), MethodCall(_, _, _, span), New(_, _, span), NewArray(_, _, span), Index(_, _, span), Lambda(_, _, span): span;
+				Equal(_, _, span), Call(_, _, span), MethodCall(_, _, _, span), New(_, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span),
+				Lambda(_, _, span): span;
 		}
 
 	static function decodeString(text:String):String {

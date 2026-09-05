@@ -17,6 +17,7 @@ class HlCode {
 
 enum HlTypeDef {
 	Simple(kind:HlType);
+	Abstract(name:Int);
 	Function(arguments:Array<Int>, result:Int);
 	Object(name:Int, base:Int, global:Int, fields:Array<HlObjectField>, methods:Array<HlObjectMethod>, bindings:Array<Int>);
 	Virtual(fields:Array<HlVirtualField>);

@@ -10,6 +10,7 @@ enum AstType {
 	VoidType;
 	NamedType(name:String);
 	ArrayType(element:AstType);
+	MapType(key:AstType, value:AstType);
 	NullableType(element:AstType);
 	FunctionType(arguments:Array<AstType>, result:AstType);
 }
@@ -66,6 +67,7 @@ enum AstExpression {
 	MethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan);
 	New(typeName:String, arguments:Array<AstExpression>, span:SourceSpan);
 	NewArray(element:AstType, length:AstExpression, span:SourceSpan);
+	NewMap(key:AstType, value:AstType, span:SourceSpan);
 	Index(array:AstExpression, index:AstExpression, span:SourceSpan);
 	Lambda(arguments:Array<AstArgument>, statements:Array<AstStatement>, span:SourceSpan);
 }

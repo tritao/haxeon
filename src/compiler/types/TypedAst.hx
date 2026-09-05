@@ -39,9 +39,11 @@ enum TypedExpressionKind {
 	TToInterface(value:TypedExpression, name:String);
 	TNew(typeName:String, arguments:Array<TypedExpression>, hasConstructor:Bool);
 	TNewArray(element:CompilerType, length:TypedExpression);
+	TNewMap(key:CompilerType, value:CompilerType);
 	TField(object:TypedExpression, name:String);
 	TMethodCall(object:TypedExpression, functionName:String, arguments:Array<TypedExpression>);
 	TIndex(array:TypedExpression, index:TypedExpression);
+	TMapGet(map:TypedExpression, key:TypedExpression);
 	TArrayLength(array:TypedExpression);
 	TStringLength(value:TypedExpression);
 	TStringIndexOf(value:TypedExpression, needle:TypedExpression);
@@ -53,6 +55,7 @@ enum TypedStatement {
 	TAssign(name:String, value:TypedExpression, span:SourceSpan);
 	TFieldAssign(object:TypedExpression, name:String, value:TypedExpression, span:SourceSpan);
 	TIndexAssign(array:TypedExpression, index:TypedExpression, value:TypedExpression, span:SourceSpan);
+	TMapAssign(map:TypedExpression, key:TypedExpression, value:TypedExpression, span:SourceSpan);
 	TReturn(expression:TypedExpression, span:SourceSpan);
 	TReturnVoid(span:SourceSpan);
 	TIf(condition:TypedExpression, thenBranch:Array<TypedStatement>, elseBranch:Array<TypedStatement>, span:SourceSpan);

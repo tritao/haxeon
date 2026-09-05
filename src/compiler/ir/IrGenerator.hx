@@ -85,7 +85,9 @@ class IrGenerator {
 
 	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>):IrProgram {
 		var program = new IrProgram("__entry");
-		var needsArrayRuntime = false, needsStringRuntime = false;
+		var needsArrayRuntime = false,
+			needsStringRuntime = false,
+			needsMapRuntime = false;
 		for (fn in functions)
 			for (block in fn.blocks)
 				for (instruction in block.instructions)
@@ -96,6 +98,8 @@ class IrGenerator {
 							if (name == "__string_concat" || name == "__string_length" || name == "__string_equal" || name == "__string_index_of"
 								|| name == "__string_substring")
 								needsStringRuntime = true;
+							if (StringTools.startsWith(name, "__map_string_i32_"))
+								needsMapRuntime = true;
 						default:
 					}
 		program.objects = objects == null ? [] : objects;
@@ -152,6 +156,37 @@ class IrGenerator {
 				arguments: [Bytes, Bytes],
 				result: Bytes
 			});
+		if (needsMapRuntime) {
+			var mapType = Abstract("map_string_i32");
+			program.natives.push({
+				name: "__map_string_i32_alloc",
+				library: "realtime_runtime",
+				symbol: "__map_string_i32_alloc",
+				arguments: [],
+				result: mapType
+			});
+			program.natives.push({
+				name: "__map_string_i32_set",
+				library: "realtime_runtime",
+				symbol: "__map_string_i32_set",
+				arguments: [mapType, Bytes, I32],
+				result: Void
+			});
+			program.natives.push({
+				name: "__map_string_i32_exists",
+				library: "realtime_runtime",
+				symbol: "__map_string_i32_exists",
+				arguments: [mapType, Bytes],
+				result: Bool
+			});
+			program.natives.push({
+				name: "__map_string_i32_get",
+				library: "realtime_runtime",
+				symbol: "__map_string_i32_get",
+				arguments: [mapType, Bytes],
+				result: I32
+			});
+		}
 		if (needsStringRuntime)
 			program.natives.push({
 				name: "__string_length",
@@ -212,6 +247,8 @@ class IrGenerator {
 				case TIndexAssign(array, index, value, _):
 					builder.arraySet(lowerExpression(array, builder, localTypes), lowerExpression(index, builder, localTypes),
 						lowerExpression(value, builder, localTypes));
+				case TMapAssign(map, key, value, _):
+					lowerExpression(new TypedExpression(TCall("__map_string_i32_set", [map, key, value]), TVoid, map.span), builder, localTypes);
 				case TReturn(expression, _):
 					builder.returnValue(lowerExpression(expression, builder, localTypes));
 				case TReturnVoid(_):
@@ -344,6 +381,7 @@ class IrGenerator {
 				object;
 			case TNewArray(element, length):
 				builder.call(arrayAllocatorName(element), [lowerExpression(length, builder, localTypes)], Array(lowerType(element)));
+			case TNewMap(_, _): builder.call("__map_string_i32_alloc", [], Abstract("map_string_i32"));
 			case TField(object, name): builder.fieldGet(lowerExpression(object, builder, localTypes), name, lowerType(expression.type));
 			case TMethodCall(object, name, args):
 				var receiver = lowerExpression(object, builder, localTypes),
@@ -351,6 +389,11 @@ class IrGenerator {
 				builder.methodCall(receiver, name.substr(name.lastIndexOf(".") + 1), callArgs, lowerType(expression.type));
 			case TIndex(array, index):
 				builder.arrayGet(lowerExpression(array, builder, localTypes), lowerExpression(index, builder, localTypes), lowerType(expression.type));
+			case TMapGet(map, key):
+				builder.call("__map_string_i32_get", [
+					lowerExpression(map, builder, localTypes),
+					lowerExpression(key, builder, localTypes)
+				], I32);
 			case TArrayLength(array):
 				builder.arraySize(lowerExpression(array, builder, localTypes));
 			case TStringLength(value):
@@ -382,6 +425,7 @@ class IrGenerator {
 			case TString: Bytes;
 			case TVoid: Void;
 			case TClass(name): Obj(name);
+			case TMap(_, _): Abstract("map_string_i32");
 			case TInterface(name): Virtual(name);
 			case TEnum(_): I32;
 			case TNull: Void;

@@ -12,5 +12,6 @@ enum CompilerType {
 	TNull;
 	TNullable(element:CompilerType);
 	TArray(element:CompilerType);
+	TMap(key:CompilerType, value:CompilerType);
 	TFunction(arguments:Array<CompilerType>, result:CompilerType);
 }

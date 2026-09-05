@@ -9,6 +9,7 @@ enum IrType {
 	Dyn;
 	Array(element:IrType);
 	Obj(name:String);
+	Abstract(name:String);
 	Virtual(name:String);
 	Function(arguments:Array<IrType>, result:IrType);
 }
