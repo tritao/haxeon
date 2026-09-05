@@ -42,6 +42,7 @@ enum TypedStatement {
 	TAssign(name:String, value:TypedExpression, span:SourceSpan);
 	TFieldAssign(object:TypedExpression, name:String, value:TypedExpression, span:SourceSpan);
 	TReturn(expression:TypedExpression, span:SourceSpan);
+	TReturnVoid(span:SourceSpan);
 	TIf(condition:TypedExpression, thenBranch:Array<TypedStatement>, elseBranch:Array<TypedStatement>, span:SourceSpan);
 	TWhile(condition:TypedExpression, body:Array<TypedStatement>, span:SourceSpan);
 	TExpression(expression:TypedExpression, span:SourceSpan);

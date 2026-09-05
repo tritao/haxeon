@@ -432,6 +432,7 @@ class Compiler {
 			case VarDeclaration(n, t, e, span): VarDeclaration(n, t, canonicalExpression(e, module, entry, locals), span);
 			case Assignment(n, e, span): Assignment(n, canonicalExpression(e, module, entry, locals), span);
 			case Return(e, span): Return(canonicalExpression(e, module, entry, locals), span);
+			case ReturnVoid(span): ReturnVoid(span);
 			case If(c, y, n,
 				span): If(canonicalExpression(c, module, entry, locals), [for (x in y) canonicalStatement(x, module, entry, locals)],
 					[for (x in n) canonicalStatement(x, module, entry, locals)], span);
@@ -466,6 +467,7 @@ class Compiler {
 		switch s {
 			case VarDeclaration(_, _, e, _), Assignment(_, e, _), Return(e, _):
 				scanExpression(e, dependencies);
+			case ReturnVoid(_):
 			case If(c, y, n, _):
 				scanExpression(c, dependencies);
 				for (x in y)
@@ -509,6 +511,7 @@ class Compiler {
 				rememberAlias(name, e, aliases);
 			case Return(e, _):
 				scanCallExpression(e, calls, aliases);
+			case ReturnVoid(_):
 			case If(c, y, n, _):
 				scanCallExpression(c, calls, aliases);
 				for (s in y)
@@ -558,6 +561,7 @@ class Compiler {
 			switch statement {
 				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Expression(expression, _):
 					collectLambdaExpression(expression, functionName, module, generatedByModule);
+				case ReturnVoid(_):
 				case If(condition, yes, no, _):
 					collectLambdaExpression(condition, functionName, module, generatedByModule);
 					collectLambdas(yes, functionName, module, generatedByModule);

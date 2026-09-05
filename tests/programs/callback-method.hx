@@ -12,7 +12,9 @@ class Plugin {
 	}
 
 	public function activate():Void {
-		editor.register(() -> {});
+		editor.register(() -> {
+			return;
+		});
 	}
 }
 

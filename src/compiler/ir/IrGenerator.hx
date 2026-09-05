@@ -97,6 +97,8 @@ class IrGenerator {
 					builder.fieldSet(lowerExpression(object, builder, localTypes), name, lowerExpression(value, builder, localTypes));
 				case TReturn(expression, _):
 					builder.returnValue(lowerExpression(expression, builder, localTypes));
+				case TReturnVoid(_):
+					builder.returnVoid();
 				case TIf(condition, thenBranch, elseBranch, _):
 					var thenBlock = builder.createBlock(),
 						elseBlock = builder.createBlock(),

@@ -55,6 +55,7 @@ enum AstStatement {
 	VarDeclaration(name:String, ?type:AstType, initializer:AstExpression, span:SourceSpan);
 	Assignment(name:String, expression:AstExpression, span:SourceSpan);
 	Return(expression:AstExpression, span:SourceSpan);
+	ReturnVoid(span:SourceSpan);
 	If(condition:AstExpression, thenBranch:Array<AstStatement>, elseBranch:Array<AstStatement>, span:SourceSpan);
 	While(condition:AstExpression, body:Array<AstStatement>, span:SourceSpan);
 	Expression(expression:AstExpression, span:SourceSpan);

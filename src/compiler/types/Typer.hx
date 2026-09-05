@@ -160,6 +160,10 @@ class Typer {
 					if (!sameType(value.type, result))
 						fail("E1003", "Return type mismatch", span);
 					output.push(TReturn(value, span));
+				case ReturnVoid(span):
+					if (result != TVoid)
+						fail("E1003", "Return type mismatch", span);
+					output.push(TReturnVoid(span));
 				case Assignment(name, expression, span):
 					var dot = name.indexOf("."),
 						value = typeExpression(expression, scope);
@@ -389,6 +393,7 @@ class Typer {
 			switch statement {
 				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Expression(expression, _):
 					collectExpressionVariables(expression, names);
+				case ReturnVoid(_):
 				case If(condition, yes, no, _):
 					collectExpressionVariables(condition, names);
 					collectVariables(yes, names);
@@ -508,7 +513,7 @@ class Typer {
 	static function alwaysReturns(statements:Array<TypedStatement>):Bool {
 		for (statement in statements)
 			switch statement {
-				case TReturn(_, _):
+				case TReturn(_, _), TReturnVoid(_):
 					return true;
 				case TIf(_, yes, no, _):
 					if (no.length > 0 && alwaysReturns(yes) && alwaysReturns(no))
@@ -531,7 +536,8 @@ class Typer {
 
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
-			case VarDeclaration(_, _, _, span), Assignment(_, _, span), Return(_, span), If(_, _, _, span), While(_, _, span), Expression(_, span): span;
+			case VarDeclaration(_, _, _, span), Assignment(_, _, span), Return(_, span), ReturnVoid(span), If(_, _, _, span), While(_, _, span),
+				Expression(_, span): span;
 		}
 
 	static function fail(code:String, message:String, span:SourceSpan):Void
