@@ -41,6 +41,12 @@ private class RuntimeNative {
 	public static function retired_allocation_count(module:hl.Abstract<"realtime_module">):Int
 		return 0;
 
+	public static function type_count(module:hl.Abstract<"realtime_module">):Int
+		return 0;
+
+	public static function type_capacity(module:hl.Abstract<"realtime_module">):Int
+		return 0;
+
 	public static function dispose(module:hl.Abstract<"realtime_module">):Void {}
 
 	public static function inspect_patch(bytes:hl.Bytes, length:Int):Int
@@ -98,6 +104,12 @@ class Runtime {
 
 	public static function retiredCodeAllocationCount(module:LoadedModule):Int
 		return RuntimeNative.retired_allocation_count(cast module);
+
+	public static function metadataTypeCount(module:LoadedModule):Int
+		return RuntimeNative.type_count(cast module);
+
+	public static function metadataTypeCapacity(module:LoadedModule):Int
+		return RuntimeNative.type_capacity(cast module);
 
 	public static function dispose(module:LoadedModule):Void
 		RuntimeNative.dispose(cast module);

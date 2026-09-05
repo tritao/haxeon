@@ -439,6 +439,9 @@ class HotReloadMain {
 		ids.set("value", 71000);
 		bySlot.set(0, 71000);
 		var loaded = Runtime.load(HlWriter.encode(code), HlRuntimeIdentity.encode(moduleId, indices, ids));
+		var initialCapacity = Runtime.metadataTypeCapacity(loaded);
+		if (Runtime.metadataTypeCount(loaded) != code.types.length || initialCapacity - code.types.length != 65536)
+			throw "type arena did not expose its fixed append reserve";
 		var revision = 1;
 		for (i in 0...100) {
 			var baseTypes = code.types.length;
@@ -461,8 +464,31 @@ class HotReloadMain {
 				throw error;
 		}
 		code.types.pop();
-		if (Runtime.callInt(loaded, 71000) != 42)
+		if (Runtime.metadataTypeCount(loaded) != code.types.length || Runtime.callInt(loaded, 71000) != 42)
 			throw "failed type transaction damaged the live module";
+
+		var retainedTypeCount = code.types.length;
+		for (_ in retainedTypeCount...initialCapacity + 1)
+			code.types.push(Simple(HlType.I32));
+		var exhausted = HlPatchWriter.encode(code, moduleId, [0], bySlot, revision, revision + 1, 1, 0, 0, retainedTypeCount);
+		try {
+			Runtime.patchSet(loaded, new PatchSet(revision, revision + 1, exhausted, [71000]));
+			throw "exhausted type arena unexpectedly accepted metadata";
+		} catch (error:RuntimeError) {
+			if (error.status != RuntimeStatus.Incompatible)
+				throw error;
+		}
+		code.types.resize(retainedTypeCount);
+		if (Runtime.metadataTypeCount(loaded) != retainedTypeCount
+			|| Runtime.metadataTypeCapacity(loaded) != initialCapacity
+			|| Runtime.callInt(loaded, 71000) != 42)
+			throw "type arena exhaustion was not transactional";
+
+		code.functions = [new HlFunction(2, 0, [1], [LoadInt(0, 0), Return(0)])];
+		var recovery = HlPatchWriter.encode(code, moduleId, [0], bySlot, revision, revision + 1, 1, 0, 0, retainedTypeCount);
+		Runtime.patchSet(loaded, new PatchSet(revision, revision + 1, recovery, [71000]));
+		if (Runtime.callInt(loaded, 71000) != 42)
+			throw "valid patch did not recover after type arena exhaustion";
 		Runtime.dispose(loaded);
 	}
 

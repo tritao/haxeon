@@ -37,3 +37,23 @@ closure borrowers to patch ownership. This is safe but can retain memory during
 long-running repeated closure patches. The non-moving arena and transaction
 steps must add measurable borrower-aware reclamation before claiming bounded
 closure-patch memory.
+
+The type arena is one contiguous, non-moving allocation with 65,536 append slots
+reserved when a module is loaded. Compatible patches may append primitive,
+abstract, and function descriptors. Object, struct/interface-like virtual,
+enum, reference, nullable, and packed descriptors require a structural reload;
+both the HLP writer and reader reject them. Function descriptor payloads and
+abstract names are module-owned until shutdown. Patch staging checks the full
+append against the remaining capacity before writing any arena entry, and a
+capacity failure leaves the published type count, revision, dispatch slots, and
+existing behavior unchanged. The count and capacity are exposed as runtime
+metrics so long-running tests can distinguish arena growth from JIT retention.
+
+The contiguous reserve is deliberate: generated code, heap values, function
+signatures, globals, and reflection retain direct `hl_type *` pointers, while
+several HashLink consumers derive type indices with pointer subtraction. Growing
+the backing allocation or switching to chunks would invalidate those contracts.
+Exhaustion therefore requests a new module generation through the normal reload
+path. Arena entries and their auxiliary allocations are reclaimed at module
+shutdown; borrower-aware reclamation within a live generation remains
+unverified and is intentionally not attempted.
