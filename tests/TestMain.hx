@@ -158,6 +158,8 @@ class TestMain {
 			'Function "add" expects 2 arguments, got 1');
 		expectCompileError('function main():Int { if (1 < 2) return 1; }', 'Function main does not return on every path');
 		expectCompileError('function main():Int { if (1) return 1; else return 2; }', 'If condition must be Bool');
+		expectCompileError('function main():Int { return 1 ? 2 : 3; }', 'Conditional expression requires a Bool condition');
+		expectCompileError('function main():Int { var value = true ? 1 : "wrong"; return 0; }', 'Conditional branches must have matching types');
 		expectCompileError('function text():String { return "hello"; } function main():Int { var value:Float = 1.25; var wrong:String = value; return 0; }',
 			'Type mismatch for local "wrong"');
 		expectCompileError('function main():Int { missing = 1; return 0; }', 'Unknown variable "missing"');
@@ -188,6 +190,18 @@ class TestMain {
 					}
 		if (!hasPhi)
 			throw "Mutable loop did not construct an SSA phi";
+		var conditional = Frontend.compile('function main():Int { var value = true ? 40 : 2; return value; }'),
+			conditionalHasPhi = false;
+		for (fn in conditional.functions)
+			for (block in fn.blocks)
+				for (instruction in block.instructions)
+					switch instruction {
+						case compiler.ir.Ir.IrInstruction.Phi(_, _):
+							conditionalHasPhi = true;
+						default:
+					}
+		if (!conditionalHasPhi)
+			throw "Conditional expression did not merge branch values through SSA";
 		var mutableSource = 'function main():Int { var outer = 0; while (outer < 2) { var inner = 0; while (inner < 2) { inner = inner + 1; } outer = outer + inner; } return outer; }';
 		var ast = new Parser(new Lexer(new SourceFile("ssa.hx", mutableSource)).tokenize()).parseProgram();
 		var typed = Typer.type(ast), cfg = IrGenerator.generateCfg(typed.functions[0]), loads = 0, stores = 0;

@@ -1023,6 +1023,9 @@ class Compiler {
 			case Not(value, s): Not(canonicalExpression(value, module, entry, locals, aliases), s);
 			case And(a, b, s): And(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
 			case Or(a, b, s): Or(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
+			case Conditional(condition, whenTrue, whenFalse, s):
+				Conditional(canonicalExpression(condition, module, entry, locals, aliases), canonicalExpression(whenTrue, module, entry, locals, aliases),
+					canonicalExpression(whenFalse, module, entry, locals, aliases), s);
 			case Call(name, args, s):
 				var resolved = name;
 				var dot = name.indexOf("."),
@@ -1238,6 +1241,10 @@ class Compiler {
 			case And(left, right, _), Or(left, right, _):
 				scanExpression(left, dependencies);
 				scanExpression(right, dependencies);
+			case Conditional(condition, whenTrue, whenFalse, _):
+				scanExpression(condition, dependencies);
+				scanExpression(whenTrue, dependencies);
+				scanExpression(whenFalse, dependencies);
 			case Index(array, offset, _):
 				scanExpression(array, dependencies);
 				scanExpression(offset, dependencies);
@@ -1362,6 +1369,10 @@ class Compiler {
 			case And(left, right, _), Or(left, right, _):
 				scanCallExpression(left, calls, aliases);
 				scanCallExpression(right, calls, aliases);
+			case Conditional(condition, whenTrue, whenFalse, _):
+				scanCallExpression(condition, calls, aliases);
+				scanCallExpression(whenTrue, calls, aliases);
+				scanCallExpression(whenFalse, calls, aliases);
 			case New(typeName, args, _):
 				calls.set(typeName + ".new", true);
 				for (a in args)
@@ -1453,6 +1464,10 @@ class Compiler {
 			case And(left, right, _), Or(left, right, _):
 				collectLambdaExpression(left, functionName, module, generatedByModule);
 				collectLambdaExpression(right, functionName, module, generatedByModule);
+			case Conditional(condition, whenTrue, whenFalse, _):
+				collectLambdaExpression(condition, functionName, module, generatedByModule);
+				collectLambdaExpression(whenTrue, functionName, module, generatedByModule);
+				collectLambdaExpression(whenFalse, functionName, module, generatedByModule);
 			case New(_, args, _):
 				for (argument in args)
 					collectLambdaExpression(argument, functionName, module, generatedByModule);

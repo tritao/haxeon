@@ -76,6 +76,7 @@ enum AstExpression {
 	Not(value:AstExpression, span:SourceSpan);
 	And(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Or(left:AstExpression, right:AstExpression, span:SourceSpan);
+	Conditional(condition:AstExpression, whenTrue:AstExpression, whenFalse:AstExpression, span:SourceSpan);
 	Call(name:String, arguments:Array<AstExpression>, span:SourceSpan);
 	MethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan);
 	New(typeName:String, arguments:Array<AstExpression>, span:SourceSpan);

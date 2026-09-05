@@ -46,6 +46,7 @@ enum TypedExpressionKind {
 	TNot(value:TypedExpression);
 	TAnd(left:TypedExpression, right:TypedExpression);
 	TOr(left:TypedExpression, right:TypedExpression);
+	TConditional(condition:TypedExpression, whenTrue:TypedExpression, whenFalse:TypedExpression);
 	TCall(name:String, arguments:Array<TypedExpression>);
 	TCollectionCall(receiver:TypedExpression, operation:String, arguments:Array<TypedExpression>);
 	TClosureCall(callee:TypedExpression, arguments:Array<TypedExpression>);

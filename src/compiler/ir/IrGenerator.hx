@@ -840,6 +840,22 @@ class IrGenerator {
 					for (arg in args)
 						lowerExpression(arg, builder, localTypes)
 				]), lowerType(expression.type));
+			case TConditional(condition, whenTrue, whenFalse):
+				var yesBlock = builder.createBlock(),
+					noBlock = builder.createBlock(),
+					afterBlock = builder.createBlock(),
+					localName = '$' + 'conditional:${expression.span.start}:${afterBlock.id}',
+					resultType = lowerType(expression.type);
+				localTypes.set(localName, resultType);
+				builder.branch(lowerExpression(condition, builder, localTypes), yesBlock, noBlock);
+				builder.select(yesBlock);
+				builder.store(localName, lowerExpression(whenTrue, builder, localTypes));
+				builder.jump(afterBlock);
+				builder.select(noBlock);
+				builder.store(localName, lowerExpression(whenFalse, builder, localTypes));
+				builder.jump(afterBlock);
+				builder.select(afterBlock);
+				builder.load(localName, resultType);
 			case TClosureCall(callee, args):
 				builder.callClosure(lowerExpression(callee, builder, localTypes), [for (arg in args) lowerExpression(arg, builder, localTypes)],
 					lowerType(expression.type));

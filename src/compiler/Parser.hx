@@ -396,6 +396,12 @@ class Parser {
 
 	function parseExpression():AstExpression {
 		var expression = parseOr();
+		if (match(TokenKind.Question)) {
+			var whenTrue = parseExpression();
+			consume(TokenKind.Colon);
+			var whenFalse = parseExpression();
+			expression = Conditional(expression, whenTrue, whenFalse, expressionSpan(expression).merge(expressionSpan(whenFalse)));
+		}
 		return expression;
 	}
 
@@ -751,7 +757,7 @@ class Parser {
 				Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span), Div(_, _, span), Mod(_, _, span), Negate(_, span), Less(_, _, span),
 				LessEqual(_, _, span), Greater(_, _, span), GreaterEqual(_, _, span), Equal(_, _, span), NotEqual(_, _, span), Not(_, span), Call(_, _, span),
 				MethodCall(_, _, _, span), New(_, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span), Lambda(_, _, span), And(_, _, span),
-				Or(_, _, span): span;
+				Or(_, _, span), Conditional(_, _, _, span): span;
 		}
 
 	static function decodeString(text:String):String {

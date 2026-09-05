@@ -825,6 +825,18 @@ class Typer {
 				new TypedExpression(TNot(typedValue), TBool, span);
 			case And(left, right, span): logical(left, right, scope, true, span);
 			case Or(left, right, span): logical(left, right, scope, false, span);
+			case Conditional(condition, whenTrue, whenFalse, span):
+				var typedCondition = typeExpression(condition, scope, TBool);
+				if (!sameType(typedCondition.type, TBool))
+					fail("E1011", "Conditional expression requires a Bool condition", span);
+				var typedTrue = typeExpression(whenTrue, narrowedScope(scope, typedCondition, true), expectedType),
+					typedFalse = typeExpression(whenFalse, narrowedScope(scope, typedCondition, false), expectedType),
+					resultType = expectedType == null ? typedTrue.type : expectedType;
+				if (expectedType == null && !sameType(typedTrue.type, typedFalse.type))
+					fail("E1003", "Conditional branches must have matching types", span);
+				typedTrue = coerce(typedTrue, resultType, "conditional branch", "E1003");
+				typedFalse = coerce(typedFalse, resultType, "conditional branch", "E1003");
+				new TypedExpression(TConditional(typedCondition, typedTrue, typedFalse), resultType, span);
 			case New(typeName, arguments, span):
 				if (!classDecls.exists(typeName) || interfaceDecls.exists(typeName))
 					fail("E1007", 'Unknown class "$typeName"', span);
@@ -1435,6 +1447,9 @@ class Typer {
 			case Index(array, offset, _):
 				collectMutableCaptureExpression(array, outerDeclared, result);
 				collectMutableCaptureExpression(offset, outerDeclared, result);
+			case Conditional(condition, whenTrue, whenFalse, _):
+				for (item in [condition, whenTrue, whenFalse])
+					collectMutableCaptureExpression(item, outerDeclared, result);
 			case Variable(_, _), IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), NewMap(_, _, _):
 		}
 
@@ -1465,6 +1480,9 @@ class Typer {
 			case And(left, right, _), Or(left, right, _):
 				collectExpressionVariables(left, names);
 				collectExpressionVariables(right, names);
+			case Conditional(condition, whenTrue, whenFalse, _):
+				for (item in [condition, whenTrue, whenFalse])
+					collectExpressionVariables(item, names);
 			case New(_, arguments, _):
 				for (argument in arguments)
 					collectExpressionVariables(argument, names);
