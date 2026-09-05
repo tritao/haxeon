@@ -26,6 +26,32 @@ class AbiChangeSchema {
 			case GlobalLayoutChanged(name): record("global_layout_changed", "global", name);
 		};
 
+	public static function decode(version:Int, record:AbiChangeRecord):AbiChange {
+		if (version != VERSION)
+			throw 'Unsupported ABI change schema version $version';
+		if (record == null || record.entityId == null)
+			throw "Invalid ABI change record";
+		return switch record.code {
+			case "function_added": requireKind(record, "function", FunctionAdded(record.entityId));
+			case "function_removed": requireKind(record, "function", FunctionRemoved(record.entityId));
+			case "function_signature_changed": requireKind(record, "function", FunctionSignatureChanged(record.entityId));
+			case "object_added": requireKind(record, "object", ObjectAdded(record.entityId));
+			case "object_removed": requireKind(record, "object", ObjectRemoved(record.entityId));
+			case "object_layout_changed": requireKind(record, "object", ObjectLayoutChanged(record.entityId));
+			case "closure_layout_changed": requireKind(record, "closure_environment", ClosureLayoutChanged(record.entityId));
+			case "interface_changed": requireKind(record, "interface", InterfaceChanged(record.entityId));
+			case "enum_changed": requireKind(record, "enum", EnumChanged(record.entityId));
+			case "global_layout_changed": requireKind(record, "global", GlobalLayoutChanged(record.entityId));
+			case unknown: throw 'Unknown ABI change code "$unknown"';
+		};
+	}
+
+	static function requireKind(record:AbiChangeRecord, expected:String, result:AbiChange):AbiChange {
+		if (record.entityKind != expected)
+			throw 'ABI change ${record.code} requires entity kind "$expected"';
+		return result;
+	}
+
 	static function record(code:String, entityKind:String, entityId:String):AbiChangeRecord
 		return {code: code, entityKind: entityKind, entityId: entityId};
 }

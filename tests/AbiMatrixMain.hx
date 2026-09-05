@@ -4,6 +4,7 @@ import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.abi.RuntimeAbi;
 import compiler.abi.RuntimeAbiCodec;
+import compiler.abi.AbiChangeSchema;
 import compiler.Diagnostic.CompileError;
 import compiler.modules.Compiler;
 
@@ -62,6 +63,7 @@ class AbiMatrixMain {
 		];
 		for (fixture in fixtures)
 			assertDecision(fixture);
+		assertReasonSchema(fixtures);
 		Sys.println('PASS: ${fixtures.length} ABI compatibility policy fixtures');
 		var sourceFixtures:Array<SourceFixture> = [
 			sourceFixture("no-op", "function main():Int { return 40; }", "function main():Int { return 40; }", NoOp),
@@ -108,6 +110,30 @@ class AbiMatrixMain {
 			assertSourceDecision(fixture);
 		Sys.println('PASS: ${sourceFixtures.length} source ABI decision fixtures');
 		assertCleanEquivalence();
+	}
+
+	static function assertReasonSchema(fixtures:Array<AbiFixture>):Void {
+		for (fixture in fixtures)
+			switch fixture.expected {
+				case Patch:
+				case Reload(reason):
+					if (!Type.enumEq(reason, AbiChangeSchema.decode(AbiChangeSchema.VERSION, AbiChangeSchema.encode(reason))))
+						throw '${fixture.name}: structured ABI reason did not round trip';
+			}
+		try {
+			AbiChangeSchema.decode(99, {code: "object_added", entityKind: "object", entityId: "Editor"});
+			throw "ABI reason schema accepted an unknown version";
+		} catch (error:String) {
+			if (error.indexOf("Unsupported ABI change schema") < 0)
+				throw error;
+		}
+		try {
+			AbiChangeSchema.decode(AbiChangeSchema.VERSION, {code: "future_change", entityKind: "object", entityId: "Editor"});
+			throw "ABI reason schema accepted an unknown code";
+		} catch (error:String) {
+			if (error.indexOf("Unknown ABI change code") < 0)
+				throw error;
+		}
 	}
 
 	static function fixture(name:String, previous:Null<RuntimeAbiDescriptor>, next:RuntimeAbiDescriptor, expected:ExpectedDecision):AbiFixture
