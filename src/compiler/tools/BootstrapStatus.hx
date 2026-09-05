@@ -5,6 +5,7 @@ import compiler.Parser;
 import compiler.Token.TokenKind;
 import compiler.Source.SourceFile;
 import compiler.modules.Compiler;
+import compiler.Diagnostic.CompileError;
 import haxe.Json;
 import sys.FileSystem;
 import sys.io.File;
@@ -17,6 +18,8 @@ typedef FileStatus = {
 	final functions:Int;
 	final featurePressure:Map<String, Int>;
 	final failedStage:Null<String>;
+	final line:Null<Int>;
+	final column:Null<Int>;
 	final error:Null<String>;
 }
 
@@ -35,7 +38,13 @@ typedef BootstrapReport = {
 	final functions:Int;
 	final project:ProjectStatus;
 	final featurePressure:Array<{name:String, occurrences:Int}>;
-	final failures:Array<{path:String, failedStage:String, error:String}>;
+	final failures:Array<{
+		path:String,
+		failedStage:String,
+		line:Null<Int>,
+		column:Null<Int>,
+		error:String
+	}>;
 }
 
 /** Measures bootstrap readiness by executing the real frontend on source files. */
@@ -84,7 +93,8 @@ class BootstrapStatus {
 	static function inspect(path:String):FileStatus {
 		var source = File.getContent(path),
 			file = new SourceFile(path, source);
-		var pressure = featurePressure(source), lexed = false, parsed = false, functions = 0, failedStage:Null<String> = null, error:Null<String> = null;
+		var pressure = featurePressure(source), lexed = false, parsed = false, functions = 0, failedStage:Null<String> = null, line:Null<Int> = null,
+			column:Null<Int> = null, error:Null<String> = null;
 		try {
 			var tokens = new Lexer(file).tokenize();
 			lexed = true;
@@ -92,10 +102,22 @@ class BootstrapStatus {
 				var program = new Parser(tokens).parseProgram();
 				parsed = true;
 				functions = program.functions.length;
+			} catch (failure:CompileError) {
+				failedStage = "parse";
+				error = failure.diagnostic.message;
+				var location = sourceLocation(source, failure.diagnostic.span.start);
+				line = location.line;
+				column = location.column;
 			} catch (failure:Dynamic) {
 				failedStage = "parse";
 				error = Std.string(failure);
 			}
+		} catch (failure:CompileError) {
+			failedStage = "lex";
+			error = failure.diagnostic.message;
+			var location = sourceLocation(source, failure.diagnostic.span.start);
+			line = location.line;
+			column = location.column;
 		} catch (failure:Dynamic) {
 			failedStage = "lex";
 			error = Std.string(failure);
@@ -108,8 +130,21 @@ class BootstrapStatus {
 			functions: functions,
 			featurePressure: pressure,
 			failedStage: failedStage,
+			line: line,
+			column: column,
 			error: error
 		};
+	}
+
+	static function sourceLocation(source:String, offset:Int):{line:Int, column:Int} {
+		var line = 1, column = 1;
+		for (position in 0...offset)
+			if (source.charCodeAt(position) == 10) {
+				line++;
+				column = 1;
+			} else
+				column++;
+		return {line: line, column: column};
 	}
 
 	static function inspectProject(roots:Array<String>, paths:Array<String>, files:Array<FileStatus>, entryModule:String):ProjectStatus {
@@ -176,6 +211,8 @@ class BootstrapStatus {
 					if (file.error != null) {
 						path: file.path,
 						failedStage: file.failedStage,
+						line: file.line,
+						column: file.column,
 						error: file.error
 					}
 			]
@@ -197,8 +234,10 @@ class BootstrapStatus {
 			Sys.println('  ${feature.name}: ${feature.occurrences}');
 		if (report.failures.length > 0) {
 			Sys.println("Failures:");
-			for (failure in report.failures)
-				Sys.println('  ${failure.path} [${failure.failedStage}]: ${failure.error}');
+			for (failure in report.failures) {
+				var location = failure.line == null ? "" : ':${failure.line}:${failure.column}';
+				Sys.println('  ${failure.path}$location [${failure.failedStage}]: ${failure.error}');
+			}
 		}
 	}
 
