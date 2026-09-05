@@ -869,7 +869,13 @@ class Compiler {
 			isStatic: fn.isStatic,
 			arguments: [
 				for (argument in fn.arguments)
-					{name: argument.name, type: canonicalType(argument.type, aliases), span: argument.span}
+					{
+						name: argument.name,
+						type: canonicalType(argument.type, aliases),
+						span: argument.span,
+						optional: argument.optional,
+						defaultValue: argument.defaultValue == null ? null : canonicalExpression(argument.defaultValue, module, entry, locals, aliases)
+					}
 			],
 			result: canonicalType(fn.result, aliases),
 			span: fn.span,

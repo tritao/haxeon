@@ -70,8 +70,13 @@ class Parser {
 				params:Array<AstType> = [];
 			if (match(TokenKind.LeftParen)) {
 				if (!check(TokenKind.RightParen))
-					do
-						params.push(parseType()) while (match(TokenKind.Comma));
+					do {
+						if (check(TokenKind.Identifier) && peekKind(1) == TokenKind.Colon) {
+							advance();
+							advance();
+						}
+						params.push(parseType());
+					} while (match(TokenKind.Comma));
 				consume(TokenKind.RightParen);
 			}
 			cases.push({name: caseToken.text, params: params, span: caseToken.span.merge(previous().span)});
@@ -99,10 +104,18 @@ class Parser {
 		var arguments = [];
 		if (!check(TokenKind.RightParen)) {
 			do {
-				var argumentToken = consume(TokenKind.Identifier);
+				var optional = match(TokenKind.Question),
+					argumentToken = consume(TokenKind.Identifier);
 				consume(TokenKind.Colon);
-				var argumentType = parseType();
-				arguments.push({name: argumentToken.text, type: argumentType, span: argumentToken.span.merge(previous().span)});
+				var argumentType = parseType(),
+					defaultValue = match(TokenKind.Assign) ? parseExpression() : null;
+				arguments.push({
+					name: argumentToken.text,
+					type: argumentType,
+					span: argumentToken.span.merge(previous().span),
+					optional: optional || defaultValue != null,
+					defaultValue: defaultValue
+				});
 			} while (match(TokenKind.Comma));
 		}
 		consume(TokenKind.RightParen);
@@ -205,9 +218,16 @@ class Parser {
 			var arguments = [];
 			if (!check(TokenKind.RightParen))
 				do {
-					var argumentName = consume(TokenKind.Identifier).text;
+					var optional = match(TokenKind.Question),
+						argumentName = consume(TokenKind.Identifier).text;
 					consume(TokenKind.Colon);
-					arguments.push({name: argumentName, type: parseType(), span: previous().span});
+					arguments.push({
+						name: argumentName,
+						type: parseType(),
+						span: previous().span,
+						optional: optional,
+						defaultValue: null
+					});
 				} while (match(TokenKind.Comma));
 			consume(TokenKind.RightParen);
 			var result = match(TokenKind.Colon) ? parseType() : failType("Interface methods require a return type"),
@@ -510,7 +530,10 @@ class Parser {
 						&& tokens[lambdaStart + 1].kind == TokenKind.Arrow)
 						|| (tokens[lambdaStart].kind == TokenKind.Identifier
 							&& lambdaStart + 1 < tokens.length
-							&& tokens[lambdaStart + 1].kind == TokenKind.Colon));
+							&& tokens[lambdaStart + 1].kind == TokenKind.Colon)
+						|| (tokens[lambdaStart].kind == TokenKind.Question
+							&& lambdaStart + 2 < tokens.length
+							&& tokens[lambdaStart + 2].kind == TokenKind.Colon));
 			if (!isLambda) {
 				advance();
 				var grouped = parseExpression();
@@ -521,10 +544,17 @@ class Parser {
 			var arguments = [];
 			if (!check(TokenKind.RightParen)) {
 				do {
-					var argumentStart = current().span,
+					var optional = match(TokenKind.Question),
+						argumentStart = current().span,
 						argumentName = consume(TokenKind.Identifier).text;
 					consume(TokenKind.Colon);
-					arguments.push({name: argumentName, type: parseType(), span: argumentStart.merge(previous().span)});
+					arguments.push({
+						name: argumentName,
+						type: parseType(),
+						span: argumentStart.merge(previous().span),
+						optional: optional,
+						defaultValue: null
+					});
 				} while (match(TokenKind.Comma));
 			}
 			consume(TokenKind.RightParen);
@@ -705,6 +735,9 @@ class Parser {
 
 	function current():Token
 		return tokens[position];
+
+	function peekKind(offset:Int):TokenKind
+		return position + offset < tokens.length ? tokens[position + offset].kind : TokenKind.Eof;
 
 	function previous():Token
 		return tokens[position - 1];

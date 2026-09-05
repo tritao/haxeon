@@ -19,6 +19,8 @@ typedef AstArgument = {
 	final name:String;
 	final type:AstType;
 	final span:SourceSpan;
+	final ?optional:Bool;
+	final ?defaultValue:AstExpression;
 }
 
 typedef AstField = {
