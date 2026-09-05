@@ -17,6 +17,7 @@ import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 import compiler.ir.IrGenerator;
 import compiler.ir.IrTypeCodec;
+import compiler.ir.IrValueTableCodec;
 import compiler.ir.SsaBuilder;
 import compiler.ir.Cfg.CfgInstruction;
 import compiler.ir.Cfg.CfgBlock;
@@ -227,6 +228,21 @@ class TestMain {
 		unknownType.set(4, 255);
 		expectStringError(function() IrTypeCodec.decode(unknownType), "Unknown IR type tag");
 		Sys.println("PASS: IR types persist deterministically and reject malformed state");
+		var persistedValues = [
+			new compiler.ir.Ir.IrValue(9, "result", I32),
+			new compiler.ir.Ir.IrValue(2, "input", Array(Bytes))
+		], persistedValueBytes = IrValueTableCodec.encode(persistedValues), decodedValues = IrValueTableCodec.decode(persistedValueBytes);
+		if ((decodedValues[0].id : Int) != 2
+			|| (decodedValues[1].id : Int) != 9
+				|| Std.string(decodedValues[0].type) != Std.string(Array(Bytes))
+				|| persistedValueBytes.compare(IrValueTableCodec.encode(persistedValues)) != 0)
+			throw "IR value table did not round trip canonically";
+		var badReference = IrValueTableCodec.byId(decodedValues);
+		var referenceBytes = new haxe.io.BytesOutput();
+		referenceBytes.bigEndian = false;
+		referenceBytes.writeInt32(99);
+		expectStringError(function() IrValueTableCodec.readReference(new BytesInput(referenceBytes.getBytes()), badReference), "Unknown IR value reference");
+		Sys.println("PASS: canonical IR value tables preserve identity and reject unknown references");
 		var types = new TypeRegistry();
 		var firstType = types.declareClass("demo.Box", null, [{name: "value", type: "Int"}], [{name: "get", signature: "():Int"}]);
 		if (firstType.compatibility != NewType || firstType.descriptor.fields[0].slot != 0)
