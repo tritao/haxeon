@@ -46,7 +46,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 	primitive/String/reference `push` and `pop` now use capacity-aware HashLink
 	arrays whose backing storage grows without changing array identity; local,
 	mutable-field, and alias mutation are covered, while broader key/value
-	collections remain future work.
+	collections remain future work. `for (key in map)` now snapshots typed map
+	keys through the same bounds-checked array loop lowering.
 	Our HashLink fork
 	enforces bounds in the JIT.
 - [~] Explicit `Null<T>` values for reference types lower to HashLink's native

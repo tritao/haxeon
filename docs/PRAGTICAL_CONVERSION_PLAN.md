@@ -79,7 +79,7 @@ agree with official Haxe behavior where the profile overlaps.
 ### 2. Collection and ownership semantics
 
 Complete arrays and maps before porting editor code. This includes reference
-values, mutable fields, iterators, bounds behavior, and an explicit ownership
+values, typed map-key iteration, mutable fields, iterators, bounds behavior, and an explicit ownership
 model for operations that may replace an array storage object. Implement shared
 mutable capture cells before accepting callback-heavy editor APIs.
 

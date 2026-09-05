@@ -395,7 +395,18 @@ class Typer {
 					output.push(TWhile(typedCondition, typedBody, span));
 				case ForIn(name, iterable, body, span):
 					var typedIterable = typeExpression(iterable, scope),
-						element = arrayElementType(typedIterable.type, span),
+						element = switch typedIterable.type {
+							case TArray(element): element;
+							case TMap(key, value):
+								var mapName = RuntimeType.mapName(key, value);
+								if (mapName == null)
+									fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+								typedIterable = new TypedExpression(TCall(RuntimeType.mapNative(key, value, "keys"), [typedIterable]), TArray(key), span);
+								key;
+							default:
+								fail("E1014", "For-in iterable must be an Array or Map", span);
+								TInt;
+						},
 						loopScope = new Scope(scope);
 					loopScope.define(name, element, span);
 					loopDepth++;

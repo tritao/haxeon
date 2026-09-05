@@ -102,6 +102,7 @@ run_program map-basic 42
 run_program map-int 42
 run_program map-primitive-types 42
 run_program map-object 42
+run_program map-for-in 52
 run_program loop-control 42
 run_program increment 42
 run_program logical-comparisons 42
