@@ -1,6 +1,7 @@
 import runtime.Plugin;
 import runtime.ReloadablePlugin;
 import runtime.RuntimeDomain;
+import runtime.RuntimeDomain.RuntimeDomainStatus;
 
 class RuntimeDomainMain {
 	static function main():Void {
@@ -29,6 +30,8 @@ class RuntimeDomainMain {
 		} catch (error:String) {}
 		if (domain.generation != 2 || !domain.active || events[events.length - 1] != "second.activate")
 			throw "runtime domain did not recover the previous generation";
+		if (events.indexOf("failing.deactivate") >= 0)
+			throw "runtime domain deactivated a candidate that never activated";
 		var liveFailure = new TestPlugin("live-failure", events);
 		liveFailure.failSaveState = true;
 		var saveFailure = new TestPlugin("save-candidate", events);
@@ -43,7 +46,11 @@ class RuntimeDomainMain {
 			ownedFailure.reloadWithModule(saveFailure, saveFailureModule);
 			throw "runtime domain accepted a state-save failure";
 		} catch (error:String) {}
-		if (!ownedFailure.active || ownedFailure.generation != 1 || !saveFailureDisposed)
+		if (!ownedFailure.active
+			|| ownedFailure.generation != 1
+			|| !saveFailureDisposed
+			|| count(events, "live-failure.activate") != 1
+			|| events.indexOf("live-failure.deactivate") >= 0)
 			throw "runtime domain did not dispose a candidate after state-save failure";
 		domain.deactivate();
 		if (domain.active || domain.generation != 2)
@@ -56,7 +63,88 @@ class RuntimeDomainMain {
 		owned.deactivate();
 		if (disposed != 2)
 			throw "runtime domain did not dispose the active module on deactivate";
+		testPostPublicationCleanup(events);
+		testRestoreFailure(events);
+		testRecoveryFailure(events);
 		Sys.println("PASS: runtime domain lifecycle and state migration contract");
+	}
+
+	static function testRestoreFailure(events:Array<String>):Void {
+		var domain = new RuntimeDomain("restore"),
+			previous = new TestPlugin("restore-first", events),
+			candidate = new TestPlugin("restore-candidate", events);
+		previous.state = "cursor:8";
+		candidate.failRestoreState = true;
+		domain.activate(previous);
+		try {
+			domain.reload(candidate);
+			throw "runtime domain accepted failed state restoration";
+		} catch (error:String) {}
+		var suffix = events.slice(events.length - 6).join(",");
+		if (!domain.active
+			|| domain.generation != 1
+			|| suffix != "restore-first.save,restore-first.deactivate,restore-candidate.activate,restore-candidate.restore,restore-candidate.deactivate,restore-first.activate")
+			throw "runtime domain did not recover in order after restore failure";
+		domain.deactivate();
+	}
+
+	static function testPostPublicationCleanup(events:Array<String>):Void {
+		var firstModule:Dynamic = {},
+			secondModule:Dynamic = {},
+			failFirstDisposal = true;
+		var domain = new RuntimeDomain("cleanup", function(module:Dynamic):Void {
+			if (module == firstModule && failFirstDisposal) {
+				failFirstDisposal = false;
+				throw "retirement failed";
+			}
+		});
+		var first = new TestPlugin("cleanup-first", events),
+			second = new TestPlugin("cleanup-second", events);
+		domain.activateWithModule(first, firstModule);
+		try {
+			domain.reloadWithModule(second, secondModule);
+			throw "runtime domain hid a retirement failure";
+		} catch (error:runtime.RuntimeError) {}
+		if (!domain.active
+			|| domain.generation != 2
+			|| domain.retainedModuleCount != 1
+			|| domain.lastCleanupError == null
+			|| events.indexOf("cleanup-second.deactivate") >= 0)
+			throw "post-publication cleanup failure rolled back the published generation";
+		domain.deactivate();
+		if (domain.status != Inactive || domain.retainedModuleCount != 0)
+			throw "runtime domain did not retry retained module cleanup";
+	}
+
+	static function testRecoveryFailure(events:Array<String>):Void {
+		var disposed = 0, domain = new RuntimeDomain("recovery", function(_) disposed++);
+		var previous = new TestPlugin("recovery-first", events),
+			candidate = new TestPlugin("recovery-candidate", events);
+		domain.activateWithModule(previous, {});
+		previous.failActivation = true;
+		candidate.failActivation = true;
+		try {
+			domain.reloadWithModule(candidate, {});
+			throw "runtime domain accepted failed candidate and recovery";
+		} catch (error:runtime.RuntimeError) {}
+		switch domain.status {
+			case Failed(_):
+			case _:
+				throw "runtime domain claimed failed recovery was active";
+		}
+		if (domain.active || domain.generation != 1 || disposed != 1)
+			throw "failed recovery changed generation or candidate ownership";
+		domain.deactivate();
+		if (domain.status != Inactive || disposed != 2)
+			throw "failed runtime domain could not be shut down";
+	}
+
+	static function count(events:Array<String>, expected:String):Int {
+		var found = 0;
+		for (event in events)
+			if (event == expected)
+				found++;
+		return found;
 	}
 }
 
@@ -68,6 +156,7 @@ private class TestPlugin implements ReloadablePlugin {
 	public var state:String = "";
 	public var failActivation:Bool = false;
 	public var failSaveState:Bool = false;
+	public var failRestoreState:Bool = false;
 
 	public function new(name:String, events:Array<String>) {
 		this.name = name;
@@ -92,6 +181,8 @@ private class TestPlugin implements ReloadablePlugin {
 
 	public function restoreState(value:String):Void {
 		events.push('$name.restore');
+		if (failRestoreState)
+			throw 'state restore failed for $name';
 		state = value;
 	}
 }
