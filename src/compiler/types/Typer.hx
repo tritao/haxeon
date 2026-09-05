@@ -196,14 +196,19 @@ class Typer {
 			case Variable(name, span):
 				var type = scope.resolve(name);
 				if (type != null) new TypedExpression(TLocal(name), type, span); else {
-					var dot = name.indexOf(".");
-					if (dot <= 0)
-						fail("E1005", 'Unknown variable "$name"', span);
-					var objectName = name.substr(0, dot),
-						fieldName = name.substr(dot + 1),
-						object = typeExpression(Variable(objectName, span), scope),
-						field = fieldType(object.type, fieldName, span);
-					new TypedExpression(TField(object, fieldName), field, span);
+					var signature = signatures.get(name);
+					if (signature != null)
+						new TypedExpression(TFunctionRef(name), functionType(signature), span);
+					else {
+						var dot = name.indexOf(".");
+						if (dot <= 0)
+							fail("E1005", 'Unknown variable "$name"', span);
+						var objectName = name.substr(0, dot),
+							fieldName = name.substr(dot + 1),
+							object = typeExpression(Variable(objectName, span), scope),
+							field = fieldType(object.type, fieldName, span);
+						new TypedExpression(TField(object, fieldName), field, span);
+					}
 				}
 			case Add(left, right, span): arithmetic(left, right, scope, true, span);
 			case Sub(left, right, span): arithmetic(left, right, scope, false, span);
@@ -223,42 +228,60 @@ class Typer {
 				checkArguments(typed, expected, typeName + ".new");
 				new TypedExpression(TNew(typeName, typed, constructor != null), TClass(typeName), span);
 			case Call(name, arguments, span):
-				var dot = name.indexOf("."),
-					receiverName = dot < 0 ? null : name.substr(0, dot),
-					receiverType = receiverName == null ? null : scope.resolve(receiverName),
-					methodName = dot < 0 ? null : name.substr(dot + 1);
-				if (receiverType != null && methodName != null) {
-					var className = switch receiverType {
-						case TClass(value): value;
+				var callable = scope.resolve(name);
+				if (callable != null) {
+					var functionType = switch callable {
+						case TFunction(argumentTypes, result): {arguments: argumentTypes, result: result};
 						default: null;
 					};
-					if (className == null)
-						fail("E1007", 'Cannot call method on non-object "$receiverName"', span);
-					var methodInfoResult = findMethod(className, methodName);
-					if (methodInfoResult == null || methodInfoResult.isStatic)
-						fail("E1007", 'Unknown instance method "$className.$methodName"', span);
-					var methodKey = methodInfoResult.owner + "." + methodName;
-					var method = signatures.get(methodKey),
-						expected = [for (argument in method.arguments) lowerType(argument.type)],
-						typed = [for (argument in arguments) typeExpression(argument, scope)];
-					if (typed.length != expected.length)
-						fail("E1008", 'Function "$methodKey" expects ${expected.length} arguments, got ${typed.length}', span);
-					checkArguments(typed, expected, methodKey);
-					new TypedExpression(TMethodCall(typeExpression(Variable(receiverName, span), scope), methodKey, typed), lowerType(method.result), span);
-				} else {
-					var signature = signatures.get(name);
-					var external = externals.get(name),
-						expectedArguments = signature == null ? (external == null ? null : external.arguments) : [for (argument in signature.arguments) lowerType(argument.type)],
-						result = signature == null ? (external == null ? null : external.result) : lowerType(signature.result);
-					if (expectedArguments == null)
-						fail("E1007", 'Unknown function "$name"', span);
-					if (arguments.length != expectedArguments.length)
-						fail("E1008", 'Function "$name" expects ${expectedArguments.length} arguments, got ${arguments.length}', span);
+					if (functionType == null)
+						fail("E1007", 'Cannot call non-function "$name"', span);
 					var typed = [for (argument in arguments) typeExpression(argument, scope)];
-					checkArguments(typed, expectedArguments, name);
-					new TypedExpression(TCall(name, typed), result, span);
+					if (typed.length != functionType.arguments.length)
+						fail("E1008", 'Function value "$name" expects ${functionType.arguments.length} arguments, got ${typed.length}', span);
+					checkArguments(typed, functionType.arguments, name);
+					new TypedExpression(TClosureCall(new TypedExpression(TLocal(name), callable, span), typed), functionType.result, span);
+				} else {
+					var dot = name.indexOf("."),
+						receiverName = dot < 0 ? null : name.substr(0, dot),
+						receiverType = receiverName == null ? null : scope.resolve(receiverName),
+						methodName = dot < 0 ? null : name.substr(dot + 1);
+					if (receiverType != null && methodName != null) {
+						var className = switch receiverType {
+							case TClass(value): value;
+							default: null;
+						};
+						if (className == null)
+							fail("E1007", 'Cannot call method on non-object "$receiverName"', span);
+						var methodInfoResult = findMethod(className, methodName);
+						if (methodInfoResult == null || methodInfoResult.isStatic)
+							fail("E1007", 'Unknown instance method "$className.$methodName"', span);
+						var methodKey = methodInfoResult.owner + "." + methodName;
+						var method = signatures.get(methodKey),
+							expected = [for (argument in method.arguments) lowerType(argument.type)],
+							typed = [for (argument in arguments) typeExpression(argument, scope)];
+						if (typed.length != expected.length)
+							fail("E1008", 'Function "$methodKey" expects ${expected.length} arguments, got ${typed.length}', span);
+						checkArguments(typed, expected, methodKey);
+						new TypedExpression(TMethodCall(typeExpression(Variable(receiverName, span), scope), methodKey, typed), lowerType(method.result), span);
+					} else {
+						var signature = signatures.get(name);
+						var external = externals.get(name),
+							expectedArguments = signature == null ? (external == null ? null : external.arguments) : [for (argument in signature.arguments) lowerType(argument.type)],
+							result = signature == null ? (external == null ? null : external.result) : lowerType(signature.result);
+						if (expectedArguments == null)
+							fail("E1007", 'Unknown function "$name"', span);
+						if (arguments.length != expectedArguments.length)
+							fail("E1008", 'Function "$name" expects ${expectedArguments.length} arguments, got ${arguments.length}', span);
+						var typed = [for (argument in arguments) typeExpression(argument, scope)];
+						checkArguments(typed, expectedArguments, name);
+						new TypedExpression(TCall(name, typed), result, span);
+					}
 				}
 		}
+
+	function functionType(fn:AstFunction):CompilerType
+		return TFunction([for (argument in fn.arguments) lowerType(argument.type)], lowerType(fn.result));
 
 	function checkArguments(arguments:Array<TypedExpression>, expected:Array<CompilerType>, name:String):Void {
 		for (i in 0...arguments.length)
@@ -351,6 +374,10 @@ class Typer {
 	static function sameType(left:CompilerType, right:CompilerType):Bool
 		return switch [left, right] {
 			case [TClass(a), TClass(b)]: a == b;
+			case [TFunction(aArgs, aResult), TFunction(bArgs, bResult)]: aArgs.length == bArgs.length && [
+					for (i in 0...aArgs.length)
+						sameType(aArgs[i], bArgs[i])
+				].indexOf(false) < 0 && sameType(aResult, bResult);
 			default: left == right;
 		};
 }

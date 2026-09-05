@@ -89,6 +89,26 @@ class CfgVerifier {
 					for (argument in arguments)
 						require(argument, available);
 					define(out, defined, available);
+				case StaticClosure(out, _):
+					switch out.type {
+						case Function(_, _):
+						default: throw 'CFG static closure must produce a function';
+					}
+					define(out, defined, available);
+				case CallClosure(out, closure, arguments):
+					require(closure, available);
+					switch closure.type {
+						case Function(argumentTypes, result):
+							if (argumentTypes.length != arguments.length || !sameType(out.type, result))
+								throw 'CFG closure call has the wrong signature';
+							for (i in 0...arguments.length) {
+								require(arguments[i], available);
+								if (!sameType(arguments[i].type, argumentTypes[i]))
+									throw 'CFG closure call has the wrong argument type';
+							}
+						default: throw 'CFG closure call requires a function value';
+					}
+					define(out, defined, available);
 				case NewObject(out, _):
 					switch out.type {
 						case Obj(_):
@@ -147,6 +167,10 @@ class CfgVerifier {
 	static function sameType(left:IrType, right:IrType):Bool
 		return switch [left, right] {
 			case [Obj(a), Obj(b)]: a == b;
+			case [Function(aArgs, aResult), Function(bArgs, bResult)]: aArgs.length == bArgs.length && [
+					for (i in 0...aArgs.length)
+						sameType(aArgs[i], bArgs[i])
+				].indexOf(false) < 0 && sameType(aResult, bResult);
 			default: left == right;
 		};
 }

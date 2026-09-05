@@ -20,6 +20,7 @@ enum TypedExpressionKind {
 	TFloatLiteral(value:Float);
 	TStringLiteral(value:String);
 	TLocal(name:String);
+	TFunctionRef(name:String);
 	TAdd(left:TypedExpression, right:TypedExpression);
 	TSub(left:TypedExpression, right:TypedExpression);
 	TMul(left:TypedExpression, right:TypedExpression);
@@ -28,6 +29,7 @@ enum TypedExpressionKind {
 	TLessEqual(left:TypedExpression, right:TypedExpression);
 	TEqual(left:TypedExpression, right:TypedExpression);
 	TCall(name:String, arguments:Array<TypedExpression>);
+	TClosureCall(callee:TypedExpression, arguments:Array<TypedExpression>);
 	TNew(typeName:String, arguments:Array<TypedExpression>, hasConstructor:Bool);
 	TField(object:TypedExpression, name:String);
 	TMethodCall(object:TypedExpression, functionName:String, arguments:Array<TypedExpression>);

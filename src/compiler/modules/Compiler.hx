@@ -299,6 +299,7 @@ class Compiler {
 			case TString: Bytes;
 			case TVoid: Void;
 			case TClass(name): Obj(name);
+			case TFunction(arguments, result): Function([for (argument in arguments) irType(argument)], irType(result));
 		};
 
 	function stableIdsBySlot(layout:Map<String, Int>):Map<Int, Int> {
@@ -415,7 +416,10 @@ class Compiler {
 
 	static function canonicalExpression(e, module, entry, locals):AstExpression
 		return switch e {
-			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), Variable(_, _): e;
+			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _): e;
+			case Variable(name, span):
+				if (name.indexOf(".") < 0 && locals.exists(name)) Variable(module == entry
+					&& name == "main" ? "main" : module + "." + name, span); else e;
 			case Add(a, b, s): Add(canonicalExpression(a, module, entry, locals), canonicalExpression(b, module, entry, locals), s);
 			case Sub(a, b, s): Sub(canonicalExpression(a, module, entry, locals), canonicalExpression(b, module, entry, locals), s);
 			case Mul(a, b, s): Mul(canonicalExpression(a, module, entry, locals), canonicalExpression(b, module, entry, locals), s);

@@ -53,6 +53,11 @@ class HlSymbolTable {
 		var key = typeKey(type), found = typeIndices.get(key);
 		if (found != null)
 			return found;
+		switch type {
+			case Function(arguments, result):
+				return internFunction(arguments, result);
+			default:
+		}
 		var index = types.length;
 		if (typeKey(type).indexOf("obj:") == 0)
 			throw 'Object type "$type" must be registered before use';

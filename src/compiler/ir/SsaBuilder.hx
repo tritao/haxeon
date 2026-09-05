@@ -283,6 +283,12 @@ class SsaBuilder {
 				case Call(out, name, args):
 					var result = define(out);
 					target.instructions.push(Call(result, name, [for (arg in args) resolve(arg)]));
+				case StaticClosure(out, name):
+					var result = define(out);
+					target.instructions.push(StaticClosure(result, name));
+				case CallClosure(out, closure, args):
+					var result = define(out);
+					target.instructions.push(CallClosure(result, resolve(closure), [for (arg in args) resolve(arg)]));
 				case NewObject(out, typeName):
 					var result = define(out);
 					target.instructions.push(NewObject(result, typeName));

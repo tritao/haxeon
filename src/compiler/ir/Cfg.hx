@@ -29,6 +29,8 @@ enum CfgInstruction {
 	LessEqual(output:CfgValue, left:CfgValue, right:CfgValue);
 	Equal(output:CfgValue, left:CfgValue, right:CfgValue);
 	Call(output:CfgValue, functionName:String, arguments:Array<CfgValue>);
+	StaticClosure(output:CfgValue, functionName:String);
+	CallClosure(output:CfgValue, closure:CfgValue, arguments:Array<CfgValue>);
 	NewObject(output:CfgValue, typeName:String);
 	FieldGet(output:CfgValue, object:CfgValue, fieldName:String);
 	FieldSet(object:CfgValue, fieldName:String, value:CfgValue);

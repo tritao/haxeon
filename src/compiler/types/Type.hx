@@ -7,4 +7,5 @@ enum CompilerType {
 	TString;
 	TVoid;
 	TClass(name:String);
+	TFunction(arguments:Array<CompilerType>, result:CompilerType);
 }

@@ -142,6 +142,7 @@ class IrGenerator {
 				if (type == null)
 					throw 'Missing typed local "$name"';
 				builder.load(name, type);
+			case TFunctionRef(name): builder.staticClosure(name, lowerType(expression.type));
 			case TAdd(a, b): builder.add(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TSub(a, b): builder.sub(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TMul(a, b): builder.mul(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
@@ -150,6 +151,9 @@ class IrGenerator {
 			case TLessEqual(a, b): builder.lessEqual(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TEqual(a, b): builder.equal(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TCall(name, args): builder.call(name, [for (arg in args) lowerExpression(arg, builder, localTypes)], lowerType(expression.type));
+			case TClosureCall(callee, args):
+				builder.callClosure(lowerExpression(callee, builder, localTypes), [for (arg in args) lowerExpression(arg, builder, localTypes)],
+					lowerType(expression.type));
 			case TNew(typeName, args, hasConstructor):
 				var object = builder.newObject(typeName);
 				if (hasConstructor) {
@@ -182,5 +186,6 @@ class IrGenerator {
 			case TString: Bytes;
 			case TVoid: Void;
 			case TClass(name): Obj(name);
+			case TFunction(arguments, result): Function([for (argument in arguments) lowerType(argument)], lowerType(result));
 		};
 }

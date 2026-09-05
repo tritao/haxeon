@@ -96,6 +96,18 @@ class CfgBuilder {
 		return out;
 	}
 
+	public function staticClosure(name:String, type:IrType):CfgValue {
+		var out = temporary(type);
+		emit(StaticClosure(out, name));
+		return out;
+	}
+
+	public function callClosure(closure:CfgValue, args:Array<CfgValue>, result:IrType):CfgValue {
+		var out = temporary(result);
+		emit(CallClosure(out, closure, args));
+		return out;
+	}
+
 	public function newObject(typeName:String):CfgValue {
 		var out = temporary(Obj(typeName));
 		emit(NewObject(out, typeName));
