@@ -1368,23 +1368,9 @@ class Typer {
 						return new TypedExpression(TEnumConstruct(enumCase.enumName, enumCase.index, typedArguments), TEnum(enumCase.enumName), span);
 					}
 					if (receiverType != null && methodName != null) {
-						if (receiverType == TString && methodName == "indexOf") {
-							if (arguments.length != 1)
-								fail("E1008", 'Function "String.indexOf" expects 1 argument, got ${arguments.length}', span);
-							var needle = typeExpression(arguments[0], scope);
-							if (!sameType(needle.type, TString))
-								fail("E1009", "String.indexOf expects a String needle", needle.span);
-							return new TypedExpression(TStringIndexOf(receiver, needle), TInt, span);
-						}
-						if (receiverType == TString && methodName == "substring") {
-							if (arguments.length != 2)
-								fail("E1008", 'Function "String.substring" expects 2 arguments, got ${arguments.length}', span);
-							var start = typeExpression(arguments[0], scope),
-								end = typeExpression(arguments[1], scope);
-							if (!sameType(start.type, TInt) || !sameType(end.type, TInt))
-								fail("E1009", "String.substring expects Int bounds", span);
-							return new TypedExpression(TStringSubstring(receiver, start, end), TString, span);
-						}
+						var stringCall = typeStringMethod(receiver, methodName, arguments, span, scope);
+						if (stringCall != null)
+							return stringCall;
 						if (isMap(receiverType))
 							return typeMapMethod(receiver, methodName, arguments, span, scope);
 						if (isArray(receiverType))
@@ -1595,23 +1581,9 @@ class Typer {
 
 	function typeMethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
 		var receiver = typeExpression(object, scope);
-		if (sameType(receiver.type, TString) && name == "indexOf") {
-			if (arguments.length != 1)
-				fail("E1008", 'Function "String.indexOf" expects 1 argument, got ${arguments.length}', span);
-			var needle = typeExpression(arguments[0], scope);
-			if (!sameType(needle.type, TString))
-				fail("E1009", "String.indexOf expects a String needle", needle.span);
-			return new TypedExpression(TStringIndexOf(receiver, needle), TInt, span);
-		}
-		if (sameType(receiver.type, TString) && name == "substring") {
-			if (arguments.length != 2)
-				fail("E1008", 'Function "String.substring" expects 2 arguments, got ${arguments.length}', span);
-			var start = typeExpression(arguments[0], scope),
-				end = typeExpression(arguments[1], scope);
-			if (!sameType(start.type, TInt) || !sameType(end.type, TInt))
-				fail("E1009", "String.substring expects Int bounds", span);
-			return new TypedExpression(TStringSubstring(receiver, start, end), TString, span);
-		}
+		var stringCall = typeStringMethod(receiver, name, arguments, span, scope);
+		if (stringCall != null)
+			return stringCall;
 		if (isMap(receiver.type))
 			return typeMapMethod(receiver, name, arguments, span, scope);
 		if (isArray(receiver.type))
@@ -1629,6 +1601,37 @@ class Typer {
 			method = signatures.get(methodKey),
 			typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span);
 		return new TypedExpression(TMethodCall(receiver, methodKey, typed), lowerType(method.result), span);
+	}
+
+	function typeStringMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):Null<TypedExpression> {
+		if (!sameType(receiver.type, TString))
+			return null;
+		if (name == "indexOf") {
+			if (arguments.length != 1)
+				fail("E1008", 'Function "String.indexOf" expects 1 argument, got ${arguments.length}', span);
+			var needle = typeExpression(arguments[0], scope);
+			if (!sameType(needle.type, TString))
+				fail("E1009", "String.indexOf expects a String needle", needle.span);
+			return new TypedExpression(TStringIndexOf(receiver, needle), TInt, span);
+		}
+		if (name == "substring") {
+			if (arguments.length != 2)
+				fail("E1008", 'Function "String.substring" expects 2 arguments, got ${arguments.length}', span);
+			var start = typeExpression(arguments[0], scope),
+				end = typeExpression(arguments[1], scope);
+			if (!sameType(start.type, TInt) || !sameType(end.type, TInt))
+				fail("E1009", "String.substring expects Int bounds", span);
+			return new TypedExpression(TStringSubstring(receiver, start, end), TString, span);
+		}
+		if (name == "charCodeAt") {
+			if (arguments.length != 1)
+				fail("E1008", 'Function "String.charCodeAt" expects 1 argument, got ${arguments.length}', span);
+			var index = typeExpression(arguments[0], scope, TInt);
+			if (!sameType(index.type, TInt))
+				fail("E1009", "String.charCodeAt expects an Int index", index.span);
+			return new TypedExpression(TStringCharCodeAt(receiver, index), TInt, span);
+		}
+		return null;
 	}
 
 	function typeArrayMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
