@@ -500,7 +500,10 @@ class Compiler {
 		state.aliasFingerprints = aliases;
 		var enums:Map<String, String> = [];
 		for (enumDecl in state.ast.enums) {
-			var signature = enumDecl.name + "{" + [for (caseDecl in enumDecl.cases) caseDecl.name].join(";") + "}";
+			var signature = enumDecl.name + "{" + [
+				for (caseDecl in enumDecl.cases)
+					caseDecl.name + "(" + [for (param in caseDecl.params) astTypeName(param)].join(",") + ")"
+			].join(";") + "}";
 			enums.set(enumDecl.name, signature);
 			if (state.enumFingerprints.get(enumDecl.name) != signature)
 				structuralChanged.set('enum:${enumDecl.name}', true);
