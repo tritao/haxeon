@@ -971,7 +971,7 @@ class Parser {
 			return parseExpression();
 		var start = previous().span, statements = [];
 		while (!check(TokenKind.RightBrace)) {
-			if (check(TokenKind.Var)) {
+			if (isStatementOnlyStart(current().kind) || check(TokenKind.If) && !hasBranchElse()) {
 				appendStatements(statements, parseStatements());
 				continue;
 			}
@@ -1025,7 +1025,7 @@ class Parser {
 	function parseSwitchExpressionBranch():AstExpression {
 		var statements = [], start = current().span;
 		while (true) {
-			if (isStatementOnlyStart(current().kind) || check(TokenKind.If) && !hasSwitchBranchElse()) {
+			if (isStatementOnlyStart(current().kind) || check(TokenKind.If) && !hasBranchElse()) {
 				appendStatements(statements, parseStatements());
 				continue;
 			}
@@ -1053,7 +1053,7 @@ class Parser {
 			default: false;
 		};
 
-	function hasSwitchBranchElse():Bool {
+	function hasBranchElse():Bool {
 		var parentheses = 0, braces = 0, brackets = 0, tokenCount = tokens.length;
 		for (index in position...tokenCount) {
 			var kind = tokens[index].kind;

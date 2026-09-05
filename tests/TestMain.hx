@@ -62,6 +62,8 @@ class TestMain {
 		Frontend.compile('enum Mixed { Value(?first:String, second:Int); } function main():Int { var value:Mixed = Mixed.Value(null, 42); return 42; }');
 		Frontend.compile('typedef Options = { final ?name:String; ?final count:Int; } function main():Int { return 42; }');
 		Frontend.compile('function main():Int { var values = [20, 22]; var empty:Array<Int> = []; return values[0] + values[1] + empty.length; }');
+		new Parser(new Lexer(new SourceFile("expression-block-statements.hx",
+			'function main():Int return if (true) { var value = 0; if (true) value = 42; value; } else 0;')).tokenize()).parseProgram();
 		expectCompileError('function main():Int { var values = []; return 0; }', 'Empty array literal requires an expected element type');
 		Frontend.compile('function main():Int { var value:Int; do { value = 42; } while (false); return value; }');
 		expectCompileError('function main():Int { do { return 1; } while (1); }', 'Do-while condition must be Bool');
