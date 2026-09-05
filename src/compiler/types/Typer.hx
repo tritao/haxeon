@@ -752,6 +752,7 @@ class Typer {
 			case StringLiteral(value, span): new TypedExpression(TStringLiteral(value), TString, span);
 			case BoolLiteral(value, span): new TypedExpression(TBoolLiteral(value), TBool, span);
 			case NullLiteral(span): new TypedExpression(TNullLiteral, TNull, span);
+			case Unreachable(span): new TypedExpression(TUnreachable, TNever, span);
 			case Variable(name, span):
 				var type = scope.resolve(name);
 				if (type != null) {
@@ -2024,7 +2025,8 @@ class Typer {
 			case Range(start, end, _):
 				collectMutableCaptureExpression(start, outerDeclared, result);
 				collectMutableCaptureExpression(end, outerDeclared, result);
-			case Variable(_, _), IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), NewMap(_, _, _):
+			case Variable(_, _), IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_),
+				NewMap(_, _, _):
 		}
 
 	static function collectExpressionVariables(expression:AstExpression, names:Map<String, Bool>):Void
@@ -2118,7 +2120,7 @@ class Typer {
 				return;
 			case StringLiteral(_, _):
 				return;
-			case BoolLiteral(_, _), NullLiteral(_):
+			case BoolLiteral(_, _), NullLiteral(_), Unreachable(_):
 				return;
 		}
 

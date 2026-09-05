@@ -824,6 +824,7 @@ class IrGenerator {
 			case TEnumConstruct(name, index,
 				arguments): builder.makeEnum(name, index, [for (argument in arguments) lowerExpression(argument, builder, localTypes)]);
 			case TNullLiteral: throw "Uncoerced null literal";
+			case TUnreachable: unreachableValue(lowerType(expression.type), builder);
 			case TClassRef(_): throw "Class references are only valid for static members";
 			case TStaticField(name, field): builder.globalGet(name + "." + field, lowerType(expression.type));
 			case TNullableWrap(value):

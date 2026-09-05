@@ -96,6 +96,7 @@ enum AstExpression {
 	StringLiteral(value:String, span:SourceSpan);
 	BoolLiteral(value:Bool, span:SourceSpan);
 	NullLiteral(span:SourceSpan);
+	Unreachable(span:SourceSpan);
 	Variable(name:String, span:SourceSpan);
 	Member(object:AstExpression, name:String, span:SourceSpan);
 	Add(left:AstExpression, right:AstExpression, span:SourceSpan);

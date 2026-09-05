@@ -1149,6 +1149,10 @@ class Parser {
 	function parseSwitchExpressionBranch():AstExpression {
 		var statements = [], start = current().span;
 		while (true) {
+			if (atSwitchBranchEnd() && statements.length > 0 && statementTerminates(statements[statements.length - 1])) {
+				var end = statementSpan(statements[statements.length - 1]);
+				return BlockExpression(statements, Unreachable(end), start.merge(end));
+			}
 			if (isStatementOnlyStart(current().kind)) {
 				appendStatements(statements, parseStatements());
 				continue;
@@ -1170,6 +1174,13 @@ class Parser {
 
 	function atSwitchBranchEnd():Bool
 		return check(TokenKind.Case) || check(TokenKind.Default) || check(TokenKind.RightBrace);
+
+	static function statementTerminates(statement:AstStatement):Bool
+		return switch statement {
+			case Return(_, _), ReturnVoid(_), Throw(_, _): true;
+			case If(_, yes, no, _): no.length > 0 && statementTerminates(yes[yes.length - 1]) && statementTerminates(no[no.length - 1]);
+			default: false;
+		};
 
 	static function isStatementOnlyStart(kind:TokenKind):Bool
 		return switch kind {
@@ -1406,13 +1417,13 @@ class Parser {
 
 	static function expressionSpan(expression:AstExpression)
 		return switch expression {
-			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), BoolLiteral(_, span), NullLiteral(span), Variable(_, span),
-				Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span), Div(_, _, span), Mod(_, _, span), BitAnd(_, _, span),
-				BitXor(_, _, span), BitOr(_, _, span), ShiftLeft(_, _, span), ShiftRight(_, _, span), UnsignedShiftRight(_, _, span), Negate(_, span),
-				Less(_, _, span), LessEqual(_, _, span), Greater(_, _, span), GreaterEqual(_, _, span), Equal(_, _, span), NotEqual(_, _, span), Not(_, span),
-				Call(_, _, span), MethodCall(_, _, _, span), New(_, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span),
-				PostfixIncrement(_, _, span), Lambda(_, _, span), And(_, _, span), Or(_, _, span), Conditional(_, _, _, span), BlockExpression(_, _, span),
-				ThrowExpression(_, span), SwitchExpression(_, _, _, span), Cast(_, _, span): span;
+			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), BoolLiteral(_, span), NullLiteral(span), Unreachable(span),
+				Variable(_, span), Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span), Div(_, _, span), Mod(_, _, span),
+				BitAnd(_, _, span), BitXor(_, _, span), BitOr(_, _, span), ShiftLeft(_, _, span), ShiftRight(_, _, span), UnsignedShiftRight(_, _, span),
+				Negate(_, span), Less(_, _, span), LessEqual(_, _, span), Greater(_, _, span), GreaterEqual(_, _, span), Equal(_, _, span),
+				NotEqual(_, _, span), Not(_, span), Call(_, _, span), MethodCall(_, _, _, span), New(_, _, span), NewArray(_, _, span), NewMap(_, _, span),
+				Index(_, _, span), PostfixIncrement(_, _, span), Lambda(_, _, span), And(_, _, span), Or(_, _, span), Conditional(_, _, _, span),
+				BlockExpression(_, _, span), ThrowExpression(_, span), SwitchExpression(_, _, _, span), Cast(_, _, span): span;
 			case ObjectLiteral(_, span), ArrayLiteral(_, span), MapLiteral(_, span), ArrayComprehension(_, _, _, _, _, span),
 				MapComprehension(_, _, _, _, _, _, span), Range(_, _, span): span;
 		}

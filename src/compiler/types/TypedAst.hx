@@ -24,6 +24,7 @@ enum TypedExpressionKind {
 	TEnumLiteral(name:String, index:Int);
 	TEnumConstruct(name:String, index:Int, arguments:Array<TypedExpression>);
 	TNullLiteral;
+	TUnreachable;
 	TNullableWrap(value:TypedExpression);
 	TToDynamic(value:TypedExpression);
 	TLocal(name:String);
