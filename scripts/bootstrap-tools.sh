@@ -9,12 +9,14 @@ hashlink_source="$root_dir/vendor/hashlink"
 formatter_dir="$tools_dir/formatter"
 formatter_version="1.18.0"
 formatter_sha256="2d29c9b56e54b2643e07ee64003c3fc30a5bc133bdcb4cc15c48f09acda7a047"
+haxe_sha256="a156b3d039daa572f1f9329870ee753e3c39b7514fe8c818069323579659acca"
 
 mkdir -p "$tools_dir"
 
 if [[ ! -x "$haxe_dir/haxe" ]]; then
     archive="$tools_dir/haxe-4.3.7-linux64.tar.gz"
     curl -fL https://github.com/HaxeFoundation/haxe/releases/download/4.3.7/haxe-4.3.7-linux64.tar.gz -o "$archive"
+	echo "$haxe_sha256  $archive" | sha256sum --check
     unpack_dir=$(mktemp -d)
     tar -xzf "$archive" -C "$unpack_dir"
     mv "$unpack_dir"/haxe_* "$haxe_dir"

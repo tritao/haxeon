@@ -1,0 +1,22 @@
+name: compiler-and-runtime
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential curl unzip nodejs libpcre2-dev libuv1-dev
+      - name: Bootstrap pinned tools
+        run: scripts/bootstrap-tools.sh
+      - name: Compiler, differential, and runtime gates
+        run: scripts/test-poc.sh
+      - name: Hot reload gate
+        run: test-hot-reload.sh
