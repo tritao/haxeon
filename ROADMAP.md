@@ -38,7 +38,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 	lowered to a bounds-checked SSA loop with `break`/`continue` control edges. ABI-backed `Map<String,Int|Bool|Float|String>`
 	and `Map<Int,Int|Bool|Float|String>` specializations support construction,
 	indexed set/get, `set`, `exists`, key-array iteration, `remove`, and `clear`;
-	broader key/value collections and iterator compatibility remain future work.
+	immutable `copy`/`concat` now cover primitive, string, and reference arrays;
+	growable mutation and broader key/value collections remain future work.
 	Our HashLink fork
 	enforces bounds in the JIT.
 - [~] Explicit `Null<T>` values for reference types lower to HashLink's native
