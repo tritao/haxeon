@@ -435,6 +435,8 @@ class Compiler {
 					resolved = module == entry && name == "main" ? "main" : module + "." + name;
 				Call(resolved, [for (a in args) canonicalExpression(a, module, entry, locals)], s);
 			case New(typeName, args, s): New(typeName, [for (a in args) canonicalExpression(a, module, entry, locals)], s);
+			case Lambda(arguments, body, s):
+				Lambda(arguments, [for (statement in body) canonicalStatement(statement, module, entry, locals)], s);
 		}
 
 	static function scanStatement(s, dependencies):Void
@@ -513,6 +515,9 @@ class Compiler {
 			case New(_, args, _):
 				for (a in args)
 					scanCallExpression(a, calls, aliases);
+			case Lambda(_, body, _):
+				for (statement in body)
+					scanCalls(statement, calls, aliases);
 			default:
 		}
 

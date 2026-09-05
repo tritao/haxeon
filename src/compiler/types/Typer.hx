@@ -23,6 +23,8 @@ class Typer {
 	final methodInfo:Map<String, {owner:String, isStatic:Bool, isConstructor:Bool}> = [];
 	final externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>;
 	var classDecls:Map<String, AstClass> = [];
+	final generated:Array<TypedFunction> = [];
+	var lambdaCounter:Int = 0;
 
 	public static function type(program:AstProgram):TypedProgram
 		return new Typer(null).typeProgram(program, null);
@@ -72,6 +74,8 @@ class Typer {
 			for (method in classDecl.methods)
 				if (selected == null || selected.exists(method.name))
 					typedFunctions.push(method);
+		for (lambda in generated)
+			typedFunctions.push(lambda);
 		return {
 			classes: typedClasses,
 			functions: typedFunctions
@@ -210,6 +214,40 @@ class Typer {
 						new TypedExpression(TField(object, fieldName), field, span);
 					}
 				}
+			case Lambda(arguments, body, span):
+				var lambdaArguments = [
+					for (argument in arguments)
+						{name: argument.name, type: lowerType(argument.type)}
+				], lambdaScope = new Scope();
+				for (argument in lambdaArguments)
+					lambdaScope.define(argument.name, argument.type, span);
+				var inferredResult:CompilerType = TVoid;
+				for (statement in body)
+					switch statement {
+						case Return(value, _):
+							var typedValue = typeExpression(value, lambdaScope);
+							if (inferredResult == TVoid) inferredResult = typedValue.type; else if (!sameType(inferredResult,
+								typedValue.type)) fail("E1003", "Lambda return types do not match", span);
+						default:
+					}
+				var typedBodyScope = new Scope();
+				for (argument in lambdaArguments)
+					typedBodyScope.define(argument.name, argument.type, span);
+				var lambdaName = '$' + 'lambda' + lambdaCounter++,
+					typedBody = typeStatements(body, typedBodyScope, inferredResult);
+				if (inferredResult != TVoid && !alwaysReturns(typedBody))
+					fail("E1006", 'Function $lambdaName does not return on every path', span);
+				generated.push({
+					name: lambdaName,
+					owner: null,
+					isStatic: true,
+					isConstructor: false,
+					arguments: lambdaArguments,
+					result: inferredResult,
+					statements: typedBody,
+					span: span
+				});
+				new TypedExpression(TLambda(lambdaName), TFunction([for (argument in lambdaArguments) argument.type], inferredResult), span);
 			case Add(left, right, span): arithmetic(left, right, scope, true, span);
 			case Sub(left, right, span): arithmetic(left, right, scope, false, span);
 			case Mul(left, right, span): numeric(left, right, scope, 2, span);

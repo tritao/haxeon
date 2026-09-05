@@ -21,6 +21,7 @@ enum TypedExpressionKind {
 	TStringLiteral(value:String);
 	TLocal(name:String);
 	TFunctionRef(name:String);
+	TLambda(name:String);
 	TAdd(left:TypedExpression, right:TypedExpression);
 	TSub(left:TypedExpression, right:TypedExpression);
 	TMul(left:TypedExpression, right:TypedExpression);

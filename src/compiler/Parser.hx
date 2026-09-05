@@ -251,6 +251,25 @@ class Parser {
 			var end = consume(TokenKind.RightParen).span;
 			return New(typeName, arguments, start.merge(end));
 		}
+		if (check(TokenKind.LeftParen)) {
+			var saved = position, start = current().span;
+			advance();
+			var arguments = [];
+			if (!check(TokenKind.RightParen)) {
+				do {
+					var argumentStart = current().span,
+						argumentName = consume(TokenKind.Identifier).text;
+					consume(TokenKind.Colon);
+					arguments.push({name: argumentName, type: parseType(), span: argumentStart.merge(previous().span)});
+				} while (match(TokenKind.Comma));
+			}
+			consume(TokenKind.RightParen);
+			if (match(TokenKind.Arrow)) {
+				var body = parseStatementOrBlock();
+				return Lambda(arguments, body, start.merge(body.length == 0 ? previous().span : statementSpan(body[body.length - 1])));
+			}
+			position = saved;
+		}
 		if (match(TokenKind.This)) {
 			var start = previous().span, name = "this";
 			while (match(TokenKind.Dot))
@@ -346,7 +365,7 @@ class Parser {
 	static function expressionSpan(expression:AstExpression)
 		return switch expression {
 			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), Variable(_, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span),
-				Div(_, _, span), Less(_, _, span), LessEqual(_, _, span), Equal(_, _, span), Call(_, _, span), New(_, _, span): span;
+				Div(_, _, span), Less(_, _, span), LessEqual(_, _, span), Equal(_, _, span), Call(_, _, span), New(_, _, span), Lambda(_, _, span): span;
 		}
 
 	static function decodeString(text:String):String {

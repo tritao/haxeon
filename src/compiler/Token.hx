@@ -39,6 +39,7 @@ enum TokenKind {
 	Assign;
 	Plus;
 	Minus;
+	Arrow;
 	Star;
 	Slash;
 	Less;

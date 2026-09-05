@@ -90,7 +90,11 @@ class Lexer {
 						TokenKind.LessEqual;
 					} else TokenKind.Less;
 				case "+": TokenKind.Plus;
-				case "-": TokenKind.Minus;
+				case "-":
+					if (position < source.length && source.charAt(position) == ">") {
+						position++;
+						TokenKind.Arrow;
+					} else TokenKind.Minus;
 				case "*": TokenKind.Star;
 				case "/": TokenKind.Slash;
 				default: throw new CompileError(new Diagnostic("E0001", 'Unexpected character "${String.fromCharCode(code)}"', file.span(start, position)));

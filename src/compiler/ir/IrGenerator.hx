@@ -143,6 +143,7 @@ class IrGenerator {
 					throw 'Missing typed local "$name"';
 				builder.load(name, type);
 			case TFunctionRef(name): builder.staticClosure(name, lowerType(expression.type));
+			case TLambda(name): builder.staticClosure(name, lowerType(expression.type));
 			case TAdd(a, b): builder.add(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TSub(a, b): builder.sub(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TMul(a, b): builder.mul(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
