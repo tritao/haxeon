@@ -150,3 +150,6 @@ of the proof-of-concept test suite.
 `./scripts/bootstrap-status.sh` runs the real lexer, parser, and typer over the
 compiler source tree and reports bootstrap progress. Add `--json` for a
 machine-readable dashboard.
+
+The staged architecture, reload rules, and Pragtical conversion gates are
+tracked in [ROADMAP.md](ROADMAP.md).
