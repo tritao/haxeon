@@ -347,13 +347,16 @@ class Parser {
 			consume(TokenKind.LeftBrace);
 			var cases = [];
 			while (match(TokenKind.Case)) {
-				var caseStart = previous().span, value = parseExpression();
+				var caseStart = previous().span, values = [parseExpression()];
+				while (match(TokenKind.Comma))
+					values.push(parseExpression());
 				consume(TokenKind.Colon);
 				var statements = [];
 				while (!check(TokenKind.RightBrace) && !check(TokenKind.Case) && !check(TokenKind.Default))
 					appendStatements(statements, parseStatements());
-				var caseEnd = statements.length == 0 ? expressionSpan(value) : statementSpan(statements[statements.length - 1]);
-				cases.push({value: value, statements: statements, span: caseStart.merge(caseEnd)});
+				var caseEnd = statements.length == 0 ? expressionSpan(values[values.length - 1]) : statementSpan(statements[statements.length - 1]);
+				for (value in values)
+					cases.push({value: value, statements: statements, span: caseStart.merge(caseEnd)});
 			}
 			var defaultBranch = [], hasDefault = match(TokenKind.Default);
 			if (hasDefault) {
@@ -696,11 +699,14 @@ class Parser {
 		consume(TokenKind.LeftBrace);
 		var cases = [];
 		while (match(TokenKind.Case)) {
-			var caseStart = previous().span, value = parseExpression();
+			var caseStart = previous().span, values = [parseExpression()];
+			while (match(TokenKind.Comma))
+				values.push(parseExpression());
 			consume(TokenKind.Colon);
 			var result = parseExpression();
 			match(TokenKind.Semicolon);
-			cases.push({value: value, result: result, span: caseStart.merge(expressionSpan(result))});
+			for (value in values)
+				cases.push({value: value, result: result, span: caseStart.merge(expressionSpan(result))});
 		}
 		var fallback = null;
 		if (match(TokenKind.Default)) {

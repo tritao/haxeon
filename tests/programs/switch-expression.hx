@@ -5,8 +5,7 @@ enum Choice {
 
 function main():Int {
 	var number = switch (2) {
-		case 1: 1;
-		case 2: 40;
+		case 1, 2: 40;
 		default: 0;
 	};
 	var text = switch "yes" {

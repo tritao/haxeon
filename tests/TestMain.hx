@@ -163,6 +163,7 @@ class TestMain {
 		expectCompileError('function main():Int { return switch 1 { case 1: 42; }; }', 'Switch expression requires a default branch');
 		expectCompileError('function main():Int { return switch 1 { case 1: 42; default: "wrong"; }; }', 'Type mismatch for switch branch');
 		expectCompileError('function main():Int { return switch 1 { case 1: 40; case 1: 2; default: 0; }; }', 'Duplicate switch case');
+		Frontend.compile('function main():Int { var value = switch 2 { case 1, 2: 42; default: 0; }; switch (value) { case 41, 42: return value; default: return 0; } }');
 		expectCompileError('function text():String { return "hello"; } function main():Int { var value:Float = 1.25; var wrong:String = value; return 0; }',
 			'Type mismatch for local "wrong"');
 		expectCompileError('function main():Int { missing = 1; return 0; }', 'Unknown variable "missing"');
