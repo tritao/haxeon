@@ -4,18 +4,24 @@ class LanguageServiceMain {
 	static function main():Void {
 		var service = new LanguageService();
 		service.update("Main.hx",
-			"class Editor { public var active:Int; public function open():Void { return; } } function main():Int { var editor = new Editor(); editor.open(); return 42; }");
+			"typedef Count = Int; interface Plugin { function activate():Void; } class Editor { public var active:Int; public function open():Void { return; } } function main():Int { var editor = new Editor(); editor.open(); return 42; }");
 		service.compile("Main");
 		var symbols = service.documentSymbols("Main.hx"),
 			foundClass = false,
-			foundMethod = false;
+			foundMethod = false,
+			foundAlias = false,
+			foundInterface = false;
 		for (symbol in symbols) {
 			if (symbol.name == "Editor" && symbol.kind == "class")
 				foundClass = true;
 			if (symbol.name == "open" && symbol.kind == "method" && symbol.detail == "open():Void")
 				foundMethod = true;
+			if (symbol.name == "Count" && symbol.kind == "type")
+				foundAlias = true;
+			if (symbol.name == "Plugin" && symbol.kind == "interface")
+				foundInterface = true;
 		}
-		if (!foundClass || !foundMethod)
+		if (!foundClass || !foundMethod || !foundAlias || !foundInterface)
 			throw "language service did not expose document symbols";
 		var source = service.compiler.modules.get("Main").source.text,
 			completion = service.complete("Main.hx", source.length),

@@ -62,6 +62,28 @@ class LanguageService {
 				detail: '${fn.name}():${typeName(fn.result)}',
 				span: fn.span
 			});
+		for (alias in state.ast.aliases)
+			result.push({
+				name: alias.name,
+				kind: "type",
+				detail: 'typedef ${alias.name}=${typeName(alias.type)}',
+				span: alias.span
+			});
+		for (interfaceDecl in state.ast.interfaces) {
+			result.push({
+				name: interfaceDecl.name,
+				kind: "interface",
+				detail: 'interface ${interfaceDecl.name}',
+				span: interfaceDecl.span
+			});
+			for (method in interfaceDecl.methods)
+				result.push({
+					name: method.name,
+					kind: "method",
+					detail: '${method.name}():${typeName(method.result)}',
+					span: method.span
+				});
+		}
 		for (classDecl in state.ast.classes) {
 			result.push({
 				name: classDecl.name,
