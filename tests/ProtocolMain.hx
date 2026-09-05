@@ -10,6 +10,13 @@ class ProtocolMain {
 		if (!compiled.ok
 			|| compiled.result.revision != 1
 			|| compiled.result.requiresReload
+			|| compiled.result.compatibility.schemaVersion != 1
+			|| compiled.result.compatibility.decision != "initial_load"
+			|| compiled.result.compatibility.baseRevision != 0
+			|| compiled.result.compatibility.targetRevision != 1
+			|| compiled.result.compatibility.artifactKind != "module"
+			|| compiled.result.compatibility.domainIdentity == null
+			|| compiled.result.compatibility.reasons.length != 0
 			|| compiled.result.moduleBase64 == null
 			|| compiled.result.moduleBase64.length == 0
 			|| compiled.result.runtimeIdentityBase64 == null
@@ -46,9 +53,27 @@ class ProtocolMain {
 		var editedSource = StringTools.replace(source, "return 42", "return 41");
 		assertOk(protocol.handle('{"id":7,"method":"update","path":"Main.hx","source":' + Json.stringify(editedSource) + '}'));
 		var patched:Dynamic = Json.parse(protocol.handle('{"id":8,"method":"compile","entry":"Main"}'));
-		if (!patched.ok || patched.result.requiresReload || !patched.result.patchAvailable || patched.result.patchBase64 == null
-			|| patched.result.patchBase64.length == 0)
+		if (!patched.ok
+			|| patched.result.requiresReload
+			|| !patched.result.patchAvailable
+			|| patched.result.patchBase64 == null
+			|| patched.result.patchBase64.length == 0
+			|| patched.result.compatibility.decision != "patch"
+			|| patched.result.compatibility.baseRevision != 1
+			|| patched.result.compatibility.targetRevision != 2
+			|| patched.result.compatibility.artifactKind != "patch")
 			throw "protocol compile did not transport a compatible patch";
+		var structuralSource = StringTools.replace(editedSource, "public var active:Int;", "public var active:Int; public var generation:Int;");
+		assertOk(protocol.handle('{"id":81,"method":"update","path":"Main.hx","source":' + Json.stringify(structuralSource) + '}'));
+		var reload:Dynamic = Json.parse(protocol.handle('{"id":82,"method":"compile","entry":"Main"}'));
+		if (!reload.ok
+			|| reload.result.compatibility.decision != "reload_domain"
+			|| reload.result.compatibility.artifactKind != "module"
+			|| reload.result.compatibility.reasons.length == 0
+			|| reload.result.compatibility.reasons[0].code != "object_layout_changed"
+			|| reload.result.compatibility.reasons[0].entityKind != "object"
+			|| reload.result.compatibility.reasons[0].entityId != "Editor")
+			throw "protocol compile did not return a structured reload decision";
 		var invalid:Dynamic = Json.parse(protocol.handle('{"id":9,"method":"update","path":"Main.hx","source":"function main(:Int { return 0; }"}'));
 		if (!invalid.ok)
 			throw "protocol update should acknowledge unsaved edits";

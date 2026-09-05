@@ -8,6 +8,7 @@ import compiler.service.LanguageService.DocumentSymbol;
 import compiler.service.LanguageService.SymbolLocation;
 import compiler.service.LanguageService.TextEdit;
 import compiler.hl.HlWriter;
+import compiler.abi.AbiChangeSchema;
 import haxe.crypto.Base64;
 import haxe.Json;
 
@@ -53,13 +54,23 @@ class LanguageServiceProtocol {
 					result = cast {updated: true};
 				case "compile":
 					var build = service.compile(requiredString(request, "entry"), token);
+					var initialLoad = build.revision == 1 && !build.requiresReload && build.patchBytes == null,
+						artifactKind = build.patchBytes != null ? "patch" : build.requiresReload || initialLoad ? "module" : "none";
 					result = cast {
+						compatibility: {
+							schemaVersion: AbiChangeSchema.VERSION,
+							decision: build.requiresReload ? "reload_domain" : initialLoad ? "initial_load" : "patch",
+							baseRevision: build.revision - 1,
+							targetRevision: build.revision,
+							domainIdentity: Base64.encode(build.runtimeIdentity.sub(4, 16)),
+							artifactKind: artifactKind,
+							reasons: [for (reason in build.reloadReasons) AbiChangeSchema.encode(reason)]
+						},
 						revision: build.revision,
 						retyped: build.retyped,
 						regenerated: build.regenerated,
 						changedFunctions: build.changedFunctions,
 						requiresReload: build.requiresReload,
-						reloadReasons: [for (reason in build.reloadReasons) Std.string(reason)],
 						patchAvailable: build.patchBytes != null,
 						moduleBase64: Base64.encode(HlWriter.encode(build.module)),
 						patchBase64: build.patchBytes == null ? null : Base64.encode(build.patchBytes),
