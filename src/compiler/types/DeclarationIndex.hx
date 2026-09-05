@@ -111,6 +111,7 @@ class DeclarationIndex {
 				TDynamic;
 			case NativeAbstractType(name): TNativeAbstract(name);
 			case NamedType("Dynamic"): TDynamic;
+			case NamedType("hl.Bytes"), NamedType("haxe.io.Bytes"): TBytes;
 			case NamedType(name):
 				var substitution = substitutions.get(name),
 					alias = aliases.get(name);
@@ -158,6 +159,7 @@ class DeclarationIndex {
 			case TBool: "Bool";
 			case TFloat: "Float";
 			case TString: "String";
+			case TBytes: "Bytes";
 			case TDynamic: "Dynamic";
 			case TNativeAbstract(name): 'hl.Abstract<$name>';
 			case TNever: "Never";

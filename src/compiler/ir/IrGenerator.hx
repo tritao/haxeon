@@ -461,12 +461,19 @@ class IrGenerator {
 			allFunctions.unshift(staticInitializer);
 		for (fn in allFunctions)
 			program.functions.push(fn);
+		var mainFunction:Null<IrFunction> = null;
+		for (fn in allFunctions)
+			if (fn.name == "main" || fn.name == "Main.main")
+				mainFunction = fn;
+		if (mainFunction == null)
+			throw "IR program has no executable entry point";
 		var entry = new IrBuilder();
 		if (staticInitializer != null)
 			entry.call("__init", [], Void);
-		var result = entry.call("main", [], I32);
-		var exited = entry.call("__exit", [result], Void);
-		entry.returnValue(exited);
+		var result = entry.call(mainFunction.name, [], mainFunction.result);
+		if (mainFunction.result == I32)
+			result = entry.call("__exit", [result], Void);
+		entry.returnValue(result);
 		program.functions.push(new IrFunction("__entry", [], Void, entry.blocks));
 		return program;
 	}
@@ -1352,6 +1359,7 @@ class IrGenerator {
 			case TBool: Bool;
 			case TFloat: F64;
 			case TString: Bytes;
+			case TBytes: Bytes;
 			case TDynamic: Dyn;
 			case TNativeAbstract(name): Abstract(name);
 			case TNever: throw "Never must be coerced before lowering";

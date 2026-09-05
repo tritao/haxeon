@@ -54,7 +54,7 @@ class Typer {
 			?externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>):TypedProgram
 		return new Typer(externals).typeProgram(program, selected, true);
 
-	function new(externals)
+	function new(externals:Null<Map<String, {arguments:Array<CompilerType>, result:CompilerType}>>)
 		this.externals = externals == null ? [] : externals;
 
 	function typeProgram(program:AstProgram, selected:Null<Map<String, Bool>>, requireMain:Bool):TypedProgram {
@@ -103,8 +103,10 @@ class Typer {
 		}
 		if (requireMain) {
 			var main = signatures.get("main");
-			if (main == null || main.arguments.length != 0 || lowerType(main.result) != TInt)
-				throw "Program must define function main():Int";
+			if (main == null)
+				main = signatures.get("Main.main");
+			if (main == null || main.arguments.length != 0 || (lowerType(main.result) != TInt && lowerType(main.result) != TVoid))
+				throw "Program must define main():Int or static Main.main():Void";
 		}
 		var typedEnums = [
 			for (enumDecl in program.enums)
@@ -130,7 +132,7 @@ class Typer {
 					bases: interfaceDecl.bases,
 					methods: [
 						for (method in interfaceDecl.methods)
-							{name: method.name, arguments: [for (argument in method.arguments) lowerType(argument.type)], result: lowerType(method.result)}
+							{name: method.name, arguments: [for (argument in method.arguments) argumentType(argument)], result: lowerType(method.result)}
 					]
 				}
 			], typedClasses = [for (classDecl in program.classes) typeClass(classDecl, classDecls, selected)], typedFunctions:Array<TypedFunction> = [];
@@ -331,7 +333,7 @@ class Typer {
 			scope.define("this", TClass(owner), fn.span);
 		var arguments = [];
 		for (argument in fn.arguments) {
-			var type = lowerType(argument.type);
+			var type = argumentType(argument);
 			scope.define(argument.name, type, argument.span);
 			if (context.cells.exists(argument.name))
 				context.cellTypes.set(argument.name, type);
@@ -1261,10 +1263,11 @@ class Typer {
 						for (field in classDecls.get(typeName).fields)
 							if (!field.isStatic && field.initializer != null) field
 					].length > 0,
-					expected = constructor == null ? [] : [for (argument in constructor.arguments) lowerType(argument.type)];
-				if (arguments.length != expected.length)
-					fail("E1008", 'Constructor "$typeName" expects ${expected.length} arguments, got ${arguments.length}', span);
-				var typed = typeCallArguments(arguments, expected, scope, typeName + ".new");
+					expected = constructor == null ? [] : [for (argument in constructor.arguments) argumentType(argument)];
+				if (constructor == null && arguments.length != 0)
+					fail("E1008", 'Constructor "$typeName" expects 0 arguments, got ${arguments.length}', span);
+				var typed = constructor == null ? typeCallArguments(arguments, expected, scope,
+					typeName + ".new") : typeDeclaredCallArguments(arguments, constructor.arguments, scope, typeName + ".new", span);
 				new TypedExpression(TNew(typeName, typed, constructor != null || implicitConstructor), TClass(typeName), span);
 			case NewArray(element, length, span):
 				var typedLength = typeExpression(length, scope);
@@ -1372,10 +1375,7 @@ class Typer {
 							var specialized = specializeGeneric(methodKey, method, genericArguments, span, methodInfoResult.owner, true);
 							return new TypedExpression(TCall(specialized.name, specialized.arguments), specialized.result, span);
 						}
-						var expected = [for (argument in method.arguments) lowerType(argument.type)];
-						if (arguments.length != expected.length)
-							fail("E1008", 'Function "$methodKey" expects ${expected.length} arguments, got ${arguments.length}', span);
-						var typed = typeCallArguments(arguments, expected, scope, methodKey);
+						var typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span);
 						new TypedExpression(TMethodCall(receiver, methodKey, typed), lowerType(method.result), span);
 					} else {
 						var signature = signatures.get(name);
@@ -1387,13 +1387,14 @@ class Typer {
 							return new TypedExpression(TCall(specialized.name, specialized.arguments), specialized.result, span);
 						}
 						var external = externals.get(name),
-							expectedArguments = signature == null ? (external == null ? null : external.arguments) : [for (argument in signature.arguments) lowerType(argument.type)],
+							expectedArguments = signature == null ? (external == null ? null : external.arguments) : [for (argument in signature.arguments) argumentType(argument)],
 							result = signature == null ? (external == null ? null : external.result) : lowerType(signature.result);
 						if (expectedArguments == null)
 							fail("E1007", 'Unknown function "$name"', span);
-						if (arguments.length != expectedArguments.length)
+						if (signature == null && arguments.length != expectedArguments.length)
 							fail("E1008", 'Function "$name" expects ${expectedArguments.length} arguments, got ${arguments.length}', span);
-						var typed = typeCallArguments(arguments, expectedArguments, scope, name);
+						var typed = signature == null ? typeCallArguments(arguments, expectedArguments, scope,
+							name) : typeDeclaredCallArguments(arguments, signature.arguments, scope, name, span);
 						new TypedExpression(TCall(name, typed), result, span);
 					}
 				}
@@ -1575,11 +1576,7 @@ class Typer {
 			fail("E1007", 'Unknown instance method "$className.$name"', span);
 		var methodKey = methodInfoResult.owner + "." + name,
 			method = signatures.get(methodKey),
-			expected = [for (argument in method.arguments) lowerType(argument.type)],
-			typed = [for (argument in arguments) typeExpression(argument, scope)];
-		if (typed.length != expected.length)
-			fail("E1008", 'Function "$methodKey" expects ${expected.length} arguments, got ${typed.length}', span);
-		typed = coerceArguments(typed, expected, methodKey);
+			typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span);
 		return new TypedExpression(TMethodCall(receiver, methodKey, typed), lowerType(method.result), span);
 	}
 
@@ -1760,7 +1757,7 @@ class Typer {
 		};
 
 	function functionType(fn:AstFunction):CompilerType
-		return TFunction([for (argument in fn.arguments) lowerType(argument.type)], lowerType(fn.result));
+		return TFunction([for (argument in fn.arguments) argumentType(argument)], lowerType(fn.result));
 
 	static function collectAssignedLocals(statements:Array<AstStatement>, names:Map<String, Bool>):Void {
 		for (statement in statements)
@@ -2150,6 +2147,34 @@ class Typer {
 		return coerceArguments(typed, expected, name);
 	}
 
+	function typeDeclaredCallArguments(arguments:Array<AstExpression>, parameters:Array<compiler.Ast.AstArgument>, scope:Scope, name:String,
+			span:SourceSpan):Array<TypedExpression> {
+		var required = parameters.length;
+		while (required > 0 && parameters[required - 1].optional)
+			required--;
+		if (arguments.length < required || arguments.length > parameters.length) {
+			var expected = required == parameters.length ? '$required' : '$required to ${parameters.length}';
+			fail("E1008", 'Function "$name" expects $expected arguments, got ${arguments.length}', span);
+		}
+		var typed = [
+			for (i in 0...arguments.length)
+				typeExpression(arguments[i], scope, argumentType(parameters[i]))
+		];
+		for (i in arguments.length...parameters.length) {
+			var parameter = parameters[i], expected = argumentType(parameter);
+			if (parameter.defaultValue == null)
+				typed.push(coerce(new TypedExpression(TNullLiteral, TNull, span), expected, 'default argument ${i + 1} to "$name"'));
+			else
+				typed.push(coerce(typeExpression(parameter.defaultValue, scope, expected), expected, 'default argument ${i + 1} to "$name"'));
+		}
+		return coerceArguments(typed, [for (parameter in parameters) argumentType(parameter)], name);
+	}
+
+	function argumentType(argument:compiler.Ast.AstArgument):CompilerType {
+		var type = lowerType(argument.type);
+		return argument.optional && argument.defaultValue == null ? TNullable(type) : type;
+	}
+
 	function coerce(value:TypedExpression, expected:CompilerType, context:String, code:String = "E1009"):TypedExpression {
 		if (value.type == TNever)
 			return new TypedExpression(value.expression, expected, value.span);
@@ -2270,7 +2295,7 @@ class Typer {
 			default: null;
 		};
 
-	function arithmetic(a, b, scope, add, span):TypedExpression {
+	function arithmetic(a:AstExpression, b:AstExpression, scope:Scope, add:Bool, span:SourceSpan):TypedExpression {
 		var left = typeExpression(a, scope), right = typeExpression(b, scope);
 		if (add && sameType(left.type, TString) && sameType(right.type, TString))
 			return new TypedExpression(TAdd(left, right), TString, span);
@@ -2279,7 +2304,7 @@ class Typer {
 		return new TypedExpression(add ? TAdd(left, right) : TSub(left, right), left.type, span);
 	}
 
-	function logical(a, b, scope, and, span):TypedExpression {
+	function logical(a:AstExpression, b:AstExpression, scope:Scope, and:Bool, span:SourceSpan):TypedExpression {
 		var left = typeExpression(a, scope),
 			rightScope = narrowedScope(scope, left, and),
 			right = typeExpression(b, rightScope);
@@ -2288,21 +2313,21 @@ class Typer {
 		return new TypedExpression(and ? TAnd(left, right) : TOr(left, right), TBool, span);
 	}
 
-	function numeric(a, b, scope, operation, span):TypedExpression {
+	function numeric(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan):TypedExpression {
 		var left = typeExpression(a, scope), right = typeExpression(b, scope);
 		if (!sameType(left.type, right.type) || (!sameType(left.type, TInt) && !sameType(left.type, TFloat)))
 			fail("E1010", "Arithmetic requires matching Int or Float operands", span);
 		return new TypedExpression(operation == 2 ? TMul(left, right) : TDiv(left, right), left.type, span);
 	}
 
-	function modulo(a, b, scope, span):TypedExpression {
+	function modulo(a:AstExpression, b:AstExpression, scope:Scope, span:SourceSpan):TypedExpression {
 		var left = typeExpression(a, scope), right = typeExpression(b, scope);
 		if (!sameType(left.type, TInt) || !sameType(right.type, TInt))
 			fail("E1010", "Modulo requires matching Int operands", span);
 		return new TypedExpression(TMod(left, right), TInt, span);
 	}
 
-	function bitwise(a, b, scope, operation:Int, span):TypedExpression {
+	function bitwise(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan):TypedExpression {
 		var left = typeExpression(a, scope), right = typeExpression(b, scope);
 		if (!sameType(left.type, TInt) || !sameType(right.type, TInt))
 			fail("E1010", "Bitwise operators require Int operands", span);
@@ -2317,7 +2342,7 @@ class Typer {
 		return new TypedExpression(expression, TInt, span);
 	}
 
-	function comparison(a, b, scope, operation, span):TypedExpression {
+	function comparison(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan):TypedExpression {
 		var left = typeExpression(a, scope), right = typeExpression(b, scope);
 		if (operation == 2) {
 			if (sameType(left.type, TNull) && isNullable(right.type))

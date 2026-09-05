@@ -13,6 +13,7 @@ class SemanticSignature {
 			case TBool: "Bool";
 			case TFloat: "Float";
 			case TString: "String";
+			case TBytes: "Bytes";
 			case TDynamic: "Dynamic";
 			case TNativeAbstract(name): 'hl.Abstract<"$name">';
 			case TNever: "Never";
