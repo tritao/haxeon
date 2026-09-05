@@ -155,17 +155,11 @@ DEFINE_ARRAY_INDEX_OF(bytes, vbyte *, realtime_bytes_equal(values[i], value))
 
 #define DEFINE_ARRAY_MUTATION(SUFFIX, VALUE_TYPE) \
 HL_PRIM varray *HL_NAME(__array_push_##SUFFIX)( varray *array, VALUE_TYPE value ) { \
-	int stride = hl_type_size(array->at); \
-	varray *target = array; \
-	if (array->size >= array->capacity) { \
-		target = hl_alloc_array(array->at, array->size + 1); \
-		if (array->size > 0) \
-			memcpy(hl_aptr(target, vbyte), hl_aptr(array, vbyte), (size_t)array->size * stride); \
-	} else { \
-		target->size++; \
-	} \
-	((VALUE_TYPE *)hl_aptr(target, vbyte))[target->size - 1] = value; \
-	return target; \
+	if (array->size >= array->capacity) \
+		hl_array_reserve(array, array->size + 1); \
+	array->size++; \
+	((VALUE_TYPE *)hl_aptr(array, vbyte))[array->size - 1] = value; \
+	return array; \
 } \
 HL_PRIM VALUE_TYPE HL_NAME(__array_pop_##SUFFIX)( varray *array ) { \
 	if (array->size <= 0) \

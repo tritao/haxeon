@@ -69,10 +69,12 @@ function values. They support construction, indexed set/get, `set`, `exists`,
 each HashLink abstract type and native function family is versioned with the
 compiler ABI. Array `copy`, `concat`, `slice`, and primitive/String `indexOf`
 are also compiler-owned operations, and primitive/String/reference `push`/`pop`
-use the fork's capacity-aware arrays. Local and mutable-field `push` rebinding
-is supported; alias mutation and nullable/enum key/value combinations still
-produce an explicit typed unsupported-ABI diagnostic rather than silently
-falling back to dynamic behavior.
+use the fork's capacity-aware arrays. Array growth preserves object identity, so
+aliases and fields observe the same contents after `push` or `pop`; local and
+mutable-field rebinding remains supported for source-level compatibility.
+Nullable/enum key/value combinations still produce an explicit typed
+unsupported-ABI diagnostic rather than silently falling back to dynamic
+behavior.
 
 IR values and control-flow blocks have numeric identities independent of
 source names. Functions contain explicit basic blocks terminated by `Return`,
