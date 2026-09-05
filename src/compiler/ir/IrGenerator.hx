@@ -475,6 +475,8 @@ class IrGenerator {
 			if (builder.isTerminated())
 				break;
 			switch statement {
+				case TDeclare(name, type, _):
+					localTypes.set(name, lowerType(type));
 				case TVar(name, initializer, _):
 					var value = lowerExpression(initializer, builder, localTypes),
 						cellType = localTypes.get('__cell:$name');

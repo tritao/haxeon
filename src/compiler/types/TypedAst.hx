@@ -67,6 +67,7 @@ enum TypedExpressionKind {
 }
 
 enum TypedStatement {
+	TDeclare(name:String, type:CompilerType, span:SourceSpan);
 	TVar(name:String, initializer:TypedExpression, span:SourceSpan);
 	TAssign(name:String, value:TypedExpression, span:SourceSpan);
 	TCellAssign(name:String, cellClass:String, value:TypedExpression, span:SourceSpan);

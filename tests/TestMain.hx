@@ -163,6 +163,10 @@ class TestMain {
 		expectCompileError('function text():String { return "hello"; } function main():Int { var value:Float = 1.25; var wrong:String = value; return 0; }',
 			'Type mismatch for local "wrong"');
 		expectCompileError('function main():Int { missing = 1; return 0; }', 'Unknown variable "missing"');
+		expectCompileError('function main():Int { var value:Int; return value; }', 'Local "value" may be used before assignment');
+		expectCompileError('function main():Int { var value:Int; if (true) value = 42; return value; }', 'Local "value" may be used before assignment');
+		expectCompileError('function main():Int { var value:Int; value++; return value; }', 'Local "value" may be used before assignment');
+		expectCompileError('function main():Int { var value; return 0; }', 'Uninitialized local "value" requires an explicit type');
 		expectCompileError('function main():Int { var value:Int = 1; value = "wrong"; return value; }', 'Type mismatch for local "value"');
 		expectCompileError('function main():Int { throw; }', 'Expected expression');
 		expectCompileError('function noop():Void { return; } function main():Int { throw noop(); }', 'Cannot throw a Void value');
@@ -425,6 +429,10 @@ class TestMain {
 			throw "Alias-equivalent field spelling changed the semantic layout";
 		Frontend.compile("function main():Int { var value = 40; var read = () -> { var value = 2; return value; }; return read() + value; }");
 		Frontend.compile("function main():Int { var left = 20, right:Int = 22; return left + right; }");
+		Frontend.compile("function main():Int { var value:Int; if (true) value = 40; else value = 2; return value; }");
+		Frontend.compile("function main():Int { var value:Int; switch (1) { case 1: value = 40; default: value = 2; } return value; }");
+		Frontend.compile('function main():Int { var value:Int; try { value = 42; } catch (error:Dynamic) { throw "failed"; } return value; }');
+		Frontend.compile('function main():Int { while (true) { var value:Int; try { value = 42; } catch (error:Dynamic) { break; } return value; } return 0; }');
 		Frontend.compile("class Math { public static function answer():Int return 42; } function main():Int return Math.answer();");
 		Frontend.compile("function main():Int { var convert:(Int) -> Dynamic = (value:Int) -> { return value; }; convert(42); return 42; }");
 		expectCompileError("class Box { public var value:Int; } function main():Int { var box:Null<Box> = new Box(); if (box != null) { box = null; return box.value; } return 0; }",

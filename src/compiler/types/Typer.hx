@@ -345,6 +345,12 @@ class Typer {
 			if (alwaysReturns(output))
 				fail("E1012", "Unreachable statement", statementSpan(statement));
 			switch statement {
+				case UninitializedDeclaration(name, declared, span):
+					var declaredType = lowerType(declared);
+					if (context.cells.exists(name))
+						fail("E1023", 'Captured local "$name" must be initialized at its declaration', span);
+					scope.define(name, declaredType, span, false);
+					output.push(TDeclare(scope.resolveId(name), declaredType, span));
 				case VarDeclaration(name, declared, initializer, span):
 					var declaredType = declared == null ? null : lowerType(declared),
 						value = typeExpression(initializer, scope, declaredType);
@@ -373,7 +379,9 @@ class Typer {
 						fail("E1021", "Cannot throw null", span);
 					output.push(TThrow(value, span));
 				case Try(tryBranch, catches, span):
-					var typedCatches:Array<TypedCatch> = [];
+					var typedCatches:Array<TypedCatch> = [],
+						catchScopes:Array<Scope> = [],
+						tryScope = new Scope(scope);
 					for (i in 0...catches.length) {
 						var catchClause = catches[i],
 							loweredCatchType = lowerType(catchClause.type);
@@ -384,6 +392,7 @@ class Typer {
 							default: fail("E1022", "Unsupported catch binding type", catchClause.span);
 						}
 						var catchScope = new Scope(scope);
+						catchScopes.push(catchScope);
 						catchScope.define(catchClause.name, loweredCatchType, catchClause.span);
 						typedCatches.push({
 							name: catchScope.resolveId(catchClause.name),
@@ -392,7 +401,15 @@ class Typer {
 							span: catchClause.span
 						});
 					}
-					output.push(TTry(typeStatements(tryBranch, new Scope(scope), result), typedCatches, span));
+					var typedTry = typeStatements(tryBranch, tryScope, result);
+					output.push(TTry(typedTry, typedCatches, span));
+					var continuing = [];
+					if (!alwaysExits(typedTry))
+						continuing.push(tryScope);
+					for (i in 0...typedCatches.length)
+						if (!alwaysExits(typedCatches[i].statements))
+							continuing.push(catchScopes[i]);
+					scope.mergeAssignmentsFrom(continuing);
 				case Break(span):
 					if (context.loopDepth == 0)
 						fail("E1017", "break is only valid inside a loop", span);
@@ -403,6 +420,8 @@ class Typer {
 					output.push(TContinue(span));
 				case Increment(name, delta, span):
 					var current = scope.resolve(name);
+					if (current != null && !scope.isAssigned(name))
+						fail("E1023", 'Local "$name" may be used before assignment', span);
 					if (current == null) {
 						var dot = name.indexOf("."),
 							ownerSeparator = context.name.lastIndexOf("."),
@@ -450,6 +469,7 @@ class Typer {
 								output.push(TCellAssign(name, context.cells.get(name), value, span));
 							else
 								output.push(TAssign(scope.resolveId(name), value, span));
+							scope.markAssigned(name);
 							scope.refine(name, value.type);
 						}
 					} else {
@@ -494,6 +514,14 @@ class Typer {
 						typedThen = typeStatements(thenBranch, thenScope, result),
 						typedElse = typeStatements(elseBranch, elseScope, result);
 					output.push(TIf(typedCondition, typedThen, typedElse, span));
+					var continuing = [];
+					if (!alwaysExits(typedThen))
+						continuing.push(thenScope);
+					if (elseBranch.length == 0)
+						continuing.push(scope);
+					else if (!alwaysExits(typedElse))
+						continuing.push(elseScope);
+					scope.mergeAssignmentsFrom(continuing);
 					if (elseBranch.length == 0 && alwaysReturns(typedThen))
 						refineAfterGuard(scope, typedCondition);
 				case While(condition, body, span):
@@ -528,7 +556,9 @@ class Typer {
 					var typedExpression = typeExpression(expression, scope);
 					if (!sameType(typedExpression.type, TInt) && !isEnum(typedExpression.type))
 						fail("E1019", "Switch requires an Int or enum value", typedExpression.span);
-					var typedCases = [], seenCases:Map<String, Bool> = [];
+					var typedCases = [],
+						caseScopes = [],
+						seenCases:Map<String, Bool> = [];
 					for (switchCase in cases) {
 						var caseScope = new Scope(scope),
 							pattern = typeEnumPattern(switchCase.value, typedExpression.type, caseScope),
@@ -538,6 +568,7 @@ class Typer {
 							constructorIndex = pattern == null ? -1 : pattern.index,
 							enumName:Null<String> = pattern == null ? null : pattern.enumName,
 							bindings = pattern == null ? [] : pattern.bindings;
+						caseScopes.push(caseScope);
 						if (pattern == null)
 							switch typedValue.expression {
 								case TEnumLiteral(name, index):
@@ -577,8 +608,19 @@ class Typer {
 						if (missing.length > 0)
 							fail("E1021", 'Enum switch is missing cases: ${missing.join(", ")}', span);
 					}
-					var typedDefault = typeStatements(defaultBranch, new Scope(scope), result);
+					var defaultScope = new Scope(scope),
+						typedDefault = typeStatements(defaultBranch, defaultScope, result);
 					output.push(TSwitch(typedExpression, typedCases, typedDefault, hasDefault, span));
+					var continuing = [];
+					for (i in 0...typedCases.length)
+						if (!alwaysExits(typedCases[i].statements))
+							continuing.push(caseScopes[i]);
+					if (hasDefault) {
+						if (!alwaysExits(typedDefault))
+							continuing.push(defaultScope);
+					} else if (!exhaustiveEnum(typedExpression.type, typedCases))
+						continuing.push(scope);
+					scope.mergeAssignmentsFrom(continuing);
 				case Expression(expression, span):
 					output.push(TExpression(typeExpression(expression, scope), span));
 			}
@@ -633,10 +675,14 @@ class Typer {
 			case NullLiteral(span): new TypedExpression(TNullLiteral, TNull, span);
 			case Variable(name, span):
 				var type = scope.resolve(name);
-				if (type != null) new TypedExpression(scope.isCapture(name) ? (scope.isCellCapture(name) ? TCellCaptured(name,
-					scope.cellClass(name)) : TCaptured(name)) : (context.cells.exists(name) ? TCellLocal(name,
-						context.cells.get(name)) : TLocal(name == "this" ? name : scope.resolveId(name))),
-					type, span); else {
+				if (type != null) {
+					if (!scope.isAssigned(name))
+						fail("E1023", 'Local "$name" may be used before assignment', span);
+					new TypedExpression(scope.isCapture(name) ? (scope.isCellCapture(name) ? TCellCaptured(name,
+						scope.cellClass(name)) : TCaptured(name)) : (context.cells.exists(name) ? TCellLocal(name,
+							context.cells.get(name)) : TLocal(name == "this" ? name : scope.resolveId(name))),
+						type, span);
+				} else {
 					var signature = signatures.get(name);
 					if (signature != null)
 						new TypedExpression(TFunctionRef(name), functionType(signature), span);
@@ -971,6 +1017,9 @@ class Typer {
 	function seedLambdaScope(statements:Array<AstStatement>, scope:Scope):Void {
 		for (statement in statements)
 			switch (statement) {
+				case UninitializedDeclaration(name, declared, span):
+					if (scope.resolve(name) == null)
+						scope.define(name, lowerType(declared), span, false);
 				case VarDeclaration(name, declared, initializer, span):
 					if (scope.resolve(name) == null) {
 						var value = typeExpression(initializer, scope);
@@ -1279,6 +1328,8 @@ class Typer {
 	static function collectDeclaredLocals(statements:Array<AstStatement>, names:Map<String, Bool>):Void {
 		for (statement in statements)
 			switch statement {
+				case UninitializedDeclaration(name, _, _):
+					names.set(name, true);
 				case VarDeclaration(name, _, _, _):
 					names.set(name, true);
 				case If(_, yes, no, _):
@@ -1306,6 +1357,7 @@ class Typer {
 	static function collectVariables(statements:Array<AstStatement>, names:Map<String, Bool>):Void {
 		for (statement in statements)
 			switch statement {
+				case UninitializedDeclaration(_, _, _):
 				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
 					collectExpressionVariables(expression, names);
 				case IndexAssignment(array, offset, expression, _):
@@ -1343,6 +1395,7 @@ class Typer {
 	static function collectMutableCaptureCandidates(statements:Array<AstStatement>, outerDeclared:Map<String, Bool>, result:Map<String, Bool>):Void {
 		for (statement in statements)
 			switch (statement) {
+				case UninitializedDeclaration(_, _, _):
 				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
 					collectMutableCaptureExpression(expression, outerDeclared, result);
 				case IndexAssignment(array, offset, expression, _):
@@ -1697,6 +1750,28 @@ class Typer {
 		return false;
 	}
 
+	function alwaysExits(statements:Array<TypedStatement>):Bool {
+		for (statement in statements)
+			switch statement {
+				case TReturn(_, _), TReturnVoid(_), TThrow(_, _), TBreak(_), TContinue(_):
+					return true;
+				case TIf(_, yes, no, _):
+					if (no.length > 0 && alwaysExits(yes) && alwaysExits(no))
+						return true;
+				case TTry(tryBranch, catches, _):
+					if (alwaysExits(tryBranch)
+						&& catches.length > 0
+						&& [for (catchClause in catches) alwaysExits(catchClause.statements)].indexOf(false) < 0)
+						return true;
+				case TSwitch(expression, cases, defaultBranch, hasDefault, _):
+					if ((hasDefault ? alwaysExits(defaultBranch) : exhaustiveEnum(expression.type, cases))
+						&& [for (switchCase in cases) alwaysExits(switchCase.statements)].indexOf(false) < 0)
+						return true;
+				default:
+			}
+		return false;
+	}
+
 	function exhaustiveEnum(type:CompilerType, cases:Array<TypedSwitchCase>):Bool {
 		var enumName = switch type {
 			case TEnum(name): name;
@@ -1761,9 +1836,9 @@ class Typer {
 
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
-			case VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), Throw(_, span),
-				Try(_, _, span), If(_, _, _, span), While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span), Switch(_, _, _, _, span),
-				Increment(_, _, span), Expression(_, span): span;
+			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span),
+				ReturnVoid(span), Throw(_, span), Try(_, _, span), If(_, _, _, span), While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span),
+				Switch(_, _, _, _, span), Increment(_, _, span), Expression(_, span): span;
 		}
 
 	static function fail(code:String, message:String, span:SourceSpan):Void

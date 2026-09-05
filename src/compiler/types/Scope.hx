@@ -14,6 +14,7 @@ class Scope {
 		declared:CompilerType,
 		id:String
 	}> = [];
+	final assigned:Map<String, Bool> = [];
 	final captures:Map<String, Bool> = [];
 	final cellCaptures:Map<String, Bool> = [];
 	final cellClasses:Map<String, String> = [];
@@ -23,14 +24,42 @@ class Scope {
 		facts = new FlowFacts(parent == null ? null : parent.facts);
 	}
 
-	public function define(name:String, type:CompilerType, span:SourceSpan):Void {
+	public function define(name:String, type:CompilerType, span:SourceSpan, initialized:Bool = true):Void {
 		if (values.exists(name))
 			throw new CompileError(new Diagnostic("E1001", 'Duplicate local "$name"', span));
-		values.set(name, {
+		var value = {
 			source: name,
 			declared: type,
 			id: '$' + 'l${allocateLocalId()}:$name'
-		});
+		};
+		values.set(name, value);
+		assigned.set(value.id, initialized);
+	}
+
+	public function isAssigned(name:String):Bool {
+		var value = resolveLocal(name);
+		return value != null && isAssignedId(value.id);
+	}
+
+	public function markAssigned(name:String):Void {
+		var value = resolveLocal(name);
+		if (value != null)
+			assigned.set(value.id, true);
+	}
+
+	public function mergeAssignmentsFrom(scopes:Array<Scope>):Void {
+		if (scopes.length == 0)
+			return;
+		for (value in visibleValues()) {
+			var allAssigned = true;
+			for (scope in scopes)
+				if (!scope.isAssignedId(value.id)) {
+					allAssigned = false;
+					break;
+				}
+			if (allAssigned)
+				assigned.set(value.id, true);
+		}
 	}
 
 	public function defineCapture(name:String, type:CompilerType, span:SourceSpan, cell:Bool = false, ?cellClass:String):Void {
@@ -96,6 +125,18 @@ class Scope {
 			if (value.id == id)
 				return value;
 		return parent == null ? null : parent.resolveById(id);
+	}
+
+	function isAssignedId(id:String):Bool {
+		var state = assigned.get(id);
+		return state != null ? state : parent != null && parent.isAssignedId(id);
+	}
+
+	function visibleValues():Array<{source:String, declared:CompilerType, id:String}> {
+		var result = parent == null ? [] : parent.visibleValues();
+		for (value in values)
+			result.push(value);
+		return result;
 	}
 
 	function allocateLocalId():Int

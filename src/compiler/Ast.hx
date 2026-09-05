@@ -87,6 +87,7 @@ enum AstExpression {
 }
 
 enum AstStatement {
+	UninitializedDeclaration(name:String, type:AstType, span:SourceSpan);
 	VarDeclaration(name:String, ?type:AstType, initializer:AstExpression, span:SourceSpan);
 	Assignment(name:String, expression:AstExpression, span:SourceSpan);
 	IndexAssignment(array:AstExpression, index:AstExpression, expression:AstExpression, span:SourceSpan);

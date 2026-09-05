@@ -950,6 +950,7 @@ class Compiler {
 
 	static function canonicalStatement(s, module, entry, locals, ?aliases):AstStatement
 		return switch s {
+			case UninitializedDeclaration(n, t, span): UninitializedDeclaration(n, canonicalType(t, aliases), span);
 			case VarDeclaration(n, t, e,
 				span): VarDeclaration(n, t == null ? null : canonicalType(t, aliases), canonicalExpression(e, module, entry, locals, aliases), span);
 			case Assignment(n, e, span): Assignment(n, canonicalExpression(e, module, entry, locals, aliases), span);
@@ -1130,6 +1131,8 @@ class Compiler {
 			entry:String):Void
 		for (statement in statements)
 			switch statement {
+				case UninitializedDeclaration(_, type, _):
+					addTypeDependency(result, owner, Body, type, []);
 				case VarDeclaration(_, type, expression, _):
 					if (type != null)
 						addTypeDependency(result, owner, Body, type, []);
@@ -1186,6 +1189,7 @@ class Compiler {
 
 	static function scanStatement(s, dependencies):Void
 		switch s {
+			case UninitializedDeclaration(_, _, _):
 			case VarDeclaration(_, _, e, _), Assignment(_, e, _), Return(e, _), Throw(e, _):
 				scanExpression(e, dependencies);
 			case Try(tryBranch, catches, _):
@@ -1293,6 +1297,8 @@ class Compiler {
 
 	static function scanCalls(statement:AstStatement, calls:Map<String, Bool>, aliases:Map<String, String>):Void
 		switch statement {
+			case UninitializedDeclaration(name, _, _):
+				aliases.remove(name);
 			case VarDeclaration(name, _, e, _):
 				scanCallExpression(e, calls, aliases);
 				rememberAlias(name, e, aliases);
@@ -1401,6 +1407,7 @@ class Compiler {
 	static function collectLambdas(statements:Array<AstStatement>, functionName:String, module:String, generatedByModule:Map<String, Map<String, Bool>>):Void {
 		for (statement in statements)
 			switch statement {
+				case UninitializedDeclaration(_, _, _):
 				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
 					collectLambdaExpression(expression, functionName, module, generatedByModule);
 				case Try(tryBranch, catches, _):

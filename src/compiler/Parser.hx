@@ -405,9 +405,14 @@ class Parser {
 		do {
 			var nameToken = consume(TokenKind.Identifier),
 				type = match(TokenKind.Colon) ? parseType() : null;
-			consume(TokenKind.Assign);
-			var initializer = parseExpression();
-			declarations.push(VarDeclaration(nameToken.text, type, initializer, start.merge(expressionSpan(initializer))));
+			if (match(TokenKind.Assign)) {
+				var initializer = parseExpression();
+				declarations.push(VarDeclaration(nameToken.text, type, initializer, start.merge(expressionSpan(initializer))));
+			} else {
+				if (type == null)
+					fail(current(), 'Uninitialized local "${nameToken.text}" requires an explicit type');
+				declarations.push(UninitializedDeclaration(nameToken.text, type, start.merge(previous().span)));
+			}
 		} while (match(TokenKind.Comma));
 		var end = consume(TokenKind.Semicolon).span;
 		if (declarations.length > 0) {
@@ -415,6 +420,8 @@ class Parser {
 			switch declarations[last] {
 				case VarDeclaration(name, type, initializer, _):
 					declarations[last] = VarDeclaration(name, type, initializer, start.merge(end));
+				case UninitializedDeclaration(name, type, _):
+					declarations[last] = UninitializedDeclaration(name, type, start.merge(end));
 				default:
 			}
 		}
@@ -814,8 +821,8 @@ class Parser {
 
 	static function statementSpan(statement:AstStatement)
 		return switch statement {
-			case VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), Throw(_, span),
-				Try(_, _, span), If(_, _, _, span), While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span), Switch(_, _, _, _, span),
-				Increment(_, _, span), Expression(_, span): span;
+			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span),
+				ReturnVoid(span), Throw(_, span), Try(_, _, span), If(_, _, _, span), While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span),
+				Switch(_, _, _, _, span), Increment(_, _, span), Expression(_, span): span;
 		}
 }

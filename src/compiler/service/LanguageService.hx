@@ -521,7 +521,7 @@ class LanguageService {
 			if (span.start > position)
 				break;
 			switch statement {
-				case VarDeclaration(local, _, _, declaration):
+				case UninitializedDeclaration(local, _, declaration), VarDeclaration(local, _, _, declaration):
 					if (local == name)
 						visible = declaration;
 				case If(_, yes, no, _):
@@ -559,15 +559,15 @@ class LanguageService {
 
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
-			case VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), Throw(_, span),
-				Try(_, _, span), If(_, _, _, span), While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span), Switch(_, _, _, _, span),
-				Increment(_, _, span), Expression(_, span): span;
+			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span),
+				ReturnVoid(span), Throw(_, span), Try(_, _, span), If(_, _, _, span), While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span),
+				Switch(_, _, _, _, span), Increment(_, _, span), Expression(_, span): span;
 		};
 
 	static function localDeclaration(statements:Array<AstStatement>, name:String):Null<SourceSpan> {
 		for (statement in statements)
 			switch statement {
-				case VarDeclaration(local, _, _, span):
+				case UninitializedDeclaration(local, _, span), VarDeclaration(local, _, _, span):
 					if (local == name)
 						return span;
 				case If(_, yes, no, _):
@@ -615,6 +615,9 @@ class LanguageService {
 	static function localType(statements:Array<TypedStatement>, name:String):Null<CompilerType> {
 		for (statement in statements)
 			switch statement {
+				case TDeclare(local, type, _):
+					if (sourceLocalName(local) == name)
+						return type;
 				case TVar(local, initializer, _):
 					if (sourceLocalName(local) == name)
 						return initializer.type;
