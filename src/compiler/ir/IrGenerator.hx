@@ -289,9 +289,10 @@ class IrGenerator {
 					var one = type == I32 ? builder.constInt(1) : builder.constFloat(1);
 					builder.store(name, delta > 0 ? builder.add(builder.load(name, type), one) : builder.sub(builder.load(name, type), one));
 				case TIf(condition, thenBranch, elseBranch, _):
-					var thenBlock = builder.createBlock(),
+					var conditionValue = lowerExpression(condition, builder, localTypes),
+						thenBlock = builder.createBlock(),
 						elseBlock = builder.createBlock();
-					builder.branch(lowerExpression(condition, builder, localTypes), thenBlock, elseBlock);
+					builder.branch(conditionValue, thenBlock, elseBlock);
 					builder.select(thenBlock);
 					lowerStatements(thenBranch, builder, localTypes, loops);
 					var thenActive = !builder.isTerminated(),
@@ -413,6 +414,8 @@ class IrGenerator {
 			case TLess(a, b): builder.less(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TLessEqual(a, b): builder.lessEqual(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TNot(value): builder.equal(lowerExpression(value, builder, localTypes), builder.constBool(false));
+			case TAnd(left, right): lowerLogical(left, right, true, builder, localTypes);
+			case TOr(left, right): lowerLogical(left, right, false, builder, localTypes);
 			case TEqual(a, b):
 				var left = lowerExpression(a, builder, localTypes),
 					right = lowerExpression(b, builder, localTypes);
@@ -490,6 +493,35 @@ class IrGenerator {
 			case TArray(element): Array(lowerType(element));
 			case TFunction(arguments, result): Function([for (argument in arguments) lowerType(argument)], lowerType(result));
 		};
+
+	static function lowerLogical(left:TypedExpression, right:TypedExpression, and:Bool, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
+		var resultName = '$' + 'logical:' + left.span.start + ':' + right.span.end;
+		localTypes.set(resultName, Bool);
+		var leftValue = lowerExpression(left, builder, localTypes),
+			rightBlock = builder.createBlock(),
+			shortBlock = builder.createBlock();
+		if (and)
+			builder.branch(leftValue, rightBlock, shortBlock);
+		else
+			builder.branch(leftValue, shortBlock, rightBlock);
+		builder.select(rightBlock);
+		var rightValue = lowerExpression(right, builder, localTypes),
+			rightActive = !builder.isTerminated(),
+			rightExit = builder.currentBlock();
+		if (rightActive)
+			builder.store(resultName, rightValue);
+		builder.select(shortBlock);
+		builder.store(resultName, builder.constBool(and ? false : true));
+		var shortActive = !builder.isTerminated(),
+			shortExit = builder.currentBlock(),
+			joinBlock = builder.createBlock();
+		if (rightActive)
+			builder.jumpFrom(rightExit, joinBlock);
+		if (shortActive)
+			builder.jumpFrom(shortExit, joinBlock);
+		builder.select(joinBlock);
+		return builder.load(resultName, Bool);
+	}
 
 	static function arrayAllocatorName(element:CompilerType):String
 		return switch element {

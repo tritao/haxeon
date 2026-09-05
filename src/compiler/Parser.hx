@@ -313,6 +313,31 @@ class Parser {
 	}
 
 	function parseExpression():AstExpression {
+		var expression = parseOr();
+		return expression;
+	}
+
+	function parseOr():AstExpression {
+		var expression = parseAnd();
+		while (match(TokenKind.OrOr)) {
+			var right = parseAnd(),
+				span = expressionSpan(expression).merge(expressionSpan(right));
+			expression = Or(expression, right, span);
+		}
+		return expression;
+	}
+
+	function parseAnd():AstExpression {
+		var expression = parseComparison();
+		while (match(TokenKind.AndAnd)) {
+			var right = parseComparison(),
+				span = expressionSpan(expression).merge(expressionSpan(right));
+			expression = And(expression, right, span);
+		}
+		return expression;
+	}
+
+	function parseComparison():AstExpression {
 		var expression = parseAdditive();
 		if (check(TokenKind.Less) || check(TokenKind.LessEqual) || check(TokenKind.Greater) || check(TokenKind.GreaterEqual) || check(TokenKind.EqualEqual)
 			|| check(TokenKind.NotEqual)) {
@@ -608,7 +633,8 @@ class Parser {
 			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), BoolLiteral(_, span), NullLiteral(span), Variable(_, span),
 				Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span), Div(_, _, span), Less(_, _, span), LessEqual(_, _, span),
 				Greater(_, _, span), GreaterEqual(_, _, span), Equal(_, _, span), NotEqual(_, _, span), Not(_, span), Call(_, _, span),
-				MethodCall(_, _, _, span), New(_, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span), Lambda(_, _, span): span;
+				MethodCall(_, _, _, span), New(_, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span), Lambda(_, _, span), And(_, _, span),
+				Or(_, _, span): span;
 		}
 
 	static function decodeString(text:String):String {

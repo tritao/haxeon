@@ -99,6 +99,16 @@ class Lexer {
 						position++;
 						TokenKind.NotEqual;
 					} else TokenKind.Not;
+				case "&":
+					if (position < source.length && source.charAt(position) == "&") {
+						position++;
+						TokenKind.AndAnd;
+					} else throw new CompileError(new Diagnostic("E0001", "Expected '&' after '&'", file.span(start, position)));
+				case "|":
+					if (position < source.length && source.charAt(position) == "|") {
+						position++;
+						TokenKind.OrOr;
+					} else throw new CompileError(new Diagnostic("E0001", "Expected '|' after '|'", file.span(start, position)));
 				case "[": TokenKind.LeftBracket;
 				case "]": TokenKind.RightBracket;
 				case "+":

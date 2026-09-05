@@ -629,6 +629,8 @@ class Compiler {
 			case Equal(a, b, s): Equal(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
 			case NotEqual(a, b, s): NotEqual(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
 			case Not(value, s): Not(canonicalExpression(value, module, entry, locals, aliases), s);
+			case And(a, b, s): And(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
+			case Or(a, b, s): Or(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
 			case Call(name, args, s):
 				var resolved = name;
 				var dot = name.indexOf("."),
@@ -719,6 +721,9 @@ class Compiler {
 				scanExpression(b, dependencies);
 			case Not(value, _):
 				scanExpression(value, dependencies);
+			case And(left, right, _), Or(left, right, _):
+				scanExpression(left, dependencies);
+				scanExpression(right, dependencies);
 			case Index(array, offset, _):
 				scanExpression(array, dependencies);
 				scanExpression(offset, dependencies);
@@ -801,6 +806,9 @@ class Compiler {
 				scanCallExpression(b, calls, aliases);
 			case Not(value, _):
 				scanCallExpression(value, calls, aliases);
+			case And(left, right, _), Or(left, right, _):
+				scanCallExpression(left, calls, aliases);
+				scanCallExpression(right, calls, aliases);
 			case New(_, args, _):
 				for (a in args)
 					scanCallExpression(a, calls, aliases);
@@ -875,6 +883,9 @@ class Compiler {
 				collectLambdaExpression(right, functionName, module, generatedByModule);
 			case Not(value, _):
 				collectLambdaExpression(value, functionName, module, generatedByModule);
+			case And(left, right, _), Or(left, right, _):
+				collectLambdaExpression(left, functionName, module, generatedByModule);
+				collectLambdaExpression(right, functionName, module, generatedByModule);
 			case New(_, args, _):
 				for (argument in args)
 					collectLambdaExpression(argument, functionName, module, generatedByModule);

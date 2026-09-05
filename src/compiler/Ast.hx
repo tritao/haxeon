@@ -67,6 +67,8 @@ enum AstExpression {
 	Equal(left:AstExpression, right:AstExpression, span:SourceSpan);
 	NotEqual(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Not(value:AstExpression, span:SourceSpan);
+	And(left:AstExpression, right:AstExpression, span:SourceSpan);
+	Or(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Call(name:String, arguments:Array<AstExpression>, span:SourceSpan);
 	MethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan);
 	New(typeName:String, arguments:Array<AstExpression>, span:SourceSpan);

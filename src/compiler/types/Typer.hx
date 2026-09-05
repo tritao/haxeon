@@ -461,6 +461,8 @@ class Typer {
 				if (!sameType(typedValue.type, TBool))
 					fail("E1011", "Logical negation requires a Bool operand", span);
 				new TypedExpression(TNot(typedValue), TBool, span);
+			case And(left, right, span): logical(left, right, scope, true, span);
+			case Or(left, right, span): logical(left, right, scope, false, span);
 			case New(typeName, arguments, span):
 				if (!classDecls.exists(typeName) || interfaceDecls.exists(typeName))
 					fail("E1007", 'Unknown class "$typeName"', span);
@@ -752,6 +754,9 @@ class Typer {
 				collectExpressionVariables(right, names);
 			case Not(value, _):
 				collectExpressionVariables(value, names);
+			case And(left, right, _), Or(left, right, _):
+				collectExpressionVariables(left, names);
+				collectExpressionVariables(right, names);
 			case New(_, arguments, _):
 				for (argument in arguments)
 					collectExpressionVariables(argument, names);
@@ -898,6 +903,13 @@ class Typer {
 		if (!sameType(left.type, right.type) || (!sameType(left.type, TInt) && !sameType(left.type, TFloat)))
 			fail("E1010", "Arithmetic requires matching Int or Float operands", span);
 		return new TypedExpression(add ? TAdd(left, right) : TSub(left, right), left.type, span);
+	}
+
+	function logical(a, b, scope, and, span):TypedExpression {
+		var left = typeExpression(a, scope), right = typeExpression(b, scope);
+		if (!sameType(left.type, TBool) || !sameType(right.type, TBool))
+			fail("E1011", "Logical operators require Bool operands", span);
+		return new TypedExpression(and ? TAnd(left, right) : TOr(left, right), TBool, span);
 	}
 
 	function numeric(a, b, scope, operation, span):TypedExpression {

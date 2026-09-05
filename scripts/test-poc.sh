@@ -78,6 +78,7 @@ run_program map-primitive-types 42
 run_program loop-control 42
 run_program increment 42
 run_program logical-comparisons 42
+run_program short-circuit 42
 run_program interface-dispatch 42
 run_program interface-inheritance 43
 run_program interface-upcast 5

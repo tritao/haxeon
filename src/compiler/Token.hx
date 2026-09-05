@@ -63,6 +63,8 @@ enum TokenKind {
 	EqualEqual;
 	NotEqual;
 	Not;
+	AndAnd;
+	OrOr;
 	LeftBracket;
 	RightBracket;
 	Eof;
