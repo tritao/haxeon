@@ -10,6 +10,7 @@ import compiler.hl.HlOpcode;
 import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlType;
 import compiler.modules.Compiler;
+import compiler.ir.IrFunctionStateCodec;
 import runtime.Runtime;
 import runtime.RuntimeError;
 import runtime.RuntimeStatus;
@@ -17,6 +18,7 @@ import runtime.PatchSet;
 
 class HotReloadMain {
 	static function main():Void {
+		testDecodedIrLifetime();
 		var compiler = new Compiler();
 		compiler.update("Value.hx", "function value():Int { return 42; }");
 		compiler.update("Probe.hx", "function read():Int { return Value.value(); }");
@@ -231,6 +233,21 @@ class HotReloadMain {
 		testAppendedFloatAndStringSymbols();
 		testNonMovingTypeArena();
 		Sys.println("PASS: selective HLP patches are atomic and retain bounded JIT code");
+	}
+
+	static function testDecodedIrLifetime():Void {
+		for (iteration in 0...100) {
+			var compiler = new Compiler();
+			compiler.update("Main.hx", 'function add(a:Int, b:Int):Int { return a + b; } function main():Int { return add($iteration, 1); }');
+			var program = compiler.compile("Main").ir, decoded = [];
+			for (fn in program.functions)
+				decoded.push(IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(fn)));
+			IrFunctionStateCodec.verify(decoded, program);
+		}
+		var probe = new Compiler();
+		probe.update("Main.hx", "function main():Int { return 42; }");
+		if (probe.compile("Main").ir.functions.length == 0)
+			throw "Compiler failed after decoded IR lifetime stress";
 	}
 
 	static function testNonMovingTypeArena():Void {

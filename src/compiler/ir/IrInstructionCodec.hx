@@ -279,19 +279,20 @@ class IrInstructionCodec {
 	}
 
 	static function writeOperand(output:BytesOutput, value:Dynamic):Void {
-		if (Std.isOfType(value, IrValue)) {
+		var valueType = Type.typeof(value);
+		if (valueType.match(TClass(IrValue))) {
 			output.writeByte(0);
 			IrValueTableCodec.writeReference(output, cast value);
-		} else if (Std.isOfType(value, Int)) {
+		} else if (valueType.match(TInt)) {
 			output.writeByte(1);
 			output.writeInt32(value);
-		} else if (Std.isOfType(value, Float)) {
+		} else if (valueType.match(TFloat)) {
 			output.writeByte(2);
 			output.writeDouble(value);
-		} else if (Std.isOfType(value, Bool)) {
+		} else if (valueType.match(TBool)) {
 			output.writeByte(3);
 			output.writeByte(value ? 1 : 0);
-		} else if (Std.isOfType(value, String)) {
+		} else if (valueType.match(TClass(String))) {
 			output.writeByte(4);
 			writeString(output, value);
 		} else if (value is Array) {
@@ -302,7 +303,7 @@ class IrInstructionCodec {
 			output.writeInt32(values.length);
 			for (item in values)
 				writeOperand(output, item);
-		} else if (value != null && Type.getEnum(value) == IrType) {
+		} else if (valueType.match(TEnum(IrType))) {
 			output.writeByte(6);
 			IrTypeCodec.writeType(output, cast value, 0);
 		} else if (value != null && Reflect.hasField(value, "block") && Reflect.hasField(value, "value")) {
