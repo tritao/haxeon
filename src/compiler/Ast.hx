@@ -106,6 +106,7 @@ enum AstStatement {
 	Try(tryBranch:Array<AstStatement>, catches:Array<AstCatch>, span:SourceSpan);
 	If(condition:AstExpression, thenBranch:Array<AstStatement>, elseBranch:Array<AstStatement>, span:SourceSpan);
 	While(condition:AstExpression, body:Array<AstStatement>, span:SourceSpan);
+	DoWhile(body:Array<AstStatement>, condition:AstExpression, span:SourceSpan);
 	ForIn(name:String, iterable:AstExpression, body:Array<AstStatement>, span:SourceSpan);
 	Break(span:SourceSpan);
 	Continue(span:SourceSpan);

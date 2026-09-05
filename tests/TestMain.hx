@@ -59,6 +59,11 @@ class TestMain {
 		Frontend.compile('function main():Int { return 0x2A; }');
 		Frontend.compile('function main():Int { var values = [20, 22]; var empty:Array<Int> = []; return values[0] + values[1] + empty.length; }');
 		expectCompileError('function main():Int { var values = []; return 0; }', 'Empty array literal requires an expected element type');
+		Frontend.compile('function main():Int { var value:Int; do { value = 42; } while (false); return value; }');
+		expectCompileError('function main():Int { do { return 1; } while (1); }', 'Do-while condition must be Bool');
+		expectCompileError('function main():Int { do { break; } while (true); return 0; }', 'break in do-while is not supported by the current CFG backend');
+		expectCompileError('function main():Int { do { continue; } while (true); return 0; }',
+			'continue in do-while is not supported by the current CFG backend');
 		var values = [
 			-0x1FFFFFFF,
 			-0x2000,

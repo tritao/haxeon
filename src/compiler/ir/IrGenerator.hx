@@ -658,6 +658,40 @@ class IrGenerator {
 					if (!builder.isTerminated())
 						builder.jump(conditionBlock);
 					builder.select(afterBlock);
+				case TDoWhile(body, condition, span):
+					var breakFlag = '$' + 'do-while-break:' + span.start;
+					localTypes.set(breakFlag, Bool);
+					builder.store(breakFlag, builder.constBool(false));
+					var conditionBlock = builder.createBlock(),
+						conditionCheck = builder.createBlock(),
+						bodyBlock = builder.createBlock(),
+						afterBlock = builder.createBlock();
+					loops.push({
+						breakBlock: afterBlock,
+						continueBlock: conditionBlock,
+						breakFlag: breakFlag,
+						trapDepth: builder.trapDepth()
+					});
+					lowerStatements(body, builder, localTypes, loops);
+					loops.pop();
+					if (!builder.isTerminated())
+						builder.jump(conditionBlock);
+					builder.select(conditionBlock);
+					builder.branch(builder.load(breakFlag, Bool), afterBlock, conditionCheck);
+					builder.select(conditionCheck);
+					builder.branch(lowerExpression(condition, builder, localTypes), bodyBlock, afterBlock);
+					builder.select(bodyBlock);
+					loops.push({
+						breakBlock: afterBlock,
+						continueBlock: conditionBlock,
+						breakFlag: breakFlag,
+						trapDepth: builder.trapDepth()
+					});
+					lowerStatements(body, builder, localTypes, loops);
+					loops.pop();
+					if (!builder.isTerminated())
+						builder.jump(conditionBlock);
+					builder.select(afterBlock);
 				case TForIn(name, iterable, body, span):
 					var arrayName = '$' + 'for-array:' + span.start,
 						indexName = '$' + 'for-index:' + span.start,

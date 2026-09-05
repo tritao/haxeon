@@ -1004,6 +1004,9 @@ class Compiler {
 			case While(c, b,
 				span): While(canonicalExpression(c, module, entry, locals, aliases), [for (x in b) canonicalStatement(x, module, entry, locals, aliases)],
 					span);
+			case DoWhile(b, c,
+				span): DoWhile([for (x in b) canonicalStatement(x, module, entry, locals, aliases)], canonicalExpression(c, module, entry, locals, aliases),
+					span);
 			case ForIn(name, iterable, body,
 				span): ForIn(name, canonicalExpression(iterable, module, entry, locals, aliases),
 					[for (x in body) canonicalStatement(x, module, entry, locals, aliases)], span);
@@ -1199,6 +1202,9 @@ class Compiler {
 				case While(condition, body, _):
 					addExpressionDependencies(result, owner, Body, condition, module, entry);
 					addBodyDependencies(result, owner, body, module, entry);
+				case DoWhile(body, condition, _):
+					addBodyDependencies(result, owner, body, module, entry);
+					addExpressionDependencies(result, owner, Body, condition, module, entry);
 				case ForIn(_, iterable, body, _):
 					addExpressionDependencies(result, owner, Body, iterable, module, entry);
 					addBodyDependencies(result, owner, body, module, entry);
@@ -1265,6 +1271,10 @@ class Compiler {
 				scanExpression(c, dependencies);
 				for (x in b)
 					scanStatement(x, dependencies);
+			case DoWhile(b, c, _):
+				for (x in b)
+					scanStatement(x, dependencies);
+				scanExpression(c, dependencies);
 			case ForIn(_, iterable, b, _):
 				scanExpression(iterable, dependencies);
 				for (x in b)
@@ -1396,6 +1406,10 @@ class Compiler {
 				scanCallExpression(c, calls, aliases);
 				for (s in b)
 					scanCalls(s, calls, aliases);
+			case DoWhile(b, c, _):
+				for (s in b)
+					scanCalls(s, calls, aliases);
+				scanCallExpression(c, calls, aliases);
 			case ForIn(_, iterable, b, _):
 				scanCallExpression(iterable, calls, aliases);
 				for (s in b)
@@ -1506,6 +1520,9 @@ class Compiler {
 				case While(condition, body, _):
 					collectLambdaExpression(condition, functionName, module, generatedByModule);
 					collectLambdas(body, functionName, module, generatedByModule);
+				case DoWhile(body, condition, _):
+					collectLambdas(body, functionName, module, generatedByModule);
+					collectLambdaExpression(condition, functionName, module, generatedByModule);
 				case ForIn(_, iterable, body, _):
 					collectLambdaExpression(iterable, functionName, module, generatedByModule);
 					collectLambdas(body, functionName, module, generatedByModule);

@@ -201,6 +201,7 @@ class Lexer {
 			case "if": TokenKind.If;
 			case "else": TokenKind.Else;
 			case "while": TokenKind.While;
+			case "do": TokenKind.Do;
 			case "for": TokenKind.For;
 			case "in": TokenKind.In;
 			case "break": TokenKind.Break;

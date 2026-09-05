@@ -531,6 +531,9 @@ class LanguageService {
 				case While(_, body, _):
 					if (containsPosition(body, position))
 						return localDeclarationAt(body, name, position, visible);
+				case DoWhile(body, _, _):
+					if (containsPosition(body, position))
+						return localDeclarationAt(body, name, position, visible);
 				case ForIn(local, _, body, declaration):
 					if (containsPosition(body, position))
 						return localDeclarationAt(body, name, position, local == name ? declaration : visible);
@@ -560,8 +563,8 @@ class LanguageService {
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
 			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span),
-				ReturnVoid(span), Throw(_, span), Try(_, _, span), If(_, _, _, span), While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span),
-				Switch(_, _, _, _, span), Increment(_, _, span), Expression(_, span): span;
+				ReturnVoid(span), Throw(_, span), Try(_, _, span), If(_, _, _, span), While(_, _, span), DoWhile(_, _, span), ForIn(_, _, _, span),
+				Break(span), Continue(span), Switch(_, _, _, _, span), Increment(_, _, span), Expression(_, span): span;
 		};
 
 	static function localDeclaration(statements:Array<AstStatement>, name:String):Null<SourceSpan> {
@@ -576,7 +579,7 @@ class LanguageService {
 						declaration = localDeclaration(no, name);
 					if (declaration != null)
 						return declaration;
-				case While(_, body, _), ForIn(_, _, body, _):
+				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, body, _):
 					var declaration = localDeclaration(body, name);
 					if (declaration != null)
 						return declaration;
@@ -637,6 +640,10 @@ class LanguageService {
 					if (branchType != null)
 						return branchType;
 				case TWhile(_, body, _):
+					var loopType = localType(body, name);
+					if (loopType != null)
+						return loopType;
+				case TDoWhile(body, _, _):
 					var loopType = localType(body, name);
 					if (loopType != null)
 						return loopType;

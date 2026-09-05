@@ -28,6 +28,7 @@ enum TokenKind {
 	If;
 	Else;
 	While;
+	Do;
 	For;
 	In;
 	Break;

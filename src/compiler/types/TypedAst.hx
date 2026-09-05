@@ -95,6 +95,7 @@ enum TypedStatement {
 	TTry(tryBranch:Array<TypedStatement>, catches:Array<TypedCatch>, span:SourceSpan);
 	TIf(condition:TypedExpression, thenBranch:Array<TypedStatement>, elseBranch:Array<TypedStatement>, span:SourceSpan);
 	TWhile(condition:TypedExpression, body:Array<TypedStatement>, span:SourceSpan);
+	TDoWhile(body:Array<TypedStatement>, condition:TypedExpression, span:SourceSpan);
 	TForIn(name:String, iterable:TypedExpression, body:Array<TypedStatement>, span:SourceSpan);
 	TBreak(span:SourceSpan);
 	TContinue(span:SourceSpan);

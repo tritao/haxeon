@@ -427,10 +427,14 @@ class Typer {
 				case Break(span):
 					if (context.loopDepth == 0)
 						fail("E1017", "break is only valid inside a loop", span);
+					if (!context.loopEarlyExits[context.loopEarlyExits.length - 1])
+						fail("E1017", "break in do-while is not supported by the current CFG backend", span);
 					output.push(TBreak(span));
 				case Continue(span):
 					if (context.loopDepth == 0)
 						fail("E1017", "continue is only valid inside a loop", span);
+					if (!context.loopEarlyExits[context.loopEarlyExits.length - 1])
+						fail("E1017", "continue in do-while is not supported by the current CFG backend", span);
 					output.push(TContinue(span));
 				case Increment(name, delta, span):
 					var current = scope.resolve(name);
@@ -543,9 +547,23 @@ class Typer {
 					if (!sameType(typedCondition.type, TBool))
 						fail("E1004", "While condition must be Bool", span);
 					context.loopDepth++;
+					context.loopEarlyExits.push(true);
 					var typedBody = typeStatements(body, new Scope(scope), result);
+					context.loopEarlyExits.pop();
 					context.loopDepth--;
 					output.push(TWhile(typedCondition, typedBody, span));
+				case DoWhile(body, condition, span):
+					var bodyScope = new Scope(scope);
+					context.loopDepth++;
+					context.loopEarlyExits.push(false);
+					var typedBody = typeStatements(body, bodyScope, result);
+					context.loopEarlyExits.pop();
+					context.loopDepth--;
+					var typedCondition = typeExpression(condition, bodyScope);
+					if (!sameType(typedCondition.type, TBool))
+						fail("E1004", "Do-while condition must be Bool", span);
+					output.push(TDoWhile(typedBody, typedCondition, span));
+					scope.mergeAssignmentsFrom([bodyScope]);
 				case ForIn(name, iterable, body, span):
 					var typedIterable = typeExpression(iterable, scope),
 						element = switch typedIterable.type {
@@ -563,7 +581,9 @@ class Typer {
 						loopScope = new Scope(scope);
 					loopScope.define(name, element, span);
 					context.loopDepth++;
+					context.loopEarlyExits.push(true);
 					var typedBody = typeStatements(body, loopScope, result);
+					context.loopEarlyExits.pop();
 					context.loopDepth--;
 					output.push(TForIn(loopScope.resolveId(name), typedIterable, typedBody, span));
 				case Switch(expression, cases, defaultBranch, hasDefault, span):
@@ -1176,7 +1196,7 @@ class Typer {
 				case If(_, yes, no, _):
 					seedLambdaScope(yes, scope);
 					seedLambdaScope(no, scope);
-				case While(_, body, _), ForIn(_, _, body, _):
+				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, body, _):
 					seedLambdaScope(body, scope);
 				case Try(tryBranch, catches, _):
 					seedLambdaScope(tryBranch, scope);
@@ -1526,6 +1546,8 @@ class Typer {
 					collectAssignedLocals(no, names);
 				case While(_, body, _):
 					collectAssignedLocals(body, names);
+				case DoWhile(body, _, _):
+					collectAssignedLocals(body, names);
 				case ForIn(name, _, body, _):
 					names.set(name, true);
 					collectAssignedLocals(body, names);
@@ -1552,6 +1574,8 @@ class Typer {
 					collectDeclaredLocals(yes, names);
 					collectDeclaredLocals(no, names);
 				case While(_, body, _):
+					collectDeclaredLocals(body, names);
+				case DoWhile(body, _, _):
 					collectDeclaredLocals(body, names);
 				case ForIn(name, _, body, _):
 					names.set(name, true);
@@ -1588,6 +1612,9 @@ class Typer {
 				case While(condition, body, _):
 					collectExpressionVariables(condition, names);
 					collectVariables(body, names);
+				case DoWhile(body, condition, _):
+					collectVariables(body, names);
+					collectExpressionVariables(condition, names);
 				case ForIn(_, iterable, body, _):
 					collectExpressionVariables(iterable, names);
 					collectVariables(body, names);
@@ -1625,6 +1652,9 @@ class Typer {
 				case While(condition, body, _):
 					collectMutableCaptureExpression(condition, outerDeclared, result);
 					collectMutableCaptureCandidates(body, outerDeclared, result);
+				case DoWhile(body, condition, _):
+					collectMutableCaptureCandidates(body, outerDeclared, result);
+					collectMutableCaptureExpression(condition, outerDeclared, result);
 				case ForIn(_, iterable, body, _):
 					collectMutableCaptureExpression(iterable, outerDeclared, result);
 					collectMutableCaptureCandidates(body, outerDeclared, result);
@@ -1665,7 +1695,7 @@ class Typer {
 				case If(_, yes, no, _):
 					collectExceptionCellCandidates(yes, declared, result);
 					collectExceptionCellCandidates(no, declared, result);
-				case While(_, body, _), ForIn(_, _, body, _):
+				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, body, _):
 					collectExceptionCellCandidates(body, declared, result);
 				case Switch(_, cases, defaultBranch, _, _):
 					for (switchCase in cases)
@@ -1991,6 +2021,9 @@ class Typer {
 				case TIf(_, yes, no, _):
 					if (no.length > 0 && alwaysReturns(yes) && alwaysReturns(no))
 						return true;
+				case TDoWhile(body, _, _):
+					if (alwaysReturns(body))
+						return true;
 				case TTry(tryBranch, catches, _):
 					if (alwaysReturns(tryBranch)
 						&& catches.length > 0
@@ -2012,6 +2045,9 @@ class Typer {
 					return true;
 				case TIf(_, yes, no, _):
 					if (no.length > 0 && alwaysExits(yes) && alwaysExits(no))
+						return true;
+				case TDoWhile(body, _, _):
+					if (alwaysExits(body))
 						return true;
 				case TTry(tryBranch, catches, _):
 					if (alwaysExits(tryBranch)
@@ -2130,8 +2166,8 @@ class Typer {
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
 			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span), Return(_, span),
-				ReturnVoid(span), Throw(_, span), Try(_, _, span), If(_, _, _, span), While(_, _, span), ForIn(_, _, _, span), Break(span), Continue(span),
-				Switch(_, _, _, _, span), Increment(_, _, span), Expression(_, span): span;
+				ReturnVoid(span), Throw(_, span), Try(_, _, span), If(_, _, _, span), While(_, _, span), DoWhile(_, _, span), ForIn(_, _, _, span),
+				Break(span), Continue(span), Switch(_, _, _, _, span), Increment(_, _, span), Expression(_, span): span;
 		}
 
 	static function fail(code:String, message:String, span:SourceSpan):Void
