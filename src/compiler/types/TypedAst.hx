@@ -93,6 +93,7 @@ enum TypedExpressionKind {
 	TStringSubstring(value:TypedExpression, start:TypedExpression, end:TypedExpression);
 	TArrayPush(array:TypedExpression, value:TypedExpression);
 	TArrayPop(array:TypedExpression);
+	TArraySort(array:TypedExpression, comparator:TypedExpression);
 }
 
 typedef TypedObjectField = {final name:String; final value:TypedExpression;}

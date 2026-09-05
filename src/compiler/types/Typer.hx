@@ -2015,6 +2015,15 @@ class Typer {
 					"E1002") : new TypedExpression(TArrayLength(receiver), TInt, span);
 			return new TypedExpression(TCollectionCall(receiver, "slice", [start, end]), TArray(element), span);
 		}
+		if (name == "sort") {
+			if (arguments.length != 1)
+				fail("E1008", "Array.sort expects one comparator", span);
+			if (!isRebindableArrayReceiver(receiver))
+				fail("E1016", "Array.sort requires a mutable local or field array", span);
+			var comparatorType = TFunction([element, element], TInt),
+				comparator = coerce(typeExpression(arguments[0], scope, comparatorType), comparatorType, "array comparator", "E1002");
+			return new TypedExpression(TArraySort(receiver, comparator), TVoid, span);
+		}
 		if (name == "indexOf") {
 			switch element {
 				case TInt, TFloat, TBool, TString:

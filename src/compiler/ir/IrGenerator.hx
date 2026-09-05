@@ -1391,7 +1391,63 @@ class IrGenerator {
 					default: throw "Array.pop requires an array value";
 				};
 				builder.call(RuntimeType.arrayNative(element, "pop"), [lowerExpression(array, builder, localTypes)], lowerType(element));
+			case TArraySort(array, comparator): lowerArraySort(array, comparator, expression.span, builder, localTypes);
 		}
+
+	static function lowerArraySort(array:TypedExpression, comparator:TypedExpression, span:compiler.Source.SourceSpan, builder:CfgBuilder,
+			localTypes:Map<String, IrType>):CfgValue {
+		var element = switch array.type {
+			case TArray(value): value;
+			default: throw "Array.sort requires an array";
+		}, elementType = lowerType(element), arrayType = Array(elementType), comparatorType = lowerType(comparator.type), suffix = Std.string(span.start), arrayName = '$'
+			+ 'sort-array:$suffix', comparatorName = '$' + 'sort-comparator:$suffix', indexName = '$' + 'sort-index:$suffix', keyName = '$'
+				+ 'sort-key:$suffix', scanName = '$' + 'sort-scan:$suffix';
+		for (entry in [
+			{name: arrayName, type: arrayType},
+			{name: comparatorName, type: comparatorType},
+			{name: indexName, type: I32},
+			{name: keyName, type: elementType},
+			{name: scanName, type: I32}
+		])
+			localTypes.set(entry.name, entry.type);
+		builder.store(arrayName, lowerExpression(array, builder, localTypes));
+		builder.store(comparatorName, lowerExpression(comparator, builder, localTypes));
+		builder.store(indexName, builder.constInt(1));
+		var outerCondition = builder.createBlock(),
+			outerBody = builder.createBlock(),
+			innerCondition = builder.createBlock(),
+			compare = builder.createBlock(),
+			move = builder.createBlock(),
+			insert = builder.createBlock(),
+			done = builder.createBlock();
+		builder.jump(outerCondition);
+		builder.select(outerCondition);
+		builder.branch(builder.less(builder.load(indexName, I32), builder.arraySize(builder.load(arrayName, arrayType))), outerBody, done);
+		builder.select(outerBody);
+		builder.store(keyName, builder.arrayGet(builder.load(arrayName, arrayType), builder.load(indexName, I32), elementType));
+		builder.store(scanName, builder.sub(builder.load(indexName, I32), builder.constInt(1)));
+		builder.jump(innerCondition);
+		builder.select(innerCondition);
+		builder.branch(builder.lessEqual(builder.constInt(0), builder.load(scanName, I32)), compare, insert);
+		builder.select(compare);
+		var order = builder.callClosure(builder.load(comparatorName, comparatorType), [
+			builder.arrayGet(builder.load(arrayName, arrayType), builder.load(scanName, I32), elementType),
+			builder.load(keyName, elementType)
+		], I32);
+		builder.branch(builder.less(builder.constInt(0), order), move, insert);
+		builder.select(move);
+		var scan = builder.load(scanName, I32);
+		builder.arraySet(builder.load(arrayName, arrayType), builder.add(scan, builder.constInt(1)),
+			builder.arrayGet(builder.load(arrayName, arrayType), scan, elementType));
+		builder.store(scanName, builder.sub(scan, builder.constInt(1)));
+		builder.jump(innerCondition);
+		builder.select(insert);
+		builder.arraySet(builder.load(arrayName, arrayType), builder.add(builder.load(scanName, I32), builder.constInt(1)), builder.load(keyName, elementType));
+		builder.store(indexName, builder.add(builder.load(indexName, I32), builder.constInt(1)));
+		builder.jump(outerCondition);
+		builder.select(done);
+		return builder.constVoid();
+	}
 
 	static function implicitArguments(fn:TypedFunction):Array<{name:String, type:IrType}> {
 		if (fn.owner == null || fn.isStatic)

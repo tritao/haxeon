@@ -50,6 +50,12 @@ class CfgBuilder {
 		terminate(Return(out));
 	}
 
+	public function constVoid():CfgValue {
+		var out = temporary(Void);
+		emit(ConstVoid(out));
+		return out;
+	}
+
 	public function throwValue(value:CfgValue):Void
 		terminate(Throw(value));
 
