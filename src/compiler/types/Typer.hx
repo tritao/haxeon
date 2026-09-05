@@ -743,11 +743,17 @@ class Typer {
 				fail("E1008", "Map.keys expects no arguments", span);
 			return new TypedExpression(TCall(RuntimeType.mapNative(mapType.key, mapType.value, "keys"), [receiver]), TArray(mapType.key), span);
 		}
+		if (name == "clear") {
+			if (arguments.length != 0)
+				fail("E1008", "Map.clear expects no arguments", span);
+			return new TypedExpression(TCall(RuntimeType.mapNative(mapType.key, mapType.value, "clear"), [receiver]), TVoid, span);
+		}
 		if (arguments.length != 1)
 			fail("E1008", 'Map.$name expects one argument', span);
 		var key = coerce(typeExpression(arguments[0], scope), mapType.key, "map key", "E1002");
 		return switch name {
 			case "exists": new TypedExpression(TCall(RuntimeType.mapNative(mapType.key, mapType.value, "exists"), [receiver, key]), TBool, span);
+			case "remove": new TypedExpression(TCall(RuntimeType.mapNative(mapType.key, mapType.value, "remove"), [receiver, key]), TBool, span);
 			case "get": new TypedExpression(TMapGet(receiver, key), mapType.value, span);
 			default:
 				fail("E1007", 'Unknown map method "$name"', span);

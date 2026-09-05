@@ -7,7 +7,14 @@ function main():Int {
 	var sum = 0;
 	for (key in values.keys())
 		sum = sum + values.get(key);
+	if (!values.remove(9) || values.exists(9))
+		return 0;
+	values.set(9, 1);
 	var flags = new Map<Int, Bool>();
+	flags[7] = true;
+	flags.clear();
+	if (flags.exists(7))
+		return 0;
 	flags[7] = true;
 	var ratios = new Map<Int, Float>();
 	ratios[7] = 0.5;
