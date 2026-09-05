@@ -78,6 +78,7 @@ class TestMain {
 		Frontend.compile('class Value { public final number:Int = 42; public function new() { } } function main():Int { var value:Null<Value> = new Value(); if (value != null && value.number == 42) return value.number; return 0; }');
 		Frontend.compile('function make():String return "value"; function main():Int { var value = null; if (true) value = make(); return value == null ? 0 : 42; }');
 		Frontend.compile('function make():String return "value"; function main():Int { var values = []; values.push(make()); return values.length; }');
+		Frontend.compile('function apply(callback:(Int, Int)->Int):Int return callback(1, 2); function main():Int return apply(function(_, _) return 42);');
 		Frontend.compile('function fail():Void throw "failure"; function value():String { fail(); return null; } function main():Int return 42;');
 		Frontend.compile('function fail():Void throw "failure"; function value():String return if (true) "value" else { fail(); null; }; function main():Int return 42;');
 		Typer.typeLibrary(new Parser(new Lexer(new SourceFile("infinite-loop.hx",

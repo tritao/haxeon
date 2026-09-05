@@ -1136,15 +1136,17 @@ class Typer {
 						lambdaScope = new Scope(),
 						declared:Map<String, Bool> = [];
 					for (i in 0...arguments.length) {
-						var argument = arguments[i];
+						var argument = arguments[i],
+							localName = argument.name == "_" ? '$' + 'discard:$i' : argument.name;
 						var argumentType = argument.type == InferredType ? (expectedFunction == null ? null : expectedFunction.arguments[i]) : lowerType(argument.type);
 						if (argumentType == null)
 							fail("E1003", 'Cannot infer lambda parameter "${argument.name}" without a function context', argument.span);
 						if (expectedFunction != null && !TypeRelations.equals(argumentType, expectedFunction.arguments[i]))
 							fail("E1003", "Lambda argument type does not match its context", argument.span);
-						lambdaScope.define(argument.name, argumentType, argument.span);
-						lambdaArguments.push({name: lambdaScope.resolveId(argument.name), type: argumentType});
-						declared.set(argument.name, true);
+						lambdaScope.define(localName, argumentType, argument.span);
+						lambdaArguments.push({name: lambdaScope.resolveId(localName), type: argumentType});
+						if (argument.name != "_")
+							declared.set(argument.name, true);
 					}
 					collectDeclaredLocals(body, declared);
 					var freeVariables:Map<String, Bool> = [];
@@ -1182,8 +1184,9 @@ class Typer {
 							}
 					var typedBodyScope = new Scope();
 					for (i in 0...lambdaArguments.length) {
-						typedBodyScope.define(arguments[i].name, lambdaArguments[i].type, arguments[i].span);
-						lambdaArguments[i] = {name: typedBodyScope.resolveId(arguments[i].name), type: lambdaArguments[i].type};
+						var localName = arguments[i].name == "_" ? '$' + 'discard:$i' : arguments[i].name;
+						typedBodyScope.define(localName, lambdaArguments[i].type, arguments[i].span);
+						lambdaArguments[i] = {name: typedBodyScope.resolveId(localName), type: lambdaArguments[i].type};
 					}
 					for (name in captures)
 						typedBodyScope.defineCapture(name, scope.resolve(name), span, captureCells.exists(name), captureCells.get(name));
