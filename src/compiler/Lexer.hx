@@ -22,8 +22,28 @@ class Lexer {
 				position++;
 				continue;
 			}
+			if (code == 47 && position + 1 < source.length) {
+				var next = source.charCodeAt(position + 1);
+				if (next == 47) {
+					position += 2;
+					while (position < source.length && source.charCodeAt(position) != 10)
+						position++;
+					continue;
+				}
+				if (next == 42) {
+					var commentStart = position;
+					position += 2;
+					while (position + 1 < source.length && !(source.charCodeAt(position) == 42 && source.charCodeAt(position + 1) == 47))
+						position++;
+					if (position + 1 >= source.length)
+						throw new CompileError(new Diagnostic("E0001", "Unterminated block comment", file.span(commentStart, position)));
+					position += 2;
+					continue;
+				}
+			}
 			var start = position;
-			if (code == 34) {
+			if (code == 34 || code == 39) {
+				var quote = code;
 				position++;
 				var escaped = false, closed = false;
 				while (position < source.length) {
@@ -36,7 +56,7 @@ class Lexer {
 						escaped = true;
 						continue;
 					}
-					if (current == 34) {
+					if (current == quote) {
 						closed = true;
 						break;
 					}
@@ -111,6 +131,8 @@ class Lexer {
 					} else throw new CompileError(new Diagnostic("E0001", "Expected '|' after '|'", file.span(start, position)));
 				case "[": TokenKind.LeftBracket;
 				case "]": TokenKind.RightBracket;
+				case "?": TokenKind.Question;
+				case "@": TokenKind.At;
 				case "+":
 					if (position < source.length && source.charAt(position) == "=") {
 						position++;

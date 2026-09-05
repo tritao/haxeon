@@ -47,6 +47,12 @@ import Type as HaxeType;
 
 class TestMain {
 	static function main():Void {
+		var lexicalForms = new Lexer(new SourceFile("lexical-forms.hx", "// line\n/* block */ 'text' ? @")).tokenize();
+		if (lexicalForms.length != 4
+			|| lexicalForms[0].kind != compiler.Token.TokenKind.StringLiteral
+			|| lexicalForms[1].kind != compiler.Token.TokenKind.Question
+			|| lexicalForms[2].kind != compiler.Token.TokenKind.At)
+			throw "Common Haxe lexical forms were not tokenized";
 		var values = [
 			-0x1FFFFFFF,
 			-0x2000,
@@ -497,7 +503,7 @@ class TestMain {
 		Sys.println("PASS: typer rejects invalid names, calls, conditions, and return paths");
 
 		try {
-			Frontend.compileFile(new SourceFile("broken.hx", "function main():Int { return @; }"));
+			Frontend.compileFile(new SourceFile("broken.hx", "function main():Int { return ~; }"));
 			throw "compiler accepted invalid character";
 		} catch (error:CompileError) {
 			if (error.diagnostic.code != "E0001" || error.diagnostic.span.file.path != "broken.hx" || error.diagnostic.span.start != 29)

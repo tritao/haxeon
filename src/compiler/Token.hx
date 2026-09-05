@@ -74,6 +74,8 @@ enum TokenKind {
 	OrOr;
 	LeftBracket;
 	RightBracket;
+	Question;
+	At;
 	Eof;
 }
 
