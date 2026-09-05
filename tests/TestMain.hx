@@ -400,6 +400,14 @@ class TestMain {
 		Frontend.compile("function main():Int { var value = 40; var read = () -> { var value = 2; return value; }; return read() + value; }");
 		expectCompileError("class Box { public var value:Int; } function main():Int { var box:Null<Box> = new Box(); if (box != null) { box = null; return box.value; } return 0; }",
 			'Field "value" requires an object');
+		var captureProgram = new Parser(new Lexer(new SourceFile("capture.hx",
+			"function main():Int { var value = 40; var read = () -> { return value + 2; }; return read(); }")).tokenize()).parseProgram(),
+			captureTyped = Typer.type(captureProgram),
+			captureObjects = IrGenerator.objectsFrom(captureTyped);
+		if (captureTyped.classes.length != 0 || captureTyped.captureEnvironments.length != 1)
+			throw "Semantic typing manufactured a runtime helper class";
+		if ([for (object in captureObjects) object.name].indexOf(captureTyped.captureEnvironments[0].name) < 0)
+			throw "Lowering did not materialize the capture environment";
 		Sys.println("PASS: declaration resolution rejects unknown types and cycles and resolves semantic signatures");
 		var classProgram = new Parser(new Lexer(new SourceFile("Box.hx",
 			"package demo; class Box { public final value:Int; public function new(value:Int) { } public function get():Int { return 42; } } function main():Int { return 42; }"))

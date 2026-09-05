@@ -100,7 +100,7 @@ class IrGenerator {
 	}
 
 	public static function objectsFrom(typed:TypedProgram):Array<IrObject> {
-		return [
+		var objects:Array<IrObject> = [
 			for (classDecl in typed.classes)
 				{
 					name: classDecl.name,
@@ -119,6 +119,26 @@ class IrGenerator {
 					]
 				}
 		];
+		for (cell in typed.cells)
+			objects.push({
+				name: cell.name,
+				base: null,
+				interfaces: [],
+				fields: [{name: "value", type: lowerType(cell.valueType)}],
+				methods: []
+			});
+		for (environment in typed.captureEnvironments)
+			objects.push({
+				name: environment.name,
+				base: null,
+				interfaces: [],
+				fields: [
+					for (field in environment.fields)
+						{name: field.name, type: lowerType(field.type)}
+				],
+				methods: []
+			});
+		return objects;
 	}
 
 	public static function staticFieldsFrom(typed:TypedProgram):Array<IrStaticField> {

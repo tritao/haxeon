@@ -34,7 +34,8 @@ class Typer {
 	var declarations:DeclarationIndex;
 	var relations:TypeRelations;
 	final generated:Array<TypedFunction> = [];
-	final generatedClasses:Array<TypedClass> = [];
+	final generatedCells:Array<compiler.types.TypedAst.TypedCell> = [];
+	final generatedEnvironments:Array<compiler.types.TypedAst.TypedCaptureEnvironment> = [];
 	final lambdaCache:Map<String, TypedExpression> = [];
 	var context:BodyContext = new BodyContext("");
 
@@ -129,8 +130,10 @@ class Typer {
 		return {
 			enums: typedEnums,
 			interfaces: typedInterfaces,
-			classes: typedClasses.concat(generatedClasses),
-			functions: typedFunctions
+			classes: typedClasses,
+			functions: typedFunctions,
+			cells: generatedCells,
+			captureEnvironments: generatedEnvironments
 		};
 	}
 
@@ -300,23 +303,7 @@ class Typer {
 		for (name in context.cells.keys()) {
 			var cellType = context.cellTypes.get(name);
 			if (cellType != null)
-				generatedClasses.push({
-					name: context.cells.get(name),
-					base: null,
-					interfaces: [],
-					fields: [
-						{
-							name: "value",
-							type: cellType,
-							initializer: null,
-							isStatic: false,
-							isFinal: false,
-							span: fn.span
-						}
-					],
-					methods: [],
-					span: fn.span
-				});
+				generatedCells.push({name: context.cells.get(name), valueType: cellType});
 		}
 		context = previousContext;
 		return resultFunction;
@@ -736,23 +723,15 @@ class Typer {
 						fail("E1006", 'Function $lambdaName does not return on every path', span);
 					var environment = captures.length == 0 ? null : '$' + 'lambda-env:' + context.name + ':' + span.start;
 					if (environment != null)
-						generatedClasses.push({
+						generatedEnvironments.push({
 							name: environment,
-							base: null,
-							interfaces: [],
 							fields: [
 								for (name in captures)
 									{
 										name: name,
-										type: captureCells.exists(name) ? TClass(captureCells.get(name)) : scope.resolve(name),
-										initializer: null,
-										isStatic: false,
-										isFinal: false,
-										span: span
+										type: captureCells.exists(name) ? TClass(captureCells.get(name)) : scope.resolve(name)
 									}
-							],
-							methods: [],
-							span: span
+							]
 						});
 					generated.push({
 						name: lambdaName,
@@ -769,23 +748,7 @@ class Typer {
 					for (name in lambdaCells.keys()) {
 						var cellType = lambdaCellTypes.get(name);
 						if (cellType != null)
-							generatedClasses.push({
-								name: lambdaCells.get(name),
-								base: null,
-								interfaces: [],
-								fields: [
-									{
-										name: "value",
-										type: cellType,
-										initializer: null,
-										isStatic: false,
-										isFinal: false,
-										span: span
-									}
-								],
-								methods: [],
-								span: span
-							});
+							generatedCells.push({name: lambdaCells.get(name), valueType: cellType});
 					}
 					var lambdaResult = new TypedExpression(TLambda(lambdaName, environment, captures),
 						TFunction([for (argument in lambdaArguments) argument.type], inferredResult), span);
