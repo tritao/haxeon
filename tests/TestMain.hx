@@ -239,6 +239,7 @@ class TestMain {
 		Frontend.compile('function main():Int { var value = switch 1 { case 1: 42; default: 0; } return value; }');
 		Frontend.compile('function main():Int { var values:Array<Int> = [42]; do values.push(0) while (false); return values[0]; }');
 		Frontend.compile('function main():Int { return if (true) 42; else { 0; }; }');
+		Frontend.compile('function main():Int { return if (true) { var value = 42; value; } else 0; }');
 		new Parser(new Lexer(new SourceFile("contextual-expression-name.hx",
 			'function main():Int { return String.fromCharCode(42).length; }')).tokenize()).parseProgram();
 		var mutableSource = 'function main():Int { var outer = 0; while (outer < 2) { var inner = 0; while (inner < 2) { inner = inner + 1; } outer = outer + inner; } return outer; }';

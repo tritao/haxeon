@@ -776,6 +776,10 @@ class Parser {
 			return parseExpression();
 		var start = previous().span, statements = [];
 		while (!check(TokenKind.RightBrace)) {
+			if (check(TokenKind.Var)) {
+				appendStatements(statements, parseStatements());
+				continue;
+			}
 			var saved = position, candidate = parseExpression();
 			if (check(TokenKind.RightBrace)) {
 				var end = consume(TokenKind.RightBrace).span;
