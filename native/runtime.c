@@ -33,6 +33,10 @@ HL_PRIM varray *HL_NAME(__array_alloc_bool)( int length ) {
 	return hl_alloc_array(&hlt_bool, length);
 }
 
+HL_PRIM varray *HL_NAME(__array_alloc_ref)( int length ) {
+	return hl_alloc_array(&hlt_dyn, length);
+}
+
 HL_PRIM vbyte *HL_NAME(__string_concat)( vbyte *left, vbyte *right ) {
 	int left_length = left == NULL ? 0 : (int)ustrlen((const uchar *)left);
 	int right_length = right == NULL ? 0 : (int)ustrlen((const uchar *)right);
@@ -160,6 +164,7 @@ DEFINE_PRIM(_ARR,__array_alloc_i32,_I32);
 DEFINE_PRIM(_ARR,__array_alloc_f64,_I32);
 DEFINE_PRIM(_ARR,__array_alloc_bytes,_I32);
 DEFINE_PRIM(_ARR,__array_alloc_bool,_I32);
+DEFINE_PRIM(_ARR,__array_alloc_ref,_I32);
 DEFINE_PRIM(_BYTES,__string_concat,_BYTES _BYTES);
 DEFINE_PRIM(_I32,__string_length,_BYTES);
 DEFINE_PRIM(_BOOL,__string_equal,_BYTES _BYTES);

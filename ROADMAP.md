@@ -31,9 +31,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 - [x] Function values for non-capturing references.
 - [x] Capturing closures and instance closures (read-only captures; mutable
   capture cells remain future work).
-- [~] `Array<Int>` typing, indexed reads/writes, `.length`, and compiler-owned
-	`Int`/`Float`/`Bool`/`String` allocation lower directly to HashLink array
-	operations and the runtime ABI. Object arrays, maps, and pattern matching
+- [~] `Array<T>` typing, indexed reads/writes, `.length`, and compiler-owned
+	`Int`/`Float`/`Bool`/`String` plus reference-array allocation lower directly
+	to HashLink array operations and the runtime ABI. Maps and pattern matching
 	remain future work. Our HashLink fork enforces bounds in the JIT.
 - [~] Explicit `Null<T>` values for reference types lower to HashLink's native
 	null representation, support equality, and reject implicit untyped null
@@ -105,9 +105,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 
 ## Feature order after the current milestone
 
-1. Extend the first-class `Array<T>` runtime type from the current
-	`Int`/`Float`/`String` allocation slice to object arrays and compiler-owned
-	collection operations; keep bounds checks in the HashLink operation contract.
+1. Extend the first-class `Array<T>` runtime type with map operations and
+	collection iteration; keep bounds checks in the HashLink operation contract.
 2. Add payload enums and pattern matching on the same tagged-value rules used
 	   by the runtime bridge; nullable reference values are already supported but
 	   need flow-sensitive narrowing.

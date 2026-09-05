@@ -241,7 +241,7 @@ class CfgVerifier {
 
 	static function isReference(type:IrType):Bool
 		return switch type {
-			case Bytes, Obj(_), Virtual(_), Array(_), Function(_, _): true;
+			case Bytes, Dyn, Obj(_), Virtual(_), Array(_), Function(_, _): true;
 			default: false;
 		};
 }

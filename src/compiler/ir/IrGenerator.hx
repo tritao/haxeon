@@ -136,6 +136,13 @@ class IrGenerator {
 				arguments: [I32],
 				result: Array(Bool)
 			});
+			program.natives.push({
+				name: "__array_alloc_ref",
+				library: "realtime_runtime",
+				symbol: "__array_alloc_ref",
+				arguments: [I32],
+				result: Array(Dyn)
+			});
 		}
 		if (needsStringRuntime)
 			program.natives.push({
@@ -357,6 +364,7 @@ class IrGenerator {
 			case TFloat: "__array_alloc_f64";
 			case TString: "__array_alloc_bytes";
 			case TBool: "__array_alloc_bool";
-			default: throw "Compiler-owned allocation currently supports Int, Float, Bool, and String arrays";
+			case TClass(_), TInterface(_), TArray(_), TFunction(_): "__array_alloc_ref";
+			default: throw "Compiler-owned allocation currently supports primitive and reference arrays";
 		};
 }

@@ -38,10 +38,10 @@ configured library/symbol binding. Registrations freeze after compilation so a
 native-table layout cannot silently change beneath a live module.
 
 Compiler-owned `new Array<Int>(length)`, `new Array<Float>(length)`,
-`new Array<Bool>(length)`, and `new Array<String>(length)` expressions emit the realtime runtime ABI without
-requiring source-level native registration. Indexed operations and `.length`
-remain ordinary typed expressions and use HashLink's bounds-checked array
-operations.
+`new Array<Bool>(length)`, `new Array<String>(length)`, and reference-array
+expressions emit the realtime runtime ABI without requiring source-level native
+registration. Indexed operations and `.length` remain ordinary typed
+expressions and use HashLink's bounds-checked array operations.
 
 String addition, equality, `.length`, `indexOf`, and `substring` use the same
 compiler-owned runtime ABI, keeping source code independent from native symbol

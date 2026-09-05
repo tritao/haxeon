@@ -162,7 +162,7 @@ class IrVerifier {
 					if (!compatibleType(args[i].type, signature.arguments[i], objects, interfaces))
 						throw 'Wrong IR argument type for "$name"';
 				}
-				if (!sameType(out.type, signature.result))
+				if (!sameType(out.type, signature.result) && !abiCompatible(out.type, signature.result))
 					throw 'Wrong IR result type for "$name"';
 				define(values, out);
 			case StaticClosure(out, name):
@@ -397,7 +397,13 @@ class IrVerifier {
 
 	static function isReference(type:IrType):Bool
 		return switch type {
-			case Bytes, Obj(_), Virtual(_), Array(_), Function(_, _): true;
+			case Bytes, Dyn, Obj(_), Virtual(_), Array(_), Function(_, _): true;
+			default: false;
+		};
+
+	static function abiCompatible(actual:IrType, expected:IrType):Bool
+		return switch [actual, expected] {
+			case [Array(element), Array(Dyn)]: isReference(element);
 			default: false;
 		};
 

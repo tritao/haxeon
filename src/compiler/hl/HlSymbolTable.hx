@@ -73,6 +73,7 @@ class HlSymbolTable {
 			case Bool: HlType.Bool;
 			case F64: HlType.F64;
 			case Bytes: HlType.Bytes;
+			case Dyn: HlType.Dyn;
 			case Array(_): HlType.Array;
 			case Obj(name): throw 'Object type "$name" must be registered before use';
 			case Virtual(name): throw 'Virtual type "$name" must be registered before use';
@@ -199,6 +200,7 @@ class HlSymbolTable {
 			case Bool: "bool";
 			case F64: "f64";
 			case Bytes: "bytes";
+			case Dyn: "dyn";
 			case Array(element): 'array:${typeKey(element)}';
 			case Obj(name): 'obj:$name';
 			case Virtual(name): 'virt:$name';

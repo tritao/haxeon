@@ -71,6 +71,7 @@ run_program inheritance-class 43
 run_program virtual-dispatch 71
 run_program enum-basic 42
 run_program nullable-basic 42
+run_program object-array 42
 run_program interface-dispatch 42
 run_program interface-inheritance 43
 run_program interface-upcast 5

@@ -6,6 +6,7 @@ enum IrType {
 	Bool;
 	F64;
 	Bytes;
+	Dyn;
 	Array(element:IrType);
 	Obj(name:String);
 	Virtual(name:String);
