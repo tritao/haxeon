@@ -27,6 +27,10 @@ class LspProtocol {
 	final publishedDiagnostics:Map<String, String> = [];
 	final activeRequests:Map<String, CancellationToken> = [];
 	final requestMutex = new sys.thread.Mutex();
+	final diagnosticMutex = new sys.thread.Mutex();
+	final pendingDiagnosticTargets:Map<String, Bool> = [];
+	var diagnosticToken:Null<CancellationToken>;
+	var deferDiagnostics = false;
 	var analysisGeneration = 0;
 	var shutdownRequested = false;
 	var exitRequested = false;
@@ -86,6 +90,43 @@ class LspProtocol {
 	public function shouldExit():Bool
 		return exitRequested;
 
+	public function enableDeferredDiagnostics():Void
+		deferDiagnostics = true;
+
+	public function cancelPendingDiagnostics():Void {
+		diagnosticMutex.acquire();
+		if (diagnosticToken != null)
+			diagnosticToken.cancel();
+		diagnosticMutex.release();
+	}
+
+	public function analyzePendingDiagnostics():Array<String> {
+		if (!deferDiagnostics)
+			return [];
+		var generation = analysisGeneration,
+			targets = [for (target in pendingDiagnosticTargets.keys()) target],
+			token = new CancellationToken();
+		for (target in targets)
+			pendingDiagnosticTargets.remove(target);
+		targets.sort(Reflect.compare);
+		diagnosticMutex.acquire();
+		diagnosticToken = token;
+		diagnosticMutex.release();
+		try {
+			for (target in targets)
+				try
+					service.analyze(target, token)
+				catch (cancelled:CancellationError)
+					throw cancelled
+				catch (_:CompileError) {} catch (_:Dynamic) {}
+		} catch (_:CancellationError) {
+			clearDiagnosticToken(token);
+			return [];
+		}
+		clearDiagnosticToken(token);
+		return generation == analysisGeneration ? diagnosticNotifications(generation) : [];
+	}
+
 	function initializeResult():Dynamic
 		return {
 			capabilities: {
@@ -125,6 +166,11 @@ class LspProtocol {
 			targets = service.compiler.dependentModules(changedModule);
 		if (targets.length == 0)
 			targets.push(changedModule);
+		if (deferDiagnostics) {
+			for (target in targets)
+				pendingDiagnosticTargets.set(target, true);
+			return [];
+		}
 		for (target in targets)
 			try
 				service.analyze(target)
@@ -278,6 +324,13 @@ class LspProtocol {
 		requestMutex.acquire();
 		activeRequests.remove(key);
 		requestMutex.release();
+	}
+
+	function clearDiagnosticToken(token:CancellationToken):Void {
+		diagnosticMutex.acquire();
+		if (diagnosticToken == token)
+			diagnosticToken = null;
+		diagnosticMutex.release();
 	}
 
 	static function requestKey(id:Dynamic):String

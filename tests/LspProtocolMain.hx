@@ -206,6 +206,77 @@ class LspProtocolMain {
 		var closedMessage:Dynamic = Json.parse(closedDependent[0]);
 		if (closedMessage.params.uri != consumerUri || Reflect.hasField(closedMessage.params, "version"))
 			throw "closed document diagnostic incorrectly included an LSP version";
+		var scheduledService = new LanguageService(),
+			scheduledProtocol = new LspProtocol(scheduledService),
+			scheduledMessages:Array<String> = [],
+			scheduledDiagnostics = new sys.thread.Lock(),
+			scheduledDispatcher = new LspDispatcher(scheduledProtocol, response -> {
+				scheduledMessages.push(response);
+				var parsed:Dynamic = Json.parse(response);
+				if (parsed.method == "textDocument/publishDiagnostics" && parsed.params.uri == consumerUri)
+					scheduledDiagnostics.release();
+			}, 16, 20);
+		scheduledDispatcher.dispatch(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: choiceUri,
+					languageId: "haxe",
+					version: 1,
+					text: choiceSource
+				}
+			}
+		}));
+		scheduledDispatcher.dispatch(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: consumerUri,
+					languageId: "haxe",
+					version: 1,
+					text: consumerSource
+				}
+			}
+		}));
+		scheduledDispatcher.dispatch(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didChange",
+			params: {
+				textDocument: {uri: choiceUri, version: 2},
+				contentChanges: [{text: "package workspace.shape; enum Choice { One; Two; }"}]
+			}
+		}));
+		scheduledDispatcher.dispatch(Json.stringify({
+			jsonrpc: "2.0",
+			id: 90,
+			method: "textDocument/hover",
+			params: {textDocument: {uri: consumerUri}, position: {line: 0, character: 10}}
+		}));
+		scheduledDiagnostics.wait();
+		scheduledDispatcher.finish();
+		var interactiveIndex = -1,
+			diagnosticIndex = -1,
+			latestChoiceVersion = -1,
+			scheduledConsumerDiagnostics = -1;
+		for (index in 0...scheduledMessages.length) {
+			var parsed:Dynamic = Json.parse(scheduledMessages[index]);
+			if (parsed.id == 90)
+				interactiveIndex = index;
+			if (parsed.method == "textDocument/publishDiagnostics") {
+				if (parsed.params.uri == choiceUri)
+					latestChoiceVersion = parsed.params.version;
+				if (parsed.params.uri == consumerUri) {
+					diagnosticIndex = index;
+					scheduledConsumerDiagnostics = parsed.params.diagnostics.length;
+				}
+			}
+		}
+		if (interactiveIndex < 0 || diagnosticIndex <= interactiveIndex)
+			throw "interactive LSP request was not prioritized over pending diagnostics";
+		if (latestChoiceVersion != 2 || scheduledConsumerDiagnostics == 0)
+			throw "debounced diagnostics did not publish only the latest document generation";
 		var definition = request(protocol, Json.stringify({
 			jsonrpc: "2.0",
 			id: 3,
