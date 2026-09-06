@@ -95,6 +95,9 @@ class LspProtocol {
 				case "textDocument/semanticTokens/full": cancellable(id, token -> semanticTokens(request, token));
 				case "textDocument/codeAction": cancellable(id, token -> codeActions(request, token));
 				case "textDocument/inlayHint": cancellable(id, token -> inlayHints(request, token));
+				case "textDocument/prepareCallHierarchy": cancellable(id, token -> prepareCallHierarchy(request, token));
+				case "callHierarchy/incomingCalls": cancellable(id, token -> callHierarchyCalls(request, token, true));
+				case "callHierarchy/outgoingCalls": cancellable(id, token -> callHierarchyCalls(request, token, false));
 				case "textDocument/hover": cancellable(id, token -> hover(request, token));
 				case "textDocument/signatureHelp": cancellable(id, token -> signatureHelp(request, token));
 				case "textDocument/definition": cancellable(id, token -> definition(request, token));
@@ -231,6 +234,7 @@ class LspProtocol {
 				},
 				codeActionProvider: {codeActionKinds: ["quickfix"]},
 				inlayHintProvider: true,
+				callHierarchyProvider: true,
 				hoverProvider: true,
 				signatureHelpProvider: {triggerCharacters: ["(", ","]},
 				definitionProvider: true,
@@ -578,6 +582,46 @@ class LspProtocol {
 					paddingRight: hint.paddingRight
 				}
 		];
+	}
+
+	function prepareCallHierarchy(request:Dynamic, token:CancellationToken):Dynamic {
+		var document = document(request);
+		ensureAnalyzed(document, token);
+		requireCurrent(document);
+		var item = service.prepareCallHierarchy(compilerPath(document), positionOffset(document, position(request)));
+		return item == null ? null : [callHierarchyItem(item)];
+	}
+
+	function callHierarchyCalls(request:Dynamic, token:CancellationToken, incoming:Bool):Array<Dynamic> {
+		var item:Dynamic = required(required(request, "params"), "item"), data = required(item, "data"), identity = requiredString(data, "identity"),
+			revision = requiredInt(data, "revision");
+		if (!service.isCallHierarchyCurrent(identity, revision))
+			throw new LspRequestError(-32801, "Call hierarchy item no longer matches its source revision");
+		var relations = incoming ? service.incomingCalls(identity, revision, token) : service.outgoingCalls(identity, revision, token);
+		return incoming ? [
+			for (relation in relations) {
+				var target = documentForPath(relation.item.path);
+				{from: callHierarchyItem(relation.item), fromRanges: [for (range in relation.ranges) target.range(range.start, range.end)]};
+			}
+		] : [
+			for (relation in relations) {
+				var target = documentForPath(relation.item.path);
+				{to: callHierarchyItem(relation.item), fromRanges: [for (range in relation.ranges) target.range(range.start, range.end)]};
+			}
+		];
+	}
+
+	function callHierarchyItem(item:compiler.service.LanguageService.CallHierarchyItem):Dynamic {
+		var target = documentForPath(item.path), range = target.range(item.span.start, item.span.end);
+		return {
+			name: item.name,
+			kind: symbolKind(item.kind),
+			detail: item.detail,
+			uri: documents.uri(project.diskPath(item.path)),
+			range: range,
+			selectionRange: range,
+			data: {identity: item.identity, revision: item.revision}
+		};
 	}
 
 	function hover(request:Dynamic, token:CancellationToken):Dynamic {

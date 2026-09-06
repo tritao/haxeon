@@ -94,6 +94,21 @@ typedef InlayHint = {
 	final paddingRight:Bool;
 }
 
+typedef CallHierarchyItem = {
+	final identity:String;
+	final name:String;
+	final kind:String;
+	final detail:String;
+	final path:String;
+	final span:SourceSpan;
+	final revision:Int;
+}
+
+typedef CallHierarchyRelation = {
+	final item:CallHierarchyItem;
+	final ranges:Array<SourceSpan>;
+}
+
 private typedef WorkspaceIndexEntry = {
 	final revision:Int;
 	final symbols:Array<WorkspaceSymbol>;
@@ -251,12 +266,75 @@ class LanguageService {
 		return result;
 	}
 
+	public function prepareCallHierarchy(path:String, position:Int):Null<CallHierarchyItem> {
+		var context = semanticQuery(path, position);
+		if (context == null || context.symbol == null)
+			return null;
+		return callHierarchyItem(context.symbol);
+	}
+
+	public function incomingCalls(identity:String, revision:Int, ?token:CancellationToken):Array<CallHierarchyRelation>
+		return hierarchyCalls(identity, revision, true, token);
+
+	public function outgoingCalls(identity:String, revision:Int, ?token:CancellationToken):Array<CallHierarchyRelation>
+		return hierarchyCalls(identity, revision, false, token);
+
+	public function isCallHierarchyCurrent(identity:String, revision:Int):Bool {
+		var item = callHierarchyItem(cast identity);
+		return item != null && item.revision == revision;
+	}
+
 	function workspaceSymbolIdentity(identity:String):Null<WorkspaceSymbol> {
 		for (state in compiler.modules)
 			for (symbol in indexedWorkspaceSymbols(state))
 				if (symbol.identity == identity)
 					return symbol;
 		return null;
+	}
+
+	function callHierarchyItem(identity:SemanticSymbolId):Null<CallHierarchyItem> {
+		var resolved = compiler.semanticWorkspace.indexedSymbol(identity);
+		if (resolved == null)
+			return null;
+		var signature = compiler.semanticWorkspace.indexedSignature(identity), kind = switch resolved.symbol.kind {
+			case DeclarationKind.Function: "function";
+			case DeclarationKind.Class: "class";
+			case DeclarationKind.Member if (signature != null): "method";
+			default: return null;
+		};
+		return {
+			identity: Std.string(identity),
+			name: sourceName(resolved.symbol.name),
+			kind: kind,
+			detail: signature == null ? resolved.symbol.name : signature.label,
+			path: resolved.state.source.path,
+			span: resolved.symbol.declaration,
+			revision: resolved.state.revision
+		};
+	}
+
+	function hierarchyCalls(identity:String, revision:Int, incoming:Bool, ?token:CancellationToken):Array<CallHierarchyRelation> {
+		var origin = callHierarchyItem(cast identity), grouped:Map<String, CallHierarchyRelation> = [];
+		if (origin == null || origin.revision != revision)
+			return [];
+		for (located in compiler.semanticWorkspace.indexedCalls(token)) {
+			var edge = located.edge, matches = incoming ? Std.string(edge.callee) == identity : Std.string(edge.caller) == identity;
+			if (!matches)
+				continue;
+			var relatedId = incoming ? edge.caller : edge.callee, key = Std.string(relatedId), relation = grouped.get(key);
+			if (relation == null) {
+				var item = callHierarchyItem(relatedId);
+				if (item == null)
+					continue;
+				grouped.set(key, relation = {item: item, ranges: []});
+			}
+			relation.ranges.push(edge.span);
+		}
+		var result = [for (relation in grouped) relation];
+		result.sort(function(left, right) return Reflect.compare(left.item.identity, right.item.identity));
+		for (relation in result)
+			relation.ranges.sort(function(left, right) return Reflect.compare(left.start, right.start));
+		return result;
 	}
 
 	/** Whether editor spans and typed data belong to the latest source revision. */

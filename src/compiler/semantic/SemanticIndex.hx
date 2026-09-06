@@ -47,6 +47,12 @@ typedef SemanticSignatureInfo = {
 	final result:String;
 }
 
+typedef SemanticCallEdge = {
+	final caller:SemanticSymbolId;
+	final callee:SemanticSymbolId;
+	final span:SourceSpan;
+}
+
 /** Revision-local declaration and resolved-local facts emitted by the compiler. */
 class SemanticIndex {
 	public final revision:Int;
@@ -55,13 +61,16 @@ class SemanticIndex {
 
 	final bindings:Array<PositionBinding> = [];
 	final references:Map<String, Array<SourceSpan>> = [];
+	final referenceKeys:Map<String, Map<String, Bool>> = [];
 	final signatures:Map<String, SemanticSignatureInfo> = [];
+	final callEdges:Array<SemanticCallEdge> = [];
 	final completionLocals:Array<SemanticCompletionLocal> = [];
 	final functionReceivers:Array<{span:SourceSpan, type:CompilerType}> = [];
 	final completionTypes:Array<{span:SourceSpan, type:CompilerType}> = [];
 	final tokens:Array<Token>;
 	final module:String;
 	var cancellation:Null<CancellationToken>;
+	var currentCaller:Null<SemanticSymbolId>;
 	var checkpointCount:Int = 0;
 
 	public function new(path:String, revision:Int, declarations:DeclarationIndex, tokens:Array<Token>) {
@@ -137,7 +146,10 @@ class SemanticIndex {
 		}
 		declareLocals(fn, fn.statements);
 		indexCompletionLocals(fn.statements, fn.span, 0);
+		currentCaller = functionId;
 		indexStatements(fn, fn.statements, resolve, resolveEnumCase);
+		indexCallTokens(fn, functionId, resolve);
+		currentCaller = null;
 		bindings.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
 		checkpoint();
 		cancellation = null;
@@ -161,6 +173,34 @@ class SemanticIndex {
 
 	public function signature(id:SemanticSymbolId):Null<SemanticSignatureInfo>
 		return signatures.get(id);
+
+	public function calls():Array<SemanticCallEdge> {
+		var result = callEdges.copy();
+		for (caller in symbols) {
+			if (caller.kind != DeclarationKind.Function && caller.kind != DeclarationKind.Member)
+				continue;
+			var declarationBinding = locations(caller.id);
+			for (index in 0...tokens.length) {
+				var token = tokens[index];
+				if (token.span.start < caller.declaration.start || token.span.end > caller.declaration.end || token.kind != TokenKind.Identifier
+					|| index + 1 >= tokens.length || tokens[index + 1].kind != TokenKind.LeftParen
+					|| declarationBinding.length > 0 && token.span.start == declarationBinding[0].start)
+					continue;
+				var callee = symbolIdAt(token.span.start);
+				if (callee == null)
+					continue;
+				var duplicate = false;
+				for (edge in result)
+					if (edge.caller == caller.id && edge.callee == callee && edge.span.start == token.span.start) {
+						duplicate = true;
+						break;
+					}
+				if (!duplicate)
+					result.push({caller: caller.id, callee: callee, span: token.span});
+			}
+		}
+		return result;
+	}
 
 	public function indexTypeReferences(resolve:String->Null<SemanticSymbolId>, ?token:CancellationToken):Void {
 		var started = Sys.time();
@@ -402,7 +442,7 @@ class SemanticIndex {
 				bindMember(resolve, object.type, name, expression.span);
 				indexExpression(fn, object, resolve, resolveEnumCase);
 			case TMethodCall(object, method, arguments):
-				bindNamed(resolve, method, expression.span);
+				addCall(bindNamed(resolve, method, expression.span), expression.span, method);
 				indexExpression(fn, object, resolve, resolveEnumCase);
 				for (argument in arguments)
 					indexExpression(fn, argument, resolve, resolveEnumCase);
@@ -411,7 +451,7 @@ class SemanticIndex {
 				for (argument in arguments)
 					indexExpression(fn, argument, resolve, resolveEnumCase);
 			case TCall(name, arguments):
-				bindNamed(resolve, name, expression.span);
+				addCall(bindNamed(resolve, name, expression.span), expression.span, name);
 				for (argument in arguments)
 					indexExpression(fn, argument, resolve, resolveEnumCase);
 			case TFunctionRef(name):
@@ -426,7 +466,7 @@ class SemanticIndex {
 			case TPostfixStaticField(owner, name, _):
 				bindNamed(resolve, owner + "." + name, expression.span);
 			case TNew(name, arguments, _):
-				bindNamed(resolve, name, expression.span);
+				addCall(bindNamed(resolve, name, expression.span), expression.span, name);
 				for (argument in arguments)
 					indexExpression(fn, argument, resolve, resolveEnumCase);
 			case TEnumLiteral(name, index):
@@ -457,15 +497,47 @@ class SemanticIndex {
 		}
 	}
 
+	function addCall(callee:Null<SemanticSymbolId>, expression:SourceSpan, name:String):Void {
+		if (currentCaller == null || callee == null)
+			return;
+		var token = referenceToken(tokens, expression, sourceName(name));
+		var span = token == null ? expression : token.span;
+		for (edge in callEdges)
+			if (edge.caller == currentCaller && edge.callee == callee && edge.span.start == span.start && edge.span.end == span.end)
+				return;
+		callEdges.push({caller: currentCaller, callee: callee, span: span});
+	}
+
+	function indexCallTokens(fn:TypedFunction, caller:Null<SemanticSymbolId>, resolve:String->Null<SemanticSymbolId>):Void {
+		if (caller == null)
+			return;
+		var declaration = declarationToken(tokens, fn.span, sourceName(fn.name));
+		for (index in 0...tokens.length) {
+			var token = tokens[index];
+			if (token.span.start < fn.span.start || token.span.end > fn.span.end || token.kind != TokenKind.Identifier || index + 1 >= tokens.length
+				|| tokens[index + 1].kind != TokenKind.LeftParen || declaration != null && token.span.start == declaration.span.start)
+				continue;
+			var callee = resolve(token.text);
+			if (callee != null) {
+				currentCaller = caller;
+				addCall(callee, token.span, token.text);
+			}
+		}
+	}
+
 	function bind(id:SemanticSymbolId, span:SourceSpan):Void {
 		checkpoint();
 		bindings.push({span: span, symbol: id});
 		var locations = references.get(id);
-		if (locations == null)
+		var keys = referenceKeys.get(id);
+		if (locations == null) {
 			references.set(id, locations = []);
-		for (existing in locations)
-			if (existing.start == span.start && existing.end == span.end)
-				return;
+			referenceKeys.set(id, keys = []);
+		}
+		var key = span.file.path + ":" + span.start + ":" + span.end;
+		if (keys.exists(key))
+			return;
+		keys.set(key, true);
 		locations.push(span);
 	}
 
@@ -574,11 +646,12 @@ class SemanticIndex {
 			bind(id, token.span);
 	}
 
-	function bindNamed(resolve:String->Null<SemanticSymbolId>, name:String, span:SourceSpan):Void {
+	function bindNamed(resolve:String->Null<SemanticSymbolId>, name:String, span:SourceSpan):Null<SemanticSymbolId> {
 		var id = resolve(name),
 			token = referenceToken(tokens, span, sourceName(name));
 		if (id != null && token != null)
 			bind(id, token.span);
+		return id;
 	}
 
 	function bindMember(resolve:String->Null<SemanticSymbolId>, type:CompilerType, name:String, span:SourceSpan):Void {

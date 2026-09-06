@@ -46,7 +46,8 @@ class LspProtocolMain {
 			|| initialized.result.capabilities.semanticTokensProvider.legend.tokenTypes[12] != "function"
 			|| initialized.result.capabilities.codeActionProvider.codeActionKinds[0] != "quickfix"
 			|| !initialized.result.capabilities.workspaceSymbolProvider.resolveProvider
-			|| !initialized.result.capabilities.inlayHintProvider)
+			|| !initialized.result.capabilities.inlayHintProvider
+			|| !initialized.result.capabilities.callHierarchyProvider)
 			throw "LSP initialization capabilities are incomplete";
 		var watcherRegistration = protocol.handle('{"jsonrpc":"2.0","method":"initialized","params":{}}');
 		if (watcherRegistration.length != 1
@@ -319,7 +320,7 @@ class LspProtocolMain {
 			|| actions.result[0].edit.documentChanges[0].textDocument.version != 1
 			|| actions.result[0].edit.documentChanges[0].edits[0].newText != "\"")
 			throw "LSP code actions did not expose the compiler-authored lexical fix";
-		var callSource = "function add(left:Int, right:Int):Int return left + right; function main():Int return add(20, 22);",
+		var callSource = "function add(left:Int, right:Int):Int return left + right; function main():Int return add(20, 22) + add(1, 2);",
 			callUri = "file:///workspace/Call.hx";
 		protocol.handle(Json.stringify({
 			jsonrpc: "2.0",
@@ -357,6 +358,37 @@ class LspProtocolMain {
 		}
 		if (!hasLeftHint || !hasRightHint)
 			throw "LSP inlay hints omitted resolved call parameter names";
+		var preparedAdd = request(protocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 62,
+			method: "textDocument/prepareCallHierarchy",
+			params: {textDocument: {uri: callUri}, position: {line: 0, character: callSource.indexOf("add") + 1}}
+		})), preparedMain = request(protocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 63,
+			method: "textDocument/prepareCallHierarchy",
+			params: {textDocument: {uri: callUri}, position: {line: 0, character: callSource.indexOf("main") + 1}}
+		}));
+		if (preparedAdd.result == null || preparedMain.result == null)
+			throw "LSP did not prepare callable hierarchy items";
+		var incoming = request(protocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 64,
+			method: "callHierarchy/incomingCalls",
+			params: {item: preparedAdd.result[0]}
+		})), outgoing = request(protocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 65,
+			method: "callHierarchy/outgoingCalls",
+			params: {item: preparedMain.result[0]}
+		}));
+		if (incoming.result.length != 1
+			|| incoming.result[0].from.name != "main"
+			|| incoming.result[0].fromRanges.length != 2
+			|| outgoing.result.length != 1
+			|| outgoing.result[0].to.name != "add"
+			|| outgoing.result[0].fromRanges.length != 2)
+			throw "LSP call hierarchy did not aggregate repeated incoming and outgoing call sites";
 		var completion = request(protocol, Json.stringify({
 			jsonrpc: "2.0",
 			id: 7,

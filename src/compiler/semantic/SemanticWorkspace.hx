@@ -8,6 +8,7 @@ import compiler.types.Type.NominalKind;
 import compiler.semantic.SemanticIndex.IndexedSemanticSymbol;
 import compiler.semantic.SemanticIndex.SemanticSymbolId;
 import compiler.semantic.SemanticIndex.SemanticSignatureInfo;
+import compiler.semantic.SemanticIndex.SemanticCallEdge;
 import compiler.service.CancellationToken;
 
 /** A declaration resolved against the effective snapshots of a module workspace. */
@@ -147,6 +148,19 @@ class SemanticWorkspace {
 			if (model != null)
 				for (span in model.index.locations(id))
 					result.push({state: state, span: span});
+		}
+		return result;
+	}
+
+	public function indexedCalls(?token:CancellationToken):Array<{state:ModuleState, edge:SemanticCallEdge}> {
+		var result = [];
+		for (state in orderedStates()) {
+			if (token != null)
+				token.check();
+			var model = effectiveModel(state);
+			if (model != null)
+				for (edge in model.index.calls())
+					result.push({state: state, edge: edge});
 		}
 		return result;
 	}
