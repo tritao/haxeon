@@ -1183,8 +1183,21 @@ class Typer {
 						type = pushedElementType(name, no, 0, resolvedBindings);
 					if (type != null)
 						return type;
-				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _):
+				case While(_, body, _), DoWhile(body, _, _):
 					var type = pushedElementType(name, body, 0, resolvedBindings);
+					if (type != null)
+						return type;
+				case ForIn(keyName, valueName, iterable, body, _):
+					var loopBindings = copyMap(resolvedBindings);
+					switch knownExpressionType(iterable, resolvedBindings) {
+						case TArray(element): loopBindings.set(keyName, element);
+						case TMap(key, value):
+							loopBindings.set(keyName, valueName == null ? value : key);
+							if (valueName != null) loopBindings.set(valueName, value);
+						case TRange: loopBindings.set(keyName, TInt);
+						default:
+					}
+					var type = pushedElementType(name, body, 0, loopBindings);
 					if (type != null)
 						return type;
 				case Try(tryBranch, catches, _):
@@ -1304,6 +1317,13 @@ class Typer {
 			case IntegerLiteral(_, _): TInt;
 			case FloatLiteral(_, _): TFloat;
 			case BoolLiteral(_, _): TBool;
+			case ArrayLiteral(values, _) if (values.length > 0): var element = knownExpressionType(values[0], bindings),
+					homogeneous = element != null; for (index in 1...values.length) {
+					var candidate = knownExpressionType(values[index], bindings);
+					if (candidate == null || element == null || !sameType(candidate, element))
+						homogeneous = false;
+				} homogeneous && element != null ? TArray(element) : null;
+			case Range(_, _, _): TRange;
 			case New(typeName, _, _): classDecls.exists(typeName) ? TInstance(NominalKind.Class, typeName, []) : null;
 			default: null;
 		};
