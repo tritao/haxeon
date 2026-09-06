@@ -1234,9 +1234,13 @@ class IrGenerator {
 		builder.select(innerCondition);
 		builder.branch(builder.lessEqual(builder.constInt(0), builder.load(scanName, I32)), compare, insert);
 		builder.select(compare);
+		var comparatorArguments = switch comparatorType {
+			case Function(arguments, _): arguments;
+			default: throw "Array.sort comparator must be a function";
+		};
 		var order = builder.callClosure(builder.load(comparatorName, comparatorType), [
-			builder.arrayGet(builder.load(arrayName, arrayType), builder.load(scanName, I32), elementType),
-			builder.load(keyName, elementType)
+			abiBoundaryCast(builder, builder.arrayGet(builder.load(arrayName, arrayType), builder.load(scanName, I32), elementType), comparatorArguments[0]),
+			abiBoundaryCast(builder, builder.load(keyName, elementType), comparatorArguments[1])
 		], I32);
 		builder.branch(builder.less(builder.constInt(0), order), move, insert);
 		builder.select(move);
