@@ -143,17 +143,18 @@ class DeclarationIndex {
 					for (i in 0...alias.typeParameters.length)
 						aliasSubstitutions.set(alias.typeParameters[i], resolvedArguments[i]);
 					resolveAlias(alias, resolving, aliasSubstitutions);
-				} else if (!enums.exists(name)) {
-					fail('Type "$name" does not accept type arguments', span);
-					TDynamic;
-				} else {
-					var declaration = enums.get(name);
-					if (arguments.length != declaration.typeParameters.length)
-						fail('Type "$name" expects ${declaration.typeParameters.length} type arguments, got ${arguments.length}', span);
-					TInstance(Enum, name, [
+				} else if (classes.exists(name) || interfaces.exists(name) || enums.exists(name)) {
+					var parameters = classes.exists(name) ? classes.get(name)
+						.typeParameters : interfaces.exists(name) ? interfaces.get(name).typeParameters : enums.get(name).typeParameters;
+					if (arguments.length != parameters.length)
+						fail('Type "$name" expects ${parameters.length} type arguments, got ${arguments.length}', span);
+					TInstance(classes.exists(name) ? Class : interfaces.exists(name) ? Interface : Enum, name, [
 						for (argument in arguments)
 							resolveInner(argument, span, resolving, substitutions)
 					]);
+				} else {
+					fail('Type "$name" does not accept type arguments', span);
+					TDynamic;
 				}
 			case ArrayType(element): TArray(resolveInner(element, span, resolving, substitutions));
 			case MapType(key, value): TMap(resolveInner(key, span, resolving, substitutions), resolveInner(value, span, resolving, substitutions));
@@ -192,12 +193,19 @@ class DeclarationIndex {
 			resolveAlias(alias, resolving, substitutions);
 		} else if (enumAbstracts.exists(name)) resolveInner(enumAbstracts.get(name).underlying, span, resolving,
 			substitutions); else if (abstracts.exists(name)) resolveInner(abstracts.get(name).underlying, span, resolving,
-			substitutions); else if (interfaces.exists(name)) TInstance(Interface, name,
-			[]); else if (enums.exists(name)) TInstance(Enum, name,
-			[]); else if (classes.exists(name)) TInstance(Class, name, []); else if (PlatformAbi.isType(name)) PlatformAbi.valueType(name); else {
+			substitutions); else if (interfaces.exists(name)) resolveBareNominal(name, Interface, interfaces.get(name).typeParameters.length,
+			span); else if (enums.exists(name)) resolveBareNominal(name, Enum, enums.get(name).typeParameters.length,
+			span); else if (classes.exists(name)) resolveBareNominal(name, Class, classes.get(name).typeParameters.length,
+			span); else if (PlatformAbi.isType(name)) PlatformAbi.valueType(name); else {
 			fail('Unknown type "$name"', span);
 			TVoid;
 		};
+	}
+
+	function resolveBareNominal(name:String, kind:compiler.types.Type.NominalKind, arity:Int, span:SourceSpan):CompilerType {
+		if (arity != 0)
+			fail('Type "$name" expects $arity type arguments, got 0', span);
+		return TInstance(kind, name, []);
 	}
 
 	function resolveAlias(alias:AstTypeAlias, resolving:Map<String, Bool>, substitutions:Map<String, CompilerType>):CompilerType {
@@ -287,21 +295,28 @@ class DeclarationIndex {
 				for (parameter in caseDecl.params)
 					resolve(parameter.type, parameter.span, substitutions);
 		}
-		for (decl in program.interfaces)
+		for (decl in program.interfaces) {
+			var substitutions:Map<String, CompilerType> = [];
+			for (parameter in decl.typeParameters)
+				substitutions.set(parameter, TTypeParameter(decl.name, parameter));
 			for (method in decl.methods)
-				resolveFunction(method, decl.name + "." + method.name);
+				resolveFunction(method, decl.name + "." + method.name, substitutions);
+		}
 		for (decl in program.classes) {
+			var substitutions:Map<String, CompilerType> = [];
+			for (parameter in decl.typeParameters)
+				substitutions.set(parameter, TTypeParameter(decl.name, parameter));
 			for (field in decl.fields)
-				resolve(FieldInference.parsedType(field), field.span);
+				resolve(FieldInference.parsedType(field), field.span, substitutions);
 			for (method in decl.methods)
-				resolveFunction(method, decl.name + "." + method.name);
+				resolveFunction(method, decl.name + "." + method.name, substitutions);
 		}
 		for (fn in program.functions)
 			resolveFunction(fn, fn.name);
 	}
 
-	function resolveFunction(fn:AstFunction, owner:String):Void {
-		var substitutions:Map<String, CompilerType> = [],
+	function resolveFunction(fn:AstFunction, owner:String, ?ownerSubstitutions:Map<String, CompilerType>):Void {
+		var substitutions:Map<String, CompilerType> = ownerSubstitutions == null ? [] : [for (name => type in ownerSubstitutions) name => type],
 			typeParameters = fn.typeParameters;
 		if (typeParameters != null)
 			for (parameter in typeParameters)

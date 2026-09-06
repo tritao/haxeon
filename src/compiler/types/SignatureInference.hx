@@ -27,6 +27,7 @@ class SignatureInference {
 		for (classDecl in program.classes) {
 			inferredClasses.push({
 				name: classDecl.name,
+				typeParameters: classDecl.typeParameters,
 				isPrivate: classDecl.isPrivate,
 				metadata: classDecl.metadata,
 				base: classDecl.base,

@@ -73,8 +73,8 @@ class TypeRelations {
 					case TTypeParameter(otherOwner, otherName): owner == otherOwner && name == otherName;
 					default: false;
 				};
-			case TInstance(Class, name, []): sameClass(right, name);
-			case TInstance(Interface, name, []): sameInterface(right, name);
+			case TInstance(Class, name, arguments): sameNominal(right, Class, name, arguments);
+			case TInstance(Interface, name, arguments): sameNominal(right, Interface, name, arguments);
 			case TInstance(Enum, name, arguments): sameEnum(right, name, arguments);
 			case TNativeAbstract(name): sameNativeAbstract(right, name);
 			case TNullable(element): sameUnary(right, element, true);
@@ -93,15 +93,9 @@ class TypeRelations {
 			default: left == right;
 		};
 
-	static function sameClass(type:CompilerType, name:String):Bool
+	static function sameNominal(type:CompilerType, kind:compiler.types.Type.NominalKind, name:String, arguments:Array<CompilerType>):Bool
 		return switch type {
-			case TInstance(Class, other, []): name == other;
-			default: false;
-		};
-
-	static function sameInterface(type:CompilerType, name:String):Bool
-		return switch type {
-			case TInstance(Interface, other, []): name == other;
+			case TInstance(otherKind, other, otherArguments): kind == otherKind && name == other && sameTypes(arguments, otherArguments);
 			default: false;
 		};
 

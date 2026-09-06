@@ -538,6 +538,17 @@ class TestMain {
 		if (genericAliasTyped.functions[0].result != compiler.types.Type.CompilerType.TInt)
 			throw "Generic type aliases were not substituted by the typer";
 		Sys.println("PASS: generic type aliases substitute their arguments");
+		var genericNominalProgram = new Parser(new Lexer(new SourceFile("generic-nominals.hx",
+			"interface Source<T> { function get():T; } class Box<T> { var value:T; public function new(value:T) { this.value = value; } public function get():T return value; } function consume(value:Box<Int>):Int return 42; function main():Int return 42;"))
+			.tokenize()).parseProgram();
+		var genericNominalModel = compiler.types.SemanticProgram.analyze(genericNominalProgram);
+		var genericNominalType = genericNominalModel.declarations.resolve(genericNominalProgram.functions[0].arguments[0].type);
+		switch genericNominalType {
+			case compiler.types.Type.CompilerType.TInstance(Class, "Box", [compiler.types.Type.CompilerType.TInt]):
+			default:
+				throw "Generic nominal arguments were not preserved semantically";
+		}
+		Sys.println("PASS: generic class and interface arguments resolve semantically");
 		expectCompileError("function consume(value:Missing):Int { return 0; } function main():Int { return 0; }", 'Unknown type "Missing"');
 		expectCompileError("typedef Loop = Loop; function main():Int { return 0; }", 'Cyclic type alias involving "Loop"');
 		expectCompileError("class Loop extends Loop { } function main():Int { return 0; }", 'Cyclic class inheritance involving "Loop"');

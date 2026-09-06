@@ -57,6 +57,7 @@ typedef AstField = {
 /** Parsed class declaration and its unresolved inheritance relationships. */
 typedef AstClass = {
 	final name:String;
+	final typeParameters:Array<String>;
 	final isPrivate:Bool;
 	final metadata:Array<AstMetadata>;
 	final base:Null<String>;
@@ -72,6 +73,7 @@ typedef AstMetadata = {final name:String; final arguments:Array<AstExpression>; 
 /** Parsed interface declaration before inherited methods are resolved. */
 typedef AstInterface = {
 	final name:String;
+	final typeParameters:Array<String>;
 	final bases:Array<String>;
 	final methods:Array<AstFunction>;
 	final span:SourceSpan;

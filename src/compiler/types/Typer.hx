@@ -2364,7 +2364,7 @@ class Typer {
 		if (isArray(receiver.type))
 			return typeArrayMethod(receiver, name, arguments, span, scope);
 		var className = switch receiver.type {
-			case TInstance(Class, value, []), TInstance(Interface, value, []): value;
+			case TInstance(Class, value, _), TInstance(Interface, value, _): value;
 			default: null;
 		};
 		if (className == null)
@@ -2372,10 +2372,12 @@ class Typer {
 		var methodInfoResult = findMethod(className, name);
 		if (methodInfoResult == null || methodInfoResult.isStatic)
 			fail("E1007", 'Unknown instance method "$className.$name"', span);
-		var methodKey = methodInfoResult.owner + "." + name,
+		var substitutions = nominalSubstitutions(receiver.type),
+			methodKey = methodInfoResult.owner + "." + name,
 			method = signatures.get(methodKey),
-			typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span);
-		return applyCallEffect(new TypedExpression(TMethodCall(receiver, methodKey, typed), lowerType(method.result), span), methodKey);
+			typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span, substitutions);
+		return applyCallEffect(new TypedExpression(TMethodCall(receiver, methodKey, typed), declarations.resolve(method.result, method.span, substitutions),
+			span), methodKey);
 	}
 
 	function typeStringMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):Null<TypedExpression> {
@@ -2572,8 +2574,8 @@ class Typer {
 		return coerceArguments(typed, expected, name);
 	}
 
-	function typeDeclaredCallArguments(arguments:Array<AstExpression>, parameters:Array<compiler.Ast.AstArgument>, scope:Scope, name:String,
-			span:SourceSpan):Array<TypedExpression> {
+	function typeDeclaredCallArguments(arguments:Array<AstExpression>, parameters:Array<compiler.Ast.AstArgument>, scope:Scope, name:String, span:SourceSpan,
+			?substitutions:Map<String, CompilerType>):Array<TypedExpression> {
 		var required = parameters.length;
 		while (required > 0 && parameters[required - 1].optional)
 			required--;
@@ -2583,23 +2585,39 @@ class Typer {
 		}
 		var typed = [
 			for (i in 0...arguments.length)
-				typeExpression(arguments[i], scope, argumentType(parameters[i]))
+				typeExpression(arguments[i], scope, argumentType(parameters[i], substitutions))
 		];
 		for (i in arguments.length...parameters.length) {
 			var parameter = parameters[i],
-				expected = argumentType(parameter),
+				expected = argumentType(parameter, substitutions),
 				defaultValue = parameter.defaultValue;
 			if (defaultValue == null)
 				typed.push(coerce(new TypedExpression(TNullLiteral, TNull, span), expected, 'default argument ${i + 1} to "$name"'));
 			else
 				typed.push(coerce(typeExpression(defaultValue, scope, expected), expected, 'default argument ${i + 1} to "$name"'));
 		}
-		return coerceArguments(typed, [for (parameter in parameters) argumentType(parameter)], name);
+		return coerceArguments(typed, [for (parameter in parameters) argumentType(parameter, substitutions)], name);
 	}
 
-	function argumentType(argument:compiler.Ast.AstArgument):CompilerType {
-		var type = lowerType(argument.type);
+	function argumentType(argument:compiler.Ast.AstArgument, ?substitutions:Map<String, CompilerType>):CompilerType {
+		var type = substitutions == null ? lowerType(argument.type) : declarations.resolve(argument.type, argument.span, substitutions);
 		return argument.optional && argument.defaultValue == null ? CompilerType.TNullable(type) : type;
+	}
+
+	function nominalSubstitutions(type:CompilerType):Map<String, CompilerType> {
+		var result:Map<String, CompilerType> = [];
+		switch type {
+			case TInstance(Class, name, arguments):
+				if (classDecls.exists(name))
+					for (index in 0...arguments.length)
+						result.set(classDecls.get(name).typeParameters[index], arguments[index]);
+			case TInstance(Interface, name, arguments):
+				if (interfaceDecls.exists(name))
+					for (index in 0...arguments.length)
+						result.set(interfaceDecls.get(name).typeParameters[index], arguments[index]);
+			default:
+		}
+		return result;
 	}
 
 	function coerce(value:TypedExpression, expected:CompilerType, context:String, code:String = "E1009"):TypedExpression {
@@ -2726,12 +2744,12 @@ class Typer {
 					if (field.name == name)
 						return field.type;
 				throw new CompileError(new Diagnostic("E1005", 'Unknown anonymous field "$name"', span));
-			case TInstance(Class, className, []):
+			case TInstance(Class, className, arguments):
 				if (classDecls.exists(className)) {
 					var classDecl = requiredMapValue(classDecls, className);
 					for (field in classDecl.fields)
 						if (field.name == name && !field.isStatic)
-							return lowerType(FieldInference.parsedType(field));
+							return declarations.resolve(FieldInference.parsedType(field), field.span, nominalSubstitutions(type));
 					var base = classDecl.base;
 					if (base != null)
 						return fieldType(TInstance(Class, base, []), name, span);
@@ -2765,13 +2783,13 @@ class Typer {
 					if (field.name == name)
 						found = field.type;
 				found;
-			case TInstance(Class, className, []):
+			case TInstance(Class, className, arguments):
 				var found:Null<CompilerType> = null;
 				if (classDecls.exists(className)) {
 					var classDecl = requiredMapValue(classDecls, className);
 					for (field in classDecl.fields)
 						if (field.name == name && !field.isStatic)
-							found = lowerType(FieldInference.parsedType(field));
+							found = declarations.resolve(FieldInference.parsedType(field), field.span, nominalSubstitutions(type));
 					var base = classDecl.base;
 					if (found == null && base != null)
 						found = findFieldType(TInstance(Class, base, []), name);

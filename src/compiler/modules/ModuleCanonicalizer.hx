@@ -41,6 +41,14 @@ class ModuleCanonicalizer {
 	static function copyAliases(aliases:Map<String, String>):Map<String, String>
 		return [for (name => target in aliases) name => target];
 
+	static function combinedTypeParameters(owner:Array<String>, member:Null<Array<String>>):Array<String> {
+		var result = owner.copy();
+		if (member != null)
+			for (parameter in member)
+				result.push(parameter);
+		return result;
+	}
+
 	public static function canonicalName(module:String, entry:String, local:String):String
 		return module == entry && local == "main" ? "main" : local.indexOf(".") >= 0 ? local : module + "." + local;
 
@@ -135,6 +143,7 @@ class ModuleCanonicalizer {
 			packageName:Null<String>):compiler.Ast.AstInterface
 		return {
 			name: qualifiedTypeName(packageName, interfaceDecl.name),
+			typeParameters: interfaceDecl.typeParameters,
 			bases: [for (base in interfaceDecl.bases) resolveTypeName(base, aliases)],
 			methods: [
 				for (method in interfaceDecl.methods)
@@ -144,9 +153,13 @@ class ModuleCanonicalizer {
 						typeParameters: method.typeParameters,
 						arguments: [
 							for (argument in method.arguments)
-								{name: argument.name, type: canonicalType(argument.type, aliases, method.typeParameters), span: argument.span}
+								{
+									name: argument.name,
+									type: canonicalType(argument.type, aliases, combinedTypeParameters(interfaceDecl.typeParameters, method.typeParameters)),
+									span: argument.span
+								}
 						],
-						result: canonicalType(method.result, aliases, method.typeParameters),
+						result: canonicalType(method.result, aliases, combinedTypeParameters(interfaceDecl.typeParameters, method.typeParameters)),
 						statements: [],
 						span: method.span
 					}

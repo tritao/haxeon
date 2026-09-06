@@ -310,6 +310,7 @@ class Parser {
 	function parseClass(isPrivate:Bool, metadata:Array<compiler.Ast.AstMetadata>):AstClass {
 		var start = consume(TokenKind.Class).span,
 			name = consume(TokenKind.Identifier).text,
+			typeParameters = parseTypeParameters(),
 			base:Null<String> = null,
 			interfaces = [];
 		if (match(TokenKind.Extends))
@@ -380,6 +381,7 @@ class Parser {
 		var end = consume(TokenKind.RightBrace).span;
 		return {
 			name: name,
+			typeParameters: typeParameters,
 			isPrivate: isPrivate,
 			metadata: metadata,
 			base: base,
@@ -407,7 +409,7 @@ class Parser {
 	}
 
 	function parseInterface():AstInterface {
-		var start = consume(TokenKind.Interface).span, name = consume(TokenKind.Identifier).text, bases = [];
+		var start = consume(TokenKind.Interface).span, name = consume(TokenKind.Identifier).text, typeParameters = parseTypeParameters(), bases = [];
 		if (match(TokenKind.Extends)) {
 			bases.push(parseQualifiedName());
 			while (match(TokenKind.Comma))
@@ -450,6 +452,7 @@ class Parser {
 		var end = consume(TokenKind.RightBrace).span;
 		return {
 			name: name,
+			typeParameters: typeParameters,
 			bases: bases,
 			methods: methods,
 			span: start.merge(end)

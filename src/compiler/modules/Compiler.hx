@@ -515,11 +515,14 @@ class Compiler {
 				}
 			}
 			for (classDecl in ast.classes) {
-				var className = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name);
+				var className = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name),
+					classAliases:Map<String, String> = [for (alias => target in aliases) alias => target];
+				for (parameter in classDecl.typeParameters)
+					classAliases.set(parameter, parameter);
 				var classMethods:Array<AstFunction> = [];
 				for (parsedMethod in classDecl.methods) {
 					var method = SignatureInference.inferFieldBoundArguments(parsedMethod, classDecl);
-					var canonical = ModuleCanonicalizer.canonicalFunction(method, name, entryModule, locals, className + "." + method.name, aliases);
+					var canonical = ModuleCanonicalizer.canonicalFunction(method, name, entryModule, locals, className + "." + method.name, classAliases);
 					functions.push(canonical);
 					classMethods.push({
 						name: method.name,
@@ -549,6 +552,7 @@ class Compiler {
 				}
 				classes.push({
 					name: className,
+					typeParameters: classDecl.typeParameters,
 					isPrivate: classDecl.isPrivate,
 					metadata: classDecl.metadata,
 					base: ModuleCanonicalizer.resolveOptionalTypeName(classDecl.base, aliases),
@@ -560,7 +564,7 @@ class Compiler {
 						for (field in classDecl.fields)
 							{
 								name: field.name,
-								type: ModuleCanonicalizer.canonicalType(FieldInference.parsedType(field), aliases),
+								type: ModuleCanonicalizer.canonicalType(FieldInference.parsedType(field), classAliases, classDecl.typeParameters),
 								initializer: ModuleCanonicalizer.canonicalOptionalExpression(field.initializer, name, entryModule, locals, aliases),
 								readAccess: field.readAccess,
 								writeAccess: field.writeAccess,
