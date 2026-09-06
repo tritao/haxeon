@@ -200,9 +200,7 @@ class Parser {
 	}
 
 	function parseEnum(start:SourceSpan):AstEnum {
-		var name = consume(TokenKind.Identifier).text,
-			typeParameters = parseTypeParameters(),
-			cases = [];
+		var name = consume(TokenKind.Identifier).text, typeParameters = parseTypeParameters(), cases = [];
 		consume(TokenKind.LeftBrace);
 		while (!check(TokenKind.RightBrace)) {
 			var caseToken = consumeName(),
@@ -231,7 +229,12 @@ class Parser {
 			consume(TokenKind.Semicolon);
 		}
 		var end = consume(TokenKind.RightBrace).span;
-		return {name: name, typeParameters: typeParameters, cases: cases, span: start.merge(end)};
+		return {
+			name: name,
+			typeParameters: typeParameters,
+			cases: cases,
+			span: start.merge(end)
+		};
 	}
 
 	function parseQualifiedName():String {
@@ -1113,7 +1116,8 @@ class Parser {
 		var depth = 0, cursor = position;
 		while (cursor < tokens.length) {
 			switch tokens[cursor].kind {
-				case LeftParen: depth++;
+				case LeftParen:
+					depth++;
 				case RightParen:
 					depth--;
 					if (depth == 0)
@@ -1392,8 +1396,7 @@ class Parser {
 		}
 		if (match(TokenKind.Less)) {
 			do
-				parseType()
-			while (match(TokenKind.Comma));
+				parseType() while (match(TokenKind.Comma));
 			consume(TokenKind.Greater);
 		}
 		return NamedType(name);

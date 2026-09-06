@@ -67,6 +67,7 @@ class ModuleCanonicalizer {
 	public static function canonicalEnum(enumDecl:compiler.Ast.AstEnum, aliases:Map<String, String>, packageName:Null<String>):compiler.Ast.AstEnum
 		return {
 			name: qualifiedTypeName(packageName, enumDecl.name),
+			typeParameters: enumDecl.typeParameters,
 			cases: [
 				for (caseDecl in enumDecl.cases)
 					{

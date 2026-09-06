@@ -86,7 +86,7 @@ typedef AstEnumParameter = {final name:Null<String>; final type:AstType; final o
 typedef AstEnumCase = {final name:String; final params:Array<AstEnumParameter>; final span:SourceSpan;}
 
 /** Parsed algebraic enum declaration. */
-typedef AstEnum = {final name:String; final cases:Array<AstEnumCase>; final span:SourceSpan;}
+typedef AstEnum = {final name:String; final typeParameters:Array<String>; final cases:Array<AstEnumCase>; final span:SourceSpan;}
 
 /** One named constant declared by an enum abstract. */
 typedef AstEnumAbstractValue = {final name:String; final value:AstExpression; final span:SourceSpan;}

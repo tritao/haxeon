@@ -135,7 +135,7 @@ class Typer {
 								name: caseDecl.name,
 								params: [
 									for (param in caseDecl.params)
-										param.optional ? CompilerType.TNullable(lowerType(param.type)) : lowerType(param.type)
+										erasedEnumParameter(enumDecl, param)
 								],
 								span: caseDecl.span
 							}
@@ -2553,8 +2553,35 @@ class Typer {
 		var declaration = requiredMapValue(enumDecls, enumName);
 		for (index in 0...declaration.cases.length)
 			if (declaration.cases[index].name == caseName)
-				return {enumName: enumName, index: index, params: declaration.cases[index].params};
+				return {
+					enumName: enumName,
+					index: index,
+					params: [
+						for (parameter in declaration.cases[index].params)
+							eraseEnumParameter(declaration, parameter)
+					]
+				};
 		return null;
+	}
+
+	function erasedEnumParameter(declaration:AstEnum, parameter:compiler.Ast.AstEnumParameter):CompilerType {
+		var type = declaration.typeParameters.indexOf(switch parameter.type {
+			case NamedType(name): name;
+			default: "";
+		}) >= 0 ? TDynamic : lowerType(parameter.type);
+		return parameter.optional ? TNullable(type) : type;
+	}
+
+	static function eraseEnumParameter(declaration:AstEnum, parameter:compiler.Ast.AstEnumParameter):compiler.Ast.AstEnumParameter {
+		return declaration.typeParameters.indexOf(switch parameter.type {
+			case NamedType(name): name;
+			default: "";
+		}) < 0 ? parameter : {
+			name: parameter.name,
+			type: NamedType("Dynamic"),
+			optional: parameter.optional,
+			span: parameter.span
+		};
 	}
 
 	static function requiredEnumParameters(parameters:Array<compiler.Ast.AstEnumParameter>):Int {
