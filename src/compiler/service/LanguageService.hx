@@ -272,6 +272,9 @@ class LanguageService {
 	}
 
 	public function references(path:String, position:Int):Array<SymbolLocation> {
+		var indexed = indexedReferences(path, position);
+		if (indexed != null)
+			return indexed;
 		var target = resolveSymbol(path, position),
 			result:Array<SymbolLocation> = [];
 		if (target == null)
@@ -296,6 +299,25 @@ class LanguageService {
 			return pathOrder == 0 ? Reflect.compare(a.span.start, b.span.start) : pathOrder;
 		});
 		return result;
+	}
+
+	function indexedReferences(path:String, position:Int):Null<Array<SymbolLocation>> {
+		var state = stateFor(path),
+			model = state == null ? null : effectiveSemanticModel(state);
+		if (state == null || model == null)
+			return null;
+		var symbol = model.index.symbolAt(position);
+		if (symbol == null || Std.string(symbol.id).indexOf(":local:") < 0)
+			return null;
+		return [
+			for (span in model.index.locations(symbol.id))
+				{
+					path: span.file.path,
+					span: span,
+					revision: model.revision,
+					stale: model.revision != state.revision
+				}
+		];
 	}
 
 	public function rename(path:String, position:Int, replacement:String):Array<TextEdit> {
