@@ -40,15 +40,25 @@ set +e
 (
 	cd "$root_dir"
 	LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" \
-		gdb -q -batch -ex "set pagination off" -ex run -ex "thread apply all bt 30" \
-		-ex "info registers" --args "${command[@]}"
+		gdb -q -batch -ex "set pagination off" -ex run \
+		-ex 'set $hl_pc0 = $pc' -ex "frame 1" -ex 'set $hl_pc1 = $pc' \
+		-ex "frame 2" -ex 'set $hl_pc2 = $pc' -ex "frame 0" \
+		-ex 'printf "candidate PCs: %p %p %p\n", $hl_pc0, $hl_pc1, $hl_pc2' \
+		-ex 'set $hl_location0 = (char *)hl_module_resolve_jit_location((void *)$hl_pc0)' \
+		-ex 'printf "resolved JIT frame 0: %s\n", $hl_location0 ? $hl_location0 : "not a HashLink JIT address"' \
+		-ex 'set $hl_location1 = (char *)hl_module_resolve_jit_location((void *)$hl_pc1)' \
+		-ex 'printf "resolved JIT frame 1: %s\n", $hl_location1 ? $hl_location1 : "not a HashLink JIT address"' \
+		-ex 'set $hl_location2 = (char *)hl_module_resolve_jit_location((void *)$hl_pc2)' \
+		-ex 'printf "resolved JIT frame 2: %s\n", $hl_location2 ? $hl_location2 : "not a HashLink JIT address"' \
+		-ex "thread apply all bt 30" -ex "info registers" \
+		--args "${command[@]}"
 ) >>"$report" 2>&1
 gdb_status=$?
 set -e
 
 echo "bootstrap diagnostic report: $report"
 if rg -q "received signal SIG(SEGV|ABRT|BUS|ILL)" "$report"; then
-	rg -n "received signal|Program received|^#0 |^#1 |^#2 " "$report" | tail -n 80 || true
+	rg -n "received signal|Program received|resolved JIT frame|^#0 |^#1 |^#2 " "$report" | tail -n 80 || true
 	exit 139
 fi
 tail -n 40 "$report"
