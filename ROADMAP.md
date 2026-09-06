@@ -151,7 +151,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 - [x] Build compiler B using A; the resulting HLB is byte-for-byte identical.
 - [x] Check in a reproducible `bootstrap/compiler.hl`; `bootstrap-compiler.sh
   --self` rebuilds it identically without invoking official Haxe.
-- [ ] Build/test in CI from the pinned HashLink fork and formatter version.
+- [x] Build/test in CI from the pinned HashLink fork and formatter version,
+  including an exact self-hosted compiler rebuild.
 - [~] Differential suite: four paired programs currently compare official HL
 	and realtime HL behavior in the normal gate; broader collections, diagnostics,
 	and reload-classification coverage remain.

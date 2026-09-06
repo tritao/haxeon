@@ -18,5 +18,7 @@ jobs:
         run: scripts/bootstrap-tools.sh
       - name: Compiler, differential, and runtime gates
         run: scripts/test-poc.sh
+      - name: Self-hosted compiler gate
+        run: scripts/bootstrap-compiler.sh --self
       - name: Hot reload gate
         run: test-hot-reload.sh
