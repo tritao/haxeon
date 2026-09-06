@@ -306,7 +306,7 @@ class Compiler {
 		if (startingAssembler != null)
 			assembler = startingAssembler;
 		try {
-			var result = compileCandidate(entryModule, token, transactionStartedAt, snapshotDoneAt);
+			var result = compileCandidate(entryModule, token, snapshot.modules, transactionStartedAt, snapshotDoneAt);
 			var abi = publishedAbi;
 			if (abi == null)
 				throw "Compilation did not produce a runtime ABI";
@@ -325,7 +325,8 @@ class Compiler {
 		}
 	}
 
-	function compileCandidate(entryModule:String, token:Null<CancellationToken>, transactionStartedAt:Float, snapshotDoneAt:Float):CompileResult {
+	function compileCandidate(entryModule:String, token:Null<CancellationToken>, rollbackModules:Map<String, ModuleState>, transactionStartedAt:Float,
+			snapshotDoneAt:Float):CompileResult {
 		var startedAt = snapshotDoneAt;
 		if (token != null)
 			token.check();
@@ -335,8 +336,11 @@ class Compiler {
 		var reachability = new ModuleReachability(modules, entryModule);
 		while (reachability.hasNext(token)) {
 			var reachableState = reachability.next();
-			parse(reachableState, entryModule, bodyChanged, signatureChanged, structuralChanged);
-			addTypeDependencies(reachableState);
+			if (reachableState.ast == null) {
+				reachableState = writableState(reachableState.name, rollbackModules);
+				parse(reachableState, entryModule, bodyChanged, signatureChanged, structuralChanged);
+				addTypeDependencies(reachableState);
+			}
 			reachability.includeDependencies(reachableState);
 		}
 		var names = reachability.finish(token);
@@ -593,7 +597,7 @@ class Compiler {
 			for (name in names) {
 				var state = modules.get(name);
 				if (state.source.path == error.diagnostic.span.file.path)
-					state.diagnostics.push(error.diagnostic);
+					writableState(name, rollbackModules).diagnostics.push(error.diagnostic);
 			}
 			throw error;
 		}
@@ -622,7 +626,7 @@ class Compiler {
 				}
 				generatedNames.set(fn.name, true);
 			}
-			var state = modules.get(module);
+			var state = writableState(module, rollbackModules);
 			state.typedFunctions.set(fn.name, fn);
 			state.typedSourceRevisions.set(fn.name, state.revision);
 			retyped.push(fn.name);
@@ -662,14 +666,17 @@ class Compiler {
 				if (hasInstanceInitializer || hasConstructor)
 					valid.set(className + ".new", true);
 			}
-			for (cached in state.typedFunctions.keys())
-				if (!valid.exists(cached)) {
+			var removed = [for (cached in state.typedFunctions.keys()) if (!valid.exists(cached)) cached];
+			if (removed.length > 0) {
+				state = writableState(name, rollbackModules);
+				for (cached in removed) {
 					state.typedFunctions.remove(cached);
 					state.typedSourceRevisions.remove(cached);
 					state.irFunctions.remove(cached);
 					state.irSourceRevisions.remove(cached);
 					state.irVersions.remove(cached);
 				}
+			}
 		}
 		retyped.sort(Reflect.compare);
 		regenerated.sort(Reflect.compare);
@@ -721,10 +728,13 @@ class Compiler {
 		rehydrationBaseline = null;
 		for (name in names) {
 			var state = modules.get(name);
-			state.lastGoodTokens = state.tokens;
-			state.lastGoodAst = state.ast;
-			state.lastGoodSource = state.source;
-			state.lastGoodRevision = state.revision;
+			if (state.lastGoodRevision != state.revision) {
+				state = writableState(name, rollbackModules);
+				state.lastGoodTokens = state.tokens;
+				state.lastGoodAst = state.ast;
+				state.lastGoodSource = state.source;
+				state.lastGoodRevision = state.revision;
+			}
 		}
 		compiledOnce = true;
 		var finishedAt = Sys.time() * 1000.0;
@@ -884,7 +894,7 @@ class Compiler {
 		var moduleCopies:Map<String, ModuleState> = [],
 			objectCopies:Map<String, IrObject> = [];
 		for (name => state in modules)
-			moduleCopies.set(name, state.copy());
+			moduleCopies.set(name, state);
 		for (name => object in objectCache)
 			objectCopies.set(name, object);
 		return {
@@ -896,6 +906,15 @@ class Compiler {
 			compiledOnce: compiledOnce,
 			rehydrationBaseline: rehydrationBaseline
 		};
+	}
+
+	function writableState(name:String, rollbackModules:Map<String, ModuleState>):ModuleState {
+		var state = modules.get(name);
+		if (rollbackModules.get(name) == state) {
+			state = state.copy();
+			modules.set(name, state);
+		}
+		return state;
 	}
 
 	function restore(snapshot:CompilerSnapshot):Void {

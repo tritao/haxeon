@@ -52,9 +52,12 @@ class ModuleMain {
 			throw "Adding a function changed the stable Math.add identity";
 		if (added.module.ints.indexOf(20) != twentyIndex)
 			throw "Adding a constant renumbered an existing constant";
-		var firstBytes = HlWriter.encode(added.module);
+		var firstBytes = HlWriter.encode(added.module),
+			unchangedMain = compiler.modules.get("Main");
 		compiler.update("Math.hx", "function add(a:Int, b:Int):Int { var sum = a + b; return sum; }");
 		var result = compiler.compile("Main");
+		if (compiler.modules.get("Main") != unchangedMain)
+			throw "Body edit copied an unchanged dependent module";
 		if (result.retyped.join(",") != "Math.add")
 			throw 'Body edit invalidated callers: ${result.retyped}';
 		if (compiler.modules.get("Main").parseVersion != 1)
