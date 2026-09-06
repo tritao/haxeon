@@ -7,7 +7,7 @@ import compiler.ir.Ir.IrObject;
 import compiler.modules.ModuleState;
 import compiler.types.TypeRegistry;
 import compiler.types.TypedAst.TypedProgram;
-import compiler.types.SemanticProgram;
+import compiler.semantic.SemanticProgram;
 
 /** Compiler-owned semantic state captured before staging a publication. */
 typedef CompilerSnapshot = {

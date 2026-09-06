@@ -1,4 +1,4 @@
-package compiler.types;
+package compiler.semantic;
 
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstType;

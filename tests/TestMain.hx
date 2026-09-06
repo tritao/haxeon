@@ -18,7 +18,7 @@ import compiler.hl.persistence.HlFunctionCacheStateCodec;
 import compiler.hl.incremental.HlModuleAssembler;
 import compiler.hl.persistence.HlAssemblerStateCodec;
 import compiler.abi.PatchPlanner.PatchDecision;
-import compiler.types.SemanticSignature;
+import compiler.semantic.SemanticSignature;
 import compiler.semantic.GenericSpecializationRegistry;
 import compiler.ir.hl.HlLower;
 import compiler.ir.Ir.IrProgram;
@@ -542,7 +542,7 @@ class TestMain {
 		var genericNominalProgram = new Parser(new Lexer(new SourceFile("generic-nominals.hx",
 			"interface Source<T> { function get():T; } class Box<T> { var value:T; public function new(value:T) { this.value = value; } public function get():T return value; } function consume(value:Box<Int>):Int return 42; function main():Int return 42;"))
 			.tokenize()).parseProgram();
-		var genericNominalModel = compiler.types.SemanticProgram.analyze(genericNominalProgram);
+		var genericNominalModel = compiler.semantic.SemanticProgram.analyze(genericNominalProgram);
 		var genericNominalType = genericNominalModel.declarations.resolve(genericNominalProgram.functions[0].arguments[0].type);
 		switch genericNominalType {
 			case compiler.types.Type.CompilerType.TInstance(Class, "Box", [compiler.types.Type.CompilerType.TInt]):

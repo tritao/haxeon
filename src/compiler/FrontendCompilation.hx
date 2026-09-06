@@ -8,7 +8,7 @@ import compiler.modules.ModuleState;
 import compiler.semantic.ModuleCanonicalizer;
 import compiler.semantic.SemanticAssembly;
 import compiler.service.CancellationToken;
-import compiler.types.SemanticProgram;
+import compiler.semantic.SemanticProgram;
 import compiler.types.Typer;
 import compiler.types.Typer.TyperPhaseMetrics;
 import compiler.types.TypedAst.TypedProgram;

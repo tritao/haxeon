@@ -1,7 +1,8 @@
-package compiler.types;
+package compiler.semantic;
 
 import compiler.syntax.Ast.AstProgram;
 import compiler.Source.SourceFile;
+import compiler.types.DeclarationIndex;
 
 /** Immutable, revision-bound semantic facts derived from one parsed module. */
 class SemanticModel {

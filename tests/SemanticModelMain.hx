@@ -2,7 +2,7 @@ import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.Source.SourceFile;
 import compiler.types.DeclarationIndex.DeclarationKind;
-import compiler.types.SemanticModel;
+import compiler.semantic.SemanticModel;
 
 class SemanticModelMain {
 	static function main():Void {

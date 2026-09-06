@@ -1,7 +1,10 @@
-package compiler.types;
+package compiler.semantic;
 
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstProgram;
+import compiler.types.DeclarationIndex;
+import compiler.types.SignatureInference;
+import compiler.types.TypeRelations;
 
 typedef SemanticMethodInfo = {
 	final owner:String;

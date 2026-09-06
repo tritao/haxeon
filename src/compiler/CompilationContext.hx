@@ -11,7 +11,7 @@ import compiler.modules.ModuleGraph;
 import compiler.modules.ModuleState;
 import compiler.semantic.ModuleAnalyzer;
 import compiler.semantic.GenericSpecializationRegistry;
-import compiler.types.SemanticProgram;
+import compiler.semantic.SemanticProgram;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedProgram;
 import haxe.io.Bytes;

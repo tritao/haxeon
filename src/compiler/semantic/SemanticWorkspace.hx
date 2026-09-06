@@ -149,13 +149,13 @@ class SemanticWorkspace {
 		return false;
 	}
 
-	static function ownsType(state:ModuleState, model:compiler.types.SemanticModel, declaredName:String, requestedName:String):Bool {
+	static function ownsType(state:ModuleState, model:compiler.semantic.SemanticModel, declaredName:String, requestedName:String):Bool {
 		if (requestedName == declaredName || requestedName == state.name)
 			return true;
 		var packageName = model.program.packageName;
 		return packageName != null && requestedName == packageName + "." + declaredName;
 	}
 
-	static function effectiveModel(state:ModuleState):Null<compiler.types.SemanticModel>
+	static function effectiveModel(state:ModuleState):Null<compiler.semantic.SemanticModel>
 		return state.ast == null ? state.lastGoodSemanticModel : state.semanticModel;
 }

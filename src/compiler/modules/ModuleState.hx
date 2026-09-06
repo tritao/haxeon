@@ -6,7 +6,7 @@ import compiler.syntax.Token;
 import compiler.Diagnostic;
 import compiler.Source.SourceFile;
 import compiler.ir.IrFunction;
-import compiler.types.SemanticModel;
+import compiler.semantic.SemanticModel;
 import compiler.types.TypedAst.TypedFunction;
 
 /** Artifact boundary at which a dependent declaration observes a change. */

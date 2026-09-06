@@ -1,7 +1,7 @@
 package compiler.runtime;
 
 import compiler.types.Type.CompilerType;
-import compiler.types.SemanticSignature;
+import compiler.semantic.SemanticSignature;
 import compiler.types.TypeRelations;
 
 /** Runtime calling/storage representation selected independently of semantic identity. */

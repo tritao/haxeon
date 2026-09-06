@@ -4,7 +4,7 @@ import compiler.Source.SourceFile;
 import compiler.modules.ModuleState;
 import compiler.semantic.SemanticWorkspace;
 import compiler.semantic.SemanticWorkspace.WorkspaceResolution;
-import compiler.types.SemanticModel;
+import compiler.semantic.SemanticModel;
 import compiler.types.Type.CompilerType;
 import compiler.service.LanguageService;
 import compiler.Diagnostic.CompileError;
