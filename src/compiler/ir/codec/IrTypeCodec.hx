@@ -1,4 +1,4 @@
-package compiler.ir;
+package compiler.ir.codec;
 
 import compiler.ir.Ir.IrType;
 import haxe.io.BytesInput;

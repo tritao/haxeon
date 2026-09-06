@@ -1,4 +1,4 @@
-package compiler.ir;
+package compiler.ir.cfg;
 
 import compiler.ir.Ir.IrType;
 

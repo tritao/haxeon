@@ -1,6 +1,6 @@
 package compiler.hl.incremental;
 
-import compiler.ir.HlLower;
+import compiler.ir.hl.HlLower;
 import compiler.ir.Ir.IrProgram;
 import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.hl.HlCode;

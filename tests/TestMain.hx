@@ -18,23 +18,24 @@ import compiler.hl.persistence.HlFunctionCacheStateCodec;
 import compiler.hl.incremental.HlModuleAssembler;
 import compiler.hl.persistence.HlAssemblerStateCodec;
 import compiler.abi.PatchPlanner.PatchDecision;
-import compiler.ir.HlLower;
+import compiler.types.SemanticSignature;
+import compiler.ir.hl.HlLower;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 import compiler.ir.IrGenerator;
-import compiler.ir.IrTypeCodec;
-import compiler.ir.IrValueTableCodec;
-import compiler.ir.IrTerminatorCodec;
-import compiler.ir.IrInstructionCodec;
-import compiler.ir.IrFunctionStateCodec;
-import compiler.ir.SsaBuilder;
-import compiler.ir.Cfg.CfgInstruction;
-import compiler.ir.Cfg.CfgBlock;
-import compiler.ir.Cfg.CfgFunction;
-import compiler.ir.Cfg.CfgValue;
-import compiler.ir.CfgVerifier;
+import compiler.ir.codec.IrTypeCodec;
+import compiler.ir.codec.IrValueTableCodec;
+import compiler.ir.codec.IrTerminatorCodec;
+import compiler.ir.codec.IrInstructionCodec;
+import compiler.ir.codec.IrFunctionStateCodec;
+import compiler.ir.cfg.SsaBuilder;
+import compiler.ir.cfg.Cfg.CfgInstruction;
+import compiler.ir.cfg.Cfg.CfgBlock;
+import compiler.ir.cfg.Cfg.CfgFunction;
+import compiler.ir.cfg.Cfg.CfgValue;
+import compiler.ir.cfg.CfgVerifier;
 import compiler.Lexer;
 import compiler.Parser;
 import compiler.types.Typer;
@@ -310,21 +311,21 @@ class TestMain {
 		var unterminated = new CfgBlock(0);
 		expectCfgError(new CfgFunction("bad", [], I32, [unterminated], []), "Reachable CFG block 0 in bad has no terminator");
 		var badTarget = new CfgBlock(0);
-		badTarget.terminator = compiler.ir.Cfg.CfgTerminator.Jump(4);
+		badTarget.terminator = compiler.ir.cfg.Cfg.CfgTerminator.Jump(4);
 		expectCfgError(new CfgFunction("bad", [], I32, [badTarget], []), "Unknown CFG block 4");
 		var duplicate = new CfgBlock(0),
 			first = new CfgValue(0, I32),
 			again = new CfgValue(0, I32);
 		duplicate.instructions.push(ConstInt(first, 1));
 		duplicate.instructions.push(ConstInt(again, 2));
-		duplicate.terminator = compiler.ir.Cfg.CfgTerminator.Return(again);
+		duplicate.terminator = compiler.ir.cfg.Cfg.CfgTerminator.Return(again);
 		expectCfgError(new CfgFunction("bad", [], I32, [duplicate], []), "Duplicate CFG value 0");
 		var crossBlockA = new CfgBlock(0),
 			crossBlockB = new CfgBlock(1),
 			crossValue = new CfgValue(0, I32);
 		crossBlockA.instructions.push(ConstInt(crossValue, 1));
-		crossBlockA.terminator = compiler.ir.Cfg.CfgTerminator.Jump(1);
-		crossBlockB.terminator = compiler.ir.Cfg.CfgTerminator.Return(crossValue);
+		crossBlockA.terminator = compiler.ir.cfg.Cfg.CfgTerminator.Jump(1);
+		crossBlockB.terminator = compiler.ir.cfg.Cfg.CfgTerminator.Return(crossValue);
 		expectCfgError(new CfgFunction("bad", [], I32, [crossBlockA, crossBlockB], []),
 			"CFG value 0 is used outside its defining block or before definition in block 1");
 		Sys.println("PASS: CFG verifier rejects malformed blocks, edges, and values");
@@ -569,6 +570,18 @@ class TestMain {
 		expectParserError("function invalid<T,T>(value:T):T return value;", 'Duplicate type parameter "T"');
 		Frontend.compile('function identity<T>(value:T):T return value; function first<T>(values:Array<T>):T return values[0]; function main():Int { var values = new Array<Int>(1); values[0] = 42; return identity(first(values)); }');
 		Frontend.compile('class GenericMethods { public static function identity<T>(value:T):T return value; public static function answer():Int return identity(42); } function main():Int return GenericMethods.answer();');
+		var shapedGenericProgram = new Parser(new Lexer(new SourceFile("generic-shapes.hx",
+			'class Box {} function identity<T>(value:T):T return value; function main():Int { identity("text"); identity(new Box()); return identity(42); }'))
+			.tokenize()).parseProgram(),
+			shapedGeneric = Typer.type(shapedGenericProgram),
+			identityBodies = [for (fn in shapedGeneric.functions) if (fn.genericOrigin == "identity") fn];
+		if (identityBodies.length != 2)
+			throw "Generic reference instantiations did not share one representation body";
+		var identityShapes = [for (fn in identityBodies) SemanticSignature.type(fn.typeArguments[0])];
+		identityShapes.sort(Reflect.compare);
+		if (identityShapes.join(",") != "Dynamic,Int")
+			throw "Generic bodies were not partitioned by runtime representation";
+		Frontend.compile('enum Value<T> { Value(value:T); } function intValue(value:Value<Int>):Int return switch value { case Value(item): item; }; function stringValue(value:Value<String>):String return switch value { case Value(item): item; }; function main():Int return intValue(Value(40)) + stringValue(Value("ok")).length;');
 		expectCompileError('function choose<T>(left:T, right:T):T return left; function main():Int return choose(42, "wrong");',
 			'Conflicting types inferred for generic parameter "T"');
 		expectCompileError('typedef Invalid = { value:Int; value:String; }; function main():Int return 0;', 'Duplicate anonymous field "value"');

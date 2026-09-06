@@ -176,7 +176,7 @@ class Compiler {
 		var baseline:Map<String, Bytes> = [];
 		rehydrationBaseline = baseline;
 		for (name => fn in restored.cache.functions)
-			baseline.set(name, compiler.ir.IrFunctionStateCodec.encode(fn));
+			baseline.set(name, compiler.ir.codec.IrFunctionStateCodec.encode(fn));
 	}
 
 	public function acknowledgePublication(revision:Int):Void
@@ -939,7 +939,7 @@ class Compiler {
 				continue;
 			}
 			var old = baseline.get(name), next = current.get(name);
-			if (old.compare(compiler.ir.IrFunctionStateCodec.encode(next)) != 0)
+			if (old.compare(compiler.ir.codec.IrFunctionStateCodec.encode(next)) != 0)
 				changed.push(name);
 		}
 		return changed;

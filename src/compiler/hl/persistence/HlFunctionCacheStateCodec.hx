@@ -2,7 +2,7 @@ package compiler.hl.persistence;
 
 import compiler.hl.incremental.HlFunctionCache;
 import compiler.hl.incremental.HlFunctionCache.HlFunctionCacheState;
-import compiler.ir.IrTypeCodec;
+import compiler.ir.codec.IrTypeCodec;
 import haxe.io.Bytes;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;

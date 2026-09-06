@@ -3,7 +3,7 @@ package compiler.hl.incremental;
 import compiler.hl.HlWriter;
 import compiler.hl.HlFunction;
 import compiler.ir.IrFunction;
-import compiler.ir.IrFunctionStateCodec;
+import compiler.ir.codec.IrFunctionStateCodec;
 
 /** Serialized SSA body associated with a cached function name. */
 typedef HlCachedFunctionState = {final name:String; final bytes:haxe.io.Bytes;}
@@ -105,7 +105,7 @@ class HlFunctionCache {
 		for (entry in state.functions) {
 			if (!result.userSlots.exists(entry.name) || result.functions.exists(entry.name))
 				throw "Invalid cached function state";
-			var fn = compiler.ir.IrFunctionStateCodec.decode(entry.bytes);
+			var fn = compiler.ir.codec.IrFunctionStateCodec.decode(entry.bytes);
 			if (fn.name != entry.name)
 				throw "Cached function name mismatch";
 			result.functions.set(entry.name, fn);

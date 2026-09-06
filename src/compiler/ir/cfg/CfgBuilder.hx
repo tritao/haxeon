@@ -1,6 +1,6 @@
-package compiler.ir;
+package compiler.ir.cfg;
 
-import compiler.ir.Cfg;
+import compiler.ir.cfg.Cfg;
 import compiler.ir.Ir.IrType;
 
 /** Builds mutable-local basic blocks while tracking lexical trap scopes. */

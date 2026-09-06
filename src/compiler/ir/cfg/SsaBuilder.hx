@@ -1,7 +1,7 @@
-package compiler.ir;
+package compiler.ir.cfg;
 
-import compiler.ir.Cfg;
-import compiler.ir.CfgVerifier;
+import compiler.ir.cfg.Cfg;
+import compiler.ir.cfg.CfgVerifier;
 import compiler.ir.Ir;
 
 /** Pending phi definition populated while mutable locals are renamed. */

@@ -1,4 +1,4 @@
-package compiler.ir;
+package compiler.ir.hl;
 
 import compiler.hl.HlCode;
 import compiler.hl.HlCode.HlTypeDef;

@@ -1,4 +1,4 @@
-package compiler.ir;
+package compiler.ir.codec;
 
 import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrType;
@@ -6,8 +6,8 @@ import compiler.ir.Ir.IrValue;
 import haxe.io.Bytes as HaxeBytes;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
-import compiler.ir.IrTypeCodec;
-import compiler.ir.IrValueTableCodec;
+import compiler.ir.codec.IrTypeCodec;
+import compiler.ir.codec.IrValueTableCodec;
 
 /** Closed, versioned encoding for every persisted IR instruction operand. */
 class IrInstructionCodec {

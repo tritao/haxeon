@@ -1,4 +1,4 @@
-package compiler.ir;
+package compiler.ir.codec;
 
 import compiler.ir.Ir.IrBlock;
 import compiler.ir.Ir.IrInstruction;
@@ -8,10 +8,10 @@ import haxe.io.Bytes;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
 import compiler.ir.IrFunction;
-import compiler.ir.IrInstructionCodec;
-import compiler.ir.IrTerminatorCodec;
-import compiler.ir.IrTypeCodec;
-import compiler.ir.IrValueTableCodec;
+import compiler.ir.codec.IrInstructionCodec;
+import compiler.ir.codec.IrTerminatorCodec;
+import compiler.ir.codec.IrTypeCodec;
+import compiler.ir.codec.IrValueTableCodec;
 import compiler.ir.IrVerifier;
 
 /** Deterministic framing for a complete SSA IR function. */

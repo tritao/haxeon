@@ -1,6 +1,6 @@
 import compiler.hl.HlWriter;
 import compiler.hl.patch.HlPatchReader;
-import compiler.ir.HlLower;
+import compiler.ir.hl.HlLower;
 import compiler.modules.Compiler;
 import compiler.Diagnostic.CompileError;
 import sys.io.File;

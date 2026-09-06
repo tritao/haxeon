@@ -12,7 +12,7 @@ import compiler.hl.HlType;
 import compiler.modules.Compiler;
 import compiler.modules.Compiler.CompileResult;
 import compiler.modules.CompilerPublication.ReconnectDecision;
-import compiler.ir.IrFunctionStateCodec;
+import compiler.ir.codec.IrFunctionStateCodec;
 import compiler.hl.persistence.HlFunctionCacheStateCodec;
 import compiler.hl.persistence.HlSymbolStateCodec;
 import compiler.hl.persistence.HlAssemblerStateCodec;
