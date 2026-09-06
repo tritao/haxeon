@@ -351,13 +351,13 @@ class CfgBuilder {
 	function temporary(type):CfgValue
 		return new CfgValue(nextValue++, type);
 
-	function emit(value):Void {
+	function emit(value:CfgInstruction):Void {
 		if (isTerminated())
 			throw "Cannot emit after CFG terminator";
 		current.instructions.push(new Located(value, provenance));
 	}
 
-	function terminate(value):Void {
+	function terminate(value:CfgTerminator):Void {
 		if (isTerminated())
 			throw 'CFG block ${current.id} already has a terminator';
 		current.terminator = new Located(value, provenance);
