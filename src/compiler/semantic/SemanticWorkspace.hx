@@ -7,6 +7,7 @@ import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.semantic.SemanticIndex.IndexedSemanticSymbol;
 import compiler.semantic.SemanticIndex.SemanticSymbolId;
+import compiler.semantic.SemanticIndex.SemanticSignatureInfo;
 
 /** A declaration resolved against the effective snapshots of a module workspace. */
 typedef WorkspaceDeclaration = {
@@ -97,6 +98,16 @@ class SemanticWorkspace {
 				symbol = model == null ? null : model.index.symbol(id);
 			if (symbol != null)
 				return {state: state, symbol: symbol};
+		}
+		return null;
+	}
+
+	public function indexedSignature(id:SemanticSymbolId):Null<SemanticSignatureInfo> {
+		for (state in orderedStates()) {
+			var model = effectiveModel(state),
+				signature = model == null ? null : model.index.signature(id);
+			if (signature != null)
+				return signature;
 		}
 		return null;
 	}

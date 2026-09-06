@@ -10,6 +10,7 @@ import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.Type.CompilerType;
+import compiler.syntax.Ast.AstType;
 
 abstract SemanticSymbolId(String) from String to String {
 	public inline function new(module:String, declaration:String)
@@ -38,6 +39,12 @@ typedef SemanticCompletionContext = {
 	final receiver:Null<CompilerType>;
 }
 
+typedef SemanticSignatureInfo = {
+	final label:String;
+	final parameters:Array<String>;
+	final result:String;
+}
+
 /** Revision-local declaration and resolved-local facts emitted by the compiler. */
 class SemanticIndex {
 	public final revision:Int;
@@ -45,6 +52,7 @@ class SemanticIndex {
 
 	final bindings:Array<PositionBinding> = [];
 	final references:Map<String, Array<SourceSpan>> = [];
+	final signatures:Map<String, SemanticSignatureInfo> = [];
 	final completionLocals:Array<SemanticCompletionLocal> = [];
 	final functionReceivers:Array<{span:SourceSpan, type:CompilerType}> = [];
 	final tokens:Array<Token>;
@@ -69,7 +77,32 @@ class SemanticIndex {
 			if (binding != null)
 				bind(id, binding.span);
 		}
+		for (enumDecl in declarations.enums)
+			for (enumCase in enumDecl.cases) {
+				var parameters = [
+					for (index in 0...enumCase.params.length) {
+						var parameter = enumCase.params[index];
+						(parameter.name == null ? "arg" + index : parameter.name) + ":" + displayAstType(parameter.type);
+					}
+				];
+				setDeclaredSignature(enumDecl.name + "." + enumCase.name, enumDecl.name + "." + enumCase.name + "(" + parameters.join(", ") + ")", parameters,
+					enumDecl.name);
+			}
+		for (classDecl in declarations.classes)
+			for (method in classDecl.methods)
+				if (method.name == "new") {
+					var parameters = [
+						for (argument in method.arguments)
+							argument.name + ":" + displayAstType(argument.type)
+					];
+					setDeclaredSignature(classDecl.name, classDecl.name + "(" + parameters.join(", ") + ")", parameters, classDecl.name);
+				}
 	}
+
+	function setDeclaredSignature(symbolName:String, label:String, parameters:Array<String>, result:String):Void
+		for (symbol in symbols)
+			if (symbol.name == symbolName)
+				signatures.set(symbol.id, {label: label, parameters: parameters, result: result});
 
 	public function indexTypedFunction(fn:TypedFunction, resolve:String->Null<SemanticSymbolId>, resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>):Void {
 		for (argument in fn.arguments) {
@@ -78,6 +111,18 @@ class SemanticIndex {
 		}
 		if (fn.owner != null)
 			functionReceivers.push({span: fn.span, type: TInstance(compiler.types.Type.NominalKind.Class, fn.owner, [])});
+		var functionId = resolve(fn.name);
+		if (functionId != null) {
+			var parameters = [
+				for (argument in fn.arguments)
+					sourceLocalName(argument.name) + ":" + displayType(argument.type)
+			], name = sourceName(fn.name);
+			signatures.set(functionId, {
+				label: name + "(" + parameters.join(", ") + "):" + displayType(fn.result),
+				parameters: parameters,
+				result: displayType(fn.result)
+			});
+		}
 		declareLocals(fn, fn.statements);
 		indexCompletionLocals(fn.statements, fn.span, 0);
 		indexStatements(fn, fn.statements, resolve, resolveEnumCase);
@@ -98,6 +143,9 @@ class SemanticIndex {
 
 	public function symbol(id:SemanticSymbolId):Null<IndexedSemanticSymbol>
 		return symbols.get(id);
+
+	public function signature(id:SemanticSymbolId):Null<SemanticSignatureInfo>
+		return signatures.get(id);
 
 	public function locations(id:SemanticSymbolId):Array<SourceSpan> {
 		var result = references.get(id);
@@ -458,4 +506,38 @@ class SemanticIndex {
 		var separator = name.lastIndexOf(".");
 		return separator < 0 ? name : name.substr(separator + 1);
 	}
+
+	static function displayType(type:CompilerType):String
+		return switch type {
+			case TInt: "Int";
+			case TFloat: "Float";
+			case TBool: "Bool";
+			case TString: "String";
+			case TVoid: "Void";
+			case TArray(element): 'Array<${displayType(element)}>';
+			case TMap(key, value): 'Map<${displayType(key)},${displayType(value)}>';
+			case TNullable(element): 'Null<${displayType(element)}>';
+			case TInstance(_, name, arguments): arguments.length == 0 ? name : name
+					+ "<"
+					+ [for (argument in arguments) displayType(argument)].join(",") + ">";
+			case TFunction(arguments, result): "(" + [for (argument in arguments) displayType(argument)].join(",") + ")->" + displayType(result);
+			default: Std.string(type);
+		};
+
+	static function displayAstType(type:AstType):String
+		return switch type {
+			case IntType: "Int";
+			case BoolType: "Bool";
+			case FloatType: "Float";
+			case StringType: "String";
+			case VoidType: "Void";
+			case InferredType: "_";
+			case NamedType(name): name;
+			case AppliedType(name, arguments): name + "<" + [for (argument in arguments) displayAstType(argument)].join(",") + ">";
+			case ArrayType(element): 'Array<${displayAstType(element)}>';
+			case MapType(key, value): 'Map<${displayAstType(key)},${displayAstType(value)}>';
+			case NullableType(element): 'Null<${displayAstType(element)}>';
+			case FunctionType(arguments, result): "(" + [for (argument in arguments) displayAstType(argument)].join(",") + ")->" + displayAstType(result);
+			default: Std.string(type);
+		};
 }

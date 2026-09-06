@@ -17,7 +17,9 @@ class LspProtocolMain {
 			protocol = new LspProtocol(service);
 		service.compiler.enablePublicationTracking();
 		var initialized = request(protocol, '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}');
-		if (!initialized.result.capabilities.hoverProvider || initialized.result.capabilities.textDocumentSync.change != 1)
+		if (!initialized.result.capabilities.hoverProvider
+			|| initialized.result.capabilities.signatureHelpProvider == null
+			|| initialized.result.capabilities.textDocumentSync.change != 1)
 			throw "LSP initialization capabilities are incomplete";
 		var source = "function main():Int { var answer = 42; return answer; }",
 			uri = "file:///workspace/Main.hx";
@@ -45,6 +47,30 @@ class LspProtocolMain {
 		}));
 		if (hover.result == null || hover.result.contents.value != "main():Int")
 			throw "LSP hover did not use the compiler language service";
+		var callSource = "function add(left:Int, right:Int):Int return left + right; function main():Int return add(20, 22);",
+			callUri = "file:///workspace/Call.hx";
+		protocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: callUri,
+					languageId: "haxe",
+					version: 1,
+					text: callSource
+				}
+			}
+		}));
+		var signature = request(protocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 6,
+			method: "textDocument/signatureHelp",
+			params: {textDocument: {uri: callUri}, position: {line: 0, character: callSource.indexOf("22") + 1}}
+		}));
+		if (signature.result == null
+			|| signature.result.signatures[0].label != "add(left:Int, right:Int):Int"
+			|| signature.result.activeParameter != 1)
+			throw "LSP signature help did not use compiler signature information";
 		var definition = request(protocol, Json.stringify({
 			jsonrpc: "2.0",
 			id: 3,

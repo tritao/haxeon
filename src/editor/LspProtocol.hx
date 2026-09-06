@@ -58,6 +58,7 @@ class LspProtocol {
 				case "textDocument/documentSymbol": [response(id, documentSymbols(request))];
 				case "textDocument/completion": [response(id, completion(request))];
 				case "textDocument/hover": [response(id, hover(request))];
+				case "textDocument/signatureHelp": [response(id, signatureHelp(request))];
 				case "textDocument/definition": [response(id, definition(request))];
 				case "textDocument/references": [response(id, references(request))];
 				case "textDocument/prepareRename": [response(id, prepareRename(request))];
@@ -83,6 +84,7 @@ class LspProtocol {
 				documentSymbolProvider: true,
 				completionProvider: {triggerCharacters: ["."]},
 				hoverProvider: true,
+				signatureHelpProvider: {triggerCharacters: ["(", ","]},
 				definitionProvider: true,
 				referencesProvider: true,
 				renameProvider: {prepareProvider: true}
@@ -161,6 +163,21 @@ class LspProtocol {
 		var document = document(request),
 			value = service.hover(document.path, positionOffset(document, position(request)));
 		return value == null ? null : {contents: {kind: "plaintext", value: value}};
+	}
+
+	function signatureHelp(request:Dynamic):Dynamic {
+		var document = document(request),
+			value = service.signatureHelp(document.path, positionOffset(document, position(request)));
+		return value == null ? null : {
+			signatures: [
+				{
+					label: value.label,
+					parameters: [for (parameter in value.parameters) {label: parameter}]
+				}
+			],
+			activeSignature: 0,
+			activeParameter: value.activeParameter
+		};
 	}
 
 	function definition(request:Dynamic):Dynamic {

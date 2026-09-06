@@ -179,6 +179,21 @@ class LanguageServiceMain {
 			|| enumReferences.length != 3
 			|| enumRename.length != 3)
 			throw "language service enum-case semantic indexing failed";
+		var enumSignature = enumService.signatureHelp("app/Main.hx", enumSource.lastIndexOf("41") + 1);
+		if (enumSignature == null || enumSignature.label != "Kind.Two(value:Int)" || enumSignature.activeParameter != 0)
+			throw "language service enum-constructor signature help failed";
+		var signatureService = new LanguageService(),
+			signatureSource = "class Box { public function new(value:Int) {} } function add(left:Int, right:Int):Int return left + right; function main():Int { var box = new Box(1); return add(20, add(1, 2)); }";
+		signatureService.update("Signatures.hx", signatureSource);
+		signatureService.compile("Signatures");
+		var nestedSignature = signatureService.signatureHelp("Signatures.hx", signatureSource.indexOf("2));") + 1),
+			constructorSignature = signatureService.signatureHelp("Signatures.hx", signatureSource.indexOf("Box(1)") + "Box(".length);
+		if (nestedSignature == null
+			|| nestedSignature.label != "add(left:Int, right:Int):Int"
+			|| nestedSignature.activeParameter != 1
+			|| constructorSignature == null
+			|| constructorSignature.label != "Box(value:Int)")
+			throw "language service nested-call or constructor signature help failed";
 		var hierarchyService = new LanguageService(),
 			hierarchySource = "typedef ParentAlias = Parent; class Parent { public function value():Int { return 42; } } class Child extends Parent { } function main():Int { var child:Child = new Child(); return child.value(); }";
 		hierarchyService.update("Hierarchy.hx", hierarchySource);

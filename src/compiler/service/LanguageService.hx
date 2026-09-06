@@ -55,6 +55,14 @@ typedef TextEdit = {
 	final replacement:String;
 }
 
+typedef SignatureHelp = {
+	final label:String;
+	final parameters:Array<String>;
+	final activeParameter:Int;
+	final ?revision:Int;
+	final ?stale:Bool;
+}
+
 /** Internal semantic key and declaration/function location used by editor queries. */
 typedef SemanticSymbol = {
 	final key:String;
@@ -241,6 +249,11 @@ class LanguageService {
 			ast = state == null ? null : effectiveAst(state);
 		if (state == null || ast == null)
 			return null;
+		var model = effectiveSemanticModel(state),
+			indexedId = model == null ? null : model.index.symbolIdAt(position),
+			indexedSignature = indexedId == null ? null : compiler.semanticWorkspace.indexedSignature(indexedId);
+		if (indexedSignature != null)
+			return indexedSignature.label;
 		var name = identifierPrefix(state.source.text, position);
 		if (name.length == 0)
 			return null;
@@ -269,6 +282,77 @@ class LanguageService {
 			if (symbol.name == name)
 				return symbol.detail;
 		return null;
+	}
+
+	public function signatureHelp(path:String, position:Int):Null<SignatureHelp> {
+		var state = stateFor(path),
+			tokens = state == null ? null : effectiveTokens(state),
+			model = state == null ? null : effectiveSemanticModel(state);
+		if (state == null || tokens == null || model == null)
+			return null;
+		var open = callOpenToken(tokens, position);
+		if (open < 1)
+			return null;
+		var callee = open - 1;
+		while (callee >= 0 && tokens[callee].kind != Identifier)
+			callee--;
+		if (callee < 0)
+			return null;
+		var id = model.index.symbolIdAt(tokens[callee].span.start + 1),
+			signature = id == null ? null : compiler.semanticWorkspace.indexedSignature(id);
+		if (signature == null)
+			return null;
+		var active = activeCallParameter(tokens, open, position);
+		if (signature.parameters.length > 0 && active >= signature.parameters.length)
+			active = signature.parameters.length - 1;
+		var result:SignatureHelp = {
+			label: signature.label,
+			parameters: signature.parameters,
+			activeParameter: active
+		};
+		tagResults([result], state);
+		return result;
+	}
+
+	static function callOpenToken(tokens:Array<compiler.syntax.Token>, position:Int):Int {
+		var depth = 0;
+		var index = tokens.length - 1;
+		while (index >= 0 && tokens[index].span.start >= position)
+			index--;
+		while (index >= 0) {
+			switch tokens[index].kind {
+				case RightParen:
+					depth++;
+				case LeftParen:
+					if (depth == 0)
+						return index;
+					depth--;
+				default:
+			}
+			index--;
+		}
+		return -1;
+	}
+
+	static function activeCallParameter(tokens:Array<compiler.syntax.Token>, open:Int, position:Int):Int {
+		var depth = 0, active = 0;
+		for (index in open + 1...tokens.length) {
+			var token = tokens[index];
+			if (token.span.start >= position)
+				break;
+			switch token.kind {
+				case LeftParen, LeftBracket, LeftBrace:
+					depth++;
+				case RightParen, RightBracket, RightBrace:
+					if (depth > 0)
+						depth--;
+				case Comma:
+					if (depth == 0)
+						active++;
+				default:
+			}
+		}
+		return active;
 	}
 
 	public function definition(path:String, position:Int):Null<SymbolLocation> {
