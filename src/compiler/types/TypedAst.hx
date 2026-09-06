@@ -223,6 +223,7 @@ enum CellStorageKind {
 /** Storage location read while constructing a closure environment. */
 enum TypedCaptureSource {
 	CaptureLocal(bindingId:String);
+	CaptureReceiver;
 	CaptureCellLocal(name:String, cellClass:String);
 	CaptureEnvironmentField(name:String);
 	CaptureCellEnvironmentField(name:String, cellClass:String);

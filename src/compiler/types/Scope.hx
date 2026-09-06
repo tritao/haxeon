@@ -10,6 +10,7 @@ private typedef ScopeValue = {
 	final source:String;
 	final declared:CompilerType;
 	final id:String;
+	final receiver:Bool;
 }
 
 /**
@@ -31,17 +32,21 @@ class Scope {
 		facts = new FlowFacts(parent == null ? null : parent.facts);
 	}
 
-	public function define(name:String, type:CompilerType, span:SourceSpan, initialized:Bool = true, ?bindingId:String):Void {
+	public function define(name:String, type:CompilerType, span:SourceSpan, initialized:Bool = true, ?bindingId:String, receiver:Bool = false):Void {
 		if (values.exists(name))
 			throw new CompileError(new Diagnostic("E1001", 'Duplicate local "$name"', span));
 		var value:ScopeValue = {
 			source: name,
 			declared: type,
-			id: bindingId == null ? '$' + 'l${allocateLocalId()}:$name' : bindingId
+			id: bindingId == null ? '$' + 'l${allocateLocalId()}:$name' : bindingId,
+			receiver: receiver
 		};
 		values.set(name, value);
 		assigned.set(value.id, initialized);
 	}
+
+	public function defineReceiver(type:CompilerType, span:SourceSpan):Void
+		define("this", type, span, true, null, true);
 
 	public function isAssigned(name:String):Bool {
 		var value = resolveLocal(name);
@@ -131,6 +136,11 @@ class Scope {
 		if (value == null)
 			throw 'Missing binding for local "$name"';
 		return value.id;
+	}
+
+	public function isReceiver(name:String):Bool {
+		var value = resolveLocal(name);
+		return value != null && value.receiver;
 	}
 
 	function resolveLocal(name:String):Null<ScopeValue> {

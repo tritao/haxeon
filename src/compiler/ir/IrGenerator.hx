@@ -510,6 +510,8 @@ class IrGenerator {
 						var value = switch capture.source {
 							case CaptureLocal(bindingId):
 								builder.load(bindingId, requireLocalType(localTypes, bindingId, 'Missing captured binding "$bindingId"'));
+							case CaptureReceiver:
+								builder.load("this", requireLocalType(localTypes, "this", "Captured receiver has no ABI local"));
 							case CaptureCellLocal(localName, cellClass):
 								builder.load('$' + 'cell:$localName', Obj(cellClass));
 							case CaptureEnvironmentField(field):

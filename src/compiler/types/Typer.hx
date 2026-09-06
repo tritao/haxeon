@@ -373,7 +373,7 @@ class Typer {
 				var initializerContext = enterBody(classDecl.name + ".__init");
 				var scope = new Scope();
 				if (!field.isStatic)
-					scope.define("this", TClass(classDecl.name), field.span);
+					scope.defineReceiver(TClass(classDecl.name), field.span);
 				initializer = coerce(typeExpression(parsedInitializer, scope, type), type,
 					(field.isStatic ? 'static field "${classDecl.name}.${field.name}"' : 'field "${classDecl.name}.${field.name}"'), "E1002");
 				leaveBody(initializerContext);
@@ -531,7 +531,7 @@ class Typer {
 		var scope = new Scope();
 		var isConstructor = owner != null && fn.name == "new";
 		if (owner != null && !isStatic)
-			scope.define("this", TClass(owner), fn.span);
+			scope.defineReceiver(TClass(owner), fn.span);
 		var arguments = [];
 		for (argument in fn.arguments) {
 			var type = argumentType(argument);
@@ -1423,7 +1423,7 @@ class Typer {
 								var bindingId = scope.requireId(name),
 									captureSource:TypedCaptureSource = if (scope.isCellCapture(name)) CaptureCellEnvironmentField(name,
 										scope.requireCellClass(name)) else if (scope.isCapture(name)) CaptureEnvironmentField(name) else if (cellClass != null)
-										CaptureCellLocal(name, cellClass) else CaptureLocal(name == "this" ? name : bindingId);
+										CaptureCellLocal(name, cellClass) else if (scope.isReceiver(name)) CaptureReceiver else CaptureLocal(bindingId);
 								lambdaScope.defineCapture(name, captureType, span, cellClass != null, cellClass, bindingId);
 								if (cellClass != null)
 									captureCells.set(name, cellClass);
