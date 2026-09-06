@@ -23,6 +23,23 @@ class SignatureInference {
 				if (method.name == "new")
 					constructors.set(classDecl.name, inferFieldBoundArguments(method, classDecl));
 		}
+		var inferredClasses:Array<AstClass> = [];
+		for (classDecl in program.classes) {
+			inferredClasses.push({
+				name: classDecl.name,
+				isPrivate: classDecl.isPrivate,
+				metadata: classDecl.metadata,
+				base: classDecl.base,
+				interfaces: classDecl.interfaces,
+				fields: classDecl.fields,
+				methods: inferClassMethods(classDecl, enums, constructors, classes),
+				span: classDecl.span
+			});
+		}
+		var inferredFunctions:Array<AstFunction> = [];
+		for (fn in program.functions) {
+			inferredFunctions.push(inferFunction(fn, enums));
+		}
 		return {
 			packageName: program.packageName,
 			imports: program.imports,
@@ -32,27 +49,18 @@ class SignatureInference {
 			enumAbstracts: program.enumAbstracts,
 			abstracts: program.abstracts,
 			interfaces: program.interfaces,
-			classes: [
-				for (classDecl in program.classes)
-					{
-						name: classDecl.name,
-						isPrivate: classDecl.isPrivate,
-						metadata: classDecl.metadata,
-						base: classDecl.base,
-						interfaces: classDecl.interfaces,
-						fields: classDecl.fields,
-						methods: inferClassMethods(classDecl, enums, constructors, classes),
-						span: classDecl.span
-					}
-			],
-			functions: [for (fn in program.functions) inferFunction(fn, enums)]
+			classes: inferredClasses,
+			functions: inferredFunctions
 		};
 	}
 
 	static function inferClassMethods(classDecl:AstClass, enums:Map<String, AstEnum>, constructors:Map<String, AstFunction>,
 			classes:Map<String, AstClass>):Array<AstFunction> {
-		var methods = [for (method in classDecl.methods) inferFieldBoundArguments(method, classDecl)],
+		var methods:Array<AstFunction> = [],
 			byName:Map<String, AstFunction> = [];
+		for (method in classDecl.methods) {
+			methods.push(inferFieldBoundArguments(method, classDecl));
+		}
 		for (method in methods)
 			byName.set(method.name, method);
 		for (_ in 0...methods.length) {
@@ -77,7 +85,11 @@ class SignatureInference {
 		];
 		for (method in constrained)
 			byName.set(method.name, method);
-		return [for (method in constrained) inferFunction(method, enums, byName)];
+		var inferred:Array<AstFunction> = [];
+		for (method in constrained) {
+			inferred.push(inferFunction(method, enums, byName));
+		}
+		return inferred;
 	}
 
 	static function constraintsFor(constraints:Map<String, Map<String, AstType>>, name:String):Map<String, AstType>

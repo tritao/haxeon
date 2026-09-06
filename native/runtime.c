@@ -162,6 +162,27 @@ HL_PRIM vbyte *HL_NAME(__bytes_to_string)( realtime_bytes *bytes ) {
 	return (vbyte *)result;
 }
 
+static vbyte *realtime_string_from_utf8( const char *utf8 ) {
+	int chars = hl_utf8_length((const vbyte *)utf8, 0);
+	uchar *result = (uchar *)hl_alloc_bytes((chars + 1) * (int)sizeof(uchar));
+	hl_from_utf8(result, chars, utf8);
+	result[chars] = 0;
+	return (vbyte *)result;
+}
+
+HL_PRIM varray *HL_NAME(__sys_args)( void ) {
+	varray *result = hl_alloc_array(&hlt_bytes, hl_setup.sys_nargs);
+	vbyte **arguments = hl_aptr(result, vbyte *);
+	for( int index = 0; index < hl_setup.sys_nargs; index++ ) {
+#ifdef HL_WIN
+		arguments[index] = (vbyte *)hl_setup.sys_args[index];
+#else
+		arguments[index] = realtime_string_from_utf8(hl_setup.sys_args[index]);
+#endif
+	}
+	return result;
+}
+
 HL_PRIM realtime_bytes_input *HL_NAME(__bytes_input_new)( realtime_bytes *bytes ) {
 	realtime_bytes_input *input = (realtime_bytes_input *)hl_gc_alloc_finalizer(sizeof(realtime_bytes_input));
 	input->finalize = realtime_bytes_input_finalize;
@@ -684,6 +705,18 @@ HL_PRIM int HL_NAME(__std_int_f64)( double value ) { return (int)value; }
 HL_PRIM int HL_NAME(__std_random)( int limit ) { return limit <= 0 ? 0 : rand() % limit; }
 
 HL_PRIM vbyte *HL_NAME(__std_string)( vdynamic *value ) {
+	if( value != NULL ) switch( value->t->kind ) {
+	case HOBJ:
+	case HSTRUCT:
+	case HARRAY:
+	case HENUM:
+	case HVIRTUAL:
+	case HDYNOBJ:
+	case HFUN:
+		return (vbyte *)hl_to_string((vdynamic *)value->v.ptr);
+	default:
+		break;
+	}
 	return (vbyte *)hl_to_string(value);
 }
 
@@ -817,7 +850,7 @@ HL_PRIM int HL_NAME(call_i32)( hl_runtime_module *runtime, int stable_id ) {
 	vdynamic *exception = NULL;
 	hl_runtime_status status = hl_runtime_module_call_i32(runtime,stable_id,&result,&exception);
 	if( status == HL_RUNTIME_EXCEPTION ) realtime_raise_module_exception();
-	if( status != HL_RUNTIME_OK ) hl_error("Invalid runtime function call");
+	if( status != HL_RUNTIME_OK ) hl_error("Invalid runtime function call (status %d, stable ID %d)",status,stable_id);
 	return result;
 }
 
@@ -1096,6 +1129,7 @@ DEFINE_PRIM(_VOID,__bytes_set_i32,_ABSTRACT(realtime_bytes) _I32 _I32);
 DEFINE_PRIM(_ABSTRACT(realtime_bytes),__bytes_sub,_ABSTRACT(realtime_bytes) _I32 _I32);
 DEFINE_PRIM(_I32,__bytes_compare,_ABSTRACT(realtime_bytes) _ABSTRACT(realtime_bytes));
 DEFINE_PRIM(_BYTES,__bytes_to_string,_ABSTRACT(realtime_bytes));
+DEFINE_PRIM(_ARR,__sys_args,_NO_ARG);
 DEFINE_PRIM(_ABSTRACT(realtime_bytes_input),__bytes_input_new,_ABSTRACT(realtime_bytes));
 DEFINE_PRIM(_I32,__bytes_input_position,_ABSTRACT(realtime_bytes_input));
 DEFINE_PRIM(_BOOL,__bytes_input_big_endian,_ABSTRACT(realtime_bytes_input));

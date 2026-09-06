@@ -112,6 +112,8 @@ run_program captured-lambda 42
 run_program mutable-capture 78
 run_program nested-mutable-capture 3
 run_program trace 42
+run_program string-interpolation 42
+run_program array-index-growth 42
 run_program sys-runtime 42
 run_program callback-method 42
 run_program name-collision 42

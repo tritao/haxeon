@@ -164,8 +164,6 @@ class HlLower {
 				if (output != null)
 					defineRegister(output, registers, registerTypes);
 			}
-		var hasTrap = false;
-
 		var edges:Map<String, Array<{destination:IrValue, source:IrValue}>> = [];
 		for (block in fn.blocks)
 			for (instruction in block.instructions)
@@ -186,13 +184,12 @@ class HlLower {
 					case Catch(output):
 						catchValues.set(block.id, output);
 						defineRegister(output, registers, registerTypes);
-					case BeginTry(_, _):
-						hasTrap = true;
 					default:
 				}
 
-		var instructions:Array<HlInstruction> = [];
-		for (block in (hasTrap ? orderedBlocks(fn) : fn.blocks)) {
+		var instructions:Array<HlInstruction> = [],
+			activeTraps:Array<Int> = [];
+		for (block in orderedBlocks(fn)) {
 			if (block.instructions.length == 0 && block.terminator == null)
 				continue;
 			instructions.push(HlInstruction.Label('block_${block.id}'));
@@ -221,9 +218,13 @@ class HlLower {
 						if (!catchValues.exists(catchBlock))
 							throw 'Try block $block.id has no catch value in block $catchBlock';
 						var handlerValue = catchValues.get(catchBlock);
-						instructions.push(HlInstruction.Trap(requireRegister(handlerValue, registers), 'block_$catchBlock'));
+						var handlerRegister = requireRegister(handlerValue, registers);
+						activeTraps.push(handlerRegister);
+						instructions.push(HlInstruction.Trap(handlerRegister, 'block_$catchBlock'));
 					case EndTry:
-						instructions.push(HlInstruction.EndTrap(0));
+						if (activeTraps.length == 0)
+							throw 'Try block $block.id ends without an active trap';
+						instructions.push(HlInstruction.EndTrap(activeTraps.pop()));
 					case Catch(_):
 					case GlobalGet(output, name):
 						var global = symbols.requireGlobalIndex(name);
@@ -359,19 +360,28 @@ class HlLower {
 		var byId:Map<Int, IrBlock> = [for (block in fn.blocks) block.id => block],
 			seen:Map<Int, Bool> = [],
 			output:Array<IrBlock> = [];
-		visitBlock(byId, seen, output, fn.blocks[0].id, -1);
+		appendReversePostorder(byId, seen, output, fn.blocks[0].id);
 		for (block in fn.blocks)
 			if (!seen.exists(block.id) && (block.instructions.length > 0 || block.terminator != null))
-				visitBlock(byId, seen, output, block.id, -1);
+				appendReversePostorder(byId, seen, output, block.id);
 		return output;
 	}
 
-	static function visitBlock(byId:Map<Int, IrBlock>, seen:Map<Int, Bool>, output:Array<IrBlock>, id:Int, stop:Int):Void {
-		if (stop >= 0 && id == stop || seen.exists(id) || !byId.exists(id))
+	static function appendReversePostorder(byId:Map<Int, IrBlock>, seen:Map<Int, Bool>, output:Array<IrBlock>, entry:Int):Void {
+		var postorder:Array<IrBlock> = [];
+		visitPostorder(byId, seen, postorder, entry);
+		var index = postorder.length;
+		while (index > 0) {
+			index--;
+			output.push(postorder[index]);
+		}
+	}
+
+	static function visitPostorder(byId:Map<Int, IrBlock>, seen:Map<Int, Bool>, output:Array<IrBlock>, id:Int):Void {
+		if (seen.exists(id) || !byId.exists(id))
 			return;
 		var block = byId.get(id);
 		seen.set(id, true);
-		output.push(block);
 		var region:Null<{catchBlock:Int, afterBlock:Int}> = null;
 		for (instruction in block.instructions)
 			switch instruction {
@@ -390,39 +400,18 @@ class HlLower {
 					successors.push(no);
 				case Return(_), Throw(_), Rethrow(_):
 			}
-		// Preserve reducible loops as backward branches for HashLink's JIT.
-		successors.sort(function(a, b) {
-			var aLoops = HlLower.canReach(byId, a, id, []),
-				bLoops = HlLower.canReach(byId, b, id, []);
-			return aLoops == bLoops ? 0 : (aLoops ? -1 : 1);
-		});
-		if (region == null) {
-			for (successor in successors)
-				visitBlock(byId, seen, output, successor, stop);
-			return;
+		if (region != null) {
+			// Visit structural exits first because reversal places the protected
+			// body before its handler and the handler before the shared exit.
+			visitPostorder(byId, seen, output, region.afterBlock);
+			visitPostorder(byId, seen, output, region.catchBlock);
 		}
-		for (successor in successors)
-			visitBlock(byId, seen, output, successor, region.afterBlock);
-		visitBlock(byId, seen, output, region.catchBlock, region.afterBlock);
-		visitBlock(byId, seen, output, region.afterBlock, stop);
-	}
-
-	static function canReach(byId:Map<Int, IrBlock>, from:Int, target:Int, checked:Map<Int, Bool>):Bool {
-		if (from == target)
-			return true;
-		if (checked.exists(from))
-			return false;
-		checked.set(from, true);
-		if (!byId.exists(from))
-			return false;
-		var terminator = byId.get(from).terminator;
-		if (terminator == null)
-			return false;
-		return switch terminator {
-			case Jump(next): canReach(byId, next, target, checked);
-			case Branch(_, yes, no): canReach(byId, yes, target, checked) || canReach(byId, no, target, checked);
-			case Return(_), Throw(_), Rethrow(_): false;
-		};
+		var successorIndex = successors.length;
+		while (successorIndex > 0) {
+			successorIndex--;
+			visitPostorder(byId, seen, output, successors[successorIndex]);
+		}
+		output.push(block);
 	}
 
 	static function edgeKey(from:Int, to:Int):String

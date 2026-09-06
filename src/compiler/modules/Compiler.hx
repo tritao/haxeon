@@ -283,8 +283,9 @@ class Compiler {
 		for (name in names)
 			if (token != null)
 				token.check();
-		for (name in names)
+		for (name in names) {
 			parse(modules.get(name), entryModule, bodyChanged, signatureChanged, structuralChanged);
+		}
 		for (name in names)
 			addTypeDependencies(modules.get(name));
 		if (token != null)
@@ -533,6 +534,7 @@ class Compiler {
 		var selected:Map<String, Bool> = [];
 		for (name in invalid.keys())
 			selected.set(name, true);
+		var entryPoint = executableEntryPoint(entryModule);
 		var typedNew:TypedProgram;
 		try {
 			if (token != null)
@@ -548,7 +550,7 @@ class Compiler {
 				interfaces: interfaces,
 				classes: classes,
 				functions: programFunctions
-			}, selected, nativeSignatures());
+			}, selected, nativeSignatures(), entryPoint);
 		} catch (error:CompileError) {
 			for (name in names) {
 				var state = modules.get(name);
@@ -649,7 +651,8 @@ class Compiler {
 		var objectNames = [for (name in objectCache.keys()) name];
 		objectNames.sort(Reflect.compare);
 		var ir = IrGenerator.assemble(cached, irNatives(), [for (name in objectNames) objectCache.get(name)], IrGenerator.interfacesFrom(typedNew),
-			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew), IrGenerator.staticInitializerFrom(typedNew, initializationClasses));
+			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew), IrGenerator.staticInitializerFrom(typedNew, initializationClasses),
+			entryPoint);
 		var nextAbi = RuntimeAbi.describe(ir),
 			decision = PatchPlanner.plan(publishedAbi, nextAbi),
 			reloadReasons:Array<AbiChange> = switch decision {
@@ -726,6 +729,18 @@ class Compiler {
 		var result = [for (name in seen.keys()) name];
 		result.sort(Reflect.compare);
 		return result;
+	}
+
+	function executableEntryPoint(entryModule:String):String {
+		var ast = modules.get(entryModule).parsedAst();
+		for (fn in ast.functions)
+			if (fn.name == "main")
+				return "main";
+		for (classDecl in ast.classes)
+			for (method in classDecl.methods)
+				if (method.name == "main" && method.isStatic)
+					return qualifiedTypeName(ast.packageName, classDecl.name) + ".main";
+		return "main";
 	}
 
 	function addTypeDependencies(state:ModuleState):Void {

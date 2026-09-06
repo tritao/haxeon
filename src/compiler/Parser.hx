@@ -912,7 +912,7 @@ class Parser {
 		if (match(TokenKind.Float))
 			return parsePostfix(FloatLiteral(Std.parseFloat(previous().text), previous().span));
 		if (match(TokenKind.StringLiteral))
-			return parsePostfix(StringLiteral(decodeString(previous().text), previous().span));
+			return parsePostfix(parseStringExpression(previous()));
 		if (match(TokenKind.BoolTrue))
 			return parsePostfix(BoolLiteral(true, previous().span));
 		if (match(TokenKind.BoolFalse))
@@ -1461,7 +1461,7 @@ class Parser {
 	function fail(token:Token, message:String):Void
 		throw new CompileError(new Diagnostic("E0002", message, token.span));
 
-	static function expressionSpan(expression:AstExpression)
+	static function expressionSpan(expression:AstExpression):SourceSpan
 		return switch expression {
 			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), BoolLiteral(_, span), NullLiteral(span), Unreachable(span),
 				Variable(_, span), Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span), Div(_, _, span), Mod(_, _, span),
@@ -1495,7 +1495,113 @@ class Parser {
 		return out;
 	}
 
-	static function statementSpan(statement:AstStatement)
+	static function parseStringExpression(token:Token):AstExpression {
+		var text = token.text;
+		if (text.charAt(0) != "'" || text.indexOf("$") < 0)
+			return StringLiteral(decodeString(text), token.span);
+		var parts:Array<AstExpression> = [], literal = "", index = 1, end = text.length - 1;
+		while (index < end) {
+			var character = text.charAt(index);
+			if (character == "\\") {
+				literal += decodeEscape(text.charAt(index + 1));
+				index += 2;
+				continue;
+			}
+			if (character != "$") {
+				literal += character;
+				index++;
+				continue;
+			}
+			if (index + 1 < end && text.charAt(index + 1) == "$") {
+				literal += "$";
+				index += 2;
+				continue;
+			}
+			if (index + 1 >= end || text.charAt(index + 1) != "{" && !isInterpolationIdentifierStart(text.charCodeAt(index + 1))) {
+				literal += "$";
+				index++;
+				continue;
+			}
+			appendStringLiteral(parts, literal, token.span);
+			literal = "";
+			var expressionStart = index + 1, expressionEnd = expressionStart;
+			if (expressionStart < end && text.charAt(expressionStart) == "{") {
+				expressionStart++;
+				expressionEnd = interpolationEnd(text, expressionStart, end, token.span);
+				index = expressionEnd + 1;
+			} else {
+				while (expressionEnd < end && isInterpolationIdentifierPart(text.charCodeAt(expressionEnd)))
+					expressionEnd++;
+				index = expressionEnd;
+			}
+			var expression = parseInterpolatedExpression(text.substring(expressionStart, expressionEnd), token.span, expressionStart);
+			parts.push(Call("Std.string", [expression], expressionSpan(expression)));
+		}
+		appendStringLiteral(parts, literal, token.span);
+		var result = parts[0];
+		for (partIndex in 1...parts.length)
+			result = Add(result, parts[partIndex], expressionSpan(result).merge(expressionSpan(parts[partIndex])));
+		return result;
+	}
+
+	static function appendStringLiteral(parts:Array<AstExpression>, value:String, span:SourceSpan):Void {
+		if (value.length > 0 || parts.length == 0)
+			parts.push(StringLiteral(value, span));
+	}
+
+	static function decodeEscape(escaped:String):String
+		return switch escaped {
+			case "n": "\n";
+			case "r": "\r";
+			case "t": "\t";
+			case "\"": "\"";
+			case "'": "'";
+			case "\\": "\\";
+			default: escaped;
+		};
+
+	static function interpolationEnd(text:String, start:Int, end:Int, span:SourceSpan):Int {
+		var depth = 1, index = start, quote = "";
+		while (index < end) {
+			var character = text.charAt(index);
+			if (quote != "") {
+				if (character == "\\")
+					index++;
+				else if (character == quote)
+					quote = "";
+			} else if (character == "\"" || character == "'")
+				quote = character;
+			else if (character == "{")
+				depth++;
+			else if (character == "}") {
+				depth--;
+				if (depth == 0)
+					return index;
+			}
+			index++;
+		}
+		throw new CompileError(new Diagnostic("E0002", "Unterminated string interpolation", span));
+	}
+
+	static function parseInterpolatedExpression(source:String, outer:SourceSpan, offset:Int):AstExpression {
+		var interpolationFile = new compiler.Source.SourceFile(outer.file.path, source),
+			shifted:Array<Token> = [];
+		for (token in new Lexer(interpolationFile).tokenize())
+			shifted.push(new Token(token.kind, token.text,
+				new SourceSpan(outer.file, outer.start + offset + token.span.start, outer.start + offset + token.span.end)));
+		var parser = new Parser(shifted),
+			expression = parser.parseExpression();
+		parser.consume(TokenKind.Eof);
+		return expression;
+	}
+
+	static function isInterpolationIdentifierPart(code:Int):Bool
+		return isInterpolationIdentifierStart(code) || code >= 48 && code <= 57;
+
+	static function isInterpolationIdentifierStart(code:Int):Bool
+		return code >= 65 && code <= 90 || code >= 97 && code <= 122 || code == 95;
+
+	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
 			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span),
 				FieldAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), Throw(_, span), Try(_, _, span), If(_, _, _, span), While(_, _, span),

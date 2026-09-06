@@ -51,20 +51,20 @@ class Typer {
 	final noReturnFunctions:Map<String, Bool> = [];
 
 	public static function type(program:AstProgram):TypedProgram
-		return new Typer(null).typeProgram(program, null, true);
+		return new Typer(null).typeProgram(program, null, true, null);
 
 	/** Type a reusable module without requiring an executable main function. */
 	public static function typeLibrary(program:AstProgram):TypedProgram
-		return new Typer(null).typeProgram(program, null, false);
+		return new Typer(null).typeProgram(program, null, false, null);
 
 	public static function typeSelected(program:AstProgram, selected:Map<String, Bool>,
-			?externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>):TypedProgram
-		return new Typer(externals).typeProgram(program, selected, true);
+			?externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>, ?entryPoint:String):TypedProgram
+		return new Typer(externals).typeProgram(program, selected, true, entryPoint);
 
 	function new(externals:Null<Map<String, {arguments:Array<CompilerType>, result:CompilerType}>>)
 		this.externals = externals == null ? [] : externals;
 
-	function typeProgram(program:AstProgram, selected:Null<Map<String, Bool>>, requireMain:Bool):TypedProgram {
+	function typeProgram(program:AstProgram, selected:Null<Map<String, Bool>>, requireMain:Bool, entryPoint:Null<String>):TypedProgram {
 		program = SignatureInference.inferProgram(program);
 		declarations = new DeclarationIndex(program);
 		relations = new TypeRelations(declarations);
@@ -111,14 +111,16 @@ class Typer {
 		inferNoReturnFunctions();
 		if (requireMain) {
 			var main:AstFunction;
-			if (signatures.exists("main"))
+			if (entryPoint != null && signatures.exists(entryPoint))
+				main = signatures.get(entryPoint);
+			else if (entryPoint == null && signatures.exists("main"))
 				main = signatures.get("main");
-			else if (signatures.exists("Main.main"))
+			else if (entryPoint == null && signatures.exists("Main.main"))
 				main = signatures.get("Main.main");
 			else
-				throw "Program must define main():Int or static Main.main():Void";
+				throw 'Program must define executable entry point "${entryPoint == null ? "main" : entryPoint}"';
 			if (main.arguments.length != 0 || (lowerType(main.result) != TInt && lowerType(main.result) != TVoid))
-				throw "Program must define main():Int or static Main.main():Void";
+				throw 'Executable entry point "${entryPoint == null ? main.name : entryPoint}" must take no arguments and return Int or Void';
 		}
 		var typedEnums:Array<TypedEnum> = [
 			for (enumDecl in program.enums)
@@ -152,8 +154,9 @@ class Typer {
 				typeClass(classDecl, classDecls, selected)
 			], typedFunctions:Array<TypedFunction> = [];
 		for (fn in program.functions)
-			if (!isGeneric(fn) && (selected == null || selected.exists(fn.name)))
+			if (!isGeneric(fn) && (selected == null || selected.exists(fn.name))) {
 				typedFunctions.push(typeFunction(fn));
+			}
 		for (classDecl in typedClasses)
 			for (method in classDecl.methods)
 				if (selected == null || selected.exists(method.name))
@@ -2362,8 +2365,6 @@ class Typer {
 		if (name == "sort") {
 			if (arguments.length != 1)
 				fail("E1008", "Array.sort expects one comparator", span);
-			if (!isRebindableArrayReceiver(receiver))
-				fail("E1016", "Array.sort requires a mutable local or field array", span);
 			var comparatorType = CompilerType.TFunction([element, element], TInt),
 				comparator = coerce(typeExpression(arguments[0], scope, comparatorType), comparatorType, "array comparator", "E1002");
 			return new TypedExpression(TArraySort(receiver, comparator), TVoid, span);
@@ -2392,7 +2393,7 @@ class Typer {
 
 	function isRebindableArrayReceiver(receiver:TypedExpression):Bool
 		return switch receiver.expression {
-			case TLocal(_): true;
+			case TLocal(_), TCellLocal(_, _): true;
 			case TField(object, name): hasInstanceField(object.type, name);
 			default: false;
 		};

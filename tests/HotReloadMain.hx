@@ -25,6 +25,13 @@ import runtime.RuntimeStatus;
 import runtime.PatchSet;
 
 class HotReloadMain {
+	static function requireFunctionId(result:CompileResult, name:String):Int {
+		var id = result.functionIds.get(name);
+		if (id == null)
+			throw 'compiled module is missing function $name';
+		return id;
+	}
+
 	static function main():Void {
 		testPatchContract();
 		testDecodedIrLifetime();
@@ -41,14 +48,15 @@ class HotReloadMain {
 		compiler.update("Seed.hx", "function ratio():Float { return 1.0 + 0.5; } function label():String { return \"initial\"; }");
 		compiler.update("ExceptionProbe.hx",
 			"function probe():Int { try { throw \"probe\"; } catch (error:Int) { return 0; } catch (error:String) { return 41; } }");
-		compiler.update("Main.hx", "function main():Int { return Probe.read() + ExceptionProbe.probe() - 41; }");
+		compiler.update("Main.hx",
+			"function main():Int { var result = Probe.read() + ExceptionProbe.probe() - 41; if (result < 0) return Worker.run(); return result; }");
 		var initial = compiler.compile("Main");
 		var liveRevision = initial.revision;
 
-		var valueIndex = initial.functionIds.get("Value.value"),
-			readIndex = initial.functionIds.get("Probe.read"),
-			exceptionIndex = initial.functionIds.get("ExceptionProbe.probe"),
-			workIndex = initial.functionIds.get("Worker.run");
+		var valueIndex = requireFunctionId(initial, "Value.value"),
+			readIndex = requireFunctionId(initial, "Probe.read"),
+			exceptionIndex = requireFunctionId(initial, "ExceptionProbe.probe"),
+			workIndex = requireFunctionId(initial, "Worker.run");
 		var loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
 		if (Runtime.callInt(loaded, valueIndex) != 42)
 			throw "initial generation did not return 42";

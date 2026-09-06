@@ -239,7 +239,7 @@ class IrGenerator {
 	}
 
 	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>,
-			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializer:IrFunction):IrProgram {
+			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializer:IrFunction, ?entryPoint:String):IrProgram {
 		var program = new IrProgram("__entry");
 		var needsArrayRuntime = false,
 			needsStringRuntime = false,
@@ -540,10 +540,10 @@ class IrGenerator {
 			program.functions.push(fn);
 		var mainFunction:Null<IrFunction> = null;
 		for (fn in allFunctions)
-			if (fn.name == "main" || fn.name == "Main.main")
+			if (entryPoint == null ? (fn.name == "main" || fn.name == "Main.main") : fn.name == entryPoint)
 				mainFunction = fn;
 		if (mainFunction == null)
-			throw "IR program has no executable entry point";
+			throw 'IR program has no executable entry point "${entryPoint == null ? "main" : entryPoint}"';
 		var entry = new IrBuilder();
 		if (staticInitializer != null)
 			entry.call("__init", [], Void);
@@ -1151,6 +1151,15 @@ class IrGenerator {
 				localTypes.set(subjectName, subjectType);
 				localTypes.set(resultName, resultType);
 				builder.store(subjectName, lowerExpression(subject, builder, localTypes));
+				if (defaultExpression != null)
+					switch subject.type {
+						case TEnum(_):
+							var firstCheck = builder.createBlock(),
+								subjectValue = builder.load(subjectName, subjectType);
+							builder.branch(builder.equal(subjectValue, builder.constNull(subjectType)), fallbackBlock, firstCheck);
+							checkBlocks[0] = firstCheck;
+						default:
+					}
 				for (caseIndex in 0...cases.length) {
 					var switchCase = cases[caseIndex],
 						isExhaustiveFinalCase = defaultExpression == null && caseIndex == cases.length - 1 && switchCase.guard == null,
@@ -1540,6 +1549,9 @@ class IrGenerator {
 				var pushed = builder.call(RuntimeType.arrayNative(element, "push"), operands, Array(lowerType(element)));
 				switch array.expression {
 					case TLocal(name): builder.store(name, pushed);
+					case TCellLocal(name, cellClass):
+						var cell = builder.load('$' + 'cell:$name', Obj(cellClass));
+						builder.fieldSet(cell, "value", pushed);
 					case TField(object, name): builder.fieldSet(lowerExpression(object, builder, localTypes), name, pushed);
 					default: throw "Array.push requires a mutable local or field array";
 				}

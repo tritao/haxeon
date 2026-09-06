@@ -39,7 +39,7 @@ class RuntimeAbi {
 		compiler.registerNative("Sys.sleep", "std", "sys_sleep", [TFloat], TVoid);
 		compiler.registerNative("Sys.getPid", "std", "sys_getpid", [], TInt);
 		compiler.registerNative("Sys.getChar", "std", "sys_get_char", [TBool], TInt);
-		compiler.registerNative("Sys.args", "std", "sys_args", [], TArray(TString));
+		compiler.registerNative("Sys.args", "realtime_runtime", "__sys_args", [], TArray(TString));
 		compiler.registerNative("Std.parseInt", "realtime_runtime", "__std_parse_int", [TString], TInt);
 		compiler.registerNative("Std.parseFloat", "realtime_runtime", "__std_parse_float", [TString], TFloat);
 		compiler.registerNative("__std_int_f64", "realtime_runtime", "__std_int_f64", [TFloat], TInt);
