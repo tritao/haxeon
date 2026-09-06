@@ -23,10 +23,15 @@ class RuntimeType {
 		};
 
 	public static function arrayNative(element:CompilerType, operation:String):String {
+		var name = requireArrayName(element);
+		return '__array_${operation}_$name';
+	}
+
+	public static function requireArrayName(element:CompilerType):String {
 		var name = arrayName(element);
 		if (name == null)
 			throw 'Unsupported compiler array ABI for $element';
-		return '__array_${operation}_$name';
+		return name;
 	}
 
 	public static function mapName(key:CompilerType, value:CompilerType):Null<String>
@@ -48,10 +53,15 @@ class RuntimeType {
 		return StringTools.startsWith(name, "map_int_") ? TInt : TString;
 
 	public static function mapNative(key:CompilerType, value:CompilerType, operation:String):String {
+		var name = requireMapName(key, value);
+		return '__${name}_$operation';
+	}
+
+	public static function requireMapName(key:CompilerType, value:CompilerType):String {
 		var name = mapName(key, value);
 		if (name == null)
 			throw 'Unsupported compiler map ABI for ${key} -> ${value}';
-		return '__${name}_$operation';
+		return name;
 	}
 
 	public static function mapValueType(name:String):Null<CompilerType>
@@ -71,6 +81,7 @@ class RuntimeType {
 		return switch type {
 			case TBytes, THlBytes, TDynamic, TNativeAbstract(_), TClass(_), TInterface(_), TEnum(_), TAnonymous(_,
 				_), TArray(_), TMap(_, _), TFunction(_, _): true;
+			case TNullable(element): isRuntimeReference(element);
 			default: false;
 		};
 }

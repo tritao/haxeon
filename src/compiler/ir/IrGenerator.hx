@@ -10,13 +10,27 @@ import compiler.types.TypedAst.TypedSwitchCase;
 import compiler.ir.Cfg.CfgFunction;
 import compiler.ir.Cfg.CfgBlock;
 import compiler.ir.Cfg.CfgValue;
+import compiler.ir.Cfg.CfgArgument;
+import compiler.ir.SsaBuilder;
+import compiler.ir.IrBuilder;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.Ir.IrObject;
+import compiler.ir.Ir.IrObjectField;
+import compiler.ir.Ir.IrObjectMethod;
 import compiler.ir.Ir.IrInterface;
 import compiler.ir.Ir.IrEnum;
 import compiler.ir.Ir.IrStaticField;
+
+private typedef LoopContext = {
+	final breakBlock:CfgBlock;
+	final continueBlock:CfgBlock;
+	final breakFlag:String;
+	final trapDepth:Int;
+}
+
+private typedef MapTypes = {final key:CompilerType; final value:CompilerType;}
 
 /** Lowers typed syntax to a mutable-local CFG; SsaBuilder owns all SSA policy. */
 class IrGenerator {
@@ -27,15 +41,18 @@ class IrGenerator {
 
 	/** Build the module boot function from static field initializers. */
 	public static function staticInitializerFrom(typed:TypedProgram, ?classOrder:Array<String>):Null<IrFunction> {
-		var statements:Array<TypedStatement> = [], firstSpan = null;
+		var statements:Array<TypedStatement> = [],
+			spans:Array<compiler.Source.SourceSpan> = [];
 		var classes = orderedClasses(typed.classes, classOrder);
 		for (classDecl in classes)
-			for (field in classDecl.fields)
-				if (field.isStatic && field.initializer != null) {
-					if (firstSpan == null)
-						firstSpan = field.span;
-					statements.push(TStaticFieldAssign(classDecl.name, field.name, field.initializer, field.span));
+			for (field in classDecl.fields) {
+				var initializer = field.initializer;
+				if (field.isStatic && initializer != null) {
+					if (spans.length == 0)
+						spans.push(field.span);
+					statements.push(TStaticFieldAssign(classDecl.name, field.name, initializer, field.span));
 				}
+			}
 		if (statements.length == 0)
 			return null;
 		return generateFunction({
@@ -48,7 +65,7 @@ class IrGenerator {
 			statements: statements,
 			cells: [],
 			cellCaptures: [],
-			span: firstSpan
+			span: spans[0]
 		});
 	}
 
@@ -61,8 +78,8 @@ class IrGenerator {
 		var result:Array<compiler.types.TypedAst.TypedClass> = [],
 			seen:Map<String, Bool> = [];
 		for (name in order) {
-			var classDecl = byName.get(name);
-			if (classDecl != null) {
+			if (byName.exists(name)) {
+				var classDecl = byName.get(name);
 				result.push(classDecl);
 				seen.set(name, true);
 			}
@@ -100,25 +117,27 @@ class IrGenerator {
 	}
 
 	public static function objectsFrom(typed:TypedProgram):Array<IrObject> {
-		var objects:Array<IrObject> = [
-			for (classDecl in typed.classes)
-				{
-					name: classDecl.name,
-					base: classDecl.base,
-					interfaces: classDecl.interfaces,
-					fields: [
-						for (field in classDecl.fields)
-							if (!field.isStatic) {name: field.name, type: lowerType(field.type)}
-					],
-					methods: [
-						for (method in classDecl.methods)
-							if (!method.isStatic && !method.isConstructor) {
-								name: method.name.substr(method.name.lastIndexOf(".") + 1),
-								functionName: method.name
-							}
-					]
+		var objects:Array<IrObject> = [];
+		for (classDecl in typed.classes) {
+			var fields:Array<IrObjectField> = [];
+			for (field in classDecl.fields)
+				if (!field.isStatic)
+					fields.push({name: field.name, type: lowerType(field.type)});
+			var methods:Array<IrObjectMethod> = [];
+			for (methodDecl in classDecl.methods)
+				if (!methodDecl.isStatic && !methodDecl.isConstructor) {
+					var functionName = methodDecl.name;
+					var separator = IrGenerator.lastSeparator(functionName);
+					methods.push({name: functionName.substring(separator + 1, functionName.length), functionName: functionName});
 				}
-		];
+			objects.push({
+				name: classDecl.name,
+				base: classDecl.base,
+				interfaces: classDecl.interfaces,
+				fields: fields,
+				methods: methods
+			});
+		}
 		for (cell in typed.cells)
 			objects.push({
 				name: cell.name,
@@ -149,6 +168,17 @@ class IrGenerator {
 		return objects;
 	}
 
+	static function lastSeparator(value:String):Int {
+		return lastSeparatorCode(value, 46);
+	}
+
+	static function lastSeparatorCode(value:String, separator:Int):Int {
+		var index = value.length - 1;
+		while (index >= 0 && value.charCodeAt(index) != separator)
+			index--;
+		return index;
+	}
+
 	public static function staticFieldsFrom(typed:TypedProgram):Array<IrStaticField> {
 		var result = [];
 		for (classDecl in typed.classes)
@@ -166,25 +196,25 @@ class IrGenerator {
 	public static function generateCfg(fn:TypedFunction):CfgFunction {
 		var builder = new CfgBuilder(), localTypes:Map<String, IrType> = [];
 		for (name => cellClass in fn.cells) {
-			var cellType = Obj(cellClass);
+			var cellType:IrType = Obj(cellClass);
 			localTypes.set('__cell:$name', cellType);
 			localTypes.set('$' + 'cell:$name', cellType);
 		}
-		for (name => cellClass in fn.cellCaptures)
-			localTypes.set('__capturecell:$name', Obj(cellClass));
-		var arguments = [
+		for (name => cellClass in fn.cellCaptures) {
+			var cellType:IrType = Obj(cellClass);
+			localTypes.set('__capturecell:$name', cellType);
+		}
+		var arguments:Array<CfgArgument> = [
 			for (argument in implicitArguments(fn)) {
 				localTypes.set(argument.name, argument.type);
 				{name: argument.name, type: argument.type};
 			}
 		];
-		arguments = arguments.concat([
-			for (argument in fn.arguments) {
-				var type = lowerType(argument.type);
-				localTypes.set(argument.name, type);
-				{name: argument.name, type: type};
-			}
-		]);
+		for (argument in fn.arguments) {
+			var type = lowerType(argument.type);
+			localTypes.set(argument.name, type);
+			arguments.push({name: argument.name, type: type});
+		}
 		for (name => cellClass in fn.cells)
 			for (argument in arguments)
 				if (argument.name == name) {
@@ -192,7 +222,7 @@ class IrGenerator {
 					builder.fieldSet(cell, "value", builder.load(name, localTypes.get(name)));
 					builder.store('$' + 'cell:$name', cell);
 				}
-		lowerStatements(fn.statements, builder, localTypes);
+		lowerStatements(fn.statements, builder, localTypes, []);
 		if (!builder.isTerminated()) {
 			if (lowerType(fn.result) == Void)
 				builder.returnVoid();
@@ -223,9 +253,9 @@ class IrGenerator {
 								|| name == "__string_substring")
 								needsStringRuntime = true;
 							if (StringTools.startsWith(name, "__map_")) {
-								var operationStart = name.lastIndexOf("_");
+								var operationStart = IrGenerator.lastSeparatorCode(name, 95);
 								if (operationStart > 0)
-									mapRuntimeNames.set(name.substr(2, operationStart - 2), true);
+									mapRuntimeNames.set(name.substring(2, operationStart), true);
 							}
 						default:
 					}
@@ -284,14 +314,15 @@ class IrGenerator {
 				arguments: [I32],
 				result: Array(Dyn)
 			});
-			for (entry in [
+			var arrayKinds:Array<{name:String, type:IrType}> = [
 				{name: "i32", type: I32},
 				{name: "f64", type: F64},
 				{name: "bytes", type: Bytes},
 				{name: "bool", type: Bool},
 				{name: "ref", type: Dyn}
-			]) {
-				var arrayType = Array(entry.type);
+			];
+			for (entry in arrayKinds) {
+				var arrayType:IrType = Array(entry.type);
 				program.natives.push({
 					name: '__array_copy_${entry.name}',
 					library: "realtime_runtime",
@@ -363,9 +394,14 @@ class IrGenerator {
 			var keyType = RuntimeType.mapKeyType(mapName);
 			if (keyType == null)
 				throw 'Unknown compiler map key ABI "$mapName"';
-			var mapType = Abstract(mapName),
-				keyIrType = lowerType(keyType),
-				valueIrType = isReferenceMap ? Dyn : lowerType(valueType);
+			var mapType:IrType = Abstract(mapName);
+			var keyIrType = lowerType(keyType);
+			var valueIrType:IrType = Dyn;
+			if (!isReferenceMap) {
+				if (valueType == null)
+					throw 'Unknown compiler map ABI "$mapName"';
+				valueIrType = lowerType(valueType);
+			}
 			program.natives.push({
 				name: '__${mapName}_alloc',
 				library: "realtime_runtime",
@@ -489,9 +525,11 @@ class IrGenerator {
 		if (natives != null)
 			for (native in natives)
 				program.natives.push(native);
-		var allFunctions = functions.copy();
+		var allFunctions:Array<IrFunction> = [];
 		if (staticInitializer != null)
-			allFunctions.unshift(staticInitializer);
+			allFunctions.push(staticInitializer);
+		for (fn in functions)
+			allFunctions.push(fn);
 		for (fn in allFunctions)
 			program.functions.push(fn);
 		var mainFunction:Null<IrFunction> = null;
@@ -511,14 +549,7 @@ class IrGenerator {
 		return program;
 	}
 
-	static function lowerStatements(statements:Array<TypedStatement>, builder:CfgBuilder, localTypes:Map<String, IrType>, ?loops:Array<{
-		breakBlock:CfgBlock,
-		continueBlock:CfgBlock,
-		breakFlag:String,
-		trapDepth:Int
-	}>):Void {
-		if (loops == null)
-			loops = [];
+	static function lowerStatements(statements:Array<TypedStatement>, builder:CfgBuilder, localTypes:Map<String, IrType>, loops:Array<LoopContext>):Void {
 		for (statement in statements) {
 			if (builder.isTerminated())
 				break;
@@ -526,12 +557,13 @@ class IrGenerator {
 				case TDeclare(name, type, _):
 					localTypes.set(name, lowerType(type));
 				case TVar(name, initializer, _):
-					var value = lowerExpression(initializer, builder, localTypes),
-						cellType = localTypes.get('__cell:$name');
-					if (cellType == null) {
+					var value = lowerExpression(initializer, builder, localTypes);
+					var cellKey = '__cell:$name';
+					if (!localTypes.exists(cellKey)) {
 						localTypes.set(name, lowerType(initializer.type));
 						builder.store(name, value);
 					} else {
+						var cellType = localTypes.get(cellKey);
 						var cellClass = switch cellType {
 							case Obj(name): name;
 							default: throw 'Invalid capture cell type for "$name"';
@@ -545,9 +577,7 @@ class IrGenerator {
 				case TCellAssign(name, cellClass, value, _):
 					builder.fieldSet(builder.load('$' + 'cell:$name', Obj(cellClass)), "value", lowerExpression(value, builder, localTypes));
 				case TCellCapturedAssign(name, cellClass, value, _):
-					var owner = localTypes.get("this");
-					if (owner == null)
-						throw 'Captured assignment "$name" has no environment';
+					var owner = requireLocalType(localTypes, "this", 'Captured assignment "$name" has no environment');
 					var cell = builder.fieldGet(builder.load("this", owner), name, Obj(cellClass));
 					builder.fieldSet(cell, "value", lowerExpression(value, builder, localTypes));
 				case TFieldAssign(object, name, value, _):
@@ -590,12 +620,13 @@ class IrGenerator {
 						exceptionLocal = '$' + 'exception:${catchBlock}',
 						catchActive = false,
 						hasDynamicCatch = false;
-					localTypes.set(exceptionLocal, Dyn);
+					var exceptionType:IrType = Dyn;
+					localTypes.set(exceptionLocal, exceptionType);
 					builder.store(exceptionLocal, exception);
 					for (i in 0...catches.length) {
 						var catchClause = catches[i],
 							catchIrType = lowerType(catchClause.type),
-							nextDispatch:CfgBlock = null;
+							nextDispatch:Null<CfgBlock> = null;
 						if (catchClause.type != TDynamic) {
 							var handlerBlock = builder.createBlock(),
 								mismatchBlock = builder.createBlock();
@@ -635,23 +666,19 @@ class IrGenerator {
 					builder.closeTrapsToDepth(loop.trapDepth);
 					builder.jump(loop.continueBlock);
 				case TIncrement(name, delta, _):
-					var type = localTypes.get(name);
-					if (type == null)
-						throw 'Missing increment local "$name"';
-					var one = type == I32 ? builder.constInt(1) : builder.constFloat(1);
+					var type = requireLocalType(localTypes, name, 'Missing increment local "$name"');
+					var one = type == I32 ? builder.constInt(1) : builder.constFloat(1.0);
 					builder.store(name, delta > 0 ? builder.add(builder.load(name, type), one) : builder.sub(builder.load(name, type), one));
 				case TCellIncrement(name, cellClass, valueType, delta, _):
 					var cell = builder.load('$' + 'cell:$name', Obj(cellClass)),
 						value = builder.fieldGet(cell, "value", lowerType(valueType)),
-						one = valueType == TInt ? builder.constInt(1) : builder.constFloat(1);
+						one = valueType == TInt ? builder.constInt(1) : builder.constFloat(1.0);
 					builder.fieldSet(cell, "value", delta > 0 ? builder.add(value, one) : builder.sub(value, one));
 				case TCellCapturedIncrement(name, cellClass, valueType, delta, _):
-					var owner = localTypes.get("this");
-					if (owner == null)
-						throw 'Captured increment "$name" has no environment';
+					var owner = requireLocalType(localTypes, "this", 'Captured increment "$name" has no environment');
 					var cell = builder.fieldGet(builder.load("this", owner), name, Obj(cellClass)),
 						value = builder.fieldGet(cell, "value", lowerType(valueType)),
-						one = valueType == TInt ? builder.constInt(1) : builder.constFloat(1);
+						one = valueType == TInt ? builder.constInt(1) : builder.constFloat(1.0);
 					builder.fieldSet(cell, "value", delta > 0 ? builder.add(value, one) : builder.sub(value, one));
 				case TIf(condition, thenBranch, elseBranch, _):
 					var conditionValue = lowerExpression(condition, builder, localTypes),
@@ -674,7 +701,7 @@ class IrGenerator {
 					if (thenActive || elseActive)
 						builder.select(joinBlock);
 				case TWhile(condition, body, span):
-					var breakFlag = '$' + 'while-break:' + span.start;
+					var breakFlag = '$' + 'while-break:${span.start}';
 					localTypes.set(breakFlag, Bool);
 					builder.store(breakFlag, builder.constBool(false));
 					var conditionBlock = builder.createBlock(),
@@ -699,7 +726,7 @@ class IrGenerator {
 						builder.jump(conditionBlock);
 					builder.select(afterBlock);
 				case TDoWhile(body, condition, span):
-					var breakFlag = '$' + 'do-while-break:' + span.start;
+					var breakFlag = '$' + 'do-while-break:${span.start}';
 					localTypes.set(breakFlag, Bool);
 					builder.store(breakFlag, builder.constBool(false));
 					var conditionBlock = builder.createBlock(),
@@ -733,21 +760,28 @@ class IrGenerator {
 						builder.jump(conditionBlock);
 					builder.select(afterBlock);
 				case TForIn(name, valueName, iterable, body, span):
-					var arrayName = '$' + 'for-array:' + span.start,
-						mapName = '$' + 'for-map:' + span.start,
-						indexName = '$' + 'for-index:' + span.start,
-						breakFlag = '$' + 'for-break:' + span.start,
-						mapTypes = switch iterable.type {
-							case TMap(key, value): {key: key, value: value};
-							default: null;
-						},
-						arrayType = valueName == null ? lowerType(iterable.type) : Array(lowerType(mapTypes.key)),
-						elementType = switch iterable.type {
-							case TArray(element): lowerType(element);
-							case TRange: I32;
-							case TMap(key, _): lowerType(key);
-							default: throw 'For-in iterable is not an array';
-						};
+					var arrayName = '$' + 'for-array:${span.start}',
+						mapName = '$' + 'for-map:${span.start}',
+						indexName = '$' + 'for-index:${span.start}',
+						breakFlag = '$' + 'for-break:${span.start}';
+					var mapKey:CompilerType = TVoid,
+						mapValue:CompilerType = TVoid;
+					switch iterable.type {
+						case TMap(key, value):
+							mapKey = key;
+							mapValue = value;
+						default:
+					}
+					var arrayType:IrType = switch iterable.type {
+						case TMap(key, _): Array(lowerType(key));
+						default: lowerType(iterable.type);
+					};
+					var elementType = switch iterable.type {
+						case TArray(element): lowerType(element);
+						case TRange: I32;
+						case TMap(key, _): lowerType(key);
+						default: throw 'For-in iterable is not an array';
+					};
 					localTypes.set(arrayName, arrayType);
 					localTypes.set(indexName, I32);
 					localTypes.set(breakFlag, Bool);
@@ -757,10 +791,10 @@ class IrGenerator {
 					else {
 						var loweredMapType = lowerType(iterable.type);
 						localTypes.set(mapName, loweredMapType);
-						localTypes.set(valueName, lowerType(mapTypes.value));
+						localTypes.set(valueName, lowerType(mapValue));
 						builder.store(mapName, lowerExpression(iterable, builder, localTypes));
 						builder.store(arrayName,
-							builder.call(RuntimeType.mapNative(mapTypes.key, mapTypes.value, "keys"), [builder.load(mapName, loweredMapType)], arrayType));
+							builder.call(RuntimeType.mapNative(mapKey, mapValue, "keys"), [builder.load(mapName, loweredMapType)], arrayType));
 					}
 					builder.store(indexName, builder.constInt(-1));
 					builder.store(breakFlag, builder.constBool(false));
@@ -782,8 +816,8 @@ class IrGenerator {
 					builder.store(name, builder.arrayGet(bodyArray, bodyIndex, elementType));
 					if (valueName != null)
 						builder.store(valueName,
-							builder.call(RuntimeType.mapNative(mapTypes.key, mapTypes.value, "get"),
-								[builder.load(mapName, lowerType(iterable.type)), builder.load(name, elementType)], lowerType(mapTypes.value)));
+							builder.call(RuntimeType.mapNative(mapKey, mapValue, "get"),
+								[builder.load(mapName, lowerType(iterable.type)), builder.load(name, elementType)], lowerType(mapValue)));
 					loops.push({
 						breakBlock: afterBlock,
 						continueBlock: conditionBlock,
@@ -797,7 +831,7 @@ class IrGenerator {
 					}
 					builder.select(afterBlock);
 				case TSwitch(expression, cases, defaultBranch, hasDefault, span):
-					var switchName = '$' + 'switch:' + span.start,
+					var switchName = '$' + 'switch:${span.start}',
 						switchType = lowerType(expression.type),
 						exits:Array<CfgBlock> = [];
 					localTypes.set(switchName, switchType);
@@ -822,8 +856,9 @@ class IrGenerator {
 						for (binding in switchCase.bindings)
 							builder.store(binding.name,
 								builder.enumField(builder.load(switchName, switchType), switchCase.constructorIndex, binding.index, lowerType(binding.type)));
-						if (switchCase.guard != null) {
-							builder.branch(lowerExpression(switchCase.guard, builder, localTypes), bodyBlock, nextBlock);
+						var guard = switchCase.guard;
+						if (guard != null) {
+							builder.branch(lowerExpression(guard, builder, localTypes), bodyBlock, nextBlock);
 							builder.select(bodyBlock);
 						}
 						lowerStatements(switchCase.statements, builder, localTypes, loops);
@@ -886,22 +921,16 @@ class IrGenerator {
 				}
 			case TToDynamic(value): builder.toDyn(lowerExpression(value, builder, localTypes));
 			case TLocal(name):
-				var type = localTypes.get(name);
-				if (type == null)
-					throw 'Missing typed local "$name"';
+				var type = requireLocalType(localTypes, name, 'Missing typed local "$name"');
 				builder.load(name, type);
 			case TCellLocal(name, cellClass):
 				var cell = builder.load('$' + 'cell:$name', Obj(cellClass));
 				builder.fieldGet(cell, "value", lowerType(expression.type));
 			case TCaptured(name):
-				var owner = localTypes.get("this");
-				if (owner == null)
-					throw 'Captured value "$name" has no environment';
+				var owner = requireLocalType(localTypes, "this", 'Captured value "$name" has no environment');
 				builder.fieldGet(builder.load("this", owner), name, lowerType(expression.type));
 			case TCellCaptured(name, cellClass):
-				var owner = localTypes.get("this");
-				if (owner == null)
-					throw 'Captured value "$name" has no environment';
+				var owner = requireLocalType(localTypes, "this", 'Captured value "$name" has no environment');
 				var cell = builder.fieldGet(builder.load("this", owner), name, Obj(cellClass));
 				builder.fieldGet(cell, "value", lowerType(expression.type));
 			case TFunctionRef(name): builder.staticClosure(name, lowerType(expression.type));
@@ -909,11 +938,16 @@ class IrGenerator {
 				if (environment == null) builder.staticClosure(name, lowerType(expression.type)); else {
 					var object = builder.newObject(environment);
 					for (capture in captures) {
-						var cellType = localTypes.get('__cell:$capture');
-						var capturedCellType = localTypes.get('__capturecell:$capture');
-						var value = cellType == null ? (capturedCellType == null ? builder.load(capture,
-							localTypes.get(capture)) : builder.fieldGet(builder.load("this", localTypes.get("this")), capture,
-								capturedCellType)) : builder.load('$' + 'cell:$capture', cellType);
+						var cellKey = '__cell:$capture',
+							capturedCellKey = '__capturecell:$capture';
+						var value:CfgValue;
+						if (localTypes.exists(cellKey))
+							value = builder.load('$' + 'cell:$capture', localTypes.get(cellKey));
+						else if (localTypes.exists(capturedCellKey))
+							value = builder.fieldGet(builder.load("this", requireLocalType(localTypes, "this", "Capture has no environment")), capture,
+								localTypes.get(capturedCellKey));
+						else
+							value = builder.load(capture, requireLocalType(localTypes, capture, 'Missing captured local "$capture"'));
 						builder.fieldSet(object, capture, value);
 					}
 					builder.instanceClosure(name, object, lowerType(expression.type));
@@ -934,7 +968,7 @@ class IrGenerator {
 			case TUnsignedShiftRight(a, b): builder.unsignedShiftRight(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TNegate(value):
 				var typed = lowerExpression(value, builder, localTypes);
-				value.type == TInt ? builder.sub(builder.constInt(0), typed) : builder.sub(builder.constFloat(0), typed);
+				value.type == TInt ? builder.sub(builder.constInt(0), typed) : builder.sub(builder.constFloat(0.0), typed);
 			case TLess(a, b): builder.less(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TLessEqual(a, b): builder.lessEqual(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
 			case TNot(value): builder.equal(lowerExpression(value, builder, localTypes), builder.constBool(false));
@@ -1003,18 +1037,19 @@ class IrGenerator {
 					resultName = '$' + 'switch-expression-result:${expression.span.start}',
 					subjectType = lowerType(subject.type),
 					resultType = lowerType(expression.type),
-					entryBlock = builder.currentBlock(),
-					bodyBlocks = [],
-					matchBlocks = [],
-					checkBlocks = [entryBlock];
+					entryBlock = builder.currentBlock();
+				var bodyBlocks:Array<CfgBlock> = [];
+				var matchBlocks:Array<CfgBlock> = [];
+				var checkBlocks:Array<CfgBlock> = [entryBlock];
 				for (caseIndex in 0...cases.length) {
-					matchBlocks.push(cases[caseIndex].guard == null ? null : builder.createBlock());
-					bodyBlocks.push(builder.createBlock());
+					var bodyBlock = builder.createBlock();
+					bodyBlocks.push(bodyBlock);
+					matchBlocks.push(cases[caseIndex].guard == null ? bodyBlock : builder.createBlock());
 					if (caseIndex + 1 < cases.length)
 						checkBlocks.push(builder.createBlock());
 				}
-				var fallbackBlock = defaultExpression == null ? null : builder.createBlock(),
-					afterBlock = builder.createBlock();
+				var afterBlock = builder.createBlock();
+				var fallbackBlock = defaultExpression == null ? afterBlock : builder.createBlock();
 				builder.select(entryBlock);
 				localTypes.set(subjectName, subjectType);
 				localTypes.set(resultName, resultType);
@@ -1034,7 +1069,7 @@ class IrGenerator {
 						builder, localTypes),
 						matches = subject.type == TString ? builder.call("__string_equal", [comparisonValue, caseValue],
 							Bool) : builder.equal(comparisonValue, caseValue);
-					var matchBlock = switchCase.guard == null ? bodyBlock : matchBlocks[caseIndex];
+					var matchBlock = matchBlocks[caseIndex];
 					if (isExhaustiveFinalCase)
 						builder.jump(bodyBlock);
 					else
@@ -1045,8 +1080,9 @@ class IrGenerator {
 						builder.store(binding.name,
 							builder.enumField(builder.load(subjectName, subjectType), switchCase.constructorIndex, binding.index, lowerType(binding.type)));
 					}
-					if (switchCase.guard != null) {
-						builder.branch(lowerExpression(switchCase.guard, builder, localTypes), bodyBlock, nextBlock);
+					var guard = switchCase.guard;
+					if (guard != null) {
+						builder.branch(lowerExpression(guard, builder, localTypes), bodyBlock, nextBlock);
 						builder.select(bodyBlock);
 					}
 					var caseResult = lowerExpression(switchCase.result, builder, localTypes);
@@ -1055,9 +1091,10 @@ class IrGenerator {
 						builder.jump(afterBlock);
 					}
 				}
-				if (defaultExpression != null) {
+				var fallback = defaultExpression;
+				if (fallback != null) {
 					builder.select(fallbackBlock);
-					var fallbackResult = lowerExpression(defaultExpression, builder, localTypes);
+					var fallbackResult = lowerExpression(fallback, builder, localTypes);
 					if (!builder.isTerminated()) {
 						builder.store(resultName, fallbackResult);
 						builder.jump(afterBlock);
@@ -1109,21 +1146,18 @@ class IrGenerator {
 					mapName = '$' + 'comprehension-map:${expression.span.start}',
 					resultName = '$' + 'comprehension-result:${expression.span.start}',
 					indexName = '$' + 'comprehension-index:${expression.span.start}',
-					mapTypes = switch iterable.type {
-						case TMap(key, mapValue): {key: key, value: mapValue};
-						default: null;
-					},
+					mapTypes = mapTypesOrVoid(iterable.type),
 					keyType = valueName == null ? switch iterable.type {
 						case TArray(element): element;
 						case TRange: TInt;
 						default: throw "Array comprehension requires an array iterable";
 					} : mapTypes.key,
-					inputType = Array(lowerType(keyType)),
+					inputType:IrType = Array(lowerType(keyType)),
 					resultElement = switch expression.type {
 						case TArray(element): element;
 						default: throw "Array comprehension requires an array result";
 					},
-					resultType = Array(lowerType(resultElement));
+					resultType:IrType = Array(lowerType(resultElement));
 				localTypes.set(inputName, inputType);
 				localTypes.set(resultName, resultType);
 				localTypes.set(indexName, I32);
@@ -1155,19 +1189,19 @@ class IrGenerator {
 						builder.load(mapName, lowerType(iterable.type)),
 						builder.load(keyName, lowerType(keyType))
 					], lowerType(mapTypes.value)));
-				var includeBlock = condition == null ? null : builder.createBlock(),
-					excludeBlock = condition == null ? null : builder.createBlock(),
-					nextBlock = condition == null ? null : builder.createBlock();
-				if (condition != null) {
-					builder.branch(lowerExpression(condition, builder, localTypes), includeBlock, excludeBlock);
+				var conditionValue = condition;
+				if (conditionValue == null) {
+					var loweredValue = lowerExpression(value, builder, localTypes);
+					builder.arraySet(builder.load(resultName, resultType), builder.load(indexName, I32), loweredValue);
+				} else {
+					var includeBlock = builder.createBlock(),
+						excludeBlock = builder.createBlock(),
+						nextBlock = builder.createBlock();
+					builder.branch(lowerExpression(conditionValue, builder, localTypes), includeBlock, excludeBlock);
 					builder.select(excludeBlock);
 					builder.jump(nextBlock);
 					builder.select(includeBlock);
-				}
-				var loweredValue = lowerExpression(value, builder, localTypes);
-				if (condition == null)
-					builder.arraySet(builder.load(resultName, resultType), builder.load(indexName, I32), loweredValue);
-				else {
+					var loweredValue = lowerExpression(value, builder, localTypes);
 					var grown = builder.call(RuntimeType.arrayNative(resultElement, "push"), [builder.load(resultName, resultType), loweredValue], resultType);
 					builder.store(resultName, grown);
 					builder.jump(nextBlock);
@@ -1182,17 +1216,14 @@ class IrGenerator {
 					sourceMapName = '$' + 'map-comprehension-source:${expression.span.start}',
 					resultName = '$' + 'map-comprehension-result:${expression.span.start}',
 					indexName = '$' + 'map-comprehension-index:${expression.span.start}',
-					sourceMapTypes = switch iterable.type {
-						case TMap(mapKey, mapValue): {key: mapKey, value: mapValue};
-						default: null;
-					},
+					sourceMapTypes = mapTypesOrVoid(iterable.type),
 					itemType = valueName == null ? switch iterable.type {
 						case TArray(element): element;
 						case TRange: TInt;
 						default: throw "Map comprehension requires an array iterable";
 					} : sourceMapTypes.key,
-					inputType = Array(lowerType(itemType)),
-					resultTypes = switch expression.type {
+					inputType:IrType = Array(lowerType(itemType)),
+					resultTypes:MapTypes = switch expression.type {
 						case TMap(mapKey, mapValue): {key: mapKey, value: mapValue};
 						default: throw "Map comprehension requires a map result";
 					},
@@ -1227,21 +1258,18 @@ class IrGenerator {
 						builder.load(sourceMapName, lowerType(iterable.type)),
 						builder.load(keyName, lowerType(itemType))
 					], lowerType(sourceMapTypes.value)));
-				var includeBlock = condition == null ? null : builder.createBlock(),
-					excludeBlock = condition == null ? null : builder.createBlock(),
-					nextBlock = condition == null ? null : builder.createBlock();
-				if (condition != null) {
-					builder.branch(lowerExpression(condition, builder, localTypes), includeBlock, excludeBlock);
+				var conditionValue = condition;
+				if (conditionValue == null) {
+					setComprehensionMapEntry(builder, localTypes, resultTypes, resultName, resultType, key, value);
+				} else {
+					var includeBlock = builder.createBlock(),
+						excludeBlock = builder.createBlock(),
+						nextBlock = builder.createBlock();
+					builder.branch(lowerExpression(conditionValue, builder, localTypes), includeBlock, excludeBlock);
 					builder.select(excludeBlock);
 					builder.jump(nextBlock);
 					builder.select(includeBlock);
-				}
-				builder.call(RuntimeType.mapNative(resultTypes.key, resultTypes.value, "set"), [
-					builder.load(resultName, resultType),
-					lowerExpression(key, builder, localTypes),
-					lowerExpression(value, builder, localTypes)
-				], Void);
-				if (condition != null) {
+					setComprehensionMapEntry(builder, localTypes, resultTypes, resultName, resultType, key, value);
 					builder.jump(nextBlock);
 					builder.select(nextBlock);
 				}
@@ -1256,7 +1284,7 @@ class IrGenerator {
 					lengthName = '$' + 'range-length:${expression.span.start}',
 					resultName = '$' + 'range-result:${expression.span.start}',
 					indexName = '$' + 'range-index:${expression.span.start}',
-					resultType = Array(I32);
+					resultType:IrType = Array(I32);
 				for (name in [startName, endName, differenceName, lengthName, indexName])
 					localTypes.set(name, I32);
 				localTypes.set(resultName, resultType);
@@ -1291,12 +1319,13 @@ class IrGenerator {
 				builder.load(resultName, resultType);
 			case TNewArray(element, length):
 				builder.call(arrayAllocatorName(element), [lowerExpression(length, builder, localTypes)], Array(lowerType(element)));
-			case TNewMap(key, value): builder.call(RuntimeType.mapNative(key, value, "alloc"), [], Abstract(RuntimeType.mapName(key, value)));
+			case TNewMap(key, value): builder.call(RuntimeType.mapNative(key, value, "alloc"), [], lowerType(expression.type));
 			case TField(object, name): builder.fieldGet(lowerExpression(object, builder, localTypes), name, lowerType(expression.type));
 			case TMethodCall(object, name, args):
 				var receiver = lowerExpression(object, builder, localTypes),
 					callArgs = [for (arg in args) lowerExpression(arg, builder, localTypes)];
-				builder.methodCall(receiver, name.substr(name.lastIndexOf(".") + 1), callArgs, lowerType(expression.type));
+				var separator = IrGenerator.lastSeparator(name);
+				builder.methodCall(receiver, name.substring(separator + 1, name.length), callArgs, lowerType(expression.type));
 			case TSuperCall(owner, args):
 				builder.call(owner + ".new", [builder.load("this", localTypes.get("this"))].concat([
 					for (arg in args)
@@ -1317,9 +1346,7 @@ class IrGenerator {
 				builder.fieldSet(cell, "value", delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one));
 				oldValue;
 			case TPostfixCellCaptured(name, cellClass, delta):
-				var owner = localTypes.get("this");
-				if (owner == null)
-					throw 'Captured increment "$name" has no environment';
+				var owner = requireLocalType(localTypes, "this", 'Captured increment "$name" has no environment');
 				var cell = builder.fieldGet(builder.load("this", owner), name, Obj(cellClass)),
 					oldValue = builder.fieldGet(cell, "value", lowerType(expression.type)),
 					one = incrementOne(expression.type, builder);
@@ -1407,16 +1434,24 @@ class IrGenerator {
 		var element = switch array.type {
 			case TArray(value): value;
 			default: throw "Array.sort requires an array";
-		}, elementType = lowerType(element), arrayType = Array(elementType), comparatorType = lowerType(comparator.type), suffix = Std.string(span.start), arrayName = '$'
-			+ 'sort-array:$suffix', comparatorName = '$' + 'sort-comparator:$suffix', indexName = '$' + 'sort-index:$suffix', keyName = '$'
-				+ 'sort-key:$suffix', scanName = '$' + 'sort-scan:$suffix';
-		for (entry in [
+		};
+		var elementType = lowerType(element),
+			comparatorType = lowerType(comparator.type),
+			suffix = Std.string(span.start);
+		var arrayType:IrType = Array(elementType);
+		var arrayName = '$' + 'sort-array:$suffix',
+			comparatorName = '$' + 'sort-comparator:$suffix',
+			indexName = '$' + 'sort-index:$suffix',
+			keyName = '$' + 'sort-key:$suffix',
+			scanName = '$' + 'sort-scan:$suffix';
+		var locals:Array<{name:String, type:IrType}> = [
 			{name: arrayName, type: arrayType},
 			{name: comparatorName, type: comparatorType},
 			{name: indexName, type: I32},
 			{name: keyName, type: elementType},
 			{name: scanName, type: I32}
-		])
+		];
+		for (entry in locals)
 			localTypes.set(entry.name, entry.type);
 		builder.store(arrayName, lowerExpression(array, builder, localTypes));
 		builder.store(comparatorName, lowerExpression(comparator, builder, localTypes));
@@ -1457,11 +1492,33 @@ class IrGenerator {
 		return builder.constVoid();
 	}
 
-	static function implicitArguments(fn:TypedFunction):Array<{name:String, type:IrType}> {
-		if (fn.owner == null || fn.isStatic)
+	static function implicitArguments(fn:TypedFunction):Array<CfgArgument> {
+		var owner = fn.owner;
+		if (owner == null || fn.isStatic)
 			return [];
-		return [{name: "this", type: Obj(fn.owner)}];
+		return [{name: "this", type: Obj(owner)}];
 	}
+
+	static function requireLocalType(localTypes:Map<String, IrType>, name:String, message:String):IrType {
+		if (!localTypes.exists(name))
+			throw message;
+		return localTypes.get(name);
+	}
+
+	static function setComprehensionMapEntry(builder:CfgBuilder, localTypes:Map<String, IrType>, types:MapTypes, resultName:String, resultType:IrType,
+			key:TypedExpression, value:TypedExpression):Void {
+		builder.call(RuntimeType.mapNative(types.key, types.value, "set"), [
+			builder.load(resultName, resultType),
+			lowerExpression(key, builder, localTypes),
+			lowerExpression(value, builder, localTypes)
+		], Void);
+	}
+
+	static function mapTypesOrVoid(type:CompilerType):MapTypes
+		return switch type {
+			case TMap(key, value): {key: key, value: value};
+			default: {key: TVoid, value: TVoid};
+		};
 
 	public static function lowerType(type:CompilerType):IrType
 		return switch type {
@@ -1477,7 +1534,7 @@ class IrGenerator {
 			case TRange: Array(I32);
 			case TVoid: Void;
 			case TClass(name): Obj(name);
-			case TMap(key, value): Abstract(RuntimeType.mapName(key, value));
+			case TMap(key, value): Abstract(RuntimeType.requireMapName(key, value));
 			case TInterface(name): Virtual(name);
 			case TEnum(name): Enum(name);
 			case TNull: Void;
@@ -1491,15 +1548,15 @@ class IrGenerator {
 		return switch type {
 			case I32: builder.constInt(0);
 			case Bool: builder.constBool(false);
-			case F64: builder.constFloat(0);
+			case F64: builder.constFloat(0.0);
 			default: builder.constNull(type);
 		};
 
 	static function incrementOne(type:CompilerType, builder:CfgBuilder):CfgValue
-		return type == TInt ? builder.constInt(1) : builder.constFloat(1);
+		return type == TInt ? builder.constInt(1) : builder.constFloat(1.0);
 
 	static function lowerLogical(left:TypedExpression, right:TypedExpression, and:Bool, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
-		var resultName = '$' + 'logical:' + left.span.start + ':' + right.span.end;
+		var resultName = '$' + 'logical:${left.span.start}:${right.span.end}';
 		localTypes.set(resultName, Bool);
 		var leftValue = lowerExpression(left, builder, localTypes),
 			rightBlock = builder.createBlock(),
@@ -1528,5 +1585,5 @@ class IrGenerator {
 	}
 
 	static function arrayAllocatorName(element:CompilerType):String
-		return "__array_alloc_" + RuntimeType.arrayName(element);
+		return "__array_alloc_" + RuntimeType.requireArrayName(element);
 }

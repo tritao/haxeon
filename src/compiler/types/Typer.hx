@@ -2141,8 +2141,8 @@ class Typer {
 		if (name == "set") {
 			if (arguments.length != 2)
 				fail("E1008", "Map.set expects a key and value", span);
-			var key = coerce(typeExpression(arguments[0], scope), mapType.key, "map key", "E1002"),
-				value = coerce(typeExpression(arguments[1], scope), mapType.value, "map value", "E1002");
+			var key = coerce(typeExpression(arguments[0], scope, mapType.key), mapType.key, "map key", "E1002"),
+				value = coerce(typeExpression(arguments[1], scope, mapType.value), mapType.value, "map value", "E1002");
 			return new TypedExpression(TCollectionCall(receiver, "set", [key, value]), TVoid, span);
 		}
 		if (name == "keys") {
@@ -2167,7 +2167,7 @@ class Typer {
 		}
 		if (arguments.length != 1)
 			fail("E1008", 'Map.$name expects one argument', span);
-		var key = coerce(typeExpression(arguments[0], scope), mapType.key, "map key", "E1002");
+		var key = coerce(typeExpression(arguments[0], scope, mapType.key), mapType.key, "map key", "E1002");
 		return switch name {
 			case "exists": new TypedExpression(TCollectionCall(receiver, "exists", [key]), TBool, span);
 			case "remove": new TypedExpression(TCollectionCall(receiver, "remove", [key]), TBool, span);
