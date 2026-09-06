@@ -18,6 +18,7 @@ import compiler.runtime.PlatformAbi;
 import compiler.semantic.GenericSpecializationRegistry;
 import compiler.types.analysis.BodyContext;
 import compiler.types.analysis.CaptureAnalysis;
+import compiler.types.analysis.AbstractConstructorNormalizer;
 import compiler.types.analysis.ClosureConversion;
 import compiler.types.analysis.ControlFlow;
 import compiler.types.analysis.FlowAnalysis;
@@ -490,8 +491,7 @@ class Typer {
 				cellCaptures: [],
 				span: classDecl.span
 			});
-		var parsedBase = classDecl.base,
-			baseName:Null<String> = null;
+		var parsedBase = classDecl.base, baseName:Null<String> = null;
 		if (parsedBase != null)
 			baseName = inheritanceName(parsedBase);
 		return {
@@ -546,8 +546,8 @@ class Typer {
 			var initializer = field.initializer;
 			if (initializer == null)
 				throw 'Missing initializer for "$className.${field.name}"';
-			statements.push(TFieldAssign(new TypedExpression(TLocal("this"), TInstance(NominalKind.Class, className, []), field.span), field.name, initializer,
-				field.span));
+			statements.push(TFieldAssign(new TypedExpression(TLocal("this"), TInstance(NominalKind.Class, className, []), field.span), field.name,
+				initializer, field.span));
 		}
 		return statements;
 	}
@@ -612,7 +612,7 @@ class Typer {
 				context.cellKinds.set(name, ExceptionEdge);
 		}
 		var scope = new Scope();
-		var isConstructor = owner != null && fn.name == "new";
+		var isConstructor = owner != null && classDecls.exists(owner) && fn.name == "new";
 		if (abstractReceiver != null) {
 			scope.defineReceiver(abstractReceiver, fn.span);
 		} else if (owner != null && !isStatic) {
@@ -752,8 +752,7 @@ class Typer {
 							case TInstance(kind, _, arguments):
 								if (Std.string(kind) != "class")
 									fail("E1022", "Unsupported catch binding type", catchClause.span);
-								if (arguments.length != 0)
-									fail("E1022", "Unsupported generic catch binding type", catchClause.span);
+								if (arguments.length != 0) fail("E1022", "Unsupported generic catch binding type", catchClause.span);
 							default: fail("E1022", "Unsupported catch binding type", catchClause.span);
 						}
 						var catchScope = new Scope(scope);
@@ -1430,14 +1429,15 @@ class Typer {
 								for (index in 0...expectedEnum.cases.length) {
 									var enumCase = expectedEnum.cases[index];
 									if (enumCase.name == name && enumCase.params.length == 0) {
-									var literalType:CompilerType = TInstance(NominalKind.Enum, expectedEnum.name, []);
+										var literalType:CompilerType = TInstance(NominalKind.Enum, expectedEnum.name, []);
 										var resolvedExpected = expectedType;
 										if (resolvedExpected != null)
 											switch resolvedExpected {
-											case TInstance(Enum, _, arguments): literalType = TInstance(NominalKind.Enum, expectedEnum.name, arguments);
+												case TInstance(Enum, _, arguments): literalType = TInstance(NominalKind.Enum, expectedEnum.name, arguments);
 												case TNullable(element):
 													switch element {
-													case TInstance(Enum, _, arguments): literalType = TInstance(NominalKind.Enum, expectedEnum.name, arguments);
+														case TInstance(Enum, _,
+															arguments): literalType = TInstance(NominalKind.Enum, expectedEnum.name, arguments);
 														default:
 													}
 												default:
@@ -2258,10 +2258,8 @@ class Typer {
 	function typeAbstractConstruction(name:String, typeArguments:Array<AstType>, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
 		var decl = requiredMapValue(declarations.abstracts, name),
 			valueType = typeArguments.length == 0 ? declarations.resolve(NamedType(name), span) : declarations.resolve(AppliedType(name, typeArguments), span),
-			constructor:Null<AstFunction> = null;
-		for (method in decl.methods)
-			if (method.name == "new")
-				constructor = method;
+			constructorName = name + ".new",
+			constructor = signatures.get(constructorName);
 		if (constructor == null)
 			fail("E1007", 'Abstract "$name" has no constructor', span);
 		var substitutions:Map<String, CompilerType> = [],
@@ -2274,19 +2272,21 @@ class Typer {
 			default:
 		}
 		var resolvedConstructor = Typer.requiredFunction(constructor),
-			typed = typeDeclaredCallArguments(arguments, resolvedConstructor.arguments, scope, name + ".new", span, substitutions), selected = -1;
-		if (resolvedConstructor.statements.length == 1)
-			switch resolvedConstructor.statements[0] {
-				case Assignment("this", Variable(argumentName, _), _):
-					for (index in 0...resolvedConstructor.arguments.length)
-						if (resolvedConstructor.arguments[index].name == argumentName)
-							selected = index;
-				default:
-			}
-		if (selected < 0)
-			fail("E1007", 'Abstract constructor "$name.new" must assign one argument directly to this', resolvedConstructor.span);
-		var constructed = coerce(typed[selected], representation, 'abstract constructor "$name.new"', "E1003");
-		return new TypedExpression(TAbiCast(constructed), valueType, span);
+			normalized = AbstractConstructorNormalizer.normalize(resolvedConstructor, decl.underlying),
+			typedArguments = [for (argument in arguments) typeExpression(argument, scope)],
+			constructed:TypedExpression;
+		try {
+			constructed = specializeGeneric(constructorName, normalized, typedArguments, span, name, true, substitutions);
+		} catch (error:CompileError) {
+			var message = error.diagnostic.message;
+			if (StringTools.startsWith(message, 'Type mismatch for local "' + AbstractConstructorNormalizer.RESULT_PREFIX))
+				fail("E1003", 'Type mismatch for abstract constructor "$constructorName"', error.diagnostic.span);
+			if (StringTools.startsWith(message, 'Local "' + AbstractConstructorNormalizer.RESULT_PREFIX)
+				&& message.indexOf("may be used before assignment") >= 0)
+				fail("E1023", 'Abstract constructor "$constructorName" does not initialize this on every path', error.diagnostic.span);
+			throw error;
+		}
+		return new TypedExpression(TAbiCast(coerce(constructed, representation, 'abstract constructor "$constructorName"', "E1003")), valueType, span);
 	}
 
 	function applyCallEffect(call:TypedExpression, name:String):TypedExpression

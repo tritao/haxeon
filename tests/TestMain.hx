@@ -561,12 +561,28 @@ class TestMain {
 			'Duplicate from conversion "type-parameter:Wrapped:T" on abstract "Wrapped"');
 		expectCompileError("abstract Bad(Int) { public function new(value:String) { this = value; } } function main():Int { new Bad(\"bad\"); return 0; }",
 			'Type mismatch for abstract constructor "Bad.new"');
-		expectCompileError("abstract Bad(Int) { public function new(value:Int) { this = value + 1; } } function main():Int { new Bad(1); return 0; }",
-			'Abstract constructor "Bad.new" must assign one argument directly to this');
+		var computedAbstract = new Parser(new Lexer(new SourceFile("computed-abstract.hx",
+			"abstract Offset(Int) { public function new(value:Int, offset:Int) { var computed = value + offset; this = computed; } } function main():Int { new Offset(40, 2); return 0; }"))
+			.tokenize()).parseProgram();
+		var computedAbstractTyped = Typer.type(computedAbstract),
+			computedConstructors = [
+				for (fn in computedAbstractTyped.functions)
+					if (StringTools.startsWith(fn.name, "$generic:Offset.new")) fn
+			];
+		if (computedConstructors.length != 1 || computedConstructors[0].result != compiler.types.Type.CompilerType.TInt)
+			throw "Computed abstract constructor was not normalized to a representation-returning function";
+		var branchingAbstract = new Parser(new Lexer(new SourceFile("branching-abstract.hx",
+			"abstract Choice(Int) { public function new(value:Int, fallback:Int, useValue:Bool) { if (useValue) { this = value; return; } else { this = fallback; } } } function main():Int { new Choice(42, 0, true); return 0; }"))
+			.tokenize()).parseProgram();
+		Typer.type(branchingAbstract);
+		expectCompileError("abstract Bad(Int) { public function new(value:Int, assign:Bool) { if (assign) this = value; } } function main():Int { new Bad(1, true); return 0; }",
+			'Abstract constructor "Bad.new" does not initialize this on every path');
+		expectCompileError("abstract Bad(Int) { public function new(value:Int) { return value; } } function main():Int { new Bad(1); return 0; }",
+			"Abstract constructors cannot return a value");
 		expectCompileError("abstract Loop<T>(Loop<T>) {} function main():Int return 0;", 'Cyclic abstract representation involving "Loop"');
 		var modularAbstract = new Compiler();
-		var modularAbstractDeclaration = "abstract Identity<T>(T) from T to T { public static function wrap(value:T):Identity<T> return value; public function unwrap():T return this; }",
-			modularAbstractMain = "import Identity; function main():Int return Identity.wrap(42).unwrap();";
+		var modularAbstractDeclaration = "abstract Identity<T>(T) from T to T { public function new(value:T) { this = value; } public static function wrap(value:T):Identity<T> return value; public function unwrap():T return this; }",
+			modularAbstractMain = "import Identity; function main():Int return Identity.wrap(new Identity<Int>(42).unwrap()).unwrap();";
 		modularAbstract.update("Identity.hx", modularAbstractDeclaration);
 		modularAbstract.update("Main.hx", modularAbstractMain);
 		var modularAbstractBuild = modularAbstract.compile("Main"),
@@ -584,7 +600,7 @@ class TestMain {
 			];
 		modularAbstractBodies.sort(Reflect.compare);
 		resumedAbstractBodies.sort(Reflect.compare);
-		if (modularAbstractBodies.length != 2 || modularAbstractBodies.join(",") != resumedAbstractBodies.join(","))
+		if (modularAbstractBodies.length != 3 || modularAbstractBodies.join(",") != resumedAbstractBodies.join(","))
 			throw "Generic abstract method specializations did not survive compiler restart";
 		Sys.println("PASS: generic abstracts resolve instantiated representations across modules");
 		var genericNominalProgram = new Parser(new Lexer(new SourceFile("generic-nominals.hx",

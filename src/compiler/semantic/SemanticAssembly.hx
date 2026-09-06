@@ -33,7 +33,8 @@ class SemanticAssembly {
 			classes:Array<compiler.syntax.Ast.AstClass> = [],
 			owners:Map<String, String> = [],
 			generatedByModule:Map<String, Map<String, Bool>> = [],
-			reverseCalls:Map<String, Array<String>> = [];
+			reverseCalls:Map<String, Array<String>> = [],
+			genericOrigins:Map<String, Bool> = [];
 		var sourceTypeAliases:Map<String, String> = [];
 		for (moduleName in names) {
 			var moduleState = modules.get(moduleName),
@@ -134,6 +135,8 @@ class SemanticAssembly {
 						};
 					functions.push(canonicalMethod);
 					owners.set(qualified, name);
+					if (canonicalAbstract.typeParameters.length > 0 || (method.typeParameters != null && method.typeParameters.length > 0))
+						genericOrigins.set(qualified, true);
 					LambdaCollector.collect(method.statements, qualified, name, generatedByModule);
 				}
 			}
@@ -169,6 +172,8 @@ class SemanticAssembly {
 				functions.push(canonical);
 				programFunctions.push(canonical);
 				owners.set(canonical.name, name);
+				if (canonical.typeParameters != null && canonical.typeParameters.length > 0)
+					genericOrigins.set(canonical.name, true);
 				LambdaCollector.collect(canonical.statements, canonical.name, name, generatedByModule);
 				for (callee in state.canonicalCalls.get(canonical.name)) {
 					var callers:Array<String>;
@@ -201,6 +206,8 @@ class SemanticAssembly {
 						statements: canonical.statements
 					});
 					owners.set(canonical.name, name);
+					if (classDecl.typeParameters.length > 0 || (method.typeParameters != null && method.typeParameters.length > 0))
+						genericOrigins.set(canonical.name, true);
 					var calls:Map<String, Bool> = [];
 					var aliases:Map<String, String> = [];
 					for (statement in canonical.statements)
@@ -280,6 +287,9 @@ class SemanticAssembly {
 		for (name in bodyChanged.keys())
 			invalid.set(name, true);
 		var work:Array<String> = [for (name in signatureChanged.keys()) name], workCursor = 0;
+		for (name in bodyChanged.keys())
+			if (genericOrigins.exists(name))
+				work.push(name);
 		while (workCursor < work.length) {
 			if (token != null)
 				token.check();

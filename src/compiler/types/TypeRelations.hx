@@ -119,8 +119,8 @@ class TypeRelations {
 
 	static function sameNominal(type:CompilerType, kind:compiler.types.Type.NominalKind, name:String, arguments:Array<CompilerType>):Bool
 		return switch type {
-			case TInstance(otherKind, other, otherArguments):
-				Std.string(kind) == Std.string(otherKind) && name == Std.string(other) && sameTypes(arguments, otherArguments);
+			case TInstance(otherKind, other, otherArguments): Std.string(kind) == Std.string(otherKind) && name == Std.string(other) && sameTypes(arguments,
+					otherArguments);
 			default: false;
 		};
 
@@ -163,8 +163,7 @@ class TypeRelations {
 	public static function isReference(type:CompilerType):Bool
 		return switch type {
 			case TAbstract(_, _, representation): isReference(representation);
-			case TString, TBytes, THlBytes, TDynamic, TNativeAbstract(_), TInstance(_, _, _),
-				TAnonymous(_, _), TArray(_), TFunction(_, _), TMap(_, _): true;
+			case TString, TBytes, THlBytes, TDynamic, TNativeAbstract(_), TInstance(_, _, _), TAnonymous(_, _), TArray(_), TFunction(_, _), TMap(_, _): true;
 			default: false;
 		};
 

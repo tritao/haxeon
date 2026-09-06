@@ -251,8 +251,7 @@ class DeclarationIndex {
 	static function nullable(type:CompilerType):CompilerType
 		return switch type {
 			case TNullable(_): type;
-			case TString, TDynamic, TNativeAbstract(_), TInstance(_, _, _), TAnonymous(_, _),
-				TArray(_), TFunction(_, _), TMap(_, _):
+			case TString, TDynamic, TNativeAbstract(_), TInstance(_, _, _), TAnonymous(_, _), TArray(_), TFunction(_, _), TMap(_, _):
 				TNullable(type);
 			default: type;
 		};

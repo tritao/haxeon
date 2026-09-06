@@ -169,6 +169,20 @@ class ModuleChangeAnalyzer {
 					bodyChanged.set(canonical, true);
 			}
 		}
+		for (abstractDecl in ast.abstracts) {
+			var abstractName = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, abstractDecl.name);
+			for (method in abstractDecl.methods) {
+				var localName = abstractName + "." + method.name,
+					signature = SemanticSignature.parsedFunction(method, ast.aliases),
+					body = state.source.text.substring(method.span.start, method.span.end);
+				signatures.set(localName, signature);
+				bodies.set(localName, body);
+				if (state.signatureFingerprints.get(localName) != signature)
+					signatureChanged.set(localName, true);
+				else if (state.bodyFingerprints.get(localName) != body)
+					bodyChanged.set(localName, true);
+			}
+		}
 		for (old in state.signatureFingerprints.keys())
 			if (!signatures.exists(old)) {
 				var canonical = ModuleCanonicalizer.canonicalName(state.name, entry, old);

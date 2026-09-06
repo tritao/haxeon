@@ -295,6 +295,10 @@ class SemanticDependencyCollector {
 				calls.set(typeName + ".new", true);
 				for (a in args)
 					scanCallExpression(a, calls, aliases);
+			case NewGeneric(typeName, _, args, _):
+				calls.set(typeName + ".new", true);
+				for (a in args)
+					scanCallExpression(a, calls, aliases);
 			case NewArray(_, length, _):
 				scanCallExpression(length, calls, aliases);
 			case NewMap(_, _, _):
