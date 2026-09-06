@@ -25,9 +25,9 @@ typedef BackendAssemblyResult = {
 
 /** Plans and assembles one IR candidate for the HashLink backend. */
 class BackendAssembly {
-	public static function assemble(compiler:Compiler, ir:IrProgram, regenerated:Array<String>, token:Null<CancellationToken>):BackendAssemblyResult {
+	public static function assemble(context:CompilationContext, ir:IrProgram, regenerated:Array<String>, token:Null<CancellationToken>):BackendAssemblyResult {
 		var nextAbi = RuntimeAbi.describe(ir),
-			decision = PatchPlanner.plan(compiler.publishedAbi, nextAbi),
+			decision = PatchPlanner.plan(context.publishedAbi, nextAbi),
 			reloadReasons:Array<AbiChange> = switch decision {
 				case Patch: [];
 				case ReloadDomain(reasons): reasons;
@@ -37,15 +37,15 @@ class BackendAssembly {
 		if (reloadReasons.length > 0)
 			decision = ReloadDomain(reloadReasons);
 		var abiPlanningDoneAt = Sys.time() * 1000.0;
-		var candidateAssembler = compiler.compiledOnce
-			&& PatchPlanner.requiresFreshLayout(decision) ? new HlModuleAssembler(Compiler.copyIndices(compiler.assembler.cache.stableIds)) : compiler.assembler.copy();
-		var assembly = candidateAssembler.assemble(ir, compiler.rehydratedChanges(regenerated, ir), decision);
+		var candidateAssembler = context.compiledOnce
+			&& PatchPlanner.requiresFreshLayout(decision) ? new HlModuleAssembler(CompilationContext.copyIndices(context.assembler.cache.stableIds)) : context.assembler.copy();
+		var assembly = candidateAssembler.assemble(ir, context.rehydratedChanges(regenerated, ir), decision);
 		var backendAssemblyDoneAt = Sys.time() * 1000.0;
 		if (token != null)
 			token.check();
 		var patchBytes = reloadReasons.length > 0
-			|| assembly.changedFunctions.length == 0 ? null : HlPatchWriter.encode(assembly.module, compiler.moduleId, assembly.changedSlots,
-				compiler.stableIdsBySlot(candidateAssembler, assembly.functionIndices), assembly.revision - 1, assembly.revision, assembly.baseInts,
+			|| assembly.changedFunctions.length == 0 ? null : HlPatchWriter.encode(assembly.module, context.moduleId, assembly.changedSlots,
+				context.stableIdsBySlot(candidateAssembler, assembly.functionIndices), assembly.revision - 1, assembly.revision, assembly.baseInts,
 				assembly.baseFloats, assembly.baseStrings, assembly.baseTypes);
 		return {
 			assembly: assembly,

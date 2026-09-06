@@ -59,10 +59,10 @@ import compiler.Compiler.CompileResult;
 
 /** Executes the mutable frontend, IR, ABI-planning, and backend candidate phases. */
 class CompilationPipeline {
-	public static function compile(compiler:Compiler, entryModule:String, token:Null<CancellationToken>, rollbackModules:Map<String, ModuleState>,
+	public static function compile(context:CompilationContext, entryModule:String, token:Null<CancellationToken>, rollbackModules:Map<String, ModuleState>,
 			transactionStartedAt:Float, snapshotDoneAt:Float):CompileResult {
-		var frontend = ModuleFrontendPipeline.run(compiler, entryModule, token, rollbackModules, snapshotDoneAt);
-		var modules = compiler.modules, moduleId = compiler.moduleId;
+		var frontend = ModuleFrontendPipeline.run(context, entryModule, token, rollbackModules, snapshotDoneAt);
+		var modules = context.modules, moduleId = context.moduleId;
 		var ir = frontend.ir,
 			names = frontend.moduleNames,
 			typedNew = frontend.typedProgram;
@@ -72,7 +72,7 @@ class CompilationPipeline {
 		var frontendDoneAt = frontend.frontendDoneAt,
 			typingLoweringDoneAt = frontend.typingLoweringDoneAt,
 			irAssemblyDoneAt = frontend.irAssemblyDoneAt;
-		var backend = BackendAssembly.assemble(compiler, ir, regenerated, token);
+		var backend = BackendAssembly.assemble(context, ir, regenerated, token);
 		var nextAbi = backend.abi,
 			reloadReasons = backend.reloadReasons,
 			candidateAssembler = backend.assembler,
@@ -81,14 +81,14 @@ class CompilationPipeline {
 			abiPlanningDoneAt = backend.abiPlanningDoneAt,
 			backendAssemblyDoneAt = backend.backendAssemblyDoneAt,
 			patchEncodingDoneAt = backend.patchEncodingDoneAt;
-		compiler.lastTypedProgram = typedNew;
-		compiler.publishedAbi = nextAbi;
-		compiler.assembler = candidateAssembler;
-		compiler.rehydrationBaseline = null;
+		context.setLastTypedProgram(typedNew);
+		context.publishedAbi = nextAbi;
+		context.assembler = candidateAssembler;
+		context.clearRehydrationBaseline();
 		for (name in names) {
 			var state = modules.get(name);
 			if (state.lastGoodRevision != state.revision) {
-				state = compiler.writableState(name, rollbackModules);
+				state = context.writableState(name, rollbackModules);
 				state.lastGoodTokens = state.tokens;
 				state.lastGoodAst = state.ast;
 				state.lastGoodSemanticModel = state.semanticModel;
@@ -96,7 +96,7 @@ class CompilationPipeline {
 				state.lastGoodRevision = state.revision;
 			}
 		}
-		compiler.compiledOnce = true;
+		context.compiledOnce = true;
 		var finishedAt = Sys.time() * 1000.0;
 		return {
 			ir: ir,
@@ -106,8 +106,8 @@ class CompilationPipeline {
 			changedFunctions: assembly.changedFunctions,
 			requiresReload: assembly.requiresReload,
 			reloadReasons: reloadReasons,
-			functionIndices: Compiler.copyIndices(assembly.functionIndices),
-			functionIds: Compiler.copyIndices(candidateAssembler.cache.stableIds),
+			functionIndices: CompilationContext.copyIndices(assembly.functionIndices),
+			functionIds: CompilationContext.copyIndices(candidateAssembler.cache.stableIds),
 			runtimeIdentity: HlRuntimeIdentity.encode(moduleId, assembly.revision, assembly.functionIndices, candidateAssembler.cache.stableIds),
 			revision: assembly.revision,
 			patchBytes: patchBytes,

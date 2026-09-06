@@ -112,9 +112,7 @@ typedef ValidationResult = {
  * Compilation is transactional: failed edits do not replace published artifacts.
  */
 @:allow(compiler.CompilationTransaction)
-@:allow(compiler.CompilationPipeline)
-@:allow(compiler.BackendAssembly)
-@:allow(compiler.ModuleFrontendPipeline)
+@:allow(compiler.CompilationContext)
 class Compiler {
 	final genericSpecializations = new GenericSpecializationRegistry();
 

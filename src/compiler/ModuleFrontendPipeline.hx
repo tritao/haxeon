@@ -71,16 +71,16 @@ typedef FrontendResult = {
 
 /** Builds and validates the reachable source graph through complete IR assembly. */
 class ModuleFrontendPipeline {
-	public static function run(compiler:Compiler, entryModule:String, token:Null<CancellationToken>, rollbackModules:Map<String, ModuleState>,
+	public static function run(context:CompilationContext, entryModule:String, token:Null<CancellationToken>, rollbackModules:Map<String, ModuleState>,
 			snapshotDoneAt:Float):FrontendResult {
-		var modules = compiler.modules,
-			graph = compiler.graph,
-			objectCache = compiler.objectCache;
-		var moduleId = compiler.moduleId,
-			assembler = compiler.assembler,
-			publishedAbi = compiler.publishedAbi;
-		var compiledOnce = compiler.compiledOnce,
-			genericSpecializations = compiler.genericSpecializations;
+		var modules = context.modules,
+			graph = context.graph,
+			objectCache = context.objectCache;
+		var moduleId = context.moduleId,
+			assembler = context.assembler,
+			publishedAbi = context.publishedAbi;
+		var compiledOnce = context.compiledOnce,
+			genericSpecializations = context.genericSpecializations;
 		var startedAt = snapshotDoneAt;
 		if (token != null)
 			token.check();
@@ -91,9 +91,9 @@ class ModuleFrontendPipeline {
 		while (reachability.hasNext(token)) {
 			var reachableState = reachability.next();
 			if (reachableState.ast == null) {
-				reachableState = compiler.writableState(reachableState.name, rollbackModules);
-				compiler.parse(reachableState, entryModule, bodyChanged, signatureChanged, structuralChanged);
-				compiler.addTypeDependencies(reachableState);
+				reachableState = context.writableState(reachableState.name, rollbackModules);
+				context.parse(reachableState, entryModule, bodyChanged, signatureChanged, structuralChanged);
+				context.addTypeDependencies(reachableState);
 			}
 			reachability.includeDependencies(reachableState);
 		}
@@ -148,7 +148,7 @@ class ModuleFrontendPipeline {
 			var state = modules.get(name),
 				ast = state.parsedAst(),
 				locals:Map<String, Bool> = [],
-				aliases = compiler.importAliases(ast.imports, ast.importAliases);
+				aliases = context.importAliases(ast.imports, ast.importAliases);
 			for (sourceName => declarationName in sourceTypeAliases)
 				aliases.set(sourceName, declarationName);
 			for (importPath in ast.imports)
@@ -214,7 +214,7 @@ class ModuleFrontendPipeline {
 			if (state.canonicalRevision == state.revision && state.canonicalEntry == entryModule && state.canonicalAliasKey == aliasKey)
 				canonicalFunctions = state.canonicalFunctions;
 			else {
-				state = compiler.writableState(name, rollbackModules);
+				state = context.writableState(name, rollbackModules);
 				canonicalFunctions = [
 					for (fn in ast.functions)
 						ModuleCanonicalizer.canonicalFunction(fn, name, entryModule, locals, null, aliases)
@@ -360,7 +360,7 @@ class ModuleFrontendPipeline {
 		var selected:Map<String, Bool> = [];
 		for (name in invalid.keys())
 			selected.set(name, true);
-		var entryPoint = compiler.executableEntryPoint(entryModule);
+		var entryPoint = context.executableEntryPoint(entryModule);
 		var frontendDoneAt = Sys.time() * 1000.0;
 		var typedNew:TypedProgram, typerMetrics:TyperPhaseMetrics;
 		try {
@@ -378,28 +378,28 @@ class ModuleFrontendPipeline {
 				classes: classes,
 				functions: programFunctions
 			};
-			var previousSemantic = compiler.cachedSemanticProgram;
+			var previousSemantic = context.cachedSemanticProgram;
 			var canReuseSemantic = previousSemantic != null
-				&& Compiler.mapIsEmpty(signatureChanged)
-				&& Compiler.mapIsEmpty(structuralChanged)
+				&& CompilationContext.mapIsEmpty(signatureChanged)
+				&& CompilationContext.mapIsEmpty(structuralChanged)
 				&& canonicalProgram.classes.length == 0
 				&& canonicalProgram.abstracts.length == 0
 				&& canonicalProgram.enumAbstracts.length == 0
-				&& Compiler.explicitFunctionSignatures(canonicalProgram.functions);
+				&& CompilationContext.explicitFunctionSignatures(canonicalProgram.functions);
 			var semantic:SemanticProgram;
 			if (canReuseSemantic && previousSemantic != null)
 				semantic = previousSemantic.replaceTopLevelBodies(canonicalProgram, selected);
 			else
 				semantic = SemanticProgram.analyze(canonicalProgram);
-			compiler.cachedSemanticProgram = semantic;
-			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, compiler.nativeSignatures(), entryPoint, genericSpecializations);
+			context.cachedSemanticProgram = semantic;
+			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, context.nativeSignatures(), entryPoint, genericSpecializations);
 			typedNew = typedResult.program;
 			typerMetrics = typedResult.metrics;
 		} catch (error:CompileError) {
 			for (name in names) {
 				var state = modules.get(name);
 				if (state.source.path == error.diagnostic.span.file.path)
-					compiler.writableState(name, rollbackModules).diagnostics.push(error.diagnostic);
+					context.writableState(name, rollbackModules).diagnostics.push(error.diagnostic);
 			}
 			throw error;
 		}
@@ -428,7 +428,7 @@ class ModuleFrontendPipeline {
 				}
 				generatedNames.set(fn.name, true);
 			}
-			var state = compiler.writableState(module, rollbackModules);
+			var state = context.writableState(module, rollbackModules);
 			state.typedFunctions.set(fn.name, fn);
 			state.typedSourceRevisions.set(fn.name, state.revision);
 			retyped.push(fn.name);
@@ -470,7 +470,7 @@ class ModuleFrontendPipeline {
 			}
 			var removed = [for (cached in state.typedFunctions.keys()) if (!valid.exists(cached)) cached];
 			if (removed.length > 0) {
-				state = compiler.writableState(name, rollbackModules);
+				state = context.writableState(name, rollbackModules);
 				for (cached in removed) {
 					state.typedFunctions.remove(cached);
 					state.typedSourceRevisions.remove(cached);
@@ -498,7 +498,7 @@ class ModuleFrontendPipeline {
 			token.check();
 		var objectNames = [for (name in objectCache.keys()) name];
 		objectNames.sort(Reflect.compare);
-		var ir = IrGenerator.assemble(cached, compiler.irNatives(), [for (name in objectNames) objectCache.get(name)], IrGenerator.interfacesFrom(typedNew),
+		var ir = IrGenerator.assemble(cached, context.irNatives(), [for (name in objectNames) objectCache.get(name)], IrGenerator.interfacesFrom(typedNew),
 			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew), IrGenerator.staticInitializerFrom(typedNew, initializationClasses),
 			entryPoint);
 		var irAssemblyDoneAt = Sys.time() * 1000.0;
