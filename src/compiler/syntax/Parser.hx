@@ -1445,7 +1445,8 @@ class Parser {
 				return NullableType(element);
 			}
 		var name = parseQualifiedName();
-		if (match(TokenKind.Less) && check(TokenKind.StringLiteral)) {
+		if (check(TokenKind.Less) && peekKind(1) == TokenKind.StringLiteral) {
+			advance();
 			var tag = consume(TokenKind.StringLiteral),
 				value = decodeString(tag.text);
 			consume(TokenKind.Greater);
