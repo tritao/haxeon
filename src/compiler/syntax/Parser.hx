@@ -69,7 +69,7 @@ class Parser {
 				fail(current(), "Top-level visibility modifier is not supported for this declaration");
 			else if (check(TokenKind.Identifier) && current().text == "abstract") {
 				var start = advance().span;
-				abstracts.push(parseAbstract(start, externDeclaration));
+				abstracts.push(parseAbstract(start, externDeclaration, metadata));
 			} else
 				functions.push(parseFunction(false, externDeclaration, metadata));
 		}
@@ -105,7 +105,7 @@ class Parser {
 		return result;
 	}
 
-	function parseAbstract(start:SourceSpan, isExtern:Bool = false):AstAbstract {
+	function parseAbstract(start:SourceSpan, isExtern:Bool = false, ?metadata:Array<compiler.syntax.Ast.AstMetadata>):AstAbstract {
 		var name = consume(TokenKind.Identifier).text,
 			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
@@ -142,6 +142,7 @@ class Parser {
 		return {
 			name: name,
 			isExtern: isExtern,
+			metadata: metadata == null ? [] : metadata,
 			typeParameters: typeParameters,
 			typeConstraints: typeConstraints,
 			underlying: underlying,
@@ -1444,11 +1445,11 @@ class Parser {
 				return NullableType(element);
 			}
 		var name = parseQualifiedName();
-		if (name == "hl.Abstract" && match(TokenKind.Less)) {
+		if (match(TokenKind.Less) && check(TokenKind.StringLiteral)) {
 			var tag = consume(TokenKind.StringLiteral),
 				value = decodeString(tag.text);
 			consume(TokenKind.Greater);
-			return NativeAbstractType(value);
+			return NativeAbstractType(name, value);
 		}
 		if (match(TokenKind.Less)) {
 			var arguments = [];

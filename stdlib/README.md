@@ -11,5 +11,9 @@ The pinned upstream version and every imported file are recorded in
 license notices. Keep local compatibility edits small and document them next
 to the source entry.
 
+Declarations under `hl/` are target ABI façades owned by this project. They
+carry explicit representation metadata and are not copies of upstream stdlib
+implementations.
+
 Do not put compiler implementation sources from HaxeFoundation/haxe here. The
 compiler and the standard library have different licenses.

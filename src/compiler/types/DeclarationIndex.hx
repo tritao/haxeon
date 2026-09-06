@@ -126,11 +126,13 @@ class DeclarationIndex {
 			case InferredType:
 				fail("Unresolved inferred type", span);
 				TDynamic;
-			case NativeAbstractType(name): TNativeAbstract(name);
+			case NativeAbstractType(declaration, tag):
+				if (!abstracts.exists(declaration) || abstractRepresentation(abstracts.get(declaration)) != "nativeAbstract")
+					fail('Type "$declaration" does not accept a native ABI tag', span);
+				TNativeAbstract(tag);
 			case NamedType(name):
 				switch name {
 					case "Dynamic": TDynamic;
-					case "hl.Bytes": THlBytes;
 					case "haxe.io.Bytes": TBytes;
 					case "haxe.io.BytesInput": TNativeAbstract("realtime_bytes_input");
 					case "haxe.io.BytesOutput": TNativeAbstract("realtime_bytes_output");
@@ -272,12 +274,41 @@ class DeclarationIndex {
 
 	function resolveAbstract(decl:compiler.syntax.Ast.AstAbstract, span:SourceSpan, resolving:Map<String, Bool>,
 			substitutions:Map<String, CompilerType>):CompilerType {
+		var metadata = decl.metadata;
+		if (metadata != null)
+			for (entry in metadata)
+				if (entry.name == "hlType") {
+					if (entry.arguments.length != 1)
+						fail('@:hlType requires one representation string', entry.span);
+					return switch entry.arguments[0] {
+						case StringLiteral("bytes", _): THlBytes;
+						case StringLiteral("dynamic", _): TDynamic;
+						case StringLiteral(value, _):
+							fail('Unknown HashLink representation "$value"', entry.span);
+							TDynamic;
+						default:
+							fail('@:hlType argument must be a string literal', entry.span);
+							TDynamic;
+					};
+				}
 		if (resolving.exists(decl.name))
 			fail('Cyclic abstract representation involving "${decl.name}"', span);
 		resolving.set(decl.name, true);
 		var resolved = resolveInner(decl.underlying, span, resolving, substitutions);
 		resolving.remove(decl.name);
 		return resolved;
+	}
+
+	static function abstractRepresentation(decl:compiler.syntax.Ast.AstAbstract):Null<String> {
+		var metadata = decl.metadata;
+		if (metadata != null)
+			for (entry in metadata)
+				if (entry.name == "hlType" && entry.arguments.length == 1)
+					return switch entry.arguments[0] {
+						case StringLiteral(value, _): value;
+						default: null;
+					};
+		return null;
 	}
 
 	static function nullable(type:CompilerType):CompilerType

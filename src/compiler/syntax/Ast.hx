@@ -10,7 +10,7 @@ enum AstType {
 	StringType;
 	VoidType;
 	InferredType;
-	NativeAbstractType(name:String);
+	NativeAbstractType(declaration:String, tag:String);
 	NamedType(name:String);
 	AppliedType(name:String, arguments:Array<AstType>);
 	ArrayType(element:AstType);
@@ -118,6 +118,7 @@ typedef AstEnumAbstract = {
 typedef AstAbstract = {
 	final name:String;
 	final ?isExtern:Bool;
+	final ?metadata:Array<AstMetadata>;
 	final typeParameters:Array<String>;
 	final ?typeConstraints:Array<AstTypeConstraint>;
 	final underlying:AstType;

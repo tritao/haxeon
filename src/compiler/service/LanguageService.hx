@@ -766,7 +766,7 @@ class LanguageService {
 			case StringType: "String";
 			case VoidType: "Void";
 			case InferredType: "_";
-			case NativeAbstractType(name): 'hl.Abstract<"$name">';
+			case NativeAbstractType(declaration, tag): '$declaration<"$tag">';
 			case NamedType(name): name;
 			case AppliedType(name, arguments): '$name<${[for (argument in arguments) typeName(argument)].join(",")}>';
 			case ArrayType(element): 'Array<${typeName(element)}>';

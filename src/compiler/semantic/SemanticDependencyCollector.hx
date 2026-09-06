@@ -47,6 +47,8 @@ class SemanticDependencyCollector {
 	public static function addTypeDependency(result:Map<String, Array<SemanticDependency>>, owner:String, kind:SemanticDependencyKind,
 			type:compiler.syntax.Ast.AstType, aliases:Map<String, String>):Void
 		switch type {
+			case NativeAbstractType(declaration, _):
+				addDependency(result, owner, kind, ModuleCanonicalizer.resolveTypeName(declaration, aliases));
 			case NamedType(name):
 				addDependency(result, owner, kind, ModuleCanonicalizer.resolveTypeName(name, aliases));
 			case AppliedType(name, arguments):
@@ -65,7 +67,7 @@ class SemanticDependencyCollector {
 			case AnonymousType(fields):
 				for (field in fields)
 					addTypeDependency(result, owner, kind, field.type, aliases);
-			case IntType, BoolType, FloatType, StringType, VoidType, InferredType, NativeAbstractType(_):
+			case IntType, BoolType, FloatType, StringType, VoidType, InferredType:
 		}
 
 	public static function addBodyDependencies(result:Map<String, Array<SemanticDependency>>, owner:String, statements:Array<AstStatement>, module:String,

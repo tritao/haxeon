@@ -144,6 +144,7 @@ class ModuleCanonicalizer {
 		return {
 			name: qualifiedTypeName(packageName, decl.name),
 			isExtern: decl.isExtern,
+			metadata: decl.metadata,
 			typeParameters: decl.typeParameters,
 			typeConstraints: canonicalConstraints(decl.typeConstraints, aliases, decl.typeParameters),
 			underlying: canonicalType(decl.underlying, aliases, decl.typeParameters),
@@ -254,7 +255,7 @@ class ModuleCanonicalizer {
 			case StringType: "String";
 			case VoidType: "Void";
 			case InferredType: "_";
-			case NativeAbstractType(name): 'hl.Abstract<"$name">';
+			case NativeAbstractType(declaration, tag): '$declaration<"$tag">';
 			case NamedType(name): name;
 			case AppliedType(name, arguments): '$name<${[for (argument in arguments) astTypeName(argument)].join(",")}>';
 			case ArrayType(element): 'Array<${astTypeName(element)}>';
@@ -497,7 +498,7 @@ class ModuleCanonicalizer {
 	public static function canonicalType(type:compiler.syntax.Ast.AstType, aliases:Null<Map<String, String>>,
 			?typeParameters:Array<String>):compiler.syntax.Ast.AstType
 		return switch type {
-			case NativeAbstractType(name): NativeAbstractType(name);
+			case NativeAbstractType(declaration, tag): NativeAbstractType(resolveTypeName(declaration, aliases), tag);
 			case NamedType(name): NamedType(typeParameters != null
 					&& typeParameters.indexOf(name) >= 0 ? name : resolveTypeName(name, aliases));
 			case AppliedType(name,

@@ -90,7 +90,7 @@ class SemanticSignature {
 			case StringType: "String";
 			case VoidType: "Void";
 			case InferredType: "_";
-			case NativeAbstractType(name): 'hl.Abstract<"$name">';
+			case NativeAbstractType(declaration, tag): '$declaration<"$tag">';
 			case NamedType(name):
 				if (!aliases.exists(name) || resolving.exists(name)) name; else {
 					var alias = aliases.get(name);

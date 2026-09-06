@@ -7,7 +7,6 @@ import compiler.types.Type.NominalKind;
 class PlatformAbi {
 	static final types:Map<String, Bool> = [
 		"haxe.io.Bytes" => true,
-		"hl.Bytes" => true,
 		"haxe.io.BytesInput" => true,
 		"haxe.io.BytesOutput" => true,
 		"haxe.io.Encoding" => true,
