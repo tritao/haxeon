@@ -13,9 +13,9 @@ import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.Type.AnonymousField;
 import compiler.runtime.RuntimeType;
-import compiler.runtime.RuntimeShape.RuntimeShapes;
 import compiler.runtime.PlatformAbi;
 import compiler.semantic.GenericSpecializationRegistry;
+import compiler.semantic.GenericSpecializationPolicy;
 import compiler.types.analysis.BodyContext;
 import compiler.types.analysis.CaptureAnalysis;
 import compiler.types.analysis.AbstractConstructorNormalizer;
@@ -2561,10 +2561,12 @@ class Typer {
 				declarations.resolve(argument.type, argument.span, substitutions)
 		], semanticArguments = coerceArguments(arguments, semanticExpected,
 			baseName), result = declarations.resolve(fn.result, fn.span, substitutions), representationSubstitutions:Map<String, CompilerType> = [];
-		for (parameter in parameters)
-			representationSubstitutions.set(parameter,
-				requiresConcreteRepresentation(fn,
-					parameter) ? requiredMapValue(substitutions, parameter) : RuntimeShapes.representative(requiredMapValue(substitutions, parameter)));
+		var specializationPolicies:Array<String> = [];
+		for (parameter in parameters) {
+			var decision = GenericSpecializationPolicy.decide(fn, parameter, requiredMapValue(substitutions, parameter));
+			representationSubstitutions.set(parameter, decision.representation);
+			specializationPolicies.push(decision.policy);
+		}
 		var representationExpected = [
 			for (argument in fn.arguments)
 				declarations.resolve(argument.type, argument.span, representationSubstitutions)
@@ -2574,7 +2576,7 @@ class Typer {
 			], representationResult = declarations.resolve(fn.result, fn.span, representationSubstitutions), representationArguments = [
 			for (parameter in parameters)
 				requiredMapValue(representationSubstitutions, parameter)
-			], specialization = genericSpecializations.request(baseName, representationArguments);
+			], specialization = genericSpecializations.request(baseName, representationArguments, specializationPolicies);
 		var representationReceiver:Null<CompilerType> = null;
 		if (receiver != null)
 			representationReceiver = abstractReceiverType(requiredString(owner), representationSubstitutions);
@@ -2599,41 +2601,6 @@ class Typer {
 				requiredMapValue(substitutions, parameter)
 		], representation = declarations.resolve(decl.underlying, decl.span, substitutions);
 		return TAbstract(name, arguments, representation);
-	}
-
-	static function requiresConcreteRepresentation(fn:AstFunction, parameter:String):Bool {
-		var constraints = fn.typeConstraints;
-		if (constraints != null)
-			for (constraint in constraints)
-				if (constraint.parameter == parameter)
-					return true;
-		for (argument in fn.arguments)
-			if (containsNestedTypeParameter(argument.type, parameter, false))
-				return true;
-		return containsNestedTypeParameter(fn.result, parameter, false);
-	}
-
-	static function containsNestedTypeParameter(type:AstType, parameter:String, nested:Bool):Bool
-		return switch type {
-			case NamedType(name): nested && name == parameter;
-			case AppliedType(_, arguments): containsNestedIn(arguments, parameter);
-			case ArrayType(element), NullableType(element): containsNestedTypeParameter(element, parameter, true);
-			case MapType(key, value): containsNestedTypeParameter(key, parameter, true) || containsNestedTypeParameter(value, parameter, true);
-			case FunctionType(arguments, result): containsNestedIn(arguments, parameter) || containsNestedTypeParameter(result, parameter, true);
-			case AnonymousType(fields):
-				var found = false;
-				for (field in fields)
-					if (containsNestedTypeParameter(field.type, parameter, true))
-						found = true;
-				found;
-			default: false;
-		};
-
-	static function containsNestedIn(types:Array<AstType>, parameter:String):Bool {
-		for (type in types)
-			if (containsNestedTypeParameter(type, parameter, true))
-				return true;
-		return false;
 	}
 
 	function inferTypeParameters(pattern:AstType, actual:CompilerType, parameters:Array<String>, substitutions:Map<String, CompilerType>, span:SourceSpan):Void

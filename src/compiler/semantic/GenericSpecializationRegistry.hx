@@ -46,6 +46,7 @@ class GenericSpecializationRegistry {
 
 	function restore(state:Bytes):Void {
 		var input = new BytesInput(state);
+		var restoredNames:Map<String, Bool> = [];
 		input.bigEndian = false;
 		try {
 			if (input.readString(3) != "GSR" || input.readByte() != 1)
@@ -57,7 +58,10 @@ class GenericSpecializationRegistry {
 				var key = readString(input), name = readString(input);
 				if (names.exists(key))
 					throw "Duplicate generic specialization";
+				if (restoredNames.exists(name))
+					throw "Generic specialization name collision";
 				names.set(key, name);
+				restoredNames.set(name, true);
 			}
 			if (input.position != state.length)
 				throw "Trailing generic specialization state";
@@ -79,9 +83,10 @@ class GenericSpecializationRegistry {
 		return input.readString(length);
 	}
 
-	public function request(origin:String, representations:Array<CompilerType>):GenericSpecialization {
+	public function request(origin:String, representations:Array<CompilerType>, ?policies:Array<String>):GenericSpecialization {
 		var signature = [for (type in representations) SemanticSignature.type(type)].join(","),
-			key = origin + "<" + signature + ">";
+			policy = policies == null ? "legacy" : policies.join(","),
+			key = origin + "[" + policy + "]<" + signature + ">";
 		if (names.exists(key))
 			return {
 				origin: origin,
