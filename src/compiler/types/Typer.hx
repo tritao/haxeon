@@ -1421,19 +1421,19 @@ class Typer {
 									context.cellKinds.set(name, MutableCapture);
 								}
 								var bindingId = scope.requireId(name),
-									captureSource:TypedCaptureSource = if (scope.isCellCapture(name))
-										CaptureCellEnvironmentField(name, scope.requireCellClass(name))
-									else if (scope.isCapture(name))
-										CaptureEnvironmentField(name)
-									else if (cellClass != null)
-										CaptureCellLocal(name, cellClass)
-									else
-										CaptureLocal(bindingId);
+									captureSource:TypedCaptureSource = if (scope.isCellCapture(name)) CaptureCellEnvironmentField(name,
+										scope.requireCellClass(name)) else if (scope.isCapture(name)) CaptureEnvironmentField(name) else if (cellClass != null)
+										CaptureCellLocal(name, cellClass) else CaptureLocal(bindingId);
 								lambdaScope.defineCapture(name, captureType, span, cellClass != null, cellClass, bindingId);
 								if (cellClass != null)
 									captureCells.set(name, cellClass);
 								captureTypes.set(name, captureType);
-								captures.push({field: name, bindingId: bindingId, type: captureType, source: captureSource});
+								captures.push({
+									field: name,
+									bindingId: bindingId,
+									type: captureType,
+									source: captureSource
+								});
 							}
 						}
 					seedLambdaScope(body, lambdaScope);
@@ -1444,8 +1444,8 @@ class Typer {
 						lambdaArguments[i] = {name: typedBodyScope.requireId(localName), type: lambdaArguments[i].type};
 					}
 					for (capture in captures)
-						typedBodyScope.defineCapture(capture.field, capture.type, span, captureCells.exists(capture.field),
-							captureCells.get(capture.field), capture.bindingId);
+						typedBodyScope.defineCapture(capture.field, capture.type, span, captureCells.exists(capture.field), captureCells.get(capture.field),
+							capture.bindingId);
 					var outerContext = context,
 						lambdaName = '$' + 'lambda:${outerContext.name}:${span.start}',
 						lambdaContext = enterBody(lambdaName, outerContext.typeSubstitutions);

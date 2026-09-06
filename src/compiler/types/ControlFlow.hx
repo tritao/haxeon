@@ -16,8 +16,7 @@ class ControlFlow {
 	public static function alwaysExits(statements:Array<TypedStatement>, exhaustive:(CompilerType, Array<TypedSwitchCase>) -> Bool):Bool
 		return alwaysTerminates(statements, exhaustive, true);
 
-	static function alwaysTerminates(statements:Array<TypedStatement>, exhaustive:(CompilerType, Array<TypedSwitchCase>) -> Bool,
-		loopExit:Bool):Bool {
+	static function alwaysTerminates(statements:Array<TypedStatement>, exhaustive:(CompilerType, Array<TypedSwitchCase>) -> Bool, loopExit:Bool):Bool {
 		for (statement in statements)
 			switch statement {
 				case TReturn(_, _), TReturnVoid(_), TThrow(_, _):
@@ -35,13 +34,16 @@ class ControlFlow {
 				case TWhile(condition, body, _) if (isInfiniteLoop(condition, body)):
 					return true;
 				case TTry(tryBranch, catches, _):
-					if (alwaysTerminates(tryBranch, exhaustive, loopExit)
-						&& catches.length > 0
-						&& [for (catchClause in catches) alwaysTerminates(catchClause.statements, exhaustive, loopExit)].indexOf(false) < 0)
+					if (alwaysTerminates(tryBranch, exhaustive, loopExit) && catches.length > 0 && [
+						for (catchClause in catches)
+							alwaysTerminates(catchClause.statements, exhaustive, loopExit)
+					].indexOf(false) < 0)
 						return true;
 				case TSwitch(expression, cases, defaultBranch, hasDefault, _):
-					if ((hasDefault ? alwaysTerminates(defaultBranch, exhaustive, loopExit) : exhaustive(expression.type, cases))
-						&& [for (switchCase in cases) alwaysTerminates(switchCase.statements, exhaustive, loopExit)].indexOf(false) < 0)
+					if ((hasDefault ? alwaysTerminates(defaultBranch, exhaustive, loopExit) : exhaustive(expression.type, cases)) && [
+						for (switchCase in cases)
+							alwaysTerminates(switchCase.statements, exhaustive, loopExit)
+					].indexOf(false) < 0)
 						return true;
 				default:
 			}

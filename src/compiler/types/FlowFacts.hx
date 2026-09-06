@@ -11,8 +11,7 @@ class FlowFacts {
 	public function new(?parent:FlowFacts)
 		this.parent = parent;
 
-	public function refine(bindingId:String, type:CompilerType):Void
-	{
+	public function refine(bindingId:String, type:CompilerType):Void {
 		invalidated.remove(bindingId);
 		refinedTypes.set(bindingId, type);
 	}
