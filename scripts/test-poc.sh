@@ -207,6 +207,7 @@ run_program anonymous-record 42
 run_program switch-expression 42
 run_program throw-expression 42
 run_program array-literal 42
+run_program empty-array-flow-inference 42
 run_program array-comprehension 42
 run_program filtered-array-comprehension 42
 run_program range-iteration 42

@@ -241,7 +241,7 @@ class IrVerifier {
 				for (i in 0...args.length) {
 					require(values, args[i]);
 					if (!compatibleType(args[i].type, signature.arguments[i], objects, interfaces))
-						throw 'Wrong IR argument type for "$name"';
+						throw 'Wrong IR argument type for "$name" at argument $i: got ${args[i].type}, expected ${signature.arguments[i]}';
 				}
 				if (!sameType(out.type, signature.result) && !trustedNativeResult(name, out.type, signature.result))
 					throw 'Wrong IR result type for "$name"';
@@ -316,8 +316,10 @@ class IrVerifier {
 			case FieldSet(object, fieldName, value):
 				var objectType = requireObject(object, values, objects),
 					field = findField(objectType, fieldName, objects);
-				if (field == null || !sameType(field.type, value.type))
-					throw 'Unknown or mismatched IR field "${objectType.name}.$fieldName"';
+				if (field == null)
+					throw 'Unknown IR field "${objectType.name}.$fieldName"';
+				if (!sameType(field.type, value.type))
+					throw 'Mismatched IR field "${objectType.name}.$fieldName": got ${value.type}, expected ${field.type}';
 				require(values, value);
 			case ArrayGet(out, array, index):
 				require(values, array);

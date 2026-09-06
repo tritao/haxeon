@@ -936,8 +936,8 @@ class Typer {
 								var platformField = PlatformAbi.field(object.type, fieldName),
 									expected = fieldType(object.type, fieldName, span);
 								var value = coerce(typeExpression(expression, scope, expected), expected, 'field "$name"', "E1002");
-								if (platformField == null && isGenericNominal(object.type))
-									value = abiBoundaryCast(value, TDynamic);
+								if (platformField == null)
+									value = abiBoundaryCast(value, fieldRepresentationType(object.type, fieldName, span));
 								var setter:Null<String> = platformField == null ? null : platformField.set;
 								if (setter != null) output.push(TExpression(new TypedExpression(TCall(setter, [object, value]), TVoid, span),
 									span)); else output.push(TFieldAssign(object, fieldName, value, span));
@@ -970,6 +970,8 @@ class Typer {
 							var platformField = PlatformAbi.field(object.type, fieldName),
 								expected = fieldType(object.type, fieldName, span);
 							value = coerce(value, expected, 'field "$fieldName"', "E1002");
+							if (platformField == null)
+								value = abiBoundaryCast(value, fieldRepresentationType(object.type, fieldName, span));
 							var setter:Null<String> = platformField == null ? null : platformField.set;
 							if (setter != null) output.push(TExpression(new TypedExpression(TCall(setter, [object, value]), TVoid, span),
 								span)); else output.push(TFieldAssign(object, fieldName, value, span));
@@ -1175,6 +1177,24 @@ class Typer {
 					var type = pushedElementType(name, body, 0);
 					if (type != null)
 						return type;
+				case Try(tryBranch, catches, _):
+					var type = pushedElementType(name, tryBranch, 0);
+					if (type != null)
+						return type;
+					for (catchClause in catches) {
+						type = pushedElementType(name, catchClause.statements, 0);
+						if (type != null)
+							return type;
+					}
+				case Switch(_, cases, defaultBranch, _, _):
+					for (switchCase in cases) {
+						var type = pushedElementType(name, switchCase.statements, 0);
+						if (type != null)
+							return type;
+					}
+					var type = pushedElementType(name, defaultBranch, 0);
+					if (type != null)
+						return type;
 				case VarDeclaration(shadowed, _, _, _), UninitializedDeclaration(shadowed, _, _) if (shadowed == name):
 					return null;
 				default:
@@ -1208,6 +1228,24 @@ class Typer {
 						return type;
 				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _):
 					var type = assignedLocalType(name, body, 0);
+					if (type != null)
+						return type;
+				case Try(tryBranch, catches, _):
+					var type = assignedLocalType(name, tryBranch, 0);
+					if (type != null)
+						return type;
+					for (catchClause in catches) {
+						type = assignedLocalType(name, catchClause.statements, 0);
+						if (type != null)
+							return type;
+					}
+				case Switch(_, cases, defaultBranch, _, _):
+					for (switchCase in cases) {
+						var type = assignedLocalType(name, switchCase.statements, 0);
+						if (type != null)
+							return type;
+					}
+					var type = assignedLocalType(name, defaultBranch, 0);
 					if (type != null)
 						return type;
 				case VarDeclaration(shadowed, _, _, _), UninitializedDeclaration(shadowed, _, _) if (shadowed == name):
@@ -2239,25 +2277,8 @@ class Typer {
 					return typeAbstractConstruction(typeName, [], arguments, span, scope);
 				if ((!classDecls.exists(typeName) && !PlatformAbi.isType(typeName)) || interfaceDecls.exists(typeName))
 					fail("E1007", 'Unknown class "$typeName"', span);
-				var classSubstitutions:Null<Map<String, CompilerType>> = null,
-					inferredClassType:Null<CompilerType> = null;
-				if (classDecls.exists(typeName) && classDecls.get(typeName).typeParameters.length > 0) {
-					var declaration = classDecls.get(typeName),
-						resolvedArguments:Array<CompilerType> = [];
-					switch expectedType {
-						case TInstance(Class, expectedName, expectedArguments) if (expectedName == typeName):
-							resolvedArguments = expectedArguments.copy();
-						case TNullable(TInstance(Class, expectedName, expectedArguments)) if (expectedName == typeName):
-							resolvedArguments = expectedArguments.copy();
-						default:
-					}
-					while (resolvedArguments.length < declaration.typeParameters.length)
-						resolvedArguments.push(TDynamic);
-					classSubstitutions = [];
-					for (index in 0...declaration.typeParameters.length)
-						classSubstitutions.set(declaration.typeParameters[index], resolvedArguments[index]);
-					inferredClassType = TInstance(Class, typeName, resolvedArguments);
-				}
+				if (classDecls.exists(typeName) && classDecls.get(typeName).typeParameters.length > 0)
+					return typeInferredClassConstruction(typeName, arguments, span, scope, expectedType);
 				var constructorName = typeName + ".new",
 					hasConstructor = signatures.exists(constructorName),
 					implicitConstructor = !hasConstructor && classDecls.exists(typeName) && [
@@ -2266,16 +2287,16 @@ class Typer {
 					].length > 0;
 				var expected = hasConstructor ? [
 					for (argument in requiredMapValue(signatures, constructorName).arguments)
-						argumentType(argument, classSubstitutions)
+						argumentType(argument)
 				] : PlatformAbi.constructorArguments(typeName), resolvedExpected:Array<CompilerType> = [];
 				if (expected != null)
 					resolvedExpected = expected;
 				if (!hasConstructor && arguments.length != resolvedExpected.length)
 					fail("E1008", 'Constructor "$typeName" expects ${resolvedExpected.length} arguments, got ${arguments.length}', span);
 				var typed = hasConstructor ? typeDeclaredCallArguments(arguments, requiredMapValue(signatures, constructorName).arguments, scope,
-					constructorName, span, classSubstitutions) : typeCallArguments(arguments, resolvedExpected, scope, constructorName);
+					constructorName, span) : typeCallArguments(arguments, resolvedExpected, scope, constructorName);
 				var nativeConstructor = PlatformAbi.constructorNative(typeName),
-					valueType = inferredClassType == null ? PlatformAbi.valueType(typeName) : inferredClassType;
+					valueType = PlatformAbi.valueType(typeName);
 				nativeConstructor == null ? new TypedExpression(TNew(typeName, typed, hasConstructor || implicitConstructor), valueType,
 					span) : new TypedExpression(TCall(nativeConstructor, typed), valueType, span);
 			case NewArray(element, length, span):
@@ -2711,6 +2732,18 @@ class Typer {
 					case TNullable(actualElement): inferTypeParameters(element, actualElement, parameters, substitutions, span);
 					default:
 				}
+			case AppliedType(name, patternArguments):
+				switch actual {
+					case TInstance(_, actualName, actualArguments) if (actualName == name
+						&& patternArguments.length == actualArguments.length):
+						for (index in 0...patternArguments.length)
+							inferTypeParameters(patternArguments[index], actualArguments[index], parameters, substitutions, span);
+					case TAbstract(actualName, actualArguments, _) if (actualName == name
+						&& patternArguments.length == actualArguments.length):
+						for (index in 0...patternArguments.length)
+							inferTypeParameters(patternArguments[index], actualArguments[index], parameters, substitutions, span);
+					default:
+				}
 			case FunctionType(patternArguments, patternResult):
 				switch actual {
 					case TFunction(actualArguments, actualResult) if (patternArguments.length == actualArguments.length):
@@ -2753,9 +2786,25 @@ class Typer {
 		if (platformField != null)
 			return new TypedExpression(TCall(platformField.get, [typedObject]), platformField.type, span);
 		var semanticType = fieldType(typedObject.type, name, span),
-			physicalType = isGenericNominal(typedObject.type) ? TDynamic : semanticType;
+			physicalType = fieldRepresentationType(typedObject.type, name, span);
 		return abiBoundaryCast(new TypedExpression(TField(typedObject, name), physicalType, span), semanticType);
 	}
+
+	function fieldRepresentationType(type:CompilerType, name:String, span:SourceSpan):CompilerType
+		return switch type {
+			case TInstance(NominalKind.Class, className, _) if (classDecls.exists(className)):
+				var declaration = requiredMapValue(classDecls, className),
+					substitutions:Map<String, CompilerType> = [];
+				for (parameter in declaration.typeParameters)
+					substitutions.set(parameter, TDynamic);
+				var result:Null<CompilerType> = null;
+				for (field in declaration.fields)
+					if (field.name == name && !field.isStatic)
+						result = declarations.resolve(FieldInference.parsedType(field), field.span, substitutions);
+				if (result != null) result; else if (declaration.base != null) fieldRepresentationType(declarations.resolve(declaration.base,
+					declaration.span, substitutions), name, span); else fieldType(type, name, span);
+			default: fieldType(type, name, span);
+		};
 
 	function isGenericNominal(type:CompilerType):Bool
 		return switch type {
@@ -3077,6 +3126,113 @@ class Typer {
 				typed.push(coerce(typeExpression(defaultValue, scope, expected), expected, 'default argument ${i + 1} to "$name"'));
 		}
 		return coerceArguments(typed, [for (parameter in parameters) argumentType(parameter, substitutions)], name);
+	}
+
+	function typeInferredClassConstruction(typeName:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
+			expectedType:Null<CompilerType>):TypedExpression {
+		var declaration = requiredMapValue(classDecls, typeName),
+			parameters = declaration.typeParameters,
+			substitutions:Map<String, CompilerType> = [];
+		var constructorExpectation = switch expectedType {
+			case TNullable(element): element;
+			default: expectedType;
+		};
+		var contextualArguments:Null<Array<CompilerType>> = null;
+		switch constructorExpectation {
+			case TInstance(NominalKind.Class, expectedName, values):
+				if (expectedName == typeName)
+					contextualArguments = values;
+			default:
+		}
+		if (contextualArguments != null)
+			for (index in 0...parameters.length)
+				if (index < contextualArguments.length)
+					substitutions.set(parameters[index], contextualArguments[index]);
+
+		var constructorName = typeName + ".new",
+			hasConstructor = signatures.exists(constructorName),
+			implicitConstructor = !hasConstructor && [
+				for (field in declaration.fields)
+					if (!field.isStatic && field.initializer != null) field
+			].length > 0;
+		if (!hasConstructor) {
+			if (arguments.length != 0)
+				fail("E1008", 'Constructor "$typeName" expects 0 arguments, got ${arguments.length}', span);
+		} else {
+			var constructor = requiredMapValue(signatures, constructorName),
+				required = constructor.arguments.length;
+			while (required > 0 && constructor.arguments[required - 1].optional)
+				required--;
+			if (arguments.length < required || arguments.length > constructor.arguments.length) {
+				var expected = required == constructor.arguments.length ? '$required' : '$required to ${constructor.arguments.length}';
+				fail("E1008", 'Function "$constructorName" expects $expected arguments, got ${arguments.length}', span);
+			}
+		}
+
+		var typed:Array<TypedExpression> = [],
+			constructor = hasConstructor ? requiredMapValue(signatures, constructorName) : null;
+		for (index in 0...arguments.length) {
+			var expectedArgument:Null<CompilerType> = null;
+			if (allTypeParametersBound(parameters, substitutions) && constructor != null)
+				expectedArgument = declarations.resolve(constructor.arguments[index].type, constructor.arguments[index].span, substitutions);
+			var argument = typeExpression(arguments[index], scope, expectedArgument);
+			if (constructor != null)
+				inferTypeParameters(constructor.arguments[index].type, argument.type, parameters, substitutions, argument.span);
+			typed.push(argument);
+		}
+		for (parameter in parameters)
+			if (!substitutions.exists(parameter))
+				fail("E1003", 'Cannot infer generic type parameter "$parameter" for constructor "$typeName"', span);
+		validateTypeParameterConstraints(typeName, declaration.typeConstraints, substitutions, span);
+
+		if (constructor != null) {
+			var semanticExpected = [
+				for (parameter in constructor.arguments)
+					declarations.resolve(parameter.type, parameter.span, substitutions)
+			];
+			for (index in arguments.length...constructor.arguments.length) {
+				var parameter = constructor.arguments[index],
+					defaultValue = parameter.defaultValue;
+				if (defaultValue == null)
+					typed.push(new TypedExpression(TNullLiteral, TNull, span));
+				else
+					typed.push(typeExpression(defaultValue, scope, semanticExpected[index]));
+			}
+			typed = coerceArguments(typed, semanticExpected, constructorName);
+		}
+		var typeArguments = [for (parameter in parameters) requiredMapValue(substitutions, parameter)],
+			valueType = TInstance(NominalKind.Class, typeName, typeArguments),
+			representationSubstitutions:Map<String, CompilerType> = [];
+		for (parameter in parameters)
+			representationSubstitutions.set(parameter, TDynamic);
+		var representationExpected:Array<CompilerType> = [];
+		if (constructor != null)
+			for (parameter in constructor.arguments)
+				representationExpected.push(declarations.resolve(parameter.type, parameter.span, representationSubstitutions));
+		var representationArguments = [
+			for (index in 0...typed.length)
+				abiBoundaryCast(typed[index], representationExpected[index])
+		];
+		return new TypedExpression(TNew(typeName, representationArguments, hasConstructor || implicitConstructor), valueType, span);
+	}
+
+	static function allTypeParametersBound(parameters:Array<String>, substitutions:Map<String, CompilerType>):Bool {
+		for (parameter in parameters)
+			if (!substitutions.exists(parameter))
+				return false;
+		return true;
+	}
+
+	function validateTypeParameterConstraints(name:String, constraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>,
+			substitutions:Map<String, CompilerType>, span:SourceSpan):Void {
+		if (constraints == null)
+			return;
+		for (constraint in constraints) {
+			var actual = requiredMapValue(substitutions, constraint.parameter),
+				expected = declarations.resolve(constraint.type, constraint.span, substitutions);
+			if (!isAssignable(actual, expected))
+				fail("E1003", 'Type argument for "${constraint.parameter}" on "$name" does not satisfy constraint "${SemanticSignature.type(expected)}"', span);
+		}
 	}
 
 	function argumentType(argument:compiler.syntax.Ast.AstArgument, ?substitutions:Map<String, CompilerType>):CompilerType {
