@@ -3,6 +3,9 @@ package compiler.ir.cfg;
 import compiler.ir.cfg.Cfg;
 import compiler.ir.cfg.CfgVerifier;
 import compiler.ir.Ir;
+import compiler.ir.SourceProvenance;
+import compiler.ir.SourceProvenance.Located;
+import compiler.ir.SourceProvenance.SourceOrigin;
 
 /** Pending phi definition populated while mutable locals are renamed. */
 private typedef SsaPhi = {output:IrValue, inputs:Array<IrPhiInput>};
@@ -69,8 +72,8 @@ class SsaBuilder {
 				throw 'Unknown CFG block $id';
 			var block = cfg.blocks[id];
 			var handlers:Array<Int> = [];
-			for (instruction in block.instructions)
-				switch instruction {
+			for (located in block.instructions)
+				switch located.value {
 					case BeginTry(catchBlock, _):
 						handlers.push(catchBlock);
 					default:
@@ -78,7 +81,7 @@ class SsaBuilder {
 			var terminator = block.terminator;
 			if (terminator == null)
 				throw 'Reachable CFG block $id has no terminator';
-			var next:Array<Int> = switch terminator {
+			var next:Array<Int> = switch terminator.value {
 				case Jump(target): [target];
 				case Branch(_, yes, no): [yes, no];
 				case Return(_), Throw(_), Rethrow(_): [];
@@ -193,8 +196,8 @@ class SsaBuilder {
 			if (!reachable.exists(id))
 				continue;
 			var use:Map<String, Bool> = [], def:Map<String, Bool> = [];
-			for (instruction in cfg.blocks[id].instructions)
-				switch instruction {
+			for (located in cfg.blocks[id].instructions)
+				switch located.value {
 					case LoadLocal(_, name):
 						if (!def.exists(name))
 							use.set(name, true);
@@ -238,8 +241,8 @@ class SsaBuilder {
 			addDefinition(definitions, argument.name, 0);
 		for (block in cfg.blocks)
 			if (reachable.exists(block.id))
-				for (instruction in block.instructions)
-					switch instruction {
+				for (located in block.instructions)
+					switch located.value {
 						case StoreLocal(name, _):
 							addDefinition(definitions, name, block.id);
 						default:
@@ -280,13 +283,14 @@ class SsaBuilder {
 			var blockPhis = phis.get(id);
 			for (name in sortedPhiNames(blockPhis)) {
 				var phi = blockPhis.get(name);
-				target.instructions.push(Phi(phi.output, phi.inputs));
+				target.instructions.push(new Located(Phi(phi.output, phi.inputs), phiProvenance(id)));
 				push(name, phi.output);
 				pushed.push(name);
 			}
 		}
-		for (instruction in block.instructions)
-			switch instruction {
+		for (located in block.instructions) {
+			var provenance = located.provenance;
+			switch located.value {
 				case LoadLocal(out, name):
 					temporaries.set(out.id, current(name));
 				case StoreLocal(name, value):
@@ -294,139 +298,140 @@ class SsaBuilder {
 					pushed.push(name);
 				case ConstVoid(out):
 					var result = define(out);
-					target.instructions.push(ConstVoid(result));
+					emit(target, ConstVoid(result), provenance);
 				case ConstInt(out, value):
 					var result = define(out);
-					target.instructions.push(ConstInt(result, value));
+					emit(target, ConstInt(result, value), provenance);
 				case ConstFloat(out, value):
 					var result = define(out);
-					target.instructions.push(ConstFloat(result, value));
+					emit(target, ConstFloat(result, value), provenance);
 				case ConstString(out, value):
 					var result = define(out);
-					target.instructions.push(ConstString(result, value));
+					emit(target, ConstString(result, value), provenance);
 				case ConstBool(out, value):
 					var result = define(out);
-					target.instructions.push(ConstBool(result, value));
+					emit(target, ConstBool(result, value), provenance);
 				case ConstNull(out):
 					var result = define(out);
-					target.instructions.push(ConstNull(result));
+					emit(target, ConstNull(result), provenance);
 				case TypeValue(out, type):
 					var result = define(out);
-					target.instructions.push(TypeValue(result, type));
+					emit(target, TypeValue(result, type), provenance);
 				case ToDyn(out, value):
 					var result = define(out);
-					target.instructions.push(ToDyn(result, resolve(value)));
+					emit(target, ToDyn(result, resolve(value)), provenance);
 				case SafeCast(out, value):
 					var result = define(out);
-					target.instructions.push(SafeCast(result, resolve(value)));
+					emit(target, SafeCast(result, resolve(value)), provenance);
 				case BeginTry(catchBlock, afterBlock):
-					target.instructions.push(BeginTry(catchBlock, afterBlock));
+					emit(target, BeginTry(catchBlock, afterBlock), provenance);
 				case EndTry:
-					target.instructions.push(EndTry);
+					emit(target, EndTry, provenance);
 				case Catch(out):
 					var result = define(out);
-					target.instructions.push(Catch(result));
+					emit(target, Catch(result), provenance);
 				case GlobalGet(out, name):
 					var result = define(out);
-					target.instructions.push(GlobalGet(result, name));
+					emit(target, GlobalGet(result, name), provenance);
 				case GlobalSet(name, value):
-					target.instructions.push(GlobalSet(name, resolve(value)));
+					emit(target, GlobalSet(name, resolve(value)), provenance);
 				case Add(out, a, b):
 					var result = define(out);
-					target.instructions.push(Add(result, resolve(a), resolve(b)));
+					emit(target, Add(result, resolve(a), resolve(b)), provenance);
 				case Sub(out, a, b):
 					var result = define(out);
-					target.instructions.push(Sub(result, resolve(a), resolve(b)));
+					emit(target, Sub(result, resolve(a), resolve(b)), provenance);
 				case Mul(out, a, b):
 					var result = define(out);
-					target.instructions.push(Mul(result, resolve(a), resolve(b)));
+					emit(target, Mul(result, resolve(a), resolve(b)), provenance);
 				case Div(out, a, b):
 					var result = define(out);
-					target.instructions.push(Div(result, resolve(a), resolve(b)));
+					emit(target, Div(result, resolve(a), resolve(b)), provenance);
 				case Mod(out, a, b):
 					var result = define(out);
-					target.instructions.push(Mod(result, resolve(a), resolve(b)));
+					emit(target, Mod(result, resolve(a), resolve(b)), provenance);
 				case BitAnd(out, a, b):
 					var result = define(out);
-					target.instructions.push(BitAnd(result, resolve(a), resolve(b)));
+					emit(target, BitAnd(result, resolve(a), resolve(b)), provenance);
 				case BitXor(out, a, b):
 					var result = define(out);
-					target.instructions.push(BitXor(result, resolve(a), resolve(b)));
+					emit(target, BitXor(result, resolve(a), resolve(b)), provenance);
 				case BitOr(out, a, b):
 					var result = define(out);
-					target.instructions.push(BitOr(result, resolve(a), resolve(b)));
+					emit(target, BitOr(result, resolve(a), resolve(b)), provenance);
 				case ShiftLeft(out, a, b):
 					var result = define(out);
-					target.instructions.push(ShiftLeft(result, resolve(a), resolve(b)));
+					emit(target, ShiftLeft(result, resolve(a), resolve(b)), provenance);
 				case ShiftRight(out, a, b):
 					var result = define(out);
-					target.instructions.push(ShiftRight(result, resolve(a), resolve(b)));
+					emit(target, ShiftRight(result, resolve(a), resolve(b)), provenance);
 				case UnsignedShiftRight(out, a, b):
 					var result = define(out);
-					target.instructions.push(UnsignedShiftRight(result, resolve(a), resolve(b)));
+					emit(target, UnsignedShiftRight(result, resolve(a), resolve(b)), provenance);
 				case Less(out, a, b):
 					var result = define(out);
-					target.instructions.push(Less(result, resolve(a), resolve(b)));
+					emit(target, Less(result, resolve(a), resolve(b)), provenance);
 				case LessEqual(out, a, b):
 					var result = define(out);
-					target.instructions.push(LessEqual(result, resolve(a), resolve(b)));
+					emit(target, LessEqual(result, resolve(a), resolve(b)), provenance);
 				case Equal(out, a, b):
 					var result = define(out);
-					target.instructions.push(Equal(result, resolve(a), resolve(b)));
+					emit(target, Equal(result, resolve(a), resolve(b)), provenance);
 				case Call(out, name, args):
 					var result = define(out);
-					target.instructions.push(Call(result, name, [for (arg in args) resolve(arg)]));
+					emit(target, Call(result, name, [for (arg in args) resolve(arg)]), provenance);
 				case StaticClosure(out, name):
 					var result = define(out);
-					target.instructions.push(StaticClosure(result, name));
+					emit(target, StaticClosure(result, name), provenance);
 				case InstanceClosure(out, name, receiver):
 					var result = define(out);
-					target.instructions.push(InstanceClosure(result, name, resolve(receiver)));
+					emit(target, InstanceClosure(result, name, resolve(receiver)), provenance);
 				case CallClosure(out, closure, args):
 					var result = define(out);
-					target.instructions.push(CallClosure(result, resolve(closure), [for (arg in args) resolve(arg)]));
+					emit(target, CallClosure(result, resolve(closure), [for (arg in args) resolve(arg)]), provenance);
 				case ToVirtual(out, value):
 					var result = define(out);
-					target.instructions.push(ToVirtual(result, resolve(value)));
+					emit(target, ToVirtual(result, resolve(value)), provenance);
 				case MethodCall(out, object, methodName, args):
 					var result = define(out);
-					target.instructions.push(MethodCall(result, resolve(object), methodName, [for (arg in args) resolve(arg)]));
+					emit(target, MethodCall(result, resolve(object), methodName, [for (arg in args) resolve(arg)]), provenance);
 				case NewObject(out, typeName):
 					var result = define(out);
-					target.instructions.push(NewObject(result, typeName));
+					emit(target, NewObject(result, typeName), provenance);
 				case FieldGet(out, object, fieldName):
 					var result = define(out);
-					target.instructions.push(FieldGet(result, resolve(object), fieldName));
+					emit(target, FieldGet(result, resolve(object), fieldName), provenance);
 				case FieldSet(object, fieldName, value):
-					target.instructions.push(FieldSet(resolve(object), fieldName, resolve(value)));
+					emit(target, FieldSet(resolve(object), fieldName, resolve(value)), provenance);
 				case ArrayGet(out, array, index):
 					var result = define(out);
-					target.instructions.push(ArrayGet(result, resolve(array), resolve(index)));
+					emit(target, ArrayGet(result, resolve(array), resolve(index)), provenance);
 				case ArraySet(array, index, value):
-					target.instructions.push(ArraySet(resolve(array), resolve(index), resolve(value)));
+					emit(target, ArraySet(resolve(array), resolve(index), resolve(value)), provenance);
 				case ArraySize(out, array):
 					var result = define(out);
-					target.instructions.push(ArraySize(result, resolve(array)));
+					emit(target, ArraySize(result, resolve(array)), provenance);
 				case MakeEnum(out, typeName, constructor, arguments):
 					var result = define(out);
-					target.instructions.push(MakeEnum(result, typeName, constructor, [for (argument in arguments) resolve(argument)]));
+					emit(target, MakeEnum(result, typeName, constructor, [for (argument in arguments) resolve(argument)]), provenance);
 				case EnumIndex(out, value):
 					var result = define(out);
-					target.instructions.push(EnumIndex(result, resolve(value)));
+					emit(target, EnumIndex(result, resolve(value)), provenance);
 				case EnumField(out, value, constructor, field):
 					var result = define(out);
-					target.instructions.push(EnumField(result, resolve(value), constructor, field));
+					emit(target, EnumField(result, resolve(value), constructor, field), provenance);
 			}
+		}
 		var terminator = block.terminator;
 		if (terminator == null)
 			throw 'Reachable CFG block $id has no terminator';
-		target.terminator = switch terminator {
+		target.terminator = new Located(switch terminator.value {
 			case Return(value): Return(resolve(value));
 			case Throw(value): Throw(resolve(value));
 			case Rethrow(value): Rethrow(resolve(value));
 			case Jump(to): Jump(to);
 			case Branch(condition, yes, no): Branch(resolve(condition), yes, no);
-		};
+		}, terminator.provenance);
 		if (successors.exists(id))
 			for (successor in successors.get(id)) {
 				if (phis.exists(successor)) {
@@ -455,6 +460,19 @@ class SsaBuilder {
 		var result = allocate('v${value.id}', value.type);
 		temporaries.set(value.id, result);
 		return result;
+	}
+
+	static function emit(block:IrBlock, instruction:IrInstruction, provenance:SourceProvenance):Void
+		block.instructions.push(new Located(instruction, provenance));
+
+	function phiProvenance(blockId:Int):SourceProvenance {
+		var block = cfg.blocks[blockId],
+			anchor:Null<compiler.ir.SourceProvenance.SourceLocation> = null;
+		if (block.instructions.length > 0)
+			anchor = block.instructions[0].provenance.location;
+		else if (block.terminator != null)
+			anchor = block.terminator.provenance.location;
+		return new SourceProvenance(anchor, SourceOrigin.CompilerGenerated("ssa-phi"));
 	}
 
 	function resolve(value:CfgValue):IrValue {

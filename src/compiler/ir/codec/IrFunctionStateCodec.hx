@@ -13,10 +13,14 @@ import compiler.ir.codec.IrTerminatorCodec;
 import compiler.ir.codec.IrTypeCodec;
 import compiler.ir.codec.IrValueTableCodec;
 import compiler.ir.IrVerifier;
+import compiler.ir.SourceProvenance;
+import compiler.ir.SourceProvenance.Located;
+import compiler.ir.SourceProvenance.SourceLocation;
+import compiler.ir.SourceProvenance.SourceOrigin;
 
 /** Deterministic framing for a complete SSA IR function. */
 class IrFunctionStateCodec {
-	static inline final VERSION = 1;
+	static inline final VERSION = 2;
 	static inline final MAX_BLOCKS = 0x100000;
 	static inline final MAX_INSTRUCTIONS = 0x1000000;
 
@@ -26,10 +30,10 @@ class IrFunctionStateCodec {
 			collectValue(argument, values);
 		for (block in fn.blocks) {
 			for (instruction in block.instructions)
-				collectInstruction(instruction, values);
+				collectInstruction(instruction.value, values);
 			var terminator = block.terminator;
 			if (terminator != null)
-				collectTerminator(terminator, values);
+				collectTerminator(terminator.value, values);
 		}
 		var valueBytes = IrValueTableCodec.encode([for (_ => value in values) value]),
 			output = new BytesOutput();
@@ -57,15 +61,18 @@ class IrFunctionStateCodec {
 			if (block.instructions.length > MAX_INSTRUCTIONS)
 				throw "Too many IR instructions";
 			output.writeInt32(block.instructions.length);
-			for (instruction in block.instructions)
-				writeBytes(output, IrInstructionCodec.encode(instruction));
+			for (instruction in block.instructions) {
+				writeBytes(output, IrInstructionCodec.encode(instruction.value));
+				writeProvenance(output, instruction.provenance);
+			}
 			var blockTerminator = block.terminator;
 			if (blockTerminator == null)
 				throw "IR block has no terminator";
 			var terminator = new BytesOutput();
 			terminator.bigEndian = false;
-			IrTerminatorCodec.write(terminator, blockTerminator);
+			IrTerminatorCodec.write(terminator, blockTerminator.value);
 			writeBytes(output, terminator.getBytes());
+			writeProvenance(output, blockTerminator.provenance);
 		}
 		return output.getBytes();
 	}
@@ -76,7 +83,8 @@ class IrFunctionStateCodec {
 		try {
 			if (input.readString(3) != "IRF")
 				throw "Invalid IR function state";
-			if (input.readByte() != VERSION)
+			var version = input.readByte();
+			if (version != 1 && version != VERSION)
 				throw "Unsupported IR function state version";
 			var valuesArray = IrValueTableCodec.decode(readBytes(input, bytes.length)),
 				values = IrValueTableCodec.byId(valuesArray),
@@ -101,12 +109,17 @@ class IrFunctionStateCodec {
 				var instructionCount = input.readInt32();
 				if (instructionCount < 0 || instructionCount > MAX_INSTRUCTIONS)
 					throw "Invalid IR instruction count";
-				for (_ in 0...instructionCount)
-					block.instructions.push(IrInstructionCodec.decode(readBytes(input, bytes.length), values));
+				for (_ in 0...instructionCount) {
+					var instruction = IrInstructionCodec.decode(readBytes(input, bytes.length), values),
+						provenance = version >= 2 ? readProvenance(input, bytes.length) : SourceProvenance.generated("legacy-ir-cache");
+					block.instructions.push(new Located(instruction, provenance));
+				}
 				var terminatorBytes = readBytes(input, bytes.length),
 					terminatorInput = new BytesInput(terminatorBytes);
 				terminatorInput.bigEndian = false;
-				block.terminator = IrTerminatorCodec.read(terminatorInput, values, blockIds);
+				var decodedTerminator = IrTerminatorCodec.read(terminatorInput, values, blockIds);
+				block.terminator = new Located(decodedTerminator,
+					version >= 2 ? readProvenance(input, bytes.length) : SourceProvenance.generated("legacy-ir-cache"));
 				if (terminatorInput.position != terminatorBytes.length)
 					throw "Trailing IR terminator data";
 			}
@@ -116,6 +129,39 @@ class IrFunctionStateCodec {
 		} catch (error:haxe.io.Eof) {
 			throw "Truncated IR function state";
 		}
+	}
+
+	static function writeProvenance(output:BytesOutput, provenance:SourceProvenance):Void {
+		var location = provenance.location;
+		output.writeByte(location == null ? 0 : 1);
+		if (location != null) {
+			IrTypeCodec.writeString(output, location.path);
+			output.writeInt32(location.start);
+			output.writeInt32(location.end);
+			output.writeInt32(location.line);
+		}
+		switch provenance.origin {
+			case UserSource:
+				output.writeByte(0);
+			case CompilerGenerated(reason):
+				output.writeByte(1);
+				IrTypeCodec.writeString(output, reason);
+		}
+	}
+
+	static function readProvenance(input:BytesInput, limit:Int):SourceProvenance {
+		var hasLocation = input.readByte();
+		if (hasLocation != 0 && hasLocation != 1)
+			throw "Invalid IR provenance location flag";
+		var location:Null<SourceLocation> = null;
+		if (hasLocation == 1)
+			location = new SourceLocation(IrTypeCodec.readString(input, limit), input.readInt32(), input.readInt32(), input.readInt32());
+		var origin:SourceOrigin = switch input.readByte() {
+			case 0: UserSource;
+			case 1: CompilerGenerated(IrTypeCodec.readString(input, limit));
+			default: throw "Invalid IR provenance origin";
+		};
+		return new SourceProvenance(location, origin);
 	}
 
 	public static function verify(functions:Array<IrFunction>, context:compiler.ir.Ir.IrProgram):Void {

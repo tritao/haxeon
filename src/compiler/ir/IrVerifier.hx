@@ -68,7 +68,7 @@ class IrVerifier {
 			var block = blocks.get(id);
 			reachable.set(id, true);
 			for (instruction in block.instructions)
-				switch instruction {
+				switch instruction.value {
 					case BeginTry(catchBlock, afterBlock):
 						if (!blocks.exists(catchBlock))
 							throw 'Unknown IR block $catchBlock in ${fn.name}';
@@ -78,17 +78,17 @@ class IrVerifier {
 					default:
 				}
 			for (instruction in block.instructions)
-				switch instruction {
+				switch instruction.value {
 					case Phi(out, _):
 						define(values, out);
 					default:
 				}
 			for (instruction in block.instructions)
-				verifyInstruction(instruction, values, signatures, objects, interfaces, enums, globals);
+				verifyInstruction(instruction.value, values, signatures, objects, interfaces, enums, globals);
 			var terminator = block.terminator;
 			if (terminator == null)
 				throw 'Reachable IR block $id in ${fn.name} has no terminator';
-			switch terminator {
+			switch terminator.value {
 				case Return(value):
 					require(values, value);
 					if (!sameType(value.type, fn.result))
@@ -115,7 +115,7 @@ class IrVerifier {
 		for (block in fn.blocks) {
 			var terminator = block.terminator;
 			if (reachable.exists(block.id) && terminator != null)
-				switch terminator {
+				switch terminator.value {
 					case Jump(target):
 						addPredecessor(predecessors, target, block.id);
 					case Branch(_, yes, no):
@@ -127,7 +127,7 @@ class IrVerifier {
 		for (block in fn.blocks)
 			if (reachable.exists(block.id))
 				for (instruction in block.instructions)
-					switch instruction {
+					switch instruction.value {
 						case Phi(out, inputs):
 							if (!predecessors.exists(block.id))
 								throw 'Phi ${out.id} does not cover every predecessor';

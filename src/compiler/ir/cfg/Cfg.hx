@@ -1,6 +1,7 @@
 package compiler.ir.cfg;
 
 import compiler.ir.Ir.IrType;
+import compiler.ir.SourceProvenance.Located;
 
 /** Function-local identity for a value in mutable control-flow form. */
 abstract CfgValueId(Int) from Int to Int {}
@@ -81,8 +82,8 @@ enum CfgTerminator {
 /** Mutable basic block whose terminator is assigned exactly once during construction. */
 class CfgBlock {
 	public final id:Int;
-	public final instructions:Array<CfgInstruction> = [];
-	public var terminator:Null<CfgTerminator>;
+	public final instructions:Array<Located<CfgInstruction>> = [];
+	public var terminator:Null<Located<CfgTerminator>>;
 
 	public function new(id)
 		this.id = id;

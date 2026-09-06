@@ -122,6 +122,7 @@ class IrGenerator {
 		for (statement in statements) {
 			if (builder.isTerminated())
 				break;
+			builder.at(typedStatementSpan(statement));
 			switch statement {
 				case TDeclare(name, type, _):
 					localTypes.set(name, lowerType(type));
@@ -472,6 +473,16 @@ class IrGenerator {
 		}
 	}
 
+	static function typedStatementSpan(statement:TypedStatement):compiler.Source.SourceSpan
+		return switch statement {
+			case TDeclare(_, _, span), TVar(_, _, span), TAssign(_, _, span), TCellAssign(_, _, _, span), TCellCapturedAssign(_, _, _, span),
+				TFieldAssign(_, _, _, span), TStaticFieldAssign(_, _, _, span), TIndexAssign(_, _, _, span), TMapAssign(_, _, _, span), TReturn(_, span),
+				TReturnVoid(span), TThrow(_, span), TTry(_, _, span), TIf(_, _, _, span), TWhile(_, _, span), TDoWhile(_, _, span), TForIn(_, _, _, _, span),
+				TBreak(span), TContinue(span), TSwitch(_, _, _, _, span), TIncrement(_, _, span), TCellIncrement(_, _, _, _, span),
+				TCellCapturedIncrement(_, _, _, _, span), TExpression(_, span):
+				span;
+		};
+
 	static function lowerOperands(expressions:Array<TypedExpression>, builder:CfgBuilder, localTypes:Map<String, IrType>):Array<CfgValue> {
 		var temporaries:Array<{name:String, type:IrType}> = [];
 		for (expression in expressions) {
@@ -537,7 +548,19 @@ class IrGenerator {
 			default: left == right;
 		};
 
-	static function lowerExpression(expression:TypedExpression, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue
+	static function lowerExpression(expression:TypedExpression, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
+		var previous = builder.enterSource(expression.span);
+		try {
+			var result = lowerExpressionAt(expression, builder, localTypes);
+			builder.restoreSource(previous);
+			return result;
+		} catch (error:Dynamic) {
+			builder.restoreSource(previous);
+			throw error;
+		}
+	}
+
+	static function lowerExpressionAt(expression:TypedExpression, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue
 		return switch expression.expression {
 			case TIntLiteral(value): builder.constInt(value);
 			case TFloatLiteral(value): builder.constFloat(value);

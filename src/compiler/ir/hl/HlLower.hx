@@ -4,6 +4,7 @@ import compiler.hl.HlCode;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction;
 import compiler.hl.HlFunction.HlInstruction;
+import compiler.hl.HlFunction.HlDebugLocation;
 import compiler.hl.HlType;
 import compiler.hl.incremental.HlSymbolTable;
 import compiler.ir.Ir.IrInstruction;
@@ -16,6 +17,7 @@ import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
 import compiler.ir.Ir.IrEnum;
 import compiler.ir.IrVerifier;
+import compiler.ir.SourceProvenance;
 
 /** Lowers verified SSA IR into indexed HashLink types, registers, and opcodes. */
 class HlLower {
@@ -161,14 +163,14 @@ class HlLower {
 			defineRegister(argument, registers, registerTypes);
 		for (block in fn.blocks)
 			for (instruction in block.instructions) {
-				var output = instructionOutput(instruction);
+				var output = instructionOutput(instruction.value);
 				if (output != null)
 					defineRegister(output, registers, registerTypes);
 			}
 		var edges:Map<String, Array<{destination:IrValue, source:IrValue}>> = [];
 		for (block in fn.blocks)
 			for (instruction in block.instructions)
-				switch instruction {
+				switch instruction.value {
 					case Phi(output, inputs):
 						defineRegister(output, registers, registerTypes);
 						for (input in inputs) {
@@ -189,13 +191,16 @@ class HlLower {
 				}
 
 		var instructions:Array<HlInstruction> = [],
+			debugLocations:Array<HlDebugLocation> = [],
 			activeTraps:Array<Int> = [];
 		for (block in orderedBlocks(fn)) {
 			if (block.instructions.length == 0 && block.terminator == null)
 				continue;
 			instructions.push(HlInstruction.Label('block_${block.id}'));
+			debugLocations.push(debugLocation(blockProvenance(block)));
 			for (instruction in block.instructions) {
-				switch instruction {
+				var instructionStart = instructions.length;
+				switch instruction.value {
 					case Phi(_, _):
 					case ConstVoid(output):
 						defineRegister(output, registers, registerTypes);
@@ -324,11 +329,13 @@ class HlLower {
 						instructions.push(HlInstruction.EnumField(defineRegister(output, registers, registerTypes), requireRegister(value, registers),
 							constructor, field));
 				}
+				appendDebugLocations(debugLocations, instructions.length - instructionStart, instruction.provenance);
 			}
 			var terminator = block.terminator;
 			if (terminator == null)
 				throw 'Reachable IR block ${block.id} has no terminator';
-			switch terminator {
+			var terminatorStart = instructions.length;
+			switch terminator.value {
 				case Return(value):
 					instructions.push(HlInstruction.Return(requireRegister(value, registers)));
 				case Throw(value):
@@ -346,10 +353,28 @@ class HlLower {
 					instructions.push(HlInstruction.JumpTrue(requireRegister(condition, registers), 'block_$yes'));
 					instructions.push(HlInstruction.Jump('block_$no'));
 			}
+			appendDebugLocations(debugLocations, instructions.length - terminatorStart, terminator.provenance);
 		}
 
 		return new HlFunction(internFunctionType([for (argument in fn.arguments) argument.type], fn.result), requireFunction(fn.name), registerTypes,
-			instructions);
+			instructions, debugLocations);
+	}
+
+	static function appendDebugLocations(output:Array<HlDebugLocation>, count:Int, provenance:SourceProvenance):Void
+		for (_ in 0...count)
+			output.push(debugLocation(provenance));
+
+	static function debugLocation(provenance:SourceProvenance):HlDebugLocation {
+		var location = provenance.location;
+		return location == null ? {path: "<generated>", line: 1} : {path: location.path, line: location.line};
+	}
+
+	static function blockProvenance(block:IrBlock):SourceProvenance {
+		if (block.instructions.length > 0)
+			return block.instructions[0].provenance;
+		if (block.terminator != null)
+			return block.terminator.provenance;
+		return SourceProvenance.generated("empty-hl-block");
 	}
 
 	/**
@@ -385,7 +410,7 @@ class HlLower {
 		seen.set(id, true);
 		var region:Null<{catchBlock:Int, afterBlock:Int}> = null;
 		for (instruction in block.instructions)
-			switch instruction {
+			switch instruction.value {
 				case BeginTry(catchBlock, afterBlock):
 					region = {catchBlock: catchBlock, afterBlock: afterBlock};
 				default:
@@ -393,7 +418,7 @@ class HlLower {
 		var successors:Array<Int> = [];
 		var terminator = block.terminator;
 		if (terminator != null)
-			switch terminator {
+			switch terminator.value {
 				case Jump(target):
 					successors.push(target);
 				case Branch(_, yes, no):

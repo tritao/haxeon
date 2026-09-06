@@ -1,17 +1,25 @@
 package compiler.hl;
 
+/** HashLink debugger location corresponding exactly to one encoded opcode. */
+typedef HlDebugLocation = {
+	final path:String;
+	final line:Int;
+}
+
 /** HashLink bytecode function after register allocation and symbol resolution. */
 class HlFunction {
 	public final type:Int;
 	public final functionIndex:Int;
 	public final registers:Array<Int>;
 	public final opcodes:Array<HlInstruction>;
+	public final debugLocations:Array<HlDebugLocation>;
 
-	public function new(type:Int, functionIndex:Int, registers:Array<Int>, opcodes:Array<HlInstruction>) {
+	public function new(type:Int, functionIndex:Int, registers:Array<Int>, opcodes:Array<HlInstruction>, ?debugLocations:Array<HlDebugLocation>) {
 		this.type = type;
 		this.functionIndex = functionIndex;
 		this.registers = registers;
 		this.opcodes = opcodes;
+		this.debugLocations = debugLocations == null ? [] : debugLocations;
 	}
 }
 

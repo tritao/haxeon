@@ -4,6 +4,7 @@ import haxe.io.Bytes as HaxeBytes;
 import haxe.io.BytesOutput;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction.HlInstruction;
+import compiler.hl.HlFunction.HlDebugLocation;
 
 /** Encoded opcode bytes paired with unresolved symbolic branch targets. */
 private typedef EncodedInstruction = {
@@ -14,6 +15,9 @@ private typedef EncodedInstruction = {
 /** Serializes the in-memory HashLink model using canonical HLB encodings. */
 class HlWriter {
 	final output:BytesOutput;
+	var hasDebug:Bool = false;
+	var debugFiles:Array<String> = [];
+	var debugFileIndices:Map<String, Int> = [];
 
 	public function new() {
 		output = new BytesOutput();
@@ -42,9 +46,10 @@ class HlWriter {
 	}
 
 	function writeCode(code:HlCode):Void {
+		prepareDebugFiles(code);
 		output.writeString("HLB");
 		output.writeByte(HlCode.VERSION);
-		writeUnsignedIndex(0); // flags: no debug information
+		writeUnsignedIndex(hasDebug ? 1 : 0);
 		writeUnsignedIndex(code.ints.length);
 		writeUnsignedIndex(code.floats.length);
 		writeUnsignedIndex(code.strings.length);
@@ -62,6 +67,10 @@ class HlWriter {
 			output.writeDouble(value);
 		writeStrings(code.strings);
 		output.writeInt32(0); // byte blob storage size
+		if (hasDebug) {
+			writeUnsignedIndex(debugFiles.length);
+			writeStrings(debugFiles);
+		}
 
 		for (type in code.types)
 			writeType(type);
@@ -164,6 +173,56 @@ class HlWriter {
 			writeIndex(type);
 		for (instruction in instructions)
 			writeOpcode(instruction.opcode, instruction.operands);
+		if (hasDebug) {
+			writeDebugLocations(fn);
+			writeUnsignedIndex(0); // local-variable assignments
+		}
+	}
+
+	function prepareDebugFiles(code:HlCode):Void {
+		hasDebug = false;
+		for (fn in code.functions)
+			if (fn.debugLocations.length > 0)
+				hasDebug = true;
+		if (!hasDebug)
+			return;
+		for (fn in code.functions) {
+			if (fn.debugLocations.length == 0) {
+				internDebugFile("<generated>");
+				continue;
+			}
+			for (location in fn.debugLocations)
+				internDebugFile(location.path);
+		}
+	}
+
+	function internDebugFile(path:String):Int {
+		if (debugFileIndices.exists(path))
+			return debugFileIndices.get(path);
+		var index = debugFiles.length;
+		if (index > 0x7FFF)
+			throw "Too many HashLink debug files";
+		debugFiles.push(path);
+		debugFileIndices.set(path, index);
+		return index;
+	}
+
+	function writeDebugLocations(fn:HlFunction):Void {
+		var currentFile = -1;
+		for (index in 0...fn.opcodes.length) {
+			var location:HlDebugLocation = fn.debugLocations.length == 0 ? cast {path: "<generated>", line: 1} : fn.debugLocations[index];
+			if (location.line > 0x1FFFFF)
+				throw 'Debug line ${location.line} exceeds the HashLink format limit';
+			var file = debugFileIndices.get(location.path);
+			if (file != currentFile) {
+				output.writeByte(((file >> 8) << 1) | 1);
+				output.writeByte(file & 0xFF);
+				currentFile = file;
+			}
+			output.writeByte((location.line & 0x1F) << 3);
+			output.writeByte((location.line >> 5) & 0xFF);
+			output.writeByte((location.line >> 13) & 0xFF);
+		}
 	}
 
 	function lowerInstructions(fn:HlFunction):Array<EncodedInstruction> {

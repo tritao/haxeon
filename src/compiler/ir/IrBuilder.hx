@@ -1,6 +1,8 @@
 package compiler.ir;
 
 import compiler.ir.Ir;
+import compiler.ir.SourceProvenance;
+import compiler.ir.SourceProvenance.Located;
 
 /** Imperative helper for constructing a single well-formed SSA function. */
 class IrBuilder {
@@ -187,7 +189,7 @@ class IrBuilder {
 	public function terminate(value:IrTerminator):Void {
 		if (current.terminator != null)
 			throw 'IR block ${current.id} already has a terminator';
-		current.terminator = value;
+		current.terminator = new Located(value, SourceProvenance.generated("ir-builder"));
 	}
 
 	public function isTerminated():Bool
@@ -208,7 +210,7 @@ class IrBuilder {
 	function emit(instruction:IrInstruction):Void {
 		if (isTerminated())
 			throw "Cannot emit after terminator";
-		current.instructions.push(instruction);
+		current.instructions.push(new Located(instruction, SourceProvenance.generated("ir-builder")));
 	}
 
 	function temporary(type:IrType):IrValue

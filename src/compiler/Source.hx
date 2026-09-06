@@ -5,13 +5,34 @@ class SourceFile {
 	public final path:String;
 	public final text:String;
 
+	final lineStarts:Array<Int>;
+
 	public function new(path:String, text:String) {
 		this.path = path;
 		this.text = text;
+		lineStarts = [0];
+		for (index in 0...text.length)
+			if (text.charCodeAt(index) == 10)
+				lineStarts.push(index + 1);
 	}
 
 	public function span(start:Int, end:Int):SourceSpan
 		return new SourceSpan(this, start, end);
+
+	/** One-based line containing an offset, found without rescanning source text. */
+	public function lineAt(offset:Int):Int {
+		if (offset < 0 || offset > text.length)
+			throw 'Source offset $offset is outside "$path"';
+		var low = 0, high = lineStarts.length;
+		while (low < high) {
+			var middle = low + ((high - low) >> 1);
+			if (lineStarts[middle] <= offset)
+				low = middle + 1;
+			else
+				high = middle;
+		}
+		return low;
+	}
 }
 
 /** Half-open byte/character range within a single {@link SourceFile}. */

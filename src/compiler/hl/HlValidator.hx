@@ -71,6 +71,11 @@ class HlValidator {
 			addFunctionIndex(functionIndices, fn.functionIndex);
 		}
 		for (fn in code.functions) {
+			if (fn.debugLocations.length != 0 && fn.debugLocations.length != fn.opcodes.length)
+				throw 'Debug location count does not match opcodes in function ${fn.functionIndex}';
+			for (location in fn.debugLocations)
+				if (location.path == null || location.line < 1)
+					throw 'Invalid debug location in function ${fn.functionIndex}';
 			for (registerType in fn.registers)
 				requireType(code, registerType, 'register in function ${fn.functionIndex}');
 			validateInstructions(code, fn, functionIndices);

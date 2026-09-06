@@ -130,7 +130,7 @@ class ModuleChangeAnalyzer {
 				if (field.initializer == null)
 					continue;
 				var fieldName = className + "." + field.name,
-					initializer = state.source.text.substring(field.span.start, field.span.end);
+					initializer = sourceFingerprint(state, field.span);
 				if (field.isStatic) {
 					staticInitializers.set(fieldName, initializer);
 					if (!state.staticInitializerFingerprints.exists(fieldName)
@@ -177,7 +177,7 @@ class ModuleChangeAnalyzer {
 		for (fn in ast.functions) {
 			var canonical = state.name == entry && fn.name == "main" ? "main" : state.name + "." + fn.name;
 			var signature = SemanticSignature.parsedFunction(fn, ast.aliases),
-				body = state.source.text.substring(fn.span.start, fn.span.end);
+				body = sourceFingerprint(state, fn.span);
 			signatures.set(fn.name, signature);
 			bodies.set(fn.name, body);
 			if (state.signatureFingerprints.get(fn.name) != signature)
@@ -205,7 +205,7 @@ class ModuleChangeAnalyzer {
 				var localName = className + "." + method.name,
 					canonical = localName,
 					signature = SemanticSignature.parsedFunction(method, ast.aliases),
-					body = state.source.text.substring(method.span.start, method.span.end);
+					body = sourceFingerprint(state, method.span);
 				signatures.set(localName, signature);
 				bodies.set(localName, body);
 				if (state.signatureFingerprints.get(localName) != signature)
@@ -219,7 +219,7 @@ class ModuleChangeAnalyzer {
 			for (method in abstractDecl.methods) {
 				var localName = abstractName + "." + method.name,
 					signature = SemanticSignature.parsedFunction(method, ast.aliases),
-					body = state.source.text.substring(method.span.start, method.span.end);
+					body = sourceFingerprint(state, method.span);
 				signatures.set(localName, signature);
 				bodies.set(localName, body);
 				if (state.signatureFingerprints.get(localName) != signature)
@@ -248,4 +248,8 @@ class ModuleChangeAnalyzer {
 			instanceInitializerFingerprints: instanceInitializers
 		};
 	}
+
+	/** Include coordinates because debugger metadata changes when declarations move. */
+	static function sourceFingerprint(state:compiler.modules.ModuleState, span:compiler.Source.SourceSpan):String
+		return state.source.path + ":" + span.start + ":" + state.source.text.substring(span.start, span.end);
 }

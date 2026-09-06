@@ -1,5 +1,7 @@
 package compiler.ir;
 
+import compiler.ir.SourceProvenance.Located;
+
 /** Backend-oriented value types carried by the SSA intermediate representation. */
 enum IrType {
 	Void;
@@ -93,8 +95,8 @@ enum IrTerminator {
 /** SSA basic block identified independently of its position in the block array. */
 class IrBlock {
 	public final id:Int;
-	public final instructions:Array<IrInstruction> = [];
-	public var terminator:Null<IrTerminator>;
+	public final instructions:Array<Located<IrInstruction>> = [];
+	public var terminator:Null<Located<IrTerminator>>;
 
 	public function new(id)
 		this.id = id;

@@ -209,7 +209,7 @@ class IrProgramAssembler {
 		for (fn in functions)
 			for (block in fn.blocks)
 				for (instruction in block.instructions)
-					switch instruction {
+					switch instruction.value {
 						case Call(_, name, _):
 							if (name == "__exception_matches")
 								needsExceptionRuntime = true;

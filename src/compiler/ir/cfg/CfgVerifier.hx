@@ -37,15 +37,15 @@ class CfgVerifier {
 			var block = blocks.get(id), terminator = block.terminator;
 			if (terminator == null)
 				throw 'Reachable CFG block $id in ${fn.name} has no terminator';
-			for (instruction in block.instructions)
-				switch instruction {
+			for (located in block.instructions)
+				switch located.value {
 					case BeginTry(catchBlock, afterBlock):
 						targetBlock(catchBlock, blocks);
 						targetBlock(afterBlock, blocks);
 						work.push(catchBlock);
 					default:
 				}
-			switch terminator {
+			switch terminator.value {
 				case Jump(target):
 					work.push(target);
 				case Branch(_, yes, no):
@@ -58,8 +58,8 @@ class CfgVerifier {
 
 	static function verifyBlock(fn:CfgFunction, block:CfgBlock, blocks:Map<Int, CfgBlock>, defined:Map<Int, Bool>):Void {
 		var available:Map<Int, Bool> = [];
-		for (instruction in block.instructions)
-			switch instruction {
+		for (located in block.instructions)
+			switch located.value {
 				case ConstVoid(out):
 					expect(out, Void);
 					define(out, defined, available);
@@ -248,7 +248,7 @@ class CfgVerifier {
 			}
 		var terminator = block.terminator;
 		if (terminator != null)
-			switch terminator {
+			switch terminator.value {
 				case Return(value):
 					require(value, available, block.id);
 					if (!sameType(value.type, fn.result))

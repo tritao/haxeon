@@ -2,6 +2,10 @@ package compiler.ir.cfg;
 
 import compiler.ir.cfg.Cfg;
 import compiler.ir.Ir.IrType;
+import compiler.Source.SourceSpan;
+import compiler.ir.SourceProvenance;
+import compiler.ir.SourceProvenance.Located;
+import compiler.ir.SourceProvenance.SourceOrigin;
 
 /** Builds mutable-local basic blocks while tracking lexical trap scopes. */
 class CfgBuilder {
@@ -10,6 +14,7 @@ class CfgBuilder {
 	var current:CfgBlock;
 	var nextValue:Int = 0;
 	var activeTraps:Int = 0;
+	var provenance:SourceProvenance = SourceProvenance.generated("cfg-builder");
 
 	public function new()
 		current = createBlock();
@@ -26,6 +31,25 @@ class CfgBuilder {
 	public function currentBlock():CfgBlock
 		return current;
 
+	/** Select the source context inherited by subsequently emitted operations. */
+	public function at(span:SourceSpan):Void
+		provenance = SourceProvenance.user(span);
+
+	/** Select an explicit compiler-generated context, optionally anchored in source. */
+	public function generated(reason:String, ?anchor:SourceSpan):Void
+		provenance = SourceProvenance.generated(reason, anchor);
+
+	/** Enter a nested source context and return the token needed to restore it. */
+	public function enterSource(span:SourceSpan):SourceProvenance {
+		var previous = provenance;
+		provenance = SourceProvenance.user(span);
+		return previous;
+	}
+
+	/** Restore a context returned by {@link enterSource}. */
+	public function restoreSource(previous:SourceProvenance):Void
+		provenance = previous;
+
 	public function isTerminated():Bool
 		return current.terminator != null;
 
@@ -36,7 +60,8 @@ class CfgBuilder {
 	public function jumpFrom(source:CfgBlock, target:CfgBlock):Void {
 		if (source.terminator != null)
 			throw 'CFG block ${source.id} already has a terminator';
-		source.terminator = Jump(target.id);
+		var anchor = source.instructions.length == 0 ? provenance.location : source.instructions[source.instructions.length - 1].provenance.location;
+		source.terminator = new Located(Jump(target.id), new SourceProvenance(anchor, SourceOrigin.CompilerGenerated("structured-join")));
 	}
 
 	public function branch(condition:CfgValue, yes:CfgBlock, no:CfgBlock):Void
@@ -66,7 +91,7 @@ class CfgBuilder {
 	/** Seal a block that is unreachable from the function entry. */
 	public function markUnreachable():Void
 		if (!isTerminated())
-			current.terminator = Jump(current.id);
+			current.terminator = new Located(Jump(current.id), new SourceProvenance(provenance.location, SourceOrigin.CompilerGenerated("unreachable-block")));
 
 	public function beginTry(catchBlock:CfgBlock, afterBlock:CfgBlock):Void {
 		emit(BeginTry(catchBlock.id, afterBlock.id));
@@ -329,12 +354,12 @@ class CfgBuilder {
 	function emit(value):Void {
 		if (isTerminated())
 			throw "Cannot emit after CFG terminator";
-		current.instructions.push(value);
+		current.instructions.push(new Located(value, provenance));
 	}
 
 	function terminate(value):Void {
 		if (isTerminated())
 			throw 'CFG block ${current.id} already has a terminator';
-		current.terminator = value;
+		current.terminator = new Located(value, provenance);
 	}
 }

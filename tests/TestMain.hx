@@ -37,6 +37,8 @@ import compiler.ir.cfg.Cfg.CfgBlock;
 import compiler.ir.cfg.Cfg.CfgFunction;
 import compiler.ir.cfg.Cfg.CfgValue;
 import compiler.ir.cfg.CfgVerifier;
+import compiler.ir.SourceProvenance;
+import compiler.ir.SourceProvenance.Located;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.types.Typer;
@@ -48,6 +50,9 @@ import haxe.io.BytesInput;
 import Type as HaxeType;
 
 class TestMain {
+	static function located<T>(value:T):Located<T>
+		return new Located(value, SourceProvenance.generated("malformed-test-fixture"));
+
 	static function main():Void {
 		var lexicalForms = new Lexer(new SourceFile("lexical-forms.hx", "// line\n/* block */ 'text' ? @")).tokenize();
 		if (lexicalForms.length != 4
@@ -261,7 +266,7 @@ class TestMain {
 		for (fn in ssa.functions)
 			for (block in fn.blocks)
 				for (instruction in block.instructions)
-					switch instruction {
+					switch instruction.value {
 						case compiler.ir.Ir.IrInstruction.Phi(_, _):
 							hasPhi = true;
 						default:
@@ -273,7 +278,7 @@ class TestMain {
 		for (fn in conditional.functions)
 			for (block in fn.blocks)
 				for (instruction in block.instructions)
-					switch instruction {
+					switch instruction.value {
 						case compiler.ir.Ir.IrInstruction.Phi(_, _):
 							conditionalHasPhi = true;
 						default:
@@ -299,7 +304,7 @@ class TestMain {
 		var typed = Typer.type(ast), cfg = IrGenerator.generateCfg(typed.functions[0]), loads = 0, stores = 0;
 		for (block in cfg.blocks)
 			for (instruction in block.instructions)
-				switch instruction {
+				switch instruction.value {
 					case LoadLocal(_, _):
 						loads++;
 					case StoreLocal(_, _):
@@ -311,7 +316,7 @@ class TestMain {
 		var built = SsaBuilder.build(cfg), phis = 0;
 		for (block in built.blocks)
 			for (instruction in block.instructions)
-				switch instruction {
+				switch instruction.value {
 					case compiler.ir.Ir.IrInstruction.Phi(_, _):
 						phis++;
 					default:
@@ -323,21 +328,21 @@ class TestMain {
 		var unterminated = new CfgBlock(0);
 		expectCfgError(new CfgFunction("bad", [], I32, [unterminated], []), "Reachable CFG block 0 in bad has no terminator");
 		var badTarget = new CfgBlock(0);
-		badTarget.terminator = compiler.ir.cfg.Cfg.CfgTerminator.Jump(4);
+		badTarget.terminator = located(compiler.ir.cfg.Cfg.CfgTerminator.Jump(4));
 		expectCfgError(new CfgFunction("bad", [], I32, [badTarget], []), "Unknown CFG block 4");
 		var duplicate = new CfgBlock(0),
 			first = new CfgValue(0, I32),
 			again = new CfgValue(0, I32);
-		duplicate.instructions.push(ConstInt(first, 1));
-		duplicate.instructions.push(ConstInt(again, 2));
-		duplicate.terminator = compiler.ir.cfg.Cfg.CfgTerminator.Return(again);
+		duplicate.instructions.push(located(ConstInt(first, 1)));
+		duplicate.instructions.push(located(ConstInt(again, 2)));
+		duplicate.terminator = located(compiler.ir.cfg.Cfg.CfgTerminator.Return(again));
 		expectCfgError(new CfgFunction("bad", [], I32, [duplicate], []), "Duplicate CFG value 0");
 		var crossBlockA = new CfgBlock(0),
 			crossBlockB = new CfgBlock(1),
 			crossValue = new CfgValue(0, I32);
-		crossBlockA.instructions.push(ConstInt(crossValue, 1));
-		crossBlockA.terminator = compiler.ir.cfg.Cfg.CfgTerminator.Jump(1);
-		crossBlockB.terminator = compiler.ir.cfg.Cfg.CfgTerminator.Return(crossValue);
+		crossBlockA.instructions.push(located(ConstInt(crossValue, 1)));
+		crossBlockA.terminator = located(compiler.ir.cfg.Cfg.CfgTerminator.Jump(1));
+		crossBlockB.terminator = located(compiler.ir.cfg.Cfg.CfgTerminator.Return(crossValue));
 		expectCfgError(new CfgFunction("bad", [], I32, [crossBlockA, crossBlockB], []),
 			"CFG value 0 is used outside its defining block or before definition in block 1");
 		Sys.println("PASS: CFG verifier rejects malformed blocks, edges, and values");
@@ -376,13 +381,13 @@ class TestMain {
 				instructionValues.set(argument.id, argument);
 			for (block in fn.blocks)
 				for (instruction in block.instructions)
-					for (parameter in HaxeType.enumParameters(instruction))
+					for (parameter in HaxeType.enumParameters(instruction.value))
 						collectInstructionValues(parameter, instructionValues);
 			for (block in fn.blocks)
 				for (instruction in block.instructions) {
-					var encoded = IrInstructionCodec.encode(instruction),
+					var encoded = IrInstructionCodec.encode(instruction.value),
 						decoded = IrInstructionCodec.decode(encoded, instructionValues);
-					if (Std.string(decoded) != Std.string(instruction))
+					if (Std.string(decoded) != Std.string(instruction.value))
 						throw "IR instruction did not round trip";
 				}
 		}
@@ -397,6 +402,30 @@ class TestMain {
 			decodedFunctions.push(decodedFunction);
 		}
 		IrFunctionStateCodec.verify(decodedFunctions, instructionProgram);
+		var provenanceProgram = Frontend.compileFile(new SourceFile("debug-lines.hx", "function main():Int {\n  var value = 41;\n  return value + 1;\n}")),
+			provenanceLines:Map<Int, Bool> = [];
+		for (fn in provenanceProgram.functions)
+			if (fn.name == "main")
+				for (block in fn.blocks) {
+					for (instruction in block.instructions) {
+						var location = instruction.provenance.location;
+						if (location != null && location.path == "debug-lines.hx")
+							provenanceLines.set(location.line, true);
+					}
+					var terminator = block.terminator;
+					if (terminator != null && terminator.provenance.location != null)
+						provenanceLines.set(terminator.provenance.location.line, true);
+				}
+		if (!provenanceLines.exists(2) || !provenanceLines.exists(3))
+			throw "SSA IR did not retain expression and statement source lines";
+		var debugCode = HlLower.lower(provenanceProgram),
+			debugBytes = HlWriter.encode(debugCode);
+		if (debugBytes.get(4) != 1)
+			throw "HLB writer did not enable function debug metadata";
+		for (fn in debugCode.functions)
+			if (fn.debugLocations.length != fn.opcodes.length)
+				throw "HashLink opcode debug locations are not total";
+		Sys.println("PASS: source provenance survives SSA and covers every lowered HashLink opcode");
 		var functionCache = new HlFunctionCache();
 		functionCache.update(instructionProgram.functions);
 		var functionCacheBytes = HlFunctionCacheStateCodec.encode(functionCache.exportState()),
