@@ -175,13 +175,20 @@ non-moving type arena.
 ./scripts/format.sh
 ./scripts/format.sh --check
 ./scripts/bootstrap-status.sh
+./scripts/bootstrap-compiler.sh
+./scripts/bootstrap-compiler.sh --self
 ./scripts/test-poc.sh
 ./test-hot-reload.sh
 ```
 
-Bootstrap/reference Haxe is downloaded below `.tools/`, while the runtime is
-built from the pinned `vendor/hashlink` submodule. Normal development will
-eventually use the checked-in bootstrap compiler instead of official Haxe.
+`./scripts/bootstrap-compiler.sh` uses the pinned reference Haxe to build
+`bootstrap/compiler.hl`, then uses that compiler to build a second compiler and
+requires byte-for-byte equality. The resulting artifact is checked in.
+`./scripts/bootstrap-compiler.sh --self` rebuilds it using the checked-in compiler
+and pinned HashLink without invoking reference Haxe; use this mode for ordinary
+compiler development after cloning and initializing the submodule. Both modes
+derive the same sorted source manifest from `src/` and build the native runtime
+bridge before invoking the compiler.
 
 The writer currently targets bytecode format version 6, matching the current
 HashLink decoder in `src/code.c`.

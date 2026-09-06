@@ -145,10 +145,12 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 
 ### E. Self-hosting and release engineering
 
-- [ ] Keep compiler sources inside the implemented subset.
-- [ ] Bootstrap compiler A with official Haxe.
-- [ ] Build compiler B using A and compare behavior against A.
-- [ ] Check in a reproducible `bootstrap/compiler.hl`.
+- [x] Keep compiler sources inside the implemented subset; the bootstrap
+  dashboard lexes, parses, and compiles all 82 compiler source files.
+- [x] Bootstrap compiler A with official Haxe.
+- [x] Build compiler B using A; the resulting HLB is byte-for-byte identical.
+- [x] Check in a reproducible `bootstrap/compiler.hl`; `bootstrap-compiler.sh
+  --self` rebuilds it identically without invoking official Haxe.
 - [ ] Build/test in CI from the pinned HashLink fork and formatter version.
 - [~] Differential suite: four paired programs currently compare official HL
 	and realtime HL behavior in the normal gate; broader collections, diagnostics,
@@ -256,10 +258,10 @@ second compiler or a second runtime.
 
 - Constrain compiler sources to the implemented subset and track unsupported
   syntax in the bootstrap dashboard.
-- Build compiler A with official Haxe, then compiler B with A; compare HLB,
-  diagnostics, and differential behavior rather than requiring byte identity.
-- Check in a reproducible bootstrap compiler and make official Haxe optional
-  for normal development and release builds.
+- Keep the exact compiler A/compiler B HLB comparison and broaden diagnostic
+  and differential comparisons as the supported language surface grows.
+- Use the checked-in bootstrap compiler for normal development; retain official
+  Haxe as the reproducible bootstrap and differential oracle.
 
 ### 7. Production conversion
 

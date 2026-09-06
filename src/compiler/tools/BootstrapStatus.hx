@@ -163,8 +163,7 @@ class BootstrapStatus {
 
 		var compiler = new Compiler();
 		CompilerRuntimeAbi.register(compiler);
-		for (path in paths)
-			compiler.update(projectPath(path, roots), File.getContent(path));
+		BootstrapSources.load(compiler, roots, paths);
 		try {
 			compiler.compile(entryModule);
 			return {
@@ -190,18 +189,6 @@ class BootstrapStatus {
 				error: Std.string(failure)
 			};
 		}
-	}
-
-	static function projectPath(path:String, roots:Array<String>):String {
-		var normalized = path.split("\\").join("/");
-		for (root in roots) {
-			var prefix = root.split("\\").join("/");
-			if (!StringTools.endsWith(prefix, "/"))
-				prefix += "/";
-			if (StringTools.startsWith(normalized, prefix))
-				return normalized.substr(prefix.length);
-		}
-		return normalized;
 	}
 
 	static function summarize(roots:Array<String>, files:Array<FileStatus>, project:ProjectStatus):BootstrapReport {
