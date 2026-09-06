@@ -1,22 +1,16 @@
 package compiler;
 
 import compiler.Ast;
-import compiler.Ast.AstExpression;
 import compiler.Ast.AstFunction;
-import compiler.Ast.AstStatement;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
-import compiler.Lexer;
-import compiler.Parser;
 import compiler.Source.SourceFile;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.IrGenerator;
-import compiler.types.FieldInference;
 import compiler.types.SignatureInference;
 import compiler.types.Typer;
 import compiler.types.Typer.TyperPhaseMetrics;
-import compiler.types.SemanticSignature;
 import compiler.types.GenericSpecializationRegistry;
 import compiler.types.SemanticProgram;
 import compiler.types.TypedAst.TypedProgram;
@@ -45,15 +39,9 @@ import compiler.CompilerPublication.ReconnectDecision;
 import compiler.CompilerPublication.ReconnectReason;
 import compiler.modules.ModuleGraph;
 import compiler.modules.ModulePath;
-import compiler.modules.ModuleReachability;
 import compiler.modules.ModuleState;
-import compiler.modules.ModuleState.SemanticDependency;
-import compiler.modules.ModuleState.SemanticDependencyKind;
 import compiler.semantic.ModuleCanonicalizer;
-import compiler.semantic.ModuleChangeAnalyzer;
-import compiler.semantic.DependencyScanner;
 import compiler.semantic.LambdaCollector;
-import compiler.semantic.SemanticDependencyCollector;
 import compiler.semantic.SemanticWorkspace;
 
 /** Public alias for a host-native declaration accepted by the compiler. */
@@ -344,93 +332,6 @@ class Compiler {
 		return "main";
 	}
 
-	function addTypeDependencies(state:ModuleState):Void {
-		var dependencies:Map<String, Bool> = [];
-		for (name in state.dependencies)
-			dependencies.set(name, true);
-		var ast = state.parsedAst();
-		for (alias in ast.aliases)
-			addModuleTypeDependency(alias.type, state, dependencies);
-		for (enumDecl in ast.enums)
-			for (caseDecl in enumDecl.cases)
-				for (parameter in caseDecl.params)
-					addModuleTypeDependency(parameter.type, state, dependencies);
-		for (interfaceDecl in ast.interfaces)
-			for (method in interfaceDecl.methods)
-				addFunctionTypeDependencies(method, state, dependencies);
-		for (classDecl in ast.classes) {
-			var base = classDecl.base;
-			if (base != null) {
-				var owner = sourceModuleForType(ModuleCanonicalizer.astTypeName(base), ast.packageName);
-				if (owner != null && owner != state.name)
-					dependencies.set(owner, true);
-			}
-			for (field in classDecl.fields)
-				addModuleTypeDependency(FieldInference.parsedType(field), state, dependencies);
-			for (method in classDecl.methods)
-				addFunctionTypeDependencies(method, state, dependencies);
-		}
-		for (fn in ast.functions)
-			addFunctionTypeDependencies(fn, state, dependencies);
-		state.dependencies = [for (name in dependencies.keys()) name];
-		state.dependencies.sort(Reflect.compare);
-	}
-
-	function addFunctionTypeDependencies(fn:AstFunction, state:ModuleState, dependencies:Map<String, Bool>):Void {
-		for (argument in fn.arguments)
-			addModuleTypeDependency(argument.type, state, dependencies);
-		addModuleTypeDependency(fn.result, state, dependencies);
-	}
-
-	function addModuleTypeDependency(type:compiler.Ast.AstType, state:ModuleState, dependencies:Map<String, Bool>):Void
-		switch type {
-			case NamedType(name):
-				var ast = state.parsedAst(),
-					owner = sourceModuleForType(name, ast.packageName);
-				if (owner != null && owner != state.name)
-					dependencies.set(owner, true);
-			case ArrayType(element), NullableType(element):
-				addModuleTypeDependency(element, state, dependencies);
-			case MapType(key, value):
-				addModuleTypeDependency(key, state, dependencies);
-				addModuleTypeDependency(value, state, dependencies);
-			case FunctionType(arguments, result):
-				for (argument in arguments)
-					addModuleTypeDependency(argument, state, dependencies);
-				addModuleTypeDependency(result, state, dependencies);
-			case AnonymousType(fields):
-				for (field in fields)
-					addModuleTypeDependency(field.type, state, dependencies);
-			default:
-		}
-
-	function sourceModuleForType(typeName:String, packageName:Null<String>):Null<String> {
-		var qualified = typeName.indexOf(".") < 0 && packageName != null ? packageName + "." + typeName : typeName,
-			module = sourceModuleForDependency(qualified);
-		if (module != null)
-			return module;
-		for (name => state in modules) {
-			var ast = state.ast;
-			if (ast == null)
-				continue;
-			var declaredPackage = ast.packageName,
-				prefix = declaredPackage == null ? "" : declaredPackage + ".";
-			for (declaration in ast.aliases)
-				if (prefix + declaration.name == qualified)
-					return name;
-			for (declaration in ast.enums)
-				if (prefix + declaration.name == qualified)
-					return name;
-			for (declaration in ast.interfaces)
-				if (prefix + declaration.name == qualified)
-					return name;
-			for (declaration in ast.classes)
-				if (prefix + declaration.name == qualified)
-					return name;
-		}
-		return null;
-	}
-
 	function rehydratedChanges(regenerated:Array<String>, program:IrProgram):Array<String> {
 		var baseline = rehydrationBaseline;
 		if (baseline == null)
@@ -553,199 +454,10 @@ class Compiler {
 		return result;
 	}
 
-	function parse(state:ModuleState, entry:String, bodyChanged:Map<String, Bool>, signatureChanged:Map<String, Bool>,
-			structuralChanged:Map<String, Bool>):Void {
-		if (state.ast != null)
-			return;
-		try {
-			state.tokens = new Lexer(state.source).tokenize();
-			state.ast = new Parser(state.tokens).parseProgram();
-			state.semanticModel = new compiler.types.SemanticModel(state.parsedAst(), state.source, state.revision);
-			state.parseVersion++;
-		} catch (error:CompileError) {
-			state.diagnostics.push(error.diagnostic);
-			throw error;
-		}
-		var ast = state.parsedAst(), dependencies:Map<String, Bool> = [];
-		for (dependency in ast.imports)
-			dependencies.set(dependency, true);
-		for (fn in ast.functions)
-			for (statement in fn.statements)
-				DependencyScanner.scanStatement(statement, dependencies);
-		for (classDecl in ast.classes)
-			for (field in classDecl.fields) {
-				var initializer = field.initializer;
-				if (initializer != null)
-					DependencyScanner.scanExpression(initializer, dependencies);
-			}
-		for (classDecl in ast.classes)
-			for (method in classDecl.methods)
-				for (statement in method.statements)
-					DependencyScanner.scanStatement(statement, dependencies);
-		for (abstractDecl in ast.abstracts)
-			for (method in abstractDecl.methods)
-				for (statement in method.statements)
-					DependencyScanner.scanStatement(statement, dependencies);
-		for (abstractDecl in ast.enumAbstracts)
-			for (value in abstractDecl.values)
-				DependencyScanner.scanExpression(value.value, dependencies);
-		for (classDecl in ast.classes) {
-			dependencies.remove(classDecl.name);
-			for (field in classDecl.fields)
-				dependencies.remove(field.name);
-		}
-		for (enumDecl in ast.enums)
-			dependencies.remove(enumDecl.name);
-		for (abstractDecl in ast.enumAbstracts)
-			dependencies.remove(abstractDecl.name);
-		for (abstractDecl in ast.abstracts)
-			dependencies.remove(abstractDecl.name);
-		for (importPath in ast.imports) {
-			var alias = lastPathSegment(importPath);
-			if (alias != importPath)
-				dependencies.remove(alias);
-		}
-		for (alias in ast.importAliases.keys())
-			dependencies.remove(alias);
-		// Dotted native names such as Sys.time look like module-qualified calls
-		// to the dependency scanner.  Registered natives own those prefixes and
-		// must not require a source module with the same name.
-		for (dependency in [for (dependency in dependencies.keys()) dependency])
-			if (nativePrefixExists(dependency))
-				dependencies.remove(dependency);
-		var packageName = ast.packageName;
-		for (dependency in [for (dependency in dependencies.keys()) dependency]) {
-			var sourceModule = sourceModuleForDependency(dependency);
-			if (sourceModule == null && isPlatformDependency(dependency)) {
-				dependencies.remove(dependency);
-				continue;
-			}
-			if (dependency.indexOf(".") < 0 && packageName != null) {
-				var packageCandidate = packageName + "." + dependency;
-				if (modules.exists(packageCandidate)) {
-					dependencies.remove(dependency);
-					dependencies.set(packageCandidate, true);
-					continue;
-				}
-			}
-			if (sourceModule == null && dependency.indexOf(".") < 0 && hasSourceModuleImport(ast.imports)) {
-				dependencies.remove(dependency);
-				continue;
-			}
-			if (sourceModule == null && dependency.indexOf(".") < 0 && packageName != null) {
-				var packageCandidate = packageName + "." + dependency;
-				dependencies.remove(dependency);
-				dependencies.set(packageCandidate, true);
-				continue;
-			}
-			if (sourceModule != null && sourceModule != dependency) {
-				dependencies.remove(dependency);
-				dependencies.set(sourceModule, true);
-			}
-		}
-		state.dependencies = [for (name in dependencies.keys()) name];
-		state.dependencies.sort(Reflect.compare);
-		var typeAliases = importAliases(ast.imports, ast.importAliases);
-		ModuleCanonicalizer.addDeclaredTypeAliases(typeAliases, ast, ast.packageName);
-		state.semanticDependencies = SemanticDependencyCollector.collectSemanticDependencies(state, entry, typeAliases);
-		var changes = ModuleChangeAnalyzer.analyze(state, entry, typeAliases, types, compiledOnce);
-		mergeChanges(bodyChanged, changes.bodyChanged);
-		mergeChanges(signatureChanged, changes.signatureChanged);
-		mergeChanges(structuralChanged, changes.structuralChanged);
-		state.signatureFingerprints = changes.signatureFingerprints;
-		state.bodyFingerprints = changes.bodyFingerprints;
-		state.interfaceFingerprints = changes.interfaceFingerprints;
-		state.aliasFingerprints = changes.aliasFingerprints;
-		state.enumFingerprints = changes.enumFingerprints;
-		state.staticInitializerFingerprints = changes.staticInitializerFingerprints;
-		state.instanceInitializerFingerprints = changes.instanceInitializerFingerprints;
-		state.dirty = false;
-	}
-
-	function hasSourceModuleImport(imports:Array<String>):Bool {
-		for (importPath in imports)
-			if (sourceModuleForDependency(importPath) != null)
-				return true;
-		return false;
-	}
-
-	static function lastPathSegment(path:String):String {
-		return compiler.QualifiedName.last(path);
-	}
-
-	static function firstPathSegment(path:String):String {
-		return compiler.QualifiedName.first(path);
-	}
-
-	static function parentPath(path:String):String {
-		return compiler.QualifiedName.parentOrEmpty(path);
-	}
-
-	static function mergeChanges(target:Map<String, Bool>, source:Map<String, Bool>):Void {
-		for (name in source.keys())
-			target.set(name, true);
-	}
-
 	static function mapIsEmpty(values:Map<String, Bool>):Bool {
 		for (_ in values.keys())
 			return false;
 		return true;
-	}
-
-	function importAliases(imports:Array<String>, explicit:Map<String, String>):Map<String, String> {
-		var aliases:Map<String, String> = [];
-		for (path in imports) {
-			var alias = lastPathSegment(path);
-			aliases.set(alias, importedDeclarationName(path));
-			aliases.set(path, importedDeclarationName(path));
-		}
-		for (alias => path in explicit) {
-			aliases.set(alias, importedDeclarationName(path));
-			aliases.set(path, importedDeclarationName(path));
-		}
-		return aliases;
-	}
-
-	function importedDeclarationName(path:String):String {
-		var sourceModule = sourceModuleForDependency(path);
-		if (sourceModule == null)
-			return path;
-		var moduleName:String = sourceModule;
-		if (moduleName == path)
-			return path;
-		var packageName = parentPath(moduleName),
-			nestedStart = moduleName.length + 1,
-			nestedName = path.substring(nestedStart, path.length);
-		return packageName.length == 0 ? nestedName : packageName + "." + nestedName;
-	}
-
-	function nativePrefixExists(prefix:String):Bool
-		return natives.hasChild(prefix);
-
-	function sourceModuleForDependency(path:String):Null<String> {
-		var candidate = path;
-		while (true) {
-			if (modules.exists(candidate))
-				return candidate;
-			var parent = parentPath(candidate);
-			if (parent.length == 0)
-				return null;
-			candidate = parent;
-		}
-	}
-
-	static function isPlatformDependency(path:String):Bool {
-		var root = firstPathSegment(path);
-		return root == "haxe" || root == "sys" || root == "hl" || root == "Array" || root == "String" || root == "Math" || root == "Reflect"
-			|| root == "Std" || root == "StringTools" || root == "Type";
-	}
-
-	static function signatureFingerprint(fn:AstFunction, aliases:Array<compiler.Ast.AstTypeAlias>):String
-		return SemanticSignature.parsedFunction(fn, aliases);
-
-	static function owner(name:String, entry:String):String {
-		var first = firstPathSegment(name);
-		return first == name ? entry : first;
 	}
 
 	static function copyIndices(source:Map<String, Int>):Map<String, Int> {

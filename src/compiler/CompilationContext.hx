@@ -8,6 +8,7 @@ import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrProgram;
 import compiler.modules.ModuleGraph;
 import compiler.modules.ModuleState;
+import compiler.semantic.ModuleAnalyzer;
 import compiler.types.GenericSpecializationRegistry;
 import compiler.types.SemanticProgram;
 import compiler.types.Type.CompilerType;
@@ -17,6 +18,7 @@ import haxe.io.Bytes;
 /** Narrow, typed access to mutable state needed while building a candidate. */
 class CompilationContext {
 	final owner:Compiler;
+	final moduleAnalyzer:ModuleAnalyzer;
 
 	public final modules:Map<String, ModuleState>;
 	public final graph:ModuleGraph;
@@ -36,19 +38,20 @@ class CompilationContext {
 		objectCache = owner.objectCache;
 		moduleId = owner.moduleId;
 		genericSpecializations = owner.genericSpecializations;
+		moduleAnalyzer = new ModuleAnalyzer(modules, owner.types, owner.natives, owner.compiledOnce);
 	}
 
 	public function writableState(name:String, rollback:Map<String, ModuleState>):ModuleState
 		return owner.writableState(name, rollback);
 
 	public function parse(state:ModuleState, entry:String, body:Map<String, Bool>, signatures:Map<String, Bool>, structural:Map<String, Bool>):Void
-		owner.parse(state, entry, body, signatures, structural);
+		moduleAnalyzer.parse(state, entry, body, signatures, structural);
 
 	public function addTypeDependencies(state:ModuleState):Void
-		owner.addTypeDependencies(state);
+		moduleAnalyzer.addTypeDependencies(state);
 
 	public function importAliases(imports:Array<String>, explicit:Map<String, String>):Map<String, String>
-		return owner.importAliases(imports, explicit);
+		return moduleAnalyzer.importAliases(imports, explicit);
 
 	public function executableEntryPoint(entry:String):String
 		return owner.executableEntryPoint(entry);
