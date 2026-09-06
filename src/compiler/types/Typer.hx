@@ -1423,7 +1423,7 @@ class Typer {
 								var bindingId = scope.requireId(name),
 									captureSource:TypedCaptureSource = if (scope.isCellCapture(name)) CaptureCellEnvironmentField(name,
 										scope.requireCellClass(name)) else if (scope.isCapture(name)) CaptureEnvironmentField(name) else if (cellClass != null)
-										CaptureCellLocal(name, cellClass) else CaptureLocal(bindingId);
+										CaptureCellLocal(name, cellClass) else CaptureLocal(name == "this" ? name : bindingId);
 								lambdaScope.defineCapture(name, captureType, span, cellClass != null, cellClass, bindingId);
 								if (cellClass != null)
 									captureCells.set(name, cellClass);
