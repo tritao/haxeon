@@ -11,13 +11,14 @@ import compiler.modules.ModulePath;
 import compiler.modules.ModuleState;
 import compiler.semantic.SemanticWorkspace.WorkspaceResolution;
 import compiler.semantic.SemanticIndex.SemanticSymbolId;
+import compiler.semantic.SemanticIndex.SemanticCompletionContext;
+import compiler.semantic.SemanticModel;
 import compiler.Compiler.CompileResult;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstStatement;
 import compiler.types.Type.CompilerType;
 import compiler.types.DeclarationIndex.DeclarationKind;
 import compiler.types.TypeRelations;
-import compiler.types.TypedAst.TypedStatement;
 import compiler.runtime.RuntimeNatives;
 
 /** Editor-facing declaration summary, optionally marked as stale. */
@@ -71,6 +72,14 @@ typedef SemanticSymbol = {
 	final key:String;
 	final location:SymbolLocation;
 	final functionSpan:Null<SourceSpan>;
+}
+
+private typedef SemanticQueryContext = {
+	final state:ModuleState;
+	final model:SemanticModel;
+	final symbol:Null<SemanticSymbolId>;
+	final completion:SemanticCompletionContext;
+	final stale:Bool;
 }
 
 /** Read-only editor queries backed by the persistent compiler state. */
@@ -223,11 +232,6 @@ class LanguageService {
 								detail: '${method.name}(${[for (argument in method.arguments) typeName(argument.type)].join(",")}):${typeName(method.result)}'
 							});
 				}
-			if (semanticContext == null || semanticContext.receiver == null) {
-				var receiverType = qualifierType(path, qualifier, position);
-				if (receiverType != null)
-					addInstanceMembers(receiverType, prefix, result);
-			}
 			if (result.length > 0) {
 				sortCompletion(result);
 				tagResults(result, state);
@@ -285,10 +289,11 @@ class LanguageService {
 					for (field in classDecl.fields)
 						if (field.name == name && field.isStatic)
 							return '${field.name}:${typeName(field.type)}';
-			var receiverType = qualifierType(path, qualifier, position),
+			var model = effectiveSemanticModel(state),
+				context = model == null ? null : model.index.completionContext(position, qualifier),
 				members:Array<CompletionItem> = [];
-			if (receiverType != null) {
-				addInstanceMembers(receiverType, name, members);
+			if (context != null && context.receiver != null) {
+				addInstanceMembers(context.receiver, name, members);
 				if (members.length > 0)
 					return members[0].detail;
 			}
@@ -374,17 +379,15 @@ class LanguageService {
 		var indexed = indexedDefinition(path, position);
 		if (indexed != null)
 			return indexed;
-		var symbol = resolveSymbol(path, position);
+		var symbol = recoverySymbol(path, position);
 		return symbol == null ? null : symbol.location;
 	}
 
 	function indexedDefinition(path:String, position:Int):Null<SymbolLocation> {
-		var state = stateFor(path),
-			model = state == null ? null : effectiveSemanticModel(state);
-		if (state == null || model == null)
+		var context = semanticQuery(path, position);
+		if (context == null)
 			return null;
-		var id = model.index.symbolIdAt(position),
-			resolved = id == null ? null : compiler.semanticWorkspace.indexedSymbol(id);
+		var resolved = context.symbol == null ? null : compiler.semanticWorkspace.indexedSymbol(context.symbol);
 		return resolved == null ? null : {
 			path: resolved.symbol.declaration.file.path,
 			span: resolved.symbol.declaration,
@@ -397,7 +400,7 @@ class LanguageService {
 		var indexed = indexedReferences(path, position);
 		if (indexed != null)
 			return indexed;
-		var target = resolveSymbol(path, position),
+		var target = recoverySymbol(path, position),
 			result:Array<SymbolLocation> = [];
 		if (target == null)
 			return result;
@@ -406,7 +409,7 @@ class LanguageService {
 			if (tokens != null)
 				for (token in tokens)
 					if (token.kind == Identifier) {
-						var candidate = resolveSymbol(state.source.path, token.span.start + 1);
+						var candidate = recoverySymbol(state.source.path, token.span.start + 1);
 						if (candidate != null && candidate.key == target.key)
 							result.push({
 								path: state.source.path,
@@ -424,11 +427,10 @@ class LanguageService {
 	}
 
 	function indexedReferences(path:String, position:Int):Null<Array<SymbolLocation>> {
-		var state = stateFor(path),
-			model = state == null ? null : effectiveSemanticModel(state);
-		if (state == null || model == null)
+		var context = semanticQuery(path, position);
+		if (context == null)
 			return null;
-		var id = model.index.symbolIdAt(position);
+		var id = context.symbol;
 		if (id == null)
 			return null;
 		return [
@@ -443,11 +445,10 @@ class LanguageService {
 	}
 
 	public function rename(path:String, position:Int, replacement:String):Array<TextEdit> {
-		var state = stateFor(path),
-			model = state == null ? null : effectiveSemanticModel(state),
-			indexedId = model == null ? null : model.index.symbolIdAt(position),
+		var context = semanticQuery(path, position),
+			indexedId = context == null ? null : context.symbol,
 			name = symbolAt(path, position),
-			legacyTarget = indexedId == null ? resolveSymbol(path, position) : null,
+			legacyTarget = indexedId == null ? recoverySymbol(path, position) : null,
 			result:Array<TextEdit> = [];
 		if (name == null || !isIdentifier(replacement) || replacement == name)
 			return result;
@@ -455,7 +456,7 @@ class LanguageService {
 		if (indexedId != null) {
 			if (indexedRenameCollides(indexedId, replacement, targetReferences))
 				return result;
-		} else if (legacyTarget == null || renameCollides(legacyTarget, replacement, targetReferences))
+		} else if (legacyTarget == null || recoveryRenameCollides(legacyTarget, replacement, targetReferences))
 			return result;
 		for (reference in targetReferences)
 			result.push({
@@ -515,7 +516,7 @@ class LanguageService {
 		return separator < 0 ? name : name.substring(0, separator);
 	}
 
-	function renameCollides(target:SemanticSymbol, replacement:String, affected:Array<SymbolLocation>):Bool {
+	function recoveryRenameCollides(target:SemanticSymbol, replacement:String, affected:Array<SymbolLocation>):Bool {
 		var affectedPaths:Map<String, Bool> = [];
 		for (location in affected)
 			affectedPaths.set(location.path, true);
@@ -526,7 +527,7 @@ class LanguageService {
 			if (tokens != null)
 				for (token in tokens)
 					if (token.kind == Identifier && token.text == replacement) {
-						var existing = resolveSymbol(state.source.path, token.span.start + 1);
+						var existing = recoverySymbol(state.source.path, token.span.start + 1);
 						if (existing != null && existing.key != target.key)
 							return true;
 					}
@@ -554,7 +555,20 @@ class LanguageService {
 		return true;
 	}
 
-	function resolveSymbol(path:String, position:Int):Null<SemanticSymbol> {
+	function semanticQuery(path:String, position:Int, ?qualifier:String):Null<SemanticQueryContext> {
+		var state = stateFor(path),
+			model = state == null ? null : effectiveSemanticModel(state);
+		return state == null || model == null ? null : {
+			state: state,
+			model: model,
+			symbol: model.index.symbolIdAt(position),
+			completion: model.index.completionContext(position, qualifier),
+			stale: snapshotRevision(state) != state.revision
+		};
+	}
+
+	/** Syntax recovery used only when a revision has no semantic binding at the cursor. */
+	function recoverySymbol(path:String, position:Int):Null<SemanticSymbol> {
 		var state = stateFor(path),
 			tokens = state == null ? null : effectiveTokens(state),
 			ast = state == null ? null : effectiveAst(state);
@@ -602,7 +616,8 @@ class LanguageService {
 			&& tokens[tokenIndex - 1].kind == Dot
 			&& tokens[tokenIndex - 2].kind == Identifier ? tokens[tokenIndex - 2].text : null;
 		if (qualifier != null) {
-			var receiverType = qualifierType(path, qualifier, position);
+			var completion = model == null ? null : model.index.completionContext(position, qualifier),
+				receiverType = completion == null ? null : completion.receiver;
 			if (receiverType != null) {
 				var member = memberSymbol(receiverType, token.text);
 				if (member != null)
@@ -781,106 +796,6 @@ class LanguageService {
 				DoWhile(_, _,
 					span), ForIn(_, _, _, _, span), Break(span), Continue(span), Switch(_, _, _, _, span), Increment(_, _, span), Expression(_, span): span;
 		};
-
-	static function localDeclaration(statements:Array<AstStatement>, name:String):Null<SourceSpan> {
-		for (statement in statements)
-			switch statement {
-				case UninitializedDeclaration(local, _, span), VarDeclaration(local, _, _, span):
-					if (local == name)
-						return span;
-				case If(_, yes, no, _):
-					var declaration = localDeclaration(yes, name);
-					if (declaration == null)
-						declaration = localDeclaration(no, name);
-					if (declaration != null)
-						return declaration;
-				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _):
-					var declaration = localDeclaration(body, name);
-					if (declaration != null)
-						return declaration;
-				case Switch(_, cases, defaultBranch, _, _):
-					for (switchCase in cases) {
-						var declaration = localDeclaration(switchCase.statements, name);
-						if (declaration != null)
-							return declaration;
-					}
-					var declaration = localDeclaration(defaultBranch, name);
-					if (declaration != null)
-						return declaration;
-				default:
-			}
-		return null;
-	}
-
-	function qualifierType(path:String, qualifier:String, position:Int):Null<CompilerType> {
-		var state = stateFor(path);
-		if (state == null)
-			return null;
-		for (fn in state.typedFunctions)
-			if (position >= fn.span.start && position <= fn.span.end) {
-				if (qualifier == "this" && fn.owner != null)
-					return TInstance(Class, fn.owner, []);
-				for (argument in fn.arguments)
-					if (sourceLocalName(argument.name) == qualifier)
-						return argument.type;
-				var local = localType(fn.statements, qualifier);
-				if (local != null)
-					return local;
-			}
-		return null;
-	}
-
-	static function localType(statements:Array<TypedStatement>, name:String):Null<CompilerType> {
-		for (statement in statements)
-			switch statement {
-				case TDeclare(local, type, _):
-					if (sourceLocalName(local) == name)
-						return type;
-				case TVar(local, initializer, _):
-					if (sourceLocalName(local) == name)
-						return initializer.type;
-				case TForIn(local, valueLocal, iterable, body, _):
-					if (sourceLocalName(local) == name)
-						return switch iterable.type {
-							case TArray(element): element;
-							case TMap(key, _): key;
-							default: null;
-						};
-					if (valueLocal != null && sourceLocalName(valueLocal) == name)
-						return switch iterable.type {
-							case TMap(_, value): value;
-							default: null;
-						};
-					var loopType = localType(body, name);
-					if (loopType != null)
-						return loopType;
-				case TIf(_, yes, no, _):
-					var branchType = localType(yes, name);
-					if (branchType == null)
-						branchType = localType(no, name);
-					if (branchType != null)
-						return branchType;
-				case TWhile(_, body, _):
-					var loopType = localType(body, name);
-					if (loopType != null)
-						return loopType;
-				case TDoWhile(body, _, _):
-					var loopType = localType(body, name);
-					if (loopType != null)
-						return loopType;
-				case TSwitch(_, cases, defaultBranch, _, _):
-					for (switchCase in cases) {
-						var caseType = localType(switchCase.statements, name);
-						if (caseType != null)
-							return caseType;
-					}
-					var defaultType = localType(defaultBranch, name);
-					if (defaultType != null)
-						return defaultType;
-				default:
-			}
-		return null;
-	}
 
 	static function sourceLocalName(identity:String):String {
 		var separator = identity.indexOf(":");
