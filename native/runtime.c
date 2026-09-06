@@ -886,14 +886,13 @@ HL_PRIM vdynamic *HL_NAME(call_closure)( hl_runtime_module *runtime, int stable_
 	return (vdynamic*)result;
 }
 
-HL_PRIM int HL_NAME(call_closure_i32)( vclosure *closure ) {
-	vdynamic *result;
-	bool raised = false;
-	if( closure == NULL || closure->t->kind != HFUN || closure->t->fun->nargs != 0 || closure->t->fun->ret->kind != HI32 )
-		hl_error("Invalid retained runtime closure");
-	result = hl_dyn_call_safe(closure,NULL,0,&raised);
-	if( raised ) realtime_raise_module_exception();
-	return result->v.i;
+HL_PRIM int HL_NAME(call_closure_i32)( hl_runtime_module *runtime, vclosure *closure ) {
+	int result = 0;
+	vdynamic *exception = NULL;
+	hl_runtime_status status = hl_runtime_module_call_retained_closure_i32(runtime,closure,&result,&exception);
+	if( status == HL_RUNTIME_EXCEPTION ) realtime_raise_module_exception();
+	if( status != HL_RUNTIME_OK ) hl_error("Invalid retained runtime closure (status %d)",status);
+	return result;
 }
 
 HL_PRIM vdynamic *HL_NAME(call_object)( hl_runtime_module *runtime, int stable_id ) {
@@ -974,7 +973,7 @@ DEFINE_PRIM(_VOID,call_void,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_BYTES,call_bytes,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_VOID,call_bytes1,_ABSTRACT(realtime_module) _I32 _BYTES);
 DEFINE_PRIM(_DYN,call_closure,_ABSTRACT(realtime_module) _I32);
-DEFINE_PRIM(_I32,call_closure_i32,_DYN);
+DEFINE_PRIM(_I32,call_closure_i32,_ABSTRACT(realtime_module) _DYN);
 DEFINE_PRIM(_DYN,call_object,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_I32,call_i32_object,_ABSTRACT(realtime_module) _I32 _DYN);
 DEFINE_PRIM(_I32,validate_call,_ABSTRACT(realtime_module) _I32 _I32);

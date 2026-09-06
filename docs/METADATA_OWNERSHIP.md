@@ -72,3 +72,10 @@ the loaded `hl_module` as that owner, and the runtime reports them separately
 from managed allocations. Process-global runtime roots remain unowned. Removing
 a root removes its ownership record in the same GC-locked operation, so the
 count describes the current root set rather than historical registrations.
+
+All host-mediated execution of module code, including calls through retained
+closures, holds the runtime-module mutex. Acquiring that mutex for retirement is
+therefore the active-call quiescence proof. The host keeps each retained value
+paired with its originating `LoadedModule`; the native call bridge receives that
+module explicitly and does not infer ownership from the closure's header type,
+which may be synthetic.

@@ -52,6 +52,24 @@ class LoadedModule {
 	}
 
 	@:allow(runtime.RetainedValue)
+	function accessBorrowed<T>(operation:hl.Abstract<"realtime_module">->T):T {
+		mutex.acquire();
+		var current = handle;
+		if (current == null || borrowers <= 0) {
+			mutex.release();
+			throw new RuntimeError(RuntimeStatus.BadArgument, "Retained runtime module is unavailable");
+		}
+		try {
+			var result = operation(current);
+			mutex.release();
+			return result;
+		} catch (error:Dynamic) {
+			mutex.release();
+			throw error;
+		}
+	}
+
+	@:allow(runtime.RetainedValue)
 	function release():Void {
 		mutex.acquire();
 		if (borrowers <= 0) {

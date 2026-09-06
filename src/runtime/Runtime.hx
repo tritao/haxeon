@@ -21,7 +21,7 @@ private class RuntimeNative {
 	public static function call_closure(module:hl.Abstract<"realtime_module">, index:Int):Dynamic
 		return null;
 
-	public static function call_closure_i32(closure:Dynamic):Int
+	public static function call_closure_i32(module:hl.Abstract<"realtime_module">, closure:Dynamic):Int
 		return 0;
 
 	public static function call_object(module:hl.Abstract<"realtime_module">, index:Int):Dynamic
@@ -111,7 +111,7 @@ class Runtime {
 		return new RetainedValue(module, retain(module, stableIndex, 4, function(handle) return RuntimeNative.call_closure(handle, stableIndex)));
 
 	public static function callRetainedClosureInt(closure:RetainedValue):Int
-		return RuntimeNative.call_closure_i32(closure.get());
+		return closure.access(RuntimeNative.call_closure_i32);
 
 	public static function retainObject(module:LoadedModule, stableIndex:Int):RetainedValue
 		return new RetainedValue(module, retain(module, stableIndex, 5, function(handle) return RuntimeNative.call_object(handle, stableIndex)));

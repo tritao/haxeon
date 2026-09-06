@@ -18,6 +18,14 @@ class RetainedValue {
 		return value;
 	}
 
+	@:allow(runtime.Runtime)
+	function access<T>(operation:hl.Abstract<"realtime_module">->Dynamic->T):T {
+		var retained = value;
+		if (retained == null)
+			throw new RuntimeError(RuntimeStatus.BadArgument, "Retained runtime value has been released");
+		return module.accessBorrowed(function(handle) return operation(handle, retained));
+	}
+
 	public function release():Void {
 		if (value == null)
 			return;
