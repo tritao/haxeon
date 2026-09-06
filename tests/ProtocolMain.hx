@@ -2,6 +2,27 @@ import editor.LanguageServiceProtocol;
 import compiler.service.CancellationToken;
 import haxe.Json;
 
+class CheckpointCancellationToken extends CancellationToken {
+	final entered:sys.thread.Lock;
+	final resume:sys.thread.Lock;
+	var first = true;
+
+	public function new(entered:sys.thread.Lock, resume:sys.thread.Lock) {
+		super();
+		this.entered = entered;
+		this.resume = resume;
+	}
+
+	public override function check():Void {
+		if (first) {
+			first = false;
+			entered.release();
+			resume.wait();
+		}
+		super.check();
+	}
+}
+
 class ProtocolMain {
 	static function main():Void {
 		var protocol = new LanguageServiceProtocol();
@@ -148,25 +169,23 @@ class ProtocolMain {
 			path: "Large.hx",
 			source: source
 		})));
-		var ready = new sys.thread.Lock(), done = new sys.thread.Lock(), response = "";
+		var entered = new sys.thread.Lock(), resume = new sys.thread.Lock(), done = new sys.thread.Lock(), response = "",
+			token = new CheckpointCancellationToken(entered, resume);
 		sys.thread.Thread.create(function() {
-			ready.release();
-			response = protocol.handle('{"id":99,"method":"compile","entry":"Large"}');
+			response = protocol.handleWithToken('{"id":99,"method":"compile","entry":"Large"}', token);
 			done.release();
 		});
-		ready.wait();
-		var duplicate:Dynamic = null;
-		for (_ in 0...10000) {
-			duplicate = Json.parse(protocol.handle('{"id":99,"method":"diagnostics","path":"Large.hx"}'));
-			if (!duplicate.ok && duplicate.error.code == "E_DUPLICATE_REQUEST")
-				break;
-		}
+		entered.wait();
+		var duplicate:Dynamic = Json.parse(protocol.handle('{"id":99,"method":"diagnostics","path":"Large.hx"}'));
 		if (duplicate == null || duplicate.ok || duplicate.error.code != "E_DUPLICATE_REQUEST")
 			throw "protocol did not reject a duplicate active request id";
 		if (protocol.cancel("99"))
 			throw "protocol conflated string and numeric request ids";
-		if (!protocol.cancel(99) || !done.wait(5.0))
+		if (!protocol.cancel(99))
 			throw "protocol did not cancel an active request safely";
+		resume.release();
+		if (!done.wait(5.0))
+			throw "cancelled protocol request did not unwind safely";
 		var cancelled:Dynamic = Json.parse(response);
 		if (cancelled.ok || cancelled.error.code != "E_CANCELLED")
 			throw "concurrent compile did not return cancellation";
