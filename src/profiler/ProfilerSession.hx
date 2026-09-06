@@ -55,6 +55,31 @@ class ProfileEvent {
 	}
 }
 
+class ProfileLeaf {
+	public final timestamp:Float;
+	public final threadId:Int;
+	public final address:Int64;
+	public final offset:Null<Int>;
+	public final functionName:Null<String>;
+	public final opcodeIndex:Null<Int>;
+	public final opcode:Null<Int>;
+	public final file:Null<String>;
+	public final line:Null<Int>;
+
+	public function new(timestamp:Float, threadId:Int, address:Int64, ?offset:Int, ?functionName:String, ?opcodeIndex:Int, ?opcode:Int, ?file:String,
+			?line:Int) {
+		this.timestamp = timestamp;
+		this.threadId = threadId;
+		this.address = address;
+		this.offset = offset;
+		this.functionName = functionName;
+		this.opcodeIndex = opcodeIndex;
+		this.opcode = opcode;
+		this.file = file;
+		this.line = line;
+	}
+}
+
 class ProfilerSnapshot {
 	public final state:ProfilerSessionState;
 	public final samples:Int;
@@ -64,6 +89,7 @@ class ProfilerSnapshot {
 	public final lines:Array<ProfileAggregate>;
 	public final stacks:Array<ProfileStack>;
 	public final events:Array<ProfileEvent>;
+	public final leaves:Array<ProfileLeaf>;
 	public final metadataSchema:Int;
 	public final metadataRevisions:Map<String, Int>;
 	public final pendingBytes:Int;
@@ -78,6 +104,7 @@ class ProfilerSnapshot {
 		lines = session.lineAggregates();
 		stacks = session.stackAggregates();
 		events = session.events.copy();
+		leaves = session.leaves.copy();
 		metadataSchema = session.metadata == null ? 0 : session.metadata.schema;
 		metadataRevisions = session.metadata == null ? new Map() : session.metadata.revisions.copy();
 		pendingBytes = session.pendingBytes();
@@ -95,6 +122,9 @@ class ProfilerSession {
 	public var lastError(default, null):Null<String>;
 	public var metadataRefreshSeconds:Float = 5.0;
 	public final events:Array<ProfileEvent> = [];
+	public final leaves:Array<ProfileLeaf> = [];
+	public var leafCapacity:Int = 256;
+	public var eventCapacity:Int = 256;
 
 	final client:HldiClient;
 	final decoder = new HldiStreamDecoder();
@@ -165,6 +195,7 @@ class ProfilerSession {
 		lines.clear();
 		stacks.clear();
 		events.resize(0);
+		leaves.resize(0);
 	}
 
 	public function close():Void {
@@ -193,9 +224,15 @@ class ProfilerSession {
 	function consume(record:HldiRecord):Void {
 		if (record.kind == 2) {
 			events.push(new ProfileEvent(record.timestamp, record.threadId, record.value, record.payload));
+			if (eventCapacity <= 0)
+				events.resize(0);
+			else if (events.length > eventCapacity)
+				events.splice(0, events.length - eventCapacity);
 			return;
 		}
 		samples++;
+		if (record.frames.length != 0)
+			captureLeaf(record);
 		var resolved:Array<{symbol:HldiSymbol, line:Null<HldiSourceLine>}> = [];
 		for (address in record.frames) {
 			var symbol = resolve(address);
@@ -230,6 +267,23 @@ class ProfilerSession {
 			}
 			stack.samples++;
 		}
+	}
+
+	function captureLeaf(record:HldiRecord):Void {
+		var address = record.frames[0], symbol = resolve(address);
+		if (symbol == null)
+			leaves.push(new ProfileLeaf(record.timestamp, record.threadId, address));
+		else {
+			var relative = Int64.sub(address, symbol.start), offset:Null<Int> = relative.high == 0 ? relative.low : null,
+				location = symbol.sourceAt(address);
+			leaves.push(location == null
+				? new ProfileLeaf(record.timestamp, record.threadId, address, offset, symbol.name)
+				: new ProfileLeaf(record.timestamp, record.threadId, address, offset, symbol.name, location.opcodeIndex, location.opcode, location.file, location.line));
+		}
+		if (leafCapacity <= 0)
+			leaves.resize(0);
+		else if (leaves.length > leafCapacity)
+			leaves.splice(0, leaves.length - leafCapacity);
 	}
 
 	function resolve(address:Int64):Null<HldiSymbol> {

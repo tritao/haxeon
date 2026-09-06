@@ -37,6 +37,7 @@ class LspDispatcher {
 		this.capacity = capacity;
 		debounceSeconds = debounceMs / 1000.0;
 		protocol.enableDeferredDiagnostics();
+		protocol.enableProfilerNotifications(emit);
 		Thread.create(run);
 		Thread.create(runDebounce);
 	}
@@ -90,6 +91,7 @@ class LspDispatcher {
 		available.release();
 		stopped.wait();
 		debounceStopped.wait();
+		protocol.dispose();
 	}
 
 	function run():Void {

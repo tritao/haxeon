@@ -25,6 +25,7 @@ private class LspRequestError {
 class LspProtocol {
 	final service:LanguageService;
 	final documents = new DocumentStore();
+	final profiler = new ProfilerService();
 
 	public final project = new ProjectWorkspace();
 
@@ -68,10 +69,13 @@ class LspProtocol {
 				case "initialized": [watcherRegistration()];
 				case "shutdown":
 					shutdownRequested = true;
+					profiler.close();
 					[response(id, null)];
 				case "exit":
 					exitRequested = true;
+					profiler.close();
 					[];
+				case "workspace/executeCommand": [response(id, executeCommand(request))];
 				case "textDocument/didOpen": synchronize(request, true);
 				case "textDocument/didChange": synchronize(request, false);
 				case "textDocument/didClose": closeDocument(request);
@@ -102,6 +106,12 @@ class LspProtocol {
 
 	public function shouldExit():Bool
 		return exitRequested;
+
+	public function enableProfilerNotifications(emit:String->Void):Void
+		profiler.setEmitter(snapshot -> emit(notification("haxeon/profilerSnapshot", snapshot)));
+
+	public function dispose():Void
+		profiler.close();
 
 	public function enableDeferredDiagnostics():Void
 		deferDiagnostics = true;
@@ -209,10 +219,31 @@ class LspProtocol {
 				definitionProvider: true,
 				referencesProvider: true,
 				renameProvider: {prepareProvider: true},
+				executeCommandProvider: {
+					commands: [
+						"haxeon.profiler.connect",
+						"haxeon.profiler.start",
+						"haxeon.profiler.pause",
+						"haxeon.profiler.poll",
+						"haxeon.profiler.reset",
+						"haxeon.profiler.snapshot",
+						"haxeon.profiler.disconnect"
+					]
+				},
 				workspace: {workspaceFolders: {supported: true, changeNotifications: true}}
 			},
 			serverInfo: {name: "haxeon", version: "0.1.0"}
 		};
+
+	function executeCommand(request:Dynamic):Dynamic {
+		var params = required(request, "params"), command = requiredString(params, "command"), rawArguments:Dynamic = Reflect.field(params, "arguments"),
+			arguments:Array<Dynamic> = rawArguments == null ? [] : cast rawArguments;
+		if (!Std.isOfType(arguments, Array))
+			throw 'Field "arguments" must be an array';
+		if (!StringTools.startsWith(command, "haxeon.profiler."))
+			throw new LspRequestError(-32602, 'Unsupported command "$command"');
+		return profiler.execute(command, arguments);
+	}
 
 	function synchronize(request:Dynamic, opening:Bool):Array<String> {
 		var params:Dynamic = required(request, "params"), textDocument:Dynamic = required(params, "textDocument"), uri = requiredString(textDocument, "uri"),
