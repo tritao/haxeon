@@ -3,6 +3,8 @@ package editor;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.modules.ModulePath;
+import compiler.service.CancellationError;
+import compiler.service.CancellationToken;
 import compiler.service.LanguageService;
 import editor.lsp.DocumentStore;
 import editor.lsp.DocumentStore.LspDocument;
@@ -23,6 +25,9 @@ class LspProtocol {
 	final service:LanguageService;
 	final documents = new DocumentStore();
 	final publishedDiagnostics:Map<String, String> = [];
+	final activeRequests:Map<String, CancellationToken> = [];
+	final requestMutex = new sys.thread.Mutex();
+	var analysisGeneration = 0;
 	var shutdownRequested = false;
 	var exitRequested = false;
 
@@ -57,18 +62,22 @@ class LspProtocol {
 				case "textDocument/didChange": synchronize(request, false);
 				case "textDocument/didClose": close(request);
 				case "textDocument/documentSymbol": [response(id, documentSymbols(request))];
-				case "textDocument/completion": [response(id, completion(request))];
+				case "textDocument/completion": cancellable(id, token -> completion(request, token));
 				case "textDocument/hover": [response(id, hover(request))];
 				case "textDocument/signatureHelp": [response(id, signatureHelp(request))];
 				case "textDocument/definition": [response(id, definition(request))];
-				case "textDocument/references": [response(id, references(request))];
+				case "textDocument/references": cancellable(id, token -> references(request, token));
 				case "textDocument/prepareRename": [response(id, prepareRename(request))];
 				case "textDocument/rename": [response(id, rename(request))];
-				case "$/cancelRequest": [];
+				case "$/cancelRequest":
+					cancel(request);
+					[];
 				default: id == null ? [] : [error(id, -32601, 'Method not found: $method')];
 			};
 		} catch (failure:LspRequestError) {
 			return id == null ? [] : [error(id, failure.code, failure.message)];
+		} catch (_:CancellationError) {
+			return id == null ? [] : [error(id, -32800, "Request cancelled")];
 		} catch (failure:Dynamic) {
 			return id == null ? [] : [error(id, -32603, Std.string(failure))];
 		}
@@ -109,6 +118,7 @@ class LspProtocol {
 		var document = opening ? documents.open(uri, version, source) : documents.replace(uri, version, source);
 		if (document == null)
 			return [];
+		var generation = ++analysisGeneration;
 		var path = document.path;
 		service.update(path, document.source);
 		var changedModule = ModulePath.fromFile(path),
@@ -119,7 +129,7 @@ class LspProtocol {
 			try
 				service.analyze(target)
 			catch (_:CompileError) {}
-		return diagnosticNotifications();
+		return generation == analysisGeneration ? diagnosticNotifications(generation) : [];
 	}
 
 	function close(request:Dynamic):Array<String> {
@@ -129,16 +139,17 @@ class LspProtocol {
 		return [notification("textDocument/publishDiagnostics", {uri: uri, diagnostics: []})];
 	}
 
-	function diagnosticNotifications():Array<String> {
-		var result:Array<String> = [],
+	function diagnosticNotifications(generation:Int):Array<String> {
+		var pending:Array<{uri:String, fingerprint:String, message:String}> = [],
 			states = [for (state in service.compiler.modules) state];
 		states.sort(function(left, right) return Reflect.compare(left.source.path, right.source.path));
 		for (state in states) {
+			if (generation != analysisGeneration)
+				return [];
 			var uri = documents.uri(state.source.path),
 				fingerprint = diagnosticFingerprint(state.diagnostics);
 			if (publishedDiagnostics.get(uri) == fingerprint)
 				continue;
-			publishedDiagnostics.set(uri, fingerprint);
 			var params:Dynamic = {
 				uri: uri,
 				diagnostics: [for (diagnostic in state.diagnostics) diagnosticJson(diagnostic)]
@@ -146,9 +157,13 @@ class LspProtocol {
 			var open = documents.forPath(state.source.path);
 			if (open != null)
 				Reflect.setField(params, "version", open.version);
-			result.push(notification("textDocument/publishDiagnostics", params));
+			pending.push({uri: uri, fingerprint: fingerprint, message: notification("textDocument/publishDiagnostics", params)});
 		}
-		return result;
+		if (generation != analysisGeneration)
+			return [];
+		for (publication in pending)
+			publishedDiagnostics.set(publication.uri, publication.fingerprint);
+		return [for (publication in pending) publication.message];
 	}
 
 	static function diagnosticFingerprint(diagnostics:Array<Diagnostic>):String
@@ -177,13 +192,13 @@ class LspProtocol {
 		];
 	}
 
-	function completion(request:Dynamic):Dynamic {
+	function completion(request:Dynamic, token:CancellationToken):Dynamic {
 		var document = document(request),
 			offset = positionOffset(document, position(request));
 		return {
 			isIncomplete: false,
 			items: [
-				for (item in service.complete(document.path, offset))
+				for (item in service.complete(document.path, offset, token))
 					{
 						label: item.label,
 						kind: completionKind(item.kind),
@@ -223,15 +238,50 @@ class LspProtocol {
 		return location == null ? null : locationJson(location.path, location.span.start, location.span.end);
 	}
 
-	function references(request:Dynamic):Array<Dynamic> {
+	function references(request:Dynamic, token:CancellationToken):Array<Dynamic> {
 		var document = document(request);
 		requireCurrent(document);
-		var locations = service.references(document.path, positionOffset(document, position(request)));
+		var locations = service.references(document.path, positionOffset(document, position(request)), token);
 		return [
 			for (location in locations)
 				locationJson(location.path, location.span.start, location.span.end)
 		];
 	}
+
+	function cancellable(id:Dynamic, query:CancellationToken->Dynamic):Array<String> {
+		var token = new CancellationToken(), key = requestKey(id);
+		requestMutex.acquire();
+		activeRequests.set(key, token);
+		requestMutex.release();
+		try {
+			var result = query(token);
+			removeRequest(key);
+			return [response(id, result)];
+		} catch (failure:Dynamic) {
+			removeRequest(key);
+			throw failure;
+		}
+	}
+
+	function cancel(request:Dynamic):Void {
+		var id = Reflect.field(required(request, "params"), "id");
+		if (id == null)
+			return;
+		requestMutex.acquire();
+		var token = activeRequests.get(requestKey(id));
+		if (token != null)
+			token.cancel();
+		requestMutex.release();
+	}
+
+	function removeRequest(key:String):Void {
+		requestMutex.acquire();
+		activeRequests.remove(key);
+		requestMutex.release();
+	}
+
+	static function requestKey(id:Dynamic):String
+		return Json.stringify(id);
 
 	function prepareRename(request:Dynamic):Dynamic {
 		var document = document(request);

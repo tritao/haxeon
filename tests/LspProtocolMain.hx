@@ -2,7 +2,20 @@ import editor.LspProtocol;
 import editor.lsp.DocumentStore;
 import editor.lsp.DocumentStore.LspDocument;
 import haxe.Json;
+import compiler.service.CancellationToken;
 import compiler.service.LanguageService;
+import compiler.service.LanguageService.CompletionItem;
+
+class BlockingLanguageService extends LanguageService {
+	public final entered = new sys.thread.Lock();
+	public final resume = new sys.thread.Lock();
+
+	public override function complete(path:String, position:Int, ?token:CancellationToken):Array<CompletionItem> {
+		entered.release();
+		resume.wait();
+		return super.complete(path, position, token);
+	}
+}
 
 class LspProtocolMain {
 	static function main():Void {
@@ -82,6 +95,37 @@ class LspProtocolMain {
 				foundRankedCall = true;
 		if (!foundRankedCall)
 			throw "LSP completion omitted compiler ranking or insertion metadata";
+		var blockingService = new BlockingLanguageService(),
+			blockingProtocol = new LspProtocol(blockingService),
+			cancelledResponse:Array<String> = null,
+			cancelledDone = new sys.thread.Lock();
+		blockingProtocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: uri,
+					languageId: "haxe",
+					version: 1,
+					text: source
+				}
+			}
+		}));
+		sys.thread.Thread.create(() -> {
+			cancelledResponse = blockingProtocol.handle(Json.stringify({
+				jsonrpc: "2.0",
+				id: 88,
+				method: "textDocument/completion",
+				params: {textDocument: {uri: uri}, position: {line: 0, character: source.length}}
+			}));
+			cancelledDone.release();
+		});
+		blockingService.entered.wait();
+		blockingProtocol.handle('{"jsonrpc":"2.0","method":"$/cancelRequest","params":{"id":88}}');
+		blockingService.resume.release();
+		cancelledDone.wait();
+		if (cancelledResponse.length != 1 || Json.parse(cancelledResponse[0]).error.code != -32800)
+			throw "LSP did not cancel an active completion request";
 		var diagnosticService = new LanguageService(),
 			diagnosticProtocol = new LspProtocol(diagnosticService),
 			choiceUri = "file:///workspace/shape/Choice.hx",
@@ -204,6 +248,17 @@ class LspProtocolMain {
 		}));
 		if (staleRename.length != 1 || Json.parse(staleRename[0]).error.code != -32801)
 			throw "LSP rename did not reject a stale semantic snapshot";
+		if (protocol.handle('{"jsonrpc":"2.0","method":"$/cancelRequest","params":{"id":999}}').length != 0)
+			throw "LSP cancellation notification produced a response";
+		var lifecycle = new LspProtocol(),
+			shutdown = lifecycle.handle('{"jsonrpc":"2.0","id":20,"method":"shutdown"}');
+		if (shutdown.length != 1 || Json.parse(shutdown[0]).result != null)
+			throw "LSP shutdown did not return a null result";
+		var afterShutdown = lifecycle.handle('{"jsonrpc":"2.0","id":21,"method":"textDocument/hover","params":{}}');
+		if (afterShutdown.length != 1 || Json.parse(afterShutdown[0]).error.code != -32600)
+			throw "LSP accepted a request after shutdown";
+		if (lifecycle.handle('{"jsonrpc":"2.0","method":"exit"}').length != 0 || !lifecycle.shouldExit())
+			throw "LSP exit lifecycle was not recorded";
 		Sys.println("PASS: standard LSP adapter maps compiler language queries");
 	}
 
