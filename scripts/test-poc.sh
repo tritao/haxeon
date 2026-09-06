@@ -155,6 +155,7 @@ run_program enum-payload 42
 run_program enum-payload-pattern 42
 run_program nullable-basic 42
 run_program nullable-compound 42
+run_program nullable-enum-switch 42
 run_program object-array 42
 run_program array-copy-concat 42
 run_program array-slice-index 42

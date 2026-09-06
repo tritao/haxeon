@@ -1004,11 +1004,7 @@ class Typer {
 									constructorIndex = index;
 								default:
 							}
-						var caseKey = switch typedValue.expression {
-							case TIntLiteral(value): 'int:$value';
-							case TEnumLiteral(name, index): enumPatternKey(name, index, predicates);
-							default: null;
-						};
+						var caseKey = switchCaseKey(typedValue, predicates);
 						if (caseKey != null && typedGuard == null) {
 							if (seenCases.exists(caseKey))
 								fail("E1020", "Duplicate switch case", switchCase.span);
@@ -1026,10 +1022,7 @@ class Typer {
 						});
 					}
 					if (isEnum(typedExpression.type) && !hasDefault) {
-						var enumName:String = switch typedExpression.type {
-							case TInstance(Enum, name, _): name;
-							default: "";
-						};
+						var enumName = Std.string(enumName(typedExpression.type));
 						var missing:Array<String> = [];
 						if (enumDecls.exists(enumName)) {
 							var enumDecl = enumDecls.get(enumName);
@@ -1037,6 +1030,8 @@ class Typer {
 								if (!seenCases.exists('enum:$enumName:$index'))
 									missing.push(enumDecl.cases[index].name);
 						}
+						if (isNullableEnum(typedExpression.type) && !seenCases.exists("null"))
+							missing.push("null");
 						if (missing.length > 0)
 							fail("E1021", 'Enum switch is missing cases: ${missing.join(", ")}', span);
 					}
@@ -1352,12 +1347,22 @@ class Typer {
 				if (info == null && name.indexOf(".") < 0)
 					switch expected {
 						case TInstance(Enum, enumName, _): info = enumCaseInfo(enumName + "." + name);
+						case TNullable(inner):
+							switch inner {
+								case TInstance(Enum, enumName, _): info = enumCaseInfo(enumName + "." + name);
+								default:
+							}
 						default:
 					}
 				if (info == null)
 					return null;
 				var instanceType = switch expected {
 					case TInstance(Enum, _, _): expected;
+					case TNullable(inner):
+						switch inner {
+							case TInstance(Enum, _, _): inner;
+							default: TInstance(NominalKind.Enum, info.enumName, []);
+						}
 					default: TInstance(NominalKind.Enum, info.enumName, []);
 				};
 				var instanceName = switch instanceType {
@@ -1449,6 +1454,16 @@ class Typer {
 		];
 		return 'enum:$name:$index:${keys.join(",")}';
 	}
+
+	function switchCaseKey(value:TypedExpression, predicates:Array<TypedSwitchPredicate>):Null<String>
+		return switch value.expression {
+			case TIntLiteral(v): 'int:$v';
+			case TStringLiteral(v): 'string:$v';
+			case TEnumLiteral(name, index): enumPatternKey(name, index, predicates);
+			case TNullLiteral: "null";
+			case TNullableWrap(inner): switchCaseKey(inner, predicates);
+			default: null;
+		};
 
 	function constantPatternKey(value:TypedExpression):Null<String>
 		return switch value.expression {
@@ -1821,12 +1836,7 @@ class Typer {
 								constructorIndex = index;
 							default:
 						}
-					var caseKey = switch typedValue.expression {
-						case TIntLiteral(value): 'int:$value';
-						case TStringLiteral(value): 'string:$value';
-						case TEnumLiteral(name, index): enumPatternKey(name, index, predicates);
-						default: null;
-					};
+					var caseKey = switchCaseKey(typedValue, predicates);
 					if (caseKey != null && typedGuard == null) {
 						if (seenCases.exists(caseKey))
 							fail("E1020", "Duplicate switch case", switchCase.span);
@@ -1871,16 +1881,16 @@ class Typer {
 				if (typedDefault == null && !isEnum(typedSubject.type))
 					fail("E1021", "Switch expression requires a default branch", span);
 				if (isEnum(typedSubject.type) && typedDefault == null) {
-					var enumName:String = switch typedSubject.type {
-						case TInstance(Enum, name, _): name;
-						default: "";
-					}, missing:Array<String> = [];
+					var enumName = Std.string(enumName(typedSubject.type)),
+						missing:Array<String> = [];
 					if (enumDecls.exists(enumName)) {
 						var enumDecl = enumDecls.get(enumName);
 						for (index in 0...enumDecl.cases.length)
 							if (!seenCases.exists('enum:$enumName:$index'))
 								missing.push(enumDecl.cases[index].name);
 					}
+					if (isNullableEnum(typedSubject.type) && !seenCases.exists("null"))
+						missing.push("null");
 					if (missing.length > 0)
 						fail("E1021", 'Enum switch is missing cases: ${missing.join(", ")}', span);
 				}
@@ -3304,6 +3314,13 @@ class Typer {
 	static function isEnum(type:CompilerType):Bool
 		return switch type {
 			case TInstance(Enum, _, _): true;
+			case TNullable(inner): isEnum(inner);
+			default: false;
+		};
+
+	static function isNullableEnum(type:CompilerType):Bool
+		return switch type {
+			case TNullable(inner): isEnum(inner);
 			default: false;
 		};
 

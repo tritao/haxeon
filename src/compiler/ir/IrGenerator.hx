@@ -416,11 +416,17 @@ class IrGenerator {
 							bodyBlock = switchCase.guard == null ? matchBlock : builder.createBlock(),
 							nextBlock = builder.createBlock();
 						builder.select(checkBlock);
-						var switchValue = switch expression.type {
-							case TInstance(Enum, _, _): builder.enumIndex(builder.load(switchName, switchType));
-							default: builder.load(switchName, switchType);
-						}, caseValue = switchCase.constructorIndex >= 0 ? builder.constInt(switchCase.constructorIndex) : lowerExpression(switchCase.value,
-							builder, localTypes);
+						var subjectValue = builder.load(switchName, switchType);
+						if (isNullableEnumType(expression.type) && switchCase.constructorIndex >= 0) {
+							var nonNullBlock = builder.createBlock();
+							builder.branch(builder.equal(subjectValue, builder.constNull(switchType)), nextBlock, nonNullBlock);
+							builder.select(nonNullBlock);
+							subjectValue = builder.load(switchName, switchType);
+						}
+						var switchValue = switchCase.constructorIndex >= 0
+							&& isEnumType(expression.type) ? builder.enumIndex(subjectValue) : subjectValue,
+							caseValue = switchCase.constructorIndex >= 0 ? builder.constInt(switchCase.constructorIndex) : lowerExpression(switchCase.value,
+								builder, localTypes);
 						var predicateBlock = switchCase.predicates.length == 0 ? matchBlock : builder.createBlock();
 						builder.branch(builder.equal(switchValue, caseValue), predicateBlock, nextBlock);
 						if (switchCase.predicates.length > 0)
@@ -448,10 +454,7 @@ class IrGenerator {
 						checkBlock = nextBlock;
 					}
 					builder.select(checkBlock);
-					if (!hasDefault && switch expression.type {
-							case TInstance(Enum, _, _): true;
-							default: false;
-						})
+					if (!hasDefault && isEnumType(expression.type))
 						builder.jump(checkBlock);
 					else
 						lowerStatements(defaultBranch, builder, localTypes, loops);
@@ -721,26 +724,23 @@ class IrGenerator {
 				localTypes.set(subjectName, subjectType);
 				localTypes.set(resultName, resultType);
 				builder.store(subjectName, lowerExpression(subject, builder, localTypes));
-				if (defaultExpression != null)
-					switch subject.type {
-						case TInstance(Enum, _, _):
-							var firstCheck = builder.createBlock(),
-								subjectValue = builder.load(subjectName, subjectType);
-							builder.branch(builder.equal(subjectValue, builder.constNull(subjectType)), fallbackBlock, firstCheck);
-							checkBlocks[0] = firstCheck;
-						default:
-					}
 				for (caseIndex in 0...cases.length) {
 					var switchCase = cases[caseIndex],
 						isExhaustiveFinalCase = defaultExpression == null && caseIndex == cases.length - 1 && switchCase.guard == null,
 						bodyBlock = bodyBlocks[caseIndex],
 						nextBlock = caseIndex + 1 < cases.length ? checkBlocks[caseIndex + 1] : (defaultExpression == null ? afterBlock : fallbackBlock);
 					builder.select(checkBlocks[caseIndex]);
-					var subjectValue = builder.load(subjectName, subjectType),
-						comparisonValue = switch subject.type {
-							case TInstance(Enum, _, _): builder.enumIndex(subjectValue);
-							default: subjectValue;
-						};
+					var subjectValue = builder.load(subjectName, subjectType);
+					if (isNullableEnumType(subject.type)
+						&& switchCase.constructorIndex >= 0
+						&& !(isExhaustiveFinalCase && switchCase.predicates.length == 0)) {
+						var nonNullBlock = builder.createBlock();
+						builder.branch(builder.equal(subjectValue, builder.constNull(subjectType)), nextBlock, nonNullBlock);
+						builder.select(nonNullBlock);
+						subjectValue = builder.load(subjectName, subjectType);
+					}
+					var comparisonValue = switchCase.constructorIndex >= 0
+						&& isEnumType(subject.type) ? builder.enumIndex(subjectValue) : subjectValue;
 					var caseValue = switchCase.constructorIndex >= 0 ? builder.constInt(switchCase.constructorIndex) : lowerExpression(switchCase.value,
 						builder, localTypes),
 						matches = subject.type == TString ? builder.call("__string_equal", [comparisonValue, caseValue],
@@ -1243,6 +1243,21 @@ class IrGenerator {
 		return switch type {
 			case TString: true;
 			case TAbstract(_, _, representation): isStringPatternType(representation);
+			default: false;
+		};
+
+	static function isNullableEnumType(type:CompilerType):Bool
+		return switch type {
+			case TNullable(inner): isDirectEnumType(inner);
+			default: false;
+		};
+
+	static function isEnumType(type:CompilerType):Bool
+		return isDirectEnumType(type) || isNullableEnumType(type);
+
+	static function isDirectEnumType(type:CompilerType):Bool
+		return switch type {
+			case TInstance(Enum, _, _): true;
 			default: false;
 		};
 
