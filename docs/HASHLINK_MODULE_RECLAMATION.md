@@ -60,6 +60,13 @@ release their pins before freeing metadata. Profiler samples may retain raw
 numeric JIT addresses, but later symbolization only dereferences metadata found
 through a new pinned snapshot; samples for an unloaded module resolve as unknown.
 
+Platform registrations now have symmetric teardown. Windows function tables are
+removed before any executable-memory release. VTune method IDs are retained per
+module, duplicate publication is avoided, and every published method receives
+an unload notification before its JIT metadata is freed. Global shutdown also
+stops an active profiler worker before releasing the module registry or the
+process-owned JIT wrapper image.
+
 ## Required proof for a future in-process design
 
 An in-process implementation is safe only after HashLink provides a unified
