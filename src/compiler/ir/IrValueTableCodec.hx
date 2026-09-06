@@ -84,10 +84,10 @@ class IrValueTableCodec {
 		output.writeInt32(value.id);
 
 	public static function readReference(input:BytesInput, values:Map<Int, IrValue>):IrValue {
-		var id = input.readInt32(), value = values.get(id);
-		if (id < 0 || value == null)
+		var id = input.readInt32();
+		if (id < 0 || !values.exists(id))
 			throw "Unknown IR value reference";
-		return value;
+		return values.get(id);
 	}
 
 	static function writeString(output:BytesOutput, value:String):Void {

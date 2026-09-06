@@ -1,7 +1,6 @@
 package compiler.ir;
 
 import compiler.ir.Ir.IrType;
-import haxe.io.Bytes as HaxeBytes;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
 
@@ -12,7 +11,7 @@ class IrTypeCodec {
 	static inline final MAX_ARGUMENTS = 0x10000;
 	static inline final MAX_STRING_BYTES = 0x100000;
 
-	public static function encode(type:IrType):HaxeBytes {
+	public static function encode(type:IrType):haxe.io.Bytes {
 		var output = new BytesOutput();
 		output.bigEndian = false;
 		output.writeString("IRT");
@@ -21,7 +20,7 @@ class IrTypeCodec {
 		return output.getBytes();
 	}
 
-	public static function decode(bytes:HaxeBytes):IrType {
+	public static function decode(bytes:haxe.io.Bytes):IrType {
 		var input = new BytesInput(bytes);
 		input.bigEndian = false;
 		try {
@@ -111,7 +110,7 @@ class IrTypeCodec {
 	}
 
 	public static function writeString(output:BytesOutput, value:String):Void {
-		var bytes = HaxeBytes.ofString(value);
+		var bytes = haxe.io.Bytes.ofString(value);
 		if (bytes.length > MAX_STRING_BYTES)
 			throw "IR state string is too long";
 		output.writeInt32(bytes.length);

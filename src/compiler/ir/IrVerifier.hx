@@ -58,9 +58,9 @@ class IrVerifier {
 			var id = work.pop();
 			if (reachable.exists(id))
 				continue;
-			var block = blocks.get(id);
-			if (block == null)
+			if (!blocks.exists(id))
 				throw 'Unknown IR block $id in ${fn.name}';
+			var block = blocks.get(id);
 			reachable.set(id, true);
 			for (instruction in block.instructions)
 				switch instruction {
@@ -80,9 +80,10 @@ class IrVerifier {
 				}
 			for (instruction in block.instructions)
 				verifyInstruction(instruction, values, signatures, objects, interfaces, enums, globals);
-			if (block.terminator == null)
+			var terminator = block.terminator;
+			if (terminator == null)
 				throw 'Reachable IR block $id in ${fn.name} has no terminator';
-			switch block.terminator {
+			switch terminator {
 				case Return(value):
 					require(values, value);
 					if (!sameType(value.type, fn.result))
@@ -106,9 +107,10 @@ class IrVerifier {
 			}
 		}
 		var predecessors:Map<Int, Map<Int, Bool>> = [];
-		for (block in fn.blocks)
-			if (reachable.exists(block.id) && block.terminator != null)
-				switch block.terminator {
+		for (block in fn.blocks) {
+			var terminator = block.terminator;
+			if (reachable.exists(block.id) && terminator != null)
+				switch terminator {
 					case Jump(target):
 						addPredecessor(predecessors, target, block.id);
 					case Branch(_, yes, no):
@@ -116,14 +118,17 @@ class IrVerifier {
 						addPredecessor(predecessors, no, block.id);
 					default:
 				}
+		}
 		for (block in fn.blocks)
 			if (reachable.exists(block.id))
 				for (instruction in block.instructions)
 					switch instruction {
 						case Phi(out, inputs):
+							if (!predecessors.exists(block.id))
+								throw 'Phi ${out.id} does not cover every predecessor';
 							var expected = predecessors.get(block.id),
 								seen:Map<Int, Bool> = [];
-							if (expected == null || inputs.length != countKeys(expected))
+							if (inputs.length != countKeys(expected))
 								throw 'Phi ${out.id} does not cover every predecessor';
 							for (input in inputs) {
 								if (!expected.exists(input.block) || seen.exists(input.block))
@@ -182,14 +187,18 @@ class IrVerifier {
 					throw 'IR catch value must be Dyn';
 				define(values, out);
 			case GlobalGet(out, name):
+				if (!globals.exists(name))
+					throw 'Unknown IR static field "$name"';
 				var type = globals.get(name);
-				if (type == null || !sameType(out.type, type))
-					throw 'Unknown or mismatched IR static field "$name" (declared=${type == null ? "missing" : Std.string(type)}, actual=${Std.string(out.type)})';
+				if (!sameType(out.type, type))
+					throw 'Mismatched IR static field "$name" (declared=${Std.string(type)}, actual=${Std.string(out.type)})';
 				define(values, out);
 			case GlobalSet(name, value):
+				if (!globals.exists(name))
+					throw 'Unknown IR static field "$name"';
 				var type = globals.get(name);
-				if (type == null || !sameType(value.type, type))
-					throw 'Unknown or mismatched IR static field "$name" (declared=${type == null ? "missing" : Std.string(type)}, actual=${Std.string(value.type)})';
+				if (!sameType(value.type, type))
+					throw 'Mismatched IR static field "$name" (declared=${Std.string(type)}, actual=${Std.string(value.type)})';
 				require(values, value);
 			case Add(out, a, b), Sub(out, a, b), Mul(out, a, b), Div(out, a, b):
 				if (!sameType(out.type, a.type) || !sameType(a.type, b.type) || (!sameType(a.type, I32) && !sameType(a.type, F64)))
@@ -221,9 +230,9 @@ class IrVerifier {
 					throw 'IR equality requires matching primitive or reference values';
 				define(values, out);
 			case Call(out, name, args):
-				var signature = signatures.get(name);
-				if (signature == null)
+				if (!signatures.exists(name))
 					throw 'Unknown IR call "$name"';
+				var signature = signatures.get(name);
 				if (args.length != signature.arguments.length)
 					throw 'Wrong IR argument count for "$name"';
 				for (i in 0...args.length) {
@@ -235,20 +244,22 @@ class IrVerifier {
 					throw 'Wrong IR result type for "$name"';
 				define(values, out);
 			case StaticClosure(out, name):
-				var signature = signatures.get(name);
-				if (signature == null)
+				if (!signatures.exists(name))
 					throw 'Unknown IR closure target "$name"';
+				var signature = signatures.get(name);
 				if (!sameType(out.type, Function(signature.arguments, signature.result)))
 					throw 'Wrong IR closure type for "$name"';
 				define(values, out);
 			case InstanceClosure(out, name, receiver):
+				if (!signatures.exists(name))
+					throw 'Unknown or receiver-less IR closure target "$name"';
 				var signature = signatures.get(name);
-				if (signature == null || signature.arguments.length == 0)
+				if (signature.arguments.length == 0)
 					throw 'Unknown or receiver-less IR closure target "$name"';
 				require(values, receiver);
 				if (!compatibleType(receiver.type, signature.arguments[0], objects, interfaces))
 					throw 'Wrong IR instance closure receiver type';
-				var closureType = Function(signature.arguments.slice(1), signature.result);
+				var closureType:IrType = Function(signature.arguments.slice(1), signature.result);
 				if (!sameType(out.type, closureType))
 					throw 'Wrong IR instance closure type for "$name"';
 				define(values, out);
@@ -336,8 +347,10 @@ class IrVerifier {
 			case MakeEnum(out, typeName, constructor, arguments):
 				if (!isEnumType(out.type, typeName, enums))
 					throw 'Unknown or mismatched IR enum "$typeName"';
+				if (!enums.exists(typeName))
+					throw 'Invalid IR enum constructor "$typeName"';
 				var enumDecl = enums.get(typeName);
-				if (enumDecl == null || constructor < 0 || constructor >= enumDecl.cases.length)
+				if (constructor < 0 || constructor >= enumDecl.cases.length)
 					throw 'Invalid IR enum constructor "$typeName"';
 				var constructorDecl = enumDecl.cases[constructor];
 				if (constructorDecl.params.length != arguments.length)
@@ -362,8 +375,10 @@ class IrVerifier {
 					case Enum(name): name;
 					default: throw 'IR enum field requires an enum value';
 				};
+				if (!enums.exists(typeName))
+					throw 'Invalid IR enum field constructor';
 				var enumDecl = enums.get(typeName);
-				if (enumDecl == null || constructor < 0 || constructor >= enumDecl.cases.length)
+				if (constructor < 0 || constructor >= enumDecl.cases.length)
 					throw 'Invalid IR enum field constructor';
 				var constructorDecl = enumDecl.cases[constructor];
 				if (field < 0 || field >= constructorDecl.params.length || !sameType(out.type, constructorDecl.params[field]))
@@ -375,10 +390,9 @@ class IrVerifier {
 		require(values, value);
 		return switch value.type {
 			case Obj(name):
-				var object = objects.get(name);
-				if (object == null)
+				if (!objects.exists(name))
 					throw 'Unknown IR object "$name"';
-				object;
+				objects.get(name);
 			default: throw 'IR value ${value.id} is not an object';
 		};
 	}
@@ -399,10 +413,10 @@ class IrVerifier {
 		for (field in object.fields)
 			if (field.name == name)
 				return field;
-		if (object.base != null) {
-			var base = objects.get(object.base);
-			if (base != null)
-				return findField(base, name, objects);
+		var baseName = object.base;
+		if (baseName != null && objects.exists(baseName)) {
+			var base = objects.get(baseName);
+			return findField(base, name, objects);
 		}
 		return null;
 	}
@@ -411,7 +425,10 @@ class IrVerifier {
 		for (method in object.methods)
 			if (method.name == name)
 				return method.functionName;
-		return object.base == null ? null : findMethodFunction(objects.get(object.base), name, objects);
+		var baseName = object.base;
+		if (baseName == null || !objects.exists(baseName))
+			return null;
+		return findMethodFunction(objects.get(baseName), name, objects);
 	}
 
 	static function methodSignature(type:IrType, name:String, signatures, objects:Map<String, IrObject>,
@@ -420,12 +437,18 @@ class IrVerifier {
 			case Obj(_):
 				var object = requireObjectType(type, objects),
 					functionName = findMethodFunction(object, name, objects);
-				functionName == null ? null : signatures.get(functionName);
+				if (functionName == null || !signatures.exists(functionName)) null; else signatures.get(functionName);
 			case Virtual(interfaceName):
-				var interfaceDecl = interfaces.get(interfaceName);
-				if (interfaceDecl == null) null; else {
+				if (!interfaces.exists(interfaceName)) null; else {
+					var interfaceDecl = interfaces.get(interfaceName);
 					var method = findInterfaceMethod(interfaceDecl, name, interfaces);
-					method == null ? null : {arguments: [Virtual(interfaceName)].concat(method.arguments), result: method.result};
+					if (method == null)
+						null;
+					else {
+						var arguments:Array<IrType> = [Virtual(interfaceName)];
+						arguments = arguments.concat(method.arguments);
+						{arguments: arguments, result: method.result};
+					}
 				}
 			default: null;
 		};
@@ -436,8 +459,8 @@ class IrVerifier {
 			if (method.name == name)
 				return method;
 		for (base in interfaceDecl.bases) {
-			var baseDecl = interfaces.get(base);
-			if (baseDecl != null) {
+			if (interfaces.exists(base)) {
+				var baseDecl = interfaces.get(base);
 				var found = findInterfaceMethod(baseDecl, name, interfaces);
 				if (found != null)
 					return found;
@@ -449,17 +472,18 @@ class IrVerifier {
 	static function requireObjectType(type:IrType, objects:Map<String, IrObject>):IrObject {
 		return switch type {
 			case Obj(name):
-				var object = objects.get(name);
-				if (object == null)
+				if (!objects.exists(name))
 					throw 'Unknown IR object "$name"';
-				object;
+				objects.get(name);
 			default: throw "IR method receiver is not an object";
 		};
 	}
 
 	static function addPredecessor(map:Map<Int, Map<Int, Bool>>, target:Int, source:Int):Void {
-		var found = map.get(target);
-		if (found == null) {
+		var found:Map<Int, Bool>;
+		if (map.exists(target))
+			found = map.get(target);
+		else {
 			found = [];
 			map.set(target, found);
 		}
@@ -496,15 +520,34 @@ class IrVerifier {
 	}
 
 	static function sameType(left:IrType, right:IrType):Bool
-		return switch [left, right] {
-			case [Obj(a), Obj(b)]: a == b;
-			case [Enum(a), Enum(b)]: a == b;
-			case [Abstract(a), Abstract(b)]: a == b;
-			case [Array(a), Array(b)]: sameType(a, b);
-			case [Function(aArgs, aResult), Function(bArgs, bResult)]: aArgs.length == bArgs.length && [
-					for (i in 0...aArgs.length)
-						sameType(aArgs[i], bArgs[i])
-				].indexOf(false) < 0 && sameType(aResult, bResult);
+		return switch left {
+			case Obj(a): switch right {
+					case Obj(b): a == b;
+					default: false;
+				};
+			case Enum(a): switch right {
+					case Enum(b): a == b;
+					default: false;
+				};
+			case Abstract(a): switch right {
+					case Abstract(b): a == b;
+					default: false;
+				};
+			case Array(a): switch right {
+					case Array(b): sameType(a, b);
+					default: false;
+				};
+			case Function(aArgs, aResult): switch right {
+					case Function(bArgs, bResult):
+						if (aArgs.length != bArgs.length) false; else {
+							var equal = sameType(aResult, bResult);
+							for (i in 0...aArgs.length)
+								if (!sameType(aArgs[i], bArgs[i]))
+									equal = false;
+							equal;
+						}
+					default: false;
+				};
 			default: left == right;
 		};
 
@@ -515,22 +558,46 @@ class IrVerifier {
 		};
 
 	static function abiCompatible(actual:IrType, expected:IrType):Bool
-		return switch [actual, expected] {
-			case [Array(element), Array(Dyn)]: isReference(element);
-			case [Bytes, Dyn], [Obj(_), Dyn], [Virtual(_), Dyn], [Array(_), Dyn], [Function(_, _), Dyn]: true;
+		return switch expected {
+			case Array(Dyn): switch actual {
+					case Array(element): isReference(element);
+					default: false;
+				};
+			case Dyn: switch actual {
+					case Bytes, Obj(_), Virtual(_), Array(_), Function(_, _): true;
+					default: false;
+				};
 			default: false;
 		};
 
 	static function compatibleType(actual:IrType, expected:IrType, objects:Map<String, IrObject>, interfaces:Map<String, IrInterface>):Bool {
 		if (sameType(actual, expected))
 			return true;
-		return switch [actual, expected] {
-			case [Obj(actualName), Obj(expectedName)]: var object = objects.get(actualName); object != null && object.base != null && compatibleType(Obj(object.base),
-					expected, objects, interfaces);
-			case [Virtual(actualName), Virtual(expectedName)]: interfaceExtends(actualName, expectedName, interfaces);
-			case [Array(actualElement), Array(Dyn)]: isReference(actualElement);
-			case [Array(actualElement), Array(expectedElement)]: sameType(actualElement, expectedElement);
-			case [Bytes, Dyn], [Obj(_), Dyn], [Virtual(_), Dyn], [Array(_), Dyn], [Function(_, _), Dyn]: true;
+		return switch actual {
+			case Obj(actualName): switch expected {
+					case Obj(_):
+						if (!objects.exists(actualName)) false; else {
+							var base = objects.get(actualName).base;
+							base != null && compatibleType(Obj(base), expected, objects, interfaces)
+							;
+						}
+					case Dyn: true;
+					default: false;
+				};
+			case Virtual(actualName): switch expected {
+					case Virtual(expectedName): interfaceExtends(actualName, expectedName, interfaces);
+					case Dyn: true;
+					default: false;
+				};
+			case Array(actualElement): switch expected {
+					case Array(expectedElement): expectedElement == Dyn ? isReference(actualElement) : sameType(actualElement, expectedElement);
+					case Dyn: true;
+					default: false;
+				};
+			case Bytes, Function(_, _): switch expected {
+					case Dyn: true;
+					default: false;
+				};
 			default: false;
 		};
 	}
@@ -538,9 +605,9 @@ class IrVerifier {
 	static function interfaceExtends(actual:String, expected:String, interfaces:Map<String, IrInterface>):Bool {
 		if (actual == expected)
 			return true;
-		var declaration = interfaces.get(actual);
-		if (declaration == null)
+		if (!interfaces.exists(actual))
 			return false;
+		var declaration = interfaces.get(actual);
 		for (base in declaration.bases)
 			if (interfaceExtends(base, expected, interfaces))
 				return true;
