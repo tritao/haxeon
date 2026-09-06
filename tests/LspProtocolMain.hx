@@ -42,7 +42,8 @@ class LspProtocolMain {
 		if (!initialized.result.capabilities.hoverProvider
 			|| initialized.result.capabilities.signatureHelpProvider == null
 			|| initialized.result.capabilities.textDocumentSync.change != 1
-			|| !initialized.result.capabilities.documentHighlightProvider)
+			|| !initialized.result.capabilities.documentHighlightProvider
+			|| initialized.result.capabilities.semanticTokensProvider.legend.tokenTypes[12] != "function")
 			throw "LSP initialization capabilities are incomplete";
 		var watcherRegistration = protocol.handle('{"jsonrpc":"2.0","method":"initialized","params":{}}');
 		if (watcherRegistration.length != 1
@@ -252,6 +253,17 @@ class LspProtocolMain {
 		}));
 		if (highlights.result.length != 2 || highlights.result[0].kind != 3 || highlights.result[1].kind != 2)
 			throw "LSP document highlights did not classify declaration and read occurrences";
+		var semantic = request(protocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 51,
+			method: "textDocument/semanticTokens/full",
+			params: {textDocument: {uri: uri}}
+		}));
+		if (!hasSemanticToken(semantic.result.data, 0, source.indexOf("main"), 12, 1)
+			|| !hasSemanticToken(semantic.result.data, 0, source.indexOf("answer"), 8, 1)
+			|| !hasSemanticToken(semantic.result.data, 0, source.lastIndexOf("answer"), 8, 0)
+			|| !hasSemanticToken(semantic.result.data, 0, source.indexOf("42"), 19, 0))
+			throw "LSP semantic tokens omitted typed declarations, references, or literals";
 		var callSource = "function add(left:Int, right:Int):Int return left + right; function main():Int return add(20, 22);",
 			callUri = "file:///workspace/Call.hx";
 		protocol.handle(Json.stringify({
@@ -604,6 +616,18 @@ class LspProtocolMain {
 			return false;
 		var response:Dynamic = Json.parse(responses[0]);
 		return response.error == null && response.result != null && response.result.uri == expectedUri;
+	}
+
+	static function hasSemanticToken(raw:Dynamic, expectedLine:Int, expectedCharacter:Int, expectedType:Int, expectedModifiers:Int):Bool {
+		var data:Array<Int> = cast raw, line = 0, character = 0, index = 0;
+		while (index < data.length) {
+			line += data[index];
+			character = data[index] == 0 ? character + data[index + 1] : data[index + 1];
+			if (line == expectedLine && character == expectedCharacter && data[index + 3] == expectedType && data[index + 4] == expectedModifiers)
+				return true;
+			index += 5;
+		}
+		return false;
 	}
 
 	static function deleteTree(path:String):Void {

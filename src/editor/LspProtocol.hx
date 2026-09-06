@@ -23,6 +23,11 @@ private class LspRequestError {
 
 /** Minimal standard LSP adapter over the compiler-owned language service. */
 class LspProtocol {
+	static final SEMANTIC_TOKEN_TYPES = ["namespace", "type", "class", "enum", "interface", "struct", "typeParameter", "parameter", "variable",
+		"property", "enumMember", "event", "function", "method", "macro", "keyword", "modifier", "comment", "string", "number", "regexp", "operator",
+		"decorator"];
+	static final SEMANTIC_TOKEN_MODIFIERS = ["declaration", "definition", "readonly", "static", "deprecated", "abstract", "async", "modification",
+		"documentation", "defaultLibrary"];
 	final service:LanguageService;
 	final documents = new DocumentStore();
 	final profiler = new ProfilerService();
@@ -84,6 +89,7 @@ class LspProtocol {
 				case "textDocument/documentSymbol": cancellable(id, token -> documentSymbols(request, token));
 				case "textDocument/completion": cancellable(id, token -> completion(request, token));
 				case "textDocument/documentHighlight": cancellable(id, token -> documentHighlights(request, token));
+				case "textDocument/semanticTokens/full": cancellable(id, token -> semanticTokens(request, token));
 				case "textDocument/hover": cancellable(id, token -> hover(request, token));
 				case "textDocument/signatureHelp": cancellable(id, token -> signatureHelp(request, token));
 				case "textDocument/definition": cancellable(id, token -> definition(request, token));
@@ -214,6 +220,10 @@ class LspProtocol {
 				documentSymbolProvider: true,
 				completionProvider: {triggerCharacters: ["."]},
 				documentHighlightProvider: true,
+				semanticTokensProvider: {
+					legend: {tokenTypes: SEMANTIC_TOKEN_TYPES, tokenModifiers: SEMANTIC_TOKEN_MODIFIERS},
+					full: true
+				},
 				hoverProvider: true,
 				signatureHelpProvider: {triggerCharacters: ["(", ","]},
 				definitionProvider: true,
@@ -449,6 +459,21 @@ class LspProtocol {
 		];
 	}
 
+	function semanticTokens(request:Dynamic, token:CancellationToken):Dynamic {
+		var document = document(request);
+		ensureAnalyzed(document, token);
+		requireCurrent(document);
+		var data:Array<Int> = [], previousLine = 0, previousCharacter = 0;
+		for (semantic in service.semanticTokens(compilerPath(document), token)) {
+			var start:Dynamic = document.position(semantic.span.start), end:Dynamic = document.position(semantic.span.end);
+			appendSemanticToken(data, start.line, start.character, Std.int(end.character - start.character), semantic.type, semantic.modifiers, previousLine,
+				previousCharacter);
+			previousLine = start.line;
+			previousCharacter = start.character;
+		}
+		return {data: data};
+	}
+
 	function hover(request:Dynamic, token:CancellationToken):Dynamic {
 		var document = document(request);
 		ensureAnalyzed(document, token);
@@ -669,6 +694,21 @@ class LspProtocol {
 			value = Reflect.field(value, name);
 		}
 		return value != null && Reflect.field(value, "snippetSupport") == true;
+	}
+
+	static function appendSemanticToken(data:Array<Int>, line:Int, character:Int, length:Int, type:String, modifiers:Array<String>, previousLine:Int,
+			previousCharacter:Int):Void {
+		var modifierBits = 0;
+		for (modifier in modifiers) {
+			var modifierIndex = SEMANTIC_TOKEN_MODIFIERS.indexOf(modifier);
+			if (modifierIndex >= 0)
+				modifierBits |= 1 << modifierIndex;
+		}
+		data.push(line - previousLine);
+		data.push(line == previousLine ? character - previousCharacter : character);
+		data.push(length);
+		data.push(SEMANTIC_TOKEN_TYPES.indexOf(type));
+		data.push(modifierBits);
 	}
 
 	static function diagnosticJson(diagnostic:Diagnostic):Dynamic

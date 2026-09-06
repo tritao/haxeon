@@ -49,6 +49,13 @@ typedef DocumentHighlight = {
 	final write:Bool;
 }
 
+/** Absolute semantic token; transport adapters own position/delta encoding. */
+typedef SemanticToken = {
+	final span:SourceSpan;
+	final type:String;
+	final modifiers:Array<String>;
+}
+
 /** Source location returned by a semantic navigation query. */
 typedef SymbolLocation = {
 	final ?revision:Int;
@@ -293,6 +300,47 @@ class LanguageService {
 				write: declaration != null && sameSpan(span, declaration.declaration) || assignmentFollows(source, span.end)
 			});
 		}
+		result.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
+		return result;
+	}
+
+	public function semanticTokens(path:String, ?token:CancellationToken):Array<SemanticToken> {
+		var state = stateFor(path), result:Array<SemanticToken> = [],
+			tokens = state == null ? null : effectiveTokens(state),
+			model = state == null ? null : effectiveSemanticModel(state);
+		if (state == null || tokens == null)
+			return result;
+		for (index in 0...tokens.length) {
+			var lexical = tokens[index];
+			if (token != null)
+				token.check();
+			if (lexical.kind == Eof)
+				continue;
+			var type:Null<String> = switch lexical.kind {
+				case Identifier:
+					var semantic = semanticTokenType(model, lexical.span.start);
+					semantic == "variable" && isParameterToken(tokens, index) ? "parameter" : semantic;
+				case TypeInt, TypeBool, TypeFloat, TypeString, Void: "type";
+				case Integer, Float: "number";
+				case StringLiteral: "string";
+				case LeftParen, RightParen, LeftBrace, RightBrace, Colon, Semicolon, Comma, Dot, Assign, PlusAssign, MinusAssign, Increment,
+					Decrement, Plus, Minus, Arrow, Star, Slash, Percent, Less, Greater, LessEqual, GreaterEqual, EqualEqual, NotEqual, Not, AndAnd,
+					OrOr, Ampersand, Pipe, Caret, LeftBracket, RightBracket, Question, At: "operator";
+				default: "keyword";
+			};
+			if (type != null) {
+				var indexed = model == null ? null : model.index.symbolAt(lexical.span.start), modifiers = [];
+				if (indexed != null && semanticDeclaration(model, indexed.id, lexical.span)) {
+					modifiers.push("declaration");
+					if (hasDeclarationModifier(tokens, index, Static))
+						modifiers.push("static");
+					if (hasDeclarationModifier(tokens, index, Final))
+						modifiers.push("readonly");
+				}
+				addSemanticSpan(state.source, lexical.span.start, lexical.span.end, type, modifiers, result);
+			}
+		}
+		addCommentTokens(state.source, result);
 		result.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
 		return result;
 	}
@@ -659,6 +707,110 @@ class LanguageService {
 			return next != "=" && next != ">";
 		return (current == "+" || current == "-" || current == "*" || current == "/" || current == "%" || current == "&" || current == "|"
 			|| current == "^") && next == "=";
+	}
+
+	static function semanticTokenType(model:Null<SemanticModel>, position:Int):String {
+		var symbol = model == null ? null : model.index.symbolAt(position);
+		if (symbol == null)
+			return "variable";
+		return switch symbol.kind {
+			case DeclarationKind.Alias, DeclarationKind.Abstract: "type";
+			case DeclarationKind.Class: "class";
+			case DeclarationKind.Interface: "interface";
+			case DeclarationKind.Enum: "enum";
+			case DeclarationKind.EnumCase: "enumMember";
+			case DeclarationKind.TypeParameter: "typeParameter";
+			case DeclarationKind.Function: "function";
+			case DeclarationKind.Member:
+				model.index.signature(symbol.id) != null ? "method" : Std.string(symbol.id).indexOf(":local:") >= 0 ? "variable" : "property";
+		};
+	}
+
+	static function isParameterToken(tokens:Array<compiler.syntax.Token>, index:Int):Bool {
+		if (index + 1 >= tokens.length || tokens[index + 1].kind != Colon)
+			return false;
+		var depth = 0, cursor = index - 1;
+		while (cursor >= 0) {
+			switch tokens[cursor].kind {
+				case RightParen: depth++;
+				case LeftParen:
+					if (depth == 0)
+						return cursor > 0 && (tokens[cursor - 1].kind == Identifier || tokens[cursor - 1].kind == New);
+					depth--;
+				case LeftBrace, RightBrace, Semicolon: return false;
+				default:
+			}
+			cursor--;
+		}
+		return false;
+	}
+
+	static function hasDeclarationModifier(tokens:Array<compiler.syntax.Token>, index:Int, modifier:TokenKind):Bool {
+		var cursor = index - 1;
+		while (cursor >= 0) {
+			var kind = tokens[cursor].kind;
+			if (kind == modifier)
+				return true;
+			if (kind == LeftBrace || kind == RightBrace || kind == Semicolon)
+				return false;
+			cursor--;
+		}
+		return false;
+	}
+
+	static function semanticDeclaration(model:SemanticModel, id:SemanticSymbolId, span:SourceSpan):Bool {
+		var locations = model.index.locations(id);
+		return locations.length > 0 && sameSpan(locations[0], span);
+	}
+
+	static function addCommentTokens(file:compiler.Source.SourceFile, result:Array<SemanticToken>):Void {
+		var source = file.text, position = 0;
+		while (position + 1 < source.length) {
+			var quote = source.charAt(position);
+			if (quote == "\"" || quote == "'") {
+				position++;
+				while (position < source.length) {
+					if (source.charAt(position) == "\\")
+						position += 2;
+					else if (source.charAt(position++) == quote)
+						break;
+				}
+				continue;
+			}
+			if (source.charAt(position) != "/") {
+				position++;
+				continue;
+			}
+			var next = source.charAt(position + 1), start = position;
+			if (next == "/") {
+				position += 2;
+				while (position < source.length && source.charCodeAt(position) != 10)
+					position++;
+				addSemanticSpan(file, start, position, "comment", [], result);
+			} else if (next == "*") {
+				position += 2;
+				while (position + 1 < source.length && !(source.charAt(position) == "*" && source.charAt(position + 1) == "/"))
+					position++;
+				position = Std.int(Math.min(source.length, position + 2));
+				addSemanticSpan(file, start, position, "comment", [], result);
+			} else
+				position++;
+		}
+	}
+
+	static function addSemanticSpan(file:compiler.Source.SourceFile, start:Int, end:Int, type:String, modifiers:Array<String>,
+			result:Array<SemanticToken>):Void {
+		var partStart = start, position = start;
+		while (position < end) {
+			if (file.text.charCodeAt(position) == 10) {
+				if (position > partStart)
+					result.push({span: file.span(partStart, position), type: type, modifiers: modifiers.copy()});
+				partStart = position + 1;
+			}
+			position++;
+		}
+		if (end > partStart)
+			result.push({span: file.span(partStart, end), type: type, modifiers: modifiers.copy()});
 	}
 
 	static function completionTypeCompatible(actual:CompilerType, expected:CompilerType):Bool {
