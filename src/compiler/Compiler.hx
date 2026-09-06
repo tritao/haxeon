@@ -37,24 +37,24 @@ import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.abi.PatchPlanner;
 import compiler.abi.PatchPlanner.AbiChange;
 import compiler.abi.PatchPlanner.PatchDecision;
+import compiler.abi.NativeRegistry;
+import compiler.abi.NativeRegistry.NativeDefinition;
 import compiler.CompilerPublication.CompilerSnapshot;
 import compiler.CompilerPublication.PublicationStatus;
 import compiler.CompilerPublication.ReconnectDecision;
 import compiler.CompilerPublication.ReconnectReason;
-import compiler.modules.ModuleState.SemanticDependency;
-import compiler.modules.ModuleState.SemanticDependencyKind;
 import compiler.modules.ModuleGraph;
 import compiler.modules.ModulePath;
 import compiler.modules.ModuleReachability;
 import compiler.modules.ModuleState;
+import compiler.modules.ModuleState.SemanticDependency;
+import compiler.modules.ModuleState.SemanticDependencyKind;
 import compiler.semantic.ModuleCanonicalizer;
 import compiler.semantic.ModuleChangeAnalyzer;
-import compiler.semantic.SemanticDependencyCollector;
-import compiler.semantic.SemanticWorkspace;
 import compiler.semantic.DependencyScanner;
 import compiler.semantic.LambdaCollector;
-import compiler.abi.NativeRegistry;
-import compiler.abi.NativeRegistry.NativeDefinition;
+import compiler.semantic.SemanticDependencyCollector;
+import compiler.semantic.SemanticWorkspace;
 
 /** Public alias for a host-native declaration accepted by the compiler. */
 typedef NativeFunction = NativeDefinition;
@@ -111,6 +111,7 @@ typedef ValidationResult = {
  * Persistent incremental compiler and owner of all module and backend state.
  * Compilation is transactional: failed edits do not replace published artifacts.
  */
+@:allow(compiler.CompilationTransaction)
 class Compiler {
 	final genericSpecializations = new GenericSpecializationRegistry();
 
@@ -214,7 +215,7 @@ class Compiler {
 	}
 
 	public function compact(entryModule:String):CompileResult {
-		var result = compileTransaction(entryModule, null, new HlModuleAssembler(assembler.cache.stableIds));
+		var result = new CompilationTransaction(this, entryModule, null, new HlModuleAssembler(assembler.cache.stableIds)).run();
 		rememberCompile(entryModule, result);
 		return result;
 	}
@@ -317,7 +318,7 @@ class Compiler {
 				}
 			};
 		}
-		var result = compileTransaction(entryModule, token, null);
+		var result = new CompilationTransaction(this, entryModule, token, null).run();
 		rememberCompile(entryModule, result);
 		return result;
 	}
@@ -326,34 +327,6 @@ class Compiler {
 		cachedCompileGeneration = sourceGeneration;
 		cachedCompileEntry = entryModule;
 		cachedCompileResult = result;
-	}
-
-	function compileTransaction(entryModule:String, token:Null<CancellationToken>, startingAssembler:Null<HlModuleAssembler>):CompileResult {
-		var transactionStartedAt = Sys.time() * 1000.0;
-		publication.beforeCompile();
-		var snapshot = snapshot();
-		var snapshotDoneAt = Sys.time() * 1000.0;
-		var previousAssembler = assembler;
-		if (startingAssembler != null)
-			assembler = startingAssembler;
-		try {
-			var result = compileCandidate(entryModule, token, snapshot.modules, transactionStartedAt, snapshotDoneAt);
-			var abi = publishedAbi;
-			if (abi == null)
-				throw "Compilation did not produce a runtime ABI";
-			publication.candidate(result.revision, abi, snapshot, previousAssembler);
-			return result;
-		} catch (error:Dynamic) {
-			var failedDiagnostics:Map<String, Array<Diagnostic>> = [];
-			for (name => state in modules)
-				failedDiagnostics.set(name, state.diagnostics.copy());
-			restore(snapshot);
-			assembler = previousAssembler;
-			for (name => diagnostics in failedDiagnostics)
-				if (modules.exists(name))
-					modules.get(name).diagnostics = diagnostics;
-			throw error;
-		}
 	}
 
 	function compileCandidate(entryModule:String, token:Null<CancellationToken>, rollbackModules:Map<String, ModuleState>, transactionStartedAt:Float,
