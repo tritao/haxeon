@@ -353,12 +353,42 @@ class LanguageServiceMain {
 		configuredService.update("Configured.hx", "function main():Int return 42;");
 		configuredService.analyze("Configured");
 		var defaultIndex = configuredService.compiler.modules.get("Configured").semanticModel.index;
-		configuredService.configure("build-a");
+		configuredService.configure("build-a", "scope-a", []);
 		if (configuredService.compiler.configurationIdentity != "build-a" || configuredService.isCurrent("Configured.hx"))
 			throw "compiler build identity did not invalidate semantic caches";
 		configuredService.analyze("Configured");
 		if (defaultIndex == configuredService.compiler.modules.get("Configured").semanticModel.index)
 			throw "semantic index was reused across build configurations";
+		var defineService = new LanguageService();
+		defineService.update("Stable.hx", "function stable():Int return 1;");
+		defineService.update("Conditional.hx",
+			"import Stable;\n#if feature && version >= 2.5\nfunction featureOnly():Int return Stable.stable();\n#else\nfunction fallbackOnly():Int return Stable.stable();\n#end\nfunction main():Int return Stable.stable();");
+		defineService.configure("without-feature", "shared-scope", []);
+		defineService.analyze("Conditional");
+		var stableIndex = defineService.compiler.modules.get("Stable").semanticModel.index,
+			hasFallback = false;
+		for (symbol in defineService.documentSymbols("Conditional.hx"))
+			if (symbol.name == "fallbackOnly")
+				hasFallback = true;
+		defineService.configure("with-feature", "shared-scope", ["feature", "version=3.0"]);
+		if (!defineService.isCurrent("Stable.hx") || defineService.isCurrent("Conditional.hx"))
+			throw "define change invalidated modules that do not reference it";
+		defineService.analyze("Conditional");
+		var hasFeature = false;
+		for (symbol in defineService.documentSymbols("Conditional.hx"))
+			if (symbol.name == "featureOnly")
+				hasFeature = true;
+		if (!hasFallback || !hasFeature || stableIndex != defineService.compiler.modules.get("Stable").semanticModel.index)
+			throw "conditional compilation did not switch branches incrementally";
+		var malformedConditional = new LanguageService();
+		malformedConditional.update("MalformedConditional.hx", "#if feature\nfunction main():Int return 1;");
+		try {
+			malformedConditional.analyze("MalformedConditional");
+			throw "unclosed conditional compilation unexpectedly parsed";
+		} catch (error:CompileError) {
+			if (error.diagnostic.code != "E0002")
+				throw error;
+		}
 		service.update("Main.hx", "function main(:Int { return 0; }");
 		try {
 			service.compile("Main");

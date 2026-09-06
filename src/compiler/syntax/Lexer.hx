@@ -10,9 +10,9 @@ class Lexer {
 	final source:String;
 	var position:Int = 0;
 
-	public function new(file:SourceFile) {
+	public function new(file:SourceFile, ?source:String) {
 		this.file = file;
-		this.source = file.text;
+		this.source = source == null ? file.text : source;
 	}
 
 	public function tokenize():Array<Token> {

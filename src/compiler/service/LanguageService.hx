@@ -87,8 +87,8 @@ class LanguageService {
 	public function remove(path:String):Bool
 		return compiler.remove(path);
 
-	public function configure(identity:String):Void
-		compiler.configure(identity);
+	public function configure(identity:String, scopeIdentity:String, defines:Array<String>):Void
+		compiler.configure(identity, scopeIdentity, defines);
 
 	public function compile(entryModule:String, ?token:CancellationToken):CompileResult
 		return compiler.compile(entryModule, token);

@@ -117,6 +117,9 @@ class Compiler {
 	public final semanticWorkspace:SemanticWorkspace;
 	public var configurationIdentity(default, null):String = "default";
 
+	var configurationScopeIdentity:String = "default";
+	var defines:Map<String, String> = [];
+
 	/** Last successfully assembled typed program; failed edits never replace it. */
 	public var lastTypedProgram:Null<TypedProgram> = null;
 
@@ -248,12 +251,37 @@ class Compiler {
 	}
 
 	/** Change semantic build context and invalidate every source-derived cache. */
-	public function configure(identity:String):Void {
+	public function configure(identity:String, scopeIdentity:String, values:Array<String>):Void {
 		if (identity == configurationIdentity)
 			return;
+		var nextDefines:Map<String, String> = [];
+		for (value in values) {
+			var separator = value.indexOf("="),
+				name = separator < 0 ? value : value.substr(0, separator);
+			nextDefines.set(name, separator < 0 ? "1" : value.substr(separator + 1));
+		}
+		var changed:Map<String, Bool> = [];
+		for (name => value in defines)
+			if (nextDefines.get(name) != value)
+				changed.set(name, true);
+		for (name => value in nextDefines)
+			if (defines.get(name) != value)
+				changed.set(name, true);
+		var scopeChanged = scopeIdentity != configurationScopeIdentity;
 		configurationIdentity = identity;
-		for (state in modules)
-			state.update(new SourceFile(state.source.path, state.source.text));
+		configurationScopeIdentity = scopeIdentity;
+		defines = nextDefines;
+		for (state in modules) {
+			var affected = scopeChanged;
+			if (!affected)
+				for (name in state.conditionalDefines)
+					if (changed.exists(name)) {
+						affected = true;
+						break;
+					}
+			if (affected)
+				state.update(new SourceFile(state.source.path, state.source.text));
+		}
 		sourceGeneration++;
 	}
 
@@ -291,6 +319,9 @@ class Compiler {
 
 	function fork():Compiler {
 		var candidate = new Compiler(exportIdentityState(), nativeConfiguration());
+		candidate.configurationIdentity = configurationIdentity;
+		candidate.configurationScopeIdentity = configurationScopeIdentity;
+		candidate.defines = [for (name => value in defines) name => value];
 		var moduleNames = [for (name in modules.keys()) name];
 		moduleNames.sort(Reflect.compare);
 		for (name in moduleNames) {
@@ -410,6 +441,9 @@ class Compiler {
 
 	function createCandidate(snapshot:CompilerSnapshot, startingAssembler:Null<HlModuleAssembler>):Compiler {
 		var candidate = new Compiler(exportIdentityState(), nativeConfiguration());
+		candidate.configurationIdentity = configurationIdentity;
+		candidate.configurationScopeIdentity = configurationScopeIdentity;
+		candidate.defines = [for (name => value in defines) name => value];
 		for (name in [for (name in candidate.modules.keys()) name])
 			candidate.modules.remove(name);
 		for (name => state in snapshot.modules)

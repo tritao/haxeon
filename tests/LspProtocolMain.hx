@@ -99,12 +99,12 @@ class LspProtocolMain {
 			watchMainPath = Path.join([watchAppRoot, "Main.hx"]),
 			watchHelperPath = Path.join([watchLibRoot, "Helper.hx"]),
 			watchConfigPath = Path.join([watchRoot, "haxe.json"]),
-			watchMainSource = "package app; import lib.Helper; function main():Int { var helper = new Helper(); return helper.answer(); }";
+			watchMainSource = "package app; import lib.Helper;\n#if watcher && !missing\nfunction buildSelected():Int return 1;\n#else\nfunction wrongBuild():Int return 0;\n#end\nfunction main():Int { var helper = new Helper(); return helper.answer(); }";
 		sys.FileSystem.createDirectory(watchRoot);
 		sys.FileSystem.createDirectory(watchSourceRoot);
 		sys.FileSystem.createDirectory(watchAppRoot);
 		sys.FileSystem.createDirectory(watchLibRoot);
-		sys.io.File.saveContent(watchConfigPath, '{"classPath":["src"],"main":"app.Main"}');
+		sys.io.File.saveContent(watchConfigPath, '{"classPath":["src"],"main":"app.Main","defines":["watcher"]}');
 		sys.io.File.saveContent(watchMainPath, watchMainSource);
 		sys.io.File.saveContent(watchHelperPath, "package lib; class Helper { public function new() {} public function answer():Int return 1; }");
 		var watchProtocol = new LspProtocol(),
@@ -129,6 +129,20 @@ class LspProtocolMain {
 				}
 			}
 		}));
+		var buildSymbols = watchProtocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			id: 430,
+			method: "textDocument/documentSymbol",
+			params: {textDocument: {uri: watchMainUri}}
+		})), hasSelectedBuild = false, hasWrongBuild = false;
+		for (symbol in cast(Json.parse(buildSymbols[0]).result, Array<Dynamic>)) {
+			if (symbol.name == "buildSelected")
+				hasSelectedBuild = true;
+			if (symbol.name == "wrongBuild")
+				hasWrongBuild = true;
+		}
+		if (!hasSelectedBuild || hasWrongBuild)
+			throw "selected build defines did not control LSP symbols";
 		sys.io.File.saveContent(watchHelperPath,
 			"package lib; class Helper { public function new() {} public function answer():Int return 2; public function diskOnly():Int return 3; }");
 		watchProtocol.handle(watchedFileMessage(watchHelperUri, 2));

@@ -39,6 +39,7 @@ class ModuleState {
 	public var lastGoodSource:Null<SourceFile>;
 	public var lastGoodRevision:Int = 0;
 	public var dependencies:Array<String> = [];
+	public var conditionalDefines:Array<String> = [];
 	public var semanticDependencies:Map<String, Array<SemanticDependency>> = [];
 	public var diagnostics:Array<Diagnostic> = [];
 	public var signatureFingerprints:Map<String, String> = [];
@@ -102,6 +103,7 @@ class ModuleState {
 		result.lastGoodSource = lastGoodSource;
 		result.lastGoodRevision = lastGoodRevision;
 		result.dependencies = dependencies.copy();
+		result.conditionalDefines = conditionalDefines.copy();
 		result.semanticDependencies = copyDependencyMap(semanticDependencies);
 		result.diagnostics = diagnostics.copy();
 		result.signatureFingerprints = copyMap(signatureFingerprints);

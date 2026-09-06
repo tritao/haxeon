@@ -40,7 +40,7 @@ class CompilationContext {
 		objectCache = owner.objectCache;
 		moduleId = owner.moduleId;
 		genericSpecializations = owner.genericSpecializations;
-		moduleAnalyzer = new ModuleAnalyzer(modules, owner.types, owner.natives, owner.compiledOnce);
+		moduleAnalyzer = new ModuleAnalyzer(modules, owner.types, owner.natives, owner.compiledOnce, owner.defines);
 	}
 
 	public function writableState(name:String, rollback:Map<String, ModuleState>):ModuleState

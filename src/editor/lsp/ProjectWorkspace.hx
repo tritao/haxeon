@@ -10,6 +10,7 @@ import sys.io.File;
 
 class HaxeProjectConfiguration {
 	public final id:String;
+	public final scopeId:String;
 	public final file:String;
 	public final classPaths:ReadOnlyArray<String>;
 	public final entries:ReadOnlyArray<String>;
@@ -22,13 +23,13 @@ class HaxeProjectConfiguration {
 		this.entries = sortedCopy(entries);
 		this.defines = sortedCopy(defines);
 		this.libraries = sortedCopy(libraries);
-		id = Sha256.encode([
+		scopeId = Sha256.encode([
 			file,
 			this.classPaths.join("|"),
 			this.entries.join("|"),
-			this.defines.join("|"),
 			this.libraries.join("|")
 		].join("\n"));
+		id = Sha256.encode(scopeId + "\n" + this.defines.join("|"));
 	}
 
 	public function owns(path:String):Bool {
@@ -158,8 +159,6 @@ class ProjectWorkspace {
 			catch (failure:Dynamic)
 				errors.push('$file: ${Std.string(failure)}');
 		for (configuration in configurations) {
-			if (configuration.defines.length > 0)
-				errors.push('${configuration.file}: conditional defines are recorded but not yet supported by this compiler');
 			if (configuration.libraries.length > 0)
 				errors.push('${configuration.file}: Haxelib dependencies are recorded but not yet resolved by this compiler');
 		}

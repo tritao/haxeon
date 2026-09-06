@@ -144,7 +144,7 @@ class LspProtocol {
 	function initialize(request:Dynamic, id:Dynamic):Array<String> {
 		project.initialize(required(request, "params"), service);
 		if (project.configurations.length > 0)
-			service.configure(project.configurations[0].id);
+			configure(project.configurations[0]);
 		var result = [response(id, initializeResult())];
 		for (message in project.errors)
 			result.push(notification("window/showMessage", {type: 1, message: 'Haxe project configuration: $message'}));
@@ -168,7 +168,7 @@ class LspProtocol {
 			];
 		var configuration = project.configurationFor("");
 		if (configuration != null)
-			service.configure(configuration.id);
+			configure(configuration);
 		analysisGeneration++;
 		for (module in service.compiler.modules.keys())
 			pendingDiagnosticTargets.set(module, true);
@@ -580,9 +580,12 @@ class LspProtocol {
 	function activateConfiguration(path:String):String {
 		var configuration = project.configurationFor(path);
 		if (configuration != null)
-			service.configure(configuration.id);
+			configure(configuration);
 		return project.compilerPath(path);
 	}
+
+	function configure(configuration:editor.lsp.ProjectWorkspace.HaxeProjectConfiguration):Void
+		service.configure(configuration.id, configuration.scopeId, configuration.defines.copy());
 
 	static function documentUri(request:Dynamic):String
 		return requiredString(required(required(request, "params"), "textDocument"), "uri");

@@ -3,6 +3,7 @@ package compiler.semantic;
 import compiler.syntax.Ast.AstFunction;
 import compiler.Diagnostic.CompileError;
 import compiler.syntax.Lexer;
+import compiler.syntax.ConditionalCompilation;
 import compiler.syntax.Parser;
 import compiler.QualifiedName;
 import compiler.runtime.NativeRegistry;
@@ -16,12 +17,14 @@ class ModuleAnalyzer {
 	final types:TypeRegistry;
 	final natives:NativeRegistry;
 	final compiledOnce:Bool;
+	final defines:Map<String, String>;
 
-	public function new(modules:Map<String, ModuleState>, types:TypeRegistry, natives:NativeRegistry, compiledOnce:Bool) {
+	public function new(modules:Map<String, ModuleState>, types:TypeRegistry, natives:NativeRegistry, compiledOnce:Bool, defines:Map<String, String>) {
 		this.modules = modules;
 		this.types = types;
 		this.natives = natives;
 		this.compiledOnce = compiledOnce;
+		this.defines = defines;
 	}
 
 	public function parse(state:ModuleState, entry:String, bodyChanged:Map<String, Bool>, signatureChanged:Map<String, Bool>,
@@ -29,7 +32,9 @@ class ModuleAnalyzer {
 		if (state.ast != null)
 			return;
 		try {
-			state.tokens = new Lexer(state.source).tokenize();
+			var conditional = ConditionalCompilation.process(state.source, defines);
+			state.conditionalDefines = conditional.defines;
+			state.tokens = new Lexer(state.source, conditional.text).tokenize();
 			state.ast = new Parser(state.tokens).parseProgram();
 			state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.revision, state.tokens);
 			state.parseVersion++;
