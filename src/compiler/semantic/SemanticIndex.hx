@@ -37,6 +37,7 @@ typedef SemanticCompletionLocal = {
 typedef SemanticCompletionContext = {
 	final locals:Array<SemanticCompletionLocal>;
 	final receiver:Null<CompilerType>;
+	final expected:Null<CompilerType>;
 }
 
 typedef SemanticSignatureInfo = {
@@ -55,6 +56,7 @@ class SemanticIndex {
 	final signatures:Map<String, SemanticSignatureInfo> = [];
 	final completionLocals:Array<SemanticCompletionLocal> = [];
 	final functionReceivers:Array<{span:SourceSpan, type:CompilerType}> = [];
+	final completionTypes:Array<{span:SourceSpan, type:CompilerType}> = [];
 	final tokens:Array<Token>;
 	final module:String;
 
@@ -175,7 +177,16 @@ class SemanticIndex {
 					if (local.name == qualifier)
 						receiver = local.type;
 		}
-		return {locals: locals, receiver: receiver};
+		var expected:Null<CompilerType> = null, expectedWidth = 0x3fffffff;
+		for (candidate in completionTypes)
+			if (position >= candidate.span.start && position <= candidate.span.end) {
+				var width = candidate.span.end - candidate.span.start;
+				if (width < expectedWidth) {
+					expected = candidate.type;
+					expectedWidth = width;
+				}
+			}
+		return {locals: locals, receiver: receiver, expected: expected};
 	}
 
 	function addCompletionLocal(identity:String, type:CompilerType, declaration:SourceSpan, scope:SourceSpan, depth:Int):Void {
@@ -324,6 +335,7 @@ class SemanticIndex {
 
 	function indexExpression(fn:TypedFunction, expression:TypedExpression, resolve:String->Null<SemanticSymbolId>,
 			resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>):Void {
+		completionTypes.push({span: expression.span, type: expression.type});
 		switch expression.expression {
 			case TLocal(identity), TCellLocal(identity, _), TCaptured(identity), TCellCaptured(identity, _):
 				var id = localId(fn, identity);

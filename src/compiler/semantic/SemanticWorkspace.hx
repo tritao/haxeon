@@ -144,6 +144,30 @@ class SemanticWorkspace {
 		return result;
 	}
 
+	public function enumCases(type:CompilerType):Array<IndexedSemanticSymbol> {
+		var enumName = switch type {
+			case TNullable(element): return enumCases(element);
+			case TInstance(NominalKind.Enum, name, _): Std.string(name);
+			default: return [];
+		};
+		var result:Array<IndexedSemanticSymbol> = [];
+		for (state in orderedStates()) {
+			var model = effectiveModel(state);
+			if (model == null)
+				continue;
+			var packagePrefix = model.program.packageName == null ? "" : Std.string(model.program.packageName) + ".";
+			for (symbol in model.index.symbols)
+				if (symbol.kind == DeclarationKind.EnumCase) {
+					var separator = symbol.name.lastIndexOf("."),
+						owner = separator < 0 ? "" : symbol.name.substring(0, separator);
+					if (owner == enumName || packagePrefix + owner == enumName)
+						result.push(symbol);
+				}
+		}
+		result.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		return result;
+	}
+
 	function memberInner(type:CompilerType, name:String, visiting:Map<String, Bool>):Null<WorkspaceDeclaration> {
 		return switch type {
 			case TNullable(element): memberInner(element, name, visiting);

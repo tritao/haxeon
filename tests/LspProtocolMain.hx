@@ -71,6 +71,17 @@ class LspProtocolMain {
 			|| signature.result.signatures[0].label != "add(left:Int, right:Int):Int"
 			|| signature.result.activeParameter != 1)
 			throw "LSP signature help did not use compiler signature information";
+		var completion = request(protocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 7,
+			method: "textDocument/completion",
+			params: {textDocument: {uri: callUri}, position: {line: 0, character: callSource.lastIndexOf("add")}}
+		})), foundRankedCall = false;
+		for (item in cast(completion.result.items, Array<Dynamic>))
+			if (item.label == "add" && item.sortText != null && item.insertText == "add(")
+				foundRankedCall = true;
+		if (!foundRankedCall)
+			throw "LSP completion omitted compiler ranking or insertion metadata";
 		var definition = request(protocol, Json.stringify({
 			jsonrpc: "2.0",
 			id: 3,

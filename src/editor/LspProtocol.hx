@@ -153,7 +153,9 @@ class LspProtocol {
 					{
 						label: item.label,
 						kind: completionKind(item.kind),
-						detail: item.detail
+						detail: item.detail,
+						sortText: item.sortText,
+						insertText: item.insertText
 					}
 			]
 		};

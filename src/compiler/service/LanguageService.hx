@@ -16,6 +16,7 @@ import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstStatement;
 import compiler.types.Type.CompilerType;
 import compiler.types.DeclarationIndex.DeclarationKind;
+import compiler.types.TypeRelations;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.runtime.RuntimeNatives;
 
@@ -36,6 +37,8 @@ typedef CompletionItem = {
 	final label:String;
 	final kind:String;
 	final detail:String;
+	final ?sortText:String;
+	final ?insertText:String;
 }
 
 /** Source location returned by a semantic navigation query. */
@@ -226,20 +229,32 @@ class LanguageService {
 					addInstanceMembers(receiverType, prefix, result);
 			}
 			if (result.length > 0) {
-				result.sort(function(a, b) return Reflect.compare(a.label, b.label));
+				sortCompletion(result);
 				tagResults(result, state);
 				return result;
 			}
 		}
 		if (semanticContext != null)
 			for (local in semanticContext.locals)
-				addMember(local.name, "variable", local.name + ":" + compilerTypeName(local.type), prefix, result);
+				addMember(local.name, "variable", local.name + ":" + compilerTypeName(local.type), prefix,
+					result, semanticContext.expected != null && completionTypeCompatible(local.type, semanticContext.expected) ? 0 : 2);
+		if (semanticContext != null && semanticContext.expected != null)
+			for (symbol in compiler.semanticWorkspace.enumCases(semanticContext.expected)) {
+				var label = sourceName(symbol.name),
+					signature = compiler.semanticWorkspace.indexedSignature(symbol.id),
+					insertText = signature != null && signature.parameters.length > 0 ? label + "(" : label;
+				addMember(label, "enumCase", symbol.name, prefix, result, 1, insertText);
+			}
 		if (model != null)
 			for (symbol in compiler.semanticWorkspace.visibleSymbols(state))
-				if (symbol.name.indexOf(".") < 0)
-					addMember(symbol.name, completionDeclarationKind(symbol.kind), symbol.name, prefix, result);
+				if (symbol.name.indexOf(".") < 0) {
+					var signature = compiler.semanticWorkspace.indexedSignature(symbol.id);
+					addMember(symbol.name, completionDeclarationKind(symbol.kind), symbol.name, prefix, result, 3,
+						signature == null ? null : symbol.name + "(");
+				}
 		for (symbol in documentSymbols(path))
 			addMember(symbol.name, symbol.kind, symbol.detail, prefix, result);
+		sortCompletion(result);
 		tagResults(result, state);
 		return result;
 	}
@@ -941,9 +956,28 @@ class LanguageService {
 		}
 	}
 
-	static function addMember(label:String, kind:String, detail:String, prefix:String, result:Array<CompletionItem>):Void {
+	static function addMember(label:String, kind:String, detail:String, prefix:String, result:Array<CompletionItem>, ?rank:Int = 3, ?insertText:String):Void {
 		if ((prefix.length == 0 || StringTools.startsWith(label, prefix)) && [for (item in result) item.label].indexOf(label) < 0)
-			result.push({label: label, kind: kind, detail: detail});
+			result.push({
+				label: label,
+				kind: kind,
+				detail: detail,
+				sortText: Std.string(rank) + "_" + label,
+				insertText: insertText
+			});
+	}
+
+	static function sortCompletion(result:Array<CompletionItem>):Void
+		result.sort(function(left, right) return Reflect.compare(left.sortText, right.sortText));
+
+	static function completionTypeCompatible(actual:CompilerType, expected:CompilerType):Bool {
+		if (TypeRelations.equals(actual, expected))
+			return true;
+		return switch expected {
+			case TDynamic: true;
+			case TNullable(element): completionTypeCompatible(actual, element);
+			default: false;
+		};
 	}
 
 	static function tagResults<T>(results:Array<T>, state:ModuleState):Void {

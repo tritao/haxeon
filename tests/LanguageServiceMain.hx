@@ -96,6 +96,28 @@ class LanguageServiceMain {
 				outerDetail = item.detail;
 		if (innerDetail != "value:String" || outerDetail != "value:Int")
 			throw "compiler completion context did not preserve lexical shadowing";
+		var expectedService = new LanguageService(),
+			expectedSource = "enum Choice { One; Two(value:Int); } function choose(candidate:Choice, count:Int):Choice return candidate; function main():Int return 0;";
+		expectedService.update("Expected.hx", expectedSource);
+		expectedService.compile("Expected");
+		var expectedPosition = expectedSource.indexOf("return candidate") + "return ".length,
+			expectedCompletion = expectedService.complete("Expected.hx", expectedPosition), candidateIndex = -1, oneIndex = -1, twoIndex = -1;
+		for (index in 0...expectedCompletion.length)
+			switch expectedCompletion[index].label {
+				case "candidate":
+					candidateIndex = index;
+				case "One":
+					oneIndex = index;
+				case "Two":
+					twoIndex = index;
+				default:
+			}
+		if (candidateIndex < 0
+			|| oneIndex <= candidateIndex
+			|| twoIndex <= candidateIndex
+			|| expectedCompletion[twoIndex].insertText != "Two("
+			|| !StringTools.startsWith(expectedCompletion[candidateIndex].sortText, "0_"))
+			throw "expected-type completion ranking or enum insertion failed";
 		var methodPosition = source.lastIndexOf("open") + 2,
 			definition = service.definition("Main.hx", methodPosition);
 		if (definition == null
