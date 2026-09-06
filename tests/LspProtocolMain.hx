@@ -3,6 +3,7 @@ import editor.LspProtocol;
 import editor.lsp.DocumentStore;
 import editor.lsp.DocumentStore.LspDocument;
 import haxe.Json;
+import haxe.io.Path;
 import compiler.service.CancellationToken;
 import compiler.service.LanguageService;
 import compiler.service.LanguageService.CompletionItem;
@@ -35,6 +36,55 @@ class LspProtocolMain {
 			|| initialized.result.capabilities.signatureHelpProvider == null
 			|| initialized.result.capabilities.textDocumentSync.change != 1)
 			throw "LSP initialization capabilities are incomplete";
+		var fixtureRoot = sys.FileSystem.absolutePath("tests/fixtures/pragtical"),
+			fixtureMainPath = Path.join([fixtureRoot, "pragtical/app/LspFixture.hx"]),
+			fixtureMainUri = "file://" + fixtureMainPath,
+			fixtureSource = sys.io.File.getContent(fixtureMainPath),
+			fixtureDocument = new LspDocument(fixtureMainUri, fixtureMainPath, 1, fixtureSource),
+			projectProtocol = new LspProtocol();
+		request(projectProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 40,
+			method: "initialize",
+			params: {rootUri: "file://" + fixtureRoot}
+		}));
+		if (projectProtocol.project.configurations.length != 1
+			|| !projectProtocol.project.hasDiskSource(Path.join([fixtureRoot, "pragtical/plugins/SearchPlugin.hx"])))
+			throw "LSP initialization did not discover the Haxe project";
+		projectProtocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: fixtureMainUri,
+					languageId: "haxe",
+					version: 1,
+					text: fixtureSource
+				}
+			}
+		}));
+		var importedTypeOffset = fixtureSource.indexOf("Document"),
+			importedDefinition = request(projectProtocol, Json.stringify({
+				jsonrpc: "2.0",
+				id: 41,
+				method: "textDocument/definition",
+				params: {textDocument: {uri: fixtureMainUri}, position: fixtureDocument.position(importedTypeOffset + 2)}
+			}));
+		if (importedDefinition.result == null || !StringTools.endsWith(importedDefinition.result.uri, "/pragtical/api/Document.hx"))
+			throw "project-backed definition did not resolve an unopened dependency";
+		var memberOffset = fixtureSource.indexOf("document.selection") + "document.".length,
+			projectCompletion = request(projectProtocol, Json.stringify({
+				jsonrpc: "2.0",
+				id: 42,
+				method: "textDocument/completion",
+				params: {textDocument: {uri: fixtureMainUri}, position: fixtureDocument.position(memberOffset)}
+			})),
+			hasUnopenedMember = false;
+		for (item in cast(projectCompletion.result.items, Array<Dynamic>))
+			if (item.label == "name")
+				hasUnopenedMember = true;
+		if (!hasUnopenedMember)
+			throw "project-backed completion omitted members from unopened dependencies";
 		var source = "function main():Int { var answer = 42; return answer; }",
 			uri = "file:///workspace/Main.hx";
 		var opened = protocol.handle(Json.stringify({

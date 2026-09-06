@@ -8,6 +8,7 @@ import compiler.service.CancellationToken;
 import compiler.service.LanguageService;
 import editor.lsp.DocumentStore;
 import editor.lsp.DocumentStore.LspDocument;
+import editor.lsp.ProjectWorkspace;
 import haxe.Json;
 
 private class LspRequestError {
@@ -24,6 +25,9 @@ private class LspRequestError {
 class LspProtocol {
 	final service:LanguageService;
 	final documents = new DocumentStore();
+
+	public final project = new ProjectWorkspace();
+
 	final publishedDiagnostics:Map<String, String> = [];
 	final activeRequests:Map<String, CancellationToken> = [];
 	final requestMutex = new sys.thread.Mutex();
@@ -58,7 +62,7 @@ class LspProtocol {
 			return id == null ? [] : [error(id, -32600, "Server has shut down")];
 		try {
 			return switch method {
-				case "initialize": [response(id, initializeResult())];
+				case "initialize": initialize(request, id);
 				case "initialized": [];
 				case "shutdown":
 					shutdownRequested = true;
@@ -134,6 +138,14 @@ class LspProtocol {
 		return generation == analysisGeneration ? diagnosticNotifications(generation) : [];
 	}
 
+	function initialize(request:Dynamic, id:Dynamic):Array<String> {
+		project.initialize(required(request, "params"), service);
+		var result = [response(id, initializeResult())];
+		for (message in project.errors)
+			result.push(notification("window/showMessage", {type: 1, message: 'Haxe project configuration: $message'}));
+		return result;
+	}
+
 	function initializeResult():Dynamic
 		return {
 			capabilities: {
@@ -167,7 +179,7 @@ class LspProtocol {
 		if (document == null)
 			return [];
 		var generation = ++analysisGeneration;
-		var path = document.path;
+		var path = project.compilerPath(document.path);
 		service.update(path, document.source);
 		var changedModule = ModulePath.fromFile(path),
 			targets = service.compiler.dependentModules(changedModule);
@@ -186,8 +198,9 @@ class LspProtocol {
 	}
 
 	function close(request:Dynamic):Array<String> {
-		var uri = documentUri(request);
+		var uri = documentUri(request), document = documents.get(uri);
 		documents.close(uri);
+		project.restore(document.path, service);
 		publishedDiagnostics.set(uri, "");
 		return [notification("textDocument/publishDiagnostics", {uri: uri, diagnostics: []})];
 	}
@@ -199,7 +212,8 @@ class LspProtocol {
 		for (state in states) {
 			if (generation != analysisGeneration)
 				return [];
-			var uri = documents.uri(state.source.path),
+			var diskPath = project.diskPath(state.source.path),
+				uri = documents.uri(diskPath),
 				fingerprint = diagnosticFingerprint(state.diagnostics);
 			if (publishedDiagnostics.get(uri) == fingerprint)
 				continue;
@@ -207,7 +221,7 @@ class LspProtocol {
 				uri: uri,
 				diagnostics: [for (diagnostic in state.diagnostics) diagnosticJson(diagnostic)]
 			};
-			var open = documents.forPath(state.source.path);
+			var open = documents.forPath(diskPath);
 			if (open != null)
 				Reflect.setField(params, "version", open.version);
 			pending.push({uri: uri, fingerprint: fingerprint, message: notification("textDocument/publishDiagnostics", params)});
@@ -235,7 +249,7 @@ class LspProtocol {
 		ensureAnalyzed(document, token);
 		requireCurrent(document);
 		return [
-			for (symbol in service.documentSymbols(document.path))
+			for (symbol in service.documentSymbols(compilerPath(document)))
 				{
 					name: symbol.name,
 					kind: symbolKind(symbol.kind),
@@ -253,7 +267,7 @@ class LspProtocol {
 		return {
 			isIncomplete: false,
 			items: [
-				for (item in service.complete(document.path, offset, token))
+				for (item in service.complete(compilerPath(document), offset, token))
 					{
 						label: item.label,
 						kind: completionKind(item.kind),
@@ -268,14 +282,14 @@ class LspProtocol {
 	function hover(request:Dynamic, token:CancellationToken):Dynamic {
 		var document = document(request);
 		ensureAnalyzed(document, token);
-		var value = service.hover(document.path, positionOffset(document, position(request)));
+		var value = service.hover(compilerPath(document), positionOffset(document, position(request)));
 		return value == null ? null : {contents: {kind: "plaintext", value: value}};
 	}
 
 	function signatureHelp(request:Dynamic, token:CancellationToken):Dynamic {
 		var document = document(request);
 		ensureAnalyzed(document, token);
-		var value = service.signatureHelp(document.path, positionOffset(document, position(request)));
+		var value = service.signatureHelp(compilerPath(document), positionOffset(document, position(request)));
 		return value == null ? null : {
 			signatures: [
 				{
@@ -292,7 +306,7 @@ class LspProtocol {
 		var document = document(request);
 		ensureAnalyzed(document, token);
 		requireCurrent(document);
-		var location = service.definition(document.path, positionOffset(document, position(request)));
+		var location = service.definition(compilerPath(document), positionOffset(document, position(request)));
 		return location == null ? null : locationJson(location.path, location.span.start, location.span.end);
 	}
 
@@ -300,7 +314,7 @@ class LspProtocol {
 		var document = document(request);
 		ensureAnalyzed(document, token);
 		requireCurrent(document);
-		var locations = service.references(document.path, positionOffset(document, position(request)), token);
+		var locations = service.references(compilerPath(document), positionOffset(document, position(request)), token);
 		return [
 			for (location in locations)
 				locationJson(location.path, location.span.start, location.span.end)
@@ -308,9 +322,10 @@ class LspProtocol {
 	}
 
 	function ensureAnalyzed(document:LspDocument, token:CancellationToken):Void {
-		if (!deferDiagnostics || service.isCurrent(document.path))
+		var path = compilerPath(document);
+		if (!deferDiagnostics || service.isCurrent(path))
 			return;
-		var module = ModulePath.fromFile(document.path),
+		var module = ModulePath.fromFile(path),
 			targets = [for (target in pendingDiagnosticTargets.keys()) target],
 			started = Sys.time();
 		targets.sort(function(left, right) {
@@ -328,7 +343,7 @@ class LspProtocol {
 			catch (cancelled:CancellationError)
 				throw cancelled
 			catch (_:CompileError) {} catch (_:Dynamic) {}
-			if (service.isCurrent(document.path))
+			if (service.isCurrent(path))
 				break;
 		}
 		lastForegroundAnalysisMs = (Sys.time() - started) * 1000.0;
@@ -381,7 +396,7 @@ class LspProtocol {
 		ensureAnalyzed(document, token);
 		requireCurrent(document);
 		var offset = positionOffset(document, position(request));
-		for (token in service.compiler.modules.get(ModulePath.fromFile(document.path)).tokens)
+		for (token in service.compiler.modules.get(ModulePath.fromFile(compilerPath(document))).tokens)
 			if (offset >= token.span.start && offset <= token.span.end && Std.string(token.kind) == "Identifier")
 				return {range: document.range(token.span.start, token.span.end), placeholder: token.text};
 		return null;
@@ -392,13 +407,13 @@ class LspProtocol {
 		ensureAnalyzed(document, token);
 		requireCurrent(document);
 		var params:Dynamic = required(request, "params"),
-			edits = service.rename(document.path, positionOffset(document, position(request)), requiredString(params, "newName")),
+			edits = service.rename(compilerPath(document), positionOffset(document, position(request)), requiredString(params, "newName")),
 			grouped:Map<String, Array<Dynamic>> = [],
 			targets:Map<String, LspDocument> = [];
 		for (edit in edits) {
 			if (edit.stale)
 				throw new LspRequestError(-32801, "Rename result is based on stale source");
-			var uri = documents.uri(edit.path),
+			var uri = documents.uri(project.diskPath(edit.path)),
 				target = documentForPath(edit.path),
 				existing = grouped.get(uri);
 			if (existing == null)
@@ -422,26 +437,30 @@ class LspProtocol {
 
 	function locationJson(path:String, start:Int, end:Int):Dynamic {
 		var target = documentForPath(path);
-		return {uri: documents.uri(path), range: target.range(start, end)};
+		return {uri: documents.uri(project.diskPath(path)), range: target.range(start, end)};
 	}
 
 	function documentForPath(path:String):LspDocument {
-		var open = documents.forPath(path);
+		var diskPath = project.diskPath(path),
+			open = documents.forPath(diskPath);
 		if (open != null)
 			return open;
 		var state = service.compiler.modules.get(ModulePath.fromFile(path));
 		if (state == null)
 			throw 'Unknown source path: $path';
-		return new LspDocument(documents.uri(path), path, state.revision, state.source.text);
+		return new LspDocument(documents.uri(diskPath), diskPath, state.revision, state.source.text);
 	}
 
 	function document(request:Dynamic):LspDocument
 		return documents.get(documentUri(request));
 
 	function requireCurrent(document:LspDocument):Void {
-		if (!service.isCurrent(document.path))
+		if (!service.isCurrent(compilerPath(document)))
 			throw new LspRequestError(-32801, "Semantic snapshot does not match the current document version");
 	}
+
+	function compilerPath(document:LspDocument):String
+		return project.compilerPath(document.path);
 
 	static function documentUri(request:Dynamic):String
 		return requiredString(required(required(request, "params"), "textDocument"), "uri");

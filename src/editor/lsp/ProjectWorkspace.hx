@@ -1,0 +1,233 @@
+package editor.lsp;
+
+import compiler.service.LanguageService;
+import haxe.Json;
+import haxe.io.Path;
+import sys.FileSystem;
+import sys.io.File;
+
+typedef HaxeProjectConfiguration = {
+	final file:String;
+	final classPaths:Array<String>;
+	final entries:Array<String>;
+	final defines:Array<String>;
+	final libraries:Array<String>;
+}
+
+/** Disk-backed project sources kept below open-document overlays. */
+class ProjectWorkspace {
+	public final configurations:Array<HaxeProjectConfiguration> = [];
+	public final errors:Array<String> = [];
+
+	final diskSources:Map<String, String> = [];
+	final compilerPathByDisk:Map<String, String> = [];
+	final diskPathByCompiler:Map<String, String> = [];
+	final sourceRoots:Array<String> = [];
+
+	public function new() {}
+
+	public function initialize(params:Dynamic, service:LanguageService):Void {
+		var roots = workspaceRoots(params), configFiles:Array<String> = [];
+		for (root in roots)
+			if (FileSystem.exists(root) && FileSystem.isDirectory(root))
+				for (name in FileSystem.readDirectory(root))
+					if (name == "haxe.json" || StringTools.endsWith(name, ".hxml"))
+						configFiles.push(Path.join([root, name]));
+		configFiles.sort(Reflect.compare);
+		for (file in configFiles)
+			try
+				configurations.push(parseConfiguration(file))
+			catch (failure:Dynamic)
+				errors.push('$file: ${Std.string(failure)}');
+		if (configurations.length == 0)
+			for (root in roots)
+				sourceRoots.push(root);
+		else
+			for (configuration in configurations)
+				for (classPath in configuration.classPaths)
+					if (sourceRoots.indexOf(classPath) < 0)
+						sourceRoots.push(classPath);
+		sourceRoots.sort(Reflect.compare);
+		for (root in sourceRoots)
+			loadSources(root, service);
+	}
+
+	public function restore(path:String, service:LanguageService):Void {
+		var source = diskSources.get(normalize(path));
+		if (source != null)
+			service.update(compilerPath(path), source);
+	}
+
+	public function hasDiskSource(path:String):Bool
+		return diskSources.exists(normalize(path));
+
+	public function compilerPath(path:String):String {
+		var normalized = normalize(path),
+			known = compilerPathByDisk.get(normalized);
+		if (known != null)
+			return known;
+		for (root in sourceRoots) {
+			var relative = relativePath(root, normalized);
+			if (relative != normalized) {
+				compilerPathByDisk.set(normalized, relative);
+				diskPathByCompiler.set(relative, normalized);
+				return relative;
+			}
+		}
+		return path;
+	}
+
+	public function diskPath(path:String):String {
+		var known = diskPathByCompiler.get(path);
+		return known == null ? path : known;
+	}
+
+	function parseConfiguration(file:String):HaxeProjectConfiguration {
+		return StringTools.endsWith(file, ".hxml") ? parseHxml(file) : parseJson(file);
+	}
+
+	function parseHxml(file:String):HaxeProjectConfiguration {
+		var base = Path.directory(file), classPaths = [], entries = [], defines = [], libraries = [], words:Array<String> = [];
+		for (line in File.getContent(file).split("\n")) {
+			var clean = StringTools.trim(line), comment = clean.indexOf("#");
+			if (comment >= 0)
+				clean = StringTools.trim(clean.substr(0, comment));
+			if (clean.length > 0)
+				for (word in ~/\s+/g.split(clean))
+					words.push(word);
+		}
+		var index = 0;
+		while (index < words.length) {
+			var option = words[index++],
+				value = index < words.length ? words[index] : null;
+			switch option {
+				case "-cp", "--class-path":
+					if (value != null) {
+						classPaths.push(resolve(base, value));
+						index++;
+					}
+				case "-main", "--main":
+					if (value != null) {
+						entries.push(value);
+						index++;
+					}
+				case "-D", "--define":
+					if (value != null) {
+						defines.push(value);
+						index++;
+					}
+				case "-lib", "--library":
+					if (value != null) {
+						libraries.push(value);
+						index++;
+					}
+				default:
+					if (StringTools.startsWith(option, "-cp="))
+						classPaths.push(resolve(base, option.substr(4)));
+			}
+		}
+		if (classPaths.length == 0)
+			classPaths.push(base);
+		return {
+			file: file,
+			classPaths: classPaths,
+			entries: entries,
+			defines: defines,
+			libraries: libraries
+		};
+	}
+
+	function parseJson(file:String):HaxeProjectConfiguration {
+		var value:Dynamic = Json.parse(File.getContent(file)),
+			base = Path.directory(file),
+			classPaths:Array<String> = [],
+			entries:Array<String> = [],
+			defines:Array<String> = [],
+			libraries:Array<String> = [];
+		appendStrings(value, "classPath", item -> classPaths.push(resolve(base, item)));
+		appendStrings(value, "classPaths", item -> classPaths.push(resolve(base, item)));
+		appendStrings(value, "sourcePaths", item -> classPaths.push(resolve(base, item)));
+		appendStrings(value, "main", entries.push);
+		appendStrings(value, "defines", defines.push);
+		appendStrings(value, "libraries", libraries.push);
+		if (classPaths.length == 0)
+			classPaths.push(base);
+		return {
+			file: file,
+			classPaths: classPaths,
+			entries: entries,
+			defines: defines,
+			libraries: libraries
+		};
+	}
+
+	function loadSources(root:String, service:LanguageService):Void {
+		if (!FileSystem.exists(root) || !FileSystem.isDirectory(root)) {
+			errors.push('Source root does not exist: $root');
+			return;
+		}
+		var pending = [root], loaded = 0;
+		while (pending.length > 0 && loaded < 10000) {
+			var directory = pending.pop(),
+				names = FileSystem.readDirectory(directory);
+			names.sort(Reflect.compare);
+			for (name in names) {
+				if (name == ".git" || name == "node_modules" || name == "build" || name == "out" || name == "vendor")
+					continue;
+				var path = normalize(Path.join([directory, name]));
+				if (FileSystem.isDirectory(path))
+					pending.push(path);
+				else if (StringTools.endsWith(name, ".hx")) {
+					var source = File.getContent(path),
+						compilerPath = relativePath(root, path);
+					diskSources.set(path, source);
+					compilerPathByDisk.set(path, compilerPath);
+					diskPathByCompiler.set(compilerPath, path);
+					service.update(compilerPath, source);
+					loaded++;
+				}
+			}
+		}
+		if (loaded >= 10000)
+			errors.push('Source scan limit reached below $root');
+	}
+
+	static function appendStrings(value:Dynamic, field:String, append:String->Void):Void {
+		var found:Dynamic = Reflect.field(value, field);
+		if (Std.isOfType(found, String))
+			append(cast found);
+		else if (Std.isOfType(found, Array))
+			for (item in cast(found, Array<Dynamic>))
+				if (Std.isOfType(item, String))
+					append(cast item);
+	}
+
+	static function workspaceRoots(params:Dynamic):Array<String> {
+		var result:Array<String> = [],
+			folders:Dynamic = Reflect.field(params, "workspaceFolders");
+		if (Std.isOfType(folders, Array))
+			for (folder in cast(folders, Array<Dynamic>)) {
+				var uri:Dynamic = Reflect.field(folder, "uri");
+				if (Std.isOfType(uri, String))
+					result.push(uriPath(cast uri));
+			}
+		var root:Dynamic = Reflect.field(params, "rootUri");
+		if (result.length == 0 && Std.isOfType(root, String))
+			result.push(uriPath(cast root));
+		return result;
+	}
+
+	static function resolve(base:String, path:String):String
+		return normalize(Path.isAbsolute(path) ? path : Path.join([base, path]));
+
+	static function relativePath(root:String, path:String):String {
+		var prefix = StringTools.endsWith(root, "/") ? root : root + "/";
+		return StringTools.startsWith(path, prefix) ? path.substr(prefix.length) : path;
+	}
+
+	static function uriPath(uri:String):String
+		return normalize(StringTools.startsWith(uri, "file://") ? StringTools.urlDecode(uri.substr(7)) : uri);
+
+	static function normalize(path:String):String
+		return StringTools.replace(FileSystem.absolutePath(path), "\\", "/");
+}
