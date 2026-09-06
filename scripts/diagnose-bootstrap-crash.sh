@@ -5,10 +5,43 @@ root_dir=$(cd "$(dirname "$0")/.." && pwd)
 hl="$root_dir/vendor/hashlink/hl"
 compiler="$root_dir/bootstrap/compiler.hl"
 runtime="$root_dir/out/realtime_runtime.hdll"
+output="$root_dir/out/bootstrap/compiler-diagnostic.hl"
 report=${REPORT:-"$root_dir/out/diagnostics/bootstrap-crash.log"}
 
+usage() {
+	echo "usage: $0 [--compiler PATH] [--output PATH] [--report PATH]" >&2
+}
+
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		--compiler)
+			[[ $# -ge 2 ]] || { usage; exit 2; }
+			compiler=$2
+			shift 2
+			;;
+		--output)
+			[[ $# -ge 2 ]] || { usage; exit 2; }
+			output=$2
+			shift 2
+			;;
+		--report)
+			[[ $# -ge 2 ]] || { usage; exit 2; }
+			report=$2
+			shift 2
+			;;
+		*)
+			usage
+			exit 2
+			;;
+	esac
+done
+
+[[ "$compiler" = /* ]] || compiler="$root_dir/$compiler"
+[[ "$output" = /* ]] || output="$root_dir/$output"
+[[ "$report" = /* ]] || report="$root_dir/$report"
+
 if [[ ! -x "$hl" || ! -f "$compiler" ]]; then
-	echo "missing HashLink or bootstrap compiler; run ./scripts/bootstrap-compiler.sh first" >&2
+	echo "missing HashLink or compiler artifact: $compiler" >&2
 	exit 1
 fi
 if ! command -v gdb >/dev/null 2>&1; then
@@ -16,14 +49,14 @@ if ! command -v gdb >/dev/null 2>&1; then
 	exit 1
 fi
 
-mkdir -p "$(dirname "$report")" "$root_dir/out/bootstrap"
+mkdir -p "$(dirname "$report")" "$(dirname "$output")"
 make -C "$root_dir/vendor/hashlink" -j2 libhl.so hl >/dev/null
 cc -shared -fPIC -DHL_NAME\(n\)=realtime_##n \
 	-I "$root_dir/vendor/hashlink/src" "$root_dir/native/runtime.c" \
 	-L "$root_dir/vendor/hashlink" -lhl -Wl,-rpath,"$root_dir/vendor/hashlink" -o "$runtime"
 
 mapfile -t sources < <(cd "$root_dir" && find src stdlib -type f -name '*.hx' -print | LC_ALL=C sort)
-command=("$hl" "$compiler" --output=out/bootstrap/compiler-diagnostic.hl \
+command=("$hl" "$compiler" "--output=$output" \
 	--entry=compiler.tools.BootstrapCompiler --root=src --root=stdlib "${sources[@]}")
 
 {
@@ -31,6 +64,8 @@ command=("$hl" "$compiler" --output=out/bootstrap/compiler-diagnostic.hl \
 	echo "timestamp: $(date --iso-8601=seconds)"
 	echo "revision: $(git -C "$root_dir" rev-parse HEAD)"
 	echo "hashlink: $($hl --version)"
+	echo "compiler: $compiler"
+	echo "output: $output"
 	printf "command:"
 	printf " %q" "${command[@]}"
 	printf "\n\n"
