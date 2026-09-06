@@ -15,9 +15,9 @@ page-aligned mapping, so `munmap` fails and the JIT mapping remains resident.
 Changing the call to `m->jit_code` makes the mapping disappear but exposes stale
 process state and causes a later segmentation fault.
 
-The teardown order also calls `hl_free(&m->ctx.alloc)` before its remaining reads
-of `m->code`, including function counts and debug data. A future unload design
-must move allocator destruction after every metadata consumer.
+Module allocator destruction now runs after every metadata consumer. This fixes
+the teardown dependency order independently of whether the executable mapping is
+physically released.
 
 ## Prototype tested
 
@@ -66,6 +66,15 @@ module, duplicate publication is avoided, and every published method receives
 an unload notification before its JIT metadata is freed. Global shutdown also
 stops an active profiler worker before releasing the module registry or the
 process-owned JIT wrapper image.
+
+The remaining runtime caches and external containers have also been classified.
+Object/prototype metadata belongs to the module arena; field-name and GUID caches
+retain copied process-owned data; native libraries remain loaded for the process;
+and TLS/deque values remain visible through managed allocation ownership. A
+structured retirement snapshot reports live managed allocations, module-owned
+roots, registry readers, and typed category flags while host calls are quiesced.
+Owned roots are teardown inputs rather than external borrowers, so the API does
+not flatten these categories into a `ready` boolean.
 
 ## Required proof for a future in-process design
 

@@ -952,6 +952,18 @@ HL_PRIM int HL_NAME(native_root_count)( hl_runtime_module *runtime ) {
 	return hl_runtime_module_native_root_count(runtime);
 }
 
+HL_PRIM void HL_NAME(retirement_status)( hl_runtime_module *runtime, vbyte *out ) {
+	hl_module_retirement_status status;
+	int fields[4];
+	if( out == NULL ) return;
+	hl_runtime_module_retirement_status_get(runtime,&status);
+	fields[0] = status.live_managed_allocations;
+	fields[1] = status.owned_native_roots;
+	fields[2] = status.registry_readers;
+	fields[3] = status.flags;
+	memcpy(out,fields,sizeof(fields));
+}
+
 HL_PRIM int HL_NAME(revision)( hl_runtime_module *runtime ) {
 	return hl_runtime_module_revision(runtime);
 }
@@ -989,6 +1001,7 @@ DEFINE_PRIM(_I32,type_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,type_capacity,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,live_allocation_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,native_root_count,_ABSTRACT(realtime_module));
+DEFINE_PRIM(_VOID,retirement_status,_ABSTRACT(realtime_module) _BYTES);
 DEFINE_PRIM(_I32,revision,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_VOID,set_patch_failure_stage,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_VOID,dispose,_ABSTRACT(realtime_module));

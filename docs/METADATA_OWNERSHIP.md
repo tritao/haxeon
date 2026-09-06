@@ -14,6 +14,10 @@ module generation.
 | JIT ABI wrapper image | HashLink executable allocator | Process runtime | Dynamic-call bridge and wrapper closures | Global HashLink shutdown after all modules and managed values are finished |
 | Module-registry snapshot | HashLink module registry | Debugger, profiler, stack capture, symbol resolver, or type dump operation | Module metadata during one inspection | Reader releases its pin; unload waits after removing publication |
 | Platform JIT registration | Windows unwind service or Intel VTune | `hl_module` JIT image | Native unwinding and profiler symbol lookup | Notify or unregister before releasing executable code or debug metadata |
+| Object/prototype runtime metadata | Module arena | `hl_module` type descriptors | Reflection and dynamic dispatch | Module teardown after managed borrowers are gone |
+| Field-name and GUID caches | Process runtime | HashLink process | Reflection by copied name or GUID data | Global HashLink shutdown; entries do not borrow module pointers |
+| Native-library mapping | Platform loader | HashLink process | Resolved native function pointers | Process shutdown; module retirement never unloads a shared library |
+| TLS and deque roots | HashLink process or owning managed handle | GC root registry | Managed values stored by user code | Clearing/finalizing the container removes roots; module-owned values remain visible in the managed allocation census |
 | Patch JIT image and decoded function metadata | HashLink patch transaction | `hl_module` patch-code owner | Dispatch slots, escaped closures, active calls | Retain replaced images through module release until borrower tracking exists |
 | Constant and string append storage | HashLink patch transaction | `hl_module` | Patched code and appended type metadata | Runtime-module release |
 | Globals storage | HashLink module allocator | Loaded module generation | Generated code and rooted heap values | Runtime-module release after plugin deactivation |
@@ -75,6 +79,22 @@ the loaded `hl_module` as that owner, and the runtime reports them separately
 from managed allocations. Process-global runtime roots remain unowned. Removing
 a root removes its ownership record in the same GC-locked operation, so the
 count describes the current root set rather than historical registrations.
+
+`Runtime.retirementStatus()` takes these counters under the runtime-module call
+mutex. It reports module-owned roots separately from borrowers because teardown
+can remove the former itself. Managed allocations and pinned registry readers are
+known borrowers. The flags repeat the nonzero categories so callers do not need
+to recreate native classification rules from counts. This is a diagnostic and a
+building block for staged retirement; it does not by itself authorize executable
+unmapping.
+
+The cache and external-handle audit found no additional module pointer owner in
+HashLink's object/prototype metadata, field-name cache, GUID map, native-library
+table, TLS storage, or deque storage. Object/prototype metadata is reached only
+through the module type arena. Field names and GUID entries copy process-owned
+data. Native libraries intentionally remain process-loaded. TLS and deque roots
+may retain managed module values, which the explicit GC allocation-owner ledger
+counts without inferring ownership from `hl_type *`.
 
 All host-mediated execution of module code, including calls through retained
 closures, holds the runtime-module mutex. Acquiring that mutex for retirement is

@@ -57,6 +57,8 @@ private class RuntimeNative {
 	public static function native_root_count(module:hl.Abstract<"realtime_module">):Int
 		return 0;
 
+	public static function retirement_status(module:hl.Abstract<"realtime_module">, out:hl.Bytes):Void {}
+
 	public static function revision(module:hl.Abstract<"realtime_module">):Int
 		return 0;
 
@@ -139,6 +141,14 @@ class Runtime {
 
 	public static function nativeRootCount(module:LoadedModule):Int
 		return module.access(RuntimeNative.native_root_count);
+
+	public static function retirementStatus(module:LoadedModule):ModuleRetirementStatus
+		return module.access(function(handle) {
+			// Native ABI: four consecutive little-endian Int32 fields in declaration order.
+			var bytes = Bytes.alloc(16);
+			RuntimeNative.retirement_status(handle, bytes.getData());
+			return new ModuleRetirementStatus(bytes.getInt32(0), bytes.getInt32(4), bytes.getInt32(8), bytes.getInt32(12));
+		});
 
 	public static function liveRevision(module:LoadedModule):Int
 		return module.access(RuntimeNative.revision);

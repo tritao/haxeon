@@ -23,6 +23,7 @@ import runtime.LoadedModule;
 import runtime.RuntimeError;
 import runtime.RuntimeStatus;
 import runtime.PatchSet;
+import runtime.ModuleRetirementStatus.ModuleRetirementFlag;
 
 class HotReloadMain {
 	static function requireFunctionId(result:CompileResult, name:String):Int {
@@ -338,10 +339,15 @@ class HotReloadMain {
 		var initial = compiler.compile("Main"),
 			loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
 		var retained = Runtime.retainObject(loaded, initial.functionIds.get("Main.make"));
-		if (Runtime.nativeRootCount(loaded) == 0)
+		var retirement = Runtime.retirementStatus(loaded);
+		if (retirement.ownedNativeRoots == 0 || !retirement.has(OwnedNativeRoots))
 			throw "loaded module globals were not attributed to their native owner";
-		if (Runtime.liveAllocationCount(loaded) == 0)
+		if (retirement.liveManagedAllocations == 0 || !retirement.has(LiveManagedAllocations))
 			throw "retained object was not attributed to its module";
+		if (!retirement.hasKnownBorrowers())
+			throw "retirement status did not report the retained object borrower";
+		if (retirement.registryReaders != 0 || retirement.has(RegistryReaders))
+			throw "retirement status leaked an inactive registry reader";
 		try {
 			Runtime.callInt(loaded, initial.functionIds.get("Main.fail"));
 			throw "module exception unexpectedly returned";
