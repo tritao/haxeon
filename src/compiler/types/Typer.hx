@@ -573,7 +573,7 @@ class Typer {
 		return resultFunction;
 	}
 
-	function typeStatements(statements:Array<AstStatement>, scope:Scope, result:CompilerType):Array<TypedStatement> {
+	function typeStatements(statements:Array<AstStatement>, scope:Scope, result:Null<CompilerType>):Array<TypedStatement> {
 		var output = [];
 		for (statementIndex in 0...statements.length) {
 			var statement = statements[statementIndex];
@@ -615,11 +615,18 @@ class Typer {
 						context.cellTypes.set(name, value.type);
 					output.push(TVar(context.cells.exists(name) ? name : scope.requireId(name), value, span));
 				case Return(expression, span):
-					var value = typeExpression(expression, scope, result);
-					value = coerce(value, result, "return", "E1003");
+					var expected = result == null ? context.inferredResult : result;
+					var value = typeExpression(expression, scope, expected);
+					if (expected == null)
+						context.inferredResult = value.type;
+					else
+						value = coerce(value, expected, "return", "E1003");
 					output.push(TReturn(value, span));
 				case ReturnVoid(span):
-					if (result != TVoid)
+					var expected = result == null ? context.inferredResult : result;
+					if (expected == null)
+						context.inferredResult = TVoid;
+					else if (expected != TVoid)
 						fail("E1003", "Return type mismatch", span);
 					output.push(TReturnVoid(span));
 				case Throw(expression, span):
@@ -1407,16 +1414,6 @@ class Typer {
 							}
 						}
 					seedLambdaScope(body, lambdaScope);
-					var inferredResult:CompilerType = expectedFunction == null ? TVoid : expectedFunction.result;
-					if (expectedFunction == null)
-						for (statement in body)
-							switch statement {
-								case Return(value, _):
-									var typedValue = typeExpression(value, lambdaScope);
-									if (inferredResult == TVoid) inferredResult = typedValue.type; else if (!sameType(inferredResult,
-										typedValue.type)) fail("E1003", "Lambda return types do not match", span);
-								default:
-							}
 					var typedBodyScope = new Scope();
 					for (i in 0...lambdaArguments.length) {
 						var localName = arguments[i].name == "_" ? '$' + 'discard:$i' : arguments[i].name;
@@ -1428,7 +1425,7 @@ class Typer {
 					var lambdaName = '$' + 'lambda:${context.name}:${span.start}',
 						previousContext = context;
 					context = new BodyContext(lambdaName, previousContext.typeSubstitutions);
-					context.resultType = inferredResult;
+					context.resultType = expectedFunction == null ? TVoid : expectedFunction.result;
 					CaptureAnalysis.collectAssignedLocals(body, context.assigned);
 					var lambdaDeclared:Map<String, Bool> = [];
 					for (argument in arguments)
@@ -1440,7 +1437,9 @@ class Typer {
 						context.cells.set(name, '$' + 'cell:' + lambdaName + ':' + name);
 						context.cellKinds.set(name, MutableCapture);
 					}
-					var typedBody = typeStatements(body, typedBodyScope, inferredResult);
+					var typedBody = typeStatements(body, typedBodyScope, expectedFunction == null ? null : expectedFunction.result),
+						inferredResult = expectedFunction == null ? (context.inferredResult == null ? TVoid : context.inferredResult) : expectedFunction.result;
+					context.resultType = inferredResult;
 					var lambdaCells = copyMap(context.cells),
 						lambdaCellTypes = copyMap(context.cellTypes),
 						lambdaCellKinds = copyMap(context.cellKinds);
@@ -1930,6 +1929,8 @@ class Typer {
 							typeExpression(arguments[i], scope, functionType.arguments[i])
 					];
 					typed = coerceArguments(typed, functionType.arguments, name);
+					for (captured in context.cells.keys())
+						scope.invalidate(captured);
 					new TypedExpression(TClosureCall(new TypedExpression(TLocal(scope.requireId(name)), callable, span), typed), functionType.result, span);
 				} else {
 					if (name.indexOf(".") < 0) {

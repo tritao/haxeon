@@ -200,7 +200,9 @@ class Parser {
 	}
 
 	function parseEnum(start:SourceSpan):AstEnum {
-		var name = consume(TokenKind.Identifier).text, cases = [];
+		var name = consume(TokenKind.Identifier).text,
+			typeParameters = parseTypeParameters(),
+			cases = [];
 		consume(TokenKind.LeftBrace);
 		while (!check(TokenKind.RightBrace)) {
 			var caseToken = consumeName(),
@@ -229,7 +231,7 @@ class Parser {
 			consume(TokenKind.Semicolon);
 		}
 		var end = consume(TokenKind.RightBrace).span;
-		return {name: name, cases: cases, span: start.merge(end)};
+		return {name: name, typeParameters: typeParameters, cases: cases, span: start.merge(end)};
 	}
 
 	function parseQualifiedName():String {
@@ -1013,17 +1015,7 @@ class Parser {
 		if (check(TokenKind.LeftParen)) {
 			var saved = position,
 				start = current().span,
-				lambdaStart = position + 1,
-				isLambda = lambdaStart < tokens.length
-					&& ((tokens[lambdaStart].kind == TokenKind.RightParen
-						&& lambdaStart + 1 < tokens.length
-						&& tokens[lambdaStart + 1].kind == TokenKind.Arrow)
-						|| (tokens[lambdaStart].kind == TokenKind.Identifier
-							&& lambdaStart + 1 < tokens.length
-							&& tokens[lambdaStart + 1].kind == TokenKind.Colon)
-						|| (tokens[lambdaStart].kind == TokenKind.Question
-							&& lambdaStart + 2 < tokens.length
-							&& tokens[lambdaStart + 2].kind == TokenKind.Colon));
+				isLambda = parenthesizedLambdaAhead();
 			if (!isLambda) {
 				advance();
 				var grouped = parseExpression();
@@ -1042,10 +1034,10 @@ class Parser {
 					var optional = match(TokenKind.Question),
 						argumentStart = current().span,
 						argumentName = consume(TokenKind.Identifier).text;
-					consume(TokenKind.Colon);
+					var argumentType = match(TokenKind.Colon) ? parseType() : InferredType;
 					arguments.push({
 						name: argumentName,
-						type: parseType(),
+						type: argumentType,
 						span: argumentStart.merge(previous().span),
 						optional: optional,
 						defaultValue: null
@@ -1115,6 +1107,22 @@ class Parser {
 		}
 		fail(current(), "Expected expression");
 		return null;
+	}
+
+	function parenthesizedLambdaAhead():Bool {
+		var depth = 0, cursor = position;
+		while (cursor < tokens.length) {
+			switch tokens[cursor].kind {
+				case LeftParen: depth++;
+				case RightParen:
+					depth--;
+					if (depth == 0)
+						return cursor + 1 < tokens.length && tokens[cursor + 1].kind == TokenKind.Arrow;
+				default:
+			}
+			cursor++;
+		}
+		return false;
 	}
 
 	function parseComprehensionValue():AstExpression {
@@ -1381,6 +1389,12 @@ class Parser {
 				value = decodeString(tag.text);
 			consume(TokenKind.Greater);
 			return NativeAbstractType(value);
+		}
+		if (match(TokenKind.Less)) {
+			do
+				parseType()
+			while (match(TokenKind.Comma));
+			consume(TokenKind.Greater);
 		}
 		return NamedType(name);
 	}

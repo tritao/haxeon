@@ -570,6 +570,9 @@ class TestMain {
 		expectCompileError('typedef Pair = {left:Int, right:Int}; function consume(pair:Pair):Int return pair.left; function main():Int return consume({left: 42});',
 			'Missing object field "right"');
 		Frontend.compile("function main():Int { var convert:(Int) -> Dynamic = (value:Int) -> { return value; }; convert(42); return 42; }");
+		Frontend.compile("function main():Int { var convert:(Int) -> Int = (value) -> { return value; }; return convert(42); }");
+		expectCompileError("class Box { public var value:Int; } function main():Int { var box:Null<Box> = new Box(); var clear = () -> { box = null; }; if (box != null) { clear(); return box.value; } return 0; }",
+			'Field "value" requires an object');
 		expectCompileError("class Box { public var value:Int; } function main():Int { var box:Null<Box> = new Box(); if (box != null) { box = null; return box.value; } return 0; }",
 			'Field "value" requires an object');
 		var captureProgram = new Parser(new Lexer(new SourceFile("capture.hx",

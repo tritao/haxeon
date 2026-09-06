@@ -14,6 +14,7 @@ class BodyContext {
 	public var loopDepth:Int = 0;
 	public final loopEarlyExits:Array<Bool> = [];
 	public var resultType:CompilerType = TVoid;
+	public var inferredResult:Null<CompilerType>;
 
 	public function new(name:String, ?typeSubstitutions:Map<String, CompilerType>) {
 		this.name = name;

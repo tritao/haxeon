@@ -101,7 +101,11 @@ class CaptureAnalysis {
 		for (statement in statements)
 			switch statement {
 				case UninitializedDeclaration(_, _, _):
-				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
+				case VarDeclaration(_, _, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
+					collectExpressionVariables(expression, names);
+				case Assignment(name, expression, _):
+					if (name.indexOf(".") < 0)
+						names.set(name, true);
 					collectExpressionVariables(expression, names);
 				case IndexAssignment(array, offset, expression, _):
 					collectExpressionVariables(array, names);

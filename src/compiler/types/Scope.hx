@@ -87,6 +87,12 @@ class Scope {
 			facts.refine(local.id, type);
 	}
 
+	public function invalidate(name:String):Void {
+		var local = resolveLocal(name);
+		if (local != null)
+			facts.invalidate(local.id);
+	}
+
 	public function isCapture(name:String):Bool
 		return captures.exists(name);
 
