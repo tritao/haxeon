@@ -85,6 +85,10 @@ class LoadedModule {
 					handle = null;
 					deferredDispose = null;
 				} catch (error:Dynamic) {
+					if (Std.isOfType(error, RuntimeError) && cast(error, RuntimeError).status == RuntimeStatus.RetirementBlocked) {
+						mutex.release();
+						return;
+					}
 					mutex.release();
 					throw error;
 				}
@@ -94,24 +98,29 @@ class LoadedModule {
 	}
 
 	@:allow(runtime.Runtime)
-	function close(dispose:hl.Abstract<"realtime_module">->Void):Void {
+	function close(dispose:hl.Abstract<"realtime_module">->Void):Bool {
 		mutex.acquire();
 		var current = handle;
 		if (current == null) {
 			mutex.release();
-			return;
+			return true;
 		}
 		closeRequested = true;
 		if (borrowers > 0) {
 			deferredDispose = dispose;
 			mutex.release();
-			return;
+			return false;
 		}
 		try {
 			dispose(current);
 			handle = null;
 			mutex.release();
+			return true;
 		} catch (error:Dynamic) {
+			if (Std.isOfType(error, RuntimeError) && cast(error, RuntimeError).status == RuntimeStatus.RetirementBlocked) {
+				mutex.release();
+				return false;
+			}
 			mutex.release();
 			throw error;
 		}

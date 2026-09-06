@@ -10,4 +10,5 @@ enum abstract RuntimeStatus(Int) from Int to Int {
 	var JitFailed = 5;
 	var BadFunction = 6;
 	var Exception = 7;
+	var RetirementBlocked = 8;
 }

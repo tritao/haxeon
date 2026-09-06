@@ -39,7 +39,12 @@ class HotReloadMain {
 		testBackendStateLifetime();
 		testLiveAbiPatchMatrix();
 		testRetainedPatchedClosure();
+		if (Runtime.retryRetirements() != 0)
+			throw "released closure kept module retirement blocked after its frame unwound";
 		testRetainedObject();
+		if (Runtime.retryRetirements() != 0)
+			throw "released object kept module retirement blocked after its frame unwound";
+		testPhysicalModuleReclamation();
 		testCompilerRestart();
 		var compiler = new Compiler();
 		compiler.update("Value.hx", "function value():Int { return 42; }");
@@ -392,6 +397,26 @@ class HotReloadMain {
 		if (Runtime.callRetainedClosureInt(retained) != 42)
 			throw "module disposal invalidated a retained closure";
 		retained.release();
+		Runtime.dispose(loaded);
+	}
+
+	static function testPhysicalModuleReclamation():Void {
+		var compiler = new Compiler();
+		compiler.update("Main.hx", "function main():Int { return 42; }");
+		var result = compiler.compile("Main"),
+			bytes = HlWriter.encode(result.module),
+			mainId = result.functionIds.get("main");
+		for (i in 0...100) {
+			runDisposableGeneration(bytes, result.runtimeIdentity, mainId);
+			if (Runtime.retryRetirements() != 0)
+				throw 'physical module retirement remained blocked at iteration $i';
+		}
+	}
+
+	static function runDisposableGeneration(bytes:haxe.io.Bytes, identity:haxe.io.Bytes, mainId:Int):Void {
+		var loaded = Runtime.load(bytes, identity);
+		if (Runtime.callInt(loaded, mainId) != 42)
+			throw "disposable generation returned the wrong value";
 		Runtime.dispose(loaded);
 	}
 

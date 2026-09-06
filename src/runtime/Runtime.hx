@@ -1,6 +1,7 @@
 package runtime;
 
 import haxe.io.Bytes;
+import sys.thread.Mutex;
 
 /** Private declarations for the native module lifecycle and invocation ABI. */
 @:hlNative("realtime_runtime")
@@ -64,7 +65,8 @@ private class RuntimeNative {
 
 	public static function set_patch_failure_stage(module:hl.Abstract<"realtime_module">, stage:Int):Void {}
 
-	public static function dispose(module:hl.Abstract<"realtime_module">):Void {}
+	public static function dispose(module:hl.Abstract<"realtime_module">):Int
+		return -1;
 
 	public static function inspect_patch(bytes:hl.Bytes, length:Int):Int
 		return -1;
@@ -75,6 +77,9 @@ private class RuntimeNative {
  * Calls translate native status codes and exceptions into {@link RuntimeError}.
  */
 class Runtime {
+	static final retirementBacklog:Array<LoadedModule> = [];
+	static final retirementMutex = new Mutex();
+
 	public static function inspectPatch(bytes:Bytes):{baseRevision:Int, revision:Int, functionCount:Int} {
 		var summary = RuntimeNative.inspect_patch(bytes.getData(), bytes.length);
 		if (summary < 0)
@@ -83,6 +88,7 @@ class Runtime {
 	}
 
 	public static function load(bytes:Bytes, identity:Bytes):LoadedModule {
+		retryRetirements();
 		var module = RuntimeNative.load(bytes.getData(), bytes.length, identity.getData(), identity.length);
 		if (module == null)
 			throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the module bytes");
@@ -158,8 +164,44 @@ class Runtime {
 			RuntimeNative.set_patch_failure_stage(handle, stage);
 		});
 
-	public static function dispose(module:LoadedModule):Void
-		module.close(RuntimeNative.dispose);
+	public static function dispose(module:LoadedModule):Void {
+		retirementMutex.acquire();
+		try {
+			if (!tryDispose(module) && retirementBacklog.indexOf(module) < 0)
+				retirementBacklog.push(module);
+			retirementMutex.release();
+		} catch (error:Dynamic) {
+			retirementMutex.release();
+			throw error;
+		}
+	}
+
+	/** Retry modules whose reclamation was delayed by retained or conservative borrowers. */
+	public static function retryRetirements():Int {
+		retirementMutex.acquire();
+		try {
+			var write = 0;
+			for (read in 0...retirementBacklog.length) {
+				var module = retirementBacklog[read];
+				if (!tryDispose(module))
+					retirementBacklog[write++] = module;
+			}
+			retirementBacklog.resize(write);
+			retirementMutex.release();
+			return write;
+		} catch (error:Dynamic) {
+			retirementMutex.release();
+			throw error;
+		}
+	}
+
+	static function tryDispose(module:LoadedModule):Bool
+		return module.close(function(handle) {
+			var status:RuntimeStatus = RuntimeNative.dispose(handle);
+			if (status != RuntimeStatus.Ok)
+				throw new RuntimeError(status,
+					status == RuntimeStatus.RetirementBlocked ? "Runtime module retirement is waiting for managed borrowers" : 'HashLink rejected module retirement (status ${(status : Int)})');
+		});
 
 	public static function patchSet(module:LoadedModule, patch:PatchSet):Void {
 		var status:RuntimeStatus = module.access(function(handle) return RuntimeNative.patch(handle, patch.bytes.getData(), patch.bytes.length));

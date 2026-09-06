@@ -972,8 +972,8 @@ HL_PRIM void HL_NAME(set_patch_failure_stage)( hl_runtime_module *runtime, int s
 	hl_runtime_module_set_patch_failure_stage(runtime,stage);
 }
 
-HL_PRIM void HL_NAME(dispose)( hl_runtime_module *runtime ) {
-	hl_runtime_module_release(runtime);
+HL_PRIM int HL_NAME(dispose)( hl_runtime_module *runtime ) {
+	return hl_runtime_module_release(runtime);
 }
 
 HL_PRIM int HL_NAME(inspect_patch)( vbyte *bytes, int length ) {
@@ -1004,7 +1004,7 @@ DEFINE_PRIM(_I32,native_root_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_VOID,retirement_status,_ABSTRACT(realtime_module) _BYTES);
 DEFINE_PRIM(_I32,revision,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_VOID,set_patch_failure_stage,_ABSTRACT(realtime_module) _I32);
-DEFINE_PRIM(_VOID,dispose,_ABSTRACT(realtime_module));
+DEFINE_PRIM(_I32,dispose,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,inspect_patch,_BYTES _I32);
 DEFINE_PRIM(_VOID,array_int_init,_OBJ(_BYTES _I32));
 DEFINE_PRIM(_VOID,array_int_push,_OBJ(_BYTES _I32) _I32);
