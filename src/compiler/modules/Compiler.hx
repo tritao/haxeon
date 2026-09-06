@@ -64,6 +64,14 @@ typedef CompileResult = {
 /** Work and output-size counters measured for one compilation. */
 typedef CompileMetrics = {
 	final elapsedMs:Float;
+	final transactionSnapshotMs:Float;
+	final frontendMs:Float;
+	final typingLoweringMs:Float;
+	final irAssemblyMs:Float;
+	final abiPlanningMs:Float;
+	final backendAssemblyMs:Float;
+	final patchEncodingMs:Float;
+	final finalizeMs:Float;
 	final modules:Int;
 	final retypedFunctions:Int;
 	final regeneratedFunctions:Int;
@@ -260,6 +268,14 @@ class Compiler {
 				patchBytes: null,
 				metrics: {
 					elapsedMs: 0.0,
+					transactionSnapshotMs: 0.0,
+					frontendMs: 0.0,
+					typingLoweringMs: 0.0,
+					irAssemblyMs: 0.0,
+					abiPlanningMs: 0.0,
+					backendAssemblyMs: 0.0,
+					patchEncodingMs: 0.0,
+					finalizeMs: 0.0,
 					modules: cached.metrics.modules,
 					retypedFunctions: 0,
 					regeneratedFunctions: 0,
@@ -282,13 +298,15 @@ class Compiler {
 	}
 
 	function compileTransaction(entryModule:String, token:Null<CancellationToken>, startingAssembler:Null<HlModuleAssembler>):CompileResult {
+		var transactionStartedAt = Sys.time() * 1000.0;
 		publication.beforeCompile();
 		var snapshot = snapshot();
+		var snapshotDoneAt = Sys.time() * 1000.0;
 		var previousAssembler = assembler;
 		if (startingAssembler != null)
 			assembler = startingAssembler;
 		try {
-			var result = compileCandidate(entryModule, token);
+			var result = compileCandidate(entryModule, token, transactionStartedAt, snapshotDoneAt);
 			var abi = publishedAbi;
 			if (abi == null)
 				throw "Compilation did not produce a runtime ABI";
@@ -307,8 +325,8 @@ class Compiler {
 		}
 	}
 
-	function compileCandidate(entryModule:String, ?token:CancellationToken):CompileResult {
-		var startedAt = Date.now().getTime();
+	function compileCandidate(entryModule:String, token:Null<CancellationToken>, transactionStartedAt:Float, snapshotDoneAt:Float):CompileResult {
+		var startedAt = snapshotDoneAt;
 		if (token != null)
 			token.check();
 		var bodyChanged:Map<String, Bool> = [],
@@ -554,6 +572,7 @@ class Compiler {
 		for (name in invalid.keys())
 			selected.set(name, true);
 		var entryPoint = executableEntryPoint(entryModule);
+		var frontendDoneAt = Sys.time() * 1000.0;
 		var typedNew:TypedProgram;
 		try {
 			if (token != null)
@@ -654,6 +673,7 @@ class Compiler {
 		}
 		retyped.sort(Reflect.compare);
 		regenerated.sort(Reflect.compare);
+		var typingLoweringDoneAt = Sys.time() * 1000.0;
 		var cachedNames:Array<String> = [];
 		for (moduleName in names) {
 			var state = modules.get(moduleName);
@@ -672,6 +692,7 @@ class Compiler {
 		var ir = IrGenerator.assemble(cached, irNatives(), [for (name in objectNames) objectCache.get(name)], IrGenerator.interfacesFrom(typedNew),
 			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew), IrGenerator.staticInitializerFrom(typedNew, initializationClasses),
 			entryPoint);
+		var irAssemblyDoneAt = Sys.time() * 1000.0;
 		var nextAbi = RuntimeAbi.describe(ir),
 			decision = PatchPlanner.plan(publishedAbi, nextAbi),
 			reloadReasons:Array<AbiChange> = switch decision {
@@ -682,15 +703,18 @@ class Compiler {
 		reloadReasons.sort(function(a, b) return Reflect.compare(Std.string(a), Std.string(b)));
 		if (reloadReasons.length > 0)
 			decision = ReloadDomain(reloadReasons);
+		var abiPlanningDoneAt = Sys.time() * 1000.0;
 		var candidateAssembler = compiledOnce
 			&& PatchPlanner.requiresFreshLayout(decision) ? new HlModuleAssembler(copyIndices(assembler.cache.stableIds)) : assembler.copy();
 		var assembly = candidateAssembler.assemble(ir, rehydratedChanges(regenerated, ir), decision);
+		var backendAssemblyDoneAt = Sys.time() * 1000.0;
 		if (token != null)
 			token.check();
 		var patchBytes = reloadReasons.length > 0
 			|| assembly.changedFunctions.length == 0 ? null : HlPatchWriter.encode(assembly.module, moduleId, assembly.changedSlots,
 				stableIdsBySlot(candidateAssembler, assembly.functionIndices), assembly.revision - 1, assembly.revision, assembly.baseInts,
 				assembly.baseFloats, assembly.baseStrings, assembly.baseTypes);
+		var patchEncodingDoneAt = Sys.time() * 1000.0;
 		lastTypedProgram = typedNew;
 		publishedAbi = nextAbi;
 		assembler = candidateAssembler;
@@ -703,6 +727,7 @@ class Compiler {
 			state.lastGoodRevision = state.revision;
 		}
 		compiledOnce = true;
+		var finishedAt = Sys.time() * 1000.0;
 		return {
 			ir: ir,
 			module: assembly.module,
@@ -717,7 +742,15 @@ class Compiler {
 			revision: assembly.revision,
 			patchBytes: patchBytes,
 			metrics: {
-				elapsedMs: Date.now().getTime() - startedAt,
+				elapsedMs: finishedAt - transactionStartedAt,
+				transactionSnapshotMs: snapshotDoneAt - transactionStartedAt,
+				frontendMs: frontendDoneAt - startedAt,
+				typingLoweringMs: typingLoweringDoneAt - frontendDoneAt,
+				irAssemblyMs: irAssemblyDoneAt - typingLoweringDoneAt,
+				abiPlanningMs: abiPlanningDoneAt - irAssemblyDoneAt,
+				backendAssemblyMs: backendAssemblyDoneAt - abiPlanningDoneAt,
+				patchEncodingMs: patchEncodingDoneAt - backendAssemblyDoneAt,
+				finalizeMs: finishedAt - patchEncodingDoneAt,
 				modules: names.length,
 				retypedFunctions: retyped.length,
 				regeneratedFunctions: regenerated.length,

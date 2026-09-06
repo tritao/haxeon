@@ -2,6 +2,7 @@ package;
 
 import compiler.hl.HlWriter;
 import compiler.modules.Compiler;
+import compiler.modules.Compiler.CompileMetrics;
 import haxe.Json;
 import haxe.io.Bytes;
 import runtime.LoadedModule;
@@ -18,6 +19,14 @@ typedef Sample = {
 	final artifactBytes:Int;
 	final retyped:Int;
 	final regenerated:Int;
+	final transactionSnapshotMs:Float;
+	final frontendMs:Float;
+	final typingLoweringMs:Float;
+	final irAssemblyMs:Float;
+	final abiPlanningMs:Float;
+	final backendAssemblyMs:Float;
+	final patchEncodingMs:Float;
+	final finalizeMs:Float;
 }
 
 typedef Summary = {
@@ -28,6 +37,14 @@ typedef Summary = {
 	final artifactBytes:Percentiles;
 	final retyped:Percentiles;
 	final regenerated:Percentiles;
+	final transactionSnapshotMs:Percentiles;
+	final frontendMs:Percentiles;
+	final typingLoweringMs:Percentiles;
+	final irAssemblyMs:Percentiles;
+	final abiPlanningMs:Percentiles;
+	final backendAssemblyMs:Percentiles;
+	final patchEncodingMs:Percentiles;
+	final finalizeMs:Percentiles;
 }
 
 typedef Percentiles = {
@@ -108,14 +125,14 @@ class BenchmarkMain {
 			bytes = HlWriter.encode(build.module),
 			module = Runtime.load(bytes, build.runtimeIdentity);
 		Runtime.dispose(module);
-		return sample(started, compileDone, stamp(), bytes.length, build.metrics.retypedFunctions, build.metrics.regeneratedFunctions);
+		return sample(started, compileDone, stamp(), bytes.length, build.metrics.retypedFunctions, build.metrics.regeneratedFunctions, build.metrics);
 	}
 
 	static function noopRebuild():Sample {
 		var compiler = fixtureCompiler();
 		compiler.compile("Main");
 		var started = stamp(), build = compiler.compile("Main"), done = stamp();
-		return sample(started, done, done, 0, build.metrics.retypedFunctions, build.metrics.regeneratedFunctions);
+		return sample(started, done, done, 0, build.metrics.retypedFunctions, build.metrics.regeneratedFunctions, build.metrics);
 	}
 
 	static function bodyEditPatch():Sample {
@@ -130,7 +147,7 @@ class BenchmarkMain {
 		Runtime.patchSet(module, new PatchSet(initial.revision, build.revision, build.patchBytes, build.changedFunctions));
 		var done = stamp();
 		Runtime.dispose(module);
-		return sample(started, compileDone, done, build.patchBytes.length, build.metrics.retypedFunctions, build.metrics.regeneratedFunctions);
+		return sample(started, compileDone, done, build.patchBytes.length, build.metrics.retypedFunctions, build.metrics.regeneratedFunctions, build.metrics);
 	}
 
 	static function signatureEditReload():Sample {
@@ -160,7 +177,7 @@ class BenchmarkMain {
 			module = Runtime.load(bytes, build.runtimeIdentity), done = stamp();
 		Runtime.dispose(oldModule);
 		Runtime.dispose(module);
-		return sample(started, compileDone, done, bytes.length, build.metrics.retypedFunctions, build.metrics.regeneratedFunctions);
+		return sample(started, compileDone, done, bytes.length, build.metrics.retypedFunctions, build.metrics.regeneratedFunctions, build.metrics);
 	}
 
 	static function patchSoak(iterations:Int, mode:String):Dynamic {
@@ -209,7 +226,8 @@ class BenchmarkMain {
 				compileDone = stamp();
 			if (mode == "combined")
 				Runtime.patchSet(module, new PatchSet(revision, build.revision, build.patchBytes, build.changedFunctions));
-			samples.push(sample(started, compileDone, stamp(), build.patchBytes.length, build.metrics.retypedFunctions, build.metrics.regeneratedFunctions));
+			samples.push(sample(started, compileDone, stamp(), build.patchBytes.length, build.metrics.retypedFunctions, build.metrics.regeneratedFunctions,
+				build.metrics));
 			revision = build.revision;
 		}
 		return finishSoak(samples, module, rssBefore, heapBefore);
@@ -296,7 +314,7 @@ class BenchmarkMain {
 			artifactBytes = scenario == "cold_compile" ? HlWriter.encode(build.module)
 				.length : build.patchBytes != null ? build.patchBytes.length : build.changedFunctions.length == 0
 					&& !build.requiresReload ? 0 : HlWriter.encode(build.module).length;
-		return sample(started, compileDone, compileDone, artifactBytes, build.metrics.retypedFunctions, build.metrics.regeneratedFunctions);
+		return sample(started, compileDone, compileDone, artifactBytes, build.metrics.retypedFunctions, build.metrics.regeneratedFunctions, build.metrics);
 	}
 
 	static function generatedCompiler(size:Int):Compiler {
@@ -342,14 +360,22 @@ class BenchmarkMain {
 		return File.getContent(diskPath);
 	}
 
-	static function sample(started:Float, compileDone:Float, done:Float, bytes:Int, retyped:Int, regenerated:Int):Sample
+	static function sample(started:Float, compileDone:Float, done:Float, bytes:Int, retyped:Int, regenerated:Int, ?metrics:CompileMetrics):Sample
 		return {
 			totalMs: (done - started) * 1000.0,
 			compileMs: (compileDone - started) * 1000.0,
 			runtimeMs: (done - compileDone) * 1000.0,
 			artifactBytes: bytes,
 			retyped: retyped,
-			regenerated: regenerated
+			regenerated: regenerated,
+			transactionSnapshotMs: metrics == null ? 0.0 : metrics.transactionSnapshotMs,
+			frontendMs: metrics == null ? 0.0 : metrics.frontendMs,
+			typingLoweringMs: metrics == null ? 0.0 : metrics.typingLoweringMs,
+			irAssemblyMs: metrics == null ? 0.0 : metrics.irAssemblyMs,
+			abiPlanningMs: metrics == null ? 0.0 : metrics.abiPlanningMs,
+			backendAssemblyMs: metrics == null ? 0.0 : metrics.backendAssemblyMs,
+			patchEncodingMs: metrics == null ? 0.0 : metrics.patchEncodingMs,
+			finalizeMs: metrics == null ? 0.0 : metrics.finalizeMs
 		};
 
 	static function summarize(samples:Array<Sample>):Summary
@@ -360,7 +386,15 @@ class BenchmarkMain {
 			runtimeMs: percentiles([for (value in samples) value.runtimeMs]),
 			artifactBytes: percentiles([for (value in samples) value.artifactBytes]),
 			retyped: percentiles([for (value in samples) value.retyped]),
-			regenerated: percentiles([for (value in samples) value.regenerated])
+			regenerated: percentiles([for (value in samples) value.regenerated]),
+			transactionSnapshotMs: percentiles([for (value in samples) value.transactionSnapshotMs]),
+			frontendMs: percentiles([for (value in samples) value.frontendMs]),
+			typingLoweringMs: percentiles([for (value in samples) value.typingLoweringMs]),
+			irAssemblyMs: percentiles([for (value in samples) value.irAssemblyMs]),
+			abiPlanningMs: percentiles([for (value in samples) value.abiPlanningMs]),
+			backendAssemblyMs: percentiles([for (value in samples) value.backendAssemblyMs]),
+			patchEncodingMs: percentiles([for (value in samples) value.patchEncodingMs]),
+			finalizeMs: percentiles([for (value in samples) value.finalizeMs])
 		};
 
 	static function percentiles(values:Array<Float>):Percentiles {
