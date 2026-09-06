@@ -49,6 +49,13 @@ class ModuleState {
 		this.source = source;
 	}
 
+	public function parsedAst():AstProgram {
+		var result = ast;
+		if (result == null)
+			throw 'Module "$name" has not been parsed';
+		return result;
+	}
+
 	public function update(source:SourceFile):Void {
 		this.source = source;
 		revision++;

@@ -11,6 +11,8 @@ import compiler.Parser;
 import compiler.Source.SourceFile;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.IrGenerator;
+import compiler.types.FieldInference;
+import compiler.types.SignatureInference;
 import compiler.types.Typer;
 import compiler.types.SemanticSignature;
 import compiler.types.TypedAst.TypedProgram;
@@ -99,7 +101,8 @@ class Compiler {
 		} else {
 			var identity = HlRuntimeIdentity.decodePersistent(identityState);
 			moduleId = identity.moduleId;
-			assembler = identity.assemblerState == null ? new HlModuleAssembler(identity.stableIds) : HlAssemblerStateCodec.decode(identity.assemblerState);
+			var assemblerState = identity.assemblerState;
+			assembler = assemblerState == null ? new HlModuleAssembler(identity.stableIds) : HlAssemblerStateCodec.decode(assemblerState);
 			for (name => id in identity.stableIds)
 				if (assembler.cache.stableIds.get(name) != id)
 					throw "Assembler stable identities do not match compiler state";
@@ -138,9 +141,10 @@ class Compiler {
 	}
 
 	function beginRehydration(restored:HlModuleAssembler):Void {
-		rehydrationBaseline = [];
+		var baseline:Map<String, Bytes> = [];
+		rehydrationBaseline = baseline;
 		for (name => fn in restored.cache.functions)
-			rehydrationBaseline.set(name, compiler.ir.IrFunctionStateCodec.encode(fn));
+			baseline.set(name, compiler.ir.IrFunctionStateCodec.encode(fn));
 	}
 
 	public function acknowledgePublication(revision:Int):Void
@@ -188,12 +192,14 @@ class Compiler {
 	public function update(path:String, source:String):ModuleState {
 		var name = ModulePath.fromFile(path),
 			file = new SourceFile(path, source);
-		var state = modules.get(name);
-		if (state == null) {
+		var state:ModuleState;
+		if (modules.exists(name)) {
+			state = modules.get(name);
+			state.update(file);
+		} else {
 			state = new ModuleState(name, file);
 			modules.set(name, state);
-		} else
-			state.update(file);
+		}
 		return state;
 	}
 
@@ -245,7 +251,10 @@ class Compiler {
 		var previousAssembler = assembler;
 		try {
 			var result = compileCandidate(entryModule, token);
-			publication.candidate(result.revision, publishedAbi, snapshot, previousAssembler);
+			var abi = publishedAbi;
+			if (abi == null)
+				throw "Compilation did not produce a runtime ABI";
+			publication.candidate(result.revision, abi, snapshot, previousAssembler);
 			return result;
 		} catch (error:Dynamic) {
 			var failedDiagnostics:Map<String, Array<Diagnostic>> = [];
@@ -260,7 +269,7 @@ class Compiler {
 	}
 
 	function compileCandidate(entryModule:String, ?token:CancellationToken):CompileResult {
-		var startedAt = haxe.Timer.stamp();
+		var startedAt = Date.now().getTime();
 		if (token != null)
 			token.check();
 		if (!modules.exists(entryModule))
@@ -297,8 +306,9 @@ class Compiler {
 			initializationClasses:Array<String> = [];
 		for (name in initializationNames) {
 			var state = modules.get(name);
-			for (classDecl in state.ast.classes)
-				initializationClasses.push(qualifiedTypeName(state.ast.packageName, classDecl.name));
+			var ast = state.parsedAst();
+			for (classDecl in ast.classes)
+				initializationClasses.push(qualifiedTypeName(ast.packageName, classDecl.name));
 		}
 
 		var functions:Array<AstFunction> = [],
@@ -315,7 +325,7 @@ class Compiler {
 		var sourceTypeAliases:Map<String, String> = [];
 		for (moduleName in names) {
 			var moduleState = modules.get(moduleName),
-				program = moduleState.ast;
+				program = moduleState.parsedAst();
 			for (declaration in program.aliases)
 				sourceTypeAliases.set(sourceDeclarationPath(moduleName, declaration.name), qualifiedTypeName(program.packageName, declaration.name));
 			for (declaration in program.enums)
@@ -333,47 +343,68 @@ class Compiler {
 			if (token != null)
 				token.check();
 			var state = modules.get(name),
+				ast = state.parsedAst(),
 				locals:Map<String, Bool> = [],
-				aliases = importAliases(state.ast.imports, state.ast.importAliases);
+				aliases = importAliases(ast.imports, ast.importAliases);
 			for (sourceName => declarationName in sourceTypeAliases)
 				aliases.set(sourceName, declarationName);
-			for (importPath in state.ast.imports)
+			for (importPath in ast.imports)
 				if (modules.exists(importPath))
-					for (sourceName => declarationName in sourceTypeAliases)
-						if (StringTools.startsWith(sourceName, importPath + ".")) {
-							var nestedName = sourceName.substr(importPath.length + 1);
+					for (sourceName => declarationName in sourceTypeAliases) {
+						var qualifiedSourceName:String = sourceName;
+						if (StringTools.startsWith(qualifiedSourceName, importPath + ".")) {
+							var nestedStart = importPath.length + 1,
+								nestedName = qualifiedSourceName.substring(nestedStart, qualifiedSourceName.length);
 							if (nestedName.indexOf(".") < 0)
 								aliases.set(nestedName, declarationName);
 						}
-			var visiblePackage = state.ast.packageName;
-			while (visiblePackage != null) {
-				var packagePrefix = visiblePackage.length == 0 ? "" : visiblePackage + ".";
-				for (sourceName => declarationName in sourceTypeAliases)
-					if (StringTools.startsWith(sourceName, packagePrefix) && StringTools.startsWith(declarationName, packagePrefix)) {
-						var relativeSourceName = sourceName.substr(packagePrefix.length),
-							simpleName = declarationName.substr(packagePrefix.length);
+					}
+			var visiblePackage = ast.packageName;
+			while (true) {
+				var currentPackage:String;
+				if (visiblePackage == null)
+					break;
+				else
+					currentPackage = visiblePackage;
+				var packagePrefix = currentPackage.length == 0 ? "" : currentPackage + ".";
+				for (sourceName => declarationName in sourceTypeAliases) {
+					var qualifiedSourceName:String = sourceName,
+						qualifiedDeclarationName:String = declarationName;
+					if (StringTools.startsWith(qualifiedSourceName, packagePrefix)
+						&& StringTools.startsWith(qualifiedDeclarationName, packagePrefix)) {
+						var relativeSourceName = qualifiedSourceName.substring(packagePrefix.length, qualifiedSourceName.length),
+							simpleName = qualifiedDeclarationName.substring(packagePrefix.length, qualifiedDeclarationName.length);
 						if (!aliases.exists(relativeSourceName))
 							aliases.set(relativeSourceName, declarationName);
 						if (simpleName.indexOf(".") < 0 && !aliases.exists(simpleName))
 							aliases.set(simpleName, declarationName);
 					}
-				var separator = visiblePackage.lastIndexOf(".");
-				visiblePackage = separator < 0 ? null : visiblePackage.substr(0, separator);
+				}
+				var separator = -1,
+					separatorCursor = currentPackage.length - 1;
+				while (separatorCursor >= 0) {
+					if (currentPackage.charCodeAt(separatorCursor) == 46) {
+						separator = separatorCursor;
+						break;
+					}
+					separatorCursor--;
+				}
+				visiblePackage = separator < 0 ? null : currentPackage.substring(0, separator);
 			}
-			addDeclaredTypeAliases(aliases, state.ast, state.ast.packageName);
-			for (interfaceDecl in state.ast.interfaces)
-				interfaces.push(canonicalInterface(interfaceDecl, aliases, state.ast.packageName));
-			for (alias in state.ast.aliases)
-				typeAliases.push(canonicalAlias(alias, aliases, state.ast.packageName));
-			for (enumDecl in state.ast.enums)
-				enums.push(canonicalEnum(enumDecl, aliases, state.ast.packageName));
-			for (abstractDecl in state.ast.enumAbstracts)
-				enumAbstracts.push(canonicalEnumAbstract(abstractDecl, aliases, state.ast.packageName, name, entryModule, locals));
-			for (abstractDecl in state.ast.abstracts)
-				abstracts.push(canonicalAbstract(abstractDecl, aliases, state.ast.packageName, name, entryModule, locals));
-			for (fn in state.ast.functions)
+			addDeclaredTypeAliases(aliases, ast, ast.packageName);
+			for (interfaceDecl in ast.interfaces)
+				interfaces.push(canonicalInterface(interfaceDecl, aliases, ast.packageName));
+			for (alias in ast.aliases)
+				typeAliases.push(canonicalAlias(alias, aliases, ast.packageName));
+			for (enumDecl in ast.enums)
+				enums.push(canonicalEnum(enumDecl, aliases, ast.packageName));
+			for (abstractDecl in ast.enumAbstracts)
+				enumAbstracts.push(canonicalEnumAbstract(abstractDecl, aliases, ast.packageName, name, entryModule, locals));
+			for (abstractDecl in ast.abstracts)
+				abstracts.push(canonicalAbstract(abstractDecl, aliases, ast.packageName, name, entryModule, locals));
+			for (fn in ast.functions)
 				locals.set(fn.name, true);
-			for (fn in state.ast.functions) {
+			for (fn in ast.functions) {
 				var canonical = canonicalFunction(fn, name, entryModule, locals, null, aliases);
 				functions.push(canonical);
 				programFunctions.push(canonical);
@@ -384,19 +415,21 @@ class Compiler {
 					scanCalls(statement, calls, aliases);
 				collectLambdas(canonical.statements, canonical.name, name, generatedByModule);
 				for (callee in calls.keys()) {
-					var callers = reverseCalls.get(callee);
-					if (callers == null) {
+					var callers:Array<String>;
+					if (reverseCalls.exists(callee))
+						callers = reverseCalls.get(callee);
+					else {
 						callers = [];
 						reverseCalls.set(callee, callers);
 					}
 					callers.push(canonical.name);
 				}
 			}
-			for (classDecl in state.ast.classes) {
-				var className = qualifiedTypeName(state.ast.packageName, classDecl.name);
+			for (classDecl in ast.classes) {
+				var className = qualifiedTypeName(ast.packageName, classDecl.name);
 				var classMethods:Array<AstFunction> = [];
 				for (parsedMethod in classDecl.methods) {
-					var method = compiler.types.SignatureInference.inferFieldBoundArguments(parsedMethod, classDecl);
+					var method = SignatureInference.inferFieldBoundArguments(parsedMethod, classDecl);
 					var canonical = canonicalFunction(method, name, entryModule, locals, className + "." + method.name, aliases);
 					functions.push(canonical);
 					classMethods.push({
@@ -415,8 +448,10 @@ class Compiler {
 						scanCalls(statement, calls, aliases);
 					collectLambdas(canonical.statements, canonical.name, name, generatedByModule);
 					for (callee in calls.keys()) {
-						var callers = reverseCalls.get(callee);
-						if (callers == null) {
+						var callers:Array<String>;
+						if (reverseCalls.exists(callee))
+							callers = reverseCalls.get(callee);
+						else {
 							callers = [];
 							reverseCalls.set(callee, callers);
 						}
@@ -427,7 +462,7 @@ class Compiler {
 					name: className,
 					isPrivate: classDecl.isPrivate,
 					metadata: classDecl.metadata,
-					base: classDecl.base == null ? null : resolveTypeName(classDecl.base, aliases),
+					base: resolveOptionalTypeName(classDecl.base, aliases),
 					interfaces: [
 						for (interfaceName in classDecl.interfaces)
 							resolveTypeName(interfaceName, aliases)
@@ -436,8 +471,8 @@ class Compiler {
 						for (field in classDecl.fields)
 							{
 								name: field.name,
-								type: canonicalType(compiler.types.FieldInference.parsedType(field), aliases),
-								initializer: field.initializer == null ? null : canonicalExpression(field.initializer, name, entryModule, locals, aliases),
+								type: canonicalType(FieldInference.parsedType(field), aliases),
+								initializer: canonicalOptionalExpression(field.initializer, name, entryModule, locals, aliases),
 								readAccess: field.readAccess,
 								writeAccess: field.writeAccess,
 								isStatic: field.isStatic,
@@ -457,36 +492,42 @@ class Compiler {
 				owners.set(lambdaName, module);
 		var invalid:Map<String, Bool> = [];
 		for (change in structuralChanged.keys()) {
-			var separator = change.indexOf(":"),
-				target = separator < 0 ? change : change.substr(separator + 1);
-			for (state in modules)
-				for (owner => dependencies in state.semanticDependencies)
-					for (dependency in dependencies)
+			var changedDependency:String = change,
+				separator = changedDependency.indexOf(":"),
+				target = separator < 0 ? changedDependency : changedDependency.substring(separator + 1, changedDependency.length);
+			for (moduleName in names) {
+				var dependencyState = modules.get(moduleName);
+				for (owner => dependencies in dependencyState.semanticDependencies)
+					for (dependency in dependencies) {
+						var functionOwner:String = owner;
 						if (sameDependencyTarget(dependency.target, target)) {
 							var matchedFunction = false;
 							for (fn in functions)
-								if (fn.name == owner || StringTools.startsWith(fn.name, owner + ".")) {
+								if (fn.name == functionOwner || StringTools.startsWith(fn.name, functionOwner + ".")) {
 									invalid.set(fn.name, true);
 									matchedFunction = true;
 								}
 							if (matchedFunction)
 								break;
 						}
+					}
+			}
 		}
 		for (name in bodyChanged.keys())
 			invalid.set(name, true);
-		var work = [for (name in signatureChanged.keys()) name];
-		while (work.length > 0) {
+		var work:Array<String> = [for (name in signatureChanged.keys()) name], workCursor = 0;
+		while (workCursor < work.length) {
 			if (token != null)
 				token.check();
-			var changed = work.pop();
-			if (invalid.exists(changed)) {} else
+			var changed = work[workCursor++];
+			if (!invalid.exists(changed))
 				invalid.set(changed, true);
-			var callers = reverseCalls.get(changed);
-			if (callers != null)
+			if (reverseCalls.exists(changed)) {
+				var callers = reverseCalls.get(changed);
 				for (caller in callers)
 					if (!invalid.exists(caller))
 						work.push(caller);
+			}
 		}
 		var selected:Map<String, Bool> = [];
 		for (name in invalid.keys())
@@ -522,21 +563,24 @@ class Compiler {
 		for (fn in typedNew.functions) {
 			if (token != null)
 				token.check();
-			var module = owners.get(fn.name);
-			if (module == null && fn.genericOrigin != null) {
-				module = owners.get(fn.genericOrigin);
-				if (module != null) {
-					owners.set(fn.name, module);
-					var generatedNames = generatedByModule.get(module);
-					if (generatedNames == null) {
-						generatedNames = [];
-						generatedByModule.set(module, generatedNames);
-					}
-					generatedNames.set(fn.name, true);
+			var module:String;
+			if (owners.exists(fn.name))
+				module = owners.get(fn.name);
+			else {
+				var genericOrigin = fn.genericOrigin;
+				if (genericOrigin == null || !owners.exists(genericOrigin))
+					throw 'No source module owns typed function "${fn.name}"';
+				module = owners.get(genericOrigin);
+				owners.set(fn.name, module);
+				var generatedNames:Map<String, Bool>;
+				if (generatedByModule.exists(module))
+					generatedNames = generatedByModule.get(module);
+				else {
+					generatedNames = [];
+					generatedByModule.set(module, generatedNames);
 				}
+				generatedNames.set(fn.name, true);
 			}
-			if (module == null)
-				throw 'No source module owns typed function "${fn.name}"';
 			var state = modules.get(module);
 			state.typedFunctions.set(fn.name, fn);
 			state.typedSourceRevisions.set(fn.name, state.revision);
@@ -545,24 +589,27 @@ class Compiler {
 			state.irFunctions.set(fn.name, IrGenerator.generateFunction(fn));
 			state.irSourceRevisions.set(fn.name, state.revision);
 			regenerated.push(fn.name);
-			var version = state.irVersions.get(fn.name);
-			state.irVersions.set(fn.name, version == null ? 1 : version + 1);
+			var version = state.irVersions.exists(fn.name) ? state.irVersions.get(fn.name) + 1 : 1;
+			state.irVersions.set(fn.name, version);
 		}
 		for (module in touchedModules.keys())
 			modules.get(module).typeVersion++;
 		for (name in names) {
 			if (token != null)
 				token.check();
-			var state = modules.get(name), valid:Map<String, Bool> = [];
+			var state = modules.get(name),
+				ast = state.parsedAst(),
+				valid:Map<String, Bool> = [];
 			for (fn in functions)
-				if (owners.get(fn.name) == name)
+				if (owners.exists(fn.name) && owners.get(fn.name) == name)
 					valid.set(fn.name, true);
-			var lambdaNames = generatedByModule.get(name);
-			if (lambdaNames != null)
+			if (generatedByModule.exists(name)) {
+				var lambdaNames = generatedByModule.get(name);
 				for (lambdaName in lambdaNames.keys())
 					valid.set(lambdaName, true);
-			for (classDecl in state.ast.classes) {
-				var className = qualifiedTypeName(state.ast.packageName, classDecl.name),
+			}
+			for (classDecl in ast.classes) {
+				var className = qualifiedTypeName(ast.packageName, classDecl.name),
 					hasInstanceInitializer = false,
 					hasConstructor = false;
 				for (field in classDecl.fields)
@@ -586,9 +633,11 @@ class Compiler {
 		retyped.sort(Reflect.compare);
 		regenerated.sort(Reflect.compare);
 		var cachedNames:Array<String> = [];
-		for (state in modules)
+		for (moduleName in names) {
+			var state = modules.get(moduleName);
 			for (functionName in state.irFunctions.keys())
 				cachedNames.push(functionName);
+		}
 		cachedNames.sort(Reflect.compare);
 		var cached = [
 			for (functionName in cachedNames)
@@ -645,7 +694,7 @@ class Compiler {
 			revision: assembly.revision,
 			patchBytes: patchBytes,
 			metrics: {
-				elapsedMs: (haxe.Timer.stamp() - startedAt) * 1000.0,
+				elapsedMs: Date.now().getTime() - startedAt,
 				modules: names.length,
 				retypedFunctions: retyped.length,
 				regeneratedFunctions: regenerated.length,
@@ -658,17 +707,20 @@ class Compiler {
 	}
 
 	function reachableModules(entryModule:String):Array<String> {
-		var seen:Map<String, Bool> = [], pending = [entryModule];
-		while (pending.length > 0) {
-			var name = pending.pop();
+		var seen:Map<String, Bool> = [],
+			pending:Array<String> = [entryModule],
+			pendingCursor = 0;
+		while (pendingCursor < pending.length) {
+			var name = pending[pendingCursor++];
 			if (seen.exists(name))
 				continue;
 			seen.set(name, true);
-			var state = modules.get(name);
-			if (state != null)
+			if (modules.exists(name)) {
+				var state = modules.get(name);
 				for (dependency in state.dependencies)
 					if (modules.exists(dependency) && !seen.exists(dependency))
 						pending.push(dependency);
+			}
 		}
 		var result = [for (name in seen.keys()) name];
 		result.sort(Reflect.compare);
@@ -720,7 +772,7 @@ class Compiler {
 					dependencies.set(owner, true);
 			}
 			for (field in classDecl.fields)
-				add(compiler.types.FieldInference.parsedType(field));
+				add(FieldInference.parsedType(field));
 			for (method in classDecl.methods)
 				addFunction(method);
 		}
@@ -1034,7 +1086,7 @@ class Compiler {
 				baseName = classDecl.base == null ? null : resolveTypeName(classDecl.base, typeAliases);
 			var classFields = [
 				for (field in classDecl.fields)
-					{name: field.name, type: SemanticSignature.parsed(compiler.types.FieldInference.parsedType(field), state.ast.aliases)}
+					{name: field.name, type: SemanticSignature.parsed(FieldInference.parsedType(field), state.ast.aliases)}
 			], classMethods = [
 				for (method in classDecl.methods)
 					{name: method.name, signature: signatureFingerprint(method, state.ast.aliases)}
@@ -1385,6 +1437,13 @@ class Compiler {
 				], s);
 		}
 
+	static function canonicalOptionalExpression(e:Null<AstExpression>, module:String, entry:String, locals:Map<String, Bool>,
+			aliases:Map<String, String>):Null<AstExpression> {
+		if (e == null)
+			return null;
+		return canonicalExpression(e, module, entry, locals, aliases);
+	}
+
 	function importAliases(imports:Array<String>, explicit:Map<String, String>):Map<String, String> {
 		var aliases:Map<String, String> = [];
 		for (path in imports) {
@@ -1415,6 +1474,12 @@ class Compiler {
 		if (imported == null)
 			return name;
 		return imported;
+	}
+
+	static function resolveOptionalTypeName(name:Null<String>, aliases:Null<Map<String, String>>):Null<String> {
+		if (name == null)
+			return null;
+		return resolveTypeName(name, aliases);
 	}
 
 	static function resolveExpressionAlias(name:String, aliases:Map<String, String>):Null<String> {
@@ -1466,7 +1531,7 @@ class Compiler {
 			for (interfaceName in classDecl.interfaces)
 				addDependency(result, className, Layout, resolveTypeName(interfaceName, typeAliases));
 			for (field in classDecl.fields) {
-				addTypeDependency(result, className, Layout, compiler.types.FieldInference.parsedType(field), typeAliases);
+				addTypeDependency(result, className, Layout, FieldInference.parsedType(field), typeAliases);
 				if (field.initializer != null)
 					addExpressionDependencies(result, className + "." + field.name, Initializer, field.initializer, state.name, entry);
 			}
