@@ -286,6 +286,7 @@ class SsaBuilder {
 			for (name in sortedPhiNames(blockPhis)) {
 				var phi = blockPhis.get(name);
 				target.instructions.push(new Located(Phi(phi.output, phi.inputs), phiProvenance(id)));
+				addDebugBinding(debugLocal(name), phi.output);
 				push(name, phi.output);
 				pushed.push(name);
 			}

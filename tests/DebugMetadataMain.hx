@@ -112,6 +112,7 @@ class DebugMetadataMain {
 			throw 'Shadowed locals did not retain distinct identities: $identityCount';
 
 		var code = HlLower.lower(program), fn = code.functions[index], bounded = 0, open = 0;
+		assertAssignmentsSorted(fn.debugAssignments);
 		for (assignment in fn.debugAssignments)
 			if (code.strings[assignment.name] == "value") {
 				if (assignment.scopeEnd < 0)
@@ -125,6 +126,16 @@ class DebugMetadataMain {
 		if (bounded != 2 || open != 1)
 			throw 'Expected two bounded inner assignments and one function-scoped assignment, got bounded=$bounded open=$open';
 		Sys.println("PASS: shadowed locals retain distinct identities and lexical opcode lifetimes");
+	}
+
+	static function assertAssignmentsSorted(assignments:Array<compiler.hl.HlFunction.HlDebugAssignment>):Void {
+		var previous = -1;
+		for (assignment in assignments)
+			if (assignment.position >= 0) {
+				if (assignment.position < previous)
+					throw 'Debug assignments are not sorted: ${assignment.position} follows $previous';
+				previous = assignment.position;
+			}
 	}
 
 	static function findFunctionIndex(functions:Array<IrFunction>, name:String):Int {

@@ -385,7 +385,18 @@ class HlLower {
 				case Jump(target):
 					var key = edgeKey(block.id, target);
 					if (edges.exists(key))
-						emitPhiMoves(edges.get(key), registers, registerTypes, instructions);
+						for (write in emitPhiMoves(edges.get(key), registers, registerTypes, instructions)) {
+							var bindings = bindingsByValue.get(write.value.id);
+							if (bindings != null)
+								for (binding in bindings) {
+									var assignmentKey = binding.identity + "@" + write.position;
+									if (!seenAssignments.exists(assignmentKey)) {
+										seenAssignments.set(assignmentKey, true);
+										debugAssignments.push({name: internString(binding.name), position: write.position, scopeEnd: -1});
+										assignmentBindings.push(binding);
+									}
+								}
+						}
 					instructions.push(HlInstruction.Jump('block_$target'));
 				case Branch(condition, yes, no):
 					if (edges.exists(edgeKey(block.id, yes)) || edges.exists(edgeKey(block.id, no)))
@@ -518,13 +529,16 @@ class HlLower {
 		return '$from:$to';
 
 	function emitPhiMoves(moves:Array<{destination:IrValue, source:IrValue}>, registers:Map<Int, Int>, registerTypes:Array<Int>,
-			instructions:Array<HlInstruction>):Void {
+			instructions:Array<HlInstruction>):Array<{value:IrValue, position:Int}> {
+		var writes:Array<{value:IrValue, position:Int}> = [];
 		if (moves.length == 1) {
 			var destination = requireRegister(moves[0].destination, registers),
 				source = requireRegister(moves[0].source, registers);
-			if (destination != source)
+			if (destination != source) {
+				writes.push({value: moves[0].destination, position: instructions.length});
 				instructions.push(HlInstruction.Move(destination, source));
-			return;
+			}
+			return writes;
 		}
 		var temporaries:Array<Int> = [];
 		for (move in moves) {
@@ -533,8 +547,11 @@ class HlLower {
 			temporaries.push(temporary);
 			instructions.push(HlInstruction.Move(temporary, requireRegister(move.source, registers)));
 		}
-		for (i in 0...moves.length)
+		for (i in 0...moves.length) {
+			writes.push({value: moves[i].destination, position: instructions.length});
 			instructions.push(HlInstruction.Move(requireRegister(moves[i].destination, registers), temporaries[i]));
+		}
+		return writes;
 	}
 
 	function lowerComparison(output:IrValue, left:IrValue, right:IrValue, operation:Int, registers:Map<Int, Int>, registerTypes:Array<Int>,
