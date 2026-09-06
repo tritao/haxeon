@@ -21,9 +21,9 @@ class ModuleState {
 	public var revision:Int = 1;
 	public var parseVersion:Int = 0;
 	public var typeVersion:Int = 0;
-	public var tokens:Array<Token>;
+	public var tokens:Array<Token> = [];
 	public var ast:Null<AstProgram>;
-	public var lastGoodTokens:Array<Token>;
+	public var lastGoodTokens:Array<Token> = [];
 	public var lastGoodAst:Null<AstProgram>;
 	public var lastGoodSource:Null<SourceFile>;
 	public var lastGoodRevision:Int = 0;
@@ -59,7 +59,7 @@ class ModuleState {
 	public function update(source:SourceFile):Void {
 		this.source = source;
 		revision++;
-		tokens = null;
+		tokens = [];
 		ast = null;
 		diagnostics = [];
 		dirty = true;

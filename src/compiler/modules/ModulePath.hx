@@ -2,11 +2,27 @@ package compiler.modules;
 
 class ModulePath {
 	public static function fromFile(path:String):String {
-		var normalized = path.split("\\").join("/");
-		while (StringTools.startsWith(normalized, "./"))
-			normalized = normalized.substr(2);
-		if (StringTools.endsWith(normalized, ".hx"))
-			normalized = normalized.substr(0, normalized.length - 3);
-		return normalized.split("/").filter(function(part) return part.length > 0).join(".");
+		var start = 0, end = path.length;
+		while (start + 1 < end && path.charCodeAt(start) == 46 && isSeparator(path.charCodeAt(start + 1)))
+			start += 2;
+		if (end - start >= 3 && path.charCodeAt(end - 3) == 46 && path.charCodeAt(end - 2) == 104 && path.charCodeAt(end - 1) == 120)
+			end -= 3;
+		var result = "", segment = "";
+		for (cursor in start...end) {
+			var code = path.charCodeAt(cursor);
+			if (isSeparator(code)) {
+				if (segment.length > 0) {
+					result += (result.length == 0 ? "" : ".") + segment;
+					segment = "";
+				}
+			} else
+				segment += String.fromCharCode(code);
+		}
+		if (segment.length > 0)
+			result += (result.length == 0 ? "" : ".") + segment;
+		return result;
 	}
+
+	static function isSeparator(code:Int):Bool
+		return code == 47 || code == 92;
 }

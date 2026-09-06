@@ -755,7 +755,7 @@ class LanguageService {
 		return state.ast == null ? state.lastGoodAst : state.ast;
 
 	static function effectiveTokens(state:ModuleState):Null<Array<compiler.Token>>
-		return state.tokens == null ? state.lastGoodTokens : state.tokens;
+		return state.ast == null ? state.lastGoodTokens : state.tokens;
 
 	static function identifierPrefix(source:String, position:Int):String {
 		var end = position < 0 ? 0 : position > source.length ? source.length : position, start = end;

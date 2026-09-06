@@ -9,8 +9,10 @@ class ModuleGraph {
 		reverse.clear();
 		for (name => state in states)
 			for (dependency in state.dependencies) {
-				var users = reverse.get(dependency);
-				if (users == null) {
+				var users:Array<String>;
+				if (reverse.exists(dependency))
+					users = reverse.get(dependency);
+				else {
 					users = [];
 					reverse.set(dependency, users);
 				}
@@ -19,12 +21,12 @@ class ModuleGraph {
 	}
 
 	public function dependents(name:String):Array<String> {
-		var found:Map<String, Bool> = [], work = [name], result = [];
-		while (work.length > 0) {
-			var current = work.pop();
-			var users = reverse.get(current);
-			if (users == null)
+		var found:Map<String, Bool> = [], work:Array<String> = [name], result:Array<String> = [], cursor = 0;
+		while (cursor < work.length) {
+			var current = work[cursor++];
+			if (!reverse.exists(current))
 				continue;
+			var users = reverse.get(current);
 			for (user in users)
 				if (!found.exists(user)) {
 					found.set(user, true);
@@ -52,30 +54,42 @@ class ModuleGraph {
 			outgoing.set(name, []);
 		}
 		for (name in names) {
-			var state = states.get(name);
-			if (state == null)
+			if (!states.exists(name))
 				continue;
+			var state = states.get(name);
 			for (dependency in state.dependencies)
 				if (known.exists(dependency)) {
 					indegree.set(name, indegree.get(name) + 1);
-					outgoing.get(dependency).push(name);
+					var dependents = outgoing.get(dependency);
+					dependents.push(name);
 				}
 		}
-		var ready = [for (name in names) if (indegree.get(name) == 0) name], result = [];
-		while (ready.length > 0) {
-			ready.sort(Reflect.compare);
-			var name = ready.shift();
+		var orderedNames = names.copy(),
+			result:Array<String> = [],
+			emitted:Map<String, Bool> = [];
+		orderedNames.sort(Reflect.compare);
+		while (result.length < orderedNames.length) {
+			var candidateIndex = -1;
+			for (index in 0...orderedNames.length) {
+				var candidate = orderedNames[index];
+				if (!emitted.exists(candidate) && indegree.get(candidate) == 0) {
+					candidateIndex = index;
+					break;
+				}
+			}
+			if (candidateIndex < 0)
+				break;
+			var name = orderedNames[candidateIndex];
+			emitted.set(name, true);
 			result.push(name);
 			for (dependent in outgoing.get(name)) {
 				var next = indegree.get(dependent) - 1;
 				indegree.set(dependent, next);
-				if (next == 0)
-					ready.push(dependent);
 			}
 		}
-		if (result.length != names.length)
-			for (name in names)
-				if (result.indexOf(name) < 0)
+		if (result.length != orderedNames.length)
+			for (name in orderedNames)
+				if (!emitted.exists(name))
 					result.push(name);
 		return result;
 	}
