@@ -986,6 +986,14 @@ class Compiler {
 				dependencies.remove(dependency);
 				continue;
 			}
+			if (dependency.indexOf(".") < 0 && packageName != null) {
+				var packageCandidate = packageName + "." + dependency;
+				if (modules.exists(packageCandidate)) {
+					dependencies.remove(dependency);
+					dependencies.set(packageCandidate, true);
+					continue;
+				}
+			}
 			if (dependency.indexOf(".") < 0 && hasSourceModuleImport(ast.imports)) {
 				dependencies.remove(dependency);
 				continue;
