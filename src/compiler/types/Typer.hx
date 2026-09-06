@@ -1158,6 +1158,17 @@ class Typer {
 			default: null;
 		};
 
+	function contextualExpressionType(expression:AstExpression, scope:Scope):Null<CompilerType> {
+		var known = knownExpressionType(expression);
+		if (known != null)
+			return known;
+		return switch expression {
+			case Variable(name, _): scope.resolve(name);
+			case Cast(_, target, _): target == null ? null : lowerType(target);
+			default: null;
+		};
+	}
+
 	function knownCallType(name:String):Null<CompilerType> {
 		var signatureName = resolvedCallName(name);
 		if (!signatures.exists(signatureName))
@@ -1764,7 +1775,13 @@ class Typer {
 				var typedCondition = typeExpression(predicate, scope, TBool);
 				if (!sameType(typedCondition.type, TBool))
 					fail("E1011", "Conditional expression requires a Bool condition", span);
-				var typedTrue = typeExpression(whenTrue, FlowAnalysis.narrowedScope(scope, typedCondition, true), expectedType),
+				var contextualType = expectedType;
+				if (contextualType == null) {
+					contextualType = contextualExpressionType(whenTrue, scope);
+					if (contextualType == null)
+						contextualType = contextualExpressionType(whenFalse, scope);
+				}
+				var typedTrue = typeExpression(whenTrue, FlowAnalysis.narrowedScope(scope, typedCondition, true), contextualType),
 					branchExpected = expectedType == null
 						&& typedTrue.type != TNull
 						&& typedTrue.type != TNever ? (containsNullLiteral(whenFalse) ? CompilerType.TNullable(typedTrue.type) : typedTrue.type) : expectedType,
