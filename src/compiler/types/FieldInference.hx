@@ -20,6 +20,7 @@ class FieldInference {
 			case FloatLiteral(_, _): FloatType;
 			case Negate(value, _): negatedType(field, value);
 			case StringLiteral(_, _): StringType;
+			case Add(left, right, _) if (isConstantString(left) && isConstantString(right)): StringType;
 			case BoolLiteral(_, _): BoolType;
 			case New(typeName, _, _): NamedType(typeName);
 			case NewGeneric(typeName, typeArguments, _, _): AppliedType(typeName, typeArguments);
@@ -29,6 +30,13 @@ class FieldInference {
 				throw new CompileError(new Diagnostic("E1002", 'Cannot infer type of field "${field.name}" from this initializer', field.span));
 		};
 	}
+
+	static function isConstantString(expression:AstExpression):Bool
+		return switch expression {
+			case StringLiteral(_, _): true;
+			case Add(left, right, _): isConstantString(left) && isConstantString(right);
+			default: false;
+		};
 
 	static function negatedType(field:AstField, value:AstExpression):AstType
 		return switch value {

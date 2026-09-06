@@ -227,7 +227,9 @@ class TestMain {
 		expectCompileError('class Invalid { static final value; } function main():Int { return 0; }', 'Field "value" requires a type or initializer');
 		expectCompileError('class Invalid { static final value = 20 + 22; } function main():Int { return 0; }',
 			'Cannot infer type of field "value" from this initializer');
-		Frontend.compile('class Defaults { static final integer = -1; static final fraction = -0.5; } function main():Int { return Defaults.integer; }');
+		Frontend.compile("class Defaults { static final integer = -1; static final fraction = -0.5; static final prefix = '$' + 'abstract-' + 'result'; } function main():Int { return Defaults.integer; }");
+		expectCompileError('class Invalid { static final value = "count: " + 1; } function main():Int { return 0; }',
+			'Cannot infer type of field "value" from this initializer');
 		expectCompileError('class Invalid { static final value:Int = "wrong"; } function main():Int { return 0; }',
 			'Type mismatch for static field "Invalid.value"');
 		expectCompileError('function main():Int { var value:Int = 1; value = "wrong"; return value; }', 'Type mismatch for local "value"');
