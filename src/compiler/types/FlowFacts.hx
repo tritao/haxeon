@@ -14,7 +14,9 @@ class FlowFacts {
 		refinedTypes.set(bindingId, type);
 
 	public function resolve(bindingId:String):Null<CompilerType> {
-		var type = refinedTypes.get(bindingId);
-		return type != null ? type : parent == null ? null : parent.resolve(bindingId);
+		if (refinedTypes.exists(bindingId))
+			return refinedTypes.get(bindingId);
+		var outer = parent;
+		return outer == null ? null : outer.resolve(bindingId);
 	}
 }
