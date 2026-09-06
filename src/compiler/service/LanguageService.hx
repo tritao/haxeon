@@ -56,6 +56,13 @@ typedef SemanticToken = {
 	final modifiers:Array<String>;
 }
 
+typedef CodeAction = {
+	final id:String;
+	final title:String;
+	final diagnostic:Diagnostic;
+	final edits:Array<TextEdit>;
+}
+
 /** Source location returned by a semantic navigation query. */
 typedef SymbolLocation = {
 	final ?revision:Int;
@@ -120,6 +127,30 @@ class LanguageService {
 	public function diagnostics(path:String):Array<Diagnostic> {
 		var state = stateFor(path);
 		return state == null ? [] : state.diagnostics.copy();
+	}
+
+	public function codeActions(path:String, start:Int, end:Int):Array<CodeAction> {
+		var state = stateFor(path), result:Array<CodeAction> = [];
+		if (state == null)
+			return result;
+		for (diagnostic in state.diagnostics) {
+			if (diagnostic.span.end < start || diagnostic.span.start > end)
+				continue;
+			for (fix in diagnostic.fixes)
+				result.push({
+					id: diagnostic.code + ":" + fix.id,
+					title: fix.title,
+					diagnostic: diagnostic,
+					edits: [for (edit in fix.edits) {
+						path: edit.span.file.path,
+						span: edit.span,
+						replacement: edit.replacement,
+						revision: state.revision,
+						stale: false
+					}]
+				});
+		}
+		return result;
 	}
 
 	/** Whether editor spans and typed data belong to the latest source revision. */

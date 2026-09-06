@@ -3,6 +3,7 @@ package compiler.syntax;
 import compiler.syntax.Token.TokenKind;
 import compiler.Source.SourceFile;
 import compiler.Diagnostic.CompileError;
+import compiler.Diagnostic.DiagnosticSeverity;
 
 /** Converts one source file into a positioned token stream or a lexical diagnostic. */
 class Lexer {
@@ -37,7 +38,9 @@ class Lexer {
 					while (position + 1 < source.length && !(source.charCodeAt(position) == 42 && source.charCodeAt(position + 1) == 47))
 						position++;
 					if (position + 1 >= source.length)
-						throw new CompileError(new Diagnostic("E0001", "Unterminated block comment", file.span(commentStart, position)));
+						throw new CompileError(new Diagnostic("E0001", "Unterminated block comment", file.span(commentStart, position), DiagnosticSeverity.Error, [
+							{id: "close-block-comment", title: "Close block comment", edits: [{span: file.span(position, position), replacement: "*/"}]}
+						]));
 					position += 2;
 					continue;
 				}
@@ -63,7 +66,9 @@ class Lexer {
 					}
 				}
 				if (!closed)
-					throw new CompileError(new Diagnostic("E0001", "Unterminated string literal", file.span(start, position)));
+					throw new CompileError(new Diagnostic("E0001", "Unterminated string literal", file.span(start, position), DiagnosticSeverity.Error, [
+						{id: "close-string-literal", title: "Close string literal", edits: [{span: file.span(position, position), replacement: String.fromCharCode(quote)}]}
+					]));
 				tokens.push(new Token(TokenKind.StringLiteral, source.substring(start, position), file.span(start, position)));
 				continue;
 			}

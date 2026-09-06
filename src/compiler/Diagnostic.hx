@@ -2,6 +2,18 @@ package compiler;
 
 import compiler.Source.SourceSpan;
 
+typedef DiagnosticEdit = {
+	final span:SourceSpan;
+	final replacement:String;
+}
+
+/** Compiler-authored deterministic repair attached to a diagnostic. */
+typedef DiagnosticFix = {
+	final id:String;
+	final title:String;
+	final edits:Array<DiagnosticEdit>;
+}
+
 /** User-facing importance assigned to a compiler diagnostic. */
 enum DiagnosticSeverity {
 	Error;
@@ -14,12 +26,14 @@ class Diagnostic {
 	public final message:String;
 	public final severity:DiagnosticSeverity;
 	public final span:SourceSpan;
+	public final fixes:Array<DiagnosticFix>;
 
-	public function new(code, message, span, ?severity = Error) {
+	public function new(code, message, span, ?severity = Error, ?fixes:Array<DiagnosticFix>) {
 		this.code = code;
 		this.message = message;
 		this.span = span;
 		this.severity = severity;
+		this.fixes = fixes == null ? [] : fixes;
 	}
 }
 

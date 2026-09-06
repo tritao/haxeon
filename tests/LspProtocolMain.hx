@@ -43,7 +43,8 @@ class LspProtocolMain {
 			|| initialized.result.capabilities.signatureHelpProvider == null
 			|| initialized.result.capabilities.textDocumentSync.change != 1
 			|| !initialized.result.capabilities.documentHighlightProvider
-			|| initialized.result.capabilities.semanticTokensProvider.legend.tokenTypes[12] != "function")
+			|| initialized.result.capabilities.semanticTokensProvider.legend.tokenTypes[12] != "function"
+			|| initialized.result.capabilities.codeActionProvider.codeActionKinds[0] != "quickfix")
 			throw "LSP initialization capabilities are incomplete";
 		var watcherRegistration = protocol.handle('{"jsonrpc":"2.0","method":"initialized","params":{}}');
 		if (watcherRegistration.length != 1
@@ -264,6 +265,30 @@ class LspProtocolMain {
 			|| !hasSemanticToken(semantic.result.data, 0, source.lastIndexOf("answer"), 8, 0)
 			|| !hasSemanticToken(semantic.result.data, 0, source.indexOf("42"), 19, 0))
 			throw "LSP semantic tokens omitted typed declarations, references, or literals";
+		var brokenUri = "file:///workspace/BrokenString.hx",
+			brokenSource = "function main():String return \"broken";
+		protocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {textDocument: {uri: brokenUri, languageId: "haxe", version: 1, text: brokenSource}}
+		}));
+		var actions = request(protocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 52,
+			method: "textDocument/codeAction",
+			params: {
+				textDocument: {uri: brokenUri},
+				range: {start: {line: 0, character: 0}, end: {line: 0, character: brokenSource.length}},
+				context: {diagnostics: []}
+			}
+		}));
+		if (actions.result.length != 1
+			|| actions.result[0].title != "Close string literal"
+			|| actions.result[0].kind != "quickfix"
+			|| actions.result[0].diagnostics[0].code != "E0001"
+			|| actions.result[0].edit.documentChanges[0].textDocument.version != 1
+			|| actions.result[0].edit.documentChanges[0].edits[0].newText != "\"")
+			throw "LSP code actions did not expose the compiler-authored lexical fix";
 		var callSource = "function add(left:Int, right:Int):Int return left + right; function main():Int return add(20, 22);",
 			callUri = "file:///workspace/Call.hx";
 		protocol.handle(Json.stringify({

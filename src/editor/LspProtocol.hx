@@ -90,6 +90,7 @@ class LspProtocol {
 				case "textDocument/completion": cancellable(id, token -> completion(request, token));
 				case "textDocument/documentHighlight": cancellable(id, token -> documentHighlights(request, token));
 				case "textDocument/semanticTokens/full": cancellable(id, token -> semanticTokens(request, token));
+				case "textDocument/codeAction": cancellable(id, token -> codeActions(request, token));
 				case "textDocument/hover": cancellable(id, token -> hover(request, token));
 				case "textDocument/signatureHelp": cancellable(id, token -> signatureHelp(request, token));
 				case "textDocument/definition": cancellable(id, token -> definition(request, token));
@@ -224,6 +225,7 @@ class LspProtocol {
 					legend: {tokenTypes: SEMANTIC_TOKEN_TYPES, tokenModifiers: SEMANTIC_TOKEN_MODIFIERS},
 					full: true
 				},
+				codeActionProvider: {codeActionKinds: ["quickfix"]},
 				hoverProvider: true,
 				signatureHelpProvider: {triggerCharacters: ["(", ","]},
 				definitionProvider: true,
@@ -472,6 +474,37 @@ class LspProtocol {
 			previousCharacter = start.character;
 		}
 		return {data: data};
+	}
+
+	function codeActions(request:Dynamic, token:CancellationToken):Array<Dynamic> {
+		var document = document(request), params = required(request, "params"), range = required(params, "range"),
+			start = positionOffset(document, required(range, "start")), end = positionOffset(document, required(range, "end"));
+		token.check();
+		return [
+			for (action in service.codeActions(compilerPath(document), start, end)) {
+				var changes:Map<String, Array<Dynamic>> = [], targets:Map<String, LspDocument> = [];
+				for (edit in action.edits) {
+					var uri = documents.uri(project.diskPath(edit.path)), target = documentForPath(edit.path), existing = changes.get(uri);
+					if (existing == null)
+						changes.set(uri, existing = []);
+					targets.set(uri, target);
+					existing.push({range: target.range(edit.span.start, edit.span.end), newText: edit.replacement});
+				}
+				{
+					title: action.title,
+					kind: "quickfix",
+					diagnostics: [diagnosticJson(action.diagnostic)],
+					isPreferred: true,
+					edit: {documentChanges: [
+						for (uri => edits in changes)
+							{
+								textDocument: {uri: uri, version: documents.forPath(targets.get(uri).path) == null ? null : targets.get(uri).version},
+								edits: edits
+							}
+					]}
+				}
+			}
+		];
 	}
 
 	function hover(request:Dynamic, token:CancellationToken):Dynamic {
