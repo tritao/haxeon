@@ -251,5 +251,5 @@ class ModuleChangeAnalyzer {
 
 	/** Include coordinates because debugger metadata changes when declarations move. */
 	static function sourceFingerprint(state:compiler.modules.ModuleState, span:compiler.Source.SourceSpan):String
-		return state.source.path + ":" + span.start + ":" + state.source.text.substring(span.start, span.end);
+		return state.source.path + ":" + Std.string(span.start) + ":" + state.source.text.substring(span.start, span.end);
 }
