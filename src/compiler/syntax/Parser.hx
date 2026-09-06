@@ -631,7 +631,7 @@ class Parser {
 			return Switch(expression, cases, defaultBranch, hasDefault, start.merge(end));
 		}
 		if (check(TokenKind.Identifier) || check(TokenKind.This)) {
-			var saved = position, target = parseExpression();
+			var saved = position, target = parseOr();
 			if (match(TokenKind.Increment) || match(TokenKind.Decrement)) {
 				var delta = previous().kind == TokenKind.Increment ? 1 : -1,
 					end = consume(TokenKind.Semicolon).span;
@@ -784,6 +784,15 @@ class Parser {
 			consume(TokenKind.Colon);
 			var whenFalse = parseExpression();
 			expression = Conditional(expression, whenTrue, whenFalse, expressionSpan(expression).merge(expressionSpan(whenFalse)));
+		}
+		if (check(TokenKind.Assign) && peekKind(1) != TokenKind.Greater) {
+			advance();
+			var value = parseExpression(),
+				span = expressionSpan(expression).merge(expressionSpan(value));
+			expression = switch expression {
+				case Variable(name, _): BlockExpression([Assignment(name, value, span)], Variable(name, span), span);
+				default: throw new CompileError(new Diagnostic("E0002", "Assignment expression target must be a variable", expressionSpan(expression)));
+			};
 		}
 		return expression;
 	}

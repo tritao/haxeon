@@ -280,7 +280,7 @@ class Typer {
 			fail("E1021", 'Extern function "${fn.name}" requires @:hlNative(library, symbol)', fn.span);
 		if (binding.arguments.length != 2)
 			fail("E1021", '@:hlNative requires a library and symbol string', binding.span);
-		var values = [];
+		var values:Array<String> = [];
 		for (argument in binding.arguments)
 			switch argument {
 				case StringLiteral(value, _):
