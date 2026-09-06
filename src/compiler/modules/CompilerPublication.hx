@@ -6,6 +6,7 @@ import compiler.hl.HlModuleAssembler;
 import compiler.ir.Ir.IrObject;
 import compiler.types.TypeRegistry;
 import compiler.types.TypedAst.TypedProgram;
+import compiler.types.SemanticProgram;
 
 /** Compiler-owned semantic state captured before staging a publication. */
 typedef CompilerSnapshot = {
@@ -16,6 +17,7 @@ typedef CompilerSnapshot = {
 	final publishedAbi:Null<RuntimeAbiDescriptor>;
 	final compiledOnce:Bool;
 	final rehydrationBaseline:Null<Map<String, haxe.io.Bytes>>;
+	final semanticProgram:Null<SemanticProgram>;
 }
 
 /** Runtime revision and ABI last acknowledged by the host. */

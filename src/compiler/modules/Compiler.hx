@@ -115,6 +115,7 @@ class Compiler {
 	var cachedCompileGeneration = -1;
 	var cachedCompileEntry:Null<String>;
 	var cachedCompileResult:Null<CompileResult>;
+	var cachedSemanticProgram:Null<SemanticProgram>;
 
 	public function new(?identityState:Bytes, ?nativeConfiguration:Array<NativeFunction>) {
 		semanticWorkspace = new SemanticWorkspace(modules);
@@ -605,7 +606,7 @@ class Compiler {
 		try {
 			if (token != null)
 				token.check();
-			var semantic = SemanticProgram.analyze({
+			var canonicalProgram:compiler.Ast.AstProgram = {
 				packageName: null,
 				imports: [],
 				importAliases: [],
@@ -616,7 +617,17 @@ class Compiler {
 				interfaces: interfaces,
 				classes: classes,
 				functions: programFunctions
-			});
+			};
+			var previousSemantic = cachedSemanticProgram;
+			var canReuseSemantic = previousSemantic != null
+				&& !signatureChanged.keys().hasNext()
+				&& !structuralChanged.keys().hasNext()
+				&& canonicalProgram.classes.length == 0
+				&& canonicalProgram.abstracts.length == 0
+				&& canonicalProgram.enumAbstracts.length == 0
+				&& explicitFunctionSignatures(canonicalProgram.functions);
+			var semantic = canReuseSemantic ? previousSemantic.replaceTopLevelBodies(canonicalProgram, selected) : SemanticProgram.analyze(canonicalProgram);
+			cachedSemanticProgram = semantic;
 			typedNew = Typer.typeAnalyzed(semantic, selected, nativeSignatures(), entryPoint);
 		} catch (error:CompileError) {
 			for (name in names) {
@@ -930,7 +941,8 @@ class Compiler {
 			lastTypedProgram: lastTypedProgram,
 			publishedAbi: publishedAbi,
 			compiledOnce: compiledOnce,
-			rehydrationBaseline: rehydrationBaseline
+			rehydrationBaseline: rehydrationBaseline,
+			semanticProgram: cachedSemanticProgram
 		};
 	}
 
@@ -954,6 +966,18 @@ class Compiler {
 		publishedAbi = snapshot.publishedAbi;
 		compiledOnce = snapshot.compiledOnce;
 		rehydrationBaseline = snapshot.rehydrationBaseline;
+		cachedSemanticProgram = snapshot.semanticProgram;
+	}
+
+	static function explicitFunctionSignatures(functions:Array<AstFunction>):Bool {
+		for (fn in functions) {
+			if (fn.result == InferredType)
+				return false;
+			for (argument in fn.arguments)
+				if (argument.type == InferredType)
+					return false;
+		}
+		return true;
 	}
 
 	function nativeSignatures():Map<String, {arguments:Array<CompilerType>, result:CompilerType}> {
