@@ -27,6 +27,7 @@ private typedef PositionBinding = {final span:SourceSpan; final symbol:SemanticS
 
 /** Revision-local declaration and resolved-local facts emitted by the compiler. */
 class SemanticIndex {
+	public final revision:Int;
 	public final symbols:Map<String, IndexedSemanticSymbol> = [];
 
 	final bindings:Array<PositionBinding> = [];
@@ -34,8 +35,9 @@ class SemanticIndex {
 	final tokens:Array<Token>;
 	final module:String;
 
-	public function new(path:String, declarations:DeclarationIndex, tokens:Array<Token>) {
+	public function new(path:String, revision:Int, declarations:DeclarationIndex, tokens:Array<Token>) {
 		module = ModulePath.fromFile(path);
+		this.revision = revision;
 		this.tokens = tokens;
 		var keys = [for (key in declarations.symbols.keys()) key];
 		keys.sort(Reflect.compare);

@@ -17,6 +17,6 @@ class SemanticModel {
 		this.revision = revision;
 		this.program = program;
 		this.declarations = DeclarationIndex.forModule(program, source);
-		this.index = new SemanticIndex(source.path, declarations, tokens == null ? new Lexer(source).tokenize() : tokens);
+		this.index = new SemanticIndex(source.path, revision, declarations, tokens == null ? new Lexer(source).tokenize() : tokens);
 	}
 }

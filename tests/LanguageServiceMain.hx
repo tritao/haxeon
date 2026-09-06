@@ -203,6 +203,44 @@ class LanguageServiceMain {
 			throw "language service allowed a cross-module global rename collision";
 		if (enumService.rename("app/Main.hx", enumConstructorPosition, "One").length != 0)
 			throw "language service allowed an enum-case rename collision";
+		var incrementalService = new LanguageService();
+		incrementalService.update("inc/Values.hx", "package inc; function value():Int return 1;");
+		var incrementalSource = "package incapp; import inc.Values; function helper():Int return Values.value(); function main():Int return helper();";
+		incrementalService.update("incapp/Main.hx", incrementalSource);
+		incrementalService.compile("incapp.Main");
+		var valuesIndex = incrementalService.compiler.modules.get("inc.Values").semanticModel.index,
+			firstMainIndex = incrementalService.compiler.modules.get("incapp.Main").semanticModel.index;
+		incrementalService.update("incapp/Main.hx",
+			"package incapp; import inc.Values; function helper():Int return Values.value() + 1; function main():Int return helper();");
+		var bodyAnalysis = incrementalService.compile("incapp.Main"),
+			secondMainIndex = incrementalService.compiler.modules.get("incapp.Main").semanticModel.index,
+			helperUse = incrementalService.compiler.modules.get("incapp.Main").source.text.lastIndexOf("helper");
+		if (valuesIndex != incrementalService.compiler.modules.get("inc.Values").semanticModel.index
+			|| firstMainIndex == secondMainIndex
+			|| secondMainIndex.revision != incrementalService.compiler.modules.get("incapp.Main").revision
+			|| secondMainIndex.symbolIdAt(helperUse) == null
+			|| bodyAnalysis.retyped.indexOf("incapp.Main.helper") < 0
+			|| bodyAnalysis.retyped.indexOf("main") < 0)
+			throw "semantic index did not rebuild exactly the edited module";
+		incrementalService.update("inc/Values.hx", "package inc; function value():Int return 2;");
+		var dependencyBodyAnalysis = incrementalService.compile("incapp.Main");
+		if (dependencyBodyAnalysis.retyped.indexOf("main") >= 0 || dependencyBodyAnalysis.retyped.indexOf("incapp.Main.helper") >= 0)
+			throw "body-only dependency edit unnecessarily rebuilt consumer indexes";
+		var structuralService = new LanguageService();
+		structuralService.update("shape/Choice.hx", "package shape; enum Choice { One; }");
+		var structuralSource = "package shapeapp; import shape.Choice; function helper(value:Choice):Int return switch value { case Choice.One: 1; default: 0; }; function main():Int return helper(Choice.One);";
+		structuralService.update("shapeapp/Main.hx", structuralSource);
+		structuralService.compile("shapeapp.Main");
+		var originalConsumerIndex = structuralService.compiler.modules.get("shapeapp.Main").semanticModel.index;
+		structuralService.update("shape/Choice.hx", "package shape; enum Choice { One; Two; }");
+		var structuralAnalysis = structuralService.compile("shapeapp.Main"),
+			updatedConsumerIndex = structuralService.compiler.modules.get("shapeapp.Main").semanticModel.index,
+			choiceUse = structuralSource.lastIndexOf("Choice.One") + "Choice.".length;
+		if (structuralAnalysis.retyped.indexOf("main") < 0
+			|| structuralAnalysis.retyped.indexOf("shapeapp.Main.helper") < 0
+			|| originalConsumerIndex == updatedConsumerIndex
+			|| updatedConsumerIndex.symbolIdAt(choiceUse) == null)
+			throw "public enum change did not atomically rebuild dependent semantic indexes";
 		service.update("Main.hx", "function main(:Int { return 0; }");
 		try {
 			service.compile("Main");

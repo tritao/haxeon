@@ -97,6 +97,16 @@ class FrontendCompilation {
 			}
 			throw error;
 		}
+		var reindexedModules:Map<String, Bool> = [];
+		for (functionName in selected.keys()) {
+			var module = owners.get(functionName);
+			if (module != null)
+				reindexedModules.set(module, true);
+		}
+		for (module in reindexedModules.keys()) {
+			var state = context.writableState(module, rollbackModules);
+			state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.revision, state.tokens);
+		}
 		var retyped = [], regenerated = [];
 		for (object in IrGenerator.objectsFrom(typedNew))
 			objectCache.set(object.name, object);

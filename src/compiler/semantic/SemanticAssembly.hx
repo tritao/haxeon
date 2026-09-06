@@ -314,6 +314,15 @@ class SemanticAssembly {
 		}
 		for (name in bodyChanged.keys())
 			invalid.set(name, true);
+		// A new source revision owns a fresh position index. Retype every function
+		// in that module so unchanged bodies cannot leave gaps or stale spans in it.
+		for (moduleName in names) {
+			var state = modules.get(moduleName);
+			if (state.lastGoodRevision != state.revision)
+				for (fn in functions)
+					if (owners.get(fn.name) == moduleName)
+						invalid.set(fn.name, true);
+		}
 		var work:Array<String> = [for (name in signatureChanged.keys()) name], workCursor = 0;
 		for (name in bodyChanged.keys())
 			if (genericOrigins.exists(name))
@@ -330,6 +339,20 @@ class SemanticAssembly {
 					if (!invalid.exists(caller))
 						work.push(caller);
 			}
+		}
+		// Semantic indexes are replaced as module-sized snapshots. If one function
+		// changes meaning, type every function owned by that module before swapping
+		// the index so no bindings from the previous snapshot survive.
+		var invalidModules:Map<String, Bool> = [];
+		for (functionName in invalid.keys()) {
+			var owner = owners.get(functionName);
+			if (owner != null)
+				invalidModules.set(owner, true);
+		}
+		for (fn in functions) {
+			var owner = owners.get(fn.name);
+			if (owner != null && invalidModules.exists(owner))
+				invalid.set(fn.name, true);
 		}
 		var selected:Map<String, Bool> = [];
 		for (name in invalid.keys())
