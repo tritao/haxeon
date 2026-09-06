@@ -17,6 +17,14 @@ class ModuleMain {
 		compiler.update("Unused.hx", "function identity(x:Int):Int { return x; }");
 		compiler.update("BrokenUnused.hx", "function broken(:Int { }");
 		var first = compiler.compile("Main");
+		var noOp = compiler.compile("Main");
+		if (noOp.revision != first.revision
+			|| noOp.module != first.module
+			|| noOp.metrics.retypedFunctions != 0
+			|| noOp.metrics.regeneratedFunctions != 0
+			|| noOp.changedFunctions.length != 0
+			|| noOp.patchBytes != null)
+			throw "Unchanged compilation did not reuse the last successful build";
 		var mainDependencies = compiler.modules.get("Main").semanticDependencies.get("main"),
 			hasBodyDependency = false;
 		for (dependency in mainDependencies)

@@ -101,6 +101,10 @@ class Compiler {
 	var compiledOnce = false;
 	final publication = new CompilerPublication();
 	var rehydrationBaseline:Null<Map<String, Bytes>>;
+	var sourceGeneration = 0;
+	var cachedCompileGeneration = -1;
+	var cachedCompileEntry:Null<String>;
+	var cachedCompileResult:Null<CompileResult>;
 
 	public function new(?identityState:Bytes, ?nativeConfiguration:Array<NativeFunction>) {
 		natives = new NativeRegistry(nativeConfiguration);
@@ -176,8 +180,11 @@ class Compiler {
 		return natives.configuration();
 	}
 
-	public function compact(entryModule:String):CompileResult
-		return compileTransaction(entryModule, null, new HlModuleAssembler(assembler.cache.stableIds));
+	public function compact(entryModule:String):CompileResult {
+		var result = compileTransaction(entryModule, null, new HlModuleAssembler(assembler.cache.stableIds));
+		rememberCompile(entryModule, result);
+		return result;
+	}
 
 	public function update(path:String, source:String):ModuleState {
 		var name = ModulePath.fromFile(path),
@@ -190,6 +197,7 @@ class Compiler {
 			state = new ModuleState(name, file);
 			modules.set(name, state);
 		}
+		sourceGeneration++;
 		return state;
 	}
 
@@ -229,8 +237,49 @@ class Compiler {
 		return candidate;
 	}
 
-	public function compile(entryModule:String, ?token:CancellationToken):CompileResult
-		return compileTransaction(entryModule, token, null);
+	public function compile(entryModule:String, ?token:CancellationToken):CompileResult {
+		var cached = cachedCompileResult;
+		if (!publication.status().tracking
+			&& cached != null
+			&& cachedCompileGeneration == sourceGeneration
+			&& cachedCompileEntry == entryModule) {
+			if (token != null)
+				token.check();
+			return {
+				ir: cached.ir,
+				module: cached.module,
+				retyped: [],
+				regenerated: [],
+				changedFunctions: [],
+				requiresReload: false,
+				reloadReasons: [],
+				functionIndices: cached.functionIndices,
+				functionIds: cached.functionIds,
+				runtimeIdentity: cached.runtimeIdentity,
+				revision: cached.revision,
+				patchBytes: null,
+				metrics: {
+					elapsedMs: 0.0,
+					modules: cached.metrics.modules,
+					retypedFunctions: 0,
+					regeneratedFunctions: 0,
+					changedFunctions: 0,
+					moduleFunctions: cached.metrics.moduleFunctions,
+					moduleNatives: cached.metrics.moduleNatives,
+					patchBytes: 0
+				}
+			};
+		}
+		var result = compileTransaction(entryModule, token, null);
+		rememberCompile(entryModule, result);
+		return result;
+	}
+
+	function rememberCompile(entryModule:String, result:CompileResult):Void {
+		cachedCompileGeneration = sourceGeneration;
+		cachedCompileEntry = entryModule;
+		cachedCompileResult = result;
+	}
 
 	function compileTransaction(entryModule:String, token:Null<CancellationToken>, startingAssembler:Null<HlModuleAssembler>):CompileResult {
 		publication.beforeCompile();
