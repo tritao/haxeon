@@ -1834,9 +1834,10 @@ class Typer {
 						scope.define(name, lowerType(declared), span, false);
 				case VarDeclaration(name, declared, initializer, span):
 					if (scope.resolve(name) == null) {
-						var value = typeExpression(initializer, scope);
+						var declaredType = declared == null ? null : lowerType(declared);
+						var value = typeExpression(initializer, scope, declaredType);
 						if (declared != null)
-							value = coerce(value, lowerType(declared), 'local "$name"', "E1002");
+							value = coerce(value, declaredType, 'local "$name"', "E1002");
 						scope.define(name, value.type, span);
 					}
 				case If(_, yes, no, _):
@@ -2830,7 +2831,8 @@ class Typer {
 	}
 
 	function comparison(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan):TypedExpression {
-		var left = typeExpression(a, scope), right = typeExpression(b, scope);
+		var left = typeExpression(a, scope),
+			right = typeExpression(b, scope, left.type);
 		if (operation == 2) {
 			if (sameType(left.type, TNull) && isNullable(right.type))
 				left = coerce(left, right.type, "null comparison");

@@ -7,6 +7,7 @@ import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlType;
 import compiler.hl.HlSymbolTable;
 import compiler.ir.Ir.IrInstruction;
+import compiler.ir.Ir.IrTerminator;
 import compiler.ir.Ir.IrBlock;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.Ir.IrObject;
@@ -14,6 +15,7 @@ import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
 import compiler.ir.Ir.IrEnum;
+import compiler.ir.IrVerifier;
 
 class HlLower {
 	final code:HlCode;
@@ -47,7 +49,10 @@ class HlLower {
 	}
 
 	function lowerProgram(program:IrProgram):HlCode {
-		if (functionIndices.keys().hasNext() == false) {
+		var hasFunctionIndices = false;
+		for (_ in functionIndices)
+			hasFunctionIndices = true;
+		if (!hasFunctionIndices) {
 			var nextFunction = 0;
 			for (native in program.natives)
 				addFunctionName(native.name, nextFunction++);
@@ -57,41 +62,48 @@ class HlLower {
 		var pendingInterfaces = program.interfaces.copy();
 		while (pendingInterfaces.length > 0) {
 			var progressed = false;
-			for (interfaceDecl in pendingInterfaces.copy()) {
+			var remainingInterfaces:Array<compiler.ir.Ir.IrInterface> = [];
+			for (interfaceDecl in pendingInterfaces) {
 				var ready = true;
 				for (base in interfaceDecl.bases)
 					if (!symbols.hasType('virt:$base'))
 						ready = false;
-				if (!ready)
-					continue;
-				symbols.internInterface(interfaceDecl);
-				pendingInterfaces.remove(interfaceDecl);
-				progressed = true;
+				if (ready) {
+					symbols.internInterface(interfaceDecl);
+					progressed = true;
+				} else
+					remainingInterfaces.push(interfaceDecl);
 			}
 			if (!progressed)
 				throw 'Unable to order interface bases';
+			pendingInterfaces = remainingInterfaces;
 		}
 		for (enumDecl in program.enums)
 			enumTypeIndices.set(enumDecl.name, symbols.internEnum(enumDecl));
 		var pending = program.objects.copy();
 		while (pending.length > 0) {
 			var progressed = false;
-			for (object in pending.copy()) {
-				if (object.base != null && !objectTypeIndices.exists(object.base) && !symbols.hasType('obj:${object.base}'))
-					continue;
+			var remaining:Array<IrObject> = [];
+			for (object in pending) {
+				var ready = true;
+				if (object.base != null) {
+					var baseName = Std.string(object.base);
+					ready = objectTypeIndices.exists(baseName) || symbols.hasType('obj:$baseName');
+				}
 				var fieldsReady = true;
 				for (field in object.fields)
 					if (!objectTypeReady(field.type))
 						fieldsReady = false;
-				if (!fieldsReady)
-					continue;
-				objects.set(object.name, object);
-				objectTypeIndices.set(object.name, symbols.internObject(object, functionIndices));
-				pending.remove(object);
-				progressed = true;
+				if (ready && fieldsReady) {
+					objects.set(object.name, object);
+					objectTypeIndices.set(object.name, symbols.internObject(object, functionIndices));
+					progressed = true;
+				} else
+					remaining.push(object);
 			}
 			if (!progressed)
 				throw 'Unable to order object metadata dependencies';
+			pending = remaining;
 		}
 		for (field in program.staticFields)
 			symbols.internGlobal(field.name, field.type);
@@ -145,9 +157,11 @@ class HlLower {
 					case Phi(output, inputs):
 						defineRegister(output, registers, registerTypes);
 						for (input in inputs) {
-							var key = edgeKey(input.block, block.id),
+							var key = edgeKey(input.block, block.id);
+							var moves:Array<{destination:IrValue, source:IrValue}>;
+							if (edges.exists(key))
 								moves = edges.get(key);
-							if (moves == null) {
+							else {
 								moves = [];
 								edges.set(key, moves);
 							}
@@ -188,9 +202,9 @@ class HlLower {
 					case SafeCast(output, value):
 						instructions.push(HlInstruction.SafeCast(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
 					case BeginTry(catchBlock, _):
-						var handlerValue = catchValues.get(catchBlock);
-						if (handlerValue == null)
+						if (!catchValues.exists(catchBlock))
 							throw 'Try block $block.id has no catch value in block $catchBlock';
+						var handlerValue = catchValues.get(catchBlock);
 						instructions.push(HlInstruction.Trap(requireRegister(handlerValue, registers), 'block_$catchBlock'));
 					case EndTry:
 						instructions.push(HlInstruction.EndTrap(0));
@@ -293,9 +307,10 @@ class HlLower {
 							constructor, field));
 				}
 			}
-			if (block.terminator == null)
+			var terminator = block.terminator;
+			if (terminator == null)
 				throw 'Reachable IR block ${block.id} has no terminator';
-			switch block.terminator {
+			switch terminator {
 				case Return(value):
 					instructions.push(HlInstruction.Return(requireRegister(value, registers)));
 				case Throw(value):
@@ -303,7 +318,9 @@ class HlLower {
 				case Rethrow(value):
 					instructions.push(HlInstruction.Rethrow(requireRegister(value, registers)));
 				case Jump(target):
-					emitPhiMoves(edges.get(edgeKey(block.id, target)), registers, registerTypes, instructions);
+					var key = edgeKey(block.id, target);
+					if (edges.exists(key))
+						emitPhiMoves(edges.get(key), registers, registerTypes, instructions);
 					instructions.push(HlInstruction.Jump('block_$target'));
 				case Branch(condition, yes, no):
 					if (edges.exists(edgeKey(block.id, yes)) || edges.exists(edgeKey(block.id, no)))
@@ -326,70 +343,77 @@ class HlLower {
 		var byId:Map<Int, IrBlock> = [for (block in fn.blocks) block.id => block],
 			seen:Map<Int, Bool> = [],
 			output:Array<IrBlock> = [];
-		function canReach(from:Int, target:Int, checked:Map<Int, Bool>):Bool {
-			if (from == target)
-				return true;
-			if (checked.exists(from))
-				return false;
-			checked.set(from, true);
-			var block = byId.get(from);
-			if (block == null)
-				return false;
-			return switch block.terminator {
-				case Jump(next): canReach(next, target, checked);
-				case Branch(_, yes, no): canReach(yes, target, checked) || canReach(no, target, checked);
-				case Return(_), Throw(_), Rethrow(_), null: false;
-			};
-		}
-		function visit(id:Int, stop:Null<Int>):Void {
-			if (stop != null && id == stop || seen.exists(id))
-				return;
-			var block = byId.get(id);
-			if (block == null)
-				return;
-			seen.set(id, true);
-			output.push(block);
-			var region:Null<{catchBlock:Int, afterBlock:Int}> = null;
-			for (instruction in block.instructions)
-				switch instruction {
-					case BeginTry(catchBlock, afterBlock):
-						region = {catchBlock: catchBlock, afterBlock: afterBlock};
-					default:
-				}
-			var successors:Array<Int> = switch block.terminator {
-				case Jump(target): [target];
-				case Branch(_, yes, no): [yes, no];
-				case Return(_), Throw(_), Rethrow(_), null: [];
-			};
-			// Preserve reducible loops as backward branches for HashLink's JIT.
-			successors.sort(function(a, b) {
-				var aLoops = canReach(a, id, []), bLoops = canReach(b, id, []);
-				return aLoops == bLoops ? 0 : (aLoops ? -1 : 1);
-			});
-			if (region == null) {
-				for (successor in successors)
-					visit(successor, stop);
-				return;
-			}
-			for (successor in successors)
-				visit(successor, region.afterBlock);
-			visit(region.catchBlock, region.afterBlock);
-			visit(region.afterBlock, stop);
-		}
-		visit(fn.blocks[0].id, null);
+		visitBlock(byId, seen, output, fn.blocks[0].id, -1);
 		for (block in fn.blocks)
 			if (!seen.exists(block.id) && (block.instructions.length > 0 || block.terminator != null))
-				visit(block.id, null);
+				visitBlock(byId, seen, output, block.id, -1);
 		return output;
+	}
+
+	static function visitBlock(byId:Map<Int, IrBlock>, seen:Map<Int, Bool>, output:Array<IrBlock>, id:Int, stop:Int):Void {
+		if (stop >= 0 && id == stop || seen.exists(id) || !byId.exists(id))
+			return;
+		var block = byId.get(id);
+		seen.set(id, true);
+		output.push(block);
+		var region:Null<{catchBlock:Int, afterBlock:Int}> = null;
+		for (instruction in block.instructions)
+			switch instruction {
+				case BeginTry(catchBlock, afterBlock):
+					region = {catchBlock: catchBlock, afterBlock: afterBlock};
+				default:
+			}
+		var successors:Array<Int> = [];
+		var terminator = block.terminator;
+		if (terminator != null)
+			switch terminator {
+				case Jump(target):
+					successors.push(target);
+				case Branch(_, yes, no):
+					successors.push(yes);
+					successors.push(no);
+				case Return(_), Throw(_), Rethrow(_):
+			}
+		// Preserve reducible loops as backward branches for HashLink's JIT.
+		successors.sort(function(a, b) {
+			var aLoops = HlLower.canReach(byId, a, id, []),
+				bLoops = HlLower.canReach(byId, b, id, []);
+			return aLoops == bLoops ? 0 : (aLoops ? -1 : 1);
+		});
+		if (region == null) {
+			for (successor in successors)
+				visitBlock(byId, seen, output, successor, stop);
+			return;
+		}
+		for (successor in successors)
+			visitBlock(byId, seen, output, successor, region.afterBlock);
+		visitBlock(byId, seen, output, region.catchBlock, region.afterBlock);
+		visitBlock(byId, seen, output, region.afterBlock, stop);
+	}
+
+	static function canReach(byId:Map<Int, IrBlock>, from:Int, target:Int, checked:Map<Int, Bool>):Bool {
+		if (from == target)
+			return true;
+		if (checked.exists(from))
+			return false;
+		checked.set(from, true);
+		if (!byId.exists(from))
+			return false;
+		var terminator = byId.get(from).terminator;
+		if (terminator == null)
+			return false;
+		return switch terminator {
+			case Jump(next): canReach(byId, next, target, checked);
+			case Branch(_, yes, no): canReach(byId, yes, target, checked) || canReach(byId, no, target, checked);
+			case Return(_), Throw(_), Rethrow(_): false;
+		};
 	}
 
 	static function edgeKey(from:Int, to:Int):String
 		return '$from:$to';
 
-	function emitPhiMoves(moves:Null<Array<{destination:IrValue, source:IrValue}>>, registers:Map<Int, Int>, registerTypes:Array<Int>,
+	function emitPhiMoves(moves:Array<{destination:IrValue, source:IrValue}>, registers:Map<Int, Int>, registerTypes:Array<Int>,
 			instructions:Array<HlInstruction>):Void {
-		if (moves == null)
-			return;
 		if (moves.length == 1) {
 			var destination = requireRegister(moves[0].destination, registers),
 				source = requireRegister(moves[0].source, registers);
@@ -397,7 +421,7 @@ class HlLower {
 				instructions.push(HlInstruction.Move(destination, source));
 			return;
 		}
-		var temporaries = [];
+		var temporaries:Array<Int> = [];
 		for (move in moves) {
 			var temporary = registerTypes.length;
 			registerTypes.push(internType(move.source.type));
@@ -437,10 +461,9 @@ class HlLower {
 	}
 
 	function requireRegister(value:IrValue, registers:Map<Int, Int>):Int {
-		var index = registers.get(value.id);
-		if (index == null)
+		if (!registers.exists(value.id))
 			throw 'IR value ${value.id} is used before definition';
-		return index;
+		return registers.get(value.id);
 	}
 
 	function internInt(value:Int):Int {
@@ -463,10 +486,9 @@ class HlLower {
 	}
 
 	function requireObjectType(name:String):Int {
-		var index = objectTypeIndices.get(name);
-		if (index == null)
+		if (!objectTypeIndices.exists(name))
 			throw 'Unknown IR object "$name"';
-		return index;
+		return objectTypeIndices.get(name);
 	}
 
 	function requireEnumConstructor(typeName:String, type:IrType, constructor:Int):Int {
@@ -488,28 +510,30 @@ class HlLower {
 			case Obj(value): value;
 			default: throw 'IR value ${object.id} is not an object';
 		};
-		var descriptor = objects.get(typeName);
-		if (descriptor == null)
+		if (!objects.exists(typeName))
 			throw 'Unknown IR object "$typeName"';
-		var offset = descriptor.base == null ? 0 : objectFieldCount(descriptor.base);
+		var descriptor = objects.get(typeName);
+		var baseName = descriptor.base == null ? "" : Std.string(descriptor.base);
+		var offset = baseName.length == 0 ? 0 : objectFieldCount(baseName);
 		for (index in 0...descriptor.fields.length)
 			if (descriptor.fields[index].name == name)
 				return offset + index;
-		if (descriptor.base != null)
-			return requireObjectFieldByType(descriptor.base, name);
+		if (baseName.length > 0)
+			return requireObjectFieldByType(baseName, name);
 		throw 'Unknown IR field "$typeName.$name"';
 	}
 
 	function requireObjectFieldByType(typeName:String, name:String):Int {
-		var descriptor = objects.get(typeName);
-		if (descriptor == null)
+		if (!objects.exists(typeName))
 			throw 'Unknown IR object "$typeName"';
-		var offset = descriptor.base == null ? 0 : objectFieldCount(descriptor.base);
+		var descriptor = objects.get(typeName);
+		var baseName = descriptor.base == null ? "" : Std.string(descriptor.base);
+		var offset = baseName.length == 0 ? 0 : objectFieldCount(baseName);
 		for (index in 0...descriptor.fields.length)
 			if (descriptor.fields[index].name == name)
 				return offset + index;
-		if (descriptor.base != null)
-			return requireObjectFieldByType(descriptor.base, name);
+		if (baseName.length > 0)
+			return requireObjectFieldByType(baseName, name);
 		throw 'Unknown IR field "$typeName.$name"';
 	}
 
@@ -524,10 +548,11 @@ class HlLower {
 	}
 
 	function objectFieldCount(typeName:String):Int {
-		var descriptor = objects.get(typeName);
-		if (descriptor == null)
+		if (!objects.exists(typeName))
 			throw 'Unknown IR object "$typeName"';
-		return descriptor.fields.length + (descriptor.base == null ? 0 : objectFieldCount(descriptor.base));
+		var descriptor = objects.get(typeName);
+		var baseName = descriptor.base == null ? "" : Std.string(descriptor.base);
+		return descriptor.fields.length + (baseName.length == 0 ? 0 : objectFieldCount(baseName));
 	}
 
 	function addFunctionName(name:String, index:Int):Void {
@@ -537,9 +562,8 @@ class HlLower {
 	}
 
 	function requireFunction(name:String):Int {
-		var index = functionIndices.get(name);
-		if (index == null)
+		if (!functionIndices.exists(name))
 			throw 'Unknown IR function "$name"';
-		return index;
+		return functionIndices.get(name);
 	}
 }
