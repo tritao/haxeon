@@ -29,6 +29,9 @@ private class RuntimeNative {
 	public static function call_i32_object(module:hl.Abstract<"realtime_module">, index:Int, argument:Dynamic):Int
 		return 0;
 
+	public static function validate_call(module:hl.Abstract<"realtime_module">, index:Int, shape:Int):Int
+		return -1;
+
 	public static function patch(module:hl.Abstract<"realtime_module">, bytes:hl.Bytes, length:Int):Int
 		return -1;
 
@@ -62,44 +65,44 @@ class Runtime {
 	public static function inspectPatch(bytes:Bytes):{baseRevision:Int, revision:Int, functionCount:Int} {
 		var summary = RuntimeNative.inspect_patch(bytes.getData(), bytes.length);
 		if (summary < 0)
-			throw "HashLink rejected the HLP bytes";
+			throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the HLP bytes");
 		return {baseRevision: summary >>> 22, revision: (summary >>> 12) & 0x3FF, functionCount: summary & 0xFFF};
 	}
 
 	public static function load(bytes:Bytes, identity:Bytes):LoadedModule {
 		var module = RuntimeNative.load(bytes.getData(), bytes.length, identity.getData(), identity.length);
 		if (module == null)
-			throw "HashLink rejected the module bytes";
+			throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the module bytes");
 		return new LoadedModule(module);
 	}
 
 	public static function callInt(module:LoadedModule, stableIndex:Int):Int
-		return module.access(function(handle) return RuntimeNative.call_i32(handle, stableIndex));
+		return invoke(module, stableIndex, 0, function(handle) return RuntimeNative.call_i32(handle, stableIndex));
 
 	public static function callVoid(module:LoadedModule, stableIndex:Int):Void
-		module.access(function(handle) RuntimeNative.call_void(handle, stableIndex));
+		invoke(module, stableIndex, 1, function(handle) RuntimeNative.call_void(handle, stableIndex));
 
 	public static function callString(module:LoadedModule, stableIndex:Int):String {
-		var bytes = module.access(function(handle) return RuntimeNative.call_bytes(handle, stableIndex));
+		var bytes = invoke(module, stableIndex, 2, function(handle) return RuntimeNative.call_bytes(handle, stableIndex));
 		if (bytes == null)
 			return null;
 		return @:privateAccess String.__alloc__(bytes, bytes.ucs2Length(0));
 	}
 
 	public static function callStringArg(module:LoadedModule, stableIndex:Int, argument:String):Void
-		module.access(function(handle) RuntimeNative.call_bytes1(handle, stableIndex, @:privateAccess argument.bytes));
+		invoke(module, stableIndex, 3, function(handle) RuntimeNative.call_bytes1(handle, stableIndex, @:privateAccess argument.bytes));
 
 	public static function retainClosure(module:LoadedModule, stableIndex:Int):RetainedValue
-		return new RetainedValue(module, module.accessRetained(function(handle) return RuntimeNative.call_closure(handle, stableIndex)));
+		return new RetainedValue(module, retain(module, stableIndex, 4, function(handle) return RuntimeNative.call_closure(handle, stableIndex)));
 
 	public static function callRetainedClosureInt(closure:RetainedValue):Int
 		return RuntimeNative.call_closure_i32(closure.get());
 
 	public static function retainObject(module:LoadedModule, stableIndex:Int):RetainedValue
-		return new RetainedValue(module, module.accessRetained(function(handle) return RuntimeNative.call_object(handle, stableIndex)));
+		return new RetainedValue(module, retain(module, stableIndex, 5, function(handle) return RuntimeNative.call_object(handle, stableIndex)));
 
 	public static function callIntObject(module:LoadedModule, stableIndex:Int, argument:RetainedValue):Int
-		return module.access(function(handle) return RuntimeNative.call_i32_object(handle, stableIndex, argument.get()));
+		return invoke(module, stableIndex, 6, function(handle) return RuntimeNative.call_i32_object(handle, stableIndex, argument.get()));
 
 	public static function retainedCodeAllocationCount(module:LoadedModule):Int
 		return module.access(RuntimeNative.allocation_count);
@@ -131,5 +134,33 @@ class Runtime {
 			var statusCode:Int = status;
 			throw new RuntimeError(status, 'HashLink rejected the patch transaction (status $statusCode)');
 		}
+	}
+
+	static function invoke<T>(module:LoadedModule, stableIndex:Int, shape:Int, operation:hl.Abstract<"realtime_module">->T):T
+		return module.access(function(handle) {
+			validateCall(handle, stableIndex, shape);
+			try
+				return operation(handle)
+			catch (error:RuntimeError)
+				throw error
+			catch (error:Dynamic)
+				throw new RuntimeError(RuntimeStatus.Exception, Std.string(error));
+		});
+
+	static function retain(module:LoadedModule, stableIndex:Int, shape:Int, operation:hl.Abstract<"realtime_module">->Dynamic):Dynamic
+		return module.accessRetained(function(handle) {
+			validateCall(handle, stableIndex, shape);
+			try
+				return operation(handle)
+			catch (error:RuntimeError)
+				throw error
+			catch (error:Dynamic)
+				throw new RuntimeError(RuntimeStatus.Exception, Std.string(error));
+		});
+
+	static function validateCall(handle:hl.Abstract<"realtime_module">, stableIndex:Int, shape:Int):Void {
+		var status:RuntimeStatus = RuntimeNative.validate_call(handle, stableIndex, shape);
+		if (status != RuntimeStatus.Ok)
+			throw new RuntimeError(status, 'Invalid runtime function call (stable ID $stableIndex)');
 	}
 }

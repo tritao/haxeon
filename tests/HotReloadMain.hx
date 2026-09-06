@@ -85,8 +85,8 @@ class HotReloadMain {
 		try {
 			Runtime.inspectPatch(changed.patchBytes.sub(0, changed.patchBytes.length - 1));
 			throw "native decoder accepted truncated HLP";
-		} catch (error:String) {
-			if (error != "HashLink rejected the HLP bytes")
+		} catch (error:RuntimeError) {
+			if (error.status != RuntimeStatus.BadFormat)
 				throw error;
 		}
 		var compilerIndex = changed.functionIds.get("Value.value");
@@ -292,6 +292,20 @@ class HotReloadMain {
 		}
 		if (Runtime.callInt(loaded, valueIndex) != 49)
 			throw "foreign patch damaged the live generation";
+		try {
+			Runtime.callString(loaded, valueIndex);
+			throw "runtime accepted a call with the wrong result shape";
+		} catch (error:RuntimeError) {
+			if (error.status != RuntimeStatus.BadFunction)
+				throw error;
+		}
+		try {
+			Runtime.callInt(loaded, 0x6FFFFFFF);
+			throw "runtime accepted an unknown stable function ID";
+		} catch (error:RuntimeError) {
+			if (error.status != RuntimeStatus.BadFunction)
+				throw error;
+		}
 		Runtime.dispose(loaded);
 		Runtime.dispose(loaded);
 		try {

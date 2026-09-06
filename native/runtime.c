@@ -913,6 +913,10 @@ HL_PRIM int HL_NAME(call_i32_object)( hl_runtime_module *runtime, int stable_id,
 	return result;
 }
 
+HL_PRIM int HL_NAME(validate_call)( hl_runtime_module *runtime, int stable_id, int shape ) {
+	return hl_runtime_module_validate_call(runtime,stable_id,shape);
+}
+
 HL_PRIM int HL_NAME(patch)( hl_runtime_module *runtime, vbyte *bytes, int length ) {
 	return hl_runtime_module_apply_hlp(runtime,bytes,length);
 }
@@ -965,6 +969,7 @@ DEFINE_PRIM(_DYN,call_closure,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_I32,call_closure_i32,_DYN);
 DEFINE_PRIM(_DYN,call_object,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_I32,call_i32_object,_ABSTRACT(realtime_module) _I32 _DYN);
+DEFINE_PRIM(_I32,validate_call,_ABSTRACT(realtime_module) _I32 _I32);
 DEFINE_PRIM(_I32,patch,_ABSTRACT(realtime_module) _BYTES _I32);
 DEFINE_PRIM(_I32,allocation_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,patch_jit_count,_ABSTRACT(realtime_module));
