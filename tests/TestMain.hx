@@ -324,7 +324,8 @@ class TestMain {
 		crossBlockA.instructions.push(ConstInt(crossValue, 1));
 		crossBlockA.terminator = compiler.ir.Cfg.CfgTerminator.Jump(1);
 		crossBlockB.terminator = compiler.ir.Cfg.CfgTerminator.Return(crossValue);
-		expectCfgError(new CfgFunction("bad", [], I32, [crossBlockA, crossBlockB], []), "CFG value 0 is used outside its defining block or before definition");
+		expectCfgError(new CfgFunction("bad", [], I32, [crossBlockA, crossBlockB], []),
+			"CFG value 0 is used outside its defining block or before definition in block 1");
 		Sys.println("PASS: CFG verifier rejects malformed blocks, edges, and values");
 		var persistedType = Function([I32, Array(Obj("demo.Box")), Function([Bytes], Bool)], Virtual("demo.Plugin")),
 			persistedTypeBytes = IrTypeCodec.encode(persistedType);

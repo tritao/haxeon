@@ -982,7 +982,8 @@ class Compiler {
 				dependencies.remove(dependency);
 		var packageName = ast.packageName;
 		for (dependency in [for (dependency in dependencies.keys()) dependency]) {
-			if (isPlatformDependency(dependency)) {
+			var sourceModule = sourceModuleForDependency(dependency);
+			if (sourceModule == null && isPlatformDependency(dependency)) {
 				dependencies.remove(dependency);
 				continue;
 			}
@@ -994,11 +995,10 @@ class Compiler {
 					continue;
 				}
 			}
-			if (dependency.indexOf(".") < 0 && hasSourceModuleImport(ast.imports)) {
+			if (sourceModule == null && dependency.indexOf(".") < 0 && hasSourceModuleImport(ast.imports)) {
 				dependencies.remove(dependency);
 				continue;
 			}
-			var sourceModule = sourceModuleForDependency(dependency);
 			if (sourceModule == null && dependency.indexOf(".") < 0 && packageName != null) {
 				var packageCandidate = packageName + "." + dependency;
 				dependencies.remove(dependency);

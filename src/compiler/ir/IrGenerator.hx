@@ -190,8 +190,14 @@ class IrGenerator {
 		return result;
 	}
 
-	public static function generateFunction(fn:TypedFunction):IrFunction
-		return SsaBuilder.build(generateCfg(fn));
+	public static function generateFunction(fn:TypedFunction):IrFunction {
+		var cfg = generateCfg(fn);
+		try {
+			return SsaBuilder.build(cfg);
+		} catch (error:String) {
+			throw 'CFG generation failed for ${fn.name}: $error';
+		}
+	}
 
 	public static function generateCfg(fn:TypedFunction):CfgFunction {
 		var builder = new CfgBuilder(), localTypes:Map<String, IrType> = [];
@@ -575,25 +581,28 @@ class IrGenerator {
 				case TAssign(name, value, _):
 					builder.store(name, lowerExpression(value, builder, localTypes));
 				case TCellAssign(name, cellClass, value, _):
-					builder.fieldSet(builder.load('$' + 'cell:$name', Obj(cellClass)), "value", lowerExpression(value, builder, localTypes));
+					var loweredValue = lowerExpression(value, builder, localTypes);
+					builder.fieldSet(builder.load('$' + 'cell:$name', Obj(cellClass)), "value", loweredValue);
 				case TCellCapturedAssign(name, cellClass, value, _):
 					var owner = requireLocalType(localTypes, "this", 'Captured assignment "$name" has no environment');
-					var cell = builder.fieldGet(builder.load("this", owner), name, Obj(cellClass));
-					builder.fieldSet(cell, "value", lowerExpression(value, builder, localTypes));
+					var loweredValue = lowerExpression(value, builder, localTypes),
+						cell = builder.fieldGet(builder.load("this", owner), name, Obj(cellClass));
+					builder.fieldSet(cell, "value", loweredValue);
 				case TFieldAssign(object, name, value, _):
-					builder.fieldSet(lowerExpression(object, builder, localTypes), name, lowerExpression(value, builder, localTypes));
+					var operands = lowerOperands([object, value], builder, localTypes);
+					builder.fieldSet(operands[0], name, operands[1]);
 				case TStaticFieldAssign(name, field, value, _):
 					builder.globalSet(name + "." + field, lowerExpression(value, builder, localTypes));
 				case TIndexAssign(array, index, value, _):
-					builder.arraySet(lowerExpression(array, builder, localTypes), lowerExpression(index, builder, localTypes),
-						lowerExpression(value, builder, localTypes));
+					var operands = lowerOperands([array, index, value], builder, localTypes);
+					builder.arraySet(operands[0], operands[1], operands[2]);
 				case TMapAssign(map, key, value, _):
 					var mapType = switch map.type {
 						case TMap(keyType, valueType): {key: keyType, value: valueType};
 						default: throw "Map assignment requires a map value";
 					};
-					lowerExpression(new TypedExpression(TCall(RuntimeType.mapNative(mapType.key, mapType.value, "set"), [map, key, value]), TVoid, map.span),
-						builder, localTypes);
+					var operands = lowerOperands([map, key, value], builder, localTypes);
+					lowerMapSet(builder, operands[0], operands[1], operands[2], mapType.key, mapType.value);
 				case TReturn(expression, _):
 					var returnValue = lowerExpression(expression, builder, localTypes);
 					builder.closeTrapsForExit();
@@ -701,6 +710,7 @@ class IrGenerator {
 					if (thenActive || elseActive)
 						builder.select(joinBlock);
 				case TWhile(condition, body, span):
+					var infinite = isTrueLiteral(condition) && !canBreakCurrentLoop(body);
 					var breakFlag = '$' + 'while-break:${span.start}';
 					localTypes.set(breakFlag, Bool);
 					builder.store(breakFlag, builder.constBool(false));
@@ -725,6 +735,8 @@ class IrGenerator {
 					if (!builder.isTerminated())
 						builder.jump(conditionBlock);
 					builder.select(afterBlock);
+					if (infinite)
+						builder.markUnreachable();
 				case TDoWhile(body, condition, span):
 					var breakFlag = '$' + 'do-while-break:${span.start}';
 					localTypes.set(breakFlag, Bool);
@@ -816,8 +828,7 @@ class IrGenerator {
 					builder.store(name, builder.arrayGet(bodyArray, bodyIndex, elementType));
 					if (valueName != null)
 						builder.store(valueName,
-							builder.call(RuntimeType.mapNative(mapKey, mapValue, "get"),
-								[builder.load(mapName, lowerType(iterable.type)), builder.load(name, elementType)], lowerType(mapValue)));
+							lowerMapGet(builder, builder.load(mapName, lowerType(iterable.type)), builder.load(name, elementType), mapKey, mapValue));
 					loops.push({
 						breakBlock: afterBlock,
 						continueBlock: conditionBlock,
@@ -897,6 +908,60 @@ class IrGenerator {
 		].indexOf(false) < 0;
 	}
 
+	static function isTrueLiteral(expression:TypedExpression):Bool
+		return switch expression.expression {
+			case TBoolLiteral(value): value;
+			default: false;
+		};
+
+	static function canBreakCurrentLoop(statements:Array<TypedStatement>):Bool {
+		for (statement in statements)
+			switch statement {
+				case TBreak(_):
+					return true;
+				case TIf(_, yes, no, _):
+					if (canBreakCurrentLoop(yes) || canBreakCurrentLoop(no))
+						return true;
+				case TTry(tryBranch, catches, _):
+					if (canBreakCurrentLoop(tryBranch))
+						return true;
+					for (catchClause in catches)
+						if (canBreakCurrentLoop(catchClause.statements))
+							return true;
+				case TSwitch(_, cases, fallback, _, _):
+					for (switchCase in cases)
+						if (canBreakCurrentLoop(switchCase.statements))
+							return true;
+					if (canBreakCurrentLoop(fallback))
+						return true;
+				case TWhile(_, _, _), TDoWhile(_, _, _), TForIn(_, _, _, _, _):
+				default:
+			}
+		return false;
+	}
+
+	static function lowerOperands(expressions:Array<TypedExpression>, builder:CfgBuilder, localTypes:Map<String, IrType>):Array<CfgValue> {
+		var temporaries:Array<{name:String, type:IrType}> = [];
+		for (expression in expressions) {
+			var value = lowerExpression(expression, builder, localTypes),
+				name = '$' + 'operand:${expression.span.start}:${value.id}';
+			localTypes.set(name, value.type);
+			builder.store(name, value);
+			temporaries.push({name: name, type: value.type});
+		}
+		return [for (temporary in temporaries) builder.load(temporary.name, temporary.type)];
+	}
+
+	static function lowerMapGet(builder:CfgBuilder, map:CfgValue, key:CfgValue, keyType:CompilerType, valueType:CompilerType):CfgValue {
+		var name = RuntimeType.requireMapName(keyType, valueType);
+		return builder.call('__${name}_get', [map, key], lowerType(valueType));
+	}
+
+	static function lowerMapSet(builder:CfgBuilder, map:CfgValue, key:CfgValue, value:CfgValue, keyType:CompilerType, valueType:CompilerType):CfgValue {
+		var name = RuntimeType.requireMapName(keyType, valueType);
+		return builder.call('__${name}_set', [map, key, value], Void);
+	}
+
 	static function lowerExpression(expression:TypedExpression, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue
 		return switch expression.expression {
 			case TIntLiteral(value): builder.constInt(value);
@@ -904,8 +969,7 @@ class IrGenerator {
 			case TStringLiteral(value): builder.constString(value);
 			case TBoolLiteral(value): builder.constBool(value);
 			case TEnumLiteral(name, index): builder.makeEnum(name, index, []);
-			case TEnumConstruct(name, index,
-				arguments): builder.makeEnum(name, index, [for (argument in arguments) lowerExpression(argument, builder, localTypes)]);
+			case TEnumConstruct(name, index, arguments): builder.makeEnum(name, index, lowerOperands(arguments, builder, localTypes));
 			case TNullLiteral: throw "Uncoerced null literal";
 			case TUnreachable: unreachableValue(lowerType(expression.type), builder);
 			case TNoReturn(value):
@@ -953,30 +1017,56 @@ class IrGenerator {
 					builder.instanceClosure(name, object, lowerType(expression.type));
 				}
 			case TAdd(a, b):
-				var left = lowerExpression(a, builder, localTypes),
-					right = lowerExpression(b, builder, localTypes);
+				var operands = lowerOperands([a, b], builder, localTypes),
+					left = operands[0],
+					right = operands[1];
 				lowerType(expression.type) == Bytes ? builder.call("__string_concat", [left, right], Bytes) : builder.add(left, right);
-			case TSub(a, b): builder.sub(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
-			case TMul(a, b): builder.mul(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
-			case TDiv(a, b): builder.div(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
-			case TMod(a, b): builder.mod(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
-			case TBitAnd(a, b): builder.bitAnd(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
-			case TBitXor(a, b): builder.bitXor(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
-			case TBitOr(a, b): builder.bitOr(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
-			case TShiftLeft(a, b): builder.shiftLeft(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
-			case TShiftRight(a, b): builder.shiftRight(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
-			case TUnsignedShiftRight(a, b): builder.unsignedShiftRight(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
+			case TSub(a, b):
+				var values = lowerOperands([a, b], builder, localTypes);
+				builder.sub(values[0], values[1]);
+			case TMul(a, b):
+				var values = lowerOperands([a, b], builder, localTypes);
+				builder.mul(values[0], values[1]);
+			case TDiv(a, b):
+				var values = lowerOperands([a, b], builder, localTypes);
+				builder.div(values[0], values[1]);
+			case TMod(a, b):
+				var values = lowerOperands([a, b], builder, localTypes);
+				builder.mod(values[0], values[1]);
+			case TBitAnd(a, b):
+				var values = lowerOperands([a, b], builder, localTypes);
+				builder.bitAnd(values[0], values[1]);
+			case TBitXor(a, b):
+				var values = lowerOperands([a, b], builder, localTypes);
+				builder.bitXor(values[0], values[1]);
+			case TBitOr(a, b):
+				var values = lowerOperands([a, b], builder, localTypes);
+				builder.bitOr(values[0], values[1]);
+			case TShiftLeft(a, b):
+				var values = lowerOperands([a, b], builder, localTypes);
+				builder.shiftLeft(values[0], values[1]);
+			case TShiftRight(a, b):
+				var values = lowerOperands([a, b], builder, localTypes);
+				builder.shiftRight(values[0], values[1]);
+			case TUnsignedShiftRight(a, b):
+				var values = lowerOperands([a, b], builder, localTypes);
+				builder.unsignedShiftRight(values[0], values[1]);
 			case TNegate(value):
 				var typed = lowerExpression(value, builder, localTypes);
 				value.type == TInt ? builder.sub(builder.constInt(0), typed) : builder.sub(builder.constFloat(0.0), typed);
-			case TLess(a, b): builder.less(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
-			case TLessEqual(a, b): builder.lessEqual(lowerExpression(a, builder, localTypes), lowerExpression(b, builder, localTypes));
+			case TLess(a, b):
+				var values = lowerOperands([a, b], builder, localTypes);
+				builder.less(values[0], values[1]);
+			case TLessEqual(a, b):
+				var values = lowerOperands([a, b], builder, localTypes);
+				builder.lessEqual(values[0], values[1]);
 			case TNot(value): builder.equal(lowerExpression(value, builder, localTypes), builder.constBool(false));
 			case TAnd(left, right): lowerLogical(left, right, true, builder, localTypes);
 			case TOr(left, right): lowerLogical(left, right, false, builder, localTypes);
 			case TEqual(a, b):
-				var left = lowerExpression(a, builder, localTypes),
-					right = lowerExpression(b, builder, localTypes);
+				var operands = lowerOperands([a, b], builder, localTypes),
+					left = operands[0],
+					right = operands[1];
 				var isEnum = switch a.type {
 					case TEnum(_): true;
 					default: false;
@@ -986,17 +1076,21 @@ class IrGenerator {
 					right = builder.enumIndex(right);
 				}
 				lowerType(a.type) == Bytes ? builder.call("__string_equal", [left, right], Bool) : builder.equal(left, right);
-			case TCall(name, args): builder.call(name, [for (arg in args) lowerExpression(arg, builder, localTypes)], lowerType(expression.type));
+			case TCall(name, args): builder.call(name, lowerOperands(args, builder, localTypes), lowerType(expression.type));
 			case TCollectionCall(receiver, operation, args):
 				var nativeName = switch receiver.type {
 					case TArray(element): RuntimeType.arrayNative(element, operation);
 					case TMap(key, value): RuntimeType.mapNative(key, value, operation);
 					default: throw "Collection operation requires an Array or Map receiver";
 				};
-				builder.call(nativeName, [lowerExpression(receiver, builder, localTypes)].concat([
-					for (arg in args)
-						lowerExpression(arg, builder, localTypes)
-				]), lowerType(expression.type));
+				var operands:Array<TypedExpression> = [receiver];
+				for (argument in args)
+					operands.push(argument);
+				var lowered = lowerOperands(operands, builder, localTypes);
+				switch receiver.type {
+					case TMap(key, value) if (operation == "set"): lowerMapSet(builder, lowered[0], lowered[1], lowered[2], key, value);
+					default: builder.call(nativeName, lowered, lowerType(expression.type));
+				}
 			case TConditional(condition, whenTrue, whenFalse):
 				var yesBlock = builder.createBlock(),
 					noBlock = builder.createBlock(),
@@ -1042,14 +1136,17 @@ class IrGenerator {
 				var matchBlocks:Array<CfgBlock> = [];
 				var checkBlocks:Array<CfgBlock> = [entryBlock];
 				for (caseIndex in 0...cases.length) {
-					var bodyBlock = builder.createBlock();
-					bodyBlocks.push(bodyBlock);
-					matchBlocks.push(cases[caseIndex].guard == null ? bodyBlock : builder.createBlock());
+					var matchBlock = builder.createBlock();
+					matchBlocks.push(matchBlock);
+					bodyBlocks.push(cases[caseIndex].guard == null ? matchBlock : builder.createBlock());
 					if (caseIndex + 1 < cases.length)
 						checkBlocks.push(builder.createBlock());
 				}
-				var afterBlock = builder.createBlock();
-				var fallbackBlock = defaultExpression == null ? afterBlock : builder.createBlock();
+				// Keep all case and fallback blocks before their shared join. HashLink
+				// treats a backward branch as a loop edge and requires its target to
+				// dominate the branch.
+				var fallbackBlock = builder.createBlock(),
+					afterBlock = builder.createBlock();
 				builder.select(entryBlock);
 				localTypes.set(subjectName, subjectType);
 				localTypes.set(resultName, resultType);
@@ -1058,7 +1155,7 @@ class IrGenerator {
 					var switchCase = cases[caseIndex],
 						isExhaustiveFinalCase = defaultExpression == null && caseIndex == cases.length - 1 && switchCase.guard == null,
 						bodyBlock = bodyBlocks[caseIndex],
-						nextBlock = caseIndex + 1 < cases.length ? checkBlocks[caseIndex + 1] : fallbackBlock;
+						nextBlock = caseIndex + 1 < cases.length ? checkBlocks[caseIndex + 1] : (defaultExpression == null ? afterBlock : fallbackBlock);
 					builder.select(checkBlocks[caseIndex]);
 					var subjectValue = builder.load(subjectName, subjectType),
 						comparisonValue = switch subject.type {
@@ -1103,44 +1200,70 @@ class IrGenerator {
 				builder.select(afterBlock);
 				builder.load(resultName, resultType);
 			case TClosureCall(callee, args):
-				builder.callClosure(lowerExpression(callee, builder, localTypes), [for (arg in args) lowerExpression(arg, builder, localTypes)],
-					lowerType(expression.type));
+				var operands:Array<TypedExpression> = [callee];
+				for (argument in args)
+					operands.push(argument);
+				var loweredOperands = lowerOperands(operands, builder, localTypes),
+					loweredArguments:Array<CfgValue> = [];
+				for (index in 1...loweredOperands.length)
+					loweredArguments.push(loweredOperands[index]);
+				builder.callClosure(loweredOperands[0], loweredArguments, lowerType(expression.type));
 			case TToInterface(value, name):
 				builder.toVirtual(lowerExpression(value, builder, localTypes), Virtual(name));
 			case TNew(typeName, args, hasConstructor):
-				var object = builder.newObject(typeName);
+				var object = builder.newObject(typeName),
+					objectType:IrType = Obj(typeName),
+					objectName = '$' + 'new-object:${expression.span.start}:${object.id}';
+				localTypes.set(objectName, objectType);
+				builder.store(objectName, object);
 				if (hasConstructor) {
-					var constructorArgs = [object];
-					for (arg in args)
-						constructorArgs.push(lowerExpression(arg, builder, localTypes));
+					var loweredArguments = lowerOperands(args, builder, localTypes),
+						constructorArgs:Array<CfgValue> = [builder.load(objectName, objectType)];
+					for (argument in loweredArguments)
+						constructorArgs.push(argument);
 					builder.call('$typeName.new', constructorArgs, Void);
 				}
-				object;
+				builder.load(objectName, objectType);
 			case TObjectLiteral(typeName, fields):
-				var object = builder.newObject(typeName);
-				for (field in fields)
-					builder.fieldSet(object, field.name, lowerExpression(field.value, builder, localTypes));
-				object;
+				var object = builder.newObject(typeName),
+					objectType:IrType = Obj(typeName),
+					objectName = '$' + 'object-literal:${expression.span.start}:${object.id}';
+				localTypes.set(objectName, objectType);
+				builder.store(objectName, object);
+				for (field in fields) {
+					var fieldValue = lowerExpression(field.value, builder, localTypes);
+					builder.fieldSet(builder.load(objectName, objectType), field.name, fieldValue);
+				}
+				builder.load(objectName, objectType);
 			case TArrayLiteral(values):
 				var element = switch expression.type {
 					case TArray(element): element;
 					default: throw "Array literal requires an array type";
-				}, array = builder.call(arrayAllocatorName(element), [builder.constInt(values.length)], Array(lowerType(element)));
-				for (index in 0...values.length)
-					builder.arraySet(array, builder.constInt(index), lowerExpression(values[index], builder, localTypes));
-				array;
+				}, arrayType:IrType = Array(lowerType(element)), array = builder.call(arrayAllocatorName(element), [builder.constInt(values.length)],
+					arrayType), arrayName = '$' + 'array-literal:${expression.span.start}:${array.id}';
+				localTypes.set(arrayName, arrayType);
+				builder.store(arrayName, array);
+				for (index in 0...values.length) {
+					var elementValue = lowerExpression(values[index], builder, localTypes);
+					builder.arraySet(builder.load(arrayName, arrayType), builder.constInt(index), elementValue);
+				}
+				builder.load(arrayName, arrayType);
 			case TMapLiteral(entries):
 				var types = switch expression.type {
 					case TMap(key, value): {key: key, value: value};
 					default: throw "Map literal requires a map type";
-				}, resultType = lowerType(expression.type), map = builder.call(RuntimeType.mapNative(types.key, types.value, "alloc"), [], resultType);
-				for (entry in entries)
-					builder.call(RuntimeType.mapNative(types.key, types.value, "set"), [
-						map,
-						lowerExpression(entry.key, builder, localTypes),
-						lowerExpression(entry.value, builder, localTypes)
-					], Void);
-				map;
+				}, resultType = lowerType(expression.type), map = builder.call(RuntimeType.mapNative(types.key, types.value, "alloc"), [],
+					resultType), mapName = '$' + 'map-literal:${expression.span.start}:${map.id}';
+				localTypes.set(mapName, resultType);
+				builder.store(mapName, map);
+				for (entry in entries) {
+					var entryValues = lowerOperands([entry.key, entry.value], builder, localTypes),
+						callArguments:Array<CfgValue> = [builder.load(mapName, resultType)];
+					for (entryValue in entryValues)
+						callArguments.push(entryValue);
+					lowerMapSet(builder, callArguments[0], callArguments[1], callArguments[2], types.key, types.value);
+				}
+				builder.load(mapName, resultType);
 			case TArrayComprehension(keyName, valueName, iterable, condition, value):
 				var inputName = '$' + 'comprehension-input:${expression.span.start}',
 					mapName = '$' + 'comprehension-map:${expression.span.start}',
@@ -1185,10 +1308,9 @@ class IrGenerator {
 				builder.select(bodyBlock);
 				builder.store(keyName, builder.arrayGet(builder.load(inputName, inputType), builder.load(indexName, I32), lowerType(keyType)));
 				if (valueName != null)
-					builder.store(valueName, builder.call(RuntimeType.mapNative(mapTypes.key, mapTypes.value, "get"), [
-						builder.load(mapName, lowerType(iterable.type)),
-						builder.load(keyName, lowerType(keyType))
-					], lowerType(mapTypes.value)));
+					builder.store(valueName,
+						lowerMapGet(builder, builder.load(mapName, lowerType(iterable.type)), builder.load(keyName, lowerType(keyType)), mapTypes.key,
+							mapTypes.value));
 				var conditionValue = condition;
 				if (conditionValue == null) {
 					var loweredValue = lowerExpression(value, builder, localTypes);
@@ -1254,10 +1376,9 @@ class IrGenerator {
 				builder.select(bodyBlock);
 				builder.store(keyName, builder.arrayGet(builder.load(inputName, inputType), builder.load(indexName, I32), lowerType(itemType)));
 				if (valueName != null)
-					builder.store(valueName, builder.call(RuntimeType.mapNative(sourceMapTypes.key, sourceMapTypes.value, "get"), [
-						builder.load(sourceMapName, lowerType(iterable.type)),
-						builder.load(keyName, lowerType(itemType))
-					], lowerType(sourceMapTypes.value)));
+					builder.store(valueName,
+						lowerMapGet(builder, builder.load(sourceMapName, lowerType(iterable.type)), builder.load(keyName, lowerType(itemType)),
+							sourceMapTypes.key, sourceMapTypes.value));
 				var conditionValue = condition;
 				if (conditionValue == null) {
 					setComprehensionMapEntry(builder, localTypes, resultTypes, resultName, resultType, key, value);
@@ -1322,8 +1443,14 @@ class IrGenerator {
 			case TNewMap(key, value): builder.call(RuntimeType.mapNative(key, value, "alloc"), [], lowerType(expression.type));
 			case TField(object, name): builder.fieldGet(lowerExpression(object, builder, localTypes), name, lowerType(expression.type));
 			case TMethodCall(object, name, args):
-				var receiver = lowerExpression(object, builder, localTypes),
-					callArgs = [for (arg in args) lowerExpression(arg, builder, localTypes)];
+				var operands:Array<TypedExpression> = [object];
+				for (argument in args)
+					operands.push(argument);
+				var loweredOperands = lowerOperands(operands, builder, localTypes),
+					receiver = loweredOperands[0],
+					callArgs:Array<CfgValue> = [];
+				for (index in 1...loweredOperands.length)
+					callArgs.push(loweredOperands[index]);
 				var separator = IrGenerator.lastSeparator(name);
 				builder.methodCall(receiver, name.substring(separator + 1, name.length), callArgs, lowerType(expression.type));
 			case TSuperCall(owner, args):
@@ -1332,7 +1459,8 @@ class IrGenerator {
 						lowerExpression(arg, builder, localTypes)
 				]), Void);
 			case TIndex(array, index):
-				builder.arrayGet(lowerExpression(array, builder, localTypes), lowerExpression(index, builder, localTypes), lowerType(expression.type));
+				var operands = lowerOperands([array, index], builder, localTypes);
+				builder.arrayGet(operands[0], operands[1], lowerType(expression.type));
 			case TPostfixLocal(name, delta):
 				var type = lowerType(expression.type),
 					oldValue = builder.load(name, type),
@@ -1375,10 +1503,8 @@ class IrGenerator {
 					case TMap(keyType, valueType): {key: keyType, value: valueType};
 					default: throw "Map read requires a map value";
 				};
-				builder.call(RuntimeType.mapNative(mapType.key, mapType.value, "get"), [
-					lowerExpression(map, builder, localTypes),
-					lowerExpression(key, builder, localTypes)
-				], lowerType(expression.type));
+				var operands = lowerOperands([map, key], builder, localTypes);
+				lowerMapGet(builder, operands[0], operands[1], mapType.key, mapType.value);
 			case TArrayLength(array):
 				builder.arraySize(lowerExpression(array, builder, localTypes));
 			case TStringLength(value):
@@ -1410,10 +1536,8 @@ class IrGenerator {
 				var element = switch array.type {
 					case TArray(valueType): valueType;
 					default: throw "Array.push requires an array value";
-				}, pushed = builder.call(RuntimeType.arrayNative(element, "push"), [
-					lowerExpression(array, builder, localTypes),
-					lowerExpression(value, builder, localTypes)
-					], Array(lowerType(element)));
+				}, operands = lowerOperands([array, value], builder, localTypes);
+				var pushed = builder.call(RuntimeType.arrayNative(element, "push"), operands, Array(lowerType(element)));
 				switch array.expression {
 					case TLocal(name): builder.store(name, pushed);
 					case TField(object, name): builder.fieldSet(lowerExpression(object, builder, localTypes), name, pushed);
@@ -1424,8 +1548,8 @@ class IrGenerator {
 				var element = switch array.type {
 					case TArray(valueType): valueType;
 					default: throw "Array.pop requires an array value";
-				};
-				builder.call(RuntimeType.arrayNative(element, "pop"), [lowerExpression(array, builder, localTypes)], lowerType(element));
+				}, resultType = lowerType(element), loweredArray = lowerExpression(array, builder, localTypes);
+				builder.call(RuntimeType.arrayNative(element, "pop"), [loweredArray], resultType);
 			case TArraySort(array, comparator): lowerArraySort(array, comparator, expression.span, builder, localTypes);
 		}
 
@@ -1507,11 +1631,8 @@ class IrGenerator {
 
 	static function setComprehensionMapEntry(builder:CfgBuilder, localTypes:Map<String, IrType>, types:MapTypes, resultName:String, resultType:IrType,
 			key:TypedExpression, value:TypedExpression):Void {
-		builder.call(RuntimeType.mapNative(types.key, types.value, "set"), [
-			builder.load(resultName, resultType),
-			lowerExpression(key, builder, localTypes),
-			lowerExpression(value, builder, localTypes)
-		], Void);
+		var operands = lowerOperands([key, value], builder, localTypes);
+		lowerMapSet(builder, builder.load(resultName, resultType), operands[0], operands[1], types.key, types.value);
 	}
 
 	static function mapTypesOrVoid(type:CompilerType):MapTypes
@@ -1533,7 +1654,7 @@ class IrGenerator {
 			case TNever: throw "Never must be coerced before lowering";
 			case TRange: Array(I32);
 			case TVoid: Void;
-			case TClass(name): Obj(name);
+			case TClass(name): name == "haxe.io.Eof" ? Dyn : Obj(name);
 			case TMap(key, value): Abstract(RuntimeType.requireMapName(key, value));
 			case TInterface(name): Virtual(name);
 			case TEnum(name): Enum(name);

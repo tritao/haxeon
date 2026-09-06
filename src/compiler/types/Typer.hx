@@ -294,6 +294,20 @@ class Typer {
 		};
 	}
 
+	static function objectLiteralExpectation(type:Null<CompilerType>):Null<CompilerType> {
+		if (type == null)
+			return null;
+		return switch type {
+			case TAnonymous(_, _): type;
+			case TNullable(element):
+				switch element {
+					case TAnonymous(_, _): element;
+					default: null;
+				}
+			default: null;
+		};
+	}
+
 	static function arrayElementExpectation(type:Null<CompilerType>):Null<CompilerType> {
 		if (type == null)
 			return null;
@@ -1651,7 +1665,8 @@ class Typer {
 				}
 				new TypedExpression(TSwitchExpression(typedSubject, typedCases, typedDefault), resultType, span);
 			case ObjectLiteral(fields, span):
-				var expectedFields = anonymousFields(expectedType);
+				var objectExpected = objectLiteralExpectation(expectedType),
+					expectedFields = anonymousFields(objectExpected);
 				var seen:Map<String, Bool> = [],
 					typedFields:Array<TypedObjectField> = [];
 				for (field in fields) {
@@ -1672,14 +1687,14 @@ class Typer {
 							fail("E1002", 'Missing object field "${field.name}"', span);
 				typedFields.sort(function(left, right) return Reflect.compare(left.name, right.name));
 				var resolvedResult:CompilerType;
-				if (expectedType == null) {
+				if (objectExpected == null) {
 					var inferred:Array<AnonymousField> = [
 						for (field in typedFields)
 							{name: field.name, type: field.value.type, optional: false}
 					];
 					resolvedResult = TAnonymous(anonymousTypeName(inferred), inferred);
 				} else
-					resolvedResult = expectedType;
+					resolvedResult = objectExpected;
 				var typeName = switch resolvedResult {
 					case TAnonymous(name, _): name;
 					default: "";

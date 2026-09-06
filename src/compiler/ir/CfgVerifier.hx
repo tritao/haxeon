@@ -76,20 +76,18 @@ class CfgVerifier {
 					expect(out, Bool);
 					define(out, defined, available);
 				case ConstNull(out):
-					switch out.type {
-						case Bytes, Abstract(_), Obj(_), Enum(_), Virtual(_), Array(_), Function(_, _):
-						default: throw 'CFG null constant must produce a reference value';
-					}
+					if (!isReference(out.type))
+						throw 'CFG null constant ${out.id} has non-reference type ${out.type} in block ${block.id}';
 					define(out, defined, available);
 				case TypeValue(out, _):
 					expect(out, TypeRef);
 					define(out, defined, available);
 				case ToDyn(out, value):
-					require(value, available);
+					require(value, available, block.id);
 					expect(out, Dyn);
 					define(out, defined, available);
 				case SafeCast(out, value):
-					require(value, available);
+					require(value, available, block.id);
 					expect(value, Dyn);
 					define(out, defined, available);
 				case BeginTry(catchBlock, afterBlock):
@@ -105,37 +103,37 @@ class CfgVerifier {
 						throw 'Wrong CFG load type for local "$name"';
 					define(out, defined, available);
 				case StoreLocal(name, value):
-					require(value, available);
+					require(value, available, block.id);
 					if (!sameType(value.type, local(fn, name)))
 						throw 'Wrong CFG store type for local "$name"';
 				case GlobalGet(out, _):
 					define(out, defined, available);
 				case GlobalSet(_, value):
-					require(value, available);
+					require(value, available, block.id);
 				case Add(out, a, b), Sub(out, a, b), Mul(out, a, b), Div(out, a, b):
-					require(a, available);
-					require(b, available);
+					require(a, available, block.id);
+					require(b, available, block.id);
 					if (!sameType(out.type, a.type) || !sameType(a.type, b.type) || (!sameType(a.type, I32) && !sameType(a.type, F64)))
 						throw "CFG arithmetic requires matching numeric values";
 					define(out, defined, available);
 				case Mod(out, a, b), BitAnd(out, a, b), BitXor(out, a, b), BitOr(out, a, b), ShiftLeft(out, a, b), ShiftRight(out, a, b),
 					UnsignedShiftRight(out, a, b):
-					require(a, available);
-					require(b, available);
+					require(a, available, block.id);
+					require(b, available, block.id);
 					expect(out, I32);
 					expect(a, I32);
 					expect(b, I32);
 					define(out, defined, available);
 				case Less(out, a, b), LessEqual(out, a, b):
-					require(a, available);
-					require(b, available);
+					require(a, available, block.id);
+					require(b, available, block.id);
 					expect(out, Bool);
 					if (!sameType(a.type, b.type) || (a.type != I32 && a.type != F64))
 						throw "CFG ordered comparison requires matching Int or Float values";
 					define(out, defined, available);
 				case Equal(out, a, b):
-					require(a, available);
-					require(b, available);
+					require(a, available, block.id);
+					require(b, available, block.id);
 					expect(out, Bool);
 					if (!sameType(a.type, b.type)
 						|| (!sameType(a.type, I32) && !sameType(a.type, F64) && !sameType(a.type, Bool) && !isReference(a.type)))
@@ -143,7 +141,7 @@ class CfgVerifier {
 					define(out, defined, available);
 				case Call(out, _, arguments):
 					for (argument in arguments)
-						require(argument, available);
+						require(argument, available, block.id);
 					define(out, defined, available);
 				case StaticClosure(out, _):
 					switch out.type {
@@ -152,20 +150,20 @@ class CfgVerifier {
 					}
 					define(out, defined, available);
 				case InstanceClosure(out, _, receiver):
-					require(receiver, available);
+					require(receiver, available, block.id);
 					switch out.type {
 						case Function(_, _):
 						default: throw 'CFG instance closure must produce a function';
 					}
 					define(out, defined, available);
 				case CallClosure(out, closure, arguments):
-					require(closure, available);
+					require(closure, available, block.id);
 					switch closure.type {
 						case Function(argumentTypes, result):
 							if (argumentTypes.length != arguments.length || !sameType(out.type, result))
 								throw 'CFG closure call has the wrong signature';
 							for (i in 0...arguments.length) {
-								require(arguments[i], available);
+								require(arguments[i], available, block.id);
 								if (!sameType(arguments[i].type, argumentTypes[i]))
 									throw 'CFG closure call has the wrong argument type';
 							}
@@ -173,16 +171,16 @@ class CfgVerifier {
 					}
 					define(out, defined, available);
 				case ToVirtual(out, value):
-					require(value, available);
+					require(value, available, block.id);
 					switch out.type {
 						case Virtual(_):
 						default: throw 'CFG virtual conversion must produce a virtual value';
 					}
 					define(out, defined, available);
 				case MethodCall(out, object, _, arguments):
-					require(object, available);
+					require(object, available, block.id);
 					for (argument in arguments)
-						require(argument, available);
+						require(argument, available, block.id);
 					define(out, defined, available);
 				case NewObject(out, _):
 					switch out.type {
@@ -191,14 +189,14 @@ class CfgVerifier {
 					}
 					define(out, defined, available);
 				case FieldGet(out, object, _):
-					require(object, available);
+					require(object, available, block.id);
 					define(out, defined, available);
 				case FieldSet(object, _, value):
-					require(object, available);
-					require(value, available);
+					require(object, available, block.id);
+					require(value, available, block.id);
 				case ArrayGet(out, array, index):
-					require(array, available);
-					require(index, available);
+					require(array, available, block.id);
+					require(index, available, block.id);
 					expect(index, I32);
 					switch array.type {
 						case Array(element):
@@ -207,17 +205,17 @@ class CfgVerifier {
 					}
 					define(out, defined, available);
 				case ArraySet(array, index, value):
-					require(array, available);
-					require(index, available);
-					require(value, available);
+					require(array, available, block.id);
+					require(index, available, block.id);
+					require(value, available, block.id);
 					expect(index, I32);
 					switch array.type {
 						case Array(element):
-							if (!sameType(value.type, element)) throw 'CFG array write has the wrong element type';
+							if (!sameType(value.type, element)) throw 'CFG array write value ${value.id} has type ${value.type}, expected $element';
 						default: throw 'CFG array write requires an Array value';
 					}
 				case ArraySize(out, array):
-					require(array, available);
+					require(array, available, block.id);
 					switch array.type {
 						case Array(_):
 						default: throw 'CFG array size requires an Array value';
@@ -230,7 +228,7 @@ class CfgVerifier {
 						default: throw 'CFG enum construction must produce an enum value';
 					}
 					for (argument in arguments)
-						require(argument, available);
+						require(argument, available, block.id);
 					define(out, defined, available);
 				case EnumIndex(out, value):
 					expect(out, I32);
@@ -238,30 +236,30 @@ class CfgVerifier {
 						case Enum(_):
 						default: throw 'CFG enum index requires an enum value';
 					}
-					require(value, available);
+					require(value, available, block.id);
 					define(out, defined, available);
 				case EnumField(out, value, _, _):
 					switch value.type {
 						case Enum(_):
 						default: throw 'CFG enum field requires an enum value';
 					}
-					require(value, available);
+					require(value, available, block.id);
 					define(out, defined, available);
 			}
 		var terminator = block.terminator;
 		if (terminator != null)
 			switch terminator {
 				case Return(value):
-					require(value, available);
+					require(value, available, block.id);
 					if (!sameType(value.type, fn.result))
 						throw 'Wrong CFG return type in ${fn.name}';
 				case Throw(value), Rethrow(value):
-					require(value, available);
+					require(value, available, block.id);
 					expect(value, Dyn);
 				case Jump(target):
 					targetBlock(target, blocks);
 				case Branch(condition, yes, no):
-					require(condition, available);
+					require(condition, available, block.id);
 					expect(condition, Bool);
 					targetBlock(yes, blocks);
 					targetBlock(no, blocks);
@@ -285,9 +283,9 @@ class CfgVerifier {
 		available.set(value.id, true);
 	}
 
-	static function require(value:CfgValue, available:Map<Int, Bool>):Void
+	static function require(value:CfgValue, available:Map<Int, Bool>, blockId:Int):Void
 		if (!available.exists(value.id))
-			throw 'CFG value ${value.id} is used outside its defining block or before definition';
+			throw 'CFG value ${value.id} is used outside its defining block or before definition in block $blockId';
 
 	static function expect(value:CfgValue, type:IrType):Void
 		if (!sameType(value.type, type))

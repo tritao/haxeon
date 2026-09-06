@@ -8,5 +8,4 @@ function main():Int {
 	catch (error:String) {
 		return 42;
 	}
-	return 0;
 }

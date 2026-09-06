@@ -38,7 +38,11 @@ class IrVerifier {
 		if (!signatures.exists(program.entryPoint))
 			throw 'Unknown IR entry point "${program.entryPoint}"';
 		for (fn in program.functions)
-			verifyFunction(fn, signatures, objects, interfaces, enums, globals);
+			try {
+				verifyFunction(fn, signatures, objects, interfaces, enums, globals);
+			} catch (error:String) {
+				throw 'IR verification failed for ${fn.name}: $error';
+			}
 	}
 
 	static function verifyFunction(fn:IrFunction, signatures:Map<String, {arguments:Array<IrType>, result:IrType}>, objects:Map<String, IrObject>,
@@ -162,10 +166,8 @@ class IrVerifier {
 				expect(out, Bool);
 				define(values, out);
 			case ConstNull(out):
-				switch out.type {
-					case Bytes, Abstract(_), Obj(_), Enum(_), Virtual(_), Array(_), Function(_, _):
-					default: throw 'IR null constant must produce a reference value';
-				}
+				if (!isReference(out.type))
+					throw 'IR null constant must produce a reference value';
 				define(values, out);
 			case TypeValue(out, _):
 				expect(out, TypeRef);
@@ -563,15 +565,14 @@ class IrVerifier {
 					case Array(element): isReference(element);
 					default: false;
 				};
-			case Dyn: switch actual {
-					case Bytes, Obj(_), Virtual(_), Array(_), Function(_, _): true;
-					default: false;
-				};
+			case Dyn: isReference(actual);
 			default: false;
 		};
 
 	static function compatibleType(actual:IrType, expected:IrType, objects:Map<String, IrObject>, interfaces:Map<String, IrInterface>):Bool {
 		if (sameType(actual, expected))
+			return true;
+		if (abiCompatible(actual, expected))
 			return true;
 		return switch actual {
 			case Obj(actualName): switch expected {

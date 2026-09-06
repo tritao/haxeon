@@ -39,6 +39,7 @@ class HlSymbolTable {
 	final objectIndices:Map<String, Int> = [];
 	final objectMethodIndices:Map<String, Map<String, Int>> = [];
 	final interfaceMethodIndices:Map<String, Map<String, Int>> = [];
+	final pendingTypes:Map<String, Bool> = [];
 
 	public function new() {}
 
@@ -220,21 +221,26 @@ class HlSymbolTable {
 
 	public function internEnum(enumDecl:IrEnum):Int {
 		var key = 'enum:${enumDecl.name}';
-		if (typeIndices.exists(key))
+		if (typeIndices.exists(key) && !pendingTypes.exists(key))
 			return typeIndices.get(key);
 		var constructors = [
 			for (constructor in enumDecl.cases)
 				{name: internString(constructor.name), params: [for (param in constructor.params) internType(param)]}
 		];
-		var index = types.length;
-		types.push(Enum(internString(enumDecl.name), 0, constructors));
-		typeIndices.set(key, index);
+		var index = typeIndices.exists(key) ? typeIndices.get(key) : types.length;
+		if (pendingTypes.exists(key)) {
+			types[index] = Enum(internString(enumDecl.name), 0, constructors);
+			pendingTypes.remove(key);
+		} else {
+			types.push(Enum(internString(enumDecl.name), 0, constructors));
+			typeIndices.set(key, index);
+		}
 		return index;
 	}
 
 	public function internInterface(interfaceDecl:IrInterface):Int {
 		var name = interfaceDecl.name, key = 'virt:$name';
-		if (typeIndices.exists(key))
+		if (typeIndices.exists(key) && !pendingTypes.exists(key))
 			return typeIndices.get(key);
 		var fields:Array<Null<HlVirtualField>> = [], slots:Map<String, Int> = [], next = 0;
 		for (base in interfaceDecl.bases)
@@ -272,9 +278,14 @@ class HlSymbolTable {
 				throw 'Interface "$name" has an unassigned virtual slot';
 			} else
 				completeFields.push(field);
-		var index = types.length;
-		types.push(Virtual(completeFields));
-		typeIndices.set(key, index);
+		var index = typeIndices.exists(key) ? typeIndices.get(key) : types.length;
+		if (pendingTypes.exists(key)) {
+			types[index] = Virtual(completeFields);
+			pendingTypes.remove(key);
+		} else {
+			types.push(Virtual(completeFields));
+			typeIndices.set(key, index);
+		}
 		interfaceMethodIndices.set(name, slots);
 		return index;
 	}
@@ -285,14 +296,14 @@ class HlSymbolTable {
 		var fields = [
 			for (field in object.fields)
 				{name: internString(field.name), type: internType(field.type)}
-		], index = types.length, global = globals.length + 1;
+		], key = 'obj:${object.name}', index = typeIndices.exists(key) ? typeIndices.get(key) : types.length, global = globals.length + 1;
 		var base = -1, slots:Map<String, Int> = [], nextSlot = 0;
 		if (object.base != null) {
 			var baseName = Std.string(object.base);
-			var key = 'obj:$baseName';
-			if (!typeIndices.exists(key))
+			var baseKey = 'obj:$baseName';
+			if (!typeIndices.exists(baseKey))
 				throw 'Object base "$baseName" must be registered before "${object.name}"';
-			base = typeIndices.get(key);
+			base = typeIndices.get(baseKey);
 			if (objectMethodIndices.exists(baseName))
 				for (name => slot in objectMethodIndices.get(baseName)) {
 					slots.set(name, slot);
@@ -314,9 +325,15 @@ class HlSymbolTable {
 			var functionIndex = functionIndices.get(method.functionName);
 			methods.push({name: internString(method.name), functionIndex: functionIndex, prototype: slot});
 		}
-		types.push(Object(internString(object.name), base, global, fields, methods, []));
+		var definition:HlTypeDef = Object(internString(object.name), base, global, fields, methods, []);
+		if (pendingTypes.exists(key)) {
+			types[index] = definition;
+			pendingTypes.remove(key);
+		} else {
+			types.push(definition);
+			typeIndices.set(key, index);
+		}
 		objectIndices.set(object.name, index);
-		typeIndices.set('obj:${object.name}', index);
 		objectMethodIndices.set(object.name, slots);
 		globals.push(index);
 		return index;
@@ -324,6 +341,31 @@ class HlSymbolTable {
 
 	public function hasType(key:String):Bool
 		return typeIndices.exists(key);
+
+	public function hasInterfaceMethods(name:String):Bool
+		return interfaceMethodIndices.exists(name);
+
+	public function hasObjectMethods(name:String):Bool
+		return objectMethodIndices.exists(name);
+
+	public function reserveEnum(name:String):Int
+		return reserveType('enum:$name');
+
+	public function reserveInterface(name:String):Int
+		return reserveType('virt:$name');
+
+	public function reserveObject(name:String):Int
+		return reserveType('obj:$name');
+
+	function reserveType(key:String):Int {
+		if (typeIndices.exists(key))
+			return typeIndices.get(key);
+		var index = types.length;
+		types.push(HlTypeDef.Simple(HlType.Void));
+		typeIndices.set(key, index);
+		pendingTypes.set(key, true);
+		return index;
+	}
 
 	public function internGlobal(name:String, type:IrType):Int {
 		if (globalIndices.exists(name))

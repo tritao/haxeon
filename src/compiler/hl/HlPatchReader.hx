@@ -26,7 +26,7 @@ class HlPatchReader {
 					length = readUnsigned(input),
 					end = input.position + length;
 				if (end > bytes.length)
-					throw new haxe.io.Eof();
+					throw "Truncated HLP data";
 				switch tag {
 					case 1:
 						if (baseInts >= 0)

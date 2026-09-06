@@ -23,8 +23,8 @@ class ModuleMain {
 				hasBodyDependency = true;
 		if (!hasBodyDependency)
 			throw "Semantic dependency graph did not record the imported body call";
-		if (first.metrics.modules != 3 || first.metrics.retypedFunctions == 0 || first.metrics.moduleNatives <= 1 || first.metrics.elapsedMs < 0.0)
-			throw "Compile metrics did not describe the initial module build";
+		if (first.metrics.modules != 2 || first.metrics.retypedFunctions == 0 || first.metrics.moduleNatives <= 1 || first.metrics.elapsedMs < 0.0)
+			throw 'Compile metrics did not describe the initial module build: modules=${first.metrics.modules}, retyped=${first.metrics.retypedFunctions}, natives=${first.metrics.moduleNatives}, elapsed=${first.metrics.elapsedMs}';
 		try {
 			compiler.registerNative("late", "std", "sys_time", [], TFloat);
 			throw "late native registration was accepted";
@@ -68,8 +68,8 @@ class ModuleMain {
 			throw "Compiler HLP did not contain exactly the changed function";
 		if (result.requiresReload)
 			throw "Body edit unexpectedly requires reload";
-		if (compiler.modules.get("Unused").parseVersion != 1 || compiler.modules.get("Unused").typeVersion != 1)
-			throw "Unrelated module was not reused";
+		if (compiler.modules.get("Unused").parseVersion != 1 || compiler.modules.get("Unused").typeVersion != 0)
+			throw 'Unreachable module had unexpected work: parse=${compiler.modules.get("Unused").parseVersion}, type=${compiler.modules.get("Unused").typeVersion}';
 		var secondBytes = HlWriter.encode(result.module);
 		if (firstBytes.compare(secondBytes) != 0)
 			throw "Equivalent incremental builds were not deterministic";
@@ -101,12 +101,13 @@ class ModuleMain {
 		var mathIr = compiler.modules.get("Math").irFunctions.get("Math.add");
 		compiler.update("Unused.hx", "function identity(x:Int):Int { var copy = x; return copy; }");
 		var unrelated = compiler.compile("Main");
-		if (unrelated.regenerated.join(",") != "Unused.identity")
+		if (unrelated.regenerated.length != 0)
 			throw 'Unrelated edit regenerated ${unrelated.regenerated}';
 		if (compiler.modules.get("Main").irFunctions.get("main") != mainIr
 			|| compiler.modules.get("Math").irFunctions.get("Math.add") != mathIr)
 			throw "Unrelated edit replaced cached IR objects";
 		compiler.update("Temp.hx", "function oldValue():Int { return 3; }");
+		compiler.update("Main.hx", "import Temp; function main():Int { print(\"native registration works\\n\"); return Math.add(20, 22); }");
 		var withOld = compiler.compile("Main"),
 			oldIndex = withOld.functionIndices.get("Temp.oldValue"),
 			oldId = withOld.functionIds.get("Temp.oldValue");

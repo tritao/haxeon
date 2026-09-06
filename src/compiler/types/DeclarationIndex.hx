@@ -158,8 +158,8 @@ class DeclarationIndex {
 			resolved;
 		} else if (enumAbstracts.exists(name)) resolveInner(enumAbstracts.get(name).underlying, span, resolving,
 			substitutions); else if (abstracts.exists(name)) resolveInner(abstracts.get(name).underlying, span, resolving,
-			substitutions); else if (interfaces.exists(name)) TInterface(name); else if (enums.exists(name)) TEnum(name); else if (classes.exists(name)
-			|| PlatformAbi.isType(name)) TClass(name); else {
+			substitutions); else if (interfaces.exists(name)) TInterface(name); else if (enums.exists(name)) TEnum(name); else if (classes.exists(name))
+			TClass(name); else if (PlatformAbi.isType(name)) PlatformAbi.valueType(name); else {
 			fail('Unknown type "$name"', span);
 			TVoid;
 		};

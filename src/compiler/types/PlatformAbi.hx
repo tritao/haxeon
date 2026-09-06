@@ -11,7 +11,6 @@ class PlatformAbi {
 		"haxe.io.BytesOutput" => true,
 		"haxe.io.Encoding" => true,
 		"haxe.io.Eof" => true,
-		"haxe.Exception" => true,
 		"haxe.Json" => true,
 		"sys.FileSystem" => true,
 		"sys.io.File" => true,
@@ -26,7 +25,6 @@ class PlatformAbi {
 		return switch name {
 			case "haxe.io.BytesInput", "BytesInput": [CompilerType.TBytes];
 			case "haxe.io.BytesOutput", "BytesOutput": noArguments();
-			case "haxe.Exception": [CompilerType.TString];
 			default: null;
 		};
 

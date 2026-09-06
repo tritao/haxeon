@@ -59,6 +59,14 @@ class HlLower {
 			for (fn in program.functions)
 				addFunctionName(fn.name, nextFunction++);
 		}
+		for (enumDecl in program.enums)
+			symbols.reserveEnum(enumDecl.name);
+		for (interfaceDecl in program.interfaces)
+			symbols.reserveInterface(interfaceDecl.name);
+		for (object in program.objects)
+			symbols.reserveObject(object.name);
+		for (enumDecl in program.enums)
+			enumTypeIndices.set(enumDecl.name, symbols.internEnum(enumDecl));
 		var pendingInterfaces = program.interfaces.copy();
 		while (pendingInterfaces.length > 0) {
 			var progressed = false;
@@ -66,7 +74,7 @@ class HlLower {
 			for (interfaceDecl in pendingInterfaces) {
 				var ready = true;
 				for (base in interfaceDecl.bases)
-					if (!symbols.hasType('virt:$base'))
+					if (!symbols.hasInterfaceMethods(base))
 						ready = false;
 				if (ready) {
 					symbols.internInterface(interfaceDecl);
@@ -78,8 +86,6 @@ class HlLower {
 				throw 'Unable to order interface bases';
 			pendingInterfaces = remainingInterfaces;
 		}
-		for (enumDecl in program.enums)
-			enumTypeIndices.set(enumDecl.name, symbols.internEnum(enumDecl));
 		var pending = program.objects.copy();
 		while (pending.length > 0) {
 			var progressed = false;
@@ -88,7 +94,7 @@ class HlLower {
 				var ready = true;
 				if (object.base != null) {
 					var baseName = Std.string(object.base);
-					ready = objectTypeIndices.exists(baseName) || symbols.hasType('obj:$baseName');
+					ready = objectTypeIndices.exists(baseName) || symbols.hasObjectMethods(baseName);
 				}
 				var fieldsReady = true;
 				for (field in object.fields)
@@ -110,7 +116,11 @@ class HlLower {
 		for (native in program.natives)
 			lowerNative(native);
 		for (fn in program.functions)
-			code.functions.push(lowerFunction(fn));
+			try {
+				code.functions.push(lowerFunction(fn));
+			} catch (error:String) {
+				throw 'HashLink lowering failed for ${fn.name}: $error';
+			}
 
 		code.entryPoint = requireFunction(program.entryPoint);
 		code.ints = code.ints.copy();
@@ -148,6 +158,12 @@ class HlLower {
 		var catchValues:Map<Int, IrValue> = [];
 		for (argument in fn.arguments)
 			defineRegister(argument, registers, registerTypes);
+		for (block in fn.blocks)
+			for (instruction in block.instructions) {
+				var output = instructionOutput(instruction);
+				if (output != null)
+					defineRegister(output, registers, registerTypes);
+			}
 		var hasTrap = false;
 
 		var edges:Map<String, Array<{destination:IrValue, source:IrValue}>> = [];
@@ -453,12 +469,24 @@ class HlLower {
 
 	function defineRegister(value:IrValue, registers:Map<Int, Int>, types:Array<Int>):Int {
 		if (registers.exists(value.id))
-			throw 'IR value ${value.id} is defined more than once';
+			return registers.get(value.id);
 		var index = types.length;
 		registers.set(value.id, index);
 		types.push(internType(value.type));
 		return index;
 	}
+
+	static function instructionOutput(instruction:IrInstruction):Null<IrValue>
+		return switch instruction {
+			case Phi(output, _), ConstVoid(output), ConstInt(output, _), ConstFloat(output, _), ConstString(output, _), ConstBool(output, _),
+				ConstNull(output), TypeValue(output, _), ToDyn(output, _), SafeCast(output, _), Catch(output), GlobalGet(output, _), Add(output, _, _),
+				Sub(output, _, _), Mul(output, _, _), Div(output, _, _), Mod(output, _, _), BitAnd(output, _, _), BitXor(output, _, _), BitOr(output, _, _),
+				ShiftLeft(output, _, _), ShiftRight(output, _, _), UnsignedShiftRight(output, _, _), Less(output, _, _), LessEqual(output, _, _),
+				Equal(output, _, _), Call(output, _, _), StaticClosure(output, _), InstanceClosure(output, _, _), CallClosure(output, _, _),
+				ToVirtual(output, _), MethodCall(output, _, _, _), NewObject(output, _), FieldGet(output, _, _), ArrayGet(output, _, _), ArraySize(output, _),
+				MakeEnum(output, _, _, _), EnumIndex(output, _), EnumField(output, _, _, _): output;
+			case BeginTry(_, _), EndTry, GlobalSet(_, _), FieldSet(_, _, _), ArraySet(_, _, _): null;
+		};
 
 	function requireRegister(value:IrValue, registers:Map<Int, Int>):Int {
 		if (!registers.exists(value.id))

@@ -21,11 +21,13 @@ class Diagnostic {
 	}
 }
 
-class CompileError extends haxe.Exception {
+class CompileError {
 	public final diagnostic:Diagnostic;
 
 	public function new(diagnostic:Diagnostic) {
 		this.diagnostic = diagnostic;
-		super(diagnostic.message);
 	}
+
+	public function toString():String
+		return diagnostic.message;
 }
