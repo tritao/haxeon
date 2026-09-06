@@ -139,6 +139,23 @@ class LanguageServiceMain {
 			|| importedReferences.length != 2
 			|| importedEdits.length != 2)
 			throw "language service imported symbol resolution failed";
+		var enumService = new LanguageService();
+		enumService.update("model/Kind.hx", "package model; enum Kind { One; Two(value:Int); }");
+		var enumSource = "package app; import model.Kind; function read(value:Kind):Int return switch value { case Kind.One: 1; case Kind.Two(item): item; }; function main():Int { var first:Kind = Kind.One; var second:Kind = Kind.Two(41); return read(first) + read(second); }";
+		enumService.update("app/Main.hx", enumSource);
+		enumService.compile("app.Main");
+		var enumLiteralPosition = enumSource.lastIndexOf("Kind.One") + "Kind.".length,
+			enumConstructorPosition = enumSource.lastIndexOf("Kind.Two") + "Kind.".length,
+			enumDefinition = enumService.definition("app/Main.hx", enumLiteralPosition),
+			enumReferences = enumService.references("app/Main.hx", enumLiteralPosition),
+			enumRename = enumService.rename("app/Main.hx", enumConstructorPosition, "Pair");
+		if (enumService.compiler.modules.get("app.Main").semanticModel.index.symbolIdAt(enumLiteralPosition) == null
+			|| enumService.compiler.modules.get("app.Main").semanticModel.index.symbolIdAt(enumConstructorPosition) == null
+			|| enumDefinition == null
+			|| enumDefinition.path != "model/Kind.hx"
+			|| enumReferences.length != 3
+			|| enumRename.length != 3)
+			throw "language service enum-case semantic indexing failed";
 		var hierarchyService = new LanguageService(),
 			hierarchySource = "typedef ParentAlias = Parent; class Parent { public function value():Int { return 42; } } class Child extends Parent { } function main():Int { var child:Child = new Child(); return child.value(); }";
 		hierarchyService.update("Hierarchy.hx", hierarchySource);

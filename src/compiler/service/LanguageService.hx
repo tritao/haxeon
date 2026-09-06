@@ -322,13 +322,19 @@ class LanguageService {
 	}
 
 	public function rename(path:String, position:Int, replacement:String):Array<TextEdit> {
-		var name = symbolAt(path, position),
+		var state = stateFor(path),
+			model = state == null ? null : effectiveSemanticModel(state),
+			indexedId = model == null ? null : model.index.symbolIdAt(position),
+			name = symbolAt(path, position),
 			target = resolveSymbol(path, position),
 			result:Array<TextEdit> = [];
-		if (name == null || target == null || !isIdentifier(replacement) || replacement == name)
+		if (name == null || !isIdentifier(replacement) || replacement == name)
 			return result;
 		var targetReferences = references(path, position);
-		if (renameCollides(target, replacement, targetReferences))
+		if (indexedId != null) {
+			if (indexedRenameCollides(indexedId, replacement, targetReferences))
+				return result;
+		} else if (target == null || renameCollides(target, replacement, targetReferences))
 			return result;
 		for (reference in targetReferences)
 			result.push({
@@ -339,6 +345,26 @@ class LanguageService {
 				stale: reference.stale
 			});
 		return result;
+	}
+
+	function indexedRenameCollides(target:compiler.semantic.SemanticIndex.SemanticSymbolId, replacement:String, affected:Array<SymbolLocation>):Bool {
+		var affectedPaths:Map<String, Bool> = [];
+		for (location in affected)
+			affectedPaths.set(location.path, true);
+		for (state in compiler.modules) {
+			if (!affectedPaths.exists(state.source.path))
+				continue;
+			var tokens = effectiveTokens(state),
+				model = effectiveSemanticModel(state);
+			if (tokens != null && model != null)
+				for (token in tokens)
+					if (token.kind == Identifier && token.text == replacement) {
+						var existing = model.index.symbolIdAt(token.span.start + 1);
+						if (existing != null && Std.string(existing) != Std.string(target))
+							return true;
+					}
+		}
+		return false;
 	}
 
 	function renameCollides(target:SemanticSymbol, replacement:String, affected:Array<SymbolLocation>):Bool {

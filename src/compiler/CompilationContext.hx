@@ -64,6 +64,9 @@ class CompilationContext {
 	public function resolveSemanticSymbol(name:String):Null<SemanticSymbolId>
 		return owner.semanticWorkspace.resolveSymbolId(name);
 
+	public function resolveSemanticEnumCase(name:String, index:Int):Null<SemanticSymbolId>
+		return owner.semanticWorkspace.resolveEnumCaseId(name, index);
+
 	public function irNatives():Array<IrNative>
 		return owner.irNatives();
 

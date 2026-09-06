@@ -63,9 +63,30 @@ class SemanticWorkspace {
 			var model = effectiveModel(state);
 			if (model == null)
 				continue;
+			var packagePrefix = model.program.packageName == null ? "" : Std.string(model.program.packageName) + ".";
 			for (symbol in model.index.symbols)
-				if (symbol.name == name || state.name + "." + symbol.name == name)
+				if (symbol.name == name || state.name + "." + symbol.name == name || packagePrefix + symbol.name == name)
 					matches.push(symbol.id);
+		}
+		return matches.length == 1 ? matches[0] : null;
+	}
+
+	public function resolveEnumCaseId(enumName:String, index:Int):Null<SemanticSymbolId> {
+		if (index < 0)
+			return null;
+		var matches:Array<SemanticSymbolId> = [];
+		for (state in orderedStates()) {
+			var model = effectiveModel(state);
+			if (model == null)
+				continue;
+			var packagePrefix = model.program.packageName == null ? "" : Std.string(model.program.packageName) + ".";
+			for (declaration in model.program.enums)
+				if ((declaration.name == enumName || packagePrefix + declaration.name == enumName) && index < declaration.cases.length) {
+					var symbolName = declaration.name + "." + declaration.cases[index].name;
+					for (symbol in model.index.symbols)
+						if (symbol.name == symbolName)
+							matches.push(symbol.id);
+				}
 		}
 		return matches.length == 1 ? matches[0] : null;
 	}

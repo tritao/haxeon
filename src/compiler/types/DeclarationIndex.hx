@@ -73,6 +73,8 @@ class DeclarationIndex {
 		for (decl in program.enums) {
 			declareType(decl.name, DeclarationKind.Enum, decl.span);
 			enums.set(decl.name, decl);
+			for (enumCase in decl.cases)
+				declare(DeclarationKind.Member, decl.name + "." + enumCase.name, enumCase.span);
 		}
 		for (decl in program.enumAbstracts) {
 			declareType(decl.name, DeclarationKind.Abstract, decl.span);
