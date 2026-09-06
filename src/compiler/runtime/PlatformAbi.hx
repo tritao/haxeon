@@ -1,4 +1,4 @@
-package compiler.types;
+package compiler.runtime;
 
 import compiler.types.Type.CompilerType;
 

@@ -1,8 +1,8 @@
 package compiler.ir;
 
 import compiler.types.Type.CompilerType;
-import compiler.types.RuntimeType;
-import compiler.types.ControlFlow;
+import compiler.runtime.RuntimeType;
+import compiler.types.analysis.ControlFlow;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedFunction;

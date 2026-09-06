@@ -1,7 +1,7 @@
 import compiler.Lexer;
 import compiler.Parser;
 import compiler.Source.SourceFile;
-import compiler.types.CaptureAnalysis;
+import compiler.types.analysis.CaptureAnalysis;
 
 class CaptureAnalysisMain {
 	static function main():Void {
@@ -17,7 +17,7 @@ class CaptureAnalysisMain {
 		Sys.println("PASS: capture and exception-edge storage analysis");
 	}
 
-	static function analyze(source:String):compiler.types.CaptureAnalysis.BodyStorageAnalysis {
+	static function analyze(source:String):compiler.types.analysis.CaptureAnalysis.BodyStorageAnalysis {
 		var program = new Parser(new Lexer(new SourceFile("capture-analysis.hx", source)).tokenize()).parseProgram();
 		return CaptureAnalysis.analyze(program.functions[0].statements, []);
 	}

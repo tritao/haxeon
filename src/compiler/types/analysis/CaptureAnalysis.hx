@@ -1,4 +1,4 @@
-package compiler.types;
+package compiler.types.analysis;
 
 import compiler.Ast.AstExpression;
 import compiler.Ast.AstStatement;
@@ -10,7 +10,6 @@ typedef BodyStorageAnalysis = {
 	final mutableCaptures:Map<String, Bool>;
 	final exceptionCells:Map<String, Bool>;
 }
-
 /** Owns capture and exception-edge storage analysis independently of body typing. */
 class CaptureAnalysis {
 	public static function analyze(statements:Array<AstStatement>, arguments:Array<String>):BodyStorageAnalysis {

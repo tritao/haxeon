@@ -1,4 +1,4 @@
-package compiler.types;
+package compiler.types.analysis;
 
 import compiler.types.Type.CompilerType;
 import compiler.Source.SourceSpan;
@@ -12,7 +12,6 @@ private typedef ScopeValue = {
 	final id:String;
 	final receiver:Bool;
 }
-
 /**
  * Lexical bindings, definite assignment, flow facts, and capture decisions.
  * Child scopes preserve stable binding IDs while maintaining branch-local facts.

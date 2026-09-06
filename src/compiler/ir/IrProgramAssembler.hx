@@ -1,6 +1,6 @@
 package compiler.ir;
 
-import compiler.types.RuntimeType;
+import compiler.runtime.RuntimeType;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypedAst.TypedCaptureSource;

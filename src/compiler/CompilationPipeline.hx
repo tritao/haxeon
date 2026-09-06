@@ -17,7 +17,7 @@ import compiler.types.SignatureInference;
 import compiler.types.Typer;
 import compiler.types.Typer.TyperPhaseMetrics;
 import compiler.types.SemanticSignature;
-import compiler.types.GenericSpecializationRegistry;
+import compiler.semantic.GenericSpecializationRegistry;
 import compiler.types.SemanticProgram;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.hl.HlCode;

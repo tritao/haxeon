@@ -1,4 +1,4 @@
-package compiler.types;
+package compiler.types.analysis;
 
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedExpression;

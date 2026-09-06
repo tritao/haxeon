@@ -19,7 +19,7 @@ import compiler.hl.incremental.HlModuleAssembler;
 import compiler.hl.persistence.HlAssemblerStateCodec;
 import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.types.SemanticSignature;
-import compiler.types.GenericSpecializationRegistry;
+import compiler.semantic.GenericSpecializationRegistry;
 import compiler.ir.hl.HlLower;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;

@@ -1,5 +1,6 @@
 package compiler.types;
 
+import compiler.runtime.PlatformAbi;
 import compiler.Ast;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;

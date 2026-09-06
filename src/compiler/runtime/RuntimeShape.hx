@@ -1,6 +1,8 @@
-package compiler.types;
+package compiler.runtime;
 
 import compiler.types.Type.CompilerType;
+import compiler.types.SemanticSignature;
+import compiler.types.TypeRelations;
 
 /** Runtime calling/storage representation selected independently of semantic identity. */
 enum abstract RuntimeShape(String) to String {
