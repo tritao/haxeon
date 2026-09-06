@@ -86,6 +86,14 @@ typedef WorkspaceSymbol = {
 	final revision:Int;
 }
 
+typedef InlayHint = {
+	final position:Int;
+	final label:String;
+	final kind:String;
+	final paddingLeft:Bool;
+	final paddingRight:Bool;
+}
+
 private typedef WorkspaceIndexEntry = {
 	final revision:Int;
 	final symbols:Array<WorkspaceSymbol>;
@@ -212,6 +220,35 @@ class LanguageService {
 					if (symbol.identity == identity)
 						return symbol;
 		return null;
+	}
+
+	public function inlayHints(path:String, start:Int, end:Int, ?token:CancellationToken):Array<InlayHint> {
+		var state = stateFor(path), model = state == null ? null : effectiveSemanticModel(state), tokens = state == null ? null : effectiveTokens(state),
+			result:Array<InlayHint> = [];
+		if (state == null || model == null || tokens == null)
+			return result;
+		for (index in 0...tokens.length) {
+			if (token != null)
+				token.check();
+			var current = tokens[index];
+			if (current.span.start > end)
+				break;
+			if (current.kind == Var && index + 1 < tokens.length && tokens[index + 1].kind == Identifier) {
+				var name = tokens[index + 1], after = index + 2 < tokens.length ? tokens[index + 2] : null;
+				if (name.span.end >= start && name.span.end <= end && (after == null || after.kind != Colon)) {
+					var context = model.index.completionContext(name.span.end), localType:Null<CompilerType> = null;
+					for (local in context.locals)
+						if (local.name == name.text)
+							localType = local.type;
+					if (localType != null)
+						result.push({position: name.span.end, label: ": " + compilerTypeName(localType), kind: "type", paddingLeft: false, paddingRight: false});
+				}
+			}
+			if (current.kind == LeftParen && index > 0 && (tokens[index - 1].kind == Identifier || tokens[index - 1].kind == New))
+				addParameterHints(path, tokens, index, start, end, result);
+		}
+		result.sort(function(left, right) return Reflect.compare(left.position, right.position));
+		return result;
 	}
 
 	function workspaceSymbolIdentity(identity:String):Null<WorkspaceSymbol> {
@@ -994,6 +1031,43 @@ class LanguageService {
 			case TNullable(element): completionTypeCompatible(actual, element);
 			default: false;
 		};
+	}
+
+	function addParameterHints(path:String, tokens:Array<compiler.syntax.Token>, open:Int, start:Int, end:Int, result:Array<InlayHint>):Void {
+		var signature = signatureHelp(path, tokens[open].span.end);
+		if (signature == null || signature.parameters.length == 0)
+			return;
+		var depth = 1, argument = 0, cursor = open + 1, argumentStart = cursor;
+		while (cursor < tokens.length && depth > 0) {
+			var kind = tokens[cursor].kind;
+			switch kind {
+				case LeftParen, LeftBracket, LeftBrace: depth++;
+				case RightParen, RightBracket, RightBrace:
+					depth--;
+					if (depth == 0) {
+						addParameterHint(tokens, argumentStart, cursor, argument, signature.parameters, start, end, result);
+						break;
+					}
+				case Comma:
+					if (depth == 1) {
+						addParameterHint(tokens, argumentStart, cursor, argument++, signature.parameters, start, end, result);
+						argumentStart = cursor + 1;
+					}
+				default:
+			}
+			cursor++;
+		}
+	}
+
+	static function addParameterHint(tokens:Array<compiler.syntax.Token>, startIndex:Int, endIndex:Int, argument:Int, parameters:Array<String>, rangeStart:Int,
+			rangeEnd:Int, result:Array<InlayHint>):Void {
+		if (argument >= parameters.length || startIndex >= endIndex)
+			return;
+		var first = tokens[startIndex], parameter = parameters[argument], separator = parameter.indexOf(":"),
+			name = separator < 0 ? parameter : parameter.substring(0, separator);
+		if (first.span.start < rangeStart || first.span.start > rangeEnd || first.kind == Identifier && first.text == name)
+			return;
+		result.push({position: first.span.start, label: name + ":", kind: "parameter", paddingLeft: false, paddingRight: true});
 	}
 
 	function indexedWorkspaceSymbols(state:ModuleState):Array<WorkspaceSymbol> {

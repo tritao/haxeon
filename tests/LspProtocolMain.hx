@@ -45,7 +45,8 @@ class LspProtocolMain {
 			|| !initialized.result.capabilities.documentHighlightProvider
 			|| initialized.result.capabilities.semanticTokensProvider.legend.tokenTypes[12] != "function"
 			|| initialized.result.capabilities.codeActionProvider.codeActionKinds[0] != "quickfix"
-			|| !initialized.result.capabilities.workspaceSymbolProvider.resolveProvider)
+			|| !initialized.result.capabilities.workspaceSymbolProvider.resolveProvider
+			|| !initialized.result.capabilities.inlayHintProvider)
 			throw "LSP initialization capabilities are incomplete";
 		var watcherRegistration = protocol.handle('{"jsonrpc":"2.0","method":"initialized","params":{}}');
 		if (watcherRegistration.length != 1
@@ -272,6 +273,17 @@ class LspProtocolMain {
 		}));
 		if (highlights.result.length != 2 || highlights.result[0].kind != 3 || highlights.result[1].kind != 2)
 			throw "LSP document highlights did not classify declaration and read occurrences";
+		var localHints = request(protocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 50,
+			method: "textDocument/inlayHint",
+			params: {textDocument: {uri: uri}, range: {start: {line: 0, character: 0}, end: {line: 0, character: source.length}}}
+		})), inferredLocal = false;
+		for (hint in cast(localHints.result, Array<Dynamic>))
+			if (hint.kind == 1 && hint.label == ": Int" && hint.position.character == source.indexOf("answer") + "answer".length)
+				inferredLocal = true;
+		if (!inferredLocal)
+			throw "LSP inlay hints omitted an inferred local type";
 		var semantic = request(protocol, Json.stringify({
 			jsonrpc: "2.0",
 			id: 51,
@@ -331,6 +343,20 @@ class LspProtocolMain {
 			|| signature.result.signatures[0].label != "add(left:Int, right:Int):Int"
 			|| signature.result.activeParameter != 1)
 			throw "LSP signature help did not use compiler signature information";
+		var callHints = request(protocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 61,
+			method: "textDocument/inlayHint",
+			params: {textDocument: {uri: callUri}, range: {start: {line: 0, character: 0}, end: {line: 0, character: callSource.length}}}
+		})), hasLeftHint = false, hasRightHint = false;
+		for (hint in cast(callHints.result, Array<Dynamic>)) {
+			if (hint.kind == 2 && hint.label == "left:" && hint.position.character == callSource.indexOf("20"))
+				hasLeftHint = true;
+			if (hint.kind == 2 && hint.label == "right:" && hint.position.character == callSource.indexOf("22"))
+				hasRightHint = true;
+		}
+		if (!hasLeftHint || !hasRightHint)
+			throw "LSP inlay hints omitted resolved call parameter names";
 		var completion = request(protocol, Json.stringify({
 			jsonrpc: "2.0",
 			id: 7,

@@ -94,6 +94,7 @@ class LspProtocol {
 				case "textDocument/documentHighlight": cancellable(id, token -> documentHighlights(request, token));
 				case "textDocument/semanticTokens/full": cancellable(id, token -> semanticTokens(request, token));
 				case "textDocument/codeAction": cancellable(id, token -> codeActions(request, token));
+				case "textDocument/inlayHint": cancellable(id, token -> inlayHints(request, token));
 				case "textDocument/hover": cancellable(id, token -> hover(request, token));
 				case "textDocument/signatureHelp": cancellable(id, token -> signatureHelp(request, token));
 				case "textDocument/definition": cancellable(id, token -> definition(request, token));
@@ -229,6 +230,7 @@ class LspProtocol {
 					full: true
 				},
 				codeActionProvider: {codeActionKinds: ["quickfix"]},
+				inlayHintProvider: true,
 				hoverProvider: true,
 				signatureHelpProvider: {triggerCharacters: ["(", ","]},
 				definitionProvider: true,
@@ -558,6 +560,23 @@ class LspProtocol {
 					]}
 				}
 			}
+		];
+	}
+
+	function inlayHints(request:Dynamic, token:CancellationToken):Array<Dynamic> {
+		var document = document(request), range = required(required(request, "params"), "range");
+		ensureAnalyzed(document, token);
+		requireCurrent(document);
+		return [
+			for (hint in service.inlayHints(compilerPath(document), positionOffset(document, required(range, "start")),
+				positionOffset(document, required(range, "end")), token))
+				{
+					position: document.position(hint.position),
+					label: hint.label,
+					kind: hint.kind == "type" ? 1 : 2,
+					paddingLeft: hint.paddingLeft,
+					paddingRight: hint.paddingRight
+				}
 		];
 	}
 
