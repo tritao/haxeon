@@ -32,6 +32,19 @@ import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
 
+typedef TyperPhaseMetrics = {
+	final setupMs:Float;
+	final noReturnMs:Float;
+	final metadataMs:Float;
+	final bodiesMs:Float;
+	final assemblyMs:Float;
+}
+
+typedef MeasuredTypedProgram = {
+	final program:TypedProgram;
+	final metrics:TyperPhaseMetrics;
+}
+
 /** Resolves bindings and converts parsed syntax into the typed semantic tree. */
 class Typer {
 	var signatures:Map<String, AstFunction> = [];
@@ -53,11 +66,11 @@ class Typer {
 	final noReturnFunctions:Map<String, Bool> = [];
 
 	public static function type(program:AstProgram):TypedProgram
-		return new Typer(null).typeProgram(SemanticProgram.analyze(program), null, true, null);
+		return new Typer(null).typeProgramMeasured(SemanticProgram.analyze(program), null, true, null).program;
 
 	/** Type a reusable module without requiring an executable main function. */
 	public static function typeLibrary(program:AstProgram):TypedProgram
-		return new Typer(null).typeProgram(SemanticProgram.analyze(program), null, false, null);
+		return new Typer(null).typeProgramMeasured(SemanticProgram.analyze(program), null, false, null).program;
 
 	public static function typeSelected(program:AstProgram, selected:Map<String, Bool>,
 			?externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>, ?entryPoint:String):TypedProgram
@@ -65,12 +78,17 @@ class Typer {
 
 	public static function typeAnalyzed(semantic:SemanticProgram, selected:Map<String, Bool>,
 			?externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>, ?entryPoint:String):TypedProgram
-		return new Typer(externals).typeProgram(semantic, selected, true, entryPoint);
+		return typeAnalyzedMeasured(semantic, selected, externals, entryPoint).program;
+
+	public static function typeAnalyzedMeasured(semantic:SemanticProgram, selected:Map<String, Bool>,
+			?externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>, ?entryPoint:String):MeasuredTypedProgram
+		return new Typer(externals).typeProgramMeasured(semantic, selected, true, entryPoint);
 
 	function new(externals:Null<Map<String, {arguments:Array<CompilerType>, result:CompilerType}>>)
 		this.externals = externals == null ? [] : externals;
 
-	function typeProgram(semantic:SemanticProgram, selected:Null<Map<String, Bool>>, requireMain:Bool, entryPoint:Null<String>):TypedProgram {
+	function typeProgramMeasured(semantic:SemanticProgram, selected:Null<Map<String, Bool>>, requireMain:Bool, entryPoint:Null<String>):MeasuredTypedProgram {
+		var startedAt = Sys.time() * 1000.0;
 		var program = semantic.program;
 		declarations = semantic.declarations;
 		relations = semantic.relations;
@@ -91,7 +109,9 @@ class Typer {
 			if (externals.exists(fn.name))
 				fail("E1000", 'Function "${fn.name}" conflicts with a registered native', fn.span);
 		}
+		var setupDoneAt = Sys.time() * 1000.0;
 		inferNoReturnFunctions();
+		var noReturnDoneAt = Sys.time() * 1000.0;
 		if (requireMain) {
 			var main:AstFunction;
 			if (entryPoint != null && signatures.exists(entryPoint))
@@ -136,6 +156,7 @@ class Typer {
 			for (classDecl in program.classes)
 				typeClass(classDecl, classDecls, selected)
 			], typedFunctions:Array<TypedFunction> = [];
+		var metadataDoneAt = Sys.time() * 1000.0;
 		for (fn in program.functions)
 			if (!isGeneric(fn) && (selected == null || selected.exists(fn.name))) {
 				typedFunctions.push(typeFunction(fn));
@@ -146,7 +167,8 @@ class Typer {
 					typedFunctions.push(method);
 		for (lambda in generated)
 			typedFunctions.push(lambda);
-		return {
+		var bodiesDoneAt = Sys.time() * 1000.0;
+		var result:TypedProgram = {
 			enums: typedEnums,
 			interfaces: typedInterfaces,
 			classes: typedClasses,
@@ -154,6 +176,17 @@ class Typer {
 			cells: generatedCells,
 			captureEnvironments: generatedEnvironments,
 			anonymousTypes: orderedAnonymousTypes()
+		};
+		var assemblyDoneAt = Sys.time() * 1000.0;
+		return {
+			program: result,
+			metrics: {
+				setupMs: setupDoneAt - startedAt,
+				noReturnMs: noReturnDoneAt - setupDoneAt,
+				metadataMs: metadataDoneAt - noReturnDoneAt,
+				bodiesMs: bodiesDoneAt - metadataDoneAt,
+				assemblyMs: assemblyDoneAt - bodiesDoneAt
+			}
 		};
 	}
 

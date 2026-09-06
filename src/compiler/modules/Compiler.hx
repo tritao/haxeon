@@ -15,6 +15,7 @@ import compiler.ir.IrGenerator;
 import compiler.types.FieldInference;
 import compiler.types.SignatureInference;
 import compiler.types.Typer;
+import compiler.types.Typer.TyperPhaseMetrics;
 import compiler.types.SemanticSignature;
 import compiler.types.SemanticProgram;
 import compiler.types.TypedAst.TypedProgram;
@@ -68,6 +69,11 @@ typedef CompileMetrics = {
 	final transactionSnapshotMs:Float;
 	final frontendMs:Float;
 	final typingLoweringMs:Float;
+	final typerSetupMs:Float;
+	final typerNoReturnMs:Float;
+	final typerMetadataMs:Float;
+	final typerBodiesMs:Float;
+	final typerAssemblyMs:Float;
 	final irAssemblyMs:Float;
 	final abiPlanningMs:Float;
 	final backendAssemblyMs:Float;
@@ -275,6 +281,11 @@ class Compiler {
 					transactionSnapshotMs: 0.0,
 					frontendMs: 0.0,
 					typingLoweringMs: 0.0,
+					typerSetupMs: 0.0,
+					typerNoReturnMs: 0.0,
+					typerMetadataMs: 0.0,
+					typerBodiesMs: 0.0,
+					typerAssemblyMs: 0.0,
 					irAssemblyMs: 0.0,
 					abiPlanningMs: 0.0,
 					backendAssemblyMs: 0.0,
@@ -602,7 +613,7 @@ class Compiler {
 			selected.set(name, true);
 		var entryPoint = executableEntryPoint(entryModule);
 		var frontendDoneAt = Sys.time() * 1000.0;
-		var typedNew:TypedProgram;
+		var typedNew:TypedProgram, typerMetrics:TyperPhaseMetrics;
 		try {
 			if (token != null)
 				token.check();
@@ -628,7 +639,9 @@ class Compiler {
 				&& explicitFunctionSignatures(canonicalProgram.functions);
 			var semantic = canReuseSemantic ? previousSemantic.replaceTopLevelBodies(canonicalProgram, selected) : SemanticProgram.analyze(canonicalProgram);
 			cachedSemanticProgram = semantic;
-			typedNew = Typer.typeAnalyzed(semantic, selected, nativeSignatures(), entryPoint);
+			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, nativeSignatures(), entryPoint);
+			typedNew = typedResult.program;
+			typerMetrics = typedResult.metrics;
 		} catch (error:CompileError) {
 			for (name in names) {
 				var state = modules.get(name);
@@ -793,6 +806,11 @@ class Compiler {
 				transactionSnapshotMs: snapshotDoneAt - transactionStartedAt,
 				frontendMs: frontendDoneAt - startedAt,
 				typingLoweringMs: typingLoweringDoneAt - frontendDoneAt,
+				typerSetupMs: typerMetrics.setupMs,
+				typerNoReturnMs: typerMetrics.noReturnMs,
+				typerMetadataMs: typerMetrics.metadataMs,
+				typerBodiesMs: typerMetrics.bodiesMs,
+				typerAssemblyMs: typerMetrics.assemblyMs,
 				irAssemblyMs: irAssemblyDoneAt - typingLoweringDoneAt,
 				abiPlanningMs: abiPlanningDoneAt - irAssemblyDoneAt,
 				backendAssemblyMs: backendAssemblyDoneAt - abiPlanningDoneAt,

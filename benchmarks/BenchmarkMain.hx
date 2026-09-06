@@ -22,6 +22,11 @@ typedef Sample = {
 	final transactionSnapshotMs:Float;
 	final frontendMs:Float;
 	final typingLoweringMs:Float;
+	final typerSetupMs:Float;
+	final typerNoReturnMs:Float;
+	final typerMetadataMs:Float;
+	final typerBodiesMs:Float;
+	final typerAssemblyMs:Float;
 	final irAssemblyMs:Float;
 	final abiPlanningMs:Float;
 	final backendAssemblyMs:Float;
@@ -40,6 +45,11 @@ typedef Summary = {
 	final transactionSnapshotMs:Percentiles;
 	final frontendMs:Percentiles;
 	final typingLoweringMs:Percentiles;
+	final typerSetupMs:Percentiles;
+	final typerNoReturnMs:Percentiles;
+	final typerMetadataMs:Percentiles;
+	final typerBodiesMs:Percentiles;
+	final typerAssemblyMs:Percentiles;
 	final irAssemblyMs:Percentiles;
 	final abiPlanningMs:Percentiles;
 	final backendAssemblyMs:Percentiles;
@@ -371,6 +381,11 @@ class BenchmarkMain {
 			transactionSnapshotMs: metrics == null ? 0.0 : metrics.transactionSnapshotMs,
 			frontendMs: metrics == null ? 0.0 : metrics.frontendMs,
 			typingLoweringMs: metrics == null ? 0.0 : metrics.typingLoweringMs,
+			typerSetupMs: metrics == null ? 0.0 : metrics.typerSetupMs,
+			typerNoReturnMs: metrics == null ? 0.0 : metrics.typerNoReturnMs,
+			typerMetadataMs: metrics == null ? 0.0 : metrics.typerMetadataMs,
+			typerBodiesMs: metrics == null ? 0.0 : metrics.typerBodiesMs,
+			typerAssemblyMs: metrics == null ? 0.0 : metrics.typerAssemblyMs,
 			irAssemblyMs: metrics == null ? 0.0 : metrics.irAssemblyMs,
 			abiPlanningMs: metrics == null ? 0.0 : metrics.abiPlanningMs,
 			backendAssemblyMs: metrics == null ? 0.0 : metrics.backendAssemblyMs,
@@ -390,6 +405,11 @@ class BenchmarkMain {
 			transactionSnapshotMs: percentiles([for (value in samples) value.transactionSnapshotMs]),
 			frontendMs: percentiles([for (value in samples) value.frontendMs]),
 			typingLoweringMs: percentiles([for (value in samples) value.typingLoweringMs]),
+			typerSetupMs: percentiles([for (value in samples) value.typerSetupMs]),
+			typerNoReturnMs: percentiles([for (value in samples) value.typerNoReturnMs]),
+			typerMetadataMs: percentiles([for (value in samples) value.typerMetadataMs]),
+			typerBodiesMs: percentiles([for (value in samples) value.typerBodiesMs]),
+			typerAssemblyMs: percentiles([for (value in samples) value.typerAssemblyMs]),
 			irAssemblyMs: percentiles([for (value in samples) value.irAssemblyMs]),
 			abiPlanningMs: percentiles([for (value in samples) value.abiPlanningMs]),
 			backendAssemblyMs: percentiles([for (value in samples) value.backendAssemblyMs]),
