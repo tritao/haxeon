@@ -114,7 +114,7 @@ typedef ValidationResult = {
 @:allow(compiler.CompilationTransaction)
 @:allow(compiler.CompilationContext)
 class Compiler {
-	var genericSpecializations = new GenericSpecializationRegistry();
+	var genericSpecializations:GenericSpecializationRegistry;
 
 	public final modules:Map<String, ModuleState> = [];
 	public final semanticWorkspace:SemanticWorkspace;
@@ -144,11 +144,13 @@ class Compiler {
 		semanticWorkspace = new SemanticWorkspace(modules);
 		natives = new NativeRegistry(nativeConfiguration);
 		if (identityState == null) {
+			genericSpecializations = new GenericSpecializationRegistry();
 			moduleId = HlRuntimeIdentity.createModuleId();
 			assembler = new HlModuleAssembler();
 			types = new TypeRegistry();
 		} else {
 			var identity = HlRuntimeIdentity.decodePersistent(identityState);
+			genericSpecializations = new GenericSpecializationRegistry(identity.specializationState);
 			moduleId = identity.moduleId;
 			var assemblerState = identity.assemblerState;
 			assembler = assemblerState == null ? new HlModuleAssembler(identity.stableIds) : HlAssemblerStateCodec.decode(assemblerState);
@@ -173,7 +175,7 @@ class Compiler {
 		var state = publication.persistence();
 		var backend = state.tracking && state.revision > 0 ? HlAssemblerStateCodec.encode(assembler) : null;
 		return HlRuntimeIdentity.encodePersistent(moduleId, assembler.cache.stableIds, types.exportState(), publishedAbi, state.tracking, state.revision,
-			state.abi, backend);
+			state.abi, backend, genericSpecializations.exportState());
 	}
 
 	public function enablePublicationTracking():Void {

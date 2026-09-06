@@ -19,6 +19,7 @@ import compiler.hl.incremental.HlModuleAssembler;
 import compiler.hl.persistence.HlAssemblerStateCodec;
 import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.types.SemanticSignature;
+import compiler.types.GenericSpecializationRegistry;
 import compiler.ir.hl.HlLower;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
@@ -628,6 +629,23 @@ class TestMain {
 		sharedGenericBodies.sort(Reflect.compare);
 		if (sharedShapeBuild.requiresReload || firstGenericBodies.join(",") != sharedGenericBodies.join(","))
 			throw "Equivalent generic reference shapes did not preserve incremental identity";
+		var specializationRegistry = new GenericSpecializationRegistry(),
+			initialSpecialization = specializationRegistry.request("identity", [compiler.types.Type.CompilerType.TDynamic]),
+			restoredRegistry = new GenericSpecializationRegistry(specializationRegistry.exportState()),
+			restoredSpecialization = restoredRegistry.request("identity", [compiler.types.Type.CompilerType.TDynamic]);
+		if (!initialSpecialization.isNew || restoredSpecialization.isNew || restoredSpecialization.name != initialSpecialization.name)
+			throw "Generic specialization identity did not survive registry persistence";
+		var resumedGeneric = new Compiler(incrementalGeneric.exportIdentityState());
+		resumedGeneric.update("Main.hx", 'class Box {} function identity<T>(value:T):T return value; function main():Int { identity(new Box()); return 42; }');
+		var resumedGenericBuild = resumedGeneric.compile("Main"),
+			resumedGenericBodies = [
+				for (fn in resumedGenericBuild.ir.functions)
+					if (StringTools.startsWith(fn.name, "$generic:")) fn.name
+			];
+		resumedGenericBodies.sort(Reflect.compare);
+		if (resumedGenericBuild.requiresReload || resumedGenericBodies.join(",") != sharedGenericBodies.join(","))
+			throw "Generic specialization identity did not survive compiler restart";
+		Sys.println("PASS: generic specialization identity survives compiler restart");
 		Frontend.compile('enum Value<T> { Value(value:T); } function intValue(value:Value<Int>):Int return switch value { case Value(item): item; }; function stringValue(value:Value<String>):String return switch value { case Value(item): item; }; function main():Int return intValue(Value(40)) + stringValue(Value("ok")).length;');
 		expectCompileError('function choose<T>(left:T, right:T):T return left; function main():Int return choose(42, "wrong");',
 			'Conflicting types inferred for generic parameter "T"');

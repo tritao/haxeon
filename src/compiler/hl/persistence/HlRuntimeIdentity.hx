@@ -16,11 +16,12 @@ typedef HlPersistentIdentity = {
 	final acknowledgedRevision:Int;
 	final acknowledgedAbi:Null<RuntimeAbiDescriptor>;
 	final assemblerState:Null<Bytes>;
+	final specializationState:Null<Bytes>;
 }
 
 /** Encodes runtime manifests and persistent compiler identity state. */
 class HlRuntimeIdentity {
-	public static inline final VERSION = 5;
+	public static inline final VERSION = 6;
 	public static inline final RUNTIME_VERSION = 2;
 	static var sequence = 1;
 
@@ -55,7 +56,8 @@ class HlRuntimeIdentity {
 	}
 
 	public static function encodePersistent(moduleId:Bytes, stableIds:Map<String, Int>, ?typeState:Bytes, ?publishedAbi:RuntimeAbiDescriptor,
-			?publicationTracking:Bool = false, ?acknowledgedRevision:Int = 0, ?acknowledgedAbi:RuntimeAbiDescriptor, ?assemblerState:Bytes):Bytes {
+			?publicationTracking:Bool = false, ?acknowledgedRevision:Int = 0, ?acknowledgedAbi:RuntimeAbiDescriptor, ?assemblerState:Bytes,
+			?specializationState:Bytes):Bytes {
 		if (moduleId.length != 16)
 			throw "Module ID must contain 16 bytes";
 		if (acknowledgedRevision < 0
@@ -91,6 +93,9 @@ class HlRuntimeIdentity {
 		var backend = assemblerState == null ? Bytes.alloc(0) : assemblerState;
 		out.writeInt32(backend.length);
 		out.write(backend);
+		var specializations = specializationState == null ? Bytes.alloc(0) : specializationState;
+		out.writeInt32(specializations.length);
+		out.write(specializations);
 		return out.getBytes();
 	}
 
@@ -101,7 +106,7 @@ class HlRuntimeIdentity {
 			if (input.readString(3) != "HCS")
 				throw "Invalid compiler identity state";
 			var version = input.readByte();
-			if (version != VERSION)
+			if (version != 5 && version != VERSION)
 				throw "Invalid compiler identity state";
 			var moduleId = input.read(16),
 				count = input.readInt32(),
@@ -148,6 +153,13 @@ class HlRuntimeIdentity {
 			var assemblerState:Null<Bytes> = assemblerLength == 0 ? null : input.read(assemblerLength);
 			if ((acknowledgedRevision > 0 && assemblerState == null) || (acknowledgedRevision == 0 && assemblerState != null))
 				throw "Invalid acknowledged assembler baseline";
+			var specializationState:Null<Bytes> = null;
+			if (version >= 6) {
+				var specializationLength = input.readInt32();
+				if (specializationLength < 0 || specializationLength > 0x10000000 || specializationLength > bytes.length - input.position)
+					throw "Invalid generic specialization state";
+				specializationState = specializationLength == 0 ? null : input.read(specializationLength);
+			}
 			if (input.position != bytes.length)
 				throw "Trailing compiler identity data";
 			return {
@@ -158,7 +170,8 @@ class HlRuntimeIdentity {
 				publicationTracking: publicationTracking,
 				acknowledgedRevision: acknowledgedRevision,
 				acknowledgedAbi: acknowledgedAbi,
-				assemblerState: assemblerState
+				assemblerState: assemblerState,
+				specializationState: specializationState
 			};
 		} catch (error:haxe.io.Eof) {
 			throw "Truncated compiler identity state";
