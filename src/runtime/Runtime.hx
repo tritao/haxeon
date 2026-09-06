@@ -2,6 +2,7 @@ package runtime;
 
 import haxe.io.Bytes;
 
+/** Private declarations for the native module lifecycle and invocation ABI. */
 @:hlNative("realtime_runtime")
 private class RuntimeNative {
 	public static function load(bytes:hl.Bytes, length:Int, identity:hl.Bytes, identityLength:Int):hl.Abstract<"realtime_module">
@@ -61,6 +62,10 @@ private class RuntimeNative {
 		return -1;
 }
 
+/**
+ * Checked host facade for loading, invoking, patching, and disposing live modules.
+ * Calls translate native status codes and exceptions into {@link RuntimeError}.
+ */
 class Runtime {
 	public static function inspectPatch(bytes:Bytes):{baseRevision:Int, revision:Int, functionCount:Int} {
 		var summary = RuntimeNative.inspect_patch(bytes.getData(), bytes.length);

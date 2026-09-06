@@ -2,6 +2,7 @@ package compiler.abi;
 
 import compiler.abi.PatchPlanner.AbiChange;
 
+/** Language-neutral code and entity identity for one ABI incompatibility. */
 typedef AbiChangeRecord = {
 	final code:String;
 	final entityKind:String;

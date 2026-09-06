@@ -4,6 +4,7 @@ import compiler.ir.Cfg;
 import compiler.ir.CfgVerifier;
 import compiler.ir.Ir;
 
+/** Pending phi definition populated while mutable locals are renamed. */
 private typedef SsaPhi = {output:IrValue, inputs:Array<IrPhiInput>};
 
 /** Constructs minimal SSA with dominance frontiers, then renames mutable locals. */

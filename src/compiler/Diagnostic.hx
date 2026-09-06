@@ -2,11 +2,13 @@ package compiler;
 
 import compiler.Source.SourceSpan;
 
+/** User-facing importance assigned to a compiler diagnostic. */
 enum DiagnosticSeverity {
 	Error;
 	Warning;
 }
 
+/** Structured compiler feedback tied to an exact source span. */
 class Diagnostic {
 	public final code:String;
 	public final message:String;
@@ -21,6 +23,7 @@ class Diagnostic {
 	}
 }
 
+/** Exception wrapper used to propagate one structured diagnostic internally. */
 class CompileError {
 	public final diagnostic:Diagnostic;
 

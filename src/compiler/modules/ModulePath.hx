@@ -1,5 +1,6 @@
 package compiler.modules;
 
+/** Canonicalizes source file paths into dot-separated module identities. */
 class ModulePath {
 	public static function fromFile(path:String):String {
 		var start = 0, end = path.length;

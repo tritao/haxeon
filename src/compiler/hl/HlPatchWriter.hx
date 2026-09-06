@@ -5,6 +5,7 @@ import haxe.io.BytesOutput;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlType as HashLinkType;
 
+/** Encodes versioned, transactional HLP deltas from an assembled module. */
 class HlPatchWriter {
 	public static inline final VERSION = 4;
 	static inline final SYMBOLS = 1;

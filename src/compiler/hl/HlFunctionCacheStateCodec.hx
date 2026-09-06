@@ -6,6 +6,7 @@ import haxe.io.Bytes;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
 
+/** Strict deterministic persistence for an {@link HlFunctionCache} baseline. */
 class HlFunctionCacheStateCodec {
 	static inline final MAX_ITEMS = 0x100000;
 

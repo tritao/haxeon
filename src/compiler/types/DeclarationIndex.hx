@@ -7,6 +7,7 @@ import compiler.Source.SourceSpan;
 import compiler.types.Type.AnonymousField;
 import compiler.types.Type.CompilerType;
 
+/** Stable category used to identify a source declaration semantically. */
 enum abstract DeclarationKind(String) {
 	var Alias = "alias";
 	var Enum = "enum";
@@ -18,8 +19,10 @@ enum abstract DeclarationKind(String) {
 	var TypeParameter = "type-parameter";
 }
 
+/** Stable qualified identity assigned independently of declaration objects. */
 abstract DeclarationId(String) from String to String {}
 
+/** Indexed declaration identity, category, source name, and location. */
 typedef DeclarationSymbol = {
 	final id:DeclarationId;
 	final kind:DeclarationKind;

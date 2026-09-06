@@ -6,6 +6,7 @@ import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.hl.HlFunctionCacheStateCodec;
 import compiler.hl.HlSymbolStateCodec;
 
+/** Persisted append-only symbol and function baseline for incremental assembly. */
 typedef HlAssemblerState = {
 	final initialized:Bool;
 	final revision:Int;
@@ -17,6 +18,7 @@ typedef HlAssemblerState = {
 	final cache:haxe.io.Bytes;
 }
 
+/** Module plus identity and delta metadata produced by one assembly transaction. */
 typedef HlAssemblyResult = {
 	final module:HlCode;
 	final changedFunctions:Array<Int>;
@@ -30,6 +32,10 @@ typedef HlAssemblyResult = {
 	final baseTypes:Int;
 }
 
+/**
+ * Stateful IR-to-HashLink assembler with append-only published indices.
+ * Callers publish or discard a copied instance as one compiler transaction.
+ */
 class HlModuleAssembler {
 	public var symbols(default, null) = new HlSymbolTable();
 	public var cache(default, null):HlFunctionCache;

@@ -5,12 +5,17 @@ import compiler.Source.SourceSpan;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 
+/** Resolved local binding identity and its declared semantic type. */
 private typedef ScopeValue = {
 	final source:String;
 	final declared:CompilerType;
 	final id:String;
 }
 
+/**
+ * Lexical bindings, definite assignment, flow facts, and capture decisions.
+ * Child scopes preserve stable binding IDs while maintaining branch-local facts.
+ */
 class Scope {
 	final parent:Null<Scope>;
 	final facts:FlowFacts;

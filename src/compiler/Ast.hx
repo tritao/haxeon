@@ -2,6 +2,7 @@ package compiler;
 
 import compiler.Source.SourceSpan;
 
+/** Source-level type syntax before name resolution and semantic checking. */
 enum AstType {
 	IntType;
 	BoolType;
@@ -18,8 +19,10 @@ enum AstType {
 	AnonymousType(fields:Array<AstAnonymousField>);
 }
 
+/** One field declared by an anonymous structural type. */
 typedef AstAnonymousField = {final name:String; final type:AstType; final optional:Bool; final span:SourceSpan;}
 
+/** Function parameter syntax, including its optional default expression. */
 typedef AstArgument = {
 	final name:String;
 	final type:AstType;
@@ -28,6 +31,7 @@ typedef AstArgument = {
 	final ?defaultValue:AstExpression;
 }
 
+/** Source spelling of a field's read or write accessor policy. */
 enum AstFieldAccess {
 	DefaultAccess;
 	NullAccess;
@@ -37,6 +41,7 @@ enum AstFieldAccess {
 	DynamicAccess;
 }
 
+/** Parsed class field before annotation inference and accessor validation. */
 typedef AstField = {
 	final name:String;
 	final type:Null<AstType>;
@@ -48,6 +53,7 @@ typedef AstField = {
 	final span:SourceSpan;
 }
 
+/** Parsed class declaration and its unresolved inheritance relationships. */
 typedef AstClass = {
 	final name:String;
 	final isPrivate:Bool;
@@ -59,8 +65,10 @@ typedef AstClass = {
 	final span:SourceSpan;
 }
 
+/** Metadata annotation attached to a source declaration. */
 typedef AstMetadata = {final name:String; final arguments:Array<AstExpression>; final span:SourceSpan;}
 
+/** Parsed interface declaration before inherited methods are resolved. */
 typedef AstInterface = {
 	final name:String;
 	final bases:Array<String>;
@@ -68,12 +76,22 @@ typedef AstInterface = {
 	final span:SourceSpan;
 }
 
+/** Source typedef that the declaration index expands during type resolution. */
 typedef AstTypeAlias = {final name:String; final type:AstType; final isPrivate:Bool; final span:SourceSpan;}
+
+/** One parameter in an enum constructor declaration. */
 typedef AstEnumParameter = {final name:Null<String>; final type:AstType; final optional:Bool; final span:SourceSpan;}
+
+/** Parsed enum constructor and its ordered payload parameters. */
 typedef AstEnumCase = {final name:String; final params:Array<AstEnumParameter>; final span:SourceSpan;}
+
+/** Parsed algebraic enum declaration. */
 typedef AstEnum = {final name:String; final cases:Array<AstEnumCase>; final span:SourceSpan;}
+
+/** One named constant declared by an enum abstract. */
 typedef AstEnumAbstractValue = {final name:String; final value:AstExpression; final span:SourceSpan;}
 
+/** Parsed enum abstract, including explicit conversion relationships. */
 typedef AstEnumAbstract = {
 	final name:String;
 	final underlying:AstType;
@@ -83,6 +101,7 @@ typedef AstEnumAbstract = {
 	final span:SourceSpan;
 }
 
+/** Parsed non-enum abstract and the methods exposed through its underlying type. */
 typedef AstAbstract = {
 	final name:String;
 	final underlying:AstType;
@@ -92,8 +111,10 @@ typedef AstAbstract = {
 	final span:SourceSpan;
 }
 
+/** One typed catch arm in a parsed try statement. */
 typedef AstCatch = {final name:String; final type:AstType; final statements:Array<AstStatement>; final span:SourceSpan;}
 
+/** Parsed expression tree; each constructor retains its complete source span. */
 enum AstExpression {
 	IntegerLiteral(value:Int, span:SourceSpan);
 	FloatLiteral(value:Float, span:SourceSpan);
@@ -146,9 +167,13 @@ enum AstExpression {
 	Lambda(arguments:Array<AstArgument>, statements:Array<AstStatement>, span:SourceSpan);
 }
 
+/** Named value supplied by an object-literal expression. */
 typedef AstObjectField = {final name:String; final value:AstExpression; final span:SourceSpan;}
+
+/** Key/value pair supplied by a map-literal expression. */
 typedef AstMapEntry = {final key:AstExpression; final value:AstExpression; final span:SourceSpan;}
 
+/** One guarded arm of a switch used as an expression. */
 typedef AstSwitchExpressionCase = {
 	final value:AstExpression;
 	final guard:Null<AstExpression>;
@@ -156,6 +181,7 @@ typedef AstSwitchExpressionCase = {
 	final span:SourceSpan;
 }
 
+/** Parsed statement tree before binding resolution and type checking. */
 enum AstStatement {
 	UninitializedDeclaration(name:String, type:AstType, span:SourceSpan);
 	VarDeclaration(name:String, ?type:AstType, initializer:AstExpression, span:SourceSpan);
@@ -177,6 +203,7 @@ enum AstStatement {
 	Expression(expression:AstExpression, span:SourceSpan);
 }
 
+/** One guarded statement arm of a parsed switch. */
 typedef AstSwitchCase = {
 	final value:AstExpression;
 	final guard:Null<AstExpression>;
@@ -184,6 +211,7 @@ typedef AstSwitchCase = {
 	final span:SourceSpan;
 }
 
+/** Parsed function or method declaration with an unresolved signature and body. */
 typedef AstFunction = {
 	final name:String;
 	final isStatic:Bool;
@@ -194,6 +222,7 @@ typedef AstFunction = {
 	final span:SourceSpan;
 }
 
+/** Complete parsed module, grouped by declaration kind for semantic indexing. */
 typedef AstProgram = {
 	final packageName:Null<String>;
 	final imports:Array<String>;

@@ -11,6 +11,7 @@ import haxe.Json;
 import sys.FileSystem;
 import sys.io.File;
 
+/** Frontend readiness and failure details measured for one source file. */
 typedef FileStatus = {
 	final path:String;
 	final bytes:Int;
@@ -24,6 +25,7 @@ typedef FileStatus = {
 	final error:Null<String>;
 }
 
+/** Outcome of attempting a complete bootstrap project compilation. */
 typedef ProjectStatus = {
 	final entryModule:String;
 	final attempted:Bool;
@@ -31,6 +33,7 @@ typedef ProjectStatus = {
 	final error:Null<String>;
 }
 
+/** Aggregate machine-readable bootstrap readiness report. */
 typedef BootstrapReport = {
 	final roots:Array<String>;
 	final files:Int;

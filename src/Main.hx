@@ -4,6 +4,7 @@ import compiler.modules.ModulePath;
 import compiler.RuntimeAbi;
 import sys.io.File;
 
+/** Command-line compiler entry point for producing a complete HashLink module. */
 class Main {
 	static function main():Void {
 		var arguments = Sys.args();

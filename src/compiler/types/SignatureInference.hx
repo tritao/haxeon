@@ -106,12 +106,12 @@ class SignatureInference {
 					collectExpressionCallConstraint(initializer, environment, methods, constraints);
 				case Return(expression, _), Expression(expression, _), Throw(expression, _):
 					collectExpressionCallConstraint(expression, environment, methods, constraints);
-				case If(condition, yes, no, _):
-					collectExpressionCallConstraint(condition, environment, methods, constraints);
+				case If(predicate, yes, no, _):
+					collectExpressionCallConstraint(predicate, environment, methods, constraints);
 					collectCallConstraints(yes, copyTypes(environment), methods, constraints);
 					collectCallConstraints(no, copyTypes(environment), methods, constraints);
-				case While(condition, body, _), DoWhile(body, condition, _):
-					collectExpressionCallConstraint(condition, environment, methods, constraints);
+				case While(predicate, body, _), DoWhile(body, predicate, _):
+					collectExpressionCallConstraint(predicate, environment, methods, constraints);
 					collectCallConstraints(body, copyTypes(environment), methods, constraints);
 				case ForIn(_, _, iterable, body, _):
 					collectExpressionCallConstraint(iterable, environment, methods, constraints);

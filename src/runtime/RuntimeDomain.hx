@@ -2,18 +2,21 @@ package runtime;
 
 import haxe.io.Bytes;
 
+/** Externally visible lifecycle state of a reload domain. */
 enum RuntimeDomainStatus {
 	Inactive;
 	Active;
 	Failed(message:String);
 }
 
+/** Best-known activation state while recovering from lifecycle failures. */
 private enum GenerationActivation {
 	GenerationInactive;
 	GenerationActive;
 	GenerationUnknown;
 }
 
+/** Plugin generation paired with its optional owned native module handle. */
 private class OwnedGeneration {
 	public final plugin:Plugin;
 	public final module:Dynamic;

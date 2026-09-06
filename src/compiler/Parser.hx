@@ -16,6 +16,7 @@ import compiler.Source.SourceSpan;
 import compiler.Token.TokenKind;
 import compiler.Diagnostic.CompileError;
 
+/** Recursive-descent parser for the supported Haxe-compatible source subset. */
 class Parser {
 	final tokens:Array<Token>;
 	var position:Int = 0;

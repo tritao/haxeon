@@ -4,6 +4,7 @@ import compiler.ir.Ir;
 import compiler.ir.Ir.IrInterface;
 import compiler.ir.Ir.IrEnum;
 
+/** Rejects malformed or ill-typed SSA programs before backend lowering. */
 class IrVerifier {
 	public static function verify(program:IrProgram):Void {
 		var signatures:Map<String, {arguments:Array<IrType>, result:IrType}> = [];

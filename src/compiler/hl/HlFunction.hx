@@ -1,5 +1,6 @@
 package compiler.hl;
 
+/** HashLink bytecode function after register allocation and symbol resolution. */
 class HlFunction {
 	public final type:Int;
 	public final functionIndex:Int;
@@ -14,6 +15,7 @@ class HlFunction {
 	}
 }
 
+/** Symbolic HashLink instruction used before labels become relative offsets. */
 enum HlInstruction {
 	Move(destination:Int, source:Int);
 	LoadInt(destination:Int, constant:Int);

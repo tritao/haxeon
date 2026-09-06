@@ -6,6 +6,7 @@ import compiler.Source.SourceFile;
 import compiler.ir.IrFunction;
 import compiler.types.TypedAst.TypedFunction;
 
+/** Artifact boundary at which a dependent declaration observes a change. */
 enum abstract SemanticDependencyKind(String) {
 	var Signature = "signature";
 	var Body = "body";
@@ -13,8 +14,13 @@ enum abstract SemanticDependencyKind(String) {
 	var Initializer = "initializer";
 }
 
+/** Dependency edge from one declaration artifact to another declaration. */
 typedef SemanticDependency = {final kind:SemanticDependencyKind; final target:String;}
 
+/**
+ * Incremental artifacts and last-known-good state owned by one source module.
+ * Failed edits may update diagnostics but must not replace the last good tree.
+ */
 class ModuleState {
 	public final name:String;
 	public var source:SourceFile;

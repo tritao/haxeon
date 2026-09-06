@@ -5,11 +5,13 @@ import haxe.io.BytesOutput;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction.HlInstruction;
 
+/** Encoded opcode bytes paired with unresolved symbolic branch targets. */
 private typedef EncodedInstruction = {
 	final opcode:HlOpcode;
 	final operands:Array<Int>;
 }
 
+/** Serializes the in-memory HashLink model using canonical HLB encodings. */
 class HlWriter {
 	final output:BytesOutput;
 

@@ -41,8 +41,10 @@ import compiler.modules.CompilerPublication.ReconnectReason;
 import compiler.modules.ModuleState.SemanticDependency;
 import compiler.modules.ModuleState.SemanticDependencyKind;
 
+/** Public alias for a host-native declaration accepted by the compiler. */
 typedef NativeFunction = compiler.modules.NativeRegistry.NativeDefinition;
 
+/** Artifacts, invalidation details, and publication metadata from a successful build. */
 typedef CompileResult = {
 	final ir:IrProgram;
 	final module:HlCode;
@@ -59,6 +61,7 @@ typedef CompileResult = {
 	final metrics:CompileMetrics;
 }
 
+/** Work and output-size counters measured for one compilation. */
 typedef CompileMetrics = {
 	final elapsedMs:Float;
 	final modules:Int;
@@ -70,11 +73,16 @@ typedef CompileMetrics = {
 	final patchBytes:Int;
 }
 
+/** Non-mutating validation outcome for a prospective source update. */
 typedef ValidationResult = {
 	final valid:Bool;
 	final diagnostic:Null<Diagnostic>;
 }
 
+/**
+ * Persistent incremental compiler and owner of all module and backend state.
+ * Compilation is transactional: failed edits do not replace published artifacts.
+ */
 class Compiler {
 	public final modules:Map<String, ModuleState> = [];
 
@@ -1363,8 +1371,8 @@ class Compiler {
 			case Not(value, s): Not(canonicalExpression(value, module, entry, locals, aliases), s);
 			case And(a, b, s): And(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
 			case Or(a, b, s): Or(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
-			case Conditional(condition, whenTrue, whenFalse, s):
-				Conditional(canonicalExpression(condition, module, entry, locals, aliases), canonicalExpression(whenTrue, module, entry, locals, aliases),
+			case Conditional(predicate, whenTrue, whenFalse, s):
+				Conditional(canonicalExpression(predicate, module, entry, locals, aliases), canonicalExpression(whenTrue, module, entry, locals, aliases),
 					canonicalExpression(whenFalse, module, entry, locals, aliases), s);
 			case BlockExpression(statements, value, s):
 				BlockExpression([
@@ -1397,15 +1405,15 @@ class Compiler {
 							span: mapEntry.span
 						}
 				], s);
-			case ArrayComprehension(keyName, valueName, iterable, condition, value, s):
+			case ArrayComprehension(keyName, valueName, iterable, predicate, value, s):
 				ArrayComprehension(keyName, valueName, canonicalExpression(iterable, module, entry, locals, aliases),
-					canonicalOptionalExpression(condition, module, entry, locals, aliases), canonicalExpression(value, module, entry, locals, aliases), s);
-			case MapComprehension(keyName, valueName, iterable, condition, key, value, s):
+					canonicalOptionalExpression(predicate, module, entry, locals, aliases), canonicalExpression(value, module, entry, locals, aliases), s);
+			case MapComprehension(keyName, valueName, iterable, predicate, key, value, s):
 				MapComprehension(keyName, valueName, canonicalExpression(iterable, module, entry, locals, aliases),
-					canonicalOptionalExpression(condition, module, entry, locals, aliases), canonicalExpression(key, module, entry, locals, aliases),
+					canonicalOptionalExpression(predicate, module, entry, locals, aliases), canonicalExpression(key, module, entry, locals, aliases),
 					canonicalExpression(value, module, entry, locals, aliases), s);
-			case Range(start, end,
-				s): Range(canonicalExpression(start, module, entry, locals, aliases), canonicalExpression(end, module, entry, locals, aliases), s);
+			case Range(start, rangeEnd,
+				s): Range(canonicalExpression(start, module, entry, locals, aliases), canonicalExpression(rangeEnd, module, entry, locals, aliases), s);
 			case Call(name, args, s):
 				var resolved = name;
 				var dot = name.indexOf("."),
@@ -1606,16 +1614,16 @@ class Compiler {
 				case FieldAssignment(object, _, expression, _):
 					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, object, module, entry);
 					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, expression, module, entry);
-				case If(condition, yes, no, _):
-					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, condition, module, entry);
+				case If(predicate, yes, no, _):
+					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, predicate, module, entry);
 					addBodyDependencies(result, owner, yes, module, entry);
 					addBodyDependencies(result, owner, no, module, entry);
-				case While(condition, body, _):
-					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, condition, module, entry);
+				case While(predicate, body, _):
+					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, predicate, module, entry);
 					addBodyDependencies(result, owner, body, module, entry);
-				case DoWhile(body, condition, _):
+				case DoWhile(body, predicate, _):
 					addBodyDependencies(result, owner, body, module, entry);
-					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, condition, module, entry);
+					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, predicate, module, entry);
 				case ForIn(_, _, iterable, body, _):
 					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, iterable, module, entry);
 					addBodyDependencies(result, owner, body, module, entry);
@@ -1740,8 +1748,8 @@ class Compiler {
 			case And(left, right, _), Or(left, right, _):
 				scanExpression(left, dependencies);
 				scanExpression(right, dependencies);
-			case Conditional(condition, whenTrue, whenFalse, _):
-				scanExpression(condition, dependencies);
+			case Conditional(predicate, whenTrue, whenFalse, _):
+				scanExpression(predicate, dependencies);
 				scanExpression(whenTrue, dependencies);
 				scanExpression(whenFalse, dependencies);
 			case BlockExpression(statements, value, _):
@@ -1775,20 +1783,20 @@ class Compiler {
 					scanExpression(mapEntry.key, dependencies);
 					scanExpression(mapEntry.value, dependencies);
 				}
-			case ArrayComprehension(_, _, iterable, condition, value, _):
+			case ArrayComprehension(_, _, iterable, predicate, value, _):
 				scanExpression(iterable, dependencies);
-				if (condition != null)
-					scanExpression(condition, dependencies);
+				if (predicate != null)
+					scanExpression(predicate, dependencies);
 				scanExpression(value, dependencies);
-			case MapComprehension(_, _, iterable, condition, key, value, _):
+			case MapComprehension(_, _, iterable, predicate, key, value, _):
 				scanExpression(iterable, dependencies);
-				if (condition != null)
-					scanExpression(condition, dependencies);
+				if (predicate != null)
+					scanExpression(predicate, dependencies);
 				scanExpression(key, dependencies);
 				scanExpression(value, dependencies);
-			case Range(start, end, _):
+			case Range(start, rangeEnd, _):
 				scanExpression(start, dependencies);
-				scanExpression(end, dependencies);
+				scanExpression(rangeEnd, dependencies);
 			case Index(array, offset, _):
 				scanExpression(array, dependencies);
 				scanExpression(offset, dependencies);
@@ -1955,8 +1963,8 @@ class Compiler {
 			case And(left, right, _), Or(left, right, _):
 				scanCallExpression(left, calls, aliases);
 				scanCallExpression(right, calls, aliases);
-			case Conditional(condition, whenTrue, whenFalse, _):
-				scanCallExpression(condition, calls, aliases);
+			case Conditional(predicate, whenTrue, whenFalse, _):
+				scanCallExpression(predicate, calls, aliases);
 				scanCallExpression(whenTrue, calls, aliases);
 				scanCallExpression(whenFalse, calls, aliases);
 			case BlockExpression(statements, value, _):
@@ -1990,20 +1998,20 @@ class Compiler {
 					scanCallExpression(mapEntry.key, calls, aliases);
 					scanCallExpression(mapEntry.value, calls, aliases);
 				}
-			case ArrayComprehension(_, _, iterable, condition, value, _):
+			case ArrayComprehension(_, _, iterable, predicate, value, _):
 				scanCallExpression(iterable, calls, aliases);
-				if (condition != null)
-					scanCallExpression(condition, calls, aliases);
+				if (predicate != null)
+					scanCallExpression(predicate, calls, aliases);
 				scanCallExpression(value, calls, aliases);
-			case MapComprehension(_, _, iterable, condition, key, value, _):
+			case MapComprehension(_, _, iterable, predicate, key, value, _):
 				scanCallExpression(iterable, calls, aliases);
-				if (condition != null)
-					scanCallExpression(condition, calls, aliases);
+				if (predicate != null)
+					scanCallExpression(predicate, calls, aliases);
 				scanCallExpression(key, calls, aliases);
 				scanCallExpression(value, calls, aliases);
-			case Range(start, end, _):
+			case Range(start, rangeEnd, _):
 				scanCallExpression(start, calls, aliases);
-				scanCallExpression(end, calls, aliases);
+				scanCallExpression(rangeEnd, calls, aliases);
 			case New(typeName, args, _):
 				calls.set(typeName + ".new", true);
 				for (a in args)
@@ -2051,16 +2059,16 @@ class Compiler {
 				case ReturnVoid(_):
 				case Break(_), Continue(_):
 				case Increment(_, _, _):
-				case If(condition, yes, no, _):
-					collectLambdaExpression(condition, functionName, module, generatedByModule);
+				case If(predicate, yes, no, _):
+					collectLambdaExpression(predicate, functionName, module, generatedByModule);
 					collectLambdas(yes, functionName, module, generatedByModule);
 					collectLambdas(no, functionName, module, generatedByModule);
-				case While(condition, body, _):
-					collectLambdaExpression(condition, functionName, module, generatedByModule);
+				case While(predicate, body, _):
+					collectLambdaExpression(predicate, functionName, module, generatedByModule);
 					collectLambdas(body, functionName, module, generatedByModule);
-				case DoWhile(body, condition, _):
+				case DoWhile(body, predicate, _):
 					collectLambdas(body, functionName, module, generatedByModule);
-					collectLambdaExpression(condition, functionName, module, generatedByModule);
+					collectLambdaExpression(predicate, functionName, module, generatedByModule);
 				case ForIn(_, _, iterable, body, _):
 					collectLambdaExpression(iterable, functionName, module, generatedByModule);
 					collectLambdas(body, functionName, module, generatedByModule);
@@ -2111,8 +2119,8 @@ class Compiler {
 			case And(left, right, _), Or(left, right, _):
 				collectLambdaExpression(left, functionName, module, generatedByModule);
 				collectLambdaExpression(right, functionName, module, generatedByModule);
-			case Conditional(condition, whenTrue, whenFalse, _):
-				collectLambdaExpression(condition, functionName, module, generatedByModule);
+			case Conditional(predicate, whenTrue, whenFalse, _):
+				collectLambdaExpression(predicate, functionName, module, generatedByModule);
 				collectLambdaExpression(whenTrue, functionName, module, generatedByModule);
 				collectLambdaExpression(whenFalse, functionName, module, generatedByModule);
 			case BlockExpression(statements, value, _):
@@ -2145,20 +2153,20 @@ class Compiler {
 					collectLambdaExpression(mapEntry.key, functionName, module, generatedByModule);
 					collectLambdaExpression(mapEntry.value, functionName, module, generatedByModule);
 				}
-			case ArrayComprehension(_, _, iterable, condition, value, _):
+			case ArrayComprehension(_, _, iterable, predicate, value, _):
 				collectLambdaExpression(iterable, functionName, module, generatedByModule);
-				if (condition != null)
-					collectLambdaExpression(condition, functionName, module, generatedByModule);
+				if (predicate != null)
+					collectLambdaExpression(predicate, functionName, module, generatedByModule);
 				collectLambdaExpression(value, functionName, module, generatedByModule);
-			case MapComprehension(_, _, iterable, condition, key, value, _):
+			case MapComprehension(_, _, iterable, predicate, key, value, _):
 				collectLambdaExpression(iterable, functionName, module, generatedByModule);
-				if (condition != null)
-					collectLambdaExpression(condition, functionName, module, generatedByModule);
+				if (predicate != null)
+					collectLambdaExpression(predicate, functionName, module, generatedByModule);
 				collectLambdaExpression(key, functionName, module, generatedByModule);
 				collectLambdaExpression(value, functionName, module, generatedByModule);
-			case Range(start, end, _):
+			case Range(start, rangeEnd, _):
 				collectLambdaExpression(start, functionName, module, generatedByModule);
-				collectLambdaExpression(end, functionName, module, generatedByModule);
+				collectLambdaExpression(rangeEnd, functionName, module, generatedByModule);
 			case New(_, args, _):
 				for (argument in args)
 					collectLambdaExpression(argument, functionName, module, generatedByModule);

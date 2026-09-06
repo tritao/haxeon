@@ -23,6 +23,7 @@ import compiler.ir.Ir.IrInterface;
 import compiler.ir.Ir.IrEnum;
 import compiler.ir.Ir.IrStaticField;
 
+/** Active structured-loop targets and the trap depth at their declaration. */
 private typedef LoopContext = {
 	final breakBlock:CfgBlock;
 	final continueBlock:CfgBlock;
@@ -30,6 +31,7 @@ private typedef LoopContext = {
 	final trapDepth:Int;
 }
 
+/** Resolved key and value types of a map operation being lowered. */
 private typedef MapTypes = {final key:CompilerType; final value:CompilerType;}
 
 /** Lowers typed syntax to a mutable-local CFG; SsaBuilder owns all SSA policy. */

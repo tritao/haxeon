@@ -1,5 +1,6 @@
 package compiler.ir;
 
+/** Backend-oriented value types carried by the SSA intermediate representation. */
 enum IrType {
 	Void;
 	I32;
@@ -16,6 +17,7 @@ enum IrType {
 	Function(arguments:Array<IrType>, result:IrType);
 }
 
+/** Immutable SSA definition with a function-local numeric identity. */
 class IrValue {
 	public final id:Int;
 	public final name:String;
@@ -28,8 +30,10 @@ class IrValue {
 	}
 }
 
+/** Value contributed by one predecessor to an SSA phi definition. */
 typedef IrPhiInput = {final block:Int; final value:IrValue;}
 
+/** Typed SSA operations independent of HashLink register and symbol indices. */
 enum IrInstruction {
 	Phi(output:IrValue, inputs:Array<IrPhiInput>);
 	ConstVoid(output:IrValue);
@@ -77,6 +81,7 @@ enum IrInstruction {
 	EnumField(output:IrValue, value:IrValue, constructor:Int, field:Int);
 }
 
+/** Mandatory control transfer ending an SSA basic block. */
 enum IrTerminator {
 	Return(value:IrValue);
 	Throw(value:IrValue);
@@ -85,6 +90,7 @@ enum IrTerminator {
 	Branch(condition:IrValue, whenTrue:Int, whenFalse:Int);
 }
 
+/** SSA basic block identified independently of its position in the block array. */
 class IrBlock {
 	public final id:Int;
 	public final instructions:Array<IrInstruction> = [];
@@ -94,6 +100,7 @@ class IrBlock {
 		this.id = id;
 }
 
+/** Runtime-native function required by an IR program. */
 typedef IrNative = {
 	final name:String;
 	final library:String;
@@ -102,15 +109,31 @@ typedef IrNative = {
 	final result:IrType;
 }
 
+/** Runtime-visible field in an IR object layout. */
 typedef IrObjectField = {final name:String; final type:IrType;}
+
+/** Method name and implementing function attached to an IR object. */
 typedef IrObjectMethod = {final name:String; final functionName:String;}
+
+/** Object layout and dispatch metadata required by backend lowering. */
 typedef IrObject = {final name:String; final base:Null<String>; final interfaces:Array<String>; final fields:Array<IrObjectField>; final methods:Array<IrObjectMethod>;}
+
+/** Callable contract required by an IR interface. */
 typedef IrInterfaceMethod = {final name:String; final arguments:Array<IrType>; final result:IrType;}
+
+/** Interface inheritance and method contracts required by backend lowering. */
 typedef IrInterface = {final name:String; final bases:Array<String>; final methods:Array<IrInterfaceMethod>;}
+
+/** Ordered payload types of one IR enum constructor. */
 typedef IrEnumCase = {final name:String; final params:Array<IrType>;}
+
+/** Enum layout required by backend lowering. */
 typedef IrEnum = {final name:String; final cases:Array<IrEnumCase>;}
+
+/** Module-level storage slot required by an IR program. */
 typedef IrStaticField = {final name:String; final type:IrType;}
 
+/** Complete register-independent program assembled into a HashLink module. */
 class IrProgram {
 	public var natives:Array<IrNative> = [];
 	public var functions:Array<IrFunction> = [];

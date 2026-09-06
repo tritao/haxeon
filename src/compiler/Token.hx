@@ -2,6 +2,7 @@ package compiler;
 
 import compiler.Source.SourceSpan;
 
+/** Closed vocabulary emitted by the lexer and consumed by the parser. */
 enum TokenKind {
 	Package;
 	Import;
@@ -84,6 +85,7 @@ enum TokenKind {
 	Eof;
 }
 
+/** One lexical token retaining its original spelling and source location. */
 class Token {
 	public final kind:TokenKind;
 	public final text:String;

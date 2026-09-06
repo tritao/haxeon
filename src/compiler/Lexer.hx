@@ -4,6 +4,7 @@ import compiler.Token.TokenKind;
 import compiler.Source.SourceFile;
 import compiler.Diagnostic.CompileError;
 
+/** Converts one source file into a positioned token stream or a lexical diagnostic. */
 class Lexer {
 	final file:SourceFile;
 	final source:String;

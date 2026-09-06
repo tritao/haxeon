@@ -8,9 +8,13 @@ import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrInterface;
 import compiler.ir.Ir.IrEnum;
 
+/** Persisted association between a semantic name and an append-only index. */
 typedef HlNamedIndex = {final name:String; final index:Int;}
+
+/** Persisted ordered member indices owned by one named type. */
 typedef HlNamedSlots = {final name:String; final slots:Array<HlNamedIndex>;}
 
+/** Complete persistable state of the HashLink symbol tables. */
 typedef HlSymbolState = {
 	final ints:Array<Int>;
 	final strings:Array<String>;
@@ -24,6 +28,10 @@ typedef HlSymbolState = {
 	final interfaceMethodIndices:Array<HlNamedSlots>;
 }
 
+/**
+ * Interns constants, types, globals, and dispatch slots into stable arrays.
+ * Published prefixes are append-only so patches can validate prior contents.
+ */
 class HlSymbolTable {
 	public final ints:Array<Int> = [];
 	public final strings:Array<String> = [];

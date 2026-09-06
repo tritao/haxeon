@@ -5,6 +5,7 @@ import haxe.io.BytesInput;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlPatch;
 
+/** Strict HLP decoder used as the Haxe-side oracle for native patch validation. */
 class HlPatchReader {
 	public static function decode(bytes:Bytes):HlPatch {
 		var input = new BytesInput(bytes);

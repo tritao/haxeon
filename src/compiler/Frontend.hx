@@ -5,6 +5,7 @@ import compiler.ir.IrGenerator;
 import compiler.types.Typer;
 import compiler.Source.SourceFile;
 
+/** Stateless convenience pipeline from source text through typed SSA IR. */
 class Frontend {
 	public static function compile(source:String):IrProgram {
 		return compileFile(new SourceFile("<memory>", source));

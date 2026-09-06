@@ -2,8 +2,10 @@ package compiler.ir;
 
 import compiler.ir.Ir.IrType;
 
+/** Function-local identity for a value in mutable control-flow form. */
 abstract CfgValueId(Int) from Int to Int {}
 
+/** Typed value referenced by mutable CFG instructions. */
 class CfgValue {
 	public final id:CfgValueId;
 	public final type:IrType;
@@ -14,6 +16,11 @@ class CfgValue {
 	}
 }
 
+/**
+ * Instruction set used before SSA construction.
+ *
+ * Explicit local loads and stores are eliminated by {@code SsaBuilder}.
+ */
 enum CfgInstruction {
 	ConstVoid(output:CfgValue);
 	ConstInt(output:CfgValue, value:Int);
@@ -62,6 +69,7 @@ enum CfgInstruction {
 	EnumField(output:CfgValue, value:CfgValue, constructor:Int, field:Int);
 }
 
+/** Mandatory transfer of control ending a mutable CFG block. */
 enum CfgTerminator {
 	Return(value:CfgValue);
 	Throw(value:CfgValue);
@@ -70,6 +78,7 @@ enum CfgTerminator {
 	Branch(condition:CfgValue, whenTrue:Int, whenFalse:Int);
 }
 
+/** Mutable basic block whose terminator is assigned exactly once during construction. */
 class CfgBlock {
 	public final id:Int;
 	public final instructions:Array<CfgInstruction> = [];
@@ -79,8 +88,10 @@ class CfgBlock {
 		this.id = id;
 }
 
+/** Named function input available as a local at CFG entry. */
 typedef CfgArgument = {final name:String; final type:IrType;}
 
+/** Complete mutable-local function passed to CFG verification and SSA construction. */
 class CfgFunction {
 	public final name:String;
 	public final arguments:Array<CfgArgument>;

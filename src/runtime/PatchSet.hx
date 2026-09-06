@@ -2,6 +2,7 @@ package runtime;
 
 import haxe.io.Bytes;
 
+/** Validated patch artifact and the stable function IDs it is expected to replace. */
 class PatchSet {
 	public final baseRevision:Int;
 	public final revision:Int;

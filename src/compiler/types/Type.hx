@@ -1,5 +1,11 @@
 package compiler.types;
 
+/**
+ * Canonical semantic types produced by type checking.
+ *
+ * Unlike {@code AstType}, every named type here has been resolved. Backend
+ * lowering must preserve the distinctions represented by these constructors.
+ */
 enum CompilerType {
 	TInt;
 	TBool;
@@ -23,4 +29,5 @@ enum CompilerType {
 	TAnonymous(name:String, fields:Array<AnonymousField>);
 }
 
+/** Resolved field contract used to compare structural anonymous types. */
 typedef AnonymousField = {final name:String; final type:CompilerType; final optional:Bool;}

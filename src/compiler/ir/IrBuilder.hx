@@ -2,6 +2,7 @@ package compiler.ir;
 
 import compiler.ir.Ir;
 
+/** Imperative helper for constructing a single well-formed SSA function. */
 class IrBuilder {
 	public final blocks:Array<IrBlock> = [];
 	public final arguments:Array<IrValue> = [];

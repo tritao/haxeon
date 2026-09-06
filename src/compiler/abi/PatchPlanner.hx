@@ -2,6 +2,7 @@ package compiler.abi;
 
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 
+/** Runtime-visible structural change that may require a domain reload. */
 enum AbiChange {
 	FunctionAdded(name:String);
 	FunctionRemoved(name:String);
@@ -15,6 +16,7 @@ enum AbiChange {
 	GlobalLayoutChanged(name:String);
 }
 
+/** Permitted publication strategy after comparing two runtime ABIs. */
 enum PatchDecision {
 	Patch;
 	ReloadDomain(reasons:Array<AbiChange>);

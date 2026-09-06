@@ -31,6 +31,7 @@ import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
 
+/** Resolves bindings and converts parsed syntax into the typed semantic tree. */
 class Typer {
 	final signatures:Map<String, AstFunction> = [];
 	final methodInfo:Map<String, {owner:String, isStatic:Bool, isConstructor:Bool}> = [];
@@ -783,8 +784,8 @@ class Typer {
 							var value = coerce(typeExpression(expression, scope, element), element, "array element", "E1002");
 							output.push(TIndexAssign(typedArray, typedIndex, value, span));
 					}
-				case FieldAssignment(objectExpression, fieldName, expression, span):
-					var object = typeExpression(objectExpression, scope),
+				case FieldAssignment(receiverExpression, fieldName, expression, span):
+					var object = typeExpression(receiverExpression, scope),
 						value = typeExpression(expression, scope);
 					switch object.expression {
 						case TClassRef(className):
@@ -799,8 +800,8 @@ class Typer {
 							if (setter != null) output.push(TExpression(new TypedExpression(TCall(setter, [object, value]), TVoid, span),
 								span)); else output.push(TFieldAssign(object, fieldName, value, span));
 					}
-				case If(condition, thenBranch, elseBranch, span):
-					var typedCondition = typeExpression(condition, scope);
+				case If(predicate, thenBranch, elseBranch, span):
+					var typedCondition = typeExpression(predicate, scope);
 					if (!sameType(typedCondition.type, TBool))
 						fail("E1004", "If condition must be Bool", span);
 					var thenScope = narrowedScope(scope, typedCondition, true),
@@ -818,8 +819,8 @@ class Typer {
 					scope.mergeAssignmentsFrom(continuing);
 					if (elseBranch.length == 0 && alwaysExits(typedThen))
 						refineAfterGuard(scope, typedCondition);
-				case While(condition, body, span):
-					var typedCondition = typeExpression(condition, scope);
+				case While(predicate, body, span):
+					var typedCondition = typeExpression(predicate, scope);
 					if (!sameType(typedCondition.type, TBool))
 						fail("E1004", "While condition must be Bool", span);
 					context.loopEarlyExits[context.loopDepth] = true;
@@ -827,13 +828,13 @@ class Typer {
 					var typedBody = typeStatements(body, new Scope(scope), result);
 					context.loopDepth--;
 					output.push(TWhile(typedCondition, typedBody, span));
-				case DoWhile(body, condition, span):
+				case DoWhile(body, predicate, span):
 					var bodyScope = new Scope(scope);
 					context.loopEarlyExits[context.loopDepth] = false;
 					context.loopDepth++;
 					var typedBody = typeStatements(body, bodyScope, result);
 					context.loopDepth--;
-					var typedCondition = typeExpression(condition, bodyScope);
+					var typedCondition = typeExpression(predicate, bodyScope);
 					if (!sameType(typedCondition.type, TBool))
 						fail("E1004", "Do-while condition must be Bool", span);
 					output.push(TDoWhile(typedBody, typedCondition, span));
@@ -1530,8 +1531,8 @@ class Typer {
 				new TypedExpression(TNot(typedValue), TBool, span);
 			case And(left, right, span): logical(left, right, scope, true, span);
 			case Or(left, right, span): logical(left, right, scope, false, span);
-			case Conditional(condition, whenTrue, whenFalse, span):
-				var typedCondition = typeExpression(condition, scope, TBool);
+			case Conditional(predicate, whenTrue, whenFalse, span):
+				var typedCondition = typeExpression(predicate, scope, TBool);
 				if (!sameType(typedCondition.type, TBool))
 					fail("E1011", "Conditional expression requires a Bool condition", span);
 				var typedTrue = typeExpression(whenTrue, narrowedScope(scope, typedCondition, true), expectedType),
@@ -1756,7 +1757,7 @@ class Typer {
 				if (RuntimeType.mapName(keyType, valueType) == null)
 					fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
 				new TypedExpression(TMapLiteral(typedEntries), TMap(keyType, valueType), span);
-			case ArrayComprehension(keyName, valueName, iterable, condition, value, span):
+			case ArrayComprehension(keyName, valueName, iterable, predicate, value, span):
 				var typedIterable = typeExpression(iterable, scope),
 					originalIterable = typedIterable,
 					loopScope = new Scope(scope),
@@ -1786,7 +1787,7 @@ class Typer {
 						case TMap(_, mapValue): loopScope.define(valueName, mapValue, span);
 						default:
 					}
-				var typedCondition = condition == null ? null : typeExpression(condition, loopScope, TBool);
+				var typedCondition = predicate == null ? null : typeExpression(predicate, loopScope, TBool);
 				if (typedCondition != null && typedCondition.type != TBool)
 					fail("E1004", "Array comprehension condition must be Bool", span);
 				var expectedElement = arrayElementExpectation(expectedType),
@@ -1796,7 +1797,7 @@ class Typer {
 				new TypedExpression(TArrayComprehension(loopScope.requireId(keyName), valueName == null ? null : loopScope.requireId(valueName),
 					valueName == null ? typedIterable : originalIterable, typedCondition, typedValue),
 					TArray(elementType), span);
-			case MapComprehension(keyName, valueName, iterable, condition, key, value, span):
+			case MapComprehension(keyName, valueName, iterable, predicate, key, value, span):
 				var typedIterable = typeExpression(iterable, scope),
 					originalIterable = typedIterable,
 					loopScope = new Scope(scope),
@@ -1826,7 +1827,7 @@ class Typer {
 						case TMap(_, mapValue): loopScope.define(valueName, mapValue, span);
 						default:
 					}
-				var typedCondition = condition == null ? null : typeExpression(condition, loopScope, TBool);
+				var typedCondition = predicate == null ? null : typeExpression(predicate, loopScope, TBool);
 				if (typedCondition != null && typedCondition.type != TBool)
 					fail("E1004", "Map comprehension condition must be Bool", span);
 				var expected = mapExpectation(expectedType),
@@ -1841,9 +1842,9 @@ class Typer {
 				new TypedExpression(TMapComprehension(loopScope.requireId(keyName), valueName == null ? null : loopScope.requireId(valueName),
 					valueName == null ? typedIterable : originalIterable, typedCondition, typedKey, typedValue),
 					TMap(resultKey, resultValue), span);
-			case Range(start, end, span):
+			case Range(start, rangeEnd, span):
 				var typedStart = typeExpression(start, scope, TInt),
-					typedEnd = typeExpression(end, scope, TInt);
+					typedEnd = typeExpression(rangeEnd, scope, TInt);
 				if (typedStart.type != TInt || typedEnd.type != TInt)
 					fail("E1014", "Range bounds must be Int values", span);
 				new TypedExpression(TRange(typedStart, typedEnd), TRange, span);
@@ -2605,16 +2606,16 @@ class Typer {
 					collectExpressionVariables(object, names);
 					collectExpressionVariables(expression, names);
 				case ReturnVoid(_):
-				case If(condition, yes, no, _):
-					collectExpressionVariables(condition, names);
+				case If(predicate, yes, no, _):
+					collectExpressionVariables(predicate, names);
 					collectVariables(yes, names);
 					collectVariables(no, names);
-				case While(condition, body, _):
-					collectExpressionVariables(condition, names);
+				case While(predicate, body, _):
+					collectExpressionVariables(predicate, names);
 					collectVariables(body, names);
-				case DoWhile(body, condition, _):
+				case DoWhile(body, predicate, _):
 					collectVariables(body, names);
-					collectExpressionVariables(condition, names);
+					collectExpressionVariables(predicate, names);
 				case ForIn(_, _, iterable, body, _):
 					collectExpressionVariables(iterable, names);
 					collectVariables(body, names);
@@ -2651,16 +2652,16 @@ class Typer {
 				case FieldAssignment(object, _, expression, _):
 					collectMutableCaptureExpression(object, outerDeclared, result);
 					collectMutableCaptureExpression(expression, outerDeclared, result);
-				case If(condition, yes, no, _):
-					collectMutableCaptureExpression(condition, outerDeclared, result);
+				case If(predicate, yes, no, _):
+					collectMutableCaptureExpression(predicate, outerDeclared, result);
 					collectMutableCaptureCandidates(yes, outerDeclared, result);
 					collectMutableCaptureCandidates(no, outerDeclared, result);
-				case While(condition, body, _):
-					collectMutableCaptureExpression(condition, outerDeclared, result);
+				case While(predicate, body, _):
+					collectMutableCaptureExpression(predicate, outerDeclared, result);
 					collectMutableCaptureCandidates(body, outerDeclared, result);
-				case DoWhile(body, condition, _):
+				case DoWhile(body, predicate, _):
 					collectMutableCaptureCandidates(body, outerDeclared, result);
-					collectMutableCaptureExpression(condition, outerDeclared, result);
+					collectMutableCaptureExpression(predicate, outerDeclared, result);
 				case ForIn(_, _, iterable, body, _):
 					collectMutableCaptureExpression(iterable, outerDeclared, result);
 					collectMutableCaptureCandidates(body, outerDeclared, result);
@@ -2758,8 +2759,8 @@ class Typer {
 				collectMutableCaptureExpression(offset, outerDeclared, result);
 			case PostfixIncrement(target, _, _):
 				collectMutableCaptureExpression(target, outerDeclared, result);
-			case Conditional(condition, whenTrue, whenFalse, _):
-				for (item in [condition, whenTrue, whenFalse])
+			case Conditional(predicate, whenTrue, whenFalse, _):
+				for (item in [predicate, whenTrue, whenFalse])
 					collectMutableCaptureExpression(item, outerDeclared, result);
 			case BlockExpression(statements, value, _):
 				collectMutableCaptureCandidates(statements, outerDeclared, result);
@@ -2791,20 +2792,20 @@ class Typer {
 					collectMutableCaptureExpression(entry.key, outerDeclared, result);
 					collectMutableCaptureExpression(entry.value, outerDeclared, result);
 				}
-			case ArrayComprehension(_, _, iterable, condition, value, _):
+			case ArrayComprehension(_, _, iterable, predicate, value, _):
 				collectMutableCaptureExpression(iterable, outerDeclared, result);
-				if (condition != null)
-					collectMutableCaptureExpression(condition, outerDeclared, result);
+				if (predicate != null)
+					collectMutableCaptureExpression(predicate, outerDeclared, result);
 				collectMutableCaptureExpression(value, outerDeclared, result);
-			case MapComprehension(_, _, iterable, condition, key, value, _):
+			case MapComprehension(_, _, iterable, predicate, key, value, _):
 				collectMutableCaptureExpression(iterable, outerDeclared, result);
-				if (condition != null)
-					collectMutableCaptureExpression(condition, outerDeclared, result);
+				if (predicate != null)
+					collectMutableCaptureExpression(predicate, outerDeclared, result);
 				collectMutableCaptureExpression(key, outerDeclared, result);
 				collectMutableCaptureExpression(value, outerDeclared, result);
-			case Range(start, end, _):
+			case Range(start, rangeEnd, _):
 				collectMutableCaptureExpression(start, outerDeclared, result);
-				collectMutableCaptureExpression(end, outerDeclared, result);
+				collectMutableCaptureExpression(rangeEnd, outerDeclared, result);
 			case Variable(_, _), IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_),
 				NewMap(_, _, _):
 		}
@@ -2838,8 +2839,8 @@ class Typer {
 			case And(left, right, _), Or(left, right, _):
 				collectExpressionVariables(left, names);
 				collectExpressionVariables(right, names);
-			case Conditional(condition, whenTrue, whenFalse, _):
-				for (item in [condition, whenTrue, whenFalse])
+			case Conditional(predicate, whenTrue, whenFalse, _):
+				for (item in [predicate, whenTrue, whenFalse])
 					collectExpressionVariables(item, names);
 			case BlockExpression(statements, value, _):
 				collectVariables(statements, names);
@@ -2871,20 +2872,20 @@ class Typer {
 					collectExpressionVariables(entry.key, names);
 					collectExpressionVariables(entry.value, names);
 				}
-			case ArrayComprehension(_, _, iterable, condition, value, _):
+			case ArrayComprehension(_, _, iterable, predicate, value, _):
 				collectExpressionVariables(iterable, names);
-				if (condition != null)
-					collectExpressionVariables(condition, names);
+				if (predicate != null)
+					collectExpressionVariables(predicate, names);
 				collectExpressionVariables(value, names);
-			case MapComprehension(_, _, iterable, condition, key, value, _):
+			case MapComprehension(_, _, iterable, predicate, key, value, _):
 				collectExpressionVariables(iterable, names);
-				if (condition != null)
-					collectExpressionVariables(condition, names);
+				if (predicate != null)
+					collectExpressionVariables(predicate, names);
 				collectExpressionVariables(key, names);
 				collectExpressionVariables(value, names);
-			case Range(start, end, _):
+			case Range(start, rangeEnd, _):
 				collectExpressionVariables(start, names);
-				collectExpressionVariables(end, names);
+				collectExpressionVariables(rangeEnd, names);
 			case New(_, arguments, _):
 				for (argument in arguments)
 					collectExpressionVariables(argument, names);

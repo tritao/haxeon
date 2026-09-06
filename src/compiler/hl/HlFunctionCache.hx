@@ -3,10 +3,16 @@ package compiler.hl;
 import compiler.ir.IrFunction;
 import compiler.ir.IrFunctionStateCodec;
 
+/** Serialized SSA body associated with a cached function name. */
 typedef HlCachedFunctionState = {final name:String; final bytes:haxe.io.Bytes;}
+
+/** Persistent stable runtime identity associated with a function name. */
 typedef HlStableFunctionState = {final name:String; final id:Int;}
+
+/** Cached semantic signature used to classify function changes. */
 typedef HlFunctionSignatureState = {final name:String; final signature:String;}
 
+/** Complete persistable state of append-only function slots and bodies. */
 typedef HlFunctionCacheState = {
 	final slots:Array<String>;
 	final stableIds:Array<HlStableFunctionState>;
@@ -15,6 +21,10 @@ typedef HlFunctionCacheState = {
 	final nextStableId:Int;
 }
 
+/**
+ * Owns append-only user-function slots and stable runtime IDs.
+ * Removed names retain their slots until an explicit assembler compaction.
+ */
 class HlFunctionCache {
 	public static inline final INIT_STABLE_ID:Int = 0x7FFF0000;
 

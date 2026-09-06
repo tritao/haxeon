@@ -4,6 +4,7 @@ import compiler.types.Type.CompilerType;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.Ir.IrType;
 
+/** Source signature and HashLink binding for one immutable host native. */
 typedef NativeDefinition = {
 	final name:String;
 	final library:String;

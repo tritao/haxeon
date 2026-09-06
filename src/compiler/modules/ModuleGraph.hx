@@ -1,5 +1,6 @@
 package compiler.modules;
 
+/** Directed module-dependency graph used for deterministic invalidation. */
 class ModuleGraph {
 	final reverse:Map<String, Array<String>> = [];
 

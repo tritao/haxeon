@@ -17,6 +17,7 @@ import compiler.types.DeclarationIndex.DeclarationKind;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.RuntimeAbi;
 
+/** Editor-facing declaration summary, optionally marked as stale. */
 typedef DocumentSymbol = {
 	final ?revision:Int;
 	final ?stale:Bool;
@@ -26,6 +27,7 @@ typedef DocumentSymbol = {
 	final span:SourceSpan;
 }
 
+/** Editor completion candidate derived from the effective compiler snapshot. */
 typedef CompletionItem = {
 	final ?revision:Int;
 	final ?stale:Bool;
@@ -34,6 +36,7 @@ typedef CompletionItem = {
 	final detail:String;
 }
 
+/** Source location returned by a semantic navigation query. */
 typedef SymbolLocation = {
 	final ?revision:Int;
 	final ?stale:Bool;
@@ -41,6 +44,7 @@ typedef SymbolLocation = {
 	final span:SourceSpan;
 }
 
+/** Revision-aware source replacement proposed by an editor operation. */
 typedef TextEdit = {
 	final ?revision:Int;
 	final ?stale:Bool;
@@ -49,6 +53,7 @@ typedef TextEdit = {
 	final replacement:String;
 }
 
+/** Internal semantic key and declaration/function location used by editor queries. */
 typedef SemanticSymbol = {
 	final key:String;
 	final location:SymbolLocation;

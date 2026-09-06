@@ -2,6 +2,7 @@ package compiler.ir;
 
 import compiler.ir.Ir;
 
+/** Verified SSA function with explicit arguments, blocks, and result type. */
 class IrFunction {
 	public final name:String;
 	public final arguments:Array<IrValue>;

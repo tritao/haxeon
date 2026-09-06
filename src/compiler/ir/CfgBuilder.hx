@@ -3,6 +3,7 @@ package compiler.ir;
 import compiler.ir.Cfg;
 import compiler.ir.Ir.IrType;
 
+/** Builds mutable-local basic blocks while tracking lexical trap scopes. */
 class CfgBuilder {
 	public final blocks:Array<CfgBlock> = [];
 

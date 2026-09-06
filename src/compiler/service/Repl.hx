@@ -4,6 +4,7 @@ import compiler.hl.HlWriter;
 import compiler.modules.Compiler;
 import haxe.io.Bytes;
 
+/** Ephemeral wrapper module and generated function used for one REPL expression. */
 typedef ReplProgram = {
 	final bytes:Bytes;
 	final identity:Bytes;

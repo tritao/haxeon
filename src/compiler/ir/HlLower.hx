@@ -17,6 +17,7 @@ import compiler.ir.Ir.IrValue;
 import compiler.ir.Ir.IrEnum;
 import compiler.ir.IrVerifier;
 
+/** Lowers verified SSA IR into indexed HashLink types, registers, and opcodes. */
 class HlLower {
 	final code:HlCode;
 	final symbols:HlSymbolTable;

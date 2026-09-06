@@ -4,12 +4,22 @@ import haxe.io.Bytes;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
 
+/** Persistent runtime-independent identity of a declared source type. */
 abstract StableTypeId(Int) from Int to Int {}
+
+/** Persistent identity of a field within its declaring type. */
 abstract StableFieldId(Int) from Int to Int {}
+
+/** Persistent identity of a method within its declaring type. */
 abstract StableMethodId(Int) from Int to Int {}
+
+/** Name and canonical semantic type supplied when declaring a field layout. */
 typedef DeclaredField = {final name:String; final type:String;}
+
+/** Name and canonical signature supplied when declaring a method. */
 typedef DeclaredMethod = {final name:String; final signature:String;}
 
+/** Stable field identity and its current physical layout slot. */
 class TypeField {
 	public final id:StableFieldId;
 	public final name:String;
@@ -24,6 +34,7 @@ class TypeField {
 	}
 }
 
+/** Stable method identity and its current semantic signature. */
 class TypeMethod {
 	public final id:StableMethodId;
 	public final name:String;
@@ -36,6 +47,7 @@ class TypeMethod {
 	}
 }
 
+/** Current source-level layout and identities of a declared class. */
 class TypeDescriptor {
 	public final id:StableTypeId;
 	public final name:String;
@@ -52,6 +64,7 @@ class TypeDescriptor {
 	}
 }
 
+/** Compatibility of a class declaration with its previously registered layout. */
 enum TypeCompatibility {
 	NewType;
 	Compatible;
@@ -60,6 +73,7 @@ enum TypeCompatibility {
 	BaseChanged;
 }
 
+/** Registered descriptor paired with its compatibility classification. */
 typedef TypeDeclarationResult = {
 	final descriptor:TypeDescriptor;
 	final compatibility:TypeCompatibility;

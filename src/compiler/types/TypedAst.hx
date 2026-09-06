@@ -4,6 +4,7 @@ import compiler.types.Type.CompilerType;
 import compiler.Source.SourceSpan;
 import compiler.Ast.AstType;
 
+/** Expression paired with its resolved semantic type and original source span. */
 class TypedExpression {
 	public final expression:TypedExpressionKind;
 	public final type:CompilerType;
@@ -16,6 +17,7 @@ class TypedExpression {
 	}
 }
 
+/** Type-checked expression operations consumed by IR generation. */
 enum TypedExpressionKind {
 	TIntLiteral(value:Int);
 	TFloatLiteral(value:Float);
@@ -96,9 +98,13 @@ enum TypedExpressionKind {
 	TArraySort(array:TypedExpression, comparator:TypedExpression);
 }
 
+/** Resolved field initializer in a typed object literal. */
 typedef TypedObjectField = {final name:String; final value:TypedExpression;}
+
+/** Resolved key/value pair in a typed map literal. */
 typedef TypedMapEntry = {final key:TypedExpression; final value:TypedExpression;}
 
+/** Type-checked, guarded arm of a switch expression. */
 typedef TypedSwitchExpressionCase = {
 	final value:TypedExpression;
 	final guard:Null<TypedExpression>;
@@ -108,6 +114,7 @@ typedef TypedSwitchExpressionCase = {
 	final bindings:Array<TypedSwitchBinding>;
 }
 
+/** Type-checked statements with explicit storage and dispatch decisions. */
 enum TypedStatement {
 	TDeclare(name:String, type:CompilerType, span:SourceSpan);
 	TVar(name:String, initializer:TypedExpression, span:SourceSpan);
@@ -135,6 +142,7 @@ enum TypedStatement {
 	TExpression(expression:TypedExpression, span:SourceSpan);
 }
 
+/** Type-checked switch arm with resolved enum bindings, when applicable. */
 typedef TypedSwitchCase = {
 	final value:TypedExpression;
 	final guard:Null<TypedExpression>;
@@ -145,11 +153,24 @@ typedef TypedSwitchCase = {
 	final span:SourceSpan;
 }
 
+/** Local binding introduced for one enum-constructor payload position. */
 typedef TypedSwitchBinding = {final name:String; final type:CompilerType; final index:Int;}
+
+/** Resolved catch arm ready for IR exception lowering. */
 typedef TypedCatch = {final name:String; final type:CompilerType; final statements:Array<TypedStatement>; final span:SourceSpan;}
+
+/** Resolved enum-constructor signature. */
 typedef TypedEnumCase = {final name:String; final params:Array<CompilerType>; final span:SourceSpan;}
+
+/** Type-checked enum declaration. */
 typedef TypedEnum = {final name:String; final cases:Array<TypedEnumCase>; final span:SourceSpan;}
 
+/**
+ * Fully typed function or method body.
+ *
+ * Cell maps record mutable storage decisions that IR generation must preserve
+ * across closures and exception edges.
+ */
 typedef TypedFunction = {
 	final name:String;
 	final ?genericOrigin:String;
@@ -165,6 +186,7 @@ typedef TypedFunction = {
 	final span:SourceSpan;
 }
 
+/** Class field after annotation inference and initializer type checking. */
 typedef TypedField = {
 	final name:String;
 	final type:CompilerType;
@@ -176,6 +198,7 @@ typedef TypedField = {
 	final span:SourceSpan;
 }
 
+/** Class declaration with resolved field, method, and inheritance contracts. */
 typedef TypedClass = {
 	final name:String;
 	final base:Null<String>;
@@ -185,18 +208,28 @@ typedef TypedClass = {
 	final span:SourceSpan;
 }
 
+/** Resolved callable contract required by an interface. */
 typedef TypedInterfaceMethod = {final name:String; final arguments:Array<CompilerType>; final result:CompilerType;}
+
+/** Interface declaration after base and method signature resolution. */
 typedef TypedInterface = {final name:String; final bases:Array<String>; final methods:Array<TypedInterfaceMethod>;}
 
+/** Reason a local is represented by a shared generated cell. */
 enum CellStorageKind {
 	MutableCapture;
 	ExceptionEdge;
 }
 
+/** Generated mutable cell type required by a typed program. */
 typedef TypedCell = {final name:String; final valueType:CompilerType; final kind:CellStorageKind;}
+
+/** Generated object layout shared by a lambda and its captured values. */
 typedef TypedCaptureEnvironment = {final name:String; final fields:Array<{name:String, type:CompilerType}>;}
+
+/** Named backend representation of a structural anonymous type. */
 typedef TypedAnonymous = {final name:String; final fields:Array<compiler.types.Type.AnonymousField>;}
 
+/** Complete semantic module consumed by IR generation. */
 typedef TypedProgram = {
 	final enums:Array<TypedEnum>;
 	final interfaces:Array<TypedInterface>;

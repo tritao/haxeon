@@ -2,6 +2,7 @@ package compiler.abi;
 
 import compiler.ir.Ir;
 
+/** Deterministic semantic descriptions of every runtime-visible declaration. */
 typedef RuntimeAbiDescriptor = {
 	final functions:Map<String, String>;
 	final objects:Map<String, String>;

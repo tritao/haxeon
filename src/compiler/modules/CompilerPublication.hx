@@ -7,6 +7,7 @@ import compiler.ir.Ir.IrObject;
 import compiler.types.TypeRegistry;
 import compiler.types.TypedAst.TypedProgram;
 
+/** Compiler-owned semantic state captured before staging a publication. */
 typedef CompilerSnapshot = {
 	final modules:Map<String, ModuleState>;
 	final types:TypeRegistry;
@@ -17,12 +18,14 @@ typedef CompilerSnapshot = {
 	final rehydrationBaseline:Null<Map<String, haxe.io.Bytes>>;
 }
 
+/** Runtime revision and ABI last acknowledged by the host. */
 typedef PublishedBaseline = {
 	final revision:Int;
 	final abi:Null<RuntimeAbiDescriptor>;
 	final backendAvailable:Bool;
 }
 
+/** Candidate build retained until the host acknowledges or rejects it. */
 typedef PendingPublication = {
 	final baseline:PublishedBaseline;
 	final revision:Int;
@@ -31,6 +34,7 @@ typedef PendingPublication = {
 	final assembler:HlModuleAssembler;
 }
 
+/** Read-only summary of the current publication state machine. */
 typedef PublicationStatus = {
 	final tracking:Bool;
 	final acknowledgedRevision:Int;
@@ -38,23 +42,27 @@ typedef PublicationStatus = {
 	final pendingRevision:Int;
 }
 
+/** Minimal acknowledged publication state stored across compiler sessions. */
 typedef PublicationPersistence = {
 	final tracking:Bool;
 	final revision:Int;
 	final abi:Null<RuntimeAbiDescriptor>;
 }
 
+/** Internal states of the compiler-to-runtime publication transaction. */
 enum PublicationState {
 	Untracked;
 	Ready(baseline:PublishedBaseline);
 	Pending(candidate:PendingPublication);
 }
 
+/** Action required after comparing a reconnecting runtime with compiler state. */
 enum ReconnectDecision {
 	ContinuePatching;
 	ReloadDomain(reason:ReconnectReason);
 }
 
+/** Stable reason that incremental patching cannot safely resume. */
 enum ReconnectReason {
 	PublicationTrackingDisabled;
 	PublicationPending(revision:Int);

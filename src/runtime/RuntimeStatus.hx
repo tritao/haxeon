@@ -1,5 +1,6 @@
 package runtime;
 
+/** Stable status codes shared with the native realtime runtime ABI. */
 enum abstract RuntimeStatus(Int) from Int to Int {
 	var Ok = 0;
 	var BadArgument = 1;

@@ -2,6 +2,7 @@ package compiler.types;
 
 import compiler.types.Type.CompilerType;
 
+/** Explicit conversion required to assign one semantic type to another. */
 enum ConversionPlan {
 	Identity;
 	ToDynamic;

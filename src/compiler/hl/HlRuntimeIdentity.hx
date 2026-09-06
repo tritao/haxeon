@@ -6,6 +6,7 @@ import haxe.io.BytesInput;
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.abi.RuntimeAbiCodec;
 
+/** Compiler identity and acknowledged publication baseline restored across sessions. */
 typedef HlPersistentIdentity = {
 	final moduleId:Bytes;
 	final stableIds:Map<String, Int>;
@@ -17,6 +18,7 @@ typedef HlPersistentIdentity = {
 	final assemblerState:Null<Bytes>;
 }
 
+/** Encodes runtime manifests and persistent compiler identity state. */
 class HlRuntimeIdentity {
 	public static inline final VERSION = 5;
 	public static inline final RUNTIME_VERSION = 2;

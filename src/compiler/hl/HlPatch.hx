@@ -1,5 +1,6 @@
 package compiler.hl;
 
+/** Decoded HLP transaction, including expected live prefixes and replacements. */
 typedef HlPatch = {
 	final moduleId:haxe.io.Bytes;
 	final baseRevision:Int;
@@ -19,6 +20,7 @@ typedef HlPatch = {
 	final functions:Array<HlPatchFunction>;
 }
 
+/** One replacement function addressed by stable identity after relocation. */
 typedef HlPatchFunction = {
 	final type:Int;
 	final functionIndex:Int;
@@ -27,6 +29,7 @@ typedef HlPatchFunction = {
 	final relocations:Array<{instruction:Int, stableId:Int}>;
 }
 
+/** Decoded numeric HashLink opcode and its wire operands. */
 typedef HlPatchInstruction = {
 	final opcode:Int;
 	final operands:Array<Int>;

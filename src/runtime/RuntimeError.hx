@@ -1,5 +1,6 @@
 package runtime;
 
+/** Stable runtime failure status paired with human-readable context. */
 class RuntimeError {
 	public final status:RuntimeStatus;
 	public final message:String;

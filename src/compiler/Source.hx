@@ -1,5 +1,6 @@
 package compiler;
 
+/** Immutable source text and its diagnostic path for one compiler input. */
 class SourceFile {
 	public final path:String;
 	public final text:String;
@@ -13,6 +14,7 @@ class SourceFile {
 		return new SourceSpan(this, start, end);
 }
 
+/** Half-open byte/character range within a single {@link SourceFile}. */
 class SourceSpan {
 	public final file:SourceFile;
 	public final start:Int;
