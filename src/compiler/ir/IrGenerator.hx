@@ -596,6 +596,7 @@ class IrGenerator {
 				var cell = builder.fieldGet(builder.load("this", owner), name, Obj(cellClass));
 				builder.fieldGet(cell, "value", lowerType(expression.type));
 			case TFunctionRef(name): builder.staticClosure(name, lowerType(expression.type));
+			case TMethodRef(object, name): builder.instanceClosure(name, lowerExpression(object, builder, localTypes), lowerType(expression.type));
 			case TLambda(name, environment, captures):
 				if (environment == null) builder.staticClosure(name, lowerType(expression.type)); else {
 					var object = builder.newObject(environment);

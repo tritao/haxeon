@@ -14,6 +14,7 @@ import compiler.types.Type.CompilerType;
 class RuntimeType {
 	public static function arrayName(element:CompilerType):Null<String>
 		return switch element {
+			case TAbstract(_, _, representation): arrayName(representation);
 			case TInt: "i32";
 			case TFloat: "f64";
 			case TBool: "bool";
@@ -35,6 +36,7 @@ class RuntimeType {
 
 	public static function mapName(key:CompilerType, value:CompilerType):Null<String>
 		return switch key {
+			case TAbstract(_, _, representation): mapName(representation, value);
 			case TString: mapValueName("map_string_", value);
 			case TInt: mapValueName("map_int_", value);
 			default: null;
@@ -42,6 +44,7 @@ class RuntimeType {
 
 	static function mapValueName(prefix:String, value:CompilerType):Null<String>
 		return switch value {
+			case TAbstract(_, _, representation): mapValueName(prefix, representation);
 			case TInt: prefix + "i32";
 			case TBool: prefix + "bool";
 			case TFloat: prefix + "f64";
@@ -79,6 +82,7 @@ class RuntimeType {
 
 	static function isRuntimeReference(type:CompilerType):Bool
 		return switch type {
+			case TAbstract(_, _, representation): isRuntimeReference(representation);
 			case TBytes, THlBytes, TDynamic, TNativeAbstract(_), TInstance(_, _, _), TAnonymous(_, _), TArray(_), TMap(_, _), TFunction(_, _): true;
 			case TNullable(element): isRuntimeReference(element);
 			default: false;

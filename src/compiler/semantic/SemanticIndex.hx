@@ -54,7 +54,7 @@ class SemanticIndex {
 		}
 	}
 
-	public function indexTypedFunction(fn:TypedFunction, resolve:String->Null<SemanticSymbolId>, resolveEnumCase:String->Int->Null<SemanticSymbolId>):Void {
+	public function indexTypedFunction(fn:TypedFunction, resolve:String->Null<SemanticSymbolId>, resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>):Void {
 		for (argument in fn.arguments)
 			declareLocal(fn, argument.name, fn.span);
 		declareLocals(fn, fn.statements);
@@ -123,7 +123,7 @@ class SemanticIndex {
 	}
 
 	function indexStatements(fn:TypedFunction, statements:Array<TypedStatement>, resolve:String->Null<SemanticSymbolId>,
-			resolveEnumCase:String->Int->Null<SemanticSymbolId>):Void {
+			resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>):Void {
 		for (statement in statements)
 			switch statement {
 				case TVar(_, value, _), TReturn(value, _), TThrow(value, _), TExpression(value, _):
@@ -172,7 +172,7 @@ class SemanticIndex {
 	}
 
 	function indexExpression(fn:TypedFunction, expression:TypedExpression, resolve:String->Null<SemanticSymbolId>,
-			resolveEnumCase:String->Int->Null<SemanticSymbolId>):Void {
+			resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>):Void {
 		switch expression.expression {
 			case TLocal(identity), TCellLocal(identity, _), TCaptured(identity), TCellCaptured(identity, _):
 				var id = localId(fn, identity);
@@ -216,6 +216,9 @@ class SemanticIndex {
 					indexExpression(fn, argument, resolve, resolveEnumCase);
 			case TFunctionRef(name):
 				bindNamed(resolve, name, expression.span);
+			case TMethodRef(object, name):
+				bindNamed(resolve, name, expression.span);
+				indexExpression(fn, object, resolve, resolveEnumCase);
 			case TClassRef(name):
 				bindNamed(resolve, name, expression.span);
 			case TStaticField(owner, name):
@@ -288,7 +291,7 @@ class SemanticIndex {
 			bindNamed(resolve, owner + "." + name, span);
 	}
 
-	function bindEnumCase(resolve:String->Int->Null<SemanticSymbolId>, enumName:Null<String>, index:Int, span:SourceSpan):Void {
+	function bindEnumCase(resolve:(String, Int) -> Null<SemanticSymbolId>, enumName:Null<String>, index:Int, span:SourceSpan):Void {
 		if (enumName == null || index < 0)
 			return;
 		var id = resolve(enumName, index);

@@ -241,6 +241,29 @@ class Typer {
 			}
 		for (lambda in closureConversion.generatedFunctions())
 			typedFunctions.push(lambda);
+		for (fn in typedFunctions) {
+			for (argument in fn.arguments)
+				registerAnonymousTypes(argument.type);
+			registerAnonymousTypes(fn.result);
+		}
+		for (classDecl in typedClasses)
+			for (field in classDecl.fields)
+				registerAnonymousTypes(field.type);
+		for (interfaceDecl in typedInterfaces)
+			for (method in interfaceDecl.methods) {
+				for (argument in method.arguments)
+					registerAnonymousTypes(argument);
+				registerAnonymousTypes(method.result);
+			}
+		for (enumDecl in typedEnums)
+			for (enumCase in enumDecl.cases)
+				for (parameter in enumCase.params)
+					registerAnonymousTypes(parameter);
+		for (native in typedNatives) {
+			for (argument in native.arguments)
+				registerAnonymousTypes(argument);
+			registerAnonymousTypes(native.result);
+		}
 		var bodiesDoneAt = Sys.time() * 1000.0;
 		var result:TypedProgram = {
 			enums: typedEnums,
@@ -2847,6 +2870,23 @@ class Typer {
 		var platformField = PlatformAbi.field(typedObject.type, name);
 		if (platformField != null)
 			return new TypedExpression(TCall(platformField.get, [typedObject]), platformField.type, span);
+		var owner = switch typedObject.type {
+			case TInstance(Class, className, _), TInstance(Interface, className, _): className;
+			default: null;
+		};
+		if (owner != null) {
+			var methodInfo = findMethod(owner, name);
+			if (methodInfo != null && !methodInfo.isStatic) {
+				var methodKey = methodInfo.owner + "." + name,
+					method = requiredMapValue(signatures, methodKey);
+				if (isGeneric(method))
+					fail("E1007", "Generic instance method values are not supported yet", span);
+				var substitutions = nominalSubstitutions(projectNominal(typedObject.type, methodInfo.owner)),
+					arguments = [for (argument in method.arguments) argumentType(argument, substitutions)],
+					result = declarations.resolve(method.result, method.span, substitutions);
+				return new TypedExpression(TMethodRef(typedObject, methodKey), TFunction(arguments, result), span);
+			}
+		}
 		var semanticType = fieldType(typedObject.type, name, span),
 			physicalType = fieldRepresentationType(typedObject.type, name, span);
 		return abiBoundaryCast(new TypedExpression(TField(typedObject, name), physicalType, span), semanticType);

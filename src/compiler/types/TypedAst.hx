@@ -36,6 +36,7 @@ enum TypedExpressionKind {
 	TClassRef(name:String);
 	TStaticField(name:String, field:String);
 	TFunctionRef(name:String);
+	TMethodRef(object:TypedExpression, functionName:String);
 	TLambda(name:String, environment:Null<String>, captures:Array<TypedCapture>);
 	TAdd(left:TypedExpression, right:TypedExpression);
 	TSub(left:TypedExpression, right:TypedExpression);
