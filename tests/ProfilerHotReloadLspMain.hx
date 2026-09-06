@@ -43,6 +43,11 @@ class ProfilerHotReloadLspMain {
 			});
 			if (snapshot.params.metadataChanges.length == 0)
 				throw "Snapshot omitted revision history";
+			var mergedRevisionNode = false;
+			for (node in cast(snapshot.params.view.flameGraph, Array<Dynamic>))
+				if (node.revisions.length > 1) mergedRevisionNode = true;
+			if (!mergedRevisionNode || snapshot.params.view.revisionMarkers.length == 0)
+				throw "Editor profiling view did not merge hot-reload revisions";
 			dispatcher.dispatch(command(3, "haxeon.profiler.pause", {}));
 			var paused = waitFor(messages, mutex, available, value -> value.id == 3);
 			if (paused.result.unresolvedFrames != 0)

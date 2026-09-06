@@ -1,0 +1,4 @@
+-cp src
+-cp tests
+-main ProfilerViewModelMain
+-hl out/profiler-view-model-test.hl

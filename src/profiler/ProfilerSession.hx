@@ -37,11 +37,30 @@ class ProfileAggregate {
 }
 
 class ProfileStack {
+	public final key:String;
 	public final frames:Array<String>;
+	public final frameDetails:Array<ProfileStackFrame>;
 	public var samples = 0;
 
-	public function new(frames:Array<String>)
-		this.frames = frames;
+	public function new(key:String, frameDetails:Array<ProfileStackFrame>) {
+		this.key = key;
+		this.frameDetails = frameDetails;
+		frames = [for (frame in frameDetails) frame.name];
+	}
+}
+
+class ProfileStackFrame {
+	public final key:String;
+	public final stableKey:String;
+	public final name:String;
+	public final revision:Int;
+
+	public function new(key:String, stableKey:String, name:String, revision:Int) {
+		this.key = key;
+		this.stableKey = stableKey;
+		this.name = name;
+		this.revision = revision;
+}
 }
 
 class ProfileEvent {
@@ -323,14 +342,17 @@ class ProfilerSession {
 			}
 		}
 		if (record.frames.length != 0) {
-			var labels = [];
+			var frameDetails = [];
 			for (index in 0...record.frames.length) {
 				var address = record.frames[record.frames.length - index - 1], symbol = resolve(address);
-				labels.push(symbol == null ? "[unknown]" : symbol.name);
+				frameDetails.push(symbol == null
+					? new ProfileStackFrame("[unknown]", "[unknown]", "[unknown]", 0)
+					: new ProfileStackFrame('${symbol.moduleId}:${symbol.revision}:${symbol.functionId}', '${symbol.moduleId}:${symbol.functionId}', symbol.name,
+						symbol.revision));
 			}
-			var key = labels.join(";") , stack = stacks.get(key);
+			var key = [for (frame in frameDetails) frame.key].join(";") , stack = stacks.get(key);
 			if (stack == null) {
-				stack = new ProfileStack(labels);
+				stack = new ProfileStack(key, frameDetails);
 				stacks.set(key, stack);
 			}
 			stack.samples++;

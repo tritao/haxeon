@@ -25,6 +25,7 @@ class ProfilerService {
 	var notificationSequence = 0;
 	var maxEntries = 100;
 	var emittedMetadataChanges = 0;
+	final viewModel = new ProfilerViewModel();
 
 	public function new() {}
 
@@ -80,6 +81,7 @@ class ProfilerService {
 		if (requestedMaxEntries < 1)
 			throw "Profiler maxEntries must be positive";
 		session = new ProfilerSession(new HldiClient(host, port, timeout));
+		viewModel.reset();
 		emittedMetadataChanges = 0;
 		if (Reflect.hasField(options, "leafCapacity"))
 			session.leafCapacity = requiredInt(options, "leafCapacity");
@@ -115,6 +117,7 @@ class ProfilerService {
 	function reset():Dynamic {
 		var current = requireSession();
 		current.reset();
+		viewModel.reset();
 		emittedMetadataChanges = 0;
 		return snapshot(current.snapshot());
 	}
@@ -174,7 +177,7 @@ class ProfilerService {
 	}
 
 	function snapshot(value:ProfilerSnapshot):Dynamic {
-		return {
+		var result:Dynamic = {
 			sequence: ++notificationSequence,
 			state: Std.string(value.state),
 			samples: value.samples,
@@ -207,6 +210,10 @@ class ProfilerService {
 			}],
 			lastError: value.lastError
 		};
+		var view = viewModel.update(result);
+		Reflect.setField(result, "view", view.state);
+		Reflect.setField(result, "viewDelta", view.delta);
+		return result;
 	}
 
 	static function aggregateValue(value:ProfileAggregate):Dynamic
@@ -221,7 +228,12 @@ class ProfilerService {
 		};
 
 	static function stackValue(value:ProfileStack):Dynamic
-		return {frames: value.frames, samples: value.samples};
+		return {
+			key: value.key,
+			frames: value.frames,
+			frameDetails: [for (frame in value.frameDetails) {key: frame.key, stableKey: frame.stableKey, name: frame.name, revision: frame.revision}],
+			samples: value.samples
+		};
 
 	static function leafValue(value:ProfileLeaf):Dynamic
 		return {

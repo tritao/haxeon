@@ -37,6 +37,9 @@ class ProfilerLspMain {
 			var leaf = notification.params.leaves[0];
 			if (leaf.pc == null || leaf.offset == null || leaf.opcodeIndex == null || leaf.file == null)
 				throw "Profiler notification omitted raw leaf metadata";
+			if (notification.params.view.callTree.length == 0 || notification.params.view.flameGraph.length == 0
+				|| notification.params.viewDelta.nodes.length == 0 || notification.params.view.health.bufferCapacity == "0")
+				throw "Profiler notification omitted incremental editor view data";
 
 			dispatcher.dispatch(command(4, "haxeon.profiler.pause", {}));
 			var paused = waitFor(messages, mutex, available, value -> value.id == 4);
