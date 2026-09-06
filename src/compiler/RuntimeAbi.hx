@@ -1,6 +1,7 @@
 package compiler;
 
 import compiler.modules.Compiler;
+import compiler.modules.Compiler.NativeFunction;
 import compiler.types.Type.CompilerType;
 
 /**
@@ -83,5 +84,12 @@ class RuntimeAbi {
 		var date:CompilerType = TNativeAbstract("realtime_date");
 		compiler.registerNative("Date.now", "realtime_runtime", "__date_now", [], date);
 		compiler.registerNative("__date_get_time", "realtime_runtime", "__date_get_time", [date], TFloat);
+	}
+
+	/** Immutable native definitions shared by compiler snapshots and services. */
+	public static function configuration():Array<NativeFunction> {
+		var collector = new Compiler();
+		register(collector);
+		return collector.nativeConfiguration();
 	}
 }

@@ -94,7 +94,7 @@ class Compiler {
 	final publication = new CompilerPublication();
 	var rehydrationBaseline:Null<Map<String, Bytes>>;
 
-	public function new(?identityState:Bytes) {
+	public function new(?identityState:Bytes, ?nativeConfiguration:Array<NativeFunction>) {
 		if (identityState == null) {
 			moduleId = HlRuntimeIdentity.createModuleId();
 			assembler = new HlModuleAssembler();
@@ -119,6 +119,9 @@ class Compiler {
 				beginRehydration(assembler);
 			}
 		}
+		if (nativeConfiguration != null)
+			for (native in nativeConfiguration)
+				registerNativeUnchecked(native.name, native.library, native.symbol, native.arguments, native.result);
 	}
 
 	public function exportIdentityState():Bytes {
@@ -160,6 +163,10 @@ class Compiler {
 	public function registerNative(name:String, library:String, symbol:String, arguments:Array<CompilerType>, result:CompilerType):Void {
 		if (compiledOnce)
 			throw "Native registrations are frozen after the first compilation";
+		registerNativeUnchecked(name, library, symbol, arguments, result);
+	}
+
+	function registerNativeUnchecked(name:String, library:String, symbol:String, arguments:Array<CompilerType>, result:CompilerType):Void {
 		if (name == "__exit"
 			|| name == "__array_alloc_i32"
 			|| name == "__array_alloc_f64"
@@ -185,10 +192,25 @@ class Compiler {
 		});
 	}
 
-	public function compact(entryModule:String):CompileResult {
-		assembler = new HlModuleAssembler(assembler.cache.stableIds);
-		return compile(entryModule);
+	public function nativeConfiguration():Array<NativeFunction> {
+		var names = [for (name in natives.keys()) name];
+		names.sort(Reflect.compare);
+		return [
+			for (name in names) {
+				var native = natives.get(name);
+				{
+					name: native.name,
+					library: native.library,
+					symbol: native.symbol,
+					arguments: native.arguments.copy(),
+					result: native.result
+				};
+			}
+		];
 	}
+
+	public function compact(entryModule:String):CompileResult
+		return compileTransaction(entryModule, null, new HlModuleAssembler(assembler.cache.stableIds));
 
 	public function update(path:String, source:String):ModuleState {
 		var name = ModulePath.fromFile(path),
@@ -230,13 +252,7 @@ class Compiler {
 	}
 
 	function fork():Compiler {
-		var candidate = new Compiler(exportIdentityState());
-		var nativeNames = [for (name in natives.keys()) name];
-		nativeNames.sort(Reflect.compare);
-		for (name in nativeNames) {
-			var native = natives.get(name);
-			candidate.registerNative(native.name, native.library, native.symbol, native.arguments, native.result);
-		}
+		var candidate = new Compiler(exportIdentityState(), nativeConfiguration());
 		var moduleNames = [for (name in modules.keys()) name];
 		moduleNames.sort(Reflect.compare);
 		for (name in moduleNames) {
@@ -246,10 +262,15 @@ class Compiler {
 		return candidate;
 	}
 
-	public function compile(entryModule:String, ?token:CancellationToken):CompileResult {
+	public function compile(entryModule:String, ?token:CancellationToken):CompileResult
+		return compileTransaction(entryModule, token, null);
+
+	function compileTransaction(entryModule:String, token:Null<CancellationToken>, startingAssembler:Null<HlModuleAssembler>):CompileResult {
 		publication.beforeCompile();
 		var snapshot = snapshot();
 		var previousAssembler = assembler;
+		if (startingAssembler != null)
+			assembler = startingAssembler;
 		try {
 			var result = compileCandidate(entryModule, token);
 			var abi = publishedAbi;
@@ -262,6 +283,7 @@ class Compiler {
 			for (name => state in modules)
 				failedDiagnostics.set(name, state.diagnostics.copy());
 			restore(snapshot);
+			assembler = previousAssembler;
 			for (name => diagnostics in failedDiagnostics)
 				if (modules.exists(name))
 					modules.get(name).diagnostics = diagnostics;
@@ -275,23 +297,30 @@ class Compiler {
 			token.check();
 		if (!modules.exists(entryModule))
 			throw 'Missing entry module "$entryModule"';
-		var names = [for (name in modules.keys()) name];
-		names.sort(Reflect.compare);
+		var names:Array<String> = [];
 		var bodyChanged:Map<String, Bool> = [],
 			signatureChanged:Map<String, Bool> = [],
 			structuralChanged:Map<String, Bool> = [];
-		for (name in names)
+		var pending = [entryModule], seen:Map<String, Bool> = [], cursor = 0;
+		while (cursor < pending.length) {
 			if (token != null)
 				token.check();
-		for (name in names) {
-			parse(modules.get(name), entryModule, bodyChanged, signatureChanged, structuralChanged);
+			var name = pending[cursor++];
+			if (seen.exists(name))
+				continue;
+			seen.set(name, true);
+			if (!modules.exists(name))
+				continue;
+			var state = modules.get(name);
+			parse(state, entryModule, bodyChanged, signatureChanged, structuralChanged);
+			addTypeDependencies(state);
+			for (dependency in state.dependencies)
+				if (!seen.exists(dependency))
+					pending.push(dependency);
 		}
-		for (name in names)
-			addTypeDependencies(modules.get(name));
-		if (token != null)
-			token.check();
 		graph.rebuild(modules);
-		names = reachableModules(entryModule);
+		names = [for (name in seen.keys()) if (modules.exists(name)) name];
+		names.sort(Reflect.compare);
 		for (name in names)
 			if (token != null)
 				token.check();

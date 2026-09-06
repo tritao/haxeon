@@ -15,6 +15,7 @@ class ModuleMain {
 		compiler.update("Math.hx", "function add(a:Int, b:Int):Int { return a + b; }");
 		compiler.update("Main.hx", "function main():Int { print(\"native registration works\\n\"); return Math.add(20, 22); }");
 		compiler.update("Unused.hx", "function identity(x:Int):Int { return x; }");
+		compiler.update("BrokenUnused.hx", "function broken(:Int { }");
 		var first = compiler.compile("Main");
 		var mainDependencies = compiler.modules.get("Main").semanticDependencies.get("main"),
 			hasBodyDependency = false;
@@ -68,7 +69,7 @@ class ModuleMain {
 			throw "Compiler HLP did not contain exactly the changed function";
 		if (result.requiresReload)
 			throw "Body edit unexpectedly requires reload";
-		if (compiler.modules.get("Unused").parseVersion != 1 || compiler.modules.get("Unused").typeVersion != 0)
+		if (compiler.modules.get("Unused").parseVersion != 0 || compiler.modules.get("Unused").typeVersion != 0)
 			throw 'Unreachable module had unexpected work: parse=${compiler.modules.get("Unused").parseVersion}, type=${compiler.modules.get("Unused").typeVersion}';
 		var secondBytes = HlWriter.encode(result.module);
 		if (firstBytes.compare(secondBytes) != 0)
@@ -232,6 +233,7 @@ class ModuleMain {
 		if (callManyPatch.functions.length != 1 || callManyPatch.functions[0].relocations.length != 1)
 			throw "OCallN stable relocation was not emitted";
 		var validationCompiler = new Compiler();
+		validationCompiler.registerNative("clock", "std", "sys_time", [], TFloat);
 		validationCompiler.update("Main.hx", "function main():Int { return 42; }");
 		validationCompiler.compile("Main");
 		var previousSource = validationCompiler.modules.get("Main").source.text,
@@ -242,6 +244,22 @@ class ModuleMain {
 			throw "Transactional validation mutated the live source snapshot";
 		if (!validationCompiler.validate("Main.hx", previousSource, "Main").valid)
 			throw "Valid transactional edit was rejected";
+		validationCompiler.enablePublicationTracking();
+		var trackedValidation = validationCompiler.compile("Main");
+		validationCompiler.acknowledgePublication(trackedValidation.revision);
+		if (!validationCompiler.validate("Main.hx", previousSource, "Main").valid)
+			throw "Validation lost native configuration after publication";
+		var failedCompact = new Compiler();
+		failedCompact.update("Main.hx", "function main():Int { return 40; }");
+		var beforeCompactFailure = failedCompact.compile("Main");
+		failedCompact.update("Main.hx", "function main():Int { return \"bad\"; }");
+		try
+			failedCompact.compact("Main")
+		catch (_:CompileError) {}
+		failedCompact.update("Main.hx", "function main():Int { return 41; }");
+		var afterCompactFailure = failedCompact.compile("Main");
+		if (afterCompactFailure.revision != beforeCompactFailure.revision + 1 || afterCompactFailure.patchBytes == null)
+			throw "Failed compaction discarded the published backend baseline";
 		var publicationCompiler = new Compiler();
 		publicationCompiler.enablePublicationTracking();
 		publicationCompiler.update("Main.hx", "function main():Int { return 40; }");

@@ -5,7 +5,7 @@ import haxe.Json;
 class ProtocolMain {
 	static function main():Void {
 		var protocol = new LanguageServiceProtocol();
-		assertOk(protocol.handle('{"id":1,"method":"update","path":"Main.hx","source":"class Editor { public var active:Int; public function new() { } } function main():Int { var editor = new Editor(); editor.active; return 42; }"}'));
+		assertOk(protocol.handle('{"id":1,"method":"update","path":"Main.hx","source":"class Editor { public var active:Int; public function new() { } } function main():Int { Sys.time(); var editor = new Editor(); editor.active; return 42; }"}'));
 		var compiled:Dynamic = Json.parse(protocol.handle('{"id":2,"method":"compile","entry":"Main"}'));
 		if (!compiled.ok
 			|| compiled.result.revision != 1
@@ -45,7 +45,7 @@ class ProtocolMain {
 		})));
 		if (!connected.ok || connected.result.decision != "continue_patching" || connected.result.reason != null)
 			throw "protocol rejected the acknowledged runtime baseline";
-		var source = "class Editor { public var active:Int; public function new() { } } function main():Int { var editor = new Editor(); editor.active; return 42; }",
+		var source = "class Editor { public var active:Int; public function new() { } } function main():Int { Sys.time(); var editor = new Editor(); editor.active; return 42; }",
 			completion:Dynamic = Json.parse(protocol.handle('{"id":3,"method":"complete","path":"Main.hx","position":'
 				+ (source.indexOf("editor.active") + "editor.".length)
 				+ '}'));

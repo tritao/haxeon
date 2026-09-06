@@ -15,6 +15,7 @@ import compiler.types.Type.CompilerType;
 import compiler.types.DeclarationIndex;
 import compiler.types.DeclarationIndex.DeclarationKind;
 import compiler.types.TypedAst.TypedStatement;
+import compiler.RuntimeAbi;
 
 typedef DocumentSymbol = {
 	final ?revision:Int;
@@ -59,7 +60,7 @@ class LanguageService {
 	public final compiler:Compiler;
 
 	public function new(?identityState:haxe.io.Bytes)
-		compiler = new Compiler(identityState);
+		compiler = new Compiler(identityState, RuntimeAbi.configuration());
 
 	public function update(path:String, source:String):ModuleState
 		return compiler.update(path, source);
