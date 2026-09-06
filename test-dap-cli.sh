@@ -3,22 +3,21 @@ set -euo pipefail
 
 repo_dir="$(cd "$(dirname "$0")" && pwd)"
 tools_dir="$repo_dir/.tools"
-adapter_dir="$tools_dir/hashlink-adapter-package/unpacked/extension"
+adapter_dir="$repo_dir/vendor/hashlink-debugger"
 dap_home="$tools_dir/dap-cli-home"
 session="hl-dap-smoke"
 dap=(npx --yes @roblourens/dap-cli@0.3.0)
 
-mkdir -p "$repo_dir/out" "$tools_dir/hashlink-adapter-package" "$dap_home/config"
+mkdir -p "$repo_dir/out" "$dap_home/config"
 
+if [[ ! -d "$adapter_dir/node_modules" ]]; then
+	npm --prefix "$adapter_dir" ci --ignore-scripts
+fi
 if [[ ! -f "$adapter_dir/adapter.js" ]]; then
-  package="$tools_dir/hashlink-adapter-package/haxe-hl-2.0.0.vsix.gz"
-  archive="$tools_dir/hashlink-adapter-package/haxe-hl-2.0.0.vsix"
-  curl -fL \
-    "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/HaxeFoundation/vsextensions/haxe-hl/2.0.0/vspackage" \
-    -o "$package"
-  echo "13be8457103b31021c7a1fdb1ac1d197d63433d0a46a0557554507362c901a7b  $package" | sha256sum --check
-  gzip -dc "$package" > "$archive"
-  unzip -q -o "$archive" -d "$tools_dir/hashlink-adapter-package/unpacked"
+	(
+		cd "$adapter_dir"
+		"$tools_dir/haxe/haxe" build.hxml
+	)
 fi
 
 python3 - "$dap_home/config/adapters.json" "$adapter_dir" "$repo_dir" <<'PY'

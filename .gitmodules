@@ -1,3 +1,6 @@
 [submodule "vendor/hashlink"]
 	path = vendor/hashlink
 	url = https://github.com/tritao/hashlink.git
+[submodule "vendor/hashlink-debugger"]
+	path = vendor/hashlink-debugger
+	url = https://github.com/vshaxe/hashlink-debugger.git
