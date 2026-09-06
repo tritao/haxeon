@@ -4,6 +4,7 @@ import compiler.Ast;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
+import compiler.types.Type.AnonymousField;
 import compiler.types.Type.CompilerType;
 
 enum abstract DeclarationKind(String) {
@@ -17,10 +18,7 @@ enum abstract DeclarationKind(String) {
 	var TypeParameter = "type-parameter";
 }
 
-abstract DeclarationId(String) to String {
-	public inline function new(kind:DeclarationKind, name:String)
-		this = '$kind:$name';
-}
+abstract DeclarationId(String) from String to String {}
 
 typedef DeclarationSymbol = {
 	final id:DeclarationId;
@@ -53,42 +51,42 @@ class DeclarationIndex {
 	public function new(program:AstProgram) {
 		fallbackSpan = firstSpan(program);
 		for (alias in program.aliases) {
-			declareType(alias.name, Alias, alias.span);
+			declareType(alias.name, DeclarationKind.Alias, alias.span);
 			aliases.set(alias.name, alias.type);
 			aliasSpans.set(alias.name, alias.span);
 		}
 		for (decl in program.enums) {
-			declareType(decl.name, Enum, decl.span);
+			declareType(decl.name, DeclarationKind.Enum, decl.span);
 			enums.set(decl.name, decl);
 		}
 		for (decl in program.enumAbstracts) {
-			declareType(decl.name, Abstract, decl.span);
+			declareType(decl.name, DeclarationKind.Abstract, decl.span);
 			enumAbstracts.set(decl.name, decl);
 			for (value in decl.values)
-				declare(Member, decl.name + "." + value.name, value.span);
+				declare(DeclarationKind.Member, decl.name + "." + value.name, value.span);
 		}
 		for (decl in program.abstracts) {
-			declareType(decl.name, Abstract, decl.span);
+			declareType(decl.name, DeclarationKind.Abstract, decl.span);
 			abstracts.set(decl.name, decl);
 			for (method in decl.methods)
-				declare(Member, decl.name + "." + method.name, method.span);
+				declare(DeclarationKind.Member, decl.name + "." + method.name, method.span);
 		}
 		for (decl in program.interfaces) {
-			declareType(decl.name, Interface, decl.span);
+			declareType(decl.name, DeclarationKind.Interface, decl.span);
 			interfaces.set(decl.name, decl);
 			for (method in decl.methods)
-				declare(Member, decl.name + "." + method.name, method.span);
+				declare(DeclarationKind.Member, decl.name + "." + method.name, method.span);
 		}
 		for (decl in program.classes) {
-			declareType(decl.name, Class, decl.span);
+			declareType(decl.name, DeclarationKind.Class, decl.span);
 			classes.set(decl.name, decl);
 			for (field in decl.fields)
-				declare(Member, decl.name + "." + field.name, field.span);
+				declare(DeclarationKind.Member, decl.name + "." + field.name, field.span);
 			for (method in decl.methods)
-				declare(Member, decl.name + "." + method.name, method.span);
+				declare(DeclarationKind.Member, decl.name + "." + method.name, method.span);
 		}
 		for (fn in program.functions)
-			declare(Function, fn.name, fn.span);
+			declare(DeclarationKind.Function, fn.name, fn.span);
 		validateCycles();
 		validateSignatures(program);
 	}
@@ -110,28 +108,15 @@ class DeclarationIndex {
 				fail("Unresolved inferred type", span);
 				TDynamic;
 			case NativeAbstractType(name): TNativeAbstract(name);
-			case NamedType("Dynamic"): TDynamic;
-			case NamedType("hl.Bytes"): THlBytes;
-			case NamedType("haxe.io.Bytes"): TBytes;
-			case NamedType("haxe.io.BytesInput"): TNativeAbstract("realtime_bytes_input");
-			case NamedType("haxe.io.BytesOutput"): TNativeAbstract("realtime_bytes_output");
-			case NamedType("Date"): TNativeAbstract("realtime_date");
 			case NamedType(name):
-				var substitution = substitutions.get(name),
-					alias = aliases.get(name);
-				if (substitution != null) substitution; else if (alias != null) {
-					if (resolving.exists(name))
-						fail('Cyclic type alias involving "$name"', aliasSpans.get(name));
-					resolving.set(name, true);
-					var resolved = resolveInner(alias, aliasSpans.get(name), resolving, substitutions);
-					resolving.remove(name);
-					resolved;
-				} else if (enumAbstracts.exists(name)) resolveInner(enumAbstracts.get(name).underlying, span, resolving,
-					substitutions); else if (abstracts.exists(name)) resolveInner(abstracts.get(name).underlying, span, resolving,
-					substitutions); else if (interfaces.exists(name)) TInterface(name); else if (enums.exists(name)) TEnum(name); else if (classes.exists(name)
-					|| PlatformAbi.isType(name)) TClass(name); else {
-					fail('Unknown type "$name"', span);
-					TVoid;
+				switch name {
+					case "Dynamic": TDynamic;
+					case "hl.Bytes": THlBytes;
+					case "haxe.io.Bytes": TBytes;
+					case "haxe.io.BytesInput": TNativeAbstract("realtime_bytes_input");
+					case "haxe.io.BytesOutput": TNativeAbstract("realtime_bytes_output");
+					case "Date": TNativeAbstract("realtime_date");
+					default: resolveNamedType(name, span, resolving, substitutions);
 				}
 			case ArrayType(element): TArray(resolveInner(element, span, resolving, substitutions));
 			case MapType(key, value): TMap(resolveInner(key, span, resolving, substitutions), resolveInner(value, span, resolving, substitutions));
@@ -142,7 +127,7 @@ class DeclarationIndex {
 						resolveInner(argument, span, resolving, substitutions)
 				], resolveInner(result, span, resolving, substitutions));
 			case AnonymousType(parsedFields):
-				var fields = [
+				var fields:Array<AnonymousField> = [
 					for (field in parsedFields)
 						{
 							name: field.name,
@@ -162,10 +147,28 @@ class DeclarationIndex {
 				TAnonymous('$' + 'anon:{$signature}', fields);
 		};
 
+	function resolveNamedType(name:String, span:SourceSpan, resolving:Map<String, Bool>, substitutions:Map<String, CompilerType>):CompilerType {
+		return if (substitutions.exists(name)) substitutions.get(name); else if (aliases.exists(name)) {
+			var alias = aliases.get(name);
+			if (resolving.exists(name))
+				fail('Cyclic type alias involving "$name"', aliasSpans.get(name));
+			resolving.set(name, true);
+			var resolved = resolveInner(alias, aliasSpans.get(name), resolving, substitutions);
+			resolving.remove(name);
+			resolved;
+		} else if (enumAbstracts.exists(name)) resolveInner(enumAbstracts.get(name).underlying, span, resolving,
+			substitutions); else if (abstracts.exists(name)) resolveInner(abstracts.get(name).underlying, span, resolving,
+			substitutions); else if (interfaces.exists(name)) TInterface(name); else if (enums.exists(name)) TEnum(name); else if (classes.exists(name)
+			|| PlatformAbi.isType(name)) TClass(name); else {
+			fail('Unknown type "$name"', span);
+			TVoid;
+		};
+	}
+
 	static function nullable(type:CompilerType):CompilerType
 		return switch type {
 			case TNullable(_): type;
-			case TString, TDynamic, TNativeAbstract(_), TClass(_), TInterface(_), TEnum(_), TAnonymous(_, _), TArray(_), TFunction(_), TMap(_, _):
+			case TString, TDynamic, TNativeAbstract(_), TClass(_), TInterface(_), TEnum(_), TAnonymous(_, _), TArray(_), TFunction(_, _), TMap(_, _):
 				TNullable(type);
 			default: type;
 		};
@@ -241,9 +244,10 @@ class DeclarationIndex {
 	}
 
 	function resolveFunction(fn:AstFunction):Void {
-		var substitutions:Map<String, CompilerType> = [];
-		if (fn.typeParameters != null)
-			for (parameter in fn.typeParameters)
+		var substitutions:Map<String, CompilerType> = [],
+			typeParameters = fn.typeParameters;
+		if (typeParameters != null)
+			for (parameter in typeParameters)
 				substitutions.set(parameter, TDynamic);
 		for (argument in fn.arguments)
 			resolve(argument.type, argument.span, substitutions);
@@ -251,23 +255,25 @@ class DeclarationIndex {
 	}
 
 	function visitClass(name:String, visiting:Map<String, Bool>):Void {
-		var decl = classes.get(name);
-		if (decl == null && PlatformAbi.isType(name))
-			return;
-		if (decl == null)
+		if (!classes.exists(name)) {
+			if (PlatformAbi.isType(name))
+				return;
 			fail('Unknown base class "$name"', fallbackSpan);
+		}
+		var decl = classes.get(name);
 		if (visiting.exists(name))
 			fail('Cyclic class inheritance involving "$name"', decl.span);
 		visiting.set(name, true);
-		if (decl.base != null)
-			visitClass(decl.base, visiting);
+		var base = decl.base;
+		if (base != null)
+			visitClass(base, visiting);
 		visiting.remove(name);
 	}
 
 	function visitInterface(name:String, visiting:Map<String, Bool>):Void {
-		var decl = interfaces.get(name);
-		if (decl == null)
+		if (!interfaces.exists(name))
 			fail('Unknown interface "$name"', fallbackSpan);
+		var decl = interfaces.get(name);
 		if (visiting.exists(name))
 			fail('Cyclic interface inheritance involving "$name"', decl.span);
 		visiting.set(name, true);
@@ -277,8 +283,15 @@ class DeclarationIndex {
 	}
 
 	function declareType(name:String, kind:DeclarationKind, span:SourceSpan):Void {
-		for (existing in [Alias, Enum, Interface, Class])
-			if (symbol(existing, name) != null)
+		var typeKinds:Array<DeclarationKind> = [
+			DeclarationKind.Alias,
+			DeclarationKind.Enum,
+			DeclarationKind.Abstract,
+			DeclarationKind.Interface,
+			DeclarationKind.Class
+		];
+		for (existing in typeKinds)
+			if (symbols.exists('$existing:$name'))
 				fail('Duplicate type name "$name"', span);
 		declare(kind, name, span);
 	}
@@ -288,7 +301,7 @@ class DeclarationIndex {
 		if (symbols.exists(key))
 			fail('Duplicate declaration "$name"', span);
 		symbols.set(key, {
-			id: new DeclarationId(kind, name),
+			id: '$kind:$name',
 			kind: kind,
 			name: name,
 			span: span
