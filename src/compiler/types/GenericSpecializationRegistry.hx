@@ -15,6 +15,13 @@ class GenericSpecializationRegistry {
 
 	public function new() {}
 
+	public function copy():GenericSpecializationRegistry {
+		var result = new GenericSpecializationRegistry();
+		for (key => name in names)
+			result.names.set(key, name);
+		return result;
+	}
+
 	public function request(origin:String, representations:Array<CompilerType>):GenericSpecialization {
 		var signature = [for (type in representations) SemanticSignature.type(type)].join(","),
 			key = origin + "<" + signature + ">";

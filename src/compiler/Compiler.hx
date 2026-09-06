@@ -114,7 +114,7 @@ typedef ValidationResult = {
 @:allow(compiler.CompilationTransaction)
 @:allow(compiler.CompilationContext)
 class Compiler {
-	final genericSpecializations = new GenericSpecializationRegistry();
+	var genericSpecializations = new GenericSpecializationRegistry();
 
 	public final modules:Map<String, ModuleState> = [];
 	public final semanticWorkspace:SemanticWorkspace;
@@ -465,6 +465,41 @@ class Compiler {
 			rehydrationBaseline: rehydrationBaseline,
 			semanticProgram: cachedSemanticProgram
 		};
+	}
+
+	function createCandidate(snapshot:CompilerSnapshot, startingAssembler:Null<HlModuleAssembler>):Compiler {
+		var candidate = new Compiler(exportIdentityState(), nativeConfiguration());
+		for (name in [for (name in candidate.modules.keys()) name])
+			candidate.modules.remove(name);
+		for (name => state in snapshot.modules)
+			candidate.modules.set(name, state);
+		candidate.types = snapshot.types.copy();
+		candidate.objectCache = [for (name => object in snapshot.objectCache) name => object];
+		candidate.lastTypedProgram = snapshot.lastTypedProgram;
+		candidate.publishedAbi = snapshot.publishedAbi;
+		candidate.compiledOnce = snapshot.compiledOnce;
+		candidate.rehydrationBaseline = snapshot.rehydrationBaseline;
+		candidate.cachedSemanticProgram = snapshot.semanticProgram;
+		candidate.genericSpecializations = genericSpecializations.copy();
+		candidate.assembler = startingAssembler == null ? assembler : startingAssembler;
+		return candidate;
+	}
+
+	function adoptCandidate(candidate:Compiler):Void {
+		for (name in [for (name in modules.keys()) name])
+			modules.remove(name);
+		for (name => state in candidate.modules)
+			modules.set(name, state);
+		types = candidate.types;
+		objectCache = candidate.objectCache;
+		lastTypedProgram = candidate.lastTypedProgram;
+		publishedAbi = candidate.publishedAbi;
+		compiledOnce = candidate.compiledOnce;
+		rehydrationBaseline = candidate.rehydrationBaseline;
+		cachedSemanticProgram = candidate.cachedSemanticProgram;
+		assembler = candidate.assembler;
+		genericSpecializations = candidate.genericSpecializations;
+		graph.rebuild(modules);
 	}
 
 	function writableState(name:String, rollbackModules:Map<String, ModuleState>):ModuleState {
