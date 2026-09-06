@@ -336,24 +336,24 @@ class TestMain {
 		Sys.println("PASS: mutable CFG lowers through pruned dominance-based SSA");
 
 		var unterminated = new CfgBlock(0);
-		expectCfgError(new CfgFunction("bad", [], I32, [unterminated], []), "Reachable CFG block 0 in bad has no terminator");
+		expectCfgError(new CfgFunction("bad", [], I32, [unterminated], [], 0), "Reachable CFG block 0 in bad has no terminator");
 		var badTarget = new CfgBlock(0);
 		badTarget.terminator = located(compiler.ir.cfg.Cfg.CfgTerminator.Jump(4));
-		expectCfgError(new CfgFunction("bad", [], I32, [badTarget], []), "Unknown CFG block 4");
+		expectCfgError(new CfgFunction("bad", [], I32, [badTarget], [], 0), "Unknown CFG block 4");
 		var duplicate = new CfgBlock(0),
 			first = new CfgValue(0, I32),
 			again = new CfgValue(0, I32);
 		duplicate.instructions.push(located(ConstInt(first, 1)));
 		duplicate.instructions.push(located(ConstInt(again, 2)));
 		duplicate.terminator = located(compiler.ir.cfg.Cfg.CfgTerminator.Return(again));
-		expectCfgError(new CfgFunction("bad", [], I32, [duplicate], []), "Duplicate CFG value 0");
+		expectCfgError(new CfgFunction("bad", [], I32, [duplicate], [], 1), "Duplicate CFG value 0");
 		var crossBlockA = new CfgBlock(0),
 			crossBlockB = new CfgBlock(1),
 			crossValue = new CfgValue(0, I32);
 		crossBlockA.instructions.push(located(ConstInt(crossValue, 1)));
 		crossBlockA.terminator = located(compiler.ir.cfg.Cfg.CfgTerminator.Jump(1));
 		crossBlockB.terminator = located(compiler.ir.cfg.Cfg.CfgTerminator.Return(crossValue));
-		expectCfgError(new CfgFunction("bad", [], I32, [crossBlockA, crossBlockB], []),
+		expectCfgError(new CfgFunction("bad", [], I32, [crossBlockA, crossBlockB], [], 1),
 			"CFG value 0 is used outside its defining block or before definition in block 1");
 		Sys.println("PASS: CFG verifier rejects malformed blocks, edges, and values");
 		var persistedType = Function([I32, Array(Obj("demo.Box")), Function([Bytes], Bool)], Virtual("demo.Plugin")),

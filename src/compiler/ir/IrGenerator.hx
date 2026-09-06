@@ -115,7 +115,7 @@ class IrGenerator {
 			else
 				throw 'Function ${fn.name} does not return on every path';
 		}
-		return new CfgFunction(fn.name, arguments, lowerType(fn.result), builder.blocks, localTypes);
+		return new CfgFunction(fn.name, arguments, lowerType(fn.result), builder.blocks, localTypes, builder.valueCount());
 	}
 
 	static function lowerStatements(statements:Array<TypedStatement>, builder:CfgBuilder, localTypes:Map<String, IrType>, loops:Array<LoopContext>):Void {

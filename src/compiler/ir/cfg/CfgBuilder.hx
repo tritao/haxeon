@@ -31,6 +31,9 @@ class CfgBuilder {
 	public function currentBlock():CfgBlock
 		return current;
 
+	public function valueCount():Int
+		return nextValue;
+
 	/** Select the source context inherited by subsequently emitted operations. */
 	public function at(span:SourceSpan):Void
 		provenance = SourceProvenance.user(span);

@@ -99,12 +99,14 @@ class CfgFunction {
 	public final result:IrType;
 	public final blocks:Array<CfgBlock>;
 	public final localTypes:Map<String, IrType>;
+	public final valueCount:Int;
 
-	public function new(name, arguments, result, blocks, localTypes) {
+	public function new(name, arguments, result, blocks, localTypes, valueCount) {
 		this.name = name;
 		this.arguments = arguments;
 		this.result = result;
 		this.blocks = blocks;
 		this.localTypes = localTypes;
+		this.valueCount = valueCount;
 	}
 }
