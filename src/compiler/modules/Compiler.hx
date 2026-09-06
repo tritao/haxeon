@@ -10,6 +10,7 @@ import compiler.Lexer;
 import compiler.Parser;
 import compiler.Source.SourceFile;
 import compiler.ir.Ir.IrProgram;
+import compiler.ir.Ir.IrType;
 import compiler.ir.IrGenerator;
 import compiler.types.FieldInference;
 import compiler.types.SignatureInference;
@@ -731,56 +732,61 @@ class Compiler {
 		var dependencies:Map<String, Bool> = [];
 		for (name in state.dependencies)
 			dependencies.set(name, true);
-		function add(type:compiler.Ast.AstType):Void
-			switch type {
-				case NamedType(name):
-					var owner = sourceModuleForType(name, state.ast.packageName);
-					if (owner != null && owner != state.name)
-						dependencies.set(owner, true);
-				case ArrayType(element), NullableType(element):
-					add(element);
-				case MapType(key, value):
-					add(key);
-					add(value);
-				case FunctionType(arguments, result):
-					for (argument in arguments)
-						add(argument);
-					add(result);
-				case AnonymousType(fields):
-					for (field in fields)
-						add(field.type);
-				default:
-			}
-		function addFunction(fn:AstFunction):Void {
-			for (argument in fn.arguments)
-				add(argument.type);
-			add(fn.result);
-		}
-		for (alias in state.ast.aliases)
-			add(alias.type);
-		for (enumDecl in state.ast.enums)
+		var ast = state.parsedAst();
+		for (alias in ast.aliases)
+			addModuleTypeDependency(alias.type, state, dependencies);
+		for (enumDecl in ast.enums)
 			for (caseDecl in enumDecl.cases)
 				for (parameter in caseDecl.params)
-					add(parameter.type);
-		for (interfaceDecl in state.ast.interfaces)
+					addModuleTypeDependency(parameter.type, state, dependencies);
+		for (interfaceDecl in ast.interfaces)
 			for (method in interfaceDecl.methods)
-				addFunction(method);
-		for (classDecl in state.ast.classes) {
-			if (classDecl.base != null) {
-				var owner = sourceModuleForType(classDecl.base, state.ast.packageName);
+				addFunctionTypeDependencies(method, state, dependencies);
+		for (classDecl in ast.classes) {
+			var base = classDecl.base;
+			if (base != null) {
+				var owner = sourceModuleForType(base, ast.packageName);
 				if (owner != null && owner != state.name)
 					dependencies.set(owner, true);
 			}
 			for (field in classDecl.fields)
-				add(FieldInference.parsedType(field));
+				addModuleTypeDependency(FieldInference.parsedType(field), state, dependencies);
 			for (method in classDecl.methods)
-				addFunction(method);
+				addFunctionTypeDependencies(method, state, dependencies);
 		}
-		for (fn in state.ast.functions)
-			addFunction(fn);
+		for (fn in ast.functions)
+			addFunctionTypeDependencies(fn, state, dependencies);
 		state.dependencies = [for (name in dependencies.keys()) name];
 		state.dependencies.sort(Reflect.compare);
 	}
+
+	function addFunctionTypeDependencies(fn:AstFunction, state:ModuleState, dependencies:Map<String, Bool>):Void {
+		for (argument in fn.arguments)
+			addModuleTypeDependency(argument.type, state, dependencies);
+		addModuleTypeDependency(fn.result, state, dependencies);
+	}
+
+	function addModuleTypeDependency(type:compiler.Ast.AstType, state:ModuleState, dependencies:Map<String, Bool>):Void
+		switch type {
+			case NamedType(name):
+				var ast = state.parsedAst(),
+					owner = sourceModuleForType(name, ast.packageName);
+				if (owner != null && owner != state.name)
+					dependencies.set(owner, true);
+			case ArrayType(element), NullableType(element):
+				addModuleTypeDependency(element, state, dependencies);
+			case MapType(key, value):
+				addModuleTypeDependency(key, state, dependencies);
+				addModuleTypeDependency(value, state, dependencies);
+			case FunctionType(arguments, result):
+				for (argument in arguments)
+					addModuleTypeDependency(argument, state, dependencies);
+				addModuleTypeDependency(result, state, dependencies);
+			case AnonymousType(fields):
+				for (field in fields)
+					addModuleTypeDependency(field.type, state, dependencies);
+			default:
+		}
 
 	function sourceModuleForType(typeName:String, packageName:Null<String>):Null<String> {
 		var qualified = typeName.indexOf(".") < 0 && packageName != null ? packageName + "." + typeName : typeName,
@@ -788,19 +794,21 @@ class Compiler {
 		if (module != null)
 			return module;
 		for (name => state in modules) {
-			if (state.ast == null)
+			var ast = state.ast;
+			if (ast == null)
 				continue;
-			var prefix = state.ast.packageName == null ? "" : state.ast.packageName + ".";
-			for (declaration in state.ast.aliases)
+			var declaredPackage = ast.packageName,
+				prefix = declaredPackage == null ? "" : declaredPackage + ".";
+			for (declaration in ast.aliases)
 				if (prefix + declaration.name == qualified)
 					return name;
-			for (declaration in state.ast.enums)
+			for (declaration in ast.enums)
 				if (prefix + declaration.name == qualified)
 					return name;
-			for (declaration in state.ast.interfaces)
+			for (declaration in ast.interfaces)
 				if (prefix + declaration.name == qualified)
 					return name;
-			for (declaration in state.ast.classes)
+			for (declaration in ast.classes)
 				if (prefix + declaration.name == qualified)
 					return name;
 		}
@@ -808,14 +816,19 @@ class Compiler {
 	}
 
 	function rehydratedChanges(regenerated:Array<String>, program:IrProgram):Array<String> {
-		if (rehydrationBaseline == null)
+		var baseline = rehydrationBaseline;
+		if (baseline == null)
 			return regenerated;
 		var current:Map<String, compiler.ir.IrFunction> = [], changed = [];
 		for (fn in program.functions)
 			current.set(fn.name, fn);
 		for (name in regenerated) {
-			var old = rehydrationBaseline.get(name), next = current.get(name);
-			if (old == null || next == null || old.compare(compiler.ir.IrFunctionStateCodec.encode(next)) != 0)
+			if (!baseline.exists(name) || !current.exists(name)) {
+				changed.push(name);
+				continue;
+			}
+			var old = baseline.get(name), next = current.get(name);
+			if (old.compare(compiler.ir.IrFunctionStateCodec.encode(next)) != 0)
 				changed.push(name);
 		}
 		return changed;
@@ -876,14 +889,14 @@ class Compiler {
 		];
 	}
 
-	static function irType(type:CompilerType):compiler.ir.Ir.IrType
+	static function irType(type:CompilerType):IrType
 		return switch type {
 			case TInt: I32;
 			case TBool: Bool;
 			case TFloat: F64;
-			case TString: Bytes;
+			case TString: IrType.Bytes;
 			case TBytes: Abstract("realtime_bytes");
-			case THlBytes: Bytes;
+			case THlBytes: IrType.Bytes;
 			case TDynamic: Dyn;
 			case TNativeAbstract(name): Abstract(name);
 			case TNever: throw "Never is not a runtime ABI type";
@@ -920,31 +933,31 @@ class Compiler {
 			state.diagnostics.push(error.diagnostic);
 			throw error;
 		}
-		var dependencies:Map<String, Bool> = [];
-		if (state.ast.imports != null)
-			for (dependency in state.ast.imports)
-				dependencies.set(dependency, true);
-		for (fn in state.ast.functions)
+		var ast = state.parsedAst(), dependencies:Map<String, Bool> = [];
+		for (dependency in ast.imports)
+			dependencies.set(dependency, true);
+		for (fn in ast.functions)
 			for (statement in fn.statements)
 				scanStatement(statement, dependencies);
-		for (classDecl in state.ast.classes)
-			for (field in classDecl.fields)
-				if (field.initializer != null)
-					scanExpression(field.initializer, dependencies);
-		for (abstractDecl in state.ast.enumAbstracts)
+		for (classDecl in ast.classes)
+			for (field in classDecl.fields) {
+				var initializer = field.initializer;
+				if (initializer != null)
+					scanExpression(initializer, dependencies);
+			}
+		for (abstractDecl in ast.enumAbstracts)
 			for (value in abstractDecl.values)
 				scanExpression(value.value, dependencies);
-		for (classDecl in state.ast.classes)
+		for (classDecl in ast.classes)
 			dependencies.remove(classDecl.name);
-		for (enumDecl in state.ast.enums)
+		for (enumDecl in ast.enums)
 			dependencies.remove(enumDecl.name);
-		for (abstractDecl in state.ast.enumAbstracts)
+		for (abstractDecl in ast.enumAbstracts)
 			dependencies.remove(abstractDecl.name);
-		for (abstractDecl in state.ast.abstracts)
+		for (abstractDecl in ast.abstracts)
 			dependencies.remove(abstractDecl.name);
-		for (importPath in state.ast.imports) {
-			var dot = importPath.lastIndexOf("."),
-				alias = dot < 0 ? importPath : importPath.substr(dot + 1);
+		for (importPath in ast.imports) {
+			var alias = lastPathSegment(importPath);
 			if (alias != importPath)
 				dependencies.remove(alias);
 		}
@@ -954,14 +967,15 @@ class Compiler {
 		for (dependency in [for (dependency in dependencies.keys()) dependency])
 			if (nativePrefixExists(dependency))
 				dependencies.remove(dependency);
+		var packageName = ast.packageName;
 		for (dependency in [for (dependency in dependencies.keys()) dependency]) {
 			if (isPlatformDependency(dependency)) {
 				dependencies.remove(dependency);
 				continue;
 			}
 			var sourceModule = sourceModuleForDependency(dependency);
-			if (sourceModule == null && dependency.indexOf(".") < 0 && state.ast.packageName != null) {
-				var packageCandidate = state.ast.packageName + "." + dependency;
+			if (sourceModule == null && dependency.indexOf(".") < 0 && packageName != null) {
+				var packageCandidate = packageName + "." + dependency;
 				dependencies.remove(dependency);
 				dependencies.set(packageCandidate, true);
 				continue;
@@ -973,16 +987,16 @@ class Compiler {
 		}
 		state.dependencies = [for (name in dependencies.keys()) name];
 		state.dependencies.sort(Reflect.compare);
-		var typeAliases = importAliases(state.ast.imports, state.ast.importAliases);
-		addDeclaredTypeAliases(typeAliases, state.ast, state.ast.packageName);
+		var typeAliases = importAliases(ast.imports, ast.importAliases);
+		addDeclaredTypeAliases(typeAliases, ast, ast.packageName);
 		state.semanticDependencies = collectSemanticDependencies(state, entry, typeAliases);
 		var signatures:Map<String, String> = [],
 			bodies:Map<String, String> = [];
 		var interfaces:Map<String, String> = [];
-		for (interfaceDecl in state.ast.interfaces) {
+		for (interfaceDecl in ast.interfaces) {
 			var signature = interfaceDecl.name + " extends " + interfaceDecl.bases.join(",") + " {" + [
 				for (method in interfaceDecl.methods)
-					method.name + ":" + signatureFingerprint(method, state.ast.aliases)
+					method.name + ":" + signatureFingerprint(method, ast.aliases)
 			].join(";") + "}";
 			interfaces.set(interfaceDecl.name, signature);
 			if (state.interfaceFingerprints.get(interfaceDecl.name) != signature)
@@ -993,9 +1007,9 @@ class Compiler {
 				structuralChanged.set('interface:$old', true);
 		state.interfaceFingerprints = interfaces;
 		var aliases:Map<String, String> = [];
-		for (alias in state.ast.aliases) {
-			var aliasName = qualifiedTypeName(state.ast.packageName, alias.name),
-				signature = aliasName + "=" + SemanticSignature.parsed(alias.type, state.ast.aliases);
+		for (alias in ast.aliases) {
+			var aliasName = qualifiedTypeName(ast.packageName, alias.name),
+				signature = aliasName + "=" + SemanticSignature.parsed(alias.type, ast.aliases);
 			aliases.set(aliasName, signature);
 			if (state.aliasFingerprints.get(aliasName) != signature)
 				structuralChanged.set('alias:$aliasName', true);
@@ -1005,13 +1019,13 @@ class Compiler {
 				structuralChanged.set('alias:$old', true);
 		state.aliasFingerprints = aliases;
 		var enums:Map<String, String> = [];
-		for (enumDecl in state.ast.enums) {
-			var enumName = qualifiedTypeName(state.ast.packageName, enumDecl.name),
+		for (enumDecl in ast.enums) {
+			var enumName = qualifiedTypeName(ast.packageName, enumDecl.name),
 				signature = enumName + "{" + [
 					for (caseDecl in enumDecl.cases)
 						caseDecl.name + "(" + [
 							for (param in caseDecl.params)
-								(param.optional ? "?" : "") + SemanticSignature.parsed(param.type, state.ast.aliases)
+								(param.optional ? "?" : "") + SemanticSignature.parsed(param.type, ast.aliases)
 						].join(",") + ")"
 				].join(";") + "}";
 			enums.set(enumName, signature);
@@ -1024,29 +1038,32 @@ class Compiler {
 		state.enumFingerprints = enums;
 		var staticInitializers:Map<String, String> = [],
 			instanceInitializers:Map<String, String> = [];
-		for (classDecl in state.ast.classes) {
-			var className = qualifiedTypeName(state.ast.packageName, classDecl.name);
+		for (classDecl in ast.classes) {
+			var className = qualifiedTypeName(ast.packageName, classDecl.name);
 			for (field in classDecl.fields) {
-				switch field.initializer {
-					case null:
-					case expression:
-						var fieldName = className + "." + field.name,
-							initializer = state.source.text.substring(field.span.start, field.span.end);
-						if (field.isStatic) {
-							staticInitializers.set(fieldName, initializer);
-							if (state.staticInitializerFingerprints.get(fieldName) != initializer)
-								structuralChanged.set('static:$fieldName', true);
-						} else {
-							instanceInitializers.set(fieldName, initializer);
-							if (state.instanceInitializerFingerprints.get(fieldName) != initializer) {
-								bodyChanged.set(className + ".new", true);
-								if (classDecl.methods.filter(function(method) return method.name == "new").length == 0
-									&& state.instanceInitializerFingerprints.get(fieldName) == null) {
-									structuralChanged.set(className, true);
-									signatureChanged.set(className + ".new", true);
-								}
-							}
+				if (field.initializer == null)
+					continue;
+				var fieldName = className + "." + field.name,
+					initializer = state.source.text.substring(field.span.start, field.span.end);
+				if (field.isStatic) {
+					staticInitializers.set(fieldName, initializer);
+					if (!state.staticInitializerFingerprints.exists(fieldName)
+						|| state.staticInitializerFingerprints.get(fieldName) != initializer)
+						structuralChanged.set('static:$fieldName', true);
+				} else {
+					instanceInitializers.set(fieldName, initializer);
+					if (!state.instanceInitializerFingerprints.exists(fieldName)
+						|| state.instanceInitializerFingerprints.get(fieldName) != initializer) {
+						bodyChanged.set(className + ".new", true);
+						var hasConstructor = false;
+						for (method in classDecl.methods)
+							if (method.name == "new")
+								hasConstructor = true;
+						if (!hasConstructor && !state.instanceInitializerFingerprints.exists(fieldName)) {
+							structuralChanged.set(className, true);
+							signatureChanged.set(className + ".new", true);
 						}
+					}
 				}
 			}
 		}
@@ -1056,10 +1073,11 @@ class Compiler {
 		state.staticInitializerFingerprints = staticInitializers;
 		for (old in state.instanceInitializerFingerprints.keys())
 			if (!instanceInitializers.exists(old)) {
-				var className = old.substr(0, old.lastIndexOf(".")),
+				var fieldName:String = old,
+					className = parentPath(fieldName),
 					hasConstructor = false;
-				for (classDecl in state.ast.classes)
-					if (qualifiedTypeName(state.ast.packageName, classDecl.name) == className)
+				for (classDecl in ast.classes)
+					if (qualifiedTypeName(ast.packageName, classDecl.name) == className)
 						for (method in classDecl.methods)
 							if (method.name == "new")
 								hasConstructor = true;
@@ -1070,9 +1088,9 @@ class Compiler {
 				}
 			}
 		state.instanceInitializerFingerprints = instanceInitializers;
-		for (fn in state.ast.functions) {
+		for (fn in ast.functions) {
 			var canonical = state.name == entry && fn.name == "main" ? "main" : state.name + "." + fn.name;
-			var signature = signatureFingerprint(fn, state.ast.aliases),
+			var signature = signatureFingerprint(fn, ast.aliases),
 				body = state.source.text.substring(fn.span.start, fn.span.end);
 			signatures.set(fn.name, signature);
 			bodies.set(fn.name, body);
@@ -1081,15 +1099,15 @@ class Compiler {
 			else if (state.bodyFingerprints.get(fn.name) != body)
 				bodyChanged.set(canonical, true);
 		}
-		for (classDecl in state.ast.classes) {
-			var className = qualifiedTypeName(state.ast.packageName, classDecl.name),
-				baseName = classDecl.base == null ? null : resolveTypeName(classDecl.base, typeAliases);
+		for (classDecl in ast.classes) {
+			var className = qualifiedTypeName(ast.packageName, classDecl.name),
+				baseName = resolveOptionalTypeName(classDecl.base, typeAliases);
 			var classFields = [
 				for (field in classDecl.fields)
-					{name: field.name, type: SemanticSignature.parsed(FieldInference.parsedType(field), state.ast.aliases)}
+					{name: field.name, type: SemanticSignature.parsed(FieldInference.parsedType(field), ast.aliases)}
 			], classMethods = [
 				for (method in classDecl.methods)
-					{name: method.name, signature: signatureFingerprint(method, state.ast.aliases)}
+					{name: method.name, signature: signatureFingerprint(method, ast.aliases)}
 				];
 			var typeResult = types.declareClass(className, baseName, classFields, classMethods);
 			if (compiledOnce && typeResult.compatibility != Compatible)
@@ -1097,7 +1115,7 @@ class Compiler {
 			for (method in classDecl.methods) {
 				var localName = className + "." + method.name,
 					canonical = localName,
-					signature = signatureFingerprint(method, state.ast.aliases),
+					signature = signatureFingerprint(method, ast.aliases),
 					body = state.source.text.substring(method.span.start, method.span.end);
 				signatures.set(localName, signature);
 				bodies.set(localName, body);
@@ -1117,6 +1135,36 @@ class Compiler {
 		state.dirty = false;
 	}
 
+	static function lastPathSegment(path:String):String {
+		var cursor = path.length - 1;
+		while (cursor >= 0) {
+			if (path.charCodeAt(cursor) == 46)
+				return path.substring(cursor + 1, path.length);
+			cursor--;
+		}
+		return path;
+	}
+
+	static function firstPathSegment(path:String):String {
+		var cursor = 0;
+		while (cursor < path.length) {
+			if (path.charCodeAt(cursor) == 46)
+				return path.substring(0, cursor);
+			cursor++;
+		}
+		return path;
+	}
+
+	static function parentPath(path:String):String {
+		var cursor = path.length - 1;
+		while (cursor >= 0) {
+			if (path.charCodeAt(cursor) == 46)
+				return path.substring(0, cursor);
+			cursor--;
+		}
+		return "";
+	}
+
 	static function canonicalFunction(fn:AstFunction, module:String, entry:String, locals:Map<String, Bool>, ?explicitName:String,
 			?aliases:Map<String, String>):AstFunction {
 		var name = explicitName != null ? explicitName : module == entry && fn.name == "main" ? "main" : module + "." + fn.name;
@@ -1131,7 +1179,7 @@ class Compiler {
 						type: canonicalType(argument.type, aliases),
 						span: argument.span,
 						optional: argument.optional,
-						defaultValue: argument.defaultValue == null ? null : canonicalExpression(argument.defaultValue, module, entry, locals, aliases)
+						defaultValue: canonicalOptionalExpression(argument.defaultValue, module, entry, locals, aliases)
 					}
 			],
 			result: canonicalType(fn.result, aliases),
@@ -1147,8 +1195,7 @@ class Compiler {
 		return packageName == null || packageName.length == 0 ? name : packageName + "." + name;
 
 	static function sourceDeclarationPath(moduleName:String, declarationName:String):String {
-		var separator = moduleName.lastIndexOf("."),
-			primaryName = separator < 0 ? moduleName : moduleName.substr(separator + 1);
+		var primaryName = lastPathSegment(moduleName);
 		return primaryName == declarationName ? moduleName : moduleName + "." + declarationName;
 	}
 
@@ -1318,7 +1365,7 @@ class Compiler {
 					for (switchCase in cases)
 						{
 							value: canonicalExpression(switchCase.value, module, entry, locals, aliases),
-							guard: switchCase.guard == null ? null : canonicalExpression(switchCase.guard, module, entry, locals, aliases),
+							guard: canonicalOptionalExpression(switchCase.guard, module, entry, locals, aliases),
 							statements: [
 								for (x in switchCase.statements)
 									canonicalStatement(x, module, entry, locals, aliases)
@@ -1335,8 +1382,10 @@ class Compiler {
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_): e;
 			case Variable(name, span):
 				var dot = name.indexOf("."),
-					prefix = dot < 0 ? name : name.substr(0, dot),
-					imported = aliases == null || locals.exists(prefix) ? null : resolveExpressionAlias(name, aliases);
+					prefix = firstPathSegment(name),
+					imported:Null<String> = null;
+				if (!locals.exists(prefix))
+					imported = resolveOptionalExpressionAlias(name, aliases);
 				if (imported != null) Variable(imported,
 					span); else if (dot < 0 && locals.exists(name)) Variable(module == entry
 					&& name == "main" ? "main" : module + "." + name, span); else e;
@@ -1376,18 +1425,18 @@ class Compiler {
 						canonicalStatement(statement, module, entry, locals, aliases)
 				], canonicalExpression(value, module, entry, locals, aliases), s);
 			case ThrowExpression(value, s): ThrowExpression(canonicalExpression(value, module, entry, locals, aliases), s);
-			case Cast(value, target, s): Cast(canonicalExpression(value, module, entry, locals, aliases), target, s);
+			case Cast(value, target, s):
+				Cast(canonicalExpression(value, module, entry, locals, aliases), canonicalOptionalType(target, aliases), s);
 			case SwitchExpression(subject, cases, fallback, s):
 				SwitchExpression(canonicalExpression(subject, module, entry, locals, aliases), [
 					for (switchCase in cases)
 						{
 							value: canonicalExpression(switchCase.value, module, entry, locals, aliases),
-							guard: switchCase.guard == null ? null : canonicalExpression(switchCase.guard, module, entry, locals, aliases),
+							guard: canonicalOptionalExpression(switchCase.guard, module, entry, locals, aliases),
 							result: canonicalExpression(switchCase.result, module, entry, locals, aliases),
 							span: switchCase.span
 						}
-				],
-					fallback == null ? null : canonicalExpression(fallback, module, entry, locals, aliases), s);
+				], canonicalOptionalExpression(fallback, module, entry, locals, aliases), s);
 			case ObjectLiteral(fields, s): ObjectLiteral([
 					for (field in fields)
 						{name: field.name, value: canonicalExpression(field.value, module, entry, locals, aliases), span: field.span}
@@ -1403,19 +1452,18 @@ class Compiler {
 				], s);
 			case ArrayComprehension(keyName, valueName, iterable, condition, value, s):
 				ArrayComprehension(keyName, valueName, canonicalExpression(iterable, module, entry, locals, aliases),
-					condition == null ? null : canonicalExpression(condition, module, entry, locals, aliases),
-					canonicalExpression(value, module, entry, locals, aliases), s);
+					canonicalOptionalExpression(condition, module, entry, locals, aliases), canonicalExpression(value, module, entry, locals, aliases), s);
 			case MapComprehension(keyName, valueName, iterable, condition, key, value, s):
 				MapComprehension(keyName, valueName, canonicalExpression(iterable, module, entry, locals, aliases),
-					condition == null ? null : canonicalExpression(condition, module, entry, locals, aliases),
-					canonicalExpression(key, module, entry, locals, aliases), canonicalExpression(value, module, entry, locals, aliases), s);
+					canonicalOptionalExpression(condition, module, entry, locals, aliases), canonicalExpression(key, module, entry, locals, aliases),
+					canonicalExpression(value, module, entry, locals, aliases), s);
 			case Range(start, end,
 				s): Range(canonicalExpression(start, module, entry, locals, aliases), canonicalExpression(end, module, entry, locals, aliases), s);
 			case Call(name, args, s):
 				var resolved = name;
 				var dot = name.indexOf("."),
-					prefix = dot < 0 ? name : name.substr(0, dot),
-					imported = aliases == null ? null : resolveExpressionAlias(name, aliases);
+					prefix = firstPathSegment(name),
+					imported = resolveOptionalExpressionAlias(name, aliases);
 				if (imported != null)
 					resolved = imported;
 				else if (name.indexOf(".") < 0 && locals.exists(name))
@@ -1425,30 +1473,42 @@ class Compiler {
 				s): MethodCall(canonicalExpression(object, module, entry, locals, aliases), name,
 					[for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
 			case New(typeName, args, s): New(resolveTypeName(typeName, aliases), [for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
-			case NewArray(element, length, s): NewArray(element, canonicalExpression(length, module, entry, locals, aliases), s);
-			case NewMap(key, value, s): NewMap(key, value, s);
+			case NewArray(element, length, s): NewArray(canonicalType(element, aliases), canonicalExpression(length, module, entry, locals, aliases), s);
+			case NewMap(key, value, s): NewMap(canonicalType(key, aliases), canonicalType(value, aliases), s);
 			case Index(array, offset,
 				s): Index(canonicalExpression(array, module, entry, locals, aliases), canonicalExpression(offset, module, entry, locals, aliases), s);
 			case PostfixIncrement(target, delta, s): PostfixIncrement(canonicalExpression(target, module, entry, locals, aliases), delta, s);
 			case Lambda(arguments, body, s):
-				Lambda(arguments, [
+				Lambda([
+					for (argument in arguments)
+						{
+							name: argument.name,
+							type: canonicalType(argument.type, aliases),
+							span: argument.span
+						}
+				], [
 					for (statement in body)
 						canonicalStatement(statement, module, entry, locals, aliases)
 				], s);
 		}
 
 	static function canonicalOptionalExpression(e:Null<AstExpression>, module:String, entry:String, locals:Map<String, Bool>,
-			aliases:Map<String, String>):Null<AstExpression> {
+			aliases:Null<Map<String, String>>):Null<AstExpression> {
 		if (e == null)
 			return null;
 		return canonicalExpression(e, module, entry, locals, aliases);
 	}
 
+	static function canonicalOptionalType(type:Null<compiler.Ast.AstType>, aliases:Null<Map<String, String>>):Null<compiler.Ast.AstType> {
+		if (type == null)
+			return null;
+		return canonicalType(type, aliases);
+	}
+
 	function importAliases(imports:Array<String>, explicit:Map<String, String>):Map<String, String> {
 		var aliases:Map<String, String> = [];
 		for (path in imports) {
-			var dot = path.lastIndexOf("."),
-				alias = dot < 0 ? path : path.substr(dot + 1);
+			var alias = lastPathSegment(path);
 			aliases.set(alias, importedDeclarationName(path));
 			aliases.set(path, importedDeclarationName(path));
 		}
@@ -1461,19 +1521,24 @@ class Compiler {
 
 	function importedDeclarationName(path:String):String {
 		var sourceModule = sourceModuleForDependency(path);
-		if (sourceModule == null || sourceModule == path)
+		if (sourceModule == null)
 			return path;
-		var moduleSeparator = sourceModule.lastIndexOf("."),
-			packageName = moduleSeparator < 0 ? "" : sourceModule.substr(0, moduleSeparator),
-			nestedName = path.substr(sourceModule.length + 1);
+		var moduleName:String = sourceModule;
+		if (moduleName == path)
+			return path;
+		var packageName = parentPath(moduleName),
+			nestedStart = moduleName.length + 1,
+			nestedName = path.substring(nestedStart, path.length);
 		return packageName.length == 0 ? nestedName : packageName + "." + nestedName;
 	}
 
 	static function resolveTypeName(name:String, aliases:Null<Map<String, String>>):String {
-		var imported = aliases == null ? null : aliases.get(name);
-		if (imported == null)
+		if (aliases == null)
 			return name;
-		return imported;
+		var availableAliases:Map<String, String> = aliases;
+		if (!availableAliases.exists(name))
+			return name;
+		return availableAliases.get(name);
 	}
 
 	static function resolveOptionalTypeName(name:Null<String>, aliases:Null<Map<String, String>>):Null<String> {
@@ -1485,14 +1550,22 @@ class Compiler {
 	static function resolveExpressionAlias(name:String, aliases:Map<String, String>):Null<String> {
 		var candidate = name;
 		while (true) {
-			var resolved = aliases.get(candidate);
-			if (resolved != null)
-				return resolved + name.substr(candidate.length);
-			var separator = candidate.lastIndexOf(".");
-			if (separator < 0)
+			if (aliases.exists(candidate)) {
+				var resolved = aliases.get(candidate),
+					suffix = name.substring(candidate.length, name.length);
+				return resolved + suffix;
+			}
+			var parent = parentPath(candidate);
+			if (parent.length == 0)
 				return null;
-			candidate = candidate.substr(0, separator);
+			candidate = parent;
 		}
+	}
+
+	static function resolveOptionalExpressionAlias(name:String, aliases:Null<Map<String, String>>):Null<String> {
+		if (aliases == null)
+			return null;
+		return resolveExpressionAlias(name, aliases);
 	}
 
 	static function canonicalType(type:compiler.Ast.AstType, aliases:Null<Map<String, String>>):compiler.Ast.AstType
@@ -1516,30 +1589,33 @@ class Compiler {
 		};
 
 	static function collectSemanticDependencies(state:ModuleState, entry:String, typeAliases:Map<String, String>):Map<String, Array<SemanticDependency>> {
-		var result:Map<String, Array<SemanticDependency>> = [];
-		for (fn in state.ast.functions) {
+		var result:Map<String, Array<SemanticDependency>> = [],
+			ast = state.parsedAst();
+		for (fn in ast.functions) {
 			var owner = state.name == entry && fn.name == "main" ? "main" : state.name + "." + fn.name;
 			for (argument in fn.arguments)
-				addTypeDependency(result, owner, Signature, argument.type, typeAliases);
-			addTypeDependency(result, owner, Signature, fn.result, typeAliases);
+				addTypeDependency(result, owner, SemanticDependencyKind.Signature, argument.type, typeAliases);
+			addTypeDependency(result, owner, SemanticDependencyKind.Signature, fn.result, typeAliases);
 			addBodyDependencies(result, owner, fn.statements, state.name, entry);
 		}
-		for (classDecl in state.ast.classes) {
-			var className = qualifiedTypeName(state.ast.packageName, classDecl.name);
-			if (classDecl.base != null)
-				addDependency(result, className, Layout, resolveTypeName(classDecl.base, typeAliases));
+		for (classDecl in ast.classes) {
+			var className = qualifiedTypeName(ast.packageName, classDecl.name),
+				base = classDecl.base;
+			if (base != null)
+				addDependency(result, className, SemanticDependencyKind.Layout, resolveTypeName(base, typeAliases));
 			for (interfaceName in classDecl.interfaces)
-				addDependency(result, className, Layout, resolveTypeName(interfaceName, typeAliases));
+				addDependency(result, className, SemanticDependencyKind.Layout, resolveTypeName(interfaceName, typeAliases));
 			for (field in classDecl.fields) {
-				addTypeDependency(result, className, Layout, FieldInference.parsedType(field), typeAliases);
-				if (field.initializer != null)
-					addExpressionDependencies(result, className + "." + field.name, Initializer, field.initializer, state.name, entry);
+				addTypeDependency(result, className, SemanticDependencyKind.Layout, FieldInference.parsedType(field), typeAliases);
+				var initializer = field.initializer;
+				if (initializer != null)
+					addExpressionDependencies(result, className + "." + field.name, SemanticDependencyKind.Initializer, initializer, state.name, entry);
 			}
 			for (method in classDecl.methods) {
 				var owner = className + "." + method.name;
 				for (argument in method.arguments)
-					addTypeDependency(result, owner, Signature, argument.type, typeAliases);
-				addTypeDependency(result, owner, Signature, method.result, typeAliases);
+					addTypeDependency(result, owner, SemanticDependencyKind.Signature, argument.type, typeAliases);
+				addTypeDependency(result, owner, SemanticDependencyKind.Signature, method.result, typeAliases);
 				addBodyDependencies(result, owner, method.statements, state.name, entry);
 			}
 		}
@@ -1571,47 +1647,57 @@ class Compiler {
 		for (statement in statements)
 			switch statement {
 				case UninitializedDeclaration(_, type, _):
-					addTypeDependency(result, owner, Body, type, []);
+					addTypeDependency(result, owner, SemanticDependencyKind.Body, type, []);
 				case VarDeclaration(_, type, expression, _):
-					if (type != null)
-						addTypeDependency(result, owner, Body, type, []);
-					addExpressionDependencies(result, owner, Body, expression, module, entry);
+					addOptionalTypeDependency(result, owner, SemanticDependencyKind.Body, type, []);
+					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, expression, module, entry);
 				case Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
-					addExpressionDependencies(result, owner, Body, expression, module, entry);
+					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, expression, module, entry);
 				case IndexAssignment(array, offset, expression, _):
 					for (item in [array, offset, expression])
-						addExpressionDependencies(result, owner, Body, item, module, entry);
+						addExpressionDependencies(result, owner, SemanticDependencyKind.Body, item, module, entry);
 				case FieldAssignment(object, _, expression, _):
-					addExpressionDependencies(result, owner, Body, object, module, entry);
-					addExpressionDependencies(result, owner, Body, expression, module, entry);
+					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, object, module, entry);
+					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, expression, module, entry);
 				case If(condition, yes, no, _):
-					addExpressionDependencies(result, owner, Body, condition, module, entry);
+					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, condition, module, entry);
 					addBodyDependencies(result, owner, yes, module, entry);
 					addBodyDependencies(result, owner, no, module, entry);
 				case While(condition, body, _):
-					addExpressionDependencies(result, owner, Body, condition, module, entry);
+					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, condition, module, entry);
 					addBodyDependencies(result, owner, body, module, entry);
 				case DoWhile(body, condition, _):
 					addBodyDependencies(result, owner, body, module, entry);
-					addExpressionDependencies(result, owner, Body, condition, module, entry);
+					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, condition, module, entry);
 				case ForIn(_, _, iterable, body, _):
-					addExpressionDependencies(result, owner, Body, iterable, module, entry);
+					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, iterable, module, entry);
 					addBodyDependencies(result, owner, body, module, entry);
 				case Try(body, catches, _):
 					addBodyDependencies(result, owner, body, module, entry);
 					for (clause in catches)
 						addBodyDependencies(result, owner, clause.statements, module, entry);
 				case Switch(expression, cases, fallback, _, _):
-					addExpressionDependencies(result, owner, Body, expression, module, entry);
+					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, expression, module, entry);
 					for (switchCase in cases) {
-						addExpressionDependencies(result, owner, Body, switchCase.value, module, entry);
-						if (switchCase.guard != null)
-							addExpressionDependencies(result, owner, Body, switchCase.guard, module, entry);
+						addExpressionDependencies(result, owner, SemanticDependencyKind.Body, switchCase.value, module, entry);
+						addOptionalExpressionDependencies(result, owner, SemanticDependencyKind.Body, switchCase.guard, module, entry);
 						addBodyDependencies(result, owner, switchCase.statements, module, entry);
 					}
 					addBodyDependencies(result, owner, fallback, module, entry);
 				case ReturnVoid(_), Break(_), Continue(_), Increment(_, _, _):
 			}
+
+	static function addOptionalTypeDependency(result:Map<String, Array<SemanticDependency>>, owner:String, kind:SemanticDependencyKind,
+			type:Null<compiler.Ast.AstType>, aliases:Map<String, String>):Void {
+		if (type != null)
+			addTypeDependency(result, owner, kind, type, aliases);
+	}
+
+	static function addOptionalExpressionDependencies(result:Map<String, Array<SemanticDependency>>, owner:String, kind:SemanticDependencyKind,
+			expression:Null<AstExpression>, module:String, entry:String):Void {
+		if (expression != null)
+			addExpressionDependencies(result, owner, kind, expression, module, entry);
+	}
 
 	static function addExpressionDependencies(result:Map<String, Array<SemanticDependency>>, owner:String, kind:SemanticDependencyKind,
 			expression:AstExpression, module:String, entry:String):Void {
@@ -1622,8 +1708,10 @@ class Compiler {
 	}
 
 	static function addDependency(result:Map<String, Array<SemanticDependency>>, owner:String, kind:SemanticDependencyKind, target:String):Void {
-		var dependencies = result.get(owner);
-		if (dependencies == null) {
+		var dependencies:Array<SemanticDependency>;
+		if (result.exists(owner))
+			dependencies = result.get(owner);
+		else {
 			dependencies = [];
 			result.set(owner, dependencies);
 		}
@@ -1679,8 +1767,9 @@ class Compiler {
 				scanExpression(expression, dependencies);
 				for (switchCase in cases) {
 					scanExpression(switchCase.value, dependencies);
-					if (switchCase.guard != null)
-						scanExpression(switchCase.guard, dependencies);
+					var guard = switchCase.guard;
+					if (guard != null)
+						scanExpression(guard, dependencies);
 					for (x in switchCase.statements)
 						scanStatement(x, dependencies);
 				}
@@ -1720,12 +1809,14 @@ class Compiler {
 				scanExpression(subject, dependencies);
 				for (switchCase in cases) {
 					scanExpression(switchCase.value, dependencies);
-					if (switchCase.guard != null)
-						scanExpression(switchCase.guard, dependencies);
+					var guard = switchCase.guard;
+					if (guard != null)
+						scanExpression(guard, dependencies);
 					scanExpression(switchCase.result, dependencies);
 				}
-				if (fallback != null)
-					scanExpression(fallback, dependencies);
+				var fallbackExpression = fallback;
+				if (fallbackExpression != null)
+					scanExpression(fallbackExpression, dependencies);
 			case ObjectLiteral(fields, _):
 				for (field in fields)
 					scanExpression(field.value, dependencies);
