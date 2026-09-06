@@ -1,7 +1,10 @@
 package compiler.ir;
 
 import compiler.ir.Cfg;
+import compiler.ir.CfgVerifier;
 import compiler.ir.Ir;
+
+private typedef SsaPhi = {output:IrValue, inputs:Array<IrPhiInput>};
 
 /** Constructs minimal SSA with dominance frontiers, then renames mutable locals. */
 class SsaBuilder {
@@ -15,7 +18,7 @@ class SsaBuilder {
 	var children:Map<Int, Array<Int>> = [];
 	var frontiers:Map<Int, Map<Int, Bool>> = [];
 	var liveIn:Map<Int, Map<String, Bool>> = [];
-	var phis:Map<Int, Map<String, {output:IrValue, inputs:Array<IrPhiInput>}>> = [];
+	var phis:Map<Int, Map<String, SsaPhi>> = [];
 	var roots:Array<Int> = [];
 	var stacks:Map<String, Array<IrValue>> = [];
 	var temporaries:Map<Int, IrValue> = [];
@@ -61,9 +64,9 @@ class SsaBuilder {
 			if (reachable.exists(id))
 				continue;
 			reachable.set(id, true);
-			var block = cfg.blocks[id];
-			if (block == null)
+			if (id < 0 || id >= cfg.blocks.length)
 				throw 'Unknown CFG block $id';
+			var block = cfg.blocks[id];
 			var handlers:Array<Int> = [];
 			for (instruction in block.instructions)
 				switch instruction {
@@ -71,19 +74,23 @@ class SsaBuilder {
 						handlers.push(catchBlock);
 					default:
 				}
-			var next:Array<Int> = switch block.terminator {
+			var terminator = block.terminator;
+			if (terminator == null)
+				throw 'Reachable CFG block $id has no terminator';
+			var next:Array<Int> = switch terminator {
 				case Jump(target): [target];
 				case Branch(_, yes, no): [yes, no];
 				case Return(_), Throw(_), Rethrow(_): [];
-				case null: throw 'Reachable CFG block $id has no terminator';
 			};
 			for (handler in handlers)
 				if (next.indexOf(handler) < 0)
 					next.push(handler);
 			successors.set(id, next);
 			for (target in next) {
-				var found = predecessors.get(target);
-				if (found == null) {
+				var found:Array<Int>;
+				if (predecessors.exists(target))
+					found = predecessors.get(target);
+				else {
 					found = [];
 					predecessors.set(target, found);
 				}
@@ -107,12 +114,14 @@ class SsaBuilder {
 			for (block in cfg.blocks) {
 				var id = block.id;
 				if (reachable.exists(id) && roots.indexOf(id) < 0) {
-					var preds = predecessors.get(id);
-					if (preds == null || preds.length == 0)
+					if (!predecessors.exists(id))
 						throw 'Reachable SSA block $id has no predecessor or handler root';
-					var next:Map<Int, Bool> = null;
-					for (pred in preds)
-						next = next == null ? copySet(dominators.get(pred)) : intersect(next, dominators.get(pred));
+					var preds = predecessors.get(id);
+					if (preds.length == 0)
+						throw 'Reachable SSA block $id has no predecessor or handler root';
+					var next = copySet(dominators.get(preds[0]));
+					for (index in 1...preds.length)
+						next = intersect(next, dominators.get(preds[index]));
 					next.set(id, true);
 					if (!sameSet(next, dominators.get(id))) {
 						dominators.set(id, next);
@@ -134,8 +143,10 @@ class SsaBuilder {
 						}
 					}
 				immediate.set(id, best);
-				var list = children.get(best);
-				if (list == null) {
+				var list:Array<Int>;
+				if (children.exists(best))
+					list = children.get(best);
+				else {
 					list = [];
 					children.set(best, list);
 				}
@@ -152,21 +163,21 @@ class SsaBuilder {
 			var block = cfgBlock.id;
 			if (!reachable.exists(block))
 				continue;
+			if (!predecessors.exists(block))
+				continue;
 			var preds = predecessors.get(block);
-			if (preds == null || preds.length < 2)
+			if (preds.length < 2)
 				continue;
 			for (pred in preds) {
 				var runner = pred;
 				while (runner != immediate.get(block)) {
-					var frontier = frontiers.get(runner);
-					if (frontier != null)
-						frontier.set(block, true);
+					if (frontiers.exists(runner))
+						frontiers.get(runner).set(block, true);
 					if (runner == 0 || roots.indexOf(runner) >= 0)
 						break;
-					var next = immediate.get(runner);
-					if (next == null)
+					if (!immediate.exists(runner))
 						break;
-					runner = next;
+					runner = immediate.get(runner);
 				}
 			}
 		}
@@ -202,9 +213,9 @@ class SsaBuilder {
 				var id = block.id;
 				if (!reachable.exists(id))
 					continue;
-				var out:Map<String, Bool> = [], next = successors.get(id);
-				if (next != null)
-					for (successor in next)
+				var out:Map<String, Bool> = [];
+				if (successors.exists(id))
+					for (successor in successors.get(id))
 						for (name in liveIn.get(successor).keys())
 							out.set(name, true);
 				var input = copyNames(uses.get(id));
@@ -232,17 +243,20 @@ class SsaBuilder {
 							addDefinition(definitions, name, block.id);
 						default:
 					}
-		for (name in sortedStringKeys(definitions)) {
+		for (name in sortedDefinitionNames(definitions)) {
 			var blocks = definitions.get(name),
 				work = sortedIntKeys(blocks),
 				placed:Map<Int, Bool> = [];
-			while (work.length > 0) {
-				var block = work.shift();
+			var cursor = 0;
+			while (cursor < work.length) {
+				var block = work[cursor++];
 				for (join in sortedIntKeys(frontiers.get(block)))
 					if (!placed.exists(join) && liveIn.get(join).exists(name)) {
 						placed.set(join, true);
-						var map = phis.get(join);
-						if (map == null) {
+						var map:Map<String, SsaPhi>;
+						if (phis.exists(join))
+							map = phis.get(join);
+						else {
 							map = [];
 							phis.set(join, map);
 						}
@@ -261,14 +275,15 @@ class SsaBuilder {
 		var block = cfg.blocks[id],
 			target = output[id],
 			pushed:Array<String> = [];
-		var blockPhis = phis.get(id);
-		if (blockPhis != null)
-			for (name in sortedStringKeys(blockPhis)) {
+		if (phis.exists(id)) {
+			var blockPhis = phis.get(id);
+			for (name in sortedPhiNames(blockPhis)) {
 				var phi = blockPhis.get(name);
 				target.instructions.push(Phi(phi.output, phi.inputs));
 				push(name, phi.output);
 				pushed.push(name);
 			}
+		}
 		for (instruction in block.instructions)
 			switch instruction {
 				case LoadLocal(out, name):
@@ -401,31 +416,38 @@ class SsaBuilder {
 					var result = define(out);
 					target.instructions.push(EnumField(result, resolve(value), constructor, field));
 			}
-		target.terminator = switch block.terminator {
+		var terminator = block.terminator;
+		if (terminator == null)
+			throw 'Reachable CFG block $id has no terminator';
+		target.terminator = switch terminator {
 			case Return(value): Return(resolve(value));
 			case Throw(value): Throw(resolve(value));
 			case Rethrow(value): Rethrow(resolve(value));
 			case Jump(to): Jump(to);
 			case Branch(condition, yes, no): Branch(resolve(condition), yes, no);
-			case null: null;
 		};
-		var next = successors.get(id);
-		if (next != null)
-			for (successor in next) {
-				var successorPhis = phis.get(successor);
-				if (successorPhis != null)
-					for (name in sortedStringKeys(successorPhis))
-						successorPhis.get(name).inputs.push({block: id, value: current(name)});
+		if (successors.exists(id))
+			for (successor in successors.get(id)) {
+				if (phis.exists(successor)) {
+					var successorPhis = phis.get(successor);
+					for (name in sortedPhiNames(successorPhis)) {
+						var phi = successorPhis.get(name);
+						var inputs = phi.inputs;
+						inputs.push({block: id, value: current(name)});
+					}
+				}
 			}
-		var nested = children.get(id);
-		if (nested != null) {
+		if (children.exists(id)) {
+			var nested = children.get(id);
 			nested.sort(function(a, b) return a - b);
 			for (child in nested)
 				rename(child);
 		}
-		pushed.reverse();
-		for (name in pushed)
-			stacks.get(name).pop();
+		var pushedIndex = pushed.length;
+		while (pushedIndex > 0) {
+			pushedIndex--;
+			stacks.get(pushed[pushedIndex]).pop();
+		}
 	}
 
 	function define(value:CfgValue):IrValue {
@@ -435,21 +457,20 @@ class SsaBuilder {
 	}
 
 	function resolve(value:CfgValue):IrValue {
-		var result = temporaries.get(value.id);
-		if (result == null)
+		if (!temporaries.exists(value.id))
 			throw 'CFG value ${value.id} used before definition';
-		return result;
+		return temporaries.get(value.id);
 	}
 
 	function allocate(name:String, type:IrType):IrValue {
-		if (type == null)
-			throw 'Missing type for local "$name"';
 		return new IrValue(nextValue++, name, type);
 	}
 
 	function push(name:String, value:IrValue):Void {
-		var stack = stacks.get(name);
-		if (stack == null) {
+		var stack:Array<IrValue>;
+		if (stacks.exists(name))
+			stack = stacks.get(name);
+		else {
 			stack = [];
 			stacks.set(name, stack);
 		}
@@ -457,15 +478,19 @@ class SsaBuilder {
 	}
 
 	function current(name:String):IrValue {
+		if (!stacks.exists(name))
+			throw 'Local "$name" used before definition';
 		var stack = stacks.get(name);
-		if (stack == null || stack.length == 0)
+		if (stack.length == 0)
 			throw 'Local "$name" used before definition';
 		return stack[stack.length - 1];
 	}
 
 	function addDefinition(map:Map<String, Map<Int, Bool>>, name:String, id:Int):Void {
-		var found = map.get(name);
-		if (found == null) {
+		var found:Map<Int, Bool>;
+		if (map.exists(name))
+			found = map.get(name);
+		else {
 			found = [];
 			map.set(name, found);
 		}
@@ -530,13 +555,19 @@ class SsaBuilder {
 		return true;
 	}
 
-	static function sortedIntKeys<T>(map:Map<Int, T>):Array<Int> {
+	static function sortedIntKeys(map:Map<Int, Bool>):Array<Int> {
 		var result = [for (id in map.keys()) id];
 		result.sort(function(a, b) return a - b);
 		return result;
 	}
 
-	static function sortedStringKeys<T>(map:Map<String, T>):Array<String> {
+	static function sortedDefinitionNames(map:Map<String, Map<Int, Bool>>):Array<String> {
+		var result = [for (key in map.keys()) key];
+		result.sort(Reflect.compare);
+		return result;
+	}
+
+	static function sortedPhiNames(map:Map<String, SsaPhi>):Array<String> {
 		var result = [for (name in map.keys()) name];
 		result.sort(Reflect.compare);
 		return result;

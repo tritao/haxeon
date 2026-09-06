@@ -21,8 +21,7 @@ class CfgVerifier {
 			if (arguments.exists(argument.name))
 				throw 'Duplicate CFG argument "${argument.name}"';
 			arguments.set(argument.name, true);
-			var local = fn.localTypes.get(argument.name);
-			if (local == null || !sameType(local, argument.type))
+			if (!fn.localTypes.exists(argument.name) || !sameType(fn.localTypes.get(argument.name), argument.type))
 				throw 'Wrong CFG type for argument "${argument.name}"';
 		}
 		for (block in fn.blocks)
@@ -33,8 +32,10 @@ class CfgVerifier {
 			if (reachable.exists(id))
 				continue;
 			reachable.set(id, true);
-			var block = blocks.get(id);
-			if (block.terminator == null)
+			if (!blocks.exists(id))
+				throw 'Unknown CFG block $id in ${fn.name}';
+			var block = blocks.get(id), terminator = block.terminator;
+			if (terminator == null)
 				throw 'Reachable CFG block $id in ${fn.name} has no terminator';
 			for (instruction in block.instructions)
 				switch instruction {
@@ -44,7 +45,7 @@ class CfgVerifier {
 						work.push(catchBlock);
 					default:
 				}
-			switch block.terminator {
+			switch terminator {
 				case Jump(target):
 					work.push(target);
 				case Branch(_, yes, no):
@@ -247,8 +248,9 @@ class CfgVerifier {
 					require(value, available);
 					define(out, defined, available);
 			}
-		if (block.terminator != null)
-			switch block.terminator {
+		var terminator = block.terminator;
+		if (terminator != null)
+			switch terminator {
 				case Return(value):
 					require(value, available);
 					if (!sameType(value.type, fn.result))
@@ -267,10 +269,9 @@ class CfgVerifier {
 	}
 
 	static function local(fn:CfgFunction, name:String):IrType {
-		var type = fn.localTypes.get(name);
-		if (type == null)
+		if (!fn.localTypes.exists(name))
 			throw 'Unknown CFG local "$name"';
-		return type;
+		return fn.localTypes.get(name);
 	}
 
 	static function targetBlock(id:Int, blocks:Map<Int, CfgBlock>):Void
@@ -293,16 +294,38 @@ class CfgVerifier {
 			throw 'CFG value ${value.id} has the wrong type';
 
 	static function sameType(left:IrType, right:IrType):Bool
-		return switch [left, right] {
-			case [Obj(a), Obj(b)]: a == b;
-			case [Enum(a), Enum(b)]: a == b;
-			case [Abstract(a), Abstract(b)]: a == b;
-			case [Virtual(a), Virtual(b)]: a == b;
-			case [Array(a), Array(b)]: sameType(a, b);
-			case [Function(aArgs, aResult), Function(bArgs, bResult)]: aArgs.length == bArgs.length && [
-					for (i in 0...aArgs.length)
-						sameType(aArgs[i], bArgs[i])
-				].indexOf(false) < 0 && sameType(aResult, bResult);
+		return switch left {
+			case Obj(a): switch right {
+					case Obj(b): a == b;
+					default: false;
+				};
+			case Enum(a): switch right {
+					case Enum(b): a == b;
+					default: false;
+				};
+			case Abstract(a): switch right {
+					case Abstract(b): a == b;
+					default: false;
+				};
+			case Virtual(a): switch right {
+					case Virtual(b): a == b;
+					default: false;
+				};
+			case Array(a): switch right {
+					case Array(b): sameType(a, b);
+					default: false;
+				};
+			case Function(aArgs, aResult): switch right {
+					case Function(bArgs, bResult):
+						if (aArgs.length != bArgs.length) false; else {
+							var equal = sameType(aResult, bResult);
+							for (i in 0...aArgs.length)
+								if (!sameType(aArgs[i], bArgs[i]))
+									equal = false;
+							equal;
+						}
+					default: false;
+				};
 			default: left == right;
 		};
 
