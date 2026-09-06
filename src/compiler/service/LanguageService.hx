@@ -16,6 +16,10 @@ import compiler.types.Type.CompilerType;
 import compiler.types.DeclarationIndex.DeclarationKind;
 import compiler.types.TypeRelations;
 import compiler.runtime.RuntimeNatives;
+import compiler.syntax.Lexer;
+import compiler.syntax.Parser;
+import compiler.syntax.ConditionalCompilation;
+import compiler.Diagnostic.CompileError;
 
 /** Editor-facing declaration summary, optionally marked as stale. */
 typedef DocumentSymbol = {
@@ -71,6 +75,22 @@ typedef CodeAction = {
 	final edits:Array<TextEdit>;
 }
 
+typedef WorkspaceSymbol = {
+	final identity:String;
+	final name:String;
+	final kind:String;
+	final ?container:String;
+	final detail:String;
+	final path:String;
+	final span:SourceSpan;
+	final revision:Int;
+}
+
+private typedef WorkspaceIndexEntry = {
+	final revision:Int;
+	final symbols:Array<WorkspaceSymbol>;
+}
+
 /** Source location returned by a semantic navigation query. */
 typedef SymbolLocation = {
 	final ?revision:Int;
@@ -110,6 +130,8 @@ class LanguageService {
 	static inline final MAX_REFERENCE_RESULTS = 10000;
 
 	public final compiler:Compiler;
+	final workspaceIndex:Map<String, WorkspaceIndexEntry> = [];
+	var editorDefines:Map<String, String> = [];
 
 	public function new(?identityState:haxe.io.Bytes)
 		compiler = new Compiler(identityState, RuntimeNatives.configuration());
@@ -120,8 +142,11 @@ class LanguageService {
 	public function remove(path:String):Bool
 		return compiler.remove(path);
 
-	public function configure(identity:String, scopeIdentity:String, defines:Array<String>):Void
+	public function configure(identity:String, scopeIdentity:String, defines:Array<String>):Void {
+		editorDefines = [for (define in defines) define => "1"];
+		workspaceIndex.clear();
 		compiler.configure(identity, scopeIdentity, defines);
+	}
 
 	public function compile(entryModule:String, ?token:CancellationToken):CompileResult
 		return compiler.compile(entryModule, token);
@@ -159,6 +184,42 @@ class LanguageService {
 				});
 		}
 		return result;
+	}
+
+	public function workspaceSymbols(query:String, ?token:CancellationToken):Array<WorkspaceSymbol> {
+		var normalized = query.toLowerCase(), result:Array<WorkspaceSymbol> = [];
+		for (state in compiler.modules) {
+			if (token != null)
+				token.check();
+			for (symbol in indexedWorkspaceSymbols(state))
+				if (normalized.length == 0 || symbol.name.toLowerCase().indexOf(normalized) >= 0)
+					result.push(symbol);
+		}
+		result.sort(function(left, right) {
+			var leftPrefix = StringTools.startsWith(left.name.toLowerCase(), normalized), rightPrefix = StringTools.startsWith(right.name.toLowerCase(), normalized);
+			if (leftPrefix != rightPrefix)
+				return leftPrefix ? -1 : 1;
+			var name = Reflect.compare(left.name, right.name);
+			return name == 0 ? Reflect.compare(left.identity, right.identity) : name;
+		});
+		return result.length > 200 ? result.slice(0, 200) : result;
+	}
+
+	public function resolveWorkspaceSymbol(identity:String, revision:Int):Null<WorkspaceSymbol> {
+		for (state in compiler.modules)
+			if (state.revision == revision)
+				for (symbol in indexedWorkspaceSymbols(state))
+					if (symbol.identity == identity)
+						return symbol;
+		return null;
+	}
+
+	function workspaceSymbolIdentity(identity:String):Null<WorkspaceSymbol> {
+		for (state in compiler.modules)
+			for (symbol in indexedWorkspaceSymbols(state))
+				if (symbol.identity == identity)
+					return symbol;
+		return null;
 	}
 
 	/** Whether editor spans and typed data belong to the latest source revision. */
@@ -322,6 +383,17 @@ class LanguageService {
 				addMember(symbol.name, completionDeclarationKind(symbol.kind), symbol.name, prefix, result, 4,
 					signature == null ? null : symbol.name + "(", Std.string(symbol.id), candidate.importPath);
 			}
+		if (qualifier == null) {
+			var candidates = workspaceSymbols(prefix, token), counts:Map<String, Int> = [];
+			for (candidate in candidates)
+				if (candidate.container == null && isImportableCompletionKind(candidate.kind))
+					counts.set(candidate.name, (counts.exists(candidate.name) ? counts.get(candidate.name) : 0) + 1);
+			for (candidate in candidates) {
+				var module = ModulePath.fromFile(candidate.path);
+				if (candidate.container == null && isImportableCompletionKind(candidate.kind) && counts.get(candidate.name) == 1 && module != state.name)
+					addMember(candidate.name, candidate.kind, candidate.detail, prefix, result, 4, null, "workspace|" + candidate.identity, module);
+			}
+		}
 		for (symbol in documentSymbols(path))
 			addMember(symbol.name, symbol.kind, symbol.detail, prefix, result);
 		sortCompletion(result);
@@ -333,6 +405,15 @@ class LanguageService {
 		var state = stateFor(path);
 		if (state == null || state.revision != revision)
 			return null;
+		if (StringTools.startsWith(identity, "workspace|")) {
+			var candidate = workspaceSymbolIdentity(identity.substring("workspace|".length));
+			if (candidate == null)
+				return null;
+			var edits:Array<TextEdit> = [], edit = importPath == null ? null : importEdit(state, importPath);
+			if (edit != null)
+				edits.push(edit);
+			return {detail: candidate.detail, documentation: "Declared in " + candidate.path, edits: edits};
+		}
 		var resolved = compiler.semanticWorkspace.indexedSymbol(cast identity);
 		if (resolved == null)
 			return null;
@@ -679,6 +760,9 @@ class LanguageService {
 			default: Std.string(kind);
 		};
 
+	static function isImportableCompletionKind(kind:String):Bool
+		return kind == "type" || kind == "class" || kind == "interface" || kind == "enum" || kind == "function";
+
 	function addInstanceMembers(type:CompilerType, prefix:String, result:Array<CompletionItem>):Void {
 		switch type {
 			case TNullable(element):
@@ -911,6 +995,57 @@ class LanguageService {
 			default: false;
 		};
 	}
+
+	function indexedWorkspaceSymbols(state:ModuleState):Array<WorkspaceSymbol> {
+		var cached = workspaceIndex.get(state.name);
+		if (cached != null && cached.revision == state.revision)
+			return cached.symbols;
+		var ast = effectiveAst(state);
+		if (ast == null)
+			try {
+				var conditional = ConditionalCompilation.process(state.source, editorDefines);
+				ast = new Parser(new Lexer(state.source, conditional.text).tokenize()).parseProgram();
+			} catch (_:CompileError) {}
+		var result:Array<WorkspaceSymbol> = [];
+		if (ast != null) {
+			for (fn in ast.functions)
+				addWorkspaceSymbol(result, state, fn.name, "function", null, '${fn.name}():${typeName(fn.result)}', fn.span);
+			for (alias in ast.aliases)
+				addWorkspaceSymbol(result, state, alias.name, "type", null, 'typedef ${alias.name}=${typeName(alias.type)}', alias.span);
+			for (decl in ast.interfaces) {
+				addWorkspaceSymbol(result, state, decl.name, "interface", null, 'interface ${decl.name}', decl.span);
+				for (method in decl.methods)
+					addWorkspaceSymbol(result, state, method.name, "method", decl.name, '${method.name}():${typeName(method.result)}', method.span);
+			}
+			for (decl in ast.enums) {
+				addWorkspaceSymbol(result, state, decl.name, "enum", null, 'enum ${decl.name}', decl.span);
+				for (item in decl.cases)
+					addWorkspaceSymbol(result, state, item.name, "enumCase", decl.name, decl.name + "." + item.name, item.span);
+			}
+			for (decl in ast.classes) {
+				addWorkspaceSymbol(result, state, decl.name, "class", null, 'class ${decl.name}', decl.span);
+				for (field in decl.fields)
+					addWorkspaceSymbol(result, state, field.name, "field", decl.name, '${field.name}:${typeName(field.type)}', field.span);
+				for (method in decl.methods)
+					addWorkspaceSymbol(result, state, method.name, "method", decl.name, '${method.name}():${typeName(method.result)}', method.span);
+			}
+		}
+		workspaceIndex.set(state.name, {revision: state.revision, symbols: result});
+		return result;
+	}
+
+	static function addWorkspaceSymbol(result:Array<WorkspaceSymbol>, state:ModuleState, name:String, kind:String, container:Null<String>, detail:String,
+			span:SourceSpan):Void
+		result.push({
+			identity: state.name + ":" + kind + ":" + (container == null ? "" : container + ".") + name,
+			name: name,
+			kind: kind,
+			container: container,
+			detail: detail,
+			path: state.source.path,
+			span: span,
+			revision: state.revision
+		});
 
 	static function tagResults<T>(results:Array<T>, state:ModuleState):Void {
 		var revision = snapshotRevision(state),

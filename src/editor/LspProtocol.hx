@@ -86,6 +86,8 @@ class LspProtocol {
 				case "textDocument/didClose": closeDocument(request);
 				case "workspace/didChangeWatchedFiles": watchedFiles(request);
 				case "workspace/didChangeConfiguration": changeConfiguration(request);
+				case "workspace/symbol": cancellable(id, token -> workspaceSymbols(request, token));
+				case "workspaceSymbol/resolve": cancellable(id, token -> resolveWorkspaceSymbol(request, token));
 				case "textDocument/documentSymbol": cancellable(id, token -> documentSymbols(request, token));
 				case "textDocument/completion": cancellable(id, token -> completion(request, token));
 				case "completionItem/resolve": cancellable(id, token -> resolveCompletion(request, token));
@@ -232,6 +234,7 @@ class LspProtocol {
 				definitionProvider: true,
 				referencesProvider: true,
 				renameProvider: {prepareProvider: true},
+				workspaceSymbolProvider: {resolveProvider: true},
 				executeCommandProvider: {
 					commands: [
 						"haxeon.profiler.connect",
@@ -422,6 +425,35 @@ class LspProtocol {
 					selectionRange: document.range(symbol.span.start, symbol.span.end)
 				}
 		];
+	}
+
+	function workspaceSymbols(request:Dynamic, token:CancellationToken):Array<Dynamic> {
+		var query = requiredString(required(request, "params"), "query");
+		return [
+			for (symbol in service.workspaceSymbols(query, token))
+				{
+					name: symbol.name,
+					kind: symbolKind(symbol.kind),
+					containerName: symbol.container,
+					location: {uri: documents.uri(project.diskPath(symbol.path))},
+					data: {identity: symbol.identity, revision: symbol.revision}
+				}
+		];
+	}
+
+	function resolveWorkspaceSymbol(request:Dynamic, token:CancellationToken):Dynamic {
+		var item:Dynamic = required(request, "params"), data = required(item, "data"), identity = requiredString(data, "identity"),
+			revision = requiredInt(data, "revision");
+		token.check();
+		var symbol = service.resolveWorkspaceSymbol(identity, revision);
+		if (symbol == null)
+			throw new LspRequestError(-32801, "Workspace symbol no longer matches its source revision");
+		var target = documentForPath(symbol.path);
+		Reflect.setField(item, "location", {
+			uri: documents.uri(project.diskPath(symbol.path)),
+			range: target.range(symbol.span.start, symbol.span.end)
+		});
+		return item;
 	}
 
 	function completion(request:Dynamic, token:CancellationToken):Dynamic {

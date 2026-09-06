@@ -44,7 +44,8 @@ class LspProtocolMain {
 			|| initialized.result.capabilities.textDocumentSync.change != 1
 			|| !initialized.result.capabilities.documentHighlightProvider
 			|| initialized.result.capabilities.semanticTokensProvider.legend.tokenTypes[12] != "function"
-			|| initialized.result.capabilities.codeActionProvider.codeActionKinds[0] != "quickfix")
+			|| initialized.result.capabilities.codeActionProvider.codeActionKinds[0] != "quickfix"
+			|| !initialized.result.capabilities.workspaceSymbolProvider.resolveProvider)
 			throw "LSP initialization capabilities are incomplete";
 		var watcherRegistration = protocol.handle('{"jsonrpc":"2.0","method":"initialized","params":{}}');
 		if (watcherRegistration.length != 1
@@ -68,6 +69,23 @@ class LspProtocolMain {
 		if (projectProtocol.project.configurations.length != 1
 			|| !projectProtocol.project.hasDiskSource(Path.join([fixtureRoot, "pragtical/plugins/SearchPlugin.hx"])))
 			throw "LSP initialization did not discover the Haxe project";
+		var workspaceMatches = request(projectProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 401,
+			method: "workspace/symbol",
+			params: {query: "SearchPlugin"}
+		}));
+		var searchPluginSymbol:Dynamic = null;
+		for (symbol in cast(workspaceMatches.result, Array<Dynamic>))
+			if (symbol.name == "SearchPlugin")
+				searchPluginSymbol = symbol;
+		if (searchPluginSymbol == null || Reflect.hasField(searchPluginSymbol.location, "range"))
+			throw "workspace symbols did not index an unopened project source lazily";
+		var resolvedWorkspace = request(projectProtocol,
+			Json.stringify({jsonrpc: "2.0", id: 402, method: "workspaceSymbol/resolve", params: searchPluginSymbol}));
+		if (!StringTools.endsWith(resolvedWorkspace.result.location.uri, "/pragtical/plugins/SearchPlugin.hx")
+			|| resolvedWorkspace.result.location.range == null)
+			throw "workspace symbol resolve did not map the exact disk location";
 		projectProtocol.handle(Json.stringify({
 			jsonrpc: "2.0",
 			method: "textDocument/didOpen",
@@ -333,7 +351,6 @@ class LspProtocolMain {
 			helperPath = "/workspace/tools/Helper.hx", helperUri = "file://" + helperPath,
 			importUri = "file:///workspace/ImportMain.hx", importSource = "function main():Int return 0; // Hel";
 		importService.update(helperPath, "class Helper { public static function answer():Int return 42; } function main():Int return 0;");
-		importService.analyze("workspace.tools.Helper");
 		request(importProtocol, '{"jsonrpc":"2.0","id":70,"method":"initialize","params":{}}');
 		importProtocol.handle(Json.stringify({
 			jsonrpc: "2.0",
