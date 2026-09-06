@@ -1,0 +1,4 @@
+-cp src
+-cp tests
+-main HldiClientMain
+-hl out/hldi-client-test.hl
