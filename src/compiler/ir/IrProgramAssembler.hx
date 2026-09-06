@@ -120,7 +120,7 @@ class IrProgramAssembler {
 		for (classDecl in typed.classes) {
 			var fields:Array<IrObjectField> = [];
 			for (field in classDecl.fields)
-				if (!field.isStatic)
+				if (!field.isStatic && hasPhysicalStorage(field))
 					fields.push({name: field.name, type: IrGenerator.lowerType(field.type)});
 			var methods:Array<IrObjectMethod> = [];
 			for (methodDecl in classDecl.methods)
@@ -176,6 +176,15 @@ class IrProgramAssembler {
 			});
 		return objects;
 	}
+
+	static function hasPhysicalStorage(field:compiler.types.TypedAst.TypedField):Bool
+		return hasDirectFieldAccess(field.readAccess) || hasDirectFieldAccess(field.writeAccess);
+
+	static function hasDirectFieldAccess(access:Null<compiler.syntax.Ast.AstFieldAccess>):Bool
+		return switch access {
+			case GetAccess, SetAccess, NeverAccess: false;
+			default: true;
+		};
 
 	static function lastSeparator(value:String):Int {
 		return lastSeparatorCode(value, 46);

@@ -921,7 +921,12 @@ class Typer {
 								if (thisType == null)
 									throw 'Missing "this" type for field "$name"';
 								var value = coerce(typeExpression(expression, scope, instanceField), instanceField, 'field "$name"', "E1002");
-								output.push(TFieldAssign(new TypedExpression(TLocal("this"), thisType, span), name, value, span));
+								var receiver = new TypedExpression(TLocal("this"), thisType, span),
+									propertySetter = instancePropertyAccessor(thisType, name, false);
+								if (propertySetter != null)
+									output.push(TExpression(new TypedExpression(TMethodCall(receiver, propertySetter, [value]), instanceField, span), span));
+								else
+									output.push(TFieldAssign(receiver, name, abiBoundaryCast(value, fieldRepresentationType(thisType, name, span)), span));
 							} else {
 								var owner = parentPath(context.name),
 									staticField:Null<{owner:String, type:CompilerType}> = null;
@@ -960,13 +965,18 @@ class Typer {
 								var platformField = PlatformAbi.field(object.type, fieldName),
 									expected = fieldType(object.type, fieldName, span);
 								var value = coerce(typeExpression(expression, scope, expected), expected, 'field "$name"', "E1002");
-								if (platformField == null)
-									value = abiBoundaryCast(value, fieldRepresentationType(object.type, fieldName, span));
 								var setter:Null<String> = platformField == null ? null : platformField.set;
 								if (setter != null)
 									output.push(TExpression(new TypedExpression(TCall(setter, [object, value]), TVoid, span), span));
-								else
-									output.push(TFieldAssign(object, fieldName, value, span));
+								else {
+									var propertySetter = instancePropertyAccessor(object.type, fieldName, false);
+									if (propertySetter != null)
+										output.push(TExpression(new TypedExpression(TMethodCall(object, propertySetter, [value]), expected, span), span));
+									else {
+										value = abiBoundaryCast(value, fieldRepresentationType(object.type, fieldName, span));
+										output.push(TFieldAssign(object, fieldName, value, span));
+									}
+								}
 								var objectPath = FlowAnalysis.accessPath(object);
 								if (objectPath != null) scope.invalidateExpression(objectPath + "." + fieldName);
 						}
@@ -998,13 +1008,18 @@ class Typer {
 							var platformField = PlatformAbi.field(object.type, fieldName),
 								expected = fieldType(object.type, fieldName, span);
 							value = coerce(value, expected, 'field "$fieldName"', "E1002");
-							if (platformField == null)
-								value = abiBoundaryCast(value, fieldRepresentationType(object.type, fieldName, span));
 							var setter:Null<String> = platformField == null ? null : platformField.set;
 							if (setter != null)
 								output.push(TExpression(new TypedExpression(TCall(setter, [object, value]), TVoid, span), span));
-							else
-								output.push(TFieldAssign(object, fieldName, value, span));
+							else {
+								var propertySetter = instancePropertyAccessor(object.type, fieldName, false);
+								if (propertySetter != null)
+									output.push(TExpression(new TypedExpression(TMethodCall(object, propertySetter, [value]), expected, span), span));
+								else {
+									value = abiBoundaryCast(value, fieldRepresentationType(object.type, fieldName, span));
+									output.push(TFieldAssign(object, fieldName, value, span));
+								}
+							}
 							var objectPath = FlowAnalysis.accessPath(object);
 							if (objectPath != null) scope.invalidateExpression(objectPath + "." + fieldName);
 					}
@@ -1787,7 +1802,7 @@ class Typer {
 							var field = findFieldType(thisType, name);
 							if (field == null)
 								fail("E1005", 'Unknown variable "$name"', span);
-							new TypedExpression(TField(new TypedExpression(TLocal("this"), thisType, span), name), field, span);
+							typedMember(new TypedExpression(TLocal("this"), thisType, span), name, span);
 						} else {
 							var parts = splitPath(name),
 								objectName = parts[0],
@@ -2870,6 +2885,12 @@ class Typer {
 		var platformField = PlatformAbi.field(typedObject.type, name);
 		if (platformField != null)
 			return new TypedExpression(TCall(platformField.get, [typedObject]), platformField.type, span);
+		var getter = instancePropertyAccessor(typedObject.type, name, true);
+		if (getter != null) {
+			var method = requiredMapValue(signatures, getter);
+			return new TypedExpression(TMethodCall(typedObject, getter, []),
+				declarations.resolve(method.result, method.span, nominalSubstitutions(typedObject.type)), span);
+		}
 		var owner = switch typedObject.type {
 			case TInstance(Class, className, _), TInstance(Interface, className, _): className;
 			default: null;
@@ -2891,6 +2912,22 @@ class Typer {
 			physicalType = fieldRepresentationType(typedObject.type, name, span);
 		return abiBoundaryCast(new TypedExpression(TField(typedObject, name), physicalType, span), semanticType);
 	}
+
+	function instancePropertyAccessor(type:CompilerType, name:String, read:Bool):Null<String>
+		return switch type {
+			case TInstance(Class, className, _) if (classDecls.exists(className)):
+				var declaration = requiredMapValue(classDecls, className),
+					accessor:Null<String> = null;
+				for (field in declaration.fields)
+					if (field.name == name && !field.isStatic) {
+						var usesAccessor = read ? field.readAccess == GetAccess : field.writeAccess == SetAccess;
+						if (usesAccessor)
+							accessor = className + "." + (read ? "get_" : "set_") + name;
+					}
+				if (accessor != null) accessor; else if (declaration.base != null) instancePropertyAccessor(declarations.resolve(declaration.base,
+					declaration.span, nominalSubstitutions(type)), name, read); else null;
+			default: null;
+		};
 
 	function fieldRepresentationType(type:CompilerType, name:String, span:SourceSpan):CompilerType
 		return switch type {
