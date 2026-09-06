@@ -163,7 +163,9 @@ class Typer {
 			if (abstractDecl.isExtern == true)
 				for (method in abstractDecl.methods) {
 					var nativeName = method.name.indexOf(".") >= 0 ? method.name : abstractDecl.name + "." + method.name;
-					typedNatives.push(typeExtern(method, nativeName));
+					var receiverType = method.isStatic ? null : declarations.resolve(abstractDecl.underlying, abstractDecl.span,
+						declarationTypeSubstitutions(abstractDecl.name, abstractDecl.typeParameters));
+					typedNatives.push(typeExtern(method, nativeName, receiverType));
 				}
 		var setupDoneAt = Sys.time() * 1000.0;
 		inferNoReturnFunctions();
@@ -262,7 +264,7 @@ class Typer {
 		};
 	}
 
-	function typeExtern(fn:AstFunction, ?externalName:String):compiler.types.TypedAst.TypedNative {
+	function typeExtern(fn:AstFunction, ?externalName:String, ?receiverType:CompilerType):compiler.types.TypedAst.TypedNative {
 		if (fn.statements.length != 0)
 			fail("E1021", 'Extern function "${fn.name}" cannot have a body', fn.span);
 		var binding:Null<compiler.syntax.Ast.AstMetadata> = null;
@@ -286,13 +288,23 @@ class Typer {
 				default:
 					fail("E1021", '@:hlNative arguments must be string literals', binding.span);
 			}
+		var arguments = [for (argument in fn.arguments) lowerType(argument.type)];
+		if (receiverType != null)
+			arguments.unshift(receiverType);
 		return {
 			name: externalName == null ? fn.name : externalName,
 			library: values[0],
 			symbol: values[1],
-			arguments: [for (argument in fn.arguments) lowerType(argument.type)],
+			arguments: arguments,
 			result: lowerType(fn.result)
 		};
+	}
+
+	static function declarationTypeSubstitutions(owner:String, parameters:Array<String>):Map<String, CompilerType> {
+		var result:Map<String, CompilerType> = [];
+		for (parameter in parameters)
+			result.set(parameter, TTypeParameter(owner, parameter));
+		return result;
 	}
 
 	function erasedInterfaceType(declaration:AstInterface, type:AstType, span:SourceSpan):CompilerType {
@@ -2808,6 +2820,15 @@ class Typer {
 			substitutions:Map<String, CompilerType> = [];
 		for (index in 0...decl.typeParameters.length)
 			substitutions.set(decl.typeParameters[index], typeArguments[index]);
+		if (decl.isExtern == true) {
+			var typed = typeDeclaredCallArguments(arguments, signature.arguments, scope, methodKey, span, substitutions),
+				callArguments:Array<TypedExpression> = [
+					abiBoundaryCast(receiver, declarations.resolve(decl.underlying, decl.span, substitutions))
+				];
+			for (argument in typed)
+				callArguments.push(argument);
+			return new TypedExpression(TCall(methodKey, callArguments), declarations.resolve(signature.result, signature.span, substitutions), span);
+		}
 		var typedArguments = [for (argument in arguments) typeExpression(argument, scope)];
 		return specializeGeneric(methodKey, signature, typedArguments, span, abstractName, false, substitutions, receiver);
 	}

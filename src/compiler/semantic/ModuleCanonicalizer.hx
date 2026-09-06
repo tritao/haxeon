@@ -125,7 +125,6 @@ class ModuleCanonicalizer {
 			module:String, entry:String, locals:Map<String, Bool>):compiler.syntax.Ast.AstEnumAbstract
 		return {
 			name: qualifiedTypeName(packageName, decl.name),
-			isExtern: decl.isExtern,
 			underlying: canonicalType(decl.underlying, aliases),
 			fromTypes: [for (type in decl.fromTypes) canonicalType(type, aliases)],
 			toTypes: [for (type in decl.toTypes) canonicalType(type, aliases)],
@@ -144,6 +143,7 @@ class ModuleCanonicalizer {
 			entry:String, locals:Map<String, Bool>):compiler.syntax.Ast.AstAbstract
 		return {
 			name: qualifiedTypeName(packageName, decl.name),
+			isExtern: decl.isExtern,
 			typeParameters: decl.typeParameters,
 			typeConstraints: canonicalConstraints(decl.typeConstraints, aliases, decl.typeParameters),
 			underlying: canonicalType(decl.underlying, aliases, decl.typeParameters),
@@ -165,6 +165,8 @@ class ModuleCanonicalizer {
 		return {
 			name: name,
 			isStatic: method.isStatic,
+			isExtern: method.isExtern,
+			metadata: method.metadata,
 			typeParameters: method.typeParameters,
 			typeConstraints: method.typeConstraints == null ? null : [
 				for (constraint in method.typeConstraints)
