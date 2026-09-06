@@ -3,6 +3,7 @@ import runtime.ReloadablePlugin;
 import runtime.RuntimeDomain;
 import runtime.RuntimeDomain.RuntimeDomainStatus;
 import runtime.RuntimeStateEnvelope;
+import haxe.io.Bytes;
 
 class RuntimeDomainMain {
 	static function main():Void {
@@ -221,17 +222,17 @@ private class TestPlugin implements ReloadablePlugin {
 		}
 	}
 
-	public function saveState():String {
+	public function saveState():Bytes {
 		events.push('$name.save');
 		if (failSaveState)
 			throw 'state save failed for $name';
-		return state;
+		return new RuntimeStateEnvelope(state).encode();
 	}
 
-	public function restoreState(value:String):Void {
+	public function restoreState(value:Bytes):Void {
 		events.push('$name.restore');
 		if (failRestoreState)
 			throw 'state restore failed for $name';
-		state = value;
+		state = RuntimeStateEnvelope.decode(value).payload;
 	}
 }

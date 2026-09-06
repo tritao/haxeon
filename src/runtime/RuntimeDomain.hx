@@ -1,5 +1,7 @@
 package runtime;
 
+import haxe.io.Bytes;
+
 enum RuntimeDomainStatus {
 	Inactive;
 	Active;
@@ -85,10 +87,10 @@ class RuntimeDomain {
 			throw new RuntimeError(RuntimeStatus.Incompatible, 'Runtime domain "$name" requires explicit shutdown after failure');
 		var previous = current,
 			candidate = new OwnedGeneration(plugin, module),
-			state:Null<RuntimeStateEnvelope> = null;
+			state:Null<Bytes> = null;
 		try {
 			if (Std.isOfType(previous.plugin, ReloadablePlugin))
-				state = new RuntimeStateEnvelope(cast(previous.plugin, ReloadablePlugin).saveState());
+				state = copyState(cast(previous.plugin, ReloadablePlugin).saveState());
 		} catch (error:Dynamic) {
 			tryDisposeInactive(candidate);
 			throw error;
@@ -105,7 +107,7 @@ class RuntimeDomain {
 			plugin.activate();
 			candidate.activation = GenerationActive;
 			if (state != null && Std.isOfType(plugin, ReloadablePlugin))
-				cast(plugin, ReloadablePlugin).restoreState(state.payload);
+				cast(plugin, ReloadablePlugin).restoreState(state);
 		} catch (error:Dynamic) {
 			if (!deactivateForRetirement(candidate)) {
 				retirementBacklog.push(candidate);
@@ -127,6 +129,12 @@ class RuntimeDomain {
 			lastCleanupError = Std.string(error);
 			throw new RuntimeError(RuntimeStatus.Exception, 'Runtime domain "$name" published generation $generation but retirement failed: $lastCleanupError');
 		}
+	}
+
+	static function copyState(state:Bytes):Bytes {
+		if (state == null)
+			throw new RuntimeError(RuntimeStatus.BadFormat, "Reloadable plugin returned null state");
+		return state.sub(0, state.length);
 	}
 
 	public function deactivate():Void {

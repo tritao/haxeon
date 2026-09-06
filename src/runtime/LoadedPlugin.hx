@@ -1,5 +1,7 @@
 package runtime;
 
+import haxe.io.Bytes;
+
 /**
 	Adapter for a plugin generation whose lifecycle functions live in a loaded
 	HashLink module. The stable function ids come from the compiler's runtime
@@ -30,11 +32,12 @@ class LoadedPlugin implements ReloadablePlugin {
 	public function deactivate():Void
 		Runtime.callVoid(module, deactivateIndex);
 
-	public function saveState():String
-		return Runtime.callString(module, saveStateIndex);
+	public function saveState():Bytes
+		return new RuntimeStateEnvelope(Runtime.callString(module, saveStateIndex)).encode();
 
-	public function restoreState(state:String):Void {
-		restoredState = state;
-		Runtime.callStringArg(module, restoreStateIndex, state);
+	public function restoreState(state:Bytes):Void {
+		var payload = RuntimeStateEnvelope.decode(state).payload;
+		restoredState = payload;
+		Runtime.callStringArg(module, restoreStateIndex, payload);
 	}
 }
