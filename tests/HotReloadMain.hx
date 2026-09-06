@@ -67,6 +67,9 @@ class HotReloadMain {
 		var loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
 		if (Runtime.callInt(loaded, valueIndex) != 42)
 			throw "initial generation did not return 42";
+		var initialLocation = Runtime.jitLocation(loaded, valueIndex);
+		if (initialLocation == null || initialLocation.indexOf("function=") < 0 || initialLocation.indexOf(" opcode=") < 0)
+			throw 'initial JIT target did not resolve to a function/opcode location: $initialLocation';
 		if (Runtime.callInt(loaded, readIndex) != 42)
 			throw "initial internal call did not return 42";
 		if (Runtime.callInt(loaded, exceptionIndex) != 41)
@@ -122,6 +125,9 @@ class HotReloadMain {
 			throw "one-function patch did not JIT exactly one function";
 		if (Runtime.callInt(loaded, valueIndex) != 43)
 			throw "patched generation did not return 43";
+		var patchedLocation = Runtime.jitLocation(loaded, valueIndex);
+		if (patchedLocation == null || patchedLocation.indexOf("function=") < 0 || patchedLocation.indexOf(" opcode=") < 0)
+			throw 'patched JIT target did not resolve to a function/opcode location: $patchedLocation';
 		if (Runtime.callInt(loaded, readIndex) != 43)
 			throw "existing caller did not dispatch through the patched slot";
 		if (Runtime.retainedCodeAllocationCount(loaded) != 2)

@@ -980,6 +980,22 @@ HL_PRIM int HL_NAME(patch_jit_count)( hl_runtime_module *runtime ) {
 	return hl_runtime_module_jit_count(runtime);
 }
 
+HL_PRIM vbyte *HL_NAME(jit_location)( hl_runtime_module *runtime, int stable_id ) {
+	const char *location = hl_runtime_module_resolve_jit_location(runtime,stable_id);
+	int length;
+	vbyte *bytes;
+	if( location == NULL ) return NULL;
+	length = (int)strlen(location);
+	bytes = (vbyte*)hl_gc_alloc_noptr((length + 1) * 2);
+	for(int i=0;i<length;i++) {
+		bytes[i * 2] = (vbyte)location[i];
+		bytes[i * 2 + 1] = 0;
+	}
+	bytes[length * 2] = 0;
+	bytes[length * 2 + 1] = 0;
+	return bytes;
+}
+
 HL_PRIM int HL_NAME(retired_allocation_count)( hl_runtime_module *runtime ) {
 	return hl_runtime_module_retired_allocation_count(runtime);
 }
@@ -1052,6 +1068,7 @@ DEFINE_PRIM(_I32,validate_call,_ABSTRACT(realtime_module) _I32 _I32);
 DEFINE_PRIM(_I32,patch,_ABSTRACT(realtime_module) _BYTES _I32);
 DEFINE_PRIM(_I32,allocation_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,patch_jit_count,_ABSTRACT(realtime_module));
+DEFINE_PRIM(_BYTES,jit_location,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_I32,retired_allocation_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,type_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,type_capacity,_ABSTRACT(realtime_module));

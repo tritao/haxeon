@@ -43,6 +43,9 @@ private class RuntimeNative {
 	public static function patch_jit_count(module:hl.Abstract<"realtime_module">):Int
 		return 0;
 
+	public static function jit_location(module:hl.Abstract<"realtime_module">, index:Int):hl.Bytes
+		return null;
+
 	public static function retired_allocation_count(module:hl.Abstract<"realtime_module">):Int
 		return 0;
 
@@ -147,6 +150,12 @@ class Runtime {
 
 	public static function patchJitCount(module:LoadedModule):Int
 		return module.access(RuntimeNative.patch_jit_count);
+
+	/** Resolve the currently published JIT target to its function/opcode location. */
+	public static function jitLocation(module:LoadedModule, stableIndex:Int):Null<String> {
+		var bytes = module.access(function(handle) return RuntimeNative.jit_location(handle, stableIndex));
+		return bytes == null ? null : @:privateAccess String.__alloc__(bytes, bytes.ucs2Length(0));
+	}
 
 	public static function retiredCodeAllocationCount(module:LoadedModule):Int
 		return module.access(RuntimeNative.retired_allocation_count);
