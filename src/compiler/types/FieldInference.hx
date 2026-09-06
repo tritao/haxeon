@@ -18,6 +18,8 @@ class FieldInference {
 		return switch initializer {
 			case IntegerLiteral(_, _): IntType;
 			case FloatLiteral(_, _): FloatType;
+			case Negate(IntegerLiteral(_, _), _): IntType;
+			case Negate(FloatLiteral(_, _), _): FloatType;
 			case StringLiteral(_, _): StringType;
 			case BoolLiteral(_, _): BoolType;
 			case New(typeName, _, _): NamedType(typeName);
