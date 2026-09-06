@@ -280,7 +280,7 @@ class Typer {
 			fail("E1021", 'Extern function "${fn.name}" requires @:hlNative(library, symbol)', fn.span);
 		if (binding.arguments.length != 2)
 			fail("E1021", '@:hlNative requires a library and symbol string', binding.span);
-		var values:Array<String> = [];
+		var values = [];
 		for (argument in binding.arguments)
 			switch argument {
 				case StringLiteral(value, _):
@@ -1160,39 +1160,43 @@ class Typer {
 		return usesLocalExpectedType(initializer) ? context.localExpectedTypes.get(name) : null;
 	}
 
-	function pushedElementType(name:String, statements:Array<AstStatement>, start:Int):Null<CompilerType> {
+	function pushedElementType(name:String, statements:Array<AstStatement>, start:Int, ?bindings:Map<String, CompilerType>):Null<CompilerType> {
+		if (bindings == null)
+			bindings = [];
 		for (index in start...statements.length)
 			switch statements[index] {
 				case Expression(expression, _):
-					var type = pushedElementFromExpression(name, expression);
+					var type = pushedElementFromExpression(name, expression, bindings);
 					if (type != null)
 						return type;
 				case If(_, yes, no, _):
-					var type = pushedElementType(name, yes, 0);
+					var type = pushedElementType(name, yes, 0, bindings);
 					if (type == null)
-						type = pushedElementType(name, no, 0);
+						type = pushedElementType(name, no, 0, bindings);
 					if (type != null)
 						return type;
 				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _):
-					var type = pushedElementType(name, body, 0);
+					var type = pushedElementType(name, body, 0, bindings);
 					if (type != null)
 						return type;
 				case Try(tryBranch, catches, _):
-					var type = pushedElementType(name, tryBranch, 0);
+					var type = pushedElementType(name, tryBranch, 0, bindings);
 					if (type != null)
 						return type;
 					for (catchClause in catches) {
-						type = pushedElementType(name, catchClause.statements, 0);
+						type = pushedElementType(name, catchClause.statements, 0, bindings);
 						if (type != null)
 							return type;
 					}
 				case Switch(_, cases, defaultBranch, _, _):
 					for (switchCase in cases) {
-						var type = pushedElementType(name, switchCase.statements, 0);
+						var caseBindings = copyMap(bindings);
+						collectPatternBindingTypes(switchCase.value, caseBindings);
+						var type = pushedElementType(name, switchCase.statements, 0, caseBindings);
 						if (type != null)
 							return type;
 					}
-					var type = pushedElementType(name, defaultBranch, 0);
+					var type = pushedElementType(name, defaultBranch, 0, bindings);
 					if (type != null)
 						return type;
 				case VarDeclaration(shadowed, _, _, _), UninitializedDeclaration(shadowed, _, _) if (shadowed == name):
@@ -1202,16 +1206,31 @@ class Typer {
 		return null;
 	}
 
-	function pushedElementFromExpression(name:String, expression:AstExpression):Null<CompilerType>
+	function pushedElementFromExpression(name:String, expression:AstExpression, bindings:Map<String, CompilerType>):Null<CompilerType>
 		return switch expression {
 			case MethodCall(receiverExpression, methodName, arguments, _) if (methodName == "push" && arguments.length == 1):
 				switch receiverExpression {
-					case Variable(receiver, _) if (receiver == name): knownExpressionType(arguments[0]);
+					case Variable(receiver, _) if (receiver == name): knownExpressionType(arguments[0], bindings);
 					default: null;
 				}
-			case Call(callName, arguments, _) if (callName == name + ".push" && arguments.length == 1): knownExpressionType(arguments[0]);
+			case Call(callName, arguments, _) if (callName == name + ".push" && arguments.length == 1): knownExpressionType(arguments[0], bindings);
 			default: null;
 		};
+
+	function collectPatternBindingTypes(pattern:AstExpression, bindings:Map<String, CompilerType>):Void
+		switch pattern {
+			case Call(name, arguments, _):
+				var info = enumCaseInfo(name);
+				if (info != null)
+					for (index in 0...arguments.length)
+						if (index < info.params.length)
+							switch arguments[index] {
+								case Variable(binding, _) if (binding != "_"):
+									bindings.set(binding, enumStorageParameterType(info.typeParameters, info.params[index]));
+								default:
+							}
+			default:
+		}
 
 	function assignedLocalType(name:String, statements:Array<AstStatement>, start:Int):Null<CompilerType> {
 		for (index in start...statements.length)
@@ -1255,8 +1274,9 @@ class Typer {
 		return null;
 	}
 
-	function knownExpressionType(expression:AstExpression):Null<CompilerType>
+	function knownExpressionType(expression:AstExpression, ?bindings:Map<String, CompilerType>):Null<CompilerType>
 		return switch expression {
+			case Variable(name, _) if (bindings != null): bindings.get(name);
 			case Call(name, _, _): knownCallType(name);
 			case StringLiteral(_, _): TString;
 			case IntegerLiteral(_, _): TInt;
