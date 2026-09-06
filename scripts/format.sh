@@ -9,7 +9,7 @@ if [[ ! -f "$formatter" ]]; then
     exit 1
 fi
 
-arguments=(-s "$root_dir/src" -s "$root_dir/tests")
+arguments=(-s "$root_dir/src" -s "$root_dir/tests" -s "$root_dir/benchmarks")
 if [[ ${1:-} == "--check" ]]; then
     arguments+=(--check)
 elif [[ $# -ne 0 ]]; then

@@ -183,6 +183,35 @@ non-moving type arena.
 ./test-hot-reload.sh
 ```
 
+Run the repeatable Pragtical edit-to-runtime benchmark with:
+
+```sh
+./scripts/benchmark.sh
+```
+
+It reports median, p95, and p99 latency for cold compilation, no-op rebuilds,
+body patches, signature reloads, and structural reloads. It also runs a patch
+soak test and writes machine-readable results to `out/benchmark.json`. Use
+`--iterations`, `--warmup`, `--soak`, and `--json` to override its defaults.
+To attribute soak-test memory growth, run compiler-only and runtime-only passes
+in separate processes:
+
+```sh
+./scripts/benchmark.sh --only-soak --soak-mode compiler --json out/benchmark-compiler.json
+./scripts/benchmark.sh --only-soak --soak-mode runtime --json out/benchmark-runtime.json
+```
+
+Generate scaling results for 10, 100, and 1,000 modules and compare two runs
+with:
+
+```sh
+./scripts/benchmark.sh --only-scale --json out/benchmark-scale.json
+./scripts/benchmark-compare.sh baseline.json out/benchmark-scale.json
+```
+
+Use `--scales` and `--scale-iterations` to change the generated project sizes
+and sample count. Comparison is informational and does not enforce thresholds.
+
 `./scripts/bootstrap-compiler.sh` uses the pinned reference Haxe to build
 `bootstrap/compiler.hl`, then uses that compiler to build a second compiler and
 requires byte-for-byte equality. The resulting artifact is checked in.
