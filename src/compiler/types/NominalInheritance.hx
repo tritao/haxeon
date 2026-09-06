@@ -27,8 +27,9 @@ class NominalInheritance {
 		switch type {
 			case TInstance(Class, name, _) if (declarations.classes.exists(name)):
 				var decl = declarations.classes.get(name);
-				if (decl.base != null)
-					result.push(declarations.resolve(decl.base, decl.span, substitutions));
+				var base = decl.base;
+				if (base != null)
+					result.push(declarations.resolve(base, decl.span, substitutions));
 				for (implemented in decl.interfaces)
 					result.push(declarations.resolve(implemented, decl.span, substitutions));
 			case TInstance(Interface, name, _) if (declarations.interfaces.exists(name)):
@@ -41,7 +42,8 @@ class NominalInheritance {
 	}
 
 	public function project(type:CompilerType, target:String):Null<CompilerType> {
-		if (name(type) == target)
+		var typeName = name(type);
+		if (typeName != null && typeName == target)
 			return type;
 		for (parent in parents(type)) {
 			var projected = project(parent, target);

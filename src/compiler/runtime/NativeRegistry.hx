@@ -1,6 +1,7 @@
 package compiler.runtime;
 
 import compiler.types.Type.CompilerType;
+import compiler.types.Type.NominalKind;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.Ir.IrType;
 
@@ -102,10 +103,14 @@ class NativeRegistry {
 			case TTypeParameter(owner, name): throw 'Type parameter "$owner.$name" is not a runtime ABI type';
 			case TRange: throw "Range is not a runtime ABI type";
 			case TVoid: Void;
-			case TInstance(Class, name, _): Obj(name);
+			case TInstance(kind, name, _):
+				switch kind {
+					case NominalKind.Class: Obj(name);
+					case NominalKind.Interface: Virtual(name);
+					case NominalKind.Enum: Enum(name);
+					default: throw 'Unknown nominal kind $kind';
+				}
 			case TMap(_, _): Abstract("map_string_i32");
-			case TInstance(Interface, name, _): Virtual(name);
-			case TInstance(Enum, name, _): Enum(name);
 			case TNull: Void;
 			case TNullable(element): irType(element);
 			case TArray(element): Array(irType(element));

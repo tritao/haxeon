@@ -1,6 +1,7 @@
 package compiler.runtime;
 
 import compiler.types.Type.CompilerType;
+import compiler.types.Type.NominalKind;
 
 /** Host types whose implementation is supplied by the HashLink/Haxe platform. */
 class PlatformAbi {
@@ -32,7 +33,7 @@ class PlatformAbi {
 		return switch name {
 			case "haxe.io.BytesInput", "BytesInput": CompilerType.TNativeAbstract("realtime_bytes_input");
 			case "haxe.io.BytesOutput", "BytesOutput": CompilerType.TNativeAbstract("realtime_bytes_output");
-			default: CompilerType.TInstance(Class, name, []);
+			default: CompilerType.TInstance(NominalKind.Class, name, []);
 		};
 
 	public static function constructorNative(name:String):Null<String>

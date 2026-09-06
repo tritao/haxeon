@@ -142,7 +142,10 @@ class ModuleChangeAnalyzer {
 		}
 		for (classDecl in ast.classes) {
 			var className = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name),
-				baseName = classDecl.base == null ? null : SemanticSignature.parsed(classDecl.base, ast.aliases);
+				base = classDecl.base,
+				baseName:Null<String> = null;
+			if (base != null)
+				baseName = SemanticSignature.parsed(base, ast.aliases);
 			var classFields = [
 				for (field in classDecl.fields)
 					{name: field.name, type: SemanticSignature.parsed(FieldInference.parsedType(field), ast.aliases)}

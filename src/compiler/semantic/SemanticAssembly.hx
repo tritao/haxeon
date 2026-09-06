@@ -217,12 +217,16 @@ class SemanticAssembly {
 						callers.push(canonical.name);
 					}
 				}
+				var parsedBase = classDecl.base,
+					canonicalBase:Null<compiler.syntax.Ast.AstType> = null;
+				if (parsedBase != null)
+					canonicalBase = ModuleCanonicalizer.canonicalType(parsedBase, classAliases, classDecl.typeParameters);
 				classes.push({
 					name: className,
 					typeParameters: classDecl.typeParameters,
 					isPrivate: classDecl.isPrivate,
 					metadata: classDecl.metadata,
-					base: classDecl.base == null ? null : ModuleCanonicalizer.canonicalType(classDecl.base, classAliases, classDecl.typeParameters),
+					base: canonicalBase,
 					interfaces: [
 						for (interfaceType in classDecl.interfaces)
 							ModuleCanonicalizer.canonicalType(interfaceType, classAliases, classDecl.typeParameters)

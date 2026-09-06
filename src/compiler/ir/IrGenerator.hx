@@ -1,6 +1,7 @@
 package compiler.ir;
 
 import compiler.types.Type.CompilerType;
+import compiler.types.Type.NominalKind;
 import compiler.runtime.RuntimeType;
 import compiler.types.analysis.ControlFlow;
 import compiler.types.TypedAst.TypedExpression;
@@ -1235,10 +1236,14 @@ class IrGenerator {
 			case TRange: Array(I32);
 			case TVoid: Void;
 			case TTypeParameter(owner, name): throw 'Unsubstituted type parameter "$owner.$name" reached IR lowering';
-			case TInstance(Class, name, _): name == "haxe.io.Eof" ? Dyn : Obj(name);
+			case TInstance(kind, name, _):
+				switch kind {
+					case NominalKind.Class: Std.string(name) == "haxe.io.Eof" ? Dyn : Obj(name);
+					case NominalKind.Interface: Virtual(name);
+					case NominalKind.Enum: Enum(name);
+					default: throw 'Unknown nominal kind $kind';
+				}
 			case TMap(key, value): Abstract(RuntimeType.requireMapName(key, value));
-			case TInstance(Interface, name, _): Virtual(name);
-			case TInstance(Enum, name, _): Enum(name);
 			case TNull: Void;
 			case TNullable(element): lowerType(element);
 			case TArray(element): Array(lowerType(element));

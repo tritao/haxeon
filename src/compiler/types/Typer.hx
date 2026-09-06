@@ -10,6 +10,7 @@ import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstInterface;
 import compiler.syntax.Ast.AstEnum;
 import compiler.types.Type.CompilerType;
+import compiler.types.Type.NominalKind;
 import compiler.types.Type.AnonymousField;
 import compiler.runtime.RuntimeType;
 import compiler.runtime.RuntimeShape.RuntimeShapes;
@@ -429,7 +430,7 @@ class Typer {
 				var initializerContext = enterBody(classDecl.name + ".__init", erasedSubstitutions);
 				var scope = new Scope();
 				if (!field.isStatic)
-					scope.defineReceiver(TInstance(Class, classDecl.name, []), field.span);
+					scope.defineReceiver(TInstance(NominalKind.Class, classDecl.name, []), field.span);
 				initializer = coerce(typeExpression(parsedInitializer, scope, type), type,
 					(field.isStatic ? 'static field "${classDecl.name}.${field.name}"' : 'field "${classDecl.name}.${field.name}"'), "E1002");
 				leaveBody(initializerContext);
@@ -489,9 +490,13 @@ class Typer {
 				cellCaptures: [],
 				span: classDecl.span
 			});
+		var parsedBase = classDecl.base,
+			baseName:Null<String> = null;
+		if (parsedBase != null)
+			baseName = inheritanceName(parsedBase);
 		return {
 			name: classDecl.name,
-			base: classDecl.base == null ? null : inheritanceName(classDecl.base),
+			base: baseName,
 			interfaces: [for (interfaceType in classDecl.interfaces) inheritanceName(interfaceType)],
 			fields: fields,
 			methods: typedMethods,
@@ -541,7 +546,7 @@ class Typer {
 			var initializer = field.initializer;
 			if (initializer == null)
 				throw 'Missing initializer for "$className.${field.name}"';
-			statements.push(TFieldAssign(new TypedExpression(TLocal("this"), TInstance(Class, className, []), field.span), field.name, initializer,
+			statements.push(TFieldAssign(new TypedExpression(TLocal("this"), TInstance(NominalKind.Class, className, []), field.span), field.name, initializer,
 				field.span));
 		}
 		return statements;
@@ -615,7 +620,7 @@ class Typer {
 			if (classDecls.exists(owner))
 				for (parameter in classDecls.get(owner).typeParameters)
 					receiverArguments.push(context.typeSubstitutions.exists(parameter) ? context.typeSubstitutions.get(parameter) : TDynamic);
-			scope.defineReceiver(TInstance(Class, owner, receiverArguments), fn.span);
+			scope.defineReceiver(TInstance(NominalKind.Class, owner, receiverArguments), fn.span);
 		}
 		var arguments = [];
 		if (abstractReceiver != null)
@@ -743,7 +748,12 @@ class Typer {
 						switch loweredCatchType {
 							case TDynamic:
 								if (i != catches.length - 1) fail("E1022", "Dynamic catch must be the final catch clause", catchClause.span);
-							case TInt, TFloat, TBool, TString, TInstance(Class, _, []):
+							case TInt, TFloat, TBool, TString:
+							case TInstance(kind, _, arguments):
+								if (Std.string(kind) != "class")
+									fail("E1022", "Unsupported catch binding type", catchClause.span);
+								if (arguments.length != 0)
+									fail("E1022", "Unsupported generic catch binding type", catchClause.span);
 							default: fail("E1022", "Unsupported catch binding type", catchClause.span);
 						}
 						var catchScope = new Scope(scope);
@@ -1146,7 +1156,7 @@ class Typer {
 			case IntegerLiteral(_, _): TInt;
 			case FloatLiteral(_, _): TFloat;
 			case BoolLiteral(_, _): TBool;
-			case New(typeName, _, _): classDecls.exists(typeName) ? TInstance(Class, typeName, []) : null;
+			case New(typeName, _, _): classDecls.exists(typeName) ? TInstance(NominalKind.Class, typeName, []) : null;
 			default: null;
 		};
 
@@ -1340,7 +1350,7 @@ class Typer {
 					return null;
 				var instanceType = switch expected {
 					case TInstance(Enum, _, _): expected;
-					default: TInstance(Enum, info.enumName, []);
+					default: TInstance(NominalKind.Enum, info.enumName, []);
 				};
 				var instanceName = switch instanceType {
 					case TInstance(Enum, value, _): value;
@@ -1404,7 +1414,7 @@ class Typer {
 						var external = externals.get(name);
 						new TypedExpression(TFunctionRef(name), TFunction(external.arguments, external.result), span);
 					} else if (classDecls.exists(name) || enumAbstractDecls.exists(name) || PlatformAbi.isType(name))
-						new TypedExpression(TClassRef(name), TInstance(Class, name, []), span);
+						new TypedExpression(TClassRef(name), TInstance(NominalKind.Class, name, []), span);
 					else {
 						var owner = parentPath(context.name),
 							staticField:Null<{owner:String, type:CompilerType}> = null;
@@ -1420,14 +1430,14 @@ class Typer {
 								for (index in 0...expectedEnum.cases.length) {
 									var enumCase = expectedEnum.cases[index];
 									if (enumCase.name == name && enumCase.params.length == 0) {
-										var literalType:CompilerType = TInstance(Enum, expectedEnum.name, []);
+									var literalType:CompilerType = TInstance(NominalKind.Enum, expectedEnum.name, []);
 										var resolvedExpected = expectedType;
 										if (resolvedExpected != null)
 											switch resolvedExpected {
-												case TInstance(Enum, _, arguments): literalType = TInstance(Enum, expectedEnum.name, arguments);
+											case TInstance(Enum, _, arguments): literalType = TInstance(NominalKind.Enum, expectedEnum.name, arguments);
 												case TNullable(element):
 													switch element {
-														case TInstance(Enum, _, arguments): literalType = TInstance(Enum, expectedEnum.name, arguments);
+													case TInstance(Enum, _, arguments): literalType = TInstance(NominalKind.Enum, expectedEnum.name, arguments);
 														default:
 													}
 												default:
@@ -1465,13 +1475,13 @@ class Typer {
 									fail("E1005", 'Unknown enum case "$name"', span);
 								if (enumDecl.cases[index].params.length > 0)
 									fail("E1008", 'Enum case "$name" requires constructor arguments', span);
-								return new TypedExpression(TEnumLiteral(enumName, index), TInstance(Enum, enumName, []), span);
+								return new TypedExpression(TEnumLiteral(enumName, index), TInstance(NominalKind.Enum, enumName, []), span);
 							}
 							var classEnd = parts.length - 1;
 							while (classEnd > 0) {
 								var className = parts.slice(0, classEnd).join(".");
 								if (classDecls.exists(className) || enumAbstractDecls.exists(className) || PlatformAbi.isType(className)) {
-									var classObject = new TypedExpression(TClassRef(className), TInstance(Class, className, []), span);
+									var classObject = new TypedExpression(TClassRef(className), TInstance(NominalKind.Class, className, []), span);
 									for (index in classEnd...parts.length)
 										classObject = typedMember(classObject, parts[index], span);
 									return classObject;
@@ -2144,7 +2154,7 @@ class Typer {
 						for (index in 0...typedArguments.length)
 							typedArguments[index] = abiBoundaryCast(typedArguments[index],
 								enumStorageParameterType(enumCase.typeParameters, enumCase.params[index]));
-						var resultType:CompilerType = TInstance(Enum, enumCase.enumName, []);
+						var resultType:CompilerType = TInstance(NominalKind.Enum, enumCase.enumName, []);
 						var resolvedExpected = expectedType;
 						if (resolvedExpected != null)
 							switch resolvedExpected {
@@ -2713,7 +2723,7 @@ class Typer {
 							found = true;
 					var base = classDecl.base;
 					if (!found && base != null)
-						found = hasInstanceField(TInstance(Class, inheritanceName(base), []), name);
+						found = hasInstanceField(TInstance(NominalKind.Class, inheritanceName(base), []), name);
 				}
 				found;
 			default: false;

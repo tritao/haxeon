@@ -1,6 +1,7 @@
 package compiler.ir;
 
 import compiler.runtime.RuntimeType;
+import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypedAst.TypedCaptureSource;
@@ -142,7 +143,8 @@ class IrProgramAssembler {
 						{
 							name: capture.field,
 							type: IrGenerator.lowerType(switch capture.source {
-								case CaptureCellLocal(_, cellClass), CaptureCellEnvironmentField(_, cellClass): TInstance(Class, cellClass, []);
+								case CaptureCellLocal(_, cellClass), CaptureCellEnvironmentField(_, cellClass):
+									TInstance(NominalKind.Class, cellClass, []);
 								default: capture.type;
 							})
 						}

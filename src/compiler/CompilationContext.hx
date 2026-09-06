@@ -84,27 +84,35 @@ class CompilationContext {
 	public static function copyIndices(source:Map<String, Int>):Map<String, Int>
 		return Compiler.copyIndices(source);
 
-	function get_assembler()
+	function get_assembler():HlModuleAssembler
 		return owner.assembler;
 
-	function set_assembler(value)
-		return owner.assembler = value;
+	function set_assembler(value:HlModuleAssembler):HlModuleAssembler {
+		owner.assembler = value;
+		return value;
+	}
 
-	function get_publishedAbi()
+	function get_publishedAbi():Null<RuntimeAbiDescriptor>
 		return owner.publishedAbi;
 
-	function set_publishedAbi(value)
-		return owner.publishedAbi = value;
+	function set_publishedAbi(value:Null<RuntimeAbiDescriptor>):Null<RuntimeAbiDescriptor> {
+		owner.publishedAbi = value;
+		return value;
+	}
 
-	function get_compiledOnce()
+	function get_compiledOnce():Bool
 		return owner.compiledOnce;
 
-	function set_compiledOnce(value)
-		return owner.compiledOnce = value;
+	function set_compiledOnce(value:Bool):Bool {
+		owner.compiledOnce = value;
+		return value;
+	}
 
-	function get_cachedSemanticProgram()
+	function get_cachedSemanticProgram():Null<SemanticProgram>
 		return owner.cachedSemanticProgram;
 
-	function set_cachedSemanticProgram(value)
-		return owner.cachedSemanticProgram = value;
+	function set_cachedSemanticProgram(value:Null<SemanticProgram>):Null<SemanticProgram> {
+		owner.cachedSemanticProgram = value;
+		return value;
+	}
 }

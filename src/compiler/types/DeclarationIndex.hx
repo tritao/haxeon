@@ -9,6 +9,7 @@ import compiler.Source.SourceFile;
 import compiler.semantic.ModuleCanonicalizer;
 import compiler.types.Type.AnonymousField;
 import compiler.types.Type.CompilerType;
+import compiler.types.Type.NominalKind;
 
 /** Stable category used to identify a source declaration semantically. */
 enum abstract DeclarationKind(String) {
@@ -164,7 +165,7 @@ class DeclarationIndex {
 						.typeParameters : interfaces.exists(name) ? interfaces.get(name).typeParameters : enums.get(name).typeParameters;
 					if (arguments.length != parameters.length)
 						fail('Type "$name" expects ${parameters.length} type arguments, got ${arguments.length}', span);
-					TInstance(classes.exists(name) ? Class : interfaces.exists(name) ? Interface : Enum, name, [
+					TInstance(classes.exists(name) ? NominalKind.Class : interfaces.exists(name) ? NominalKind.Interface : NominalKind.Enum, name, [
 						for (argument in arguments)
 							resolveInner(argument, span, resolving, substitutions)
 					]);
@@ -213,9 +214,9 @@ class DeclarationIndex {
 			if (decl.typeParameters.length != 0)
 				fail('Type "$name" expects ${decl.typeParameters.length} type arguments, got 0', span);
 			TAbstract(name, [], resolveAbstract(decl, span, resolving, substitutions));
-		} else if (interfaces.exists(name)) resolveBareNominal(name, Interface, interfaces.get(name).typeParameters.length,
-			span); else if (enums.exists(name)) resolveBareNominal(name, Enum, enums.get(name).typeParameters.length,
-			span); else if (classes.exists(name)) resolveBareNominal(name, Class, classes.get(name).typeParameters.length,
+		} else if (interfaces.exists(name)) resolveBareNominal(name, NominalKind.Interface, interfaces.get(name).typeParameters.length,
+			span); else if (enums.exists(name)) resolveBareNominal(name, NominalKind.Enum, enums.get(name).typeParameters.length,
+			span); else if (classes.exists(name)) resolveBareNominal(name, NominalKind.Class, classes.get(name).typeParameters.length,
 			span); else if (PlatformAbi.isType(name)) PlatformAbi.valueType(name); else {
 			fail('Unknown type "$name"', span);
 			TVoid;
@@ -250,7 +251,7 @@ class DeclarationIndex {
 	static function nullable(type:CompilerType):CompilerType
 		return switch type {
 			case TNullable(_): type;
-			case TString, TDynamic, TNativeAbstract(_), TInstance(Class, _, []), TInstance(Interface, _, []), TInstance(Enum, _, _), TAnonymous(_, _),
+			case TString, TDynamic, TNativeAbstract(_), TInstance(_, _, _), TAnonymous(_, _),
 				TArray(_), TFunction(_, _), TMap(_, _):
 				TNullable(type);
 			default: type;
@@ -271,9 +272,7 @@ class DeclarationIndex {
 			case TVoid: "Void";
 			case TTypeParameter(owner, name): 'type-parameter:$owner:$name';
 			case TAbstract(name, arguments, _): arguments.length == 0 ? name : '$name<${[for (argument in arguments) typeKey(argument)].join(",")}>';
-			case TInstance(Class, name, arguments), TInstance(Interface, name, arguments):
-				arguments.length == 0 ? name : '$name<${[for (argument in arguments) typeKey(argument)].join(",")}>';
-			case TInstance(Enum, name, arguments): arguments.length == 0 ? name : '$name<${[for (argument in arguments) typeKey(argument)].join(",")}>';
+			case TInstance(_, name, arguments): arguments.length == 0 ? name : '$name<${[for (argument in arguments) typeKey(argument)].join(",")}>';
 			case TNull: "null";
 			case TNullable(element): 'Null<${typeKey(element)}>';
 			case TArray(element): 'Array<${typeKey(element)}>';
@@ -307,14 +306,14 @@ class DeclarationIndex {
 	function validateInterfaceInstantiations():Void {
 		for (name in interfaces.keys()) {
 			var decl = interfaces.get(name);
-			validateInterfaceSet(inheritance.inheritedInterfaces(TInstance(Interface, decl.name, [
+			validateInterfaceSet(inheritance.inheritedInterfaces(TInstance(NominalKind.Interface, decl.name, [
 				for (parameter in decl.typeParameters)
 					TTypeParameter(decl.name, parameter)
 			])), decl.span);
 		}
 		for (name in classes.keys()) {
 			var decl = classes.get(name);
-			validateInterfaceSet(inheritance.inheritedInterfaces(TInstance(Class, decl.name, [
+			validateInterfaceSet(inheritance.inheritedInterfaces(TInstance(NominalKind.Class, decl.name, [
 				for (parameter in decl.typeParameters)
 					TTypeParameter(decl.name, parameter)
 			])), decl.span);
@@ -324,10 +323,12 @@ class DeclarationIndex {
 	function validateInterfaceSet(instances:Array<CompilerType>, span:SourceSpan):Void {
 		var inherited:Map<String, CompilerType> = [];
 		for (instance in instances) {
-			var name = requiredNominalName(instance),
-				previous = inherited.get(name);
-			if (previous != null && !TypeRelations.equals(previous, instance))
-				fail('Conflicting inherited interface instantiations for "$name": ${typeKey(previous)} and ${typeKey(instance)}', span);
+			var name = requiredNominalName(instance);
+			if (inherited.exists(name)) {
+				var previous = inherited.get(name);
+				if (!TypeRelations.equals(previous, instance))
+					fail('Conflicting inherited interface instantiations for "$name": ${typeKey(previous)} and ${typeKey(instance)}', span);
+			}
 			inherited.set(name, instance);
 		}
 	}

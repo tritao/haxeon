@@ -213,7 +213,7 @@ class ModuleAnalyzer {
 			var ast = state.ast;
 			if (ast == null)
 				continue;
-			var prefix = ast.packageName == null ? "" : ast.packageName + ".";
+			var prefix = ast.packageName == null ? "" : Std.string(ast.packageName) + ".";
 			for (declaration in ast.aliases)
 				if (prefix + declaration.name == qualified)
 					return name;

@@ -4,6 +4,7 @@ import compiler.Source.SourceSpan;
 import compiler.modules.ModuleState;
 import compiler.types.DeclarationIndex.DeclarationKind;
 import compiler.types.Type.CompilerType;
+import compiler.types.Type.NominalKind;
 
 /** A declaration resolved against the effective snapshots of a module workspace. */
 typedef WorkspaceDeclaration = {
@@ -57,8 +58,12 @@ class SemanticWorkspace {
 	function memberInner(type:CompilerType, name:String, visiting:Map<String, Bool>):Null<WorkspaceDeclaration> {
 		return switch type {
 			case TNullable(element): memberInner(element, name, visiting);
-			case TInstance(Class, className, []): classMember(className, name, visiting);
-			case TInstance(Interface, interfaceName, []): interfaceMember(interfaceName, name, visiting);
+			case TInstance(kind, declaration, _):
+				switch kind {
+					case NominalKind.Class: classMember(declaration, name, visiting);
+					case NominalKind.Interface: interfaceMember(declaration, name, visiting);
+					default: null;
+				}
 			default: null;
 		};
 	}
