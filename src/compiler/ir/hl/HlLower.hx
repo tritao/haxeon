@@ -19,7 +19,6 @@ import compiler.ir.Ir.IrValue;
 import compiler.ir.Ir.IrEnum;
 import compiler.ir.IrVerifier;
 import compiler.ir.SourceProvenance;
-import compiler.ir.DebugNames;
 
 /** Lowers verified SSA IR into indexed HashLink types, registers, and opcodes. */
 class HlLower {
@@ -192,22 +191,26 @@ class HlLower {
 					default:
 				}
 
-		var bindingsByValue:Map<Int, Array<String>> = [];
+		var bindingsByValue:Map<Int, Array<compiler.ir.IrFunction.IrDebugBinding>> = [];
 		for (binding in fn.debugBindings) {
-			var names = bindingsByValue.get(binding.value.id);
-			if (names == null) {
-				names = [];
-				bindingsByValue.set(binding.value.id, names);
+			var bindings = bindingsByValue.get(binding.value.id);
+			if (bindings == null) {
+				bindings = [];
+				bindingsByValue.set(binding.value.id, bindings);
 			}
-			if (names.indexOf(binding.name) < 0)
-				names.push(binding.name);
+			bindings.push(binding);
 		}
-		var debugAssignments:Array<HlDebugAssignment> = [for (argument in fn.arguments) {
-			var name = DebugNames.sourceLocal(argument.name);
-			if (name != null)
-				{name: internString(name), position: -1, scopeEnd: -1};
-		}],
+		var debugAssignments:Array<HlDebugAssignment> = [],
+			assignmentBindings:Array<compiler.ir.IrFunction.IrDebugBinding> = [],
 			seenAssignments:Map<String, Bool> = [];
+		for (argument in fn.arguments) {
+			var bindings = bindingsByValue.get(argument.id);
+			if (bindings != null)
+				for (binding in bindings) {
+					debugAssignments.push({name: internString(binding.name), position: -1, scopeEnd: -1});
+					assignmentBindings.push(binding);
+				}
+		}
 		var instructions:Array<HlInstruction> = [],
 			debugLocations:Array<HlDebugLocation> = [],
 			activeTraps:Array<Int> = [];
@@ -350,14 +353,15 @@ class HlLower {
 				}
 				appendDebugLocations(debugLocations, instructions.length - instructionStart, instruction.provenance);
 				if (output != null && instructions.length > instructionStart) {
-					var names = bindingsByValue.get(output.id);
-					if (names != null) {
+					var bindings = bindingsByValue.get(output.id);
+					if (bindings != null) {
 						var position = instructionStart;
-						for (name in names) {
-							var key = name + "@" + position;
+						for (binding in bindings) {
+							var key = binding.identity + "@" + position;
 							if (!seenAssignments.exists(key)) {
 								seenAssignments.set(key, true);
-								debugAssignments.push({name: internString(name), position: position, scopeEnd: -1});
+								debugAssignments.push({name: internString(binding.name), position: position, scopeEnd: -1});
+								assignmentBindings.push(binding);
 							}
 						}
 					}
@@ -388,8 +392,18 @@ class HlLower {
 			appendDebugLocations(debugLocations, instructions.length - terminatorStart, terminator.provenance);
 		}
 
+		var scopedAssignments:Array<HlDebugAssignment> = [];
+		for (index in 0...debugAssignments.length) {
+			var assignment = debugAssignments[index],
+				binding = assignmentBindings[index];
+			scopedAssignments.push({
+				name: assignment.name,
+				position: assignment.position,
+				scopeEnd: assignment.position < 0 ? -1 : scopeEndPosition(binding, debugLocations, assignment.position, instructions.length)
+			});
+		}
 		return new HlFunction(internFunctionType([for (argument in fn.arguments) argument.type], fn.result), requireFunction(fn.name), registerTypes,
-			instructions, debugLocations, debugAssignments);
+			instructions, debugLocations, scopedAssignments);
 	}
 
 	static function appendDebugLocations(output:Array<HlDebugLocation>, count:Int, provenance:SourceProvenance):Void
@@ -398,7 +412,31 @@ class HlLower {
 
 	static function debugLocation(provenance:SourceProvenance):HlDebugLocation {
 		var location = provenance.location;
-		return location == null ? {path: "<generated>", line: 1} : {path: location.path, line: location.line};
+		return location == null ? {
+			path: "<generated>",
+			line: 1,
+			start: -1,
+			end: -1
+		} : {
+			path: location.path,
+			line: location.line,
+			start: location.start,
+			end: location.end
+			};
+	}
+
+	static function scopeEndPosition(binding:compiler.ir.IrFunction.IrDebugBinding, locations:Array<HlDebugLocation>, position:Int, instructionCount:Int):Int {
+		var last = position;
+		for (index in position...locations.length) {
+			var location = locations[index];
+			if (location.path == binding.path
+				&& location.start != null
+				&& location.start >= binding.scopeStart
+				&& location.start < binding.scopeEnd)
+				last = index;
+		}
+		var end = last + 1;
+		return end >= instructionCount ? -1 : end;
 	}
 
 	static function blockProvenance(block:IrBlock):SourceProvenance {

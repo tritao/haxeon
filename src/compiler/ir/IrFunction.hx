@@ -2,8 +2,15 @@ package compiler.ir;
 
 import compiler.ir.Ir;
 
-/** Source local name associated with an SSA value after mutable stores vanish. */
-typedef IrDebugBinding = {final name:String; final value:IrValue;}
+/** Source binding identity, lexical range, and SSA value after mutable stores vanish. */
+typedef IrDebugBinding = {
+	final identity:String;
+	final name:String;
+	final value:IrValue;
+	final path:String;
+	final scopeStart:Int;
+	final scopeEnd:Int;
+}
 
 /** Verified SSA function with explicit arguments, blocks, and result type. */
 class IrFunction {

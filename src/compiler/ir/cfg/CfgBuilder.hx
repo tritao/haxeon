@@ -10,6 +10,9 @@ import compiler.ir.SourceProvenance.SourceOrigin;
 /** Builds mutable-local basic blocks while tracking lexical trap scopes. */
 class CfgBuilder {
 	public final blocks:Array<CfgBlock> = [];
+	public final debugLocals:Array<CfgDebugLocal> = [];
+
+	final debugLocalIds:Map<String, Bool> = [];
 
 	var current:CfgBlock;
 	var nextValue:Int = 0;
@@ -33,6 +36,21 @@ class CfgBuilder {
 
 	public function valueCount():Int
 		return nextValue;
+
+	public function debugLocal(identity:String, span:SourceSpan, scopeEnd:Int):Void {
+		if (debugLocalIds.exists(identity))
+			return;
+		var name = compiler.ir.DebugNames.sourceLocal(identity);
+		if (name == null)
+			return;
+		debugLocalIds.set(identity, true);
+		debugLocals.push({
+			identity: identity,
+			name: name,
+			span: span,
+			scopeEnd: scopeEnd
+		});
+	}
 
 	/** Select the source context inherited by subsequently emitted operations. */
 	public function at(span:SourceSpan):Void

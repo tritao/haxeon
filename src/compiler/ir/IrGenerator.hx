@@ -100,6 +100,7 @@ class IrGenerator {
 			var type = lowerType(argument.type);
 			localTypes.set(argument.name, type);
 			arguments.push({name: argument.name, type: type});
+			builder.debugLocal(argument.name, fn.span, fn.span.end);
 		}
 		for (name => cellClass in fn.cells)
 			for (argument in arguments)
@@ -108,25 +109,28 @@ class IrGenerator {
 					builder.fieldSet(cell, "value", builder.load(name, localTypes.get(name)));
 					builder.store('$' + 'cell:$name', cell);
 				}
-		lowerStatements(fn.statements, builder, localTypes, []);
+		lowerStatements(fn.statements, builder, localTypes, [], fn.span.end);
 		if (!builder.isTerminated()) {
 			if (lowerType(fn.result) == Void)
 				builder.returnVoid();
 			else
 				throw 'Function ${fn.name} does not return on every path';
 		}
-		return new CfgFunction(fn.name, arguments, lowerType(fn.result), builder.blocks, localTypes, builder.valueCount());
+		return new CfgFunction(fn.name, arguments, lowerType(fn.result), builder.blocks, localTypes, builder.valueCount(), builder.debugLocals);
 	}
 
-	static function lowerStatements(statements:Array<TypedStatement>, builder:CfgBuilder, localTypes:Map<String, IrType>, loops:Array<LoopContext>):Void {
+	static function lowerStatements(statements:Array<TypedStatement>, builder:CfgBuilder, localTypes:Map<String, IrType>, loops:Array<LoopContext>,
+			scopeEnd:Int):Void {
 		for (statement in statements) {
 			if (builder.isTerminated())
 				break;
 			builder.at(typedStatementSpan(statement));
 			switch statement {
-				case TDeclare(name, type, _):
+				case TDeclare(name, type, span):
 					localTypes.set(name, lowerType(type));
-				case TVar(name, initializer, _):
+					builder.debugLocal(name, span, scopeEnd);
+				case TVar(name, initializer, span):
+					builder.debugLocal(name, span, scopeEnd);
 					var value = lowerExpression(initializer, builder, localTypes);
 					var cellKey = '__cell:$name';
 					if (!localTypes.exists(cellKey)) {
@@ -176,11 +180,11 @@ class IrGenerator {
 					builder.returnVoid();
 				case TThrow(expression, _):
 					builder.throwValue(builder.toDyn(lowerExpression(expression, builder, localTypes)));
-				case TTry(tryBranch, catches, _):
+				case TTry(tryBranch, catches, span):
 					var catchBlock = builder.createBlock(),
 						afterBlock = builder.createBlock();
 					builder.beginTry(catchBlock, afterBlock);
-					lowerStatements(tryBranch, builder, localTypes, loops);
+					lowerStatements(tryBranch, builder, localTypes, loops, statementsScopeEnd(tryBranch, span.end));
 					var tryActive = !builder.isTerminated();
 					if (!tryActive)
 						builder.discardTry();
@@ -210,9 +214,10 @@ class IrGenerator {
 						} else
 							hasDynamicCatch = true;
 						localTypes.set(catchClause.name, catchIrType);
+						builder.debugLocal(catchClause.name, catchClause.span, catchClause.span.end);
 						var caught = builder.load(exceptionLocal, Dyn);
 						builder.store(catchClause.name, catchClause.type == TDynamic ? caught : builder.safeCast(caught, catchIrType));
-						lowerStatements(catchClause.statements, builder, localTypes, loops);
+						lowerStatements(catchClause.statements, builder, localTypes, loops, catchClause.span.end);
 						if (!builder.isTerminated()) {
 							catchActive = true;
 							builder.jump(afterBlock);
@@ -253,17 +258,17 @@ class IrGenerator {
 						value = builder.fieldGet(cell, "value", lowerType(valueType)),
 						one = valueType == TInt ? builder.constInt(1) : builder.constFloat(1.0);
 					builder.fieldSet(cell, "value", delta > 0 ? builder.add(value, one) : builder.sub(value, one));
-				case TIf(condition, thenBranch, elseBranch, _):
+				case TIf(condition, thenBranch, elseBranch, span):
 					var conditionValue = lowerExpression(condition, builder, localTypes),
 						thenBlock = builder.createBlock(),
 						elseBlock = builder.createBlock();
 					builder.branch(conditionValue, thenBlock, elseBlock);
 					builder.select(thenBlock);
-					lowerStatements(thenBranch, builder, localTypes, loops);
+					lowerStatements(thenBranch, builder, localTypes, loops, statementsScopeEnd(thenBranch, span.end));
 					var thenActive = !builder.isTerminated(),
 						thenExit = builder.currentBlock();
 					builder.select(elseBlock);
-					lowerStatements(elseBranch, builder, localTypes, loops);
+					lowerStatements(elseBranch, builder, localTypes, loops, statementsScopeEnd(elseBranch, span.end));
 					var elseActive = !builder.isTerminated(),
 						elseExit = builder.currentBlock(),
 						joinBlock = builder.createBlock();
@@ -294,7 +299,7 @@ class IrGenerator {
 						breakFlag: breakFlag,
 						trapDepth: builder.trapDepth()
 					});
-					lowerStatements(body, builder, localTypes, loops);
+					lowerStatements(body, builder, localTypes, loops, statementsScopeEnd(body, span.end));
 					loops.pop();
 					if (!builder.isTerminated())
 						builder.jump(conditionBlock);
@@ -315,7 +320,7 @@ class IrGenerator {
 						breakFlag: breakFlag,
 						trapDepth: builder.trapDepth()
 					});
-					lowerStatements(body, builder, localTypes, loops);
+					lowerStatements(body, builder, localTypes, loops, statementsScopeEnd(body, span.end));
 					loops.pop();
 					if (!builder.isTerminated())
 						builder.jump(conditionBlock);
@@ -330,7 +335,7 @@ class IrGenerator {
 						breakFlag: breakFlag,
 						trapDepth: builder.trapDepth()
 					});
-					lowerStatements(body, builder, localTypes, loops);
+					lowerStatements(body, builder, localTypes, loops, statementsScopeEnd(body, span.end));
 					loops.pop();
 					if (!builder.isTerminated())
 						builder.jump(conditionBlock);
@@ -362,12 +367,14 @@ class IrGenerator {
 					localTypes.set(indexName, I32);
 					localTypes.set(breakFlag, Bool);
 					localTypes.set(name, elementType);
+					builder.debugLocal(name, span, statementsScopeEnd(body, span.end));
 					if (valueName == null)
 						builder.store(arrayName, lowerExpression(iterable, builder, localTypes));
 					else {
 						var loweredMapType = lowerType(iterable.type);
 						localTypes.set(mapName, loweredMapType);
 						localTypes.set(valueName, lowerType(mapValue));
+						builder.debugLocal(valueName, span, statementsScopeEnd(body, span.end));
 						builder.store(mapName, lowerExpression(iterable, builder, localTypes));
 						builder.store(arrayName,
 							builder.call(RuntimeType.mapNative(mapKey, mapValue, "keys"), [builder.load(mapName, loweredMapType)], arrayType));
@@ -399,7 +406,7 @@ class IrGenerator {
 						breakFlag: breakFlag,
 						trapDepth: builder.trapDepth()
 					});
-					lowerStatements(body, builder, localTypes, loops);
+					lowerStatements(body, builder, localTypes, loops, statementsScopeEnd(body, span.end));
 					loops.pop();
 					if (!builder.isTerminated()) {
 						builder.jump(conditionBlock);
@@ -437,6 +444,7 @@ class IrGenerator {
 						if (switchCase.constructorIndex >= 0)
 							for (binding in switchCase.bindings) {
 								localTypes.set(binding.name, lowerType(binding.type));
+								builder.debugLocal(binding.name, switchCase.span, switchCase.span.end);
 							}
 						for (binding in switchCase.bindings)
 							builder.store(binding.name,
@@ -449,7 +457,7 @@ class IrGenerator {
 							builder.branch(lowerExpression(guard, builder, localTypes), bodyBlock, nextBlock);
 							builder.select(bodyBlock);
 						}
-						lowerStatements(switchCase.statements, builder, localTypes, loops);
+						lowerStatements(switchCase.statements, builder, localTypes, loops, switchCase.span.end);
 						if (!builder.isTerminated())
 							exits.push(builder.currentBlock());
 						checkBlock = nextBlock;
@@ -458,7 +466,7 @@ class IrGenerator {
 					if (!hasDefault && isEnumType(expression.type))
 						builder.jump(checkBlock);
 					else
-						lowerStatements(defaultBranch, builder, localTypes, loops);
+						lowerStatements(defaultBranch, builder, localTypes, loops, statementsScopeEnd(defaultBranch, span.end));
 					if (!builder.isTerminated())
 						exits.push(builder.currentBlock());
 					if (exits.length > 0) {
@@ -482,6 +490,9 @@ class IrGenerator {
 				TCellCapturedIncrement(_, _, _, _, span), TExpression(_, span):
 				span;
 		};
+
+	static function statementsScopeEnd(statements:Array<TypedStatement>, fallback:Int):Int
+		return statements.length == 0 ? fallback : typedStatementSpan(statements[statements.length - 1]).end;
 
 	static function lowerOperands(expressions:Array<TypedExpression>, builder:CfgBuilder, localTypes:Map<String, IrType>):Array<CfgValue> {
 		var temporaries:Array<{name:String, type:IrType}> = [];
@@ -732,7 +743,7 @@ class IrGenerator {
 				builder.load(localName, resultType);
 			case TBlockExpression(statements, result):
 				var placeholder = unreachableValue(lowerType(expression.type), builder);
-				lowerStatements(statements, builder, localTypes, []);
+				lowerStatements(statements, builder, localTypes, [], expression.span.end);
 				if (builder.isTerminated()) placeholder; else lowerExpression(result, builder, localTypes);
 			case TThrowExpression(value):
 				var placeholder = unreachableValue(lowerType(expression.type), builder);

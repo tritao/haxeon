@@ -2,6 +2,7 @@ package compiler.ir.cfg;
 
 import compiler.ir.Ir.IrType;
 import compiler.ir.SourceProvenance.Located;
+import compiler.Source.SourceSpan;
 
 /** Function-local identity for a value in mutable control-flow form. */
 abstract CfgValueId(Int) from Int to Int {}
@@ -92,6 +93,14 @@ class CfgBlock {
 /** Named function input available as a local at CFG entry. */
 typedef CfgArgument = {final name:String; final type:IrType;}
 
+/** Source-level identity and lexical range for one CFG local. */
+typedef CfgDebugLocal = {
+	final identity:String;
+	final name:String;
+	final span:SourceSpan;
+	final scopeEnd:Int;
+}
+
 /** Complete mutable-local function passed to CFG verification and SSA construction. */
 class CfgFunction {
 	public final name:String;
@@ -100,13 +109,15 @@ class CfgFunction {
 	public final blocks:Array<CfgBlock>;
 	public final localTypes:Map<String, IrType>;
 	public final valueCount:Int;
+	public final debugLocals:Array<CfgDebugLocal>;
 
-	public function new(name, arguments, result, blocks, localTypes, valueCount) {
+	public function new(name, arguments, result, blocks, localTypes, valueCount, ?debugLocals) {
 		this.name = name;
 		this.arguments = arguments;
 		this.result = result;
 		this.blocks = blocks;
 		this.localTypes = localTypes;
 		this.valueCount = valueCount;
+		this.debugLocals = debugLocals == null ? [] : debugLocals;
 	}
 }

@@ -20,7 +20,7 @@ import compiler.ir.SourceProvenance.SourceOrigin;
 
 /** Deterministic framing for a complete SSA IR function. */
 class IrFunctionStateCodec {
-	static inline final VERSION = 3;
+	static inline final VERSION = 4;
 	static inline final MAX_BLOCKS = 0x100000;
 	static inline final MAX_INSTRUCTIONS = 0x1000000;
 
@@ -50,8 +50,12 @@ class IrFunctionStateCodec {
 		IrTypeCodec.writeType(output, fn.result, 0);
 		output.writeInt32(fn.debugBindings.length);
 		for (binding in fn.debugBindings) {
+			IrTypeCodec.writeString(output, binding.identity);
 			IrTypeCodec.writeString(output, binding.name);
 			IrValueTableCodec.writeReference(output, binding.value);
+			IrTypeCodec.writeString(output, binding.path);
+			output.writeInt32(binding.scopeStart);
+			output.writeInt32(binding.scopeEnd);
 		}
 		if (fn.blocks.length == 0 || fn.blocks.length > MAX_BLOCKS)
 			throw "Invalid IR function block count";
@@ -106,8 +110,26 @@ class IrFunctionStateCodec {
 				var bindingCount = input.readInt32();
 				if (bindingCount < 0 || bindingCount > IrValueTableCodec.MAX_VALUES)
 					throw "Invalid IR debug binding count";
-				for (_ in 0...bindingCount)
-					debugBindings.push({name: IrTypeCodec.readString(input, bytes.length), value: IrValueTableCodec.readReference(input, values)});
+				for (_ in 0...bindingCount) {
+					var identity = version >= 4 ? IrTypeCodec.readString(input, bytes.length) : "",
+						name = IrTypeCodec.readString(input, bytes.length),
+						value = IrValueTableCodec.readReference(input, values);
+					debugBindings.push(version >= 4 ? {
+						identity: identity,
+						name: name,
+						value: value,
+						path: IrTypeCodec.readString(input, bytes.length),
+						scopeStart: input.readInt32(),
+						scopeEnd: input.readInt32()
+					} : {
+						identity: name,
+						name: name,
+						value: value,
+						path: "",
+						scopeStart: -1,
+						scopeEnd: -1
+						});
+				}
 			}
 			var blockCount = input.readInt32();
 			if (blockCount <= 0 || blockCount > MAX_BLOCKS)

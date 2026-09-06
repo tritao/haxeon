@@ -4,7 +4,6 @@ import compiler.ir.cfg.Cfg;
 import compiler.ir.cfg.CfgVerifier;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance;
-import compiler.ir.DebugNames;
 import compiler.ir.SourceProvenance.Located;
 import compiler.ir.SourceProvenance.SourceOrigin;
 
@@ -51,6 +50,7 @@ class SsaBuilder {
 			var value = allocate(argument.name, argument.type);
 			arguments.push(value);
 			push(argument.name, value);
+			addDebugBinding(debugLocal(argument.name), value);
 		}
 		var orderedRoots = roots.copy();
 		orderedRoots.sort(function(a, b) return a - b);
@@ -298,9 +298,7 @@ class SsaBuilder {
 				case StoreLocal(name, value):
 					var resolved = resolve(value);
 					push(name, resolved);
-					var debugName = DebugNames.sourceLocal(name);
-					if (debugName != null)
-						debugBindings.push({name: debugName, value: resolved});
+					addDebugBinding(debugLocal(name), resolved);
 					pushed.push(name);
 				case ConstVoid(out):
 					var result = define(out);
@@ -489,6 +487,25 @@ class SsaBuilder {
 
 	function allocate(name:String, type:IrType):IrValue {
 		return new IrValue(nextValue++, name, type);
+	}
+
+	function debugLocal(identity:String):Null<compiler.ir.cfg.Cfg.CfgDebugLocal> {
+		for (local in cfg.debugLocals)
+			if (local.identity == identity)
+				return local;
+		return null;
+	}
+
+	function addDebugBinding(local:Null<compiler.ir.cfg.Cfg.CfgDebugLocal>, value:IrValue):Void {
+		if (local != null)
+			debugBindings.push({
+				identity: local.identity,
+				name: local.name,
+				value: value,
+				path: local.span.file.path,
+				scopeStart: local.span.start,
+				scopeEnd: local.scopeEnd
+			});
 	}
 
 	function push(name:String, value:IrValue):Void {
