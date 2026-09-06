@@ -605,7 +605,7 @@ class Compiler {
 		try {
 			if (token != null)
 				token.check();
-			typedNew = Typer.typeSelected({
+			var semantic = semanticWorkspace().analyze({
 				packageName: null,
 				imports: [],
 				importAliases: [],
@@ -616,7 +616,8 @@ class Compiler {
 				interfaces: interfaces,
 				classes: classes,
 				functions: programFunctions
-			}, selected, nativeSignatures(), entryPoint);
+			});
+			typedNew = Typer.typeSelectedSemantic(semantic, selected, nativeSignatures(), entryPoint);
 		} catch (error:CompileError) {
 			for (name in names) {
 				var state = modules.get(name);

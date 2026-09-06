@@ -52,22 +52,26 @@ class Typer {
 	final noReturnFunctions:Map<String, Bool> = [];
 
 	public static function type(program:AstProgram):TypedProgram
-		return new Typer(null).typeProgram(program, null, true, null);
+		return new Typer(null).typeProgram(SemanticProgram.analyze(program), null, true, null);
 
 	/** Type a reusable module without requiring an executable main function. */
 	public static function typeLibrary(program:AstProgram):TypedProgram
-		return new Typer(null).typeProgram(program, null, false, null);
+		return new Typer(null).typeProgram(SemanticProgram.analyze(program), null, false, null);
 
 	public static function typeSelected(program:AstProgram, selected:Map<String, Bool>,
 			?externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>, ?entryPoint:String):TypedProgram
-		return new Typer(externals).typeProgram(program, selected, true, entryPoint);
+		return typeSelectedSemantic(SemanticProgram.analyze(program), selected, externals, entryPoint);
+
+	public static function typeSelectedSemantic(semantic:SemanticProgram, selected:Map<String, Bool>,
+			?externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>, ?entryPoint:String):TypedProgram
+		return new Typer(externals).typeProgram(semantic, selected, true, entryPoint);
 
 	function new(externals:Null<Map<String, {arguments:Array<CompilerType>, result:CompilerType}>>)
 		this.externals = externals == null ? [] : externals;
 
-	function typeProgram(program:AstProgram, selected:Null<Map<String, Bool>>, requireMain:Bool, entryPoint:Null<String>):TypedProgram {
-		program = SignatureInference.inferProgram(program);
-		declarations = new DeclarationIndex(program);
+	function typeProgram(semantic:SemanticProgram, selected:Null<Map<String, Bool>>, requireMain:Bool, entryPoint:Null<String>):TypedProgram {
+		var program = semantic.program;
+		declarations = semantic.declarations;
 		relations = new TypeRelations(declarations);
 		enumDecls = declarations.enums;
 		enumAbstractDecls = declarations.enumAbstracts;
