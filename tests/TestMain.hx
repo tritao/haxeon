@@ -844,6 +844,12 @@ class TestMain {
 		importedEnumCompiler.update("Main.hx",
 			"import Kinds.Choice; import Data.Bytes; function consume(value:Bytes):Int return 0; function main():Int { var payload:Bytes = new Bytes(); var choice:Choice = Bytes(42); return consume(payload) + switch choice { case Bytes(value): value; case Empty: 0; }; }");
 		importedEnumCompiler.compile("Main");
+		var ambiguousConstructorCompiler = new Compiler();
+		ambiguousConstructorCompiler.update("First.hx", "enum FirstChoice { Same(value:Int); }");
+		ambiguousConstructorCompiler.update("Second.hx", "enum SecondChoice { Same(value:String); }");
+		ambiguousConstructorCompiler.update("Main.hx",
+			"import First.FirstChoice; import Second.SecondChoice; function main():Int { var first:FirstChoice = Same(42); var second:SecondChoice = Same(\"value\"); return switch first { case Same(value): value; }; }");
+		ambiguousConstructorCompiler.compile("Main");
 		var staticClass = Frontend.compile("class Math { public static function add(a:Int, b:Int):Int { return a + b; } } function main():Int { return Math.add(20, 22); }");
 		var foundStatic = false;
 		for (fn in staticClass.functions)
