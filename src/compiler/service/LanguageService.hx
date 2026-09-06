@@ -123,6 +123,12 @@ typedef FoldingRegion = {
 	final ?kind:String;
 }
 
+typedef DocumentLink = {
+	final span:SourceSpan;
+	final targetPath:String;
+	final tooltip:String;
+}
+
 private typedef StructuralIndexEntry = {
 	final revision:Int;
 	final folds:Array<FoldingRegion>;
@@ -346,11 +352,54 @@ class LanguageService {
 		return result;
 	}
 
+	public function documentLinks(path:String, ?token:CancellationToken):Array<DocumentLink> {
+		var state = stateFor(path), tokens = state == null ? null : effectiveTokens(state), result:Array<DocumentLink> = [];
+		if (state == null || tokens == null)
+			return result;
+		var index = 0;
+		while (index < tokens.length) {
+			if (token != null)
+				token.check();
+			if (tokens[index].kind != Import) {
+				index++;
+				continue;
+			}
+			index++;
+			if (index >= tokens.length || tokens[index].kind != Identifier)
+				continue;
+			var start = tokens[index].span.start, end = tokens[index].span.end, parts = [tokens[index].text];
+			index++;
+			while (index + 1 < tokens.length && tokens[index].kind == Dot && tokens[index + 1].kind == Identifier) {
+				parts.push(tokens[index + 1].text);
+				end = tokens[index + 1].span.end;
+				index += 2;
+			}
+			var importPath = parts.join("."), target = importedModule(importPath);
+			if (target != null)
+				result.push({span: state.source.span(start, end), targetPath: target.source.path, tooltip: "Open " + importPath});
+		}
+		return result;
+	}
+
 	function workspaceSymbolIdentity(identity:String):Null<WorkspaceSymbol> {
 		for (state in compiler.modules)
 			for (symbol in indexedWorkspaceSymbols(state))
 				if (symbol.identity == identity)
 					return symbol;
+		return null;
+	}
+
+	function importedModule(importPath:String):Null<ModuleState> {
+		var candidate = importPath;
+		while (candidate.length > 0) {
+			var state = compiler.modules.get(candidate);
+			if (state != null)
+				return state;
+			var separator = candidate.lastIndexOf(".");
+			if (separator < 0)
+				break;
+			candidate = candidate.substring(0, separator);
+		}
 		return null;
 	}
 

@@ -49,7 +49,8 @@ class LspProtocolMain {
 			|| !initialized.result.capabilities.inlayHintProvider
 			|| !initialized.result.capabilities.callHierarchyProvider
 			|| !initialized.result.capabilities.foldingRangeProvider
-			|| !initialized.result.capabilities.selectionRangeProvider)
+			|| !initialized.result.capabilities.selectionRangeProvider
+			|| initialized.result.capabilities.documentLinkProvider.resolveProvider)
 			throw "LSP initialization capabilities are incomplete";
 		var watcherRegistration = protocol.handle('{"jsonrpc":"2.0","method":"initialized","params":{}}');
 		if (watcherRegistration.length != 1
@@ -102,6 +103,19 @@ class LspProtocolMain {
 				}
 			}
 		}));
+		var documentLinks = request(projectProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 403,
+			method: "textDocument/documentLink",
+			params: {textDocument: {uri: fixtureMainUri}}
+		})), importStart = fixtureDocument.position(fixtureSource.indexOf("pragtical.api.Document")),
+			importEnd = fixtureDocument.position(fixtureSource.indexOf("pragtical.api.Document") + "pragtical.api.Document".length);
+		if (documentLinks.result.length != 1
+			|| !StringTools.endsWith(documentLinks.result[0].target, "/pragtical/api/Document.hx")
+			|| documentLinks.result[0].range.start.line != importStart.line
+			|| documentLinks.result[0].range.start.character != importStart.character
+			|| documentLinks.result[0].range.end.character != importEnd.character)
+			throw "LSP document links did not resolve the exact import path span";
 		var importedTypeOffset = fixtureSource.indexOf("Document"),
 			importedDefinition = request(projectProtocol, Json.stringify({
 				jsonrpc: "2.0",

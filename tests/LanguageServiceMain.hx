@@ -39,6 +39,15 @@ class LanguageServiceMain {
 				hasMain = true;
 		if (!hasMain || service.hover("Main.hx", hoverPosition) != "main():Int")
 			throw "language service completion or hover failed";
+		var linkService = new LanguageService(), aliasSource = "import tools.Helper as H; function main():Int return 0;";
+		linkService.update("tools/Helper.hx", "package tools; class Helper {}");
+		linkService.update("AliasMain.hx", aliasSource);
+		linkService.analyze("AliasMain");
+		var links = linkService.documentLinks("AliasMain.hx");
+		if (links.length != 1
+			|| links[0].targetPath != "tools/Helper.hx"
+			|| aliasSource.substring(links[0].span.start, links[0].span.end) != "tools.Helper")
+			throw "language service did not resolve an aliased import's exact path span";
 		var kindStart = source.indexOf("Kind.One"), kindCompletionPosition = kindStart + "Kind.".length, kindPosition = kindStart + "Kind.One".length,
 			kindCompletion = service.complete("Main.hx", kindCompletionPosition), hasTwo = false;
 		for (item in kindCompletion)

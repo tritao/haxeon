@@ -100,6 +100,7 @@ class LspProtocol {
 				case "callHierarchy/outgoingCalls": cancellable(id, token -> callHierarchyCalls(request, token, false));
 				case "textDocument/foldingRange": cancellable(id, token -> foldingRanges(request, token));
 				case "textDocument/selectionRange": cancellable(id, token -> selectionRanges(request, token));
+				case "textDocument/documentLink": cancellable(id, token -> documentLinks(request, token));
 				case "textDocument/hover": cancellable(id, token -> hover(request, token));
 				case "textDocument/signatureHelp": cancellable(id, token -> signatureHelp(request, token));
 				case "textDocument/definition": cancellable(id, token -> definition(request, token));
@@ -239,6 +240,7 @@ class LspProtocol {
 				callHierarchyProvider: true,
 				foldingRangeProvider: true,
 				selectionRangeProvider: true,
+				documentLinkProvider: {resolveProvider: false},
 				hoverProvider: true,
 				signatureHelpProvider: {triggerCharacters: ["(", ","]},
 				definitionProvider: true,
@@ -666,6 +668,20 @@ class LspProtocol {
 			index--;
 		}
 		return parent;
+	}
+
+	function documentLinks(request:Dynamic, token:CancellationToken):Array<Dynamic> {
+		var document = document(request);
+		ensureAnalyzed(document, token);
+		requireCurrent(document);
+		return [
+			for (link in service.documentLinks(compilerPath(document), token))
+				{
+					range: document.range(link.span.start, link.span.end),
+					target: documents.uri(project.diskPath(link.targetPath)),
+					tooltip: link.tooltip
+				}
+		];
 	}
 
 	function hover(request:Dynamic, token:CancellationToken):Dynamic {
