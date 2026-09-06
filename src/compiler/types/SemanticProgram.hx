@@ -3,10 +3,19 @@ package compiler.types;
 import compiler.Ast.AstFunction;
 import compiler.Ast.AstProgram;
 
+typedef SemanticMethodInfo = {
+	final owner:String;
+	final isStatic:Bool;
+	final isConstructor:Bool;
+}
+
 /** Validated global semantic facts for one canonical, assembled program. */
 class SemanticProgram {
 	public final program:AstProgram;
 	public final declarations:DeclarationIndex;
+	public final relations:TypeRelations;
+	public final signatures:Map<String, AstFunction>;
+	public final methodInfo:Map<String, SemanticMethodInfo>;
 
 	public static function analyze(program:AstProgram):SemanticProgram {
 		var inferred = SignatureInference.inferProgram(program);
@@ -22,7 +31,7 @@ class SemanticProgram {
 			for (fn in program.functions)
 				if (selected.exists(fn.name) && currentByName.exists(fn.name)) withBody(fn, currentByName.get(fn.name)) else fn
 		];
-		return new SemanticProgram({
+		var nextProgram:AstProgram = {
 			packageName: program.packageName,
 			imports: program.imports,
 			importAliases: program.importAliases,
@@ -33,7 +42,14 @@ class SemanticProgram {
 			interfaces: program.interfaces,
 			classes: program.classes,
 			functions: functions
-		}, declarations);
+		};
+		var nextSignatures:Map<String, AstFunction> = [];
+		for (name => fn in signatures)
+			nextSignatures.set(name, fn);
+		for (fn in functions)
+			if (selected.exists(fn.name))
+				nextSignatures.set(fn.name, fn);
+		return new SemanticProgram(nextProgram, declarations, nextSignatures, methodInfo, relations);
 	}
 
 	static function withBody(signature:AstFunction, body:AstFunction):AstFunction
@@ -47,8 +63,31 @@ class SemanticProgram {
 			statements: body.statements
 		};
 
-	function new(program:AstProgram, declarations:DeclarationIndex) {
+	function new(program:AstProgram, declarations:DeclarationIndex, ?preparedSignatures:Map<String, AstFunction>,
+			?preparedMethodInfo:Map<String, SemanticMethodInfo>, ?preparedRelations:TypeRelations) {
 		this.program = program;
 		this.declarations = declarations;
+		relations = preparedRelations == null ? new TypeRelations(declarations) : preparedRelations;
+		if (preparedSignatures != null && preparedMethodInfo != null) {
+			signatures = preparedSignatures;
+			methodInfo = preparedMethodInfo;
+			return;
+		}
+		signatures = [];
+		methodInfo = [];
+		for (decl in program.interfaces)
+			for (method in decl.methods) {
+				var name = decl.name + "." + method.name;
+				signatures.set(name, method);
+				methodInfo.set(name, {owner: decl.name, isStatic: false, isConstructor: false});
+			}
+		for (decl in program.classes)
+			for (method in decl.methods) {
+				var name = decl.name + "." + method.name;
+				signatures.set(name, method);
+				methodInfo.set(name, {owner: decl.name, isStatic: method.isStatic, isConstructor: method.name == "new"});
+			}
+		for (fn in program.functions)
+			signatures.set(fn.name, fn);
 	}
 }

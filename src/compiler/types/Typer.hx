@@ -12,6 +12,7 @@ import compiler.Ast.AstEnum;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.AnonymousField;
 import compiler.types.RuntimeType;
+import compiler.types.SemanticProgram.SemanticMethodInfo;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedExpressionKind;
 import compiler.types.TypedAst.TypedEnum;
@@ -33,8 +34,8 @@ import compiler.Source.SourceSpan;
 
 /** Resolves bindings and converts parsed syntax into the typed semantic tree. */
 class Typer {
-	final signatures:Map<String, AstFunction> = [];
-	final methodInfo:Map<String, {owner:String, isStatic:Bool, isConstructor:Bool}> = [];
+	var signatures:Map<String, AstFunction> = [];
+	var methodInfo:Map<String, SemanticMethodInfo> = [];
 	final externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>;
 	var classDecls:Map<String, AstClass> = [];
 	var interfaceDecls:Map<String, AstInterface> = [];
@@ -72,7 +73,9 @@ class Typer {
 	function typeProgram(semantic:SemanticProgram, selected:Null<Map<String, Bool>>, requireMain:Bool, entryPoint:Null<String>):TypedProgram {
 		var program = semantic.program;
 		declarations = semantic.declarations;
-		relations = new TypeRelations(declarations);
+		relations = semantic.relations;
+		signatures = semantic.signatures;
+		methodInfo = semantic.methodInfo;
 		enumDecls = declarations.enums;
 		enumAbstractDecls = declarations.enumAbstracts;
 		for (decl in program.enumAbstracts) {
@@ -84,34 +87,9 @@ class Typer {
 		classDecls = declarations.classes;
 		for (alias in program.aliases)
 			registerAnonymousTypes(lowerType(alias.type));
-		for (interfaceDecl in program.interfaces) {
-			for (method in interfaceDecl.methods) {
-				var qualified = interfaceDecl.name + "." + method.name;
-				if (signatures.exists(qualified))
-					fail("E1000", 'Duplicate interface method "$qualified"', method.span);
-				signatures.set(qualified, method);
-				methodInfo.set(qualified, {owner: interfaceDecl.name, isStatic: false, isConstructor: false});
-			}
-		}
-		for (classDecl in program.classes) {
-			for (method in classDecl.methods) {
-				var qualified = classDecl.name + "." + method.name;
-				if (signatures.exists(qualified))
-					fail("E1000", 'Duplicate method "$qualified"', method.span);
-				signatures.set(qualified, method);
-				methodInfo.set(qualified, {
-					owner: classDecl.name,
-					isStatic: method.isStatic,
-					isConstructor: method.name == "new"
-				});
-			}
-		}
 		for (fn in program.functions) {
-			if (signatures.exists(fn.name))
-				fail("E1000", 'Duplicate function "${fn.name}"', fn.span);
 			if (externals.exists(fn.name))
 				fail("E1000", 'Function "${fn.name}" conflicts with a registered native', fn.span);
-			signatures.set(fn.name, fn);
 		}
 		inferNoReturnFunctions();
 		if (requireMain) {
@@ -1923,7 +1901,7 @@ class Typer {
 				} else {
 					if (name.indexOf(".") < 0) {
 						var owner = parentPath(context.name),
-							implicitMethod:Null<{owner:String, isStatic:Bool, isConstructor:Bool}> = null;
+							implicitMethod:Null<SemanticMethodInfo> = null;
 						if (owner != null)
 							implicitMethod = findMethod(owner, name);
 						if (implicitMethod != null) {
@@ -2506,13 +2484,13 @@ class Typer {
 		return relations.isAssignable(actual, expected);
 	}
 
-	function findMethod(className:String, name:String):Null<{owner:String, isStatic:Bool, isConstructor:Bool}> {
-		var results:Array<{owner:String, isStatic:Bool, isConstructor:Bool}> = [];
+	function findMethod(className:String, name:String):Null<SemanticMethodInfo> {
+		var results:Array<SemanticMethodInfo> = [];
 		findMethods(className, name, results);
 		return results.length == 0 ? null : results[0];
 	}
 
-	function findMethods(className:String, name:String, results:Array<{owner:String, isStatic:Bool, isConstructor:Bool}>):Void {
+	function findMethods(className:String, name:String, results:Array<SemanticMethodInfo>):Void {
 		if (results.length > 0)
 			return;
 		var key = className + "." + name;
