@@ -111,6 +111,12 @@ class ProfilerSnapshot {
 	public final metadataSchema:Int;
 	public final metadataRevisions:Map<String, Int>;
 	public final pendingBytes:Int;
+	public final bufferCapacity:Int64;
+	public final bufferUsed:Int64;
+	public final bufferUtilization:Float;
+	public final requestedSampleRate:Int;
+	public final effectiveSampleRate:Int;
+	public final metadataRefreshMs:Float;
 	public final lastError:Null<String>;
 
 	public function new(session:ProfilerSession) {
@@ -127,6 +133,12 @@ class ProfilerSnapshot {
 		metadataSchema = session.metadata == null ? 0 : session.metadata.schema;
 		metadataRevisions = session.metadata == null ? new Map() : session.metadata.revisions.copy();
 		pendingBytes = session.pendingBytes();
+		bufferCapacity = session.bufferCapacity;
+		bufferUsed = session.bufferUsed;
+		bufferUtilization = session.bufferUtilization;
+		requestedSampleRate = session.requestedSampleRate;
+		effectiveSampleRate = session.effectiveSampleRate;
+		metadataRefreshMs = session.metadataRefreshMs;
 		lastError = session.lastError;
 	}
 }
@@ -138,6 +150,12 @@ class ProfilerSession {
 	public var samples(default, null) = 0;
 	public var unresolvedFrames(default, null) = 0;
 	public var dropped(default, null):Int64 = Int64.ofInt(0);
+	public var bufferCapacity(default, null):Int64 = Int64.ofInt(0);
+	public var bufferUsed(default, null):Int64 = Int64.ofInt(0);
+	public var bufferUtilization(default, null):Float = 0;
+	public var requestedSampleRate(default, null) = 0;
+	public var effectiveSampleRate(default, null) = 0;
+	public var metadataRefreshMs(default, null):Float = 0;
 	public var metadata(default, null):Null<HldiMetadata>;
 	public var lastError(default, null):Null<String>;
 	public var metadataRefreshSeconds:Float = 5.0;
@@ -165,6 +183,7 @@ class ProfilerSession {
 		this.sampleRate = sampleRate;
 		refreshMetadata();
 		var status = client.configure(sampleRate, true);
+		updateHealth(status);
 		cursor = status.next;
 		dropped = status.dropped;
 		state = Running;
@@ -175,6 +194,7 @@ class ProfilerSession {
 		if (state != Running)
 			return;
 		var status = client.configure(sampleRate, false);
+		updateHealth(status);
 		cursor = status.next;
 		dropped = status.dropped;
 		state = Paused;
@@ -192,6 +212,7 @@ class ProfilerSession {
 			var records = decoder.append(result.bytes);
 			for (record in records)
 				consume(record);
+			updateHealth(client.status());
 			lastError = null;
 			return records.length;
 		} catch (error:Dynamic) {
@@ -202,7 +223,8 @@ class ProfilerSession {
 	}
 
 	public function refreshMetadata(?timestamp:Float):Void {
-		var previous = metadata, next = client.metadata();
+		var previous = metadata, started = Timer.stamp(), next = client.metadata();
+		metadataRefreshMs = (Timer.stamp() - started) * 1000;
 		if (previous != null)
 			for (moduleId => revision in next.revisions) {
 				var oldRevision = previous.revisions.get(moduleId);
@@ -237,6 +259,15 @@ class ProfilerSession {
 
 	public function pendingBytes():Int
 		return decoder.pendingBytes();
+
+	function updateHealth(status:profiler.HldiTypes.HldiStatus):Void {
+		dropped = status.dropped;
+		bufferCapacity = status.bufferCapacity;
+		bufferUsed = Int64.sub(status.next, status.consumer);
+		requestedSampleRate = status.requestedRate;
+		effectiveSampleRate = status.sampleRate;
+		bufferUtilization = bufferCapacity == 0 ? 0 : Std.parseFloat(Int64.toStr(bufferUsed)) / Std.parseFloat(Int64.toStr(bufferCapacity));
+	}
 
 	public function functionAggregates():Array<ProfileAggregate>
 		return sorted(functions);

@@ -23,13 +23,19 @@ class HldiStatus {
 	public final dropped:Int64;
 	public final sampleRate:Int;
 	public final paused:Bool;
+	public final bufferCapacity:Int64;
+	public final consumer:Int64;
+	public final requestedRate:Int;
 
-	public function new(first:Int64, next:Int64, dropped:Int64, sampleRate:Int, paused:Bool) {
+	public function new(first:Int64, next:Int64, dropped:Int64, sampleRate:Int, paused:Bool, ?bufferCapacity:Int64, ?consumer:Int64, requestedRate:Int = 0) {
 		this.first = first;
 		this.next = next;
 		this.dropped = dropped;
 		this.sampleRate = sampleRate;
 		this.paused = paused;
+		this.bufferCapacity = bufferCapacity == null ? Int64.ofInt(0) : bufferCapacity;
+		this.consumer = consumer == null ? next : consumer;
+		this.requestedRate = requestedRate == 0 ? sampleRate : requestedRate;
 	}
 }
 

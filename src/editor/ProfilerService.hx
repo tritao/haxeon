@@ -181,6 +181,12 @@ class ProfilerService {
 			unresolvedFrames: value.unresolvedFrames,
 			dropped: Int64.toStr(value.dropped),
 			pendingBytes: value.pendingBytes,
+			bufferCapacity: Int64.toStr(value.bufferCapacity),
+			bufferUsed: Int64.toStr(value.bufferUsed),
+			bufferUtilization: value.bufferUtilization,
+			requestedSampleRate: value.requestedSampleRate,
+			effectiveSampleRate: value.effectiveSampleRate,
+			metadataRefreshMs: value.metadataRefreshMs,
 			metadataSchema: value.metadataSchema,
 			metadataRevisions: [for (moduleId => revision in value.metadataRevisions) {moduleId: moduleId, revision: revision}],
 			metadataChanges: [for (change in value.metadataChanges) {
