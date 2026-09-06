@@ -24,7 +24,7 @@ class HlPatchReader {
 			if (revision <= base)
 				throw "Invalid patch revision range";
 			var baseInts = -1, baseFloats = -1, baseStrings = -1, baseTypes = -1, intPrefixHash = 0, floatPrefixHash = 0, stringPrefixHash = 0,
-				typePrefixHash = 0, ints = [], floats = [], strings = [], types = [], functions = [];
+				typePrefixHash = 0, ints = [], floats = [], strings = [], types = [], functions = [], debugFiles = [], haveDebug = false;
 			for (_ in 0...readUnsigned(input)) {
 				var tag = input.readByte(),
 					length = readUnsigned(input),
@@ -58,6 +58,37 @@ class HlPatchReader {
 							if (input.position != functionEnd)
 								throw "Invalid patch function length";
 						}
+					case 3:
+						if (haveDebug)
+							throw "Duplicate HLP debug section";
+						haveDebug = true;
+						debugFiles = [for (_ in 0...readUnsigned(input)) input.readString(readUnsigned(input))];
+						var debugFunctions = readUnsigned(input),
+							seen:Map<Int, Bool> = [];
+						if (debugFunctions != functions.length)
+							throw "HLP debug function count mismatch";
+						for (_ in 0...debugFunctions) {
+							var stableId = readUnsigned(input),
+								found:Null<HlPatchFunction> = null;
+							if (seen.exists(stableId))
+								throw "Duplicate HLP function debug metadata";
+							seen.set(stableId, true);
+							for (fn in functions)
+								if (fn.functionIndex == stableId)
+									found = fn;
+							if (found == null)
+								throw "Unknown HLP debug function";
+							var count = readUnsigned(input);
+							if (count != found.instructions.length)
+								throw "HLP debug opcode count mismatch";
+							for (_ in 0...count) {
+								var file = readUnsigned(input),
+									line = readUnsigned(input);
+								if (file >= debugFiles.length || line < 1)
+									throw "Invalid HLP debug location";
+								found.debug.push({file: file, line: line});
+							}
+						}
 					default:
 						input.position = end;
 				}
@@ -84,7 +115,8 @@ class HlPatchReader {
 				floats: floats,
 				strings: strings,
 				types: types,
-				functions: functions
+				functions: functions,
+				debugFiles: debugFiles
 			};
 		} catch (error:haxe.io.Eof) {
 			throw "Truncated HLP data";
@@ -130,7 +162,8 @@ class HlPatchReader {
 			functionIndex: stableId,
 			registers: registers,
 			instructions: instructions,
-			relocations: relocations
+			relocations: relocations,
+			debug: []
 		};
 	}
 

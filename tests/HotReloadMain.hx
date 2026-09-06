@@ -84,6 +84,13 @@ class HotReloadMain {
 			throw "HLP did not encode the source float symbol delta";
 		if (decoded.baseStrings != initial.module.strings.length || decoded.strings.indexOf("patched source") < 0)
 			throw "HLP did not encode the source string symbol delta";
+		if (decoded.debugFiles.indexOf("Value.hx") < 0
+			|| decoded.functions.length != 1
+			|| decoded.functions[0].debug.length != decoded.functions[0].instructions.length)
+			throw "HLP did not preserve opcode-indexed source debug metadata";
+		for (location in decoded.functions[0].debug)
+			if (location.file < 0 || location.file >= decoded.debugFiles.length || location.line < 1)
+				throw "HLP contains an invalid source debug location";
 		var nativeDecoded = Runtime.inspectPatch(changed.patchBytes);
 		if (nativeDecoded.baseRevision != decoded.baseRevision
 			|| nativeDecoded.revision != decoded.revision

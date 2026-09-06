@@ -160,6 +160,11 @@ class TestMain {
 				Return(0),
 				Label("catch"),
 				Throw(2)
+			], [
+				for (line in 10...17) {
+					path: "patch-debug.hx",
+					line: line
+				}
 			]),
 		];
 		var testModuleId = haxe.io.Bytes.alloc(16),
@@ -178,6 +183,12 @@ class TestMain {
 			|| patch.functions[0].instructions[3].opcode != HlOpcode.EndTrap
 			|| patch.functions[0].instructions[6].opcode != HlOpcode.Throw)
 			throw "HLP round trip lost function bytecode";
+		if (patch.debugFiles.length != 1
+			|| patch.debugFiles[0] != "patch-debug.hx"
+			|| patch.functions[0].debug.length != 7
+			|| patch.functions[0].debug[0].line != 10
+			|| patch.functions[0].debug[6].line != 16)
+			throw "HLP round trip lost function debug metadata";
 		try {
 			HlPatchReader.decode(patchBytes.sub(0, patchBytes.length - 1));
 			throw "truncated HLP was accepted";

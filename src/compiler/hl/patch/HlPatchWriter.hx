@@ -12,6 +12,7 @@ import compiler.hl.HlType as HashLinkType;
 class HlPatchWriter {
 	static inline final SYMBOLS = 1;
 	static inline final FUNCTIONS = 2;
+	static inline final DEBUG = 3;
 
 	public static function encode(code:HlCode, moduleId:HaxeBytes, changedSlots:Array<Int>, stableIdsBySlot:Map<Int, Int>, baseRevision:Int, revision:Int,
 			baseInts:Int = 0, baseFloats:Int = 0, baseStrings:Int = 0, baseTypes:Int = 0):HaxeBytes {
@@ -82,15 +83,51 @@ class HlPatchWriter {
 			functions.write(encoded);
 		}
 		var out = new BytesOutput();
+		var debug = encodeDebug(selected, stableIdsBySlot);
 		out.bigEndian = false;
 		out.writeString(HlPatchFormat.MAGIC);
 		out.writeByte(HlPatchFormat.VERSION);
 		out.write(moduleId);
 		writeIndex(out, baseRevision);
 		writeIndex(out, revision);
-		writeIndex(out, 2);
+		writeIndex(out, debug == null ? 2 : 3);
 		writeSection(out, SYMBOLS, symbols.getBytes());
 		writeSection(out, FUNCTIONS, functions.getBytes());
+		if (debug != null)
+			writeSection(out, DEBUG, debug);
+		return out.getBytes();
+	}
+
+	static function encodeDebug(functions:Array<HlFunction>, stableIdsBySlot:Map<Int, Int>):Null<HaxeBytes> {
+		for (fn in functions)
+			if (fn.debugLocations.length == 0)
+				return null;
+		var files:Array<String> = [], fileIndices:Map<String, Int> = [];
+		for (fn in functions)
+			for (location in fn.debugLocations)
+				if (!fileIndices.exists(location.path)) {
+					fileIndices.set(location.path, files.length);
+					files.push(location.path);
+				}
+		var out = new BytesOutput();
+		out.bigEndian = false;
+		writeIndex(out, files.length);
+		for (file in files) {
+			var bytes = HaxeBytes.ofString(file);
+			writeIndex(out, bytes.length);
+			out.write(bytes);
+		}
+		writeIndex(out, functions.length);
+		for (fn in functions) {
+			if (fn.debugLocations.length != fn.opcodes.length)
+				throw 'Debug location count does not match opcodes in function ${fn.functionIndex}';
+			writeIndex(out, stableIdsBySlot.get(fn.functionIndex));
+			writeIndex(out, fn.debugLocations.length);
+			for (location in fn.debugLocations) {
+				writeIndex(out, fileIndices.get(location.path));
+				writeIndex(out, location.line);
+			}
+		}
 		return out.getBytes();
 	}
 

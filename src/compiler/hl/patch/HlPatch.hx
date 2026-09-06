@@ -20,6 +20,7 @@ typedef HlPatch = {
 	final strings:Array<String>;
 	final types:Array<HlTypeDef>;
 	final functions:Array<HlPatchFunction>;
+	final debugFiles:Array<String>;
 }
 
 /** One replacement function addressed by stable identity after relocation. */
@@ -29,6 +30,7 @@ typedef HlPatchFunction = {
 	final registers:Array<Int>;
 	final instructions:Array<HlPatchInstruction>;
 	final relocations:Array<{instruction:Int, stableId:Int}>;
+	final debug:Array<{file:Int, line:Int}>;
 }
 
 /** Decoded numeric HashLink opcode and its wire operands. */
