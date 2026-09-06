@@ -1,6 +1,7 @@
 package compiler.types;
 
 import compiler.Ast.AstClass;
+import compiler.Ast.AstArgument;
 import compiler.Ast.AstEnum;
 import compiler.Ast.AstExpression;
 import compiler.Ast.AstFunction;
@@ -65,7 +66,7 @@ class SignatureInference {
 			}
 			methods = [
 				for (method in methods)
-					replaceArguments(method, calleeConstraints.get(method.name) == null ? [] : calleeConstraints.get(method.name))
+					replaceArguments(method, constraintsFor(calleeConstraints, method.name))
 			];
 			for (method in methods)
 				byName.set(method.name, method);
@@ -78,6 +79,9 @@ class SignatureInference {
 			byName.set(method.name, method);
 		return [for (method in constrained) inferFunction(method, enums, byName)];
 	}
+
+	static function constraintsFor(constraints:Map<String, Map<String, AstType>>, name:String):Map<String, AstType>
+		return constraints.exists(name) ? constraints.get(name) : [];
 
 	static function collectCallConstraints(statements:Array<AstStatement>, environment:Map<String, AstType>, methods:Map<String, AstFunction>,
 			constraints:Map<String, Map<String, AstType>>):Void
@@ -116,11 +120,13 @@ class SignatureInference {
 			constraints:Map<String, Map<String, AstType>>):Void
 		switch expression {
 			case Call(name, arguments, _), MethodCall(_, name, arguments, _):
-				var methodName = localMethodName(name),
-					callee = methods.get(methodName);
-				if (callee != null) {
-					var inferred = constraints.get(methodName);
-					if (inferred == null) {
+				var methodName = localMethodName(name);
+				if (methods.exists(methodName)) {
+					var callee = methods.get(methodName),
+						inferred:Map<String, AstType>;
+					if (constraints.exists(methodName))
+						inferred = constraints.get(methodName);
+					else {
 						inferred = [];
 						constraints.set(methodName, inferred);
 					}
@@ -128,8 +134,7 @@ class SignatureInference {
 						if (index < callee.arguments.length && callee.arguments[index].type == InferredType)
 							switch arguments[index] {
 								case Variable(argumentName, _):
-									var type = environment.get(argumentName);
-									if (type != null) inferred.set(callee.arguments[index].name, type);
+									if (environment.exists(argumentName)) inferred.set(callee.arguments[index].name, environment.get(argumentName));
 								default:
 							}
 				}
@@ -153,71 +158,104 @@ class SignatureInference {
 		var inferred:Map<String, AstType> = [];
 		for (statement in fn.statements)
 			switch statement {
-				case Assignment(path, Variable(argumentName, _), _):
-					var fieldType = resolveMemberPath(path, owner, classes);
-					switch fieldType {
-						case NullableType(element): inferred.set(argumentName, element);
-						case null:
-						default: inferred.set(argumentName, fieldType);
+				case Assignment(path, value, _):
+					switch value {
+						case Variable(argumentName, _): inferAssignmentBoundArgument(path, argumentName, owner, classes, inferred);
+						default:
 					}
-				case Return(Call(name, arguments, _), _), Expression(Call(name, arguments, _), _):
-					var callee = methods.get(localMethodName(name));
-					if (callee != null)
-						for (index in 0...arguments.length)
-							if (index < callee.arguments.length && callee.arguments[index].type != InferredType)
-								switch arguments[index] {
-									case Variable(argumentName, _): inferred.set(argumentName, callee.arguments[index].type);
-									default:
-								}
-					if (StringTools.endsWith(name, ".push") && arguments.length == 1) {
-						var receiverPath = name.substr(0, name.length - ".push".length),
-							receiverType = resolveMemberPath(receiverPath, owner, classes);
-						switch [receiverType, arguments[0]] {
-							case [ArrayType(element), Variable(argumentName, _)]: inferred.set(argumentName, element);
-							default:
-						}
-					}
-				case Return(MethodCall(_, name, arguments, _), _), Expression(MethodCall(_, name, arguments, _), _):
-					var callee = methods.get(name);
-					if (callee != null)
-						for (index in 0...arguments.length)
-							if (index < callee.arguments.length && callee.arguments[index].type != InferredType)
-								switch arguments[index] {
-									case Variable(argumentName, _): inferred.set(argumentName, callee.arguments[index].type);
-									default:
-								}
-				case Return(New(name, arguments, _), _), Expression(New(name, arguments, _), _):
-					var constructor = constructors.get(name);
-					if (constructor != null)
-						for (index in 0...arguments.length)
-							if (index < constructor.arguments.length && constructor.arguments[index].type != InferredType)
-								switch arguments[index] {
-									case Variable(argumentName, _): inferred.set(argumentName, constructor.arguments[index].type);
-									default:
-								}
+				case Return(expression, _), Expression(expression, _):
+					inferExpressionBoundArguments(expression, owner, methods, constructors, classes, inferred);
 				default:
 			}
 		return replaceArguments(fn, inferred);
 	}
 
+	static function inferAssignmentBoundArgument(path:String, argumentName:String, owner:AstClass, classes:Map<String, AstClass>,
+			inferred:Map<String, AstType>):Void {
+		var fieldType = resolveMemberPath(path, owner, classes);
+		if (fieldType == null)
+			return;
+		switch fieldType {
+			case NullableType(element):
+				inferred.set(argumentName, element);
+			default:
+				inferred.set(argumentName, fieldType);
+		}
+	}
+
+	static function inferExpressionBoundArguments(expression:AstExpression, owner:AstClass, methods:Map<String, AstFunction>,
+			constructors:Map<String, AstFunction>, classes:Map<String, AstClass>, inferred:Map<String, AstType>):Void
+		switch expression {
+			case Call(name, arguments, _):
+				inferArgumentsFromCallable(methods, localMethodName(name), arguments, inferred);
+				if (StringTools.endsWith(name, ".push") && arguments.length == 1) {
+					var receiverPath = name.substring(0, name.length - ".push".length),
+						receiverType = resolveMemberPath(receiverPath, owner, classes);
+					if (receiverType != null)
+						switch receiverType {
+							case ArrayType(element):
+								switch arguments[0] {
+									case Variable(argumentName, _): inferred.set(argumentName, element);
+									default:
+								}
+							default:
+						}
+				}
+			case MethodCall(_, name, arguments, _):
+				inferArgumentsFromCallable(methods, name, arguments, inferred);
+			case New(name, arguments, _):
+				inferArgumentsFromCallable(constructors, name, arguments, inferred);
+			default:
+		}
+
+	static function inferArgumentsFromCallable(callables:Map<String, AstFunction>, name:String, arguments:Array<AstExpression>,
+			inferred:Map<String, AstType>):Void {
+		if (!callables.exists(name))
+			return;
+		var callable = callables.get(name);
+		for (index in 0...arguments.length)
+			if (index < callable.arguments.length && callable.arguments[index].type != InferredType)
+				switch arguments[index] {
+					case Variable(argumentName, _):
+						inferred.set(argumentName, callable.arguments[index].type);
+					default:
+				}
+	}
+
 	static function resolveMemberPath(path:String, owner:AstClass, classes:Map<String, AstClass>):Null<AstType> {
-		var parts = path.split("."), current:Null<AstType> = null;
+		var parts = splitPath(path), current:Null<AstType> = null;
 		for (field in owner.fields)
 			if (field.name == parts[0])
 				current = field.type;
-		for (index in 1...parts.length)
-			switch current {
+		for (index in 1...parts.length) {
+			var resolved = current;
+			if (resolved == null)
+				return null;
+			switch resolved {
 				case NamedType(className):
-					var classDecl = classes.get(className);
 					current = null;
-					if (classDecl != null)
+					if (classes.exists(className)) {
+						var classDecl = classes.get(className);
 						for (field in classDecl.fields)
 							if (field.name == parts[index])
 								current = field.type;
+					}
 				default:
 					current = null;
 			}
+		}
 		return current;
+	}
+
+	static function splitPath(path:String):Array<String> {
+		var parts:Array<String> = [], start = 0;
+		for (cursor in 0...path.length)
+			if (path.charCodeAt(cursor) == 46) {
+				parts.push(path.substring(start, cursor));
+				start = cursor + 1;
+			}
+		parts.push(path.substring(start, path.length));
+		return parts;
 	}
 
 	static function inferFunction(fn:AstFunction, enums:Map<String, AstEnum>, ?methods:Map<String, AstFunction>):AstFunction {
@@ -280,19 +318,18 @@ class SignatureInference {
 		};
 
 	static function bindPattern(pattern:AstExpression, subjectType:Null<AstType>, environment:Map<String, AstType>, enums:Map<String, AstEnum>):Void {
+		if (subjectType == null)
+			return;
 		var enumName = switch subjectType {
 			case NamedType(name): name;
 			default: null;
 		};
-		if (enumName == null)
+		if (enumName == null || !enums.exists(enumName))
 			return;
 		var enumDecl = enums.get(enumName);
-		if (enumDecl == null)
-			return;
 		switch pattern {
 			case Call(name, arguments, _):
-				var separator = name.lastIndexOf("."),
-					caseName = separator < 0 ? name : name.substr(separator + 1);
+				var caseName = lastPathSegment(name);
 				for (caseDecl in enumDecl.cases)
 					if (caseDecl.name == caseName)
 						for (index in 0...arguments.length)
@@ -305,13 +342,21 @@ class SignatureInference {
 		}
 	}
 
+	static function lastPathSegment(path:String):String {
+		var cursor = path.length - 1;
+		while (cursor >= 0) {
+			if (path.charCodeAt(cursor) == 46)
+				return path.substring(cursor + 1, path.length);
+			cursor--;
+		}
+		return path;
+	}
+
 	static function sameType(left:AstType, right:AstType):Bool
 		return Std.string(left) == Std.string(right);
 
-	static function localMethodName(name:String):String {
-		var separator = name.lastIndexOf(".");
-		return separator < 0 ? name : name.substr(separator + 1);
-	}
+	static function localMethodName(name:String):String
+		return lastPathSegment(name);
 
 	static function copyTypes(source:Map<String, AstType>):Map<String, AstType> {
 		var result:Map<String, AstType> = [];
@@ -324,19 +369,30 @@ class SignatureInference {
 		var inferred:Map<String, AstType> = [];
 		for (statement in fn.statements)
 			switch statement {
-				case FieldAssignment(Variable("this", _), fieldName, Variable(argumentName, _), _):
-					constrainFromField(inferred, argumentName, fieldName, classDecl);
-				case Assignment(fieldPath, Variable(argumentName, _), _) if (StringTools.startsWith(fieldPath, "this.")):
-					constrainFromField(inferred, argumentName, fieldPath.substr("this.".length), classDecl);
+				case FieldAssignment(object, fieldName, value, _):
+					switch object {
+						case Variable(objectName, _) if (objectName == "this"):
+							switch value {
+								case Variable(argumentName, _): constrainFromField(inferred, argumentName, fieldName, classDecl);
+								default:
+							}
+						default:
+					}
+				case Assignment(fieldPath, value, _) if (StringTools.startsWith(fieldPath, "this.")):
+					switch value {
+						case Variable(argumentName, _):
+							constrainFromField(inferred, argumentName, fieldPath.substring("this.".length, fieldPath.length), classDecl);
+						default:
+					}
 				default:
 			}
 		return replaceArguments(fn, inferred);
 	}
 
 	static function replaceArguments(fn:AstFunction, inferred:Map<String, AstType>):AstFunction {
-		var changed = false, arguments = [
+		var changed = false, arguments:Array<AstArgument> = [
 			for (argument in fn.arguments) {
-				var inferredType = argument.type == InferredType ? inferred.get(argument.name) : null;
+				var inferredType = argument.type == InferredType && inferred.exists(argument.name) ? inferred.get(argument.name) : null;
 				if (inferredType != null) changed = true;
 				{
 					name: argument.name,
@@ -360,6 +416,9 @@ class SignatureInference {
 
 	static function constrainFromField(inferred:Map<String, AstType>, argumentName:String, fieldName:String, classDecl:AstClass):Void
 		for (field in classDecl.fields)
-			if (field.name == fieldName && field.type != null)
-				inferred.set(argumentName, field.type);
+			if (field.name == fieldName) {
+				var fieldType = field.type;
+				if (fieldType != null)
+					inferred.set(argumentName, fieldType);
+			}
 }

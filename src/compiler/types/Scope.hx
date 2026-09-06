@@ -5,15 +5,17 @@ import compiler.Source.SourceSpan;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 
+private typedef ScopeValue = {
+	final source:String;
+	final declared:CompilerType;
+	final id:String;
+}
+
 class Scope {
 	final parent:Null<Scope>;
 	final facts:FlowFacts;
 	var nextLocalId:Int = 0;
-	final values:Map<String, {
-		source:String,
-		declared:CompilerType,
-		id:String
-	}> = [];
+	final values:Map<String, ScopeValue> = [];
 	final assigned:Map<String, Bool> = [];
 	final captures:Map<String, Bool> = [];
 	final cellCaptures:Map<String, Bool> = [];
@@ -27,7 +29,7 @@ class Scope {
 	public function define(name:String, type:CompilerType, span:SourceSpan, initialized:Bool = true):Void {
 		if (values.exists(name))
 			throw new CompileError(new Diagnostic("E1001", 'Duplicate local "$name"', span));
-		var value = {
+		var value:ScopeValue = {
 			source: name,
 			declared: type,
 			id: '$' + 'l${allocateLocalId()}:$name'
@@ -107,38 +109,38 @@ class Scope {
 		return value == null ? null : value.id;
 	}
 
-	function resolveLocal(name:String):Null<{
-		source:String,
-		declared:CompilerType,
-		id:String
-	}> {
-		var value = values.get(name);
-		return value != null ? value : parent == null ? null : parent.resolveLocal(name);
+	function resolveLocal(name:String):Null<ScopeValue> {
+		if (values.exists(name))
+			return values.get(name);
+		var outer = parent;
+		return outer == null ? null : outer.resolveLocal(name);
 	}
 
-	function resolveById(id:String):Null<{
-		source:String,
-		declared:CompilerType,
-		id:String
-	}> {
-		for (value in values)
+	function resolveById(id:String):Null<ScopeValue> {
+		for (_ => value in values)
 			if (value.id == id)
 				return value;
-		return parent == null ? null : parent.resolveById(id);
+		var outer = parent;
+		return outer == null ? null : outer.resolveById(id);
 	}
 
 	function isAssignedId(id:String):Bool {
-		var state = assigned.get(id);
-		return state != null ? state : parent != null && parent.isAssignedId(id);
+		if (assigned.exists(id))
+			return assigned.get(id);
+		var outer = parent;
+		return outer != null && outer.isAssignedId(id);
 	}
 
-	function visibleValues():Array<{source:String, declared:CompilerType, id:String}> {
-		var result = parent == null ? [] : parent.visibleValues();
-		for (value in values)
+	function visibleValues():Array<ScopeValue> {
+		var outer = parent,
+			result:Array<ScopeValue> = outer == null ? [] : outer.visibleValues();
+		for (_ => value in values)
 			result.push(value);
 		return result;
 	}
 
-	function allocateLocalId():Int
-		return parent == null ? nextLocalId++ : parent.allocateLocalId();
+	function allocateLocalId():Int {
+		var outer = parent;
+		return outer == null ? nextLocalId++ : outer.allocateLocalId();
+	}
 }

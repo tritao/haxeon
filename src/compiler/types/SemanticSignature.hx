@@ -33,9 +33,10 @@ class SemanticSignature {
 		};
 
 	public static function parsedFunction(fn:AstFunction, aliases:Array<AstTypeAlias>):String {
-		var definitions = [for (alias in aliases) alias.name => alias.type];
+		var definitions:Map<String, AstType> = [for (alias in aliases) alias.name => alias.type],
+			typeParameters = fn.typeParameters;
 		return fn.name
-			+ (fn.typeParameters == null || fn.typeParameters.length == 0 ? "" : '<${fn.typeParameters.join(",")}>')
+			+ (typeParameters == null || typeParameters.length == 0 ? "" : '<${typeParameters.join(",")}>')
 			+ "("
 			+ [for (argument in fn.arguments) parsedType(argument.type, definitions, [])].join(",") + ")->" + parsedType(fn.result, definitions, []);
 	}
@@ -53,8 +54,8 @@ class SemanticSignature {
 			case InferredType: "_";
 			case NativeAbstractType(name): 'hl.Abstract<"$name">';
 			case NamedType(name):
-				var alias = aliases.get(name);
-				if (alias == null || resolving.exists(name)) name; else {
+				if (!aliases.exists(name) || resolving.exists(name)) name; else {
+					var alias = aliases.get(name);
 					resolving.set(name, true);
 					var result = parsedType(alias, aliases, resolving);
 					resolving.remove(name);
