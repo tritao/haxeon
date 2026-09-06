@@ -483,6 +483,16 @@ class TestMain {
 		nestedTypeCompiler.update("sample/Types.hx", "package sample; typedef Inner = Int;");
 		nestedTypeCompiler.update("Main.hx", "import sample.Types.Inner; function main():Int { var value:Inner = 42; return value; }");
 		nestedTypeCompiler.compile("Main");
+		var moduleImportCompiler = new Compiler();
+		moduleImportCompiler.update("sample/Types.hx", "package sample; class Types {} class Inner { public function new() {} }");
+		moduleImportCompiler.update("Main.hx", "import sample.Types; function main():Int { new Inner(); return 0; }");
+		moduleImportCompiler.compile("Main");
+		var methodDependencyCompiler = new Compiler();
+		methodDependencyCompiler.update("sample/Failure.hx", "package sample; class Failure { public function new() {} }");
+		methodDependencyCompiler.update("sample/Service.hx",
+			"package sample; import sample.Failure as Problem; class Service { static final VALUES:Map<String, Bool> = [\"known\" => true]; public static function create():Failure return new Problem(); public static function known():Bool return VALUES.exists(\"known\"); public static function character():String return String.fromCharCode(65); }");
+		methodDependencyCompiler.update("Main.hx", "import sample.Service; function main():Int { Service.create(); return 0; }");
+		methodDependencyCompiler.compile("Main");
 		var platformType = new Parser(new Lexer(new SourceFile("Platform.hx", "function size(value:haxe.io.Bytes):Int return 0;")).tokenize()).parseProgram();
 		Typer.typeLibrary(platformType);
 		Sys.println("PASS: nested module and platform type names resolve canonically");

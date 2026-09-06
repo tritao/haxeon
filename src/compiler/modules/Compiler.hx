@@ -945,11 +945,22 @@ class Compiler {
 				if (initializer != null)
 					scanExpression(initializer, dependencies);
 			}
+		for (classDecl in ast.classes)
+			for (method in classDecl.methods)
+				for (statement in method.statements)
+					scanStatement(statement, dependencies);
+		for (abstractDecl in ast.abstracts)
+			for (method in abstractDecl.methods)
+				for (statement in method.statements)
+					scanStatement(statement, dependencies);
 		for (abstractDecl in ast.enumAbstracts)
 			for (value in abstractDecl.values)
 				scanExpression(value.value, dependencies);
-		for (classDecl in ast.classes)
+		for (classDecl in ast.classes) {
 			dependencies.remove(classDecl.name);
+			for (field in classDecl.fields)
+				dependencies.remove(field.name);
+		}
 		for (enumDecl in ast.enums)
 			dependencies.remove(enumDecl.name);
 		for (abstractDecl in ast.enumAbstracts)
@@ -961,6 +972,8 @@ class Compiler {
 			if (alias != importPath)
 				dependencies.remove(alias);
 		}
+		for (alias in ast.importAliases.keys())
+			dependencies.remove(alias);
 		// Dotted native names such as Sys.time look like module-qualified calls
 		// to the dependency scanner.  Registered natives own those prefixes and
 		// must not require a source module with the same name.
@@ -970,6 +983,10 @@ class Compiler {
 		var packageName = ast.packageName;
 		for (dependency in [for (dependency in dependencies.keys()) dependency]) {
 			if (isPlatformDependency(dependency)) {
+				dependencies.remove(dependency);
+				continue;
+			}
+			if (dependency.indexOf(".") < 0 && hasSourceModuleImport(ast.imports)) {
 				dependencies.remove(dependency);
 				continue;
 			}
@@ -1133,6 +1150,13 @@ class Compiler {
 		state.signatureFingerprints = signatures;
 		state.bodyFingerprints = bodies;
 		state.dirty = false;
+	}
+
+	function hasSourceModuleImport(imports:Array<String>):Bool {
+		for (importPath in imports)
+			if (sourceModuleForDependency(importPath) != null)
+				return true;
+		return false;
 	}
 
 	static function lastPathSegment(path:String):String {
@@ -1859,6 +1883,10 @@ class Compiler {
 				addQualifiedOwner(name, dependencies);
 				for (a in args)
 					scanExpression(a, dependencies);
+			case New(typeName, args, _):
+				dependencies.set(typeName, true);
+				for (a in args)
+					scanExpression(a, dependencies);
 			case NewArray(_, length, _):
 				scanExpression(length, dependencies);
 			case NewMap(_, _, _):
@@ -1888,8 +1916,8 @@ class Compiler {
 
 	static function isPlatformDependency(path:String):Bool {
 		var root = firstPathSegment(path);
-		return root == "haxe" || root == "sys" || root == "hl" || root == "Array" || root == "Math" || root == "Reflect" || root == "Std"
-			|| root == "StringTools" || root == "Type";
+		return root == "haxe" || root == "sys" || root == "hl" || root == "Array" || root == "String" || root == "Math" || root == "Reflect"
+			|| root == "Std" || root == "StringTools" || root == "Type";
 	}
 
 	static function scanQualifiedDependency(name:String, dependencies:Map<String, Bool>):Void {
