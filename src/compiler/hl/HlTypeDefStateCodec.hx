@@ -1,6 +1,10 @@
 package compiler.hl;
 
 import compiler.hl.HlCode.HlTypeDef;
+import compiler.hl.HlCode.HlObjectField;
+import compiler.hl.HlCode.HlObjectMethod;
+import compiler.hl.HlCode.HlVirtualField;
+import compiler.hl.HlCode.HlEnumConstructor;
 import haxe.io.Bytes;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
@@ -97,22 +101,24 @@ class HlTypeDefStateCodec {
 				case 1: Abstract(input.readInt32());
 				case 2: Function(readInts(input), input.readInt32());
 				case 3:
-					var name = input.readInt32(), base = input.readInt32(), global = input.readInt32(), fields = [];
+					var name = input.readInt32(),
+						base = input.readInt32(),
+						global = input.readInt32();
+					var fields:Array<HlObjectField> = [];
 					for (_ in 0...readCount(input))
 						fields.push({name: input.readInt32(), type: input.readInt32()});
-					var methods = [];
+					var methods:Array<HlObjectMethod> = [];
 					for (_ in 0...readCount(input))
 						methods.push({name: input.readInt32(), functionIndex: input.readInt32(), prototype: input.readInt32()});
 					Object(name, base, global, fields, methods, readInts(input));
 				case 4:
-					var fields = [];
+					var fields:Array<HlVirtualField> = [];
 					for (_ in 0...readCount(input))
 						fields.push({name: input.readInt32(), type: input.readInt32()});
 					Virtual(fields);
 				case 5:
-					var name = input.readInt32(),
-						global = input.readInt32(),
-						constructors = [];
+					var name = input.readInt32(), global = input.readInt32();
+					var constructors:Array<HlEnumConstructor> = [];
 					for (_ in 0...readCount(input))
 						constructors.push({name: input.readInt32(), params: readInts(input)});
 					Enum(name, global, constructors);
@@ -122,33 +128,27 @@ class HlTypeDefStateCodec {
 	}
 
 	static function validateReferences(types:Array<HlTypeDef>, strings:Int, globals:Int):Void {
-		function string(index:Int):Void
-			if (index < 0 || index >= strings)
-				throw "Invalid HashLink type string reference";
-		function type(index:Int):Void
-			if (index < 0 || index >= types.length)
-				throw "Invalid HashLink type reference";
 		for (definition in types)
 			switch definition {
 				case Simple(_):
 				case Abstract(name):
-					string(name);
+					validateStringReference(name, strings);
 				case Function(arguments, result):
 					for (argument in arguments)
-						type(argument);
-					type(result);
+						validateTypeReference(argument, types.length);
+					validateTypeReference(result, types.length);
 				case Object(name, base, global, fields, methods, bindings):
-					string(name);
+					validateStringReference(name, strings);
 					if (base >= 0)
-						type(base);
+						validateTypeReference(base, types.length);
 					if (global < 0 || global > globals)
 						throw "Invalid HashLink object global";
 					for (field in fields) {
-						string(field.name);
-						type(field.type);
+						validateStringReference(field.name, strings);
+						validateTypeReference(field.type, types.length);
 					}
 					for (method in methods) {
-						string(method.name);
+						validateStringReference(method.name, strings);
 						if (method.functionIndex < 0 || method.prototype < 0)
 							throw "Invalid HashLink object method";
 					}
@@ -157,19 +157,29 @@ class HlTypeDefStateCodec {
 							throw "Invalid HashLink object binding";
 				case Virtual(fields):
 					for (field in fields) {
-						string(field.name);
-						type(field.type);
+						validateStringReference(field.name, strings);
+						validateTypeReference(field.type, types.length);
 					}
 				case Enum(name, global, constructors):
-					string(name);
+					validateStringReference(name, strings);
 					if (global < 0)
 						throw "Invalid HashLink enum global";
 					for (constructor in constructors) {
-						string(constructor.name);
+						validateStringReference(constructor.name, strings);
 						for (parameter in constructor.params)
-							type(parameter);
+							validateTypeReference(parameter, types.length);
 					}
 			}
+	}
+
+	static function validateStringReference(index:Int, count:Int):Void {
+		if (index < 0 || index >= count)
+			throw "Invalid HashLink type string reference";
+	}
+
+	static function validateTypeReference(index:Int, count:Int):Void {
+		if (index < 0 || index >= count)
+			throw "Invalid HashLink type reference";
 	}
 
 	static function writeInts(output:BytesOutput, values:Array<Int>):Void {
