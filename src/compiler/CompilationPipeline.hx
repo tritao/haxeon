@@ -61,7 +61,7 @@ import compiler.Compiler.CompileResult;
 class CompilationPipeline {
 	public static function compile(context:CompilationContext, entryModule:String, token:Null<CancellationToken>, rollbackModules:Map<String, ModuleState>,
 			transactionStartedAt:Float, snapshotDoneAt:Float):CompileResult {
-		var frontend = ModuleFrontendPipeline.run(context, entryModule, token, rollbackModules, snapshotDoneAt);
+		var frontend = FrontendCompilation.run(context, entryModule, token, rollbackModules, snapshotDoneAt);
 		var modules = context.modules, moduleId = context.moduleId;
 		var ir = frontend.ir,
 			names = frontend.moduleNames,

@@ -1,62 +1,17 @@
 package compiler;
 
-import compiler.Ast;
-import compiler.Ast.AstExpression;
-import compiler.Ast.AstFunction;
-import compiler.Ast.AstStatement;
-import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
-import compiler.Lexer;
-import compiler.Parser;
-import compiler.Source.SourceFile;
 import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrType;
 import compiler.ir.IrGenerator;
-import compiler.types.FieldInference;
-import compiler.types.SignatureInference;
-import compiler.types.Typer;
-import compiler.types.Typer.TyperPhaseMetrics;
-import compiler.types.SemanticSignature;
-import compiler.types.GenericSpecializationRegistry;
-import compiler.types.SemanticProgram;
-import compiler.types.TypedAst.TypedProgram;
-import compiler.hl.HlCode;
-import compiler.hl.incremental.HlModuleAssembler;
-import compiler.hl.patch.HlPatchWriter;
-import compiler.hl.persistence.HlRuntimeIdentity;
-import compiler.hl.persistence.HlAssemblerStateCodec;
-import haxe.io.Bytes;
-import compiler.types.Type.CompilerType;
-import compiler.ir.Ir.IrNative;
-import compiler.ir.Ir.IrObject;
-import compiler.types.TypeRegistry;
-import compiler.types.TypeRegistry.TypeCompatibility;
-import compiler.service.CancellationToken;
-import compiler.abi.RuntimeAbi;
-import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
-import compiler.abi.PatchPlanner;
-import compiler.abi.PatchPlanner.AbiChange;
-import compiler.abi.PatchPlanner.PatchDecision;
-import compiler.abi.NativeRegistry;
-import compiler.abi.NativeRegistry.NativeDefinition;
-import compiler.CompilerPublication.CompilerSnapshot;
-import compiler.CompilerPublication.PublicationStatus;
-import compiler.CompilerPublication.ReconnectDecision;
-import compiler.CompilerPublication.ReconnectReason;
-import compiler.modules.ModuleGraph;
-import compiler.modules.ModulePath;
 import compiler.modules.ModuleReachability;
 import compiler.modules.ModuleState;
-import compiler.modules.ModuleState.SemanticDependency;
-import compiler.modules.ModuleState.SemanticDependencyKind;
 import compiler.semantic.ModuleCanonicalizer;
-import compiler.semantic.ModuleChangeAnalyzer;
-import compiler.semantic.DependencyScanner;
-import compiler.semantic.LambdaCollector;
-import compiler.semantic.SemanticDependencyCollector;
-import compiler.semantic.SemanticWorkspace;
 import compiler.semantic.SemanticAssembly;
-import compiler.Compiler.CompileResult;
+import compiler.service.CancellationToken;
+import compiler.types.SemanticProgram;
+import compiler.types.Typer;
+import compiler.types.Typer.TyperPhaseMetrics;
+import compiler.types.TypedAst.TypedProgram;
 
 typedef FrontendResult = {
 	final ir:IrProgram;
@@ -69,19 +24,15 @@ typedef FrontendResult = {
 	final typingLoweringDoneAt:Float;
 	final irAssemblyDoneAt:Float;
 }
+
 /** Builds and validates the reachable source graph through complete IR assembly. */
-class ModuleFrontendPipeline {
+class FrontendCompilation {
 	public static function run(context:CompilationContext, entryModule:String, token:Null<CancellationToken>, rollbackModules:Map<String, ModuleState>,
 			snapshotDoneAt:Float):FrontendResult {
 		var modules = context.modules,
 			graph = context.graph,
-			objectCache = context.objectCache;
-		var moduleId = context.moduleId,
-			assembler = context.assembler,
-			publishedAbi = context.publishedAbi;
-		var compiledOnce = context.compiledOnce,
+			objectCache = context.objectCache,
 			genericSpecializations = context.genericSpecializations;
-		var startedAt = snapshotDoneAt;
 		if (token != null)
 			token.check();
 		var bodyChanged:Map<String, Bool> = [],
