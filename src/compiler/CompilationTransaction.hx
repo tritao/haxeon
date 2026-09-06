@@ -28,7 +28,7 @@ class CompilationTransaction {
 		if (startingAssembler != null)
 			compiler.assembler = startingAssembler;
 		try {
-			var result = compiler.compileCandidate(entryModule, token, snapshot.modules, transactionStartedAt, snapshotDoneAt);
+			var result = CompilationPipeline.compile(compiler, entryModule, token, snapshot.modules, transactionStartedAt, snapshotDoneAt);
 			var abi = compiler.publishedAbi;
 			if (abi == null)
 				throw "Compilation did not produce a runtime ABI";
