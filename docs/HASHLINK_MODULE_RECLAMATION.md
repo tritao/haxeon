@@ -52,13 +52,13 @@ in one process-owned executable image copied from the first finalized JIT suppor
 prefix. Later module loads no longer redirect those globals into their own JIT
 images, and global shutdown releases the support image explicitly.
 
-Debugger and profiler inspection remains an unload blocker. Stack capture,
-symbol resolution, and the debugger handshake traverse the process-global
-module array without synchronization, while the profiler stores raw JIT return
-addresses and resolves them later. A future in-process unload implementation
-must provide synchronized module-registry reads and ensure recorded samples are
-symbolized or discarded before their module metadata is freed. The runtime call
-mutex does not protect these process-wide readers.
+Debugger and profiler inspection use pinned module-registry snapshots. Stack
+capture, symbol resolution, type dumps, VTune enumeration, and the debugger
+handshake increment a per-module reader pin before inspecting metadata. Unload
+first removes the module from publication, then waits for prior snapshots to
+release their pins before freeing metadata. Profiler samples may retain raw
+numeric JIT addresses, but later symbolization only dereferences metadata found
+through a new pinned snapshot; samples for an unloaded module resolve as unknown.
 
 ## Required proof for a future in-process design
 

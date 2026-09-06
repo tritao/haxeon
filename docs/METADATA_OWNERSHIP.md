@@ -12,6 +12,7 @@ module generation.
 | Function dispatch slots | `hl_module` | Loaded module generation | Patchable calls and staged closures | Runtime-module release |
 | Base JIT image | HashLink executable allocator | `hl_module` | Dispatch slots, closures, active calls | Runtime-module release after calls quiesce |
 | JIT ABI wrapper image | HashLink executable allocator | Process runtime | Dynamic-call bridge and wrapper closures | Global HashLink shutdown after all modules and managed values are finished |
+| Module-registry snapshot | HashLink module registry | Debugger, profiler, stack capture, symbol resolver, or type dump operation | Module metadata during one inspection | Reader releases its pin; unload waits after removing publication |
 | Patch JIT image and decoded function metadata | HashLink patch transaction | `hl_module` patch-code owner | Dispatch slots, escaped closures, active calls | Retain replaced images through module release until borrower tracking exists |
 | Constant and string append storage | HashLink patch transaction | `hl_module` | Patched code and appended type metadata | Runtime-module release |
 | Globals storage | HashLink module allocator | Loaded module generation | Generated code and rooted heap values | Runtime-module release after plugin deactivation |
