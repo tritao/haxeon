@@ -19,6 +19,7 @@ enum AstType {
 	FunctionType(arguments:Array<AstType>, result:AstType);
 	AnonymousType(fields:Array<AstAnonymousField>);
 }
+
 /** One field declared by an anonymous structural type. */
 typedef AstAnonymousField = {final name:String; final type:AstType; final optional:Bool; final span:SourceSpan;}
 
@@ -112,6 +113,7 @@ typedef AstEnumAbstract = {
 /** Parsed non-enum abstract and the methods exposed through its underlying type. */
 typedef AstAbstract = {
 	final name:String;
+	final typeParameters:Array<String>;
 	final underlying:AstType;
 	final fromTypes:Array<AstType>;
 	final toTypes:Array<AstType>;

@@ -103,7 +103,8 @@ class Parser {
 	}
 
 	function parseAbstract(start:SourceSpan):AstAbstract {
-		var name = consume(TokenKind.Identifier).text;
+		var name = consume(TokenKind.Identifier).text,
+			typeParameters = parseTypeParameters();
 		consume(TokenKind.LeftParen);
 		var underlying = parseType();
 		consume(TokenKind.RightParen);
@@ -135,6 +136,7 @@ class Parser {
 		var end = consume(TokenKind.RightBrace).span;
 		return {
 			name: name,
+			typeParameters: typeParameters,
 			underlying: underlying,
 			fromTypes: fromTypes,
 			toTypes: toTypes,

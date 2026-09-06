@@ -147,6 +147,14 @@ class DeclarationIndex {
 					for (i in 0...alias.typeParameters.length)
 						aliasSubstitutions.set(alias.typeParameters[i], resolvedArguments[i]);
 					resolveAlias(alias, resolving, aliasSubstitutions);
+				} else if (abstracts.exists(name)) {
+					var decl = abstracts.get(name);
+					if (arguments.length != decl.typeParameters.length)
+						fail('Type "$name" expects ${decl.typeParameters.length} type arguments, got ${arguments.length}', span);
+					var abstractSubstitutions = [for (parameter => value in substitutions) parameter => value];
+					for (index in 0...arguments.length)
+						abstractSubstitutions.set(decl.typeParameters[index], resolveInner(arguments[index], span, resolving, substitutions));
+					resolveAbstract(decl, span, resolving, abstractSubstitutions);
 				} else if (classes.exists(name) || interfaces.exists(name) || enums.exists(name)) {
 					var parameters = classes.exists(name) ? classes.get(name)
 						.typeParameters : interfaces.exists(name) ? interfaces.get(name).typeParameters : enums.get(name).typeParameters;
@@ -196,8 +204,12 @@ class DeclarationIndex {
 				fail('Type "$name" expects ${alias.typeParameters.length} type arguments, got 0', span);
 			resolveAlias(alias, resolving, substitutions);
 		} else if (enumAbstracts.exists(name)) resolveInner(enumAbstracts.get(name).underlying, span, resolving,
-			substitutions); else if (abstracts.exists(name)) resolveInner(abstracts.get(name).underlying, span, resolving,
-			substitutions); else if (interfaces.exists(name)) resolveBareNominal(name, Interface, interfaces.get(name).typeParameters.length,
+			substitutions); else if (abstracts.exists(name)) {
+			var decl = abstracts.get(name);
+			if (decl.typeParameters.length != 0)
+				fail('Type "$name" expects ${decl.typeParameters.length} type arguments, got 0', span);
+			resolveAbstract(decl, span, resolving, substitutions);
+		} else if (interfaces.exists(name)) resolveBareNominal(name, Interface, interfaces.get(name).typeParameters.length,
 			span); else if (enums.exists(name)) resolveBareNominal(name, Enum, enums.get(name).typeParameters.length,
 			span); else if (classes.exists(name)) resolveBareNominal(name, Class, classes.get(name).typeParameters.length,
 			span); else if (PlatformAbi.isType(name)) PlatformAbi.valueType(name); else {
@@ -218,6 +230,16 @@ class DeclarationIndex {
 		resolving.set(alias.name, true);
 		var resolved = resolveInner(alias.type, alias.span, resolving, substitutions);
 		resolving.remove(alias.name);
+		return resolved;
+	}
+
+	function resolveAbstract(decl:compiler.syntax.Ast.AstAbstract, span:SourceSpan, resolving:Map<String, Bool>,
+			substitutions:Map<String, CompilerType>):CompilerType {
+		if (resolving.exists(decl.name))
+			fail('Cyclic abstract representation involving "${decl.name}"', span);
+		resolving.set(decl.name, true);
+		var resolved = resolveInner(decl.underlying, span, resolving, substitutions);
+		resolving.remove(decl.name);
 		return resolved;
 	}
 
@@ -307,13 +329,14 @@ class DeclarationIndex {
 
 	function validateSignatures(program:AstProgram):Void {
 		for (decl in program.abstracts) {
-			resolve(decl.underlying, decl.span);
+			var substitutions = declarationSubstitutions(decl.name, decl.typeParameters);
+			resolve(decl.underlying, decl.span, substitutions);
 			for (type in decl.fromTypes)
-				resolve(type, decl.span);
+				resolve(type, decl.span, substitutions);
 			for (type in decl.toTypes)
-				resolve(type, decl.span);
+				resolve(type, decl.span, substitutions);
 			for (method in decl.methods)
-				resolveFunction(method, decl.name);
+				resolveFunction(method, decl.name, substitutions);
 		}
 		for (decl in program.enumAbstracts) {
 			resolve(decl.underlying, decl.span);

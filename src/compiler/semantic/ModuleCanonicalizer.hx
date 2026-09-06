@@ -75,7 +75,8 @@ class ModuleCanonicalizer {
 			aliases.set(classDecl.name, qualifiedTypeName(packageName, classDecl.name));
 	}
 
-	public static function canonicalAlias(alias:compiler.syntax.Ast.AstTypeAlias, aliases:Map<String, String>, packageName:Null<String>):compiler.syntax.Ast.AstTypeAlias
+	public static function canonicalAlias(alias:compiler.syntax.Ast.AstTypeAlias, aliases:Map<String, String>,
+			packageName:Null<String>):compiler.syntax.Ast.AstTypeAlias
 		return {
 			name: qualifiedTypeName(packageName, alias.name),
 			typeParameters: alias.typeParameters,
@@ -84,7 +85,8 @@ class ModuleCanonicalizer {
 			span: alias.span
 		};
 
-	public static function canonicalEnum(enumDecl:compiler.syntax.Ast.AstEnum, aliases:Map<String, String>, packageName:Null<String>):compiler.syntax.Ast.AstEnum
+	public static function canonicalEnum(enumDecl:compiler.syntax.Ast.AstEnum, aliases:Map<String, String>,
+			packageName:Null<String>):compiler.syntax.Ast.AstEnum
 		return {
 			name: qualifiedTypeName(packageName, enumDecl.name),
 			typeParameters: enumDecl.typeParameters,
@@ -107,8 +109,8 @@ class ModuleCanonicalizer {
 			span: enumDecl.span
 		};
 
-	public static function canonicalEnumAbstract(decl:compiler.syntax.Ast.AstEnumAbstract, aliases:Map<String, String>, packageName:Null<String>, module:String,
-			entry:String, locals:Map<String, Bool>):compiler.syntax.Ast.AstEnumAbstract
+	public static function canonicalEnumAbstract(decl:compiler.syntax.Ast.AstEnumAbstract, aliases:Map<String, String>, packageName:Null<String>,
+			module:String, entry:String, locals:Map<String, Bool>):compiler.syntax.Ast.AstEnumAbstract
 		return {
 			name: qualifiedTypeName(packageName, decl.name),
 			underlying: canonicalType(decl.underlying, aliases),
@@ -129,15 +131,46 @@ class ModuleCanonicalizer {
 			entry:String, locals:Map<String, Bool>):compiler.syntax.Ast.AstAbstract
 		return {
 			name: qualifiedTypeName(packageName, decl.name),
-			underlying: canonicalType(decl.underlying, aliases),
-			fromTypes: [for (type in decl.fromTypes) canonicalType(type, aliases)],
-			toTypes: [for (type in decl.toTypes) canonicalType(type, aliases)],
+			typeParameters: decl.typeParameters,
+			underlying: canonicalType(decl.underlying, aliases, decl.typeParameters),
+			fromTypes: [for (type in decl.fromTypes) canonicalType(type, aliases, decl.typeParameters)],
+			toTypes: [for (type in decl.toTypes) canonicalType(type, aliases, decl.typeParameters)],
 			methods: [
 				for (method in decl.methods)
-					canonicalFunction(method, module, entry, locals, qualifiedTypeName(packageName, decl.name) + "." + method.name, aliases)
+					canonicalAbstractMethod(method, decl.typeParameters, module, entry, locals, qualifiedTypeName(packageName, decl.name) + "." + method.name,
+						aliases)
 			],
 			span: decl.span
 		};
+
+	static function canonicalAbstractMethod(method:AstFunction, ownerTypeParameters:Array<String>, module:String, entry:String, locals:Map<String, Bool>,
+			name:String, aliases:Map<String, String>):AstFunction {
+		var parameters = combinedTypeParameters(ownerTypeParameters, method.typeParameters),
+			methodAliases = copyAliases(aliases);
+		for (parameter in parameters)
+			methodAliases.set(parameter, parameter);
+		return {
+			name: name,
+			isStatic: method.isStatic,
+			typeParameters: method.typeParameters,
+			arguments: [
+				for (argument in method.arguments)
+					{
+						name: argument.name,
+						type: canonicalType(argument.type, methodAliases, parameters),
+						span: argument.span,
+						optional: argument.optional,
+						defaultValue: canonicalOptionalExpression(argument.defaultValue, module, entry, locals, methodAliases)
+					}
+			],
+			result: canonicalType(method.result, methodAliases, parameters),
+			span: method.span,
+			statements: [
+				for (statement in method.statements)
+					canonicalStatement(statement, module, entry, locals, methodAliases)
+			]
+		};
+	}
 
 	public static function canonicalInterface(interfaceDecl:compiler.syntax.Ast.AstInterface, aliases:Map<String, String>,
 			packageName:Null<String>):compiler.syntax.Ast.AstInterface
@@ -418,7 +451,8 @@ class ModuleCanonicalizer {
 		return resolveExpressionAlias(name, aliases);
 	}
 
-	public static function canonicalType(type:compiler.syntax.Ast.AstType, aliases:Null<Map<String, String>>, ?typeParameters:Array<String>):compiler.syntax.Ast.AstType
+	public static function canonicalType(type:compiler.syntax.Ast.AstType, aliases:Null<Map<String, String>>,
+			?typeParameters:Array<String>):compiler.syntax.Ast.AstType
 		return switch type {
 			case NativeAbstractType(name): NativeAbstractType(name);
 			case NamedType(name): NamedType(typeParameters != null
