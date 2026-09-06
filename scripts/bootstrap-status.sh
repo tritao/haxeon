@@ -9,4 +9,4 @@ if [[ ! -x "$haxe" ]]; then
 	exit 1
 fi
 
-"$haxe" --cwd "$root_dir" -cp src --run Main bootstrap-status "$@"
+"$haxe" --cwd "$root_dir" -cp src --run compiler.tools.BootstrapStatus "$@"

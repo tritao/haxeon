@@ -1,17 +1,12 @@
 import compiler.hl.HlWriter;
 import compiler.modules.Compiler;
 import compiler.modules.ModulePath;
-import compiler.tools.BootstrapStatus;
 import compiler.RuntimeAbi;
 import sys.io.File;
 
 class Main {
 	static function main():Void {
 		var arguments = Sys.args();
-		if (arguments.length > 0 && arguments[0] == "bootstrap-status") {
-			BootstrapStatus.run(arguments.slice(1));
-			return;
-		}
 		var sourcePath = arguments.length > 0 ? arguments[0] : "tests/programs/add.hx";
 		var outputPath = arguments.length > 1 ? arguments[1] : "out/program.hl";
 		var compiler = new Compiler();

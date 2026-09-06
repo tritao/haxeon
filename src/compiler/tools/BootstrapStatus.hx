@@ -50,22 +50,25 @@ typedef BootstrapReport = {
 
 /** Measures bootstrap readiness by executing the real frontend on source files. */
 class BootstrapStatus {
+	public static function main():Void
+		run(Sys.args());
+
 	public static function run(arguments:Array<String>):Void {
 		var json = false;
 		var entryModule = "Main";
-		var roots = [];
+		var roots:Array<String> = [];
 		for (argument in arguments) {
 			if (argument == "--json")
 				json = true;
 			else if (StringTools.startsWith(argument, "--entry="))
-				entryModule = argument.substr("--entry=".length);
+				entryModule = argument.substring("--entry=".length, argument.length);
 			else
 				roots.push(argument);
 		}
 		if (roots.length == 0)
 			roots = ["src"];
 
-		var paths = [];
+		var paths:Array<String> = [];
 		for (root in roots)
 			collect(root, paths);
 		paths.sort(Reflect.compare);
