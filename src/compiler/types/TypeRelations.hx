@@ -84,6 +84,19 @@ class TypeRelations {
 					case TArray(actualElement): equals(actualElement, expectedElement);
 					default: false;
 				}
+			case TFunction(expectedArguments, expectedResult):
+				switch actual {
+					case TFunction(actualArguments, actualResult):
+						if (actualArguments.length != expectedArguments.length
+							|| !isAssignable(actualResult, expectedResult)) false; else {
+							var compatible = true;
+							for (index in 0...actualArguments.length)
+								if (!isAssignable(expectedArguments[index], actualArguments[index]))
+									compatible = false;
+							compatible;
+						}
+					default: false;
+				}
 			default: false;
 		};
 	}

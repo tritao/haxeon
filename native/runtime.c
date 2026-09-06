@@ -733,12 +733,8 @@ HL_PRIM vbyte *HL_NAME(__std_string)( vdynamic *value ) {
 	return (vbyte *)hl_to_string(value);
 }
 
-HL_PRIM int HL_NAME(__reflect_compare)( vbyte *left, vbyte *right ) {
-	if( left == NULL ) return right == NULL ? 0 : -1;
-	if( right == NULL ) return 1;
-	const uchar *a = (const uchar *)left, *b = (const uchar *)right;
-	while( *a != 0 && *a == *b ) { a++; b++; }
-	return (int)*a - (int)*b;
+HL_PRIM int HL_NAME(__reflect_compare)( vdynamic *left, vdynamic *right ) {
+	return hl_dyn_compare(left,right);
 }
 
 HL_PRIM bool HL_NAME(__string_starts_with)( vbyte *value, vbyte *prefix ) {
@@ -1227,7 +1223,7 @@ DEFINE_PRIM(_F64,__std_parse_float,_BYTES);
 DEFINE_PRIM(_I32,__std_int_f64,_F64);
 DEFINE_PRIM(_I32,__std_random,_I32);
 DEFINE_PRIM(_BYTES,__std_string,_DYN);
-DEFINE_PRIM(_I32,__reflect_compare,_BYTES _BYTES);
+DEFINE_PRIM(_I32,__reflect_compare,_DYN _DYN);
 DEFINE_PRIM(_BOOL,__string_starts_with,_BYTES _BYTES);
 DEFINE_PRIM(_BOOL,__string_ends_with,_BYTES _BYTES);
 DEFINE_PRIM(_BYTES,__string_replace,_BYTES _BYTES _BYTES);

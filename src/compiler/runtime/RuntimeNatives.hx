@@ -53,7 +53,7 @@ class RuntimeNatives {
 		definitions.push(native("__std_int_f64", "realtime_runtime", "__std_int_f64", [TFloat], TInt));
 		definitions.push(native("Std.random", "realtime_runtime", "__std_random", [TInt], TInt));
 		definitions.push(native("Std.string", "realtime_runtime", "__std_string", [TDynamic], TString));
-		definitions.push(native("Reflect.compare", "realtime_runtime", "__reflect_compare", [TString, TString], TInt));
+		definitions.push(native("Reflect.compare", "realtime_runtime", "__reflect_compare", [TDynamic, TDynamic], TInt));
 		definitions.push(native("StringTools.startsWith", "realtime_runtime", "__string_starts_with", [TString, TString], TBool));
 		definitions.push(native("StringTools.endsWith", "realtime_runtime", "__string_ends_with", [TString, TString], TBool));
 		definitions.push(native("StringTools.replace", "realtime_runtime", "__string_replace", [TString, TString, TString], TString));
