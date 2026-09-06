@@ -3,11 +3,11 @@ package compiler.ir;
 import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
-import compiler.ir.Ir.BlockId;
 import haxe.io.Bytes as HaxeBytes;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
-import Array as HaxeArray;
+import compiler.ir.IrTypeCodec;
+import compiler.ir.IrValueTableCodec;
 
 /** Closed, versioned encoding for every persisted IR instruction operand. */
 class IrInstructionCodec {
@@ -79,22 +79,158 @@ class IrInstructionCodec {
 			return result;
 		} catch (error:haxe.io.Eof) {
 			throw "Truncated IR instruction state";
-		} catch (error:Dynamic) {
-			if (Std.isOfType(error, String) && StringTools.startsWith(cast error, "Invalid IR") || error == "Unknown IR instruction")
+		} catch (error:String) {
+			if (StringTools.startsWith(error, "Invalid IR") || error == "Unknown IR instruction")
 				throw error;
+			throw "Invalid IR instruction operands";
+		} catch (_:Dynamic) {
 			throw "Invalid IR instruction operands";
 		}
 	}
 
 	public static function write(output:BytesOutput, instruction:IrInstruction):Void {
-		var name = Type.enumConstructor(instruction);
-		if (!CONSTRUCTORS.exists(name))
-			throw "Unknown IR instruction";
-		writeString(output, name);
-		var parameters = Type.enumParameters(instruction);
-		output.writeInt32(parameters.length);
-		for (parameter in parameters)
-			writeOperand(output, parameter);
+		switch instruction {
+			case Phi(value, inputs):
+				begin(output, "Phi", 2);
+				writeValue(output, value);
+				writePhiInputs(output, inputs);
+			case ConstVoid(value):
+				begin(output, "ConstVoid", 1);
+				writeValue(output, value);
+			case ConstInt(value, constant):
+				begin(output, "ConstInt", 2);
+				writeValue(output, value);
+				writeInt(output, constant);
+			case ConstFloat(value, constant):
+				begin(output, "ConstFloat", 2);
+				writeValue(output, value);
+				writeFloat(output, constant);
+			case ConstString(value, constant):
+				begin(output, "ConstString", 2);
+				writeValue(output, value);
+				writeText(output, constant);
+			case ConstBool(value, constant):
+				begin(output, "ConstBool", 2);
+				writeValue(output, value);
+				writeBool(output, constant);
+			case ConstNull(value):
+				begin(output, "ConstNull", 1);
+				writeValue(output, value);
+			case TypeValue(value, type):
+				begin(output, "TypeValue", 2);
+				writeValue(output, value);
+				writeType(output, type);
+			case ToDyn(outputValue, value):
+				writeTwoValues(output, "ToDyn", outputValue, value);
+			case SafeCast(outputValue, value):
+				writeTwoValues(output, "SafeCast", outputValue, value);
+			case BeginTry(catchBlock, afterBlock):
+				begin(output, "BeginTry", 2);
+				writeInt(output, catchBlock);
+				writeInt(output, afterBlock);
+			case EndTry:
+				begin(output, "EndTry", 0);
+			case Catch(value):
+				begin(output, "Catch", 1);
+				writeValue(output, value);
+			case GlobalGet(value, name):
+				begin(output, "GlobalGet", 2);
+				writeValue(output, value);
+				writeText(output, name);
+			case GlobalSet(name, value):
+				begin(output, "GlobalSet", 2);
+				writeText(output, name);
+				writeValue(output, value);
+			case Add(value, left, right):
+				writeThreeValues(output, "Add", value, left, right);
+			case Sub(value, left, right):
+				writeThreeValues(output, "Sub", value, left, right);
+			case Mul(value, left, right):
+				writeThreeValues(output, "Mul", value, left, right);
+			case Div(value, left, right):
+				writeThreeValues(output, "Div", value, left, right);
+			case Mod(value, left, right):
+				writeThreeValues(output, "Mod", value, left, right);
+			case BitAnd(value, left, right):
+				writeThreeValues(output, "BitAnd", value, left, right);
+			case BitXor(value, left, right):
+				writeThreeValues(output, "BitXor", value, left, right);
+			case BitOr(value, left, right):
+				writeThreeValues(output, "BitOr", value, left, right);
+			case ShiftLeft(value, left, right):
+				writeThreeValues(output, "ShiftLeft", value, left, right);
+			case ShiftRight(value, left, right):
+				writeThreeValues(output, "ShiftRight", value, left, right);
+			case UnsignedShiftRight(value, left, right):
+				writeThreeValues(output, "UnsignedShiftRight", value, left, right);
+			case Less(value, left, right):
+				writeThreeValues(output, "Less", value, left, right);
+			case LessEqual(value, left, right):
+				writeThreeValues(output, "LessEqual", value, left, right);
+			case Equal(value, left, right):
+				writeThreeValues(output, "Equal", value, left, right);
+			case Call(value, name, arguments):
+				begin(output, "Call", 3);
+				writeValue(output, value);
+				writeText(output, name);
+				writeValues(output, arguments);
+			case StaticClosure(value, name):
+				begin(output, "StaticClosure", 2);
+				writeValue(output, value);
+				writeText(output, name);
+			case InstanceClosure(value, name, receiver):
+				begin(output, "InstanceClosure", 3);
+				writeValue(output, value);
+				writeText(output, name);
+				writeValue(output, receiver);
+			case CallClosure(value, closure, arguments):
+				begin(output, "CallClosure", 3);
+				writeValue(output, value);
+				writeValue(output, closure);
+				writeValues(output, arguments);
+			case ToVirtual(outputValue, value):
+				writeTwoValues(output, "ToVirtual", outputValue, value);
+			case MethodCall(value, object, name, arguments):
+				begin(output, "MethodCall", 4);
+				writeValue(output, value);
+				writeValue(output, object);
+				writeText(output, name);
+				writeValues(output, arguments);
+			case NewObject(value, name):
+				begin(output, "NewObject", 2);
+				writeValue(output, value);
+				writeText(output, name);
+			case FieldGet(value, object, name):
+				begin(output, "FieldGet", 3);
+				writeValue(output, value);
+				writeValue(output, object);
+				writeText(output, name);
+			case FieldSet(object, name, value):
+				begin(output, "FieldSet", 3);
+				writeValue(output, object);
+				writeText(output, name);
+				writeValue(output, value);
+			case ArrayGet(value, array, index):
+				writeThreeValues(output, "ArrayGet", value, array, index);
+			case ArraySet(array, index, value):
+				writeThreeValues(output, "ArraySet", array, index, value);
+			case ArraySize(value, array):
+				writeTwoValues(output, "ArraySize", value, array);
+			case MakeEnum(value, name, constructor, arguments):
+				begin(output, "MakeEnum", 4);
+				writeValue(output, value);
+				writeText(output, name);
+				writeInt(output, constructor);
+				writeValues(output, arguments);
+			case EnumIndex(outputValue, value):
+				writeTwoValues(output, "EnumIndex", outputValue, value);
+			case EnumField(outputValue, value, constructor, field):
+				begin(output, "EnumField", 4);
+				writeValue(output, outputValue);
+				writeValue(output, value);
+				writeInt(output, constructor);
+				writeInt(output, field);
+		}
 	}
 
 	public static function read(input:BytesInput, totalLength:Int, values:Map<Int, IrValue>):IrInstruction {
@@ -298,52 +434,79 @@ class IrInstructionCodec {
 			var block = input.readInt32();
 			if (block < 0)
 				throw "Invalid IR block reference";
-			result.push({block: (block : BlockId), value: IrValueTableCodec.readReference(input, values)});
+			result.push({block: block, value: IrValueTableCodec.readReference(input, values)});
 		}
 		return result;
 	}
 
-	static function writeOperand(output:BytesOutput, value:Dynamic):Void {
-		var valueType = Type.typeof(value);
-		if (valueType.match(TClass(IrValue))) {
-			output.writeByte(0);
-			IrValueTableCodec.writeReference(output, cast value);
-		} else if (valueType.match(TInt)) {
-			output.writeByte(1);
-			output.writeInt32(value);
-		} else if (valueType.match(TFloat)) {
-			output.writeByte(2);
-			output.writeDouble(value);
-		} else if (valueType.match(TBool)) {
-			output.writeByte(3);
-			output.writeByte(value ? 1 : 0);
-		} else if (valueType.match(TClass(String))) {
-			output.writeByte(4);
-			writeString(output, value);
-		} else if (isArrayType(valueType)) {
-			var values:Array<Dynamic> = cast value;
-			if (values.length > 0x100000)
-				throw "Invalid IR operand array";
-			output.writeByte(5);
-			output.writeInt32(values.length);
-			for (item in values)
-				writeOperand(output, item);
-		} else if (valueType.match(TEnum(IrType))) {
-			output.writeByte(6);
-			IrTypeCodec.writeType(output, cast value, 0);
-		} else if (value != null && Reflect.hasField(value, "block") && Reflect.hasField(value, "value")) {
-			output.writeByte(7);
-			output.writeInt32(Reflect.field(value, "block"));
-			IrValueTableCodec.writeReference(output, Reflect.field(value, "value"));
-		} else
-			throw "Invalid IR instruction operand";
+	static function begin(output:BytesOutput, name:String, count:Int):Void {
+		writeString(output, name);
+		output.writeInt32(count);
 	}
 
-	static function isArrayType(type:Type.ValueType):Bool
-		return switch type {
-			case TClass(value): value == HaxeArray;
-			default: false;
-		};
+	static function writeValue(output:BytesOutput, value:IrValue):Void {
+		output.writeByte(0);
+		IrValueTableCodec.writeReference(output, value);
+	}
+
+	static function writeInt(output:BytesOutput, value:Int):Void {
+		output.writeByte(1);
+		output.writeInt32(value);
+	}
+
+	static function writeFloat(output:BytesOutput, value:Float):Void {
+		output.writeByte(2);
+		output.writeDouble(value);
+	}
+
+	static function writeBool(output:BytesOutput, value:Bool):Void {
+		output.writeByte(3);
+		output.writeByte(value ? 1 : 0);
+	}
+
+	static function writeText(output:BytesOutput, value:String):Void {
+		output.writeByte(4);
+		writeString(output, value);
+	}
+
+	static function writeType(output:BytesOutput, value:IrType):Void {
+		output.writeByte(6);
+		IrTypeCodec.writeType(output, value, 0);
+	}
+
+	static function writeValues(output:BytesOutput, values:Array<IrValue>):Void {
+		if (values.length > 0x100000)
+			throw "Invalid IR operand array";
+		output.writeByte(5);
+		output.writeInt32(values.length);
+		for (value in values)
+			writeValue(output, value);
+	}
+
+	static function writePhiInputs(output:BytesOutput, inputs:Array<compiler.ir.Ir.IrPhiInput>):Void {
+		if (inputs.length > 0x100000)
+			throw "Invalid IR operand array";
+		output.writeByte(5);
+		output.writeInt32(inputs.length);
+		for (input in inputs) {
+			output.writeByte(7);
+			output.writeInt32(input.block);
+			IrValueTableCodec.writeReference(output, input.value);
+		}
+	}
+
+	static function writeTwoValues(output:BytesOutput, name:String, first:IrValue, second:IrValue):Void {
+		begin(output, name, 2);
+		writeValue(output, first);
+		writeValue(output, second);
+	}
+
+	static function writeThreeValues(output:BytesOutput, name:String, first:IrValue, second:IrValue, third:IrValue):Void {
+		begin(output, name, 3);
+		writeValue(output, first);
+		writeValue(output, second);
+		writeValue(output, third);
+	}
 
 	static function readOperand(input:BytesInput, totalLength:Int, values:Map<Int, IrValue>):Dynamic
 		return switch input.readByte() {

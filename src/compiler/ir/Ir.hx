@@ -16,11 +16,8 @@ enum IrType {
 	Function(arguments:Array<IrType>, result:IrType);
 }
 
-abstract ValueId(Int) from Int to Int {}
-abstract BlockId(Int) from Int to Int {}
-
 class IrValue {
-	public final id:ValueId;
+	public final id:Int;
 	public final name:String;
 	public final type:IrType;
 
@@ -31,7 +28,7 @@ class IrValue {
 	}
 }
 
-typedef IrPhiInput = {final block:BlockId; final value:IrValue;}
+typedef IrPhiInput = {final block:Int; final value:IrValue;}
 
 enum IrInstruction {
 	Phi(output:IrValue, inputs:Array<IrPhiInput>);
@@ -44,7 +41,7 @@ enum IrInstruction {
 	TypeValue(output:IrValue, type:IrType);
 	ToDyn(output:IrValue, value:IrValue);
 	SafeCast(output:IrValue, value:IrValue);
-	BeginTry(catchBlock:BlockId, afterBlock:BlockId);
+	BeginTry(catchBlock:Int, afterBlock:Int);
 	EndTry;
 	Catch(output:IrValue);
 	GlobalGet(output:IrValue, name:String);
@@ -84,12 +81,12 @@ enum IrTerminator {
 	Return(value:IrValue);
 	Throw(value:IrValue);
 	Rethrow(value:IrValue);
-	Jump(target:BlockId);
-	Branch(condition:IrValue, whenTrue:BlockId, whenFalse:BlockId);
+	Jump(target:Int);
+	Branch(condition:IrValue, whenTrue:Int, whenFalse:Int);
 }
 
 class IrBlock {
-	public final id:BlockId;
+	public final id:Int;
 	public final instructions:Array<IrInstruction> = [];
 	public var terminator:Null<IrTerminator>;
 
