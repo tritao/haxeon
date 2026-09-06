@@ -153,6 +153,7 @@ run_program virtual-dispatch 71
 run_program enum-basic 42
 run_program enum-payload 42
 run_program enum-payload-pattern 42
+run_program enum-array-pattern 42
 run_program nullable-basic 42
 run_program nullable-compound 42
 run_program nullable-enum-switch 42

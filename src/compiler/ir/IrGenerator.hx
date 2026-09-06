@@ -1247,8 +1247,13 @@ class IrGenerator {
 			var field = abiBoundaryCast(builder,
 				builder.enumField(builder.load(subjectName, subjectType), constructorIndex, predicate.index, lowerType(predicate.storageType)),
 				lowerType(predicate.type));
-			var expected = lowerExpression(predicate.value, builder, localTypes);
-			var matches = isStringPatternType(predicate.type) ? builder.call("__string_equal", [field, expected], Bool) : builder.equal(field, expected);
+			var matches = if (predicate.arrayLength >= 0) builder.equal(builder.arraySize(field), builder.constInt(predicate.arrayLength)); else {
+				var predicateValue = predicate.value;
+				if (predicateValue == null)
+					throw "Equality payload predicate has no value";
+				var expected = lowerExpression(predicateValue, builder, localTypes);
+				isStringPatternType(predicate.type) ? builder.call("__string_equal", [field, expected], Bool) : builder.equal(field, expected);
+			}
 			checkBlock = index + 1 == predicates.length ? matchBlock : builder.createBlock();
 			builder.branch(matches, checkBlock, nextBlock);
 		}

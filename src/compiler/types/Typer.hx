@@ -1422,6 +1422,24 @@ class Typer {
 	}
 
 	function typeEnumPredicate(value:AstExpression, type:CompilerType, storageType:CompilerType, index:Int, constantName:Null<String>):TypedSwitchPredicate {
+		switch value {
+			case ArrayLiteral(values, span):
+				switch type {
+					case TArray(_):
+						if (values.length != 0)
+							fail("E1019", "Non-empty array payload patterns are not supported yet", span);
+						return {
+							value: null,
+							arrayLength: 0,
+							type: type,
+							storageType: storageType,
+							index: index
+						};
+					default:
+						fail("E1019", "Array payload pattern requires an Array value", span);
+				}
+			default:
+		}
 		var resolvedValue = switch value {
 			case Variable(_, span) if (constantName != null): Variable(Std.string(constantName), span);
 			default: value;
@@ -1431,6 +1449,7 @@ class Typer {
 			fail("E1019", "Enum switch payload patterns must be constants, local names, or '_'", typed.span);
 		return {
 			value: typed,
+			arrayLength: -1,
 			type: type,
 			storageType: storageType,
 			index: index
@@ -1461,9 +1480,18 @@ class Typer {
 			return 'enum:$name:$index';
 		var keys = [
 			for (predicate in predicates)
-				'${predicate.index}:${constantPatternKey(predicate.value)}'
+				'${predicate.index}:${switchPredicateKey(predicate)}'
 		];
 		return 'enum:$name:$index:${keys.join(",")}';
+	}
+
+	function switchPredicateKey(predicate:TypedSwitchPredicate):String {
+		if (predicate.arrayLength >= 0)
+			return 'array-length:${predicate.arrayLength}';
+		var value = predicate.value;
+		if (value == null)
+			throw "Equality payload predicate has no value";
+		return Std.string(constantPatternKey(value));
 	}
 
 	function switchCaseKey(value:TypedExpression, predicates:Array<TypedSwitchPredicate>):Null<String>
