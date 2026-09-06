@@ -134,8 +134,8 @@ def read_handshake(reader: Reader) -> tuple[int, list[ModuleMappings]]:
     return pointer_size, modules
 
 
-def read_refresh(reader: Reader, pointer_size: int) -> list[ModuleMappings]:
-    if reader.read(4) != b"MAP3":
+def read_refresh(reader: Reader, pointer_size: int, marker: bytes | None = None) -> list[ModuleMappings]:
+    if (marker if marker is not None else reader.read(4)) != b"MAP3":
         raise ProtocolError("missing MAP3 refresh marker")
     module_count = reader.i32()
     if module_count <= 0:
@@ -185,12 +185,24 @@ def main() -> int:
         initial_revisions = {module.identity: module.revision for module in initial}
         deadline = time.monotonic() + args.timeout
         observed: ModuleMappings | None = None
+        # A releases --debug-wait without racing a redundant live snapshot.
+        sock.sendall(b"A")
+        if reader.read(4) != b"ACK3":
+            raise ProtocolError("missing initial ACK3")
         while time.monotonic() < deadline and process.poll() is None:
+            marker = reader.read(4)
+            if marker != b"REV3":
+                raise ProtocolError("missing REV3 notification")
+            reader.pointer(pointer_size)
+            if reader.i32() <= 0:
+                raise ProtocolError("invalid REV3 revision")
             sock.sendall(b"R")
-            for module in read_refresh(reader, pointer_size):
+            marker = reader.read(4)
+            for module in read_refresh(reader, pointer_size, marker):
                 if module.regions and module.revision > initial_revisions.get(module.identity, 0):
                     observed = module
                     break
+            sock.sendall(b"A")
             if observed is not None:
                 break
             time.sleep(0.005)

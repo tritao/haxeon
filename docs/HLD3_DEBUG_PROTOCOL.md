@@ -34,8 +34,32 @@ revision and patch-region payload described above. Any other command closes
 the connection. Clients should refresh after observing a revision change and
 reinstall source breakpoints at the active function mappings.
 
-The transport does not itself synchronize patch publication, process stops,
-and breakpoint rewriting. A debugger must arrange a safe refresh point before
-reinstalling software breakpoints. In particular, sending `R` after ptrace has
-stopped every target thread can deadlock because the runtime's debug-server
-thread cannot produce `MAP3` until the process resumes.
+After atomically publishing a patch, the runtime sends `REV3`, the module
+identity pointer, and its new revision. The publishing thread then waits while
+the adapter sends `R`, consumes the resulting `MAP3`, and safely rewrites its
+software breakpoints. The adapter completes the transaction by sending `A`;
+only then does the publishing thread return to user code.
+
+Runtime-loaded modules send the same `REV3` notification at revision 1, making
+their embedded HLB and base JIT table visible before the load call returns. An
+initial `A` releases `--debug-wait`; the runtime confirms it with `ACK3`.
+
+Revision-time software breakpoint writes use `B`, an entry count, and entries
+containing an address plus the requested byte. The runtime responds with
+`BRK3`, the count, and each replaced byte. This lets the adapter retain the
+original bytes without using ptrace while the publisher is parked.
+
+Breakpoint rewrites are performed by the runtime's protocol thread after the
+complete `MAP3` frame. This avoids both requesting a snapshot from a
+ptrace-stopped server and writing process memory while the target is running.
+
+## Diagnostic tracing
+
+Set `HL_DEBUG_TRACE` to a writable file path to record newline-delimited JSON
+from the runtime, debugger core, and DAP adapter. The trace includes revision
+publication and acknowledgement, mapping refreshes, breakpoint function/opcode
+identity and native addresses, verified code writes, native wait results, trap
+recognition, target exit status, and uncaught adapter errors.
+
+Tracing is disabled by default. `test-dap-hot-reload.sh` enables it for its
+isolated target and prints the trace automatically when the test fails.

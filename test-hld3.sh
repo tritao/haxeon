@@ -13,10 +13,10 @@ cc -shared -fPIC -DHL_NAME\(n\)=realtime_\#\#n \
   -Wl,-rpath,"$repo_dir/vendor/hashlink" \
   -o "$repo_dir/out/realtime_runtime.hdll"
 
-"$repo_dir/.tools/haxe/haxe" "$repo_dir/hot-reload-test.hxml"
+"$repo_dir/.tools/haxe/haxe" "$repo_dir/dap-hot-reload-probe.hxml"
 
 (
   cd "$repo_dir/out"
   LD_LIBRARY_PATH="$repo_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-    python3 "$repo_dir/scripts/hld3-harness.py" hot-reload-test.hl --hl "$repo_dir/vendor/hashlink/hl"
+    python3 "$repo_dir/scripts/hld3-harness.py" dap-hot-reload-probe.hl --hl "$repo_dir/vendor/hashlink/hl" --timeout 20
 )
