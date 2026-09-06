@@ -34,7 +34,8 @@ typedef PendingPublication = {
 typedef PublicationStatus = {
 	final tracking:Bool;
 	final acknowledgedRevision:Int;
-	final pendingRevision:Null<Int>;
+	final hasPendingRevision:Bool;
+	final pendingRevision:Int;
 }
 
 typedef PublicationPersistence = {
@@ -108,11 +109,22 @@ class CompilerPublication {
 
 	public function status():PublicationStatus
 		return switch state {
-			case Untracked: {tracking: false, acknowledgedRevision: 0, pendingRevision: null};
-			case Ready(baseline): {tracking: true, acknowledgedRevision: baseline.revision, pendingRevision: null};
+			case Untracked: {
+					tracking: false,
+					acknowledgedRevision: 0,
+					hasPendingRevision: false,
+					pendingRevision: 0
+				};
+			case Ready(baseline): {
+					tracking: true,
+					acknowledgedRevision: baseline.revision,
+					hasPendingRevision: false,
+					pendingRevision: 0
+				};
 			case Pending(candidate): {
 					tracking: true,
 					acknowledgedRevision: candidate.baseline.revision,
+					hasPendingRevision: true,
 					pendingRevision: candidate.revision
 				};
 		};

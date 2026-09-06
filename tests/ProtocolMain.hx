@@ -35,7 +35,7 @@ class ProtocolMain {
 			|| pendingReconnect.result.reason.code != "publication_pending")
 			throw "protocol reconnect ignored a pending publication";
 		var acknowledged:Dynamic = Json.parse(protocol.handle('{"id":22,"method":"acknowledge","revision":1}'));
-		if (!acknowledged.ok || acknowledged.result.acknowledgedRevision != 1 || acknowledged.result.pendingRevision != null)
+		if (!acknowledged.ok || acknowledged.result.acknowledgedRevision != 1 || acknowledged.result.hasPendingRevision)
 			throw "protocol did not acknowledge initial publication";
 		var connected:Dynamic = Json.parse(protocol.handle(Json.stringify({
 			id: 23,
@@ -85,7 +85,7 @@ class ProtocolMain {
 			|| patched.result.compatibility.artifactKind != "patch")
 			throw "protocol compile did not transport a compatible patch";
 		var rejected:Dynamic = Json.parse(protocol.handle('{"id":83,"method":"reject","revision":2}'));
-		if (!rejected.ok || rejected.result.acknowledgedRevision != 1 || rejected.result.pendingRevision != null)
+		if (!rejected.ok || rejected.result.acknowledgedRevision != 1 || rejected.result.hasPendingRevision)
 			throw "protocol did not restore the acknowledged baseline after rejection";
 		var retried:Dynamic = Json.parse(protocol.handle('{"id":831,"method":"compile","entry":"Main"}'));
 		if (!retried.ok || retried.result.revision != 2 || retried.result.patchBase64 != patched.result.patchBase64)

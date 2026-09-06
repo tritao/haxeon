@@ -246,6 +246,7 @@ class ModuleMain {
 		publicationCompiler.update("Main.hx", "function main():Int { return 40; }");
 		var publicationInitial = publicationCompiler.compile("Main");
 		if (publicationCompiler.publicationStatus().acknowledgedRevision != 0
+			|| !publicationCompiler.publicationStatus().hasPendingRevision
 			|| publicationCompiler.publicationStatus().pendingRevision != publicationInitial.revision)
 			throw "Emitted initial build advanced the acknowledged runtime baseline";
 		try {
@@ -286,7 +287,7 @@ class ModuleMain {
 		}
 		publicationCompiler.rejectPublication(rejectedPublication.revision);
 		if (publicationCompiler.publicationStatus().acknowledgedRevision != publicationInitial.revision
-			|| publicationCompiler.publicationStatus().pendingRevision != null)
+			|| publicationCompiler.publicationStatus().hasPendingRevision)
 			throw "Rejected build advanced or left the runtime publication baseline pending";
 		var retriedPublication = publicationCompiler.compile("Main");
 		if (retriedPublication.revision != rejectedPublication.revision

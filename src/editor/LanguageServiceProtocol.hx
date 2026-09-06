@@ -202,6 +202,7 @@ class LanguageServiceProtocol {
 		var status = service.compiler.publicationStatus();
 		return {
 			acknowledgedRevision: status.acknowledgedRevision,
+			hasPendingRevision: status.hasPendingRevision,
 			pendingRevision: status.pendingRevision
 		};
 	}
