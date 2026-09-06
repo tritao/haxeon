@@ -72,15 +72,11 @@ wait_frame() {
   return 1
 }
 
-assert_local() {
-	local expected=$1 scopes ref variables
+read_locals() {
+	local scopes ref
 	scopes=$("${dap[@]}" scopes --name "$session" --frame-id "$current_frame")
 	ref=$(python3 -c 'import json,sys; print(next(s["variablesReference"] for s in json.load(sys.stdin)["data"]["scopes"] if s["name"]=="Locals"))' <<<"$scopes")
-	variables=$("${dap[@]}" variables --name "$session" --variables-reference "$ref")
-	if ! python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="result" and v.get("type")=="Int" and v.get("value")==sys.argv[1] for v in vs)' "$expected" <<<"$variables"; then
-		printf '%s\n' "$variables" >&2
-		return 1
-	fi
+	"${dap[@]}" variables --name "$session" --variables-reference "$ref"
 }
 
 "${dap[@]}" start >/dev/null
@@ -91,10 +87,16 @@ print(json.dumps({"type":"hl","request":"launch","name":"HLD3 hot reload","cwd":
 PY
 )
 "${dap[@]}" launch --adapter hashlink --name "$session" --json "$launch_json" >/dev/null
-value=$("${dap[@]}" breakpoints set --name "$session" --source "$repo_dir/tests/dap/Value.hx" --line 4)
-python3 -c 'import json,sys; assert json.load(sys.stdin)["data"]["breakpoints"][0]["verified"]' <<<"$value"
-wait_frame Value.hx 4
-assert_local 43
+value=$("${dap[@]}" breakpoints set --name "$session" --source "$repo_dir/tests/dap/Value.hx" --line 6 8)
+python3 -c 'import json,sys; points=json.load(sys.stdin)["data"]["breakpoints"]; assert len(points)==2 and all(p["verified"] for p in points)' <<<"$value"
+wait_frame Value.hx 6
+locals=$(read_locals)
+python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="result" and v.get("value")=="43" for v in vs), vs; assert any(v["name"]=="scoped" and v.get("value")=="142" for v in vs), vs' <<<"$locals"
+
+"${dap[@]}" continue --name "$session" >/dev/null
+wait_frame Value.hx 8
+locals=$(read_locals)
+python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="result" and v.get("value")=="42" for v in vs), vs; assert not any(v["name"]=="scoped" for v in vs), vs' <<<"$locals"
 
 "${dap[@]}" continue --name "$session" >/dev/null
 for _ in {1..40}; do
@@ -102,6 +104,12 @@ for _ in {1..40}; do
 	if python3 -c 'import json,sys; raise SystemExit(0 if json.load(sys.stdin).get("data",{}).get("status")=="running" else 1)' <<<"$status"; then break; fi
 	sleep 0.05
 done
-wait_frame Value.hx 4
-assert_local 44
-echo "PASS: dap-cli rebound Value.hx:4 and resolved locals in original and patched code"
+wait_frame Value.hx 6
+locals=$(read_locals)
+python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="result" and v.get("value")=="44" for v in vs), vs; assert any(v["name"]=="scoped" and v.get("value")=="143" for v in vs), vs' <<<"$locals"
+
+"${dap[@]}" continue --name "$session" >/dev/null
+wait_frame Value.hx 8
+locals=$(read_locals)
+python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="result" and v.get("value")=="43" for v in vs), vs; assert not any(v["name"]=="scoped" for v in vs), vs' <<<"$locals"
+echo "PASS: dap-cli rebound scoped locals in original and patched Value.hx code"
