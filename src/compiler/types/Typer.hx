@@ -371,6 +371,7 @@ class Typer {
 			return null;
 		return switch type {
 			case TArray(element): element;
+			case TNullable(element): arrayElementExpectation(element);
 			default: null;
 		};
 	}
@@ -380,6 +381,7 @@ class Typer {
 			return null;
 		return switch type {
 			case TMap(key, value): {key: key, value: value};
+			case TNullable(element): mapExpectation(element);
 			default: null;
 		};
 	}
@@ -1163,7 +1165,8 @@ class Typer {
 		if (known != null)
 			return known;
 		return switch expression {
-			case Variable(name, _): scope.resolve(name);
+			case Variable(name, _): name.indexOf(".") >= 0 ? typeExpression(expression, scope).type : scope.resolve(name);
+			case Member(_, _, _): typeExpression(expression, scope).type;
 			case Cast(_, target, _): target == null ? null : lowerType(target);
 			default: null;
 		};

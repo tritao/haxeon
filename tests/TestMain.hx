@@ -213,6 +213,9 @@ class TestMain {
 		Frontend.compile('function main():Int { var values:Map<String, Array<Int>> = []; var found = values.get("key"); return found == null ? 0 : found.length; }');
 		Frontend.compile('enum Choice { First; Second; } function choose(flag:Bool, other:Choice):Choice return flag ? First : other; function reverse(flag:Bool, other:Choice):Choice return flag ? other : Second; function main():Int return 0;');
 		Frontend.compile('function choose(value:Null<String>):Int { var chosen = value == null ? (true ? "fallback" : "unused") : value; return chosen.length; } function main():Int return choose(null);');
+		Frontend.compile('class Values { public var items:Null<Array<Int>>; public function new(items:Null<Array<Int>>) { this.items = items; } } function choose(values:Values):Array<Int> { var result = values.items == null ? [] : values.items; return result; } function main():Int return choose(new Values(null)).length;');
+		Frontend.compile('typedef ValuesRecord = { items:Null<Array<Int>> }; function choose(values:ValuesRecord):Array<Int> { var result = values.items == null ? [] : values.items; return result; } function main():Int return 0;');
+		Frontend.compile('typedef OptionalValues = { ?items:Array<Int> }; function choose(values:OptionalValues):Array<Int> { var result = values.items == null ? [] : values.items; return result; } function main():Int return 0;');
 		expectCompileError('function main():Int { var value = true ? 1 : "wrong"; return 0; }', 'Conditional branches must have matching types');
 		expectCompileError('function main():Int { return switch 1 { case 1: 42; }; }', 'Switch expression requires a default branch');
 		expectCompileError('function main():Int { return switch 1 { case 1: 42; default: "wrong"; }; }', 'Type mismatch for switch branch');
