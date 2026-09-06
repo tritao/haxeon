@@ -19,6 +19,7 @@ import compiler.ir.Ir.IrValue;
 import compiler.ir.Ir.IrEnum;
 import compiler.ir.IrVerifier;
 import compiler.ir.SourceProvenance;
+import compiler.ir.DebugNames;
 
 /** Lowers verified SSA IR into indexed HashLink types, registers, and opcodes. */
 class HlLower {
@@ -202,7 +203,9 @@ class HlLower {
 				names.push(binding.name);
 		}
 		var debugAssignments:Array<HlDebugAssignment> = [for (argument in fn.arguments) {
-			name: internString(argument.name), position: -1, scopeEnd: -1
+			var name = DebugNames.sourceLocal(argument.name);
+			if (name != null)
+				{name: internString(name), position: -1, scopeEnd: -1};
 		}],
 			seenAssignments:Map<String, Bool> = [];
 		var instructions:Array<HlInstruction> = [],

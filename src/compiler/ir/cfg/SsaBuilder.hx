@@ -4,6 +4,7 @@ import compiler.ir.cfg.Cfg;
 import compiler.ir.cfg.CfgVerifier;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance;
+import compiler.ir.DebugNames;
 import compiler.ir.SourceProvenance.Located;
 import compiler.ir.SourceProvenance.SourceOrigin;
 
@@ -297,7 +298,7 @@ class SsaBuilder {
 				case StoreLocal(name, value):
 					var resolved = resolve(value);
 					push(name, resolved);
-					var debugName = sourceDebugName(name);
+					var debugName = DebugNames.sourceLocal(name);
 					if (debugName != null)
 						debugBindings.push({name: debugName, value: resolved});
 					pushed.push(name);
@@ -488,14 +489,6 @@ class SsaBuilder {
 
 	function allocate(name:String, type:IrType):IrValue {
 		return new IrValue(nextValue++, name, type);
-	}
-
-	static function sourceDebugName(name:String):Null<String> {
-		if (StringTools.startsWith(name, "$l")) {
-			var separator = name.indexOf(":");
-			return separator < 0 ? null : name.substr(separator + 1);
-		}
-		return StringTools.startsWith(name, "$") ? null : name;
 	}
 
 	function push(name:String, value:IrValue):Void {
