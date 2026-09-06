@@ -56,6 +56,7 @@ class RuntimeNatives {
 		definitions.push(native("Reflect.compare", "realtime_runtime", "__reflect_compare", [TString, TString], TInt));
 		definitions.push(native("StringTools.startsWith", "realtime_runtime", "__string_starts_with", [TString, TString], TBool));
 		definitions.push(native("StringTools.endsWith", "realtime_runtime", "__string_ends_with", [TString, TString], TBool));
+		definitions.push(native("StringTools.replace", "realtime_runtime", "__string_replace", [TString, TString, TString], TString));
 		definitions.push(native("sys.io.File.getContent", "realtime_runtime", "__file_get_content", [TString], TString));
 		var bytes:CompilerType = TBytes,
 			input:CompilerType = TNativeAbstract("realtime_bytes_input"),

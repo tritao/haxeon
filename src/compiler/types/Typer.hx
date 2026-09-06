@@ -955,9 +955,10 @@ class Typer {
 							var mapName = RuntimeType.mapName(key, value);
 							if (mapName == null)
 								fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
-							if (valueName == null)
-								typedIterable = new TypedExpression(TCollectionCall(typedIterable, "keys", []), TArray(key), span);
-							key;
+							if (valueName == null) {
+								typedIterable = new TypedExpression(TCollectionCall(typedIterable, "values", []), TArray(value), span);
+								value;
+							} else key;
 						default:
 							fail("E1014", "For-in iterable must be an Array or Map", span);
 							TInt;
@@ -1319,6 +1320,10 @@ class Typer {
 			return right;
 		if (right == TNever || sameType(left, right))
 			return left;
+		if (isAssignable(left, right))
+			return right;
+		if (isAssignable(right, left))
+			return left;
 		return switch left {
 			case TNull: right == TVoid ? null : TNullable(right);
 			case TNullable(inner): sameType(inner, right) ? TNullable(inner) : null;
@@ -1490,7 +1495,7 @@ class Typer {
 							}
 							var object = typeExpression(Variable(objectName, span), scope);
 							for (index in 1...parts.length)
-								object = typedMember(object, parts[index], span);
+								object = typedMemberWithFlow(object, parts[index], span, scope);
 							object;
 						}
 					}
@@ -1901,8 +1906,8 @@ class Typer {
 					case TMap(key, mapValue):
 						if (RuntimeType.mapName(key, mapValue) == null)
 							fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
-						keyType = key;
-						if (valueName == null) typedIterable = new TypedExpression(TCollectionCall(typedIterable, "keys", []), TArray(key), span);
+						keyType = valueName == null ? mapValue : key;
+						if (valueName == null) typedIterable = new TypedExpression(TCollectionCall(typedIterable, "values", []), TArray(mapValue), span);
 					default:
 						fail("E1014", "Array comprehension iterable must be an Array or Map", span);
 				}
@@ -1941,8 +1946,8 @@ class Typer {
 					case TMap(mapKey, mapValue):
 						if (RuntimeType.mapName(mapKey, mapValue) == null)
 							fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
-						itemType = mapKey;
-						if (valueName == null) typedIterable = new TypedExpression(TCollectionCall(typedIterable, "keys", []), TArray(mapKey), span);
+						itemType = valueName == null ? mapValue : mapKey;
+						if (valueName == null) typedIterable = new TypedExpression(TCollectionCall(typedIterable, "values", []), TArray(mapValue), span);
 					default:
 						fail("E1014", "Map comprehension iterable must be an Array or Map", span);
 				}
@@ -2252,7 +2257,16 @@ class Typer {
 		}
 
 	function typeMember(object:AstExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression {
-		return typedMember(typeExpression(object, scope), name, span);
+		return typedMemberWithFlow(typeExpression(object, scope), name, span, scope);
+	}
+
+	function typedMemberWithFlow(object:TypedExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression {
+		var member = typedMember(object, name, span),
+			path = FlowAnalysis.accessPath(member);
+		if (path == null)
+			return member;
+		var refined = scope.resolveExpression(path);
+		return refined == null ? member : new TypedExpression(member.expression, refined, member.span);
 	}
 
 	function typeAbstractConstruction(name:String, typeArguments:Array<AstType>, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
@@ -2607,11 +2621,11 @@ class Typer {
 			return new TypedExpression(TStringIndexOf(receiver, needle), TInt, span);
 		}
 		if (name == "substring") {
-			if (arguments.length != 2)
-				fail("E1008", 'Function "String.substring" expects 2 arguments, got ${arguments.length}', span);
+			if (arguments.length < 1 || arguments.length > 2)
+				fail("E1008", 'Function "String.substring" expects 1 or 2 arguments, got ${arguments.length}', span);
 			var start = typeExpression(arguments[0], scope),
-				end = typeExpression(arguments[1], scope);
-			if (!sameType(start.type, TInt) || !sameType(end.type, TInt))
+				end:Null<TypedExpression> = arguments.length == 1 ? null : typeExpression(arguments[1], scope);
+			if (!sameType(start.type, TInt) || (end != null && !sameType(end.type, TInt)))
 				fail("E1009", "String.substring expects Int bounds", span);
 			return new TypedExpression(TStringSubstring(receiver, start, end), TString, span);
 		}
@@ -3022,12 +3036,22 @@ class Typer {
 
 	function arithmetic(a:AstExpression, b:AstExpression, scope:Scope, add:Bool, span:SourceSpan):TypedExpression {
 		var left = typeExpression(a, scope), right = typeExpression(b, scope);
-		if (add && sameType(left.type, TString) && sameType(right.type, TString))
+		if (add && isStringConvertible(left.type) && isStringConvertible(right.type)) {
+			left = coerce(left, TString, "string concatenation", "E1010");
+			right = coerce(right, TString, "string concatenation", "E1010");
 			return new TypedExpression(TAdd(left, right), TString, span);
+		}
 		if (!sameType(left.type, right.type) || (!sameType(left.type, TInt) && !sameType(left.type, TFloat)))
 			fail("E1010", "Arithmetic requires matching Int or Float operands", span);
 		return new TypedExpression(add ? TAdd(left, right) : TSub(left, right), left.type, span);
 	}
+
+	function isStringConvertible(type:CompilerType):Bool
+		return switch type {
+			case TString: true;
+			case TAbstract(_, _, _): isAssignable(type, TString);
+			default: false;
+		};
 
 	function logical(a:AstExpression, b:AstExpression, scope:Scope, and:Bool, span:SourceSpan):TypedExpression {
 		var left = typeExpression(a, scope),
@@ -3080,6 +3104,23 @@ class Typer {
 			return new TypedExpression(TEqual(left, right), TBool, span);
 		if (operation == 2 && sameType(left.type, TBool) && sameType(right.type, TBool))
 			return new TypedExpression(TEqual(left, right), TBool, span);
+		if (operation == 2 && isAssignable(left.type, right.type)) {
+			left = coerce(left, right.type, "equality comparison", "E1011");
+			return new TypedExpression(TEqual(left, right), TBool, span);
+		}
+		if (operation == 2 && isAssignable(right.type, left.type)) {
+			right = coerce(right, left.type, "equality comparison", "E1011");
+			return new TypedExpression(TEqual(left, right), TBool, span);
+		}
+		if (operation == 2
+			&& ((sameType(left.type, TNull) && TypeRelations.isReference(right.type))
+				|| (sameType(right.type, TNull) && TypeRelations.isReference(left.type)))) {
+			if (sameType(left.type, TNull))
+				left = new TypedExpression(TNullableWrap(left), right.type, left.span);
+			else
+				right = new TypedExpression(TNullableWrap(right), left.type, right.span);
+			return new TypedExpression(TEqual(left, right), TBool, span);
+		}
 		if (operation == 2 && (sameType(left.type, TNull) || sameType(right.type, TNull))) {
 			var nullableComparison = switch left.type {
 				case TNull:
@@ -3099,8 +3140,8 @@ class Typer {
 		}
 		if (operation == 2 && sameType(left.type, right.type))
 			switch left.type {
-				case TDynamic, TNativeAbstract(_), TInstance(Class, _, []), TInstance(Interface, _, []), TInstance(Enum, _, _), TNullable(_), TArray(_),
-					TMap(_, _), TFunction(_, _), TAnonymous(_, _):
+				case TDynamic, TNativeAbstract(_), TAbstract(_, _, _), TInstance(Class, _, []), TInstance(Interface, _, []), TInstance(Enum, _, _),
+					TNullable(_), TArray(_), TMap(_, _), TFunction(_, _), TAnonymous(_, _):
 					return new TypedExpression(TEqual(left, right), TBool, span);
 				default:
 			}

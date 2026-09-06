@@ -28,22 +28,37 @@ class FlowAnalysis {
 		}
 		var comparison = nullComparison(condition);
 		if (comparison != null) {
-			var nonNull = truthy == comparison.nonNullWhenTrue;
-			scope.refine(comparison.name, nonNull ? comparison.nonNullType : TNull);
+			var nonNull = truthy == comparison.nonNullWhenTrue,
+				refined = nonNull ? comparison.nonNullType : TNull;
+			if (comparison.localName.length > 0)
+				scope.refine(comparison.localName, refined);
+			else
+				scope.refineExpression(comparison.path, refined);
 		}
 	}
 
-	static function nullComparison(condition:TypedExpression):Null<{name:String, nonNullType:CompilerType, nonNullWhenTrue:Bool}> {
+	static function nullComparison(condition:TypedExpression):Null<{
+		localName:String,
+		path:String,
+		nonNullType:CompilerType,
+		nonNullWhenTrue:Bool
+	}> {
 		return switch condition.expression {
-			case TEqual(left, right): var local = nullableLocal(left),
+			case TEqual(left, right): var local = nullableAccess(left),
 					other = isNullValue(right) ? true : false; if (local == null) {
-					local = nullableLocal(right);
+					local = nullableAccess(right);
 					other = isNullValue(left);
-				} local == null || !other ? null : {name: local.name, nonNullType: local.nonNullType, nonNullWhenTrue: false};
+				} local == null || !other ? null : {
+					localName: local.localName,
+					path: local.path,
+					nonNullType: local.nonNullType,
+					nonNullWhenTrue: false
+				};
 			case TNot(value):
 				var comparison = nullComparison(value);
 				comparison == null ? null : {
-					name: comparison.name,
+					localName: comparison.localName,
+					path: comparison.path,
 					nonNullType: comparison.nonNullType,
 					nonNullWhenTrue: !comparison.nonNullWhenTrue
 				};
@@ -51,15 +66,30 @@ class FlowAnalysis {
 		};
 	}
 
-	static function nullableLocal(expression:TypedExpression):Null<{name:String, nonNullType:CompilerType}> {
+	static function nullableAccess(expression:TypedExpression):Null<{localName:String, path:String, nonNullType:CompilerType}> {
 		return switch expression.expression {
 			case TLocal(name), TCellLocal(name, _): switch expression.type {
-					case TNullable(element): {name: name, nonNullType: element};
+					case TNullable(element): {localName: name, path: "", nonNullType: element};
 					default: null;
 				};
-			default: null;
+			default:
+				var path = accessPath(expression);
+				switch expression.type {
+					case TNullable(element) if (path != null): {localName: "", path: path, nonNullType: element};
+					default: null;
+				}
 		};
 	}
+
+	public static function accessPath(expression:TypedExpression):Null<String>
+		return switch expression.expression {
+			case TLocal(name), TCellLocal(name, _): name;
+			case TField(object, name):
+				var parent = accessPath(object);
+				parent == null ? null : parent + "." + name;
+			case TCast(value), TAbiCast(value): accessPath(value);
+			default: null;
+		};
 
 	static function isNullValue(expression:TypedExpression):Bool
 		return switch expression.expression {

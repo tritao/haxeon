@@ -12,6 +12,7 @@ private typedef ScopeValue = {
 	final id:String;
 	final receiver:Bool;
 }
+
 /**
  * Lexical bindings, definite assignment, flow facts, and capture decisions.
  * Child scopes preserve stable binding IDs while maintaining branch-local facts.
@@ -90,6 +91,12 @@ class Scope {
 		if (local != null)
 			facts.refine(local.id, type);
 	}
+
+	public function refineExpression(path:String, type:CompilerType):Void
+		facts.refine('$' + 'expression:$path', type);
+
+	public function resolveExpression(path:String):Null<CompilerType>
+		return facts.resolve('$' + 'expression:$path');
 
 	public function invalidate(name:String):Void {
 		var local = resolveLocal(name);

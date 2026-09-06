@@ -11,13 +11,13 @@ function main():Int {
 	values["one"] = new Item(10);
 	values["two"] = new Item(32);
 	var total = 0;
-	for (key in values)
-		total = total + values.get(key).value;
+	for (item in values)
+		total = total + item.value;
 
 	var indexed = new Map<Int, Int>();
 	indexed[3] = 4;
 	indexed[5] = 6;
-	for (indexKey in indexed)
-		total = total + indexed[indexKey];
+	for (indexValue in indexed)
+		total = total + indexValue;
 	return total;
 }

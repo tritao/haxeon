@@ -745,6 +745,45 @@ HL_PRIM bool HL_NAME(__string_ends_with)( vbyte *value, vbyte *suffix ) {
 		&& memcmp(value + (value_length - suffix_length) * sizeof(uchar), suffix, suffix_length * sizeof(uchar)) == 0;
 }
 
+HL_PRIM vbyte *HL_NAME(__string_replace)( vbyte *value, vbyte *sub, vbyte *by ) {
+	int value_length = value == NULL ? 0 : (int)ustrlen((const uchar *)value);
+	int sub_length = sub == NULL ? 0 : (int)ustrlen((const uchar *)sub);
+	int by_length = by == NULL ? 0 : (int)ustrlen((const uchar *)by);
+	int matches = 0;
+	if( sub_length == 0 ) {
+		matches = value_length > 0 ? value_length - 1 : 0;
+	} else {
+		for( int offset = 0; offset <= value_length - sub_length; ) {
+			if( memcmp(value + offset * sizeof(uchar), sub, sub_length * sizeof(uchar)) == 0 ) {
+				matches++;
+				offset += sub_length;
+			} else
+				offset++;
+		}
+	}
+	int result_length = value_length + matches * (by_length - sub_length);
+	vbyte *result = hl_alloc_bytes((result_length + 1) * (int)sizeof(uchar));
+	uchar *output = (uchar *)result;
+	int source_offset = 0, output_offset = 0;
+	while( source_offset < value_length ) {
+		bool matched = sub_length == 0 ? source_offset > 0
+			: source_offset <= value_length - sub_length
+				&& memcmp(value + source_offset * sizeof(uchar), sub, sub_length * sizeof(uchar)) == 0;
+		if( matched ) {
+			if( by_length > 0 )
+				memcpy(output + output_offset, by, by_length * sizeof(uchar));
+			output_offset += by_length;
+			if( sub_length > 0 ) {
+				source_offset += sub_length;
+				continue;
+			}
+		}
+		output[output_offset++] = ((const uchar *)value)[source_offset++];
+	}
+	output[output_offset] = 0;
+	return result;
+}
+
 HL_PRIM vbyte *HL_NAME(__file_get_content)( vbyte *path ) {
 	FILE *file = fopen(hl_to_utf8((const uchar *)path), "rb");
 	if( file == NULL ) hl_error("Could not open source file");
@@ -1160,6 +1199,7 @@ DEFINE_PRIM(_BYTES,__std_string,_DYN);
 DEFINE_PRIM(_I32,__reflect_compare,_BYTES _BYTES);
 DEFINE_PRIM(_BOOL,__string_starts_with,_BYTES _BYTES);
 DEFINE_PRIM(_BOOL,__string_ends_with,_BYTES _BYTES);
+DEFINE_PRIM(_BYTES,__string_replace,_BYTES _BYTES _BYTES);
 DEFINE_PRIM(_BYTES,__file_get_content,_BYTES);
 DEFINE_PRIM(_ABSTRACT(realtime_bytes),__bytes_alloc,_I32);
 DEFINE_PRIM(_ABSTRACT(realtime_bytes),__bytes_of_string,_BYTES);

@@ -8,7 +8,7 @@ class StringMain {
 		var compiler = new Compiler();
 		compiler.registerNative("trace", "std", "sys_print", [CompilerType.TString], CompilerType.TVoid);
 		compiler.update("Main.hx",
-			'function main():Int { var text = "hello " + "world"; trace(text); var found = text.indexOf("world"); var piece = text.substring(6, 11); if (piece == "world") return text.length + found + piece.length + 20; return 0; }');
+			'function main():Int { var text = "hello " + "world"; trace(text); var found = text.indexOf("world"); var piece = text.substring(6); if (piece == "world") return text.length + found + piece.length + 20; return 0; }');
 		var result = compiler.compile("Main");
 		File.saveBytes(Sys.args()[0], HlWriter.encode(result.module));
 	}

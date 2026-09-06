@@ -1104,11 +1104,9 @@ class IrGenerator {
 			case TStringFromCharCode(code):
 				builder.call("__string_from_char_code", [lowerExpression(code, builder, localTypes)], Bytes);
 			case TStringSubstring(value, start, end):
-				builder.call("__string_substring", [
-					lowerExpression(value, builder, localTypes),
-					lowerExpression(start, builder, localTypes),
-					lowerExpression(end, builder, localTypes)
-				], Bytes);
+				var loweredValue = lowerExpression(value, builder, localTypes),
+					loweredEnd = end == null ? builder.call("__string_length", [loweredValue], I32) : lowerExpression(end, builder, localTypes);
+				builder.call("__string_substring", [loweredValue, lowerExpression(start, builder, localTypes), loweredEnd], Bytes);
 			case TArrayPush(array, value):
 				var element = switch array.type {
 					case TArray(valueType): valueType;

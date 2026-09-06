@@ -9,8 +9,6 @@ make -C "$root_dir/vendor/hashlink" -j2 libhl.so hl >/dev/null
 
 "$root_dir/scripts/format.sh" --check
 
-"$root_dir/tests/differential/run.sh"
-
 if [[ ! -x "$haxe" || ! -x "$hl" ]]; then
     echo "missing local toolchain; run ./scripts/bootstrap-tools.sh first" >&2
     exit 1
@@ -23,6 +21,9 @@ cc -shared -fPIC -DHL_NAME\(n\)=realtime_##n \
 	-L "$root_dir/vendor/hashlink" -lhl \
 	-Wl,-rpath,"$root_dir/vendor/hashlink" \
 	-o "$root_dir/out/realtime_runtime.hdll"
+
+"$root_dir/tests/differential/run.sh"
+
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run TestMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run CaptureAnalysisMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ModuleCanonicalizerMain

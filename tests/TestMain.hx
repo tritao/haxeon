@@ -210,6 +210,7 @@ class TestMain {
 		expectCompileError('function main():Int { if (1) return 1; else return 2; }', 'If condition must be Bool');
 		expectCompileError('function main():Int { return 1 ? 2 : 3; }', 'Conditional expression requires a Bool condition');
 		Frontend.compile('typedef Holder = { value:Null<String> }; function read(holder:Holder):Int return holder.value != null && holder.value.length > 0 ? 1 : 0; function main():Int return 0;');
+		Frontend.compile('function main():Int { var values:Map<String, Array<Int>> = []; var found = values.get("key"); return found == null ? 0 : found.length; }');
 		expectCompileError('function main():Int { var value = true ? 1 : "wrong"; return 0; }', 'Conditional branches must have matching types');
 		expectCompileError('function main():Int { return switch 1 { case 1: 42; }; }', 'Switch expression requires a default branch');
 		expectCompileError('function main():Int { return switch 1 { case 1: 42; default: "wrong"; }; }', 'Type mismatch for switch branch');
