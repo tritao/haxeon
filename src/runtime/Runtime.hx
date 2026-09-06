@@ -54,6 +54,9 @@ private class RuntimeNative {
 	public static function live_allocation_count(module:hl.Abstract<"realtime_module">):Int
 		return 0;
 
+	public static function native_root_count(module:hl.Abstract<"realtime_module">):Int
+		return 0;
+
 	public static function revision(module:hl.Abstract<"realtime_module">):Int
 		return 0;
 
@@ -133,6 +136,9 @@ class Runtime {
 
 	public static function liveAllocationCount(module:LoadedModule):Int
 		return module.access(RuntimeNative.live_allocation_count);
+
+	public static function nativeRootCount(module:LoadedModule):Int
+		return module.access(RuntimeNative.native_root_count);
 
 	public static function liveRevision(module:LoadedModule):Int
 		return module.access(RuntimeNative.revision);

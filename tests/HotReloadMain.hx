@@ -338,6 +338,8 @@ class HotReloadMain {
 		var initial = compiler.compile("Main"),
 			loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
 		var retained = Runtime.retainObject(loaded, initial.functionIds.get("Main.make"));
+		if (Runtime.nativeRootCount(loaded) == 0)
+			throw "loaded module globals were not attributed to their native owner";
 		if (Runtime.liveAllocationCount(loaded) == 0)
 			throw "retained object was not attributed to its module";
 		compiler.update("Main.hx",

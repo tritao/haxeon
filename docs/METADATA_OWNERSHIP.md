@@ -66,3 +66,9 @@ array allocations pass their logical module owner explicitly because their GC
 header type can be synthetic or shared. A zero count covers managed allocations
 only; it is not permission to unmap a module because native caches, JIT entry
 points, and other non-GC borrowers still need separate ownership tracking.
+
+GC roots now carry an optional explicit owner as well. Module global roots use
+the loaded `hl_module` as that owner, and the runtime reports them separately
+from managed allocations. Process-global runtime roots remain unowned. Removing
+a root removes its ownership record in the same GC-locked operation, so the
+count describes the current root set rather than historical registrations.
