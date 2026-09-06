@@ -1,23 +1,24 @@
 package compiler.hl;
 
-import haxe.io.Bytes;
+import haxe.io.Bytes as HaxeBytes;
 import haxe.io.BytesOutput;
 import compiler.hl.HlCode.HlTypeDef;
+import compiler.hl.HlType as HashLinkType;
 
 class HlPatchWriter {
 	public static inline final VERSION = 4;
 	static inline final SYMBOLS = 1;
 	static inline final FUNCTIONS = 2;
 
-	public static function encode(code:HlCode, moduleId:Bytes, changedSlots:Array<Int>, stableIdsBySlot:Map<Int, Int>, baseRevision:Int, revision:Int,
-			baseInts:Int = 0, baseFloats:Int = 0, baseStrings:Int = 0, baseTypes:Int = 0):Bytes {
+	public static function encode(code:HlCode, moduleId:HaxeBytes, changedSlots:Array<Int>, stableIdsBySlot:Map<Int, Int>, baseRevision:Int, revision:Int,
+			baseInts:Int = 0, baseFloats:Int = 0, baseStrings:Int = 0, baseTypes:Int = 0):HaxeBytes {
 		if (baseRevision < 0 || revision <= baseRevision)
 			throw "Invalid patch revision range";
 		var selected:Array<HlFunction> = [];
 		if (moduleId.length != 16)
 			throw "Module ID must contain 16 bytes";
 		for (index in changedSlots) {
-			var found = null;
+			var found:Null<HlFunction> = null;
 			for (fn in code.functions)
 				if (fn.functionIndex == index) {
 					found = fn;
@@ -46,7 +47,7 @@ class HlPatchWriter {
 		writeIndex(symbols, baseStrings);
 		writeIndex(symbols, code.strings.length - baseStrings);
 		for (i in baseStrings...code.strings.length) {
-			var b = Bytes.ofString(code.strings[i]);
+			var b = HaxeBytes.ofString(code.strings[i]);
 			writeIndex(symbols, b.length);
 			symbols.write(b);
 		}
@@ -60,9 +61,9 @@ class HlPatchWriter {
 		functions.bigEndian = false;
 		writeIndex(functions, selected.length);
 		for (fn in selected) {
-			var stableId = stableIdsBySlot.get(fn.functionIndex);
-			if (stableId == null)
+			if (!stableIdsBySlot.exists(fn.functionIndex))
 				throw 'Missing stable ID for function slot ${fn.functionIndex}';
+			var stableId = stableIdsBySlot.get(fn.functionIndex);
 			var body = HlWriter.encodeFunction(fn), bytes = new BytesOutput();
 			bytes.bigEndian = false;
 			writeIndex(bytes, stableId);
@@ -90,7 +91,7 @@ class HlPatchWriter {
 		return out.getBytes();
 	}
 
-	static function writeSection(out:BytesOutput, tag:Int, bytes:Bytes):Void {
+	static function writeSection(out:BytesOutput, tag:Int, bytes:HaxeBytes):Void {
 		out.writeByte(tag);
 		writeIndex(out, bytes.length);
 		out.write(bytes);
@@ -104,9 +105,8 @@ class HlPatchWriter {
 					instruction++;
 				case Call0(_, target), Call1(_, target, _), Call2(_, target, _, _), CallN(_, target, _), StaticClosure(_, target),
 					InstanceClosure(_, target, _):
-					var stableId = stableIdsBySlot.get(target);
-					if (stableId != null)
-						result.push({instruction: instruction, stableId: stableId});
+					if (stableIdsBySlot.exists(target))
+						result.push({instruction: instruction, stableId: stableIdsBySlot.get(target)});
 					instruction++;
 				default:
 					instruction++;
@@ -114,14 +114,14 @@ class HlPatchWriter {
 		return result;
 	}
 
-	static function hashBytes(bytes:Bytes, hash:Int = cast 0x811C9DC5):Int {
+	static function hashBytes(bytes:HaxeBytes, hash:Int = cast 0x811C9DC5):Int {
 		var h = hash;
 		for (i in 0...bytes.length)
 			h = (h ^ bytes.get(i)) * 16777619;
 		return h;
 	}
 
-	static function intBytes(value:Int):Bytes {
+	static function intBytes(value:Int):HaxeBytes {
 		var out = new BytesOutput();
 		out.bigEndian = false;
 		out.writeInt32(value);
@@ -149,7 +149,7 @@ class HlPatchWriter {
 	static function hashStrings(values:Array<String>, count:Int):Int {
 		var h:Int = cast 0x811C9DC5;
 		for (i in 0...count) {
-			var b = Bytes.ofString(values[i]);
+			var b = HaxeBytes.ofString(values[i]);
 			h = hashBytes(intBytes(b.length), h);
 			h = hashBytes(b, h);
 		}
@@ -163,16 +163,16 @@ class HlPatchWriter {
 				case Simple(kind):
 					h = hashBytes(intBytes(kind), h);
 				case Abstract(name):
-					h = hashBytes(intBytes(HlType.Abstract), h);
+					h = hashBytes(intBytes(HashLinkType.Abstract), h);
 					h = hashBytes(intBytes(name), h);
 				case Function(args, result):
-					h = hashBytes(intBytes(HlType.Fun), h);
+					h = hashBytes(intBytes(HashLinkType.Fun), h);
 					h = hashBytes(intBytes(args.length), h);
 					for (a in args)
 						h = hashBytes(intBytes(a), h);
 					h = hashBytes(intBytes(result), h);
 				case Object(name, base, global, fields, methods, bindings):
-					h = hashBytes(intBytes(HlType.Obj), h);
+					h = hashBytes(intBytes(HashLinkType.Obj), h);
 					h = hashBytes(intBytes(name), h);
 					h = hashBytes(intBytes(base), h);
 					h = hashBytes(intBytes(global), h);
@@ -191,14 +191,14 @@ class HlPatchWriter {
 					for (binding in bindings)
 						h = hashBytes(intBytes(binding), h);
 				case Virtual(fields):
-					h = hashBytes(intBytes(HlType.Virtual), h);
+					h = hashBytes(intBytes(HashLinkType.Virtual), h);
 					h = hashBytes(intBytes(fields.length), h);
 					for (field in fields) {
 						h = hashBytes(intBytes(field.name), h);
 						h = hashBytes(intBytes(field.type), h);
 					}
 				case Enum(name, global, constructors):
-					h = hashBytes(intBytes(HlType.Enum), h);
+					h = hashBytes(intBytes(HashLinkType.Enum), h);
 					h = hashBytes(intBytes(name), h);
 					h = hashBytes(intBytes(global), h);
 					h = hashBytes(intBytes(constructors.length), h);
@@ -221,10 +221,10 @@ class HlPatchWriter {
 			case Simple(kind):
 				out.writeByte(kind);
 			case Abstract(name):
-				out.writeByte(HlType.Abstract);
+				out.writeByte(HashLinkType.Abstract);
 				writeSignedIndex(out, name);
 			case Function(args, result):
-				out.writeByte(HlType.Fun);
+				out.writeByte(HashLinkType.Fun);
 				out.writeByte(args.length);
 				for (a in args)
 					writeSignedIndex(out, a);

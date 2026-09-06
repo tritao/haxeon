@@ -1113,6 +1113,11 @@ class Typer {
 								enumName = name.substr(0, lastDot),
 								enumCaseName = name.substr(lastDot + 1),
 								enumDecl = enumDecls.get(enumName);
+							var enumAbstract = enumAbstractDecls.get(enumName);
+							if (enumAbstract != null)
+								for (value in enumAbstract.values)
+									if (value.name == enumCaseName)
+										return typeExpression(value.value, new Scope(), lowerType(enumAbstract.underlying));
 							if (enumDecl != null) {
 								var index = -1;
 								for (i in 0...enumDecl.cases.length)
