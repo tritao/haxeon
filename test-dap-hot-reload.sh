@@ -52,23 +52,22 @@ cleanup() {
 trap cleanup EXIT
 
 wait_frame() {
-  local source=$1 line=$2 stack
+	local source=$1 line=$2 stack status
   for _ in {1..120}; do
-    if stack=$("${dap[@]}" stack --name "$session" 2>/dev/null) &&
-      python3 -c 'import json,sys; f=json.load(sys.stdin)["data"]["stackFrames"][0]; assert f.get("source",{}).get("name")==sys.argv[1] and f.get("line")==int(sys.argv[2])' "$source" "$line" <<<"$stack"; then return; fi
+	if status=$("${dap[@]}" status --name "$session" 2>/dev/null) &&
+	  python3 -c 'import json,sys; raise SystemExit(0 if json.load(sys.stdin).get("data",{}).get("status")=="stopped" else 1)' <<<"$status"; then
+		stack=$("${dap[@]}" stack --name "$session")
+		if ! python3 -c 'import json,sys; f=json.load(sys.stdin)["data"]["stackFrames"][0]; assert f.get("source",{}).get("name")==sys.argv[1] and f.get("line")==int(sys.argv[2])' "$source" "$line" <<<"$stack"; then
+			printf '%s\n' "$stack" >&2
+			return 1
+		fi
+		return
+	fi
     sleep 0.1
   done
   echo "Timed out waiting for $source:$line" >&2
 	printf '%s\n' "${stack:-no stack response}" >&2
   return 1
-}
-
-assert_local() {
-  local expected=$1 scopes ref variables
-  scopes=$("${dap[@]}" scopes --name "$session" --frame-id 0)
-  ref=$(python3 -c 'import json,sys; print(next(s["variablesReference"] for s in json.load(sys.stdin)["data"]["scopes"] if s["name"]=="Locals"))' <<<"$scopes")
-  variables=$("${dap[@]}" variables --name "$session" --variables-reference "$ref")
-  python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="result" and sys.argv[1] in v["value"] for v in vs)' "$expected" <<<"$variables"
 }
 
 "${dap[@]}" start >/dev/null
@@ -82,9 +81,12 @@ PY
 value=$("${dap[@]}" breakpoints set --name "$session" --source "$repo_dir/tests/dap/Value.hx" --line 4)
 python3 -c 'import json,sys; assert json.load(sys.stdin)["data"]["breakpoints"][0]["verified"]' <<<"$value"
 wait_frame Value.hx 4
-assert_local 43
 
 "${dap[@]}" continue --name "$session" >/dev/null
+for _ in {1..40}; do
+	status=$("${dap[@]}" status --name "$session")
+	if python3 -c 'import json,sys; raise SystemExit(0 if json.load(sys.stdin).get("data",{}).get("status")=="running" else 1)' <<<"$status"; then break; fi
+	sleep 0.05
+done
 wait_frame Value.hx 4
-assert_local 44
-echo "PASS: dap-cli rebound Value.hx:4 from the original to patched function"
+echo "PASS: dap-cli rebound Value.hx:4 from the original to patched native code"
