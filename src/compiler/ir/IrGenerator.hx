@@ -682,10 +682,9 @@ class IrGenerator {
 				var operands = lowerOperands([a, b], builder, localTypes),
 					left = operands[0],
 					right = operands[1];
-				var isEnum = switch a.type {
-					case TInstance(Enum, _, _): true;
-					default: false;
-				};
+				if (isNullableEnumExpression(a) || isNullableEnumExpression(b))
+					return lowerNullableEnumEquality(a, b, left, right, builder, localTypes);
+				var isEnum = isDirectEnumType(a.type) && !isNullExpression(a) && !isNullExpression(b);
 				if (isEnum) {
 					left = builder.enumIndex(left);
 					right = builder.enumIndex(right);
@@ -750,8 +749,11 @@ class IrGenerator {
 				var subjectName = '$' + 'switch-expression-subject:${expression.span.start}',
 					resultName = '$' + 'switch-expression-result:${expression.span.start}',
 					subjectType = lowerType(subject.type),
-					resultType = lowerType(expression.type),
-					entryBlock = builder.currentBlock();
+					resultType = lowerType(expression.type);
+				localTypes.set(subjectName, subjectType);
+				localTypes.set(resultName, resultType);
+				builder.store(subjectName, lowerExpression(subject, builder, localTypes));
+				var entryBlock = builder.currentBlock();
 				var bodyBlocks:Array<CfgBlock> = [];
 				var matchBlocks:Array<CfgBlock> = [];
 				var checkBlocks:Array<CfgBlock> = [entryBlock];
@@ -767,10 +769,6 @@ class IrGenerator {
 				// dominate the branch.
 				var fallbackBlock = builder.createBlock(),
 					afterBlock = builder.createBlock();
-				builder.select(entryBlock);
-				localTypes.set(subjectName, subjectType);
-				localTypes.set(resultName, resultType);
-				builder.store(subjectName, lowerExpression(subject, builder, localTypes));
 				for (caseIndex in 0...cases.length) {
 					var switchCase = cases[caseIndex],
 						isExhaustiveFinalCase = defaultExpression == null && caseIndex == cases.length - 1 && switchCase.guard == null,
@@ -1331,6 +1329,65 @@ class IrGenerator {
 			case TInstance(Enum, _, _): true;
 			default: false;
 		};
+
+	static function isNullExpression(expression:TypedExpression):Bool
+		return switch expression.expression {
+			case TNullLiteral: true;
+			case TNullableWrap(value), TCast(value), TAbiCast(value): isNullExpression(value);
+			default: false;
+		};
+
+	static function isNullableEnumExpression(expression:TypedExpression):Bool
+		return if (isNullableEnumType(expression.type)) true; else switch expression.expression {
+			case TCast(value), TAbiCast(value): isNullableEnumExpression(value);
+			default: false;
+		};
+
+	static function lowerNullableEnumEquality(a:TypedExpression, b:TypedExpression, left:CfgValue, right:CfgValue, builder:CfgBuilder,
+			localTypes:Map<String, IrType>):CfgValue {
+		var leftName = '$' + 'nullable-enum-left:${left.id}',
+			rightName = '$' + 'nullable-enum-right:${right.id}',
+			resultName = '$' + 'nullable-enum-equal:${left.id}',
+			leftNull = isNullableEnumExpression(a),
+			rightNull = isNullableEnumExpression(b),
+			nullBlock = builder.createBlock(),
+			nonNullBlock = builder.createBlock();
+		var otherNullBlock = leftNull && rightNull ? builder.createBlock() : null,
+			bothNonNullBlock = leftNull && rightNull ? builder.createBlock() : null,
+			joinBlock = builder.createBlock();
+		localTypes.set(leftName, left.type);
+		localTypes.set(rightName, right.type);
+		localTypes.set(resultName, Bool);
+		builder.store(leftName, left);
+		builder.store(rightName, right);
+		var nullableValue = leftNull ? builder.load(leftName, left.type) : builder.load(rightName, right.type);
+		builder.branch(builder.equal(nullableValue, builder.constNull(nullableValue.type)), nullBlock, nonNullBlock);
+		builder.select(nullBlock);
+		var nullResult = if (leftNull && rightNull) {
+			var other = leftNull ? builder.load(rightName, right.type) : builder.load(leftName, left.type);
+			builder.equal(other, builder.constNull(other.type));
+		} else builder.constBool(false);
+		builder.store(resultName, nullResult);
+		builder.jump(joinBlock);
+		builder.select(nonNullBlock);
+		if (leftNull && rightNull) {
+			var other = builder.load(rightName, right.type);
+			builder.branch(builder.equal(other, builder.constNull(other.type)), otherNullBlock, bothNonNullBlock);
+			builder.select(otherNullBlock);
+			builder.store(resultName, builder.constBool(false));
+			builder.jump(joinBlock);
+			builder.select(bothNonNullBlock);
+			builder.store(resultName,
+				builder.equal(builder.enumIndex(builder.load(leftName, left.type)), builder.enumIndex(builder.load(rightName, right.type))));
+			builder.jump(joinBlock);
+		} else {
+			builder.store(resultName,
+				builder.equal(builder.enumIndex(builder.load(leftName, left.type)), builder.enumIndex(builder.load(rightName, right.type))));
+			builder.jump(joinBlock);
+		}
+		builder.select(joinBlock);
+		return builder.load(resultName, Bool);
+	}
 
 	static function mapTypesOrVoid(type:CompilerType):MapTypes
 		return switch type {

@@ -10,6 +10,7 @@ enum ConversionPlan {
 	ToDynamic;
 	ToInterface(name:String);
 	WrapNullable;
+	UnwrapNullable;
 	Incompatible;
 }
 
@@ -27,6 +28,17 @@ class TypeRelations {
 			return AbstractCast;
 		if (!isAssignable(actual, expected))
 			return Incompatible;
+		switch actual {
+			case TNullable(element) if (isReference(expected) && isAssignable(element, expected)):
+				return UnwrapNullable;
+			case TArray(actualElement):
+				switch expected {
+					case TArray(expectedElement) if (!equals(actualElement, expectedElement)):
+						return UnwrapNullable;
+					default:
+				}
+			default:
+		}
 		return switch expected {
 			case TDynamic: ToDynamic;
 			case TInstance(kind, name, _):
@@ -52,6 +64,12 @@ class TypeRelations {
 			return true;
 		if (equals(actual, expected))
 			return true;
+		switch actual {
+			case TNullable(element):
+				if (isReference(expected) && isAssignable(element, expected))
+					return true;
+			default:
+		}
 		if (abstractConversion(actual, expected))
 			return true;
 		return switch expected {
@@ -81,7 +99,7 @@ class TypeRelations {
 				}
 			case TArray(expectedElement):
 				switch actual {
-					case TArray(actualElement): equals(actualElement, expectedElement);
+					case TArray(actualElement): isAssignable(actualElement, expectedElement);
 					default: false;
 				}
 			case TFunction(expectedArguments, expectedResult):

@@ -954,7 +954,7 @@ class Typer {
 					} else {
 						var objectName = name.substring(0, dot),
 							fieldName = name.substring(dot + 1, name.length),
-							object = typeExpression(Variable(objectName, span), scope),
+							object = unwrapNullable(typeExpression(Variable(objectName, span), scope)),
 							expected:CompilerType;
 						switch object.expression {
 							case TClassRef(className):
@@ -982,7 +982,7 @@ class Typer {
 						}
 					}
 				case IndexAssignment(array, offset, expression, span):
-					var typedArray = typeExpression(array, scope),
+					var typedArray = unwrapNullable(typeExpression(array, scope)),
 						typedIndex = typeExpression(offset, scope);
 					switch typedArray.type {
 						case TMap(key, mapValue):
@@ -997,7 +997,7 @@ class Typer {
 							output.push(TIndexAssign(typedArray, typedIndex, value, span));
 					}
 				case FieldAssignment(receiverExpression, fieldName, expression, span):
-					var object = typeExpression(receiverExpression, scope),
+					var object = unwrapNullable(typeExpression(receiverExpression, scope)),
 						value = typeExpression(expression, scope);
 					switch object.expression {
 						case TClassRef(className):
@@ -1064,7 +1064,7 @@ class Typer {
 					output.push(TDoWhile(typedBody, typedCondition, span));
 					scope.mergeAssignmentsFrom([bodyScope]);
 				case ForIn(name, valueName, iterable, body, span):
-					var typedIterable = typeExpression(iterable, scope),
+					var typedIterable = unwrapNullable(typeExpression(iterable, scope)),
 						originalIterable = typedIterable;
 					var element:CompilerType = switch typedIterable.type {
 						case TArray(element): element;
@@ -2412,12 +2412,12 @@ class Typer {
 					fail("E1016", "Only compiler-owned primitive Map<String,T> specializations are supported", span);
 				new TypedExpression(TNewMap(loweredKey, loweredValue), TMap(loweredKey, loweredValue), span);
 			case Index(array, offset, span):
-				var typedArray = typeExpression(array, scope),
+				var typedArray = unwrapNullable(typeExpression(array, scope)),
 					typedIndex = typeExpression(offset, scope);
 				switch typedArray.type {
 					case TMap(key, value):
 						var typedKey = coerce(typedIndex, key, "map key", "E1002");
-						new TypedExpression(TMapGet(typedArray, typedKey), value, span);
+						new TypedExpression(TMapGet(typedArray, typedKey), nullableMapValue(value), span);
 					default:
 						if (typedIndex.type != TInt)
 							fail("E1014", "Array index must be Int", typedIndex.span);
@@ -2512,6 +2512,8 @@ class Typer {
 					if (receiver != null && parts.length > 2)
 						for (index in 1...parts.length - 1)
 							receiver = typedMemberWithFlow(receiver, parts[index], span, scope);
+					if (receiver != null)
+						receiver = unwrapNullable(receiver);
 					var receiverType = receiver == null ? null : receiver.type;
 					var enumCase = enumCaseInfo(name);
 					if (enumCase == null && name.indexOf(".") < 0) {
@@ -2866,6 +2868,7 @@ class Typer {
 		}
 
 	function typedMember(typedObject:TypedExpression, name:String, span:SourceSpan):TypedExpression {
+		typedObject = unwrapNullable(typedObject);
 		switch typedObject.expression {
 			case TClassRef(className):
 				if (enumAbstractDecls.exists(className)) {
@@ -2912,6 +2915,12 @@ class Typer {
 			physicalType = fieldRepresentationType(typedObject.type, name, span);
 		return abiBoundaryCast(new TypedExpression(TField(typedObject, name), physicalType, span), semanticType);
 	}
+
+	static function unwrapNullable(value:TypedExpression):TypedExpression
+		return switch value.type {
+			case TNullable(element): new TypedExpression(value.expression, element, value.span);
+			default: value;
+		};
 
 	function instancePropertyAccessor(type:CompilerType, name:String, read:Bool):Null<String>
 		return switch type {
@@ -2970,7 +2979,7 @@ class Typer {
 	}
 
 	function typeMethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
-		var receiver = typeExpression(object, scope);
+		var receiver = unwrapNullable(typeExpression(object, scope));
 		var platformMethod = PlatformAbi.method(receiver.type, name);
 		if (platformMethod != null) {
 			var typed = typeCallArguments(arguments, platformMethod.arguments, scope, name);
@@ -3232,10 +3241,16 @@ class Typer {
 		return switch name {
 			case "exists": new TypedExpression(TCollectionCall(receiver, "exists", [key]), TBool, span);
 			case "remove": new TypedExpression(TCollectionCall(receiver, "remove", [key]), TBool, span);
-			case "get": new TypedExpression(TMapGet(receiver, key), mapType.value, span);
+			case "get": new TypedExpression(TMapGet(receiver, key), nullableMapValue(mapType.value), span);
 			default: throw new CompileError(new Diagnostic("E1007", 'Unknown map method "$name"', span));
 		};
 	}
+
+	static function nullableMapValue(type:CompilerType):CompilerType
+		return if (!TypeRelations.isReference(type)) type; else switch type {
+			case TNullable(_): type;
+			default: TNullable(type);
+		};
 
 	function functionType(fn:AstFunction):CompilerType
 		return TFunction([for (argument in fn.arguments) argumentType(argument)], lowerType(fn.result));
@@ -3426,6 +3441,8 @@ class Typer {
 				new TypedExpression(TToInterface(value, name), expected, value.span);
 			case WrapNullable:
 				new TypedExpression(TNullableWrap(value), expected, value.span);
+			case UnwrapNullable:
+				new TypedExpression(TCast(value), expected, value.span);
 			case Incompatible:
 				fail(code, 'Type mismatch for $context', value.span);
 				value;
