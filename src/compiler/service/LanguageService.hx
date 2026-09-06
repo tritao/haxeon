@@ -10,10 +10,12 @@ import compiler.Compiler;
 import compiler.modules.ModulePath;
 import compiler.modules.ModuleState;
 import compiler.semantic.SemanticWorkspace.WorkspaceResolution;
+import compiler.semantic.SemanticIndex.SemanticSymbolId;
 import compiler.Compiler.CompileResult;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstStatement;
 import compiler.types.Type.CompilerType;
+import compiler.types.DeclarationIndex.DeclarationKind;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.runtime.RuntimeNatives;
 
@@ -326,7 +328,7 @@ class LanguageService {
 			model = state == null ? null : effectiveSemanticModel(state),
 			indexedId = model == null ? null : model.index.symbolIdAt(position),
 			name = symbolAt(path, position),
-			target = resolveSymbol(path, position),
+			legacyTarget = indexedId == null ? resolveSymbol(path, position) : null,
 			result:Array<TextEdit> = [];
 		if (name == null || !isIdentifier(replacement) || replacement == name)
 			return result;
@@ -334,7 +336,7 @@ class LanguageService {
 		if (indexedId != null) {
 			if (indexedRenameCollides(indexedId, replacement, targetReferences))
 				return result;
-		} else if (target == null || renameCollides(target, replacement, targetReferences))
+		} else if (legacyTarget == null || renameCollides(legacyTarget, replacement, targetReferences))
 			return result;
 		for (reference in targetReferences)
 			result.push({
@@ -347,7 +349,7 @@ class LanguageService {
 		return result;
 	}
 
-	function indexedRenameCollides(target:compiler.semantic.SemanticIndex.SemanticSymbolId, replacement:String, affected:Array<SymbolLocation>):Bool {
+	function indexedRenameCollides(target:SemanticSymbolId, replacement:String, affected:Array<SymbolLocation>):Bool {
 		var affectedPaths:Map<String, Bool> = [];
 		for (location in affected)
 			affectedPaths.set(location.path, true);
@@ -360,11 +362,38 @@ class LanguageService {
 				for (token in tokens)
 					if (token.kind == Identifier && token.text == replacement) {
 						var existing = model.index.symbolIdAt(token.span.start + 1);
-						if (existing != null && Std.string(existing) != Std.string(target))
+						if (existing != null && Std.string(existing) != Std.string(target) && semanticNamesCollide(target, existing))
 							return true;
 					}
 		}
 		return false;
+	}
+
+	function semanticNamesCollide(left:SemanticSymbolId, right:SemanticSymbolId):Bool {
+		var leftSymbol = compiler.semanticWorkspace.indexedSymbol(left),
+			rightSymbol = compiler.semanticWorkspace.indexedSymbol(right);
+		if (leftSymbol == null || rightSymbol == null)
+			return false;
+		var leftLocal = localCollisionScope(left),
+			rightLocal = localCollisionScope(right);
+		if (leftLocal != null || rightLocal != null)
+			return leftLocal != null && leftLocal == rightLocal;
+		if (leftSymbol.symbol.kind == DeclarationKind.Member && rightSymbol.symbol.kind == DeclarationKind.Member)
+			return declarationOwner(leftSymbol.symbol.name) == declarationOwner(rightSymbol.symbol.name);
+		return leftSymbol.state.name == rightSymbol.state.name;
+	}
+
+	static function localCollisionScope(id:SemanticSymbolId):Null<String> {
+		var value = Std.string(id), marker = value.indexOf(":local:");
+		if (marker < 0)
+			return null;
+		var identity = value.indexOf(":$" + "l", marker + 7);
+		return identity < 0 ? value : value.substring(0, identity);
+	}
+
+	static function declarationOwner(name:String):String {
+		var separator = name.lastIndexOf(".");
+		return separator < 0 ? name : name.substring(0, separator);
 	}
 
 	function renameCollides(target:SemanticSymbol, replacement:String, affected:Array<SymbolLocation>):Bool {

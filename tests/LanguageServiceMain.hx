@@ -180,17 +180,43 @@ class LanguageServiceMain {
 		if (collisionService.rename("Collision.hx", collisionPosition, "score").length != 0
 			|| collisionService.rename("Collision.hx", collisionPosition, "not-valid").length != 0)
 			throw "language service allowed an unsafe rename";
+		var inheritedCollisionService = new LanguageService(),
+			inheritedCollisionSource = "class Parent { public function value():Int return 1; public function score():Int return 2; } class Child extends Parent {} function main():Int return new Child().value();";
+		inheritedCollisionService.update("InheritedCollision.hx", inheritedCollisionSource);
+		inheritedCollisionService.compile("InheritedCollision");
+		if (inheritedCollisionService.rename("InheritedCollision.hx", inheritedCollisionSource.lastIndexOf("value") + 1, "score").length != 0)
+			throw "language service allowed an inherited-member rename collision";
+		var scopedRenameService = new LanguageService(),
+			scopedRenameSource = "function first(value:Int):Int return value; function second(item:Int):Int return item; function main():Int return first(42) + second(1);";
+		scopedRenameService.update("ScopedRename.hx", scopedRenameSource);
+		scopedRenameService.compile("ScopedRename");
+		var scopedRenamePosition = scopedRenameSource.indexOf("return value") + "return ".length;
+		if (scopedRenameService.rename("ScopedRename.hx", scopedRenamePosition, "item").length != 2)
+			throw "language service treated another function's local as a rename collision";
+		var globalCollisionService = new LanguageService();
+		globalCollisionService.update("lib/Math.hx",
+			"package lib; function add(left:Int, right:Int):Int return left + right; function sum(left:Int, right:Int):Int return left + right;");
+		var globalCollisionSource = "package app; import lib.Math; function main():Int return Math.add(20, 22);";
+		globalCollisionService.update("app/Collision.hx", globalCollisionSource);
+		globalCollisionService.compile("app.Collision");
+		if (globalCollisionService.rename("app/Collision.hx", globalCollisionSource.indexOf("add") + 1, "sum").length != 0)
+			throw "language service allowed a cross-module global rename collision";
+		if (enumService.rename("app/Main.hx", enumConstructorPosition, "One").length != 0)
+			throw "language service allowed an enum-case rename collision";
 		service.update("Main.hx", "function main(:Int { return 0; }");
 		try {
 			service.compile("Main");
 			throw "invalid edit unexpectedly compiled";
 		} catch (error:CompileError) {}
 		var recoveredSymbols = service.documentSymbols("Main.hx"),
-			recoveredCompletion = service.complete("Main.hx", 0);
+			recoveredCompletion = service.complete("Main.hx", 0),
+			staleRename = service.rename("Main.hx", methodPosition, "display");
 		if (recoveredSymbols.length == 0 || recoveredCompletion.length == 0)
 			throw "failed edit discarded the last good language-service snapshot";
 		if (!recoveredSymbols[0].stale || recoveredSymbols[0].revision != 1 || !recoveredCompletion[0].stale)
 			throw "failed edit did not identify stale semantic query results";
+		if (staleRename.length != 2 || !staleRename[0].stale || !staleRename[1].stale)
+			throw "rename did not preserve last-good semantic snapshot metadata";
 		Sys.println("PASS: compiler-backed language service snapshot works");
 	}
 }
