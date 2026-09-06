@@ -198,10 +198,19 @@ class CaptureAnalysis {
 			switch statement {
 				case Try(tryBranch, catches, _):
 					var assigned:Map<String, Bool> = [],
-						observed:Map<String, Bool> = [];
+						observed:Map<String, Bool> = [],
+						protectedLocals:Map<String, Bool> = [],
+						handlerLocals:Map<String, Bool> = [];
 					collectAssignedLocals(tryBranch, assigned);
-					for (catchClause in catches)
+					collectDeclaredLocals(tryBranch, protectedLocals);
+					for (name in protectedLocals.keys())
+						assigned.remove(name);
+					for (catchClause in catches) {
 						collectVariables(catchClause.statements, observed);
+						collectDeclaredLocals(catchClause.statements, handlerLocals);
+					}
+					for (name in handlerLocals.keys())
+						observed.remove(name);
 					for (name in observed.keys())
 						if (assigned.exists(name) && declared.exists(name))
 							result.set(name, true);

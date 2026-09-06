@@ -14,8 +14,9 @@ class CaptureAnalysisMain {
 		var exception = analyze('function main():Int { var value = 0; try { value = 42; throw "stop"; } catch (error:Dynamic) { return value; } }');
 		expect(exception.exceptionCells.exists("value"), "local crossing a throwing edge should require stable storage");
 
-		var loopShadowing = analyze('function main():Int { try { for (name in [1]) trace(name); } catch (error:Dynamic) { for (name in [2]) trace(name); } return 0; }');
-		expect(!loopShadowing.exceptionCells.exists("name"), "separate loop bindings must not alias across an exception edge");
+		var loopShadowing = analyze('function main():Int { try { for (name => state in [1 => 2]) { state = state + 1; trace(name); } } catch (error:Dynamic) { for (name => state in [3 => 4]) trace(name + state); } return 0; }');
+		expect(!loopShadowing.exceptionCells.exists("name"), "separate loop keys must not alias across an exception edge");
+		expect(!loopShadowing.exceptionCells.exists("state"), "separate loop values must not alias across an exception edge");
 
 		Sys.println("PASS: capture and exception-edge storage analysis");
 	}
