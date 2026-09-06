@@ -22,6 +22,7 @@ private class LspRequestError {
 class LspProtocol {
 	final service:LanguageService;
 	final documents = new DocumentStore();
+	final publishedDiagnostics:Map<String, String> = [];
 	var shutdownRequested = false;
 	var exitRequested = false;
 
@@ -110,23 +111,56 @@ class LspProtocol {
 			return [];
 		var path = document.path;
 		service.update(path, document.source);
-		try
-			service.analyze(ModulePath.fromFile(path))
-		catch (_:CompileError) {}
-		return [
-			notification("textDocument/publishDiagnostics", {
-				uri: uri,
-				version: version,
-				diagnostics: [for (diagnostic in service.diagnostics(path)) diagnosticJson(diagnostic)]
-			})
-		];
+		var changedModule = ModulePath.fromFile(path),
+			targets = service.compiler.dependentModules(changedModule);
+		if (targets.length == 0)
+			targets.push(changedModule);
+		for (target in targets)
+			try
+				service.analyze(target)
+			catch (_:CompileError) {}
+		return diagnosticNotifications();
 	}
 
 	function close(request:Dynamic):Array<String> {
 		var uri = documentUri(request);
 		documents.close(uri);
+		publishedDiagnostics.set(uri, "");
 		return [notification("textDocument/publishDiagnostics", {uri: uri, diagnostics: []})];
 	}
+
+	function diagnosticNotifications():Array<String> {
+		var result:Array<String> = [],
+			states = [for (state in service.compiler.modules) state];
+		states.sort(function(left, right) return Reflect.compare(left.source.path, right.source.path));
+		for (state in states) {
+			var uri = documents.uri(state.source.path),
+				fingerprint = diagnosticFingerprint(state.diagnostics);
+			if (publishedDiagnostics.get(uri) == fingerprint)
+				continue;
+			publishedDiagnostics.set(uri, fingerprint);
+			var params:Dynamic = {
+				uri: uri,
+				diagnostics: [for (diagnostic in state.diagnostics) diagnosticJson(diagnostic)]
+			};
+			var open = documents.forPath(state.source.path);
+			if (open != null)
+				Reflect.setField(params, "version", open.version);
+			result.push(notification("textDocument/publishDiagnostics", params));
+		}
+		return result;
+	}
+
+	static function diagnosticFingerprint(diagnostics:Array<Diagnostic>):String
+		return [
+			for (diagnostic in diagnostics)
+				diagnostic.code
+				+ ":"
+				+ diagnostic.span.start
+				+ ":"
+				+ diagnostic.span.end
+				+ ":"
+				+ diagnostic.message].join("\n");
 
 	function documentSymbols(request:Dynamic):Array<Dynamic> {
 		var document = document(request);

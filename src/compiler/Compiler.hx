@@ -99,6 +99,7 @@ typedef ValidationResult = {
 typedef AnalysisResult = {
 	final moduleNames:Array<String>;
 	final retyped:Array<String>;
+	final diagnosticModules:Array<String>;
 	final elapsedMs:Float;
 }
 
@@ -237,6 +238,9 @@ class Compiler {
 	/** Update semantic state without assembling or publishing a runtime artifact. */
 	public function analyze(entryModule:String, ?token:CancellationToken):AnalysisResult
 		return new AnalysisTransaction(this, entryModule, token).run();
+
+	public function dependentModules(module:String):Array<String>
+		return graph.dependents(module);
 
 	/**
 		Validate an unsaved edit without mutating this compiler's live snapshot.

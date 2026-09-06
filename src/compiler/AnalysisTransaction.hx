@@ -21,6 +21,19 @@ class AnalysisTransaction {
 		var snapshot = compiler.snapshot(),
 			candidate = compiler.createCandidate(snapshot, null),
 			startedAt = Sys.time() * 1000.0;
+		var diagnosticWork = [entryModule],
+			diagnosticSeen:Map<String, Bool> = [],
+			diagnosticCursor = 0;
+		while (diagnosticCursor < diagnosticWork.length) {
+			var name = diagnosticWork[diagnosticCursor++];
+			if (diagnosticSeen.exists(name) || !candidate.modules.exists(name))
+				continue;
+			diagnosticSeen.set(name, true);
+			var state = candidate.modules.get(name);
+			state.diagnostics = [];
+			for (dependency in state.dependencies)
+				diagnosticWork.push(dependency);
+		}
 		try {
 			var context = new CompilationContext(candidate);
 			var frontend = FrontendCompilation.run(context, entryModule, token, snapshot.modules, startedAt, false);
@@ -37,9 +50,17 @@ class AnalysisTransaction {
 				}
 			}
 			compiler.adoptCandidate(candidate);
+			var diagnosticModules:Array<String> = [];
+			for (name => state in candidate.modules) {
+				var previous = snapshot.modules.get(name);
+				if (previous == null || diagnosticFingerprint(previous.diagnostics) != diagnosticFingerprint(state.diagnostics))
+					diagnosticModules.push(name);
+			}
+			diagnosticModules.sort(Reflect.compare);
 			return {
 				moduleNames: frontend.moduleNames,
 				retyped: frontend.retyped,
+				diagnosticModules: diagnosticModules,
 				elapsedMs: Sys.time() * 1000.0 - startedAt
 			};
 		} catch (error:Dynamic) {
@@ -52,4 +73,17 @@ class AnalysisTransaction {
 			throw error;
 		}
 	}
+
+	static function diagnosticFingerprint(diagnostics:Array<Diagnostic>):String
+		return [
+			for (diagnostic in diagnostics)
+				diagnostic.code
+				+ ":"
+				+ diagnostic.span.file.path
+				+ ":"
+				+ diagnostic.span.start
+				+ ":"
+				+ diagnostic.span.end
+				+ ":"
+				+ diagnostic.message].join("\n");
 }

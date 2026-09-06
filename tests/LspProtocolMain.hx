@@ -82,6 +82,80 @@ class LspProtocolMain {
 				foundRankedCall = true;
 		if (!foundRankedCall)
 			throw "LSP completion omitted compiler ranking or insertion metadata";
+		var diagnosticService = new LanguageService(),
+			diagnosticProtocol = new LspProtocol(diagnosticService),
+			choiceUri = "file:///workspace/shape/Choice.hx",
+			consumerUri = "file:///workspace/shapeapp/Main.hx",
+			choiceSource = "package workspace.shape; enum Choice { One; }",
+			consumerSource = "package workspace.shapeapp; import workspace.shape.Choice; function read(value:Choice):Int return switch value { case Choice.One: 1; }; function main():Int return read(Choice.One);";
+		diagnosticProtocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: choiceUri,
+					languageId: "haxe",
+					version: 1,
+					text: choiceSource
+				}
+			}
+		}));
+		diagnosticProtocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: consumerUri,
+					languageId: "haxe",
+					version: 1,
+					text: consumerSource
+				}
+			}
+		}));
+		var invalidated = diagnosticProtocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didChange",
+			params: {textDocument: {uri: choiceUri, version: 2}, contentChanges: [{text: "package workspace.shape; enum Choice { One; Two; }"}]}
+		}));
+		if (invalidated.length != 1)
+			throw 'expected one dependent diagnostic publication, got ${invalidated.length}';
+		var invalidatedMessage:Dynamic = Json.parse(invalidated[0]);
+		if (invalidatedMessage.params.uri != consumerUri
+			|| invalidatedMessage.params.version != 1
+			|| invalidatedMessage.params.diagnostics.length == 0)
+			throw "dependent enum change did not publish versioned consumer diagnostics";
+		var recovered = diagnosticProtocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didChange",
+			params: {textDocument: {uri: choiceUri, version: 3}, contentChanges: [{text: choiceSource}]}
+		}));
+		if (recovered.length != 1)
+			throw "diagnostic recovery did not publish exactly one clearing notification";
+		var recoveredMessage:Dynamic = Json.parse(recovered[0]);
+		if (recoveredMessage.params.uri != consumerUri || recoveredMessage.params.diagnostics.length != 0)
+			throw "diagnostic recovery did not clear the dependent module";
+		var duplicate = diagnosticProtocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didChange",
+			params: {textDocument: {uri: choiceUri, version: 4}, contentChanges: [{text: choiceSource}]}
+		}));
+		if (duplicate.length != 0)
+			throw "unchanged diagnostics were published more than once";
+		diagnosticProtocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didClose",
+			params: {textDocument: {uri: consumerUri}}
+		}));
+		var closedDependent = diagnosticProtocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didChange",
+			params: {textDocument: {uri: choiceUri, version: 5}, contentChanges: [{text: "package workspace.shape; enum Choice { One; Two; }"}]}
+		}));
+		if (closedDependent.length != 1)
+			throw "closed dependent diagnostic was not published";
+		var closedMessage:Dynamic = Json.parse(closedDependent[0]);
+		if (closedMessage.params.uri != consumerUri || Reflect.hasField(closedMessage.params, "version"))
+			throw "closed document diagnostic incorrectly included an LSP version";
 		var definition = request(protocol, Json.stringify({
 			jsonrpc: "2.0",
 			id: 3,
