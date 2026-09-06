@@ -85,6 +85,9 @@ set +e
 		-ex 'printf "resolved JIT frame 1: %s\n", $hl_location1 ? $hl_location1 : "not a HashLink JIT address"' \
 		-ex 'set $hl_location2 = (char *)hl_module_resolve_jit_location((void *)$hl_pc2)' \
 		-ex 'printf "resolved JIT frame 2: %s\n", $hl_location2 ? $hl_location2 : "not a HashLink JIT address"' \
+		-ex "frame 2" -ex 'x/24i $hl_pc2 - 48' -ex "info registers" \
+		-ex 'printf "JIT cast source type memory:\n"' -ex 'x/8gx $rsi' \
+		-ex 'printf "JIT cast target type memory:\n"' -ex 'x/8gx $rdx' -ex "frame 0" \
 		-ex "thread apply all bt 30" -ex "info registers" \
 		--args "${command[@]}"
 ) >>"$report" 2>&1

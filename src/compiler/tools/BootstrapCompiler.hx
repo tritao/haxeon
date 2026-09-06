@@ -13,6 +13,7 @@ class BootstrapCompiler {
 	public static function main():Void {
 		var output = "bootstrap/compiler.hl",
 			entry = "compiler.tools.BootstrapCompiler",
+			dumpFunction = -1,
 			roots:Array<String> = [],
 			paths:Array<String> = [];
 		for (argument in Sys.args())
@@ -22,7 +23,9 @@ class BootstrapCompiler {
 				entry = argument.substring("--entry=".length, argument.length);
 			else if (StringTools.startsWith(argument, "--root="))
 				roots.push(argument.substring("--root=".length, argument.length));
-			else
+			else if (StringTools.startsWith(argument, "--dump-function=")) {
+				dumpFunction = parseFunctionIndex(argument.substring("--dump-function=".length, argument.length));
+			} else
 				paths.push(argument);
 		if (roots.length == 0)
 			roots.push("src");
@@ -43,9 +46,29 @@ class BootstrapCompiler {
 			throw failure;
 		}
 		Sys.println("writing bootstrap artifact " + output);
+		if (dumpFunction >= 0)
+			for (fn in result.module.functions)
+				if (fn.functionIndex == dumpFunction) {
+					Sys.println('function ${fn.functionIndex} type=${fn.type} registers=${[for (register in fn.registers) Std.string(register)].join(",")}');
+					for (index in 0...fn.opcodes.length)
+						Sys.println('$index\t${Std.string(fn.opcodes[index])}');
+				}
 		File.saveBytes(output, HlWriter.encode(result.module));
 		File.saveBytes(output + ".functions", Bytes.ofString(functionMap(result.functionIndices)));
 		Sys.println("compiled " + Std.string(paths.length) + " source files -> " + output);
+	}
+
+	static function parseFunctionIndex(value:String):Int {
+		if (value.length == 0)
+			throw "Invalid function index";
+		var result = 0;
+		for (index in 0...value.length) {
+			var digit = value.charCodeAt(index) - 48;
+			if (digit < 0 || digit > 9)
+				throw "Invalid function index";
+			result = result * 10 + digit;
+		}
+		return result;
 	}
 
 	static function functionMap(indices:Map<String, Int>):String {
