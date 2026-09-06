@@ -144,9 +144,12 @@ class Typer {
 				registerAnonymousTypes(aliasType);
 			}
 		}
+		var typedNatives:Array<compiler.types.TypedAst.TypedNative> = [];
 		for (fn in program.functions) {
 			if (externals.exists(fn.name))
 				fail("E1000", 'Function "${fn.name}" conflicts with a registered native', fn.span);
+			if (fn.isExtern == true)
+				typedNatives.push(typeExtern(fn));
 		}
 		var setupDoneAt = Sys.time() * 1000.0;
 		inferNoReturnFunctions();
@@ -204,7 +207,7 @@ class Typer {
 			], typedFunctions:Array<TypedFunction> = [];
 		var metadataDoneAt = Sys.time() * 1000.0;
 		for (fn in program.functions)
-			if (!isGeneric(fn) && (selected == null || selected.exists(fn.name))) {
+			if (fn.isExtern != true && !isGeneric(fn) && (selected == null || selected.exists(fn.name))) {
 				typedFunctions.push(typeFunction(fn));
 			}
 		for (classDecl in typedClasses)
@@ -226,7 +229,8 @@ class Typer {
 			classes: typedClasses,
 			functions: typedFunctions,
 			closurePlan: closureConversion.plan(),
-			anonymousTypes: orderedAnonymousTypes()
+			anonymousTypes: orderedAnonymousTypes(),
+			natives: typedNatives
 		};
 		var assemblyDoneAt = Sys.time() * 1000.0;
 		return {
@@ -238,6 +242,39 @@ class Typer {
 				bodiesMs: bodiesDoneAt - metadataDoneAt,
 				assemblyMs: assemblyDoneAt - bodiesDoneAt
 			}
+		};
+	}
+
+	function typeExtern(fn:AstFunction):compiler.types.TypedAst.TypedNative {
+		if (fn.statements.length != 0)
+			fail("E1021", 'Extern function "${fn.name}" cannot have a body', fn.span);
+		var binding:Null<compiler.syntax.Ast.AstMetadata> = null;
+		var metadata = fn.metadata;
+		if (metadata != null)
+			for (entry in metadata)
+				if (entry.name == "hlNative") {
+					if (binding != null)
+						fail("E1021", 'Extern function "${fn.name}" has duplicate @:hlNative metadata', entry.span);
+					binding = entry;
+				}
+		if (binding == null)
+			fail("E1021", 'Extern function "${fn.name}" requires @:hlNative(library, symbol)', fn.span);
+		if (binding.arguments.length != 2)
+			fail("E1021", '@:hlNative requires a library and symbol string', binding.span);
+		var values = [];
+		for (argument in binding.arguments)
+			switch argument {
+				case StringLiteral(value, _):
+					values.push(value);
+				default:
+					fail("E1021", '@:hlNative arguments must be string literals', binding.span);
+			}
+		return {
+			name: fn.name,
+			library: values[0],
+			symbol: values[1],
+			arguments: [for (argument in fn.arguments) lowerType(argument.type)],
+			result: lowerType(fn.result)
 		};
 	}
 

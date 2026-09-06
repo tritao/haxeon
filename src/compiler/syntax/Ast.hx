@@ -230,6 +230,8 @@ typedef AstSwitchCase = {
 typedef AstFunction = {
 	final name:String;
 	final isStatic:Bool;
+	final ?isExtern:Bool;
+	final ?metadata:Array<AstMetadata>;
 	final ?typeParameters:Array<String>;
 	final ?typeConstraints:Array<AstTypeConstraint>;
 	final arguments:Array<AstArgument>;

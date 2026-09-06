@@ -530,6 +530,24 @@ class TestMain {
 			|| metadataProgram.classes[0].metadata[0].arguments.length != 1)
 			throw "Class metadata and top-level visibility were not preserved";
 		Sys.println("PASS: declaration and expression metadata parse explicitly");
+		var externProgram = Frontend.compile('@:hlNative("std", "sys_time") extern function nativeTime():Float; function main():Int { nativeTime(); return 42; }');
+		var nativeTime = null;
+		for (native in externProgram.natives)
+			if (native.name == "nativeTime")
+				nativeTime = native;
+		var emittedExternBody = false;
+		for (fn in externProgram.functions)
+			if (fn.name == "nativeTime")
+				emittedExternBody = true;
+		if (nativeTime == null || nativeTime.library != "std" || nativeTime.symbol != "sys_time" || emittedExternBody)
+			throw "Source extern native binding was not preserved without emitting a body";
+		expectCompileError('extern function missing():Int; function main():Int return 42;', 'Extern function "missing" requires @:hlNative(library, symbol)');
+		expectCompileError('@:hlNative("std") extern function malformed():Int; function main():Int return 42;',
+			"@:hlNative requires a library and symbol string");
+		var modularExtern = new Compiler();
+		modularExtern.update("Main.hx", '@:hlNative("std", "sys_time") extern function nativeTime():Float; function main():Int { nativeTime(); return 42; }');
+		modularExtern.compile("Main");
+		Sys.println("PASS: extern functions lower through validated HashLink native bindings");
 		var nativeHandleProgram = new Parser(new Lexer(new SourceFile("NativeHandle.hx",
 			'function identity(value:hl.Abstract<"module">):hl.Abstract<"module"> { return value; }')).tokenize()).parseProgram(),
 			nativeHandleTyped = Typer.typeLibrary(nativeHandleProgram),

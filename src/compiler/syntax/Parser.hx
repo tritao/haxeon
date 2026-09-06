@@ -67,8 +67,12 @@ class Parser {
 			else if (check(TokenKind.Identifier) && current().text == "abstract") {
 				var start = advance().span;
 				abstracts.push(parseAbstract(start));
-			} else
-				functions.push(parseFunction(false));
+			} else {
+				var isExtern = check(TokenKind.Identifier) && current().text == "extern";
+				if (isExtern)
+					advance();
+				functions.push(parseFunction(false, isExtern, metadata));
+			}
 		}
 		return {
 			packageName: packageName,
@@ -254,13 +258,14 @@ class Parser {
 		return name;
 	}
 
-	function parseFunction(allowMissingReturn:Bool):AstFunction {
+	function parseFunction(allowMissingReturn:Bool, isExtern:Bool = false, ?metadata:Array<compiler.syntax.Ast.AstMetadata>):AstFunction {
 		var start = consume(TokenKind.Function).span,
 			name = check(TokenKind.New) ? advance().text : consume(TokenKind.Identifier).text;
-		return parseFunctionBody(start, name, allowMissingReturn, false);
+		return parseFunctionBody(start, name, allowMissingReturn, false, isExtern, metadata);
 	}
 
-	function parseFunctionBody(start:SourceSpan, name:String, allowMissingReturn:Bool, isStatic:Bool = false):AstFunction {
+	function parseFunctionBody(start:SourceSpan, name:String, allowMissingReturn:Bool, isStatic:Bool = false, isExtern:Bool = false,
+			?metadata:Array<compiler.syntax.Ast.AstMetadata>):AstFunction {
 		var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
 		consume(TokenKind.LeftParen);
@@ -283,7 +288,9 @@ class Parser {
 		consume(TokenKind.RightParen);
 		var result = match(TokenKind.Colon) ? parseType() : allowMissingReturn && name == "new" ? VoidType : InferredType;
 		var statements = [], end:SourceSpan;
-		if (match(TokenKind.LeftBrace)) {
+		if (isExtern) {
+			end = consume(TokenKind.Semicolon).span;
+		} else if (match(TokenKind.LeftBrace)) {
 			while (!check(TokenKind.RightBrace))
 				appendStatements(statements, parseStatements());
 			end = consume(TokenKind.RightBrace).span;
@@ -294,6 +301,8 @@ class Parser {
 		return {
 			name: name,
 			isStatic: isStatic,
+			isExtern: isExtern,
+			metadata: metadata == null ? [] : metadata,
 			typeParameters: typeParameters,
 			typeConstraints: typeConstraints,
 			arguments: arguments,
@@ -476,6 +485,8 @@ class Parser {
 			methods.push({
 				name: methodName,
 				isStatic: false,
+				isExtern: false,
+				metadata: [],
 				typeParameters: typeParameters,
 				typeConstraints: typeConstraints,
 				arguments: arguments,

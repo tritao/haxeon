@@ -18,6 +18,8 @@ class ModuleCanonicalizer {
 		return {
 			name: name,
 			isStatic: fn.isStatic,
+			isExtern: fn.isExtern,
+			metadata: fn.metadata,
 			typeParameters: fn.typeParameters,
 			typeConstraints: fn.typeConstraints == null ? null : [
 				for (constraint in fn.typeConstraints)

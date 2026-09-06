@@ -18,9 +18,21 @@ import compiler.ir.Ir.IrStaticField;
 /** Builds complete IR programs and selects their required runtime surface. */
 class IrProgramAssembler {
 	public static function generate(typed:TypedProgram):IrProgram {
-		return assemble([for (fn in typed.functions) IrGenerator.generateFunction(fn)], null, objectsFrom(typed), interfacesFrom(typed), enumsFrom(typed),
-			staticFieldsFrom(typed), staticInitializerFrom(typed));
+		return assemble([for (fn in typed.functions) IrGenerator.generateFunction(fn)], nativesFrom(typed), objectsFrom(typed), interfacesFrom(typed),
+			enumsFrom(typed), staticFieldsFrom(typed), staticInitializerFrom(typed));
 	}
+
+	public static function nativesFrom(typed:TypedProgram):Array<IrNative>
+		return [
+			for (native in typed.natives)
+				{
+					name: native.name,
+					library: native.library,
+					symbol: native.symbol,
+					arguments: [for (argument in native.arguments) IrGenerator.lowerType(argument)],
+					result: IrGenerator.lowerType(native.result)
+				}
+		];
 
 	/** Build the module boot function from static field initializers. */
 	public static function staticInitializerFrom(typed:TypedProgram, ?classOrder:Array<String>):Null<IrFunction> {

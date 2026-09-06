@@ -3,6 +3,7 @@ package compiler;
 import compiler.Diagnostic.CompileError;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.IrGenerator;
+import compiler.ir.IrProgramAssembler;
 import compiler.modules.ModuleReachability;
 import compiler.modules.ModuleState;
 import compiler.semantic.ModuleCanonicalizer;
@@ -191,7 +192,14 @@ class FrontendCompilation {
 			token.check();
 		var objectNames = [for (name in objectCache.keys()) name];
 		objectNames.sort(Reflect.compare);
-		var ir = IrGenerator.assemble(cached, context.irNatives(), [for (name in objectNames) objectCache.get(name)], IrGenerator.interfacesFrom(typedNew),
+		var irNatives = context.irNatives();
+		for (native in IrProgramAssembler.nativesFrom(typedNew)) {
+			for (existing in irNatives)
+				if (existing.name == native.name)
+					throw 'Native "${native.name}" is declared more than once';
+			irNatives.push(native);
+		}
+		var ir = IrGenerator.assemble(cached, irNatives, [for (name in objectNames) objectCache.get(name)], IrGenerator.interfacesFrom(typedNew),
 			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew), IrGenerator.staticInitializerFrom(typedNew, initializationClasses),
 			entryPoint);
 		var irAssemblyDoneAt = Sys.time() * 1000.0;

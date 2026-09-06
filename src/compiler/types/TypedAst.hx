@@ -273,4 +273,14 @@ typedef TypedProgram = {
 	final functions:Array<TypedFunction>;
 	final closurePlan:TypedClosurePlan;
 	final anonymousTypes:Array<TypedAnonymous>;
+	final natives:Array<TypedNative>;
+}
+
+/** A source-declared target function with no generated body. */
+typedef TypedNative = {
+	final name:String;
+	final library:String;
+	final symbol:String;
+	final arguments:Array<CompilerType>;
+	final result:CompilerType;
 }
