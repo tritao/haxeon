@@ -349,6 +349,16 @@ class LanguageServiceMain {
 			referencesCancelled = true;
 		if (!completionCancelled || !referencesCancelled)
 			throw "language-service queries ignored cancellation";
+		var configuredService = new LanguageService();
+		configuredService.update("Configured.hx", "function main():Int return 42;");
+		configuredService.analyze("Configured");
+		var defaultIndex = configuredService.compiler.modules.get("Configured").semanticModel.index;
+		configuredService.configure("build-a");
+		if (configuredService.compiler.configurationIdentity != "build-a" || configuredService.isCurrent("Configured.hx"))
+			throw "compiler build identity did not invalidate semantic caches";
+		configuredService.analyze("Configured");
+		if (defaultIndex == configuredService.compiler.modules.get("Configured").semanticModel.index)
+			throw "semantic index was reused across build configurations";
 		service.update("Main.hx", "function main(:Int { return 0; }");
 		try {
 			service.compile("Main");

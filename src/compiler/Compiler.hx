@@ -115,6 +115,7 @@ class Compiler {
 
 	public final modules:Map<String, ModuleState> = [];
 	public final semanticWorkspace:SemanticWorkspace;
+	public var configurationIdentity(default, null):String = "default";
 
 	/** Last successfully assembled typed program; failed edits never replace it. */
 	public var lastTypedProgram:Null<TypedProgram> = null;
@@ -244,6 +245,16 @@ class Compiler {
 		graph.rebuild(modules);
 		sourceGeneration++;
 		return true;
+	}
+
+	/** Change semantic build context and invalidate every source-derived cache. */
+	public function configure(identity:String):Void {
+		if (identity == configurationIdentity)
+			return;
+		configurationIdentity = identity;
+		for (state in modules)
+			state.update(new SourceFile(state.source.path, state.source.text));
+		sourceGeneration++;
 	}
 
 	/** Update semantic state without assembling or publishing a runtime artifact. */

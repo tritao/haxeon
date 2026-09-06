@@ -2,16 +2,49 @@ package editor.lsp;
 
 import compiler.service.LanguageService;
 import haxe.Json;
+import haxe.crypto.Sha256;
+import haxe.ds.ReadOnlyArray;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 
-typedef HaxeProjectConfiguration = {
-	final file:String;
-	final classPaths:Array<String>;
-	final entries:Array<String>;
-	final defines:Array<String>;
-	final libraries:Array<String>;
+class HaxeProjectConfiguration {
+	public final id:String;
+	public final file:String;
+	public final classPaths:ReadOnlyArray<String>;
+	public final entries:ReadOnlyArray<String>;
+	public final defines:ReadOnlyArray<String>;
+	public final libraries:ReadOnlyArray<String>;
+
+	public function new(file:String, classPaths:Array<String>, entries:Array<String>, defines:Array<String>, libraries:Array<String>) {
+		this.file = file;
+		this.classPaths = sortedCopy(classPaths);
+		this.entries = sortedCopy(entries);
+		this.defines = sortedCopy(defines);
+		this.libraries = sortedCopy(libraries);
+		id = Sha256.encode([
+			file,
+			this.classPaths.join("|"),
+			this.entries.join("|"),
+			this.defines.join("|"),
+			this.libraries.join("|")
+		].join("\n"));
+	}
+
+	public function owns(path:String):Bool {
+		for (classPath in classPaths) {
+			var prefix = StringTools.endsWith(classPath, "/") ? classPath : classPath + "/";
+			if (path == classPath || StringTools.startsWith(path, prefix))
+				return true;
+		}
+		return false;
+	}
+
+	static function sortedCopy(values:Array<String>):Array<String> {
+		var result = values.copy();
+		result.sort(Reflect.compare);
+		return result;
+	}
 }
 
 /** Disk-backed project sources kept below open-document overlays. */
@@ -24,6 +57,7 @@ class ProjectWorkspace {
 	final diskPathByCompiler:Map<String, String> = [];
 	final sourceRoots:Array<String> = [];
 	final workspaceRootPaths:Array<String> = [];
+	var preferredConfigurationId:Null<String>;
 
 	public function new() {}
 
@@ -41,6 +75,13 @@ class ProjectWorkspace {
 		errors.resize(0);
 		sourceRoots.resize(0);
 		diskSources.clear();
+		compilerPathByDisk.clear();
+		diskPathByCompiler.clear();
+		for (path => compilerPath in previous)
+			if (isOpen(path)) {
+				compilerPathByDisk.set(path, compilerPath);
+				diskPathByCompiler.set(compilerPath, path);
+			}
 		discover(service, isOpen);
 		for (path => compilerPath in previous)
 			if (!diskSources.exists(path) && !isOpen(path))
@@ -70,6 +111,36 @@ class ProjectWorkspace {
 		return name == "haxe.json" || StringTools.endsWith(name, ".hxml");
 	}
 
+	public function selectConfiguration(id:Null<String>):Bool {
+		if (id == null || id.length == 0) {
+			preferredConfigurationId = null;
+			return true;
+		}
+		for (configuration in configurations)
+			if (configuration.id == id || configuration.file == id) {
+				preferredConfigurationId = configuration.id;
+				return true;
+			}
+		return false;
+	}
+
+	public function configurationFor(path:String):Null<HaxeProjectConfiguration> {
+		if (preferredConfigurationId != null)
+			for (configuration in configurations)
+				if (configuration.id == preferredConfigurationId)
+					return configuration;
+		var normalized = normalize(path), matches = [
+			for (configuration in configurations)
+				if (configuration.owns(normalized)) configuration
+		];
+		matches.sort(function(left, right) {
+			var leftDepth = longestOwningPath(left, normalized),
+				rightDepth = longestOwningPath(right, normalized);
+			return leftDepth == rightDepth ? Reflect.compare(left.id, right.id) : rightDepth - leftDepth;
+		});
+		return matches.length == 0 ? (configurations.length == 1 ? configurations[0] : null) : matches[0];
+	}
+
 	public static function pathFromUri(uri:String):String
 		return uriPath(uri);
 
@@ -86,6 +157,12 @@ class ProjectWorkspace {
 				configurations.push(parseConfiguration(file))
 			catch (failure:Dynamic)
 				errors.push('$file: ${Std.string(failure)}');
+		for (configuration in configurations) {
+			if (configuration.defines.length > 0)
+				errors.push('${configuration.file}: conditional defines are recorded but not yet supported by this compiler');
+			if (configuration.libraries.length > 0)
+				errors.push('${configuration.file}: Haxelib dependencies are recorded but not yet resolved by this compiler');
+		}
 		if (configurations.length == 0)
 			for (root in workspaceRootPaths)
 				sourceRoots.push(root);
@@ -139,7 +216,12 @@ class ProjectWorkspace {
 		return StringTools.endsWith(file, ".hxml") ? parseHxml(file) : parseJson(file);
 	}
 
-	function parseHxml(file:String):HaxeProjectConfiguration {
+	function parseHxml(file:String, ?visiting:Map<String, Bool>):HaxeProjectConfiguration {
+		if (visiting == null)
+			visiting = [];
+		if (visiting.exists(file))
+			throw 'Cyclic HXML reference: $file';
+		visiting.set(file, true);
 		var base = Path.directory(file), classPaths = [], entries = [], defines = [], libraries = [], words:Array<String> = [];
 		for (line in File.getContent(file).split("\n")) {
 			var clean = StringTools.trim(line), comment = clean.indexOf("#");
@@ -177,17 +259,23 @@ class ProjectWorkspace {
 				default:
 					if (StringTools.startsWith(option, "-cp="))
 						classPaths.push(resolve(base, option.substr(4)));
+					else if (StringTools.endsWith(option, ".hxml")) {
+						var referenced = parseHxml(resolve(base, option), visiting);
+						for (path in referenced.classPaths)
+							classPaths.push(path);
+						for (entry in referenced.entries)
+							entries.push(entry);
+						for (define in referenced.defines)
+							defines.push(define);
+						for (library in referenced.libraries)
+							libraries.push(library);
+					}
 			}
 		}
+		visiting.remove(file);
 		if (classPaths.length == 0)
 			classPaths.push(base);
-		return {
-			file: file,
-			classPaths: classPaths,
-			entries: entries,
-			defines: defines,
-			libraries: libraries
-		};
+		return new HaxeProjectConfiguration(file, classPaths, entries, defines, libraries);
 	}
 
 	function parseJson(file:String):HaxeProjectConfiguration {
@@ -205,13 +293,7 @@ class ProjectWorkspace {
 		appendStrings(value, "libraries", libraries.push);
 		if (classPaths.length == 0)
 			classPaths.push(base);
-		return {
-			file: file,
-			classPaths: classPaths,
-			entries: entries,
-			defines: defines,
-			libraries: libraries
-		};
+		return new HaxeProjectConfiguration(file, classPaths, entries, defines, libraries);
 	}
 
 	function loadSources(root:String, service:LanguageService, isOpen:String->Bool):Void {
@@ -233,6 +315,11 @@ class ProjectWorkspace {
 				else if (StringTools.endsWith(name, ".hx")) {
 					var source = File.getContent(path),
 						compilerPath = relativePath(root, path);
+					var existing = diskPathByCompiler.get(compilerPath);
+					if (existing != null && existing != path) {
+						errors.push('Conflicting module identity $compilerPath: $existing and $path');
+						continue;
+					}
 					diskSources.set(path, source);
 					compilerPathByDisk.set(path, compilerPath);
 					diskPathByCompiler.set(compilerPath, path);
@@ -277,6 +364,14 @@ class ProjectWorkspace {
 	static function relativePath(root:String, path:String):String {
 		var prefix = StringTools.endsWith(root, "/") ? root : root + "/";
 		return StringTools.startsWith(path, prefix) ? path.substr(prefix.length) : path;
+	}
+
+	static function longestOwningPath(configuration:HaxeProjectConfiguration, path:String):Int {
+		var result = -1;
+		for (classPath in configuration.classPaths)
+			if (path == classPath || StringTools.startsWith(path, (StringTools.endsWith(classPath, "/") ? classPath : classPath + "/")))
+				result = Std.int(Math.max(result, classPath.length));
+		return result;
 	}
 
 	static function uriPath(uri:String):String

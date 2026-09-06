@@ -179,6 +179,22 @@ class LspProtocolMain {
 		watchProtocol.handle(watchedFileMessage("file://" + watchConfigPath, 2));
 		if (!watchProtocol.project.hasDiskSource(Path.join([alternateRoot, "Alternate.hx"])))
 			throw "Haxe configuration change did not refresh source roots";
+		var secondRoot = Path.join([watchRoot, "second"]),
+			secondConfigPath = Path.join([watchRoot, "second.hxml"]);
+		sys.FileSystem.createDirectory(secondRoot);
+		sys.io.File.saveContent(Path.join([secondRoot, "Second.hx"]), "class Second {}");
+		sys.io.File.saveContent(secondConfigPath, "-cp second\n-main Second\n");
+		watchProtocol.handle(watchedFileMessage("file://" + secondConfigPath, 1));
+		if (watchProtocol.project.configurations.length != 2
+			|| watchProtocol.project.configurations[0].id == watchProtocol.project.configurations[1].id)
+			throw "discovered Haxe builds did not receive stable distinct identities";
+		watchProtocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "workspace/didChangeConfiguration",
+			params: {settings: {haxeon: {configuration: secondConfigPath}}}
+		}));
+		if (watchProtocol.project.configurationFor(Path.join([alternateRoot, "Alternate.hx"])).file != secondConfigPath)
+			throw "explicit Haxe build selection did not override path ownership";
 		deleteTree(watchRoot);
 		var source = "function main():Int { var answer = 42; return answer; }",
 			uri = "file:///workspace/Main.hx";

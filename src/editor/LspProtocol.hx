@@ -75,6 +75,7 @@ class LspProtocol {
 				case "textDocument/didChange": synchronize(request, false);
 				case "textDocument/didClose": close(request);
 				case "workspace/didChangeWatchedFiles": watchedFiles(request);
+				case "workspace/didChangeConfiguration": changeConfiguration(request);
 				case "textDocument/documentSymbol": cancellable(id, token -> documentSymbols(request, token));
 				case "textDocument/completion": cancellable(id, token -> completion(request, token));
 				case "textDocument/hover": cancellable(id, token -> hover(request, token));
@@ -142,10 +143,36 @@ class LspProtocol {
 
 	function initialize(request:Dynamic, id:Dynamic):Array<String> {
 		project.initialize(required(request, "params"), service);
+		if (project.configurations.length > 0)
+			service.configure(project.configurations[0].id);
 		var result = [response(id, initializeResult())];
 		for (message in project.errors)
 			result.push(notification("window/showMessage", {type: 1, message: 'Haxe project configuration: $message'}));
 		return result;
+	}
+
+	function changeConfiguration(request:Dynamic):Array<String> {
+		var params = required(request, "params"),
+			settings:Dynamic = Reflect.field(params, "settings"),
+			selected:Dynamic = settings;
+		if (settings != null && Reflect.hasField(settings, "haxeon"))
+			selected = Reflect.field(settings, "haxeon");
+		var id:Dynamic = selected == null ? null : Reflect.field(selected, "configuration");
+		if (id != null && !Std.isOfType(id, String))
+			return [
+				notification("window/showMessage", {type: 1, message: "haxeon.configuration must be a build id or configuration path"})
+			];
+		if (!project.selectConfiguration(cast id))
+			return [
+				notification("window/showMessage", {type: 1, message: 'Unknown Haxe build configuration: $id'})
+			];
+		var configuration = project.configurationFor("");
+		if (configuration != null)
+			service.configure(configuration.id);
+		analysisGeneration++;
+		for (module in service.compiler.modules.keys())
+			pendingDiagnosticTargets.set(module, true);
+		return [];
 	}
 
 	function watcherRegistration():String
@@ -199,7 +226,7 @@ class LspProtocol {
 		if (document == null)
 			return [];
 		var generation = ++analysisGeneration;
-		var path = project.compilerPath(document.path);
+		var path = activateConfiguration(document.path);
 		service.update(path, document.source);
 		var changedModule = ModulePath.fromFile(path),
 			targets = service.compiler.dependentModules(changedModule);
@@ -548,7 +575,14 @@ class LspProtocol {
 	}
 
 	function compilerPath(document:LspDocument):String
-		return project.compilerPath(document.path);
+		return activateConfiguration(document.path);
+
+	function activateConfiguration(path:String):String {
+		var configuration = project.configurationFor(path);
+		if (configuration != null)
+			service.configure(configuration.id);
+		return project.compilerPath(path);
+	}
 
 	static function documentUri(request:Dynamic):String
 		return requiredString(required(required(request, "params"), "textDocument"), "uri");
