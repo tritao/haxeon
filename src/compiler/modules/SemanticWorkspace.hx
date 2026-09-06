@@ -11,6 +11,13 @@ typedef WorkspaceDeclaration = {
 	final span:SourceSpan;
 }
 
+/** A lookup either identifies one declaration, no declaration, or an ambiguous set. */
+enum WorkspaceResolution {
+	Resolved(declaration:WorkspaceDeclaration);
+	Ambiguous(declarations:Array<WorkspaceDeclaration>);
+	Missing;
+}
+
 /** Shared cross-module name and member resolution over current or last-good models. */
 class SemanticWorkspace {
 	final modules:Map<String, ModuleState>;
@@ -19,23 +26,27 @@ class SemanticWorkspace {
 		this.modules = modules;
 
 	public function global(from:ModuleState, name:String):Null<WorkspaceDeclaration> {
-		var visible = [from];
+		return switch globalResolution(from, name) {
+			case Resolved(declaration): declaration;
+			case Ambiguous(_), Missing: null;
+		};
+	}
+
+	public function globalResolution(from:ModuleState, name:String):WorkspaceResolution {
+		var local = declarationsIn(from, name);
+		if (local.length == 1)
+			return Resolved(local[0]);
+		if (local.length > 1)
+			return Ambiguous(local);
+		var matches:Array<WorkspaceDeclaration> = [];
 		for (dependency in from.dependencies) {
 			var state = modules.get(dependency);
 			if (state != null)
-				visible.push(state);
+				for (declaration in declarationsIn(state, name))
+					if (!contains(matches, declaration))
+						matches.push(declaration);
 		}
-		for (state in visible) {
-			var model = effectiveModel(state);
-			if (model == null)
-				continue;
-			for (kind in [Alias, Function, Class, Interface, Enum, Abstract]) {
-				var declaration = model.declarations.symbol(kind, name);
-				if (declaration != null)
-					return {state: state, key: declaration.id, span: declaration.span};
-			}
-		}
-		return null;
+		return matches.length == 0 ? Missing : matches.length == 1 ? Resolved(matches[0]) : Ambiguous(matches);
 	}
 
 	public function member(type:CompilerType, name:String):Null<WorkspaceDeclaration>
@@ -105,6 +116,25 @@ class SemanticWorkspace {
 		var names = [for (name in modules.keys()) name];
 		names.sort(Reflect.compare);
 		return [for (name in names) modules.get(name)];
+	}
+
+	function declarationsIn(state:ModuleState, name:String):Array<WorkspaceDeclaration> {
+		var result:Array<WorkspaceDeclaration> = [],
+			model = effectiveModel(state);
+		if (model != null)
+			for (kind in [Alias, Function, Class, Interface, Enum, Abstract]) {
+				var declaration = model.declarations.symbol(kind, name);
+				if (declaration != null)
+					result.push({state: state, key: declaration.id, span: declaration.span});
+			}
+		return result;
+	}
+
+	static function contains(declarations:Array<WorkspaceDeclaration>, candidate:WorkspaceDeclaration):Bool {
+		for (declaration in declarations)
+			if (declaration.state == candidate.state && declaration.key == candidate.key)
+				return true;
+		return false;
 	}
 
 	static function ownsType(state:ModuleState, model:compiler.types.SemanticModel, declaredName:String, requestedName:String):Bool {

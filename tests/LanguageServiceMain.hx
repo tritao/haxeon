@@ -153,6 +153,14 @@ class LanguageServiceMain {
 			|| aliasDefinition == null
 			|| aliasDefinition.span.start > hierarchySource.indexOf("class Parent"))
 			throw "language service did not resolve inheritance and alias navigation";
+		var collisionService = new LanguageService(),
+			collisionSource = "class Item { public function value():Int return 1; public function score():Int return value(); } function main():Int return new Item().value();";
+		collisionService.update("Collision.hx", collisionSource);
+		collisionService.compile("Collision");
+		var collisionPosition = collisionSource.lastIndexOf("value") + 2;
+		if (collisionService.rename("Collision.hx", collisionPosition, "score").length != 0
+			|| collisionService.rename("Collision.hx", collisionPosition, "not-valid").length != 0)
+			throw "language service allowed an unsafe rename";
 		service.update("Main.hx", "function main(:Int { return 0; }");
 		try {
 			service.compile("Main");

@@ -2,11 +2,13 @@ package compiler.service;
 
 import compiler.Ast.AstType;
 import compiler.Diagnostic;
+import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
 import compiler.Token.TokenKind;
 import compiler.modules.Compiler;
 import compiler.modules.ModulePath;
 import compiler.modules.ModuleState;
+import compiler.modules.SemanticWorkspace.WorkspaceResolution;
 import compiler.modules.Compiler.CompileResult;
 import compiler.Ast.AstFunction;
 import compiler.Ast.AstStatement;
@@ -270,10 +272,15 @@ class LanguageService {
 	}
 
 	public function rename(path:String, position:Int, replacement:String):Array<TextEdit> {
-		var name = symbolAt(path, position), result:Array<TextEdit> = [];
-		if (name == null || replacement.length == 0)
+		var name = symbolAt(path, position),
+			target = resolveSymbol(path, position),
+			result:Array<TextEdit> = [];
+		if (name == null || target == null || !isIdentifier(replacement) || replacement == name)
 			return result;
-		for (reference in references(path, position))
+		var targetReferences = references(path, position);
+		if (renameCollides(target, replacement, targetReferences))
+			return result;
+		for (reference in targetReferences)
 			result.push({
 				path: reference.path,
 				span: reference.span,
@@ -282,6 +289,25 @@ class LanguageService {
 				stale: reference.stale
 			});
 		return result;
+	}
+
+	function renameCollides(target:SemanticSymbol, replacement:String, affected:Array<SymbolLocation>):Bool {
+		var affectedPaths:Map<String, Bool> = [];
+		for (location in affected)
+			affectedPaths.set(location.path, true);
+		for (state in compiler.modules) {
+			if (!affectedPaths.exists(state.source.path))
+				continue;
+			var tokens = effectiveTokens(state);
+			if (tokens != null)
+				for (token in tokens)
+					if (token.kind == Identifier && token.text == replacement) {
+						var existing = resolveSymbol(state.source.path, token.span.start + 1);
+						if (existing != null && existing.key != target.key)
+							return true;
+					}
+		}
+		return false;
 	}
 
 	function symbolAt(path:String, position:Int):Null<String> {
@@ -293,6 +319,15 @@ class LanguageService {
 			if (token.kind == Identifier && position >= token.span.start && position <= token.span.end)
 				return token.text;
 		return null;
+	}
+
+	static function isIdentifier(value:String):Bool {
+		if (value.length == 0 || !isIdentifierStart(value.charCodeAt(0)))
+			return false;
+		for (i in 1...value.length)
+			if (!isIdentifierPart(value.charCodeAt(i)))
+				return false;
+		return true;
 	}
 
 	function resolveSymbol(path:String, position:Int):Null<SemanticSymbol> {
@@ -337,12 +372,12 @@ class LanguageService {
 			}
 			var imported = importedModule(state, qualifier);
 			if (imported != null) {
-				var importedSymbol = globalSymbol(imported, token.text);
+				var importedSymbol = globalSymbol(imported, token.text, token.span);
 				if (importedSymbol != null)
 					return importedSymbol;
 			}
 		}
-		return globalSymbol(state, token.text);
+		return globalSymbol(state, token.text, token.span);
 	}
 
 	function declarationSymbol(state:ModuleState, tokens:Array<compiler.Token>, tokenIndex:Int, name:String):Null<SemanticSymbol> {
@@ -394,9 +429,16 @@ class LanguageService {
 			functionSpan: functionSpan
 		};
 
-	function globalSymbol(state:ModuleState, name:String):Null<SemanticSymbol> {
-		var declaration = compiler.semanticWorkspace.global(state, name);
-		return declaration == null ? null : symbol(declaration.state, declaration.key, declaration.span, null);
+	function globalSymbol(state:ModuleState, name:String, ?useSpan:SourceSpan):Null<SemanticSymbol> {
+		return switch compiler.semanticWorkspace.globalResolution(state, name) {
+			case Resolved(declaration): symbol(declaration.state, declaration.key, declaration.span, null);
+			case Missing: null;
+			case Ambiguous(declarations):
+				var owners = [for (declaration in declarations) declaration.state.name];
+				owners.sort(Reflect.compare);
+				throw new CompileError(new Diagnostic("E2001", 'Ambiguous symbol "$name" imported from ${owners.join(", ")}',
+					useSpan == null ? declarations[0].span : useSpan));
+		};
 	}
 
 	function importedModule(state:ModuleState, name:String):Null<ModuleState> {
@@ -711,6 +753,9 @@ class LanguageService {
 
 	static inline function isIdentifierPart(code:Int):Bool
 		return (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || (code >= 48 && code <= 57) || code == 95;
+
+	static inline function isIdentifierStart(code:Int):Bool
+		return (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code == 95;
 
 	static function typeName(type:AstType):String
 		return switch type {
