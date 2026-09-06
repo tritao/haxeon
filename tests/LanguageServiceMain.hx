@@ -226,12 +226,28 @@ class LanguageServiceMain {
 			aliasUse = hierarchySource.indexOf("ParentAlias =") + "ParentAlias = ".length,
 			aliasDefinition = hierarchyService.definition("Hierarchy.hx", aliasUse);
 		if (hierarchyService.compiler.modules.get("Hierarchy").semanticModel.index.symbolIdAt(inheritedUse) == null
+			|| hierarchyService.compiler.modules.get("Hierarchy").semanticModel.index.symbolIdAt(aliasUse) == null
 			|| inheritedDefinition == null
 			|| inheritedDefinition.span.start > hierarchySource.indexOf("value")
 			|| inheritedRename.length != 2
 			|| aliasDefinition == null
 			|| aliasDefinition.span.start > hierarchySource.indexOf("class Parent"))
 			throw "language service did not resolve inheritance and alias navigation";
+		var typeService = new LanguageService();
+		typeService.update("domain/Entity.hx", "package domain; class Entity {}");
+		var typeSource = "package usecase; import domain.Entity; typedef EntityAlias = Entity; class Child extends Entity {} function identity(value:Entity):Entity return value; function main():Int return 0;";
+		typeService.update("usecase/Main.hx", typeSource);
+		typeService.compile("usecase.Main");
+		var typePosition = typeSource.indexOf(":Entity return") + 1,
+			typeDefinition = typeService.definition("usecase/Main.hx", typePosition),
+			typeReferences = typeService.references("usecase/Main.hx", typePosition),
+			typeRename = typeService.rename("usecase/Main.hx", typePosition, "Record");
+		if (typeService.compiler.modules.get("usecase.Main").semanticModel.index.symbolIdAt(typePosition) == null
+			|| typeDefinition == null
+			|| typeDefinition.path != "domain/Entity.hx"
+			|| typeReferences.length != 6
+			|| typeRename.length != 6)
+			throw 'language service type-reference index failed: references=${typeReferences.length}, rename=${typeRename.length}';
 		var collisionService = new LanguageService(),
 			collisionSource = "class Item { public function value():Int return 1; public function score():Int return value(); } function main():Int return new Item().value();";
 		collisionService.update("Collision.hx", collisionSource);

@@ -3,19 +3,15 @@ package compiler.service;
 import compiler.semantic.ModuleCanonicalizer;
 import compiler.syntax.Ast.AstType;
 import compiler.Diagnostic;
-import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
 import compiler.syntax.Token.TokenKind;
 import compiler.Compiler;
 import compiler.modules.ModulePath;
 import compiler.modules.ModuleState;
-import compiler.semantic.SemanticWorkspace.WorkspaceResolution;
 import compiler.semantic.SemanticIndex.SemanticSymbolId;
 import compiler.semantic.SemanticIndex.SemanticCompletionContext;
 import compiler.semantic.SemanticModel;
 import compiler.Compiler.CompileResult;
-import compiler.syntax.Ast.AstFunction;
-import compiler.syntax.Ast.AstStatement;
 import compiler.types.Type.CompilerType;
 import compiler.types.DeclarationIndex.DeclarationKind;
 import compiler.types.TypeRelations;
@@ -65,13 +61,6 @@ typedef SignatureHelp = {
 	final activeParameter:Int;
 	final ?revision:Int;
 	final ?stale:Bool;
-}
-
-/** Internal semantic key and declaration/function location used by editor queries. */
-typedef SemanticSymbol = {
-	final key:String;
-	final location:SymbolLocation;
-	final functionSpan:Null<SourceSpan>;
 }
 
 private typedef SemanticQueryContext = {
@@ -376,11 +365,7 @@ class LanguageService {
 	}
 
 	public function definition(path:String, position:Int):Null<SymbolLocation> {
-		var indexed = indexedDefinition(path, position);
-		if (indexed != null)
-			return indexed;
-		var symbol = recoverySymbol(path, position);
-		return symbol == null ? null : symbol.location;
+		return indexedDefinition(path, position);
 	}
 
 	function indexedDefinition(path:String, position:Int):Null<SymbolLocation> {
@@ -398,32 +383,7 @@ class LanguageService {
 
 	public function references(path:String, position:Int):Array<SymbolLocation> {
 		var indexed = indexedReferences(path, position);
-		if (indexed != null)
-			return indexed;
-		var target = recoverySymbol(path, position),
-			result:Array<SymbolLocation> = [];
-		if (target == null)
-			return result;
-		for (state in compiler.modules) {
-			var tokens = effectiveTokens(state);
-			if (tokens != null)
-				for (token in tokens)
-					if (token.kind == Identifier) {
-						var candidate = recoverySymbol(state.source.path, token.span.start + 1);
-						if (candidate != null && candidate.key == target.key)
-							result.push({
-								path: state.source.path,
-								span: token.span,
-								revision: snapshotRevision(state),
-								stale: snapshotRevision(state) != state.revision
-							});
-					}
-		}
-		result.sort(function(a, b) {
-			var pathOrder = Reflect.compare(a.path, b.path);
-			return pathOrder == 0 ? Reflect.compare(a.span.start, b.span.start) : pathOrder;
-		});
-		return result;
+		return indexed == null ? [] : indexed;
 	}
 
 	function indexedReferences(path:String, position:Int):Null<Array<SymbolLocation>> {
@@ -448,15 +408,11 @@ class LanguageService {
 		var context = semanticQuery(path, position),
 			indexedId = context == null ? null : context.symbol,
 			name = symbolAt(path, position),
-			legacyTarget = indexedId == null ? recoverySymbol(path, position) : null,
 			result:Array<TextEdit> = [];
-		if (name == null || !isIdentifier(replacement) || replacement == name)
+		if (indexedId == null || name == null || !isIdentifier(replacement) || replacement == name)
 			return result;
 		var targetReferences = references(path, position);
-		if (indexedId != null) {
-			if (indexedRenameCollides(indexedId, replacement, targetReferences))
-				return result;
-		} else if (legacyTarget == null || recoveryRenameCollides(legacyTarget, replacement, targetReferences))
+		if (indexedRenameCollides(indexedId, replacement, targetReferences))
 			return result;
 		for (reference in targetReferences)
 			result.push({
@@ -516,25 +472,6 @@ class LanguageService {
 		return separator < 0 ? name : name.substring(0, separator);
 	}
 
-	function recoveryRenameCollides(target:SemanticSymbol, replacement:String, affected:Array<SymbolLocation>):Bool {
-		var affectedPaths:Map<String, Bool> = [];
-		for (location in affected)
-			affectedPaths.set(location.path, true);
-		for (state in compiler.modules) {
-			if (!affectedPaths.exists(state.source.path))
-				continue;
-			var tokens = effectiveTokens(state);
-			if (tokens != null)
-				for (token in tokens)
-					if (token.kind == Identifier && token.text == replacement) {
-						var existing = recoverySymbol(state.source.path, token.span.start + 1);
-						if (existing != null && existing.key != target.key)
-							return true;
-					}
-		}
-		return false;
-	}
-
 	function symbolAt(path:String, position:Int):Null<String> {
 		var state = stateFor(path);
 		var tokens = state == null ? null : effectiveTokens(state);
@@ -565,241 +502,6 @@ class LanguageService {
 			completion: model.index.completionContext(position, qualifier),
 			stale: snapshotRevision(state) != state.revision
 		};
-	}
-
-	/** Syntax recovery used only when a revision has no semantic binding at the cursor. */
-	function recoverySymbol(path:String, position:Int):Null<SemanticSymbol> {
-		var state = stateFor(path),
-			tokens = state == null ? null : effectiveTokens(state),
-			ast = state == null ? null : effectiveAst(state);
-		if (state == null || tokens == null || ast == null)
-			return null;
-		var model = effectiveSemanticModel(state),
-			indexedId = model == null ? null : model.index.symbolIdAt(position),
-			indexed = indexedId == null ? null : compiler.semanticWorkspace.indexedSymbol(indexedId);
-		if (indexed != null)
-			return {
-				key: Std.string(indexedId),
-				location: {
-					path: indexed.symbol.declaration.file.path,
-					span: indexed.symbol.declaration,
-					revision: snapshotRevision(indexed.state),
-					stale: snapshotRevision(indexed.state) != indexed.state.revision
-				},
-				functionSpan: null
-			};
-		var tokenIndex = -1;
-		for (i in 0...tokens.length)
-			if (tokens[i].kind == Identifier && position >= tokens[i].span.start && position <= tokens[i].span.end) {
-				tokenIndex = i;
-				break;
-			}
-		if (tokenIndex < 0)
-			return null;
-		var token = tokens[tokenIndex],
-			local = localSymbol(path, position, token.text);
-		if (local != null)
-			return {
-				key: 'local:${state.name}:${local.functionSpan.start}:${local.declaration.start}',
-				location: {
-					path: path,
-					span: local.declaration,
-					revision: snapshotRevision(state),
-					stale: snapshotRevision(state) != state.revision
-				},
-				functionSpan: local.functionSpan
-			};
-		var declaration = declarationSymbol(state, tokens, tokenIndex, token.text);
-		if (declaration != null)
-			return declaration;
-		var qualifier = tokenIndex >= 2
-			&& tokens[tokenIndex - 1].kind == Dot
-			&& tokens[tokenIndex - 2].kind == Identifier ? tokens[tokenIndex - 2].text : null;
-		if (qualifier != null) {
-			var completion = model == null ? null : model.index.completionContext(position, qualifier),
-				receiverType = completion == null ? null : completion.receiver;
-			if (receiverType != null) {
-				var member = memberSymbol(receiverType, token.text);
-				if (member != null)
-					return member;
-			}
-			var imported = importedModule(state, qualifier);
-			if (imported != null) {
-				var importedSymbol = globalSymbol(imported, token.text, token.span);
-				if (importedSymbol != null)
-					return importedSymbol;
-			}
-		}
-		return globalSymbol(state, token.text, token.span);
-	}
-
-	function declarationSymbol(state:ModuleState, tokens:Array<compiler.syntax.Token>, tokenIndex:Int, name:String):Null<SemanticSymbol> {
-		var previous = tokenIndex > 0 ? tokens[tokenIndex - 1].kind : null,
-			ast = effectiveAst(state);
-		if (ast == null)
-			return null;
-		if (previous == TokenKind.Class)
-			for (classDecl in ast.classes)
-				if (classDecl.name == name)
-					return symbol(state, 'class:$name', classDecl.span, null);
-		if (previous == TokenKind.Interface)
-			for (interfaceDecl in ast.interfaces)
-				if (interfaceDecl.name == name)
-					return symbol(state, 'interface:$name', interfaceDecl.span, null);
-		if (previous == TokenKind.Enum)
-			for (enumDecl in ast.enums)
-				if (enumDecl.name == name)
-					return symbol(state, 'enum:$name', enumDecl.span, null);
-		if (previous == TokenKind.Function) {
-			for (fn in ast.functions)
-				if (fn.name == name)
-					return symbol(state, 'function:$name', fn.span, null);
-			for (classDecl in ast.classes)
-				for (method in classDecl.methods)
-					if (method.name == name && tokenIndexInside(tokens[tokenIndex].span.start, method.span))
-						return symbol(state, 'class:${classDecl.name}:method:$name', method.span, null);
-		}
-		if (previous == TokenKind.Var)
-			for (classDecl in ast.classes)
-				for (field in classDecl.fields)
-					if (field.name == name)
-						return symbol(state, 'class:${classDecl.name}:field:$name', field.span, null);
-		return null;
-	}
-
-	static function tokenIndexInside(position:Int, span:SourceSpan):Bool
-		return position >= span.start && position <= span.end;
-
-	function symbol(state:ModuleState, key:String, span:SourceSpan, ?functionSpan:SourceSpan):SemanticSymbol
-		return {
-			key: '${state.name}:$key',
-			location: {
-				path: state.source.path,
-				span: span,
-				revision: snapshotRevision(state),
-				stale: snapshotRevision(state) != state.revision
-			},
-			functionSpan: functionSpan
-		};
-
-	function globalSymbol(state:ModuleState, name:String, ?useSpan:SourceSpan):Null<SemanticSymbol> {
-		return switch compiler.semanticWorkspace.globalResolution(state, name) {
-			case Resolved(declaration): symbol(declaration.state, declaration.key, declaration.span, null);
-			case Missing: null;
-			case Ambiguous(declarations):
-				var owners = [for (declaration in declarations) declaration.state.name];
-				owners.sort(Reflect.compare);
-				throw new CompileError(new Diagnostic("E2001", 'Ambiguous symbol "$name" imported from ${owners.join(", ")}',
-					useSpan == null ? declarations[0].span : useSpan));
-		};
-	}
-
-	function importedModule(state:ModuleState, name:String):Null<ModuleState> {
-		var ast = effectiveAst(state);
-		if (ast == null)
-			return null;
-		for (path in ast.imports) {
-			var parts = path.split(".");
-			if (parts[parts.length - 1] == name) {
-				var imported = compiler.modules.get(path);
-				if (imported != null)
-					return imported;
-			}
-		}
-		return null;
-	}
-
-	function memberSymbol(type:CompilerType, name:String):Null<SemanticSymbol> {
-		var declaration = compiler.semanticWorkspace.member(type, name);
-		return declaration == null ? null : symbol(declaration.state, declaration.key, declaration.span, null);
-	}
-
-	function localSymbol(path:String, position:Int, name:String):Null<{functionSpan:SourceSpan, declaration:SourceSpan}> {
-		var state = stateFor(path),
-			ast = state == null ? null : effectiveAst(state);
-		if (state == null || ast == null)
-			return null;
-		for (fn in ast.functions)
-			if (position >= fn.span.start && position <= fn.span.end) {
-				var argumentSpan = null;
-				for (argument in fn.arguments)
-					if (argument.name == name)
-						argumentSpan = argument.span;
-				var declaration = localDeclarationAt(fn.statements, name, position, argumentSpan);
-				if (declaration != null)
-					return {functionSpan: fn.span, declaration: declaration};
-			}
-		for (classDecl in ast.classes)
-			for (method in classDecl.methods)
-				if (position >= method.span.start && position <= method.span.end) {
-					var argumentSpan = null;
-					for (argument in method.arguments)
-						if (argument.name == name)
-							argumentSpan = argument.span;
-					var declaration = localDeclarationAt(method.statements, name, position, argumentSpan);
-					if (declaration != null)
-						return {functionSpan: method.span, declaration: declaration};
-				}
-		return null;
-	}
-
-	static function localDeclarationAt(statements:Array<AstStatement>, name:String, position:Int, inherited:Null<SourceSpan>):Null<SourceSpan> {
-		var visible = inherited;
-		for (statement in statements) {
-			var span = statementSpan(statement);
-			if (span.start > position)
-				break;
-			switch statement {
-				case UninitializedDeclaration(local, _, declaration), VarDeclaration(local, _, _, declaration):
-					if (local == name)
-						visible = declaration;
-				case If(_, yes, no, _):
-					var branch = containsPosition(yes, position) ? yes : (containsPosition(no, position) ? no : null);
-					if (branch != null)
-						return localDeclarationAt(branch, name, position, visible);
-				case While(_, body, _):
-					if (containsPosition(body, position))
-						return localDeclarationAt(body, name, position, visible);
-				case DoWhile(body, _, _):
-					if (containsPosition(body, position))
-						return localDeclarationAt(body, name, position, visible);
-				case ForIn(local, valueLocal, _, body, declaration):
-					if (containsPosition(body, position))
-						return localDeclarationAt(body, name, position, local == name || valueLocal == name ? declaration : visible);
-				case Try(tryBranch, catches, _):
-					if (containsPosition(tryBranch, position))
-						return localDeclarationAt(tryBranch, name, position, visible);
-					for (catchClause in catches)
-						if (position >= catchClause.span.start && position <= catchClause.span.end)
-							return localDeclarationAt(catchClause.statements, name, position, catchClause.name == name ? catchClause.span : visible);
-				case Switch(_, cases, defaultBranch, _, _):
-					for (switchCase in cases)
-						if (containsPosition(switchCase.statements, position))
-							return localDeclarationAt(switchCase.statements, name, position, visible);
-					if (containsPosition(defaultBranch, position))
-						return localDeclarationAt(defaultBranch, name, position, visible);
-				default:
-			}
-		}
-		return visible;
-	}
-
-	static function containsPosition(statements:Array<AstStatement>, position:Int):Bool
-		return statements.length > 0
-			&& position >= statementSpan(statements[0]).start
-			&& position <= statementSpan(statements[statements.length - 1]).end;
-
-	static function statementSpan(statement:AstStatement):SourceSpan
-		return switch statement {
-			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span),
-				FieldAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), Throw(_, span), Try(_, _, span), If(_, _, _, span), While(_, _, span),
-				DoWhile(_, _,
-					span), ForIn(_, _, _, _, span), Break(span), Continue(span), Switch(_, _, _, _, span), Increment(_, _, span), Expression(_, span): span;
-		};
-
-	static function sourceLocalName(identity:String):String {
-		var separator = identity.indexOf(":");
-		return StringTools.startsWith(identity, "$l") && separator >= 0 ? identity.substr(separator + 1) : identity;
 	}
 
 	static function sourceName(name:String):String {

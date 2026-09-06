@@ -72,6 +72,25 @@ class SemanticWorkspace {
 		return matches.length == 1 ? matches[0] : null;
 	}
 
+	public function resolveTypeSymbolId(name:String):Null<SemanticSymbolId> {
+		var matches:Array<SemanticSymbolId> = [];
+		for (state in orderedStates()) {
+			var model = effectiveModel(state);
+			if (model == null)
+				continue;
+			var packagePrefix = model.program.packageName == null ? "" : Std.string(model.program.packageName) + ".";
+			for (symbol in model.index.symbols)
+				if (isTypeKind(symbol.kind)
+					&& (symbol.name == name || state.name + "." + symbol.name == name || packagePrefix + symbol.name == name))
+					matches.push(symbol.id);
+		}
+		return matches.length == 1 ? matches[0] : null;
+	}
+
+	static function isTypeKind(kind:DeclarationKind):Bool
+		return kind == DeclarationKind.Alias || kind == DeclarationKind.Enum || kind == DeclarationKind.Abstract || kind == DeclarationKind.Interface
+			|| kind == DeclarationKind.Class;
+
 	public function resolveEnumCaseId(enumName:String, index:Int):Null<SemanticSymbolId> {
 		if (index < 0)
 			return null;

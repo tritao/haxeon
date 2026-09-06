@@ -149,6 +149,20 @@ class SemanticIndex {
 	public function signature(id:SemanticSymbolId):Null<SemanticSignatureInfo>
 		return signatures.get(id);
 
+	public function indexTypeReferences(resolve:String->Null<SemanticSymbolId>):Void {
+		for (index in 0...tokens.length) {
+			var token = tokens[index];
+			if (token.kind != TokenKind.Identifier || !isTypeReferenceToken(index))
+				continue;
+			var name = qualifiedTokenName(index), id = resolve(name);
+			if (id == null)
+				id = resolve(token.text);
+			if (id != null)
+				bind(id, token.span);
+		}
+		bindings.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
+	}
+
 	public function locations(id:SemanticSymbolId):Array<SourceSpan> {
 		var result = references.get(id);
 		return result == null ? [] : result.copy();
@@ -429,6 +443,98 @@ class SemanticIndex {
 			if (existing.start == span.start && existing.end == span.end)
 				return;
 		locations.push(span);
+	}
+
+	function isTypeReferenceToken(index:Int):Bool {
+		if (index <= 0)
+			return false;
+		var previous = tokens[index - 1].kind;
+		if (previous == TokenKind.Colon
+			|| previous == TokenKind.Extends
+			|| previous == TokenKind.Implements
+			|| previous == TokenKind.Less)
+			return true;
+		if (previous == TokenKind.Assign)
+			return precededBy(TokenKind.Typedef, index);
+		if (previous == TokenKind.Dot)
+			return typePathStartsInContext(index);
+		if (previous == TokenKind.Comma)
+			return insideTypeArguments(index) || precededByEither(TokenKind.Extends, TokenKind.Implements, index);
+		return precededBy(TokenKind.Import, index) && followedBy(TokenKind.Semicolon, index);
+	}
+
+	function qualifiedTokenName(index:Int):String {
+		var start = index;
+		while (start >= 2 && tokens[start - 1].kind == TokenKind.Dot && tokens[start - 2].kind == TokenKind.Identifier)
+			start -= 2;
+		var parts:Array<String> = [];
+		for (cursor in start...index + 1)
+			if (tokens[cursor].kind == TokenKind.Identifier)
+				parts.push(tokens[cursor].text);
+		return parts.join(".");
+	}
+
+	function typePathStartsInContext(index:Int):Bool {
+		var start = index;
+		while (start >= 2 && tokens[start - 1].kind == TokenKind.Dot && tokens[start - 2].kind == TokenKind.Identifier)
+			start -= 2;
+		if (start == 0)
+			return false;
+		var kind = tokens[start - 1].kind;
+		return kind == TokenKind.Colon
+			|| kind == TokenKind.Extends
+			|| kind == TokenKind.Implements
+			|| kind == TokenKind.Less
+			|| (kind == TokenKind.Assign && precededBy(TokenKind.Typedef, start))
+			|| precededBy(TokenKind.Import, start);
+	}
+
+	function insideTypeArguments(index:Int):Bool {
+		var depth = 0, cursor = index - 1;
+		while (cursor >= 0) {
+			switch tokens[cursor].kind {
+				case Greater:
+					depth++;
+				case Less:
+					if (depth == 0)
+						return true;
+					depth--;
+				case Semicolon, LeftBrace, RightBrace, Assign:
+					return false;
+				default:
+			}
+			cursor--;
+		}
+		return false;
+	}
+
+	function precededBy(kind:TokenKind, index:Int):Bool {
+		var cursor = index - 1;
+		while (cursor >= 0) {
+			var candidate = tokens[cursor].kind;
+			if (candidate == kind)
+				return true;
+			if (candidate == TokenKind.Semicolon || candidate == TokenKind.LeftBrace || candidate == TokenKind.RightBrace)
+				return false;
+			cursor--;
+		}
+		return false;
+	}
+
+	function precededByEither(left:TokenKind, right:TokenKind, index:Int):Bool
+		return precededBy(left, index) || precededBy(right, index);
+
+	function followedBy(kind:TokenKind, index:Int):Bool {
+		var cursor = index + 1;
+		while (cursor < tokens.length) {
+			var candidate = tokens[cursor].kind;
+			if (candidate == kind)
+				return true;
+			if (candidate != TokenKind.Dot && candidate != TokenKind.Identifier)
+				return false;
+			cursor++;
+		}
+		return false;
 	}
 
 	function bindLocalUse(fn:TypedFunction, identity:String, span:SourceSpan):Void {

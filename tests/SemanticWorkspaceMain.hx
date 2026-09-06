@@ -7,7 +7,6 @@ import compiler.semantic.SemanticWorkspace.WorkspaceResolution;
 import compiler.semantic.SemanticModel;
 import compiler.types.Type.CompilerType;
 import compiler.service.LanguageService;
-import compiler.Diagnostic.CompileError;
 
 class SemanticWorkspaceMain {
 	static function main():Void {
@@ -46,12 +45,7 @@ class SemanticWorkspaceMain {
 		service.compiler.modules.set(query.name, query);
 		service.compiler.modules.set(base.name, base);
 		service.compiler.modules.set(other.name, other);
-		try {
-			service.definition("Query.hx", query.source.text.indexOf("Base") + 1);
-			throw "ambiguous editor lookup should produce a diagnostic";
-		} catch (error:CompileError) {
-			expect(error.diagnostic.code == "E2001", "ambiguous lookup should use its stable diagnostic code");
-		}
+		expect(service.definition("Query.hx", query.source.text.indexOf("Base") + 1) == null, "editor queries should not guess an unbound ambiguous symbol");
 
 		Sys.println("PASS: cross-module semantic workspace");
 	}
