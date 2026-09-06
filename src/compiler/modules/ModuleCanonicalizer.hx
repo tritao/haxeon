@@ -70,7 +70,8 @@ class ModuleCanonicalizer {
 	public static function canonicalAlias(alias:compiler.Ast.AstTypeAlias, aliases:Map<String, String>, packageName:Null<String>):compiler.Ast.AstTypeAlias
 		return {
 			name: qualifiedTypeName(packageName, alias.name),
-			type: canonicalType(alias.type, aliases),
+			typeParameters: alias.typeParameters,
+			type: canonicalType(alias.type, aliases, alias.typeParameters),
 			isPrivate: alias.isPrivate,
 			span: alias.span
 		};

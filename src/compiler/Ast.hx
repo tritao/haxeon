@@ -78,7 +78,13 @@ typedef AstInterface = {
 }
 
 /** Source typedef that the declaration index expands during type resolution. */
-typedef AstTypeAlias = {final name:String; final type:AstType; final isPrivate:Bool; final span:SourceSpan;}
+typedef AstTypeAlias = {
+	final name:String;
+	final typeParameters:Array<String>;
+	final type:AstType;
+	final isPrivate:Bool;
+	final span:SourceSpan;
+}
 
 /** One parameter in an enum constructor declaration. */
 typedef AstEnumParameter = {final name:Null<String>; final type:AstType; final optional:Bool; final span:SourceSpan;}

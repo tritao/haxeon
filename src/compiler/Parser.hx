@@ -181,7 +181,8 @@ class Parser {
 	}
 
 	function parseTypeAlias(start:SourceSpan, isPrivate:Bool):AstTypeAlias {
-		var name = consume(TokenKind.Identifier).text;
+		var name = consume(TokenKind.Identifier).text,
+			typeParameters = parseTypeParameters();
 		consume(TokenKind.Assign);
 		var type = parseType(), end = previous().span;
 		switch type {
@@ -193,6 +194,7 @@ class Parser {
 		}
 		return {
 			name: name,
+			typeParameters: typeParameters,
 			type: type,
 			isPrivate: isPrivate,
 			span: start.merge(end)

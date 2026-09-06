@@ -531,6 +531,13 @@ class TestMain {
 			|| Typer.type(aliasProgram).functions[0].arguments[0].type != compiler.types.Type.CompilerType.TInt)
 			throw "Type aliases were not resolved by the typer";
 		Sys.println("PASS: primitive type aliases resolve through the typed AST");
+		var genericAliasProgram = new Parser(new Lexer(new SourceFile("generic-aliases.hx",
+			"typedef Pair<T> = { left:T, right:T }; function main():Int { var value:Pair<Int> = { left: 20, right: 22 }; return value.left + value.right; }"))
+			.tokenize()).parseProgram();
+		var genericAliasTyped = Typer.type(genericAliasProgram);
+		if (genericAliasTyped.functions[0].result != compiler.types.Type.CompilerType.TInt)
+			throw "Generic type aliases were not substituted by the typer";
+		Sys.println("PASS: generic type aliases substitute their arguments");
 		expectCompileError("function consume(value:Missing):Int { return 0; } function main():Int { return 0; }", 'Unknown type "Missing"');
 		expectCompileError("typedef Loop = Loop; function main():Int { return 0; }", 'Cyclic type alias involving "Loop"');
 		expectCompileError("class Loop extends Loop { } function main():Int { return 0; }", 'Cyclic class inheritance involving "Loop"');

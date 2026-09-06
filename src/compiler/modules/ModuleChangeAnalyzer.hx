@@ -46,7 +46,10 @@ class ModuleChangeAnalyzer {
 		var aliases:Map<String, String> = [];
 		for (alias in ast.aliases) {
 			var aliasName = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, alias.name),
-				signature = aliasName + "=" + SemanticSignature.parsed(alias.type, ast.aliases);
+				signature = aliasName
+					+ (alias.typeParameters.length == 0 ? "" : '<${alias.typeParameters.join(",")}>')
+					+ "="
+					+ SemanticSignature.parsed(alias.type, ast.aliases);
 			aliases.set(aliasName, signature);
 			if (state.aliasFingerprints.get(aliasName) != signature)
 				structuralChanged.set('alias:$aliasName', true);

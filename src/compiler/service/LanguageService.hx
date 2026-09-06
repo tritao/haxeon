@@ -97,7 +97,7 @@ class LanguageService {
 			result.push({
 				name: alias.name,
 				kind: "type",
-				detail: 'typedef ${alias.name}=${typeName(alias.type)}',
+				detail: 'typedef ${alias.name}${alias.typeParameters.length == 0 ? "" : "<" + alias.typeParameters.join(",") + ">"}=${typeName(alias.type)}',
 				span: alias.span
 			});
 		for (interfaceDecl in ast.interfaces) {

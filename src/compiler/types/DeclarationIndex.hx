@@ -41,7 +41,7 @@ typedef TypeParameterSymbol = {
 
 /** Shared owner of source declarations and parsed-type resolution. */
 class DeclarationIndex {
-	public final aliases:Map<String, AstType> = [];
+	public final aliases:Map<String, AstTypeAlias> = [];
 	public final enums:Map<String, AstEnum> = [];
 	public final enumAbstracts:Map<String, compiler.Ast.AstEnumAbstract> = [];
 	public final abstracts:Map<String, compiler.Ast.AstAbstract> = [];
@@ -62,7 +62,7 @@ class DeclarationIndex {
 		fallbackSpan = firstSpan(program, emptySpan);
 		for (alias in program.aliases) {
 			declareType(alias.name, DeclarationKind.Alias, alias.span);
-			aliases.set(alias.name, alias.type);
+			aliases.set(alias.name, alias);
 			aliasSpans.set(alias.name, alias.span);
 		}
 		for (decl in program.enums) {
@@ -131,7 +131,19 @@ class DeclarationIndex {
 					default: resolveNamedType(name, span, resolving, substitutions);
 				}
 			case AppliedType(name, arguments):
-				if (!enums.exists(name)) {
+				if (aliases.exists(name)) {
+					var alias = aliases.get(name);
+					if (arguments.length != alias.typeParameters.length)
+						fail('Type "$name" expects ${alias.typeParameters.length} type arguments, got ${arguments.length}', span);
+					var resolvedArguments = [
+						for (argument in arguments)
+							resolveInner(argument, span, resolving, substitutions)
+					];
+					var aliasSubstitutions = [for (parameter => value in substitutions) parameter => value];
+					for (i in 0...alias.typeParameters.length)
+						aliasSubstitutions.set(alias.typeParameters[i], resolvedArguments[i]);
+					resolveAlias(alias, resolving, aliasSubstitutions);
+				} else if (!enums.exists(name)) {
 					fail('Type "$name" does not accept type arguments', span);
 					TDynamic;
 				} else {
@@ -175,12 +187,9 @@ class DeclarationIndex {
 	function resolveNamedType(name:String, span:SourceSpan, resolving:Map<String, Bool>, substitutions:Map<String, CompilerType>):CompilerType {
 		return if (substitutions.exists(name)) substitutions.get(name); else if (aliases.exists(name)) {
 			var alias = aliases.get(name);
-			if (resolving.exists(name))
-				fail('Cyclic type alias involving "$name"', aliasSpans.get(name));
-			resolving.set(name, true);
-			var resolved = resolveInner(alias, aliasSpans.get(name), resolving, substitutions);
-			resolving.remove(name);
-			resolved;
+			if (alias.typeParameters.length != 0)
+				fail('Type "$name" expects ${alias.typeParameters.length} type arguments, got 0', span);
+			resolveAlias(alias, resolving, substitutions);
 		} else if (enumAbstracts.exists(name)) resolveInner(enumAbstracts.get(name).underlying, span, resolving,
 			substitutions); else if (abstracts.exists(name)) resolveInner(abstracts.get(name).underlying, span, resolving,
 			substitutions); else if (interfaces.exists(name)) TInterface(name); else if (enums.exists(name)) TEnum(name,
@@ -188,6 +197,15 @@ class DeclarationIndex {
 			fail('Unknown type "$name"', span);
 			TVoid;
 		};
+	}
+
+	function resolveAlias(alias:AstTypeAlias, resolving:Map<String, Bool>, substitutions:Map<String, CompilerType>):CompilerType {
+		if (resolving.exists(alias.name))
+			fail('Cyclic type alias involving "${alias.name}"', alias.span);
+		resolving.set(alias.name, true);
+		var resolved = resolveInner(alias.type, alias.span, resolving, substitutions);
+		resolving.remove(alias.name);
+		return resolved;
 	}
 
 	static function nullable(type:CompilerType):CompilerType
@@ -223,8 +241,13 @@ class DeclarationIndex {
 		};
 
 	function validateCycles():Void {
-		for (name in aliases.keys())
-			resolve(NamedType(name), aliasSpans.get(name));
+		for (name in aliases.keys()) {
+			var alias = aliases.get(name),
+				substitutions:Map<String, CompilerType> = [];
+			for (parameter in alias.typeParameters)
+				substitutions.set(parameter, TTypeParameter(alias.name, parameter));
+			resolveAlias(alias, [], substitutions);
+		}
 		for (name in classes.keys()) {
 			visitClass(name, []);
 			var decl = classes.get(name);

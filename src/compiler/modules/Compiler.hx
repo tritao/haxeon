@@ -627,7 +627,6 @@ class Compiler {
 		try {
 			if (token != null)
 				token.check();
-			Sys.println("bootstrap-debug: canonical program");
 			var canonicalProgram:compiler.Ast.AstProgram = {
 				packageName: null,
 				imports: [],
@@ -653,10 +652,8 @@ class Compiler {
 				semantic = previousSemantic.replaceTopLevelBodies(canonicalProgram, selected);
 			else
 				semantic = SemanticProgram.analyze(canonicalProgram);
-			Sys.println("bootstrap-debug: semantic complete");
 			cachedSemanticProgram = semantic;
 			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, nativeSignatures(), entryPoint, genericSpecializations);
-			Sys.println("bootstrap-debug: typing complete");
 			typedNew = typedResult.program;
 			typerMetrics = typedResult.metrics;
 		} catch (error:CompileError) {

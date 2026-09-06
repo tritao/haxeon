@@ -118,14 +118,17 @@ class Typer {
 		enumDecls = declarations.enums;
 		enumAbstractDecls = declarations.enumAbstracts;
 		for (decl in program.enumAbstracts) {
-			var underlying = lowerType(decl.underlying);
+			var emptySubstitutions:Map<String, CompilerType> = [];
+			var underlying = declarations.resolve(decl.underlying, null, emptySubstitutions);
 			for (value in decl.values)
 				coerce(typeExpression(value.value, new Scope(), underlying), underlying, 'enum abstract value "${decl.name}.${value.name}"', "E1002");
 		}
 		interfaceDecls = declarations.interfaces;
 		classDecls = declarations.classes;
-		for (alias in program.aliases)
-			registerAnonymousTypes(lowerType(alias.type));
+		for (alias in program.aliases) {
+			if (alias.typeParameters.length == 0)
+				registerAnonymousTypes(lowerType(alias.type));
+		}
 		for (fn in program.functions) {
 			if (externals.exists(fn.name))
 				fail("E1000", 'Function "${fn.name}" conflicts with a registered native', fn.span);
