@@ -839,9 +839,10 @@ class TestMain {
 		if (interfaceCompiler.compile("Main").requiresReload)
 			throw "Restoring an unpublished invalid interface contract required reload";
 		var importedEnumCompiler = new Compiler();
-		importedEnumCompiler.update("Kinds.hx", "enum Choice { Pick(value:Int); Empty; }");
+		importedEnumCompiler.update("Kinds.hx", "enum Choice { Bytes(value:Int); Empty; }");
+		importedEnumCompiler.update("Data.hx", "class Bytes {}");
 		importedEnumCompiler.update("Main.hx",
-			"import Kinds.Choice; function main():Int { var choice:Choice = Pick(42); return switch choice { case Pick(value): value; case Empty: 0; }; }");
+			"import Kinds.Choice; import Data.Bytes; function consume(value:Bytes):Int return 0; function main():Int { var payload:Bytes = new Bytes(); var choice:Choice = Bytes(42); return consume(payload) + switch choice { case Bytes(value): value; case Empty: 0; }; }");
 		importedEnumCompiler.compile("Main");
 		var staticClass = Frontend.compile("class Math { public static function add(a:Int, b:Int):Int { return a + b; } } function main():Int { return Math.add(20, 22); }");
 		var foundStatic = false;

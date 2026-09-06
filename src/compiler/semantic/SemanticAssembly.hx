@@ -82,7 +82,7 @@ class SemanticAssembly {
 							constructorTargets.set(caseName, importedType + "." + caseName);
 			}
 			for (caseName => target in constructorTargets)
-				if (!ambiguousConstructors.exists(caseName))
+				if (!ambiguousConstructors.exists(caseName) && !aliases.exists(caseName))
 					aliases.set(caseName, target);
 			for (importPath in ast.imports)
 				if (modules.exists(importPath))
