@@ -1,4 +1,4 @@
-import compiler.modules.Compiler;
+import compiler.Compiler;
 
 class InstanceInitializerMain {
 	static function main():Void {

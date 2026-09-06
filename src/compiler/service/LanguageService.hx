@@ -5,11 +5,11 @@ import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
 import compiler.Token.TokenKind;
-import compiler.modules.Compiler;
+import compiler.Compiler;
 import compiler.modules.ModulePath;
 import compiler.modules.ModuleState;
-import compiler.modules.SemanticWorkspace.WorkspaceResolution;
-import compiler.modules.Compiler.CompileResult;
+import compiler.semantic.SemanticWorkspace.WorkspaceResolution;
+import compiler.Compiler.CompileResult;
 import compiler.Ast.AstFunction;
 import compiler.Ast.AstStatement;
 import compiler.types.Type.CompilerType;
@@ -72,7 +72,7 @@ class LanguageService {
 	public function compile(entryModule:String, ?token:CancellationToken):CompileResult
 		return compiler.compile(entryModule, token);
 
-	public function validate(path:String, source:String, entryModule:String, ?token:CancellationToken):compiler.modules.Compiler.ValidationResult
+	public function validate(path:String, source:String, entryModule:String, ?token:CancellationToken):compiler.Compiler.ValidationResult
 		return compiler.validate(path, source, entryModule, token);
 
 	public function diagnostics(path:String):Array<Diagnostic> {

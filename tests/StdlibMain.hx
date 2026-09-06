@@ -1,6 +1,6 @@
 import compiler.RuntimeAbi;
 import compiler.hl.HlWriter;
-import compiler.modules.Compiler;
+import compiler.Compiler;
 import compiler.Diagnostic.CompileError;
 import sys.io.File;
 

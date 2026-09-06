@@ -1,4 +1,4 @@
-package compiler.modules;
+package compiler.semantic;
 
 import compiler.Ast;
 import compiler.Ast.AstExpression;

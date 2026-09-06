@@ -1,4 +1,4 @@
-package compiler.modules;
+package compiler.abi;
 
 import compiler.types.Type.CompilerType;
 import compiler.ir.Ir.IrNative;

@@ -1,6 +1,6 @@
 package compiler.tools;
 
-import compiler.modules.Compiler;
+import compiler.Compiler;
 import sys.io.File;
 
 /** Loads a deterministic source manifest into a compiler instance. */

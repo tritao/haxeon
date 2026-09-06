@@ -1,5 +1,5 @@
 import compiler.hl.HlWriter;
-import compiler.modules.Compiler;
+import compiler.Compiler;
 import runtime.Runtime;
 
 class StaticInitOrderMain {

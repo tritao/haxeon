@@ -1,4 +1,5 @@
-package compiler.modules;
+package compiler.semantic;
+import compiler.modules.ModuleState;
 
 import compiler.types.FieldInference;
 import compiler.types.SemanticSignature;

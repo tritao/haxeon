@@ -3,7 +3,7 @@ import compiler.Parser;
 import compiler.Source.SourceFile;
 import compiler.modules.ModuleState;
 import compiler.modules.ModuleState.SemanticDependencyKind;
-import compiler.modules.SemanticDependencyCollector;
+import compiler.semantic.SemanticDependencyCollector;
 
 class SemanticDependencyCollectorMain {
 	static function main():Void {

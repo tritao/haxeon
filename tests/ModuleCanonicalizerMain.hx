@@ -4,7 +4,7 @@ import compiler.Ast.AstType;
 import compiler.Lexer;
 import compiler.Parser;
 import compiler.Source.SourceFile;
-import compiler.modules.ModuleCanonicalizer;
+import compiler.semantic.ModuleCanonicalizer;
 
 class ModuleCanonicalizerMain {
 	static function main():Void {

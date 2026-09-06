@@ -41,7 +41,7 @@ import compiler.Parser;
 import compiler.types.Typer;
 import compiler.types.TypeRegistry;
 import compiler.types.TypeRegistry.TypeCompatibility;
-import compiler.modules.Compiler;
+import compiler.Compiler;
 import haxe.io.Bytes as HaxeBytes;
 import haxe.io.BytesInput;
 import Type as HaxeType;

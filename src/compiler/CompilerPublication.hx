@@ -1,9 +1,10 @@
-package compiler.modules;
+package compiler;
 
 import compiler.Diagnostic;
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.hl.incremental.HlModuleAssembler;
 import compiler.ir.Ir.IrObject;
+import compiler.modules.ModuleState;
 import compiler.types.TypeRegistry;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.SemanticProgram;

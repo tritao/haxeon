@@ -1,7 +1,7 @@
 package compiler;
 
-import compiler.modules.Compiler;
-import compiler.modules.Compiler.NativeFunction;
+import compiler.Compiler;
+import compiler.Compiler.NativeFunction;
 import compiler.types.Type.CompilerType;
 
 /**

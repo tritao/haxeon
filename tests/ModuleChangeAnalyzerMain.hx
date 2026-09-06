@@ -1,8 +1,8 @@
 import compiler.Lexer;
 import compiler.Parser;
 import compiler.Source.SourceFile;
-import compiler.modules.ModuleChangeAnalyzer;
-import compiler.modules.ModuleCanonicalizer;
+import compiler.semantic.ModuleChangeAnalyzer;
+import compiler.semantic.ModuleCanonicalizer;
 import compiler.modules.ModuleState;
 import compiler.types.TypeRegistry;
 
@@ -34,7 +34,7 @@ class ModuleChangeAnalyzerMain {
 		Sys.println("PASS: module change classification");
 	}
 
-	static function analyze(state:ModuleState, types:TypeRegistry, compiledOnce:Bool):compiler.modules.ModuleChangeAnalyzer.ModuleChangeAnalysis {
+	static function analyze(state:ModuleState, types:TypeRegistry, compiledOnce:Bool):compiler.semantic.ModuleChangeAnalyzer.ModuleChangeAnalysis {
 		var aliases:Map<String, String> = [];
 		ModuleCanonicalizer.addDeclaredTypeAliases(aliases, state.parsedAst(), state.parsedAst().packageName);
 		return ModuleChangeAnalyzer.analyze(state, state.name, aliases, types, compiledOnce);
@@ -52,7 +52,7 @@ class ModuleChangeAnalyzerMain {
 		state.ast = new Parser(state.tokens).parseProgram();
 	}
 
-	static function publish(state:ModuleState, analysis:compiler.modules.ModuleChangeAnalyzer.ModuleChangeAnalysis):Void {
+	static function publish(state:ModuleState, analysis:compiler.semantic.ModuleChangeAnalyzer.ModuleChangeAnalysis):Void {
 		state.signatureFingerprints = analysis.signatureFingerprints;
 		state.bodyFingerprints = analysis.bodyFingerprints;
 		state.interfaceFingerprints = analysis.interfaceFingerprints;

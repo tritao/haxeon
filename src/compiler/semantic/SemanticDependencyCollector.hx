@@ -1,4 +1,5 @@
-package compiler.modules;
+package compiler.semantic;
+import compiler.modules.ModuleState;
 
 import compiler.Ast.AstExpression;
 import compiler.Ast.AstStatement;

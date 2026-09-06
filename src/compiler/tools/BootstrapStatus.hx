@@ -4,7 +4,7 @@ import compiler.Lexer;
 import compiler.Parser;
 import compiler.Token.TokenKind;
 import compiler.Source.SourceFile;
-import compiler.modules.Compiler;
+import compiler.Compiler;
 import compiler.RuntimeAbi as CompilerRuntimeAbi;
 import compiler.Diagnostic.CompileError;
 import haxe.Json;

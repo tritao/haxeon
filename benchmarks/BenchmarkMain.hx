@@ -1,8 +1,8 @@
 package;
 
 import compiler.hl.HlWriter;
-import compiler.modules.Compiler;
-import compiler.modules.Compiler.CompileMetrics;
+import compiler.Compiler;
+import compiler.Compiler.CompileMetrics;
 import haxe.Json;
 import haxe.io.Bytes;
 import runtime.LoadedModule;

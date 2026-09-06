@@ -3,8 +3,8 @@ package compiler.tools;
 import compiler.RuntimeAbi;
 import compiler.Diagnostic.CompileError;
 import compiler.hl.HlWriter;
-import compiler.modules.Compiler;
-import compiler.modules.Compiler.CompileResult;
+import compiler.Compiler;
+import compiler.Compiler.CompileResult;
 import sys.io.File;
 
 /** Builds the compiler project from an explicit, deterministic source manifest. */

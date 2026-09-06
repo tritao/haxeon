@@ -1,4 +1,4 @@
-import compiler.modules.Compiler;
+import compiler.Compiler;
 import compiler.service.Repl;
 import runtime.Runtime;
 

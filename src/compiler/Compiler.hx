@@ -1,4 +1,4 @@
-package compiler.modules;
+package compiler;
 
 import compiler.Ast;
 import compiler.Ast.AstExpression;
@@ -37,15 +37,27 @@ import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.abi.PatchPlanner;
 import compiler.abi.PatchPlanner.AbiChange;
 import compiler.abi.PatchPlanner.PatchDecision;
-import compiler.modules.CompilerPublication.CompilerSnapshot;
-import compiler.modules.CompilerPublication.PublicationStatus;
-import compiler.modules.CompilerPublication.ReconnectDecision;
-import compiler.modules.CompilerPublication.ReconnectReason;
+import compiler.CompilerPublication.CompilerSnapshot;
+import compiler.CompilerPublication.PublicationStatus;
+import compiler.CompilerPublication.ReconnectDecision;
+import compiler.CompilerPublication.ReconnectReason;
 import compiler.modules.ModuleState.SemanticDependency;
 import compiler.modules.ModuleState.SemanticDependencyKind;
+import compiler.modules.ModuleGraph;
+import compiler.modules.ModulePath;
+import compiler.modules.ModuleReachability;
+import compiler.modules.ModuleState;
+import compiler.semantic.ModuleCanonicalizer;
+import compiler.semantic.ModuleChangeAnalyzer;
+import compiler.semantic.SemanticDependencyCollector;
+import compiler.semantic.SemanticWorkspace;
+import compiler.semantic.DependencyScanner;
+import compiler.semantic.LambdaCollector;
+import compiler.abi.NativeRegistry;
+import compiler.abi.NativeRegistry.NativeDefinition;
 
 /** Public alias for a host-native declaration accepted by the compiler. */
-typedef NativeFunction = compiler.modules.NativeRegistry.NativeDefinition;
+typedef NativeFunction = NativeDefinition;
 
 /** Artifacts, invalidation details, and publication metadata from a successful build. */
 typedef CompileResult = {
@@ -502,7 +514,7 @@ class Compiler {
 				functions.push(canonical);
 				programFunctions.push(canonical);
 				owners.set(canonical.name, name);
-				collectLambdas(canonical.statements, canonical.name, name, generatedByModule);
+				LambdaCollector.collect(canonical.statements, canonical.name, name, generatedByModule);
 				for (callee in state.canonicalCalls.get(canonical.name)) {
 					var callers:Array<String>;
 					if (reverseCalls.exists(callee))
@@ -538,7 +550,7 @@ class Compiler {
 					var aliases:Map<String, String> = [];
 					for (statement in canonical.statements)
 						SemanticDependencyCollector.scanCalls(statement, calls, aliases);
-					collectLambdas(canonical.statements, canonical.name, name, generatedByModule);
+					LambdaCollector.collect(canonical.statements, canonical.name, name, generatedByModule);
 					for (callee in calls.keys()) {
 						var callers:Array<String>;
 						if (reverseCalls.exists(callee))
@@ -1049,24 +1061,24 @@ class Compiler {
 			dependencies.set(dependency, true);
 		for (fn in ast.functions)
 			for (statement in fn.statements)
-				scanStatement(statement, dependencies);
+				DependencyScanner.scanStatement(statement, dependencies);
 		for (classDecl in ast.classes)
 			for (field in classDecl.fields) {
 				var initializer = field.initializer;
 				if (initializer != null)
-					scanExpression(initializer, dependencies);
+					DependencyScanner.scanExpression(initializer, dependencies);
 			}
 		for (classDecl in ast.classes)
 			for (method in classDecl.methods)
 				for (statement in method.statements)
-					scanStatement(statement, dependencies);
+					DependencyScanner.scanStatement(statement, dependencies);
 		for (abstractDecl in ast.abstracts)
 			for (method in abstractDecl.methods)
 				for (statement in method.statements)
-					scanStatement(statement, dependencies);
+					DependencyScanner.scanStatement(statement, dependencies);
 		for (abstractDecl in ast.enumAbstracts)
 			for (value in abstractDecl.values)
-				scanExpression(value.value, dependencies);
+				DependencyScanner.scanExpression(value.value, dependencies);
 		for (classDecl in ast.classes) {
 			dependencies.remove(classDecl.name);
 			for (field in classDecl.fields)
@@ -1197,151 +1209,6 @@ class Compiler {
 		return packageName.length == 0 ? nestedName : packageName + "." + nestedName;
 	}
 
-	static function scanStatement(s:AstStatement, dependencies:Map<String, Bool>):Void
-		switch s {
-			case UninitializedDeclaration(_, _, _):
-			case VarDeclaration(_, _, e, _), Assignment(_, e, _), Return(e, _), Throw(e, _):
-				scanExpression(e, dependencies);
-			case Try(tryBranch, catches, _):
-				for (x in tryBranch)
-					scanStatement(x, dependencies);
-				for (catchClause in catches)
-					for (x in catchClause.statements)
-						scanStatement(x, dependencies);
-			case IndexAssignment(array, offset, e, _):
-				scanExpression(array, dependencies);
-				scanExpression(offset, dependencies);
-				scanExpression(e, dependencies);
-			case FieldAssignment(object, _, e, _):
-				scanExpression(object, dependencies);
-				scanExpression(e, dependencies);
-			case ReturnVoid(_):
-			case Break(_), Continue(_):
-			case Increment(_, _, _):
-			case If(c, y, n, _):
-				scanExpression(c, dependencies);
-				for (x in y)
-					scanStatement(x, dependencies);
-				for (x in n)
-					scanStatement(x, dependencies);
-			case While(c, b, _):
-				scanExpression(c, dependencies);
-				for (x in b)
-					scanStatement(x, dependencies);
-			case DoWhile(b, c, _):
-				for (x in b)
-					scanStatement(x, dependencies);
-				scanExpression(c, dependencies);
-			case ForIn(_, _, iterable, b, _):
-				scanExpression(iterable, dependencies);
-				for (x in b)
-					scanStatement(x, dependencies);
-			case Switch(expression, cases, defaultBranch, _, _):
-				scanExpression(expression, dependencies);
-				for (switchCase in cases) {
-					scanExpression(switchCase.value, dependencies);
-					var guard = switchCase.guard;
-					if (guard != null)
-						scanExpression(guard, dependencies);
-					for (x in switchCase.statements)
-						scanStatement(x, dependencies);
-				}
-				for (x in defaultBranch)
-					scanStatement(x, dependencies);
-			case Expression(e, _):
-				scanExpression(e, dependencies);
-		}
-
-	static function scanExpression(e:AstExpression, dependencies:Map<String, Bool>):Void
-		switch e {
-			case Add(a, b, _), Sub(a, b, _), Mul(a, b, _), Div(a, b, _), Mod(a, b, _), BitAnd(a, b, _), BitXor(a, b, _), BitOr(a, b, _), ShiftLeft(a, b, _),
-				ShiftRight(a, b, _), UnsignedShiftRight(a, b, _), Less(a, b, _), LessEqual(a, b, _), Greater(a, b, _), GreaterEqual(a, b, _), Equal(a, b, _),
-				NotEqual(a, b, _):
-				scanExpression(a, dependencies);
-				scanExpression(b, dependencies);
-			case Not(value, _):
-				scanExpression(value, dependencies);
-			case Negate(value, _):
-				scanExpression(value, dependencies);
-			case And(left, right, _), Or(left, right, _):
-				scanExpression(left, dependencies);
-				scanExpression(right, dependencies);
-			case Conditional(predicate, whenTrue, whenFalse, _):
-				scanExpression(predicate, dependencies);
-				scanExpression(whenTrue, dependencies);
-				scanExpression(whenFalse, dependencies);
-			case BlockExpression(statements, value, _):
-				for (statement in statements)
-					scanStatement(statement, dependencies);
-				scanExpression(value, dependencies);
-			case ThrowExpression(value, _):
-				scanExpression(value, dependencies);
-			case Cast(value, _, _):
-				scanExpression(value, dependencies);
-			case SwitchExpression(subject, cases, fallback, _):
-				scanExpression(subject, dependencies);
-				for (switchCase in cases) {
-					scanExpression(switchCase.value, dependencies);
-					var guard = switchCase.guard;
-					if (guard != null)
-						scanExpression(guard, dependencies);
-					scanExpression(switchCase.result, dependencies);
-				}
-				var fallbackExpression = fallback;
-				if (fallbackExpression != null)
-					scanExpression(fallbackExpression, dependencies);
-			case ObjectLiteral(fields, _):
-				for (field in fields)
-					scanExpression(field.value, dependencies);
-			case ArrayLiteral(values, _):
-				for (value in values)
-					scanExpression(value, dependencies);
-			case MapLiteral(entries, _):
-				for (mapEntry in entries) {
-					scanExpression(mapEntry.key, dependencies);
-					scanExpression(mapEntry.value, dependencies);
-				}
-			case ArrayComprehension(_, _, iterable, predicate, value, _):
-				scanExpression(iterable, dependencies);
-				if (predicate != null)
-					scanExpression(predicate, dependencies);
-				scanExpression(value, dependencies);
-			case MapComprehension(_, _, iterable, predicate, key, value, _):
-				scanExpression(iterable, dependencies);
-				if (predicate != null)
-					scanExpression(predicate, dependencies);
-				scanExpression(key, dependencies);
-				scanExpression(value, dependencies);
-			case Range(start, rangeEnd, _):
-				scanExpression(start, dependencies);
-				scanExpression(rangeEnd, dependencies);
-			case Index(array, offset, _):
-				scanExpression(array, dependencies);
-				scanExpression(offset, dependencies);
-			case PostfixIncrement(target, _, _):
-				scanExpression(target, dependencies);
-			case Member(object, _, _):
-				scanExpression(object, dependencies);
-			case Variable(name, _):
-				scanQualifiedDependency(name, dependencies);
-			case MethodCall(object, _, args, _):
-				scanExpression(object, dependencies);
-				for (a in args)
-					scanExpression(a, dependencies);
-			case Call(name, args, _):
-				addQualifiedOwner(name, dependencies);
-				for (a in args)
-					scanExpression(a, dependencies);
-			case New(typeName, args, _):
-				dependencies.set(typeName, true);
-				for (a in args)
-					scanExpression(a, dependencies);
-			case NewArray(_, length, _):
-				scanExpression(length, dependencies);
-			case NewMap(_, _, _):
-			default:
-		}
-
 	function nativePrefixExists(prefix:String):Bool
 		return natives.hasChild(prefix);
 
@@ -1362,174 +1229,6 @@ class Compiler {
 		return root == "haxe" || root == "sys" || root == "hl" || root == "Array" || root == "String" || root == "Math" || root == "Reflect"
 			|| root == "Std" || root == "StringTools" || root == "Type";
 	}
-
-	static function scanQualifiedDependency(name:String, dependencies:Map<String, Bool>):Void {
-		addQualifiedOwner(name, dependencies);
-	}
-
-	static function addQualifiedOwner(name:String, dependencies:Map<String, Bool>):Void {
-		var length = name.length, segmentStart = 0, hasSeparator = false;
-		for (cursor in 0...length)
-			if (name.charCodeAt(cursor) == 46) {
-				hasSeparator = true;
-				break;
-			}
-		if (!hasSeparator)
-			return;
-		for (cursor in 0...length + 1)
-			if (cursor == length || name.charCodeAt(cursor) == 46) {
-				if (cursor > segmentStart) {
-					var first = name.charCodeAt(segmentStart);
-					if (first >= 65 && first <= 90) {
-						dependencies.set(name.substring(0, cursor), true);
-						return;
-					}
-				}
-				segmentStart = cursor + 1;
-			}
-	}
-
-	static function collectLambdas(statements:Array<AstStatement>, functionName:String, module:String, generatedByModule:Map<String, Map<String, Bool>>):Void {
-		for (statement in statements)
-			switch statement {
-				case UninitializedDeclaration(_, _, _):
-				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
-					collectLambdaExpression(expression, functionName, module, generatedByModule);
-				case Try(tryBranch, catches, _):
-					collectLambdas(tryBranch, functionName, module, generatedByModule);
-					for (catchClause in catches)
-						collectLambdas(catchClause.statements, functionName, module, generatedByModule);
-				case IndexAssignment(array, offset, expression, _):
-					collectLambdaExpression(array, functionName, module, generatedByModule);
-					collectLambdaExpression(offset, functionName, module, generatedByModule);
-					collectLambdaExpression(expression, functionName, module, generatedByModule);
-				case FieldAssignment(object, _, expression, _):
-					collectLambdaExpression(object, functionName, module, generatedByModule);
-					collectLambdaExpression(expression, functionName, module, generatedByModule);
-				case ReturnVoid(_):
-				case Break(_), Continue(_):
-				case Increment(_, _, _):
-				case If(predicate, yes, no, _):
-					collectLambdaExpression(predicate, functionName, module, generatedByModule);
-					collectLambdas(yes, functionName, module, generatedByModule);
-					collectLambdas(no, functionName, module, generatedByModule);
-				case While(predicate, body, _):
-					collectLambdaExpression(predicate, functionName, module, generatedByModule);
-					collectLambdas(body, functionName, module, generatedByModule);
-				case DoWhile(body, predicate, _):
-					collectLambdas(body, functionName, module, generatedByModule);
-					collectLambdaExpression(predicate, functionName, module, generatedByModule);
-				case ForIn(_, _, iterable, body, _):
-					collectLambdaExpression(iterable, functionName, module, generatedByModule);
-					collectLambdas(body, functionName, module, generatedByModule);
-				case Switch(expression, cases, defaultBranch, _, _):
-					collectLambdaExpression(expression, functionName, module, generatedByModule);
-					for (switchCase in cases) {
-						collectLambdaExpression(switchCase.value, functionName, module, generatedByModule);
-						var guard = switchCase.guard;
-						if (guard != null)
-							collectLambdaExpression(guard, functionName, module, generatedByModule);
-						collectLambdas(switchCase.statements, functionName, module, generatedByModule);
-					}
-					collectLambdas(defaultBranch, functionName, module, generatedByModule);
-			}
-	}
-
-	static function collectLambdaExpression(expression:AstExpression, functionName:String, module:String, generatedByModule:Map<String, Map<String, Bool>>):Void
-		switch expression {
-			case Lambda(_, body, span):
-				var names:Map<String, Bool>;
-				if (generatedByModule.exists(module))
-					names = generatedByModule.get(module);
-				else {
-					names = [];
-					generatedByModule.set(module, names);
-				}
-				names.set('$' + 'lambda:' + functionName + ':' + Std.string(span.start), true);
-				collectLambdas(body, functionName, module, generatedByModule);
-			case Call(_, args, _):
-				for (argument in args)
-					collectLambdaExpression(argument, functionName, module, generatedByModule);
-			case MethodCall(object, _, args, _):
-				collectLambdaExpression(object, functionName, module, generatedByModule);
-				for (argument in args)
-					collectLambdaExpression(argument, functionName, module, generatedByModule);
-			case Member(object, _, _):
-				collectLambdaExpression(object, functionName, module, generatedByModule);
-			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _),
-				BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _), UnsignedShiftRight(left, right, _),
-				Less(left, right, _), LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _),
-				NotEqual(left, right, _):
-				collectLambdaExpression(left, functionName, module, generatedByModule);
-				collectLambdaExpression(right, functionName, module, generatedByModule);
-			case Not(value, _):
-				collectLambdaExpression(value, functionName, module, generatedByModule);
-			case Negate(value, _):
-				collectLambdaExpression(value, functionName, module, generatedByModule);
-			case And(left, right, _), Or(left, right, _):
-				collectLambdaExpression(left, functionName, module, generatedByModule);
-				collectLambdaExpression(right, functionName, module, generatedByModule);
-			case Conditional(predicate, whenTrue, whenFalse, _):
-				collectLambdaExpression(predicate, functionName, module, generatedByModule);
-				collectLambdaExpression(whenTrue, functionName, module, generatedByModule);
-				collectLambdaExpression(whenFalse, functionName, module, generatedByModule);
-			case BlockExpression(statements, value, _):
-				collectLambdas(statements, functionName, module, generatedByModule);
-				collectLambdaExpression(value, functionName, module, generatedByModule);
-			case ThrowExpression(value, _):
-				collectLambdaExpression(value, functionName, module, generatedByModule);
-			case Cast(value, _, _):
-				collectLambdaExpression(value, functionName, module, generatedByModule);
-			case SwitchExpression(subject, cases, fallback, _):
-				collectLambdaExpression(subject, functionName, module, generatedByModule);
-				for (switchCase in cases) {
-					collectLambdaExpression(switchCase.value, functionName, module, generatedByModule);
-					var guard = switchCase.guard;
-					if (guard != null)
-						collectLambdaExpression(guard, functionName, module, generatedByModule);
-					collectLambdaExpression(switchCase.result, functionName, module, generatedByModule);
-				}
-				var fallbackExpression = fallback;
-				if (fallbackExpression != null)
-					collectLambdaExpression(fallbackExpression, functionName, module, generatedByModule);
-			case ObjectLiteral(fields, _):
-				for (field in fields)
-					collectLambdaExpression(field.value, functionName, module, generatedByModule);
-			case ArrayLiteral(values, _):
-				for (value in values)
-					collectLambdaExpression(value, functionName, module, generatedByModule);
-			case MapLiteral(entries, _):
-				for (mapEntry in entries) {
-					collectLambdaExpression(mapEntry.key, functionName, module, generatedByModule);
-					collectLambdaExpression(mapEntry.value, functionName, module, generatedByModule);
-				}
-			case ArrayComprehension(_, _, iterable, predicate, value, _):
-				collectLambdaExpression(iterable, functionName, module, generatedByModule);
-				if (predicate != null)
-					collectLambdaExpression(predicate, functionName, module, generatedByModule);
-				collectLambdaExpression(value, functionName, module, generatedByModule);
-			case MapComprehension(_, _, iterable, predicate, key, value, _):
-				collectLambdaExpression(iterable, functionName, module, generatedByModule);
-				if (predicate != null)
-					collectLambdaExpression(predicate, functionName, module, generatedByModule);
-				collectLambdaExpression(key, functionName, module, generatedByModule);
-				collectLambdaExpression(value, functionName, module, generatedByModule);
-			case Range(start, rangeEnd, _):
-				collectLambdaExpression(start, functionName, module, generatedByModule);
-				collectLambdaExpression(rangeEnd, functionName, module, generatedByModule);
-			case New(_, args, _):
-				for (argument in args)
-					collectLambdaExpression(argument, functionName, module, generatedByModule);
-			case NewArray(_, length, _):
-				collectLambdaExpression(length, functionName, module, generatedByModule);
-			case NewMap(_, _, _):
-			case Index(array, offset, _):
-				collectLambdaExpression(array, functionName, module, generatedByModule);
-				collectLambdaExpression(offset, functionName, module, generatedByModule);
-			case PostfixIncrement(target, _, _):
-				collectLambdaExpression(target, functionName, module, generatedByModule);
-			default:
-		}
 
 	static function signatureFingerprint(fn:AstFunction, aliases:Array<compiler.Ast.AstTypeAlias>):String
 		return SemanticSignature.parsedFunction(fn, aliases);

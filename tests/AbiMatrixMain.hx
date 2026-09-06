@@ -6,7 +6,7 @@ import compiler.abi.RuntimeAbi;
 import compiler.abi.RuntimeAbiCodec;
 import compiler.abi.AbiChangeSchema;
 import compiler.Diagnostic.CompileError;
-import compiler.modules.Compiler;
+import compiler.Compiler;
 
 typedef AbiFixture = {
 	final name:String;
