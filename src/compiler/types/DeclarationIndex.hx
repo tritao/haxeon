@@ -115,6 +115,7 @@ class DeclarationIndex {
 			case NamedType("haxe.io.Bytes"): TBytes;
 			case NamedType("haxe.io.BytesInput"): TNativeAbstract("realtime_bytes_input");
 			case NamedType("haxe.io.BytesOutput"): TNativeAbstract("realtime_bytes_output");
+			case NamedType("Date"): TNativeAbstract("realtime_date");
 			case NamedType(name):
 				var substitution = substitutions.get(name),
 					alias = aliases.get(name);

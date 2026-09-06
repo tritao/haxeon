@@ -57,8 +57,10 @@ class PlatformAbi {
 		return switch [type, name] {
 			case [TBytes, "get"]: {arguments: [TInt], result: TInt, nativeName: "__bytes_get"};
 			case [TBytes, "set"]: {arguments: [TInt, TInt], result: TVoid, nativeName: "__bytes_set"};
+			case [TBytes, "setInt32"]: {arguments: [TInt, TInt], result: TVoid, nativeName: "__bytes_set_i32"};
 			case [TBytes, "sub"]: {arguments: [TInt, TInt], result: TBytes, nativeName: "__bytes_sub"};
 			case [TBytes, "compare"]: {arguments: [TBytes], result: TInt, nativeName: "__bytes_compare"};
+			case [TBytes, "toString"]: {arguments: [], result: TString, nativeName: "__bytes_to_string"};
 			case [TNativeAbstract("realtime_bytes_input"), "readByte"]: {arguments: [], result: TInt, nativeName: "__bytes_input_read_byte"};
 			case [TNativeAbstract("realtime_bytes_input"), "readInt32"]: {arguments: [], result: TInt, nativeName: "__bytes_input_read_i32"};
 			case [TNativeAbstract("realtime_bytes_input"), "readDouble"]: {arguments: [], result: TFloat, nativeName: "__bytes_input_read_f64"};
@@ -74,6 +76,7 @@ class PlatformAbi {
 					nativeName: "__bytes_output_write"
 				};
 			case [TNativeAbstract("realtime_bytes_output"), "getBytes"]: {arguments: [], result: TBytes, nativeName: "__bytes_output_get_bytes"};
+			case [TNativeAbstract("realtime_date"), "getTime"]: {arguments: [], result: TFloat, nativeName: "__date_get_time"};
 			default: null;
 		};
 }

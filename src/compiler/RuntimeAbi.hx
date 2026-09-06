@@ -42,6 +42,8 @@ class RuntimeAbi {
 		compiler.registerNative("Sys.args", "std", "sys_args", [], TArray(TString));
 		compiler.registerNative("Std.parseInt", "realtime_runtime", "__std_parse_int", [TString], TInt);
 		compiler.registerNative("Std.parseFloat", "realtime_runtime", "__std_parse_float", [TString], TFloat);
+		compiler.registerNative("__std_int_f64", "realtime_runtime", "__std_int_f64", [TFloat], TInt);
+		compiler.registerNative("Std.random", "realtime_runtime", "__std_random", [TInt], TInt);
 		compiler.registerNative("Std.string", "realtime_runtime", "__std_string", [TDynamic], TString);
 		compiler.registerNative("Reflect.compare", "realtime_runtime", "__reflect_compare", [TString, TString], TInt);
 		compiler.registerNative("StringTools.startsWith", "realtime_runtime", "__string_starts_with", [TString, TString], TBool);
@@ -55,8 +57,10 @@ class RuntimeAbi {
 		compiler.registerNative("__bytes_length", "realtime_runtime", "__bytes_length", [bytes], TInt);
 		compiler.registerNative("__bytes_get", "realtime_runtime", "__bytes_get", [bytes, TInt], TInt);
 		compiler.registerNative("__bytes_set", "realtime_runtime", "__bytes_set", [bytes, TInt, TInt], TVoid);
+		compiler.registerNative("__bytes_set_i32", "realtime_runtime", "__bytes_set_i32", [bytes, TInt, TInt], TVoid);
 		compiler.registerNative("__bytes_sub", "realtime_runtime", "__bytes_sub", [bytes, TInt, TInt], bytes);
 		compiler.registerNative("__bytes_compare", "realtime_runtime", "__bytes_compare", [bytes, bytes], TInt);
+		compiler.registerNative("__bytes_to_string", "realtime_runtime", "__bytes_to_string", [bytes], TString);
 		compiler.registerNative("__bytes_input_new", "realtime_runtime", "__bytes_input_new", [bytes], input);
 		compiler.registerNative("__bytes_input_position", "realtime_runtime", "__bytes_input_position", [input], TInt);
 		compiler.registerNative("__bytes_input_big_endian", "realtime_runtime", "__bytes_input_big_endian", [input], TBool);
@@ -76,5 +80,8 @@ class RuntimeAbi {
 		compiler.registerNative("__bytes_output_write", "realtime_runtime", "__bytes_output_write", [output, bytes], TVoid);
 		compiler.registerNative("__bytes_output_get_bytes", "realtime_runtime", "__bytes_output_get_bytes", [output], bytes);
 		compiler.registerNative("sys.io.File.saveBytes", "realtime_runtime", "__file_save_bytes", [TString, bytes], TVoid);
+		var date:CompilerType = TNativeAbstract("realtime_date");
+		compiler.registerNative("Date.now", "realtime_runtime", "__date_now", [], date);
+		compiler.registerNative("__date_get_time", "realtime_runtime", "__date_get_time", [date], TFloat);
 	}
 }

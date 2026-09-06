@@ -1,5 +1,6 @@
 package compiler.hl;
 
+import compiler.hl.HlTypeDefStateCodec;
 import compiler.hl.HlSymbolTable.HlNamedIndex;
 import compiler.hl.HlSymbolTable.HlNamedSlots;
 import compiler.hl.HlSymbolTable.HlSymbolState;

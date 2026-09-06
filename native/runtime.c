@@ -54,6 +54,17 @@ typedef struct {
 	bool big_endian;
 } realtime_bytes_output;
 
+typedef struct { double milliseconds; } realtime_date;
+extern double hl_sys_time( void );
+
+HL_PRIM realtime_date *HL_NAME(__date_now)( void ) {
+	realtime_date *date = (realtime_date *)hl_gc_alloc_raw(sizeof(realtime_date));
+	date->milliseconds = hl_sys_time() * 1000.0;
+	return date;
+}
+
+HL_PRIM double HL_NAME(__date_get_time)( realtime_date *date ) { return date->milliseconds; }
+
 static void realtime_bytes_finalize( void *value ) {
 	realtime_bytes *bytes = (realtime_bytes *)value;
 	free(bytes->data);
@@ -123,6 +134,10 @@ HL_PRIM void HL_NAME(__bytes_set)( realtime_bytes *bytes, int position, int valu
 	realtime_bytes_bounds(bytes, position, 1);
 	bytes->data[position] = (vbyte)value;
 }
+HL_PRIM void HL_NAME(__bytes_set_i32)( realtime_bytes *bytes, int position, int value ) {
+	realtime_bytes_bounds(bytes, position, 4);
+	for( int i = 0; i < 4; i++ ) bytes->data[position + i] = (vbyte)(value >> (i * 8));
+}
 HL_PRIM realtime_bytes *HL_NAME(__bytes_sub)( realtime_bytes *bytes, int position, int length ) {
 	realtime_bytes_bounds(bytes, position, length);
 	realtime_bytes *result = realtime_bytes_make(length);
@@ -133,6 +148,18 @@ HL_PRIM int HL_NAME(__bytes_compare)( realtime_bytes *left, realtime_bytes *righ
 	int common = left->length < right->length ? left->length : right->length;
 	int compared = common == 0 ? 0 : memcmp(left->data, right->data, (size_t)common);
 	return compared != 0 ? compared : left->length - right->length;
+}
+HL_PRIM vbyte *HL_NAME(__bytes_to_string)( realtime_bytes *bytes ) {
+	char *utf8 = (char *)malloc((size_t)bytes->length + 1);
+	if( utf8 == NULL ) hl_error("Could not allocate byte string");
+	if( bytes->length > 0 ) memcpy(utf8, bytes->data, (size_t)bytes->length);
+	utf8[bytes->length] = 0;
+	int chars = hl_utf8_length((vbyte *)utf8, 0);
+	uchar *result = (uchar *)hl_alloc_bytes((chars + 1) * (int)sizeof(uchar));
+	hl_from_utf8(result, chars, utf8);
+	result[chars] = 0;
+	free(utf8);
+	return (vbyte *)result;
 }
 
 HL_PRIM realtime_bytes_input *HL_NAME(__bytes_input_new)( realtime_bytes *bytes ) {
@@ -653,6 +680,9 @@ HL_PRIM double HL_NAME(__std_parse_float)( vbyte *value ) {
 	return value == NULL ? 0.0 : strtod(hl_to_utf8((const uchar *)value), NULL);
 }
 
+HL_PRIM int HL_NAME(__std_int_f64)( double value ) { return (int)value; }
+HL_PRIM int HL_NAME(__std_random)( int limit ) { return limit <= 0 ? 0 : rand() % limit; }
+
 HL_PRIM vbyte *HL_NAME(__std_string)( vdynamic *value ) {
 	return (vbyte *)hl_to_string(value);
 }
@@ -1050,6 +1080,8 @@ DEFINE_PRIM(_BYTES,__string_char_at,_BYTES _I32);
 DEFINE_PRIM(_BYTES,__string_from_char_code,_I32);
 DEFINE_PRIM(_I32,__std_parse_int,_BYTES);
 DEFINE_PRIM(_F64,__std_parse_float,_BYTES);
+DEFINE_PRIM(_I32,__std_int_f64,_F64);
+DEFINE_PRIM(_I32,__std_random,_I32);
 DEFINE_PRIM(_BYTES,__std_string,_DYN);
 DEFINE_PRIM(_I32,__reflect_compare,_BYTES _BYTES);
 DEFINE_PRIM(_BOOL,__string_starts_with,_BYTES _BYTES);
@@ -1060,8 +1092,10 @@ DEFINE_PRIM(_ABSTRACT(realtime_bytes),__bytes_of_string,_BYTES);
 DEFINE_PRIM(_I32,__bytes_length,_ABSTRACT(realtime_bytes));
 DEFINE_PRIM(_I32,__bytes_get,_ABSTRACT(realtime_bytes) _I32);
 DEFINE_PRIM(_VOID,__bytes_set,_ABSTRACT(realtime_bytes) _I32 _I32);
+DEFINE_PRIM(_VOID,__bytes_set_i32,_ABSTRACT(realtime_bytes) _I32 _I32);
 DEFINE_PRIM(_ABSTRACT(realtime_bytes),__bytes_sub,_ABSTRACT(realtime_bytes) _I32 _I32);
 DEFINE_PRIM(_I32,__bytes_compare,_ABSTRACT(realtime_bytes) _ABSTRACT(realtime_bytes));
+DEFINE_PRIM(_BYTES,__bytes_to_string,_ABSTRACT(realtime_bytes));
 DEFINE_PRIM(_ABSTRACT(realtime_bytes_input),__bytes_input_new,_ABSTRACT(realtime_bytes));
 DEFINE_PRIM(_I32,__bytes_input_position,_ABSTRACT(realtime_bytes_input));
 DEFINE_PRIM(_BOOL,__bytes_input_big_endian,_ABSTRACT(realtime_bytes_input));
@@ -1081,6 +1115,8 @@ DEFINE_PRIM(_VOID,__bytes_output_write_string,_ABSTRACT(realtime_bytes_output) _
 DEFINE_PRIM(_VOID,__bytes_output_write,_ABSTRACT(realtime_bytes_output) _ABSTRACT(realtime_bytes));
 DEFINE_PRIM(_ABSTRACT(realtime_bytes),__bytes_output_get_bytes,_ABSTRACT(realtime_bytes_output));
 DEFINE_PRIM(_VOID,__file_save_bytes,_BYTES _ABSTRACT(realtime_bytes));
+DEFINE_PRIM(_ABSTRACT(realtime_date),__date_now,_NO_ARG);
+DEFINE_PRIM(_F64,__date_get_time,_ABSTRACT(realtime_date));
 DEFINE_PRIM(_BYTES,__array_join_bytes,_ARR _BYTES);
 DEFINE_PRIM(_BYTES,__string_substring,_BYTES _I32 _I32);
 DEFINE_PRIM(_BOOL,__exception_matches,_DYN _TYPE);
