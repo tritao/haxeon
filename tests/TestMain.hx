@@ -540,7 +540,7 @@ class TestMain {
 			throw "Generic type aliases were not substituted by the typer";
 		Sys.println("PASS: generic type aliases substitute their arguments");
 		var genericAbstractProgram = new Parser(new Lexer(new SourceFile("generic-abstracts.hx",
-			"abstract Identity<T>(T) from T to T { public static function wrap(value:T):Identity<T> return value; } function read(value:Identity<Int>):Int return value; function main():Int return read(Identity.wrap(42));"))
+			"abstract Identity<T>(T) from T to T { public function new(value:T) { this = value; } public static function wrap(value:T):Identity<T> return value; public function unwrap():T return this; } function read(value:Identity<Int>):Int return value; function main():Int return read(Identity.wrap(42)) + new Identity<Int>(0).unwrap();"))
 			.tokenize()).parseProgram();
 		if (genericAbstractProgram.abstracts[0].typeParameters.join(",") != "T")
 			throw "Generic abstract type parameters were not preserved";
@@ -559,11 +559,33 @@ class TestMain {
 			'Type mismatch for return');
 		expectCompileError("abstract Wrapped<T>(T) from T from T {} function main():Int return 0;",
 			'Duplicate from conversion "type-parameter:Wrapped:T" on abstract "Wrapped"');
+		expectCompileError("abstract Bad(Int) { public function new(value:String) { this = value; } } function main():Int { new Bad(\"bad\"); return 0; }",
+			'Type mismatch for abstract constructor "Bad.new"');
+		expectCompileError("abstract Bad(Int) { public function new(value:Int) { this = value + 1; } } function main():Int { new Bad(1); return 0; }",
+			'Abstract constructor "Bad.new" must assign one argument directly to this');
 		expectCompileError("abstract Loop<T>(Loop<T>) {} function main():Int return 0;", 'Cyclic abstract representation involving "Loop"');
 		var modularAbstract = new Compiler();
-		modularAbstract.update("Identity.hx", "abstract Identity<T>(T) from T to T {}");
-		modularAbstract.update("Main.hx", "import Identity; function read(value:Identity<Int>):Int return value; function main():Int return read(42);");
-		modularAbstract.compile("Main");
+		var modularAbstractDeclaration = "abstract Identity<T>(T) from T to T { public static function wrap(value:T):Identity<T> return value; public function unwrap():T return this; }",
+			modularAbstractMain = "import Identity; function main():Int return Identity.wrap(42).unwrap();";
+		modularAbstract.update("Identity.hx", modularAbstractDeclaration);
+		modularAbstract.update("Main.hx", modularAbstractMain);
+		var modularAbstractBuild = modularAbstract.compile("Main"),
+			modularAbstractBodies = [
+				for (fn in modularAbstractBuild.ir.functions)
+					if (StringTools.startsWith(fn.name, "$generic:Identity.")) fn.name
+			];
+		var resumedAbstract = new Compiler(modularAbstract.exportIdentityState());
+		resumedAbstract.update("Identity.hx", modularAbstractDeclaration);
+		resumedAbstract.update("Main.hx", modularAbstractMain);
+		var resumedAbstractBuild = resumedAbstract.compile("Main"),
+			resumedAbstractBodies = [
+				for (fn in resumedAbstractBuild.ir.functions)
+					if (StringTools.startsWith(fn.name, "$generic:Identity.")) fn.name
+			];
+		modularAbstractBodies.sort(Reflect.compare);
+		resumedAbstractBodies.sort(Reflect.compare);
+		if (modularAbstractBodies.length != 2 || modularAbstractBodies.join(",") != resumedAbstractBodies.join(","))
+			throw "Generic abstract method specializations did not survive compiler restart";
 		Sys.println("PASS: generic abstracts resolve instantiated representations across modules");
 		var genericNominalProgram = new Parser(new Lexer(new SourceFile("generic-nominals.hx",
 			"interface Source<T> { function get():T; } class Box<T> { var value:T; public function new(value:T) { this.value = value; } public function get():T return value; } function consume(value:Box<Int>):Int return 42; function main():Int return 42;"))

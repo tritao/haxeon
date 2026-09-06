@@ -399,6 +399,18 @@ class Typer {
 		return value;
 	}
 
+	static function requiredType(value:Null<CompilerType>):CompilerType {
+		if (value == null)
+			throw "Expected semantic type";
+		return value;
+	}
+
+	static function requiredFunction(value:Null<AstFunction>):AstFunction {
+		if (value == null)
+			throw "Expected function declaration";
+		return value;
+	}
+
 	function typeClass(classDecl:AstClass, classes:Map<String, AstClass>, selected:Null<Map<String, Bool>>):TypedClass {
 		var fields:Array<TypedField> = [],
 			fieldNames:Map<String, Bool> = [],
@@ -578,8 +590,8 @@ class Typer {
 		return true;
 	}
 
-	function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool = false, ?substitutions:Map<String, CompilerType>,
-			?specializedName:String):TypedFunction {
+	function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool = false, ?substitutions:Map<String, CompilerType>, ?specializedName:String,
+			?abstractReceiver:CompilerType):TypedFunction {
 		var functionName = specializedName == null ? (owner == null ? fn.name : owner + "." + fn.name) : specializedName;
 		var functionContext = enterBody(functionName, substitutions);
 		var storage = CaptureAnalysis.analyze(fn.statements, [for (argument in fn.arguments) argument.name]);
@@ -596,7 +608,9 @@ class Typer {
 		}
 		var scope = new Scope();
 		var isConstructor = owner != null && fn.name == "new";
-		if (owner != null && !isStatic) {
+		if (abstractReceiver != null) {
+			scope.defineReceiver(abstractReceiver, fn.span);
+		} else if (owner != null && !isStatic) {
 			var receiverArguments:Array<CompilerType> = [];
 			if (classDecls.exists(owner))
 				for (parameter in classDecls.get(owner).typeParameters)
@@ -604,6 +618,8 @@ class Typer {
 			scope.defineReceiver(TInstance(Class, owner, receiverArguments), fn.span);
 		}
 		var arguments = [];
+		if (abstractReceiver != null)
+			arguments.push({name: "this", type: abstractReceiver});
 		for (argument in fn.arguments) {
 			var type = argumentType(argument);
 			scope.define(argument.name, type, argument.span);
@@ -1950,6 +1966,8 @@ class Typer {
 					fail("E1014", "Range bounds must be Int values", span);
 				new TypedExpression(TRange(typedStart, typedEnd), TRange, span);
 			case NewGeneric(typeName, typeArguments, arguments, span):
+				if (declarations.abstracts.exists(typeName))
+					return typeAbstractConstruction(typeName, typeArguments, arguments, span, scope);
 				if (!classDecls.exists(typeName) || interfaceDecls.exists(typeName))
 					fail("E1007", 'Unknown class "$typeName"', span);
 				var valueType = declarations.resolve(AppliedType(typeName, typeArguments), span),
@@ -1967,6 +1985,8 @@ class Typer {
 				var typed = [for (argument in semanticArguments) abiBoundaryCast(argument, TDynamic)];
 				new TypedExpression(TNew(typeName, typed, hasConstructor || implicitConstructor), valueType, span);
 			case New(typeName, arguments, span):
+				if (declarations.abstracts.exists(typeName))
+					return typeAbstractConstruction(typeName, [], arguments, span, scope);
 				if ((!classDecls.exists(typeName) && !PlatformAbi.isType(typeName)) || interfaceDecls.exists(typeName))
 					fail("E1007", 'Unknown class "$typeName"', span);
 				var constructorName = typeName + ".new",
@@ -2148,6 +2168,9 @@ class Typer {
 							return typeMapMethod(resolvedReceiver, resolvedMethodName, arguments, span, scope);
 						if (isArray(receiverType))
 							return typeArrayMethod(resolvedReceiver, resolvedMethodName, arguments, span, scope);
+						var abstractCall = typeAbstractMethodCall(resolvedReceiver, resolvedMethodName, arguments, span, scope);
+						if (abstractCall != null)
+							return abstractCall;
 						var platformMethod = PlatformAbi.method(receiverType, resolvedMethodName);
 						if (platformMethod != null) {
 							var typed = typeCallArguments(arguments, platformMethod.arguments, scope, resolvedMethodName),
@@ -2222,6 +2245,40 @@ class Typer {
 		return typedMember(typeExpression(object, scope), name, span);
 	}
 
+	function typeAbstractConstruction(name:String, typeArguments:Array<AstType>, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
+		var decl = requiredMapValue(declarations.abstracts, name),
+			valueType = typeArguments.length == 0 ? declarations.resolve(NamedType(name), span) : declarations.resolve(AppliedType(name, typeArguments), span),
+			constructor:Null<AstFunction> = null;
+		for (method in decl.methods)
+			if (method.name == "new")
+				constructor = method;
+		if (constructor == null)
+			fail("E1007", 'Abstract "$name" has no constructor', span);
+		var substitutions:Map<String, CompilerType> = [],
+			representation:CompilerType = TVoid;
+		switch valueType {
+			case TAbstract(_, appliedArguments, underlying):
+				representation = underlying;
+				for (index in 0...decl.typeParameters.length)
+					substitutions.set(decl.typeParameters[index], appliedArguments[index]);
+			default:
+		}
+		var resolvedConstructor = Typer.requiredFunction(constructor),
+			typed = typeDeclaredCallArguments(arguments, resolvedConstructor.arguments, scope, name + ".new", span, substitutions), selected = -1;
+		if (resolvedConstructor.statements.length == 1)
+			switch resolvedConstructor.statements[0] {
+				case Assignment("this", Variable(argumentName, _), _):
+					for (index in 0...resolvedConstructor.arguments.length)
+						if (resolvedConstructor.arguments[index].name == argumentName)
+							selected = index;
+				default:
+			}
+		if (selected < 0)
+			fail("E1007", 'Abstract constructor "$name.new" must assign one argument directly to this', resolvedConstructor.span);
+		var constructed = coerce(typed[selected], representation, 'abstract constructor "$name.new"', "E1003");
+		return new TypedExpression(TAbiCast(constructed), valueType, span);
+	}
+
 	function applyCallEffect(call:TypedExpression, name:String):TypedExpression
 		return noReturnFunctions.exists(name) ? new TypedExpression(TNoReturn(call), TNever, call.span) : call;
 
@@ -2284,11 +2341,14 @@ class Typer {
 			}
 	}
 
-	function specializeGeneric(baseName:String, fn:AstFunction, arguments:Array<TypedExpression>, span:SourceSpan, owner:Null<String>,
-			isStatic:Bool):TypedExpression {
+	function specializeGeneric(baseName:String, fn:AstFunction, arguments:Array<TypedExpression>, span:SourceSpan, owner:Null<String>, isStatic:Bool,
+			?presetSubstitutions:Map<String, CompilerType>, ?receiver:TypedExpression):TypedExpression {
 		if (arguments.length != fn.arguments.length)
 			fail("E1008", 'Function "$baseName" expects ${fn.arguments.length} arguments, got ${arguments.length}', span);
-		var substitutions:Map<String, CompilerType> = [],
+		var substitutions:Map<String, CompilerType> = presetSubstitutions == null ? [] : [
+			for (parameter => type in presetSubstitutions)
+				parameter => type
+		],
 			parameters = requiredStrings(fn.typeParameters);
 		for (i in 0...arguments.length)
 			inferTypeParameters(fn.arguments[i].type, arguments[i].type, parameters, substitutions, arguments[i].span);
@@ -2314,12 +2374,30 @@ class Typer {
 			for (parameter in parameters)
 				requiredMapValue(representationSubstitutions, parameter)
 			], specialization = genericSpecializations.request(baseName, representationArguments);
+		var representationReceiver:Null<CompilerType> = null;
+		if (receiver != null)
+			representationReceiver = abstractReceiverType(requiredString(owner), representationSubstitutions);
 		if (!emittedGenericBodies.exists(specialization.name)) {
 			emittedGenericBodies.set(specialization.name, true);
-			closureConversion.addFunction(typeFunction(fn, owner, isStatic, representationSubstitutions, specialization.name));
+			closureConversion.addFunction(typeFunction(fn, owner, receiver == null ? isStatic : true, representationSubstitutions, specialization.name,
+				representationReceiver));
+		}
+		if (receiver != null) {
+			var receiverType = representationReceiver;
+			if (receiverType == null)
+				throw "Generic abstract receiver representation was not resolved";
+			typed.unshift(abiBoundaryCast(receiver, receiverType));
 		}
 		var call = new TypedExpression(TCall(specialization.name, typed), representationResult, span);
 		return sameType(representationResult, result) ? call : abiBoundaryCast(call, result);
+	}
+
+	function abstractReceiverType(name:String, substitutions:Map<String, CompilerType>):CompilerType {
+		var decl = requiredMapValue(declarations.abstracts, name), arguments = [
+			for (parameter in decl.typeParameters)
+				requiredMapValue(substitutions, parameter)
+		], representation = declarations.resolve(decl.underlying, decl.span, substitutions);
+		return TAbstract(name, arguments, representation);
 	}
 
 	static function requiresConcreteRepresentation(fn:AstFunction, parameter:String):Bool {
@@ -2459,6 +2537,9 @@ class Typer {
 			return typeMapMethod(receiver, name, arguments, span, scope);
 		if (isArray(receiver.type))
 			return typeArrayMethod(receiver, name, arguments, span, scope);
+		var abstractCall = typeAbstractMethodCall(receiver, name, arguments, span, scope);
+		if (abstractCall != null)
+			return abstractCall;
 		var className = switch receiver.type {
 			case TInstance(Class, value, _), TInstance(Interface, value, _): value;
 			default: null;
@@ -2477,6 +2558,31 @@ class Typer {
 			physicalResult = isGenericNominal(methodOwnerType) ? TDynamic : semanticResult,
 			call = new TypedExpression(TMethodCall(receiver, methodKey, typed), physicalResult, span);
 		return applyCallEffect(abiBoundaryCast(call, semanticResult), methodKey);
+	}
+
+	function typeAbstractMethodCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):Null<TypedExpression> {
+		var abstractName:String, typeArguments:Array<CompilerType>;
+		switch receiver.type {
+			case TAbstract(name, arguments, _):
+				abstractName = name;
+				typeArguments = arguments;
+			default:
+				return null;
+		}
+		var decl = requiredMapValue(declarations.abstracts, abstractName),
+			method:Null<AstFunction> = null;
+		for (candidate in decl.methods)
+			if (candidate.name == name && !candidate.isStatic && candidate.name != "new")
+				method = candidate;
+		if (method == null)
+			fail("E1007", 'Unknown abstract method "$abstractName.$name"', span);
+		var methodKey = abstractName + "." + name,
+			signature = requiredMapValue(signatures, methodKey),
+			substitutions:Map<String, CompilerType> = [];
+		for (index in 0...decl.typeParameters.length)
+			substitutions.set(decl.typeParameters[index], typeArguments[index]);
+		var typedArguments = [for (argument in arguments) typeExpression(argument, scope)];
+		return specializeGeneric(methodKey, signature, typedArguments, span, abstractName, false, substitutions, receiver);
 	}
 
 	function typeStringMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):Null<TypedExpression> {
