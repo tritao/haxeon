@@ -189,8 +189,7 @@ class Typer {
 			interfaces: typedInterfaces,
 			classes: typedClasses,
 			functions: typedFunctions,
-			cells: closureConversion.generatedCells(),
-			captureEnvironments: closureConversion.generatedEnvironments(),
+			closurePlan: closureConversion.plan(),
 			anonymousTypes: orderedAnonymousTypes()
 		};
 		var assemblyDoneAt = Sys.time() * 1000.0;

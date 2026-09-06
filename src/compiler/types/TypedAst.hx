@@ -236,11 +236,17 @@ typedef TypedCapture = {
 	final source:TypedCaptureSource;
 }
 
-/** Generated mutable cell type required by a typed program. */
-typedef TypedCell = {final name:String; final valueType:CompilerType; final kind:CellStorageKind;}
+/** Semantic storage required to preserve a binding across an exceptional edge or closure. */
+typedef TypedStorageRequirement = {final name:String; final valueType:CompilerType; final kind:CellStorageKind;}
 
-/** Generated object layout shared by a lambda and its captured values. */
-typedef TypedCaptureEnvironment = {final name:String; final fields:Array<{name:String, type:CompilerType}>;}
+/** Semantic captures shared by one generated lambda body. */
+typedef TypedEnvironmentRequirement = {final name:String; final captures:Array<TypedCapture>;}
+
+/** Closure and exceptional-edge requirements consumed by lowering. */
+typedef TypedClosurePlan = {
+	final storage:Array<TypedStorageRequirement>;
+	final environments:Array<TypedEnvironmentRequirement>;
+}
 
 /** Named backend representation of a structural anonymous type. */
 typedef TypedAnonymous = {final name:String; final fields:Array<compiler.types.Type.AnonymousField>;}
@@ -251,7 +257,6 @@ typedef TypedProgram = {
 	final interfaces:Array<TypedInterface>;
 	final classes:Array<TypedClass>;
 	final functions:Array<TypedFunction>;
-	final cells:Array<TypedCell>;
-	final captureEnvironments:Array<TypedCaptureEnvironment>;
+	final closurePlan:TypedClosurePlan;
 	final anonymousTypes:Array<TypedAnonymous>;
 }

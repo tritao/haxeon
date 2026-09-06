@@ -3,15 +3,16 @@ package compiler.types;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.CellStorageKind;
 import compiler.types.TypedAst.TypedCapture;
-import compiler.types.TypedAst.TypedCaptureEnvironment;
-import compiler.types.TypedAst.TypedCell;
+import compiler.types.TypedAst.TypedClosurePlan;
+import compiler.types.TypedAst.TypedEnvironmentRequirement;
+import compiler.types.TypedAst.TypedStorageRequirement;
 import compiler.types.TypedAst.TypedFunction;
 
 /** Collects the runtime artifacts produced by closure conversion. */
 class ClosureConversion {
 	final functions:Array<TypedFunction> = [];
-	final cells:Array<TypedCell> = [];
-	final environments:Array<TypedCaptureEnvironment> = [];
+	final storage:Array<TypedStorageRequirement> = [];
+	final environments:Array<TypedEnvironmentRequirement> = [];
 	final cellNames:Map<String, Bool> = [];
 	final environmentNames:Map<String, Bool> = [];
 
@@ -24,34 +25,19 @@ class ClosureConversion {
 		if (cellNames.exists(name))
 			return;
 		cellNames.set(name, true);
-		cells.push({name: name, valueType: valueType, kind: kind});
+		storage.push({name: name, valueType: valueType, kind: kind});
 	}
 
 	public function addEnvironment(name:String, captures:Array<TypedCapture>):Void {
 		if (environmentNames.exists(name))
 			return;
 		environmentNames.set(name, true);
-		environments.push({
-			name: name,
-			fields: [
-				for (capture in captures)
-					{
-						name: capture.field,
-						type: switch capture.source {
-							case CaptureCellLocal(_, cellClass), CaptureCellEnvironmentField(_, cellClass): TClass(cellClass);
-							default: capture.type;
-						}
-					}
-			]
-		});
+		environments.push({name: name, captures: captures.copy()});
 	}
 
 	public function generatedFunctions():Array<TypedFunction>
 		return functions.copy();
 
-	public function generatedCells():Array<TypedCell>
-		return cells.copy();
-
-	public function generatedEnvironments():Array<TypedCaptureEnvironment>
-		return environments.copy();
+	public function plan():TypedClosurePlan
+		return {storage: storage.copy(), environments: environments.copy()};
 }

@@ -3,6 +3,7 @@ package compiler.ir;
 import compiler.types.RuntimeType;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedStatement;
+import compiler.types.TypedAst.TypedCaptureSource;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrNative;
@@ -123,7 +124,7 @@ class IrProgramAssembler {
 				methods: methods
 			});
 		}
-		for (cell in typed.cells)
+		for (cell in typed.closurePlan.storage)
 			objects.push({
 				name: cell.name,
 				base: null,
@@ -131,14 +132,20 @@ class IrProgramAssembler {
 				fields: [{name: "value", type: IrGenerator.lowerType(cell.valueType)}],
 				methods: []
 			});
-		for (environment in typed.captureEnvironments)
+		for (environment in typed.closurePlan.environments)
 			objects.push({
 				name: environment.name,
 				base: null,
 				interfaces: [],
 				fields: [
-					for (field in environment.fields)
-						{name: field.name, type: IrGenerator.lowerType(field.type)}
+					for (capture in environment.captures)
+						{
+							name: capture.field,
+							type: IrGenerator.lowerType(switch capture.source {
+								case CaptureCellLocal(_, cellClass), CaptureCellEnvironmentField(_, cellClass): TClass(cellClass);
+								default: capture.type;
+							})
+						}
 				],
 				methods: []
 			});

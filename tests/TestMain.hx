@@ -580,13 +580,14 @@ class TestMain {
 			"function main():Int { var value = 40; var read = () -> { return value + 2; }; return read(); }")).tokenize()).parseProgram(),
 			captureTyped = Typer.type(captureProgram),
 			captureObjects = IrGenerator.objectsFrom(captureTyped);
-		if (captureTyped.classes.length != 0 || captureTyped.captureEnvironments.length != 1)
+		if (captureTyped.classes.length != 0 || captureTyped.closurePlan.environments.length != 1)
 			throw "Semantic typing manufactured a runtime helper class";
-		if ([for (object in captureObjects) object.name].indexOf(captureTyped.captureEnvironments[0].name) < 0)
+		if ([for (object in captureObjects) object.name].indexOf(captureTyped.closurePlan.environments[0].name) < 0)
 			throw "Lowering did not materialize the capture environment";
 		var exceptionStorage = Typer.type(new Parser(new Lexer(new SourceFile("exception-storage.hx",
 			"function main():Int { var value = 1; try { value = 42; throw \"stop\"; } catch (error:String) { return value; } }")).tokenize()).parseProgram());
-		if (exceptionStorage.cells.length != 1 || exceptionStorage.cells[0].kind != compiler.types.TypedAst.CellStorageKind.ExceptionEdge)
+		if (exceptionStorage.closurePlan.storage.length != 1
+			|| exceptionStorage.closurePlan.storage[0].kind != compiler.types.TypedAst.CellStorageKind.ExceptionEdge)
 			throw "Exception-edge storage was confused with mutable capture storage";
 		Sys.println("PASS: declaration resolution rejects unknown types and cycles and resolves semantic signatures");
 		var classProgram = new Parser(new Lexer(new SourceFile("Box.hx",
