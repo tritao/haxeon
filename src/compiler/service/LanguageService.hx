@@ -11,8 +11,6 @@ import compiler.modules.Compiler.CompileResult;
 import compiler.Ast.AstFunction;
 import compiler.Ast.AstStatement;
 import compiler.types.Type.CompilerType;
-import compiler.types.DeclarationIndex.DeclarationKind;
-import compiler.types.SemanticModel;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.RuntimeAbi;
 
@@ -397,40 +395,8 @@ class LanguageService {
 		};
 
 	function globalSymbol(state:ModuleState, name:String):Null<SemanticSymbol> {
-		var visible = [state];
-		for (dependency in state.dependencies) {
-			var imported = compiler.modules.get(dependency);
-			if (imported != null)
-				visible.push(imported);
-		}
-		for (candidate in visible) {
-			var ast = effectiveAst(candidate);
-			if (ast == null)
-				continue;
-			var model = effectiveSemanticModel(candidate);
-			if (model != null)
-				for (kind in [Alias, Function, Class, Interface, Enum]) {
-					var declaration = model.declarations.symbol(kind, name);
-					if (declaration != null)
-						return symbol(candidate, declaration.id, declaration.span, null);
-				}
-			for (alias in ast.aliases)
-				if (alias.name == name)
-					return symbol(candidate, 'alias:$name', alias.span, null);
-			for (fn in ast.functions)
-				if (fn.name == name)
-					return symbol(candidate, 'function:$name', fn.span, null);
-			for (classDecl in ast.classes)
-				if (classDecl.name == name)
-					return symbol(candidate, 'class:$name', classDecl.span, null);
-			for (interfaceDecl in ast.interfaces)
-				if (interfaceDecl.name == name)
-					return symbol(candidate, 'interface:$name', interfaceDecl.span, null);
-			for (enumDecl in ast.enums)
-				if (enumDecl.name == name)
-					return symbol(candidate, 'enum:$name', enumDecl.span, null);
-		}
-		return null;
+		var declaration = compiler.semanticWorkspace().global(state, name);
+		return declaration == null ? null : symbol(declaration.state, declaration.key, declaration.span, null);
 	}
 
 	function importedModule(state:ModuleState, name:String):Null<ModuleState> {
@@ -449,43 +415,8 @@ class LanguageService {
 	}
 
 	function memberSymbol(type:CompilerType, name:String):Null<SemanticSymbol> {
-		switch type {
-			case TNullable(element):
-				return memberSymbol(element, name);
-			case TClass(className):
-				for (state in compiler.modules) {
-					var ast = effectiveAst(state);
-					if (ast == null)
-						continue;
-					for (classDecl in ast.classes)
-						if (classDecl.name == className) {
-							for (field in classDecl.fields)
-								if (field.name == name)
-									return symbol(state, 'class:$className:field:$name', field.span, null);
-							for (method in classDecl.methods)
-								if (method.name == name)
-									return symbol(state, 'class:$className:method:$name', method.span, null);
-							if (classDecl.base != null) {
-								var inherited = memberSymbol(TClass(classDecl.base), name);
-								if (inherited != null)
-									return inherited;
-							}
-						}
-				}
-			case TInterface(interfaceName):
-				for (state in compiler.modules) {
-					var ast = effectiveAst(state);
-					if (ast == null)
-						continue;
-					for (interfaceDecl in ast.interfaces)
-						if (interfaceDecl.name == interfaceName)
-							for (method in interfaceDecl.methods)
-								if (method.name == name)
-									return symbol(state, 'interface:$interfaceName:method:$name', method.span, null);
-				}
-			default:
-		}
-		return null;
+		var declaration = compiler.semanticWorkspace().member(type, name);
+		return declaration == null ? null : symbol(declaration.state, declaration.key, declaration.span, null);
 	}
 
 	function localSymbol(path:String, position:Int, name:String):Null<{functionSpan:SourceSpan, declaration:SourceSpan}> {
@@ -755,9 +686,6 @@ class LanguageService {
 
 	static function effectiveAst(state:ModuleState):Null<compiler.Ast.AstProgram>
 		return state.ast == null ? state.lastGoodAst : state.ast;
-
-	static function effectiveSemanticModel(state:ModuleState):Null<SemanticModel>
-		return state.ast == null ? state.lastGoodSemanticModel : state.semanticModel;
 
 	static function effectiveTokens(state:ModuleState):Null<Array<compiler.Token>>
 		return state.ast == null ? state.lastGoodTokens : state.tokens;

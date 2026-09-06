@@ -94,6 +94,9 @@ typedef ValidationResult = {
 class Compiler {
 	public final modules:Map<String, ModuleState> = [];
 
+	public function semanticWorkspace():SemanticWorkspace
+		return new SemanticWorkspace(modules);
+
 	/** Last successfully assembled typed program; failed edits never replace it. */
 	public var lastTypedProgram:Null<TypedProgram> = null;
 
