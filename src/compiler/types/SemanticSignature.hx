@@ -22,7 +22,7 @@ class SemanticSignature {
 			case TVoid: "Void";
 			case TClass(name): 'class:$name';
 			case TInterface(name): 'interface:$name';
-			case TEnum(name): 'enum:$name';
+			case TEnum(name, arguments): 'enum:$name<${[for (argument in arguments) type(argument)].join(",")}>';
 			case TNull: "null";
 			case TNullable(element): 'Null<${type(element)}>';
 			case TArray(element): 'Array<${type(element)}>';
@@ -61,6 +61,7 @@ class SemanticSignature {
 					resolving.remove(name);
 					result;
 				}
+			case AppliedType(name, arguments): '$name<${[for (argument in arguments) parsedType(argument, aliases, resolving)].join(",")}>';
 			case ArrayType(element): 'Array<${parsedType(element, aliases, resolving)}>';
 			case MapType(key, value): 'Map<${parsedType(key, aliases, resolving)},${parsedType(value, aliases, resolving)}>';
 			case NullableType(element): 'Null<${parsedType(element, aliases, resolving)}>';

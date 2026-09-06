@@ -71,7 +71,7 @@ class TypeRelations {
 		return switch left {
 			case TClass(name): sameClass(right, name);
 			case TInterface(name): sameInterface(right, name);
-			case TEnum(name): sameEnum(right, name);
+			case TEnum(name, arguments): sameEnum(right, name, arguments);
 			case TNativeAbstract(name): sameNativeAbstract(right, name);
 			case TNullable(element): sameUnary(right, element, true);
 			case TArray(element): sameUnary(right, element, false);
@@ -101,11 +101,20 @@ class TypeRelations {
 			default: false;
 		};
 
-	static function sameEnum(type:CompilerType, name:String):Bool
+	static function sameEnum(type:CompilerType, name:String, arguments:Array<CompilerType>):Bool
 		return switch type {
-			case TEnum(other): name == other;
+			case TEnum(other, otherArguments): name == other && sameTypes(arguments, otherArguments);
 			default: false;
 		};
+
+	static function sameTypes(left:Array<CompilerType>, right:Array<CompilerType>):Bool {
+		if (left.length != right.length)
+			return false;
+		for (index in 0...left.length)
+			if (!equals(left[index], right[index]))
+				return false;
+		return true;
+	}
 
 	static function sameNativeAbstract(type:CompilerType, name:String):Bool
 		return switch type {
@@ -136,7 +145,7 @@ class TypeRelations {
 
 	public static function isReference(type:CompilerType):Bool
 		return switch type {
-			case TString, TBytes, THlBytes, TDynamic, TNativeAbstract(_), TClass(_), TInterface(_), TEnum(_), TAnonymous(_, _), TArray(_), TFunction(_, _),
+			case TString, TBytes, THlBytes, TDynamic, TNativeAbstract(_), TClass(_), TInterface(_), TEnum(_, _), TAnonymous(_, _), TArray(_), TFunction(_, _),
 				TMap(_, _): true;
 			default: false;
 		};

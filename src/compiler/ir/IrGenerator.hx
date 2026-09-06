@@ -400,7 +400,7 @@ class IrGenerator {
 							nextBlock = builder.createBlock();
 						builder.select(checkBlock);
 						var switchValue = switch expression.type {
-							case TEnum(_): builder.enumIndex(builder.load(switchName, switchType));
+							case TEnum(_, _): builder.enumIndex(builder.load(switchName, switchType));
 							default: builder.load(switchName, switchType);
 						}, caseValue = switchCase.constructorIndex >= 0 ? builder.constInt(switchCase.constructorIndex) : lowerExpression(switchCase.value,
 							builder, localTypes);
@@ -424,7 +424,10 @@ class IrGenerator {
 						checkBlock = nextBlock;
 					}
 					builder.select(checkBlock);
-					if (!hasDefault && switch expression.type { case TEnum(_): true; default: false; })
+					if (!hasDefault && switch expression.type {
+							case TEnum(_, _): true;
+							default: false;
+						})
 						builder.jump(checkBlock);
 					else
 						lowerStatements(defaultBranch, builder, localTypes, loops);
@@ -572,7 +575,7 @@ class IrGenerator {
 					left = operands[0],
 					right = operands[1];
 				var isEnum = switch a.type {
-					case TEnum(_): true;
+					case TEnum(_, _): true;
 					default: false;
 				};
 				if (isEnum) {
@@ -657,7 +660,7 @@ class IrGenerator {
 				builder.store(subjectName, lowerExpression(subject, builder, localTypes));
 				if (defaultExpression != null)
 					switch subject.type {
-						case TEnum(_):
+						case TEnum(_, _):
 							var firstCheck = builder.createBlock(),
 								subjectValue = builder.load(subjectName, subjectType);
 							builder.branch(builder.equal(subjectValue, builder.constNull(subjectType)), fallbackBlock, firstCheck);
@@ -672,7 +675,7 @@ class IrGenerator {
 					builder.select(checkBlocks[caseIndex]);
 					var subjectValue = builder.load(subjectName, subjectType),
 						comparisonValue = switch subject.type {
-							case TEnum(_): builder.enumIndex(subjectValue);
+							case TEnum(_, _): builder.enumIndex(subjectValue);
 							default: subjectValue;
 						};
 					var caseValue = switchCase.constructorIndex >= 0 ? builder.constInt(switchCase.constructorIndex) : lowerExpression(switchCase.value,
@@ -1173,7 +1176,7 @@ class IrGenerator {
 			case TClass(name): name == "haxe.io.Eof" ? Dyn : Obj(name);
 			case TMap(key, value): Abstract(RuntimeType.requireMapName(key, value));
 			case TInterface(name): Virtual(name);
-			case TEnum(name): Enum(name);
+			case TEnum(name, _): Enum(name);
 			case TNull: Void;
 			case TNullable(element): lowerType(element);
 			case TArray(element): Array(lowerType(element));

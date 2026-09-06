@@ -48,6 +48,10 @@ class SemanticDependencyCollector {
 		switch type {
 			case NamedType(name):
 				addDependency(result, owner, kind, ModuleCanonicalizer.resolveTypeName(name, aliases));
+			case AppliedType(name, arguments):
+				addDependency(result, owner, kind, ModuleCanonicalizer.resolveTypeName(name, aliases));
+				for (argument in arguments)
+					addTypeDependency(result, owner, kind, argument, aliases);
 			case ArrayType(element), NullableType(element):
 				addTypeDependency(result, owner, kind, element, aliases);
 			case MapType(key, value):

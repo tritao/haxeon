@@ -50,6 +50,7 @@ class DeclarationIndex {
 	public final symbols:Map<String, DeclarationSymbol> = [];
 
 	final aliasSpans:Map<String, SourceSpan> = [];
+	final genericParameters:Map<String, Bool> = [];
 	final fallbackSpan:SourceSpan;
 
 	public static function validated(program:AstProgram):DeclarationIndex
@@ -66,6 +67,8 @@ class DeclarationIndex {
 			aliasSpans.set(alias.name, alias.span);
 		}
 		for (decl in program.enums) {
+			for (parameter in decl.typeParameters)
+				genericParameters.set(parameter, true);
 			declareType(decl.name, DeclarationKind.Enum, decl.span);
 			enums.set(decl.name, decl);
 		}
@@ -130,6 +133,19 @@ class DeclarationIndex {
 					case "Date": TNativeAbstract("realtime_date");
 					default: resolveNamedType(name, span, resolving, substitutions);
 				}
+			case AppliedType(name, arguments):
+				if (!enums.exists(name)) {
+					fail('Type "$name" does not accept type arguments', span);
+					TDynamic;
+				} else {
+					var declaration = enums.get(name);
+					if (arguments.length != declaration.typeParameters.length)
+						fail('Type "$name" expects ${declaration.typeParameters.length} type arguments, got ${arguments.length}', span);
+					TEnum(name, [
+						for (argument in arguments)
+							resolveInner(argument, span, resolving, substitutions)
+					]);
+				}
 			case ArrayType(element): TArray(resolveInner(element, span, resolving, substitutions));
 			case MapType(key, value): TMap(resolveInner(key, span, resolving, substitutions), resolveInner(value, span, resolving, substitutions));
 			case NullableType(element): TNullable(resolveInner(element, span, resolving, substitutions));
@@ -168,10 +184,11 @@ class DeclarationIndex {
 			var resolved = resolveInner(alias, aliasSpans.get(name), resolving, substitutions);
 			resolving.remove(name);
 			resolved;
-		} else if (enumAbstracts.exists(name)) resolveInner(enumAbstracts.get(name).underlying, span, resolving,
+		} else if (genericParameters.exists(name)) TDynamic; else if (enumAbstracts.exists(name)) resolveInner(enumAbstracts.get(name).underlying, span,
+			resolving,
 			substitutions); else if (abstracts.exists(name)) resolveInner(abstracts.get(name).underlying, span, resolving,
-			substitutions); else if (interfaces.exists(name)) TInterface(name); else if (enums.exists(name)) TEnum(name); else if (classes.exists(name))
-			TClass(name); else if (PlatformAbi.isType(name)) PlatformAbi.valueType(name); else {
+			substitutions); else if (interfaces.exists(name)) TInterface(name); else if (enums.exists(name)) TEnum(name,
+			[]); else if (classes.exists(name)) TClass(name); else if (PlatformAbi.isType(name)) PlatformAbi.valueType(name); else {
 			fail('Unknown type "$name"', span);
 			TVoid;
 		};
@@ -180,7 +197,7 @@ class DeclarationIndex {
 	static function nullable(type:CompilerType):CompilerType
 		return switch type {
 			case TNullable(_): type;
-			case TString, TDynamic, TNativeAbstract(_), TClass(_), TInterface(_), TEnum(_), TAnonymous(_, _), TArray(_), TFunction(_, _), TMap(_, _):
+			case TString, TDynamic, TNativeAbstract(_), TClass(_), TInterface(_), TEnum(_, _), TAnonymous(_, _), TArray(_), TFunction(_, _), TMap(_, _):
 				TNullable(type);
 			default: type;
 		};
@@ -198,7 +215,8 @@ class DeclarationIndex {
 			case TNever: "Never";
 			case TRange: "Range";
 			case TVoid: "Void";
-			case TClass(name), TInterface(name), TEnum(name): name;
+			case TClass(name), TInterface(name): name;
+			case TEnum(name, arguments): arguments.length == 0 ? name : '$name<${[for (argument in arguments) typeKey(argument)].join(",")}>';
 			case TNull: "null";
 			case TNullable(element): 'Null<${typeKey(element)}>';
 			case TArray(element): 'Array<${typeKey(element)}>';

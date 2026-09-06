@@ -20,7 +20,7 @@ enum CompilerType {
 	TVoid;
 	TClass(name:String);
 	TInterface(name:String);
-	TEnum(name:String);
+	TEnum(name:String, arguments:Array<CompilerType>);
 	TNull;
 	TNullable(element:CompilerType);
 	TArray(element:CompilerType);

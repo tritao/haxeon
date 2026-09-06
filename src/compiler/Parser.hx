@@ -1395,9 +1395,11 @@ class Parser {
 			return NativeAbstractType(value);
 		}
 		if (match(TokenKind.Less)) {
+			var arguments = [];
 			do
-				parseType() while (match(TokenKind.Comma));
+				arguments.push(parseType()) while (match(TokenKind.Comma));
 			consume(TokenKind.Greater);
+			return AppliedType(name, arguments);
 		}
 		return NamedType(name);
 	}

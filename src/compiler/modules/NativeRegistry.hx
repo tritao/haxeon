@@ -103,7 +103,7 @@ class NativeRegistry {
 			case TClass(name): Obj(name);
 			case TMap(_, _): Abstract("map_string_i32");
 			case TInterface(name): Virtual(name);
-			case TEnum(name): Enum(name);
+			case TEnum(name, _): Enum(name);
 			case TNull: Void;
 			case TNullable(element): irType(element);
 			case TArray(element): Array(irType(element));

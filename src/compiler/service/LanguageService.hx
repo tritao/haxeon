@@ -767,6 +767,7 @@ class LanguageService {
 			case InferredType: "_";
 			case NativeAbstractType(name): 'hl.Abstract<"$name">';
 			case NamedType(name): name;
+			case AppliedType(name, arguments): '$name<${[for (argument in arguments) typeName(argument)].join(",")}>';
 			case ArrayType(element): 'Array<${typeName(element)}>';
 			case MapType(key, value): 'Map<${typeName(key)},${typeName(value)}>';
 			case NullableType(element): 'Null<${typeName(element)}>';

@@ -152,6 +152,7 @@ class ModuleCanonicalizer {
 			case InferredType: "_";
 			case NativeAbstractType(name): 'hl.Abstract<"$name">';
 			case NamedType(name): name;
+			case AppliedType(name, arguments): '$name<${[for (argument in arguments) astTypeName(argument)].join(",")}>';
 			case ArrayType(element): 'Array<${astTypeName(element)}>';
 			case MapType(key, value): 'Map<${astTypeName(key)},${astTypeName(value)}>';
 			case NullableType(element): 'Null<${astTypeName(element)}>';
@@ -390,6 +391,7 @@ class ModuleCanonicalizer {
 		return switch type {
 			case NativeAbstractType(name): NativeAbstractType(name);
 			case NamedType(name): NamedType(resolveTypeName(name, aliases));
+			case AppliedType(name, arguments): AppliedType(resolveTypeName(name, aliases), [for (argument in arguments) canonicalType(argument, aliases)]);
 			case ArrayType(element): ArrayType(canonicalType(element, aliases));
 			case MapType(key, value): MapType(canonicalType(key, aliases), canonicalType(value, aliases));
 			case NullableType(element): NullableType(canonicalType(element, aliases));

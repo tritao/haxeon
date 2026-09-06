@@ -79,8 +79,8 @@ class RuntimeType {
 
 	static function isRuntimeReference(type:CompilerType):Bool
 		return switch type {
-			case TBytes, THlBytes, TDynamic, TNativeAbstract(_), TClass(_), TInterface(_), TEnum(_), TAnonymous(_,
-				_), TArray(_), TMap(_, _), TFunction(_, _): true;
+			case TBytes, THlBytes, TDynamic, TNativeAbstract(_), TClass(_), TInterface(_), TEnum(_, _), TAnonymous(_, _), TArray(_), TMap(_, _),
+				TFunction(_, _): true;
 			case TNullable(element): isRuntimeReference(element);
 			default: false;
 		};

@@ -151,7 +151,7 @@ class Typer {
 								name: caseDecl.name,
 								params: [
 									for (param in caseDecl.params)
-										erasedEnumParameter(enumDecl, param)
+										erasedEnumParameter(enumDecl, param, enumRuntimeArguments(enumDecl, program))
 								],
 								span: caseDecl.span
 							}
@@ -281,10 +281,10 @@ class Typer {
 		if (type == null)
 			return null;
 		return switch type {
-			case TEnum(name): name;
+			case TEnum(name, _): name;
 			case TNullable(element):
 				switch element {
-					case TEnum(name): name;
+					case TEnum(name, _): name;
 					default: null;
 				}
 			default: null;
@@ -924,7 +924,7 @@ class Typer {
 					}
 					if (isEnum(typedExpression.type) && !hasDefault) {
 						var enumName:String = switch typedExpression.type {
-							case TEnum(name): name;
+							case TEnum(name, _): name;
 							default: "";
 						};
 						var missing:Array<String> = [];
@@ -1161,10 +1161,10 @@ class Typer {
 			case Call(name, arguments, _):
 				var info = enumCaseInfo(name);
 				var enumName:Null<String> = switch expected {
-					case TEnum(value): value;
+					case TEnum(value, _): value;
 					case TNullable(element):
 						switch element {
-							case TEnum(value): value;
+							case TEnum(value, _): value;
 							default: null;
 						}
 					default: null;
@@ -1245,12 +1245,16 @@ class Typer {
 				var info = enumCaseInfo(name);
 				if (info == null && name.indexOf(".") < 0)
 					switch expected {
-						case TEnum(enumName): info = enumCaseInfo(enumName + "." + name);
+						case TEnum(enumName, _): info = enumCaseInfo(enumName + "." + name);
 						default:
 					}
 				if (info == null)
 					return null;
-				if (!sameType(expected, TEnum(info.enumName)))
+				var instanceType = switch expected {
+					case TEnum(_, _): expected;
+					default: TEnum(info.enumName, []);
+				};
+				if (enumName(instanceType) != info.enumName)
 					fail("E1019", "Enum switch case has the wrong enum type", span);
 				var required = requiredEnumParameters(info.params);
 				if (arguments.length < required || arguments.length > info.params.length)
@@ -1258,7 +1262,7 @@ class Typer {
 				var bindings:Array<TypedSwitchBinding> = [];
 				for (index in 0...arguments.length) {
 					var parameter = info.params[index],
-						parameterType = parameter.optional ? CompilerType.TNullable(lowerType(parameter.type)) : lowerType(parameter.type);
+						parameterType = enumParameterType(info.typeParameters, parameter, instanceType);
 					switch arguments[index] {
 						case Variable(binding, bindingSpan):
 							if (binding != "_") {
@@ -1270,7 +1274,7 @@ class Typer {
 					}
 				}
 				{
-					value: new TypedExpression(TEnumLiteral(info.enumName, info.index), TEnum(info.enumName), span),
+					value: new TypedExpression(TEnumLiteral(info.enumName, info.index), instanceType, span),
 					enumName: info.enumName,
 					index: info.index,
 					bindings: bindings
@@ -1319,7 +1323,7 @@ class Typer {
 								for (index in 0...expectedEnum.cases.length) {
 									var enumCase = expectedEnum.cases[index];
 									if (enumCase.name == name && enumCase.params.length == 0)
-										return new TypedExpression(TEnumLiteral(expectedEnum.name, index), TEnum(expectedEnum.name), span);
+										return new TypedExpression(TEnumLiteral(expectedEnum.name, index), expectedType, span);
 								}
 							}
 							var thisType = scope.resolve("this");
@@ -1351,7 +1355,7 @@ class Typer {
 									fail("E1005", 'Unknown enum case "$name"', span);
 								if (enumDecl.cases[index].params.length > 0)
 									fail("E1008", 'Enum case "$name" requires constructor arguments', span);
-								return new TypedExpression(TEnumLiteral(enumName, index), TEnum(enumName), span);
+								return new TypedExpression(TEnumLiteral(enumName, index), TEnum(enumName, []), span);
 							}
 							var classEnd = parts.length - 1;
 							while (classEnd > 0) {
@@ -1651,7 +1655,7 @@ class Typer {
 					fail("E1021", "Switch expression requires a default branch", span);
 				if (isEnum(typedSubject.type) && typedDefault == null) {
 					var enumName:String = switch typedSubject.type {
-						case TEnum(name): name;
+						case TEnum(name, _): name;
 						default: "";
 					}, missing:Array<String> = [];
 					if (enumDecls.exists(enumName)) {
@@ -1990,7 +1994,7 @@ class Typer {
 					if (enumCase != null) {
 						var expected = [
 							for (param in enumCase.params)
-								param.optional ? CompilerType.TNullable(lowerType(param.type)) : lowerType(param.type)
+								enumParameterType(enumCase.typeParameters, param, expectedType)
 						];
 						var required = requiredEnumParameters(enumCase.params);
 						if (arguments.length < required || arguments.length > expected.length)
@@ -1999,7 +2003,9 @@ class Typer {
 						while (typedArguments.length < expected.length)
 							typedArguments.push(new TypedExpression(TNullLiteral, TNull, span));
 						typedArguments = coerceArguments(typedArguments, expected, name);
-						return new TypedExpression(TEnumConstruct(enumCase.enumName, enumCase.index, typedArguments), TEnum(enumCase.enumName), span);
+						var resultType = expectedType != null
+							&& enumName(expectedType) == enumCase.enumName ? expectedType : TEnum(enumCase.enumName, []);
+						return new TypedExpression(TEnumConstruct(enumCase.enumName, enumCase.index, typedArguments), resultType, span);
 					}
 					if (receiverType != null && methodName != null) {
 						var resolvedReceiver = requiredExpression(receiver),
@@ -2550,7 +2556,12 @@ class Typer {
 				findMethods(base, name, results);
 	}
 
-	function enumCaseInfo(name:String):Null<{enumName:String, index:Int, params:Array<compiler.Ast.AstEnumParameter>}> {
+	function enumCaseInfo(name:String):Null<{
+		enumName:String,
+		index:Int,
+		params:Array<compiler.Ast.AstEnumParameter>,
+		typeParameters:Array<String>
+	}> {
 		var parent = parentPath(name);
 		if (parent == null)
 			return null;
@@ -2563,32 +2574,47 @@ class Typer {
 				return {
 					enumName: enumName,
 					index: index,
-					params: [
-						for (parameter in declaration.cases[index].params)
-							eraseEnumParameter(declaration, parameter)
-					]
+					params: declaration.cases[index].params,
+					typeParameters: declaration.typeParameters
 				};
 		return null;
 	}
 
-	function erasedEnumParameter(declaration:AstEnum, parameter:compiler.Ast.AstEnumParameter):CompilerType {
-		var type = declaration.typeParameters.indexOf(switch parameter.type {
+	function enumParameterType(typeParameters:Array<String>, parameter:compiler.Ast.AstEnumParameter, instance:Null<CompilerType>):CompilerType {
+		var resolved:CompilerType = switch parameter.type {
+			case NamedType(name) if (typeParameters.indexOf(name) >= 0):
+				var index = typeParameters.indexOf(name);
+				switch instance {
+					case TEnum(_, arguments) if (index < arguments.length): arguments[index];
+					default: TDynamic;
+				}
+			default: lowerType(parameter.type);
+		};
+		return parameter.optional ? TNullable(resolved) : resolved;
+	}
+
+	function erasedEnumParameter(declaration:AstEnum, parameter:compiler.Ast.AstEnumParameter, arguments:Array<CompilerType>):CompilerType {
+		var parameterIndex = declaration.typeParameters.indexOf(switch parameter.type {
 			case NamedType(name): name;
 			default: "";
-		}) >= 0 ? TDynamic : lowerType(parameter.type);
+		}),
+			type = parameterIndex >= 0 && parameterIndex < arguments.length ? arguments[parameterIndex] : lowerType(parameter.type);
 		return parameter.optional ? TNullable(type) : type;
 	}
 
-	static function eraseEnumParameter(declaration:AstEnum, parameter:compiler.Ast.AstEnumParameter):compiler.Ast.AstEnumParameter {
-		return declaration.typeParameters.indexOf(switch parameter.type {
-			case NamedType(name): name;
-			default: "";
-		}) < 0 ? parameter : {
-			name: parameter.name,
-			type: NamedType("Dynamic"),
-			optional: parameter.optional,
-			span: parameter.span
-		};
+	function enumRuntimeArguments(declaration:AstEnum, program:AstProgram):Array<CompilerType> {
+		for (fn in program.functions) {
+			var types = [fn.result];
+			for (argument in fn.arguments)
+				types.push(argument.type);
+			for (type in types)
+				switch type {
+					case AppliedType(name, arguments) if (name == declaration.name):
+						return [for (argument in arguments) lowerType(argument)];
+					default:
+				}
+		}
+		return [for (_ in declaration.typeParameters) TDynamic];
 	}
 
 	static function requiredEnumParameters(parameters:Array<compiler.Ast.AstEnumParameter>):Int {
@@ -2742,7 +2768,7 @@ class Typer {
 		}
 		if (operation == 2 && sameType(left.type, right.type))
 			switch left.type {
-				case TEnum(_), TNullable(_):
+				case TEnum(_, _), TNullable(_):
 					return new TypedExpression(TEqual(left, right), TBool, span);
 				default:
 			}
@@ -2757,7 +2783,7 @@ class Typer {
 
 	function exhaustiveEnum(type:CompilerType, cases:Array<TypedSwitchCase>):Bool {
 		var enumName = switch type {
-			case TEnum(name): name;
+			case TEnum(name, _): name;
 			default: return false;
 		};
 		if (!enumDecls.exists(enumName))
@@ -2819,7 +2845,7 @@ class Typer {
 
 	static function isEnum(type:CompilerType):Bool
 		return switch type {
-			case TEnum(_): true;
+			case TEnum(_, _): true;
 			default: false;
 		};
 

@@ -12,6 +12,7 @@ enum AstType {
 	InferredType;
 	NativeAbstractType(name:String);
 	NamedType(name:String);
+	AppliedType(name:String, arguments:Array<AstType>);
 	ArrayType(element:AstType);
 	MapType(key:AstType, value:AstType);
 	NullableType(element:AstType);
