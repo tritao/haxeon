@@ -13,7 +13,9 @@ import compiler.types.Type.CompilerType;
 import compiler.types.RuntimeType;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedExpressionKind;
+import compiler.types.TypedAst.TypedEnum;
 import compiler.types.TypedAst.TypedFunction;
+import compiler.types.TypedAst.TypedInterface;
 import compiler.types.TypedAst.TypedClass;
 import compiler.types.TypedAst.TypedCatch;
 import compiler.types.TypedAst.TypedField;
@@ -21,6 +23,7 @@ import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypedAst.TypedSwitchBinding;
 import compiler.types.TypedAst.TypedSwitchCase;
+import compiler.types.TypedAst.TypedSwitchExpressionCase;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
@@ -104,13 +107,17 @@ class Typer {
 		}
 		inferNoReturnFunctions();
 		if (requireMain) {
-			var main = signatures.get("main");
-			if (main == null)
+			var main:AstFunction;
+			if (signatures.exists("main"))
+				main = signatures.get("main");
+			else if (signatures.exists("Main.main"))
 				main = signatures.get("Main.main");
-			if (main == null || main.arguments.length != 0 || (lowerType(main.result) != TInt && lowerType(main.result) != TVoid))
+			else
+				throw "Program must define main():Int or static Main.main():Void";
+			if (main.arguments.length != 0 || (lowerType(main.result) != TInt && lowerType(main.result) != TVoid))
 				throw "Program must define main():Int or static Main.main():Void";
 		}
-		var typedEnums = [
+		var typedEnums:Array<TypedEnum> = [
 			for (enumDecl in program.enums)
 				{
 					name: enumDecl.name,
@@ -120,14 +127,14 @@ class Typer {
 								name: caseDecl.name,
 								params: [
 									for (param in caseDecl.params)
-										param.optional ? TNullable(lowerType(param.type)) : lowerType(param.type)
+										param.optional ? CompilerType.TNullable(lowerType(param.type)) : lowerType(param.type)
 								],
 								span: caseDecl.span
 							}
 					],
 					span: enumDecl.span
 				}
-		], typedInterfaces = [
+		], typedInterfaces:Array<TypedInterface> = [
 			for (interfaceDecl in program.interfaces)
 				{
 					name: interfaceDecl.name,
@@ -137,7 +144,10 @@ class Typer {
 							{name: method.name, arguments: [for (argument in method.arguments) argumentType(argument)], result: lowerType(method.result)}
 					]
 				}
-			], typedClasses = [for (classDecl in program.classes) typeClass(classDecl, classDecls, selected)], typedFunctions:Array<TypedFunction> = [];
+			], typedClasses:Array<TypedClass> = [
+			for (classDecl in program.classes)
+				typeClass(classDecl, classDecls, selected)
+			], typedFunctions:Array<TypedFunction> = [];
 		for (fn in program.functions)
 			if (!isGeneric(fn) && (selected == null || selected.exists(fn.name)))
 				typedFunctions.push(typeFunction(fn));
@@ -175,16 +185,11 @@ class Typer {
 			switch statement {
 				case Throw(_, _):
 					return true;
-				case Expression(Call(name, _, _), _):
-					var resolved = name;
-					if (name.indexOf(".") < 0) {
-						var separator = functionName.lastIndexOf(".");
-						if (separator >= 0)
-							resolved = functionName.substr(0, separator) + "." + name;
+				case Expression(expression, _):
+					switch expression {
+						case Call(name, _, _): return noReturnFunctions.exists(qualifiedLocalCall(name, functionName));
+						default: return false;
 					}
-					if (noReturnFunctions.exists(resolved))
-						return true;
-					return false;
 				case If(_, yes, no, _) if (no.length > 0
 					&& astStatementsDoNotReturn(yes, functionName)
 					&& astStatementsDoNotReturn(no, functionName)):
@@ -206,6 +211,28 @@ class Typer {
 		return false;
 	}
 
+	static function qualifiedLocalCall(name:String, functionName:String):String {
+		if (name.indexOf(".") >= 0)
+			return name;
+		var cursor = functionName.length - 1;
+		while (cursor >= 0) {
+			if (functionName.charCodeAt(cursor) == 46)
+				return functionName.substring(0, cursor) + "." + name;
+			cursor--;
+		}
+		return name;
+	}
+
+	static function parentPath(path:String):Null<String> {
+		var cursor = path.length - 1;
+		while (cursor >= 0) {
+			if (path.charCodeAt(cursor) == 46)
+				return path.substring(0, cursor);
+			cursor--;
+		}
+		return null;
+	}
+
 	function typeClass(classDecl:AstClass, classes:Map<String, AstClass>, selected:Null<Map<String, Bool>>):TypedClass {
 		var fields:Array<TypedField> = [], fieldNames:Map<String, Bool> = [];
 		for (field in classDecl.fields) {
@@ -214,14 +241,15 @@ class Typer {
 			var type = lowerType(FieldInference.parsedType(field));
 			if (type == TVoid)
 				fail("E1002", 'Field "${classDecl.name}.${field.name}" cannot have type Void', field.span);
-			var initializer:Null<TypedExpression> = null;
-			if (field.initializer != null) {
+			var initializer:Null<TypedExpression> = null,
+				parsedInitializer = field.initializer;
+			if (parsedInitializer != null) {
 				var previousContext = context;
 				context = new BodyContext(classDecl.name + ".__init");
 				var scope = new Scope();
 				if (!field.isStatic)
 					scope.define("this", TClass(classDecl.name), field.span);
-				initializer = coerce(typeExpression(field.initializer, scope, type), type,
+				initializer = coerce(typeExpression(parsedInitializer, scope, type), type,
 					(field.isStatic ? 'static field "${classDecl.name}.${field.name}"' : 'field "${classDecl.name}.${field.name}"'), "E1002");
 				context = previousContext;
 			}
@@ -269,10 +297,7 @@ class Typer {
 				isConstructor: true,
 				arguments: [],
 				result: TVoid,
-				statements: [
-					for (field in instanceInitializers)
-						TFieldAssign(new TypedExpression(TLocal("this"), TClass(classDecl.name), field.span), field.name, field.initializer, field.span)
-				],
+				statements: instanceInitializerStatements(instanceInitializers, classDecl.name),
 				cells: [],
 				cellCaptures: [],
 				span: classDecl.span
@@ -308,10 +333,7 @@ class Typer {
 		};
 
 	function prependInstanceInitializers(method:TypedFunction, className:String, fields:Array<TypedField>):TypedFunction {
-		var statements:Array<TypedStatement> = [
-			for (field in fields)
-				TFieldAssign(new TypedExpression(TLocal("this"), TClass(className), field.span), field.name, field.initializer, field.span)
-		];
+		var statements = instanceInitializerStatements(fields, className);
 		return {
 			name: method.name,
 			owner: method.owner,
@@ -326,10 +348,21 @@ class Typer {
 		};
 	}
 
+	static function instanceInitializerStatements(fields:Array<TypedField>, className:String):Array<TypedStatement> {
+		var statements:Array<TypedStatement> = [];
+		for (field in fields) {
+			var initializer = field.initializer;
+			if (initializer == null)
+				throw 'Missing initializer for "$className.${field.name}"';
+			statements.push(TFieldAssign(new TypedExpression(TLocal("this"), TClass(className), field.span), field.name, initializer, field.span));
+		}
+		return statements;
+	}
+
 	function validateInterfaceImplementation(classDecl:AstClass, interfaceName:String, span:SourceSpan):Void {
-		var interfaceDecl = interfaceDecls.get(interfaceName);
-		if (interfaceDecl == null)
+		if (!interfaceDecls.exists(interfaceName))
 			return;
+		var interfaceDecl = interfaceDecls.get(interfaceName);
 		for (base in interfaceDecl.bases) {
 			if (!interfaceDecls.exists(base))
 				fail("E1007", 'Unknown interface "$base"', span);
@@ -339,8 +372,8 @@ class Typer {
 			var implementation = findMethod(classDecl.name, method.name);
 			if (implementation == null || implementation.isStatic)
 				fail("E1007", 'Class "${classDecl.name}" does not implement "$interfaceName.${method.name}"', span);
-			var actual = signatures.get(implementation.owner + "." + method.name);
-			if (actual == null || !sameSignature(actual, method))
+			var implementationName = implementation.owner + "." + method.name;
+			if (!signatures.exists(implementationName) || !sameSignature(signatures.get(implementationName), method))
 				fail("E1003", 'Method "${classDecl.name}.${method.name}" does not match interface "$interfaceName"', span);
 		}
 	}
@@ -387,7 +420,10 @@ class Typer {
 			scope.define(argument.name, type, argument.span);
 			if (context.cells.exists(argument.name))
 				context.cellTypes.set(argument.name, type);
-			arguments.push({name: context.cells.exists(argument.name) ? argument.name : scope.resolveId(argument.name), type: type});
+			var argumentId = argument.name;
+			if (!context.cells.exists(argument.name))
+				argumentId = scope.requireId(argument.name);
+			arguments.push({name: argumentId, type: type});
 		}
 		var result = lowerType(fn.result);
 		context.resultType = result;
@@ -395,27 +431,38 @@ class Typer {
 		var statements = typeStatements(fn.statements, scope, result);
 		if (result != TVoid && !alwaysReturns(statements))
 			fail("E1006", 'Function ${fn.name} does not return on every path', fn.span);
+		var typeArguments:Null<Array<CompilerType>> = null,
+			typeParameters = fn.typeParameters;
+		if (specializedName != null && typeParameters != null) {
+			var resolvedArguments:Array<CompilerType> = [];
+			for (parameter in typeParameters) {
+				if (!context.typeSubstitutions.exists(parameter))
+					throw 'Missing specialization for type parameter "$parameter"';
+				resolvedArguments.push(context.typeSubstitutions.get(parameter));
+			}
+			typeArguments = resolvedArguments;
+		}
 		var resultFunction:TypedFunction = {
 			name: functionName,
 			genericOrigin: specializedName == null ? null : (owner == null ? fn.name : owner + "." + fn.name),
-			typeArguments: specializedName == null || fn.typeParameters == null ? null : [
-				for (parameter in fn.typeParameters)
-					context.typeSubstitutions.get(parameter)
-			],
+			typeArguments: typeArguments,
 			owner: owner,
 			isStatic: isStatic,
 			isConstructor: isConstructor,
 			arguments: arguments,
 			result: result,
 			statements: statements,
-			cells: context.cells.copy(),
+			cells: copyMap(context.cells),
 			cellCaptures: [],
 			span: fn.span
 		};
 		for (name in context.cells.keys()) {
-			var cellType = context.cellTypes.get(name);
-			if (cellType != null)
-				generatedCells.push({name: context.cells.get(name), valueType: cellType, kind: context.cellKinds.get(name)});
+			if (context.cellTypes.exists(name) && context.cellKinds.exists(name))
+				generatedCells.push({
+					name: requiredMapValue(context.cells, name),
+					valueType: requiredMapValue(context.cellTypes, name),
+					kind: requiredMapValue(context.cellKinds, name)
+				});
 		}
 		context = previousContext;
 		return resultFunction;
@@ -436,16 +483,21 @@ class Typer {
 					if (context.cells.exists(name))
 						fail("E1023", 'Captured local "$name" must be initialized at its declaration', span);
 					scope.define(name, declaredType, span, false);
-					output.push(TDeclare(scope.resolveId(name), declaredType, span));
+					output.push(TDeclare(scope.requireId(name), declaredType, span));
 				case VarDeclaration(name, declared, initializer, span):
-					var inferredExpected = declared == null ? expectedInitializerType(name, initializer, statements, statementIndex + 1) : null,
-						declaredType = declared == null ? inferredExpected : lowerType(declared),
-						predeclared = declaredType != null && switch initializer {
-							case Lambda(_, _, _): true;
-							default: false;
-						};
-					if (predeclared)
-						scope.define(name, declaredType, span);
+					var declaredType:Null<CompilerType>;
+					if (declared == null)
+						declaredType = expectedInitializerType(name, initializer, statements, statementIndex + 1);
+					else
+						declaredType = lowerType(declared);
+					var predeclared = false;
+					if (declaredType != null)
+						switch initializer {
+							case Lambda(_, _, _):
+								scope.define(name, declaredType, span);
+								predeclared = true;
+							default:
+						}
 					var value = typeExpression(initializer, scope, declaredType);
 					if (declaredType != null) {
 						value = coerce(value, declaredType, 'local "$name"', "E1002");
@@ -456,7 +508,7 @@ class Typer {
 						scope.define(name, value.type, span);
 					if (context.cells.exists(name))
 						context.cellTypes.set(name, value.type);
-					output.push(TVar(context.cells.exists(name) ? name : scope.resolveId(name), value, span));
+					output.push(TVar(context.cells.exists(name) ? name : scope.requireId(name), value, span));
 				case Return(expression, span):
 					var value = typeExpression(expression, scope, result);
 					value = coerce(value, result, "return", "E1003");
@@ -489,7 +541,7 @@ class Typer {
 						catchScopes.push(catchScope);
 						catchScope.define(catchClause.name, loweredCatchType, catchClause.span);
 						typedCatches.push({
-							name: catchScope.resolveId(catchClause.name),
+							name: catchScope.requireId(catchClause.name),
 							type: loweredCatchType,
 							statements: typeStatements(catchClause.statements, catchScope, result),
 							span: catchClause.span
@@ -497,7 +549,7 @@ class Typer {
 					}
 					var typedTry = typeStatements(tryBranch, tryScope, result);
 					output.push(TTry(typedTry, typedCatches, span));
-					var continuing = [];
+					var continuing:Array<Scope> = [];
 					if (!alwaysExits(typedTry))
 						continuing.push(tryScope);
 					for (i in 0...typedCatches.length)
@@ -507,13 +559,13 @@ class Typer {
 				case Break(span):
 					if (context.loopDepth == 0)
 						fail("E1017", "break is only valid inside a loop", span);
-					if (!context.loopEarlyExits[context.loopEarlyExits.length - 1])
+					if (!context.loopEarlyExits[context.loopDepth - 1])
 						fail("E1017", "break in do-while is not supported by the current CFG backend", span);
 					output.push(TBreak(span));
 				case Continue(span):
 					if (context.loopDepth == 0)
 						fail("E1017", "continue is only valid inside a loop", span);
-					if (!context.loopEarlyExits[context.loopEarlyExits.length - 1])
+					if (!context.loopEarlyExits[context.loopDepth - 1])
 						fail("E1017", "continue in do-while is not supported by the current CFG backend", span);
 					output.push(TContinue(span));
 				case Increment(name, delta, span):
@@ -522,15 +574,19 @@ class Typer {
 						fail("E1023", 'Local "$name" may be used before assignment', span);
 					if (current == null) {
 						var dot = name.indexOf("."),
-							ownerSeparator = context.name.lastIndexOf("."),
-							owner = dot < 0 ? (ownerSeparator < 0 ? null : context.name.substr(0, ownerSeparator)) : name.substr(0, dot),
-							fieldName = dot < 0 ? name : name.substr(dot + 1),
-							staticField = owner == null ? null : findStaticFieldNullable(owner, fieldName);
+							owner = dot < 0 ? parentPath(context.name) : name.substring(0, dot),
+							fieldName = dot < 0 ? name : name.substring(dot + 1, name.length),
+							staticField:Null<{
+								owner:String,
+								type:CompilerType
+							}> = null;
+						if (owner != null)
+							staticField = findStaticFieldNullable(owner, fieldName);
 						if (staticField == null || (!sameType(staticField.type, TInt) && !sameType(staticField.type, TFloat)))
 							fail("E1018", 'Increment requires a numeric local or static field "$name"', span);
 						var oldValue = new TypedExpression(TStaticField(staticField.owner, fieldName), staticField.type, span),
 							one:TypedExpression = sameType(staticField.type,
-								TInt) ? new TypedExpression(TIntLiteral(1), TInt, span) : new TypedExpression(TFloatLiteral(1), TFloat, span),
+								TInt) ? new TypedExpression(TIntLiteral(1), TInt, span) : new TypedExpression(TFloatLiteral(1.0), TFloat, span),
 							updated = delta > 0 ? new TypedExpression(TAdd(oldValue, one), staticField.type,
 								span) : new TypedExpression(TSub(oldValue, one), staticField.type, span);
 						output.push(TStaticFieldAssign(staticField.owner, fieldName, updated, span));
@@ -539,11 +595,11 @@ class Typer {
 					else if (scope.isCapture(name)) {
 						if (!scope.isCellCapture(name))
 							fail("E1013", 'Captured variable "$name" requires mutable capture cells', span);
-						output.push(TCellCapturedIncrement(name, scope.cellClass(name), current, delta, span));
+						output.push(TCellCapturedIncrement(name, scope.requireCellClass(name), current, delta, span));
 					} else if (context.cells.exists(name))
-						output.push(TCellIncrement(name, context.cells.get(name), current, delta, span));
+						output.push(TCellIncrement(name, requiredMapValue(context.cells, name), current, delta, span));
 					else
-						output.push(TIncrement(scope.resolveId(name), delta, span));
+						output.push(TIncrement(scope.requireId(name), delta, span));
 				case Assignment(name, expression, span):
 					var dot = name.indexOf(".");
 					if (dot < 0) {
@@ -552,12 +608,15 @@ class Typer {
 							var thisType = scope.resolve("this"),
 								instanceField = thisType == null ? null : findFieldType(thisType, name);
 							if (instanceField != null) {
+								if (thisType == null)
+									throw 'Missing "this" type for field "$name"';
 								var value = coerce(typeExpression(expression, scope, instanceField), instanceField, 'field "$name"', "E1002");
 								output.push(TFieldAssign(new TypedExpression(TLocal("this"), thisType, span), name, value, span));
 							} else {
-								var ownerSeparator = context.name.lastIndexOf("."),
-									owner = ownerSeparator < 0 ? null : context.name.substr(0, ownerSeparator),
-									staticField = owner == null ? null : findStaticFieldNullable(owner, name);
+								var owner = parentPath(context.name),
+									staticField:Null<{owner:String, type:CompilerType}> = null;
+								if (owner != null)
+									staticField = findStaticFieldNullable(owner, name);
 								if (staticField == null)
 									fail("E1005", 'Unknown variable "$name"', span);
 								var value = coerce(typeExpression(expression, scope, staticField.type), staticField.type, 'field "$name"', "E1002");
@@ -568,17 +627,17 @@ class Typer {
 							if (scope.isCapture(name)) {
 								if (!scope.isCellCapture(name))
 									fail("E1013", 'Captured variable "$name" requires mutable capture cells', span);
-								output.push(TCellCapturedAssign(name, scope.cellClass(name), value, span));
+								output.push(TCellCapturedAssign(name, scope.requireCellClass(name), value, span));
 							} else if (context.cells.exists(name))
-								output.push(TCellAssign(name, context.cells.get(name), value, span));
+								output.push(TCellAssign(name, requiredMapValue(context.cells, name), value, span));
 							else
-								output.push(TAssign(scope.resolveId(name), value, span));
+								output.push(TAssign(scope.requireId(name), value, span));
 							scope.markAssigned(name);
 							scope.refine(name, value.type);
 						}
 					} else {
-						var objectName = name.substr(0, dot),
-							fieldName = name.substr(dot + 1),
+						var objectName = name.substring(0, dot),
+							fieldName = name.substring(dot + 1, name.length),
 							object = typeExpression(Variable(objectName, span), scope),
 							expected:CompilerType;
 						switch object.expression {
@@ -590,8 +649,8 @@ class Typer {
 								var platformField = PlatformAbi.field(object.type, fieldName),
 									expected = fieldType(object.type, fieldName, span);
 								var value = coerce(typeExpression(expression, scope, expected), expected, 'field "$name"', "E1002");
-								if (platformField != null && platformField.set != null) output.push(TExpression(new TypedExpression(TCall(platformField.set,
-									[object, value]), TVoid, span),
+								var setter:Null<String> = platformField == null ? null : platformField.set;
+								if (setter != null) output.push(TExpression(new TypedExpression(TCall(setter, [object, value]), TVoid, span),
 									span)); else output.push(TFieldAssign(object, fieldName, value, span));
 						}
 					}
@@ -622,8 +681,8 @@ class Typer {
 							var platformField = PlatformAbi.field(object.type, fieldName),
 								expected = fieldType(object.type, fieldName, span);
 							value = coerce(value, expected, 'field "$fieldName"', "E1002");
-							if (platformField != null && platformField.set != null) output.push(TExpression(new TypedExpression(TCall(platformField.set,
-								[object, value]), TVoid, span),
+							var setter:Null<String> = platformField == null ? null : platformField.set;
+							if (setter != null) output.push(TExpression(new TypedExpression(TCall(setter, [object, value]), TVoid, span),
 								span)); else output.push(TFieldAssign(object, fieldName, value, span));
 					}
 				case If(condition, thenBranch, elseBranch, span):
@@ -635,7 +694,7 @@ class Typer {
 						typedThen = typeStatements(thenBranch, thenScope, result),
 						typedElse = typeStatements(elseBranch, elseScope, result);
 					output.push(TIf(typedCondition, typedThen, typedElse, span));
-					var continuing = [];
+					var continuing:Array<Scope> = [];
 					if (!alwaysExits(typedThen))
 						continuing.push(thenScope);
 					if (elseBranch.length == 0)
@@ -649,18 +708,16 @@ class Typer {
 					var typedCondition = typeExpression(condition, scope);
 					if (!sameType(typedCondition.type, TBool))
 						fail("E1004", "While condition must be Bool", span);
+					context.loopEarlyExits[context.loopDepth] = true;
 					context.loopDepth++;
-					context.loopEarlyExits.push(true);
 					var typedBody = typeStatements(body, new Scope(scope), result);
-					context.loopEarlyExits.pop();
 					context.loopDepth--;
 					output.push(TWhile(typedCondition, typedBody, span));
 				case DoWhile(body, condition, span):
 					var bodyScope = new Scope(scope);
+					context.loopEarlyExits[context.loopDepth] = false;
 					context.loopDepth++;
-					context.loopEarlyExits.push(false);
 					var typedBody = typeStatements(body, bodyScope, result);
-					context.loopEarlyExits.pop();
 					context.loopDepth--;
 					var typedCondition = typeExpression(condition, bodyScope);
 					if (!sameType(typedCondition.type, TBool))
@@ -669,52 +726,52 @@ class Typer {
 					scope.mergeAssignmentsFrom([bodyScope]);
 				case ForIn(name, valueName, iterable, body, span):
 					var typedIterable = typeExpression(iterable, scope),
-						originalIterable = typedIterable,
-						element = switch typedIterable.type {
-							case TArray(element): element;
-							case TRange: TInt;
-							case TMap(key, value):
-								var mapName = RuntimeType.mapName(key, value);
-								if (mapName == null)
-									fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
-								if (valueName == null)
-									typedIterable = new TypedExpression(TCollectionCall(typedIterable, "keys", []), TArray(key), span);
-								key;
-							default:
-								fail("E1014", "For-in iterable must be an Array or Map", span);
-								TInt;
-						},
-						loopScope = new Scope(scope);
+						originalIterable = typedIterable;
+					var element:CompilerType = switch typedIterable.type {
+						case TArray(element): element;
+						case TRange: TInt;
+						case TMap(key, value):
+							var mapName = RuntimeType.mapName(key, value);
+							if (mapName == null)
+								fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+							if (valueName == null)
+								typedIterable = new TypedExpression(TCollectionCall(typedIterable, "keys", []), TArray(key), span);
+							key;
+						default:
+							fail("E1014", "For-in iterable must be an Array or Map", span);
+							TInt;
+					};
+					var loopScope = new Scope(scope);
 					loopScope.define(name, element, span);
 					if (valueName != null)
 						switch originalIterable.type {
 							case TMap(_, value): loopScope.define(valueName, value, span);
 							default: fail("E1014", "Key/value for-in requires a Map", span);
 						}
+					context.loopEarlyExits[context.loopDepth] = true;
 					context.loopDepth++;
-					context.loopEarlyExits.push(true);
 					var typedBody = typeStatements(body, loopScope, result);
-					context.loopEarlyExits.pop();
 					context.loopDepth--;
-					output.push(TForIn(loopScope.resolveId(name), valueName == null ? null : loopScope.resolveId(valueName),
-						valueName == null ? typedIterable : originalIterable, typedBody, span));
+					var valueId:Null<String> = valueName == null ? null : loopScope.requireId(valueName);
+					output.push(TForIn(loopScope.requireId(name), valueId, valueName == null ? typedIterable : originalIterable, typedBody, span));
 				case Switch(expression, cases, defaultBranch, hasDefault, span):
 					var typedExpression = typeExpression(expression, scope);
 					if (!sameType(typedExpression.type, TInt) && !isEnum(typedExpression.type))
 						fail("E1019", "Switch requires an Int or enum value", typedExpression.span);
-					var typedCases = [],
-						caseScopes = [],
+					var typedCases:Array<TypedSwitchCase> = [],
+						caseScopes:Array<Scope> = [],
 						seenCases:Map<String, Bool> = [];
 					for (switchCase in cases) {
 						var caseScope = new Scope(scope),
 							pattern = typeEnumPattern(switchCase.value, typedExpression.type, caseScope),
 							typedValue = pattern == null ? coerce(typeExpression(switchCase.value, scope, typedExpression.type), typedExpression.type,
-								"switch case", "E1019") : pattern.value,
-							typedGuard = switchCase.guard == null ? null : coerce(typeExpression(switchCase.guard, caseScope), TBool, "switch guard", "E1003"),
+								"switch case", "E1019") : pattern.value;
+						var parsedGuard = switchCase.guard,
+							typedGuard = parsedGuard == null ? null : coerce(typeExpression(parsedGuard, caseScope), TBool, "switch guard", "E1003"),
 							typedBody = typeStatements(switchCase.statements, caseScope, result),
 							constructorIndex = pattern == null ? -1 : pattern.index,
 							enumName:Null<String> = pattern == null ? null : pattern.enumName,
-							bindings = pattern == null ? [] : pattern.bindings;
+							bindings:Array<TypedSwitchBinding> = pattern == null ? [] : pattern.bindings;
 						caseScopes.push(caseScope);
 						if (pattern == null)
 							switch typedValue.expression {
@@ -744,22 +801,24 @@ class Typer {
 						});
 					}
 					if (isEnum(typedExpression.type) && !hasDefault) {
-						var enumName = switch typedExpression.type {
+						var enumName:String = switch typedExpression.type {
 							case TEnum(name): name;
 							default: "";
 						};
-						var enumDecl = enumDecls.get(enumName), missing = [];
-						if (enumDecl != null)
+						var missing:Array<String> = [];
+						if (enumDecls.exists(enumName)) {
+							var enumDecl = enumDecls.get(enumName);
 							for (index in 0...enumDecl.cases.length)
 								if (!seenCases.exists('enum:$enumName:$index'))
 									missing.push(enumDecl.cases[index].name);
+						}
 						if (missing.length > 0)
 							fail("E1021", 'Enum switch is missing cases: ${missing.join(", ")}', span);
 					}
 					var defaultScope = new Scope(scope),
 						typedDefault = typeStatements(defaultBranch, defaultScope, result);
 					output.push(TSwitch(typedExpression, typedCases, typedDefault, hasDefault, span));
-					var continuing = [];
+					var continuing:Array<Scope> = [];
 					for (i in 0...typedCases.length)
 						if (!alwaysExits(typedCases[i].statements))
 							continuing.push(caseScopes[i]);
@@ -1032,7 +1091,7 @@ class Typer {
 				var required = requiredEnumParameters(info.params);
 				if (arguments.length < required || arguments.length > info.params.length)
 					fail("E1019", 'Enum switch case "$name" expects $required to ${info.params.length} bindings', span);
-				var bindings = [];
+				var bindings:Array<TypedSwitchBinding> = [];
 				for (index in 0...arguments.length) {
 					var parameter = info.params[index],
 						parameterType = parameter.optional ? TNullable(lowerType(parameter.type)) : lowerType(parameter.type);
@@ -1040,7 +1099,7 @@ class Typer {
 						case Variable(binding, bindingSpan):
 							if (binding != "_") {
 								scope.define(binding, parameterType, bindingSpan);
-								bindings.push({name: scope.resolveId(binding), type: parameterType, index: index});
+								bindings.push({name: scope.requireId(binding), type: parameterType, index: index});
 							}
 						default:
 							fail("E1019", "Enum switch payloads must bind local names or '_'", span);
@@ -1070,8 +1129,8 @@ class Typer {
 					if (!scope.isAssigned(name))
 						fail("E1023", 'Local "$name" may be used before assignment', span);
 					new TypedExpression(scope.isCapture(name) ? (scope.isCellCapture(name) ? TCellCaptured(name,
-						scope.cellClass(name)) : TCaptured(name)) : (context.cells.exists(name) ? TCellLocal(name,
-							context.cells.get(name)) : TLocal(name == "this" ? name : scope.resolveId(name))),
+						scope.requireCellClass(name)) : TCaptured(name)) : (context.cells.exists(name) ? TCellLocal(name,
+							requiredMapValue(context.cells, name)) : TLocal(name == "this" ? name : scope.requireId(name))),
 						type, span);
 				} else {
 					var signature = signatures.get(name);
@@ -1169,7 +1228,7 @@ class Typer {
 						if (expectedFunction != null && !TypeRelations.equals(argumentType, expectedFunction.arguments[i]))
 							fail("E1003", "Lambda argument type does not match its context", argument.span);
 						lambdaScope.define(localName, argumentType, argument.span);
-						lambdaArguments.push({name: lambdaScope.resolveId(localName), type: argumentType});
+						lambdaArguments.push({name: lambdaScope.requireId(localName), type: argumentType});
 						if (argument.name != "_")
 							declared.set(argument.name, true);
 					}
@@ -1181,9 +1240,9 @@ class Typer {
 						if (!declared.exists(name)) {
 							var capturedType = scope.resolve(name);
 							if (capturedType != null) {
-								var cellClass = context.cells.get(name);
+								var cellClass = requiredMapValue(context.cells, name);
 								if (cellClass == null && scope.isCellCapture(name))
-									cellClass = scope.cellClass(name);
+									cellClass = scope.requireCellClass(name);
 								if (cellClass == null && context.assigned.exists(name)) {
 									cellClass = '$' + 'cell:' + context.name + ':' + name;
 									context.cells.set(name, cellClass);
@@ -1231,9 +1290,9 @@ class Typer {
 						context.cellKinds.set(name, MutableCapture);
 					}
 					var typedBody = typeStatements(body, typedBodyScope, inferredResult);
-					var lambdaCells = context.cells.copy(),
-						lambdaCellTypes = context.cellTypes.copy(),
-						lambdaCellKinds = context.cellKinds.copy();
+					var lambdaCells = copyMap(context.cells),
+						lambdaCellTypes = copyMap(context.cellTypes),
+						lambdaCellKinds = copyMap(context.cellKinds);
 					for (i in 0...lambdaArguments.length)
 						if (lambdaCells.exists(arguments[i].name))
 							lambdaArguments[i] = {name: arguments[i].name, type: lambdaArguments[i].type};
@@ -1355,7 +1414,7 @@ class Typer {
 				var typedSubject = typeExpression(expression, scope);
 				if (!sameType(typedSubject.type, TInt) && !sameType(typedSubject.type, TString) && !isEnum(typedSubject.type))
 					fail("E1019", "Switch requires an Int, String, or enum value", typedSubject.span);
-				var typedCases = [],
+				var typedCases:Array<TypedSwitchExpressionCase> = [],
 					seenCases:Map<String, Bool> = [],
 					resultType = expectedType;
 				for (switchCase in cases) {
@@ -1696,7 +1755,7 @@ class Typer {
 							typeExpression(arguments[i], scope, functionType.arguments[i])
 					];
 					typed = coerceArguments(typed, functionType.arguments, name);
-					new TypedExpression(TClosureCall(new TypedExpression(TLocal(scope.resolveId(name)), callable, span), typed), functionType.result, span);
+					new TypedExpression(TClosureCall(new TypedExpression(TLocal(scope.requireId(name)), callable, span), typed), functionType.result, span);
 				} else {
 					if (name.indexOf(".") < 0) {
 						var ownerSeparator = context.name.lastIndexOf("."),
@@ -2628,7 +2687,7 @@ class Typer {
 		}
 
 	function coerceArguments(arguments:Array<TypedExpression>, expected:Array<CompilerType>, name:String):Array<TypedExpression> {
-		var output = [];
+		var output:Array<TypedExpression> = [];
 		for (i in 0...arguments.length)
 			output.push(coerce(arguments[i], expected[i], 'argument ${i + 1} to "$name"'));
 		return output;
@@ -2709,8 +2768,8 @@ class Typer {
 		var dot = name.lastIndexOf(".");
 		if (dot <= 0)
 			return null;
-		var enumName = name.substr(0, dot),
-			caseName = name.substr(dot + 1),
+		var enumName = name.substring(0, dot),
+			caseName = name.substring(dot + 1, name.length),
 			declaration = enumDecls.get(enumName);
 		if (declaration == null)
 			return null;
@@ -2981,6 +3040,19 @@ class Typer {
 
 	function lowerType(type:AstType):CompilerType
 		return declarations.resolve(type, null, context.typeSubstitutions);
+
+	static function copyMap<T>(source:Map<String, T>):Map<String, T> {
+		var result:Map<String, T> = [];
+		for (name => value in source)
+			result.set(name, value);
+		return result;
+	}
+
+	static function requiredMapValue<T>(source:Map<String, T>, name:String):T {
+		if (!source.exists(name))
+			throw 'Missing map entry "$name"';
+		return source.get(name);
+	}
 
 	static function isGeneric(fn:AstFunction):Bool
 		return fn.typeParameters != null && fn.typeParameters.length > 0;

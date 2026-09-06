@@ -91,6 +91,12 @@ class Scope {
 	public function cellClass(name:String):Null<String>
 		return cellClasses.get(name);
 
+	public function requireCellClass(name:String):String {
+		if (!cellClasses.exists(name))
+			throw 'Missing capture cell for "$name"';
+		return cellClasses.get(name);
+	}
+
 	public function resolve(name:String):Null<CompilerType> {
 		var value = resolveLocal(name);
 		if (value == null)
@@ -107,6 +113,13 @@ class Scope {
 	public function resolveId(name:String):Null<String> {
 		var value = resolveLocal(name);
 		return value == null ? null : value.id;
+	}
+
+	public function requireId(name:String):String {
+		var value = resolveLocal(name);
+		if (value == null)
+			throw 'Missing binding for local "$name"';
+		return value.id;
 	}
 
 	function resolveLocal(name:String):Null<ScopeValue> {
