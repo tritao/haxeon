@@ -67,6 +67,7 @@ class RuntimeDomainMain {
 			throw "runtime domain did not dispose the active module on deactivate";
 		testPostPublicationCleanup(events);
 		testRestoreFailure(events);
+		testCandidateCleanupFailure(events);
 		testRecoveryFailure(events);
 		Sys.println("PASS: runtime domain lifecycle and state migration contract");
 	}
@@ -134,6 +135,30 @@ class RuntimeDomainMain {
 			throw "runtime domain did not retry retained module cleanup";
 	}
 
+	static function testCandidateCleanupFailure(events:Array<String>):Void {
+		var disposed = 0, domain = new RuntimeDomain("candidate-cleanup", function(_) disposed++),
+			previous = new TestPlugin("candidate-cleanup-first", events), candidate = new TestPlugin("candidate-cleanup-second", events);
+		previous.state = "cursor:9";
+		candidate.failRestoreState = true;
+		candidate.failDeactivationCount = 1;
+		domain.activateWithModule(previous, {});
+		try {
+			domain.reloadWithModule(candidate, {});
+			throw "runtime domain accepted a candidate whose cleanup failed";
+		} catch (error:runtime.RuntimeError) {}
+		if (domain.active
+			|| domain.retainedModuleCount != 1
+			|| disposed != 0
+			|| count(events, "candidate-cleanup-second.deactivate") != 1)
+			throw "runtime domain disposed or forgot a partially active candidate";
+		domain.deactivate();
+		if (domain.status != Inactive
+			|| domain.retainedModuleCount != 0
+			|| disposed != 2
+			|| count(events, "candidate-cleanup-second.deactivate") != 2)
+			throw "runtime domain did not retry candidate deactivation before disposal";
+	}
+
 	static function testRecoveryFailure(events:Array<String>):Void {
 		var disposed = 0, domain = new RuntimeDomain("recovery", function(_) disposed++);
 		var previous = new TestPlugin("recovery-first", events),
@@ -175,6 +200,7 @@ private class TestPlugin implements ReloadablePlugin {
 	public var failActivation:Bool = false;
 	public var failSaveState:Bool = false;
 	public var failRestoreState:Bool = false;
+	public var failDeactivationCount:Int = 0;
 
 	public function new(name:String, events:Array<String>) {
 		this.name = name;
@@ -187,8 +213,13 @@ private class TestPlugin implements ReloadablePlugin {
 			throw 'activation failed for $name';
 	}
 
-	public function deactivate():Void
+	public function deactivate():Void {
 		events.push('$name.deactivate');
+		if (failDeactivationCount > 0) {
+			failDeactivationCount--;
+			throw 'deactivation failed for $name';
+		}
+	}
 
 	public function saveState():String {
 		events.push('$name.save');

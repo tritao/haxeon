@@ -291,6 +291,14 @@ class HotReloadMain {
 		if (Runtime.callInt(loaded, valueIndex) != 49)
 			throw "foreign patch damaged the live generation";
 		Runtime.dispose(loaded);
+		Runtime.dispose(loaded);
+		try {
+			Runtime.liveRevision(loaded);
+			throw "disposed runtime module remained callable";
+		} catch (error:RuntimeError) {
+			if (error.status != RuntimeStatus.BadArgument)
+				throw error;
+		}
 		testAppendedFloatAndStringSymbols();
 		testNonMovingTypeArena();
 		Sys.println("PASS: selective HLP patches are atomic and retain bounded JIT code");

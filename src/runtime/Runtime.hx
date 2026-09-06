@@ -70,63 +70,63 @@ class Runtime {
 		var module = RuntimeNative.load(bytes.getData(), bytes.length, identity.getData(), identity.length);
 		if (module == null)
 			throw "HashLink rejected the module bytes";
-		return cast module;
+		return new LoadedModule(module);
 	}
 
 	public static function callInt(module:LoadedModule, stableIndex:Int):Int
-		return RuntimeNative.call_i32(cast module, stableIndex);
+		return module.access(function(handle) return RuntimeNative.call_i32(handle, stableIndex));
 
 	public static function callVoid(module:LoadedModule, stableIndex:Int):Void
-		RuntimeNative.call_void(cast module, stableIndex);
+		module.access(function(handle) RuntimeNative.call_void(handle, stableIndex));
 
 	public static function callString(module:LoadedModule, stableIndex:Int):String {
-		var bytes = RuntimeNative.call_bytes(cast module, stableIndex);
+		var bytes = module.access(function(handle) return RuntimeNative.call_bytes(handle, stableIndex));
 		if (bytes == null)
 			return null;
 		return @:privateAccess String.__alloc__(bytes, bytes.ucs2Length(0));
 	}
 
 	public static function callStringArg(module:LoadedModule, stableIndex:Int, argument:String):Void
-		RuntimeNative.call_bytes1(cast module, stableIndex, @:privateAccess argument.bytes);
+		module.access(function(handle) RuntimeNative.call_bytes1(handle, stableIndex, @:privateAccess argument.bytes));
 
 	public static function retainClosure(module:LoadedModule, stableIndex:Int):Dynamic
-		return RuntimeNative.call_closure(cast module, stableIndex);
+		return module.access(function(handle) return RuntimeNative.call_closure(handle, stableIndex));
 
 	public static function callRetainedClosureInt(closure:Dynamic):Int
 		return RuntimeNative.call_closure_i32(closure);
 
 	public static function retainObject(module:LoadedModule, stableIndex:Int):Dynamic
-		return RuntimeNative.call_object(cast module, stableIndex);
+		return module.access(function(handle) return RuntimeNative.call_object(handle, stableIndex));
 
 	public static function callIntObject(module:LoadedModule, stableIndex:Int, argument:Dynamic):Int
-		return RuntimeNative.call_i32_object(cast module, stableIndex, argument);
+		return module.access(function(handle) return RuntimeNative.call_i32_object(handle, stableIndex, argument));
 
 	public static function retainedCodeAllocationCount(module:LoadedModule):Int
-		return RuntimeNative.allocation_count(cast module);
+		return module.access(RuntimeNative.allocation_count);
 
 	public static function patchJitCount(module:LoadedModule):Int
-		return RuntimeNative.patch_jit_count(cast module);
+		return module.access(RuntimeNative.patch_jit_count);
 
 	public static function retiredCodeAllocationCount(module:LoadedModule):Int
-		return RuntimeNative.retired_allocation_count(cast module);
+		return module.access(RuntimeNative.retired_allocation_count);
 
 	public static function metadataTypeCount(module:LoadedModule):Int
-		return RuntimeNative.type_count(cast module);
+		return module.access(RuntimeNative.type_count);
 
 	public static function metadataTypeCapacity(module:LoadedModule):Int
-		return RuntimeNative.type_capacity(cast module);
+		return module.access(RuntimeNative.type_capacity);
 
 	public static function liveRevision(module:LoadedModule):Int
-		return RuntimeNative.revision(cast module);
+		return module.access(RuntimeNative.revision);
 
 	@:noCompletion public static function injectPatchFailure(module:LoadedModule, stage:Int):Void
-		RuntimeNative.set_patch_failure_stage(cast module, stage);
+		module.access(function(handle) RuntimeNative.set_patch_failure_stage(handle, stage));
 
 	public static function dispose(module:LoadedModule):Void
-		RuntimeNative.dispose(cast module);
+		module.close(RuntimeNative.dispose);
 
 	public static function patchSet(module:LoadedModule, patch:PatchSet):Void {
-		var status:RuntimeStatus = RuntimeNative.patch(cast module, patch.bytes.getData(), patch.bytes.length);
+		var status:RuntimeStatus = module.access(function(handle) return RuntimeNative.patch(handle, patch.bytes.getData(), patch.bytes.length));
 		if (status != RuntimeStatus.Ok) {
 			var statusCode:Int = status;
 			throw new RuntimeError(status, 'HashLink rejected the patch transaction (status $statusCode)');

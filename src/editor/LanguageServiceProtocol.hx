@@ -13,6 +13,7 @@ import compiler.modules.CompilerPublication.ReconnectDecision;
 import compiler.modules.CompilerPublication.ReconnectReason;
 import haxe.crypto.Base64;
 import haxe.Json;
+import sys.thread.Mutex;
 
 /** JSON-lines adapter for the persistent compiler service.
 
@@ -22,6 +23,8 @@ import haxe.Json;
 class LanguageServiceProtocol {
 	final service:LanguageService;
 	final activeRequests:Map<String, CancellationToken> = [];
+	final activeRequestsMutex = new Mutex();
+	final serviceMutex = new Mutex();
 
 	public function new(?service:LanguageService) {
 		this.service = service == null ? new LanguageService() : service;
@@ -48,7 +51,14 @@ class LanguageServiceProtocol {
 			return Json.stringify({id: id, ok: true, result: {cancelled: cancelled}});
 		}
 		var requestKey = key(id);
+		activeRequestsMutex.acquire();
+		if (activeRequests.exists(requestKey)) {
+			activeRequestsMutex.release();
+			return failure(id, "E_DUPLICATE_REQUEST", "Request id is already active");
+		}
 		activeRequests.set(requestKey, token);
+		activeRequestsMutex.release();
+		serviceMutex.acquire();
 		try {
 			token.check();
 			var result:Dynamic;
@@ -135,31 +145,42 @@ class LanguageServiceProtocol {
 					throw 'Unknown language-service method "$method"';
 			}
 			token.check();
-			activeRequests.remove(requestKey);
+			finishRequest(requestKey);
 			return Json.stringify({id: id, ok: true, result: result});
 		} catch (error:CancellationError) {
-			activeRequests.remove(requestKey);
+			finishRequest(requestKey);
 			return failure(id, "E_CANCELLED", "Request cancelled");
 		} catch (error:CompileError) {
-			activeRequests.remove(requestKey);
+			finishRequest(requestKey);
 			return failureDiagnostic(id, error.diagnostic);
 		} catch (error:Dynamic) {
-			activeRequests.remove(requestKey);
+			finishRequest(requestKey);
 			return failure(id, "E0000", Std.string(error));
 		}
 	}
 
+	function finishRequest(requestKey:String):Void {
+		serviceMutex.release();
+		activeRequestsMutex.acquire();
+		activeRequests.remove(requestKey);
+		activeRequestsMutex.release();
+	}
+
 	/** Cancel a currently running request by its JSON id. */
 	public function cancel(requestId:Dynamic):Bool {
+		activeRequestsMutex.acquire();
 		var request = activeRequests.get(key(requestId));
-		if (request == null)
+		if (request == null) {
+			activeRequestsMutex.release();
 			return false;
+		}
 		request.cancel();
+		activeRequestsMutex.release();
 		return true;
 	}
 
 	static function key(value:Dynamic):String
-		return value == null ? "null" : Std.string(value);
+		return value == null ? "null" : Std.isOfType(value, String) ? "string:" + cast(value, String) : "value:" + Json.stringify(value);
 
 	static function requiredString(request:Dynamic, name:String):String {
 		var value:Dynamic = Reflect.field(request, name);
