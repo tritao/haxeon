@@ -60,9 +60,9 @@ class Typer {
 
 	public static function typeSelected(program:AstProgram, selected:Map<String, Bool>,
 			?externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>, ?entryPoint:String):TypedProgram
-		return typeSelectedSemantic(SemanticProgram.analyze(program), selected, externals, entryPoint);
+		return typeAnalyzed(SemanticProgram.analyze(program), selected, externals, entryPoint);
 
-	public static function typeSelectedSemantic(semantic:SemanticProgram, selected:Map<String, Bool>,
+	public static function typeAnalyzed(semantic:SemanticProgram, selected:Map<String, Bool>,
 			?externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>, ?entryPoint:String):TypedProgram
 		return new Typer(externals).typeProgram(semantic, selected, true, entryPoint);
 

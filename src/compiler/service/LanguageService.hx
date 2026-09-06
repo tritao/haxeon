@@ -395,7 +395,7 @@ class LanguageService {
 		};
 
 	function globalSymbol(state:ModuleState, name:String):Null<SemanticSymbol> {
-		var declaration = compiler.semanticWorkspace().global(state, name);
+		var declaration = compiler.semanticWorkspace.global(state, name);
 		return declaration == null ? null : symbol(declaration.state, declaration.key, declaration.span, null);
 	}
 
@@ -415,7 +415,7 @@ class LanguageService {
 	}
 
 	function memberSymbol(type:CompilerType, name:String):Null<SemanticSymbol> {
-		var declaration = compiler.semanticWorkspace().member(type, name);
+		var declaration = compiler.semanticWorkspace.member(type, name);
 		return declaration == null ? null : symbol(declaration.state, declaration.key, declaration.span, null);
 	}
 

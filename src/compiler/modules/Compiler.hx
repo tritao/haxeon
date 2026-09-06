@@ -16,6 +16,7 @@ import compiler.types.FieldInference;
 import compiler.types.SignatureInference;
 import compiler.types.Typer;
 import compiler.types.SemanticSignature;
+import compiler.types.SemanticProgram;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.hl.HlCode;
 import compiler.hl.HlModuleAssembler;
@@ -93,9 +94,7 @@ typedef ValidationResult = {
  */
 class Compiler {
 	public final modules:Map<String, ModuleState> = [];
-
-	public function semanticWorkspace():SemanticWorkspace
-		return new SemanticWorkspace(modules);
+	public final semanticWorkspace:SemanticWorkspace;
 
 	/** Last successfully assembled typed program; failed edits never replace it. */
 	public var lastTypedProgram:Null<TypedProgram> = null;
@@ -118,6 +117,7 @@ class Compiler {
 	var cachedCompileResult:Null<CompileResult>;
 
 	public function new(?identityState:Bytes, ?nativeConfiguration:Array<NativeFunction>) {
+		semanticWorkspace = new SemanticWorkspace(modules);
 		natives = new NativeRegistry(nativeConfiguration);
 		if (identityState == null) {
 			moduleId = HlRuntimeIdentity.createModuleId();
@@ -605,7 +605,7 @@ class Compiler {
 		try {
 			if (token != null)
 				token.check();
-			var semantic = semanticWorkspace().analyze({
+			var semantic = SemanticProgram.analyze({
 				packageName: null,
 				imports: [],
 				importAliases: [],
@@ -617,7 +617,7 @@ class Compiler {
 				classes: classes,
 				functions: programFunctions
 			});
-			typedNew = Typer.typeSelectedSemantic(semantic, selected, nativeSignatures(), entryPoint);
+			typedNew = Typer.typeAnalyzed(semantic, selected, nativeSignatures(), entryPoint);
 		} catch (error:CompileError) {
 			for (name in names) {
 				var state = modules.get(name);

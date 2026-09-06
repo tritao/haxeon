@@ -4,6 +4,7 @@ import compiler.Ast;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
+import compiler.Source.SourceFile;
 import compiler.types.Type.AnonymousField;
 import compiler.types.Type.CompilerType;
 
@@ -51,7 +52,13 @@ class DeclarationIndex {
 	final aliasSpans:Map<String, SourceSpan> = [];
 	final fallbackSpan:SourceSpan;
 
-	public function new(program:AstProgram, validate:Bool = true, ?emptySpan:SourceSpan) {
+	public static function validated(program:AstProgram):DeclarationIndex
+		return new DeclarationIndex(program, true, null);
+
+	public static function forModule(program:AstProgram, source:SourceFile):DeclarationIndex
+		return new DeclarationIndex(program, false, source.span(0, 0));
+
+	function new(program:AstProgram, validate:Bool, emptySpan:Null<SourceSpan>) {
 		fallbackSpan = firstSpan(program, emptySpan);
 		for (alias in program.aliases) {
 			declareType(alias.name, DeclarationKind.Alias, alias.span);

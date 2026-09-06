@@ -18,10 +18,6 @@ class SemanticWorkspace {
 	public function new(modules:Map<String, ModuleState>)
 		this.modules = modules;
 
-	/** Validate the canonical program assembled from the workspace snapshots. */
-	public function analyze(program:compiler.Ast.AstProgram):compiler.types.SemanticProgram
-		return compiler.types.SemanticProgram.analyze(program);
-
 	public function global(from:ModuleState, name:String):Null<WorkspaceDeclaration> {
 		var visible = [from];
 		for (dependency in from.dependencies) {

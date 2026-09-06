@@ -9,7 +9,7 @@ class SemanticProgram {
 
 	public static function analyze(program:AstProgram):SemanticProgram {
 		var inferred = SignatureInference.inferProgram(program);
-		return new SemanticProgram(inferred, new DeclarationIndex(inferred));
+		return new SemanticProgram(inferred, DeclarationIndex.validated(inferred));
 	}
 
 	function new(program:AstProgram, declarations:DeclarationIndex) {

@@ -14,7 +14,7 @@ class SemanticProgramMain {
 		expect(semantic.program.functions[0].arguments[0].type == IntType, "semantic analysis should retain the program paired with its index");
 		expect(semantic.declarations.symbol(DeclarationKind.Function, "identity") != null, "semantic analysis should own validated declarations");
 		var selected:Map<String, Bool> = ["identity" => true, "main" => true];
-		var typed = Typer.typeSelectedSemantic(semantic, selected);
+		var typed = Typer.typeAnalyzed(semantic, selected);
 		expect(typed.functions.length == 2, "Typer should consume the analyzed semantic program");
 
 		Sys.println("PASS: validated semantic program feeds Typer");

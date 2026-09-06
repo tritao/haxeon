@@ -12,6 +12,6 @@ class SemanticModel {
 	public function new(program:AstProgram, source:SourceFile, revision:Int) {
 		this.revision = revision;
 		this.program = program;
-		this.declarations = new DeclarationIndex(program, false, source.span(0, 0));
+		this.declarations = DeclarationIndex.forModule(program, source);
 	}
 }
