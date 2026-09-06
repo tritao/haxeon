@@ -21,11 +21,14 @@ class HldiClientMain {
 		var session = new ProfilerSession(client);
 		try {
 			session.start(500);
-			require(session.metadata != null && session.metadata.schema == 2, "expected schema 2 metadata");
+			require(session.metadata != null && session.metadata.schema == 3, "expected schema 3 metadata");
 			require(session.metadata.symbols.length > 0, "expected JIT symbols");
 			var sourceMappings = 0;
 			for (symbol in session.metadata.symbols)
-				sourceMappings += symbol.lines.length;
+				for (location in symbol.lines) {
+					require(location.endOffset > location.offset, "expected a non-empty opcode range");
+					sourceMappings++;
+				}
 			require(sourceMappings > 0, "expected source mappings");
 
 			for (_ in 0...8) {

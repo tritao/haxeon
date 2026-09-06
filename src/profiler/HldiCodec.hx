@@ -66,7 +66,7 @@ class HldiReader {
 class HldiCodec {
 	public static function metadata(bytes:Bytes):HldiMetadata {
 		var input = new HldiReader(bytes), schema = input.u32();
-		if (schema != 1 && schema != 2)
+		if (schema < 1 || schema > 3)
 			throw 'Unsupported HLDI metadata schema $schema';
 		var moduleCount = count(input, "modules"), symbols = [], revisions = new Map<String, Int>();
 		for (_ in 0...moduleCount) {
@@ -84,10 +84,14 @@ class HldiCodec {
 					var lines:Array<HldiSourceLine> = [];
 					if (schema >= 2)
 						for (_ in 0...count(input, "source lines")) {
-							var jitOffset = input.u32(), fileId = input.u32(), line = input.u32();
-							if (jitOffset < 0 || jitOffset >= size || fileId < 0 || fileId >= files.length || line <= 0)
+							var jitOffset = input.u32(), endOffset = schema >= 3 ? input.u32() : 0;
+							var opcodeIndex = schema >= 3 ? input.u32() : 0, opcode = schema >= 3 ? input.u32() : 0;
+							var fileId = input.u32(), line = input.u32();
+							if (jitOffset < 0 || jitOffset >= size || (schema >= 3 && (endOffset <= jitOffset || endOffset > size)) || fileId < 0 || fileId >= files.length || line <= 0)
 								throw 'Invalid source mapping for $name';
-							lines.push(new HldiSourceLine(jitOffset, files[fileId], line));
+							if (lines.length != 0 && haxe.Int32.ucompare(jitOffset, lines[lines.length - 1].offset) < 0)
+								throw 'Unsorted source mapping for $name';
+							lines.push(new HldiSourceLine(jitOffset, endOffset, opcodeIndex, opcode, files[fileId], line));
 						}
 					var start = Int64.add(base, Int64.ofInt(offset)), end = Int64.add(start, Int64.ofInt(size));
 					symbols.push(new HldiSymbol(moduleId, revision, functionId, start, end, name, lines));

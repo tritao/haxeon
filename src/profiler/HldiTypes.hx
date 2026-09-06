@@ -35,11 +35,17 @@ class HldiStatus {
 
 class HldiSourceLine {
 	public final offset:Int;
+	public final endOffset:Int;
+	public final opcodeIndex:Int;
+	public final opcode:Int;
 	public final file:String;
 	public final line:Int;
 
-	public function new(offset:Int, file:String, line:Int) {
+	public function new(offset:Int, endOffset:Int, opcodeIndex:Int, opcode:Int, file:String, line:Int) {
 		this.offset = offset;
+		this.endOffset = endOffset;
+		this.opcodeIndex = opcodeIndex;
+		this.opcode = opcode;
 		this.file = file;
 		this.line = line;
 	}
@@ -75,7 +81,10 @@ class HldiSymbol {
 			else
 				high = middle;
 		}
-		return low == 0 ? null : lines[low - 1];
+		if (low == 0)
+			return null;
+		var location = lines[low - 1];
+		return location.endOffset != 0 && haxe.Int32.ucompare(relative.low, location.endOffset) >= 0 ? null : location;
 	}
 }
 
