@@ -113,6 +113,7 @@ typedef ValidationResult = {
  */
 @:allow(compiler.CompilationTransaction)
 @:allow(compiler.CompilationPipeline)
+@:allow(compiler.BackendAssembly)
 class Compiler {
 	final genericSpecializations = new GenericSpecializationRegistry();
 

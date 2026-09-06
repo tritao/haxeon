@@ -490,28 +490,15 @@ class CompilationPipeline {
 			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew), IrGenerator.staticInitializerFrom(typedNew, initializationClasses),
 			entryPoint);
 		var irAssemblyDoneAt = Sys.time() * 1000.0;
-		var nextAbi = RuntimeAbi.describe(ir),
-			decision = PatchPlanner.plan(publishedAbi, nextAbi),
-			reloadReasons:Array<AbiChange> = switch decision {
-				case Patch: [];
-				case ReloadDomain(reasons): reasons;
-				case Reject(diagnostics): throw diagnostics.join("; ");
-			};
-		reloadReasons.sort(function(a, b) return Reflect.compare(Std.string(a), Std.string(b)));
-		if (reloadReasons.length > 0)
-			decision = ReloadDomain(reloadReasons);
-		var abiPlanningDoneAt = Sys.time() * 1000.0;
-		var candidateAssembler = compiledOnce
-			&& PatchPlanner.requiresFreshLayout(decision) ? new HlModuleAssembler(Compiler.copyIndices(assembler.cache.stableIds)) : assembler.copy();
-		var assembly = candidateAssembler.assemble(ir, compiler.rehydratedChanges(regenerated, ir), decision);
-		var backendAssemblyDoneAt = Sys.time() * 1000.0;
-		if (token != null)
-			token.check();
-		var patchBytes = reloadReasons.length > 0
-			|| assembly.changedFunctions.length == 0 ? null : HlPatchWriter.encode(assembly.module, moduleId, assembly.changedSlots,
-				compiler.stableIdsBySlot(candidateAssembler, assembly.functionIndices), assembly.revision - 1, assembly.revision, assembly.baseInts,
-				assembly.baseFloats, assembly.baseStrings, assembly.baseTypes);
-		var patchEncodingDoneAt = Sys.time() * 1000.0;
+		var backend = BackendAssembly.assemble(compiler, ir, regenerated, token);
+		var nextAbi = backend.abi,
+			reloadReasons = backend.reloadReasons,
+			candidateAssembler = backend.assembler,
+			assembly = backend.assembly;
+		var patchBytes = backend.patchBytes,
+			abiPlanningDoneAt = backend.abiPlanningDoneAt,
+			backendAssemblyDoneAt = backend.backendAssemblyDoneAt,
+			patchEncodingDoneAt = backend.patchEncodingDoneAt;
 		compiler.lastTypedProgram = typedNew;
 		compiler.publishedAbi = nextAbi;
 		compiler.assembler = candidateAssembler;
