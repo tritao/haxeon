@@ -14,6 +14,7 @@ module generation.
 | Patch JIT image and decoded function metadata | HashLink patch transaction | `hl_module` patch-code owner | Dispatch slots, escaped closures, active calls | Retain replaced images through module release until borrower tracking exists |
 | Constant and string append storage | HashLink patch transaction | `hl_module` | Patched code and appended type metadata | Runtime-module release |
 | Globals storage | HashLink module allocator | Loaded module generation | Generated code and rooted heap values | Runtime-module release after plugin deactivation |
+| Managed objects, closures, and array storage | HashLink GC with an explicit allocation owner | `hl_module` whose type or callable produced the value | Host roots, globals, other managed values | GC sweep removes ownership records when values become unreachable |
 | Plugin state envelope | Host Haxe heap | `RuntimeDomain` transition | Candidate restore call | End of transition; payload is copied serialized text and contains no generation pointers |
 | Candidate module | Host loader | `RuntimeDomain` transition | Candidate plugin before publication | Dispose on pre-publication failure, or transfer ownership to the domain at publication |
 | Retired module | `RuntimeDomain` | Domain retirement backlog | Permitted in-flight calls only | Disposal after deactivation/publication; failed disposal remains tracked for retry |
@@ -57,3 +58,11 @@ Exhaustion therefore requests a new module generation through the normal reload
 path. Arena entries and their auxiliary allocations are reclaimed at module
 shutdown; borrower-aware reclamation within a live generation remains
 unverified and is intentionally not attempted.
+
+HashLink records module ownership when a managed allocation is created. A major
+collection removes records for dead allocations, and the runtime exposes the
+remaining per-module count for diagnostics and reclamation tests. Closure and
+array allocations pass their logical module owner explicitly because their GC
+header type can be synthetic or shared. A zero count covers managed allocations
+only; it is not permission to unmap a module because native caches, JIT entry
+points, and other non-GC borrowers still need separate ownership tracking.

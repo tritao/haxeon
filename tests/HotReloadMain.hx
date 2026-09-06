@@ -338,6 +338,8 @@ class HotReloadMain {
 		var initial = compiler.compile("Main"),
 			loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
 		var retained = Runtime.retainObject(loaded, initial.functionIds.get("Main.make"));
+		if (Runtime.liveAllocationCount(loaded) == 0)
+			throw "retained object was not attributed to its module";
 		compiler.update("Main.hx",
 			"class Box { public var value:Int; public function new(value:Int):Void { this.value = value; } } function make():Box { return new Box(40); } function read(box:Box):Int { return box.value + 2; } function main():Int { return read(make()); }");
 		var changed = compiler.compile("Main");
@@ -359,6 +361,8 @@ class HotReloadMain {
 		var first = compiler.compile("Main");
 		Runtime.patchSet(loaded, new PatchSet(initial.revision, first.revision, first.patchBytes, first.changedFunctions));
 		var retained = Runtime.retainClosure(loaded, makeId);
+		if (Runtime.liveAllocationCount(loaded) == 0)
+			throw "retained closure was not attributed to its module";
 		if (Runtime.callRetainedClosureInt(retained) != 41)
 			throw "patched closure did not capture the published function";
 		compiler.update("Main.hx",
