@@ -1867,8 +1867,8 @@ class Compiler {
 
 	function nativePrefixExists(prefix:String):Bool {
 		for (name in natives.keys()) {
-			var dot = name.indexOf(".");
-			if (dot > 0 && name.substr(0, dot) == prefix)
+			var nativeName:String = name;
+			if (firstPathSegment(nativeName) == prefix && nativeName != prefix)
 				return true;
 		}
 		return false;
@@ -1879,15 +1879,15 @@ class Compiler {
 		while (true) {
 			if (modules.exists(candidate))
 				return candidate;
-			var separator = candidate.lastIndexOf(".");
-			if (separator < 0)
+			var parent = parentPath(candidate);
+			if (parent.length == 0)
 				return null;
-			candidate = candidate.substr(0, separator);
+			candidate = parent;
 		}
 	}
 
 	static function isPlatformDependency(path:String):Bool {
-		var root = path.split(".")[0];
+		var root = firstPathSegment(path);
 		return root == "haxe" || root == "sys" || root == "hl" || root == "Array" || root == "Math" || root == "Reflect" || root == "Std"
 			|| root == "StringTools" || root == "Type";
 	}
@@ -1897,16 +1897,25 @@ class Compiler {
 	}
 
 	static function addQualifiedOwner(name:String, dependencies:Map<String, Bool>):Void {
-		var parts = name.split("."), owner = [];
-		if (parts.length < 2)
-			return;
-		for (part in parts) {
-			owner.push(part);
-			if (part.length > 0 && part.charCodeAt(0) >= 65 && part.charCodeAt(0) <= 90) {
-				dependencies.set(owner.join("."), true);
-				return;
+		var length = name.length, segmentStart = 0, hasSeparator = false;
+		for (cursor in 0...length)
+			if (name.charCodeAt(cursor) == 46) {
+				hasSeparator = true;
+				break;
 			}
-		}
+		if (!hasSeparator)
+			return;
+		for (cursor in 0...length + 1)
+			if (cursor == length || name.charCodeAt(cursor) == 46) {
+				if (cursor > segmentStart) {
+					var first = name.charCodeAt(segmentStart);
+					if (first >= 65 && first <= 90) {
+						dependencies.set(name.substring(0, cursor), true);
+						return;
+					}
+				}
+				segmentStart = cursor + 1;
+			}
 	}
 
 	static function scanCalls(statement:AstStatement, calls:Map<String, Bool>, aliases:Map<String, String>):Void
@@ -1961,8 +1970,9 @@ class Compiler {
 				scanCallExpression(expression, calls, aliases);
 				for (switchCase in cases) {
 					scanCallExpression(switchCase.value, calls, aliases);
-					if (switchCase.guard != null)
-						scanCallExpression(switchCase.guard, calls, aliases);
+					var guard = switchCase.guard;
+					if (guard != null)
+						scanCallExpression(guard, calls, aliases);
 					for (s in switchCase.statements)
 						scanCalls(s, calls, aliases);
 				}
@@ -1975,7 +1985,8 @@ class Compiler {
 	static function scanCallExpression(e:AstExpression, calls:Map<String, Bool>, aliases:Map<String, String>):Void
 		switch e {
 			case Call(name, args, _):
-				calls.set(aliases.get(name) == null ? name : aliases.get(name), true);
+				var target = aliases.exists(name) ? aliases.get(name) : name;
+				calls.set(target, true);
 				for (a in args)
 					scanCallExpression(a, calls, aliases);
 			case MethodCall(object, _, args, _):
@@ -2015,12 +2026,14 @@ class Compiler {
 				scanCallExpression(subject, calls, aliases);
 				for (switchCase in cases) {
 					scanCallExpression(switchCase.value, calls, aliases);
-					if (switchCase.guard != null)
-						scanCallExpression(switchCase.guard, calls, aliases);
+					var guard = switchCase.guard;
+					if (guard != null)
+						scanCallExpression(guard, calls, aliases);
 					scanCallExpression(switchCase.result, calls, aliases);
 				}
-				if (fallback != null)
-					scanCallExpression(fallback, calls, aliases);
+				var fallbackExpression = fallback;
+				if (fallbackExpression != null)
+					scanCallExpression(fallbackExpression, calls, aliases);
 			case ObjectLiteral(fields, _):
 				for (field in fields)
 					scanCallExpression(field.value, calls, aliases);
@@ -2067,8 +2080,8 @@ class Compiler {
 	static function rememberAlias(name:String, expression:AstExpression, aliases:Map<String, String>):Void
 		switch expression {
 			case Variable(target, _):
-				var resolved = aliases.get(target);
-				aliases.set(name, resolved == null ? target : resolved);
+				var resolved = aliases.exists(target) ? aliases.get(target) : target;
+				aliases.set(name, resolved);
 			default:
 				aliases.remove(name);
 		}
@@ -2110,8 +2123,9 @@ class Compiler {
 					collectLambdaExpression(expression, functionName, module, generatedByModule);
 					for (switchCase in cases) {
 						collectLambdaExpression(switchCase.value, functionName, module, generatedByModule);
-						if (switchCase.guard != null)
-							collectLambdaExpression(switchCase.guard, functionName, module, generatedByModule);
+						var guard = switchCase.guard;
+						if (guard != null)
+							collectLambdaExpression(guard, functionName, module, generatedByModule);
 						collectLambdas(switchCase.statements, functionName, module, generatedByModule);
 					}
 					collectLambdas(defaultBranch, functionName, module, generatedByModule);
@@ -2121,12 +2135,14 @@ class Compiler {
 	static function collectLambdaExpression(expression:AstExpression, functionName:String, module:String, generatedByModule:Map<String, Map<String, Bool>>):Void
 		switch expression {
 			case Lambda(_, body, span):
-				var names = generatedByModule.get(module);
-				if (names == null) {
+				var names:Map<String, Bool>;
+				if (generatedByModule.exists(module))
+					names = generatedByModule.get(module);
+				else {
 					names = [];
 					generatedByModule.set(module, names);
 				}
-				names.set('$' + 'lambda:' + functionName + ':' + span.start, true);
+				names.set('$' + 'lambda:' + functionName + ':' + Std.string(span.start), true);
 				collectLambdas(body, functionName, module, generatedByModule);
 			case Call(_, args, _):
 				for (argument in args)
@@ -2165,12 +2181,14 @@ class Compiler {
 				collectLambdaExpression(subject, functionName, module, generatedByModule);
 				for (switchCase in cases) {
 					collectLambdaExpression(switchCase.value, functionName, module, generatedByModule);
-					if (switchCase.guard != null)
-						collectLambdaExpression(switchCase.guard, functionName, module, generatedByModule);
+					var guard = switchCase.guard;
+					if (guard != null)
+						collectLambdaExpression(guard, functionName, module, generatedByModule);
 					collectLambdaExpression(switchCase.result, functionName, module, generatedByModule);
 				}
-				if (fallback != null)
-					collectLambdaExpression(fallback, functionName, module, generatedByModule);
+				var fallbackExpression = fallback;
+				if (fallbackExpression != null)
+					collectLambdaExpression(fallbackExpression, functionName, module, generatedByModule);
 			case ObjectLiteral(fields, _):
 				for (field in fields)
 					collectLambdaExpression(field.value, functionName, module, generatedByModule);
@@ -2214,8 +2232,8 @@ class Compiler {
 		return SemanticSignature.parsedFunction(fn, aliases);
 
 	static function owner(name:String, entry:String):String {
-		var dot = name.indexOf(".");
-		return dot < 0 ? entry : name.substr(0, dot);
+		var first = firstPathSegment(name);
+		return first == name ? entry : first;
 	}
 
 	static function copyIndices(source:Map<String, Int>):Map<String, Int> {
