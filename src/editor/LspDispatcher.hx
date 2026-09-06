@@ -118,12 +118,19 @@ class LspDispatcher {
 	function runDebounce():Void {
 		while (true) {
 			debounceWake.wait();
-			while (debounceWake.wait(debounceSeconds)) {}
-			available.acquire();
-			var done = finished, generation = debounceGeneration;
-			available.release();
+			var done = false;
+			while (true) {
+				available.acquire();
+				done = finished;
+				available.release();
+				if (done || !debounceWake.wait(debounceSeconds))
+					break;
+			}
 			if (done)
 				break;
+			available.acquire();
+			var generation = debounceGeneration;
+			available.release();
 			enqueue({
 				message: "",
 				diagnostics: true,

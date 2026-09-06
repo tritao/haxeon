@@ -132,6 +132,44 @@ class LspProtocolMain {
 		dispatcher.finish();
 		if (Json.parse(cancelledResponse).error.code != -32800)
 			throw "LSP did not cancel an active completion request";
+		var foregroundService = new LanguageService(),
+			foregroundProtocol = new LspProtocol(foregroundService),
+			foregroundResponse:String = null,
+			foregroundDone = new sys.thread.Lock(),
+			foregroundDispatcher = new LspDispatcher(foregroundProtocol, response -> {
+				var parsed:Dynamic = Json.parse(response);
+				if (parsed.id == 89) {
+					foregroundResponse = response;
+					foregroundDone.release();
+				}
+			}, 4, 5000);
+		foregroundDispatcher.dispatch(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: uri,
+					languageId: "haxe",
+					version: 1,
+					text: source
+				}
+			}
+		}));
+		foregroundDispatcher.dispatch(Json.stringify({
+			jsonrpc: "2.0",
+			id: 89,
+			method: "textDocument/completion",
+			params: {textDocument: {uri: uri}, position: {line: 0, character: source.length}}
+		}));
+		foregroundDone.wait();
+		foregroundDispatcher.finish();
+		var foregroundCompletion:Dynamic = Json.parse(foregroundResponse),
+			foregroundHasMain = false;
+		for (item in cast(foregroundCompletion.result.items, Array<Dynamic>))
+			if (item.label == "main")
+				foregroundHasMain = true;
+		if (!foregroundHasMain || foregroundProtocol.lastForegroundAnalysisMs < 0)
+			throw "first-open completion did not demand a current semantic snapshot";
 		var diagnosticService = new LanguageService(),
 			diagnosticProtocol = new LspProtocol(diagnosticService),
 			choiceUri = "file:///workspace/shape/Choice.hx",
@@ -275,7 +313,7 @@ class LspProtocolMain {
 		}
 		if (interactiveIndex < 0 || diagnosticIndex <= interactiveIndex)
 			throw "interactive LSP request was not prioritized over pending diagnostics";
-		if (latestChoiceVersion != 2 || scheduledConsumerDiagnostics == 0)
+		if (latestChoiceVersion != 2 || scheduledConsumerDiagnostics == 0 || scheduledProtocol.lastBackgroundAnalysisMs < 0)
 			throw "debounced diagnostics did not publish only the latest document generation";
 		var definition = request(protocol, Json.stringify({
 			jsonrpc: "2.0",

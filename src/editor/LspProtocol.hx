@@ -32,6 +32,10 @@ class LspProtocol {
 	var diagnosticToken:Null<CancellationToken>;
 	var deferDiagnostics = false;
 	var analysisGeneration = 0;
+
+	public var lastForegroundAnalysisMs(default, null):Float = 0.0;
+	public var lastBackgroundAnalysisMs(default, null):Float = 0.0;
+
 	var shutdownRequested = false;
 	var exitRequested = false;
 
@@ -65,14 +69,14 @@ class LspProtocol {
 				case "textDocument/didOpen": synchronize(request, true);
 				case "textDocument/didChange": synchronize(request, false);
 				case "textDocument/didClose": close(request);
-				case "textDocument/documentSymbol": [response(id, documentSymbols(request))];
+				case "textDocument/documentSymbol": cancellable(id, token -> documentSymbols(request, token));
 				case "textDocument/completion": cancellable(id, token -> completion(request, token));
-				case "textDocument/hover": [response(id, hover(request))];
-				case "textDocument/signatureHelp": [response(id, signatureHelp(request))];
-				case "textDocument/definition": [response(id, definition(request))];
+				case "textDocument/hover": cancellable(id, token -> hover(request, token));
+				case "textDocument/signatureHelp": cancellable(id, token -> signatureHelp(request, token));
+				case "textDocument/definition": cancellable(id, token -> definition(request, token));
 				case "textDocument/references": cancellable(id, token -> references(request, token));
-				case "textDocument/prepareRename": [response(id, prepareRename(request))];
-				case "textDocument/rename": [response(id, rename(request))];
+				case "textDocument/prepareRename": cancellable(id, token -> prepareRename(request, token));
+				case "textDocument/rename": cancellable(id, token -> rename(request, token));
 				case "$/cancelRequest":
 					cancel(request);
 					[];
@@ -112,6 +116,7 @@ class LspProtocol {
 		diagnosticMutex.acquire();
 		diagnosticToken = token;
 		diagnosticMutex.release();
+		var started = Sys.time();
 		try {
 			for (target in targets)
 				try
@@ -121,9 +126,11 @@ class LspProtocol {
 				catch (_:CompileError) {} catch (_:Dynamic) {}
 		} catch (_:CancellationError) {
 			clearDiagnosticToken(token);
+			lastBackgroundAnalysisMs = (Sys.time() - started) * 1000.0;
 			return [];
 		}
 		clearDiagnosticToken(token);
+		lastBackgroundAnalysisMs = (Sys.time() - started) * 1000.0;
 		return generation == analysisGeneration ? diagnosticNotifications(generation) : [];
 	}
 
@@ -223,8 +230,9 @@ class LspProtocol {
 				+ ":"
 				+ diagnostic.message].join("\n");
 
-	function documentSymbols(request:Dynamic):Array<Dynamic> {
+	function documentSymbols(request:Dynamic, token:CancellationToken):Array<Dynamic> {
 		var document = document(request);
+		ensureAnalyzed(document, token);
 		requireCurrent(document);
 		return [
 			for (symbol in service.documentSymbols(document.path))
@@ -239,8 +247,9 @@ class LspProtocol {
 	}
 
 	function completion(request:Dynamic, token:CancellationToken):Dynamic {
-		var document = document(request),
-			offset = positionOffset(document, position(request));
+		var document = document(request);
+		ensureAnalyzed(document, token);
+		var offset = positionOffset(document, position(request));
 		return {
 			isIncomplete: false,
 			items: [
@@ -256,15 +265,17 @@ class LspProtocol {
 		};
 	}
 
-	function hover(request:Dynamic):Dynamic {
-		var document = document(request),
-			value = service.hover(document.path, positionOffset(document, position(request)));
+	function hover(request:Dynamic, token:CancellationToken):Dynamic {
+		var document = document(request);
+		ensureAnalyzed(document, token);
+		var value = service.hover(document.path, positionOffset(document, position(request)));
 		return value == null ? null : {contents: {kind: "plaintext", value: value}};
 	}
 
-	function signatureHelp(request:Dynamic):Dynamic {
-		var document = document(request),
-			value = service.signatureHelp(document.path, positionOffset(document, position(request)));
+	function signatureHelp(request:Dynamic, token:CancellationToken):Dynamic {
+		var document = document(request);
+		ensureAnalyzed(document, token);
+		var value = service.signatureHelp(document.path, positionOffset(document, position(request)));
 		return value == null ? null : {
 			signatures: [
 				{
@@ -277,8 +288,9 @@ class LspProtocol {
 		};
 	}
 
-	function definition(request:Dynamic):Dynamic {
+	function definition(request:Dynamic, token:CancellationToken):Dynamic {
 		var document = document(request);
+		ensureAnalyzed(document, token);
 		requireCurrent(document);
 		var location = service.definition(document.path, positionOffset(document, position(request)));
 		return location == null ? null : locationJson(location.path, location.span.start, location.span.end);
@@ -286,12 +298,40 @@ class LspProtocol {
 
 	function references(request:Dynamic, token:CancellationToken):Array<Dynamic> {
 		var document = document(request);
+		ensureAnalyzed(document, token);
 		requireCurrent(document);
 		var locations = service.references(document.path, positionOffset(document, position(request)), token);
 		return [
 			for (location in locations)
 				locationJson(location.path, location.span.start, location.span.end)
 		];
+	}
+
+	function ensureAnalyzed(document:LspDocument, token:CancellationToken):Void {
+		if (!deferDiagnostics || service.isCurrent(document.path))
+			return;
+		var module = ModulePath.fromFile(document.path),
+			targets = [for (target in pendingDiagnosticTargets.keys()) target],
+			started = Sys.time();
+		targets.sort(function(left, right) {
+			if (left == module)
+				return -1;
+			if (right == module)
+				return 1;
+			return Reflect.compare(left, right);
+		});
+		for (target in targets) {
+			token.check();
+			pendingDiagnosticTargets.remove(target);
+			try
+				service.analyze(target, token)
+			catch (cancelled:CancellationError)
+				throw cancelled
+			catch (_:CompileError) {} catch (_:Dynamic) {}
+			if (service.isCurrent(document.path))
+				break;
+		}
+		lastForegroundAnalysisMs = (Sys.time() - started) * 1000.0;
 	}
 
 	function cancellable(id:Dynamic, query:CancellationToken->Dynamic):Array<String> {
@@ -336,8 +376,9 @@ class LspProtocol {
 	static function requestKey(id:Dynamic):String
 		return Json.stringify(id);
 
-	function prepareRename(request:Dynamic):Dynamic {
+	function prepareRename(request:Dynamic, token:CancellationToken):Dynamic {
 		var document = document(request);
+		ensureAnalyzed(document, token);
 		requireCurrent(document);
 		var offset = positionOffset(document, position(request));
 		for (token in service.compiler.modules.get(ModulePath.fromFile(document.path)).tokens)
@@ -346,8 +387,9 @@ class LspProtocol {
 		return null;
 	}
 
-	function rename(request:Dynamic):Dynamic {
+	function rename(request:Dynamic, token:CancellationToken):Dynamic {
 		var document = document(request);
+		ensureAnalyzed(document, token);
 		requireCurrent(document);
 		var params:Dynamic = required(request, "params"),
 			edits = service.rename(document.path, positionOffset(document, position(request)), requiredString(params, "newName")),
