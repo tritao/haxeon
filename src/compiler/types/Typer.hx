@@ -992,8 +992,10 @@ class Typer {
 							typedValue = pattern == null ? coerce(typeExpression(switchCase.value, scope, typedExpression.type), typedExpression.type,
 								"switch case", "E1019") : pattern.value;
 						var parsedGuard = switchCase.guard,
-							typedGuard = parsedGuard == null ? null : coerce(typeExpression(parsedGuard, caseScope), TBool, "switch guard", "E1003"),
-							typedBody = typeStatements(switchCase.statements, caseScope, result),
+							typedGuard = parsedGuard == null ? null : coerce(typeExpression(parsedGuard, caseScope), TBool, "switch guard", "E1003");
+						if (typedGuard != null)
+							caseScope = FlowAnalysis.narrowedScope(caseScope, typedGuard, true);
+						var typedBody = typeStatements(switchCase.statements, caseScope, result),
 							constructorIndex = pattern == null ? -1 : pattern.index,
 							enumName:Null<String> = pattern == null ? null : pattern.enumName,
 							bindings:Array<TypedSwitchBinding> = pattern == null ? [] : pattern.bindings,
@@ -1888,8 +1890,10 @@ class Typer {
 						typedValue = pattern == null ? coerce(typeExpression(switchCase.value, scope, typedSubject.type), typedSubject.type, "switch case",
 							"E1019") : pattern.value;
 					var parsedGuard = switchCase.guard,
-						typedGuard = parsedGuard == null ? null : coerce(typeExpression(parsedGuard, caseScope), TBool, "switch guard", "E1003"),
-						typedResult = typeExpression(switchCase.result, caseScope, expectedType == null ? resultType : expectedType),
+						typedGuard = parsedGuard == null ? null : coerce(typeExpression(parsedGuard, caseScope), TBool, "switch guard", "E1003");
+					if (typedGuard != null)
+						caseScope = FlowAnalysis.narrowedScope(caseScope, typedGuard, true);
+					var typedResult = typeExpression(switchCase.result, caseScope, expectedType == null ? resultType : expectedType),
 						enumName:Null<String> = pattern == null ? null : pattern.enumName,
 						constructorIndex = pattern == null ? -1 : pattern.index,
 						predicates:Array<TypedSwitchPredicate> = pattern == null ? [] : pattern.predicates;
