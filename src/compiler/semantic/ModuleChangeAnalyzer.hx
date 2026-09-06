@@ -32,10 +32,13 @@ class ModuleChangeAnalyzer {
 			bodies:Map<String, String> = [];
 		var interfaces:Map<String, String> = [];
 		for (interfaceDecl in ast.interfaces) {
-			var signature = interfaceDecl.name + " extends " + [for (base in interfaceDecl.bases) ModuleCanonicalizer.astTypeName(base)].join(",") + " {" + [
-				for (method in interfaceDecl.methods)
-					method.name + ":" + SemanticSignature.parsedFunction(method, ast.aliases)
-			].join(";") + "}";
+			var signature = interfaceDecl.name
+				+ '<${SemanticSignature.parsedParameters(interfaceDecl.typeParameters, interfaceDecl.typeConstraints, ast.aliases)}>'
+				+ " extends "
+				+ [for (base in interfaceDecl.bases) ModuleCanonicalizer.astTypeName(base)].join(",") + " {" + [
+					for (method in interfaceDecl.methods)
+						method.name + ":" + SemanticSignature.parsedFunction(method, ast.aliases)
+				].join(";") + "}";
 			interfaces.set(interfaceDecl.name, signature);
 			if (state.interfaceFingerprints.get(interfaceDecl.name) != signature)
 				structuralChanged.set('interface:${interfaceDecl.name}', true);
@@ -48,7 +51,8 @@ class ModuleChangeAnalyzer {
 		for (alias in ast.aliases) {
 			var aliasName = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, alias.name),
 				signature = aliasName
-					+ (alias.typeParameters.length == 0 ? "" : '<${alias.typeParameters.join(",")}>')
+					+
+					(alias.typeParameters.length == 0 ? "" : '<${SemanticSignature.parsedParameters(alias.typeParameters, alias.typeConstraints, ast.aliases)}>')
 					+ "="
 					+ SemanticSignature.parsed(alias.type, ast.aliases);
 			aliases.set(aliasName, signature);
@@ -81,7 +85,8 @@ class ModuleChangeAnalyzer {
 		for (abstractDecl in ast.abstracts) {
 			var abstractName = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, abstractDecl.name),
 				signature = abstractName
-					+ (abstractDecl.typeParameters.length == 0 ? "" : '<${abstractDecl.typeParameters.join(",")}>')
+					+
+					(abstractDecl.typeParameters.length == 0 ? "" : '<${SemanticSignature.parsedParameters(abstractDecl.typeParameters, abstractDecl.typeConstraints, ast.aliases)}>')
 					+ "("
 					+ SemanticSignature.parsed(abstractDecl.underlying, ast.aliases)
 					+ ")"
@@ -98,6 +103,25 @@ class ModuleChangeAnalyzer {
 			if (!abstracts.exists(old))
 				structuralChanged.set('abstract:$old', true);
 		state.abstractFingerprints = abstracts;
+		var ownerConstraints:Map<String, String> = [];
+		for (classDecl in ast.classes) {
+			var name = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name),
+				signature = SemanticSignature.parsedParameters(classDecl.typeParameters, classDecl.typeConstraints, ast.aliases);
+			ownerConstraints.set(name, signature);
+			if (state.ownerConstraintFingerprints.get(name) != signature)
+				structuralChanged.set('constraint:$name', true);
+		}
+		for (interfaceDecl in ast.interfaces) {
+			var name = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, interfaceDecl.name),
+				signature = SemanticSignature.parsedParameters(interfaceDecl.typeParameters, interfaceDecl.typeConstraints, ast.aliases);
+			ownerConstraints.set(name, signature);
+			if (state.ownerConstraintFingerprints.get(name) != signature)
+				structuralChanged.set('constraint:$name', true);
+		}
+		for (old in state.ownerConstraintFingerprints.keys())
+			if (!ownerConstraints.exists(old))
+				structuralChanged.set('constraint:$old', true);
+		state.ownerConstraintFingerprints = ownerConstraints;
 		var staticInitializers:Map<String, String> = [],
 			instanceInitializers:Map<String, String> = [];
 		for (classDecl in ast.classes) {

@@ -559,6 +559,8 @@ class TestMain {
 		if (boundedProgram.functions[0].typeConstraints == null || boundedProgram.functions[0].typeConstraints.length != 1)
 			throw "Bounded generic constraint was not preserved by the parser";
 		Typer.type(boundedProgram);
+		Frontend.compile("interface Readable { function read():Int; } interface Writable { function write():Int; } class Both implements Readable, Writable { public function new() {} public function read():Int return 40; public function write():Int return 2; } function consume<T:(Readable, Writable)>(value:T):Int return value.read() + value.write(); function main():Int return consume(new Both());");
+		Frontend.compile("interface Readable { function read():Int; } class Value implements Readable { public function new() {} public function read():Int return 42; } class Pair<T, U:T> {} function main():Int { var pair:Pair<Readable, Value>; return 42; }");
 		Frontend.compile("interface Readable { function read():Int; } class Value implements Readable { public function new() {} public function read():Int return 42; } class Box<T:Readable> { public function new() {} } function main():Int { var box:Box<Value> = new Box<Value>(); return 42; }");
 		expectCompileError("interface Readable { function read():Int; } class Box<T:Readable> {} function main():Int { var box:Box<Int>; return 0; }",
 			'Type argument for "T" on "Box" does not satisfy constraint "interface:Readable<>"');

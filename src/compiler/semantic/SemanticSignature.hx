@@ -62,6 +62,26 @@ class SemanticSignature {
 	public static function parsed(type:AstType, aliases:Array<AstTypeAlias>):String
 		return parsedType(type, [for (alias in aliases) alias.name => alias.type], []);
 
+	public static function parsedParameters(parameters:Array<String>, constraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>,
+			aliases:Array<AstTypeAlias>):String {
+		var definitions:Map<String, AstType> = [for (alias in aliases) alias.name => alias.type];
+		return [
+			for (parameter in parameters)
+				parameter + parsedParameterConstraint(parameter, constraints, definitions)
+		].join(",");
+	}
+
+	static function parsedParameterConstraint(parameter:String, constraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>,
+			definitions:Map<String, AstType>):String {
+		if (constraints == null)
+			return "";
+		var bounds = [
+			for (constraint in constraints)
+				if (constraint.parameter == parameter) parsedType(constraint.type, definitions, [])
+		];
+		return bounds.length == 0 ? "" : bounds.length == 1 ? ":" + bounds[0] : ":(" + bounds.join(",") + ")";
+	}
+
 	static function parsedType(type:AstType, aliases:Map<String, AstType>, resolving:Map<String, Bool>):String
 		return switch type {
 			case IntType: "Int";

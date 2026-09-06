@@ -165,8 +165,10 @@ class DeclarationIndex {
 					validateTypeArguments(name, decl.typeConstraints, abstractSubstitutions, span);
 					TAbstract(name, resolvedArguments, resolveAbstract(decl, span, resolving, abstractSubstitutions));
 				} else if (classes.exists(name) || interfaces.exists(name) || enums.exists(name)) {
-					var declaration:Dynamic = classes.exists(name) ? classes.get(name) : interfaces.exists(name) ? interfaces.get(name) : enums.get(name),
-						parameters:Array<String> = declaration.typeParameters;
+					var parameters = classes.exists(name) ? classes.get(name)
+						.typeParameters : interfaces.exists(name) ? interfaces.get(name).typeParameters : enums.get(name).typeParameters,
+						constraints = classes.exists(name) ? classes.get(name)
+							.typeConstraints : interfaces.exists(name) ? interfaces.get(name).typeConstraints : enums.get(name).typeConstraints;
 					if (arguments.length != parameters.length)
 						fail('Type "$name" expects ${parameters.length} type arguments, got ${arguments.length}', span);
 					var resolvedArguments = [
@@ -176,7 +178,7 @@ class DeclarationIndex {
 					var applied = declarationSubstitutions(name, parameters);
 					for (index in 0...parameters.length)
 						applied.set(parameters[index], resolvedArguments[index]);
-					validateTypeArguments(name, declaration.typeConstraints, applied, span);
+					validateTypeArguments(name, constraints, applied, span);
 					TInstance(classes.exists(name) ? NominalKind.Class : interfaces.exists(name) ? NominalKind.Interface : NominalKind.Enum, name,
 						resolvedArguments);
 				} else {

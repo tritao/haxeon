@@ -313,9 +313,14 @@ class Parser {
 				fail(parameter, 'Duplicate type parameter "${parameter.text}"');
 			result.push(parameter.text);
 			if (match(TokenKind.Colon)) {
-				var constraint = parseType();
-				if (constraints != null)
-					constraints.push({parameter: parameter.text, type: constraint, span: parameter.span.merge(previous().span)});
+				var grouped = match(TokenKind.LeftParen);
+				do {
+					var constraint = parseType();
+					if (constraints != null)
+						constraints.push({parameter: parameter.text, type: constraint, span: parameter.span.merge(previous().span)});
+				} while (grouped && match(TokenKind.Comma));
+				if (grouped)
+					consume(TokenKind.RightParen);
 			}
 		} while (match(TokenKind.Comma));
 		consume(TokenKind.Greater);
