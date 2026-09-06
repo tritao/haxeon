@@ -1,6 +1,7 @@
-package compiler.hl;
+package compiler.hl.persistence;
 
-import compiler.hl.HlModuleAssembler.HlAssemblerState;
+import compiler.hl.incremental.HlModuleAssembler;
+import compiler.hl.incremental.HlModuleAssembler.HlAssemblerState;
 import haxe.io.Bytes;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;

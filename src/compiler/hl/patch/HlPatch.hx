@@ -1,4 +1,6 @@
-package compiler.hl;
+package compiler.hl.patch;
+
+import compiler.hl.HlCode.HlTypeDef;
 
 /** Decoded HLP transaction, including expected live prefixes and replacements. */
 typedef HlPatch = {
@@ -16,7 +18,7 @@ typedef HlPatch = {
 	final ints:Array<Int>;
 	final floats:Array<Float>;
 	final strings:Array<String>;
-	final types:Array<HlCode.HlTypeDef>;
+	final types:Array<HlTypeDef>;
 	final functions:Array<HlPatchFunction>;
 }
 

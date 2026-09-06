@@ -1,8 +1,9 @@
-package compiler.hl;
+package compiler.hl.incremental;
 
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlCode.HlVirtualField;
 import compiler.hl.HlCode.HlObjectMethod;
+import compiler.hl.HlType;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrInterface;

@@ -1,5 +1,5 @@
 import compiler.hl.HlWriter;
-import compiler.hl.HlPatchReader;
+import compiler.hl.patch.HlPatchReader;
 import compiler.ir.HlLower;
 import compiler.modules.Compiler;
 import compiler.Diagnostic.CompileError;

@@ -5,7 +5,7 @@ import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction;
 import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlType;
-import compiler.hl.HlSymbolTable;
+import compiler.hl.incremental.HlSymbolTable;
 import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrTerminator;
 import compiler.ir.Ir.IrBlock;

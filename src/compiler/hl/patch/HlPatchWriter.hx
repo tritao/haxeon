@@ -1,13 +1,15 @@
-package compiler.hl;
+package compiler.hl.patch;
 
 import haxe.io.Bytes as HaxeBytes;
 import haxe.io.BytesOutput;
+import compiler.hl.HlWriter;
+import compiler.hl.HlCode;
 import compiler.hl.HlCode.HlTypeDef;
+import compiler.hl.HlFunction;
 import compiler.hl.HlType as HashLinkType;
 
 /** Encodes versioned, transactional HLP deltas from an assembled module. */
 class HlPatchWriter {
-	public static inline final VERSION = 4;
 	static inline final SYMBOLS = 1;
 	static inline final FUNCTIONS = 2;
 
@@ -81,8 +83,8 @@ class HlPatchWriter {
 		}
 		var out = new BytesOutput();
 		out.bigEndian = false;
-		out.writeString("HLP");
-		out.writeByte(VERSION);
+		out.writeString(HlPatchFormat.MAGIC);
+		out.writeByte(HlPatchFormat.VERSION);
 		out.write(moduleId);
 		writeIndex(out, baseRevision);
 		writeIndex(out, revision);

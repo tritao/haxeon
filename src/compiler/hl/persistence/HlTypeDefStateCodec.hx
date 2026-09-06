@@ -1,10 +1,11 @@
-package compiler.hl;
+package compiler.hl.persistence;
 
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlCode.HlObjectField;
 import compiler.hl.HlCode.HlObjectMethod;
 import compiler.hl.HlCode.HlVirtualField;
 import compiler.hl.HlCode.HlEnumConstructor;
+import compiler.hl.HlType;
 import haxe.io.Bytes;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;

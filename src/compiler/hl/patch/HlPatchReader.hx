@@ -1,9 +1,12 @@
-package compiler.hl;
+package compiler.hl.patch;
 
 import haxe.io.Bytes;
 import haxe.io.BytesInput;
 import compiler.hl.HlCode.HlTypeDef;
-import compiler.hl.HlPatch;
+import compiler.hl.HlOpcode;
+import compiler.hl.HlType;
+import compiler.hl.patch.HlPatch.HlPatchFunction;
+import compiler.hl.patch.HlPatch.HlPatchInstruction;
 
 /** Strict HLP decoder used as the Haxe-side oracle for native patch validation. */
 class HlPatchReader {
@@ -11,9 +14,9 @@ class HlPatchReader {
 		var input = new BytesInput(bytes);
 		input.bigEndian = false;
 		try {
-			if (input.readString(3) != "HLP")
+			if (input.readString(3) != HlPatchFormat.MAGIC)
 				throw "Invalid HLP magic";
-			if (input.readByte() != HlPatchWriter.VERSION)
+			if (input.readByte() != HlPatchFormat.VERSION)
 				throw "Unsupported HLP version";
 			var moduleId = input.read(16),
 				base = readUnsigned(input),

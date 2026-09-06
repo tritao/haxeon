@@ -1,10 +1,12 @@
-package compiler.hl;
+package compiler.hl.incremental;
 
 import compiler.ir.HlLower;
 import compiler.ir.Ir.IrProgram;
 import compiler.abi.PatchPlanner.PatchDecision;
-import compiler.hl.HlFunctionCacheStateCodec;
-import compiler.hl.HlSymbolStateCodec;
+import compiler.hl.HlCode;
+import compiler.hl.persistence.HlFunctionCacheStateCodec;
+import compiler.hl.persistence.HlSymbolStateCodec;
+import compiler.hl.patch.HlPatchWriter;
 
 /** Persisted append-only symbol and function baseline for incremental assembly. */
 typedef HlAssemblerState = {

@@ -1,5 +1,7 @@
-package compiler.hl;
+package compiler.hl.incremental;
 
+import compiler.hl.HlWriter;
+import compiler.hl.HlFunction;
 import compiler.ir.IrFunction;
 import compiler.ir.IrFunctionStateCodec;
 

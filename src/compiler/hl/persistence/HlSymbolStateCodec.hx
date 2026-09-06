@@ -1,9 +1,9 @@
-package compiler.hl;
+package compiler.hl.persistence;
 
-import compiler.hl.HlTypeDefStateCodec;
-import compiler.hl.HlSymbolTable.HlNamedIndex;
-import compiler.hl.HlSymbolTable.HlNamedSlots;
-import compiler.hl.HlSymbolTable.HlSymbolState;
+import compiler.hl.incremental.HlSymbolTable;
+import compiler.hl.incremental.HlSymbolTable.HlNamedIndex;
+import compiler.hl.incremental.HlSymbolTable.HlNamedSlots;
+import compiler.hl.incremental.HlSymbolTable.HlSymbolState;
 import haxe.io.Bytes;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;

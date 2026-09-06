@@ -1,4 +1,4 @@
-package compiler.hl;
+package compiler.hl.persistence;
 
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
