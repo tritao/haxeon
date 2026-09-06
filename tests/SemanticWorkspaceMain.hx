@@ -1,5 +1,5 @@
-import compiler.Lexer;
-import compiler.Parser;
+import compiler.syntax.Lexer;
+import compiler.syntax.Parser;
 import compiler.Source.SourceFile;
 import compiler.modules.ModuleState;
 import compiler.semantic.SemanticWorkspace;

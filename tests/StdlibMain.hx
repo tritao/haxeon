@@ -1,4 +1,4 @@
-import compiler.RuntimeAbi;
+import compiler.runtime.RuntimeAbi;
 import compiler.hl.HlWriter;
 import compiler.Compiler;
 import compiler.Diagnostic.CompileError;

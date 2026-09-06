@@ -1,8 +1,8 @@
-import compiler.Ast.AstExpression;
-import compiler.Ast.AstStatement;
-import compiler.Ast.AstType;
-import compiler.Lexer;
-import compiler.Parser;
+import compiler.syntax.Ast.AstExpression;
+import compiler.syntax.Ast.AstStatement;
+import compiler.syntax.Ast.AstType;
+import compiler.syntax.Lexer;
+import compiler.syntax.Parser;
 import compiler.Source.SourceFile;
 import compiler.semantic.ModuleCanonicalizer;
 

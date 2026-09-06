@@ -1,4 +1,4 @@
-package compiler;
+package compiler.syntax;
 
 import compiler.Source.SourceSpan;
 
@@ -19,7 +19,6 @@ enum AstType {
 	FunctionType(arguments:Array<AstType>, result:AstType);
 	AnonymousType(fields:Array<AstAnonymousField>);
 }
-
 /** One field declared by an anonymous structural type. */
 typedef AstAnonymousField = {final name:String; final type:AstType; final optional:Bool; final span:SourceSpan;}
 

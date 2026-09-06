@@ -1,7 +1,7 @@
 package compiler.semantic;
 
-import compiler.Ast.AstExpression;
-import compiler.Ast.AstStatement;
+import compiler.syntax.Ast.AstExpression;
+import compiler.syntax.Ast.AstStatement;
 
 /** Discovers compiler-generated lambda functions in canonical syntax trees. */
 class LambdaCollector {

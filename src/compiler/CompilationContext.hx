@@ -1,5 +1,6 @@
 package compiler;
 
+import compiler.syntax.Ast.AstFunction;
 import compiler.abi.NativeRegistry.NativeDefinition;
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.hl.incremental.HlModuleAssembler;
@@ -77,7 +78,7 @@ class CompilationContext {
 	public static function mapIsEmpty(values:Map<String, Bool>):Bool
 		return Compiler.mapIsEmpty(values);
 
-	public static function explicitFunctionSignatures(functions:Array<Ast.AstFunction>):Bool
+	public static function explicitFunctionSignatures(functions:Array<AstFunction>):Bool
 		return Compiler.explicitFunctionSignatures(functions);
 
 	public static function copyIndices(source:Map<String, Int>):Map<String, Int>

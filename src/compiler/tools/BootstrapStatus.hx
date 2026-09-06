@@ -1,11 +1,11 @@
 package compiler.tools;
 
-import compiler.Lexer;
-import compiler.Parser;
-import compiler.Token.TokenKind;
+import compiler.syntax.Lexer;
+import compiler.syntax.Parser;
+import compiler.syntax.Token.TokenKind;
 import compiler.Source.SourceFile;
 import compiler.Compiler;
-import compiler.RuntimeAbi as CompilerRuntimeAbi;
+import compiler.runtime.RuntimeAbi as CompilerRuntimeAbi;
 import compiler.Diagnostic.CompileError;
 import haxe.Json;
 import sys.FileSystem;

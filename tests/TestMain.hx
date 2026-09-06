@@ -37,8 +37,8 @@ import compiler.ir.cfg.Cfg.CfgBlock;
 import compiler.ir.cfg.Cfg.CfgFunction;
 import compiler.ir.cfg.Cfg.CfgValue;
 import compiler.ir.cfg.CfgVerifier;
-import compiler.Lexer;
-import compiler.Parser;
+import compiler.syntax.Lexer;
+import compiler.syntax.Parser;
 import compiler.types.Typer;
 import compiler.types.TypeRegistry;
 import compiler.types.TypeRegistry.TypeCompatibility;
@@ -51,9 +51,9 @@ class TestMain {
 	static function main():Void {
 		var lexicalForms = new Lexer(new SourceFile("lexical-forms.hx", "// line\n/* block */ 'text' ? @")).tokenize();
 		if (lexicalForms.length != 4
-			|| lexicalForms[0].kind != compiler.Token.TokenKind.StringLiteral
-			|| lexicalForms[1].kind != compiler.Token.TokenKind.Question
-			|| lexicalForms[2].kind != compiler.Token.TokenKind.At)
+			|| lexicalForms[0].kind != compiler.syntax.Token.TokenKind.StringLiteral
+			|| lexicalForms[1].kind != compiler.syntax.Token.TokenKind.Question
+			|| lexicalForms[2].kind != compiler.syntax.Token.TokenKind.At)
 			throw "Common Haxe lexical forms were not tokenized";
 		var hexTokens = new Lexer(new SourceFile("hex.hx", "0x2A 0Xff")).tokenize();
 		if (hexTokens[0].text != "0x2A" || hexTokens[1].text != "0Xff")
@@ -280,8 +280,8 @@ class TestMain {
 			'function main():Int { return String.fromCharCode(42).length; }')).tokenize()).parseProgram();
 		var inferredSignatures = new Parser(new Lexer(new SourceFile("inferred-signatures.hx",
 			'class Value { public function new(value) {} public function read() { return 42; } }')).tokenize()).parseProgram();
-		if (inferredSignatures.classes[0].methods[0].arguments[0].type != compiler.Ast.AstType.InferredType
-			|| inferredSignatures.classes[0].methods[1].result != compiler.Ast.AstType.InferredType)
+		if (inferredSignatures.classes[0].methods[0].arguments[0].type != compiler.syntax.Ast.AstType.InferredType
+			|| inferredSignatures.classes[0].methods[1].result != compiler.syntax.Ast.AstType.InferredType)
 			throw "Missing function annotations were not preserved for semantic inference";
 		var mutableSource = 'function main():Int { var outer = 0; while (outer < 2) { var inner = 0; while (inner < 2) { inner = inner + 1; } outer = outer + inner; } return outer; }';
 		var ast = new Parser(new Lexer(new SourceFile("ssa.hx", mutableSource)).tokenize()).parseProgram();
@@ -700,15 +700,15 @@ class TestMain {
 			.tokenize()).parseProgram();
 		if (classProgram.classes.length != 1
 			|| classProgram.classes[0].fields[0].name != "value"
-			|| classProgram.classes[0].fields[1].readAccess != compiler.Ast.AstFieldAccess.GetAccess
-			|| classProgram.classes[0].fields[1].writeAccess != compiler.Ast.AstFieldAccess.NeverAccess
+			|| classProgram.classes[0].fields[1].readAccess != compiler.syntax.Ast.AstFieldAccess.GetAccess
+			|| classProgram.classes[0].fields[1].writeAccess != compiler.syntax.Ast.AstFieldAccess.NeverAccess
 			|| classProgram.classes[0].methods.length != 3
 			|| classProgram.classes[0].methods[0].name != "new")
 			throw "Minimal class declarations were not preserved in the AST";
 		var typedClass = Typer.type(classProgram);
 		if (typedClass.classes.length != 1
 			|| typedClass.classes[0].fields[0].type != compiler.types.Type.CompilerType.TInt
-			|| typedClass.classes[0].fields[1].readAccess != compiler.Ast.AstFieldAccess.GetAccess
+			|| typedClass.classes[0].fields[1].readAccess != compiler.syntax.Ast.AstFieldAccess.GetAccess
 			|| typedClass.classes[0].methods[1].result != compiler.types.Type.CompilerType.TInt)
 			throw "Minimal class declarations were not type checked";
 		var libraryProgram = new Parser(new Lexer(new SourceFile("Library.hx",

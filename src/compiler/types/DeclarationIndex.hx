@@ -1,7 +1,7 @@
 package compiler.types;
 
 import compiler.runtime.PlatformAbi;
-import compiler.Ast;
+import compiler.syntax.Ast;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
@@ -45,8 +45,8 @@ typedef TypeParameterSymbol = {
 class DeclarationIndex {
 	public final aliases:Map<String, AstTypeAlias> = [];
 	public final enums:Map<String, AstEnum> = [];
-	public final enumAbstracts:Map<String, compiler.Ast.AstEnumAbstract> = [];
-	public final abstracts:Map<String, compiler.Ast.AstAbstract> = [];
+	public final enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract> = [];
+	public final abstracts:Map<String, compiler.syntax.Ast.AstAbstract> = [];
 	public final interfaces:Map<String, AstInterface> = [];
 	public final classes:Map<String, AstClass> = [];
 	public final symbols:Map<String, DeclarationSymbol> = [];

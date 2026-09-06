@@ -1,14 +1,14 @@
 package compiler.types;
 
-import compiler.Ast;
-import compiler.Ast.AstExpression;
-import compiler.Ast.AstFunction;
-import compiler.Ast.AstProgram;
-import compiler.Ast.AstStatement;
-import compiler.Ast.AstType;
-import compiler.Ast.AstClass;
-import compiler.Ast.AstInterface;
-import compiler.Ast.AstEnum;
+import compiler.syntax.Ast;
+import compiler.syntax.Ast.AstExpression;
+import compiler.syntax.Ast.AstFunction;
+import compiler.syntax.Ast.AstProgram;
+import compiler.syntax.Ast.AstStatement;
+import compiler.syntax.Ast.AstType;
+import compiler.syntax.Ast.AstClass;
+import compiler.syntax.Ast.AstInterface;
+import compiler.syntax.Ast.AstEnum;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.AnonymousField;
 import compiler.runtime.RuntimeType;
@@ -64,7 +64,7 @@ class Typer {
 	var classDecls:Map<String, AstClass> = [];
 	var interfaceDecls:Map<String, AstInterface> = [];
 	var enumDecls:Map<String, AstEnum> = [];
-	var enumAbstractDecls:Map<String, compiler.Ast.AstEnumAbstract> = [];
+	var enumAbstractDecls:Map<String, compiler.syntax.Ast.AstEnumAbstract> = [];
 	var declarations:DeclarationIndex;
 	var relations:TypeRelations;
 	final closureConversion = new ClosureConversion();
@@ -2665,7 +2665,7 @@ class Typer {
 		return coerceArguments(typed, expected, name);
 	}
 
-	function typeDeclaredCallArguments(arguments:Array<AstExpression>, parameters:Array<compiler.Ast.AstArgument>, scope:Scope, name:String, span:SourceSpan,
+	function typeDeclaredCallArguments(arguments:Array<AstExpression>, parameters:Array<compiler.syntax.Ast.AstArgument>, scope:Scope, name:String, span:SourceSpan,
 			?substitutions:Map<String, CompilerType>):Array<TypedExpression> {
 		var required = parameters.length;
 		while (required > 0 && parameters[required - 1].optional)
@@ -2690,7 +2690,7 @@ class Typer {
 		return coerceArguments(typed, [for (parameter in parameters) argumentType(parameter, substitutions)], name);
 	}
 
-	function argumentType(argument:compiler.Ast.AstArgument, ?substitutions:Map<String, CompilerType>):CompilerType {
+	function argumentType(argument:compiler.syntax.Ast.AstArgument, ?substitutions:Map<String, CompilerType>):CompilerType {
 		var type = substitutions == null ? lowerType(argument.type) : declarations.resolve(argument.type, argument.span, substitutions);
 		return argument.optional && argument.defaultValue == null ? CompilerType.TNullable(type) : type;
 	}
@@ -2765,7 +2765,7 @@ class Typer {
 	function enumCaseInfo(name:String):Null<{
 		enumName:String,
 		index:Int,
-		params:Array<compiler.Ast.AstEnumParameter>,
+		params:Array<compiler.syntax.Ast.AstEnumParameter>,
 		typeParameters:Array<String>
 	}> {
 		var parent = parentPath(name);
@@ -2786,7 +2786,7 @@ class Typer {
 		return null;
 	}
 
-	function enumParameterType(typeParameters:Array<String>, parameter:compiler.Ast.AstEnumParameter, instance:Null<CompilerType>):CompilerType {
+	function enumParameterType(typeParameters:Array<String>, parameter:compiler.syntax.Ast.AstEnumParameter, instance:Null<CompilerType>):CompilerType {
 		var substitutions:Map<String, CompilerType> = [];
 		for (index in 0...typeParameters.length) {
 			var argument:CompilerType = TDynamic;
@@ -2803,7 +2803,7 @@ class Typer {
 		return parameter.optional ? TNullable(resolved) : resolved;
 	}
 
-	function enumStorageParameterType(typeParameters:Array<String>, parameter:compiler.Ast.AstEnumParameter):CompilerType {
+	function enumStorageParameterType(typeParameters:Array<String>, parameter:compiler.syntax.Ast.AstEnumParameter):CompilerType {
 		// A HashLink enum has one physical constructor layout for every source
 		// specialization. Erase all payloads of a generic enum so two uses cannot
 		// publish incompatible field representations for that shared layout.
@@ -2816,13 +2816,13 @@ class Typer {
 		return parameter.optional ? TNullable(type) : type;
 	}
 
-	function erasedEnumParameter(declaration:AstEnum, parameter:compiler.Ast.AstEnumParameter):CompilerType
+	function erasedEnumParameter(declaration:AstEnum, parameter:compiler.syntax.Ast.AstEnumParameter):CompilerType
 		return enumStorageParameterType(declaration.typeParameters, parameter);
 
 	function abiBoundaryCast(value:TypedExpression, target:CompilerType):TypedExpression
 		return sameType(value.type, target) ? value : new TypedExpression(TAbiCast(value), target, value.span);
 
-	static function requiredEnumParameters(parameters:Array<compiler.Ast.AstEnumParameter>):Int {
+	static function requiredEnumParameters(parameters:Array<compiler.syntax.Ast.AstEnumParameter>):Int {
 		var minimum = 0;
 		for (index in 0...parameters.length)
 			if (!parameters[index].optional)

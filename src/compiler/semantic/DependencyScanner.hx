@@ -1,7 +1,7 @@
 package compiler.semantic;
 
-import compiler.Ast.AstExpression;
-import compiler.Ast.AstStatement;
+import compiler.syntax.Ast.AstExpression;
+import compiler.syntax.Ast.AstStatement;
 
 /** Collects qualified source dependencies referenced by syntax trees. */
 class DependencyScanner {

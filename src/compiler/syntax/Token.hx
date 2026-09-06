@@ -1,4 +1,4 @@
-package compiler;
+package compiler.syntax;
 
 import compiler.Source.SourceSpan;
 
@@ -84,7 +84,6 @@ enum TokenKind {
 	At;
 	Eof;
 }
-
 /** One lexical token retaining its original spelling and source location. */
 class Token {
 	public final kind:TokenKind;

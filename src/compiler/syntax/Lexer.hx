@@ -1,6 +1,6 @@
-package compiler;
+package compiler.syntax;
 
-import compiler.Token.TokenKind;
+import compiler.syntax.Token.TokenKind;
 import compiler.Source.SourceFile;
 import compiler.Diagnostic.CompileError;
 

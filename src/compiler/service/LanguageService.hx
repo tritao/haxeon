@@ -1,21 +1,21 @@
 package compiler.service;
 
 import compiler.semantic.ModuleCanonicalizer;
-import compiler.Ast.AstType;
+import compiler.syntax.Ast.AstType;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
-import compiler.Token.TokenKind;
+import compiler.syntax.Token.TokenKind;
 import compiler.Compiler;
 import compiler.modules.ModulePath;
 import compiler.modules.ModuleState;
 import compiler.semantic.SemanticWorkspace.WorkspaceResolution;
 import compiler.Compiler.CompileResult;
-import compiler.Ast.AstFunction;
-import compiler.Ast.AstStatement;
+import compiler.syntax.Ast.AstFunction;
+import compiler.syntax.Ast.AstStatement;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedStatement;
-import compiler.RuntimeAbi;
+import compiler.runtime.RuntimeAbi;
 
 /** Editor-facing declaration summary, optionally marked as stale. */
 typedef DocumentSymbol = {
@@ -381,7 +381,7 @@ class LanguageService {
 		return globalSymbol(state, token.text, token.span);
 	}
 
-	function declarationSymbol(state:ModuleState, tokens:Array<compiler.Token>, tokenIndex:Int, name:String):Null<SemanticSymbol> {
+	function declarationSymbol(state:ModuleState, tokens:Array<compiler.syntax.Token>, tokenIndex:Int, name:String):Null<SemanticSymbol> {
 		var previous = tokenIndex > 0 ? tokens[tokenIndex - 1].kind : null,
 			ast = effectiveAst(state);
 		if (ast == null)
@@ -727,10 +727,10 @@ class LanguageService {
 	function stateFor(path:String):Null<ModuleState>
 		return compiler.modules.get(ModulePath.fromFile(path));
 
-	static function effectiveAst(state:ModuleState):Null<compiler.Ast.AstProgram>
+	static function effectiveAst(state:ModuleState):Null<compiler.syntax.Ast.AstProgram>
 		return state.ast == null ? state.lastGoodAst : state.ast;
 
-	static function effectiveTokens(state:ModuleState):Null<Array<compiler.Token>>
+	static function effectiveTokens(state:ModuleState):Null<Array<compiler.syntax.Token>>
 		return state.ast == null ? state.lastGoodTokens : state.tokens;
 
 	static function identifierPrefix(source:String, position:Int):String {

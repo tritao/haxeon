@@ -1,13 +1,13 @@
 package compiler.types;
 
-import compiler.Ast.AstClass;
-import compiler.Ast.AstArgument;
-import compiler.Ast.AstEnum;
-import compiler.Ast.AstExpression;
-import compiler.Ast.AstFunction;
-import compiler.Ast.AstProgram;
-import compiler.Ast.AstStatement;
-import compiler.Ast.AstType;
+import compiler.syntax.Ast.AstClass;
+import compiler.syntax.Ast.AstArgument;
+import compiler.syntax.Ast.AstEnum;
+import compiler.syntax.Ast.AstExpression;
+import compiler.syntax.Ast.AstFunction;
+import compiler.syntax.Ast.AstProgram;
+import compiler.syntax.Ast.AstStatement;
+import compiler.syntax.Ast.AstType;
 
 /** Collects declaration-level constraints before body typing. */
 class SignatureInference {

@@ -1,13 +1,13 @@
 package compiler;
 
-import compiler.Ast;
-import compiler.Ast.AstExpression;
-import compiler.Ast.AstFunction;
-import compiler.Ast.AstStatement;
+import compiler.syntax.Ast;
+import compiler.syntax.Ast.AstExpression;
+import compiler.syntax.Ast.AstFunction;
+import compiler.syntax.Ast.AstStatement;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
-import compiler.Lexer;
-import compiler.Parser;
+import compiler.syntax.Lexer;
+import compiler.syntax.Parser;
 import compiler.Source.SourceFile;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;

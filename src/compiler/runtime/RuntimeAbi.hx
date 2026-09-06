@@ -1,4 +1,4 @@
-package compiler;
+package compiler.runtime;
 
 import compiler.Compiler;
 import compiler.Compiler.NativeFunction;

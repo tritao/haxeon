@@ -1,7 +1,7 @@
 package compiler.types.analysis;
 
-import compiler.Ast.AstExpression;
-import compiler.Ast.AstStatement;
+import compiler.syntax.Ast.AstExpression;
+import compiler.syntax.Ast.AstStatement;
 
 /** Storage requirements discovered from a function's source-level local usage. */
 typedef BodyStorageAnalysis = {

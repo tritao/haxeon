@@ -1,7 +1,7 @@
 package compiler.types;
 
-import compiler.Ast.AstFunction;
-import compiler.Ast.AstProgram;
+import compiler.syntax.Ast.AstFunction;
+import compiler.syntax.Ast.AstProgram;
 
 typedef SemanticMethodInfo = {
 	final owner:String;

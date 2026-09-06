@@ -4,6 +4,8 @@ import compiler.ir.Ir.IrProgram;
 import compiler.ir.IrGenerator;
 import compiler.types.Typer;
 import compiler.Source.SourceFile;
+import compiler.syntax.Lexer;
+import compiler.syntax.Parser;
 
 /** Stateless convenience pipeline from source text through typed SSA IR. */
 class Frontend {

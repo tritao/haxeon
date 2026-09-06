@@ -1,8 +1,8 @@
 package compiler.types;
 
-import compiler.Ast.AstExpression;
-import compiler.Ast.AstField;
-import compiler.Ast.AstType;
+import compiler.syntax.Ast.AstExpression;
+import compiler.syntax.Ast.AstField;
+import compiler.syntax.Ast.AstType;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 

@@ -1,6 +1,6 @@
 import compiler.Frontend;
-import compiler.Lexer;
-import compiler.Parser;
+import compiler.syntax.Lexer;
+import compiler.syntax.Parser;
 import compiler.Source.SourceFile;
 import compiler.ir.IrProgramAssembler;
 import compiler.types.Typer;

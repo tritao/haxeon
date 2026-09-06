@@ -1,8 +1,8 @@
 package compiler.types;
 
-import compiler.Ast.AstFunction;
-import compiler.Ast.AstType;
-import compiler.Ast.AstTypeAlias;
+import compiler.syntax.Ast.AstFunction;
+import compiler.syntax.Ast.AstType;
+import compiler.syntax.Ast.AstTypeAlias;
 import compiler.types.Type.CompilerType;
 
 /** Deterministic spelling for resolved semantic types and callable signatures. */

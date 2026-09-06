@@ -1,6 +1,6 @@
 package compiler.types;
 
-import compiler.Ast.AstProgram;
+import compiler.syntax.Ast.AstProgram;
 import compiler.Source.SourceFile;
 
 /** Immutable, revision-bound semantic facts derived from one parsed module. */

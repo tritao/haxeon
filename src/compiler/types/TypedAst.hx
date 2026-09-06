@@ -2,7 +2,7 @@ package compiler.types;
 
 import compiler.types.Type.CompilerType;
 import compiler.Source.SourceSpan;
-import compiler.Ast.AstType;
+import compiler.syntax.Ast.AstType;
 
 /** Expression paired with its resolved semantic type and original source span. */
 class TypedExpression {
@@ -192,8 +192,8 @@ typedef TypedField = {
 	final name:String;
 	final type:CompilerType;
 	final initializer:Null<TypedExpression>;
-	final readAccess:Null<compiler.Ast.AstFieldAccess>;
-	final writeAccess:Null<compiler.Ast.AstFieldAccess>;
+	final readAccess:Null<compiler.syntax.Ast.AstFieldAccess>;
+	final writeAccess:Null<compiler.syntax.Ast.AstFieldAccess>;
 	final isStatic:Bool;
 	final isFinal:Bool;
 	final span:SourceSpan;

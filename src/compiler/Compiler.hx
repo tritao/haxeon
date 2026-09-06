@@ -1,7 +1,7 @@
 package compiler;
 
-import compiler.Ast;
-import compiler.Ast.AstFunction;
+import compiler.syntax.Ast;
+import compiler.syntax.Ast.AstFunction;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceFile;

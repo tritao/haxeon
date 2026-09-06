@@ -1,7 +1,7 @@
 import compiler.hl.HlWriter;
 import compiler.Compiler;
 import compiler.modules.ModulePath;
-import compiler.RuntimeAbi;
+import compiler.runtime.RuntimeAbi;
 import sys.io.File;
 
 /** Command-line compiler entry point for producing a complete HashLink module. */

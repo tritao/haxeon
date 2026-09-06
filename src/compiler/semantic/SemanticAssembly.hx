@@ -1,7 +1,7 @@
 package compiler.semantic;
 
-import compiler.Ast;
-import compiler.Ast.AstFunction;
+import compiler.syntax.Ast;
+import compiler.syntax.Ast.AstFunction;
 import compiler.CompilationContext;
 import compiler.modules.ModuleState;
 import compiler.service.CancellationToken;
@@ -24,12 +24,12 @@ class SemanticAssembly {
 		var modules = context.modules;
 		var functions:Array<AstFunction> = [],
 			programFunctions:Array<AstFunction> = [],
-			typeAliases:Array<compiler.Ast.AstTypeAlias> = [],
-			enums:Array<compiler.Ast.AstEnum> = [],
-			enumAbstracts:Array<compiler.Ast.AstEnumAbstract> = [],
-			abstracts:Array<compiler.Ast.AstAbstract> = [],
-			interfaces:Array<compiler.Ast.AstInterface> = [],
-			classes:Array<compiler.Ast.AstClass> = [],
+			typeAliases:Array<compiler.syntax.Ast.AstTypeAlias> = [],
+			enums:Array<compiler.syntax.Ast.AstEnum> = [],
+			enumAbstracts:Array<compiler.syntax.Ast.AstEnumAbstract> = [],
+			abstracts:Array<compiler.syntax.Ast.AstAbstract> = [],
+			interfaces:Array<compiler.syntax.Ast.AstInterface> = [],
+			classes:Array<compiler.syntax.Ast.AstClass> = [],
 			owners:Map<String, String> = [],
 			generatedByModule:Map<String, Map<String, Bool>> = [],
 			reverseCalls:Map<String, Array<String>> = [];

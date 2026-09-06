@@ -1,7 +1,7 @@
 package compiler.semantic;
 
-import compiler.Ast.AstExpression;
-import compiler.Ast.AstStatement;
+import compiler.syntax.Ast.AstExpression;
+import compiler.syntax.Ast.AstStatement;
 import compiler.modules.ModuleState;
 import compiler.types.FieldInference;
 import compiler.modules.ModuleState.SemanticDependency;
@@ -45,7 +45,7 @@ class SemanticDependencyCollector {
 	}
 
 	public static function addTypeDependency(result:Map<String, Array<SemanticDependency>>, owner:String, kind:SemanticDependencyKind,
-			type:compiler.Ast.AstType, aliases:Map<String, String>):Void
+			type:compiler.syntax.Ast.AstType, aliases:Map<String, String>):Void
 		switch type {
 			case NamedType(name):
 				addDependency(result, owner, kind, ModuleCanonicalizer.resolveTypeName(name, aliases));
@@ -114,7 +114,7 @@ class SemanticDependencyCollector {
 			}
 
 	public static function addOptionalTypeDependency(result:Map<String, Array<SemanticDependency>>, owner:String, kind:SemanticDependencyKind,
-			type:Null<compiler.Ast.AstType>, aliases:Map<String, String>):Void {
+			type:Null<compiler.syntax.Ast.AstType>, aliases:Map<String, String>):Void {
 		if (type != null)
 			addTypeDependency(result, owner, kind, type, aliases);
 	}

@@ -1,19 +1,19 @@
-package compiler;
+package compiler.syntax;
 
-import compiler.Ast.AstExpression;
-import compiler.Ast.AstFieldAccess;
-import compiler.Ast.AstFunction;
-import compiler.Ast.AstClass;
-import compiler.Ast.AstInterface;
-import compiler.Ast.AstTypeAlias;
-import compiler.Ast.AstEnum;
-import compiler.Ast.AstEnumAbstract;
-import compiler.Ast.AstAbstract;
-import compiler.Ast.AstProgram;
-import compiler.Ast.AstStatement;
-import compiler.Ast.AstType;
+import compiler.syntax.Ast.AstExpression;
+import compiler.syntax.Ast.AstFieldAccess;
+import compiler.syntax.Ast.AstFunction;
+import compiler.syntax.Ast.AstClass;
+import compiler.syntax.Ast.AstInterface;
+import compiler.syntax.Ast.AstTypeAlias;
+import compiler.syntax.Ast.AstEnum;
+import compiler.syntax.Ast.AstEnumAbstract;
+import compiler.syntax.Ast.AstAbstract;
+import compiler.syntax.Ast.AstProgram;
+import compiler.syntax.Ast.AstStatement;
+import compiler.syntax.Ast.AstType;
 import compiler.Source.SourceSpan;
-import compiler.Token.TokenKind;
+import compiler.syntax.Token.TokenKind;
 import compiler.Diagnostic.CompileError;
 
 /** Recursive-descent parser for the supported Haxe-compatible source subset. */
@@ -84,7 +84,7 @@ class Parser {
 		};
 	}
 
-	function parseMetadata():Array<compiler.Ast.AstMetadata> {
+	function parseMetadata():Array<compiler.syntax.Ast.AstMetadata> {
 		var result = [];
 		while (match(TokenKind.At)) {
 			var start = previous().span;
@@ -206,7 +206,7 @@ class Parser {
 		consume(TokenKind.LeftBrace);
 		while (!check(TokenKind.RightBrace)) {
 			var caseToken = consumeName(),
-				params:Array<compiler.Ast.AstEnumParameter> = [];
+				params:Array<compiler.syntax.Ast.AstEnumParameter> = [];
 			if (match(TokenKind.LeftParen)) {
 				if (!check(TokenKind.RightParen))
 					do {
@@ -317,7 +317,7 @@ class Parser {
 		return result;
 	}
 
-	function parseClass(isPrivate:Bool, metadata:Array<compiler.Ast.AstMetadata>):AstClass {
+	function parseClass(isPrivate:Bool, metadata:Array<compiler.syntax.Ast.AstMetadata>):AstClass {
 		var start = consume(TokenKind.Class).span,
 			name = consume(TokenKind.Identifier).text,
 			typeParameters = parseTypeParameters(),
@@ -531,7 +531,7 @@ class Parser {
 		if (match(TokenKind.Try)) {
 			var start = previous().span,
 				tryBranch = parseTryBody(),
-				catches:Array<compiler.Ast.AstCatch> = [],
+				catches:Array<compiler.syntax.Ast.AstCatch> = [],
 				end = previous().span;
 			do {
 				var catchStart = consume(TokenKind.Catch).span;

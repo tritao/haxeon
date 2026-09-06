@@ -1,9 +1,9 @@
 package compiler.semantic;
 
-import compiler.Ast.AstFunction;
+import compiler.syntax.Ast.AstFunction;
 import compiler.Diagnostic.CompileError;
-import compiler.Lexer;
-import compiler.Parser;
+import compiler.syntax.Lexer;
+import compiler.syntax.Parser;
 import compiler.QualifiedName;
 import compiler.abi.NativeRegistry;
 import compiler.modules.ModuleState;
@@ -182,7 +182,7 @@ class ModuleAnalyzer {
 		addModuleTypeDependency(fn.result, state, dependencies);
 	}
 
-	function addModuleTypeDependency(type:compiler.Ast.AstType, state:ModuleState, dependencies:Map<String, Bool>):Void
+	function addModuleTypeDependency(type:compiler.syntax.Ast.AstType, state:ModuleState, dependencies:Map<String, Bool>):Void
 		switch type {
 			case NamedType(name):
 				var ast = state.parsedAst(),
