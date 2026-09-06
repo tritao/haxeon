@@ -24,6 +24,7 @@ class ProfilerService {
 	var pollIntervalSeconds = 0.1;
 	var notificationSequence = 0;
 	var maxEntries = 100;
+	var emittedMetadataChanges = 0;
 
 	public function new() {}
 
@@ -79,6 +80,7 @@ class ProfilerService {
 		if (requestedMaxEntries < 1)
 			throw "Profiler maxEntries must be positive";
 		session = new ProfilerSession(new HldiClient(host, port, timeout));
+		emittedMetadataChanges = 0;
 		if (Reflect.hasField(options, "leafCapacity"))
 			session.leafCapacity = requiredInt(options, "leafCapacity");
 		if (Reflect.hasField(options, "eventCapacity"))
@@ -113,6 +115,7 @@ class ProfilerService {
 	function reset():Dynamic {
 		var current = requireSession();
 		current.reset();
+		emittedMetadataChanges = 0;
 		return snapshot(current.snapshot());
 	}
 
@@ -129,7 +132,7 @@ class ProfilerService {
 	function run():Void {
 		while (true) {
 			wake.wait(pollIntervalSeconds);
-			var message:Dynamic = null, output = emitter;
+			var message:Dynamic = null, changes:Array<Dynamic> = [], output = emitter;
 			mutex.acquire();
 			if (stopping) {
 				mutex.release();
@@ -139,13 +142,20 @@ class ProfilerService {
 				try {
 					session.poll();
 					message = snapshot(session.snapshot());
+					while (emittedMetadataChanges < session.metadataChanges.length) {
+						var change = session.metadataChanges[emittedMetadataChanges++];
+						changes.push({timestamp: change.timestamp, moduleId: change.moduleId, oldRevision: change.oldRevision, newRevision: change.newRevision});
+					}
 				} catch (error:Dynamic) {
 					message = snapshot(session.snapshot());
 					Reflect.setField(message, "error", Std.string(error));
 				}
 			mutex.release();
-			if (message != null && output != null)
-				output(message);
+			if (message != null && output != null) {
+				output({method: "haxeon/profilerSnapshot", params: message});
+				for (change in changes)
+					output({method: "haxeon/profilerMetadataChanged", params: change});
+			}
 		}
 		stopped.release();
 	}
@@ -173,6 +183,12 @@ class ProfilerService {
 			pendingBytes: value.pendingBytes,
 			metadataSchema: value.metadataSchema,
 			metadataRevisions: [for (moduleId => revision in value.metadataRevisions) {moduleId: moduleId, revision: revision}],
+			metadataChanges: [for (change in value.metadataChanges) {
+				timestamp: change.timestamp,
+				moduleId: change.moduleId,
+				oldRevision: change.oldRevision,
+				newRevision: change.newRevision
+			}],
 			functions: [for (aggregate in value.functions.slice(0, maxEntries)) aggregateValue(aggregate)],
 			lines: [for (aggregate in value.lines.slice(0, maxEntries)) aggregateValue(aggregate)],
 			stacks: [for (stack in value.stacks.slice(0, maxEntries)) stackValue(stack)],
@@ -188,7 +204,15 @@ class ProfilerService {
 	}
 
 	static function aggregateValue(value:ProfileAggregate):Dynamic
-		return {key: value.key, name: value.name, file: value.file, line: value.line, selfSamples: value.selfSamples, totalSamples: value.totalSamples};
+		return {
+			key: value.key,
+			stableKey: value.stableKey,
+			name: value.name,
+			file: value.file,
+			line: value.line,
+			selfSamples: value.selfSamples,
+			totalSamples: value.totalSamples
+		};
 
 	static function stackValue(value:ProfileStack):Dynamic
 		return {frames: value.frames, samples: value.samples};

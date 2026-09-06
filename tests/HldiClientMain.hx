@@ -21,7 +21,7 @@ class HldiClientMain {
 		var session = new ProfilerSession(client);
 		try {
 			session.start(500);
-			require(session.metadata != null && session.metadata.schema == 3, "expected schema 3 metadata");
+			require(session.metadata != null && session.metadata.schema == 4, "expected schema 4 metadata");
 			require(session.metadata.symbols.length > 0, "expected JIT symbols");
 			var sourceMappings = 0;
 			for (symbol in session.metadata.symbols)

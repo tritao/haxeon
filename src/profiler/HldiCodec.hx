@@ -66,7 +66,7 @@ class HldiReader {
 class HldiCodec {
 	public static function metadata(bytes:Bytes):HldiMetadata {
 		var input = new HldiReader(bytes), schema = input.u32();
-		if (schema < 1 || schema > 3)
+		if (schema < 1 || schema > 4)
 			throw 'Unsupported HLDI metadata schema $schema';
 		var moduleCount = count(input, "modules"), symbols = [], revisions = new Map<String, Int>();
 		for (_ in 0...moduleCount) {
@@ -76,7 +76,8 @@ class HldiCodec {
 				for (_ in 0...count(input, "debug files"))
 					files.push(input.take(count(input, "debug file bytes")).toString());
 			for (_ in 0...regionCount) {
-				var base = input.u64(), regionSize = input.u64(), flags = input.u32(), functionCount = count(input, "functions");
+				var base = input.u64(), regionSize = input.u64(), flags = input.u32(), regionRevision = schema >= 4 ? input.u32() : revision,
+					functionCount = count(input, "functions");
 				for (_ in 0...functionCount) {
 					var functionId = input.u32(), offset = input.u32(), size = input.u32(), name = input.take(count(input, "symbol name bytes")).toString();
 					if (size <= 0)
@@ -94,7 +95,7 @@ class HldiCodec {
 							lines.push(new HldiSourceLine(jitOffset, endOffset, opcodeIndex, opcode, files[fileId], line));
 						}
 					var start = Int64.add(base, Int64.ofInt(offset)), end = Int64.add(start, Int64.ofInt(size));
-					symbols.push(new HldiSymbol(moduleId, revision, functionId, start, end, name, lines));
+					symbols.push(new HldiSymbol(moduleId, regionRevision, functionId, start, end, name, lines));
 				}
 			}
 		}

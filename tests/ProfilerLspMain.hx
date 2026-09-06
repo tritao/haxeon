@@ -30,8 +30,8 @@ class ProfilerLspMain {
 
 			dispatcher.dispatch(command(3, "haxeon.profiler.start", {sampleRate: 250, pollIntervalMs: 25}));
 			var started = waitFor(messages, mutex, available, value -> value.id == 3);
-			if (started.result.state != "running" || started.result.metadataSchema != 3)
-				throw "Profiler did not start with schema 3 metadata";
+			if (started.result.state != "running" || started.result.metadataSchema != 4)
+				throw "Profiler did not start with schema 4 metadata";
 			var notification = waitFor(messages, mutex, available,
 				value -> value.method == "haxeon/profilerSnapshot" && value.params.samples > 0 && value.params.leaves.length > 0);
 			var leaf = notification.params.leaves[0];

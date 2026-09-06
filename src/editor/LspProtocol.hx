@@ -116,7 +116,7 @@ class LspProtocol {
 		return exitRequested;
 
 	public function enableProfilerNotifications(emit:String->Void):Void
-		profiler.setEmitter(snapshot -> emit(notification("haxeon/profilerSnapshot", snapshot)));
+		profiler.setEmitter(message -> emit(notification(Reflect.field(message, "method"), Reflect.field(message, "params"))));
 
 	public function dispose():Void
 		profiler.close();

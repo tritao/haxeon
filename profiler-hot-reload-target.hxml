@@ -1,0 +1,5 @@
+-cp src
+-cp tests
+-main ProfilerHotReloadTarget
+-debug
+-hl out/profiler-hot-reload-target.hl

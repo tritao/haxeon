@@ -4,6 +4,7 @@ import haxe.Int64;
 import haxe.Timer;
 import haxe.io.Bytes;
 import profiler.HldiCodec.HldiStreamDecoder;
+import profiler.HldiCodec.HldiReader;
 import profiler.HldiTypes.HldiMetadata;
 import profiler.HldiTypes.HldiRecord;
 import profiler.HldiTypes.HldiSourceLine;
@@ -19,14 +20,16 @@ enum abstract ProfilerSessionState(String) from String to String {
 
 class ProfileAggregate {
 	public final key:String;
+	public final stableKey:String;
 	public final name:String;
 	public final file:Null<String>;
 	public final line:Null<Int>;
 	public var selfSamples = 0;
 	public var totalSamples = 0;
 
-	public function new(key:String, name:String, ?file:String, ?line:Int) {
+	public function new(key:String, stableKey:String, name:String, ?file:String, ?line:Int) {
 		this.key = key;
+		this.stableKey = stableKey;
 		this.name = name;
 		this.file = file;
 		this.line = line;
@@ -52,6 +55,20 @@ class ProfileEvent {
 		this.threadId = threadId;
 		this.eventId = eventId;
 		this.payload = payload;
+	}
+}
+
+class ProfileMetadataChange {
+	public final timestamp:Float;
+	public final moduleId:String;
+	public final oldRevision:Int;
+	public final newRevision:Int;
+
+	public function new(timestamp:Float, moduleId:String, oldRevision:Int, newRevision:Int) {
+		this.timestamp = timestamp;
+		this.moduleId = moduleId;
+		this.oldRevision = oldRevision;
+		this.newRevision = newRevision;
 	}
 }
 
@@ -90,6 +107,7 @@ class ProfilerSnapshot {
 	public final stacks:Array<ProfileStack>;
 	public final events:Array<ProfileEvent>;
 	public final leaves:Array<ProfileLeaf>;
+	public final metadataChanges:Array<ProfileMetadataChange>;
 	public final metadataSchema:Int;
 	public final metadataRevisions:Map<String, Int>;
 	public final pendingBytes:Int;
@@ -105,6 +123,7 @@ class ProfilerSnapshot {
 		stacks = session.stackAggregates();
 		events = session.events.copy();
 		leaves = session.leaves.copy();
+		metadataChanges = session.metadataChanges.copy();
 		metadataSchema = session.metadata == null ? 0 : session.metadata.schema;
 		metadataRevisions = session.metadata == null ? new Map() : session.metadata.revisions.copy();
 		pendingBytes = session.pendingBytes();
@@ -114,6 +133,7 @@ class ProfilerSnapshot {
 
 /** Owns profiler lifecycle, incremental decoding, symbolization and aggregation. */
 class ProfilerSession {
+	public static inline final EVENT_MODULE_REVISION = 0x484C0001;
 	public var state(default, null):ProfilerSessionState = Connected;
 	public var samples(default, null) = 0;
 	public var unresolvedFrames(default, null) = 0;
@@ -123,6 +143,7 @@ class ProfilerSession {
 	public var metadataRefreshSeconds:Float = 5.0;
 	public final events:Array<ProfileEvent> = [];
 	public final leaves:Array<ProfileLeaf> = [];
+	public final metadataChanges:Array<ProfileMetadataChange> = [];
 	public var leafCapacity:Int = 256;
 	public var eventCapacity:Int = 256;
 
@@ -180,8 +201,15 @@ class ProfilerSession {
 		}
 	}
 
-	public function refreshMetadata():Void {
-		metadata = client.metadata();
+	public function refreshMetadata(?timestamp:Float):Void {
+		var previous = metadata, next = client.metadata();
+		if (previous != null)
+			for (moduleId => revision in next.revisions) {
+				var oldRevision = previous.revisions.get(moduleId);
+				if (oldRevision != null && oldRevision != revision)
+					metadataChanges.push(new ProfileMetadataChange(timestamp == null ? Timer.stamp() : timestamp, moduleId, oldRevision, revision));
+			}
+		metadata = next;
 		nextMetadataRefresh = Timer.stamp() + metadataRefreshSeconds;
 	}
 
@@ -196,6 +224,7 @@ class ProfilerSession {
 		stacks.clear();
 		events.resize(0);
 		leaves.resize(0);
+		metadataChanges.resize(0);
 	}
 
 	public function close():Void {
@@ -228,6 +257,14 @@ class ProfilerSession {
 				events.resize(0);
 			else if (events.length > eventCapacity)
 				events.splice(0, events.length - eventCapacity);
+			if (record.value == EVENT_MODULE_REVISION) {
+				if (record.payload.length != 12)
+					throw "Invalid HLDI module revision event";
+				var announced = new HldiReader(record.payload), moduleId = Int64.toStr(announced.u64()), revision = announced.u32();
+				refreshMetadata(record.timestamp);
+				if (metadata == null || metadata.revisions.get(moduleId) != revision)
+					throw 'HLDI metadata did not reach announced module revision $revision';
+			}
 			return;
 		}
 		samples++;
@@ -303,7 +340,7 @@ class ProfilerSession {
 	function functionAggregate(symbol:HldiSymbol):ProfileAggregate {
 		var key = '${symbol.moduleId}:${symbol.revision}:${symbol.functionId}', value = functions.get(key);
 		if (value == null) {
-			value = new ProfileAggregate(key, symbol.name);
+			value = new ProfileAggregate(key, '${symbol.moduleId}:${symbol.functionId}', symbol.name);
 			functions.set(key, value);
 		}
 		return value;
@@ -312,7 +349,7 @@ class ProfilerSession {
 	function lineAggregate(symbol:HldiSymbol, source:HldiSourceLine):ProfileAggregate {
 		var key = '${symbol.moduleId}:${symbol.revision}:${symbol.functionId}:${source.file}:${source.line}', value = lines.get(key);
 		if (value == null) {
-			value = new ProfileAggregate(key, symbol.name, source.file, source.line);
+			value = new ProfileAggregate(key, '${symbol.moduleId}:${symbol.functionId}:${source.file}:${source.line}', symbol.name, source.file, source.line);
 			lines.set(key, value);
 		}
 		return value;
