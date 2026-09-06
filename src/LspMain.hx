@@ -1,3 +1,4 @@
+import editor.LspDispatcher;
 import editor.LspProtocol;
 import haxe.io.Bytes;
 import haxe.io.Eof;
@@ -7,7 +8,16 @@ class LspMain {
 	static function main():Void {
 		var protocol = new LspProtocol(),
 			input = Sys.stdin(),
-			output = Sys.stdout();
+			output = Sys.stdout(),
+			outputMutex = new sys.thread.Mutex(),
+			dispatcher = new LspDispatcher(protocol, response -> {
+				var bytes = Bytes.ofString(response);
+				outputMutex.acquire();
+				output.writeString('Content-Length: ${bytes.length}\r\n\r\n');
+				output.write(bytes);
+				output.flush();
+				outputMutex.release();
+			});
 		while (true) {
 			var contentLength = -1;
 			try {
@@ -24,14 +34,9 @@ class LspMain {
 			if (contentLength < 0)
 				continue;
 			var message = input.readString(contentLength);
-			for (response in protocol.handle(message)) {
-				var bytes = Bytes.ofString(response);
-				output.writeString('Content-Length: ${bytes.length}\r\n\r\n');
-				output.write(bytes);
-				output.flush();
-			}
-			if (protocol.shouldExit())
+			if (dispatcher.dispatch(message))
 				break;
 		}
+		dispatcher.finish();
 	}
 }

@@ -1,3 +1,4 @@
+import editor.LspDispatcher;
 import editor.LspProtocol;
 import editor.lsp.DocumentStore;
 import editor.lsp.DocumentStore.LspDocument;
@@ -97,9 +98,16 @@ class LspProtocolMain {
 			throw "LSP completion omitted compiler ranking or insertion metadata";
 		var blockingService = new BlockingLanguageService(),
 			blockingProtocol = new LspProtocol(blockingService),
-			cancelledResponse:Array<String> = null,
+			cancelledResponse:String = null,
 			cancelledDone = new sys.thread.Lock();
-		blockingProtocol.handle(Json.stringify({
+		var dispatcher = new LspDispatcher(blockingProtocol, response -> {
+			var parsed:Dynamic = Json.parse(response);
+			if (parsed.id == 88) {
+				cancelledResponse = response;
+				cancelledDone.release();
+			}
+		}, 4);
+		dispatcher.dispatch(Json.stringify({
 			jsonrpc: "2.0",
 			method: "textDocument/didOpen",
 			params: {
@@ -111,20 +119,18 @@ class LspProtocolMain {
 				}
 			}
 		}));
-		sys.thread.Thread.create(() -> {
-			cancelledResponse = blockingProtocol.handle(Json.stringify({
-				jsonrpc: "2.0",
-				id: 88,
-				method: "textDocument/completion",
-				params: {textDocument: {uri: uri}, position: {line: 0, character: source.length}}
-			}));
-			cancelledDone.release();
-		});
+		dispatcher.dispatch(Json.stringify({
+			jsonrpc: "2.0",
+			id: 88,
+			method: "textDocument/completion",
+			params: {textDocument: {uri: uri}, position: {line: 0, character: source.length}}
+		}));
 		blockingService.entered.wait();
-		blockingProtocol.handle('{"jsonrpc":"2.0","method":"$/cancelRequest","params":{"id":88}}');
+		dispatcher.dispatch('{"jsonrpc":"2.0","method":"$/cancelRequest","params":{"id":88}}');
 		blockingService.resume.release();
 		cancelledDone.wait();
-		if (cancelledResponse.length != 1 || Json.parse(cancelledResponse[0]).error.code != -32800)
+		dispatcher.finish();
+		if (Json.parse(cancelledResponse).error.code != -32800)
 			throw "LSP did not cancel an active completion request";
 		var diagnosticService = new LanguageService(),
 			diagnosticProtocol = new LspProtocol(diagnosticService),
