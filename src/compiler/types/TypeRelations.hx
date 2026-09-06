@@ -42,15 +42,14 @@ class TypeRelations {
 			return true;
 		return switch expected {
 			case TDynamic: true;
-			case TInstance(Class, expectedName, _):
+			case TInstance(Class, _, _):
 				switch actual {
-					case TInstance(Class, actualName, _): classReaches(actualName, expectedName);
+					case TInstance(Class, _, _): nominalReaches(actual, expected);
 					default: false;
 				}
-			case TInstance(Interface, expectedName, _):
+			case TInstance(Interface, _, _):
 				switch actual {
-					case TInstance(Class, actualName, _): classReaches(actualName, expectedName);
-					case TInstance(Interface, actualName, _): interfaceReaches(actualName, expectedName);
+					case TInstance(Class, _, _), TInstance(Interface, _, _): nominalReaches(actual, expected);
 					default: false;
 				}
 			case TNullable(expectedElement):
@@ -143,40 +142,51 @@ class TypeRelations {
 
 	public static function isReference(type:CompilerType):Bool
 		return switch type {
-			case TString, TBytes, THlBytes, TDynamic, TNativeAbstract(_), TInstance(Class, _, []), TInstance(Interface, _, []), TInstance(Enum, _, _),
+			case TString, TBytes, THlBytes, TDynamic, TNativeAbstract(_), TInstance(Class, _, _), TInstance(Interface, _, _), TInstance(Enum, _, _),
 				TAnonymous(_, _), TArray(_), TFunction(_, _), TMap(_, _): true;
 			default: false;
 		};
 
-	function classReaches(actual:String, expected:String):Bool {
-		if (actual == expected)
+	function nominalReaches(actual:CompilerType, expected:CompilerType):Bool {
+		if (equals(actual, expected))
 			return true;
-		if (!declarations.classes.exists(actual))
-			return interfaceReaches(actual, expected);
-		var decl = declarations.classes.get(actual), base = decl.base;
-		if (base != null && classReaches(inheritanceName(base), expected))
-			return true;
-		for (type in decl.interfaces)
-			if (interfaceReaches(inheritanceName(type), expected))
-				return true;
-		return false;
-	}
-
-	function interfaceReaches(actual:String, expected:String):Bool {
-		if (actual == expected)
-			return true;
-		if (!declarations.interfaces.exists(actual))
-			return false;
-		var decl = declarations.interfaces.get(actual);
-		for (base in decl.bases)
-			if (interfaceReaches(inheritanceName(base), expected))
-				return true;
-		return false;
-	}
-
-	static function inheritanceName(type:compiler.Ast.AstType):String
-		return switch type {
-			case NamedType(name), AppliedType(name, _): name;
-			default: throw "Inheritance requires a nominal type";
+		return switch actual {
+			case TInstance(Class, name, _):
+				if (!declarations.classes.exists(name)) false; else {
+					var decl = declarations.classes.get(name), substitutions = nominalSubstitutions(actual), found = false;
+					if (decl.base != null)
+						found = nominalReaches(declarations.resolve(decl.base, decl.span, substitutions), expected);
+					if (!found)
+						for (implemented in decl.interfaces)
+							if (nominalReaches(declarations.resolve(implemented, decl.span, substitutions), expected))
+								found = true;
+					found;
+				}
+			case TInstance(Interface, name, _):
+				if (!declarations.interfaces.exists(name)) false; else {
+					var decl = declarations.interfaces.get(name), substitutions = nominalSubstitutions(actual), found = false;
+					for (base in decl.bases)
+						if (nominalReaches(declarations.resolve(base, decl.span, substitutions), expected))
+							found = true;
+					found;
+				}
+			default: false;
 		};
+	}
+
+	function nominalSubstitutions(type:CompilerType):Map<String, CompilerType> {
+		var result:Map<String, CompilerType> = [];
+		switch type {
+			case TInstance(Class, name, arguments):
+				if (declarations.classes.exists(name))
+					for (index in 0...arguments.length)
+						result.set(declarations.classes.get(name).typeParameters[index], arguments[index]);
+			case TInstance(Interface, name, arguments):
+				if (declarations.interfaces.exists(name))
+					for (index in 0...arguments.length)
+						result.set(declarations.interfaces.get(name).typeParameters[index], arguments[index]);
+			default:
+		}
+		return result;
+	}
 }

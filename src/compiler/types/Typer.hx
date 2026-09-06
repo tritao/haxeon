@@ -2158,10 +2158,11 @@ class Typer {
 							var specialized = specializeGeneric(methodKey, method, genericArguments, span, methodInfoResult.owner, true);
 							return specialized;
 						}
-						var substitutions = nominalSubstitutions(receiverType),
+						var methodOwnerType = projectNominal(receiverType, methodInfoResult.owner),
+							substitutions = nominalSubstitutions(methodOwnerType),
 							typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span, substitutions),
 							semanticResult = declarations.resolve(method.result, method.span, substitutions),
-							physicalResult = isGenericNominal(receiverType) ? TDynamic : semanticResult,
+							physicalResult = isGenericNominal(methodOwnerType) ? TDynamic : semanticResult,
 							call = new TypedExpression(TMethodCall(resolvedReceiver, methodKey, typed), physicalResult, span);
 						applyCallEffect(abiBoundaryCast(call, semanticResult), methodKey);
 					} else {
@@ -2209,24 +2210,28 @@ class Typer {
 		return noReturnFunctions.exists(name) ? new TypedExpression(TNoReturn(call), TNever, call.span) : call;
 
 	function typeSuperCall(arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
-		var owner = parentPath(context.name), base:Null<String> = null;
+		var owner = parentPath(context.name), baseType:Null<AstType> = null;
 		if (owner != null && classDecls.exists(owner))
-			base = inheritanceName(requiredMapValue(classDecls, owner).base);
-		if (base == null)
+			baseType = requiredMapValue(classDecls, owner).base;
+		if (baseType == null)
 			fail("E1007", "super() requires a base-class constructor", span);
-		var resolvedBase = requiredString(base),
+		var baseInstance = declarations.resolve(baseType, span, context.typeSubstitutions),
+			resolvedBase = nominalName(baseInstance),
+			substitutions = nominalSubstitutions(baseInstance),
 			constructorName = resolvedBase + ".new",
 			hasConstructor = signatures.exists(constructorName),
 			expected = hasConstructor ? [
 				for (argument in requiredMapValue(signatures, constructorName).arguments)
-					argumentType(argument)
+					argumentType(argument, substitutions)
 			] : PlatformAbi.constructorArguments(resolvedBase),
 			resolvedExpected:Array<CompilerType> = [];
 		if (expected != null)
 			resolvedExpected = expected;
 		if (arguments.length != resolvedExpected.length)
 			fail("E1008", 'Constructor "$resolvedBase" expects ${resolvedExpected.length} arguments, got ${arguments.length}', span);
-		return new TypedExpression(TSuperCall(resolvedBase, typeCallArguments(arguments, resolvedExpected, scope, constructorName)), TVoid, span);
+		var semanticArguments = typeCallArguments(arguments, resolvedExpected, scope, constructorName),
+			physicalArguments = isGenericNominal(baseInstance) ? [for (argument in semanticArguments) abiBoundaryCast(argument, TDynamic)] : semanticArguments;
+		return new TypedExpression(TSuperCall(resolvedBase, physicalArguments), TVoid, span);
 	}
 
 	function seedLambdaScope(statements:Array<AstStatement>, scope:Scope):Void {
@@ -2447,12 +2452,13 @@ class Typer {
 		var methodInfoResult = findMethod(className, name);
 		if (methodInfoResult == null || methodInfoResult.isStatic)
 			fail("E1007", 'Unknown instance method "$className.$name"', span);
-		var substitutions = nominalSubstitutions(receiver.type),
+		var methodOwnerType = projectNominal(receiver.type, methodInfoResult.owner),
+			substitutions = nominalSubstitutions(methodOwnerType),
 			methodKey = methodInfoResult.owner + "." + name,
 			method = signatures.get(methodKey),
 			typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span, substitutions);
 		var semanticResult = declarations.resolve(method.result, method.span, substitutions),
-			physicalResult = isGenericNominal(receiver.type) ? TDynamic : semanticResult,
+			physicalResult = isGenericNominal(methodOwnerType) ? TDynamic : semanticResult,
 			call = new TypedExpression(TMethodCall(receiver, methodKey, typed), physicalResult, span);
 		return applyCallEffect(abiBoundaryCast(call, semanticResult), methodKey);
 	}
@@ -2697,6 +2703,46 @@ class Typer {
 		return result;
 	}
 
+	function projectNominal(type:CompilerType, target:String):CompilerType {
+		if (nominalName(type) == target)
+			return type;
+		return switch type {
+			case TInstance(Class, name, _) if (classDecls.exists(name)):
+				var decl = classDecls.get(name),
+					substitutions = nominalSubstitutions(type),
+					result:Null<CompilerType> = null;
+				if (decl.base != null) {
+					var candidate = projectNominal(declarations.resolve(decl.base, decl.span, substitutions), target);
+					if (nominalName(candidate) == target)
+						result = candidate;
+				}
+				if (result == null)
+					for (implemented in decl.interfaces) {
+						var candidate = projectNominal(declarations.resolve(implemented, decl.span, substitutions), target);
+						if (nominalName(candidate) == target)
+							result = candidate;
+					}
+				result == null ? type : result;
+			case TInstance(Interface, name, _) if (interfaceDecls.exists(name)):
+				var decl = interfaceDecls.get(name),
+					substitutions = nominalSubstitutions(type),
+					result:Null<CompilerType> = null;
+				for (base in decl.bases) {
+					var candidate = projectNominal(declarations.resolve(base, decl.span, substitutions), target);
+					if (nominalName(candidate) == target)
+						result = candidate;
+				}
+				result == null ? type : result;
+			default: type;
+		};
+	}
+
+	static function nominalName(type:CompilerType):String
+		return switch type {
+			case TInstance(_, name, _): name;
+			default: "";
+		};
+
 	static function inheritanceName(type:AstType):String
 		return switch type {
 			case NamedType(name), AppliedType(name, _): name;
@@ -2835,7 +2881,7 @@ class Typer {
 							return declarations.resolve(FieldInference.parsedType(field), field.span, nominalSubstitutions(type));
 					var base = classDecl.base;
 					if (base != null)
-						return fieldType(TInstance(Class, inheritanceName(base), []), name, span);
+						return fieldType(declarations.resolve(base, classDecl.span, nominalSubstitutions(type)), name, span);
 				}
 				throw new CompileError(new Diagnostic("E1005", 'Unknown field "$className.$name"', span));
 			default:
@@ -2875,7 +2921,7 @@ class Typer {
 							found = declarations.resolve(FieldInference.parsedType(field), field.span, nominalSubstitutions(type));
 					var base = classDecl.base;
 					if (found == null && base != null)
-						found = findFieldType(TInstance(Class, inheritanceName(base), []), name);
+						found = findFieldType(declarations.resolve(base, classDecl.span, nominalSubstitutions(type)), name);
 				}
 				found;
 			default: null;

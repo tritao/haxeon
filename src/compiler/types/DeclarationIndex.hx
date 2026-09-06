@@ -340,8 +340,10 @@ class DeclarationIndex {
 			fail('Cyclic class inheritance involving "$name"', decl.span);
 		visiting.set(name, true);
 		var base = decl.base;
-		if (base != null)
-			visitClass(requiredNominalName(resolve(base, decl.span)), visiting);
+		if (base != null) {
+			var substitutions = declarationSubstitutions(decl.name, decl.typeParameters);
+			visitClass(requiredNominalName(resolve(base, decl.span, substitutions)), visiting);
+		}
 		visiting.remove(name);
 	}
 
@@ -352,9 +354,17 @@ class DeclarationIndex {
 		if (visiting.exists(name))
 			fail('Cyclic interface inheritance involving "$name"', decl.span);
 		visiting.set(name, true);
+		var substitutions = declarationSubstitutions(decl.name, decl.typeParameters);
 		for (base in decl.bases)
-			visitInterface(requiredNominalName(resolve(base, decl.span)), visiting);
+			visitInterface(requiredNominalName(resolve(base, decl.span, substitutions)), visiting);
 		visiting.remove(name);
+	}
+
+	static function declarationSubstitutions(owner:String, parameters:Array<String>):Map<String, CompilerType> {
+		var result:Map<String, CompilerType> = [];
+		for (parameter in parameters)
+			result.set(parameter, TTypeParameter(owner, parameter));
+		return result;
 	}
 
 	static function nominalName(type:CompilerType):Null<String>

@@ -549,6 +549,17 @@ class TestMain {
 				throw "Generic nominal arguments were not preserved semantically";
 		}
 		Sys.println("PASS: generic class and interface arguments resolve semantically");
+		expectCompileError("interface Source<T> { function get():T; } class TextSource implements Source<String> { public function get():String return \"no\"; } function consume(value:Source<Int>):Int return 42; function main():Int return consume(new TextSource());",
+			'Type mismatch for argument 1 to "consume"');
+		var genericReloadCompiler = new Compiler();
+		genericReloadCompiler.update("Main.hx",
+			"class Box<T> { public function new() {} } function main():Int { var value:Box<Int> = new Box<Int>(); return 42; }");
+		genericReloadCompiler.compile("Main");
+		genericReloadCompiler.update("Main.hx",
+			"class Box<T> { public function new() {} } function main():Int { var value:Box<String> = new Box<String>(); return 42; }");
+		if (genericReloadCompiler.compile("Main").requiresReload)
+			throw "Semantic-only generic argument change required runtime reload";
+		Sys.println("PASS: erased generic argument edits remain hot-patch compatible");
 		expectCompileError("function consume(value:Missing):Int { return 0; } function main():Int { return 0; }", 'Unknown type "Missing"');
 		expectCompileError("typedef Loop = Loop; function main():Int { return 0; }", 'Cyclic type alias involving "Loop"');
 		expectCompileError("class Loop extends Loop { } function main():Int { return 0; }", 'Cyclic class inheritance involving "Loop"');
