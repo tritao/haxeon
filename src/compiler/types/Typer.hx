@@ -12,6 +12,7 @@ import compiler.Ast.AstEnum;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.AnonymousField;
 import compiler.types.RuntimeType;
+import compiler.types.RuntimeShape.RuntimeShapes;
 import compiler.types.SemanticProgram.SemanticMethodInfo;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedExpressionKind;
@@ -63,7 +64,8 @@ class Typer {
 	final bodyContexts:Array<BodyContext> = [new BodyContext("")];
 	var context(get, never):BodyContext;
 	final anonymousTypes:Map<String, Array<compiler.types.Type.AnonymousField>> = [];
-	final genericSpecializations:Map<String, String> = [];
+	final genericSpecializations:GenericSpecializationRegistry;
+	final emittedGenericBodies:Map<String, Bool> = [];
 	final noReturnFunctions:Map<String, Bool> = [];
 
 	inline function get_context():BodyContext
@@ -82,11 +84,11 @@ class Typer {
 	}
 
 	public static function type(program:AstProgram):TypedProgram
-		return new Typer(null).typeProgramMeasured(SemanticProgram.analyze(program), null, true, null).program;
+		return new Typer(null, null).typeProgramMeasured(SemanticProgram.analyze(program), null, true, null).program;
 
 	/** Type a reusable module without requiring an executable main function. */
 	public static function typeLibrary(program:AstProgram):TypedProgram
-		return new Typer(null).typeProgramMeasured(SemanticProgram.analyze(program), null, false, null).program;
+		return new Typer(null, null).typeProgramMeasured(SemanticProgram.analyze(program), null, false, null).program;
 
 	public static function typeSelected(program:AstProgram, selected:Map<String, Bool>,
 			?externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>, ?entryPoint:String):TypedProgram
@@ -97,11 +99,14 @@ class Typer {
 		return typeAnalyzedMeasured(semantic, selected, externals, entryPoint).program;
 
 	public static function typeAnalyzedMeasured(semantic:SemanticProgram, selected:Map<String, Bool>,
-			?externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>, ?entryPoint:String):MeasuredTypedProgram
-		return new Typer(externals).typeProgramMeasured(semantic, selected, true, entryPoint);
+			?externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>, ?entryPoint:String,
+			?specializations:GenericSpecializationRegistry):MeasuredTypedProgram
+		return new Typer(externals, specializations).typeProgramMeasured(semantic, selected, true, entryPoint);
 
-	function new(externals:Null<Map<String, {arguments:Array<CompilerType>, result:CompilerType}>>)
+	function new(externals:Null<Map<String, {arguments:Array<CompilerType>, result:CompilerType}>>, specializations:Null<GenericSpecializationRegistry>) {
 		this.externals = externals == null ? [] : externals;
+		this.genericSpecializations = specializations == null ? new GenericSpecializationRegistry() : specializations;
+	}
 
 	function typeProgramMeasured(semantic:SemanticProgram, selected:Null<Map<String, Bool>>, requireMain:Bool, entryPoint:Null<String>):MeasuredTypedProgram {
 		var startedAt = Sys.time() * 1000.0;
@@ -151,7 +156,7 @@ class Typer {
 								name: caseDecl.name,
 								params: [
 									for (param in caseDecl.params)
-										erasedEnumParameter(enumDecl, param, enumRuntimeArguments(enumDecl, program))
+										erasedEnumParameter(enumDecl, param)
 								],
 								span: caseDecl.span
 							}
@@ -547,7 +552,7 @@ class Typer {
 		context.resultType = result;
 		inferBodyLocalTypes(fn.statements, result);
 		var statements = typeStatements(fn.statements, scope, result);
-		if (result != TVoid && !ControlFlow.alwaysReturns(statements, exhaustiveEnum))
+		if (result != TVoid && !ControlFlow.alwaysReturns(statements, function(type, cases) return this.exhaustiveEnum(type, cases)))
 			fail("E1006", 'Function ${fn.name} does not return on every path', fn.span);
 		var typeArguments:Null<Array<CompilerType>> = null,
 			typeParameters = fn.typeParameters;
@@ -587,7 +592,7 @@ class Typer {
 		var output = [];
 		for (statementIndex in 0...statements.length) {
 			var statement = statements[statementIndex];
-			if (ControlFlow.alwaysReturns(output, exhaustiveEnum)) {
+			if (ControlFlow.alwaysReturns(output, function(type, cases) return this.exhaustiveEnum(type, cases))) {
 				if (isNoReturnPlaceholder(output, statement))
 					continue;
 				fail("E1012", "Unreachable statement", statementSpan(statement));
@@ -672,10 +677,10 @@ class Typer {
 					var typedTry = typeStatements(tryBranch, tryScope, result);
 					output.push(TTry(typedTry, typedCatches, span));
 					var continuing:Array<Scope> = [];
-					if (!ControlFlow.alwaysExits(typedTry, exhaustiveEnum))
+					if (!ControlFlow.alwaysExits(typedTry, function(type, cases) return this.exhaustiveEnum(type, cases)))
 						continuing.push(tryScope);
 					for (i in 0...typedCatches.length)
-						if (!ControlFlow.alwaysExits(typedCatches[i].statements, exhaustiveEnum))
+						if (!ControlFlow.alwaysExits(typedCatches[i].statements, function(type, cases) return this.exhaustiveEnum(type, cases)))
 							continuing.push(catchScopes[i]);
 					scope.mergeAssignmentsFrom(continuing);
 				case Break(span):
@@ -817,14 +822,15 @@ class Typer {
 						typedElse = typeStatements(elseBranch, elseScope, result);
 					output.push(TIf(typedCondition, typedThen, typedElse, span));
 					var continuing:Array<Scope> = [];
-					if (!ControlFlow.alwaysExits(typedThen, exhaustiveEnum))
+					if (!ControlFlow.alwaysExits(typedThen, function(type, cases) return this.exhaustiveEnum(type, cases)))
 						continuing.push(thenScope);
 					if (elseBranch.length == 0)
 						continuing.push(scope);
-					else if (!ControlFlow.alwaysExits(typedElse, exhaustiveEnum))
+					else if (!ControlFlow.alwaysExits(typedElse, function(type, cases) return this.exhaustiveEnum(type, cases)))
 						continuing.push(elseScope);
 					scope.mergeAssignmentsFrom(continuing);
-					if (elseBranch.length == 0 && ControlFlow.alwaysExits(typedThen, exhaustiveEnum))
+					if (elseBranch.length == 0
+						&& ControlFlow.alwaysExits(typedThen, function(type, cases) return this.exhaustiveEnum(type, cases)))
 						FlowAnalysis.refineAfterGuard(scope, typedCondition);
 				case While(predicate, body, span):
 					var typedCondition = typeExpression(predicate, scope);
@@ -942,10 +948,10 @@ class Typer {
 					output.push(TSwitch(typedExpression, typedCases, typedDefault, hasDefault, span));
 					var continuing:Array<Scope> = [];
 					for (i in 0...typedCases.length)
-						if (!ControlFlow.alwaysExits(typedCases[i].statements, exhaustiveEnum))
+						if (!ControlFlow.alwaysExits(typedCases[i].statements, function(type, cases) return this.exhaustiveEnum(type, cases)))
 							continuing.push(caseScopes[i]);
 					if (hasDefault) {
-						if (!ControlFlow.alwaysExits(typedDefault, exhaustiveEnum))
+						if (!ControlFlow.alwaysExits(typedDefault, function(type, cases) return this.exhaustiveEnum(type, cases)))
 							continuing.push(defaultScope);
 					} else if (!exhaustiveEnum(typedExpression.type, typedCases))
 						continuing.push(scope);
@@ -1177,9 +1183,7 @@ class Typer {
 						if (index >= info.params.length)
 							break;
 						var parameter = info.params[index],
-							parameterType = lowerType(parameter.type);
-						if (parameter.optional)
-							parameterType = TNullable(parameterType);
+							parameterType = enumStorageParameterType(info.typeParameters, parameter);
 						changed = constrainLocalExpression(arguments[index], parameterType) || changed;
 					}
 				else {
@@ -1254,7 +1258,11 @@ class Typer {
 					case TEnum(_, _): expected;
 					default: TEnum(info.enumName, []);
 				};
-				if (enumName(instanceType) != info.enumName)
+				var instanceName = switch instanceType {
+					case TEnum(value, _): value;
+					default: "";
+				};
+				if (instanceName != info.enumName)
 					fail("E1019", "Enum switch case has the wrong enum type", span);
 				var required = requiredEnumParameters(info.params);
 				if (arguments.length < required || arguments.length > info.params.length)
@@ -1267,7 +1275,12 @@ class Typer {
 						case Variable(binding, bindingSpan):
 							if (binding != "_") {
 								scope.define(binding, parameterType, bindingSpan);
-								bindings.push({name: scope.requireId(binding), type: parameterType, index: index});
+								bindings.push({
+									name: scope.requireId(binding),
+									type: parameterType,
+									storageType: enumStorageParameterType(info.typeParameters, parameter),
+									index: index
+								});
 							}
 						default:
 							fail("E1019", "Enum switch payloads must bind local names or '_'", span);
@@ -1322,8 +1335,21 @@ class Typer {
 								var expectedEnum = enumDecls.get(expectedEnumName);
 								for (index in 0...expectedEnum.cases.length) {
 									var enumCase = expectedEnum.cases[index];
-									if (enumCase.name == name && enumCase.params.length == 0)
-										return new TypedExpression(TEnumLiteral(expectedEnum.name, index), expectedType, span);
+									if (enumCase.name == name && enumCase.params.length == 0) {
+										var literalType:CompilerType = TEnum(expectedEnum.name, []);
+										var resolvedExpected = expectedType;
+										if (resolvedExpected != null)
+											switch resolvedExpected {
+												case TEnum(_, arguments): literalType = TEnum(expectedEnum.name, arguments);
+												case TNullable(element):
+													switch element {
+														case TEnum(_, arguments): literalType = TEnum(expectedEnum.name, arguments);
+														default:
+													}
+												default:
+											}
+										return new TypedExpression(TEnumLiteral(expectedEnum.name, index), literalType, span);
+									}
 								}
 							}
 							var thisType = scope.resolve("this");
@@ -1461,8 +1487,14 @@ class Typer {
 						context.cells.set(name, '$' + 'cell:' + lambdaName + ':' + name);
 						context.cellKinds.set(name, MutableCapture);
 					}
-					var typedBody = typeStatements(body, typedBodyScope, expectedFunction == null ? null : expectedFunction.result),
-						inferredResult = expectedFunction == null ? (context.inferredResult == null ? TVoid : context.inferredResult) : expectedFunction.result;
+					var typedBody = typeStatements(body, typedBodyScope, expectedFunction == null ? null : expectedFunction.result);
+					var inferredResult:CompilerType;
+					if (expectedFunction != null)
+						inferredResult = expectedFunction.result;
+					else {
+						var contextualResult = context.inferredResult;
+						inferredResult = contextualResult == null ? CompilerType.TVoid : contextualResult;
+					}
 					context.resultType = inferredResult;
 					var lambdaCells = copyMap(context.cells),
 						lambdaCellTypes = copyMap(context.cellTypes),
@@ -1471,7 +1503,8 @@ class Typer {
 						if (lambdaCells.exists(arguments[i].name))
 							lambdaArguments[i] = {name: arguments[i].name, type: lambdaArguments[i].type};
 					leaveBody(lambdaContext);
-					if (inferredResult != TVoid && !ControlFlow.alwaysReturns(typedBody, exhaustiveEnum))
+					if (inferredResult != TVoid
+						&& !ControlFlow.alwaysReturns(typedBody, function(type, cases) return this.exhaustiveEnum(type, cases)))
 						fail("E1006", 'Function $lambdaName does not return on every path', span);
 					var environment:Null<String> = null;
 					if (captures.length > 0)
@@ -1549,7 +1582,7 @@ class Typer {
 			case BlockExpression(statements, result, span):
 				var blockScope = new Scope(scope),
 					typedStatements = typeStatements(statements, blockScope, context.resultType);
-				if (ControlFlow.alwaysExits(typedStatements, exhaustiveEnum))
+				if (ControlFlow.alwaysExits(typedStatements, function(type, cases) return this.exhaustiveEnum(type, cases)))
 					return new TypedExpression(TBlockExpression(typedStatements, new TypedExpression(TUnreachable, TNever, span)), TNever, span);
 				var typedResult = typeExpression(result, blockScope, expectedType);
 				new TypedExpression(TBlockExpression(typedStatements, typedResult), typedResult.type, span);
@@ -1957,7 +1990,7 @@ class Typer {
 									fail("E1007", "Generic instance methods are not supported yet", span);
 								var genericArguments = [for (argument in arguments) typeExpression(argument, scope)],
 									specialized = specializeGeneric(methodKey, method, genericArguments, span, implicitMethod.owner, true);
-								return new TypedExpression(TCall(specialized.name, specialized.arguments), specialized.result, span);
+								return specialized;
 							}
 							var typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span);
 							if (implicitMethod.isStatic)
@@ -2003,8 +2036,21 @@ class Typer {
 						while (typedArguments.length < expected.length)
 							typedArguments.push(new TypedExpression(TNullLiteral, TNull, span));
 						typedArguments = coerceArguments(typedArguments, expected, name);
-						var resultType = expectedType != null
-							&& enumName(expectedType) == enumCase.enumName ? expectedType : TEnum(enumCase.enumName, []);
+						for (index in 0...typedArguments.length)
+							typedArguments[index] = abiBoundaryCast(typedArguments[index],
+								enumStorageParameterType(enumCase.typeParameters, enumCase.params[index]));
+						var resultType:CompilerType = TEnum(enumCase.enumName, []);
+						var resolvedExpected = expectedType;
+						if (resolvedExpected != null)
+							switch resolvedExpected {
+								case TEnum(expectedName, _) if (expectedName == enumCase.enumName): resultType = resolvedExpected;
+								case TNullable(element):
+									switch element {
+										case TEnum(expectedName, _) if (expectedName == enumCase.enumName): resultType = resolvedExpected;
+										default:
+									}
+								default:
+							}
 						return new TypedExpression(TEnumConstruct(enumCase.enumName, enumCase.index, typedArguments), resultType, span);
 					}
 					if (receiverType != null && methodName != null) {
@@ -2041,7 +2087,7 @@ class Typer {
 								fail("E1007", "Generic instance methods are not supported yet", span);
 							var genericArguments = [for (argument in arguments) typeExpression(argument, scope)];
 							var specialized = specializeGeneric(methodKey, method, genericArguments, span, methodInfoResult.owner, true);
-							return new TypedExpression(TCall(specialized.name, specialized.arguments), specialized.result, span);
+							return specialized;
 						}
 						var typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span);
 						applyCallEffect(new TypedExpression(TMethodCall(resolvedReceiver, methodKey, typed), lowerType(method.result), span), methodKey);
@@ -2058,7 +2104,7 @@ class Typer {
 							}
 							var typed = [for (argument in arguments) typeExpression(argument, scope)],
 								specialized = specializeGeneric(name, signature, typed, span, infoOwner, infoStatic);
-							return new TypedExpression(TCall(specialized.name, specialized.arguments), specialized.result, span);
+							return specialized;
 						}
 						var expectedArguments:Array<CompilerType> = [],
 							result:CompilerType = TVoid;
@@ -2145,7 +2191,7 @@ class Typer {
 	}
 
 	function specializeGeneric(baseName:String, fn:AstFunction, arguments:Array<TypedExpression>, span:SourceSpan, owner:Null<String>,
-			isStatic:Bool):{name:String, arguments:Array<TypedExpression>, result:CompilerType} {
+			isStatic:Bool):TypedExpression {
 		if (arguments.length != fn.arguments.length)
 			fail("E1008", 'Function "$baseName" expects ${fn.arguments.length} arguments, got ${arguments.length}', span);
 		var substitutions:Map<String, CompilerType> = [],
@@ -2155,21 +2201,61 @@ class Typer {
 		for (parameter in parameters)
 			if (!substitutions.exists(parameter))
 				fail("E1003", 'Cannot infer generic type parameter "$parameter" for "$baseName"', span);
-		var expected = [
+		var semanticExpected = [
 			for (argument in fn.arguments)
 				declarations.resolve(argument.type, argument.span, substitutions)
-		], typed = coerceArguments(arguments, expected, baseName), result = declarations.resolve(fn.result, fn.span, substitutions), key = baseName + "<" + [
+		], semanticArguments = coerceArguments(arguments, semanticExpected,
+			baseName), result = declarations.resolve(fn.result, fn.span, substitutions), representationSubstitutions:Map<String, CompilerType> = [];
+		for (parameter in parameters)
+			representationSubstitutions.set(parameter,
+				requiresConcreteRepresentation(fn,
+					parameter) ? requiredMapValue(substitutions, parameter) : RuntimeShapes.representative(requiredMapValue(substitutions, parameter)));
+		var representationExpected = [
+			for (argument in fn.arguments)
+				declarations.resolve(argument.type, argument.span, representationSubstitutions)
+		], typed = [
+			for (index in 0...semanticArguments.length)
+				abiBoundaryCast(semanticArguments[index], representationExpected[index])
+			], representationResult = declarations.resolve(fn.result, fn.span, representationSubstitutions), representationArguments = [
 			for (parameter in parameters)
-				SemanticSignature.type(requiredMapValue(substitutions, parameter))
-			].join(",") + ">", resolvedName:String;
-		if (genericSpecializations.exists(key))
-			resolvedName = requiredMapValue(genericSpecializations, key);
-		else {
-			resolvedName = '$' + 'generic:$key';
-			genericSpecializations.set(key, resolvedName);
-			closureConversion.addFunction(typeFunction(fn, owner, isStatic, substitutions, resolvedName));
+				requiredMapValue(representationSubstitutions, parameter)
+			], specialization = genericSpecializations.request(baseName, representationArguments);
+		if (!emittedGenericBodies.exists(specialization.name)) {
+			emittedGenericBodies.set(specialization.name, true);
+			closureConversion.addFunction(typeFunction(fn, owner, isStatic, representationSubstitutions, specialization.name));
 		}
-		return {name: resolvedName, arguments: typed, result: result};
+		var call = new TypedExpression(TCall(specialization.name, typed), representationResult, span);
+		return sameType(representationResult, result) ? call : abiBoundaryCast(call, result);
+	}
+
+	static function requiresConcreteRepresentation(fn:AstFunction, parameter:String):Bool {
+		for (argument in fn.arguments)
+			if (containsNestedTypeParameter(argument.type, parameter, false))
+				return true;
+		return containsNestedTypeParameter(fn.result, parameter, false);
+	}
+
+	static function containsNestedTypeParameter(type:AstType, parameter:String, nested:Bool):Bool
+		return switch type {
+			case NamedType(name): nested && name == parameter;
+			case AppliedType(_, arguments): containsNestedIn(arguments, parameter);
+			case ArrayType(element), NullableType(element): containsNestedTypeParameter(element, parameter, true);
+			case MapType(key, value): containsNestedTypeParameter(key, parameter, true) || containsNestedTypeParameter(value, parameter, true);
+			case FunctionType(arguments, result): containsNestedIn(arguments, parameter) || containsNestedTypeParameter(result, parameter, true);
+			case AnonymousType(fields):
+				var found = false;
+				for (field in fields)
+					if (containsNestedTypeParameter(field.type, parameter, true))
+						found = true;
+				found;
+			default: false;
+		};
+
+	static function containsNestedIn(types:Array<AstType>, parameter:String):Bool {
+		for (type in types)
+			if (containsNestedTypeParameter(type, parameter, true))
+				return true;
+		return false;
 	}
 
 	function inferTypeParameters(pattern:AstType, actual:CompilerType, parameters:Array<String>, substitutions:Map<String, CompilerType>, span:SourceSpan):Void
@@ -2581,41 +2667,40 @@ class Typer {
 	}
 
 	function enumParameterType(typeParameters:Array<String>, parameter:compiler.Ast.AstEnumParameter, instance:Null<CompilerType>):CompilerType {
-		var resolved:CompilerType = switch parameter.type {
-			case NamedType(name) if (typeParameters.indexOf(name) >= 0):
-				var index = typeParameters.indexOf(name);
-				switch instance {
-					case TEnum(_, arguments) if (index < arguments.length): arguments[index];
-					default: TDynamic;
+		var substitutions:Map<String, CompilerType> = [];
+		for (index in 0...typeParameters.length) {
+			var argument:CompilerType = TDynamic;
+			var resolvedInstance = instance;
+			if (resolvedInstance != null)
+				switch resolvedInstance {
+					case TEnum(_, arguments) if (index < arguments.length):
+						argument = arguments[index];
+					default:
 				}
-			default: lowerType(parameter.type);
-		};
+			substitutions.set(typeParameters[index], argument);
+		}
+		var resolved = declarations.resolve(parameter.type, parameter.span, substitutions);
 		return parameter.optional ? TNullable(resolved) : resolved;
 	}
 
-	function erasedEnumParameter(declaration:AstEnum, parameter:compiler.Ast.AstEnumParameter, arguments:Array<CompilerType>):CompilerType {
-		var parameterIndex = declaration.typeParameters.indexOf(switch parameter.type {
-			case NamedType(name): name;
-			default: "";
-		}),
-			type = parameterIndex >= 0 && parameterIndex < arguments.length ? arguments[parameterIndex] : lowerType(parameter.type);
+	function enumStorageParameterType(typeParameters:Array<String>, parameter:compiler.Ast.AstEnumParameter):CompilerType {
+		// A HashLink enum has one physical constructor layout for every source
+		// specialization. Erase all payloads of a generic enum so two uses cannot
+		// publish incompatible field representations for that shared layout.
+		if (typeParameters.length > 0)
+			return TDynamic;
+		var substitutions:Map<String, CompilerType> = [];
+		for (name in typeParameters)
+			substitutions.set(name, TDynamic);
+		var type = declarations.resolve(parameter.type, parameter.span, substitutions);
 		return parameter.optional ? TNullable(type) : type;
 	}
 
-	function enumRuntimeArguments(declaration:AstEnum, program:AstProgram):Array<CompilerType> {
-		for (fn in program.functions) {
-			var types = [fn.result];
-			for (argument in fn.arguments)
-				types.push(argument.type);
-			for (type in types)
-				switch type {
-					case AppliedType(name, arguments) if (name == declaration.name):
-						return [for (argument in arguments) lowerType(argument)];
-					default:
-				}
-		}
-		return [for (_ in declaration.typeParameters) TDynamic];
-	}
+	function erasedEnumParameter(declaration:AstEnum, parameter:compiler.Ast.AstEnumParameter):CompilerType
+		return enumStorageParameterType(declaration.typeParameters, parameter);
+
+	function abiBoundaryCast(value:TypedExpression, target:CompilerType):TypedExpression
+		return sameType(value.type, target) ? value : new TypedExpression(TAbiCast(value), target, value.span);
 
 	static function requiredEnumParameters(parameters:Array<compiler.Ast.AstEnumParameter>):Int {
 		var minimum = 0;
@@ -2768,7 +2853,8 @@ class Typer {
 		}
 		if (operation == 2 && sameType(left.type, right.type))
 			switch left.type {
-				case TEnum(_, _), TNullable(_):
+				case TDynamic, TNativeAbstract(_), TClass(_), TInterface(_), TEnum(_, _), TNullable(_), TArray(_), TMap(_, _), TFunction(_, _),
+					TAnonymous(_, _):
 					return new TypedExpression(TEqual(left, right), TBool, span);
 				default:
 			}

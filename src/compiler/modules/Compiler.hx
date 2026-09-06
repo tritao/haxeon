@@ -17,6 +17,7 @@ import compiler.types.SignatureInference;
 import compiler.types.Typer;
 import compiler.types.Typer.TyperPhaseMetrics;
 import compiler.types.SemanticSignature;
+import compiler.types.GenericSpecializationRegistry;
 import compiler.types.SemanticProgram;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.hl.HlCode;
@@ -99,6 +100,8 @@ typedef ValidationResult = {
  * Compilation is transactional: failed edits do not replace published artifacts.
  */
 class Compiler {
+	final genericSpecializations = new GenericSpecializationRegistry();
+
 	public final modules:Map<String, ModuleState> = [];
 	public final semanticWorkspace:SemanticWorkspace;
 
@@ -256,11 +259,12 @@ class Compiler {
 	}
 
 	public function compile(entryModule:String, ?token:CancellationToken):CompileResult {
-		var cached = cachedCompileResult;
+		var cached = cachedCompileResult, cachedEntry = cachedCompileEntry;
 		if (!publication.status().tracking
 			&& cached != null
 			&& cachedCompileGeneration == sourceGeneration
-			&& cachedCompileEntry == entryModule) {
+			&& cachedEntry != null
+			&& cachedEntry == entryModule) {
 			if (token != null)
 				token.check();
 			return {
@@ -366,7 +370,7 @@ class Compiler {
 			var state = modules.get(name);
 			var ast = state.parsedAst();
 			for (classDecl in ast.classes)
-				initializationClasses.push(qualifiedTypeName(ast.packageName, classDecl.name));
+				initializationClasses.push(ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name));
 		}
 
 		var functions:Array<AstFunction> = [],
@@ -385,17 +389,23 @@ class Compiler {
 			var moduleState = modules.get(moduleName),
 				program = moduleState.parsedAst();
 			for (declaration in program.aliases)
-				sourceTypeAliases.set(sourceDeclarationPath(moduleName, declaration.name), qualifiedTypeName(program.packageName, declaration.name));
+				sourceTypeAliases.set(ModuleCanonicalizer.sourceDeclarationPath(moduleName, declaration.name),
+					ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name));
 			for (declaration in program.enums)
-				sourceTypeAliases.set(sourceDeclarationPath(moduleName, declaration.name), qualifiedTypeName(program.packageName, declaration.name));
+				sourceTypeAliases.set(ModuleCanonicalizer.sourceDeclarationPath(moduleName, declaration.name),
+					ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name));
 			for (declaration in program.enumAbstracts)
-				sourceTypeAliases.set(sourceDeclarationPath(moduleName, declaration.name), qualifiedTypeName(program.packageName, declaration.name));
+				sourceTypeAliases.set(ModuleCanonicalizer.sourceDeclarationPath(moduleName, declaration.name),
+					ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name));
 			for (declaration in program.abstracts)
-				sourceTypeAliases.set(sourceDeclarationPath(moduleName, declaration.name), qualifiedTypeName(program.packageName, declaration.name));
+				sourceTypeAliases.set(ModuleCanonicalizer.sourceDeclarationPath(moduleName, declaration.name),
+					ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name));
 			for (declaration in program.interfaces)
-				sourceTypeAliases.set(sourceDeclarationPath(moduleName, declaration.name), qualifiedTypeName(program.packageName, declaration.name));
+				sourceTypeAliases.set(ModuleCanonicalizer.sourceDeclarationPath(moduleName, declaration.name),
+					ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name));
 			for (declaration in program.classes)
-				sourceTypeAliases.set(sourceDeclarationPath(moduleName, declaration.name), qualifiedTypeName(program.packageName, declaration.name));
+				sourceTypeAliases.set(ModuleCanonicalizer.sourceDeclarationPath(moduleName, declaration.name),
+					ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name));
 		}
 		for (name in names) {
 			if (token != null)
@@ -449,17 +459,17 @@ class Compiler {
 				}
 				visiblePackage = separator < 0 ? null : currentPackage.substring(0, separator);
 			}
-			addDeclaredTypeAliases(aliases, ast, ast.packageName);
+			ModuleCanonicalizer.addDeclaredTypeAliases(aliases, ast, ast.packageName);
 			for (interfaceDecl in ast.interfaces)
-				interfaces.push(canonicalInterface(interfaceDecl, aliases, ast.packageName));
+				interfaces.push(ModuleCanonicalizer.canonicalInterface(interfaceDecl, aliases, ast.packageName));
 			for (alias in ast.aliases)
-				typeAliases.push(canonicalAlias(alias, aliases, ast.packageName));
+				typeAliases.push(ModuleCanonicalizer.canonicalAlias(alias, aliases, ast.packageName));
 			for (enumDecl in ast.enums)
-				enums.push(canonicalEnum(enumDecl, aliases, ast.packageName));
+				enums.push(ModuleCanonicalizer.canonicalEnum(enumDecl, aliases, ast.packageName));
 			for (abstractDecl in ast.enumAbstracts)
-				enumAbstracts.push(canonicalEnumAbstract(abstractDecl, aliases, ast.packageName, name, entryModule, locals));
+				enumAbstracts.push(ModuleCanonicalizer.canonicalEnumAbstract(abstractDecl, aliases, ast.packageName, name, entryModule, locals));
 			for (abstractDecl in ast.abstracts)
-				abstracts.push(canonicalAbstract(abstractDecl, aliases, ast.packageName, name, entryModule, locals));
+				abstracts.push(ModuleCanonicalizer.canonicalAbstract(abstractDecl, aliases, ast.packageName, name, entryModule, locals));
 			for (fn in ast.functions)
 				locals.set(fn.name, true);
 			var aliasNames = [for (aliasName in aliases.keys()) aliasName];
@@ -472,14 +482,14 @@ class Compiler {
 				state = writableState(name, rollbackModules);
 				canonicalFunctions = [
 					for (fn in ast.functions)
-						canonicalFunction(fn, name, entryModule, locals, null, aliases)
+						ModuleCanonicalizer.canonicalFunction(fn, name, entryModule, locals, null, aliases)
 				];
 				var canonicalCalls:Map<String, Array<String>> = [];
 				for (canonical in canonicalFunctions) {
 					var calls:Map<String, Bool> = [],
 						localAliases:Map<String, String> = [];
 					for (statement in canonical.statements)
-						scanCalls(statement, calls, localAliases);
+						SemanticDependencyCollector.scanCalls(statement, calls, localAliases);
 					canonicalCalls.set(canonical.name, [for (callee in calls.keys()) callee]);
 				}
 				state.canonicalFunctions = canonicalFunctions;
@@ -505,11 +515,11 @@ class Compiler {
 				}
 			}
 			for (classDecl in ast.classes) {
-				var className = qualifiedTypeName(ast.packageName, classDecl.name);
+				var className = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name);
 				var classMethods:Array<AstFunction> = [];
 				for (parsedMethod in classDecl.methods) {
 					var method = SignatureInference.inferFieldBoundArguments(parsedMethod, classDecl);
-					var canonical = canonicalFunction(method, name, entryModule, locals, className + "." + method.name, aliases);
+					var canonical = ModuleCanonicalizer.canonicalFunction(method, name, entryModule, locals, className + "." + method.name, aliases);
 					functions.push(canonical);
 					classMethods.push({
 						name: method.name,
@@ -524,7 +534,7 @@ class Compiler {
 					var calls:Map<String, Bool> = [];
 					var aliases:Map<String, String> = [];
 					for (statement in canonical.statements)
-						scanCalls(statement, calls, aliases);
+						SemanticDependencyCollector.scanCalls(statement, calls, aliases);
 					collectLambdas(canonical.statements, canonical.name, name, generatedByModule);
 					for (callee in calls.keys()) {
 						var callers:Array<String>;
@@ -541,17 +551,17 @@ class Compiler {
 					name: className,
 					isPrivate: classDecl.isPrivate,
 					metadata: classDecl.metadata,
-					base: resolveOptionalTypeName(classDecl.base, aliases),
+					base: ModuleCanonicalizer.resolveOptionalTypeName(classDecl.base, aliases),
 					interfaces: [
 						for (interfaceName in classDecl.interfaces)
-							resolveTypeName(interfaceName, aliases)
+							ModuleCanonicalizer.resolveTypeName(interfaceName, aliases)
 					],
 					fields: [
 						for (field in classDecl.fields)
 							{
 								name: field.name,
-								type: canonicalType(FieldInference.parsedType(field), aliases),
-								initializer: canonicalOptionalExpression(field.initializer, name, entryModule, locals, aliases),
+								type: ModuleCanonicalizer.canonicalType(FieldInference.parsedType(field), aliases),
+								initializer: ModuleCanonicalizer.canonicalOptionalExpression(field.initializer, name, entryModule, locals, aliases),
 								readAccess: field.readAccess,
 								writeAccess: field.writeAccess,
 								isStatic: field.isStatic,
@@ -579,7 +589,7 @@ class Compiler {
 				for (owner => dependencies in dependencyState.semanticDependencies)
 					for (dependency in dependencies) {
 						var functionOwner:String = owner;
-						if (sameDependencyTarget(dependency.target, target)) {
+						if (SemanticDependencyCollector.sameDependencyTarget(dependency.target, target)) {
 							var matchedFunction = false;
 							for (fn in functions)
 								if (fn.name == functionOwner || StringTools.startsWith(fn.name, functionOwner + ".")) {
@@ -617,6 +627,7 @@ class Compiler {
 		try {
 			if (token != null)
 				token.check();
+			Sys.println("bootstrap-debug: canonical program");
 			var canonicalProgram:compiler.Ast.AstProgram = {
 				packageName: null,
 				imports: [],
@@ -631,15 +642,21 @@ class Compiler {
 			};
 			var previousSemantic = cachedSemanticProgram;
 			var canReuseSemantic = previousSemantic != null
-				&& !signatureChanged.keys().hasNext()
-				&& !structuralChanged.keys().hasNext()
+				&& mapIsEmpty(signatureChanged)
+				&& mapIsEmpty(structuralChanged)
 				&& canonicalProgram.classes.length == 0
 				&& canonicalProgram.abstracts.length == 0
 				&& canonicalProgram.enumAbstracts.length == 0
 				&& explicitFunctionSignatures(canonicalProgram.functions);
-			var semantic = canReuseSemantic ? previousSemantic.replaceTopLevelBodies(canonicalProgram, selected) : SemanticProgram.analyze(canonicalProgram);
+			var semantic:SemanticProgram;
+			if (canReuseSemantic && previousSemantic != null)
+				semantic = previousSemantic.replaceTopLevelBodies(canonicalProgram, selected);
+			else
+				semantic = SemanticProgram.analyze(canonicalProgram);
+			Sys.println("bootstrap-debug: semantic complete");
 			cachedSemanticProgram = semantic;
-			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, nativeSignatures(), entryPoint);
+			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, nativeSignatures(), entryPoint, genericSpecializations);
+			Sys.println("bootstrap-debug: typing complete");
 			typedNew = typedResult.program;
 			typerMetrics = typedResult.metrics;
 		} catch (error:CompileError) {
@@ -703,7 +720,7 @@ class Compiler {
 					valid.set(lambdaName, true);
 			}
 			for (classDecl in ast.classes) {
-				var className = qualifiedTypeName(ast.packageName, classDecl.name),
+				var className = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name),
 					hasInstanceInitializer = false,
 					hasConstructor = false;
 				for (field in classDecl.fields)
@@ -835,7 +852,7 @@ class Compiler {
 		for (classDecl in ast.classes)
 			for (method in classDecl.methods)
 				if (method.name == "main" && method.isStatic)
-					return qualifiedTypeName(ast.packageName, classDecl.name) + ".main";
+					return ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name) + ".main";
 		return "main";
 	}
 
@@ -1106,8 +1123,8 @@ class Compiler {
 		state.dependencies = [for (name in dependencies.keys()) name];
 		state.dependencies.sort(Reflect.compare);
 		var typeAliases = importAliases(ast.imports, ast.importAliases);
-		addDeclaredTypeAliases(typeAliases, ast, ast.packageName);
-		state.semanticDependencies = collectSemanticDependencies(state, entry, typeAliases);
+		ModuleCanonicalizer.addDeclaredTypeAliases(typeAliases, ast, ast.packageName);
+		state.semanticDependencies = SemanticDependencyCollector.collectSemanticDependencies(state, entry, typeAliases);
 		var changes = ModuleChangeAnalyzer.analyze(state, entry, typeAliases, types, compiledOnce);
 		mergeChanges(bodyChanged, changes.bodyChanged);
 		mergeChanges(signatureChanged, changes.signatureChanged);
@@ -1146,23 +1163,11 @@ class Compiler {
 			target.set(name, true);
 	}
 
-	static final canonicalFunction = ModuleCanonicalizer.canonicalFunction;
-	static final canonicalName = ModuleCanonicalizer.canonicalName;
-	static final qualifiedTypeName = ModuleCanonicalizer.qualifiedTypeName;
-	static final sourceDeclarationPath = ModuleCanonicalizer.sourceDeclarationPath;
-	static final addDeclaredTypeAliases = ModuleCanonicalizer.addDeclaredTypeAliases;
-	static final canonicalAlias = ModuleCanonicalizer.canonicalAlias;
-	static final canonicalEnum = ModuleCanonicalizer.canonicalEnum;
-	static final canonicalEnumAbstract = ModuleCanonicalizer.canonicalEnumAbstract;
-	static final canonicalAbstract = ModuleCanonicalizer.canonicalAbstract;
-	static final canonicalInterface = ModuleCanonicalizer.canonicalInterface;
-	static final canonicalType = ModuleCanonicalizer.canonicalType;
-	static final canonicalOptionalExpression = ModuleCanonicalizer.canonicalOptionalExpression;
-	static final resolveTypeName = ModuleCanonicalizer.resolveTypeName;
-	static final resolveOptionalTypeName = ModuleCanonicalizer.resolveOptionalTypeName;
-	static final collectSemanticDependencies = SemanticDependencyCollector.collectSemanticDependencies;
-	static final sameDependencyTarget = SemanticDependencyCollector.sameDependencyTarget;
-	static final scanCalls = SemanticDependencyCollector.scanCalls;
+	static function mapIsEmpty(values:Map<String, Bool>):Bool {
+		for (_ in values.keys())
+			return false;
+		return true;
+	}
 
 	function importAliases(imports:Array<String>, explicit:Map<String, String>):Map<String, String> {
 		var aliases:Map<String, String> = [];

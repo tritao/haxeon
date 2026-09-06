@@ -581,6 +581,24 @@ class TestMain {
 		identityShapes.sort(Reflect.compare);
 		if (identityShapes.join(",") != "Dynamic,Int")
 			throw "Generic bodies were not partitioned by runtime representation";
+		var incrementalGeneric = new Compiler();
+		incrementalGeneric.update("Main.hx", 'class Box {} function identity<T>(value:T):T return value; function main():Int { identity("text"); return 42; }');
+		var firstGenericBuild = incrementalGeneric.compile("Main"),
+			firstGenericBodies = [
+				for (fn in firstGenericBuild.ir.functions)
+					if (StringTools.startsWith(fn.name, "$generic:")) fn.name
+			];
+		incrementalGeneric.update("Main.hx",
+			'class Box {} function identity<T>(value:T):T return value; function main():Int { identity(new Box()); return 42; }');
+		var sharedShapeBuild = incrementalGeneric.compile("Main"),
+			sharedGenericBodies = [
+				for (fn in sharedShapeBuild.ir.functions)
+					if (StringTools.startsWith(fn.name, "$generic:")) fn.name
+			];
+		firstGenericBodies.sort(Reflect.compare);
+		sharedGenericBodies.sort(Reflect.compare);
+		if (sharedShapeBuild.requiresReload || firstGenericBodies.join(",") != sharedGenericBodies.join(","))
+			throw "Equivalent generic reference shapes did not preserve incremental identity";
 		Frontend.compile('enum Value<T> { Value(value:T); } function intValue(value:Value<Int>):Int return switch value { case Value(item): item; }; function stringValue(value:Value<String>):String return switch value { case Value(item): item; }; function main():Int return intValue(Value(40)) + stringValue(Value("ok")).length;');
 		expectCompileError('function choose<T>(left:T, right:T):T return left; function main():Int return choose(42, "wrong");',
 			'Conflicting types inferred for generic parameter "T"');

@@ -18,8 +18,7 @@ class FieldInference {
 		return switch initializer {
 			case IntegerLiteral(_, _): IntType;
 			case FloatLiteral(_, _): FloatType;
-			case Negate(IntegerLiteral(_, _), _): IntType;
-			case Negate(FloatLiteral(_, _), _): FloatType;
+			case Negate(value, _): negatedType(field, value);
 			case StringLiteral(_, _): StringType;
 			case BoolLiteral(_, _): BoolType;
 			case New(typeName, _, _): NamedType(typeName);
@@ -29,4 +28,12 @@ class FieldInference {
 				throw new CompileError(new Diagnostic("E1002", 'Cannot infer type of field "${field.name}" from this initializer', field.span));
 		};
 	}
+
+	static function negatedType(field:AstField, value:AstExpression):AstType
+		return switch value {
+			case IntegerLiteral(_, _): IntType;
+			case FloatLiteral(_, _): FloatType;
+			default:
+				throw new CompileError(new Diagnostic("E1002", 'Cannot infer type of field "${field.name}" from this initializer', field.span));
+		};
 }

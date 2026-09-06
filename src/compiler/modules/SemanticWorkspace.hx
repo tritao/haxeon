@@ -40,11 +40,12 @@ class SemanticWorkspace {
 			return Ambiguous(local);
 		var matches:Array<WorkspaceDeclaration> = [];
 		for (dependency in from.dependencies) {
-			var state = modules.get(dependency);
-			if (state != null)
+			if (modules.exists(dependency)) {
+				var state = modules.get(dependency);
 				for (declaration in declarationsIn(state, name))
 					if (!contains(matches, declaration))
 						matches.push(declaration);
+			}
 		}
 		return matches.length == 0 ? Missing : matches.length == 1 ? Resolved(matches[0]) : Ambiguous(matches);
 	}
@@ -78,8 +79,9 @@ class SemanticWorkspace {
 					for (method in decl.methods)
 						if (method.name == name)
 							return {state: state, key: 'class:${decl.name}:method:$name', span: method.span};
-					if (decl.base != null) {
-						var inherited = classMember(decl.base, name, visiting);
+					var base = decl.base;
+					if (base != null) {
+						var inherited = classMember(base, name, visiting);
 						if (inherited != null)
 							return inherited;
 					}
@@ -121,12 +123,21 @@ class SemanticWorkspace {
 	function declarationsIn(state:ModuleState, name:String):Array<WorkspaceDeclaration> {
 		var result:Array<WorkspaceDeclaration> = [],
 			model = effectiveModel(state);
-		if (model != null)
-			for (kind in [Alias, Function, Class, Interface, Enum, Abstract]) {
+		if (model != null) {
+			var kinds:Array<DeclarationKind> = [
+				DeclarationKind.Alias,
+				DeclarationKind.Function,
+				DeclarationKind.Class,
+				DeclarationKind.Interface,
+				DeclarationKind.Enum,
+				DeclarationKind.Abstract
+			];
+			for (kind in kinds) {
 				var declaration = model.declarations.symbol(kind, name);
 				if (declaration != null)
 					result.push({state: state, key: declaration.id, span: declaration.span});
 			}
+		}
 		return result;
 	}
 

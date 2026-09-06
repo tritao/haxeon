@@ -69,6 +69,10 @@ class TypeRelations {
 
 	public static function equals(left:CompilerType, right:CompilerType):Bool
 		return switch left {
+			case TTypeParameter(owner, name): switch right {
+					case TTypeParameter(otherOwner, otherName): owner == otherOwner && name == otherName;
+					default: false;
+				};
 			case TClass(name): sameClass(right, name);
 			case TInterface(name): sameInterface(right, name);
 			case TEnum(name, arguments): sameEnum(right, name, arguments);

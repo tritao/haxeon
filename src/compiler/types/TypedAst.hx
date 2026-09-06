@@ -60,6 +60,7 @@ enum TypedExpressionKind {
 	TThrowExpression(expression:TypedExpression);
 	TNoReturn(expression:TypedExpression);
 	TCast(expression:TypedExpression);
+	TAbiCast(expression:TypedExpression);
 	TSwitchExpression(expression:TypedExpression, cases:Array<TypedSwitchExpressionCase>, defaultExpression:Null<TypedExpression>);
 	TObjectLiteral(name:String, fields:Array<TypedObjectField>);
 	TArrayLiteral(values:Array<TypedExpression>);
@@ -154,7 +155,7 @@ typedef TypedSwitchCase = {
 }
 
 /** Local binding introduced for one enum-constructor payload position. */
-typedef TypedSwitchBinding = {final name:String; final type:CompilerType; final index:Int;}
+typedef TypedSwitchBinding = {final name:String; final type:CompilerType; final storageType:CompilerType; final index:Int;}
 
 /** Resolved catch arm ready for IR exception lowering. */
 typedef TypedCatch = {final name:String; final type:CompilerType; final statements:Array<TypedStatement>; final span:SourceSpan;}

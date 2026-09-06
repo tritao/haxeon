@@ -20,6 +20,7 @@ class SemanticSignature {
 			case TNever: "Never";
 			case TRange: "Range";
 			case TVoid: "Void";
+			case TTypeParameter(owner, name): 'type-parameter:$owner:$name';
 			case TClass(name): 'class:$name';
 			case TInterface(name): 'interface:$name';
 			case TEnum(name, arguments): 'enum:$name<${[for (argument in arguments) type(argument)].join(",")}>';

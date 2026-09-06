@@ -39,13 +39,27 @@ private typedef MapTypes = {final key:CompilerType; final value:CompilerType;}
 
 /** Lowers typed syntax to a mutable-local CFG; SsaBuilder owns all SSA policy. */
 class IrGenerator {
-	public static final generate = IrProgramAssembler.generate;
-	public static final staticInitializerFrom = IrProgramAssembler.staticInitializerFrom;
-	public static final enumsFrom = IrProgramAssembler.enumsFrom;
-	public static final interfacesFrom = IrProgramAssembler.interfacesFrom;
-	public static final objectsFrom = IrProgramAssembler.objectsFrom;
-	public static final staticFieldsFrom = IrProgramAssembler.staticFieldsFrom;
-	public static final assemble = IrProgramAssembler.assemble;
+	public static function generate(typed:TypedProgram):IrProgram
+		return IrProgramAssembler.generate(typed);
+
+	public static function staticInitializerFrom(typed:TypedProgram, ?classOrder:Array<String>):Null<IrFunction>
+		return IrProgramAssembler.staticInitializerFrom(typed, classOrder);
+
+	public static function enumsFrom(typed:TypedProgram):Array<IrEnum>
+		return IrProgramAssembler.enumsFrom(typed);
+
+	public static function interfacesFrom(typed:TypedProgram):Array<IrInterface>
+		return IrProgramAssembler.interfacesFrom(typed);
+
+	public static function objectsFrom(typed:TypedProgram):Array<IrObject>
+		return IrProgramAssembler.objectsFrom(typed);
+
+	public static function staticFieldsFrom(typed:TypedProgram):Array<IrStaticField>
+		return IrProgramAssembler.staticFieldsFrom(typed);
+
+	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>,
+			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializer:IrFunction, ?entryPoint:String):IrProgram
+		return IrProgramAssembler.assemble(functions, natives, objects, interfaces, enums, staticFields, staticInitializer, entryPoint);
 
 	static function lastSeparator(value:String):Int {
 		var index = value.length - 1;
@@ -413,7 +427,10 @@ class IrGenerator {
 							}
 						for (binding in switchCase.bindings)
 							builder.store(binding.name,
-								builder.enumField(builder.load(switchName, switchType), switchCase.constructorIndex, binding.index, lowerType(binding.type)));
+								abiBoundaryCast(builder,
+									builder.enumField(builder.load(switchName, switchType), switchCase.constructorIndex, binding.index,
+										lowerType(binding.storageType)),
+									lowerType(binding.type)));
 						var guard = switchCase.guard;
 						if (guard != null) {
 							builder.branch(lowerExpression(guard, builder, localTypes), bodyBlock, nextBlock);
@@ -467,6 +484,41 @@ class IrGenerator {
 		var name = RuntimeType.requireMapName(keyType, valueType);
 		return builder.call('__${name}_set', [map, key, value], Void);
 	}
+
+	static function abiBoundaryCast(builder:CfgBuilder, value:CfgValue, target:IrType):CfgValue {
+		if (sameIrType(value.type, target))
+			return value;
+		if (target == Dyn)
+			return builder.toDyn(value);
+		if (value.type == Dyn)
+			return builder.safeCast(value, target);
+		throw 'Unsupported ABI boundary cast from ${value.type} to $target';
+	}
+
+	static function sameIrType(left:IrType, right:IrType):Bool
+		return switch left {
+			case Obj(name): switch right {
+					case Obj(other): name == other;
+					default: false;
+				};
+			case Enum(name): switch right {
+					case Enum(other): name == other;
+					default: false;
+				};
+			case Abstract(name): switch right {
+					case Abstract(other): name == other;
+					default: false;
+				};
+			case Virtual(name): switch right {
+					case Virtual(other): name == other;
+					default: false;
+				};
+			case Array(element): switch right {
+					case Array(other): sameIrType(element, other);
+					default: false;
+				};
+			default: left == right;
+		};
 
 	static function lowerExpression(expression:TypedExpression, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue
 		return switch expression.expression {
@@ -631,11 +683,13 @@ class IrGenerator {
 				var placeholder = unreachableValue(lowerType(expression.type), builder);
 				builder.throwValue(builder.toDyn(lowerExpression(value, builder, localTypes)));
 				placeholder;
-			case TCast(value):
+			case TCast(value), TAbiCast(value):
 				var source = lowerExpression(value, builder, localTypes),
 					target = lowerType(expression.type);
-				if (source.type == target) source; else if (source.type == Dyn) builder.safeCast(source,
-					target); else if (target == Dyn) builder.toDyn(source); else throw 'Unsupported cast from ${source.type} to $target';
+				if (sameIrType(source.type,
+					target)) source; else if (source.type == Dyn) builder.safeCast(source,
+					target); else if (target == Dyn) builder.toDyn(source); else
+					throw 'Unsupported cast from ${source.type} to $target at ${expression.span.file.path}:${expression.span.start}';
 			case TSwitchExpression(subject, cases, defaultExpression):
 				var subjectName = '$' + 'switch-expression-subject:${expression.span.start}',
 					resultName = '$' + 'switch-expression-result:${expression.span.start}',
@@ -694,7 +748,10 @@ class IrGenerator {
 					for (binding in switchCase.bindings) {
 						localTypes.set(binding.name, lowerType(binding.type));
 						builder.store(binding.name,
-							builder.enumField(builder.load(subjectName, subjectType), switchCase.constructorIndex, binding.index, lowerType(binding.type)));
+							abiBoundaryCast(builder,
+								builder.enumField(builder.load(subjectName, subjectType), switchCase.constructorIndex, binding.index,
+									lowerType(binding.storageType)),
+								lowerType(binding.type)));
 					}
 					var guard = switchCase.guard;
 					if (guard != null) {
@@ -1176,6 +1233,7 @@ class IrGenerator {
 			case TNever: throw "Never must be coerced before lowering";
 			case TRange: Array(I32);
 			case TVoid: Void;
+			case TTypeParameter(owner, name): throw 'Unsubstituted type parameter "$owner.$name" reached IR lowering';
 			case TClass(name): name == "haxe.io.Eof" ? Dyn : Obj(name);
 			case TMap(key, value): Abstract(RuntimeType.requireMapName(key, value));
 			case TInterface(name): Virtual(name);

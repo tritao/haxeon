@@ -9,7 +9,12 @@ import compiler.Ast.AstStatement;
 class ModuleCanonicalizer {
 	public static function canonicalFunction(fn:AstFunction, module:String, entry:String, locals:Map<String, Bool>, ?explicitName:String,
 			?aliases:Map<String, String>):AstFunction {
-		var name = explicitName != null ? explicitName : module == entry && fn.name == "main" ? "main" : module + "." + fn.name;
+		var name = explicitName != null ? explicitName : module == entry && fn.name == "main" ? "main" : module + "." + fn.name,
+			functionAliases = aliases == null ? null : copyAliases(aliases),
+			typeParameters = fn.typeParameters;
+		if (functionAliases != null && typeParameters != null)
+			for (parameter in typeParameters)
+				functionAliases.set(parameter, parameter);
 		return {
 			name: name,
 			isStatic: fn.isStatic,
@@ -18,17 +23,23 @@ class ModuleCanonicalizer {
 				for (argument in fn.arguments)
 					{
 						name: argument.name,
-						type: canonicalType(argument.type, aliases),
+						type: canonicalType(argument.type, functionAliases, fn.typeParameters),
 						span: argument.span,
 						optional: argument.optional,
-						defaultValue: canonicalOptionalExpression(argument.defaultValue, module, entry, locals, aliases)
+						defaultValue: canonicalOptionalExpression(argument.defaultValue, module, entry, locals, functionAliases)
 					}
 			],
-			result: canonicalType(fn.result, aliases),
+			result: canonicalType(fn.result, functionAliases, fn.typeParameters),
 			span: fn.span,
-			statements: [for (s in fn.statements) canonicalStatement(s, module, entry, locals, aliases)]
+			statements: [
+				for (s in fn.statements)
+					canonicalStatement(s, module, entry, locals, functionAliases)
+			]
 		};
 	}
+
+	static function copyAliases(aliases:Map<String, String>):Map<String, String>
+		return [for (name => target in aliases) name => target];
 
 	public static function canonicalName(module:String, entry:String, local:String):String
 		return module == entry && local == "main" ? "main" : local.indexOf(".") >= 0 ? local : module + "." + local;
@@ -76,7 +87,7 @@ class ModuleCanonicalizer {
 							for (param in caseDecl.params)
 								{
 									name: param.name,
-									type: canonicalType(param.type, aliases),
+									type: canonicalType(param.type, aliases, enumDecl.typeParameters),
 									optional: param.optional,
 									span: param.span
 								}
@@ -132,9 +143,9 @@ class ModuleCanonicalizer {
 						typeParameters: method.typeParameters,
 						arguments: [
 							for (argument in method.arguments)
-								{name: argument.name, type: canonicalType(argument.type, aliases), span: argument.span}
+								{name: argument.name, type: canonicalType(argument.type, aliases, method.typeParameters), span: argument.span}
 						],
-						result: canonicalType(method.result, aliases),
+						result: canonicalType(method.result, aliases, method.typeParameters),
 						statements: [],
 						span: method.span
 					}
@@ -387,20 +398,24 @@ class ModuleCanonicalizer {
 		return resolveExpressionAlias(name, aliases);
 	}
 
-	public static function canonicalType(type:compiler.Ast.AstType, aliases:Null<Map<String, String>>):compiler.Ast.AstType
+	public static function canonicalType(type:compiler.Ast.AstType, aliases:Null<Map<String, String>>, ?typeParameters:Array<String>):compiler.Ast.AstType
 		return switch type {
 			case NativeAbstractType(name): NativeAbstractType(name);
-			case NamedType(name): NamedType(resolveTypeName(name, aliases));
-			case AppliedType(name, arguments): AppliedType(resolveTypeName(name, aliases), [for (argument in arguments) canonicalType(argument, aliases)]);
-			case ArrayType(element): ArrayType(canonicalType(element, aliases));
-			case MapType(key, value): MapType(canonicalType(key, aliases), canonicalType(value, aliases));
-			case NullableType(element): NullableType(canonicalType(element, aliases));
-			case FunctionType(arguments, result): FunctionType([for (argument in arguments) canonicalType(argument, aliases)], canonicalType(result, aliases));
+			case NamedType(name): NamedType(typeParameters != null
+					&& typeParameters.indexOf(name) >= 0 ? name : resolveTypeName(name, aliases));
+			case AppliedType(name,
+				arguments): AppliedType(resolveTypeName(name, aliases), [for (argument in arguments) canonicalType(argument, aliases, typeParameters)]);
+			case ArrayType(element): ArrayType(canonicalType(element, aliases, typeParameters));
+			case MapType(key, value): MapType(canonicalType(key, aliases, typeParameters), canonicalType(value, aliases, typeParameters));
+			case NullableType(element): NullableType(canonicalType(element, aliases, typeParameters));
+			case FunctionType(arguments,
+				result): FunctionType([for (argument in arguments) canonicalType(argument, aliases, typeParameters)],
+					canonicalType(result, aliases, typeParameters));
 			case AnonymousType(fields): AnonymousType([
 					for (field in fields)
 						{
 							name: field.name,
-							type: canonicalType(field.type, aliases),
+							type: canonicalType(field.type, aliases, typeParameters),
 							optional: field.optional,
 							span: field.span
 						}

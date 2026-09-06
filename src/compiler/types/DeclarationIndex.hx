@@ -50,7 +50,6 @@ class DeclarationIndex {
 	public final symbols:Map<String, DeclarationSymbol> = [];
 
 	final aliasSpans:Map<String, SourceSpan> = [];
-	final genericParameters:Map<String, Bool> = [];
 	final fallbackSpan:SourceSpan;
 
 	public static function validated(program:AstProgram):DeclarationIndex
@@ -67,8 +66,6 @@ class DeclarationIndex {
 			aliasSpans.set(alias.name, alias.span);
 		}
 		for (decl in program.enums) {
-			for (parameter in decl.typeParameters)
-				genericParameters.set(parameter, true);
 			declareType(decl.name, DeclarationKind.Enum, decl.span);
 			enums.set(decl.name, decl);
 		}
@@ -184,8 +181,7 @@ class DeclarationIndex {
 			var resolved = resolveInner(alias, aliasSpans.get(name), resolving, substitutions);
 			resolving.remove(name);
 			resolved;
-		} else if (genericParameters.exists(name)) TDynamic; else if (enumAbstracts.exists(name)) resolveInner(enumAbstracts.get(name).underlying, span,
-			resolving,
+		} else if (enumAbstracts.exists(name)) resolveInner(enumAbstracts.get(name).underlying, span, resolving,
 			substitutions); else if (abstracts.exists(name)) resolveInner(abstracts.get(name).underlying, span, resolving,
 			substitutions); else if (interfaces.exists(name)) TInterface(name); else if (enums.exists(name)) TEnum(name,
 			[]); else if (classes.exists(name)) TClass(name); else if (PlatformAbi.isType(name)) PlatformAbi.valueType(name); else {
@@ -215,6 +211,7 @@ class DeclarationIndex {
 			case TNever: "Never";
 			case TRange: "Range";
 			case TVoid: "Void";
+			case TTypeParameter(owner, name): 'type-parameter:$owner:$name';
 			case TClass(name), TInterface(name): name;
 			case TEnum(name, arguments): arguments.length == 0 ? name : '$name<${[for (argument in arguments) typeKey(argument)].join(",")}>';
 			case TNull: "null";
@@ -247,7 +244,7 @@ class DeclarationIndex {
 			for (type in decl.toTypes)
 				resolve(type, decl.span);
 			for (method in decl.methods)
-				resolveFunction(method);
+				resolveFunction(method, decl.name);
 		}
 		for (decl in program.enumAbstracts) {
 			resolve(decl.underlying, decl.span);
@@ -259,30 +256,30 @@ class DeclarationIndex {
 		for (decl in program.enums) {
 			var substitutions:Map<String, CompilerType> = [];
 			for (parameter in decl.typeParameters)
-				substitutions.set(parameter, TDynamic);
+				substitutions.set(parameter, TTypeParameter(decl.name, parameter));
 			for (caseDecl in decl.cases)
 				for (parameter in caseDecl.params)
 					resolve(parameter.type, parameter.span, substitutions);
 		}
 		for (decl in program.interfaces)
 			for (method in decl.methods)
-				resolveFunction(method);
+				resolveFunction(method, decl.name + "." + method.name);
 		for (decl in program.classes) {
 			for (field in decl.fields)
 				resolve(FieldInference.parsedType(field), field.span);
 			for (method in decl.methods)
-				resolveFunction(method);
+				resolveFunction(method, decl.name + "." + method.name);
 		}
 		for (fn in program.functions)
-			resolveFunction(fn);
+			resolveFunction(fn, fn.name);
 	}
 
-	function resolveFunction(fn:AstFunction):Void {
+	function resolveFunction(fn:AstFunction, owner:String):Void {
 		var substitutions:Map<String, CompilerType> = [],
 			typeParameters = fn.typeParameters;
 		if (typeParameters != null)
 			for (parameter in typeParameters)
-				substitutions.set(parameter, TDynamic);
+				substitutions.set(parameter, TTypeParameter(owner, parameter));
 		for (argument in fn.arguments)
 			resolve(argument.type, argument.span, substitutions);
 		resolve(fn.result, fn.span, substitutions);

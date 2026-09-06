@@ -1,5 +1,7 @@
 package compiler.types;
 
+import compiler.types.DeclarationIndex.DeclarationId;
+
 /**
  * Canonical semantic types produced by type checking.
  *
@@ -18,6 +20,7 @@ enum CompilerType {
 	TNever;
 	TRange;
 	TVoid;
+	TTypeParameter(owner:DeclarationId, name:String);
 	TClass(name:String);
 	TInterface(name:String);
 	TEnum(name:String, arguments:Array<CompilerType>);

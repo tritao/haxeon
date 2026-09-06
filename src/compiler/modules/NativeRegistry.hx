@@ -98,6 +98,7 @@ class NativeRegistry {
 			case TDynamic: Dyn;
 			case TNativeAbstract(name): Abstract(name);
 			case TNever: throw "Never is not a runtime ABI type";
+			case TTypeParameter(owner, name): throw 'Type parameter "$owner.$name" is not a runtime ABI type';
 			case TRange: throw "Range is not a runtime ABI type";
 			case TVoid: Void;
 			case TClass(name): Obj(name);

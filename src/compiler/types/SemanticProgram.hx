@@ -27,10 +27,12 @@ class SemanticProgram {
 		var currentByName:Map<String, AstFunction> = [];
 		for (fn in current.functions)
 			currentByName.set(fn.name, fn);
-		var functions = [
-			for (fn in program.functions)
-				if (selected.exists(fn.name) && currentByName.exists(fn.name)) withBody(fn, currentByName.get(fn.name)) else fn
-		];
+		var functions:Array<AstFunction> = [];
+		for (fn in program.functions)
+			if (selected.exists(fn.name) && currentByName.exists(fn.name))
+				functions.push(withBody(fn, currentByName.get(fn.name)));
+			else
+				functions.push(fn);
 		var nextProgram:AstProgram = {
 			packageName: program.packageName,
 			imports: program.imports,
