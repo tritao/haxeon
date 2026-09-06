@@ -89,17 +89,17 @@ class Runtime {
 	public static function callStringArg(module:LoadedModule, stableIndex:Int, argument:String):Void
 		module.access(function(handle) RuntimeNative.call_bytes1(handle, stableIndex, @:privateAccess argument.bytes));
 
-	public static function retainClosure(module:LoadedModule, stableIndex:Int):Dynamic
-		return module.access(function(handle) return RuntimeNative.call_closure(handle, stableIndex));
+	public static function retainClosure(module:LoadedModule, stableIndex:Int):RetainedValue
+		return new RetainedValue(module, module.accessRetained(function(handle) return RuntimeNative.call_closure(handle, stableIndex)));
 
-	public static function callRetainedClosureInt(closure:Dynamic):Int
-		return RuntimeNative.call_closure_i32(closure);
+	public static function callRetainedClosureInt(closure:RetainedValue):Int
+		return RuntimeNative.call_closure_i32(closure.get());
 
-	public static function retainObject(module:LoadedModule, stableIndex:Int):Dynamic
-		return module.access(function(handle) return RuntimeNative.call_object(handle, stableIndex));
+	public static function retainObject(module:LoadedModule, stableIndex:Int):RetainedValue
+		return new RetainedValue(module, module.accessRetained(function(handle) return RuntimeNative.call_object(handle, stableIndex)));
 
-	public static function callIntObject(module:LoadedModule, stableIndex:Int, argument:Dynamic):Int
-		return module.access(function(handle) return RuntimeNative.call_i32_object(handle, stableIndex, argument));
+	public static function callIntObject(module:LoadedModule, stableIndex:Int, argument:RetainedValue):Int
+		return module.access(function(handle) return RuntimeNative.call_i32_object(handle, stableIndex, argument.get()));
 
 	public static function retainedCodeAllocationCount(module:LoadedModule):Int
 		return module.access(RuntimeNative.allocation_count);

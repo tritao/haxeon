@@ -153,6 +153,8 @@ class HotReloadMain {
 				throw 'stress patch $i returned the wrong value';
 			if (Runtime.retainedCodeAllocationCount(loaded) != retainedAllocations)
 				throw 'stress patch $i leaked a code allocation';
+			if (Runtime.retiredCodeAllocationCount(loaded) != 0)
+				throw 'stress patch $i retained superseded JIT code';
 		}
 
 		var beforePair = Runtime.patchJitCount(loaded);
@@ -328,6 +330,7 @@ class HotReloadMain {
 		Runtime.patchSet(loaded, new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
 		if (Runtime.callIntObject(loaded, initial.functionIds.get("Main.read"), retained) != 42)
 			throw "patched code could not consume a retained object with the same layout";
+		retained.release();
 		Runtime.dispose(loaded);
 	}
 
@@ -350,8 +353,12 @@ class HotReloadMain {
 		Runtime.patchSet(loaded, new PatchSet(first.revision, second.revision, second.patchBytes, second.changedFunctions));
 		if (Runtime.callRetainedClosureInt(retained) != 42)
 			throw "retained closure did not follow its stable function slot";
-		if (Runtime.retiredCodeAllocationCount(loaded) != 1)
-			throw "escaped closure JIT owner was not tracked as retired";
+		if (Runtime.retiredCodeAllocationCount(loaded) != 0)
+			throw "stable closure dispatch retained superseded JIT code";
+		Runtime.dispose(loaded);
+		if (Runtime.callRetainedClosureInt(retained) != 42)
+			throw "module disposal invalidated a retained closure";
+		retained.release();
 		Runtime.dispose(loaded);
 	}
 

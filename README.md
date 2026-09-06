@@ -138,10 +138,12 @@ registry across editor or compiler restarts. Patch call sites also carry
 stable-target relocations, so HashLink resolves user-function calls against the
 loaded generation instead of trusting an old HLB function index.
 
-Calls and commits are synchronized. Each stable slot records its owning JIT
-allocation; replacing its last referenced slot reclaims that allocation after
-protected calls finish. Failed staging is discarded before publication, keeping
-repeated editor reloads bounded. Runtime modules also support explicit disposal.
+Calls and commits are synchronized. Permanent per-slot dispatch entries keep
+closures and object prototypes valid while allowing superseded patch JIT
+allocations to be reclaimed after protected calls finish. Failed staging is
+discarded before publication, keeping repeated editor reloads bounded. Runtime
+modules use synchronized owning handles; retained objects and closures explicitly
+pin their module until released, and disposal is idempotent.
 Patch sets carry expected-base and replacement revisions; stale or replayed
 updates are rejected before loading or changing live dispatch state.
 
