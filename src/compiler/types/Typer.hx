@@ -1129,6 +1129,17 @@ class Typer {
 									fail("E1008", 'Enum case "$name" requires constructor arguments', span);
 								return new TypedExpression(TEnumLiteral(enumName, index), TEnum(enumName), span);
 							}
+							var classEnd = parts.length - 1;
+							while (classEnd > 0) {
+								var className = parts.slice(0, classEnd).join(".");
+								if (classDecls.exists(className) || enumAbstractDecls.exists(className) || PlatformAbi.isType(className)) {
+									var classObject = new TypedExpression(TClassRef(className), TClass(className), span);
+									for (index in classEnd...parts.length)
+										classObject = typedMember(classObject, parts[index], span);
+									return classObject;
+								}
+								classEnd--;
+							}
 							var object = typeExpression(Variable(objectName, span), scope);
 							for (index in 1...parts.length)
 								object = typedMember(object, parts[index], span);

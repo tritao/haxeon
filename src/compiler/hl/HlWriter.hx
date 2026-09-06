@@ -2,7 +2,6 @@ package compiler.hl;
 
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
-import haxe.io.Encoding;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction.HlInstruction;
 
@@ -326,7 +325,7 @@ class HlWriter {
 	}
 
 	function writeCode(code:HlCode):Void {
-		output.writeString("HLB", Encoding.UTF8);
+		output.writeString("HLB");
 		output.writeByte(HlCode.VERSION);
 		writeUnsignedIndex(0); // flags: no debug information
 		writeUnsignedIndex(code.ints.length);
@@ -364,9 +363,9 @@ class HlWriter {
 
 	function writeStrings(strings:Array<String>):Void {
 		var data = new BytesOutput();
-		var lengths = [];
+		var lengths:Array<Int> = [];
 		for (value in strings) {
-			var bytes = Bytes.ofString(value, Encoding.UTF8);
+			var bytes = Bytes.ofString(value);
 			lengths.push(bytes.length);
 			data.write(bytes);
 			data.writeByte(0);
@@ -550,8 +549,7 @@ class HlWriter {
 				case Rethrow(register):
 					{opcode: HlOpcode.Rethrow, operands: [register]};
 			}
-			if (encoded != null)
-				result.push(encoded);
+			result.push(encoded);
 		}
 		return result;
 	}
