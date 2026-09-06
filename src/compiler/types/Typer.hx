@@ -1775,17 +1775,24 @@ class Typer {
 				var typedCondition = typeExpression(predicate, scope, TBool);
 				if (!sameType(typedCondition.type, TBool))
 					fail("E1011", "Conditional expression requires a Bool condition", span);
+				var trueScope = FlowAnalysis.narrowedScope(scope, typedCondition, true),
+					falseScope = FlowAnalysis.narrowedScope(scope, typedCondition, false);
 				var contextualType = expectedType;
 				if (contextualType == null) {
-					contextualType = contextualExpressionType(whenTrue, scope);
+					contextualType = contextualExpressionType(whenTrue, trueScope);
 					if (contextualType == null)
-						contextualType = contextualExpressionType(whenFalse, scope);
+						contextualType = contextualExpressionType(whenFalse, falseScope);
+					if (contextualType != null
+						&& !isNullable(contextualType)
+						&& contextualType != TNull
+						&& (containsNullLiteral(whenTrue) || containsNullLiteral(whenFalse)))
+						contextualType = TNullable(contextualType);
 				}
-				var typedTrue = typeExpression(whenTrue, FlowAnalysis.narrowedScope(scope, typedCondition, true), contextualType),
+				var typedTrue = typeExpression(whenTrue, trueScope, contextualType),
 					branchExpected = expectedType == null
 						&& typedTrue.type != TNull
 						&& typedTrue.type != TNever ? (containsNullLiteral(whenFalse) ? CompilerType.TNullable(typedTrue.type) : typedTrue.type) : expectedType,
-					typedFalse = typeExpression(whenFalse, FlowAnalysis.narrowedScope(scope, typedCondition, false), branchExpected),
+					typedFalse = typeExpression(whenFalse, falseScope, branchExpected),
 					resultType = expectedType == null ? commonConditionalType(typedTrue.type, typedFalse.type) : expectedType;
 				if (resultType == null)
 					fail("E1003", "Conditional branches must have matching types", span);
