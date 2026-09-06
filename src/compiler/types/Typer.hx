@@ -2782,6 +2782,14 @@ class Typer {
 			var value = coerce(typeExpression(arguments[0], scope, element), element, "array element", "E1002");
 			return new TypedExpression(TArrayPush(receiver, value), TInt, span);
 		}
+		if (name == "unshift") {
+			if (arguments.length != 1)
+				fail("E1008", "Array.unshift expects one argument", span);
+			if (!isRebindableArrayReceiver(receiver))
+				fail("E1016", "Array.unshift requires a mutable local or field array", span);
+			var value = coerce(typeExpression(arguments[0], scope, element), element, "array element", "E1002");
+			return new TypedExpression(TArrayUnshift(receiver, value), TInt, span);
+		}
 		if (name == "pop") {
 			if (arguments.length != 0)
 				fail("E1008", "Array.pop expects no arguments", span);

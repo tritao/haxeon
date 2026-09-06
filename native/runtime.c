@@ -435,6 +435,15 @@ HL_PRIM varray *HL_NAME(__array_push_##SUFFIX)( varray *array, VALUE_TYPE value 
 	((VALUE_TYPE *)hl_aptr(array, vbyte))[array->size - 1] = value; \
 	return array; \
 } \
+HL_PRIM varray *HL_NAME(__array_unshift_##SUFFIX)( varray *array, VALUE_TYPE value ) { \
+	if (array->size >= array->capacity) \
+		hl_array_reserve(array, array->size + 1); \
+	int stride = hl_type_size(array->at); \
+	memmove(hl_aptr(array, vbyte) + stride, hl_aptr(array, vbyte), (size_t)array->size * stride); \
+	array->size++; \
+	((VALUE_TYPE *)hl_aptr(array, vbyte))[0] = value; \
+	return array; \
+} \
 HL_PRIM VALUE_TYPE HL_NAME(__array_pop_##SUFFIX)( varray *array ) { \
 	if (array->size <= 0) \
 		hl_error("Array.pop on an empty array"); \
@@ -1085,14 +1094,19 @@ DEFINE_PRIM(_I32,__array_index_of_f64,_ARR _F64);
 DEFINE_PRIM(_I32,__array_index_of_bytes,_ARR _BYTES);
 DEFINE_PRIM(_I32,__array_index_of_bool,_ARR _BOOL);
 DEFINE_PRIM(_ARR,__array_push_i32,_ARR _I32);
+DEFINE_PRIM(_ARR,__array_unshift_i32,_ARR _I32);
 DEFINE_PRIM(_I32,__array_pop_i32,_ARR);
 DEFINE_PRIM(_ARR,__array_push_f64,_ARR _F64);
+DEFINE_PRIM(_ARR,__array_unshift_f64,_ARR _F64);
 DEFINE_PRIM(_F64,__array_pop_f64,_ARR);
 DEFINE_PRIM(_ARR,__array_push_bytes,_ARR _BYTES);
+DEFINE_PRIM(_ARR,__array_unshift_bytes,_ARR _BYTES);
 DEFINE_PRIM(_BYTES,__array_pop_bytes,_ARR);
 DEFINE_PRIM(_ARR,__array_push_bool,_ARR _BOOL);
+DEFINE_PRIM(_ARR,__array_unshift_bool,_ARR _BOOL);
 DEFINE_PRIM(_BOOL,__array_pop_bool,_ARR);
 DEFINE_PRIM(_ARR,__array_push_ref,_ARR _DYN);
+DEFINE_PRIM(_ARR,__array_unshift_ref,_ARR _DYN);
 DEFINE_PRIM(_DYN,__array_pop_ref,_ARR);
 DEFINE_PRIM(_ABSTRACT(map_string_i32),__map_string_i32_alloc,_NO_ARG);
 DEFINE_PRIM(_VOID,__map_string_i32_set,_ABSTRACT(map_string_i32) _BYTES _I32);

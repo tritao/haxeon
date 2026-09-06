@@ -95,6 +95,7 @@ enum TypedExpressionKind {
 	TStringFromCharCode(code:TypedExpression);
 	TStringSubstring(value:TypedExpression, start:TypedExpression, end:Null<TypedExpression>);
 	TArrayPush(array:TypedExpression, value:TypedExpression);
+	TArrayUnshift(array:TypedExpression, value:TypedExpression);
 	TArrayPop(array:TypedExpression);
 	TArraySort(array:TypedExpression, comparator:TypedExpression);
 }

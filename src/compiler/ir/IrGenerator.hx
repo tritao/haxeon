@@ -1132,6 +1132,21 @@ class IrGenerator {
 					default: throw "Array.push requires a mutable local or field array";
 				}
 				builder.arraySize(pushed);
+			case TArrayUnshift(array, value):
+				var element = switch array.type {
+					case TArray(valueType): valueType;
+					default: throw "Array.unshift requires an array value";
+				}, operands = lowerOperands([array, value], builder, localTypes);
+				var shifted = builder.call(RuntimeType.arrayNative(element, "unshift"), operands, Array(lowerType(element)));
+				switch array.expression {
+					case TLocal(name): builder.store(name, shifted);
+					case TCellLocal(name, cellClass):
+						var cell = builder.load('$' + 'cell:$name', Obj(cellClass));
+						builder.fieldSet(cell, "value", shifted);
+					case TField(object, name): builder.fieldSet(lowerExpression(object, builder, localTypes), name, shifted);
+					default: throw "Array.unshift requires a mutable local or field array";
+				}
+				builder.arraySize(shifted);
 			case TArrayPop(array):
 				var element = switch array.type {
 					case TArray(valueType): valueType;
