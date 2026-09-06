@@ -447,17 +447,38 @@ class Compiler {
 				abstracts.push(canonicalAbstract(abstractDecl, aliases, ast.packageName, name, entryModule, locals));
 			for (fn in ast.functions)
 				locals.set(fn.name, true);
-			for (fn in ast.functions) {
-				var canonical = canonicalFunction(fn, name, entryModule, locals, null, aliases);
+			var aliasNames = [for (aliasName in aliases.keys()) aliasName];
+			aliasNames.sort(Reflect.compare);
+			var aliasKey = [for (aliasName in aliasNames) aliasName + "=" + aliases.get(aliasName)].join(";");
+			var canonicalFunctions:Array<AstFunction>;
+			if (state.canonicalRevision == state.revision && state.canonicalEntry == entryModule && state.canonicalAliasKey == aliasKey)
+				canonicalFunctions = state.canonicalFunctions;
+			else {
+				state = writableState(name, rollbackModules);
+				canonicalFunctions = [
+					for (fn in ast.functions)
+						canonicalFunction(fn, name, entryModule, locals, null, aliases)
+				];
+				var canonicalCalls:Map<String, Array<String>> = [];
+				for (canonical in canonicalFunctions) {
+					var calls:Map<String, Bool> = [],
+						localAliases:Map<String, String> = [];
+					for (statement in canonical.statements)
+						scanCalls(statement, calls, localAliases);
+					canonicalCalls.set(canonical.name, [for (callee in calls.keys()) callee]);
+				}
+				state.canonicalFunctions = canonicalFunctions;
+				state.canonicalRevision = state.revision;
+				state.canonicalEntry = entryModule;
+				state.canonicalAliasKey = aliasKey;
+				state.canonicalCalls = canonicalCalls;
+			}
+			for (canonical in canonicalFunctions) {
 				functions.push(canonical);
 				programFunctions.push(canonical);
 				owners.set(canonical.name, name);
-				var calls:Map<String, Bool> = [];
-				var aliases:Map<String, String> = [];
-				for (statement in canonical.statements)
-					scanCalls(statement, calls, aliases);
 				collectLambdas(canonical.statements, canonical.name, name, generatedByModule);
-				for (callee in calls.keys()) {
+				for (callee in state.canonicalCalls.get(canonical.name)) {
 					var callers:Array<String>;
 					if (reverseCalls.exists(callee))
 						callers = reverseCalls.get(callee);

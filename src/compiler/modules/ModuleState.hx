@@ -1,6 +1,7 @@
 package compiler.modules;
 
 import compiler.Ast.AstProgram;
+import compiler.Ast.AstFunction;
 import compiler.Diagnostic;
 import compiler.Source.SourceFile;
 import compiler.ir.IrFunction;
@@ -49,6 +50,11 @@ class ModuleState {
 	public var irSourceRevisions:Map<String, Int> = [];
 	public var irVersions:Map<String, Int> = [];
 	public var dirty:Bool = true;
+	public var canonicalFunctions:Array<AstFunction> = [];
+	public var canonicalRevision:Int = 0;
+	public var canonicalEntry:String = "";
+	public var canonicalAliasKey:String = "";
+	public var canonicalCalls:Map<String, Array<String>> = [];
 
 	public function new(name, source) {
 		this.name = name;
@@ -98,6 +104,11 @@ class ModuleState {
 		result.irSourceRevisions = copyMap(irSourceRevisions);
 		result.irVersions = copyMap(irVersions);
 		result.dirty = dirty;
+		result.canonicalFunctions = canonicalFunctions;
+		result.canonicalRevision = canonicalRevision;
+		result.canonicalEntry = canonicalEntry;
+		result.canonicalAliasKey = canonicalAliasKey;
+		result.canonicalCalls = canonicalCalls;
 		return result;
 	}
 
