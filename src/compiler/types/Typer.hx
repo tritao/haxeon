@@ -2912,13 +2912,23 @@ class Typer {
 				fail("E1009", "String.indexOf expects a String needle", needle.span);
 			return new TypedExpression(TStringIndexOf(receiver, needle), TInt, span);
 		}
-		if (name == "substring") {
+		if (name == "lastIndexOf") {
+			if (arguments.length != 1)
+				fail("E1008", 'Function "String.lastIndexOf" expects 1 argument, got ${arguments.length}', span);
+			var needle = typeExpression(arguments[0], scope, TString);
+			if (!sameType(needle.type, TString))
+				fail("E1009", "String.lastIndexOf expects a String needle", needle.span);
+			return new TypedExpression(TCall("__string_last_index_of", [receiver, needle]), TInt, span);
+		}
+		if (name == "substring" || name == "substr") {
 			if (arguments.length < 1 || arguments.length > 2)
-				fail("E1008", 'Function "String.substring" expects 1 or 2 arguments, got ${arguments.length}', span);
+				fail("E1008", 'Function "String.$name" expects 1 or 2 arguments, got ${arguments.length}', span);
 			var start = typeExpression(arguments[0], scope),
 				end:Null<TypedExpression> = arguments.length == 1 ? null : typeExpression(arguments[1], scope);
 			if (!sameType(start.type, TInt) || (end != null && !sameType(end.type, TInt)))
-				fail("E1009", "String.substring expects Int bounds", span);
+				fail("E1009", "String.$name expects Int bounds", span);
+			if (name == "substr" && end != null)
+				end = new TypedExpression(TAdd(start, end), TInt, span);
 			return new TypedExpression(TStringSubstring(receiver, start, end), TString, span);
 		}
 		if (name == "charCodeAt") {

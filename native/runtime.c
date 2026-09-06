@@ -684,6 +684,16 @@ HL_PRIM int HL_NAME(__string_index_of)( vbyte *value, vbyte *needle ) {
 	return -1;
 }
 
+HL_PRIM int HL_NAME(__string_last_index_of)( vbyte *value, vbyte *needle ) {
+	if( value == NULL || needle == NULL ) return -1;
+	const uchar *text = (const uchar *)value, *search = (const uchar *)needle;
+	int text_length = (int)ustrlen(text), search_length = (int)ustrlen(search);
+	if( search_length == 0 ) return text_length;
+	for( int index = text_length - search_length; index >= 0; index-- )
+		if( memcmp(text + index,search,search_length * sizeof(uchar)) == 0 ) return index;
+	return -1;
+}
+
 HL_PRIM int HL_NAME(__string_char_code_at)( vbyte *value, int index ) {
 	int length = value == NULL ? 0 : (int)ustrlen((const uchar *)value);
 	if( index < 0 || index >= length ) return -1;
@@ -992,6 +1002,10 @@ HL_PRIM vbyte *HL_NAME(jit_location)( hl_runtime_module *runtime, int stable_id 
 	return bytes;
 }
 
+HL_PRIM int HL_NAME(debug_region_count)( hl_runtime_module *runtime ) {
+	return hl_runtime_module_debug_region_count(runtime);
+}
+
 HL_PRIM int HL_NAME(retired_allocation_count)( hl_runtime_module *runtime ) {
 	return hl_runtime_module_retired_allocation_count(runtime);
 }
@@ -1065,6 +1079,7 @@ DEFINE_PRIM(_I32,patch,_ABSTRACT(realtime_module) _BYTES _I32);
 DEFINE_PRIM(_I32,allocation_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,patch_jit_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_BYTES,jit_location,_ABSTRACT(realtime_module) _I32);
+DEFINE_PRIM(_I32,debug_region_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,retired_allocation_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,type_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,type_capacity,_ABSTRACT(realtime_module));
@@ -1215,6 +1230,7 @@ DEFINE_PRIM(_BYTES,__string_concat,_BYTES _BYTES);
 DEFINE_PRIM(_I32,__string_length,_BYTES);
 DEFINE_PRIM(_BOOL,__string_equal,_BYTES _BYTES);
 DEFINE_PRIM(_I32,__string_index_of,_BYTES _BYTES);
+DEFINE_PRIM(_I32,__string_last_index_of,_BYTES _BYTES);
 DEFINE_PRIM(_I32,__string_char_code_at,_BYTES _I32);
 DEFINE_PRIM(_BYTES,__string_char_at,_BYTES _I32);
 DEFINE_PRIM(_BYTES,__string_from_char_code,_I32);
