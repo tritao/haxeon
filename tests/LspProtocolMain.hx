@@ -1,9 +1,18 @@
 import editor.LspProtocol;
+import editor.lsp.DocumentStore;
+import editor.lsp.DocumentStore.LspDocument;
 import haxe.Json;
 import compiler.service.LanguageService;
 
 class LspProtocolMain {
 	static function main():Void {
+		var positions = new LspDocument("file:///workspace/Lines.hx", "/workspace/Lines.hx", 1, "one\nthree");
+		var converted:Dynamic = positions.position(6);
+		if (positions.offset(1, 2) != 6 || converted.line != 1 || converted.character != 2)
+			throw "LSP document position conversion is inconsistent";
+		var decoded = new DocumentStore().open("file:///workspace/My%20File.hx", 1, "");
+		if (decoded.path != "/workspace/My File.hx")
+			throw "LSP file URI was not decoded";
 		var service = new LanguageService(),
 			protocol = new LspProtocol(service);
 		service.compiler.enablePublicationTracking();
@@ -50,9 +59,19 @@ class LspProtocolMain {
 			method: "textDocument/rename",
 			params: {textDocument: {uri: uri}, position: {line: 0, character: source.lastIndexOf("answer") + 2}, newName: "result"}
 		}));
-		var edits:Array<Dynamic> = Reflect.field(renamed.result.changes, uri);
-		if (edits == null || edits.length != 2)
+		var documentChanges:Array<Dynamic> = renamed.result.documentChanges;
+		if (documentChanges.length != 1
+			|| documentChanges[0].textDocument.uri != uri
+			|| documentChanges[0].textDocument.version != 1
+			|| documentChanges[0].edits.length != 2)
 			throw "LSP rename did not return a workspace edit";
+		var staleChange = protocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didChange",
+			params: {textDocument: {uri: uri, version: 1}, contentChanges: [{text: "invalid"}]}
+		}));
+		if (staleChange.length != 0)
+			throw "LSP accepted an out-of-order document version";
 		var state = service.compiler.modules.get("workspace.Main");
 		if (!state.pendingIrFunctions.exists("main"))
 			throw 'Language analysis did not defer IR: pending=${[for (name in state.pendingIrFunctions.keys()) name]}, typed=${[for (name in state.typedFunctions.keys()) name]}';
@@ -60,6 +79,20 @@ class LspProtocolMain {
 		state = service.compiler.modules.get("workspace.Main");
 		if (build.regenerated.indexOf("main") < 0 || state.pendingIrFunctions.exists("main"))
 			throw 'Runtime build did not lower deferred IR: regenerated=${build.regenerated}, pending=${[for (name in state.pendingIrFunctions.keys()) name]}';
+		var broken = "function main(:Int { return 0; }";
+		protocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didChange",
+			params: {textDocument: {uri: uri, version: 2}, contentChanges: [{text: broken}]}
+		}));
+		var staleRename = protocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			id: 5,
+			method: "textDocument/rename",
+			params: {textDocument: {uri: uri}, position: {line: 0, character: 10}, newName: "other"}
+		}));
+		if (staleRename.length != 1 || Json.parse(staleRename[0]).error.code != -32801)
+			throw "LSP rename did not reject a stale semantic snapshot";
 		Sys.println("PASS: standard LSP adapter maps compiler language queries");
 	}
 

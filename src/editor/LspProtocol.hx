@@ -4,12 +4,24 @@ import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.modules.ModulePath;
 import compiler.service.LanguageService;
+import editor.lsp.DocumentStore;
+import editor.lsp.DocumentStore.LspDocument;
 import haxe.Json;
+
+private class LspRequestError {
+	public final code:Int;
+	public final message:String;
+
+	public function new(code:Int, message:String) {
+		this.code = code;
+		this.message = message;
+	}
+}
 
 /** Minimal standard LSP adapter over the compiler-owned language service. */
 class LspProtocol {
 	final service:LanguageService;
-	final documents:Map<String, {path:String, version:Int, source:String}> = [];
+	final documents = new DocumentStore();
 	var shutdownRequested = false;
 	var exitRequested = false;
 
@@ -53,6 +65,8 @@ class LspProtocol {
 				case "$/cancelRequest": [];
 				default: id == null ? [] : [error(id, -32601, 'Method not found: $method')];
 			};
+		} catch (failure:LspRequestError) {
+			return id == null ? [] : [error(id, failure.code, failure.message)];
 		} catch (failure:Dynamic) {
 			return id == null ? [] : [error(id, -32603, Std.string(failure))];
 		}
@@ -89,9 +103,11 @@ class LspProtocol {
 				throw "Incremental document changes were not negotiated";
 			source = requiredString(changes[changes.length - 1], "text");
 		}
-		var path = uriPath(uri);
-		documents.set(uri, {path: path, version: version, source: source});
-		service.update(path, source);
+		var document = opening ? documents.open(uri, version, source) : documents.replace(uri, version, source);
+		if (document == null)
+			return [];
+		var path = document.path;
+		service.update(path, document.source);
 		try
 			service.analyze(ModulePath.fromFile(path))
 		catch (_:CompileError) {}
@@ -106,27 +122,28 @@ class LspProtocol {
 
 	function close(request:Dynamic):Array<String> {
 		var uri = documentUri(request);
-		documents.remove(uri);
+		documents.close(uri);
 		return [notification("textDocument/publishDiagnostics", {uri: uri, diagnostics: []})];
 	}
 
 	function documentSymbols(request:Dynamic):Array<Dynamic> {
 		var document = document(request);
+		requireCurrent(document);
 		return [
 			for (symbol in service.documentSymbols(document.path))
 				{
 					name: symbol.name,
 					kind: symbolKind(symbol.kind),
 					detail: symbol.detail,
-					range: range(document.source, symbol.span.start, symbol.span.end),
-					selectionRange: range(document.source, symbol.span.start, symbol.span.end)
+					range: document.range(symbol.span.start, symbol.span.end),
+					selectionRange: document.range(symbol.span.start, symbol.span.end)
 				}
 		];
 	}
 
 	function completion(request:Dynamic):Dynamic {
 		var document = document(request),
-			offset = positionOffset(document.source, position(request));
+			offset = positionOffset(document, position(request));
 		return {
 			isIncomplete: false,
 			items: [
@@ -142,19 +159,21 @@ class LspProtocol {
 
 	function hover(request:Dynamic):Dynamic {
 		var document = document(request),
-			value = service.hover(document.path, positionOffset(document.source, position(request)));
+			value = service.hover(document.path, positionOffset(document, position(request)));
 		return value == null ? null : {contents: {kind: "plaintext", value: value}};
 	}
 
 	function definition(request:Dynamic):Dynamic {
-		var document = document(request),
-			location = service.definition(document.path, positionOffset(document.source, position(request)));
+		var document = document(request);
+		requireCurrent(document);
+		var location = service.definition(document.path, positionOffset(document, position(request)));
 		return location == null ? null : locationJson(location.path, location.span.start, location.span.end);
 	}
 
 	function references(request:Dynamic):Array<Dynamic> {
-		var document = document(request),
-			locations = service.references(document.path, positionOffset(document.source, position(request)));
+		var document = document(request);
+		requireCurrent(document);
+		var locations = service.references(document.path, positionOffset(document, position(request)));
 		return [
 			for (location in locations)
 				locationJson(location.path, location.span.start, location.span.end)
@@ -162,48 +181,68 @@ class LspProtocol {
 	}
 
 	function prepareRename(request:Dynamic):Dynamic {
-		var document = document(request),
-			offset = positionOffset(document.source, position(request));
+		var document = document(request);
+		requireCurrent(document);
+		var offset = positionOffset(document, position(request));
 		for (token in service.compiler.modules.get(ModulePath.fromFile(document.path)).tokens)
 			if (offset >= token.span.start && offset <= token.span.end && Std.string(token.kind) == "Identifier")
-				return {range: range(document.source, token.span.start, token.span.end), placeholder: token.text};
+				return {range: document.range(token.span.start, token.span.end), placeholder: token.text};
 		return null;
 	}
 
 	function rename(request:Dynamic):Dynamic {
-		var document = document(request),
-			params:Dynamic = required(request, "params"),
-			edits = service.rename(document.path, positionOffset(document.source, position(request)), requiredString(params, "newName")),
-			changes:Dynamic = {};
+		var document = document(request);
+		requireCurrent(document);
+		var params:Dynamic = required(request, "params"),
+			edits = service.rename(document.path, positionOffset(document, position(request)), requiredString(params, "newName")),
+			grouped:Map<String, Array<Dynamic>> = [],
+			targets:Map<String, LspDocument> = [];
 		for (edit in edits) {
-			var uri = pathUri(edit.path),
-				source = sourceForPath(edit.path),
-				existing:Array<Dynamic> = Reflect.field(changes, uri);
-			if (existing == null) {
-				existing = [];
-				Reflect.setField(changes, uri, existing);
-			}
-			existing.push({range: range(source, edit.span.start, edit.span.end), newText: edit.replacement});
+			if (edit.stale)
+				throw new LspRequestError(-32801, "Rename result is based on stale source");
+			var uri = documents.uri(edit.path),
+				target = documentForPath(edit.path),
+				existing = grouped.get(uri);
+			if (existing == null)
+				grouped.set(uri, existing = []);
+			targets.set(uri, target);
+			existing.push({range: target.range(edit.span.start, edit.span.end), newText: edit.replacement});
 		}
-		return {changes: changes};
+		return {
+			documentChanges: [
+				for (uri => textEdits in grouped)
+					{
+						textDocument: {
+							uri: uri,
+							version: documents.forPath(targets.get(uri).path) == null ? null : targets.get(uri).version
+						},
+						edits: textEdits
+					}
+			]
+		};
 	}
 
-	function locationJson(path:String, start:Int, end:Int):Dynamic
-		return {uri: pathUri(path), range: range(sourceForPath(path), start, end)};
+	function locationJson(path:String, start:Int, end:Int):Dynamic {
+		var target = documentForPath(path);
+		return {uri: documents.uri(path), range: target.range(start, end)};
+	}
 
-	function sourceForPath(path:String):String {
-		for (document in documents)
-			if (document.path == path)
-				return document.source;
+	function documentForPath(path:String):LspDocument {
+		var open = documents.forPath(path);
+		if (open != null)
+			return open;
 		var state = service.compiler.modules.get(ModulePath.fromFile(path));
-		return state == null ? "" : state.source.text;
+		if (state == null)
+			throw 'Unknown source path: $path';
+		return new LspDocument(documents.uri(path), path, state.revision, state.source.text);
 	}
 
-	function document(request:Dynamic):{path:String, version:Int, source:String} {
-		var uri = documentUri(request), result = documents.get(uri);
-		if (result == null)
-			throw 'Document is not open: $uri';
-		return result;
+	function document(request:Dynamic):LspDocument
+		return documents.get(documentUri(request));
+
+	function requireCurrent(document:LspDocument):Void {
+		if (!service.isCurrent(document.path))
+			throw new LspRequestError(-32801, "Semantic snapshot does not match the current document version");
 	}
 
 	static function documentUri(request:Dynamic):String
@@ -212,34 +251,12 @@ class LspProtocol {
 	static function position(request:Dynamic):Dynamic
 		return required(required(request, "params"), "position");
 
-	static function positionOffset(source:String, position:Dynamic):Int {
-		var line = requiredInt(position, "line"), character = requiredInt(position, "character"), offset = 0;
-		for (_ in 0...line) {
-			var newline = source.indexOf("\n", offset);
-			if (newline < 0)
-				return source.length;
-			offset = newline + 1;
-		}
-		var lineEnd = source.indexOf("\n", offset);
-		return Std.int(Math.min(offset + character, lineEnd < 0 ? source.length : lineEnd));
-	}
-
-	static function range(source:String, start:Int, end:Int):Dynamic
-		return {start: offsetPosition(source, start), end: offsetPosition(source, end)};
-
-	static function offsetPosition(source:String, requested:Int):Dynamic {
-		var offset = Std.int(Math.max(0, Math.min(requested, source.length))), line = 0, lineStart = 0;
-		for (index in 0...offset)
-			if (source.charCodeAt(index) == 10) {
-				line++;
-				lineStart = index + 1;
-			}
-		return {line: line, character: offset - lineStart};
-	}
+	static function positionOffset(document:LspDocument, position:Dynamic):Int
+		return document.offset(requiredInt(position, "line"), requiredInt(position, "character"));
 
 	static function diagnosticJson(diagnostic:Diagnostic):Dynamic
 		return {
-			range: range(diagnostic.span.file.text, diagnostic.span.start, diagnostic.span.end),
+			range: new LspDocument("", diagnostic.span.file.path, 0, diagnostic.span.file.text).range(diagnostic.span.start, diagnostic.span.end),
 			severity: Std.string(diagnostic.severity) == "Warning" ? 2 : 1,
 			code: diagnostic.code,
 			source: "haxeon",
@@ -269,12 +286,6 @@ class LspProtocol {
 			case "enumCase": 20;
 			default: 6;
 		};
-
-	static function pathUri(path:String):String
-		return StringTools.startsWith(path, "file://") ? path : "file://" + path;
-
-	static function uriPath(uri:String):String
-		return StringTools.startsWith(uri, "file://") ? uri.substr(7) : uri;
 
 	static function required(value:Dynamic, name:String):Dynamic {
 		var field = Reflect.field(value, name);

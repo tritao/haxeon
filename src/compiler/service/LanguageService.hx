@@ -84,6 +84,12 @@ class LanguageService {
 		return state == null ? [] : state.diagnostics.copy();
 	}
 
+	/** Whether editor spans and typed data belong to the latest source revision. */
+	public function isCurrent(path:String):Bool {
+		var state = stateFor(path);
+		return state != null && state.ast != null && state.lastGoodRevision == state.revision;
+	}
+
 	public function documentSymbols(path:String):Array<DocumentSymbol> {
 		var state = stateFor(path),
 			result:Array<DocumentSymbol> = [],
