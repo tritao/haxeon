@@ -5,6 +5,7 @@ import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction;
 import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlFunction.HlDebugLocation;
+import compiler.hl.HlFunction.HlDebugAssignment;
 import compiler.hl.HlType;
 import compiler.hl.incremental.HlSymbolTable;
 import compiler.ir.Ir.IrInstruction;
@@ -190,6 +191,20 @@ class HlLower {
 					default:
 				}
 
+		var bindingsByValue:Map<Int, Array<String>> = [];
+		for (binding in fn.debugBindings) {
+			var names = bindingsByValue.get(binding.value.id);
+			if (names == null) {
+				names = [];
+				bindingsByValue.set(binding.value.id, names);
+			}
+			if (names.indexOf(binding.name) < 0)
+				names.push(binding.name);
+		}
+		var debugAssignments:Array<HlDebugAssignment> = [for (argument in fn.arguments) {
+			name: internString(argument.name), position: -1, scopeEnd: -1
+		}],
+			seenAssignments:Map<String, Bool> = [];
 		var instructions:Array<HlInstruction> = [],
 			debugLocations:Array<HlDebugLocation> = [],
 			activeTraps:Array<Int> = [];
@@ -200,6 +215,7 @@ class HlLower {
 			debugLocations.push(debugLocation(blockProvenance(block)));
 			for (instruction in block.instructions) {
 				var instructionStart = instructions.length;
+				var output = instructionOutput(instruction.value);
 				switch instruction.value {
 					case Phi(_, _):
 					case ConstVoid(output):
@@ -330,6 +346,19 @@ class HlLower {
 							constructor, field));
 				}
 				appendDebugLocations(debugLocations, instructions.length - instructionStart, instruction.provenance);
+				if (output != null && instructions.length > instructionStart) {
+					var names = bindingsByValue.get(output.id);
+					if (names != null) {
+						var position = encodedInstructionCount(instructions, instructionStart);
+						for (name in names) {
+							var key = name + "@" + position;
+							if (!seenAssignments.exists(key)) {
+								seenAssignments.set(key, true);
+								debugAssignments.push({name: internString(name), position: position, scopeEnd: -1});
+							}
+						}
+					}
+				}
 			}
 			var terminator = block.terminator;
 			if (terminator == null)
@@ -357,7 +386,17 @@ class HlLower {
 		}
 
 		return new HlFunction(internFunctionType([for (argument in fn.arguments) argument.type], fn.result), requireFunction(fn.name), registerTypes,
-			instructions, debugLocations);
+			instructions, debugLocations, debugAssignments);
+	}
+
+	static function encodedInstructionCount(instructions:Array<HlInstruction>, end:Int):Int {
+		var count = 0;
+		for (index in 0...end)
+			switch instructions[index] {
+				case Label(_):
+				default: count++;
+			}
+		return count;
 	}
 
 	static function appendDebugLocations(output:Array<HlDebugLocation>, count:Int, provenance:SourceProvenance):Void

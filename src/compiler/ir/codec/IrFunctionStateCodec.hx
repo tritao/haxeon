@@ -20,7 +20,7 @@ import compiler.ir.SourceProvenance.SourceOrigin;
 
 /** Deterministic framing for a complete SSA IR function. */
 class IrFunctionStateCodec {
-	static inline final VERSION = 2;
+	static inline final VERSION = 3;
 	static inline final MAX_BLOCKS = 0x100000;
 	static inline final MAX_INSTRUCTIONS = 0x1000000;
 
@@ -28,6 +28,8 @@ class IrFunctionStateCodec {
 		var values:Map<Int, IrValue> = [];
 		for (argument in fn.arguments)
 			collectValue(argument, values);
+		for (binding in fn.debugBindings)
+			collectValue(binding.value, values);
 		for (block in fn.blocks) {
 			for (instruction in block.instructions)
 				collectInstruction(instruction.value, values);
@@ -46,6 +48,11 @@ class IrFunctionStateCodec {
 		for (argument in fn.arguments)
 			IrValueTableCodec.writeReference(output, argument);
 		IrTypeCodec.writeType(output, fn.result, 0);
+		output.writeInt32(fn.debugBindings.length);
+		for (binding in fn.debugBindings) {
+			IrTypeCodec.writeString(output, binding.name);
+			IrValueTableCodec.writeReference(output, binding.value);
+		}
 		if (fn.blocks.length == 0 || fn.blocks.length > MAX_BLOCKS)
 			throw "Invalid IR function block count";
 		var blocks:Map<Int, Bool> = [];
@@ -84,7 +91,7 @@ class IrFunctionStateCodec {
 			if (input.readString(3) != "IRF")
 				throw "Invalid IR function state";
 			var version = input.readByte();
-			if (version != 1 && version != VERSION)
+			if (version < 1 || version > VERSION)
 				throw "Unsupported IR function state version";
 			var valuesArray = IrValueTableCodec.decode(readBytes(input, bytes.length)),
 				values = IrValueTableCodec.byId(valuesArray),
@@ -94,7 +101,15 @@ class IrFunctionStateCodec {
 				throw "Invalid IR function argument count";
 			var arguments = [for (_ in 0...argumentCount) IrValueTableCodec.readReference(input, values)],
 				result = IrTypeCodec.readType(input, bytes.length, 0),
-				blockCount = input.readInt32();
+				debugBindings:Array<compiler.ir.IrFunction.IrDebugBinding> = [];
+			if (version >= 3) {
+				var bindingCount = input.readInt32();
+				if (bindingCount < 0 || bindingCount > IrValueTableCodec.MAX_VALUES)
+					throw "Invalid IR debug binding count";
+				for (_ in 0...bindingCount)
+					debugBindings.push({name: IrTypeCodec.readString(input, bytes.length), value: IrValueTableCodec.readReference(input, values)});
+			}
+			var blockCount = input.readInt32();
 			if (blockCount <= 0 || blockCount > MAX_BLOCKS)
 				throw "Invalid IR function block count";
 			var blocks:Array<IrBlock> = [], blockIds:Map<Int, Bool> = [];
@@ -125,7 +140,7 @@ class IrFunctionStateCodec {
 			}
 			if (input.position != bytes.length)
 				throw "Trailing IR function state data";
-			return new IrFunction(name, arguments, result, blocks);
+			return new IrFunction(name, arguments, result, blocks, debugBindings);
 		} catch (error:haxe.io.Eof) {
 			throw "Truncated IR function state";
 		}

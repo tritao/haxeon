@@ -28,6 +28,7 @@ class SsaBuilder {
 	var temporaries:Map<Int, IrValue> = [];
 	var nextValue:Int = 0;
 	var renamed:Map<Int, Bool> = [];
+	var debugBindings:Array<compiler.ir.IrFunction.IrDebugBinding> = [];
 
 	public static function build(cfg:CfgFunction):IrFunction {
 		CfgVerifier.verify(cfg);
@@ -57,7 +58,7 @@ class SsaBuilder {
 		for (block in cfg.blocks)
 			if (reachable.exists(block.id) && roots.indexOf(block.id) < 0 && immediate.exists(block.id) && immediate.get(block.id) == -1)
 				rename(block.id);
-		return new IrFunction(cfg.name, arguments, cfg.result, output);
+		return new IrFunction(cfg.name, arguments, cfg.result, output, debugBindings);
 	}
 
 	function buildGraph():Void {
@@ -294,7 +295,11 @@ class SsaBuilder {
 				case LoadLocal(out, name):
 					temporaries.set(out.id, current(name));
 				case StoreLocal(name, value):
-					push(name, resolve(value));
+					var resolved = resolve(value);
+					push(name, resolved);
+					var debugName = sourceDebugName(name);
+					if (debugName != null)
+						debugBindings.push({name: debugName, value: resolved});
 					pushed.push(name);
 				case ConstVoid(out):
 					var result = define(out);
@@ -483,6 +488,14 @@ class SsaBuilder {
 
 	function allocate(name:String, type:IrType):IrValue {
 		return new IrValue(nextValue++, name, type);
+	}
+
+	static function sourceDebugName(name:String):Null<String> {
+		if (StringTools.startsWith(name, "$l")) {
+			var separator = name.indexOf(":");
+			return separator < 0 ? null : name.substr(separator + 1);
+		}
+		return StringTools.startsWith(name, "$") ? null : name;
 	}
 
 	function push(name:String, value:IrValue):Void {

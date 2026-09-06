@@ -175,7 +175,12 @@ class HlWriter {
 			writeOpcode(instruction.opcode, instruction.operands);
 		if (hasDebug) {
 			writeDebugLocations(fn);
-			writeUnsignedIndex(0); // local-variable assignments
+			writeUnsignedIndex(fn.debugAssignments.length);
+			for (assignment in fn.debugAssignments) {
+				writeUnsignedIndex(assignment.name);
+				writeIndex(assignment.position + 1);
+				writeIndex(assignment.scopeEnd + 1);
+			}
 		}
 	}
 

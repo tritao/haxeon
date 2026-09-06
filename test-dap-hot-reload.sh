@@ -50,6 +50,7 @@ cleanup() {
 	fi
 }
 trap cleanup EXIT
+current_frame=
 
 wait_frame() {
 	local source=$1 line=$2 stack status
@@ -61,6 +62,7 @@ wait_frame() {
 			printf '%s\n' "$stack" >&2
 			return 1
 		fi
+		current_frame=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["stackFrames"][0]["id"])' <<<"$stack")
 		return
 	fi
     sleep 0.1
@@ -68,6 +70,17 @@ wait_frame() {
   echo "Timed out waiting for $source:$line" >&2
 	printf '%s\n' "${stack:-no stack response}" >&2
   return 1
+}
+
+assert_local() {
+	local scopes ref variables
+	scopes=$("${dap[@]}" scopes --name "$session" --frame-id "$current_frame")
+	ref=$(python3 -c 'import json,sys; print(next(s["variablesReference"] for s in json.load(sys.stdin)["data"]["scopes"] if s["name"]=="Locals"))' <<<"$scopes")
+	variables=$("${dap[@]}" variables --name "$session" --variables-reference "$ref")
+	if ! python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="result" and v.get("type")=="Int" for v in vs)' <<<"$variables"; then
+		printf '%s\n' "$variables" >&2
+		return 1
+	fi
 }
 
 "${dap[@]}" start >/dev/null
@@ -81,6 +94,7 @@ PY
 value=$("${dap[@]}" breakpoints set --name "$session" --source "$repo_dir/tests/dap/Value.hx" --line 4)
 python3 -c 'import json,sys; assert json.load(sys.stdin)["data"]["breakpoints"][0]["verified"]' <<<"$value"
 wait_frame Value.hx 4
+assert_local
 
 "${dap[@]}" continue --name "$session" >/dev/null
 for _ in {1..40}; do
@@ -89,4 +103,5 @@ for _ in {1..40}; do
 	sleep 0.05
 done
 wait_frame Value.hx 4
-echo "PASS: dap-cli rebound Value.hx:4 from the original to patched native code"
+assert_local
+echo "PASS: dap-cli rebound Value.hx:4 and resolved locals in original and patched code"

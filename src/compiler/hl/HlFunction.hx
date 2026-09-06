@@ -6,6 +6,13 @@ typedef HlDebugLocation = {
 	final line:Int;
 }
 
+/** HashLink debugger binding at an encoded opcode, or -1 for an argument. */
+typedef HlDebugAssignment = {
+	final name:Int;
+	final position:Int;
+	final scopeEnd:Int;
+}
+
 /** HashLink bytecode function after register allocation and symbol resolution. */
 class HlFunction {
 	public final type:Int;
@@ -13,13 +20,16 @@ class HlFunction {
 	public final registers:Array<Int>;
 	public final opcodes:Array<HlInstruction>;
 	public final debugLocations:Array<HlDebugLocation>;
+	public final debugAssignments:Array<HlDebugAssignment>;
 
-	public function new(type:Int, functionIndex:Int, registers:Array<Int>, opcodes:Array<HlInstruction>, ?debugLocations:Array<HlDebugLocation>) {
+	public function new(type:Int, functionIndex:Int, registers:Array<Int>, opcodes:Array<HlInstruction>, ?debugLocations:Array<HlDebugLocation>,
+			?debugAssignments:Array<HlDebugAssignment>) {
 		this.type = type;
 		this.functionIndex = functionIndex;
 		this.registers = registers;
 		this.opcodes = opcodes;
 		this.debugLocations = debugLocations == null ? [] : debugLocations;
+		this.debugAssignments = debugAssignments == null ? [] : debugAssignments;
 	}
 }
 
