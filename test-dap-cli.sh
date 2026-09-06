@@ -70,7 +70,10 @@ print(json.dumps({
     "program": root + "/out/dap-cli-probe.hl",
     "hl": root + "/vendor/hashlink/hl",
     "classPaths": [root + "/tests", root + "/.tools/haxe/std"],
-    "env": {"LD_LIBRARY_PATH": root + "/vendor/hashlink"},
+	"env": {
+		"LD_LIBRARY_PATH": root + "/vendor/hashlink",
+		"HL_DEBUG_PROTOCOL": "3",
+	},
 }))
 PY
 )

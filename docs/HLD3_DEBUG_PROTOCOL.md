@@ -8,6 +8,8 @@ The HLD3 handshake keeps every HLD2 field in its existing order. After each
 module's ordinary function records it appends:
 
 - the module address, used as its stable mapping identity;
+- the byte length and contents of its original HLB image, or zero when the
+  launch module is already known to the client;
 - the module revision as an `Int32`;
 - the number of patch JIT regions as an `Int32`;
 - for each region: its base pointer, byte size, one-byte retired flag, and
