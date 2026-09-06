@@ -60,7 +60,7 @@ class HlLower {
 			for (interfaceDecl in pendingInterfaces.copy()) {
 				var ready = true;
 				for (base in interfaceDecl.bases)
-					if (symbols.typeIndex('virt:$base') == null)
+					if (!symbols.hasType('virt:$base'))
 						ready = false;
 				if (!ready)
 					continue;
@@ -77,7 +77,7 @@ class HlLower {
 		while (pending.length > 0) {
 			var progressed = false;
 			for (object in pending.copy()) {
-				if (object.base != null && !objectTypeIndices.exists(object.base) && symbols.typeIndex('obj:${object.base}') == null)
+				if (object.base != null && !objectTypeIndices.exists(object.base) && !symbols.hasType('obj:${object.base}'))
 					continue;
 				var fieldsReady = true;
 				for (field in object.fields)
@@ -111,7 +111,7 @@ class HlLower {
 
 	function objectTypeReady(type:IrType):Bool
 		return switch type {
-			case Obj(name): objectTypeIndices.exists(name) || symbols.typeIndex('obj:$name') != null;
+			case Obj(name): objectTypeIndices.exists(name) || symbols.hasType('obj:$name');
 			case Function(arguments, result):
 				var ready = objectTypeReady(result);
 				for (argument in arguments)
@@ -196,14 +196,10 @@ class HlLower {
 						instructions.push(HlInstruction.EndTrap(0));
 					case Catch(_):
 					case GlobalGet(output, name):
-						var global = symbols.globalIndex(name);
-						if (global == null)
-							throw 'Unknown static field global "$name"';
+						var global = symbols.requireGlobalIndex(name);
 						instructions.push(HlInstruction.GlobalGet(defineRegister(output, registers, registerTypes), global));
 					case GlobalSet(name, source):
-						var global = symbols.globalIndex(name);
-						if (global == null)
-							throw 'Unknown static field global "$name"';
+						var global = symbols.requireGlobalIndex(name);
 						instructions.push(HlInstruction.GlobalSet(global, requireRegister(source, registers)));
 					case Add(output, left, right):
 						instructions.push(HlInstruction.Add(defineRegister(output, registers, registerTypes), requireRegister(left, registers),
@@ -521,16 +517,10 @@ class HlLower {
 		var typeName = switch value.type {
 			case Obj(value): value;
 			case Virtual(value):
-				var virtualIndex = symbols.interfaceMethodIndex(value, name);
-				if (virtualIndex == null)
-					throw 'Unknown IR method "$value.$name"';
-				return virtualIndex;
+				return symbols.requireInterfaceMethodIndex(value, name);
 			default: throw 'IR value ${value.id} is not an object';
 		};
-		var index = symbols.objectMethodIndex(typeName, name);
-		if (index == null)
-			throw 'Unknown IR method "$typeName.$name"';
-		return index;
+		return symbols.requireObjectMethodIndex(typeName, name);
 	}
 
 	function objectFieldCount(typeName:String):Int {

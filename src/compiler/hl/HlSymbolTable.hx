@@ -2,6 +2,7 @@ package compiler.hl;
 
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlCode.HlVirtualField;
+import compiler.hl.HlCode.HlObjectMethod;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrInterface;
@@ -119,7 +120,7 @@ class HlSymbolTable {
 	}
 
 	static function orderedNestedMap(values:Map<String, Map<String, Int>>):Array<HlNamedSlots> {
-		var result = [for (name => slots in values) {name: name, slots: orderedMap(slots)}];
+		var result:Array<HlNamedSlots> = [for (name => slots in values) {name: name, slots: orderedMap(slots)}];
 		result.sort(function(a, b) return Reflect.compare(a.name, b.name));
 		return result;
 	}
@@ -152,9 +153,8 @@ class HlSymbolTable {
 		}
 
 	public function internInt(value:Int):Int {
-		var found = intIndices.get(value);
-		if (found != null)
-			return found;
+		if (intIndices.exists(value))
+			return intIndices.get(value);
 		var index = ints.length;
 		ints.push(value);
 		intIndices.set(value, index);
@@ -162,9 +162,8 @@ class HlSymbolTable {
 	}
 
 	public function internString(value:String):Int {
-		var found = stringIndices.get(value);
-		if (found != null)
-			return found;
+		if (stringIndices.exists(value))
+			return stringIndices.get(value);
 		var index = strings.length;
 		strings.push(value);
 		stringIndices.set(value, index);
@@ -172,9 +171,9 @@ class HlSymbolTable {
 	}
 
 	public function internFloat(value:Float):Int {
-		var key = Std.string(value), found = floatIndices.get(key);
-		if (found != null)
-			return found;
+		var key = Std.string(value);
+		if (floatIndices.exists(key))
+			return floatIndices.get(key);
 		var index = floats.length;
 		floats.push(value);
 		floatIndices.set(key, index);
@@ -182,9 +181,9 @@ class HlSymbolTable {
 	}
 
 	public function internType(type:IrType):Int {
-		var key = typeKey(type), found = typeIndices.get(key);
-		if (found != null)
-			return found;
+		var key = typeKey(type);
+		if (typeIndices.exists(key))
+			return typeIndices.get(key);
 		switch type {
 			case Function(arguments, result):
 				return internFunction(arguments, result);
@@ -220,9 +219,9 @@ class HlSymbolTable {
 	}
 
 	public function internEnum(enumDecl:IrEnum):Int {
-		var key = 'enum:${enumDecl.name}', found = typeIndices.get(key);
-		if (found != null)
-			return found;
+		var key = 'enum:${enumDecl.name}';
+		if (typeIndices.exists(key))
+			return typeIndices.get(key);
 		var constructors = [
 			for (constructor in enumDecl.cases)
 				{name: internString(constructor.name), params: [for (param in constructor.params) internType(param)]}
@@ -234,82 +233,88 @@ class HlSymbolTable {
 	}
 
 	public function internInterface(interfaceDecl:IrInterface):Int {
-		var name = interfaceDecl.name,
-			key = 'virt:$name',
-			found = typeIndices.get(key);
-		if (found != null)
-			return found;
+		var name = interfaceDecl.name, key = 'virt:$name';
+		if (typeIndices.exists(key))
+			return typeIndices.get(key);
 		var fields:Array<Null<HlVirtualField>> = [], slots:Map<String, Int> = [], next = 0;
-		for (base in interfaceDecl.bases) {
-			var inherited = interfaceMethodIndices.get(base);
-			if (inherited != null)
+		for (base in interfaceDecl.bases)
+			if (interfaceMethodIndices.exists(base)) {
+				var inherited = interfaceMethodIndices.get(base);
 				for (methodName => slot in inherited) {
 					slots.set(methodName, slot);
 					if (slot >= next)
 						next = slot + 1;
-					var baseIndex = typeIndices.get('virt:$base');
-					if (baseIndex != null)
+					if (typeIndices.exists('virt:$base')) {
+						var baseIndex = typeIndices.get('virt:$base');
 						switch types[baseIndex] {
 							case Virtual(baseFields):
 								if (slot < baseFields.length)
 									fields[slot] = baseFields[slot];
 							default:
 						}
+					}
 				}
-		}
+			}
 		for (method in interfaceDecl.methods) {
-			var slot = slots.get(method.name);
-			if (slot == null) {
+			var slot:Int;
+			if (slots.exists(method.name))
+				slot = slots.get(method.name);
+			else {
 				slot = next++;
 				slots.set(method.name, slot);
 			}
 			var type = internFunction(method.arguments, method.result);
 			fields[slot] = {name: internString(method.name), type: type};
 		}
+		var completeFields:Array<HlVirtualField> = [];
 		for (field in fields)
-			if (field == null)
+			if (field == null) {
 				throw 'Interface "$name" has an unassigned virtual slot';
+			} else
+				completeFields.push(field);
 		var index = types.length;
-		types.push(Virtual([for (field in fields) field]));
+		types.push(Virtual(completeFields));
 		typeIndices.set(key, index);
 		interfaceMethodIndices.set(name, slots);
 		return index;
 	}
 
 	public function internObject(object:IrObject, functionIndices:Map<String, Int>):Int {
-		var found = objectIndices.get(object.name);
-		if (found != null)
-			return found;
+		if (objectIndices.exists(object.name))
+			return objectIndices.get(object.name);
 		var fields = [
 			for (field in object.fields)
 				{name: internString(field.name), type: internType(field.type)}
 		], index = types.length, global = globals.length + 1;
-		var base = object.base == null ? -1 : typeIndices.get('obj:${object.base}');
-		if (object.base != null && base == null)
-			throw 'Object base "${object.base}" must be registered before "${object.name}"';
-		var slots:Map<String, Int> = [], nextSlot = 0;
+		var base = -1, slots:Map<String, Int> = [], nextSlot = 0;
 		if (object.base != null) {
-			var inherited = objectMethodIndices.get(object.base);
-			if (inherited != null)
-				for (name => slot in inherited) {
+			var baseName = Std.string(object.base);
+			var key = 'obj:$baseName';
+			if (!typeIndices.exists(key))
+				throw 'Object base "$baseName" must be registered before "${object.name}"';
+			base = typeIndices.get(key);
+			if (objectMethodIndices.exists(baseName))
+				for (name => slot in objectMethodIndices.get(baseName)) {
 					slots.set(name, slot);
 					if (slot >= nextSlot)
 						nextSlot = slot + 1;
 				}
 		}
-		var methods = [];
+		var methods:Array<HlObjectMethod> = [];
 		for (method in object.methods) {
-			var slot = slots.get(method.name);
-			if (slot == null) {
+			var slot:Int;
+			if (slots.exists(method.name))
+				slot = slots.get(method.name);
+			else {
 				slot = nextSlot++;
 				slots.set(method.name, slot);
 			}
-			var functionIndex = functionIndices.get(method.functionName);
-			if (functionIndex == null)
+			if (!functionIndices.exists(method.functionName))
 				throw 'Unknown object method function "${method.functionName}"';
+			var functionIndex = functionIndices.get(method.functionName);
 			methods.push({name: internString(method.name), functionIndex: functionIndex, prototype: slot});
 		}
-		types.push(Object(internString(object.name), base == null ? -1 : base, global, fields, methods, []));
+		types.push(Object(internString(object.name), base, global, fields, methods, []));
 		objectIndices.set(object.name, index);
 		typeIndices.set('obj:${object.name}', index);
 		objectMethodIndices.set(object.name, slots);
@@ -317,37 +322,47 @@ class HlSymbolTable {
 		return index;
 	}
 
-	public function typeIndex(key:String):Null<Int>
-		return typeIndices.get(key);
+	public function hasType(key:String):Bool
+		return typeIndices.exists(key);
 
 	public function internGlobal(name:String, type:IrType):Int {
-		var found = globalIndices.get(name);
-		if (found != null)
-			return found;
+		if (globalIndices.exists(name))
+			return globalIndices.get(name);
 		var index = globals.length;
 		globals.push(internType(type));
 		globalIndices.set(name, index);
 		return index;
 	}
 
-	public function globalIndex(name:String):Null<Int>
+	public function requireGlobalIndex(name:String):Int {
+		if (!globalIndices.exists(name))
+			throw 'Unknown static field global "$name"';
 		return globalIndices.get(name);
-
-	public function objectMethodIndex(objectName:String, methodName:String):Null<Int> {
-		var methods = objectMethodIndices.get(objectName);
-		return methods == null ? null : methods.get(methodName);
 	}
 
-	public function interfaceMethodIndex(interfaceName:String, methodName:String):Null<Int> {
+	public function requireObjectMethodIndex(objectName:String, methodName:String):Int {
+		if (!objectMethodIndices.exists(objectName))
+			throw 'Unknown IR method "$objectName.$methodName"';
+		var methods = objectMethodIndices.get(objectName);
+		if (!methods.exists(methodName))
+			throw 'Unknown IR method "$objectName.$methodName"';
+		return methods.get(methodName);
+	}
+
+	public function requireInterfaceMethodIndex(interfaceName:String, methodName:String):Int {
+		if (!interfaceMethodIndices.exists(interfaceName))
+			throw 'Unknown IR method "$interfaceName.$methodName"';
 		var methods = interfaceMethodIndices.get(interfaceName);
-		return methods == null ? null : methods.get(methodName);
+		if (!methods.exists(methodName))
+			throw 'Unknown IR method "$interfaceName.$methodName"';
+		return methods.get(methodName);
 	}
 
 	public function internFunction(arguments:Array<IrType>, result:IrType):Int {
 		var key = 'fun(${[for (a in arguments) typeKey(a)].join(",")})->${typeKey(result)}',
 			found = typeIndices.get(key);
-		if (found != null)
-			return found;
+		if (typeIndices.exists(key))
+			return typeIndices.get(key);
 		var args = [for (a in arguments) internType(a)],
 			ret = internType(result),
 			index = types.length;
