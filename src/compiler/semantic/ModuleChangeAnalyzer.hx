@@ -249,7 +249,11 @@ class ModuleChangeAnalyzer {
 		};
 	}
 
-	/** Include coordinates because debugger metadata changes when declarations move. */
+	/** Include the source line because it is part of emitted debugger metadata. */
 	static function sourceFingerprint(state:compiler.modules.ModuleState, span:compiler.Source.SourceSpan):String
-		return state.source.path + ":" + Std.string(span.start) + ":" + state.source.text.substring(span.start, span.end);
+		return state.source.path
+			+ ":"
+			+ Std.string(state.source.lineAt(span.start))
+			+ ":"
+			+ state.source.text.substring(span.start, span.end);
 }
