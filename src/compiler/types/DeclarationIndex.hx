@@ -5,6 +5,7 @@ import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
 import compiler.Source.SourceFile;
+import compiler.semantic.ModuleCanonicalizer;
 import compiler.types.Type.AnonymousField;
 import compiler.types.Type.CompilerType;
 
@@ -262,9 +263,11 @@ class DeclarationIndex {
 		for (name in classes.keys()) {
 			visitClass(name, []);
 			var decl = classes.get(name);
-			for (interfaceName in decl.interfaces)
-				if (!interfaces.exists(interfaceName))
-					fail('Unknown interface "$interfaceName"', decl.span);
+			for (interfaceType in decl.interfaces) {
+				var interfaceName = nominalName(resolve(interfaceType, decl.span));
+				if (interfaceName == null || !interfaces.exists(interfaceName))
+					fail('Unknown interface "${ModuleCanonicalizer.astTypeName(interfaceType)}"', decl.span);
+			}
 		}
 		for (name in interfaces.keys())
 			visitInterface(name, []);
@@ -338,7 +341,7 @@ class DeclarationIndex {
 		visiting.set(name, true);
 		var base = decl.base;
 		if (base != null)
-			visitClass(base, visiting);
+			visitClass(requiredNominalName(resolve(base, decl.span)), visiting);
 		visiting.remove(name);
 	}
 
@@ -350,8 +353,21 @@ class DeclarationIndex {
 			fail('Cyclic interface inheritance involving "$name"', decl.span);
 		visiting.set(name, true);
 		for (base in decl.bases)
-			visitInterface(base, visiting);
+			visitInterface(requiredNominalName(resolve(base, decl.span)), visiting);
 		visiting.remove(name);
+	}
+
+	static function nominalName(type:CompilerType):Null<String>
+		return switch type {
+			case TInstance(_, name, _): name;
+			default: null;
+		};
+
+	static function requiredNominalName(type:CompilerType):String {
+		var name = nominalName(type);
+		if (name == null)
+			throw "Expected nominal inheritance type";
+		return name;
 	}
 
 	function declareType(name:String, kind:DeclarationKind, span:SourceSpan):Void {

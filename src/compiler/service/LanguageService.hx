@@ -1,5 +1,6 @@
 package compiler.service;
 
+import compiler.semantic.ModuleCanonicalizer;
 import compiler.Ast.AstType;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
@@ -668,7 +669,7 @@ class LanguageService {
 											'${method.name}(${[for (argument in method.arguments) typeName(argument.type)].join(",")}):${typeName(method.result)}',
 											prefix, result);
 								if (classDecl.base != null)
-									addInstanceMembers(TInstance(Class, classDecl.base, []), prefix, result);
+									addInstanceMembers(TInstance(Class, ModuleCanonicalizer.astTypeName(classDecl.base), []), prefix, result);
 							}
 				}
 			case TInstance(Interface, name, []):

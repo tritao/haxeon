@@ -172,10 +172,17 @@ class Typer {
 			for (interfaceDecl in program.interfaces)
 				{
 					name: interfaceDecl.name,
-					bases: interfaceDecl.bases,
+					bases: [for (base in interfaceDecl.bases) inheritanceName(base)],
 					methods: [
 						for (method in interfaceDecl.methods)
-							{name: method.name, arguments: [for (argument in method.arguments) argumentType(argument)], result: lowerType(method.result)}
+							{
+								name: method.name,
+								arguments: [
+									for (argument in method.arguments)
+										erasedInterfaceType(interfaceDecl, argument.type, argument.span)
+								],
+								result: erasedInterfaceType(interfaceDecl, method.result, method.span)
+							}
 					]
 				}
 			], typedClasses:Array<TypedClass> = [
@@ -213,6 +220,13 @@ class Typer {
 				assemblyMs: assemblyDoneAt - bodiesDoneAt
 			}
 		};
+	}
+
+	function erasedInterfaceType(declaration:AstInterface, type:AstType, span:SourceSpan):CompilerType {
+		var substitutions:Map<String, CompilerType> = [];
+		for (parameter in declaration.typeParameters)
+			substitutions.set(parameter, TDynamic);
+		return declarations.resolve(type, span, substitutions);
 	}
 
 	function inferNoReturnFunctions():Void {
@@ -404,10 +418,15 @@ class Typer {
 				span: field.span
 			});
 		}
-		for (interfaceName in classDecl.interfaces) {
+		var classSemanticSubstitutions:Map<String, CompilerType> = [];
+		for (parameter in classDecl.typeParameters)
+			classSemanticSubstitutions.set(parameter, TTypeParameter(classDecl.name, parameter));
+		for (interfaceType in classDecl.interfaces) {
+			var interfaceInstance = declarations.resolve(interfaceType, classDecl.span, classSemanticSubstitutions),
+				interfaceName = inheritanceName(interfaceType);
 			if (!interfaceDecls.exists(interfaceName))
 				fail("E1007", 'Unknown interface "$interfaceName"', classDecl.span);
-			validateInterfaceImplementation(classDecl, interfaceName, classDecl.span);
+			validateInterfaceImplementation(classDecl, interfaceInstance, classSemanticSubstitutions, classDecl.span);
 		}
 		var typedMethods:Array<TypedFunction> = [],
 			instanceInitializers:Array<TypedField> = [],
@@ -444,8 +463,8 @@ class Typer {
 			});
 		return {
 			name: classDecl.name,
-			base: classDecl.base,
-			interfaces: classDecl.interfaces,
+			base: classDecl.base == null ? null : inheritanceName(classDecl.base),
+			interfaces: [for (interfaceType in classDecl.interfaces) inheritanceName(interfaceType)],
 			fields: fields,
 			methods: typedMethods,
 			span: classDecl.span
@@ -500,30 +519,45 @@ class Typer {
 		return statements;
 	}
 
-	function validateInterfaceImplementation(classDecl:AstClass, interfaceName:String, span:SourceSpan):Void {
+	function validateInterfaceImplementation(classDecl:AstClass, interfaceInstance:CompilerType, classSubstitutions:Map<String, CompilerType>,
+			span:SourceSpan):Void {
+		var interfaceName = switch interfaceInstance {
+			case TInstance(Interface, name, _): name;
+			default:
+				fail("E1007", "Implemented type must be an interface", span);
+				return;
+		};
 		if (!interfaceDecls.exists(interfaceName))
 			return;
-		var interfaceDecl = interfaceDecls.get(interfaceName);
-		for (base in interfaceDecl.bases) {
+		var interfaceDecl = interfaceDecls.get(interfaceName),
+			interfaceSubstitutions = nominalSubstitutions(interfaceInstance);
+		for (baseType in interfaceDecl.bases) {
+			var baseInstance = declarations.resolve(baseType, interfaceDecl.span, interfaceSubstitutions),
+				base = inheritanceName(baseType);
 			if (!interfaceDecls.exists(base))
 				fail("E1007", 'Unknown interface "$base"', span);
-			validateInterfaceImplementation(classDecl, base, span);
+			validateInterfaceImplementation(classDecl, baseInstance, classSubstitutions, span);
 		}
 		for (method in interfaceDecl.methods) {
 			var implementation = findMethod(classDecl.name, method.name);
 			if (implementation == null || implementation.isStatic)
 				fail("E1007", 'Class "${classDecl.name}" does not implement "$interfaceName.${method.name}"', span);
 			var implementationName = implementation.owner + "." + method.name;
-			if (!signatures.exists(implementationName) || !sameSignature(signatures.get(implementationName), method))
+			if (!signatures.exists(implementationName)
+				|| !sameSignature(signatures.get(implementationName), method, classSubstitutions, interfaceSubstitutions))
 				fail("E1003", 'Method "${classDecl.name}.${method.name}" does not match interface "$interfaceName"', span);
 		}
 	}
 
-	function sameSignature(left:AstFunction, right:AstFunction):Bool {
-		if (left.arguments.length != right.arguments.length || !TypeRelations.equals(lowerType(left.result), lowerType(right.result)))
+	function sameSignature(left:AstFunction, right:AstFunction, ?leftSubstitutions:Map<String, CompilerType>,
+			?rightSubstitutions:Map<String, CompilerType>):Bool {
+		if (left.arguments.length != right.arguments.length
+			|| !TypeRelations.equals(declarations.resolve(left.result, left.span, leftSubstitutions),
+				declarations.resolve(right.result, right.span, rightSubstitutions)))
 			return false;
 		for (i in 0...left.arguments.length)
-			if (!TypeRelations.equals(lowerType(left.arguments[i].type), lowerType(right.arguments[i].type)))
+			if (!TypeRelations.equals(declarations.resolve(left.arguments[i].type, left.arguments[i].span, leftSubstitutions),
+				declarations.resolve(right.arguments[i].type, right.arguments[i].span, rightSubstitutions)))
 				return false;
 		return true;
 	}
@@ -2177,7 +2211,7 @@ class Typer {
 	function typeSuperCall(arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
 		var owner = parentPath(context.name), base:Null<String> = null;
 		if (owner != null && classDecls.exists(owner))
-			base = requiredMapValue(classDecls, owner).base;
+			base = inheritanceName(requiredMapValue(classDecls, owner).base);
 		if (base == null)
 			fail("E1007", "super() requires a base-class constructor", span);
 		var resolvedBase = requiredString(base),
@@ -2387,7 +2421,7 @@ class Typer {
 			if (field.name == name && field.isStatic)
 				return {owner: className, type: lowerType(FieldInference.parsedType(field))};
 		var base = classDecl.base;
-		return base == null ? null : findStaticFieldNullable(base, name);
+		return base == null ? null : findStaticFieldNullable(inheritanceName(base), name);
 	}
 
 	function typeMethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
@@ -2551,7 +2585,7 @@ class Typer {
 							found = true;
 					var base = classDecl.base;
 					if (!found && base != null)
-						found = hasInstanceField(TInstance(Class, base, []), name);
+						found = hasInstanceField(TInstance(Class, inheritanceName(base), []), name);
 				}
 				found;
 			default: false;
@@ -2663,6 +2697,12 @@ class Typer {
 		return result;
 	}
 
+	static function inheritanceName(type:AstType):String
+		return switch type {
+			case NamedType(name), AppliedType(name, _): name;
+			default: throw "Inheritance requires a nominal type";
+		};
+
 	function coerce(value:TypedExpression, expected:CompilerType, context:String, code:String = "E1009"):TypedExpression {
 		if (value.type == TNever)
 			return new TypedExpression(value.expression, expected, value.span);
@@ -2701,12 +2741,12 @@ class Typer {
 		if (classDecls.exists(className)) {
 			var base = requiredMapValue(classDecls, className).base;
 			if (base != null)
-				findMethods(base, name, results);
+				findMethods(inheritanceName(base), name, results);
 			return;
 		}
 		if (interfaceDecls.exists(className))
 			for (base in requiredMapValue(interfaceDecls, className).bases)
-				findMethods(base, name, results);
+				findMethods(inheritanceName(base), name, results);
 	}
 
 	function enumCaseInfo(name:String):Null<{
@@ -2795,7 +2835,7 @@ class Typer {
 							return declarations.resolve(FieldInference.parsedType(field), field.span, nominalSubstitutions(type));
 					var base = classDecl.base;
 					if (base != null)
-						return fieldType(TInstance(Class, base, []), name, span);
+						return fieldType(TInstance(Class, inheritanceName(base), []), name, span);
 				}
 				throw new CompileError(new Diagnostic("E1005", 'Unknown field "$className.$name"', span));
 			default:
@@ -2835,7 +2875,7 @@ class Typer {
 							found = declarations.resolve(FieldInference.parsedType(field), field.span, nominalSubstitutions(type));
 					var base = classDecl.base;
 					if (found == null && base != null)
-						found = findFieldType(TInstance(Class, base, []), name);
+						found = findFieldType(TInstance(Class, inheritanceName(base), []), name);
 				}
 				found;
 			default: null;

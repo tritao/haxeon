@@ -25,9 +25,9 @@ class TypeRelations {
 			return Incompatible;
 		return switch expected {
 			case TDynamic: ToDynamic;
-			case TInstance(Interface, name, []):
+			case TInstance(Interface, name, _):
 				switch actual {
-					case TInstance(Class, _, []), TInstance(Interface, _, []): ToInterface(name);
+					case TInstance(Class, _, _), TInstance(Interface, _, _): ToInterface(name);
 					default: Identity;
 				}
 			case TNullable(_): WrapNullable;
@@ -42,15 +42,15 @@ class TypeRelations {
 			return true;
 		return switch expected {
 			case TDynamic: true;
-			case TInstance(Class, expectedName, []):
+			case TInstance(Class, expectedName, _):
 				switch actual {
-					case TInstance(Class, actualName, []): classReaches(actualName, expectedName);
+					case TInstance(Class, actualName, _): classReaches(actualName, expectedName);
 					default: false;
 				}
-			case TInstance(Interface, expectedName, []):
+			case TInstance(Interface, expectedName, _):
 				switch actual {
-					case TInstance(Class, actualName, []): classReaches(actualName, expectedName);
-					case TInstance(Interface, actualName, []): interfaceReaches(actualName, expectedName);
+					case TInstance(Class, actualName, _): classReaches(actualName, expectedName);
+					case TInstance(Interface, actualName, _): interfaceReaches(actualName, expectedName);
 					default: false;
 				}
 			case TNullable(expectedElement):
@@ -154,10 +154,10 @@ class TypeRelations {
 		if (!declarations.classes.exists(actual))
 			return interfaceReaches(actual, expected);
 		var decl = declarations.classes.get(actual), base = decl.base;
-		if (base != null && classReaches(base, expected))
+		if (base != null && classReaches(inheritanceName(base), expected))
 			return true;
-		for (name in decl.interfaces)
-			if (interfaceReaches(name, expected))
+		for (type in decl.interfaces)
+			if (interfaceReaches(inheritanceName(type), expected))
 				return true;
 		return false;
 	}
@@ -169,8 +169,14 @@ class TypeRelations {
 			return false;
 		var decl = declarations.interfaces.get(actual);
 		for (base in decl.bases)
-			if (interfaceReaches(base, expected))
+			if (interfaceReaches(inheritanceName(base), expected))
 				return true;
 		return false;
 	}
+
+	static function inheritanceName(type:compiler.Ast.AstType):String
+		return switch type {
+			case NamedType(name), AppliedType(name, _): name;
+			default: throw "Inheritance requires a nominal type";
+		};
 }

@@ -1,7 +1,7 @@
 package compiler.semantic;
-import compiler.modules.ModuleState;
 
 import compiler.Source.SourceSpan;
+import compiler.modules.ModuleState;
 import compiler.types.DeclarationIndex.DeclarationKind;
 import compiler.types.Type.CompilerType;
 
@@ -82,7 +82,7 @@ class SemanticWorkspace {
 							return {state: state, key: 'class:${decl.name}:method:$name', span: method.span};
 					var base = decl.base;
 					if (base != null) {
-						var inherited = classMember(base, name, visiting);
+						var inherited = classMember(ModuleCanonicalizer.astTypeName(base), name, visiting);
 						if (inherited != null)
 							return inherited;
 					}
@@ -106,7 +106,7 @@ class SemanticWorkspace {
 						if (method.name == name)
 							return {state: state, key: 'interface:${decl.name}:method:$name', span: method.span};
 					for (base in decl.bases) {
-						var inherited = interfaceMember(base, name, visiting);
+						var inherited = interfaceMember(ModuleCanonicalizer.astTypeName(base), name, visiting);
 						if (inherited != null)
 							return inherited;
 					}

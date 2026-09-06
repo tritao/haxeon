@@ -321,14 +321,14 @@ class Parser {
 		var start = consume(TokenKind.Class).span,
 			name = consume(TokenKind.Identifier).text,
 			typeParameters = parseTypeParameters(),
-			base:Null<String> = null,
+			base:Null<AstType> = null,
 			interfaces = [];
 		if (match(TokenKind.Extends))
-			base = parseQualifiedName();
+			base = parseType();
 		if (match(TokenKind.Implements)) {
-			interfaces.push(parseQualifiedName());
+			interfaces.push(parseType());
 			while (match(TokenKind.Comma))
-				interfaces.push(parseQualifiedName());
+				interfaces.push(parseType());
 		}
 		consume(TokenKind.LeftBrace);
 		var fields = [], methods = [];
@@ -421,9 +421,9 @@ class Parser {
 	function parseInterface():AstInterface {
 		var start = consume(TokenKind.Interface).span, name = consume(TokenKind.Identifier).text, typeParameters = parseTypeParameters(), bases = [];
 		if (match(TokenKind.Extends)) {
-			bases.push(parseQualifiedName());
+			bases.push(parseType());
 			while (match(TokenKind.Comma))
-				bases.push(parseQualifiedName());
+				bases.push(parseType());
 		}
 		consume(TokenKind.LeftBrace);
 		var methods = [];

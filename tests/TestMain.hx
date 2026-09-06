@@ -670,7 +670,8 @@ class TestMain {
 			throw "Library modules were not type checked without an executable main";
 		var interfaceSource = "interface Plugin { function activate():Void; function score(value:Int):Int; } class SearchPlugin implements Plugin { public function activate():Void { } public function score(value:Int):Int { return value; } } function consume(plugin:Plugin):Int { plugin.activate(); return plugin.score(42); } function main():Int { var plugin:Plugin = new SearchPlugin(); return consume(plugin); }",
 			interfaceProgram = new Parser(new Lexer(new SourceFile("Plugin.hx", interfaceSource)).tokenize()).parseProgram();
-		if (interfaceProgram.interfaces.length != 1 || interfaceProgram.classes[0].interfaces[0] != "Plugin")
+		if (interfaceProgram.interfaces.length != 1
+			|| compiler.semantic.ModuleCanonicalizer.astTypeName(interfaceProgram.classes[0].interfaces[0]) != "Plugin")
 			throw "Interface declarations were not preserved in the AST";
 		var interfaceTyped = Typer.type(interfaceProgram);
 		if (interfaceTyped.classes[0].interfaces.length != 1)

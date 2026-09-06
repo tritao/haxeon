@@ -290,10 +290,10 @@ class ModuleFrontendPipeline {
 					typeParameters: classDecl.typeParameters,
 					isPrivate: classDecl.isPrivate,
 					metadata: classDecl.metadata,
-					base: ModuleCanonicalizer.resolveOptionalTypeName(classDecl.base, aliases),
+					base: classDecl.base == null ? null : ModuleCanonicalizer.canonicalType(classDecl.base, classAliases, classDecl.typeParameters),
 					interfaces: [
-						for (interfaceName in classDecl.interfaces)
-							ModuleCanonicalizer.resolveTypeName(interfaceName, aliases)
+						for (interfaceType in classDecl.interfaces)
+							ModuleCanonicalizer.canonicalType(interfaceType, classAliases, classDecl.typeParameters)
 					],
 					fields: [
 						for (field in classDecl.fields)

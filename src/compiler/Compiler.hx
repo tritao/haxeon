@@ -361,7 +361,7 @@ class Compiler {
 		for (classDecl in ast.classes) {
 			var base = classDecl.base;
 			if (base != null) {
-				var owner = sourceModuleForType(base, ast.packageName);
+				var owner = sourceModuleForType(ModuleCanonicalizer.astTypeName(base), ast.packageName);
 				if (owner != null && owner != state.name)
 					dependencies.set(owner, true);
 			}

@@ -1,8 +1,8 @@
 package compiler.semantic;
-import compiler.modules.ModuleState;
 
 import compiler.Ast.AstExpression;
 import compiler.Ast.AstStatement;
+import compiler.modules.ModuleState;
 import compiler.types.FieldInference;
 import compiler.modules.ModuleState.SemanticDependency;
 import compiler.modules.ModuleState.SemanticDependencyKind;
@@ -24,9 +24,9 @@ class SemanticDependencyCollector {
 			var className = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name),
 				base = classDecl.base;
 			if (base != null)
-				addDependency(result, className, SemanticDependencyKind.Layout, ModuleCanonicalizer.resolveTypeName(base, typeAliases));
-			for (interfaceName in classDecl.interfaces)
-				addDependency(result, className, SemanticDependencyKind.Layout, ModuleCanonicalizer.resolveTypeName(interfaceName, typeAliases));
+				addTypeDependency(result, className, SemanticDependencyKind.Layout, base, typeAliases);
+			for (interfaceType in classDecl.interfaces)
+				addTypeDependency(result, className, SemanticDependencyKind.Layout, interfaceType, typeAliases);
 			for (field in classDecl.fields) {
 				addTypeDependency(result, className, SemanticDependencyKind.Layout, FieldInference.parsedType(field), typeAliases);
 				var initializer = field.initializer;

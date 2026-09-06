@@ -144,7 +144,10 @@ class ModuleCanonicalizer {
 		return {
 			name: qualifiedTypeName(packageName, interfaceDecl.name),
 			typeParameters: interfaceDecl.typeParameters,
-			bases: [for (base in interfaceDecl.bases) resolveTypeName(base, aliases)],
+			bases: [
+				for (base in interfaceDecl.bases)
+					canonicalType(base, aliases, interfaceDecl.typeParameters)
+			],
 			methods: [
 				for (method in interfaceDecl.methods)
 					{

@@ -1,6 +1,6 @@
 package compiler.semantic;
-import compiler.modules.ModuleState;
 
+import compiler.modules.ModuleState;
 import compiler.types.FieldInference;
 import compiler.types.SemanticSignature;
 import compiler.types.TypeRegistry;
@@ -32,7 +32,7 @@ class ModuleChangeAnalyzer {
 			bodies:Map<String, String> = [];
 		var interfaces:Map<String, String> = [];
 		for (interfaceDecl in ast.interfaces) {
-			var signature = interfaceDecl.name + " extends " + interfaceDecl.bases.join(",") + " {" + [
+			var signature = interfaceDecl.name + " extends " + [for (base in interfaceDecl.bases) ModuleCanonicalizer.astTypeName(base)].join(",") + " {" + [
 				for (method in interfaceDecl.methods)
 					method.name + ":" + SemanticSignature.parsedFunction(method, ast.aliases)
 			].join(";") + "}";
@@ -142,7 +142,7 @@ class ModuleChangeAnalyzer {
 		}
 		for (classDecl in ast.classes) {
 			var className = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name),
-				baseName = ModuleCanonicalizer.resolveOptionalTypeName(classDecl.base, typeAliases);
+				baseName = classDecl.base == null ? null : SemanticSignature.parsed(classDecl.base, ast.aliases);
 			var classFields = [
 				for (field in classDecl.fields)
 					{name: field.name, type: SemanticSignature.parsed(FieldInference.parsedType(field), ast.aliases)}
