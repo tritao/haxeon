@@ -10,12 +10,15 @@ import compiler.Ast.AstClass;
 import compiler.Ast.AstInterface;
 import compiler.Ast.AstEnum;
 import compiler.types.Type.CompilerType;
+import compiler.types.Type.AnonymousField;
 import compiler.types.RuntimeType;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedExpressionKind;
 import compiler.types.TypedAst.TypedEnum;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedInterface;
+import compiler.types.TypedAst.TypedMapEntry;
+import compiler.types.TypedAst.TypedObjectField;
 import compiler.types.TypedAst.TypedClass;
 import compiler.types.TypedAst.TypedCatch;
 import compiler.types.TypedAst.TypedField;
@@ -231,6 +234,100 @@ class Typer {
 			cursor--;
 		}
 		return null;
+	}
+
+	static function pathBeforeLast(path:String):String {
+		var parent = parentPath(path);
+		return parent == null ? "" : parent;
+	}
+
+	static function lastPathSegment(path:String):String {
+		var cursor = path.length - 1;
+		while (cursor >= 0) {
+			if (path.charCodeAt(cursor) == 46)
+				return path.substring(cursor + 1, path.length);
+			cursor--;
+		}
+		return path;
+	}
+
+	static function splitPath(path:String):Array<String> {
+		var parts:Array<String> = [], start = 0;
+		for (cursor in 0...path.length)
+			if (path.charCodeAt(cursor) == 46) {
+				parts.push(path.substring(start, cursor));
+				start = cursor + 1;
+			}
+		parts.push(path.substring(start, path.length));
+		return parts;
+	}
+
+	static function enumName(type:Null<CompilerType>):Null<String> {
+		if (type == null)
+			return null;
+		return switch type {
+			case TEnum(name): name;
+			case TNullable(element):
+				switch element {
+					case TEnum(name): name;
+					default: null;
+				}
+			default: null;
+		};
+	}
+
+	static function expectedFunctionType(type:Null<CompilerType>):Null<{arguments:Array<CompilerType>, result:CompilerType}> {
+		if (type == null)
+			return null;
+		return switch type {
+			case TFunction(arguments, result): {arguments: arguments, result: result};
+			default: null;
+		};
+	}
+
+	static function anonymousFields(type:Null<CompilerType>):Null<Array<AnonymousField>> {
+		if (type == null)
+			return null;
+		return switch type {
+			case TAnonymous(_, fields): fields;
+			default: null;
+		};
+	}
+
+	static function arrayElementExpectation(type:Null<CompilerType>):Null<CompilerType> {
+		if (type == null)
+			return null;
+		return switch type {
+			case TArray(element): element;
+			default: null;
+		};
+	}
+
+	static function mapExpectation(type:Null<CompilerType>):Null<{key:CompilerType, value:CompilerType}> {
+		if (type == null)
+			return null;
+		return switch type {
+			case TMap(key, value): {key: key, value: value};
+			default: null;
+		};
+	}
+
+	static function requiredExpression(value:Null<TypedExpression>):TypedExpression {
+		if (value == null)
+			throw "Expected typed expression";
+		return value;
+	}
+
+	static function requiredString(value:Null<String>):String {
+		if (value == null)
+			throw "Expected string";
+		return value;
+	}
+
+	static function requiredStrings(value:Null<Array<String>>):Array<String> {
+		if (value == null)
+			throw "Expected string array";
+		return value;
 	}
 
 	function typeClass(classDecl:AstClass, classes:Map<String, AstClass>, selected:Null<Map<String, Bool>>):TypedClass {
@@ -843,7 +940,12 @@ class Typer {
 			default: false;
 		};
 		return previousIsNoReturn && switch statement {
-			case Return(NullLiteral(_), _), ReturnVoid(_): true;
+			case Return(expression, _):
+				switch expression {
+					case NullLiteral(_): true;
+					default: false;
+				}
+			case ReturnVoid(_): true;
 			default: false;
 		};
 	}
@@ -866,12 +968,8 @@ class Typer {
 	function pushedElementType(name:String, statements:Array<AstStatement>, start:Int):Null<CompilerType> {
 		for (index in start...statements.length)
 			switch statements[index] {
-				case Expression(MethodCall(Variable(receiver, _), "push", arguments, _), _) if (receiver == name && arguments.length == 1):
-					var type = knownExpressionType(arguments[0]);
-					if (type != null)
-						return type;
-				case Expression(Call(callName, arguments, _), _) if (callName == name + ".push" && arguments.length == 1):
-					var type = knownExpressionType(arguments[0]);
+				case Expression(expression, _):
+					var type = pushedElementFromExpression(name, expression);
 					if (type != null)
 						return type;
 				case If(_, yes, no, _):
@@ -890,6 +988,17 @@ class Typer {
 			}
 		return null;
 	}
+
+	function pushedElementFromExpression(name:String, expression:AstExpression):Null<CompilerType>
+		return switch expression {
+			case MethodCall(receiverExpression, methodName, arguments, _) if (methodName == "push" && arguments.length == 1):
+				switch receiverExpression {
+					case Variable(receiver, _) if (receiver == name): knownExpressionType(arguments[0]);
+					default: null;
+				}
+			case Call(callName, arguments, _) if (callName == name + ".push" && arguments.length == 1): knownExpressionType(arguments[0]);
+			default: null;
+		};
 
 	function assignedLocalType(name:String, statements:Array<AstStatement>, start:Int):Null<CompilerType> {
 		for (index in start...statements.length)
@@ -917,13 +1026,7 @@ class Typer {
 
 	function knownExpressionType(expression:AstExpression):Null<CompilerType>
 		return switch expression {
-			case Call(name, _, _): var signatureName = name; if (name.indexOf(".") < 0) {
-					var separator = context.name.lastIndexOf("."),
-						owner = separator < 0 ? null : context.name.substr(0, separator),
-						method = owner == null ? null : findMethod(owner, name);
-					if (method != null)
-						signatureName = method.owner + "." + name;
-				} var signature = signatures.get(signatureName); signature == null || isGeneric(signature) ? null : lowerType(signature.result);
+			case Call(name, _, _): knownCallType(name);
 			case StringLiteral(_, _): TString;
 			case IntegerLiteral(_, _): TInt;
 			case FloatLiteral(_, _): TFloat;
@@ -931,6 +1034,27 @@ class Typer {
 			case New(typeName, _, _): classDecls.exists(typeName) ? TClass(typeName) : null;
 			default: null;
 		};
+
+	function knownCallType(name:String):Null<CompilerType> {
+		var signatureName = resolvedCallName(name);
+		if (!signatures.exists(signatureName))
+			return null;
+		var signature = signatures.get(signatureName);
+		return isGeneric(signature) ? null : lowerType(signature.result);
+	}
+
+	function resolvedCallName(name:String):String {
+		var signatureName = name;
+		if (name.indexOf(".") < 0) {
+			var owner = parentPath(context.name);
+			if (owner != null) {
+				var method = findMethod(owner, name);
+				if (method != null)
+					signatureName = method.owner + "." + name;
+			}
+		}
+		return signatureName;
+	}
 
 	static function usesLocalExpectedType(initializer:AstExpression):Bool
 		return switch initializer {
@@ -963,15 +1087,12 @@ class Typer {
 				case VarDeclaration(name, declared, initializer, _):
 					if (declared != null)
 						changed = constrainLocal(name, lowerType(declared)) || changed;
-					var expected = context.localExpectedTypes.get(name);
-					if (expected != null)
-						changed = constrainLocalExpression(initializer, expected) || changed;
+					if (context.localExpectedTypes.exists(name))
+						changed = constrainLocalExpression(initializer, context.localExpectedTypes.get(name)) || changed;
 				case Return(expression, _):
 					changed = constrainLocalExpression(expression, result) || changed;
-				case Expression(MethodCall(Variable(receiver, _), "push", arguments, _), _) if (arguments.length == 1):
-					changed = constrainPushedValue(receiver, arguments[0]) || changed;
-				case Expression(Call(name, arguments, _), _) if (arguments.length == 1 && StringTools.endsWith(name, ".push")):
-					changed = constrainPushedValue(name.substr(0, name.length - 5), arguments[0]) || changed;
+				case Expression(expression, _):
+					changed = constrainPushedExpression(expression) || changed;
 				case If(_, thenBranch, elseBranch, _):
 					changed = inferBodyStatementConstraints(thenBranch, result)
 						|| inferBodyStatementConstraints(elseBranch, result)
@@ -991,6 +1112,18 @@ class Typer {
 		return changed;
 	}
 
+	function constrainPushedExpression(expression:AstExpression):Bool
+		return switch expression {
+			case MethodCall(receiverExpression, methodName, arguments, _) if (methodName == "push" && arguments.length == 1):
+				switch receiverExpression {
+					case Variable(receiver, _): constrainPushedValue(receiver, arguments[0]);
+					default: false;
+				}
+			case Call(name, arguments, _) if (arguments.length == 1 && StringTools.endsWith(name, ".push")):
+				constrainPushedValue(name.substring(0, name.length - 5), arguments[0]);
+			default: false;
+		};
+
 	function constrainPushedValue(receiver:String, value:AstExpression):Bool
 		return switch context.localExpectedTypes.get(receiver) {
 			case TArray(element): constrainLocalExpression(value, element);
@@ -1001,8 +1134,14 @@ class Typer {
 		return switch expression {
 			case Variable(name, _): constrainLocal(name, expected);
 			case Call(name, arguments, _):
-				var info = enumCaseInfo(name), enumName = switch expected {
-					case TEnum(value), TNullable(TEnum(value)): value;
+				var info = enumCaseInfo(name);
+				var enumName:Null<String> = switch expected {
+					case TEnum(value): value;
+					case TNullable(element):
+						switch element {
+							case TEnum(value): value;
+							default: null;
+						}
 					default: null;
 				};
 				if (info == null && enumName != null && name.indexOf(".") < 0)
@@ -1019,21 +1158,16 @@ class Typer {
 						changed = constrainLocalExpression(arguments[index], parameterType) || changed;
 					}
 				else {
-					var signatureName = name;
-					if (name.indexOf(".") < 0) {
-						var separator = context.name.lastIndexOf("."),
-							owner = separator < 0 ? null : context.name.substr(0, separator),
-							method = owner == null ? null : findMethod(owner, name);
-						if (method != null)
-							signatureName = method.owner + "." + name;
+					var signatureName = resolvedCallName(name);
+					if (signatures.exists(signatureName)) {
+						var signature = signatures.get(signatureName);
+						if (!isGeneric(signature))
+							for (index in 0...arguments.length) {
+								if (index >= signature.arguments.length)
+									break;
+								changed = constrainLocalExpression(arguments[index], argumentType(signature.arguments[index])) || changed;
+							}
 					}
-					var signature = signatures.get(signatureName);
-					if (signature != null && !isGeneric(signature))
-						for (index in 0...arguments.length) {
-							if (index >= signature.arguments.length)
-								break;
-							changed = constrainLocalExpression(arguments[index], argumentType(signature.arguments[index])) || changed;
-						}
 				}
 				changed;
 			case ObjectLiteral(fields, _):
@@ -1063,10 +1197,15 @@ class Typer {
 			return right;
 		if (right == TNever || sameType(left, right))
 			return left;
-		return switch [left, right] {
-			case [TNull, value], [value, TNull] if (value != TVoid): TNullable(value);
-			case [TNullable(inner), value], [value, TNullable(inner)] if (sameType(inner, value)): TNullable(inner);
-			default: null;
+		return switch left {
+			case TNull: right == TVoid ? null : TNullable(right);
+			case TNullable(inner): sameType(inner, right) ? TNullable(inner) : null;
+			default:
+				switch right {
+					case TNull: left == TVoid ? null : TNullable(left);
+					case TNullable(inner): sameType(left, inner) ? TNullable(inner) : null;
+					default: null;
+				}
 		};
 	}
 
@@ -1094,7 +1233,7 @@ class Typer {
 				var bindings:Array<TypedSwitchBinding> = [];
 				for (index in 0...arguments.length) {
 					var parameter = info.params[index],
-						parameterType = parameter.optional ? TNullable(lowerType(parameter.type)) : lowerType(parameter.type);
+						parameterType = parameter.optional ? CompilerType.TNullable(lowerType(parameter.type)) : lowerType(parameter.type);
 					switch arguments[index] {
 						case Variable(binding, bindingSpan):
 							if (binding != "_") {
@@ -1133,51 +1272,52 @@ class Typer {
 							requiredMapValue(context.cells, name)) : TLocal(name == "this" ? name : scope.requireId(name))),
 						type, span);
 				} else {
-					var signature = signatures.get(name);
-					if (signature != null)
-						new TypedExpression(TFunctionRef(name), functionType(signature), span);
+					if (signatures.exists(name))
+						new TypedExpression(TFunctionRef(name), functionType(signatures.get(name)), span);
 					else if (externals.exists(name)) {
 						var external = externals.get(name);
 						new TypedExpression(TFunctionRef(name), TFunction(external.arguments, external.result), span);
 					} else if (classDecls.exists(name) || enumAbstractDecls.exists(name) || PlatformAbi.isType(name))
 						new TypedExpression(TClassRef(name), TClass(name), span);
 					else {
-						var ownerSeparator = context.name.lastIndexOf("."),
-							owner = ownerSeparator < 0 ? null : context.name.substr(0, ownerSeparator),
-							staticField = owner == null ? null : findStaticFieldNullable(owner, name);
+						var owner = parentPath(context.name),
+							staticField:Null<{owner:String, type:CompilerType}> = null;
+						if (owner != null)
+							staticField = findStaticFieldNullable(owner, name);
 						if (staticField != null)
 							return new TypedExpression(TStaticField(staticField.owner, name), staticField.type, span);
 						var dot = name.indexOf(".");
 						if (dot <= 0) {
-							var expectedEnum = switch expectedType {
-								case TEnum(enumName), TNullable(TEnum(enumName)): enumDecls.get(enumName);
-								default: null;
-							};
-							if (expectedEnum != null)
+							var expectedEnumName = enumName(expectedType);
+							if (expectedEnumName != null && enumDecls.exists(expectedEnumName)) {
+								var expectedEnum = enumDecls.get(expectedEnumName);
 								for (index in 0...expectedEnum.cases.length) {
 									var enumCase = expectedEnum.cases[index];
 									if (enumCase.name == name && enumCase.params.length == 0)
 										return new TypedExpression(TEnumLiteral(expectedEnum.name, index), TEnum(expectedEnum.name), span);
 								}
-							var thisType = scope.resolve("this"),
-								field = thisType == null ? null : findFieldType(thisType, name);
+							}
+							var thisType = scope.resolve("this");
+							if (thisType == null)
+								fail("E1005", 'Unknown variable "$name"', span);
+							var field = findFieldType(thisType, name);
 							if (field == null)
 								fail("E1005", 'Unknown variable "$name"', span);
 							new TypedExpression(TField(new TypedExpression(TLocal("this"), thisType, span), name), field, span);
 						} else {
-							var parts = name.split("."),
+							var parts = splitPath(name),
 								objectName = parts[0],
 								fieldName = parts[1],
-								lastDot = name.lastIndexOf("."),
-								enumName = name.substr(0, lastDot),
-								enumCaseName = name.substr(lastDot + 1),
-								enumDecl = enumDecls.get(enumName);
-							var enumAbstract = enumAbstractDecls.get(enumName);
-							if (enumAbstract != null)
+								enumName = pathBeforeLast(name),
+								enumCaseName = lastPathSegment(name);
+							if (enumAbstractDecls.exists(enumName)) {
+								var enumAbstract = enumAbstractDecls.get(enumName);
 								for (value in enumAbstract.values)
 									if (value.name == enumCaseName)
 										return typeExpression(value.value, new Scope(), lowerType(enumAbstract.underlying));
-							if (enumDecl != null) {
+							}
+							if (enumDecls.exists(enumName)) {
+								var enumDecl = enumDecls.get(enumName);
 								var index = -1;
 								for (i in 0...enumDecl.cases.length)
 									if (enumDecl.cases[i].name == enumCaseName)
@@ -1207,13 +1347,9 @@ class Typer {
 					}
 				}
 			case Lambda(arguments, body, span):
-				var lambdaKey = span.file.path + ":" + span.start,
-					cachedLambda = lambdaCache.get(lambdaKey);
-				if (cachedLambda != null) cachedLambda else {
-					var expectedFunction = switch expectedType {
-						case TFunction(expectedArguments, expectedResult): {arguments: expectedArguments, result: expectedResult};
-						default: null;
-					};
+				var lambdaKey = '${span.file.path}:${span.start}';
+				if (lambdaCache.exists(lambdaKey)) lambdaCache.get(lambdaKey) else {
+					var expectedFunction = expectedFunctionType(expectedType);
 					if (expectedFunction != null && expectedFunction.arguments.length != arguments.length)
 						fail("E1008", 'Lambda expects ${expectedFunction.arguments.length} arguments, got ${arguments.length}', span);
 					var lambdaArguments:Array<{name:String, type:CompilerType}> = [],
@@ -1235,23 +1371,30 @@ class Typer {
 					collectDeclaredLocals(body, declared);
 					var freeVariables:Map<String, Bool> = [];
 					collectVariables(body, freeVariables);
-					var captures = [], captureCells:Map<String, String> = [];
+					var captures:Array<String> = [],
+						captureCells:Map<String, String> = [],
+						captureTypes:Map<String, CompilerType> = [];
 					for (name in freeVariables.keys())
 						if (!declared.exists(name)) {
 							var capturedType = scope.resolve(name);
 							if (capturedType != null) {
-								var cellClass = requiredMapValue(context.cells, name);
+								var captureType:CompilerType = capturedType;
+								var cellClass:Null<String> = null;
+								if (context.cells.exists(name))
+									cellClass = requiredMapValue(context.cells, name);
 								if (cellClass == null && scope.isCellCapture(name))
 									cellClass = scope.requireCellClass(name);
 								if (cellClass == null && context.assigned.exists(name)) {
-									cellClass = '$' + 'cell:' + context.name + ':' + name;
-									context.cells.set(name, cellClass);
-									context.cellTypes.set(name, capturedType);
+									var newCellClass = '$' + 'cell:' + context.name + ':' + name;
+									cellClass = newCellClass;
+									context.cells.set(name, newCellClass);
+									context.cellTypes.set(name, captureType);
 									context.cellKinds.set(name, MutableCapture);
 								}
-								lambdaScope.defineCapture(name, capturedType, span, cellClass != null, cellClass);
+								lambdaScope.defineCapture(name, captureType, span, cellClass != null, cellClass);
 								if (cellClass != null)
 									captureCells.set(name, cellClass);
+								captureTypes.set(name, captureType);
 								captures.push(name);
 							}
 						}
@@ -1270,11 +1413,11 @@ class Typer {
 					for (i in 0...lambdaArguments.length) {
 						var localName = arguments[i].name == "_" ? '$' + 'discard:$i' : arguments[i].name;
 						typedBodyScope.define(localName, lambdaArguments[i].type, arguments[i].span);
-						lambdaArguments[i] = {name: typedBodyScope.resolveId(localName), type: lambdaArguments[i].type};
+						lambdaArguments[i] = {name: typedBodyScope.requireId(localName), type: lambdaArguments[i].type};
 					}
 					for (name in captures)
-						typedBodyScope.defineCapture(name, scope.resolve(name), span, captureCells.exists(name), captureCells.get(name));
-					var lambdaName = '$' + 'lambda:' + context.name + ':' + span.start,
+						typedBodyScope.defineCapture(name, requiredMapValue(captureTypes, name), span, captureCells.exists(name), captureCells.get(name));
+					var lambdaName = '$' + 'lambda:${context.name}:${span.start}',
 						previousContext = context;
 					context = new BodyContext(lambdaName, previousContext.typeSubstitutions);
 					context.resultType = inferredResult;
@@ -1299,7 +1442,9 @@ class Typer {
 					context = previousContext;
 					if (inferredResult != TVoid && !alwaysReturns(typedBody))
 						fail("E1006", 'Function $lambdaName does not return on every path', span);
-					var environment = captures.length == 0 ? null : '$' + 'lambda-env:' + context.name + ':' + span.start;
+					var environment:Null<String> = null;
+					if (captures.length > 0)
+						environment = '$' + 'lambda-env:${context.name}:${span.start}';
 					if (environment != null)
 						generatedEnvironments.push({
 							name: environment,
@@ -1307,7 +1452,8 @@ class Typer {
 								for (name in captures)
 									{
 										name: name,
-										type: captureCells.exists(name) ? TClass(captureCells.get(name)) : scope.resolve(name)
+										type: captureCells.exists(name) ? CompilerType.TClass(requiredMapValue(captureCells,
+											name)) : requiredMapValue(captureTypes, name)
 									}
 							]
 						});
@@ -1320,14 +1466,16 @@ class Typer {
 						result: inferredResult,
 						statements: typedBody,
 						cells: lambdaCells,
-						cellCaptures: captureCells.copy(),
+						cellCaptures: copyMap(captureCells),
 						span: span
 					});
-					for (name in lambdaCells.keys()) {
-						var cellType = lambdaCellTypes.get(name);
-						if (cellType != null)
-							generatedCells.push({name: lambdaCells.get(name), valueType: cellType, kind: lambdaCellKinds.get(name)});
-					}
+					for (name in lambdaCells.keys())
+						if (lambdaCellTypes.exists(name) && lambdaCellKinds.exists(name))
+							generatedCells.push({
+								name: requiredMapValue(lambdaCells, name),
+								valueType: requiredMapValue(lambdaCellTypes, name),
+								kind: requiredMapValue(lambdaCellKinds, name)
+							});
 					var lambdaResult = new TypedExpression(TLambda(lambdaName, environment, captures),
 						TFunction([for (argument in lambdaArguments) argument.type], inferredResult), span);
 					lambdaCache.set(lambdaKey, lambdaResult);
@@ -1372,7 +1520,7 @@ class Typer {
 				var typedTrue = typeExpression(whenTrue, narrowedScope(scope, typedCondition, true), expectedType),
 					branchExpected = expectedType == null
 						&& typedTrue.type != TNull
-						&& typedTrue.type != TNever ? (containsNullLiteral(whenFalse) ? TNullable(typedTrue.type) : typedTrue.type) : expectedType,
+						&& typedTrue.type != TNever ? (containsNullLiteral(whenFalse) ? CompilerType.TNullable(typedTrue.type) : typedTrue.type) : expectedType,
 					typedFalse = typeExpression(whenFalse, narrowedScope(scope, typedCondition, false), branchExpected),
 					resultType = expectedType == null ? commonConditionalType(typedTrue.type, typedFalse.type) : expectedType;
 				if (resultType == null)
@@ -1398,7 +1546,7 @@ class Typer {
 				var typedTarget = typeExpression(target, scope);
 				if (!sameType(typedTarget.type, TInt) && !sameType(typedTarget.type, TFloat))
 					fail("E1018", "Postfix increment requires a numeric target", span);
-				var operation = switch typedTarget.expression {
+				var operation:TypedExpressionKind = switch typedTarget.expression {
 					case TLocal(name): TPostfixLocal(name, delta);
 					case TCellLocal(name, cellClass): TPostfixCellLocal(name, cellClass, delta);
 					case TCellCaptured(name, cellClass): TPostfixCellCaptured(name, cellClass, delta);
@@ -1421,8 +1569,9 @@ class Typer {
 					var caseScope = new Scope(scope),
 						pattern = typeEnumPattern(switchCase.value, typedSubject.type, caseScope),
 						typedValue = pattern == null ? coerce(typeExpression(switchCase.value, scope, typedSubject.type), typedSubject.type, "switch case",
-							"E1019") : pattern.value,
-						typedGuard = switchCase.guard == null ? null : coerce(typeExpression(switchCase.guard, caseScope), TBool, "switch guard", "E1003"),
+							"E1019") : pattern.value;
+					var parsedGuard = switchCase.guard,
+						typedGuard = parsedGuard == null ? null : coerce(typeExpression(parsedGuard, caseScope), TBool, "switch guard", "E1003"),
 						typedResult = typeExpression(switchCase.result, caseScope, expectedType == null ? resultType : expectedType),
 						enumName:Null<String> = pattern == null ? null : pattern.enumName,
 						constructorIndex = pattern == null ? -1 : pattern.index;
@@ -1487,24 +1636,24 @@ class Typer {
 				if (typedDefault == null && !isEnum(typedSubject.type))
 					fail("E1021", "Switch expression requires a default branch", span);
 				if (isEnum(typedSubject.type) && typedDefault == null) {
-					var enumName = switch typedSubject.type {
+					var enumName:String = switch typedSubject.type {
 						case TEnum(name): name;
 						default: "";
-					}, enumDecl = enumDecls.get(enumName), missing = [];
-					if (enumDecl != null)
+					}, missing:Array<String> = [];
+					if (enumDecls.exists(enumName)) {
+						var enumDecl = enumDecls.get(enumName);
 						for (index in 0...enumDecl.cases.length)
 							if (!seenCases.exists('enum:$enumName:$index'))
 								missing.push(enumDecl.cases[index].name);
+					}
 					if (missing.length > 0)
 						fail("E1021", 'Enum switch is missing cases: ${missing.join(", ")}', span);
 				}
 				new TypedExpression(TSwitchExpression(typedSubject, typedCases, typedDefault), resultType, span);
 			case ObjectLiteral(fields, span):
-				var expectedFields = switch expectedType {
-					case TAnonymous(_, values): values;
-					default: null;
-				};
-				var seen:Map<String, Bool> = [], typedFields = [];
+				var expectedFields = anonymousFields(expectedType);
+				var seen:Map<String, Bool> = [],
+					typedFields:Array<TypedObjectField> = [];
 				for (field in fields) {
 					if (seen.exists(field.name))
 						fail("E1001", 'Duplicate object field "${field.name}"', field.span);
@@ -1522,57 +1671,70 @@ class Typer {
 						if (!field.optional && !seen.exists(field.name))
 							fail("E1002", 'Missing object field "${field.name}"', span);
 				typedFields.sort(function(left, right) return Reflect.compare(left.name, right.name));
-				var resultType = expectedType;
-				if (resultType == null) {
-					var inferred = [
+				var resolvedResult:CompilerType;
+				if (expectedType == null) {
+					var inferred:Array<AnonymousField> = [
 						for (field in typedFields)
 							{name: field.name, type: field.value.type, optional: false}
 					];
-					resultType = TAnonymous(anonymousTypeName(inferred), inferred);
-				}
-				var typeName = switch resultType {
+					resolvedResult = TAnonymous(anonymousTypeName(inferred), inferred);
+				} else
+					resolvedResult = expectedType;
+				var typeName = switch resolvedResult {
 					case TAnonymous(name, _): name;
 					default: "";
 				};
-				registerAnonymousTypes(resultType);
-				new TypedExpression(TObjectLiteral(typeName, typedFields), resultType, span);
+				registerAnonymousTypes(resolvedResult);
+				new TypedExpression(TObjectLiteral(typeName, typedFields), resolvedResult, span);
 			case ArrayLiteral(values, span):
-				if (values.length == 0)
-					switch expectedType {
-						case TMap(_, _): return new TypedExpression(TMapLiteral([]), expectedType, span);
-						default:
-					}
-				var expectedElement = switch expectedType {
-					case TArray(element): element;
-					default: null;
-				};
+				var expectedMap = mapExpectation(expectedType);
+				if (values.length == 0 && expectedMap != null)
+					return new TypedExpression(TMapLiteral([]), TMap(expectedMap.key, expectedMap.value), span);
+				var expectedElement = arrayElementExpectation(expectedType);
 				if (values.length == 0 && expectedElement == null)
 					fail("E1003", "Empty array literal requires an expected element type", span);
-				var typedValues = [], elementType = expectedElement;
+				var typedValues:Array<TypedExpression> = [],
+					elementType = expectedElement;
 				for (value in values) {
-					var typedValue = typeExpression(value, scope, elementType);
-					if (elementType == null)
-						elementType = typedValue.type;
-					typedValues.push(coerce(typedValue, elementType, "array element", "E1003"));
+					var typedValue = typeExpression(value, scope, elementType),
+						resolvedElement:CompilerType;
+					if (elementType == null) {
+						resolvedElement = typedValue.type;
+						elementType = resolvedElement;
+					} else
+						resolvedElement = elementType;
+					typedValues.push(coerce(typedValue, resolvedElement, "array element", "E1003"));
 				}
+				if (elementType == null)
+					throw "Array element type was not resolved";
 				new TypedExpression(TArrayLiteral(typedValues), TArray(elementType), span);
 			case MapLiteral(entries, span):
-				var expected = switch expectedType {
-					case TMap(key, value): {key: key, value: value};
-					default: null;
-				}, keyType = expected == null ? null : expected.key, valueType = expected == null ? null : expected.value, typedEntries = [];
+				var expected = mapExpectation(expectedType),
+					keyType = expected == null ? null : expected.key,
+					valueType = expected == null ? null : expected.value,
+					typedEntries:Array<TypedMapEntry> = [];
 				for (entry in entries) {
 					var key = typeExpression(entry.key, scope, keyType),
-						value = typeExpression(entry.value, scope, valueType);
-					if (keyType == null)
-						keyType = key.type;
-					if (valueType == null)
-						valueType = value.type;
+						value = typeExpression(entry.value, scope, valueType),
+						resolvedKey:CompilerType,
+						resolvedValue:CompilerType;
+					if (keyType == null) {
+						resolvedKey = key.type;
+						keyType = resolvedKey;
+					} else
+						resolvedKey = keyType;
+					if (valueType == null) {
+						resolvedValue = value.type;
+						valueType = resolvedValue;
+					} else
+						resolvedValue = valueType;
 					typedEntries.push({
-						key: coerce(key, keyType, "map key", "E1003"),
-						value: coerce(value, valueType, "map value", "E1003")
+						key: coerce(key, resolvedKey, "map key", "E1003"),
+						value: coerce(value, resolvedValue, "map value", "E1003")
 					});
 				}
+				if (keyType == null || valueType == null)
+					throw "Map key/value types were not resolved";
 				if (RuntimeType.mapName(keyType, valueType) == null)
 					fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
 				new TypedExpression(TMapLiteral(typedEntries), TMap(keyType, valueType), span);
@@ -1580,7 +1742,7 @@ class Typer {
 				var typedIterable = typeExpression(iterable, scope),
 					originalIterable = typedIterable,
 					loopScope = new Scope(scope),
-					keyType:CompilerType;
+					keyType:Null<CompilerType> = null;
 				switch typedIterable.type {
 					case TArray(element):
 						if (valueName != null)
@@ -1597,8 +1759,9 @@ class Typer {
 						if (valueName == null) typedIterable = new TypedExpression(TCollectionCall(typedIterable, "keys", []), TArray(key), span);
 					default:
 						fail("E1014", "Array comprehension iterable must be an Array or Map", span);
-						keyType = TInt;
 				}
+				if (keyType == null)
+					throw "Array comprehension item type was not resolved";
 				loopScope.define(keyName, keyType, span);
 				if (valueName != null)
 					switch originalIterable.type {
@@ -1608,19 +1771,18 @@ class Typer {
 				var typedCondition = condition == null ? null : typeExpression(condition, loopScope, TBool);
 				if (typedCondition != null && typedCondition.type != TBool)
 					fail("E1004", "Array comprehension condition must be Bool", span);
-				var expectedElement = switch expectedType {
-					case TArray(element): element;
-					default: null;
-				}, typedValue = typeExpression(value, loopScope, expectedElement), elementType = expectedElement == null ? typedValue.type : expectedElement;
+				var expectedElement = arrayElementExpectation(expectedType),
+					typedValue = typeExpression(value, loopScope, expectedElement),
+					elementType = expectedElement == null ? typedValue.type : expectedElement;
 				typedValue = coerce(typedValue, elementType, "array comprehension value", "E1003");
-				new TypedExpression(TArrayComprehension(loopScope.resolveId(keyName), valueName == null ? null : loopScope.resolveId(valueName),
+				new TypedExpression(TArrayComprehension(loopScope.requireId(keyName), valueName == null ? null : loopScope.requireId(valueName),
 					valueName == null ? typedIterable : originalIterable, typedCondition, typedValue),
 					TArray(elementType), span);
 			case MapComprehension(keyName, valueName, iterable, condition, key, value, span):
 				var typedIterable = typeExpression(iterable, scope),
 					originalIterable = typedIterable,
 					loopScope = new Scope(scope),
-					itemType:CompilerType;
+					itemType:Null<CompilerType> = null;
 				switch typedIterable.type {
 					case TArray(element):
 						if (valueName != null)
@@ -1637,8 +1799,9 @@ class Typer {
 						if (valueName == null) typedIterable = new TypedExpression(TCollectionCall(typedIterable, "keys", []), TArray(mapKey), span);
 					default:
 						fail("E1014", "Map comprehension iterable must be an Array or Map", span);
-						itemType = TInt;
 				}
+				if (itemType == null)
+					throw "Map comprehension item type was not resolved";
 				loopScope.define(keyName, itemType, span);
 				if (valueName != null)
 					switch originalIterable.type {
@@ -1648,17 +1811,16 @@ class Typer {
 				var typedCondition = condition == null ? null : typeExpression(condition, loopScope, TBool);
 				if (typedCondition != null && typedCondition.type != TBool)
 					fail("E1004", "Map comprehension condition must be Bool", span);
-				var expected = switch expectedType {
-					case TMap(expectedKey, expectedValue): {key: expectedKey, value: expectedValue};
-					default: null;
-				}, typedKey = typeExpression(key, loopScope,
-					expected == null ? null : expected.key), typedValue = typeExpression(value, loopScope,
-						expected == null ? null : expected.value), resultKey = expected == null ? typedKey.type : expected.key, resultValue = expected == null ? typedValue.type : expected.value;
+				var expected = mapExpectation(expectedType),
+					typedKey = typeExpression(key, loopScope, expected == null ? null : expected.key),
+					typedValue = typeExpression(value, loopScope, expected == null ? null : expected.value),
+					resultKey = expected == null ? typedKey.type : expected.key,
+					resultValue = expected == null ? typedValue.type : expected.value;
 				typedKey = coerce(typedKey, resultKey, "map comprehension key", "E1003");
 				typedValue = coerce(typedValue, resultValue, "map comprehension value", "E1003");
 				if (RuntimeType.mapName(resultKey, resultValue) == null)
 					fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
-				new TypedExpression(TMapComprehension(loopScope.resolveId(keyName), valueName == null ? null : loopScope.resolveId(valueName),
+				new TypedExpression(TMapComprehension(loopScope.requireId(keyName), valueName == null ? null : loopScope.requireId(valueName),
 					valueName == null ? typedIterable : originalIterable, typedCondition, typedKey, typedValue),
 					TMap(resultKey, resultValue), span);
 			case Range(start, end, span):
@@ -1670,21 +1832,25 @@ class Typer {
 			case New(typeName, arguments, span):
 				if ((!classDecls.exists(typeName) && !PlatformAbi.isType(typeName)) || interfaceDecls.exists(typeName))
 					fail("E1007", 'Unknown class "$typeName"', span);
-				var constructor = signatures.get(typeName + ".new"),
-					implicitConstructor = constructor == null && classDecls.exists(typeName) && [
+				var constructorName = typeName + ".new",
+					hasConstructor = signatures.exists(constructorName),
+					implicitConstructor = !hasConstructor && classDecls.exists(typeName) && [
 						for (field in classDecls.get(typeName).fields)
 							if (!field.isStatic && field.initializer != null) field
-					].length > 0,
-					expected = constructor == null ? PlatformAbi.constructorArguments(typeName) : [for (argument in constructor.arguments) argumentType(argument)];
-				if (expected == null)
-					expected = [];
-				if (constructor == null && arguments.length != expected.length)
-					fail("E1008", 'Constructor "$typeName" expects ${expected.length} arguments, got ${arguments.length}', span);
-				var typed = constructor == null ? typeCallArguments(arguments, expected, scope,
-					typeName + ".new") : typeDeclaredCallArguments(arguments, constructor.arguments, scope, typeName + ".new", span);
+					].length > 0;
+				var expected = hasConstructor ? [
+					for (argument in requiredMapValue(signatures, constructorName).arguments)
+						argumentType(argument)
+				] : PlatformAbi.constructorArguments(typeName), resolvedExpected:Array<CompilerType> = [];
+				if (expected != null)
+					resolvedExpected = expected;
+				if (!hasConstructor && arguments.length != resolvedExpected.length)
+					fail("E1008", 'Constructor "$typeName" expects ${resolvedExpected.length} arguments, got ${arguments.length}', span);
+				var typed = hasConstructor ? typeDeclaredCallArguments(arguments, requiredMapValue(signatures, constructorName).arguments, scope,
+					constructorName, span) : typeCallArguments(arguments, resolvedExpected, scope, constructorName);
 				var nativeConstructor = PlatformAbi.constructorNative(typeName),
 					valueType = PlatformAbi.valueType(typeName);
-				nativeConstructor == null ? new TypedExpression(TNew(typeName, typed, constructor != null || implicitConstructor), valueType,
+				nativeConstructor == null ? new TypedExpression(TNew(typeName, typed, hasConstructor || implicitConstructor), valueType,
 					span) : new TypedExpression(TCall(nativeConstructor, typed), valueType, span);
 			case NewArray(element, length, span):
 				var typedLength = typeExpression(length, scope);
@@ -1758,9 +1924,10 @@ class Typer {
 					new TypedExpression(TClosureCall(new TypedExpression(TLocal(scope.requireId(name)), callable, span), typed), functionType.result, span);
 				} else {
 					if (name.indexOf(".") < 0) {
-						var ownerSeparator = context.name.lastIndexOf("."),
-							owner = ownerSeparator < 0 ? null : context.name.substr(0, ownerSeparator),
-							implicitMethod = owner == null ? null : findMethod(owner, name);
+						var owner = parentPath(context.name),
+							implicitMethod:Null<{owner:String, isStatic:Bool, isConstructor:Bool}> = null;
+						if (owner != null)
+							implicitMethod = findMethod(owner, name);
 						if (implicitMethod != null) {
 							var methodKey = implicitMethod.owner + "." + name,
 								method = signatures.get(methodKey);
@@ -1781,24 +1948,32 @@ class Typer {
 							return applyCallEffect(new TypedExpression(TMethodCall(receiver, methodKey, typed), lowerType(method.result), span), methodKey);
 						}
 					}
-					var parts = name.split("."),
-						receiverName = parts.length < 2 || signatures.exists(name) ? null : parts[0],
-						receiver = receiverName == null ? null : resolveReceiver(receiverName, span, scope),
-						methodName = parts.length < 2 ? null : parts[parts.length - 1];
+					var parts = splitPath(name),
+						receiverName:Null<String> = null,
+						receiver:Null<TypedExpression> = null,
+						methodName:Null<String> = null;
+					if (parts.length >= 2) {
+						methodName = parts[parts.length - 1];
+						if (!signatures.exists(name)) {
+							var resolvedReceiverName = parts[0];
+							receiverName = resolvedReceiverName;
+							receiver = resolveReceiver(resolvedReceiverName, span, scope);
+						}
+					}
 					if (receiver != null && parts.length > 2)
 						for (index in 1...parts.length - 1)
 							receiver = typedMember(receiver, parts[index], span);
 					var receiverType = receiver == null ? null : receiver.type;
 					var enumCase = enumCaseInfo(name);
-					if (enumCase == null && name.indexOf(".") < 0)
-						switch expectedType {
-							case TEnum(enumName), TNullable(TEnum(enumName)): enumCase = enumCaseInfo(enumName + "." + name);
-							default:
-						}
+					if (enumCase == null && name.indexOf(".") < 0) {
+						var expectedEnum = enumName(expectedType);
+						if (expectedEnum != null)
+							enumCase = enumCaseInfo(expectedEnum + "." + name);
+					}
 					if (enumCase != null) {
 						var expected = [
 							for (param in enumCase.params)
-								param.optional ? TNullable(lowerType(param.type)) : lowerType(param.type)
+								param.optional ? CompilerType.TNullable(lowerType(param.type)) : lowerType(param.type)
 						];
 						var required = requiredEnumParameters(enumCase.params);
 						if (arguments.length < required || arguments.length > expected.length)
@@ -1810,17 +1985,22 @@ class Typer {
 						return new TypedExpression(TEnumConstruct(enumCase.enumName, enumCase.index, typedArguments), TEnum(enumCase.enumName), span);
 					}
 					if (receiverType != null && methodName != null) {
-						var stringCall = typeStringMethod(receiver, methodName, arguments, span, scope);
+						var resolvedReceiver = requiredExpression(receiver),
+							resolvedMethodName = requiredString(methodName);
+						var stringCall = typeStringMethod(resolvedReceiver, resolvedMethodName, arguments, span, scope);
 						if (stringCall != null)
 							return stringCall;
 						if (isMap(receiverType))
-							return typeMapMethod(receiver, methodName, arguments, span, scope);
+							return typeMapMethod(resolvedReceiver, resolvedMethodName, arguments, span, scope);
 						if (isArray(receiverType))
-							return typeArrayMethod(receiver, methodName, arguments, span, scope);
-						var platformMethod = PlatformAbi.method(receiverType, methodName);
+							return typeArrayMethod(resolvedReceiver, resolvedMethodName, arguments, span, scope);
+						var platformMethod = PlatformAbi.method(receiverType, resolvedMethodName);
 						if (platformMethod != null) {
-							var typed = typeCallArguments(arguments, platformMethod.arguments, scope, methodName);
-							return new TypedExpression(TCall(platformMethod.nativeName, [receiver].concat(typed)), platformMethod.result, span);
+							var typed = typeCallArguments(arguments, platformMethod.arguments, scope, resolvedMethodName),
+								callArguments:Array<TypedExpression> = [resolvedReceiver];
+							for (argument in typed)
+								callArguments.push(argument);
+							return new TypedExpression(TCall(platformMethod.nativeName, callArguments), platformMethod.result, span);
 						}
 						var className = switch receiverType {
 							case TClass(value), TInterface(value): value;
@@ -1828,10 +2008,10 @@ class Typer {
 						};
 						if (className == null)
 							fail("E1007", 'Cannot call method on non-object "$receiverName"', span);
-						var methodInfoResult = findMethod(className, methodName);
+						var methodInfoResult = findMethod(className, resolvedMethodName);
 						if (methodInfoResult == null || methodInfoResult.isStatic)
 							fail("E1007", 'Unknown instance method "$className.$methodName"', span);
-						var methodKey = methodInfoResult.owner + "." + methodName;
+						var methodKey = methodInfoResult.owner + "." + resolvedMethodName;
 						var method = signatures.get(methodKey);
 						if (isGeneric(method)) {
 							if (!methodInfoResult.isStatic)
@@ -1841,25 +2021,38 @@ class Typer {
 							return new TypedExpression(TCall(specialized.name, specialized.arguments), specialized.result, span);
 						}
 						var typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span);
-						applyCallEffect(new TypedExpression(TMethodCall(receiver, methodKey, typed), lowerType(method.result), span), methodKey);
+						applyCallEffect(new TypedExpression(TMethodCall(resolvedReceiver, methodKey, typed), lowerType(method.result), span), methodKey);
 					} else {
-						var signature = signatures.get(name);
-						if (signature != null && isGeneric(signature)) {
+						var hasSignature = signatures.exists(name);
+						if (hasSignature && isGeneric(requiredMapValue(signatures, name))) {
+							var signature = requiredMapValue(signatures, name),
+								infoOwner:Null<String> = null,
+								infoStatic = true;
+							if (methodInfo.exists(name)) {
+								var resolvedInfo = requiredMapValue(methodInfo, name);
+								infoOwner = resolvedInfo.owner;
+								infoStatic = resolvedInfo.isStatic;
+							}
 							var typed = [for (argument in arguments) typeExpression(argument, scope)],
-								info = methodInfo.get(name),
-								specialized = specializeGeneric(name, signature, typed, span, info == null ? null : info.owner,
-									info == null ? true : info.isStatic);
+								specialized = specializeGeneric(name, signature, typed, span, infoOwner, infoStatic);
 							return new TypedExpression(TCall(specialized.name, specialized.arguments), specialized.result, span);
 						}
-						var external = externals.get(name),
-							expectedArguments = signature == null ? (external == null ? null : external.arguments) : [for (argument in signature.arguments) argumentType(argument)],
-							result = signature == null ? (external == null ? null : external.result) : lowerType(signature.result);
-						if (expectedArguments == null)
+						var expectedArguments:Array<CompilerType> = [],
+							result:CompilerType = TVoid;
+						if (hasSignature) {
+							var signature = requiredMapValue(signatures, name);
+							expectedArguments = [for (argument in signature.arguments) argumentType(argument)];
+							result = lowerType(signature.result);
+						} else if (externals.exists(name)) {
+							var external = requiredMapValue(externals, name);
+							expectedArguments = external.arguments;
+							result = external.result;
+						} else
 							fail("E1007", 'Unknown function "$name"', span);
-						if (signature == null && arguments.length != expectedArguments.length)
+						if (!hasSignature && arguments.length != expectedArguments.length)
 							fail("E1008", 'Function "$name" expects ${expectedArguments.length} arguments, got ${arguments.length}', span);
-						var typed = signature == null ? typeCallArguments(arguments, expectedArguments, scope,
-							name) : typeDeclaredCallArguments(arguments, signature.arguments, scope, name, span);
+						var typed = hasSignature ? typeDeclaredCallArguments(arguments, requiredMapValue(signatures, name).arguments, scope, name,
+							span) : typeCallArguments(arguments, expectedArguments, scope, name);
 						applyCallEffect(new TypedExpression(TCall(name, typed), result, span), name);
 					}
 				}
@@ -1874,22 +2067,24 @@ class Typer {
 		return noReturnFunctions.exists(name) ? new TypedExpression(TNoReturn(call), TNever, call.span) : call;
 
 	function typeSuperCall(arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
-		var separator = context.name.lastIndexOf("."),
-			owner = separator < 0 ? null : context.name.substr(0, separator),
-			classDecl = owner == null ? null : classDecls.get(owner),
-			base = classDecl == null ? null : classDecl.base;
+		var owner = parentPath(context.name), base:Null<String> = null;
+		if (owner != null && classDecls.exists(owner))
+			base = requiredMapValue(classDecls, owner).base;
 		if (base == null)
 			fail("E1007", "super() requires a base-class constructor", span);
-		var constructor = signatures.get(base + ".new"),
-			expected = constructor == null ? PlatformAbi.constructorArguments(base) : [
-				for (argument in constructor.arguments)
+		var resolvedBase = requiredString(base),
+			constructorName = resolvedBase + ".new",
+			hasConstructor = signatures.exists(constructorName),
+			expected = hasConstructor ? [
+				for (argument in requiredMapValue(signatures, constructorName).arguments)
 					argumentType(argument)
-			];
-		if (expected == null)
-			expected = [];
-		if (arguments.length != expected.length)
-			fail("E1008", 'Constructor "$base" expects ${expected.length} arguments, got ${arguments.length}', span);
-		return new TypedExpression(TSuperCall(base, typeCallArguments(arguments, expected, scope, base + ".new")), TVoid, span);
+			] : PlatformAbi.constructorArguments(resolvedBase),
+			resolvedExpected:Array<CompilerType> = [];
+		if (expected != null)
+			resolvedExpected = expected;
+		if (arguments.length != resolvedExpected.length)
+			fail("E1008", 'Constructor "$resolvedBase" expects ${resolvedExpected.length} arguments, got ${arguments.length}', span);
+		return new TypedExpression(TSuperCall(resolvedBase, typeCallArguments(arguments, resolvedExpected, scope, constructorName)), TVoid, span);
 	}
 
 	function seedLambdaScope(statements:Array<AstStatement>, scope:Scope):Void {
@@ -1900,10 +2095,13 @@ class Typer {
 						scope.define(name, lowerType(declared), span, false);
 				case VarDeclaration(name, declared, initializer, span):
 					if (scope.resolve(name) == null) {
-						var declaredType = declared == null ? null : lowerType(declared);
-						var value = typeExpression(initializer, scope, declaredType);
-						if (declared != null)
-							value = coerce(value, declaredType, 'local "$name"', "E1002");
+						var value:TypedExpression;
+						if (declared == null)
+							value = typeExpression(initializer, scope);
+						else {
+							var declaredType = lowerType(declared);
+							value = coerce(typeExpression(initializer, scope, declaredType), declaredType, 'local "$name"', "E1002");
+						}
 						scope.define(name, value.type, span);
 					}
 				case If(_, yes, no, _):
@@ -1927,32 +2125,34 @@ class Typer {
 			isStatic:Bool):{name:String, arguments:Array<TypedExpression>, result:CompilerType} {
 		if (arguments.length != fn.arguments.length)
 			fail("E1008", 'Function "$baseName" expects ${fn.arguments.length} arguments, got ${arguments.length}', span);
-		var substitutions:Map<String, CompilerType> = [];
+		var substitutions:Map<String, CompilerType> = [],
+			parameters = requiredStrings(fn.typeParameters);
 		for (i in 0...arguments.length)
-			inferTypeParameters(fn.arguments[i].type, arguments[i].type, fn.typeParameters, substitutions, arguments[i].span);
-		for (parameter in fn.typeParameters)
-			if (substitutions.get(parameter) == null)
+			inferTypeParameters(fn.arguments[i].type, arguments[i].type, parameters, substitutions, arguments[i].span);
+		for (parameter in parameters)
+			if (!substitutions.exists(parameter))
 				fail("E1003", 'Cannot infer generic type parameter "$parameter" for "$baseName"', span);
 		var expected = [
 			for (argument in fn.arguments)
 				declarations.resolve(argument.type, argument.span, substitutions)
 		], typed = coerceArguments(arguments, expected, baseName), result = declarations.resolve(fn.result, fn.span, substitutions), key = baseName + "<" + [
-			for (parameter in fn.typeParameters)
-				SemanticSignature.type(substitutions.get(parameter))
-			].join(",") + ">", name = genericSpecializations.get(key);
-		if (name == null) {
-			name = '$' + 'generic:$key';
-			genericSpecializations.set(key, name);
-			generated.push(typeFunction(fn, owner, isStatic, substitutions, name));
+			for (parameter in parameters)
+				SemanticSignature.type(requiredMapValue(substitutions, parameter))
+			].join(",") + ">", resolvedName:String;
+		if (genericSpecializations.exists(key))
+			resolvedName = requiredMapValue(genericSpecializations, key);
+		else {
+			resolvedName = '$' + 'generic:$key';
+			genericSpecializations.set(key, resolvedName);
+			generated.push(typeFunction(fn, owner, isStatic, substitutions, resolvedName));
 		}
-		return {name: name, arguments: typed, result: result};
+		return {name: resolvedName, arguments: typed, result: result};
 	}
 
 	function inferTypeParameters(pattern:AstType, actual:CompilerType, parameters:Array<String>, substitutions:Map<String, CompilerType>, span:SourceSpan):Void
 		switch pattern {
 			case NamedType(name) if (parameters.indexOf(name) >= 0):
-				var previous = substitutions.get(name);
-				if (previous != null && !sameType(previous, actual))
+				if (substitutions.exists(name) && !sameType(requiredMapValue(substitutions, name), actual))
 					fail("E1003", 'Conflicting types inferred for generic parameter "$name"', span);
 				substitutions.set(name, actual);
 			case ArrayType(element):
@@ -1996,11 +2196,12 @@ class Typer {
 	function typedMember(typedObject:TypedExpression, name:String, span:SourceSpan):TypedExpression {
 		switch typedObject.expression {
 			case TClassRef(className):
-				var abstractDecl = enumAbstractDecls.get(className);
-				if (abstractDecl != null)
+				if (enumAbstractDecls.exists(className)) {
+					var abstractDecl = requiredMapValue(enumAbstractDecls, className);
 					for (value in abstractDecl.values)
 						if (value.name == name)
 							return typeExpression(value.value, new Scope(), lowerType(abstractDecl.underlying));
+				}
 				var staticField = findStaticField(className, name, span);
 				return new TypedExpression(TStaticField(staticField.owner, name), staticField.type, span);
 			default:
@@ -2019,18 +2220,18 @@ class Typer {
 		var result = findStaticFieldNullable(className, name);
 		if (result != null)
 			return result;
-		fail("E1005", 'Unknown static field "$className.$name"', span);
-		return {owner: className, type: TVoid};
+		throw new CompileError(new Diagnostic("E1005", 'Unknown static field "$className.$name"', span));
 	}
 
 	function findStaticFieldNullable(className:String, name:String):Null<{owner:String, type:CompilerType}> {
-		var classDecl = classDecls.get(className);
-		if (classDecl == null)
+		if (!classDecls.exists(className))
 			return null;
+		var classDecl = requiredMapValue(classDecls, className);
 		for (field in classDecl.fields)
 			if (field.name == name && field.isStatic)
 				return {owner: className, type: lowerType(FieldInference.parsedType(field))};
-		return classDecl.base == null ? null : findStaticFieldNullable(classDecl.base, name);
+		var base = classDecl.base;
+		return base == null ? null : findStaticFieldNullable(base, name);
 	}
 
 	function typeMethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
@@ -2148,7 +2349,7 @@ class Typer {
 				fail("E1008", "Array.sort expects one comparator", span);
 			if (!isRebindableArrayReceiver(receiver))
 				fail("E1016", "Array.sort requires a mutable local or field array", span);
-			var comparatorType = TFunction([element, element], TInt),
+			var comparatorType = CompilerType.TFunction([element, element], TInt),
 				comparator = coerce(typeExpression(arguments[0], scope, comparatorType), comparatorType, "array comparator", "E1002");
 			return new TypedExpression(TArraySort(receiver, comparator), TVoid, span);
 		}
@@ -2171,8 +2372,7 @@ class Typer {
 			var value = coerce(typeExpression(arguments[0], scope), element, "array element", "E1002");
 			return new TypedExpression(TCollectionCall(receiver, "index_of", [value]), TInt, span);
 		}
-		fail("E1007", 'Unknown array method "$name"', span);
-		return new TypedExpression(TNullLiteral, TVoid, span);
+		throw new CompileError(new Diagnostic("E1007", 'Unknown array method "$name"', span));
 	}
 
 	function isRebindableArrayReceiver(receiver:TypedExpression):Bool
@@ -2185,13 +2385,15 @@ class Typer {
 	function hasInstanceField(type:CompilerType, name:String):Bool
 		return switch type {
 			case TClass(className):
-				var classDecl = classDecls.get(className), found = false;
-				if (classDecl != null) {
+				var found = false;
+				if (classDecls.exists(className)) {
+					var classDecl = requiredMapValue(classDecls, className);
 					for (field in classDecl.fields)
 						if (field.name == name && !field.isStatic)
 							found = true;
-					if (!found && classDecl.base != null)
-						found = hasInstanceField(TClass(classDecl.base), name);
+					var base = classDecl.base;
+					if (!found && base != null)
+						found = hasInstanceField(TClass(base), name);
 				}
 				found;
 			default: false;
@@ -2238,9 +2440,7 @@ class Typer {
 			case "exists": new TypedExpression(TCollectionCall(receiver, "exists", [key]), TBool, span);
 			case "remove": new TypedExpression(TCollectionCall(receiver, "remove", [key]), TBool, span);
 			case "get": new TypedExpression(TMapGet(receiver, key), mapType.value, span);
-			default:
-				fail("E1007", 'Unknown map method "$name"', span);
-				new TypedExpression(TNullLiteral, TVoid, span);
+			default: throw new CompileError(new Diagnostic("E1007", 'Unknown map method "$name"', span));
 		};
 	}
 
@@ -2406,8 +2606,9 @@ class Typer {
 					collectExpressionVariables(expression, names);
 					for (switchCase in cases) {
 						collectExpressionVariables(switchCase.value, names);
-						if (switchCase.guard != null)
-							collectExpressionVariables(switchCase.guard, names);
+						var guard = switchCase.guard;
+						if (guard != null)
+							collectExpressionVariables(guard, names);
 						collectVariables(switchCase.statements, names);
 					}
 					collectVariables(defaultBranch, names);
@@ -2451,8 +2652,9 @@ class Typer {
 					collectMutableCaptureExpression(expression, outerDeclared, result);
 					for (switchCase in cases) {
 						collectMutableCaptureExpression(switchCase.value, outerDeclared, result);
-						if (switchCase.guard != null)
-							collectMutableCaptureExpression(switchCase.guard, outerDeclared, result);
+						var guard = switchCase.guard;
+						if (guard != null)
+							collectMutableCaptureExpression(guard, outerDeclared, result);
 						collectMutableCaptureCandidates(switchCase.statements, outerDeclared, result);
 					}
 					collectMutableCaptureCandidates(defaultBranch, outerDeclared, result);
@@ -2554,12 +2756,14 @@ class Typer {
 				collectMutableCaptureExpression(subject, outerDeclared, result);
 				for (switchCase in cases) {
 					collectMutableCaptureExpression(switchCase.value, outerDeclared, result);
-					if (switchCase.guard != null)
-						collectMutableCaptureExpression(switchCase.guard, outerDeclared, result);
+					var guard = switchCase.guard;
+					if (guard != null)
+						collectMutableCaptureExpression(guard, outerDeclared, result);
 					collectMutableCaptureExpression(switchCase.result, outerDeclared, result);
 				}
-				if (fallback != null)
-					collectMutableCaptureExpression(fallback, outerDeclared, result);
+				var resolvedFallback = fallback;
+				if (resolvedFallback != null)
+					collectMutableCaptureExpression(resolvedFallback, outerDeclared, result);
 			case ObjectLiteral(fields, _):
 				for (field in fields)
 					collectMutableCaptureExpression(field.value, outerDeclared, result);
@@ -2602,7 +2806,7 @@ class Typer {
 			case Call(name, arguments, _):
 				var separator = name.indexOf(".");
 				if (separator > 0)
-					names.set(name.substr(0, separator), true);
+					names.set(splitPath(name)[0], true);
 				for (argument in arguments)
 					collectExpressionVariables(argument, names);
 			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _),
@@ -2632,12 +2836,14 @@ class Typer {
 				collectExpressionVariables(subject, names);
 				for (switchCase in cases) {
 					collectExpressionVariables(switchCase.value, names);
-					if (switchCase.guard != null)
-						collectExpressionVariables(switchCase.guard, names);
+					var guard = switchCase.guard;
+					if (guard != null)
+						collectExpressionVariables(guard, names);
 					collectExpressionVariables(switchCase.result, names);
 				}
-				if (fallback != null)
-					collectExpressionVariables(fallback, names);
+				var resolvedFallback = fallback;
+				if (resolvedFallback != null)
+					collectExpressionVariables(resolvedFallback, names);
 			case ObjectLiteral(fields, _):
 				for (field in fields)
 					collectExpressionVariables(field.value, names);
@@ -2712,18 +2918,20 @@ class Typer {
 				typeExpression(arguments[i], scope, argumentType(parameters[i]))
 		];
 		for (i in arguments.length...parameters.length) {
-			var parameter = parameters[i], expected = argumentType(parameter);
-			if (parameter.defaultValue == null)
+			var parameter = parameters[i],
+				expected = argumentType(parameter),
+				defaultValue = parameter.defaultValue;
+			if (defaultValue == null)
 				typed.push(coerce(new TypedExpression(TNullLiteral, TNull, span), expected, 'default argument ${i + 1} to "$name"'));
 			else
-				typed.push(coerce(typeExpression(parameter.defaultValue, scope, expected), expected, 'default argument ${i + 1} to "$name"'));
+				typed.push(coerce(typeExpression(defaultValue, scope, expected), expected, 'default argument ${i + 1} to "$name"'));
 		}
 		return coerceArguments(typed, [for (parameter in parameters) argumentType(parameter)], name);
 	}
 
 	function argumentType(argument:compiler.Ast.AstArgument):CompilerType {
 		var type = lowerType(argument.type);
-		return argument.optional && argument.defaultValue == null ? TNullable(type) : type;
+		return argument.optional && argument.defaultValue == null ? CompilerType.TNullable(type) : type;
 	}
 
 	function coerce(value:TypedExpression, expected:CompilerType, context:String, code:String = "E1009"):TypedExpression {
@@ -2748,31 +2956,38 @@ class Typer {
 	}
 
 	function findMethod(className:String, name:String):Null<{owner:String, isStatic:Bool, isConstructor:Bool}> {
-		var info = methodInfo.get(className + "." + name);
-		if (info != null)
-			return info;
-		var classDecl = classDecls.get(className);
-		if (classDecl != null)
-			return classDecl.base == null ? null : findMethod(classDecl.base, name);
-		var interfaceDecl = interfaceDecls.get(className);
-		if (interfaceDecl != null)
-			for (base in interfaceDecl.bases) {
-				var inherited = findMethod(base, name);
-				if (inherited != null)
-					return inherited;
-			}
-		return null;
+		var results:Array<{owner:String, isStatic:Bool, isConstructor:Bool}> = [];
+		findMethods(className, name, results);
+		return results.length == 0 ? null : results[0];
+	}
+
+	function findMethods(className:String, name:String, results:Array<{owner:String, isStatic:Bool, isConstructor:Bool}>):Void {
+		if (results.length > 0)
+			return;
+		var key = className + "." + name;
+		if (methodInfo.exists(key)) {
+			results.push(requiredMapValue(methodInfo, key));
+			return;
+		}
+		if (classDecls.exists(className)) {
+			var base = requiredMapValue(classDecls, className).base;
+			if (base != null)
+				findMethods(base, name, results);
+			return;
+		}
+		if (interfaceDecls.exists(className))
+			for (base in requiredMapValue(interfaceDecls, className).bases)
+				findMethods(base, name, results);
 	}
 
 	function enumCaseInfo(name:String):Null<{enumName:String, index:Int, params:Array<compiler.Ast.AstEnumParameter>}> {
-		var dot = name.lastIndexOf(".");
-		if (dot <= 0)
+		var parent = parentPath(name);
+		if (parent == null)
 			return null;
-		var enumName = name.substring(0, dot),
-			caseName = name.substring(dot + 1, name.length),
-			declaration = enumDecls.get(enumName);
-		if (declaration == null)
+		var enumName = parent, caseName = lastPathSegment(name);
+		if (!enumDecls.exists(enumName))
 			return null;
+		var declaration = requiredMapValue(enumDecls, enumName);
 		for (index in 0...declaration.cases.length)
 			if (declaration.cases[index].name == caseName)
 				return {enumName: enumName, index: index, params: declaration.cases[index].params};
@@ -2796,21 +3011,21 @@ class Typer {
 				for (field in fields)
 					if (field.name == name)
 						return field.type;
-				fail("E1005", 'Unknown anonymous field "$name"', span);
+				throw new CompileError(new Diagnostic("E1005", 'Unknown anonymous field "$name"', span));
 			case TClass(className):
-				var classDecl = classDecls.get(className);
-				if (classDecl != null) {
+				if (classDecls.exists(className)) {
+					var classDecl = requiredMapValue(classDecls, className);
 					for (field in classDecl.fields)
 						if (field.name == name && !field.isStatic)
 							return lowerType(FieldInference.parsedType(field));
-					if (classDecl.base != null)
-						return fieldType(TClass(classDecl.base), name, span);
+					var base = classDecl.base;
+					if (base != null)
+						return fieldType(TClass(base), name, span);
 				}
-				fail("E1005", 'Unknown field "$className.$name"', span);
+				throw new CompileError(new Diagnostic("E1005", 'Unknown field "$className.$name"', span));
 			default:
-				fail("E1005", 'Field "$name" requires an object', span);
+				throw new CompileError(new Diagnostic("E1005", 'Field "$name" requires an object', span));
 		}
-		return TVoid;
 	}
 
 	function resolveReceiver(name:String, span:SourceSpan, scope:Scope):Null<TypedExpression> {
@@ -2819,9 +3034,10 @@ class Typer {
 		var thisType = scope.resolve("this");
 		if (thisType != null && findFieldType(thisType, name) != null)
 			return typeExpression(Variable(name, span), scope);
-		var ownerSeparator = context.name.lastIndexOf("."),
-			owner = ownerSeparator < 0 ? null : context.name.substr(0, ownerSeparator),
-			staticField = owner == null ? null : findStaticFieldNullable(owner, name);
+		var owner = parentPath(context.name),
+			staticField:Null<{owner:String, type:CompilerType}> = null;
+		if (owner != null)
+			staticField = findStaticFieldNullable(owner, name);
 		if (staticField != null)
 			return new TypedExpression(TStaticField(staticField.owner, name), staticField.type, span);
 		return null;
@@ -2830,20 +3046,21 @@ class Typer {
 	function findFieldType(type:CompilerType, name:String):Null<CompilerType>
 		return switch type {
 			case TAnonymous(_, fields):
-				var found = null;
+				var found:Null<CompilerType> = null;
 				for (field in fields)
 					if (field.name == name)
 						found = field.type;
 				found;
 			case TClass(className):
-				var classDecl = classDecls.get(className),
-					found:Null<CompilerType> = null;
-				if (classDecl != null) {
+				var found:Null<CompilerType> = null;
+				if (classDecls.exists(className)) {
+					var classDecl = requiredMapValue(classDecls, className);
 					for (field in classDecl.fields)
 						if (field.name == name && !field.isStatic)
 							found = lowerType(FieldInference.parsedType(field));
-					if (found == null && classDecl.base != null)
-						found = findFieldType(TClass(classDecl.base), name);
+					var base = classDecl.base;
+					if (found == null && base != null)
+						found = findFieldType(TClass(base), name);
 				}
 				found;
 			default: null;
@@ -2885,7 +3102,7 @@ class Typer {
 		var left = typeExpression(a, scope), right = typeExpression(b, scope);
 		if (!sameType(left.type, TInt) || !sameType(right.type, TInt))
 			fail("E1010", "Bitwise operators require Int operands", span);
-		var expression = switch operation {
+		var expression:TypedExpressionKind = switch operation {
 			case 0: TBitAnd(left, right);
 			case 1: TBitXor(left, right);
 			case 2: TBitOr(left, right);
@@ -2909,12 +3126,23 @@ class Typer {
 			return new TypedExpression(TEqual(left, right), TBool, span);
 		if (operation == 2 && sameType(left.type, TBool) && sameType(right.type, TBool))
 			return new TypedExpression(TEqual(left, right), TBool, span);
-		if (operation == 2 && (sameType(left.type, TNull) || sameType(right.type, TNull)))
-			switch [left.type, right.type] {
-				case [TNull, TNullable(_)], [TNullable(_), TNull], [TNullable(_), TNullable(_)]:
-					return new TypedExpression(TEqual(left, right), TBool, span);
-				default:
-			}
+		if (operation == 2 && (sameType(left.type, TNull) || sameType(right.type, TNull))) {
+			var nullableComparison = switch left.type {
+				case TNull:
+					switch right.type {
+						case TNullable(_): true;
+						default: false;
+					}
+				case TNullable(_):
+					switch right.type {
+						case TNull, TNullable(_): true;
+						default: false;
+					}
+				default: false;
+			};
+			if (nullableComparison)
+				return new TypedExpression(TEqual(left, right), TBool, span);
+		}
 		if (operation == 2 && sameType(left.type, right.type))
 			switch left.type {
 				case TEnum(_), TNullable(_):
@@ -2990,7 +3218,7 @@ class Typer {
 
 	static function isTrueLiteral(expression:TypedExpression):Bool
 		return switch expression.expression {
-			case TBoolLiteral(true): true;
+			case TBoolLiteral(value): value;
 			default: false;
 		};
 
@@ -3025,9 +3253,9 @@ class Typer {
 			case TEnum(name): name;
 			default: return false;
 		};
-		var enumDecl = enumDecls.get(enumName);
-		if (enumDecl == null)
+		if (!enumDecls.exists(enumName))
 			return false;
+		var enumDecl = requiredMapValue(enumDecls, enumName);
 		var seen:Map<Int, Bool> = [];
 		for (switchCase in cases)
 			if (switchCase.constructorIndex >= 0)
@@ -3054,8 +3282,10 @@ class Typer {
 		return source.get(name);
 	}
 
-	static function isGeneric(fn:AstFunction):Bool
-		return fn.typeParameters != null && fn.typeParameters.length > 0;
+	static function isGeneric(fn:AstFunction):Bool {
+		var parameters = fn.typeParameters;
+		return parameters == null ? false : requiredStrings(parameters).length > 0;
+	}
 
 	function arrayElementType(type:CompilerType, span:SourceSpan):CompilerType
 		return switch type {
@@ -3094,7 +3324,7 @@ class Typer {
 
 	static function isReference(type:CompilerType):Bool
 		return switch type {
-			case TString, TDynamic, TClass(_), TInterface(_), TAnonymous(_, _), TArray(_), TFunction(_), TMap(_, _): true;
+			case TString, TDynamic, TClass(_), TInterface(_), TAnonymous(_, _), TArray(_), TFunction(_, _), TMap(_, _): true;
 			default: false;
 		};
 
