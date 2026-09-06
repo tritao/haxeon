@@ -176,8 +176,20 @@ class LanguageService {
 		if (state == null || ast == null)
 			return result;
 		var prefix = identifierPrefix(state.source.text, position);
-		var qualifier = memberQualifier(state.source.text, position);
+		var qualifier = memberQualifier(state.source.text, position),
+			model = effectiveSemanticModel(state),
+			semanticContext = model == null ? null : model.index.completionContext(position, qualifier);
 		if (qualifier != null) {
+			if (semanticContext != null && semanticContext.receiver != null)
+				addInstanceMembers(semanticContext.receiver, prefix, result);
+			if (model != null)
+				for (symbol in compiler.semanticWorkspace.visibleSymbols(state)) {
+					var separator = symbol.name.lastIndexOf(".");
+					if (symbol.kind == DeclarationKind.EnumCase
+						&& separator > 0
+						&& sourceName(symbol.name.substring(0, separator)) == qualifier)
+						addMember(symbol.name.substring(separator + 1), "enumCase", symbol.name, prefix, result);
+				}
 			for (enumDecl in ast.enums)
 				if (enumDecl.name == qualifier)
 					for (caseDecl in enumDecl.cases)
@@ -200,18 +212,26 @@ class LanguageService {
 								detail: '${method.name}(${[for (argument in method.arguments) typeName(argument.type)].join(",")}):${typeName(method.result)}'
 							});
 				}
-			var receiverType = qualifierType(path, qualifier, position);
-			if (receiverType != null)
-				addInstanceMembers(receiverType, prefix, result);
+			if (semanticContext == null || semanticContext.receiver == null) {
+				var receiverType = qualifierType(path, qualifier, position);
+				if (receiverType != null)
+					addInstanceMembers(receiverType, prefix, result);
+			}
 			if (result.length > 0) {
 				result.sort(function(a, b) return Reflect.compare(a.label, b.label));
 				tagResults(result, state);
 				return result;
 			}
 		}
+		if (semanticContext != null)
+			for (local in semanticContext.locals)
+				addMember(local.name, "variable", local.name + ":" + compilerTypeName(local.type), prefix, result);
+		if (model != null)
+			for (symbol in compiler.semanticWorkspace.visibleSymbols(state))
+				if (symbol.name.indexOf(".") < 0)
+					addMember(symbol.name, completionDeclarationKind(symbol.kind), symbol.name, prefix, result);
 		for (symbol in documentSymbols(path))
-			if (prefix.length == 0 || StringTools.startsWith(symbol.name, prefix))
-				result.push({label: symbol.name, kind: symbol.kind, detail: symbol.detail});
+			addMember(symbol.name, symbol.kind, symbol.detail, prefix, result);
 		tagResults(result, state);
 		return result;
 	}
@@ -768,6 +788,18 @@ class LanguageService {
 		return StringTools.startsWith(identity, "$l") && separator >= 0 ? identity.substr(separator + 1) : identity;
 	}
 
+	static function sourceName(name:String):String {
+		var separator = name.lastIndexOf(".");
+		return separator < 0 ? name : name.substring(separator + 1);
+	}
+
+	static function completionDeclarationKind(kind:DeclarationKind):String
+		return switch kind {
+			case DeclarationKind.Alias: "type";
+			case DeclarationKind.EnumCase: "enumCase";
+			default: Std.string(kind);
+		};
+
 	function addInstanceMembers(type:CompilerType, prefix:String, result:Array<CompletionItem>):Void {
 		switch type {
 			case TNullable(element):
@@ -895,5 +927,22 @@ class LanguageService {
 			case NullableType(element): 'Null<${typeName(element)}>';
 			case FunctionType(arguments, result): '(${[for (argument in arguments) typeName(argument)].join(",")})->${typeName(result)}';
 			case AnonymousType(fields): '{${[for (field in fields) (field.optional ? "?" : "") + field.name + ":" + typeName(field.type)].join(",")}}';
+		};
+
+	static function compilerTypeName(type:CompilerType):String
+		return switch type {
+			case TInt: "Int";
+			case TFloat: "Float";
+			case TBool: "Bool";
+			case TString: "String";
+			case TVoid: "Void";
+			case TArray(element): 'Array<${compilerTypeName(element)}>';
+			case TMap(key, value): 'Map<${compilerTypeName(key)},${compilerTypeName(value)}>';
+			case TNullable(element): 'Null<${compilerTypeName(element)}>';
+			case TInstance(_, name, arguments): arguments.length == 0 ? name : name
+					+ "<"
+					+ [for (argument in arguments) compilerTypeName(argument)].join(",") + ">";
+			case TFunction(arguments, result): "(" + [for (argument in arguments) compilerTypeName(argument)].join(",") + ")->" + compilerTypeName(result);
+			default: Std.string(type);
 		};
 }

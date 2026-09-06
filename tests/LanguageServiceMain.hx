@@ -80,6 +80,22 @@ class LanguageServiceMain {
 		}
 		if (!hasPush || !hasPop || service.hover("Main.hx", arrayPosition + 3) != "push(value):Int")
 			throw "language service typed array completion failed";
+		var scopeCompletionService = new LanguageService(),
+			scopeCompletionSource = "function main():Int { var value:Int = 1; if (true) { var value:String = \"inner\"; value; } return value; }";
+		scopeCompletionService.update("ScopeCompletion.hx", scopeCompletionSource);
+		scopeCompletionService.compile("ScopeCompletion");
+		var innerCompletion = scopeCompletionService.complete("ScopeCompletion.hx", scopeCompletionSource.indexOf("value; }") + "value".length),
+			outerCompletion = scopeCompletionService.complete("ScopeCompletion.hx", scopeCompletionSource.lastIndexOf("value;") + "value".length),
+			innerDetail:Null<String> = null,
+			outerDetail:Null<String> = null;
+		for (item in innerCompletion)
+			if (item.label == "value")
+				innerDetail = item.detail;
+		for (item in outerCompletion)
+			if (item.label == "value")
+				outerDetail = item.detail;
+		if (innerDetail != "value:String" || outerDetail != "value:Int")
+			throw "compiler completion context did not preserve lexical shadowing";
 		var methodPosition = source.lastIndexOf("open") + 2,
 			definition = service.definition("Main.hx", methodPosition);
 		if (definition == null
@@ -144,6 +160,13 @@ class LanguageServiceMain {
 		var enumSource = "package app; import model.Kind; function read(value:Kind):Int return switch value { case Kind.One: 1; case Kind.Two(item): item; }; function main():Int { var first:Kind = Kind.One; var second:Kind = Kind.Two(41); return read(first) + read(second); }";
 		enumService.update("app/Main.hx", enumSource);
 		enumService.compile("app.Main");
+		var importedEnumCompletion = enumService.complete("app/Main.hx", enumSource.indexOf("Kind.One") + "Kind.".length),
+			hasImportedEnumCase = false;
+		for (item in importedEnumCompletion)
+			if (item.label == "Two")
+				hasImportedEnumCase = true;
+		if (!hasImportedEnumCase)
+			throw "compiler completion context did not expose imported enum cases";
 		var enumLiteralPosition = enumSource.lastIndexOf("Kind.One") + "Kind.".length,
 			enumConstructorPosition = enumSource.lastIndexOf("Kind.Two") + "Kind.".length,
 			enumDefinition = enumService.definition("app/Main.hx", enumLiteralPosition),

@@ -25,6 +25,19 @@ typedef IndexedSemanticSymbol = {
 
 private typedef PositionBinding = {final span:SourceSpan; final symbol:SemanticSymbolId;}
 
+typedef SemanticCompletionLocal = {
+	final name:String;
+	final type:CompilerType;
+	final declaration:SourceSpan;
+	final scope:SourceSpan;
+	final depth:Int;
+}
+
+typedef SemanticCompletionContext = {
+	final locals:Array<SemanticCompletionLocal>;
+	final receiver:Null<CompilerType>;
+}
+
 /** Revision-local declaration and resolved-local facts emitted by the compiler. */
 class SemanticIndex {
 	public final revision:Int;
@@ -32,6 +45,8 @@ class SemanticIndex {
 
 	final bindings:Array<PositionBinding> = [];
 	final references:Map<String, Array<SourceSpan>> = [];
+	final completionLocals:Array<SemanticCompletionLocal> = [];
+	final functionReceivers:Array<{span:SourceSpan, type:CompilerType}> = [];
 	final tokens:Array<Token>;
 	final module:String;
 
@@ -57,9 +72,14 @@ class SemanticIndex {
 	}
 
 	public function indexTypedFunction(fn:TypedFunction, resolve:String->Null<SemanticSymbolId>, resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>):Void {
-		for (argument in fn.arguments)
+		for (argument in fn.arguments) {
 			declareLocal(fn, argument.name, fn.span);
+			addCompletionLocal(argument.name, argument.type, fn.span, fn.span, 0);
+		}
+		if (fn.owner != null)
+			functionReceivers.push({span: fn.span, type: TInstance(compiler.types.Type.NominalKind.Class, fn.owner, [])});
 		declareLocals(fn, fn.statements);
+		indexCompletionLocals(fn.statements, fn.span, 0);
 		indexStatements(fn, fn.statements, resolve, resolveEnumCase);
 		bindings.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
 	}
@@ -82,6 +102,87 @@ class SemanticIndex {
 	public function locations(id:SemanticSymbolId):Array<SourceSpan> {
 		var result = references.get(id);
 		return result == null ? [] : result.copy();
+	}
+
+	public function completionContext(position:Int, ?qualifier:String):SemanticCompletionContext {
+		var visible:Map<String, SemanticCompletionLocal> = [];
+		for (local in completionLocals)
+			if (position >= local.declaration.start && position <= local.scope.end) {
+				var existing = visible.get(local.name);
+				if (existing == null
+					|| local.depth > existing.depth
+					|| (local.depth == existing.depth && local.declaration.start > existing.declaration.start))
+					visible.set(local.name, local);
+			}
+		var locals = [for (local in visible) local];
+		locals.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		var receiver:Null<CompilerType> = null;
+		if (qualifier != null) {
+			if (qualifier == "this")
+				for (candidate in functionReceivers)
+					if (position >= candidate.span.start && position <= candidate.span.end)
+						receiver = candidate.type;
+			if (receiver == null)
+				for (local in locals)
+					if (local.name == qualifier)
+						receiver = local.type;
+		}
+		return {locals: locals, receiver: receiver};
+	}
+
+	function addCompletionLocal(identity:String, type:CompilerType, declaration:SourceSpan, scope:SourceSpan, depth:Int):Void {
+		var token = declarationToken(tokens, declaration, sourceLocalName(identity));
+		if (token != null)
+			completionLocals.push({
+				name: sourceLocalName(identity),
+				type: type,
+				declaration: token.span,
+				scope: scope,
+				depth: depth
+			});
+	}
+
+	function indexCompletionLocals(statements:Array<TypedStatement>, scope:SourceSpan, depth:Int):Void {
+		for (statement in statements)
+			switch statement {
+				case TDeclare(name, type, span):
+					addCompletionLocal(name, type, span, scope, depth);
+				case TVar(name, value, span):
+					addCompletionLocal(name, value.type, span, scope, depth);
+				case TIf(_, yes, no, span):
+					indexCompletionLocals(yes, span, depth + 1);
+					indexCompletionLocals(no, span, depth + 1);
+				case TWhile(_, body, span), TDoWhile(body, _, span):
+					indexCompletionLocals(body, span, depth + 1);
+				case TForIn(name, valueName, iterable, body, span):
+					var keyType = switch iterable.type {
+						case TArray(element), TMap(element, _): element;
+						default: TDynamic;
+					};
+					addCompletionLocal(name, keyType, span, span, depth + 1);
+					if (valueName != null) {
+						var valueType = switch iterable.type {
+							case TMap(_, value): value;
+							default: TDynamic;
+						};
+						addCompletionLocal(valueName, valueType, span, span, depth + 1);
+					}
+					indexCompletionLocals(body, span, depth + 1);
+				case TTry(body, catches, span):
+					indexCompletionLocals(body, span, depth + 1);
+					for (caught in catches) {
+						addCompletionLocal(caught.name, caught.type, caught.span, caught.span, depth + 1);
+						indexCompletionLocals(caught.statements, caught.span, depth + 1);
+					}
+				case TSwitch(_, cases, fallback, _, span):
+					for (item in cases) {
+						for (binding in item.bindings)
+							addCompletionLocal(binding.name, binding.type, item.span, item.span, depth + 1);
+						indexCompletionLocals(item.statements, item.span, depth + 1);
+					}
+					indexCompletionLocals(fallback, span, depth + 1);
+				default:
+			}
 	}
 
 	function declareLocals(fn:TypedFunction, statements:Array<TypedStatement>):Void {

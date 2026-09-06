@@ -20,6 +20,7 @@ enum abstract DeclarationKind(String) {
 	var Class = "class";
 	var Function = "function";
 	var Member = "member";
+	var EnumCase = "enum-case";
 	var TypeParameter = "type-parameter";
 }
 
@@ -74,7 +75,7 @@ class DeclarationIndex {
 			declareType(decl.name, DeclarationKind.Enum, decl.span);
 			enums.set(decl.name, decl);
 			for (enumCase in decl.cases)
-				declare(DeclarationKind.Member, decl.name + "." + enumCase.name, enumCase.span);
+				declare(DeclarationKind.EnumCase, decl.name + "." + enumCase.name, enumCase.span);
 		}
 		for (decl in program.enumAbstracts) {
 			declareType(decl.name, DeclarationKind.Abstract, decl.span);

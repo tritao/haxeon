@@ -112,6 +112,27 @@ class SemanticWorkspace {
 		return result;
 	}
 
+	public function visibleSymbols(from:ModuleState):Array<IndexedSemanticSymbol> {
+		var visibleModules:Map<String, Bool> = [from.name => true],
+			result:Array<IndexedSemanticSymbol> = [],
+			seen:Map<String, Bool> = [];
+		for (dependency in from.dependencies)
+			visibleModules.set(dependency, true);
+		for (state in orderedStates()) {
+			if (!visibleModules.exists(state.name))
+				continue;
+			var model = effectiveModel(state);
+			if (model != null)
+				for (symbol in model.index.symbols)
+					if (!seen.exists(symbol.id)) {
+						seen.set(symbol.id, true);
+						result.push(symbol);
+					}
+		}
+		result.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		return result;
+	}
+
 	function memberInner(type:CompilerType, name:String, visiting:Map<String, Bool>):Null<WorkspaceDeclaration> {
 		return switch type {
 			case TNullable(element): memberInner(element, name, visiting);
