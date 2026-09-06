@@ -551,6 +551,7 @@ class TestMain {
 			throw "Generic function type parameters were not preserved";
 		expectParserError("function invalid<T,T>(value:T):T return value;", 'Duplicate type parameter "T"');
 		Frontend.compile('function identity<T>(value:T):T return value; function first<T>(values:Array<T>):T return values[0]; function main():Int { var values = new Array<Int>(1); values[0] = 42; return identity(first(values)); }');
+		Frontend.compile('class GenericMethods { public static function identity<T>(value:T):T return value; public static function answer():Int return identity(42); } function main():Int return GenericMethods.answer();');
 		expectCompileError('function choose<T>(left:T, right:T):T return left; function main():Int return choose(42, "wrong");',
 			'Conflicting types inferred for generic parameter "T"');
 		expectCompileError('typedef Invalid = { value:Int; value:String; }; function main():Int return 0;', 'Duplicate anonymous field "value"');

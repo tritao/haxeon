@@ -1704,8 +1704,15 @@ class Typer {
 							implicitMethod = owner == null ? null : findMethod(owner, name);
 						if (implicitMethod != null) {
 							var methodKey = implicitMethod.owner + "." + name,
-								method = signatures.get(methodKey),
-								typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span);
+								method = signatures.get(methodKey);
+							if (isGeneric(method)) {
+								if (!implicitMethod.isStatic)
+									fail("E1007", "Generic instance methods are not supported yet", span);
+								var genericArguments = [for (argument in arguments) typeExpression(argument, scope)],
+									specialized = specializeGeneric(methodKey, method, genericArguments, span, implicitMethod.owner, true);
+								return new TypedExpression(TCall(specialized.name, specialized.arguments), specialized.result, span);
+							}
+							var typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span);
 							if (implicitMethod.isStatic)
 								return applyCallEffect(new TypedExpression(TCall(methodKey, typed), lowerType(method.result), span), methodKey);
 							var thisType = scope.resolve("this");
