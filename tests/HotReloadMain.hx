@@ -334,7 +334,7 @@ class HotReloadMain {
 	static function testRetainedObject():Void {
 		var compiler = new Compiler();
 		compiler.update("Main.hx",
-			"class Box { public var value:Int; public function new(value:Int):Void { this.value = value; } } function make():Box { return new Box(40); } function read(box:Box):Int { return box.value; } function main():Int { return read(make()); }");
+			"class Box { public var value:Int; public function new(value:Int):Void { this.value = value; } } function make():Box { return new Box(40); } function read(box:Box):Int { return box.value; } function fail():Int { throw new Box(1); } function main():Int { return read(make()); }");
 		var initial = compiler.compile("Main"),
 			loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
 		var retained = Runtime.retainObject(loaded, initial.functionIds.get("Main.make"));
@@ -342,8 +342,15 @@ class HotReloadMain {
 			throw "loaded module globals were not attributed to their native owner";
 		if (Runtime.liveAllocationCount(loaded) == 0)
 			throw "retained object was not attributed to its module";
+		try {
+			Runtime.callInt(loaded, initial.functionIds.get("Main.fail"));
+			throw "module exception unexpectedly returned";
+		} catch (error:RuntimeError) {
+			if (error.status != RuntimeStatus.Exception)
+				throw error;
+		}
 		compiler.update("Main.hx",
-			"class Box { public var value:Int; public function new(value:Int):Void { this.value = value; } } function make():Box { return new Box(40); } function read(box:Box):Int { return box.value + 2; } function main():Int { return read(make()); }");
+			"class Box { public var value:Int; public function new(value:Int):Void { this.value = value; } } function make():Box { return new Box(40); } function read(box:Box):Int { return box.value + 2; } function fail():Int { throw new Box(1); } function main():Int { return read(make()); }");
 		var changed = compiler.compile("Main");
 		Runtime.patchSet(loaded, new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
 		if (Runtime.callIntObject(loaded, initial.functionIds.get("Main.read"), retained) != 42)

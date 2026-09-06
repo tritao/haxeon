@@ -52,6 +52,14 @@ in one process-owned executable image copied from the first finalized JIT suppor
 prefix. Later module loads no longer redirect those globals into their own JIT
 images, and global shutdown releases the support image explicitly.
 
+Debugger and profiler inspection remains an unload blocker. Stack capture,
+symbol resolution, and the debugger handshake traverse the process-global
+module array without synchronization, while the profiler stores raw JIT return
+addresses and resolves them later. A future in-process unload implementation
+must provide synchronized module-registry reads and ensure recorded samples are
+symbolized or discarded before their module metadata is freed. The runtime call
+mutex does not protect these process-wide readers.
+
 ## Required proof for a future in-process design
 
 An in-process implementation is safe only after HashLink provides a unified

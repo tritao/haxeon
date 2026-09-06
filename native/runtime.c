@@ -18,6 +18,10 @@ extern void hl_hbclear( realtime_string_map *map );
 static void realtime_raise_module_exception( void ) {
 	/* A module exception owns generation-specific type metadata. Never let that
 	   value escape into the host exception machinery after the call returns. */
+	hl_thread_info *thread = hl_get_thread();
+	thread->exc_value = NULL;
+	thread->exc_stack_count = 0;
+	memset(thread->exc_stack_trace,0,sizeof(thread->exc_stack_trace));
 	hl_error("Runtime module call raised an exception");
 }
 

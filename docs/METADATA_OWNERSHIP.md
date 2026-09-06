@@ -80,3 +80,8 @@ therefore the active-call quiescence proof. The host keeps each retained value
 paired with its originating `LoadedModule`; the native call bridge receives that
 module explicitly and does not infer ownership from the closure's header type,
 which may be synthetic.
+
+When a module exception crosses the native call boundary, the bridge discards
+the generation-owned exception object and captured JIT return addresses before
+raising the host-facing `RuntimeError`. Caught module failures therefore do not
+leave hidden borrowers in the current thread's exception state.
