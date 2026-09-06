@@ -222,6 +222,8 @@ class SemanticAssembly {
 					classMethods.push({
 						name: method.name,
 						isStatic: method.isStatic,
+						isExtern: method.isExtern,
+						metadata: method.metadata,
 						typeParameters: method.typeParameters,
 						typeConstraints: canonical.typeConstraints,
 						arguments: canonical.arguments,
@@ -254,6 +256,7 @@ class SemanticAssembly {
 					canonicalBase = ModuleCanonicalizer.canonicalType(parsedBase, classAliases, classDecl.typeParameters);
 				classes.push({
 					name: className,
+					isExtern: classDecl.isExtern,
 					typeParameters: classDecl.typeParameters,
 					typeConstraints: classDecl.typeConstraints,
 					isPrivate: classDecl.isPrivate,

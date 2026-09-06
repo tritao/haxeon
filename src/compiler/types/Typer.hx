@@ -151,6 +151,14 @@ class Typer {
 			if (fn.isExtern == true)
 				typedNatives.push(typeExtern(fn));
 		}
+		for (classDecl in program.classes)
+			if (classDecl.isExtern == true)
+				for (method in classDecl.methods) {
+					if (!method.isStatic)
+						fail("E1021", 'Extern instance method "${classDecl.name}.${method.name}" is not supported yet', method.span);
+					var nativeName = method.name.indexOf(".") >= 0 ? method.name : classDecl.name + "." + method.name;
+					typedNatives.push(typeExtern(method, nativeName));
+				}
 		var setupDoneAt = Sys.time() * 1000.0;
 		inferNoReturnFunctions();
 		var noReturnDoneAt = Sys.time() * 1000.0;
@@ -203,7 +211,7 @@ class Typer {
 				}
 			], typedClasses:Array<TypedClass> = [
 			for (classDecl in program.classes)
-				typeClass(classDecl, classDecls, selected)
+				if (classDecl.isExtern != true) typeClass(classDecl, classDecls, selected)
 			], typedFunctions:Array<TypedFunction> = [];
 		var metadataDoneAt = Sys.time() * 1000.0;
 		for (fn in program.functions)
@@ -245,7 +253,7 @@ class Typer {
 		};
 	}
 
-	function typeExtern(fn:AstFunction):compiler.types.TypedAst.TypedNative {
+	function typeExtern(fn:AstFunction, ?externalName:String):compiler.types.TypedAst.TypedNative {
 		if (fn.statements.length != 0)
 			fail("E1021", 'Extern function "${fn.name}" cannot have a body', fn.span);
 		var binding:Null<compiler.syntax.Ast.AstMetadata> = null;
@@ -270,7 +278,7 @@ class Typer {
 					fail("E1021", '@:hlNative arguments must be string literals', binding.span);
 			}
 		return {
-			name: fn.name,
+			name: externalName == null ? fn.name : externalName,
 			library: values[0],
 			symbol: values[1],
 			arguments: [for (argument in fn.arguments) lowerType(argument.type)],

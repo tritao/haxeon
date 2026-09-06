@@ -48,6 +48,9 @@ class Parser {
 		while (!check(TokenKind.Eof)) {
 			var metadata = parseMetadata();
 			var visibility = match(TokenKind.Private) ? previous() : match(TokenKind.Public) ? previous() : null;
+			var externDeclaration = check(TokenKind.Identifier) && current().text == "extern";
+			if (externDeclaration)
+				advance();
 			if (match(TokenKind.Typedef))
 				aliases.push(parseTypeAlias(visibility == null ? previous()
 					.span : visibility.span, visibility != null && visibility.kind == TokenKind.Private));
@@ -61,18 +64,14 @@ class Parser {
 			} else if (check(TokenKind.Interface))
 				interfaces.push(parseInterface());
 			else if (check(TokenKind.Class))
-				classes.push(parseClass(visibility != null && visibility.kind == TokenKind.Private, metadata));
+				classes.push(parseClass(visibility != null && visibility.kind == TokenKind.Private, metadata, externDeclaration));
 			else if (visibility != null)
 				fail(current(), "Top-level visibility modifier is not supported for this declaration");
 			else if (check(TokenKind.Identifier) && current().text == "abstract") {
 				var start = advance().span;
 				abstracts.push(parseAbstract(start));
-			} else {
-				var isExtern = check(TokenKind.Identifier) && current().text == "extern";
-				if (isExtern)
-					advance();
-				functions.push(parseFunction(false, isExtern, metadata));
-			}
+			} else
+				functions.push(parseFunction(false, externDeclaration, metadata));
 		}
 		return {
 			packageName: packageName,
@@ -346,7 +345,7 @@ class Parser {
 		return result;
 	}
 
-	function parseClass(isPrivate:Bool, metadata:Array<compiler.syntax.Ast.AstMetadata>):AstClass {
+	function parseClass(isPrivate:Bool, metadata:Array<compiler.syntax.Ast.AstMetadata>, isExtern:Bool = false):AstClass {
 		var start = consume(TokenKind.Class).span,
 			name = consume(TokenKind.Identifier).text,
 			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
@@ -363,7 +362,7 @@ class Parser {
 		consume(TokenKind.LeftBrace);
 		var fields = [], methods = [];
 		while (!check(TokenKind.RightBrace)) {
-			parseMetadata();
+			var memberMetadata = parseMetadata();
 			var isStatic = false, isFinal = false;
 			while (true) {
 				switch current().kind {
@@ -387,7 +386,7 @@ class Parser {
 			if (match(TokenKind.Function)) {
 				var functionStart = previous().span,
 					methodName = check(TokenKind.New) ? advance().text : consume(TokenKind.Identifier).text;
-				methods.push(parseFunctionBody(functionStart, methodName, true, isStatic));
+				methods.push(parseFunctionBody(functionStart, methodName, true, isStatic, isExtern, memberMetadata));
 			} else {
 				var fieldStart = current().span;
 				match(TokenKind.Var);
@@ -421,6 +420,7 @@ class Parser {
 		var end = consume(TokenKind.RightBrace).span;
 		return {
 			name: name,
+			isExtern: isExtern,
 			typeParameters: typeParameters,
 			typeConstraints: typeConstraints,
 			isPrivate: isPrivate,

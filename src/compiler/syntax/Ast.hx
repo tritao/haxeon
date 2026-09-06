@@ -57,6 +57,7 @@ typedef AstField = {
 /** Parsed class declaration and its unresolved inheritance relationships. */
 typedef AstClass = {
 	final name:String;
+	final ?isExtern:Bool;
 	final typeParameters:Array<String>;
 	final ?typeConstraints:Array<AstTypeConstraint>;
 	final isPrivate:Bool;

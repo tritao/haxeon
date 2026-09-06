@@ -547,6 +547,10 @@ class TestMain {
 		var modularExtern = new Compiler();
 		modularExtern.update("Main.hx", '@:hlNative("std", "sys_time") extern function nativeTime():Float; function main():Int { nativeTime(); return 42; }');
 		modularExtern.compile("Main");
+		var externClass = new Compiler();
+		externClass.update("Clock.hx", 'extern class Clock { @:hlNative("std", "sys_time") public static function now():Float; }');
+		externClass.update("Main.hx", 'import Clock; function main():Int { Clock.now(); return 42; }');
+		externClass.compile("Main");
 		Sys.println("PASS: extern functions lower through validated HashLink native bindings");
 		var nativeHandleProgram = new Parser(new Lexer(new SourceFile("NativeHandle.hx",
 			'function identity(value:hl.Abstract<"module">):hl.Abstract<"module"> { return value; }')).tokenize()).parseProgram(),
