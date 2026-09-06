@@ -2,6 +2,7 @@ package compiler.ir;
 
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
+import compiler.types.TypeRelations;
 import compiler.runtime.RuntimeType;
 import compiler.types.analysis.ControlFlow;
 import compiler.types.TypedAst.TypedExpression;
@@ -568,6 +569,17 @@ class IrGenerator {
 					case Array(other): sameIrType(element, other);
 					default: false;
 				};
+			case Function(arguments, result): switch right {
+					case Function(otherArguments, otherResult):
+						if (arguments.length != otherArguments.length || !sameIrType(result, otherResult)) false; else {
+							var same = true;
+							for (index in 0...arguments.length)
+								if (!sameIrType(arguments[index], otherArguments[index]))
+									same = false;
+							same;
+						}
+					default: false;
+				};
 			default: left == right;
 		};
 
@@ -602,12 +614,15 @@ class IrGenerator {
 			case TNullableWrap(value):
 				switch value.expression {
 					case TNullLiteral: builder.constNull(lowerType(expression.type));
-					default: lowerExpression(value, builder, localTypes);
+					default:
+						var lowered = lowerExpression(value, builder, localTypes),
+							target = lowerType(expression.type);
+						sameIrType(lowered.type, target) ? lowered : abiBoundaryCast(builder, lowered, target);
 				}
 			case TToDynamic(value): builder.toDyn(lowerExpression(value, builder, localTypes));
 			case TLocal(name):
 				var type = requireLocalType(localTypes, name, 'Missing typed local "$name"');
-				builder.load(name, type);
+				abiBoundaryCast(builder, builder.load(name, type), lowerType(expression.type));
 			case TCellLocal(name, cellClass):
 				var cell = builder.load('$' + 'cell:$name', Obj(cellClass));
 				builder.fieldGet(cell, "value", lowerType(expression.type));
@@ -1430,7 +1445,7 @@ class IrGenerator {
 				}
 			case TMap(key, value): Abstract(RuntimeType.requireMapName(key, value));
 			case TNull: Void;
-			case TNullable(element): lowerType(element);
+			case TNullable(element): TypeRelations.isReference(element) ? lowerType(element) : Dyn;
 			case TArray(element): Array(lowerType(element));
 			case TFunction(arguments, result): Function([for (argument in arguments) lowerType(argument)], lowerType(result));
 			case TAnonymous(name, _): Obj(name);

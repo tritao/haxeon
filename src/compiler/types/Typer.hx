@@ -1109,8 +1109,8 @@ class Typer {
 					output.push(TForIn(loopScope.requireId(name), valueId, valueName == null ? typedIterable : originalIterable, typedBody, span));
 				case Switch(expression, cases, defaultBranch, hasDefault, span):
 					var typedExpression = typeExpression(expression, scope);
-					if (!sameType(typedExpression.type, TInt) && !isEnum(typedExpression.type))
-						fail("E1019", "Switch requires an Int or enum value", typedExpression.span);
+					if (!sameType(typedExpression.type, TInt) && !sameType(typedExpression.type, TString) && !isEnum(typedExpression.type))
+						fail("E1019", "Switch requires an Int, String, or enum value", typedExpression.span);
 					var typedCases:Array<TypedSwitchCase> = [],
 						caseScopes:Array<Scope> = [],
 						seenCases:Map<String, Bool> = [];
@@ -1732,6 +1732,8 @@ class Typer {
 			case TBoolLiteral(v): 'bool:$v';
 			case TStringLiteral(v): 'string:$v';
 			case TEnumLiteral(name, index): 'enum:$name:$index';
+			case TNullLiteral: "null";
+			case TNullableWrap(inner): constantPatternKey(inner);
 			case TCast(inner), TAbiCast(inner): constantPatternKey(inner);
 			default: null;
 		};
@@ -2596,10 +2598,9 @@ class Typer {
 						var methodKey = methodInfoResult.owner + "." + resolvedMethodName;
 						var method = signatures.get(methodKey);
 						if (isGeneric(method)) {
-							if (!methodInfoResult.isStatic)
-								fail("E1007", "Generic instance methods are not supported yet", span);
 							var genericArguments = [for (argument in arguments) typeExpression(argument, scope)];
-							var specialized = specializeGeneric(methodKey, method, genericArguments, span, methodInfoResult.owner, true);
+							var specialized = specializeGeneric(methodKey, method, genericArguments, span, methodInfoResult.owner, methodInfoResult.isStatic,
+								null, methodInfoResult.isStatic ? null : resolvedReceiver);
 							return specialized;
 						}
 						var methodOwnerType = projectNominal(receiverType, methodInfoResult.owner),
@@ -2656,7 +2657,7 @@ class Typer {
 		if (path == null)
 			return member;
 		var refined = scope.resolveExpression(path);
-		return refined == null ? member : new TypedExpression(member.expression, refined, member.span);
+		return refined == null || sameType(member.type, refined) ? member : new TypedExpression(TCast(member), refined, member.span);
 	}
 
 	function typeAbstractConstruction(name:String, typeArguments:Array<AstType>, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
@@ -2800,7 +2801,8 @@ class Typer {
 			], specialization = genericSpecializations.request(baseName, representationArguments, specializationPolicies);
 		var representationReceiver:Null<CompilerType> = null;
 		if (receiver != null)
-			representationReceiver = abstractReceiverType(requiredString(owner), representationSubstitutions);
+			representationReceiver = declarations.abstracts.exists(requiredString(owner)) ? abstractReceiverType(requiredString(owner),
+				representationSubstitutions) : receiver.type;
 		if (!emittedGenericBodies.exists(specialization.name)) {
 			emittedGenericBodies.set(specialization.name, true);
 			closureConversion.addFunction(typeFunction(fn, owner, receiver == null ? isStatic : true, representationSubstitutions, specialization.name,
@@ -2809,7 +2811,7 @@ class Typer {
 		if (receiver != null) {
 			var receiverType = representationReceiver;
 			if (receiverType == null)
-				throw "Generic abstract receiver representation was not resolved";
+				throw "Generic receiver representation was not resolved";
 			typed.unshift(abiBoundaryCast(receiver, receiverType));
 		}
 		var call = new TypedExpression(TCall(specialization.name, typed), representationResult, span);
@@ -3065,13 +3067,23 @@ class Typer {
 	function typeStringMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):Null<TypedExpression> {
 		if (!sameType(receiver.type, TString))
 			return null;
+		if (name == "toLowerCase") {
+			if (arguments.length != 0)
+				fail("E1008", 'Function "String.toLowerCase" expects no arguments, got ${arguments.length}', span);
+			return new TypedExpression(TCall("__string_to_lower_case", [receiver]), TString, span);
+		}
 		if (name == "indexOf") {
-			if (arguments.length != 1)
-				fail("E1008", 'Function "String.indexOf" expects 1 argument, got ${arguments.length}', span);
+			if (arguments.length < 1 || arguments.length > 2)
+				fail("E1008", 'Function "String.indexOf" expects 1 or 2 arguments, got ${arguments.length}', span);
 			var needle = typeExpression(arguments[0], scope);
 			if (!sameType(needle.type, TString))
 				fail("E1009", "String.indexOf expects a String needle", needle.span);
-			return new TypedExpression(TStringIndexOf(receiver, needle), TInt, span);
+			if (arguments.length == 1)
+				return new TypedExpression(TStringIndexOf(receiver, needle), TInt, span);
+			var start = typeExpression(arguments[1], scope, TInt);
+			if (!sameType(start.type, TInt))
+				fail("E1009", "String.indexOf expects an Int start index", start.span);
+			return new TypedExpression(TCall("__string_index_of_from", [receiver, needle, start]), TInt, span);
 		}
 		if (name == "lastIndexOf") {
 			if (arguments.length != 1)

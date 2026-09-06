@@ -225,6 +225,8 @@ class TestMain {
 		expectCompileError('function main():Int { if (1) return 1; else return 2; }', 'If condition must be Bool');
 		expectCompileError('function main():Int { return 1 ? 2 : 3; }', 'Conditional expression requires a Bool condition');
 		Frontend.compile('typedef Holder = { value:Null<String> }; function read(holder:Holder):Int return holder.value != null && holder.value.length > 0 ? 1 : 0; function main():Int return 0;');
+		Frontend.compile('typedef Location = { path:String, start:Null<Int> }; function contains(location:Location, path:String, minimum:Int):Bool return location.path == path && location.start != null && location.start >= minimum; function main():Int return 0;');
+		Frontend.compile('function nullablePrimitive(value:Int):Null<Int> return value; function main():Int return nullablePrimitive(42) == null ? 0 : 42;');
 		Frontend.compile('function main():Int { var values:Map<String, Array<Int>> = []; var found = values.get("key"); return found == null ? 0 : found.length; }');
 		Frontend.compile('enum Choice { First; Second; } function choose(flag:Bool, other:Choice):Choice return flag ? First : other; function reverse(flag:Bool, other:Choice):Choice return flag ? other : Second; function main():Int return 0;');
 		Frontend.compile('function choose(value:Null<String>):Int { var chosen = value == null ? (true ? "fallback" : "unused") : value; return chosen.length; } function main():Int return choose(null);');
@@ -555,6 +557,7 @@ class TestMain {
 		Typer.typeLibrary(platformType);
 		Sys.println("PASS: nested module and platform type names resolve canonically");
 		Frontend.compile("class InferredConstructor { final value:Int; public function new(value) { this.value = value; } } function main():Int return new InferredConstructor(42).value;");
+		Frontend.compile("class InferredConditionalConstructor { final values:Array<Int>; public function new(?values) { this.values = values == null ? [] : values; } } function main():Int return new InferredConditionalConstructor([42]).values[0];");
 		Frontend.compile("class InferredCalls { public function new() {} function target(value:Int):Int return value; public function forward(value):Int return this.target(value); } function main():Int return new InferredCalls().forward(42);");
 		Frontend.compile("class OptionalConstructor { public function new(?value:String) {} } function main():Int { new OptionalConstructor(); return 42; }");
 		var voidEntryCompiler = new Compiler();

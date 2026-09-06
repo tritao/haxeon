@@ -4,8 +4,8 @@ package compiler.hl;
 typedef HlDebugLocation = {
 	final path:String;
 	final line:Int;
-	final ?start:Int;
-	final ?end:Int;
+	final start:Null<Int>;
+	final end:Null<Int>;
 }
 
 /** HashLink debugger binding at an encoded opcode, or -1 for an argument. */

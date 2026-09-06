@@ -1,10 +1,15 @@
 #define HL_NAME(n) realtime_##n
 #include <hl.h>
 #include <hlmodule.h>
+#include <math.h>
 #include <string.h>
 #include <stdlib.h>
 
 typedef struct realtime_string_map realtime_string_map;
+
+HL_PRIM bool HL_NAME(__math_is_nan)( double value ) {
+	return isnan(value);
+}
 extern realtime_string_map *hl_hballoc( void );
 extern void hl_hbset( realtime_string_map *map, uchar *key, vdynamic *value );
 extern bool hl_hbexists( realtime_string_map *map, uchar *key );
@@ -684,6 +689,60 @@ HL_PRIM int HL_NAME(__string_index_of)( vbyte *value, vbyte *needle ) {
 	return -1;
 }
 
+HL_PRIM int HL_NAME(__string_index_of_from)( vbyte *value, vbyte *needle, int start ) {
+	int value_length = value == NULL ? 0 : (int)ustrlen((const uchar *)value);
+	int needle_length = needle == NULL ? 0 : (int)ustrlen((const uchar *)needle);
+	if( start < 0 ) start = 0;
+	if( start > value_length ) return -1;
+	if( needle_length == 0 ) return start;
+	if( needle_length > value_length - start ) return -1;
+	for( int i = start; i <= value_length - needle_length; i++ )
+		if( memcmp(value + i * sizeof(uchar), needle, needle_length * sizeof(uchar)) == 0 ) return i;
+	return -1;
+}
+
+static vbyte *realtime_string_slice( const uchar *value, int start, int end ) {
+	vbyte *result = hl_alloc_bytes((end - start + 1) * (int)sizeof(uchar));
+	if( end > start ) memcpy(result,value + start,(end - start) * sizeof(uchar));
+	((uchar *)result)[end - start] = 0;
+	return result;
+}
+
+HL_PRIM vbyte *HL_NAME(__string_ltrim)( vbyte *value ) {
+	const uchar *text = (const uchar *)value;
+	int length = value == NULL ? 0 : (int)ustrlen(text), start = 0;
+	while( start < length && text[start] <= 32 ) start++;
+	return realtime_string_slice(text,start,length);
+}
+
+HL_PRIM vbyte *HL_NAME(__string_trim)( vbyte *value ) {
+	const uchar *text = (const uchar *)value;
+	int length = value == NULL ? 0 : (int)ustrlen(text), start = 0, end = length;
+	while( start < end && text[start] <= 32 ) start++;
+	while( end > start && text[end - 1] <= 32 ) end--;
+	return realtime_string_slice(text,start,end);
+}
+
+HL_PRIM vbyte *HL_NAME(__string_to_lower_case)( vbyte *value ) {
+	const uchar *text = (const uchar *)value;
+	int length = value == NULL ? 0 : (int)ustrlen(text);
+	vbyte *result = hl_alloc_bytes((length + 1) * (int)sizeof(uchar));
+	uchar *output = (uchar *)result;
+	for( int index = 0; index < length; index++ ) {
+		uchar code = text[index];
+		output[index] = code >= 'A' && code <= 'Z' ? code + ('a' - 'A') : code;
+	}
+	output[length] = 0;
+	return result;
+}
+
+HL_PRIM bool HL_NAME(__string_is_space)( vbyte *value, int position ) {
+	int length = value == NULL ? 0 : (int)ustrlen((const uchar *)value);
+	if( position < 0 || position >= length ) return false;
+	uchar code = ((const uchar *)value)[position];
+	return (code > 8 && code < 14) || code == 32;
+}
+
 HL_PRIM int HL_NAME(__string_last_index_of)( vbyte *value, vbyte *needle ) {
 	if( value == NULL || needle == NULL ) return -1;
 	const uchar *text = (const uchar *)value, *search = (const uchar *)needle;
@@ -1227,9 +1286,15 @@ DEFINE_PRIM(_BOOL,__map_int_ref_remove,_ABSTRACT(map_int_ref) _I32);
 DEFINE_PRIM(_VOID,__map_int_ref_clear,_ABSTRACT(map_int_ref));
 DEFINE_PRIM(_I32,__map_int_ref_size,_ABSTRACT(map_int_ref));
 DEFINE_PRIM(_BYTES,__string_concat,_BYTES _BYTES);
+DEFINE_PRIM(_BOOL,__math_is_nan,_F64);
 DEFINE_PRIM(_I32,__string_length,_BYTES);
 DEFINE_PRIM(_BOOL,__string_equal,_BYTES _BYTES);
 DEFINE_PRIM(_I32,__string_index_of,_BYTES _BYTES);
+DEFINE_PRIM(_I32,__string_index_of_from,_BYTES _BYTES _I32);
+DEFINE_PRIM(_BYTES,__string_ltrim,_BYTES);
+DEFINE_PRIM(_BYTES,__string_trim,_BYTES);
+DEFINE_PRIM(_BYTES,__string_to_lower_case,_BYTES);
+DEFINE_PRIM(_BOOL,__string_is_space,_BYTES _I32);
 DEFINE_PRIM(_I32,__string_last_index_of,_BYTES _BYTES);
 DEFINE_PRIM(_I32,__string_char_code_at,_BYTES _I32);
 DEFINE_PRIM(_BYTES,__string_char_at,_BYTES _I32);

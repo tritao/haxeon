@@ -95,7 +95,7 @@ class TypeRelations {
 			case TNullable(expectedElement):
 				switch actual {
 					case TNull: true;
-					default: isReference(actual) && (equals(actual, expectedElement) || isAssignable(actual, expectedElement));
+					default: equals(actual, expectedElement) || isAssignable(actual, expectedElement);
 				}
 			case TArray(expectedElement):
 				switch actual {

@@ -378,22 +378,34 @@ class SignatureInference {
 				case FieldAssignment(object, fieldName, value, _):
 					switch object {
 						case Variable(objectName, _) if (objectName == "this"):
-							switch value {
-								case Variable(argumentName, _): constrainFromField(inferred, argumentName, fieldName, classDecl);
-								default:
-							}
+							constrainExpressionFromField(inferred, value, fieldName, classDecl);
 						default:
 					}
 				case Assignment(fieldPath, value, _) if (StringTools.startsWith(fieldPath, "this.")):
-					switch value {
-						case Variable(argumentName, _):
-							constrainFromField(inferred, argumentName, fieldPath.substring("this.".length, fieldPath.length), classDecl);
-						default:
-					}
+					constrainExpressionFromField(inferred, value, fieldPath.substring("this.".length, fieldPath.length), classDecl);
 				default:
 			}
 		return replaceArguments(fn, inferred);
 	}
+
+	static function constrainExpressionFromField(inferred:Map<String, AstType>, expression:AstExpression, fieldName:String, classDecl:AstClass):Void
+		switch expression {
+			case Variable(argumentName, _):
+				constrainFromField(inferred, argumentName, fieldName, classDecl);
+			case Conditional(_, whenTrue, whenFalse, _):
+				constrainExpressionFromField(inferred, whenTrue, fieldName, classDecl);
+				constrainExpressionFromField(inferred, whenFalse, fieldName, classDecl);
+			case BlockExpression(_, result, _):
+				constrainExpressionFromField(inferred, result, fieldName, classDecl);
+			case Cast(value, null, _):
+				constrainExpressionFromField(inferred, value, fieldName, classDecl);
+			case SwitchExpression(_, cases, defaultExpression, _):
+				for (switchCase in cases)
+					constrainExpressionFromField(inferred, switchCase.result, fieldName, classDecl);
+				if (defaultExpression != null)
+					constrainExpressionFromField(inferred, defaultExpression, fieldName, classDecl);
+			default:
+		}
 
 	static function inferDefaultBoundArguments(fn:AstFunction):AstFunction {
 		var inferred:Map<String, AstType> = [];

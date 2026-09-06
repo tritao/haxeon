@@ -223,7 +223,12 @@ class HlWriter {
 	function writeDebugLocations(fn:HlFunction):Void {
 		var currentFile = -1;
 		for (index in 0...fn.opcodes.length) {
-			var location:HlDebugLocation = fn.debugLocations.length == 0 ? cast {path: "<generated>", line: 1} : fn.debugLocations[index];
+			var location:HlDebugLocation = fn.debugLocations.length == 0 ? {
+				path: "<generated>",
+				line: 1,
+				start: null,
+				end: null
+			} : fn.debugLocations[index];
 			if (location.line > 0x1FFFFF)
 				throw 'Debug line ${location.line} exceeds the HashLink format limit';
 			var file = debugFileIndices.get(location.path);
