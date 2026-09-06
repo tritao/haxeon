@@ -170,6 +170,7 @@ run_program map-basic 42
 run_program map-int 42
 run_program map-primitive-types 42
 run_program map-object 42
+run_program map-anonymous-enum 42
 run_program map-for-in 52
 run_program map-key-value-for-in 42
 run_program loop-control 42

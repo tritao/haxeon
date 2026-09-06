@@ -485,8 +485,10 @@ class IrGenerator {
 	}
 
 	static function lowerMapGet(builder:CfgBuilder, map:CfgValue, key:CfgValue, keyType:CompilerType, valueType:CompilerType):CfgValue {
-		var name = RuntimeType.requireMapName(keyType, valueType);
-		return builder.call('__${name}_get', [map, key], lowerType(valueType));
+		var name = RuntimeType.requireMapName(keyType, valueType),
+			target = lowerType(valueType);
+		var value = builder.call('__${name}_get', [map, key], StringTools.endsWith(name, "_ref") ? Dyn : target);
+		return abiBoundaryCast(builder, value, target);
 	}
 
 	static function lowerMapSet(builder:CfgBuilder, map:CfgValue, key:CfgValue, value:CfgValue, keyType:CompilerType, valueType:CompilerType):CfgValue {
