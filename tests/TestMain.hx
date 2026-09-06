@@ -164,10 +164,11 @@ class TestMain {
 				Label("catch"),
 				Throw(2)
 			], [
-				for (line in 10...17) {
-					path: "patch-debug.hx",
-					line: line
-				}
+				for (line in 10...17)
+					{
+						path: "patch-debug.hx",
+						line: line
+					}
 			]),
 		];
 		var testModuleId = haxe.io.Bytes.alloc(16),
