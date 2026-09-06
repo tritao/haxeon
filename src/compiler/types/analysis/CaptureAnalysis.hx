@@ -10,6 +10,7 @@ typedef BodyStorageAnalysis = {
 	final mutableCaptures:Map<String, Bool>;
 	final exceptionCells:Map<String, Bool>;
 }
+
 /** Owns capture and exception-edge storage analysis independently of body typing. */
 class CaptureAnalysis {
 	public static function analyze(statements:Array<AstStatement>, arguments:Array<String>):BodyStorageAnalysis {
@@ -46,10 +47,7 @@ class CaptureAnalysis {
 					collectAssignedLocals(body, names);
 				case DoWhile(body, _, _):
 					collectAssignedLocals(body, names);
-				case ForIn(name, valueName, _, body, _):
-					names.set(name, true);
-					if (valueName != null)
-						names.set(valueName, true);
+				case ForIn(_, _, _, body, _):
 					collectAssignedLocals(body, names);
 				case Switch(_, cases, defaultBranch, _, _):
 					for (switchCase in cases)
