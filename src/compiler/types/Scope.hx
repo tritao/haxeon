@@ -31,13 +31,13 @@ class Scope {
 		facts = new FlowFacts(parent == null ? null : parent.facts);
 	}
 
-	public function define(name:String, type:CompilerType, span:SourceSpan, initialized:Bool = true):Void {
+	public function define(name:String, type:CompilerType, span:SourceSpan, initialized:Bool = true, ?bindingId:String):Void {
 		if (values.exists(name))
 			throw new CompileError(new Diagnostic("E1001", 'Duplicate local "$name"', span));
 		var value:ScopeValue = {
 			source: name,
 			declared: type,
-			id: '$' + 'l${allocateLocalId()}:$name'
+			id: bindingId == null ? '$' + 'l${allocateLocalId()}:$name' : bindingId
 		};
 		values.set(name, value);
 		assigned.set(value.id, initialized);
@@ -69,8 +69,8 @@ class Scope {
 		}
 	}
 
-	public function defineCapture(name:String, type:CompilerType, span:SourceSpan, cell:Bool = false, ?cellClass:String):Void {
-		define(name, type, span);
+	public function defineCapture(name:String, type:CompilerType, span:SourceSpan, cell:Bool = false, ?cellClass:String, ?bindingId:String):Void {
+		define(name, type, span, true, bindingId);
 		captures.set(name, true);
 		if (cell) {
 			cellCaptures.set(name, true);

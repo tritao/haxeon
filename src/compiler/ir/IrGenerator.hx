@@ -8,6 +8,7 @@ import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypedAst.TypedSwitchCase;
+import compiler.types.TypedAst.TypedCaptureSource;
 import compiler.ir.Cfg.CfgFunction;
 import compiler.ir.Cfg.CfgBlock;
 import compiler.ir.Cfg.CfgValue;
@@ -503,17 +504,19 @@ class IrGenerator {
 				if (environment == null) builder.staticClosure(name, lowerType(expression.type)); else {
 					var object = builder.newObject(environment);
 					for (capture in captures) {
-						var cellKey = '__cell:$capture',
-							capturedCellKey = '__capturecell:$capture';
-						var value:CfgValue;
-						if (localTypes.exists(cellKey))
-							value = builder.load('$' + 'cell:$capture', localTypes.get(cellKey));
-						else if (localTypes.exists(capturedCellKey))
-							value = builder.fieldGet(builder.load("this", requireLocalType(localTypes, "this", "Capture has no environment")), capture,
-								localTypes.get(capturedCellKey));
-						else
-							value = builder.load(capture, requireLocalType(localTypes, capture, 'Missing captured local "$capture"'));
-						builder.fieldSet(object, capture, value);
+						var value = switch capture.source {
+							case CaptureLocal(bindingId):
+								builder.load(bindingId, requireLocalType(localTypes, bindingId, 'Missing captured binding "$bindingId"'));
+							case CaptureCellLocal(localName, cellClass):
+								builder.load('$' + 'cell:$localName', Obj(cellClass));
+							case CaptureEnvironmentField(field):
+								builder.fieldGet(builder.load("this", requireLocalType(localTypes, "this", "Capture has no environment")), field,
+									lowerType(capture.type));
+							case CaptureCellEnvironmentField(field, cellClass):
+								builder.fieldGet(builder.load("this", requireLocalType(localTypes, "this", "Capture has no environment")), field,
+									Obj(cellClass));
+						};
+						builder.fieldSet(object, capture.field, value);
 					}
 					builder.instanceClosure(name, object, lowerType(expression.type));
 				}

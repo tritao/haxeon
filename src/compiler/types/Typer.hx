@@ -22,6 +22,8 @@ import compiler.types.TypedAst.TypedMapEntry;
 import compiler.types.TypedAst.TypedObjectField;
 import compiler.types.TypedAst.TypedClass;
 import compiler.types.TypedAst.TypedCatch;
+import compiler.types.TypedAst.TypedCapture;
+import compiler.types.TypedAst.TypedCaptureSource;
 import compiler.types.TypedAst.TypedField;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedStatement;
@@ -1386,7 +1388,7 @@ class Typer {
 					CaptureAnalysis.collectDeclaredLocals(body, declared);
 					var freeVariables:Map<String, Bool> = [];
 					CaptureAnalysis.collectVariables(body, freeVariables);
-					var captures:Array<String> = [],
+					var captures:Array<TypedCapture> = [],
 						captureCells:Map<String, String> = [],
 						captureTypes:Map<String, CompilerType> = [];
 					for (name in freeVariables.keys())
@@ -1406,11 +1408,20 @@ class Typer {
 									context.cellTypes.set(name, captureType);
 									context.cellKinds.set(name, MutableCapture);
 								}
-								lambdaScope.defineCapture(name, captureType, span, cellClass != null, cellClass);
+								var bindingId = scope.requireId(name),
+									captureSource:TypedCaptureSource = if (scope.isCellCapture(name))
+										CaptureCellEnvironmentField(name, scope.requireCellClass(name))
+									else if (scope.isCapture(name))
+										CaptureEnvironmentField(name)
+									else if (cellClass != null)
+										CaptureCellLocal(name, cellClass)
+									else
+										CaptureLocal(bindingId);
+								lambdaScope.defineCapture(name, captureType, span, cellClass != null, cellClass, bindingId);
 								if (cellClass != null)
 									captureCells.set(name, cellClass);
 								captureTypes.set(name, captureType);
-								captures.push(name);
+								captures.push({field: name, bindingId: bindingId, type: captureType, source: captureSource});
 							}
 						}
 					seedLambdaScope(body, lambdaScope);
@@ -1420,8 +1431,9 @@ class Typer {
 						typedBodyScope.define(localName, lambdaArguments[i].type, arguments[i].span);
 						lambdaArguments[i] = {name: typedBodyScope.requireId(localName), type: lambdaArguments[i].type};
 					}
-					for (name in captures)
-						typedBodyScope.defineCapture(name, requiredMapValue(captureTypes, name), span, captureCells.exists(name), captureCells.get(name));
+					for (capture in captures)
+						typedBodyScope.defineCapture(capture.field, capture.type, span, captureCells.exists(capture.field),
+							captureCells.get(capture.field), capture.bindingId);
 					var lambdaName = '$' + 'lambda:${context.name}:${span.start}',
 						previousContext = context;
 					context = new BodyContext(lambdaName, previousContext.typeSubstitutions);
@@ -1456,11 +1468,11 @@ class Typer {
 						generatedEnvironments.push({
 							name: environment,
 							fields: [
-								for (name in captures)
+								for (capture in captures)
 									{
-										name: name,
-										type: captureCells.exists(name) ? CompilerType.TClass(requiredMapValue(captureCells,
-											name)) : requiredMapValue(captureTypes, name)
+										name: capture.field,
+										type: captureCells.exists(capture.field) ? CompilerType.TClass(requiredMapValue(captureCells,
+											capture.field)) : capture.type
 									}
 							]
 						});

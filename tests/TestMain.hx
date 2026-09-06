@@ -549,6 +549,7 @@ class TestMain {
 		if (semanticFieldCompiler.compile("Main").requiresReload)
 			throw "Alias-equivalent field spelling changed the semantic layout";
 		Frontend.compile("function main():Int { var value = 40; var read = () -> { var value = 2; return value; }; return read() + value; }");
+		Frontend.compile("function main():Int { var value = 40; var outer = () -> { var inner = () -> { return value + 2; }; return inner(); }; return outer(); }");
 		Frontend.compile("function main():Int { var left = 20, right:Int = 22; return left + right; }");
 		Frontend.compile("function main():Int { var value:Int; if (true) value = 40; else value = 2; return value; }");
 		Frontend.compile("function main():Int { var value:Int; switch (1) { case 1: value = 40; default: value = 2; } return value; }");

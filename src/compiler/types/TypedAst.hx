@@ -36,7 +36,7 @@ enum TypedExpressionKind {
 	TClassRef(name:String);
 	TStaticField(name:String, field:String);
 	TFunctionRef(name:String);
-	TLambda(name:String, environment:Null<String>, captures:Array<String>);
+	TLambda(name:String, environment:Null<String>, captures:Array<TypedCapture>);
 	TAdd(left:TypedExpression, right:TypedExpression);
 	TSub(left:TypedExpression, right:TypedExpression);
 	TMul(left:TypedExpression, right:TypedExpression);
@@ -218,6 +218,22 @@ typedef TypedInterface = {final name:String; final bases:Array<String>; final me
 enum CellStorageKind {
 	MutableCapture;
 	ExceptionEdge;
+}
+
+/** Storage location read while constructing a closure environment. */
+enum TypedCaptureSource {
+	CaptureLocal(bindingId:String);
+	CaptureCellLocal(name:String, cellClass:String);
+	CaptureEnvironmentField(name:String);
+	CaptureCellEnvironmentField(name:String, cellClass:String);
+}
+
+/** A closure capture tied to its resolved lexical binding and storage source. */
+typedef TypedCapture = {
+	final field:String;
+	final bindingId:String;
+	final type:CompilerType;
+	final source:TypedCaptureSource;
 }
 
 /** Generated mutable cell type required by a typed program. */
