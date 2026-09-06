@@ -750,6 +750,12 @@ class TestMain {
 		identityShapes.sort(Reflect.compare);
 		if (identityShapes.join(",") != "Dynamic,Int")
 			throw "Generic bodies were not partitioned by runtime representation";
+		var layoutGenericProgram = new Parser(new Lexer(new SourceFile("generic-layout.hx",
+			"function first<T>(values:Array<T>):T return values[0]; function main():Int { var values = new Array<Int>(1); values[0] = 42; return first(values); }"))
+			.tokenize()).parseProgram(),
+			layoutGeneric = Typer.type(layoutGenericProgram);
+		if ([for (fn in layoutGeneric.functions) if (fn.name.indexOf("[layout]") >= 0) fn].length == 0)
+			throw "Nested generic representation did not select the layout policy";
 		var incrementalGeneric = new Compiler();
 		incrementalGeneric.update("Main.hx", 'class Box {} function identity<T>(value:T):T return value; function main():Int { identity("text"); return 42; }');
 		var firstGenericBuild = incrementalGeneric.compile("Main"),
@@ -774,6 +780,28 @@ class TestMain {
 			restoredSpecialization = restoredRegistry.request("identity", [compiler.types.Type.CompilerType.TDynamic]);
 		if (!initialSpecialization.isNew || restoredSpecialization.isNew || restoredSpecialization.name != initialSpecialization.name)
 			throw "Generic specialization identity did not survive registry persistence";
+		if (initialSpecialization.name.indexOf("[legacy]") < 0 || firstGenericBodies[0].indexOf("[shape]") < 0)
+			throw "Generic specialization policy was not encoded in stable identity";
+		var corruptSpecializations = new haxe.io.BytesOutput();
+		corruptSpecializations.bigEndian = false;
+		corruptSpecializations.writeString("GSR");
+		corruptSpecializations.writeByte(1);
+		corruptSpecializations.writeInt32(2);
+		for (key in ["first", "second"]) {
+			var keyBytes = haxe.io.Bytes.ofString(key),
+				nameBytes = haxe.io.Bytes.ofString("collision");
+			corruptSpecializations.writeInt32(keyBytes.length);
+			corruptSpecializations.write(keyBytes);
+			corruptSpecializations.writeInt32(nameBytes.length);
+			corruptSpecializations.write(nameBytes);
+		}
+		try {
+			new GenericSpecializationRegistry(corruptSpecializations.getBytes());
+			throw "Generic specialization registry accepted colliding restored names";
+		} catch (error:String) {
+			if (error != "Generic specialization name collision")
+				throw error;
+		}
 		var resumedGeneric = new Compiler(incrementalGeneric.exportIdentityState());
 		resumedGeneric.update("Main.hx", 'class Box {} function identity<T>(value:T):T return value; function main():Int { identity(new Box()); return 42; }');
 		var resumedGenericBuild = resumedGeneric.compile("Main"),
@@ -784,6 +812,15 @@ class TestMain {
 		resumedGenericBodies.sort(Reflect.compare);
 		if (resumedGenericBuild.requiresReload || resumedGenericBodies.join(",") != sharedGenericBodies.join(","))
 			throw "Generic specialization identity did not survive compiler restart";
+		var pruningCompiler = new Compiler();
+		pruningCompiler.update("Library.hx", "class Library { public static function identity<T>(value:T):T return value; }");
+		pruningCompiler.update("Main.hx", "import Library; function main():Int return Library.identity(42);");
+		pruningCompiler.compile("Main");
+		pruningCompiler.update("Main.hx", "function main():Int return 42;");
+		var prunedBuild = pruningCompiler.compile("Main");
+		for (fn in prunedBuild.ir.functions)
+			if (StringTools.startsWith(fn.name, "$generic:") && fn.name.indexOf("identity") >= 0)
+				throw "Unreachable module retained a stale generic specialization";
 		Sys.println("PASS: generic specialization identity survives compiler restart");
 		Frontend.compile('enum Value<T> { Value(value:T); } function intValue(value:Value<Int>):Int return switch value { case Value(item): item; }; function stringValue(value:Value<String>):String return switch value { case Value(item): item; }; function main():Int return intValue(Value(40)) + stringValue(Value("ok")).length;');
 		expectCompileError('function choose<T>(left:T, right:T):T return left; function main():Int return choose(42, "wrong");',
