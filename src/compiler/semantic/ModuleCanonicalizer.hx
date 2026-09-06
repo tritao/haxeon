@@ -19,6 +19,14 @@ class ModuleCanonicalizer {
 			name: name,
 			isStatic: fn.isStatic,
 			typeParameters: fn.typeParameters,
+			typeConstraints: fn.typeConstraints == null ? null : [
+				for (constraint in fn.typeConstraints)
+					{
+						parameter: constraint.parameter,
+						type: canonicalType(constraint.type, functionAliases, fn.typeParameters),
+						span: constraint.span
+					}
+			],
 			arguments: [
 				for (argument in fn.arguments)
 					{
@@ -152,6 +160,14 @@ class ModuleCanonicalizer {
 			name: name,
 			isStatic: method.isStatic,
 			typeParameters: method.typeParameters,
+			typeConstraints: method.typeConstraints == null ? null : [
+				for (constraint in method.typeConstraints)
+					{
+						parameter: constraint.parameter,
+						type: canonicalType(constraint.type, methodAliases, parameters),
+						span: constraint.span
+					}
+			],
 			arguments: [
 				for (argument in method.arguments)
 					{
@@ -186,6 +202,14 @@ class ModuleCanonicalizer {
 						name: method.name,
 						isStatic: false,
 						typeParameters: method.typeParameters,
+						typeConstraints: method.typeConstraints == null ? null : [
+							for (constraint in method.typeConstraints)
+								{
+									parameter: constraint.parameter,
+									type: canonicalType(constraint.type, aliases, combinedTypeParameters(interfaceDecl.typeParameters, method.typeParameters)),
+									span: constraint.span
+								}
+						],
 						arguments: [
 							for (argument in method.arguments)
 								{

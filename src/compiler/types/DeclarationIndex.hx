@@ -394,6 +394,10 @@ class DeclarationIndex {
 		if (typeParameters != null)
 			for (parameter in typeParameters)
 				substitutions.set(parameter, TTypeParameter(owner, parameter));
+		var constraints = fn.typeConstraints;
+		if (constraints != null)
+			for (constraint in constraints)
+				resolve(constraint.type, constraint.span, substitutions);
 		for (argument in fn.arguments)
 			resolve(argument.type, argument.span, substitutions);
 		resolve(fn.result, fn.span, substitutions);

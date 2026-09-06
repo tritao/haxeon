@@ -255,7 +255,8 @@ class Parser {
 	}
 
 	function parseFunctionBody(start:SourceSpan, name:String, allowMissingReturn:Bool, isStatic:Bool = false):AstFunction {
-		var typeParameters = parseTypeParameters();
+		var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
+			typeParameters = parseTypeParameters(typeConstraints);
 		consume(TokenKind.LeftParen);
 		var arguments = [];
 		if (!check(TokenKind.RightParen)) {
@@ -288,6 +289,7 @@ class Parser {
 			name: name,
 			isStatic: isStatic,
 			typeParameters: typeParameters,
+			typeConstraints: typeConstraints,
 			arguments: arguments,
 			result: result,
 			statements: statements,
@@ -295,7 +297,7 @@ class Parser {
 		};
 	}
 
-	function parseTypeParameters():Array<String> {
+	function parseTypeParameters(?constraints:Array<compiler.syntax.Ast.AstTypeConstraint>):Array<String> {
 		var result = [];
 		if (!match(TokenKind.Less))
 			return result;
@@ -304,6 +306,11 @@ class Parser {
 			if (result.indexOf(parameter.text) >= 0)
 				fail(parameter, 'Duplicate type parameter "${parameter.text}"');
 			result.push(parameter.text);
+			if (match(TokenKind.Colon)) {
+				var constraint = parseType();
+				if (constraints != null)
+					constraints.push({parameter: parameter.text, type: constraint, span: parameter.span.merge(previous().span)});
+			}
 		} while (match(TokenKind.Comma));
 		consume(TokenKind.Greater);
 		return result;
@@ -432,7 +439,8 @@ class Parser {
 		while (!check(TokenKind.RightBrace)) {
 			var methodStart = consume(TokenKind.Function).span,
 				methodName = consume(TokenKind.Identifier).text;
-			var typeParameters = parseTypeParameters();
+			var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
+				typeParameters = parseTypeParameters(typeConstraints);
 			consume(TokenKind.LeftParen);
 			var arguments = [];
 			if (!check(TokenKind.RightParen))
@@ -455,6 +463,7 @@ class Parser {
 				name: methodName,
 				isStatic: false,
 				typeParameters: typeParameters,
+				typeConstraints: typeConstraints,
 				arguments: arguments,
 				result: result,
 				statements: [],

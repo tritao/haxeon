@@ -227,11 +227,15 @@ typedef AstFunction = {
 	final name:String;
 	final isStatic:Bool;
 	final ?typeParameters:Array<String>;
+	final ?typeConstraints:Array<AstTypeConstraint>;
 	final arguments:Array<AstArgument>;
 	final result:AstType;
 	final statements:Array<AstStatement>;
 	final span:SourceSpan;
 }
+
+/** Upper bound attached to a generic function or method parameter. */
+typedef AstTypeConstraint = {final parameter:String; final type:AstType; final span:SourceSpan;}
 
 /** Complete parsed module, grouped by declaration kind for semantic indexing. */
 typedef AstProgram = {

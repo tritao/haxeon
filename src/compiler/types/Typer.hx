@@ -2548,6 +2548,14 @@ class Typer {
 		for (parameter in parameters)
 			if (!substitutions.exists(parameter))
 				fail("E1003", 'Cannot infer generic type parameter "$parameter" for "$baseName"', span);
+		var constraints = fn.typeConstraints;
+		if (constraints != null)
+			for (constraint in constraints) {
+				var actual = requiredMapValue(substitutions, constraint.parameter),
+					expected = declarations.resolve(constraint.type, constraint.span, substitutions);
+				if (!isAssignable(actual, expected))
+					fail("E1003", 'Type argument for "${constraint.parameter}" does not satisfy constraint "${SemanticSignature.type(expected)}"', span);
+			}
 		var semanticExpected = [
 			for (argument in fn.arguments)
 				declarations.resolve(argument.type, argument.span, substitutions)
@@ -2594,6 +2602,11 @@ class Typer {
 	}
 
 	static function requiresConcreteRepresentation(fn:AstFunction, parameter:String):Bool {
+		var constraints = fn.typeConstraints;
+		if (constraints != null)
+			for (constraint in constraints)
+				if (constraint.parameter == parameter)
+					return true;
 		for (argument in fn.arguments)
 			if (containsNestedTypeParameter(argument.type, parameter, false))
 				return true;

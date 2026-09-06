@@ -23,6 +23,7 @@ class AbstractConstructorNormalizer {
 			name: constructor.name,
 			isStatic: true,
 			typeParameters: constructor.typeParameters == null ? [] : constructor.typeParameters,
+			typeConstraints: constructor.typeConstraints,
 			arguments: constructor.arguments,
 			result: representation,
 			statements: statements,

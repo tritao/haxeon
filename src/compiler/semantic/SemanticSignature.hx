@@ -44,9 +44,19 @@ class SemanticSignature {
 		var definitions:Map<String, AstType> = [for (alias in aliases) alias.name => alias.type],
 			typeParameters = fn.typeParameters;
 		return fn.name
-			+ (typeParameters == null || typeParameters.length == 0 ? "" : '<${typeParameters.join(",")}>')
+			+ (typeParameters == null
+				|| typeParameters.length == 0 ? "" : '<${[for (parameter in typeParameters) parameter + parsedConstraint(fn, parameter, definitions)].join(",")}>')
 			+ "("
 			+ [for (argument in fn.arguments) parsedType(argument.type, definitions, [])].join(",") + ")->" + parsedType(fn.result, definitions, []);
+	}
+
+	static function parsedConstraint(fn:AstFunction, parameter:String, definitions:Map<String, AstType>):String {
+		var constraints = fn.typeConstraints;
+		if (constraints != null)
+			for (constraint in constraints)
+				if (constraint.parameter == parameter)
+					return ":" + parsedType(constraint.type, definitions, []);
+		return "";
 	}
 
 	public static function parsed(type:AstType, aliases:Array<AstTypeAlias>):String

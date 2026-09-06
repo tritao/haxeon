@@ -553,6 +553,14 @@ class TestMain {
 		var genericAbstractProgram = new Parser(new Lexer(new SourceFile("generic-abstracts.hx",
 			"abstract Identity<T>(T) from T to T { public function new(value:T) { this = value; } public static function wrap(value:T):Identity<T> return value; public function unwrap():T return this; } function read(value:Identity<Int>):Int return value; function main():Int return read(Identity.wrap(42)) + new Identity<Int>(0).unwrap();"))
 			.tokenize()).parseProgram();
+		var boundedProgram = new Parser(new Lexer(new SourceFile("bounded-generics.hx",
+			"interface Readable { function read():Int; } class Value implements Readable { public function new() {} public function read():Int return 42; } function consume<T:Readable>(value:T):Int return value.read(); function main():Int return consume(new Value());"))
+			.tokenize()).parseProgram();
+		if (boundedProgram.functions[0].typeConstraints == null || boundedProgram.functions[0].typeConstraints.length != 1)
+			throw "Bounded generic constraint was not preserved by the parser";
+		Typer.type(boundedProgram);
+		expectCompileError("interface Readable { function read():Int; } function consume<T:Readable>(value:T):Int return value.read(); function main():Int return consume(42);",
+			'Type argument for "T" does not satisfy constraint "interface:Readable<>"');
 		if (genericAbstractProgram.abstracts[0].typeParameters.join(",") != "T")
 			throw "Generic abstract type parameters were not preserved";
 		var genericAbstractTyped = Typer.type(genericAbstractProgram);
