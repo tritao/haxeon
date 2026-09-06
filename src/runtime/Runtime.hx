@@ -80,7 +80,9 @@ class Runtime {
 		return invoke(module, stableIndex, 0, function(handle) return RuntimeNative.call_i32(handle, stableIndex));
 
 	public static function callVoid(module:LoadedModule, stableIndex:Int):Void
-		invoke(module, stableIndex, 1, function(handle) RuntimeNative.call_void(handle, stableIndex));
+		invoke(module, stableIndex, 1, function(handle) {
+			RuntimeNative.call_void(handle, stableIndex);
+		});
 
 	public static function callString(module:LoadedModule, stableIndex:Int):String {
 		var bytes = invoke(module, stableIndex, 2, function(handle) return RuntimeNative.call_bytes(handle, stableIndex));
@@ -90,7 +92,9 @@ class Runtime {
 	}
 
 	public static function callStringArg(module:LoadedModule, stableIndex:Int, argument:String):Void
-		invoke(module, stableIndex, 3, function(handle) RuntimeNative.call_bytes1(handle, stableIndex, @:privateAccess argument.bytes));
+		invoke(module, stableIndex, 3, function(handle) {
+			RuntimeNative.call_bytes1(handle, stableIndex, @:privateAccess argument.bytes);
+		});
 
 	public static function retainClosure(module:LoadedModule, stableIndex:Int):RetainedValue
 		return new RetainedValue(module, retain(module, stableIndex, 4, function(handle) return RuntimeNative.call_closure(handle, stableIndex)));
@@ -123,7 +127,9 @@ class Runtime {
 		return module.access(RuntimeNative.revision);
 
 	@:noCompletion public static function injectPatchFailure(module:LoadedModule, stage:Int):Void
-		module.access(function(handle) RuntimeNative.set_patch_failure_stage(handle, stage));
+		module.access(function(handle) {
+			RuntimeNative.set_patch_failure_stage(handle, stage);
+		});
 
 	public static function dispose(module:LoadedModule):Void
 		module.close(RuntimeNative.dispose);
@@ -139,23 +145,25 @@ class Runtime {
 	static function invoke<T>(module:LoadedModule, stableIndex:Int, shape:Int, operation:hl.Abstract<"realtime_module">->T):T
 		return module.access(function(handle) {
 			validateCall(handle, stableIndex, shape);
-			try
-				return operation(handle)
-			catch (error:RuntimeError)
-				throw error
-			catch (error:Dynamic)
+			try {
+				return operation(handle);
+			} catch (error:RuntimeError) {
+				throw error;
+			} catch (error:Dynamic) {
 				throw new RuntimeError(RuntimeStatus.Exception, Std.string(error));
+			}
 		});
 
 	static function retain(module:LoadedModule, stableIndex:Int, shape:Int, operation:hl.Abstract<"realtime_module">->Dynamic):Dynamic
 		return module.accessRetained(function(handle) {
 			validateCall(handle, stableIndex, shape);
-			try
-				return operation(handle)
-			catch (error:RuntimeError)
-				throw error
-			catch (error:Dynamic)
+			try {
+				return operation(handle);
+			} catch (error:RuntimeError) {
+				throw error;
+			} catch (error:Dynamic) {
 				throw new RuntimeError(RuntimeStatus.Exception, Std.string(error));
+			}
 		});
 
 	static function validateCall(handle:hl.Abstract<"realtime_module">, stableIndex:Int, shape:Int):Void {
