@@ -44,6 +44,14 @@ does not enumerate. Possible owners include native callback metadata, runtime
 object/prototype caches, exception or stack-unwind state, and other process-global
 JIT bookkeeping.
 
+The callback audit subsequently identified one concrete borrower. HashLink's
+process-global C-to-HL and HL-to-C wrapper pointers were republished from every
+base JIT image, and wrapper closure objects copied the HL-to-C address. The
+wrappers are architecture support code rather than module code, so they now live
+in one process-owned executable image copied from the first finalized JIT support
+prefix. Later module loads no longer redirect those globals into their own JIT
+images, and global shutdown releases the support image explicitly.
+
 ## Required proof for a future in-process design
 
 An in-process implementation is safe only after HashLink provides a unified
