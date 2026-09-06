@@ -6,5 +6,12 @@ function value():Int {
 		scoped = scoped + 0;
 	}
 	result = result - 1;
+	try {
+		throw "patched-probe";
+	} catch (error:Int) {
+		result = 0;
+	} catch (error:String) {
+		result = result + 0;
+	}
 	return result;
 }

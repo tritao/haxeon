@@ -114,4 +114,11 @@ python3 -c 'import json,sys; data=json.load(sys.stdin)["data"]; assert data["res
 wait_frame Value.hx 8
 locals=$(read_locals)
 python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="result" and v.get("value")=="44" for v in vs), vs; assert not any(v["name"]=="scoped" for v in vs), vs' <<<"$locals"
+"${dap[@]}" request --name "$session" setExceptionBreakpoints --json '{"filters":["all"]}' >/dev/null
+"${dap[@]}" continue --name "$session" >/dev/null
+wait_frame Value.hx 10
+threads=$("${dap[@]}" threads --name "$session")
+thread_id=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["threads"][0]["id"])' <<<"$threads")
+exception=$("${dap[@]}" request --name "$session" exceptionInfo --json "{\"threadId\":$thread_id}")
+python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; assert d["exceptionId"]=="String" and d["description"]=="patched-probe", d; assert "Value.hx:10" in d["details"]["stackTrace"], d' <<<"$exception"
 echo "PASS: dap-cli rebound scoped locals in original and patched Value.hx code"
