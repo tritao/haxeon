@@ -110,7 +110,7 @@ class FrontendCompilation {
 		for (module in reindexedModules.keys()) {
 			var model = modules.get(module).semanticModel;
 			if (model != null)
-				model.index.indexTypeReferences(context.resolveSemanticType);
+				model.index.indexTypeReferences(context.resolveSemanticType, token);
 		}
 		var retyped = [], regenerated = [];
 		for (object in IrGenerator.objectsFrom(typedNew))
@@ -141,7 +141,7 @@ class FrontendCompilation {
 			state.typedFunctions.set(fn.name, fn);
 			state.typedSourceRevisions.set(fn.name, state.revision);
 			if (state.semanticModel != null)
-				state.semanticModel.index.indexTypedFunction(fn, context.resolveSemanticSymbol, context.resolveSemanticEnumCase);
+				state.semanticModel.index.indexTypedFunction(fn, context.resolveSemanticSymbol, context.resolveSemanticEnumCase, token);
 			retyped.push(fn.name);
 			touchedModules.set(module, true);
 			if (lowerToIr) {

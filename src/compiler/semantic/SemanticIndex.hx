@@ -11,6 +11,7 @@ import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.Type.CompilerType;
 import compiler.syntax.Ast.AstType;
+import compiler.service.CancellationToken;
 
 abstract SemanticSymbolId(String) from String to String {
 	public inline function new(module:String, declaration:String)
@@ -50,6 +51,7 @@ typedef SemanticSignatureInfo = {
 class SemanticIndex {
 	public final revision:Int;
 	public final symbols:Map<String, IndexedSemanticSymbol> = [];
+	public var indexingMs(default, null):Float = 0.0;
 
 	final bindings:Array<PositionBinding> = [];
 	final references:Map<String, Array<SourceSpan>> = [];
@@ -59,6 +61,8 @@ class SemanticIndex {
 	final completionTypes:Array<{span:SourceSpan, type:CompilerType}> = [];
 	final tokens:Array<Token>;
 	final module:String;
+	var cancellation:Null<CancellationToken>;
+	var checkpointCount:Int = 0;
 
 	public function new(path:String, revision:Int, declarations:DeclarationIndex, tokens:Array<Token>) {
 		module = ModulePath.fromFile(path);
@@ -106,7 +110,13 @@ class SemanticIndex {
 			if (symbol.name == symbolName)
 				signatures.set(symbol.id, {label: label, parameters: parameters, result: result});
 
-	public function indexTypedFunction(fn:TypedFunction, resolve:String->Null<SemanticSymbolId>, resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>):Void {
+	public function indexTypedFunction(fn:TypedFunction, resolve:String->Null<SemanticSymbolId>, resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>,
+			?token:CancellationToken):Void {
+		var started = Sys.time();
+		if (token != null)
+			token.check();
+		cancellation = token;
+		checkpoint();
 		for (argument in fn.arguments) {
 			declareLocal(fn, argument.name, fn.span);
 			addCompletionLocal(argument.name, argument.type, fn.span, fn.span, 0);
@@ -129,6 +139,9 @@ class SemanticIndex {
 		indexCompletionLocals(fn.statements, fn.span, 0);
 		indexStatements(fn, fn.statements, resolve, resolveEnumCase);
 		bindings.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
+		checkpoint();
+		cancellation = null;
+		indexingMs += (Sys.time() - started) * 1000.0;
 	}
 
 	public function symbolIdAt(position:Int):Null<SemanticSymbolId> {
@@ -149,8 +162,13 @@ class SemanticIndex {
 	public function signature(id:SemanticSymbolId):Null<SemanticSignatureInfo>
 		return signatures.get(id);
 
-	public function indexTypeReferences(resolve:String->Null<SemanticSymbolId>):Void {
+	public function indexTypeReferences(resolve:String->Null<SemanticSymbolId>, ?token:CancellationToken):Void {
+		var started = Sys.time();
+		if (token != null)
+			token.check();
+		cancellation = token;
 		for (index in 0...tokens.length) {
+			checkpoint();
 			var token = tokens[index];
 			if (token.kind != TokenKind.Identifier || !isTypeReferenceToken(index))
 				continue;
@@ -161,6 +179,9 @@ class SemanticIndex {
 				bind(id, token.span);
 		}
 		bindings.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
+		checkpoint();
+		cancellation = null;
+		indexingMs += (Sys.time() - started) * 1000.0;
 	}
 
 	public function locations(id:SemanticSymbolId):Array<SourceSpan> {
@@ -216,7 +237,8 @@ class SemanticIndex {
 	}
 
 	function indexCompletionLocals(statements:Array<TypedStatement>, scope:SourceSpan, depth:Int):Void {
-		for (statement in statements)
+		for (statement in statements) {
+			checkpoint();
 			switch statement {
 				case TDeclare(name, type, span):
 					addCompletionLocal(name, type, span, scope, depth);
@@ -256,6 +278,7 @@ class SemanticIndex {
 					indexCompletionLocals(fallback, span, depth + 1);
 				default:
 			}
+		}
 	}
 
 	function declareLocals(fn:TypedFunction, statements:Array<TypedStatement>):Void {
@@ -435,6 +458,7 @@ class SemanticIndex {
 	}
 
 	function bind(id:SemanticSymbolId, span:SourceSpan):Void {
+		checkpoint();
 		bindings.push({span: span, symbol: id});
 		var locations = references.get(id);
 		if (locations == null)
@@ -443,6 +467,12 @@ class SemanticIndex {
 			if (existing.start == span.start && existing.end == span.end)
 				return;
 		locations.push(span);
+	}
+
+	inline function checkpoint():Void {
+		checkpointCount++;
+		if ((checkpointCount & 127) == 0 && cancellation != null)
+			cancellation.check();
 	}
 
 	function isTypeReferenceToken(index:Int):Bool {

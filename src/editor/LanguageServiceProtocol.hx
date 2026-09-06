@@ -119,7 +119,7 @@ class LanguageServiceProtocol {
 					];
 				case "complete":
 					result = cast [
-						for (item in service.complete(requiredString(request, "path"), requiredInt(request, "position")))
+						for (item in service.complete(requiredString(request, "path"), requiredInt(request, "position"), token))
 							cast item
 					];
 				case "hover":
@@ -128,7 +128,7 @@ class LanguageServiceProtocol {
 					result = cast locationJson(service.definition(requiredString(request, "path"), requiredInt(request, "position")));
 				case "references":
 					result = cast [
-						for (location in service.references(requiredString(request, "path"), requiredInt(request, "position")))
+						for (location in service.references(requiredString(request, "path"), requiredInt(request, "position"), token))
 							cast locationJson(location)
 					];
 				case "rename":

@@ -8,6 +8,7 @@ import compiler.types.Type.NominalKind;
 import compiler.semantic.SemanticIndex.IndexedSemanticSymbol;
 import compiler.semantic.SemanticIndex.SemanticSymbolId;
 import compiler.semantic.SemanticIndex.SemanticSignatureInfo;
+import compiler.service.CancellationToken;
 
 /** A declaration resolved against the effective snapshots of a module workspace. */
 typedef WorkspaceDeclaration = {
@@ -131,9 +132,11 @@ class SemanticWorkspace {
 		return null;
 	}
 
-	public function indexedLocations(id:SemanticSymbolId):Array<{state:ModuleState, span:SourceSpan}> {
+	public function indexedLocations(id:SemanticSymbolId, ?token:CancellationToken):Array<{state:ModuleState, span:SourceSpan}> {
 		var result = [];
 		for (state in orderedStates()) {
+			if (token != null)
+				token.check();
 			var model = effectiveModel(state);
 			if (model != null)
 				for (span in model.index.locations(id))
@@ -142,13 +145,15 @@ class SemanticWorkspace {
 		return result;
 	}
 
-	public function visibleSymbols(from:ModuleState):Array<IndexedSemanticSymbol> {
+	public function visibleSymbols(from:ModuleState, ?token:CancellationToken):Array<IndexedSemanticSymbol> {
 		var visibleModules:Map<String, Bool> = [from.name => true],
 			result:Array<IndexedSemanticSymbol> = [],
 			seen:Map<String, Bool> = [];
 		for (dependency in from.dependencies)
 			visibleModules.set(dependency, true);
 		for (state in orderedStates()) {
+			if (token != null)
+				token.check();
 			if (!visibleModules.exists(state.name))
 				continue;
 			var model = effectiveModel(state);
@@ -163,14 +168,16 @@ class SemanticWorkspace {
 		return result;
 	}
 
-	public function enumCases(type:CompilerType):Array<IndexedSemanticSymbol> {
+	public function enumCases(type:CompilerType, ?token:CancellationToken):Array<IndexedSemanticSymbol> {
 		var enumName = switch type {
-			case TNullable(element): return enumCases(element);
+			case TNullable(element): return enumCases(element, token);
 			case TInstance(NominalKind.Enum, name, _): Std.string(name);
 			default: return [];
 		};
 		var result:Array<IndexedSemanticSymbol> = [];
 		for (state in orderedStates()) {
+			if (token != null)
+				token.check();
 			var model = effectiveModel(state);
 			if (model == null)
 				continue;

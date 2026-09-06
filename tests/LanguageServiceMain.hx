@@ -1,4 +1,5 @@
 import compiler.service.LanguageService;
+import compiler.service.CancellationToken;
 import compiler.Diagnostic.CompileError;
 
 class LanguageServiceMain {
@@ -317,6 +318,37 @@ class LanguageServiceMain {
 			|| originalConsumerIndex == updatedConsumerIndex
 			|| updatedConsumerIndex.symbolIdAt(choiceUse) == null)
 			throw "public enum change did not atomically rebuild dependent semantic indexes";
+		var largeService = new LanguageService(),
+			largeSource = new StringBuf();
+		for (index in 0...260)
+			largeSource.add('function candidate${StringTools.lpad(Std.string(index), "0", 3)}():Int return $index; ');
+		largeSource.add("function main():Int return 0;");
+		var largeText = largeSource.toString();
+		largeService.update("Large.hx", largeText);
+		largeService.compile("Large");
+		var firstLargeCompletion = largeService.complete("Large.hx", largeText.length),
+			secondLargeCompletion = largeService.complete("Large.hx", largeText.length);
+		if (firstLargeCompletion.length != 200 || secondLargeCompletion.length != firstLargeCompletion.length)
+			throw 'completion result limit was not enforced: ${firstLargeCompletion.length}';
+		for (index in 0...firstLargeCompletion.length)
+			if (firstLargeCompletion[index].label != secondLargeCompletion[index].label)
+				throw "bounded completion ordering was not deterministic";
+		var largeIndex = largeService.compiler.modules.get("Large").semanticModel.index;
+		if (largeIndex.indexingMs < 0)
+			throw "semantic indexing timing was not recorded";
+		var cancelled = new CancellationToken();
+		cancelled.cancel();
+		var completionCancelled = false, referencesCancelled = false;
+		try
+			largeService.complete("Large.hx", largeText.length, cancelled)
+		catch (_:compiler.service.CancellationError)
+			completionCancelled = true;
+		try
+			service.references("Main.hx", methodPosition, cancelled)
+		catch (_:compiler.service.CancellationError)
+			referencesCancelled = true;
+		if (!completionCancelled || !referencesCancelled)
+			throw "language-service queries ignored cancellation";
 		service.update("Main.hx", "function main(:Int { return 0; }");
 		try {
 			service.compile("Main");

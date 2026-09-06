@@ -73,6 +73,9 @@ private typedef SemanticQueryContext = {
 
 /** Read-only editor queries backed by the persistent compiler state. */
 class LanguageService {
+	static inline final MAX_COMPLETION_ITEMS = 200;
+	static inline final MAX_REFERENCE_RESULTS = 10000;
+
 	public final compiler:Compiler;
 
 	public function new(?identityState:haxe.io.Bytes)
@@ -178,7 +181,9 @@ class LanguageService {
 		return result;
 	}
 
-	public function complete(path:String, position:Int):Array<CompletionItem> {
+	public function complete(path:String, position:Int, ?token:CancellationToken):Array<CompletionItem> {
+		if (token != null)
+			token.check();
 		var state = stateFor(path),
 			result:Array<CompletionItem> = [],
 			ast = state == null ? null : effectiveAst(state);
@@ -192,7 +197,7 @@ class LanguageService {
 			if (semanticContext != null && semanticContext.receiver != null)
 				addInstanceMembers(semanticContext.receiver, prefix, result);
 			if (model != null)
-				for (symbol in compiler.semanticWorkspace.visibleSymbols(state)) {
+				for (symbol in compiler.semanticWorkspace.visibleSymbols(state, token)) {
 					var separator = symbol.name.lastIndexOf(".");
 					if (symbol.kind == DeclarationKind.EnumCase
 						&& separator > 0
@@ -224,7 +229,7 @@ class LanguageService {
 			if (result.length > 0) {
 				sortCompletion(result);
 				tagResults(result, state);
-				return result;
+				return limitedCompletion(result);
 			}
 		}
 		if (semanticContext != null)
@@ -232,14 +237,14 @@ class LanguageService {
 				addMember(local.name, "variable", local.name + ":" + compilerTypeName(local.type), prefix,
 					result, semanticContext.expected != null && completionTypeCompatible(local.type, semanticContext.expected) ? 0 : 2);
 		if (semanticContext != null && semanticContext.expected != null)
-			for (symbol in compiler.semanticWorkspace.enumCases(semanticContext.expected)) {
+			for (symbol in compiler.semanticWorkspace.enumCases(semanticContext.expected, token)) {
 				var label = sourceName(symbol.name),
 					signature = compiler.semanticWorkspace.indexedSignature(symbol.id),
 					insertText = signature != null && signature.parameters.length > 0 ? label + "(" : label;
 				addMember(label, "enumCase", symbol.name, prefix, result, 1, insertText);
 			}
 		if (model != null)
-			for (symbol in compiler.semanticWorkspace.visibleSymbols(state))
+			for (symbol in compiler.semanticWorkspace.visibleSymbols(state, token))
 				if (symbol.name.indexOf(".") < 0) {
 					var signature = compiler.semanticWorkspace.indexedSignature(symbol.id);
 					addMember(symbol.name, completionDeclarationKind(symbol.kind), symbol.name, prefix, result, 3,
@@ -249,7 +254,7 @@ class LanguageService {
 			addMember(symbol.name, symbol.kind, symbol.detail, prefix, result);
 		sortCompletion(result);
 		tagResults(result, state);
-		return result;
+		return limitedCompletion(result);
 	}
 
 	public function hover(path:String, position:Int):Null<String> {
@@ -381,20 +386,20 @@ class LanguageService {
 		};
 	}
 
-	public function references(path:String, position:Int):Array<SymbolLocation> {
-		var indexed = indexedReferences(path, position);
+	public function references(path:String, position:Int, ?token:CancellationToken):Array<SymbolLocation> {
+		var indexed = indexedReferences(path, position, token);
 		return indexed == null ? [] : indexed;
 	}
 
-	function indexedReferences(path:String, position:Int):Null<Array<SymbolLocation>> {
+	function indexedReferences(path:String, position:Int, ?token:CancellationToken):Null<Array<SymbolLocation>> {
 		var context = semanticQuery(path, position);
 		if (context == null)
 			return null;
 		var id = context.symbol;
 		if (id == null)
 			return null;
-		return [
-			for (location in compiler.semanticWorkspace.indexedLocations(id))
+		var result:Array<SymbolLocation> = [
+			for (location in compiler.semanticWorkspace.indexedLocations(id, token))
 				{
 					path: location.span.file.path,
 					span: location.span,
@@ -402,6 +407,11 @@ class LanguageService {
 					stale: snapshotRevision(location.state) != location.state.revision
 				}
 		];
+		result.sort(function(left, right) {
+			var path = Reflect.compare(left.path, right.path);
+			return path == 0 ? Reflect.compare(left.span.start, right.span.start) : path;
+		});
+		return result.length > MAX_REFERENCE_RESULTS ? result.slice(0, MAX_REFERENCE_RESULTS) : result;
 	}
 
 	public function rename(path:String, position:Int, replacement:String):Array<TextEdit> {
@@ -586,6 +596,9 @@ class LanguageService {
 
 	static function sortCompletion(result:Array<CompletionItem>):Void
 		result.sort(function(left, right) return Reflect.compare(left.sortText, right.sortText));
+
+	static function limitedCompletion(result:Array<CompletionItem>):Array<CompletionItem>
+		return result.length > MAX_COMPLETION_ITEMS ? result.slice(0, MAX_COMPLETION_ITEMS) : result;
 
 	static function completionTypeCompatible(actual:CompilerType, expected:CompilerType):Bool {
 		if (TypeRelations.equals(actual, expected))
