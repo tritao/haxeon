@@ -16,11 +16,12 @@ typedef SemanticAssemblyResult = {
 	final selected:Map<String, Bool>;
 	final entryPoint:String;
 }
+
 /** Canonicalizes reachable declarations and selects functions invalidated by source changes. */
 class SemanticAssembly {
-	public static function run(context:CompilationContext, entryModule:String, token:Null<CancellationToken>,
-			rollbackModules:Map<String, ModuleState>, names:Array<String>, bodyChanged:Map<String, Bool>,
-			signatureChanged:Map<String, Bool>, structuralChanged:Map<String, Bool>):SemanticAssemblyResult {
+	public static function run(context:CompilationContext, entryModule:String, token:Null<CancellationToken>, rollbackModules:Map<String, ModuleState>,
+			names:Array<String>, bodyChanged:Map<String, Bool>, signatureChanged:Map<String, Bool>,
+			structuralChanged:Map<String, Bool>):SemanticAssemblyResult {
 		var modules = context.modules;
 		var functions:Array<AstFunction> = [],
 			programFunctions:Array<AstFunction> = [],
@@ -117,8 +118,25 @@ class SemanticAssembly {
 				enums.push(ModuleCanonicalizer.canonicalEnum(enumDecl, aliases, ast.packageName));
 			for (abstractDecl in ast.enumAbstracts)
 				enumAbstracts.push(ModuleCanonicalizer.canonicalEnumAbstract(abstractDecl, aliases, ast.packageName, name, entryModule, locals));
-			for (abstractDecl in ast.abstracts)
-				abstracts.push(ModuleCanonicalizer.canonicalAbstract(abstractDecl, aliases, ast.packageName, name, entryModule, locals));
+			for (abstractDecl in ast.abstracts) {
+				var canonicalAbstract = ModuleCanonicalizer.canonicalAbstract(abstractDecl, aliases, ast.packageName, name, entryModule, locals);
+				abstracts.push(canonicalAbstract);
+				for (method in canonicalAbstract.methods) {
+					var qualified = canonicalAbstract.name + "." + method.name,
+						canonicalMethod:AstFunction = {
+							name: qualified,
+							isStatic: method.isStatic,
+							typeParameters: method.typeParameters,
+							arguments: method.arguments,
+							result: method.result,
+							span: method.span,
+							statements: method.statements
+						};
+					functions.push(canonicalMethod);
+					owners.set(qualified, name);
+					LambdaCollector.collect(method.statements, qualified, name, generatedByModule);
+				}
+			}
 			for (fn in ast.functions)
 				locals.set(fn.name, true);
 			var aliasNames = [for (aliasName in aliases.keys()) aliasName];

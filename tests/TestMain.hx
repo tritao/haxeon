@@ -540,17 +540,25 @@ class TestMain {
 			throw "Generic type aliases were not substituted by the typer";
 		Sys.println("PASS: generic type aliases substitute their arguments");
 		var genericAbstractProgram = new Parser(new Lexer(new SourceFile("generic-abstracts.hx",
-			"abstract Identity<T>(T) from T to T {} function read(value:Identity<Int>):Int return value; function main():Int return read(42);")).tokenize())
-			.parseProgram();
+			"abstract Identity<T>(T) from T to T { public static function wrap(value:T):Identity<T> return value; } function read(value:Identity<Int>):Int return value; function main():Int return read(Identity.wrap(42));"))
+			.tokenize()).parseProgram();
 		if (genericAbstractProgram.abstracts[0].typeParameters.join(",") != "T")
 			throw "Generic abstract type parameters were not preserved";
 		var genericAbstractTyped = Typer.type(genericAbstractProgram);
-		if (genericAbstractTyped.functions[0].arguments[0].type != compiler.types.Type.CompilerType.TInt)
-			throw "Applied generic abstract did not resolve to its instantiated representation";
+		switch genericAbstractTyped.functions[0].arguments[0].type {
+			case compiler.types.Type.CompilerType.TAbstract("Identity", [compiler.types.Type.CompilerType.TInt], compiler.types.Type.CompilerType.TInt):
+			default:
+				throw "Applied generic abstract did not preserve its identity and instantiated representation";
+		}
 		expectCompileError("abstract Identity<T>(T) {} function main():Int { var value:Identity = 42; return value; }",
 			'Type "Identity" expects 1 type arguments, got 0');
 		expectCompileError("abstract Identity<T>(T) {} function main():Int { var value:Identity<Int, String> = 42; return value; }",
 			'Type "Identity" expects 1 type arguments, got 2');
+		expectCompileError("abstract Wrapped<T>(T) {} function main():Int { var value:Wrapped<Int> = 42; return 0; }", 'Type mismatch for local "value"');
+		expectCompileError("abstract Wrapped<T>(T) from T {} function unwrap(value:Wrapped<Int>):Int return value; function main():Int return 0;",
+			'Type mismatch for return');
+		expectCompileError("abstract Wrapped<T>(T) from T from T {} function main():Int return 0;",
+			'Duplicate from conversion "type-parameter:Wrapped:T" on abstract "Wrapped"');
 		expectCompileError("abstract Loop<T>(Loop<T>) {} function main():Int return 0;", 'Cyclic abstract representation involving "Loop"');
 		var modularAbstract = new Compiler();
 		modularAbstract.update("Identity.hx", "abstract Identity<T>(T) from T to T {}");

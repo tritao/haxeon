@@ -17,6 +17,7 @@ enum abstract RuntimeShape(String) to String {
 class RuntimeShapes {
 	public static function of(type:CompilerType):RuntimeShape
 		return switch type {
+			case TAbstract(_, _, representation): of(representation);
 			case TInt: RuntimeShape.I32;
 			case TFloat: RuntimeShape.F64;
 			case TBool: RuntimeShape.Bool;

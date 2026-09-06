@@ -92,7 +92,31 @@ class SemanticProgram {
 				signatures.set(name, method);
 				methodInfo.set(name, {owner: decl.name, isStatic: method.isStatic, isConstructor: method.name == "new"});
 			}
+		for (decl in program.abstracts)
+			for (method in decl.methods) {
+				var name = decl.name + "." + method.name,
+					signature = withOwnerTypeParameters(method, decl.typeParameters);
+				signatures.set(name, signature);
+				methodInfo.set(name, {owner: decl.name, isStatic: method.isStatic, isConstructor: method.name == "new"});
+			}
 		for (fn in program.functions)
 			signatures.set(fn.name, fn);
+	}
+
+	static function withOwnerTypeParameters(method:AstFunction, ownerParameters:Array<String>):AstFunction {
+		var parameters = ownerParameters.copy(),
+			methodParameters = method.typeParameters;
+		if (methodParameters != null)
+			for (parameter in methodParameters)
+				parameters.push(parameter);
+		return {
+			name: method.name,
+			isStatic: method.isStatic,
+			typeParameters: parameters.length == 0 ? null : parameters,
+			arguments: method.arguments,
+			result: method.result,
+			span: method.span,
+			statements: method.statements
+		};
 	}
 }

@@ -28,6 +28,7 @@ enum CompilerType {
 	TRange;
 	TVoid;
 	TTypeParameter(owner:DeclarationId, name:String);
+	TAbstract(declaration:DeclarationId, arguments:Array<CompilerType>, representation:CompilerType);
 	TInstance(kind:NominalKind, declaration:DeclarationId, arguments:Array<CompilerType>);
 	TNull;
 	TNullable(element:CompilerType);

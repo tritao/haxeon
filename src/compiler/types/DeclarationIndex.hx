@@ -154,7 +154,11 @@ class DeclarationIndex {
 					var abstractSubstitutions = [for (parameter => value in substitutions) parameter => value];
 					for (index in 0...arguments.length)
 						abstractSubstitutions.set(decl.typeParameters[index], resolveInner(arguments[index], span, resolving, substitutions));
-					resolveAbstract(decl, span, resolving, abstractSubstitutions);
+					var resolvedArguments = [
+						for (argument in arguments)
+							resolveInner(argument, span, resolving, substitutions)
+					];
+					TAbstract(name, resolvedArguments, resolveAbstract(decl, span, resolving, abstractSubstitutions));
 				} else if (classes.exists(name) || interfaces.exists(name) || enums.exists(name)) {
 					var parameters = classes.exists(name) ? classes.get(name)
 						.typeParameters : interfaces.exists(name) ? interfaces.get(name).typeParameters : enums.get(name).typeParameters;
@@ -208,7 +212,7 @@ class DeclarationIndex {
 			var decl = abstracts.get(name);
 			if (decl.typeParameters.length != 0)
 				fail('Type "$name" expects ${decl.typeParameters.length} type arguments, got 0', span);
-			resolveAbstract(decl, span, resolving, substitutions);
+			TAbstract(name, [], resolveAbstract(decl, span, resolving, substitutions));
 		} else if (interfaces.exists(name)) resolveBareNominal(name, Interface, interfaces.get(name).typeParameters.length,
 			span); else if (enums.exists(name)) resolveBareNominal(name, Enum, enums.get(name).typeParameters.length,
 			span); else if (classes.exists(name)) resolveBareNominal(name, Class, classes.get(name).typeParameters.length,
@@ -266,6 +270,7 @@ class DeclarationIndex {
 			case TRange: "Range";
 			case TVoid: "Void";
 			case TTypeParameter(owner, name): 'type-parameter:$owner:$name';
+			case TAbstract(name, arguments, _): arguments.length == 0 ? name : '$name<${[for (argument in arguments) typeKey(argument)].join(",")}>';
 			case TInstance(Class, name, arguments), TInstance(Interface, name, arguments):
 				arguments.length == 0 ? name : '$name<${[for (argument in arguments) typeKey(argument)].join(",")}>';
 			case TInstance(Enum, name, arguments): arguments.length == 0 ? name : '$name<${[for (argument in arguments) typeKey(argument)].join(",")}>';
@@ -331,10 +336,11 @@ class DeclarationIndex {
 		for (decl in program.abstracts) {
 			var substitutions = declarationSubstitutions(decl.name, decl.typeParameters);
 			resolve(decl.underlying, decl.span, substitutions);
+			var fromKeys:Map<String, Bool> = [], toKeys:Map<String, Bool> = [];
 			for (type in decl.fromTypes)
-				resolve(type, decl.span, substitutions);
+				validateAbstractConversion(decl.name, "from", resolve(type, decl.span, substitutions), fromKeys, decl.span);
 			for (type in decl.toTypes)
-				resolve(type, decl.span, substitutions);
+				validateAbstractConversion(decl.name, "to", resolve(type, decl.span, substitutions), toKeys, decl.span);
 			for (method in decl.methods)
 				resolveFunction(method, decl.name, substitutions);
 		}
@@ -371,6 +377,13 @@ class DeclarationIndex {
 		}
 		for (fn in program.functions)
 			resolveFunction(fn, fn.name);
+	}
+
+	function validateAbstractConversion(name:String, direction:String, type:CompilerType, seen:Map<String, Bool>, span:SourceSpan):Void {
+		var key = typeKey(type);
+		if (seen.exists(key))
+			fail('Duplicate $direction conversion "$key" on abstract "$name"', span);
+		seen.set(key, true);
 	}
 
 	function resolveFunction(fn:AstFunction, owner:String, ?ownerSubstitutions:Map<String, CompilerType>):Void {

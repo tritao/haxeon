@@ -137,8 +137,7 @@ class ModuleCanonicalizer {
 			toTypes: [for (type in decl.toTypes) canonicalType(type, aliases, decl.typeParameters)],
 			methods: [
 				for (method in decl.methods)
-					canonicalAbstractMethod(method, decl.typeParameters, module, entry, locals, qualifiedTypeName(packageName, decl.name) + "." + method.name,
-						aliases)
+					canonicalAbstractMethod(method, decl.typeParameters, module, entry, locals, method.name, aliases)
 			],
 			span: decl.span
 		};

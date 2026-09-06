@@ -12,6 +12,7 @@ typedef NativeDefinition = {
 	final arguments:Array<CompilerType>;
 	final result:CompilerType;
 }
+
 /** Owns immutable compiler native definitions and their derived views. */
 class NativeRegistry {
 	final definitions:Map<String, NativeDefinition> = [];
@@ -88,6 +89,7 @@ class NativeRegistry {
 
 	static function irType(type:CompilerType):IrType
 		return switch type {
+			case TAbstract(_, _, representation): irType(representation);
 			case TInt: I32;
 			case TBool: Bool;
 			case TFloat: F64;

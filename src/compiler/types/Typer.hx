@@ -208,6 +208,12 @@ class Typer {
 			for (method in classDecl.methods)
 				if (selected == null || selected.exists(method.name))
 					typedFunctions.push(method);
+		for (abstractDecl in program.abstracts)
+			for (method in abstractDecl.methods) {
+				var name = abstractDecl.name + "." + method.name;
+				if (method.isStatic && !isGeneric(requiredMapValue(signatures, name)) && (selected == null || selected.exists(name)))
+					typedFunctions.push(typeFunction(requiredMapValue(signatures, name), abstractDecl.name, true));
+			}
 		for (lambda in closureConversion.generatedFunctions())
 			typedFunctions.push(lambda);
 		var bodiesDoneAt = Sys.time() * 1000.0;
@@ -2667,8 +2673,8 @@ class Typer {
 		return coerceArguments(typed, expected, name);
 	}
 
-	function typeDeclaredCallArguments(arguments:Array<AstExpression>, parameters:Array<compiler.syntax.Ast.AstArgument>, scope:Scope, name:String, span:SourceSpan,
-			?substitutions:Map<String, CompilerType>):Array<TypedExpression> {
+	function typeDeclaredCallArguments(arguments:Array<AstExpression>, parameters:Array<compiler.syntax.Ast.AstArgument>, scope:Scope, name:String,
+			span:SourceSpan, ?substitutions:Map<String, CompilerType>):Array<TypedExpression> {
 		var required = parameters.length;
 		while (required > 0 && parameters[required - 1].optional)
 			required--;
@@ -2723,6 +2729,8 @@ class Typer {
 			return new TypedExpression(value.expression, expected, value.span);
 		return switch relations.conversion(value.type, expected) {
 			case Identity: value;
+			case AbstractCast:
+				new TypedExpression(TAbiCast(value), expected, value.span);
 			case ToDynamic:
 				new TypedExpression(TToDynamic(value), expected, value.span);
 			case ToInterface(name):

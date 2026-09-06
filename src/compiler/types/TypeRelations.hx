@@ -5,6 +5,7 @@ import compiler.types.Type.CompilerType;
 /** Explicit conversion required to assign one semantic type to another. */
 enum ConversionPlan {
 	Identity;
+	AbstractCast;
 	ToDynamic;
 	ToInterface(name:String);
 	WrapNullable;
@@ -21,6 +22,8 @@ class TypeRelations {
 	public function conversion(actual:CompilerType, expected:CompilerType):ConversionPlan {
 		if (equals(actual, expected))
 			return Identity;
+		if (abstractConversion(actual, expected))
+			return AbstractCast;
 		if (!isAssignable(actual, expected))
 			return Incompatible;
 		return switch expected {
@@ -39,6 +42,8 @@ class TypeRelations {
 		if (actual == TNever)
 			return true;
 		if (equals(actual, expected))
+			return true;
+		if (abstractConversion(actual, expected))
 			return true;
 		return switch expected {
 			case TDynamic: true;
@@ -68,6 +73,11 @@ class TypeRelations {
 
 	public static function equals(left:CompilerType, right:CompilerType):Bool
 		return switch left {
+			case TAbstract(name, arguments, _):
+				switch right {
+					case TAbstract(other, otherArguments, _): name == other && sameTypes(arguments, otherArguments);
+					default: false;
+				}
 			case TTypeParameter(owner, name): switch right {
 					case TTypeParameter(otherOwner, otherName): owner == otherOwner && name == otherName;
 					default: false;
@@ -142,6 +152,7 @@ class TypeRelations {
 
 	public static function isReference(type:CompilerType):Bool
 		return switch type {
+			case TAbstract(_, _, representation): isReference(representation);
 			case TString, TBytes, THlBytes, TDynamic, TNativeAbstract(_), TInstance(Class, _, _), TInstance(Interface, _, _), TInstance(Enum, _, _),
 				TAnonymous(_, _), TArray(_), TFunction(_, _), TMap(_, _): true;
 			default: false;
@@ -149,5 +160,41 @@ class TypeRelations {
 
 	function nominalReaches(actual:CompilerType, expected:CompilerType):Bool {
 		return declarations.inheritance.reaches(actual, expected);
+	}
+
+	function abstractConversion(actual:CompilerType, expected:CompilerType):Bool {
+		return switch expected {
+			case TAbstract(name, arguments, representation):
+				var decl = declarations.abstracts.get(name);
+				if (decl == null) false; else {
+					var substitutions = abstractSubstitutions(decl.typeParameters, arguments),
+						allowed = false;
+					for (fromType in decl.fromTypes)
+						if (equals(actual, declarations.resolve(fromType, decl.span, substitutions)))
+							allowed = true;
+					allowed;
+				}
+			default:
+				switch actual {
+					case TAbstract(name, arguments, representation):
+						var decl = declarations.abstracts.get(name);
+						if (decl == null) false; else {
+							var substitutions = abstractSubstitutions(decl.typeParameters, arguments),
+								allowed = false;
+							for (toType in decl.toTypes)
+								if (equals(expected, declarations.resolve(toType, decl.span, substitutions)))
+									allowed = true;
+							allowed;
+						}
+					default: false;
+				}
+		};
+	}
+
+	static function abstractSubstitutions(parameters:Array<String>, arguments:Array<CompilerType>):Map<String, CompilerType> {
+		var result:Map<String, CompilerType> = [];
+		for (index in 0...parameters.length)
+			result.set(parameters[index], arguments[index]);
+		return result;
 	}
 }

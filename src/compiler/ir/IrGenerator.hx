@@ -1222,6 +1222,7 @@ class IrGenerator {
 
 	public static function lowerType(type:CompilerType):IrType
 		return switch type {
+			case TAbstract(_, _, representation): lowerType(representation);
 			case TInt: I32;
 			case TBool: Bool;
 			case TFloat: F64;
