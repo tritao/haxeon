@@ -48,7 +48,10 @@ class LspDispatcher {
 			protocol.handle(message);
 			return false;
 		}
-		var changesDocument = method == "textDocument/didOpen" || method == "textDocument/didChange";
+		var changesDocument = method == "textDocument/didOpen"
+			|| method == "textDocument/didChange"
+			|| method == "textDocument/didClose"
+			|| method == "workspace/didChangeWatchedFiles";
 		if (changesDocument)
 			protocol.cancelPendingDiagnostics();
 		if (!enqueue({

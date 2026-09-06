@@ -84,6 +84,9 @@ class LanguageService {
 	public function update(path:String, source:String):ModuleState
 		return compiler.update(path, source);
 
+	public function remove(path:String):Bool
+		return compiler.remove(path);
+
 	public function compile(entryModule:String, ?token:CancellationToken):CompileResult
 		return compiler.compile(entryModule, token);
 

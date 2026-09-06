@@ -23,12 +23,59 @@ class ProjectWorkspace {
 	final compilerPathByDisk:Map<String, String> = [];
 	final diskPathByCompiler:Map<String, String> = [];
 	final sourceRoots:Array<String> = [];
+	final workspaceRootPaths:Array<String> = [];
 
 	public function new() {}
 
 	public function initialize(params:Dynamic, service:LanguageService):Void {
-		var roots = workspaceRoots(params), configFiles:Array<String> = [];
-		for (root in roots)
+		for (root in workspaceRoots(params))
+			workspaceRootPaths.push(root);
+		discover(service, _ -> false);
+	}
+
+	public function reload(service:LanguageService, isOpen:String->Bool):Void {
+		var previous:Map<String, String> = [];
+		for (path => compilerPath in compilerPathByDisk)
+			previous.set(path, compilerPath);
+		configurations.resize(0);
+		errors.resize(0);
+		sourceRoots.resize(0);
+		diskSources.clear();
+		discover(service, isOpen);
+		for (path => compilerPath in previous)
+			if (!diskSources.exists(path) && !isOpen(path))
+				service.remove(compilerPath);
+	}
+
+	public function refresh(path:String, service:LanguageService, open:Bool):Null<String> {
+		var normalized = normalize(path),
+			compilerPath = compilerPath(normalized);
+		if (FileSystem.exists(normalized) && !FileSystem.isDirectory(normalized)) {
+			var source = File.getContent(normalized);
+			diskSources.set(normalized, source);
+			compilerPathByDisk.set(normalized, compilerPath);
+			diskPathByCompiler.set(compilerPath, normalized);
+			if (!open)
+				service.update(compilerPath, source);
+		} else {
+			diskSources.remove(normalized);
+			if (!open)
+				service.remove(compilerPath);
+		}
+		return compilerPath;
+	}
+
+	public function isConfiguration(path:String):Bool {
+		var name = Path.withoutDirectory(path);
+		return name == "haxe.json" || StringTools.endsWith(name, ".hxml");
+	}
+
+	public static function pathFromUri(uri:String):String
+		return uriPath(uri);
+
+	function discover(service:LanguageService, isOpen:String->Bool):Void {
+		var configFiles:Array<String> = [];
+		for (root in workspaceRootPaths)
 			if (FileSystem.exists(root) && FileSystem.isDirectory(root))
 				for (name in FileSystem.readDirectory(root))
 					if (name == "haxe.json" || StringTools.endsWith(name, ".hxml"))
@@ -40,7 +87,7 @@ class ProjectWorkspace {
 			catch (failure:Dynamic)
 				errors.push('$file: ${Std.string(failure)}');
 		if (configurations.length == 0)
-			for (root in roots)
+			for (root in workspaceRootPaths)
 				sourceRoots.push(root);
 		else
 			for (configuration in configurations)
@@ -49,13 +96,19 @@ class ProjectWorkspace {
 						sourceRoots.push(classPath);
 		sourceRoots.sort(Reflect.compare);
 		for (root in sourceRoots)
-			loadSources(root, service);
+			loadSources(root, service, isOpen);
 	}
 
-	public function restore(path:String, service:LanguageService):Void {
-		var source = diskSources.get(normalize(path));
-		if (source != null)
+	public function restore(path:String, service:LanguageService):Bool {
+		var normalized = normalize(path), source = diskSources.get(normalized);
+		if (source != null) {
 			service.update(compilerPath(path), source);
+			return true;
+		} else if (compilerPathByDisk.exists(normalized)) {
+			service.remove(compilerPath(path));
+			return true;
+		}
+		return false;
 	}
 
 	public function hasDiskSource(path:String):Bool
@@ -161,7 +214,7 @@ class ProjectWorkspace {
 		};
 	}
 
-	function loadSources(root:String, service:LanguageService):Void {
+	function loadSources(root:String, service:LanguageService, isOpen:String->Bool):Void {
 		if (!FileSystem.exists(root) || !FileSystem.isDirectory(root)) {
 			errors.push('Source root does not exist: $root');
 			return;
@@ -183,7 +236,8 @@ class ProjectWorkspace {
 					diskSources.set(path, source);
 					compilerPathByDisk.set(path, compilerPath);
 					diskPathByCompiler.set(compilerPath, path);
-					service.update(compilerPath, source);
+					if (!isOpen(path))
+						service.update(compilerPath, source);
 					loaded++;
 				}
 			}

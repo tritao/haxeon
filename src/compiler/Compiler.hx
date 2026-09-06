@@ -235,6 +235,17 @@ class Compiler {
 		return state;
 	}
 
+	/** Remove a source module and invalidate graph/cached compilation state. */
+	public function remove(path:String):Bool {
+		var name = ModulePath.fromFile(path);
+		if (!modules.exists(name))
+			return false;
+		modules.remove(name);
+		graph.rebuild(modules);
+		sourceGeneration++;
+		return true;
+	}
+
 	/** Update semantic state without assembling or publishing a runtime artifact. */
 	public function analyze(entryModule:String, ?token:CancellationToken):AnalysisResult
 		return new AnalysisTransaction(this, entryModule, token).run();

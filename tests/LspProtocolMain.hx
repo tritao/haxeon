@@ -36,6 +36,13 @@ class LspProtocolMain {
 			|| initialized.result.capabilities.signatureHelpProvider == null
 			|| initialized.result.capabilities.textDocumentSync.change != 1)
 			throw "LSP initialization capabilities are incomplete";
+		var watcherRegistration = protocol.handle('{"jsonrpc":"2.0","method":"initialized","params":{}}');
+		if (watcherRegistration.length != 1
+			|| Json.parse(watcherRegistration[0]).method != "client/registerCapability"
+			|| Json.parse(watcherRegistration[0]).params.registrations[0].registerOptions.watchers.length != 3)
+			throw "LSP did not register project and source file watchers";
+		if (protocol.handle('{"jsonrpc":"2.0","id":"haxeon/register-watchers","result":null}').length != 0)
+			throw "LSP did not accept the client watcher-registration response";
 		var fixtureRoot = sys.FileSystem.absolutePath("tests/fixtures/pragtical"),
 			fixtureMainPath = Path.join([fixtureRoot, "pragtical/app/LspFixture.hx"]),
 			fixtureMainUri = "file://" + fixtureMainPath,
@@ -85,6 +92,94 @@ class LspProtocolMain {
 				hasUnopenedMember = true;
 		if (!hasUnopenedMember)
 			throw "project-backed completion omitted members from unopened dependencies";
+		var watchRoot = "/tmp/haxeon-lsp-watch-" + Std.string(Std.int(Sys.time() * 1000000)),
+			watchSourceRoot = Path.join([watchRoot, "src"]),
+			watchAppRoot = Path.join([watchSourceRoot, "app"]),
+			watchLibRoot = Path.join([watchSourceRoot, "lib"]),
+			watchMainPath = Path.join([watchAppRoot, "Main.hx"]),
+			watchHelperPath = Path.join([watchLibRoot, "Helper.hx"]),
+			watchConfigPath = Path.join([watchRoot, "haxe.json"]),
+			watchMainSource = "package app; import lib.Helper; function main():Int { var helper = new Helper(); return helper.answer(); }";
+		sys.FileSystem.createDirectory(watchRoot);
+		sys.FileSystem.createDirectory(watchSourceRoot);
+		sys.FileSystem.createDirectory(watchAppRoot);
+		sys.FileSystem.createDirectory(watchLibRoot);
+		sys.io.File.saveContent(watchConfigPath, '{"classPath":["src"],"main":"app.Main"}');
+		sys.io.File.saveContent(watchMainPath, watchMainSource);
+		sys.io.File.saveContent(watchHelperPath, "package lib; class Helper { public function new() {} public function answer():Int return 1; }");
+		var watchProtocol = new LspProtocol(),
+			watchMainUri = "file://" + watchMainPath,
+			watchHelperUri = "file://" + watchHelperPath,
+			watchDocument = new LspDocument(watchMainUri, watchMainPath, 1, watchMainSource);
+		request(watchProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 43,
+			method: "initialize",
+			params: {rootUri: "file://" + watchRoot}
+		}));
+		watchProtocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: watchMainUri,
+					languageId: "haxe",
+					version: 1,
+					text: watchMainSource
+				}
+			}
+		}));
+		sys.io.File.saveContent(watchHelperPath,
+			"package lib; class Helper { public function new() {} public function answer():Int return 2; public function diskOnly():Int return 3; }");
+		watchProtocol.handle(watchedFileMessage(watchHelperUri, 2));
+		watchMainSource = StringTools.replace(watchMainSource, "helper.answer", "helper.diskOnly");
+		watchDocument.replace(2, watchMainSource);
+		watchProtocol.handle(documentChangeMessage(watchMainUri, 2, watchMainSource));
+		if (!definitionTargets(watchProtocol, watchMainUri, watchDocument, "diskOnly", 44, watchHelperUri))
+			throw "external source edit did not refresh unopened navigation";
+		var overlaySource = "package lib; class Helper { public function new() {} public function answer():Int return 4; public function overlayOnly():Int return 5; }";
+		watchProtocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: watchHelperUri,
+					languageId: "haxe",
+					version: 1,
+					text: overlaySource
+				}
+			}
+		}));
+		watchMainSource = StringTools.replace(watchMainSource, "helper.diskOnly", "helper.overlayOnly");
+		watchDocument.replace(3, watchMainSource);
+		watchProtocol.handle(documentChangeMessage(watchMainUri, 3, watchMainSource));
+		sys.io.File.saveContent(watchHelperPath,
+			"package lib; class Helper { public function new() {} public function answer():Int return 6; public function newestDisk():Int return 7; }");
+		watchProtocol.handle(watchedFileMessage(watchHelperUri, 2));
+		if (!definitionTargets(watchProtocol, watchMainUri, watchDocument, "overlayOnly", 45, watchHelperUri))
+			throw "disk watcher overrode an open document overlay";
+		watchProtocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didClose",
+			params: {textDocument: {uri: watchHelperUri}}
+		}));
+		watchMainSource = StringTools.replace(watchMainSource, "helper.overlayOnly", "helper.newestDisk");
+		watchDocument.replace(4, watchMainSource);
+		watchProtocol.handle(documentChangeMessage(watchMainUri, 4, watchMainSource));
+		if (!definitionTargets(watchProtocol, watchMainUri, watchDocument, "newestDisk", 47, watchHelperUri))
+			throw "closing an overlay did not restore the newest disk source";
+		sys.FileSystem.deleteFile(watchHelperPath);
+		watchProtocol.handle(watchedFileMessage(watchHelperUri, 3));
+		if (definitionTargets(watchProtocol, watchMainUri, watchDocument, "newestDisk", 48, watchHelperUri))
+			throw "deleted source remained in semantic completion";
+		var alternateRoot = Path.join([watchRoot, "alternate"]);
+		sys.FileSystem.createDirectory(alternateRoot);
+		sys.io.File.saveContent(Path.join([alternateRoot, "Alternate.hx"]), "class Alternate {}");
+		sys.io.File.saveContent(watchConfigPath, '{"classPath":["alternate"]}');
+		watchProtocol.handle(watchedFileMessage("file://" + watchConfigPath, 2));
+		if (!watchProtocol.project.hasDiskSource(Path.join([alternateRoot, "Alternate.hx"])))
+			throw "Haxe configuration change did not refresh source roots";
+		deleteTree(watchRoot);
 		var source = "function main():Int { var answer = 42; return answer; }",
 			uri = "file:///workspace/Main.hx";
 		var opened = protocol.handle(Json.stringify({
@@ -435,5 +530,40 @@ class LspProtocolMain {
 		if (result.error != null)
 			throw result.error.message;
 		return result;
+	}
+
+	static function watchedFileMessage(uri:String, type:Int):String
+		return Json.stringify({jsonrpc: "2.0", method: "workspace/didChangeWatchedFiles", params: {changes: [{uri: uri, type: type}]}});
+
+	static function documentChangeMessage(uri:String, version:Int, source:String):String
+		return Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didChange",
+			params: {textDocument: {uri: uri, version: version}, contentChanges: [{text: source}]}
+		});
+
+	static function definitionTargets(protocol:LspProtocol, uri:String, document:LspDocument, symbol:String, id:Int, expectedUri:String):Bool {
+		var responses = protocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			id: id,
+			method: "textDocument/definition",
+			params: {textDocument: {uri: uri}, position: document.position(document.source.indexOf(symbol) + 2)}
+		}));
+		if (responses.length != 1)
+			return false;
+		var response:Dynamic = Json.parse(responses[0]);
+		return response.error == null && response.result != null && response.result.uri == expectedUri;
+	}
+
+	static function deleteTree(path:String):Void {
+		if (!sys.FileSystem.exists(path))
+			return;
+		if (!sys.FileSystem.isDirectory(path)) {
+			sys.FileSystem.deleteFile(path);
+			return;
+		}
+		for (name in sys.FileSystem.readDirectory(path))
+			deleteTree(Path.join([path, name]));
+		sys.FileSystem.deleteDirectory(path);
 	}
 }

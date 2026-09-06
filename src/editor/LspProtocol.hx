@@ -57,13 +57,14 @@ class LspProtocol {
 		var method:String = Reflect.field(request, "method"),
 			id:Dynamic = Reflect.field(request, "id");
 		if (method == null)
-			return id == null ? [] : [error(id, -32600, "Invalid Request")];
+			return id != null
+				&& (Reflect.hasField(request, "result") || Reflect.hasField(request, "error")) ? [] : id == null ? [] : [error(id, -32600, "Invalid Request")];
 		if (shutdownRequested && method != "exit")
 			return id == null ? [] : [error(id, -32600, "Server has shut down")];
 		try {
 			return switch method {
 				case "initialize": initialize(request, id);
-				case "initialized": [];
+				case "initialized": [watcherRegistration()];
 				case "shutdown":
 					shutdownRequested = true;
 					[response(id, null)];
@@ -73,6 +74,7 @@ class LspProtocol {
 				case "textDocument/didOpen": synchronize(request, true);
 				case "textDocument/didChange": synchronize(request, false);
 				case "textDocument/didClose": close(request);
+				case "workspace/didChangeWatchedFiles": watchedFiles(request);
 				case "textDocument/documentSymbol": cancellable(id, token -> documentSymbols(request, token));
 				case "textDocument/completion": cancellable(id, token -> completion(request, token));
 				case "textDocument/hover": cancellable(id, token -> hover(request, token));
@@ -146,6 +148,23 @@ class LspProtocol {
 		return result;
 	}
 
+	function watcherRegistration():String
+		return serverRequest("haxeon/register-watchers", "client/registerCapability", {
+			registrations: [
+				{
+					id: "haxeon-workspace-files",
+					method: "workspace/didChangeWatchedFiles",
+					registerOptions: {
+						watchers: [
+							{globPattern: "**/*.hx", kind: 7},
+							{globPattern: "**/*.hxml", kind: 7},
+							{globPattern: "**/haxe.json", kind: 7}
+						]
+					}
+				}
+			]
+		});
+
 	function initializeResult():Dynamic
 		return {
 			capabilities: {
@@ -157,7 +176,8 @@ class LspProtocol {
 				signatureHelpProvider: {triggerCharacters: ["(", ","]},
 				definitionProvider: true,
 				referencesProvider: true,
-				renameProvider: {prepareProvider: true}
+				renameProvider: {prepareProvider: true},
+				workspace: {workspaceFolders: {supported: true, changeNotifications: true}}
 			},
 			serverInfo: {name: "haxeon", version: "0.1.0"}
 		};
@@ -198,11 +218,79 @@ class LspProtocol {
 	}
 
 	function close(request:Dynamic):Array<String> {
-		var uri = documentUri(request), document = documents.get(uri);
+		var uri = documentUri(request),
+			document = documents.get(uri),
+			compilerPath = project.compilerPath(document.path),
+			module = ModulePath.fromFile(compilerPath),
+			targets = service.compiler.dependentModules(module);
 		documents.close(uri);
-		project.restore(document.path, service);
+		var restored = project.restore(document.path, service);
 		publishedDiagnostics.set(uri, "");
-		return [notification("textDocument/publishDiagnostics", {uri: uri, diagnostics: []})];
+		var result = [notification("textDocument/publishDiagnostics", {uri: uri, diagnostics: []})];
+		if (!restored)
+			return result;
+		var generation = ++analysisGeneration;
+		if (targets.length == 0 && service.compiler.modules.exists(module))
+			targets.push(module);
+		if (deferDiagnostics)
+			for (target in targets)
+				pendingDiagnosticTargets.set(target, true);
+		else {
+			for (target in targets)
+				try
+					service.analyze(target)
+				catch (_:Dynamic) {}
+			if (generation == analysisGeneration)
+				for (message in diagnosticNotifications(generation))
+					result.push(message);
+		}
+		return result;
+	}
+
+	function watchedFiles(request:Dynamic):Array<String> {
+		var changes:Array<Dynamic> = cast required(required(request, "params"), "changes"),
+			targets:Map<String, Bool> = [],
+			configurationChanged = false,
+			mutated = false;
+		for (change in changes) {
+			var path = ProjectWorkspace.pathFromUri(requiredString(change, "uri"));
+			if (project.isConfiguration(path)) {
+				configurationChanged = true;
+				continue;
+			}
+			if (!StringTools.endsWith(path, ".hx"))
+				continue;
+			var open = documents.forPath(path) != null,
+				compilerPath = project.compilerPath(path),
+				module = ModulePath.fromFile(compilerPath);
+			if (!open) {
+				for (dependent in service.compiler.dependentModules(module))
+					targets.set(dependent, true);
+				mutated = true;
+			}
+			project.refresh(path, service, open);
+			if (!open && service.compiler.modules.exists(module))
+				targets.set(module, true);
+		}
+		if (configurationChanged) {
+			project.reload(service, path -> documents.forPath(path) != null);
+			for (module in service.compiler.modules.keys())
+				targets.set(module, true);
+			mutated = true;
+		}
+		if (!mutated)
+			return [];
+		var generation = ++analysisGeneration;
+		if (deferDiagnostics) {
+			for (target in targets.keys())
+				pendingDiagnosticTargets.set(target, true);
+			return [];
+		}
+		for (target in targets.keys())
+			try
+				service.analyze(target)
+			catch (_:Dynamic) {}
+		return generation == analysisGeneration ? diagnosticNotifications(generation) : [];
 	}
 
 	function diagnosticNotifications(generation:Int):Array<String> {
@@ -530,6 +618,14 @@ class LspProtocol {
 
 	static function notification(method:String, params:Dynamic):String
 		return Json.stringify({jsonrpc: "2.0", method: method, params: params});
+
+	static function serverRequest(id:String, method:String, params:Dynamic):String
+		return Json.stringify({
+			jsonrpc: "2.0",
+			id: id,
+			method: method,
+			params: params
+		});
 
 	static function error(id:Dynamic, code:Int, message:String):String
 		return Json.stringify({jsonrpc: "2.0", id: id, error: {code: code, message: message}});
