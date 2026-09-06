@@ -133,7 +133,43 @@ class ProtocolMain {
 		var unknownCancel:Dynamic = Json.parse(protocol.handle('{"id":12,"method":"cancel","requestId":"missing"}'));
 		if (!unknownCancel.ok || unknownCancel.result.cancelled)
 			throw "protocol cancelled an unknown request";
+		testConcurrentCancellation();
 		Sys.println("PASS: language-service JSON protocol is transactional");
+	}
+
+	static function testConcurrentCancellation():Void {
+		var protocol = new LanguageServiceProtocol(), source = "";
+		for (index in 0...4000)
+			source += 'function value$index():Int { return $index; } ';
+		source += "function main():Int { return value3999(); }";
+		assertOk(protocol.handle(Json.stringify({
+			id: 90,
+			method: "update",
+			path: "Large.hx",
+			source: source
+		})));
+		var ready = new sys.thread.Lock(), done = new sys.thread.Lock(), response = "";
+		sys.thread.Thread.create(function() {
+			ready.release();
+			response = protocol.handle('{"id":99,"method":"compile","entry":"Large"}');
+			done.release();
+		});
+		ready.wait();
+		var duplicate:Dynamic = null;
+		for (_ in 0...10000) {
+			duplicate = Json.parse(protocol.handle('{"id":99,"method":"diagnostics","path":"Large.hx"}'));
+			if (!duplicate.ok && duplicate.error.code == "E_DUPLICATE_REQUEST")
+				break;
+		}
+		if (duplicate == null || duplicate.ok || duplicate.error.code != "E_DUPLICATE_REQUEST")
+			throw "protocol did not reject a duplicate active request id";
+		if (protocol.cancel("99"))
+			throw "protocol conflated string and numeric request ids";
+		if (!protocol.cancel(99) || !done.wait(5.0))
+			throw "protocol did not cancel an active request safely";
+		var cancelled:Dynamic = Json.parse(response);
+		if (cancelled.ok || cancelled.error.code != "E_CANCELLED")
+			throw "concurrent compile did not return cancellation";
 	}
 
 	static function assertOk(response:String):Void {
