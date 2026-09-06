@@ -11,5 +11,7 @@ class Box<T> {
 
 function main():Int {
 	var box:Box<Int> = new Box<Int>(42);
-	return box.get();
+	var text:Box<String> = new Box<String>("shared layout");
+	box.value = 40;
+	return box.get() + (text.get() == "shared layout" ? 2 : 0);
 }

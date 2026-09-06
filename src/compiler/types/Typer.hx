@@ -792,6 +792,8 @@ class Typer {
 								var platformField = PlatformAbi.field(object.type, fieldName),
 									expected = fieldType(object.type, fieldName, span);
 								var value = coerce(typeExpression(expression, scope, expected), expected, 'field "$name"', "E1002");
+								if (platformField == null && isGenericNominal(object.type))
+									value = abiBoundaryCast(value, TDynamic);
 								var setter:Null<String> = platformField == null ? null : platformField.set;
 								if (setter != null) output.push(TExpression(new TypedExpression(TCall(setter, [object, value]), TVoid, span),
 									span)); else output.push(TFieldAssign(object, fieldName, value, span));
