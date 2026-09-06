@@ -126,7 +126,7 @@ class FrontendCompilation {
 			state.typedFunctions.set(fn.name, fn);
 			state.typedSourceRevisions.set(fn.name, state.revision);
 			if (state.semanticModel != null)
-				state.semanticModel.index.indexTypedFunction(fn);
+				state.semanticModel.index.indexTypedFunction(fn, context.resolveSemanticSymbol);
 			retyped.push(fn.name);
 			touchedModules.set(module, true);
 			if (lowerToIr) {

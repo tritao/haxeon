@@ -262,12 +262,13 @@ class LanguageService {
 			model = state == null ? null : effectiveSemanticModel(state);
 		if (state == null || model == null)
 			return null;
-		var symbol = model.index.symbolAt(position);
-		return symbol == null ? null : {
-			path: symbol.declaration.file.path,
-			span: symbol.declaration,
-			revision: model.revision,
-			stale: model.revision != state.revision
+		var id = model.index.symbolIdAt(position),
+			resolved = id == null ? null : compiler.semanticWorkspace.indexedSymbol(id);
+		return resolved == null ? null : {
+			path: resolved.symbol.declaration.file.path,
+			span: resolved.symbol.declaration,
+			revision: snapshotRevision(resolved.state),
+			stale: snapshotRevision(resolved.state) != resolved.state.revision
 		};
 	}
 
@@ -306,16 +307,16 @@ class LanguageService {
 			model = state == null ? null : effectiveSemanticModel(state);
 		if (state == null || model == null)
 			return null;
-		var symbol = model.index.symbolAt(position);
-		if (symbol == null || Std.string(symbol.id).indexOf(":local:") < 0)
+		var id = model.index.symbolIdAt(position);
+		if (id == null)
 			return null;
 		return [
-			for (span in model.index.locations(symbol.id))
+			for (location in compiler.semanticWorkspace.indexedLocations(id))
 				{
-					path: span.file.path,
-					span: span,
-					revision: model.revision,
-					stale: model.revision != state.revision
+					path: location.span.file.path,
+					span: location.span,
+					revision: snapshotRevision(location.state),
+					stale: snapshotRevision(location.state) != location.state.revision
 				}
 		];
 	}

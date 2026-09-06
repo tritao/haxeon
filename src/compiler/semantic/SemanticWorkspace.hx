@@ -5,6 +5,8 @@ import compiler.modules.ModuleState;
 import compiler.types.DeclarationIndex.DeclarationKind;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
+import compiler.semantic.SemanticIndex.IndexedSemanticSymbol;
+import compiler.semantic.SemanticIndex.SemanticSymbolId;
 
 /** A declaration resolved against the effective snapshots of a module workspace. */
 typedef WorkspaceDeclaration = {
@@ -54,6 +56,40 @@ class SemanticWorkspace {
 
 	public function member(type:CompilerType, name:String):Null<WorkspaceDeclaration>
 		return memberInner(type, name, []);
+
+	public function resolveSymbolId(name:String):Null<SemanticSymbolId> {
+		var matches:Array<SemanticSymbolId> = [];
+		for (state in orderedStates()) {
+			var model = effectiveModel(state);
+			if (model == null)
+				continue;
+			for (symbol in model.index.symbols)
+				if (symbol.name == name || state.name + "." + symbol.name == name)
+					matches.push(symbol.id);
+		}
+		return matches.length == 1 ? matches[0] : null;
+	}
+
+	public function indexedSymbol(id:SemanticSymbolId):Null<{state:ModuleState, symbol:IndexedSemanticSymbol}> {
+		for (state in orderedStates()) {
+			var model = effectiveModel(state),
+				symbol = model == null ? null : model.index.symbol(id);
+			if (symbol != null)
+				return {state: state, symbol: symbol};
+		}
+		return null;
+	}
+
+	public function indexedLocations(id:SemanticSymbolId):Array<{state:ModuleState, span:SourceSpan}> {
+		var result = [];
+		for (state in orderedStates()) {
+			var model = effectiveModel(state);
+			if (model != null)
+				for (span in model.index.locations(id))
+					result.push({state: state, span: span});
+		}
+		return result;
+	}
 
 	function memberInner(type:CompilerType, name:String, visiting:Map<String, Bool>):Null<WorkspaceDeclaration> {
 		return switch type {

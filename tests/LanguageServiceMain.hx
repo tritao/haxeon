@@ -133,7 +133,8 @@ class LanguageServiceMain {
 			importedDefinition = importService.definition("editor/Main.hx", importedPosition),
 			importedReferences = importService.references("editor/Main.hx", importedPosition),
 			importedEdits = importService.rename("editor/Main.hx", importedPosition, "sum");
-		if (importedDefinition == null
+		if (importService.compiler.modules.get("editor.Main").semanticModel.index.symbolIdAt(importedPosition) == null
+			|| importedDefinition == null
 			|| importedDefinition.path != "editor/util/Math.hx"
 			|| importedReferences.length != 2
 			|| importedEdits.length != 2)
@@ -147,7 +148,8 @@ class LanguageServiceMain {
 			inheritedRename = hierarchyService.rename("Hierarchy.hx", inheritedUse, "score"),
 			aliasUse = hierarchySource.indexOf("ParentAlias =") + "ParentAlias = ".length,
 			aliasDefinition = hierarchyService.definition("Hierarchy.hx", aliasUse);
-		if (inheritedDefinition == null
+		if (hierarchyService.compiler.modules.get("Hierarchy").semanticModel.index.symbolIdAt(inheritedUse) == null
+			|| inheritedDefinition == null
 			|| inheritedDefinition.span.start > hierarchySource.indexOf("value")
 			|| inheritedRename.length != 2
 			|| aliasDefinition == null

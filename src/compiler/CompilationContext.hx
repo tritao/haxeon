@@ -12,6 +12,7 @@ import compiler.modules.ModuleState;
 import compiler.semantic.ModuleAnalyzer;
 import compiler.semantic.GenericSpecializationRegistry;
 import compiler.semantic.SemanticProgram;
+import compiler.semantic.SemanticIndex.SemanticSymbolId;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedProgram;
 import haxe.io.Bytes;
@@ -59,6 +60,9 @@ class CompilationContext {
 
 	public function nativeSignatures():Map<String, {arguments:Array<CompilerType>, result:CompilerType}>
 		return owner.nativeSignatures();
+
+	public function resolveSemanticSymbol(name:String):Null<SemanticSymbolId>
+		return owner.semanticWorkspace.resolveSymbolId(name);
 
 	public function irNatives():Array<IrNative>
 		return owner.irNatives();
