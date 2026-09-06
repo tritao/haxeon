@@ -52,6 +52,7 @@ class DeclarationIndex {
 	public final classes:Map<String, AstClass> = [];
 	public final symbols:Map<String, DeclarationSymbol> = [];
 	public final inheritance:NominalInheritance;
+	public final conversions:AbstractConversionGraph;
 
 	final aliasSpans:Map<String, SourceSpan> = [];
 	final fallbackSpan:SourceSpan;
@@ -106,6 +107,7 @@ class DeclarationIndex {
 			validateCycles();
 			validateSignatures(program);
 		}
+		conversions = new AbstractConversionGraph(this, validate);
 	}
 
 	public function resolve(type:AstType, ?span:SourceSpan, ?substitutions:Map<String, CompilerType>):CompilerType

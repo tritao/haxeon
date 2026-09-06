@@ -209,6 +209,7 @@ class TestMain {
 		expectCompileError('function main():Int { if (1 < 2) return 1; }', 'Function main does not return on every path');
 		expectCompileError('function main():Int { if (1) return 1; else return 2; }', 'If condition must be Bool');
 		expectCompileError('function main():Int { return 1 ? 2 : 3; }', 'Conditional expression requires a Bool condition');
+		Frontend.compile('typedef Holder = { value:Null<String> }; function read(holder:Holder):Int return holder.value != null && holder.value.length > 0 ? 1 : 0; function main():Int return 0;');
 		expectCompileError('function main():Int { var value = true ? 1 : "wrong"; return 0; }', 'Conditional branches must have matching types');
 		expectCompileError('function main():Int { return switch 1 { case 1: 42; }; }', 'Switch expression requires a default branch');
 		expectCompileError('function main():Int { return switch 1 { case 1: 42; default: "wrong"; }; }', 'Type mismatch for switch branch');
@@ -561,6 +562,15 @@ class TestMain {
 			'Type mismatch for return');
 		expectCompileError("abstract Wrapped<T>(T) from T from T {} function main():Int return 0;",
 			'Duplicate from conversion "type-parameter:Wrapped:T" on abstract "Wrapped"');
+		expectCompileError("abstract A(Int) from B {} abstract B(Int) from A {} function main():Int return 0;", 'Cyclic from conversion involving "A"');
+		expectCompileError("abstract A(Int) to B {} abstract B(Int) to A {} function main():Int return 0;", 'Cyclic to conversion involving "A"');
+		expectCompileError("abstract A(Int) to B to C {} abstract B(Int) to D {} abstract C(Int) to D {} abstract D(Int) {} function main():Int return 0;",
+			'Ambiguous to conversion paths from "A" to "D"');
+		expectCompileError("abstract A(Int) from B from C {} abstract B(Int) from D {} abstract C(Int) from D {} abstract D(Int) {} function main():Int return 0;",
+			'Ambiguous from conversion paths from "D" to "A"');
+		Frontend.compile("abstract A<T>(T) to B<T> to B<Array<T>> {} abstract B<T>(T) {} function main():Int return 0;");
+		expectCompileError("abstract A(Int) from Int to B {} abstract B(Int) from A to Int {} function read(value:A):Int return value; function main():Int return 0;",
+			"Type mismatch for return");
 		expectCompileError("abstract Bad(Int) { public function new(value:String) { this = value; } } function main():Int { new Bad(\"bad\"); return 0; }",
 			'Type mismatch for abstract constructor "Bad.new"');
 		var computedAbstract = new Parser(new Lexer(new SourceFile("computed-abstract.hx",
@@ -605,6 +615,19 @@ class TestMain {
 		if (modularAbstractBodies.length != 3 || modularAbstractBodies.join(",") != resumedAbstractBodies.join(","))
 			throw "Generic abstract method specializations did not survive compiler restart";
 		Sys.println("PASS: generic abstracts resolve instantiated representations across modules");
+		var conversionCompiler = new Compiler();
+		conversionCompiler.update("Value.hx", "abstract Value(Int) from Int to Int {}");
+		conversionCompiler.update("Main.hx", "import Value; function read(value:Value):Int return value; function main():Int return read(42);");
+		conversionCompiler.compile("Main");
+		conversionCompiler.update("Value.hx", "abstract Value(Int) from Int {}");
+		try {
+			conversionCompiler.compile("Main");
+			throw "Removing an abstract conversion did not retype its cross-module consumer";
+		} catch (error:CompileError) {
+			if (error.diagnostic.message != "Type mismatch for return")
+				throw error;
+		}
+		Sys.println("PASS: abstract conversion edits invalidate cross-module consumers");
 		var genericNominalProgram = new Parser(new Lexer(new SourceFile("generic-nominals.hx",
 			"interface Source<T> { function get():T; } class Box<T> { var value:T; public function new(value:T) { this.value = value; } public function get():T return value; } function consume(value:Box<Int>):Int return 42; function main():Int return 42;"))
 			.tokenize()).parseProgram();

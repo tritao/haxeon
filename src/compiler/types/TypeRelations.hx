@@ -172,38 +172,6 @@ class TypeRelations {
 	}
 
 	function abstractConversion(actual:CompilerType, expected:CompilerType):Bool {
-		return switch expected {
-			case TAbstract(name, arguments, representation):
-				if (!declarations.abstracts.exists(name)) false; else {
-					var decl = declarations.abstracts.get(name);
-					var substitutions = abstractSubstitutions(decl.typeParameters, arguments),
-						allowed = false;
-					for (fromType in decl.fromTypes)
-						if (equals(actual, declarations.resolve(fromType, decl.span, substitutions)))
-							allowed = true;
-					allowed;
-				}
-			default:
-				switch actual {
-					case TAbstract(name, arguments, representation):
-						if (!declarations.abstracts.exists(name)) false; else {
-							var decl = declarations.abstracts.get(name);
-							var substitutions = abstractSubstitutions(decl.typeParameters, arguments),
-								allowed = false;
-							for (toType in decl.toTypes)
-								if (equals(expected, declarations.resolve(toType, decl.span, substitutions)))
-									allowed = true;
-							allowed;
-						}
-					default: false;
-				}
-		};
-	}
-
-	static function abstractSubstitutions(parameters:Array<String>, arguments:Array<CompilerType>):Map<String, CompilerType> {
-		var result:Map<String, CompilerType> = [];
-		for (index in 0...parameters.length)
-			result.set(parameters[index], arguments[index]);
-		return result;
+		return declarations.conversions.allows(actual, expected);
 	}
 }

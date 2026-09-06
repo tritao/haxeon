@@ -77,6 +77,27 @@ class ModuleChangeAnalyzer {
 			if (!enums.exists(old))
 				structuralChanged.set('enum:$old', true);
 		state.enumFingerprints = enums;
+		var abstracts:Map<String, String> = [];
+		for (abstractDecl in ast.abstracts) {
+			var abstractName = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, abstractDecl.name),
+				signature = abstractName
+					+ (abstractDecl.typeParameters.length == 0 ? "" : '<${abstractDecl.typeParameters.join(",")}>')
+					+ "("
+					+ SemanticSignature.parsed(abstractDecl.underlying, ast.aliases)
+					+ ")"
+					+ " from "
+					+ [
+						for (type in abstractDecl.fromTypes)
+							SemanticSignature.parsed(type, ast.aliases)
+					].join(",") + " to " + [for (type in abstractDecl.toTypes) SemanticSignature.parsed(type, ast.aliases)].join(",");
+			abstracts.set(abstractName, signature);
+			if (state.abstractFingerprints.get(abstractName) != signature)
+				structuralChanged.set('abstract:$abstractName', true);
+		}
+		for (old in state.abstractFingerprints.keys())
+			if (!abstracts.exists(old))
+				structuralChanged.set('abstract:$old', true);
+		state.abstractFingerprints = abstracts;
 		var staticInitializers:Map<String, String> = [],
 			instanceInitializers:Map<String, String> = [];
 		for (classDecl in ast.classes) {
