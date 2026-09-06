@@ -107,6 +107,8 @@ done
 wait_frame Value.hx 6
 locals=$(read_locals)
 python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="result" and v.get("value")=="44" for v in vs), vs; assert any(v["name"]=="scoped" and v.get("value")=="143" for v in vs), vs' <<<"$locals"
+evaluated=$("${dap[@]}" evaluate --name "$session" --frame-id "$current_frame" --context watch --expression 'result + scoped')
+python3 -c 'import json,sys; data=json.load(sys.stdin)["data"]; assert data["result"]=="187" and data["type"]=="Int", data' <<<"$evaluated"
 
 "${dap[@]}" next --name "$session" >/dev/null
 wait_frame Value.hx 8
