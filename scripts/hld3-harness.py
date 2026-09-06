@@ -75,6 +75,16 @@ def read_patch_regions(reader: Reader, pointer_size: int) -> ModuleMappings:
     if hlb and not hlb.startswith(b"HLB"):
         raise ProtocolError("invalid embedded HLD3 module bytecode")
     revision = reader.i32()
+    reader.pointer(pointer_size)  # globals
+    reader.pointer(pointer_size)  # runtime type table
+    reader.pointer(pointer_size)  # initial JIT base
+    if reader.i32() <= 0:
+        raise ProtocolError("invalid HLD3 module JIT size")
+    function_count = reader.i32()
+    if function_count < 0:
+        raise ProtocolError("invalid HLD3 module function count")
+    for _ in range(function_count):
+        read_function(reader, False)
     region_count = reader.i32()
     if revision < 1 or region_count < 0:
         raise ProtocolError("invalid HLD3 module revision or region count")
