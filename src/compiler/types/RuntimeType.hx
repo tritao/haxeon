@@ -18,8 +18,7 @@ class RuntimeType {
 			case TFloat: "f64";
 			case TBool: "bool";
 			case TString: "bytes";
-			case value if (isRuntimeReference(value)): "ref";
-			default: null;
+			default: isRuntimeReference(element) ? "ref" : null;
 		};
 
 	public static function arrayNative(element:CompilerType, operation:String):String {
@@ -35,22 +34,23 @@ class RuntimeType {
 	}
 
 	public static function mapName(key:CompilerType, value:CompilerType):Null<String>
-		return switch [key, value] {
-			case [TString, TInt]: "map_string_i32";
-			case [TString, TBool]: "map_string_bool";
-			case [TString, TFloat]: "map_string_f64";
-			case [TString, TString]: "map_string_bytes";
-			case [TString, value] if (isRuntimeReference(value)): "map_string_ref";
-			case [TInt, TInt]: "map_int_i32";
-			case [TInt, TBool]: "map_int_bool";
-			case [TInt, TFloat]: "map_int_f64";
-			case [TInt, TString]: "map_int_bytes";
-			case [TInt, value] if (isRuntimeReference(value)): "map_int_ref";
+		return switch key {
+			case TString: mapValueName("map_string_", value);
+			case TInt: mapValueName("map_int_", value);
 			default: null;
 		};
 
+	static function mapValueName(prefix:String, value:CompilerType):Null<String>
+		return switch value {
+			case TInt: prefix + "i32";
+			case TBool: prefix + "bool";
+			case TFloat: prefix + "f64";
+			case TString: prefix + "bytes";
+			default: isRuntimeReference(value) ? prefix + "ref" : null;
+		};
+
 	public static function mapKeyType(name:String):Null<CompilerType>
-		return StringTools.startsWith(name, "map_int_") ? TInt : TString;
+		return StringTools.startsWith(name, "map_int_") ? CompilerType.TInt : CompilerType.TString;
 
 	public static function mapNative(key:CompilerType, value:CompilerType, operation:String):String {
 		var name = requireMapName(key, value);
@@ -66,14 +66,14 @@ class RuntimeType {
 
 	public static function mapValueType(name:String):Null<CompilerType>
 		return switch name {
-			case "map_string_i32": TInt;
-			case "map_string_bool": TBool;
-			case "map_string_f64": TFloat;
-			case "map_string_bytes": TString;
-			case "map_int_i32": TInt;
-			case "map_int_bool": TBool;
-			case "map_int_f64": TFloat;
-			case "map_int_bytes": TString;
+			case "map_string_i32": CompilerType.TInt;
+			case "map_string_bool": CompilerType.TBool;
+			case "map_string_f64": CompilerType.TFloat;
+			case "map_string_bytes": CompilerType.TString;
+			case "map_int_i32": CompilerType.TInt;
+			case "map_int_bool": CompilerType.TBool;
+			case "map_int_f64": CompilerType.TFloat;
+			case "map_int_bytes": CompilerType.TString;
 			default: null;
 		};
 
