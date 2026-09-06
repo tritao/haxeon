@@ -35,16 +35,19 @@ class SemanticAssembly {
 			generatedByModule:Map<String, Map<String, Bool>> = [],
 			reverseCalls:Map<String, Array<String>> = [],
 			genericOrigins:Map<String, Bool> = [];
-		var sourceTypeAliases:Map<String, String> = [];
+		var sourceTypeAliases:Map<String, String> = [],
+			enumCasesByType:Map<String, Array<String>> = [];
 		for (moduleName in names) {
 			var moduleState = modules.get(moduleName),
 				program = moduleState.parsedAst();
 			for (declaration in program.aliases)
 				sourceTypeAliases.set(ModuleCanonicalizer.sourceDeclarationPath(moduleName, declaration.name),
 					ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name));
-			for (declaration in program.enums)
-				sourceTypeAliases.set(ModuleCanonicalizer.sourceDeclarationPath(moduleName, declaration.name),
-					ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name));
+			for (declaration in program.enums) {
+				var canonicalName = ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name);
+				sourceTypeAliases.set(ModuleCanonicalizer.sourceDeclarationPath(moduleName, declaration.name), canonicalName);
+				enumCasesByType.set(canonicalName, [for (enumCase in declaration.cases) enumCase.name]);
+			}
 			for (declaration in program.enumAbstracts)
 				sourceTypeAliases.set(ModuleCanonicalizer.sourceDeclarationPath(moduleName, declaration.name),
 					ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name));
@@ -67,6 +70,20 @@ class SemanticAssembly {
 				aliases = context.importAliases(ast.imports, ast.importAliases);
 			for (sourceName => declarationName in sourceTypeAliases)
 				aliases.set(sourceName, declarationName);
+			var constructorTargets:Map<String, String> = [],
+				ambiguousConstructors:Map<String, Bool> = [];
+			for (importPath in ast.imports) {
+				var importedType = sourceTypeAliases.get(importPath);
+				if (importedType != null && enumCasesByType.exists(importedType))
+					for (caseName in enumCasesByType.get(importedType))
+						if (constructorTargets.exists(caseName))
+							ambiguousConstructors.set(caseName, true);
+						else
+							constructorTargets.set(caseName, importedType + "." + caseName);
+			}
+			for (caseName => target in constructorTargets)
+				if (!ambiguousConstructors.exists(caseName))
+					aliases.set(caseName, target);
 			for (importPath in ast.imports)
 				if (modules.exists(importPath))
 					for (sourceName => declarationName in sourceTypeAliases) {

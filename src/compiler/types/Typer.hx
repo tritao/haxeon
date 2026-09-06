@@ -1616,7 +1616,22 @@ class Typer {
 									fail("E1005", 'Unknown enum case "$name"', span);
 								if (enumDecl.cases[index].params.length > 0)
 									fail("E1008", 'Enum case "$name" requires constructor arguments', span);
-								return new TypedExpression(TEnumLiteral(enumName, index), TInstance(NominalKind.Enum, enumName, []), span);
+								var literalType:CompilerType = TInstance(NominalKind.Enum, enumName, []);
+								var expectedEnumName = Typer.enumName(expectedType);
+								if (expectedEnumName == enumName) {
+									var resolvedExpected = expectedType;
+									if (resolvedExpected != null)
+										switch resolvedExpected {
+											case TInstance(Enum, _, arguments): literalType = TInstance(NominalKind.Enum, enumName, arguments);
+											case TNullable(element):
+												switch element {
+													case TInstance(Enum, _, arguments): literalType = TInstance(NominalKind.Enum, enumName, arguments);
+													default:
+												}
+											default:
+										}
+								}
+								return new TypedExpression(TEnumLiteral(enumName, index), literalType, span);
 							}
 							var classEnd = parts.length - 1;
 							while (classEnd > 0) {
