@@ -37,13 +37,13 @@ cc -shared -fPIC -DHL_NAME\(n\)=realtime_##n \
 	-Wl,-rpath,"$root_dir/vendor/hashlink" \
 	-o "$runtime"
 
-mapfile -t sources < <(cd "$root_dir" && find src -type f -name '*.hx' -print | LC_ALL=C sort)
+mapfile -t sources < <(cd "$root_dir" && find src stdlib -type f -name '*.hx' -print | LC_ALL=C sort)
 
 if [[ "$mode" == "--self" ]]; then
 	(
 		cd "$root_dir"
 		LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$compiler_a" \
-			--output=out/bootstrap/compiler-self.hl --entry=compiler.tools.BootstrapCompiler --root=src "${sources[@]}"
+			--output=out/bootstrap/compiler-self.hl --entry=compiler.tools.BootstrapCompiler --root=src --root=stdlib "${sources[@]}"
 	)
 	cmp "$compiler_a" "$self_compiler"
 	echo "PASS: checked-in compiler rebuilt itself identically"
@@ -51,12 +51,12 @@ if [[ "$mode" == "--self" ]]; then
 fi
 
 "$haxe" --cwd "$root_dir" -cp src --run compiler.tools.BootstrapCompiler \
-	--output=bootstrap/compiler.hl --entry=compiler.tools.BootstrapCompiler --root=src "${sources[@]}"
+	--output=bootstrap/compiler.hl --entry=compiler.tools.BootstrapCompiler --root=src --root=stdlib "${sources[@]}"
 
 (
 	cd "$root_dir"
 	LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$compiler_a" \
-		--output=out/bootstrap/compiler-b.hl --entry=compiler.tools.BootstrapCompiler --root=src "${sources[@]}"
+		--output=out/bootstrap/compiler-b.hl --entry=compiler.tools.BootstrapCompiler --root=src --root=stdlib "${sources[@]}"
 )
 
 cmp "$compiler_a" "$compiler_b"

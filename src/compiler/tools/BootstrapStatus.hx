@@ -69,7 +69,7 @@ class BootstrapStatus {
 				roots.push(argument);
 		}
 		if (roots.length == 0)
-			roots = ["src"];
+			roots = ["src", "stdlib"];
 
 		var paths:Array<String> = [];
 		for (root in roots)

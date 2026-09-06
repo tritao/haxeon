@@ -36,6 +36,17 @@ cc -shared -fPIC -DHL_NAME\(n\)=realtime_##n \
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run LanguageServiceMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ProtocolMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run RuntimeDomainMain
+stdlib_output="$root_dir/out/stdlib.hl"
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run StdlibMain "$stdlib_output"
+set +e
+LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$stdlib_output"
+stdlib_status=$?
+set -e
+if [[ $stdlib_status -ne 42 ]]; then
+	echo "vendored stdlib: expected exit 42, got $stdlib_status" >&2
+	exit 1
+fi
+echo "PASS: vendored haxe.ds.ArraySort compiled and executed (exit 42)"
 "$haxe" --cwd "$root_dir" "$root_dir/repl-test.hxml"
 set +e
 LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$root_dir/out/repl-test.hl"
