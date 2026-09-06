@@ -581,7 +581,7 @@ class LanguageService {
 		for (fn in state.typedFunctions)
 			if (position >= fn.span.start && position <= fn.span.end) {
 				if (qualifier == "this" && fn.owner != null)
-					return TClass(fn.owner);
+					return TInstance(Class, fn.owner, []);
 				for (argument in fn.arguments)
 					if (sourceLocalName(argument.name) == qualifier)
 						return argument.type;
@@ -653,7 +653,7 @@ class LanguageService {
 		switch type {
 			case TNullable(element):
 				addInstanceMembers(element, prefix, result);
-			case TClass(name):
+			case TInstance(Class, name, []):
 				for (state in compiler.modules) {
 					var ast = effectiveAst(state);
 					if (ast != null)
@@ -668,10 +668,10 @@ class LanguageService {
 											'${method.name}(${[for (argument in method.arguments) typeName(argument.type)].join(",")}):${typeName(method.result)}',
 											prefix, result);
 								if (classDecl.base != null)
-									addInstanceMembers(TClass(classDecl.base), prefix, result);
+									addInstanceMembers(TInstance(Class, classDecl.base, []), prefix, result);
 							}
 				}
-			case TInterface(name):
+			case TInstance(Interface, name, []):
 				for (state in compiler.modules) {
 					var ast = effectiveAst(state);
 					if (ast != null)

@@ -101,10 +101,10 @@ class NativeRegistry {
 			case TTypeParameter(owner, name): throw 'Type parameter "$owner.$name" is not a runtime ABI type';
 			case TRange: throw "Range is not a runtime ABI type";
 			case TVoid: Void;
-			case TClass(name): Obj(name);
+			case TInstance(Class, name, _): Obj(name);
 			case TMap(_, _): Abstract("map_string_i32");
-			case TInterface(name): Virtual(name);
-			case TEnum(name, _): Enum(name);
+			case TInstance(Interface, name, _): Virtual(name);
+			case TInstance(Enum, name, _): Enum(name);
 			case TNull: Void;
 			case TNullable(element): irType(element);
 			case TArray(element): Array(irType(element));

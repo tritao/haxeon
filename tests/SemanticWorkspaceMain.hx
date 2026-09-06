@@ -21,13 +21,13 @@ class SemanticWorkspaceMain {
 
 		var global = workspace.global(child, "Base");
 		expect(global != null && global.state == base && global.key == "class:Base", "imports should resolve through the workspace");
-		var inherited = workspace.member(TClass("demo.Child"), "value");
+		var inherited = workspace.member(TInstance(Class, "demo.Child", []), "value");
 		expect(inherited != null && inherited.state == base && inherited.key == "class:Base:method:value",
 			"qualified classes should resolve inherited members across modules");
 
 		publish(base);
 		base.update(new SourceFile("demo/Base.hx", "class Base {"));
-		var stale = new SemanticWorkspace(modules).member(TClass("demo.Base"), "value");
+		var stale = new SemanticWorkspace(modules).member(TInstance(Class, "demo.Base", []), "value");
 		expect(stale != null && stale.state == base, "failed edits should retain last-good workspace lookup");
 
 		var other = parsedState("other.Base", "package other; function Base():Int return 2;");

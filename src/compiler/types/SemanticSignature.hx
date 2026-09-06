@@ -21,9 +21,9 @@ class SemanticSignature {
 			case TRange: "Range";
 			case TVoid: "Void";
 			case TTypeParameter(owner, name): 'type-parameter:$owner:$name';
-			case TClass(name): 'class:$name';
-			case TInterface(name): 'interface:$name';
-			case TEnum(name, arguments): 'enum:$name<${[for (argument in arguments) type(argument)].join(",")}>';
+			case TInstance(Class, name, arguments): 'class:$name<${[for (argument in arguments) type(argument)].join(",")}>';
+			case TInstance(Interface, name, arguments): 'interface:$name<${[for (argument in arguments) type(argument)].join(",")}>';
+			case TInstance(Enum, name, arguments): 'enum:$name<${[for (argument in arguments) type(argument)].join(",")}>';
 			case TNull: "null";
 			case TNullable(element): 'Null<${type(element)}>';
 			case TArray(element): 'Array<${type(element)}>';

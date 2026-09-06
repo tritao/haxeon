@@ -150,7 +150,7 @@ class DeclarationIndex {
 					var declaration = enums.get(name);
 					if (arguments.length != declaration.typeParameters.length)
 						fail('Type "$name" expects ${declaration.typeParameters.length} type arguments, got ${arguments.length}', span);
-					TEnum(name, [
+					TInstance(Enum, name, [
 						for (argument in arguments)
 							resolveInner(argument, span, resolving, substitutions)
 					]);
@@ -192,8 +192,9 @@ class DeclarationIndex {
 			resolveAlias(alias, resolving, substitutions);
 		} else if (enumAbstracts.exists(name)) resolveInner(enumAbstracts.get(name).underlying, span, resolving,
 			substitutions); else if (abstracts.exists(name)) resolveInner(abstracts.get(name).underlying, span, resolving,
-			substitutions); else if (interfaces.exists(name)) TInterface(name); else if (enums.exists(name)) TEnum(name,
-			[]); else if (classes.exists(name)) TClass(name); else if (PlatformAbi.isType(name)) PlatformAbi.valueType(name); else {
+			substitutions); else if (interfaces.exists(name)) TInstance(Interface, name,
+			[]); else if (enums.exists(name)) TInstance(Enum, name,
+			[]); else if (classes.exists(name)) TInstance(Class, name, []); else if (PlatformAbi.isType(name)) PlatformAbi.valueType(name); else {
 			fail('Unknown type "$name"', span);
 			TVoid;
 		};
@@ -211,7 +212,8 @@ class DeclarationIndex {
 	static function nullable(type:CompilerType):CompilerType
 		return switch type {
 			case TNullable(_): type;
-			case TString, TDynamic, TNativeAbstract(_), TClass(_), TInterface(_), TEnum(_, _), TAnonymous(_, _), TArray(_), TFunction(_, _), TMap(_, _):
+			case TString, TDynamic, TNativeAbstract(_), TInstance(Class, _, []), TInstance(Interface, _, []), TInstance(Enum, _, _), TAnonymous(_, _),
+				TArray(_), TFunction(_, _), TMap(_, _):
 				TNullable(type);
 			default: type;
 		};
@@ -230,8 +232,9 @@ class DeclarationIndex {
 			case TRange: "Range";
 			case TVoid: "Void";
 			case TTypeParameter(owner, name): 'type-parameter:$owner:$name';
-			case TClass(name), TInterface(name): name;
-			case TEnum(name, arguments): arguments.length == 0 ? name : '$name<${[for (argument in arguments) typeKey(argument)].join(",")}>';
+			case TInstance(Class, name, arguments), TInstance(Interface, name, arguments):
+				arguments.length == 0 ? name : '$name<${[for (argument in arguments) typeKey(argument)].join(",")}>';
+			case TInstance(Enum, name, arguments): arguments.length == 0 ? name : '$name<${[for (argument in arguments) typeKey(argument)].join(",")}>';
 			case TNull: "null";
 			case TNullable(element): 'Null<${typeKey(element)}>';
 			case TArray(element): 'Array<${typeKey(element)}>';

@@ -56,8 +56,8 @@ class SemanticWorkspace {
 	function memberInner(type:CompilerType, name:String, visiting:Map<String, Bool>):Null<WorkspaceDeclaration> {
 		return switch type {
 			case TNullable(element): memberInner(element, name, visiting);
-			case TClass(className): classMember(className, name, visiting);
-			case TInterface(interfaceName): interfaceMember(interfaceName, name, visiting);
+			case TInstance(Class, className, []): classMember(className, name, visiting);
+			case TInstance(Interface, interfaceName, []): interfaceMember(interfaceName, name, visiting);
 			default: null;
 		};
 	}

@@ -142,7 +142,7 @@ class IrProgramAssembler {
 						{
 							name: capture.field,
 							type: IrGenerator.lowerType(switch capture.source {
-								case CaptureCellLocal(_, cellClass), CaptureCellEnvironmentField(_, cellClass): TClass(cellClass);
+								case CaptureCellLocal(_, cellClass), CaptureCellEnvironmentField(_, cellClass): TInstance(Class, cellClass, []);
 								default: capture.type;
 							})
 						}

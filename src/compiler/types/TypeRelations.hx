@@ -25,9 +25,9 @@ class TypeRelations {
 			return Incompatible;
 		return switch expected {
 			case TDynamic: ToDynamic;
-			case TInterface(name):
+			case TInstance(Interface, name, []):
 				switch actual {
-					case TClass(_), TInterface(_): ToInterface(name);
+					case TInstance(Class, _, []), TInstance(Interface, _, []): ToInterface(name);
 					default: Identity;
 				}
 			case TNullable(_): WrapNullable;
@@ -42,15 +42,15 @@ class TypeRelations {
 			return true;
 		return switch expected {
 			case TDynamic: true;
-			case TClass(expectedName):
+			case TInstance(Class, expectedName, []):
 				switch actual {
-					case TClass(actualName): classReaches(actualName, expectedName);
+					case TInstance(Class, actualName, []): classReaches(actualName, expectedName);
 					default: false;
 				}
-			case TInterface(expectedName):
+			case TInstance(Interface, expectedName, []):
 				switch actual {
-					case TClass(actualName): classReaches(actualName, expectedName);
-					case TInterface(actualName): interfaceReaches(actualName, expectedName);
+					case TInstance(Class, actualName, []): classReaches(actualName, expectedName);
+					case TInstance(Interface, actualName, []): interfaceReaches(actualName, expectedName);
 					default: false;
 				}
 			case TNullable(expectedElement):
@@ -73,9 +73,9 @@ class TypeRelations {
 					case TTypeParameter(otherOwner, otherName): owner == otherOwner && name == otherName;
 					default: false;
 				};
-			case TClass(name): sameClass(right, name);
-			case TInterface(name): sameInterface(right, name);
-			case TEnum(name, arguments): sameEnum(right, name, arguments);
+			case TInstance(Class, name, []): sameClass(right, name);
+			case TInstance(Interface, name, []): sameInterface(right, name);
+			case TInstance(Enum, name, arguments): sameEnum(right, name, arguments);
 			case TNativeAbstract(name): sameNativeAbstract(right, name);
 			case TNullable(element): sameUnary(right, element, true);
 			case TArray(element): sameUnary(right, element, false);
@@ -95,19 +95,19 @@ class TypeRelations {
 
 	static function sameClass(type:CompilerType, name:String):Bool
 		return switch type {
-			case TClass(other): name == other;
+			case TInstance(Class, other, []): name == other;
 			default: false;
 		};
 
 	static function sameInterface(type:CompilerType, name:String):Bool
 		return switch type {
-			case TInterface(other): name == other;
+			case TInstance(Interface, other, []): name == other;
 			default: false;
 		};
 
 	static function sameEnum(type:CompilerType, name:String, arguments:Array<CompilerType>):Bool
 		return switch type {
-			case TEnum(other, otherArguments): name == other && sameTypes(arguments, otherArguments);
+			case TInstance(Enum, other, otherArguments): name == other && sameTypes(arguments, otherArguments);
 			default: false;
 		};
 
@@ -149,8 +149,8 @@ class TypeRelations {
 
 	public static function isReference(type:CompilerType):Bool
 		return switch type {
-			case TString, TBytes, THlBytes, TDynamic, TNativeAbstract(_), TClass(_), TInterface(_), TEnum(_, _), TAnonymous(_, _), TArray(_), TFunction(_, _),
-				TMap(_, _): true;
+			case TString, TBytes, THlBytes, TDynamic, TNativeAbstract(_), TInstance(Class, _, []), TInstance(Interface, _, []), TInstance(Enum, _, _),
+				TAnonymous(_, _), TArray(_), TFunction(_, _), TMap(_, _): true;
 			default: false;
 		};
 

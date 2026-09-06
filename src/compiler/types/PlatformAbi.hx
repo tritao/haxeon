@@ -32,7 +32,7 @@ class PlatformAbi {
 		return switch name {
 			case "haxe.io.BytesInput", "BytesInput": CompilerType.TNativeAbstract("realtime_bytes_input");
 			case "haxe.io.BytesOutput", "BytesOutput": CompilerType.TNativeAbstract("realtime_bytes_output");
-			default: CompilerType.TClass(name);
+			default: CompilerType.TInstance(Class, name, []);
 		};
 
 	public static function constructorNative(name:String):Null<String>

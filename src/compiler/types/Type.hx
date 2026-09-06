@@ -2,6 +2,13 @@ package compiler.types;
 
 import compiler.types.DeclarationIndex.DeclarationId;
 
+/** Kind of declaration referenced by an instantiated nominal type. */
+enum abstract NominalKind(String) {
+	var Class = "class";
+	var Interface = "interface";
+	var Enum = "enum";
+}
+
 /**
  * Canonical semantic types produced by type checking.
  *
@@ -21,9 +28,7 @@ enum CompilerType {
 	TRange;
 	TVoid;
 	TTypeParameter(owner:DeclarationId, name:String);
-	TClass(name:String);
-	TInterface(name:String);
-	TEnum(name:String, arguments:Array<CompilerType>);
+	TInstance(kind:NominalKind, declaration:DeclarationId, arguments:Array<CompilerType>);
 	TNull;
 	TNullable(element:CompilerType);
 	TArray(element:CompilerType);

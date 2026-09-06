@@ -415,7 +415,7 @@ class IrGenerator {
 							nextBlock = builder.createBlock();
 						builder.select(checkBlock);
 						var switchValue = switch expression.type {
-							case TEnum(_, _): builder.enumIndex(builder.load(switchName, switchType));
+							case TInstance(Enum, _, _): builder.enumIndex(builder.load(switchName, switchType));
 							default: builder.load(switchName, switchType);
 						}, caseValue = switchCase.constructorIndex >= 0 ? builder.constInt(switchCase.constructorIndex) : lowerExpression(switchCase.value,
 							builder, localTypes);
@@ -443,7 +443,7 @@ class IrGenerator {
 					}
 					builder.select(checkBlock);
 					if (!hasDefault && switch expression.type {
-							case TEnum(_, _): true;
+							case TInstance(Enum, _, _): true;
 							default: false;
 						})
 						builder.jump(checkBlock);
@@ -630,7 +630,7 @@ class IrGenerator {
 					left = operands[0],
 					right = operands[1];
 				var isEnum = switch a.type {
-					case TEnum(_, _): true;
+					case TInstance(Enum, _, _): true;
 					default: false;
 				};
 				if (isEnum) {
@@ -717,7 +717,7 @@ class IrGenerator {
 				builder.store(subjectName, lowerExpression(subject, builder, localTypes));
 				if (defaultExpression != null)
 					switch subject.type {
-						case TEnum(_, _):
+						case TInstance(Enum, _, _):
 							var firstCheck = builder.createBlock(),
 								subjectValue = builder.load(subjectName, subjectType);
 							builder.branch(builder.equal(subjectValue, builder.constNull(subjectType)), fallbackBlock, firstCheck);
@@ -732,7 +732,7 @@ class IrGenerator {
 					builder.select(checkBlocks[caseIndex]);
 					var subjectValue = builder.load(subjectName, subjectType),
 						comparisonValue = switch subject.type {
-							case TEnum(_, _): builder.enumIndex(subjectValue);
+							case TInstance(Enum, _, _): builder.enumIndex(subjectValue);
 							default: subjectValue;
 						};
 					var caseValue = switchCase.constructorIndex >= 0 ? builder.constInt(switchCase.constructorIndex) : lowerExpression(switchCase.value,
@@ -1234,10 +1234,10 @@ class IrGenerator {
 			case TRange: Array(I32);
 			case TVoid: Void;
 			case TTypeParameter(owner, name): throw 'Unsubstituted type parameter "$owner.$name" reached IR lowering';
-			case TClass(name): name == "haxe.io.Eof" ? Dyn : Obj(name);
+			case TInstance(Class, name, _): name == "haxe.io.Eof" ? Dyn : Obj(name);
 			case TMap(key, value): Abstract(RuntimeType.requireMapName(key, value));
-			case TInterface(name): Virtual(name);
-			case TEnum(name, _): Enum(name);
+			case TInstance(Interface, name, _): Virtual(name);
+			case TInstance(Enum, name, _): Enum(name);
 			case TNull: Void;
 			case TNullable(element): lowerType(element);
 			case TArray(element): Array(lowerType(element));
