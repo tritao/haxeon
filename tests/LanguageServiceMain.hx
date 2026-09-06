@@ -326,9 +326,10 @@ class LanguageServiceMain {
 		var largeText = largeSource.toString();
 		largeService.update("Large.hx", largeText);
 		largeService.compile("Large");
-		var firstLargeCompletion = largeService.complete("Large.hx", largeText.length),
+		var largeCompletionResult = largeService.completeResult("Large.hx", largeText.length),
+			firstLargeCompletion = largeCompletionResult.items,
 			secondLargeCompletion = largeService.complete("Large.hx", largeText.length);
-		if (firstLargeCompletion.length != 200 || secondLargeCompletion.length != firstLargeCompletion.length)
+		if (!largeCompletionResult.isIncomplete || firstLargeCompletion.length != 200 || secondLargeCompletion.length != firstLargeCompletion.length)
 			throw 'completion result limit was not enforced: ${firstLargeCompletion.length}';
 		for (index in 0...firstLargeCompletion.length)
 			if (firstLargeCompletion[index].label != secondLargeCompletion[index].label)

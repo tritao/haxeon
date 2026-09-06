@@ -36,6 +36,7 @@ class LspProtocol {
 	var diagnosticToken:Null<CancellationToken>;
 	var deferDiagnostics = false;
 	var analysisGeneration = 0;
+	var completionSnippets = false;
 
 	public var lastForegroundAnalysisMs(default, null):Float = 0.0;
 	public var lastBackgroundAnalysisMs(default, null):Float = 0.0;
@@ -73,11 +74,12 @@ class LspProtocol {
 					[];
 				case "textDocument/didOpen": synchronize(request, true);
 				case "textDocument/didChange": synchronize(request, false);
-				case "textDocument/didClose": close(request);
+				case "textDocument/didClose": closeDocument(request);
 				case "workspace/didChangeWatchedFiles": watchedFiles(request);
 				case "workspace/didChangeConfiguration": changeConfiguration(request);
 				case "textDocument/documentSymbol": cancellable(id, token -> documentSymbols(request, token));
 				case "textDocument/completion": cancellable(id, token -> completion(request, token));
+				case "textDocument/documentHighlight": cancellable(id, token -> documentHighlights(request, token));
 				case "textDocument/hover": cancellable(id, token -> hover(request, token));
 				case "textDocument/signatureHelp": cancellable(id, token -> signatureHelp(request, token));
 				case "textDocument/definition": cancellable(id, token -> definition(request, token));
@@ -142,7 +144,9 @@ class LspProtocol {
 	}
 
 	function initialize(request:Dynamic, id:Dynamic):Array<String> {
-		project.initialize(required(request, "params"), service);
+		var params = required(request, "params");
+		completionSnippets = clientCompletionSnippets(params);
+		project.initialize(params, service);
 		if (project.configurations.length > 0)
 			configure(project.configurations[0]);
 		var result = [response(id, initializeResult())];
@@ -199,6 +203,7 @@ class LspProtocol {
 				textDocumentSync: {openClose: true, change: 1},
 				documentSymbolProvider: true,
 				completionProvider: {triggerCharacters: ["."]},
+				documentHighlightProvider: true,
 				hoverProvider: true,
 				signatureHelpProvider: {triggerCharacters: ["(", ","]},
 				definitionProvider: true,
@@ -244,7 +249,7 @@ class LspProtocol {
 		return generation == analysisGeneration ? diagnosticNotifications(generation) : [];
 	}
 
-	function close(request:Dynamic):Array<String> {
+	function closeDocument(request:Dynamic):Array<String> {
 		var uri = documentUri(request),
 			document = documents.get(uri),
 			compilerPath = project.compilerPath(document.path),
@@ -378,20 +383,39 @@ class LspProtocol {
 	function completion(request:Dynamic, token:CancellationToken):Dynamic {
 		var document = document(request);
 		ensureAnalyzed(document, token);
-		var offset = positionOffset(document, position(request));
+		var offset = positionOffset(document, position(request)),
+			start = identifierStart(document.source, offset),
+			completion = service.completeResult(compilerPath(document), offset, token);
 		return {
-			isIncomplete: false,
+			isIncomplete: completion.isIncomplete,
 			items: [
-				for (item in service.complete(compilerPath(document), offset, token))
+				for (item in completion.items) {
+					var insertion = item.insertText == null ? item.label : item.insertText,
+						snippet = completionSnippets && StringTools.endsWith(insertion, "(");
 					{
 						label: item.label,
 						kind: completionKind(item.kind),
 						detail: item.detail,
 						sortText: item.sortText,
-						insertText: item.insertText
+						insertTextFormat: snippet ? 2 : 1,
+						textEdit: {
+							range: document.range(start, offset),
+							newText: snippet ? insertion + "${1})" : insertion
+						}
 					}
+				}
 			]
 		};
+	}
+
+	function documentHighlights(request:Dynamic, token:CancellationToken):Array<Dynamic> {
+		var document = document(request);
+		ensureAnalyzed(document, token);
+		requireCurrent(document);
+		return [
+			for (highlight in service.documentHighlights(compilerPath(document), positionOffset(document, position(request)), token))
+				{range: document.range(highlight.span.start, highlight.span.end), kind: highlight.write ? 3 : 2}
+		];
 	}
 
 	function hover(request:Dynamic, token:CancellationToken):Dynamic {
@@ -595,6 +619,26 @@ class LspProtocol {
 
 	static function positionOffset(document:LspDocument, position:Dynamic):Int
 		return document.offset(requiredInt(position, "line"), requiredInt(position, "character"));
+
+	static function identifierStart(source:String, position:Int):Int {
+		while (position > 0) {
+			var code = source.charCodeAt(position - 1);
+			if (!(code >= 65 && code <= 90 || code >= 97 && code <= 122 || code >= 48 && code <= 57 || code == 95))
+				break;
+			position--;
+		}
+		return position;
+	}
+
+	static function clientCompletionSnippets(params:Dynamic):Bool {
+		var value:Dynamic = Reflect.field(params, "capabilities");
+		for (name in ["textDocument", "completion", "completionItem"]) {
+			if (value == null)
+				return false;
+			value = Reflect.field(value, name);
+		}
+		return value != null && Reflect.field(value, "snippetSupport") == true;
+	}
 
 	static function diagnosticJson(diagnostic:Diagnostic):Dynamic
 		return {

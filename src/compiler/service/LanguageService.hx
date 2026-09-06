@@ -38,6 +38,17 @@ typedef CompletionItem = {
 	final ?insertText:String;
 }
 
+typedef CompletionResult = {
+	final items:Array<CompletionItem>;
+	final isIncomplete:Bool;
+}
+
+/** A same-document semantic occurrence, classified for LSP highlighting. */
+typedef DocumentHighlight = {
+	final span:SourceSpan;
+	final write:Bool;
+}
+
 /** Source location returned by a semantic navigation query. */
 typedef SymbolLocation = {
 	final ?revision:Int;
@@ -187,14 +198,17 @@ class LanguageService {
 		return result;
 	}
 
-	public function complete(path:String, position:Int, ?token:CancellationToken):Array<CompletionItem> {
+	public function complete(path:String, position:Int, ?token:CancellationToken):Array<CompletionItem>
+		return completeResult(path, position, token).items;
+
+	public function completeResult(path:String, position:Int, ?token:CancellationToken):CompletionResult {
 		if (token != null)
 			token.check();
 		var state = stateFor(path),
 			result:Array<CompletionItem> = [],
 			ast = state == null ? null : effectiveAst(state);
 		if (state == null || ast == null)
-			return result;
+			return completionResult(result);
 		var prefix = identifierPrefix(state.source.text, position);
 		var qualifier = memberQualifier(state.source.text, position),
 			model = effectiveSemanticModel(state),
@@ -235,7 +249,7 @@ class LanguageService {
 			if (result.length > 0) {
 				sortCompletion(result);
 				tagResults(result, state);
-				return limitedCompletion(result);
+				return completionResult(result);
 			}
 		}
 		if (semanticContext != null)
@@ -260,7 +274,27 @@ class LanguageService {
 			addMember(symbol.name, symbol.kind, symbol.detail, prefix, result);
 		sortCompletion(result);
 		tagResults(result, state);
-		return limitedCompletion(result);
+		return completionResult(result);
+	}
+
+	public function documentHighlights(path:String, position:Int, ?token:CancellationToken):Array<DocumentHighlight> {
+		if (token != null)
+			token.check();
+		var context = semanticQuery(path, position), result:Array<DocumentHighlight> = [];
+		if (context == null || context.symbol == null)
+			return result;
+		var declaration = context.model.index.symbol(context.symbol),
+			source = context.state.source.text;
+		for (span in context.model.index.locations(context.symbol)) {
+			if (token != null)
+				token.check();
+			result.push({
+				span: span,
+				write: declaration != null && sameSpan(span, declaration.declaration) || assignmentFollows(source, span.end)
+			});
+		}
+		result.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
+		return result;
 	}
 
 	public function hover(path:String, position:Int):Null<String> {
@@ -603,8 +637,29 @@ class LanguageService {
 	static function sortCompletion(result:Array<CompletionItem>):Void
 		result.sort(function(left, right) return Reflect.compare(left.sortText, right.sortText));
 
-	static function limitedCompletion(result:Array<CompletionItem>):Array<CompletionItem>
-		return result.length > MAX_COMPLETION_ITEMS ? result.slice(0, MAX_COMPLETION_ITEMS) : result;
+	static function completionResult(result:Array<CompletionItem>):CompletionResult {
+		var incomplete = result.length > MAX_COMPLETION_ITEMS;
+		return {items: incomplete ? result.slice(0, MAX_COMPLETION_ITEMS) : result, isIncomplete: incomplete};
+	}
+
+	static function sameSpan(left:SourceSpan, right:SourceSpan):Bool
+		return left.file.path == right.file.path && left.start == right.start && left.end == right.end;
+
+	static function assignmentFollows(source:String, position:Int):Bool {
+		while (position < source.length) {
+			var code = source.charCodeAt(position);
+			if (code != 32 && code != 9 && code != 10 && code != 13)
+				break;
+			position++;
+		}
+		if (position >= source.length)
+			return false;
+		var current = source.charAt(position), next = source.charAt(position + 1);
+		if (current == "=")
+			return next != "=" && next != ">";
+		return (current == "+" || current == "-" || current == "*" || current == "/" || current == "%" || current == "&" || current == "|"
+			|| current == "^") && next == "=";
+	}
 
 	static function completionTypeCompatible(actual:CompilerType, expected:CompilerType):Bool {
 		if (TypeRelations.equals(actual, expected))

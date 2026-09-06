@@ -17,6 +17,12 @@ class BlockingLanguageService extends LanguageService {
 		resume.wait();
 		return super.complete(path, position, token);
 	}
+
+	public override function completeResult(path:String, position:Int, ?token:CancellationToken):compiler.service.LanguageService.CompletionResult {
+		entered.release();
+		resume.wait();
+		return super.completeResult(path, position, token);
+	}
 }
 
 class LspProtocolMain {
@@ -31,10 +37,12 @@ class LspProtocolMain {
 		var service = new LanguageService(),
 			protocol = new LspProtocol(service);
 		service.compiler.enablePublicationTracking();
-		var initialized = request(protocol, '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}');
+		var initialized = request(protocol,
+			'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{"textDocument":{"completion":{"completionItem":{"snippetSupport":true}}}}}}');
 		if (!initialized.result.capabilities.hoverProvider
 			|| initialized.result.capabilities.signatureHelpProvider == null
-			|| initialized.result.capabilities.textDocumentSync.change != 1)
+			|| initialized.result.capabilities.textDocumentSync.change != 1
+			|| !initialized.result.capabilities.documentHighlightProvider)
 			throw "LSP initialization capabilities are incomplete";
 		var watcherRegistration = protocol.handle('{"jsonrpc":"2.0","method":"initialized","params":{}}');
 		if (watcherRegistration.length != 1
@@ -236,6 +244,14 @@ class LspProtocolMain {
 		}));
 		if (hover.result == null || hover.result.contents.value != "main():Int")
 			throw "LSP hover did not use the compiler language service";
+		var highlights = request(protocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 5,
+			method: "textDocument/documentHighlight",
+			params: {textDocument: {uri: uri}, position: {line: 0, character: source.lastIndexOf("answer") + 2}}
+		}));
+		if (highlights.result.length != 2 || highlights.result[0].kind != 3 || highlights.result[1].kind != 2)
+			throw "LSP document highlights did not classify declaration and read occurrences";
 		var callSource = "function add(left:Int, right:Int):Int return left + right; function main():Int return add(20, 22);",
 			callUri = "file:///workspace/Call.hx";
 		protocol.handle(Json.stringify({
@@ -264,10 +280,15 @@ class LspProtocolMain {
 			jsonrpc: "2.0",
 			id: 7,
 			method: "textDocument/completion",
-			params: {textDocument: {uri: callUri}, position: {line: 0, character: callSource.lastIndexOf("add")}}
+			params: {textDocument: {uri: callUri}, position: {line: 0, character: callSource.lastIndexOf("add") + 2}}
 		})), foundRankedCall = false;
 		for (item in cast(completion.result.items, Array<Dynamic>))
-			if (item.label == "add" && item.sortText != null && item.insertText == "add(")
+			if (item.label == "add"
+				&& item.sortText != null
+				&& item.insertTextFormat == 2
+				&& item.textEdit.newText == "add(${1})"
+				&& item.textEdit.range.start.character == callSource.lastIndexOf("add")
+				&& item.textEdit.range.end.character == callSource.lastIndexOf("add") + 2)
 				foundRankedCall = true;
 		if (!foundRankedCall)
 			throw "LSP completion omitted compiler ranking or insertion metadata";
