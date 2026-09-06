@@ -36,6 +36,7 @@ cc -shared -fPIC -DHL_NAME\(n\)=realtime_##n \
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run AbiMatrixMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run LanguageServiceMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ProtocolMain
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run LspProtocolMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run RuntimeDomainMain
 stdlib_output="$root_dir/out/stdlib.hl"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run StdlibMain "$stdlib_output"
