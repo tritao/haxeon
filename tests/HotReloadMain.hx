@@ -45,6 +45,7 @@ class HotReloadMain {
 		if (Runtime.retryRetirements() != 0)
 			throw "released object kept module retirement blocked after its frame unwound";
 		testPhysicalModuleReclamation();
+		testFailedInitializerRetirement();
 		testCompilerRestart();
 		var compiler = new Compiler();
 		compiler.update("Value.hx", "function value():Int { return 42; }");
@@ -335,6 +336,9 @@ class HotReloadMain {
 		} catch (error:Dynamic) {
 			return 'error-$error';
 		}
+		Runtime.drainRetirements();
+		if (Runtime.pendingRetirementCount != 0)
+			throw "retirement backlog metric remained nonzero after drain";
 	}
 
 	static function testRetainedObject():Void {
@@ -418,6 +422,27 @@ class HotReloadMain {
 		if (Runtime.callInt(loaded, mainId) != 42)
 			throw "disposable generation returned the wrong value";
 		Runtime.dispose(loaded);
+	}
+
+	static function testFailedInitializerRetirement():Void {
+		produceFailedInitializer();
+		Runtime.drainRetirements();
+		if (Runtime.pendingRetirementCount != 0)
+			throw "failed initializer lost or retained its internally owned module";
+	}
+
+	static function produceFailedInitializer():Void {
+		var compiler = new Compiler();
+		compiler.update("Main.hx",
+			'class Main { public static var value:Int = fail(); static function fail():Int { throw "initialization failed"; } } function main():Int { return Main.value; }');
+		var result = compiler.compile("Main");
+		try {
+			Runtime.load(HlWriter.encode(result.module), result.runtimeIdentity);
+			throw "throwing module initializer unexpectedly loaded";
+		} catch (error:RuntimeError) {
+			if (error.status != RuntimeStatus.BadFormat)
+				throw error;
+		}
 	}
 
 	static function testPatchContract():Void {

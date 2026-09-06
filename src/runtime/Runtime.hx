@@ -68,6 +68,12 @@ private class RuntimeNative {
 	public static function dispose(module:hl.Abstract<"realtime_module">):Int
 		return -1;
 
+	public static function retry_failed_retirements():Int
+		return 0;
+
+	public static function failed_retirement_count():Int
+		return 0;
+
 	public static function inspect_patch(bytes:hl.Bytes, length:Int):Int
 		return -1;
 }
@@ -79,6 +85,15 @@ private class RuntimeNative {
 class Runtime {
 	static final retirementBacklog:Array<LoadedModule> = [];
 	static final retirementMutex = new Mutex();
+
+	public static var pendingRetirementCount(get, never):Int;
+
+	static function get_pendingRetirementCount():Int {
+		retirementMutex.acquire();
+		var count = retirementBacklog.length + RuntimeNative.failed_retirement_count();
+		retirementMutex.release();
+		return count;
+	}
 
 	public static function inspectPatch(bytes:Bytes):{baseRevision:Int, revision:Int, functionCount:Int} {
 		var summary = RuntimeNative.inspect_patch(bytes.getData(), bytes.length);
@@ -187,12 +202,20 @@ class Runtime {
 					retirementBacklog[write++] = module;
 			}
 			retirementBacklog.resize(write);
+			write += RuntimeNative.retry_failed_retirements();
 			retirementMutex.release();
 			return write;
 		} catch (error:Dynamic) {
 			retirementMutex.release();
 			throw error;
 		}
+	}
+
+	/** Reclaim every pending module or report that shutdown still has borrowers. */
+	public static function drainRetirements():Void {
+		var pending = retryRetirements();
+		if (pending != 0)
+			throw new RuntimeError(RuntimeStatus.RetirementBlocked, '$pending runtime module retirement(s) remain blocked');
 	}
 
 	static function tryDispose(module:LoadedModule):Bool

@@ -99,9 +99,23 @@ requires plugins to deactivate and unregister callbacks before disposal; native
 code that retains an unregistered raw JIT address, or a module that starts an
 untracked background thread, remains outside the supported runtime API.
 
+The public HashLink unload path uses the same borrower-checked retirement
+operation. Forceful module teardown has the explicit
+`hl_module_free_shutdown()` name and is limited to initialization cleanup and
+process shutdown. A module whose initializer throws is owned by an internal
+HashLink retirement queue until its cleared exception frame becomes collectible;
+that queue participates in retries and is force-drained before the module
+registry and GC are destroyed globally.
+
+The Haxe backlog is synchronized and observable through
+`Runtime.pendingRetirementCount`. `Runtime.drainRetirements()` provides the final
+shutdown gate: it either empties both Haxe and failed-load queues or raises a
+typed `RetirementBlocked` error while ownership remains intact.
+
 ## Reproduction gate
 
 Use `./test-hot-reload.sh` after any unload change. It includes 100 repeated
 load/call/retire cycles with physical JIT unmapping, retained-object and closure
-retries, patch stress, and exception paths. Run `./scripts/test-poc.sh` for the
-full compiler, plugin, and runtime regression suite.
+retries, a throwing initializer, patch stress, and exception paths. Run
+`./scripts/test-poc.sh` for the full compiler, plugin, and runtime regression
+suite.
