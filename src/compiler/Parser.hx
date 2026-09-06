@@ -307,6 +307,16 @@ class Parser {
 		return result;
 	}
 
+	function parseTypeArguments():Array<AstType> {
+		var result = [];
+		if (!match(TokenKind.Less))
+			return result;
+		do
+			result.push(parseType()) while (match(TokenKind.Comma));
+		consume(TokenKind.Greater);
+		return result;
+	}
+
 	function parseClass(isPrivate:Bool, metadata:Array<compiler.Ast.AstMetadata>):AstClass {
 		var start = consume(TokenKind.Class).span,
 			name = consume(TokenKind.Identifier).text,
@@ -1011,6 +1021,7 @@ class Parser {
 				return parsePostfix(NewMap(key, value, start.merge(end)));
 			}
 			var typeName = parseQualifiedName();
+			var typeArguments = parseTypeArguments();
 			consume(TokenKind.LeftParen);
 			var arguments = [];
 			if (!check(TokenKind.RightParen)) {
@@ -1018,7 +1029,8 @@ class Parser {
 					arguments.push(parseExpression()) while (match(TokenKind.Comma));
 			}
 			var end = consume(TokenKind.RightParen).span;
-			return parsePostfix(New(typeName, arguments, start.merge(end)));
+			return parsePostfix(typeArguments.length == 0 ? New(typeName, arguments,
+				start.merge(end)) : NewGeneric(typeName, typeArguments, arguments, start.merge(end)));
 		}
 		if (check(TokenKind.LeftParen)) {
 			var saved = position,
@@ -1492,9 +1504,10 @@ class Parser {
 				Variable(_, span), Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span), Div(_, _, span), Mod(_, _, span),
 				BitAnd(_, _, span), BitXor(_, _, span), BitOr(_, _, span), ShiftLeft(_, _, span), ShiftRight(_, _, span), UnsignedShiftRight(_, _, span),
 				Negate(_, span), Less(_, _, span), LessEqual(_, _, span), Greater(_, _, span), GreaterEqual(_, _, span), Equal(_, _, span),
-				NotEqual(_, _, span), Not(_, span), Call(_, _, span), MethodCall(_, _, _, span), New(_, _, span), NewArray(_, _, span), NewMap(_, _, span),
-				Index(_, _, span), PostfixIncrement(_, _, span), Lambda(_, _, span), And(_, _, span), Or(_, _, span), Conditional(_, _, _, span),
-				BlockExpression(_, _, span), ThrowExpression(_, span), SwitchExpression(_, _, _, span), Cast(_, _, span): span;
+				NotEqual(_, _, span), Not(_, span), Call(_, _, span), MethodCall(_, _, _, span), New(_, _, span), NewGeneric(_, _, _, span),
+				NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span), PostfixIncrement(_, _, span), Lambda(_, _, span), And(_, _, span),
+				Or(_, _, span), Conditional(_, _, _, span), BlockExpression(_, _, span), ThrowExpression(_, span), SwitchExpression(_, _, _, span),
+				Cast(_, _, span): span;
 			case ObjectLiteral(_, span), ArrayLiteral(_, span), MapLiteral(_, span), ArrayComprehension(_, _, _, _, _, span),
 				MapComprehension(_, _, _, _, _, _, span), Range(_, _, span): span;
 		}

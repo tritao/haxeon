@@ -258,7 +258,7 @@ class CaptureAnalysis {
 				collectMutableCaptureExpression(right, outerDeclared, result);
 			case Negate(value, _), Not(value, _):
 				collectMutableCaptureExpression(value, outerDeclared, result);
-			case New(_, arguments, _):
+			case New(_, arguments, _), NewGeneric(_, _, arguments, _):
 				for (argument in arguments)
 					collectMutableCaptureExpression(argument, outerDeclared, result);
 			case NewArray(_, length, _):
@@ -395,7 +395,7 @@ class CaptureAnalysis {
 			case Range(start, rangeEnd, _):
 				collectExpressionVariables(start, names);
 				collectExpressionVariables(rangeEnd, names);
-			case New(_, arguments, _):
+			case New(_, arguments, _), NewGeneric(_, _, arguments, _):
 				for (argument in arguments)
 					collectExpressionVariables(argument, names);
 			case NewArray(_, length, _):

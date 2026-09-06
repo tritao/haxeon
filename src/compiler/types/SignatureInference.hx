@@ -162,6 +162,7 @@ class SignatureInference {
 			case StringLiteral(_, _): StringType;
 			case BoolLiteral(_, _): BoolType;
 			case New(name, _, _): NamedType(name);
+			case NewGeneric(name, typeArguments, _, _): AppliedType(name, typeArguments);
 			case NewArray(element, _, _): ArrayType(element);
 			default: null;
 		};
@@ -216,7 +217,7 @@ class SignatureInference {
 				}
 			case MethodCall(_, name, arguments, _):
 				inferArgumentsFromCallable(methods, name, arguments, inferred);
-			case New(name, arguments, _):
+			case New(name, arguments, _), NewGeneric(name, _, arguments, _):
 				inferArgumentsFromCallable(constructors, name, arguments, inferred);
 			default:
 		}
@@ -302,6 +303,7 @@ class SignatureInference {
 			case BoolLiteral(_, _): BoolType;
 			case Variable(name, _): environment.get(name);
 			case New(name, _, _): NamedType(name);
+			case NewGeneric(name, typeArguments, _, _): AppliedType(name, typeArguments);
 			case NewArray(element, _, _): ArrayType(element);
 			case Call(name, _, _): var method = methods == null ? null : methods.get(localMethodName(name)); method == null || method.result == InferredType ? null : method.result;
 			case SwitchExpression(subject, cases, fallback, _):

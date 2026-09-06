@@ -208,6 +208,7 @@ run_program do-while 42
 run_program postfix-increment 42
 run_program optional-enum-parameter 42
 run_program generic-functions 42
+run_program generic-class 42
 
 object_output="$root_dir/out/object.hl"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ObjectMain "$object_output"

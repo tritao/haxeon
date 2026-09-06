@@ -169,6 +169,7 @@ enum AstExpression {
 	Call(name:String, arguments:Array<AstExpression>, span:SourceSpan);
 	MethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan);
 	New(typeName:String, arguments:Array<AstExpression>, span:SourceSpan);
+	NewGeneric(typeName:String, typeArguments:Array<AstType>, arguments:Array<AstExpression>, span:SourceSpan);
 	NewArray(element:AstType, length:AstExpression, span:SourceSpan);
 	NewMap(key:AstType, value:AstType, span:SourceSpan);
 	Index(array:AstExpression, index:AstExpression, span:SourceSpan);

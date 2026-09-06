@@ -370,17 +370,21 @@ class Typer {
 	}
 
 	function typeClass(classDecl:AstClass, classes:Map<String, AstClass>, selected:Null<Map<String, Bool>>):TypedClass {
-		var fields:Array<TypedField> = [], fieldNames:Map<String, Bool> = [];
+		var fields:Array<TypedField> = [],
+			fieldNames:Map<String, Bool> = [],
+			erasedSubstitutions:Map<String, CompilerType> = [];
+		for (parameter in classDecl.typeParameters)
+			erasedSubstitutions.set(parameter, TDynamic);
 		for (field in classDecl.fields) {
 			if (fieldNames.exists(field.name))
 				fail("E1000", 'Duplicate field "${classDecl.name}.${field.name}"', field.span);
-			var type = lowerType(FieldInference.parsedType(field));
+			var type = declarations.resolve(FieldInference.parsedType(field), field.span, erasedSubstitutions);
 			if (type == TVoid)
 				fail("E1002", 'Field "${classDecl.name}.${field.name}" cannot have type Void', field.span);
 			var initializer:Null<TypedExpression> = null,
 				parsedInitializer = field.initializer;
 			if (parsedInitializer != null) {
-				var initializerContext = enterBody(classDecl.name + ".__init");
+				var initializerContext = enterBody(classDecl.name + ".__init", erasedSubstitutions);
 				var scope = new Scope();
 				if (!field.isStatic)
 					scope.defineReceiver(TInstance(Class, classDecl.name, []), field.span);
@@ -416,7 +420,8 @@ class Typer {
 				continue;
 			var qualified = classDecl.name + "." + method.name,
 				typeBody = selected == null || selected.exists(qualified),
-				typedMethod = typeBody ? typeFunction(method, classDecl.name, method.isStatic) : methodSignature(method, classDecl.name);
+				typedMethod = typeBody ? typeFunction(method, classDecl.name, method.isStatic,
+					erasedSubstitutions) : methodSignature(method, classDecl.name, erasedSubstitutions);
 			if (method.name == "new") {
 				hasConstructor = true;
 				if (typeBody && instanceInitializers.length > 0)
@@ -447,7 +452,7 @@ class Typer {
 		};
 	}
 
-	function methodSignature(method:AstFunction, owner:String):TypedFunction
+	function methodSignature(method:AstFunction, owner:String, ?substitutions:Map<String, CompilerType>):TypedFunction
 		return {
 			name: owner + "." + method.name,
 			owner: owner,
@@ -457,10 +462,10 @@ class Typer {
 				for (argument in method.arguments)
 					{
 						name: argument.name,
-						type: lowerType(argument.type)
+						type: substitutions == null ? lowerType(argument.type) : declarations.resolve(argument.type, argument.span, substitutions)
 					}
 			],
-			result: lowerType(method.result),
+			result: substitutions == null ? lowerType(method.result) : declarations.resolve(method.result, method.span, substitutions),
 			statements: [],
 			cells: [],
 			cellCaptures: [],
@@ -541,8 +546,13 @@ class Typer {
 		}
 		var scope = new Scope();
 		var isConstructor = owner != null && fn.name == "new";
-		if (owner != null && !isStatic)
-			scope.defineReceiver(TInstance(Class, owner, []), fn.span);
+		if (owner != null && !isStatic) {
+			var receiverArguments:Array<CompilerType> = [];
+			if (classDecls.exists(owner))
+				for (parameter in classDecls.get(owner).typeParameters)
+					receiverArguments.push(context.typeSubstitutions.exists(parameter) ? context.typeSubstitutions.get(parameter) : TDynamic);
+			scope.defineReceiver(TInstance(Class, owner, receiverArguments), fn.span);
+		}
 		var arguments = [];
 		for (argument in fn.arguments) {
 			var type = argumentType(argument);
@@ -1887,6 +1897,23 @@ class Typer {
 				if (typedStart.type != TInt || typedEnd.type != TInt)
 					fail("E1014", "Range bounds must be Int values", span);
 				new TypedExpression(TRange(typedStart, typedEnd), TRange, span);
+			case NewGeneric(typeName, typeArguments, arguments, span):
+				if (!classDecls.exists(typeName) || interfaceDecls.exists(typeName))
+					fail("E1007", 'Unknown class "$typeName"', span);
+				var valueType = declarations.resolve(AppliedType(typeName, typeArguments), span),
+					substitutions = nominalSubstitutions(valueType),
+					constructorName = typeName + ".new",
+					hasConstructor = signatures.exists(constructorName),
+					implicitConstructor = !hasConstructor && [
+						for (field in classDecls.get(typeName).fields)
+							if (!field.isStatic && field.initializer != null) field
+					].length > 0;
+				if (!hasConstructor && arguments.length != 0)
+					fail("E1008", 'Constructor "$typeName" expects 0 arguments, got ${arguments.length}', span);
+				var semanticArguments = hasConstructor ? typeDeclaredCallArguments(arguments, requiredMapValue(signatures, constructorName).arguments, scope,
+					constructorName, span, substitutions) : [];
+				var typed = [for (argument in semanticArguments) abiBoundaryCast(argument, TDynamic)];
+				new TypedExpression(TNew(typeName, typed, hasConstructor || implicitConstructor), valueType, span);
 			case New(typeName, arguments, span):
 				if ((!classDecls.exists(typeName) && !PlatformAbi.isType(typeName)) || interfaceDecls.exists(typeName))
 					fail("E1007", 'Unknown class "$typeName"', span);
@@ -2078,7 +2105,7 @@ class Typer {
 							return new TypedExpression(TCall(platformMethod.nativeName, callArguments), platformMethod.result, span);
 						}
 						var className = switch receiverType {
-							case TInstance(Class, value, []), TInstance(Interface, value, []): value;
+							case TInstance(Class, value, _), TInstance(Interface, value, _): value;
 							default: null;
 						};
 						if (className == null)
@@ -2095,8 +2122,12 @@ class Typer {
 							var specialized = specializeGeneric(methodKey, method, genericArguments, span, methodInfoResult.owner, true);
 							return specialized;
 						}
-						var typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span);
-						applyCallEffect(new TypedExpression(TMethodCall(resolvedReceiver, methodKey, typed), lowerType(method.result), span), methodKey);
+						var substitutions = nominalSubstitutions(receiverType),
+							typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span, substitutions),
+							semanticResult = declarations.resolve(method.result, method.span, substitutions),
+							physicalResult = isGenericNominal(receiverType) ? TDynamic : semanticResult,
+							call = new TypedExpression(TMethodCall(resolvedReceiver, methodKey, typed), physicalResult, span);
+						applyCallEffect(abiBoundaryCast(call, semanticResult), methodKey);
 					} else {
 						var hasSignature = signatures.exists(name);
 						if (hasSignature && isGeneric(requiredMapValue(signatures, name))) {
@@ -2328,8 +2359,16 @@ class Typer {
 		var platformField = PlatformAbi.field(typedObject.type, name);
 		if (platformField != null)
 			return new TypedExpression(TCall(platformField.get, [typedObject]), platformField.type, span);
-		return new TypedExpression(TField(typedObject, name), fieldType(typedObject.type, name, span), span);
+		var semanticType = fieldType(typedObject.type, name, span),
+			physicalType = isGenericNominal(typedObject.type) ? TDynamic : semanticType;
+		return abiBoundaryCast(new TypedExpression(TField(typedObject, name), physicalType, span), semanticType);
 	}
+
+	function isGenericNominal(type:CompilerType):Bool
+		return switch type {
+			case TInstance(Class, _, arguments), TInstance(Interface, _, arguments): arguments.length > 0;
+			default: false;
+		};
 
 	function findStaticField(className:String, name:String, span:SourceSpan):{owner:String, type:CompilerType} {
 		var result = findStaticFieldNullable(className, name);
@@ -2376,8 +2415,10 @@ class Typer {
 			methodKey = methodInfoResult.owner + "." + name,
 			method = signatures.get(methodKey),
 			typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span, substitutions);
-		return applyCallEffect(new TypedExpression(TMethodCall(receiver, methodKey, typed), declarations.resolve(method.result, method.span, substitutions),
-			span), methodKey);
+		var semanticResult = declarations.resolve(method.result, method.span, substitutions),
+			physicalResult = isGenericNominal(receiver.type) ? TDynamic : semanticResult,
+			call = new TypedExpression(TMethodCall(receiver, methodKey, typed), physicalResult, span);
+		return applyCallEffect(abiBoundaryCast(call, semanticResult), methodKey);
 	}
 
 	function typeStringMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):Null<TypedExpression> {

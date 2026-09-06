@@ -344,6 +344,9 @@ class ModuleCanonicalizer {
 				s): MethodCall(canonicalExpression(object, module, entry, locals, aliases), name,
 					[for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
 			case New(typeName, args, s): New(resolveTypeName(typeName, aliases), [for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
+			case NewGeneric(typeName, typeArguments, args, s):
+				NewGeneric(resolveTypeName(typeName, aliases), [for (type in typeArguments) canonicalType(type, aliases)],
+					[for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
 			case NewArray(element, length, s): NewArray(canonicalType(element, aliases), canonicalExpression(length, module, entry, locals, aliases), s);
 			case NewMap(key, value, s): NewMap(canonicalType(key, aliases), canonicalType(value, aliases), s);
 			case Index(array, offset,

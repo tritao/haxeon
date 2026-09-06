@@ -22,6 +22,7 @@ class FieldInference {
 			case StringLiteral(_, _): StringType;
 			case BoolLiteral(_, _): BoolType;
 			case New(typeName, _, _): NamedType(typeName);
+			case NewGeneric(typeName, typeArguments, _, _): AppliedType(typeName, typeArguments);
 			case NewArray(element, _, _): ArrayType(element);
 			case NewMap(key, value, _): MapType(key, value);
 			default:
