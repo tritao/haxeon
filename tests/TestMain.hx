@@ -200,12 +200,7 @@ class TestMain {
 			if (error != "Truncated HLP data")
 				throw error;
 		}
-		var extended = haxe.io.Bytes.alloc(patchBytes.length + 3);
-		extended.blit(0, patchBytes, 0, patchBytes.length);
-		extended.set(22, 3);
-		extended.set(patchBytes.length, 99);
-		extended.set(patchBytes.length + 1, 1);
-		extended.set(patchBytes.length + 2, 42);
+		var extended = HlPatchWriter.encode(patchCode, testModuleId, [1], stableBySlot, 7, 8, 0, 0, 0, 0, [{tag: 99, bytes: haxe.io.Bytes.ofString("*")}]);
 		if (HlPatchReader.decode(extended).functions.length != 1)
 			throw "unknown HLP section changed known data";
 		Sys.println("PASS: selective HLP functions and revisions round trip strictly");

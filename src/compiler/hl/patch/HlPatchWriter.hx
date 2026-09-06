@@ -15,7 +15,10 @@ class HlPatchWriter {
 	static inline final DEBUG = 3;
 
 	public static function encode(code:HlCode, moduleId:HaxeBytes, changedSlots:Array<Int>, stableIdsBySlot:Map<Int, Int>, baseRevision:Int, revision:Int,
-			baseInts:Int = 0, baseFloats:Int = 0, baseStrings:Int = 0, baseTypes:Int = 0):HaxeBytes {
+			baseInts:Int = 0, baseFloats:Int = 0, baseStrings:Int = 0, baseTypes:Int = 0, ?extensionSections:Array<{
+			tag:Int,
+			bytes:HaxeBytes
+		}>):HaxeBytes {
 		if (baseRevision < 0 || revision <= baseRevision)
 			throw "Invalid patch revision range";
 		var selected:Array<HlFunction> = [];
@@ -90,13 +93,19 @@ class HlPatchWriter {
 		out.write(moduleId);
 		writeIndex(out, baseRevision);
 		writeIndex(out, revision);
-		writeIndex(out, debug == null ? 2 : 3);
+		var extensions = extensionSections == null ? [] : extensionSections;
+		for (section in extensions)
+			if (section.tag == SYMBOLS || section.tag == FUNCTIONS || section.tag == DEBUG)
+				throw 'Extension section uses reserved HLP tag ${section.tag}';
+		writeIndex(out, (debug == null ? 2 : 3) + extensions.length);
 		writeSection(out, SYMBOLS, symbols.getBytes());
 		writeSection(out, FUNCTIONS, functions.getBytes());
 		if (debug != null)
 			writeSection(out, DEBUG, debug);
+		for (section in extensions)
+			writeSection(out, section.tag, section.bytes);
 		return out.getBytes();
-	}
+		}
 
 	static function encodeDebug(functions:Array<HlFunction>, stableIdsBySlot:Map<Int, Int>):Null<HaxeBytes> {
 		for (fn in functions)
