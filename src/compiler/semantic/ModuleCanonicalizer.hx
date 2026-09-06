@@ -501,8 +501,10 @@ class ModuleCanonicalizer {
 			case NativeAbstractType(declaration, tag): NativeAbstractType(resolveTypeName(declaration, aliases), tag);
 			case NamedType(name): NamedType(typeParameters != null
 					&& typeParameters.indexOf(name) >= 0 ? name : resolveTypeName(name, aliases));
-			case AppliedType(name,
-				arguments): AppliedType(resolveTypeName(name, aliases), [for (argument in arguments) canonicalType(argument, aliases, typeParameters)]);
+			case AppliedType(name, arguments): AppliedType(resolveTypeName(name, aliases), [
+					for (argument in arguments)
+						canonicalType(argument, aliases, typeParameters)
+				]);
 			case ArrayType(element): ArrayType(canonicalType(element, aliases, typeParameters));
 			case MapType(key, value): MapType(canonicalType(key, aliases, typeParameters), canonicalType(value, aliases, typeParameters));
 			case NullableType(element): NullableType(canonicalType(element, aliases, typeParameters));

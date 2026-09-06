@@ -2239,6 +2239,25 @@ class Typer {
 					return typeAbstractConstruction(typeName, [], arguments, span, scope);
 				if ((!classDecls.exists(typeName) && !PlatformAbi.isType(typeName)) || interfaceDecls.exists(typeName))
 					fail("E1007", 'Unknown class "$typeName"', span);
+				var classSubstitutions:Null<Map<String, CompilerType>> = null,
+					inferredClassType:Null<CompilerType> = null;
+				if (classDecls.exists(typeName) && classDecls.get(typeName).typeParameters.length > 0) {
+					var declaration = classDecls.get(typeName),
+						resolvedArguments:Array<CompilerType> = [];
+					switch expectedType {
+						case TInstance(Class, expectedName, expectedArguments) if (expectedName == typeName):
+							resolvedArguments = expectedArguments.copy();
+						case TNullable(TInstance(Class, expectedName, expectedArguments)) if (expectedName == typeName):
+							resolvedArguments = expectedArguments.copy();
+						default:
+					}
+					while (resolvedArguments.length < declaration.typeParameters.length)
+						resolvedArguments.push(TDynamic);
+					classSubstitutions = [];
+					for (index in 0...declaration.typeParameters.length)
+						classSubstitutions.set(declaration.typeParameters[index], resolvedArguments[index]);
+					inferredClassType = TInstance(Class, typeName, resolvedArguments);
+				}
 				var constructorName = typeName + ".new",
 					hasConstructor = signatures.exists(constructorName),
 					implicitConstructor = !hasConstructor && classDecls.exists(typeName) && [
@@ -2247,16 +2266,16 @@ class Typer {
 					].length > 0;
 				var expected = hasConstructor ? [
 					for (argument in requiredMapValue(signatures, constructorName).arguments)
-						argumentType(argument)
+						argumentType(argument, classSubstitutions)
 				] : PlatformAbi.constructorArguments(typeName), resolvedExpected:Array<CompilerType> = [];
 				if (expected != null)
 					resolvedExpected = expected;
 				if (!hasConstructor && arguments.length != resolvedExpected.length)
 					fail("E1008", 'Constructor "$typeName" expects ${resolvedExpected.length} arguments, got ${arguments.length}', span);
 				var typed = hasConstructor ? typeDeclaredCallArguments(arguments, requiredMapValue(signatures, constructorName).arguments, scope,
-					constructorName, span) : typeCallArguments(arguments, resolvedExpected, scope, constructorName);
+					constructorName, span, classSubstitutions) : typeCallArguments(arguments, resolvedExpected, scope, constructorName);
 				var nativeConstructor = PlatformAbi.constructorNative(typeName),
-					valueType = PlatformAbi.valueType(typeName);
+					valueType = inferredClassType == null ? PlatformAbi.valueType(typeName) : inferredClassType;
 				nativeConstructor == null ? new TypedExpression(TNew(typeName, typed, hasConstructor || implicitConstructor), valueType,
 					span) : new TypedExpression(TCall(nativeConstructor, typed), valueType, span);
 			case NewArray(element, length, span):
