@@ -98,6 +98,8 @@ class LspProtocol {
 				case "textDocument/prepareCallHierarchy": cancellable(id, token -> prepareCallHierarchy(request, token));
 				case "callHierarchy/incomingCalls": cancellable(id, token -> callHierarchyCalls(request, token, true));
 				case "callHierarchy/outgoingCalls": cancellable(id, token -> callHierarchyCalls(request, token, false));
+				case "textDocument/foldingRange": cancellable(id, token -> foldingRanges(request, token));
+				case "textDocument/selectionRange": cancellable(id, token -> selectionRanges(request, token));
 				case "textDocument/hover": cancellable(id, token -> hover(request, token));
 				case "textDocument/signatureHelp": cancellable(id, token -> signatureHelp(request, token));
 				case "textDocument/definition": cancellable(id, token -> definition(request, token));
@@ -235,6 +237,8 @@ class LspProtocol {
 				codeActionProvider: {codeActionKinds: ["quickfix"]},
 				inlayHintProvider: true,
 				callHierarchyProvider: true,
+				foldingRangeProvider: true,
+				selectionRangeProvider: true,
 				hoverProvider: true,
 				signatureHelpProvider: {triggerCharacters: ["(", ","]},
 				definitionProvider: true,
@@ -625,6 +629,43 @@ class LspProtocol {
 			selectionRange: range,
 			data: {identity: item.identity, revision: item.revision}
 		};
+	}
+
+	function foldingRanges(request:Dynamic, token:CancellationToken):Array<Dynamic> {
+		var document = document(request);
+		ensureAnalyzed(document, token);
+		requireCurrent(document);
+		var result:Array<Dynamic> = [];
+		for (fold in service.foldingRanges(compilerPath(document))) {
+			token.check();
+			var start:Dynamic = document.position(fold.span.start), end:Dynamic = document.position(fold.span.end);
+			if (start.line < end.line)
+				result.push({startLine: start.line, startCharacter: start.character, endLine: end.line, endCharacter: end.character, kind: fold.kind});
+		}
+		return result;
+	}
+
+	function selectionRanges(request:Dynamic, token:CancellationToken):Array<Dynamic> {
+		var document = document(request), positions:Array<Dynamic> = cast required(required(request, "params"), "positions"), offsets = [];
+		ensureAnalyzed(document, token);
+		requireCurrent(document);
+		for (position in positions) {
+			token.check();
+			offsets.push(positionOffset(document, position));
+		}
+		return [for (spans in service.selectionRanges(compilerPath(document), offsets)) selectionRange(document, spans)];
+	}
+
+	static function selectionRange(document:LspDocument, spans:Array<compiler.Source.SourceSpan>):Dynamic {
+		var parent:Dynamic = null, index = spans.length - 1;
+		while (index >= 0) {
+			var item:Dynamic = {range: document.range(spans[index].start, spans[index].end)};
+			if (parent != null)
+				Reflect.setField(item, "parent", parent);
+			parent = item;
+			index--;
+		}
+		return parent;
 	}
 
 	function hover(request:Dynamic, token:CancellationToken):Dynamic {

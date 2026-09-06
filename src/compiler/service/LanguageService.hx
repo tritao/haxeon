@@ -118,6 +118,17 @@ typedef CallHierarchyRelation = {
 	final ranges:Array<SourceSpan>;
 }
 
+typedef FoldingRegion = {
+	final span:SourceSpan;
+	final ?kind:String;
+}
+
+private typedef StructuralIndexEntry = {
+	final revision:Int;
+	final folds:Array<FoldingRegion>;
+	final containers:Array<SourceSpan>;
+}
+
 private typedef WorkspaceIndexEntry = {
 	final revision:Int;
 	final symbols:Array<WorkspaceSymbol>;
@@ -171,6 +182,7 @@ class LanguageService {
 	public final compiler:Compiler;
 	final workspaceIndex:Map<String, WorkspaceIndexEntry> = [];
 	final documentationIndex:Map<String, DocumentationIndexEntry> = [];
+	final structuralIndex:Map<String, StructuralIndexEntry> = [];
 	var editorDefines:Map<String, String> = [];
 
 	public function new(?identityState:haxe.io.Bytes)
@@ -186,6 +198,7 @@ class LanguageService {
 		editorDefines = [for (define in defines) define => "1"];
 		workspaceIndex.clear();
 		documentationIndex.clear();
+		structuralIndex.clear();
 		compiler.configure(identity, scopeIdentity, defines);
 	}
 
@@ -300,6 +313,37 @@ class LanguageService {
 	public function isCallHierarchyCurrent(identity:String, revision:Int):Bool {
 		var item = callHierarchyItem(cast identity);
 		return item != null && item.revision == revision;
+	}
+
+	public function foldingRanges(path:String):Array<FoldingRegion> {
+		var state = stateFor(path);
+		return state == null ? [] : indexedStructure(state).folds.copy();
+	}
+
+	public function selectionRanges(path:String, positions:Array<Int>):Array<Array<SourceSpan>> {
+		var state = stateFor(path), result:Array<Array<SourceSpan>> = [];
+		if (state == null)
+			return result;
+		var structure = indexedStructure(state), tokens = effectiveTokens(state);
+		for (position in positions) {
+			var spans:Array<SourceSpan> = [];
+			if (tokens != null)
+				for (token in tokens)
+					if (token.kind != Eof && position >= token.span.start && position <= token.span.end) {
+						spans.push(token.span);
+						break;
+					}
+			for (span in structure.containers)
+				if (position >= span.start && position <= span.end)
+					spans.push(span);
+			spans.sort(function(left, right) return Reflect.compare(left.end - left.start, right.end - right.start));
+			var unique:Array<SourceSpan> = [];
+			for (span in spans)
+				if (unique.length == 0 || unique[unique.length - 1].start != span.start || unique[unique.length - 1].end != span.end)
+					unique.push(span);
+			result.push(unique);
+		}
+		return result;
 	}
 
 	function workspaceSymbolIdentity(identity:String):Null<WorkspaceSymbol> {
@@ -1243,6 +1287,90 @@ class LanguageService {
 			else
 				break;
 		return found == null ? {markdown: "", parameters: [], deprecated: false} : found;
+	}
+
+	function indexedStructure(state:ModuleState):StructuralIndexEntry {
+		var cached = structuralIndex.get(state.name);
+		if (cached != null && cached.revision == state.revision)
+			return cached;
+		var folds:Array<FoldingRegion> = [], containers:Array<SourceSpan> = [], tokens = effectiveTokens(state), source = state.source;
+		if (tokens != null) {
+			var braces:Array<compiler.syntax.Token> = [], firstImport:Null<Int> = null, lastImport:Null<Int> = null, inImport = false;
+			for (token in tokens)
+				switch token.kind {
+					case LeftBrace: braces.push(token);
+					case RightBrace:
+						if (braces.length > 0) {
+							var open = braces.pop(), span = source.span(open.span.start, token.span.end);
+							folds.push({span: span, kind: "region"});
+							containers.push(span);
+						}
+					case Import:
+						inImport = true;
+						if (firstImport == null)
+							firstImport = token.span.start;
+					case Semicolon:
+						if (inImport) {
+							lastImport = token.span.end;
+							inImport = false;
+						}
+					default:
+				}
+			if (firstImport != null && lastImport != null)
+				folds.push({span: source.span(firstImport, lastImport), kind: "imports"});
+		}
+		for (span in commentSpans(source.text, source)) {
+			folds.push({span: span, kind: "comment"});
+			containers.push(span);
+		}
+		addConditionalFolds(source, folds, containers);
+		for (symbol in indexedWorkspaceSymbols(state))
+			containers.push(symbol.span);
+		containers.push(source.span(0, source.text.length));
+		folds.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
+		structuralIndex.set(state.name, cached = {revision: state.revision, folds: folds, containers: containers});
+		return cached;
+	}
+
+	static function commentSpans(text:String, file:compiler.Source.SourceFile):Array<SourceSpan> {
+		var result:Array<SourceSpan> = [], position = 0;
+		while (position + 1 < text.length) {
+			var quote = text.charAt(position);
+			if (quote == "\"" || quote == "'") {
+				position++;
+				while (position < text.length)
+					if (text.charAt(position) == "\\") position += 2; else if (text.charAt(position++) == quote) break;
+				continue;
+			}
+			var marker = text.substr(position, 2), start = position;
+			if (marker == "//") {
+				var newline = text.indexOf("\n", position + 2);
+				position = newline < 0 ? text.length : newline;
+				result.push(file.span(start, position));
+			} else if (marker == "/*") {
+				var close = text.indexOf("*/", position + 2);
+				position = close < 0 ? text.length : close + 2;
+				result.push(file.span(start, position));
+			} else
+				position++;
+		}
+		return result;
+	}
+
+	static function addConditionalFolds(file:compiler.Source.SourceFile, folds:Array<FoldingRegion>, containers:Array<SourceSpan>):Void {
+		var source = file.text, offset = 0, stack:Array<Int> = [];
+		while (offset < source.length) {
+			var newline = source.indexOf("\n", offset), end = newline < 0 ? source.length : newline + 1,
+				line = StringTools.trim(source.substring(offset, end));
+			if (StringTools.startsWith(line, "#if"))
+				stack.push(offset);
+			else if (StringTools.startsWith(line, "#end") && stack.length > 0) {
+				var span = file.span(stack.pop(), end);
+				folds.push({span: span, kind: "region"});
+				containers.push(span);
+			}
+			offset = end;
+		}
 	}
 
 	static function scanDocumentation(source:String):Array<{end:Int, documentation:SymbolDocumentation}> {

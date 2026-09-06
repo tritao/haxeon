@@ -47,7 +47,9 @@ class LspProtocolMain {
 			|| initialized.result.capabilities.codeActionProvider.codeActionKinds[0] != "quickfix"
 			|| !initialized.result.capabilities.workspaceSymbolProvider.resolveProvider
 			|| !initialized.result.capabilities.inlayHintProvider
-			|| !initialized.result.capabilities.callHierarchyProvider)
+			|| !initialized.result.capabilities.callHierarchyProvider
+			|| !initialized.result.capabilities.foldingRangeProvider
+			|| !initialized.result.capabilities.selectionRangeProvider)
 			throw "LSP initialization capabilities are incomplete";
 		var watcherRegistration = protocol.handle('{"jsonrpc":"2.0","method":"initialized","params":{}}');
 		if (watcherRegistration.length != 1
@@ -334,6 +336,25 @@ class LspProtocolMain {
 				}
 			}
 		}));
+		var callFolds = request(protocol, Json.stringify({
+			jsonrpc: "2.0", id: 59, method: "textDocument/foldingRange", params: {textDocument: {uri: callUri}}
+		})), hasDocumentationFold = false;
+		for (fold in cast(callFolds.result, Array<Dynamic>))
+			if (fold.kind == "comment" && fold.startLine == 0 && fold.endLine == 5)
+				hasDocumentationFold = true;
+		if (!hasDocumentationFold)
+			throw "LSP folding ranges omitted a multiline documentation comment";
+		var valuePosition = callDocument.position(callSource.indexOf("20")), declarationPosition = callDocument.position(callSource.indexOf("add") + 1),
+			selections = request(protocol, Json.stringify({
+				jsonrpc: "2.0", id: 60, method: "textDocument/selectionRange",
+				params: {textDocument: {uri: callUri}, positions: [valuePosition, declarationPosition]}
+			}));
+		if (selections.result.length != 2
+			|| selections.result[0].range.start.character > valuePosition.character
+			|| selections.result[0].range.end.character < valuePosition.character
+			|| selectionDepth(selections.result[0]) < 3
+			|| selectionDepth(selections.result[1]) < 2)
+			throw "LSP selection ranges did not return nested token, declaration, and document spans";
 		var signature = request(protocol, Json.stringify({
 			jsonrpc: "2.0",
 			id: 6,
@@ -792,6 +813,15 @@ class LspProtocolMain {
 			index += 5;
 		}
 		return false;
+	}
+
+	static function selectionDepth(value:Dynamic):Int {
+		var depth = 0;
+		while (value != null) {
+			depth++;
+			value = Reflect.field(value, "parent");
+		}
+		return depth;
 	}
 
 	static function deleteTree(path:String):Void {
