@@ -148,45 +148,6 @@ class TypeRelations {
 		};
 
 	function nominalReaches(actual:CompilerType, expected:CompilerType):Bool {
-		if (equals(actual, expected))
-			return true;
-		return switch actual {
-			case TInstance(Class, name, _):
-				if (!declarations.classes.exists(name)) false; else {
-					var decl = declarations.classes.get(name), substitutions = nominalSubstitutions(actual), found = false;
-					if (decl.base != null)
-						found = nominalReaches(declarations.resolve(decl.base, decl.span, substitutions), expected);
-					if (!found)
-						for (implemented in decl.interfaces)
-							if (nominalReaches(declarations.resolve(implemented, decl.span, substitutions), expected))
-								found = true;
-					found;
-				}
-			case TInstance(Interface, name, _):
-				if (!declarations.interfaces.exists(name)) false; else {
-					var decl = declarations.interfaces.get(name), substitutions = nominalSubstitutions(actual), found = false;
-					for (base in decl.bases)
-						if (nominalReaches(declarations.resolve(base, decl.span, substitutions), expected))
-							found = true;
-					found;
-				}
-			default: false;
-		};
-	}
-
-	function nominalSubstitutions(type:CompilerType):Map<String, CompilerType> {
-		var result:Map<String, CompilerType> = [];
-		switch type {
-			case TInstance(Class, name, arguments):
-				if (declarations.classes.exists(name))
-					for (index in 0...arguments.length)
-						result.set(declarations.classes.get(name).typeParameters[index], arguments[index]);
-			case TInstance(Interface, name, arguments):
-				if (declarations.interfaces.exists(name))
-					for (index in 0...arguments.length)
-						result.set(declarations.interfaces.get(name).typeParameters[index], arguments[index]);
-			default:
-		}
-		return result;
+		return declarations.inheritance.reaches(actual, expected);
 	}
 }

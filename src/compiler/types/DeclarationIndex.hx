@@ -49,6 +49,7 @@ class DeclarationIndex {
 	public final interfaces:Map<String, AstInterface> = [];
 	public final classes:Map<String, AstClass> = [];
 	public final symbols:Map<String, DeclarationSymbol> = [];
+	public final inheritance:NominalInheritance;
 
 	final aliasSpans:Map<String, SourceSpan> = [];
 	final fallbackSpan:SourceSpan;
@@ -98,6 +99,7 @@ class DeclarationIndex {
 		}
 		for (fn in program.functions)
 			declare(DeclarationKind.Function, fn.name, fn.span);
+		inheritance = new NominalInheritance(this);
 		if (validate) {
 			validateCycles();
 			validateSignatures(program);
@@ -276,47 +278,30 @@ class DeclarationIndex {
 
 	function validateInterfaceInstantiations():Void {
 		for (name in interfaces.keys()) {
-			var decl = interfaces.get(name),
-				inherited:Map<String, CompilerType> = [],
-				substitutions = declarationSubstitutions(decl.name, decl.typeParameters);
-			for (base in decl.bases)
-				collectInterface(resolve(base, decl.span, substitutions), inherited, decl.span);
-		}
-		for (name in classes.keys()) {
-			var decl = classes.get(name),
-				inherited:Map<String, CompilerType> = [];
-			collectClassInterfaces(TInstance(Class, decl.name, [
+			var decl = interfaces.get(name);
+			validateInterfaceSet(inheritance.inheritedInterfaces(TInstance(Interface, decl.name, [
 				for (parameter in decl.typeParameters)
 					TTypeParameter(decl.name, parameter)
-			]), inherited, decl.span);
+			])), decl.span);
+		}
+		for (name in classes.keys()) {
+			var decl = classes.get(name);
+			validateInterfaceSet(inheritance.inheritedInterfaces(TInstance(Class, decl.name, [
+				for (parameter in decl.typeParameters)
+					TTypeParameter(decl.name, parameter)
+			])), decl.span);
 		}
 	}
 
-	function collectClassInterfaces(instance:CompilerType, inherited:Map<String, CompilerType>, span:SourceSpan):Void {
-		var name = requiredNominalName(instance);
-		if (!classes.exists(name))
-			return;
-		var decl = classes.get(name),
-			substitutions = nominalSubstitutions(instance);
-		if (decl.base != null)
-			collectClassInterfaces(resolve(decl.base, decl.span, substitutions), inherited, span);
-		for (interfaceType in decl.interfaces)
-			collectInterface(resolve(interfaceType, decl.span, substitutions), inherited, span);
-	}
-
-	function collectInterface(instance:CompilerType, inherited:Map<String, CompilerType>, span:SourceSpan):Void {
-		var name = requiredNominalName(instance),
-			previous = inherited.get(name);
-		if (previous != null) {
-			if (!TypeRelations.equals(previous, instance))
+	function validateInterfaceSet(instances:Array<CompilerType>, span:SourceSpan):Void {
+		var inherited:Map<String, CompilerType> = [];
+		for (instance in instances) {
+			var name = requiredNominalName(instance),
+				previous = inherited.get(name);
+			if (previous != null && !TypeRelations.equals(previous, instance))
 				fail('Conflicting inherited interface instantiations for "$name": ${typeKey(previous)} and ${typeKey(instance)}', span);
-			return;
+			inherited.set(name, instance);
 		}
-		inherited.set(name, instance);
-		var decl = interfaces.get(name),
-			substitutions = nominalSubstitutions(instance);
-		for (base in decl.bases)
-			collectInterface(resolve(base, decl.span, substitutions), inherited, span);
 	}
 
 	function validateSignatures(program:AstProgram):Void {
@@ -411,27 +396,6 @@ class DeclarationIndex {
 		for (parameter in parameters)
 			result.set(parameter, TTypeParameter(owner, parameter));
 		return result;
-	}
-
-	function nominalSubstitutions(instance:CompilerType):Map<String, CompilerType> {
-		var result:Map<String, CompilerType> = [];
-		switch instance {
-			case TInstance(Class, name, arguments):
-				for (i in 0...arguments.length)
-					result.set(requiredTypeParameter(classes.get(name).typeParameters, i), arguments[i]);
-			case TInstance(Interface, name, arguments):
-				for (i in 0...arguments.length)
-					result.set(requiredTypeParameter(interfaces.get(name).typeParameters, i), arguments[i]);
-			default:
-		}
-		return result;
-	}
-
-	static function requiredTypeParameter(parameters:Array<String>, index:Int):String {
-		var parameter = parameters[index];
-		if (parameter == null)
-			throw "Missing nominal type parameter";
-		return parameter;
 	}
 
 	static function nominalName(type:CompilerType):Null<String>

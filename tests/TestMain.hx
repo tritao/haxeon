@@ -568,6 +568,25 @@ class TestMain {
 		expectCompileError("interface Root<T> {} interface Left extends Root<Int> {} interface Right extends Root<String> {} interface Diamond extends Left, Right {} function main():Int return 0;",
 			'Conflicting inherited interface instantiations for "Root": Root<Int> and Root<String>');
 		Frontend.compile("interface Root<T> {} interface Left<T> extends Root<T> {} interface Right<T> extends Root<T> {} interface Diamond<T> extends Left<T>, Right<T> {} function main():Int return 42;");
+		var modularDiamond = new Compiler();
+		modularDiamond.update("Root.hx", "interface Root<T> { function value():T; }");
+		modularDiamond.update("Left.hx", "import Root; interface Left<T> extends Root<T> {}");
+		modularDiamond.update("Right.hx", "import Root; interface Right<T> extends Root<T> {}");
+		modularDiamond.update("Main.hx",
+			"import Left; import Right; interface Diamond<T> extends Left<T>, Right<T> {} class Value implements Diamond<Int> { public function value():Int return 42; } function main():Int return new Value().value();");
+		modularDiamond.compile("Main");
+		var modularDiamondBaseline = modularDiamond.exportIdentityState();
+		modularDiamond.update("Right.hx", "import Root; interface Right<T> extends Root<String> {}");
+		try {
+			modularDiamond.compile("Main");
+			throw "Cross-module conflicting generic diamond was accepted";
+		} catch (error:CompileError) {
+			if (error.diagnostic.code != "E1020"
+				|| error.diagnostic.message.indexOf('Conflicting inherited interface instantiations for "Root"') < 0)
+				throw error;
+		}
+		if (modularDiamond.exportIdentityState().compare(modularDiamondBaseline) != 0)
+			throw "Rejected cross-module generic diamond changed committed compiler identity";
 		Frontend.compile("class Parent { } class Child extends Parent { } function consume(value:Parent):Int { return 42; } function main():Int { return consume(new Child()); }");
 		Frontend.compile("class Counter { public function new() { } function value():Int return 42; public function read():Int return value(); } function main():Int return new Counter().read();");
 		Frontend.compile("class Counter { var value:Int = 40; public function new() { value += 2; } public function read():Int return value; } function main():Int return new Counter().read();");

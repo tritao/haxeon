@@ -2688,53 +2688,12 @@ class Typer {
 	}
 
 	function nominalSubstitutions(type:CompilerType):Map<String, CompilerType> {
-		var result:Map<String, CompilerType> = [];
-		switch type {
-			case TInstance(Class, name, arguments):
-				if (classDecls.exists(name))
-					for (index in 0...arguments.length)
-						result.set(classDecls.get(name).typeParameters[index], arguments[index]);
-			case TInstance(Interface, name, arguments):
-				if (interfaceDecls.exists(name))
-					for (index in 0...arguments.length)
-						result.set(interfaceDecls.get(name).typeParameters[index], arguments[index]);
-			default:
-		}
-		return result;
+		return declarations.inheritance.substitutions(type);
 	}
 
 	function projectNominal(type:CompilerType, target:String):CompilerType {
-		if (nominalName(type) == target)
-			return type;
-		return switch type {
-			case TInstance(Class, name, _) if (classDecls.exists(name)):
-				var decl = classDecls.get(name),
-					substitutions = nominalSubstitutions(type),
-					result:Null<CompilerType> = null;
-				if (decl.base != null) {
-					var candidate = projectNominal(declarations.resolve(decl.base, decl.span, substitutions), target);
-					if (nominalName(candidate) == target)
-						result = candidate;
-				}
-				if (result == null)
-					for (implemented in decl.interfaces) {
-						var candidate = projectNominal(declarations.resolve(implemented, decl.span, substitutions), target);
-						if (nominalName(candidate) == target)
-							result = candidate;
-					}
-				result == null ? type : result;
-			case TInstance(Interface, name, _) if (interfaceDecls.exists(name)):
-				var decl = interfaceDecls.get(name),
-					substitutions = nominalSubstitutions(type),
-					result:Null<CompilerType> = null;
-				for (base in decl.bases) {
-					var candidate = projectNominal(declarations.resolve(base, decl.span, substitutions), target);
-					if (nominalName(candidate) == target)
-						result = candidate;
-				}
-				result == null ? type : result;
-			default: type;
-		};
+		var projected = declarations.inheritance.project(type, target);
+		return projected == null ? type : projected;
 	}
 
 	static function nominalName(type:CompilerType):String
