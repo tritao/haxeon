@@ -5,7 +5,7 @@ import compiler.Diagnostic.CompileError;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.QualifiedName;
-import compiler.abi.NativeRegistry;
+import compiler.runtime.NativeRegistry;
 import compiler.modules.ModuleState;
 import compiler.types.FieldInference;
 import compiler.types.TypeRegistry;

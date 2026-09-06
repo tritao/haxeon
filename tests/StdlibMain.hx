@@ -1,4 +1,4 @@
-import compiler.runtime.RuntimeAbi;
+import compiler.runtime.RuntimeNatives;
 import compiler.hl.HlWriter;
 import compiler.Compiler;
 import compiler.Diagnostic.CompileError;
@@ -9,7 +9,7 @@ class StdlibMain {
 	static function main():Void {
 		var output = Sys.args()[0];
 		var compiler = new Compiler();
-		RuntimeAbi.register(compiler);
+		RuntimeNatives.register(compiler);
 		compiler.update("haxe/ds/ArraySort.hx", File.getContent("stdlib/haxe/ds/ArraySort.hx"));
 		compiler.update("haxe/ds/Option.hx", File.getContent("stdlib/haxe/ds/Option.hx"));
 		compiler.update("haxe/ds/Either.hx", File.getContent("stdlib/haxe/ds/Either.hx"));
@@ -18,7 +18,7 @@ class StdlibMain {
 		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module));
 
 		var invalid = new Compiler();
-		RuntimeAbi.register(invalid);
+		RuntimeNatives.register(invalid);
 		invalid.update("haxe/ds/Option.hx", File.getContent("stdlib/haxe/ds/Option.hx"));
 		invalid.update("Main.hx", 'import haxe.ds.Option; function main():Int { var value:Option<Int> = Some("bad"); return 0; }');
 		try {

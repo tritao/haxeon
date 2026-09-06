@@ -15,7 +15,7 @@ import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstStatement;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedStatement;
-import compiler.runtime.RuntimeAbi;
+import compiler.runtime.RuntimeNatives;
 
 /** Editor-facing declaration summary, optionally marked as stale. */
 typedef DocumentSymbol = {
@@ -65,7 +65,7 @@ class LanguageService {
 	public final compiler:Compiler;
 
 	public function new(?identityState:haxe.io.Bytes)
-		compiler = new Compiler(identityState, RuntimeAbi.configuration());
+		compiler = new Compiler(identityState, RuntimeNatives.configuration());
 
 	public function update(path:String, source:String):ModuleState
 		return compiler.update(path, source);

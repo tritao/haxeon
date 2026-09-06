@@ -1,4 +1,4 @@
-package compiler.abi;
+package compiler.runtime;
 
 import compiler.types.Type.CompilerType;
 import compiler.ir.Ir.IrNative;
@@ -12,7 +12,6 @@ typedef NativeDefinition = {
 	final arguments:Array<CompilerType>;
 	final result:CompilerType;
 }
-
 /** Owns immutable compiler native definitions and their derived views. */
 class NativeRegistry {
 	final definitions:Map<String, NativeDefinition> = [];

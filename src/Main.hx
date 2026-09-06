@@ -1,7 +1,7 @@
 import compiler.hl.HlWriter;
 import compiler.Compiler;
 import compiler.modules.ModulePath;
-import compiler.runtime.RuntimeAbi;
+import compiler.runtime.RuntimeNatives;
 import sys.io.File;
 
 /** Command-line compiler entry point for producing a complete HashLink module. */
@@ -11,7 +11,7 @@ class Main {
 		var sourcePath = arguments.length > 0 ? arguments[0] : "tests/programs/add.hx";
 		var outputPath = arguments.length > 1 ? arguments[1] : "out/program.hl";
 		var compiler = new Compiler();
-		RuntimeAbi.register(compiler);
+		RuntimeNatives.register(compiler);
 		var module = ModulePath.fromFile(sourcePath);
 		compiler.update(sourcePath, File.getContent(sourcePath));
 		var result = compiler.compile(module);

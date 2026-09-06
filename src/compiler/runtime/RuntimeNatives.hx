@@ -13,7 +13,7 @@ import compiler.types.Type.CompilerType;
  * compiler-owned realtime runtime remains reserved for ABI operations whose
  * representation or reload semantics differ from ordinary HashLink.
  */
-class RuntimeAbi {
+class RuntimeNatives {
 	public static inline var VERSION:Int = 1;
 
 	public static function register(compiler:Compiler):Void {

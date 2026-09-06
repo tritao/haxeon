@@ -1,7 +1,7 @@
 package compiler;
 
 import compiler.syntax.Ast.AstFunction;
-import compiler.abi.NativeRegistry.NativeDefinition;
+import compiler.runtime.NativeRegistry.NativeDefinition;
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.hl.incremental.HlModuleAssembler;
 import compiler.ir.Ir.IrNative;
