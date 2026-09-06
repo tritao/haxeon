@@ -1126,12 +1126,14 @@ class Parser {
 			return parsePostfix(Cast(grouped, target, start.merge(end)));
 		}
 		if (match(TokenKind.This)) {
-			var start = previous().span, name = "this";
+			var start = previous().span, end = start, name = "this";
 			while (check(TokenKind.Dot) && peekKind(1) != TokenKind.Dot) {
 				advance();
-				name += "." + consumeName().text;
+				var part = consumeName();
+				name += "." + part.text;
+				end = part.span;
 			}
-			var expression:AstExpression = Variable(name, start);
+			var expression:AstExpression = Variable(name, start.merge(end));
 			return parsePostfix(expression);
 		}
 		if (match(TokenKind.LeftBrace)) {
@@ -1150,14 +1152,14 @@ class Parser {
 			return parsePostfix(ObjectLiteral(fields, start.merge(end)));
 		}
 		if (isNameToken(current().kind)) {
-			var nameToken = consumeName(),
-				name = nameToken.text,
-				start = nameToken.span;
+			var nameToken = consumeName(), name = nameToken.text, start = nameToken.span, end = start;
 			while (check(TokenKind.Dot) && peekKind(1) != TokenKind.Dot) {
 				advance();
-				name += "." + consumeName().text;
+				var part = consumeName();
+				name += "." + part.text;
+				end = part.span;
 			}
-			var expression:AstExpression = Variable(name, start);
+			var expression:AstExpression = Variable(name, start.merge(end));
 			if (match(TokenKind.LeftParen)) {
 				var arguments = [];
 				if (!check(TokenKind.RightParen)) {

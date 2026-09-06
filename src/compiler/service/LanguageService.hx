@@ -412,6 +412,20 @@ class LanguageService {
 			ast = state == null ? null : effectiveAst(state);
 		if (state == null || tokens == null || ast == null)
 			return null;
+		var model = effectiveSemanticModel(state),
+			indexedId = model == null ? null : model.index.symbolIdAt(position),
+			indexed = indexedId == null ? null : compiler.semanticWorkspace.indexedSymbol(indexedId);
+		if (indexed != null)
+			return {
+				key: Std.string(indexedId),
+				location: {
+					path: indexed.symbol.declaration.file.path,
+					span: indexed.symbol.declaration,
+					revision: snapshotRevision(indexed.state),
+					stale: snapshotRevision(indexed.state) != indexed.state.revision
+				},
+				functionSpan: null
+			};
 		var tokenIndex = -1;
 		for (i in 0...tokens.length)
 			if (tokens[i].kind == Identifier && position >= tokens[i].span.start && position <= tokens[i].span.end) {
