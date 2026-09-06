@@ -534,7 +534,7 @@ class Typer {
 		context.resultType = result;
 		inferBodyLocalTypes(fn.statements, result);
 		var statements = typeStatements(fn.statements, scope, result);
-		if (result != TVoid && !alwaysReturns(statements))
+		if (result != TVoid && !ControlFlow.alwaysReturns(statements, exhaustiveEnum))
 			fail("E1006", 'Function ${fn.name} does not return on every path', fn.span);
 		var typeArguments:Null<Array<CompilerType>> = null,
 			typeParameters = fn.typeParameters;
@@ -577,7 +577,7 @@ class Typer {
 		var output = [];
 		for (statementIndex in 0...statements.length) {
 			var statement = statements[statementIndex];
-			if (alwaysReturns(output)) {
+			if (ControlFlow.alwaysReturns(output, exhaustiveEnum)) {
 				if (isNoReturnPlaceholder(output, statement))
 					continue;
 				fail("E1012", "Unreachable statement", statementSpan(statement));
@@ -662,10 +662,10 @@ class Typer {
 					var typedTry = typeStatements(tryBranch, tryScope, result);
 					output.push(TTry(typedTry, typedCatches, span));
 					var continuing:Array<Scope> = [];
-					if (!alwaysExits(typedTry))
+					if (!ControlFlow.alwaysExits(typedTry, exhaustiveEnum))
 						continuing.push(tryScope);
 					for (i in 0...typedCatches.length)
-						if (!alwaysExits(typedCatches[i].statements))
+						if (!ControlFlow.alwaysExits(typedCatches[i].statements, exhaustiveEnum))
 							continuing.push(catchScopes[i]);
 					scope.mergeAssignmentsFrom(continuing);
 				case Break(span):
@@ -807,14 +807,14 @@ class Typer {
 						typedElse = typeStatements(elseBranch, elseScope, result);
 					output.push(TIf(typedCondition, typedThen, typedElse, span));
 					var continuing:Array<Scope> = [];
-					if (!alwaysExits(typedThen))
+					if (!ControlFlow.alwaysExits(typedThen, exhaustiveEnum))
 						continuing.push(thenScope);
 					if (elseBranch.length == 0)
 						continuing.push(scope);
-					else if (!alwaysExits(typedElse))
+					else if (!ControlFlow.alwaysExits(typedElse, exhaustiveEnum))
 						continuing.push(elseScope);
 					scope.mergeAssignmentsFrom(continuing);
-					if (elseBranch.length == 0 && alwaysExits(typedThen))
+					if (elseBranch.length == 0 && ControlFlow.alwaysExits(typedThen, exhaustiveEnum))
 						FlowAnalysis.refineAfterGuard(scope, typedCondition);
 				case While(predicate, body, span):
 					var typedCondition = typeExpression(predicate, scope);
@@ -932,10 +932,10 @@ class Typer {
 					output.push(TSwitch(typedExpression, typedCases, typedDefault, hasDefault, span));
 					var continuing:Array<Scope> = [];
 					for (i in 0...typedCases.length)
-						if (!alwaysExits(typedCases[i].statements))
+						if (!ControlFlow.alwaysExits(typedCases[i].statements, exhaustiveEnum))
 							continuing.push(caseScopes[i]);
 					if (hasDefault) {
-						if (!alwaysExits(typedDefault))
+						if (!ControlFlow.alwaysExits(typedDefault, exhaustiveEnum))
 							continuing.push(defaultScope);
 					} else if (!exhaustiveEnum(typedExpression.type, typedCases))
 						continuing.push(scope);
@@ -1447,7 +1447,7 @@ class Typer {
 						if (lambdaCells.exists(arguments[i].name))
 							lambdaArguments[i] = {name: arguments[i].name, type: lambdaArguments[i].type};
 					context = previousContext;
-					if (inferredResult != TVoid && !alwaysReturns(typedBody))
+					if (inferredResult != TVoid && !ControlFlow.alwaysReturns(typedBody, exhaustiveEnum))
 						fail("E1006", 'Function $lambdaName does not return on every path', span);
 					var environment:Null<String> = null;
 					if (captures.length > 0)
@@ -1538,7 +1538,7 @@ class Typer {
 			case BlockExpression(statements, result, span):
 				var blockScope = new Scope(scope),
 					typedStatements = typeStatements(statements, blockScope, context.resultType);
-				if (alwaysExits(typedStatements))
+				if (ControlFlow.alwaysExits(typedStatements, exhaustiveEnum))
 					return new TypedExpression(TBlockExpression(typedStatements, new TypedExpression(TUnreachable, TNever, span)), TNever, span);
 				var typedResult = typeExpression(result, blockScope, expectedType);
 				new TypedExpression(TBlockExpression(typedStatements, typedResult), typedResult.type, span);
@@ -2746,96 +2746,6 @@ class Typer {
 			case 1: TLessEqual(left, right);
 			default: TEqual(left, right);
 		}, TBool, span);
-	}
-
-	function alwaysReturns(statements:Array<TypedStatement>):Bool {
-		for (statement in statements)
-			switch statement {
-				case TReturn(_, _), TReturnVoid(_), TThrow(_, _):
-					return true;
-				case TExpression(expression, _) if (expression.type == TNever):
-					return true;
-				case TIf(_, yes, no, _):
-					if (no.length > 0 && alwaysReturns(yes) && alwaysReturns(no))
-						return true;
-				case TDoWhile(body, _, _):
-					if (alwaysReturns(body))
-						return true;
-				case TWhile(condition, body, _) if (isTrueLiteral(condition) && !canBreakCurrentLoop(body)):
-					return true;
-				case TTry(tryBranch, catches, _):
-					if (alwaysReturns(tryBranch)
-						&& catches.length > 0
-						&& [for (catchClause in catches) alwaysReturns(catchClause.statements)].indexOf(false) < 0)
-						return true;
-				case TSwitch(expression, cases, defaultBranch, hasDefault, _):
-					if ((hasDefault ? alwaysReturns(defaultBranch) : exhaustiveEnum(expression.type, cases))
-						&& [for (switchCase in cases) alwaysReturns(switchCase.statements)].indexOf(false) < 0)
-						return true;
-				default:
-			}
-		return false;
-	}
-
-	function alwaysExits(statements:Array<TypedStatement>):Bool {
-		for (statement in statements)
-			switch statement {
-				case TReturn(_, _), TReturnVoid(_), TThrow(_, _), TBreak(_), TContinue(_):
-					return true;
-				case TExpression(expression, _) if (expression.type == TNever):
-					return true;
-				case TIf(_, yes, no, _):
-					if (no.length > 0 && alwaysExits(yes) && alwaysExits(no))
-						return true;
-				case TDoWhile(body, _, _):
-					if (alwaysExits(body))
-						return true;
-				case TWhile(condition, body, _) if (isTrueLiteral(condition) && !canBreakCurrentLoop(body)):
-					return true;
-				case TTry(tryBranch, catches, _):
-					if (alwaysExits(tryBranch)
-						&& catches.length > 0
-						&& [for (catchClause in catches) alwaysExits(catchClause.statements)].indexOf(false) < 0)
-						return true;
-				case TSwitch(expression, cases, defaultBranch, hasDefault, _):
-					if ((hasDefault ? alwaysExits(defaultBranch) : exhaustiveEnum(expression.type, cases))
-						&& [for (switchCase in cases) alwaysExits(switchCase.statements)].indexOf(false) < 0)
-						return true;
-				default:
-			}
-		return false;
-	}
-
-	static function isTrueLiteral(expression:TypedExpression):Bool
-		return switch expression.expression {
-			case TBoolLiteral(value): value;
-			default: false;
-		};
-
-	function canBreakCurrentLoop(statements:Array<TypedStatement>):Bool {
-		for (statement in statements)
-			switch statement {
-				case TBreak(_):
-					return true;
-				case TIf(_, yes, no, _):
-					if (canBreakCurrentLoop(yes) || canBreakCurrentLoop(no))
-						return true;
-				case TTry(tryBranch, catches, _):
-					if (canBreakCurrentLoop(tryBranch))
-						return true;
-					for (catchClause in catches)
-						if (canBreakCurrentLoop(catchClause.statements))
-							return true;
-				case TSwitch(_, cases, fallback, _, _):
-					for (switchCase in cases)
-						if (canBreakCurrentLoop(switchCase.statements))
-							return true;
-					if (canBreakCurrentLoop(fallback))
-						return true;
-				case TWhile(_, _, _), TDoWhile(_, _, _), TForIn(_, _, _, _, _):
-				default:
-			}
-		return false;
 	}
 
 	function exhaustiveEnum(type:CompilerType, cases:Array<TypedSwitchCase>):Bool {

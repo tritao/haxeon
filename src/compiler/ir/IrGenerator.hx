@@ -2,6 +2,7 @@ package compiler.ir;
 
 import compiler.types.Type.CompilerType;
 import compiler.types.RuntimeType;
+import compiler.types.ControlFlow;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedFunction;
@@ -254,7 +255,7 @@ class IrGenerator {
 					if (thenActive || elseActive)
 						builder.select(joinBlock);
 				case TWhile(condition, body, span):
-					var infinite = isTrueLiteral(condition) && !canBreakCurrentLoop(body);
+					var infinite = ControlFlow.isInfiniteLoop(condition, body);
 					var breakFlag = '$' + 'while-break:${span.start}';
 					localTypes.set(breakFlag, Bool);
 					builder.store(breakFlag, builder.constBool(false));
@@ -422,7 +423,7 @@ class IrGenerator {
 						checkBlock = nextBlock;
 					}
 					builder.select(checkBlock);
-					if (!hasDefault && exhaustiveEnumSwitch(expression.type, cases))
+					if (!hasDefault && switch expression.type { case TEnum(_): true; default: false; })
 						builder.jump(checkBlock);
 					else
 						lowerStatements(defaultBranch, builder, localTypes, loops);
@@ -438,50 +439,6 @@ class IrGenerator {
 					lowerExpression(expression, builder, localTypes);
 			}
 		}
-	}
-
-	static function exhaustiveEnumSwitch(type:CompilerType, cases:Array<TypedSwitchCase>):Bool {
-		switch type {
-			case TEnum(_):
-			default:
-				return false;
-		}
-		return cases.length > 0 && [
-			for (switchCase in cases)
-				switchCase.constructorIndex >= 0 && switchCase.guard == null
-		].indexOf(false) < 0;
-	}
-
-	static function isTrueLiteral(expression:TypedExpression):Bool
-		return switch expression.expression {
-			case TBoolLiteral(value): value;
-			default: false;
-		};
-
-	static function canBreakCurrentLoop(statements:Array<TypedStatement>):Bool {
-		for (statement in statements)
-			switch statement {
-				case TBreak(_):
-					return true;
-				case TIf(_, yes, no, _):
-					if (canBreakCurrentLoop(yes) || canBreakCurrentLoop(no))
-						return true;
-				case TTry(tryBranch, catches, _):
-					if (canBreakCurrentLoop(tryBranch))
-						return true;
-					for (catchClause in catches)
-						if (canBreakCurrentLoop(catchClause.statements))
-							return true;
-				case TSwitch(_, cases, fallback, _, _):
-					for (switchCase in cases)
-						if (canBreakCurrentLoop(switchCase.statements))
-							return true;
-					if (canBreakCurrentLoop(fallback))
-						return true;
-				case TWhile(_, _, _), TDoWhile(_, _, _), TForIn(_, _, _, _, _):
-				default:
-			}
-		return false;
 	}
 
 	static function lowerOperands(expressions:Array<TypedExpression>, builder:CfgBuilder, localTypes:Map<String, IrType>):Array<CfgValue> {
