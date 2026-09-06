@@ -93,7 +93,7 @@ class LspProtocol {
 		documents.set(uri, {path: path, version: version, source: source});
 		service.update(path, source);
 		try
-			service.compile(ModulePath.fromFile(path))
+			service.analyze(ModulePath.fromFile(path))
 		catch (_:CompileError) {}
 		return [
 			notification("textDocument/publishDiagnostics", {

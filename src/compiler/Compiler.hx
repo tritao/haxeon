@@ -95,11 +95,19 @@ typedef ValidationResult = {
 	final diagnostic:Null<Diagnostic>;
 }
 
+/** Semantic analysis completed without runtime artifact assembly or publication. */
+typedef AnalysisResult = {
+	final moduleNames:Array<String>;
+	final retyped:Array<String>;
+	final elapsedMs:Float;
+}
+
 /**
  * Persistent incremental compiler and owner of all module and backend state.
  * Compilation is transactional: failed edits do not replace published artifacts.
  */
 @:allow(compiler.CompilationTransaction)
+@:allow(compiler.AnalysisTransaction)
 @:allow(compiler.CompilationContext)
 class Compiler {
 	var genericSpecializations:GenericSpecializationRegistry;
@@ -225,6 +233,10 @@ class Compiler {
 		sourceGeneration++;
 		return state;
 	}
+
+	/** Update semantic state without assembling or publishing a runtime artifact. */
+	public function analyze(entryModule:String, ?token:CancellationToken):AnalysisResult
+		return new AnalysisTransaction(this, entryModule, token).run();
 
 	/**
 		Validate an unsaved edit without mutating this compiler's live snapshot.

@@ -1,9 +1,12 @@
 import editor.LspProtocol;
 import haxe.Json;
+import compiler.service.LanguageService;
 
 class LspProtocolMain {
 	static function main():Void {
-		var protocol = new LspProtocol();
+		var service = new LanguageService(),
+			protocol = new LspProtocol(service);
+		service.compiler.enablePublicationTracking();
 		var initialized = request(protocol, '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}');
 		if (!initialized.result.capabilities.hoverProvider || initialized.result.capabilities.textDocumentSync.change != 1)
 			throw "LSP initialization capabilities are incomplete";
@@ -23,6 +26,8 @@ class LspProtocolMain {
 		}));
 		if (opened.length != 1 || Json.parse(opened[0]).method != "textDocument/publishDiagnostics")
 			throw "LSP didOpen did not publish diagnostics";
+		if (service.compiler.publicationStatus().hasPendingRevision)
+			throw "LSP document analysis published a runtime candidate";
 		var hover = request(protocol, Json.stringify({
 			jsonrpc: "2.0",
 			id: 2,

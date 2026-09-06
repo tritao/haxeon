@@ -73,6 +73,9 @@ class LanguageService {
 	public function compile(entryModule:String, ?token:CancellationToken):CompileResult
 		return compiler.compile(entryModule, token);
 
+	public function analyze(entryModule:String, ?token:CancellationToken):compiler.Compiler.AnalysisResult
+		return compiler.analyze(entryModule, token);
+
 	public function validate(path:String, source:String, entryModule:String, ?token:CancellationToken):compiler.Compiler.ValidationResult
 		return compiler.validate(path, source, entryModule, token);
 
