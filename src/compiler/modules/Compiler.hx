@@ -41,7 +41,7 @@ import compiler.modules.CompilerPublication.ReconnectReason;
 import compiler.modules.ModuleState.SemanticDependency;
 import compiler.modules.ModuleState.SemanticDependencyKind;
 
-typedef NativeFunction = {final name:String; final library:String; final symbol:String; final arguments:Array<CompilerType>; final result:CompilerType;}
+typedef NativeFunction = compiler.modules.NativeRegistry.NativeDefinition;
 
 typedef CompileResult = {
 	final ir:IrProgram;
@@ -87,7 +87,7 @@ class Compiler {
 
 	public var types(default, null):TypeRegistry;
 
-	final natives:Map<String, NativeFunction> = [];
+	final natives:NativeRegistry;
 	var objectCache:Map<String, IrObject> = [];
 	var publishedAbi:Null<RuntimeAbiDescriptor>;
 	var compiledOnce = false;
@@ -95,6 +95,7 @@ class Compiler {
 	var rehydrationBaseline:Null<Map<String, Bytes>>;
 
 	public function new(?identityState:Bytes, ?nativeConfiguration:Array<NativeFunction>) {
+		natives = new NativeRegistry(nativeConfiguration);
 		if (identityState == null) {
 			moduleId = HlRuntimeIdentity.createModuleId();
 			assembler = new HlModuleAssembler();
@@ -119,9 +120,6 @@ class Compiler {
 				beginRehydration(assembler);
 			}
 		}
-		if (nativeConfiguration != null)
-			for (native in nativeConfiguration)
-				registerNativeUnchecked(native.name, native.library, native.symbol, native.arguments, native.result);
 	}
 
 	public function exportIdentityState():Bytes {
@@ -163,50 +161,11 @@ class Compiler {
 	public function registerNative(name:String, library:String, symbol:String, arguments:Array<CompilerType>, result:CompilerType):Void {
 		if (compiledOnce)
 			throw "Native registrations are frozen after the first compilation";
-		registerNativeUnchecked(name, library, symbol, arguments, result);
-	}
-
-	function registerNativeUnchecked(name:String, library:String, symbol:String, arguments:Array<CompilerType>, result:CompilerType):Void {
-		if (name == "__exit"
-			|| name == "__array_alloc_i32"
-			|| name == "__array_alloc_f64"
-			|| name == "__array_alloc_bytes"
-			|| name == "__array_alloc_bool"
-			|| name == "__array_alloc_ref"
-			|| StringTools.startsWith(name, "__array_")
-			|| StringTools.startsWith(name, "__map_")
-			|| name == "__string_concat"
-			|| name == "__string_length"
-			|| name == "__string_equal"
-			|| name == "__string_index_of"
-			|| name == "__string_substring")
-			throw 'Native "$name" is reserved by the compiler runtime ABI';
-		if (natives.exists(name))
-			throw 'Native "$name" is already registered';
-		natives.set(name, {
-			name: name,
-			library: library,
-			symbol: symbol,
-			arguments: arguments.copy(),
-			result: result
-		});
+		natives.registerNative(name, library, symbol, arguments, result);
 	}
 
 	public function nativeConfiguration():Array<NativeFunction> {
-		var names = [for (name in natives.keys()) name];
-		names.sort(Reflect.compare);
-		return [
-			for (name in names) {
-				var native = natives.get(name);
-				{
-					name: native.name,
-					library: native.library,
-					symbol: native.symbol,
-					arguments: native.arguments.copy(),
-					result: native.result
-				};
-			}
-		];
+		return natives.configuration();
 	}
 
 	public function compact(entryModule:String):CompileResult
@@ -295,44 +254,18 @@ class Compiler {
 		var startedAt = Date.now().getTime();
 		if (token != null)
 			token.check();
-		if (!modules.exists(entryModule))
-			throw 'Missing entry module "$entryModule"';
-		var names:Array<String> = [];
 		var bodyChanged:Map<String, Bool> = [],
 			signatureChanged:Map<String, Bool> = [],
 			structuralChanged:Map<String, Bool> = [];
-		var pending = [entryModule], seen:Map<String, Bool> = [], cursor = 0;
-		while (cursor < pending.length) {
-			if (token != null)
-				token.check();
-			var name = pending[cursor++];
-			if (seen.exists(name))
-				continue;
-			seen.set(name, true);
-			if (!modules.exists(name))
-				continue;
-			var state = modules.get(name);
-			parse(state, entryModule, bodyChanged, signatureChanged, structuralChanged);
-			addTypeDependencies(state);
-			for (dependency in state.dependencies)
-				if (!seen.exists(dependency))
-					pending.push(dependency);
+		var reachability = new ModuleReachability(modules, entryModule);
+		while (reachability.hasNext(token)) {
+			var reachableState = reachability.next();
+			parse(reachableState, entryModule, bodyChanged, signatureChanged, structuralChanged);
+			addTypeDependencies(reachableState);
+			reachability.includeDependencies(reachableState);
 		}
+		var names = reachability.finish(token);
 		graph.rebuild(modules);
-		names = [for (name in seen.keys()) if (modules.exists(name)) name];
-		names.sort(Reflect.compare);
-		for (name in names)
-			if (token != null)
-				token.check();
-		for (name in names)
-			for (dependency in modules.get(name).dependencies)
-				if (!modules.exists(dependency)) {
-					var state = modules.get(name),
-						span = state.source.span(0, state.source.text.length);
-					var diagnostic = new Diagnostic("E2001", 'Missing module "$dependency"', span);
-					state.diagnostics.push(diagnostic);
-					throw new CompileError(diagnostic);
-				}
 		var initializationNames = graph.initializationOrder(modules, names),
 			initializationClasses:Array<String> = [];
 		for (name in initializationNames) {
@@ -739,27 +672,6 @@ class Compiler {
 		};
 	}
 
-	function reachableModules(entryModule:String):Array<String> {
-		var seen:Map<String, Bool> = [],
-			pending:Array<String> = [entryModule],
-			pendingCursor = 0;
-		while (pendingCursor < pending.length) {
-			var name = pending[pendingCursor++];
-			if (seen.exists(name))
-				continue;
-			seen.set(name, true);
-			if (modules.exists(name)) {
-				var state = modules.get(name);
-				for (dependency in state.dependencies)
-					if (modules.exists(dependency) && !seen.exists(dependency))
-						pending.push(dependency);
-			}
-		}
-		var result = [for (name in seen.keys()) name];
-		result.sort(Reflect.compare);
-		return result;
-	}
-
 	function executableEntryPoint(entryModule:String):String {
 		var ast = modules.get(entryModule).parsedAst();
 		for (fn in ast.functions)
@@ -910,52 +822,11 @@ class Compiler {
 	}
 
 	function nativeSignatures():Map<String, {arguments:Array<CompilerType>, result:CompilerType}> {
-		var result:Map<String, {arguments:Array<CompilerType>, result:CompilerType}> = [];
-		for (name => native in natives)
-			result.set(name, {arguments: native.arguments, result: native.result});
-		return result;
+		return natives.signatures();
 	}
 
-	function irNatives():Array<IrNative> {
-		var names = [for (name in natives.keys()) name];
-		names.sort(Reflect.compare);
-		return [
-			for (name in names) {
-				var native = natives.get(name);
-				{
-					name: native.name,
-					library: native.library,
-					symbol: native.symbol,
-					arguments: [for (type in native.arguments) irType(type)],
-					result: irType(native.result)
-				}
-			}
-		];
-	}
-
-	static function irType(type:CompilerType):IrType
-		return switch type {
-			case TInt: I32;
-			case TBool: Bool;
-			case TFloat: F64;
-			case TString: IrType.Bytes;
-			case TBytes: Abstract("realtime_bytes");
-			case THlBytes: IrType.Bytes;
-			case TDynamic: Dyn;
-			case TNativeAbstract(name): Abstract(name);
-			case TNever: throw "Never is not a runtime ABI type";
-			case TRange: throw "Range is not a runtime ABI type";
-			case TVoid: Void;
-			case TClass(name): Obj(name);
-			case TMap(_, _): Abstract("map_string_i32");
-			case TInterface(name): Virtual(name);
-			case TEnum(name): Enum(name);
-			case TNull: Void;
-			case TNullable(element): irType(element);
-			case TArray(element): Array(irType(element));
-			case TFunction(arguments, result): Function([for (argument in arguments) irType(argument)], irType(result));
-			case TAnonymous(name, _): Obj(name);
-		};
+	function irNatives():Array<IrNative>
+		return natives.irNatives();
 
 	function stableIdsBySlot(sourceAssembler:HlModuleAssembler, layout:Map<String, Int>):Map<Int, Int> {
 		var result:Map<Int, Int> = [];
@@ -1945,14 +1816,8 @@ class Compiler {
 			default:
 		}
 
-	function nativePrefixExists(prefix:String):Bool {
-		for (name in natives.keys()) {
-			var nativeName:String = name;
-			if (firstPathSegment(nativeName) == prefix && nativeName != prefix)
-				return true;
-		}
-		return false;
-	}
+	function nativePrefixExists(prefix:String):Bool
+		return natives.hasChild(prefix);
 
 	function sourceModuleForDependency(path:String):Null<String> {
 		var candidate = path;
