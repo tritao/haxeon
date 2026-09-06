@@ -506,6 +506,11 @@ class Typer {
 	}
 
 	function typeClass(classDecl:AstClass, classes:Map<String, AstClass>, selected:Null<Map<String, Bool>>):TypedClass {
+		var isValue = hasMetadata(classDecl.metadata, "value");
+		if (isValue && classDecl.base != null)
+			fail("E1022", 'Value class "${classDecl.name}" cannot extend another class', classDecl.span);
+		if (isValue && classDecl.interfaces.length > 0)
+			fail("E1022", 'Value class "${classDecl.name}" cannot implement interfaces', classDecl.span);
 		var fields:Array<TypedField> = [],
 			fieldNames:Map<String, Bool> = [],
 			erasedSubstitutions:Map<String, CompilerType> = [];
@@ -588,12 +593,20 @@ class Typer {
 			baseName = inheritanceName(parsedBase);
 		return {
 			name: classDecl.name,
+			isValue: isValue,
 			base: baseName,
 			interfaces: [for (interfaceType in classDecl.interfaces) inheritanceName(interfaceType)],
 			fields: fields,
 			methods: typedMethods,
 			span: classDecl.span
 		};
+	}
+
+	static function hasMetadata(metadata:Array<compiler.syntax.Ast.AstMetadata>, name:String):Bool {
+		for (entry in metadata)
+			if (entry.name == name)
+				return true;
+		return false;
 	}
 
 	function methodSignature(method:AstFunction, owner:String, ?substitutions:Map<String, CompilerType>):TypedFunction

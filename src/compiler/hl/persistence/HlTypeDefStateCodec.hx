@@ -75,6 +75,22 @@ class HlTypeDefStateCodec {
 						output.writeInt32(method.prototype);
 					}
 					writeInts(output, bindings);
+				case Structure(name, global, fields, methods, bindings):
+					output.writeByte(7);
+					output.writeInt32(name);
+					output.writeInt32(global);
+					output.writeInt32(fields.length);
+					for (field in fields) {
+						output.writeInt32(field.name);
+						output.writeInt32(field.type);
+					}
+					output.writeInt32(methods.length);
+					for (method in methods) {
+						output.writeInt32(method.name);
+						output.writeInt32(method.functionIndex);
+						output.writeInt32(method.prototype);
+					}
+					writeInts(output, bindings);
 				case Virtual(fields):
 					output.writeByte(4);
 					output.writeInt32(fields.length);
@@ -116,6 +132,15 @@ class HlTypeDefStateCodec {
 					for (_ in 0...readCount(input))
 						methods.push({name: input.readInt32(), functionIndex: input.readInt32(), prototype: input.readInt32()});
 					Object(name, base, global, fields, methods, readInts(input));
+				case 7:
+					var name = input.readInt32(), global = input.readInt32();
+					var fields:Array<HlObjectField> = [];
+					for (_ in 0...readCount(input))
+						fields.push({name: input.readInt32(), type: input.readInt32()});
+					var methods:Array<HlObjectMethod> = [];
+					for (_ in 0...readCount(input))
+						methods.push({name: input.readInt32(), functionIndex: input.readInt32(), prototype: input.readInt32()});
+					Structure(name, global, fields, methods, readInts(input));
 				case 4:
 					var fields:Array<HlVirtualField> = [];
 					for (_ in 0...readCount(input))
@@ -137,10 +162,10 @@ class HlTypeDefStateCodec {
 		for (definition in types)
 			switch definition {
 				case Simple(kind):
-					if (kind == HlType.Ref || kind == HlType.Null)
+					if (kind == HlType.Ref || kind == HlType.Null || kind == HlType.Packed)
 						throw "Parameterized HashLink type stored without its parameter";
 				case Parameterized(kind, parameter):
-					if (kind != HlType.Ref && kind != HlType.Null)
+					if (kind != HlType.Ref && kind != HlType.Null && kind != HlType.Packed)
 						throw "Invalid parameterized HashLink type";
 					validateTypeReference(parameter, types.length);
 				case Abstract(name):
@@ -167,6 +192,22 @@ class HlTypeDefStateCodec {
 					for (binding in bindings)
 						if (binding < 0)
 							throw "Invalid HashLink object binding";
+				case Structure(name, global, fields, methods, bindings):
+					validateStringReference(name, strings);
+					if (global < 0 || global > globals)
+						throw "Invalid HashLink structure global";
+					for (field in fields) {
+						validateStringReference(field.name, strings);
+						validateTypeReference(field.type, types.length);
+					}
+					for (method in methods) {
+						validateStringReference(method.name, strings);
+						if (method.functionIndex < 0 || method.prototype < 0)
+							throw "Invalid HashLink structure method";
+					}
+					for (binding in bindings)
+						if (binding < 0)
+							throw "Invalid HashLink structure binding";
 				case Virtual(fields):
 					for (field in fields) {
 						validateStringReference(field.name, strings);

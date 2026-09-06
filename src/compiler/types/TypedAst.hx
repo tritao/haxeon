@@ -215,6 +215,7 @@ typedef TypedField = {
 /** Class declaration with resolved field, method, and inheritance contracts. */
 typedef TypedClass = {
 	final name:String;
+	final isValue:Bool;
 	final base:Null<String>;
 	final interfaces:Array<String>;
 	final fields:Array<TypedField>;

@@ -118,7 +118,14 @@ typedef IrObjectField = {final name:String; final type:IrType;}
 typedef IrObjectMethod = {final name:String; final functionName:String;}
 
 /** Object layout and dispatch metadata required by backend lowering. */
-typedef IrObject = {final name:String; final base:Null<String>; final interfaces:Array<String>; final fields:Array<IrObjectField>; final methods:Array<IrObjectMethod>;}
+typedef IrObject = {
+	final name:String;
+	final isValue:Bool;
+	final base:Null<String>;
+	final interfaces:Array<String>;
+	final fields:Array<IrObjectField>;
+	final methods:Array<IrObjectMethod>;
+}
 
 /** Callable contract required by an IR interface. */
 typedef IrInterfaceMethod = {final name:String; final arguments:Array<IrType>; final result:IrType;}

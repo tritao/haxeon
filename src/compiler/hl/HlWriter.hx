@@ -108,7 +108,7 @@ class HlWriter {
 			case Simple(kind):
 				output.writeByte(kind);
 			case Parameterized(kind, parameter):
-				if (kind != HlType.Ref && kind != HlType.Null)
+				if (kind != HlType.Ref && kind != HlType.Null && kind != HlType.Packed)
 					throw 'Unsupported parameterized HashLink type $kind';
 				output.writeByte(kind);
 				writeIndex(parameter);
@@ -125,23 +125,10 @@ class HlWriter {
 				writeIndex(result);
 			case Object(name, base, global, fields, methods, bindings):
 				output.writeByte(HlType.Obj);
-				writeIndex(name);
-				writeIndex(base);
-				writeUnsignedIndex(global);
-				writeUnsignedIndex(fields.length);
-				writeUnsignedIndex(methods.length);
-				writeUnsignedIndex(Std.int(bindings.length / 2));
-				for (field in fields) {
-					writeIndex(field.name);
-					writeIndex(field.type);
-				}
-				for (method in methods) {
-					writeIndex(method.name);
-					writeUnsignedIndex(method.functionIndex);
-					writeIndex(method.prototype);
-				}
-				for (binding in bindings)
-					writeUnsignedIndex(binding);
+				writeObjectType(name, base, global, fields, methods, bindings);
+			case Structure(name, global, fields, methods, bindings):
+				output.writeByte(HlType.Struct);
+				writeObjectType(name, -1, global, fields, methods, bindings);
 			case Virtual(fields):
 				output.writeByte(HlType.Virtual);
 				writeUnsignedIndex(fields.length);
@@ -161,6 +148,27 @@ class HlWriter {
 						writeIndex(param);
 				}
 		}
+	}
+
+	function writeObjectType(name:Int, base:Int, global:Int, fields:Array<compiler.hl.HlCode.HlObjectField>, methods:Array<compiler.hl.HlCode.HlObjectMethod>,
+			bindings:Array<Int>):Void {
+		writeIndex(name);
+		writeIndex(base);
+		writeUnsignedIndex(global);
+		writeUnsignedIndex(fields.length);
+		writeUnsignedIndex(methods.length);
+		writeUnsignedIndex(Std.int(bindings.length / 2));
+		for (field in fields) {
+			writeIndex(field.name);
+			writeIndex(field.type);
+		}
+		for (method in methods) {
+			writeIndex(method.name);
+			writeUnsignedIndex(method.functionIndex);
+			writeIndex(method.prototype);
+		}
+		for (binding in bindings)
+			writeUnsignedIndex(binding);
 	}
 
 	function writeFunction(fn:HlFunction):Void {

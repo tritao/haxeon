@@ -12,10 +12,10 @@ class HlValidator {
 		for (type in code.types) {
 			switch type {
 				case Simple(kind):
-					if (kind == HlType.Ref || kind == HlType.Null)
+					if (kind == HlType.Ref || kind == HlType.Null || kind == HlType.Packed)
 						throw 'HashLink type $kind requires a parameter';
 				case Parameterized(kind, parameter):
-					if (kind != HlType.Ref && kind != HlType.Null)
+					if (kind != HlType.Ref && kind != HlType.Null && kind != HlType.Packed)
 						throw 'Unsupported parameterized HashLink type $kind';
 					requireType(code, parameter, "parameterized type argument");
 				case Abstract(name):
@@ -48,6 +48,20 @@ class HlValidator {
 						requireFunctionIndex(code, method.functionIndex, "object method");
 						if (method.prototype < 0)
 							throw 'Invalid object method prototype ${method.prototype}';
+					}
+				case Structure(name, global, fields, methods, bindings):
+					requireString(code, name, "structure name");
+					if (global > code.globals.length && global != 0)
+						throw 'Invalid structure global $global';
+					for (field in fields) {
+						requireString(code, field.name, "structure field name");
+						requireType(code, field.type, "structure field type");
+					}
+					for (method in methods) {
+						requireString(code, method.name, "structure method name");
+						requireFunctionIndex(code, method.functionIndex, "structure method");
+						if (method.prototype < 0)
+							throw 'Invalid structure method prototype ${method.prototype}';
 					}
 				case Virtual(fields):
 					for (field in fields) {

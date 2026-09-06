@@ -106,7 +106,12 @@ class ModuleChangeAnalyzer {
 		var ownerConstraints:Map<String, String> = [];
 		for (classDecl in ast.classes) {
 			var name = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name),
-				signature = SemanticSignature.parsedParameters(classDecl.typeParameters, classDecl.typeConstraints, ast.aliases);
+				signature = SemanticSignature.parsedParameters(classDecl.typeParameters, classDecl.typeConstraints, ast.aliases),
+				isValue = false;
+			for (metadata in classDecl.metadata)
+				if (metadata.name == "value")
+					isValue = true;
+			signature += isValue ? ":value" : ":object";
 			ownerConstraints.set(name, signature);
 			if (state.ownerConstraintFingerprints.get(name) != signature)
 				structuralChanged.set('constraint:$name', true);
@@ -198,7 +203,11 @@ class ModuleChangeAnalyzer {
 				for (method in classDecl.methods)
 					{name: method.name, signature: SemanticSignature.parsedFunction(method, ast.aliases)}
 				];
-			var typeResult = types.declareClass(className, baseName, classFields, classMethods);
+			var isValue = false;
+			for (metadata in classDecl.metadata)
+				if (metadata.name == "value")
+					isValue = true;
+			var typeResult = types.declareClass(className, baseName, classFields, classMethods, isValue);
 			if (compiledOnce && typeResult.compatibility != Compatible)
 				structuralChanged.set(className, true);
 			for (method in classDecl.methods) {

@@ -131,6 +131,7 @@ class IrProgramAssembler {
 				}
 			objects.push({
 				name: classDecl.name,
+				isValue: classDecl.isValue,
 				base: classDecl.base,
 				interfaces: classDecl.interfaces,
 				fields: fields,
@@ -140,6 +141,7 @@ class IrProgramAssembler {
 		for (cell in typed.closurePlan.storage)
 			objects.push({
 				name: cell.name,
+				isValue: false,
 				base: null,
 				interfaces: [],
 				fields: [{name: "value", type: IrGenerator.lowerType(cell.valueType)}],
@@ -148,6 +150,7 @@ class IrProgramAssembler {
 		for (environment in typed.closurePlan.environments)
 			objects.push({
 				name: environment.name,
+				isValue: false,
 				base: null,
 				interfaces: [],
 				fields: [
@@ -166,6 +169,7 @@ class IrProgramAssembler {
 		for (anonymous in typed.anonymousTypes)
 			objects.push({
 				name: anonymous.name,
+				isValue: false,
 				base: null,
 				interfaces: [],
 				fields: [

@@ -299,12 +299,12 @@ class HlSymbolTable {
 		return index;
 	}
 
-	public function internObject(object:IrObject, functionIndices:Map<String, Int>):Int {
+	public function internObject(object:IrObject, functionIndices:Map<String, Int>, ?valueObjects:Map<String, Bool>):Int {
 		if (objectIndices.exists(object.name))
 			return objectIndices.get(object.name);
 		var fields = [
 			for (field in object.fields)
-				{name: internString(field.name), type: internType(field.type)}
+				{name: internString(field.name), type: internObjectFieldType(field.type, valueObjects)}
 		], key = 'obj:${object.name}', index = typeIndices.exists(key) ? typeIndices.get(key) : types.length, global = globals.length + 1;
 		var base = -1, slots:Map<String, Int> = [], nextSlot = 0;
 		if (object.base != null) {
@@ -334,7 +334,8 @@ class HlSymbolTable {
 			var functionIndex = functionIndices.get(method.functionName);
 			methods.push({name: internString(method.name), functionIndex: functionIndex, prototype: slot});
 		}
-		var definition:HlTypeDef = Object(internString(object.name), base, global, fields, methods, []);
+		var definition:HlTypeDef = object.isValue ? Structure(internString(object.name), global, fields, methods,
+			[]) : Object(internString(object.name), base, global, fields, methods, []);
 		if (pendingTypes.exists(key)) {
 			types[index] = definition;
 			pendingTypes.remove(key);
@@ -346,6 +347,20 @@ class HlSymbolTable {
 		objectMethodIndices.set(object.name, slots);
 		globals.push(index);
 		return index;
+	}
+
+	function internObjectFieldType(type:IrType, valueObjects:Null<Map<String, Bool>>):Int {
+		return switch type {
+			case Obj(name) if (valueObjects != null && valueObjects.exists(name)):
+				var parameter = internType(type), key = 'packed:obj:$name';
+				if (typeIndices.exists(key)) typeIndices.get(key); else {
+					var index = types.length;
+					types.push(Parameterized(HlType.Packed, parameter));
+					typeIndices.set(key, index);
+					index;
+				}
+			default: internType(type);
+		};
 	}
 
 	public function hasType(key:String):Bool

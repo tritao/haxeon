@@ -242,6 +242,25 @@ class HlPatchWriter {
 					h = hashBytes(intBytes(bindings.length), h);
 					for (binding in bindings)
 						h = hashBytes(intBytes(binding), h);
+				case Structure(name, global, fields, methods, bindings):
+					h = hashBytes(intBytes(HashLinkType.Struct), h);
+					h = hashBytes(intBytes(name), h);
+					h = hashBytes(intBytes(-1), h);
+					h = hashBytes(intBytes(global), h);
+					h = hashBytes(intBytes(fields.length), h);
+					for (field in fields) {
+						h = hashBytes(intBytes(field.name), h);
+						h = hashBytes(intBytes(field.type), h);
+					}
+					h = hashBytes(intBytes(methods.length), h);
+					for (method in methods) {
+						h = hashBytes(intBytes(method.name), h);
+						h = hashBytes(intBytes(method.functionIndex), h);
+						h = hashBytes(intBytes(method.prototype), h);
+					}
+					h = hashBytes(intBytes(bindings.length), h);
+					for (binding in bindings)
+						h = hashBytes(intBytes(binding), h);
 				case Virtual(fields):
 					h = hashBytes(intBytes(HashLinkType.Virtual), h);
 					h = hashBytes(intBytes(fields.length), h);
@@ -290,6 +309,8 @@ class HlPatchWriter {
 				writeSignedIndex(out, result);
 			case Object(_, _, _, _, _, _):
 				throw "Object type patches require a structural reload";
+			case Structure(_, _, _, _, _):
+				throw "Structure type patches require a structural reload";
 			case Virtual(_):
 				throw "Virtual type patches require a structural reload";
 			case Enum(_, _, _):

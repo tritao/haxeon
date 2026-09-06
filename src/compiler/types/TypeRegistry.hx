@@ -51,13 +51,15 @@ class TypeMethod {
 class TypeDescriptor {
 	public final id:StableTypeId;
 	public final name:String;
+	public final isValue:Bool;
 	public final base:Null<String>;
 	public final fields:Array<TypeField>;
 	public final methods:Array<TypeMethod>;
 
-	public function new(id, name, base, fields, methods) {
+	public function new(id, name, base, fields, methods, isValue = false) {
 		this.id = id;
 		this.name = name;
+		this.isValue = isValue;
 		this.base = base;
 		this.fields = fields;
 		this.methods = methods;
@@ -103,7 +105,8 @@ class TypeRegistry {
 		return result;
 	}
 
-	public function declareClass(name:String, base:Null<String>, fields:Array<DeclaredField>, methods:Array<DeclaredMethod>):TypeDeclarationResult {
+	public function declareClass(name:String, base:Null<String>, fields:Array<DeclaredField>, methods:Array<DeclaredMethod>,
+			isValue = false):TypeDeclarationResult {
 		var typeId:StableTypeId = idFor("type:" + name);
 		var typeFields = [];
 		for (slot in 0...fields.length) {
@@ -113,7 +116,7 @@ class TypeRegistry {
 		var typeMethods = [];
 		for (method in methods)
 			typeMethods.push(new TypeMethod(idFor("method:" + name + ":" + method.name), method.name, method.signature));
-		var descriptor = new TypeDescriptor(typeId, name, base, typeFields, typeMethods),
+		var descriptor = new TypeDescriptor(typeId, name, base, typeFields, typeMethods, isValue),
 			previous = descriptors.get(name);
 		descriptors.set(name, descriptor);
 		return {descriptor: descriptor, compatibility: classify(previous, descriptor)};
@@ -182,6 +185,8 @@ class TypeRegistry {
 			return NewType;
 		if (previous.base != current.base)
 			return BaseChanged;
+		if (previous.isValue != current.isValue)
+			return LayoutChanged;
 		if (previous.fields.length != current.fields.length)
 			return LayoutChanged;
 		for (i in 0...current.fields.length) {

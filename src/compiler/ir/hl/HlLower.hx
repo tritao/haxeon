@@ -69,6 +69,10 @@ class HlLower {
 			symbols.reserveInterface(interfaceDecl.name);
 		for (object in program.objects)
 			symbols.reserveObject(object.name);
+		var valueObjects:Map<String, Bool> = [];
+		for (object in program.objects)
+			if (object.isValue)
+				valueObjects.set(object.name, true);
 		for (enumDecl in program.enums)
 			enumTypeIndices.set(enumDecl.name, symbols.internEnum(enumDecl));
 		var pendingInterfaces = program.interfaces.copy();
@@ -106,7 +110,7 @@ class HlLower {
 						fieldsReady = false;
 				if (ready && fieldsReady) {
 					objects.set(object.name, object);
-					objectTypeIndices.set(object.name, symbols.internObject(object, functionIndices));
+					objectTypeIndices.set(object.name, symbols.internObject(object, functionIndices, valueObjects));
 					progressed = true;
 				} else
 					remaining.push(object);

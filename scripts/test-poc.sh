@@ -299,6 +299,18 @@ if [[ $compiler_array_status -ne 47 ]]; then
 fi
 echo "PASS: compiler-owned Int/Float/Bool/String array allocation executed (exit 47)"
 
+value_struct_output="$root_dir/out/value-struct.hl"
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run ValueStructMain "$value_struct_output"
+set +e
+LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$value_struct_output"
+value_struct_status=$?
+set -e
+if [[ $value_struct_status -ne 42 ]]; then
+	echo "value struct: expected exit 42, got $value_struct_status" >&2
+	exit 1
+fi
+echo "PASS: HSTRUCT value and HPACKED embedded field executed (exit 42)"
+
 string_output="$root_dir/out/string.hl"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run StringMain "$string_output"
 set +e
