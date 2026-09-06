@@ -441,6 +441,7 @@ class LspProtocol {
 					name: symbol.name,
 					kind: symbolKind(symbol.kind),
 					containerName: symbol.container,
+					tags: symbol.deprecated ? [1] : null,
 					location: {uri: documents.uri(project.diskPath(symbol.path))},
 					data: {identity: symbol.identity, revision: symbol.revision}
 				}
@@ -459,6 +460,8 @@ class LspProtocol {
 			uri: documents.uri(project.diskPath(symbol.path)),
 			range: target.range(symbol.span.start, symbol.span.end)
 		});
+		if (symbol.deprecated)
+			Reflect.setField(item, "tags", [1]);
 		return item;
 	}
 
@@ -503,7 +506,7 @@ class LspProtocol {
 		if (resolved == null)
 			throw new LspRequestError(-32801, "Completion item no longer matches the current document version");
 		Reflect.setField(item, "detail", resolved.detail);
-		Reflect.setField(item, "documentation", {kind: "plaintext", value: resolved.documentation});
+		Reflect.setField(item, "documentation", {kind: "markdown", value: resolved.documentation});
 		Reflect.setField(item, "additionalTextEdits", [
 			for (edit in resolved.edits)
 				{range: document.range(edit.span.start, edit.span.end), newText: edit.replacement}
@@ -627,8 +630,11 @@ class LspProtocol {
 	function hover(request:Dynamic, token:CancellationToken):Dynamic {
 		var document = document(request);
 		ensureAnalyzed(document, token);
-		var value = service.hover(compilerPath(document), positionOffset(document, position(request)));
-		return value == null ? null : {contents: {kind: "plaintext", value: value}};
+		var offset = positionOffset(document, position(request)), value = service.hover(compilerPath(document), offset),
+			documentation = service.hoverDocumentation(compilerPath(document), offset);
+		return value == null ? null : documentation == null || documentation.markdown.length == 0 ? {contents: {kind: "plaintext", value: value}} : {
+			contents: {kind: "markdown", value: "```haxe\n" + value + "\n```\n\n" + documentation.markdown}
+		};
 	}
 
 	function signatureHelp(request:Dynamic, token:CancellationToken):Dynamic {
@@ -639,7 +645,13 @@ class LspProtocol {
 			signatures: [
 				{
 					label: value.label,
-					parameters: [for (parameter in value.parameters) {label: parameter}]
+					documentation: value.documentation == null ? null : {kind: "markdown", value: value.documentation},
+					parameters: [for (index in 0...value.parameters.length) {
+						label: value.parameters[index],
+						documentation: value.parameterDocumentation == null || value.parameterDocumentation[index] == null ? null : {
+							kind: "markdown", value: value.parameterDocumentation[index]
+						}
+					}]
 				}
 			],
 			activeSignature: 0,

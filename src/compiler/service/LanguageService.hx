@@ -50,6 +50,12 @@ typedef ResolvedCompletion = {
 	final edits:Array<TextEdit>;
 }
 
+typedef SymbolDocumentation = {
+	final markdown:String;
+	final parameters:Map<String, String>;
+	final deprecated:Bool;
+}
+
 typedef CompletionResult = {
 	final items:Array<CompletionItem>;
 	final isIncomplete:Bool;
@@ -84,6 +90,8 @@ typedef WorkspaceSymbol = {
 	final path:String;
 	final span:SourceSpan;
 	final revision:Int;
+	final ?documentation:String;
+	final ?deprecated:Bool;
 }
 
 typedef InlayHint = {
@@ -102,6 +110,7 @@ typedef CallHierarchyItem = {
 	final path:String;
 	final span:SourceSpan;
 	final revision:Int;
+	final ?documentation:String;
 }
 
 typedef CallHierarchyRelation = {
@@ -112,6 +121,11 @@ typedef CallHierarchyRelation = {
 private typedef WorkspaceIndexEntry = {
 	final revision:Int;
 	final symbols:Array<WorkspaceSymbol>;
+}
+
+private typedef DocumentationIndexEntry = {
+	final revision:Int;
+	final comments:Array<{end:Int, documentation:SymbolDocumentation}>;
 }
 
 /** Source location returned by a semantic navigation query. */
@@ -137,6 +151,8 @@ typedef SignatureHelp = {
 	final activeParameter:Int;
 	final ?revision:Int;
 	final ?stale:Bool;
+	final ?documentation:String;
+	final ?parameterDocumentation:Array<Null<String>>;
 }
 
 private typedef SemanticQueryContext = {
@@ -154,6 +170,7 @@ class LanguageService {
 
 	public final compiler:Compiler;
 	final workspaceIndex:Map<String, WorkspaceIndexEntry> = [];
+	final documentationIndex:Map<String, DocumentationIndexEntry> = [];
 	var editorDefines:Map<String, String> = [];
 
 	public function new(?identityState:haxe.io.Bytes)
@@ -168,6 +185,7 @@ class LanguageService {
 	public function configure(identity:String, scopeIdentity:String, defines:Array<String>):Void {
 		editorDefines = [for (define in defines) define => "1"];
 		workspaceIndex.clear();
+		documentationIndex.clear();
 		compiler.configure(identity, scopeIdentity, defines);
 	}
 
@@ -301,15 +319,18 @@ class LanguageService {
 			case DeclarationKind.Class: "class";
 			case DeclarationKind.Member if (signature != null): "method";
 			default: return null;
-		};
+		}, documentation = documentationFor(resolved.state, resolved.symbol.declaration), detail = signature == null ? resolved.symbol.name : signature.label;
+		if (documentation.markdown.length > 0)
+			detail += " — " + documentation.markdown.split("\n")[0];
 		return {
 			identity: Std.string(identity),
 			name: sourceName(resolved.symbol.name),
 			kind: kind,
-			detail: signature == null ? resolved.symbol.name : signature.label,
+			detail: detail,
 			path: resolved.state.source.path,
 			span: resolved.symbol.declaration,
-			revision: resolved.state.revision
+			revision: resolved.state.revision,
+			documentation: documentation.markdown
 		};
 	}
 
@@ -527,7 +548,11 @@ class LanguageService {
 			var edits:Array<TextEdit> = [], edit = importPath == null ? null : importEdit(state, importPath);
 			if (edit != null)
 				edits.push(edit);
-			return {detail: candidate.detail, documentation: "Declared in " + candidate.path, edits: edits};
+			return {
+				detail: candidate.detail,
+				documentation: candidate.documentation == null || candidate.documentation.length == 0 ? "Declared in " + candidate.path : candidate.documentation,
+				edits: edits
+			};
 		}
 		var resolved = compiler.semanticWorkspace.indexedSymbol(cast identity);
 		if (resolved == null)
@@ -538,9 +563,10 @@ class LanguageService {
 			if (edit != null)
 				edits.push(edit);
 		}
+		var documentation = documentationFor(resolved.state, resolved.symbol.declaration);
 		return {
 			detail: signature == null ? resolved.symbol.name + ":" + Std.string(resolved.symbol.kind) : signature.label,
-			documentation: "Declared in " + resolved.state.source.path,
+			documentation: documentation.markdown.length == 0 ? "Declared in " + resolved.state.source.path : documentation.markdown,
 			edits: edits
 		};
 	}
@@ -593,6 +619,8 @@ class LanguageService {
 				var indexed = model == null ? null : model.index.symbolAt(lexical.span.start), modifiers = [];
 				if (indexed != null && semanticDeclaration(model, indexed.id, lexical.span)) {
 					modifiers.push("declaration");
+					if (documentationFor(state, indexed.declaration).deprecated)
+						modifiers.push("deprecated");
 					if (hasDeclarationModifier(tokens, index, Static))
 						modifiers.push("static");
 					if (hasDeclarationModifier(tokens, index, Final))
@@ -647,6 +675,14 @@ class LanguageService {
 		return null;
 	}
 
+	public function hoverDocumentation(path:String, position:Int):Null<SymbolDocumentation> {
+		var context = semanticQuery(path, position);
+		if (context == null || context.symbol == null)
+			return null;
+		var resolved = compiler.semanticWorkspace.indexedSymbol(context.symbol);
+		return resolved == null ? null : documentationFor(resolved.state, resolved.symbol.declaration);
+	}
+
 	public function signatureHelp(path:String, position:Int):Null<SignatureHelp> {
 		var state = stateFor(path),
 			tokens = state == null ? null : effectiveTokens(state),
@@ -673,6 +709,14 @@ class LanguageService {
 			parameters: signature.parameters,
 			activeParameter: active
 		};
+		var resolved = compiler.semanticWorkspace.indexedSymbol(id), documentation = resolved == null ? null : documentationFor(resolved.state, resolved.symbol.declaration);
+		if (documentation != null) {
+			Reflect.setField(result, "documentation", documentation.markdown);
+			Reflect.setField(result, "parameterDocumentation", [for (parameter in signature.parameters) {
+				var separator = parameter.indexOf(":"), name = separator < 0 ? parameter : parameter.substring(0, separator);
+				documentation.parameters.get(name);
+			}]);
+		}
 		tagResults([result], state);
 		return result;
 	}
@@ -1186,8 +1230,90 @@ class LanguageService {
 		return result;
 	}
 
-	static function addWorkspaceSymbol(result:Array<WorkspaceSymbol>, state:ModuleState, name:String, kind:String, container:Null<String>, detail:String,
-			span:SourceSpan):Void
+	function documentationFor(state:ModuleState, span:SourceSpan):SymbolDocumentation {
+		var cached = documentationIndex.get(state.name);
+		if (cached == null || cached.revision != state.revision) {
+			cached = {revision: state.revision, comments: scanDocumentation(state.source.text)};
+			documentationIndex.set(state.name, cached);
+		}
+		var found:Null<SymbolDocumentation> = null;
+		for (comment in cached.comments)
+			if (comment.end <= span.start && documentationGap(state.source.text.substring(comment.end, span.start)))
+				found = comment.documentation;
+			else
+				break;
+		return found == null ? {markdown: "", parameters: [], deprecated: false} : found;
+	}
+
+	static function scanDocumentation(source:String):Array<{end:Int, documentation:SymbolDocumentation}> {
+		var result = [], position = 0;
+		while (position + 2 < source.length) {
+			var quote = source.charAt(position);
+			if (quote == "\"" || quote == "'") {
+				position++;
+				while (position < source.length)
+					if (source.charAt(position) == "\\")
+						position += 2;
+					else if (source.charAt(position++) == quote)
+						break;
+				continue;
+			}
+			if (source.substr(position, 2) == "//") {
+				var newline = source.indexOf("\n", position + 2);
+				position = newline < 0 ? source.length : newline + 1;
+				continue;
+			}
+			if (source.substr(position, 3) != "/**") {
+				position++;
+				continue;
+			}
+			var close = source.indexOf("*/", position + 3);
+			if (close < 0)
+				break;
+			result.push({end: close + 2, documentation: normalizeDocumentation(source.substring(position + 3, close))});
+			position = close + 2;
+		}
+		return result;
+	}
+
+	static function documentationGap(gap:String):Bool {
+		var trimmed = StringTools.trim(gap);
+		if (trimmed.length == 0)
+			return true;
+		// Metadata may legally sit between a doc comment and its declaration.
+		return StringTools.startsWith(trimmed, "@:") && trimmed.indexOf(";") < 0 && trimmed.indexOf("{") < 0 && trimmed.indexOf("}") < 0;
+	}
+
+	static function normalizeDocumentation(raw:String):SymbolDocumentation {
+		var body:Array<String> = [], parameters:Map<String, String> = [], deprecated = false;
+		for (line in raw.split("\n")) {
+			var value = StringTools.trim(line);
+			if (StringTools.startsWith(value, "*"))
+				value = StringTools.trim(value.substring(1));
+			if (StringTools.startsWith(value, "@param ")) {
+				var content = StringTools.trim(value.substring(7)), separator = content.indexOf(" ");
+				parameters.set(separator < 0 ? content : content.substring(0, separator), separator < 0 ? "" : StringTools.trim(content.substring(separator + 1)));
+			} else if (StringTools.startsWith(value, "@return "))
+				body.push("**Returns:** " + StringTools.trim(value.substring(8)));
+			else if (StringTools.startsWith(value, "@deprecated")) {
+				deprecated = true;
+				var message = StringTools.trim(value.substring(11));
+				body.push("**Deprecated.**" + (message.length == 0 ? "" : " " + message));
+			} else if (StringTools.startsWith(value, "@see "))
+				body.push("**See:** " + StringTools.trim(value.substring(5)));
+			else
+				body.push(value);
+		}
+		while (body.length > 0 && body[0].length == 0)
+			body.shift();
+		while (body.length > 0 && body[body.length - 1].length == 0)
+			body.pop();
+		return {markdown: body.join("\n"), parameters: parameters, deprecated: deprecated};
+	}
+
+	function addWorkspaceSymbol(result:Array<WorkspaceSymbol>, state:ModuleState, name:String, kind:String, container:Null<String>, detail:String,
+			span:SourceSpan):Void {
+		var documentation = documentationFor(state, span);
 		result.push({
 			identity: state.name + ":" + kind + ":" + (container == null ? "" : container + ".") + name,
 			name: name,
@@ -1196,8 +1322,11 @@ class LanguageService {
 			detail: detail,
 			path: state.source.path,
 			span: span,
-			revision: state.revision
+			revision: state.revision,
+			documentation: documentation.markdown,
+			deprecated: documentation.deprecated
 		});
+	}
 
 	static function tagResults<T>(results:Array<T>, state:ModuleState):Void {
 		var revision = snapshotRevision(state),

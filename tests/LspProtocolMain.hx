@@ -320,8 +320,8 @@ class LspProtocolMain {
 			|| actions.result[0].edit.documentChanges[0].textDocument.version != 1
 			|| actions.result[0].edit.documentChanges[0].edits[0].newText != "\"")
 			throw "LSP code actions did not expose the compiler-authored lexical fix";
-		var callSource = "function add(left:Int, right:Int):Int return left + right; function main():Int return add(20, 22) + add(1, 2);",
-			callUri = "file:///workspace/Call.hx";
+		var callSource = "/** Adds values.\n * @param left First value.\n * @param right Second value.\n * @return the sum.\n * @deprecated Use sum.\n */\nfunction add(left:Int, right:Int):Int return left + right; function main():Int return add(20, 22) + add(1, 2);",
+			callUri = "file:///workspace/Call.hx", callDocument = new LspDocument(callUri, "/workspace/Call.hx", 1, callSource);
 		protocol.handle(Json.stringify({
 			jsonrpc: "2.0",
 			method: "textDocument/didOpen",
@@ -338,22 +338,24 @@ class LspProtocolMain {
 			jsonrpc: "2.0",
 			id: 6,
 			method: "textDocument/signatureHelp",
-			params: {textDocument: {uri: callUri}, position: {line: 0, character: callSource.indexOf("22") + 1}}
+			params: {textDocument: {uri: callUri}, position: callDocument.position(callSource.indexOf("22") + 1)}
 		}));
 		if (signature.result == null
 			|| signature.result.signatures[0].label != "add(left:Int, right:Int):Int"
+			|| signature.result.signatures[0].documentation.value.indexOf("Adds values") < 0
+			|| signature.result.signatures[0].parameters[0].documentation.value != "First value."
 			|| signature.result.activeParameter != 1)
 			throw "LSP signature help did not use compiler signature information";
 		var callHints = request(protocol, Json.stringify({
 			jsonrpc: "2.0",
 			id: 61,
 			method: "textDocument/inlayHint",
-			params: {textDocument: {uri: callUri}, range: {start: {line: 0, character: 0}, end: {line: 0, character: callSource.length}}}
+			params: {textDocument: {uri: callUri}, range: {start: {line: 0, character: 0}, end: callDocument.position(callSource.length)}}
 		})), hasLeftHint = false, hasRightHint = false;
 		for (hint in cast(callHints.result, Array<Dynamic>)) {
-			if (hint.kind == 2 && hint.label == "left:" && hint.position.character == callSource.indexOf("20"))
+			if (hint.kind == 2 && hint.label == "left:" && hint.position.character == callDocument.position(callSource.indexOf("20")).character)
 				hasLeftHint = true;
-			if (hint.kind == 2 && hint.label == "right:" && hint.position.character == callSource.indexOf("22"))
+			if (hint.kind == 2 && hint.label == "right:" && hint.position.character == callDocument.position(callSource.indexOf("22")).character)
 				hasRightHint = true;
 		}
 		if (!hasLeftHint || !hasRightHint)
@@ -362,12 +364,12 @@ class LspProtocolMain {
 			jsonrpc: "2.0",
 			id: 62,
 			method: "textDocument/prepareCallHierarchy",
-			params: {textDocument: {uri: callUri}, position: {line: 0, character: callSource.indexOf("add") + 1}}
+			params: {textDocument: {uri: callUri}, position: callDocument.position(callSource.indexOf("add") + 1)}
 		})), preparedMain = request(protocol, Json.stringify({
 			jsonrpc: "2.0",
 			id: 63,
 			method: "textDocument/prepareCallHierarchy",
-			params: {textDocument: {uri: callUri}, position: {line: 0, character: callSource.indexOf("main") + 1}}
+			params: {textDocument: {uri: callUri}, position: callDocument.position(callSource.indexOf("main") + 1)}
 		}));
 		if (preparedAdd.result == null || preparedMain.result == null)
 			throw "LSP did not prepare callable hierarchy items";
@@ -393,18 +395,34 @@ class LspProtocolMain {
 			jsonrpc: "2.0",
 			id: 7,
 			method: "textDocument/completion",
-			params: {textDocument: {uri: callUri}, position: {line: 0, character: callSource.lastIndexOf("add") + 2}}
-		})), foundRankedCall = false;
+			params: {textDocument: {uri: callUri}, position: callDocument.position(callSource.lastIndexOf("add") + 2)}
+		})), foundRankedCall = false, addCompletionItem:Dynamic = null;
 		for (item in cast(completion.result.items, Array<Dynamic>))
 			if (item.label == "add"
 				&& item.sortText != null
 				&& item.insertTextFormat == 2
 				&& item.textEdit.newText == "add(${1})"
-				&& item.textEdit.range.start.character == callSource.lastIndexOf("add")
-				&& item.textEdit.range.end.character == callSource.lastIndexOf("add") + 2)
+				&& item.textEdit.range.start.character == callDocument.position(callSource.lastIndexOf("add")).character
+				&& item.textEdit.range.end.character == callDocument.position(callSource.lastIndexOf("add") + 2).character) {
 				foundRankedCall = true;
+				addCompletionItem = item;
+			}
 		if (!foundRankedCall)
 			throw "LSP completion omitted compiler ranking or insertion metadata";
+		var resolvedAdd = request(protocol, Json.stringify({jsonrpc: "2.0", id: 76, method: "completionItem/resolve", params: addCompletionItem}));
+		if (resolvedAdd.result.documentation.kind != "markdown" || resolvedAdd.result.documentation.value.indexOf("**Deprecated.** Use sum.") < 0)
+			throw "completion resolve did not reuse compiler-owned documentation";
+		var addHoverPosition = callDocument.position(callSource.indexOf("add") + 1),
+			documentedHover = request(protocol, Json.stringify({
+				jsonrpc: "2.0", id: 77, method: "textDocument/hover", params: {textDocument: {uri: callUri}, position: addHoverPosition}
+			}));
+		if (documentedHover.result.contents.kind != "markdown" || documentedHover.result.contents.value.indexOf("Adds values") < 0)
+			throw "hover did not reuse compiler-owned documentation";
+		var callSemantic = request(protocol, Json.stringify({
+			jsonrpc: "2.0", id: 78, method: "textDocument/semanticTokens/full", params: {textDocument: {uri: callUri}}
+		})), addDeclaration = callDocument.position(callSource.indexOf("add"));
+		if (!hasSemanticToken(callSemantic.result.data, addDeclaration.line, addDeclaration.character, 12, 17))
+			throw "deprecated documentation did not annotate the semantic declaration token";
 		var importService = new LanguageService(), importProtocol = new LspProtocol(importService),
 			helperPath = "/workspace/tools/Helper.hx", helperUri = "file://" + helperPath,
 			importUri = "file:///workspace/ImportMain.hx", importSource = "function main():Int return 0; // Hel";
