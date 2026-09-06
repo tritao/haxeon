@@ -21,6 +21,10 @@ class PlatformAbi {
 	public static function isType(name:String):Bool
 		return types.exists(name);
 
+	/** Whether a platform-owned type may carry a compile-time native ABI tag. */
+	public static function acceptsNativeTag(name:String):Bool
+		return name == "hl.Abstract";
+
 	public static function constructorArguments(name:String):Null<Array<CompilerType>>
 		return switch name {
 			case "haxe.io.BytesInput", "BytesInput": [CompilerType.TBytes];

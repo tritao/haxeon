@@ -602,6 +602,7 @@ class TestMain {
 		if (!compiler.types.TypeRelations.equals(nativeHandleTyped.functions[0].arguments[0].type, nativeHandleType)
 			|| !compiler.types.TypeRelations.equals(nativeHandleTyped.functions[0].result, nativeHandleType))
 			throw "Tagged native abstract type was not preserved semantically";
+		expectCompileError('function invalid(value:UserHandle<"module">):Int return 0;', 'Type "UserHandle" does not accept a native ABI tag');
 		var aliasProgram = new Parser(new Lexer(new SourceFile("aliases.hx",
 			"typedef Number = Int; function add(value:Number):Number { return value; } function main():Int { return add(42); }")).tokenize()).parseProgram();
 		if (aliasProgram.aliases.length != 1

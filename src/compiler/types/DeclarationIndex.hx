@@ -127,7 +127,8 @@ class DeclarationIndex {
 				fail("Unresolved inferred type", span);
 				TDynamic;
 			case NativeAbstractType(declaration, tag):
-				if (!abstracts.exists(declaration) || abstractRepresentation(abstracts.get(declaration)) != "nativeAbstract")
+				if (!PlatformAbi.acceptsNativeTag(declaration)
+					&& (!abstracts.exists(declaration) || abstractRepresentation(abstracts.get(declaration)) != "nativeAbstract"))
 					fail('Type "$declaration" does not accept a native ABI tag', span);
 				TNativeAbstract(tag);
 			case NamedType(name):
