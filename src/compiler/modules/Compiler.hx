@@ -987,148 +987,17 @@ class Compiler {
 		var typeAliases = importAliases(ast.imports, ast.importAliases);
 		addDeclaredTypeAliases(typeAliases, ast, ast.packageName);
 		state.semanticDependencies = collectSemanticDependencies(state, entry, typeAliases);
-		var signatures:Map<String, String> = [],
-			bodies:Map<String, String> = [];
-		var interfaces:Map<String, String> = [];
-		for (interfaceDecl in ast.interfaces) {
-			var signature = interfaceDecl.name + " extends " + interfaceDecl.bases.join(",") + " {" + [
-				for (method in interfaceDecl.methods)
-					method.name + ":" + signatureFingerprint(method, ast.aliases)
-			].join(";") + "}";
-			interfaces.set(interfaceDecl.name, signature);
-			if (state.interfaceFingerprints.get(interfaceDecl.name) != signature)
-				structuralChanged.set('interface:${interfaceDecl.name}', true);
-		}
-		for (old in state.interfaceFingerprints.keys())
-			if (!interfaces.exists(old))
-				structuralChanged.set('interface:$old', true);
-		state.interfaceFingerprints = interfaces;
-		var aliases:Map<String, String> = [];
-		for (alias in ast.aliases) {
-			var aliasName = qualifiedTypeName(ast.packageName, alias.name),
-				signature = aliasName + "=" + SemanticSignature.parsed(alias.type, ast.aliases);
-			aliases.set(aliasName, signature);
-			if (state.aliasFingerprints.get(aliasName) != signature)
-				structuralChanged.set('alias:$aliasName', true);
-		}
-		for (old in state.aliasFingerprints.keys())
-			if (!aliases.exists(old))
-				structuralChanged.set('alias:$old', true);
-		state.aliasFingerprints = aliases;
-		var enums:Map<String, String> = [];
-		for (enumDecl in ast.enums) {
-			var enumName = qualifiedTypeName(ast.packageName, enumDecl.name),
-				signature = enumName + "{" + [
-					for (caseDecl in enumDecl.cases)
-						caseDecl.name + "(" + [
-							for (param in caseDecl.params)
-								(param.optional ? "?" : "") + SemanticSignature.parsed(param.type, ast.aliases)
-						].join(",") + ")"
-				].join(";") + "}";
-			enums.set(enumName, signature);
-			if (state.enumFingerprints.get(enumName) != signature)
-				structuralChanged.set('enum:$enumName', true);
-		}
-		for (old in state.enumFingerprints.keys())
-			if (!enums.exists(old))
-				structuralChanged.set('enum:$old', true);
-		state.enumFingerprints = enums;
-		var staticInitializers:Map<String, String> = [],
-			instanceInitializers:Map<String, String> = [];
-		for (classDecl in ast.classes) {
-			var className = qualifiedTypeName(ast.packageName, classDecl.name);
-			for (field in classDecl.fields) {
-				if (field.initializer == null)
-					continue;
-				var fieldName = className + "." + field.name,
-					initializer = state.source.text.substring(field.span.start, field.span.end);
-				if (field.isStatic) {
-					staticInitializers.set(fieldName, initializer);
-					if (!state.staticInitializerFingerprints.exists(fieldName)
-						|| state.staticInitializerFingerprints.get(fieldName) != initializer)
-						structuralChanged.set('static:$fieldName', true);
-				} else {
-					instanceInitializers.set(fieldName, initializer);
-					if (!state.instanceInitializerFingerprints.exists(fieldName)
-						|| state.instanceInitializerFingerprints.get(fieldName) != initializer) {
-						bodyChanged.set(className + ".new", true);
-						var hasConstructor = false;
-						for (method in classDecl.methods)
-							if (method.name == "new")
-								hasConstructor = true;
-						if (!hasConstructor && !state.instanceInitializerFingerprints.exists(fieldName)) {
-							structuralChanged.set(className, true);
-							signatureChanged.set(className + ".new", true);
-						}
-					}
-				}
-			}
-		}
-		for (old in state.staticInitializerFingerprints.keys())
-			if (!staticInitializers.exists(old))
-				structuralChanged.set('static:$old', true);
-		state.staticInitializerFingerprints = staticInitializers;
-		for (old in state.instanceInitializerFingerprints.keys())
-			if (!instanceInitializers.exists(old)) {
-				var fieldName:String = old,
-					className = parentPath(fieldName),
-					hasConstructor = false;
-				for (classDecl in ast.classes)
-					if (qualifiedTypeName(ast.packageName, classDecl.name) == className)
-						for (method in classDecl.methods)
-							if (method.name == "new")
-								hasConstructor = true;
-				bodyChanged.set(className + ".new", true);
-				if (!hasConstructor) {
-					structuralChanged.set(className, true);
-					signatureChanged.set(className + ".new", true);
-				}
-			}
-		state.instanceInitializerFingerprints = instanceInitializers;
-		for (fn in ast.functions) {
-			var canonical = state.name == entry && fn.name == "main" ? "main" : state.name + "." + fn.name;
-			var signature = signatureFingerprint(fn, ast.aliases),
-				body = state.source.text.substring(fn.span.start, fn.span.end);
-			signatures.set(fn.name, signature);
-			bodies.set(fn.name, body);
-			if (state.signatureFingerprints.get(fn.name) != signature)
-				signatureChanged.set(canonical, true);
-			else if (state.bodyFingerprints.get(fn.name) != body)
-				bodyChanged.set(canonical, true);
-		}
-		for (classDecl in ast.classes) {
-			var className = qualifiedTypeName(ast.packageName, classDecl.name),
-				baseName = resolveOptionalTypeName(classDecl.base, typeAliases);
-			var classFields = [
-				for (field in classDecl.fields)
-					{name: field.name, type: SemanticSignature.parsed(FieldInference.parsedType(field), ast.aliases)}
-			], classMethods = [
-				for (method in classDecl.methods)
-					{name: method.name, signature: signatureFingerprint(method, ast.aliases)}
-				];
-			var typeResult = types.declareClass(className, baseName, classFields, classMethods);
-			if (compiledOnce && typeResult.compatibility != Compatible)
-				structuralChanged.set(className, true);
-			for (method in classDecl.methods) {
-				var localName = className + "." + method.name,
-					canonical = localName,
-					signature = signatureFingerprint(method, ast.aliases),
-					body = state.source.text.substring(method.span.start, method.span.end);
-				signatures.set(localName, signature);
-				bodies.set(localName, body);
-				if (state.signatureFingerprints.get(localName) != signature)
-					signatureChanged.set(canonical, true);
-				else if (state.bodyFingerprints.get(localName) != body)
-					bodyChanged.set(canonical, true);
-			}
-		}
-		for (old in state.signatureFingerprints.keys())
-			if (!signatures.exists(old)) {
-				var canonical = canonicalName(state.name, entry, old);
-				signatureChanged.set(canonical, true);
-			}
-		state.signatureFingerprints = signatures;
-		state.bodyFingerprints = bodies;
+		var changes = ModuleChangeAnalyzer.analyze(state, entry, typeAliases, types, compiledOnce);
+		mergeChanges(bodyChanged, changes.bodyChanged);
+		mergeChanges(signatureChanged, changes.signatureChanged);
+		mergeChanges(structuralChanged, changes.structuralChanged);
+		state.signatureFingerprints = changes.signatureFingerprints;
+		state.bodyFingerprints = changes.bodyFingerprints;
+		state.interfaceFingerprints = changes.interfaceFingerprints;
+		state.aliasFingerprints = changes.aliasFingerprints;
+		state.enumFingerprints = changes.enumFingerprints;
+		state.staticInitializerFingerprints = changes.staticInitializerFingerprints;
+		state.instanceInitializerFingerprints = changes.instanceInitializerFingerprints;
 		state.dirty = false;
 	}
 
@@ -1149,6 +1018,11 @@ class Compiler {
 
 	static function parentPath(path:String):String {
 		return compiler.QualifiedName.parentOrEmpty(path);
+	}
+
+	static function mergeChanges(target:Map<String, Bool>, source:Map<String, Bool>):Void {
+		for (name in source.keys())
+			target.set(name, true);
 	}
 
 	static final canonicalFunction = ModuleCanonicalizer.canonicalFunction;
