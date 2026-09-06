@@ -349,7 +349,7 @@ class HlLower {
 				if (output != null && instructions.length > instructionStart) {
 					var names = bindingsByValue.get(output.id);
 					if (names != null) {
-						var position = encodedInstructionCount(instructions, instructionStart);
+						var position = instructionStart;
 						for (name in names) {
 							var key = name + "@" + position;
 							if (!seenAssignments.exists(key)) {
@@ -387,16 +387,6 @@ class HlLower {
 
 		return new HlFunction(internFunctionType([for (argument in fn.arguments) argument.type], fn.result), requireFunction(fn.name), registerTypes,
 			instructions, debugLocations, debugAssignments);
-	}
-
-	static function encodedInstructionCount(instructions:Array<HlInstruction>, end:Int):Int {
-		var count = 0;
-		for (index in 0...end)
-			switch instructions[index] {
-				case Label(_):
-				default: count++;
-			}
-		return count;
 	}
 
 	static function appendDebugLocations(output:Array<HlDebugLocation>, count:Int, provenance:SourceProvenance):Void
