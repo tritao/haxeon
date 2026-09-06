@@ -506,6 +506,12 @@ class IrGenerator {
 		throw 'Unsupported ABI boundary cast from ${value.type} to $target';
 	}
 
+	static function referenceResultCast(builder:CfgBuilder, value:CfgValue, target:IrType):CfgValue {
+		if (sameIrType(value.type, target))
+			return value;
+		return abiBoundaryCast(builder, value.type == Dyn ? value : builder.toDyn(value), target);
+	}
+
 	static function sameIrType(left:IrType, right:IrType):Bool
 		return switch left {
 			case Obj(name): switch right {
@@ -661,8 +667,11 @@ class IrGenerator {
 					operands.push(argument);
 				var lowered = lowerOperands(operands, builder, localTypes);
 				switch receiver.type {
+					case TArray(element): lowerArrayNativeCall(builder, element, operation, lowered, lowerType(expression.type));
 					case TMap(key, value) if (operation == "set"): lowerMapSet(builder, lowered[0], lowered[1], lowered[2], key, value);
-					default: builder.call(nativeName, lowered, lowerType(expression.type));
+					default:
+						var resultType = lowerType(expression.type);
+						builder.call(nativeName, lowered, resultType);
 				}
 			case TConditional(condition, whenTrue, whenFalse):
 				var yesBlock = builder.createBlock(),
@@ -828,8 +837,8 @@ class IrGenerator {
 				var element = switch expression.type {
 					case TArray(element): element;
 					default: throw "Array literal requires an array type";
-				}, arrayType:IrType = Array(lowerType(element)), array = builder.call(arrayAllocatorName(element), [builder.constInt(values.length)],
-					arrayType), arrayName = '$' + 'array-literal:${expression.span.start}:${array.id}';
+				}, arrayType:IrType = Array(lowerType(element)), array = lowerArrayAllocation(builder, element,
+					builder.constInt(values.length)), arrayName = '$' + 'array-literal:${expression.span.start}:${array.id}';
 				localTypes.set(arrayName, arrayType);
 				builder.store(arrayName, array);
 				for (index in 0...values.length) {
@@ -885,7 +894,7 @@ class IrGenerator {
 						builder.call(RuntimeType.mapNative(mapTypes.key, mapTypes.value, "keys"), [builder.load(mapName, loweredMapType)], inputType));
 				}
 				var capacity = condition == null ? builder.arraySize(builder.load(inputName, inputType)) : builder.constInt(0);
-				builder.store(resultName, builder.call(arrayAllocatorName(resultElement), [capacity], resultType));
+				builder.store(resultName, lowerArrayAllocation(builder, resultElement, capacity));
 				builder.store(indexName, builder.constInt(0));
 				var conditionBlock = builder.createBlock(),
 					bodyBlock = builder.createBlock(),
@@ -913,7 +922,7 @@ class IrGenerator {
 					builder.jump(nextBlock);
 					builder.select(includeBlock);
 					var loweredValue = lowerExpression(value, builder, localTypes);
-					var grown = builder.call(RuntimeType.arrayNative(resultElement, "push"), [builder.load(resultName, resultType), loweredValue], resultType);
+					var grown = lowerArrayNativeCall(builder, resultElement, "push", [builder.load(resultName, resultType), loweredValue], resultType);
 					builder.store(resultName, grown);
 					builder.jump(nextBlock);
 					builder.select(nextBlock);
@@ -1012,7 +1021,7 @@ class IrGenerator {
 				builder.store(lengthName, builder.load(differenceName, I32));
 				builder.jump(allocateBlock);
 				builder.select(allocateBlock);
-				builder.store(resultName, builder.call(arrayAllocatorName(TInt), [builder.load(lengthName, I32)], resultType));
+				builder.store(resultName, lowerArrayAllocation(builder, TInt, builder.load(lengthName, I32)));
 				builder.store(indexName, builder.constInt(0));
 				var conditionBlock = builder.createBlock(),
 					bodyBlock = builder.createBlock(),
@@ -1028,7 +1037,7 @@ class IrGenerator {
 				builder.select(afterBlock);
 				builder.load(resultName, resultType);
 			case TNewArray(element, length):
-				builder.call(arrayAllocatorName(element), [lowerExpression(length, builder, localTypes)], Array(lowerType(element)));
+				lowerArrayAllocation(builder, element, lowerExpression(length, builder, localTypes));
 			case TNewMap(key, value): builder.call(RuntimeType.mapNative(key, value, "alloc"), [], lowerType(expression.type));
 			case TField(object, name): builder.fieldGet(lowerExpression(object, builder, localTypes), name, lowerType(expression.type));
 			case TMethodCall(object, name, args):
@@ -1124,7 +1133,7 @@ class IrGenerator {
 					case TArray(valueType): valueType;
 					default: throw "Array.push requires an array value";
 				}, operands = lowerOperands([array, value], builder, localTypes);
-				var pushed = builder.call(RuntimeType.arrayNative(element, "push"), operands, Array(lowerType(element)));
+				var pushed = lowerArrayNativeCall(builder, element, "push", operands, Array(lowerType(element)));
 				switch array.expression {
 					case TLocal(name): builder.store(name, pushed);
 					case TCellLocal(name, cellClass):
@@ -1139,7 +1148,7 @@ class IrGenerator {
 					case TArray(valueType): valueType;
 					default: throw "Array.unshift requires an array value";
 				}, operands = lowerOperands([array, value], builder, localTypes);
-				var shifted = builder.call(RuntimeType.arrayNative(element, "unshift"), operands, Array(lowerType(element)));
+				var shifted = lowerArrayNativeCall(builder, element, "unshift", operands, Array(lowerType(element)));
 				switch array.expression {
 					case TLocal(name): builder.store(name, shifted);
 					case TCellLocal(name, cellClass):
@@ -1154,7 +1163,7 @@ class IrGenerator {
 					case TArray(valueType): valueType;
 					default: throw "Array.pop requires an array value";
 				}, resultType = lowerType(element), loweredArray = lowerExpression(array, builder, localTypes);
-				builder.call(RuntimeType.arrayNative(element, "pop"), [loweredArray], resultType);
+				lowerArrayNativeCall(builder, element, "pop", [loweredArray], resultType);
 			case TArraySort(array, comparator): lowerArraySort(array, comparator, expression.span, builder, localTypes);
 		}
 
@@ -1361,4 +1370,19 @@ class IrGenerator {
 
 	static function arrayAllocatorName(element:CompilerType):String
 		return "__array_alloc_" + RuntimeType.requireArrayName(element);
+
+	static function lowerArrayAllocation(builder:CfgBuilder, element:CompilerType, length:CfgValue):CfgValue {
+		var elementType = lowerType(element), arrayType = Array(elementType);
+		return builder.call(arrayAllocatorName(element), [length], arrayType);
+	}
+
+	static function lowerArrayNativeCall(builder:CfgBuilder, element:CompilerType, operation:String, arguments:Array<CfgValue>, resultType:IrType):CfgValue {
+		var nativeName = RuntimeType.arrayNative(element, operation);
+		var nativeResult = RuntimeType.requireArrayName(element) == "ref" ? switch resultType {
+			case Array(_): return builder.call(nativeName, arguments, resultType);
+			case Obj(_), Enum(_), Abstract(_), Virtual(_), Function(_, _): Dyn;
+			default: resultType;
+		} : resultType;
+		return referenceResultCast(builder, builder.call(nativeName, arguments, nativeResult), resultType);
+	}
 }

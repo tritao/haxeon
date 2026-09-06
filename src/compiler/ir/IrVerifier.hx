@@ -243,7 +243,7 @@ class IrVerifier {
 					if (!compatibleType(args[i].type, signature.arguments[i], objects, interfaces))
 						throw 'Wrong IR argument type for "$name"';
 				}
-				if (!sameType(out.type, signature.result) && !abiCompatible(out.type, signature.result))
+				if (!sameType(out.type, signature.result) && !trustedNativeResult(name, out.type, signature.result))
 					throw 'Wrong IR result type for "$name"';
 				define(values, out);
 			case StaticClosure(out, name):
@@ -569,6 +569,13 @@ class IrVerifier {
 			case Dyn: isReference(actual);
 			default: false;
 		};
+
+	static function trustedNativeResult(name:String, actual:IrType, expected:IrType):Bool
+		return (StringTools.startsWith(name, "__array_")
+			&& StringTools.endsWith(name, "_ref")
+			|| StringTools.startsWith(name, "__map_")
+			&& name.indexOf("_ref_values") >= 0)
+			&& abiCompatible(actual, expected);
 
 	static function compatibleType(actual:IrType, expected:IrType, objects:Map<String, IrObject>, interfaces:Map<String, IrInterface>):Bool {
 		if (sameType(actual, expected))
