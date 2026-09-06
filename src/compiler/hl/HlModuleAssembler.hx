@@ -3,6 +3,8 @@ package compiler.hl;
 import compiler.ir.HlLower;
 import compiler.ir.Ir.IrProgram;
 import compiler.abi.PatchPlanner.PatchDecision;
+import compiler.hl.HlFunctionCacheStateCodec;
+import compiler.hl.HlSymbolStateCodec;
 
 typedef HlAssemblerState = {
 	final initialized:Bool;
@@ -110,9 +112,9 @@ class HlModuleAssembler {
 		var changed:Array<Int> = [], changedSlots:Array<Int> = [];
 		if (initialized)
 			for (name in regenerated) {
-				var index = layout.get(name),
-					stableId = cache.stableIds.get(name);
-				if (index != null && stableId != null) {
+				if (layout.exists(name) && cache.stableIds.exists(name)) {
+					var index = layout.get(name),
+						stableId = cache.stableIds.get(name);
 					changedSlots.push(index);
 					changed.push(stableId);
 				}

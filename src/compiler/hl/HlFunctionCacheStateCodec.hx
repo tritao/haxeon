@@ -1,6 +1,7 @@
 package compiler.hl;
 
 import compiler.hl.HlFunctionCache.HlFunctionCacheState;
+import compiler.ir.IrTypeCodec;
 import haxe.io.Bytes;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
@@ -16,20 +17,20 @@ class HlFunctionCacheStateCodec {
 		out.writeInt32(state.nextStableId);
 		writeCount(out, state.slots.length);
 		for (name in state.slots)
-			compiler.ir.IrTypeCodec.writeString(out, name);
+			IrTypeCodec.writeString(out, name);
 		writeCount(out, state.stableIds.length);
 		for (entry in state.stableIds) {
-			compiler.ir.IrTypeCodec.writeString(out, entry.name);
+			IrTypeCodec.writeString(out, entry.name);
 			out.writeInt32(entry.id);
 		}
 		writeCount(out, state.signatures.length);
 		for (entry in state.signatures) {
-			compiler.ir.IrTypeCodec.writeString(out, entry.name);
-			compiler.ir.IrTypeCodec.writeString(out, entry.signature);
+			IrTypeCodec.writeString(out, entry.name);
+			IrTypeCodec.writeString(out, entry.signature);
 		}
 		writeCount(out, state.functions.length);
 		for (entry in state.functions) {
-			compiler.ir.IrTypeCodec.writeString(out, entry.name);
+			IrTypeCodec.writeString(out, entry.name);
 			writeBytes(out, entry.bytes);
 		}
 		return out.getBytes();
@@ -43,19 +44,19 @@ class HlFunctionCacheStateCodec {
 				throw "Invalid function cache state";
 			var next = input.readInt32(), slots = [
 				for (_ in 0...readCount(input))
-					compiler.ir.IrTypeCodec.readString(input, bytes.length)
+					IrTypeCodec.readString(input, bytes.length)
 			], ids = [];
 			for (_ in 0...readCount(input))
-				ids.push({name: compiler.ir.IrTypeCodec.readString(input, bytes.length), id: input.readInt32()});
+				ids.push({name: IrTypeCodec.readString(input, bytes.length), id: input.readInt32()});
 			var signatures = [];
 			for (_ in 0...readCount(input))
 				signatures.push({
-					name: compiler.ir.IrTypeCodec.readString(input, bytes.length),
-					signature: compiler.ir.IrTypeCodec.readString(input, bytes.length)
+					name: IrTypeCodec.readString(input, bytes.length),
+					signature: IrTypeCodec.readString(input, bytes.length)
 				});
 			var functions = [];
 			for (_ in 0...readCount(input))
-				functions.push({name: compiler.ir.IrTypeCodec.readString(input, bytes.length), bytes: readBytes(input, bytes.length)});
+				functions.push({name: IrTypeCodec.readString(input, bytes.length), bytes: readBytes(input, bytes.length)});
 			if (input.position != bytes.length)
 				throw "Trailing function cache state data";
 			return {

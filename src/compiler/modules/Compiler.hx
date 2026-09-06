@@ -317,17 +317,17 @@ class Compiler {
 			var moduleState = modules.get(moduleName),
 				program = moduleState.ast;
 			for (declaration in program.aliases)
-				sourceTypeAliases.set(moduleName + "." + declaration.name, qualifiedTypeName(program.packageName, declaration.name));
+				sourceTypeAliases.set(sourceDeclarationPath(moduleName, declaration.name), qualifiedTypeName(program.packageName, declaration.name));
 			for (declaration in program.enums)
-				sourceTypeAliases.set(moduleName + "." + declaration.name, qualifiedTypeName(program.packageName, declaration.name));
+				sourceTypeAliases.set(sourceDeclarationPath(moduleName, declaration.name), qualifiedTypeName(program.packageName, declaration.name));
 			for (declaration in program.enumAbstracts)
-				sourceTypeAliases.set(moduleName + "." + declaration.name, qualifiedTypeName(program.packageName, declaration.name));
+				sourceTypeAliases.set(sourceDeclarationPath(moduleName, declaration.name), qualifiedTypeName(program.packageName, declaration.name));
 			for (declaration in program.abstracts)
-				sourceTypeAliases.set(moduleName + "." + declaration.name, qualifiedTypeName(program.packageName, declaration.name));
+				sourceTypeAliases.set(sourceDeclarationPath(moduleName, declaration.name), qualifiedTypeName(program.packageName, declaration.name));
 			for (declaration in program.interfaces)
-				sourceTypeAliases.set(moduleName + "." + declaration.name, qualifiedTypeName(program.packageName, declaration.name));
+				sourceTypeAliases.set(sourceDeclarationPath(moduleName, declaration.name), qualifiedTypeName(program.packageName, declaration.name));
 			for (declaration in program.classes)
-				sourceTypeAliases.set(moduleName + "." + declaration.name, qualifiedTypeName(program.packageName, declaration.name));
+				sourceTypeAliases.set(sourceDeclarationPath(moduleName, declaration.name), qualifiedTypeName(program.packageName, declaration.name));
 		}
 		for (name in names) {
 			if (token != null)
@@ -736,6 +736,8 @@ class Compiler {
 		if (module != null)
 			return module;
 		for (name => state in modules) {
+			if (state.ast == null)
+				continue;
 			var prefix = state.ast.packageName == null ? "" : state.ast.packageName + ".";
 			for (declaration in state.ast.aliases)
 				if (prefix + declaration.name == qualified)
@@ -901,12 +903,21 @@ class Compiler {
 			if (nativePrefixExists(dependency))
 				dependencies.remove(dependency);
 		for (dependency in [for (dependency in dependencies.keys()) dependency]) {
+			if (isPlatformDependency(dependency)) {
+				dependencies.remove(dependency);
+				continue;
+			}
 			var sourceModule = sourceModuleForDependency(dependency);
+			if (sourceModule == null && dependency.indexOf(".") < 0 && state.ast.packageName != null) {
+				var packageCandidate = state.ast.packageName + "." + dependency;
+				dependencies.remove(dependency);
+				dependencies.set(packageCandidate, true);
+				continue;
+			}
 			if (sourceModule != null && sourceModule != dependency) {
 				dependencies.remove(dependency);
 				dependencies.set(sourceModule, true);
-			} else if (sourceModule == null && isPlatformDependency(dependency))
-				dependencies.remove(dependency);
+			}
 		}
 		state.dependencies = [for (name in dependencies.keys()) name];
 		state.dependencies.sort(Reflect.compare);
@@ -1082,6 +1093,12 @@ class Compiler {
 
 	static function qualifiedTypeName(packageName:Null<String>, name:String):String
 		return packageName == null || packageName.length == 0 ? name : packageName + "." + name;
+
+	static function sourceDeclarationPath(moduleName:String, declarationName:String):String {
+		var separator = moduleName.lastIndexOf("."),
+			primaryName = separator < 0 ? moduleName : moduleName.substr(separator + 1);
+		return primaryName == declarationName ? moduleName : moduleName + "." + declarationName;
+	}
 
 	static function addDeclaredTypeAliases(aliases:Map<String, String>, program:compiler.Ast.AstProgram, packageName:Null<String>):Void {
 		for (alias in program.aliases)
@@ -1267,8 +1284,8 @@ class Compiler {
 			case Variable(name, span):
 				var dot = name.indexOf("."),
 					prefix = dot < 0 ? name : name.substr(0, dot),
-					imported = aliases == null || locals.exists(prefix) ? null : aliases.get(prefix);
-				if (imported != null) Variable(imported + (dot < 0 ? "" : name.substr(dot)),
+					imported = aliases == null || locals.exists(prefix) ? null : resolveExpressionAlias(name, aliases);
+				if (imported != null) Variable(imported,
 					span); else if (dot < 0 && locals.exists(name)) Variable(module == entry
 					&& name == "main" ? "main" : module + "." + name, span); else e;
 			case Member(object, name, s): Member(canonicalExpression(object, module, entry, locals, aliases), name, s);
@@ -1346,9 +1363,9 @@ class Compiler {
 				var resolved = name;
 				var dot = name.indexOf("."),
 					prefix = dot < 0 ? name : name.substr(0, dot),
-					imported = aliases == null ? null : aliases.get(prefix);
+					imported = aliases == null ? null : resolveExpressionAlias(name, aliases);
 				if (imported != null)
-					resolved = imported + (dot < 0 ? "" : name.substr(dot));
+					resolved = imported;
 				else if (name.indexOf(".") < 0 && locals.exists(name))
 					resolved = module == entry && name == "main" ? "main" : module + "." + name;
 				Call(resolved, [for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
@@ -1398,6 +1415,19 @@ class Compiler {
 		if (imported == null)
 			return name;
 		return imported;
+	}
+
+	static function resolveExpressionAlias(name:String, aliases:Map<String, String>):Null<String> {
+		var candidate = name;
+		while (true) {
+			var resolved = aliases.get(candidate);
+			if (resolved != null)
+				return resolved + name.substr(candidate.length);
+			var separator = candidate.lastIndexOf(".");
+			if (separator < 0)
+				return null;
+			candidate = candidate.substr(0, separator);
+		}
 	}
 
 	static function canonicalType(type:compiler.Ast.AstType, aliases:Null<Map<String, String>>):compiler.Ast.AstType
@@ -1670,14 +1700,7 @@ class Compiler {
 				for (a in args)
 					scanExpression(a, dependencies);
 			case Call(name, args, _):
-				var dot = name.indexOf(".");
-				if (dot > 0) {
-					var prefix = name.substr(0, dot);
-					// Lowercase dotted calls are instance calls on locals (for
-					// example box.get), not module dependencies.
-					if (prefix.length > 0 && prefix.charCodeAt(0) >= 65 && prefix.charCodeAt(0) <= 90)
-						dependencies.set(prefix, true);
-				}
+				addQualifiedOwner(name, dependencies);
 				for (a in args)
 					scanExpression(a, dependencies);
 			case NewArray(_, length, _):
@@ -1714,11 +1737,19 @@ class Compiler {
 	}
 
 	static function scanQualifiedDependency(name:String, dependencies:Map<String, Bool>):Void {
-		var dot = name.indexOf(".");
-		if (dot > 0) {
-			var prefix = name.substr(0, dot);
-			if (prefix.length > 0 && prefix.charCodeAt(0) >= 65 && prefix.charCodeAt(0) <= 90)
-				dependencies.set(prefix, true);
+		addQualifiedOwner(name, dependencies);
+	}
+
+	static function addQualifiedOwner(name:String, dependencies:Map<String, Bool>):Void {
+		var parts = name.split("."), owner = [];
+		if (parts.length < 2)
+			return;
+		for (part in parts) {
+			owner.push(part);
+			if (part.length > 0 && part.charCodeAt(0) >= 65 && part.charCodeAt(0) <= 90) {
+				dependencies.set(owner.join("."), true);
+				return;
+			}
 		}
 	}
 
