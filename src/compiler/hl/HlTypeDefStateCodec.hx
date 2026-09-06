@@ -46,6 +46,10 @@ class HlTypeDefStateCodec {
 				case Simple(kind):
 					output.writeByte(0);
 					output.writeByte(kind);
+				case Parameterized(kind, parameter):
+					output.writeByte(6);
+					output.writeByte(kind);
+					output.writeInt32(parameter);
 				case Abstract(name):
 					output.writeByte(1);
 					output.writeInt32(name);
@@ -122,6 +126,7 @@ class HlTypeDefStateCodec {
 					for (_ in 0...readCount(input))
 						constructors.push({name: input.readInt32(), params: readInts(input)});
 					Enum(name, global, constructors);
+				case 6: Parameterized(cast input.readByte(), input.readInt32());
 				default: throw "Unknown HashLink type state tag";
 			});
 		return result;
@@ -130,7 +135,13 @@ class HlTypeDefStateCodec {
 	static function validateReferences(types:Array<HlTypeDef>, strings:Int, globals:Int):Void {
 		for (definition in types)
 			switch definition {
-				case Simple(_):
+				case Simple(kind):
+					if (kind == HlType.Ref || kind == HlType.Null)
+						throw "Parameterized HashLink type stored without its parameter";
+				case Parameterized(kind, parameter):
+					if (kind != HlType.Ref && kind != HlType.Null)
+						throw "Invalid parameterized HashLink type";
+					validateTypeReference(parameter, types.length);
 				case Abstract(name):
 					validateStringReference(name, strings);
 				case Function(arguments, result):

@@ -630,8 +630,25 @@ class HotReloadMain {
 			if (Runtime.callInt(loaded, 71000) != 42)
 				throw 'type arena patch $i damaged the live function';
 		}
+		var parameterizedBase = code.types.length;
+		code.types.push(Parameterized(HlType.Ref, parameterizedBase + 1));
+		code.types.push(Parameterized(HlType.Null, 1));
+		code.functions = [
+			new HlFunction(2, 0, [1, parameterizedBase, parameterizedBase + 1], [LoadInt(0, 0), Return(0)])
+		];
+		var parameterizedBytes = HlPatchWriter.encode(code, moduleId, [0], bySlot, revision, revision + 1, 1, 0, 0, parameterizedBase);
+		var parameterizedPatch = HlPatchReader.decode(parameterizedBytes);
+		switch parameterizedPatch.types {
+			case [Parameterized(HlType.Ref, reference), Parameterized(HlType.Null, 1)] if (reference == parameterizedBase + 1):
+			default:
+				throw "parameterized patch types did not round-trip";
+		}
+		Runtime.patchSet(loaded, new PatchSet(revision, revision + 1, parameterizedBytes, [71000]));
+		revision++;
+		if (Runtime.metadataTypeCount(loaded) != code.types.length || Runtime.callInt(loaded, 71000) != 42)
+			throw "parameterized type patch damaged the live module";
 		var baseTypes = code.types.length;
-		code.types.push(Function([999999], 1));
+		code.types.push(Parameterized(HlType.Ref, 999999));
 		var invalid = HlPatchWriter.encode(code, moduleId, [0], bySlot, revision, revision + 1, 1, 0, 0, baseTypes);
 		try {
 			Runtime.patchSet(loaded, new PatchSet(revision, revision + 1, invalid, [71000]));

@@ -163,6 +163,9 @@ class HlPatchWriter {
 			switch values[i] {
 				case Simple(kind):
 					h = hashBytes(intBytes(kind), h);
+				case Parameterized(kind, parameter):
+					h = hashBytes(intBytes(kind), h);
+					h = hashBytes(intBytes(parameter), h);
 				case Abstract(name):
 					h = hashBytes(intBytes(HashLinkType.Abstract), h);
 					h = hashBytes(intBytes(name), h);
@@ -220,7 +223,14 @@ class HlPatchWriter {
 	static function writeType(out:BytesOutput, type:HlTypeDef):Void
 		switch type {
 			case Simple(kind):
+				if (kind == HashLinkType.Ref || kind == HashLinkType.Null)
+					throw 'HashLink type $kind requires a parameter';
 				out.writeByte(kind);
+			case Parameterized(kind, parameter):
+				if (kind != HashLinkType.Ref && kind != HashLinkType.Null)
+					throw 'Unsupported parameterized HashLink patch type $kind';
+				out.writeByte(kind);
+				writeSignedIndex(out, parameter);
 			case Abstract(name):
 				out.writeByte(HashLinkType.Abstract);
 				writeSignedIndex(out, name);

@@ -412,6 +412,10 @@ class TestMain {
 		if (Std.string(decodedTypes) != Std.string(symbolTable.types)
 			|| encodedTypes.compare(HlTypeDefStateCodec.encode(decodedTypes)) != 0)
 			throw "HashLink type definitions did not round trip deterministically";
+		var parameterizedTypes = [Simple(HlType.I32), Parameterized(HlType.Ref, 0), Parameterized(HlType.Null, 1)],
+			parameterizedState = HlTypeDefStateCodec.encode(parameterizedTypes);
+		if (parameterizedState.compare(HlTypeDefStateCodec.encode(HlTypeDefStateCodec.decode(parameterizedState, 0, 0))) != 0)
+			throw "Parameterized HashLink type state did not round trip deterministically";
 		var symbolBytes = HlSymbolStateCodec.encode(symbolTable.exportState()),
 			binarySymbols = HlSymbolStateCodec.restore(symbolBytes);
 		if (symbolBytes.compare(HlSymbolStateCodec.encode(binarySymbols.exportState())) != 0 || binarySymbols.internInt(42) != intIndex)

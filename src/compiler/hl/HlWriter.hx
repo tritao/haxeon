@@ -47,7 +47,13 @@ class HlWriter {
 
 		for (type in code.types) {
 			switch type {
-				case Simple(_):
+				case Simple(kind):
+					if (kind == HlType.Ref || kind == HlType.Null)
+						throw 'HashLink type $kind requires a parameter';
+				case Parameterized(kind, parameter):
+					if (kind != HlType.Ref && kind != HlType.Null)
+						throw 'Unsupported parameterized HashLink type $kind';
+					requireType(code, parameter, "parameterized type argument");
 				case Abstract(name):
 					requireString(code, name, "abstract name");
 				case Enum(name, global, constructors):
@@ -383,6 +389,11 @@ class HlWriter {
 		switch type {
 			case Simple(kind):
 				output.writeByte(kind);
+			case Parameterized(kind, parameter):
+				if (kind != HlType.Ref && kind != HlType.Null)
+					throw 'Unsupported parameterized HashLink type $kind';
+				output.writeByte(kind);
+				writeIndex(parameter);
 			case Abstract(name):
 				output.writeByte(HlType.Abstract);
 				writeIndex(name);

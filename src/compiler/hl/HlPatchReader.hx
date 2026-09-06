@@ -98,6 +98,8 @@ class HlPatchReader {
 			throw "Enum type patches require a structural reload";
 		if (tag == HlType.Abstract)
 			return Abstract(readIndex(input));
+		if (tag == HlType.Ref || tag == HlType.Null)
+			return Parameterized(cast tag, readIndex(input));
 		return if (tag == HlType.Fun) {
 			var n = input.readByte();
 			Function([for (_ in 0...n) readIndex(input)], readIndex(input));
