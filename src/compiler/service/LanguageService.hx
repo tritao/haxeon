@@ -36,6 +36,14 @@ typedef CompletionItem = {
 	final detail:String;
 	final ?sortText:String;
 	final ?insertText:String;
+	final ?identity:String;
+	final ?importPath:String;
+}
+
+typedef ResolvedCompletion = {
+	final detail:String;
+	final documentation:String;
+	final edits:Array<TextEdit>;
 }
 
 typedef CompletionResult = {
@@ -306,13 +314,39 @@ class LanguageService {
 				if (symbol.name.indexOf(".") < 0) {
 					var signature = compiler.semanticWorkspace.indexedSignature(symbol.id);
 					addMember(symbol.name, completionDeclarationKind(symbol.kind), symbol.name, prefix, result, 3,
-						signature == null ? null : symbol.name + "(");
+						signature == null ? null : symbol.name + "(", Std.string(symbol.id));
 				}
+		if (qualifier == null)
+			for (candidate in compiler.semanticWorkspace.importableSymbols(state, token)) {
+				var symbol = candidate.symbol, signature = compiler.semanticWorkspace.indexedSignature(symbol.id);
+				addMember(symbol.name, completionDeclarationKind(symbol.kind), symbol.name, prefix, result, 4,
+					signature == null ? null : symbol.name + "(", Std.string(symbol.id), candidate.importPath);
+			}
 		for (symbol in documentSymbols(path))
 			addMember(symbol.name, symbol.kind, symbol.detail, prefix, result);
 		sortCompletion(result);
 		tagResults(result, state);
 		return completionResult(result);
+	}
+
+	public function resolveCompletion(path:String, identity:String, revision:Int, ?importPath:String):Null<ResolvedCompletion> {
+		var state = stateFor(path);
+		if (state == null || state.revision != revision)
+			return null;
+		var resolved = compiler.semanticWorkspace.indexedSymbol(cast identity);
+		if (resolved == null)
+			return null;
+		var signature = compiler.semanticWorkspace.indexedSignature(cast identity), edits:Array<TextEdit> = [];
+		if (importPath != null) {
+			var edit = importEdit(state, importPath);
+			if (edit != null)
+				edits.push(edit);
+		}
+		return {
+			detail: signature == null ? resolved.symbol.name + ":" + Std.string(resolved.symbol.kind) : signature.label,
+			documentation: "Declared in " + resolved.state.source.path,
+			edits: edits
+		};
 	}
 
 	public function documentHighlights(path:String, position:Int, ?token:CancellationToken):Array<DocumentHighlight> {
@@ -702,15 +736,39 @@ class LanguageService {
 		}
 	}
 
-	static function addMember(label:String, kind:String, detail:String, prefix:String, result:Array<CompletionItem>, ?rank:Int = 3, ?insertText:String):Void {
+	static function addMember(label:String, kind:String, detail:String, prefix:String, result:Array<CompletionItem>, ?rank:Int = 3, ?insertText:String,
+			?identity:String, ?importPath:String):Void {
 		if ((prefix.length == 0 || StringTools.startsWith(label, prefix)) && [for (item in result) item.label].indexOf(label) < 0)
 			result.push({
 				label: label,
 				kind: kind,
 				detail: detail,
 				sortText: Std.string(rank) + "_" + label,
-				insertText: insertText
+				insertText: insertText,
+				identity: identity,
+				importPath: importPath
 			});
+	}
+
+	function importEdit(state:ModuleState, importPath:String):Null<TextEdit> {
+		var ast = effectiveAst(state), tokens = effectiveTokens(state);
+		if (ast == null || tokens == null || ast.imports.indexOf(importPath) >= 0)
+			return null;
+		var separator = importPath.lastIndexOf("."), targetPackage = separator < 0 ? "" : importPath.substring(0, separator),
+			currentPackage = ast.packageName == null ? "" : Std.string(ast.packageName);
+		if (targetPackage == currentPackage)
+			return null;
+		var insertion = 0;
+		for (index in 0...tokens.length)
+			if (tokens[index].kind == Semicolon && index > 0 && (tokens[index - 1].kind == Identifier || tokens[index - 1].kind == Package)) {
+				var cursor = index - 1;
+				while (cursor >= 0 && (tokens[cursor].kind == Identifier || tokens[cursor].kind == Dot))
+					cursor--;
+				if (cursor >= 0 && (tokens[cursor].kind == Import || tokens[cursor].kind == Package))
+					insertion = tokens[index].span.end;
+			}
+		var replacement = insertion == 0 ? 'import $importPath;\n' : '\nimport $importPath;';
+		return {path: state.source.path, span: state.source.span(insertion, insertion), replacement: replacement, revision: state.revision, stale: false};
 	}
 
 	static function sortCompletion(result:Array<CompletionItem>):Void

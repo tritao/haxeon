@@ -17,6 +17,12 @@ typedef WorkspaceDeclaration = {
 	final span:SourceSpan;
 }
 
+typedef ImportableSymbol = {
+	final state:ModuleState;
+	final symbol:IndexedSemanticSymbol;
+	final importPath:String;
+}
+
 /** A lookup either identifies one declaration, no declaration, or an ambiguous set. */
 enum WorkspaceResolution {
 	Resolved(declaration:WorkspaceDeclaration);
@@ -165,6 +171,35 @@ class SemanticWorkspace {
 					}
 		}
 		result.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		return result;
+	}
+
+	/** Unique top-level declarations outside the current module's visibility set. */
+	public function importableSymbols(from:ModuleState, ?token:CancellationToken):Array<ImportableSymbol> {
+		var visible:Map<String, Bool> = [from.name => true], byName:Map<String, Array<ImportableSymbol>> = [];
+		for (dependency in from.dependencies)
+			visible.set(dependency, true);
+		for (state in orderedStates()) {
+			if (token != null)
+				token.check();
+			if (visible.exists(state.name))
+				continue;
+			var model = effectiveModel(state);
+			if (model == null)
+				continue;
+			for (symbol in model.index.symbols)
+				if (symbol.name.indexOf(".") < 0 && (isTypeKind(symbol.kind) || symbol.kind == DeclarationKind.Function)) {
+					var matches = byName.get(symbol.name);
+					if (matches == null)
+						byName.set(symbol.name, matches = []);
+					matches.push({state: state, symbol: symbol, importPath: state.name});
+				}
+		}
+		var result:Array<ImportableSymbol> = [];
+		for (matches in byName)
+			if (matches.length == 1)
+				result.push(matches[0]);
+		result.sort(function(left, right) return Reflect.compare(left.symbol.name, right.symbol.name));
 		return result;
 	}
 

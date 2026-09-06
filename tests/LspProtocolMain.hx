@@ -329,6 +329,52 @@ class LspProtocolMain {
 				foundRankedCall = true;
 		if (!foundRankedCall)
 			throw "LSP completion omitted compiler ranking or insertion metadata";
+		var importService = new LanguageService(), importProtocol = new LspProtocol(importService),
+			helperPath = "/workspace/tools/Helper.hx", helperUri = "file://" + helperPath,
+			importUri = "file:///workspace/ImportMain.hx", importSource = "function main():Int return 0; // Hel";
+		importService.update(helperPath, "class Helper { public static function answer():Int return 42; } function main():Int return 0;");
+		importService.analyze("workspace.tools.Helper");
+		request(importProtocol, '{"jsonrpc":"2.0","id":70,"method":"initialize","params":{}}');
+		importProtocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {textDocument: {uri: importUri, languageId: "haxe", version: 1, text: importSource}}
+		}));
+		var importCompletion = request(importProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 71,
+			method: "textDocument/completion",
+			params: {textDocument: {uri: importUri}, position: {line: 0, character: importSource.length}}
+		})), helperItem:Dynamic = null;
+		for (item in cast(importCompletion.result.items, Array<Dynamic>))
+			if (item.label == "Helper")
+				helperItem = item;
+		if (helperItem == null || helperItem.data == null || helperItem.data.importPath != "workspace.tools.Helper")
+			throw "completion omitted a unique auto-import candidate or its opaque resolve data";
+		var resolvedHelper = request(importProtocol, Json.stringify({jsonrpc: "2.0", id: 72, method: "completionItem/resolve", params: helperItem}));
+		if (resolvedHelper.result.documentation.value.indexOf(helperPath) < 0
+			|| resolvedHelper.result.additionalTextEdits.length != 1
+			|| resolvedHelper.result.additionalTextEdits[0].newText != "import workspace.tools.Helper;\n")
+			throw "completion resolve omitted documentation or the deterministic import edit";
+		var importedSource = "import workspace.tools.Helper;\nfunction main():Int return 0; // Hel";
+		importProtocol.handle(documentChangeMessage(importUri, 2, importedSource));
+		var importedCompletion = request(importProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 74,
+			method: "textDocument/completion",
+			params: {textDocument: {uri: importUri}, position: {line: 1, character: "function main():Int return 0; // Hel".length}}
+		})), importedHelper:Dynamic = null;
+		for (item in cast(importedCompletion.result.items, Array<Dynamic>))
+			if (item.label == "Helper")
+				importedHelper = item;
+		if (importedHelper == null)
+			throw "completion omitted an already imported workspace symbol";
+		var resolvedImported = request(importProtocol, Json.stringify({jsonrpc: "2.0", id: 75, method: "completionItem/resolve", params: importedHelper}));
+		if (importedHelper.data.importPath != null || resolvedImported.result.additionalTextEdits.length != 0)
+			throw "completion resolve proposed a duplicate import";
+		var staleResolve = importProtocol.handle(Json.stringify({jsonrpc: "2.0", id: 73, method: "completionItem/resolve", params: helperItem}));
+		if (staleResolve.length != 1 || Json.parse(staleResolve[0]).error.code != -32801)
+			throw "completion resolve accepted stale candidate data";
 		var blockingService = new BlockingLanguageService(),
 			blockingProtocol = new LspProtocol(blockingService),
 			cancelledResponse:String = null,

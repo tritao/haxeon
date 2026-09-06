@@ -88,6 +88,7 @@ class LspProtocol {
 				case "workspace/didChangeConfiguration": changeConfiguration(request);
 				case "textDocument/documentSymbol": cancellable(id, token -> documentSymbols(request, token));
 				case "textDocument/completion": cancellable(id, token -> completion(request, token));
+				case "completionItem/resolve": cancellable(id, token -> resolveCompletion(request, token));
 				case "textDocument/documentHighlight": cancellable(id, token -> documentHighlights(request, token));
 				case "textDocument/semanticTokens/full": cancellable(id, token -> semanticTokens(request, token));
 				case "textDocument/codeAction": cancellable(id, token -> codeActions(request, token));
@@ -219,7 +220,7 @@ class LspProtocol {
 				positionEncoding: "utf-16",
 				textDocumentSync: {openClose: true, change: 1},
 				documentSymbolProvider: true,
-				completionProvider: {triggerCharacters: ["."]},
+				completionProvider: {triggerCharacters: ["."], resolveProvider: true},
 				documentHighlightProvider: true,
 				semanticTokensProvider: {
 					legend: {tokenTypes: SEMANTIC_TOKEN_TYPES, tokenModifiers: SEMANTIC_TOKEN_MODIFIERS},
@@ -434,8 +435,7 @@ class LspProtocol {
 			items: [
 				for (item in completion.items) {
 					var insertion = item.insertText == null ? item.label : item.insertText,
-						snippet = completionSnippets && StringTools.endsWith(insertion, "(");
-					{
+						snippet = completionSnippets && StringTools.endsWith(insertion, "("), result:Dynamic = {
 						label: item.label,
 						kind: completionKind(item.kind),
 						detail: item.detail,
@@ -445,10 +445,32 @@ class LspProtocol {
 							range: document.range(start, offset),
 							newText: snippet ? insertion + "${1})" : insertion
 						}
-					}
+					};
+					if (item.identity != null)
+						Reflect.setField(result, "data", {uri: document.uri, identity: item.identity, revision: item.revision, importPath: item.importPath});
+					result;
 				}
 			]
 		};
+	}
+
+	function resolveCompletion(request:Dynamic, token:CancellationToken):Dynamic {
+		var item:Dynamic = required(request, "params"), data:Dynamic = required(item, "data"), uri = requiredString(data, "uri"),
+			document = documents.get(uri), identity = requiredString(data, "identity"), revision = requiredInt(data, "revision"),
+			importPath:Dynamic = Reflect.field(data, "importPath");
+		if (importPath != null && !Std.isOfType(importPath, String))
+			throw new LspRequestError(-32602, "Invalid completion import path");
+		token.check();
+		var resolved = service.resolveCompletion(compilerPath(document), identity, revision, cast importPath);
+		if (resolved == null)
+			throw new LspRequestError(-32801, "Completion item no longer matches the current document version");
+		Reflect.setField(item, "detail", resolved.detail);
+		Reflect.setField(item, "documentation", {kind: "plaintext", value: resolved.documentation});
+		Reflect.setField(item, "additionalTextEdits", [
+			for (edit in resolved.edits)
+				{range: document.range(edit.span.start, edit.span.end), newText: edit.replacement}
+		]);
+		return item;
 	}
 
 	function documentHighlights(request:Dynamic, token:CancellationToken):Array<Dynamic> {
