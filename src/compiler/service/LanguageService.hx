@@ -2,7 +2,6 @@ package compiler.service;
 
 import compiler.Ast.AstType;
 import compiler.Diagnostic;
-import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
 import compiler.Token.TokenKind;
 import compiler.modules.Compiler;
@@ -12,8 +11,8 @@ import compiler.modules.Compiler.CompileResult;
 import compiler.Ast.AstFunction;
 import compiler.Ast.AstStatement;
 import compiler.types.Type.CompilerType;
-import compiler.types.DeclarationIndex;
 import compiler.types.DeclarationIndex.DeclarationKind;
+import compiler.types.SemanticModel;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.RuntimeAbi;
 
@@ -408,16 +407,13 @@ class LanguageService {
 			var ast = effectiveAst(candidate);
 			if (ast == null)
 				continue;
-			try {
-				var declarations = new DeclarationIndex(ast);
+			var model = effectiveSemanticModel(candidate);
+			if (model != null)
 				for (kind in [Alias, Function, Class, Interface, Enum]) {
-					var declaration = declarations.symbol(kind, name);
+					var declaration = model.declarations.symbol(kind, name);
 					if (declaration != null)
 						return symbol(candidate, declaration.id, declaration.span, null);
 				}
-			} catch (_:CompileError) {
-				// Keep syntax-based editor recovery available for incomplete modules.
-			}
 			for (alias in ast.aliases)
 				if (alias.name == name)
 					return symbol(candidate, 'alias:$name', alias.span, null);
@@ -759,6 +755,9 @@ class LanguageService {
 
 	static function effectiveAst(state:ModuleState):Null<compiler.Ast.AstProgram>
 		return state.ast == null ? state.lastGoodAst : state.ast;
+
+	static function effectiveSemanticModel(state:ModuleState):Null<SemanticModel>
+		return state.ast == null ? state.lastGoodSemanticModel : state.semanticModel;
 
 	static function effectiveTokens(state:ModuleState):Null<Array<compiler.Token>>
 		return state.ast == null ? state.lastGoodTokens : state.tokens;

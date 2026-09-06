@@ -1,0 +1,17 @@
+package compiler.types;
+
+import compiler.Ast.AstProgram;
+import compiler.Source.SourceFile;
+
+/** Immutable, revision-bound semantic facts derived from one parsed module. */
+class SemanticModel {
+	public final revision:Int;
+	public final program:AstProgram;
+	public final declarations:DeclarationIndex;
+
+	public function new(program:AstProgram, source:SourceFile, revision:Int) {
+		this.revision = revision;
+		this.program = program;
+		this.declarations = new DeclarationIndex(program, false, source.span(0, 0));
+	}
+}

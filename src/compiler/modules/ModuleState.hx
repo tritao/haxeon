@@ -5,6 +5,7 @@ import compiler.Ast.AstFunction;
 import compiler.Diagnostic;
 import compiler.Source.SourceFile;
 import compiler.ir.IrFunction;
+import compiler.types.SemanticModel;
 import compiler.types.TypedAst.TypedFunction;
 
 /** Artifact boundary at which a dependent declaration observes a change. */
@@ -30,8 +31,10 @@ class ModuleState {
 	public var typeVersion:Int = 0;
 	public var tokens:Array<Token> = [];
 	public var ast:Null<AstProgram>;
+	public var semanticModel:Null<SemanticModel>;
 	public var lastGoodTokens:Array<Token> = [];
 	public var lastGoodAst:Null<AstProgram>;
+	public var lastGoodSemanticModel:Null<SemanticModel>;
 	public var lastGoodSource:Null<SourceFile>;
 	public var lastGoodRevision:Int = 0;
 	public var dependencies:Array<String> = [];
@@ -73,6 +76,7 @@ class ModuleState {
 		revision++;
 		tokens = [];
 		ast = null;
+		semanticModel = null;
 		diagnostics = [];
 		dirty = true;
 	}
@@ -84,8 +88,10 @@ class ModuleState {
 		result.typeVersion = typeVersion;
 		result.tokens = tokens;
 		result.ast = ast;
+		result.semanticModel = semanticModel;
 		result.lastGoodTokens = lastGoodTokens;
 		result.lastGoodAst = lastGoodAst;
+		result.lastGoodSemanticModel = lastGoodSemanticModel;
 		result.lastGoodSource = lastGoodSource;
 		result.lastGoodRevision = lastGoodRevision;
 		result.dependencies = dependencies.copy();

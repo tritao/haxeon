@@ -753,6 +753,7 @@ class Compiler {
 				state = writableState(name, rollbackModules);
 				state.lastGoodTokens = state.tokens;
 				state.lastGoodAst = state.ast;
+				state.lastGoodSemanticModel = state.semanticModel;
 				state.lastGoodSource = state.source;
 				state.lastGoodRevision = state.revision;
 			}
@@ -973,6 +974,7 @@ class Compiler {
 		try {
 			state.tokens = new Lexer(state.source).tokenize();
 			state.ast = new Parser(state.tokens).parseProgram();
+			state.semanticModel = new compiler.types.SemanticModel(state.parsedAst(), state.source, state.revision);
 			state.parseVersion++;
 		} catch (error:CompileError) {
 			state.diagnostics.push(error.diagnostic);

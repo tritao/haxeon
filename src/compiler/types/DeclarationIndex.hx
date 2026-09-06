@@ -51,8 +51,8 @@ class DeclarationIndex {
 	final aliasSpans:Map<String, SourceSpan> = [];
 	final fallbackSpan:SourceSpan;
 
-	public function new(program:AstProgram) {
-		fallbackSpan = firstSpan(program);
+	public function new(program:AstProgram, validate:Bool = true, ?emptySpan:SourceSpan) {
+		fallbackSpan = firstSpan(program, emptySpan);
 		for (alias in program.aliases) {
 			declareType(alias.name, DeclarationKind.Alias, alias.span);
 			aliases.set(alias.name, alias.type);
@@ -90,8 +90,10 @@ class DeclarationIndex {
 		}
 		for (fn in program.functions)
 			declare(DeclarationKind.Function, fn.name, fn.span);
-		validateCycles();
-		validateSignatures(program);
+		if (validate) {
+			validateCycles();
+			validateSignatures(program);
+		}
 	}
 
 	public function resolve(type:AstType, ?span:SourceSpan, ?substitutions:Map<String, CompilerType>):CompilerType
@@ -311,7 +313,7 @@ class DeclarationIndex {
 		});
 	}
 
-	static function firstSpan(program:AstProgram):SourceSpan {
+	static function firstSpan(program:AstProgram, emptySpan:Null<SourceSpan>):SourceSpan {
 		if (program.aliases.length > 0)
 			return program.aliases[0].span;
 		if (program.enums.length > 0)
@@ -326,7 +328,9 @@ class DeclarationIndex {
 			return program.classes[0].span;
 		if (program.functions.length > 0)
 			return program.functions[0].span;
-		throw "Cannot index an empty program";
+		if (emptySpan == null)
+			throw "Cannot index an empty program";
+		return emptySpan;
 	}
 
 	static function fail(message:String, span:SourceSpan):Void
