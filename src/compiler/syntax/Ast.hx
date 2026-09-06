@@ -117,6 +117,7 @@ typedef AstEnumAbstract = {
 /** Parsed non-enum abstract and the methods exposed through its underlying type. */
 typedef AstAbstract = {
 	final name:String;
+	final ?isExtern:Bool;
 	final typeParameters:Array<String>;
 	final ?typeConstraints:Array<AstTypeConstraint>;
 	final underlying:AstType;

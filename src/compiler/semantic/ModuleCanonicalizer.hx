@@ -125,6 +125,7 @@ class ModuleCanonicalizer {
 			module:String, entry:String, locals:Map<String, Bool>):compiler.syntax.Ast.AstEnumAbstract
 		return {
 			name: qualifiedTypeName(packageName, decl.name),
+			isExtern: decl.isExtern,
 			underlying: canonicalType(decl.underlying, aliases),
 			fromTypes: [for (type in decl.fromTypes) canonicalType(type, aliases)],
 			toTypes: [for (type in decl.toTypes) canonicalType(type, aliases)],

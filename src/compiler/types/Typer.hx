@@ -159,6 +159,12 @@ class Typer {
 					var nativeName = method.name.indexOf(".") >= 0 ? method.name : classDecl.name + "." + method.name;
 					typedNatives.push(typeExtern(method, nativeName));
 				}
+		for (abstractDecl in program.abstracts)
+			if (abstractDecl.isExtern == true)
+				for (method in abstractDecl.methods) {
+					var nativeName = method.name.indexOf(".") >= 0 ? method.name : abstractDecl.name + "." + method.name;
+					typedNatives.push(typeExtern(method, nativeName));
+				}
 		var setupDoneAt = Sys.time() * 1000.0;
 		inferNoReturnFunctions();
 		var noReturnDoneAt = Sys.time() * 1000.0;
@@ -225,7 +231,10 @@ class Typer {
 		for (abstractDecl in program.abstracts)
 			for (method in abstractDecl.methods) {
 				var name = abstractDecl.name + "." + method.name;
-				if (method.isStatic && !isGeneric(requiredMapValue(signatures, name)) && (selected == null || selected.exists(name)))
+				if (abstractDecl.isExtern != true
+					&& method.isStatic
+					&& !isGeneric(requiredMapValue(signatures, name))
+					&& (selected == null || selected.exists(name)))
 					typedFunctions.push(typeFunction(requiredMapValue(signatures, name), abstractDecl.name, true));
 			}
 		for (lambda in closureConversion.generatedFunctions())

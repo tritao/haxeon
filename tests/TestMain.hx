@@ -551,6 +551,10 @@ class TestMain {
 		externClass.update("Clock.hx", 'extern class Clock { @:hlNative("std", "sys_time") public static function now():Float; }');
 		externClass.update("Main.hx", 'import Clock; function main():Int { Clock.now(); return 42; }');
 		externClass.compile("Main");
+		var externAbstract = new Compiler();
+		externAbstract.update("Clock.hx", 'extern abstract Clock(Float) { @:hlNative("std", "sys_time") public static function now():Float; }');
+		externAbstract.update("Main.hx", 'import Clock; function main():Int { Clock.now(); return 42; }');
+		externAbstract.compile("Main");
 		Sys.println("PASS: extern functions lower through validated HashLink native bindings");
 		var nativeHandleProgram = new Parser(new Lexer(new SourceFile("NativeHandle.hx",
 			'function identity(value:hl.Abstract<"module">):hl.Abstract<"module"> { return value; }')).tokenize()).parseProgram(),

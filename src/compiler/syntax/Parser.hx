@@ -69,7 +69,7 @@ class Parser {
 				fail(current(), "Top-level visibility modifier is not supported for this declaration");
 			else if (check(TokenKind.Identifier) && current().text == "abstract") {
 				var start = advance().span;
-				abstracts.push(parseAbstract(start));
+				abstracts.push(parseAbstract(start, externDeclaration));
 			} else
 				functions.push(parseFunction(false, externDeclaration, metadata));
 		}
@@ -105,7 +105,7 @@ class Parser {
 		return result;
 	}
 
-	function parseAbstract(start:SourceSpan):AstAbstract {
+	function parseAbstract(start:SourceSpan, isExtern:Bool = false):AstAbstract {
 		var name = consume(TokenKind.Identifier).text,
 			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
@@ -126,6 +126,7 @@ class Parser {
 		consume(TokenKind.LeftBrace);
 		var methods = [];
 		while (!check(TokenKind.RightBrace)) {
+			var methodMetadata = parseMetadata();
 			var isStatic = false;
 			while (check(TokenKind.Public) || check(TokenKind.Private) || check(TokenKind.Inline) || check(TokenKind.Static)) {
 				if (match(TokenKind.Static))
@@ -135,11 +136,12 @@ class Parser {
 			}
 			var functionStart = consume(TokenKind.Function).span,
 				methodName = check(TokenKind.New) ? advance().text : consume(TokenKind.Identifier).text;
-			methods.push(parseFunctionBody(functionStart, methodName, true, isStatic));
+			methods.push(parseFunctionBody(functionStart, methodName, true, isStatic, isExtern, methodMetadata));
 		}
 		var end = consume(TokenKind.RightBrace).span;
 		return {
 			name: name,
+			isExtern: isExtern,
 			typeParameters: typeParameters,
 			typeConstraints: typeConstraints,
 			underlying: underlying,
