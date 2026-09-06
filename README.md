@@ -131,6 +131,40 @@ realtime operations remain in a separately versioned ABI.
 Unsupported ABI combinations produce explicit typed diagnostics instead of
 silently falling back to dynamic behavior.
 
+### Source-declared HashLink bindings
+
+Target functions can be declared without a Haxe body by combining `extern`
+with `@:hlNative`:
+
+```haxe
+@:hlNative("std", "sys_time")
+extern function nativeTime():Float;
+```
+
+The two metadata arguments are the HashLink library and exported symbol.
+Bindings participate in normal name and type checking, but emit only a native
+table entry. Missing, duplicate, non-string, or malformed bindings are compile
+errors. Static methods on `extern class` and static or instance methods on
+`extern abstract` use the same form; an instance abstract method passes its
+underlying representation as native argument zero.
+
+An extern abstract can declare its HashLink storage independently of its source
+identity:
+
+```haxe
+@:hlType("bytes")
+extern abstract Bytes(Dynamic) {}
+
+@:hlType("nativeAbstract")
+extern abstract Abstract<T>(Dynamic) {}
+```
+
+The supported representations are currently `bytes` and `nativeAbstract`.
+Tagged types such as `hl.Abstract<"realtime_module">` use the latter and retain
+the quoted tag as part of their ABI identity. These target declarations live
+under `stdlib/hl`; unsupported representation names are diagnosed rather than
+silently lowered as ordinary objects.
+
 ## 🛡️ Transactional patching
 
 Haxeon treats hot replacement as a transaction, not a best-effort reload:
