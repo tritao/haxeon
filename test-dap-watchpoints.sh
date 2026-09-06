@@ -86,14 +86,14 @@ wait_stop() {
 read_locals() {
 	local scopes
 	scopes=$("${dap[@]}" scopes --name "$session" --frame-id "$current_frame")
-	members_ref=$(python3 -c 'import json,sys; print(next(s["variablesReference"] for s in json.load(sys.stdin)["data"]["scopes"] if s["name"]=="Locals"))' <<<"$scopes")
-	members=$("${dap[@]}" variables --name "$session" --variables-reference "$members_ref")
+	locals_ref=$(python3 -c 'import json,sys; print(next(s["variablesReference"] for s in json.load(sys.stdin)["data"]["scopes"] if s["name"]=="Locals"))' <<<"$scopes")
+	locals=$("${dap[@]}" variables --name "$session" --variables-reference "$locals_ref")
 }
 
 wait_stop 5
 read_locals
-python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="watched" and v["value"]=="0" for v in vs), vs' <<<"$members"
-info=$("${dap[@]}" request --name "$session" dataBreakpointInfo --json "{\"variablesReference\":$members_ref,\"name\":\"watched\"}")
+python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="watched" and v["value"]=="0" for v in vs), vs' <<<"$locals"
+info=$("${dap[@]}" request --name "$session" dataBreakpointInfo --json "{\"variablesReference\":$locals_ref,\"name\":\"watched\"}")
 data_id=$(python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; assert d["dataId"] is not None and d["accessTypes"]==["write"], d; print(d["dataId"])' <<<"$info")
 installed=$("${dap[@]}" request --name "$session" setDataBreakpoints --json "{\"breakpoints\":[{\"dataId\":\"$data_id\",\"accessType\":\"write\"}]}")
 python3 -c 'import json,sys; points=json.load(sys.stdin)["data"]["breakpoints"]; assert len(points)==1 and points[0]["verified"], points' <<<"$installed"
@@ -104,7 +104,7 @@ python3 -c 'import json,sys; points=json.load(sys.stdin)["data"]["breakpoints"];
 for expected in 10 20 30; do
 	wait_stop 6
 	read_locals
-	python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="watched" and v["value"]==sys.argv[1] for v in vs), vs' "$expected" <<<"$members"
+	python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="watched" and v["value"]==sys.argv[1] for v in vs), vs' "$expected" <<<"$locals"
 	if [[ "$expected" == 10 ]]; then
 		"${dap[@]}" next --name "$session" >/dev/null
 		wait_stop 4
@@ -116,4 +116,6 @@ done
 
 cleared=$("${dap[@]}" request --name "$session" setDataBreakpoints --json '{"breakpoints":[]}')
 python3 -c 'import json,sys; assert json.load(sys.stdin)["data"]["breakpoints"]==[]' <<<"$cleared"
+rejected=$("${dap[@]}" request --name "$session" setDataBreakpoints --json '{"breakpoints":[{"dataId":"999999","accessType":"write"}]}')
+python3 -c 'import json,sys; point=json.load(sys.stdin)["data"]["breakpoints"][0]; assert not point["verified"] and "no longer valid" in point["message"], point' <<<"$rejected"
 echo "PASS: DAP local write watchpoint reports repeated mutations and survives stepping"
