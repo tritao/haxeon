@@ -26,6 +26,7 @@ cc -shared -fPIC -DHL_NAME\(n\)=realtime_##n \
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run TestMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run CaptureAnalysisMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ModuleCanonicalizerMain
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run SemanticDependencyCollectorMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run AbiMatrixMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run LanguageServiceMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ProtocolMain
