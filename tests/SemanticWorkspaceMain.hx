@@ -61,7 +61,7 @@ class SemanticWorkspaceMain {
 		var state = new ModuleState(name, source);
 		state.tokens = new Lexer(source).tokenize();
 		state.ast = new Parser(state.tokens).parseProgram();
-		state.semanticModel = new SemanticModel(state.parsedAst(), source, state.revision);
+		state.semanticModel = new SemanticModel(state.parsedAst(), source, state.revision, state.tokens);
 		return state;
 	}
 

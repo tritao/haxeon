@@ -250,8 +250,25 @@ class LanguageService {
 	}
 
 	public function definition(path:String, position:Int):Null<SymbolLocation> {
+		var indexed = indexedDefinition(path, position);
+		if (indexed != null)
+			return indexed;
 		var symbol = resolveSymbol(path, position);
 		return symbol == null ? null : symbol.location;
+	}
+
+	function indexedDefinition(path:String, position:Int):Null<SymbolLocation> {
+		var state = stateFor(path),
+			model = state == null ? null : effectiveSemanticModel(state);
+		if (state == null || model == null)
+			return null;
+		var symbol = model.index.symbolAt(position);
+		return symbol == null ? null : {
+			path: symbol.declaration.file.path,
+			span: symbol.declaration,
+			revision: model.revision,
+			stale: model.revision != state.revision
+		};
 	}
 
 	public function references(path:String, position:Int):Array<SymbolLocation> {
@@ -741,6 +758,9 @@ class LanguageService {
 
 	static function effectiveTokens(state:ModuleState):Null<Array<compiler.syntax.Token>>
 		return state.ast == null ? state.lastGoodTokens : state.tokens;
+
+	static function effectiveSemanticModel(state:ModuleState):Null<compiler.semantic.SemanticModel>
+		return state.ast == null ? state.lastGoodSemanticModel : state.semanticModel;
 
 	static function identifierPrefix(source:String, position:Int):String {
 		var end = position < 0 ? 0 : position > source.length ? source.length : position, start = end;

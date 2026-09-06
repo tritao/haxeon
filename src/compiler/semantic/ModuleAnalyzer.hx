@@ -31,7 +31,7 @@ class ModuleAnalyzer {
 		try {
 			state.tokens = new Lexer(state.source).tokenize();
 			state.ast = new Parser(state.tokens).parseProgram();
-			state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.revision);
+			state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.revision, state.tokens);
 			state.parseVersion++;
 		} catch (error:CompileError) {
 			state.diagnostics.push(error.diagnostic);
