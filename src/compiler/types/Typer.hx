@@ -41,6 +41,7 @@ import compiler.types.TypedAst.TypedField;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypedAst.TypedSwitchBinding;
+import compiler.types.TypedAst.TypedSwitchPredicate;
 import compiler.types.TypedAst.TypedSwitchCase;
 import compiler.types.TypedAst.TypedSwitchExpressionCase;
 import compiler.Diagnostic;
@@ -993,7 +994,8 @@ class Typer {
 							typedBody = typeStatements(switchCase.statements, caseScope, result),
 							constructorIndex = pattern == null ? -1 : pattern.index,
 							enumName:Null<String> = pattern == null ? null : pattern.enumName,
-							bindings:Array<TypedSwitchBinding> = pattern == null ? [] : pattern.bindings;
+							bindings:Array<TypedSwitchBinding> = pattern == null ? [] : pattern.bindings,
+							predicates:Array<TypedSwitchPredicate> = pattern == null ? [] : pattern.predicates;
 						caseScopes.push(caseScope);
 						if (pattern == null)
 							switch typedValue.expression {
@@ -1004,7 +1006,7 @@ class Typer {
 							}
 						var caseKey = switch typedValue.expression {
 							case TIntLiteral(value): 'int:$value';
-							case TEnumLiteral(name, index): 'enum:$name:$index';
+							case TEnumLiteral(name, index): enumPatternKey(name, index, predicates);
 							default: null;
 						};
 						if (caseKey != null && typedGuard == null) {
@@ -1019,6 +1021,7 @@ class Typer {
 							enumName: enumName,
 							constructorIndex: constructorIndex,
 							bindings: bindings,
+							predicates: predicates,
 							span: switchCase.span
 						});
 					}
@@ -1340,7 +1343,8 @@ class Typer {
 		value:TypedExpression,
 		enumName:String,
 		index:Int,
-		bindings:Array<TypedSwitchBinding>
+		bindings:Array<TypedSwitchBinding>,
+		predicates:Array<TypedSwitchPredicate>
 	}> {
 		return switch value {
 			case Call(name, arguments, span):
@@ -1365,34 +1369,96 @@ class Typer {
 				var required = requiredEnumParameters(info.params);
 				if (arguments.length < required || arguments.length > info.params.length)
 					fail("E1019", 'Enum switch case "$name" expects $required to ${info.params.length} bindings', span);
-				var bindings:Array<TypedSwitchBinding> = [];
+				var bindings:Array<TypedSwitchBinding> = [],
+					predicates:Array<TypedSwitchPredicate> = [];
 				for (index in 0...arguments.length) {
 					var parameter = info.params[index],
-						parameterType = enumParameterType(info.typeParameters, parameter, instanceType);
+						parameterType = enumParameterType(info.typeParameters, parameter, instanceType),
+						abstractName = enumAbstractPatternName(parameter.type),
+						storageType = enumStorageParameterType(info.typeParameters, parameter);
 					switch arguments[index] {
 						case Variable(binding, bindingSpan):
-							if (binding != "_") {
+							var constantName = enumAbstractPatternConstant(abstractName, binding);
+							if (binding == "_") {} else if (constantName != null || binding.indexOf(".") >= 0) {
+								predicates.push(typeEnumPredicate(arguments[index], parameterType, storageType, index, constantName));
+							} else {
 								scope.define(binding, parameterType, bindingSpan);
 								bindings.push({
 									name: scope.requireId(binding),
 									type: parameterType,
-									storageType: enumStorageParameterType(info.typeParameters, parameter),
+									storageType: storageType,
 									index: index
 								});
 							}
 						default:
-							fail("E1019", "Enum switch payloads must bind local names or '_'", span);
+							predicates.push(typeEnumPredicate(arguments[index], parameterType, storageType, index, null));
 					}
 				}
 				{
 					value: new TypedExpression(TEnumLiteral(info.enumName, info.index), instanceType, span),
 					enumName: info.enumName,
 					index: info.index,
-					bindings: bindings
+					bindings: bindings,
+					predicates: predicates
 				};
 			default: null;
 		};
 	}
+
+	function typeEnumPredicate(value:AstExpression, type:CompilerType, storageType:CompilerType, index:Int, constantName:Null<String>):TypedSwitchPredicate {
+		var resolvedValue = switch value {
+			case Variable(_, span) if (constantName != null): Variable(Std.string(constantName), span);
+			default: value;
+		};
+		var typed = coerce(typeExpression(resolvedValue, new Scope(), type), type, "enum payload pattern", "E1019");
+		if (constantPatternKey(typed) == null)
+			fail("E1019", "Enum switch payload patterns must be constants, local names, or '_'", typed.span);
+		return {
+			value: typed,
+			type: type,
+			storageType: storageType,
+			index: index
+		};
+	}
+
+	function enumAbstractPatternName(type:AstType):Null<String>
+		return switch type {
+			case NamedType(name), AppliedType(name, _): enumAbstractDecls.exists(name) ? name : null;
+			default: null;
+		};
+
+	function enumAbstractPatternConstant(abstractName:Null<String>, name:String):Null<String> {
+		if (abstractName == null)
+			return null;
+		var declaration = enumAbstractDecls.get(abstractName);
+		if (declaration == null)
+			return null;
+		var memberName = lastPathSegment(name);
+		for (value in declaration.values)
+			if (value.name == memberName)
+				return abstractName + "." + memberName;
+		return null;
+	}
+
+	function enumPatternKey(name:String, index:Int, predicates:Array<TypedSwitchPredicate>):String {
+		if (predicates.length == 0)
+			return 'enum:$name:$index';
+		var keys = [
+			for (predicate in predicates)
+				'${predicate.index}:${constantPatternKey(predicate.value)}'
+		];
+		return 'enum:$name:$index:${keys.join(",")}';
+	}
+
+	function constantPatternKey(value:TypedExpression):Null<String>
+		return switch value.expression {
+			case TIntLiteral(v): 'int:$v';
+			case TBoolLiteral(v): 'bool:$v';
+			case TStringLiteral(v): 'string:$v';
+			case TEnumLiteral(name, index): 'enum:$name:$index';
+			case TCast(inner), TAbiCast(inner): constantPatternKey(inner);
+			default: null;
+		};
 
 	function typeExpression(expression:AstExpression, scope:Scope, ?expectedType:CompilerType):TypedExpression
 		return switch expression {
@@ -1450,6 +1516,22 @@ class Typer {
 										return new TypedExpression(TEnumLiteral(expectedEnum.name, index), literalType, span);
 									}
 								}
+							}
+							var expectedAbstractName = switch expectedType {
+								case TAbstract(declaration, _, _): declaration;
+								default: null;
+							};
+							var expectedAbstract = expectedAbstractName == null ? null : enumAbstractDecls.get(expectedAbstractName);
+							if (expectedAbstract == null && expectedAbstractName != null)
+								for (candidateName => candidate in enumAbstractDecls)
+									if (lastPathSegment(candidateName) == lastPathSegment(expectedAbstractName)) {
+										expectedAbstract = candidate;
+										break;
+									}
+							if (expectedAbstract != null) {
+								for (value in expectedAbstract.values)
+									if (value.name == name)
+										return typeExpression(value.value, new Scope(), lowerType(expectedAbstract.underlying));
 							}
 							var thisType = scope.resolve("this");
 							if (thisType == null)
@@ -1724,7 +1806,8 @@ class Typer {
 						typedGuard = parsedGuard == null ? null : coerce(typeExpression(parsedGuard, caseScope), TBool, "switch guard", "E1003"),
 						typedResult = typeExpression(switchCase.result, caseScope, expectedType == null ? resultType : expectedType),
 						enumName:Null<String> = pattern == null ? null : pattern.enumName,
-						constructorIndex = pattern == null ? -1 : pattern.index;
+						constructorIndex = pattern == null ? -1 : pattern.index,
+						predicates:Array<TypedSwitchPredicate> = pattern == null ? [] : pattern.predicates;
 					if (expectedType == null && typedResult.type != TNever) {
 						var joined = resultType == null ? typedResult.type : commonConditionalType(resultType, typedResult.type);
 						if (joined == null)
@@ -1741,7 +1824,7 @@ class Typer {
 					var caseKey = switch typedValue.expression {
 						case TIntLiteral(value): 'int:$value';
 						case TStringLiteral(value): 'string:$value';
-						case TEnumLiteral(name, index): 'enum:$name:$index';
+						case TEnumLiteral(name, index): enumPatternKey(name, index, predicates);
 						default: null;
 					};
 					if (caseKey != null && typedGuard == null) {
@@ -1755,7 +1838,8 @@ class Typer {
 						result: typedResult,
 						enumName: enumName,
 						constructorIndex: constructorIndex,
-						bindings: pattern == null ? [] : pattern.bindings
+						bindings: pattern == null ? [] : pattern.bindings,
+						predicates: predicates
 					});
 				}
 				var typedDefault = defaultExpression == null ? null : typeExpression(defaultExpression, scope,
@@ -1778,7 +1862,8 @@ class Typer {
 							result: coerce(switchCase.result, resultType, "switch branch", "E1003"),
 							enumName: switchCase.enumName,
 							constructorIndex: switchCase.constructorIndex,
-							bindings: switchCase.bindings
+							bindings: switchCase.bindings,
+							predicates: switchCase.predicates
 						}
 				];
 				if (typedDefault != null)

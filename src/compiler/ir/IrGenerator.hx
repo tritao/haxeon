@@ -9,6 +9,7 @@ import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypedAst.TypedSwitchCase;
+import compiler.types.TypedAst.TypedSwitchPredicate;
 import compiler.types.TypedAst.TypedCaptureSource;
 import compiler.ir.cfg.Cfg.CfgFunction;
 import compiler.ir.cfg.Cfg.CfgBlock;
@@ -420,7 +421,11 @@ class IrGenerator {
 							default: builder.load(switchName, switchType);
 						}, caseValue = switchCase.constructorIndex >= 0 ? builder.constInt(switchCase.constructorIndex) : lowerExpression(switchCase.value,
 							builder, localTypes);
-						builder.branch(builder.equal(switchValue, caseValue), matchBlock, nextBlock);
+						var predicateBlock = switchCase.predicates.length == 0 ? matchBlock : builder.createBlock();
+						builder.branch(builder.equal(switchValue, caseValue), predicateBlock, nextBlock);
+						if (switchCase.predicates.length > 0)
+							lowerEnumPredicates(switchName, switchType, switchCase.constructorIndex, switchCase.predicates, predicateBlock, matchBlock,
+								nextBlock, builder, localTypes);
 						builder.select(matchBlock);
 						if (switchCase.constructorIndex >= 0)
 							for (binding in switchCase.bindings) {
@@ -741,10 +746,15 @@ class IrGenerator {
 						matches = subject.type == TString ? builder.call("__string_equal", [comparisonValue, caseValue],
 							Bool) : builder.equal(comparisonValue, caseValue);
 					var matchBlock = matchBlocks[caseIndex];
-					if (isExhaustiveFinalCase)
+					if (isExhaustiveFinalCase && switchCase.predicates.length == 0)
 						builder.jump(bodyBlock);
-					else
-						builder.branch(matches, matchBlock, nextBlock);
+					else {
+						var predicateBlock = switchCase.predicates.length == 0 ? matchBlock : builder.createBlock();
+						builder.branch(matches, predicateBlock, nextBlock);
+						if (switchCase.predicates.length > 0)
+							lowerEnumPredicates(subjectName, subjectType, switchCase.constructorIndex, switchCase.predicates, predicateBlock, matchBlock,
+								nextBlock, builder, localTypes);
+					}
 					builder.select(matchBlock);
 					for (binding in switchCase.bindings) {
 						localTypes.set(binding.name, lowerType(binding.type));
@@ -1212,6 +1222,29 @@ class IrGenerator {
 		var operands = lowerOperands([key, value], builder, localTypes);
 		lowerMapSet(builder, builder.load(resultName, resultType), operands[0], operands[1], types.key, types.value);
 	}
+
+	static function lowerEnumPredicates(subjectName:String, subjectType:IrType, constructorIndex:Int, predicates:Array<TypedSwitchPredicate>,
+			firstBlock:CfgBlock, matchBlock:CfgBlock, nextBlock:CfgBlock, builder:CfgBuilder, localTypes:Map<String, IrType>):Void {
+		var checkBlock = firstBlock;
+		for (index in 0...predicates.length) {
+			var predicate = predicates[index];
+			builder.select(checkBlock);
+			var field = abiBoundaryCast(builder,
+				builder.enumField(builder.load(subjectName, subjectType), constructorIndex, predicate.index, lowerType(predicate.storageType)),
+				lowerType(predicate.type));
+			var expected = lowerExpression(predicate.value, builder, localTypes);
+			var matches = isStringPatternType(predicate.type) ? builder.call("__string_equal", [field, expected], Bool) : builder.equal(field, expected);
+			checkBlock = index + 1 == predicates.length ? matchBlock : builder.createBlock();
+			builder.branch(matches, checkBlock, nextBlock);
+		}
+	}
+
+	static function isStringPatternType(type:CompilerType):Bool
+		return switch type {
+			case TString: true;
+			case TAbstract(_, _, representation): isStringPatternType(representation);
+			default: false;
+		};
 
 	static function mapTypesOrVoid(type:CompilerType):MapTypes
 		return switch type {

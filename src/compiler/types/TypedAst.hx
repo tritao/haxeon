@@ -113,6 +113,7 @@ typedef TypedSwitchExpressionCase = {
 	final enumName:Null<String>;
 	final constructorIndex:Int;
 	final bindings:Array<TypedSwitchBinding>;
+	final predicates:Array<TypedSwitchPredicate>;
 }
 
 /** Type-checked statements with explicit storage and dispatch decisions. */
@@ -151,11 +152,15 @@ typedef TypedSwitchCase = {
 	final enumName:Null<String>;
 	final constructorIndex:Int;
 	final bindings:Array<TypedSwitchBinding>;
+	final predicates:Array<TypedSwitchPredicate>;
 	final span:SourceSpan;
 }
 
 /** Local binding introduced for one enum-constructor payload position. */
 typedef TypedSwitchBinding = {final name:String; final type:CompilerType; final storageType:CompilerType; final index:Int;}
+
+/** Constant constraint applied to one enum-constructor payload position. */
+typedef TypedSwitchPredicate = {final value:TypedExpression; final type:CompilerType; final storageType:CompilerType; final index:Int;}
 
 /** Resolved catch arm ready for IR exception lowering. */
 typedef TypedCatch = {final name:String; final type:CompilerType; final statements:Array<TypedStatement>; final span:SourceSpan;}
