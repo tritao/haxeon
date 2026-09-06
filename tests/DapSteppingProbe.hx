@@ -11,7 +11,7 @@ function main():Int {
 	if (answer == 41) {
 		answer = answer + 1;
 	}
-	for (index in 0...1) {
+	for (index in 0...3) {
 		answer = answer + index;
 	}
 	return answer;

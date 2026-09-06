@@ -145,9 +145,24 @@ wait_frame DapSteppingProbe.main 12
 wait_frame DapSteppingProbe.main 14
 locals=$(read_locals)
 python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="answer" and v.get("value")=="42" for v in vs), vs' <<<"$locals"
+loop_breakpoint=$("${dap[@]}" breakpoints set --name "$session" --source "$repo_dir/tests/DapSteppingProbe.hx" --line 15)
+python3 -c 'import json,sys; assert json.load(sys.stdin)["data"]["breakpoints"][0]["verified"]' <<<"$loop_breakpoint"
 "${dap[@]}" next --name "$session" >/dev/null
 wait_frame DapSteppingProbe.main 15
 locals=$(read_locals)
 python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="index" and v.get("value")=="0" for v in vs), vs' <<<"$locals"
+python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="answer" and v.get("value")=="42" for v in vs), vs' <<<"$locals"
+
+"${dap[@]}" continue --name "$session" >/dev/null
+wait_frame DapSteppingProbe.main 15
+locals=$(read_locals)
+python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="index" and v.get("value")=="1" for v in vs), vs' <<<"$locals"
+python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="answer" and v.get("value")=="42" for v in vs), vs' <<<"$locals"
+
+"${dap[@]}" continue --name "$session" >/dev/null
+wait_frame DapSteppingProbe.main 15
+locals=$(read_locals)
+python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="index" and v.get("value")=="2" for v in vs), vs' <<<"$locals"
+python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="answer" and v.get("value")=="43" for v in vs), vs' <<<"$locals"
 
 echo "PASS: dap-cli next, stepIn, and stepOut preserve source lines, frames, branches, loops, and locals"
