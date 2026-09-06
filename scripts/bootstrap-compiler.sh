@@ -46,6 +46,7 @@ if [[ "$mode" == "--self" ]]; then
 			--output=out/bootstrap/compiler-self.hl --entry=compiler.tools.BootstrapCompiler --root=src --root=stdlib "${sources[@]}"
 	)
 	cmp "$compiler_a" "$self_compiler"
+	cmp "$compiler_a.functions" "$self_compiler.functions"
 	echo "PASS: checked-in compiler rebuilt itself identically"
 	exit 0
 fi
@@ -60,4 +61,5 @@ fi
 )
 
 cmp "$compiler_a" "$compiler_b"
+cmp "$compiler_a.functions" "$compiler_b.functions"
 echo "PASS: bootstrap compiler rebuilt an identical compiler"

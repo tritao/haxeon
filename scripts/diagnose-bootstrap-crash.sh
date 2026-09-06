@@ -59,6 +59,14 @@ set -e
 echo "bootstrap diagnostic report: $report"
 if rg -q "received signal SIG(SEGV|ABRT|BUS|ILL)" "$report"; then
 	rg -n "received signal|Program received|resolved JIT frame|^#0 |^#1 |^#2 " "$report" | tail -n 80 || true
+	if [[ -f "$compiler.functions" ]]; then
+		while read -r function_index; do
+			resolved=$(awk -F '\t' -v target="$function_index" '$1 == target { print $2; exit }' "$compiler.functions")
+			if [[ -n "$resolved" ]]; then
+				echo "resolved function $function_index: $resolved" | tee -a "$report"
+			fi
+		done < <(sed -n 's/.*function=\([0-9][0-9]*\).*/\1/p' "$report" | sort -nu)
+	fi
 	exit 139
 fi
 tail -n 40 "$report"
