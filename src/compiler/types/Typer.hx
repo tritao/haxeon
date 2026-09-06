@@ -231,13 +231,7 @@ class Typer {
 	}
 
 	static function parentPath(path:String):Null<String> {
-		var cursor = path.length - 1;
-		while (cursor >= 0) {
-			if (path.charCodeAt(cursor) == 46)
-				return path.substring(0, cursor);
-			cursor--;
-		}
-		return null;
+		return compiler.QualifiedName.parent(path);
 	}
 
 	static function pathBeforeLast(path:String):String {
@@ -246,24 +240,11 @@ class Typer {
 	}
 
 	static function lastPathSegment(path:String):String {
-		var cursor = path.length - 1;
-		while (cursor >= 0) {
-			if (path.charCodeAt(cursor) == 46)
-				return path.substring(cursor + 1, path.length);
-			cursor--;
-		}
-		return path;
+		return compiler.QualifiedName.last(path);
 	}
 
 	static function splitPath(path:String):Array<String> {
-		var parts:Array<String> = [], start = 0;
-		for (cursor in 0...path.length)
-			if (path.charCodeAt(cursor) == 46) {
-				parts.push(path.substring(start, cursor));
-				start = cursor + 1;
-			}
-		parts.push(path.substring(start, path.length));
-		return parts;
+		return compiler.QualifiedName.split(path);
 	}
 
 	static function enumName(type:Null<CompilerType>):Null<String> {
@@ -507,20 +488,14 @@ class Typer {
 		var previousContext = context;
 		var functionName = specializedName == null ? (owner == null ? fn.name : owner + "." + fn.name) : specializedName;
 		context = new BodyContext(functionName, substitutions);
-		collectAssignedLocals(fn.statements, context.assigned);
-		var declared:Map<String, Bool> = [];
-		for (argument in fn.arguments)
-			declared.set(argument.name, true);
-		collectDeclaredLocals(fn.statements, declared);
-		var mutableCandidates:Map<String, Bool> = [];
-		collectMutableCaptureCandidates(fn.statements, declared, mutableCandidates);
-		var exceptionCandidates:Map<String, Bool> = [];
-		collectExceptionCellCandidates(fn.statements, declared, exceptionCandidates);
-		for (name in mutableCandidates.keys()) {
+		var storage = CaptureAnalysis.analyze(fn.statements, [for (argument in fn.arguments) argument.name]);
+		for (name in storage.assigned.keys())
+			context.assigned.set(name, true);
+		for (name in storage.mutableCaptures.keys()) {
 			context.cells.set(name, '$' + 'cell:' + context.name + ':' + name);
 			context.cellKinds.set(name, MutableCapture);
 		}
-		for (name in exceptionCandidates.keys()) {
+		for (name in storage.exceptionCells.keys()) {
 			context.cells.set(name, '$' + 'cell:' + context.name + ':' + name);
 			if (!context.cellKinds.exists(name))
 				context.cellKinds.set(name, ExceptionEdge);
@@ -804,8 +779,8 @@ class Typer {
 					var typedCondition = typeExpression(predicate, scope);
 					if (!sameType(typedCondition.type, TBool))
 						fail("E1004", "If condition must be Bool", span);
-					var thenScope = narrowedScope(scope, typedCondition, true),
-						elseScope = narrowedScope(scope, typedCondition, false),
+					var thenScope = FlowAnalysis.narrowedScope(scope, typedCondition, true),
+						elseScope = FlowAnalysis.narrowedScope(scope, typedCondition, false),
 						typedThen = typeStatements(thenBranch, thenScope, result),
 						typedElse = typeStatements(elseBranch, elseScope, result);
 					output.push(TIf(typedCondition, typedThen, typedElse, span));
@@ -818,7 +793,7 @@ class Typer {
 						continuing.push(elseScope);
 					scope.mergeAssignmentsFrom(continuing);
 					if (elseBranch.length == 0 && alwaysExits(typedThen))
-						refineAfterGuard(scope, typedCondition);
+						FlowAnalysis.refineAfterGuard(scope, typedCondition);
 				case While(predicate, body, span):
 					var typedCondition = typeExpression(predicate, scope);
 					if (!sameType(typedCondition.type, TBool))
@@ -1386,9 +1361,9 @@ class Typer {
 						if (argument.name != "_")
 							declared.set(argument.name, true);
 					}
-					collectDeclaredLocals(body, declared);
+					CaptureAnalysis.collectDeclaredLocals(body, declared);
 					var freeVariables:Map<String, Bool> = [];
-					collectVariables(body, freeVariables);
+					CaptureAnalysis.collectVariables(body, freeVariables);
 					var captures:Array<String> = [],
 						captureCells:Map<String, String> = [],
 						captureTypes:Map<String, CompilerType> = [];
@@ -1439,13 +1414,13 @@ class Typer {
 						previousContext = context;
 					context = new BodyContext(lambdaName, previousContext.typeSubstitutions);
 					context.resultType = inferredResult;
-					collectAssignedLocals(body, context.assigned);
+					CaptureAnalysis.collectAssignedLocals(body, context.assigned);
 					var lambdaDeclared:Map<String, Bool> = [];
 					for (argument in arguments)
 						lambdaDeclared.set(argument.name, true);
-					collectDeclaredLocals(body, lambdaDeclared);
+					CaptureAnalysis.collectDeclaredLocals(body, lambdaDeclared);
 					var lambdaCandidates:Map<String, Bool> = [];
-					collectMutableCaptureCandidates(body, lambdaDeclared, lambdaCandidates);
+					CaptureAnalysis.collectMutableCaptureCandidates(body, lambdaDeclared, lambdaCandidates);
 					for (name in lambdaCandidates.keys()) {
 						context.cells.set(name, '$' + 'cell:' + lambdaName + ':' + name);
 						context.cellKinds.set(name, MutableCapture);
@@ -1535,11 +1510,11 @@ class Typer {
 				var typedCondition = typeExpression(predicate, scope, TBool);
 				if (!sameType(typedCondition.type, TBool))
 					fail("E1011", "Conditional expression requires a Bool condition", span);
-				var typedTrue = typeExpression(whenTrue, narrowedScope(scope, typedCondition, true), expectedType),
+				var typedTrue = typeExpression(whenTrue, FlowAnalysis.narrowedScope(scope, typedCondition, true), expectedType),
 					branchExpected = expectedType == null
 						&& typedTrue.type != TNull
 						&& typedTrue.type != TNever ? (containsNullLiteral(whenFalse) ? CompilerType.TNullable(typedTrue.type) : typedTrue.type) : expectedType,
-					typedFalse = typeExpression(whenFalse, narrowedScope(scope, typedCondition, false), branchExpected),
+					typedFalse = typeExpression(whenFalse, FlowAnalysis.narrowedScope(scope, typedCondition, false), branchExpected),
 					resultType = expectedType == null ? commonConditionalType(typedTrue.type, typedFalse.type) : expectedType;
 				if (resultType == null)
 					fail("E1003", "Conditional branches must have matching types", span);
@@ -2461,453 +2436,8 @@ class Typer {
 		};
 	}
 
-	function narrowedScope(scope:Scope, condition:TypedExpression, truthy:Bool):Scope {
-		var result = new Scope(scope);
-		applyConditionNarrowing(result, condition, truthy);
-		return result;
-	}
-
-	function applyConditionNarrowing(scope:Scope, condition:TypedExpression, truthy:Bool):Void {
-		switch condition.expression {
-			case TAnd(left, right) if (truthy):
-				applyConditionNarrowing(scope, left, true);
-				applyConditionNarrowing(scope, right, true);
-				return;
-			case TOr(left, right) if (!truthy):
-				applyConditionNarrowing(scope, left, false);
-				applyConditionNarrowing(scope, right, false);
-				return;
-			default:
-		}
-		var comparison = nullComparison(condition);
-		if (comparison != null) {
-			var nonNull = truthy == comparison.nonNullWhenTrue;
-			scope.refine(comparison.name, nonNull ? comparison.nonNullType : TNull);
-		}
-	}
-
-	function refineAfterGuard(scope:Scope, condition:TypedExpression):Void
-		applyConditionNarrowing(scope, condition, false);
-
-	function nullComparison(condition:TypedExpression):Null<{name:String, nonNullType:CompilerType, nonNullWhenTrue:Bool}> {
-		return switch condition.expression {
-			case TEqual(left, right): var local = nullableLocal(left),
-					other = isNullValue(right) ? true : false; if (local == null) {
-					local = nullableLocal(right);
-					other = isNullValue(left);
-				} local == null || !other ? null : {name: local.name, nonNullType: local.nonNullType, nonNullWhenTrue: false};
-			case TNot(value):
-				var comparison = nullComparison(value);
-				comparison == null ? null : {
-					name: comparison.name,
-					nonNullType: comparison.nonNullType,
-					nonNullWhenTrue: !comparison.nonNullWhenTrue
-				};
-			default: null;
-		};
-	}
-
-	function nullableLocal(expression:TypedExpression):Null<{name:String, nonNullType:CompilerType}> {
-		return switch expression.expression {
-			case TLocal(name), TCellLocal(name, _): switch expression.type {
-					case TNullable(element): {name: name, nonNullType: element};
-					default: null;
-				};
-			default: null;
-		};
-	}
-
-	static function isNullValue(expression:TypedExpression):Bool
-		return switch expression.expression {
-			case TNullLiteral: true;
-			case TNullableWrap(value): isNullValue(value);
-			default: false;
-		};
-
 	function functionType(fn:AstFunction):CompilerType
 		return TFunction([for (argument in fn.arguments) argumentType(argument)], lowerType(fn.result));
-
-	static function collectAssignedLocals(statements:Array<AstStatement>, names:Map<String, Bool>):Void {
-		for (statement in statements)
-			switch (statement) {
-				case Assignment(name, _, _):
-					if (name.indexOf(".") < 0)
-						names.set(name, true);
-				case Increment(name, _, _):
-					names.set(name, true);
-				case If(_, yes, no, _):
-					collectAssignedLocals(yes, names);
-					collectAssignedLocals(no, names);
-				case While(_, body, _):
-					collectAssignedLocals(body, names);
-				case DoWhile(body, _, _):
-					collectAssignedLocals(body, names);
-				case ForIn(name, valueName, _, body, _):
-					names.set(name, true);
-					if (valueName != null)
-						names.set(valueName, true);
-					collectAssignedLocals(body, names);
-				case Switch(_, cases, defaultBranch, _, _):
-					for (switchCase in cases)
-						collectAssignedLocals(switchCase.statements, names);
-					collectAssignedLocals(defaultBranch, names);
-				case Try(tryBranch, catches, _):
-					collectAssignedLocals(tryBranch, names);
-					for (catchClause in catches)
-						collectAssignedLocals(catchClause.statements, names);
-				default:
-			}
-	}
-
-	static function collectDeclaredLocals(statements:Array<AstStatement>, names:Map<String, Bool>):Void {
-		for (statement in statements)
-			switch statement {
-				case UninitializedDeclaration(name, _, _):
-					names.set(name, true);
-				case VarDeclaration(name, _, _, _):
-					names.set(name, true);
-				case If(_, yes, no, _):
-					collectDeclaredLocals(yes, names);
-					collectDeclaredLocals(no, names);
-				case While(_, body, _):
-					collectDeclaredLocals(body, names);
-				case DoWhile(body, _, _):
-					collectDeclaredLocals(body, names);
-				case ForIn(name, valueName, _, body, _):
-					names.set(name, true);
-					if (valueName != null)
-						names.set(valueName, true);
-					collectDeclaredLocals(body, names);
-				case Switch(_, cases, defaultBranch, _, _):
-					for (switchCase in cases)
-						collectDeclaredLocals(switchCase.statements, names);
-					collectDeclaredLocals(defaultBranch, names);
-				case Try(tryBranch, catches, _):
-					collectDeclaredLocals(tryBranch, names);
-					for (catchClause in catches)
-						collectDeclaredLocals(catchClause.statements, names);
-				case Break(_), Continue(_):
-				case Increment(_, _, _):
-				default:
-			}
-	}
-
-	static function collectVariables(statements:Array<AstStatement>, names:Map<String, Bool>):Void {
-		for (statement in statements)
-			switch statement {
-				case UninitializedDeclaration(_, _, _):
-				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
-					collectExpressionVariables(expression, names);
-				case IndexAssignment(array, offset, expression, _):
-					collectExpressionVariables(array, names);
-					collectExpressionVariables(offset, names);
-					collectExpressionVariables(expression, names);
-				case FieldAssignment(object, _, expression, _):
-					collectExpressionVariables(object, names);
-					collectExpressionVariables(expression, names);
-				case ReturnVoid(_):
-				case If(predicate, yes, no, _):
-					collectExpressionVariables(predicate, names);
-					collectVariables(yes, names);
-					collectVariables(no, names);
-				case While(predicate, body, _):
-					collectExpressionVariables(predicate, names);
-					collectVariables(body, names);
-				case DoWhile(body, predicate, _):
-					collectVariables(body, names);
-					collectExpressionVariables(predicate, names);
-				case ForIn(_, _, iterable, body, _):
-					collectExpressionVariables(iterable, names);
-					collectVariables(body, names);
-				case Switch(expression, cases, defaultBranch, _, _):
-					collectExpressionVariables(expression, names);
-					for (switchCase in cases) {
-						collectExpressionVariables(switchCase.value, names);
-						var guard = switchCase.guard;
-						if (guard != null)
-							collectExpressionVariables(guard, names);
-						collectVariables(switchCase.statements, names);
-					}
-					collectVariables(defaultBranch, names);
-				case Try(tryBranch, catches, _):
-					collectVariables(tryBranch, names);
-					for (catchClause in catches)
-						collectVariables(catchClause.statements, names);
-				case Break(_), Continue(_):
-				case Increment(name, _, _):
-					names.set(name, true);
-			}
-	}
-
-	static function collectMutableCaptureCandidates(statements:Array<AstStatement>, outerDeclared:Map<String, Bool>, result:Map<String, Bool>):Void {
-		for (statement in statements)
-			switch (statement) {
-				case UninitializedDeclaration(_, _, _):
-				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
-					collectMutableCaptureExpression(expression, outerDeclared, result);
-				case IndexAssignment(array, offset, expression, _):
-					collectMutableCaptureExpression(array, outerDeclared, result);
-					collectMutableCaptureExpression(offset, outerDeclared, result);
-					collectMutableCaptureExpression(expression, outerDeclared, result);
-				case FieldAssignment(object, _, expression, _):
-					collectMutableCaptureExpression(object, outerDeclared, result);
-					collectMutableCaptureExpression(expression, outerDeclared, result);
-				case If(predicate, yes, no, _):
-					collectMutableCaptureExpression(predicate, outerDeclared, result);
-					collectMutableCaptureCandidates(yes, outerDeclared, result);
-					collectMutableCaptureCandidates(no, outerDeclared, result);
-				case While(predicate, body, _):
-					collectMutableCaptureExpression(predicate, outerDeclared, result);
-					collectMutableCaptureCandidates(body, outerDeclared, result);
-				case DoWhile(body, predicate, _):
-					collectMutableCaptureCandidates(body, outerDeclared, result);
-					collectMutableCaptureExpression(predicate, outerDeclared, result);
-				case ForIn(_, _, iterable, body, _):
-					collectMutableCaptureExpression(iterable, outerDeclared, result);
-					collectMutableCaptureCandidates(body, outerDeclared, result);
-				case Switch(expression, cases, defaultBranch, _, _):
-					collectMutableCaptureExpression(expression, outerDeclared, result);
-					for (switchCase in cases) {
-						collectMutableCaptureExpression(switchCase.value, outerDeclared, result);
-						var guard = switchCase.guard;
-						if (guard != null)
-							collectMutableCaptureExpression(guard, outerDeclared, result);
-						collectMutableCaptureCandidates(switchCase.statements, outerDeclared, result);
-					}
-					collectMutableCaptureCandidates(defaultBranch, outerDeclared, result);
-				case Try(tryBranch, catches, _):
-					collectMutableCaptureCandidates(tryBranch, outerDeclared, result);
-					for (catchClause in catches)
-						collectMutableCaptureCandidates(catchClause.statements, outerDeclared, result);
-				case ReturnVoid(_), Break(_), Continue(_), Increment(_, _, _):
-			}
-	}
-
-	/**
-		Locals mutated in a protected region and observed by its handler need stable
-		storage: an exception can bypass SSA edge moves at any throwing instruction.
-	**/
-	static function collectExceptionCellCandidates(statements:Array<AstStatement>, declared:Map<String, Bool>, result:Map<String, Bool>):Void {
-		for (statement in statements)
-			switch statement {
-				case Try(tryBranch, catches, _):
-					var assigned:Map<String, Bool> = [],
-						observed:Map<String, Bool> = [];
-					collectAssignedLocals(tryBranch, assigned);
-					for (catchClause in catches)
-						collectVariables(catchClause.statements, observed);
-					for (name in observed.keys())
-						if (assigned.exists(name) && declared.exists(name))
-							result.set(name, true);
-					collectExceptionCellCandidates(tryBranch, declared, result);
-					for (catchClause in catches)
-						collectExceptionCellCandidates(catchClause.statements, declared, result);
-				case If(_, yes, no, _):
-					collectExceptionCellCandidates(yes, declared, result);
-					collectExceptionCellCandidates(no, declared, result);
-				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _):
-					collectExceptionCellCandidates(body, declared, result);
-				case Switch(_, cases, defaultBranch, _, _):
-					for (switchCase in cases)
-						collectExceptionCellCandidates(switchCase.statements, declared, result);
-					collectExceptionCellCandidates(defaultBranch, declared, result);
-				default:
-			}
-	}
-
-	static function collectMutableCaptureExpression(expression:AstExpression, outerDeclared:Map<String, Bool>, result:Map<String, Bool>):Void
-		switch (expression) {
-			case Lambda(arguments, body, _):
-				var declared:Map<String, Bool> = [];
-				for (argument in arguments)
-					declared.set(argument.name, true);
-				collectDeclaredLocals(body, declared);
-				var names:Map<String, Bool> = [],
-					assigned:Map<String, Bool> = [];
-				collectVariables(body, names);
-				collectAssignedLocals(body, assigned);
-				for (name in assigned.keys())
-					names.set(name, true);
-				for (name in names.keys())
-					if (!declared.exists(name) && outerDeclared.exists(name))
-						result.set(name, true);
-				collectMutableCaptureCandidates(body, outerDeclared, result);
-			case Member(object, _, _):
-				collectMutableCaptureExpression(object, outerDeclared, result);
-			case MethodCall(object, _, arguments, _):
-				collectMutableCaptureExpression(object, outerDeclared, result);
-				for (argument in arguments)
-					collectMutableCaptureExpression(argument, outerDeclared, result);
-			case Call(_, arguments, _):
-				for (argument in arguments)
-					collectMutableCaptureExpression(argument, outerDeclared, result);
-			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _),
-				BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _), UnsignedShiftRight(left, right, _),
-				Less(left, right, _), LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _),
-				NotEqual(left, right, _), And(left, right, _), Or(left, right, _):
-				collectMutableCaptureExpression(left, outerDeclared, result);
-				collectMutableCaptureExpression(right, outerDeclared, result);
-			case Negate(value, _), Not(value, _):
-				collectMutableCaptureExpression(value, outerDeclared, result);
-			case New(_, arguments, _):
-				for (argument in arguments)
-					collectMutableCaptureExpression(argument, outerDeclared, result);
-			case NewArray(_, length, _):
-				collectMutableCaptureExpression(length, outerDeclared, result);
-			case Index(array, offset, _):
-				collectMutableCaptureExpression(array, outerDeclared, result);
-				collectMutableCaptureExpression(offset, outerDeclared, result);
-			case PostfixIncrement(target, _, _):
-				collectMutableCaptureExpression(target, outerDeclared, result);
-			case Conditional(predicate, whenTrue, whenFalse, _):
-				for (item in [predicate, whenTrue, whenFalse])
-					collectMutableCaptureExpression(item, outerDeclared, result);
-			case BlockExpression(statements, value, _):
-				collectMutableCaptureCandidates(statements, outerDeclared, result);
-				collectMutableCaptureExpression(value, outerDeclared, result);
-			case ThrowExpression(value, _):
-				collectMutableCaptureExpression(value, outerDeclared, result);
-			case Cast(value, _, _):
-				collectMutableCaptureExpression(value, outerDeclared, result);
-			case SwitchExpression(subject, cases, fallback, _):
-				collectMutableCaptureExpression(subject, outerDeclared, result);
-				for (switchCase in cases) {
-					collectMutableCaptureExpression(switchCase.value, outerDeclared, result);
-					var guard = switchCase.guard;
-					if (guard != null)
-						collectMutableCaptureExpression(guard, outerDeclared, result);
-					collectMutableCaptureExpression(switchCase.result, outerDeclared, result);
-				}
-				var resolvedFallback = fallback;
-				if (resolvedFallback != null)
-					collectMutableCaptureExpression(resolvedFallback, outerDeclared, result);
-			case ObjectLiteral(fields, _):
-				for (field in fields)
-					collectMutableCaptureExpression(field.value, outerDeclared, result);
-			case ArrayLiteral(values, _):
-				for (value in values)
-					collectMutableCaptureExpression(value, outerDeclared, result);
-			case MapLiteral(entries, _):
-				for (entry in entries) {
-					collectMutableCaptureExpression(entry.key, outerDeclared, result);
-					collectMutableCaptureExpression(entry.value, outerDeclared, result);
-				}
-			case ArrayComprehension(_, _, iterable, predicate, value, _):
-				collectMutableCaptureExpression(iterable, outerDeclared, result);
-				if (predicate != null)
-					collectMutableCaptureExpression(predicate, outerDeclared, result);
-				collectMutableCaptureExpression(value, outerDeclared, result);
-			case MapComprehension(_, _, iterable, predicate, key, value, _):
-				collectMutableCaptureExpression(iterable, outerDeclared, result);
-				if (predicate != null)
-					collectMutableCaptureExpression(predicate, outerDeclared, result);
-				collectMutableCaptureExpression(key, outerDeclared, result);
-				collectMutableCaptureExpression(value, outerDeclared, result);
-			case Range(start, rangeEnd, _):
-				collectMutableCaptureExpression(start, outerDeclared, result);
-				collectMutableCaptureExpression(rangeEnd, outerDeclared, result);
-			case Variable(_, _), IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_),
-				NewMap(_, _, _):
-		}
-
-	static function collectExpressionVariables(expression:AstExpression, names:Map<String, Bool>):Void
-		switch expression {
-			case Variable(name, _):
-				names.set(name, true);
-			case Member(object, _, _):
-				collectExpressionVariables(object, names);
-			case MethodCall(object, _, arguments, _):
-				collectExpressionVariables(object, names);
-				for (argument in arguments)
-					collectExpressionVariables(argument, names);
-			case Call(name, arguments, _):
-				var separator = name.indexOf(".");
-				if (separator > 0)
-					names.set(splitPath(name)[0], true);
-				for (argument in arguments)
-					collectExpressionVariables(argument, names);
-			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _),
-				BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _), UnsignedShiftRight(left, right, _),
-				Less(left, right, _), LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _),
-				NotEqual(left, right, _):
-				collectExpressionVariables(left, names);
-				collectExpressionVariables(right, names);
-			case Negate(value, _):
-				collectExpressionVariables(value, names);
-			case Not(value, _):
-				collectExpressionVariables(value, names);
-			case And(left, right, _), Or(left, right, _):
-				collectExpressionVariables(left, names);
-				collectExpressionVariables(right, names);
-			case Conditional(predicate, whenTrue, whenFalse, _):
-				for (item in [predicate, whenTrue, whenFalse])
-					collectExpressionVariables(item, names);
-			case BlockExpression(statements, value, _):
-				collectVariables(statements, names);
-				collectExpressionVariables(value, names);
-			case ThrowExpression(value, _):
-				collectExpressionVariables(value, names);
-			case Cast(value, _, _):
-				collectExpressionVariables(value, names);
-			case SwitchExpression(subject, cases, fallback, _):
-				collectExpressionVariables(subject, names);
-				for (switchCase in cases) {
-					collectExpressionVariables(switchCase.value, names);
-					var guard = switchCase.guard;
-					if (guard != null)
-						collectExpressionVariables(guard, names);
-					collectExpressionVariables(switchCase.result, names);
-				}
-				var resolvedFallback = fallback;
-				if (resolvedFallback != null)
-					collectExpressionVariables(resolvedFallback, names);
-			case ObjectLiteral(fields, _):
-				for (field in fields)
-					collectExpressionVariables(field.value, names);
-			case ArrayLiteral(values, _):
-				for (value in values)
-					collectExpressionVariables(value, names);
-			case MapLiteral(entries, _):
-				for (entry in entries) {
-					collectExpressionVariables(entry.key, names);
-					collectExpressionVariables(entry.value, names);
-				}
-			case ArrayComprehension(_, _, iterable, predicate, value, _):
-				collectExpressionVariables(iterable, names);
-				if (predicate != null)
-					collectExpressionVariables(predicate, names);
-				collectExpressionVariables(value, names);
-			case MapComprehension(_, _, iterable, predicate, key, value, _):
-				collectExpressionVariables(iterable, names);
-				if (predicate != null)
-					collectExpressionVariables(predicate, names);
-				collectExpressionVariables(key, names);
-				collectExpressionVariables(value, names);
-			case Range(start, rangeEnd, _):
-				collectExpressionVariables(start, names);
-				collectExpressionVariables(rangeEnd, names);
-			case New(_, arguments, _):
-				for (argument in arguments)
-					collectExpressionVariables(argument, names);
-			case NewArray(_, length, _):
-				collectExpressionVariables(length, names);
-			case NewMap(_, _, _):
-			case Index(array, offset, _):
-				collectExpressionVariables(array, names);
-				collectExpressionVariables(offset, names);
-			case PostfixIncrement(target, _, _):
-				collectExpressionVariables(target, names);
-			case Lambda(_, body, _):
-				collectVariables(body, names);
-			case IntegerLiteral(_, _):
-				return;
-			case FloatLiteral(_, _):
-				return;
-			case StringLiteral(_, _):
-				return;
-			case BoolLiteral(_, _), NullLiteral(_), Unreachable(_):
-				return;
-		}
 
 	function coerceArguments(arguments:Array<TypedExpression>, expected:Array<CompilerType>, name:String):Array<TypedExpression> {
 		var output:Array<TypedExpression> = [];
@@ -3094,7 +2624,7 @@ class Typer {
 
 	function logical(a:AstExpression, b:AstExpression, scope:Scope, and:Bool, span:SourceSpan):TypedExpression {
 		var left = typeExpression(a, scope),
-			rightScope = narrowedScope(scope, left, and),
+			rightScope = FlowAnalysis.narrowedScope(scope, left, and),
 			right = typeExpression(b, rightScope);
 		if (!sameType(left.type, TBool) || !sameType(right.type, TBool))
 			fail("E1011", "Logical operators require Bool operands", span);

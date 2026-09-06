@@ -1091,33 +1091,15 @@ class Compiler {
 	}
 
 	static function lastPathSegment(path:String):String {
-		var cursor = path.length - 1;
-		while (cursor >= 0) {
-			if (path.charCodeAt(cursor) == 46)
-				return path.substring(cursor + 1, path.length);
-			cursor--;
-		}
-		return path;
+		return compiler.QualifiedName.last(path);
 	}
 
 	static function firstPathSegment(path:String):String {
-		var cursor = 0;
-		while (cursor < path.length) {
-			if (path.charCodeAt(cursor) == 46)
-				return path.substring(0, cursor);
-			cursor++;
-		}
-		return path;
+		return compiler.QualifiedName.first(path);
 	}
 
 	static function parentPath(path:String):String {
-		var cursor = path.length - 1;
-		while (cursor >= 0) {
-			if (path.charCodeAt(cursor) == 46)
-				return path.substring(0, cursor);
-			cursor--;
-		}
-		return "";
+		return compiler.QualifiedName.parentOrEmpty(path);
 	}
 
 	static function canonicalFunction(fn:AstFunction, module:String, entry:String, locals:Map<String, Bool>, ?explicitName:String,

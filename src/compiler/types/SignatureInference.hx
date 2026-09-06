@@ -260,14 +260,7 @@ class SignatureInference {
 	}
 
 	static function splitPath(path:String):Array<String> {
-		var parts:Array<String> = [], start = 0;
-		for (cursor in 0...path.length)
-			if (path.charCodeAt(cursor) == 46) {
-				parts.push(path.substring(start, cursor));
-				start = cursor + 1;
-			}
-		parts.push(path.substring(start, path.length));
-		return parts;
+		return compiler.QualifiedName.split(path);
 	}
 
 	static function inferFunction(fn:AstFunction, enums:Map<String, AstEnum>, ?methods:Map<String, AstFunction>):AstFunction {
@@ -355,13 +348,7 @@ class SignatureInference {
 	}
 
 	static function lastPathSegment(path:String):String {
-		var cursor = path.length - 1;
-		while (cursor >= 0) {
-			if (path.charCodeAt(cursor) == 46)
-				return path.substring(cursor + 1, path.length);
-			cursor--;
-		}
-		return path;
+		return compiler.QualifiedName.last(path);
 	}
 
 	static function sameType(left:AstType, right:AstType):Bool

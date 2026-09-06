@@ -24,6 +24,7 @@ cc -shared -fPIC -DHL_NAME\(n\)=realtime_##n \
 	-Wl,-rpath,"$root_dir/vendor/hashlink" \
 	-o "$root_dir/out/realtime_runtime.hdll"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run TestMain
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run CaptureAnalysisMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run AbiMatrixMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run LanguageServiceMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ProtocolMain
