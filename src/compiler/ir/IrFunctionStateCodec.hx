@@ -1,6 +1,5 @@
 package compiler.ir;
 
-import Array as HaxeArray;
 import compiler.ir.Ir.IrBlock;
 import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrTerminator;
@@ -9,6 +8,11 @@ import haxe.io.Bytes;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
 import compiler.ir.IrFunction;
+import compiler.ir.IrInstructionCodec;
+import compiler.ir.IrTerminatorCodec;
+import compiler.ir.IrTypeCodec;
+import compiler.ir.IrValueTableCodec;
+import compiler.ir.IrVerifier;
 
 /** Deterministic framing for a complete SSA IR function. */
 class IrFunctionStateCodec {
@@ -22,11 +26,12 @@ class IrFunctionStateCodec {
 			collectValue(argument, values);
 		for (block in fn.blocks) {
 			for (instruction in block.instructions)
-				collectParameters(Type.enumParameters(instruction), values);
-			if (block.terminator != null)
-				collectParameters(Type.enumParameters(block.terminator), values);
+				collectInstruction(instruction, values);
+			var terminator = block.terminator;
+			if (terminator != null)
+				collectTerminator(terminator, values);
 		}
-		var valueBytes = IrValueTableCodec.encode([for (value in values) value]),
+		var valueBytes = IrValueTableCodec.encode([for (_ => value in values) value]),
 			output = new BytesOutput();
 		output.bigEndian = false;
 		output.writeString("IRF");
@@ -54,11 +59,12 @@ class IrFunctionStateCodec {
 			output.writeInt32(block.instructions.length);
 			for (instruction in block.instructions)
 				writeBytes(output, IrInstructionCodec.encode(instruction));
-			if (block.terminator == null)
+			var blockTerminator = block.terminator;
+			if (blockTerminator == null)
 				throw "IR block has no terminator";
 			var terminator = new BytesOutput();
 			terminator.bigEndian = false;
-			IrTerminatorCodec.write(terminator, block.terminator);
+			IrTerminatorCodec.write(terminator, blockTerminator);
 			writeBytes(output, terminator.getBytes());
 		}
 		return output.getBytes();
@@ -123,27 +129,66 @@ class IrFunctionStateCodec {
 		IrVerifier.verify(program);
 	}
 
-	static function collectParameters(parameters:Array<Dynamic>, values:Map<Int, IrValue>):Void
-		for (parameter in parameters)
-			if (Std.isOfType(parameter, IrValue))
-				collectValue(cast parameter, values);
-			else if (isArrayType(Type.typeof(parameter)))
-				for (item in (cast parameter : Array<Dynamic>))
-					if (Reflect.hasField(item, "value"))
-						collectValue(Reflect.field(item, "value"), values);
-					else if (Std.isOfType(item, IrValue))
-						collectValue(item, values);
+	static function collectInstruction(instruction:IrInstruction, values:Map<Int, IrValue>):Void {
+		switch instruction {
+			case Phi(output, inputs):
+				collectValue(output, values);
+				for (input in inputs)
+					collectValue(input.value, values);
+			case ConstVoid(output), ConstInt(output, _), ConstFloat(output, _), ConstString(output, _), ConstBool(output, _), ConstNull(output),
+				TypeValue(output, _), Catch(output), GlobalGet(output, _), StaticClosure(output, _), NewObject(output, _):
+				collectValue(output, values);
+			case ToDyn(output, value), SafeCast(output, value), InstanceClosure(output, _, value), ToVirtual(output, value), ArraySize(output, value),
+				EnumIndex(output, value), EnumField(output, value, _, _):
+				collectValue(output, values);
+				collectValue(value, values);
+			case Add(output, left, right), Sub(output, left, right), Mul(output, left, right), Div(output, left, right), Mod(output, left, right),
+				BitAnd(output, left, right), BitXor(output, left, right), BitOr(output, left, right), ShiftLeft(output, left, right),
+				ShiftRight(output, left, right), UnsignedShiftRight(output, left, right), Less(output, left, right), LessEqual(output, left, right),
+				Equal(output, left, right), ArrayGet(output, left, right):
+				collectValue(output, values);
+				collectValue(left, values);
+				collectValue(right, values);
+			case Call(output, _, arguments), CallClosure(output, _, arguments), MethodCall(output, _, _, arguments), MakeEnum(output, _, _, arguments):
+				collectValue(output, values);
+				for (argument in arguments)
+					collectValue(argument, values);
+				switch instruction {
+					case CallClosure(_, closure, _): collectValue(closure, values);
+					case MethodCall(_, object, _, _): collectValue(object, values);
+					default:
+				}
+			case GlobalSet(_, value):
+				collectValue(value, values);
+			case FieldGet(output, object, _):
+				collectValue(output, values);
+				collectValue(object, values);
+			case FieldSet(object, _, value):
+				collectValue(object, values);
+				collectValue(value, values);
+			case ArraySet(array, index, value):
+				collectValue(array, values);
+				collectValue(index, values);
+				collectValue(value, values);
+			case BeginTry(_, _), EndTry:
+		}
+	}
 
-	static function isArrayType(type:Type.ValueType):Bool
-		return switch type {
-			case TClass(value): value == HaxeArray;
-			default: false;
-		};
+	static function collectTerminator(terminator:IrTerminator, values:Map<Int, IrValue>):Void {
+		switch terminator {
+			case Return(value), Throw(value), Rethrow(value), Branch(value, _, _):
+				collectValue(value, values);
+			case Jump(_):
+		}
+	}
 
 	static function collectValue(value:IrValue, values:Map<Int, IrValue>):Void {
-		var id:Int = value.id, previous = values.get(id);
-		if (previous != null && (previous.name != value.name || Std.string(previous.type) != Std.string(value.type)))
-			throw "Conflicting IR value identity";
+		var id:Int = value.id;
+		if (values.exists(id)) {
+			var previous = values.get(id);
+			if (previous.name != value.name || Std.string(previous.type) != Std.string(value.type))
+				throw "Conflicting IR value identity";
+		}
 		values.set(id, value);
 	}
 
