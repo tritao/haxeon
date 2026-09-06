@@ -215,6 +215,7 @@ run_program cast-expression 42
 run_program do-while 42
 run_program postfix-increment 42
 run_program optional-enum-parameter 42
+run_program default-parameter-inference 42
 run_program generic-functions 42
 run_program generic-abstract 42
 run_program bounded-generic 42

@@ -41,7 +41,7 @@ class SignatureInference {
 		}
 		var inferredFunctions:Array<AstFunction> = [];
 		for (fn in program.functions) {
-			inferredFunctions.push(inferFunction(fn, enums));
+			inferredFunctions.push(inferFunction(inferDefaultBoundArguments(fn), enums));
 		}
 		return {
 			packageName: program.packageName,
@@ -371,6 +371,7 @@ class SignatureInference {
 	}
 
 	public static function inferFieldBoundArguments(fn:AstFunction, classDecl:AstClass):AstFunction {
+		fn = inferDefaultBoundArguments(fn);
 		var inferred:Map<String, AstType> = [];
 		for (statement in fn.statements)
 			switch statement {
@@ -390,6 +391,17 @@ class SignatureInference {
 						default:
 					}
 				default:
+			}
+		return replaceArguments(fn, inferred);
+	}
+
+	static function inferDefaultBoundArguments(fn:AstFunction):AstFunction {
+		var inferred:Map<String, AstType> = [];
+		for (argument in fn.arguments)
+			if (argument.type == InferredType && argument.defaultValue != null) {
+				var defaultType = inferSimpleExpression(argument.defaultValue, []);
+				if (defaultType != null)
+					inferred.set(argument.name, defaultType);
 			}
 		return replaceArguments(fn, inferred);
 	}

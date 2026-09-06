@@ -288,7 +288,7 @@ class Typer {
 				default:
 					fail("E1021", '@:hlNative arguments must be string literals', binding.span);
 			}
-		var arguments = [for (argument in fn.arguments) lowerType(argument.type)];
+		var arguments = [for (argument in fn.arguments) argumentType(argument)];
 		if (receiverType != null)
 			arguments.unshift(receiverType);
 		return {
@@ -583,7 +583,7 @@ class Typer {
 				for (argument in method.arguments)
 					{
 						name: argument.name,
-						type: substitutions == null ? lowerType(argument.type) : declarations.resolve(argument.type, argument.span, substitutions)
+						type: argumentType(argument, substitutions)
 					}
 			],
 			result: substitutions == null ? lowerType(method.result) : declarations.resolve(method.result, method.span, substitutions),
@@ -3236,7 +3236,10 @@ class Typer {
 	}
 
 	function argumentType(argument:compiler.syntax.Ast.AstArgument, ?substitutions:Map<String, CompilerType>):CompilerType {
-		var type = substitutions == null ? lowerType(argument.type) : declarations.resolve(argument.type, argument.span, substitutions);
+		var type = if (argument.type == InferredType && argument.defaultValue != null) {
+			var inferred = knownExpressionType(argument.defaultValue);
+			inferred == null ? TDynamic : inferred;
+		} else substitutions == null ? lowerType(argument.type) : declarations.resolve(argument.type, argument.span, substitutions);
 		return argument.optional && argument.defaultValue == null ? CompilerType.TNullable(type) : type;
 	}
 
