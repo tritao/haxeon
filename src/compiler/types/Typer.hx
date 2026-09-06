@@ -62,10 +62,26 @@ class Typer {
 	final generatedCells:Array<compiler.types.TypedAst.TypedCell> = [];
 	final generatedEnvironments:Array<compiler.types.TypedAst.TypedCaptureEnvironment> = [];
 	final lambdaCache:Map<String, TypedExpression> = [];
-	var context:BodyContext = new BodyContext("");
+	final bodyContexts:Array<BodyContext> = [new BodyContext("")];
+	var context(get, never):BodyContext;
 	final anonymousTypes:Map<String, Array<compiler.types.Type.AnonymousField>> = [];
 	final genericSpecializations:Map<String, String> = [];
 	final noReturnFunctions:Map<String, Bool> = [];
+
+	inline function get_context():BodyContext
+		return bodyContexts[bodyContexts.length - 1];
+
+	function enterBody(name:String, ?typeSubstitutions:Map<String, CompilerType>):BodyContext {
+		var body = new BodyContext(name, typeSubstitutions);
+		bodyContexts.push(body);
+		return body;
+	}
+
+	function leaveBody(body:BodyContext):Void {
+		if (context != body)
+			throw "Body typing contexts must be left in stack order";
+		bodyContexts.pop();
+	}
 
 	public static function type(program:AstProgram):TypedProgram
 		return new Typer(null).typeProgramMeasured(SemanticProgram.analyze(program), null, true, null).program;
@@ -357,14 +373,13 @@ class Typer {
 			var initializer:Null<TypedExpression> = null,
 				parsedInitializer = field.initializer;
 			if (parsedInitializer != null) {
-				var previousContext = context;
-				context = new BodyContext(classDecl.name + ".__init");
+				var initializerContext = enterBody(classDecl.name + ".__init");
 				var scope = new Scope();
 				if (!field.isStatic)
 					scope.define("this", TClass(classDecl.name), field.span);
 				initializer = coerce(typeExpression(parsedInitializer, scope, type), type,
 					(field.isStatic ? 'static field "${classDecl.name}.${field.name}"' : 'field "${classDecl.name}.${field.name}"'), "E1002");
-				context = previousContext;
+				leaveBody(initializerContext);
 			}
 			fieldNames.set(field.name, true);
 			fields.push({
@@ -502,9 +517,8 @@ class Typer {
 
 	function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool = false, ?substitutions:Map<String, CompilerType>,
 			?specializedName:String):TypedFunction {
-		var previousContext = context;
 		var functionName = specializedName == null ? (owner == null ? fn.name : owner + "." + fn.name) : specializedName;
-		context = new BodyContext(functionName, substitutions);
+		var functionContext = enterBody(functionName, substitutions);
 		var storage = CaptureAnalysis.analyze(fn.statements, [for (argument in fn.arguments) argument.name]);
 		for (name in storage.assigned.keys())
 			context.assigned.set(name, true);
@@ -571,7 +585,7 @@ class Typer {
 					kind: requiredMapValue(context.cellKinds, name)
 				});
 		}
-		context = previousContext;
+		leaveBody(functionContext);
 		return resultFunction;
 	}
 
@@ -1434,9 +1448,9 @@ class Typer {
 					for (capture in captures)
 						typedBodyScope.defineCapture(capture.field, capture.type, span, captureCells.exists(capture.field),
 							captureCells.get(capture.field), capture.bindingId);
-					var lambdaName = '$' + 'lambda:${context.name}:${span.start}',
-						previousContext = context;
-					context = new BodyContext(lambdaName, previousContext.typeSubstitutions);
+					var outerContext = context,
+						lambdaName = '$' + 'lambda:${outerContext.name}:${span.start}',
+						lambdaContext = enterBody(lambdaName, outerContext.typeSubstitutions);
 					context.resultType = expectedFunction == null ? TVoid : expectedFunction.result;
 					CaptureAnalysis.collectAssignedLocals(body, context.assigned);
 					var lambdaDeclared:Map<String, Bool> = [];
@@ -1458,7 +1472,7 @@ class Typer {
 					for (i in 0...lambdaArguments.length)
 						if (lambdaCells.exists(arguments[i].name))
 							lambdaArguments[i] = {name: arguments[i].name, type: lambdaArguments[i].type};
-					context = previousContext;
+					leaveBody(lambdaContext);
 					if (inferredResult != TVoid && !ControlFlow.alwaysReturns(typedBody, exhaustiveEnum))
 						fail("E1006", 'Function $lambdaName does not return on every path', span);
 					var environment:Null<String> = null;
