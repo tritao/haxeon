@@ -58,9 +58,7 @@ class Typer {
 	var enumAbstractDecls:Map<String, compiler.Ast.AstEnumAbstract> = [];
 	var declarations:DeclarationIndex;
 	var relations:TypeRelations;
-	final generated:Array<TypedFunction> = [];
-	final generatedCells:Array<compiler.types.TypedAst.TypedCell> = [];
-	final generatedEnvironments:Array<compiler.types.TypedAst.TypedCaptureEnvironment> = [];
+	final closureConversion = new ClosureConversion();
 	final lambdaCache:Map<String, TypedExpression> = [];
 	final bodyContexts:Array<BodyContext> = [new BodyContext("")];
 	var context(get, never):BodyContext;
@@ -183,7 +181,7 @@ class Typer {
 			for (method in classDecl.methods)
 				if (selected == null || selected.exists(method.name))
 					typedFunctions.push(method);
-		for (lambda in generated)
+		for (lambda in closureConversion.generatedFunctions())
 			typedFunctions.push(lambda);
 		var bodiesDoneAt = Sys.time() * 1000.0;
 		var result:TypedProgram = {
@@ -191,8 +189,8 @@ class Typer {
 			interfaces: typedInterfaces,
 			classes: typedClasses,
 			functions: typedFunctions,
-			cells: generatedCells,
-			captureEnvironments: generatedEnvironments,
+			cells: closureConversion.generatedCells(),
+			captureEnvironments: closureConversion.generatedEnvironments(),
 			anonymousTypes: orderedAnonymousTypes()
 		};
 		var assemblyDoneAt = Sys.time() * 1000.0;
@@ -579,11 +577,8 @@ class Typer {
 		};
 		for (name in context.cells.keys()) {
 			if (context.cellTypes.exists(name) && context.cellKinds.exists(name))
-				generatedCells.push({
-					name: requiredMapValue(context.cells, name),
-					valueType: requiredMapValue(context.cellTypes, name),
-					kind: requiredMapValue(context.cellKinds, name)
-				});
+				closureConversion.addCell(requiredMapValue(context.cells, name), requiredMapValue(context.cellTypes, name),
+					requiredMapValue(context.cellKinds, name));
 		}
 		leaveBody(functionContext);
 		return resultFunction;
@@ -1479,18 +1474,8 @@ class Typer {
 					if (captures.length > 0)
 						environment = '$' + 'lambda-env:${context.name}:${span.start}';
 					if (environment != null)
-						generatedEnvironments.push({
-							name: environment,
-							fields: [
-								for (capture in captures)
-									{
-										name: capture.field,
-										type: captureCells.exists(capture.field) ? CompilerType.TClass(requiredMapValue(captureCells,
-											capture.field)) : capture.type
-									}
-							]
-						});
-					generated.push({
+						closureConversion.addEnvironment(environment, captures);
+					closureConversion.addFunction({
 						name: lambdaName,
 						owner: environment,
 						isStatic: environment == null,
@@ -1504,11 +1489,8 @@ class Typer {
 					});
 					for (name in lambdaCells.keys())
 						if (lambdaCellTypes.exists(name) && lambdaCellKinds.exists(name))
-							generatedCells.push({
-								name: requiredMapValue(lambdaCells, name),
-								valueType: requiredMapValue(lambdaCellTypes, name),
-								kind: requiredMapValue(lambdaCellKinds, name)
-							});
+							closureConversion.addCell(requiredMapValue(lambdaCells, name), requiredMapValue(lambdaCellTypes, name),
+								requiredMapValue(lambdaCellKinds, name));
 					var lambdaResult = new TypedExpression(TLambda(lambdaName, environment, captures),
 						TFunction([for (argument in lambdaArguments) argument.type], inferredResult), span);
 					lambdaCache.set(lambdaKey, lambdaResult);
@@ -2180,7 +2162,7 @@ class Typer {
 		else {
 			resolvedName = '$' + 'generic:$key';
 			genericSpecializations.set(key, resolvedName);
-			generated.push(typeFunction(fn, owner, isStatic, substitutions, resolvedName));
+			closureConversion.addFunction(typeFunction(fn, owner, isStatic, substitutions, resolvedName));
 		}
 		return {name: resolvedName, arguments: typed, result: result};
 	}
