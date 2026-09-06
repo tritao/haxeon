@@ -156,9 +156,8 @@ class TypeRegistry {
 	}
 
 	function idFor(name:String):Int {
-		var existing = ids.get(name);
-		if (existing != null)
-			return existing;
+		if (ids.exists(name))
+			return ids.get(name);
 		var result = nextId++;
 		ids.set(name, result);
 		return result;
