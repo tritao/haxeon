@@ -7,6 +7,7 @@ class FlowFacts {
 	final parent:Null<FlowFacts>;
 	final refinedTypes:Map<String, CompilerType> = [];
 	final invalidated:Map<String, Bool> = [];
+	final invalidatedPrefixes:Array<String> = [];
 
 	public function new(?parent:FlowFacts)
 		this.parent = parent;
@@ -22,11 +23,21 @@ class FlowFacts {
 	}
 
 	public function resolve(bindingId:String):Null<CompilerType> {
+		for (prefix in invalidatedPrefixes)
+			if (bindingId == prefix || StringTools.startsWith(bindingId, prefix + "."))
+				return null;
 		if (refinedTypes.exists(bindingId))
 			return refinedTypes.get(bindingId);
 		if (invalidated.exists(bindingId))
 			return null;
 		var outer = parent;
 		return outer == null ? null : outer.resolve(bindingId);
+	}
+
+	public function invalidatePrefix(prefix:String):Void {
+		for (bindingId in refinedTypes.keys())
+			if (bindingId == prefix || StringTools.startsWith(bindingId, prefix + "."))
+				refinedTypes.remove(bindingId);
+		invalidatedPrefixes.push(prefix);
 	}
 }

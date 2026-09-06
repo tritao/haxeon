@@ -98,6 +98,15 @@ class Scope {
 	public function resolveExpression(path:String):Null<CompilerType>
 		return facts.resolve('$' + 'expression:$path');
 
+	public function invalidateExpression(path:String):Void
+		facts.invalidatePrefix('$' + 'expression:$path');
+
+	public function invalidateExpressionsForLocal(name:String):Void {
+		var local = resolveLocal(name);
+		if (local != null)
+			facts.invalidatePrefix('$' + 'expression:' + local.id);
+	}
+
 	public function invalidate(name:String):Void {
 		var local = resolveLocal(name);
 		if (local != null)

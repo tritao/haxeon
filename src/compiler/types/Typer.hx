@@ -920,6 +920,7 @@ class Typer {
 							else
 								output.push(TAssign(scope.requireId(name), value, span));
 							scope.markAssigned(name);
+							scope.invalidateExpressionsForLocal(name);
 							scope.refine(name, value.type);
 						}
 					} else {
@@ -939,8 +940,12 @@ class Typer {
 								if (platformField == null)
 									value = abiBoundaryCast(value, fieldRepresentationType(object.type, fieldName, span));
 								var setter:Null<String> = platformField == null ? null : platformField.set;
-								if (setter != null) output.push(TExpression(new TypedExpression(TCall(setter, [object, value]), TVoid, span),
-									span)); else output.push(TFieldAssign(object, fieldName, value, span));
+								if (setter != null)
+									output.push(TExpression(new TypedExpression(TCall(setter, [object, value]), TVoid, span), span));
+								else
+									output.push(TFieldAssign(object, fieldName, value, span));
+								var objectPath = FlowAnalysis.accessPath(object);
+								if (objectPath != null) scope.invalidateExpression(objectPath + "." + fieldName);
 						}
 					}
 				case IndexAssignment(array, offset, expression, span):
@@ -973,8 +978,12 @@ class Typer {
 							if (platformField == null)
 								value = abiBoundaryCast(value, fieldRepresentationType(object.type, fieldName, span));
 							var setter:Null<String> = platformField == null ? null : platformField.set;
-							if (setter != null) output.push(TExpression(new TypedExpression(TCall(setter, [object, value]), TVoid, span),
-								span)); else output.push(TFieldAssign(object, fieldName, value, span));
+							if (setter != null)
+								output.push(TExpression(new TypedExpression(TCall(setter, [object, value]), TVoid, span), span));
+							else
+								output.push(TFieldAssign(object, fieldName, value, span));
+							var objectPath = FlowAnalysis.accessPath(object);
+							if (objectPath != null) scope.invalidateExpression(objectPath + "." + fieldName);
 					}
 				case If(predicate, thenBranch, elseBranch, span):
 					var typedCondition = typeExpression(predicate, scope);
@@ -1161,42 +1170,41 @@ class Typer {
 	}
 
 	function pushedElementType(name:String, statements:Array<AstStatement>, start:Int, ?bindings:Map<String, CompilerType>):Null<CompilerType> {
-		if (bindings == null)
-			bindings = [];
+		var resolvedBindings:Map<String, CompilerType> = bindings == null ? [] : bindings;
 		for (index in start...statements.length)
 			switch statements[index] {
 				case Expression(expression, _):
-					var type = pushedElementFromExpression(name, expression, bindings);
+					var type = pushedElementFromExpression(name, expression, resolvedBindings);
 					if (type != null)
 						return type;
 				case If(_, yes, no, _):
-					var type = pushedElementType(name, yes, 0, bindings);
+					var type = pushedElementType(name, yes, 0, resolvedBindings);
 					if (type == null)
-						type = pushedElementType(name, no, 0, bindings);
+						type = pushedElementType(name, no, 0, resolvedBindings);
 					if (type != null)
 						return type;
 				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _):
-					var type = pushedElementType(name, body, 0, bindings);
+					var type = pushedElementType(name, body, 0, resolvedBindings);
 					if (type != null)
 						return type;
 				case Try(tryBranch, catches, _):
-					var type = pushedElementType(name, tryBranch, 0, bindings);
+					var type = pushedElementType(name, tryBranch, 0, resolvedBindings);
 					if (type != null)
 						return type;
 					for (catchClause in catches) {
-						type = pushedElementType(name, catchClause.statements, 0, bindings);
+						type = pushedElementType(name, catchClause.statements, 0, resolvedBindings);
 						if (type != null)
 							return type;
 					}
 				case Switch(_, cases, defaultBranch, _, _):
 					for (switchCase in cases) {
-						var caseBindings = copyMap(bindings);
+						var caseBindings = copyMap(resolvedBindings);
 						collectPatternBindingTypes(switchCase.value, caseBindings);
 						var type = pushedElementType(name, switchCase.statements, 0, caseBindings);
 						if (type != null)
 							return type;
 					}
-					var type = pushedElementType(name, defaultBranch, 0, bindings);
+					var type = pushedElementType(name, defaultBranch, 0, resolvedBindings);
 					if (type != null)
 						return type;
 				case VarDeclaration(shadowed, _, _, _), UninitializedDeclaration(shadowed, _, _) if (shadowed == name):
@@ -1221,6 +1229,20 @@ class Typer {
 		switch pattern {
 			case Call(name, arguments, _):
 				var info = enumCaseInfo(name);
+				if (info == null && name.indexOf(".") < 0) {
+					var matchedName:Null<String> = null;
+					for (enumName => declaration in enumDecls)
+						for (enumCase in declaration.cases)
+							if (enumCase.name == name
+								&& arguments.length >= requiredEnumParameters(enumCase.params)
+								&& arguments.length <= enumCase.params.length) {
+								if (matchedName != null)
+									return;
+								matchedName = enumName;
+							}
+					if (matchedName != null)
+						info = enumCaseInfo(matchedName + "." + name);
+				}
 				if (info != null)
 					for (index in 0...arguments.length)
 						if (index < info.params.length)
@@ -2431,7 +2453,7 @@ class Typer {
 					}
 					if (receiver != null && parts.length > 2)
 						for (index in 1...parts.length - 1)
-							receiver = typedMember(receiver, parts[index], span);
+							receiver = typedMemberWithFlow(receiver, parts[index], span, scope);
 					var receiverType = receiver == null ? null : receiver.type;
 					var enumCase = enumCaseInfo(name);
 					if (enumCase == null && name.indexOf(".") < 0) {

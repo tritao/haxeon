@@ -83,6 +83,9 @@ class TestMain {
 		Frontend.compile('class Value { public function new() { } } function main():Int { var value = true ? new Value() : null; return value == null ? 0 : 42; }');
 		Frontend.compile('class Value { public final number:Int = 42; public function new() { } } function fail():Void throw "missing"; function main():Int { var value:Null<Value> = new Value(); if (value == null) fail(); return value.number; }');
 		Frontend.compile('class Value { public final number:Int = 42; public function new() { } } function main():Int { var value:Null<Value> = new Value(); if (value != null && value.number == 42) return value.number; return 0; }');
+		Frontend.compile('class Value { public final number:Int = 42; public function new() { } } class Holder { public var value:Null<Value> = null; public function new(value:Null<Value>) { this.value = value; } } function main():Int { var holder = new Holder(new Value()); if (holder.value != null) return holder.value.number; return 0; }');
+		expectCompileError('class Value { public final number:Int = 42; public function new() { } } class Holder { public var value:Null<Value> = null; public function new(value:Null<Value>) { this.value = value; } } function main():Int { var holder = new Holder(new Value()); if (holder.value != null) { holder.value = null; return holder.value.number; } return 0; }',
+			'Field "number" requires an object');
 		Frontend.compile('function make():String return "value"; function main():Int { var value = null; if (true) value = make(); return value == null ? 0 : 42; }');
 		Frontend.compile('function make():String return "value"; function main():Int { var values = []; values.push(make()); return values.length; }');
 		Frontend.compile('function main():Int { var values = [3, 1, 2]; values.sort(function(left, right) return left - right); return values[0] + values[1] + values[2] + 36; }');
