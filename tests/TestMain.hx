@@ -564,6 +564,10 @@ class TestMain {
 		expectCompileError("function consume(value:Missing):Int { return 0; } function main():Int { return 0; }", 'Unknown type "Missing"');
 		expectCompileError("typedef Loop = Loop; function main():Int { return 0; }", 'Cyclic type alias involving "Loop"');
 		expectCompileError("class Loop extends Loop { } function main():Int { return 0; }", 'Cyclic class inheritance involving "Loop"');
+		expectCompileError("class Loop<T> extends Loop<Array<T>> { } function main():Int { return 0; }", 'Cyclic class inheritance involving "Loop"');
+		expectCompileError("interface Root<T> {} interface Left extends Root<Int> {} interface Right extends Root<String> {} interface Diamond extends Left, Right {} function main():Int return 0;",
+			'Conflicting inherited interface instantiations for "Root": Root<Int> and Root<String>');
+		Frontend.compile("interface Root<T> {} interface Left<T> extends Root<T> {} interface Right<T> extends Root<T> {} interface Diamond<T> extends Left<T>, Right<T> {} function main():Int return 42;");
 		Frontend.compile("class Parent { } class Child extends Parent { } function consume(value:Parent):Int { return 42; } function main():Int { return consume(new Child()); }");
 		Frontend.compile("class Counter { public function new() { } function value():Int return 42; public function read():Int return value(); } function main():Int return new Counter().read();");
 		Frontend.compile("class Counter { var value:Int = 40; public function new() { value += 2; } public function read():Int return value; } function main():Int return new Counter().read();");
