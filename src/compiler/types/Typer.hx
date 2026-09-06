@@ -3558,9 +3558,9 @@ class Typer {
 
 	function arithmetic(a:AstExpression, b:AstExpression, scope:Scope, add:Bool, span:SourceSpan):TypedExpression {
 		var left = typeExpression(a, scope), right = typeExpression(b, scope);
-		if (add && isStringConvertible(left.type) && isStringConvertible(right.type)) {
-			left = coerce(left, TString, "string concatenation", "E1010");
-			right = coerce(right, TString, "string concatenation", "E1010");
+		if (add && (isStringConvertible(left.type) || isStringConvertible(right.type))) {
+			left = stringify(left);
+			right = stringify(right);
 			return new TypedExpression(TAdd(left, right), TString, span);
 		}
 		if (!sameType(left.type, right.type) || (!sameType(left.type, TInt) && !sameType(left.type, TFloat)))
@@ -3574,6 +3574,13 @@ class Typer {
 			case TAbstract(_, _, _): isAssignable(type, TString);
 			default: false;
 		};
+
+	function stringify(value:TypedExpression):TypedExpression {
+		if (isStringConvertible(value.type))
+			return coerce(value, TString, "string concatenation", "E1010");
+		var dynamicValue = coerce(value, TDynamic, "string concatenation", "E1010");
+		return new TypedExpression(TCall("Std.string", [dynamicValue]), TString, value.span);
+	}
 
 	function logical(a:AstExpression, b:AstExpression, scope:Scope, and:Bool, span:SourceSpan):TypedExpression {
 		var left = typeExpression(a, scope),
