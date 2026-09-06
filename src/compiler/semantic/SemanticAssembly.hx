@@ -255,6 +255,7 @@ class SemanticAssembly {
 				classes.push({
 					name: className,
 					typeParameters: classDecl.typeParameters,
+					typeConstraints: classDecl.typeConstraints,
 					isPrivate: classDecl.isPrivate,
 					metadata: classDecl.metadata,
 					base: canonicalBase,

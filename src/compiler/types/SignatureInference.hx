@@ -28,6 +28,7 @@ class SignatureInference {
 			inferredClasses.push({
 				name: classDecl.name,
 				typeParameters: classDecl.typeParameters,
+				typeConstraints: classDecl.typeConstraints,
 				isPrivate: classDecl.isPrivate,
 				metadata: classDecl.metadata,
 				base: classDecl.base,

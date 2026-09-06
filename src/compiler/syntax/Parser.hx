@@ -104,7 +104,8 @@ class Parser {
 
 	function parseAbstract(start:SourceSpan):AstAbstract {
 		var name = consume(TokenKind.Identifier).text,
-			typeParameters = parseTypeParameters();
+			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
+			typeParameters = parseTypeParameters(typeConstraints);
 		consume(TokenKind.LeftParen);
 		var underlying = parseType();
 		consume(TokenKind.RightParen);
@@ -137,6 +138,7 @@ class Parser {
 		return {
 			name: name,
 			typeParameters: typeParameters,
+			typeConstraints: typeConstraints,
 			underlying: underlying,
 			fromTypes: fromTypes,
 			toTypes: toTypes,
@@ -184,7 +186,8 @@ class Parser {
 
 	function parseTypeAlias(start:SourceSpan, isPrivate:Bool):AstTypeAlias {
 		var name = consume(TokenKind.Identifier).text,
-			typeParameters = parseTypeParameters();
+			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
+			typeParameters = parseTypeParameters(typeConstraints);
 		consume(TokenKind.Assign);
 		var type = parseType(), end = previous().span;
 		switch type {
@@ -197,6 +200,7 @@ class Parser {
 		return {
 			name: name,
 			typeParameters: typeParameters,
+			typeConstraints: typeConstraints,
 			type: type,
 			isPrivate: isPrivate,
 			span: start.merge(end)
@@ -204,7 +208,8 @@ class Parser {
 	}
 
 	function parseEnum(start:SourceSpan):AstEnum {
-		var name = consume(TokenKind.Identifier).text, typeParameters = parseTypeParameters(), cases = [];
+		var name = consume(TokenKind.Identifier).text, typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
+			typeParameters = parseTypeParameters(typeConstraints), cases = [];
 		consume(TokenKind.LeftBrace);
 		while (!check(TokenKind.RightBrace)) {
 			var caseToken = consumeName(),
@@ -236,6 +241,7 @@ class Parser {
 		return {
 			name: name,
 			typeParameters: typeParameters,
+			typeConstraints: typeConstraints,
 			cases: cases,
 			span: start.merge(end)
 		};
@@ -329,7 +335,8 @@ class Parser {
 	function parseClass(isPrivate:Bool, metadata:Array<compiler.syntax.Ast.AstMetadata>):AstClass {
 		var start = consume(TokenKind.Class).span,
 			name = consume(TokenKind.Identifier).text,
-			typeParameters = parseTypeParameters(),
+			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
+			typeParameters = parseTypeParameters(typeConstraints),
 			base:Null<AstType> = null,
 			interfaces = [];
 		if (match(TokenKind.Extends))
@@ -401,6 +408,7 @@ class Parser {
 		return {
 			name: name,
 			typeParameters: typeParameters,
+			typeConstraints: typeConstraints,
 			isPrivate: isPrivate,
 			metadata: metadata,
 			base: base,
@@ -428,7 +436,8 @@ class Parser {
 	}
 
 	function parseInterface():AstInterface {
-		var start = consume(TokenKind.Interface).span, name = consume(TokenKind.Identifier).text, typeParameters = parseTypeParameters(), bases = [];
+		var start = consume(TokenKind.Interface).span, name = consume(TokenKind.Identifier).text,
+			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [], typeParameters = parseTypeParameters(typeConstraints), bases = [];
 		if (match(TokenKind.Extends)) {
 			bases.push(parseType());
 			while (match(TokenKind.Comma))
@@ -474,6 +483,7 @@ class Parser {
 		return {
 			name: name,
 			typeParameters: typeParameters,
+			typeConstraints: typeConstraints,
 			bases: bases,
 			methods: methods,
 			span: start.merge(end)

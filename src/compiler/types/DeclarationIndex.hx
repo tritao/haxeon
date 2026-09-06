@@ -149,6 +149,7 @@ class DeclarationIndex {
 					var aliasSubstitutions = [for (parameter => value in substitutions) parameter => value];
 					for (i in 0...alias.typeParameters.length)
 						aliasSubstitutions.set(alias.typeParameters[i], resolvedArguments[i]);
+					validateTypeArguments(name, alias.typeConstraints, aliasSubstitutions, span);
 					resolveAlias(alias, resolving, aliasSubstitutions);
 				} else if (abstracts.exists(name)) {
 					var decl = abstracts.get(name);
@@ -161,16 +162,23 @@ class DeclarationIndex {
 						for (argument in arguments)
 							resolveInner(argument, span, resolving, substitutions)
 					];
+					validateTypeArguments(name, decl.typeConstraints, abstractSubstitutions, span);
 					TAbstract(name, resolvedArguments, resolveAbstract(decl, span, resolving, abstractSubstitutions));
 				} else if (classes.exists(name) || interfaces.exists(name) || enums.exists(name)) {
-					var parameters = classes.exists(name) ? classes.get(name)
-						.typeParameters : interfaces.exists(name) ? interfaces.get(name).typeParameters : enums.get(name).typeParameters;
+					var declaration:Dynamic = classes.exists(name) ? classes.get(name) : interfaces.exists(name) ? interfaces.get(name) : enums.get(name),
+						parameters:Array<String> = declaration.typeParameters;
 					if (arguments.length != parameters.length)
 						fail('Type "$name" expects ${parameters.length} type arguments, got ${arguments.length}', span);
-					TInstance(classes.exists(name) ? NominalKind.Class : interfaces.exists(name) ? NominalKind.Interface : NominalKind.Enum, name, [
+					var resolvedArguments = [
 						for (argument in arguments)
 							resolveInner(argument, span, resolving, substitutions)
-					]);
+					];
+					var applied = declarationSubstitutions(name, parameters);
+					for (index in 0...parameters.length)
+						applied.set(parameters[index], resolvedArguments[index]);
+					validateTypeArguments(name, declaration.typeConstraints, applied, span);
+					TInstance(classes.exists(name) ? NominalKind.Class : interfaces.exists(name) ? NominalKind.Interface : NominalKind.Enum, name,
+						resolvedArguments);
 				} else {
 					fail('Type "$name" does not accept type arguments', span);
 					TDynamic;
@@ -203,6 +211,26 @@ class DeclarationIndex {
 				].join(",");
 				TAnonymous('$' + 'anon:{$signature}', fields);
 		};
+
+	function validateTypeArguments(name:String, constraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>, substitutions:Map<String, CompilerType>,
+			span:SourceSpan):Void {
+		if (constraints == null)
+			return;
+		var relations = new TypeRelations(this);
+		for (constraint in constraints) {
+			var actual = substitutions.get(constraint.parameter),
+				expected = resolve(constraint.type, constraint.span, substitutions);
+			if (actual != null)
+				switch actual {
+					case TTypeParameter(_, _):
+						continue;
+					default:
+				}
+			if (actual == null || !relations.isAssignable(actual, expected))
+				fail('Type argument for "${constraint.parameter}" on "$name" does not satisfy constraint "${compiler.semantic.SemanticSignature.type(expected)}"',
+					span);
+		}
+	}
 
 	function resolveNamedType(name:String, span:SourceSpan, resolving:Map<String, Bool>, substitutions:Map<String, CompilerType>):CompilerType {
 		return if (substitutions.exists(name)) substitutions.get(name); else if (aliases.exists(name)) {

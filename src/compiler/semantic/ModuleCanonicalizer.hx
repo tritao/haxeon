@@ -88,6 +88,7 @@ class ModuleCanonicalizer {
 		return {
 			name: qualifiedTypeName(packageName, alias.name),
 			typeParameters: alias.typeParameters,
+			typeConstraints: canonicalConstraints(alias.typeConstraints, aliases, alias.typeParameters),
 			type: canonicalType(alias.type, aliases, alias.typeParameters),
 			isPrivate: alias.isPrivate,
 			span: alias.span
@@ -98,6 +99,7 @@ class ModuleCanonicalizer {
 		return {
 			name: qualifiedTypeName(packageName, enumDecl.name),
 			typeParameters: enumDecl.typeParameters,
+			typeConstraints: canonicalConstraints(enumDecl.typeConstraints, aliases, enumDecl.typeParameters),
 			cases: [
 				for (caseDecl in enumDecl.cases)
 					{
@@ -140,6 +142,7 @@ class ModuleCanonicalizer {
 		return {
 			name: qualifiedTypeName(packageName, decl.name),
 			typeParameters: decl.typeParameters,
+			typeConstraints: canonicalConstraints(decl.typeConstraints, aliases, decl.typeParameters),
 			underlying: canonicalType(decl.underlying, aliases, decl.typeParameters),
 			fromTypes: [for (type in decl.fromTypes) canonicalType(type, aliases, decl.typeParameters)],
 			toTypes: [for (type in decl.toTypes) canonicalType(type, aliases, decl.typeParameters)],
@@ -192,6 +195,7 @@ class ModuleCanonicalizer {
 		return {
 			name: qualifiedTypeName(packageName, interfaceDecl.name),
 			typeParameters: interfaceDecl.typeParameters,
+			typeConstraints: canonicalConstraints(interfaceDecl.typeConstraints, aliases, interfaceDecl.typeParameters),
 			bases: [
 				for (base in interfaceDecl.bases)
 					canonicalType(base, aliases, interfaceDecl.typeParameters)
@@ -225,6 +229,17 @@ class ModuleCanonicalizer {
 			],
 			span: interfaceDecl.span
 		};
+
+	static function canonicalConstraints(constraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>, aliases:Map<String, String>,
+			typeParameters:Array<String>):Null<Array<compiler.syntax.Ast.AstTypeConstraint>>
+		return constraints == null ? null : [
+			for (constraint in constraints)
+				{
+					parameter: constraint.parameter,
+					type: canonicalType(constraint.type, aliases, typeParameters),
+					span: constraint.span
+				}
+		];
 
 	public static function astTypeName(type:compiler.syntax.Ast.AstType):String
 		return switch type {

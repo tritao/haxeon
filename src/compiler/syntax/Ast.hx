@@ -58,6 +58,7 @@ typedef AstField = {
 typedef AstClass = {
 	final name:String;
 	final typeParameters:Array<String>;
+	final ?typeConstraints:Array<AstTypeConstraint>;
 	final isPrivate:Bool;
 	final metadata:Array<AstMetadata>;
 	final base:Null<AstType>;
@@ -74,6 +75,7 @@ typedef AstMetadata = {final name:String; final arguments:Array<AstExpression>; 
 typedef AstInterface = {
 	final name:String;
 	final typeParameters:Array<String>;
+	final ?typeConstraints:Array<AstTypeConstraint>;
 	final bases:Array<AstType>;
 	final methods:Array<AstFunction>;
 	final span:SourceSpan;
@@ -83,6 +85,7 @@ typedef AstInterface = {
 typedef AstTypeAlias = {
 	final name:String;
 	final typeParameters:Array<String>;
+	final ?typeConstraints:Array<AstTypeConstraint>;
 	final type:AstType;
 	final isPrivate:Bool;
 	final span:SourceSpan;
@@ -95,7 +98,7 @@ typedef AstEnumParameter = {final name:Null<String>; final type:AstType; final o
 typedef AstEnumCase = {final name:String; final params:Array<AstEnumParameter>; final span:SourceSpan;}
 
 /** Parsed algebraic enum declaration. */
-typedef AstEnum = {final name:String; final typeParameters:Array<String>; final cases:Array<AstEnumCase>; final span:SourceSpan;}
+typedef AstEnum = {final name:String; final typeParameters:Array<String>; final ?typeConstraints:Array<AstTypeConstraint>; final cases:Array<AstEnumCase>; final span:SourceSpan;}
 
 /** One named constant declared by an enum abstract. */
 typedef AstEnumAbstractValue = {final name:String; final value:AstExpression; final span:SourceSpan;}
@@ -114,6 +117,7 @@ typedef AstEnumAbstract = {
 typedef AstAbstract = {
 	final name:String;
 	final typeParameters:Array<String>;
+	final ?typeConstraints:Array<AstTypeConstraint>;
 	final underlying:AstType;
 	final fromTypes:Array<AstType>;
 	final toTypes:Array<AstType>;
