@@ -504,9 +504,20 @@ class IrGenerator {
 
 	static function lowerMapSet(builder:CfgBuilder, map:CfgValue, key:CfgValue, value:CfgValue, keyType:CompilerType, valueType:CompilerType):CfgValue {
 		var name = RuntimeType.requireMapName(keyType, valueType);
-		var stored = StringTools.endsWith(name, "_ref") ? abiBoundaryCast(builder, value, Dyn) : value;
+		var stored = StringTools.endsWith(name, "_ref") && requiresDynamicBox(value.type) ? abiBoundaryCast(builder, value, Dyn) : value;
 		return builder.call('__${name}_set', [map, key, stored], Void);
 	}
+
+	/**
+	 * Values whose HashLink representation does not begin with an `hl_type *`
+	 * must be boxed before crossing a native `_DYN` parameter. GC-managed
+	 * references already have the dynamic header and must retain their identity.
+	 */
+	static function requiresDynamicBox(type:IrType):Bool
+		return switch type {
+			case Abstract(_), Bytes, TypeRef: true;
+			default: false;
+		};
 
 	static function abiBoundaryCast(builder:CfgBuilder, value:CfgValue, target:IrType):CfgValue {
 		if (sameIrType(value.type, target))
