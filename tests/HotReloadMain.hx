@@ -432,12 +432,17 @@ class HotReloadMain {
 	}
 
 	static function produceFailedInitializer():Void {
-		var compiler = new Compiler();
-		compiler.update("Main.hx",
-			'class Main { public static var value:Int = fail(); static function fail():Int { throw "initialization failed"; } } function main():Int { return Main.value; }');
-		var result = compiler.compile("Main");
+		var moduleId = haxe.io.Bytes.alloc(16), code = new HlCode();
+		moduleId.set(0, 37);
+		code.strings = ["initialization failed"];
+		code.types = [Simple(HlType.Void), Simple(HlType.Bytes), Function([], 0)];
+		code.functions = [new HlFunction(2, 0, [1], [LoadString(0, 0), Throw(0)])];
+		code.entryPoint = 0;
+		var indices:Map<String, Int> = [], ids:Map<String, Int> = [];
+		indices.set("__init", 0);
+		ids.set("__init", 0x7FFF0000);
 		try {
-			Runtime.load(HlWriter.encode(result.module), result.runtimeIdentity);
+			Runtime.load(HlWriter.encode(code), HlRuntimeIdentity.encode(moduleId, 1, indices, ids));
 			throw "throwing module initializer unexpectedly loaded";
 		} catch (error:RuntimeError) {
 			if (error.status != RuntimeStatus.BadFormat)
