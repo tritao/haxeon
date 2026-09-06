@@ -53,6 +53,13 @@ class LspProtocolMain {
 		var edits:Array<Dynamic> = Reflect.field(renamed.result.changes, uri);
 		if (edits == null || edits.length != 2)
 			throw "LSP rename did not return a workspace edit";
+		var state = service.compiler.modules.get("workspace.Main");
+		if (!state.pendingIrFunctions.exists("main"))
+			throw 'Language analysis did not defer IR: pending=${[for (name in state.pendingIrFunctions.keys()) name]}, typed=${[for (name in state.typedFunctions.keys()) name]}';
+		var build = service.compile("workspace.Main");
+		state = service.compiler.modules.get("workspace.Main");
+		if (build.regenerated.indexOf("main") < 0 || state.pendingIrFunctions.exists("main"))
+			throw 'Runtime build did not lower deferred IR: regenerated=${build.regenerated}, pending=${[for (name in state.pendingIrFunctions.keys()) name]}';
 		Sys.println("PASS: standard LSP adapter maps compiler language queries");
 	}
 

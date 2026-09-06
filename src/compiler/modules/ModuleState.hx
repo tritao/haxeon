@@ -52,6 +52,10 @@ class ModuleState {
 	public var bodyFingerprints:Map<String, String> = [];
 	public var typedFunctions:Map<String, TypedFunction> = [];
 	public var typedSourceRevisions:Map<String, Int> = [];
+
+	/** Typed functions changed by analysis and awaiting build-time IR lowering. */
+	public var pendingIrFunctions:Map<String, Bool> = [];
+
 	public var irFunctions:Map<String, IrFunction> = [];
 	public var irSourceRevisions:Map<String, Int> = [];
 	public var irVersions:Map<String, Int> = [];
@@ -111,6 +115,7 @@ class ModuleState {
 		result.bodyFingerprints = copyMap(bodyFingerprints);
 		result.typedFunctions = copyMap(typedFunctions);
 		result.typedSourceRevisions = copyMap(typedSourceRevisions);
+		result.pendingIrFunctions = copyMap(pendingIrFunctions);
 		result.irFunctions = copyMap(irFunctions);
 		result.irSourceRevisions = copyMap(irSourceRevisions);
 		result.irVersions = copyMap(irVersions);

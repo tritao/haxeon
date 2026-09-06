@@ -23,7 +23,7 @@ class AnalysisTransaction {
 			startedAt = Sys.time() * 1000.0;
 		try {
 			var context = new CompilationContext(candidate);
-			var frontend = FrontendCompilation.run(context, entryModule, token, snapshot.modules, startedAt);
+			var frontend = FrontendCompilation.run(context, entryModule, token, snapshot.modules, startedAt, false);
 			context.setLastTypedProgram(frontend.typedProgram);
 			for (name in frontend.moduleNames) {
 				var state = candidate.modules.get(name);

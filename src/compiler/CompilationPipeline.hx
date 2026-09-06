@@ -66,6 +66,8 @@ class CompilationPipeline {
 		var ir = frontend.ir,
 			names = frontend.moduleNames,
 			typedNew = frontend.typedProgram;
+		if (ir == null)
+			throw "Build frontend did not produce IR";
 		var retyped = frontend.retyped,
 			regenerated = frontend.regenerated,
 			typerMetrics = frontend.typerMetrics;

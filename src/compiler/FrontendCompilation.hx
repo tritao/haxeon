@@ -15,7 +15,7 @@ import compiler.types.Typer.TyperPhaseMetrics;
 import compiler.types.TypedAst.TypedProgram;
 
 typedef FrontendResult = {
-	final ir:IrProgram;
+	final ir:Null<IrProgram>;
 	final moduleNames:Array<String>;
 	final typedProgram:TypedProgram;
 	final retyped:Array<String>;
@@ -29,7 +29,7 @@ typedef FrontendResult = {
 /** Builds and validates the reachable source graph through complete IR assembly. */
 class FrontendCompilation {
 	public static function run(context:CompilationContext, entryModule:String, token:Null<CancellationToken>, rollbackModules:Map<String, ModuleState>,
-			snapshotDoneAt:Float):FrontendResult {
+			snapshotDoneAt:Float, ?lowerToIr = true):FrontendResult {
 		var modules = context.modules,
 			graph = context.graph,
 			objectCache = context.objectCache,
@@ -127,11 +127,15 @@ class FrontendCompilation {
 			state.typedSourceRevisions.set(fn.name, state.revision);
 			retyped.push(fn.name);
 			touchedModules.set(module, true);
-			state.irFunctions.set(fn.name, IrGenerator.generateFunction(fn));
-			state.irSourceRevisions.set(fn.name, state.revision);
-			regenerated.push(fn.name);
-			var version = state.irVersions.exists(fn.name) ? state.irVersions.get(fn.name) + 1 : 1;
-			state.irVersions.set(fn.name, version);
+			if (lowerToIr) {
+				state.irFunctions.set(fn.name, IrGenerator.generateFunction(fn));
+				state.irSourceRevisions.set(fn.name, state.revision);
+				state.pendingIrFunctions.remove(fn.name);
+				regenerated.push(fn.name);
+				var version = state.irVersions.exists(fn.name) ? state.irVersions.get(fn.name) + 1 : 1;
+				state.irVersions.set(fn.name, version);
+			} else
+				state.pendingIrFunctions.set(fn.name, true);
 		}
 		for (module in touchedModules.keys())
 			modules.get(module).typeVersion++;
@@ -149,6 +153,9 @@ class FrontendCompilation {
 				for (lambdaName in lambdaNames.keys())
 					valid.set(lambdaName, true);
 			}
+			if (lowerToIr)
+				for (pending in state.pendingIrFunctions.keys())
+					valid.set(pending, true);
 			for (classDecl in ast.classes) {
 				var className = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name),
 					hasInstanceInitializer = false,
@@ -168,6 +175,7 @@ class FrontendCompilation {
 				for (cached in removed) {
 					state.typedFunctions.remove(cached);
 					state.typedSourceRevisions.remove(cached);
+					state.pendingIrFunctions.remove(cached);
 					state.irFunctions.remove(cached);
 					state.irSourceRevisions.remove(cached);
 					state.irVersions.remove(cached);
@@ -175,8 +183,41 @@ class FrontendCompilation {
 			}
 		}
 		retyped.sort(Reflect.compare);
+		if (lowerToIr)
+			for (name in names) {
+				var state = modules.get(name),
+					pending = [for (functionName in state.pendingIrFunctions.keys()) functionName];
+				pending.sort(Reflect.compare);
+				if (pending.length > 0)
+					state = context.writableState(name, rollbackModules);
+				for (functionName in pending) {
+					if (token != null)
+						token.check();
+					var fn = state.typedFunctions.get(functionName);
+					if (fn == null)
+						throw 'Pending IR function "$functionName" has no typed function';
+					state.irFunctions.set(functionName, IrGenerator.generateFunction(fn));
+					state.irSourceRevisions.set(functionName, state.typedSourceRevisions.get(functionName));
+					var version = state.irVersions.exists(functionName) ? state.irVersions.get(functionName) + 1 : 1;
+					state.irVersions.set(functionName, version);
+					state.pendingIrFunctions.remove(functionName);
+					regenerated.push(functionName);
+				}
+			}
 		regenerated.sort(Reflect.compare);
 		var typingLoweringDoneAt = Sys.time() * 1000.0;
+		if (!lowerToIr)
+			return {
+				ir: null,
+				moduleNames: names,
+				typedProgram: typedNew,
+				retyped: retyped,
+				regenerated: regenerated,
+				typerMetrics: typerMetrics,
+				frontendDoneAt: frontendDoneAt,
+				typingLoweringDoneAt: typingLoweringDoneAt,
+				irAssemblyDoneAt: typingLoweringDoneAt
+			};
 		var cachedNames:Array<String> = [];
 		for (moduleName in names) {
 			var state = modules.get(moduleName);
