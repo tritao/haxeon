@@ -1,180 +1,167 @@
-# realtime-haxe
+# Haxeon ⚡
 
-An experimental Haxe-compatible realtime compiler targeting HashLink only.
+> **Haxe, always on.**
 
-The proof of concept compiles a small Haxe-compatible source file through a
-lexer, parser, AST, typed IR, and HashLink backend. The generated entry point
-passes the source `main()` result to HashLink's `std@sys_exit` native, making
-the result observable to the integration test.
+Haxeon is an experimental Haxe-compatible language and realtime compiler for
+HashLink. It combines familiar Haxe syntax and static typing with incremental
+compilation, transactional hot patching, and a runtime designed to keep an
+application running while its code changes.
 
-The example is expressed as typed, register-independent IR. `HlLower` assigns
-function/type/register indices, interns constants and native names, and lowers
-the IR to the serialized HashLink model.
+Haxeon currently implements a growing subset of Haxe. It is a serious compiler
+experiment and is not yet recommended for production applications.
 
-IR values are immutable SSA definitions. Assignments create new values;
+## 🔥 Why Haxeon?
+
+Traditional development repeatedly stops, rebuilds, and restarts an
+application. Haxeon is built around a continuous development loop:
+
+1. Edit Haxe-compatible source.
+2. Recompile only what changed.
+3. Validate the resulting patch.
+4. Atomically install it into the running HashLink program.
+5. Keep existing state, objects, and closures alive.
+
+If a patch is malformed, stale, or incompatible, the running program remains
+untouched.
+
+## ✨ Highlights
+
+- Familiar Haxe-compatible syntax with static type checking
+- A self-hosted compiler running on HashLink
+- Incremental parsing, typing, and IR generation
+- Function-level change detection and stable function identities
+- Transactional, multi-function hot-code replacement
+- Live callers and closures that immediately observe committed replacements
+- Explicit reload boundaries for incompatible structural changes
+- Persistent compiler identity across compiler and editor restarts
+- Reclamation of superseded JIT allocations after protected calls finish
+- Standard `.hl` output for ordinary HashLink compatibility
+
+## 🧭 What Haxeon is
+
+Haxeon is both a focused Haxe-compatible language implementation and a live
+execution environment built on a patchable HashLink runtime.
+
+For the initial application load, the compiler emits a standard HashLink
+bytecode module—the same format normally stored in a `.hl` file. Compatible
+edits become compact Haxeon patch data containing only changed function bodies
+and the symbol additions they require. The runtime validates and JIT-compiles
+the entire patch privately before publishing it as one atomic transaction.
+
+Haxeon is not currently a drop-in replacement for the complete Haxe compiler.
+Language and standard-library coverage are still expanding, and edits that
+change the live module's structure may require a reload.
+
+## 🏗️ How it works
+
+```text
+Haxe-compatible source
+        │
+        ▼
+ Lexer → Parser → Type checker
+        │
+        ▼
+ Immutable SSA IR
+        │
+        ▼
+ HashLink lowering and assembly
+        │
+        ├── Initial build ──→ HashLink bytecode module (.hl)
+        │                      + Haxeon identity manifest
+        │
+        └── Compatible edit → Haxeon patch
+                               │
+                               └── validate → stage → commit
+```
+
+The implementation uses three short format names:
+
+- **HLB** is the standard serialized HashLink bytecode format. Its bytes begin
+  with the `HLB` signature and are normally written as a `.hl` file.
+- **HLI** is Haxeon's companion identity manifest. It binds a module identity
+  and stable Haxeon function IDs to the function slots in an initial HLB module.
+- **HLP** is Haxeon's versioned patch protocol. It carries validated symbol
+  additions and replacement function bodies between incremental builds and the
+  live runtime.
+
+HLI and HLP are Haxeon-specific data formats; neither changes the standard HLB
+module, so generated `.hl` files remain compatible with ordinary HashLink.
+
+The frontend is divided into parsing, declaration and type checking, and IR
+generation. Modules retain their source, tokens, syntax trees, typed trees,
+dependencies, diagnostics, and generated IR. Body and signature fingerprints
+allow Haxeon to reuse unaffected artifacts and propagate invalidation only where
+required.
+
+IR values are immutable SSA definitions. Assignments create new values, while
 condition joins and mutable loop headers receive explicit, predecessor-complete
-phi nodes. The HL backend eliminates phis on their incoming edges with parallel
-copy snapshots, emits actual HashLink `OLabel` block markers, and leaves no SSA
-constructs in HLB/HLP. This supports nested mutable loops and values assigned on
-only one conditional branch without making HashLink aware of compiler SSA.
+phi nodes. The HashLink backend eliminates those phis on incoming edges with
+parallel-copy snapshots, emits real `OLabel` block markers, and leaves no SSA
+constructs in the serialized bytecode module or patch.
 
-Capturing closures use generated environments. Mutable locals captured by a
-closure are lowered through shared generated cell objects, so later writes are
-visible to every closure that captured the variable.
+## 🧩 Language support
 
-The frontend is split into parsing, declaration/type checking, and IR
-generation. The current subset supports `Int`, `Bool`, `Float`, `String`, local
-variables, functions, calls, numeric addition/subtraction, string operations,
-boolean literals, integer comparisons,
-nested `if`/`else`, and recursive functions. String literals support the common
-quote, slash, newline, carriage-return, and tab escapes. Source edits that add
-new float or string constants flow through ordinary incremental compilation
-into transactional HLP symbol deltas.
+The current subset includes:
 
-Simple `typedef` aliases are resolved before type checking, so editor-facing
-APIs can introduce stable names without changing the backend type ABI.
+- `Int`, `Bool`, `Float`, `String`, nullable values, and dynamic values
+- Local variables, functions, methods, recursion, and expression statements
+- Classes, interfaces, anonymous structures, enums, and enum abstracts
+- Closures with generated environments and shared cells for mutable captures
+- Arrays and compiler-owned primitive, string, and reference array operations
+- Primitive and reference-valued `Map<String, T>` and `Map<Int, T>` forms
+- Arithmetic, bitwise operations, comparisons, string operations, and casts
+- `if`/`else`, `switch`, `while`, `do`/`while`, `for`, `break`, and `continue`
+- Array iteration and comprehensions
+- Exceptions
+- Simple `typedef` aliases and generics
+- Haxe-compatible `Sys` operations through the stable runtime ABI
 
-The expression subset also includes multiplication, signed division, call or
-value expression statements, integer modulo, unary numeric negation, enum/int
-`switch` statements, and `while` control-flow. Hosts can register typed
-HashLink natives through `Compiler.registerNative()` before the first build;
-source calls remain ordinary Haxe-compatible calls while the backend emits the
-configured library/symbol binding. Registrations freeze after compilation so a
-native-table layout cannot silently change beneath a live module.
+String addition, equality, `.length`, `indexOf`, and `substring` use the
+compiler-owned runtime ABI. Arrays support checked indexing, `.length`, `copy`,
+`concat`, `slice`, `indexOf`, `push`, and `pop`. Capacity-aware array growth
+preserves object identity so aliases and fields continue to observe the same
+array.
 
-`compiler.RuntimeAbi.register(compiler)` installs the stable host surface used
-by the command-line compiler: `trace` plus Haxe-compatible `Sys` time,
-filesystem, environment, process, and argument calls. These delegate to
-HashLink's standard library; compiler-owned realtime operations stay in the
-separately versioned `realtime_runtime` ABI.
+Hosts may register typed HashLink natives with `Compiler.registerNative()`
+before the first build. Registrations then freeze so the native-table layout
+cannot silently change beneath a live module. `compiler.RuntimeAbi.register()`
+installs the stable host surface used by the command-line compiler; Haxeon-owned
+realtime operations remain in a separately versioned ABI.
 
-Compiler-owned `new Array<Int>(length)`, `new Array<Float>(length)`,
-`new Array<Bool>(length)`, `new Array<String>(length)`, and reference-array
-expressions emit the realtime runtime ABI without requiring source-level native
-registration. Indexed operations and `.length` remain ordinary typed
-expressions and use HashLink's bounds-checked array operations. Array iteration
-with `for (item in values)` lowers to the same checked indexed loop in SSA;
-`break` and `continue` retain structured loop targets.
-Numeric locals also support `++` and `--` through the ordinary typed arithmetic
-and assignment path.
+Unsupported ABI combinations produce explicit typed diagnostics instead of
+silently falling back to dynamic behavior.
 
-String addition, equality, `.length`, `indexOf`, and `substring` use the same
-compiler-owned runtime ABI, keeping source code independent from native symbol
-names.
+## 🛡️ Transactional patching
 
-Compiler-owned maps currently cover primitive/string maps plus reference-valued
-`Map<String,T>` and `Map<Int,T>` forms for classes, interfaces, arrays, and
-function values. They support construction, indexed set/get, `set`, `exists`,
-`remove`, `clear`, `size`, `keys`, and typed `values`;
-each HashLink abstract type and native function family is versioned with the
-compiler ABI. Array `copy`, `concat`, `slice`, and primitive/String `indexOf`
-are also compiler-owned operations, and primitive/String/reference `push`/`pop`
-use the fork's capacity-aware arrays. Array growth preserves object identity, so
-aliases and fields observe the same contents after `push` or `pop`; local and
-mutable-field rebinding remains supported for source-level compatibility.
-Nullable/enum key/value combinations still produce an explicit typed
-unsupported-ABI diagnostic rather than silently falling back to dynamic
-behavior.
+Haxeon treats hot replacement as a transaction, not a best-effort reload:
 
-IR values and control-flow blocks have numeric identities independent of
-source names. Functions contain explicit basic blocks terminated by `Return`,
-`Jump`, or `Branch`, and an IR verifier checks the graph and types before HL
-lowering.
-
-`compiler.modules.Compiler` retains source, tokens, syntax trees, typed trees,
-dependencies, diagnostics, and generated IR per module. Qualified calls such
-as `Math.add(20, 22)` create dependency edges; updating a module invalidates
-its typed dependents while unrelated parsed and typed state is reused.
-
-Function signatures and bodies have separate fingerprints. Body edits replace
-only that function's typed and IR artifacts; signature edits propagate through
-the function call graph. Cached IR objects for unaffected functions are reused
-when the executable module is assembled.
-
-The session-scoped HL assembler assigns append-only indices to functions,
-types, strings, and constants. Independently, it assigns persistent stable
-function IDs that survive insertion, removal, bytecode reordering, and explicit
-assembler compaction. Compilation reports changed stable function IDs
-and whether a structural edit requires reload. Removed functions retain a
-tombstone slot until `Compiler.compact()` performs a deterministic full rebuild.
-
-User-function slots and stable IDs live in a compiler registry that contains no
-natives. During HL assembly, the backend independently lays out the frozen native
-registry followed by cached bytecode-function slots and produces the transient
-`findex` map. Consequently, changing host-native configuration between separate
-build domains can change HLB layout without changing persistent source-function
-identity.
-
-The runtime proof of concept loads compiler-produced HLB bytes in-process and
-calls functions through compiler-owned stable slots. A compatible edit arrives
-as HLP, is validated and JIT compiled privately, and then commits all selected
-slots atomically. Failed compilation, malformed bytecode, and structural edits
-leave the live code untouched. `vendor/hashlink` tracks
-our HashLink fork, which exports the module lifecycle needed by the runtime
-bridge and provides an opt-in `HL_MODULE_PATCHABLE` JIT mode. Calls in that mode
-dispatch through the module function table, so already-JITed callers immediately
-observe a committed replacement. Names and debug metadata are deliberately not
-used as function identity.
-
-The lifecycle is exposed as an opaque `hl_runtime_module` owned by HashLink.
-Loading, calls, patch decoding/application, synchronization, revision state,
-allocation statistics, and destruction stay behind that API; the project HDLL
-is only an FFI adapter and does not inspect `hl_module` or `hl_patch`. Runtime
-operations return stable status codes, surfaced in Haxe as `RuntimeStatus` and
-`RuntimeError`, so malformed, stale, and incompatible patches remain distinct
-without coupling callers to native error strings.
-
-Initial module loading includes an `HLI` identity manifest alongside the
-standard, unmodified HLB bytes. The manifest binds a 128-bit module ID and
-stable function IDs to that generation's HashLink slots. HLP version 4 carries
-the module ID and identifies replacement bodies by stable ID; HashLink resolves
-the current slot internally and rejects patches from another module before
-revision checking or JIT staging. Keeping identity outside HLB preserves normal
-`.hl` compatibility with HashLink.
-
-Compiler identity state can be serialized with `Compiler.exportIdentityState()`
-and supplied to a new compiler instance, preserving the module ID and stable-ID
-registry across editor or compiler restarts. Patch call sites also carry
-stable-target relocations, so HashLink resolves user-function calls against the
-loaded generation instead of trusting an old HLB function index.
+- Every live module has a 128-bit identity.
+- Functions receive persistent stable IDs independent of bytecode ordering.
+- Patches carry an expected base revision and replacement revisions.
+- Symbol tables are verified by prefix length and content hash.
+- Patch call sites use stable-target relocations rather than stale bytecode
+  function-table indices.
+- All replacements are validated and JIT-compiled before publication.
+- Multi-function patches become visible atomically.
+- Failed staging is discarded without changing the live program.
+- Stale, replayed, cross-module, and incompatible patches are rejected.
 
 Calls and commits are synchronized. Permanent per-slot dispatch entries keep
-closures and object prototypes valid while allowing superseded patch JIT
-allocations to be reclaimed after protected calls finish. Failed staging is
-discarded before publication, keeping repeated editor reloads bounded. Runtime
-modules use synchronized owning handles; retained objects and closures explicitly
-pin their module until released, and disposal is idempotent.
-Patch sets carry expected-base and replacement revisions; stale or replayed
-updates are rejected before loading or changing live dispatch state.
+existing closures and object prototypes valid, while superseded JIT code is
+reclaimed after protected calls complete. Retained objects and closures pin
+their owning module until released, and module disposal is idempotent.
 
-Compatible incremental builds also emit versioned `HLP` bytes. The patch format
-contains the stable symbol/type requirements and only the changed function
-definitions, with a strict Haxe decoder serving as the protocol oracle for the
-native HashLink decoder. The fork exposes owned `hl_patch_read`/`hl_patch_free`
-APIs with strict bounds, version, opcode, function-length, and trailing-data
-validation; integration tests feed identical bytes through both decoders.
-`hl_module_apply_patch` resolves those records against the live module and JITs
-only their functions. Tests instrument the JIT to prove one changed function
-causes one compilation and two-function patches publish as a single transaction.
-HLP version 4 is a length-delimited section container; unknown sections can be
-skipped while required symbol and function sections are validated strictly.
-It represents symbol tables as an expected live prefix count and FNV-1a content
-hash followed by append-only records, preventing equal-length but different
-symbol tables from accepting the same patch. Integer, float, and UTF-8 string
-additions are deep-copied, staged, JIT-compiled, and published with the code
-transaction. Appended strings own their UTF-16 cache independently so failed
-staging rolls back cleanly and committed code retains valid constants. Repeated
-mixed-symbol patches retain bounded JIT allocations. Type-table growth still
-fails closed: HashLink stores direct `hl_type*` pointers throughout initialized
-modules, so moving the type array would invalidate live code. New function or
-structural types therefore remain a domain-reload boundary until the fork has a
-non-moving type arena.
+Type-table growth remains a reload boundary because initialized HashLink modules
+store direct `hl_type*` pointers. Haxeon fails closed for new function or
+structural types until the runtime has a non-moving type arena.
 
-## Run the proof of concept
+## 🚀 Run the proof of concept
+
+Initialize the pinned tools, verify formatting, bootstrap the compiler, and run
+the integration suites:
 
 ```sh
 ./scripts/bootstrap-tools.sh
-./scripts/format.sh
 ./scripts/format.sh --check
 ./scripts/bootstrap-status.sh
 ./scripts/bootstrap-compiler.sh
@@ -183,7 +170,21 @@ non-moving type arena.
 ./test-hot-reload.sh
 ```
 
-Run the repeatable Pragtical edit-to-runtime benchmark with:
+`bootstrap/compiler.hl` is checked in. For ordinary compiler development,
+`bootstrap-compiler.sh --self` rebuilds it with the checked-in compiler and
+pinned HashLink without invoking the reference Haxe compiler.
+
+The full bootstrap uses pinned reference Haxe to build the compiler, then asks
+that compiler to build itself and requires byte-for-byte equality. Both modes
+derive the same sorted source manifest from `src/` and build the native runtime
+bridge before compilation.
+
+The writer currently targets HashLink bytecode format version 6, matching the
+decoder in `src/code.c`.
+
+## 📊 Benchmarks
+
+Run the repeatable edit-to-runtime benchmark:
 
 ```sh
 ./scripts/benchmark.sh
@@ -191,46 +192,48 @@ Run the repeatable Pragtical edit-to-runtime benchmark with:
 
 It reports median, p95, and p99 latency for cold compilation, no-op rebuilds,
 body patches, signature reloads, and structural reloads. It also runs a patch
-soak test and writes machine-readable results to `out/benchmark.json`. Use
-`--iterations`, `--warmup`, `--soak`, and `--json` to override its defaults.
-To attribute soak-test memory growth, run compiler-only and runtime-only passes
-in separate processes:
+soak test and writes machine-readable results to `out/benchmark.json`.
+
+Attribute soak-test memory growth with isolated compiler and runtime passes:
 
 ```sh
-./scripts/benchmark.sh --only-soak --soak-mode compiler --json out/benchmark-compiler.json
-./scripts/benchmark.sh --only-soak --soak-mode runtime --json out/benchmark-runtime.json
+./scripts/benchmark.sh --only-soak --soak-mode compiler \
+  --json out/benchmark-compiler.json
+./scripts/benchmark.sh --only-soak --soak-mode runtime \
+  --json out/benchmark-runtime.json
 ```
 
-Generate scaling results for 10, 100, and 1,000 modules and compare two runs
-with:
+Generate scaling results and compare two runs:
 
 ```sh
 ./scripts/benchmark.sh --only-scale --json out/benchmark-scale.json
 ./scripts/benchmark-compare.sh baseline.json out/benchmark-scale.json
 ```
 
-Use `--scales` and `--scale-iterations` to change the generated project sizes
-and sample count. Comparison is informational and does not enforce thresholds.
+Use `--iterations`, `--warmup`, `--soak`, `--scales`, and
+`--scale-iterations` to tune a run. Benchmark comparisons are informational and
+do not enforce thresholds.
 
-`./scripts/bootstrap-compiler.sh` uses the pinned reference Haxe to build
-`bootstrap/compiler.hl`, then uses that compiler to build a second compiler and
-requires byte-for-byte equality. The resulting artifact is checked in.
-`./scripts/bootstrap-compiler.sh --self` rebuilds it using the checked-in compiler
-and pinned HashLink without invoking reference Haxe; use this mode for ordinary
-compiler development after cloning and initializing the submodule. Both modes
-derive the same sorted source manifest from `src/` and build the native runtime
-bridge before invoking the compiler.
+## 🧪 Development
 
-The writer currently targets bytecode format version 6, matching the current
-HashLink decoder in `src/code.c`.
+Haxe sources use the repository-pinned Haxe Formatter:
 
-Haxe sources are formatted with the repository-pinned Haxe Formatter. Run
-`./scripts/format.sh` to apply formatting; `./scripts/format.sh --check` is part
-of the proof-of-concept test suite.
+```sh
+./scripts/format.sh
+./scripts/format.sh --check
+```
 
-`./scripts/bootstrap-status.sh` runs the real lexer, parser, and typer over the
-compiler source tree and reports bootstrap progress. Add `--json` for a
-machine-readable dashboard.
+`bootstrap-status.sh` runs the real lexer, parser, and typer over the compiler
+source tree and reports bootstrap progress. Pass `--json` for a machine-readable
+dashboard.
+
+## 🗺️ Project direction
+
+The long-term goal is practical Haxe source compatibility where it matters,
+with realtime behavior treated as a core compiler and runtime constraint rather
+than an editor-side workaround.
 
 The staged architecture, reload rules, and Pragtical conversion gates are
-tracked in [ROADMAP.md](ROADMAP.md).
+tracked in the [roadmap](ROADMAP.md). Deeper design notes live in
+[`docs/`](docs/), including patch transactions, metadata ownership, module
+reclamation, semantic contracts, and the implementation baseline.
