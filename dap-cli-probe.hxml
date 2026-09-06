@@ -1,0 +1,4 @@
+-cp tests
+-main DapCliProbe
+-debug
+-hl out/dap-cli-probe.hl
