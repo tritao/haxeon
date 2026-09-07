@@ -49,7 +49,7 @@ if [[ $stdlib_status -ne 42 ]]; then
 	echo "vendored stdlib: expected exit 42, got $stdlib_status" >&2
 	exit 1
 fi
-echo "PASS: vendored haxe.ds.ArraySort compiled and executed (exit 42)"
+echo "PASS: vendored stdlib compiled and executed (exit 42)"
 "$haxe" --cwd "$root_dir" "$root_dir/tests/hxml/repl-test.hxml"
 set +e
 LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$root_dir/out/repl-test.hl"

@@ -148,6 +148,20 @@ errors. Static methods on `extern class` and static or instance methods on
 `extern abstract` use the same form; an instance abstract method passes its
 underlying representation as native argument zero.
 
+An extern class or abstract can provide a default library for all its methods.
+The method name is used as the native symbol unless the method carries its own
+two-argument `@:hlNative` binding:
+
+```haxe
+@:hlNative("platform")
+extern class Native {
+    public static function poll():Int;
+
+    @:hlNative("override", "renamed")
+    public static function draw():Void;
+}
+```
+
 An extern abstract can declare its HashLink storage independently of its source
 identity:
 
