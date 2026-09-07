@@ -1,6 +1,8 @@
 [submodule "vendor/hashlink"]
 	path = vendor/hashlink
 	url = https://github.com/tritao/hashlink.git
+	branch = haxeon/runtime
 [submodule "vendor/hashlink-debugger"]
 	path = vendor/hashlink-debugger
-	url = https://github.com/vshaxe/hashlink-debugger.git
+	url = https://github.com/tritao/hashlink-debugger.git
+	branch = haxeon/debugger
