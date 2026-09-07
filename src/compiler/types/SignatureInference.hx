@@ -9,6 +9,27 @@ import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstType;
 
+/** Lexically scoped types used while collecting lightweight signature constraints. */
+private class InferenceEnvironment {
+	final parent:Null<InferenceEnvironment>;
+	final values:Map<String, AstType> = [];
+
+	public function new(?parent)
+		this.parent = parent;
+
+	public function fork():InferenceEnvironment
+		return new InferenceEnvironment(this);
+
+	public function set(name:String, type:AstType):Void
+		values.set(name, type);
+
+	public function get(name:String):Null<AstType>
+		return values.exists(name) ? values.get(name) : parent == null ? null : parent.get(name);
+
+	public function exists(name:String):Bool
+		return values.exists(name) || parent != null && parent.exists(name);
+}
+
 /** Collects declaration-level constraints before body typing. */
 class SignatureInference {
 	public static function inferProgram(program:AstProgram):AstProgram {
@@ -69,7 +90,7 @@ class SignatureInference {
 		for (_ in 0...methods.length) {
 			var calleeConstraints:Map<String, Map<String, AstType>> = [];
 			for (method in methods) {
-				var environment:Map<String, AstType> = [];
+				var environment = new InferenceEnvironment();
 				for (argument in method.arguments)
 					if (argument.type != InferredType)
 						environment.set(argument.name, argument.type);
@@ -98,7 +119,7 @@ class SignatureInference {
 	static function constraintsFor(constraints:Map<String, Map<String, AstType>>, name:String):Map<String, AstType>
 		return constraints.exists(name) ? constraints.get(name) : [];
 
-	static function collectCallConstraints(statements:Array<AstStatement>, environment:Map<String, AstType>, methods:Map<String, AstFunction>,
+	static function collectCallConstraints(statements:Array<AstStatement>, environment:InferenceEnvironment, methods:Map<String, AstFunction>,
 			constraints:Map<String, Map<String, AstType>>):Void
 		for (statement in statements)
 			switch statement {
@@ -111,27 +132,27 @@ class SignatureInference {
 					collectExpressionCallConstraint(expression, environment, methods, constraints);
 				case If(predicate, yes, no, _):
 					collectExpressionCallConstraint(predicate, environment, methods, constraints);
-					collectCallConstraints(yes, copyTypes(environment), methods, constraints);
-					collectCallConstraints(no, copyTypes(environment), methods, constraints);
+					collectCallConstraints(yes, environment.fork(), methods, constraints);
+					collectCallConstraints(no, environment.fork(), methods, constraints);
 				case While(predicate, body, _), DoWhile(body, predicate, _):
 					collectExpressionCallConstraint(predicate, environment, methods, constraints);
-					collectCallConstraints(body, copyTypes(environment), methods, constraints);
+					collectCallConstraints(body, environment.fork(), methods, constraints);
 				case ForIn(_, _, iterable, body, _):
 					collectExpressionCallConstraint(iterable, environment, methods, constraints);
-					collectCallConstraints(body, copyTypes(environment), methods, constraints);
+					collectCallConstraints(body, environment.fork(), methods, constraints);
 				case Try(body, catches, _):
-					collectCallConstraints(body, copyTypes(environment), methods, constraints);
+					collectCallConstraints(body, environment.fork(), methods, constraints);
 					for (clause in catches)
-						collectCallConstraints(clause.statements, copyTypes(environment), methods, constraints);
+						collectCallConstraints(clause.statements, environment.fork(), methods, constraints);
 				case Switch(expression, cases, fallback, _, _):
 					collectExpressionCallConstraint(expression, environment, methods, constraints);
 					for (switchCase in cases)
-						collectCallConstraints(switchCase.statements, copyTypes(environment), methods, constraints);
-					collectCallConstraints(fallback, copyTypes(environment), methods, constraints);
+						collectCallConstraints(switchCase.statements, environment.fork(), methods, constraints);
+					collectCallConstraints(fallback, environment.fork(), methods, constraints);
 				default:
 			}
 
-	static function collectExpressionCallConstraint(expression:AstExpression, environment:Map<String, AstType>, methods:Map<String, AstFunction>,
+	static function collectExpressionCallConstraint(expression:AstExpression, environment:InferenceEnvironment, methods:Map<String, AstFunction>,
 			constraints:Map<String, Map<String, AstType>>):Void
 		switch expression {
 			case Call(name, arguments, _), MethodCall(_, name, arguments, _):
@@ -156,7 +177,7 @@ class SignatureInference {
 			default:
 		}
 
-	static function inferSimpleExpression(expression:AstExpression, environment:Map<String, AstType>):Null<AstType>
+	static function inferSimpleExpression(expression:AstExpression, environment:InferenceEnvironment):Null<AstType>
 		return switch expression {
 			case Variable(name, _): environment.get(name);
 			case IntegerLiteral(_, _): IntType;
@@ -270,7 +291,7 @@ class SignatureInference {
 	static function inferFunction(fn:AstFunction, enums:Map<String, AstEnum>, ?methods:Map<String, AstFunction>):AstFunction {
 		if (fn.result != InferredType)
 			return fn;
-		var environment:Map<String, AstType> = [];
+		var environment = new InferenceEnvironment();
 		for (argument in fn.arguments)
 			if (argument.type != InferredType)
 				environment.set(argument.name, argument.type);
@@ -297,7 +318,7 @@ class SignatureInference {
 		};
 	}
 
-	static function inferExpression(expression:AstExpression, environment:Map<String, AstType>, enums:Map<String, AstEnum>,
+	static function inferExpression(expression:AstExpression, environment:InferenceEnvironment, enums:Map<String, AstEnum>,
 			?methods:Map<String, AstFunction>):Null<AstType>
 		return switch expression {
 			case IntegerLiteral(_, _): IntType;
@@ -313,7 +334,7 @@ class SignatureInference {
 				var subjectType = inferExpression(subject, environment, enums, methods),
 					inferred:Null<AstType> = null;
 				for (switchCase in cases) {
-					var caseEnvironment = copyTypes(environment);
+					var caseEnvironment = environment.fork();
 					bindPattern(switchCase.value, subjectType, caseEnvironment, enums);
 					var candidate = inferExpression(switchCase.result, caseEnvironment, enums, methods);
 					if (candidate != null && (inferred == null || sameType(inferred, candidate)))
@@ -328,7 +349,7 @@ class SignatureInference {
 			default: null;
 		};
 
-	static function bindPattern(pattern:AstExpression, subjectType:Null<AstType>, environment:Map<String, AstType>, enums:Map<String, AstEnum>):Void {
+	static function bindPattern(pattern:AstExpression, subjectType:Null<AstType>, environment:InferenceEnvironment, enums:Map<String, AstEnum>):Void {
 		if (subjectType == null)
 			return;
 		var enumName = switch subjectType {
@@ -414,13 +435,6 @@ class SignatureInference {
 	static function localMethodName(name:String):String
 		return lastPathSegment(name);
 
-	static function copyTypes(source:Map<String, AstType>):Map<String, AstType> {
-		var result:Map<String, AstType> = [];
-		for (name => type in source)
-			result.set(name, type);
-		return result;
-	}
-
 	public static function inferFieldBoundArguments(fn:AstFunction, classDecl:AstClass):AstFunction {
 		fn = inferDefaultBoundArguments(fn);
 		var inferred:Map<String, AstType> = [];
@@ -462,7 +476,7 @@ class SignatureInference {
 		var inferred:Map<String, AstType> = [];
 		for (argument in fn.arguments)
 			if (argument.type == InferredType && argument.defaultValue != null) {
-				var defaultType = inferSimpleExpression(argument.defaultValue, []);
+				var defaultType = inferSimpleExpression(argument.defaultValue, new InferenceEnvironment());
 				if (defaultType != null)
 					inferred.set(argument.name, defaultType);
 			}
