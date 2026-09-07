@@ -3852,6 +3852,8 @@ class Typer {
 	function registerAnonymousTypes(type:CompilerType):Void
 		switch type {
 			case TAnonymous(name, fields):
+				if (anonymousTypes.exists(name))
+					return;
 				anonymousTypes.set(name, fields);
 				for (field in fields)
 					registerAnonymousTypes(field.type);
