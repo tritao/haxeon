@@ -1825,7 +1825,7 @@ class Typer {
 			default: null;
 		};
 
-	function typeExpression(expression:AstExpression, scope:Scope, ?expectedType:CompilerType):TypedExpression
+	function typeExpression(expression:AstExpression, scope:Scope, ?expectedType:CompilerType, inferDynamicLambdaResult:Bool = false):TypedExpression
 		return switch expression {
 			case IntegerLiteral(value, span): new TypedExpression(TIntLiteral(value), TInt, span);
 			case FloatLiteral(value, span): new TypedExpression(TFloatLiteral(value), TFloat, span);
@@ -1848,7 +1848,8 @@ class Typer {
 					if (localMethod != null && !localMethod.isStatic)
 						return typeMember(Variable("this", span), name, span, scope);
 					var functionName = localMethod == null ? name : localMethod.owner + "." + name;
-					var expectedFunction = expectedFunctionType(expectedType);
+					var expectedFunction = expectedFunctionType(expectedType),
+						inferContextualResult = expectedFunction != null && expectedFunction.result == TDynamic && inferDynamicLambdaResult;
 					if (name == "Reflect.compare" && expectedFunction != null && expectedFunction.arguments.length == 2
 						&& sameType(expectedFunction.arguments[0], TString) && sameType(expectedFunction.arguments[1], TString)
 						&& sameType(expectedFunction.result, TInt))
@@ -1975,7 +1976,8 @@ class Typer {
 			case Lambda(arguments, body, span):
 				var lambdaKey = '${context.name}:${span.file.path}:${span.start}';
 				if (lambdaCache.exists(lambdaKey)) lambdaCache.get(lambdaKey) else {
-					var expectedFunction = expectedFunctionType(expectedType);
+					var expectedFunction = expectedFunctionType(expectedType),
+						inferContextualResult = expectedFunction != null && expectedFunction.result == TDynamic && inferDynamicLambdaResult;
 					if (expectedFunction != null && expectedFunction.arguments.length != arguments.length)
 						fail("E1008", 'Lambda expects ${expectedFunction.arguments.length} arguments, got ${arguments.length}', span);
 					var lambdaArguments:Array<{name:String, type:CompilerType}> = [],
@@ -2050,7 +2052,7 @@ class Typer {
 					var outerContext = context,
 						lambdaName = '$' + 'lambda:${outerContext.name}:${span.start}',
 						lambdaContext = enterBody(lambdaName, outerContext.typeSubstitutions);
-					context.resultType = expectedFunction == null ? TVoid : expectedFunction.result;
+					context.resultType = expectedFunction == null || inferContextualResult ? TVoid : expectedFunction.result;
 					context.contextualVoidLambda = expectedFunction != null && expectedFunction.result == TVoid;
 					CaptureAnalysis.collectAssignedLocals(body, context.assigned);
 					var lambdaDeclared:Map<String, Bool> = [];
@@ -2063,9 +2065,9 @@ class Typer {
 						context.cells.set(name, '$' + 'cell:' + lambdaName + ':' + name);
 						context.cellKinds.set(name, MutableCapture);
 					}
-					var typedBody = typeStatements(body, typedBodyScope, expectedFunction == null ? null : expectedFunction.result);
+					var typedBody = typeStatements(body, typedBodyScope, expectedFunction == null || inferContextualResult ? null : expectedFunction.result);
 					var inferredResult:CompilerType;
-					if (expectedFunction != null)
+					if (expectedFunction != null && !inferContextualResult)
 						inferredResult = expectedFunction.result;
 					else {
 						var contextualResult = context.inferredResult;
@@ -2622,10 +2624,10 @@ class Typer {
 								if (contextual)
 									for (parameter in parameters)
 										if (!typingSubstitutions.exists(parameter)) typingSubstitutions.set(parameter, TDynamic);
-								var genericArguments = contextual ? [
-									for (index in 0...arguments.length)
-										typeExpression(arguments[index], scope,
-											declarations.resolve(method.arguments[index].type, method.arguments[index].span, typingSubstitutions))
+				var genericArguments = contextual ? [
+					for (index in 0...arguments.length)
+						typeExpression(arguments[index], scope,
+							declarations.resolve(method.arguments[index].type, method.arguments[index].span, typingSubstitutions), true)
 								] : [for (argument in arguments) typeExpression(argument, scope)];
 								var specialized = specializeGeneric(methodKey, method, genericArguments, span, scope, implicitMethod.owner, true,
 									null);
@@ -2739,10 +2741,10 @@ class Typer {
 							if (contextual)
 								for (parameter in parameters)
 									if (!typingSubstitutions.exists(parameter)) typingSubstitutions.set(parameter, TDynamic);
-							var genericArguments = contextual ? [
-								for (index in 0...arguments.length)
-									typeExpression(arguments[index], scope,
-										declarations.resolve(method.arguments[index].type, method.arguments[index].span, typingSubstitutions))
+						var genericArguments = contextual ? [
+							for (index in 0...arguments.length)
+								typeExpression(arguments[index], scope,
+									declarations.resolve(method.arguments[index].type, method.arguments[index].span, typingSubstitutions), true)
 							] : [for (argument in arguments) typeExpression(argument, scope)];
 							var specialized = specializeGeneric(methodKey, method, genericArguments, span, scope, methodInfoResult.owner, methodInfoResult.isStatic,
 								null, methodInfoResult.isStatic ? null : resolvedReceiver);
