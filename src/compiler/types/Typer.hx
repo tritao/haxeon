@@ -1844,8 +1844,10 @@ class Typer {
 							requiredMapValue(context.cells, name)) : TLocal(name == "this" ? name : scope.requireId(name))),
 						type, span);
 				} else {
-					var localMethod = lexicalMethod(name),
-						functionName = localMethod != null && localMethod.isStatic ? localMethod.owner + "." + name : name;
+					var localMethod = lexicalMethod(name);
+					if (localMethod != null && !localMethod.isStatic)
+						return typeMember(Variable("this", span), name, span, scope);
+					var functionName = localMethod == null ? name : localMethod.owner + "." + name;
 					var expectedFunction = expectedFunctionType(expectedType);
 					if (name == "Reflect.compare" && expectedFunction != null && expectedFunction.arguments.length == 2
 						&& sameType(expectedFunction.arguments[0], TString) && sameType(expectedFunction.arguments[1], TString)

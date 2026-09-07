@@ -37,14 +37,14 @@ yet promise complete runtime behavior.
 | `utest.exceptions.AssertFailureException` | pass | `-` | - |
 | `utest.exceptions.UTestException` | pass | `-` | - |
 | `utest.ui.Report` | blocked | `E0001` | Unexpected character "$" |
-| `utest.ui.common.ClassResult` | blocked | `E1005` | Unknown variable "addSuccesses" |
-| `utest.ui.common.FixtureResult` | blocked | `E1005` | Unknown variable "addSuccesses" |
+| `utest.ui.common.ClassResult` | pass | `-` | - |
+| `utest.ui.common.FixtureResult` | pass | `-` | - |
 | `utest.ui.common.HeaderDisplayMode` | pass | `-` | - |
 | `utest.ui.common.IReport` | blocked | `E0002` | Expected Function, got Public |
 | `utest.ui.common.PackageResult` | blocked | `E0002` | Expected expression |
 | `utest.ui.common.ReportTools` | blocked | `E0002` | Expected Function, got Public |
 | `utest.ui.common.ResultAggregator` | blocked | `E0001` | Unexpected character "$" |
-| `utest.ui.common.ResultStats` | blocked | `E1005` | Unknown variable "addSuccesses" |
+| `utest.ui.common.ResultStats` | pass | `-` | - |
 | `utest.ui.macro.MacroReport` | pass | `-` | - |
 | `utest.ui.text.DiagnosticsReport` | blocked | `E0002` | Expected Function, got Identifier |
 | `utest.ui.text.HtmlReport` | blocked | `E0002` | Expected Function, got Identifier |
@@ -57,20 +57,19 @@ yet promise complete runtime behavior.
 | `utest.utils.Print` | blocked | `E1007` | Unknown function "Sys.print" |
 | `utest.utils.TestBuilder` | blocked | `E0001` | Unexpected character "$" |
 
-Baseline result: **7 of 36 modules analyze unchanged**.
+Baseline result: **10 of 36 modules analyze unchanged**.
 
 ## Priority order
 
-1. Support implicit instance-method references such as `addSuccesses` when
-   passed as callbacks; this is shared by three common report modules.
-2. Parse or safely exclude macro splice syntax; the modules previously blocked
+1. Parse or safely exclude macro splice syntax; the modules previously blocked
    by regex literals now reach `$` syntax in their macro-only dependencies.
-3. Expand property and interface-field parsing; `TestResult`, `PackageResult`,
+2. Expand property and interface-field parsing; `TestResult`, `PackageResult`,
    `ReportTools`, and `IReport` now stop at these declaration/expression forms.
-4. Improve same-package and secondary-type module resolution, beginning with
+3. Improve same-package and secondary-type module resolution, beginning with
    upstream `utest.Test` and `utest.utils.AsyncUtils`.
-5. Broaden `Type`/`Reflect` APIs, then add `haxe.Timer`; these unlock typed
-   exception assertions, reports, and asynchronous tests.
+4. Add `Sys.print`, then broaden `Type`/`Reflect` APIs and add `haxe.Timer`;
+   these unlock text output, typed exception assertions, reports, and
+   asynchronous tests.
 
 The local compatibility layer remains the active implementation until an
 upstream module passes both analysis and runtime tests. Modules should be
