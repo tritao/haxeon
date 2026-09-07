@@ -70,6 +70,9 @@ class CompilationContext {
 	public function resolveSemanticType(name:String):Null<SemanticSymbolId>
 		return owner.semanticWorkspace.resolveTypeSymbolId(name);
 
+	public function invalidateSemanticResolutionCache():Void
+		owner.semanticWorkspace.invalidateResolutionCache();
+
 	public function irNatives():Array<IrNative>
 		return owner.irNatives();
 

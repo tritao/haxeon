@@ -7,9 +7,12 @@ import compiler.semantic.SemanticWorkspace.WorkspaceResolution;
 import compiler.semantic.SemanticModel;
 import compiler.types.Type.CompilerType;
 import compiler.service.LanguageService;
+import compiler.runtime.RuntimeType;
 
 class SemanticWorkspaceMain {
 	static function main():Void {
+		expect(RuntimeType.mapName(TString, TNullable(TAbstract("Symbol", [], TString))) == "map_string_bytes",
+			"nullable reference abstracts should use their representation's map ABI");
 		var base = parsedState("demo.Base", "package demo; class Base { public function value():Int return 1; }");
 		var child = parsedState("demo.Child", "package demo; import demo.Base; class Child extends Base {}");
 		child.dependencies = ["demo.Base"];
@@ -17,6 +20,10 @@ class SemanticWorkspaceMain {
 		modules.set(base.name, base);
 		modules.set(child.name, child);
 		var workspace = new SemanticWorkspace(modules);
+		var resolvedBase = workspace.resolveTypeSymbolId("Base");
+		expect(resolvedBase != null && workspace.resolveTypeSymbolId("Base") == resolvedBase, "type resolution should be stable when cached");
+		workspace.invalidateResolutionCache();
+		expect(workspace.resolveTypeSymbolId("Base") == resolvedBase, "invalidating resolution caches should preserve results");
 
 		var global = workspace.global(child, "Base");
 		expect(global != null && global.state == base && global.key == "class:Base", "imports should resolve through the workspace");

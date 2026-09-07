@@ -34,6 +34,9 @@ enum WorkspaceResolution {
 /** Shared cross-module name and member resolution over current or last-good models. */
 class SemanticWorkspace {
 	final modules:Map<String, ModuleState>;
+	final symbolResolutionCache:Map<String, Null<SemanticSymbolId>> = [];
+	final typeResolutionCache:Map<String, Null<SemanticSymbolId>> = [];
+	final enumCaseResolutionCache:Map<String, Null<SemanticSymbolId>> = [];
 
 	public function new(modules:Map<String, ModuleState>)
 		this.modules = modules;
@@ -67,6 +70,8 @@ class SemanticWorkspace {
 		return memberInner(type, name, []);
 
 	public function resolveSymbolId(name:String):Null<SemanticSymbolId> {
+		if (symbolResolutionCache.exists(name))
+			return symbolResolutionCache.get(name);
 		var matches:Array<SemanticSymbolId> = [];
 		for (state in orderedStates()) {
 			var model = effectiveModel(state);
@@ -77,10 +82,14 @@ class SemanticWorkspace {
 				if (symbol.name == name || state.name + "." + symbol.name == name || packagePrefix + symbol.name == name)
 					matches.push(symbol.id);
 		}
-		return matches.length == 1 ? matches[0] : null;
+		var result = matches.length == 1 ? matches[0] : null;
+		symbolResolutionCache.set(name, result);
+		return result;
 	}
 
 	public function resolveTypeSymbolId(name:String):Null<SemanticSymbolId> {
+		if (typeResolutionCache.exists(name))
+			return typeResolutionCache.get(name);
 		var matches:Array<SemanticSymbolId> = [];
 		for (state in orderedStates()) {
 			var model = effectiveModel(state);
@@ -92,7 +101,9 @@ class SemanticWorkspace {
 					&& (symbol.name == name || state.name + "." + symbol.name == name || packagePrefix + symbol.name == name))
 					matches.push(symbol.id);
 		}
-		return matches.length == 1 ? matches[0] : null;
+		var result = matches.length == 1 ? matches[0] : null;
+		typeResolutionCache.set(name, result);
+		return result;
 	}
 
 	static function isTypeKind(kind:DeclarationKind):Bool
@@ -102,6 +113,9 @@ class SemanticWorkspace {
 	public function resolveEnumCaseId(enumName:String, index:Int):Null<SemanticSymbolId> {
 		if (index < 0)
 			return null;
+		var cacheKey = enumName + ":" + index;
+		if (enumCaseResolutionCache.exists(cacheKey))
+			return enumCaseResolutionCache.get(cacheKey);
 		var matches:Array<SemanticSymbolId> = [];
 		for (state in orderedStates()) {
 			var model = effectiveModel(state);
@@ -116,7 +130,15 @@ class SemanticWorkspace {
 							matches.push(symbol.id);
 				}
 		}
-		return matches.length == 1 ? matches[0] : null;
+		var result = matches.length == 1 ? matches[0] : null;
+		enumCaseResolutionCache.set(cacheKey, result);
+		return result;
+	}
+
+	public function invalidateResolutionCache():Void {
+		symbolResolutionCache.clear();
+		typeResolutionCache.clear();
+		enumCaseResolutionCache.clear();
 	}
 
 	public function indexedSymbol(id:SemanticSymbolId):Null<{state:ModuleState, symbol:IndexedSemanticSymbol}> {

@@ -45,11 +45,20 @@ class RuntimeType {
 	static function mapValueName(prefix:String, value:CompilerType):Null<String>
 		return switch value {
 			case TAbstract(_, _, representation): mapValueName(prefix, representation);
+			case TNullable(element): nullableMapValueName(prefix, element);
 			case TInt: prefix + "i32";
 			case TBool: prefix + "bool";
 			case TFloat: prefix + "f64";
 			case TString: prefix + "bytes";
 			default: isRuntimeReference(value) ? prefix + "ref" : null;
+		};
+
+	static function nullableMapValueName(prefix:String, element:CompilerType):Null<String>
+		return switch element {
+			case TAbstract(_, _, representation): nullableMapValueName(prefix, representation);
+			case TString: prefix + "bytes";
+			case TInt, TBool, TFloat: prefix + "ref";
+			default: isRuntimeReference(element) ? prefix + "ref" : null;
 		};
 
 	public static function mapKeyType(name:String):Null<CompilerType>
