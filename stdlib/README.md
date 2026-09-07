@@ -22,3 +22,14 @@ cache. Explicitly supplied modules take precedence over files in source roots.
 
 Do not put compiler implementation sources from HaxeFoundation/haxe here. The
 compiler and the standard library have different licenses.
+
+## utest compatibility
+
+The `utest` package provides a synchronous subset of the upstream API:
+`utest.Test`, `utest.Assert`, `utest.Runner`, and `utest.ui.Report`. Assertions
+include `equals`, `notEquals`, `isTrue`, `isFalse`, and `fail`.
+
+Haxeon does not yet execute build macros, so test methods are registered by
+overriding `registerTests()` and calling `addTest(name, method)`. Async tests,
+automatic test discovery, positional assertion metadata, patterns, lifecycle
+hooks, and alternate report formats are not yet supported.

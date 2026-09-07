@@ -56,6 +56,29 @@ if [[ $stdlib_status -ne 42 ]]; then
 	exit 1
 fi
 echo "PASS: vendored stdlib compiled and executed (exit 42)"
+
+utest_output="$root_dir/out/utest-basic.hl"
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run UtestMain "$utest_output"
+set +e
+LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$utest_output"
+utest_status=$?
+set -e
+if [[ $utest_status -ne 0 ]]; then
+	echo "utest compatibility: expected exit 0, got $utest_status" >&2
+	exit 1
+fi
+echo "PASS: utest-compatible assertions and runner executed (exit 0)"
+utest_failure_output="$root_dir/out/utest-failure.hl"
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run UtestMain "$utest_failure_output" "tests/programs/utest-failure.hx"
+set +e
+LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$utest_failure_output"
+utest_failure_status=$?
+set -e
+if [[ $utest_failure_status -ne 1 ]]; then
+	echo "utest failure reporting: expected exit 1, got $utest_failure_status" >&2
+	exit 1
+fi
+echo "PASS: utest-compatible runner reports assertion failures (exit 1)"
 "$haxe" --cwd "$root_dir" "$root_dir/tests/hxml/repl-test.hxml"
 set +e
 LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$root_dir/out/repl-test.hl"
