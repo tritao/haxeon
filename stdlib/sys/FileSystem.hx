@@ -31,6 +31,21 @@ extern function fileSystemIsDirectory(path:String):Bool;
 @:hlNative("realtime_runtime", "__sys_full_path")
 extern function fileSystemFullPath(path:String):String;
 
+@:hlNative("realtime_runtime", "__sys_read_dir")
+extern function fileSystemReadDirectory(path:String):Array<String>;
+
+@:hlNative("realtime_runtime", "__sys_create_dir")
+extern function fileSystemCreateDirectory(path:String, mode:Int):Bool;
+
+@:hlNative("realtime_runtime", "__sys_delete")
+extern function fileSystemDeleteFile(path:String):Bool;
+
+@:hlNative("realtime_runtime", "__sys_remove_dir")
+extern function fileSystemDeleteDirectory(path:String):Bool;
+
+@:hlNative("realtime_runtime", "__sys_rename")
+extern function fileSystemRename(path:String, newPath:String):Bool;
+
 /** Supported filesystem queries backed by the stable runtime ABI. */
 class FileSystem {
 	public static inline function exists(path:String):Bool
@@ -41,4 +56,22 @@ class FileSystem {
 
 	public static inline function fullPath(path:String):String
 		return fileSystemFullPath(path);
+
+	public static inline function absolutePath(path:String):String
+		return fileSystemFullPath(path);
+
+	public static inline function readDirectory(path:String):Array<String>
+		return fileSystemReadDirectory(path);
+
+	public static inline function createDirectory(path:String):Void
+		fileSystemCreateDirectory(path, 493);
+
+	public static inline function deleteFile(path:String):Void
+		fileSystemDeleteFile(path);
+
+	public static inline function deleteDirectory(path:String):Void
+		fileSystemDeleteDirectory(path);
+
+	public static inline function rename(path:String, newPath:String):Void
+		fileSystemRename(path, newPath);
 }

@@ -40,6 +40,26 @@ function main():Int {
 		return 6;
 	if (Sys.command("test xé = xé") != 0)
 		return 7;
+	var fsDirectory = "out/filesystem-runtime-é";
+	var fsRenamed = "out/filesystem-runtime-renamed-é";
+	var fsFile = fsRenamed + "/value-ß.txt";
+	if (sys.FileSystem.exists(fsFile))
+		sys.FileSystem.deleteFile(fsFile);
+	if (sys.FileSystem.exists(fsDirectory))
+		sys.FileSystem.deleteDirectory(fsDirectory);
+	if (sys.FileSystem.exists(fsRenamed))
+		sys.FileSystem.deleteDirectory(fsRenamed);
+	sys.FileSystem.createDirectory(fsDirectory);
+	if (!sys.FileSystem.isDirectory(fsDirectory) || sys.FileSystem.absolutePath(fsDirectory).length == 0)
+		return 8;
+	sys.FileSystem.rename(fsDirectory, fsRenamed);
+	sys.io.File.saveContent(fsFile, "filesystem");
+	if (!sys.FileSystem.exists(fsFile) || sys.FileSystem.readDirectory(fsRenamed).indexOf("value-ß.txt") < 0)
+		return 9;
+	sys.FileSystem.deleteFile(fsFile);
+	sys.FileSystem.deleteDirectory(fsRenamed);
+	if (sys.FileSystem.exists(fsRenamed))
+		return 10;
 	Sys.println("PASS: Sys UTF-8 marshalling ✓\n");
 	trace("PASS: trace UTF-8 marshalling ✓\n");
 	return 42;

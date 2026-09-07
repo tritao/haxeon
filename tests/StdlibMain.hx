@@ -51,6 +51,12 @@ class StdlibMain {
 			"sys.FileSystem.exists",
 			"sys.FileSystem.isDirectory",
 			"sys.FileSystem.fullPath",
+			"sys.FileSystem.absolutePath",
+			"sys.FileSystem.readDirectory",
+			"sys.FileSystem.createDirectory",
+			"sys.FileSystem.deleteFile",
+			"sys.FileSystem.deleteDirectory",
+			"sys.FileSystem.rename",
 			"Math.isNaN",
 			"Reflect.compare",
 			"haxe.io.Bytes.alloc",
@@ -127,7 +133,16 @@ class StdlibMain {
 			"__file_save_content" => true,
 			"__file_save_bytes" => true
 		];
-		var fileSystemSymbols:Map<String, Bool> = ["__sys_exists" => true, "__sys_is_dir" => true, "__sys_full_path" => true];
+		var fileSystemSymbols:Map<String, Bool> = [
+			"__sys_exists" => true,
+			"__sys_is_dir" => true,
+			"__sys_full_path" => true,
+			"__sys_read_dir" => true,
+			"__sys_create_dir" => true,
+			"__sys_delete" => true,
+			"__sys_remove_dir" => true,
+			"__sys_rename" => true
+		];
 		var dateSymbols:Map<String, Bool> = ["__date_now" => true, "__date_get_time" => true];
 		var coreSymbols:Map<String, Bool> = ["__math_is_nan" => true, "__reflect_compare" => true];
 		var bytesSymbols:Map<String, Bool> = ["__bytes_alloc" => true, "__bytes_of_string" => true];
