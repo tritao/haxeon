@@ -51,6 +51,7 @@ cleanup() {
 }
 trap cleanup EXIT
 current_frame=
+current_stack=
 
 wait_frame() {
 	local source=$1 line=$2 stack status
@@ -63,6 +64,7 @@ wait_frame() {
 			return 1
 		fi
 		current_frame=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["stackFrames"][0]["id"])' <<<"$stack")
+		current_stack=$stack
 		return
 	fi
     sleep 0.1
@@ -90,6 +92,7 @@ PY
 value=$("${dap[@]}" breakpoints set --name "$session" --source "$repo_dir/tests/dap/Value.hx" --line 6 8)
 python3 -c 'import json,sys; points=json.load(sys.stdin)["data"]["breakpoints"]; assert len(points)==2 and all(p["verified"] for p in points)' <<<"$value"
 wait_frame Value.hx 6
+initial_column=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["stackFrames"][0]["column"])' <<<"$current_stack")
 locals=$(read_locals)
 python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="result" and v.get("value")=="43" for v in vs), vs; assert any(v["name"]=="scoped" and v.get("value")=="142" for v in vs), vs' <<<"$locals"
 
@@ -105,6 +108,7 @@ for _ in {1..40}; do
 	sleep 0.05
 done
 wait_frame Value.hx 6
+python3 -c 'import json,sys; frame=json.load(sys.stdin)["data"]["stackFrames"][0]; assert frame.get("column",0)>=5 and frame["column"]!=int(sys.argv[1]), frame' "$initial_column" <<<"$current_stack"
 locals=$(read_locals)
 python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="result" and v.get("value")=="44" for v in vs), vs; assert any(v["name"]=="scoped" and v.get("value")=="143" for v in vs), vs' <<<"$locals"
 evaluated=$("${dap[@]}" evaluate --name "$session" --frame-id "$current_frame" --context watch --expression 'result + scoped')

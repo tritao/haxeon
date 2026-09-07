@@ -19,12 +19,18 @@ module's ordinary function records it appends:
   function count;
 - for each region function: its HLB function index, stable function ID, the
   existing 13-byte HLD function header, opcode-offset table, and
-  variable-location data.
+  variable-location data;
+- after each MAP3 function record, an `Int32` source-span count. Base functions
+  use zero because their spans are already present in the embedded HLB. Patched
+  functions provide one record per opcode containing debug-file index, line,
+  start offset, end offset, and flags as `Int32` values.
 
 Repeating the base JIT table makes a module first observed in a later `MAP3`
 snapshot fully self-describing; such a module was not present in the initial
 HLD2-compatible prefix.
 Active patch regions replace mappings for their listed function indices.
+Their source-span records likewise replace the HLB opcode spans for those
+functions as one part of applying the complete MAP3 snapshot.
 Retired regions remain addressable for stacks that were executing superseded
 code when a patch was published.
 

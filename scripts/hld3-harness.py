@@ -64,6 +64,15 @@ def read_function(reader: Reader, indexed: bool, stable: bool = False) -> int:
         raise ProtocolError("invalid HLD3 function mapping")
     reader.read((nops + 1) * (4 if large else 2))
     reader.read(vars_size)
+    if stable:
+        span_count = reader.i32()
+        if span_count not in (0, nops):
+            raise ProtocolError("invalid HLD3 source-span count")
+        for _ in range(span_count):
+            file_index, line = reader.i32(), reader.i32()
+            start, end, flags = reader.i32(), reader.i32(), reader.i32()
+            if file_index < 0 or line < 1 or not ((start == -1 and end == -1) or (start >= 0 and end >= start)) or flags < 0:
+                raise ProtocolError("invalid HLD3 source span")
     return function_index
 
 

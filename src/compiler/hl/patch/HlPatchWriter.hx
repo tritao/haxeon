@@ -135,6 +135,9 @@ class HlPatchWriter {
 			for (location in fn.debugLocations) {
 				writeIndex(out, fileIndices.get(location.path));
 				writeIndex(out, location.line);
+				writeIndex(out, location.start == null ? 0 : location.start + 1);
+				writeIndex(out, location.end == null ? 0 : location.end + 1);
+				writeIndex(out, location.flags);
 			}
 		}
 		return out.getBytes();

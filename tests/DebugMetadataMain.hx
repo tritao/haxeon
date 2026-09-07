@@ -2,6 +2,8 @@ import compiler.Frontend;
 import compiler.Source.SourceFile;
 import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlWriter;
+import compiler.hl.patch.HlPatchReader;
+import compiler.hl.patch.HlPatchWriter;
 import compiler.ir.IrFunction;
 import compiler.ir.codec.IrFunctionStateCodec;
 import compiler.ir.hl.HlLower;
@@ -89,6 +91,21 @@ class DebugMetadataMain {
 		if (!contains(bytes, suffix))
 			throw "HLB output did not serialize canonical debug assignment triples";
 		Sys.println("PASS: HLB serializes deterministic local and function debug metadata");
+
+		var stableBySlot:Map<Int, Int> = [for (compiledFunction in code.functions) compiledFunction.functionIndex => compiledFunction.functionIndex],
+			patch = HlPatchReader.decode(HlPatchWriter.encode(code, haxe.io.Bytes.alloc(16), [for (compiledFunction in code.functions) compiledFunction.functionIndex],
+				stableBySlot, 0, 1));
+		for (index in 0...patch.functions.length) {
+			var actual = patch.functions[index].debug, expected = code.functions[index].debugLocations;
+			if (actual.length != expected.length)
+				throw "HLP lost opcode source spans";
+			for (opcode in 0...actual.length)
+				if (patch.debugFiles[actual[opcode].file] != expected[opcode].path || actual[opcode].line != expected[opcode].line
+					|| actual[opcode].start != expected[opcode].start || actual[opcode].end != expected[opcode].end
+					|| actual[opcode].flags != expected[opcode].flags)
+					throw "HLP changed an opcode source span";
+		}
+		Sys.println("PASS: HLP preserves precise opcode source spans");
 
 		testShadowedScopes();
 	}

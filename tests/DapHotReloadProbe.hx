@@ -17,7 +17,7 @@ class DapHotReloadProbe {
 		var initialValue = Runtime.callInt(loaded, functionIndex);
 
 		compiler.update("Value.hx",
-			"function value():Int {\n  var result = 43;\n  if (true) {\n    var scoped = result + 100;\n    result = scoped - 99;\n    scoped = scoped + 0;\n  }\n  result = result - 1;\n  try {\n    throw \"patched-probe\";\n  } catch (error:Int) {\n    result = 0;\n  } catch (error:String) {\n    result = result + 0;\n  }\n  return result;\n}");
+			StringTools.replace("function value():Int {\n  var result = 43;\n  if (true) {\n    var scoped = result + 100;\n    result = scoped - 99;\n    scoped = scoped + 0;\n  }\n  result = result - 1;\n  try {\n    throw \"patched-probe\";\n  } catch (error:Int) {\n    result = 0;\n  } catch (error:String) {\n    result = result + 0;\n  }\n  return result;\n}", "\n  ", "\n    "));
 		var changed = compiler.compile("Main");
 		Runtime.patchSet(loaded, new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
 		for (gate in 0...100)
