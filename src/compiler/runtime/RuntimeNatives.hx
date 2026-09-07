@@ -35,8 +35,6 @@ class RuntimeNatives {
 		definitions.push(native("__string_index_of_from", "realtime_runtime", "__string_index_of_from", [TString, TString, TInt], TInt));
 		definitions.push(native("__string_to_lower_case", "realtime_runtime", "__string_to_lower_case", [TString], TString));
 		definitions.push(native("__string_split", "realtime_runtime", "__string_split", [TString, TString], TArray(TString)));
-		definitions.push(native("sys.io.File.getContent", "realtime_runtime", "__file_get_content", [TString], TString));
-		definitions.push(native("sys.io.File.saveContent", "realtime_runtime", "__file_save_content", [TString, TString], TVoid));
 		var bytes:CompilerType = TBytes,
 			input:CompilerType = TNativeAbstract("realtime_bytes_input"),
 			output:CompilerType = TNativeAbstract("realtime_bytes_output");
@@ -67,7 +65,6 @@ class RuntimeNatives {
 		definitions.push(native("__bytes_output_write_string", "realtime_runtime", "__bytes_output_write_string", [output, TString], TVoid));
 		definitions.push(native("__bytes_output_write", "realtime_runtime", "__bytes_output_write", [output, bytes], TVoid));
 		definitions.push(native("__bytes_output_get_bytes", "realtime_runtime", "__bytes_output_get_bytes", [output], bytes));
-		definitions.push(native("sys.io.File.saveBytes", "realtime_runtime", "__file_save_bytes", [TString, bytes], TVoid));
 		var date:CompilerType = TNativeAbstract("realtime_date");
 		definitions.push(native("Date.now", "realtime_runtime", "__date_now", [], date));
 		definitions.push(native("__date_get_time", "realtime_runtime", "__date_get_time", [date], TFloat));
