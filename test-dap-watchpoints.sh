@@ -94,7 +94,7 @@ wait_stop 5
 read_locals
 python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="watched" and v["value"]=="0" for v in vs), vs' <<<"$locals"
 info=$("${dap[@]}" request --name "$session" dataBreakpointInfo --json "{\"variablesReference\":$locals_ref,\"name\":\"watched\"}")
-data_id=$(python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; assert d["dataId"] is not None and d["accessTypes"]==["write"], d; print(d["dataId"])' <<<"$info")
+data_id=$(python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; assert d["dataId"] is not None and ":" in d["dataId"] and d["accessTypes"]==["write"], d; print(d["dataId"])' <<<"$info")
 installed=$("${dap[@]}" request --name "$session" setDataBreakpoints --json "{\"breakpoints\":[{\"dataId\":\"$data_id\",\"accessType\":\"write\"}]}")
 python3 -c 'import json,sys; points=json.load(sys.stdin)["data"]["breakpoints"]; assert len(points)==1 and points[0]["verified"], points' <<<"$installed"
 "${dap[@]}" request --name "$session" setBreakpoints \
