@@ -7,7 +7,7 @@ function callee(input:Int):Int {
 function main():Int {
 	Sys.sleep(1.0);
 	var seed = 20;
-	var answer = callee(seed);
+	var answer = other(seed) + callee(seed);
 	if (answer == 41) {
 		answer = answer + 1;
 	}
@@ -15,4 +15,8 @@ function main():Int {
 		answer = answer + index;
 	}
 	return answer;
+}
+
+function other(input:Int):Int {
+	return input - input;
 }

@@ -146,7 +146,10 @@ wait_frame DapSteppingProbe.main 10
 locals=$(read_locals)
 python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="seed" and v.get("value")=="20" for v in vs), vs' <<<"$locals"
 
-"${dap[@]}" step-in --name "$session" >/dev/null
+step_targets=$("${dap[@]}" request --name "$session" stepInTargets --json "{\"frameId\":$current_frame}")
+target_id=$(python3 -c 'import json,sys; targets=json.load(sys.stdin)["data"]["targets"]; assert len(targets)>=2 and any("other" in t["label"] for t in targets) and any("callee" in t["label"] for t in targets), targets; print(next(t["id"] for t in targets if "callee" in t["label"]))' <<<"$step_targets")
+thread_id=$("${dap[@]}" threads --name "$session" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["threads"][0]["id"])')
+"${dap[@]}" request --name "$session" stepIn --json "{\"threadId\":$thread_id,\"targetId\":$target_id}" >/dev/null
 wait_frame DapSteppingProbe.callee 2
 python3 -c 'import json,sys; frames=json.load(sys.stdin)["data"]["stackFrames"]; assert len(frames)>=2 and frames[1].get("source",{}).get("name")=="DapSteppingProbe.hx" and frames[1].get("line")==10, frames' <<<"$current_stack"
 locals=$(read_locals)
@@ -196,4 +199,4 @@ locals=$(read_locals)
 python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="index" and v.get("value")=="2" for v in vs), vs' <<<"$locals"
 python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="answer" and v.get("value")=="43" for v in vs), vs' <<<"$locals"
 
-echo "PASS: dap-cli next, stepIn, and stepOut preserve source lines, frames, branches, loops, and locals"
+echo "PASS: dap-cli targeted stepIn, next, and stepOut preserve source lines, frames, branches, loops, and locals"
