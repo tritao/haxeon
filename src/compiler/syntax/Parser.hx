@@ -1495,6 +1495,11 @@ class Parser {
 				continue;
 			}
 			if (match(TokenKind.Dot)) {
+				if (recovering && isExpressionTerminator(current().kind)) {
+					var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
+					recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expected member name", span));
+					break;
+				}
 				var nameToken = consumeName(), name = nameToken.text;
 				if (match(TokenKind.LeftParen)) {
 					var arguments = [];
@@ -1540,6 +1545,11 @@ class Parser {
 	}
 
 	function parseAtomicType():AstType {
+		if (recovering && isExpressionTerminator(current().kind)) {
+			var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
+			recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expected type", span));
+			return InferredType;
+		}
 		if (match(TokenKind.LeftBrace)) {
 			var fields = [];
 			while (!check(TokenKind.RightBrace)) {

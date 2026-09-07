@@ -611,6 +611,11 @@ class LanguageService {
 		if (qualifier != null) {
 			if (semanticContext != null && semanticContext.receiver != null)
 				addInstanceMembers(semanticContext.receiver, prefix, result);
+			if (state.ast == null && state.recoveredAst != null) {
+				var recoveredReceiver = recoveredQualifierType(state.recoveredAst, qualifier, position);
+				if (recoveredReceiver != null)
+					addInstanceMembers(recoveredReceiver, prefix, result);
+			}
 			if (model != null)
 				for (symbol in compiler.semanticWorkspace.visibleSymbols(state, token)) {
 					var separator = symbol.name.lastIndexOf(".");
@@ -1656,6 +1661,68 @@ class LanguageService {
 					}
 			}
 	}
+
+	static function recoveredQualifierType(ast:compiler.syntax.Ast.AstProgram, qualifier:String, position:Int):Null<CompilerType> {
+		for (fn in ast.functions) {
+			var found = recoveredFunctionLocalType(fn, qualifier, position);
+			if (found != null)
+				return found;
+		}
+		for (owner in ast.classes)
+			for (fn in owner.methods)
+				if (position >= fn.span.start && position <= fn.span.end) {
+					if (qualifier == "this")
+						return TInstance(compiler.types.Type.NominalKind.Class, owner.name, []);
+					var found = recoveredFunctionLocalType(fn, qualifier, position);
+					if (found != null)
+						return found;
+				}
+		return null;
+	}
+
+	static function recoveredFunctionLocalType(fn:compiler.syntax.Ast.AstFunction, name:String, position:Int):Null<CompilerType> {
+		if (position < fn.span.start || position > fn.span.end)
+			return null;
+		for (argument in fn.arguments)
+			if (argument.name == name)
+				return recoveredCompilerType(argument.type);
+		var found:Null<CompilerType> = null;
+		for (statement in fn.statements)
+			switch statement {
+				case UninitializedDeclaration(local, type, span) if (local == name && span.start <= position):
+					found = recoveredCompilerType(type);
+				case VarDeclaration(local, type, initializer, span) if (local == name && span.start <= position):
+					found = type == null ? recoveredExpressionType(initializer) : recoveredCompilerType(type);
+				default:
+			}
+		return found;
+	}
+
+	static function recoveredExpressionType(expression:compiler.syntax.Ast.AstExpression):CompilerType
+		return switch expression {
+			case StringLiteral(_, _): TString;
+			case IntegerLiteral(_, _): TInt;
+			case FloatLiteral(_, _): TFloat;
+			case BoolLiteral(_, _): TBool;
+			case New(name, _, _), NewGeneric(name, _, _, _): TInstance(compiler.types.Type.NominalKind.Class, name, []);
+			case ArrayLiteral(_, _): TArray(TDynamic);
+			case MapLiteral(_, _): TMap(TDynamic, TDynamic);
+			default: TDynamic;
+		};
+
+	static function recoveredCompilerType(type:AstType):CompilerType
+		return switch type {
+			case IntType: TInt;
+			case BoolType: TBool;
+			case FloatType: TFloat;
+			case StringType: TString;
+			case VoidType: TVoid;
+			case ArrayType(element): TArray(recoveredCompilerType(element));
+			case MapType(key, value): TMap(recoveredCompilerType(key), recoveredCompilerType(value));
+			case NullableType(element): TNullable(recoveredCompilerType(element));
+			case NamedType(name), AppliedType(name, _): TInstance(compiler.types.Type.NominalKind.Class, name, []);
+			default: TDynamic;
+		};
 
 	static function identifierPrefix(source:String, position:Int):String {
 		var end = position < 0 ? 0 : position > source.length ? source.length : position, start = end;
