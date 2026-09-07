@@ -30,9 +30,13 @@ class AbstractConversionGraph {
 				toEdges.push({source: owner, target: node(declarations.resolve(type, decl.span, substitutions), decl.name, decl.typeParameters)});
 		}
 		if (validate) {
-			validateDirection("from", fromEdges);
-			validateDirection("to", toEdges);
+			validate();
 		}
+	}
+
+	public function validate():Void {
+		validateDirection("from", fromEdges);
+		validateDirection("to", toEdges);
 	}
 
 	public function allows(actual:CompilerType, expected:CompilerType):Bool

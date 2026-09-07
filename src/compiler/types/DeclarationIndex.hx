@@ -109,18 +109,20 @@ class DeclarationIndex {
 		for (fn in program.functions)
 			declare(DeclarationKind.Function, fn.name, fn.span);
 		inheritance = new NominalInheritance(this);
+		conversions = new AbstractConversionGraph(this, false);
 		if (validate) {
 			connectShapes();
 			validateProgramSignatures(program);
 		}
-		conversions = new AbstractConversionGraph(this, validate);
 	}
 
 	public function connectShapes():Void
 		validateCycles();
 
-	public function validateProgramSignatures(program:AstProgram):Void
+	public function validateProgramSignatures(program:AstProgram):Void {
 		validateSignatures(program);
+		conversions.validate();
+	}
 
 	function validate(program:AstProgram):DeclarationIndex {
 		connectShapes();
