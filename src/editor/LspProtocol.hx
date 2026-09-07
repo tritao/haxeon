@@ -106,6 +106,7 @@ class LspProtocol {
 				case "textDocument/didClose": closeDocument(request);
 				case "workspace/didChangeWatchedFiles": watchedFiles(request);
 				case "workspace/didChangeConfiguration": changeConfiguration(request);
+				case "workspace/didChangeWorkspaceFolders": changeWorkspaceFolders(request);
 				case "workspace/symbol": cancellable(id, token -> workspaceSymbols(request, token));
 				case "workspace/diagnostic": cancellable(id, token -> workspaceDiagnostic(request, token));
 				case "workspaceSymbol/resolve": cancellable(id, token -> resolveWorkspaceSymbol(request, token));
@@ -410,6 +411,45 @@ class LspProtocol {
 				service.analyze(target)
 			catch (_:Dynamic) {}
 		return generation == analysisGeneration ? diagnosticNotifications(generation) : [];
+	}
+
+	function changeWorkspaceFolders(request:Dynamic):Array<String> {
+		var event = required(required(request, "params"), "event"), added = workspaceFolderUris(required(event, "added")),
+			removed = workspaceFolderUris(required(event, "removed")), previousUris:Map<String, Bool> = [];
+		for (state in service.compiler.modules)
+			previousUris.set(documents.uri(project.diskPath(state.source.path)), true);
+		project.changeWorkspaceFolders(added, removed, service, path -> documents.forPath(path) != null);
+		clearAllSemanticTokenSnapshots();
+		clearAllPullDiagnosticSnapshots();
+		var currentUris:Map<String, Bool> = [];
+		for (state in service.compiler.modules)
+			currentUris.set(documents.uri(project.diskPath(state.source.path)), true);
+		var result:Array<String> = [];
+		for (uri in previousUris.keys())
+			if (!currentUris.exists(uri)) {
+				publishedDiagnostics.set(uri, "");
+				result.push(notification("textDocument/publishDiagnostics", {uri: uri, diagnostics: []}));
+			}
+		var generation = ++analysisGeneration, targets = [for (module in service.compiler.modules.keys()) module];
+		pendingDiagnosticTargets.clear();
+		if (deferDiagnostics) {
+			for (target in targets)
+				pendingDiagnosticTargets.set(target, true);
+			return result;
+		}
+		targets.sort(Reflect.compare);
+		for (target in targets) {
+			var state = service.compiler.modules.get(target);
+			if (state != null)
+				activateConfiguration(project.diskPath(state.source.path));
+			try
+				service.analyze(target)
+			catch (_:Dynamic) {}
+		}
+		if (generation == analysisGeneration)
+			for (message in diagnosticNotifications(generation))
+				result.push(message);
+		return result;
 	}
 
 	function diagnosticNotifications(generation:Int):Array<String> {
@@ -863,8 +903,18 @@ class LspProtocol {
 
 	function ensureAnalyzed(document:LspDocument, token:CancellationToken):Void {
 		var path = compilerPath(document);
-		if (!deferDiagnostics || service.isCurrent(path))
+		if (service.isCurrent(path))
 			return;
+		if (!deferDiagnostics) {
+			var started = Sys.time();
+			try
+				service.analyze(ModulePath.fromFile(path), token)
+			catch (cancelled:CancellationError)
+				throw cancelled
+			catch (_:CompileError) {} catch (_:Dynamic) {}
+			lastForegroundAnalysisMs = (Sys.time() - started) * 1000.0;
+			return;
+		}
 		var module = ModulePath.fromFile(path),
 			targets = [for (target in pendingDiagnosticTargets.keys()) target],
 			started = Sys.time();
@@ -1006,6 +1056,8 @@ class LspProtocol {
 		var configuration = project.configurationFor(path);
 		if (configuration != null)
 			configure(configuration);
+		else
+			service.configure("default", "default", []);
 		return project.compilerPath(path);
 	}
 
@@ -1014,6 +1066,12 @@ class LspProtocol {
 
 	static function documentUri(request:Dynamic):String
 		return requiredString(required(required(request, "params"), "textDocument"), "uri");
+
+	static function workspaceFolderUris(raw:Dynamic):Array<String> {
+		if (!Std.isOfType(raw, Array))
+			throw new LspRequestError(-32602, "Workspace folder changes must be arrays");
+		return [for (folder in cast(raw, Array<Dynamic>)) requiredString(folder, "uri")];
+	}
 
 	static function position(request:Dynamic):Dynamic
 		return required(required(request, "params"), "position");
@@ -1104,9 +1162,22 @@ class LspProtocol {
 		semanticTokenMutex.release();
 	}
 
+	function clearAllSemanticTokenSnapshots():Void {
+		semanticTokenMutex.acquire();
+		semanticTokenSnapshots.clear();
+		semanticTokenOrder.resize(0);
+		semanticTokenMutex.release();
+	}
+
 	function clearPullDiagnosticSnapshot(uri:String):Void {
 		pullDiagnosticMutex.acquire();
 		pullDiagnosticSnapshots.remove(uri);
+		pullDiagnosticMutex.release();
+	}
+
+	function clearAllPullDiagnosticSnapshots():Void {
+		pullDiagnosticMutex.acquire();
+		pullDiagnosticSnapshots.clear();
 		pullDiagnosticMutex.release();
 	}
 

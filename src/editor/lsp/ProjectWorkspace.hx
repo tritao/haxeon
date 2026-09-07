@@ -57,7 +57,9 @@ class ProjectWorkspace {
 	final compilerPathByDisk:Map<String, String> = [];
 	final diskPathByCompiler:Map<String, String> = [];
 	final sourceRoots:Array<String> = [];
+	final unconfiguredSourceRoots:Array<String> = [];
 	final workspaceRootPaths:Array<String> = [];
+	final detachedConfigurations:Map<String, HaxeProjectConfiguration> = [];
 	var preferredConfigurationId:Null<String>;
 
 	public function new() {}
@@ -68,13 +70,34 @@ class ProjectWorkspace {
 		discover(service, _ -> false);
 	}
 
+	public function changeWorkspaceFolders(added:Array<String>, removed:Array<String>, service:LanguageService, isOpen:String->Bool):Void {
+		for (uri in removed) {
+			var root = uriPath(uri);
+			while (workspaceRootPaths.remove(root)) {}
+		}
+		for (uri in added) {
+			var root = uriPath(uri);
+			if (workspaceRootPaths.indexOf(root) < 0)
+				workspaceRootPaths.push(root);
+		}
+		workspaceRootPaths.sort(Reflect.compare);
+		reload(service, isOpen);
+	}
+
 	public function reload(service:LanguageService, isOpen:String->Bool):Void {
 		var previous:Map<String, String> = [];
 		for (path => compilerPath in compilerPathByDisk)
 			previous.set(path, compilerPath);
+		for (path in previous.keys())
+			if (isOpen(path)) {
+				var configuration = configurationFor(path);
+				if (configuration != null)
+					detachedConfigurations.set(path, configuration);
+			}
 		configurations.resize(0);
 		errors.resize(0);
 		sourceRoots.resize(0);
+		unconfiguredSourceRoots.resize(0);
 		diskSources.clear();
 		compilerPathByDisk.clear();
 		diskPathByCompiler.clear();
@@ -84,9 +107,23 @@ class ProjectWorkspace {
 				diskPathByCompiler.set(compilerPath, path);
 			}
 		discover(service, isOpen);
+		for (path in [for (path in detachedConfigurations.keys()) path])
+			if (workspaceOwns(path))
+				detachedConfigurations.remove(path);
+		if (preferredConfigurationId != null) {
+			var preferredExists = false;
+			for (configuration in configurations)
+				if (configuration.id == preferredConfigurationId)
+					preferredExists = true;
+			if (!preferredExists)
+				preferredConfigurationId = null;
+		}
 		for (path => compilerPath in previous)
-			if (!diskSources.exists(path) && !isOpen(path))
-				service.remove(compilerPath);
+			if (!diskSources.exists(path) && !isOpen(path)) {
+				var replacement = diskPathByCompiler.get(compilerPath);
+				if (replacement == null || replacement == path)
+					service.remove(compilerPath);
+			}
 	}
 
 	public function refresh(path:String, service:LanguageService, open:Bool):Null<String> {
@@ -126,11 +163,14 @@ class ProjectWorkspace {
 	}
 
 	public function configurationFor(path:String):Null<HaxeProjectConfiguration> {
+		var normalized = normalize(path), detached = detachedConfigurations.get(normalized);
+		if (detached != null)
+			return detached;
 		if (preferredConfigurationId != null)
 			for (configuration in configurations)
 				if (configuration.id == preferredConfigurationId)
 					return configuration;
-		var normalized = normalize(path), matches = [
+		var matches = [
 			for (configuration in configurations)
 				if (configuration.owns(normalized)) configuration
 		];
@@ -139,19 +179,26 @@ class ProjectWorkspace {
 				rightDepth = longestOwningPath(right, normalized);
 			return leftDepth == rightDepth ? Reflect.compare(left.id, right.id) : rightDepth - leftDepth;
 		});
-		return matches.length == 0 ? (configurations.length == 1 ? configurations[0] : null) : matches[0];
+		if (matches.length > 0)
+			return matches[0];
+		for (root in unconfiguredSourceRoots)
+			if (normalized == root || StringTools.startsWith(normalized, (StringTools.endsWith(root, "/") ? root : root + "/")))
+				return null;
+		return configurations.length == 1 ? configurations[0] : null;
 	}
 
 	public static function pathFromUri(uri:String):String
 		return uriPath(uri);
 
 	function discover(service:LanguageService, isOpen:String->Bool):Void {
-		var configFiles:Array<String> = [];
+		var configFiles:Array<String> = [], configuredRoots:Map<String, Bool> = [];
 		for (root in workspaceRootPaths)
 			if (FileSystem.exists(root) && FileSystem.isDirectory(root))
 				for (name in FileSystem.readDirectory(root))
-					if (name == "haxe.json" || StringTools.endsWith(name, ".hxml"))
+					if (name == "haxe.json" || StringTools.endsWith(name, ".hxml")) {
 						configFiles.push(Path.join([root, name]));
+						configuredRoots.set(root, true);
+					}
 		configFiles.sort(Reflect.compare);
 		for (file in configFiles)
 			try
@@ -162,14 +209,15 @@ class ProjectWorkspace {
 			if (configuration.libraries.length > 0)
 				errors.push('${configuration.file}: Haxelib dependencies are recorded but not yet resolved by this compiler');
 		}
-		if (configurations.length == 0)
-			for (root in workspaceRootPaths)
+		for (root in workspaceRootPaths)
+			if (!configuredRoots.exists(root)) {
 				sourceRoots.push(root);
-		else
-			for (configuration in configurations)
-				for (classPath in configuration.classPaths)
-					if (sourceRoots.indexOf(classPath) < 0)
-						sourceRoots.push(classPath);
+				unconfiguredSourceRoots.push(root);
+			}
+		for (configuration in configurations)
+			for (classPath in configuration.classPaths)
+				if (sourceRoots.indexOf(classPath) < 0)
+					sourceRoots.push(classPath);
 		sourceRoots.sort(Reflect.compare);
 		for (root in sourceRoots)
 			loadSources(root, service, isOpen);
@@ -182,6 +230,7 @@ class ProjectWorkspace {
 			return true;
 		} else if (compilerPathByDisk.exists(normalized)) {
 			service.remove(compilerPath(path));
+			detachedConfigurations.remove(normalized);
 			return true;
 		}
 		return false;
@@ -312,6 +361,8 @@ class ProjectWorkspace {
 				if (FileSystem.isDirectory(path))
 					pending.push(path);
 				else if (StringTools.endsWith(name, ".hx")) {
+					if (preferredSourceRoot(path) != root)
+						continue;
 					var source = File.getContent(path),
 						compilerPath = relativePath(root, path);
 					var existing = diskPathByCompiler.get(compilerPath);
@@ -330,6 +381,22 @@ class ProjectWorkspace {
 		}
 		if (loaded >= 10000)
 			errors.push('Source scan limit reached below $root');
+	}
+
+	function preferredSourceRoot(path:String):Null<String> {
+		var result:Null<String> = null;
+		for (root in sourceRoots)
+			if ((path == root || StringTools.startsWith(path, (StringTools.endsWith(root, "/") ? root : root + "/")))
+				&& (result == null || root.length > result.length))
+				result = root;
+		return result;
+	}
+
+	function workspaceOwns(path:String):Bool {
+		for (root in workspaceRootPaths)
+			if (path == root || StringTools.startsWith(path, (StringTools.endsWith(root, "/") ? root : root + "/")))
+				return true;
+		return false;
 	}
 
 	static function appendStrings(value:Dynamic, field:String, append:String->Void):Void {

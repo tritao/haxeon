@@ -307,6 +307,63 @@ class LspProtocolMain {
 		if (watchProtocol.project.configurationFor(Path.join([alternateRoot, "Alternate.hx"])).file != secondConfigPath)
 			throw "explicit Haxe build selection did not override path ownership";
 		deleteTree(watchRoot);
+		var folderRoot = "/tmp/haxeon-lsp-folders-" + Std.string(Std.int(Sys.time() * 1000000)),
+			folderA = Path.join([folderRoot, "folder-a"]), folderB = Path.join([folderRoot, "folder-b"]),
+			folderASource = Path.join([folderA, "src"]), folderBSource = Path.join([folderB, "src"]),
+			folderAPath = Path.join([folderASource, "FolderA.hx"]), folderBPath = Path.join([folderBSource, "FolderB.hx"]),
+			folderAUri = "file://" + folderAPath, folderBUri = "file://" + folderBPath;
+		for (path in [folderRoot, folderA, folderB, folderASource, folderBSource])
+			sys.FileSystem.createDirectory(path);
+		sys.io.File.saveContent(Path.join([folderA, "build.hxml"]), "-cp src\n-main FolderA\n");
+		sys.io.File.saveContent(Path.join([folderB, "build.hxml"]), "-cp src\n-main FolderB\n");
+		sys.io.File.saveContent(folderAPath, "function main():Int return 1;");
+		sys.io.File.saveContent(folderBPath, "function main():Int return 2;");
+		var folderProtocol = new LspProtocol();
+		request(folderProtocol, Json.stringify({
+			jsonrpc: "2.0", id: 434, method: "initialize", params: {workspaceFolders: [{uri: "file://" + folderA, name: "folder-a"}]}
+		}));
+		if (!folderProtocol.project.hasDiskSource(folderAPath) || folderProtocol.project.hasDiskSource(folderBPath))
+			throw "initial workspace folders were not indexed independently";
+		folderProtocol.handle(Json.stringify({
+			jsonrpc: "2.0", method: "textDocument/didOpen",
+			params: {textDocument: {uri: folderAUri, languageId: "haxe", version: 1, text: sys.io.File.getContent(folderAPath)}}
+		}));
+		var initialFolderTokens = request(folderProtocol, Json.stringify({
+			jsonrpc: "2.0", id: 4341, method: "textDocument/semanticTokens/full", params: {textDocument: {uri: folderAUri}}
+		}));
+		folderProtocol.handle(workspaceFolderChange([{uri: "file://" + folderB, name: "folder-b"}], [{uri: "file://" + folderA, name: "folder-a"}]));
+		if (folderProtocol.project.hasDiskSource(folderAPath) || !folderProtocol.project.hasDiskSource(folderBPath))
+			throw "workspace folder replacement did not update indexed disk sources";
+		var retainedSymbols = request(folderProtocol, Json.stringify({
+			jsonrpc: "2.0", id: 435, method: "textDocument/documentSymbol", params: {textDocument: {uri: folderAUri}}
+		}));
+		if (retainedSymbols.result.length == 0)
+			throw "removing a workspace folder discarded its open document overlay";
+		var refreshedFolderTokens = request(folderProtocol, Json.stringify({
+			jsonrpc: "2.0", id: 4351, method: "textDocument/semanticTokens/full/delta",
+			params: {textDocument: {uri: folderAUri}, previousResultId: initialFolderTokens.result.resultId}
+		}));
+		if (!Reflect.hasField(refreshedFolderTokens.result, "data"))
+			throw "workspace folder changes did not invalidate semantic token history";
+		folderProtocol.handle(Json.stringify({
+			jsonrpc: "2.0", method: "textDocument/didClose", params: {textDocument: {uri: folderAUri}}
+		}));
+		var folderDiagnostics = request(folderProtocol, Json.stringify({
+			jsonrpc: "2.0", id: 436, method: "workspace/diagnostic", params: {previousResultIds: []}
+		})), foundRemovedFolder = false, foundRetainedFolder = false;
+		for (report in cast(folderDiagnostics.result.items, Array<Dynamic>)) {
+			if (report.uri == folderAUri)
+				foundRemovedFolder = true;
+			if (report.uri == folderBUri)
+				foundRetainedFolder = true;
+		}
+		if (foundRemovedFolder || !foundRetainedFolder)
+			throw "workspace diagnostics retained a closed removed folder or omitted the active root";
+		folderProtocol.handle(workspaceFolderChange([{uri: "file://" + folderRoot, name: "parent"}], []));
+		folderProtocol.handle(workspaceFolderChange([], [{uri: "file://" + folderB, name: "folder-b"}]));
+		if (!folderProtocol.project.hasDiskSource(folderAPath) || !folderProtocol.project.hasDiskSource(folderBPath))
+			throw "removing an overlapping child folder discarded files still owned by its parent";
+		deleteTree(folderRoot);
 		var source = "function main():Int { var answer = 42; return answer; }",
 			uri = "file:///workspace/Main.hx";
 		var opened = protocol.handle(Json.stringify({
@@ -932,6 +989,9 @@ class LspProtocolMain {
 
 	static function watchedFileMessage(uri:String, type:Int):String
 		return Json.stringify({jsonrpc: "2.0", method: "workspace/didChangeWatchedFiles", params: {changes: [{uri: uri, type: type}]}});
+
+	static function workspaceFolderChange(added:Array<Dynamic>, removed:Array<Dynamic>):String
+		return Json.stringify({jsonrpc: "2.0", method: "workspace/didChangeWorkspaceFolders", params: {event: {added: added, removed: removed}}});
 
 	static function documentChangeMessage(uri:String, version:Int, source:String):String
 		return Json.stringify({
