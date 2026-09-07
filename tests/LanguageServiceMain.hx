@@ -457,6 +457,21 @@ class LanguageServiceMain {
 			throw "failed edit did not identify stale semantic query results";
 		if (staleRename.length != 2 || !staleRename[0].stale || !staleRename[1].stale)
 			throw "rename did not preserve last-good semantic snapshot metadata";
+		var partialService = new LanguageService();
+		partialService.update("Partial.hx",
+			"function broken(:Int {} function alsoBroken(:Int {} function visible():Int return 42;");
+		try {
+			partialService.analyze("Partial");
+			throw "invalid partial source unexpectedly analyzed";
+		} catch (_:CompileError) {}
+		var partialSymbols = partialService.documentSymbols("Partial.hx"), foundVisible = false;
+		for (symbol in partialSymbols)
+			if (symbol.name == "visible" && symbol.stale)
+				foundVisible = true;
+		if (!foundVisible)
+			throw "parser recovery did not preserve a valid declaration after malformed declarations";
+		if (partialService.diagnostics("Partial.hx").length != 2)
+			throw "parser recovery did not collect multiple declaration diagnostics";
 		Sys.println("PASS: compiler-backed language service snapshot works");
 	}
 }

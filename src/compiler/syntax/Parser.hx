@@ -16,10 +16,17 @@ import compiler.Source.SourceSpan;
 import compiler.syntax.Token.TokenKind;
 import compiler.Diagnostic.CompileError;
 
+typedef RecoveredParse = {
+	final program:AstProgram;
+	final diagnostics:Array<compiler.Diagnostic>;
+}
+
 /** Recursive-descent parser for the supported Haxe-compatible source subset. */
 class Parser {
 	final tokens:Array<Token>;
 	var position:Int = 0;
+	var recovering:Bool = false;
+	var recoveryDiagnostics:Array<compiler.Diagnostic> = [];
 
 	public function new(tokens:Array<Token>) {
 		this.tokens = tokens;
@@ -46,6 +53,8 @@ class Parser {
 		var functions = [], aliases:Array<AstTypeAlias> = [], enums:Array<AstEnum> = [], enumAbstracts:Array<AstEnumAbstract> = [],
 			abstracts:Array<AstAbstract> = [], interfaces:Array<AstInterface> = [], classes = [];
 		while (!check(TokenKind.Eof)) {
+			var declarationStart = position;
+			try {
 			var metadata = parseMetadata();
 			var visibility = match(TokenKind.Private) ? previous() : match(TokenKind.Public) ? previous() : null;
 			var externDeclaration = check(TokenKind.Identifier) && current().text == "extern";
@@ -72,6 +81,12 @@ class Parser {
 				abstracts.push(parseAbstract(start, externDeclaration, metadata));
 			} else
 				functions.push(parseFunction(false, externDeclaration, metadata));
+			} catch (error:CompileError) {
+				if (!recovering)
+					throw error;
+				recoveryDiagnostics.push(error.diagnostic);
+				synchronizeTopLevel(declarationStart);
+			}
 		}
 		return {
 			packageName: packageName,
@@ -86,6 +101,43 @@ class Parser {
 			functions: functions
 		};
 	}
+
+	/** Parse as much current source as possible for editor features. */
+	public function parseProgramRecovering():RecoveredParse {
+		recovering = true;
+		recoveryDiagnostics = [];
+		var program = parseProgram();
+		return {program: program, diagnostics: recoveryDiagnostics.copy()};
+	}
+
+	function synchronizeTopLevel(declarationStart:Int):Void {
+		var braceDepth = 0;
+		for (index in 0...position)
+			switch tokens[index].kind {
+				case TokenKind.LeftBrace: braceDepth++;
+				case TokenKind.RightBrace: if (braceDepth > 0) braceDepth--;
+				default:
+			}
+		if (position <= declarationStart && !check(TokenKind.Eof))
+			advance();
+		while (!check(TokenKind.Eof)) {
+			if (braceDepth == 0 && isTopLevelStart(current()))
+				return;
+			switch advance().kind {
+				case TokenKind.LeftBrace: braceDepth++;
+				case TokenKind.RightBrace: if (braceDepth > 0) braceDepth--;
+				default:
+			}
+		}
+	}
+
+	static function isTopLevelStart(token:Token):Bool
+		return switch token.kind {
+			case TokenKind.Function, TokenKind.Class, TokenKind.Interface, TokenKind.Enum, TokenKind.Typedef, TokenKind.Public, TokenKind.Private,
+				TokenKind.At: true;
+			case TokenKind.Identifier: token.text == "abstract" || token.text == "extern";
+			default: false;
+		};
 
 	function parseMetadata():Array<compiler.syntax.Ast.AstMetadata> {
 		var result = [];

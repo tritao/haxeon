@@ -211,8 +211,32 @@ class LanguageService {
 	public function compile(entryModule:String, ?token:CancellationToken):CompileResult
 		return compiler.compile(entryModule, token);
 
-	public function analyze(entryModule:String, ?token:CancellationToken):compiler.Compiler.AnalysisResult
-		return compiler.analyze(entryModule, token);
+	public function analyze(entryModule:String, ?token:CancellationToken):compiler.Compiler.AnalysisResult {
+		try
+			return compiler.analyze(entryModule, token)
+		catch (error:CompileError) {
+			recoverCurrentSyntax();
+			throw error;
+		}
+	}
+
+	function recoverCurrentSyntax():Void {
+		for (state in compiler.modules) {
+			if (state.ast != null)
+				continue;
+			try {
+				var conditional = ConditionalCompilation.process(state.source, editorDefines);
+				var tokens = new Lexer(state.source, conditional.text).tokenize();
+				var recovered = new Parser(tokens).parseProgramRecovering();
+				state.recoveredTokens = tokens;
+				state.recoveredAst = recovered.program;
+				for (diagnostic in recovered.diagnostics)
+					if (![for (existing in state.diagnostics) existing.span.start + ":" + existing.message]
+							.contains(diagnostic.span.start + ":" + diagnostic.message))
+						state.diagnostics.push(diagnostic);
+			} catch (_:CompileError) {}
+		}
+	}
 
 	public function validate(path:String, source:String, entryModule:String, ?token:CancellationToken):compiler.Compiler.ValidationResult
 		return compiler.validate(path, source, entryModule, token);
@@ -1572,10 +1596,10 @@ class LanguageService {
 		return compiler.modules.get(ModulePath.fromFile(path));
 
 	static function effectiveAst(state:ModuleState):Null<compiler.syntax.Ast.AstProgram>
-		return state.ast == null ? state.lastGoodAst : state.ast;
+		return state.ast != null ? state.ast : state.recoveredAst != null ? state.recoveredAst : state.lastGoodAst;
 
 	static function effectiveTokens(state:ModuleState):Null<Array<compiler.syntax.Token>>
-		return state.ast == null ? state.lastGoodTokens : state.tokens;
+		return state.ast != null ? state.tokens : state.recoveredAst != null ? state.recoveredTokens : state.lastGoodTokens;
 
 	static function effectiveSemanticModel(state:ModuleState):Null<compiler.semantic.SemanticModel>
 		return state.ast == null ? state.lastGoodSemanticModel : state.semanticModel;
