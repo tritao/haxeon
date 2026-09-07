@@ -89,8 +89,14 @@ class TestMain {
 		Frontend.compile('enum Value { Present; } typedef Options = { ?value:Value }; function main():Int { var options:Options = { value: null }; return 42; }');
 		Frontend.compile('function main():Int { var values = [20, 22]; var empty:Array<Int> = []; return values[0] + values[1] + empty.length; }');
 		Frontend.compile('function main():Int { var values:Map<String, Int> = []; values.set("answer", 42); if (!values.exists("answer")) return 0; return values.get("answer"); }');
+		Frontend.compile('function main():Int { var values:Map<String, Int> = []; values.set("answer", 42); return values.get("answer"); }');
+		Frontend.compile('function main():Int { var values:Map<String, Int> = []; values["answer"] = 42; return values["answer"]; }');
+		Frontend.compile('function main():Int { var values:Map<String, Bool> = []; values["answer"] = true; values.clear(); values["answer"] = true; return values.get("answer") ? 42 : 0; }');
+		Frontend.compile('function main():Int { var values:Map<String, Int> = ["answer" => 42]; for (key in values.keys()) return values.get(key); return 0; }');
 		expectCompileError('function main():Int { var values:Map<String, Int> = []; return values.get("answer"); }', "Type mismatch for return");
 		expectCompileError('function main():Int { var values:Map<String, Int> = []; if (values.exists("answer")) { values.remove("answer"); return values.get("answer"); } return 0; }',
+			"Type mismatch for return");
+		expectCompileError('function main():Int { var values:Map<String, Int> = ["answer" => 42]; for (key in values.keys()) { values.remove(key); return values.get(key); } return 0; }',
 			"Type mismatch for return");
 		Frontend.compile('function value(flag:Bool):Int { var result:Null<Int> = flag ? 1 : null; if (result == null) result = 2; return result; } function main():Int return value(false);');
 		Frontend.compile('function main():Int { return "A".charCodeAt(0); }');

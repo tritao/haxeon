@@ -157,8 +157,12 @@ HL_PRIM vbyte *HL_NAME(__string_from_char_code)( int code ) {
 }
 
 HL_PRIM vbyte *HL_NAME(__string_from_bytes)( vbyte *value, int length ) {
-	(void)length;
-	return value;
+	if( length < 0 ) hl_error("Negative string length");
+	if( value == NULL && length != 0 ) hl_error("Null string bytes");
+	vbyte *result = hl_alloc_bytes((length + 1) * (int)sizeof(uchar));
+	if( length > 0 ) memcpy(result,value,length * sizeof(uchar));
+	((uchar *)result)[length] = 0;
+	return result;
 }
 
 HL_PRIM vbyte *HL_NAME(__string_bytes)( vbyte *value ) {

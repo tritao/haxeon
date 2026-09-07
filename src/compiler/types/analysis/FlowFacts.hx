@@ -24,14 +24,14 @@ class FlowFacts {
 	}
 
 	public function resolve(bindingId:String):Null<CompilerType> {
+		if (refinedTypes.exists(bindingId))
+			return refinedTypes.get(bindingId);
 		for (prefix in invalidatedNamespaces)
 			if (StringTools.startsWith(bindingId, prefix))
 				return null;
 		for (prefix in invalidatedPrefixes)
 			if (bindingId == prefix || StringTools.startsWith(bindingId, prefix + "."))
 				return null;
-		if (refinedTypes.exists(bindingId))
-			return refinedTypes.get(bindingId);
 		if (invalidated.exists(bindingId))
 			return null;
 		var outer = parent;

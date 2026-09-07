@@ -1065,7 +1065,7 @@ class Typer {
 							var value = coerce(typeExpression(expression, scope, mapValue), mapValue, "map value", "E1002");
 							var entryPath = FlowAnalysis.mapEntryPath(typedArray, typedIndex);
 							if (entryPath != null)
-								scope.invalidateExpressionValue(entryPath);
+								scope.refineExpression(entryPath, mapValue);
 							output.push(TMapAssign(typedArray, typedIndex, value, span));
 						default:
 							if (typedIndex.type != TInt)
@@ -1162,6 +1162,17 @@ class Typer {
 					};
 					var loopScope = new Scope(scope);
 					loopScope.define(name, element, span);
+					if (valueName == null)
+						switch originalIterable.expression {
+							case TCollectionCall(map, "keys", []):
+								var key = new TypedExpression(TLocal(loopScope.requireId(name)), element, span),
+									entryPath = FlowAnalysis.mapEntryPath(map, key);
+								if (entryPath != null) switch map.type {
+									case TMap(_, value): loopScope.refineExpression(entryPath, value);
+									default:
+								}
+							default:
+						}
 					if (valueName != null)
 						switch originalIterable.type {
 							case TMap(_, value): loopScope.define(valueName, value, span);
@@ -3566,7 +3577,7 @@ class Typer {
 				value = coerce(typeExpression(arguments[1], scope, mapType.value), mapType.value, "map value", "E1002");
 			var entryPath = FlowAnalysis.mapEntryPath(receiver, key);
 			if (entryPath != null)
-				scope.invalidateExpressionValue(entryPath);
+				scope.refineExpression(entryPath, mapType.value);
 			return new TypedExpression(TCollectionCall(receiver, "set", [key, value]), TVoid, span);
 		}
 		if (name == "keys") {
