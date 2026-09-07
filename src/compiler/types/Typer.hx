@@ -84,8 +84,8 @@ class Typer {
 	inline function get_context():BodyContext
 		return bodyContexts[bodyContexts.length - 1];
 
-	function enterBody(name:String, ?typeSubstitutions:Map<String, CompilerType>):BodyContext {
-		var owner = StringTools.startsWith(name, "$lambda:") ? context.lexicalOwner : parentPath(name),
+	function enterBody(name:String, ?typeSubstitutions:Map<String, CompilerType>, ?ownerOverride:String):BodyContext {
+		var owner = ownerOverride != null ? ownerOverride : StringTools.startsWith(name, "$lambda:") ? context.lexicalOwner : parentPath(name),
 			body = new BodyContext(name, typeSubstitutions, owner);
 		bodyContexts.push(body);
 		return body;
@@ -735,7 +735,7 @@ class Typer {
 	function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool = false, ?substitutions:Map<String, CompilerType>, ?specializedName:String,
 			?abstractReceiver:CompilerType):TypedFunction {
 		var functionName = specializedName == null ? (owner == null ? fn.name : owner + "." + fn.name) : specializedName;
-		var functionContext = enterBody(functionName, substitutions);
+		var functionContext = enterBody(functionName, substitutions, specializedName == null ? null : owner);
 		var storage = CaptureAnalysis.analyze(fn.statements, [for (argument in fn.arguments) argument.name]);
 		for (name in storage.assigned.keys())
 			context.assigned.set(name, true);
@@ -1949,7 +1949,7 @@ class Typer {
 					}
 				}
 			case Lambda(arguments, body, span):
-				var lambdaKey = '${span.file.path}:${span.start}';
+				var lambdaKey = '${context.name}:${span.file.path}:${span.start}';
 				if (lambdaCache.exists(lambdaKey)) lambdaCache.get(lambdaKey) else {
 					var expectedFunction = expectedFunctionType(expectedType);
 					if (expectedFunction != null && expectedFunction.arguments.length != arguments.length)
@@ -1973,6 +1973,10 @@ class Typer {
 					CaptureAnalysis.collectDeclaredLocals(body, declared);
 					var freeVariables:Map<String, Bool> = [];
 					CaptureAnalysis.collectVariables(body, freeVariables);
+					// An unqualified instance member in a lambda is resolved through the
+					// lexical receiver even though `this` is not present in the syntax.
+					if (scope.resolve("this") != null)
+						freeVariables.set("this", true);
 					var captures:Array<TypedCapture> = [],
 						captureCells:Map<String, String> = [],
 						captureTypes:Map<String, CompilerType> = [];
@@ -2022,7 +2026,7 @@ class Typer {
 					var outerContext = context,
 						lambdaName = '$' + 'lambda:${outerContext.name}:${span.start}',
 						lambdaContext = enterBody(lambdaName, outerContext.typeSubstitutions);
-					context.resultType = expectedFunction == null ? TVoid : expectedFunction.result;
+					context.resultType = expectedFunction == null || expectedFunction.result == TDynamic ? TVoid : expectedFunction.result;
 					context.contextualVoidLambda = expectedFunction != null && expectedFunction.result == TVoid;
 					CaptureAnalysis.collectAssignedLocals(body, context.assigned);
 					var lambdaDeclared:Map<String, Bool> = [];
@@ -2035,9 +2039,10 @@ class Typer {
 						context.cells.set(name, '$' + 'cell:' + lambdaName + ':' + name);
 						context.cellKinds.set(name, MutableCapture);
 					}
-					var typedBody = typeStatements(body, typedBodyScope, expectedFunction == null ? null : expectedFunction.result);
+					var typedBody = typeStatements(body, typedBodyScope,
+						expectedFunction == null || expectedFunction.result == TDynamic ? null : expectedFunction.result);
 					var inferredResult:CompilerType;
-					if (expectedFunction != null)
+					if (expectedFunction != null && expectedFunction.result != TDynamic)
 						inferredResult = expectedFunction.result;
 					else {
 						var contextualResult = context.inferredResult;
@@ -2061,6 +2066,7 @@ class Typer {
 						closureConversion.addEnvironment(environment, captures);
 					closureConversion.addFunction({
 						name: lambdaName,
+						genericOrigin: outerContext.name,
 						owner: environment,
 						isStatic: environment == null,
 						isConstructor: false,
@@ -2571,7 +2577,7 @@ class Typer {
 					typed = coerceArguments(typed, functionType.arguments, name);
 					for (captured in context.cells.keys())
 						scope.invalidate(captured);
-					new TypedExpression(TClosureCall(new TypedExpression(TLocal(scope.requireId(name)), callable, span), typed), functionType.result, span);
+					new TypedExpression(TClosureCall(typeExpression(Variable(name, span), scope), typed), functionType.result, span);
 				} else {
 					if (name.indexOf(".") < 0) {
 						var implicitMethod = lexicalMethod(name);
@@ -2581,8 +2587,25 @@ class Typer {
 							if (isGeneric(method)) {
 								if (!implicitMethod.isStatic)
 									fail("E1007", "Generic instance methods are not supported yet", span);
-								var genericArguments = [for (argument in arguments) typeExpression(argument, scope)],
-									specialized = specializeGeneric(methodKey, method, genericArguments, span, implicitMethod.owner, true);
+								var preset:Map<String, CompilerType> = [], parameters = functionTypeParameters(method), hasLambda = false;
+								for (argument in arguments)
+									switch argument {
+										case Lambda(_, _, _): hasLambda = true;
+										default:
+									}
+								if (hasLambda && expectedType != null)
+									inferTypeParameters(method.result, expectedType, parameters, preset, span);
+								var contextual = hasLambda, typingSubstitutions = copyMap(preset);
+								if (contextual)
+									for (parameter in parameters)
+										if (!typingSubstitutions.exists(parameter)) typingSubstitutions.set(parameter, TDynamic);
+								var genericArguments = contextual ? [
+									for (index in 0...arguments.length)
+										typeExpression(arguments[index], scope,
+											declarations.resolve(method.arguments[index].type, method.arguments[index].span, typingSubstitutions))
+								] : [for (argument in arguments) typeExpression(argument, scope)];
+								var specialized = specializeGeneric(methodKey, method, genericArguments, span, implicitMethod.owner, true,
+									null);
 								return specialized;
 							}
 							var typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span);
@@ -2591,7 +2614,7 @@ class Typer {
 							var thisType = scope.resolve("this");
 							if (thisType == null)
 								fail("E1007", 'Instance method "$methodKey" requires an object', span);
-							var receiver = new TypedExpression(TLocal("this"), thisType, span);
+							var receiver = typeExpression(Variable("this", span), scope);
 							return applyCallEffect(new TypedExpression(TMethodCall(receiver, methodKey, typed), lowerType(method.result), span), methodKey);
 						}
 					}
@@ -2681,7 +2704,23 @@ class Typer {
 						var methodKey = methodInfoResult.owner + "." + resolvedMethodName;
 						var method = signatures.get(methodKey);
 						if (isGeneric(method)) {
-							var genericArguments = [for (argument in arguments) typeExpression(argument, scope)];
+							var preset:Map<String, CompilerType> = [], parameters = functionTypeParameters(method), hasLambda = false;
+							for (argument in arguments)
+								switch argument {
+									case Lambda(_, _, _): hasLambda = true;
+									default:
+								}
+							if (hasLambda && expectedType != null)
+								inferTypeParameters(method.result, expectedType, parameters, preset, span);
+							var contextual = hasLambda, typingSubstitutions = copyMap(preset);
+							if (contextual)
+								for (parameter in parameters)
+									if (!typingSubstitutions.exists(parameter)) typingSubstitutions.set(parameter, TDynamic);
+							var genericArguments = contextual ? [
+								for (index in 0...arguments.length)
+									typeExpression(arguments[index], scope,
+										declarations.resolve(method.arguments[index].type, method.arguments[index].span, typingSubstitutions))
+							] : [for (argument in arguments) typeExpression(argument, scope)];
 							var specialized = specializeGeneric(methodKey, method, genericArguments, span, methodInfoResult.owner, methodInfoResult.isStatic,
 								null, methodInfoResult.isStatic ? null : resolvedReceiver);
 							return specialized;
@@ -2847,7 +2886,7 @@ class Typer {
 			for (parameter => type in presetSubstitutions)
 				parameter => type
 		],
-			parameters = requiredStrings(fn.typeParameters);
+			parameters = functionTypeParameters(fn);
 		for (i in 0...arguments.length)
 			inferTypeParameters(fn.arguments[i].type, arguments[i].type, parameters, substitutions, arguments[i].span);
 		for (parameter in parameters)
@@ -3903,9 +3942,14 @@ class Typer {
 		return source.get(name);
 	}
 
-	static function isGeneric(fn:AstFunction):Bool {
+	static function isGeneric(fn:AstFunction):Bool
+		return functionTypeParameters(fn).length > 0;
+
+	static function functionTypeParameters(fn:AstFunction):Array<String> {
 		var parameters = fn.typeParameters;
-		return parameters == null ? false : requiredStrings(parameters).length > 0;
+		if (parameters == null)
+			return [];
+		return parameters;
 	}
 
 	function arrayElementType(type:CompilerType, span:SourceSpan):CompilerType

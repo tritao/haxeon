@@ -324,8 +324,8 @@ class CaptureAnalysis {
 			case Range(start, rangeEnd, _):
 				collectMutableCaptureExpression(start, outerDeclared, result);
 				collectMutableCaptureExpression(rangeEnd, outerDeclared, result);
-			case Variable(_, _), IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_), ErrorExpression(_),
-				NewMap(_, _, _):
+			case Variable(_, _), IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_),
+				ErrorExpression(_), NewMap(_, _, _):
 		}
 
 	public static function collectExpressionVariables(expression:AstExpression, names:Map<String, Bool>):Void
@@ -339,9 +339,7 @@ class CaptureAnalysis {
 				for (argument in arguments)
 					collectExpressionVariables(argument, names);
 			case Call(name, arguments, _):
-				var separator = name.indexOf(".");
-				if (separator > 0)
-					names.set(compiler.QualifiedName.split(name)[0], true);
+				names.set(pathRoot(name), true);
 				for (argument in arguments)
 					collectExpressionVariables(argument, names);
 			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _),

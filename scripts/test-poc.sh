@@ -119,6 +119,7 @@ run_program lambda 42
 run_program expression-lambda 42
 run_program single-argument-lambda 43
 run_program contextual-callbacks 42
+run_program generic-contextual-callback 42
 run_program anonymous-function 42
 run_program enum-abstract 42
 run_program enum-argument-string 42
@@ -213,6 +214,7 @@ run_program interface-inheritance 43
 run_program interface-upcast 5
 run_program interface-field 42
 run_program multiple-implements 42
+run_program captured-method 42
 run_program throw-string 1
 run_program try-catch 42
 run_program try-rethrow 1

@@ -118,19 +118,17 @@ class FrontendCompilation {
 		var retyped = [], regenerated = [];
 		for (object in IrGenerator.objectsFrom(typedNew))
 			objectCache.set(object.name, object);
-		var touchedModules:Map<String, Bool> = [];
+		var touchedModules:Map<String, Bool> = [], typedByName:Map<String, compiler.types.TypedAst.TypedFunction> = [], generatedFunctions:Map<String, Bool> = [];
+		for (fn in typedNew.functions) {
+			typedByName.set(fn.name, fn);
+			if (!owners.exists(fn.name))
+				generatedFunctions.set(fn.name, true);
+		}
 		for (fn in typedNew.functions) {
 			if (token != null)
 				token.check();
-			var module:String;
-			if (owners.exists(fn.name))
-				module = owners.get(fn.name);
-			else {
-				var genericOrigin = fn.genericOrigin;
-				if (genericOrigin == null || !owners.exists(genericOrigin))
-					throw 'No source module owns typed function "${fn.name}"';
-				module = owners.get(genericOrigin);
-				owners.set(fn.name, module);
+			var generated = generatedFunctions.exists(fn.name), module = resolveFunctionModule(fn, owners, typedByName, []);
+			if (generated) {
 				var generatedNames:Map<String, Bool>;
 				if (generatedByModule.exists(module))
 					generatedNames = generatedByModule.get(module);
@@ -275,5 +273,27 @@ class FrontendCompilation {
 			typingLoweringDoneAt: typingLoweringDoneAt,
 			irAssemblyDoneAt: irAssemblyDoneAt
 		};
+	}
+
+	static function resolveFunctionModule(fn:compiler.types.TypedAst.TypedFunction, owners:Map<String, String>,
+			typedByName:Map<String, compiler.types.TypedAst.TypedFunction>, visiting:Map<String, Bool>):String {
+		if (owners.exists(fn.name))
+			return owners.get(fn.name);
+		if (visiting.exists(fn.name))
+			throw 'Cyclic generated-function ownership involving "${fn.name}"';
+		visiting.set(fn.name, true);
+		var origin = fn.genericOrigin;
+		if (origin == null)
+			throw 'No source module owns typed function "${fn.name}"';
+		var module:String;
+		if (owners.exists(origin))
+			module = owners.get(origin);
+		else if (typedByName.exists(origin))
+			module = resolveFunctionModule(typedByName.get(origin), owners, typedByName, visiting);
+		else
+			throw 'No source module owns typed function "${fn.name}"';
+		owners.set(fn.name, module);
+		visiting.remove(fn.name);
+		return module;
 	}
 }
