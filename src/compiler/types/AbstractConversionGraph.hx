@@ -17,7 +17,7 @@ class AbstractConversionGraph {
 	final toEdges:Array<ConversionEdge> = [];
 	final spans:Map<String, compiler.Source.SourceSpan> = [];
 
-	public function new(declarations:DeclarationIndex, validate:Bool) {
+	public function new(declarations:DeclarationIndex, shouldValidate:Bool) {
 		this.declarations = declarations;
 		for (name in declarations.abstracts.keys()) {
 			var decl = declarations.abstracts.get(name),
@@ -29,7 +29,7 @@ class AbstractConversionGraph {
 			for (type in decl.toTypes)
 				toEdges.push({source: owner, target: node(declarations.resolve(type, decl.span, substitutions), decl.name, decl.typeParameters)});
 		}
-		if (validate) {
+		if (shouldValidate) {
 			validate();
 		}
 	}
