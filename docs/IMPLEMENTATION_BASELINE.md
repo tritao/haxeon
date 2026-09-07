@@ -10,7 +10,7 @@ Recorded 2026-09-05 before step 1 changes.
 
 ## Passing gates
 
-- `./scripts/test-poc.sh`
+- `./scripts/test.sh`
   - formatting and differential tests
   - compiler, module, language-service, protocol, and runtime-domain tests
   - representative plugin workload

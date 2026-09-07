@@ -27,24 +27,7 @@ cc -shared -fPIC -DHL_NAME\(n\)=realtime_##n \
 
 "$root_dir/tests/differential/run.sh"
 
-"$haxe" --cwd "$root_dir" "${test_classpaths[@]}" --run TestMain
-"$haxe" --cwd "$root_dir" "${test_classpaths[@]}" --run ExternMain
-"$haxe" --cwd "$root_dir" "${test_classpaths[@]}" --run CaptureAnalysisMain
-"$haxe" --cwd "$root_dir" "${test_classpaths[@]}" --run ModuleCanonicalizerMain
-"$haxe" --cwd "$root_dir" "${test_classpaths[@]}" --run SemanticDependencyCollectorMain
-"$haxe" --cwd "$root_dir" "${test_classpaths[@]}" --run ResolvedSemanticDependencyMain
-"$haxe" --cwd "$root_dir" "${test_classpaths[@]}" --run InvalidationMain
-"$haxe" --cwd "$root_dir" "${test_classpaths[@]}" --run IrProgramAssemblerMain
-"$haxe" --cwd "$root_dir" "${test_classpaths[@]}" --run ModuleChangeAnalyzerMain
-"$haxe" --cwd "$root_dir" "${test_classpaths[@]}" --run SemanticModelMain
-"$haxe" --cwd "$root_dir" "${test_classpaths[@]}" --run SemanticWorkspaceMain
-"$haxe" --cwd "$root_dir" "${test_classpaths[@]}" --run SemanticProgramMain
-"$haxe" --cwd "$root_dir" "${test_classpaths[@]}" --run AbiMatrixMain
-"$haxe" --cwd "$root_dir" "${test_classpaths[@]}" --run LanguageServiceMain
-"$haxe" --cwd "$root_dir" "${test_classpaths[@]}" --run ParserRecoveryMain
-"$haxe" --cwd "$root_dir" "${test_classpaths[@]}" --run ParserRecoveryFuzzMain
-"$haxe" --cwd "$root_dir" "${test_classpaths[@]}" --run ConditionalCompilationMain
-"$haxe" --cwd "$root_dir" "${test_classpaths[@]}" --run FunctionTypeSyntaxMain
+"$haxe" --cwd "$root_dir" -cp tests --run driver.TestDriver --root "$root_dir" --suite compiler
 exception_output="$root_dir/out/exception.hl"
 "$haxe" --cwd "$root_dir" "${test_classpaths[@]}" --run ExceptionMain "$exception_output"
 set +e
@@ -111,9 +94,7 @@ if [[ $null_reference_status -ne 42 ]]; then
 	exit 1
 fi
 echo "PASS: null coerces to reference-like types while primitives remain strict (exit 42)"
-"$haxe" --cwd "$root_dir" "${test_classpaths[@]}" --run ProtocolMain
-"$haxe" --cwd "$root_dir" "${test_classpaths[@]}" --run LspProtocolMain
-"$haxe" --cwd "$root_dir" "${test_classpaths[@]}" --run RuntimeDomainMain
+"$haxe" --cwd "$root_dir" -cp tests --run driver.TestDriver --root "$root_dir" --suite tooling,runtime
 stdlib_output="$root_dir/out/stdlib.hl"
 "$haxe" --cwd "$root_dir" "${test_classpaths[@]}" --run StdlibMain "$stdlib_output"
 set +e
@@ -216,168 +197,8 @@ if [[ $instance_initializer_status -ne 0 ]]; then
 	exit 1
 fi
 
-run_program() {
-    local name=$1
-    local expected=$2
-    local source_file="$root_dir/tests/programs/$name.hx"
-    local output="$root_dir/out/$name.hl"
-    "$haxe" --cwd "$root_dir" -cp src --run Main "$source_file" "$output"
+"$haxe" --cwd "$root_dir" -cp tests --run driver.TestDriver --root "$root_dir" --suite programs
 
-    set +e
-	LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$output"
-    local status=$?
-    set -e
-    if [[ $status -ne $expected ]]; then
-        echo "$name: expected exit $expected, got $status" >&2
-        exit 1
-    fi
-    echo "PASS: $name source compiled and executed (exit $expected)"
-}
-
-run_program add 42
-run_program bytes-codec 42
-run_program call-many 42
-run_program function-call 42
-run_program function-value 42
-run_program lambda 42
-run_program expression-lambda 42
-run_program single-argument-lambda 43
-run_program contextual-callbacks 42
-run_program generic-contextual-callback 42
-run_program nullable-map-get 42
-run_program enum-array-pattern 42
-run_program anonymous-function 42
-run_program enum-abstract 42
-run_program enum-argument-string 42
-run_program concise-try 42
-run_program switch-expression-block 42
-run_program member-range 42
-run_program trailing-object-comma 42
-run_program block-comprehension 42
-run_program transparent-abstract 42
-run_program computed-field-assignment 42
-run_program computed-property 42
-run_program assignment-expression 42
-run_program literal-postfix 42
-run_program bitwise 42
-run_program bitwise-comparison-precedence 42
-run_program type-annotation 42
-run_program local-function 42
-run_program map-literal 42
-run_program map-comprehension 42
-run_program switch-guard 42
-run_program captured-lambda 42
-run_program captured-this 42
-run_program mutable-capture 78
-run_program nested-mutable-capture 3
-run_program trace 42
-run_program string-interpolation 42
-run_program string-concat-mixed 42
-run_program string-split 42
-run_program reflect-compare-sort 42
-run_program array-index-growth 42
-run_program date-runtime 42
-run_program sys-runtime 42
-run_program callback-method 42
-run_program bound-method 42
-run_program name-collision 42
-run_program bool-if 42
-run_program fib 55
-run_program while-arithmetic 42
-run_program branch-assignment 42
-run_program static-class 42
-run_program static-field 81
-run_program static-field-init 42
-run_program instance-class 42
-run_program instance-field-init 42
-run_program instance-field-init-constructor 42
-run_program default-constructor-class 42
-run_program inheritance-class 43
-run_program override-method 42
-run_program virtual-dispatch 71
-run_program enum-basic 42
-run_program enum-payload 42
-run_program enum-payload-pattern 42
-run_program generic-enum-field 42
-run_program enum-array-pattern 42
-run_program nullable-basic 42
-run_program nullable-guard-return 42
-run_program nullable-array-guard 42
-run_program native-abstract-null 42
-run_program nullable-compound 42
-run_program nullable-enum-switch 42
-run_program object-array 42
-run_program array-copy-concat 42
-run_program array-slice-index 42
-run_program array-mutation 42
-run_program array-insert 42
-run_program array-resize 42
-run_program array-remove 42
-run_program array-expression-mutation 42
-run_program array-unshift 42
-run_program array-object-mutation 8
-run_program array-field-mutation 11
-run_program array-alias-growth 42
-run_program for-in 42
-run_program map-basic 42
-run_program map-int 42
-run_program map-primitive-types 42
-run_program map-object 42
-run_program map-anonymous-enum 42
-run_program map-for-in 52
-run_program map-key-value-for-in 42
-run_program map-nullable-get 42
-run_program loop-control 42
-run_program increment 42
-run_program logical-comparisons 42
-run_program short-circuit 42
-run_program negation 42
-run_program modulo 42
-run_program switch-enum 42
-run_program switch-subject-binding 42
-run_program enum-exhaustive 42
-run_program interface-dispatch 42
-run_program interface-inheritance 43
-run_program interface-upcast 5
-run_program interface-field 42
-run_program multiple-implements 42
-run_program captured-method 42
-run_program throw-string 1
-run_program try-catch 42
-run_program try-rethrow 1
-run_program try-array-bounds 42
-run_program try-nested 42
-run_program try-return 42
-run_program try-branch 42
-run_program try-loop-control 42
-run_program try-outer-local 42
-run_program try-branch-local 42
-run_program try-call-local 42
-run_program try-typed-class 42
-run_program try-typed-mismatch 42
-run_program try-typed-int 42
-run_program try-multiple-catches 42
-run_program local-shadowing 42
-run_program captured-shadowing 42
-run_program dynamic-argument 42
-run_program anonymous-record 42
-run_program switch-expression 42
-run_program throw-expression 42
-run_program array-literal 42
-run_program empty-array-flow-inference 42
-run_program array-comprehension 42
-run_program filtered-array-comprehension 42
-run_program range-iteration 42
-run_program cast-expression 42
-run_program do-while 42
-run_program postfix-increment 42
-run_program optional-enum-parameter 42
-run_program default-parameter-inference 42
-run_program generic-functions 42
-run_program generic-abstract 42
-run_program bounded-generic 42
-run_program generic-class 42
-run_program generic-interface 42
 
 object_output="$root_dir/out/object.hl"
 "$haxe" --cwd "$root_dir" "${test_classpaths[@]}" --run ObjectMain "$object_output"

@@ -214,7 +214,7 @@ the integration suites:
 ./scripts/bootstrap-status.sh
 ./scripts/bootstrap-compiler.sh
 ./scripts/bootstrap-compiler.sh --self
-./scripts/test-poc.sh
+./scripts/test.sh
 ./tests/integration/test-hot-reload.sh
 ```
 
