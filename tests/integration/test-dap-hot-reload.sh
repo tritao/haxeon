@@ -101,6 +101,10 @@ PY
 value=$("${dap[@]}" breakpoints set --name "$session" --source "$source_dir/Value.hx" --line 6 8)
 python3 -c 'import json,sys; points=json.load(sys.stdin)["data"]["breakpoints"]; assert len(points)==2 and all(p["verified"] for p in points)' <<<"$value"
 wait_frame Value.hx 6
+initial_modules=$("${dap[@]}" request --name "$session" modules --json '{}')
+module_id=$(python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; assert d["totalModules"]==len(d["modules"])>=1, d; matches=[m for m in d["modules"] if m["sourceSnapshots"]>=1]; assert len(matches)==1, d; m=matches[0]; assert m["version"]=="1" and m["revision"]==1, m; assert m["activeRegions"]==0 and m["retiredRegions"]==0, m; print(m["id"])' <<<"$initial_modules")
+first_module=$("${dap[@]}" request --name "$session" modules --json '{"startModule":0,"moduleCount":1}')
+python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; assert d["totalModules"]>=1 and len(d["modules"])==1, d' <<<"$first_module"
 initial_column=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["stackFrames"][0]["column"])' <<<"$current_stack")
 locals=$(read_locals)
 python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="result" and v.get("value")=="43" for v in vs), vs; assert any(v["name"]=="scoped" and v.get("value")=="142" for v in vs), vs' <<<"$locals"
@@ -118,6 +122,8 @@ for _ in {1..40}; do
 	sleep 0.05
 done
 wait_frame Value.hx 6
+patched_modules=$("${dap[@]}" request --name "$session" modules --json '{}')
+python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; matches=[m for m in d["modules"] if str(m["id"])==sys.argv[1]]; assert len(matches)==1, d; m=matches[0]; assert m["version"]=="2" and m["revision"]==2, m; assert m["activeRegions"]>=1 and m["retiredRegions"]==0, m; assert m["sourceSnapshots"]>=1, m' "$module_id" <<<"$patched_modules"
 python3 -c 'import json,sys; frame=json.load(sys.stdin)["data"]["stackFrames"][0]; assert frame.get("column",0)>=5 and frame["column"]!=int(sys.argv[1]), frame' "$initial_column" <<<"$current_stack"
 printf '\n// stale patched source\n' >> "$source_dir/Value.hx"
 patched_stack=$("${dap[@]}" stack --name "$session")
@@ -141,4 +147,4 @@ threads=$("${dap[@]}" threads --name "$session")
 thread_id=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["threads"][0]["id"])' <<<"$threads")
 exception=$("${dap[@]}" request --name "$session" exceptionInfo --json "{\"threadId\":$thread_id}")
 python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; assert d["exceptionId"]=="String" and d["description"]=="patched-probe", d; assert "Value.hx:10" in d["details"]["stackTrace"], d' <<<"$exception"
-echo "PASS: dap-cli rebound scoped locals in original and patched Value.hx code"
+echo "PASS: dap-cli reported module revisions and rebound scoped locals in original and patched Value.hx code"

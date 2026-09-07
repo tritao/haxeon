@@ -65,6 +65,22 @@ Breakpoint rewrites are performed by the runtime's protocol thread after the
 complete `MAP3` frame. This avoids both requesting a snapshot from a
 ptrace-stopped server and writing process memory while the target is running.
 
+## DAP module projection
+
+The HashLink debug adapter exposes every HLD3 module through the standard DAP
+`modules` request. The HLD3 identity pointer becomes the stable DAP module ID,
+and `version` contains the decimal module revision. In addition to the standard
+address range and symbol status, the adapter advertises columns for the numeric
+revision, active and retired patch-region counts, and compiled-source snapshot
+count. `startModule` and `moduleCount` pagination is applied after collecting a
+consistent snapshot of all modules.
+
+The adapter emits a DAP `module` event with reason `new` when an identity first
+appears, `changed` when its revision or reported region/source counts change,
+and `removed` if a later mapping snapshot no longer contains it. Events are
+published only after DAP initialization, and a completed `MAP3` refresh is the
+single source of truth for change detection.
+
 ## Diagnostic tracing
 
 Set `HL_DEBUG_TRACE` to a writable file path to record newline-delimited JSON
