@@ -110,6 +110,7 @@ typedef TypedMapEntry = {final key:TypedExpression; final value:TypedExpression;
 /** Type-checked, guarded arm of a switch expression. */
 typedef TypedSwitchExpressionCase = {
 	final value:TypedExpression;
+	final subjectBinding:Null<String>;
 	final guard:Null<TypedExpression>;
 	final result:TypedExpression;
 	final enumName:Null<String>;
@@ -149,6 +150,7 @@ enum TypedStatement {
 /** Type-checked switch arm with resolved enum bindings, when applicable. */
 typedef TypedSwitchCase = {
 	final value:TypedExpression;
+	final subjectBinding:Null<String>;
 	final guard:Null<TypedExpression>;
 	final statements:Array<TypedStatement>;
 	final enumName:Null<String>;

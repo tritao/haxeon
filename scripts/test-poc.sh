@@ -203,6 +203,7 @@ run_program short-circuit 42
 run_program negation 42
 run_program modulo 42
 run_program switch-enum 42
+run_program switch-subject-binding 42
 run_program enum-exhaustive 42
 run_program interface-dispatch 42
 run_program interface-inheritance 43

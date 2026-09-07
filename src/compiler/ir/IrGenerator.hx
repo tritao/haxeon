@@ -437,11 +437,20 @@ class IrGenerator {
 							caseValue = switchCase.constructorIndex >= 0 ? builder.constInt(switchCase.constructorIndex) : lowerExpression(switchCase.value,
 								builder, localTypes);
 						var predicateBlock = switchCase.predicates.length == 0 ? matchBlock : builder.createBlock();
-						builder.branch(builder.equal(switchValue, caseValue), predicateBlock, nextBlock);
+						if (switchCase.subjectBinding != null)
+							builder.jump(predicateBlock);
+						else
+							builder.branch(builder.equal(switchValue, caseValue), predicateBlock, nextBlock);
 						if (switchCase.predicates.length > 0)
 							lowerEnumPredicates(switchName, switchType, switchCase.constructorIndex, switchCase.predicates, predicateBlock, matchBlock,
 								nextBlock, builder, localTypes);
 						builder.select(matchBlock);
+						var subjectBinding = switchCase.subjectBinding;
+						if (subjectBinding != null && subjectBinding.length > 0) {
+							localTypes.set(subjectBinding, switchType);
+							builder.store(subjectBinding, builder.load(switchName, switchType));
+							builder.debugLocal(subjectBinding, switchCase.span, switchCase.span.end);
+						}
 						if (switchCase.constructorIndex >= 0)
 							for (binding in switchCase.bindings) {
 								localTypes.set(binding.name, lowerType(binding.type));
@@ -820,7 +829,7 @@ class IrGenerator {
 						matches = subject.type == TString ? builder.call("__string_equal", [comparisonValue, caseValue],
 							Bool) : builder.equal(comparisonValue, caseValue);
 					var matchBlock = matchBlocks[caseIndex];
-					if (isExhaustiveFinalCase && switchCase.predicates.length == 0)
+					if (switchCase.subjectBinding != null || (isExhaustiveFinalCase && switchCase.predicates.length == 0))
 						builder.jump(bodyBlock);
 					else {
 						var predicateBlock = switchCase.predicates.length == 0 ? matchBlock : builder.createBlock();
@@ -830,6 +839,11 @@ class IrGenerator {
 								nextBlock, builder, localTypes);
 					}
 					builder.select(matchBlock);
+					var subjectBinding = switchCase.subjectBinding;
+					if (subjectBinding != null && subjectBinding.length > 0) {
+						localTypes.set(subjectBinding, subjectType);
+						builder.store(subjectBinding, builder.load(subjectName, subjectType));
+					}
 					for (binding in switchCase.bindings) {
 						localTypes.set(binding.name, lowerType(binding.type));
 						builder.store(binding.name,

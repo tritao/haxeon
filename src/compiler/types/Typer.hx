@@ -1155,8 +1155,9 @@ class Typer {
 						seenCases:Map<String, Bool> = [];
 					for (switchCase in cases) {
 						var caseScope = new Scope(scope),
-							pattern = typeEnumPattern(switchCase.value, typedExpression.type, caseScope),
-							typedValue = pattern == null ? coerce(typeExpression(switchCase.value, scope, typedExpression.type), typedExpression.type,
+							subjectBinding = switchSubjectBinding(switchCase.value, typedExpression.type, caseScope),
+							pattern = subjectBinding == null ? typeEnumPattern(switchCase.value, typedExpression.type, caseScope) : null,
+							typedValue = subjectBinding != null ? typedExpression : pattern == null ? coerce(typeExpression(switchCase.value, scope, typedExpression.type), typedExpression.type,
 								"switch case", "E1019") : pattern.value;
 						var parsedGuard = switchCase.guard,
 							typedGuard = parsedGuard == null ? null : coerce(typeExpression(parsedGuard, caseScope), TBool, "switch guard", "E1003");
@@ -1176,6 +1177,8 @@ class Typer {
 							}
 						}
 						var caseKey = switchCaseKey(typedValue, predicates);
+						if (subjectBinding != null)
+							seenCases.set("$catchall", true);
 						if (caseKey != null && typedGuard == null) {
 							if (seenCases.exists(caseKey))
 								fail("E1020", "Duplicate switch case", switchCase.span);
@@ -1183,6 +1186,7 @@ class Typer {
 						}
 						typedCases.push({
 							value: typedValue,
+							subjectBinding: subjectBinding,
 							guard: typedGuard,
 							statements: typedBody,
 							enumName: enumName,
@@ -1192,7 +1196,7 @@ class Typer {
 							span: switchCase.span
 						});
 					}
-					if (isEnum(typedExpression.type) && !hasDefault) {
+					if (isEnum(typedExpression.type) && !hasDefault && !seenCases.exists("$catchall")) {
 						var enumName = Std.string(enumName(typedExpression.type));
 						var missing:Array<String> = [];
 						if (enumDecls.exists(enumName)) {
@@ -1680,6 +1684,23 @@ class Typer {
 		};
 	}
 
+	function switchSubjectBinding(value:AstExpression, expected:CompilerType, scope:Scope):Null<String> {
+		return switch value {
+			case Variable(name, span):
+				var info = enumCaseInfo(name);
+				if (info == null && name.indexOf(".") < 0) {
+					var expectedEnum = enumName(expected);
+					if (expectedEnum != null)
+						info = enumCaseInfo(expectedEnum + "." + name);
+				}
+				if (info != null) null; else if (name == "_") ""; else {
+					scope.define(name, expected, span);
+					scope.requireId(name);
+				}
+			default: null;
+		}
+	}
+
 	function typeEnumPredicate(value:AstExpression, type:CompilerType, storageType:CompilerType, index:Int, constantName:Null<String>):TypedSwitchPredicate {
 		switch value {
 			case ArrayLiteral(values, span):
@@ -2158,8 +2179,9 @@ class Typer {
 					resultType = expectedType;
 				for (switchCase in cases) {
 					var caseScope = new Scope(scope),
-						pattern = typeEnumPattern(switchCase.value, typedSubject.type, caseScope),
-						typedValue = pattern == null ? coerce(typeExpression(switchCase.value, scope, typedSubject.type), typedSubject.type, "switch case",
+						subjectBinding = switchSubjectBinding(switchCase.value, typedSubject.type, caseScope),
+						pattern = subjectBinding == null ? typeEnumPattern(switchCase.value, typedSubject.type, caseScope) : null,
+						typedValue = subjectBinding != null ? typedSubject : pattern == null ? coerce(typeExpression(switchCase.value, scope, typedSubject.type), typedSubject.type, "switch case",
 							"E1019") : pattern.value;
 					var parsedGuard = switchCase.guard,
 						typedGuard = parsedGuard == null ? null : coerce(typeExpression(parsedGuard, caseScope), TBool, "switch guard", "E1003");
@@ -2183,6 +2205,8 @@ class Typer {
 						}
 					}
 					var caseKey = switchCaseKey(typedValue, predicates);
+					if (subjectBinding != null)
+						seenCases.set("$catchall", true);
 					if (caseKey != null && typedGuard == null) {
 						if (seenCases.exists(caseKey))
 							fail("E1020", "Duplicate switch case", switchCase.span);
@@ -2190,6 +2214,7 @@ class Typer {
 					}
 					typedCases.push({
 						value: typedValue,
+						subjectBinding: subjectBinding,
 						guard: typedGuard,
 						result: typedResult,
 						enumName: enumName,
@@ -2214,6 +2239,7 @@ class Typer {
 					for (switchCase in typedCases)
 						{
 							value: switchCase.value,
+							subjectBinding: switchCase.subjectBinding,
 							guard: switchCase.guard,
 							result: coerce(switchCase.result, resultType, "switch branch", "E1003"),
 							enumName: switchCase.enumName,
@@ -2226,7 +2252,7 @@ class Typer {
 					typedDefault = coerce(typedDefault, resultType, "switch branch", "E1003");
 				if (typedDefault == null && !isEnum(typedSubject.type))
 					fail("E1021", "Switch expression requires a default branch", span);
-				if (isEnum(typedSubject.type) && typedDefault == null) {
+				if (isEnum(typedSubject.type) && typedDefault == null && !seenCases.exists("$catchall")) {
 					var enumName = Std.string(enumName(typedSubject.type)),
 						missing:Array<String> = [];
 					if (enumDecls.exists(enumName)) {
@@ -3851,7 +3877,9 @@ class Typer {
 		var enumDecl = requiredMapValue(enumDecls, enumName);
 		var seen:Map<Int, Bool> = [];
 		for (switchCase in cases)
-			if (switchCase.constructorIndex >= 0)
+			if (switchCase.subjectBinding != null)
+				return true;
+			else if (switchCase.constructorIndex >= 0)
 				seen.set(switchCase.constructorIndex, true);
 		for (index in 0...enumDecl.cases.length)
 			if (!seen.exists(index))
