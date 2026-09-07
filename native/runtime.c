@@ -830,6 +830,18 @@ HL_PRIM vbyte *HL_NAME(__std_string)( vdynamic *value ) {
 }
 
 HL_PRIM int HL_NAME(__reflect_compare)( vdynamic *left, vdynamic *right ) {
+	if( left != NULL && right != NULL && left->t->kind == HBYTES && right->t->kind == HBYTES ) {
+		const uchar *left_value = (const uchar *)left->v.ptr;
+		const uchar *right_value = (const uchar *)right->v.ptr;
+		if( left_value == right_value ) return 0;
+		if( left_value == NULL ) return -1;
+		if( right_value == NULL ) return 1;
+		while( *left_value != 0 && *left_value == *right_value ) {
+			left_value++;
+			right_value++;
+		}
+		return *left_value < *right_value ? -1 : *left_value > *right_value ? 1 : 0;
+	}
 	return hl_dyn_compare(left,right);
 }
 
