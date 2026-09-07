@@ -358,7 +358,58 @@ class SignatureInference {
 	}
 
 	static function sameType(left:AstType, right:AstType):Bool
-		return Std.string(left) == Std.string(right);
+		return switch left {
+			case IntType: switch right { case IntType: true; default: false; };
+			case BoolType: switch right { case BoolType: true; default: false; };
+			case FloatType: switch right { case FloatType: true; default: false; };
+			case StringType: switch right { case StringType: true; default: false; };
+			case VoidType: switch right { case VoidType: true; default: false; };
+			case InferredType: switch right { case InferredType: true; default: false; };
+			case ErrorType(_): switch right { case ErrorType(_): true; default: false; };
+			case NativeAbstractType(declaration, tag): switch right {
+					case NativeAbstractType(otherDeclaration, otherTag): declaration == otherDeclaration && tag == otherTag;
+					default: false;
+				};
+			case NamedType(name): switch right { case NamedType(other): name == other; default: false; };
+			case AppliedType(name, arguments): switch right {
+					case AppliedType(otherName, otherArguments): name == otherName && sameTypes(arguments, otherArguments);
+					default: false;
+				};
+			case ArrayType(element): switch right { case ArrayType(other): sameType(element, other); default: false; };
+			case MapType(key, value): switch right {
+					case MapType(otherKey, otherValue): sameType(key, otherKey) && sameType(value, otherValue);
+					default: false;
+				};
+			case NullableType(element): switch right { case NullableType(other): sameType(element, other); default: false; };
+			case FunctionType(arguments, result): switch right {
+					case FunctionType(otherArguments, otherResult): sameTypes(arguments, otherArguments) && sameType(result, otherResult);
+					default: false;
+				};
+			case AnonymousType(fields): switch right {
+					case AnonymousType(otherFields): sameFields(fields, otherFields);
+					default: false;
+				};
+		};
+
+	static function sameTypes(left:Array<AstType>, right:Array<AstType>):Bool {
+		if (left.length != right.length)
+			return false;
+		for (index in 0...left.length)
+			if (!sameType(left[index], right[index]))
+				return false;
+		return true;
+	}
+
+	static function sameFields(left:Array<compiler.syntax.Ast.AstAnonymousField>, right:Array<compiler.syntax.Ast.AstAnonymousField>):Bool {
+		if (left.length != right.length)
+			return false;
+		for (index in 0...left.length) {
+			var field = left[index], other = right[index];
+			if (field.name != other.name || field.optional != other.optional || !sameType(field.type, other.type))
+				return false;
+		}
+		return true;
+	}
 
 	static function localMethodName(name:String):String
 		return lastPathSegment(name);
