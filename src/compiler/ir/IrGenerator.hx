@@ -604,7 +604,10 @@ class IrGenerator {
 			case TEnumLiteral(name, index): builder.makeEnum(name, index, []);
 			case TEnumConstruct(name, index, arguments): builder.makeEnum(name, index, lowerOperands(arguments, builder, localTypes));
 			case TNullLiteral: throw "Uncoerced null literal";
-			case TUnreachable: unreachableValue(lowerType(expression.type), builder);
+			case TUnreachable:
+				var placeholder = unreachableValue(lowerType(expression.type), builder);
+				builder.markUnreachable();
+				placeholder;
 			case TNoReturn(value):
 				var lowered = lowerExpression(value, builder, localTypes);
 				builder.markUnreachable();
