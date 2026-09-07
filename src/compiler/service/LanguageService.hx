@@ -261,6 +261,7 @@ class LanguageService {
 				}
 			} catch (_:CompileError) {}
 		}
+		compiler.semanticWorkspace.invalidateResolutionCache();
 	}
 
 	public function validate(path:String, source:String, entryModule:String, ?token:CancellationToken):compiler.Compiler.ValidationResult

@@ -7,7 +7,7 @@ import compiler.syntax.Parser;
 class ParserRecoveryMain {
 	static function main():Void {
 		var service = new LanguageService(), source =
-			"class Box { public var value:Int; public function read():Int return value; } function main():Int { var box:Box = new Box(); box.";
+			"class Box { public var value:Int; public function read():Int return value; } function main():Int { var box:Box = new Box(); box.value; box.";
 		service.update("Main.hx", source);
 		try
 			service.analyze("Main")
@@ -21,6 +21,19 @@ class ParserRecoveryMain {
 		var boxDeclaration = source.indexOf("box:Box");
 		if (service.hover("Main.hx", boxDeclaration + 1) != "box:Box")
 			throw "recovered semantic model did not expose the current local type";
+		var boxUse = source.lastIndexOf("box.");
+		var definition = service.definition("Main.hx", boxUse + 1), references = service.references("Main.hx", boxUse + 1),
+			rename = service.rename("Main.hx", boxUse + 1, "renamed"), highlights = service.documentHighlights("Main.hx", boxUse + 1);
+		if (definition == null || definition.span.start != boxDeclaration || definition.stale)
+			throw 'recovered local definition did not resolve to the current declaration: ${definition == null ? "null" : definition.span.start + ":" + definition.stale} expected $boxDeclaration';
+		if (references.length < 2 || rename.length != references.length || highlights.length != references.length)
+			throw "recovered local references, rename, or highlights were incomplete";
+		for (edit in rename)
+			if (edit.stale)
+				throw "recovered rename produced stale edits";
+		var valueUse = source.lastIndexOf("value;"), valueDeclaration = source.indexOf("value:Int"), memberDefinition = service.definition("Main.hx", valueUse + 1);
+		if (memberDefinition == null || valueDeclaration < memberDefinition.span.start || valueDeclaration > memberDefinition.span.end || memberDefinition.stale)
+			throw "recovered member definition did not resolve to the current field";
 
 		var typeService = new LanguageService(), typeSource = "function main():Int { var unfinished:";
 		typeService.update("Type.hx", typeSource);

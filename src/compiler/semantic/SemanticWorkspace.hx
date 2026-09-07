@@ -583,5 +583,5 @@ class SemanticWorkspace {
 	}
 
 	static function effectiveModel(state:ModuleState):Null<compiler.semantic.SemanticModel>
-		return state.ast == null ? state.lastGoodSemanticModel : state.semanticModel;
+		return state.ast != null ? state.semanticModel : state.recoveredSemanticModel != null ? state.recoveredSemanticModel : state.lastGoodSemanticModel;
 }
