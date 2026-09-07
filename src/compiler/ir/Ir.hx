@@ -46,6 +46,7 @@ enum IrInstruction {
 	ConstNull(output:IrValue);
 	TypeValue(output:IrValue, type:IrType);
 	ToDyn(output:IrValue, value:IrValue);
+	IntToFloat(output:IrValue, value:IrValue);
 	SafeCast(output:IrValue, value:IrValue);
 	BeginTry(catchBlock:Int, afterBlock:Int);
 	EndTry(catchBlock:Int);

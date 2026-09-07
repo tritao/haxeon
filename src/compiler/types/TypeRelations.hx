@@ -6,6 +6,7 @@ import compiler.types.Type.NominalKind;
 /** Explicit conversion required to assign one semantic type to another. */
 enum ConversionPlan {
 	Identity;
+	IntToFloat;
 	AbstractCast;
 	ToDynamic;
 	ToInterface(name:String);
@@ -24,6 +25,8 @@ class TypeRelations {
 	public function conversion(actual:CompilerType, expected:CompilerType):ConversionPlan {
 		if (equals(actual, expected))
 			return Identity;
+		if (actual == TInt && expected == TFloat)
+			return IntToFloat;
 		if (actual == TNull && isReference(expected))
 			return WrapNullable;
 		if (abstractConversion(actual, expected))

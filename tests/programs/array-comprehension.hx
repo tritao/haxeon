@@ -3,5 +3,5 @@ function main():Int {
 	values["answer"] = 42;
 	var copied = [for (_ => value in values) value];
 	var doubled = [for (value in copied) value * 2];
-	return doubled[0] / 2;
+	return Std.int(doubled[0] / 2);
 }

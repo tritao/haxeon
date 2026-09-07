@@ -49,6 +49,7 @@ name-collision	42
 bool-if	42
 fib	55
 while-arithmetic	42
+numeric-promotion	42
 branch-assignment	42
 static-class	42
 static-field	81

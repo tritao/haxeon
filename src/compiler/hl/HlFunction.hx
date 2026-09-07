@@ -50,6 +50,7 @@ enum HlInstruction {
 	LoadNull(destination:Int);
 	LoadType(destination:Int, type:Int);
 	ToDyn(destination:Int, source:Int);
+	ToSFloat(destination:Int, source:Int);
 	SafeCast(destination:Int, source:Int);
 	Trap(destination:Int, target:String);
 	EndTrap(destination:Int);

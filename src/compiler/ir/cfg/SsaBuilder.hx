@@ -362,6 +362,9 @@ class SsaBuilder {
 				case ToDyn(out, value):
 					var result = define(out);
 					emit(target, ToDyn(result, resolve(value)), provenance);
+				case IntToFloat(out, value):
+					var result = define(out);
+					emit(target, IntToFloat(result, resolve(value)), provenance);
 				case SafeCast(out, value):
 					var result = define(out);
 					emit(target, SafeCast(result, resolve(value)), provenance);

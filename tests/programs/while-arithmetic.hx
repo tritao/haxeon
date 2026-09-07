@@ -9,5 +9,5 @@ function main():Int {
 		}
 		outer = outer + 1;
 	}
-	return total * 2 / 2;
+	return Std.int(total * 2 / 2);
 }

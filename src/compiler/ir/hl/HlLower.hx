@@ -311,6 +311,8 @@ class HlLower {
 						instructions.push(HlInstruction.LoadType(defineRegister(output, registers, registerTypes), internType(type)));
 					case ToDyn(output, value):
 						instructions.push(HlInstruction.ToDyn(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
+					case IntToFloat(output, value):
+						instructions.push(HlInstruction.ToSFloat(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
 					case SafeCast(output, value):
 						instructions.push(HlInstruction.SafeCast(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
 					case BeginTry(catchBlock, _):
@@ -664,7 +666,7 @@ class HlLower {
 	static function instructionOutput(instruction:IrInstruction):Null<IrValue>
 		return switch instruction {
 			case Phi(output, _), ConstVoid(output), ConstInt(output, _), ConstFloat(output, _), ConstString(output, _), ConstBool(output, _),
-				ConstNull(output), TypeValue(output, _), ToDyn(output, _), SafeCast(output, _), Catch(output), GlobalGet(output, _), Add(output, _, _),
+				ConstNull(output), TypeValue(output, _), ToDyn(output, _), IntToFloat(output, _), SafeCast(output, _), Catch(output), GlobalGet(output, _), Add(output, _, _),
 				Sub(output, _, _), Mul(output, _, _), Div(output, _, _), Mod(output, _, _), BitAnd(output, _, _), BitXor(output, _, _), BitOr(output, _, _),
 				ShiftLeft(output, _, _), ShiftRight(output, _, _), UnsignedShiftRight(output, _, _), Less(output, _, _), LessEqual(output, _, _),
 				Equal(output, _, _), Call(output, _, _), StaticClosure(output, _), InstanceClosure(output, _, _), CallClosure(output, _, _),

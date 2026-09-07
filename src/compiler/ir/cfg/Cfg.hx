@@ -32,6 +32,7 @@ enum CfgInstruction {
 	ConstNull(output:CfgValue);
 	TypeValue(output:CfgValue, type:IrType);
 	ToDyn(output:CfgValue, value:CfgValue);
+	IntToFloat(output:CfgValue, value:CfgValue);
 	SafeCast(output:CfgValue, value:CfgValue);
 	BeginTry(catchBlock:Int, afterBlock:Int);
 	EndTry(catchBlock:Int);

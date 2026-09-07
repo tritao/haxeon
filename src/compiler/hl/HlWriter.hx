@@ -383,6 +383,8 @@ class HlWriter {
 					{opcode: HlOpcode.Type, operands: [destination, type]};
 				case ToDyn(destination, source):
 					{opcode: HlOpcode.ToDyn, operands: [destination, source]};
+				case ToSFloat(destination, source):
+					{opcode: HlOpcode.ToSFloat, operands: [destination, source]};
 				case SafeCast(destination, source):
 					{opcode: HlOpcode.SafeCast, operands: [destination, source]};
 				case GlobalGet(destination, global):

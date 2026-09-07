@@ -629,6 +629,7 @@ class IrGenerator {
 							target = lowerType(expression.type);
 						sameIrType(lowered.type, target) ? lowered : abiBoundaryCast(builder, lowered, target);
 				}
+			case TIntToFloat(value): builder.intToFloat(lowerExpression(value, builder, localTypes));
 			case TToDynamic(value): switch value.expression {
 					case TNullLiteral: builder.constNull(Dyn);
 					default: builder.toDyn(lowerExpression(value, builder, localTypes));

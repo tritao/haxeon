@@ -21,6 +21,7 @@ class IrInstructionCodec {
 		"ConstNull" => true,
 		"TypeValue" => true,
 		"ToDyn" => true,
+		"IntToFloat" => true,
 		"SafeCast" => true,
 		"BeginTry" => true,
 		"EndTry" => true,
@@ -122,6 +123,8 @@ class IrInstructionCodec {
 				writeType(output, type);
 			case ToDyn(outputValue, value):
 				writeTwoValues(output, "ToDyn", outputValue, value);
+			case IntToFloat(outputValue, value):
+				writeTwoValues(output, "IntToFloat", outputValue, value);
 			case SafeCast(outputValue, value):
 				writeTwoValues(output, "SafeCast", outputValue, value);
 			case BeginTry(catchBlock, afterBlock):
@@ -270,6 +273,9 @@ class IrInstructionCodec {
 			case "ToDyn":
 				arity(2);
 				ToDyn(readValue(input, values), readValue(input, values));
+			case "IntToFloat":
+				arity(2);
+				IntToFloat(readValue(input, values), readValue(input, values));
 			case "SafeCast":
 				arity(2);
 				SafeCast(readValue(input, values), readValue(input, values));

@@ -3850,6 +3850,8 @@ class Typer {
 			return new TypedExpression(value.expression, expected, value.span);
 		return switch relations.conversion(value.type, expected) {
 			case Identity: value;
+			case IntToFloat:
+				new TypedExpression(TIntToFloat(value), TFloat, value.span);
 			case AbstractCast:
 				new TypedExpression(TAbiCast(value), expected, value.span);
 			case ToDynamic:
@@ -4034,9 +4036,10 @@ class Typer {
 			right = stringify(right);
 			return new TypedExpression(TAdd(left, right), TString, span);
 		}
-		if (!sameType(left.type, right.type) || (!sameType(left.type, TInt) && !sameType(left.type, TFloat)))
+		if (!isNumeric(left.type) || !isNumeric(right.type))
 			fail("E1010", "Arithmetic requires matching Int or Float operands", span);
-		return new TypedExpression(add ? TAdd(left, right) : TSub(left, right), left.type, span);
+		var promoted = promoteNumericOperands(left, right);
+		return new TypedExpression(add ? TAdd(promoted.left, promoted.right) : TSub(promoted.left, promoted.right), promoted.type, span);
 	}
 
 	function isStringConvertible(type:CompilerType):Bool
@@ -4064,9 +4067,22 @@ class Typer {
 
 	function numeric(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan):TypedExpression {
 		var left = typeExpression(a, scope), right = typeExpression(b, scope);
-		if (!sameType(left.type, right.type) || (!sameType(left.type, TInt) && !sameType(left.type, TFloat)))
+		if (!isNumeric(left.type) || !isNumeric(right.type))
 			fail("E1010", "Arithmetic requires matching Int or Float operands", span);
-		return new TypedExpression(operation == 2 ? TMul(left, right) : TDiv(left, right), left.type, span);
+		var promoted = promoteNumericOperands(left, right, operation != 2);
+		return new TypedExpression(operation == 2 ? TMul(promoted.left, promoted.right) : TDiv(promoted.left, promoted.right), promoted.type, span);
+	}
+
+	function isNumeric(type:CompilerType):Bool
+		return sameType(type, TInt) || sameType(type, TFloat);
+
+	function promoteNumericOperands(left:TypedExpression, right:TypedExpression, forceFloat:Bool = false):{
+		left:TypedExpression,
+		right:TypedExpression,
+		type:CompilerType
+	} {
+		var type = forceFloat || sameType(left.type, TFloat) || sameType(right.type, TFloat) ? TFloat : TInt;
+		return {left: coerce(left, type, "numeric operand", "E1010"), right: coerce(right, type, "numeric operand", "E1010"), type: type};
 	}
 
 	function modulo(a:AstExpression, b:AstExpression, scope:Scope, span:SourceSpan):TypedExpression {
@@ -4145,8 +4161,11 @@ class Typer {
 					return new TypedExpression(TEqual(left, right), TBool, span);
 				default:
 			}
-		if (!sameType(left.type, right.type) || (left.type != TInt && left.type != TFloat))
+		if (!isNumeric(left.type) || !isNumeric(right.type))
 			fail("E1011", "Comparison requires matching Int or Float operands", span);
+		var promoted = promoteNumericOperands(left, right);
+		left = promoted.left;
+		right = promoted.right;
 		return new TypedExpression(switch operation {
 			case 0: TLess(left, right);
 			case 1: TLessEqual(left, right);

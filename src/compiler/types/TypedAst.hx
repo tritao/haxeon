@@ -28,6 +28,7 @@ enum TypedExpressionKind {
 	TNullLiteral;
 	TUnreachable;
 	TNullableWrap(value:TypedExpression);
+	TIntToFloat(value:TypedExpression);
 	TToDynamic(value:TypedExpression);
 	TLocal(name:String);
 	TCellLocal(name:String, cellClass:String);

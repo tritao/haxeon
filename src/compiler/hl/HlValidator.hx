@@ -164,6 +164,9 @@ class HlValidator {
 				case ToDyn(destination, source):
 					requireRegister(fn, destination);
 					requireRegister(fn, source);
+				case ToSFloat(destination, source):
+					requireRegister(fn, destination);
+					requireRegister(fn, source);
 				case SafeCast(destination, source):
 					requireRegister(fn, destination);
 					requireRegister(fn, source);
