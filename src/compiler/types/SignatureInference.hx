@@ -111,7 +111,7 @@ class SignatureInference {
 			byName.set(method.name, method);
 		var inferred:Array<AstFunction> = [];
 		for (method in constrained) {
-			inferred.push(inferFunction(method, enums, byName));
+			inferred.push(inferFunction(method, enums, byName, classDecl));
 		}
 		return inferred;
 	}
@@ -184,6 +184,9 @@ class SignatureInference {
 			case FloatLiteral(_, _): FloatType;
 			case StringLiteral(_, _): StringType;
 			case BoolLiteral(_, _): BoolType;
+			case Less(_, _, _), LessEqual(_, _, _), Greater(_, _, _), GreaterEqual(_, _, _), Equal(_, _, _), NotEqual(_, _, _), Not(_, _), And(_, _, _),
+				Or(_, _, _):
+				BoolType;
 			case New(name, _, _): NamedType(name);
 			case NewGeneric(name, typeArguments, _, _): AppliedType(name, typeArguments);
 			case NewArray(element, _, _): ArrayType(element);
@@ -288,34 +291,67 @@ class SignatureInference {
 		return compiler.QualifiedName.split(path);
 	}
 
-	static function inferFunction(fn:AstFunction, enums:Map<String, AstEnum>, ?methods:Map<String, AstFunction>):AstFunction {
+	static function inferFunction(fn:AstFunction, enums:Map<String, AstEnum>, ?methods:Map<String, AstFunction>, ?owner:AstClass):AstFunction {
 		if (fn.result != InferredType)
 			return fn;
 		var environment = new InferenceEnvironment();
 		for (argument in fn.arguments)
 			if (argument.type != InferredType)
 				environment.set(argument.name, argument.type);
-		var inferred:Null<AstType> = null;
-		for (statement in fn.statements)
-			switch statement {
-				case Return(expression, _):
-					var candidate = inferExpression(expression, environment, enums, methods);
-					if (candidate != null && (inferred == null || sameType(inferred, candidate)))
-						inferred = candidate;
-				default:
-			}
+		if (owner != null)
+			for (field in owner.fields)
+				environment.set(field.name, field.type);
+		var candidates:Array<AstType> = [];
+		var hasValueReturn = collectReturnTypes(fn.statements, environment, enums, methods, candidates);
+		if (candidates.length == 0)
+			return hasValueReturn ? fn : withResult(fn, VoidType);
+		var inferred:Null<AstType> = candidates[0];
+		for (candidate in candidates)
+			if (!sameType(inferred, candidate))
+				return fn;
 		if (inferred == null)
 			return fn;
+		return withResult(fn, inferred);
+	}
+
+	static function withResult(fn:AstFunction, result:AstType):AstFunction
 		return {
 			name: fn.name,
 			isStatic: fn.isStatic,
 			typeParameters: fn.typeParameters,
 			typeConstraints: fn.typeConstraints,
 			arguments: fn.arguments,
-			result: inferred,
+			result: result,
 			statements: fn.statements,
 			span: fn.span
 		};
+
+	static function collectReturnTypes(statements:Array<AstStatement>, environment:Map<String, AstType>, enums:Map<String, AstEnum>,
+			methods:Null<Map<String, AstFunction>>, output:Array<AstType>):Bool {
+		var found = false;
+		for (statement in statements)
+			switch statement {
+				case Return(expression, _):
+					found = true;
+					var candidate = inferExpression(expression, environment, enums, methods);
+					if (candidate != null)
+						output.push(candidate);
+				case If(_, yes, no, _):
+					found = collectReturnTypes(yes, environment, enums, methods, output) || found;
+					found = collectReturnTypes(no, environment, enums, methods, output) || found;
+				case Try(body, catches, _):
+					found = collectReturnTypes(body, environment, enums, methods, output) || found;
+					for (clause in catches)
+						found = collectReturnTypes(clause.statements, environment, enums, methods, output) || found;
+				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _):
+					found = collectReturnTypes(body, environment, enums, methods, output) || found;
+				case Switch(_, cases, fallback, _, _):
+					for (switchCase in cases)
+						found = collectReturnTypes(switchCase.statements, environment, enums, methods, output) || found;
+					found = collectReturnTypes(fallback, environment, enums, methods, output) || found;
+				default:
+			}
+		return found;
 	}
 
 	static function inferExpression(expression:AstExpression, environment:InferenceEnvironment, enums:Map<String, AstEnum>,
@@ -325,11 +361,17 @@ class SignatureInference {
 			case FloatLiteral(_, _): FloatType;
 			case StringLiteral(_, _): StringType;
 			case BoolLiteral(_, _): BoolType;
+			case Less(_, _, _), LessEqual(_, _, _), Greater(_, _, _), GreaterEqual(_, _, _), Equal(_, _, _), NotEqual(_, _, _), Not(_, _), And(_, _, _),
+				Or(_, _, _):
+				BoolType;
 			case Variable(name, _): environment.get(name);
 			case New(name, _, _): NamedType(name);
 			case NewGeneric(name, typeArguments, _, _): AppliedType(name, typeArguments);
 			case NewArray(element, _, _): ArrayType(element);
-			case Call(name, _, _): var method = methods == null ? null : methods.get(localMethodName(name)); method == null || method.result == InferredType ? null : method.result;
+			case Call(name, _, _):
+				var method = methods == null ? null : methods.get(localMethodName(name));
+				if (method != null && method.result != InferredType) method.result; else inferQualifiedCollectionCall(name, environment);
+			case MethodCall(object, name, _, _): inferCollectionMethod(inferExpression(object, environment, enums, methods), name);
 			case SwitchExpression(subject, cases, fallback, _):
 				var subjectType = inferExpression(subject, environment, enums, methods),
 					inferred:Null<AstType> = null;
@@ -346,6 +388,24 @@ class SignatureInference {
 						inferred = candidate;
 				}
 				inferred;
+			default: null;
+		};
+
+	static function inferQualifiedCollectionCall(name:String, environment:InferenceEnvironment):Null<AstType> {
+		var parts = splitPath(name);
+		if (parts.length != 2 || !environment.exists(parts[0]))
+			return null;
+		return inferCollectionMethod(environment.get(parts[0]), parts[1]);
+	}
+
+	static function inferCollectionMethod(receiver:Null<AstType>, name:String):Null<AstType>
+		return switch receiver {
+			case MapType(_, value) if (name == "get"): NullableType(value);
+			case MapType(key, _) if (name == "keys"): ArrayType(key);
+			case MapType(_, value) if (name == "values"): ArrayType(value);
+			case MapType(_, _) if (name == "exists" || name == "remove"): BoolType;
+			case ArrayType(element) if (name == "iterator"): ArrayType(element);
+			case AppliedType("List", [element]) if (name == "iterator"): ArrayType(element);
 			default: null;
 		};
 
