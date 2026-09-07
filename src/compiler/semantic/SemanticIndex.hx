@@ -57,6 +57,14 @@ typedef SemanticCallEdge = {
 	final span:SourceSpan;
 }
 
+/** Canonical call dependency emitted while walking the typed expression tree. */
+typedef ResolvedSemanticCall = {
+	final caller:String;
+	final callee:String;
+	final callerId:SemanticSymbolId;
+	final calleeId:SemanticSymbolId;
+}
+
 /** Revision-local declaration and resolved-local facts emitted by the compiler. */
 class SemanticIndex {
 	public final revision:Int;
@@ -68,6 +76,7 @@ class SemanticIndex {
 	final referenceKeys:Map<String, Map<String, Bool>> = [];
 	final signatures:Map<String, SemanticSignatureInfo> = [];
 	final callEdges:Array<SemanticCallEdge> = [];
+	final resolvedCallEdges:Array<ResolvedSemanticCall> = [];
 	final completionLocals:Array<SemanticCompletionLocal> = [];
 	final functionReceivers:Array<{span:SourceSpan, type:CompilerType}> = [];
 	final completionTypes:Array<{span:SourceSpan, type:CompilerType}> = [];
@@ -77,6 +86,7 @@ class SemanticIndex {
 	final module:String;
 	var cancellation:Null<CancellationToken>;
 	var currentCaller:Null<SemanticSymbolId>;
+	var currentCallerName:Null<String>;
 	var checkpointCount:Int = 0;
 
 	public function new(path:String, revision:Int, declarations:DeclarationIndex, tokens:Array<Token>) {
@@ -130,9 +140,13 @@ class SemanticIndex {
 			declarations:DeclarationIndex):Void {
 		for (field in fields)
 			if (field.type != null)
-				try setDeclarationType(owner + "." + field.name, field.span, declarations.resolve(field.type, field.span)) catch (_:Dynamic) {}
+				try
+					setDeclarationType(owner + "." + field.name, field.span, declarations.resolve(field.type, field.span))
+				catch (_:Dynamic) {}
 		for (method in methods)
-			try setDeclarationType(owner + "." + method.name, method.span, declarations.resolve(method.result, method.span)) catch (_:Dynamic) {}
+			try
+				setDeclarationType(owner + "." + method.name, method.span, declarations.resolve(method.result, method.span))
+			catch (_:Dynamic) {}
 	}
 
 	function setDeclarationType(name:String, span:SourceSpan, type:CompilerType):Void
@@ -174,9 +188,11 @@ class SemanticIndex {
 		declareLocals(fn, fn.statements);
 		indexCompletionLocals(fn.statements, fn.span, 0);
 		currentCaller = functionId;
+		currentCallerName = fn.name;
 		indexStatements(fn, fn.statements, resolve, resolveEnumCase);
 		indexCallTokens(fn, functionId, resolve);
 		currentCaller = null;
+		currentCallerName = null;
 		bindings.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
 		checkpoint();
 		cancellation = null;
@@ -263,7 +279,12 @@ class SemanticIndex {
 			return;
 		var id = new SemanticSymbolId(module, 'local:$functionKey:$name');
 		if (!symbols.exists(id)) {
-			symbols.set(id, {id: id, name: name, kind: DeclarationKind.Member, declaration: token.span});
+			symbols.set(id, {
+				id: id,
+				name: name,
+				kind: DeclarationKind.Member,
+				declaration: token.span
+			});
 			bind(id, token.span);
 			declarationTypes.set(id, type);
 		}
@@ -480,9 +501,13 @@ class SemanticIndex {
 			var declarationBinding = locations(caller.id);
 			for (index in 0...tokens.length) {
 				var token = tokens[index];
-				if (token.span.start < caller.declaration.start || token.span.end > caller.declaration.end || token.kind != TokenKind.Identifier
-					|| index + 1 >= tokens.length || tokens[index + 1].kind != TokenKind.LeftParen
-					|| declarationBinding.length > 0 && token.span.start == declarationBinding[0].start)
+				if (token.span.start < caller.declaration.start
+					|| token.span.end > caller.declaration.end
+					|| token.kind != TokenKind.Identifier
+					|| index + 1 >= tokens.length
+					|| tokens[index + 1].kind != TokenKind.LeftParen
+					|| declarationBinding.length > 0
+					&& token.span.start == declarationBinding[0].start)
 					continue;
 				var callee = symbolIdAt(token.span.start);
 				if (callee == null)
@@ -499,6 +524,10 @@ class SemanticIndex {
 		}
 		return result;
 	}
+
+	/** Calls captured from resolved typed nodes, excluding token-based recovery guesses. */
+	public function resolvedCalls():Array<ResolvedSemanticCall>
+		return resolvedCallEdges.copy();
 
 	public function indexTypeReferences(resolve:String->Null<SemanticSymbolId>, ?token:CancellationToken):Void {
 		var started = Sys.time();
@@ -811,9 +840,24 @@ class SemanticIndex {
 		}
 	}
 
-	function addCall(callee:Null<SemanticSymbolId>, expression:SourceSpan, name:String):Void {
+	function addCall(callee:Null<SemanticSymbolId>, expression:SourceSpan, name:String, ?recordResolved = true):Void {
 		if (currentCaller == null || callee == null)
 			return;
+		if (recordResolved && currentCallerName != null) {
+			var duplicateResolved = false;
+			for (edge in resolvedCallEdges)
+				if (edge.caller == currentCallerName && edge.callee == name) {
+					duplicateResolved = true;
+					break;
+				}
+			if (!duplicateResolved)
+				resolvedCallEdges.push({
+					caller: currentCallerName,
+					callee: name,
+					callerId: currentCaller,
+					calleeId: callee
+				});
+		}
 		var token = referenceToken(tokens, expression, sourceName(name));
 		var span = token == null ? expression : token.span;
 		for (edge in callEdges)
@@ -828,13 +872,18 @@ class SemanticIndex {
 		var declaration = declarationToken(tokens, fn.span, sourceName(fn.name));
 		for (index in 0...tokens.length) {
 			var token = tokens[index];
-			if (token.span.start < fn.span.start || token.span.end > fn.span.end || token.kind != TokenKind.Identifier || index + 1 >= tokens.length
-				|| tokens[index + 1].kind != TokenKind.LeftParen || declaration != null && token.span.start == declaration.span.start)
+			if (token.span.start < fn.span.start
+				|| token.span.end > fn.span.end
+				|| token.kind != TokenKind.Identifier
+				|| index + 1 >= tokens.length
+				|| tokens[index + 1].kind != TokenKind.LeftParen
+				|| declaration != null
+				&& token.span.start == declaration.span.start)
 				continue;
 			var callee = resolve(token.text);
 			if (callee != null) {
 				currentCaller = caller;
-				addCall(callee, token.span, token.text);
+				addCall(callee, token.span, token.text, false);
 			}
 		}
 	}

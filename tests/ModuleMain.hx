@@ -32,6 +32,8 @@ class ModuleMain {
 				hasBodyDependency = true;
 		if (!hasBodyDependency)
 			throw "Semantic dependency graph did not record the imported body call";
+		if (mainDependencies.length != 1)
+			throw 'Typed dependency publication retained provisional edges: $mainDependencies';
 		if (first.metrics.modules != 2 || first.metrics.retypedFunctions == 0 || first.metrics.moduleNatives <= 1 || first.metrics.elapsedMs < 0.0)
 			throw 'Compile metrics did not describe the initial module build: modules=${first.metrics.modules}, retyped=${first.metrics.retypedFunctions}, natives=${first.metrics.moduleNatives}, elapsed=${first.metrics.elapsedMs}';
 		try {

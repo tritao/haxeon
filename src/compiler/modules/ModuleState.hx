@@ -18,7 +18,13 @@ enum abstract SemanticDependencyKind(String) {
 }
 
 /** Dependency edge from one declaration artifact to another declaration. */
-typedef SemanticDependency = {final kind:SemanticDependencyKind; final target:String;}
+typedef SemanticDependency = {
+	final kind:SemanticDependencyKind;
+	final target:String;
+
+	/** Revision-independent semantic identity when the edge was emitted by resolution. */
+	final ?targetId:String;
+}
 
 /**
  * Incremental artifacts and last-known-good state owned by one source module.

@@ -13,6 +13,8 @@ import compiler.semantic.SemanticProgram;
 import compiler.types.Typer;
 import compiler.types.Typer.TyperPhaseMetrics;
 import compiler.types.TypedAst.TypedProgram;
+import compiler.modules.ModuleState.SemanticDependencyKind;
+import compiler.semantic.SemanticDependencyCollector;
 
 typedef FrontendResult = {
 	final ir:Null<IrProgram>;
@@ -155,6 +157,8 @@ class FrontendCompilation {
 			} else
 				state.pendingIrFunctions.set(fn.name, true);
 		}
+		if (indexSemantics)
+			publishResolvedBodyDependencies(context, reindexedModules, rollbackModules);
 		for (module in touchedModules.keys())
 			modules.get(module).typeVersion++;
 		for (name in names) {
@@ -295,5 +299,24 @@ class FrontendCompilation {
 		owners.set(fn.name, module);
 		visiting.remove(fn.name);
 		return module;
+	}
+
+	/** Replace provisional syntax call edges with calls proven by typed resolution. */
+	static function publishResolvedBodyDependencies(context:CompilationContext, reindexedModules:Map<String, Bool>,
+			rollbackModules:Map<String, ModuleState>):Void {
+		for (module in reindexedModules.keys()) {
+			var state = context.writableState(module, rollbackModules),
+				model = state.semanticModel;
+			if (model == null)
+				continue;
+			var resolved:Map<String, Array<compiler.modules.ModuleState.SemanticDependency>> = [];
+			for (owner => dependencies in state.semanticDependencies)
+				for (dependency in dependencies)
+					if (dependency.kind != SemanticDependencyKind.Body)
+						SemanticDependencyCollector.addDependency(resolved, owner, dependency.kind, dependency.target, dependency.targetId);
+			for (call in model.index.resolvedCalls())
+				SemanticDependencyCollector.addDependency(resolved, call.caller, SemanticDependencyKind.Body, call.callee, call.calleeId);
+			state.semanticDependencies = resolved;
+		}
 	}
 }

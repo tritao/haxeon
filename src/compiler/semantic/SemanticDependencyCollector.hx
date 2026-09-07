@@ -136,7 +136,8 @@ class SemanticDependencyCollector {
 			addDependency(result, owner, kind, ModuleCanonicalizer.canonicalName(module, entry, name));
 	}
 
-	public static function addDependency(result:Map<String, Array<SemanticDependency>>, owner:String, kind:SemanticDependencyKind, target:String):Void {
+	public static function addDependency(result:Map<String, Array<SemanticDependency>>, owner:String, kind:SemanticDependencyKind, target:String,
+			?targetId:String):Void {
 		var dependencies:Array<SemanticDependency>;
 		if (result.exists(owner))
 			dependencies = result.get(owner);
@@ -145,9 +146,9 @@ class SemanticDependencyCollector {
 			result.set(owner, dependencies);
 		}
 		for (dependency in dependencies)
-			if (dependency.kind == kind && dependency.target == target)
+			if (dependency.kind == kind && dependency.target == target && dependency.targetId == targetId)
 				return;
-		dependencies.push({kind: kind, target: target});
+		dependencies.push({kind: kind, target: target, targetId: targetId});
 	}
 
 	public static function sameDependencyTarget(dependency:String, changed:String):Bool

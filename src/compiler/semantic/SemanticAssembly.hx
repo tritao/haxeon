@@ -62,11 +62,14 @@ class SemanticAssembly {
 			for (declaration in program.interfaces)
 				sourceTypeAliases.set(ModuleCanonicalizer.sourceDeclarationPath(moduleName, declaration.name),
 					ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name));
-				for (declaration in program.classes)
-					sourceTypeAliases.set(ModuleCanonicalizer.sourceDeclarationPath(moduleName, declaration.name),
-						ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name));
+			for (declaration in program.classes)
+				sourceTypeAliases.set(ModuleCanonicalizer.sourceDeclarationPath(moduleName, declaration.name),
+					ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name));
 		}
-		var aliasUniverse = [for (sourceName => declarationName in sourceTypeAliases) sourceName + "=" + declarationName];
+		var aliasUniverse = [
+			for (sourceName => declarationName in sourceTypeAliases)
+				sourceName + "=" + declarationName
+		];
 		for (typeName => caseNames in enumCasesByType)
 			for (caseName in caseNames)
 				aliasUniverse.push(typeName + "#" + caseName);
@@ -201,7 +204,7 @@ class SemanticAssembly {
 				if (canonical.typeParameters != null && canonical.typeParameters.length > 0)
 					genericOrigins.set(canonical.name, true);
 				LambdaCollector.collect(canonical.statements, canonical.name, name, generatedByModule);
-				for (callee in state.canonicalCalls.get(canonical.name)) {
+				for (callee in dependencyCalls(state, rollbackModules, canonical.name, state.canonicalCalls.get(canonical.name))) {
 					var callers:Array<String>;
 					if (reverseCalls.exists(callee))
 						callers = reverseCalls.get(callee);
@@ -242,7 +245,7 @@ class SemanticAssembly {
 					for (statement in canonical.statements)
 						SemanticDependencyCollector.scanCalls(statement, calls, aliases);
 					LambdaCollector.collect(canonical.statements, canonical.name, name, generatedByModule);
-					for (callee in calls.keys()) {
+					for (callee in dependencyCalls(state, rollbackModules, canonical.name, [for (name in calls.keys()) name])) {
 						var callers:Array<String>;
 						if (reverseCalls.exists(callee))
 							callers = reverseCalls.get(callee);
@@ -385,5 +388,17 @@ class SemanticAssembly {
 			selected: selected,
 			entryPoint: entryPoint
 		};
+	}
+
+	/** Prefer the last successfully resolved call graph; syntax calls bootstrap new declarations. */
+	static function dependencyCalls(state:ModuleState, rollbackModules:Map<String, ModuleState>, owner:String, fallback:Array<String>):Array<String> {
+		var previous = rollbackModules.exists(state.name) ? rollbackModules.get(state.name) : state,
+			dependencies = previous.semanticDependencies.get(owner),
+			resolved:Array<String> = [];
+		if (dependencies != null)
+			for (dependency in dependencies)
+				if (dependency.kind == compiler.modules.ModuleState.SemanticDependencyKind.Body && dependency.targetId != null)
+					resolved.push(dependency.target);
+		return resolved.length == 0 ? fallback : resolved;
 	}
 }
