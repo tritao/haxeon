@@ -81,9 +81,13 @@ class DebugMetadataMain {
 
 		var bytes = HlWriter.encode(code),
 			suffix = encodedAssignmentSuffix(fn.debugAssignments);
+		if (bytes.get(3) != 7 || code.debugSections.length != 1 || code.debugSections[0].kind != HlWriter.FUNCTION_IDENTITIES)
+			throw "HLB function identity section was not emitted";
+		if (bytes.compare(HlWriter.encode(code)) != 0)
+			throw "HLB debug section encoding is not deterministic";
 		if (!contains(bytes, suffix))
 			throw "HLB output did not serialize canonical debug assignment triples";
-		Sys.println("PASS: HLB serializes canonical local assignment metadata");
+		Sys.println("PASS: HLB serializes deterministic local and function debug metadata");
 
 		testShadowedScopes();
 	}

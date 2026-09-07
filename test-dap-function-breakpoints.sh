@@ -6,6 +6,7 @@ tools_dir="$repo_dir/.tools"
 adapter_dir="$repo_dir/vendor/hashlink-debugger"
 dap_home="$tools_dir/dap-cli-home"
 session="hl-dap-function-breakpoints"
+top_level_session="hl-dap-top-level-function"
 dap=(npx --yes @roblourens/dap-cli@0.3.0)
 
 mkdir -p "$repo_dir/out" "$dap_home/config"
@@ -30,6 +31,8 @@ export DAP_CLI_HOME="$dap_home"
 cleanup() {
 	"${dap[@]}" stop --name "$session" >/dev/null 2>&1 || true
 	"${dap[@]}" close "$session" >/dev/null 2>&1 || true
+	"${dap[@]}" stop --name "$top_level_session" >/dev/null 2>&1 || true
+	"${dap[@]}" close "$top_level_session" >/dev/null 2>&1 || true
 	"${dap[@]}" stop-controller >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -71,10 +74,37 @@ python3 -c 'import json,sys; data=json.load(sys.stdin)["data"]; assert data["res
 for _ in {1..100}; do
 	status=$("${dap[@]}" status --name "$session" 2>/dev/null || true)
 	if python3 -c 'import json,sys; raise SystemExit(0 if json.load(sys.stdin).get("data",{}).get("status")=="terminated" else 1)' <<<"$status" 2>/dev/null; then
-		echo "PASS: DAP function breakpoints resolve qualified names, reject ambiguous names, honor conditions, and continue"
-		exit 0
+		break
 	fi
 	sleep 0.05
 done
-echo "Target did not terminate after the conditional function breakpoint" >&2
-exit 1
+if ! python3 -c 'import json,sys; raise SystemExit(0 if json.load(sys.stdin).get("data",{}).get("status")=="terminated" else 1)' <<<"$status"; then
+	echo "Target did not terminate after the conditional function breakpoint" >&2
+	exit 1
+fi
+
+"${dap[@]}" close "$session" >/dev/null
+"$tools_dir/haxe/haxe" --cwd "$repo_dir" -cp src --run Main \
+	"$repo_dir/tests/DapTopLevelFunctionProbe.hx" "$repo_dir/out/dap-top-level-function.hl" >/dev/null
+top_level_launch=$(python3 - "$repo_dir" <<'PY'
+import json, sys
+root = sys.argv[1]
+print(json.dumps({"type":"hl","request":"launch","name":"Top-level function identity","cwd":root+"/out","program":root+"/out/dap-top-level-function.hl","hl":root+"/vendor/hashlink/hl","classPaths":[root+"/tests",root+"/.tools/haxe/std"],"env":{"LD_LIBRARY_PATH":root+"/vendor/hashlink","HL_DEBUG_PROTOCOL":"3"}}))
+PY
+)
+"${dap[@]}" launch --adapter hashlink --name "$top_level_session" --json "$top_level_launch" >/dev/null
+result=$("${dap[@]}" request --name "$top_level_session" setFunctionBreakpoints --json '{"breakpoints":[{"name":"worker"}]}')
+python3 -c 'import json,sys; point=json.load(sys.stdin)["data"]["breakpoints"][0]; assert point["verified"], point' <<<"$result"
+for _ in {1..100}; do
+	status=$("${dap[@]}" status --name "$top_level_session" 2>/dev/null || true)
+	if python3 -c 'import json,sys; raise SystemExit(0 if json.load(sys.stdin).get("data",{}).get("status")=="stopped" else 1)' <<<"$status" 2>/dev/null; then break; fi
+	sleep 0.05
+done
+if ! python3 -c 'import json,sys; raise SystemExit(0 if json.load(sys.stdin).get("data",{}).get("status")=="stopped" else 1)' <<<"$status"; then
+	echo "Top-level function breakpoint did not stop" >&2
+	exit 1
+fi
+stack=$("${dap[@]}" stack --name "$top_level_session")
+python3 -c 'import json,sys; frame=json.load(sys.stdin)["data"]["stackFrames"][0]; assert frame["source"]["name"]=="DapTopLevelFunctionProbe.hx" and frame["name"].endswith("DapTopLevelFunctionProbe.worker"), frame' <<<"$stack"
+
+echo "PASS: DAP function breakpoints resolve methods and explicit top-level identities, reject ambiguous names, and honor conditions"

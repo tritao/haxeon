@@ -96,6 +96,15 @@ class HlValidator {
 		}
 		if (!functionIndices.exists(code.entryPoint))
 			throw 'Entry point ${code.entryPoint} is not a function';
+		var debugSections:Map<String, Bool> = [];
+		for (section in code.debugSections) {
+			if (section.kind <= 0 || section.version <= 0 || section.flags < 0 || section.payload == null)
+				throw "Invalid HLB debug section";
+			var key = section.kind + ":" + section.version;
+			if (debugSections.exists(key))
+				throw 'Duplicate HLB debug section $key';
+			debugSections.set(key, true);
+		}
 	}
 
 	static function addFunctionIndex(indices:Map<Int, Bool>, index:Int):Void {

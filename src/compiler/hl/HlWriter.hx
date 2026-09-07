@@ -14,6 +14,7 @@ private typedef EncodedInstruction = {
 
 /** Serializes the in-memory HashLink model using canonical HLB encodings. */
 class HlWriter {
+	public static inline final FUNCTION_IDENTITIES = 1;
 	final output:BytesOutput;
 	var hasDebug:Bool = false;
 	var debugFiles:Array<String> = [];
@@ -85,6 +86,43 @@ class HlWriter {
 		}
 		for (fn in code.functions)
 			writeFunction(fn);
+		writeDebugSections(code);
+	}
+
+	function writeDebugSections(code:HlCode):Void {
+		writeUnsignedIndex(code.debugSections.length);
+		for (section in code.debugSections) {
+			if (section.kind <= 0 || section.version <= 0 || section.flags < 0)
+				throw "Invalid HLB debug section header";
+			writeUnsignedIndex(section.kind);
+			writeUnsignedIndex(section.version);
+			writeUnsignedIndex(section.flags);
+			writeUnsignedIndex(section.payload.length);
+			output.write(section.payload);
+		}
+	}
+
+	public static function encodeFunctionIdentities(identities:Array<compiler.hl.HlCode.HlFunctionIdentity>):HaxeBytes {
+		var writer = new HlWriter();
+		writer.writeUnsignedIndex(identities.length);
+		for (identity in identities) {
+			writer.writeUnsignedIndex(identity.stableId);
+			writer.writeUnsignedIndex(identity.functionIndex);
+			writer.writeSizedString(identity.qualifiedName);
+			writer.writeSizedString(identity.displayName);
+			writer.writeSizedString(identity.sourcePath);
+			writer.writeIndex(identity.start + 1);
+			writer.writeIndex(identity.end + 1);
+			writer.writeUnsignedIndex(identity.line);
+			writer.writeUnsignedIndex(identity.flags);
+		}
+		return writer.output.getBytes();
+	}
+
+	function writeSizedString(value:String):Void {
+		var bytes = HaxeBytes.ofString(value);
+		writeUnsignedIndex(bytes.length);
+		output.write(bytes);
 	}
 
 	function writeStrings(strings:Array<String>):Void {

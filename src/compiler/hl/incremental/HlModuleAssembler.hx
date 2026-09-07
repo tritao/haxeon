@@ -134,7 +134,7 @@ class HlModuleAssembler {
 			case ReloadDomain(_): true;
 			case Reject(diagnostics): throw diagnostics.join("; ");
 		};
-		var module = HlLower.lowerStable(ordered, symbols, layout);
+		var module = HlLower.lowerStable(ordered, symbols, layout, cache.stableIds);
 		var baseInts = publishedInts,
 			baseFloats = publishedFloats,
 			baseStrings = publishedStrings,

@@ -7,6 +7,7 @@ import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlFunction.HlDebugLocation;
 import compiler.hl.HlFunction.HlDebugAssignment;
 import compiler.hl.HlType;
+import compiler.hl.HlWriter;
 import compiler.hl.incremental.HlSymbolTable;
 import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrTerminator;
@@ -34,13 +35,16 @@ class HlLower {
 		return new HlLower(new HlSymbolTable(), null).lowerProgram(program);
 	}
 
-	public static function lowerStable(program:IrProgram, symbols:HlSymbolTable, indices:Map<String, Int>):HlCode {
+	public static function lowerStable(program:IrProgram, symbols:HlSymbolTable, indices:Map<String, Int>, ?stableIds:Map<String, Int>):HlCode {
 		IrVerifier.verify(program);
-		return new HlLower(symbols, indices).lowerProgram(program);
+		return new HlLower(symbols, indices, stableIds).lowerProgram(program);
 	}
 
-	function new(symbols:HlSymbolTable, indices:Null<Map<String, Int>>) {
+	final stableIds:Null<Map<String, Int>>;
+
+	function new(symbols:HlSymbolTable, indices:Null<Map<String, Int>>, ?stableIds:Map<String, Int>) {
 		this.symbols = symbols;
+		this.stableIds = stableIds;
 		code = new HlCode();
 		code.ints = symbols.ints;
 		code.floats = symbols.floats;
@@ -129,6 +133,8 @@ class HlLower {
 			} catch (error:String) {
 				throw 'HashLink lowering failed for ${fn.name}: $error';
 			}
+		var identities = [for (fn in program.functions) functionIdentity(fn)];
+		code.debugSections.push({kind: HlWriter.FUNCTION_IDENTITIES, version: 1, flags: 0, payload: HlWriter.encodeFunctionIdentities(identities)});
 
 		code.entryPoint = requireFunction(program.entryPoint);
 		code.ints = code.ints.copy();
@@ -137,6 +143,31 @@ class HlLower {
 		code.types = code.types.copy();
 		code.globals = code.globals.copy();
 		return code;
+	}
+
+	function functionIdentity(fn:IrFunction):compiler.hl.HlCode.HlFunctionIdentity {
+		var functionIndex = requireFunction(fn.name), sourcePath = "", start = -1, end = -1, line = 0;
+		for (block in fn.blocks)
+			for (instruction in block.instructions) {
+				var location = instruction.provenance.location;
+				if (location == null) continue;
+				if (sourcePath == "") sourcePath = location.path;
+				if (start < 0 || location.start < start) start = location.start;
+				if (end < location.end) end = location.end;
+				if (line == 0 || location.line < line) line = location.line;
+			}
+		var parts = fn.name.split(".");
+		return {
+			stableId: stableIds != null && stableIds.exists(fn.name) ? stableIds.get(fn.name) : functionIndex,
+			functionIndex: functionIndex,
+			qualifiedName: fn.name,
+			displayName: parts[parts.length - 1],
+			sourcePath: sourcePath,
+			start: start,
+			end: end,
+			line: line,
+			flags: StringTools.startsWith(fn.name, "__") ? 1 : 0
+		};
 	}
 
 	function objectTypeReady(type:IrType):Bool

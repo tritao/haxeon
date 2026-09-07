@@ -2,7 +2,7 @@ package compiler.hl;
 
 /** In-memory representation of one complete HashLink bytecode module. */
 class HlCode {
-	public static inline final VERSION = 6;
+	public static inline final VERSION = 7;
 
 	public var ints:Array<Int> = [];
 	public var floats:Array<Float> = [];
@@ -11,9 +11,26 @@ class HlCode {
 	public var globals:Array<Int> = [];
 	public var natives:Array<HlNative> = [];
 	public var functions:Array<HlFunction> = [];
+	public var debugSections:Array<HlDebugSection> = [];
 	public var entryPoint:Int = 0;
 
 	public function new() {}
+}
+
+/** Independently versioned, length-delimited HLB debug metadata. */
+typedef HlDebugSection = {final kind:Int; final version:Int; final flags:Int; final payload:haxe.io.Bytes;}
+
+/** Stable debugger identity for a compiled function. */
+typedef HlFunctionIdentity = {
+	final stableId:Int;
+	final functionIndex:Int;
+	final qualifiedName:String;
+	final displayName:String;
+	final sourcePath:String;
+	final start:Int;
+	final end:Int;
+	final line:Int;
+	final flags:Int;
 }
 
 /** HashLink type-table entry whose references are indices into {@link HlCode.types}. */

@@ -53,13 +53,14 @@ class ModuleMappings:
     regions: list[PatchRegion]
 
 
-def read_function(reader: Reader, indexed: bool) -> int:
+def read_function(reader: Reader, indexed: bool, stable: bool = False) -> int:
     function_index = reader.i32() if indexed else -1
+    stable_id = reader.i32() if stable else function_index
     nops = reader.i32()
     _start = reader.i32()
     vars_size = reader.i32()
     large = reader.read(1)[0]
-    if nops < 0 or vars_size < 0 or large not in (0, 1):
+    if nops < 0 or vars_size < 0 or large not in (0, 1) or (stable and stable_id < 0):
         raise ProtocolError("invalid HLD3 function mapping")
     reader.read((nops + 1) * (4 if large else 2))
     reader.read(vars_size)
@@ -84,7 +85,7 @@ def read_patch_regions(reader: Reader, pointer_size: int) -> ModuleMappings:
     if function_count < 0:
         raise ProtocolError("invalid HLD3 module function count")
     for _ in range(function_count):
-        read_function(reader, False)
+        read_function(reader, False, True)
     region_count = reader.i32()
     if revision < 1 or region_count < 0:
         raise ProtocolError("invalid HLD3 module revision or region count")
@@ -96,7 +97,7 @@ def read_patch_regions(reader: Reader, pointer_size: int) -> ModuleMappings:
         function_count = reader.i32()
         if address == 0 or size <= 0 or retired not in (0, 1) or function_count <= 0:
             raise ProtocolError("invalid HLD3 patch region")
-        functions = [read_function(reader, True) for _ in range(function_count)]
+        functions = [read_function(reader, True, True) for _ in range(function_count)]
         if any(index < 0 for index in functions) or len(set(functions)) != len(functions):
             raise ProtocolError("invalid HLD3 patch function indices")
         regions.append(PatchRegion(address, size, retired == 1, functions))
