@@ -45,7 +45,7 @@ class SemanticSignature {
 			case TArray(element): 'Array<${type(element)}>';
 			case TMap(key, value): 'Map<${type(key)},${type(value)}>';
 			case TFunction(arguments, result): '(${[for (argument in arguments) type(argument)].join(",")})->${type(result)}';
-			case TAnonymous(_, fields): anonymousFields(fields);
+			case TAnonymous(name, _): name;
 		};
 
 	public static function parsedFunction(fn:AstFunction, aliases:Array<AstTypeAlias>):String {

@@ -3929,8 +3929,7 @@ class Typer {
 
 	function registerAnonymousTypes(type:CompilerType):Void
 		switch type {
-			case TAnonymous(_, fields):
-				var name = SemanticSignature.anonymousTypeName(fields);
+			case TAnonymous(name, fields):
 				if (anonymousTypes.exists(name))
 					return;
 				anonymousTypes.set(name, fields);
