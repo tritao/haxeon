@@ -47,6 +47,7 @@ enum TokenKind {
 	Integer;
 	Float;
 	StringLiteral;
+	RegexLiteral;
 	LeftParen;
 	RightParen;
 	LeftBrace;
@@ -84,6 +85,7 @@ enum TokenKind {
 	At;
 	Eof;
 }
+
 /** One lexical token retaining its original spelling and source location. */
 class Token {
 	public final kind:TokenKind;

@@ -55,6 +55,17 @@ if [[ $exception_status -ne 42 ]]; then
 	exit 1
 fi
 echo "PASS: exceptions can be chained, thrown, caught, and inspected (exit 42)"
+ereg_output="$root_dir/out/ereg.hl"
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run ERegMain "$ereg_output"
+set +e
+LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$ereg_output"
+ereg_status=$?
+set -e
+if [[ $ereg_status -ne 42 ]]; then
+	echo "EReg compatibility: expected exit 42, got $ereg_status" >&2
+	exit 1
+fi
+echo "PASS: regex literals and EReg operations executed (exit 42)"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ProtocolMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run LspProtocolMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run RuntimeDomainMain

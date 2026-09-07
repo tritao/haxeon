@@ -1172,6 +1172,13 @@ class Parser {
 			return parsePostfix(FloatLiteral(Std.parseFloat(previous().text), previous().span));
 		if (match(TokenKind.StringLiteral))
 			return parsePostfix(parseStringExpression(previous()));
+		if (match(TokenKind.RegexLiteral)) {
+			var token = previous(),
+				delimiter = token.text.lastIndexOf("/"),
+				pattern = StringTools.replace(token.text.substring(2, delimiter), "\\/", "/"),
+				options = token.text.substring(delimiter + 1);
+			return parsePostfix(New("EReg", [StringLiteral(pattern, token.span), StringLiteral(options, token.span)], token.span));
+		}
 		if (match(TokenKind.BoolTrue))
 			return parsePostfix(BoolLiteral(true, previous().span));
 		if (match(TokenKind.BoolFalse))

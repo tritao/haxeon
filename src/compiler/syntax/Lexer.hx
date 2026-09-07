@@ -35,18 +35,51 @@ class Lexer {
 				if (next == "*".code) {
 					var commentStart = position;
 					position += 2;
-					while (position + 1 < source.length
-						&& !(source.get(position) == "*".code && source.get(position + 1) == "/".code))
+					while (position + 1 < source.length && !(source.get(position) == "*".code && source.get(position + 1) == "/".code))
 						position++;
 					if (position + 1 >= source.length)
-						throw new CompileError(new Diagnostic("E0001", "Unterminated block comment", file.span(commentStart, position), DiagnosticSeverity.Error, [
-							{id: "close-block-comment", title: "Close block comment", edits: [{span: file.span(position, position), replacement: "*/"}]}
+						throw new CompileError(new Diagnostic("E0001", "Unterminated block comment", file.span(commentStart, position),
+							DiagnosticSeverity.Error, [
+							{
+								id: "close-block-comment",
+								title: "Close block comment",
+								edits: [{span: file.span(position, position), replacement: "*/"}]
+							}
 						]));
 					position += 2;
 					continue;
 				}
 			}
 			var start = position;
+			if (code == "~".code && position + 1 < source.length && source.get(position + 1) == "/".code) {
+				position += 2;
+				var escaped = false, characterClass = false, closed = false;
+				while (position < source.length) {
+					var current = source.get(position++);
+					if (escaped) {
+						escaped = false;
+						continue;
+					}
+					if (current == "\\".code) {
+						escaped = true;
+						continue;
+					}
+					if (current == "[".code)
+						characterClass = true;
+					else if (current == "]".code)
+						characterClass = false;
+					else if (current == "/".code && !characterClass) {
+						closed = true;
+						break;
+					}
+				}
+				if (!closed)
+					throw new CompileError(new Diagnostic("E0001", "Unterminated regular expression literal", file.span(start, position)));
+				while (position < source.length && isIdentifierPart(source.get(position)))
+					position++;
+				tokens.push(new Token(TokenKind.RegexLiteral, text(start, position), file.span(start, position)));
+				continue;
+			}
 			if (code == "\"".code || code == "'".code) {
 				var quote = code;
 				position++;
@@ -68,7 +101,8 @@ class Lexer {
 				}
 				if (!closed)
 					throw new CompileError(new Diagnostic("E0001", "Unterminated string literal", file.span(start, position), DiagnosticSeverity.Error, [
-						{id: "close-string-literal", title: "Close string literal", edits: [{span: file.span(position, position), replacement: String.fromCharCode(quote)}]}
+						{id: "close-string-literal", title: "Close string literal", edits: [{span: file.span(position,
+							position), replacement: String.fromCharCode(quote)}]}
 					]));
 				tokens.push(new Token(TokenKind.StringLiteral, text(start, position), file.span(start, position)));
 				continue;
@@ -83,7 +117,8 @@ class Lexer {
 			}
 			if (isDigit(code)) {
 				position++;
-				if (code == "0".code && position < source.length
+				if (code == "0".code
+					&& position < source.length
 					&& (source.get(position) == "x".code || source.get(position) == "X".code)) {
 					position++;
 					var digitsStart = position;

@@ -54,5 +54,10 @@ and `haxe.CallStack`. Exception objects retain messages, wrapped values, and
 previous-exception chains. Stack snapshots are currently deterministic and
 empty until native HashLink stack capture is exposed through the runtime ABI.
 
+`EReg` accepts both `new EReg(pattern, options)` and Haxe regex-literal syntax.
+The current deterministic subset treats patterns literally and supports `i`
+and `g`, match inspection, replacement, and splitting. Character classes,
+captures, anchors, and other advanced operators remain future work.
+
 The pinned upstream source and module-by-module analysis baseline are documented
 in [Upstream utest compatibility](../docs/UTEST_UPSTREAM_COMPATIBILITY.md).
