@@ -59,8 +59,50 @@ class StringTools {
 		return stringToolsLtrim(s);
 	}
 
+	public static function rtrim(s:String):String {
+		var length = s.length;
+		var removed = 0;
+		while (removed < length && isSpace(s, length - removed - 1))
+			removed++;
+		return removed == 0 ? s : s.substr(0, length - removed);
+	}
+
 	public static inline function trim(s:String):String {
 		return stringToolsTrim(s);
+	}
+
+	public static function lpad(s:String, c:String, length:Int):String {
+		if (c.length == 0)
+			return s;
+		var buffer = new StringBuf();
+		var padding = length - s.length;
+		while (buffer.length < padding)
+			buffer.add(c);
+		buffer.add(s);
+		return buffer.toString();
+	}
+
+	public static function rpad(s:String, c:String, length:Int):String {
+		if (c.length == 0)
+			return s;
+		var buffer = new StringBuf();
+		buffer.add(s);
+		while (buffer.length < length)
+			buffer.add(c);
+		return buffer.toString();
+	}
+
+	public static function hex(n:Int, ?digits:Int):String {
+		var result = "";
+		var characters = "0123456789ABCDEF";
+		do {
+			result = characters.charAt(n & 15) + result;
+			n = n >>> 4;
+		} while (n > 0);
+		if (digits != null)
+			while (result.length < digits)
+				result = "0" + result;
+		return result;
 	}
 
 	public static inline function isSpace(s:String, pos:Int):Bool {
