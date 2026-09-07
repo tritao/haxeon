@@ -25,6 +25,7 @@ typedef RecoveredParse = {
 /** Recursive-descent parser for the supported Haxe-compatible source subset. */
 class Parser {
 	static inline final MAX_RECOVERY_DIAGNOSTICS = 20;
+
 	final tokens:Array<Token>;
 	var position:Int = 0;
 	var recovering:Bool = false;
@@ -57,32 +58,32 @@ class Parser {
 		while (!check(TokenKind.Eof)) {
 			var declarationStart = position;
 			try {
-			var metadata = parseMetadata();
-			var visibility = match(TokenKind.Private) ? previous() : match(TokenKind.Public) ? previous() : null;
-			var externDeclaration = check(TokenKind.Identifier) && current().text == "extern";
-			if (externDeclaration)
-				advance();
-			if (match(TokenKind.Typedef))
-				aliases.push(parseTypeAlias(visibility == null ? previous()
-					.span : visibility.span, visibility != null && visibility.kind == TokenKind.Private));
-			else if (match(TokenKind.Enum)) {
-				var start = previous().span;
-				if (check(TokenKind.Identifier) && current().text == "abstract") {
+				var metadata = parseMetadata();
+				var visibility = match(TokenKind.Private) ? previous() : match(TokenKind.Public) ? previous() : null;
+				var externDeclaration = check(TokenKind.Identifier) && current().text == "extern";
+				if (externDeclaration)
 					advance();
-					enumAbstracts.push(parseEnumAbstract(start));
+				if (match(TokenKind.Typedef))
+					aliases.push(parseTypeAlias(visibility == null ? previous()
+						.span : visibility.span, visibility != null && visibility.kind == TokenKind.Private));
+				else if (match(TokenKind.Enum)) {
+					var start = previous().span;
+					if (check(TokenKind.Identifier) && current().text == "abstract") {
+						advance();
+						enumAbstracts.push(parseEnumAbstract(start));
+					} else
+						enums.push(parseEnum(start));
+				} else if (check(TokenKind.Interface))
+					interfaces.push(parseInterface());
+				else if (check(TokenKind.Class))
+					classes.push(parseClass(visibility != null && visibility.kind == TokenKind.Private, metadata, externDeclaration));
+				else if (visibility != null)
+					fail(current(), "Top-level visibility modifier is not supported for this declaration");
+				else if (check(TokenKind.Identifier) && current().text == "abstract") {
+					var start = advance().span;
+					abstracts.push(parseAbstract(start, externDeclaration, metadata));
 				} else
-					enums.push(parseEnum(start));
-			} else if (check(TokenKind.Interface))
-				interfaces.push(parseInterface());
-			else if (check(TokenKind.Class))
-				classes.push(parseClass(visibility != null && visibility.kind == TokenKind.Private, metadata, externDeclaration));
-			else if (visibility != null)
-				fail(current(), "Top-level visibility modifier is not supported for this declaration");
-			else if (check(TokenKind.Identifier) && current().text == "abstract") {
-				var start = advance().span;
-				abstracts.push(parseAbstract(start, externDeclaration, metadata));
-			} else
-				functions.push(parseFunction(false, externDeclaration, metadata));
+					functions.push(parseFunction(false, externDeclaration, metadata));
 			} catch (error:CompileError) {
 				if (!recovering)
 					throw error;
@@ -116,8 +117,11 @@ class Parser {
 		var braceDepth = 0;
 		for (index in 0...position)
 			switch tokens[index].kind {
-				case TokenKind.LeftBrace: braceDepth++;
-				case TokenKind.RightBrace: if (braceDepth > 0) braceDepth--;
+				case TokenKind.LeftBrace:
+					braceDepth++;
+				case TokenKind.RightBrace:
+					if (braceDepth > 0)
+						braceDepth--;
 				default:
 			}
 		if (position <= declarationStart && !check(TokenKind.Eof))
@@ -126,8 +130,11 @@ class Parser {
 			if (braceDepth == 0 && isTopLevelStart(current()))
 				return;
 			switch advance().kind {
-				case TokenKind.LeftBrace: braceDepth++;
-				case TokenKind.RightBrace: if (braceDepth > 0) braceDepth--;
+				case TokenKind.LeftBrace:
+					braceDepth++;
+				case TokenKind.RightBrace:
+					if (braceDepth > 0)
+						braceDepth--;
 				default:
 			}
 		}
@@ -397,8 +404,11 @@ class Parser {
 		var braceDepth = 0;
 		for (index in bodyStart...position)
 			switch tokens[index].kind {
-				case TokenKind.LeftBrace: braceDepth++;
-				case TokenKind.RightBrace: if (braceDepth > 0) braceDepth--;
+				case TokenKind.LeftBrace:
+					braceDepth++;
+				case TokenKind.RightBrace:
+					if (braceDepth > 0)
+						braceDepth--;
 				default:
 			}
 		if (position <= statementStart && !check(TokenKind.Eof))
@@ -408,9 +418,14 @@ class Parser {
 				return;
 			var consumed = advance().kind;
 			switch consumed {
-				case TokenKind.LeftBrace: braceDepth++;
-				case TokenKind.RightBrace: if (braceDepth > 0) braceDepth--;
-				case TokenKind.Semicolon: if (braceDepth == 0) return;
+				case TokenKind.LeftBrace:
+					braceDepth++;
+				case TokenKind.RightBrace:
+					if (braceDepth > 0)
+						braceDepth--;
+				case TokenKind.Semicolon:
+					if (braceDepth == 0)
+						return;
 				default:
 			}
 		}
@@ -469,64 +484,64 @@ class Parser {
 		while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof)) {
 			var memberStart = position;
 			try {
-			var memberMetadata = parseMetadata();
-			var isStatic = false, isFinal = false;
-			while (true) {
-				if (current().kind == TokenKind.Identifier && current().text == "override") {
-					advance();
-					continue;
-				}
-				switch current().kind {
-					case TokenKind.Public, TokenKind.Private:
+				var memberMetadata = parseMetadata();
+				var isStatic = false, isFinal = false;
+				while (true) {
+					if (current().kind == TokenKind.Identifier && current().text == "override") {
 						advance();
-					case TokenKind.Static:
-						advance();
-						isStatic = true;
-					case TokenKind.Inline:
-						advance();
-					case TokenKind.Final:
-						advance();
-						isFinal = true;
-					default:
+						continue;
+					}
+					switch current().kind {
+						case TokenKind.Public, TokenKind.Private:
+							advance();
+						case TokenKind.Static:
+							advance();
+							isStatic = true;
+						case TokenKind.Inline:
+							advance();
+						case TokenKind.Final:
+							advance();
+							isFinal = true;
+						default:
+							break;
+					}
+					if (current().kind != TokenKind.Public && current().kind != TokenKind.Private && current().kind != TokenKind.Static
+						&& current().kind != TokenKind.Inline && current().kind != TokenKind.Final)
 						break;
 				}
-				if (current().kind != TokenKind.Public && current().kind != TokenKind.Private && current().kind != TokenKind.Static
-					&& current().kind != TokenKind.Inline && current().kind != TokenKind.Final)
-					break;
-			}
-			if (match(TokenKind.Function)) {
-				var functionStart = previous().span,
-					methodName = check(TokenKind.New) ? advance().text : consume(TokenKind.Identifier).text;
-				methods.push(parseFunctionBody(functionStart, methodName, true, isStatic, isExtern, memberMetadata));
-			} else {
-				var fieldStart = current().span;
-				match(TokenKind.Var);
-				var fieldName = consume(TokenKind.Identifier).text;
-				var readAccess = null, writeAccess = null;
-				if (match(TokenKind.LeftParen)) {
-					readAccess = parseFieldAccess();
-					consume(TokenKind.Comma);
-					writeAccess = parseFieldAccess();
-					consume(TokenKind.RightParen);
+				if (match(TokenKind.Function)) {
+					var functionStart = previous().span,
+						methodName = check(TokenKind.New) ? advance().text : consume(TokenKind.Identifier).text;
+					methods.push(parseFunctionBody(functionStart, methodName, true, isStatic, isExtern, memberMetadata));
+				} else {
+					var fieldStart = current().span;
+					match(TokenKind.Var);
+					var fieldName = consume(TokenKind.Identifier).text;
+					var readAccess = null, writeAccess = null;
+					if (match(TokenKind.LeftParen)) {
+						readAccess = parseFieldAccess();
+						consume(TokenKind.Comma);
+						writeAccess = parseFieldAccess();
+						consume(TokenKind.RightParen);
+					}
+					var fieldType = match(TokenKind.Colon) ? parseType() : null,
+						initializer = match(TokenKind.Assign) ? parseExpression() : null;
+					if (fieldType == null) {
+						if (initializer == null)
+							fail(current(), 'Field "$fieldName" requires a type or initializer');
+					}
+					var end = consume(TokenKind.Semicolon).span;
+					fields.push({
+						name: fieldName,
+						type: fieldType,
+						initializer: initializer,
+						readAccess: readAccess,
+						writeAccess: writeAccess,
+						isStatic: isStatic,
+						isFinal: isFinal,
+						span: fieldStart.merge(end)
+					});
 				}
-				var fieldType = match(TokenKind.Colon) ? parseType() : null,
-					initializer = match(TokenKind.Assign) ? parseExpression() : null;
-				if (fieldType == null) {
-					if (initializer == null)
-						fail(current(), 'Field "$fieldName" requires a type or initializer');
-				}
-				var end = consume(TokenKind.Semicolon).span;
-				fields.push({
-					name: fieldName,
-					type: fieldType,
-					initializer: initializer,
-					readAccess: readAccess,
-					writeAccess: writeAccess,
-					isStatic: isStatic,
-					isFinal: isFinal,
-					span: fieldStart.merge(end)
-				});
-			}
 			} catch (error:CompileError) {
 				if (!recovering)
 					throw error;
@@ -554,8 +569,11 @@ class Parser {
 		var braceDepth = 0;
 		for (index in bodyStart...position)
 			switch tokens[index].kind {
-				case TokenKind.LeftBrace: braceDepth++;
-				case TokenKind.RightBrace: if (braceDepth > 0) braceDepth--;
+				case TokenKind.LeftBrace:
+					braceDepth++;
+				case TokenKind.RightBrace:
+					if (braceDepth > 0)
+						braceDepth--;
 				default:
 			}
 		if (position <= memberStart && !check(TokenKind.Eof))
@@ -564,8 +582,11 @@ class Parser {
 			if (braceDepth == 0 && (check(TokenKind.RightBrace) || isClassMemberStart(current())))
 				return;
 			switch advance().kind {
-				case TokenKind.LeftBrace: braceDepth++;
-				case TokenKind.RightBrace: if (braceDepth > 0) braceDepth--;
+				case TokenKind.LeftBrace:
+					braceDepth++;
+				case TokenKind.RightBrace:
+					if (braceDepth > 0)
+						braceDepth--;
 				default:
 			}
 		}
@@ -1115,13 +1136,15 @@ class Parser {
 		if (check(TokenKind.Identifier) && peekKind(1) == TokenKind.Arrow) {
 			var argument = advance(), start = argument.span;
 			advance();
-			var arguments:Array<AstArgument> = [{
-				name: argument.text,
-				type: InferredType,
-				span: argument.span,
-				optional: false,
-				defaultValue: null
-			}], body = parseArrowFunctionBody();
+			var arguments:Array<AstArgument> = [
+				{
+					name: argument.text,
+					type: InferredType,
+					span: argument.span,
+					optional: false,
+					defaultValue: null
+				}
+			], body = parseArrowFunctionBody();
 			return Lambda(arguments, body, start.merge(body.length == 0 ? previous().span : statementSpan(body[body.length - 1])));
 		}
 		if (match(TokenKind.If)) {
@@ -1216,6 +1239,10 @@ class Parser {
 			var start = previous().span;
 			if (check(TokenKind.Identifier) && current().text == "Array") {
 				advance();
+				if (match(TokenKind.LeftParen)) {
+					var end = consume(TokenKind.RightParen).span;
+					return parsePostfix(ArrayLiteral([], start.merge(end)));
+				}
 				consume(TokenKind.Less);
 				var element = parseType();
 				consume(TokenKind.Greater);
@@ -1226,6 +1253,10 @@ class Parser {
 			}
 			if (check(TokenKind.Identifier) && current().text == "Map") {
 				advance();
+				if (match(TokenKind.LeftParen)) {
+					var end = consume(TokenKind.RightParen).span;
+					return parsePostfix(MapLiteral([], start.merge(end)));
+				}
 				consume(TokenKind.Less);
 				var key = parseType();
 				consume(TokenKind.Comma);
@@ -1562,8 +1593,15 @@ class Parser {
 		if (match(TokenKind.LeftParen)) {
 			var arguments = [];
 			if (!check(TokenKind.RightParen)) {
-				do
-					arguments.push(parseType()) while (match(TokenKind.Comma));
+				do {
+					var optional = match(TokenKind.Question);
+					if (check(TokenKind.Identifier) && peekKind(1) == TokenKind.Colon) {
+						advance();
+						advance();
+					}
+					var argument = parseType();
+					arguments.push(optional ? NullableType(argument) : argument);
+				} while (match(TokenKind.Comma));
 			}
 			consume(TokenKind.RightParen);
 			consume(TokenKind.Arrow);
@@ -1696,12 +1734,19 @@ class Parser {
 
 	function canInsert(kind:TokenKind):Bool
 		return switch kind {
-			case TokenKind.Semicolon:
-				check(TokenKind.RightBrace) || check(TokenKind.Eof) || isTopLevelStart(current());
+			case TokenKind.Semicolon: check(TokenKind.RightBrace) || check(TokenKind.Eof) || isTopLevelStart(current());
 			case TokenKind.RightParen:
-				check(TokenKind.LeftBrace) || check(TokenKind.Colon) || check(TokenKind.Semicolon) || check(TokenKind.Arrow) || check(TokenKind.Eof);
+				check(TokenKind.LeftBrace)
+				|| check(TokenKind.Colon)
+				|| check(TokenKind.Semicolon)
+				|| check(TokenKind.Arrow)
+				|| check(TokenKind.Eof);
 			case TokenKind.RightBracket:
-				check(TokenKind.Assign) || check(TokenKind.Semicolon) || check(TokenKind.Comma) || check(TokenKind.RightParen) || check(TokenKind.Eof);
+				check(TokenKind.Assign)
+				|| check(TokenKind.Semicolon)
+				|| check(TokenKind.Comma)
+				|| check(TokenKind.RightParen)
+				|| check(TokenKind.Eof);
 			case TokenKind.Colon, TokenKind.LeftBrace:
 				check(TokenKind.Eof);
 			case TokenKind.RightBrace:
@@ -1710,10 +1755,16 @@ class Parser {
 		};
 
 	function insertMissing(kind:TokenKind):Token {
-		var replacement = tokenText(kind), span = new SourceSpan(current().span.file, current().span.start, current().span.start);
-		recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", 'Expected $kind, got ${current().kind}', span, compiler.Diagnostic.DiagnosticSeverity.Error, [
-			{id: "insert-" + replacement, title: 'Insert "$replacement"', edits: [{span: span, replacement: replacement}]}
-		]));
+		var replacement = tokenText(kind),
+			span = new SourceSpan(current().span.file, current().span.start, current().span.start);
+		recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", 'Expected $kind, got ${current().kind}', span, compiler.Diagnostic.DiagnosticSeverity.Error,
+			[
+				{
+					id: "insert-" + replacement,
+					title: 'Insert "$replacement"',
+					edits: [{span: span, replacement: replacement}]
+				}
+			]));
 		return new Token(kind, replacement, span);
 	}
 
@@ -1790,14 +1841,14 @@ class Parser {
 
 	static function expressionSpan(expression:AstExpression):SourceSpan
 		return switch expression {
-			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), BoolLiteral(_, span), NullLiteral(span), Unreachable(span), ErrorExpression(span),
-				Variable(_, span), Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span), Div(_, _, span), Mod(_, _, span),
-				BitAnd(_, _, span), BitXor(_, _, span), BitOr(_, _, span), ShiftLeft(_, _, span), ShiftRight(_, _, span), UnsignedShiftRight(_, _, span),
-				Negate(_, span), Less(_, _, span), LessEqual(_, _, span), Greater(_, _, span), GreaterEqual(_, _, span), Equal(_, _, span),
-				NotEqual(_, _, span), Not(_, span), Call(_, _, span), MethodCall(_, _, _, span), New(_, _, span), NewGeneric(_, _, _, span),
-				NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span), PostfixIncrement(_, _, span), Lambda(_, _, span), And(_, _, span),
-				Or(_, _, span), Conditional(_, _, _, span), BlockExpression(_, _, span), ThrowExpression(_, span), SwitchExpression(_, _, _, span),
-				Cast(_, _, span): span;
+			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), BoolLiteral(_, span), NullLiteral(span), Unreachable(span),
+				ErrorExpression(span), Variable(_, span), Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span), Div(_, _, span),
+				Mod(_, _, span), BitAnd(_, _, span), BitXor(_, _, span), BitOr(_, _, span), ShiftLeft(_, _, span), ShiftRight(_, _, span),
+				UnsignedShiftRight(_, _, span), Negate(_, span), Less(_, _, span), LessEqual(_, _, span), Greater(_, _, span), GreaterEqual(_, _, span),
+				Equal(_, _, span), NotEqual(_, _, span), Not(_, span), Call(_, _, span), MethodCall(_, _, _, span), New(_, _, span),
+				NewGeneric(_, _, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span), PostfixIncrement(_, _, span), Lambda(_, _, span),
+				And(_, _, span), Or(_, _, span), Conditional(_, _, _, span), BlockExpression(_, _, span), ThrowExpression(_, span),
+				SwitchExpression(_, _, _, span), Cast(_, _, span): span;
 			case ObjectLiteral(_, span), ArrayLiteral(_, span), MapLiteral(_, span), ArrayComprehension(_, _, _, _, _, span),
 				MapComprehension(_, _, _, _, _, _, span), Range(_, _, span): span;
 		}

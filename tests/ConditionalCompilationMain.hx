@@ -21,6 +21,10 @@ class ConditionalCompilationMain {
 		var literal = "function css():String return '#utesttip { color: #fff; }'; // #error ignored\n/* #if ignored */";
 		if (process(literal, []) != literal)
 			throw "directive-like text in strings or comments was modified";
+		var utf8 = "function label():String return 'café';\nfunction selected():String return #if disabled 'é' #else 'ok' #end;",
+			processedUtf8 = process(utf8, []);
+		if (haxe.io.Bytes.ofString(processedUtf8).length != haxe.io.Bytes.ofString(utf8).length || processedUtf8.indexOf("café") < 0)
+			throw "conditional masking did not preserve UTF-8 byte offsets";
 
 		process("#if disabled\n#error inactive\n#end\nfunction main():Int return 42;", []);
 		expectError("#unknown value", "Unknown conditional directive #unknown");

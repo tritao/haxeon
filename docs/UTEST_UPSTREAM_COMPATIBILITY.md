@@ -21,9 +21,9 @@ yet promise complete runtime behavior.
 | Module | Status | Diagnostic | First blocker |
 | --- | --- | --- | --- |
 | `utest.Assert` | blocked | `E0002` | Expected Semicolon, got Identifier |
-| `utest.Assertation` | blocked | `E1020` | Unknown type "Any" |
-| `utest.Async` | blocked | `E1020` | Unknown type "haxe.Timer" |
-| `utest.Dispatcher` | blocked | `E0002` | Expected Less, got LeftParen |
+| `utest.Assertation` | blocked | `E2001` | Missing module "haxe.CallStack" |
+| `utest.Async` | blocked | `E2001` | Missing module "haxe.Timer" |
+| `utest.Dispatcher` | blocked | `E2001` | Missing module "haxe.Exception" |
 | `utest.ITest` | pass | `-` | - |
 | `utest.IgnoredFixture` | blocked | `E0002` | Expected Function, got Var |
 | `utest.MacroRunner` | blocked | `E0002` | Field "macro" requires a type or initializer |
@@ -32,25 +32,25 @@ yet promise complete runtime behavior.
 | `utest.TestData` | blocked | `E0002` | Expected Colon, got LeftParen |
 | `utest.TestFixture` | blocked | `E0002` | Expected Function, got Identifier |
 | `utest.TestHandler` | blocked | `E0002` | Expected expression |
-| `utest.TestResult` | blocked | `E1020` | Unknown type "Any" |
+| `utest.TestResult` | blocked | `E2001` | Missing module "haxe.CallStack" |
 | `utest.UTest` | blocked | `E0002` | Expected Function, got Final |
-| `utest.exceptions.AssertFailureException` | blocked | `E1020` | Unknown type "haxe.Exception" |
-| `utest.exceptions.UTestException` | blocked | `E1020` | Unknown type "haxe.Exception" |
+| `utest.exceptions.AssertFailureException` | blocked | `E2001` | Missing module "haxe.Exception" |
+| `utest.exceptions.UTestException` | blocked | `E2001` | Missing module "haxe.Exception" |
 | `utest.ui.Report` | blocked | `E0001` | Unexpected character "~" |
-| `utest.ui.common.ClassResult` | blocked | `E0002` | Expected Less, got LeftParen |
-| `utest.ui.common.FixtureResult` | blocked | `E0002` | Expected Less, got LeftParen |
+| `utest.ui.common.ClassResult` | blocked | `E2001` | Missing module "haxe.CallStack" |
+| `utest.ui.common.FixtureResult` | blocked | `E2001` | Missing module "haxe.CallStack" |
 | `utest.ui.common.HeaderDisplayMode` | pass | `-` | - |
 | `utest.ui.common.IReport` | blocked | `E0002` | Expected Function, got Public |
-| `utest.ui.common.PackageResult` | blocked | `E0002` | Expected Less, got LeftParen |
-| `utest.ui.common.ReportTools` | blocked | `E0002` | Expected Less, got LeftParen |
-| `utest.ui.common.ResultAggregator` | blocked | `E0002` | Expected Less, got LeftParen |
-| `utest.ui.common.ResultStats` | blocked | `E0002` | Expected Less, got LeftParen |
+| `utest.ui.common.PackageResult` | blocked | `E2001` | Missing module "haxe.CallStack" |
+| `utest.ui.common.ReportTools` | blocked | `E2001` | Missing module "haxe.Exception" |
+| `utest.ui.common.ResultAggregator` | blocked | `E0001` | Unexpected character "~" |
+| `utest.ui.common.ResultStats` | blocked | `E2001` | Missing module "haxe.Exception" |
 | `utest.ui.macro.MacroReport` | pass | `-` | - |
 | `utest.ui.text.DiagnosticsReport` | blocked | `E0002` | Expected Function, got Identifier |
 | `utest.ui.text.HtmlReport` | blocked | `E0002` | Expected Function, got Identifier |
 | `utest.ui.text.PlainTextReport` | blocked | `E0002` | Expected Function, got Identifier |
 | `utest.ui.text.PrintReport` | blocked | `E0001` | Unexpected character "~" |
-| `utest.ui.text.TeamcityReport` | blocked | `E0002` | Field "override" requires a type or initializer |
+| `utest.ui.text.TeamcityReport` | blocked | `E0002` | Unterminated string interpolation |
 | `utest.utils.AccessoriesUtils` | blocked | `E0002` | Expected Function, got Identifier |
 | `utest.utils.AsyncUtils` | blocked | `E2001` | Missing module "utest.utils.Async" |
 | `utest.utils.Macro` | blocked | `E0002` | Field "macro" requires a type or initializer |
@@ -61,12 +61,12 @@ Baseline result: **3 of 36 modules analyze unchanged**.
 
 ## Priority order
 
-1. Support function-type syntax with named and optional arguments. The current
-   `Expected Less, got LeftParen` failures share this parser limitation.
-2. Add core aliases and classes used throughout upstream utest: `Any`,
-   `haxe.Exception`, and `List`.
-3. Add regular-expression literals and `EReg`; the newly selected target
-   branches in `Runner`, `Report`, and `PrintReport` now reach this syntax.
+1. Add `haxe.Exception` and `haxe.CallStack`; these are now the shared first
+   blocker for nine modules after function types and inferred collection
+   constructors were accepted.
+2. Add regular-expression literals and `EReg`; `Runner`, `Report`,
+   `ResultAggregator`, and `PrintReport` now reach this syntax.
+3. Add remaining core aliases and classes such as `Any` and `List`.
 4. Improve same-package and secondary-type module resolution, beginning with
    upstream `utest.Test` and `utest.utils.AsyncUtils`.
 5. Broaden `Type`/`Reflect` APIs, then add `haxe.Timer`; these unlock typed
