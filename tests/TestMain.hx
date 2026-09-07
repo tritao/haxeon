@@ -61,8 +61,11 @@ class TestMain {
 			|| lexicalForms[2].kind != compiler.syntax.Token.TokenKind.At)
 			throw "Common Haxe lexical forms were not tokenized";
 		var unicodeSource = new SourceFile("unicode.hx", "é\nx");
-		if (unicodeSource.bytes.length != 4 || unicodeSource.slice(0, 2) != "é" || unicodeSource.lineAt(3) != 2
-			|| unicodeSource.byteOffsetAt(1, 1) != 4 || unicodeSource.lspPosition(4).character != 1)
+		if (unicodeSource.bytes.length != 4
+			|| unicodeSource.slice(0, 2) != "é"
+			|| unicodeSource.lineAt(3) != 2
+			|| unicodeSource.byteOffsetAt(1, 1) != 4
+			|| unicodeSource.lspPosition(4).character != 1)
 			throw "Unicode source indexing did not preserve byte and LSP offsets";
 		var unicodeTokens = new Lexer(new SourceFile("unicode-token.hx", "\"é\"")).tokenize();
 		if (unicodeTokens[0].text != "\"é\"" || unicodeTokens[0].span.end != 4)
@@ -75,6 +78,7 @@ class TestMain {
 		Frontend.compile('enum Kind { Void; Float; } function main():Int { var value:Kind = Kind.Float; return switch value { case Kind.Void: 0; case Kind.Float: 42; }; }');
 		Frontend.compile('enum Kind { First; Second; } function main():Int { var value:Kind = Second; return switch value { case First: 0; case Second: 42; }; }');
 		Frontend.compile('enum Result { Value(value:Int, ?message:String); } function main():Int { var result:Result = Result.Value(42); switch result { case Result.Value(value): return value; } }');
+		Frontend.compile('enum Result { Values(values:Array<Int>); } function main():Int { var result:Result = Values([40, 2]); return switch result { case Values([first, second]): first + second; default: 0; }; }');
 		Frontend.compile('enum Severity { Error; Warning; } function severity(?value:Severity = Error):Severity return value; function main():Int { var value = severity(); return 42; }');
 		Frontend.compile('enum Value { Present(value:Int); } function main():Int { var value:Null<Value> = true ? null : Present(42); return 42; }');
 		Frontend.compile('enum Value { Present(value:Int); } function main():Int { var value:Value = Present(1); value = Present(42); return 42; }');
@@ -84,7 +88,11 @@ class TestMain {
 		Frontend.compile('typedef Options = { final ?name:String; ?final count:Int; } function main():Int { return 42; }');
 		Frontend.compile('enum Value { Present; } typedef Options = { ?value:Value }; function main():Int { var options:Options = { value: null }; return 42; }');
 		Frontend.compile('function main():Int { var values = [20, 22]; var empty:Array<Int> = []; return values[0] + values[1] + empty.length; }');
-		Frontend.compile('function main():Int { var values:Map<String, Int> = []; values.set("answer", 42); return values.get("answer"); }');
+		Frontend.compile('function main():Int { var values:Map<String, Int> = []; values.set("answer", 42); if (!values.exists("answer")) return 0; return values.get("answer"); }');
+		expectCompileError('function main():Int { var values:Map<String, Int> = []; return values.get("answer"); }', "Type mismatch for return");
+		expectCompileError('function main():Int { var values:Map<String, Int> = []; if (values.exists("answer")) { values.remove("answer"); return values.get("answer"); } return 0; }',
+			"Type mismatch for return");
+		Frontend.compile('function value(flag:Bool):Int { var result:Null<Int> = flag ? 1 : null; if (result == null) result = 2; return result; } function main():Int return value(false);');
 		Frontend.compile('function main():Int { return "A".charCodeAt(0); }');
 		Frontend.compile('function main():Int { return "A".charAt(0) == "A" ? 42 : 0; }');
 		Frontend.compile('function main():Int { return String.fromCharCode(65) == "A" ? 42 : 0; }');

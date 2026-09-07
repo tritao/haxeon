@@ -1,4 +1,4 @@
 function main():Int {
 	var values = ["answer" => 42];
-	return values["answer"];
+	return values.exists("answer") ? values["answer"] : 0;
 }

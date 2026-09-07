@@ -1,14 +1,11 @@
-enum ArrayPayload {
+enum Result {
 	Values(values:Array<Int>);
 }
 
-function sizeKind(payload:ArrayPayload):Int {
-	return switch payload {
-		case ArrayPayload.Values([]): 40;
-		case ArrayPayload.Values(values): values.length;
-	};
-}
-
 function main():Int {
-	return sizeKind(ArrayPayload.Values([])) + sizeKind(ArrayPayload.Values([1, 2]));
+	var result:Result = Values([40, 2]);
+	return switch result {
+		case Values([first, second]): first + second;
+		default: 0;
+	};
 }

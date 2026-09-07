@@ -20,6 +20,8 @@ class AbstractConversionGraph {
 	public function new(declarations:DeclarationIndex, shouldValidate:Bool) {
 		this.declarations = declarations;
 		for (name in declarations.abstracts.keys()) {
+			if (!declarations.abstracts.exists(name))
+				throw 'Abstract declaration "$name" disappeared during conversion indexing';
 			var decl = declarations.abstracts.get(name),
 				substitutions = abstractSubstitutions(decl.name, decl.typeParameters),
 				owner = abstractNode(decl.name, [for (index in 0...decl.typeParameters.length) '$' + '$index']);
@@ -160,7 +162,12 @@ class AbstractConversionGraph {
 		if (span == null) {
 			var names = [for (name in declarations.abstracts.keys()) name];
 			names.sort(Reflect.compare);
-			span = declarations.abstracts.get(names[0]).span;
+			if (names.length == 0)
+				throw message;
+			var name = names[0];
+			if (!declarations.abstracts.exists(name))
+				throw message;
+			span = declarations.abstracts.get(name).span;
 		}
 		throw new CompileError(new Diagnostic("E1007", message, span));
 	}

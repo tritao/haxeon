@@ -10,6 +10,7 @@ import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypedAst.TypedSwitchCase;
+import compiler.types.TypedAst.TypedSwitchBinding;
 import compiler.types.TypedAst.TypedSwitchPredicate;
 import compiler.types.TypedAst.TypedCaptureSource;
 import compiler.ir.cfg.Cfg.CfgFunction;
@@ -72,8 +73,8 @@ class IrGenerator {
 	}
 
 	public static function generateFunction(fn:TypedFunction):IrFunction {
-		var cfg = generateCfg(fn);
 		try {
+			var cfg = generateCfg(fn);
 			return SsaBuilder.build(cfg);
 		} catch (error:String) {
 			throw 'CFG generation failed for ${fn.name}: $error';
@@ -457,11 +458,7 @@ class IrGenerator {
 								builder.debugLocal(binding.name, switchCase.span, switchCase.span.end);
 							}
 						for (binding in switchCase.bindings)
-							builder.store(binding.name,
-								abiBoundaryCast(builder,
-									builder.enumField(builder.load(switchName, switchType), switchCase.constructorIndex, binding.index,
-										lowerType(binding.storageType)),
-									lowerType(binding.type)));
+							builder.store(binding.name, lowerEnumBinding(builder, builder.load(switchName, switchType), switchCase.constructorIndex, binding));
 						var guard = switchCase.guard;
 						if (guard != null) {
 							builder.branch(lowerExpression(guard, builder, localTypes), bodyBlock, nextBlock);
@@ -516,10 +513,11 @@ class IrGenerator {
 		return [for (temporary in temporaries) builder.load(temporary.name, temporary.type)];
 	}
 
-	static function lowerMapGet(builder:CfgBuilder, map:CfgValue, key:CfgValue, keyType:CompilerType, valueType:CompilerType):CfgValue {
+	static function lowerMapGet(builder:CfgBuilder, map:CfgValue, key:CfgValue, keyType:CompilerType, valueType:CompilerType,
+			?resultType:CompilerType):CfgValue {
 		var name = RuntimeType.requireMapName(keyType, valueType),
-			target = lowerType(valueType);
-		var value = builder.call('__${name}_get', [map, key], StringTools.endsWith(name, "_ref") ? Dyn : target);
+			target = lowerType(resultType == null ? valueType : resultType);
+		var value = builder.call('__${name}_get', [map, key], Dyn);
 		return abiBoundaryCast(builder, value, target);
 	}
 
@@ -810,6 +808,8 @@ class IrGenerator {
 				// dominate the branch.
 				var fallbackBlock = builder.createBlock(),
 					afterBlock = builder.createBlock();
+				if (cases.length == 0)
+					builder.jumpFrom(entryBlock, fallbackBlock);
 				for (caseIndex in 0...cases.length) {
 					var switchCase = cases[caseIndex],
 						isExhaustiveFinalCase = defaultExpression == null && caseIndex == cases.length - 1 && switchCase.guard == null,
@@ -849,11 +849,7 @@ class IrGenerator {
 					}
 					for (binding in switchCase.bindings) {
 						localTypes.set(binding.name, lowerType(binding.type));
-						builder.store(binding.name,
-							abiBoundaryCast(builder,
-								builder.enumField(builder.load(subjectName, subjectType), switchCase.constructorIndex, binding.index,
-									lowerType(binding.storageType)),
-								lowerType(binding.type)));
+						builder.store(binding.name, lowerEnumBinding(builder, builder.load(subjectName, subjectType), switchCase.constructorIndex, binding));
 					}
 					var guard = switchCase.guard;
 					if (guard != null) {
@@ -1183,7 +1179,7 @@ class IrGenerator {
 					default: throw "Map read requires a map value";
 				};
 				var operands = lowerOperands([map, key], builder, localTypes);
-				lowerMapGet(builder, operands[0], operands[1], mapType.key, mapType.value);
+				lowerMapGet(builder, operands[0], operands[1], mapType.key, mapType.value, expression.type);
 			case TArrayLength(array):
 				builder.arraySize(lowerExpression(array, builder, localTypes));
 			case TStringLength(value):
@@ -1322,9 +1318,10 @@ class IrGenerator {
 		for (index in 0...predicates.length) {
 			var predicate = predicates[index];
 			builder.select(checkBlock);
-			var field = abiBoundaryCast(builder,
-				builder.enumField(builder.load(subjectName, subjectType), constructorIndex, predicate.index, lowerType(predicate.storageType)),
-				lowerType(predicate.type));
+			var field = builder.enumField(builder.load(subjectName, subjectType), constructorIndex, predicate.index, lowerType(predicate.fieldStorageType));
+			if (predicate.arrayIndex >= 0)
+				field = builder.arrayGet(field, builder.constInt(predicate.arrayIndex), lowerType(predicate.storageType));
+			field = abiBoundaryCast(builder, field, lowerType(predicate.type));
 			var matches = if (predicate.arrayLength >= 0) builder.equal(builder.arraySize(field), builder.constInt(predicate.arrayLength)); else {
 				var predicateValue = predicate.value;
 				if (predicateValue == null)
@@ -1335,6 +1332,13 @@ class IrGenerator {
 			checkBlock = index + 1 == predicates.length ? matchBlock : builder.createBlock();
 			builder.branch(matches, checkBlock, nextBlock);
 		}
+	}
+
+	static function lowerEnumBinding(builder:CfgBuilder, subject:CfgValue, constructorIndex:Int, binding:TypedSwitchBinding):CfgValue {
+		var field = builder.enumField(subject, constructorIndex, binding.index, lowerType(binding.fieldStorageType));
+		if (binding.arrayIndex >= 0)
+			field = builder.arrayGet(field, builder.constInt(binding.arrayIndex), lowerType(binding.storageType));
+		return abiBoundaryCast(builder, field, lowerType(binding.type));
 	}
 
 	static function isStringPatternType(type:CompilerType):Bool

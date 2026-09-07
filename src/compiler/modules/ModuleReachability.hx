@@ -49,10 +49,12 @@ class ModuleReachability {
 		for (name in names) {
 			if (token != null)
 				token.check();
-			for (dependency in modules.get(name).dependencies)
+			if (!modules.exists(name))
+				throw 'Reachable module "$name" disappeared during validation';
+			var state = modules.get(name);
+			for (dependency in state.dependencies)
 				if (!modules.exists(dependency)) {
-					var state = modules.get(name),
-						span = state.source.span(0, state.source.bytes.length);
+					var span = state.source.span(0, state.source.bytes.length);
 					var diagnostic = new Diagnostic("E2001", 'Missing module "$dependency"', span);
 					state.diagnostics.push(diagnostic);
 					throw new CompileError(diagnostic);

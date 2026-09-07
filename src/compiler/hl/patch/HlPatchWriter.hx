@@ -87,7 +87,8 @@ class HlPatchWriter {
 			functions.write(encoded);
 		}
 		var out = new BytesOutput();
-		var debug = encodeDebug(selected, stableIdsBySlot), snapshots = encodeSourceSnapshots(code, selected);
+		var debug = encodeDebug(selected, stableIdsBySlot),
+			snapshots = encodeSourceSnapshots(code, selected);
 		out.bigEndian = false;
 		out.writeString(HlPatchFormat.MAGIC);
 		out.writeByte(HlPatchFormat.VERSION);
@@ -114,8 +115,11 @@ class HlPatchWriter {
 		var referenced:Map<Int, Bool> = [];
 		for (fn in functions)
 			for (location in fn.debugLocations)
-				if (location.sourceHash != 0) referenced.set(location.sourceHash, true);
-		var selected = [for (snapshot in code.sourceSnapshots) if (referenced.exists(snapshot.sourceHash)) snapshot];
+				if (location.sourceHash != 0)
+					referenced.set(location.sourceHash, true);
+		var selected = [
+			for (snapshot in code.sourceSnapshots) if (referenced.exists(snapshot.sourceHash)) snapshot
+		];
 		return selected.length == 0 ? null : HlWriter.encodeSourceSnapshots(selected);
 	}
 
@@ -142,9 +146,13 @@ class HlPatchWriter {
 		for (fn in functions) {
 			if (fn.debugLocations.length != fn.opcodes.length)
 				throw 'Debug location count does not match opcodes in function ${fn.functionIndex}';
+			if (!stableIdsBySlot.exists(fn.functionIndex))
+				throw 'Missing stable function identity for slot "${fn.functionIndex}"';
 			writeIndex(out, stableIdsBySlot.get(fn.functionIndex));
 			writeIndex(out, fn.debugLocations.length);
 			for (location in fn.debugLocations) {
+				if (!fileIndices.exists(location.path))
+					throw 'Missing patch debug source index for "${location.path}"';
 				writeIndex(out, fileIndices.get(location.path));
 				writeIndex(out, location.line);
 				writeIndex(out, location.column);

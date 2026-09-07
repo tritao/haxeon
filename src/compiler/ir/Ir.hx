@@ -48,7 +48,7 @@ enum IrInstruction {
 	ToDyn(output:IrValue, value:IrValue);
 	SafeCast(output:IrValue, value:IrValue);
 	BeginTry(catchBlock:Int, afterBlock:Int);
-	EndTry;
+	EndTry(catchBlock:Int);
 	Catch(output:IrValue);
 	GlobalGet(output:IrValue, name:String);
 	GlobalSet(name:String, value:IrValue);

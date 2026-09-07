@@ -37,6 +37,12 @@ class PlatformAbi {
 
 	public static function field(type:CompilerType, name:String):Null<{type:CompilerType, get:String, set:Null<String>}>
 		return switch type {
+			case CompilerType.TString:
+				name == "bytes" ? {
+					type: CompilerType.TAbstract("hl.Bytes", [], CompilerType.THlBytes),
+					get: "__string_bytes",
+					set: null
+				} : null;
 			case CompilerType.TBytes: name == "length" ? {type: CompilerType.TInt, get: "__bytes_length", set: null} : null;
 			case CompilerType.TAbstract(_, _, underlying): field(underlying, name);
 			case CompilerType.TNativeAbstract(kind): nativeAbstractField(kind, name);
@@ -46,6 +52,9 @@ class PlatformAbi {
 	public static function method(type:CompilerType, name:String):Null<{arguments:Array<CompilerType>, result:CompilerType, nativeName:String}>
 		return switch type {
 			case CompilerType.TBytes: bytesMethod(name);
+			case CompilerType.THlBytes:
+				name == "ucs2Length" ? {arguments: [CompilerType.TInt], result: CompilerType.TInt, nativeName: "__hl_bytes_ucs2_length"} : null;
+			case CompilerType.TAbstract(_, _, underlying): method(underlying, name);
 			default: null;
 		};
 
@@ -65,11 +74,12 @@ class PlatformAbi {
 	static function bytesMethod(name:String):Null<{arguments:Array<CompilerType>, result:CompilerType, nativeName:String}>
 		return switch name {
 			case "getData": {
-				arguments: noArguments(),
-				result: CompilerType.TAbstract("hl.Bytes", [], CompilerType.THlBytes),
-				nativeName: "__bytes_get_data"
-			};
+					arguments: noArguments(),
+					result: CompilerType.TAbstract("hl.Bytes", [], CompilerType.THlBytes),
+					nativeName: "__bytes_get_data"
+				};
 			case "get": {arguments: [CompilerType.TInt], result: CompilerType.TInt, nativeName: "__bytes_get"};
+			case "getInt32": {arguments: [CompilerType.TInt], result: CompilerType.TInt, nativeName: "__bytes_get_i32"};
 			case "set": {arguments: [CompilerType.TInt, CompilerType.TInt], result: CompilerType.TVoid, nativeName: "__bytes_set"};
 			case "setInt32": {arguments: [CompilerType.TInt, CompilerType.TInt], result: CompilerType.TVoid, nativeName: "__bytes_set_i32"};
 			case "sub": {arguments: [CompilerType.TInt, CompilerType.TInt], result: CompilerType.TBytes, nativeName: "__bytes_sub"};

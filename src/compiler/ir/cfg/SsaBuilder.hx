@@ -140,6 +140,8 @@ class SsaBuilder {
 		}
 		for (id in postorder)
 			if (roots.indexOf(id) < 0) {
+				if (!immediate.exists(id))
+					throw 'Reachable SSA block $id has no immediate dominator';
 				var parent = immediate.get(id), list:Array<Int>;
 				if (children.exists(parent))
 					list = children.get(parent);
@@ -163,12 +165,18 @@ class SsaBuilder {
 
 	static function intersectDominators(left:Int, right:Int, immediate:Map<Int, Int>, order:Map<Int, Int>):Int {
 		while (left != right) {
-			while (order.get(left) > order.get(right))
-				left = immediate.get(left);
-			while (order.get(right) > order.get(left))
-				right = immediate.get(right);
+			while (requiredInt(order, left, "dominance order") > requiredInt(order, right, "dominance order"))
+				left = requiredInt(immediate, left, "immediate dominator");
+			while (requiredInt(order, right, "dominance order") > requiredInt(order, left, "dominance order"))
+				right = requiredInt(immediate, right, "immediate dominator");
 		}
 		return left;
+	}
+
+	static function requiredInt(values:Map<Int, Int>, key:Int, context:String):Int {
+		if (!values.exists(key))
+			throw 'Missing $context for SSA block $key';
+		return values.get(key);
 	}
 
 	function computeFrontiers():Void {
@@ -308,7 +316,11 @@ class SsaBuilder {
 			pushed:Array<String> = [];
 		if (phis.exists(id)) {
 			var blockPhis = phis.get(id);
+			if (!phiNames.exists(id))
+				throw 'Missing SSA phi-name list for block $id';
 			for (name in phiNames.get(id)) {
+				if (!blockPhis.exists(name))
+					throw 'Missing SSA phi "$name" for block $id';
 				var phi = blockPhis.get(name);
 				target.instructions.push(new Located(Phi(phi.output, phi.inputs), phiProvenance(id)));
 				addDebugBinding(debugLocal(name), phi.output);
@@ -355,8 +367,8 @@ class SsaBuilder {
 					emit(target, SafeCast(result, resolve(value)), provenance);
 				case BeginTry(catchBlock, afterBlock):
 					emit(target, BeginTry(catchBlock, afterBlock), provenance);
-				case EndTry:
-					emit(target, EndTry, provenance);
+				case EndTry(catchBlock):
+					emit(target, EndTry(catchBlock), provenance);
 				case Catch(out):
 					var result = define(out);
 					emit(target, Catch(result), provenance);
@@ -466,7 +478,11 @@ class SsaBuilder {
 			for (successor in successors.get(id)) {
 				if (phis.exists(successor)) {
 					var successorPhis = phis.get(successor);
+					if (!phiNames.exists(successor))
+						throw 'Missing SSA phi-name list for successor block $successor';
 					for (name in phiNames.get(successor)) {
+						if (!successorPhis.exists(name))
+							throw 'Missing SSA phi "$name" for successor block $successor';
 						var phi = successorPhis.get(name);
 						var inputs = phi.inputs;
 						inputs.push({block: id, value: current(name)});

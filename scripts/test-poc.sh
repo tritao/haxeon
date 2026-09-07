@@ -243,6 +243,8 @@ run_program expression-lambda 42
 run_program single-argument-lambda 43
 run_program contextual-callbacks 42
 run_program generic-contextual-callback 42
+run_program nullable-map-get 42
+run_program enum-array-pattern 42
 run_program anonymous-function 42
 run_program enum-abstract 42
 run_program enum-argument-string 42

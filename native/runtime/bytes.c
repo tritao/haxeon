@@ -64,6 +64,14 @@ HL_PRIM int HL_NAME(__bytes_get)( realtime_bytes *bytes, int position ) {
 	realtime_bytes_bounds(bytes, position, 1);
 	return bytes->data[position];
 }
+
+HL_PRIM int HL_NAME(__bytes_get_i32)( realtime_bytes *bytes, int position ) {
+	realtime_bytes_bounds(bytes, position, 4);
+	return (int)((unsigned int)bytes->data[position]
+		| ((unsigned int)bytes->data[position + 1] << 8)
+		| ((unsigned int)bytes->data[position + 2] << 16)
+		| ((unsigned int)bytes->data[position + 3] << 24));
+}
 HL_PRIM void HL_NAME(__bytes_set)( realtime_bytes *bytes, int position, int value ) {
 	realtime_bytes_bounds(bytes, position, 1);
 	bytes->data[position] = (vbyte)value;

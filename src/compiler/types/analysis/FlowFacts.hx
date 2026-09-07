@@ -8,6 +8,7 @@ class FlowFacts {
 	final refinedTypes:Map<String, CompilerType> = [];
 	final invalidated:Map<String, Bool> = [];
 	final invalidatedPrefixes:Array<String> = [];
+	final invalidatedNamespaces:Array<String> = [];
 
 	public function new(?parent:FlowFacts)
 		this.parent = parent;
@@ -23,6 +24,9 @@ class FlowFacts {
 	}
 
 	public function resolve(bindingId:String):Null<CompilerType> {
+		for (prefix in invalidatedNamespaces)
+			if (StringTools.startsWith(bindingId, prefix))
+				return null;
 		for (prefix in invalidatedPrefixes)
 			if (bindingId == prefix || StringTools.startsWith(bindingId, prefix + "."))
 				return null;
@@ -39,5 +43,12 @@ class FlowFacts {
 			if (bindingId == prefix || StringTools.startsWith(bindingId, prefix + "."))
 				refinedTypes.remove(bindingId);
 		invalidatedPrefixes.push(prefix);
+	}
+
+	public function invalidateNamespace(prefix:String):Void {
+		for (bindingId in refinedTypes.keys())
+			if (StringTools.startsWith(bindingId, prefix))
+				refinedTypes.remove(bindingId);
+		invalidatedNamespaces.push(prefix);
 	}
 }

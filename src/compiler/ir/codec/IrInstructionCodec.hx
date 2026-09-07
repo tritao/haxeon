@@ -128,8 +128,9 @@ class IrInstructionCodec {
 				begin(output, "BeginTry", 2);
 				writeInt(output, catchBlock);
 				writeInt(output, afterBlock);
-			case EndTry:
-				begin(output, "EndTry", 0);
+			case EndTry(catchBlock):
+				begin(output, "EndTry", 1);
+				writeInt(output, catchBlock);
 			case Catch(value):
 				begin(output, "Catch", 1);
 				writeValue(output, value);
@@ -276,8 +277,8 @@ class IrInstructionCodec {
 				arity(2);
 				BeginTry(readInt(input), readInt(input));
 			case "EndTry":
-				arity(0);
-				EndTry;
+				arity(1);
+				EndTry(readInt(input));
 			case "Catch":
 				arity(1);
 				Catch(readValue(input, values));

@@ -188,11 +188,11 @@ class Typer {
 		if (requireMain) {
 			var main:AstFunction;
 			if (entryPoint != null && signatures.exists(entryPoint))
-				main = signatures.get(entryPoint);
+				main = requiredMapValue(signatures, entryPoint);
 			else if (entryPoint == null && signatures.exists("main"))
-				main = signatures.get("main");
+				main = requiredMapValue(signatures, "main");
 			else if (entryPoint == null && signatures.exists("Main.main"))
-				main = signatures.get("Main.main");
+				main = requiredMapValue(signatures, "Main.main");
 			else
 				throw 'Program must define executable entry point "${entryPoint == null ? "main" : entryPoint}"';
 			if (main.arguments.length != 0 || (lowerType(main.result) != TInt && lowerType(main.result) != TVoid))
@@ -734,7 +734,7 @@ class Typer {
 				fail("E1007", 'Class "${classDecl.name}" does not implement "$interfaceName.${method.name}"', span);
 			var implementationName = implementation.owner + "." + method.name;
 			if (!signatures.exists(implementationName)
-				|| !sameSignature(signatures.get(implementationName), method, classSubstitutions, interfaceSubstitutions))
+				|| !sameSignature(requiredMapValue(signatures, implementationName), method, classSubstitutions, interfaceSubstitutions))
 				fail("E1003", 'Method "${classDecl.name}.${method.name}" does not match interface "$interfaceName"', span);
 		}
 	}
@@ -1010,7 +1010,8 @@ class Typer {
 								output.push(TStaticFieldAssign(staticField.owner, name, value, span));
 							}
 						} else {
-							var value = coerce(typeExpression(expression, scope, expected), expected, 'local "$name"', "E1002");
+							var assignedValue = typeExpression(expression, scope, expected),
+								value = coerce(assignedValue, expected, 'local "$name"', "E1002");
 							if (scope.isCapture(name)) {
 								if (!scope.isCellCapture(name))
 									fail("E1013", 'Captured variable "$name" requires mutable capture cells', span);
@@ -1021,7 +1022,7 @@ class Typer {
 								output.push(TAssign(scope.requireId(name), value, span));
 							scope.markAssigned(name);
 							scope.invalidateExpressionsForLocal(name);
-							scope.refine(name, value.type);
+							scope.refine(name, assignedValue.type);
 						}
 					} else {
 						var objectName = name.substring(0, dot),
@@ -1060,6 +1061,9 @@ class Typer {
 						case TMap(key, mapValue):
 							typedIndex = coerce(typedIndex, key, "map key", "E1002");
 							var value = coerce(typeExpression(expression, scope, mapValue), mapValue, "map value", "E1002");
+							var entryPath = FlowAnalysis.mapEntryPath(typedArray, typedIndex);
+							if (entryPath != null)
+								scope.invalidateExpressionValue(entryPath);
 							output.push(TMapAssign(typedArray, typedIndex, value, span));
 						default:
 							if (typedIndex.type != TInt)
@@ -1108,10 +1112,11 @@ class Typer {
 					if (!ControlFlow.alwaysExits(typedThen, function(type, cases) return this.exhaustiveEnum(type, cases)))
 						continuing.push(thenScope);
 					if (elseBranch.length == 0)
-						continuing.push(scope);
+						continuing.push(elseScope);
 					else if (!ControlFlow.alwaysExits(typedElse, function(type, cases) return this.exhaustiveEnum(type, cases)))
 						continuing.push(elseScope);
 					scope.mergeAssignmentsFrom(continuing);
+					scope.mergeRefinementsFrom(continuing);
 					if (elseBranch.length == 0
 						&& ControlFlow.alwaysExits(typedThen, function(type, cases) return this.exhaustiveEnum(type, cases)))
 						FlowAnalysis.refineAfterGuard(scope, typedCondition);
@@ -1177,8 +1182,8 @@ class Typer {
 						var caseScope = new Scope(scope),
 							subjectBinding = switchSubjectBinding(switchCase.value, typedExpression.type, caseScope),
 							pattern = subjectBinding == null ? typeEnumPattern(switchCase.value, typedExpression.type, caseScope) : null,
-							typedValue = subjectBinding != null ? typedExpression : pattern == null ? coerce(typeExpression(switchCase.value, scope, typedExpression.type), typedExpression.type,
-								"switch case", "E1019") : pattern.value;
+							typedValue = subjectBinding != null ? typedExpression : pattern == null ? coerce(typeExpression(switchCase.value, scope,
+								typedExpression.type), typedExpression.type, "switch case", "E1019") : pattern.value;
 						var parsedGuard = switchCase.guard,
 							typedGuard = parsedGuard == null ? null : coerce(typeExpression(parsedGuard, caseScope), TBool, "switch guard", "E1003");
 						if (typedGuard != null)
@@ -1460,7 +1465,7 @@ class Typer {
 		var signatureName = resolvedCallName(name);
 		if (!signatures.exists(signatureName))
 			return null;
-		var signature = signatures.get(signatureName);
+		var signature = requiredMapValue(signatures, signatureName);
 		return isGeneric(signature) ? null : lowerType(signature.result);
 	}
 
@@ -1577,7 +1582,7 @@ class Typer {
 				else {
 					var signatureName = resolvedCallName(name);
 					if (signatures.exists(signatureName)) {
-						var signature = signatures.get(signatureName);
+						var signature = requiredMapValue(signatures, signatureName);
 						if (!isGeneric(signature))
 							for (index in 0...arguments.length) {
 								if (index >= signature.arguments.length)
@@ -1688,8 +1693,47 @@ class Typer {
 									name: scope.requireId(binding),
 									type: parameterType,
 									storageType: storageType,
-									index: index
+									fieldStorageType: storageType,
+									index: index,
+									arrayIndex: -1
 								});
+							}
+						case ArrayLiteral(values, patternSpan):
+							switch parameterType {
+								case TArray(elementType):
+									var elementStorage = switch storageType {
+										case TArray(element): element;
+										default: elementType;
+									};
+									predicates.push({
+										value: null,
+										arrayLength: values.length,
+										type: parameterType,
+										storageType: storageType,
+										fieldStorageType: storageType,
+										index: index,
+										arrayIndex: -1
+									});
+									for (arrayIndex in 0...values.length)
+										switch values[arrayIndex] {
+											case Variable(binding, bindingSpan):
+												if (binding != "_") {
+													scope.define(binding, elementType, bindingSpan);
+													bindings.push({
+														name: scope.requireId(binding),
+														type: elementType,
+														storageType: elementStorage,
+														fieldStorageType: storageType,
+														index: index,
+														arrayIndex: arrayIndex
+													});
+												}
+											default:
+												predicates.push(typeEnumPredicate(values[arrayIndex], elementType, elementStorage, index, null, arrayIndex,
+													storageType));
+										}
+								default:
+									fail("E1019", "Array payload pattern requires an Array value", patternSpan);
 							}
 						default:
 							predicates.push(typeEnumPredicate(arguments[index], parameterType, storageType, index, null));
@@ -1723,19 +1767,20 @@ class Typer {
 		}
 	}
 
-	function typeEnumPredicate(value:AstExpression, type:CompilerType, storageType:CompilerType, index:Int, constantName:Null<String>):TypedSwitchPredicate {
+	function typeEnumPredicate(value:AstExpression, type:CompilerType, storageType:CompilerType, index:Int, constantName:Null<String>, arrayIndex:Int = -1,
+			?fieldStorageType:CompilerType):TypedSwitchPredicate {
 		switch value {
 			case ArrayLiteral(values, span):
 				switch type {
 					case TArray(_):
-						if (values.length != 0)
-							fail("E1019", "Non-empty array payload patterns are not supported yet", span);
 						return {
 							value: null,
-							arrayLength: 0,
+							arrayLength: values.length,
 							type: type,
 							storageType: storageType,
-							index: index
+							fieldStorageType: fieldStorageType == null ? storageType : fieldStorageType,
+							index: index,
+							arrayIndex: arrayIndex
 						};
 					default:
 						fail("E1019", "Array payload pattern requires an Array value", span);
@@ -1754,7 +1799,9 @@ class Typer {
 			arrayLength: -1,
 			type: type,
 			storageType: storageType,
-			index: index
+			fieldStorageType: fieldStorageType == null ? storageType : fieldStorageType,
+			index: index,
+			arrayIndex: arrayIndex
 		};
 	}
 
@@ -1849,12 +1896,15 @@ class Typer {
 						return typeMember(Variable("this", span), name, span, scope);
 					var functionName = localMethod == null ? name : localMethod.owner + "." + name;
 					var expectedFunction = expectedFunctionType(expectedType);
-					if (name == "Reflect.compare" && expectedFunction != null && expectedFunction.arguments.length == 2
-						&& sameType(expectedFunction.arguments[0], TString) && sameType(expectedFunction.arguments[1], TString)
+					if (name == "Reflect.compare"
+						&& expectedFunction != null
+						&& expectedFunction.arguments.length == 2
+						&& sameType(expectedFunction.arguments[0], TString)
+						&& sameType(expectedFunction.arguments[1], TString)
 						&& sameType(expectedFunction.result, TInt))
 						new TypedExpression(TFunctionRef("__string_compare_full"), TFunction([TString, TString], TInt), span);
 					else if (signatures.exists(functionName))
-						new TypedExpression(TFunctionRef(functionName), functionType(signatures.get(functionName)), span);
+						new TypedExpression(TFunctionRef(functionName), functionType(requiredMapValue(signatures, functionName)), span);
 					else if (externals.exists(name)) {
 						var external = externals.get(name);
 						new TypedExpression(TFunctionRef(name), TFunction(external.arguments, external.result), span);
@@ -2076,7 +2126,8 @@ class Typer {
 						context.cells.set(name, '$' + 'cell:' + lambdaName + ':' + name);
 						context.cellKinds.set(name, MutableCapture);
 					}
-					var typedBody = typeStatements(body, typedBodyScope, expectedFunction == null || inferContextualResult ? null : expectedFunction.result);
+					var typedBody = typeStatements(body, typedBodyScope, expectedFunction == null
+						|| inferContextualResult ? null : expectedFunction.result);
 					var inferredResult:CompilerType;
 					if (expectedFunction != null && !inferContextualResult)
 						inferredResult = expectedFunction.result;
@@ -2223,8 +2274,8 @@ class Typer {
 					var caseScope = new Scope(scope),
 						subjectBinding = switchSubjectBinding(switchCase.value, typedSubject.type, caseScope),
 						pattern = subjectBinding == null ? typeEnumPattern(switchCase.value, typedSubject.type, caseScope) : null,
-						typedValue = subjectBinding != null ? typedSubject : pattern == null ? coerce(typeExpression(switchCase.value, scope, typedSubject.type), typedSubject.type, "switch case",
-							"E1019") : pattern.value;
+						typedValue = subjectBinding != null ? typedSubject : pattern == null ? coerce(typeExpression(switchCase.value, scope,
+							typedSubject.type), typedSubject.type, "switch case", "E1019") : pattern.value;
 					var parsedGuard = switchCase.guard,
 						typedGuard = parsedGuard == null ? null : coerce(typeExpression(parsedGuard, caseScope), TBool, "switch guard", "E1003");
 					if (typedGuard != null)
@@ -2566,7 +2617,8 @@ class Typer {
 				if (name == "Reflect.compare") {
 					if (arguments.length != 2)
 						fail("E1008", 'Function "Reflect.compare" expects 2 arguments, got ${arguments.length}', span);
-					var left = typeExpression(arguments[0], scope), right = typeExpression(arguments[1], scope, left.type);
+					var left = typeExpression(arguments[0], scope),
+						right = typeExpression(arguments[1], scope, left.type);
 					if (sameType(left.type, TString) && sameType(right.type, TString))
 						return new TypedExpression(TCall("__string_compare_full", [left, right]), TInt, span);
 				}
@@ -2587,6 +2639,20 @@ class Typer {
 							fail("E1009", "Std.int expects an Int or Float", value.span);
 							new TypedExpression(TIntLiteral(0), TInt, span);
 					};
+				}
+				if (name == "String.__alloc__") {
+					if (arguments.length != 2)
+						fail("E1008", 'Function "String.__alloc__" expects 2 arguments, got ${arguments.length}', span);
+					var bytes = typeExpression(arguments[0], scope);
+					switch bytes.type {
+						case THlBytes, TAbstract(_, _, THlBytes):
+						default: fail("E1009", "String.__alloc__ expects hl.Bytes data", bytes.span);
+					}
+					bytes = abiBoundaryCast(bytes, THlBytes);
+					var length = typeExpression(arguments[1], scope, TInt);
+					if (!sameType(length.type, TInt))
+						fail("E1009", "String.__alloc__ expects an Int length", length.span);
+					return new TypedExpression(TCall("__string_from_bytes", [bytes, length]), TString, span);
 				}
 				if (name == "String.fromCharCode") {
 					if (arguments.length != 1)
@@ -2620,28 +2686,33 @@ class Typer {
 						if (implicitMethod != null) {
 							var methodKey = implicitMethod.owner + "." + name,
 								method = signatures.get(methodKey);
+							if (method == null)
+								fail("E1007", 'Missing signature for method "$methodKey"', span);
 							if (isGeneric(method)) {
 								if (!implicitMethod.isStatic)
 									fail("E1007", "Generic instance methods are not supported yet", span);
-								var preset:Map<String, CompilerType> = [], parameters = functionTypeParameters(method), hasLambda = false;
+								var preset:Map<String, CompilerType> = [],
+									parameters = functionTypeParameters(method),
+									hasLambda = false;
 								for (argument in arguments)
 									switch argument {
 										case Lambda(_, _, _): hasLambda = true;
 										default:
 									}
-								if (hasLambda && expectedType != null)
+								if (expectedType != null)
 									inferTypeParameters(method.result, expectedType, parameters, preset, span);
-								var contextual = hasLambda, typingSubstitutions = copyMap(preset);
+								var contextual = hasLambda || expectedType != null,
+									typingSubstitutions = copyMap(preset);
 								if (contextual)
 									for (parameter in parameters)
-										if (!typingSubstitutions.exists(parameter)) typingSubstitutions.set(parameter, TDynamic);
-				var genericArguments = contextual ? [
-					for (index in 0...arguments.length)
-						typeExpression(arguments[index], scope,
-							declarations.resolve(method.arguments[index].type, method.arguments[index].span, typingSubstitutions), true)
+										if (!typingSubstitutions.exists(parameter))
+											typingSubstitutions.set(parameter, TDynamic);
+								var genericArguments = contextual ? [
+									for (index in 0...arguments.length)
+										typeExpression(arguments[index], scope,
+											declarations.resolve(method.arguments[index].type, method.arguments[index].span, typingSubstitutions), true)
 								] : [for (argument in arguments) typeExpression(argument, scope)];
-								var specialized = specializeGeneric(methodKey, method, genericArguments, span, scope, implicitMethod.owner, true,
-									null);
+								var specialized = specializeGeneric(methodKey, method, genericArguments, span, scope, implicitMethod.owner, true, preset);
 								return specialized;
 							}
 							var typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span);
@@ -2717,9 +2788,6 @@ class Typer {
 							return typeMapMethod(resolvedReceiver, resolvedMethodName, arguments, span, scope);
 						if (isArray(receiverType))
 							return typeArrayMethod(resolvedReceiver, resolvedMethodName, arguments, span, scope);
-						var abstractCall = typeAbstractMethodCall(resolvedReceiver, resolvedMethodName, arguments, span, scope);
-						if (abstractCall != null)
-							return abstractCall;
 						var platformMethod = PlatformAbi.method(receiverType, resolvedMethodName);
 						if (platformMethod != null) {
 							var typed = typeCallArguments(arguments, platformMethod.arguments, scope, resolvedMethodName),
@@ -2728,6 +2796,9 @@ class Typer {
 								callArguments.push(argument);
 							return new TypedExpression(TCall(platformMethod.nativeName, callArguments), platformMethod.result, span);
 						}
+						var abstractCall = typeAbstractMethodCall(resolvedReceiver, resolvedMethodName, arguments, span, scope);
+						if (abstractCall != null)
+							return abstractCall;
 						var className = switch receiverType {
 							case TInstance(Class, value, _), TInstance(Interface, value, _): value;
 							default: null;
@@ -2739,26 +2810,32 @@ class Typer {
 							fail("E1007", 'Unknown instance method "$className.$methodName"', span);
 						var methodKey = methodInfoResult.owner + "." + resolvedMethodName;
 						var method = signatures.get(methodKey);
+						if (method == null)
+							fail("E1007", 'Missing signature for method "$methodKey"', span);
 						if (isGeneric(method)) {
-							var preset:Map<String, CompilerType> = [], parameters = functionTypeParameters(method), hasLambda = false;
+							var preset:Map<String, CompilerType> = [],
+								parameters = functionTypeParameters(method),
+								hasLambda = false;
 							for (argument in arguments)
 								switch argument {
 									case Lambda(_, _, _): hasLambda = true;
 									default:
 								}
-							if (hasLambda && expectedType != null)
+							if (expectedType != null)
 								inferTypeParameters(method.result, expectedType, parameters, preset, span);
-							var contextual = hasLambda, typingSubstitutions = copyMap(preset);
+							var contextual = hasLambda || expectedType != null,
+								typingSubstitutions = copyMap(preset);
 							if (contextual)
 								for (parameter in parameters)
-									if (!typingSubstitutions.exists(parameter)) typingSubstitutions.set(parameter, TDynamic);
-						var genericArguments = contextual ? [
-							for (index in 0...arguments.length)
-								typeExpression(arguments[index], scope,
-									declarations.resolve(method.arguments[index].type, method.arguments[index].span, typingSubstitutions), true)
+									if (!typingSubstitutions.exists(parameter))
+										typingSubstitutions.set(parameter, TDynamic);
+							var genericArguments = contextual ? [
+								for (index in 0...arguments.length)
+									typeExpression(arguments[index], scope,
+										declarations.resolve(method.arguments[index].type, method.arguments[index].span, typingSubstitutions), true)
 							] : [for (argument in arguments) typeExpression(argument, scope)];
-							var specialized = specializeGeneric(methodKey, method, genericArguments, span, scope, methodInfoResult.owner, methodInfoResult.isStatic,
-								null, methodInfoResult.isStatic ? null : resolvedReceiver);
+							var specialized = specializeGeneric(methodKey, method, genericArguments, span, scope, methodInfoResult.owner,
+								methodInfoResult.isStatic, preset, methodInfoResult.isStatic ? null : resolvedReceiver);
 							return specialized;
 						}
 						var methodOwnerType = projectNominal(receiverType, methodInfoResult.owner),
@@ -2802,7 +2879,7 @@ class Typer {
 						applyCallEffect(new TypedExpression(TCall(name, typed), result, span), name);
 					}
 				}
-			case MethodCall(object, name, arguments, span): typeMethodCall(object, name, arguments, span, scope);
+			case MethodCall(object, name, arguments, span): typeMethodCall(object, name, arguments, span, scope, expectedType);
 		}
 
 	function typeMember(object:AstExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression {
@@ -3007,9 +3084,18 @@ class Typer {
 	function inferTypeParameters(pattern:AstType, actual:CompilerType, parameters:Array<String>, substitutions:Map<String, CompilerType>, span:SourceSpan):Void
 		switch pattern {
 			case NamedType(name) if (parameters.indexOf(name) >= 0):
-				if (substitutions.exists(name) && !sameType(requiredMapValue(substitutions, name), actual))
-					fail("E1003", 'Conflicting types inferred for generic parameter "$name"', span);
-				substitutions.set(name, actual);
+				if (substitutions.exists(name)) {
+					var previous = requiredMapValue(substitutions, name);
+					if (previous == TDynamic)
+						substitutions.set(name, actual);
+					else if (actual != TDynamic && !sameType(previous, actual)) {
+						if (isAssignable(actual, previous))
+							substitutions.set(name, actual);
+						else if (!isAssignable(previous, actual))
+							fail("E1003", 'Conflicting types inferred for generic parameter "$name"', span);
+					}
+				} else
+					substitutions.set(name, actual);
 			case ArrayType(element):
 				switch actual {
 					case TArray(actualElement): inferTypeParameters(element, actualElement, parameters, substitutions, span);
@@ -3183,7 +3269,8 @@ class Typer {
 		return base == null ? null : findStaticFieldNullable(inheritanceName(base), name);
 	}
 
-	function typeMethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
+	function typeMethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
+			?expectedType:CompilerType):TypedExpression {
 		var receiver = unwrapNullable(typeExpression(object, scope));
 		var platformMethod = PlatformAbi.method(receiver.type, name);
 		if (platformMethod != null) {
@@ -3212,8 +3299,26 @@ class Typer {
 		var methodOwnerType = projectNominal(receiver.type, methodInfoResult.owner),
 			substitutions = nominalSubstitutions(methodOwnerType),
 			methodKey = methodInfoResult.owner + "." + name,
-			method = signatures.get(methodKey),
-			typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span, substitutions);
+			method = signatures.get(methodKey);
+		if (method == null)
+			fail("E1007", 'Missing signature for method "$methodKey"', span);
+		if (isGeneric(method)) {
+			var preset = copyMap(substitutions),
+				parameters = functionTypeParameters(method);
+			if (expectedType != null)
+				inferTypeParameters(method.result, expectedType, parameters, preset, span);
+			var typingSubstitutions = copyMap(preset);
+			for (parameter in parameters)
+				if (!typingSubstitutions.exists(parameter))
+					typingSubstitutions.set(parameter, TDynamic);
+			var genericArguments = [
+				for (index in 0...arguments.length)
+					typeExpression(arguments[index], scope,
+						declarations.resolve(method.arguments[index].type, method.arguments[index].span, typingSubstitutions), true)
+			];
+			return specializeGeneric(methodKey, method, genericArguments, span, scope, methodInfoResult.owner, false, preset, receiver);
+		}
+		var typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span, substitutions);
 		var semanticResult = declarations.resolve(method.result, method.span, substitutions),
 			physicalResult = isGenericNominal(methodOwnerType) ? TDynamic : semanticResult,
 			call = new TypedExpression(TMethodCall(receiver, methodKey, typed), physicalResult, span);
@@ -3415,7 +3520,8 @@ class Typer {
 			switch element {
 				case TInt, TFloat, TBool, TString:
 				default:
-					fail("E1016", "Array.indexOf currently supports primitive and String arrays only", span);
+					if (RuntimeType.arrayName(element) != "ref")
+						fail("E1016", "Array.indexOf currently supports primitive, String, and reference arrays only", span);
 			}
 			if (arguments.length != 1)
 				fail("E1008", "Array.indexOf expects one argument", span);
@@ -3454,6 +3560,9 @@ class Typer {
 				fail("E1008", "Map.set expects a key and value", span);
 			var key = coerce(typeExpression(arguments[0], scope, mapType.key), mapType.key, "map key", "E1002"),
 				value = coerce(typeExpression(arguments[1], scope, mapType.value), mapType.value, "map value", "E1002");
+			var entryPath = FlowAnalysis.mapEntryPath(receiver, key);
+			if (entryPath != null)
+				scope.invalidateExpressionValue(entryPath);
 			return new TypedExpression(TCollectionCall(receiver, "set", [key, value]), TVoid, span);
 		}
 		if (name == "keys") {
@@ -3469,6 +3578,9 @@ class Typer {
 		if (name == "clear") {
 			if (arguments.length != 0)
 				fail("E1008", "Map.clear expects no arguments", span);
+			var entriesPath = FlowAnalysis.mapEntriesPath(receiver);
+			if (entriesPath != null)
+				scope.invalidateExpressionNamespace(entriesPath);
 			return new TypedExpression(TCollectionCall(receiver, "clear", []), TVoid, span);
 		}
 		if (name == "size") {
@@ -3481,14 +3593,21 @@ class Typer {
 		var key = coerce(typeExpression(arguments[0], scope, mapType.key), mapType.key, "map key", "E1002");
 		return switch name {
 			case "exists": new TypedExpression(TCollectionCall(receiver, "exists", [key]), TBool, span);
-			case "remove": new TypedExpression(TCollectionCall(receiver, "remove", [key]), TBool, span);
-			case "get": new TypedExpression(TMapGet(receiver, key), nullableMapValue(mapType.value), span);
+			case "remove":
+				var entryPath = FlowAnalysis.mapEntryPath(receiver, key);
+				if (entryPath != null)
+					scope.invalidateExpressionValue(entryPath);
+				new TypedExpression(TCollectionCall(receiver, "remove", [key]), TBool, span);
+			case "get":
+				var entryPath = FlowAnalysis.mapEntryPath(receiver, key),
+					refined = entryPath == null ? null : scope.resolveExpression(entryPath);
+				new TypedExpression(TMapGet(receiver, key), refined == null ? nullableMapValue(mapType.value) : refined, span);
 			default: throw new CompileError(new Diagnostic("E1007", 'Unknown map method "$name"', span));
 		};
 	}
 
 	static function nullableMapValue(type:CompilerType):CompilerType
-		return if (!TypeRelations.isReference(type)) type; else switch type {
+		return switch type {
 			case TNullable(_): type;
 			default: TNullable(type);
 		};

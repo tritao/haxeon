@@ -40,13 +40,13 @@ class NativeRegistry {
 
 	public function configuration():Array<NativeDefinition> {
 		var names = sortedNames();
-		return [for (name in names) copy(definitions.get(name))];
+		return [for (name in names) copy(requireDefinition(name))];
 	}
 
 	public function signatures():Map<String, {arguments:Array<CompilerType>, result:CompilerType}> {
 		var result:Map<String, {arguments:Array<CompilerType>, result:CompilerType}> = [];
 		for (name in sortedNames()) {
-			var native = definitions.get(name);
+			var native = requireDefinition(name);
 			result.set(name, {arguments: native.arguments.copy(), result: native.result});
 		}
 		return result;
@@ -62,7 +62,7 @@ class NativeRegistry {
 	public function irNatives():Array<IrNative>
 		return [
 			for (name in sortedNames()) {
-				var native = definitions.get(name);
+				var native = requireDefinition(name);
 				{
 					name: native.name,
 					library: native.library,
@@ -77,6 +77,12 @@ class NativeRegistry {
 		var names = [for (name in definitions.keys()) name];
 		names.sort(Reflect.compare);
 		return names;
+	}
+
+	function requireDefinition(name:String):NativeDefinition {
+		if (!definitions.exists(name))
+			throw 'Missing native definition "$name"';
+		return definitions.get(name);
 	}
 
 	static function copy(native:NativeDefinition):NativeDefinition

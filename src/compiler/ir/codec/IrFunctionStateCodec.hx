@@ -206,9 +206,12 @@ class IrFunctionStateCodec {
 	}
 
 	static function versionedLocation(input:BytesInput, limit:Int, version:Int):SourceLocation {
-		var path = IrTypeCodec.readString(input, limit), start = input.readInt32(), end = input.readInt32(), line = input.readInt32();
-		return version >= 5 ? new SourceLocation(path, start, end, line, input.readInt32(), input.readInt32(), input.readInt32(), input.readInt32())
-			: new SourceLocation(path, start, end, line);
+		var path = IrTypeCodec.readString(input, limit),
+			start = input.readInt32(),
+			end = input.readInt32(),
+			line = input.readInt32();
+		return version >= 5 ? new SourceLocation(path, start, end, line, input.readInt32(), input.readInt32(), input.readInt32(),
+			input.readInt32()) : new SourceLocation(path, start, end, line);
 	}
 
 	public static function verify(functions:Array<IrFunction>, context:compiler.ir.Ir.IrProgram):Void {
@@ -263,7 +266,7 @@ class IrFunctionStateCodec {
 				collectValue(array, values);
 				collectValue(index, values);
 				collectValue(value, values);
-			case BeginTry(_, _), EndTry:
+			case BeginTry(_, _), EndTry(_):
 		}
 	}
 

@@ -161,7 +161,14 @@ typedef TypedSwitchCase = {
 }
 
 /** Local binding introduced for one enum-constructor payload position. */
-typedef TypedSwitchBinding = {final name:String; final type:CompilerType; final storageType:CompilerType; final index:Int;}
+typedef TypedSwitchBinding = {
+	final name:String;
+	final type:CompilerType;
+	final storageType:CompilerType;
+	final fieldStorageType:CompilerType;
+	final index:Int;
+	final arrayIndex:Int;
+}
 
 /** Constant or structural constraint applied to one enum payload position. */
 typedef TypedSwitchPredicate = {
@@ -169,7 +176,9 @@ typedef TypedSwitchPredicate = {
 	final arrayLength:Int;
 	final type:CompilerType;
 	final storageType:CompilerType;
+	final fieldStorageType:CompilerType;
 	final index:Int;
+	final arrayIndex:Int;
 }
 
 /** Resolved catch arm ready for IR exception lowering. */

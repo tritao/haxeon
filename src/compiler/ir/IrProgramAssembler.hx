@@ -339,14 +339,13 @@ class IrProgramAssembler {
 					arguments: [arrayType, I32, I32],
 					result: arrayType
 				});
-				if (entry.name != "ref")
-					program.natives.push({
-						name: '__array_index_of_${entry.name}',
-						library: "realtime_runtime",
-						symbol: '__array_index_of_${entry.name}',
-						arguments: [arrayType, entry.type],
-						result: I32
-					});
+				program.natives.push({
+					name: '__array_index_of_${entry.name}',
+					library: "realtime_runtime",
+					symbol: '__array_index_of_${entry.name}',
+					arguments: [arrayType, entry.type],
+					result: I32
+				});
 				program.natives.push({
 					name: '__array_push_${entry.name}',
 					library: "realtime_runtime",
@@ -443,7 +442,7 @@ class IrProgramAssembler {
 				library: "realtime_runtime",
 				symbol: '__${mapName}_get',
 				arguments: [mapType, keyIrType],
-				result: valueIrType
+				result: Dyn
 			});
 			program.natives.push({
 				name: '__${mapName}_keys',

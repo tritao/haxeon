@@ -1677,16 +1677,22 @@ class Parser {
 			}
 			consume(TokenKind.RightParen);
 			consume(TokenKind.Arrow);
-			return FunctionType(arguments, parseType());
+			return chainedFunctionType(arguments, parseType());
 		}
 		var atomic = parseAtomicType();
 		if (match(TokenKind.Arrow))
-			return FunctionType(switch atomic {
+			return chainedFunctionType(switch atomic {
 				case VoidType: [];
 				default: [atomic];
 			}, parseType());
 		return atomic;
 	}
+
+	static function chainedFunctionType(arguments:Array<AstType>, result:AstType):AstType
+		return switch result {
+			case FunctionType(nextArguments, finalResult): FunctionType(arguments.concat(nextArguments), finalResult);
+			default: FunctionType(arguments, result);
+		};
 
 	function parseAtomicType():AstType {
 		if (recovering && isExpressionTerminator(current().kind)) {

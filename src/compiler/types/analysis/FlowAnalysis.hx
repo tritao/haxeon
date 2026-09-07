@@ -26,6 +26,11 @@ class FlowAnalysis {
 				return;
 			default:
 		}
+		var mapEntry = mapExistence(condition);
+		if (mapEntry != null && truthy == mapEntry.existsWhenTrue) {
+			scope.refineExpression(mapEntry.path, mapEntry.valueType);
+			return;
+		}
 		var comparison = nullComparison(condition);
 		if (comparison != null) {
 			var nonNull = truthy == comparison.nonNullWhenTrue,
@@ -35,6 +40,39 @@ class FlowAnalysis {
 			else
 				scope.refineExpression(comparison.path, refined);
 		}
+	}
+
+	static function mapExistence(condition:TypedExpression):Null<{path:String, valueType:CompilerType, existsWhenTrue:Bool}> {
+		return switch condition.expression {
+			case TCollectionCall(receiver, "exists", [key]):
+				var path = mapEntryPath(receiver, key);
+				switch receiver.type {
+					case TMap(_, valueType) if (path != null): {path: path, valueType: valueType, existsWhenTrue: true};
+					default: null;
+				}
+			case TNot(value):
+				var existence = mapExistence(value);
+				existence == null ? null : {path: existence.path, valueType: existence.valueType, existsWhenTrue: !existence.existsWhenTrue};
+			default: null;
+		};
+	}
+
+	public static function mapEntryPath(map:TypedExpression, key:TypedExpression):Null<String> {
+		var mapPath = accessPath(map), keyPath = accessPath(key);
+		if (mapPath == null)
+			return null;
+		if (keyPath != null)
+			return 'map-entry:$mapPath:local:$keyPath';
+		return switch key.expression {
+			case TStringLiteral(value): 'map-entry:$mapPath:string:$value';
+			case TIntLiteral(value): 'map-entry:$mapPath:int:$value';
+			default: null;
+		};
+	}
+
+	public static function mapEntriesPath(map:TypedExpression):Null<String> {
+		var mapPath = accessPath(map);
+		return mapPath == null ? null : 'map-entry:$mapPath:';
 	}
 
 	static function nullComparison(condition:TypedExpression):Null<{

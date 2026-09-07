@@ -184,7 +184,7 @@ class IrVerifier {
 					throw 'IR safe cast source must be Dyn';
 				define(values, out);
 			case BeginTry(catchBlock, afterBlock):
-			case EndTry:
+			case EndTry(_):
 			case Catch(out):
 				if (out.type != Dyn)
 					throw 'IR catch value must be Dyn';

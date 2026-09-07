@@ -16,7 +16,7 @@ class CfgBuilder {
 
 	var current:CfgBlock;
 	var nextValue:Int = 0;
-	var activeTraps:Int = 0;
+	var activeTraps:Array<Int> = [];
 	var provenance:SourceProvenance = SourceProvenance.generated("cfg-builder");
 
 	public function new()
@@ -119,21 +119,20 @@ class CfgBuilder {
 
 	public function beginTry(catchBlock:CfgBlock, afterBlock:CfgBlock):Void {
 		emit(BeginTry(catchBlock.id, afterBlock.id));
-		activeTraps++;
+		activeTraps.push(catchBlock.id);
 	}
 
 	public function endTry():Void {
-		if (activeTraps == 0)
+		if (activeTraps.length == 0)
 			throw "No active try block";
-		emit(EndTry);
-		activeTraps--;
+		emit(EndTry(activeTraps.pop()));
 	}
 
 	/** Forget a trap after all paths in the current block have terminated. */
 	public function discardTry():Void {
-		if (activeTraps == 0)
+		if (activeTraps.length == 0)
 			throw "No active try block";
-		activeTraps--;
+		activeTraps.pop();
 	}
 
 	/** Close traps on a terminating path without changing the lexical stack. */
@@ -141,14 +140,17 @@ class CfgBuilder {
 		closeTrapsToDepth(0);
 
 	public function trapDepth():Int
-		return activeTraps;
+		return activeTraps.length;
 
 	/** Close traps opened inside a destination scope without mutating lexical state. */
 	public function closeTrapsToDepth(depth:Int):Void {
-		if (depth < 0 || depth > activeTraps)
+		if (depth < 0 || depth > activeTraps.length)
 			throw 'Invalid trap depth $depth';
-		for (_ in depth...activeTraps)
-			emit(EndTry);
+		var index = activeTraps.length;
+		while (index > depth) {
+			index--;
+			emit(EndTry(activeTraps[index]));
+		}
 	}
 
 	public function catchValue():CfgValue {

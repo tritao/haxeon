@@ -2,6 +2,7 @@ package compiler.compilation;
 
 import compiler.Diagnostic.CompileError;
 import compiler.ir.Ir.IrProgram;
+import compiler.ir.IrFunction;
 import compiler.ir.IrGenerator;
 import compiler.ir.IrProgramAssembler;
 import compiler.modules.ModuleReachability;
@@ -115,15 +116,20 @@ class FrontendCompilation {
 			}
 			context.invalidateSemanticResolutionCache();
 			for (module in reindexedModules.keys()) {
-				var model = modules.get(module).semanticModel;
-				if (model != null)
-					model.index.indexTypeReferences(context.resolveSemanticType, token);
+				var state = modules.get(module);
+				if (state != null) {
+					var model = state.semanticModel;
+					if (model != null)
+						model.index.indexTypeReferences(context.resolveSemanticType, token);
+				}
 			}
 		}
 		var retyped = [], regenerated = [];
 		for (object in IrGenerator.objectsFrom(typedNew))
 			objectCache.set(object.name, object);
-		var touchedModules:Map<String, Bool> = [], typedByName:Map<String, compiler.types.TypedAst.TypedFunction> = [], generatedFunctions:Map<String, Bool> = [];
+		var touchedModules:Map<String, Bool> = [],
+			typedByName:Map<String, compiler.types.TypedAst.TypedFunction> = [],
+			generatedFunctions:Map<String, Bool> = [];
 		for (fn in typedNew.functions) {
 			typedByName.set(fn.name, fn);
 			if (!owners.exists(fn.name))
@@ -132,7 +138,8 @@ class FrontendCompilation {
 		for (fn in typedNew.functions) {
 			if (token != null)
 				token.check();
-			var generated = generatedFunctions.exists(fn.name), module = resolveFunctionModule(fn, owners, typedByName, []);
+			var generated = generatedFunctions.exists(fn.name),
+				module = resolveFunctionModule(fn, owners, typedByName, []);
 			if (generated) {
 				var generatedNames:Map<String, Bool>;
 				if (generatedByModule.exists(module))
@@ -174,10 +181,13 @@ class FrontendCompilation {
 			publishResolvedDependencies(context, typedNew, reindexedModules, rollbackModules);
 		}
 		for (module in touchedModules.keys())
-			modules.get(module).typeVersion++;
+			if (modules.exists(module))
+				modules.get(module).typeVersion++;
 		for (name in names) {
 			if (token != null)
 				token.check();
+			if (!modules.exists(name))
+				continue;
 			var state = modules.get(name),
 				ast = state.parsedAst(),
 				valid:Map<String, Bool> = [];
@@ -221,6 +231,8 @@ class FrontendCompilation {
 		retyped.sort(Reflect.compare);
 		if (lowerToIr)
 			for (name in names) {
+				if (!modules.exists(name))
+					continue;
 				var state = modules.get(name),
 					pending = [for (functionName in state.pendingIrFunctions.keys()) functionName];
 				pending.sort(Reflect.compare);
@@ -233,6 +245,8 @@ class FrontendCompilation {
 					if (fn == null)
 						throw 'Pending IR function "$functionName" has no typed function';
 					state.irFunctions.set(functionName, IrGenerator.generateFunction(fn));
+					if (!state.typedSourceRevisions.exists(functionName))
+						throw 'Pending IR function "$functionName" has no typed source revision';
 					state.irSourceRevisions.set(functionName, state.typedSourceRevisions.get(functionName));
 					var version = state.irVersions.exists(functionName) ? state.irVersions.get(functionName) + 1 : 1;
 					state.irVersions.set(functionName, version);
@@ -257,15 +271,25 @@ class FrontendCompilation {
 			};
 		var cachedNames:Array<String> = [];
 		for (moduleName in names) {
+			if (!modules.exists(moduleName))
+				continue;
 			var state = modules.get(moduleName);
 			for (functionName in state.irFunctions.keys())
 				cachedNames.push(functionName);
 		}
 		cachedNames.sort(Reflect.compare);
-		var cached = [
-			for (functionName in cachedNames)
-				modules.get(owners.get(functionName)).irFunctions.get(functionName)
-		];
+		var cached:Array<IrFunction> = [];
+		for (functionName in cachedNames) {
+			if (!owners.exists(functionName))
+				throw 'Cached function "$functionName" has no source owner';
+			var owner = owners.get(functionName);
+			if (!modules.exists(owner))
+				throw 'Cached function "$functionName" has no source module';
+			var functions = modules.get(owner).irFunctions;
+			if (!functions.exists(functionName))
+				throw 'Cached function "$functionName" has no IR body';
+			cached.push(functions.get(functionName));
+		}
 		if (token != null)
 			token.check();
 		var objectNames = [for (name in objectCache.keys()) name];
@@ -320,6 +344,8 @@ class FrontendCompilation {
 	static function indexTypedInitializers(context:CompilationContext, typed:TypedProgram, reindexedModules:Map<String, Bool>):Void {
 		for (classDecl in typed.classes)
 			for (module in reindexedModules.keys()) {
+				if (!context.modules.exists(module))
+					continue;
 				var state = context.modules.get(module),
 					model = state.semanticModel;
 				if (model == null || !modelOwnsType(model.program, classDecl.name))

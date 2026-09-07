@@ -50,6 +50,8 @@ class SemanticAssembly {
 			enumCasesByType:Map<String, Array<String>> = [],
 			enumConstructorCounts:Map<String, Int> = [];
 		for (moduleName in names) {
+			if (!modules.exists(moduleName))
+				continue;
 			var moduleState = modules.get(moduleName),
 				program = moduleState.parsedAst();
 			for (declaration in program.aliases)
@@ -89,6 +91,8 @@ class SemanticAssembly {
 
 		var discoveryPrefixes:Map<String, Array<String>> = [];
 		for (moduleName in names) {
+			if (!modules.exists(moduleName))
+				continue;
 			var program = modules.get(moduleName).parsedAst();
 			for (classDecl in program.classes) {
 				var prefixes = declaredDiscoveryPrefixes(classDecl);
@@ -99,6 +103,8 @@ class SemanticAssembly {
 		for (name in names) {
 			if (token != null)
 				token.check();
+			if (!modules.exists(name))
+				continue;
 			var state = modules.get(name),
 				ast = state.parsedAst(),
 				locals:Map<String, Bool> = [],
@@ -327,6 +333,8 @@ class SemanticAssembly {
 			invalidationReasons:Map<String, Array<InvalidationReason>> = [],
 			initialBuild = true;
 		for (moduleName in names) {
+			if (!modules.exists(moduleName))
+				continue;
 			var state = modules.get(moduleName);
 			if (state.lastGoodRevision != 0)
 				initialBuild = false;
@@ -343,6 +351,8 @@ class SemanticAssembly {
 				if (targetId == null)
 					targetId = context.resolveSemanticSymbol(target);
 				for (moduleName in names) {
+					if (!modules.exists(moduleName))
+						continue;
 					var dependencyState = modules.get(moduleName);
 					for (owner => dependencies in dependencyState.semanticDependencies)
 						for (dependency in dependencies) {
@@ -383,7 +393,9 @@ class SemanticAssembly {
 				invalidate(invalid, invalidationReasons, changed, DependencySignature, changed);
 			var changedId = context.resolveSemanticSymbol(changed);
 			if (changedId != null)
-				for (moduleName in names)
+				for (moduleName in names) {
+					if (!modules.exists(moduleName))
+						continue;
 					for (owner => dependencies in modules.get(moduleName).semanticDependencies)
 						for (dependency in dependencies)
 							if (dependency.kind == compiler.modules.ModuleState.SemanticDependencyKind.Body
@@ -392,6 +404,7 @@ class SemanticAssembly {
 								work.push(owner);
 								invalidate(invalid, invalidationReasons, owner, DependencySignature, changed, changedId, Std.string(dependency.kind));
 							}
+				}
 			if (reverseCalls.exists(changed)) {
 				var callers = reverseCalls.get(changed);
 				for (caller in callers)
@@ -414,7 +427,7 @@ class SemanticAssembly {
 				invalidModules.set(owner, true);
 		}
 		for (moduleName in names)
-			if (modules.get(moduleName).lastGoodRevision != modules.get(moduleName).revision)
+			if (modules.exists(moduleName) && modules.get(moduleName).lastGoodRevision != modules.get(moduleName).revision)
 				invalidModules.set(moduleName, true);
 		for (fn in functions) {
 			var owner = owners.get(fn.name);

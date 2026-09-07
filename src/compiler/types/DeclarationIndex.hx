@@ -190,10 +190,21 @@ class DeclarationIndex {
 					validateTypeArguments(name, decl.typeConstraints, abstractSubstitutions, span);
 					TAbstract(name, resolvedArguments, resolveAbstract(decl, span, resolving, abstractSubstitutions));
 				} else if (classes.exists(name) || interfaces.exists(name) || enums.exists(name)) {
-					var parameters = classes.exists(name) ? classes.get(name)
-						.typeParameters : interfaces.exists(name) ? interfaces.get(name).typeParameters : enums.get(name).typeParameters,
-						constraints = classes.exists(name) ? classes.get(name)
-							.typeConstraints : interfaces.exists(name) ? interfaces.get(name).typeConstraints : enums.get(name).typeConstraints;
+					var declaration:{typeParameters:Array<String>, typeConstraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>, kind:NominalKind};
+					if (classes.exists(name)) {
+						var found = classes.get(name);
+						declaration = {typeParameters: found.typeParameters, typeConstraints: found.typeConstraints, kind: NominalKind.Class};
+					} else if (interfaces.exists(name)) {
+						var found = interfaces.get(name);
+						declaration = {typeParameters: found.typeParameters, typeConstraints: found.typeConstraints, kind: NominalKind.Interface};
+					} else {
+						if (!enums.exists(name))
+							throw 'Missing nominal declaration "$name"';
+						var found = enums.get(name);
+						declaration = {typeParameters: found.typeParameters, typeConstraints: found.typeConstraints, kind: NominalKind.Enum};
+					}
+					var parameters = declaration.typeParameters,
+						constraints = declaration.typeConstraints;
 					if (arguments.length != parameters.length)
 						fail('Type "$name" expects ${parameters.length} type arguments, got ${arguments.length}', span);
 					var resolvedArguments = [
@@ -204,8 +215,7 @@ class DeclarationIndex {
 					for (index in 0...parameters.length)
 						applied.set(parameters[index], resolvedArguments[index]);
 					validateTypeArguments(name, constraints, applied, span);
-					TInstance(classes.exists(name) ? NominalKind.Class : interfaces.exists(name) ? NominalKind.Interface : NominalKind.Enum, name,
-						resolvedArguments);
+					TInstance(declaration.kind, name, resolvedArguments);
 				} else {
 					fail('Type "$name" does not accept type arguments', span);
 					TDynamic;
@@ -364,6 +374,8 @@ class DeclarationIndex {
 
 	function validateCycles():Void {
 		for (name in aliases.keys()) {
+			if (!aliases.exists(name))
+				throw 'Alias "$name" disappeared during cycle validation';
 			var alias = aliases.get(name),
 				substitutions:Map<String, CompilerType> = [];
 			for (parameter in alias.typeParameters)
@@ -372,6 +384,8 @@ class DeclarationIndex {
 		}
 		for (name in classes.keys()) {
 			visitClass(name, []);
+			if (!classes.exists(name))
+				throw 'Class "$name" disappeared during cycle validation';
 			var decl = classes.get(name);
 			for (interfaceType in decl.interfaces) {
 				var interfaceName = nominalName(resolve(interfaceType, decl.span));
@@ -386,6 +400,8 @@ class DeclarationIndex {
 
 	function validateInterfaceInstantiations():Void {
 		for (name in interfaces.keys()) {
+			if (!interfaces.exists(name))
+				throw 'Interface "$name" disappeared during inheritance validation';
 			var decl = interfaces.get(name);
 			validateInterfaceSet(inheritance.inheritedInterfaces(TInstance(NominalKind.Interface, decl.name, [
 				for (parameter in decl.typeParameters)
@@ -393,6 +409,8 @@ class DeclarationIndex {
 			])), decl.span);
 		}
 		for (name in classes.keys()) {
+			if (!classes.exists(name))
+				throw 'Class "$name" disappeared during inheritance validation';
 			var decl = classes.get(name);
 			validateInterfaceSet(inheritance.inheritedInterfaces(TInstance(NominalKind.Class, decl.name, [
 				for (parameter in decl.typeParameters)

@@ -4,6 +4,7 @@ import compiler.types.Type.CompilerType;
 import compiler.Source.SourceSpan;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
+import compiler.types.TypeRelations;
 
 /** Resolved local binding identity and its declared semantic type. */
 private typedef ScopeValue = {
@@ -74,6 +75,20 @@ class Scope {
 		}
 	}
 
+	public function mergeRefinementsFrom(scopes:Array<Scope>):Void {
+		if (scopes.length == 0)
+			return;
+		for (value in visibleValues()) {
+			var merged = scopes[0].resolvedTypeById(value.id);
+			for (index in 1...scopes.length)
+				if (!TypeRelations.equals(merged, scopes[index].resolvedTypeById(value.id))) {
+					merged = value.declared;
+					break;
+				}
+			facts.refine(value.id, merged);
+		}
+	}
+
 	public function defineCapture(name:String, type:CompilerType, span:SourceSpan, cell:Bool = false, ?cellClass:String, ?bindingId:String):Void {
 		define(name, type, span, true, bindingId);
 		captures.set(name, true);
@@ -101,6 +116,12 @@ class Scope {
 	public function invalidateExpression(path:String):Void
 		facts.invalidatePrefix('$' + 'expression:$path');
 
+	public function invalidateExpressionValue(path:String):Void
+		facts.invalidate('$' + 'expression:$path');
+
+	public function invalidateExpressionNamespace(path:String):Void
+		facts.invalidateNamespace('$' + 'expression:$path');
+
 	public function invalidateExpressionsForLocal(name:String):Void {
 		var local = resolveLocal(name);
 		if (local != null)
@@ -114,18 +135,19 @@ class Scope {
 	}
 
 	public function isCapture(name:String):Bool
-		return captures.exists(name);
+		return captures.exists(name) || (parent != null && parent.isCapture(name));
 
 	public function isCellCapture(name:String):Bool
-		return cellCaptures.exists(name);
+		return cellCaptures.exists(name) || (parent != null && parent.isCellCapture(name));
 
 	public function cellClass(name:String):Null<String>
-		return cellClasses.get(name);
+		return cellClasses.exists(name) ? cellClasses.get(name) : (parent == null ? null : parent.cellClass(name));
 
 	public function requireCellClass(name:String):String {
-		if (!cellClasses.exists(name))
+		var resolved = cellClass(name);
+		if (resolved == null)
 			throw 'Missing capture cell for "$name"';
-		return cellClasses.get(name);
+		return resolved;
 	}
 
 	public function resolve(name:String):Null<CompilerType> {
@@ -178,6 +200,14 @@ class Scope {
 			return assigned.get(id);
 		var outer = parent;
 		return outer != null && outer.isAssignedId(id);
+	}
+
+	function resolvedTypeById(id:String):CompilerType {
+		var value = resolveById(id);
+		if (value == null)
+			throw 'Missing binding "$id" while merging flow facts';
+		var refined = facts.resolve(id);
+		return refined == null ? value.declared : refined;
 	}
 
 	function visibleValues():Array<ScopeValue> {

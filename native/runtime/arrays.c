@@ -151,6 +151,7 @@ DEFINE_ARRAY_INDEX_OF(i32, int, values[i] == value)
 DEFINE_ARRAY_INDEX_OF(f64, double, values[i] == value)
 DEFINE_ARRAY_INDEX_OF(bool, bool, values[i] == value)
 DEFINE_ARRAY_INDEX_OF(bytes, vbyte *, realtime_bytes_equal(values[i], value))
+DEFINE_ARRAY_INDEX_OF(ref, void *, values[i] == value)
 
 #undef DEFINE_ARRAY_INDEX_OF
 

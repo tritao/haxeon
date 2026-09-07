@@ -98,6 +98,8 @@ class SemanticIndex {
 		var keys = [for (key in declarations.symbols.keys()) key];
 		keys.sort(Reflect.compare);
 		for (key in keys) {
+			if (!declarations.symbols.exists(key))
+				throw 'Missing semantic declaration "$key"';
 			var declaration = declarations.symbols.get(key),
 				id = new SemanticSymbolId(module, declaration.id);
 			symbols.set(id, {
@@ -342,14 +344,15 @@ class SemanticIndex {
 	}
 
 	function indexRecoveredExpression(expression:AstExpression):Void {
-			switch expression {
+		switch expression {
 			case ErrorExpression(_):
 			case Variable(name, span):
 				var separator = name.indexOf(".");
 				if (separator < 0)
 					bindRecoveredLocal(name, span);
 				else {
-					var receiver = name.substring(0, separator), member = name.substring(name.lastIndexOf(".") + 1);
+					var receiver = name.substring(0, separator),
+						member = name.substring(name.lastIndexOf(".") + 1);
 					bindRecoveredLocal(receiver, span);
 					bindRecoveredMember(Variable(receiver, span), member, span);
 				}
@@ -391,19 +394,33 @@ class SemanticIndex {
 				indexRecoveredStatementUses(statements);
 				indexRecoveredExpression(result);
 			case ArrayLiteral(values, _):
-				for (value in values) indexRecoveredExpression(value);
+				for (value in values)
+					indexRecoveredExpression(value);
 			case ObjectLiteral(fields, _):
-				for (field in fields) indexRecoveredExpression(field.value);
+				for (field in fields)
+					indexRecoveredExpression(field.value);
 			case MapLiteral(entries, _):
-				for (entry in entries) { indexRecoveredExpression(entry.key); indexRecoveredExpression(entry.value); }
+				for (entry in entries) {
+					indexRecoveredExpression(entry.key);
+					indexRecoveredExpression(entry.value);
+				}
 			case New(_, arguments, _), NewGeneric(_, _, arguments, _):
-				for (argument in arguments) indexRecoveredExpression(argument);
-			case NewArray(_, length, _): indexRecoveredExpression(length);
-			case Lambda(_, body, _): indexRecoveredStatementUses(body);
+				for (argument in arguments)
+					indexRecoveredExpression(argument);
+			case NewArray(_, length, _):
+				indexRecoveredExpression(length);
+			case Lambda(_, body, _):
+				indexRecoveredStatementUses(body);
 			case SwitchExpression(value, cases, fallback, _):
 				indexRecoveredExpression(value);
-				for (item in cases) { indexRecoveredExpression(item.value); if (item.guard != null) indexRecoveredExpression(item.guard); indexRecoveredExpression(item.result); }
-				if (fallback != null) indexRecoveredExpression(fallback);
+				for (item in cases) {
+					indexRecoveredExpression(item.value);
+					if (item.guard != null)
+						indexRecoveredExpression(item.guard);
+					indexRecoveredExpression(item.result);
+				}
+				if (fallback != null)
+					indexRecoveredExpression(fallback);
 			default:
 		}
 	}
@@ -411,8 +428,14 @@ class SemanticIndex {
 	function bindRecoveredLocal(name:String, span:SourceSpan):Null<SemanticSymbolId> {
 		var found:Null<SemanticCompletionLocal> = null;
 		for (local in completionLocals)
-			if (local.name == name && local.declaration.start <= span.start && span.start >= local.scope.start && span.end <= local.scope.end
-				&& (found == null || local.depth > found.depth || local.depth == found.depth && local.declaration.start > found.declaration.start))
+			if (local.name == name
+				&& local.declaration.start <= span.start
+				&& span.start >= local.scope.start
+				&& span.end <= local.scope.end
+				&& (found == null
+					|| local.depth > found.depth
+					|| local.depth == found.depth
+					&& local.declaration.start > found.declaration.start))
 				found = local;
 		if (found == null)
 			return null;
@@ -444,9 +467,8 @@ class SemanticIndex {
 
 	function recoveredExpressionBindingType(expression:AstExpression):CompilerType
 		return switch expression {
-			case Variable(name, span):
-				var id = bindRecoveredLocal(name, span);
-				id == null || !declarationTypes.exists(id) ? TDynamic : declarationTypes.get(id);
+			case Variable(name, span): var id = bindRecoveredLocal(name,
+					span); id == null || !declarationTypes.exists(id) ? TDynamic : declarationTypes.get(id);
 			case New(name, _, _), NewGeneric(name, _, _, _): TInstance(compiler.types.Type.NominalKind.Class, name, []);
 			default: recoveredExpressionType(expression);
 		};

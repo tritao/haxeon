@@ -57,9 +57,11 @@ class ModuleGraph {
 		for (name in names) {
 			if (!states.exists(name))
 				continue;
+			if (!indegree.exists(name))
+				throw 'Missing initialization indegree for module "$name"';
 			var state = states.get(name);
 			for (dependency in state.dependencies)
-				if (known.exists(dependency)) {
+				if (known.exists(dependency) && outgoing.exists(dependency)) {
 					indegree.set(name, indegree.get(name) + 1);
 					var dependents = outgoing.get(dependency);
 					dependents.push(name);
@@ -73,7 +75,7 @@ class ModuleGraph {
 			var candidateIndex = -1;
 			for (index in 0...orderedNames.length) {
 				var candidate = orderedNames[index];
-				if (!emitted.exists(candidate) && indegree.get(candidate) == 0) {
+				if (!emitted.exists(candidate) && indegree.exists(candidate) && indegree.get(candidate) == 0) {
 					candidateIndex = index;
 					break;
 				}
@@ -83,7 +85,11 @@ class ModuleGraph {
 			var name = orderedNames[candidateIndex];
 			emitted.set(name, true);
 			result.push(name);
+			if (!outgoing.exists(name))
+				throw 'Missing initialization dependents for module "$name"';
 			for (dependent in outgoing.get(name)) {
+				if (!indegree.exists(dependent))
+					throw 'Missing initialization indegree for dependent module "$dependent"';
 				var next = indegree.get(dependent) - 1;
 				indegree.set(dependent, next);
 			}

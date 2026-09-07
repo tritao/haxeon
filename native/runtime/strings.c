@@ -156,6 +156,15 @@ HL_PRIM vbyte *HL_NAME(__string_from_char_code)( int code ) {
 	return result;
 }
 
+HL_PRIM vbyte *HL_NAME(__string_from_bytes)( vbyte *value, int length ) {
+	(void)length;
+	return value;
+}
+
+HL_PRIM vbyte *HL_NAME(__string_bytes)( vbyte *value ) {
+	return value;
+}
+
 HL_PRIM int HL_NAME(__std_parse_int)( vbyte *value ) {
 	return value == NULL ? 0 : (int)strtol(hl_to_utf8((const uchar *)value), NULL, 0);
 }

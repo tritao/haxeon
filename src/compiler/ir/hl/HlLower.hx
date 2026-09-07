@@ -134,19 +134,39 @@ class HlLower {
 				throw 'HashLink lowering failed for ${fn.name}: $error';
 			}
 		var identities = [for (fn in program.functions) functionIdentity(fn)];
-		code.debugSections.push({kind: HlWriter.FUNCTION_IDENTITIES, version: 1, flags: 0, payload: HlWriter.encodeFunctionIdentities(identities)});
+		code.debugSections.push({
+			kind: HlWriter.FUNCTION_IDENTITIES,
+			version: 1,
+			flags: 0,
+			payload: HlWriter.encodeFunctionIdentities(identities)
+		});
 		var spans:Array<compiler.hl.HlCode.HlOpcodeSourceSpan> = [];
 		for (index in 0...code.functions.length) {
-			var identity = identities[index], loweredFunction = code.functions[index];
+			var identity = identities[index],
+				loweredFunction = code.functions[index];
 			for (opcode in 0...loweredFunction.debugLocations.length) {
 				var location = loweredFunction.debugLocations[opcode];
-				spans.push({stableId: identity.stableId, opcode: opcode, sourcePath: location.path,
-					start: location.start == null ? -1 : location.start, end: location.end == null ? -1 : location.end,
-					line: location.line, column: location.column, endLine: location.endLine, endColumn: location.endColumn,
-					sourceHash: location.sourceHash, flags: location.flags});
+				spans.push({
+					stableId: identity.stableId,
+					opcode: opcode,
+					sourcePath: location.path,
+					start: location.start == null ? -1 : location.start,
+					end: location.end == null ? -1 : location.end,
+					line: location.line,
+					column: location.column,
+					endLine: location.endLine,
+					endColumn: location.endColumn,
+					sourceHash: location.sourceHash,
+					flags: location.flags
+				});
 			}
 		}
-		code.debugSections.push({kind: HlWriter.OPCODE_SOURCE_SPANS, version: 2, flags: 0, payload: HlWriter.encodeOpcodeSourceSpans(spans)});
+		code.debugSections.push({
+			kind: HlWriter.OPCODE_SOURCE_SPANS,
+			version: 2,
+			flags: 0,
+			payload: HlWriter.encodeOpcodeSourceSpans(spans)
+		});
 
 		code.entryPoint = requireFunction(program.entryPoint);
 		code.ints = code.ints.copy();
@@ -162,11 +182,16 @@ class HlLower {
 		for (block in fn.blocks)
 			for (instruction in block.instructions) {
 				var location = instruction.provenance.location;
-				if (location == null) continue;
-				if (sourcePath == "") sourcePath = location.path;
-				if (start < 0 || location.start < start) start = location.start;
-				if (end < location.end) end = location.end;
-				if (line == 0 || location.line < line) line = location.line;
+				if (location == null)
+					continue;
+				if (sourcePath == "")
+					sourcePath = location.path;
+				if (start < 0 || location.start < start)
+					start = location.start;
+				if (end < location.end)
+					end = location.end;
+				if (line == 0 || location.line < line)
+					line = location.line;
 			}
 		var parts = fn.name.split(".");
 		return {
@@ -259,8 +284,7 @@ class HlLower {
 				}
 		}
 		var instructions:Array<HlInstruction> = [],
-			debugLocations:Array<HlDebugLocation> = [],
-			activeTraps:Array<Int> = [];
+			debugLocations:Array<HlDebugLocation> = [];
 		for (block in orderedBlocks(fn)) {
 			if (block.instructions.length == 0 && block.terminator == null)
 				continue;
@@ -294,12 +318,11 @@ class HlLower {
 							throw 'Try block $block.id has no catch value in block $catchBlock';
 						var handlerValue = catchValues.get(catchBlock);
 						var handlerRegister = requireRegister(handlerValue, registers);
-						activeTraps.push(handlerRegister);
 						instructions.push(HlInstruction.Trap(handlerRegister, 'block_$catchBlock'));
-					case EndTry:
-						if (activeTraps.length == 0)
-							throw 'Try block $block.id ends without an active trap';
-						instructions.push(HlInstruction.EndTrap(activeTraps.pop()));
+					case EndTry(catchBlock):
+						if (!catchValues.exists(catchBlock))
+							throw 'Try block $block.id ends with unknown handler block $catchBlock';
+						instructions.push(HlInstruction.EndTrap(requireRegister(catchValues.get(catchBlock), registers)));
 					case Catch(_):
 					case GlobalGet(output, name):
 						var global = symbols.requireGlobalIndex(name);
@@ -489,7 +512,10 @@ class HlLower {
 			endLine: location.endLine,
 			endColumn: location.endColumn,
 			sourceHash: location.sourceHash,
-			flags: switch provenance.origin { case CompilerGenerated(_): 1; case UserSource: 0; }
+			flags: switch provenance.origin {
+				case CompilerGenerated(_): 1;
+				case UserSource: 0;
+			}
 			};
 	}
 
@@ -644,7 +670,7 @@ class HlLower {
 				Equal(output, _, _), Call(output, _, _), StaticClosure(output, _), InstanceClosure(output, _, _), CallClosure(output, _, _),
 				ToVirtual(output, _), MethodCall(output, _, _, _), NewObject(output, _), FieldGet(output, _, _), ArrayGet(output, _, _), ArraySize(output, _),
 				MakeEnum(output, _, _, _), EnumIndex(output, _), EnumField(output, _, _, _): output;
-			case BeginTry(_, _), EndTry, GlobalSet(_, _), FieldSet(_, _, _), ArraySet(_, _, _): null;
+			case BeginTry(_, _), EndTry(_), GlobalSet(_, _), FieldSet(_, _, _), ArraySet(_, _, _): null;
 		};
 
 	function requireRegister(value:IrValue, registers:Map<Int, Int>):Int {

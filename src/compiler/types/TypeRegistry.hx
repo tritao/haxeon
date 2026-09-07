@@ -137,6 +137,8 @@ class TypeRegistry {
 		output.writeByte(VERSION);
 		output.writeInt32(names.length);
 		for (name in names) {
+			if (!ids.exists(name))
+				throw 'Missing stable type ID for "$name"';
 			var value = Bytes.ofString(name);
 			output.writeInt32(ids.get(name));
 			output.writeInt32(value.length);

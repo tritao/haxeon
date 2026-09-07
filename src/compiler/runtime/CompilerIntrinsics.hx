@@ -27,6 +27,9 @@ class CompilerIntrinsics {
 		definitions.push(native("__string_index_of_from", "realtime_runtime", "__string_index_of_from", [TString, TString, TInt], TInt));
 		definitions.push(native("__string_to_lower_case", "realtime_runtime", "__string_to_lower_case", [TString], TString));
 		definitions.push(native("__string_split", "realtime_runtime", "__string_split", [TString, TString], TArray(TString)));
+		definitions.push(native("__string_from_bytes", "realtime_runtime", "__string_from_bytes", [THlBytes, TInt], TString));
+		definitions.push(native("__string_bytes", "realtime_runtime", "__string_bytes", [TString], THlBytes));
+		definitions.push(native("__hl_bytes_ucs2_length", "std", "ucs2length", [THlBytes, TInt], TInt));
 		var bytes:CompilerType = TBytes,
 			input:CompilerType = TNativeAbstract("realtime_bytes_input"),
 			output:CompilerType = TNativeAbstract("realtime_bytes_output");
@@ -35,6 +38,7 @@ class CompilerIntrinsics {
 		definitions.push(native("__bytes_length", "realtime_runtime", "__bytes_length", [bytes], TInt));
 		definitions.push(native("__bytes_get_data", "realtime_runtime", "__bytes_get_data", [bytes], THlBytes));
 		definitions.push(native("__bytes_get", "realtime_runtime", "__bytes_get", [bytes, TInt], TInt));
+		definitions.push(native("__bytes_get_i32", "realtime_runtime", "__bytes_get_i32", [bytes, TInt], TInt));
 		definitions.push(native("__bytes_set", "realtime_runtime", "__bytes_set", [bytes, TInt, TInt], TVoid));
 		definitions.push(native("__bytes_set_i32", "realtime_runtime", "__bytes_set_i32", [bytes, TInt, TInt], TVoid));
 		definitions.push(native("__bytes_sub", "realtime_runtime", "__bytes_sub", [bytes, TInt, TInt], bytes));

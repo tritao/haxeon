@@ -95,7 +95,8 @@ class CfgVerifier {
 				case BeginTry(catchBlock, afterBlock):
 					targetBlock(catchBlock, blocks);
 					targetBlock(afterBlock, blocks);
-				case EndTry:
+				case EndTry(catchBlock):
+					targetBlock(catchBlock, blocks);
 				case Catch(out):
 					expect(out, Dyn);
 					define(out, defined, available, block.id);

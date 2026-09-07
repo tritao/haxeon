@@ -259,8 +259,9 @@ class HlSymbolTable {
 					slots.set(methodName, slot);
 					if (slot >= next)
 						next = slot + 1;
-					if (typeIndices.exists('virt:$base')) {
-						var baseIndex = typeIndices.get('virt:$base');
+					var baseKey = 'virt:$base';
+					if (typeIndices.exists(baseKey)) {
+						var baseIndex = typeIndices.get(baseKey);
 						switch types[baseIndex] {
 							case Virtual(baseFields):
 								if (slot < baseFields.length)

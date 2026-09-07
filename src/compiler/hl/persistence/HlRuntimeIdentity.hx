@@ -50,6 +50,8 @@ class HlRuntimeIdentity {
 		out.writeInt32(names.length);
 		out.writeInt32(indices.exists("__init") ? indices.get("__init") : -1);
 		for (name in names) {
+			if (!stableIds.exists(name) || !indices.exists(name))
+				throw 'Missing runtime identity mapping for "$name"';
 			out.writeInt32(stableIds.get(name));
 			out.writeInt32(indices.get(name));
 		}
@@ -76,6 +78,8 @@ class HlRuntimeIdentity {
 		out.writeInt32(names.length);
 		for (name in names) {
 			var bytes = Bytes.ofString(name);
+			if (!stableIds.exists(name))
+				throw 'Missing persistent function identity for "$name"';
 			out.writeInt32(stableIds.get(name));
 			out.writeInt32(bytes.length);
 			out.write(bytes);

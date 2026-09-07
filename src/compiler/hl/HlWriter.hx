@@ -17,6 +17,7 @@ class HlWriter {
 	public static inline final FUNCTION_IDENTITIES = 1;
 	public static inline final OPCODE_SOURCE_SPANS = 2;
 	public static inline final SOURCE_SNAPSHOTS = 3;
+
 	final output:BytesOutput;
 	var hasDebug:Bool = false;
 	var debugFiles:Array<String> = [];
@@ -122,13 +123,16 @@ class HlWriter {
 	}
 
 	public static function encodeOpcodeSourceSpans(spans:Array<compiler.hl.HlCode.HlOpcodeSourceSpan>):HaxeBytes {
-		var writer = new HlWriter(), files:Array<String> = [], fileIndices:Map<String, Int> = [], byFunction:Map<Int, Array<compiler.hl.HlCode.HlOpcodeSourceSpan>> = [], seen:Map<String, Bool> = [];
+		var writer = new HlWriter(),
+			files:Array<String> = [],
+			fileIndices:Map<String, Int> = [],
+			byFunction:Map<Int, Array<compiler.hl.HlCode.HlOpcodeSourceSpan>> = [],
+			seen:Map<String, Bool> = [];
 		for (span in spans) {
 			var validRange = span.start == -1 && span.end == -1 || span.start >= 0 && span.end >= span.start;
 			var key = span.stableId + ":" + span.opcode;
-			if (span.stableId < 0 || span.opcode < 0 || span.sourcePath == "" || span.line < 1 || span.column < 1
-				|| span.endLine < span.line || span.endColumn < 1 || span.endLine == span.line && span.endColumn < span.column
-				|| span.flags < 0 || !validRange || seen.exists(key))
+			if (span.stableId < 0 || span.opcode < 0 || span.sourcePath == "" || span.line < 1 || span.column < 1 || span.endLine < span.line
+				|| span.endColumn < 1 || span.endLine == span.line && span.endColumn < span.column || span.flags < 0 || !validRange || seen.exists(key))
 				throw "Invalid HLB opcode source span";
 			seen.set(key, true);
 			if (!fileIndices.exists(span.sourcePath)) {
@@ -143,17 +147,22 @@ class HlWriter {
 			mappings.push(span);
 		}
 		writer.writeUnsignedIndex(files.length);
-		for (file in files) writer.writeSizedString(file);
+		for (file in files)
+			writer.writeSizedString(file);
 		var stableIds = [for (stableId in byFunction.keys()) stableId];
 		stableIds.sort((left, right) -> left - right);
 		writer.writeUnsignedIndex(stableIds.length);
 		for (stableId in stableIds) {
+			if (!byFunction.exists(stableId))
+				throw 'Missing debug span mappings for function "$stableId"';
 			var mappings = byFunction.get(stableId);
 			mappings.sort((left, right) -> left.opcode - right.opcode);
 			writer.writeUnsignedIndex(stableId);
 			writer.writeUnsignedIndex(mappings.length);
 			for (span in mappings) {
 				writer.writeUnsignedIndex(span.opcode);
+				if (!fileIndices.exists(span.sourcePath))
+					throw 'Missing debug source index for "${span.sourcePath}"';
 				writer.writeUnsignedIndex(fileIndices.get(span.sourcePath));
 				writer.writeIndex(span.start + 1);
 				writer.writeIndex(span.end + 1);
@@ -169,7 +178,9 @@ class HlWriter {
 	}
 
 	public static function encodeSourceSnapshots(snapshots:Array<compiler.hl.HlCode.HlSourceSnapshot>):HaxeBytes {
-		var writer = new HlWriter(), ordered = snapshots.copy(), seen:Map<Int, HaxeBytes> = [];
+		var writer = new HlWriter(),
+			ordered = snapshots.copy(),
+			seen:Map<Int, HaxeBytes> = [];
 		ordered.sort((left, right) -> left.sourceHash < right.sourceHash ? -1 : left.sourceHash > right.sourceHash ? 1 : 0);
 		writer.writeUnsignedIndex(ordered.length);
 		for (snapshot in ordered) {
@@ -338,6 +349,8 @@ class HlWriter {
 			} : fn.debugLocations[index];
 			if (location.line > 0x1FFFFF)
 				throw 'Debug line ${location.line} exceeds the HashLink format limit';
+			if (!debugFileIndices.exists(location.path))
+				throw 'Missing HashLink debug file index for "${location.path}"';
 			var file = debugFileIndices.get(location.path);
 			if (file != currentFile) {
 				output.writeByte(((file >> 8) << 1) | 1);
@@ -428,22 +441,22 @@ class HlWriter {
 				case EnumField(destination, value, constructor, field):
 					{opcode: HlOpcode.EnumField, operands: [destination, value, constructor, field]};
 				case JumpSignedLessOrEqual(left, right, target):
-					var targetPosition = labels.get(target);
+					var targetPosition = requireLabel(labels, target);
 					{opcode: HlOpcode.JSLte, operands: [left, right, targetPosition - (result.length + 1)]};
 				case JumpSignedLess(left, right, target):
-					var targetPosition = labels.get(target);
+					var targetPosition = requireLabel(labels, target);
 					{opcode: HlOpcode.JSLt, operands: [left, right, targetPosition - (result.length + 1)]};
 				case JumpEqual(left, right, target):
-					var targetPosition = labels.get(target);
+					var targetPosition = requireLabel(labels, target);
 					{opcode: HlOpcode.JEq, operands: [left, right, targetPosition - (result.length + 1)]};
 				case JumpTrue(condition, target):
-					var targetPosition = labels.get(target);
+					var targetPosition = requireLabel(labels, target);
 					{opcode: HlOpcode.JTrue, operands: [condition, targetPosition - (result.length + 1)]};
 				case Jump(target):
-					var targetPosition = labels.get(target);
+					var targetPosition = requireLabel(labels, target);
 					{opcode: HlOpcode.JAlways, operands: [targetPosition - (result.length + 1)]};
 				case Trap(destination, target):
-					var targetPosition = labels.get(target);
+					var targetPosition = requireLabel(labels, target);
 					{opcode: HlOpcode.Trap, operands: [destination, targetPosition - (result.length + 1)]};
 				case EndTrap(destination):
 					{opcode: HlOpcode.EndTrap, operands: [destination]};
@@ -458,6 +471,12 @@ class HlWriter {
 			result.push(encoded);
 		}
 		return result;
+	}
+
+	static function requireLabel(labels:Map<String, Int>, target:String):Int {
+		if (!labels.exists(target))
+			throw 'Unknown HashLink jump label "$target"';
+		return labels.get(target);
 	}
 
 	function writeOpcode(opcode:HlOpcode, operands:Array<Int>):Void {

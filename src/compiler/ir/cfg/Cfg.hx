@@ -34,7 +34,7 @@ enum CfgInstruction {
 	ToDyn(output:CfgValue, value:CfgValue);
 	SafeCast(output:CfgValue, value:CfgValue);
 	BeginTry(catchBlock:Int, afterBlock:Int);
-	EndTry;
+	EndTry(catchBlock:Int);
 	Catch(output:CfgValue);
 	LoadLocal(output:CfgValue, name:String);
 	StoreLocal(name:String, value:CfgValue);
