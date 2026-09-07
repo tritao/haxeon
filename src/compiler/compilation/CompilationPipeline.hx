@@ -1,4 +1,4 @@
-package compiler;
+package compiler.compilation;
 
 import compiler.syntax.Ast;
 import compiler.syntax.Ast.AstExpression;
@@ -39,10 +39,10 @@ import compiler.abi.PatchPlanner.AbiChange;
 import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.runtime.NativeRegistry;
 import compiler.runtime.NativeRegistry.NativeDefinition;
-import compiler.CompilerPublication.CompilerSnapshot;
-import compiler.CompilerPublication.PublicationStatus;
-import compiler.CompilerPublication.ReconnectDecision;
-import compiler.CompilerPublication.ReconnectReason;
+import compiler.compilation.CompilerPublication.CompilerSnapshot;
+import compiler.compilation.CompilerPublication.PublicationStatus;
+import compiler.compilation.CompilerPublication.ReconnectDecision;
+import compiler.compilation.CompilerPublication.ReconnectReason;
 import compiler.modules.ModuleGraph;
 import compiler.modules.ModulePath;
 import compiler.modules.ModuleReachability;

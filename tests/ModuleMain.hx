@@ -5,7 +5,7 @@ import compiler.Compiler;
 import compiler.Diagnostic.CompileError;
 import sys.io.File;
 import compiler.types.Type.CompilerType;
-import compiler.CompilerPublication.ReconnectDecision;
+import compiler.compilation.CompilerPublication.ReconnectDecision;
 import compiler.modules.ModuleState.SemanticDependencyKind;
 
 class ModuleMain {

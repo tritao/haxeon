@@ -1,4 +1,4 @@
-package compiler;
+package compiler.compilation;
 
 import compiler.Diagnostic.CompileError;
 import compiler.ir.Ir.IrProgram;

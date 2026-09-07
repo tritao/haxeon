@@ -2,7 +2,7 @@ package compiler.semantic;
 
 import compiler.syntax.Ast;
 import compiler.syntax.Ast.AstFunction;
-import compiler.CompilationContext;
+import compiler.compilation.CompilationContext;
 import compiler.modules.ModuleState;
 import compiler.service.CancellationToken;
 import compiler.types.FieldInference;

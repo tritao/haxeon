@@ -1,4 +1,4 @@
-package compiler;
+package compiler.compilation;
 
 import compiler.abi.PatchPlanner;
 import compiler.abi.PatchPlanner.AbiChange;

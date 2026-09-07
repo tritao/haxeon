@@ -1,7 +1,7 @@
 import compiler.Diagnostic.CompileError;
 import compiler.hl.HlWriter;
 import compiler.Compiler;
-import compiler.CompilerPublication.ReconnectDecision;
+import compiler.compilation.CompilerPublication.ReconnectDecision;
 import runtime.LoadedPlugin;
 import runtime.PatchSet;
 import runtime.Runtime;

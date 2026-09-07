@@ -11,7 +11,7 @@ import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlType;
 import compiler.Compiler;
 import compiler.Compiler.CompileResult;
-import compiler.CompilerPublication.ReconnectDecision;
+import compiler.compilation.CompilerPublication.ReconnectDecision;
 import compiler.ir.codec.IrFunctionStateCodec;
 import compiler.hl.persistence.HlFunctionCacheStateCodec;
 import compiler.hl.persistence.HlSymbolStateCodec;

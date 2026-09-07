@@ -1,6 +1,7 @@
-package compiler;
+package compiler.compilation;
 
 import compiler.Diagnostic;
+import compiler.Compiler;
 import compiler.Compiler.AnalysisResult;
 import compiler.modules.ModuleState;
 import compiler.service.CancellationToken;

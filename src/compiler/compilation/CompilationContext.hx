@@ -1,5 +1,6 @@
-package compiler;
+package compiler.compilation;
 
+import compiler.Compiler;
 import compiler.syntax.Ast.AstFunction;
 import compiler.runtime.NativeRegistry.NativeDefinition;
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
