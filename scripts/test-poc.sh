@@ -99,6 +99,17 @@ if [[ $reflect_methods_status -ne 42 ]]; then
 	exit 1
 fi
 echo "PASS: Reflect.compareMethods preserves static and bound method identity (exit 42)"
+null_reference_output="$root_dir/out/null-reference.hl"
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run NullReferenceMain "$null_reference_output"
+set +e
+LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$null_reference_output"
+null_reference_status=$?
+set -e
+if [[ $null_reference_status -ne 42 ]]; then
+	echo "nullable-reference compatibility: expected exit 42, got $null_reference_status" >&2
+	exit 1
+fi
+echo "PASS: null coerces to reference-like types while primitives remain strict (exit 42)"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ProtocolMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run LspProtocolMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run RuntimeDomainMain

@@ -68,6 +68,8 @@ class TypeRelations {
 			return true;
 		if (equals(actual, expected))
 			return true;
+		if (actual == TNull && isReference(expected))
+			return true;
 		switch actual {
 			case TNullable(element):
 				if (isReference(expected) && isAssignable(element, expected))
