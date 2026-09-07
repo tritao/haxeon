@@ -29,7 +29,7 @@ typedef FrontendResult = {
 /** Builds and validates the reachable source graph through complete IR assembly. */
 class FrontendCompilation {
 	public static function run(context:CompilationContext, entryModule:String, token:Null<CancellationToken>, rollbackModules:Map<String, ModuleState>,
-			snapshotDoneAt:Float, ?lowerToIr = true):FrontendResult {
+			snapshotDoneAt:Float, ?lowerToIr = true, ?indexSemantics = true):FrontendResult {
 		var modules = context.modules,
 			graph = context.graph,
 			objectCache = context.objectCache,
@@ -103,15 +103,17 @@ class FrontendCompilation {
 			if (module != null)
 				reindexedModules.set(module, true);
 		}
-		for (module in reindexedModules.keys()) {
-			var state = context.writableState(module, rollbackModules);
-			state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.revision, state.tokens);
-		}
-		context.invalidateSemanticResolutionCache();
-		for (module in reindexedModules.keys()) {
-			var model = modules.get(module).semanticModel;
-			if (model != null)
-				model.index.indexTypeReferences(context.resolveSemanticType, token);
+		if (indexSemantics) {
+			for (module in reindexedModules.keys()) {
+				var state = context.writableState(module, rollbackModules);
+				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.revision, state.tokens);
+			}
+			context.invalidateSemanticResolutionCache();
+			for (module in reindexedModules.keys()) {
+				var model = modules.get(module).semanticModel;
+				if (model != null)
+					model.index.indexTypeReferences(context.resolveSemanticType, token);
+			}
 		}
 		var retyped = [], regenerated = [];
 		for (object in IrGenerator.objectsFrom(typedNew))
@@ -141,7 +143,7 @@ class FrontendCompilation {
 			var state = context.writableState(module, rollbackModules);
 			state.typedFunctions.set(fn.name, fn);
 			state.typedSourceRevisions.set(fn.name, state.revision);
-			if (state.semanticModel != null)
+			if (indexSemantics && state.semanticModel != null)
 				state.semanticModel.index.indexTypedFunction(fn, context.resolveSemanticSymbol, context.resolveSemanticEnumCase, token);
 			retyped.push(fn.name);
 			touchedModules.set(module, true);

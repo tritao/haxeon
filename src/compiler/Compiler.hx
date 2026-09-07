@@ -331,7 +331,7 @@ class Compiler {
 		return candidate;
 	}
 
-	public function compile(entryModule:String, ?token:CancellationToken):CompileResult {
+	public function compile(entryModule:String, ?token:CancellationToken, ?indexSemantics = true):CompileResult {
 		var cached = cachedCompileResult, cachedEntry = cachedCompileEntry;
 		if (!publication.status().tracking
 			&& cached != null
@@ -378,7 +378,7 @@ class Compiler {
 				}
 			};
 		}
-		var result = new CompilationTransaction(this, entryModule, token, null).run();
+		var result = new CompilationTransaction(this, entryModule, token, null, indexSemantics).run();
 		rememberCompile(entryModule, result);
 		return result;
 	}

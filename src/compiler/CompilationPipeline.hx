@@ -60,8 +60,8 @@ import compiler.Compiler.CompileResult;
 /** Executes the mutable frontend, IR, ABI-planning, and backend candidate phases. */
 class CompilationPipeline {
 	public static function compile(context:CompilationContext, entryModule:String, token:Null<CancellationToken>, rollbackModules:Map<String, ModuleState>,
-			transactionStartedAt:Float, snapshotDoneAt:Float):CompileResult {
-		var frontend = FrontendCompilation.run(context, entryModule, token, rollbackModules, snapshotDoneAt);
+			transactionStartedAt:Float, snapshotDoneAt:Float, ?indexSemantics = true):CompileResult {
+		var frontend = FrontendCompilation.run(context, entryModule, token, rollbackModules, snapshotDoneAt, true, indexSemantics);
 		var modules = context.modules, moduleId = context.moduleId;
 		var ir = frontend.ir,
 			names = frontend.moduleNames,

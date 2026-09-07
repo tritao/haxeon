@@ -39,7 +39,7 @@ class BootstrapCompiler {
 		Sys.println("compiling bootstrap entry " + entry);
 		var result:CompileResult;
 		try {
-			result = compiler.compile(entry);
+			result = compiler.compile(entry, null, false);
 		} catch (failure:CompileError) {
 			var diagnostic = failure.diagnostic;
 			Sys.println(diagnostic.span.file.path + ":" + Std.string(diagnostic.span.start) + ": " + diagnostic.code + ": " + diagnostic.message);

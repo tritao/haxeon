@@ -11,12 +11,14 @@ class CompilationTransaction {
 	final entryModule:String;
 	final token:Null<CancellationToken>;
 	final startingAssembler:Null<HlModuleAssembler>;
+	final indexSemantics:Bool;
 
-	public function new(compiler:Compiler, entryModule:String, token:Null<CancellationToken>, startingAssembler:Null<HlModuleAssembler>) {
+	public function new(compiler:Compiler, entryModule:String, token:Null<CancellationToken>, startingAssembler:Null<HlModuleAssembler>, ?indexSemantics = true) {
 		this.compiler = compiler;
 		this.entryModule = entryModule;
 		this.token = token;
 		this.startingAssembler = startingAssembler;
+		this.indexSemantics = indexSemantics;
 	}
 
 	public function run():CompileResult {
@@ -28,7 +30,7 @@ class CompilationTransaction {
 		var candidate = compiler.createCandidate(snapshot, startingAssembler);
 		try {
 			var context = new CompilationContext(candidate);
-			var result = CompilationPipeline.compile(context, entryModule, token, snapshot.modules, transactionStartedAt, snapshotDoneAt);
+			var result = CompilationPipeline.compile(context, entryModule, token, snapshot.modules, transactionStartedAt, snapshotDoneAt, indexSemantics);
 			var abi = candidate.publishedAbi;
 			if (abi == null)
 				throw "Compilation did not produce a runtime ABI";
