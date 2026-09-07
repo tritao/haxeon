@@ -6,6 +6,7 @@ class SourceFile {
 	public final text:String;
 
 	final lineStarts:Array<Int>;
+	final hash:Int;
 
 	public function new(path:String, text:String) {
 		this.path = path;
@@ -14,6 +15,11 @@ class SourceFile {
 		for (index in 0...text.length)
 			if (text.charCodeAt(index) == 10)
 				lineStarts.push(index + 1);
+		var contentHash:Int = cast 0x811C9DC5;
+		var bytes = haxe.io.Bytes.ofString(text);
+		for (index in 0...bytes.length)
+			contentHash = (contentHash ^ bytes.get(index)) * 16777619;
+		hash = contentHash;
 	}
 
 	public function span(start:Int, end:Int):SourceSpan
@@ -41,13 +47,8 @@ class SourceFile {
 	}
 
 	/** Stable FNV-1a identity of the UTF-8 source snapshot used for compilation. */
-	public function contentHash():Int {
-		var hash:Int = cast 0x811C9DC5;
-		var bytes = haxe.io.Bytes.ofString(text);
-		for (index in 0...bytes.length)
-			hash = (hash ^ bytes.get(index)) * 16777619;
+	public function contentHash():Int
 		return hash;
-	}
 }
 
 /** Half-open byte/character range within a single {@link SourceFile}. */
