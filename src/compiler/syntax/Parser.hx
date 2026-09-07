@@ -1,6 +1,7 @@
 package compiler.syntax;
 
 import compiler.syntax.Ast.AstExpression;
+import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstFieldAccess;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstClass;
@@ -471,6 +472,10 @@ class Parser {
 			var memberMetadata = parseMetadata();
 			var isStatic = false, isFinal = false;
 			while (true) {
+				if (current().kind == TokenKind.Identifier && current().text == "override") {
+					advance();
+					continue;
+				}
 				switch current().kind {
 					case TokenKind.Public, TokenKind.Private:
 						advance();
@@ -1110,7 +1115,7 @@ class Parser {
 		if (check(TokenKind.Identifier) && peekKind(1) == TokenKind.Arrow) {
 			var argument = advance(), start = argument.span;
 			advance();
-			var arguments = [{
+			var arguments:Array<AstArgument> = [{
 				name: argument.text,
 				type: InferredType,
 				span: argument.span,

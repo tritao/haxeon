@@ -160,6 +160,7 @@ run_program instance-field-init 42
 run_program instance-field-init-constructor 42
 run_program default-constructor-class 42
 run_program inheritance-class 43
+run_program override-method 42
 run_program virtual-dispatch 71
 run_program enum-basic 42
 run_program enum-payload 42
