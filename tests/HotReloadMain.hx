@@ -545,11 +545,11 @@ class HotReloadMain {
 		resumed.update("Main.hx", "function helper():Int { return 1; } function main():Int { return 42 + helper() - 1; }");
 		var changed = resumed.compile("Main");
 		if (changed.revision != initial.revision + 1
-			|| changed.changedFunctions.length != 1
-			|| changed.changedFunctions[0] != mainId
-			|| changed.changedFunctions[0] == helperId
+			|| changed.changedFunctions.length != 2
+			|| changed.changedFunctions.indexOf(mainId) < 0
+			|| changed.changedFunctions.indexOf(helperId) < 0
 			|| changed.patchBytes == null)
-			throw "Restarted compiler did not emit one revision-2 body patch";
+			throw "Restarted compiler did not emit the revision-2 code and source-metadata patch";
 		Runtime.patchSet(loaded, new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
 		resumed.acknowledgePublication(changed.revision);
 		if (Runtime.callInt(loaded, mainId) != 42)
