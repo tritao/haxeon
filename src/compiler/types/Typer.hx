@@ -1989,7 +1989,7 @@ class Typer {
 							var field = findFieldType(thisType, name);
 							if (field == null)
 								fail("E1005", 'Unknown variable "$name"', span);
-							typedMember(new TypedExpression(TLocal("this"), thisType, span), name, span);
+							typedMemberWithFlow(new TypedExpression(TLocal("this"), thisType, span), name, span, scope);
 						} else {
 							var parts = splitPath(name),
 								objectName = parts[0],
@@ -2697,6 +2697,19 @@ class Typer {
 					new TypedExpression(TClosureCall(typeExpression(Variable(name, span), scope), typed), functionType.result, span);
 				} else {
 					if (name.indexOf(".") < 0) {
+						var thisType = scope.resolve("this"), fieldType = thisType == null ? null : findFieldType(thisType, name);
+						if (fieldType != null) {
+							var fieldCallable = typeExpression(Variable(name, span), scope);
+							switch fieldCallable.type {
+								case TFunction(argumentTypes, result):
+									if (arguments.length != argumentTypes.length)
+										fail("E1008", 'Function field "$name" expects ${argumentTypes.length} arguments, got ${arguments.length}', span);
+									var typed = [for (index in 0...arguments.length) typeExpression(arguments[index], scope, argumentTypes[index])];
+									typed = coerceArguments(typed, argumentTypes, name);
+									return new TypedExpression(TClosureCall(fieldCallable, typed), result, span);
+								default: fail("E1007", 'Cannot call non-function field "$name"', span);
+							}
+						}
 						var implicitMethod = lexicalMethod(name);
 						if (implicitMethod != null) {
 							var methodKey = implicitMethod.owner + "." + name,

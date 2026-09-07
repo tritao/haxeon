@@ -88,6 +88,7 @@ class TestMain {
 		Frontend.compile('typedef Options = { final ?name:String; ?final count:Int; } function main():Int { return 42; }');
 		Frontend.compile('enum Value { Present; } typedef Options = { ?value:Value }; function main():Int { var options:Options = { value: null }; return 42; }');
 		Frontend.compile('function main():Int { var values = [20, 22]; var empty:Array<Int> = []; return values[0] + values[1] + empty.length; }');
+		Frontend.compile('class Callback { public var run:(value:Int) -> Int; public function new() run = value -> value + 1; public function invoke():Int return run(41); } function main():Int return new Callback().invoke();');
 		Frontend.compile('function main():Int { var values = [20, 22]; values.insert(1, 1); return values[1] + 41; }');
 		Frontend.compile('function main():Int { var values:Map<String, Int> = []; values.set("answer", 42); if (!values.exists("answer")) return 0; return values.get("answer"); }');
 		Frontend.compile('function main():Int { var values:Map<String, Int> = []; values.set("answer", 42); return values.get("answer"); }');
