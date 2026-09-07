@@ -56,6 +56,13 @@ Runtime-loaded modules send the same `REV3` notification at revision 1, making
 their embedded HLB and base JIT table visible before the load call returns. An
 initial `A` releases `--debug-wait`; the runtime confirms it with `ACK3`.
 
+Successful module retirement sends `REM3` followed by the stable module
+identity after registry unpublication and before debugger metadata is freed.
+The runtime keeps the module allocation alive until the adapter discards its
+cached mappings and replies with `A`. Revision and removal notifications share
+a monotonic internal transaction sequence, so acknowledgements remain ordered
+across modules even when their revision numbers differ.
+
 Revision-time software breakpoint writes use `B`, an entry count, and entries
 containing an address plus the requested byte. The runtime responds with
 `BRK3`, the count, and each replaced byte. This lets the adapter retain the
@@ -83,9 +90,9 @@ single source of truth for change detection.
 
 The dap-cli integration gate consumes these events with cursor-based polling.
 It checks a runtime module's `new` event at revision 1, two successive `changed`
-events at revisions 2 and 3, stable identity across those revisions, and the
-appearance of a retired patch region after the second replacement. Each event
-is cross-checked against the corresponding `modules` response.
+events at revisions 2 and 3, stable identity across those revisions, and its
+final `removed` event. Each event is cross-checked against the corresponding
+`modules` response.
 
 ## Diagnostic tracing
 

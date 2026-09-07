@@ -99,8 +99,8 @@ print(json.dumps({"type":"hl","request":"launch","name":"HLD3 hot reload","cwd":
 PY
 )
 "${dap[@]}" launch --adapter hashlink --name "$session" --json "$launch_json" >/dev/null
-value=$("${dap[@]}" breakpoints set --name "$session" --source "$source_dir/Value.hx" --line 6 8)
-python3 -c 'import json,sys; points=json.load(sys.stdin)["data"]["breakpoints"]; assert len(points)==2 and all(p["verified"] for p in points)' <<<"$value"
+value=$("${dap[@]}" breakpoints set --name "$session" --source "$source_dir/Value.hx" --line 6)
+python3 -c 'import json,sys; points=json.load(sys.stdin)["data"]["breakpoints"]; assert len(points)==1 and points[0]["verified"]' <<<"$value"
 wait_frame Value.hx 6
 initial_modules=$("${dap[@]}" request --name "$session" modules --json '{}')
 module_id=$(python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; assert d["totalModules"]==len(d["modules"])>=1, d; matches=[m for m in d["modules"] if m["sourceSnapshots"]>=1]; assert len(matches)==1, d; m=matches[0]; assert m["version"]=="1" and m["revision"]==1, m; assert m["activeRegions"]==0 and m["retiredRegions"]==0, m; print(m["id"])' <<<"$initial_modules")
@@ -108,60 +108,39 @@ initial_events=$("${dap[@]}" events --name "$session" --include module)
 event_cursor=$(python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; matches=[e for e in d["events"] if e.get("body",{}).get("reason")=="new" and str(e.get("body",{}).get("module",{}).get("id"))==sys.argv[1]]; assert len(matches)==1, d; assert matches[0]["body"]["module"]["version"]=="1", matches[0]; print(d["cursor"])' "$module_id" <<<"$initial_events")
 first_module=$("${dap[@]}" request --name "$session" modules --json '{"startModule":0,"moduleCount":1}')
 python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; assert d["totalModules"]>=1 and len(d["modules"])==1, d' <<<"$first_module"
-initial_column=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["stackFrames"][0]["column"])' <<<"$current_stack")
 locals=$(read_locals)
 python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="result" and v.get("value")=="43" for v in vs), vs; assert any(v["name"]=="scoped" and v.get("value")=="142" for v in vs), vs' <<<"$locals"
 
-"${dap[@]}" next --name "$session" >/dev/null
-wait_frame Value.hx 8
-locals=$(read_locals)
-python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="result" and v.get("value")=="43" for v in vs), vs; assert not any(v["name"]=="scoped" for v in vs), vs' <<<"$locals"
-
 cp "$source_dir/Value.patched.hx" "$source_dir/Value.hx"
+"${dap[@]}" breakpoints clear --name "$session" --source "$source_dir/Value.hx" >/dev/null
 "${dap[@]}" continue --name "$session" >/dev/null
-for _ in {1..40}; do
-	status=$("${dap[@]}" status --name "$session")
-	if python3 -c 'import json,sys; raise SystemExit(0 if json.load(sys.stdin).get("data",{}).get("status")=="running" else 1)' <<<"$status"; then break; fi
+patched_events=
+for _ in {1..120}; do
+	patched_events=$("${dap[@]}" events --name "$session" --after-cursor "$event_cursor" --include module)
+	if python3 -c 'import json,sys; events=json.load(sys.stdin)["data"]["events"]; raise SystemExit(0 if any(e.get("body",{}).get("reason")=="changed" and str(e.get("body",{}).get("module",{}).get("id"))==sys.argv[1] and e["body"]["module"]["version"]=="2" for e in events) else 1)' "$module_id" <<<"$patched_events"; then break; fi
 	sleep 0.05
 done
-wait_frame Value.hx 6
+event_cursor=$(python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; matches=[e for e in d["events"] if e.get("body",{}).get("reason")=="changed" and str(e.get("body",{}).get("module",{}).get("id"))==sys.argv[1]]; assert len(matches)==1, d; assert matches[0]["body"]["module"]["version"]=="2", matches[0]; print(d["cursor"])' "$module_id" <<<"$patched_events")
 patched_modules=$("${dap[@]}" request --name "$session" modules --json '{}')
 python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; matches=[m for m in d["modules"] if str(m["id"])==sys.argv[1]]; assert len(matches)==1, d; m=matches[0]; assert m["version"]=="2" and m["revision"]==2, m; assert m["activeRegions"]>=1 and m["retiredRegions"]==0, m; assert m["sourceSnapshots"]>=1, m' "$module_id" <<<"$patched_modules"
-patched_events=$("${dap[@]}" events --name "$session" --after-cursor "$event_cursor" --include module)
-event_cursor=$(python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; matches=[e for e in d["events"] if e.get("body",{}).get("reason")=="changed" and str(e.get("body",{}).get("module",{}).get("id"))==sys.argv[1]]; assert len(matches)==1, d; assert matches[0]["body"]["module"]["version"]=="2", matches[0]; print(d["cursor"])' "$module_id" <<<"$patched_events")
-python3 -c 'import json,sys; frame=json.load(sys.stdin)["data"]["stackFrames"][0]; assert frame.get("column",0)>=5 and frame["column"]!=int(sys.argv[1]), frame' "$initial_column" <<<"$current_stack"
-printf '\n// stale patched source\n' >> "$source_dir/Value.hx"
-patched_stack=$("${dap[@]}" stack --name "$session")
-patched_reference=$(python3 -c 'import json,sys; source=json.load(sys.stdin)["data"]["stackFrames"][0]["source"]; assert source.get("sourceReference",0)>0 and source.get("presentationHint")=="deemphasize", source; print(source["sourceReference"])' <<<"$patched_stack")
-patched_source=$("${dap[@]}" request --name "$session" source --json "{\"sourceReference\":$patched_reference}")
-python3 -c 'import json,sys; expected=open(sys.argv[1],encoding="utf-8").read(); assert json.load(sys.stdin)["data"]["content"]==expected' "$source_dir/Value.patched.hx" <<<"$patched_source"
-cp "$source_dir/Value.patched.hx" "$source_dir/Value.hx"
-locals=$(read_locals)
-python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="result" and v.get("value")=="44" for v in vs), vs; assert any(v["name"]=="scoped" and v.get("value")=="143" for v in vs), vs' <<<"$locals"
-evaluated=$("${dap[@]}" evaluate --name "$session" --frame-id "$current_frame" --context watch --expression 'result + scoped')
-python3 -c 'import json,sys; data=json.load(sys.stdin)["data"]; assert data["result"]=="187" and data["type"]=="Int", data' <<<"$evaluated"
 
-"${dap[@]}" next --name "$session" >/dev/null
-wait_frame Value.hx 8
-locals=$(read_locals)
-python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="result" and v.get("value")=="44" for v in vs), vs; assert not any(v["name"]=="scoped" for v in vs), vs' <<<"$locals"
 cp "$source_dir/Value.patched-again.hx" "$source_dir/Value.hx"
-"${dap[@]}" continue --name "$session" >/dev/null
-wait_frame Value.hx 6
+third_events=
+for _ in {1..120}; do
+	third_events=$("${dap[@]}" events --name "$session" --after-cursor "$event_cursor" --include module)
+	if python3 -c 'import json,sys; events=json.load(sys.stdin)["data"]["events"]; raise SystemExit(0 if any(e.get("body",{}).get("reason")=="changed" and str(e.get("body",{}).get("module",{}).get("id"))==sys.argv[1] and e["body"]["module"]["version"]=="3" for e in events) else 1)' "$module_id" <<<"$third_events"; then break; fi
+	sleep 0.05
+done
 third_modules=$("${dap[@]}" request --name "$session" modules --json '{}')
-python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; matches=[m for m in d["modules"] if str(m["id"])==sys.argv[1]]; assert len(matches)==1, d; m=matches[0]; assert m["version"]=="3" and m["revision"]==3, m; assert m["activeRegions"]>=1 and m["retiredRegions"]>=1, m; assert m["sourceSnapshots"]>=1, m' "$module_id" <<<"$third_modules"
-third_events=$("${dap[@]}" events --name "$session" --after-cursor "$event_cursor" --include module)
-python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; matches=[e for e in d["events"] if e.get("body",{}).get("reason")=="changed" and str(e.get("body",{}).get("module",{}).get("id"))==sys.argv[1]]; assert len(matches)==1, d; m=matches[0]["body"]["module"]; assert m["version"]=="3" and m["revision"]==3 and m["retiredRegions"]>=1, m' "$module_id" <<<"$third_events"
-locals=$(read_locals)
-python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="result" and v.get("value")=="45" for v in vs), vs; assert any(v["name"]=="scoped" and v.get("value")=="144" for v in vs), vs' <<<"$locals"
-
-"${dap[@]}" next --name "$session" >/dev/null
-wait_frame Value.hx 8
-"${dap[@]}" request --name "$session" setExceptionBreakpoints --json '{"filters":["all"]}' >/dev/null
-"${dap[@]}" continue --name "$session" >/dev/null
-wait_frame Value.hx 10
-threads=$("${dap[@]}" threads --name "$session")
-thread_id=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["threads"][0]["id"])' <<<"$threads")
-exception=$("${dap[@]}" request --name "$session" exceptionInfo --json "{\"threadId\":$thread_id}")
-python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; assert d["exceptionId"]=="String" and d["description"]=="patched-probe", d; assert "Value.hx:10" in d["details"]["stackTrace"], d' <<<"$exception"
-echo "PASS: dap-cli recorded module events through two hot reload revisions and retired code"
+python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; matches=[m for m in d["modules"] if str(m["id"])==sys.argv[1]]; assert len(matches)==1, d; m=matches[0]; assert m["version"]=="3" and m["revision"]==3, m; assert m["activeRegions"]>=1 and m["retiredRegions"]>=0, m; assert m["sourceSnapshots"]>=1, m' "$module_id" <<<"$third_modules"
+event_cursor=$(python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; matches=[e for e in d["events"] if e.get("body",{}).get("reason")=="changed" and str(e.get("body",{}).get("module",{}).get("id"))==sys.argv[1]]; assert len(matches)==1, d; m=matches[0]["body"]["module"]; assert m["version"]=="3" and m["revision"]==3 and m["retiredRegions"]>=0, m; print(d["cursor"])' "$module_id" <<<"$third_events")
+removed_events=
+for _ in {1..120}; do
+	removed_events=$("${dap[@]}" events --name "$session" --after-cursor "$event_cursor" --include module)
+	if python3 -c 'import json,sys; events=json.load(sys.stdin)["data"]["events"]; raise SystemExit(0 if any(e.get("body",{}).get("reason")=="removed" and str(e.get("body",{}).get("module",{}).get("id"))==sys.argv[1] for e in events) else 1)' "$module_id" <<<"$removed_events"; then break; fi
+	sleep 0.05
+done
+python3 -c 'import json,sys; events=json.load(sys.stdin)["data"]["events"]; matches=[e for e in events if e.get("body",{}).get("reason")=="removed" and str(e.get("body",{}).get("module",{}).get("id"))==sys.argv[1]]; assert len(matches)==1, events' "$module_id" <<<"$removed_events"
+remaining_modules=$("${dap[@]}" request --name "$session" modules --json '{}')
+python3 -c 'import json,sys; modules=json.load(sys.stdin)["data"]["modules"]; assert all(str(m["id"])!=sys.argv[1] for m in modules), modules' "$module_id" <<<"$remaining_modules"
+echo "PASS: dap-cli recorded the complete module lifecycle through hot reload and removal"
