@@ -62,10 +62,16 @@ class SemanticAssembly {
 			for (declaration in program.interfaces)
 				sourceTypeAliases.set(ModuleCanonicalizer.sourceDeclarationPath(moduleName, declaration.name),
 					ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name));
-			for (declaration in program.classes)
-				sourceTypeAliases.set(ModuleCanonicalizer.sourceDeclarationPath(moduleName, declaration.name),
-					ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name));
+				for (declaration in program.classes)
+					sourceTypeAliases.set(ModuleCanonicalizer.sourceDeclarationPath(moduleName, declaration.name),
+						ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name));
 		}
+		var aliasUniverse = [for (sourceName => declarationName in sourceTypeAliases) sourceName + "=" + declarationName];
+		for (typeName => caseNames in enumCasesByType)
+			for (caseName in caseNames)
+				aliasUniverse.push(typeName + "#" + caseName);
+		aliasUniverse.sort(Reflect.compare);
+		var aliasKey = aliasUniverse.join(";");
 		for (name in names) {
 			if (token != null)
 				token.check();
@@ -165,9 +171,6 @@ class SemanticAssembly {
 			}
 			for (fn in ast.functions)
 				locals.set(fn.name, true);
-			var aliasNames = [for (aliasName in aliases.keys()) aliasName];
-			aliasNames.sort(Reflect.compare);
-			var aliasKey = [for (aliasName in aliasNames) aliasName + "=" + aliases.get(aliasName)].join(";");
 			var canonicalFunctions:Array<AstFunction>;
 			if (state.canonicalRevision == state.revision && state.canonicalEntry == entryModule && state.canonicalAliasKey == aliasKey)
 				canonicalFunctions = state.canonicalFunctions;
