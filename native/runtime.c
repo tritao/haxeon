@@ -826,18 +826,6 @@ HL_PRIM int HL_NAME(__std_int_f64)( double value ) { return (int)value; }
 HL_PRIM int HL_NAME(__std_random)( int limit ) { return limit <= 0 ? 0 : rand() % limit; }
 
 HL_PRIM vbyte *HL_NAME(__std_string)( vdynamic *value ) {
-	if( value != NULL ) switch( value->t->kind ) {
-	case HOBJ:
-	case HSTRUCT:
-	case HARRAY:
-	case HENUM:
-	case HVIRTUAL:
-	case HDYNOBJ:
-	case HFUN:
-		return (vbyte *)hl_to_string((vdynamic *)value->v.ptr);
-	default:
-		break;
-	}
 	return (vbyte *)hl_to_string(value);
 }
 
