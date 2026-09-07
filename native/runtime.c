@@ -300,6 +300,23 @@ HL_PRIM void HL_NAME(__file_save_bytes)( vbyte *path, realtime_bytes *bytes ) {
 	if( fclose(file) != 0 ) hl_error("Could not close output file");
 }
 
+HL_PRIM void HL_NAME(__file_save_content)( vbyte *path, vbyte *content ) {
+	const char *path_utf8 = hl_to_utf8((const uchar *)path);
+	char *owned_path = (char *)malloc(strlen(path_utf8) + 1);
+	if( owned_path == NULL ) hl_error("Could not allocate output path");
+	strcpy(owned_path, path_utf8);
+	const char *utf8 = content == NULL ? "" : hl_to_utf8((const uchar *)content);
+	FILE *file = fopen(owned_path, "wb");
+	free(owned_path);
+	if( file == NULL ) hl_error("Could not open output file");
+	size_t length = strlen(utf8);
+	if( length > 0 && fwrite(utf8, 1, length, file) != length ) {
+		fclose(file);
+		hl_error("Could not write output file");
+	}
+	if( fclose(file) != 0 ) hl_error("Could not close output file");
+}
+
 HL_PRIM bool HL_NAME(__exception_matches)( vdynamic *value, hl_type *type ) {
 	return value != NULL && type != NULL && hl_safe_cast(value->t,type);
 }
@@ -1366,6 +1383,7 @@ DEFINE_PRIM(_BOOL,__string_starts_with,_BYTES _BYTES);
 DEFINE_PRIM(_BOOL,__string_ends_with,_BYTES _BYTES);
 DEFINE_PRIM(_BYTES,__string_replace,_BYTES _BYTES _BYTES);
 DEFINE_PRIM(_BYTES,__file_get_content,_BYTES);
+DEFINE_PRIM(_VOID,__file_save_content,_BYTES _BYTES);
 DEFINE_PRIM(_ABSTRACT(realtime_bytes),__bytes_alloc,_I32);
 DEFINE_PRIM(_ABSTRACT(realtime_bytes),__bytes_of_string,_BYTES);
 DEFINE_PRIM(_I32,__bytes_length,_ABSTRACT(realtime_bytes));
