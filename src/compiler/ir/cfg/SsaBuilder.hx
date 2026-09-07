@@ -231,18 +231,24 @@ class SsaBuilder {
 		while (work.length > 0) {
 			var id = work.pop();
 			queued.remove(id);
-			var out:Map<String, Bool> = [];
+			var out = liveOut.get(id);
 			if (successors.exists(id))
 				for (successor in successors.get(id))
 					for (name in liveIn.get(successor).keys())
-						out.set(name, true);
-			var input = copyNames(uses.get(id));
-			for (name in out.keys())
-				if (!defs.get(id).exists(name))
+						if (!out.exists(name))
+							out.set(name, true);
+			var input = liveIn.get(id), changed = false;
+			for (name in uses.get(id).keys())
+				if (!input.exists(name)) {
 					input.set(name, true);
-			if (!sameNames(out, liveOut.get(id)) || !sameNames(input, liveIn.get(id))) {
-				liveOut.set(id, out);
-				liveIn.set(id, input);
+					changed = true;
+				}
+			for (name in out.keys())
+				if (!defs.get(id).exists(name) && !input.exists(name)) {
+					input.set(name, true);
+					changed = true;
+				}
+			if (changed) {
 				if (predecessors.exists(id))
 					for (predecessor in predecessors.get(id))
 						if (!queued.exists(predecessor)) {
@@ -554,27 +560,6 @@ class SsaBuilder {
 			names.push(name);
 		}
 		found.set(id, true);
-	}
-
-	static function copyNames(source:Map<String, Bool>):Map<String, Bool> {
-		var result:Map<String, Bool> = [];
-		for (name in source.keys())
-			result.set(name, true);
-		return result;
-	}
-
-	static function sameNames(a:Map<String, Bool>, b:Map<String, Bool>):Bool {
-		var ac = 0, bc = 0;
-		for (_ in a.keys())
-			ac++;
-		for (_ in b.keys())
-			bc++;
-		if (ac != bc)
-			return false;
-		for (name in a.keys())
-			if (!b.exists(name))
-				return false;
-		return true;
 	}
 
 	static function sortedIntKeys(map:Map<Int, Bool>):Array<Int> {
