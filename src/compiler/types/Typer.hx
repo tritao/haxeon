@@ -1803,7 +1803,12 @@ class Typer {
 				} else {
 					var localMethod = lexicalMethod(name),
 						functionName = localMethod != null && localMethod.isStatic ? localMethod.owner + "." + name : name;
-					if (signatures.exists(functionName))
+					var expectedFunction = expectedFunctionType(expectedType);
+					if (name == "Reflect.compare" && expectedFunction != null && expectedFunction.arguments.length == 2
+						&& sameType(expectedFunction.arguments[0], TString) && sameType(expectedFunction.arguments[1], TString)
+						&& sameType(expectedFunction.result, TInt))
+						new TypedExpression(TFunctionRef("__string_compare_full"), TFunction([TString, TString], TInt), span);
+					else if (signatures.exists(functionName))
 						new TypedExpression(TFunctionRef(functionName), functionType(signatures.get(functionName)), span);
 					else if (externals.exists(name)) {
 						var external = externals.get(name);
@@ -2490,6 +2495,13 @@ class Typer {
 			case Call(name, arguments, span):
 				if (name == "super")
 					return typeSuperCall(arguments, span, scope);
+				if (name == "Reflect.compare") {
+					if (arguments.length != 2)
+						fail("E1008", 'Function "Reflect.compare" expects 2 arguments, got ${arguments.length}', span);
+					var left = typeExpression(arguments[0], scope), right = typeExpression(arguments[1], scope, left.type);
+					if (sameType(left.type, TString) && sameType(right.type, TString))
+						return new TypedExpression(TCall("__string_compare_full", [left, right]), TInt, span);
+				}
 				if (name == "haxe.io.Bytes.ofString") {
 					if (arguments.length < 1 || arguments.length > 2)
 						fail("E1008", 'Function "haxe.io.Bytes.ofString" expects 1 or 2 arguments, got ${arguments.length}', span);

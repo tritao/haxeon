@@ -31,6 +31,7 @@ class RuntimeNatives {
 		definitions.push(native("__std_int_f64", "realtime_runtime", "__std_int_f64", [TFloat], TInt));
 		definitions.push(native("Math.isNaN", "realtime_runtime", "__math_is_nan", [TFloat], TBool));
 		definitions.push(native("Reflect.compare", "realtime_runtime", "__reflect_compare", [TDynamic, TDynamic], TInt));
+		definitions.push(native("__string_compare_full", "std", "string_compare_full", [TString, TString], TInt));
 		definitions.push(native("__string_last_index_of", "realtime_runtime", "__string_last_index_of", [TString, TString], TInt));
 		definitions.push(native("__string_index_of_from", "realtime_runtime", "__string_index_of_from", [TString, TString, TInt], TInt));
 		definitions.push(native("__string_to_lower_case", "realtime_runtime", "__string_to_lower_case", [TString], TString));
