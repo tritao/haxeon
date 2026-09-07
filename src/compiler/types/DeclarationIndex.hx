@@ -214,11 +214,7 @@ class DeclarationIndex {
 				for (i in 1...fields.length)
 					if (fields[i - 1].name == fields[i].name)
 						fail('Duplicate anonymous field "${fields[i].name}"', span);
-				var signature = [
-					for (field in fields)
-						(field.optional ? "?" : "") + field.name + ":" + typeKey(field.type)
-				].join(",");
-				TAnonymous('$' + 'anon:{$signature}', fields);
+				TAnonymous(compiler.semantic.SemanticSignature.anonymousTypeName(fields), fields);
 		};
 
 	function validateTypeArguments(name:String, constraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>, substitutions:Map<String, CompilerType>,

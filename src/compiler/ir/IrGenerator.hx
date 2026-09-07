@@ -886,9 +886,11 @@ class IrGenerator {
 				}
 				builder.load(objectName, objectType);
 			case TObjectLiteral(typeName, fields):
-				var object = builder.newObject(typeName),
-					objectType:IrType = Obj(typeName),
-					objectName = '$' + 'object-literal:${expression.span.start}:${object.id}';
+				var physicalName = switch expression.type {
+					case TAnonymous(_, anonymousFields): compiler.semantic.SemanticSignature.anonymousTypeName(anonymousFields);
+					default: typeName;
+				}, object = builder.newObject(physicalName), objectType:IrType = Obj(physicalName), objectName = '$'
+					+ 'object-literal:${expression.span.start}:${object.id}';
 				localTypes.set(objectName, objectType);
 				builder.store(objectName, object);
 				for (field in fields) {
@@ -1432,7 +1434,7 @@ class IrGenerator {
 			case TNullable(element): TypeRelations.isReference(element) ? lowerType(element) : Dyn;
 			case TArray(element): Array(lowerType(element));
 			case TFunction(arguments, result): Function([for (argument in arguments) lowerType(argument)], lowerType(result));
-			case TAnonymous(name, _): Obj(name);
+			case TAnonymous(_, fields): Obj(compiler.semantic.SemanticSignature.anonymousTypeName(fields));
 		};
 
 	static function unreachableValue(type:IrType, builder:CfgBuilder):CfgValue

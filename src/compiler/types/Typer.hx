@@ -3858,11 +3858,12 @@ class Typer {
 	}
 
 	static function anonymousTypeName(fields:Array<compiler.types.Type.AnonymousField>):String
-		return '$' + 'anon:{' + [for (field in fields) field.name + ":" + SemanticSignature.type(field.type)].join(",") + '}';
+		return SemanticSignature.anonymousTypeName(fields);
 
 	function registerAnonymousTypes(type:CompilerType):Void
 		switch type {
-			case TAnonymous(name, fields):
+			case TAnonymous(_, fields):
+				var name = SemanticSignature.anonymousTypeName(fields);
 				if (anonymousTypes.exists(name))
 					return;
 				anonymousTypes.set(name, fields);

@@ -13,6 +13,7 @@ class IrProgramAssemblerMain {
 
 		var arrays = Frontend.compile("function main():Int { var values = new Array<Int>(1); values[0] = 42; return values[0]; }");
 		expect(hasNative(arrays, "__array_alloc_i32"), "array operations should select the array runtime family");
+		Frontend.compile('typedef Entry = {name:String, index:Int}; function entries(values:Map<String, Int>):Array<Entry> { var result = [for (name => index in values) {name: name, index: index}]; return result; } function main():Int return 0;');
 
 		var source = new SourceFile("Box.hx", "class Box { public var value:Int; } function main():Int return 0;"),
 			typed = Typer.type(new Parser(new Lexer(source).tokenize()).parseProgram()),

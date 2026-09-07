@@ -8,6 +8,15 @@ import compiler.types.Type.NominalKind;
 
 /** Deterministic spelling for resolved semantic types and callable signatures. */
 class SemanticSignature {
+	public static function anonymousTypeName(fields:Array<compiler.types.Type.AnonymousField>):String
+		return '$' + 'anon:' + anonymousFields(fields);
+
+	static function anonymousFields(fields:Array<compiler.types.Type.AnonymousField>):String {
+		var ordered = fields.copy();
+		ordered.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		return '{${[for (field in ordered) (field.optional ? "?" : "") + field.name + ":" + type(field.type)].join(",")}}';
+	}
+
 	public static function type(semanticType:CompilerType):String
 		return switch semanticType {
 			case TInt: "Int";
@@ -36,8 +45,7 @@ class SemanticSignature {
 			case TArray(element): 'Array<${type(element)}>';
 			case TMap(key, value): 'Map<${type(key)},${type(value)}>';
 			case TFunction(arguments, result): '(${[for (argument in arguments) type(argument)].join(",")})->${type(result)}';
-			case TAnonymous(_, fields):
-				'{${[for (field in fields) (field.optional ? "?" : "") + field.name + ":" + type(field.type)].join(",")}}';
+			case TAnonymous(_, fields): anonymousFields(fields);
 		};
 
 	public static function parsedFunction(fn:AstFunction, aliases:Array<AstTypeAlias>):String {

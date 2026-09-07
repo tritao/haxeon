@@ -140,9 +140,9 @@ class TypeRelations {
 					default: false;
 				}
 			case TFunction(arguments, result): sameFunction(right, arguments, result);
-			case TAnonymous(name, _):
+			case TAnonymous(_, fields):
 				switch right {
-					case TAnonymous(other, _): name == other;
+					case TAnonymous(_, otherFields): sameAnonymousFields(fields, otherFields);
 					default: false;
 				}
 			default: left == right;
@@ -161,6 +161,23 @@ class TypeRelations {
 		for (index in 0...left.length)
 			if (!equals(left[index], right[index]))
 				return false;
+		return true;
+	}
+
+	static function sameAnonymousFields(left:Array<compiler.types.Type.AnonymousField>, right:Array<compiler.types.Type.AnonymousField>):Bool {
+		if (left.length != right.length)
+			return false;
+		for (field in left) {
+			var found = false;
+			for (candidate in right)
+				if (candidate.name == field.name) {
+					if (candidate.optional != field.optional || !equals(field.type, candidate.type))
+						return false;
+					found = true;
+				}
+			if (!found)
+				return false;
+		}
 		return true;
 	}
 
