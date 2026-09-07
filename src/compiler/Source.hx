@@ -13,10 +13,11 @@ class SourceFile {
 		this.path = path;
 		this.text = text;
 		characterCodes = [];
+		characterCodes.resize(text.length);
 		lineStarts = [0];
 		for (index in 0...text.length) {
 			var code = text.charCodeAt(index);
-			characterCodes.push(code);
+			characterCodes[index] = code;
 			if (code == "\n".code)
 				lineStarts.push(index + 1);
 		}
