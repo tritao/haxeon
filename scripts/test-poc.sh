@@ -79,6 +79,17 @@ if [[ $utest_failure_status -ne 1 ]]; then
 	exit 1
 fi
 echo "PASS: utest-compatible runner reports assertion failures (exit 1)"
+utest_hook_failure_output="$root_dir/out/utest-hook-failure.hl"
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run UtestMain "$utest_hook_failure_output" "tests/programs/utest-hook-failure.hx"
+set +e
+LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$utest_hook_failure_output"
+utest_hook_failure_status=$?
+set -e
+if [[ $utest_hook_failure_status -ne 2 ]]; then
+	echo "utest hook failure reporting: expected exit 2, got $utest_hook_failure_status" >&2
+	exit 1
+fi
+echo "PASS: utest-compatible lifecycle hook failures are isolated (exit 2)"
 "$haxe" --cwd "$root_dir" "$root_dir/tests/hxml/repl-test.hxml"
 set +e
 LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$root_dir/out/repl-test.hl"

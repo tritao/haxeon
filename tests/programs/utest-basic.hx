@@ -40,12 +40,54 @@ class MathTest extends Test {
 	}
 }
 
+class LifecycleTest extends Test {
+	public final events:Array<Int> = [];
+
+	public function new() {
+		super();
+	}
+
+	public function setupClass():Void {
+		events.push(1);
+	}
+
+	public function setup():Void {
+		events.push(2);
+	}
+
+	public function testFirst():Void {
+		events.push(3);
+	}
+
+	public function testSecond():Void {
+		events.push(4);
+	}
+
+	public function teardown():Void {
+		events.push(5);
+	}
+
+	public function teardownClass():Void {
+		events.push(6);
+	}
+
+	public function registerTests():Void {
+		addTest("LifecycleTest.testFirst", this.testFirst);
+		addTest("LifecycleTest.testSecond", this.testSecond);
+	}
+}
+
 function main():Int {
 	if (genericDefault(42) != 42 || genericOptional(42) != 42)
 		return 2;
 	var runner = new Runner();
+	var lifecycle = new LifecycleTest();
 	runner.addCase(new MathTest());
+	runner.addCase(lifecycle);
 	Report.create(runner);
 	runner.run();
+	if (lifecycle.events.length != 8 || lifecycle.events[0] != 1 || lifecycle.events[1] != 2 || lifecycle.events[2] != 3 || lifecycle.events[3] != 5
+		|| lifecycle.events[4] != 2 || lifecycle.events[5] != 4 || lifecycle.events[6] != 5 || lifecycle.events[7] != 6)
+		return 3;
 	return runner.failures == 0 ? 0 : 1;
 }

@@ -30,7 +30,11 @@ The `utest` package provides a synchronous subset of the upstream API:
 include `equals`, `notEquals`, `isTrue`, `isFalse`, `isNull`, `notNull`, and
 `fail`.
 
+The synchronous runner supports `setupClass` and `teardownClass` around each
+case, plus `setup` and `teardown` around every test. Teardown hooks still run
+after setup or assertion failures, and hook failures have separate counters.
+
 Haxeon does not yet execute build macros, so test methods are registered by
 overriding `registerTests()` and calling `addTest(name, method)`. Async tests,
-automatic test discovery, positional assertion metadata, patterns, lifecycle
-hooks, and alternate report formats are not yet supported.
+automatic test discovery, positional assertion metadata, patterns, and
+alternate report formats are not yet supported.

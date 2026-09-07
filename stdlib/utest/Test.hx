@@ -7,6 +7,18 @@ class Test {
 
 	public function new() {}
 
+	/** Runs once before this case's registered tests. */
+	public function setupClass():Void {}
+
+	/** Runs before each registered test. */
+	public function setup():Void {}
+
+	/** Runs after each registered test, including failed setup or test calls. */
+	public function teardown():Void {}
+
+	/** Runs once after this case, including when setupClass fails. */
+	public function teardownClass():Void {}
+
 	/**
 	 * Override this method and call addTest for each test method.
 	 * Upstream utest performs this step with a build macro, which Haxeon does
