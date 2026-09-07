@@ -109,7 +109,24 @@ class DebugMetadataMain {
 		}
 		Sys.println("PASS: HLP preserves precise opcode source spans");
 
+		testSourceSnapshots();
 		testShadowedScopes();
+	}
+
+	static function testSourceSnapshots():Void {
+		var text = "// café 😀\nfunction main():Int {\n  return 42;\n}", source = new SourceFile("snapshot.hx", text), compiler = new compiler.Compiler();
+		compiler.update(source.path, source.text);
+		compiler.update("unused.hx", "function unused():Int return 0;");
+		var result = compiler.compile("snapshot"), snapshots = result.module.sourceSnapshots;
+		if (snapshots.length != 1 || snapshots[0].sourceHash != source.contentHash() || snapshots[0].content.toString() != text)
+			throw "Compiler did not retain the reachable source snapshot";
+		var sections = [for (section in result.module.debugSections) if (section.kind == HlWriter.SOURCE_SNAPSHOTS) section];
+		if (sections.length != 1 || sections[0].version != 1
+			|| sections[0].payload.compare(HlWriter.encodeSourceSnapshots(snapshots)) != 0)
+			throw "Compiler did not emit the canonical source snapshot section";
+		if (HlWriter.encode(result.module).compare(HlWriter.encode(result.module)) != 0)
+			throw "HLB source snapshot encoding is not deterministic";
+		Sys.println("PASS: compiler emits deterministic content-addressed source snapshots");
 	}
 
 	static function testShadowedScopes():Void {
