@@ -9,13 +9,13 @@ class HldiClientMain {
 
 	static function main():Void {
 		var args = Sys.args();
-		if (args.length != 1)
-			throw "Usage: hldi-client-test.hl PORT";
+		if (args.length < 1 || args.length > 2)
+			throw "Usage: hldi-client-test.hl PORT [TOKEN]";
 		var port = Std.parseInt(args[0]);
 		if (port == null)
 			throw "Invalid port";
 
-		var client = new HldiClient("127.0.0.1", port, 3.0);
+		var client = new HldiClient("127.0.0.1", port, 3.0, args.length == 2 ? args[1] : null);
 		require(client.hello.version == 1, "unexpected protocol version");
 		require(client.hello.capabilities & (HldiClient.CAP_PROFILER | HldiClient.CAP_SYMBOLS) == 3, "missing profiler capabilities");
 		var session = new ProfilerSession(client);

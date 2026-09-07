@@ -1,0 +1,3 @@
+-cp tests
+-main ProfilerRestartTarget
+-hl out/profiler-restart-target.hl

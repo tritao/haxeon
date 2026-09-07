@@ -1,0 +1,4 @@
+-cp src
+-cp tests
+-main HldiAuthMain
+-hl out/hldi-auth-test.hl

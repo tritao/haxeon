@@ -14,7 +14,11 @@
   "dependencies": {"vscode-languageclient": "^9.0.1"},
   "devDependencies": {"@types/node": "^22.10.0", "@types/vscode": "^1.90.0", "typescript": "^5.7.2"},
   "contributes": {
-    "commands": [{"command": "haxeon.profiler.open", "title": "Haxeon: Open Realtime Profiler"}],
+    "commands": [
+      {"command": "haxeon.profiler.open", "title": "Haxeon: Open Realtime Profiler"},
+      {"command": "haxeon.profiler.setToken", "title": "Haxeon: Set Diagnostics Token"},
+      {"command": "haxeon.profiler.clearToken", "title": "Haxeon: Clear Diagnostics Token"}
+    ],
     "configuration": {
       "title": "Haxeon",
       "properties": {

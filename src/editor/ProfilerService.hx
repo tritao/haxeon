@@ -77,10 +77,10 @@ class ProfilerService {
 			session.close();
 		session = null;
 		var host = stringOption(options, "host", "127.0.0.1"), port = requiredInt(options, "port"), timeout = floatOption(options, "timeoutSeconds", 5.0),
-			requestedMaxEntries = intOption(options, "maxEntries", 100);
+			requestedMaxEntries = intOption(options, "maxEntries", 100), token = optionalString(options, "token");
 		if (requestedMaxEntries < 1)
 			throw "Profiler maxEntries must be positive";
-		session = new ProfilerSession(new HldiClient(host, port, timeout));
+		session = new ProfilerSession(new HldiClient(host, port, timeout, token));
 		viewModel.reset();
 		emittedMetadataChanges = 0;
 		if (Reflect.hasField(options, "leafCapacity"))
@@ -272,6 +272,15 @@ class ProfilerService {
 	static function stringOption(options:Dynamic, name:String, fallback:String):String {
 		if (!Reflect.hasField(options, name))
 			return fallback;
+		var value:Dynamic = Reflect.field(options, name);
+		if (!Std.isOfType(value, String))
+			throw 'Profiler option "$name" must be a string';
+		return cast value;
+	}
+
+	static function optionalString(options:Dynamic, name:String):Null<String> {
+		if (!Reflect.hasField(options, name) || Reflect.field(options, name) == null)
+			return null;
 		var value:Dynamic = Reflect.field(options, name);
 		if (!Std.isOfType(value, String))
 			throw 'Profiler option "$name" must be a string';

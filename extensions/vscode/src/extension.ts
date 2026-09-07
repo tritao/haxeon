@@ -11,8 +11,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   client = new LanguageClient("haxeon", "Haxeon", serverOptions, clientOptions);
   context.subscriptions.push(client, vscode.commands.registerCommand("haxeon.profiler.open", async () => {
     await client!.start();
-    ProfilerPanel.show(context.extensionUri, client!);
-  }));
+    ProfilerPanel.show(context, client!);
+  }), vscode.commands.registerCommand("haxeon.profiler.setToken", async () => {
+    const token = await vscode.window.showInputBox({title: "Haxeon diagnostics token", password: true, ignoreFocusOut: true});
+    if (token) await context.secrets.store("haxeon.profiler.token", token);
+  }), vscode.commands.registerCommand("haxeon.profiler.clearToken", () => context.secrets.delete("haxeon.profiler.token")));
 }
 
 export async function deactivate(): Promise<void> {

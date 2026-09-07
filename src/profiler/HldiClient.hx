@@ -14,8 +14,11 @@ import sys.net.Socket;
 class HldiClient {
 	public static inline final CAP_PROFILER = 1;
 	public static inline final CAP_SYMBOLS = 2;
+	public static inline final CAP_AUTH_REQUIRED = 4;
 
+	static inline final SERVICE_CONTROL = 0;
 	static inline final SERVICE_PROFILER = 2;
+	static inline final CONTROL_AUTHENTICATE = 2;
 	static inline final PROFILE_STATUS = 1;
 	static inline final PROFILE_CONFIGURE = 2;
 	static inline final PROFILE_READ = 3;
@@ -29,7 +32,7 @@ class HldiClient {
 	var nextRequestId = 1;
 	var closed = false;
 
-	public function new(host:String, port:Int, timeoutSeconds:Float = 5.0) {
+	public function new(host:String, port:Int, timeoutSeconds:Float = 5.0, ?token:String) {
 		if (port <= 0 || port > 65535)
 			throw 'Invalid HLDI port $port';
 		socket = new Socket();
@@ -46,6 +49,16 @@ class HldiClient {
 			throw 'Unsupported HLDI version $version';
 		}
 		hello = new HldiHello(version, capabilities, input.u32(), input.u32());
+		if (capabilities & CAP_AUTH_REQUIRED != 0) {
+			if (token == null || token.length == 0) {
+				close();
+				throw "HLDI endpoint requires authentication";
+			}
+			try requestService(SERVICE_CONTROL, CONTROL_AUTHENTICATE, Bytes.ofString(token)) catch (error:Dynamic) {
+				close();
+				throw "HLDI authentication failed";
+			}
+		}
 	}
 
 	public function status():HldiStatus
@@ -84,10 +97,14 @@ class HldiClient {
 	}
 
 	function request(type:Int, payload:Bytes):Bytes {
+		return requestService(SERVICE_PROFILER, type, payload);
+	}
+
+	function requestService(service:Int, type:Int, payload:Bytes):Bytes {
 		if (closed)
 			throw "HLDI client is closed";
 		var id = nextRequestId++, header = Bytes.alloc(16);
-		header.set(0, SERVICE_PROFILER);
+		header.set(0, service);
 		header.set(1, type);
 		put32(header, 4, id);
 		put32(header, 8, payload.length);
@@ -96,9 +113,9 @@ class HldiClient {
 			socket.output.writeFullBytes(payload, 0, payload.length);
 		socket.output.flush();
 
-		var reply = new HldiReader(readExact(16)), service = reply.u8(), replyType = reply.u8(), flags = reply.u16(), replyId = reply.u32(), length = reply.u32();
+		var reply = new HldiReader(readExact(16)), replyService = reply.u8(), replyType = reply.u8(), flags = reply.u16(), replyId = reply.u32(), length = reply.u32();
 		reply.u32();
-		if (service != SERVICE_PROFILER || replyType != type || replyId != id || flags & FLAG_RESPONSE == 0)
+		if (replyService != service || replyType != type || replyId != id || flags & FLAG_RESPONSE == 0)
 			throw 'Mismatched HLDI response for request $id';
 		if (length < 0 || length > MAX_REPLY)
 			throw 'Invalid HLDI response length $length';
