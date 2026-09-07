@@ -28,7 +28,7 @@ compiler and the standard library have different licenses.
 The `utest` package provides a synchronous subset of the upstream API:
 `utest.Test`, `utest.Assert`, `utest.Runner`, and `utest.ui.Report`. Assertions
 include `equals`, `notEquals`, `isTrue`, `isFalse`, `isNull`, `notNull`, and
-`fail`.
+`fail`, plus `floatEquals`, `contains`, `notContains`, and untyped `raises`.
 
 The synchronous runner supports `setupClass` and `teardownClass` around each
 case, plus `setup` and `teardown` around every test. Teardown hooks still run

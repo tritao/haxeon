@@ -11,6 +11,10 @@ function genericOptional<T>(value:T, ?message:String):T {
 	return value;
 }
 
+function raiseExpected():Void {
+	throw "expected";
+}
+
 class MathTest extends Test {
 	public function new() {
 		super();
@@ -33,10 +37,19 @@ class MathTest extends Test {
 		Assert.notNull(present);
 	}
 
+	public function testAdditionalAssertions():Void {
+		Assert.floatEquals(1.0, 1.000001);
+		Assert.floatEquals(0.0 / 0.0, 0.0 / 0.0);
+		Assert.contains(2, [1, 2, 3]);
+		Assert.notContains(4, [1, 2, 3]);
+		Assert.raises(raiseExpected);
+	}
+
 	public function registerTests():Void {
 		addTest("MathTest.testAddition", this.testAddition);
 		addTest("MathTest.testPredicates", this.testPredicates);
 		addTest("MathTest.testNulls", this.testNulls);
+		addTest("MathTest.testAdditionalAssertions", this.testAdditionalAssertions);
 	}
 }
 

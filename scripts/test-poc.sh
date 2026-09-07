@@ -74,11 +74,11 @@ set +e
 LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$utest_failure_output"
 utest_failure_status=$?
 set -e
-if [[ $utest_failure_status -ne 1 ]]; then
-	echo "utest failure reporting: expected exit 1, got $utest_failure_status" >&2
+if [[ $utest_failure_status -ne 5 ]]; then
+	echo "utest failure reporting: expected exit 5, got $utest_failure_status" >&2
 	exit 1
 fi
-echo "PASS: utest-compatible runner reports assertion failures (exit 1)"
+echo "PASS: utest-compatible runner reports assertion failures (exit 5)"
 utest_hook_failure_output="$root_dir/out/utest-hook-failure.hl"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run UtestMain "$utest_hook_failure_output" "tests/programs/utest-hook-failure.hx"
 set +e
