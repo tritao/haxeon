@@ -133,6 +133,9 @@ class DeclarationIndex {
 	public function resolve(type:AstType, ?span:SourceSpan, ?substitutions:Map<String, CompilerType>):CompilerType
 		return resolveInner(type, span == null ? fallbackSpan : span, [], substitutions == null ? [] : substitutions);
 
+	public function resolvedFieldType(owner:String, field:compiler.syntax.Ast.AstField):AstType
+		return FieldInference.resolvedType(field, owner, classes, []);
+
 	public function symbol(kind:DeclarationKind, name:String):Null<DeclarationSymbol>
 		return symbols.get('$kind:$name');
 
@@ -471,7 +474,7 @@ class DeclarationIndex {
 			for (parameter in decl.typeParameters)
 				substitutions.set(parameter, TTypeParameter(decl.name, parameter));
 			for (field in decl.fields)
-				resolve(FieldInference.parsedType(field), field.span, substitutions);
+				resolve(resolvedFieldType(decl.name, field), field.span, substitutions);
 			for (method in decl.methods)
 				resolveFunction(method, decl.name + "." + method.name, substitutions);
 		}

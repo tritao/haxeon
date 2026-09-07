@@ -187,13 +187,9 @@ class ModuleMain {
 		if (functionValueBody.retyped.join(",") != "Main.twice")
 			throw 'Function-value body edit invalidated ${functionValueBody.retyped}';
 		functionValueCompiler.update("Main.hx", "function twice(value:Float):Int { return 42; } function main():Int { var f = twice; return f(21); }");
-		try {
-			functionValueCompiler.compile("Main");
-			throw "Function-value signature edit was accepted";
-		} catch (error:CompileError) {
-			if (error.diagnostic.code != "E1009")
-				throw error;
-		}
+		var functionValueSignature = functionValueCompiler.compile("Main");
+		if (functionValueSignature.retyped.indexOf("Main.twice") < 0 || functionValueSignature.retyped.indexOf("main") < 0)
+			throw 'Function-value signature edit did not retype callee and caller: ${functionValueSignature.retyped}';
 		if (functionValueFirst.ir.functions.length == 0 || functionValueMain == null)
 			throw "Function-value incremental setup did not compile";
 		var semanticInvalidation = new Compiler();

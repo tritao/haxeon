@@ -88,6 +88,13 @@ class SemanticAssembly {
 				aliasUniverse.push(typeName + "#" + caseName);
 		aliasUniverse.sort(Reflect.compare);
 		var aliasKey = aliasUniverse.join(";");
+		var classDeclarations:Map<String, AstClass> = [];
+		for (moduleName in names)
+			if (modules.exists(moduleName)) {
+				var parsed = modules.get(moduleName).parsedAst();
+				for (classDecl in parsed.classes)
+					classDeclarations.set(ModuleCanonicalizer.qualifiedTypeName(parsed.packageName, classDecl.name), classDecl);
+			}
 
 		var discoveryPrefixes:Map<String, Array<String>> = [];
 		for (moduleName in names) {
@@ -310,7 +317,8 @@ class SemanticAssembly {
 						for (field in classDecl.fields)
 							{
 								name: field.name,
-								type: ModuleCanonicalizer.canonicalType(FieldInference.parsedType(field), classAliases, classDecl.typeParameters),
+								type: ModuleCanonicalizer.canonicalType(FieldInference.resolvedType(field, className, classDeclarations, classAliases), classAliases,
+									classDecl.typeParameters),
 								initializer: ModuleCanonicalizer.canonicalOptionalExpression(field.initializer, name, entryModule, locals, aliases),
 								readAccess: field.readAccess,
 								writeAccess: field.writeAccess,

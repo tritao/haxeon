@@ -573,7 +573,7 @@ class Typer {
 		for (field in classDecl.fields) {
 			if (fieldNames.exists(field.name))
 				fail("E1000", 'Duplicate field "${classDecl.name}.${field.name}"', field.span);
-			var type = declarations.resolve(FieldInference.parsedType(field), field.span, erasedSubstitutions);
+			var type = declarations.resolve(declarations.resolvedFieldType(classDecl.name, field), field.span, erasedSubstitutions);
 			if (type == TVoid)
 				fail("E1002", 'Field "${classDecl.name}.${field.name}" cannot have type Void', field.span);
 			var initializer:Null<TypedExpression> = null,
@@ -1989,7 +1989,7 @@ class Typer {
 							var field = findFieldType(thisType, name);
 							if (field == null)
 								fail("E1005", 'Unknown variable "$name"', span);
-							typedMemberWithFlow(new TypedExpression(TLocal("this"), thisType, span), name, span, scope);
+							typedMemberWithFlow(typeExpression(Variable("this", span), scope), name, span, scope);
 						} else {
 							var parts = splitPath(name),
 								objectName = parts[0],
@@ -2073,10 +2073,16 @@ class Typer {
 					CaptureAnalysis.collectDeclaredLocals(body, declared);
 					var freeVariables:Map<String, Bool> = [];
 					CaptureAnalysis.collectVariables(body, freeVariables);
-					// An unqualified instance member in a lambda is resolved through the
+					// An unqualified instance method in a lambda is resolved through the
 					// lexical receiver even though `this` is not present in the syntax.
 					if (scope.resolve("this") != null)
-						freeVariables.set("this", true);
+						for (name in freeVariables.keys()) {
+							if (scope.resolve(name) == null) {
+								var method = lexicalMethod(name), receiverType = scope.resolve("this");
+								if (method != null && !method.isStatic || receiverType != null && findFieldType(receiverType, name) != null)
+									freeVariables.set("this", true);
+							}
+						}
 					var captures:Array<TypedCapture> = [],
 						captureCells:Map<String, String> = [],
 						captureTypes:Map<String, CompilerType> = [];
@@ -2827,6 +2833,9 @@ class Typer {
 						var abstractCall = typeAbstractMethodCall(resolvedReceiver, resolvedMethodName, arguments, span, scope);
 						if (abstractCall != null)
 							return abstractCall;
+						var fieldCall = typeFunctionFieldCall(resolvedReceiver, resolvedMethodName, arguments, span, scope);
+						if (fieldCall != null)
+							return fieldCall;
 						var className = switch receiverType {
 							case TInstance(Class, value, _), TInstance(Interface, value, _): value;
 							default: null;
@@ -3267,7 +3276,7 @@ class Typer {
 				var result:Null<CompilerType> = null;
 				for (field in declaration.fields)
 					if (field.name == name && !field.isStatic)
-						result = declarations.resolve(FieldInference.parsedType(field), field.span, substitutions);
+						result = declarations.resolve(declarations.resolvedFieldType(className, field), field.span, substitutions);
 				if (result != null) result; else if (declaration.base != null) fieldRepresentationType(declarations.resolve(declaration.base,
 					declaration.span, substitutions), name, span); else fieldType(type, name, span);
 			default: fieldType(type, name, span);
@@ -3292,7 +3301,7 @@ class Typer {
 		var classDecl = requiredMapValue(classDecls, className);
 		for (field in classDecl.fields)
 			if (field.name == name && field.isStatic)
-				return {owner: className, type: lowerType(FieldInference.parsedType(field))};
+				return {owner: className, type: lowerType(declarations.resolvedFieldType(className, field))};
 		var base = classDecl.base;
 		return base == null ? null : findStaticFieldNullable(inheritanceName(base), name);
 	}
@@ -3315,6 +3324,9 @@ class Typer {
 		var abstractCall = typeAbstractMethodCall(receiver, name, arguments, span, scope);
 		if (abstractCall != null)
 			return abstractCall;
+		var fieldCall = typeFunctionFieldCall(receiver, name, arguments, span, scope);
+		if (fieldCall != null)
+			return fieldCall;
 		var className = switch receiver.type {
 			case TInstance(Class, value, _), TInstance(Interface, value, _): value;
 			default: null;
@@ -3351,6 +3363,23 @@ class Typer {
 			physicalResult = isGenericNominal(methodOwnerType) ? TDynamic : semanticResult,
 			call = new TypedExpression(TMethodCall(receiver, methodKey, typed), physicalResult, span);
 		return applyCallEffect(abiBoundaryCast(call, semanticResult), methodKey);
+	}
+
+	function typeFunctionFieldCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan,
+			scope:Scope):Null<TypedExpression> {
+		var callableFieldType = findFieldType(receiver.type, name);
+		if (callableFieldType == null) return null;
+		return switch callableFieldType {
+			case TFunction(argumentTypes, result):
+				if (arguments.length != argumentTypes.length)
+					fail("E1008", 'Function field "$name" expects ${argumentTypes.length} arguments, got ${arguments.length}', span);
+				var typed = [for (index in 0...arguments.length) typeExpression(arguments[index], scope, argumentTypes[index])];
+				typed = coerceArguments(typed, argumentTypes, name);
+				new TypedExpression(TClosureCall(typedMember(receiver, name, span), typed), result, span);
+			default:
+				fail("E1007", 'Cannot call non-function field "$name"', span);
+				null;
+		};
 	}
 
 	function typeAbstractMethodCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):Null<TypedExpression> {
@@ -3980,7 +4009,7 @@ class Typer {
 					var classDecl = requiredMapValue(classDecls, className);
 					for (field in classDecl.fields)
 						if (field.name == name && !field.isStatic)
-							return declarations.resolve(FieldInference.parsedType(field), field.span, nominalSubstitutions(type));
+							return declarations.resolve(declarations.resolvedFieldType(className, field), field.span, nominalSubstitutions(type));
 					var base = classDecl.base;
 					if (base != null)
 						return fieldType(declarations.resolve(base, classDecl.span, nominalSubstitutions(type)), name, span);
@@ -4020,7 +4049,7 @@ class Typer {
 					var classDecl = requiredMapValue(classDecls, className);
 					for (field in classDecl.fields)
 						if (field.name == name && !field.isStatic)
-							found = declarations.resolve(FieldInference.parsedType(field), field.span, nominalSubstitutions(type));
+							found = declarations.resolve(declarations.resolvedFieldType(className, field), field.span, nominalSubstitutions(type));
 					var base = classDecl.base;
 					if (found == null && base != null)
 						found = findFieldType(declarations.resolve(base, classDecl.span, nominalSubstitutions(type)), name);

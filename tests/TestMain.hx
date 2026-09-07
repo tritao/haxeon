@@ -285,12 +285,19 @@ class TestMain {
 		expectCompileError('function main():Int { var value:Int; if (true) value = 42; return value; }', 'Local "value" may be used before assignment');
 		expectCompileError('function main():Int { var value:Int; value++; return value; }', 'Local "value" may be used before assignment');
 		Frontend.compile('class Box { public var value:Int; public function new() { this.value = 1; } } function main():Int { var box = new Box(); var old = box.value++; return old + box.value; }');
+		Frontend.compile('class Callbacks { public final callback:Int->Int; public function new(callback:Int->Int) this.callback = callback; } function invoke(value:Null<Callbacks>):Int { if (value != null) return value.callback(41); return 0; } function main():Int return invoke(new Callbacks(value -> value + 1));');
+		Frontend.compile('class Owner { public function value():Int return 42; public function callback():Void->Int { return function() { return value(); }; } public function empty():Void->Void { return function() {}; } } function main():Int return 0;');
+		expectCompileError('class Values { public final value:Int; public function new(value:Int) this.value = value; } function main():Int return new Values(1).value();',
+			'Cannot call non-function field "value"');
 		expectCompileError('function main():Int { var text = "x"; return text++; }', 'Postfix increment requires a numeric target');
 		expectCompileError('function main():Int { var value; return 0; }', 'Uninitialized local "value" requires an explicit type');
 		expectCompileError('class Invalid { static final value; } function main():Int { return 0; }', 'Field "value" requires a type or initializer');
 		expectCompileError('class Invalid { static final value = 20 + 22; } function main():Int { return 0; }',
 			'Cannot infer type of field "value" from this initializer');
 		Frontend.compile("class Defaults { static final integer = -1; static final fraction = -0.5; static final prefix = '$' + 'abstract-' + 'result'; } function main():Int { return Defaults.integer; }");
+		Frontend.compile('class Base { public static inline final WIDTH = 220; } class Derived { public static inline final WIDTH = Base.WIDTH; } function main():Int return Derived.WIDTH;');
+		expectCompileError('class First { static final value = Second.value; } class Second { static final value = First.value; } function main():Int return 0;',
+			'Cyclic field type inference through "First.value"');
 		expectCompileError('class Invalid { static final value = "count: " + 1; } function main():Int { return 0; }',
 			'Cannot infer type of field "value" from this initializer');
 		expectCompileError('class Invalid { static final value:Int = "wrong"; } function main():Int { return 0; }',
