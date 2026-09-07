@@ -3031,7 +3031,11 @@ class Typer {
 		}
 
 	function typedMember(typedObject:TypedExpression, name:String, span:SourceSpan):TypedExpression {
-		typedObject = unwrapNullable(typedObject);
+		switch typedObject.type {
+			case TNullable(_):
+				fail("E1005", 'Field "$name" requires an object', span);
+			default:
+		}
 		switch typedObject.expression {
 			case TClassRef(className):
 				if (enumAbstractDecls.exists(className)) {
