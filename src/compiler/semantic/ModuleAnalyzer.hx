@@ -8,6 +8,7 @@ import compiler.syntax.Parser;
 import compiler.QualifiedName;
 import compiler.runtime.NativeRegistry;
 import compiler.modules.ModuleState;
+import compiler.modules.ModuleSourceLoader;
 import compiler.types.FieldInference;
 import compiler.types.TypeRegistry;
 
@@ -18,13 +19,16 @@ class ModuleAnalyzer {
 	final natives:NativeRegistry;
 	final compiledOnce:Bool;
 	final defines:Map<String, String>;
+	final sourceLoader:ModuleSourceLoader;
 
-	public function new(modules:Map<String, ModuleState>, types:TypeRegistry, natives:NativeRegistry, compiledOnce:Bool, defines:Map<String, String>) {
+	public function new(modules:Map<String, ModuleState>, types:TypeRegistry, natives:NativeRegistry, compiledOnce:Bool, defines:Map<String, String>,
+			sourceLoader:ModuleSourceLoader) {
 		this.modules = modules;
 		this.types = types;
 		this.natives = natives;
 		this.compiledOnce = compiledOnce;
 		this.defines = defines;
+		this.sourceLoader = sourceLoader;
 	}
 
 	public function parse(state:ModuleState, entry:String, bodyChanged:Map<String, Bool>, signatureChanged:Map<String, Bool>,
@@ -89,7 +93,7 @@ class ModuleAnalyzer {
 		var packageName = ast.packageName;
 		for (dependency in [for (dependency in dependencies.keys()) dependency]) {
 			var sourceModule = sourceModuleForDependency(dependency);
-			if (sourceModule == null && isPlatformDependency(dependency)) {
+			if (sourceModule == null && isPlatformDependency(dependency) && ast.imports.indexOf(dependency) < 0) {
 				dependencies.remove(dependency);
 				continue;
 			}
@@ -254,6 +258,7 @@ class ModuleAnalyzer {
 	function sourceModuleForDependency(path:String):Null<String> {
 		var candidate = path;
 		while (true) {
+			sourceLoader.load(candidate, modules);
 			if (modules.exists(candidate))
 				return candidate;
 			var parent = QualifiedName.parentOrEmpty(candidate);

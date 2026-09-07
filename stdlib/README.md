@@ -15,5 +15,10 @@ Declarations under `hl/` are target ABI façades owned by this project. They
 carry explicit representation metadata and are not copies of upstream stdlib
 implementations.
 
+Register this directory with `Compiler.addSourceRoot("stdlib")`. Modules are
+then discovered from their imports and type references, loaded only when they
+enter the reachable dependency graph, and retained in the compiler's module
+cache. Explicitly supplied modules take precedence over files in source roots.
+
 Do not put compiler implementation sources from HaxeFoundation/haxe here. The
 compiler and the standard library have different licenses.

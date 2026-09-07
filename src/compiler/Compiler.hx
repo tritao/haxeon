@@ -43,6 +43,7 @@ import compiler.compilation.CompilerPublication.ReconnectReason;
 import compiler.modules.ModuleGraph;
 import compiler.modules.ModulePath;
 import compiler.modules.ModuleState;
+import compiler.modules.ModuleSourceLoader;
 import compiler.semantic.ModuleCanonicalizer;
 import compiler.semantic.LambdaCollector;
 import compiler.semantic.SemanticWorkspace;
@@ -127,6 +128,7 @@ class Compiler {
 	public var lastTypedProgram:Null<TypedProgram> = null;
 
 	final graph = new ModuleGraph();
+	var sourceLoader = new ModuleSourceLoader();
 	var assembler:HlModuleAssembler;
 	final moduleId:Bytes;
 
@@ -219,6 +221,14 @@ class Compiler {
 
 	public function nativeConfiguration():Array<NativeFunction> {
 		return natives.configuration();
+	}
+
+	/** Add a filesystem root whose modules are loaded on demand during resolution. */
+	public function addSourceRoot(path:String):Void {
+		if (compiledOnce)
+			throw "Source roots are frozen after the first compilation";
+		sourceLoader.addRoot(path);
+		sourceGeneration++;
 	}
 
 	public function compact(entryModule:String):CompileResult {
@@ -322,6 +332,7 @@ class Compiler {
 
 	function fork():Compiler {
 		var candidate = new Compiler(exportIdentityState(), nativeConfiguration());
+		candidate.sourceLoader = sourceLoader.copy();
 		candidate.configurationIdentity = configurationIdentity;
 		candidate.configurationScopeIdentity = configurationScopeIdentity;
 		candidate.defines = [for (name => value in defines) name => value];
@@ -444,6 +455,7 @@ class Compiler {
 
 	function createCandidate(snapshot:CompilerSnapshot, startingAssembler:Null<HlModuleAssembler>):Compiler {
 		var candidate = new Compiler(exportIdentityState(), nativeConfiguration());
+		candidate.sourceLoader = sourceLoader.copy();
 		candidate.configurationIdentity = configurationIdentity;
 		candidate.configurationScopeIdentity = configurationScopeIdentity;
 		candidate.defines = [for (name => value in defines) name => value];

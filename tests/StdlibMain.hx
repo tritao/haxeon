@@ -10,21 +10,38 @@ class StdlibMain {
 		var output = Sys.args()[0];
 		var compiler = new Compiler();
 		RuntimeNatives.register(compiler);
-		compiler.update("StringBuf.hx", File.getContent("stdlib/StringBuf.hx"));
-		compiler.update("haxe/ds/ArraySort.hx", File.getContent("stdlib/haxe/ds/ArraySort.hx"));
-		compiler.update("haxe/ds/Option.hx", File.getContent("stdlib/haxe/ds/Option.hx"));
-		compiler.update("haxe/ds/Either.hx", File.getContent("stdlib/haxe/ds/Either.hx"));
+		compiler.addSourceRoot("stdlib");
 		compiler.update("Main.hx",
 			"import haxe.ds.ArraySort; import haxe.ds.Option; import haxe.ds.Either; function compare(left:Int, right:Int):Int return left - right; function optionValue():Option<Int> return Some(20); function eitherValue():Either<Int,String> return Left(22); function readOption(value:Option<Int>):Int return switch value { case Some(number): number; case None: 0; }; function readEither(value:Either<Int,String>):Int return switch value { case Left(number): number; case Right(_): 0; }; function stringBufWorks():Bool { var buffer = new StringBuf(); buffer.add(\"A\"); buffer.add(1); buffer.addChar(66); buffer.addSub(\"cdef\", 1); buffer.addSub(\"XYZ\", 1, 1); return buffer.length == 7 && buffer.toString() == \"A1BdefY\"; } function main():Int { var values = [30, 10, 20, 20]; ArraySort.sort(values, compare); return stringBufWorks() ? values[0] + values[1] + values[2] - values[3] + readOption(optionValue()) + readEither(eitherValue()) - 20 : 0; }");
-		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module));
+		if (compiler.modules.exists("StringBuf") || compiler.modules.exists("haxe.ds.ArraySort"))
+			throw "stdlib modules were loaded eagerly";
+		var result = compiler.compile("Main");
+		for (module in ["StringBuf", "haxe.ds.ArraySort", "haxe.ds.Option", "haxe.ds.Either"])
+			if (!compiler.modules.exists(module))
+				throw 'stdlib module "$module" was not discovered';
+		if (compiler.compile("Main").retyped.length != 0)
+			throw "unchanged stdlib modules were not cached";
+		File.saveBytes(output, HlWriter.encode(result.module));
 
 		var invalid = new Compiler();
 		RuntimeNatives.register(invalid);
-		invalid.update("haxe/ds/Option.hx", File.getContent("stdlib/haxe/ds/Option.hx"));
+		invalid.addSourceRoot("stdlib");
 		invalid.update("Main.hx", 'import haxe.ds.Option; function main():Int { var value:Option<Int> = Some("bad"); return 0; }');
 		try {
 			invalid.compile("Main");
 			throw "generic enum accepted an invalid payload";
 		} catch (_:CompileError) {}
+
+		var missing = new Compiler();
+		RuntimeNatives.register(missing);
+		missing.addSourceRoot("stdlib");
+		missing.update("Main.hx", "import haxe.ds.Missing; function main():Int return 0;");
+		try {
+			missing.compile("Main");
+			throw "missing stdlib import compiled";
+		} catch (error:CompileError) {
+			if (error.diagnostic.code != "E2001")
+				throw error;
+		}
 	}
 }
