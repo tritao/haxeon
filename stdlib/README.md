@@ -43,3 +43,8 @@ Haxeon does not yet execute build macros. Instead, `utest.Test` uses
 instance methods with those prefixes. Explicit `registerTests()` overrides the
 generated registration. Async tests, positional assertion metadata, regular
 expression patterns, and alternate report formats are not yet supported.
+
+Optional `haxe.PosInfos` parameters are populated by the compiler with the
+call-site file, one-based line, enclosing class, and method. These values are
+embedded in generated code and refreshed when an incremental edit moves the
+call site.

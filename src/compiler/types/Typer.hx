@@ -2939,7 +2939,9 @@ class Typer {
 			var parameter = fn.arguments[index],
 				defaultValue = parameter.defaultValue,
 				expected = semanticExpected[index];
-			if (defaultValue == null)
+			if (isPosInfosParameter(parameter))
+				arguments.push(coerce(typeExpression(posInfosExpression(span), scope, expected), expected, 'position argument ${index + 1} to "$baseName"'));
+			else if (defaultValue == null)
 				arguments.push(coerce(new TypedExpression(TNullLiteral, TNull, span), expected, 'default argument ${index + 1} to "$baseName"'));
 			else
 				arguments.push(coerce(typeExpression(defaultValue, scope, expected), expected, 'default argument ${index + 1} to "$baseName"'));
@@ -3499,7 +3501,9 @@ class Typer {
 			var parameter = parameters[i],
 				expected = argumentType(parameter, substitutions),
 				defaultValue = parameter.defaultValue;
-			if (defaultValue == null)
+			if (isPosInfosParameter(parameter))
+				typed.push(coerce(typeExpression(posInfosExpression(span), scope, expected), expected, 'position argument ${i + 1} to "$name"'));
+			else if (defaultValue == null)
 				typed.push(coerce(new TypedExpression(TNullLiteral, TNull, span), expected, 'default argument ${i + 1} to "$name"'));
 			else
 				typed.push(coerce(typeExpression(defaultValue, scope, expected), expected, 'default argument ${i + 1} to "$name"'));
@@ -3567,12 +3571,14 @@ class Typer {
 		if (constructor != null) {
 			var semanticExpected = [
 				for (parameter in constructor.arguments)
-					declarations.resolve(parameter.type, parameter.span, substitutions)
+					argumentType(parameter, substitutions)
 			];
 			for (index in arguments.length...constructor.arguments.length) {
 				var parameter = constructor.arguments[index],
 					defaultValue = parameter.defaultValue;
-				if (defaultValue == null)
+				if (isPosInfosParameter(parameter))
+					typed.push(typeExpression(posInfosExpression(span), scope, semanticExpected[index]));
+				else if (defaultValue == null)
 					typed.push(new TypedExpression(TNullLiteral, TNull, span));
 				else
 					typed.push(typeExpression(defaultValue, scope, semanticExpected[index]));
@@ -3587,7 +3593,7 @@ class Typer {
 		var representationExpected:Array<CompilerType> = [];
 		if (constructor != null)
 			for (parameter in constructor.arguments)
-				representationExpected.push(declarations.resolve(parameter.type, parameter.span, representationSubstitutions));
+				representationExpected.push(argumentType(parameter, representationSubstitutions));
 		var representationArguments = [
 			for (index in 0...typed.length)
 				abiBoundaryCast(typed[index], representationExpected[index])
@@ -3620,6 +3626,24 @@ class Typer {
 			inferred == null ? TDynamic : inferred;
 		} else substitutions == null ? lowerType(argument.type) : declarations.resolve(argument.type, argument.span, substitutions);
 		return argument.optional && argument.defaultValue == null ? CompilerType.TNullable(type) : type;
+	}
+
+	static function isPosInfosParameter(argument:compiler.syntax.Ast.AstArgument):Bool
+		return argument.optional && switch argument.type {
+			case NamedType("haxe.PosInfos"): true;
+			default: false;
+		};
+
+	function posInfosExpression(span:SourceSpan):AstExpression {
+		var owner = parentPath(context.name),
+			separator = context.name.lastIndexOf("."),
+			method = separator < 0 ? context.name : context.name.substring(separator + 1, context.name.length);
+		return ObjectLiteral([
+			{name: "fileName", value: StringLiteral(span.file.path, span), span: span},
+			{name: "lineNumber", value: IntegerLiteral(span.file.lineAt(span.start), span), span: span},
+			{name: "className", value: StringLiteral(owner == null ? "" : owner, span), span: span},
+			{name: "methodName", value: StringLiteral(method, span), span: span}
+		], span);
 	}
 
 	function nominalSubstitutions(type:CompilerType):Map<String, CompilerType> {

@@ -4,6 +4,14 @@ import utest.Test;
 import utest.TestProgress;
 import utest.ui.Report;
 
+function positionInfo(?pos:haxe.PosInfos):Null<haxe.PosInfos> {
+	return pos;
+}
+
+function genericPositionInfo<T>(value:T, ?pos:haxe.PosInfos):Null<haxe.PosInfos> {
+	return pos;
+}
+
 function genericDefault<T>(value:T, enabled:Bool = true):T {
 	return value;
 }
@@ -14,6 +22,16 @@ function genericOptional<T>(value:T, ?message:String):T {
 
 function raiseExpected():Void {
 	throw "expected";
+}
+
+class PositionHolder {
+	public final pos:haxe.PosInfos;
+
+	public function new(?pos:haxe.PosInfos) {
+		if (pos == null)
+			throw "missing position";
+		this.pos = pos;
+	}
 }
 
 class MathTest extends Test {
@@ -48,6 +66,24 @@ class MathTest extends Test {
 
 	public function specSubtraction():Void {
 		Assert.equals(40, 42 - 2);
+	}
+
+	public function testPosInfos():Void {
+		var direct = positionInfo();
+		var generic = genericPositionInfo(42);
+		var constructed = new PositionHolder();
+		Assert.notNull(direct);
+		Assert.notNull(generic);
+		if (direct != null && generic != null) {
+			Assert.equals("Main.hx", direct.fileName);
+			Assert.equals("MathTest", direct.className);
+			Assert.equals("testPosInfos", direct.methodName);
+			Assert.isTrue(direct.lineNumber > 0);
+			Assert.equals("MathTest", generic.className);
+			Assert.equals("testPosInfos", generic.methodName);
+			Assert.equals("MathTest", constructed.pos.className);
+			Assert.equals("testPosInfos", constructed.pos.methodName);
+		}
 	}
 }
 
@@ -163,7 +199,11 @@ function main():Int {
 	if (lifecycle.events.length != 8 || lifecycle.events[0] != 1 || lifecycle.events[1] != 2 || lifecycle.events[2] != 3 || lifecycle.events[3] != 5
 		|| lifecycle.events[4] != 2 || lifecycle.events[5] != 4 || lifecycle.events[6] != 5 || lifecycle.events[7] != 6)
 		return 3;
-	if (!observer.started || !observer.completed || observer.progressCount != 9 || observer.lastTotal != 9 || runner.length != 9)
+	if (!observer.started
+		|| !observer.completed
+		|| observer.progressCount != 10
+		|| observer.lastTotal != 10
+		|| runner.length != 10)
 		return 4;
 	if (!filtered.includedRan || filtered.excludedRan)
 		return 5;

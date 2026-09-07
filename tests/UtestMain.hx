@@ -11,6 +11,7 @@ class UtestMain {
 		var source = arguments.length > 1 ? arguments[1] : "tests/programs/utest-basic.hx";
 		var compiler = new Compiler();
 		RuntimeNatives.register(compiler);
+		compiler.update("haxe/PosInfos.hx", File.getContent("stdlib/haxe/PosInfos.hx"));
 		compiler.update("utest/Assert.hx", File.getContent("stdlib/utest/Assert.hx"));
 		compiler.update("utest/ProgressEvent.hx", File.getContent("stdlib/utest/ProgressEvent.hx"));
 		compiler.update("utest/RunnerEvent.hx", File.getContent("stdlib/utest/RunnerEvent.hx"));

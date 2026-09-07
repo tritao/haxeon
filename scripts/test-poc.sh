@@ -58,6 +58,22 @@ fi
 echo "PASS: vendored stdlib compiled and executed (exit 42)"
 
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run UtestDiscoveryMain
+pos_initial_output="$root_dir/out/pos-initial.hl"
+pos_edited_output="$root_dir/out/pos-edited.hl"
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run PosInfosMain "$pos_initial_output" "$pos_edited_output"
+for position_fixture in "$pos_initial_output:4" "$pos_edited_output:5"; do
+	position_output=${position_fixture%:*}
+	position_expected=${position_fixture##*:}
+	set +e
+	LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$position_output"
+	position_status=$?
+	set -e
+	if [[ $position_status -ne $position_expected ]]; then
+		echo "PosInfos: expected line $position_expected, got $position_status" >&2
+		exit 1
+	fi
+done
+echo "PASS: PosInfos call-site lines refresh after source edits"
 utest_output="$root_dir/out/utest-basic.hl"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run UtestMain "$utest_output"
 set +e
