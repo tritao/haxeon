@@ -1848,8 +1848,7 @@ class Typer {
 					if (localMethod != null && !localMethod.isStatic)
 						return typeMember(Variable("this", span), name, span, scope);
 					var functionName = localMethod == null ? name : localMethod.owner + "." + name;
-					var expectedFunction = expectedFunctionType(expectedType),
-						inferContextualResult = expectedFunction != null && expectedFunction.result == TDynamic && inferDynamicLambdaResult;
+					var expectedFunction = expectedFunctionType(expectedType);
 					if (name == "Reflect.compare" && expectedFunction != null && expectedFunction.arguments.length == 2
 						&& sameType(expectedFunction.arguments[0], TString) && sameType(expectedFunction.arguments[1], TString)
 						&& sameType(expectedFunction.result, TInt))
@@ -1909,6 +1908,18 @@ class Typer {
 									if (value.name == name)
 										return typeExpression(value.value, new Scope(), lowerType(expectedAbstract.underlying));
 							}
+							var unqualifiedAbstract:Null<compiler.syntax.Ast.AstEnumAbstract> = null;
+							for (candidate in enumAbstractDecls)
+								for (value in candidate.values)
+									if (value.name == name) {
+										if (unqualifiedAbstract != null)
+											fail("E1005", 'Ambiguous enum abstract value "$name"', span);
+										unqualifiedAbstract = candidate;
+									}
+							if (unqualifiedAbstract != null)
+								for (value in unqualifiedAbstract.values)
+									if (value.name == name)
+										return typeExpression(value.value, new Scope(), lowerType(unqualifiedAbstract.underlying));
 							var thisType = scope.resolve("this");
 							if (thisType == null)
 								fail("E1005", 'Unknown variable "$name"', span);
