@@ -2940,6 +2940,14 @@ class Typer {
 			return new TypedExpression(TArrayLength(typedObject), TInt, span);
 		if (name == "length" && sameType(typedObject.type, TString))
 			return new TypedExpression(TStringLength(typedObject), TInt, span);
+		if (name == "code")
+			switch typedObject.expression {
+				case TStringLiteral(value) if (value.length == 1):
+					return new TypedExpression(TIntLiteral(value.charCodeAt(0)), TInt, span);
+				case TStringLiteral(_):
+					fail("E1007", "String literal .code requires exactly one character", span);
+				default:
+			}
 		var platformField = PlatformAbi.field(typedObject.type, name);
 		if (platformField != null)
 			return new TypedExpression(TCall(platformField.get, [typedObject]), platformField.type, span);

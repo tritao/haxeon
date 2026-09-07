@@ -4,6 +4,7 @@ package compiler;
 class SourceFile {
 	public final path:String;
 	public final text:String;
+	public final characterCodes:Array<Int>;
 
 	final lineStarts:Array<Int>;
 	final hash:Int;
@@ -11,10 +12,14 @@ class SourceFile {
 	public function new(path:String, text:String) {
 		this.path = path;
 		this.text = text;
+		characterCodes = [];
 		lineStarts = [0];
-		for (index in 0...text.length)
-			if (text.charCodeAt(index) == 10)
+		for (index in 0...text.length) {
+			var code = text.charCodeAt(index);
+			characterCodes.push(code);
+			if (code == "\n".code)
 				lineStarts.push(index + 1);
+		}
 		var contentHash:Int = cast 0x811C9DC5;
 		var bytes = haxe.io.Bytes.ofString(text);
 		for (index in 0...bytes.length)

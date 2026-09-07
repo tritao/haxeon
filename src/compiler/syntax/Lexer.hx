@@ -9,33 +9,42 @@ import compiler.Diagnostic.DiagnosticSeverity;
 class Lexer {
 	final file:SourceFile;
 	final source:String;
+	final characterCodes:Array<Int>;
 	var position:Int = 0;
 
 	public function new(file:SourceFile, ?source:String) {
 		this.file = file;
 		this.source = source == null ? file.text : source;
+		if (source == null || source == file.text)
+			characterCodes = file.characterCodes;
+		else {
+			characterCodes = [];
+			for (index in 0...source.length)
+				characterCodes.push(source.charCodeAt(index));
+		}
 	}
 
 	public function tokenize():Array<Token> {
 		var tokens = [];
 		while (position < source.length) {
-			var code = source.charCodeAt(position);
+			var code = characterCodes[position];
 			if (isWhitespace(code)) {
 				position++;
 				continue;
 			}
-			if (code == 47 && position + 1 < source.length) {
-				var next = source.charCodeAt(position + 1);
-				if (next == 47) {
+			if (code == "/".code && position + 1 < source.length) {
+				var next = characterCodes[position + 1];
+				if (next == "/".code) {
 					position += 2;
-					while (position < source.length && source.charCodeAt(position) != 10)
+					while (position < source.length && characterCodes[position] != "\n".code)
 						position++;
 					continue;
 				}
-				if (next == 42) {
+				if (next == "*".code) {
 					var commentStart = position;
 					position += 2;
-					while (position + 1 < source.length && !(source.charCodeAt(position) == 42 && source.charCodeAt(position + 1) == 47))
+					while (position + 1 < source.length
+						&& !(characterCodes[position] == "*".code && characterCodes[position + 1] == "/".code))
 						position++;
 					if (position + 1 >= source.length)
 						throw new CompileError(new Diagnostic("E0001", "Unterminated block comment", file.span(commentStart, position), DiagnosticSeverity.Error, [
@@ -46,17 +55,17 @@ class Lexer {
 				}
 			}
 			var start = position;
-			if (code == 34 || code == 39) {
+			if (code == "\"".code || code == "'".code) {
 				var quote = code;
 				position++;
 				var escaped = false, closed = false;
 				while (position < source.length) {
-					var current = source.charCodeAt(position++);
+					var current = characterCodes[position++];
 					if (escaped) {
 						escaped = false;
 						continue;
 					}
-					if (current == 92) {
+					if (current == "\\".code) {
 						escaped = true;
 						continue;
 					}
@@ -74,7 +83,7 @@ class Lexer {
 			}
 			if (isIdentifierStart(code)) {
 				position++;
-				while (position < source.length && isIdentifierPart(source.charCodeAt(position)))
+				while (position < source.length && isIdentifierPart(characterCodes[position]))
 					position++;
 				var text = source.substring(start, position);
 				tokens.push(new Token(keyword(text), text, file.span(start, position)));
@@ -82,23 +91,24 @@ class Lexer {
 			}
 			if (isDigit(code)) {
 				position++;
-				if (code == 48 && position < source.length && (source.charAt(position) == "x" || source.charAt(position) == "X")) {
+				if (code == "0".code && position < source.length
+					&& (characterCodes[position] == "x".code || characterCodes[position] == "X".code)) {
 					position++;
 					var digitsStart = position;
-					while (position < source.length && isHexDigit(source.charCodeAt(position)))
+					while (position < source.length && isHexDigit(characterCodes[position]))
 						position++;
 					if (position == digitsStart)
 						throw new CompileError(new Diagnostic("E0001", "Hexadecimal literal requires at least one digit", file.span(start, position)));
 					tokens.push(new Token(TokenKind.Integer, source.substring(start, position), file.span(start, position)));
 					continue;
 				}
-				while (position < source.length && isDigit(source.charCodeAt(position)))
+				while (position < source.length && isDigit(characterCodes[position]))
 					position++;
 				var kind = TokenKind.Integer;
-				if (position + 1 < source.length && source.charAt(position) == "." && isDigit(source.charCodeAt(position + 1))) {
+				if (position + 1 < source.length && characterCodes[position] == ".".code && isDigit(characterCodes[position + 1])) {
 					kind = TokenKind.Float;
 					position++;
-					while (position < source.length && isDigit(source.charCodeAt(position)))
+					while (position < source.length && isDigit(characterCodes[position]))
 						position++;
 				}
 				tokens.push(new Token(kind, source.substring(start, position), file.span(start, position)));
@@ -116,32 +126,32 @@ class Lexer {
 				case ",": TokenKind.Comma;
 				case ".": TokenKind.Dot;
 				case "=":
-					if (position < source.length && source.charAt(position) == "=") {
+					if (position < source.length && characterCodes[position] == "=".code) {
 						position++;
 						TokenKind.EqualEqual;
 					} else TokenKind.Assign;
 				case "<":
-					if (position < source.length && source.charAt(position) == "=") {
+					if (position < source.length && characterCodes[position] == "=".code) {
 						position++;
 						TokenKind.LessEqual;
 					} else TokenKind.Less;
 				case ">":
-					if (position < source.length && source.charAt(position) == "=") {
+					if (position < source.length && characterCodes[position] == "=".code) {
 						position++;
 						TokenKind.GreaterEqual;
 					} else TokenKind.Greater;
 				case "!":
-					if (position < source.length && source.charAt(position) == "=") {
+					if (position < source.length && characterCodes[position] == "=".code) {
 						position++;
 						TokenKind.NotEqual;
 					} else TokenKind.Not;
 				case "&":
-					if (position < source.length && source.charAt(position) == "&") {
+					if (position < source.length && characterCodes[position] == "&".code) {
 						position++;
 						TokenKind.AndAnd;
 					} else TokenKind.Ampersand;
 				case "|":
-					if (position < source.length && source.charAt(position) == "|") {
+					if (position < source.length && characterCodes[position] == "|".code) {
 						position++;
 						TokenKind.OrOr;
 					} else TokenKind.Pipe;
@@ -151,21 +161,21 @@ class Lexer {
 				case "?": TokenKind.Question;
 				case "@": TokenKind.At;
 				case "+":
-					if (position < source.length && source.charAt(position) == "=") {
+					if (position < source.length && characterCodes[position] == "=".code) {
 						position++;
 						TokenKind.PlusAssign;
-					} else if (position < source.length && source.charAt(position) == "+") {
+					} else if (position < source.length && characterCodes[position] == "+".code) {
 						position++;
 						TokenKind.Increment;
 					} else TokenKind.Plus;
 				case "-":
-					if (position < source.length && source.charAt(position) == ">") {
+					if (position < source.length && characterCodes[position] == ">".code) {
 						position++;
 						TokenKind.Arrow;
-					} else if (position < source.length && source.charAt(position) == "=") {
+					} else if (position < source.length && characterCodes[position] == "=".code) {
 						position++;
 						TokenKind.MinusAssign;
-					} else if (position < source.length && source.charAt(position) == "-") {
+					} else if (position < source.length && characterCodes[position] == "-".code) {
 						position++;
 						TokenKind.Decrement;
 					} else TokenKind.Minus;
@@ -226,17 +236,17 @@ class Lexer {
 	}
 
 	static inline function isWhitespace(code:Int):Bool
-		return code == 32 || code == 9 || code == 10 || code == 13;
+		return code == " ".code || code == "\t".code || code == "\n".code || code == "\r".code;
 
 	static inline function isDigit(code:Int):Bool
-		return code >= 48 && code <= 57;
+		return code >= "0".code && code <= "9".code;
 
 	static inline function isIdentifierStart(code:Int):Bool
-		return (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code == 95;
+		return (code >= "A".code && code <= "Z".code) || (code >= "a".code && code <= "z".code) || code == "_".code;
 
 	static inline function isIdentifierPart(code:Int):Bool
 		return isIdentifierStart(code) || isDigit(code);
 
 	static inline function isHexDigit(code:Int):Bool
-		return isDigit(code) || code >= 65 && code <= 70 || code >= 97 && code <= 102;
+		return isDigit(code) || code >= "A".code && code <= "F".code || code >= "a".code && code <= "f".code;
 }

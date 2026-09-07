@@ -63,6 +63,7 @@ class TestMain {
 		var hexTokens = new Lexer(new SourceFile("hex.hx", "0x2A 0Xff")).tokenize();
 		if (hexTokens[0].text != "0x2A" || hexTokens[1].text != "0Xff")
 			throw "Hexadecimal integer literals were not tokenized";
+		Frontend.compile('function main():Int return "=".code;');
 		Frontend.compile('function main():Int { return 0x2A; }');
 		Frontend.compile('enum Kind { Void; Float; } function main():Int { var value:Kind = Kind.Float; return switch value { case Kind.Void: 0; case Kind.Float: 42; }; }');
 		Frontend.compile('enum Kind { First; Second; } function main():Int { var value:Kind = Second; return switch value { case First: 0; case Second: 42; }; }');
