@@ -2626,7 +2626,7 @@ class Typer {
 										typeExpression(arguments[index], scope,
 											declarations.resolve(method.arguments[index].type, method.arguments[index].span, typingSubstitutions))
 								] : [for (argument in arguments) typeExpression(argument, scope)];
-								var specialized = specializeGeneric(methodKey, method, genericArguments, span, implicitMethod.owner, true,
+								var specialized = specializeGeneric(methodKey, method, genericArguments, span, scope, implicitMethod.owner, true,
 									null);
 								return specialized;
 							}
@@ -2743,7 +2743,7 @@ class Typer {
 									typeExpression(arguments[index], scope,
 										declarations.resolve(method.arguments[index].type, method.arguments[index].span, typingSubstitutions))
 							] : [for (argument in arguments) typeExpression(argument, scope)];
-							var specialized = specializeGeneric(methodKey, method, genericArguments, span, methodInfoResult.owner, methodInfoResult.isStatic,
+							var specialized = specializeGeneric(methodKey, method, genericArguments, span, scope, methodInfoResult.owner, methodInfoResult.isStatic,
 								null, methodInfoResult.isStatic ? null : resolvedReceiver);
 							return specialized;
 						}
@@ -2766,7 +2766,7 @@ class Typer {
 								infoStatic = resolvedInfo.isStatic;
 							}
 							var typed = [for (argument in arguments) typeExpression(argument, scope)],
-								specialized = specializeGeneric(name, signature, typed, span, infoOwner, infoStatic);
+								specialized = specializeGeneric(name, signature, typed, span, scope, infoOwner, infoStatic);
 							return specialized;
 						}
 						var expectedArguments:Array<CompilerType> = [],
@@ -2829,7 +2829,7 @@ class Typer {
 			typedArguments = [for (argument in arguments) typeExpression(argument, scope)],
 			constructed:TypedExpression;
 		try {
-			constructed = specializeGeneric(constructorName, normalized, typedArguments, span, name, true, substitutions);
+			constructed = specializeGeneric(constructorName, normalized, typedArguments, span, scope, name, true, substitutions);
 		} catch (error:CompileError) {
 			var message = error.diagnostic.message;
 			if (StringTools.startsWith(message, 'Type mismatch for local "' + AbstractConstructorNormalizer.RESULT_PREFIX))
@@ -2904,10 +2904,15 @@ class Typer {
 			}
 	}
 
-	function specializeGeneric(baseName:String, fn:AstFunction, arguments:Array<TypedExpression>, span:SourceSpan, owner:Null<String>, isStatic:Bool,
-			?presetSubstitutions:Map<String, CompilerType>, ?receiver:TypedExpression):TypedExpression {
-		if (arguments.length != fn.arguments.length)
-			fail("E1008", 'Function "$baseName" expects ${fn.arguments.length} arguments, got ${arguments.length}', span);
+	function specializeGeneric(baseName:String, fn:AstFunction, arguments:Array<TypedExpression>, span:SourceSpan, scope:Scope, owner:Null<String>,
+			isStatic:Bool, ?presetSubstitutions:Map<String, CompilerType>, ?receiver:TypedExpression):TypedExpression {
+		var required = fn.arguments.length;
+		while (required > 0 && fn.arguments[required - 1].optional)
+			required--;
+		if (arguments.length < required || arguments.length > fn.arguments.length) {
+			var expected = required == fn.arguments.length ? '$required' : '$required to ${fn.arguments.length}';
+			fail("E1008", 'Function "$baseName" expects $expected arguments, got ${arguments.length}', span);
+		}
 		var substitutions:Map<String, CompilerType> = presetSubstitutions == null ? [] : [
 			for (parameter => type in presetSubstitutions)
 				parameter => type
@@ -2928,9 +2933,20 @@ class Typer {
 			}
 		var semanticExpected = [
 			for (argument in fn.arguments)
-				declarations.resolve(argument.type, argument.span, substitutions)
-		], semanticArguments = coerceArguments(arguments, semanticExpected,
-			baseName), result = declarations.resolve(fn.result, fn.span, substitutions), representationSubstitutions:Map<String, CompilerType> = [];
+				argumentType(argument, substitutions)
+		];
+		for (index in arguments.length...fn.arguments.length) {
+			var parameter = fn.arguments[index],
+				defaultValue = parameter.defaultValue,
+				expected = semanticExpected[index];
+			if (defaultValue == null)
+				arguments.push(coerce(new TypedExpression(TNullLiteral, TNull, span), expected, 'default argument ${index + 1} to "$baseName"'));
+			else
+				arguments.push(coerce(typeExpression(defaultValue, scope, expected), expected, 'default argument ${index + 1} to "$baseName"'));
+		}
+		var semanticArguments = coerceArguments(arguments, semanticExpected, baseName),
+			result = declarations.resolve(fn.result, fn.span, substitutions),
+			representationSubstitutions:Map<String, CompilerType> = [];
 		var specializationPolicies:Array<String> = [];
 		for (parameter in parameters) {
 			var decision = GenericSpecializationPolicy.decide(fn, parameter, requiredMapValue(substitutions, parameter));
@@ -2939,7 +2955,7 @@ class Typer {
 		}
 		var representationExpected = [
 			for (argument in fn.arguments)
-				declarations.resolve(argument.type, argument.span, representationSubstitutions)
+				argumentType(argument, representationSubstitutions)
 		], typed = [
 			for (index in 0...semanticArguments.length)
 				abiBoundaryCast(semanticArguments[index], representationExpected[index])
@@ -3221,7 +3237,7 @@ class Typer {
 			return new TypedExpression(TCall(methodKey, callArguments), declarations.resolve(signature.result, signature.span, substitutions), span);
 		}
 		var typedArguments = [for (argument in arguments) typeExpression(argument, scope)];
-		return specializeGeneric(methodKey, signature, typedArguments, span, abstractName, false, substitutions, receiver);
+		return specializeGeneric(methodKey, signature, typedArguments, span, scope, abstractName, false, substitutions, receiver);
 	}
 
 	function typeStringMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):Null<TypedExpression> {

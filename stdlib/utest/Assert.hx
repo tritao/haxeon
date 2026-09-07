@@ -20,15 +20,27 @@ class Assert {
 		return true;
 	}
 
-	public static function equals(expected:Dynamic, actual:Dynamic, message:String = ""):Bool {
+	public static function equals<T>(expected:T, actual:T, message:String = ""):Bool {
 		if (expected != actual)
-			fail(message == "" ? "expected " + Std.string(expected) + " but it is " + Std.string(actual) : message);
+			Assert.fail(message == "" ? "expected " + Std.string(expected) + " but it is " + Std.string(actual) : message);
 		return true;
 	}
 
-	public static function notEquals(expected:Dynamic, actual:Dynamic, message:String = ""):Bool {
+	public static function notEquals<T>(expected:T, actual:T, message:String = ""):Bool {
 		if (expected == actual)
-			fail(message == "" ? "expected values to be different: " + Std.string(actual) : message);
+			Assert.fail(message == "" ? "expected values to be different: " + Std.string(actual) : message);
+		return true;
+	}
+
+	public static function isNull<T>(value:Null<T>, message:String = ""):Bool {
+		if (value != null)
+			Assert.fail(message == "" ? "expected null but it is " + Std.string(value) : message);
+		return true;
+	}
+
+	public static function notNull<T>(value:Null<T>, message:String = ""):Bool {
+		if (value == null)
+			Assert.fail(message == "" ? "expected not null" : message);
 		return true;
 	}
 

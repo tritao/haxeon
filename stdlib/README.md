@@ -27,7 +27,8 @@ compiler and the standard library have different licenses.
 
 The `utest` package provides a synchronous subset of the upstream API:
 `utest.Test`, `utest.Assert`, `utest.Runner`, and `utest.ui.Report`. Assertions
-include `equals`, `notEquals`, `isTrue`, `isFalse`, and `fail`.
+include `equals`, `notEquals`, `isTrue`, `isFalse`, `isNull`, `notNull`, and
+`fail`.
 
 Haxeon does not yet execute build macros, so test methods are registered by
 overriding `registerTests()` and calling `addTest(name, method)`. Async tests,
