@@ -264,5 +264,5 @@ class ModuleChangeAnalyzer {
 			+ ":"
 			+ Std.string(state.source.lineAt(span.start))
 			+ ":"
-			+ state.source.text.substring(span.start, span.end);
+			+ state.source.slice(span.start, span.end);
 }

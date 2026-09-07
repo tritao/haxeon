@@ -95,6 +95,20 @@ HL_PRIM vbyte *HL_NAME(__bytes_to_string)( realtime_bytes *bytes ) {
 	return (vbyte *)result;
 }
 
+HL_PRIM vbyte *HL_NAME(__bytes_get_string)( realtime_bytes *bytes, int position, int length ) {
+	realtime_bytes_bounds(bytes, position, length);
+	char *utf8 = (char *)malloc((size_t)length + 1);
+	if( utf8 == NULL ) hl_error("Could not allocate byte string");
+	if( length > 0 ) memcpy(utf8, bytes->data + position, (size_t)length);
+	utf8[length] = 0;
+	int chars = hl_utf8_length((vbyte *)utf8, 0);
+	uchar *result = (uchar *)hl_alloc_bytes((chars + 1) * (int)sizeof(uchar));
+	hl_from_utf8(result, chars, utf8);
+	result[chars] = 0;
+	free(utf8);
+	return (vbyte *)result;
+}
+
 static vbyte *realtime_string_from_utf8( const char *utf8 ) {
 	int chars = hl_utf8_length((const vbyte *)utf8, 0);
 	uchar *result = (uchar *)hl_alloc_bytes((chars + 1) * (int)sizeof(uchar));

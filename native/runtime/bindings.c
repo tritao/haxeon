@@ -226,6 +226,7 @@ DEFINE_PRIM(_VOID,__bytes_set_i32,_ABSTRACT(realtime_bytes) _I32 _I32);
 DEFINE_PRIM(_ABSTRACT(realtime_bytes),__bytes_sub,_ABSTRACT(realtime_bytes) _I32 _I32);
 DEFINE_PRIM(_I32,__bytes_compare,_ABSTRACT(realtime_bytes) _ABSTRACT(realtime_bytes));
 DEFINE_PRIM(_BYTES,__bytes_to_string,_ABSTRACT(realtime_bytes));
+DEFINE_PRIM(_BYTES,__bytes_get_string,_ABSTRACT(realtime_bytes) _I32 _I32);
 DEFINE_PRIM(_ARR,__sys_args,_NO_ARG);
 DEFINE_PRIM(_ABSTRACT(realtime_bytes_input),__bytes_input_new,_ABSTRACT(realtime_bytes));
 DEFINE_PRIM(_I32,__bytes_input_position,_ABSTRACT(realtime_bytes_input));

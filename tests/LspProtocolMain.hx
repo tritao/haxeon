@@ -54,7 +54,7 @@ class LspProtocolMain {
 			{range: {start: {line: 1, character: 5}, end: {line: 1, character: 5}}, rangeLength: 0, text: "!"},
 			{range: {start: {line: 0, character: 0}, end: {line: 0, character: 3}}, rangeLength: 3, text: "ONE"}
 		]);
-		if (incrementalDocument.source != "ONE\n😀TWO!\nthree" || incrementalDocument.position(incrementalDocument.source.indexOf("TWO")).character != 2)
+		if (incrementalDocument.source != "ONE\n😀TWO!\nthree" || incrementalDocument.position(incrementalDocument.offset(1, 2)).character != 2)
 			throw "incremental LSP edits did not apply sequentially with UTF-16 positions";
 		var beforeRejectedSource = incrementalDocument.source, rejectedIncrementalBatch = false;
 		try incrementalStore.applyChanges(incrementalDocument.uri, 3, [

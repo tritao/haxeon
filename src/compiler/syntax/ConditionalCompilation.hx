@@ -19,14 +19,17 @@ private typedef ConditionalFrame = {
 /** Source-offset-preserving evaluation of Haxe conditional directives. */
 class ConditionalCompilation {
 	public static function process(file:SourceFile, defines:Map<String, String>):ConditionalSource {
-		var source = file.text, output = new StringBuf(), referenced:Map<String, Bool> = [], frames:Array<ConditionalFrame> = [], offset = 0;
+		var source = file.bytes;
+		if (!hasDirectives(source))
+			return {text: file.text, defines: []};
+		var output = new StringBuf(), referenced:Map<String, Bool> = [], frames:Array<ConditionalFrame> = [], offset = 0;
 		while (offset < source.length) {
-			var end = source.indexOf("\n", offset);
-			if (end < 0)
-				end = source.length;
-			else
+			var end = offset;
+			while (end < source.length && source.get(end) != "\n".code)
 				end++;
-			var line = source.substring(offset, end),
+			if (end < source.length)
+				end++;
+			var line = file.slice(offset, end),
 				trimmed = StringTools.ltrim(line),
 				directive = StringTools.startsWith(trimmed, "#");
 			if (directive) {
@@ -76,6 +79,21 @@ class ConditionalCompilation {
 		return {text: output.toString(), defines: names};
 	}
 
+	static function hasDirectives(source:haxe.io.Bytes):Bool {
+		var position = 0, lineStart = true;
+		while (position < source.length) {
+			var code = source.get(position++);
+			if (lineStart) {
+				if (code == "#".code)
+					return true;
+				if (code != " ".code && code != "\t".code && code != "\r".code)
+					lineStart = code == "\n".code;
+			} else if (code == "\n".code)
+				lineStart = true;
+		}
+		return false;
+	}
+
 	static function isActive(frames:Array<ConditionalFrame>):Bool
 		return frames.length == 0 || frames[frames.length - 1].active;
 
@@ -86,9 +104,9 @@ class ConditionalCompilation {
 	}
 
 	static function mask(value:String):String {
-		var result = new StringBuf();
-		for (index in 0...value.length) {
-			var code = value.charCodeAt(index);
+		var result = new StringBuf(), bytes = haxe.io.Bytes.ofString(value);
+		for (index in 0...bytes.length) {
+			var code = bytes.get(index);
 			result.addChar(code == 10 || code == 13 ? code : 32);
 		}
 		return result.toString();

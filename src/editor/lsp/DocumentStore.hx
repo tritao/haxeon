@@ -1,5 +1,7 @@
 package editor.lsp;
 
+import compiler.Source.SourceFile;
+
 /** One open LSP document with monotonically versioned text and position conversion. */
 class LspDocument {
 	public final uri:String;
@@ -7,7 +9,7 @@ class LspDocument {
 	public var version(default, null):Int;
 	public var source(default, null):String;
 
-	var lineStarts:Array<Int>;
+	var snapshot:SourceFile;
 
 	public function new(uri:String, path:String, version:Int, source:String) {
 		this.uri = uri;
@@ -27,35 +29,11 @@ class LspDocument {
 	}
 
 	public function offset(line:Int, character:Int):Int {
-		if (line < 0 || character < 0 || line >= lineStarts.length)
-			throw "LSP position is outside the document";
-		var start = lineStarts[line], end = lineEnd(line), offset = start, units = 0;
-		while (offset < end && units < character) {
-			var width = utf16Width(source.charCodeAt(offset));
-			if (units + width > character)
-				throw "LSP position splits a UTF-16 surrogate pair";
-			units += width;
-			offset++;
-		}
-		if (units != character)
-			throw "LSP position is outside the document";
-		return offset;
+		return snapshot.byteOffsetAt(line, character);
 	}
 
-	public function position(requested:Int):Dynamic {
-		if (requested < 0 || requested > source.length)
-			throw "Compiler position is outside the document";
-		var low = 0, high = lineStarts.length;
-		while (low < high) {
-			var middle = low + ((high - low) >> 1);
-			if (lineStarts[middle] <= requested)
-				low = middle + 1;
-			else
-				high = middle;
-		}
-		var line = low - 1;
-		return {line: line, character: utf16Length(source, lineStarts[line], requested)};
-	}
+	public function position(requested:Int):Dynamic
+		return snapshot.lspPosition(requested);
 
 	public function range(start:Int, end:Int):Dynamic
 		return {start: position(start), end: position(end)};
@@ -79,23 +57,17 @@ class LspDocument {
 				if (rawLength != null) {
 					if (!Std.isOfType(rawLength, Int) || rawLength < 0)
 						throw 'Field "rangeLength" must be a non-negative integer';
-					if (rawLength != utf16Length(candidate, startOffset, endOffset))
+					var replaced = view.snapshot.slice(startOffset, endOffset);
+					if (rawLength != utf16Length(replaced, 0, replaced.length))
 						throw "LSP document change rangeLength does not match the replaced text";
 				}
-				candidate = candidate.substring(0, startOffset) + text + candidate.substring(endOffset);
+				candidate = view.snapshot.slice(0, startOffset) + text + view.snapshot.slice(endOffset, view.snapshot.bytes.length);
 			}
 		}
 		this.version = version;
 		source = candidate;
 		rebuildLines();
 		return true;
-	}
-
-	function lineEnd(line:Int):Int {
-		var end = line + 1 < lineStarts.length ? lineStarts[line + 1] - 1 : source.length;
-		if (end > lineStarts[line] && source.charCodeAt(end - 1) == 13)
-			end--;
-		return end;
 	}
 
 	static function positionField(value:Dynamic, name:String):{line:Int, character:Int} {
@@ -126,10 +98,7 @@ class LspDocument {
 		return code != null && code > 0xffff ? 2 : 1;
 
 	function rebuildLines():Void {
-		lineStarts = [0];
-		for (index in 0...source.length)
-			if (source.charCodeAt(index) == 10)
-				lineStarts.push(index + 1);
+		snapshot = new SourceFile(path, source);
 	}
 }
 

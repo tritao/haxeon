@@ -1107,6 +1107,18 @@ class Parser {
 				end = body.length == 0 ? previous().span : statementSpan(body[body.length - 1]);
 			return Lambda(arguments, body, start.merge(end));
 		}
+		if (check(TokenKind.Identifier) && peekKind(1) == TokenKind.Arrow) {
+			var argument = advance(), start = argument.span;
+			advance();
+			var arguments = [{
+				name: argument.text,
+				type: InferredType,
+				span: argument.span,
+				optional: false,
+				defaultValue: null
+			}], body = parseArrowFunctionBody();
+			return Lambda(arguments, body, start.merge(body.length == 0 ? previous().span : statementSpan(body[body.length - 1])));
+		}
 		if (match(TokenKind.If)) {
 			var start = previous().span;
 			consume(TokenKind.LeftParen);
@@ -1845,7 +1857,8 @@ class Parser {
 					expressionEnd++;
 				index = expressionEnd;
 			}
-			var expression = parseInterpolatedExpression(text.substring(expressionStart, expressionEnd), token.span, expressionStart);
+			var expression = parseInterpolatedExpression(text.substring(expressionStart, expressionEnd), token.span,
+				haxe.io.Bytes.ofString(text.substring(0, expressionStart)).length);
 			parts.push(Call("Std.string", [expression], expressionSpan(expression)));
 		}
 		appendStringLiteral(parts, literal, token.span);

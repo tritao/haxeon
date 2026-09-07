@@ -52,7 +52,7 @@ class ModuleReachability {
 			for (dependency in modules.get(name).dependencies)
 				if (!modules.exists(dependency)) {
 					var state = modules.get(name),
-						span = state.source.span(0, state.source.text.length);
+						span = state.source.span(0, state.source.bytes.length);
 					var diagnostic = new Diagnostic("E2001", 'Missing module "$dependency"', span);
 					state.diagnostics.push(diagnostic);
 					throw new CompileError(diagnostic);

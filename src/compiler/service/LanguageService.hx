@@ -3,6 +3,7 @@ package compiler.service;
 import compiler.semantic.ModuleCanonicalizer;
 import compiler.syntax.Ast.AstType;
 import compiler.Diagnostic;
+import compiler.Source.SourceFile;
 import compiler.Source.SourceSpan;
 import compiler.syntax.Token.TokenKind;
 import compiler.Compiler;
@@ -394,9 +395,11 @@ class LanguageService {
 
 	public function format(path:String, start:Int, end:Int, tabSize:Int, insertSpaces:Bool):Array<TextEdit> {
 		var state = stateFor(path);
-		if (state == null || start < 0 || end < start || end > state.source.text.length || tabSize <= 0)
+		if (state == null || start < 0 || end < start || end > state.source.bytes.length || tabSize <= 0)
 			return [];
-		var source = state.source.text, formatted = SourceFormatter.format(source, tabSize, insertSpaces, start, end);
+		var source = state.source.text,
+			formatted = SourceFormatter.format(source, tabSize, insertSpaces, state.source.stringOffsetForByteOffset(start),
+				state.source.stringOffsetForByteOffset(end));
 		if (formatted == null || formatted == source)
 			return [];
 		var prefix = 0, limit = Std.int(Math.min(source.length, formatted.length));
@@ -409,7 +412,7 @@ class LanguageService {
 		}
 		return [{
 			path: path,
-			span: state.source.span(prefix, sourceSuffix),
+			span: state.source.span(state.source.byteOffsetForStringOffset(prefix), state.source.byteOffsetForStringOffset(sourceSuffix)),
 			replacement: formatted.substring(prefix, formattedSuffix),
 			revision: state.revision,
 			stale: false
@@ -673,8 +676,8 @@ class LanguageService {
 			ast = state == null ? null : effectiveAst(state);
 		if (state == null || ast == null)
 			return completionResult(result);
-		var prefix = identifierPrefix(state.source.text, position);
-		var qualifier = memberQualifier(state.source.text, position),
+		var prefix = identifierPrefix(state.source, position);
+		var qualifier = memberQualifier(state.source, position),
 			model = effectiveSemanticModel(state),
 			semanticContext = model == null ? null : model.index.completionContext(position, qualifier);
 		if (qualifier != null) {
@@ -806,7 +809,7 @@ class LanguageService {
 		if (context == null || context.symbol == null)
 			return result;
 		var declaration = context.model.index.symbol(context.symbol),
-			source = context.state.source.text;
+			source = context.state.source;
 		for (span in context.model.index.locations(context.symbol)) {
 			if (token != null)
 				token.check();
@@ -877,10 +880,10 @@ class LanguageService {
 			if (indexed != null && indexedType != null)
 				return indexed.name + ":" + compilerTypeName(indexedType);
 		}
-		var name = identifierPrefix(state.source.text, position);
+		var name = identifierPrefix(state.source, position);
 		if (name.length == 0)
 			return null;
-		var qualifier = memberQualifier(state.source.text, position);
+		var qualifier = memberQualifier(state.source, position);
 		if (qualifier != null) {
 			for (enumDecl in ast.enums)
 				if (enumDecl.name == qualifier)
@@ -1309,20 +1312,20 @@ class LanguageService {
 	static function sameSpan(left:SourceSpan, right:SourceSpan):Bool
 		return left.file.path == right.file.path && left.start == right.start && left.end == right.end;
 
-	static function assignmentFollows(source:String, position:Int):Bool {
-		while (position < source.length) {
-			var code = source.charCodeAt(position);
+	static function assignmentFollows(source:SourceFile, position:Int):Bool {
+		while (position < source.bytes.length) {
+			var code = source.bytes.get(position);
 			if (code != 32 && code != 9 && code != 10 && code != 13)
 				break;
 			position++;
 		}
-		if (position >= source.length)
+		if (position >= source.bytes.length)
 			return false;
-		var current = source.charAt(position), next = source.charAt(position + 1);
-		if (current == "=")
-			return next != "=" && next != ">";
-		return (current == "+" || current == "-" || current == "*" || current == "/" || current == "%" || current == "&" || current == "|"
-			|| current == "^") && next == "=";
+		var current = source.bytes.get(position), next = position + 1 < source.bytes.length ? source.bytes.get(position + 1) : -1;
+		if (current == "=".code)
+			return next != "=".code && next != ">".code;
+		return (current == "+".code || current == "-".code || current == "*".code || current == "/".code || current == "%".code
+			|| current == "&".code || current == "|".code || current == "^".code) && next == "=".code;
 	}
 
 	static function semanticTokenType(model:Null<SemanticModel>, position:Int):String {
@@ -1402,13 +1405,13 @@ class LanguageService {
 				position += 2;
 				while (position < source.length && source.charCodeAt(position) != 10)
 					position++;
-				addSemanticSpan(file, start, position, "comment", [], result);
+				addSemanticSpan(file, file.byteOffsetForStringOffset(start), file.byteOffsetForStringOffset(position), "comment", [], result);
 			} else if (next == "*") {
 				position += 2;
 				while (position + 1 < source.length && !(source.charAt(position) == "*" && source.charAt(position + 1) == "/"))
 					position++;
 				position = Std.int(Math.min(source.length, position + 2));
-				addSemanticSpan(file, start, position, "comment", [], result);
+				addSemanticSpan(file, file.byteOffsetForStringOffset(start), file.byteOffsetForStringOffset(position), "comment", [], result);
 			} else
 				position++;
 		}
@@ -1418,7 +1421,7 @@ class LanguageService {
 			result:Array<SemanticToken>):Void {
 		var partStart = start, position = start;
 		while (position < end) {
-			if (file.text.charCodeAt(position) == 10) {
+			if (file.bytes.get(position) == "\n".code) {
 				if (position > partStart)
 					result.push({span: file.span(partStart, position), type: type, modifiers: modifiers.copy()});
 				partStart = position + 1;
@@ -1517,12 +1520,12 @@ class LanguageService {
 	function documentationFor(state:ModuleState, span:SourceSpan):SymbolDocumentation {
 		var cached = documentationIndex.get(state.name);
 		if (cached == null || cached.revision != state.revision) {
-			cached = {revision: state.revision, comments: scanDocumentation(state.source.text)};
+			cached = {revision: state.revision, comments: scanDocumentation(state.source)};
 			documentationIndex.set(state.name, cached);
 		}
 		var found:Null<SymbolDocumentation> = null;
 		for (comment in cached.comments)
-			if (comment.end <= span.start && documentationGap(state.source.text.substring(comment.end, span.start)))
+			if (comment.end <= span.start && documentationGap(state.source.slice(comment.end, span.start)))
 				found = comment.documentation;
 			else
 				break;
@@ -1566,7 +1569,7 @@ class LanguageService {
 		addConditionalFolds(source, folds, containers);
 		for (symbol in indexedWorkspaceSymbols(state))
 			containers.push(symbol.span);
-		containers.push(source.span(0, source.text.length));
+		containers.push(source.span(0, source.bytes.length));
 		folds.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
 		structuralIndex.set(state.name, cached = {revision: state.revision, folds: folds, containers: containers});
 		return cached;
@@ -1586,11 +1589,11 @@ class LanguageService {
 			if (marker == "//") {
 				var newline = text.indexOf("\n", position + 2);
 				position = newline < 0 ? text.length : newline;
-				result.push(file.span(start, position));
+				result.push(file.span(file.byteOffsetForStringOffset(start), file.byteOffsetForStringOffset(position)));
 			} else if (marker == "/*") {
 				var close = text.indexOf("*/", position + 2);
 				position = close < 0 ? text.length : close + 2;
-				result.push(file.span(start, position));
+				result.push(file.span(file.byteOffsetForStringOffset(start), file.byteOffsetForStringOffset(position)));
 			} else
 				position++;
 		}
@@ -1605,7 +1608,7 @@ class LanguageService {
 			if (StringTools.startsWith(line, "#if"))
 				stack.push(offset);
 			else if (StringTools.startsWith(line, "#end") && stack.length > 0) {
-				var span = file.span(stack.pop(), end);
+				var span = file.span(file.byteOffsetForStringOffset(stack.pop()), file.byteOffsetForStringOffset(end));
 				folds.push({span: span, kind: "region"});
 				containers.push(span);
 			}
@@ -1613,8 +1616,8 @@ class LanguageService {
 		}
 	}
 
-	static function scanDocumentation(source:String):Array<{end:Int, documentation:SymbolDocumentation}> {
-		var result = [], position = 0;
+	static function scanDocumentation(file:SourceFile):Array<{end:Int, documentation:SymbolDocumentation}> {
+		var result = [], source = file.text, position = 0;
 		while (position + 2 < source.length) {
 			var quote = source.charAt(position);
 			if (quote == "\"" || quote == "'") {
@@ -1638,7 +1641,10 @@ class LanguageService {
 			var close = source.indexOf("*/", position + 3);
 			if (close < 0)
 				break;
-			result.push({end: close + 2, documentation: normalizeDocumentation(source.substring(position + 3, close))});
+			result.push({
+				end: file.byteOffsetForStringOffset(close + 2),
+				documentation: normalizeDocumentation(source.substring(position + 3, close))
+			});
 			position = close + 2;
 		}
 		return result;
@@ -1798,23 +1804,23 @@ class LanguageService {
 			default: TDynamic;
 		};
 
-	static function identifierPrefix(source:String, position:Int):String {
-		var end = position < 0 ? 0 : position > source.length ? source.length : position, start = end;
-		while (start > 0 && isIdentifierPart(source.charCodeAt(start - 1)))
+	static function identifierPrefix(source:SourceFile, position:Int):String {
+		var end = position < 0 ? 0 : position > source.bytes.length ? source.bytes.length : position, start = end;
+		while (start > 0 && isIdentifierPart(source.bytes.get(start - 1)))
 			start--;
-		return source.substring(start, end);
+		return source.slice(start, end);
 	}
 
-	static function memberQualifier(source:String, position:Int):Null<String> {
-		var end = position < 0 ? 0 : position > source.length ? source.length : position, start = end;
-		while (start > 0 && isIdentifierPart(source.charCodeAt(start - 1)))
+	static function memberQualifier(source:SourceFile, position:Int):Null<String> {
+		var end = position < 0 ? 0 : position > source.bytes.length ? source.bytes.length : position, start = end;
+		while (start > 0 && isIdentifierPart(source.bytes.get(start - 1)))
 			start--;
-		if (start == 0 || source.charAt(start - 1) != ".")
+		if (start == 0 || source.bytes.get(start - 1) != ".".code)
 			return null;
 		var qualifierEnd = start - 1, qualifierStart = qualifierEnd;
-		while (qualifierStart > 0 && isIdentifierPart(source.charCodeAt(qualifierStart - 1)))
+		while (qualifierStart > 0 && isIdentifierPart(source.bytes.get(qualifierStart - 1)))
 			qualifierStart--;
-		return source.substring(qualifierStart, qualifierEnd);
+		return source.slice(qualifierStart, qualifierEnd);
 	}
 
 	static inline function isIdentifierPart(code:Int):Bool

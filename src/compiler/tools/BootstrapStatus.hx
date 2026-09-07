@@ -112,7 +112,7 @@ class BootstrapStatus {
 			} catch (failure:CompileError) {
 				failedStage = "parse";
 				error = failure.diagnostic.message;
-				var location = sourceLocation(source, failure.diagnostic.span.start);
+				var location = sourceLocation(file, failure.diagnostic.span.start);
 				line = location.line;
 				column = location.column;
 			} catch (failure:Dynamic) {
@@ -122,7 +122,7 @@ class BootstrapStatus {
 		} catch (failure:CompileError) {
 			failedStage = "lex";
 			error = failure.diagnostic.message;
-			var location = sourceLocation(source, failure.diagnostic.span.start);
+			var location = sourceLocation(file, failure.diagnostic.span.start);
 			line = location.line;
 			column = location.column;
 		} catch (failure:Dynamic) {
@@ -131,7 +131,7 @@ class BootstrapStatus {
 		}
 		return {
 			path: path,
-			bytes: source.length,
+			bytes: file.bytes.length,
 			lexed: lexed,
 			parsed: parsed,
 			functions: functions,
@@ -143,16 +143,8 @@ class BootstrapStatus {
 		};
 	}
 
-	static function sourceLocation(source:String, offset:Int):{line:Int, column:Int} {
-		var line = 1, column = 1;
-		for (position in 0...offset)
-			if (source.charCodeAt(position) == 10) {
-				line++;
-				column = 1;
-			} else
-				column++;
-		return {line: line, column: column};
-	}
+	static function sourceLocation(source:SourceFile, offset:Int):{line:Int, column:Int}
+		return {line: source.lineAt(offset), column: source.columnAt(offset)};
 
 	static function inspectProject(roots:Array<String>, paths:Array<String>, files:Array<FileStatus>, entryModule:String):ProjectStatus {
 		var parseFailures = files.length - countFiles(files, function(file) return file.parsed);
@@ -178,7 +170,7 @@ class BootstrapStatus {
 			};
 		} catch (failure:CompileError) {
 			var source = failure.diagnostic.span.file,
-				location = sourceLocation(source.text, failure.diagnostic.span.start);
+				location = sourceLocation(source, failure.diagnostic.span.start);
 			return {
 				entryModule: entryModule,
 				attempted: true,
