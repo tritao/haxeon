@@ -14,6 +14,21 @@
   "dependencies": {"vscode-languageclient": "^9.0.1"},
   "devDependencies": {"@types/node": "^22.10.0", "@types/vscode": "^1.90.0", "typescript": "^5.7.2"},
   "contributes": {
+    "languages": [
+      {
+        "id": "haxe",
+        "aliases": ["Haxe", "haxe"],
+        "extensions": [".hx"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "haxe",
+        "scopeName": "source.haxeon.hx",
+        "path": "./syntaxes/haxe.tmLanguage.json"
+      }
+    ],
     "commands": [
       {"command": "haxeon.profiler.open", "title": "Haxeon: Open Realtime Profiler"},
       {"command": "haxeon.profiler.setToken", "title": "Haxeon: Set Diagnostics Token"},

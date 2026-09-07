@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+haxe="$root_dir/.tools/haxe/haxe"
+hashlink="$root_dir/.tools/hashlink/hl"
+server="$root_dir/out/haxeon-lsp.hl"
+
+if [[ ! -x "$haxe" || ! -x "$hashlink" ]]; then
+	echo "missing local Haxeon toolchain; run $root_dir/scripts/bootstrap-tools.sh" >&2
+	exit 1
+fi
+
+rebuild=false
+if [[ ! -f "$server" ]]; then
+	rebuild=true
+elif find "$root_dir/src" -type f -name '*.hx' -newer "$server" -print -quit | grep -q .; then
+	rebuild=true
+elif [[ "$root_dir/haxeon-lsp.hxml" -nt "$server" ]]; then
+	rebuild=true
+fi
+
+if [[ "$rebuild" == true ]]; then
+	mkdir -p "$root_dir/out"
+	"$haxe" --cwd "$root_dir" "$root_dir/haxeon-lsp.hxml"
+fi
+
+exec "$hashlink" "$server"

@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+extension_dir="$root_dir/extensions/vscode"
+workspace_file="$root_dir/haxeon-dev.code-workspace"
+vscode_state_dir=$(mktemp -d /tmp/haxeon-vscode-dev.XXXXXX)
+
+if ! command -v code >/dev/null 2>&1; then
+	echo "VS Code's 'code' command was not found on PATH." >&2
+	exit 1
+fi
+
+if [[ ! -x "$root_dir/.tools/haxe/haxe" || ! -x "$root_dir/.tools/hashlink/hl" ]]; then
+	"$root_dir/scripts/bootstrap-tools.sh"
+fi
+
+if [[ ! -d "$extension_dir/node_modules" ]]; then
+	npm --prefix "$extension_dir" ci
+fi
+
+npm --prefix "$extension_dir" run compile
+mkdir -p "$vscode_state_dir/user-data" "$vscode_state_dir/extensions"
+
+# The extension's default server command is `haxeon-lsp`. Supplying the repo's
+# scripts directory on PATH avoids requiring user or workspace settings.
+PATH="$root_dir/scripts:$PATH" code \
+	--new-window \
+	--disable-workspace-trust \
+	--user-data-dir "$vscode_state_dir/user-data" \
+	--extensions-dir "$vscode_state_dir/extensions" \
+	--extensionDevelopmentPath="$extension_dir" \
+	"$workspace_file" \
+	--goto "$root_dir/src/Main.hx:1:1"

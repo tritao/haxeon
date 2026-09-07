@@ -1,0 +1,126 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Haxe",
+  "scopeName": "source.haxeon.hx",
+  "patterns": [
+    {"include": "#comments"},
+    {"include": "#preprocessor"},
+    {"include": "#metadata"},
+    {"include": "#strings"},
+    {"include": "#numbers"},
+    {"include": "#declarations"},
+    {"include": "#keywords"},
+    {"include": "#constants"},
+    {"include": "#types"},
+    {"include": "#operators"}
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.block.documentation.haxe",
+          "begin": "/\\*\\*",
+          "end": "\\*/"
+        },
+        {
+          "name": "comment.block.haxe",
+          "begin": "/\\*",
+          "end": "\\*/"
+        },
+        {
+          "name": "comment.line.double-slash.haxe",
+          "begin": "//",
+          "end": "$"
+        }
+      ]
+    },
+    "preprocessor": {
+      "name": "meta.preprocessor.haxe",
+      "match": "^\\s*(#(?:if|elseif|else|end|error|line))\\b.*$",
+      "captures": {"1": {"name": "keyword.control.directive.haxe"}}
+    },
+    "metadata": {
+      "name": "storage.type.annotation.haxe",
+      "match": "@(?::)?[A-Za-z_][A-Za-z0-9_.]*"
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.haxe",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {"name": "constant.character.escape.haxe", "match": "\\\\."},
+            {"name": "variable.other.readwrite.haxe", "match": "\\$[A-Za-z_][A-Za-z0-9_]*|\\$\\{"}
+          ]
+        },
+        {
+          "name": "string.quoted.single.haxe",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {"name": "constant.character.escape.haxe", "match": "\\\\."},
+            {"name": "variable.other.readwrite.haxe", "match": "\\$[A-Za-z_][A-Za-z0-9_]*|\\$\\{"}
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "name": "constant.numeric.haxe",
+      "match": "\\b(?:0[xX][0-9A-Fa-f]+|0[bB][01]+|(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?)\\b"
+    },
+    "declarations": {
+      "patterns": [
+        {
+          "match": "\\b(class|interface|enum|abstract|typedef)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {"name": "storage.type.haxe"},
+            "2": {"name": "entity.name.type.haxe"}
+          }
+        },
+        {
+          "match": "\\b(function)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {"name": "storage.type.function.haxe"},
+            "2": {"name": "entity.name.function.haxe"}
+          }
+        },
+        {
+          "match": "\\b(package|import|using)\\s+([A-Za-z_][A-Za-z0-9_.]*)",
+          "captures": {
+            "1": {"name": "keyword.control.import.haxe"},
+            "2": {"name": "entity.name.namespace.haxe"}
+          }
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.haxe",
+          "match": "\\b(?:break|case|catch|continue|default|do|else|for|if|return|switch|throw|try|while)\\b"
+        },
+        {
+          "name": "storage.modifier.haxe",
+          "match": "\\b(?:extern|final|inline|macro|override|private|public|static|dynamic)\\b"
+        },
+        {
+          "name": "keyword.other.haxe",
+          "match": "\\b(?:cast|extends|from|implements|in|is|new|operator|overload|this|to|untyped|var)\\b"
+        }
+      ]
+    },
+    "constants": {
+      "name": "constant.language.haxe",
+      "match": "\\b(?:true|false|null)\\b"
+    },
+    "types": {
+      "name": "support.type.primitive.haxe",
+      "match": "\\b(?:Any|Array|Bool|Class|Date|Dynamic|Enum|Float|Int|Int64|Iterator|Map|Null|String|UInt|Void)\\b"
+    },
+    "operators": {
+      "name": "keyword.operator.haxe",
+      "match": "(?:===|!==|>>>|>>|<<|=>|->|==|!=|<=|>=|&&|\\|\\||\\+\\+|--|\\+=|-=|\\*=|/=|%=|&=|\\|=|\\^=|\\?\\?|\\?\\.|[+*/%=&|^!<>?:~-])"
+    }
+  }
+}
