@@ -16,7 +16,7 @@ import compiler.Compiler.CompileResult;
 import compiler.types.Type.CompilerType;
 import compiler.types.DeclarationIndex.DeclarationKind;
 import compiler.types.TypeRelations;
-import compiler.runtime.RuntimeNatives;
+import compiler.runtime.CompilerIntrinsics;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.syntax.ConditionalCompilation;
@@ -203,7 +203,7 @@ class LanguageService {
 	var editorDefines:Map<String, String> = [];
 
 	public function new(?identityState:haxe.io.Bytes) {
-		compiler = new Compiler(identityState, RuntimeNatives.configuration());
+		compiler = new Compiler(identityState, CompilerIntrinsics.configuration());
 		compiler.addSourceRoot("stdlib");
 	}
 

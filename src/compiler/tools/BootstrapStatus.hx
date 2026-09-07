@@ -5,7 +5,7 @@ import compiler.syntax.Parser;
 import compiler.syntax.Token.TokenKind;
 import compiler.Source.SourceFile;
 import compiler.Compiler;
-import compiler.runtime.RuntimeNatives as CompilerRuntimeAbi;
+import compiler.runtime.CompilerIntrinsics as CompilerRuntimeAbi;
 import compiler.Diagnostic.CompileError;
 import haxe.Json;
 import sys.FileSystem;

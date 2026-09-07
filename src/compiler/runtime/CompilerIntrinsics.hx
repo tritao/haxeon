@@ -4,16 +4,8 @@ import compiler.Compiler;
 import compiler.Compiler.NativeFunction;
 import compiler.types.Type.CompilerType;
 
-/**
- * The small Haxe-compatible host surface that is stable across compiler
- * builds.  Keeping this registration in one place prevents each executable
- * entrypoint from inventing a different set of Sys/trace natives.
- *
- * The first version intentionally delegates to HashLink's std library.  The
- * compiler-owned realtime runtime remains reserved for ABI operations whose
- * representation or reload semantics differ from ordinary HashLink.
- */
-class RuntimeNatives {
+/** Native operations emitted directly by primitive and language lowering. */
+class CompilerIntrinsics {
 	public static inline var VERSION:Int = 1;
 
 	public static function register(compiler:Compiler):Void {
@@ -24,8 +16,10 @@ class RuntimeNatives {
 	/** Immutable native definitions shared by compiler snapshots and services. */
 	public static function configuration():Array<NativeFunction> {
 		var definitions:Array<NativeFunction> = [];
+		// Language primitives.
 		definitions.push(native("trace", "realtime_runtime", "__sys_print", [TString], TVoid));
 		definitions.push(native("__std_int_f64", "realtime_runtime", "__std_int_f64", [TFloat], TInt));
+		// Primitive String methods lowered directly by the typer.
 		definitions.push(native("__string_compare_full", "std", "string_compare_full", [TString, TString], TInt));
 		definitions.push(native("__string_last_index_of", "realtime_runtime", "__string_last_index_of", [TString, TString], TInt));
 		definitions.push(native("__string_index_of_from", "realtime_runtime", "__string_index_of_from", [TString, TString, TInt], TInt));
@@ -34,6 +28,8 @@ class RuntimeNatives {
 		var bytes:CompilerType = TBytes,
 			input:CompilerType = TNativeAbstract("realtime_bytes_input"),
 			output:CompilerType = TNativeAbstract("realtime_bytes_output");
+
+		// Specialized Bytes representation and instance operations.
 		definitions.push(native("__bytes_length", "realtime_runtime", "__bytes_length", [bytes], TInt));
 		definitions.push(native("__bytes_get_data", "realtime_runtime", "__bytes_get_data", [bytes], THlBytes));
 		definitions.push(native("__bytes_get", "realtime_runtime", "__bytes_get", [bytes, TInt], TInt));
@@ -43,6 +39,8 @@ class RuntimeNatives {
 		definitions.push(native("__bytes_compare", "realtime_runtime", "__bytes_compare", [bytes, bytes], TInt));
 		definitions.push(native("__bytes_to_string", "realtime_runtime", "__bytes_to_string", [bytes], TString));
 		definitions.push(native("__bytes_get_string", "realtime_runtime", "__bytes_get_string", [bytes, TInt, TInt], TString));
+
+		// Specialized BytesInput representation and operations.
 		definitions.push(native("__bytes_input_new", "realtime_runtime", "__bytes_input_new", [bytes], input));
 		definitions.push(native("__bytes_input_position", "realtime_runtime", "__bytes_input_position", [input], TInt));
 		definitions.push(native("__bytes_input_big_endian", "realtime_runtime", "__bytes_input_big_endian", [input], TBool));
@@ -52,6 +50,8 @@ class RuntimeNatives {
 		definitions.push(native("__bytes_input_read_f64", "realtime_runtime", "__bytes_input_read_f64", [input], TFloat));
 		definitions.push(native("__bytes_input_read_string", "realtime_runtime", "__bytes_input_read_string", [input, TInt], TString));
 		definitions.push(native("__bytes_input_read", "realtime_runtime", "__bytes_input_read", [input, TInt], bytes));
+
+		// Specialized BytesOutput representation and operations.
 		definitions.push(native("__bytes_output_new", "realtime_runtime", "__bytes_output_new", [], output));
 		definitions.push(native("__bytes_output_big_endian", "realtime_runtime", "__bytes_output_big_endian", [output], TBool));
 		definitions.push(native("__bytes_output_set_big_endian", "realtime_runtime", "__bytes_output_set_big_endian", [output, TBool], TVoid));

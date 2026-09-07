@@ -1,6 +1,6 @@
 package compiler.tools;
 
-import compiler.runtime.RuntimeNatives;
+import compiler.runtime.CompilerIntrinsics;
 import compiler.Diagnostic.CompileError;
 import compiler.hl.HlWriter;
 import compiler.Compiler;
@@ -34,7 +34,7 @@ class BootstrapCompiler {
 
 		Sys.println("loading " + Std.string(paths.length) + " bootstrap sources");
 		var compiler = new Compiler();
-		RuntimeNatives.register(compiler);
+		CompilerIntrinsics.register(compiler);
 		compiler.addSourceRoot("stdlib");
 		BootstrapSources.load(compiler, roots, paths);
 		Sys.println("compiling bootstrap entry " + entry);

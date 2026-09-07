@@ -1,4 +1,4 @@
-import compiler.runtime.RuntimeNatives;
+import compiler.runtime.CompilerIntrinsics;
 import compiler.hl.HlWriter;
 import compiler.Compiler;
 import compiler.Diagnostic.CompileError;
@@ -9,7 +9,7 @@ class StdlibMain {
 	static function main():Void {
 		var output = Sys.args()[0];
 		var compiler = new Compiler();
-		RuntimeNatives.register(compiler);
+		CompilerIntrinsics.register(compiler);
 		compiler.addSourceRoot("stdlib");
 		compiler.update("Main.hx",
 			"import Date; import Math; import Reflect; import haxe.io.Bytes; import sys.FileSystem; import sys.io.File; " +
@@ -61,6 +61,9 @@ class StdlibMain {
 		for (native in compiler.nativeConfiguration())
 			if (sourceOwnedNatives.indexOf(native.name) >= 0)
 				throw 'source-owned native "${native.name}" remained in the host registry';
+		for (native in compiler.nativeConfiguration())
+			if (native.name != "trace" && !StringTools.startsWith(native.name, "__"))
+				throw 'ordinary API native "${native.name}" remained in the compiler intrinsic registry';
 		for (module in [
 			"Std",
 			"StringBuf",
@@ -158,7 +161,7 @@ class StdlibMain {
 		File.saveBytes(output, HlWriter.encode(result.module));
 
 		var invalid = new Compiler();
-		RuntimeNatives.register(invalid);
+		CompilerIntrinsics.register(invalid);
 		invalid.addSourceRoot("stdlib");
 		invalid.update("Main.hx", 'import haxe.ds.Option; function main():Int { var value:Option<Int> = Some("bad"); return 0; }');
 		try {
@@ -167,7 +170,7 @@ class StdlibMain {
 		} catch (_:CompileError) {}
 
 		var missing = new Compiler();
-		RuntimeNatives.register(missing);
+		CompilerIntrinsics.register(missing);
 		missing.addSourceRoot("stdlib");
 		missing.update("Main.hx", "import haxe.ds.Missing; function main():Int return 0;");
 		try {
