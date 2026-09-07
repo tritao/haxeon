@@ -175,6 +175,8 @@ run_program generic-enum-field 42
 run_program enum-array-pattern 42
 run_program nullable-basic 42
 run_program nullable-guard-return 42
+run_program nullable-array-guard 42
+run_program native-abstract-null 42
 run_program nullable-compound 42
 run_program nullable-enum-switch 42
 run_program object-array 42

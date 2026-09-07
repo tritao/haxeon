@@ -24,6 +24,8 @@ class TypeRelations {
 	public function conversion(actual:CompilerType, expected:CompilerType):ConversionPlan {
 		if (equals(actual, expected))
 			return Identity;
+		if (actual == TNull && isReference(expected))
+			return WrapNullable;
 		if (abstractConversion(actual, expected))
 			return AbstractCast;
 		if (!isAssignable(actual, expected))
@@ -61,6 +63,8 @@ class TypeRelations {
 
 	public function isAssignable(actual:CompilerType, expected:CompilerType):Bool {
 		if (actual == TNever)
+			return true;
+		if (actual == TNull && isReference(expected))
 			return true;
 		if (equals(actual, expected))
 			return true;
