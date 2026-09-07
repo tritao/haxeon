@@ -701,6 +701,45 @@ HL_PRIM int HL_NAME(__string_index_of_from)( vbyte *value, vbyte *needle, int st
 	return -1;
 }
 
+static vbyte *realtime_string_slice( const uchar *value, int start, int end );
+
+HL_PRIM varray *HL_NAME(__string_split)( vbyte *value, vbyte *separator ) {
+	const uchar *text = (const uchar *)value;
+	const uchar *delimiter = (const uchar *)separator;
+	int text_length = text == NULL ? 0 : (int)ustrlen(text);
+	int delimiter_length = delimiter == NULL ? 0 : (int)ustrlen(delimiter);
+	int count = 1;
+	if( delimiter_length == 0 ) {
+		count = text_length;
+	} else {
+		for( int index = 0; index <= text_length - delimiter_length; ) {
+			if( memcmp(text + index,delimiter,delimiter_length * sizeof(uchar)) == 0 ) {
+				count++;
+				index += delimiter_length;
+			} else
+				index++;
+		}
+	}
+	varray *result = hl_alloc_array(&hlt_bytes,count);
+	vbyte **parts = hl_aptr(result,vbyte *);
+	if( delimiter_length == 0 ) {
+		for( int index = 0; index < text_length; index++ )
+			parts[index] = realtime_string_slice(text,index,index + 1);
+		return result;
+	}
+	int part = 0, start = 0;
+	for( int index = 0; index <= text_length - delimiter_length; ) {
+		if( memcmp(text + index,delimiter,delimiter_length * sizeof(uchar)) == 0 ) {
+			parts[part++] = realtime_string_slice(text,start,index);
+			index += delimiter_length;
+			start = index;
+		} else
+			index++;
+	}
+	parts[part] = realtime_string_slice(text,start,text_length);
+	return result;
+}
+
 static vbyte *realtime_string_slice( const uchar *value, int start, int end ) {
 	vbyte *result = hl_alloc_bytes((end - start + 1) * (int)sizeof(uchar));
 	if( end > start ) memcpy(result,value + start,(end - start) * sizeof(uchar));
@@ -1291,6 +1330,7 @@ DEFINE_PRIM(_I32,__string_length,_BYTES);
 DEFINE_PRIM(_BOOL,__string_equal,_BYTES _BYTES);
 DEFINE_PRIM(_I32,__string_index_of,_BYTES _BYTES);
 DEFINE_PRIM(_I32,__string_index_of_from,_BYTES _BYTES _I32);
+DEFINE_PRIM(_ARR,__string_split,_BYTES _BYTES);
 DEFINE_PRIM(_BYTES,__string_ltrim,_BYTES);
 DEFINE_PRIM(_BYTES,__string_trim,_BYTES);
 DEFINE_PRIM(_BYTES,__string_to_lower_case,_BYTES);

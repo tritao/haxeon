@@ -113,6 +113,7 @@ run_program call-many 42
 run_program function-call 42
 run_program function-value 42
 run_program lambda 42
+run_program expression-lambda 42
 run_program anonymous-function 42
 run_program enum-abstract 42
 run_program concise-try 42
@@ -137,6 +138,7 @@ run_program nested-mutable-capture 3
 run_program trace 42
 run_program string-interpolation 42
 run_program string-concat-mixed 42
+run_program string-split 42
 run_program array-index-growth 42
 run_program sys-runtime 42
 run_program callback-method 42

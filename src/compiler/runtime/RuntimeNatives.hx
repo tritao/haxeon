@@ -64,6 +64,7 @@ class RuntimeNatives {
 		definitions.push(native("__string_last_index_of", "realtime_runtime", "__string_last_index_of", [TString, TString], TInt));
 		definitions.push(native("__string_index_of_from", "realtime_runtime", "__string_index_of_from", [TString, TString, TInt], TInt));
 		definitions.push(native("__string_to_lower_case", "realtime_runtime", "__string_to_lower_case", [TString], TString));
+		definitions.push(native("__string_split", "realtime_runtime", "__string_split", [TString, TString], TArray(TString)));
 		definitions.push(native("sys.io.File.getContent", "realtime_runtime", "__file_get_content", [TString], TString));
 		var bytes:CompilerType = TBytes,
 			input:CompilerType = TNativeAbstract("realtime_bytes_input"),

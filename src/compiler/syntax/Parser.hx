@@ -857,6 +857,13 @@ class Parser {
 		return parseStatementOrBlock();
 	}
 
+	function parseArrowFunctionBody():Array<AstStatement> {
+		if (check(TokenKind.LeftBrace))
+			return parseStatementOrBlock();
+		var value = parseExpression();
+		return [Return(value, expressionSpan(value))];
+	}
+
 	function parseStatements():Array<AstStatement> {
 		if (!check(TokenKind.Var))
 			return [parseStatement()];
@@ -1245,7 +1252,7 @@ class Parser {
 			}
 			consume(TokenKind.RightParen);
 			if (match(TokenKind.Arrow)) {
-				var body = parseStatementOrBlock();
+				var body = parseArrowFunctionBody();
 				return Lambda(arguments, body, start.merge(body.length == 0 ? previous().span : statementSpan(body[body.length - 1])));
 			}
 			position = saved;

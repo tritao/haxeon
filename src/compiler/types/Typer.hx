@@ -3120,7 +3120,15 @@ class Typer {
 				fail("E1009", "String.charAt expects an Int index", index.span);
 			return new TypedExpression(TStringCharAt(receiver, index), TString, span);
 		}
-		return null;
+		if (name == "split") {
+			if (arguments.length != 1)
+				fail("E1008", 'Function "String.split" expects one argument, got ${arguments.length}', span);
+			var separator = typeExpression(arguments[0], scope, TString);
+			if (!sameType(separator.type, TString))
+				fail("E1009", "String.split expects a String separator", separator.span);
+			return new TypedExpression(TCall("__string_split", [receiver, separator]), TArray(TString), span);
+		}
+		throw new CompileError(new Diagnostic("E1007", 'Unknown String method "$name"', span));
 	}
 
 	function typeArrayMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
