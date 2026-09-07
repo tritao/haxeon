@@ -1746,6 +1746,7 @@ class Typer {
 			case BoolLiteral(value, span): new TypedExpression(TBoolLiteral(value), TBool, span);
 			case NullLiteral(span): new TypedExpression(TNullLiteral, TNull, span);
 			case Unreachable(span): new TypedExpression(TUnreachable, TNever, span);
+			case ErrorExpression(span): new TypedExpression(TNullLiteral, TDynamic, span);
 			case Variable(name, span):
 				var type = scope.resolve(name);
 				if (type != null) {

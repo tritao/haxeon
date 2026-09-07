@@ -321,7 +321,7 @@ class CaptureAnalysis {
 			case Range(start, rangeEnd, _):
 				collectMutableCaptureExpression(start, outerDeclared, result);
 				collectMutableCaptureExpression(rangeEnd, outerDeclared, result);
-			case Variable(_, _), IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_),
+			case Variable(_, _), IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_), ErrorExpression(_),
 				NewMap(_, _, _):
 		}
 
@@ -420,7 +420,7 @@ class CaptureAnalysis {
 				return;
 			case StringLiteral(_, _):
 				return;
-			case BoolLiteral(_, _), NullLiteral(_), Unreachable(_):
+			case BoolLiteral(_, _), NullLiteral(_), Unreachable(_), ErrorExpression(_):
 				return;
 		}
 }

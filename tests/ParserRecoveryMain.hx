@@ -57,5 +57,13 @@ class ParserRecoveryMain {
 					throw 'recovering parser threw at prefix $end: ${error.diagnostic.message}';
 			}
 		}
+		var errorFile = new SourceFile("ErrorNode.hx", "function main():Void { var incomplete ="),
+			errorProgram = new Parser(new Lexer(errorFile).tokenize()).parseProgramRecovering().program;
+		if (errorProgram.functions.length != 1)
+			throw "error expression recovery discarded its function";
+		switch errorProgram.functions[0].statements[0] {
+			case VarDeclaration(_, _, ErrorExpression(_), _):
+			default: throw "incomplete initializer did not produce an ErrorExpression";
+		}
 	}
 }

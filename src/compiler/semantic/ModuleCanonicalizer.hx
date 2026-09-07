@@ -330,7 +330,7 @@ class ModuleCanonicalizer {
 	public static function canonicalExpression(e:AstExpression, module:String, entry:String, locals:Map<String, Bool>,
 			?aliases:Map<String, String>):AstExpression
 		return switch e {
-			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_): e;
+			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_), ErrorExpression(_): e;
 			case Variable(name, span):
 				var dot = name.indexOf("."),
 					prefix = compiler.QualifiedName.first(name),

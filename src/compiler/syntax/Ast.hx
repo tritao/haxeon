@@ -139,6 +139,8 @@ enum AstExpression {
 	BoolLiteral(value:Bool, span:SourceSpan);
 	NullLiteral(span:SourceSpan);
 	Unreachable(span:SourceSpan);
+	/** Recovery-only placeholder for an incomplete or malformed expression. */
+	ErrorExpression(span:SourceSpan);
 	Variable(name:String, span:SourceSpan);
 	Member(object:AstExpression, name:String, span:SourceSpan);
 	Add(left:AstExpression, right:AstExpression, span:SourceSpan);

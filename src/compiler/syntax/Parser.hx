@@ -1059,7 +1059,7 @@ class Parser {
 		if (recovering && isExpressionTerminator(current().kind)) {
 			var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
 			recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expected expression", span));
-			return Unreachable(span);
+			return ErrorExpression(span);
 		}
 		if (check(TokenKind.At)) {
 			parseMetadata();
@@ -1385,7 +1385,7 @@ class Parser {
 		if (recoveringAtEnd()) {
 			var span = current().span;
 			recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expression block requires a result expression", span));
-			return Unreachable(span);
+			return ErrorExpression(span);
 		}
 		fail(current(), "Expression block requires a result expression");
 		return null;
@@ -1772,7 +1772,7 @@ class Parser {
 
 	static function expressionSpan(expression:AstExpression):SourceSpan
 		return switch expression {
-			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), BoolLiteral(_, span), NullLiteral(span), Unreachable(span),
+			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), BoolLiteral(_, span), NullLiteral(span), Unreachable(span), ErrorExpression(span),
 				Variable(_, span), Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span), Div(_, _, span), Mod(_, _, span),
 				BitAnd(_, _, span), BitXor(_, _, span), BitOr(_, _, span), ShiftLeft(_, _, span), ShiftRight(_, _, span), UnsignedShiftRight(_, _, span),
 				Negate(_, span), Less(_, _, span), LessEqual(_, _, span), Greater(_, _, span), GreaterEqual(_, _, span), Equal(_, _, span),
