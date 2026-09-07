@@ -1,5 +1,8 @@
 import compiler.service.LanguageService;
 import compiler.Diagnostic.CompileError;
+import compiler.Source.SourceFile;
+import compiler.syntax.Lexer;
+import compiler.syntax.Parser;
 
 class ParserRecoveryMain {
 	static function main():Void {
@@ -24,6 +27,7 @@ class ParserRecoveryMain {
 
 		for (tail in ["consume(", "values[", "true ?", "if (", "switch (", "(item:Int) ->"])
 			assertNestedRecovery(tail);
+		assertTruncationRecovery();
 		Sys.println("PASS: incomplete member and type recovery support completion");
 	}
 
@@ -38,5 +42,20 @@ class ParserRecoveryMain {
 			throw 'nested recovery discarded its enclosing function for "$tail"';
 		if (service.diagnostics("Nested.hx").length > 20)
 			throw 'nested recovery exceeded its diagnostic budget for "$tail"';
+	}
+
+	static function assertTruncationRecovery():Void {
+		var source = "package demo; class Box { public var value:Int; public function read(scale:Int):Int { if (scale > 0) return value * scale; return 0; } } function main():Int { var box:Box = new Box(); var values = [1, 2]; var read = (item:Int) -> item + box.value; return switch (values[0]) { case 1: read(41); default: 0; }; }";
+		for (end in 0...source.length + 1) {
+			var prefix = source.substring(0, end), file = new SourceFile("Truncated.hx", prefix);
+			try {
+				var recovered = new Parser(new Lexer(file).tokenize()).parseProgramRecovering();
+				if (recovered.diagnostics.length > 20)
+					throw 'recovery diagnostic budget exceeded at prefix $end';
+			} catch (error:CompileError) {
+				if (error.diagnostic.code != "E0001")
+					throw 'recovering parser threw at prefix $end: ${error.diagnostic.message}';
+			}
+		}
 	}
 }

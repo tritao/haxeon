@@ -307,9 +307,20 @@ class Parser {
 	}
 
 	function parseQualifiedName():String {
+		if (recovering && isExpressionTerminator(current().kind)) {
+			var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
+			recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expected name", span));
+			return "";
+		}
 		var name = consumeName().text;
-		while (match(TokenKind.Dot))
+		while (match(TokenKind.Dot)) {
+			if (recovering && isExpressionTerminator(current().kind)) {
+				var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
+				recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expected name", span));
+				break;
+			}
 			name += "." + consumeName().text;
+		}
 		return name;
 	}
 
