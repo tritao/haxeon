@@ -22,6 +22,7 @@ typedef FrontendResult = {
 	final moduleNames:Array<String>;
 	final typedProgram:TypedProgram;
 	final retyped:Array<String>;
+	final invalidations:Array<compiler.semantic.Invalidation.InvalidatedArtifact>;
 	final regenerated:Array<String>;
 	final typerMetrics:TyperPhaseMetrics;
 	final frontendDoneAt:Float;
@@ -237,6 +238,7 @@ class FrontendCompilation {
 				moduleNames: names,
 				typedProgram: typedNew,
 				retyped: retyped,
+				invalidations: semanticAssembly.invalidations,
 				regenerated: regenerated,
 				typerMetrics: typerMetrics,
 				frontendDoneAt: frontendDoneAt,
@@ -274,6 +276,7 @@ class FrontendCompilation {
 			moduleNames: names,
 			typedProgram: typedNew,
 			retyped: retyped,
+			invalidations: semanticAssembly.invalidations,
 			regenerated: regenerated,
 			typerMetrics: typerMetrics,
 			frontendDoneAt: frontendDoneAt,

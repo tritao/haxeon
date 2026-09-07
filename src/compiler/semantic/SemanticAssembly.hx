@@ -7,6 +7,9 @@ import compiler.modules.ModuleState;
 import compiler.service.CancellationToken;
 import compiler.types.FieldInference;
 import compiler.types.SignatureInference;
+import compiler.semantic.Invalidation.InvalidatedArtifact;
+import compiler.semantic.Invalidation.InvalidationKind;
+import compiler.semantic.Invalidation.InvalidationReason;
 
 typedef SemanticAssemblyResult = {
 	final canonicalProgram:AstProgram;
@@ -14,6 +17,7 @@ typedef SemanticAssemblyResult = {
 	final owners:Map<String, String>;
 	final generatedByModule:Map<String, Map<String, Bool>>;
 	final selected:Map<String, Bool>;
+	final invalidations:Array<InvalidatedArtifact>;
 	final entryPoint:String;
 }
 
@@ -295,7 +299,9 @@ class SemanticAssembly {
 		for (module => lambdaNames in generatedByModule)
 			for (lambdaName in lambdaNames.keys())
 				owners.set(lambdaName, module);
-		var invalid:Map<String, Bool> = [], allModulesChanged = true;
+		var invalid:Map<String, Bool> = [],
+			invalidationReasons:Map<String, Array<InvalidationReason>> = [],
+			allModulesChanged = true;
 		// A new source revision owns a fresh position index. Retype every function
 		// in that module so unchanged bodies cannot leave gaps or stale spans in it.
 		for (moduleName in names) {
@@ -305,7 +311,7 @@ class SemanticAssembly {
 			else
 				for (fn in functions)
 					if (owners.get(fn.name) == moduleName)
-						invalid.set(fn.name, true);
+						invalidate(invalid, invalidationReasons, fn.name, SourceRevision, moduleName);
 		}
 		if (!allModulesChanged) {
 			for (change in structuralChanged.keys()) {
@@ -324,10 +330,11 @@ class SemanticAssembly {
 								&& targetId != null ? dependency.targetId == targetId : SemanticDependencyCollector.sameDependencyTarget(dependency.target,
 									target);
 							if (matches) {
+								invalidate(invalid, invalidationReasons, functionOwner, StructuralDependency, target, targetId, Std.string(dependency.kind));
 								var matchedFunction = false;
 								for (fn in functions)
 									if (fn.name == functionOwner || StringTools.startsWith(fn.name, functionOwner + ".")) {
-										invalid.set(fn.name, true);
+										invalidate(invalid, invalidationReasons, fn.name, StructuralDependency, target, targetId, Std.string(dependency.kind));
 										matchedFunction = true;
 									}
 								if (matchedFunction)
@@ -338,17 +345,21 @@ class SemanticAssembly {
 			}
 		}
 		for (name in bodyChanged.keys())
-			invalid.set(name, true);
+			invalidate(invalid, invalidationReasons, name, BodyChanged, name);
 		var work:Array<String> = [for (name in signatureChanged.keys()) name], workCursor = 0;
 		for (name in bodyChanged.keys())
-			if (genericOrigins.exists(name))
+			if (genericOrigins.exists(name)) {
 				work.push(name);
+				invalidate(invalid, invalidationReasons, name, GenericOrigin, name);
+			}
 		while (workCursor < work.length) {
 			if (token != null)
 				token.check();
 			var changed = work[workCursor++];
-			if (!invalid.exists(changed))
-				invalid.set(changed, true);
+			if (signatureChanged.exists(changed))
+				invalidate(invalid, invalidationReasons, changed, SignatureChanged, changed, context.resolveSemanticSymbol(changed));
+			else if (!invalid.exists(changed))
+				invalidate(invalid, invalidationReasons, changed, DependencySignature, changed);
 			var changedId = context.resolveSemanticSymbol(changed);
 			if (changedId != null)
 				for (moduleName in names)
@@ -356,13 +367,17 @@ class SemanticAssembly {
 						for (dependency in dependencies)
 							if (dependency.kind == compiler.modules.ModuleState.SemanticDependencyKind.Body
 								&& dependency.targetId == changedId
-								&& !invalid.exists(owner))
+								&& !invalid.exists(owner)) {
 								work.push(owner);
+								invalidate(invalid, invalidationReasons, owner, DependencySignature, changed, changedId, Std.string(dependency.kind));
+							}
 			if (reverseCalls.exists(changed)) {
 				var callers = reverseCalls.get(changed);
 				for (caller in callers)
-					if (!invalid.exists(caller))
+					if (!invalid.exists(caller)) {
 						work.push(caller);
+						invalidate(invalid, invalidationReasons, caller, DependencySignature, changed, changedId, "provisional-call");
+					}
 			}
 		}
 		// Semantic indexes are replaced as module-sized snapshots. If one function
@@ -376,8 +391,8 @@ class SemanticAssembly {
 		}
 		for (fn in functions) {
 			var owner = owners.get(fn.name);
-			if (owner != null && invalidModules.exists(owner))
-				invalid.set(fn.name, true);
+			if (owner != null && invalidModules.exists(owner) && !invalid.exists(fn.name))
+				invalidate(invalid, invalidationReasons, fn.name, ModuleSemanticSnapshot, owner);
 		}
 		var selected:Map<String, Bool> = [];
 		for (name in invalid.keys())
@@ -401,8 +416,34 @@ class SemanticAssembly {
 			owners: owners,
 			generatedByModule: generatedByModule,
 			selected: selected,
+			invalidations: orderedInvalidations(invalidationReasons),
 			entryPoint: entryPoint
 		};
+	}
+
+	static function invalidate(invalid:Map<String, Bool>, reasons:Map<String, Array<InvalidationReason>>, artifact:String, kind:InvalidationKind,
+			cause:String, ?causeId:String, ?via:String):Void {
+		invalid.set(artifact, true);
+		var entries = reasons.get(artifact);
+		if (entries == null) {
+			entries = [];
+			reasons.set(artifact, entries);
+		}
+		for (entry in entries)
+			if (entry.kind == kind && entry.cause == cause && entry.causeId == causeId && entry.via == via)
+				return;
+		entries.push({
+			kind: kind,
+			cause: cause,
+			causeId: causeId,
+			via: via
+		});
+	}
+
+	static function orderedInvalidations(reasons:Map<String, Array<InvalidationReason>>):Array<InvalidatedArtifact> {
+		var names = [for (name in reasons.keys()) name];
+		names.sort(Reflect.compare);
+		return [for (name in names) {artifact: name, reasons: reasons.get(name)}];
 	}
 
 	/** Prefer the last successfully resolved call graph; syntax calls bootstrap new declarations. */

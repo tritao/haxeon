@@ -56,6 +56,7 @@ typedef CompileResult = {
 	final ir:IrProgram;
 	final module:HlCode;
 	final retyped:Array<String>;
+	final invalidations:Array<compiler.semantic.Invalidation.InvalidatedArtifact>;
 	final regenerated:Array<String>;
 	final changedFunctions:Array<Int>;
 	final requiresReload:Bool;
@@ -86,6 +87,8 @@ typedef CompileMetrics = {
 	final finalizeMs:Float;
 	final modules:Int;
 	final retypedFunctions:Int;
+	final invalidatedArtifacts:Int;
+	final invalidationReasons:Int;
 	final regeneratedFunctions:Int;
 	final changedFunctions:Int;
 	final moduleFunctions:Int;
@@ -356,6 +359,7 @@ class Compiler {
 				ir: cached.ir,
 				module: cached.module,
 				retyped: [],
+				invalidations: [],
 				regenerated: [],
 				changedFunctions: [],
 				requiresReload: false,
@@ -382,6 +386,8 @@ class Compiler {
 					finalizeMs: 0.0,
 					modules: cached.metrics.modules,
 					retypedFunctions: 0,
+					invalidatedArtifacts: 0,
+					invalidationReasons: 0,
 					regeneratedFunctions: 0,
 					changedFunctions: 0,
 					moduleFunctions: cached.metrics.moduleFunctions,

@@ -100,10 +100,14 @@ class CompilationPipeline {
 		}
 		context.compiledOnce = true;
 		var finishedAt = Sys.time() * 1000.0;
+		var invalidationReasonCount = 0;
+		for (artifact in frontend.invalidations)
+			invalidationReasonCount += artifact.reasons.length;
 		return {
 			ir: ir,
 			module: assembly.module,
 			retyped: retyped,
+			invalidations: frontend.invalidations,
 			regenerated: regenerated,
 			changedFunctions: assembly.changedFunctions,
 			requiresReload: assembly.requiresReload,
@@ -130,6 +134,8 @@ class CompilationPipeline {
 				finalizeMs: finishedAt - patchEncodingDoneAt,
 				modules: names.length,
 				retypedFunctions: retyped.length,
+				invalidatedArtifacts: frontend.invalidations.length,
+				invalidationReasons: invalidationReasonCount,
 				regeneratedFunctions: regenerated.length,
 				changedFunctions: assembly.changedFunctions.length,
 				moduleFunctions: assembly.module.functions.length,
