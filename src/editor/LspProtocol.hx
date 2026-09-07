@@ -129,6 +129,7 @@ class LspProtocol {
 				case "textDocument/signatureHelp": cancellable(id, token -> signatureHelp(request, token));
 				case "textDocument/definition": cancellable(id, token -> definition(request, token));
 				case "textDocument/typeDefinition": cancellable(id, token -> typeDefinition(request, token));
+				case "textDocument/implementation": cancellable(id, token -> implementations(request, token));
 				case "textDocument/references": cancellable(id, token -> references(request, token));
 				case "textDocument/prepareRename": cancellable(id, token -> prepareRename(request, token));
 				case "textDocument/rename": cancellable(id, token -> rename(request, token));
@@ -271,6 +272,7 @@ class LspProtocol {
 				signatureHelpProvider: {triggerCharacters: ["(", ","]},
 				definitionProvider: true,
 				typeDefinitionProvider: true,
+				implementationProvider: true,
 				referencesProvider: true,
 				renameProvider: {prepareProvider: true},
 				workspaceSymbolProvider: {resolveProvider: true},
@@ -898,6 +900,16 @@ class LspProtocol {
 		requireCurrent(document);
 		var location = service.typeDefinition(compilerPath(document), positionOffset(document, position(request)), token);
 		return location == null ? null : locationJson(location.path, location.span.start, location.span.end);
+	}
+
+	function implementations(request:Dynamic, token:CancellationToken):Array<Dynamic> {
+		var document = document(request);
+		ensureAnalyzed(document, token);
+		requireCurrent(document);
+		return [
+			for (location in service.implementations(compilerPath(document), positionOffset(document, position(request)), token))
+				locationJson(location.path, location.span.start, location.span.end)
+		];
 	}
 
 	function references(request:Dynamic, token:CancellationToken):Array<Dynamic> {

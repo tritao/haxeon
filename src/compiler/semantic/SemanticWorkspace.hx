@@ -187,6 +187,129 @@ class SemanticWorkspace {
 		return result;
 	}
 
+	public function implementations(id:SemanticSymbolId, ?token:CancellationToken):Array<WorkspaceDeclaration> {
+		var resolved = indexedSymbol(id);
+		if (resolved == null)
+			return [];
+		var owner:Null<String> = null, member:Null<String> = null, targetIsType = false;
+		for (state in orderedStates()) {
+			var model = effectiveModel(state);
+			if (model == null)
+				continue;
+			for (decl in model.program.classes)
+				if (sameSpan(decl.span, resolved.symbol.declaration)) {
+					owner = qualifiedType(model, decl.name);
+					targetIsType = true;
+				} else
+					for (method in decl.methods)
+						if (sameSpan(method.span, resolved.symbol.declaration)) {
+							owner = qualifiedType(model, decl.name);
+							member = method.name;
+						}
+			for (decl in model.program.interfaces)
+				if (sameSpan(decl.span, resolved.symbol.declaration)) {
+					owner = qualifiedType(model, decl.name);
+					targetIsType = true;
+				} else
+					for (method in decl.methods)
+						if (sameSpan(method.span, resolved.symbol.declaration)) {
+							owner = qualifiedType(model, decl.name);
+							member = method.name;
+						}
+		}
+		if (owner == null)
+			return [];
+		var result:Array<WorkspaceDeclaration> = [], seen:Map<String, Bool> = [];
+		for (state in orderedStates()) {
+			if (token != null)
+				token.check();
+			var model = effectiveModel(state);
+			if (model == null)
+				continue;
+			for (decl in model.program.classes) {
+				var identity = qualifiedType(model, decl.name);
+				if (identity == owner || !inheritsFrom(identity, owner, []))
+					continue;
+				if (targetIsType)
+					addImplementation(result, seen, state, 'class:${decl.name}', decl.span);
+				else
+					for (method in decl.methods)
+						if (method.name == member)
+							addImplementation(result, seen, state, 'class:${decl.name}:method:$member', method.span);
+			}
+		}
+		result.sort(function(left, right) {
+			var path = Reflect.compare(left.span.file.path, right.span.file.path);
+			return path == 0 ? left.span.start - right.span.start : path;
+		});
+		return result;
+	}
+
+	function inheritsFrom(candidate:String, target:String, visiting:Map<String, Bool>):Bool {
+		if (candidate == target)
+			return true;
+		if (visiting.exists(candidate))
+			return false;
+		visiting.set(candidate, true);
+		for (state in orderedStates()) {
+			var model = effectiveModel(state);
+			if (model == null)
+				continue;
+			for (decl in model.program.classes)
+				if (qualifiedType(model, decl.name) == candidate) {
+					var parents = decl.interfaces.copy();
+					if (decl.base != null)
+						parents.push(decl.base);
+					for (parent in parents) {
+						var name = ModuleCanonicalizer.astTypeName(parent);
+						if (typeNameMatches(name, target) || inheritsFrom(resolveTypeIdentity(state, name), target, visiting))
+							return true;
+					}
+				}
+			for (decl in model.program.interfaces)
+				if (qualifiedType(model, decl.name) == candidate)
+					for (base in decl.bases) {
+						var name = ModuleCanonicalizer.astTypeName(base);
+						if (typeNameMatches(name, target) || inheritsFrom(resolveTypeIdentity(state, name), target, visiting))
+							return true;
+					}
+		}
+		return false;
+	}
+
+	function resolveTypeIdentity(from:ModuleState, name:String):String {
+		var declaration = global(from, name);
+		if (declaration == null)
+			return name;
+		var model = effectiveModel(declaration.state);
+		if (model == null)
+			return name;
+		for (decl in model.program.classes)
+			if (decl.span.start == declaration.span.start && decl.span.end == declaration.span.end)
+				return qualifiedType(model, decl.name);
+		for (decl in model.program.interfaces)
+			if (decl.span.start == declaration.span.start && decl.span.end == declaration.span.end)
+				return qualifiedType(model, decl.name);
+		return name;
+	}
+
+	static function qualifiedType(model:SemanticModel, name:String):String
+		return ModuleCanonicalizer.qualifiedTypeName(model.program.packageName, name);
+
+	static function typeNameMatches(name:String, target:String):Bool
+		return name == target || name == target.substring(target.lastIndexOf(".") + 1);
+
+	static function sameSpan(left:SourceSpan, right:SourceSpan):Bool
+		return left.file.path == right.file.path && left.start == right.start && left.end == right.end;
+
+	static function addImplementation(result:Array<WorkspaceDeclaration>, seen:Map<String, Bool>, state:ModuleState, key:String, span:SourceSpan):Void {
+		var identity = span.file.path + ":" + span.start + ":" + span.end;
+		if (!seen.exists(identity)) {
+			seen.set(identity, true);
+			result.push({state: state, key: key, span: span});
+		}
+	}
+
 	public function visibleSymbols(from:ModuleState, ?token:CancellationToken):Array<IndexedSemanticSymbol> {
 		var visibleModules:Map<String, Bool> = [from.name => true],
 			result:Array<IndexedSemanticSymbol> = [],

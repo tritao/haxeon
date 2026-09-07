@@ -56,6 +56,7 @@ class LspProtocolMain {
 		if (!initialized.result.capabilities.hoverProvider
 			|| initialized.result.capabilities.signatureHelpProvider == null
 			|| !initialized.result.capabilities.typeDefinitionProvider
+			|| !initialized.result.capabilities.implementationProvider
 			|| initialized.result.capabilities.textDocumentSync.change != 1
 			|| !initialized.result.capabilities.documentHighlightProvider
 			|| initialized.result.capabilities.diagnosticProvider.identifier != "haxeon"
@@ -971,6 +972,20 @@ class LspProtocolMain {
 		diagnosticDispatcher.finish();
 		if (Json.parse(workspaceCancellation).error.code != -32800)
 			throw "workspace pull diagnostics did not honor cancellation";
+		var implementationProtocol = new LspProtocol(), implementationUri = "file:///workspace/Implementation.hx",
+			implementationSource = "interface Worker { function work():Int; } class First implements Worker { public function work():Int return 1; } class Second implements Worker { public function work():Int return 2; } function main():Int return new First().work();",
+			implementationDocument = new LspDocument(implementationUri, "/workspace/Implementation.hx", 1, implementationSource);
+		request(implementationProtocol, '{"jsonrpc":"2.0","id":893,"method":"initialize","params":{}}');
+		implementationProtocol.handle(Json.stringify({
+			jsonrpc: "2.0", method: "textDocument/didOpen",
+			params: {textDocument: {uri: implementationUri, languageId: "haxe", version: 1, text: implementationSource}}
+		}));
+		var implementationLocations = request(implementationProtocol, Json.stringify({
+			jsonrpc: "2.0", id: 894, method: "textDocument/implementation",
+			params: {textDocument: {uri: implementationUri}, position: implementationDocument.position(implementationSource.indexOf("Worker") + 2)}
+		}));
+		if (implementationLocations.result.length != 2 || implementationLocations.result[0].uri != implementationUri)
+			throw "LSP implementation navigation did not map multiple compiler locations";
 		if (protocol.handle('{"jsonrpc":"2.0","method":"$/cancelRequest","params":{"id":999}}').length != 0)
 			throw "LSP cancellation notification produced a response";
 		var lifecycle = new LspProtocol(),

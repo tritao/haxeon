@@ -243,6 +243,36 @@ class LanguageServiceMain {
 			|| aliasDefinition == null
 			|| aliasDefinition.span.start > hierarchySource.indexOf("class Parent"))
 			throw "language service did not resolve inheritance and alias navigation";
+		var implementationService = new LanguageService(),
+			contractSource = "package api; interface Plugin { function run():Int; }",
+			baseSource = "package base; import api.Plugin; class Base implements Plugin { public function run():Int return 1; }",
+			directSource = "package impl; import api.Plugin; class Direct implements Plugin { public function run():Int return 2; }",
+			derivedSource = "package impl; import base.Base; class Derived extends Base { public function run():Int return 3; }",
+			implementationMain = "package impl; import impl.Direct; import impl.Derived; function main():Int return new Direct().run() + new Derived().run();";
+		implementationService.update("api/Plugin.hx", contractSource);
+		implementationService.update("base/Base.hx", baseSource);
+		implementationService.update("impl/Direct.hx", directSource);
+		implementationService.update("impl/Derived.hx", derivedSource);
+		implementationService.update("impl/Main.hx", implementationMain);
+		implementationService.compile("impl.Main");
+		var interfaceImplementations = implementationService.implementations("api/Plugin.hx", contractSource.indexOf("Plugin") + 2),
+			methodImplementations = implementationService.implementations("api/Plugin.hx", contractSource.indexOf("run") + 1),
+			baseImplementations = implementationService.implementations("base/Base.hx", baseSource.indexOf("Base") + 1),
+			baseMethodImplementations = implementationService.implementations("base/Base.hx", baseSource.indexOf("run") + 1),
+			leafImplementations = implementationService.implementations("impl/Direct.hx", directSource.indexOf("run") + 1);
+		var implementationCancellation = new CancellationToken(), implementationCancelled = false;
+		implementationCancellation.cancel();
+		try implementationService.implementations("api/Plugin.hx", contractSource.indexOf("Plugin") + 2, implementationCancellation) catch (_:compiler.service.CancellationError)
+			implementationCancelled = true;
+		if (interfaceImplementations.length != 3
+			|| methodImplementations.length != 3
+			|| baseImplementations.length != 1
+			|| baseImplementations[0].path != "impl/Derived.hx"
+			|| baseMethodImplementations.length != 1
+			|| baseMethodImplementations[0].path != "impl/Derived.hx"
+			|| leafImplementations.length != 0
+			|| !implementationCancelled)
+			throw 'language service implementation navigation failed: interface=${interfaceImplementations.length}, method=${methodImplementations.length}, base=${baseImplementations.length}, override=${baseMethodImplementations.length}, leaf=${leafImplementations.length}';
 		var typeService = new LanguageService();
 		typeService.update("domain/Entity.hx", "package domain; class Entity {}");
 		var typeSource = "package usecase; import domain.Entity; typedef EntityAlias = Entity; class Child extends Entity {} class Holder { public var entity:Entity; public function get():Entity return entity; } function identity(value:Entity):Entity return value; function main():Int return 0;";

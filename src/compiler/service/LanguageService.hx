@@ -884,6 +884,21 @@ class LanguageService {
 		};
 	}
 
+	public function implementations(path:String, position:Int, ?token:CancellationToken):Array<SymbolLocation> {
+		var context = semanticQuery(path, position);
+		if (context == null || context.symbol == null)
+			return [];
+		return [
+			for (implementation in compiler.semanticWorkspace.implementations(context.symbol, token))
+				{
+					path: implementation.span.file.path,
+					span: implementation.span,
+					revision: snapshotRevision(implementation.state),
+					stale: snapshotRevision(implementation.state) != implementation.state.revision
+				}
+		];
+	}
+
 	static function typeDeclaration(type:Null<CompilerType>):Null<String>
 		return switch type {
 			case TNullable(element): typeDeclaration(element);
