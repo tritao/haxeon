@@ -114,7 +114,7 @@ typed `RetirementBlocked` error while ownership remains intact.
 
 ## Reproduction gate
 
-Use `./test-hot-reload.sh` after any unload change. It includes 100 repeated
+Use `./tests/integration/test-hot-reload.sh` after any unload change. It includes 100 repeated
 load/call/retire cycles with physical JIT unmapping, retained-object and closure
 retries, a throwing initializer, patch stress, and exception paths. Run
 `./scripts/test-poc.sh` for the full compiler, plugin, and runtime regression

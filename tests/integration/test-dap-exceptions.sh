@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_dir="$(cd "$(dirname "$0")" && pwd)"
+repo_dir="$(cd "$(dirname "$0")/../.." && pwd)"
 tools_dir="$repo_dir/.tools"
 adapter_dir="$repo_dir/vendor/hashlink-debugger"
 dap_home="$tools_dir/dap-cli-home"
@@ -50,7 +50,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-"$tools_dir/haxe/haxe" "$repo_dir/dap-exception-probe.hxml"
+"$tools_dir/haxe/haxe" "$repo_dir/tests/hxml/dap-exception-probe.hxml"
 "${dap[@]}" start >/dev/null
 launch_json=$(python3 - "$repo_dir" <<'PY'
 import json

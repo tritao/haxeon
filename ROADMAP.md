@@ -109,7 +109,7 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   place and execute their replacement handlers without restarting the module.
 - [x] A representative multi-module plugin now loads through the native runtime,
 	patches compatible closure/method bodies in place, and replaces the live module
-	on structural edits (`plugin-test.hxml`).
+	on structural edits (`tests/hxml/plugin-test.hxml`).
 - [x] Non-moving type arena for compatible primitive, abstract, and function
   type-table growth, with transactional publication and domain-owned cleanup.
 - [~] Structural class layout/base changes are classified as full-reload
@@ -141,7 +141,7 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   There is no second typechecker.
 - [x] Representative multi-module plugin workload with an editor facade,
 	interface lifecycle, arrays/maps, callbacks, incremental body patching, and
-	class-layout reload classification (`plugin-test.hxml`).
+	class-layout reload classification (`tests/hxml/plugin-test.hxml`).
 
 ### E. Self-hosting and release engineering
 

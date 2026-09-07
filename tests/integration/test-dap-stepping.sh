@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_dir="$(cd "$(dirname "$0")" && pwd)"
+repo_dir="$(cd "$(dirname "$0")/../.." && pwd)"
 tools_dir="$repo_dir/.tools"
 adapter_dir="$repo_dir/vendor/hashlink-debugger"
 dap_home="$tools_dir/dap-cli-home"

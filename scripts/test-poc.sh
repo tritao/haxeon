@@ -49,7 +49,7 @@ if [[ $stdlib_status -ne 42 ]]; then
 	exit 1
 fi
 echo "PASS: vendored haxe.ds.ArraySort compiled and executed (exit 42)"
-"$haxe" --cwd "$root_dir" "$root_dir/repl-test.hxml"
+"$haxe" --cwd "$root_dir" "$root_dir/tests/hxml/repl-test.hxml"
 set +e
 LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$root_dir/out/repl-test.hl"
 repl_status=$?
@@ -59,7 +59,7 @@ if [[ $repl_status -ne 0 ]]; then
 	exit 1
 fi
 
-"$haxe" --cwd "$root_dir" "$root_dir/plugin-test.hxml"
+"$haxe" --cwd "$root_dir" "$root_dir/tests/hxml/plugin-test.hxml"
 set +e
 LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$root_dir/out/plugin-test.hl" "$root_dir/out/plugin-runtime.hl"
 plugin_status=$?
@@ -69,7 +69,7 @@ if [[ $plugin_status -ne 0 ]]; then
 	exit 1
 fi
 
-"$haxe" --cwd "$root_dir" "$root_dir/static-init-order-test.hxml"
+"$haxe" --cwd "$root_dir" "$root_dir/tests/hxml/static-init-order-test.hxml"
 set +e
 LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$root_dir/out/static-init-order-test.hl"
 static_init_status=$?
@@ -79,7 +79,7 @@ if [[ $static_init_status -ne 0 ]]; then
 	exit 1
 fi
 
-"$haxe" --cwd "$root_dir" "$root_dir/instance-initializer-test.hxml"
+"$haxe" --cwd "$root_dir" "$root_dir/tests/hxml/instance-initializer-test.hxml"
 set +e
 LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$root_dir/out/instance-initializer-test.hl"
 instance_initializer_status=$?
@@ -376,7 +376,7 @@ if [[ $instance_module_status -ne 42 ]]; then
 fi
 echo "PASS: incremental instance class executed (exit 42)"
 
-"$haxe" --cwd "$root_dir" "$root_dir/static-field-test.hxml"
+"$haxe" --cwd "$root_dir" "$root_dir/tests/hxml/static-field-test.hxml"
 set +e
 LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$root_dir/out/static-field-test.hl"
 static_field_status=$?

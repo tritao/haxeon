@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_dir="$(cd "$(dirname "$0")" && pwd)"
+repo_dir="$(cd "$(dirname "$0")/../.." && pwd)"
 mkdir -p "$repo_dir/out"
 
 make -C "$repo_dir/vendor/hashlink" -j2 libhl.so hl
@@ -13,7 +13,7 @@ cc -shared -fPIC -DHL_NAME\(n\)=realtime_\#\#n \
   -Wl,-rpath,"$repo_dir/vendor/hashlink" \
   -o "$repo_dir/out/realtime_runtime.hdll"
 
-"$repo_dir/.tools/haxe/haxe" "$repo_dir/dap-hot-reload-probe.hxml"
+"$repo_dir/.tools/haxe/haxe" "$repo_dir/tests/hxml/dap-hot-reload-probe.hxml"
 
 (
   cd "$repo_dir/out"

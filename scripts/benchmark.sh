@@ -18,5 +18,5 @@ cc -shared -fPIC -DHL_NAME\(n\)=realtime_##n \
 	-L "$root_dir/vendor/hashlink" -lhl \
 	-Wl,-rpath,"$root_dir/vendor/hashlink" \
 	-o "$root_dir/out/realtime_runtime.hdll"
-"$haxe" --cwd "$root_dir" "$root_dir/benchmark.hxml"
+"$haxe" --cwd "$root_dir" "$root_dir/benchmarks/benchmark.hxml"
 LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$root_dir/out/benchmark.hl" "$@"

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_dir="$(cd "$(dirname "$0")" && pwd)"
+repo_dir="$(cd "$(dirname "$0")/../.." && pwd)"
 mkdir -p "$repo_dir/out"
 make -C "$repo_dir/vendor/hashlink" -j2 libhl.so hl >/dev/null
 "$repo_dir/.tools/haxe/haxe" --cwd "$repo_dir" -cp src -cp tests --run DebugSectionFixture \

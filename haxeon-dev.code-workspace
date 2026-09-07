@@ -1,8 +1,8 @@
 {
 	"folders": [
 		{
-			"name": "Haxeon Dev",
-			"path": "."
+			"name": "Haxeon LSP Smoke",
+			"path": "tests/lsp-smoke"
 		}
 	]
 }

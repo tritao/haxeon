@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_dir="$(cd "$(dirname "$0")" && pwd)"
+repo_dir="$(cd "$(dirname "$0")/../.." && pwd)"
 tools_dir="$repo_dir/.tools"
 adapter_dir="$repo_dir/vendor/hashlink-debugger"
 dap_home="$tools_dir/dap-cli-home"
@@ -18,7 +18,7 @@ if [[ ! -d "$adapter_dir/node_modules" ]]; then npm --prefix "$adapter_dir" ci -
 		LD_LIBRARY_PATH="$tools_dir/neko-runtime/root/usr/lib/x86_64-linux-gnu" \
 		NEKOPATH="$tools_dir/neko-runtime/root/usr/lib/x86_64-linux-gnu/neko" haxe build.hxml
 )
-"$tools_dir/haxe/haxe" "$repo_dir/dap-function-probe.hxml"
+"$tools_dir/haxe/haxe" "$repo_dir/tests/hxml/dap-function-probe.hxml"
 
 python3 - "$dap_home/config/adapters.json" "$adapter_dir" <<'PY'
 import json, sys

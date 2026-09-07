@@ -201,7 +201,7 @@ the integration suites:
 ./scripts/bootstrap-compiler.sh
 ./scripts/bootstrap-compiler.sh --self
 ./scripts/test-poc.sh
-./test-hot-reload.sh
+./tests/integration/test-hot-reload.sh
 ```
 
 `bootstrap/compiler.hl` is checked in. For ordinary compiler development,

@@ -15,7 +15,7 @@ Recorded 2026-09-05 before step 1 changes.
   - compiler, module, language-service, protocol, and runtime-domain tests
   - representative plugin workload
   - source-program and native runtime integration tests
-- `./test-hot-reload.sh`
+- `./tests/integration/test-hot-reload.sh`
   - live selective patching, atomic publication, and bounded JIT allocation
 - `./scripts/bootstrap-status.sh`
   - completed successfully as a readiness measurement

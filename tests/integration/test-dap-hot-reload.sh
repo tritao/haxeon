@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_dir="$(cd "$(dirname "$0")" && pwd)"
+repo_dir="$(cd "$(dirname "$0")/../.." && pwd)"
 tools_dir="$repo_dir/.tools"
 adapter_dir="$repo_dir/vendor/hashlink-debugger"
 dap_home="$tools_dir/dap-cli-home"
@@ -28,7 +28,7 @@ if [[ ! -d "$adapter_dir/node_modules" ]]; then npm --prefix "$adapter_dir" ci -
   NEKOPATH="$tools_dir/neko-runtime/root/usr/lib/x86_64-linux-gnu/neko" haxe build.hxml
 )
 if [[ "${SKIP_DAP_BUILD:-0}" != 1 ]]; then
-  "$tools_dir/haxe/haxe" "$repo_dir/dap-hot-reload-probe.hxml"
+  "$tools_dir/haxe/haxe" "$repo_dir/tests/hxml/dap-hot-reload-probe.hxml"
 fi
 
 python3 - "$dap_home/config/adapters.json" "$adapter_dir" <<'PY'
