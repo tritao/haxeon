@@ -8,6 +8,7 @@ class ReflectMethodsMain {
 	static function main():Void {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
+		compiler.addSourceRoot("stdlib");
 		compiler.update("Main.hx",
 			"class Handler {\n"
 			+ "  var delta:Int;\n"
