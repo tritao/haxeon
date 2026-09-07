@@ -55,6 +55,7 @@ class LspProtocolMain {
 			'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{"textDocument":{"completion":{"completionItem":{"snippetSupport":true}}}}}}');
 		if (!initialized.result.capabilities.hoverProvider
 			|| initialized.result.capabilities.signatureHelpProvider == null
+			|| !initialized.result.capabilities.typeDefinitionProvider
 			|| initialized.result.capabilities.textDocumentSync.change != 1
 			|| !initialized.result.capabilities.documentHighlightProvider
 			|| initialized.result.capabilities.diagnosticProvider.identifier != "haxeon"
@@ -143,6 +144,13 @@ class LspProtocolMain {
 			}));
 		if (importedDefinition.result == null || !StringTools.endsWith(importedDefinition.result.uri, "/pragtical/api/Document.hx"))
 			throw "project-backed definition did not resolve an unopened dependency";
+		var parameterTypeUse = fixtureSource.indexOf("Document"),
+			parameterTypeDefinition = request(projectProtocol, Json.stringify({
+				jsonrpc: "2.0", id: 411, method: "textDocument/typeDefinition",
+				params: {textDocument: {uri: fixtureMainUri}, position: fixtureDocument.position(parameterTypeUse + 2)}
+			}));
+		if (parameterTypeDefinition.result == null || !StringTools.endsWith(parameterTypeDefinition.result.uri, "/pragtical/api/Document.hx"))
+			throw "LSP type definition did not resolve an unopened project type";
 		var memberOffset = fixtureSource.indexOf("document.selection") + "document.".length,
 			projectCompletion = request(projectProtocol, Json.stringify({
 				jsonrpc: "2.0",

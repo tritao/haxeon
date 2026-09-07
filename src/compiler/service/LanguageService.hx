@@ -859,6 +859,42 @@ class LanguageService {
 		return indexedDefinition(path, position);
 	}
 
+	public function typeDefinition(path:String, position:Int, ?token:CancellationToken):Null<SymbolLocation> {
+		if (token != null)
+			token.check();
+		var context = semanticQuery(path, position);
+		if (context == null)
+			return null;
+		var target:Null<SemanticSymbolId> = null, symbol = context.symbol == null ? null : compiler.semanticWorkspace.indexedSymbol(context.symbol);
+		if (symbol != null && isTypeDeclaration(symbol.symbol.kind))
+			target = symbol.symbol.id;
+		else {
+			var declaration = typeDeclaration(context.model.index.typeAt(position));
+			if (declaration != null)
+				target = compiler.semanticWorkspace.resolveTypeSymbolId(declaration);
+		}
+		if (target == null)
+			return null;
+		var resolved = compiler.semanticWorkspace.indexedSymbol(target);
+		return resolved == null ? null : {
+			path: resolved.symbol.declaration.file.path,
+			span: resolved.symbol.declaration,
+			revision: snapshotRevision(resolved.state),
+			stale: snapshotRevision(resolved.state) != resolved.state.revision
+		};
+	}
+
+	static function typeDeclaration(type:Null<CompilerType>):Null<String>
+		return switch type {
+			case TNullable(element): typeDeclaration(element);
+			case TAbstract(declaration, _, _), TInstance(_, declaration, _): cast declaration;
+			default: null;
+		};
+
+	static function isTypeDeclaration(kind:DeclarationKind):Bool
+		return kind == DeclarationKind.Alias || kind == DeclarationKind.Enum || kind == DeclarationKind.Abstract || kind == DeclarationKind.Interface
+			|| kind == DeclarationKind.Class;
+
 	function indexedDefinition(path:String, position:Int):Null<SymbolLocation> {
 		var context = semanticQuery(path, position);
 		if (context == null)

@@ -128,6 +128,7 @@ class LspProtocol {
 				case "textDocument/hover": cancellable(id, token -> hover(request, token));
 				case "textDocument/signatureHelp": cancellable(id, token -> signatureHelp(request, token));
 				case "textDocument/definition": cancellable(id, token -> definition(request, token));
+				case "textDocument/typeDefinition": cancellable(id, token -> typeDefinition(request, token));
 				case "textDocument/references": cancellable(id, token -> references(request, token));
 				case "textDocument/prepareRename": cancellable(id, token -> prepareRename(request, token));
 				case "textDocument/rename": cancellable(id, token -> rename(request, token));
@@ -269,6 +270,7 @@ class LspProtocol {
 				hoverProvider: true,
 				signatureHelpProvider: {triggerCharacters: ["(", ","]},
 				definitionProvider: true,
+				typeDefinitionProvider: true,
 				referencesProvider: true,
 				renameProvider: {prepareProvider: true},
 				workspaceSymbolProvider: {resolveProvider: true},
@@ -887,6 +889,14 @@ class LspProtocol {
 		ensureAnalyzed(document, token);
 		requireCurrent(document);
 		var location = service.definition(compilerPath(document), positionOffset(document, position(request)));
+		return location == null ? null : locationJson(location.path, location.span.start, location.span.end);
+	}
+
+	function typeDefinition(request:Dynamic, token:CancellationToken):Dynamic {
+		var document = document(request);
+		ensureAnalyzed(document, token);
+		requireCurrent(document);
+		var location = service.typeDefinition(compilerPath(document), positionOffset(document, position(request)), token);
 		return location == null ? null : locationJson(location.path, location.span.start, location.span.end);
 	}
 

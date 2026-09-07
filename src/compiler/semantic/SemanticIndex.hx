@@ -67,6 +67,7 @@ class SemanticIndex {
 	final completionLocals:Array<SemanticCompletionLocal> = [];
 	final functionReceivers:Array<{span:SourceSpan, type:CompilerType}> = [];
 	final completionTypes:Array<{span:SourceSpan, type:CompilerType}> = [];
+	final declarationTypes:Map<SemanticSymbolId, CompilerType> = [];
 	final tokens:Array<Token>;
 	final module:String;
 	var cancellation:Null<CancellationToken>;
@@ -112,7 +113,27 @@ class SemanticIndex {
 					];
 					setDeclaredSignature(classDecl.name, classDecl.name + "(" + parameters.join(", ") + ")", parameters, classDecl.name);
 				}
+		for (fn in declarations.classes)
+			indexDeclarationTypes(fn.name, fn.fields, fn.methods, declarations);
+		for (fn in declarations.interfaces)
+			indexDeclarationTypes(fn.name, [], fn.methods, declarations);
+		for (fn in declarations.abstracts)
+			indexDeclarationTypes(fn.name, [], fn.methods, declarations);
 	}
+
+	function indexDeclarationTypes(owner:String, fields:Array<compiler.syntax.Ast.AstField>, methods:Array<compiler.syntax.Ast.AstFunction>,
+			declarations:DeclarationIndex):Void {
+		for (field in fields)
+			if (field.type != null)
+				try setDeclarationType(owner + "." + field.name, field.span, declarations.resolve(field.type, field.span)) catch (_:Dynamic) {}
+		for (method in methods)
+			try setDeclarationType(owner + "." + method.name, method.span, declarations.resolve(method.result, method.span)) catch (_:Dynamic) {}
+	}
+
+	function setDeclarationType(name:String, span:SourceSpan, type:CompilerType):Void
+		for (symbol in symbols)
+			if (symbol.name == name || symbol.declaration.start == span.start && symbol.declaration.end == span.end)
+				declarationTypes.set(symbol.id, type);
 
 	function setDeclaredSignature(symbolName:String, label:String, parameters:Array<String>, result:String):Void
 		for (symbol in symbols)
@@ -134,6 +155,7 @@ class SemanticIndex {
 			functionReceivers.push({span: fn.span, type: TInstance(compiler.types.Type.NominalKind.Class, fn.owner, [])});
 		var functionId = resolve(fn.name);
 		if (functionId != null) {
+			declarationTypes.set(functionId, fn.result);
 			var parameters = [
 				for (argument in fn.arguments)
 					sourceLocalName(argument.name) + ":" + displayType(argument.type)
@@ -262,6 +284,22 @@ class SemanticIndex {
 				}
 			}
 		return {locals: locals, receiver: receiver, expected: expected};
+	}
+
+	public function typeAt(position:Int):Null<CompilerType> {
+		var result:Null<CompilerType> = null, width = 0x3fffffff;
+		for (candidate in completionTypes)
+			if (position >= candidate.span.start && position <= candidate.span.end && candidate.span.end - candidate.span.start < width) {
+				result = candidate.type;
+				width = candidate.span.end - candidate.span.start;
+			}
+		for (local in completionLocals)
+			if (position >= local.declaration.start && position <= local.declaration.end)
+				return local.type;
+		if (result != null)
+			return result;
+		var symbol = symbolIdAt(position);
+		return symbol == null ? null : declarationTypes.get(symbol);
 	}
 
 	function addCompletionLocal(identity:String, type:CompilerType, declaration:SourceSpan, scope:SourceSpan, depth:Int):Void {

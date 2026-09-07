@@ -245,19 +245,33 @@ class LanguageServiceMain {
 			throw "language service did not resolve inheritance and alias navigation";
 		var typeService = new LanguageService();
 		typeService.update("domain/Entity.hx", "package domain; class Entity {}");
-		var typeSource = "package usecase; import domain.Entity; typedef EntityAlias = Entity; class Child extends Entity {} function identity(value:Entity):Entity return value; function main():Int return 0;";
+		var typeSource = "package usecase; import domain.Entity; typedef EntityAlias = Entity; class Child extends Entity {} class Holder { public var entity:Entity; public function get():Entity return entity; } function identity(value:Entity):Entity return value; function main():Int return 0;";
 		typeService.update("usecase/Main.hx", typeSource);
 		typeService.compile("usecase.Main");
 		var typePosition = typeSource.indexOf(":Entity return") + 1,
 			typeDefinition = typeService.definition("usecase/Main.hx", typePosition),
+			explicitTypeDefinition = typeService.typeDefinition("usecase/Main.hx", typePosition),
+			valueTypeDefinition = typeService.typeDefinition("usecase/Main.hx", typeSource.indexOf("return value") + "return ".length),
+			fieldTypeDefinition = typeService.typeDefinition("usecase/Main.hx", typeSource.indexOf("return entity") + "return ".length),
+			methodTypeDefinition = typeService.typeDefinition("usecase/Main.hx", typeSource.indexOf("get():Entity") + 1),
+			primitiveTypeDefinition = typeService.typeDefinition("usecase/Main.hx", typeSource.lastIndexOf("0")),
 			typeReferences = typeService.references("usecase/Main.hx", typePosition),
 			typeRename = typeService.rename("usecase/Main.hx", typePosition, "Record");
 		if (typeService.compiler.modules.get("usecase.Main").semanticModel.index.symbolIdAt(typePosition) == null
 			|| typeDefinition == null
 			|| typeDefinition.path != "domain/Entity.hx"
-			|| typeReferences.length != 6
-			|| typeRename.length != 6)
-			throw 'language service type-reference index failed: references=${typeReferences.length}, rename=${typeRename.length}';
+			|| explicitTypeDefinition == null
+			|| explicitTypeDefinition.path != "domain/Entity.hx"
+			|| valueTypeDefinition == null
+			|| valueTypeDefinition.path != "domain/Entity.hx"
+			|| fieldTypeDefinition == null
+			|| fieldTypeDefinition.path != "domain/Entity.hx"
+			|| methodTypeDefinition == null
+			|| methodTypeDefinition.path != "domain/Entity.hx"
+			|| primitiveTypeDefinition != null
+			|| typeReferences.length != 8
+			|| typeRename.length != 8)
+			throw 'language service type-reference index failed: explicit=${explicitTypeDefinition != null}, value=${valueTypeDefinition != null}, field=${fieldTypeDefinition != null}, method=${methodTypeDefinition != null}, primitive=${primitiveTypeDefinition != null}, references=${typeReferences.length}, rename=${typeRename.length}';
 		var collisionService = new LanguageService(),
 			collisionSource = "class Item { public function value():Int return 1; public function score():Int return value(); } function main():Int return new Item().value();";
 		collisionService.update("Collision.hx", collisionSource);
