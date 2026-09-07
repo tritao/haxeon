@@ -231,7 +231,9 @@ class ProfilerService {
 		return {
 			key: value.key,
 			frames: value.frames,
-			frameDetails: [for (frame in value.frameDetails) {key: frame.key, stableKey: frame.stableKey, name: frame.name, revision: frame.revision}],
+			frameDetails: [for (frame in value.frameDetails) {
+				key: frame.key, stableKey: frame.stableKey, name: frame.name, revision: frame.revision, file: frame.file, line: frame.line
+			}],
 			samples: value.samples
 		};
 

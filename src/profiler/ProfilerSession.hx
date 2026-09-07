@@ -54,13 +54,17 @@ class ProfileStackFrame {
 	public final stableKey:String;
 	public final name:String;
 	public final revision:Int;
+	public final file:Null<String>;
+	public final line:Null<Int>;
 
-	public function new(key:String, stableKey:String, name:String, revision:Int) {
+	public function new(key:String, stableKey:String, name:String, revision:Int, ?file:String, ?line:Int) {
 		this.key = key;
 		this.stableKey = stableKey;
 		this.name = name;
 		this.revision = revision;
-}
+		this.file = file;
+		this.line = line;
+	}
 }
 
 class ProfileEvent {
@@ -345,10 +349,11 @@ class ProfilerSession {
 			var frameDetails = [];
 			for (index in 0...record.frames.length) {
 				var address = record.frames[record.frames.length - index - 1], symbol = resolve(address);
+				var location = symbol == null ? null : symbol.sourceAt(address);
 				frameDetails.push(symbol == null
 					? new ProfileStackFrame("[unknown]", "[unknown]", "[unknown]", 0)
 					: new ProfileStackFrame('${symbol.moduleId}:${symbol.revision}:${symbol.functionId}', '${symbol.moduleId}:${symbol.functionId}', symbol.name,
-						symbol.revision));
+						symbol.revision, location == null ? null : location.file, location == null ? null : location.line));
 			}
 			var key = [for (frame in frameDetails) frame.key].join(";") , stack = stacks.get(key);
 			if (stack == null) {

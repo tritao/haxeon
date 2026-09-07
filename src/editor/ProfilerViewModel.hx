@@ -10,6 +10,9 @@ private class ProfilerViewNode {
 	public var totalSamples = 0;
 	public final revisions = new Map<Int, Bool>();
 	public final children:Array<String> = [];
+	public var file:Null<String>;
+	public var line:Null<Int>;
+	public var locationRevision = 0;
 
 	public function new(id:String, parentId:Null<String>, stableKey:String, name:String, depth:Int) {
 		this.id = id;
@@ -59,6 +62,11 @@ class ProfilerViewModel {
 				}
 				node.totalSamples += increment;
 				node.revisions.set(revision, true);
+				if (Reflect.field(frame, "file") != null && revision >= node.locationRevision) {
+					node.file = Reflect.field(frame, "file");
+					node.line = Reflect.field(frame, "line");
+					node.locationRevision = revision;
+				}
 				changed.set(path, true);
 				parent = path;
 				depth++;
@@ -90,7 +98,7 @@ class ProfilerViewModel {
 	static function nodeValue(node:ProfilerViewNode):Dynamic {
 		var revisions = [for (revision in node.revisions.keys()) revision];
 		revisions.sort((a, b) -> a - b);
-		return {id: node.id, parentId: node.parentId, stableKey: node.stableKey, name: node.name, depth: node.depth,
+		return {id: node.id, parentId: node.parentId, stableKey: node.stableKey, name: node.name, depth: node.depth, file: node.file, line: node.line,
 			selfSamples: node.selfSamples, totalSamples: node.totalSamples, revisions: revisions};
 	}
 

@@ -40,6 +40,12 @@ class ProfilerLspMain {
 			if (notification.params.view.callTree.length == 0 || notification.params.view.flameGraph.length == 0
 				|| notification.params.viewDelta.nodes.length == 0 || notification.params.view.health.bufferCapacity == "0")
 				throw "Profiler notification omitted incremental editor view data";
+			var locatedFrame = false;
+			for (stack in cast(notification.params.stacks, Array<Dynamic>))
+				for (frame in cast(stack.frameDetails, Array<Dynamic>))
+					if (frame.file != null && frame.line != null) locatedFrame = true;
+			if (!locatedFrame)
+				throw "Profiler stack frames omitted source navigation metadata";
 
 			dispatcher.dispatch(command(4, "haxeon.profiler.pause", {}));
 			var paused = waitFor(messages, mutex, available, value -> value.id == 4);

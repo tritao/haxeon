@@ -16,6 +16,7 @@ class ProfilerViewModelMain {
 		var leaf = second.state.flameGraph[1];
 		require(leaf.totalSamples == 5 && leaf.selfSamples == 5, "stable nodes did not merge cumulative revisions");
 		require(leaf.revisions.length == 2 && leaf.revisions[0] == 1 && leaf.revisions[1] == 2, "revision detail was lost");
+		require(leaf.file == "Work.hx" && leaf.line == 2, "latest revision source location was not retained");
 		require(second.delta.nodes.length == 2 && second.delta.nodes[1].totalSamples == 5, "incremental delta was incorrect");
 		require(second.state.health.effectiveSampleRate == 125 && second.state.revisionMarkers.length == 1, "health or revision markers missing");
 
@@ -27,7 +28,7 @@ class ProfilerViewModelMain {
 	static function stack(key:String, samples:Int, revision:Int):Dynamic
 		return {key: key, samples: samples, frameDetails: [
 			{key: '1:$revision:10', stableKey: "1:10", name: "Main.main", revision: revision},
-			{key: '1:$revision:11', stableKey: "1:11", name: "Work.work", revision: revision}
+			{key: '1:$revision:11', stableKey: "1:11", name: "Work.work", revision: revision, file: "Work.hx", line: revision}
 		]};
 
 	static function snapshot(samples:Int, stacks:Array<Dynamic>):Dynamic

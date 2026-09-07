@@ -1,0 +1,28 @@
+{
+  "name": "haxeon-vscode",
+  "displayName": "Haxeon",
+  "version": "0.1.0",
+  "publisher": "haxeon",
+  "engines": {"vscode": "^1.90.0"},
+  "categories": ["Programming Languages", "Visualization"],
+  "activationEvents": ["onLanguage:haxe", "onCommand:haxeon.profiler.open"],
+  "main": "./dist/extension.js",
+  "scripts": {
+    "compile": "tsc -p ./",
+    "check": "tsc -p ./ --noEmit"
+  },
+  "dependencies": {"vscode-languageclient": "^9.0.1"},
+  "devDependencies": {"@types/node": "^22.10.0", "@types/vscode": "^1.90.0", "typescript": "^5.7.2"},
+  "contributes": {
+    "commands": [{"command": "haxeon.profiler.open", "title": "Haxeon: Open Realtime Profiler"}],
+    "configuration": {
+      "title": "Haxeon",
+      "properties": {
+        "haxeon.server.path": {"type": "string", "default": "haxeon-lsp", "description": "Path to the Haxeon language server launcher."},
+        "haxeon.profiler.host": {"type": "string", "default": "127.0.0.1"},
+        "haxeon.profiler.port": {"type": "number", "default": 6113, "minimum": 1, "maximum": 65535},
+        "haxeon.profiler.sampleRate": {"type": "number", "default": 250, "minimum": 1, "maximum": 100000}
+      }
+    }
+  }
+}
