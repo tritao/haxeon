@@ -1,4 +1,5 @@
 -cp src
 -cp tests
+-cp tests/runtime
 -main StaticFieldMain
 -hl out/static-field-test.hl

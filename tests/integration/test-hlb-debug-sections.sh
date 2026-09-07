@@ -4,7 +4,7 @@ set -euo pipefail
 repo_dir="$(cd "$(dirname "$0")/../.." && pwd)"
 mkdir -p "$repo_dir/out"
 make -C "$repo_dir/vendor/hashlink" -j2 libhl.so hl >/dev/null
-"$repo_dir/.tools/haxe/haxe" --cwd "$repo_dir" -cp src -cp tests --run DebugSectionFixture \
+"$repo_dir/.tools/haxe/haxe" --cwd "$repo_dir" -cp src -cp tests -cp tests/tooling --run DebugSectionFixture \
 	"$repo_dir/out/debug-sections-valid.hl" "$repo_dir/out/debug-sections-malformed.hl"
 LD_LIBRARY_PATH="$repo_dir/vendor/hashlink" "$repo_dir/vendor/hashlink/hl" "$repo_dir/out/debug-sections-valid.hl"
 if LD_LIBRARY_PATH="$repo_dir/vendor/hashlink" "$repo_dir/vendor/hashlink/hl" "$repo_dir/out/debug-sections-malformed.hl" \

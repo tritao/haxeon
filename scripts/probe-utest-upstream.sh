@@ -19,4 +19,4 @@ if [[ $actual_revision != "$expected_revision" ]]; then
 	exit 1
 fi
 
-"$haxe" --cwd "$root_dir" -cp src -cp tests --run UtestUpstreamProbeMain
+"$haxe" --cwd "$root_dir" -cp src -cp tests -cp tests/tooling --run UtestUpstreamProbeMain
