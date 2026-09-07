@@ -16,6 +16,7 @@ private typedef EncodedInstruction = {
 class HlWriter {
 	public static inline final FUNCTION_IDENTITIES = 1;
 	public static inline final OPCODE_SOURCE_SPANS = 2;
+	public static inline final SOURCE_SNAPSHOTS = 3;
 	final output:BytesOutput;
 	var hasDebug:Bool = false;
 	var debugFiles:Array<String> = [];
@@ -163,6 +164,21 @@ class HlWriter {
 				writer.output.writeInt32(span.sourceHash);
 				writer.writeUnsignedIndex(span.flags);
 			}
+		}
+		return writer.output.getBytes();
+	}
+
+	public static function encodeSourceSnapshots(snapshots:Array<compiler.hl.HlCode.HlSourceSnapshot>):HaxeBytes {
+		var writer = new HlWriter(), ordered = snapshots.copy(), seen:Map<Int, HaxeBytes> = [];
+		ordered.sort((left, right) -> left.sourceHash < right.sourceHash ? -1 : left.sourceHash > right.sourceHash ? 1 : 0);
+		writer.writeUnsignedIndex(ordered.length);
+		for (snapshot in ordered) {
+			if (snapshot.sourceHash == 0 || seen.exists(snapshot.sourceHash))
+				throw "Invalid HLB source snapshot";
+			seen.set(snapshot.sourceHash, snapshot.content);
+			writer.output.writeInt32(snapshot.sourceHash);
+			writer.writeUnsignedIndex(snapshot.content.length);
+			writer.output.write(snapshot.content);
 		}
 		return writer.output.getBytes();
 	}

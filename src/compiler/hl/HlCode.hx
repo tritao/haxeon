@@ -12,6 +12,7 @@ class HlCode {
 	public var natives:Array<HlNative> = [];
 	public var functions:Array<HlFunction> = [];
 	public var debugSections:Array<HlDebugSection> = [];
+	public var sourceSnapshots:Array<HlSourceSnapshot> = [];
 	public var entryPoint:Int = 0;
 
 	public function new() {}
@@ -19,6 +20,12 @@ class HlCode {
 
 /** Independently versioned, length-delimited HLB debug metadata. */
 typedef HlDebugSection = {final kind:Int; final version:Int; final flags:Int; final payload:haxe.io.Bytes;}
+
+/** UTF-8 source contents addressed by the hash carried in debug locations. */
+typedef HlSourceSnapshot = {
+	final sourceHash:Int;
+	final content:haxe.io.Bytes;
+}
 
 /** Stable debugger identity for a compiled function. */
 typedef HlFunctionIdentity = {

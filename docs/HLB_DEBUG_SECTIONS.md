@@ -15,6 +15,10 @@ Section kinds are independently versioned:
   stable function ID. Each mapping contains an opcode index, source-path index,
   signed start/end offsets encoded as `offset + 1`, start line/column, end
   line/column, a 32-bit FNV-1a hash of the UTF-8 source contents, and flags.
+- `3:1` — compiled source snapshots. The payload contains entries ordered by
+  signed 32-bit source hash. Each entry stores the hash followed by the length
+  and exact UTF-8 bytes of the compiled source. Hashes are unique and zero is
+  reserved for debug locations whose source snapshot is unavailable.
 
 Opcode source-span flag bit 0 marks compiler-generated code. An unavailable
 range is encoded as start and end `-1`; a present range must satisfy
