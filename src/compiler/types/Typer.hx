@@ -3209,6 +3209,12 @@ class Typer {
 			var length = coerce(typeExpression(arguments[0], scope), TInt, "array length", "E1002");
 			return new TypedExpression(TCollectionCall(receiver, "resize", [length]), TVoid, span);
 		}
+		if (name == "remove") {
+			if (arguments.length != 1)
+				fail("E1008", "Array.remove expects one argument", span);
+			var value = coerce(typeExpression(arguments[0], scope, element), element, "array element", "E1002");
+			return new TypedExpression(TCollectionCall(receiver, "remove", [value]), TBool, span);
+		}
 		if (name == "copy") {
 			if (arguments.length != 0)
 				fail("E1008", "Array.copy expects no arguments", span);

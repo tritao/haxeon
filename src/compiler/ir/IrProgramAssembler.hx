@@ -368,6 +368,13 @@ class IrProgramAssembler {
 					arguments: [arrayType, I32],
 					result: Void
 				});
+				program.natives.push({
+					name: '__array_remove_${entry.name}',
+					library: "realtime_runtime",
+					symbol: '__array_remove_${entry.name}',
+					arguments: [arrayType, entry.type],
+					result: Bool
+				});
 			}
 		}
 		if (needsStringRuntime)

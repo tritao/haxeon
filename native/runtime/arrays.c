@@ -130,6 +130,30 @@ DEFINE_ARRAY_INDEX_OF(bytes, vbyte *, realtime_bytes_equal(values[i], value))
 
 #undef DEFINE_ARRAY_INDEX_OF
 
+#define DEFINE_ARRAY_REMOVE(SUFFIX, VALUE_TYPE, EQUALS) \
+HL_PRIM bool HL_NAME(__array_remove_##SUFFIX)( varray *array, VALUE_TYPE value ) { \
+	VALUE_TYPE *values = hl_aptr(array, VALUE_TYPE); \
+	for (int index = 0; index < array->size; index++) { \
+		if (!(EQUALS)) continue; \
+		int stride = hl_type_size(array->at); \
+		if (index + 1 < array->size) \
+			memmove(hl_aptr(array, vbyte) + index * stride, hl_aptr(array, vbyte) + (index + 1) * stride, \
+				(size_t)(array->size - index - 1) * stride); \
+		array->size--; \
+		memset(hl_aptr(array, vbyte) + array->size * stride, 0, (size_t)stride); \
+		return true; \
+	} \
+	return false; \
+}
+
+DEFINE_ARRAY_REMOVE(i32, int, values[index] == value)
+DEFINE_ARRAY_REMOVE(f64, double, values[index] == value)
+DEFINE_ARRAY_REMOVE(bool, bool, values[index] == value)
+DEFINE_ARRAY_REMOVE(bytes, vbyte *, realtime_bytes_equal(values[index], value))
+DEFINE_ARRAY_REMOVE(ref, vdynamic *, values[index] == value)
+
+#undef DEFINE_ARRAY_REMOVE
+
 #define DEFINE_ARRAY_MUTATION(SUFFIX, VALUE_TYPE) \
 HL_PRIM int HL_NAME(__array_push_##SUFFIX)( varray *array, VALUE_TYPE value ) { \
 	if (array->size >= array->capacity) \
