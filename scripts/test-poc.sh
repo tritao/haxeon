@@ -115,6 +115,7 @@ run_program function-call 42
 run_program function-value 42
 run_program lambda 42
 run_program expression-lambda 42
+run_program single-argument-lambda 43
 run_program anonymous-function 42
 run_program enum-abstract 42
 run_program enum-argument-string 42
