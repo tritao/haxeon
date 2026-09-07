@@ -212,27 +212,33 @@ class SsaBuilder {
 			liveIn.set(id, []);
 			liveOut.set(id, []);
 		}
-		var changed = true;
-		while (changed) {
-			changed = false;
-			for (block in cfg.blocks) {
-				var id = block.id;
-				if (!reachable.exists(id))
-					continue;
-				var out:Map<String, Bool> = [];
-				if (successors.exists(id))
-					for (successor in successors.get(id))
-						for (name in liveIn.get(successor).keys())
-							out.set(name, true);
-				var input = copyNames(uses.get(id));
-				for (name in out.keys())
-					if (!defs.get(id).exists(name))
-						input.set(name, true);
-				if (!sameNames(out, liveOut.get(id)) || !sameNames(input, liveIn.get(id))) {
-					liveOut.set(id, out);
-					liveIn.set(id, input);
-					changed = true;
-				}
+		var work:Array<Int> = [], queued:Map<Int, Bool> = [];
+		for (block in cfg.blocks)
+			if (reachable.exists(block.id)) {
+				work.push(block.id);
+				queued.set(block.id, true);
+			}
+		while (work.length > 0) {
+			var id = work.pop();
+			queued.remove(id);
+			var out:Map<String, Bool> = [];
+			if (successors.exists(id))
+				for (successor in successors.get(id))
+					for (name in liveIn.get(successor).keys())
+						out.set(name, true);
+			var input = copyNames(uses.get(id));
+			for (name in out.keys())
+				if (!defs.get(id).exists(name))
+					input.set(name, true);
+			if (!sameNames(out, liveOut.get(id)) || !sameNames(input, liveIn.get(id))) {
+				liveOut.set(id, out);
+				liveIn.set(id, input);
+				if (predecessors.exists(id))
+					for (predecessor in predecessors.get(id))
+						if (!queued.exists(predecessor)) {
+							queued.set(predecessor, true);
+							work.push(predecessor);
+						}
 			}
 		}
 	}
