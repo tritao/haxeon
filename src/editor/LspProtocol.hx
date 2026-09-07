@@ -664,7 +664,10 @@ class LspProtocol {
 	}
 
 	function resolveCompletion(request:Dynamic, token:CancellationToken):Dynamic {
-		var item:Dynamic = required(request, "params"), data:Dynamic = required(item, "data"), uri = requiredString(data, "uri"),
+		var item:Dynamic = required(request, "params"), data:Dynamic = Reflect.field(item, "data");
+		if (data == null)
+			return item;
+		var uri = requiredString(data, "uri"),
 			document = documents.get(uri), identity = requiredString(data, "identity"), revision = requiredInt(data, "revision"),
 			importPath:Dynamic = Reflect.field(data, "importPath");
 		if (importPath != null && !Std.isOfType(importPath, String))

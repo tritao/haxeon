@@ -614,6 +614,10 @@ class LspProtocolMain {
 			}
 		if (!foundRankedCall)
 			throw "LSP completion omitted compiler ranking or insertion metadata";
+		var plainCompletionItem:Dynamic = {label: "while", kind: 14},
+			resolvedPlain = request(protocol, Json.stringify({jsonrpc: "2.0", id: 79, method: "completionItem/resolve", params: plainCompletionItem}));
+		if (resolvedPlain.result.label != "while" || resolvedPlain.result.kind != 14)
+			throw "completion resolve did not preserve an item without deferred data";
 		var resolvedAdd = request(protocol, Json.stringify({jsonrpc: "2.0", id: 76, method: "completionItem/resolve", params: addCompletionItem}));
 		if (resolvedAdd.result.documentation.kind != "markdown" || resolvedAdd.result.documentation.value.indexOf("**Deprecated.** Use sum.") < 0)
 			throw "completion resolve did not reuse compiler-owned documentation";
