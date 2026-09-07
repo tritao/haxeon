@@ -5,6 +5,7 @@ import compiler.types.Type.CompilerType;
 /** Mutable state owned by one function or lambda while its body is checked. */
 class BodyContext {
 	public final name:String;
+	public final lexicalOwner:Null<String>;
 	public final typeSubstitutions:Map<String, CompilerType>;
 	public final assigned:Map<String, Bool> = [];
 	public final cells:Map<String, String> = [];
@@ -15,9 +16,11 @@ class BodyContext {
 	public final loopEarlyExits:Array<Bool> = [];
 	public var resultType:CompilerType = TVoid;
 	public var inferredResult:Null<CompilerType>;
+	public var contextualVoidLambda:Bool = false;
 
-	public function new(name:String, ?typeSubstitutions:Map<String, CompilerType>) {
+	public function new(name:String, ?typeSubstitutions:Map<String, CompilerType>, ?lexicalOwner:String) {
 		this.name = name;
+		this.lexicalOwner = lexicalOwner;
 		this.typeSubstitutions = typeSubstitutions == null ? [] : typeSubstitutions;
 	}
 }

@@ -97,6 +97,7 @@ class TestMain {
 		Frontend.compile('function make():String return "value"; function main():Int { var value = null; if (true) value = make(); return value == null ? 0 : 42; }');
 		Frontend.compile('function make():String return "value"; function main():Int { var values = []; values.push(make()); return values.length; }');
 		Frontend.compile('function main():Int { var values = [3, 1, 2]; values.sort(function(left, right) return left - right); return values[0] + values[1] + values[2] + 36; }');
+		expectCompileError('function invalid():Void return 42; function main():Int return 0;', 'Type mismatch for return');
 		Frontend.compile('function main():Int { var values = ["a", "b"]; return values.join(",") == "a,b" ? 42 : 0; }');
 		Frontend.compile('function apply(callback:(Int, Int)->Int):Int return callback(1, 2); function main():Int return apply(function(_, _) return 42);');
 		Frontend.compile('function fail():Void throw "failure"; function value():String { fail(); return null; } function main():Int return 42;');

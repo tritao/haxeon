@@ -85,7 +85,8 @@ class Typer {
 		return bodyContexts[bodyContexts.length - 1];
 
 	function enterBody(name:String, ?typeSubstitutions:Map<String, CompilerType>):BodyContext {
-		var body = new BodyContext(name, typeSubstitutions);
+		var owner = StringTools.startsWith(name, "$lambda:") ? context.lexicalOwner : parentPath(name),
+			body = new BodyContext(name, typeSubstitutions, owner);
 		bodyContexts.push(body);
 		return body;
 	}
@@ -458,6 +459,7 @@ class Typer {
 			return null;
 		return switch type {
 			case TFunction(arguments, result): {arguments: arguments, result: result};
+			case TNullable(inner): expectedFunctionType(inner);
 			default: null;
 		};
 	}
@@ -856,6 +858,11 @@ class Typer {
 				case Return(expression, span):
 					var expected = result == null ? context.inferredResult : result;
 					var value = typeExpression(expression, scope, expected);
+					if (expected == TVoid && context.contextualVoidLambda) {
+						output.push(TExpression(value, span));
+						output.push(TReturnVoid(span));
+						continue;
+					}
 					if (expected == null)
 						context.inferredResult = value.type;
 					else
@@ -929,7 +936,7 @@ class Typer {
 						fail("E1023", 'Local "$name" may be used before assignment', span);
 					if (current == null) {
 						var dot = name.indexOf("."),
-							owner = dot < 0 ? parentPath(context.name) : name.substring(0, dot),
+							owner = dot < 0 ? context.lexicalOwner : name.substring(0, dot),
 							fieldName = dot < 0 ? name : name.substring(dot + 1, name.length),
 							staticField:Null<{
 								owner:String,
@@ -973,7 +980,7 @@ class Typer {
 								else
 									output.push(TFieldAssign(receiver, name, abiBoundaryCast(value, fieldRepresentationType(thisType, name, span)), span));
 							} else {
-								var owner = parentPath(context.name),
+								var owner = context.lexicalOwner,
 									staticField:Null<{owner:String, type:CompilerType}> = null;
 								if (owner != null)
 									staticField = findStaticFieldNullable(owner, name);
@@ -1432,16 +1439,14 @@ class Typer {
 	}
 
 	function resolvedCallName(name:String):String {
-		var signatureName = name;
-		if (name.indexOf(".") < 0) {
-			var owner = parentPath(context.name);
-			if (owner != null) {
-				var method = findMethod(owner, name);
-				if (method != null)
-					signatureName = method.owner + "." + name;
-			}
-		}
-		return signatureName;
+		var method = lexicalMethod(name);
+		return method == null ? name : method.owner + "." + name;
+	}
+
+	function lexicalMethod(name:String):Null<SemanticMethodInfo> {
+		if (name.indexOf(".") >= 0 || context.lexicalOwner == null)
+			return null;
+		return findMethod(context.lexicalOwner, name);
 	}
 
 	static function usesLocalExpectedType(initializer:AstExpression):Bool
@@ -1796,15 +1801,17 @@ class Typer {
 							requiredMapValue(context.cells, name)) : TLocal(name == "this" ? name : scope.requireId(name))),
 						type, span);
 				} else {
-					if (signatures.exists(name))
-						new TypedExpression(TFunctionRef(name), functionType(signatures.get(name)), span);
+					var localMethod = lexicalMethod(name),
+						functionName = localMethod != null && localMethod.isStatic ? localMethod.owner + "." + name : name;
+					if (signatures.exists(functionName))
+						new TypedExpression(TFunctionRef(functionName), functionType(signatures.get(functionName)), span);
 					else if (externals.exists(name)) {
 						var external = externals.get(name);
 						new TypedExpression(TFunctionRef(name), TFunction(external.arguments, external.result), span);
 					} else if (classDecls.exists(name) || enumAbstractDecls.exists(name) || PlatformAbi.isType(name))
 						new TypedExpression(TClassRef(name), TInstance(NominalKind.Class, name, []), span);
 					else {
-						var owner = parentPath(context.name),
+						var owner = context.lexicalOwner,
 							staticField:Null<{owner:String, type:CompilerType}> = null;
 						if (owner != null)
 							staticField = findStaticFieldNullable(owner, name);
@@ -1990,6 +1997,7 @@ class Typer {
 						lambdaName = '$' + 'lambda:${outerContext.name}:${span.start}',
 						lambdaContext = enterBody(lambdaName, outerContext.typeSubstitutions);
 					context.resultType = expectedFunction == null ? TVoid : expectedFunction.result;
+					context.contextualVoidLambda = expectedFunction != null && expectedFunction.result == TVoid;
 					CaptureAnalysis.collectAssignedLocals(body, context.assigned);
 					var lambdaDeclared:Map<String, Bool> = [];
 					for (argument in arguments)
@@ -2528,10 +2536,7 @@ class Typer {
 					new TypedExpression(TClosureCall(new TypedExpression(TLocal(scope.requireId(name)), callable, span), typed), functionType.result, span);
 				} else {
 					if (name.indexOf(".") < 0) {
-						var owner = parentPath(context.name),
-							implicitMethod:Null<SemanticMethodInfo> = null;
-						if (owner != null)
-							implicitMethod = findMethod(owner, name);
+						var implicitMethod = lexicalMethod(name);
 						if (implicitMethod != null) {
 							var methodKey = implicitMethod.owner + "." + name,
 								method = signatures.get(methodKey);
@@ -2738,7 +2743,7 @@ class Typer {
 		return noReturnFunctions.exists(name) ? new TypedExpression(TNoReturn(call), TNever, call.span) : call;
 
 	function typeSuperCall(arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
-		var owner = parentPath(context.name), baseType:Null<AstType> = null;
+		var owner = context.lexicalOwner, baseType:Null<AstType> = null;
 		if (owner != null && classDecls.exists(owner))
 			baseType = requiredMapValue(classDecls, owner).base;
 		if (baseType == null)
@@ -3660,7 +3665,7 @@ class Typer {
 		var thisType = scope.resolve("this");
 		if (thisType != null && findFieldType(thisType, name) != null)
 			return typeExpression(Variable(name, span), scope);
-		var owner = parentPath(context.name),
+		var owner = context.lexicalOwner,
 			staticField:Null<{owner:String, type:CompilerType}> = null;
 		if (owner != null)
 			staticField = findStaticFieldNullable(owner, name);

@@ -116,6 +116,7 @@ run_program function-value 42
 run_program lambda 42
 run_program expression-lambda 42
 run_program single-argument-lambda 43
+run_program contextual-callbacks 42
 run_program anonymous-function 42
 run_program enum-abstract 42
 run_program enum-argument-string 42
@@ -169,6 +170,7 @@ run_program enum-payload-pattern 42
 run_program generic-enum-field 42
 run_program enum-array-pattern 42
 run_program nullable-basic 42
+run_program nullable-guard-return 42
 run_program nullable-compound 42
 run_program nullable-enum-switch 42
 run_program object-array 42
