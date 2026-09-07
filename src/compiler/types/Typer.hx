@@ -1161,13 +1161,13 @@ class Typer {
 							bindings:Array<TypedSwitchBinding> = pattern == null ? [] : pattern.bindings,
 							predicates:Array<TypedSwitchPredicate> = pattern == null ? [] : pattern.predicates;
 						caseScopes.push(caseScope);
-						if (pattern == null)
-							switch typedValue.expression {
-								case TEnumLiteral(name, index):
-									enumName = name;
-									constructorIndex = index;
-								default:
+						if (pattern == null) {
+							var literal = enumLiteral(typedValue);
+							if (literal != null) {
+								enumName = literal.name;
+								constructorIndex = literal.index;
 							}
+						}
 						var caseKey = switchCaseKey(typedValue, predicates);
 						if (caseKey != null && typedGuard == null) {
 							if (seenCases.exists(caseKey))
@@ -1758,6 +1758,13 @@ class Typer {
 			default: null;
 		};
 
+	static function enumLiteral(value:TypedExpression):Null<{name:String, index:Int}>
+		return switch value.expression {
+			case TEnumLiteral(name, index): {name: name, index: index};
+			case TNullableWrap(inner), TCast(inner), TAbiCast(inner): enumLiteral(inner);
+			default: null;
+		};
+
 	function constantPatternKey(value:TypedExpression):Null<String>
 		return switch value.expression {
 			case TIntLiteral(v): 'int:$v';
@@ -2155,13 +2162,13 @@ class Typer {
 							fail("E1003", "Switch branches must have matching types", switchCase.span);
 						resultType = joined;
 					}
-					if (pattern == null)
-						switch typedValue.expression {
-							case TEnumLiteral(name, index):
-								enumName = name;
-								constructorIndex = index;
-							default:
+					if (pattern == null) {
+						var literal = enumLiteral(typedValue);
+						if (literal != null) {
+							enumName = literal.name;
+							constructorIndex = literal.index;
 						}
+					}
 					var caseKey = switchCaseKey(typedValue, predicates);
 					if (caseKey != null && typedGuard == null) {
 						if (seenCases.exists(caseKey))
