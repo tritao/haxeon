@@ -81,6 +81,12 @@ and `removed` if a later mapping snapshot no longer contains it. Events are
 published only after DAP initialization, and a completed `MAP3` refresh is the
 single source of truth for change detection.
 
+The dap-cli integration gate consumes these events with cursor-based polling.
+It checks a runtime module's `new` event at revision 1, two successive `changed`
+events at revisions 2 and 3, stable identity across those revisions, and the
+appearance of a retired patch region after the second replacement. Each event
+is cross-checked against the corresponding `modules` response.
+
 ## Diagnostic tracing
 
 Set `HL_DEBUG_TRACE` to a writable file path to record newline-delimited JSON
