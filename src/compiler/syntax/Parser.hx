@@ -733,7 +733,7 @@ class Parser {
 				var guard = parseSwitchGuard();
 				consume(TokenKind.Colon);
 				var statements = [];
-				while (!check(TokenKind.RightBrace) && !check(TokenKind.Case) && !check(TokenKind.Default))
+				while (!check(TokenKind.RightBrace) && !check(TokenKind.Case) && !check(TokenKind.Default) && !check(TokenKind.Eof))
 					appendStatements(statements, parseStatements());
 				var caseEnd = statements.length == 0 ? expressionSpan(values[values.length - 1]) : statementSpan(statements[statements.length - 1]);
 				for (value in values)
@@ -747,7 +747,7 @@ class Parser {
 			var defaultBranch = [], hasDefault = match(TokenKind.Default);
 			if (hasDefault) {
 				consume(TokenKind.Colon);
-				while (!check(TokenKind.RightBrace))
+				while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof))
 					appendStatements(defaultBranch, parseStatements());
 			}
 			var end = consume(TokenKind.RightBrace).span;
@@ -1350,7 +1350,7 @@ class Parser {
 		if (!match(TokenKind.LeftBrace))
 			return parseExpression();
 		var start = previous().span, statements = [];
-		while (!check(TokenKind.RightBrace)) {
+		while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof)) {
 			if (isStatementOnlyStart(current().kind)) {
 				appendStatements(statements, parseStatements());
 				continue;
@@ -1371,6 +1371,11 @@ class Parser {
 					return BlockExpression(statements, result, start.merge(end));
 				default:
 			}
+		if (recoveringAtEnd()) {
+			var span = current().span;
+			recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expression block requires a result expression", span));
+			return Unreachable(span);
+		}
 		fail(current(), "Expression block requires a result expression");
 		return null;
 	}
@@ -1445,7 +1450,7 @@ class Parser {
 	}
 
 	function atSwitchBranchEnd():Bool
-		return check(TokenKind.Case) || check(TokenKind.Default) || check(TokenKind.RightBrace);
+		return check(TokenKind.Case) || check(TokenKind.Default) || check(TokenKind.RightBrace) || recoveringAtEnd();
 
 	static function statementTerminates(statement:AstStatement):Bool
 		return switch statement {
@@ -1635,7 +1640,7 @@ class Parser {
 		if (!match(TokenKind.LeftBrace))
 			return parseStatements();
 		var statements = [];
-		while (!check(TokenKind.RightBrace))
+		while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof))
 			appendStatements(statements, parseStatements());
 		consume(TokenKind.RightBrace);
 		return statements;
@@ -1668,6 +1673,8 @@ class Parser {
 				check(TokenKind.LeftBrace) || check(TokenKind.Colon) || check(TokenKind.Semicolon) || check(TokenKind.Arrow) || check(TokenKind.Eof);
 			case TokenKind.RightBracket:
 				check(TokenKind.Assign) || check(TokenKind.Semicolon) || check(TokenKind.Comma) || check(TokenKind.RightParen) || check(TokenKind.Eof);
+			case TokenKind.Colon, TokenKind.LeftBrace:
+				check(TokenKind.Eof);
 			case TokenKind.RightBrace:
 				check(TokenKind.Eof);
 			default: false;
@@ -1698,6 +1705,8 @@ class Parser {
 			case TokenKind.Semicolon: ";";
 			case TokenKind.RightParen: ")";
 			case TokenKind.RightBracket: "]";
+			case TokenKind.Colon: ":";
+			case TokenKind.LeftBrace: "{";
 			case TokenKind.RightBrace: "}";
 			default: "";
 		};
