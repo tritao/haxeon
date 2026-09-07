@@ -29,14 +29,19 @@ class SsaBuilder {
 	var nextValue:Int = 0;
 	var renamed:Map<Int, Bool> = [];
 	var debugBindings:Array<compiler.ir.IrFunction.IrDebugBinding> = [];
+	var debugLocals:Map<String, compiler.ir.cfg.Cfg.CfgDebugLocal> = [];
 
 	public static function build(cfg:CfgFunction):IrFunction {
 		CfgVerifier.verify(cfg);
 		return new SsaBuilder(cfg).run();
 	}
 
-	function new(cfg)
+	function new(cfg) {
 		this.cfg = cfg;
+		for (local in cfg.debugLocals)
+			if (!debugLocals.exists(local.identity))
+				debugLocals.set(local.identity, local);
+	}
 
 	function run():IrFunction {
 		output = [for (block in cfg.blocks) new IrBlock(block.id)];
@@ -249,7 +254,8 @@ class SsaBuilder {
 	}
 
 	function insertPhis():Void {
-		var definitions:Map<String, Map<Int, Bool>> = [], definitionNames:Array<String> = [];
+		var definitions:Map<String, Map<Int, Bool>> = [],
+			definitionNames:Array<String> = [];
 		for (argument in cfg.arguments)
 			addDefinition(definitions, definitionNames, argument.name, 0);
 		for (block in cfg.blocks)
@@ -454,7 +460,7 @@ class SsaBuilder {
 			for (successor in successors.get(id)) {
 				if (phis.exists(successor)) {
 					var successorPhis = phis.get(successor);
-						for (name in phiNames.get(successor)) {
+					for (name in phiNames.get(successor)) {
 						var phi = successorPhis.get(name);
 						var inputs = phi.inputs;
 						inputs.push({block: id, value: current(name)});
@@ -503,12 +509,8 @@ class SsaBuilder {
 		return new IrValue(nextValue++, name, type);
 	}
 
-	function debugLocal(identity:String):Null<compiler.ir.cfg.Cfg.CfgDebugLocal> {
-		for (local in cfg.debugLocals)
-			if (local.identity == identity)
-				return local;
-		return null;
-	}
+	function debugLocal(identity:String):Null<compiler.ir.cfg.Cfg.CfgDebugLocal>
+		return debugLocals.get(identity);
 
 	function addDebugBinding(local:Null<compiler.ir.cfg.Cfg.CfgDebugLocal>, value:IrValue):Void {
 		if (local != null)
@@ -580,5 +582,4 @@ class SsaBuilder {
 		result.sort(function(a, b) return a - b);
 		return result;
 	}
-
 }
