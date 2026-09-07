@@ -21,6 +21,7 @@ typedef HlPatch = {
 	final types:Array<HlTypeDef>;
 	final functions:Array<HlPatchFunction>;
 	final debugFiles:Array<String>;
+	final sourceSnapshots:Array<{sourceHash:Int, content:haxe.io.Bytes}>;
 }
 
 /** One replacement function addressed by stable identity after relocation. */

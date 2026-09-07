@@ -13,6 +13,7 @@ class HlPatchWriter {
 	static inline final SYMBOLS = 1;
 	static inline final FUNCTIONS = 2;
 	static inline final DEBUG = 3;
+	static inline final SOURCE_SNAPSHOTS = 4;
 
 	public static function encode(code:HlCode, moduleId:HaxeBytes, changedSlots:Array<Int>, stableIdsBySlot:Map<Int, Int>, baseRevision:Int, revision:Int,
 			baseInts:Int = 0, baseFloats:Int = 0, baseStrings:Int = 0, baseTypes:Int = 0, ?extensionSections:Array<{
@@ -86,7 +87,7 @@ class HlPatchWriter {
 			functions.write(encoded);
 		}
 		var out = new BytesOutput();
-		var debug = encodeDebug(selected, stableIdsBySlot);
+		var debug = encodeDebug(selected, stableIdsBySlot), snapshots = encodeSourceSnapshots(code, selected);
 		out.bigEndian = false;
 		out.writeString(HlPatchFormat.MAGIC);
 		out.writeByte(HlPatchFormat.VERSION);
@@ -95,17 +96,28 @@ class HlPatchWriter {
 		writeIndex(out, revision);
 		var extensions = extensionSections == null ? [] : extensionSections;
 		for (section in extensions)
-			if (section.tag == SYMBOLS || section.tag == FUNCTIONS || section.tag == DEBUG)
+			if (section.tag == SYMBOLS || section.tag == FUNCTIONS || section.tag == DEBUG || section.tag == SOURCE_SNAPSHOTS)
 				throw 'Extension section uses reserved HLP tag ${section.tag}';
-		writeIndex(out, (debug == null ? 2 : 3) + extensions.length);
+		writeIndex(out, 2 + (debug == null ? 0 : 1) + (snapshots == null ? 0 : 1) + extensions.length);
 		writeSection(out, SYMBOLS, symbols.getBytes());
 		writeSection(out, FUNCTIONS, functions.getBytes());
 		if (debug != null)
 			writeSection(out, DEBUG, debug);
+		if (snapshots != null)
+			writeSection(out, SOURCE_SNAPSHOTS, snapshots);
 		for (section in extensions)
 			writeSection(out, section.tag, section.bytes);
 		return out.getBytes();
 		}
+
+	static function encodeSourceSnapshots(code:HlCode, functions:Array<HlFunction>):Null<HaxeBytes> {
+		var referenced:Map<Int, Bool> = [];
+		for (fn in functions)
+			for (location in fn.debugLocations)
+				if (location.sourceHash != 0) referenced.set(location.sourceHash, true);
+		var selected = [for (snapshot in code.sourceSnapshots) if (referenced.exists(snapshot.sourceHash)) snapshot];
+		return selected.length == 0 ? null : HlWriter.encodeSourceSnapshots(selected);
+	}
 
 	static function encodeDebug(functions:Array<HlFunction>, stableIdsBySlot:Map<Int, Int>):Null<HaxeBytes> {
 		for (fn in functions)

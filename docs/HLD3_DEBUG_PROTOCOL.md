@@ -25,6 +25,10 @@ module's ordinary function records it appends:
   functions provide one record per opcode containing debug-file index, start
   line/column, end line/column, UTF-8 source-content FNV-1a hash, start/end offsets, and
   flags as `Int32` values.
+- after each patch region, an `Int32` source-snapshot count. Each snapshot
+  contains its nonzero FNV-1a hash, byte length, and exact UTF-8 contents.
+  Snapshots are owned by the patch region and remain available while retired
+  code from that region can still appear in stacks.
 
 Repeating the base JIT table makes a module first observed in a later `MAP3`
 snapshot fully self-describing; such a module was not present in the initial
