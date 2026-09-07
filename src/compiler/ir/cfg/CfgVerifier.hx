@@ -259,6 +259,8 @@ class CfgVerifier {
 					require(value, available, block.id);
 					expect(value, Dyn);
 				case Jump(target):
+					if (target == block.id)
+						throw 'CFG block ${block.id} in ${fn.name} has a degenerate self-loop';
 					targetBlock(target, blocks);
 				case Branch(condition, yes, no):
 					require(condition, available, block.id);

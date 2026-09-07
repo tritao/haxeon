@@ -465,7 +465,7 @@ class IrGenerator {
 					}
 					builder.select(checkBlock);
 					if (!hasDefault && isEnumType(expression.type))
-						builder.jump(checkBlock);
+						builder.markUnreachable();
 					else
 						lowerStatements(defaultBranch, builder, localTypes, loops, statementsScopeEnd(defaultBranch, span.end));
 					if (!builder.isTerminated())
