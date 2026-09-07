@@ -2604,7 +2604,9 @@ class Typer {
 				switch typedArray.type {
 					case TMap(key, value):
 						var typedKey = coerce(typedIndex, key, "map key", "E1002");
-						new TypedExpression(TMapGet(typedArray, typedKey), nullableMapValue(value), span);
+						var entryPath = FlowAnalysis.mapEntryPath(typedArray, typedKey),
+							refined = entryPath == null ? null : scope.resolveExpression(entryPath);
+						new TypedExpression(TMapGet(typedArray, typedKey), refined == null ? nullableMapValue(value) : refined, span);
 					default:
 						if (typedIndex.type != TInt)
 							fail("E1014", "Array index must be Int", typedIndex.span);
