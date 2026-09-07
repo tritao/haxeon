@@ -34,8 +34,6 @@ class RuntimeNatives {
 		var bytes:CompilerType = TBytes,
 			input:CompilerType = TNativeAbstract("realtime_bytes_input"),
 			output:CompilerType = TNativeAbstract("realtime_bytes_output");
-		definitions.push(native("haxe.io.Bytes.alloc", "realtime_runtime", "__bytes_alloc", [TInt], bytes));
-		definitions.push(native("haxe.io.Bytes.ofString", "realtime_runtime", "__bytes_of_string", [TString], bytes));
 		definitions.push(native("__bytes_length", "realtime_runtime", "__bytes_length", [bytes], TInt));
 		definitions.push(native("__bytes_get_data", "realtime_runtime", "__bytes_get_data", [bytes], THlBytes));
 		definitions.push(native("__bytes_get", "realtime_runtime", "__bytes_get", [bytes, TInt], TInt));

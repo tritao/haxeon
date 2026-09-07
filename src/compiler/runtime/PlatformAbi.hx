@@ -6,7 +6,6 @@ import compiler.types.Type.NominalKind;
 /** Host types whose implementation is supplied by the HashLink/Haxe platform. */
 class PlatformAbi {
 	static final types:Map<String, Bool> = [
-		"haxe.io.Bytes" => true,
 		"haxe.io.BytesInput" => true,
 		"haxe.io.BytesOutput" => true,
 		"haxe.io.Encoding" => true,
