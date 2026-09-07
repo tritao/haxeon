@@ -42,6 +42,7 @@ class RuntimeNatives {
 		definitions.push(native("haxe.io.Bytes.alloc", "realtime_runtime", "__bytes_alloc", [TInt], bytes));
 		definitions.push(native("haxe.io.Bytes.ofString", "realtime_runtime", "__bytes_of_string", [TString], bytes));
 		definitions.push(native("__bytes_length", "realtime_runtime", "__bytes_length", [bytes], TInt));
+		definitions.push(native("__bytes_get_data", "realtime_runtime", "__bytes_get_data", [bytes], THlBytes));
 		definitions.push(native("__bytes_get", "realtime_runtime", "__bytes_get", [bytes, TInt], TInt));
 		definitions.push(native("__bytes_set", "realtime_runtime", "__bytes_set", [bytes, TInt, TInt], TVoid));
 		definitions.push(native("__bytes_set_i32", "realtime_runtime", "__bytes_set_i32", [bytes, TInt, TInt], TVoid));

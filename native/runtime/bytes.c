@@ -59,6 +59,7 @@ HL_PRIM realtime_bytes *HL_NAME(__bytes_of_string)( vbyte *value ) {
 }
 
 HL_PRIM int HL_NAME(__bytes_length)( realtime_bytes *bytes ) { return bytes == NULL ? 0 : bytes->length; }
+HL_PRIM vbyte *HL_NAME(__bytes_get_data)( realtime_bytes *bytes ) { return bytes == NULL ? NULL : bytes->data; }
 HL_PRIM int HL_NAME(__bytes_get)( realtime_bytes *bytes, int position ) {
 	realtime_bytes_bounds(bytes, position, 1);
 	return bytes->data[position];

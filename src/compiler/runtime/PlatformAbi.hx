@@ -74,6 +74,11 @@ class PlatformAbi {
 
 	static function bytesMethod(name:String):Null<{arguments:Array<CompilerType>, result:CompilerType, nativeName:String}>
 		return switch name {
+			case "getData": {
+				arguments: noArguments(),
+				result: CompilerType.TAbstract("hl.Bytes", [], CompilerType.THlBytes),
+				nativeName: "__bytes_get_data"
+			};
 			case "get": {arguments: [CompilerType.TInt], result: CompilerType.TInt, nativeName: "__bytes_get"};
 			case "set": {arguments: [CompilerType.TInt, CompilerType.TInt], result: CompilerType.TVoid, nativeName: "__bytes_set"};
 			case "setInt32": {arguments: [CompilerType.TInt, CompilerType.TInt], result: CompilerType.TVoid, nativeName: "__bytes_set_i32"};
