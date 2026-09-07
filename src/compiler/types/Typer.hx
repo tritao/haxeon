@@ -26,6 +26,7 @@ import compiler.types.analysis.Scope;
 import compiler.semantic.SemanticProgram;
 import compiler.semantic.SemanticProgram.SemanticMethodInfo;
 import compiler.semantic.SemanticSignature;
+import compiler.semantic.DeclarationLifecycle.DeclarationStage;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedExpressionKind;
 import compiler.types.TypedAst.TypedEnum;
@@ -49,11 +50,16 @@ import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
 
 typedef TyperPhaseMetrics = {
+	final declarationMs:Float;
+	final shapeConnectionMs:Float;
+	final signatureTypingMs:Float;
 	final setupMs:Float;
 	final noReturnMs:Float;
 	final metadataMs:Float;
 	final bodiesMs:Float;
+	final bodyTransitionMs:Float;
 	final assemblyMs:Float;
+	final finalizationMs:Float;
 }
 
 typedef MeasuredTypedProgram = {
@@ -124,6 +130,7 @@ class Typer {
 
 	function typeProgramMeasured(semantic:SemanticProgram, selected:Null<Map<String, Bool>>, requireMain:Bool, entryPoint:Null<String>):MeasuredTypedProgram {
 		var startedAt = Sys.time() * 1000.0;
+		semantic.lifecycle.requireAtLeast(SignatureTyped);
 		var program = semantic.program;
 		declarations = semantic.declarations;
 		relations = semantic.relations;
@@ -270,6 +277,8 @@ class Typer {
 			registerAnonymousTypes(native.result);
 		}
 		var bodiesDoneAt = Sys.time() * 1000.0;
+		semantic.lifecycle.advanceAll(BodyTyped);
+		var bodyTransitionDoneAt = Sys.time() * 1000.0;
 		var result:TypedProgram = {
 			enums: typedEnums,
 			interfaces: typedInterfaces,
@@ -280,14 +289,21 @@ class Typer {
 			natives: typedNatives
 		};
 		var assemblyDoneAt = Sys.time() * 1000.0;
+		semantic.lifecycle.advanceAll(Finalized);
+		var finalizationDoneAt = Sys.time() * 1000.0;
 		return {
 			program: result,
 			metrics: {
+				declarationMs: semantic.lifecycleMetrics.declarationMs,
+				shapeConnectionMs: semantic.lifecycleMetrics.shapeConnectionMs,
+				signatureTypingMs: semantic.lifecycleMetrics.signatureTypingMs,
 				setupMs: setupDoneAt - startedAt,
 				noReturnMs: noReturnDoneAt - setupDoneAt,
 				metadataMs: metadataDoneAt - noReturnDoneAt,
 				bodiesMs: bodiesDoneAt - metadataDoneAt,
-				assemblyMs: assemblyDoneAt - bodiesDoneAt
+				bodyTransitionMs: bodyTransitionDoneAt - bodiesDoneAt,
+				assemblyMs: assemblyDoneAt - bodyTransitionDoneAt,
+				finalizationMs: finalizationDoneAt - assemblyDoneAt
 			}
 		};
 	}

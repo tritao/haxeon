@@ -5,6 +5,13 @@ import compiler.syntax.Ast.AstProgram;
 import compiler.types.DeclarationIndex;
 import compiler.types.SignatureInference;
 import compiler.types.TypeRelations;
+import compiler.semantic.DeclarationLifecycle.DeclarationStage;
+
+typedef SemanticLifecycleMetrics = {
+	final declarationMs:Float;
+	final shapeConnectionMs:Float;
+	final signatureTypingMs:Float;
+}
 
 typedef SemanticMethodInfo = {
 	final owner:String;
@@ -19,10 +26,40 @@ class SemanticProgram {
 	public final relations:TypeRelations;
 	public final signatures:Map<String, AstFunction>;
 	public final methodInfo:Map<String, SemanticMethodInfo>;
+	public final lifecycle:DeclarationLifecycle;
+	public final lifecycleMetrics:SemanticLifecycleMetrics;
 
 	public static function analyze(program:AstProgram):SemanticProgram {
+		return analyzeThrough(program, SignatureTyped);
+	}
+
+	/** Build a semantic snapshot only through the requested declaration stage. */
+	public static function analyzeThrough(program:AstProgram, through:DeclarationStage):SemanticProgram {
+		if ((through : Int) > (SignatureTyped : Int))
+			throw "Semantic analysis cannot type bodies or finalize without Typer";
+		var started = Sys.time() * 1000.0;
 		var inferred = SignatureInference.inferProgram(program);
-		return new SemanticProgram(inferred, DeclarationIndex.validated(inferred));
+		var declarations = DeclarationIndex.registered(inferred),
+			declaredAt = Sys.time() * 1000.0,
+			lifecycle = new DeclarationLifecycle(declarations),
+			shapesAt = declaredAt,
+			signaturesAt = declaredAt;
+		if ((through : Int) >= (ShapeConnected : Int)) {
+			declarations.connectShapes();
+			lifecycle.advanceAll(ShapeConnected);
+			shapesAt = Sys.time() * 1000.0;
+			signaturesAt = shapesAt;
+		}
+		if ((through : Int) >= (SignatureTyped : Int)) {
+			declarations.validateProgramSignatures(inferred);
+			lifecycle.advanceAll(SignatureTyped);
+			signaturesAt = Sys.time() * 1000.0;
+		}
+		return new SemanticProgram(inferred, declarations, null, null, null, lifecycle, {
+			declarationMs: declaredAt - started,
+			shapeConnectionMs: shapesAt - declaredAt,
+			signatureTypingMs: signaturesAt - shapesAt
+		});
 	}
 
 	/** Reuse validated declarations when only explicitly typed top-level bodies changed. */
@@ -54,7 +91,8 @@ class SemanticProgram {
 		for (fn in functions)
 			if (selected.exists(fn.name))
 				nextSignatures.set(fn.name, fn);
-		return new SemanticProgram(nextProgram, declarations, nextSignatures, methodInfo, relations);
+		return new SemanticProgram(nextProgram, declarations, nextSignatures, methodInfo, relations, new DeclarationLifecycle(declarations, SignatureTyped),
+			lifecycleMetrics);
 	}
 
 	static function withBody(signature:AstFunction, body:AstFunction):AstFunction
@@ -70,10 +108,13 @@ class SemanticProgram {
 		};
 
 	function new(program:AstProgram, declarations:DeclarationIndex, ?preparedSignatures:Map<String, AstFunction>,
-			?preparedMethodInfo:Map<String, SemanticMethodInfo>, ?preparedRelations:TypeRelations) {
+			?preparedMethodInfo:Map<String, SemanticMethodInfo>, ?preparedRelations:TypeRelations, ?preparedLifecycle:DeclarationLifecycle,
+			?preparedLifecycleMetrics:SemanticLifecycleMetrics) {
 		this.program = program;
 		this.declarations = declarations;
 		relations = preparedRelations == null ? new TypeRelations(declarations) : preparedRelations;
+		lifecycle = preparedLifecycle == null ? new DeclarationLifecycle(declarations, SignatureTyped) : preparedLifecycle;
+		lifecycleMetrics = preparedLifecycleMetrics == null ? {declarationMs: 0.0, shapeConnectionMs: 0.0, signatureTypingMs: 0.0} : preparedLifecycleMetrics;
 		if (preparedSignatures != null && preparedMethodInfo != null) {
 			signatures = preparedSignatures;
 			methodInfo = preparedMethodInfo;

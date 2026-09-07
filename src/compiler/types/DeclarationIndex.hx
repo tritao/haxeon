@@ -59,7 +59,10 @@ class DeclarationIndex {
 	final fallbackSpan:SourceSpan;
 
 	public static function validated(program:AstProgram):DeclarationIndex
-		return new DeclarationIndex(program, true, null);
+		return registered(program).validate(program);
+
+	public static function registered(program:AstProgram):DeclarationIndex
+		return new DeclarationIndex(program, false, null);
 
 	public static function forModule(program:AstProgram, source:SourceFile):DeclarationIndex
 		return new DeclarationIndex(program, false, source.span(0, 0));
@@ -107,10 +110,22 @@ class DeclarationIndex {
 			declare(DeclarationKind.Function, fn.name, fn.span);
 		inheritance = new NominalInheritance(this);
 		if (validate) {
-			validateCycles();
-			validateSignatures(program);
+			connectShapes();
+			validateProgramSignatures(program);
 		}
 		conversions = new AbstractConversionGraph(this, validate);
+	}
+
+	public function connectShapes():Void
+		validateCycles();
+
+	public function validateProgramSignatures(program:AstProgram):Void
+		validateSignatures(program);
+
+	function validate(program:AstProgram):DeclarationIndex {
+		connectShapes();
+		validateProgramSignatures(program);
+		return this;
 	}
 
 	public function resolve(type:AstType, ?span:SourceSpan, ?substitutions:Map<String, CompilerType>):CompilerType

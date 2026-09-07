@@ -36,6 +36,12 @@ class ModuleMain {
 			throw 'Typed dependency publication retained provisional edges: $mainDependencies';
 		if (first.metrics.modules != 2 || first.metrics.retypedFunctions == 0 || first.metrics.moduleNatives <= 1 || first.metrics.elapsedMs < 0.0)
 			throw 'Compile metrics did not describe the initial module build: modules=${first.metrics.modules}, retyped=${first.metrics.retypedFunctions}, natives=${first.metrics.moduleNatives}, elapsed=${first.metrics.elapsedMs}';
+		if (first.metrics.declarationMs < 0.0
+			|| first.metrics.shapeConnectionMs < 0.0
+			|| first.metrics.signatureTypingMs < 0.0
+			|| first.metrics.bodyTransitionMs < 0.0
+			|| first.metrics.finalizationTransitionMs < 0.0)
+			throw "Compile metrics did not describe declaration lifecycle transitions";
 		try {
 			compiler.registerNative("late", "std", "sys_time", [], TFloat);
 			throw "late native registration was accepted";

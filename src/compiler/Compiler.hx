@@ -75,11 +75,16 @@ typedef CompileMetrics = {
 	final transactionSnapshotMs:Float;
 	final frontendMs:Float;
 	final typingLoweringMs:Float;
+	final declarationMs:Float;
+	final shapeConnectionMs:Float;
+	final signatureTypingMs:Float;
 	final typerSetupMs:Float;
 	final typerNoReturnMs:Float;
 	final typerMetadataMs:Float;
 	final typerBodiesMs:Float;
+	final bodyTransitionMs:Float;
 	final typerAssemblyMs:Float;
+	final finalizationTransitionMs:Float;
 	final irAssemblyMs:Float;
 	final abiPlanningMs:Float;
 	final backendAssemblyMs:Float;
@@ -374,11 +379,16 @@ class Compiler {
 					transactionSnapshotMs: 0.0,
 					frontendMs: 0.0,
 					typingLoweringMs: 0.0,
+					declarationMs: 0.0,
+					shapeConnectionMs: 0.0,
+					signatureTypingMs: 0.0,
 					typerSetupMs: 0.0,
 					typerNoReturnMs: 0.0,
 					typerMetadataMs: 0.0,
 					typerBodiesMs: 0.0,
+					bodyTransitionMs: 0.0,
 					typerAssemblyMs: 0.0,
+					finalizationTransitionMs: 0.0,
 					irAssemblyMs: 0.0,
 					abiPlanningMs: 0.0,
 					backendAssemblyMs: 0.0,
