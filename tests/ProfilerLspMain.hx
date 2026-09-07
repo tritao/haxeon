@@ -20,7 +20,7 @@ class ProfilerLspMain {
 			dispatcher.dispatch(request(1, "initialize", {}));
 			var initialized = waitFor(messages, mutex, available, value -> value.id == 1);
 			var commands:Array<Dynamic> = initialized.result.capabilities.executeCommandProvider.commands;
-			if (commands.length != 7)
+			if (commands.length != 9)
 				throw "Profiler commands were not advertised";
 
 			dispatcher.dispatch(command(2, "haxeon.profiler.connect", {port: port, timeoutSeconds: 3.0, leafCapacity: 32}));
@@ -32,6 +32,10 @@ class ProfilerLspMain {
 			var started = waitFor(messages, mutex, available, value -> value.id == 3);
 			if (started.result.state != "running" || started.result.metadataSchema != 4)
 				throw "Profiler did not start with schema 4 metadata";
+			var capturePath = "out/profiler-lsp-test.hlpc";
+			dispatcher.dispatch(command(6, "haxeon.profiler.captureStart", {path: capturePath}));
+			if (!waitFor(messages, mutex, available, value -> value.id == 6).result.captureActive)
+				throw "Profiler capture did not start";
 			var notification = waitFor(messages, mutex, available,
 				value -> value.method == "haxeon/profilerSnapshot" && value.params.samples > 0 && value.params.leaves.length > 0);
 			var leaf = notification.params.leaves[0];
@@ -46,6 +50,9 @@ class ProfilerLspMain {
 					if (frame.file != null && frame.line != null) locatedFrame = true;
 			if (!locatedFrame)
 				throw "Profiler stack frames omitted source navigation metadata";
+			dispatcher.dispatch(command(7, "haxeon.profiler.captureStop", {}));
+			if (waitFor(messages, mutex, available, value -> value.id == 7).result.captureActive || !sys.FileSystem.exists(capturePath))
+				throw "Profiler capture did not finalize";
 
 			dispatcher.dispatch(command(4, "haxeon.profiler.pause", {}));
 			var paused = waitFor(messages, mutex, available, value -> value.id == 4);

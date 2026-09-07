@@ -189,6 +189,7 @@ class ProfilerSession {
 	public var eventCapacity:Int = 256;
 
 	final client:HldiClient;
+	var capture:Null<HlpcCapture>;
 	final decoder = new HldiStreamDecoder();
 	final functions = new Map<String, ProfileAggregate>();
 	final lines = new Map<String, ProfileAggregate>();
@@ -229,7 +230,8 @@ class ProfilerSession {
 		try {
 			if (metadataRefreshSeconds > 0 && Timer.stamp() >= nextMetadataRefresh)
 				refreshMetadata();
-			var result = client.read(cursor, maxBytes);
+			var requested = cursor, result = client.read(cursor, maxBytes);
+			if (capture != null) capture.samples(requested, result.next, result.dropped, result.bytes);
 			cursor = result.next;
 			dropped = result.dropped;
 			var records = decoder.append(result.bytes);
@@ -246,7 +248,8 @@ class ProfilerSession {
 	}
 
 	public function refreshMetadata(?timestamp:Float):Void {
-		var previous = metadata, started = Timer.stamp(), next = client.metadata();
+		var previous = metadata, started = Timer.stamp(), bytes = client.metadataBytes(), next = profiler.HldiCodec.metadata(bytes);
+		if (capture != null) capture.metadata(bytes);
 		metadataRefreshMs = (Timer.stamp() - started) * 1000;
 		if (previous != null)
 			for (moduleId => revision in next.revisions) {
@@ -276,12 +279,28 @@ class ProfilerSession {
 		if (state == Closed)
 			return;
 		try pause() catch (_:Dynamic) {}
+		stopCapture();
 		client.close();
 		state = Closed;
 	}
 
 	public function pendingBytes():Int
 		return decoder.pendingBytes();
+
+	public function startCapture(path:String):Void {
+		if (capture != null) throw "Profiler capture is already active";
+		capture = new HlpcCapture(path, client.hello.processId, sampleRate);
+		capture.metadata(client.metadataBytes());
+	}
+
+	public function stopCapture():Void {
+		if (capture == null) return;
+		capture.close(cursor, dropped);
+		capture = null;
+	}
+
+	public function captureActive():Bool
+		return capture != null;
 
 	function updateHealth(status:profiler.HldiTypes.HldiStatus):Void {
 		dropped = status.dropped;

@@ -87,7 +87,10 @@ class HldiClient {
 	}
 
 	public function metadata():HldiMetadata
-		return HldiCodec.metadata(request(PROFILE_METADATA, Bytes.alloc(0)));
+		return HldiCodec.metadata(metadataBytes());
+
+	public function metadataBytes():Bytes
+		return request(PROFILE_METADATA, Bytes.alloc(0));
 
 	public function close():Void {
 		if (closed)

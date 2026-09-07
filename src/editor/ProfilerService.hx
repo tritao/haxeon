@@ -43,6 +43,8 @@ class ProfilerService {
 				case "haxeon.profiler.poll": poll();
 				case "haxeon.profiler.reset": reset();
 				case "haxeon.profiler.snapshot": currentSnapshot();
+				case "haxeon.profiler.captureStart": captureStart(options);
+				case "haxeon.profiler.captureStop": captureStop();
 				case "haxeon.profiler.disconnect": disconnect();
 				default: throw 'Unknown Haxeon profiler command "$command"';
 			};
@@ -129,6 +131,19 @@ class ProfilerService {
 		return {state: "disconnected"};
 	}
 
+	function captureStart(options:Dynamic):Dynamic {
+		var current = requireSession(), path = stringOption(options, "path", "");
+		if (path.length == 0) throw "Profiler capture path must not be empty";
+		current.startCapture(path);
+		return snapshot(current.snapshot());
+	}
+
+	function captureStop():Dynamic {
+		var current = requireSession();
+		current.stopCapture();
+		return snapshot(current.snapshot());
+	}
+
 	function currentSnapshot():Dynamic
 		return session == null ? {state: "disconnected"} : snapshot(session.snapshot());
 
@@ -210,6 +225,7 @@ class ProfilerService {
 			}],
 			lastError: value.lastError
 		};
+		Reflect.setField(result, "captureActive", session != null && session.captureActive());
 		var view = viewModel.update(result);
 		Reflect.setField(result, "view", view.state);
 		Reflect.setField(result, "viewDelta", view.delta);

@@ -266,6 +266,8 @@ class LspProtocol {
 						"haxeon.profiler.poll",
 						"haxeon.profiler.reset",
 						"haxeon.profiler.snapshot",
+						"haxeon.profiler.captureStart",
+						"haxeon.profiler.captureStop",
 						"haxeon.profiler.disconnect"
 					]
 				},
