@@ -12,7 +12,6 @@ class PlatformAbi {
 		"haxe.io.Encoding" => true,
 		"haxe.io.Eof" => true,
 		"haxe.Json" => true,
-		"sys.FileSystem" => true,
 		"sys.io.File" => true,
 		"Type.ValueType" => true
 	];
