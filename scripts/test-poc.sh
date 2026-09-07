@@ -137,6 +137,7 @@ run_program map-literal 42
 run_program map-comprehension 42
 run_program switch-guard 42
 run_program captured-lambda 42
+run_program captured-this 42
 run_program mutable-capture 78
 run_program nested-mutable-capture 3
 run_program trace 42
@@ -204,6 +205,7 @@ run_program enum-exhaustive 42
 run_program interface-dispatch 42
 run_program interface-inheritance 43
 run_program interface-upcast 5
+run_program interface-field 42
 run_program throw-string 1
 run_program try-catch 42
 run_program try-rethrow 1

@@ -39,7 +39,8 @@ class CaptureAnalysis {
 					if (name.indexOf(".") < 0)
 						names.set(name, true);
 				case Increment(name, _, _):
-					names.set(name, true);
+					if (name.indexOf(".") < 0)
+						names.set(name, true);
 				case If(_, yes, no, _):
 					collectAssignedLocals(yes, names);
 					collectAssignedLocals(no, names);
@@ -103,8 +104,7 @@ class CaptureAnalysis {
 				case VarDeclaration(_, _, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
 					collectExpressionVariables(expression, names);
 				case Assignment(name, expression, _):
-					if (name.indexOf(".") < 0)
-						names.set(name, true);
+					names.set(pathRoot(name), true);
 					collectExpressionVariables(expression, names);
 				case IndexAssignment(array, offset, expression, _):
 					collectExpressionVariables(array, names);
@@ -143,7 +143,7 @@ class CaptureAnalysis {
 						collectVariables(catchClause.statements, names);
 				case Break(_), Continue(_):
 				case Increment(name, _, _):
-					names.set(name, true);
+					names.set(pathRoot(name), true);
 			}
 	}
 
@@ -331,7 +331,7 @@ class CaptureAnalysis {
 	public static function collectExpressionVariables(expression:AstExpression, names:Map<String, Bool>):Void
 		switch expression {
 			case Variable(name, _):
-				names.set(name, true);
+				names.set(pathRoot(name), true);
 			case Member(object, _, _):
 				collectExpressionVariables(object, names);
 			case MethodCall(object, _, arguments, _):
@@ -426,4 +426,9 @@ class CaptureAnalysis {
 			case BoolLiteral(_, _), NullLiteral(_), Unreachable(_), ErrorExpression(_):
 				return;
 		}
+
+	static function pathRoot(name:String):String {
+		var separator = name.indexOf(".");
+		return separator < 0 ? name : name.substring(0, separator);
+	}
 }

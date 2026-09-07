@@ -538,6 +538,10 @@ class IrVerifier {
 					case Abstract(b): a == b;
 					default: false;
 				};
+			case Virtual(a): switch right {
+					case Virtual(b): a == b;
+					default: false;
+				};
 			case Array(a): switch right {
 					case Array(b): sameType(a, b);
 					default: false;
