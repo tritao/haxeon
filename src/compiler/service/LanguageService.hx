@@ -1817,6 +1817,7 @@ class LanguageService {
 
 	static function typeName(type:AstType):String
 		return switch type {
+			case ErrorType(_): "_";
 			case IntType: "Int";
 			case BoolType: "Bool";
 			case FloatType: "Float";

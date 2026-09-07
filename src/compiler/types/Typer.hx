@@ -790,6 +790,8 @@ class Typer {
 				fail("E1012", "Unreachable statement", statementSpan(statement));
 			}
 			switch statement {
+				case ErrorStatement(_):
+					continue;
 				case UninitializedDeclaration(name, declared, span):
 					var declaredType = lowerType(declared);
 					if (context.cells.exists(name))
@@ -3886,6 +3888,7 @@ class Typer {
 
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
+			case ErrorStatement(span): span;
 			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span),
 				FieldAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), Throw(_, span), Try(_, _, span), If(_, _, _, span), While(_, _, span),
 				DoWhile(_, _,

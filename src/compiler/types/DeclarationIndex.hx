@@ -121,6 +121,7 @@ class DeclarationIndex {
 
 	function resolveInner(type:AstType, span:SourceSpan, resolving:Map<String, Bool>, substitutions:Map<String, CompilerType>):CompilerType
 		return switch type {
+			case ErrorType(_): TDynamic;
 			case IntType: TInt;
 			case BoolType: TBool;
 			case FloatType: TFloat;

@@ -249,6 +249,7 @@ class ModuleCanonicalizer {
 
 	public static function astTypeName(type:compiler.syntax.Ast.AstType):String
 		return switch type {
+			case ErrorType(_): "_";
 			case IntType: "Int";
 			case BoolType: "Bool";
 			case FloatType: "Float";
@@ -270,6 +271,7 @@ class ModuleCanonicalizer {
 
 	public static function canonicalStatement(s:AstStatement, module:String, entry:String, locals:Map<String, Bool>, ?aliases:Map<String, String>):AstStatement
 		return switch s {
+			case ErrorStatement(_): s;
 			case UninitializedDeclaration(n, t, span): UninitializedDeclaration(n, canonicalType(t, aliases), span);
 			case VarDeclaration(n, t, e,
 				span): VarDeclaration(n, t == null ? null : canonicalType(t, aliases), canonicalExpression(e, module, entry, locals, aliases), span);

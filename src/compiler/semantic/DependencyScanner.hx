@@ -7,6 +7,7 @@ import compiler.syntax.Ast.AstStatement;
 class DependencyScanner {
 	public static function scanStatement(s:AstStatement, dependencies:Map<String, Bool>):Void
 		switch s {
+			case ErrorStatement(_):
 			case UninitializedDeclaration(_, _, _):
 			case VarDeclaration(_, _, e, _), Assignment(_, e, _), Return(e, _), Throw(e, _):
 				scanExpression(e, dependencies);

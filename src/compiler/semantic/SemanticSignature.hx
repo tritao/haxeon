@@ -84,6 +84,7 @@ class SemanticSignature {
 
 	static function parsedType(type:AstType, aliases:Map<String, AstType>, resolving:Map<String, Bool>):String
 		return switch type {
+			case ErrorType(_): "_";
 			case IntType: "Int";
 			case BoolType: "Bool";
 			case FloatType: "Float";

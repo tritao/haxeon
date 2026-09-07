@@ -67,13 +67,14 @@ class SemanticDependencyCollector {
 			case AnonymousType(fields):
 				for (field in fields)
 					addTypeDependency(result, owner, kind, field.type, aliases);
-			case IntType, BoolType, FloatType, StringType, VoidType, InferredType:
+			case IntType, BoolType, FloatType, StringType, VoidType, InferredType, ErrorType(_):
 		}
 
 	public static function addBodyDependencies(result:Map<String, Array<SemanticDependency>>, owner:String, statements:Array<AstStatement>, module:String,
 			entry:String):Void
 		for (statement in statements)
 			switch statement {
+				case ErrorStatement(_):
 				case UninitializedDeclaration(_, type, _):
 					addTypeDependency(result, owner, SemanticDependencyKind.Body, type, []);
 				case VarDeclaration(_, type, expression, _):
@@ -154,6 +155,7 @@ class SemanticDependencyCollector {
 
 	public static function scanCalls(statement:AstStatement, calls:Map<String, Bool>, aliases:Map<String, String>):Void
 		switch statement {
+			case ErrorStatement(_):
 			case UninitializedDeclaration(name, _, _):
 				aliases.remove(name);
 			case VarDeclaration(name, _, e, _):

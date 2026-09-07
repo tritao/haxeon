@@ -8,6 +8,7 @@ class LambdaCollector {
 	public static function collect(statements:Array<AstStatement>, functionName:String, module:String, generatedByModule:Map<String, Map<String, Bool>>):Void {
 		for (statement in statements)
 			switch statement {
+				case ErrorStatement(_):
 				case UninitializedDeclaration(_, _, _):
 				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
 					collectLambdaExpression(expression, functionName, module, generatedByModule);

@@ -65,5 +65,17 @@ class ParserRecoveryMain {
 			case VarDeclaration(_, _, ErrorExpression(_), _):
 			default: throw "incomplete initializer did not produce an ErrorExpression";
 		}
+		var typeFile = new SourceFile("ErrorType.hx", "function main():Void { var incomplete:"),
+			typeProgram = new Parser(new Lexer(typeFile).tokenize()).parseProgramRecovering().program;
+		switch typeProgram.functions[0].statements[0] {
+			case UninitializedDeclaration(_, ErrorType(_), _):
+			default: throw "incomplete annotation did not produce an ErrorType";
+		}
+		var statementFile = new SourceFile("ErrorStatement.hx", "function main():Void { var = ; return; }"),
+			statementProgram = new Parser(new Lexer(statementFile).tokenize()).parseProgramRecovering().program;
+		switch statementProgram.functions[0].statements[0] {
+			case ErrorStatement(_):
+			default: throw "malformed statement did not produce an ErrorStatement";
+		}
 	}
 }

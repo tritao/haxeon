@@ -10,6 +10,8 @@ enum AstType {
 	StringType;
 	VoidType;
 	InferredType;
+	/** Recovery-only placeholder for an incomplete or malformed type. */
+	ErrorType(span:SourceSpan);
 	NativeAbstractType(declaration:String, tag:String);
 	NamedType(name:String);
 	AppliedType(name:String, arguments:Array<AstType>);
@@ -203,6 +205,8 @@ typedef AstSwitchExpressionCase = {
 
 /** Parsed statement tree before binding resolution and type checking. */
 enum AstStatement {
+	/** Recovery-only placeholder retaining the malformed statement location. */
+	ErrorStatement(span:SourceSpan);
 	UninitializedDeclaration(name:String, type:AstType, span:SourceSpan);
 	VarDeclaration(name:String, ?type:AstType, initializer:AstExpression, span:SourceSpan);
 	Assignment(name:String, expression:AstExpression, span:SourceSpan);

@@ -64,6 +64,7 @@ class CaptureAnalysis {
 	public static function collectDeclaredLocals(statements:Array<AstStatement>, names:Map<String, Bool>):Void {
 		for (statement in statements)
 			switch statement {
+				case ErrorStatement(_):
 				case UninitializedDeclaration(name, _, _):
 					names.set(name, true);
 				case VarDeclaration(name, _, _, _):
@@ -97,6 +98,7 @@ class CaptureAnalysis {
 	public static function collectVariables(statements:Array<AstStatement>, names:Map<String, Bool>):Void {
 		for (statement in statements)
 			switch statement {
+				case ErrorStatement(_):
 				case UninitializedDeclaration(_, _, _):
 				case VarDeclaration(_, _, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
 					collectExpressionVariables(expression, names);
@@ -148,6 +150,7 @@ class CaptureAnalysis {
 	public static function collectMutableCaptureCandidates(statements:Array<AstStatement>, outerDeclared:Map<String, Bool>, result:Map<String, Bool>):Void {
 		for (statement in statements)
 			switch (statement) {
+				case ErrorStatement(_):
 				case UninitializedDeclaration(_, _, _):
 				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
 					collectMutableCaptureExpression(expression, outerDeclared, result);
