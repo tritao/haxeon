@@ -10,8 +10,8 @@ class ModuleCanonicalizer {
 	public static function canonicalFunction(fn:AstFunction, module:String, entry:String, locals:Map<String, Bool>, ?explicitName:String,
 			?aliases:Map<String, String>):AstFunction {
 		var name = explicitName != null ? explicitName : module == entry && fn.name == "main" ? "main" : module + "." + fn.name,
-			functionAliases = aliases == null ? null : copyAliases(aliases),
-			typeParameters = fn.typeParameters;
+			typeParameters = fn.typeParameters,
+			functionAliases = aliases == null || typeParameters == null || typeParameters.length == 0 ? aliases : copyAliases(aliases);
 		if (functionAliases != null && typeParameters != null)
 			for (parameter in typeParameters)
 				functionAliases.set(parameter, parameter);
