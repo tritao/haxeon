@@ -144,6 +144,7 @@ run_program string-concat-mixed 42
 run_program string-split 42
 run_program reflect-compare-sort 42
 run_program array-index-growth 42
+run_program date-runtime 42
 run_program sys-runtime 42
 run_program callback-method 42
 run_program bound-method 42
