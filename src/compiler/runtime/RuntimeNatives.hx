@@ -47,6 +47,7 @@ class RuntimeNatives {
 		definitions.push(native("__bytes_sub", "realtime_runtime", "__bytes_sub", [bytes, TInt, TInt], bytes));
 		definitions.push(native("__bytes_compare", "realtime_runtime", "__bytes_compare", [bytes, bytes], TInt));
 		definitions.push(native("__bytes_to_string", "realtime_runtime", "__bytes_to_string", [bytes], TString));
+		definitions.push(native("__bytes_get_string", "realtime_runtime", "__bytes_get_string", [bytes, TInt, TInt], TString));
 		definitions.push(native("__bytes_input_new", "realtime_runtime", "__bytes_input_new", [bytes], input));
 		definitions.push(native("__bytes_input_position", "realtime_runtime", "__bytes_input_position", [input], TInt));
 		definitions.push(native("__bytes_input_big_endian", "realtime_runtime", "__bytes_input_big_endian", [input], TBool));
@@ -65,9 +66,6 @@ class RuntimeNatives {
 		definitions.push(native("__bytes_output_write_string", "realtime_runtime", "__bytes_output_write_string", [output, TString], TVoid));
 		definitions.push(native("__bytes_output_write", "realtime_runtime", "__bytes_output_write", [output, bytes], TVoid));
 		definitions.push(native("__bytes_output_get_bytes", "realtime_runtime", "__bytes_output_get_bytes", [output], bytes));
-		var date:CompilerType = TNativeAbstract("realtime_date");
-		definitions.push(native("Date.now", "realtime_runtime", "__date_now", [], date));
-		definitions.push(native("__date_get_time", "realtime_runtime", "__date_get_time", [date], TFloat));
 		return definitions;
 	}
 

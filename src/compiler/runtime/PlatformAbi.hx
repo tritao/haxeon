@@ -14,7 +14,6 @@ class PlatformAbi {
 		"haxe.Json" => true,
 		"sys.FileSystem" => true,
 		"sys.io.File" => true,
-		"Date" => true,
 		"Type.ValueType" => true
 	];
 
@@ -79,6 +78,7 @@ class PlatformAbi {
 			case "set": {arguments: [CompilerType.TInt, CompilerType.TInt], result: CompilerType.TVoid, nativeName: "__bytes_set"};
 			case "setInt32": {arguments: [CompilerType.TInt, CompilerType.TInt], result: CompilerType.TVoid, nativeName: "__bytes_set_i32"};
 			case "sub": {arguments: [CompilerType.TInt, CompilerType.TInt], result: CompilerType.TBytes, nativeName: "__bytes_sub"};
+			case "getString": {arguments: [CompilerType.TInt, CompilerType.TInt], result: CompilerType.TString, nativeName: "__bytes_get_string"};
 			case "compare": {arguments: [CompilerType.TBytes], result: CompilerType.TInt, nativeName: "__bytes_compare"};
 			case "toString": {arguments: noArguments(), result: CompilerType.TString, nativeName: "__bytes_to_string"};
 			default: null;
@@ -88,7 +88,6 @@ class PlatformAbi {
 		return switch kind {
 			case "realtime_bytes_input": bytesInputMethod(name);
 			case "realtime_bytes_output": bytesOutputMethod(name);
-			case "realtime_date": name == "getTime" ? {arguments: noArguments(), result: CompilerType.TFloat, nativeName: "__date_get_time"} : null;
 			default: null;
 		};
 
