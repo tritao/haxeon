@@ -43,6 +43,9 @@ class LspProtocolMain {
 			|| initialized.result.capabilities.signatureHelpProvider == null
 			|| initialized.result.capabilities.textDocumentSync.change != 1
 			|| !initialized.result.capabilities.documentHighlightProvider
+			|| initialized.result.capabilities.diagnosticProvider.identifier != "haxeon"
+			|| !initialized.result.capabilities.diagnosticProvider.interFileDependencies
+			|| initialized.result.capabilities.diagnosticProvider.workspaceDiagnostics
 			|| initialized.result.capabilities.semanticTokensProvider.legend.tokenTypes[12] != "function"
 			|| !initialized.result.capabilities.semanticTokensProvider.full.delta
 			|| initialized.result.capabilities.codeActionProvider.codeActionKinds[0] != "quickfix"
@@ -804,6 +807,33 @@ class LspProtocolMain {
 		}));
 		if (!Reflect.hasField(unknownHistory.result, "data"))
 			throw "unknown semantic token history did not fall back to a full result";
+		var diagnosticProtocol = new LspProtocol(), diagnosticUri = "file:///workspace/PullDiagnostic.hx",
+			diagnosticSource = "function main():Int return 0;";
+		request(diagnosticProtocol, '{"jsonrpc":"2.0","id":86,"method":"initialize","params":{}}');
+		diagnosticProtocol.handle(Json.stringify({
+			jsonrpc: "2.0", method: "textDocument/didOpen",
+			params: {textDocument: {uri: diagnosticUri, languageId: "haxe", version: 1, text: diagnosticSource}}
+		}));
+		var firstDiagnostics = request(diagnosticProtocol, Json.stringify({
+			jsonrpc: "2.0", id: 87, method: "textDocument/diagnostic", params: {textDocument: {uri: diagnosticUri}}
+		})), unchangedDiagnostics = request(diagnosticProtocol, Json.stringify({
+			jsonrpc: "2.0", id: 88, method: "textDocument/diagnostic",
+			params: {textDocument: {uri: diagnosticUri}, previousResultId: firstDiagnostics.result.resultId}
+		}));
+		if (firstDiagnostics.result.kind != "full" || firstDiagnostics.result.items.length != 0
+			|| unchangedDiagnostics.result.kind != "unchanged"
+			|| unchangedDiagnostics.result.resultId != firstDiagnostics.result.resultId)
+			throw "document pull diagnostics did not reuse an unchanged result";
+		diagnosticProtocol.handle(documentChangeMessage(diagnosticUri, 2, "function main():String return \"broken"));
+		var changedDiagnostics = request(diagnosticProtocol, Json.stringify({
+			jsonrpc: "2.0", id: 89, method: "textDocument/diagnostic",
+			params: {textDocument: {uri: diagnosticUri}, previousResultId: firstDiagnostics.result.resultId}
+		}));
+		if (changedDiagnostics.result.kind != "full"
+			|| changedDiagnostics.result.resultId == firstDiagnostics.result.resultId
+			|| changedDiagnostics.result.items.length != 1
+			|| changedDiagnostics.result.items[0].code != "E0001")
+			throw "document pull diagnostics did not invalidate after an edit";
 		if (protocol.handle('{"jsonrpc":"2.0","method":"$/cancelRequest","params":{"id":999}}').length != 0)
 			throw "LSP cancellation notification produced a response";
 		var lifecycle = new LspProtocol(),

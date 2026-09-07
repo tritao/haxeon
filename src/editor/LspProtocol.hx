@@ -27,6 +27,13 @@ private typedef SemanticTokenSnapshot = {
 	final data:Array<Int>;
 }
 
+private typedef DiagnosticSnapshot = {
+	final context:String;
+	final version:Int;
+	final fingerprint:String;
+	final resultId:String;
+}
+
 /** Minimal standard LSP adapter over the compiler-owned language service. */
 class LspProtocol {
 	static final SEMANTIC_TOKEN_TYPES = ["namespace", "type", "class", "enum", "interface", "struct", "typeParameter", "parameter", "variable",
@@ -44,11 +51,14 @@ class LspProtocol {
 	final activeRequests:Map<String, CancellationToken> = [];
 	final requestMutex = new sys.thread.Mutex();
 	final diagnosticMutex = new sys.thread.Mutex();
+	final pullDiagnosticMutex = new sys.thread.Mutex();
 	final semanticTokenMutex = new sys.thread.Mutex();
 	final pendingDiagnosticTargets:Map<String, Bool> = [];
 	final semanticTokenSnapshots:Map<String, SemanticTokenSnapshot> = [];
 	final semanticTokenOrder:Array<String> = [];
+	final pullDiagnosticSnapshots:Map<String, DiagnosticSnapshot> = [];
 	var semanticTokenSequence = 0;
+	var pullDiagnosticSequence = 0;
 	var diagnosticToken:Null<CancellationToken>;
 	var deferDiagnostics = false;
 	var analysisGeneration = 0;
@@ -102,6 +112,7 @@ class LspProtocol {
 				case "textDocument/completion": cancellable(id, token -> completion(request, token));
 				case "completionItem/resolve": cancellable(id, token -> resolveCompletion(request, token));
 				case "textDocument/documentHighlight": cancellable(id, token -> documentHighlights(request, token));
+				case "textDocument/diagnostic": cancellable(id, token -> documentDiagnostic(request, token));
 				case "textDocument/semanticTokens/full": cancellable(id, token -> semanticTokens(request, token));
 				case "textDocument/semanticTokens/full/delta": cancellable(id, token -> semanticTokenDelta(request, token));
 				case "textDocument/codeAction": cancellable(id, token -> codeActions(request, token));
@@ -242,6 +253,7 @@ class LspProtocol {
 				documentSymbolProvider: true,
 				completionProvider: {triggerCharacters: ["."], resolveProvider: true},
 				documentHighlightProvider: true,
+				diagnosticProvider: {identifier: "haxeon", interFileDependencies: true, workspaceDiagnostics: false},
 				semanticTokensProvider: {
 					legend: {tokenTypes: SEMANTIC_TOKEN_TYPES, tokenModifiers: SEMANTIC_TOKEN_MODIFIERS},
 					full: {delta: true}
@@ -328,6 +340,7 @@ class LspProtocol {
 			module = ModulePath.fromFile(compilerPath),
 			targets = service.compiler.dependentModules(module);
 		clearSemanticTokenSnapshots(uri);
+		clearPullDiagnosticSnapshot(uri);
 		documents.close(uri);
 		var restored = project.restore(document.path, service);
 		publishedDiagnostics.set(uri, "");
@@ -436,6 +449,33 @@ class LspProtocol {
 				+ diagnostic.span.end
 				+ ":"
 				+ diagnostic.message].join("\n");
+
+	function documentDiagnostic(request:Dynamic, token:CancellationToken):Dynamic {
+		var document = document(request);
+		ensureAnalyzed(document, token);
+		token.check();
+		var path = compilerPath(document), state = service.compiler.modules.get(ModulePath.fromFile(path));
+		if (state == null || state.source.text != document.source)
+			throw new LspRequestError(-32801, "Diagnostic snapshot does not match the current document version");
+		var fingerprint = diagnosticFingerprint(state.diagnostics), context = semanticTokenContext(document), resultId:String;
+		pullDiagnosticMutex.acquire();
+		var snapshot = pullDiagnosticSnapshots.get(document.uri);
+		if (snapshot != null && snapshot.context == context && snapshot.version == document.version && snapshot.fingerprint == fingerprint)
+			resultId = snapshot.resultId;
+		else {
+			resultId = context + ":" + document.version + ":" + pullDiagnosticSequence++;
+			pullDiagnosticSnapshots.set(document.uri, {context: context, version: document.version, fingerprint: fingerprint, resultId: resultId});
+		}
+		pullDiagnosticMutex.release();
+		var previous:Dynamic = Reflect.field(required(request, "params"), "previousResultId");
+		if (previous != null && !Std.isOfType(previous, String))
+			throw new LspRequestError(-32602, 'Field "previousResultId" must be a string');
+		return previous == resultId ? {kind: "unchanged", resultId: resultId} : {
+			kind: "full",
+			resultId: resultId,
+			items: [for (diagnostic in state.diagnostics) diagnosticJson(diagnostic)]
+		};
+	}
 
 	function documentSymbols(request:Dynamic, token:CancellationToken):Array<Dynamic> {
 		var document = document(request);
@@ -1017,6 +1057,12 @@ class LspProtocol {
 		for (id in retained)
 			semanticTokenOrder.push(id);
 		semanticTokenMutex.release();
+	}
+
+	function clearPullDiagnosticSnapshot(uri:String):Void {
+		pullDiagnosticMutex.acquire();
+		pullDiagnosticSnapshots.remove(uri);
+		pullDiagnosticMutex.release();
 	}
 
 	static function sameSemanticToken(left:Array<Int>, right:Array<Int>, leftIndex:Int, rightIndex:Int):Bool {
