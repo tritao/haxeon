@@ -982,8 +982,7 @@ class IrGenerator {
 					builder.jump(nextBlock);
 					builder.select(includeBlock);
 					var loweredValue = lowerExpression(value, builder, localTypes);
-					var grown = lowerArrayNativeCall(builder, resultElement, "push", [builder.load(resultName, resultType), loweredValue], resultType);
-					builder.store(resultName, grown);
+					lowerArrayNativeCall(builder, resultElement, "push", [builder.load(resultName, resultType), loweredValue], I32);
 					builder.jump(nextBlock);
 					builder.select(nextBlock);
 				}
@@ -1193,31 +1192,13 @@ class IrGenerator {
 					case TArray(valueType): valueType;
 					default: throw "Array.push requires an array value";
 				}, operands = lowerOperands([array, value], builder, localTypes);
-				var pushed = lowerArrayNativeCall(builder, element, "push", operands, Array(lowerType(element)));
-				switch array.expression {
-					case TLocal(name): builder.store(name, pushed);
-					case TCellLocal(name, cellClass):
-						var cell = builder.load('$' + 'cell:$name', Obj(cellClass));
-						builder.fieldSet(cell, "value", pushed);
-					case TField(object, name): builder.fieldSet(lowerExpression(object, builder, localTypes), name, pushed);
-					default: throw "Array.push requires a mutable local or field array";
-				}
-				builder.arraySize(pushed);
+				lowerArrayNativeCall(builder, element, "push", operands, I32);
 			case TArrayUnshift(array, value):
 				var element = switch array.type {
 					case TArray(valueType): valueType;
 					default: throw "Array.unshift requires an array value";
 				}, operands = lowerOperands([array, value], builder, localTypes);
-				var shifted = lowerArrayNativeCall(builder, element, "unshift", operands, Array(lowerType(element)));
-				switch array.expression {
-					case TLocal(name): builder.store(name, shifted);
-					case TCellLocal(name, cellClass):
-						var cell = builder.load('$' + 'cell:$name', Obj(cellClass));
-						builder.fieldSet(cell, "value", shifted);
-					case TField(object, name): builder.fieldSet(lowerExpression(object, builder, localTypes), name, shifted);
-					default: throw "Array.unshift requires a mutable local or field array";
-				}
-				builder.arraySize(shifted);
+				lowerArrayNativeCall(builder, element, "unshift", operands, I32);
 			case TArrayPop(array):
 				var element = switch array.type {
 					case TArray(valueType): valueType;

@@ -3133,16 +3133,12 @@ class Typer {
 		if (name == "push") {
 			if (arguments.length != 1)
 				fail("E1008", "Array.push expects one argument", span);
-			if (!isRebindableArrayReceiver(receiver))
-				fail("E1016", "Array.push requires a mutable local or field array", span);
 			var value = coerce(typeExpression(arguments[0], scope, element), element, "array element", "E1002");
 			return new TypedExpression(TArrayPush(receiver, value), TInt, span);
 		}
 		if (name == "unshift") {
 			if (arguments.length != 1)
 				fail("E1008", "Array.unshift expects one argument", span);
-			if (!isRebindableArrayReceiver(receiver))
-				fail("E1016", "Array.unshift requires a mutable local or field array", span);
 			var value = coerce(typeExpression(arguments[0], scope, element), element, "array element", "E1002");
 			return new TypedExpression(TArrayUnshift(receiver, value), TInt, span);
 		}
@@ -3201,13 +3197,6 @@ class Typer {
 		}
 		throw new CompileError(new Diagnostic("E1007", 'Unknown array method "$name"', span));
 	}
-
-	function isRebindableArrayReceiver(receiver:TypedExpression):Bool
-		return switch receiver.expression {
-			case TLocal(_), TCellLocal(_, _): true;
-			case TField(object, name): hasInstanceField(object.type, name);
-			default: false;
-		};
 
 	function hasInstanceField(type:CompilerType, name:String):Bool
 		return switch type {

@@ -345,14 +345,14 @@ class IrProgramAssembler {
 					library: "realtime_runtime",
 					symbol: '__array_push_${entry.name}',
 					arguments: [arrayType, entry.type],
-					result: arrayType
+					result: I32
 				});
 				program.natives.push({
 					name: '__array_unshift_${entry.name}',
 					library: "realtime_runtime",
 					symbol: '__array_unshift_${entry.name}',
 					arguments: [arrayType, entry.type],
-					result: arrayType
+					result: I32
 				});
 				program.natives.push({
 					name: '__array_pop_${entry.name}',

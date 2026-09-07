@@ -2,7 +2,8 @@ function main():Int {
 	var values = new Array<Int>(0);
 	var index = 0;
 	while (index < 8) {
-		values.push(index);
+		if (values.push(index) != index + 1)
+			return 0;
 		index++;
 	}
 	if (values.length != 8)
