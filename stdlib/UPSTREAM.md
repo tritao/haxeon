@@ -14,6 +14,7 @@
 | `Math.hx` | `std/Math.hx` | Limited to `isNaN`; the operation uses a source-declared stable runtime binding. |
 | `Reflect.hx` | `std/Reflect.hx` | Limited to `compare`; the operation uses a source-declared stable runtime binding. |
 | `EReg.hx` | `std/EReg.hx` | Supports literal substring matching, case-insensitive matching, match inspection, replacement, and splitting; advanced regular-expression operators are not yet implemented. |
+| `List.hx` | `std/List.hx` | Represented by `Array<T>` with compatible `add`, `iterator`, and `length` behavior. |
 | `Std.hx` | `std/Std.hx` | Limited to conversion, parsing, and random helpers; `parseInt` retains the current non-nullable runtime ABI and returns `0` for invalid input. |
 | `StringBuf.hx` | `std/StringBuf.hx` | Documentation abbreviated and storage initialized explicitly; public behavior is unchanged. |
 | `StringTools.hx` | `std/StringTools.hx` | Limited to `contains`, prefix/suffix checks, replacement, trimming, padding, hexadecimal conversion, and `isSpace`; runtime-backed operations use source-declared HashLink bindings. |

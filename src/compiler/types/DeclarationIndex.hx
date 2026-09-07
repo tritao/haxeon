@@ -157,7 +157,11 @@ class DeclarationIndex {
 					default: resolveNamedType(name, span, resolving, substitutions);
 				}
 			case AppliedType(name, arguments):
-				if (aliases.exists(name)) {
+				if (name == "List") {
+					if (arguments.length != 1)
+						fail('Type "List" expects 1 type argument, got ${arguments.length}', span);
+					TArray(resolveInner(arguments[0], span, resolving, substitutions));
+				} else if (aliases.exists(name)) {
 					var alias = aliases.get(name);
 					if (arguments.length != alias.typeParameters.length)
 						fail('Type "$name" expects ${alias.typeParameters.length} type arguments, got ${arguments.length}', span);

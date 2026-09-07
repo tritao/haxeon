@@ -3314,11 +3314,16 @@ class Typer {
 		};
 		if (RuntimeType.arrayName(element) == null)
 			fail("E1016", "This array element type has no compiler-owned runtime ABI", span);
-		if (name == "push") {
+		if (name == "push" || name == "add") {
 			if (arguments.length != 1)
-				fail("E1008", "Array.push expects one argument", span);
+				fail("E1008", 'Array.$name expects one argument', span);
 			var value = coerce(typeExpression(arguments[0], scope, element), element, "array element", "E1002");
 			return new TypedExpression(TArrayPush(receiver, value), TInt, span);
+		}
+		if (name == "iterator") {
+			if (arguments.length != 0)
+				fail("E1008", "Array.iterator expects no arguments", span);
+			return receiver;
 		}
 		if (name == "unshift") {
 			if (arguments.length != 1)

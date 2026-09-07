@@ -66,6 +66,17 @@ if [[ $ereg_status -ne 42 ]]; then
 	exit 1
 fi
 echo "PASS: regex literals and EReg operations executed (exit 42)"
+list_output="$root_dir/out/list.hl"
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run ListMain "$list_output"
+set +e
+LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$list_output"
+list_status=$?
+set -e
+if [[ $list_status -ne 42 ]]; then
+	echo "List compatibility: expected exit 42, got $list_status" >&2
+	exit 1
+fi
+echo "PASS: Array-backed List insertion and iteration executed (exit 42)"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ProtocolMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run LspProtocolMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run RuntimeDomainMain

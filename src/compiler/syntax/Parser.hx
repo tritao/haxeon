@@ -1244,6 +1244,18 @@ class Parser {
 		}
 		if (match(TokenKind.New)) {
 			var start = previous().span;
+			if (check(TokenKind.Identifier) && current().text == "List") {
+				advance();
+				var typeArguments = check(TokenKind.Less) ? parseTypeArguments() : [];
+				consume(TokenKind.LeftParen);
+				var end = consume(TokenKind.RightParen).span;
+				if (typeArguments.length > 0) {
+					if (typeArguments.length != 1)
+						fail(previous(), 'List expects 1 type argument, got ${typeArguments.length}');
+					return parsePostfix(NewArray(typeArguments[0], IntegerLiteral(0, end), start.merge(end)));
+				}
+				return parsePostfix(ArrayLiteral([], start.merge(end)));
+			}
 			if (check(TokenKind.Identifier) && current().text == "Array") {
 				advance();
 				if (match(TokenKind.LeftParen)) {

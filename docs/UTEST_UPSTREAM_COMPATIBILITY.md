@@ -32,7 +32,7 @@ yet promise complete runtime behavior.
 | `utest.TestData` | blocked | `E0002` | Expected Colon, got LeftParen |
 | `utest.TestFixture` | blocked | `E0002` | Expected Function, got Identifier |
 | `utest.TestHandler` | blocked | `E0002` | Expected expression |
-| `utest.TestResult` | blocked | `E1020` | Type "List" does not accept type arguments |
+| `utest.TestResult` | blocked | `E0002` | Expected expression |
 | `utest.UTest` | blocked | `E0002` | Expected Function, got Final |
 | `utest.exceptions.AssertFailureException` | pass | `-` | - |
 | `utest.exceptions.UTestException` | pass | `-` | - |
@@ -41,8 +41,8 @@ yet promise complete runtime behavior.
 | `utest.ui.common.FixtureResult` | blocked | `E1020` | Unresolved inferred type |
 | `utest.ui.common.HeaderDisplayMode` | pass | `-` | - |
 | `utest.ui.common.IReport` | blocked | `E0002` | Expected Function, got Public |
-| `utest.ui.common.PackageResult` | blocked | `E1020` | Unresolved inferred type |
-| `utest.ui.common.ReportTools` | blocked | `E1020` | Unresolved inferred type |
+| `utest.ui.common.PackageResult` | blocked | `E0002` | Expected expression |
+| `utest.ui.common.ReportTools` | blocked | `E0002` | Expected Function, got Public |
 | `utest.ui.common.ResultAggregator` | blocked | `E0001` | Unexpected character "$" |
 | `utest.ui.common.ResultStats` | blocked | `E1020` | Unresolved inferred type |
 | `utest.ui.macro.MacroReport` | pass | `-` | - |
@@ -61,11 +61,12 @@ Baseline result: **6 of 36 modules analyze unchanged**.
 
 ## Priority order
 
-1. Add the array-backed `List<T>` subset used by upstream result collection.
-2. Resolve the remaining inferred return and collection types in `Dispatcher`
+1. Resolve the remaining inferred return and collection types in `Dispatcher`
    and the common report data structures.
-3. Parse or safely exclude macro splice syntax; the modules previously blocked
+2. Parse or safely exclude macro splice syntax; the modules previously blocked
    by regex literals now reach `$` syntax in their macro-only dependencies.
+3. Expand property and interface-field parsing; `TestResult`, `PackageResult`,
+   `ReportTools`, and `IReport` now stop at these declaration/expression forms.
 4. Improve same-package and secondary-type module resolution, beginning with
    upstream `utest.Test` and `utest.utils.AsyncUtils`.
 5. Broaden `Type`/`Reflect` APIs, then add `haxe.Timer`; these unlock typed

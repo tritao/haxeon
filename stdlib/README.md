@@ -59,5 +59,9 @@ The current deterministic subset treats patterns literally and supports `i`
 and `g`, match inspection, replacement, and splitting. Character classes,
 captures, anchors, and other advanced operators remain future work.
 
+Core `List<T>` values use the Array runtime representation. The compatibility
+surface includes construction with inferred or explicit element types, `add`,
+`iterator`, direct iteration, and `length`.
+
 The pinned upstream source and module-by-module analysis baseline are documented
 in [Upstream utest compatibility](../docs/UTEST_UPSTREAM_COMPATIBILITY.md).
