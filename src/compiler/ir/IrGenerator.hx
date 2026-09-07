@@ -631,7 +631,10 @@ class IrGenerator {
 							target = lowerType(expression.type);
 						sameIrType(lowered.type, target) ? lowered : abiBoundaryCast(builder, lowered, target);
 				}
-			case TToDynamic(value): builder.toDyn(lowerExpression(value, builder, localTypes));
+			case TToDynamic(value): switch value.expression {
+					case TNullLiteral: builder.constNull(Dyn);
+					default: builder.toDyn(lowerExpression(value, builder, localTypes));
+				}
 			case TLocal(name):
 				var type = requireLocalType(localTypes, name, 'Missing typed local "$name"');
 				abiBoundaryCast(builder, builder.load(name, type), lowerType(expression.type));

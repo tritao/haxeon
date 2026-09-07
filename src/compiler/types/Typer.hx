@@ -3832,7 +3832,7 @@ class Typer {
 		if (isStringConvertible(value.type))
 			return coerce(value, TString, "string concatenation", "E1010");
 		var dynamicValue = coerce(value, TDynamic, "string concatenation", "E1010");
-		return new TypedExpression(TCall("Std.string", [dynamicValue]), TString, value.span);
+		return new TypedExpression(TCall("__std_string", [dynamicValue]), TString, value.span);
 	}
 
 	function logical(a:AstExpression, b:AstExpression, scope:Scope, and:Bool, span:SourceSpan):TypedExpression {
