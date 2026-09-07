@@ -152,6 +152,24 @@ class ProfileTimelineSample {
 	}
 }
 
+class ProfileAllocationSample {
+	public final sequence:Int;
+	public final timestamp:Float;
+	public final threadId:Int;
+	public final requested:String;
+	public final allocated:String;
+	public final interval:Int;
+	public final typeKind:Int;
+	public final frameDetails:Array<ProfileStackFrame>;
+
+	public function new(sequence:Int, timestamp:Float, threadId:Int, requested:Int64, allocated:Int64, interval:Int, typeKind:Int,
+			frameDetails:Array<ProfileStackFrame>) {
+		this.sequence = sequence; this.timestamp = timestamp; this.threadId = threadId;
+		this.requested = Int64.toStr(requested); this.allocated = Int64.toStr(allocated); this.interval = interval; this.typeKind = typeKind;
+		this.frameDetails = frameDetails;
+	}
+}
+
 class ProfilerSnapshot {
 	public final state:ProfilerSessionState;
 	public final samples:Int;
@@ -179,6 +197,7 @@ class ProfilerSnapshot {
 	public final threads:Map<Int, String>;
 	public final gcStats:Array<ProfileGcStats>;
 	public final timelineSamples:Array<ProfileTimelineSample>;
+	public final allocationSamples:Array<ProfileAllocationSample>;
 	public final nativeSymbolCount:Int;
 	public final lastError:Null<String>;
 
@@ -209,6 +228,7 @@ class ProfilerSnapshot {
 		threads = session.threads.copy();
 		gcStats = session.gcStats.copy();
 		timelineSamples = session.timelineSamples.copy();
+		allocationSamples = session.allocationSamples.copy();
 		nativeSymbolCount = session.nativeSymbolCount();
 		lastError = session.lastError;
 	}
@@ -220,6 +240,7 @@ class ProfilerSession {
 	public static inline final EVENT_THREAD_NAME = 0x484C0002;
 	public static inline final EVENT_GC_STATS = 0x484C0003;
 	public static inline final EVENT_NATIVE_SYMBOL = 0x484C0004;
+	public static inline final EVENT_ALLOCATION_SAMPLE = 0x484C0005;
 	public var state(default, null):ProfilerSessionState = Connected;
 	public var samples(default, null) = 0;
 	public var unresolvedFrames(default, null) = 0;
@@ -237,8 +258,12 @@ class ProfilerSession {
 	public final threads = new Map<Int, String>();
 	public final gcStats:Array<ProfileGcStats> = [];
 	public final timelineSamples:Array<ProfileTimelineSample> = [];
+	public final allocationSamples:Array<ProfileAllocationSample> = [];
 	public var timelineCapacity:Int = 50000;
+	public var allocationCapacity:Int = 10000;
 	var timelineSequence = 0;
+	var allocationSequence = 0;
+	var allocationInterval = 0;
 	final nativeSymbols = new Map<String, {name:String, module:String, base:Int64}>();
 	public var metadata(default, null):Null<HldiMetadata>;
 	public var lastError(default, null):Null<String>;
@@ -262,12 +287,13 @@ class ProfilerSession {
 	public function new(client:HldiClient)
 		this.client = client;
 
-	public function start(sampleRate:Int = 1000):Void {
+	public function start(sampleRate:Int = 1000, allocationInterval:Int = 0):Void {
 		if (state == Closed)
 			throw "Profiler session is closed";
 		this.sampleRate = sampleRate;
+		this.allocationInterval = allocationInterval;
 		refreshMetadata();
-		var status = client.configure(sampleRate, true);
+		var status = client.configure(sampleRate, true, allocationInterval);
 		updateHealth(status);
 		cursor = status.next;
 		dropped = status.dropped;
@@ -278,7 +304,7 @@ class ProfilerSession {
 	public function pause():Void {
 		if (state != Running)
 			return;
-		var status = client.configure(sampleRate, false);
+		var status = client.configure(sampleRate, false, 0);
 		updateHealth(status);
 		cursor = status.next;
 		dropped = status.dropped;
@@ -336,7 +362,9 @@ class ProfilerSession {
 		metadataChanges.resize(0);
 		gcStats.resize(0);
 		timelineSamples.resize(0);
+		allocationSamples.resize(0);
 		timelineSequence = 0;
+		allocationSequence = 0;
 		nativeSymbols.clear();
 		gcSamples = 0;
 	}
@@ -426,6 +454,17 @@ class ProfilerSession {
 					nativeSymbols.set(pc, {name: name, module: module, base: base});
 				}
 			}
+			if (record.value == EVENT_ALLOCATION_SAMPLE && record.payload.length >= 32 && (record.payload.length - 32) % 8 == 0) {
+				var input = new HldiReader(record.payload), requested = input.u64(), allocated = input.u64(), interval = input.u32(), typeKind = input.u32(),
+					count = input.u32();
+				input.u32();
+				if (count == Std.int(input.remaining() / 8)) {
+					var frames = [for (_ in 0...count) input.u64()];
+					allocationSamples.push(new ProfileAllocationSample(++allocationSequence, record.timestamp, record.threadId, requested, allocated,
+						interval, typeKind, resolveFrames(frames)));
+					if (allocationSamples.length > allocationCapacity) allocationSamples.splice(0, allocationSamples.length - allocationCapacity);
+				}
+			}
 			return;
 		}
 		samples++;
@@ -455,19 +494,7 @@ class ProfilerSession {
 			}
 		}
 		if (record.frames.length != 0) {
-			var frameDetails = [];
-			for (index in 0...record.frames.length) {
-				var address = record.frames[record.frames.length - index - 1], symbol = resolve(address);
-				var location = symbol == null ? null : symbol.sourceAt(address);
-				var native = nativeSymbols.get(Int64.toStr(address));
-				frameDetails.push(symbol == null
-					? new ProfileStackFrame(native == null ? "[native/unknown]" : 'native:${native.module}:${native.name}',
-						native == null ? "[native/unknown]" : 'native:${native.module}:${native.name}', native == null ? "[native/unknown]" : native.name, 0,
-						null, null, native == null ? null : native.module,
-						native == null ? null : Int64.toStr(Int64.sub(address, native.base)))
-					: new ProfileStackFrame('${symbol.moduleId}:${symbol.revision}:${symbol.functionId}', '${symbol.moduleId}:${symbol.functionId}', symbol.name,
-						symbol.revision, location == null ? null : location.file, location == null ? null : location.line));
-			}
+			var frameDetails = resolveFrames(record.frames);
 			var key = [for (frame in frameDetails) frame.key].join(";") , stack = stacks.get(key);
 			if (stack == null) {
 				stack = new ProfileStack(key, frameDetails);
@@ -482,6 +509,21 @@ class ProfilerSession {
 			else if (timelineSamples.length > timelineCapacity)
 				timelineSamples.splice(0, timelineSamples.length - timelineCapacity);
 		}
+	}
+
+	function resolveFrames(frames:Array<Int64>):Array<ProfileStackFrame> {
+		var frameDetails = [];
+		for (index in 0...frames.length) {
+			var address = frames[frames.length - index - 1], symbol = resolve(address);
+			var location = symbol == null ? null : symbol.sourceAt(address), native = nativeSymbols.get(Int64.toStr(address));
+			frameDetails.push(symbol == null
+				? new ProfileStackFrame(native == null ? "[native/unknown]" : 'native:${native.module}:${native.name}',
+					native == null ? "[native/unknown]" : 'native:${native.module}:${native.name}', native == null ? "[native/unknown]" : native.name, 0,
+					null, null, native == null ? null : native.module, native == null ? null : Int64.toStr(Int64.sub(address, native.base)))
+				: new ProfileStackFrame('${symbol.moduleId}:${symbol.revision}:${symbol.functionId}', '${symbol.moduleId}:${symbol.functionId}', symbol.name,
+					symbol.revision, location == null ? null : location.file, location == null ? null : location.line));
+		}
+		return frameDetails;
 	}
 
 	function captureLeaf(record:HldiRecord):Void {

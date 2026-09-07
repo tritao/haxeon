@@ -28,7 +28,7 @@ class ProfilerLspMain {
 			if (connected.result.state != "connected")
 				throw "Profiler did not connect";
 
-			dispatcher.dispatch(command(3, "haxeon.profiler.start", {sampleRate: 250, pollIntervalMs: 25}));
+			dispatcher.dispatch(command(3, "haxeon.profiler.start", {sampleRate: 250, allocationInterval: 1024, pollIntervalMs: 25}));
 			var started = waitFor(messages, mutex, available, value -> value.id == 3);
 			if (started.result.state != "running" || started.result.metadataSchema != 4)
 				throw "Profiler did not start with schema 4 metadata";
@@ -56,7 +56,8 @@ class ProfilerLspMain {
 				throw "Profiler stack frames omitted source navigation metadata";
 			if (notification.params.sampleRecords == "0" || notification.params.generatedBytes == "0"
 				|| notification.params.overheadMicrosPerSample <= 0 || notification.params.threads.length == 0 || notification.params.gcStats.length == 0
-				|| notification.params.timeline.samples.length == 0 || notification.params.timeline.stacks.length == 0)
+				|| notification.params.timeline.samples.length == 0 || notification.params.timeline.stacks.length == 0
+				|| notification.params.timeline.allocations.length == 0)
 				throw "Profiler snapshot omitted calibration or thread telemetry";
 			dispatcher.dispatch(command(7, "haxeon.profiler.captureStop", {}));
 			if (waitFor(messages, mutex, available, value -> value.id == 7).result.captureActive || !sys.FileSystem.exists(capturePath))

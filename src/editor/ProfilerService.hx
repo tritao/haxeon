@@ -28,6 +28,7 @@ class ProfilerService {
 	var timelineEpoch = 0;
 	var emittedTimelineSequence = 0;
 	var emittedGcTimestamp = -1.0;
+	var emittedAllocationSequence = 0;
 	final emittedTimelineStacks = new Map<String, Bool>();
 	final viewModel = new ProfilerViewModel();
 
@@ -100,11 +101,13 @@ class ProfilerService {
 	}
 
 	function start(options:Dynamic):Dynamic {
-		var current = requireSession(), rate = intOption(options, "sampleRate", 1000), interval = intOption(options, "pollIntervalMs", 100);
+		var current = requireSession(), rate = intOption(options, "sampleRate", 1000), interval = intOption(options, "pollIntervalMs", 100),
+			allocationInterval = intOption(options, "allocationInterval", 0);
 		if (interval < 10)
 			throw "Profiler polling interval must be at least 10ms";
 		pollIntervalSeconds = interval / 1000.0;
-		current.start(rate);
+		if (allocationInterval < 0) throw "Profiler allocation interval must not be negative";
+		current.start(rate, allocationInterval);
 		wake.release();
 		return snapshot(current.snapshot());
 	}
@@ -213,6 +216,8 @@ class ProfilerService {
 		if (newSamples.length > 0) emittedTimelineSequence = newSamples[newSamples.length - 1].sequence;
 		var newGcStats = [for (stats in value.gcStats) if (timelineReset || timelineGap || stats.timestamp > emittedGcTimestamp) stats];
 		if (newGcStats.length > 0) emittedGcTimestamp = newGcStats[newGcStats.length - 1].timestamp;
+		var newAllocations = [for (sample in value.allocationSamples) if (timelineReset || timelineGap || sample.sequence > emittedAllocationSequence) sample];
+		if (newAllocations.length > 0) emittedAllocationSequence = newAllocations[newAllocations.length - 1].sequence;
 		var result:Dynamic = {
 			sequence: ++notificationSequence,
 			state: Std.string(value.state),
@@ -237,7 +242,10 @@ class ProfilerService {
 				fromSequence: newSamples.length == 0 ? emittedTimelineSequence : newSamples[0].sequence, toSequence: emittedTimelineSequence,
 				samples: [for (sample in newSamples) {sequence: sample.sequence, timestamp: sample.timestamp, threadId: sample.threadId, stackKey: sample.stackKey}],
 				stacks: newStacks,
-				counters: downsampleGc(newGcStats, 128)},
+				counters: downsampleGc(newGcStats, 128),
+				allocations: [for (sample in newAllocations) {sequence: sample.sequence, timestamp: sample.timestamp, threadId: sample.threadId,
+					requested: sample.requested, allocated: sample.allocated, interval: sample.interval, typeKind: sample.typeKind,
+					frameDetails: [for (frame in sample.frameDetails) frameValue(frame)]}]},
 			metadataSchema: value.metadataSchema,
 			metadataRevisions: [for (moduleId => revision in value.metadataRevisions) {moduleId: moduleId, revision: revision}],
 			metadataChanges: [for (change in value.metadataChanges) {
@@ -274,6 +282,7 @@ class ProfilerService {
 		timelineEpoch++;
 		emittedTimelineSequence = 0;
 		emittedGcTimestamp = -1.0;
+		emittedAllocationSequence = 0;
 		emittedTimelineStacks.clear();
 	}
 
@@ -304,13 +313,14 @@ class ProfilerService {
 		return {
 			key: value.key,
 			frames: value.frames,
-			frameDetails: [for (frame in value.frameDetails) {
-				key: frame.key, stableKey: frame.stableKey, name: frame.name, revision: frame.revision, file: frame.file, line: frame.line,
-				nativeModule: frame.nativeModule, nativeOffset: frame.nativeOffset
-			}],
+			frameDetails: [for (frame in value.frameDetails) frameValue(frame)],
 			threadSamples: [for (threadId => samples in value.threadSamples) {threadId: threadId, samples: samples}],
 			samples: value.samples
 		};
+
+	static function frameValue(frame:profiler.ProfilerSession.ProfileStackFrame):Dynamic
+		return {key: frame.key, stableKey: frame.stableKey, name: frame.name, revision: frame.revision, file: frame.file, line: frame.line,
+			nativeModule: frame.nativeModule, nativeOffset: frame.nativeOffset};
 
 	static function leafValue(value:ProfileLeaf):Dynamic
 		return {

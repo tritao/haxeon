@@ -64,12 +64,14 @@ class HldiClient {
 	public function status():HldiStatus
 		return decodeStatus(request(PROFILE_STATUS, Bytes.alloc(0)));
 
-	public function configure(sampleRate:Int, enabled:Bool):HldiStatus {
+	public function configure(sampleRate:Int, enabled:Bool, allocationInterval:Int = 0):HldiStatus {
 		if (sampleRate <= 0)
 			throw 'Invalid profiler sample rate $sampleRate';
-		var payload = Bytes.alloc(8);
+		if (allocationInterval < 0) throw 'Invalid allocation sampling interval $allocationInterval';
+		var payload = Bytes.alloc(12);
 		put32(payload, 0, sampleRate);
 		put32(payload, 4, enabled ? 1 : 0);
+		put32(payload, 8, enabled ? allocationInterval : 0);
 		return decodeStatus(request(PROFILE_CONFIGURE, payload));
 	}
 

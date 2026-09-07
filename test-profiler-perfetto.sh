@@ -15,6 +15,7 @@ jq -e '
   (.traceEvents | length > 0) and
   any(.traceEvents[]; .ph == "C" and .name == "HashLink GC" and (.args.allocation_bytes_per_second != null)) and
   any(.traceEvents[]; .ph == "M" and .name == "thread_name") and
-  any(.traceEvents[]; .cat == "hl.sample" and (.args.stack | contains("+0x")))
+  any(.traceEvents[]; .cat == "hl.sample" and (.args.stack | contains("+0x"))) and
+  any(.traceEvents[]; .cat == "hl.alloc" and (.args.estimated_bytes > 0))
 ' "$output_file" >/dev/null
-echo "PASS: Perfetto export contains counters, threads, and native frames"
+echo "PASS: Perfetto export contains counters, threads, native frames, and allocation sites"
