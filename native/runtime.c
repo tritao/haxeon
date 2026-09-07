@@ -456,6 +456,18 @@ HL_PRIM VALUE_TYPE HL_NAME(__array_pop_##SUFFIX)( varray *array ) { \
 	array->size--; \
 	memset(hl_aptr(array, vbyte) + array->size * hl_type_size(array->at), 0, hl_type_size(array->at)); \
 	return value; \
+} \
+HL_PRIM void HL_NAME(__array_resize_##SUFFIX)( varray *array, int length ) { \
+	if (length < 0) \
+		hl_error("Array.resize length must be non-negative"); \
+	int old_length = array->size; \
+	if (length > array->capacity) \
+		hl_array_reserve(array, length); \
+	int stride = hl_type_size(array->at); \
+	if (length != old_length) \
+		memset(hl_aptr(array, vbyte) + (length < old_length ? length : old_length) * stride, 0, \
+			(size_t)(length > old_length ? length - old_length : old_length - length) * stride); \
+	array->size = length; \
 }
 
 DEFINE_ARRAY_MUTATION(i32, int)
@@ -1234,6 +1246,11 @@ DEFINE_PRIM(_BOOL,__array_pop_bool,_ARR);
 DEFINE_PRIM(_I32,__array_push_ref,_ARR _DYN);
 DEFINE_PRIM(_I32,__array_unshift_ref,_ARR _DYN);
 DEFINE_PRIM(_DYN,__array_pop_ref,_ARR);
+DEFINE_PRIM(_VOID,__array_resize_i32,_ARR _I32);
+DEFINE_PRIM(_VOID,__array_resize_f64,_ARR _I32);
+DEFINE_PRIM(_VOID,__array_resize_bytes,_ARR _I32);
+DEFINE_PRIM(_VOID,__array_resize_bool,_ARR _I32);
+DEFINE_PRIM(_VOID,__array_resize_ref,_ARR _I32);
 DEFINE_PRIM(_ABSTRACT(map_string_i32),__map_string_i32_alloc,_NO_ARG);
 DEFINE_PRIM(_VOID,__map_string_i32_set,_ABSTRACT(map_string_i32) _BYTES _I32);
 DEFINE_PRIM(_BOOL,__map_string_i32_exists,_ABSTRACT(map_string_i32) _BYTES);

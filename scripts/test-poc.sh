@@ -172,6 +172,7 @@ run_program object-array 42
 run_program array-copy-concat 42
 run_program array-slice-index 42
 run_program array-mutation 42
+run_program array-resize 42
 run_program array-expression-mutation 42
 run_program array-unshift 42
 run_program array-object-mutation 8

@@ -361,6 +361,13 @@ class IrProgramAssembler {
 					arguments: [arrayType],
 					result: entry.type
 				});
+				program.natives.push({
+					name: '__array_resize_${entry.name}',
+					library: "realtime_runtime",
+					symbol: '__array_resize_${entry.name}',
+					arguments: [arrayType, I32],
+					result: Void
+				});
 			}
 		}
 		if (needsStringRuntime)
