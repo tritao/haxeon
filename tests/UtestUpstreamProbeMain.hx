@@ -22,6 +22,7 @@ class UtestUpstreamProbeMain {
 	static function probe(entryPath:String, paths:Array<String>):Void {
 		var compiler = new Compiler();
 		RuntimeNatives.register(compiler);
+		compiler.configure("utest-upstream-probe", "utest-upstream-probe", ["haxe=4.3.7", "haxe_ver=4.3.7", "hl", "sys"]);
 		compiler.update("haxe/PosInfos.hx", File.getContent("stdlib/haxe/PosInfos.hx"));
 		for (path in paths) {
 			var relative = path.substring(upstreamRoot.length + 1, path.length);
