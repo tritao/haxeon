@@ -292,40 +292,44 @@ class SemanticAssembly {
 		for (module => lambdaNames in generatedByModule)
 			for (lambdaName in lambdaNames.keys())
 				owners.set(lambdaName, module);
-		var invalid:Map<String, Bool> = [];
-		for (change in structuralChanged.keys()) {
-			var changedDependency:String = change,
-				separator = changedDependency.indexOf(":"),
-				target = separator < 0 ? changedDependency : changedDependency.substring(separator + 1, changedDependency.length);
-			for (moduleName in names) {
-				var dependencyState = modules.get(moduleName);
-				for (owner => dependencies in dependencyState.semanticDependencies)
-					for (dependency in dependencies) {
-						var functionOwner:String = owner;
-						if (SemanticDependencyCollector.sameDependencyTarget(dependency.target, target)) {
-							var matchedFunction = false;
-							for (fn in functions)
-								if (fn.name == functionOwner || StringTools.startsWith(fn.name, functionOwner + ".")) {
-									invalid.set(fn.name, true);
-									matchedFunction = true;
-								}
-							if (matchedFunction)
-								break;
-						}
-					}
-			}
-		}
-		for (name in bodyChanged.keys())
-			invalid.set(name, true);
+		var invalid:Map<String, Bool> = [], allModulesChanged = true;
 		// A new source revision owns a fresh position index. Retype every function
 		// in that module so unchanged bodies cannot leave gaps or stale spans in it.
 		for (moduleName in names) {
 			var state = modules.get(moduleName);
-			if (state.lastGoodRevision != state.revision)
+			if (state.lastGoodRevision == state.revision)
+				allModulesChanged = false;
+			else
 				for (fn in functions)
 					if (owners.get(fn.name) == moduleName)
 						invalid.set(fn.name, true);
 		}
+		if (!allModulesChanged) {
+			for (change in structuralChanged.keys()) {
+				var changedDependency:String = change,
+					separator = changedDependency.indexOf(":"),
+					target = separator < 0 ? changedDependency : changedDependency.substring(separator + 1, changedDependency.length);
+				for (moduleName in names) {
+					var dependencyState = modules.get(moduleName);
+					for (owner => dependencies in dependencyState.semanticDependencies)
+						for (dependency in dependencies) {
+							var functionOwner:String = owner;
+							if (SemanticDependencyCollector.sameDependencyTarget(dependency.target, target)) {
+								var matchedFunction = false;
+								for (fn in functions)
+									if (fn.name == functionOwner || StringTools.startsWith(fn.name, functionOwner + ".")) {
+										invalid.set(fn.name, true);
+										matchedFunction = true;
+									}
+								if (matchedFunction)
+									break;
+							}
+						}
+				}
+			}
+		}
+		for (name in bodyChanged.keys())
+			invalid.set(name, true);
 		var work:Array<String> = [for (name in signatureChanged.keys()) name], workCursor = 0;
 		for (name in bodyChanged.keys())
 			if (genericOrigins.exists(name))
