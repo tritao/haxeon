@@ -12,7 +12,7 @@ function main():Int {
 	if (!values.exists("answer") || values.size() != 1)
 		return 0;
 	var item = values.get("answer");
-	if (item.value != 42)
+	if (item == null || item.value != 42)
 		return 0;
 	var items = values.values();
 	if (items.length != 1 || items[0].value != 42)
