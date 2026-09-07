@@ -291,6 +291,35 @@ class LanguageServiceMain {
 			|| leafImplementations.length != 0
 			|| !implementationCancelled)
 			throw 'language service implementation navigation failed: interface=${interfaceImplementations.length}, method=${methodImplementations.length}, base=${baseImplementations.length}, override=${baseMethodImplementations.length}, leaf=${leafImplementations.length}';
+		var hierarchyTypeService = new LanguageService(), rootTypeSource = "package types; class Root {}", namedTypeSource = "package types; interface Named {}",
+			branchTypeSource = "package types; import types.Root; import types.Named; class Branch extends Root implements Named {}",
+			leafTypeSource = "package types; import types.Branch; class Leaf extends Branch {}",
+			detailedTypeSource = "package types; import types.Named; interface Detailed extends Named {}",
+			typeHierarchyMain = "package app; import types.Root; import types.Named; import types.Branch; import types.Leaf; import types.Detailed; function main():Int return 0;";
+		hierarchyTypeService.update("types/Root.hx", rootTypeSource);
+		hierarchyTypeService.update("types/Named.hx", namedTypeSource);
+		hierarchyTypeService.update("types/Branch.hx", branchTypeSource);
+		hierarchyTypeService.update("types/Leaf.hx", leafTypeSource);
+		hierarchyTypeService.update("types/Detailed.hx", detailedTypeSource);
+		hierarchyTypeService.update("app/TypeHierarchy.hx", typeHierarchyMain);
+		hierarchyTypeService.compile("app.TypeHierarchy");
+		var preparedRoot = hierarchyTypeService.prepareTypeHierarchy("types/Root.hx", rootTypeSource.indexOf("Root") + 1),
+			preparedBranch = hierarchyTypeService.prepareTypeHierarchy("types/Branch.hx", branchTypeSource.indexOf("Branch") + 1),
+			preparedNamed = hierarchyTypeService.prepareTypeHierarchy("types/Named.hx", namedTypeSource.indexOf("Named") + 1);
+		if (preparedRoot == null || preparedBranch == null || preparedNamed == null)
+			throw "language service did not prepare type hierarchy items";
+		var rootSubtypes = hierarchyTypeService.typeSubtypes(preparedRoot.identity, preparedRoot.revision),
+			branchSupertypes = hierarchyTypeService.typeSupertypes(preparedBranch.identity, preparedBranch.revision),
+			branchSubtypes = hierarchyTypeService.typeSubtypes(preparedBranch.identity, preparedBranch.revision),
+			namedSubtypes = hierarchyTypeService.typeSubtypes(preparedNamed.identity, preparedNamed.revision);
+		if (rootSubtypes.length != 1 || rootSubtypes[0].name != "Branch"
+			|| branchSupertypes.length != 2 || branchSupertypes[0].name != "Named" || branchSupertypes[1].name != "Root"
+			|| branchSubtypes.length != 1 || branchSubtypes[0].name != "Leaf"
+			|| namedSubtypes.length != 2 || namedSubtypes[0].name != "Branch" || namedSubtypes[1].name != "Detailed")
+			throw "language service type hierarchy did not return direct class and interface relationships";
+		hierarchyTypeService.update("types/Root.hx", rootTypeSource + " ");
+		if (hierarchyTypeService.isTypeHierarchyCurrent(preparedRoot.identity, preparedRoot.revision))
+			throw "language service accepted a stale type hierarchy item";
 		var typeService = new LanguageService();
 		typeService.update("domain/Entity.hx", "package domain; class Entity {}");
 		var typeSource = "package usecase; import domain.Entity; typedef EntityAlias = Entity; class Child extends Entity {} class Holder { public var entity:Entity; public function get():Entity return entity; } function identity(value:Entity):Entity return value; function main():Int return 0;";

@@ -187,6 +187,94 @@ class SemanticWorkspace {
 		return result;
 	}
 
+	/** Direct nominal parents of a class or interface declaration. */
+	public function directTypeSupertypes(id:SemanticSymbolId, ?token:CancellationToken):Array<SemanticSymbolId> {
+		var resolved = indexedSymbol(id), result:Array<SemanticSymbolId> = [];
+		if (resolved == null || !isTypeKind(resolved.symbol.kind))
+			return result;
+		var model = effectiveModel(resolved.state), parents:Array<compiler.syntax.Ast.AstType> = [];
+		if (model == null)
+			return result;
+		for (decl in model.program.classes)
+			if (sameSpan(decl.span, resolved.symbol.declaration)) {
+				if (decl.base != null)
+					parents.push(decl.base);
+				parents = parents.concat(decl.interfaces);
+			}
+		for (decl in model.program.interfaces)
+			if (sameSpan(decl.span, resolved.symbol.declaration))
+				parents = parents.concat(decl.bases);
+		for (parent in parents) {
+			if (token != null)
+				token.check();
+			var declaration = global(resolved.state, ModuleCanonicalizer.astTypeName(parent)), symbol = declaration == null ? null : symbolFor(declaration);
+			if (symbol != null)
+				addTypeIdentity(result, symbol.id);
+		}
+		result.sort(function(left, right) return Reflect.compare(Std.string(left), Std.string(right)));
+		return result;
+	}
+
+	/** Direct nominal children of a class or interface declaration. */
+	public function directTypeSubtypes(id:SemanticSymbolId, ?token:CancellationToken):Array<SemanticSymbolId> {
+		var resolved = indexedSymbol(id), result:Array<SemanticSymbolId> = [];
+		if (resolved == null || !isTypeKind(resolved.symbol.kind))
+			return result;
+		for (state in orderedStates()) {
+			if (token != null)
+				token.check();
+			var model = effectiveModel(state);
+			if (model == null)
+				continue;
+			for (decl in model.program.classes) {
+				var parents = decl.interfaces.copy();
+				if (decl.base != null)
+					parents.push(decl.base);
+				if (hasDirectParent(state, parents, id)) {
+					var symbol = symbolAt(model, decl.span);
+					if (symbol != null)
+						addTypeIdentity(result, symbol.id);
+				}
+			}
+			for (decl in model.program.interfaces)
+				if (hasDirectParent(state, decl.bases, id)) {
+					var symbol = symbolAt(model, decl.span);
+					if (symbol != null)
+						addTypeIdentity(result, symbol.id);
+				}
+		}
+		result.sort(function(left, right) return Reflect.compare(Std.string(left), Std.string(right)));
+		return result;
+	}
+
+	function hasDirectParent(state:ModuleState, parents:Array<compiler.syntax.Ast.AstType>, target:SemanticSymbolId):Bool {
+		for (parent in parents) {
+			var declaration = global(state, ModuleCanonicalizer.astTypeName(parent)), symbol = declaration == null ? null : symbolFor(declaration);
+			if (symbol != null && symbol.id == target)
+				return true;
+		}
+		return false;
+	}
+
+	function symbolFor(declaration:WorkspaceDeclaration):Null<IndexedSemanticSymbol> {
+		var model = effectiveModel(declaration.state);
+		return model == null ? null : symbolAt(model, declaration.span);
+	}
+
+	static function symbolAt(model:SemanticModel, span:SourceSpan):Null<IndexedSemanticSymbol> {
+		for (symbol in model.index.symbols)
+			if (sameSpan(symbol.declaration, span) && isTypeKind(symbol.kind))
+				return symbol;
+		return null;
+	}
+
+	static function addTypeIdentity(result:Array<SemanticSymbolId>, identity:SemanticSymbolId):Void {
+		for (existing in result)
+			if (existing == identity)
+				return;
+		result.push(identity);
+	}
+
 	public function implementations(id:SemanticSymbolId, ?token:CancellationToken):Array<WorkspaceDeclaration> {
 		var resolved = indexedSymbol(id);
 		if (resolved == null)

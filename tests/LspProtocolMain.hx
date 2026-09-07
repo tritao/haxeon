@@ -78,6 +78,7 @@ class LspProtocolMain {
 			|| !initialized.result.capabilities.implementationProvider
 			|| !initialized.result.capabilities.documentFormattingProvider
 			|| !initialized.result.capabilities.documentRangeFormattingProvider
+			|| !initialized.result.capabilities.typeHierarchyProvider
 			|| initialized.result.capabilities.textDocumentSync.change != 2
 			|| !initialized.result.capabilities.documentHighlightProvider
 			|| initialized.result.capabilities.diagnosticProvider.identifier != "haxeon"
@@ -1086,6 +1087,34 @@ class LspProtocolMain {
 		}));
 		if (implementationLocations.result.length != 2 || implementationLocations.result[0].uri != implementationUri)
 			throw "LSP implementation navigation did not map multiple compiler locations";
+		var typeHierarchyProtocol = new LspProtocol(), typeHierarchyUri = "file:///workspace/TypeHierarchy.hx",
+			typeHierarchySource = "class Root {} interface Named {} class Branch extends Root implements Named {} class Leaf extends Branch {} function main():Int return 0;",
+			typeHierarchyDocument = new LspDocument(typeHierarchyUri, "/workspace/TypeHierarchy.hx", 1, typeHierarchySource);
+		request(typeHierarchyProtocol, '{"jsonrpc":"2.0","id":895,"method":"initialize","params":{}}');
+		typeHierarchyProtocol.handle(Json.stringify({
+			jsonrpc: "2.0", method: "textDocument/didOpen",
+			params: {textDocument: {uri: typeHierarchyUri, languageId: "haxe", version: 1, text: typeHierarchySource}}
+		}));
+		var preparedBranchType = request(typeHierarchyProtocol, Json.stringify({
+			jsonrpc: "2.0", id: 896, method: "textDocument/prepareTypeHierarchy",
+			params: {textDocument: {uri: typeHierarchyUri}, position: typeHierarchyDocument.position(typeHierarchySource.indexOf("Branch") + 2)}
+		})), preparedRootType = request(typeHierarchyProtocol, Json.stringify({
+			jsonrpc: "2.0", id: 897, method: "textDocument/prepareTypeHierarchy",
+			params: {textDocument: {uri: typeHierarchyUri}, position: typeHierarchyDocument.position(typeHierarchySource.indexOf("Root") + 1)}
+		}));
+		if (preparedBranchType.result == null || preparedRootType.result == null)
+			throw "LSP did not prepare type hierarchy items";
+		var branchSupertypes = request(typeHierarchyProtocol, Json.stringify({
+			jsonrpc: "2.0", id: 898, method: "typeHierarchy/supertypes", params: {item: preparedBranchType.result[0]}
+		})), branchSubtypes = request(typeHierarchyProtocol, Json.stringify({
+			jsonrpc: "2.0", id: 899, method: "typeHierarchy/subtypes", params: {item: preparedBranchType.result[0]}
+		})), rootSubtypes = request(typeHierarchyProtocol, Json.stringify({
+			jsonrpc: "2.0", id: 900, method: "typeHierarchy/subtypes", params: {item: preparedRootType.result[0]}
+		}));
+		if (branchSupertypes.result.length != 2 || branchSupertypes.result[0].name != "Named" || branchSupertypes.result[1].name != "Root"
+			|| branchSubtypes.result.length != 1 || branchSubtypes.result[0].name != "Leaf"
+			|| rootSubtypes.result.length != 1 || rootSubtypes.result[0].name != "Branch")
+			throw 'LSP type hierarchy did not map direct class and interface relationships: super=${Json.stringify(branchSupertypes.result)}, branch=${Json.stringify(branchSubtypes.result)}, root=${Json.stringify(rootSubtypes.result)}';
 		if (protocol.handle('{"jsonrpc":"2.0","method":"$/cancelRequest","params":{"id":999}}').length != 0)
 			throw "LSP cancellation notification produced a response";
 		var lifecycle = new LspProtocol(),

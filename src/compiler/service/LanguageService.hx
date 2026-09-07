@@ -118,6 +118,16 @@ typedef CallHierarchyRelation = {
 	final ranges:Array<SourceSpan>;
 }
 
+typedef TypeHierarchyItem = {
+	final identity:String;
+	final name:String;
+	final kind:String;
+	final detail:String;
+	final path:String;
+	final span:SourceSpan;
+	final revision:Int;
+}
+
 typedef FoldingRegion = {
 	final span:SourceSpan;
 	final ?kind:String;
@@ -356,6 +366,24 @@ class LanguageService {
 		return item != null && item.revision == revision;
 	}
 
+	public function prepareTypeHierarchy(path:String, position:Int):Null<TypeHierarchyItem> {
+		var context = semanticQuery(path, position);
+		if (context == null || context.symbol == null)
+			return null;
+		return typeHierarchyItem(context.symbol);
+	}
+
+	public function typeSupertypes(identity:String, revision:Int, ?token:CancellationToken):Array<TypeHierarchyItem>
+		return hierarchyTypes(identity, revision, true, token);
+
+	public function typeSubtypes(identity:String, revision:Int, ?token:CancellationToken):Array<TypeHierarchyItem>
+		return hierarchyTypes(identity, revision, false, token);
+
+	public function isTypeHierarchyCurrent(identity:String, revision:Int):Bool {
+		var item = typeHierarchyItem(cast identity);
+		return item != null && item.revision == revision;
+	}
+
 	public function foldingRanges(path:String):Array<FoldingRegion> {
 		var state = stateFor(path);
 		return state == null ? [] : indexedStructure(state).folds.copy();
@@ -507,6 +535,44 @@ class LanguageService {
 		result.sort(function(left, right) return Reflect.compare(left.item.identity, right.item.identity));
 		for (relation in result)
 			relation.ranges.sort(function(left, right) return Reflect.compare(left.start, right.start));
+		return result;
+	}
+
+	function typeHierarchyItem(identity:SemanticSymbolId):Null<TypeHierarchyItem> {
+		var resolved = compiler.semanticWorkspace.indexedSymbol(identity);
+		if (resolved == null)
+			return null;
+		var kind = switch resolved.symbol.kind {
+			case DeclarationKind.Class: "class";
+			case DeclarationKind.Interface: "interface";
+			default: return null;
+		};
+		return {
+			identity: Std.string(identity),
+			name: sourceName(resolved.symbol.name),
+			kind: kind,
+			detail: resolved.symbol.name,
+			path: resolved.state.source.path,
+			span: resolved.symbol.declaration,
+			revision: resolved.state.revision
+		};
+	}
+
+	function hierarchyTypes(identity:String, revision:Int, supertypes:Bool, ?token:CancellationToken):Array<TypeHierarchyItem> {
+		var origin = typeHierarchyItem(cast identity);
+		if (origin == null || origin.revision != revision)
+			return [];
+		var identities = supertypes ? compiler.semanticWorkspace.directTypeSupertypes(cast identity, token) : compiler.semanticWorkspace.directTypeSubtypes(cast identity, token),
+			result:Array<TypeHierarchyItem> = [];
+		for (related in identities) {
+			var item = typeHierarchyItem(related);
+			if (item != null)
+				result.push(item);
+		}
+		result.sort(function(left, right) {
+			var name = Reflect.compare(left.name, right.name);
+			return name == 0 ? Reflect.compare(left.identity, right.identity) : name;
+		});
 		return result;
 	}
 

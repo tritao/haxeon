@@ -128,6 +128,9 @@ class LspProtocol {
 				case "textDocument/prepareCallHierarchy": cancellable(id, token -> prepareCallHierarchy(request, token));
 				case "callHierarchy/incomingCalls": cancellable(id, token -> callHierarchyCalls(request, token, true));
 				case "callHierarchy/outgoingCalls": cancellable(id, token -> callHierarchyCalls(request, token, false));
+				case "textDocument/prepareTypeHierarchy": cancellable(id, token -> prepareTypeHierarchy(request, token));
+				case "typeHierarchy/supertypes": cancellable(id, token -> typeHierarchyTypes(request, token, true));
+				case "typeHierarchy/subtypes": cancellable(id, token -> typeHierarchyTypes(request, token, false));
 				case "textDocument/foldingRange": cancellable(id, token -> foldingRanges(request, token));
 				case "textDocument/formatting": cancellable(id, token -> formatting(request, token, false));
 				case "textDocument/rangeFormatting": cancellable(id, token -> formatting(request, token, true));
@@ -278,6 +281,7 @@ class LspProtocol {
 				codeActionProvider: {codeActionKinds: ["quickfix"]},
 				inlayHintProvider: true,
 				callHierarchyProvider: true,
+				typeHierarchyProvider: true,
 				foldingRangeProvider: true,
 				documentFormattingProvider: true,
 				documentRangeFormattingProvider: true,
@@ -810,6 +814,36 @@ class LspProtocol {
 	}
 
 	function callHierarchyItem(item:compiler.service.LanguageService.CallHierarchyItem):Dynamic {
+		var target = documentForPath(item.path), range = target.range(item.span.start, item.span.end);
+		return {
+			name: item.name,
+			kind: symbolKind(item.kind),
+			detail: item.detail,
+			uri: documents.uri(project.diskPath(item.path)),
+			range: range,
+			selectionRange: range,
+			data: {identity: item.identity, revision: item.revision}
+		};
+	}
+
+	function prepareTypeHierarchy(request:Dynamic, token:CancellationToken):Dynamic {
+		var document = document(request);
+		ensureAnalyzed(document, token);
+		requireCurrent(document);
+		var item = service.prepareTypeHierarchy(compilerPath(document), positionOffset(document, position(request)));
+		return item == null ? null : [typeHierarchyItem(item)];
+	}
+
+	function typeHierarchyTypes(request:Dynamic, token:CancellationToken, supertypes:Bool):Array<Dynamic> {
+		var item:Dynamic = required(required(request, "params"), "item"), data = required(item, "data"), identity = requiredString(data, "identity"),
+			revision = requiredInt(data, "revision");
+		if (!service.isTypeHierarchyCurrent(identity, revision))
+			throw new LspRequestError(-32801, "Type hierarchy item no longer matches its source revision");
+		var related = supertypes ? service.typeSupertypes(identity, revision, token) : service.typeSubtypes(identity, revision, token);
+		return [for (entry in related) typeHierarchyItem(entry)];
+	}
+
+	function typeHierarchyItem(item:compiler.service.LanguageService.TypeHierarchyItem):Dynamic {
 		var target = documentForPath(item.path), range = target.range(item.span.start, item.span.end);
 		return {
 			name: item.name,
