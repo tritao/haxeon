@@ -129,7 +129,8 @@ class ProfilerViewModel {
 			bufferUtilization: Reflect.field(snapshot, "bufferUtilization"), dropped: Reflect.field(snapshot, "dropped"),
 			requestedSampleRate: Reflect.field(snapshot, "requestedSampleRate"), effectiveSampleRate: Reflect.field(snapshot, "effectiveSampleRate"),
 			metadataRefreshMs: Reflect.field(snapshot, "metadataRefreshMs"), overheadMicrosPerSample: Reflect.field(snapshot, "overheadMicrosPerSample"),
-			generatedBytes: Reflect.field(snapshot, "generatedBytes"), gcSamples: Reflect.field(snapshot, "gcSamples"), threads: Reflect.field(snapshot, "threads")};
+			generatedBytes: Reflect.field(snapshot, "generatedBytes"), gcSamples: Reflect.field(snapshot, "gcSamples"), threads: Reflect.field(snapshot, "threads"),
+			gcStats: Reflect.field(snapshot, "gcStats"), nativeSymbolCount: Reflect.field(snapshot, "nativeSymbolCount")};
 
 	static function dynamicArray(value:Dynamic, field:String):Array<Dynamic> {
 		var result:Dynamic = Reflect.field(value, field);

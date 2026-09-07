@@ -57,14 +57,18 @@ class ProfileStackFrame {
 	public final revision:Int;
 	public final file:Null<String>;
 	public final line:Null<Int>;
+	public final nativeModule:Null<String>;
+	public final nativeOffset:Null<String>;
 
-	public function new(key:String, stableKey:String, name:String, revision:Int, ?file:String, ?line:Int) {
+	public function new(key:String, stableKey:String, name:String, revision:Int, ?file:String, ?line:Int, ?nativeModule:String, ?nativeOffset:String) {
 		this.key = key;
 		this.stableKey = stableKey;
 		this.name = name;
 		this.revision = revision;
 		this.file = file;
 		this.line = line;
+		this.nativeModule = nativeModule;
+		this.nativeOffset = nativeOffset;
 	}
 }
 
@@ -93,6 +97,19 @@ class ProfileMetadataChange {
 		this.moduleId = moduleId;
 		this.oldRevision = oldRevision;
 		this.newRevision = newRevision;
+	}
+}
+
+class ProfileGcStats {
+	public final timestamp:Float;
+	public final allocated:String;
+	public final allocations:String;
+	public final heap:String;
+	public final collections:String;
+	public final markMicros:String;
+	public function new(timestamp:Float, allocated:Int64, allocations:Int64, heap:Int64, collections:Int64, markMicros:Int64) {
+		this.timestamp = timestamp; this.allocated = Int64.toStr(allocated); this.allocations = Int64.toStr(allocations); this.heap = Int64.toStr(heap);
+		this.collections = Int64.toStr(collections); this.markMicros = Int64.toStr(markMicros);
 	}
 }
 
@@ -146,6 +163,8 @@ class ProfilerSnapshot {
 	public final overheadMicrosPerSample:Float;
 	public final gcSamples:Int;
 	public final threads:Map<Int, String>;
+	public final gcStats:Array<ProfileGcStats>;
+	public final nativeSymbolCount:Int;
 	public final lastError:Null<String>;
 
 	public function new(session:ProfilerSession) {
@@ -173,6 +192,8 @@ class ProfilerSnapshot {
 		overheadMicrosPerSample = session.overheadMicrosPerSample;
 		gcSamples = session.gcSamples;
 		threads = session.threads.copy();
+		gcStats = session.gcStats.copy();
+		nativeSymbolCount = session.nativeSymbolCount();
 		lastError = session.lastError;
 	}
 }
@@ -181,6 +202,8 @@ class ProfilerSnapshot {
 class ProfilerSession {
 	public static inline final EVENT_MODULE_REVISION = 0x484C0001;
 	public static inline final EVENT_THREAD_NAME = 0x484C0002;
+	public static inline final EVENT_GC_STATS = 0x484C0003;
+	public static inline final EVENT_NATIVE_SYMBOL = 0x484C0004;
 	public var state(default, null):ProfilerSessionState = Connected;
 	public var samples(default, null) = 0;
 	public var unresolvedFrames(default, null) = 0;
@@ -196,6 +219,8 @@ class ProfilerSession {
 	public var overheadMicrosPerSample(default, null):Float = 0;
 	public var gcSamples(default, null) = 0;
 	public final threads = new Map<Int, String>();
+	public final gcStats:Array<ProfileGcStats> = [];
+	final nativeSymbols = new Map<String, {name:String, module:String, base:Int64}>();
 	public var metadata(default, null):Null<HldiMetadata>;
 	public var lastError(default, null):Null<String>;
 	public var metadataRefreshSeconds:Float = 5.0;
@@ -290,6 +315,8 @@ class ProfilerSession {
 		events.resize(0);
 		leaves.resize(0);
 		metadataChanges.resize(0);
+		gcStats.resize(0);
+		nativeSymbols.clear();
 		gcSamples = 0;
 	}
 
@@ -319,6 +346,10 @@ class ProfilerSession {
 
 	public function captureActive():Bool
 		return capture != null;
+
+	public function nativeSymbolCount():Int {
+		var count = 0; for (_ in nativeSymbols) count++; return count;
+	}
 
 	function updateHealth(status:profiler.HldiTypes.HldiStatus):Void {
 		dropped = status.dropped;
@@ -361,6 +392,19 @@ class ProfilerSession {
 			}
 			if (record.value == EVENT_THREAD_NAME)
 				threads.set(record.threadId, record.payload.toString());
+			if (record.value == EVENT_GC_STATS && record.payload.length == 40) {
+				var input = new HldiReader(record.payload);
+				gcStats.push(new ProfileGcStats(record.timestamp, input.u64(), input.u64(), input.u64(), input.u64(), input.u64()));
+				if (gcStats.length > 256) gcStats.shift();
+			}
+			if (record.value == EVENT_NATIVE_SYMBOL && record.payload.length >= 24) {
+				var input = new HldiReader(record.payload), pc = Int64.toStr(input.u64()), base = input.u64();
+				var moduleLength = input.u32(), symbolLength = input.u32();
+				if (moduleLength + symbolLength == input.remaining()) {
+					var module = input.take(moduleLength).toString(), name = input.take(symbolLength).toString();
+					nativeSymbols.set(pc, {name: name, module: module, base: base});
+				}
+			}
 			return;
 		}
 		samples++;
@@ -372,7 +416,7 @@ class ProfilerSession {
 		for (address in record.frames) {
 			var symbol = resolve(address);
 			if (symbol == null) {
-				unresolvedFrames++;
+				if (!nativeSymbols.exists(Int64.toStr(address))) unresolvedFrames++;
 				continue;
 			}
 			resolved.push({symbol: symbol, line: symbol.sourceAt(address)});
@@ -394,8 +438,12 @@ class ProfilerSession {
 			for (index in 0...record.frames.length) {
 				var address = record.frames[record.frames.length - index - 1], symbol = resolve(address);
 				var location = symbol == null ? null : symbol.sourceAt(address);
+				var native = nativeSymbols.get(Int64.toStr(address));
 				frameDetails.push(symbol == null
-					? new ProfileStackFrame("[native/unknown]", "[native/unknown]", "[native/unknown]", 0)
+					? new ProfileStackFrame(native == null ? "[native/unknown]" : 'native:${native.module}:${native.name}',
+						native == null ? "[native/unknown]" : 'native:${native.module}:${native.name}', native == null ? "[native/unknown]" : native.name, 0,
+						null, null, native == null ? null : native.module,
+						native == null ? null : Int64.toStr(Int64.sub(address, native.base)))
 					: new ProfileStackFrame('${symbol.moduleId}:${symbol.revision}:${symbol.functionId}', '${symbol.moduleId}:${symbol.functionId}', symbol.name,
 						symbol.revision, location == null ? null : location.file, location == null ? null : location.line));
 			}

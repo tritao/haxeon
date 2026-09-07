@@ -210,6 +210,9 @@ class ProfilerService {
 			overheadMicrosPerSample: value.overheadMicrosPerSample,
 			gcSamples: value.gcSamples,
 			threads: [for (threadId => name in value.threads) {id: threadId, name: name}],
+			nativeSymbolCount: value.nativeSymbolCount,
+			gcStats: [for (stats in value.gcStats) {timestamp: stats.timestamp, allocated: stats.allocated, allocations: stats.allocations,
+				heap: stats.heap, collections: stats.collections, markMicros: stats.markMicros}],
 			metadataSchema: value.metadataSchema,
 			metadataRevisions: [for (moduleId => revision in value.metadataRevisions) {moduleId: moduleId, revision: revision}],
 			metadataChanges: [for (change in value.metadataChanges) {
@@ -253,7 +256,8 @@ class ProfilerService {
 			key: value.key,
 			frames: value.frames,
 			frameDetails: [for (frame in value.frameDetails) {
-				key: frame.key, stableKey: frame.stableKey, name: frame.name, revision: frame.revision, file: frame.file, line: frame.line
+				key: frame.key, stableKey: frame.stableKey, name: frame.name, revision: frame.revision, file: frame.file, line: frame.line,
+				nativeModule: frame.nativeModule, nativeOffset: frame.nativeOffset
 			}],
 			threadSamples: [for (threadId => samples in value.threadSamples) {threadId: threadId, samples: samples}],
 			samples: value.samples
