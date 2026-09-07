@@ -244,8 +244,13 @@ class Compiler {
 	}
 
 	public function update(path:String, source:String):ModuleState {
-		var name = ModulePath.fromFile(path),
-			file = new SourceFile(path, source);
+		var name = ModulePath.fromFile(path);
+		if (modules.exists(name)) {
+			var current = modules.get(name);
+			if (current.source.path == path && current.source.text == source)
+				return current;
+		}
+		var file = new SourceFile(path, source);
 		var state:ModuleState;
 		if (modules.exists(name)) {
 			state = modules.get(name);

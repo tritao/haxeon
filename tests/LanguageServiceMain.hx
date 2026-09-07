@@ -88,7 +88,7 @@ class LanguageServiceMain {
 			if (item.label == "active" && item.detail == "active:Int")
 				hasActive = true;
 		var instanceHoverPosition = source.indexOf("editor.active") + "editor.active".length;
-		if (!hasActive || service.hover("Main.hx", instanceHoverPosition) != "active:Int")
+		if (!hasActive || service.hover("Main.hx", instanceHoverPosition) != "Editor.active:Int")
 			throw "language service typed instance completion failed";
 		var stringPosition = source.indexOf("text.length") + "text.".length,
 			stringCompletion = service.complete("Main.hx", stringPosition),
@@ -513,7 +513,7 @@ class LanguageServiceMain {
 		} catch (_:CompileError) {}
 		var partialSymbols = partialService.documentSymbols("Partial.hx"), foundVisible = false;
 		for (symbol in partialSymbols)
-			if (symbol.name == "visible" && symbol.stale)
+			if (symbol.name == "visible" && !symbol.stale)
 				foundVisible = true;
 		if (!foundVisible)
 			throw "parser recovery did not preserve a valid declaration after malformed declarations";

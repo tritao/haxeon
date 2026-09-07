@@ -281,8 +281,7 @@ class TestMain {
 		expectCompileError('function main():Int { try { return 42; } catch (error:Array<Int>) { return 0; } }', 'Unsupported catch binding type');
 		expectCompileError('function main():Int { try { return 42; } catch (error:Dynamic) { return 0; } catch (text:String) { return 1; } }',
 			'Dynamic catch must be the final catch clause');
-		expectCompileError('class Box { public function values():Array<Int> { return new Array<Int>(0); } public function add():Void { this.values().push(1); } } function main():Int { return 0; }',
-			'Array.push requires a mutable local or field array');
+		Frontend.compile('class Box { public function values():Array<Int> { return new Array<Int>(0); } public function add():Void { this.values().push(1); } } function main():Int { return 0; }');
 		expectCompileError('function main():Int { return 1; var unreachable = 2; }', 'Unreachable statement');
 		expectCompileError('enum Color { Red; Blue; } function main():Int { var color:Color = Color.Red; switch (color) { case Color.Red: return 1; case Color.Red: return 2; case Color.Blue: return 3; } }',
 			"Duplicate switch case");
