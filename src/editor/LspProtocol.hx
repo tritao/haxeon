@@ -129,6 +129,8 @@ class LspProtocol {
 				case "callHierarchy/incomingCalls": cancellable(id, token -> callHierarchyCalls(request, token, true));
 				case "callHierarchy/outgoingCalls": cancellable(id, token -> callHierarchyCalls(request, token, false));
 				case "textDocument/foldingRange": cancellable(id, token -> foldingRanges(request, token));
+				case "textDocument/formatting": cancellable(id, token -> formatting(request, token, false));
+				case "textDocument/rangeFormatting": cancellable(id, token -> formatting(request, token, true));
 				case "textDocument/selectionRange": cancellable(id, token -> selectionRanges(request, token));
 				case "textDocument/documentLink": cancellable(id, token -> documentLinks(request, token));
 				case "textDocument/hover": cancellable(id, token -> hover(request, token));
@@ -277,6 +279,8 @@ class LspProtocol {
 				inlayHintProvider: true,
 				callHierarchyProvider: true,
 				foldingRangeProvider: true,
+				documentFormattingProvider: true,
+				documentRangeFormattingProvider: true,
 				selectionRangeProvider: true,
 				documentLinkProvider: {resolveProvider: false},
 				hoverProvider: true,
@@ -830,6 +834,21 @@ class LspProtocol {
 				result.push({startLine: start.line, startCharacter: start.character, endLine: end.line, endCharacter: end.character, kind: fold.kind});
 		}
 		return result;
+	}
+
+	function formatting(request:Dynamic, token:CancellationToken, ranged:Bool):Array<Dynamic> {
+		token.check();
+		var document = document(request), params = required(request, "params"), options = required(params, "options"), tabSize = requiredInt(options, "tabSize"),
+			insertSpaces:Dynamic = required(options, "insertSpaces"), start = 0, end = document.source.length;
+		if (!Std.isOfType(insertSpaces, Bool) || tabSize <= 0)
+			throw new LspRequestError(-32602, "Formatting options require a positive tabSize and boolean insertSpaces");
+		if (ranged) {
+			var range = required(params, "range"), startPosition = required(range, "start"), endPosition = required(range, "end");
+			start = document.offset(requiredInt(startPosition, "line"), requiredInt(startPosition, "character"));
+			end = document.offset(requiredInt(endPosition, "line"), requiredInt(endPosition, "character"));
+		}
+		var edits = service.format(compilerPath(document), start, end, tabSize, cast insertSpaces);
+		return [for (edit in edits) {range: document.range(edit.span.start, edit.span.end), newText: edit.replacement}];
 	}
 
 	function selectionRanges(request:Dynamic, token:CancellationToken):Array<Dynamic> {

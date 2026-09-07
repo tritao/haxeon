@@ -1,9 +1,27 @@
 import compiler.service.LanguageService;
 import compiler.service.CancellationToken;
+import compiler.service.SourceFormatter;
 import compiler.Diagnostic.CompileError;
 
 class LanguageServiceMain {
 	static function main():Void {
+		var formatSource = "function main():Int {\nvar text = \"{ literal }\"; // }\n/* keep { } */\nif (true) {\nreturn 42;   \n}\n}\n",
+			formatted = SourceFormatter.format(formatSource, 2, true),
+			expectedFormat = "function main():Int {\n  var text = \"{ literal }\"; // }\n  /* keep { } */\n  if (true) {\n    return 42;\n  }\n}\n";
+		if (formatted != expectedFormat || SourceFormatter.format(formatted, 2, true) != formatted)
+			throw "source formatting was not trivia-preserving and idempotent";
+		var returnStart = formatSource.indexOf("return 42"), returnEnd = returnStart + "return 42;   ".length,
+			rangeFormatted = SourceFormatter.format(formatSource, 2, true, returnStart, returnEnd);
+		if (rangeFormatted == null || rangeFormatted.indexOf("\nvar text") < 0 || rangeFormatted.indexOf("\n    return 42;") < 0)
+			throw "range formatting changed text outside the selected syntax line";
+		var crlfSource = StringTools.replace(formatSource, "\n", "\r\n"), crlfFormatted = SourceFormatter.format(crlfSource, 2, true);
+		if (crlfFormatted == null || crlfFormatted.indexOf("\r\n") < 0 || crlfFormatted.indexOf("\n") != crlfFormatted.indexOf("\r\n") + 1)
+			throw "source formatting did not preserve CRLF line endings";
+		if (SourceFormatter.format("function main(:Int {", 2, true) != null)
+			throw "source formatting rewrote malformed input";
+		var conditionalFormat = SourceFormatter.format("#if missing\nfunction main():Int return 1;\n#else\nfunction main():Int {\nreturn 2;\n}\n#end\n", 2, true);
+		if (conditionalFormat == null || conditionalFormat.indexOf("#if missing") != 0 || conditionalFormat.indexOf("\n  return 2;") < 0)
+			throw "source formatting did not preserve conditional compilation";
 		var service = new LanguageService();
 		service.update("Main.hx",
 			"typedef Count = Int; enum Kind { One; Two(Int); } interface Plugin { function activate():Void; } class Editor { public static var version:Int; public static function make():Int { return 1; } public var active:Int; public function open():Void { return; } } function main():Int { var editor = new Editor(); editor.open(); editor.active; var text:String = \"x\"; text.length; var kind:Kind = Kind.One; var values = new Array<Int>(0); values.push(1); values.pop(); Editor.make(); return 42; }");

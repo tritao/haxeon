@@ -76,6 +76,8 @@ class LspProtocolMain {
 			|| initialized.result.capabilities.signatureHelpProvider == null
 			|| !initialized.result.capabilities.typeDefinitionProvider
 			|| !initialized.result.capabilities.implementationProvider
+			|| !initialized.result.capabilities.documentFormattingProvider
+			|| !initialized.result.capabilities.documentRangeFormattingProvider
 			|| initialized.result.capabilities.textDocumentSync.change != 2
 			|| !initialized.result.capabilities.documentHighlightProvider
 			|| initialized.result.capabilities.diagnosticProvider.identifier != "haxeon"
@@ -1047,6 +1049,29 @@ class LspProtocolMain {
 		if (!hasSemanticToken(incrementallyUpdatedTokens.result.data, 0, numberOffset, 19, 0)
 			|| semanticTokenLength(incrementallyUpdatedTokens.result.data, 0, numberOffset, 19) != 2)
 			throw "incremental document change did not reach compiler-backed LSP queries";
+		var formattingProtocol = new LspProtocol(), formattingUri = "file:///workspace/Formatting.hx",
+			formattingSource = "function main():Int {\nvar text = \"{ literal }\"; // }\nif (true) {\nreturn 42;   \n}\n}\n",
+			formattingDocument = new LspDocument(formattingUri, "/workspace/Formatting.hx", 1, formattingSource);
+		request(formattingProtocol, '{"jsonrpc":"2.0","id":8923,"method":"initialize","params":{}}');
+		formattingProtocol.handle(Json.stringify({
+			jsonrpc: "2.0", method: "textDocument/didOpen",
+			params: {textDocument: {uri: formattingUri, languageId: "haxe", version: 1, text: formattingSource}}
+		}));
+		var formattingResponse = request(formattingProtocol, Json.stringify({
+			jsonrpc: "2.0", id: 8924, method: "textDocument/formatting",
+			params: {textDocument: {uri: formattingUri}, options: {tabSize: 2, insertSpaces: true}}
+		}));
+		if (formattingResponse.result.length != 1 || applyLspEdit(formattingDocument, formattingResponse.result[0]).indexOf("\n    return 42;\n") < 0)
+			throw "LSP document formatting did not map the compiler edit";
+		var rangeFormattingResponse = request(formattingProtocol, Json.stringify({
+			jsonrpc: "2.0", id: 8925, method: "textDocument/rangeFormatting",
+			params: {
+				textDocument: {uri: formattingUri}, options: {tabSize: 2, insertSpaces: true},
+				range: {start: {line: 3, character: 0}, end: {line: 4, character: 0}}
+			}
+		})), rangeFormattedSource = applyLspEdit(formattingDocument, rangeFormattingResponse.result[0]);
+		if (rangeFormattedSource.indexOf("\nvar text") < 0 || rangeFormattedSource.indexOf("\n    return 42;\n") < 0)
+			throw "LSP range formatting changed lines outside its requested range";
 		var implementationProtocol = new LspProtocol(), implementationUri = "file:///workspace/Implementation.hx",
 			implementationSource = "interface Worker { function work():Int; } class First implements Worker { public function work():Int return 1; } class Second implements Worker { public function work():Int return 2; } function main():Int return new First().work();",
 			implementationDocument = new LspDocument(implementationUri, "/workspace/Implementation.hx", 1, implementationSource);
@@ -1133,6 +1158,11 @@ class LspProtocolMain {
 			index += 5;
 		}
 		return -1;
+	}
+
+	static function applyLspEdit(document:LspDocument, edit:Dynamic):String {
+		var start = document.offset(edit.range.start.line, edit.range.start.character), end = document.offset(edit.range.end.line, edit.range.end.character);
+		return document.source.substring(0, start) + edit.newText + document.source.substring(end);
 	}
 
 	static function selectionDepth(value:Dynamic):Int {
