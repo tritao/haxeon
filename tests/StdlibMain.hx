@@ -46,6 +46,7 @@ class StdlibMain {
 			"Sys.args",
 			"Sys.println",
 			"sys.io.File.getContent",
+			"sys.io.File.getBytes",
 			"sys.io.File.saveContent",
 			"sys.io.File.saveBytes",
 			"sys.FileSystem.exists",
@@ -130,6 +131,7 @@ class StdlibMain {
 		];
 		var fileSymbols:Map<String, Bool> = [
 			"__file_get_content" => true,
+			"__file_get_bytes" => true,
 			"__file_save_content" => true,
 			"__file_save_bytes" => true
 		];

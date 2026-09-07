@@ -27,6 +27,9 @@ import haxe.io.Bytes;
 @:hlNative("realtime_runtime", "__file_get_content")
 extern function fileGetContent(path:String):String;
 
+@:hlNative("realtime_runtime", "__file_get_bytes")
+extern function fileGetBytes(path:String):Bytes;
+
 @:hlNative("realtime_runtime", "__file_save_content")
 extern function fileSaveContent(path:String, content:String):Void;
 
@@ -37,6 +40,9 @@ extern function fileSaveBytes(path:String, bytes:Bytes):Void;
 class File {
 	public static inline function getContent(path:String):String
 		return fileGetContent(path);
+
+	public static inline function getBytes(path:String):Bytes
+		return fileGetBytes(path);
 
 	public static inline function saveContent(path:String, content:String):Void
 		fileSaveContent(path, content);

@@ -130,7 +130,7 @@ HL_PRIM void HL_NAME(__file_save_content)( vbyte *path, vbyte *content ) {
 }
 
 
-HL_PRIM vbyte *HL_NAME(__file_get_content)( vbyte *path ) {
+static vbyte *realtime_file_read( vbyte *path, int *length ) {
 	char *path_utf8 = realtime_utf8_copy(path);
 	FILE *file = fopen(path_utf8, "rb");
 	free(path_utf8);
@@ -140,23 +140,43 @@ HL_PRIM vbyte *HL_NAME(__file_get_content)( vbyte *path ) {
 		hl_error("Could not seek source file");
 	}
 	long byte_length = ftell(file);
+	if( byte_length > 0x7FFFFFFF ) {
+		fclose(file);
+		hl_error("Source file is too large");
+	}
 	if( byte_length < 0 || fseek(file, 0, SEEK_SET) != 0 ) {
 		fclose(file);
 		hl_error("Could not measure source file");
 	}
-	char *utf8 = (char *)malloc((size_t)byte_length + 1);
-	if( utf8 == NULL ) {
+	vbyte *data = (vbyte *)malloc((size_t)byte_length + 1);
+	if( data == NULL ) {
 		fclose(file);
 		hl_error("Could not allocate source buffer");
 	}
-	if( fread(utf8, 1, (size_t)byte_length, file) != (size_t)byte_length ) {
-		free(utf8);
+	if( fread(data, 1, (size_t)byte_length, file) != (size_t)byte_length ) {
+		free(data);
 		fclose(file);
 		hl_error("Could not read source file");
 	}
 	fclose(file);
-	utf8[byte_length] = 0;
-	vbyte *result = realtime_string_from_utf8(utf8);
-	free(utf8);
+	data[byte_length] = 0;
+	*length = (int)byte_length;
+	return data;
+}
+
+HL_PRIM vbyte *HL_NAME(__file_get_content)( vbyte *path ) {
+	int length;
+	vbyte *data = realtime_file_read(path,&length);
+	vbyte *result = realtime_string_from_utf8((const char *)data);
+	free(data);
+	return result;
+}
+
+HL_PRIM realtime_bytes *HL_NAME(__file_get_bytes)( vbyte *path ) {
+	int length;
+	vbyte *data = realtime_file_read(path,&length);
+	realtime_bytes *result = realtime_bytes_make(length);
+	if( length > 0 ) memcpy(result->data,data,(size_t)length);
+	free(data);
 	return result;
 }

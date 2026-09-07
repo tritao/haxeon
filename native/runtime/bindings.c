@@ -253,6 +253,7 @@ DEFINE_PRIM(_VOID,__bytes_output_write_string,_ABSTRACT(realtime_bytes_output) _
 DEFINE_PRIM(_VOID,__bytes_output_write,_ABSTRACT(realtime_bytes_output) _ABSTRACT(realtime_bytes));
 DEFINE_PRIM(_ABSTRACT(realtime_bytes),__bytes_output_get_bytes,_ABSTRACT(realtime_bytes_output));
 DEFINE_PRIM(_VOID,__file_save_bytes,_BYTES _ABSTRACT(realtime_bytes));
+DEFINE_PRIM(_ABSTRACT(realtime_bytes),__file_get_bytes,_BYTES);
 DEFINE_PRIM(_ABSTRACT(realtime_date),__date_now,_NO_ARG);
 DEFINE_PRIM(_F64,__date_get_time,_ABSTRACT(realtime_date));
 DEFINE_PRIM(_BYTES,__array_join_bytes,_ARR _BYTES);

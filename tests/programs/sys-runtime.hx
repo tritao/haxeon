@@ -23,10 +23,20 @@ function main():Int {
 	if (!Sys.createDir(directory, 493) || !Sys.rename(directory, renamed))
 		return 1;
 	sys.io.File.saveContent(file, "42");
-	sys.io.File.saveBytes(bytesFile, haxe.io.Bytes.ofString("bytes"));
+	var savedBytes = haxe.io.Bytes.alloc(4);
+	savedBytes.set(0, 0);
+	savedBytes.set(1, 255);
+	savedBytes.set(2, 42);
+	savedBytes.set(3, 128);
+	sys.io.File.saveBytes(bytesFile, savedBytes);
+	var loadedBytes = sys.io.File.getBytes(bytesFile);
 	if (!Sys.exists(file)
 		|| sys.io.File.getContent(file) != "42"
-		|| sys.io.File.getContent(bytesFile) != "bytes"
+		|| loadedBytes.length != 4
+		|| loadedBytes.get(0) != 0
+		|| loadedBytes.get(1) != 255
+		|| loadedBytes.get(2) != 42
+		|| loadedBytes.get(3) != 128
 		|| Sys.readDir(renamed).indexOf("value-ß.txt") < 0)
 		return 2;
 	if (!Sys.delete(file) || !Sys.delete(bytesFile) || !Sys.removeDir(renamed))
