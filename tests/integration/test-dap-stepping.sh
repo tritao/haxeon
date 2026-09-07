@@ -105,6 +105,13 @@ print(json.dumps({
 PY
 )
 "${dap[@]}" launch --adapter hashlink --name "$session" --json "$launch_json" >/dev/null
+locations_request=$(python3 - "$repo_dir/tests/DapSteppingProbe.hx" <<'PY'
+import json,sys
+print(json.dumps({"source":{"path":sys.argv[1]},"line":9,"column":13,"endLine":9,"endColumn":13}))
+PY
+)
+locations=$("${dap[@]}" request --name "$session" breakpointLocations --json "$locations_request")
+python3 -c 'import json,sys; points=json.load(sys.stdin)["data"]["breakpoints"]; assert points and points==sorted(points,key=lambda p:(p["line"],p.get("column",0),p.get("endLine",0),p.get("endColumn",0))), points; assert all(p["line"]==9 and p.get("column")==13 for p in points), points' <<<"$locations"
 column_breakpoint=$(python3 - "$repo_dir/tests/DapSteppingProbe.hx" <<'PY'
 import json,sys
 print(json.dumps({"source":{"path":sys.argv[1]},"breakpoints":[{"line":9,"column":13}]}))
