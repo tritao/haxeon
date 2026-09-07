@@ -1,5 +1,6 @@
 -cp src
 -cp tests
+-cp tests/dap
 -main DapHotReloadProbe
 -debug
 -hl out/dap-hot-reload-probe.hl

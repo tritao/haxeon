@@ -21,7 +21,7 @@ if [[ ! -d "$adapter_dir/node_modules" ]]; then npm --prefix "$adapter_dir" ci -
 		NEKOPATH="$tools_dir/neko-runtime/root/usr/lib/x86_64-linux-gnu/neko" haxe build.hxml
 )
 "$tools_dir/haxe/haxe" --cwd "$repo_dir" -cp src --run Main \
-	"$repo_dir/tests/DapWatchpointProbe.hx" "$repo_dir/out/dap-watchpoint-probe.hl" >/dev/null
+	"$repo_dir/tests/dap/DapWatchpointProbe.hx" "$repo_dir/out/dap-watchpoint-probe.hl" >/dev/null
 
 python3 - "$dap_home/config/adapters.json" "$adapter_dir" <<'PY'
 import json
@@ -62,7 +62,7 @@ print(json.dumps({
 PY
 )
 "${dap[@]}" launch --adapter hashlink --name "$session" --json "$launch_json" >/dev/null
-breakpoint=$("${dap[@]}" breakpoints set --name "$session" --source "$repo_dir/tests/DapWatchpointProbe.hx" --line 5)
+breakpoint=$("${dap[@]}" breakpoints set --name "$session" --source "$repo_dir/tests/dap/DapWatchpointProbe.hx" --line 5)
 python3 -c 'import json,sys; p=json.load(sys.stdin)["data"]["breakpoints"][0]; assert p["verified"] and p["line"]==5, p' <<<"$breakpoint"
 
 wait_stop() {
@@ -98,7 +98,7 @@ data_id=$(python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; assert d[
 installed=$("${dap[@]}" request --name "$session" setDataBreakpoints --json "{\"breakpoints\":[{\"dataId\":\"$data_id\",\"accessType\":\"write\"}]}")
 python3 -c 'import json,sys; points=json.load(sys.stdin)["data"]["breakpoints"]; assert len(points)==1 and points[0]["verified"], points' <<<"$installed"
 "${dap[@]}" request --name "$session" setBreakpoints \
-	--json "{\"source\":{\"path\":\"$repo_dir/tests/DapWatchpointProbe.hx\"},\"breakpoints\":[]}" >/dev/null
+	--json "{\"source\":{\"path\":\"$repo_dir/tests/dap/DapWatchpointProbe.hx\"},\"breakpoints\":[]}" >/dev/null
 
 "${dap[@]}" continue --name "$session" >/dev/null
 for expected in 10 20 30; do

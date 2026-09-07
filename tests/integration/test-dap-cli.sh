@@ -79,7 +79,7 @@ PY
 )
 
 "${dap[@]}" launch --adapter hashlink --name "$session" --json "$launch_json" >/dev/null
-breakpoints=$("${dap[@]}" breakpoints set --name "$session" --source "$repo_dir/tests/DapCliProbe.hx" --line 4)
+breakpoints=$("${dap[@]}" breakpoints set --name "$session" --source "$repo_dir/tests/dap/DapCliProbe.hx" --line 4)
 python3 -c 'import json,sys; data=json.load(sys.stdin); assert data["ok"] and data["data"]["breakpoints"][0]["verified"]' <<<"$breakpoints"
 
 stopped=false

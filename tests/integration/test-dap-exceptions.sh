@@ -67,7 +67,7 @@ PY
 )
 "${dap[@]}" launch --adapter hashlink --name "$session" --json "$launch_json" >/dev/null
 "${dap[@]}" request --name "$session" setExceptionBreakpoints --json '{"filters":["all"]}' >/dev/null
-breakpoint=$("${dap[@]}" breakpoints set --name "$session" --source "$repo_dir/tests/DapExceptionProbe.hx" --line 18)
+breakpoint=$("${dap[@]}" breakpoints set --name "$session" --source "$repo_dir/tests/dap/DapExceptionProbe.hx" --line 18)
 python3 -c 'import json,sys; assert json.load(sys.stdin)["data"]["breakpoints"][0]["verified"]' <<<"$breakpoint"
 
 current_thread=

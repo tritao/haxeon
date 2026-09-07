@@ -21,7 +21,7 @@ if [[ ! -d "$adapter_dir/node_modules" ]]; then npm --prefix "$adapter_dir" ci -
 		NEKOPATH="$tools_dir/neko-runtime/root/usr/lib/x86_64-linux-gnu/neko" haxe build.hxml
 )
 "$tools_dir/haxe/haxe" --cwd "$repo_dir" -cp src --run Main \
-	"$repo_dir/tests/DapLogpointProbe.hx" "$repo_dir/out/dap-logpoint-probe.hl" >/dev/null
+	"$repo_dir/tests/dap/DapLogpointProbe.hx" "$repo_dir/out/dap-logpoint-probe.hl" >/dev/null
 
 python3 - "$dap_home/config/adapters.json" "$adapter_dir" <<'PY'
 import json
@@ -63,7 +63,7 @@ PY
 )
 "${dap[@]}" launch --adapter hashlink --name "$session" --json "$launch_json" >/dev/null
 breakpoint=$("${dap[@]}" breakpoints set --name "$session" \
-	--source "$repo_dir/tests/DapLogpointProbe.hx" --line 6 \
+	--source "$repo_dir/tests/dap/DapLogpointProbe.hx" --line 6 \
 	--log-message 'iteration {index}: doubled={{ {doubled} }}, missing={missingValue}')
 python3 -c 'import json,sys; point=json.load(sys.stdin)["data"]["breakpoints"][0]; assert point["verified"] and point["line"]==6, point' <<<"$breakpoint"
 

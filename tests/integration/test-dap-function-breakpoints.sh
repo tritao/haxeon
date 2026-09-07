@@ -85,7 +85,7 @@ fi
 
 "${dap[@]}" close "$session" >/dev/null
 "$tools_dir/haxe/haxe" --cwd "$repo_dir" -cp src --run Main \
-	"$repo_dir/tests/DapTopLevelFunctionProbe.hx" "$repo_dir/out/dap-top-level-function.hl" >/dev/null
+	"$repo_dir/tests/dap/DapTopLevelFunctionProbe.hx" "$repo_dir/out/dap-top-level-function.hl" >/dev/null
 top_level_launch=$(python3 - "$repo_dir" <<'PY'
 import json, sys
 root = sys.argv[1]

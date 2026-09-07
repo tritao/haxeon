@@ -1,3 +1,4 @@
 -cp tests
+-cp tests/profiler
 -main ProfilerAllocationTarget
 -hl out/profiler-allocation-target.hl

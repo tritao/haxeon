@@ -82,7 +82,7 @@ read_locals() {
 	"${dap[@]}" variables --name "$session" --variables-reference "$reference"
 }
 
-"$tools_dir/haxe/haxe" --cwd "$repo_dir" -cp src --run Main "$repo_dir/tests/DapScopeProbe.hx" "$repo_dir/out/dap-scope-probe.hl" >/dev/null
+"$tools_dir/haxe/haxe" --cwd "$repo_dir" -cp src --run Main "$repo_dir/tests/dap/DapScopeProbe.hx" "$repo_dir/out/dap-scope-probe.hl" >/dev/null
 "${dap[@]}" start >/dev/null
 launch_json=$(python3 - "$repo_dir" <<'PY'
 import json
@@ -102,7 +102,7 @@ print(json.dumps({
 PY
 )
 "${dap[@]}" launch --adapter hashlink --name "$session" --json "$launch_json" >/dev/null
-breakpoints=$("${dap[@]}" breakpoints set --name "$session" --source "$repo_dir/tests/DapScopeProbe.hx" --line 7 10 13 15 20 22)
+breakpoints=$("${dap[@]}" breakpoints set --name "$session" --source "$repo_dir/tests/dap/DapScopeProbe.hx" --line 7 10 13 15 20 22)
 python3 -c 'import json,sys; points=json.load(sys.stdin)["data"]["breakpoints"]; assert len(points)==6 and all(p["verified"] for p in points)' <<<"$breakpoints"
 
 wait_frame 7

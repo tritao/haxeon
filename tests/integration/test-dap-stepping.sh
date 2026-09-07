@@ -51,7 +51,7 @@ export DAP_CLI_HOME="$dap_home"
 source_backup=
 cleanup() {
 	if [[ -n "${source_backup:-}" && -f "$source_backup" ]]; then
-		cp "$source_backup" "$repo_dir/tests/DapSteppingProbe.hx"
+		cp "$source_backup" "$repo_dir/tests/dap/DapSteppingProbe.hx"
 		rm -f "$source_backup"
 	fi
 	"${dap[@]}" stop --name "$session" >/dev/null 2>&1 || true
@@ -89,7 +89,7 @@ read_locals() {
 }
 
 if [[ "${SKIP_DAP_BUILD:-0}" != 1 ]]; then
-	"$tools_dir/haxe/haxe" --cwd "$repo_dir" -cp src --run Main "$repo_dir/tests/DapSteppingProbe.hx" "$repo_dir/out/dap-stepping-probe.hl" >/dev/null
+	"$tools_dir/haxe/haxe" --cwd "$repo_dir" -cp src --run Main "$repo_dir/tests/dap/DapSteppingProbe.hx" "$repo_dir/out/dap-stepping-probe.hl" >/dev/null
 fi
 "${dap[@]}" start >/dev/null
 launch_json=$(python3 - "$repo_dir" <<'PY'
@@ -110,14 +110,14 @@ print(json.dumps({
 PY
 )
 "${dap[@]}" launch --adapter hashlink --name "$session" --json "$launch_json" >/dev/null
-locations_request=$(python3 - "$repo_dir/tests/DapSteppingProbe.hx" <<'PY'
+locations_request=$(python3 - "$repo_dir/tests/dap/DapSteppingProbe.hx" <<'PY'
 import json,sys
 print(json.dumps({"source":{"path":sys.argv[1]},"line":9,"column":13,"endLine":9,"endColumn":13}))
 PY
 )
 locations=$("${dap[@]}" request --name "$session" breakpointLocations --json "$locations_request")
 python3 -c 'import json,sys; points=json.load(sys.stdin)["data"]["breakpoints"]; assert points and points==sorted(points,key=lambda p:(p["line"],p.get("column",0),p.get("endLine",0),p.get("endColumn",0))), points; assert all(p["line"]==9 and p.get("column")==13 for p in points), points' <<<"$locations"
-column_breakpoint=$(python3 - "$repo_dir/tests/DapSteppingProbe.hx" <<'PY'
+column_breakpoint=$(python3 - "$repo_dir/tests/dap/DapSteppingProbe.hx" <<'PY'
 import json,sys
 print(json.dumps({"source":{"path":sys.argv[1]},"breakpoints":[{"line":9,"column":13}]}))
 PY
@@ -129,8 +129,8 @@ wait_frame DapSteppingProbe.main 9
 python3 -c 'import json,sys; frame=json.load(sys.stdin)["data"]["stackFrames"][0]; assert frame.get("column",0)>1, frame' <<<"$current_stack"
 
 source_backup=$(mktemp)
-cp "$repo_dir/tests/DapSteppingProbe.hx" "$source_backup"
-printf '\n// stale-source probe\n' >> "$repo_dir/tests/DapSteppingProbe.hx"
+cp "$repo_dir/tests/dap/DapSteppingProbe.hx" "$source_backup"
+printf '\n// stale-source probe\n' >> "$repo_dir/tests/dap/DapSteppingProbe.hx"
 stale_stack=$("${dap[@]}" stack --name "$session")
 python3 -c 'import json,sys; source=json.load(sys.stdin)["data"]["stackFrames"][0]["source"]; assert source.get("presentationHint")=="deemphasize" and "differs from the compiled snapshot" in source.get("origin",""), source' <<<"$stale_stack"
 compiled_reference=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["stackFrames"][0]["source"]["sourceReference"])' <<<"$stale_stack")
@@ -140,9 +140,9 @@ loaded_sources=$("${dap[@]}" request --name "$session" loadedSources --json '{}'
 python3 -c 'import json,sys; sources=json.load(sys.stdin)["data"]["sources"]; assert any(s.get("name")=="DapSteppingProbe.hx" and s.get("sourceReference",0)>0 for s in sources), sources' <<<"$loaded_sources"
 stale_locations=$("${dap[@]}" request --name "$session" breakpointLocations --json "$locations_request")
 python3 -c 'import json,sys; assert json.load(sys.stdin)["data"]["breakpoints"]==[]' <<<"$stale_locations"
-stale_breakpoint=$("${dap[@]}" breakpoints set --name "$session" --source "$repo_dir/tests/DapSteppingProbe.hx" --line 10)
+stale_breakpoint=$("${dap[@]}" breakpoints set --name "$session" --source "$repo_dir/tests/dap/DapSteppingProbe.hx" --line 10)
 python3 -c 'import json,sys; point=json.load(sys.stdin)["data"]["breakpoints"][0]; assert not point["verified"] and "differs from the compiled snapshot" in point.get("message",""), point' <<<"$stale_breakpoint"
-cp "$source_backup" "$repo_dir/tests/DapSteppingProbe.hx"
+cp "$source_backup" "$repo_dir/tests/dap/DapSteppingProbe.hx"
 rm -f "$source_backup"
 source_backup=
 
@@ -184,7 +184,7 @@ wait_frame DapSteppingProbe.main 12
 wait_frame DapSteppingProbe.main 14
 locals=$(read_locals)
 python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="answer" and v.get("value")=="42" for v in vs), vs' <<<"$locals"
-loop_breakpoint=$("${dap[@]}" breakpoints set --name "$session" --source "$repo_dir/tests/DapSteppingProbe.hx" --line 15)
+loop_breakpoint=$("${dap[@]}" breakpoints set --name "$session" --source "$repo_dir/tests/dap/DapSteppingProbe.hx" --line 15)
 python3 -c 'import json,sys; assert json.load(sys.stdin)["data"]["breakpoints"][0]["verified"]' <<<"$loop_breakpoint"
 "${dap[@]}" next --name "$session" >/dev/null
 wait_frame DapSteppingProbe.main 15

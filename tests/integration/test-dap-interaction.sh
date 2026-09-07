@@ -56,7 +56,7 @@ cleanup() {
 trap cleanup EXIT
 
 "$tools_dir/haxe/haxe" --cwd "$repo_dir" -cp src --run Main \
-	"$repo_dir/tests/DapInteractionProbe.hx" "$repo_dir/out/dap-interaction-probe.hl" >/dev/null
+	"$repo_dir/tests/dap/DapInteractionProbe.hx" "$repo_dir/out/dap-interaction-probe.hl" >/dev/null
 "${dap[@]}" start >/dev/null
 launch_json=$(python3 - "$repo_dir" <<'PY'
 import json
@@ -77,7 +77,7 @@ PY
 )
 "${dap[@]}" launch --adapter hashlink --name "$session" --json "$launch_json" >/dev/null
 breakpoint=$("${dap[@]}" breakpoints set --name "$session" \
-	--source "$repo_dir/tests/DapInteractionProbe.hx" --line 6 --condition 'index == 2')
+	--source "$repo_dir/tests/dap/DapInteractionProbe.hx" --line 6 --condition 'index == 2')
 python3 -c 'import json,sys; point=json.load(sys.stdin)["data"]["breakpoints"][0]; assert point["verified"] and point["line"]==6, point' <<<"$breakpoint"
 
 current_frame=
