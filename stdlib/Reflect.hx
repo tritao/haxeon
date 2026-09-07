@@ -22,8 +22,14 @@
 @:hlNative("realtime_runtime", "__reflect_compare")
 extern function reflectCompare(left:Dynamic, right:Dynamic):Int;
 
+@:hlNative("std", "fun_compare")
+extern function reflectCompareMethods(left:Dynamic, right:Dynamic):Bool;
+
 /** Supported reflection helpers backed by the stable runtime ABI. */
 class Reflect {
 	public static inline function compare(left:Dynamic, right:Dynamic):Int
 		return reflectCompare(left, right);
+
+	public static inline function compareMethods(left:Dynamic, right:Dynamic):Bool
+		return reflectCompareMethods(left, right);
 }
