@@ -33,6 +33,10 @@ include `equals`, `notEquals`, `isTrue`, `isFalse`, `isNull`, `notNull`, and
 The synchronous runner supports `setupClass` and `teardownClass` around each
 case, plus `setup` and `teardown` around every test. Teardown hooks still run
 after setup or assertion failures, and hook failures have separate counters.
+`Runner.addCase(test, filter)` and `Runner.globalPattern` provide substring
+filtering without requiring `EReg`. Synchronous events are available through
+`onStart`, `onProgress`, and `onComplete`; listeners use the familiar
+`dispatcher.add(callback)` form.
 
 Haxeon does not yet execute build macros, so test methods are registered by
 overriding `registerTests()` and calling `addTest(name, method)`. Async tests,

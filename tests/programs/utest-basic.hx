@@ -1,6 +1,7 @@
 import utest.Assert;
 import utest.Runner;
 import utest.Test;
+import utest.TestProgress;
 import utest.ui.Report;
 
 function genericDefault<T>(value:T, enabled:Bool = true):T {
@@ -90,17 +91,71 @@ class LifecycleTest extends Test {
 	}
 }
 
+class FilterTest extends Test {
+	public var includedRan:Bool = false;
+	public var excludedRan:Bool = false;
+
+	public function new() {
+		super();
+	}
+
+	public function testIncluded():Void {
+		includedRan = true;
+	}
+
+	public function testExcluded():Void {
+		excludedRan = true;
+	}
+
+	public function registerTests():Void {
+		addTest("FilterTest.testIncluded", this.testIncluded);
+		addTest("FilterTest.testExcluded", this.testExcluded);
+	}
+}
+
+class RunObserver {
+	public var started:Bool = false;
+	public var completed:Bool = false;
+	public var progressCount:Int = 0;
+	public var lastTotal:Int = 0;
+
+	public function new() {}
+
+	public function start(runner:Runner):Void {
+		started = true;
+	}
+
+	public function progress(value:TestProgress):Void {
+		progressCount++;
+		lastTotal = value.totals;
+	}
+
+	public function complete(runner:Runner):Void {
+		completed = true;
+	}
+}
+
 function main():Int {
 	if (genericDefault(42) != 42 || genericOptional(42) != 42)
 		return 2;
 	var runner = new Runner();
 	var lifecycle = new LifecycleTest();
+	var filtered = new FilterTest();
+	var observer = new RunObserver();
+	runner.onStart.add(observer.start);
+	runner.onProgress.add(observer.progress);
+	runner.onComplete.add(observer.complete);
 	runner.addCase(new MathTest());
 	runner.addCase(lifecycle);
+	runner.addCase(filtered, "Included");
 	Report.create(runner);
 	runner.run();
 	if (lifecycle.events.length != 8 || lifecycle.events[0] != 1 || lifecycle.events[1] != 2 || lifecycle.events[2] != 3 || lifecycle.events[3] != 5
 		|| lifecycle.events[4] != 2 || lifecycle.events[5] != 4 || lifecycle.events[6] != 5 || lifecycle.events[7] != 6)
 		return 3;
+	if (!observer.started || !observer.completed || observer.progressCount != 7 || observer.lastTotal != 7 || runner.length != 7)
+		return 4;
+	if (!filtered.includedRan || filtered.excludedRan)
+		return 5;
 	return runner.failures == 0 ? 0 : 1;
 }

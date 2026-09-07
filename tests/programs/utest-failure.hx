@@ -1,8 +1,20 @@
 import utest.Assert;
 import utest.Runner;
 import utest.Test;
+import utest.TestProgress;
 
 function doesNotRaise():Void {}
+
+class FailureObserver {
+	public var failedProgress:Int = 0;
+
+	public function new() {}
+
+	public function progress(value:TestProgress):Void {
+		if (!value.success)
+			failedProgress++;
+	}
+}
 
 class FailureTest extends Test {
 	public var tornDown:Bool = false;
@@ -47,7 +59,15 @@ class FailureTest extends Test {
 function main():Int {
 	var runner = new Runner();
 	var test = new FailureTest();
+	var observer = new FailureObserver();
+	runner.onProgress.add(observer.progress);
 	runner.addCase(test);
 	runner.run();
-	return runner.failures == 5 && test.tornDown ? 5 : 10;
+	if (runner.failures != 5)
+		return 11;
+	if (observer.failedProgress != 5)
+		return 12;
+	if (!test.tornDown)
+		return 13;
+	return 5;
 }

@@ -12,7 +12,10 @@ class UtestMain {
 		var compiler = new Compiler();
 		RuntimeNatives.register(compiler);
 		compiler.update("utest/Assert.hx", File.getContent("stdlib/utest/Assert.hx"));
+		compiler.update("utest/ProgressEvent.hx", File.getContent("stdlib/utest/ProgressEvent.hx"));
+		compiler.update("utest/RunnerEvent.hx", File.getContent("stdlib/utest/RunnerEvent.hx"));
 		compiler.update("utest/Test.hx", File.getContent("stdlib/utest/Test.hx"));
+		compiler.update("utest/TestProgress.hx", File.getContent("stdlib/utest/TestProgress.hx"));
 		compiler.update("utest/Runner.hx", File.getContent("stdlib/utest/Runner.hx"));
 		compiler.update("utest/ui/Report.hx", File.getContent("stdlib/utest/ui/Report.hx"));
 		compiler.update("Main.hx", File.getContent(source));
