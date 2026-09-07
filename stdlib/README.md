@@ -48,3 +48,6 @@ Optional `haxe.PosInfos` parameters are populated by the compiler with the
 call-site file, one-based line, enclosing class, and method. These values are
 embedded in generated code and refreshed when an incremental edit moves the
 call site.
+
+The pinned upstream source and module-by-module analysis baseline are documented
+in [Upstream utest compatibility](../docs/UTEST_UPSTREAM_COMPATIBILITY.md).

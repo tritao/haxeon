@@ -4,3 +4,6 @@
 [submodule "vendor/hashlink-debugger"]
 	path = vendor/hashlink-debugger
 	url = https://github.com/vshaxe/hashlink-debugger.git
+[submodule "vendor/utest"]
+	path = vendor/utest
+	url = https://github.com/haxe-utest/utest.git
