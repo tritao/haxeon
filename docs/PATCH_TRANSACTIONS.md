@@ -9,6 +9,9 @@ the new revision and fails as stale.
 Before staging, the runtime validates module identity, revision and symbol bases,
 prefix hashes, the complete appended-type delta, stable function identity,
 relocations, register and symbol bounds, opcode operands, and duplicate slots.
+HLP version 7 also validates content-addressed source snapshots before copying
+them into the staged code owner; their lifetime therefore matches active or
+retired patch JIT code that can reference them in debugger stacks.
 It then creates combined symbol tables, initializes reserved non-moving type
 slots, builds private function metadata, and JIT-compiles a private code image.
 Any failure frees staged storage and clears reserved type slots while leaving the

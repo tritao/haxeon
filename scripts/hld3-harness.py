@@ -111,6 +111,21 @@ def read_patch_regions(reader: Reader, pointer_size: int) -> ModuleMappings:
         functions = [read_function(reader, True, True) for _ in range(function_count)]
         if any(index < 0 for index in functions) or len(set(functions)) != len(functions):
             raise ProtocolError("invalid HLD3 patch function indices")
+        snapshot_count = reader.i32()
+        if snapshot_count < 0:
+            raise ProtocolError("invalid HLD3 source snapshot count")
+        hashes: set[int] = set()
+        for _ in range(snapshot_count):
+            source_hash, length = reader.i32(), reader.i32()
+            if source_hash == 0 or length < 0 or source_hash in hashes:
+                raise ProtocolError("invalid HLD3 source snapshot")
+            content = reader.read(length)
+            actual = 0x811C9DC5
+            for byte in content:
+                actual = ((actual ^ byte) * 16777619) & 0xFFFFFFFF
+            if actual != source_hash & 0xFFFFFFFF:
+                raise ProtocolError("invalid HLD3 source snapshot hash")
+            hashes.add(source_hash)
         regions.append(PatchRegion(address, size, retired == 1, functions))
     return ModuleMappings(identity, revision, regions)
 

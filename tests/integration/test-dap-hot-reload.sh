@@ -119,6 +119,12 @@ for _ in {1..40}; do
 done
 wait_frame Value.hx 6
 python3 -c 'import json,sys; frame=json.load(sys.stdin)["data"]["stackFrames"][0]; assert frame.get("column",0)>=5 and frame["column"]!=int(sys.argv[1]), frame' "$initial_column" <<<"$current_stack"
+printf '\n// stale patched source\n' >> "$source_dir/Value.hx"
+patched_stack=$("${dap[@]}" stack --name "$session")
+patched_reference=$(python3 -c 'import json,sys; source=json.load(sys.stdin)["data"]["stackFrames"][0]["source"]; assert source.get("sourceReference",0)>0 and source.get("presentationHint")=="deemphasize", source; print(source["sourceReference"])' <<<"$patched_stack")
+patched_source=$("${dap[@]}" request --name "$session" source --json "{\"sourceReference\":$patched_reference}")
+python3 -c 'import json,sys; expected=open(sys.argv[1],encoding="utf-8").read(); assert json.load(sys.stdin)["data"]["content"]==expected' "$source_dir/Value.patched.hx" <<<"$patched_source"
+cp "$source_dir/Value.patched.hx" "$source_dir/Value.hx"
 locals=$(read_locals)
 python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="result" and v.get("value")=="44" for v in vs), vs; assert any(v["name"]=="scoped" and v.get("value")=="143" for v in vs), vs' <<<"$locals"
 evaluated=$("${dap[@]}" evaluate --name "$session" --frame-id "$current_frame" --context watch --expression 'result + scoped')

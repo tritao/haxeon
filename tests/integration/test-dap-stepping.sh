@@ -133,6 +133,11 @@ cp "$repo_dir/tests/DapSteppingProbe.hx" "$source_backup"
 printf '\n// stale-source probe\n' >> "$repo_dir/tests/DapSteppingProbe.hx"
 stale_stack=$("${dap[@]}" stack --name "$session")
 python3 -c 'import json,sys; source=json.load(sys.stdin)["data"]["stackFrames"][0]["source"]; assert source.get("presentationHint")=="deemphasize" and "differs from the compiled snapshot" in source.get("origin",""), source' <<<"$stale_stack"
+compiled_reference=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["stackFrames"][0]["source"]["sourceReference"])' <<<"$stale_stack")
+compiled_source=$("${dap[@]}" request --name "$session" source --json "{\"sourceReference\":$compiled_reference}")
+python3 -c 'import json,sys; expected=open(sys.argv[1],encoding="utf-8").read(); data=json.load(sys.stdin)["data"]; assert data["content"]==expected and data.get("mimeType")=="text/x-haxe", data' "$source_backup" <<<"$compiled_source"
+loaded_sources=$("${dap[@]}" request --name "$session" loadedSources --json '{}')
+python3 -c 'import json,sys; sources=json.load(sys.stdin)["data"]["sources"]; assert any(s.get("name")=="DapSteppingProbe.hx" and s.get("sourceReference",0)>0 for s in sources), sources' <<<"$loaded_sources"
 stale_locations=$("${dap[@]}" request --name "$session" breakpointLocations --json "$locations_request")
 python3 -c 'import json,sys; assert json.load(sys.stdin)["data"]["breakpoints"]==[]' <<<"$stale_locations"
 stale_breakpoint=$("${dap[@]}" breakpoints set --name "$session" --source "$repo_dir/tests/DapSteppingProbe.hx" --line 10)

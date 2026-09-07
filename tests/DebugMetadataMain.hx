@@ -126,6 +126,12 @@ class DebugMetadataMain {
 			throw "Compiler did not emit the canonical source snapshot section";
 		if (HlWriter.encode(result.module).compare(HlWriter.encode(result.module)) != 0)
 			throw "HLB source snapshot encoding is not deterministic";
+		var stableBySlot:Map<Int, Int> = [for (fn in result.module.functions) fn.functionIndex => fn.functionIndex],
+			patch = HlPatchReader.decode(HlPatchWriter.encode(result.module, Bytes.alloc(16),
+				[for (fn in result.module.functions) fn.functionIndex], stableBySlot, 0, 1));
+		if (patch.sourceSnapshots.length != 1 || patch.sourceSnapshots[0].sourceHash != source.contentHash()
+			|| patch.sourceSnapshots[0].content.toString() != text)
+			throw "HLP did not preserve the referenced source snapshot";
 		Sys.println("PASS: compiler emits deterministic content-addressed source snapshots");
 	}
 

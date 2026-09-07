@@ -24,7 +24,8 @@ class HlPatchReader {
 			if (revision <= base)
 				throw "Invalid patch revision range";
 			var baseInts = -1, baseFloats = -1, baseStrings = -1, baseTypes = -1, intPrefixHash = 0, floatPrefixHash = 0, stringPrefixHash = 0,
-				typePrefixHash = 0, ints = [], floats = [], strings = [], types = [], functions = [], debugFiles = [], haveDebug = false;
+				typePrefixHash = 0, ints = [], floats = [], strings = [], types = [], functions = [], debugFiles = [], sourceSnapshots = [], haveDebug = false,
+				haveSnapshots = false;
 			for (_ in 0...readUnsigned(input)) {
 				var tag = input.readByte(),
 					length = readUnsigned(input),
@@ -93,6 +94,17 @@ class HlPatchReader {
 									sourceHash: sourceHash, start: start, end: end, flags: flags});
 							}
 						}
+					case 4:
+						if (haveSnapshots) throw "Duplicate HLP source snapshot section";
+						haveSnapshots = true;
+						var seenHashes:Map<Int, Bool> = [];
+						for (_ in 0...readUnsigned(input)) {
+							var sourceHash = input.readInt32(), content = input.read(readUnsigned(input));
+							if (sourceHash == 0 || seenHashes.exists(sourceHash) || hashBytes(content) != sourceHash)
+								throw "Invalid HLP source snapshot";
+							seenHashes.set(sourceHash, true);
+							sourceSnapshots.push({sourceHash: sourceHash, content: content});
+						}
 					default:
 						input.position = end;
 				}
@@ -120,11 +132,18 @@ class HlPatchReader {
 				strings: strings,
 				types: types,
 				functions: functions,
-				debugFiles: debugFiles
+				debugFiles: debugFiles,
+				sourceSnapshots: sourceSnapshots
 			};
 		} catch (error:haxe.io.Eof) {
 			throw "Truncated HLP data";
 		}
+	}
+
+	static function hashBytes(bytes:Bytes):Int {
+		var hash:Int = cast 0x811C9DC5;
+		for (index in 0...bytes.length) hash = (hash ^ bytes.get(index)) * 16777619;
+		return hash;
 	}
 
 	static function readType(input:BytesInput):HlTypeDef {
