@@ -77,6 +77,17 @@ if [[ $list_status -ne 42 ]]; then
 	exit 1
 fi
 echo "PASS: Array-backed List insertion and iteration executed (exit 42)"
+reflect_methods_output="$root_dir/out/reflect-methods.hl"
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run ReflectMethodsMain "$reflect_methods_output"
+set +e
+LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$reflect_methods_output"
+reflect_methods_status=$?
+set -e
+if [[ $reflect_methods_status -ne 42 ]]; then
+	echo "Reflect.compareMethods compatibility: expected exit 42, got $reflect_methods_status" >&2
+	exit 1
+fi
+echo "PASS: Reflect.compareMethods preserves static and bound method identity (exit 42)"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ProtocolMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run LspProtocolMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run RuntimeDomainMain
