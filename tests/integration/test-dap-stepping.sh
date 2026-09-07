@@ -48,7 +48,12 @@ with open(target, "w", encoding="utf-8") as output:
 PY
 
 export DAP_CLI_HOME="$dap_home"
+source_backup=
 cleanup() {
+	if [[ -n "${source_backup:-}" && -f "$source_backup" ]]; then
+		cp "$source_backup" "$repo_dir/tests/DapSteppingProbe.hx"
+		rm -f "$source_backup"
+	fi
 	"${dap[@]}" stop --name "$session" >/dev/null 2>&1 || true
 	"${dap[@]}" close "$session" >/dev/null 2>&1 || true
 	"${dap[@]}" stop-controller >/dev/null 2>&1 || true
@@ -122,6 +127,19 @@ python3 -c 'import json,sys; point=json.load(sys.stdin)["data"]["breakpoints"][0
 
 wait_frame DapSteppingProbe.main 9
 python3 -c 'import json,sys; frame=json.load(sys.stdin)["data"]["stackFrames"][0]; assert frame.get("column",0)>1, frame' <<<"$current_stack"
+
+source_backup=$(mktemp)
+cp "$repo_dir/tests/DapSteppingProbe.hx" "$source_backup"
+printf '\n// stale-source probe\n' >> "$repo_dir/tests/DapSteppingProbe.hx"
+stale_stack=$("${dap[@]}" stack --name "$session")
+python3 -c 'import json,sys; source=json.load(sys.stdin)["data"]["stackFrames"][0]["source"]; assert source.get("presentationHint")=="deemphasize" and "differs from the compiled snapshot" in source.get("origin",""), source' <<<"$stale_stack"
+stale_locations=$("${dap[@]}" request --name "$session" breakpointLocations --json "$locations_request")
+python3 -c 'import json,sys; assert json.load(sys.stdin)["data"]["breakpoints"]==[]' <<<"$stale_locations"
+stale_breakpoint=$("${dap[@]}" breakpoints set --name "$session" --source "$repo_dir/tests/DapSteppingProbe.hx" --line 10)
+python3 -c 'import json,sys; point=json.load(sys.stdin)["data"]["breakpoints"][0]; assert not point["verified"] and "differs from the compiled snapshot" in point.get("message",""), point' <<<"$stale_breakpoint"
+cp "$source_backup" "$repo_dir/tests/DapSteppingProbe.hx"
+rm -f "$source_backup"
+source_backup=
 
 "${dap[@]}" next --name "$session" >/dev/null
 wait_frame DapSteppingProbe.main 10

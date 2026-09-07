@@ -7,6 +7,7 @@ adapter_dir="$repo_dir/vendor/hashlink-debugger"
 dap_home="$tools_dir/dap-cli-home"
 session="hl-dap-hot-reload"
 trace_file="$repo_dir/out/hld3-dap-trace.jsonl"
+source_dir="$repo_dir/out/dap-hot-reload-source"
 dap=(npx --yes @roblourens/dap-cli@0.3.0)
 debug_port=$(python3 - <<'PY'
 import socket
@@ -15,6 +16,14 @@ PY
 )
 
 mkdir -p "$repo_dir/out" "$dap_home/config"
+mkdir -p "$source_dir"
+python3 - "$repo_dir/tests/dap/Value.hx" "$source_dir/Value.patched.hx" "$source_dir/Value.hx" <<'PY'
+import sys
+source, patched, initial = sys.argv[1:]
+text = open(source, encoding="utf-8").read().rstrip("\n")
+open(patched, "w", encoding="utf-8").write(text)
+open(initial, "w", encoding="utf-8").write(text.replace("    ", "  ").replace("var result = 43;", "var result = 42;"))
+PY
 : > "$trace_file"
 make -C "$repo_dir/vendor/hashlink" -j2 libhl.so hl
 cc -shared -fPIC -DHL_NAME\(n\)=realtime_\#\#n -I "$repo_dir/vendor/hashlink/src" \
@@ -85,11 +94,11 @@ read_locals() {
 launch_json=$(python3 - "$repo_dir" "$debug_port" "$trace_file" <<'PY'
 import json,sys
 r,port,trace=sys.argv[1:]
-print(json.dumps({"type":"hl","request":"launch","name":"HLD3 hot reload","cwd":r+"/out","program":r+"/out/dap-hot-reload-probe.hl","hl":r+"/vendor/hashlink/hl","port":int(port),"classPaths":[r+"/tests/dap",r+"/tests",r+"/src",r+"/.tools/haxe/std"],"env":{"LD_LIBRARY_PATH":r+"/vendor/hashlink","HL_DEBUG_PROTOCOL":"3","HL_DEBUG_TRACE":trace}}))
+print(json.dumps({"type":"hl","request":"launch","name":"HLD3 hot reload","cwd":r+"/out","program":r+"/out/dap-hot-reload-probe.hl","hl":r+"/vendor/hashlink/hl","port":int(port),"classPaths":[r+"/out/dap-hot-reload-source",r+"/tests",r+"/src",r+"/.tools/haxe/std"],"env":{"LD_LIBRARY_PATH":r+"/vendor/hashlink","HL_DEBUG_PROTOCOL":"3","HL_DEBUG_TRACE":trace}}))
 PY
 )
 "${dap[@]}" launch --adapter hashlink --name "$session" --json "$launch_json" >/dev/null
-value=$("${dap[@]}" breakpoints set --name "$session" --source "$repo_dir/tests/dap/Value.hx" --line 6 8)
+value=$("${dap[@]}" breakpoints set --name "$session" --source "$source_dir/Value.hx" --line 6 8)
 python3 -c 'import json,sys; points=json.load(sys.stdin)["data"]["breakpoints"]; assert len(points)==2 and all(p["verified"] for p in points)' <<<"$value"
 wait_frame Value.hx 6
 initial_column=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["stackFrames"][0]["column"])' <<<"$current_stack")
@@ -101,6 +110,7 @@ wait_frame Value.hx 8
 locals=$(read_locals)
 python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; assert any(v["name"]=="result" and v.get("value")=="43" for v in vs), vs; assert not any(v["name"]=="scoped" for v in vs), vs' <<<"$locals"
 
+cp "$source_dir/Value.patched.hx" "$source_dir/Value.hx"
 "${dap[@]}" continue --name "$session" >/dev/null
 for _ in {1..40}; do
 	status=$("${dap[@]}" status --name "$session")
