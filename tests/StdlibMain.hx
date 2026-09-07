@@ -29,11 +29,21 @@ class StdlibMain {
 			"Sys.fullPath",
 			"Sys.executablePath",
 			"Sys.getEnv",
+			"Sys.setCwd",
+			"Sys.putEnv",
 			"Sys.exists",
 			"Sys.isDir",
+			"Sys.createDir",
+			"Sys.removeDir",
+			"Sys.delete",
+			"Sys.rename",
 			"Sys.readDir",
+			"Sys.command",
+			"Sys.sleep",
 			"Sys.getPid",
-			"Sys.args"
+			"Sys.getChar",
+			"Sys.args",
+			"Sys.println"
 		];
 		for (native in compiler.nativeConfiguration())
 			if (sourceOwnedNatives.indexOf(native.name) >= 0)
@@ -78,7 +88,17 @@ class StdlibMain {
 			"sys_is_dir" => true,
 			"sys_read_dir" => true,
 			"sys_getpid" => true,
-			"__sys_args" => true
+			"__sys_args" => true,
+			"sys_set_cwd" => true,
+			"sys_put_env" => true,
+			"sys_create_dir" => true,
+			"sys_remove_dir" => true,
+			"sys_delete" => true,
+			"sys_rename" => true,
+			"sys_command" => true,
+			"sys_sleep" => true,
+			"sys_get_char" => true,
+			"sys_print" => true
 		];
 		for (native in result.module.natives) {
 			var symbol = result.module.strings[native.name];

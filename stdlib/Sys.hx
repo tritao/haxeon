@@ -58,7 +58,37 @@ extern function sysGetPid():Int;
 @:hlNative("realtime_runtime", "__sys_args")
 extern function sysArgs():Array<String>;
 
-/** Read-only host and process information exposed through HashLink. */
+@:hlNative("std", "sys_set_cwd")
+extern function sysSetCwd(path:String):Bool;
+
+@:hlNative("std", "sys_put_env")
+extern function sysPutEnv(name:String, value:String):Bool;
+
+@:hlNative("std", "sys_create_dir")
+extern function sysCreateDir(path:String, mode:Int):Bool;
+
+@:hlNative("std", "sys_remove_dir")
+extern function sysRemoveDir(path:String):Bool;
+
+@:hlNative("std", "sys_delete")
+extern function sysDelete(path:String):Bool;
+
+@:hlNative("std", "sys_rename")
+extern function sysRename(path:String, newPath:String):Bool;
+
+@:hlNative("std", "sys_command")
+extern function sysCommand(command:String):Int;
+
+@:hlNative("std", "sys_sleep")
+extern function sysSleep(seconds:Float):Void;
+
+@:hlNative("std", "sys_get_char")
+extern function sysGetChar(echo:Bool):Int;
+
+@:hlNative("std", "sys_print")
+extern function sysPrint(value:String):Void;
+
+/** Supported host and process operations exposed through HashLink. */
 class Sys {
 	public static inline function time():Float
 		return sysTime();
@@ -98,4 +128,34 @@ class Sys {
 
 	public static inline function args():Array<String>
 		return sysArgs();
+
+	public static inline function setCwd(path:String):Bool
+		return sysSetCwd(path);
+
+	public static inline function putEnv(name:String, value:String):Bool
+		return sysPutEnv(name, value);
+
+	public static inline function createDir(path:String, mode:Int):Bool
+		return sysCreateDir(path, mode);
+
+	public static inline function removeDir(path:String):Bool
+		return sysRemoveDir(path);
+
+	public static inline function delete(path:String):Bool
+		return sysDelete(path);
+
+	public static inline function rename(path:String, newPath:String):Bool
+		return sysRename(path, newPath);
+
+	public static inline function command(command:String):Int
+		return sysCommand(command);
+
+	public static inline function sleep(seconds:Float):Void
+		sysSleep(seconds);
+
+	public static inline function getChar(echo:Bool):Int
+		return sysGetChar(echo);
+
+	public static inline function println(value:String):Void
+		sysPrint(value);
 }
