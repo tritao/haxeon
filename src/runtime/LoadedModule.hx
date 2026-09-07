@@ -84,11 +84,14 @@ class LoadedModule {
 					dispose(current);
 					handle = null;
 					deferredDispose = null;
-				} catch (error:Dynamic) {
-					if (Std.isOfType(error, RuntimeError) && cast(error, RuntimeError).status == RuntimeStatus.RetirementBlocked) {
+				} catch (error:RuntimeError) {
+					if (error.status == RuntimeStatus.RetirementBlocked) {
 						mutex.release();
 						return;
 					}
+					mutex.release();
+					throw error;
+				} catch (error:Dynamic) {
 					mutex.release();
 					throw error;
 				}
@@ -116,11 +119,14 @@ class LoadedModule {
 			handle = null;
 			mutex.release();
 			return true;
-		} catch (error:Dynamic) {
-			if (Std.isOfType(error, RuntimeError) && cast(error, RuntimeError).status == RuntimeStatus.RetirementBlocked) {
+		} catch (error:RuntimeError) {
+			if (error.status == RuntimeStatus.RetirementBlocked) {
 				mutex.release();
 				return false;
 			}
+			mutex.release();
+			throw error;
+		} catch (error:Dynamic) {
 			mutex.release();
 			throw error;
 		}

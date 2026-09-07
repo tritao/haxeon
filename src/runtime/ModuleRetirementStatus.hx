@@ -29,5 +29,5 @@ class ModuleRetirementStatus {
 		return flags & (flag : Int) != 0;
 
 	public inline function hasKnownBorrowers():Bool
-		return has(LiveManagedAllocations) || has(RegistryReaders);
+		return has(ModuleRetirementFlag.LiveManagedAllocations) || has(ModuleRetirementFlag.RegistryReaders);
 }
