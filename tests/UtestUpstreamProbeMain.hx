@@ -1,7 +1,7 @@
 import compiler.Compiler;
 import compiler.Diagnostic.CompileError;
 import compiler.modules.ModulePath;
-import compiler.runtime.RuntimeNatives;
+import compiler.runtime.CompilerIntrinsics;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -21,7 +21,7 @@ class UtestUpstreamProbeMain {
 
 	static function probe(entryPath:String, paths:Array<String>):Void {
 		var compiler = new Compiler();
-		RuntimeNatives.register(compiler);
+		CompilerIntrinsics.register(compiler);
 		compiler.addSourceRoot("stdlib");
 		compiler.configure("utest-upstream-probe", "utest-upstream-probe", ["haxe=4.3.7", "haxe_ver=4.3.7", "hl", "sys"]);
 		compiler.update("haxe/PosInfos.hx", File.getContent("stdlib/haxe/PosInfos.hx"));

@@ -1,6 +1,6 @@
 import compiler.Compiler;
 import compiler.Diagnostic.CompileError;
-import compiler.runtime.RuntimeNatives;
+import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
 /** Validates compile-time method discovery diagnostics. */
@@ -19,7 +19,7 @@ class UtestDiscoveryMain {
 
 	static function expectInvalid(source:String, expected:String):Void {
 		var compiler = new Compiler();
-		RuntimeNatives.register(compiler);
+		CompilerIntrinsics.register(compiler);
 		compiler.update("utest/Test.hx", File.getContent("stdlib/utest/Test.hx"));
 		compiler.update("Main.hx", source);
 		try {

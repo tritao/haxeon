@@ -1,6 +1,6 @@
 import compiler.Compiler;
 import compiler.hl.HlWriter;
-import compiler.runtime.RuntimeNatives;
+import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
 /** Compiles a representative utest-style suite with Haxeon. */
@@ -10,7 +10,7 @@ class UtestMain {
 		var output = arguments[0];
 		var source = arguments.length > 1 ? arguments[1] : "tests/programs/utest-basic.hx";
 		var compiler = new Compiler();
-		RuntimeNatives.register(compiler);
+		CompilerIntrinsics.register(compiler);
 		compiler.addSourceRoot("stdlib");
 		compiler.update("haxe/PosInfos.hx", File.getContent("stdlib/haxe/PosInfos.hx"));
 		compiler.update("utest/Assert.hx", File.getContent("stdlib/utest/Assert.hx"));

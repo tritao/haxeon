@@ -1,13 +1,13 @@
 import compiler.Compiler;
 import compiler.hl.HlWriter;
-import compiler.runtime.RuntimeNatives;
+import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
 /** Compiles method-identity checks against HashLink's closure semantics. */
 class ReflectMethodsMain {
 	static function main():Void {
 		var compiler = new Compiler();
-		RuntimeNatives.register(compiler);
+		CompilerIntrinsics.register(compiler);
 		compiler.update("Main.hx",
 			"class Handler {\n"
 			+ "  var delta:Int;\n"

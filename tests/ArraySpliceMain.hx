@@ -1,13 +1,13 @@
 import compiler.Compiler;
 import compiler.hl.HlWriter;
-import compiler.runtime.RuntimeNatives;
+import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
 /** Compiles Array.splice across the compiler-owned array ABI specializations. */
 class ArraySpliceMain {
 	static function main():Void {
 		var compiler = new Compiler();
-		RuntimeNatives.register(compiler);
+		CompilerIntrinsics.register(compiler);
 		compiler.update("Main.hx",
 			"class Box {\n"
 			+ "  public var value:Int;\n"

@@ -1,7 +1,7 @@
 import compiler.Compiler;
 import compiler.Diagnostic.CompileError;
 import compiler.hl.HlWriter;
-import compiler.runtime.RuntimeNatives;
+import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
 /** Covers Haxe-compatible null values for reference-like types. */
@@ -38,7 +38,7 @@ class NullReferenceMain {
 
 	static function configuredCompiler():Compiler {
 		var compiler = new Compiler();
-		RuntimeNatives.register(compiler);
+		CompilerIntrinsics.register(compiler);
 		return compiler;
 	}
 }

@@ -1,11 +1,11 @@
 import compiler.Compiler;
-import compiler.runtime.RuntimeNatives;
+import compiler.runtime.CompilerIntrinsics;
 
 /** Covers Haxe function-type argument labels and inferred collection constructors. */
 class FunctionTypeSyntaxMain {
 	static function main():Void {
 		var compiler = new Compiler();
-		RuntimeNatives.register(compiler);
+		CompilerIntrinsics.register(compiler);
 		compiler.update("Main.hx",
 			"class Collections {\n"
 			+ "  var values:Array<Int>;\n"

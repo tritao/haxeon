@@ -1,13 +1,13 @@
 import compiler.Compiler;
 import compiler.hl.HlWriter;
-import compiler.runtime.RuntimeNatives;
+import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
 /** Compiles regex literals and the supported EReg inspection operations. */
 class ERegMain {
 	static function main():Void {
 		var compiler = new Compiler();
-		RuntimeNatives.register(compiler);
+		CompilerIntrinsics.register(compiler);
 		compiler.addSourceRoot("stdlib");
 		compiler.update("Main.hx",
 			"function main():Int {\n"

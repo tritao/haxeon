@@ -1,6 +1,6 @@
 import compiler.Compiler;
 import compiler.hl.HlWriter;
-import compiler.runtime.RuntimeNatives;
+import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
 /** Confirms call-site positions are refreshed by an incremental source edit. */
@@ -8,7 +8,7 @@ class PosInfosMain {
 	static function main():Void {
 		var arguments = Sys.args();
 		var compiler = new Compiler();
-		RuntimeNatives.register(compiler);
+		CompilerIntrinsics.register(compiler);
 		compiler.addSourceRoot("stdlib");
 		compiler.update("haxe/PosInfos.hx", File.getContent("stdlib/haxe/PosInfos.hx"));
 		var source = "import haxe.PosInfos;\nfunction position(?pos:PosInfos):PosInfos { if (pos == null) throw \"missing\"; return pos; }\nfunction main():Int {\n\treturn position().lineNumber;\n}\n";
