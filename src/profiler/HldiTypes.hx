@@ -26,8 +26,12 @@ class HldiStatus {
 	public final bufferCapacity:Int64;
 	public final consumer:Int64;
 	public final requestedRate:Int;
+	public final sampleRecords:Int64;
+	public final sampleNanos:Int64;
+	public final generatedBytes:Int64;
 
-	public function new(first:Int64, next:Int64, dropped:Int64, sampleRate:Int, paused:Bool, ?bufferCapacity:Int64, ?consumer:Int64, requestedRate:Int = 0) {
+	public function new(first:Int64, next:Int64, dropped:Int64, sampleRate:Int, paused:Bool, ?bufferCapacity:Int64, ?consumer:Int64, requestedRate:Int = 0,
+			?sampleRecords:Int64, ?sampleNanos:Int64, ?generatedBytes:Int64) {
 		this.first = first;
 		this.next = next;
 		this.dropped = dropped;
@@ -36,6 +40,9 @@ class HldiStatus {
 		this.bufferCapacity = bufferCapacity == null ? Int64.ofInt(0) : bufferCapacity;
 		this.consumer = consumer == null ? next : consumer;
 		this.requestedRate = requestedRate == 0 ? sampleRate : requestedRate;
+		this.sampleRecords = sampleRecords == null ? Int64.ofInt(0) : sampleRecords;
+		this.sampleNanos = sampleNanos == null ? Int64.ofInt(0) : sampleNanos;
+		this.generatedBytes = generatedBytes == null ? Int64.ofInt(0) : generatedBytes;
 	}
 }
 

@@ -140,7 +140,7 @@ class HldiClient {
 	}
 
 	static function decodeStatus(bytes:Bytes):HldiStatus {
-		if (bytes.length != 32 && bytes.length != 56)
+		if (bytes.length != 32 && bytes.length != 56 && bytes.length != 80)
 			throw 'Invalid HLDI status length ${bytes.length}';
 		var input = new HldiReader(bytes);
 		var first = input.u64(), next = input.u64(), dropped = input.u64(), rate = input.u32(), paused = input.u32() != 0;
@@ -148,7 +148,9 @@ class HldiClient {
 			return new HldiStatus(first, next, dropped, rate, paused);
 		var capacity = input.u64(), consumer = input.u64(), requested = input.u32();
 		input.u32();
-		return new HldiStatus(first, next, dropped, rate, paused, capacity, consumer, requested);
+		if (bytes.length == 56)
+			return new HldiStatus(first, next, dropped, rate, paused, capacity, consumer, requested);
+		return new HldiStatus(first, next, dropped, rate, paused, capacity, consumer, requested, input.u64(), input.u64(), input.u64());
 	}
 
 	static function put32(bytes:Bytes, position:Int, value:Int):Void {

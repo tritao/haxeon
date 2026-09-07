@@ -205,6 +205,11 @@ class ProfilerService {
 			requestedSampleRate: value.requestedSampleRate,
 			effectiveSampleRate: value.effectiveSampleRate,
 			metadataRefreshMs: value.metadataRefreshMs,
+			sampleRecords: Int64.toStr(value.sampleRecords),
+			generatedBytes: Int64.toStr(value.generatedBytes),
+			overheadMicrosPerSample: value.overheadMicrosPerSample,
+			gcSamples: value.gcSamples,
+			threads: [for (threadId => name in value.threads) {id: threadId, name: name}],
 			metadataSchema: value.metadataSchema,
 			metadataRevisions: [for (moduleId => revision in value.metadataRevisions) {moduleId: moduleId, revision: revision}],
 			metadataChanges: [for (change in value.metadataChanges) {
@@ -250,6 +255,7 @@ class ProfilerService {
 			frameDetails: [for (frame in value.frameDetails) {
 				key: frame.key, stableKey: frame.stableKey, name: frame.name, revision: frame.revision, file: frame.file, line: frame.line
 			}],
+			threadSamples: [for (threadId => samples in value.threadSamples) {threadId: threadId, samples: samples}],
 			samples: value.samples
 		};
 

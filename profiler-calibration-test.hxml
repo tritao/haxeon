@@ -1,0 +1,4 @@
+-cp src
+-cp tests
+-main ProfilerCalibrationMain
+-hl out/profiler-calibration-test.hl

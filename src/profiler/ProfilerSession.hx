@@ -41,6 +41,7 @@ class ProfileStack {
 	public final frames:Array<String>;
 	public final frameDetails:Array<ProfileStackFrame>;
 	public var samples = 0;
+	public final threadSamples = new Map<Int, Int>();
 
 	public function new(key:String, frameDetails:Array<ProfileStackFrame>) {
 		this.key = key;
@@ -140,6 +141,11 @@ class ProfilerSnapshot {
 	public final requestedSampleRate:Int;
 	public final effectiveSampleRate:Int;
 	public final metadataRefreshMs:Float;
+	public final sampleRecords:Int64;
+	public final generatedBytes:Int64;
+	public final overheadMicrosPerSample:Float;
+	public final gcSamples:Int;
+	public final threads:Map<Int, String>;
 	public final lastError:Null<String>;
 
 	public function new(session:ProfilerSession) {
@@ -162,6 +168,11 @@ class ProfilerSnapshot {
 		requestedSampleRate = session.requestedSampleRate;
 		effectiveSampleRate = session.effectiveSampleRate;
 		metadataRefreshMs = session.metadataRefreshMs;
+		sampleRecords = session.sampleRecords;
+		generatedBytes = session.generatedBytes;
+		overheadMicrosPerSample = session.overheadMicrosPerSample;
+		gcSamples = session.gcSamples;
+		threads = session.threads.copy();
 		lastError = session.lastError;
 	}
 }
@@ -169,6 +180,7 @@ class ProfilerSnapshot {
 /** Owns profiler lifecycle, incremental decoding, symbolization and aggregation. */
 class ProfilerSession {
 	public static inline final EVENT_MODULE_REVISION = 0x484C0001;
+	public static inline final EVENT_THREAD_NAME = 0x484C0002;
 	public var state(default, null):ProfilerSessionState = Connected;
 	public var samples(default, null) = 0;
 	public var unresolvedFrames(default, null) = 0;
@@ -179,6 +191,11 @@ class ProfilerSession {
 	public var requestedSampleRate(default, null) = 0;
 	public var effectiveSampleRate(default, null) = 0;
 	public var metadataRefreshMs(default, null):Float = 0;
+	public var sampleRecords(default, null):Int64 = Int64.ofInt(0);
+	public var generatedBytes(default, null):Int64 = Int64.ofInt(0);
+	public var overheadMicrosPerSample(default, null):Float = 0;
+	public var gcSamples(default, null) = 0;
+	public final threads = new Map<Int, String>();
 	public var metadata(default, null):Null<HldiMetadata>;
 	public var lastError(default, null):Null<String>;
 	public var metadataRefreshSeconds:Float = 5.0;
@@ -273,6 +290,7 @@ class ProfilerSession {
 		events.resize(0);
 		leaves.resize(0);
 		metadataChanges.resize(0);
+		gcSamples = 0;
 	}
 
 	public function close():Void {
@@ -308,6 +326,9 @@ class ProfilerSession {
 		bufferUsed = Int64.sub(status.next, status.consumer);
 		requestedSampleRate = status.requestedRate;
 		effectiveSampleRate = status.sampleRate;
+		sampleRecords = status.sampleRecords;
+		generatedBytes = status.generatedBytes;
+		overheadMicrosPerSample = status.sampleRecords == 0 ? 0 : Std.parseFloat(Int64.toStr(status.sampleNanos)) / Std.parseFloat(Int64.toStr(status.sampleRecords)) / 1000;
 		bufferUtilization = bufferCapacity == 0 ? 0 : Std.parseFloat(Int64.toStr(bufferUsed)) / Std.parseFloat(Int64.toStr(bufferCapacity));
 	}
 
@@ -338,9 +359,13 @@ class ProfilerSession {
 				if (metadata == null || metadata.revisions.get(moduleId) != revision)
 					throw 'HLDI metadata did not reach announced module revision $revision';
 			}
+			if (record.value == EVENT_THREAD_NAME)
+				threads.set(record.threadId, record.payload.toString());
 			return;
 		}
 		samples++;
+		if (record.flags & 1 != 0) gcSamples++;
+		if (!threads.exists(record.threadId)) threads.set(record.threadId, 'Thread ${record.threadId}');
 		if (record.frames.length != 0)
 			captureLeaf(record);
 		var resolved:Array<{symbol:HldiSymbol, line:Null<HldiSourceLine>}> = [];
@@ -370,7 +395,7 @@ class ProfilerSession {
 				var address = record.frames[record.frames.length - index - 1], symbol = resolve(address);
 				var location = symbol == null ? null : symbol.sourceAt(address);
 				frameDetails.push(symbol == null
-					? new ProfileStackFrame("[unknown]", "[unknown]", "[unknown]", 0)
+					? new ProfileStackFrame("[native/unknown]", "[native/unknown]", "[native/unknown]", 0)
 					: new ProfileStackFrame('${symbol.moduleId}:${symbol.revision}:${symbol.functionId}', '${symbol.moduleId}:${symbol.functionId}', symbol.name,
 						symbol.revision, location == null ? null : location.file, location == null ? null : location.line));
 			}
@@ -380,6 +405,8 @@ class ProfilerSession {
 				stacks.set(key, stack);
 			}
 			stack.samples++;
+			var threadSamples = stack.threadSamples.get(record.threadId);
+			stack.threadSamples.set(record.threadId, (threadSamples == null ? 0 : threadSamples) + 1);
 		}
 	}
 

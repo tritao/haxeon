@@ -10,6 +10,7 @@ private class ProfilerViewNode {
 	public var totalSamples = 0;
 	public final revisions = new Map<Int, Bool>();
 	public final children:Array<String> = [];
+	public final threadSamples = new Map<Int, Int>();
 	public var file:Null<String>;
 	public var line:Null<Int>;
 	public var locationRevision = 0;
@@ -28,6 +29,7 @@ class ProfilerViewModel {
 	final nodes = new Map<String, ProfilerViewNode>();
 	final roots:Array<String> = [];
 	final stackSamples = new Map<String, Int>();
+	final stackThreadSamples = new Map<String, Int>();
 	var lastSamples = 0;
 
 	public function new() {}
@@ -36,6 +38,7 @@ class ProfilerViewModel {
 		nodes.clear();
 		roots.resize(0);
 		stackSamples.clear();
+		stackThreadSamples.clear();
 		lastSamples = 0;
 	}
 
@@ -50,6 +53,14 @@ class ProfilerViewModel {
 			var increment = total - previous;
 			stackSamples.set(key, total);
 			if (increment <= 0) continue;
+			var threadIncrements:Array<{id:Int, samples:Int}> = [];
+			for (thread in dynamicArray(stack, "threadSamples")) {
+				var id = fieldInt(thread, "threadId"), count = fieldInt(thread, "samples"), threadKey = key + "#" + id,
+					old = stackThreadSamples.get(threadKey);
+				if (old == null) old = 0;
+				stackThreadSamples.set(threadKey, count);
+				if (count > old) threadIncrements.push({id: id, samples: count - old});
+			}
 			var parent:Null<String> = null, depth = 0, path = "", frames:Array<Dynamic> = Reflect.field(stack, "frameDetails");
 			for (frame in frames) {
 				var stableKey:String = Reflect.field(frame, "stableKey"), name:String = Reflect.field(frame, "name"), revision:Int = fieldInt(frame, "revision");
@@ -62,6 +73,10 @@ class ProfilerViewModel {
 				}
 				node.totalSamples += increment;
 				node.revisions.set(revision, true);
+				for (thread in threadIncrements) {
+					var count = node.threadSamples.get(thread.id);
+					node.threadSamples.set(thread.id, (count == null ? 0 : count) + thread.samples);
+				}
 				if (Reflect.field(frame, "file") != null && revision >= node.locationRevision) {
 					node.file = Reflect.field(frame, "file");
 					node.line = Reflect.field(frame, "line");
@@ -99,7 +114,8 @@ class ProfilerViewModel {
 		var revisions = [for (revision in node.revisions.keys()) revision];
 		revisions.sort((a, b) -> a - b);
 		return {id: node.id, parentId: node.parentId, stableKey: node.stableKey, name: node.name, depth: node.depth, file: node.file, line: node.line,
-			selfSamples: node.selfSamples, totalSamples: node.totalSamples, revisions: revisions};
+			selfSamples: node.selfSamples, totalSamples: node.totalSamples, revisions: revisions,
+			threadSamples: [for (threadId => samples in node.threadSamples) {threadId: threadId, samples: samples}]};
 	}
 
 	static function compareNodes(left:Dynamic, right:Dynamic):Int {
@@ -112,7 +128,8 @@ class ProfilerViewModel {
 		return {bufferCapacity: Reflect.field(snapshot, "bufferCapacity"), bufferUsed: Reflect.field(snapshot, "bufferUsed"),
 			bufferUtilization: Reflect.field(snapshot, "bufferUtilization"), dropped: Reflect.field(snapshot, "dropped"),
 			requestedSampleRate: Reflect.field(snapshot, "requestedSampleRate"), effectiveSampleRate: Reflect.field(snapshot, "effectiveSampleRate"),
-			metadataRefreshMs: Reflect.field(snapshot, "metadataRefreshMs")};
+			metadataRefreshMs: Reflect.field(snapshot, "metadataRefreshMs"), overheadMicrosPerSample: Reflect.field(snapshot, "overheadMicrosPerSample"),
+			generatedBytes: Reflect.field(snapshot, "generatedBytes"), gcSamples: Reflect.field(snapshot, "gcSamples"), threads: Reflect.field(snapshot, "threads")};
 
 	static function dynamicArray(value:Dynamic, field:String):Array<Dynamic> {
 		var result:Dynamic = Reflect.field(value, field);

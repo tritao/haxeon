@@ -50,6 +50,9 @@ class ProfilerLspMain {
 					if (frame.file != null && frame.line != null) locatedFrame = true;
 			if (!locatedFrame)
 				throw "Profiler stack frames omitted source navigation metadata";
+			if (notification.params.sampleRecords == "0" || notification.params.generatedBytes == "0"
+				|| notification.params.overheadMicrosPerSample <= 0 || notification.params.threads.length == 0)
+				throw "Profiler snapshot omitted calibration or thread telemetry";
 			dispatcher.dispatch(command(7, "haxeon.profiler.captureStop", {}));
 			if (waitFor(messages, mutex, available, value -> value.id == 7).result.captureActive || !sys.FileSystem.exists(capturePath))
 				throw "Profiler capture did not finalize";
