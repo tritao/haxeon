@@ -253,7 +253,7 @@ class LspProtocol {
 		return {
 			capabilities: {
 				positionEncoding: "utf-16",
-				textDocumentSync: {openClose: true, change: 1},
+				textDocumentSync: {openClose: true, change: 2},
 				documentSymbolProvider: true,
 				completionProvider: {triggerCharacters: ["."], resolveProvider: true},
 				documentHighlightProvider: true,
@@ -306,18 +306,15 @@ class LspProtocol {
 
 	function synchronize(request:Dynamic, opening:Bool):Array<String> {
 		var params:Dynamic = required(request, "params"), textDocument:Dynamic = required(params, "textDocument"), uri = requiredString(textDocument, "uri"),
-			version = requiredInt(textDocument, "version"), source:String;
+			version = requiredInt(textDocument, "version"), document:Null<LspDocument>;
 		if (opening)
-			source = requiredString(textDocument, "text");
+			document = documents.open(uri, version, requiredString(textDocument, "text"));
 		else {
-			var changes:Array<Dynamic> = cast required(params, "contentChanges");
-			if (changes.length == 0)
-				return [];
-			if (Reflect.hasField(changes[changes.length - 1], "range"))
-				throw "Incremental document changes were not negotiated";
-			source = requiredString(changes[changes.length - 1], "text");
+			var rawChanges:Dynamic = required(params, "contentChanges");
+			if (!Std.isOfType(rawChanges, Array))
+				throw new LspRequestError(-32602, 'Field "contentChanges" must be an array');
+			document = documents.applyChanges(uri, version, cast rawChanges);
 		}
-		var document = opening ? documents.open(uri, version, source) : documents.replace(uri, version, source);
 		if (document == null)
 			return [];
 		var generation = ++analysisGeneration;

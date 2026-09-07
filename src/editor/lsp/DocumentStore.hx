@@ -29,11 +29,17 @@ class LspDocument {
 	public function offset(line:Int, character:Int):Int {
 		if (line < 0 || character < 0 || line >= lineStarts.length)
 			throw "LSP position is outside the document";
-		var start = lineStarts[line],
-			end = line + 1 < lineStarts.length ? lineStarts[line + 1] - 1 : source.length;
-		if (character > end - start)
+		var start = lineStarts[line], end = lineEnd(line), offset = start, units = 0;
+		while (offset < end && units < character) {
+			var width = utf16Width(source.charCodeAt(offset));
+			if (units + width > character)
+				throw "LSP position splits a UTF-16 surrogate pair";
+			units += width;
+			offset++;
+		}
+		if (units != character)
 			throw "LSP position is outside the document";
-		return start + character;
+		return offset;
 	}
 
 	public function position(requested:Int):Dynamic {
@@ -48,11 +54,76 @@ class LspDocument {
 				high = middle;
 		}
 		var line = low - 1;
-		return {line: line, character: requested - lineStarts[line]};
+		return {line: line, character: utf16Length(source, lineStarts[line], requested)};
 	}
 
 	public function range(start:Int, end:Int):Dynamic
 		return {start: position(start), end: position(end)};
+
+	public function applyChanges(version:Int, changes:Array<Dynamic>):Bool {
+		if (version <= this.version)
+			return false;
+		if (changes.length == 0)
+			throw "LSP document change batch is empty";
+		var candidate = source;
+		for (change in changes) {
+			var text = stringField(change, "text"), range:Dynamic = Reflect.field(change, "range");
+			if (range == null)
+				candidate = text;
+			else {
+				var view = new LspDocument(uri, path, this.version, candidate), start = positionField(range, "start"), end = positionField(range, "end"),
+					startOffset = view.offset(start.line, start.character), endOffset = view.offset(end.line, end.character);
+				if (endOffset < startOffset)
+					throw "LSP document change range is reversed";
+				var rawLength:Dynamic = Reflect.field(change, "rangeLength");
+				if (rawLength != null) {
+					if (!Std.isOfType(rawLength, Int) || rawLength < 0)
+						throw 'Field "rangeLength" must be a non-negative integer';
+					if (rawLength != utf16Length(candidate, startOffset, endOffset))
+						throw "LSP document change rangeLength does not match the replaced text";
+				}
+				candidate = candidate.substring(0, startOffset) + text + candidate.substring(endOffset);
+			}
+		}
+		this.version = version;
+		source = candidate;
+		rebuildLines();
+		return true;
+	}
+
+	function lineEnd(line:Int):Int {
+		var end = line + 1 < lineStarts.length ? lineStarts[line + 1] - 1 : source.length;
+		if (end > lineStarts[line] && source.charCodeAt(end - 1) == 13)
+			end--;
+		return end;
+	}
+
+	static function positionField(value:Dynamic, name:String):{line:Int, character:Int} {
+		var position:Dynamic = Reflect.field(value, name);
+		if (position == null)
+			throw 'Missing field "$name"';
+		var line:Dynamic = Reflect.field(position, "line"), character:Dynamic = Reflect.field(position, "character");
+		if (!Std.isOfType(line, Int) || !Std.isOfType(character, Int))
+			throw "LSP positions require integer line and character fields";
+		return {line: cast line, character: cast character};
+	}
+
+	static function stringField(value:Dynamic, name:String):String {
+		var field:Dynamic = Reflect.field(value, name);
+		if (!Std.isOfType(field, String))
+			throw 'Field "$name" must be a string';
+		return cast field;
+	}
+
+	static function utf16Length(value:String, start:Int, end:Int):Int {
+		var result = 0;
+		for (index in start...end)
+			result += utf16Width(value.charCodeAt(index));
+		return result;
+	}
+
+	static inline function utf16Width(code:Null<Int>):Int
+		return code != null && code > 0xffff ? 2 : 1;
 
 	function rebuildLines():Void {
 		lineStarts = [0];
@@ -84,6 +155,13 @@ class DocumentStore {
 		if (document == null)
 			throw 'Document is not open: $uri';
 		return document.replace(version, source) ? document : null;
+	}
+
+	public function applyChanges(uri:String, version:Int, changes:Array<Dynamic>):Null<LspDocument> {
+		var document = byUri.get(uri);
+		if (document == null)
+			throw 'Document is not open: $uri';
+		return document.applyChanges(version, changes) ? document : null;
 	}
 
 	public function close(uri:String):Void {

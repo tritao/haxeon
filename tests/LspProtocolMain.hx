@@ -48,6 +48,25 @@ class LspProtocolMain {
 		var decoded = new DocumentStore().open("file:///workspace/My%20File.hx", 1, "");
 		if (decoded.path != "/workspace/My File.hx")
 			throw "LSP file URI was not decoded";
+		var incrementalStore = new DocumentStore(), incrementalDocument = incrementalStore.open("file:///workspace/Incremental.hx", 1, "one\n😀two\nthree");
+		incrementalStore.applyChanges(incrementalDocument.uri, 2, [
+			{range: {start: {line: 1, character: 2}, end: {line: 1, character: 5}}, rangeLength: 3, text: "TWO"},
+			{range: {start: {line: 1, character: 5}, end: {line: 1, character: 5}}, rangeLength: 0, text: "!"},
+			{range: {start: {line: 0, character: 0}, end: {line: 0, character: 3}}, rangeLength: 3, text: "ONE"}
+		]);
+		if (incrementalDocument.source != "ONE\n😀TWO!\nthree" || incrementalDocument.position(incrementalDocument.source.indexOf("TWO")).character != 2)
+			throw "incremental LSP edits did not apply sequentially with UTF-16 positions";
+		var beforeRejectedSource = incrementalDocument.source, rejectedIncrementalBatch = false;
+		try incrementalStore.applyChanges(incrementalDocument.uri, 3, [
+			{range: {start: {line: 0, character: 0}, end: {line: 0, character: 0}}, text: "discarded"},
+			{range: {start: {line: 99, character: 0}, end: {line: 99, character: 0}}, text: "invalid"}
+		]) catch (_:Dynamic)
+			rejectedIncrementalBatch = true;
+		if (!rejectedIncrementalBatch || incrementalDocument.version != 2 || incrementalDocument.source != beforeRejectedSource)
+			throw "failed incremental LSP edit batch was not rolled back transactionally";
+		incrementalStore.applyChanges(incrementalDocument.uri, 3, [{text: "replacement"}]);
+		if (incrementalDocument.source != "replacement")
+			throw "incremental synchronization rejected a compatible full-document change";
 		var service = new LanguageService(),
 			protocol = new LspProtocol(service);
 		service.compiler.enablePublicationTracking();
@@ -57,7 +76,7 @@ class LspProtocolMain {
 			|| initialized.result.capabilities.signatureHelpProvider == null
 			|| !initialized.result.capabilities.typeDefinitionProvider
 			|| !initialized.result.capabilities.implementationProvider
-			|| initialized.result.capabilities.textDocumentSync.change != 1
+			|| initialized.result.capabilities.textDocumentSync.change != 2
 			|| !initialized.result.capabilities.documentHighlightProvider
 			|| initialized.result.capabilities.diagnosticProvider.identifier != "haxeon"
 			|| !initialized.result.capabilities.diagnosticProvider.interFileDependencies
@@ -972,6 +991,31 @@ class LspProtocolMain {
 		diagnosticDispatcher.finish();
 		if (Json.parse(workspaceCancellation).error.code != -32800)
 			throw "workspace pull diagnostics did not honor cancellation";
+		var incrementalProtocol = new LspProtocol(), incrementalUri = "file:///workspace/ProtocolIncremental.hx",
+			incrementalSource = "function main():Int return 1;";
+		request(incrementalProtocol, '{"jsonrpc":"2.0","id":8921,"method":"initialize","params":{}}');
+		incrementalProtocol.handle(Json.stringify({
+			jsonrpc: "2.0", method: "textDocument/didOpen",
+			params: {textDocument: {uri: incrementalUri, languageId: "haxe", version: 1, text: incrementalSource}}
+		}));
+		var numberOffset = incrementalSource.indexOf("1");
+		incrementalProtocol.handle(Json.stringify({
+			jsonrpc: "2.0", method: "textDocument/didChange",
+			params: {
+				textDocument: {uri: incrementalUri, version: 2},
+				contentChanges: [{
+					range: {start: {line: 0, character: numberOffset}, end: {line: 0, character: numberOffset + 1}},
+					rangeLength: 1,
+					text: "42"
+				}]
+			}
+		}));
+		var incrementallyUpdatedTokens = request(incrementalProtocol, Json.stringify({
+			jsonrpc: "2.0", id: 8922, method: "textDocument/semanticTokens/full", params: {textDocument: {uri: incrementalUri}}
+		}));
+		if (!hasSemanticToken(incrementallyUpdatedTokens.result.data, 0, numberOffset, 19, 0)
+			|| semanticTokenLength(incrementallyUpdatedTokens.result.data, 0, numberOffset, 19) != 2)
+			throw "incremental document change did not reach compiler-backed LSP queries";
 		var implementationProtocol = new LspProtocol(), implementationUri = "file:///workspace/Implementation.hx",
 			implementationSource = "interface Worker { function work():Int; } class First implements Worker { public function work():Int return 1; } class Second implements Worker { public function work():Int return 2; } function main():Int return new First().work();",
 			implementationDocument = new LspDocument(implementationUri, "/workspace/Implementation.hx", 1, implementationSource);
@@ -1046,6 +1090,18 @@ class LspProtocolMain {
 			index += 5;
 		}
 		return false;
+	}
+
+	static function semanticTokenLength(raw:Dynamic, expectedLine:Int, expectedCharacter:Int, expectedType:Int):Int {
+		var data:Array<Int> = cast raw, line = 0, character = 0, index = 0;
+		while (index < data.length) {
+			line += data[index];
+			character = data[index] == 0 ? character + data[index + 1] : data[index + 1];
+			if (line == expectedLine && character == expectedCharacter && data[index + 3] == expectedType)
+				return data[index + 2];
+			index += 5;
+		}
+		return -1;
 	}
 
 	static function selectionDepth(value:Dynamic):Int {
