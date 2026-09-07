@@ -9,6 +9,7 @@ class ProfilerAllocationMain {
 		session.start(100);
 		for (_ in 0...24) { Sys.sleep(0.1); session.poll(); }
 		var snapshot = session.snapshot(), values = snapshot.gcStats;
+		if (snapshot.timelineSamples.length == 0) throw "missing time-correlated stack samples";
 		if (values.length < 2) throw "missing GC counter timeline";
 		var first = values[0], last = values[values.length - 1];
 		if (Std.parseFloat(last.allocated) <= Std.parseFloat(first.allocated) || Std.parseFloat(last.allocations) <= Std.parseFloat(first.allocations))

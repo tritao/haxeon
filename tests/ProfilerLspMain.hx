@@ -51,7 +51,8 @@ class ProfilerLspMain {
 			if (!locatedFrame)
 				throw "Profiler stack frames omitted source navigation metadata";
 			if (notification.params.sampleRecords == "0" || notification.params.generatedBytes == "0"
-				|| notification.params.overheadMicrosPerSample <= 0 || notification.params.threads.length == 0 || notification.params.gcStats.length == 0)
+				|| notification.params.overheadMicrosPerSample <= 0 || notification.params.threads.length == 0 || notification.params.gcStats.length == 0
+				|| notification.params.timelineSamples.length == 0 || notification.params.timelineStacks.length == 0)
 				throw "Profiler snapshot omitted calibration or thread telemetry";
 			dispatcher.dispatch(command(7, "haxeon.profiler.captureStop", {}));
 			if (waitFor(messages, mutex, available, value -> value.id == 7).result.captureActive || !sys.FileSystem.exists(capturePath))

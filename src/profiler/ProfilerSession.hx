@@ -138,6 +138,18 @@ class ProfileLeaf {
 	}
 }
 
+class ProfileTimelineSample {
+	public final timestamp:Float;
+	public final threadId:Int;
+	public final stackKey:String;
+
+	public function new(timestamp:Float, threadId:Int, stackKey:String) {
+		this.timestamp = timestamp;
+		this.threadId = threadId;
+		this.stackKey = stackKey;
+	}
+}
+
 class ProfilerSnapshot {
 	public final state:ProfilerSessionState;
 	public final samples:Int;
@@ -164,6 +176,7 @@ class ProfilerSnapshot {
 	public final gcSamples:Int;
 	public final threads:Map<Int, String>;
 	public final gcStats:Array<ProfileGcStats>;
+	public final timelineSamples:Array<ProfileTimelineSample>;
 	public final nativeSymbolCount:Int;
 	public final lastError:Null<String>;
 
@@ -193,6 +206,7 @@ class ProfilerSnapshot {
 		gcSamples = session.gcSamples;
 		threads = session.threads.copy();
 		gcStats = session.gcStats.copy();
+		timelineSamples = session.timelineSamples.copy();
 		nativeSymbolCount = session.nativeSymbolCount();
 		lastError = session.lastError;
 	}
@@ -220,6 +234,8 @@ class ProfilerSession {
 	public var gcSamples(default, null) = 0;
 	public final threads = new Map<Int, String>();
 	public final gcStats:Array<ProfileGcStats> = [];
+	public final timelineSamples:Array<ProfileTimelineSample> = [];
+	public var timelineCapacity:Int = 50000;
 	final nativeSymbols = new Map<String, {name:String, module:String, base:Int64}>();
 	public var metadata(default, null):Null<HldiMetadata>;
 	public var lastError(default, null):Null<String>;
@@ -316,6 +332,7 @@ class ProfilerSession {
 		leaves.resize(0);
 		metadataChanges.resize(0);
 		gcStats.resize(0);
+		timelineSamples.resize(0);
 		nativeSymbols.clear();
 		gcSamples = 0;
 	}
@@ -455,6 +472,11 @@ class ProfilerSession {
 			stack.samples++;
 			var threadSamples = stack.threadSamples.get(record.threadId);
 			stack.threadSamples.set(record.threadId, (threadSamples == null ? 0 : threadSamples) + 1);
+			timelineSamples.push(new ProfileTimelineSample(record.timestamp, record.threadId, key));
+			if (timelineCapacity <= 0)
+				timelineSamples.resize(0);
+			else if (timelineSamples.length > timelineCapacity)
+				timelineSamples.splice(0, timelineSamples.length - timelineCapacity);
 		}
 	}
 

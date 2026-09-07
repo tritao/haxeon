@@ -213,6 +213,7 @@ class ProfilerService {
 			nativeSymbolCount: value.nativeSymbolCount,
 			gcStats: [for (stats in value.gcStats) {timestamp: stats.timestamp, allocated: stats.allocated, allocations: stats.allocations,
 				heap: stats.heap, collections: stats.collections, markMicros: stats.markMicros}],
+			timelineSamples: [for (sample in value.timelineSamples) {timestamp: sample.timestamp, threadId: sample.threadId, stackKey: sample.stackKey}],
 			metadataSchema: value.metadataSchema,
 			metadataRevisions: [for (moduleId => revision in value.metadataRevisions) {moduleId: moduleId, revision: revision}],
 			metadataChanges: [for (change in value.metadataChanges) {
@@ -224,6 +225,7 @@ class ProfilerService {
 			functions: [for (aggregate in value.functions.slice(0, maxEntries)) aggregateValue(aggregate)],
 			lines: [for (aggregate in value.lines.slice(0, maxEntries)) aggregateValue(aggregate)],
 			stacks: [for (stack in value.stacks.slice(0, maxEntries)) stackValue(stack)],
+			timelineStacks: [for (stack in value.stacks) stackValue(stack)],
 			leaves: [for (leaf in value.leaves) leafValue(leaf)],
 			events: [for (event in value.events) {
 				timestamp: event.timestamp,
