@@ -29,7 +29,7 @@ private typedef SemanticTokenSnapshot = {
 
 private typedef DiagnosticSnapshot = {
 	final context:String;
-	final version:Int;
+	final version:Null<Int>;
 	final fingerprint:String;
 	final resultId:String;
 }
@@ -107,6 +107,7 @@ class LspProtocol {
 				case "workspace/didChangeWatchedFiles": watchedFiles(request);
 				case "workspace/didChangeConfiguration": changeConfiguration(request);
 				case "workspace/symbol": cancellable(id, token -> workspaceSymbols(request, token));
+				case "workspace/diagnostic": cancellable(id, token -> workspaceDiagnostic(request, token));
 				case "workspaceSymbol/resolve": cancellable(id, token -> resolveWorkspaceSymbol(request, token));
 				case "textDocument/documentSymbol": cancellable(id, token -> documentSymbols(request, token));
 				case "textDocument/completion": cancellable(id, token -> completion(request, token));
@@ -253,7 +254,7 @@ class LspProtocol {
 				documentSymbolProvider: true,
 				completionProvider: {triggerCharacters: ["."], resolveProvider: true},
 				documentHighlightProvider: true,
-				diagnosticProvider: {identifier: "haxeon", interFileDependencies: true, workspaceDiagnostics: false},
+				diagnosticProvider: {identifier: "haxeon", interFileDependencies: true, workspaceDiagnostics: true},
 				semanticTokensProvider: {
 					legend: {tokenTypes: SEMANTIC_TOKEN_TYPES, tokenModifiers: SEMANTIC_TOKEN_MODIFIERS},
 					full: {delta: true}
@@ -457,23 +458,63 @@ class LspProtocol {
 		var path = compilerPath(document), state = service.compiler.modules.get(ModulePath.fromFile(path));
 		if (state == null || state.source.text != document.source)
 			throw new LspRequestError(-32801, "Diagnostic snapshot does not match the current document version");
-		var fingerprint = diagnosticFingerprint(state.diagnostics), context = semanticTokenContext(document), resultId:String;
-		pullDiagnosticMutex.acquire();
-		var snapshot = pullDiagnosticSnapshots.get(document.uri);
-		if (snapshot != null && snapshot.context == context && snapshot.version == document.version && snapshot.fingerprint == fingerprint)
-			resultId = snapshot.resultId;
-		else {
-			resultId = context + ":" + document.version + ":" + pullDiagnosticSequence++;
-			pullDiagnosticSnapshots.set(document.uri, {context: context, version: document.version, fingerprint: fingerprint, resultId: resultId});
-		}
-		pullDiagnosticMutex.release();
 		var previous:Dynamic = Reflect.field(required(request, "params"), "previousResultId");
 		if (previous != null && !Std.isOfType(previous, String))
 			throw new LspRequestError(-32602, 'Field "previousResultId" must be a string');
+		return diagnosticReport(document.uri, document.version, diagnosticContext(document.path), state.diagnostics, cast previous);
+	}
+
+	function workspaceDiagnostic(request:Dynamic, token:CancellationToken):Dynamic {
+		var params = required(request, "params"), rawPrevious:Dynamic = Reflect.field(params, "previousResultIds"), previous:Map<String, String> = [];
+		if (rawPrevious != null) {
+			if (!Std.isOfType(rawPrevious, Array))
+				throw new LspRequestError(-32602, 'Field "previousResultIds" must be an array');
+			for (item in cast(rawPrevious, Array<Dynamic>))
+				previous.set(requiredString(item, "uri"), requiredString(item, "value"));
+		}
+		var targets = [for (name in service.compiler.modules.keys()) name];
+		targets.sort(Reflect.compare);
+		for (target in targets) {
+			token.check();
+			var state = service.compiler.modules.get(target);
+			if (state == null)
+				continue;
+			activateConfiguration(project.diskPath(state.source.path));
+			try
+				service.analyze(target, token)
+			catch (cancelled:CancellationError)
+				throw cancelled
+			catch (_:CompileError) {} catch (_:Dynamic) {}
+		}
+		var states = [for (state in service.compiler.modules) state];
+		states.sort(function(left, right) return Reflect.compare(project.diskPath(left.source.path), project.diskPath(right.source.path)));
+		var items:Array<Dynamic> = [];
+		for (state in states) {
+			token.check();
+			var diskPath = project.diskPath(state.source.path), uri = documents.uri(diskPath), open = documents.forPath(diskPath), version:Null<Int> = open == null ? null : open.version,
+				report:Dynamic = diagnosticReport(uri, version, diagnosticContext(diskPath), state.diagnostics, previous.get(uri));
+			Reflect.setField(report, "uri", uri);
+			Reflect.setField(report, "version", version);
+			items.push(report);
+		}
+		return {items: items};
+	}
+
+	function diagnosticReport(uri:String, version:Null<Int>, context:String, diagnostics:Array<Diagnostic>, previous:Null<String>):Dynamic {
+		var fingerprint = diagnosticFingerprint(diagnostics), resultId:String;
+		pullDiagnosticMutex.acquire();
+		var snapshot = pullDiagnosticSnapshots.get(uri);
+		if (snapshot != null && snapshot.context == context && snapshot.version == version && snapshot.fingerprint == fingerprint)
+			resultId = snapshot.resultId;
+		else {
+			resultId = context + ":" + (version == null ? "disk" : Std.string(version)) + ":" + pullDiagnosticSequence++;
+			pullDiagnosticSnapshots.set(uri, {context: context, version: version, fingerprint: fingerprint, resultId: resultId});
+		}
+		pullDiagnosticMutex.release();
 		return previous == resultId ? {kind: "unchanged", resultId: resultId} : {
 			kind: "full",
 			resultId: resultId,
-			items: [for (diagnostic in state.diagnostics) diagnosticJson(diagnostic)]
+			items: [for (diagnostic in diagnostics) diagnosticJson(diagnostic)]
 		};
 	}
 
@@ -1039,7 +1080,11 @@ class LspProtocol {
 	}
 
 	function semanticTokenContext(document:LspDocument):String {
-		var configuration = project.configurationFor(document.path);
+		return diagnosticContext(document.path);
+	}
+
+	function diagnosticContext(path:String):String {
+		var configuration = project.configurationFor(path);
 		return configuration == null ? "default" : configuration.id;
 	}
 

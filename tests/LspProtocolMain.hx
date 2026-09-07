@@ -25,6 +25,20 @@ class BlockingLanguageService extends LanguageService {
 	}
 }
 
+class BlockingDiagnosticLanguageService extends LanguageService {
+	public final entered = new sys.thread.Lock();
+	public final resume = new sys.thread.Lock();
+	public var block = false;
+
+	public override function analyze(entryModule:String, ?token:CancellationToken):compiler.Compiler.AnalysisResult {
+		if (block) {
+			entered.release();
+			resume.wait();
+		}
+		return super.analyze(entryModule, token);
+	}
+}
+
 class LspProtocolMain {
 	static function main():Void {
 		var positions = new LspDocument("file:///workspace/Lines.hx", "/workspace/Lines.hx", 1, "one\nthree");
@@ -45,7 +59,7 @@ class LspProtocolMain {
 			|| !initialized.result.capabilities.documentHighlightProvider
 			|| initialized.result.capabilities.diagnosticProvider.identifier != "haxeon"
 			|| !initialized.result.capabilities.diagnosticProvider.interFileDependencies
-			|| initialized.result.capabilities.diagnosticProvider.workspaceDiagnostics
+			|| !initialized.result.capabilities.diagnosticProvider.workspaceDiagnostics
 			|| initialized.result.capabilities.semanticTokensProvider.legend.tokenTypes[12] != "function"
 			|| !initialized.result.capabilities.semanticTokensProvider.full.delta
 			|| initialized.result.capabilities.codeActionProvider.codeActionKinds[0] != "quickfix"
@@ -193,6 +207,39 @@ class LspProtocolMain {
 		}
 		if (!hasSelectedBuild || hasWrongBuild)
 			throw "selected build defines did not control LSP symbols";
+		var firstWorkspaceDiagnostics = request(watchProtocol, Json.stringify({
+			jsonrpc: "2.0", id: 431, method: "workspace/diagnostic", params: {previousResultIds: []}
+		})), previousWorkspaceDiagnostics:Array<Dynamic> = [], unopenedDiagnostic:Dynamic = null, openedDiagnostic:Dynamic = null, previousDiagnosticUri = "";
+		for (report in cast(firstWorkspaceDiagnostics.result.items, Array<Dynamic>)) {
+			if (previousDiagnosticUri != "" && Reflect.compare(previousDiagnosticUri, report.uri) > 0)
+				throw "workspace diagnostics were not ordered deterministically";
+			previousDiagnosticUri = report.uri;
+			previousWorkspaceDiagnostics.push({uri: report.uri, value: report.resultId});
+			if (report.uri == watchHelperUri)
+				unopenedDiagnostic = report;
+			if (report.uri == watchMainUri)
+				openedDiagnostic = report;
+		}
+		if (unopenedDiagnostic == null || unopenedDiagnostic.kind != "full" || unopenedDiagnostic.version != null
+			|| openedDiagnostic == null || openedDiagnostic.version != 1)
+			throw "workspace diagnostics omitted open or indexed unopened sources";
+		var unchangedWorkspaceDiagnostics = request(watchProtocol, Json.stringify({
+			jsonrpc: "2.0", id: 432, method: "workspace/diagnostic", params: {previousResultIds: previousWorkspaceDiagnostics}
+		}));
+		for (report in cast(unchangedWorkspaceDiagnostics.result.items, Array<Dynamic>))
+			if (report.kind != "unchanged")
+				throw "workspace diagnostics did not reuse unchanged document results";
+		sys.io.File.saveContent(watchHelperPath, "package lib; class Helper {");
+		watchProtocol.handle(watchedFileMessage(watchHelperUri, 2));
+		var changedWorkspaceDiagnostics = request(watchProtocol, Json.stringify({
+			jsonrpc: "2.0", id: 433, method: "workspace/diagnostic", params: {previousResultIds: previousWorkspaceDiagnostics}
+		})), changedUnopened:Dynamic = null;
+		for (report in cast(changedWorkspaceDiagnostics.result.items, Array<Dynamic>))
+			if (report.uri == watchHelperUri)
+				changedUnopened = report;
+		if (changedUnopened == null || changedUnopened.kind != "full" || changedUnopened.items.length == 0
+			|| changedUnopened.resultId == unopenedDiagnostic.resultId)
+			throw "workspace diagnostics did not invalidate an edited unopened source";
 		sys.io.File.saveContent(watchHelperPath,
 			"package lib; class Helper { public function new() {} public function answer():Int return 2; public function diskOnly():Int return 3; }");
 		watchProtocol.handle(watchedFileMessage(watchHelperUri, 2));
@@ -834,6 +881,31 @@ class LspProtocolMain {
 			|| changedDiagnostics.result.items.length != 1
 			|| changedDiagnostics.result.items[0].code != "E0001")
 			throw "document pull diagnostics did not invalidate after an edit";
+		var blockingDiagnosticService = new BlockingDiagnosticLanguageService(), blockingDiagnosticProtocol = new LspProtocol(blockingDiagnosticService),
+			workspaceCancellation:String = null, workspaceCancellationDone = new sys.thread.Lock();
+		request(blockingDiagnosticProtocol, '{"jsonrpc":"2.0","id":891,"method":"initialize","params":{}}');
+		blockingDiagnosticProtocol.handle(Json.stringify({
+			jsonrpc: "2.0", method: "textDocument/didOpen",
+			params: {textDocument: {uri: diagnosticUri, languageId: "haxe", version: 1, text: diagnosticSource}}
+		}));
+		blockingDiagnosticService.block = true;
+		var diagnosticDispatcher = new LspDispatcher(blockingDiagnosticProtocol, response -> {
+			var parsed:Dynamic = Json.parse(response);
+			if (parsed.id == 892) {
+				workspaceCancellation = response;
+				workspaceCancellationDone.release();
+			}
+		}, 4);
+		diagnosticDispatcher.dispatch(Json.stringify({
+			jsonrpc: "2.0", id: 892, method: "workspace/diagnostic", params: {previousResultIds: []}
+		}));
+		blockingDiagnosticService.entered.wait();
+		diagnosticDispatcher.dispatch('{"jsonrpc":"2.0","method":"$/cancelRequest","params":{"id":892}}');
+		blockingDiagnosticService.resume.release();
+		workspaceCancellationDone.wait();
+		diagnosticDispatcher.finish();
+		if (Json.parse(workspaceCancellation).error.code != -32800)
+			throw "workspace pull diagnostics did not honor cancellation";
 		if (protocol.handle('{"jsonrpc":"2.0","method":"$/cancelRequest","params":{"id":999}}').length != 0)
 			throw "LSP cancellation notification produced a response";
 		var lifecycle = new LspProtocol(),
