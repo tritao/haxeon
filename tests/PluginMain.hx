@@ -44,8 +44,16 @@ class PluginMain {
 		var bodyEdit = compiler.compile("Main");
 		if (bodyEdit.requiresReload || bodyEdit.patchBytes == null || bodyEdit.changedFunctions.length == 0)
 			throw "Plugin body edit did not produce a compatible patch";
-		if (bodyEdit.metrics.retypedFunctions != 1 || bodyEdit.metrics.regeneratedFunctions != 1 || bodyEdit.metrics.elapsedMs < 0.0)
+		var pluginPrefix = "pragtical.plugins.SearchPlugin.";
+		if (bodyEdit.retyped.length == 0
+			|| bodyEdit.retyped.length != bodyEdit.regenerated.length
+			|| bodyEdit.metrics.retypedFunctions != bodyEdit.retyped.length
+			|| bodyEdit.metrics.regeneratedFunctions != bodyEdit.regenerated.length
+			|| bodyEdit.metrics.elapsedMs < 0.0)
 			throw 'Plugin body invalidation was broader than expected (${bodyEdit.retyped}/${bodyEdit.metrics.elapsedMs}ms)';
+		for (name in bodyEdit.retyped)
+			if (!StringTools.startsWith(name, pluginPrefix) && !StringTools.startsWith(name, "$lambda:" + pluginPrefix))
+				throw 'Plugin body edit invalidated another module function "$name"';
 		Runtime.patchSet(live, new PatchSet(first.revision, bodyEdit.revision, bodyEdit.patchBytes, bodyEdit.changedFunctions));
 		compiler.acknowledgePublication(bodyEdit.revision);
 		var patchedCommand = call(live, bodyEdit.functionIds, "Main.runCommand"),

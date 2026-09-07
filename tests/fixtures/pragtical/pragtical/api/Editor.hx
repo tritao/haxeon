@@ -29,6 +29,8 @@ class Editor {
 
 	public function execute(name:String):Int {
 		var callback = callbacks[name];
+		if (callback == null)
+			return 0;
 		return callback();
 	}
 }
