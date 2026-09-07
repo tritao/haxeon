@@ -361,6 +361,13 @@ class IrProgramAssembler {
 					result: I32
 				});
 				program.natives.push({
+					name: '__array_insert_${entry.name}',
+					library: "realtime_runtime",
+					symbol: '__array_insert_${entry.name}',
+					arguments: [arrayType, I32, entry.type],
+					result: Void
+				});
+				program.natives.push({
 					name: '__array_pop_${entry.name}',
 					library: "realtime_runtime",
 					symbol: '__array_pop_${entry.name}',

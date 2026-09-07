@@ -3482,6 +3482,13 @@ class Typer {
 			var value = coerce(typeExpression(arguments[0], scope, element), element, "array element", "E1002");
 			return new TypedExpression(TCollectionCall(receiver, "remove", [value]), TBool, span);
 		}
+		if (name == "insert") {
+			if (arguments.length != 2)
+				fail("E1008", "Array.insert expects a position and value", span);
+			var position = coerce(typeExpression(arguments[0], scope), TInt, "insert position", "E1002"),
+				value = coerce(typeExpression(arguments[1], scope, element), element, "array element", "E1002");
+			return new TypedExpression(TCollectionCall(receiver, "insert", [position, value]), TVoid, span);
+		}
 		if (name == "reverse") {
 			if (arguments.length != 0)
 				fail("E1008", "Array.reverse expects no arguments", span);

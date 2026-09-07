@@ -218,6 +218,18 @@ HL_PRIM int HL_NAME(__array_unshift_##SUFFIX)( varray *array, VALUE_TYPE value )
 	((VALUE_TYPE *)hl_aptr(array, vbyte))[0] = value; \
 	return array->size; \
 } \
+HL_PRIM void HL_NAME(__array_insert_##SUFFIX)( varray *array, int position, VALUE_TYPE value ) { \
+	if (position < 0) position += array->size; \
+	if (position < 0) position = 0; \
+	if (position > array->size) position = array->size; \
+	if (array->size >= array->capacity) \
+		hl_array_reserve(array, array->size + 1); \
+	int stride = hl_type_size(array->at); \
+	vbyte *values = hl_aptr(array, vbyte); \
+	memmove(values + (position + 1) * stride, values + position * stride, (size_t)(array->size - position) * stride); \
+	array->size++; \
+	((VALUE_TYPE *)values)[position] = value; \
+} \
 HL_PRIM VALUE_TYPE HL_NAME(__array_pop_##SUFFIX)( varray *array ) { \
 	if (array->size <= 0) \
 		hl_error("Array.pop on an empty array"); \
