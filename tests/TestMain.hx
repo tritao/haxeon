@@ -611,6 +611,16 @@ class TestMain {
 				emittedExternBody = true;
 		if (nativeTime == null || nativeTime.library != "std" || nativeTime.symbol != "sys_time" || emittedExternBody)
 			throw "Source extern native binding was not preserved without emitting a body";
+		var nativeStubProgram = Frontend.compile('@:hlNative("sample") private class Native { public static function read():Int return 0; } function main():Int { Native.read(); return 42; }');
+		var nativeStub = false, emittedStub = false;
+		for (native in nativeStubProgram.natives)
+			if (native.name == "Native.read" && native.library == "sample" && native.symbol == "read")
+				nativeStub = true;
+		for (fn in nativeStubProgram.functions)
+			if (fn.name == "Native.read")
+				emittedStub = true;
+		if (!nativeStub || emittedStub)
+			throw "Class-level native metadata did not replace Haxe stub bodies";
 		expectCompileError('extern function missing():Int; function main():Int return 42;', 'Extern function "missing" requires @:hlNative(library, symbol)');
 		expectCompileError('@:hlNative("std") extern function malformed():Int; function main():Int return 42;',
 			"@:hlNative requires a library and symbol string");

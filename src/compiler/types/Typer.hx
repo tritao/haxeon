@@ -159,16 +159,17 @@ class Typer {
 			if (fn.isExtern == true)
 				typedNatives.push(typeExtern(fn));
 		}
-		for (classDecl in program.classes)
-			if (classDecl.isExtern == true) {
-				var defaultLibrary = nativeLibrary(classDecl.name, classDecl.metadata);
+		for (classDecl in program.classes) {
+			var defaultLibrary = nativeLibrary(classDecl.name, classDecl.metadata);
+			if (classDecl.isExtern == true || defaultLibrary != null) {
 				for (method in classDecl.methods) {
 					if (!method.isStatic)
 						fail("E1021", 'Extern instance method "${classDecl.name}.${method.name}" is not supported yet', method.span);
 					var nativeName = method.name.indexOf(".") >= 0 ? method.name : classDecl.name + "." + method.name;
-					typedNatives.push(typeExtern(method, nativeName, null, defaultLibrary));
+					typedNatives.push(typeExtern(method, nativeName, null, defaultLibrary, null, defaultLibrary != null));
 				}
 			}
+		}
 		for (abstractDecl in program.abstracts)
 			if (abstractDecl.isExtern == true) {
 				var defaultLibrary = nativeLibrary(abstractDecl.name, abstractDecl.metadata);
@@ -234,7 +235,8 @@ class Typer {
 				}
 			], typedClasses:Array<TypedClass> = [
 			for (classDecl in program.classes)
-				if (classDecl.isExtern != true) typeClass(classDecl, classDecls, selected)
+				if (classDecl.isExtern != true
+					&& nativeLibrary(classDecl.name, classDecl.metadata) == null) typeClass(classDecl, classDecls, selected)
 			], typedFunctions:Array<TypedFunction> = [];
 		var metadataDoneAt = Sys.time() * 1000.0;
 		for (fn in program.functions)
@@ -311,9 +313,9 @@ class Typer {
 		};
 	}
 
-	function typeExtern(fn:AstFunction, ?externalName:String, ?receiverType:CompilerType, ?defaultLibrary:String,
-			?resultOverride:CompilerType):compiler.types.TypedAst.TypedNative {
-		if (fn.statements.length != 0)
+	function typeExtern(fn:AstFunction, ?externalName:String, ?receiverType:CompilerType, ?defaultLibrary:String, ?resultOverride:CompilerType,
+			allowStubBody:Bool = false):compiler.types.TypedAst.TypedNative {
+		if (fn.statements.length != 0 && !allowStubBody)
 			fail("E1021", 'Extern function "${fn.name}" cannot have a body', fn.span);
 		var binding:Null<compiler.syntax.Ast.AstMetadata> = null;
 		var metadata = fn.metadata;
@@ -2381,13 +2383,13 @@ class Typer {
 					for (field in expectedFields)
 						if (!field.optional && !seen.exists(field.name))
 							fail("E1002", 'Missing object field "${field.name}"', span);
-				typedFields.sort(function(left, right) return Reflect.compare(left.name, right.name));
 				var resolvedResult:CompilerType;
 				if (objectExpected == null) {
 					var inferred:Array<AnonymousField> = [
 						for (field in typedFields)
 							{name: field.name, type: field.value.type, optional: false}
 					];
+					inferred.sort(function(left, right) return Reflect.compare(left.name, right.name));
 					resolvedResult = TAnonymous(anonymousTypeName(inferred), inferred);
 				} else
 					resolvedResult = objectExpected;
