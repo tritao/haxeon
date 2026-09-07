@@ -346,8 +346,18 @@ class Parser {
 		if (isExtern) {
 			end = consume(TokenKind.Semicolon).span;
 		} else if (match(TokenKind.LeftBrace)) {
-			while (!check(TokenKind.RightBrace))
-				appendStatements(statements, parseStatements());
+			var bodyStart = position;
+			while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof)) {
+				var statementStart = position;
+				try
+					appendStatements(statements, parseStatements())
+				catch (error:CompileError) {
+					if (!recovering)
+						throw error;
+					recordRecoveryDiagnostic(error.diagnostic);
+					synchronizeStatement(bodyStart, statementStart);
+				}
+			}
 			end = consume(TokenKind.RightBrace).span;
 		} else if (recoveringAtEnd()) {
 			missingFunctionBody();
@@ -368,6 +378,29 @@ class Parser {
 			statements: statements,
 			span: start.merge(end)
 		};
+	}
+
+	function synchronizeStatement(bodyStart:Int, statementStart:Int):Void {
+		var braceDepth = 0;
+		for (index in bodyStart...position)
+			switch tokens[index].kind {
+				case TokenKind.LeftBrace: braceDepth++;
+				case TokenKind.RightBrace: if (braceDepth > 0) braceDepth--;
+				default:
+			}
+		if (position <= statementStart && !check(TokenKind.Eof))
+			advance();
+		while (!check(TokenKind.Eof)) {
+			if (braceDepth == 0 && check(TokenKind.RightBrace))
+				return;
+			var consumed = advance().kind;
+			switch consumed {
+				case TokenKind.LeftBrace: braceDepth++;
+				case TokenKind.RightBrace: if (braceDepth > 0) braceDepth--;
+				case TokenKind.Semicolon: if (braceDepth == 0) return;
+				default:
+			}
+		}
 	}
 
 	function parseTypeParameters(?constraints:Array<compiler.syntax.Ast.AstTypeConstraint>):Array<String> {

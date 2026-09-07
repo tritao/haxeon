@@ -503,6 +503,14 @@ class LanguageServiceMain {
 				foundMethod = true;
 		if (!foundMethod)
 			throw "class-member recovery discarded a valid method after a malformed method";
+		var statementService = new LanguageService();
+		statementService.update("Statements.hx", "function retained():Int { var broken = ; return 42; }");
+		try
+			statementService.analyze("Statements")
+		catch (_:CompileError) {}
+		var statementSymbols = statementService.documentSymbols("Statements.hx");
+		if (statementSymbols.length != 1 || statementSymbols[0].name != "retained")
+			throw "statement recovery discarded its enclosing function";
 		Sys.println("PASS: compiler-backed language service snapshot works");
 	}
 }
