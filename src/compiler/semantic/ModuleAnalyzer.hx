@@ -21,6 +21,7 @@ class ModuleAnalyzer {
 	final compiledOnce:Bool;
 	final defines:Map<String, String>;
 	final sourceLoader:ModuleSourceLoader;
+	final declarationOwners:Map<String, String> = [];
 
 	public function new(modules:Map<String, ModuleState>, types:TypeRegistry, natives:NativeRegistry, compiledOnce:Bool, defines:Map<String, String>,
 			sourceLoader:ModuleSourceLoader) {
@@ -30,6 +31,9 @@ class ModuleAnalyzer {
 		this.compiledOnce = compiledOnce;
 		this.defines = defines;
 		this.sourceLoader = sourceLoader;
+		for (name => state in modules)
+			if (state.ast != null)
+				indexDeclarations(name, state.parsedAst());
 	}
 
 	public function parse(state:ModuleState, entry:String, bodyChanged:Map<String, Bool>, signatureChanged:Map<String, Bool>,
@@ -41,6 +45,7 @@ class ModuleAnalyzer {
 			state.conditionalDefines = conditional.defines;
 			state.tokens = new Lexer(state.source, conditional.text).tokenize();
 			state.ast = new Parser(state.tokens).parseProgram();
+			indexDeclarations(state.name, state.parsedAst());
 			state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.revision, state.tokens);
 			state.parseVersion++;
 		} catch (error:CompileError) {
@@ -162,6 +167,11 @@ class ModuleAnalyzer {
 				if (owner != null && owner != state.name)
 					dependencies.set(owner, true);
 			}
+			for (interfaceType in classDecl.interfaces) {
+				var owner = sourceModuleForType(ModuleCanonicalizer.astTypeName(interfaceType), ast.packageName);
+				if (owner != null && owner != state.name)
+					dependencies.set(owner, true);
+			}
 			for (field in classDecl.fields)
 				addModuleTypeDependency(FieldInference.parsedType(field), state, dependencies);
 			for (method in classDecl.methods)
@@ -220,25 +230,24 @@ class ModuleAnalyzer {
 			module = sourceModuleForDependency(qualified);
 		if (module != null)
 			return module;
-		for (name => state in modules) {
-			var ast = state.ast;
-			if (ast == null)
-				continue;
-			var prefix = ast.packageName == null ? "" : Std.string(ast.packageName) + ".";
-			for (declaration in ast.aliases)
-				if (prefix + declaration.name == qualified)
-					return name;
-			for (declaration in ast.enums)
-				if (prefix + declaration.name == qualified)
-					return name;
-			for (declaration in ast.interfaces)
-				if (prefix + declaration.name == qualified)
-					return name;
-			for (declaration in ast.classes)
-				if (prefix + declaration.name == qualified)
-					return name;
-		}
-		return null;
+		return declarationOwners.get(qualified);
+	}
+
+	function indexDeclarations(moduleName:String, ast:compiler.syntax.Ast.AstProgram):Void {
+		var prefix = ast.packageName == null ? "" : Std.string(ast.packageName) + ".";
+		for (declaration in ast.aliases)
+			indexDeclaration(prefix + declaration.name, moduleName);
+		for (declaration in ast.enums)
+			indexDeclaration(prefix + declaration.name, moduleName);
+		for (declaration in ast.interfaces)
+			indexDeclaration(prefix + declaration.name, moduleName);
+		for (declaration in ast.classes)
+			indexDeclaration(prefix + declaration.name, moduleName);
+	}
+
+	inline function indexDeclaration(name:String, moduleName:String):Void {
+		if (!declarationOwners.exists(name))
+			declarationOwners.set(name, moduleName);
 	}
 
 	function hasSourceModuleImport(imports:Array<String>):Bool {
