@@ -28,8 +28,10 @@ hashlink_stamp="$hashlink_dir/.tritao-source-commit"
 if [[ ! -x "$hashlink_dir/hl" || ! -f "$hashlink_stamp" || "$(<"$hashlink_stamp")" != "$hashlink_commit" ]]; then
     make -C "$hashlink_source" -j"$(nproc)" hl
     mkdir -p "$hashlink_dir"
-    cp "$hashlink_source/hl" "$hashlink_dir/hl"
-    cp "$hashlink_source/libhl.so" "$hashlink_dir/libhl.so"
+    cp "$hashlink_source/hl" "$hashlink_dir/hl.new"
+    cp "$hashlink_source/libhl.so" "$hashlink_dir/libhl.so.new"
+    mv "$hashlink_dir/hl.new" "$hashlink_dir/hl"
+    mv "$hashlink_dir/libhl.so.new" "$hashlink_dir/libhl.so"
     printf '%s\n' "$hashlink_commit" > "$hashlink_stamp"
 fi
 
