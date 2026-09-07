@@ -106,9 +106,10 @@ PY
 )
 "${dap[@]}" launch --adapter hashlink --name "$session" --json "$launch_json" >/dev/null
 breakpoint=$("${dap[@]}" breakpoints set --name "$session" --source "$repo_dir/tests/DapSteppingProbe.hx" --line 9)
-python3 -c 'import json,sys; assert json.load(sys.stdin)["data"]["breakpoints"][0]["verified"]' <<<"$breakpoint"
+python3 -c 'import json,sys; point=json.load(sys.stdin)["data"]["breakpoints"][0]; assert point["verified"] and point.get("column",0)>1, point' <<<"$breakpoint"
 
 wait_frame DapSteppingProbe.main 9
+python3 -c 'import json,sys; frame=json.load(sys.stdin)["data"]["stackFrames"][0]; assert frame.get("column",0)>1, frame' <<<"$current_stack"
 
 "${dap[@]}" next --name "$session" >/dev/null
 wait_frame DapSteppingProbe.main 10

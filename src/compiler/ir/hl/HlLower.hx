@@ -135,6 +135,17 @@ class HlLower {
 			}
 		var identities = [for (fn in program.functions) functionIdentity(fn)];
 		code.debugSections.push({kind: HlWriter.FUNCTION_IDENTITIES, version: 1, flags: 0, payload: HlWriter.encodeFunctionIdentities(identities)});
+		var spans:Array<compiler.hl.HlCode.HlOpcodeSourceSpan> = [];
+		for (index in 0...code.functions.length) {
+			var identity = identities[index], loweredFunction = code.functions[index];
+			for (opcode in 0...loweredFunction.debugLocations.length) {
+				var location = loweredFunction.debugLocations[opcode];
+				spans.push({stableId: identity.stableId, opcode: opcode, sourcePath: location.path,
+					start: location.start == null ? -1 : location.start, end: location.end == null ? -1 : location.end,
+					line: location.line, flags: location.flags});
+			}
+		}
+		code.debugSections.push({kind: HlWriter.OPCODE_SOURCE_SPANS, version: 1, flags: 0, payload: HlWriter.encodeOpcodeSourceSpans(spans)});
 
 		code.entryPoint = requireFunction(program.entryPoint);
 		code.ints = code.ints.copy();
@@ -462,12 +473,14 @@ class HlLower {
 			path: "<generated>",
 			line: 1,
 			start: -1,
-			end: -1
+			end: -1,
+			flags: 1
 		} : {
 			path: location.path,
 			line: location.line,
 			start: location.start,
-			end: location.end
+			end: location.end,
+			flags: switch provenance.origin { case CompilerGenerated(_): 1; case UserSource: 0; }
 			};
 	}
 

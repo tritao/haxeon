@@ -81,8 +81,9 @@ class DebugMetadataMain {
 
 		var bytes = HlWriter.encode(code),
 			suffix = encodedAssignmentSuffix(fn.debugAssignments);
-		if (bytes.get(3) != 7 || code.debugSections.length != 1 || code.debugSections[0].kind != HlWriter.FUNCTION_IDENTITIES)
-			throw "HLB function identity section was not emitted";
+		if (bytes.get(3) != 7 || code.debugSections.length != 2 || code.debugSections[0].kind != HlWriter.FUNCTION_IDENTITIES
+			|| code.debugSections[1].kind != HlWriter.OPCODE_SOURCE_SPANS || code.debugSections[1].payload.length == 0)
+			throw "HLB function identity and opcode source-span sections were not emitted";
 		if (bytes.compare(HlWriter.encode(code)) != 0)
 			throw "HLB debug section encoding is not deterministic";
 		if (!contains(bytes, suffix))

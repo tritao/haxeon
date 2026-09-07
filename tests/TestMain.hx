@@ -169,7 +169,8 @@ class TestMain {
 						path: "patch-debug.hx",
 						line: line,
 						start: null,
-						end: null
+						end: null,
+						flags: 0
 					}
 			]),
 		];

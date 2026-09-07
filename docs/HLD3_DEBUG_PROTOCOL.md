@@ -12,13 +12,14 @@ module's ordinary function records it appends:
   launch module is already known to the client;
 - the module revision as an `Int32`;
 - the module globals pointer and runtime type-table pointer;
-- the base JIT pointer, byte size, function count, and ordinary function
-  records (the same records used by the HLD2 handshake);
+- the base JIT pointer, byte size, function count, and function records. MAP3
+  records add the stable function ID before the existing HLD2 function data;
 - the number of patch JIT regions as an `Int32`;
 - for each region: its base pointer, byte size, one-byte retired flag, and
   function count;
-- for each region function: its HLB function index followed by the existing
-  13-byte HLD function header, opcode-offset table, and variable-location data.
+- for each region function: its HLB function index, stable function ID, the
+  existing 13-byte HLD function header, opcode-offset table, and
+  variable-location data.
 
 Repeating the base JIT table makes a module first observed in a later `MAP3`
 snapshot fully self-describing; such a module was not present in the initial

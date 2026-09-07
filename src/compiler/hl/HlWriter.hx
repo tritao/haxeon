@@ -15,6 +15,7 @@ private typedef EncodedInstruction = {
 /** Serializes the in-memory HashLink model using canonical HLB encodings. */
 class HlWriter {
 	public static inline final FUNCTION_IDENTITIES = 1;
+	public static inline final OPCODE_SOURCE_SPANS = 2;
 	final output:BytesOutput;
 	var hasDebug:Bool = false;
 	var debugFiles:Array<String> = [];
@@ -115,6 +116,47 @@ class HlWriter {
 			writer.writeIndex(identity.end + 1);
 			writer.writeUnsignedIndex(identity.line);
 			writer.writeUnsignedIndex(identity.flags);
+		}
+		return writer.output.getBytes();
+	}
+
+	public static function encodeOpcodeSourceSpans(spans:Array<compiler.hl.HlCode.HlOpcodeSourceSpan>):HaxeBytes {
+		var writer = new HlWriter(), files:Array<String> = [], fileIndices:Map<String, Int> = [], byFunction:Map<Int, Array<compiler.hl.HlCode.HlOpcodeSourceSpan>> = [], seen:Map<String, Bool> = [];
+		for (span in spans) {
+			var validRange = span.start == -1 && span.end == -1 || span.start >= 0 && span.end >= span.start;
+			var key = span.stableId + ":" + span.opcode;
+			if (span.stableId < 0 || span.opcode < 0 || span.sourcePath == "" || span.line < 1 || span.flags < 0 || !validRange || seen.exists(key))
+				throw "Invalid HLB opcode source span";
+			seen.set(key, true);
+			if (!fileIndices.exists(span.sourcePath)) {
+				fileIndices.set(span.sourcePath, files.length);
+				files.push(span.sourcePath);
+			}
+			var mappings = byFunction.get(span.stableId);
+			if (mappings == null) {
+				mappings = [];
+				byFunction.set(span.stableId, mappings);
+			}
+			mappings.push(span);
+		}
+		writer.writeUnsignedIndex(files.length);
+		for (file in files) writer.writeSizedString(file);
+		var stableIds = [for (stableId in byFunction.keys()) stableId];
+		stableIds.sort((left, right) -> left - right);
+		writer.writeUnsignedIndex(stableIds.length);
+		for (stableId in stableIds) {
+			var mappings = byFunction.get(stableId);
+			mappings.sort((left, right) -> left.opcode - right.opcode);
+			writer.writeUnsignedIndex(stableId);
+			writer.writeUnsignedIndex(mappings.length);
+			for (span in mappings) {
+				writer.writeUnsignedIndex(span.opcode);
+				writer.writeUnsignedIndex(fileIndices.get(span.sourcePath));
+				writer.writeIndex(span.start + 1);
+				writer.writeIndex(span.end + 1);
+				writer.writeUnsignedIndex(span.line);
+				writer.writeUnsignedIndex(span.flags);
+			}
 		}
 		return writer.output.getBytes();
 	}
@@ -265,7 +307,8 @@ class HlWriter {
 				path: "<generated>",
 				line: 1,
 				start: null,
-				end: null
+				end: null,
+				flags: 1
 			} : fn.debugLocations[index];
 			if (location.line > 0x1FFFFF)
 				throw 'Debug line ${location.line} exceeds the HashLink format limit';

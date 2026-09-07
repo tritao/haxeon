@@ -33,6 +33,17 @@ typedef HlFunctionIdentity = {
 	final flags:Int;
 }
 
+/** Precise source ownership for one encoded opcode, addressed by stable function identity. */
+typedef HlOpcodeSourceSpan = {
+	final stableId:Int;
+	final opcode:Int;
+	final sourcePath:String;
+	final start:Int;
+	final end:Int;
+	final line:Int;
+	final flags:Int;
+}
+
 /** HashLink type-table entry whose references are indices into {@link HlCode.types}. */
 enum HlTypeDef {
 	Simple(kind:HlType);

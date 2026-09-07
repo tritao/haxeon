@@ -6,6 +6,7 @@ typedef HlDebugLocation = {
 	final line:Int;
 	final start:Null<Int>;
 	final end:Null<Int>;
+	final flags:Int;
 }
 
 /** HashLink debugger binding at an encoded opcode, or -1 for an argument. */
