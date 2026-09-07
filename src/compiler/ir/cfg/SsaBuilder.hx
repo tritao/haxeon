@@ -22,6 +22,7 @@ class SsaBuilder {
 	var frontiers:Map<Int, Map<Int, Bool>> = [];
 	var liveIn:Map<Int, Map<String, Bool>> = [];
 	var phis:Map<Int, Map<String, SsaPhi>> = [];
+	var phiNames:Map<Int, Array<String>> = [];
 	var roots:Array<Int> = [];
 	var stacks:Map<String, Array<IrValue>> = [];
 	var temporaries:Map<Int, IrValue> = [];
@@ -248,18 +249,18 @@ class SsaBuilder {
 	}
 
 	function insertPhis():Void {
-		var definitions:Map<String, Map<Int, Bool>> = [];
+		var definitions:Map<String, Map<Int, Bool>> = [], definitionNames:Array<String> = [];
 		for (argument in cfg.arguments)
-			addDefinition(definitions, argument.name, 0);
+			addDefinition(definitions, definitionNames, argument.name, 0);
 		for (block in cfg.blocks)
 			if (reachable.exists(block.id))
 				for (located in block.instructions)
 					switch located.value {
 						case StoreLocal(name, _):
-							addDefinition(definitions, name, block.id);
+							addDefinition(definitions, definitionNames, name, block.id);
 						default:
 					}
-		for (name in sortedDefinitionNames(definitions)) {
+		for (name in definitionNames) {
 			var blocks = definitions.get(name),
 				work = sortedIntKeys(blocks),
 				placed:Map<Int, Bool> = [];
@@ -275,8 +276,10 @@ class SsaBuilder {
 						else {
 							map = [];
 							phis.set(join, map);
+							phiNames.set(join, []);
 						}
 						map.set(name, {output: allocate(name, cfg.localTypes.get(name)), inputs: []});
+						phiNames.get(join).push(name);
 						if (!blocks.exists(join))
 							work.push(join);
 					}
@@ -293,7 +296,7 @@ class SsaBuilder {
 			pushed:Array<String> = [];
 		if (phis.exists(id)) {
 			var blockPhis = phis.get(id);
-			for (name in sortedPhiNames(blockPhis)) {
+			for (name in phiNames.get(id)) {
 				var phi = blockPhis.get(name);
 				target.instructions.push(new Located(Phi(phi.output, phi.inputs), phiProvenance(id)));
 				addDebugBinding(debugLocal(name), phi.output);
@@ -451,7 +454,7 @@ class SsaBuilder {
 			for (successor in successors.get(id)) {
 				if (phis.exists(successor)) {
 					var successorPhis = phis.get(successor);
-					for (name in sortedPhiNames(successorPhis)) {
+						for (name in phiNames.get(successor)) {
 						var phi = successorPhis.get(name);
 						var inputs = phi.inputs;
 						inputs.push({block: id, value: current(name)});
@@ -539,13 +542,14 @@ class SsaBuilder {
 		return stack[stack.length - 1];
 	}
 
-	function addDefinition(map:Map<String, Map<Int, Bool>>, name:String, id:Int):Void {
+	function addDefinition(map:Map<String, Map<Int, Bool>>, names:Array<String>, name:String, id:Int):Void {
 		var found:Map<Int, Bool>;
 		if (map.exists(name))
 			found = map.get(name);
 		else {
 			found = [];
 			map.set(name, found);
+			names.push(name);
 		}
 		found.set(id, true);
 	}
@@ -577,15 +581,4 @@ class SsaBuilder {
 		return result;
 	}
 
-	static function sortedDefinitionNames(map:Map<String, Map<Int, Bool>>):Array<String> {
-		var result = [for (key in map.keys()) key];
-		result.sort(Reflect.compare);
-		return result;
-	}
-
-	static function sortedPhiNames(map:Map<String, SsaPhi>):Array<String> {
-		var result = [for (name in map.keys()) name];
-		result.sort(Reflect.compare);
-		return result;
-	}
 }
