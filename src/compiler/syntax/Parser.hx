@@ -459,7 +459,7 @@ class Parser {
 			interfaces = [];
 		if (match(TokenKind.Extends))
 			base = parseType();
-		if (match(TokenKind.Implements)) {
+		while (match(TokenKind.Implements)) {
 			interfaces.push(parseType());
 			while (match(TokenKind.Comma))
 				interfaces.push(parseType());
