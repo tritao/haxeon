@@ -230,10 +230,20 @@ class LanguageService {
 				var recovered = new Parser(tokens).parseProgramRecovering();
 				state.recoveredTokens = tokens;
 				state.recoveredAst = recovered.program;
-				for (diagnostic in recovered.diagnostics)
-					if (![for (existing in state.diagnostics) existing.span.start + ":" + existing.message]
-							.contains(diagnostic.span.start + ":" + diagnostic.message))
+				for (diagnostic in recovered.diagnostics) {
+					var duplicate = -1;
+					for (index in 0...state.diagnostics.length) {
+						var existing = state.diagnostics[index];
+						if (existing.span.start == diagnostic.span.start && existing.message == diagnostic.message) {
+							duplicate = index;
+							break;
+						}
+					}
+					if (duplicate < 0)
 						state.diagnostics.push(diagnostic);
+					else if (state.diagnostics[duplicate].fixes.length == 0 && diagnostic.fixes.length > 0)
+						state.diagnostics[duplicate] = diagnostic;
+				}
 			} catch (_:CompileError) {}
 		}
 	}

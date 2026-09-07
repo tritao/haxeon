@@ -472,6 +472,37 @@ class LanguageServiceMain {
 			throw "parser recovery did not preserve a valid declaration after malformed declarations";
 		if (partialService.diagnostics("Partial.hx").length != 2)
 			throw "parser recovery did not collect multiple declaration diagnostics";
+		var delimiterService = new LanguageService();
+		delimiterService.update("Delimiter.hx", "function first():Int return 1 function second():Int return 2;");
+		try {
+			delimiterService.analyze("Delimiter");
+			throw "missing delimiter unexpectedly analyzed";
+		} catch (_:CompileError) {}
+		var delimiterSymbols = delimiterService.documentSymbols("Delimiter.hx"), delimiterDiagnostics = delimiterService.diagnostics("Delimiter.hx");
+		if (delimiterSymbols.length != 2 || delimiterSymbols[0].name != "first" || delimiterSymbols[1].name != "second")
+			throw "missing semicolon recovery did not retain adjacent declarations";
+		if (delimiterDiagnostics.length != 1 || delimiterDiagnostics[0].fixes.length != 1
+			|| delimiterDiagnostics[0].fixes[0].edits[0].replacement != ";")
+			throw "missing semicolon recovery did not expose a deterministic fix";
+		var signatureService = new LanguageService();
+		signatureService.update("Signature.hx", "function pending(");
+		try
+			signatureService.analyze("Signature")
+		catch (_:CompileError) {}
+		var signatureSymbols = signatureService.documentSymbols("Signature.hx");
+		if (signatureSymbols.length != 1 || signatureSymbols[0].name != "pending")
+			throw "unfinished function signature did not produce a recovered declaration";
+		var memberService = new LanguageService();
+		memberService.update("Members.hx", "class Members { function broken(:Int {} function visible():Int return 42; }");
+		try
+			memberService.analyze("Members")
+		catch (_:CompileError) {}
+		var memberSymbols = memberService.documentSymbols("Members.hx"), foundMethod = false;
+		for (symbol in memberSymbols)
+			if (symbol.name == "visible")
+				foundMethod = true;
+		if (!foundMethod)
+			throw "class-member recovery discarded a valid method after a malformed method";
 		Sys.println("PASS: compiler-backed language service snapshot works");
 	}
 }

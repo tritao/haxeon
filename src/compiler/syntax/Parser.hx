@@ -23,6 +23,7 @@ typedef RecoveredParse = {
 
 /** Recursive-descent parser for the supported Haxe-compatible source subset. */
 class Parser {
+	static inline final MAX_RECOVERY_DIAGNOSTICS = 20;
 	final tokens:Array<Token>;
 	var position:Int = 0;
 	var recovering:Bool = false;
@@ -84,7 +85,7 @@ class Parser {
 			} catch (error:CompileError) {
 				if (!recovering)
 					throw error;
-				recoveryDiagnostics.push(error.diagnostic);
+				recordRecoveryDiagnostic(error.diagnostic);
 				synchronizeTopLevel(declarationStart);
 			}
 		}
@@ -324,7 +325,7 @@ class Parser {
 			typeParameters = parseTypeParameters(typeConstraints);
 		consume(TokenKind.LeftParen);
 		var arguments = [];
-		if (!check(TokenKind.RightParen)) {
+		if (!check(TokenKind.RightParen) && !recoveringAtEnd()) {
 			do {
 				var optional = match(TokenKind.Question),
 					argumentToken = consume(TokenKind.Identifier);
@@ -348,6 +349,9 @@ class Parser {
 			while (!check(TokenKind.RightBrace))
 				appendStatements(statements, parseStatements());
 			end = consume(TokenKind.RightBrace).span;
+		} else if (recoveringAtEnd()) {
+			missingFunctionBody();
+			end = current().span;
 		} else {
 			appendStatements(statements, parseStatements());
 			end = statementSpan(statements[statements.length - 1]);
@@ -415,8 +419,10 @@ class Parser {
 				interfaces.push(parseType());
 		}
 		consume(TokenKind.LeftBrace);
-		var fields = [], methods = [];
-		while (!check(TokenKind.RightBrace)) {
+		var fields = [], methods = [], bodyStart = position;
+		while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof)) {
+			var memberStart = position;
+			try {
 			var memberMetadata = parseMetadata();
 			var isStatic = false, isFinal = false;
 			while (true) {
@@ -471,6 +477,12 @@ class Parser {
 					span: fieldStart.merge(end)
 				});
 			}
+			} catch (error:CompileError) {
+				if (!recovering)
+					throw error;
+				recordRecoveryDiagnostic(error.diagnostic);
+				synchronizeClassMember(bodyStart, memberStart);
+			}
 		}
 		var end = consume(TokenKind.RightBrace).span;
 		return {
@@ -487,6 +499,34 @@ class Parser {
 			span: start.merge(end)
 		};
 	}
+
+	function synchronizeClassMember(bodyStart:Int, memberStart:Int):Void {
+		var braceDepth = 0;
+		for (index in bodyStart...position)
+			switch tokens[index].kind {
+				case TokenKind.LeftBrace: braceDepth++;
+				case TokenKind.RightBrace: if (braceDepth > 0) braceDepth--;
+				default:
+			}
+		if (position <= memberStart && !check(TokenKind.Eof))
+			advance();
+		while (!check(TokenKind.Eof)) {
+			if (braceDepth == 0 && (check(TokenKind.RightBrace) || isClassMemberStart(current())))
+				return;
+			switch advance().kind {
+				case TokenKind.LeftBrace: braceDepth++;
+				case TokenKind.RightBrace: if (braceDepth > 0) braceDepth--;
+				default:
+			}
+		}
+	}
+
+	static function isClassMemberStart(token:Token):Bool
+		return switch token.kind {
+			case TokenKind.Function, TokenKind.Var, TokenKind.Public, TokenKind.Private, TokenKind.Static, TokenKind.Inline, TokenKind.Final, TokenKind.At,
+				TokenKind.Identifier: true;
+			default: false;
+		};
 
 	function parseFieldAccess():AstFieldAccess {
 		var token = advance();
@@ -1550,9 +1590,56 @@ class Parser {
 	function consume(kind:TokenKind):Token {
 		if (check(kind))
 			return advance();
+		if (recovering && canInsert(kind))
+			return insertMissing(kind);
 		fail(current(), 'Expected $kind, got ${current().kind}');
 		return null;
 	}
+
+	function recoveringAtEnd():Bool
+		return recovering && check(TokenKind.Eof);
+
+	function canInsert(kind:TokenKind):Bool
+		return switch kind {
+			case TokenKind.Semicolon:
+				check(TokenKind.RightBrace) || check(TokenKind.Eof) || isTopLevelStart(current());
+			case TokenKind.RightParen:
+				check(TokenKind.LeftBrace) || check(TokenKind.Colon) || check(TokenKind.Semicolon) || check(TokenKind.Arrow) || check(TokenKind.Eof);
+			case TokenKind.RightBracket:
+				check(TokenKind.Assign) || check(TokenKind.Semicolon) || check(TokenKind.Comma) || check(TokenKind.RightParen) || check(TokenKind.Eof);
+			case TokenKind.RightBrace:
+				check(TokenKind.Eof);
+			default: false;
+		};
+
+	function insertMissing(kind:TokenKind):Token {
+		var replacement = tokenText(kind), span = new SourceSpan(current().span.file, current().span.start, current().span.start);
+		recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", 'Expected $kind, got ${current().kind}', span, compiler.Diagnostic.DiagnosticSeverity.Error, [
+			{id: "insert-" + replacement, title: 'Insert "$replacement"', edits: [{span: span, replacement: replacement}]}
+		]));
+		return new Token(kind, replacement, span);
+	}
+
+	function missingFunctionBody():Void {
+		var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
+		recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expected function body", span, compiler.Diagnostic.DiagnosticSeverity.Error, [
+			{id: "insert-function-body", title: "Insert function body", edits: [{span: span, replacement: " {}"}]}
+		]));
+	}
+
+	function recordRecoveryDiagnostic(diagnostic:compiler.Diagnostic):Void {
+		if (recoveryDiagnostics.length < MAX_RECOVERY_DIAGNOSTICS)
+			recoveryDiagnostics.push(diagnostic);
+	}
+
+	static function tokenText(kind:TokenKind):String
+		return switch kind {
+			case TokenKind.Semicolon: ";";
+			case TokenKind.RightParen: ")";
+			case TokenKind.RightBracket: "]";
+			case TokenKind.RightBrace: "}";
+			default: "";
+		};
 
 	function consumeName():Token {
 		return if (isNameToken(current().kind)) advance(); else {
