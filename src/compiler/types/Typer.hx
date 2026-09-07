@@ -2856,16 +2856,14 @@ class Typer {
 			substitutions = nominalSubstitutions(baseInstance),
 			constructorName = resolvedBase + ".new",
 			hasConstructor = signatures.exists(constructorName),
-			expected = hasConstructor ? [
-				for (argument in requiredMapValue(signatures, constructorName).arguments)
-					argumentType(argument, substitutions)
-			] : PlatformAbi.constructorArguments(resolvedBase),
+			expected = PlatformAbi.constructorArguments(resolvedBase),
 			resolvedExpected:Array<CompilerType> = [];
 		if (expected != null)
 			resolvedExpected = expected;
-		if (arguments.length != resolvedExpected.length)
+		if (!hasConstructor && arguments.length != resolvedExpected.length)
 			fail("E1008", 'Constructor "$resolvedBase" expects ${resolvedExpected.length} arguments, got ${arguments.length}', span);
-		var semanticArguments = typeCallArguments(arguments, resolvedExpected, scope, constructorName),
+		var semanticArguments = hasConstructor ? typeDeclaredCallArguments(arguments, requiredMapValue(signatures, constructorName).arguments, scope,
+			constructorName, span, substitutions) : typeCallArguments(arguments, resolvedExpected, scope, constructorName),
 			physicalArguments = isGenericNominal(baseInstance) ? [for (argument in semanticArguments) abiBoundaryCast(argument, TDynamic)] : semanticArguments;
 		return new TypedExpression(TSuperCall(resolvedBase, physicalArguments), TVoid, span);
 	}

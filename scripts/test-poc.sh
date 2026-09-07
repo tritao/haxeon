@@ -44,6 +44,17 @@ cc -shared -fPIC -DHL_NAME\(n\)=realtime_##n \
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ParserRecoveryFuzzMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ConditionalCompilationMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run FunctionTypeSyntaxMain
+exception_output="$root_dir/out/exception.hl"
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run ExceptionMain "$exception_output"
+set +e
+LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$exception_output"
+exception_status=$?
+set -e
+if [[ $exception_status -ne 42 ]]; then
+	echo "exception compatibility: expected exit 42, got $exception_status" >&2
+	exit 1
+fi
+echo "PASS: exceptions can be chained, thrown, caught, and inspected (exit 42)"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ProtocolMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run LspProtocolMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run RuntimeDomainMain

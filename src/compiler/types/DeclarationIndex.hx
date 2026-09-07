@@ -152,7 +152,7 @@ class DeclarationIndex {
 				TNativeAbstract(tag);
 			case NamedType(name):
 				switch name {
-					case "Dynamic": TDynamic;
+					case "Dynamic", "Any": TDynamic;
 					case "haxe.io.Bytes": TBytes;
 					default: resolveNamedType(name, span, resolving, substitutions);
 				}

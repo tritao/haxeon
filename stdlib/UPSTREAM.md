@@ -9,6 +9,7 @@
 
 | Local path | Upstream path | Compatibility changes |
 | --- | --- | --- |
+| `Any.hx` | `std/Any.hx` | Represented as a source alias to `Dynamic` for the supported untyped-value subset. |
 | `Date.hx` | `std/Date.hx` | Limited to `now` and `getTime`; the abstract uses the project-owned native date representation. |
 | `Math.hx` | `std/Math.hx` | Limited to `isNaN`; the operation uses a source-declared stable runtime binding. |
 | `Reflect.hx` | `std/Reflect.hx` | Limited to `compare`; the operation uses a source-declared stable runtime binding. |
@@ -21,7 +22,10 @@
 | `haxe/io/BytesOutput.hx` | `std/haxe/io/BytesOutput.hx` | Limited to the supported primitive write operations; the source API uses a project-owned native stream representation. |
 | `sys/FileSystem.hx` | `std/sys/FileSystem.hx` | Limited to path queries and directory/file lifecycle operations; `fullPath` is retained as a compatibility alias for `absolutePath`, and operations use source-declared stable runtime bindings. |
 | `sys/io/File.hx` | `std/sys/io/File.hx` | Limited to whole-file text and byte reads/writes, including binary reads; operations use source-declared stable runtime bindings. |
+| `haxe/CallStack.hx` | `std/haxe/CallStack.hx` | Provides the portable stack-item model and deterministic empty snapshots until native stack capture is exposed. |
+| `haxe/Exception.hx` | `std/haxe/Exception.hx` | Source-level exception object with message, previous-exception, native-value, and stack properties. |
 | `haxe/PosInfos.hx` | `std/haxe/PosInfos.hx` | Documentation abbreviated and fields made final for the supported immutable structure subset. |
+| `haxe/ValueException.hx` | `std/haxe/ValueException.hx` | Retains arbitrary values in an explicit `Exception` wrapper. |
 | `haxe/ds/ArraySort.hx` | `std/haxe/ds/ArraySort.hx` | Added explicit local types, normalized binary callback syntax, and qualified same-class helper calls for the supported subset; behavior is unchanged. |
 | `haxe/ds/Either.hx` | `std/haxe/ds/Either.hx` | Documentation comments abbreviated; declaration and behavior are unchanged. |
 | `haxe/ds/Option.hx` | `std/haxe/ds/Option.hx` | Documentation comments abbreviated; declaration and behavior are unchanged. |

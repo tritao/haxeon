@@ -21,9 +21,9 @@ yet promise complete runtime behavior.
 | Module | Status | Diagnostic | First blocker |
 | --- | --- | --- | --- |
 | `utest.Assert` | blocked | `E0002` | Expected Semicolon, got Identifier |
-| `utest.Assertation` | blocked | `E2001` | Missing module "haxe.CallStack" |
+| `utest.Assertation` | pass | `-` | - |
 | `utest.Async` | blocked | `E2001` | Missing module "haxe.Timer" |
-| `utest.Dispatcher` | blocked | `E2001` | Missing module "haxe.Exception" |
+| `utest.Dispatcher` | blocked | `E1020` | Unresolved inferred type |
 | `utest.ITest` | pass | `-` | - |
 | `utest.IgnoredFixture` | blocked | `E0002` | Expected Function, got Var |
 | `utest.MacroRunner` | blocked | `E0002` | Field "macro" requires a type or initializer |
@@ -32,19 +32,19 @@ yet promise complete runtime behavior.
 | `utest.TestData` | blocked | `E0002` | Expected Colon, got LeftParen |
 | `utest.TestFixture` | blocked | `E0002` | Expected Function, got Identifier |
 | `utest.TestHandler` | blocked | `E0002` | Expected expression |
-| `utest.TestResult` | blocked | `E2001` | Missing module "haxe.CallStack" |
+| `utest.TestResult` | blocked | `E1020` | Type "List" does not accept type arguments |
 | `utest.UTest` | blocked | `E0002` | Expected Function, got Final |
-| `utest.exceptions.AssertFailureException` | blocked | `E2001` | Missing module "haxe.Exception" |
-| `utest.exceptions.UTestException` | blocked | `E2001` | Missing module "haxe.Exception" |
+| `utest.exceptions.AssertFailureException` | pass | `-` | - |
+| `utest.exceptions.UTestException` | pass | `-` | - |
 | `utest.ui.Report` | blocked | `E0001` | Unexpected character "~" |
-| `utest.ui.common.ClassResult` | blocked | `E2001` | Missing module "haxe.CallStack" |
-| `utest.ui.common.FixtureResult` | blocked | `E2001` | Missing module "haxe.CallStack" |
+| `utest.ui.common.ClassResult` | blocked | `E1020` | Unresolved inferred type |
+| `utest.ui.common.FixtureResult` | blocked | `E1020` | Unresolved inferred type |
 | `utest.ui.common.HeaderDisplayMode` | pass | `-` | - |
 | `utest.ui.common.IReport` | blocked | `E0002` | Expected Function, got Public |
-| `utest.ui.common.PackageResult` | blocked | `E2001` | Missing module "haxe.CallStack" |
-| `utest.ui.common.ReportTools` | blocked | `E2001` | Missing module "haxe.Exception" |
+| `utest.ui.common.PackageResult` | blocked | `E1020` | Unresolved inferred type |
+| `utest.ui.common.ReportTools` | blocked | `E1020` | Unresolved inferred type |
 | `utest.ui.common.ResultAggregator` | blocked | `E0001` | Unexpected character "~" |
-| `utest.ui.common.ResultStats` | blocked | `E2001` | Missing module "haxe.Exception" |
+| `utest.ui.common.ResultStats` | blocked | `E1020` | Unresolved inferred type |
 | `utest.ui.macro.MacroReport` | pass | `-` | - |
 | `utest.ui.text.DiagnosticsReport` | blocked | `E0002` | Expected Function, got Identifier |
 | `utest.ui.text.HtmlReport` | blocked | `E0002` | Expected Function, got Identifier |
@@ -57,16 +57,15 @@ yet promise complete runtime behavior.
 | `utest.utils.Print` | blocked | `E1020` | Unresolved inferred type |
 | `utest.utils.TestBuilder` | blocked | `E0001` | Unexpected character "$" |
 
-Baseline result: **3 of 36 modules analyze unchanged**.
+Baseline result: **6 of 36 modules analyze unchanged**.
 
 ## Priority order
 
-1. Add `haxe.Exception` and `haxe.CallStack`; these are now the shared first
-   blocker for nine modules after function types and inferred collection
-   constructors were accepted.
-2. Add regular-expression literals and `EReg`; `Runner`, `Report`,
+1. Add regular-expression literals and `EReg`; `Runner`, `Report`,
    `ResultAggregator`, and `PrintReport` now reach this syntax.
-3. Add remaining core aliases and classes such as `Any` and `List`.
+2. Add the array-backed `List<T>` subset used by upstream result collection.
+3. Resolve the remaining inferred return and collection types in `Dispatcher`
+   and the common report data structures.
 4. Improve same-package and secondary-type module resolution, beginning with
    upstream `utest.Test` and `utest.utils.AsyncUtils`.
 5. Broaden `Type`/`Reflect` APIs, then add `haxe.Timer`; these unlock typed
