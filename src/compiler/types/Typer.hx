@@ -2050,7 +2050,7 @@ class Typer {
 					var outerContext = context,
 						lambdaName = '$' + 'lambda:${outerContext.name}:${span.start}',
 						lambdaContext = enterBody(lambdaName, outerContext.typeSubstitutions);
-					context.resultType = expectedFunction == null || expectedFunction.result == TDynamic ? TVoid : expectedFunction.result;
+					context.resultType = expectedFunction == null ? TVoid : expectedFunction.result;
 					context.contextualVoidLambda = expectedFunction != null && expectedFunction.result == TVoid;
 					CaptureAnalysis.collectAssignedLocals(body, context.assigned);
 					var lambdaDeclared:Map<String, Bool> = [];
@@ -2063,10 +2063,9 @@ class Typer {
 						context.cells.set(name, '$' + 'cell:' + lambdaName + ':' + name);
 						context.cellKinds.set(name, MutableCapture);
 					}
-					var typedBody = typeStatements(body, typedBodyScope,
-						expectedFunction == null || expectedFunction.result == TDynamic ? null : expectedFunction.result);
+					var typedBody = typeStatements(body, typedBodyScope, expectedFunction == null ? null : expectedFunction.result);
 					var inferredResult:CompilerType;
-					if (expectedFunction != null && expectedFunction.result != TDynamic)
+					if (expectedFunction != null)
 						inferredResult = expectedFunction.result;
 					else {
 						var contextualResult = context.inferredResult;
