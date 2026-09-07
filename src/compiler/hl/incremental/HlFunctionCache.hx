@@ -28,7 +28,8 @@ typedef HlFunctionCacheState = {
  * Removed names retain their slots until an explicit assembler compaction.
  */
 class HlFunctionCache {
-	public static inline final INIT_STABLE_ID:Int = 0x7FFF0000;
+	public static inline final MAX_STABLE_ID:Int = 0x1FFFFFFF;
+	public static inline final INIT_STABLE_ID:Int = MAX_STABLE_ID;
 
 	public final userSlots:Map<String, Int> = [];
 	public final stableIds:Map<String, Int> = [];
@@ -41,8 +42,9 @@ class HlFunctionCache {
 	public function new(?existingStableIds:Map<String, Int>) {
 		if (existingStableIds != null)
 			for (name => id in existingStableIds) {
+				validateStableId(name, id);
 				stableIds.set(name, id);
-				if (id >= nextStableId)
+				if (id != INIT_STABLE_ID && id >= nextStableId)
 					nextStableId = id + 1;
 			}
 	}
@@ -83,14 +85,15 @@ class HlFunctionCache {
 	}
 
 	public static function fromState(state:HlFunctionCacheState):HlFunctionCache {
-		if (state.nextStableId < 0x10000)
+		if (state.nextStableId < 0x10000 || state.nextStableId >= INIT_STABLE_ID)
 			throw "Invalid next stable function ID";
 		var result = new HlFunctionCache(),
 			names:Map<String, Bool> = [],
 			ids:Map<Int, Bool> = [];
 		for (entry in state.stableIds) {
-			if (entry.name.length == 0 || entry.id < 0 || names.exists(entry.name) || ids.exists(entry.id))
+			if (entry.name.length == 0 || names.exists(entry.name) || ids.exists(entry.id))
 				throw "Invalid stable function identity state";
+			validateStableId(entry.name, entry.id);
 			names.set(entry.name, true);
 			ids.set(entry.id, true);
 			result.stableIds.set(entry.name, entry.id);
@@ -129,13 +132,25 @@ class HlFunctionCache {
 		for (fn in incoming) {
 			if (!userSlots.exists(fn.name)) {
 				userSlots.set(fn.name, slots.length);
-				if (!stableIds.exists(fn.name))
-					stableIds.set(fn.name, fn.name == "__init" ? INIT_STABLE_ID : nextStableId++);
+				if (!stableIds.exists(fn.name)) {
+					if (fn.name == "__init")
+						stableIds.set(fn.name, INIT_STABLE_ID);
+					else {
+						if (nextStableId >= INIT_STABLE_ID)
+							throw "Stable function ID space exhausted";
+						stableIds.set(fn.name, nextStableId++);
+					}
+				}
 				slots.push(fn.name);
 			}
 			functions.set(fn.name, fn);
 			signatures.set(fn.name, signature(fn));
 		}
+	}
+
+	static function validateStableId(name:String, id:Int):Void {
+		if (id < 0 || id > MAX_STABLE_ID || (id == INIT_STABLE_ID && name != "__init") || (name == "__init" && id != INIT_STABLE_ID))
+			throw 'Invalid stable function ID for "$name"';
 	}
 
 	public function ordered():Array<IrFunction>

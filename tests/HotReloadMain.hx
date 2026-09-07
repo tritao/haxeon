@@ -455,7 +455,7 @@ class HotReloadMain {
 		code.entryPoint = 0;
 		var indices:Map<String, Int> = [], ids:Map<String, Int> = [];
 		indices.set("__init", 0);
-		ids.set("__init", 0x7FFF0000);
+		ids.set("__init", compiler.hl.incremental.HlFunctionCache.INIT_STABLE_ID);
 		try {
 			Runtime.load(HlWriter.encode(code), HlRuntimeIdentity.encode(moduleId, 1, indices, ids));
 			throw "throwing module initializer unexpectedly loaded";
