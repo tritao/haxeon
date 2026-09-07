@@ -230,6 +230,7 @@ class LanguageService {
 				var recovered = new Parser(tokens).parseProgramRecovering();
 				state.recoveredTokens = tokens;
 				state.recoveredAst = recovered.program;
+				state.recoveredSemanticModel = new SemanticModel(recovered.program, state.source, state.revision, tokens);
 				for (diagnostic in recovered.diagnostics) {
 					var duplicate = -1;
 					for (index in 0...state.diagnostics.length) {
@@ -358,6 +359,30 @@ class LanguageService {
 	public function foldingRanges(path:String):Array<FoldingRegion> {
 		var state = stateFor(path);
 		return state == null ? [] : indexedStructure(state).folds.copy();
+	}
+
+	public function format(path:String, start:Int, end:Int, tabSize:Int, insertSpaces:Bool):Array<TextEdit> {
+		var state = stateFor(path);
+		if (state == null || start < 0 || end < start || end > state.source.text.length || tabSize <= 0)
+			return [];
+		var source = state.source.text, formatted = SourceFormatter.format(source, tabSize, insertSpaces, start, end);
+		if (formatted == null || formatted == source)
+			return [];
+		var prefix = 0, limit = Std.int(Math.min(source.length, formatted.length));
+		while (prefix < limit && source.charCodeAt(prefix) == formatted.charCodeAt(prefix))
+			prefix++;
+		var sourceSuffix = source.length, formattedSuffix = formatted.length;
+		while (sourceSuffix > prefix && formattedSuffix > prefix && source.charCodeAt(sourceSuffix - 1) == formatted.charCodeAt(formattedSuffix - 1)) {
+			sourceSuffix--;
+			formattedSuffix--;
+		}
+		return [{
+			path: path,
+			span: state.source.span(prefix, sourceSuffix),
+			replacement: formatted.substring(prefix, formattedSuffix),
+			revision: state.revision,
+			stale: false
+		}];
 	}
 
 	public function selectionRanges(path:String, positions:Array<Int>):Array<Array<SourceSpan>> {
@@ -626,6 +651,8 @@ class LanguageService {
 			for (local in semanticContext.locals)
 				addMember(local.name, "variable", local.name + ":" + compilerTypeName(local.type), prefix,
 					result, semanticContext.expected != null && completionTypeCompatible(local.type, semanticContext.expected) ? 0 : 2);
+		if (state.ast == null && state.recoveredAst != null)
+			addRecoveredLocals(state.recoveredAst, position, prefix, result);
 		if (semanticContext != null && semanticContext.expected != null)
 			for (symbol in compiler.semanticWorkspace.enumCases(semanticContext.expected, token)) {
 				var label = sourceName(symbol.name),
@@ -1612,7 +1639,23 @@ class LanguageService {
 		return state.ast != null ? state.tokens : state.recoveredAst != null ? state.recoveredTokens : state.lastGoodTokens;
 
 	static function effectiveSemanticModel(state:ModuleState):Null<compiler.semantic.SemanticModel>
-		return state.ast == null ? state.lastGoodSemanticModel : state.semanticModel;
+		return state.ast != null ? state.semanticModel : state.lastGoodSemanticModel != null ? state.lastGoodSemanticModel : state.recoveredSemanticModel;
+
+	static function addRecoveredLocals(ast:compiler.syntax.Ast.AstProgram, position:Int, prefix:String, result:Array<CompletionItem>):Void {
+		for (fn in ast.functions)
+			if (position >= fn.span.start && position <= fn.span.end) {
+				for (argument in fn.arguments)
+					addMember(argument.name, "variable", argument.name + ":" + typeName(argument.type), prefix, result, 2);
+				for (statement in fn.statements)
+					switch statement {
+						case UninitializedDeclaration(name, type, span) if (span.start <= position):
+							addMember(name, "variable", name + ":" + typeName(type), prefix, result, 2);
+						case VarDeclaration(name, type, _, span) if (span.start <= position):
+							addMember(name, "variable", name + ":" + (type == null ? "Dynamic" : typeName(type)), prefix, result, 2);
+						default:
+					}
+			}
+	}
 
 	static function identifierPrefix(source:String, position:Int):String {
 		var end = position < 0 ? 0 : position > source.length ? source.length : position, start = end;

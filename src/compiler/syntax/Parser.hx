@@ -1038,6 +1038,11 @@ class Parser {
 	}
 
 	function parsePrimary():AstExpression {
+		if (recovering && isExpressionTerminator(current().kind)) {
+			var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
+			recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expected expression", span));
+			return Unreachable(span);
+		}
 		if (check(TokenKind.At)) {
 			parseMetadata();
 			return parsePrimary();
@@ -1304,6 +1309,12 @@ class Parser {
 		fail(current(), "Expected expression");
 		return null;
 	}
+
+	static function isExpressionTerminator(kind:TokenKind):Bool
+		return switch kind {
+			case TokenKind.Semicolon, TokenKind.Comma, TokenKind.RightParen, TokenKind.RightBracket, TokenKind.RightBrace, TokenKind.Eof: true;
+			default: false;
+		};
 
 	function parenthesizedLambdaAhead():Bool {
 		var depth = 0, cursor = position;

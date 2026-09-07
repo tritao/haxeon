@@ -34,6 +34,7 @@ class ModuleState {
 	public var ast:Null<AstProgram>;
 	public var recoveredAst:Null<AstProgram>;
 	public var recoveredTokens:Array<Token> = [];
+	public var recoveredSemanticModel:Null<SemanticModel>;
 	public var semanticModel:Null<SemanticModel>;
 	public var lastGoodTokens:Array<Token> = [];
 	public var lastGoodAst:Null<AstProgram>;
@@ -88,6 +89,7 @@ class ModuleState {
 		ast = null;
 		recoveredAst = null;
 		recoveredTokens = [];
+		recoveredSemanticModel = null;
 		semanticModel = null;
 		diagnostics = [];
 		dirty = true;
@@ -102,6 +104,7 @@ class ModuleState {
 		result.ast = ast;
 		result.recoveredAst = recoveredAst;
 		result.recoveredTokens = recoveredTokens;
+		result.recoveredSemanticModel = recoveredSemanticModel;
 		result.semanticModel = semanticModel;
 		result.lastGoodTokens = lastGoodTokens;
 		result.lastGoodAst = lastGoodAst;

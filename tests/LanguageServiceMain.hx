@@ -511,6 +511,18 @@ class LanguageServiceMain {
 		var statementSymbols = statementService.documentSymbols("Statements.hx");
 		if (statementSymbols.length != 1 || statementSymbols[0].name != "retained")
 			throw "statement recovery discarded its enclosing function";
+		var expressionService = new LanguageService();
+		var expressionSource = "function pending(argument:Int):Int { var available:String = \"ok\"; var incomplete =";
+		expressionService.update("Expression.hx", expressionSource);
+		try
+			expressionService.analyze("Expression")
+		catch (_:CompileError) {}
+		var expressionSymbols = expressionService.documentSymbols("Expression.hx"), expressionCompletion = expressionService.complete("Expression.hx",
+			expressionSource.length), completionNames = [for (item in expressionCompletion) item.label];
+		if (expressionSymbols.length != 1 || expressionSymbols[0].name != "pending")
+			throw "incomplete expression discarded its enclosing declaration";
+		if (completionNames.indexOf("argument") < 0 || completionNames.indexOf("available") < 0)
+			throw "recovered expression completion omitted current arguments or locals";
 		Sys.println("PASS: compiler-backed language service snapshot works");
 	}
 }
