@@ -57,8 +57,13 @@ class LspProtocol {
 	final semanticTokenSnapshots:Map<String, SemanticTokenSnapshot> = [];
 	final semanticTokenOrder:Array<String> = [];
 	final pullDiagnosticSnapshots:Map<String, DiagnosticSnapshot> = [];
+	final refreshSupported:Map<String, Bool> = [];
+	final refreshPending:Map<String, String> = [];
+	final refreshQueued:Map<String, Bool> = [];
+	final refreshByRequest:Map<String, String> = [];
 	var semanticTokenSequence = 0;
 	var pullDiagnosticSequence = 0;
+	var refreshSequence = 0;
 	var diagnosticToken:Null<CancellationToken>;
 	var deferDiagnostics = false;
 	var analysisGeneration = 0;
@@ -84,8 +89,9 @@ class LspProtocol {
 		var method:String = Reflect.field(request, "method"),
 			id:Dynamic = Reflect.field(request, "id");
 		if (method == null)
-			return id != null
-				&& (Reflect.hasField(request, "result") || Reflect.hasField(request, "error")) ? [] : id == null ? [] : [error(id, -32600, "Invalid Request")];
+			return id != null && (Reflect.hasField(request, "result") || Reflect.hasField(request, "error")) ? serverResponse(id) : id == null ? [] : [
+				error(id, -32600, "Invalid Request")
+			];
 		if (shutdownRequested && method != "exit")
 			return id == null ? [] : [error(id, -32600, "Server has shut down")];
 		try {
@@ -199,6 +205,9 @@ class LspProtocol {
 	function initialize(request:Dynamic, id:Dynamic):Array<String> {
 		var params = required(request, "params");
 		completionSnippets = clientCompletionSnippets(params);
+		refreshSupported.set("semanticTokens", clientRefreshSupport(params, "semanticTokens"));
+		refreshSupported.set("diagnostic", clientRefreshSupport(params, "diagnostics"));
+		refreshSupported.set("inlayHint", clientRefreshSupport(params, "inlayHint"));
 		project.initialize(params, service);
 		if (project.configurations.length > 0)
 			configure(project.configurations[0]);
@@ -229,7 +238,9 @@ class LspProtocol {
 		analysisGeneration++;
 		for (module in service.compiler.modules.keys())
 			pendingDiagnosticTargets.set(module, true);
-		return [];
+		clearAllSemanticTokenSnapshots();
+		clearAllPullDiagnosticSnapshots();
+		return refreshRequests();
 	}
 
 	function watcherRegistration():String
@@ -405,13 +416,16 @@ class LspProtocol {
 		if (deferDiagnostics) {
 			for (target in targets.keys())
 				pendingDiagnosticTargets.set(target, true);
-			return [];
+			return refreshRequests();
 		}
 		for (target in targets.keys())
 			try
 				service.analyze(target)
 			catch (_:Dynamic) {}
-		return generation == analysisGeneration ? diagnosticNotifications(generation) : [];
+		var result = generation == analysisGeneration ? diagnosticNotifications(generation) : [];
+		for (message in refreshRequests())
+			result.push(message);
+		return result;
 	}
 
 	function changeWorkspaceFolders(request:Dynamic):Array<String> {
@@ -436,6 +450,8 @@ class LspProtocol {
 		if (deferDiagnostics) {
 			for (target in targets)
 				pendingDiagnosticTargets.set(target, true);
+			for (message in refreshRequests())
+				result.push(message);
 			return result;
 		}
 		targets.sort(Reflect.compare);
@@ -450,6 +466,8 @@ class LspProtocol {
 		if (generation == analysisGeneration)
 			for (message in diagnosticNotifications(generation))
 				result.push(message);
+		for (message in refreshRequests())
+			result.push(message);
 		return result;
 	}
 
@@ -1118,6 +1136,51 @@ class LspProtocol {
 		return value != null && Reflect.field(value, "snippetSupport") == true;
 	}
 
+	static function clientRefreshSupport(params:Dynamic, feature:String):Bool {
+		var capabilities:Dynamic = Reflect.field(params, "capabilities"), workspace:Dynamic = capabilities == null ? null : Reflect.field(capabilities, "workspace"),
+			options:Dynamic = workspace == null ? null : Reflect.field(workspace, feature);
+		return options != null && Reflect.field(options, "refreshSupport") == true;
+	}
+
+	function refreshRequests():Array<String> {
+		var result:Array<String> = [];
+		for (feature in ["semanticTokens", "diagnostic", "inlayHint"])
+			if (refreshSupported.get(feature) == true) {
+				if (refreshPending.exists(feature))
+					refreshQueued.set(feature, true);
+				else
+					result.push(beginRefresh(feature));
+			}
+		return result;
+	}
+
+	function beginRefresh(feature:String):String {
+		var id = "haxeon/refresh/" + feature + "/" + refreshSequence++, method = switch feature {
+			case "semanticTokens": "workspace/semanticTokens/refresh";
+			case "diagnostic": "workspace/diagnostic/refresh";
+			case "inlayHint": "workspace/inlayHint/refresh";
+			default: throw 'Unknown refresh feature "$feature"';
+		};
+		refreshPending.set(feature, id);
+		refreshByRequest.set(id, feature);
+		return serverRequest(id, method, null);
+	}
+
+	function serverResponse(id:Dynamic):Array<String> {
+		if (!Std.isOfType(id, String))
+			return [];
+		var key:String = cast id, feature = refreshByRequest.get(key);
+		if (feature == null)
+			return [];
+		refreshByRequest.remove(key);
+		if (refreshPending.get(feature) == key)
+			refreshPending.remove(feature);
+		if (!refreshQueued.exists(feature))
+			return [];
+		refreshQueued.remove(feature);
+		return [beginRefresh(feature)];
+	}
+
 	static function appendSemanticToken(data:Array<Int>, line:Int, character:Int, length:Int, type:String, modifiers:Array<String>, previousLine:Int,
 			previousCharacter:Int):Void {
 		var modifierBits = 0;
@@ -1268,13 +1331,12 @@ class LspProtocol {
 	static function notification(method:String, params:Dynamic):String
 		return Json.stringify({jsonrpc: "2.0", method: method, params: params});
 
-	static function serverRequest(id:String, method:String, params:Dynamic):String
-		return Json.stringify({
-			jsonrpc: "2.0",
-			id: id,
-			method: method,
-			params: params
-		});
+	static function serverRequest(id:String, method:String, params:Dynamic):String {
+		var request:Dynamic = {jsonrpc: "2.0", id: id, method: method};
+		if (params != null)
+			Reflect.setField(request, "params", params);
+		return Json.stringify(request);
+	}
 
 	static function error(id:Dynamic, code:Int, message:String):String
 		return Json.stringify({jsonrpc: "2.0", id: id, error: {code: code, message: message}});

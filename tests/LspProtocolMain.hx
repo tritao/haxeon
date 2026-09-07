@@ -98,6 +98,37 @@ class LspProtocolMain {
 			throw "LSP did not register project and source file watchers";
 		if (protocol.handle('{"jsonrpc":"2.0","id":"haxeon/register-watchers","result":null}').length != 0)
 			throw "LSP did not accept the client watcher-registration response";
+		var refreshProtocol = new LspProtocol();
+		request(refreshProtocol, Json.stringify({
+			jsonrpc: "2.0", id: 11, method: "initialize",
+			params: {capabilities: {workspace: {
+				semanticTokens: {refreshSupport: true}, diagnostics: {refreshSupport: true}, inlayHint: {refreshSupport: true}
+			}}}
+		}));
+		var refreshChange = Json.stringify({jsonrpc: "2.0", method: "workspace/didChangeConfiguration", params: {settings: {}}}),
+			firstRefreshes = refreshProtocol.handle(refreshChange), refreshMethods:Map<String, String> = [];
+		for (message in firstRefreshes) {
+			var parsed:Dynamic = Json.parse(message);
+			refreshMethods.set(parsed.method, Std.string(parsed.id));
+		}
+		if (firstRefreshes.length != 3
+			|| !refreshMethods.exists("workspace/semanticTokens/refresh")
+			|| !refreshMethods.exists("workspace/diagnostic/refresh")
+			|| !refreshMethods.exists("workspace/inlayHint/refresh"))
+			throw "LSP did not emit supported workspace refresh requests";
+		if (refreshProtocol.handle(refreshChange).length != 0)
+			throw "LSP did not coalesce in-flight workspace refresh requests";
+		for (method => refreshId in refreshMethods) {
+			var repeated = refreshProtocol.handle(Json.stringify({jsonrpc: "2.0", id: refreshId, result: null}));
+			if (repeated.length != 1 || Json.parse(repeated[0]).method != method || Std.string(Json.parse(repeated[0]).id) == refreshId)
+				throw "LSP did not replay a coalesced refresh after its response";
+			if (refreshProtocol.handle(Json.stringify({jsonrpc: "2.0", id: Json.parse(repeated[0]).id, result: null})).length != 0)
+				throw "LSP retained a completed refresh request";
+		}
+		var unsupportedRefreshProtocol = new LspProtocol();
+		request(unsupportedRefreshProtocol, '{"jsonrpc":"2.0","id":12,"method":"initialize","params":{"capabilities":{}}}');
+		if (unsupportedRefreshProtocol.handle(refreshChange).length != 0)
+			throw "LSP sent refresh requests without client support";
 		var fixtureRoot = sys.FileSystem.absolutePath("tests/fixtures/pragtical"),
 			fixtureMainPath = Path.join([fixtureRoot, "pragtical/app/LspFixture.hx"]),
 			fixtureMainUri = "file://" + fixtureMainPath,
