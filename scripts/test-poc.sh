@@ -25,6 +25,7 @@ cc -shared -fPIC -DHL_NAME\(n\)=realtime_##n \
 "$root_dir/tests/differential/run.sh"
 
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run TestMain
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run ExternMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run CaptureAnalysisMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ModuleCanonicalizerMain
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run SemanticDependencyCollectorMain

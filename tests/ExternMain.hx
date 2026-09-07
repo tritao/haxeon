@@ -13,6 +13,23 @@ class ExternMain {
 				found = true;
 		if (!found)
 			throw "Extern abstract instance method did not produce a native binding";
+		var classCompiler = new Compiler();
+		classCompiler.update("Native.hx",
+			'@:hlNative("platform") extern class Native { public static function poll():Int; @:hlNative("override", "renamed") public static function draw():Void; }');
+		classCompiler.update("Main.hx", "import Native; function main():Int { Native.draw(); return Native.poll(); }");
+		var classResult = classCompiler.compile("Main"),
+			inherited = false,
+			overridden = false;
+		for (native in classResult.module.natives) {
+			var library = classResult.module.strings[native.library],
+				symbol = classResult.module.strings[native.name];
+			if (library == "platform" && symbol == "poll")
+				inherited = true;
+			if (library == "override" && symbol == "renamed")
+				overridden = true;
+		}
+		if (!inherited || !overridden)
+			throw "Extern class native library inheritance or method override was not preserved";
 		var bytesCompiler = new Compiler();
 		bytesCompiler.update("hl/Bytes.hx", sys.io.File.getContent("stdlib/hl/Bytes.hx"));
 		bytesCompiler.update("Main.hx", "function identity(value:hl.Bytes):hl.Bytes return value; function main():Int return 42;");

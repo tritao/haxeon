@@ -589,6 +589,10 @@ class TestMain {
 		expectCompileError('extern function missing():Int; function main():Int return 42;', 'Extern function "missing" requires @:hlNative(library, symbol)');
 		expectCompileError('@:hlNative("std") extern function malformed():Int; function main():Int return 42;',
 			"@:hlNative requires a library and symbol string");
+		expectCompileError('@:hlNative("one", "two") extern class Native { public static function read():Int; } function main():Int return 42;',
+			"Declaration @:hlNative requires one library string");
+		expectCompileError('@:hlNative(42) extern class Native { public static function read():Int; } function main():Int return 42;',
+			"Declaration @:hlNative library must be a string literal");
 		var modularExtern = new Compiler();
 		modularExtern.update("Main.hx", '@:hlNative("std", "sys_time") extern function nativeTime():Float; function main():Int { nativeTime(); return 42; }');
 		modularExtern.compile("Main");

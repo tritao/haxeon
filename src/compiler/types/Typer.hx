@@ -152,21 +152,25 @@ class Typer {
 				typedNatives.push(typeExtern(fn));
 		}
 		for (classDecl in program.classes)
-			if (classDecl.isExtern == true)
+			if (classDecl.isExtern == true) {
+				var defaultLibrary = nativeLibrary(classDecl.name, classDecl.metadata);
 				for (method in classDecl.methods) {
 					if (!method.isStatic)
 						fail("E1021", 'Extern instance method "${classDecl.name}.${method.name}" is not supported yet', method.span);
 					var nativeName = method.name.indexOf(".") >= 0 ? method.name : classDecl.name + "." + method.name;
-					typedNatives.push(typeExtern(method, nativeName));
+					typedNatives.push(typeExtern(method, nativeName, null, defaultLibrary));
 				}
+			}
 		for (abstractDecl in program.abstracts)
-			if (abstractDecl.isExtern == true)
+			if (abstractDecl.isExtern == true) {
+				var defaultLibrary = nativeLibrary(abstractDecl.name, abstractDecl.metadata);
 				for (method in abstractDecl.methods) {
 					var nativeName = method.name.indexOf(".") >= 0 ? method.name : abstractDecl.name + "." + method.name;
 					var receiverType = method.isStatic ? null : declarations.resolve(abstractDecl.underlying, abstractDecl.span,
 						declarationTypeSubstitutions(abstractDecl.name, abstractDecl.typeParameters));
-					typedNatives.push(typeExtern(method, nativeName, receiverType));
+					typedNatives.push(typeExtern(method, nativeName, receiverType, defaultLibrary));
 				}
+			}
 		var setupDoneAt = Sys.time() * 1000.0;
 		inferNoReturnFunctions();
 		var noReturnDoneAt = Sys.time() * 1000.0;
@@ -287,7 +291,7 @@ class Typer {
 		};
 	}
 
-	function typeExtern(fn:AstFunction, ?externalName:String, ?receiverType:CompilerType):compiler.types.TypedAst.TypedNative {
+	function typeExtern(fn:AstFunction, ?externalName:String, ?receiverType:CompilerType, ?defaultLibrary:String):compiler.types.TypedAst.TypedNative {
 		if (fn.statements.length != 0)
 			fail("E1021", 'Extern function "${fn.name}" cannot have a body', fn.span);
 		var binding:Null<compiler.syntax.Ast.AstMetadata> = null;
@@ -299,28 +303,54 @@ class Typer {
 						fail("E1021", 'Extern function "${fn.name}" has duplicate @:hlNative metadata', entry.span);
 					binding = entry;
 				}
-		if (binding == null)
+		if (binding == null && defaultLibrary == null)
 			fail("E1021", 'Extern function "${fn.name}" requires @:hlNative(library, symbol)', fn.span);
-		if (binding.arguments.length != 2)
-			fail("E1021", '@:hlNative requires a library and symbol string', binding.span);
-		var values = [];
-		for (argument in binding.arguments)
-			switch argument {
-				case StringLiteral(value, _):
-					values.push(value);
-				default:
-					fail("E1021", '@:hlNative arguments must be string literals', binding.span);
-			}
+		var library = defaultLibrary, symbol = fn.name;
+		if (binding != null) {
+			if (binding.arguments.length != 2)
+				fail("E1021", '@:hlNative requires a library and symbol string', binding.span);
+			var values = metadataStrings(binding, "@:hlNative arguments must be string literals");
+			library = values[0];
+			symbol = values[1];
+		}
 		var arguments = [for (argument in fn.arguments) argumentType(argument)];
 		if (receiverType != null)
 			arguments.unshift(receiverType);
 		return {
 			name: externalName == null ? fn.name : externalName,
-			library: values[0],
-			symbol: values[1],
+			library: library,
+			symbol: symbol,
 			arguments: arguments,
 			result: lowerType(fn.result)
 		};
+	}
+
+	function nativeLibrary(owner:String, metadata:Null<Array<compiler.syntax.Ast.AstMetadata>>):Null<String> {
+		var binding:Null<compiler.syntax.Ast.AstMetadata> = null;
+		if (metadata != null)
+			for (entry in metadata)
+				if (entry.name == "hlNative") {
+					if (binding != null)
+						fail("E1021", 'Extern declaration "$owner" has duplicate @:hlNative metadata', entry.span);
+					binding = entry;
+				}
+		if (binding == null)
+			return null;
+		if (binding.arguments.length != 1)
+			fail("E1021", 'Declaration @:hlNative requires one library string', binding.span);
+		return metadataStrings(binding, "Declaration @:hlNative library must be a string literal")[0];
+	}
+
+	function metadataStrings(metadata:compiler.syntax.Ast.AstMetadata, message:String):Array<String> {
+		var values = [];
+		for (argument in metadata.arguments)
+			switch argument {
+				case StringLiteral(value, _):
+					values.push(value);
+				default:
+					fail("E1021", message, metadata.span);
+			}
+		return values;
 	}
 
 	static function declarationTypeSubstitutions(owner:String, parameters:Array<String>):Map<String, CompilerType> {
@@ -1131,13 +1161,13 @@ class Typer {
 							bindings:Array<TypedSwitchBinding> = pattern == null ? [] : pattern.bindings,
 							predicates:Array<TypedSwitchPredicate> = pattern == null ? [] : pattern.predicates;
 						caseScopes.push(caseScope);
-						if (pattern == null)
-							switch typedValue.expression {
-								case TEnumLiteral(name, index):
-									enumName = name;
-									constructorIndex = index;
-								default:
+						if (pattern == null) {
+							var literal = enumLiteral(typedValue);
+							if (literal != null) {
+								enumName = literal.name;
+								constructorIndex = literal.index;
 							}
+						}
 						var caseKey = switchCaseKey(typedValue, predicates);
 						if (caseKey != null && typedGuard == null) {
 							if (seenCases.exists(caseKey))
@@ -1728,6 +1758,13 @@ class Typer {
 			default: null;
 		};
 
+	static function enumLiteral(value:TypedExpression):Null<{name:String, index:Int}>
+		return switch value.expression {
+			case TEnumLiteral(name, index): {name: name, index: index};
+			case TNullableWrap(inner), TCast(inner), TAbiCast(inner): enumLiteral(inner);
+			default: null;
+		};
+
 	function constantPatternKey(value:TypedExpression):Null<String>
 		return switch value.expression {
 			case TIntLiteral(v): 'int:$v';
@@ -2125,13 +2162,13 @@ class Typer {
 							fail("E1003", "Switch branches must have matching types", switchCase.span);
 						resultType = joined;
 					}
-					if (pattern == null)
-						switch typedValue.expression {
-							case TEnumLiteral(name, index):
-								enumName = name;
-								constructorIndex = index;
-							default:
+					if (pattern == null) {
+						var literal = enumLiteral(typedValue);
+						if (literal != null) {
+							enumName = literal.name;
+							constructorIndex = literal.index;
 						}
+					}
 					var caseKey = switchCaseKey(typedValue, predicates);
 					if (caseKey != null && typedGuard == null) {
 						if (seenCases.exists(caseKey))
