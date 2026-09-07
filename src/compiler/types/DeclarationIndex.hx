@@ -154,8 +154,6 @@ class DeclarationIndex {
 				switch name {
 					case "Dynamic": TDynamic;
 					case "haxe.io.Bytes": TBytes;
-					case "haxe.io.BytesInput": TNativeAbstract("realtime_bytes_input");
-					case "haxe.io.BytesOutput": TNativeAbstract("realtime_bytes_output");
 					default: resolveNamedType(name, span, resolving, substitutions);
 				}
 			case AppliedType(name, arguments):

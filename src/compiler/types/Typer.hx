@@ -174,9 +174,12 @@ class Typer {
 				var defaultLibrary = nativeLibrary(abstractDecl.name, abstractDecl.metadata);
 				for (method in abstractDecl.methods) {
 					var nativeName = method.name.indexOf(".") >= 0 ? method.name : abstractDecl.name + "." + method.name;
-					var receiverType = method.isStatic ? null : declarations.resolve(abstractDecl.underlying, abstractDecl.span,
-						declarationTypeSubstitutions(abstractDecl.name, abstractDecl.typeParameters));
-					typedNatives.push(typeExtern(method, nativeName, receiverType, defaultLibrary));
+					var receiverType = method.isStatic
+						|| method.name == "new" ? null : declarations.resolve(abstractDecl.underlying, abstractDecl.span,
+							declarationTypeSubstitutions(abstractDecl.name, abstractDecl.typeParameters));
+					var resultOverride = method.name == "new" ? declarations.resolve(abstractDecl.underlying, abstractDecl.span,
+						declarationTypeSubstitutions(abstractDecl.name, abstractDecl.typeParameters)) : null;
+					typedNatives.push(typeExtern(method, nativeName, receiverType, defaultLibrary, resultOverride));
 				}
 			}
 		var setupDoneAt = Sys.time() * 1000.0;
@@ -308,7 +311,8 @@ class Typer {
 		};
 	}
 
-	function typeExtern(fn:AstFunction, ?externalName:String, ?receiverType:CompilerType, ?defaultLibrary:String):compiler.types.TypedAst.TypedNative {
+	function typeExtern(fn:AstFunction, ?externalName:String, ?receiverType:CompilerType, ?defaultLibrary:String,
+			?resultOverride:CompilerType):compiler.types.TypedAst.TypedNative {
 		if (fn.statements.length != 0)
 			fail("E1021", 'Extern function "${fn.name}" cannot have a body', fn.span);
 		var binding:Null<compiler.syntax.Ast.AstMetadata> = null;
@@ -338,7 +342,7 @@ class Typer {
 			library: library,
 			symbol: symbol,
 			arguments: arguments,
-			result: lowerType(fn.result)
+			result: resultOverride == null ? lowerType(fn.result) : resultOverride
 		};
 	}
 
@@ -1434,7 +1438,9 @@ class Typer {
 						homogeneous = false;
 				} homogeneous && element != null ? TArray(element) : null;
 			case Range(_, _, _): TRange;
-			case New(typeName, _, _): classDecls.exists(typeName) ? TInstance(NominalKind.Class, typeName, []) : null;
+			case New(typeName, _, span):
+				if (declarations.abstracts.exists(typeName)) declarations.resolve(NamedType(typeName),
+					span); else classDecls.exists(typeName) ? TInstance(NominalKind.Class, typeName, []) : null;
 			default: null;
 		};
 
@@ -2805,6 +2811,10 @@ class Typer {
 			constructor = signatures.get(constructorName);
 		if (constructor == null)
 			fail("E1007", 'Abstract "$name" has no constructor', span);
+		if (decl.isExtern == true) {
+			var typed = typeDeclaredCallArguments(arguments, constructor.arguments, scope, constructorName, span);
+			return new TypedExpression(TCall(constructorName, typed), valueType, span);
+		}
 		var substitutions:Map<String, CompilerType> = [],
 			representation:CompilerType = TVoid;
 		switch valueType {

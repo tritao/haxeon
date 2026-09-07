@@ -41,26 +41,13 @@ class CompilerIntrinsics {
 		definitions.push(native("__bytes_get_string", "realtime_runtime", "__bytes_get_string", [bytes, TInt, TInt], TString));
 
 		// Specialized BytesInput representation and operations.
-		definitions.push(native("__bytes_input_new", "realtime_runtime", "__bytes_input_new", [bytes], input));
 		definitions.push(native("__bytes_input_position", "realtime_runtime", "__bytes_input_position", [input], TInt));
 		definitions.push(native("__bytes_input_big_endian", "realtime_runtime", "__bytes_input_big_endian", [input], TBool));
 		definitions.push(native("__bytes_input_set_big_endian", "realtime_runtime", "__bytes_input_set_big_endian", [input, TBool], TVoid));
-		definitions.push(native("__bytes_input_read_byte", "realtime_runtime", "__bytes_input_read_byte", [input], TInt));
-		definitions.push(native("__bytes_input_read_i32", "realtime_runtime", "__bytes_input_read_i32", [input], TInt));
-		definitions.push(native("__bytes_input_read_f64", "realtime_runtime", "__bytes_input_read_f64", [input], TFloat));
-		definitions.push(native("__bytes_input_read_string", "realtime_runtime", "__bytes_input_read_string", [input, TInt], TString));
-		definitions.push(native("__bytes_input_read", "realtime_runtime", "__bytes_input_read", [input, TInt], bytes));
 
 		// Specialized BytesOutput representation and operations.
-		definitions.push(native("__bytes_output_new", "realtime_runtime", "__bytes_output_new", [], output));
 		definitions.push(native("__bytes_output_big_endian", "realtime_runtime", "__bytes_output_big_endian", [output], TBool));
 		definitions.push(native("__bytes_output_set_big_endian", "realtime_runtime", "__bytes_output_set_big_endian", [output, TBool], TVoid));
-		definitions.push(native("__bytes_output_write_byte", "realtime_runtime", "__bytes_output_write_byte", [output, TInt], TVoid));
-		definitions.push(native("__bytes_output_write_i32", "realtime_runtime", "__bytes_output_write_i32", [output, TInt], TVoid));
-		definitions.push(native("__bytes_output_write_f64", "realtime_runtime", "__bytes_output_write_f64", [output, TFloat], TVoid));
-		definitions.push(native("__bytes_output_write_string", "realtime_runtime", "__bytes_output_write_string", [output, TString], TVoid));
-		definitions.push(native("__bytes_output_write", "realtime_runtime", "__bytes_output_write", [output, bytes], TVoid));
-		definitions.push(native("__bytes_output_get_bytes", "realtime_runtime", "__bytes_output_get_bytes", [output], bytes));
 		return definitions;
 	}
 
