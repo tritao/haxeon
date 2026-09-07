@@ -13,6 +13,7 @@ import compiler.semantic.SemanticProgram;
 import compiler.types.Typer;
 import compiler.types.Typer.TyperPhaseMetrics;
 import compiler.types.TypedAst.TypedProgram;
+import compiler.types.Type.CompilerType;
 import compiler.modules.ModuleState.SemanticDependencyKind;
 import compiler.semantic.SemanticDependencyCollector;
 
@@ -157,8 +158,10 @@ class FrontendCompilation {
 			} else
 				state.pendingIrFunctions.set(fn.name, true);
 		}
-		if (indexSemantics)
-			publishResolvedBodyDependencies(context, reindexedModules, rollbackModules);
+		if (indexSemantics) {
+			indexTypedInitializers(context, typedNew, reindexedModules);
+			publishResolvedDependencies(context, typedNew, reindexedModules, rollbackModules);
+		}
 		for (module in touchedModules.keys())
 			modules.get(module).typeVersion++;
 		for (name in names) {
@@ -301,8 +304,22 @@ class FrontendCompilation {
 		return module;
 	}
 
-	/** Replace provisional syntax call edges with calls proven by typed resolution. */
-	static function publishResolvedBodyDependencies(context:CompilationContext, reindexedModules:Map<String, Bool>,
+	static function indexTypedInitializers(context:CompilationContext, typed:TypedProgram, reindexedModules:Map<String, Bool>):Void {
+		for (classDecl in typed.classes)
+			for (module in reindexedModules.keys()) {
+				var state = context.modules.get(module),
+					model = state.semanticModel;
+				if (model == null || !modelOwnsType(model.program, classDecl.name))
+					continue;
+				for (field in classDecl.fields)
+					if (field.initializer != null)
+						model.index.indexTypedInitializer(classDecl.name + "." + field.name, field.initializer, context.resolveSemanticSymbol,
+							context.resolveSemanticEnumCase);
+			}
+	}
+
+	/** Replace provisional edges with dependencies proven by typed resolution. */
+	static function publishResolvedDependencies(context:CompilationContext, typed:TypedProgram, reindexedModules:Map<String, Bool>,
 			rollbackModules:Map<String, ModuleState>):Void {
 		for (module in reindexedModules.keys()) {
 			var state = context.writableState(module, rollbackModules),
@@ -312,11 +329,70 @@ class FrontendCompilation {
 			var resolved:Map<String, Array<compiler.modules.ModuleState.SemanticDependency>> = [];
 			for (owner => dependencies in state.semanticDependencies)
 				for (dependency in dependencies)
-					if (dependency.kind != SemanticDependencyKind.Body)
-						SemanticDependencyCollector.addDependency(resolved, owner, dependency.kind, dependency.target, dependency.targetId);
-			for (call in model.index.resolvedCalls())
-				SemanticDependencyCollector.addDependency(resolved, call.caller, SemanticDependencyKind.Body, call.callee, call.calleeId);
+					if (dependency.kind != SemanticDependencyKind.Body && dependency.kind != SemanticDependencyKind.Initializer) {
+						var targetId = dependency.targetId == null ? context.resolveSemanticType(dependency.target) : dependency.targetId;
+						SemanticDependencyCollector.addDependency(resolved, owner, dependency.kind, dependency.target, targetId);
+					}
+			for (dependency in model.index.resolvedDependencies())
+				SemanticDependencyCollector.addDependency(resolved, dependency.owner, dependency.kind, dependency.target, dependency.targetId);
+			for (name => fn in state.typedFunctions)
+				if (state.typedSourceRevisions.get(name) == state.revision) {
+					for (argument in fn.arguments)
+						addResolvedTypeDependency(resolved, name, SemanticDependencyKind.Signature, argument.type, context);
+					addResolvedTypeDependency(resolved, name, SemanticDependencyKind.Signature, fn.result, context);
+				}
+			for (classDecl in typed.classes)
+				if (modelOwnsType(model.program, classDecl.name)) {
+					if (classDecl.base != null)
+						addResolvedNamedTypeDependency(resolved, classDecl.name, SemanticDependencyKind.Layout, classDecl.base, context);
+					for (interfaceName in classDecl.interfaces)
+						addResolvedNamedTypeDependency(resolved, classDecl.name, SemanticDependencyKind.Layout, interfaceName, context);
+					for (field in classDecl.fields)
+						addResolvedTypeDependency(resolved, classDecl.name, SemanticDependencyKind.Layout, field.type, context);
+				}
 			state.semanticDependencies = resolved;
 		}
+	}
+
+	static function addResolvedTypeDependency(result:Map<String, Array<compiler.modules.ModuleState.SemanticDependency>>, owner:String,
+			kind:SemanticDependencyKind, type:CompilerType, context:CompilationContext):Void
+		switch type {
+			case TAbstract(name, arguments, representation):
+				addResolvedNamedTypeDependency(result, owner, kind, name, context);
+				for (argument in arguments)
+					addResolvedTypeDependency(result, owner, kind, argument, context);
+				addResolvedTypeDependency(result, owner, kind, representation, context);
+			case TInstance(_, name, arguments):
+				addResolvedNamedTypeDependency(result, owner, kind, name, context);
+				for (argument in arguments)
+					addResolvedTypeDependency(result, owner, kind, argument, context);
+			case TNullable(element), TArray(element):
+				addResolvedTypeDependency(result, owner, kind, element, context);
+			case TMap(key, value):
+				addResolvedTypeDependency(result, owner, kind, key, context);
+				addResolvedTypeDependency(result, owner, kind, value, context);
+			case TFunction(arguments, resultType):
+				for (argument in arguments)
+					addResolvedTypeDependency(result, owner, kind, argument, context);
+				addResolvedTypeDependency(result, owner, kind, resultType, context);
+			case TAnonymous(_, fields):
+				for (field in fields)
+					addResolvedTypeDependency(result, owner, kind, field.type, context);
+			default:
+		}
+
+	static function addResolvedNamedTypeDependency(result:Map<String, Array<compiler.modules.ModuleState.SemanticDependency>>, owner:String,
+			kind:SemanticDependencyKind, target:String, context:CompilationContext):Void {
+		var targetId = context.resolveSemanticType(target);
+		if (targetId != null)
+			SemanticDependencyCollector.addDependency(result, owner, kind, target, targetId);
+	}
+
+	static function modelOwnsType(program:compiler.syntax.Ast.AstProgram, name:String):Bool {
+		var prefix = program.packageName == null || program.packageName.length == 0 ? "" : program.packageName + ".";
+		for (classDecl in program.classes)
+			if (prefix + classDecl.name == name)
+				return true;
+		return false;
 	}
 }

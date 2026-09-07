@@ -311,13 +311,19 @@ class SemanticAssembly {
 			for (change in structuralChanged.keys()) {
 				var changedDependency:String = change,
 					separator = changedDependency.indexOf(":"),
-					target = separator < 0 ? changedDependency : changedDependency.substring(separator + 1, changedDependency.length);
+					target = separator < 0 ? changedDependency : changedDependency.substring(separator + 1, changedDependency.length),
+					targetId = context.resolveSemanticType(target);
+				if (targetId == null)
+					targetId = context.resolveSemanticSymbol(target);
 				for (moduleName in names) {
 					var dependencyState = modules.get(moduleName);
 					for (owner => dependencies in dependencyState.semanticDependencies)
 						for (dependency in dependencies) {
 							var functionOwner:String = owner;
-							if (SemanticDependencyCollector.sameDependencyTarget(dependency.target, target)) {
+							var matches = dependency.targetId != null
+								&& targetId != null ? dependency.targetId == targetId : SemanticDependencyCollector.sameDependencyTarget(dependency.target,
+									target);
+							if (matches) {
 								var matchedFunction = false;
 								for (fn in functions)
 									if (fn.name == functionOwner || StringTools.startsWith(fn.name, functionOwner + ".")) {
@@ -343,6 +349,15 @@ class SemanticAssembly {
 			var changed = work[workCursor++];
 			if (!invalid.exists(changed))
 				invalid.set(changed, true);
+			var changedId = context.resolveSemanticSymbol(changed);
+			if (changedId != null)
+				for (moduleName in names)
+					for (owner => dependencies in modules.get(moduleName).semanticDependencies)
+						for (dependency in dependencies)
+							if (dependency.kind == compiler.modules.ModuleState.SemanticDependencyKind.Body
+								&& dependency.targetId == changedId
+								&& !invalid.exists(owner))
+								work.push(owner);
 			if (reverseCalls.exists(changed)) {
 				var callers = reverseCalls.get(changed);
 				for (caller in callers)

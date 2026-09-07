@@ -16,6 +16,7 @@ import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstExpression;
 import compiler.service.CancellationToken;
+import compiler.modules.ModuleState.SemanticDependencyKind;
 
 abstract SemanticSymbolId(String) from String to String {
 	public inline function new(module:String, declaration:String)
@@ -57,12 +58,12 @@ typedef SemanticCallEdge = {
 	final span:SourceSpan;
 }
 
-/** Canonical call dependency emitted while walking the typed expression tree. */
-typedef ResolvedSemanticCall = {
-	final caller:String;
-	final callee:String;
-	final callerId:SemanticSymbolId;
-	final calleeId:SemanticSymbolId;
+/** Dependency on a declaration established from a successfully typed node. */
+typedef ResolvedSemanticReference = {
+	final owner:String;
+	final target:String;
+	final targetId:SemanticSymbolId;
+	final kind:SemanticDependencyKind;
 }
 
 /** Revision-local declaration and resolved-local facts emitted by the compiler. */
@@ -76,7 +77,7 @@ class SemanticIndex {
 	final referenceKeys:Map<String, Map<String, Bool>> = [];
 	final signatures:Map<String, SemanticSignatureInfo> = [];
 	final callEdges:Array<SemanticCallEdge> = [];
-	final resolvedCallEdges:Array<ResolvedSemanticCall> = [];
+	final resolvedReferences:Array<ResolvedSemanticReference> = [];
 	final completionLocals:Array<SemanticCompletionLocal> = [];
 	final functionReceivers:Array<{span:SourceSpan, type:CompilerType}> = [];
 	final completionTypes:Array<{span:SourceSpan, type:CompilerType}> = [];
@@ -87,6 +88,7 @@ class SemanticIndex {
 	var cancellation:Null<CancellationToken>;
 	var currentCaller:Null<SemanticSymbolId>;
 	var currentCallerName:Null<String>;
+	var currentDependencyKind:SemanticDependencyKind = SemanticDependencyKind.Body;
 	var checkpointCount:Int = 0;
 
 	public function new(path:String, revision:Int, declarations:DeclarationIndex, tokens:Array<Token>) {
@@ -525,9 +527,32 @@ class SemanticIndex {
 		return result;
 	}
 
-	/** Calls captured from resolved typed nodes, excluding token-based recovery guesses. */
-	public function resolvedCalls():Array<ResolvedSemanticCall>
-		return resolvedCallEdges.copy();
+	public function resolvedDependencies():Array<ResolvedSemanticReference>
+		return resolvedReferences.copy();
+
+	/** Index a typed field initializer under its field declaration identity. */
+	public function indexTypedInitializer(owner:String, expression:TypedExpression, resolve:String->Null<SemanticSymbolId>,
+			resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>):Void {
+		currentCaller = resolve(owner);
+		currentCallerName = owner;
+		currentDependencyKind = SemanticDependencyKind.Initializer;
+		var synthetic:TypedFunction = {
+			name: owner,
+			owner: null,
+			isStatic: true,
+			isConstructor: false,
+			arguments: [],
+			result: expression.type,
+			statements: [],
+			cells: [],
+			cellCaptures: [],
+			span: expression.span
+		};
+		indexExpression(synthetic, expression, resolve, resolveEnumCase);
+		currentCaller = null;
+		currentCallerName = null;
+		currentDependencyKind = SemanticDependencyKind.Body;
+	}
 
 	public function indexTypeReferences(resolve:String->Null<SemanticSymbolId>, ?token:CancellationToken):Void {
 		var started = Sys.time();
@@ -840,24 +865,9 @@ class SemanticIndex {
 		}
 	}
 
-	function addCall(callee:Null<SemanticSymbolId>, expression:SourceSpan, name:String, ?recordResolved = true):Void {
+	function addCall(callee:Null<SemanticSymbolId>, expression:SourceSpan, name:String):Void {
 		if (currentCaller == null || callee == null)
 			return;
-		if (recordResolved && currentCallerName != null) {
-			var duplicateResolved = false;
-			for (edge in resolvedCallEdges)
-				if (edge.caller == currentCallerName && edge.callee == name) {
-					duplicateResolved = true;
-					break;
-				}
-			if (!duplicateResolved)
-				resolvedCallEdges.push({
-					caller: currentCallerName,
-					callee: name,
-					callerId: currentCaller,
-					calleeId: callee
-				});
-		}
 		var token = referenceToken(tokens, expression, sourceName(name));
 		var span = token == null ? expression : token.span;
 		for (edge in callEdges)
@@ -883,7 +893,7 @@ class SemanticIndex {
 			var callee = resolve(token.text);
 			if (callee != null) {
 				currentCaller = caller;
-				addCall(callee, token.span, token.text, false);
+				addCall(callee, token.span, token.text);
 			}
 		}
 	}
@@ -1012,8 +1022,11 @@ class SemanticIndex {
 	function bindNamed(resolve:String->Null<SemanticSymbolId>, name:String, span:SourceSpan):Null<SemanticSymbolId> {
 		var id = resolve(name),
 			token = referenceToken(tokens, span, sourceName(name));
-		if (id != null && token != null)
-			bind(id, token.span);
+		if (id != null) {
+			if (token != null)
+				bind(id, token.span);
+			recordResolvedReference(name, id);
+		}
 		return id;
 	}
 
@@ -1031,10 +1044,25 @@ class SemanticIndex {
 			return;
 		var id = resolve(enumName, index);
 		if (id != null) {
+			recordResolvedReference(enumName, id);
 			var token = enumReferenceToken(tokens, span, sourceName(Std.string(id)));
 			if (token != null)
 				bind(id, token.span);
 		}
+	}
+
+	function recordResolvedReference(target:String, targetId:SemanticSymbolId):Void {
+		if (currentCallerName == null)
+			return;
+		for (edge in resolvedReferences)
+			if (edge.owner == currentCallerName && edge.targetId == targetId && edge.kind == currentDependencyKind)
+				return;
+		resolvedReferences.push({
+			owner: currentCallerName,
+			target: target,
+			targetId: targetId,
+			kind: currentDependencyKind
+		});
 	}
 
 	static function enumReferenceToken(tokens:Array<Token>, expression:SourceSpan, name:String):Null<Token> {
