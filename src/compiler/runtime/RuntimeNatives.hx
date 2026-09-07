@@ -55,12 +55,6 @@ class RuntimeNatives {
 		definitions.push(native("Math.isNaN", "realtime_runtime", "__math_is_nan", [TFloat], TBool));
 		definitions.push(native("Std.string", "realtime_runtime", "__std_string", [TDynamic], TString));
 		definitions.push(native("Reflect.compare", "realtime_runtime", "__reflect_compare", [TDynamic, TDynamic], TInt));
-		definitions.push(native("StringTools.startsWith", "realtime_runtime", "__string_starts_with", [TString, TString], TBool));
-		definitions.push(native("StringTools.endsWith", "realtime_runtime", "__string_ends_with", [TString, TString], TBool));
-		definitions.push(native("StringTools.replace", "realtime_runtime", "__string_replace", [TString, TString, TString], TString));
-		definitions.push(native("StringTools.ltrim", "realtime_runtime", "__string_ltrim", [TString], TString));
-		definitions.push(native("StringTools.trim", "realtime_runtime", "__string_trim", [TString], TString));
-		definitions.push(native("StringTools.isSpace", "realtime_runtime", "__string_is_space", [TString, TInt], TBool));
 		definitions.push(native("__string_last_index_of", "realtime_runtime", "__string_last_index_of", [TString, TString], TInt));
 		definitions.push(native("__string_index_of_from", "realtime_runtime", "__string_index_of_from", [TString, TString, TInt], TInt));
 		definitions.push(native("__string_to_lower_case", "realtime_runtime", "__string_to_lower_case", [TString], TString));

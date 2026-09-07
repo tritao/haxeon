@@ -12,15 +12,33 @@ class StdlibMain {
 		RuntimeNatives.register(compiler);
 		compiler.addSourceRoot("stdlib");
 		compiler.update("Main.hx",
-			"import haxe.ds.ArraySort; import haxe.ds.Option; import haxe.ds.Either; function compare(left:Int, right:Int):Int return left - right; function optionValue():Option<Int> return Some(20); function eitherValue():Either<Int,String> return Left(22); function readOption(value:Option<Int>):Int return switch value { case Some(number): number; case None: 0; }; function readEither(value:Either<Int,String>):Int return switch value { case Left(number): number; case Right(_): 0; }; function stringBufWorks():Bool { var buffer = new StringBuf(); buffer.add(\"A\"); buffer.add(1); buffer.addChar(66); buffer.addSub(\"cdef\", 1); buffer.addSub(\"XYZ\", 1, 1); return buffer.length == 7 && buffer.toString() == \"A1BdefY\"; } function main():Int { var values = [30, 10, 20, 20]; ArraySort.sort(values, compare); return stringBufWorks() ? values[0] + values[1] + values[2] - values[3] + readOption(optionValue()) + readEither(eitherValue()) - 20 : 0; }");
+			"import haxe.ds.ArraySort; import haxe.ds.Option; import haxe.ds.Either; function compare(left:Int, right:Int):Int return left - right; function optionValue():Option<Int> return Some(20); function eitherValue():Either<Int,String> return Left(22); function readOption(value:Option<Int>):Int return switch value { case Some(number): number; case None: 0; }; function readEither(value:Either<Int,String>):Int return switch value { case Left(number): number; case Right(_): 0; }; function stdlibWorks():Bool { var buffer = new StringBuf(); buffer.add(\"A\"); buffer.add(1); buffer.addChar(66); buffer.addSub(\"cdef\", 1); buffer.addSub(\"XYZ\", 1, 1); return buffer.length == 7 && buffer.toString() == \"A1BdefY\" && StringTools.contains(\"abc\", \"b\") && StringTools.startsWith(\"abc\", \"ab\") && StringTools.endsWith(\"abc\", \"bc\") && StringTools.replace(\"a-b-a\", \"a\", \"x\") == \"x-b-x\" && StringTools.ltrim(\"  x\") == \"x\" && StringTools.trim(\" x \") == \"x\" && StringTools.isSpace(\" x\", 0); } function main():Int { var values = [30, 10, 20, 20]; ArraySort.sort(values, compare); return stdlibWorks() ? values[0] + values[1] + values[2] - values[3] + readOption(optionValue()) + readEither(eitherValue()) - 20 : 0; }");
 		if (compiler.modules.exists("StringBuf") || compiler.modules.exists("haxe.ds.ArraySort"))
 			throw "stdlib modules were loaded eagerly";
 		var result = compiler.compile("Main");
-		for (module in ["StringBuf", "haxe.ds.ArraySort", "haxe.ds.Option", "haxe.ds.Either"])
+		for (module in [
+			"StringBuf",
+			"StringTools",
+			"haxe.ds.ArraySort",
+			"haxe.ds.Option",
+			"haxe.ds.Either"
+		])
 			if (!compiler.modules.exists(module))
 				throw 'stdlib module "$module" was not discovered';
 		if (compiler.compile("Main").retyped.length != 0)
 			throw "unchanged stdlib modules were not cached";
+		var stringToolsSymbols:Map<String, Bool> = [
+			"__string_starts_with" => true,
+			"__string_ends_with" => true,
+			"__string_replace" => true,
+			"__string_ltrim" => true,
+			"__string_trim" => true,
+			"__string_is_space" => true
+		];
+		for (native in result.module.natives)
+			stringToolsSymbols.remove(result.module.strings[native.name]);
+		for (symbol in stringToolsSymbols.keys())
+			throw 'StringTools source binding "$symbol" was not emitted';
 		File.saveBytes(output, HlWriter.encode(result.module));
 
 		var invalid = new Compiler();
