@@ -201,8 +201,10 @@ class LanguageService {
 	final structuralIndex:Map<String, StructuralIndexEntry> = [];
 	var editorDefines:Map<String, String> = [];
 
-	public function new(?identityState:haxe.io.Bytes)
+	public function new(?identityState:haxe.io.Bytes) {
 		compiler = new Compiler(identityState, RuntimeNatives.configuration());
+		compiler.addSourceRoot("stdlib");
+	}
 
 	public function update(path:String, source:String):ModuleState
 		return compiler.update(path, source);

@@ -89,7 +89,7 @@ class ModuleAnalyzer {
 		for (alias in ast.importAliases.keys())
 			dependencies.remove(alias);
 		for (dependency in [for (dependency in dependencies.keys()) dependency])
-			if (natives.hasChild(dependency))
+			if (natives.hasChild(dependency) && sourceModuleForDependency(dependency) == null)
 				dependencies.remove(dependency);
 		var packageName = ast.packageName;
 		for (dependency in [for (dependency in dependencies.keys()) dependency]) {

@@ -166,6 +166,7 @@ class BootstrapStatus {
 
 		var compiler = new Compiler();
 		CompilerRuntimeAbi.register(compiler);
+		compiler.addSourceRoot("stdlib");
 		BootstrapSources.load(compiler, roots, paths);
 		try {
 			compiler.compile(entryModule);

@@ -225,8 +225,6 @@ class Compiler {
 
 	/** Add a filesystem root whose modules are loaded on demand during resolution. */
 	public function addSourceRoot(path:String):Void {
-		if (compiledOnce)
-			throw "Source roots are frozen after the first compilation";
 		sourceLoader.addRoot(path);
 		sourceGeneration++;
 	}
