@@ -3220,6 +3220,11 @@ class Typer {
 			var value = coerce(typeExpression(arguments[0], scope, element), element, "array element", "E1002");
 			return new TypedExpression(TCollectionCall(receiver, "remove", [value]), TBool, span);
 		}
+		if (name == "reverse") {
+			if (arguments.length != 0)
+				fail("E1008", "Array.reverse expects no arguments", span);
+			return new TypedExpression(TCollectionCall(receiver, "reverse", []), TVoid, span);
+		}
 		if (name == "copy") {
 			if (arguments.length != 0)
 				fail("E1008", "Array.copy expects no arguments", span);

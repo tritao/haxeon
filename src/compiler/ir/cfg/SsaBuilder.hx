@@ -17,7 +17,6 @@ class SsaBuilder {
 	var predecessors:Map<Int, Array<Int>> = [];
 	var successors:Map<Int, Array<Int>> = [];
 	var reachable:Map<Int, Bool> = [];
-	var dominators:Map<Int, Map<Int, Bool>> = [];
 	var immediate:Map<Int, Int> = [];
 	var children:Map<Int, Array<Int>> = [];
 	var frontiers:Map<Int, Map<Int, Bool>> = [];
@@ -107,58 +106,63 @@ class SsaBuilder {
 	}
 
 	function computeDominators():Void {
-		var all:Map<Int, Bool> = [];
-		for (block in cfg.blocks)
-			if (reachable.exists(block.id))
-				all.set(block.id, true);
-		for (block in cfg.blocks)
-			if (reachable.exists(block.id))
-				dominators.set(block.id, roots.indexOf(block.id) >= 0 ? singleton(block.id) : copySet(all));
+		var visited:Map<Int, Bool> = [], postorder:Array<Int> = [];
+		for (root in roots)
+			dominancePostorder(root, visited, postorder);
+		postorder.reverse();
+		var order:Map<Int, Int> = [];
+		for (index in 0...postorder.length)
+			order.set(postorder[index], index);
+		for (root in roots)
+			immediate.set(root, root);
 		var changed = true;
 		while (changed) {
 			changed = false;
-			for (block in cfg.blocks) {
-				var id = block.id;
-				if (reachable.exists(id) && roots.indexOf(id) < 0) {
-					if (!predecessors.exists(id))
-						throw 'Reachable SSA block $id has no predecessor or handler root';
-					var preds = predecessors.get(id);
-					if (preds.length == 0)
-						throw 'Reachable SSA block $id has no predecessor or handler root';
-					var next = copySet(dominators.get(preds[0]));
-					for (index in 1...preds.length)
-						next = intersect(next, dominators.get(preds[index]));
-					next.set(id, true);
-					if (!sameSet(next, dominators.get(id))) {
-						dominators.set(id, next);
-						changed = true;
-					}
+			for (index in 1...postorder.length) {
+				var id = postorder[index];
+				if (!predecessors.exists(id) || predecessors.get(id).length == 0)
+					throw 'Reachable SSA block $id has no predecessor or handler root';
+				var next = -1;
+				for (predecessor in predecessors.get(id))
+					if (immediate.exists(predecessor))
+						next = next < 0 ? predecessor : intersectDominators(predecessor, next, immediate, order);
+				if (next >= 0 && (!immediate.exists(id) || immediate.get(id) != next)) {
+					immediate.set(id, next);
+					changed = true;
 				}
 			}
 		}
-		for (block in cfg.blocks) {
-			var id = block.id;
-			if (reachable.exists(id) && roots.indexOf(id) < 0) {
-				var best = -1, bestDepth = -1;
-				for (candidate in sortedIntKeys(dominators.get(id)))
-					if (candidate != id) {
-						var depth = count(dominators.get(candidate));
-						if (depth > bestDepth) {
-							best = candidate;
-							bestDepth = depth;
-						}
-					}
-				immediate.set(id, best);
-				var list:Array<Int>;
-				if (children.exists(best))
-					list = children.get(best);
+		for (id in postorder)
+			if (roots.indexOf(id) < 0) {
+				var parent = immediate.get(id), list:Array<Int>;
+				if (children.exists(parent))
+					list = children.get(parent);
 				else {
 					list = [];
-					children.set(best, list);
+					children.set(parent, list);
 				}
 				list.push(id);
 			}
+	}
+
+	function dominancePostorder(id:Int, visited:Map<Int, Bool>, result:Array<Int>):Void {
+		if (visited.exists(id))
+			return;
+		visited.set(id, true);
+		if (successors.exists(id))
+			for (successor in successors.get(id))
+				dominancePostorder(successor, visited, result);
+		result.push(id);
+	}
+
+	static function intersectDominators(left:Int, right:Int, immediate:Map<Int, Int>, order:Map<Int, Int>):Int {
+		while (left != right) {
+			while (order.get(left) > order.get(right))
+				left = immediate.get(left);
+			while (order.get(right) > order.get(left))
+				right = immediate.get(right);
 		}
+		return left;
 	}
 
 	function computeFrontiers():Void {
@@ -544,43 +548,6 @@ class SsaBuilder {
 			map.set(name, found);
 		}
 		found.set(id, true);
-	}
-
-	static function singleton(id:Int):Map<Int, Bool> {
-		var result:Map<Int, Bool> = [];
-		result.set(id, true);
-		return result;
-	}
-
-	static function copySet(source:Map<Int, Bool>):Map<Int, Bool> {
-		var result:Map<Int, Bool> = [];
-		for (id in source.keys())
-			result.set(id, true);
-		return result;
-	}
-
-	static function intersect(a:Map<Int, Bool>, b:Map<Int, Bool>):Map<Int, Bool> {
-		var result:Map<Int, Bool> = [];
-		for (id in a.keys())
-			if (b.exists(id))
-				result.set(id, true);
-		return result;
-	}
-
-	static function sameSet(a:Map<Int, Bool>, b:Map<Int, Bool>):Bool {
-		if (count(a) != count(b))
-			return false;
-		for (id in a.keys())
-			if (!b.exists(id))
-				return false;
-		return true;
-	}
-
-	static function count(set:Map<Int, Bool>):Int {
-		var result = 0;
-		for (_ in set.keys())
-			result++;
-		return result;
 	}
 
 	static function copyNames(source:Map<String, Bool>):Map<String, Bool> {

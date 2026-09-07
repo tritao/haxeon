@@ -375,6 +375,13 @@ class IrProgramAssembler {
 					arguments: [arrayType, entry.type],
 					result: Bool
 				});
+				program.natives.push({
+					name: '__array_reverse_${entry.name}',
+					library: "realtime_runtime",
+					symbol: '__array_reverse_${entry.name}',
+					arguments: [arrayType],
+					result: Void
+				});
 			}
 		}
 		if (needsStringRuntime)

@@ -154,6 +154,28 @@ DEFINE_ARRAY_REMOVE(ref, vdynamic *, values[index] == value)
 
 #undef DEFINE_ARRAY_REMOVE
 
+static void realtime_array_reverse(varray *array) {
+	int stride = hl_type_size(array->at);
+	vbyte *values = hl_aptr(array, vbyte);
+	for (int left = 0, right = array->size - 1; left < right; left++, right--)
+		for (int byte = 0; byte < stride; byte++) {
+			vbyte value = values[left * stride + byte];
+			values[left * stride + byte] = values[right * stride + byte];
+			values[right * stride + byte] = value;
+		}
+}
+
+#define DEFINE_ARRAY_REVERSE(SUFFIX) \
+HL_PRIM void HL_NAME(__array_reverse_##SUFFIX)( varray *array ) { realtime_array_reverse(array); }
+
+DEFINE_ARRAY_REVERSE(i32)
+DEFINE_ARRAY_REVERSE(f64)
+DEFINE_ARRAY_REVERSE(bytes)
+DEFINE_ARRAY_REVERSE(bool)
+DEFINE_ARRAY_REVERSE(ref)
+
+#undef DEFINE_ARRAY_REVERSE
+
 #define DEFINE_ARRAY_MUTATION(SUFFIX, VALUE_TYPE) \
 HL_PRIM int HL_NAME(__array_push_##SUFFIX)( varray *array, VALUE_TYPE value ) { \
 	if (array->size >= array->capacity) \
