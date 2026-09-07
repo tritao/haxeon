@@ -12,6 +12,7 @@ class Main {
 		var outputPath = arguments.length > 1 ? arguments[1] : "out/program.hl";
 		var compiler = new Compiler();
 		RuntimeNatives.register(compiler);
+		compiler.addSourceRoot("stdlib");
 		var module = ModulePath.fromFile(sourcePath);
 		compiler.update(sourcePath, File.getContent(sourcePath));
 		var result = compiler.compile(module);

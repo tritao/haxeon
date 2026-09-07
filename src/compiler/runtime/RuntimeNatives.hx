@@ -51,12 +51,8 @@ class RuntimeNatives {
 		definitions.push(native("Sys.getPid", "std", "sys_getpid", [], TInt));
 		definitions.push(native("Sys.getChar", "std", "sys_get_char", [TBool], TInt));
 		definitions.push(native("Sys.args", "realtime_runtime", "__sys_args", [], TArray(TString)));
-		definitions.push(native("Std.parseInt", "realtime_runtime", "__std_parse_int", [TString], TInt));
-		definitions.push(native("Std.parseFloat", "realtime_runtime", "__std_parse_float", [TString], TFloat));
 		definitions.push(native("__std_int_f64", "realtime_runtime", "__std_int_f64", [TFloat], TInt));
-		definitions.push(native("Std.random", "realtime_runtime", "__std_random", [TInt], TInt));
 		definitions.push(native("Math.isNaN", "realtime_runtime", "__math_is_nan", [TFloat], TBool));
-		definitions.push(native("Std.string", "realtime_runtime", "__std_string", [TDynamic], TString));
 		definitions.push(native("Reflect.compare", "realtime_runtime", "__reflect_compare", [TDynamic, TDynamic], TInt));
 		definitions.push(native("__string_last_index_of", "realtime_runtime", "__string_last_index_of", [TString, TString], TInt));
 		definitions.push(native("__string_index_of_from", "realtime_runtime", "__string_index_of_from", [TString, TString, TInt], TInt));
