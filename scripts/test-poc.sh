@@ -7,7 +7,9 @@ hl="$root_dir/vendor/hashlink/hl"
 
 make -C "$root_dir/vendor/hashlink" -j2 libhl.so hl >/dev/null
 
-"$root_dir/scripts/format.sh" --check
+if [[ ${SKIP_FORMAT_CHECK:-0} != 1 ]]; then
+	"$root_dir/scripts/format.sh" --check
+fi
 
 if [[ ! -x "$haxe" || ! -x "$hl" ]]; then
     echo "missing local toolchain; run ./scripts/bootstrap-tools.sh first" >&2
