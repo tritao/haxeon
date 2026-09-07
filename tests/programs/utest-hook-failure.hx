@@ -24,10 +24,6 @@ class HookFailureTest extends Test {
 	public function teardownClass():Void {
 		throw "teardownClass failure";
 	}
-
-	public function registerTests():Void {
-		addTest("HookFailureTest.testSkipped", this.testSkipped);
-	}
 }
 
 function main():Int {

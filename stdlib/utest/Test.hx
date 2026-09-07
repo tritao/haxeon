@@ -1,6 +1,7 @@
 package utest;
 
 /** Base class for a Haxeon utest case. */
+@:discoverMethods("test", "spec")
 class Test {
 	public final testNames:Array<String> = [];
 	public final testFunctions:Array<() -> Void> = [];
@@ -19,11 +20,7 @@ class Test {
 	/** Runs once after this case, including when setupClass fails. */
 	public function teardownClass():Void {}
 
-	/**
-	 * Override this method and call addTest for each test method.
-	 * Upstream utest performs this step with a build macro, which Haxeon does
-	 * not support yet.
-	 */
+	/** May be overridden when explicit registration is preferable. */
 	public function registerTests():Void {}
 
 	public function addTest(name:String, test:() -> Void):Void {

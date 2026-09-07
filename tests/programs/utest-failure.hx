@@ -46,14 +46,6 @@ class FailureTest extends Test {
 	public function teardown():Void {
 		tornDown = true;
 	}
-
-	public function registerTests():Void {
-		addTest("FailureTest.testFailure", this.testFailure);
-		addTest("FailureTest.testFloatFailure", this.testFloatFailure);
-		addTest("FailureTest.testContainsFailure", this.testContainsFailure);
-		addTest("FailureTest.testNotContainsFailure", this.testNotContainsFailure);
-		addTest("FailureTest.testRaisesFailure", this.testRaisesFailure);
-	}
 }
 
 function main():Int {

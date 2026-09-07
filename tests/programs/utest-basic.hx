@@ -46,11 +46,8 @@ class MathTest extends Test {
 		Assert.raises(raiseExpected);
 	}
 
-	public function registerTests():Void {
-		addTest("MathTest.testAddition", this.testAddition);
-		addTest("MathTest.testPredicates", this.testPredicates);
-		addTest("MathTest.testNulls", this.testNulls);
-		addTest("MathTest.testAdditionalAssertions", this.testAdditionalAssertions);
+	public function specSubtraction():Void {
+		Assert.equals(40, 42 - 2);
 	}
 }
 
@@ -84,11 +81,6 @@ class LifecycleTest extends Test {
 	public function teardownClass():Void {
 		events.push(6);
 	}
-
-	public function registerTests():Void {
-		addTest("LifecycleTest.testFirst", this.testFirst);
-		addTest("LifecycleTest.testSecond", this.testSecond);
-	}
 }
 
 class FilterTest extends Test {
@@ -105,11 +97,6 @@ class FilterTest extends Test {
 
 	public function testExcluded():Void {
 		excludedRan = true;
-	}
-
-	public function registerTests():Void {
-		addTest("FilterTest.testIncluded", this.testIncluded);
-		addTest("FilterTest.testExcluded", this.testExcluded);
 	}
 }
 
@@ -135,12 +122,34 @@ class RunObserver {
 	}
 }
 
+class ExplicitTest extends Test {
+	public var automaticRan:Bool = false;
+	public var explicitRan:Bool = false;
+
+	public function new() {
+		super();
+	}
+
+	public function testWouldBeDiscovered():Void {
+		automaticRan = true;
+	}
+
+	public function explicitCheck():Void {
+		explicitRan = true;
+	}
+
+	public function registerTests():Void {
+		addTest("ExplicitTest.explicitCheck", this.explicitCheck);
+	}
+}
+
 function main():Int {
 	if (genericDefault(42) != 42 || genericOptional(42) != 42)
 		return 2;
 	var runner = new Runner();
 	var lifecycle = new LifecycleTest();
 	var filtered = new FilterTest();
+	var explicit = new ExplicitTest();
 	var observer = new RunObserver();
 	runner.onStart.add(observer.start);
 	runner.onProgress.add(observer.progress);
@@ -148,14 +157,17 @@ function main():Int {
 	runner.addCase(new MathTest());
 	runner.addCase(lifecycle);
 	runner.addCase(filtered, "Included");
+	runner.addCase(explicit);
 	Report.create(runner);
 	runner.run();
 	if (lifecycle.events.length != 8 || lifecycle.events[0] != 1 || lifecycle.events[1] != 2 || lifecycle.events[2] != 3 || lifecycle.events[3] != 5
 		|| lifecycle.events[4] != 2 || lifecycle.events[5] != 4 || lifecycle.events[6] != 5 || lifecycle.events[7] != 6)
 		return 3;
-	if (!observer.started || !observer.completed || observer.progressCount != 7 || observer.lastTotal != 7 || runner.length != 7)
+	if (!observer.started || !observer.completed || observer.progressCount != 9 || observer.lastTotal != 9 || runner.length != 9)
 		return 4;
 	if (!filtered.includedRan || filtered.excludedRan)
 		return 5;
+	if (!explicit.explicitRan || explicit.automaticRan)
+		return 6;
 	return runner.failures == 0 ? 0 : 1;
 }

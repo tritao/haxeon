@@ -38,7 +38,8 @@ filtering without requiring `EReg`. Synchronous events are available through
 `onStart`, `onProgress`, and `onComplete`; listeners use the familiar
 `dispatcher.add(callback)` form.
 
-Haxeon does not yet execute build macros, so test methods are registered by
-overriding `registerTests()` and calling `addTest(name, method)`. Async tests,
-automatic test discovery, positional assertion metadata, patterns, and
-alternate report formats are not yet supported.
+Haxeon does not yet execute build macros. Instead, `utest.Test` uses
+`@:discoverMethods("test", "spec")` to generate registration for parameterless
+instance methods with those prefixes. Explicit `registerTests()` overrides the
+generated registration. Async tests, positional assertion metadata, regular
+expression patterns, and alternate report formats are not yet supported.

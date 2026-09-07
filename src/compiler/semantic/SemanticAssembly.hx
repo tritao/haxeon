@@ -1,7 +1,13 @@
 package compiler.semantic;
 
 import compiler.syntax.Ast;
+import compiler.syntax.Ast.AstClass;
+import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstFunction;
+import compiler.syntax.Ast.AstStatement;
+import compiler.syntax.Ast.AstType;
+import compiler.Diagnostic;
+import compiler.Diagnostic.CompileError;
 import compiler.compilation.CompilationContext;
 import compiler.modules.ModuleState;
 import compiler.service.CancellationToken;
@@ -80,6 +86,16 @@ class SemanticAssembly {
 				aliasUniverse.push(typeName + "#" + caseName);
 		aliasUniverse.sort(Reflect.compare);
 		var aliasKey = aliasUniverse.join(";");
+
+		var discoveryPrefixes:Map<String, Array<String>> = [];
+		for (moduleName in names) {
+			var program = modules.get(moduleName).parsedAst();
+			for (classDecl in program.classes) {
+				var prefixes = declaredDiscoveryPrefixes(classDecl);
+				if (prefixes != null)
+					discoveryPrefixes.set(ModuleCanonicalizer.qualifiedTypeName(program.packageName, classDecl.name), prefixes);
+			}
+		}
 		for (name in names) {
 			if (token != null)
 				token.check();
@@ -225,8 +241,19 @@ class SemanticAssembly {
 					classAliases:Map<String, String> = [for (alias => target in aliases) alias => target];
 				for (parameter in classDecl.typeParameters)
 					classAliases.set(parameter, parameter);
+				var parsedBase = classDecl.base,
+					canonicalBase:Null<compiler.syntax.Ast.AstType> = null;
+				if (parsedBase != null)
+					canonicalBase = ModuleCanonicalizer.canonicalType(parsedBase, classAliases, classDecl.typeParameters);
+				var parsedMethods = classDecl.methods;
+				var baseName = nominalTypeName(canonicalBase);
+				if (baseName != null && discoveryPrefixes.exists(baseName)) {
+					var prefixes = discoveryPrefixes.get(baseName);
+					discoveryPrefixes.set(className, prefixes);
+					parsedMethods = discoveredMethods(classDecl, className, prefixes);
+				}
 				var classMethods:Array<AstFunction> = [];
-				for (parsedMethod in classDecl.methods) {
+				for (parsedMethod in parsedMethods) {
 					var method = SignatureInference.inferFieldBoundArguments(parsedMethod, classDecl);
 					var canonical = ModuleCanonicalizer.canonicalFunction(method, name, entryModule, locals, className + "." + method.name, classAliases);
 					functions.push(canonical);
@@ -261,10 +288,6 @@ class SemanticAssembly {
 						callers.push(canonical.name);
 					}
 				}
-				var parsedBase = classDecl.base,
-					canonicalBase:Null<compiler.syntax.Ast.AstType> = null;
-				if (parsedBase != null)
-					canonicalBase = ModuleCanonicalizer.canonicalType(parsedBase, classAliases, classDecl.typeParameters);
 				classes.push({
 					name: className,
 					isExtern: classDecl.isExtern,
@@ -462,4 +485,70 @@ class SemanticAssembly {
 					resolved.push(dependency.target);
 		return resolved.length == 0 ? fallback : resolved;
 	}
+
+	static function declaredDiscoveryPrefixes(classDecl:AstClass):Null<Array<String>> {
+		for (metadata in classDecl.metadata)
+			if (metadata.name == "discoverMethods") {
+				if (metadata.arguments.length == 0)
+					throw new CompileError(new Diagnostic("E1024", "@:discoverMethods requires at least one prefix", metadata.span));
+				var prefixes:Array<String> = [];
+				for (argument in metadata.arguments)
+					switch argument {
+						case AstExpression.StringLiteral(value, _):
+							prefixes.push(value);
+						default:
+							throw new CompileError(new Diagnostic("E1024", "@:discoverMethods prefixes must be string literals", metadata.span));
+					}
+				return prefixes;
+			}
+		return null;
+	}
+
+	static function discoveredMethods(classDecl:AstClass, className:String, prefixes:Array<String>):Array<AstFunction> {
+		for (method in classDecl.methods)
+			if (method.name == "registerTests")
+				return classDecl.methods;
+		var statements:Array<AstStatement> = [];
+		for (method in classDecl.methods) {
+			var discovered = false;
+			for (prefix in prefixes)
+				if (StringTools.startsWith(method.name, prefix))
+					discovered = true;
+			if (!discovered)
+				continue;
+			if (method.isStatic || method.arguments.length != 0)
+				throw new CompileError(new Diagnostic("E1024", 'Discovered method "$className.${method.name}" must be a parameterless instance method',
+					method.span));
+			switch method.result {
+				case AstType.VoidType, AstType.InferredType:
+				default:
+					throw new CompileError(new Diagnostic("E1024", 'Discovered method "$className.${method.name}" must return Void', method.span));
+			}
+			var receiver = AstExpression.Variable("this", method.span);
+			statements.push(AstStatement.Expression(AstExpression.MethodCall(receiver, "addTest", [
+				AstExpression.StringLiteral(className + "." + method.name, method.span),
+				AstExpression.Member(AstExpression.Variable("this", method.span), method.name, method.span)
+			], method.span), method.span));
+		}
+		var methods = classDecl.methods.copy();
+		methods.push({
+			name: "registerTests",
+			isStatic: false,
+			isExtern: false,
+			metadata: [],
+			typeParameters: [],
+			typeConstraints: [],
+			arguments: [],
+			result: AstType.VoidType,
+			statements: statements,
+			span: classDecl.span
+		});
+		return methods;
+	}
+
+	static function nominalTypeName(type:Null<AstType>):Null<String>
+		return switch type {
+			case AstType.NamedType(name), AstType.AppliedType(name, _): name;
+			default: null;
+		};
 }

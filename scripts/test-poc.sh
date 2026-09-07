@@ -57,6 +57,7 @@ if [[ $stdlib_status -ne 42 ]]; then
 fi
 echo "PASS: vendored stdlib compiled and executed (exit 42)"
 
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run UtestDiscoveryMain
 utest_output="$root_dir/out/utest-basic.hl"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run UtestMain "$utest_output"
 set +e
