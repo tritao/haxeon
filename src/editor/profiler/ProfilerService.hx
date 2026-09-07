@@ -1,4 +1,4 @@
-package editor;
+package editor.profiler;
 
 import haxe.Int64;
 import profiler.HldiClient;

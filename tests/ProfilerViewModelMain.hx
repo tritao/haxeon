@@ -1,4 +1,4 @@
-import editor.ProfilerViewModel;
+import editor.profiler.ProfilerViewModel;
 
 class ProfilerViewModelMain {
 	static function require(condition:Bool, message:String):Void {

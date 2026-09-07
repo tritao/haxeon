@@ -6,7 +6,7 @@ import compiler.modules.ModulePath;
 import compiler.service.CancellationError;
 import compiler.service.CancellationToken;
 import compiler.service.LanguageService;
-import editor.ProfilerService;
+import editor.profiler.ProfilerService;
 import editor.lsp.DocumentStore;
 import editor.lsp.DocumentStore.LspDocument;
 import editor.lsp.ProjectWorkspace;

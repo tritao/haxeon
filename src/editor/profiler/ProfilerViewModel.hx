@@ -1,4 +1,4 @@
-package editor;
+package editor.profiler;
 
 private class ProfilerViewNode {
 	public final id:String;

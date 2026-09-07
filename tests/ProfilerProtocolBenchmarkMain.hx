@@ -1,4 +1,4 @@
-import editor.ProfilerService;
+import editor.profiler.ProfilerService;
 import haxe.Json;
 import sys.thread.Mutex;
 
