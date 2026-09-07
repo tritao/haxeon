@@ -246,7 +246,7 @@ class Compiler {
 	public function update(path:String, source:String):ModuleState {
 		var name = ModulePath.fromFile(path);
 		if (modules.exists(name)) {
-			var current = modules.get(name);
+			var current:ModuleState = modules.get(name);
 			if (current.source.path == path && current.source.text == source)
 				return current;
 		}
@@ -350,7 +350,7 @@ class Compiler {
 		var moduleNames = [for (name in modules.keys()) name];
 		moduleNames.sort(Reflect.compare);
 		for (name in moduleNames) {
-			var state = modules.get(name);
+			var state:ModuleState = modules.get(name);
 			candidate.update(state.source.path, state.source.text);
 		}
 		return candidate;
@@ -423,7 +423,8 @@ class Compiler {
 	}
 
 	function executableEntryPoint(entryModule:String):String {
-		var ast = modules.get(entryModule).parsedAst();
+		var state:ModuleState = modules.get(entryModule),
+			ast = state.parsedAst();
 		for (fn in ast.functions)
 			if (fn.name == "main")
 				return "main";
@@ -512,7 +513,7 @@ class Compiler {
 	}
 
 	function writableState(name:String, rollbackModules:Map<String, ModuleState>):ModuleState {
-		var state = modules.get(name);
+		var state:ModuleState = modules.get(name);
 		if (rollbackModules.get(name) == state) {
 			state = state.copy();
 			modules.set(name, state);

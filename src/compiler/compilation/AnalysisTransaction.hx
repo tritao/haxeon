@@ -30,7 +30,7 @@ class AnalysisTransaction {
 			if (diagnosticSeen.exists(name) || !candidate.modules.exists(name))
 				continue;
 			diagnosticSeen.set(name, true);
-			var state = candidate.modules.get(name);
+			var state:ModuleState = candidate.modules.get(name);
 			state.diagnostics = [];
 			for (dependency in state.dependencies)
 				diagnosticWork.push(dependency);
@@ -40,7 +40,7 @@ class AnalysisTransaction {
 			var frontend = FrontendCompilation.run(context, entryModule, token, snapshot.modules, startedAt, false);
 			context.setLastTypedProgram(frontend.typedProgram);
 			for (name in frontend.moduleNames) {
-				var state = candidate.modules.get(name);
+				var state:ModuleState = candidate.modules.get(name);
 				if (state.lastGoodRevision != state.revision) {
 					state = context.writableState(name, snapshot.modules);
 					state.lastGoodTokens = state.tokens;
@@ -69,8 +69,10 @@ class AnalysisTransaction {
 			for (name => state in candidate.modules)
 				failedDiagnostics.set(name, state.diagnostics.copy());
 			for (name => diagnostics in failedDiagnostics)
-				if (compiler.modules.exists(name))
-					compiler.modules.get(name).diagnostics = diagnostics;
+				if (compiler.modules.exists(name)) {
+					var state:ModuleState = compiler.modules.get(name);
+					state.diagnostics = diagnostics;
+				}
 			throw error;
 		}
 	}

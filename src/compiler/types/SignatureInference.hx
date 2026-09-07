@@ -326,7 +326,7 @@ class SignatureInference {
 			span: fn.span
 		};
 
-	static function collectReturnTypes(statements:Array<AstStatement>, environment:Map<String, AstType>, enums:Map<String, AstEnum>,
+	static function collectReturnTypes(statements:Array<AstStatement>, environment:InferenceEnvironment, enums:Map<String, AstEnum>,
 			methods:Null<Map<String, AstFunction>>, output:Array<AstType>):Bool {
 		var found = false;
 		for (statement in statements)

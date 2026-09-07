@@ -88,7 +88,7 @@ class CompilationPipeline {
 		context.assembler = candidateAssembler;
 		context.clearRehydrationBaseline();
 		for (name in names) {
-			var state = modules.get(name);
+			var state:compiler.modules.ModuleState = modules.get(name);
 			if (state.lastGoodRevision != state.revision) {
 				state = context.writableState(name, rollbackModules);
 				state.lastGoodTokens = state.tokens;

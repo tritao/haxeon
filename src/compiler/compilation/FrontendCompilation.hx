@@ -96,7 +96,7 @@ class FrontendCompilation {
 			typerMetrics = typedResult.metrics;
 		} catch (error:CompileError) {
 			for (name in names) {
-				var state = modules.get(name);
+				var state:compiler.modules.ModuleState = modules.get(name);
 				if (state.source.path == error.diagnostic.span.file.path)
 					context.writableState(name, rollbackModules).diagnostics.push(error.diagnostic);
 			}
