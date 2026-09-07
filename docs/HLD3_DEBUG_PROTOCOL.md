@@ -22,8 +22,9 @@ module's ordinary function records it appends:
   variable-location data;
 - after each MAP3 function record, an `Int32` source-span count. Base functions
   use zero because their spans are already present in the embedded HLB. Patched
-  functions provide one record per opcode containing debug-file index, line,
-  start offset, end offset, and flags as `Int32` values.
+  functions provide one record per opcode containing debug-file index, start
+  line/column, end line/column, UTF-8 source-content FNV-1a hash, start/end offsets, and
+  flags as `Int32` values.
 
 Repeating the base JIT table makes a module first observed in a later `MAP3`
 snapshot fully self-describing; such a module was not present in the initial

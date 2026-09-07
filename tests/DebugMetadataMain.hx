@@ -101,6 +101,8 @@ class DebugMetadataMain {
 				throw "HLP lost opcode source spans";
 			for (opcode in 0...actual.length)
 				if (patch.debugFiles[actual[opcode].file] != expected[opcode].path || actual[opcode].line != expected[opcode].line
+					|| actual[opcode].column != expected[opcode].column || actual[opcode].endLine != expected[opcode].endLine
+					|| actual[opcode].endColumn != expected[opcode].endColumn || actual[opcode].sourceHash != expected[opcode].sourceHash
 					|| actual[opcode].start != expected[opcode].start || actual[opcode].end != expected[opcode].end
 					|| actual[opcode].flags != expected[opcode].flags)
 					throw "HLP changed an opcode source span";

@@ -41,6 +41,10 @@ typedef HlOpcodeSourceSpan = {
 	final start:Int;
 	final end:Int;
 	final line:Int;
+	final column:Int;
+	final endLine:Int;
+	final endColumn:Int;
+	final sourceHash:Int;
 	final flags:Int;
 }
 

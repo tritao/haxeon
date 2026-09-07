@@ -10,10 +10,11 @@ Section kinds are independently versioned:
 
 - `1:1` — function identities. Each record associates a stable function ID and
   HLB function index with qualified/display names and its enclosing source span.
-- `2:1` — opcode source spans. The payload begins with a local table of
+- `2:2` — opcode source spans. The payload begins with a local table of
   length-prefixed UTF-8 source paths, followed by function groups ordered by
   stable function ID. Each mapping contains an opcode index, source-path index,
-  signed start/end offsets encoded as `offset + 1`, line, and flags.
+  signed start/end offsets encoded as `offset + 1`, start line/column, end
+  line/column, a 32-bit FNV-1a hash of the UTF-8 source contents, and flags.
 
 Opcode source-span flag bit 0 marks compiler-generated code. An unavailable
 range is encoded as start and end `-1`; a present range must satisfy

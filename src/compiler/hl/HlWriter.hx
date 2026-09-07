@@ -125,7 +125,9 @@ class HlWriter {
 		for (span in spans) {
 			var validRange = span.start == -1 && span.end == -1 || span.start >= 0 && span.end >= span.start;
 			var key = span.stableId + ":" + span.opcode;
-			if (span.stableId < 0 || span.opcode < 0 || span.sourcePath == "" || span.line < 1 || span.flags < 0 || !validRange || seen.exists(key))
+			if (span.stableId < 0 || span.opcode < 0 || span.sourcePath == "" || span.line < 1 || span.column < 1
+				|| span.endLine < span.line || span.endColumn < 1 || span.endLine == span.line && span.endColumn < span.column
+				|| span.flags < 0 || !validRange || seen.exists(key))
 				throw "Invalid HLB opcode source span";
 			seen.set(key, true);
 			if (!fileIndices.exists(span.sourcePath)) {
@@ -155,6 +157,10 @@ class HlWriter {
 				writer.writeIndex(span.start + 1);
 				writer.writeIndex(span.end + 1);
 				writer.writeUnsignedIndex(span.line);
+				writer.writeUnsignedIndex(span.column);
+				writer.writeUnsignedIndex(span.endLine);
+				writer.writeUnsignedIndex(span.endColumn);
+				writer.output.writeInt32(span.sourceHash);
 				writer.writeUnsignedIndex(span.flags);
 			}
 		}
@@ -308,6 +314,10 @@ class HlWriter {
 				line: 1,
 				start: null,
 				end: null,
+				column: 1,
+				endLine: 1,
+				endColumn: 1,
+				sourceHash: 0,
 				flags: 1
 			} : fn.debugLocations[index];
 			if (location.line > 0x1FFFFF)

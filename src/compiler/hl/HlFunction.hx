@@ -4,6 +4,10 @@ package compiler.hl;
 typedef HlDebugLocation = {
 	final path:String;
 	final line:Int;
+	final column:Int;
+	final endLine:Int;
+	final endColumn:Int;
+	final sourceHash:Int;
 	final start:Null<Int>;
 	final end:Null<Int>;
 	final flags:Int;

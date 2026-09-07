@@ -142,10 +142,11 @@ class HlLower {
 				var location = loweredFunction.debugLocations[opcode];
 				spans.push({stableId: identity.stableId, opcode: opcode, sourcePath: location.path,
 					start: location.start == null ? -1 : location.start, end: location.end == null ? -1 : location.end,
-					line: location.line, flags: location.flags});
+					line: location.line, column: location.column, endLine: location.endLine, endColumn: location.endColumn,
+					sourceHash: location.sourceHash, flags: location.flags});
 			}
 		}
-		code.debugSections.push({kind: HlWriter.OPCODE_SOURCE_SPANS, version: 1, flags: 0, payload: HlWriter.encodeOpcodeSourceSpans(spans)});
+		code.debugSections.push({kind: HlWriter.OPCODE_SOURCE_SPANS, version: 2, flags: 0, payload: HlWriter.encodeOpcodeSourceSpans(spans)});
 
 		code.entryPoint = requireFunction(program.entryPoint);
 		code.ints = code.ints.copy();
@@ -474,12 +475,20 @@ class HlLower {
 			line: 1,
 			start: -1,
 			end: -1,
+			column: 1,
+			endLine: 1,
+			endColumn: 1,
+			sourceHash: 0,
 			flags: 1
 		} : {
 			path: location.path,
 			line: location.line,
 			start: location.start,
 			end: location.end,
+			column: location.column,
+			endLine: location.endLine,
+			endColumn: location.endColumn,
+			sourceHash: location.sourceHash,
 			flags: switch provenance.origin { case CompilerGenerated(_): 1; case UserSource: 0; }
 			};
 	}

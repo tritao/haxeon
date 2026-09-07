@@ -83,11 +83,14 @@ class HlPatchReader {
 								throw "HLP debug opcode count mismatch";
 							for (_ in 0...count) {
 								var file = readUnsigned(input),
-									line = readUnsigned(input), start = readIndex(input) - 1, end = readIndex(input) - 1, flags = readUnsigned(input),
+									line = readUnsigned(input), column = readUnsigned(input), endLine = readUnsigned(input), endColumn = readUnsigned(input),
+									sourceHash = input.readInt32(), start = readIndex(input) - 1, end = readIndex(input) - 1, flags = readUnsigned(input),
 									validRange = start == -1 && end == -1 || start >= 0 && end >= start;
-								if (file >= debugFiles.length || line < 1 || !validRange)
+								if (file >= debugFiles.length || line < 1 || column < 1 || endLine < line || endColumn < 1
+									|| endLine == line && endColumn < column || !validRange)
 									throw "Invalid HLP debug location";
-								found.debug.push({file: file, line: line, start: start, end: end, flags: flags});
+								found.debug.push({file: file, line: line, column: column, endLine: endLine, endColumn: endColumn,
+									sourceHash: sourceHash, start: start, end: end, flags: flags});
 							}
 						}
 					default:

@@ -20,7 +20,7 @@ import compiler.ir.SourceProvenance.SourceOrigin;
 
 /** Deterministic framing for a complete SSA IR function. */
 class IrFunctionStateCodec {
-	static inline final VERSION = 4;
+	static inline final VERSION = 5;
 	static inline final MAX_BLOCKS = 0x100000;
 	static inline final MAX_INSTRUCTIONS = 0x1000000;
 
@@ -148,7 +148,7 @@ class IrFunctionStateCodec {
 					throw "Invalid IR instruction count";
 				for (_ in 0...instructionCount) {
 					var instruction = IrInstructionCodec.decode(readBytes(input, bytes.length), values),
-						provenance = version >= 2 ? readProvenance(input, bytes.length) : SourceProvenance.generated("legacy-ir-cache");
+						provenance = version >= 2 ? readProvenance(input, bytes.length, version) : SourceProvenance.generated("legacy-ir-cache");
 					block.instructions.push(new Located(instruction, provenance));
 				}
 				var terminatorBytes = readBytes(input, bytes.length),
@@ -156,7 +156,7 @@ class IrFunctionStateCodec {
 				terminatorInput.bigEndian = false;
 				var decodedTerminator = IrTerminatorCodec.read(terminatorInput, values, blockIds);
 				block.terminator = new Located(decodedTerminator,
-					version >= 2 ? readProvenance(input, bytes.length) : SourceProvenance.generated("legacy-ir-cache"));
+					version >= 2 ? readProvenance(input, bytes.length, version) : SourceProvenance.generated("legacy-ir-cache"));
 				if (terminatorInput.position != terminatorBytes.length)
 					throw "Trailing IR terminator data";
 			}
@@ -176,6 +176,10 @@ class IrFunctionStateCodec {
 			output.writeInt32(location.start);
 			output.writeInt32(location.end);
 			output.writeInt32(location.line);
+			output.writeInt32(location.column);
+			output.writeInt32(location.endLine);
+			output.writeInt32(location.endColumn);
+			output.writeInt32(location.sourceHash);
 		}
 		switch provenance.origin {
 			case UserSource:
@@ -186,19 +190,25 @@ class IrFunctionStateCodec {
 		}
 	}
 
-	static function readProvenance(input:BytesInput, limit:Int):SourceProvenance {
+	static function readProvenance(input:BytesInput, limit:Int, version:Int):SourceProvenance {
 		var hasLocation = input.readByte();
 		if (hasLocation != 0 && hasLocation != 1)
 			throw "Invalid IR provenance location flag";
 		var location:Null<SourceLocation> = null;
 		if (hasLocation == 1)
-			location = new SourceLocation(IrTypeCodec.readString(input, limit), input.readInt32(), input.readInt32(), input.readInt32());
+			location = versionedLocation(input, limit, version);
 		var origin:SourceOrigin = switch input.readByte() {
 			case 0: UserSource;
 			case 1: CompilerGenerated(IrTypeCodec.readString(input, limit));
 			default: throw "Invalid IR provenance origin";
 		};
 		return new SourceProvenance(location, origin);
+	}
+
+	static function versionedLocation(input:BytesInput, limit:Int, version:Int):SourceLocation {
+		var path = IrTypeCodec.readString(input, limit), start = input.readInt32(), end = input.readInt32(), line = input.readInt32();
+		return version >= 5 ? new SourceLocation(path, start, end, line, input.readInt32(), input.readInt32(), input.readInt32(), input.readInt32())
+			: new SourceLocation(path, start, end, line);
 	}
 
 	public static function verify(functions:Array<IrFunction>, context:compiler.ir.Ir.IrProgram):Void {

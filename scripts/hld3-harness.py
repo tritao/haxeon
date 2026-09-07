@@ -69,9 +69,11 @@ def read_function(reader: Reader, indexed: bool, stable: bool = False) -> int:
         if span_count not in (0, nops):
             raise ProtocolError("invalid HLD3 source-span count")
         for _ in range(span_count):
-            file_index, line = reader.i32(), reader.i32()
+            file_index, line, column = reader.i32(), reader.i32(), reader.i32()
+            end_line, end_column, _source_hash = reader.i32(), reader.i32(), reader.i32()
             start, end, flags = reader.i32(), reader.i32(), reader.i32()
-            if file_index < 0 or line < 1 or not ((start == -1 and end == -1) or (start >= 0 and end >= start)) or flags < 0:
+            if file_index < 0 or line < 1 or column < 1 or end_line < line or end_column < 1 \
+                    or not ((start == -1 and end == -1) or (start >= 0 and end >= start)) or flags < 0:
                 raise ProtocolError("invalid HLD3 source span")
     return function_index
 

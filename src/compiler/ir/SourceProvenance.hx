@@ -8,18 +8,28 @@ class SourceLocation {
 	public final start:Int;
 	public final end:Int;
 	public final line:Int;
+	public final column:Int;
+	public final endLine:Int;
+	public final endColumn:Int;
+	public final sourceHash:Int;
 
-	public function new(path:String, start:Int, end:Int, line:Int) {
-		if (path == null || start < 0 || end < start || line < 1)
+	public function new(path:String, start:Int, end:Int, line:Int, column:Int = 1, ?endLine:Int, ?endColumn:Int, sourceHash:Int = 0) {
+		this.endLine = endLine == null ? line : endLine;
+		this.endColumn = endColumn == null ? column : endColumn;
+		if (path == null || start < 0 || end < start || line < 1 || column < 1 || this.endLine < line || this.endColumn < 1
+			|| this.endLine == line && this.endColumn < column)
 			throw "Invalid source location";
 		this.path = path;
 		this.start = start;
 		this.end = end;
 		this.line = line;
+		this.column = column;
+		this.sourceHash = sourceHash;
 	}
 
 	public static function fromSpan(span:SourceSpan):SourceLocation {
-		return new SourceLocation(span.file.path, span.start, span.end, span.file.lineAt(span.start));
+		return new SourceLocation(span.file.path, span.start, span.end, span.file.lineAt(span.start), span.file.columnAt(span.start),
+			span.file.lineAt(span.end), span.file.columnAt(span.end), span.file.contentHash());
 	}
 }
 
