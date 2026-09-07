@@ -26,8 +26,8 @@ yet promise complete runtime behavior.
 | `utest.Dispatcher` | pass | `-` | - |
 | `utest.ITest` | pass | `-` | - |
 | `utest.IgnoredFixture` | blocked | `E0002` | Expected Function, got Var |
-| `utest.MacroRunner` | blocked | `E0002` | Field "macro" requires a type or initializer |
-| `utest.Runner` | blocked | `E0001` | Unexpected character "$" |
+| `utest.MacroRunner` | blocked | `E0002` | Expected Function, got Identifier |
+| `utest.Runner` | blocked | `E0002` | Expected Function, got Identifier |
 | `utest.Test` | blocked | `E1020` | Unknown type "ITest" |
 | `utest.TestData` | blocked | `E0002` | Expected Colon, got LeftParen |
 | `utest.TestFixture` | blocked | `E0002` | Expected Function, got Identifier |
@@ -36,33 +36,33 @@ yet promise complete runtime behavior.
 | `utest.UTest` | blocked | `E0002` | Expected Function, got Final |
 | `utest.exceptions.AssertFailureException` | pass | `-` | - |
 | `utest.exceptions.UTestException` | pass | `-` | - |
-| `utest.ui.Report` | blocked | `E0001` | Unexpected character "$" |
+| `utest.ui.Report` | blocked | `E0002` | Expected Function, got Identifier |
 | `utest.ui.common.ClassResult` | pass | `-` | - |
 | `utest.ui.common.FixtureResult` | pass | `-` | - |
 | `utest.ui.common.HeaderDisplayMode` | pass | `-` | - |
 | `utest.ui.common.IReport` | blocked | `E0002` | Expected Function, got Public |
 | `utest.ui.common.PackageResult` | blocked | `E0002` | Expected expression |
 | `utest.ui.common.ReportTools` | blocked | `E0002` | Expected Function, got Public |
-| `utest.ui.common.ResultAggregator` | blocked | `E0001` | Unexpected character "$" |
+| `utest.ui.common.ResultAggregator` | blocked | `E0002` | Expected Function, got Identifier |
 | `utest.ui.common.ResultStats` | pass | `-` | - |
 | `utest.ui.macro.MacroReport` | pass | `-` | - |
 | `utest.ui.text.DiagnosticsReport` | blocked | `E0002` | Expected Function, got Identifier |
 | `utest.ui.text.HtmlReport` | blocked | `E0002` | Expected Function, got Identifier |
 | `utest.ui.text.PlainTextReport` | blocked | `E0002` | Expected Function, got Identifier |
-| `utest.ui.text.PrintReport` | blocked | `E0001` | Unexpected character "$" |
+| `utest.ui.text.PrintReport` | blocked | `E0002` | Expected Function, got Identifier |
 | `utest.ui.text.TeamcityReport` | blocked | `E0002` | Unterminated string interpolation |
 | `utest.utils.AccessoriesUtils` | blocked | `E0002` | Expected Function, got Identifier |
 | `utest.utils.AsyncUtils` | blocked | `E2001` | Missing module "utest.utils.Async" |
-| `utest.utils.Macro` | blocked | `E0002` | Field "macro" requires a type or initializer |
+| `utest.utils.Macro` | blocked | `E2001` | Missing module "haxe.macro.Compiler" |
 | `utest.utils.Print` | blocked | `E1007` | Unknown function "Sys.print" |
-| `utest.utils.TestBuilder` | blocked | `E0001` | Unexpected character "$" |
+| `utest.utils.TestBuilder` | blocked | `E0002` | Expected Function, got Identifier |
 
 Baseline result: **10 of 36 modules analyze unchanged**.
 
 ## Priority order
 
-1. Parse or safely exclude macro splice syntax; the modules previously blocked
-   by regex literals now reach `$` syntax in their macro-only dependencies.
+1. Parse `using` declarations; macro-only declarations are now safely omitted
+   from the runtime AST, exposing `using` as the shared next syntax blocker.
 2. Expand property and interface-field parsing; `TestResult`, `PackageResult`,
    `ReportTools`, and `IReport` now stop at these declaration/expression forms.
 3. Improve same-package and secondary-type module resolution, beginning with

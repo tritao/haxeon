@@ -59,6 +59,10 @@ class Parser {
 			var declarationStart = position;
 			try {
 				var metadata = parseMetadata();
+				if (isMacroModifier()) {
+					skipMacroFunction();
+					continue;
+				}
 				var visibility = match(TokenKind.Private) ? previous() : match(TokenKind.Public) ? previous() : null;
 				var externDeclaration = check(TokenKind.Identifier) && current().text == "extern";
 				if (externDeclaration)
@@ -485,6 +489,10 @@ class Parser {
 			var memberStart = position;
 			try {
 				var memberMetadata = parseMetadata();
+				if (isMacroModifier()) {
+					skipMacroFunction();
+					continue;
+				}
 				var isStatic = false, isFinal = false;
 				while (true) {
 					if (current().kind == TokenKind.Identifier && current().text == "override") {
@@ -563,6 +571,51 @@ class Parser {
 			methods: methods,
 			span: start.merge(end)
 		};
+	}
+
+	inline function isMacroModifier():Bool
+		return check(TokenKind.Identifier) && current().text == "macro";
+
+	/** Macro declarations are compile-time only; retain their source tokens but omit them from the runtime AST. */
+	function skipMacroFunction():Void {
+		advance();
+		while (check(TokenKind.Public) || check(TokenKind.Private) || check(TokenKind.Static) || check(TokenKind.Inline) || check(TokenKind.Final))
+			advance();
+		if (!match(TokenKind.Function))
+			fail(current(), "Macro modifier requires a function declaration");
+		var parentheses = 0, brackets = 0, bodyDepth = 0;
+		while (!check(TokenKind.Eof)) {
+			var token = advance();
+			switch token.kind {
+				case TokenKind.LeftParen:
+					parentheses++;
+				case TokenKind.RightParen:
+					if (parentheses > 0)
+						parentheses--;
+				case TokenKind.LeftBracket:
+					brackets++;
+				case TokenKind.RightBracket:
+					if (brackets > 0)
+						brackets--;
+				case TokenKind.LeftBrace if (parentheses == 0 && brackets == 0):
+					bodyDepth = 1;
+					while (bodyDepth > 0 && !check(TokenKind.Eof))
+						switch advance().kind {
+							case TokenKind.LeftBrace: bodyDepth++;
+							case TokenKind.RightBrace: bodyDepth--;
+							default:
+						}
+					if (bodyDepth != 0)
+						fail(token, "Unclosed macro function body");
+					return;
+				case TokenKind.Semicolon if (parentheses == 0 && brackets == 0):
+					return;
+				case TokenKind.RightBrace if (parentheses == 0 && brackets == 0):
+					fail(token, "Macro modifier requires a function declaration");
+				default:
+			}
+		}
+		fail(previous(), "Unclosed macro function declaration");
 	}
 
 	function synchronizeClassMember(bodyStart:Int, memberStart:Int):Void {

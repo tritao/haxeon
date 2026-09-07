@@ -101,8 +101,16 @@ class Lexer {
 				}
 				if (!closed)
 					throw new CompileError(new Diagnostic("E0001", "Unterminated string literal", file.span(start, position), DiagnosticSeverity.Error, [
-						{id: "close-string-literal", title: "Close string literal", edits: [{span: file.span(position,
-							position), replacement: String.fromCharCode(quote)}]}
+						{
+							id: "close-string-literal",
+							title: "Close string literal",
+							edits: [
+								{
+									span: file.span(position, position),
+									replacement: String.fromCharCode(quote)
+								}
+							]
+						}
 					]));
 				tokens.push(new Token(TokenKind.StringLiteral, text(start, position), file.span(start, position)));
 				continue;
@@ -193,6 +201,7 @@ class Lexer {
 				case "]": TokenKind.RightBracket;
 				case "?": TokenKind.Question;
 				case "@": TokenKind.At;
+				case "$": TokenKind.Dollar;
 				case "+":
 					if (position < source.length && source.get(position) == "=".code) {
 						position++;

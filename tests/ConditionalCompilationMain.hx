@@ -13,6 +13,11 @@ class ConditionalCompilationMain {
 		if (processed.length != source.length || processed.indexOf("Int") < 0 || processed.indexOf("42") < 0 || processed.indexOf("String") >= 0)
 			throw "inline conditional branches were not selected or offset-preserved";
 		new Parser(new Lexer(new SourceFile("Inline.hx", source), processed).tokenize()).parseProgram();
+		var macroSource = "macro function topLevel() { return macro $v{1}; } class Example { @:keep macro public function build() { return macro $v{42}; } public function value():Int return 42; }",
+			macroProgram = new Parser(new Lexer(new SourceFile("Macro.hx", macroSource)).tokenize()).parseProgram();
+		if (macroProgram.classes[0].methods.length != 1 || macroProgram.classes[0].methods[0].name != "value")
+			throw "macro methods were not excluded from the runtime AST";
+		expectParseError("function main():Int return $value;", "Expected expression");
 
 		var older = process("typedef Choice = #if (haxe >= version(\"4.10.0\")) Int #else String #end;", ["haxe" => "4.3.7"]);
 		if (older.indexOf("String") < 0 || older.indexOf("Int") >= 0)
@@ -36,6 +41,17 @@ class ConditionalCompilationMain {
 		try {
 			process(source, defines == null ? [] : defines);
 			throw 'conditional source did not fail with "$message"';
+		} catch (error:CompileError) {
+			if (error.diagnostic.code != "E0002" || error.diagnostic.message != message)
+				throw error;
+		}
+	}
+
+	static function expectParseError(source:String, message:String):Void {
+		try {
+			var file = new SourceFile("RuntimeDollar.hx", source);
+			new Parser(new Lexer(file).tokenize()).parseProgram();
+			throw 'source did not fail with "$message"';
 		} catch (error:CompileError) {
 			if (error.diagnostic.code != "E0002" || error.diagnostic.message != message)
 				throw error;
