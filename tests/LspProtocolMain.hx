@@ -1,5 +1,5 @@
-import editor.LspDispatcher;
-import editor.LspProtocol;
+import editor.lsp.LspDispatcher;
+import editor.lsp.LspProtocol;
 import editor.lsp.DocumentStore;
 import editor.lsp.DocumentStore.LspDocument;
 import haxe.Json;

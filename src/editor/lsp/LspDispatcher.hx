@@ -1,4 +1,4 @@
-package editor;
+package editor.lsp;
 
 import haxe.Json;
 import sys.thread.Condition;

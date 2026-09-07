@@ -1,5 +1,5 @@
-import editor.LspDispatcher;
-import editor.LspProtocol;
+import editor.lsp.LspDispatcher;
+import editor.lsp.LspProtocol;
 import haxe.Json;
 import sys.thread.Lock;
 import sys.thread.Mutex;
