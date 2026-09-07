@@ -133,6 +133,7 @@ run_program computed-property 42
 run_program assignment-expression 42
 run_program literal-postfix 42
 run_program bitwise 42
+run_program bitwise-comparison-precedence 42
 run_program type-annotation 42
 run_program local-function 42
 run_program map-literal 42

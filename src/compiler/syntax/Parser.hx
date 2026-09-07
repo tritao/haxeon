@@ -957,9 +957,9 @@ class Parser {
 	}
 
 	function parseAnd():AstExpression {
-		var expression = parseBitOr();
+		var expression = parseComparison();
 		while (match(TokenKind.AndAnd)) {
-			var right = parseBitOr(),
+			var right = parseComparison(),
 				span = expressionSpan(expression).merge(expressionSpan(right));
 			expression = And(expression, right, span);
 		}
@@ -985,20 +985,20 @@ class Parser {
 	}
 
 	function parseBitAnd():AstExpression {
-		var expression = parseComparison();
+		var expression = parseShift();
 		while (match(TokenKind.Ampersand)) {
-			var right = parseComparison();
+			var right = parseShift();
 			expression = BitAnd(expression, right, expressionSpan(expression).merge(expressionSpan(right)));
 		}
 		return expression;
 	}
 
 	function parseComparison():AstExpression {
-		var expression = parseShift();
+		var expression = parseBitOr();
 		if (check(TokenKind.Less) || check(TokenKind.LessEqual) || check(TokenKind.Greater) || check(TokenKind.GreaterEqual) || check(TokenKind.EqualEqual)
 			|| check(TokenKind.NotEqual)) {
 			var operation = advance().kind;
-			var right = parseShift();
+			var right = parseBitOr();
 			var span = expressionSpan(expression).merge(expressionSpan(right));
 			expression = switch operation {
 				case TokenKind.Less: Less(expression, right, span);
