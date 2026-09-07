@@ -36,5 +36,11 @@ function main():Int {
 	var moved = Sys.getCwd();
 	if (!Sys.setCwd(cwd) || moved == cwd)
 		return 5;
+	if (!Sys.putEnv("HAXEON_SYS_É", "válue-ß") || Sys.getEnv("HAXEON_SYS_É") != "válue-ß")
+		return 6;
+	if (Sys.command("test xé = xé") != 0)
+		return 7;
+	Sys.println("PASS: Sys UTF-8 marshalling ✓\n");
+	trace("PASS: trace UTF-8 marshalling ✓\n");
 	return 42;
 }

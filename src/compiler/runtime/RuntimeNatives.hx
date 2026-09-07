@@ -24,7 +24,7 @@ class RuntimeNatives {
 	/** Immutable native definitions shared by compiler snapshots and services. */
 	public static function configuration():Array<NativeFunction> {
 		var definitions:Array<NativeFunction> = [];
-		definitions.push(native("trace", "std", "sys_print", [TString], TVoid));
+		definitions.push(native("trace", "realtime_runtime", "__sys_print", [TString], TVoid));
 		definitions.push(native("sys.FileSystem.exists", "realtime_runtime", "__sys_exists", [TString], TBool));
 		definitions.push(native("sys.FileSystem.isDirectory", "realtime_runtime", "__sys_is_dir", [TString], TBool));
 		definitions.push(native("sys.FileSystem.fullPath", "realtime_runtime", "__sys_full_path", [TString], TString));

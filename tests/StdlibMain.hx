@@ -83,22 +83,22 @@ class StdlibMain {
 			"__sys_get_cwd" => true,
 			"__sys_full_path" => true,
 			"__sys_exe_path" => true,
-			"sys_get_env" => true,
+			"__sys_get_env" => true,
 			"__sys_exists" => true,
 			"__sys_is_dir" => true,
 			"__sys_read_dir" => true,
 			"sys_getpid" => true,
 			"__sys_args" => true,
 			"__sys_set_cwd" => true,
-			"sys_put_env" => true,
+			"__sys_put_env" => true,
 			"__sys_create_dir" => true,
 			"__sys_remove_dir" => true,
 			"__sys_delete" => true,
 			"__sys_rename" => true,
-			"sys_command" => true,
+			"__sys_command" => true,
 			"sys_sleep" => true,
 			"sys_get_char" => true,
-			"sys_print" => true
+			"__sys_print" => true
 		];
 		for (native in result.module.natives) {
 			var symbol = result.module.strings[native.name];

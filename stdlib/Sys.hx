@@ -40,7 +40,7 @@ extern function sysFullPath(path:String):String;
 @:hlNative("realtime_runtime", "__sys_exe_path")
 extern function sysExecutablePath():String;
 
-@:hlNative("std", "sys_get_env")
+@:hlNative("realtime_runtime", "__sys_get_env")
 extern function sysGetEnv(name:String):Null<String>;
 
 @:hlNative("realtime_runtime", "__sys_exists")
@@ -61,7 +61,7 @@ extern function sysArgs():Array<String>;
 @:hlNative("realtime_runtime", "__sys_set_cwd")
 extern function sysSetCwd(path:String):Bool;
 
-@:hlNative("std", "sys_put_env")
+@:hlNative("realtime_runtime", "__sys_put_env")
 extern function sysPutEnv(name:String, value:String):Bool;
 
 @:hlNative("realtime_runtime", "__sys_create_dir")
@@ -76,7 +76,7 @@ extern function sysDelete(path:String):Bool;
 @:hlNative("realtime_runtime", "__sys_rename")
 extern function sysRename(path:String, newPath:String):Bool;
 
-@:hlNative("std", "sys_command")
+@:hlNative("realtime_runtime", "__sys_command")
 extern function sysCommand(command:String):Int;
 
 @:hlNative("std", "sys_sleep")
@@ -85,7 +85,7 @@ extern function sysSleep(seconds:Float):Void;
 @:hlNative("std", "sys_get_char")
 extern function sysGetChar(echo:Bool):Int;
 
-@:hlNative("std", "sys_print")
+@:hlNative("realtime_runtime", "__sys_print")
 extern function sysPrint(value:String):Void;
 
 /** Supported host and process operations exposed through HashLink. */
