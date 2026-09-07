@@ -11,6 +11,10 @@ import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.Type.CompilerType;
 import compiler.syntax.Ast.AstType;
+import compiler.syntax.Ast.AstProgram;
+import compiler.syntax.Ast.AstFunction;
+import compiler.syntax.Ast.AstStatement;
+import compiler.syntax.Ast.AstExpression;
 import compiler.service.CancellationToken;
 
 abstract SemanticSymbolId(String) from String to String {
@@ -177,6 +181,93 @@ class SemanticIndex {
 		cancellation = null;
 		indexingMs += (Sys.time() - started) * 1000.0;
 	}
+
+	/** Index usable local facts from a recovered syntax tree without requiring successful typing. */
+	public function indexRecoveredSyntax(program:AstProgram):Void {
+		for (fn in program.functions)
+			indexRecoveredFunction(fn, null);
+		for (owner in program.classes)
+			for (fn in owner.methods)
+				indexRecoveredFunction(fn, owner.name);
+		for (owner in program.abstracts)
+			for (fn in owner.methods)
+				indexRecoveredFunction(fn, owner.name);
+		bindings.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
+	}
+
+	function indexRecoveredFunction(fn:AstFunction, owner:Null<String>):Void {
+		var functionKey = (owner == null ? "" : owner + ".") + fn.name;
+		for (argument in fn.arguments)
+			addRecoveredLocal(functionKey, argument.name, recoveredType(argument.type), argument.span, fn.span, 0);
+		if (owner != null)
+			functionReceivers.push({span: fn.span, type: TInstance(compiler.types.Type.NominalKind.Class, owner, [])});
+		indexRecoveredStatements(functionKey, fn.statements, fn.span, 0);
+	}
+
+	function indexRecoveredStatements(functionKey:String, statements:Array<AstStatement>, scope:SourceSpan, depth:Int):Void {
+		for (statement in statements)
+			switch statement {
+				case UninitializedDeclaration(name, type, span):
+					addRecoveredLocal(functionKey, name, recoveredType(type), span, scope, depth);
+				case VarDeclaration(name, type, initializer, span):
+					addRecoveredLocal(functionKey, name, type == null ? recoveredExpressionType(initializer) : recoveredType(type), span, scope, depth);
+				case If(_, yes, no, span):
+					indexRecoveredStatements(functionKey, yes, span, depth + 1);
+					indexRecoveredStatements(functionKey, no, span, depth + 1);
+				case While(_, body, span), DoWhile(body, _, span), ForIn(_, _, _, body, span):
+					indexRecoveredStatements(functionKey, body, span, depth + 1);
+				case Try(body, catches, span):
+					indexRecoveredStatements(functionKey, body, span, depth + 1);
+					for (caught in catches) {
+						addRecoveredLocal(functionKey, caught.name, recoveredType(caught.type), caught.span, caught.span, depth + 1);
+						indexRecoveredStatements(functionKey, caught.statements, caught.span, depth + 1);
+					}
+				case Switch(_, cases, fallback, _, span):
+					for (item in cases)
+						indexRecoveredStatements(functionKey, item.statements, item.span, depth + 1);
+					indexRecoveredStatements(functionKey, fallback, span, depth + 1);
+				default:
+			}
+	}
+
+	function addRecoveredLocal(functionKey:String, name:String, type:CompilerType, declaration:SourceSpan, scope:SourceSpan, depth:Int):Void {
+		var token = declarationToken(tokens, declaration, name);
+		if (token == null)
+			return;
+		var id = new SemanticSymbolId(module, 'local:$functionKey:$name');
+		if (!symbols.exists(id)) {
+			symbols.set(id, {id: id, name: name, kind: DeclarationKind.Member, declaration: token.span});
+			bind(id, token.span);
+			declarationTypes.set(id, type);
+		}
+		addCompletionLocal(name, type, declaration, scope, depth);
+	}
+
+	static function recoveredExpressionType(expression:AstExpression):CompilerType
+		return switch expression {
+			case IntegerLiteral(_, _): TInt;
+			case FloatLiteral(_, _): TFloat;
+			case StringLiteral(_, _): TString;
+			case BoolLiteral(_, _): TBool;
+			case ArrayLiteral(_, _): TArray(TDynamic);
+			case MapLiteral(_, _): TMap(TDynamic, TDynamic);
+			case New(name, _, _), NewGeneric(name, _, _, _): TInstance(compiler.types.Type.NominalKind.Class, name, []);
+			default: TDynamic;
+		};
+
+	static function recoveredType(type:AstType):CompilerType
+		return switch type {
+			case IntType: TInt;
+			case BoolType: TBool;
+			case FloatType: TFloat;
+			case StringType: TString;
+			case VoidType: TVoid;
+			case ArrayType(element): TArray(recoveredType(element));
+			case MapType(key, value): TMap(recoveredType(key), recoveredType(value));
+			case NullableType(element): TNullable(recoveredType(element));
+			case NamedType(name), AppliedType(name, _): TInstance(compiler.types.Type.NominalKind.Class, name, []);
+			default: TDynamic;
+		};
 
 	public function symbolIdAt(position:Int):Null<SemanticSymbolId> {
 		for (binding in bindings)

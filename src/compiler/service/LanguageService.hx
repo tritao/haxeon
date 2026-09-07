@@ -241,6 +241,7 @@ class LanguageService {
 				state.recoveredTokens = tokens;
 				state.recoveredAst = recovered.program;
 				state.recoveredSemanticModel = new SemanticModel(recovered.program, state.source, state.revision, tokens);
+				state.recoveredSemanticModel.index.indexRecoveredSyntax(recovered.program);
 				for (diagnostic in recovered.diagnostics) {
 					var duplicate = -1;
 					for (index in 0...state.diagnostics.length) {
@@ -869,6 +870,11 @@ class LanguageService {
 			indexedSignature = indexedId == null ? null : compiler.semanticWorkspace.indexedSignature(indexedId);
 		if (indexedSignature != null)
 			return indexedSignature.label;
+		if (indexedId != null && model != null) {
+			var indexed = model.index.symbol(indexedId), indexedType = model.index.typeAt(position);
+			if (indexed != null && indexedType != null)
+				return indexed.name + ":" + compilerTypeName(indexedType);
+		}
 		var name = identifierPrefix(state.source.text, position);
 		if (name.length == 0)
 			return null;
@@ -1698,7 +1704,7 @@ class LanguageService {
 	}
 
 	static function snapshotRevision(state:ModuleState):Int
-		return state.ast == null ? state.lastGoodRevision : state.revision;
+		return state.ast != null || state.recoveredSemanticModel != null ? state.revision : state.lastGoodRevision;
 
 	function stateFor(path:String):Null<ModuleState>
 		return compiler.modules.get(ModulePath.fromFile(path));
@@ -1710,7 +1716,7 @@ class LanguageService {
 		return state.ast != null ? state.tokens : state.recoveredAst != null ? state.recoveredTokens : state.lastGoodTokens;
 
 	static function effectiveSemanticModel(state:ModuleState):Null<compiler.semantic.SemanticModel>
-		return state.ast != null ? state.semanticModel : state.lastGoodSemanticModel != null ? state.lastGoodSemanticModel : state.recoveredSemanticModel;
+		return state.ast != null ? state.semanticModel : state.recoveredSemanticModel != null ? state.recoveredSemanticModel : state.lastGoodSemanticModel;
 
 	static function addRecoveredLocals(ast:compiler.syntax.Ast.AstProgram, position:Int, prefix:String, result:Array<CompletionItem>):Void {
 		for (fn in ast.functions)

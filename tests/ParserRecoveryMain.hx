@@ -12,9 +12,15 @@ class ParserRecoveryMain {
 		try
 			service.analyze("Main")
 		catch (_:CompileError) {}
-		var names = [for (item in service.complete("Main.hx", source.length)) item.label];
+		var completion = service.complete("Main.hx", source.length), names = [for (item in completion) item.label];
 		if (names.indexOf("value") < 0 || names.indexOf("read") < 0)
 			throw "incomplete member access did not retain recovered receiver completion";
+		for (item in completion)
+			if ((item.label == "value" || item.label == "read") && item.stale)
+				throw "recovered current completion was incorrectly marked stale";
+		var boxDeclaration = source.indexOf("box:Box");
+		if (service.hover("Main.hx", boxDeclaration + 1) != "box:Box")
+			throw "recovered semantic model did not expose the current local type";
 
 		var typeService = new LanguageService(), typeSource = "function main():Int { var unfinished:";
 		typeService.update("Type.hx", typeSource);
