@@ -456,8 +456,21 @@ class HotReloadMain {
 		var indices:Map<String, Int> = [], ids:Map<String, Int> = [];
 		indices.set("__init", 0);
 		ids.set("__init", compiler.hl.incremental.HlFunctionCache.INIT_STABLE_ID);
+		var identity = HlRuntimeIdentity.encode(moduleId, 1, indices, ids), invalidInitializer = identity.sub(0, identity.length);
+		invalidInitializer.setInt32(28, 1);
 		try {
-			Runtime.load(HlWriter.encode(code), HlRuntimeIdentity.encode(moduleId, 1, indices, ids));
+			Runtime.load(HlWriter.encode(code), invalidInitializer);
+			throw "runtime identity accepted an unmapped initializer slot";
+		} catch (error:RuntimeError) {
+			if (error.status != RuntimeStatus.BadFormat)
+				throw error;
+		}
+		var legacyIdentity = haxe.io.Bytes.alloc(identity.length - 4);
+		legacyIdentity.blit(0, identity, 0, 28);
+		legacyIdentity.set(3, 2);
+		legacyIdentity.blit(28, identity, 32, identity.length - 32);
+		try {
+			Runtime.load(HlWriter.encode(code), legacyIdentity);
 			throw "throwing module initializer unexpectedly loaded";
 		} catch (error:RuntimeError) {
 			if (error.status != RuntimeStatus.BadFormat)

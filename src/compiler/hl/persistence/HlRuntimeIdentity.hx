@@ -22,7 +22,7 @@ typedef HlPersistentIdentity = {
 /** Encodes runtime manifests and persistent compiler identity state. */
 class HlRuntimeIdentity {
 	public static inline final VERSION = 6;
-	public static inline final RUNTIME_VERSION = 2;
+	public static inline final RUNTIME_VERSION = 3;
 	static var sequence = 1;
 
 	public static function createModuleId():Bytes {
@@ -48,6 +48,7 @@ class HlRuntimeIdentity {
 		out.write(moduleId);
 		out.writeInt32(revision);
 		out.writeInt32(names.length);
+		out.writeInt32(indices.exists("__init") ? indices.get("__init") : -1);
 		for (name in names) {
 			out.writeInt32(stableIds.get(name));
 			out.writeInt32(indices.get(name));
