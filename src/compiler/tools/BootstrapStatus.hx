@@ -144,7 +144,7 @@ class BootstrapStatus {
 	}
 
 	static function sourceLocation(source:SourceFile, offset:Int):{line:Int, column:Int}
-		return {line: source.lineAt(offset), column: source.columnAt(offset)};
+		return source.lineColumnAt(offset);
 
 	static function inspectProject(roots:Array<String>, paths:Array<String>, files:Array<FileStatus>, entryModule:String):ProjectStatus {
 		var parseFailures = files.length - countFiles(files, function(file) return file.parsed);

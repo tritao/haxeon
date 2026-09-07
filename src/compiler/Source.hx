@@ -82,13 +82,21 @@ class SourceFile {
 		return offset - lineStarts[line - 1] + 1;
 	}
 
+	/** One-based line and column containing an offset, using a single line lookup. */
+	public function lineColumnAt(offset:Int):{line:Int, column:Int} {
+		var line = lineAt(offset);
+		return {line: line, column: offset - lineStarts[line - 1] + 1};
+	}
+
 	/** Convert a zero-based LSP UTF-16 position to the compiler's UTF-8 byte offset. */
 	public function byteOffsetAt(line:Int, character:Int):Int {
 		if (line < 0 || character < 0 || line >= lineStarts.length)
 			throw "LSP position is outside the source";
 		var offset = lineStarts[line], end = lineEnd(line), units = 0;
 		while (offset < end && units < character) {
-			var code = bytes.get(offset), width = utf8Width(code), utf16 = width == 4 ? 2 : 1;
+			var code = bytes.get(offset),
+				width = utf8Width(code),
+				utf16 = width == 4 ? 2 : 1;
 			if (units + utf16 > character)
 				throw "LSP position splits a UTF-16 surrogate pair";
 			units += utf16;
