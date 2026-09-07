@@ -167,7 +167,9 @@ class TestMain {
 				for (line in 10...17)
 					{
 						path: "patch-debug.hx",
-						line: line
+						line: line,
+						start: null,
+						end: null
 					}
 			]),
 		];
