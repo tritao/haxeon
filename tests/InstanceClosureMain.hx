@@ -34,6 +34,7 @@ class InstanceClosureMain {
 		});
 		program.objects.push({
 			name: "Env",
+			isValue: false,
 			base: null,
 			interfaces: [],
 			fields: [{name: "value", type: IrType.I32}],
