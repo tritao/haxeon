@@ -1,5 +1,112 @@
+extern vbyte *hl_sys_get_cwd( void );
+extern vbyte *hl_sys_full_path( vbyte *path );
+extern vbyte *hl_sys_exe_path( void );
+extern bool hl_sys_exists( vbyte *path );
+extern bool hl_sys_is_dir( vbyte *path );
+extern bool hl_sys_set_cwd( vbyte *path );
+extern bool hl_sys_create_dir( vbyte *path, int mode );
+extern bool hl_sys_remove_dir( vbyte *path );
+extern bool hl_sys_delete( vbyte *path );
+extern bool hl_sys_rename( vbyte *path, vbyte *new_path );
+extern varray *hl_sys_read_dir( vbyte *path );
+
+static char *realtime_utf8_copy( const vbyte *value ) {
+	const char *utf8 = value == NULL ? "" : hl_to_utf8((const uchar *)value);
+	char *result = (char *)malloc(strlen(utf8) + 1);
+	if( result == NULL ) hl_error("Could not allocate UTF-8 string");
+	strcpy(result,utf8);
+	return result;
+}
+
+static vbyte *realtime_platform_argument( vbyte *value, char **owned ) {
+#ifdef HL_WIN
+	*owned = NULL;
+	return value;
+#else
+	*owned = realtime_utf8_copy(value);
+	return (vbyte *)*owned;
+#endif
+}
+
+static vbyte *realtime_string_from_platform( vbyte *value ) {
+	if( value == NULL ) return NULL;
+#ifdef HL_WIN
+	return value;
+#else
+	return realtime_string_from_utf8((const char *)value);
+#endif
+}
+
+HL_PRIM vbyte *HL_NAME(__sys_get_cwd)( void ) {
+	return realtime_string_from_platform(hl_sys_get_cwd());
+}
+
+HL_PRIM vbyte *HL_NAME(__sys_full_path)( vbyte *path ) {
+	char *owned;
+	vbyte *argument = realtime_platform_argument(path,&owned);
+	vbyte *result = hl_sys_full_path(argument);
+	free(owned);
+	return realtime_string_from_platform(result);
+}
+
+HL_PRIM vbyte *HL_NAME(__sys_exe_path)( void ) {
+	return realtime_string_from_platform(hl_sys_exe_path());
+}
+
+#define REALTIME_PATH_BOOL(name) \
+	HL_PRIM bool HL_NAME(__sys_##name)( vbyte *path ) { \
+		char *owned; \
+		vbyte *argument = realtime_platform_argument(path,&owned); \
+		bool result = hl_sys_##name(argument); \
+		free(owned); \
+		return result; \
+	}
+
+REALTIME_PATH_BOOL(exists)
+REALTIME_PATH_BOOL(is_dir)
+REALTIME_PATH_BOOL(set_cwd)
+REALTIME_PATH_BOOL(remove_dir)
+REALTIME_PATH_BOOL(delete)
+
+HL_PRIM bool HL_NAME(__sys_create_dir)( vbyte *path, int mode ) {
+	char *owned;
+	vbyte *argument = realtime_platform_argument(path,&owned);
+	bool result = hl_sys_create_dir(argument,mode);
+	free(owned);
+	return result;
+}
+
+HL_PRIM bool HL_NAME(__sys_rename)( vbyte *path, vbyte *new_path ) {
+	char *owned_path, *owned_new_path;
+	vbyte *path_argument = realtime_platform_argument(path,&owned_path);
+	vbyte *new_path_argument = realtime_platform_argument(new_path,&owned_new_path);
+	bool result = hl_sys_rename(path_argument,new_path_argument);
+	free(owned_path);
+	free(owned_new_path);
+	return result;
+}
+
+HL_PRIM varray *HL_NAME(__sys_read_dir)( vbyte *path ) {
+	char *owned;
+	vbyte *argument = realtime_platform_argument(path,&owned);
+	varray *platform = hl_sys_read_dir(argument);
+	free(owned);
+#ifdef HL_WIN
+	return platform;
+#else
+	if( platform == NULL ) return NULL;
+	varray *result = hl_alloc_array(&hlt_bytes,platform->size);
+	vbyte **source = hl_aptr(platform,vbyte *), **target = hl_aptr(result,vbyte *);
+	for( int index = 0; index < platform->size; index++ )
+		target[index] = realtime_string_from_platform(source[index]);
+	return result;
+#endif
+}
+
 HL_PRIM void HL_NAME(__file_save_bytes)( vbyte *path, realtime_bytes *bytes ) {
-	FILE *file = fopen(hl_to_utf8((const uchar *)path), "wb");
+	char *path_utf8 = realtime_utf8_copy(path);
+	FILE *file = fopen(path_utf8, "wb");
+	free(path_utf8);
 	if( file == NULL ) hl_error("Could not open output file");
 	if( bytes->length > 0 && fwrite(bytes->data, 1, (size_t)bytes->length, file) != (size_t)bytes->length ) {
 		fclose(file);
@@ -9,10 +116,7 @@ HL_PRIM void HL_NAME(__file_save_bytes)( vbyte *path, realtime_bytes *bytes ) {
 }
 
 HL_PRIM void HL_NAME(__file_save_content)( vbyte *path, vbyte *content ) {
-	const char *path_utf8 = hl_to_utf8((const uchar *)path);
-	char *owned_path = (char *)malloc(strlen(path_utf8) + 1);
-	if( owned_path == NULL ) hl_error("Could not allocate output path");
-	strcpy(owned_path, path_utf8);
+	char *owned_path = realtime_utf8_copy(path);
 	const char *utf8 = content == NULL ? "" : hl_to_utf8((const uchar *)content);
 	FILE *file = fopen(owned_path, "wb");
 	free(owned_path);
@@ -27,7 +131,9 @@ HL_PRIM void HL_NAME(__file_save_content)( vbyte *path, vbyte *content ) {
 
 
 HL_PRIM vbyte *HL_NAME(__file_get_content)( vbyte *path ) {
-	FILE *file = fopen(hl_to_utf8((const uchar *)path), "rb");
+	char *path_utf8 = realtime_utf8_copy(path);
+	FILE *file = fopen(path_utf8, "rb");
+	free(path_utf8);
 	if( file == NULL ) hl_error("Could not open source file");
 	if( fseek(file, 0, SEEK_END) != 0 ) {
 		fclose(file);
@@ -50,10 +156,7 @@ HL_PRIM vbyte *HL_NAME(__file_get_content)( vbyte *path ) {
 	}
 	fclose(file);
 	utf8[byte_length] = 0;
-	int length = hl_utf8_length((vbyte *)utf8, 0);
-	uchar *result = (uchar *)hl_alloc_bytes((length + 1) * (int)sizeof(uchar));
-	hl_from_utf8(result, length, utf8);
-	result[length] = 0;
+	vbyte *result = realtime_string_from_utf8(utf8);
 	free(utf8);
-	return (vbyte *)result;
+	return result;
 }

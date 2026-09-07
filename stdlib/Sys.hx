@@ -31,25 +31,25 @@ extern function sysThreadCpuTime():Float;
 @:hlNative("std", "sys_process_memory")
 extern function sysProcessMemory():Float;
 
-@:hlNative("std", "sys_get_cwd")
+@:hlNative("realtime_runtime", "__sys_get_cwd")
 extern function sysGetCwd():String;
 
-@:hlNative("std", "sys_full_path")
+@:hlNative("realtime_runtime", "__sys_full_path")
 extern function sysFullPath(path:String):String;
 
-@:hlNative("std", "sys_exe_path")
+@:hlNative("realtime_runtime", "__sys_exe_path")
 extern function sysExecutablePath():String;
 
 @:hlNative("std", "sys_get_env")
 extern function sysGetEnv(name:String):Null<String>;
 
-@:hlNative("std", "sys_exists")
+@:hlNative("realtime_runtime", "__sys_exists")
 extern function sysExists(path:String):Bool;
 
-@:hlNative("std", "sys_is_dir")
+@:hlNative("realtime_runtime", "__sys_is_dir")
 extern function sysIsDir(path:String):Bool;
 
-@:hlNative("std", "sys_read_dir")
+@:hlNative("realtime_runtime", "__sys_read_dir")
 extern function sysReadDir(path:String):Array<String>;
 
 @:hlNative("std", "sys_getpid")
@@ -58,22 +58,22 @@ extern function sysGetPid():Int;
 @:hlNative("realtime_runtime", "__sys_args")
 extern function sysArgs():Array<String>;
 
-@:hlNative("std", "sys_set_cwd")
+@:hlNative("realtime_runtime", "__sys_set_cwd")
 extern function sysSetCwd(path:String):Bool;
 
 @:hlNative("std", "sys_put_env")
 extern function sysPutEnv(name:String, value:String):Bool;
 
-@:hlNative("std", "sys_create_dir")
+@:hlNative("realtime_runtime", "__sys_create_dir")
 extern function sysCreateDir(path:String, mode:Int):Bool;
 
-@:hlNative("std", "sys_remove_dir")
+@:hlNative("realtime_runtime", "__sys_remove_dir")
 extern function sysRemoveDir(path:String):Bool;
 
-@:hlNative("std", "sys_delete")
+@:hlNative("realtime_runtime", "__sys_delete")
 extern function sysDelete(path:String):Bool;
 
-@:hlNative("std", "sys_rename")
+@:hlNative("realtime_runtime", "__sys_rename")
 extern function sysRename(path:String, newPath:String):Bool;
 
 @:hlNative("std", "sys_command")
