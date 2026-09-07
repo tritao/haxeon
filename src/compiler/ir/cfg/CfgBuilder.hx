@@ -110,9 +110,12 @@ class CfgBuilder {
 		terminate(Rethrow(value));
 
 	/** Seal a block that is unreachable from the function entry. */
-	public function markUnreachable():Void
-		if (!isTerminated())
-			current.terminator = new Located(Jump(current.id), new SourceProvenance(provenance.location, SourceOrigin.CompilerGenerated("unreachable-block")));
+	public function markUnreachable():Void {
+		if (isTerminated())
+			return;
+		generated("unreachable-block");
+		throwValue(toDyn(constString("Reached compiler-generated unreachable block")));
+	}
 
 	public function beginTry(catchBlock:CfgBlock, afterBlock:CfgBlock):Void {
 		emit(BeginTry(catchBlock.id, afterBlock.id));
