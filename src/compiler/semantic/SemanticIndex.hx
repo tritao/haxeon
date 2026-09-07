@@ -527,7 +527,6 @@ class SemanticIndex {
 
 	function bind(id:SemanticSymbolId, span:SourceSpan):Void {
 		checkpoint();
-		bindings.push({span: span, symbol: id});
 		var locations = references.get(id);
 		var keys = referenceKeys.get(id);
 		if (locations == null) {
@@ -538,6 +537,7 @@ class SemanticIndex {
 		if (keys.exists(key))
 			return;
 		keys.set(key, true);
+		bindings.push({span: span, symbol: id});
 		locations.push(span);
 	}
 
