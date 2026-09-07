@@ -7,6 +7,7 @@ import compiler.syntax.ConditionalCompilation;
 import compiler.syntax.Parser;
 import compiler.QualifiedName;
 import compiler.runtime.NativeRegistry;
+import compiler.runtime.PlatformAbi;
 import compiler.modules.ModuleState;
 import compiler.modules.ModuleSourceLoader;
 import compiler.types.FieldInference;
@@ -93,7 +94,8 @@ class ModuleAnalyzer {
 		var packageName = ast.packageName;
 		for (dependency in [for (dependency in dependencies.keys()) dependency]) {
 			var sourceModule = sourceModuleForDependency(dependency);
-			if (sourceModule == null && isPlatformDependency(dependency) && ast.imports.indexOf(dependency) < 0) {
+			if (sourceModule == null
+				&& (PlatformAbi.isType(dependency) || isPlatformDependency(dependency) && ast.imports.indexOf(dependency) < 0)) {
 				dependencies.remove(dependency);
 				continue;
 			}
