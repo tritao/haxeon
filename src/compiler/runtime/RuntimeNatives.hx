@@ -43,6 +43,9 @@ class RuntimeNatives {
 		definitions.push(native("Sys.delete", "std", "sys_delete", [TString], TBool));
 		definitions.push(native("Sys.rename", "std", "sys_rename", [TString, TString], TBool));
 		definitions.push(native("Sys.readDir", "std", "sys_read_dir", [TString], TArray(TString)));
+		definitions.push(native("sys.FileSystem.exists", "std", "sys_exists", [TString], TBool));
+		definitions.push(native("sys.FileSystem.isDirectory", "std", "sys_is_dir", [TString], TBool));
+		definitions.push(native("sys.FileSystem.fullPath", "std", "sys_full_path", [TString], TString));
 		definitions.push(native("Sys.command", "std", "sys_command", [TString], TInt));
 		definitions.push(native("Sys.sleep", "std", "sys_sleep", [TFloat], TVoid));
 		definitions.push(native("Sys.getPid", "std", "sys_getpid", [], TInt));
