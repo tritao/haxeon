@@ -44,6 +44,7 @@ class LspProtocolMain {
 			|| initialized.result.capabilities.textDocumentSync.change != 1
 			|| !initialized.result.capabilities.documentHighlightProvider
 			|| initialized.result.capabilities.semanticTokensProvider.legend.tokenTypes[12] != "function"
+			|| !initialized.result.capabilities.semanticTokensProvider.full.delta
 			|| initialized.result.capabilities.codeActionProvider.codeActionKinds[0] != "quickfix"
 			|| !initialized.result.capabilities.workspaceSymbolProvider.resolveProvider
 			|| !initialized.result.capabilities.inlayHintProvider
@@ -770,6 +771,39 @@ class LspProtocolMain {
 		}));
 		if (staleRename.length != 1 || Json.parse(staleRename[0]).error.code != -32801)
 			throw "LSP rename did not reject a stale semantic snapshot";
+		var deltaProtocol = new LspProtocol(), deltaUri = "file:///workspace/Delta.hx",
+			deltaSource = "function main():Int { var a:Dynamic = 1; var b:Dynamic = 2; var c:Dynamic = 3; var d:Dynamic = 4; var e:Dynamic = 5; return 0; }";
+		request(deltaProtocol, '{"jsonrpc":"2.0","id":80,"method":"initialize","params":{}}');
+		deltaProtocol.handle(Json.stringify({
+			jsonrpc: "2.0", method: "textDocument/didOpen",
+			params: {textDocument: {uri: deltaUri, languageId: "haxe", version: 1, text: deltaSource}}
+		}));
+		var firstTokens = request(deltaProtocol, Json.stringify({
+			jsonrpc: "2.0", id: 81, method: "textDocument/semanticTokens/full", params: {textDocument: {uri: deltaUri}}
+		})), unchangedDelta = request(deltaProtocol, Json.stringify({
+			jsonrpc: "2.0", id: 82, method: "textDocument/semanticTokens/full/delta",
+			params: {textDocument: {uri: deltaUri}, previousResultId: firstTokens.result.resultId}
+		}));
+		if (unchangedDelta.result.edits.length != 0)
+			throw "unchanged semantic tokens produced a non-empty delta";
+		var changedDeltaSource = StringTools.replace(deltaSource, "= 3", "= \"three\"");
+		deltaProtocol.handle(documentChangeMessage(deltaUri, 2, changedDeltaSource));
+		var changedDelta = request(deltaProtocol, Json.stringify({
+			jsonrpc: "2.0", id: 83, method: "textDocument/semanticTokens/full/delta",
+			params: {textDocument: {uri: deltaUri}, previousResultId: unchangedDelta.result.resultId}
+		})), changedFull = request(deltaProtocol, Json.stringify({
+			jsonrpc: "2.0", id: 84, method: "textDocument/semanticTokens/full", params: {textDocument: {uri: deltaUri}}
+		}));
+		if (!Reflect.hasField(changedDelta.result, "edits")
+			|| changedDelta.result.edits.length != 1
+			|| !sameInts(applySemanticEdits(firstTokens.result.data, changedDelta.result.edits), changedFull.result.data))
+			throw "semantic token delta did not reconstruct the current full token stream";
+		var unknownHistory = request(deltaProtocol, Json.stringify({
+			jsonrpc: "2.0", id: 85, method: "textDocument/semanticTokens/full/delta",
+			params: {textDocument: {uri: deltaUri}, previousResultId: "unknown"}
+		}));
+		if (!Reflect.hasField(unknownHistory.result, "data"))
+			throw "unknown semantic token history did not fall back to a full result";
 		if (protocol.handle('{"jsonrpc":"2.0","method":"$/cancelRequest","params":{"id":999}}').length != 0)
 			throw "LSP cancellation notification produced a response";
 		var lifecycle = new LspProtocol(),
@@ -836,6 +870,28 @@ class LspProtocolMain {
 			value = Reflect.field(value, "parent");
 		}
 		return depth;
+	}
+
+	static function applySemanticEdits(original:Dynamic, rawEdits:Dynamic):Array<Int> {
+		var result:Array<Int> = cast original;
+		result = result.copy();
+		for (edit in cast(rawEdits, Array<Dynamic>)) {
+			var replacement:Array<Int> = cast edit.data;
+			result.splice(edit.start, edit.deleteCount);
+			for (index in 0...replacement.length)
+				result.insert(edit.start + index, replacement[index]);
+		}
+		return result;
+	}
+
+	static function sameInts(left:Array<Int>, rawRight:Dynamic):Bool {
+		var right:Array<Int> = cast rawRight;
+		if (left.length != right.length)
+			return false;
+		for (index in 0...left.length)
+			if (left[index] != right[index])
+				return false;
+		return true;
 	}
 
 	static function deleteTree(path:String):Void {

@@ -21,6 +21,12 @@ private class LspRequestError {
 	}
 }
 
+private typedef SemanticTokenSnapshot = {
+	final uri:String;
+	final context:String;
+	final data:Array<Int>;
+}
+
 /** Minimal standard LSP adapter over the compiler-owned language service. */
 class LspProtocol {
 	static final SEMANTIC_TOKEN_TYPES = ["namespace", "type", "class", "enum", "interface", "struct", "typeParameter", "parameter", "variable",
@@ -38,7 +44,11 @@ class LspProtocol {
 	final activeRequests:Map<String, CancellationToken> = [];
 	final requestMutex = new sys.thread.Mutex();
 	final diagnosticMutex = new sys.thread.Mutex();
+	final semanticTokenMutex = new sys.thread.Mutex();
 	final pendingDiagnosticTargets:Map<String, Bool> = [];
+	final semanticTokenSnapshots:Map<String, SemanticTokenSnapshot> = [];
+	final semanticTokenOrder:Array<String> = [];
+	var semanticTokenSequence = 0;
 	var diagnosticToken:Null<CancellationToken>;
 	var deferDiagnostics = false;
 	var analysisGeneration = 0;
@@ -93,6 +103,7 @@ class LspProtocol {
 				case "completionItem/resolve": cancellable(id, token -> resolveCompletion(request, token));
 				case "textDocument/documentHighlight": cancellable(id, token -> documentHighlights(request, token));
 				case "textDocument/semanticTokens/full": cancellable(id, token -> semanticTokens(request, token));
+				case "textDocument/semanticTokens/full/delta": cancellable(id, token -> semanticTokenDelta(request, token));
 				case "textDocument/codeAction": cancellable(id, token -> codeActions(request, token));
 				case "textDocument/inlayHint": cancellable(id, token -> inlayHints(request, token));
 				case "textDocument/prepareCallHierarchy": cancellable(id, token -> prepareCallHierarchy(request, token));
@@ -233,7 +244,7 @@ class LspProtocol {
 				documentHighlightProvider: true,
 				semanticTokensProvider: {
 					legend: {tokenTypes: SEMANTIC_TOKEN_TYPES, tokenModifiers: SEMANTIC_TOKEN_MODIFIERS},
-					full: true
+					full: {delta: true}
 				},
 				codeActionProvider: {codeActionKinds: ["quickfix"]},
 				inlayHintProvider: true,
@@ -314,6 +325,7 @@ class LspProtocol {
 			compilerPath = project.compilerPath(document.path),
 			module = ModulePath.fromFile(compilerPath),
 			targets = service.compiler.dependentModules(module);
+		clearSemanticTokenSnapshots(uri);
 		documents.close(uri);
 		var restored = project.restore(document.path, service);
 		publishedDiagnostics.set(uri, "");
@@ -532,6 +544,37 @@ class LspProtocol {
 
 	function semanticTokens(request:Dynamic, token:CancellationToken):Dynamic {
 		var document = document(request);
+		var data = encodedSemanticTokens(document, token), resultId = rememberSemanticTokens(document.uri, data);
+		return {data: data, resultId: resultId};
+	}
+
+	function semanticTokenDelta(request:Dynamic, token:CancellationToken):Dynamic {
+		var document = document(request), previousId = requiredString(required(request, "params"), "previousResultId"),
+			previous = semanticTokenSnapshot(previousId), data = encodedSemanticTokens(document, token), resultId = rememberSemanticTokens(document.uri, data);
+		if (previous == null || previous.uri != document.uri || previous.context != semanticTokenContext(document))
+			return {data: data, resultId: resultId};
+		var oldTokens = Std.int(previous.data.length / 5), newTokens = Std.int(data.length / 5), prefix = 0;
+		while (prefix < oldTokens && prefix < newTokens && sameSemanticToken(previous.data, data, prefix, prefix)) {
+			token.check();
+			prefix++;
+		}
+		var suffix = 0;
+		while (suffix < oldTokens - prefix && suffix < newTokens - prefix
+			&& sameSemanticToken(previous.data, data, oldTokens - suffix - 1, newTokens - suffix - 1)) {
+			token.check();
+			suffix++;
+		}
+		if (prefix == oldTokens && prefix == newTokens)
+			return {edits: [], resultId: resultId};
+		// Include the first unchanged suffix token because its delta is relative to the replaced predecessor.
+		var rebase = suffix > 0 ? 1 : 0, oldEnd = oldTokens - suffix + rebase, newEnd = newTokens - suffix + rebase,
+			start = prefix * 5, deleteCount = (oldEnd - prefix) * 5, replacement = data.slice(start, newEnd * 5);
+		if (replacement.length + 3 >= data.length)
+			return {data: data, resultId: resultId};
+		return {edits: [{start: start, deleteCount: deleteCount, data: replacement}], resultId: resultId};
+	}
+
+	function encodedSemanticTokens(document:LspDocument, token:CancellationToken):Array<Int> {
 		ensureAnalyzed(document, token);
 		requireCurrent(document);
 		var data:Array<Int> = [], previousLine = 0, previousCharacter = 0;
@@ -542,7 +585,7 @@ class LspProtocol {
 			previousLine = start.line;
 			previousCharacter = start.character;
 		}
-		return {data: data};
+		return data;
 	}
 
 	function codeActions(request:Dynamic, token:CancellationToken):Array<Dynamic> {
@@ -928,6 +971,58 @@ class LspProtocol {
 		data.push(length);
 		data.push(SEMANTIC_TOKEN_TYPES.indexOf(type));
 		data.push(modifierBits);
+	}
+
+	function rememberSemanticTokens(uri:String, data:Array<Int>):String {
+		var document = documents.get(uri), context = semanticTokenContext(document);
+		semanticTokenMutex.acquire();
+		var id = context + ":" + document.version + ":" + semanticTokenSequence++;
+		semanticTokenSnapshots.set(id, {uri: uri, context: context, data: data.copy()});
+		semanticTokenOrder.push(id);
+		while (semanticTokenOrder.length > 64)
+			semanticTokenSnapshots.remove(semanticTokenOrder.shift());
+		semanticTokenMutex.release();
+		return id;
+	}
+
+	function semanticTokenSnapshot(id:String):Null<SemanticTokenSnapshot> {
+		semanticTokenMutex.acquire();
+		var snapshot = semanticTokenSnapshots.get(id), result:Null<SemanticTokenSnapshot> = snapshot == null ? null : {
+			uri: snapshot.uri,
+			context: snapshot.context,
+			data: snapshot.data.copy()
+		};
+		semanticTokenMutex.release();
+		return result;
+	}
+
+	function semanticTokenContext(document:LspDocument):String {
+		var configuration = project.configurationFor(document.path);
+		return configuration == null ? "default" : configuration.id;
+	}
+
+	function clearSemanticTokenSnapshots(uri:String):Void {
+		semanticTokenMutex.acquire();
+		var retained = [];
+		for (id in semanticTokenOrder) {
+			var snapshot = semanticTokenSnapshots.get(id);
+			if (snapshot != null && snapshot.uri == uri)
+				semanticTokenSnapshots.remove(id);
+			else
+				retained.push(id);
+		}
+		semanticTokenOrder.resize(0);
+		for (id in retained)
+			semanticTokenOrder.push(id);
+		semanticTokenMutex.release();
+	}
+
+	static function sameSemanticToken(left:Array<Int>, right:Array<Int>, leftIndex:Int, rightIndex:Int):Bool {
+		var leftOffset = leftIndex * 5, rightOffset = rightIndex * 5;
+		for (part in 0...5)
+			if (left[leftOffset + part] != right[rightOffset + part])
+				return false;
+		return true;
 	}
 
 	static function diagnosticJson(diagnostic:Diagnostic):Dynamic
