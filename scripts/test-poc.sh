@@ -77,6 +77,17 @@ if [[ $list_status -ne 42 ]]; then
 	exit 1
 fi
 echo "PASS: Array-backed List insertion and iteration executed (exit 42)"
+array_splice_output="$root_dir/out/array-splice.hl"
+"$haxe" --cwd "$root_dir" -cp src -cp tests --run ArraySpliceMain "$array_splice_output"
+set +e
+LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$array_splice_output"
+array_splice_status=$?
+set -e
+if [[ $array_splice_status -ne 42 ]]; then
+	echo "Array.splice compatibility: expected exit 42, got $array_splice_status" >&2
+	exit 1
+fi
+echo "PASS: Array.splice mutation and removed values executed (exit 42)"
 reflect_methods_output="$root_dir/out/reflect-methods.hl"
 "$haxe" --cwd "$root_dir" -cp src -cp tests --run ReflectMethodsMain "$reflect_methods_output"
 set +e

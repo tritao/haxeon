@@ -3375,6 +3375,13 @@ class Typer {
 					"E1002") : new TypedExpression(TArrayLength(receiver), TInt, span);
 			return new TypedExpression(TCollectionCall(receiver, "slice", [start, end]), TArray(element), span);
 		}
+		if (name == "splice") {
+			if (arguments.length != 2)
+				fail("E1008", "Array.splice expects a position and length", span);
+			var position = coerce(typeExpression(arguments[0], scope), TInt, "splice position", "E1002"),
+				length = coerce(typeExpression(arguments[1], scope), TInt, "splice length", "E1002");
+			return new TypedExpression(TCollectionCall(receiver, "splice", [position, length]), TArray(element), span);
+		}
 		if (name == "sort") {
 			if (arguments.length != 1)
 				fail("E1008", "Array.sort expects one comparator", span);

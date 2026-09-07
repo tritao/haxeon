@@ -332,6 +332,13 @@ class IrProgramAssembler {
 					arguments: [arrayType, I32, I32],
 					result: arrayType
 				});
+				program.natives.push({
+					name: '__array_splice_${entry.name}',
+					library: "realtime_runtime",
+					symbol: '__array_splice_${entry.name}',
+					arguments: [arrayType, I32, I32],
+					result: arrayType
+				});
 				if (entry.name != "ref")
 					program.natives.push({
 						name: '__array_index_of_${entry.name}',

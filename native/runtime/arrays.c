@@ -78,6 +78,29 @@ static varray *realtime_array_slice(varray *array, int start, int end) {
 	return result;
 }
 
+static varray *realtime_array_splice(varray *array, int position, int length) {
+	if (length < 0 || position > array->size)
+		return hl_alloc_array(array->at, 0);
+	if (position < 0) {
+		position += array->size;
+		if (position < 0) position = 0;
+	}
+	if (length > array->size - position)
+		length = array->size - position;
+	if (length < 0) length = 0;
+	varray *removed = hl_alloc_array(array->at, length);
+	int stride = hl_type_size(array->at);
+	vbyte *values = hl_aptr(array, vbyte);
+	if (length > 0) {
+		memcpy(hl_aptr(removed, vbyte), values + position * stride, (size_t)length * stride);
+		memmove(values + position * stride, values + (position + length) * stride,
+			(size_t)(array->size - position - length) * stride);
+		array->size -= length;
+		memset(values + array->size * stride, 0, (size_t)length * stride);
+	}
+	return removed;
+}
+
 static bool realtime_bytes_equal(vbyte *left, vbyte *right) {
 	int leftLength = left == NULL ? 0 : (int)ustrlen((const uchar *)left);
 	int rightLength = right == NULL ? 0 : (int)ustrlen((const uchar *)right);
@@ -106,7 +129,8 @@ static varray *realtime_ref_values(varray *dynamicValues) {
 #define DEFINE_ARRAY_COPY(SUFFIX) \
 HL_PRIM varray *HL_NAME(__array_copy_##SUFFIX)( varray *array ) { return realtime_array_copy(array); } \
 HL_PRIM varray *HL_NAME(__array_concat_##SUFFIX)( varray *left, varray *right ) { return realtime_array_concat(left, right); } \
-HL_PRIM varray *HL_NAME(__array_slice_##SUFFIX)( varray *array, int start, int end ) { return realtime_array_slice(array, start, end); }
+HL_PRIM varray *HL_NAME(__array_slice_##SUFFIX)( varray *array, int start, int end ) { return realtime_array_slice(array, start, end); } \
+HL_PRIM varray *HL_NAME(__array_splice_##SUFFIX)( varray *array, int position, int length ) { return realtime_array_splice(array, position, length); }
 
 DEFINE_ARRAY_COPY(i32)
 DEFINE_ARRAY_COPY(f64)

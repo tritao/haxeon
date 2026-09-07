@@ -23,7 +23,7 @@ yet promise complete runtime behavior.
 | `utest.Assert` | blocked | `E0002` | Expected Semicolon, got Identifier |
 | `utest.Assertation` | pass | `-` | - |
 | `utest.Async` | blocked | `E2001` | Missing module "haxe.Timer" |
-| `utest.Dispatcher` | blocked | `E1007` | Unknown array method "splice" |
+| `utest.Dispatcher` | blocked | `E1003` | Type mismatch for return |
 | `utest.ITest` | pass | `-` | - |
 | `utest.IgnoredFixture` | blocked | `E0002` | Expected Function, got Var |
 | `utest.MacroRunner` | blocked | `E0002` | Field "macro" requires a type or initializer |
@@ -37,14 +37,14 @@ yet promise complete runtime behavior.
 | `utest.exceptions.AssertFailureException` | pass | `-` | - |
 | `utest.exceptions.UTestException` | pass | `-` | - |
 | `utest.ui.Report` | blocked | `E0001` | Unexpected character "$" |
-| `utest.ui.common.ClassResult` | blocked | `E1007` | Unknown array method "splice" |
-| `utest.ui.common.FixtureResult` | blocked | `E1007` | Unknown array method "splice" |
+| `utest.ui.common.ClassResult` | blocked | `E1003` | Type mismatch for return |
+| `utest.ui.common.FixtureResult` | blocked | `E1003` | Type mismatch for return |
 | `utest.ui.common.HeaderDisplayMode` | pass | `-` | - |
 | `utest.ui.common.IReport` | blocked | `E0002` | Expected Function, got Public |
 | `utest.ui.common.PackageResult` | blocked | `E0002` | Expected expression |
 | `utest.ui.common.ReportTools` | blocked | `E0002` | Expected Function, got Public |
 | `utest.ui.common.ResultAggregator` | blocked | `E0001` | Unexpected character "$" |
-| `utest.ui.common.ResultStats` | blocked | `E1007` | Unknown array method "splice" |
+| `utest.ui.common.ResultStats` | blocked | `E1003` | Type mismatch for return |
 | `utest.ui.macro.MacroReport` | pass | `-` | - |
 | `utest.ui.text.DiagnosticsReport` | blocked | `E0002` | Expected Function, got Identifier |
 | `utest.ui.text.HtmlReport` | blocked | `E0002` | Expected Function, got Identifier |
@@ -61,8 +61,8 @@ Baseline result: **6 of 36 modules analyze unchanged**.
 
 ## Priority order
 
-1. Add `Array.splice`; it is now the shared first blocker for `Dispatcher`
-   and three common report modules.
+1. Accept Haxe's nullable-reference return behavior in `Dispatcher.remove`;
+   it is now the shared first blocker for four modules.
 2. Parse or safely exclude macro splice syntax; the modules previously blocked
    by regex literals now reach `$` syntax in their macro-only dependencies.
 3. Expand property and interface-field parsing; `TestResult`, `PackageResult`,
