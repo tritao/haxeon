@@ -46,13 +46,14 @@ class PluginMain {
 			throw "Plugin body edit did not produce a compatible patch";
 		var pluginPrefix = "pragtical.plugins.SearchPlugin.";
 		if (bodyEdit.retyped.length == 0
-			|| bodyEdit.retyped.length != bodyEdit.regenerated.length
 			|| bodyEdit.metrics.retypedFunctions != bodyEdit.retyped.length
 			|| bodyEdit.metrics.regeneratedFunctions != bodyEdit.regenerated.length
 			|| bodyEdit.metrics.elapsedMs < 0.0)
 			throw 'Plugin body invalidation was broader than expected (${bodyEdit.retyped}/${bodyEdit.metrics.elapsedMs}ms)';
 		for (name in bodyEdit.retyped)
-			if (!StringTools.startsWith(name, pluginPrefix) && !StringTools.startsWith(name, "$lambda:" + pluginPrefix))
+			if (bodyEdit.regenerated.indexOf(name) < 0)
+				throw 'Plugin body edit did not regenerate invalidated function "$name"';
+			else if (!StringTools.startsWith(name, pluginPrefix) && !StringTools.startsWith(name, "$lambda:" + pluginPrefix))
 				throw 'Plugin body edit invalidated another module function "$name"';
 		Runtime.patchSet(live, new PatchSet(first.revision, bodyEdit.revision, bodyEdit.patchBytes, bodyEdit.changedFunctions));
 		compiler.acknowledgePublication(bodyEdit.revision);

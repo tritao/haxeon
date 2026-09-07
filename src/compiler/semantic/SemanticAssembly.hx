@@ -16,6 +16,7 @@ typedef SemanticAssemblyResult = {
 	final functions:Array<AstFunction>;
 	final owners:Map<String, String>;
 	final generatedByModule:Map<String, Map<String, Bool>>;
+	final invalidated:Map<String, Bool>;
 	final selected:Map<String, Bool>;
 	final invalidations:Array<InvalidatedArtifact>;
 	final entryPoint:String;
@@ -301,19 +302,16 @@ class SemanticAssembly {
 				owners.set(lambdaName, module);
 		var invalid:Map<String, Bool> = [],
 			invalidationReasons:Map<String, Array<InvalidationReason>> = [],
-			allModulesChanged = true;
-		// A new source revision owns a fresh position index. Retype every function
-		// in that module so unchanged bodies cannot leave gaps or stale spans in it.
+			initialBuild = true;
 		for (moduleName in names) {
 			var state = modules.get(moduleName);
-			if (state.lastGoodRevision == state.revision)
-				allModulesChanged = false;
-			else
-				for (fn in functions)
-					if (owners.get(fn.name) == moduleName)
-						invalidate(invalid, invalidationReasons, fn.name, SourceRevision, moduleName);
+			if (state.lastGoodRevision != 0)
+				initialBuild = false;
 		}
-		if (!allModulesChanged) {
+		if (initialBuild) {
+			for (fn in functions)
+				invalidate(invalid, invalidationReasons, fn.name, SourceRevision, owners.get(fn.name));
+		} else {
 			for (change in structuralChanged.keys()) {
 				var changedDependency:String = change,
 					separator = changedDependency.indexOf(":"),
@@ -380,15 +378,21 @@ class SemanticAssembly {
 					}
 			}
 		}
+		var invalidated:Map<String, Bool> = [];
+		for (name in invalid.keys())
+			invalidated.set(name, true);
 		// Semantic indexes are replaced as module-sized snapshots. If one function
-		// changes meaning, type every function owned by that module before swapping
-		// the index so no bindings from the previous snapshot survive.
+		// changes meaning, or its source revision changes, refresh every function in
+		// that module without reporting the unchanged functions as invalidated.
 		var invalidModules:Map<String, Bool> = [];
 		for (functionName in invalid.keys()) {
 			var owner = owners.get(functionName);
 			if (owner != null)
 				invalidModules.set(owner, true);
 		}
+		for (moduleName in names)
+			if (modules.get(moduleName).lastGoodRevision != modules.get(moduleName).revision)
+				invalidModules.set(moduleName, true);
 		for (fn in functions) {
 			var owner = owners.get(fn.name);
 			if (owner != null && invalidModules.exists(owner) && !invalid.exists(fn.name))
@@ -415,6 +419,7 @@ class SemanticAssembly {
 			functions: functions,
 			owners: owners,
 			generatedByModule: generatedByModule,
+			invalidated: invalidated,
 			selected: selected,
 			invalidations: orderedInvalidations(invalidationReasons),
 			entryPoint: entryPoint

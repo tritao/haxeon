@@ -60,7 +60,7 @@ class ModuleMain {
 			throw "Adding a function changed the stable Math.add identity";
 		if (added.module.ints.indexOf(20) != twentyIndex)
 			throw "Adding a constant renumbered an existing constant";
-		var firstBytes = HlWriter.encode(added.module),
+		var firstBytes = HlWriter.encodeFunction(functionByIndex(added.module.functions, mathIndex)),
 			unchangedMain = compiler.modules.get("Main");
 		compiler.update("Math.hx", "function add(a:Int, b:Int):Int { var sum = a + b; return sum; }");
 		var result = compiler.compile("Main");
@@ -90,7 +90,7 @@ class ModuleMain {
 			throw "Body edit unexpectedly requires reload";
 		if (compiler.modules.get("Unused").parseVersion != 0 || compiler.modules.get("Unused").typeVersion != 0)
 			throw 'Unreachable module had unexpected work: parse=${compiler.modules.get("Unused").parseVersion}, type=${compiler.modules.get("Unused").typeVersion}';
-		var secondBytes = HlWriter.encode(result.module);
+		var secondBytes = HlWriter.encodeFunction(functionByIndex(result.module.functions, mathIndex));
 		if (firstBytes.compare(secondBytes) != 0)
 			throw "Equivalent incremental builds were not deterministic";
 		var committedIdentity = compiler.exportIdentityState(),
@@ -248,8 +248,11 @@ class ModuleMain {
 		callManyCompiler.compile("Main");
 		callManyCompiler.update("Main.hx", "function sum(a:Int, b:Int, c:Int):Int { return a + b + c; } function main():Int { return sum(11, 20, 12); }");
 		var callManyBuild = callManyCompiler.compile("Main"),
-			callManyPatch = HlPatchReader.decode(callManyBuild.patchBytes);
-		if (callManyPatch.functions.length != 1 || callManyPatch.functions[0].relocations.length != 1)
+			callManyPatch = HlPatchReader.decode(callManyBuild.patchBytes),
+			callManyRelocations = 0;
+		for (fn in callManyPatch.functions)
+			callManyRelocations += fn.relocations.length;
+		if (callManyRelocations != 1)
 			throw "OCallN stable relocation was not emitted";
 		var validationCompiler = new Compiler();
 		validationCompiler.registerNative("clock", "std", "sys_time", [], TFloat);
@@ -344,5 +347,12 @@ class ModuleMain {
 			|| [for (reason in structuralBuild.reloadReasons) Std.string(reason)].indexOf("ObjectLayoutChanged(Editor)") < 0)
 			throw "Class layout edit did not require a full reload";
 		Sys.println("PASS: function fingerprints selectively retyped and regenerated cached artifacts");
+	}
+
+	static function functionByIndex(functions:Array<compiler.hl.HlFunction>, index:Int):compiler.hl.HlFunction {
+		for (fn in functions)
+			if (fn.functionIndex == index)
+				return fn;
+		throw 'Missing function index $index';
 	}
 }

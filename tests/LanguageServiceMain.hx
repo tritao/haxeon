@@ -397,8 +397,8 @@ class LanguageServiceMain {
 			|| secondMainIndex.revision != incrementalService.compiler.modules.get("incapp.Main").revision
 			|| secondMainIndex.symbolIdAt(helperUse) == null
 			|| bodyAnalysis.retyped.indexOf("incapp.Main.helper") < 0
-			|| bodyAnalysis.retyped.indexOf("main") < 0)
-			throw "semantic index did not rebuild exactly the edited module";
+			|| bodyAnalysis.retyped.indexOf("main") >= 0)
+			throw "semantic index refresh did not preserve declaration-level invalidation";
 		incrementalService.update("inc/Values.hx", "package inc; function value():Int return 2;");
 		var dependencyBodyAnalysis = incrementalService.compile("incapp.Main");
 		if (dependencyBodyAnalysis.retyped.indexOf("main") >= 0 || dependencyBodyAnalysis.retyped.indexOf("incapp.Main.helper") >= 0)
@@ -413,11 +413,11 @@ class LanguageServiceMain {
 		var structuralAnalysis = structuralService.compile("shapeapp.Main"),
 			updatedConsumerIndex = structuralService.compiler.modules.get("shapeapp.Main").semanticModel.index,
 			choiceUse = structuralSource.lastIndexOf("Choice.One") + "Choice.".length;
-		if (structuralAnalysis.retyped.indexOf("main") < 0
+		if (structuralAnalysis.retyped.indexOf("main") >= 0
 			|| structuralAnalysis.retyped.indexOf("shapeapp.Main.helper") < 0
 			|| originalConsumerIndex == updatedConsumerIndex
 			|| updatedConsumerIndex.symbolIdAt(choiceUse) == null)
-			throw "public enum change did not atomically rebuild dependent semantic indexes";
+			throw "public enum change did not selectively refresh dependent semantic indexes";
 		var largeService = new LanguageService(),
 			largeSource = new StringBuf();
 		for (index in 0...260)

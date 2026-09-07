@@ -69,6 +69,7 @@ class FrontendCompilation {
 			functions = semanticAssembly.functions,
 			owners = semanticAssembly.owners,
 			generatedByModule = semanticAssembly.generatedByModule,
+			invalidated = semanticAssembly.invalidated,
 			selected = semanticAssembly.selected,
 			entryPoint = semanticAssembly.entryPoint;
 		var frontendDoneAt = Sys.time() * 1000.0;
@@ -147,7 +148,16 @@ class FrontendCompilation {
 			state.typedSourceRevisions.set(fn.name, state.revision);
 			if (indexSemantics && state.semanticModel != null)
 				state.semanticModel.index.indexTypedFunction(fn, context.resolveSemanticSymbol, context.resolveSemanticEnumCase, token);
-			retyped.push(fn.name);
+			var semanticOrigin = fn.genericOrigin;
+			var semanticallyInvalidated = invalidated.exists(fn.name) || semanticOrigin != null && invalidated.exists(semanticOrigin);
+			if (!semanticallyInvalidated && StringTools.startsWith(fn.name, "$lambda:"))
+				for (origin in invalidated.keys())
+					if (StringTools.startsWith(fn.name, "$lambda:" + origin + ":")) {
+						semanticallyInvalidated = true;
+						break;
+					}
+			if (semanticallyInvalidated)
+				retyped.push(fn.name);
 			touchedModules.set(module, true);
 			if (lowerToIr) {
 				state.irFunctions.set(fn.name, IrGenerator.generateFunction(fn));
