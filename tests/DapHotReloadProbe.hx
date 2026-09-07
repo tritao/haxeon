@@ -23,6 +23,14 @@ class DapHotReloadProbe {
 		for (gate in 0...100)
 			Sys.sleep(0.02);
 		var patchedValue = Runtime.callInt(loaded, functionIndex);
-		Sys.println('$initialValue -> $patchedValue');
+
+		compiler.update("Value.hx",
+			StringTools.replace("function value():Int {\n  var result = 44;\n  if (true) {\n    var scoped = result + 100;\n    result = scoped - 99;\n    scoped = scoped + 0;\n  }\n  result = result - 1;\n  try {\n    throw \"patched-probe\";\n  } catch (error:Int) {\n    result = 0;\n  } catch (error:String) {\n    result = result + 0;\n  }\n  return result;\n}", "\n  ", "\n    "));
+		var changedAgain = compiler.compile("Main");
+		Runtime.patchSet(loaded, new PatchSet(changed.revision, changedAgain.revision, changedAgain.patchBytes, changedAgain.changedFunctions));
+		for (gate in 0...100)
+			Sys.sleep(0.02);
+		var patchedAgainValue = Runtime.callInt(loaded, functionIndex);
+		Sys.println('$initialValue -> $patchedValue -> $patchedAgainValue');
 	}
 }
