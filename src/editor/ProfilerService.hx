@@ -25,6 +25,10 @@ class ProfilerService {
 	var notificationSequence = 0;
 	var maxEntries = 100;
 	var emittedMetadataChanges = 0;
+	var timelineEpoch = 0;
+	var emittedTimelineSequence = 0;
+	var emittedGcTimestamp = -1.0;
+	final emittedTimelineStacks = new Map<String, Bool>();
 	final viewModel = new ProfilerViewModel();
 
 	public function new() {}
@@ -85,6 +89,7 @@ class ProfilerService {
 		session = new ProfilerSession(new HldiClient(host, port, timeout, token));
 		viewModel.reset();
 		emittedMetadataChanges = 0;
+		resetTimelineStream();
 		if (Reflect.hasField(options, "leafCapacity"))
 			session.leafCapacity = requiredInt(options, "leafCapacity");
 		if (Reflect.hasField(options, "eventCapacity"))
@@ -121,6 +126,7 @@ class ProfilerService {
 		current.reset();
 		viewModel.reset();
 		emittedMetadataChanges = 0;
+		resetTimelineStream();
 		return snapshot(current.snapshot());
 	}
 
@@ -159,13 +165,13 @@ class ProfilerService {
 			if (session != null && session.state == Running)
 				try {
 					session.poll();
-					message = snapshot(session.snapshot());
+					message = snapshot(session.snapshot(), true);
 					while (emittedMetadataChanges < session.metadataChanges.length) {
 						var change = session.metadataChanges[emittedMetadataChanges++];
 						changes.push({timestamp: change.timestamp, moduleId: change.moduleId, oldRevision: change.oldRevision, newRevision: change.newRevision});
 					}
 				} catch (error:Dynamic) {
-					message = snapshot(session.snapshot());
+					message = snapshot(session.snapshot(), true);
 					Reflect.setField(message, "error", Std.string(error));
 				}
 			mutex.release();
@@ -191,7 +197,22 @@ class ProfilerService {
 		return session;
 	}
 
-	function snapshot(value:ProfilerSnapshot):Dynamic {
+	function snapshot(value:ProfilerSnapshot, incremental:Bool = false):Dynamic {
+		var oldestSequence = value.timelineSamples.length == 0 ? emittedTimelineSequence + 1 : value.timelineSamples[0].sequence;
+		var timelineReset = emittedTimelineSequence == 0, timelineGap = !timelineReset && oldestSequence > emittedTimelineSequence + 1;
+		if (timelineGap) {
+			emittedTimelineStacks.clear();
+			timelineEpoch++;
+		}
+		var newSamples = [for (sample in value.timelineSamples) if (timelineReset || timelineGap || sample.sequence > emittedTimelineSequence) sample];
+		var requiredStacks = new Map<String, Bool>();
+		for (sample in newSamples)
+			if (!emittedTimelineStacks.exists(sample.stackKey)) requiredStacks.set(sample.stackKey, true);
+		var newStacks = [for (stack in value.stacks) if (requiredStacks.exists(stack.key)) stackValue(stack)];
+		for (stack in newStacks) emittedTimelineStacks.set(stack.key, true);
+		if (newSamples.length > 0) emittedTimelineSequence = newSamples[newSamples.length - 1].sequence;
+		var newGcStats = [for (stats in value.gcStats) if (timelineReset || timelineGap || stats.timestamp > emittedGcTimestamp) stats];
+		if (newGcStats.length > 0) emittedGcTimestamp = newGcStats[newGcStats.length - 1].timestamp;
 		var result:Dynamic = {
 			sequence: ++notificationSequence,
 			state: Std.string(value.state),
@@ -211,9 +232,12 @@ class ProfilerService {
 			gcSamples: value.gcSamples,
 			threads: [for (threadId => name in value.threads) {id: threadId, name: name}],
 			nativeSymbolCount: value.nativeSymbolCount,
-			gcStats: [for (stats in value.gcStats) {timestamp: stats.timestamp, allocated: stats.allocated, allocations: stats.allocations,
-				heap: stats.heap, collections: stats.collections, markMicros: stats.markMicros}],
-			timelineSamples: [for (sample in value.timelineSamples) {timestamp: sample.timestamp, threadId: sample.threadId, stackKey: sample.stackKey}],
+			gcStats: value.gcStats.length == 0 ? [] : [gcStatsValue(value.gcStats[value.gcStats.length - 1])],
+			timeline: {epoch: timelineEpoch, reset: timelineReset || timelineGap, gap: timelineGap,
+				fromSequence: newSamples.length == 0 ? emittedTimelineSequence : newSamples[0].sequence, toSequence: emittedTimelineSequence,
+				samples: [for (sample in newSamples) {sequence: sample.sequence, timestamp: sample.timestamp, threadId: sample.threadId, stackKey: sample.stackKey}],
+				stacks: newStacks,
+				counters: downsampleGc(newGcStats, 128)},
 			metadataSchema: value.metadataSchema,
 			metadataRevisions: [for (moduleId => revision in value.metadataRevisions) {moduleId: moduleId, revision: revision}],
 			metadataChanges: [for (change in value.metadataChanges) {
@@ -225,7 +249,6 @@ class ProfilerService {
 			functions: [for (aggregate in value.functions.slice(0, maxEntries)) aggregateValue(aggregate)],
 			lines: [for (aggregate in value.lines.slice(0, maxEntries)) aggregateValue(aggregate)],
 			stacks: [for (stack in value.stacks.slice(0, maxEntries)) stackValue(stack)],
-			timelineStacks: [for (stack in value.stacks) stackValue(stack)],
 			leaves: [for (leaf in value.leaves) leafValue(leaf)],
 			events: [for (event in value.events) {
 				timestamp: event.timestamp,
@@ -239,8 +262,32 @@ class ProfilerService {
 		var view = viewModel.update(result);
 		Reflect.setField(result, "view", view.state);
 		Reflect.setField(result, "viewDelta", view.delta);
+		if (incremental) {
+			for (field in ["functions", "lines", "stacks", "leaves", "events", "metadataChanges"])
+				Reflect.deleteField(result, field);
+			Reflect.deleteField(result, "view");
+		}
 		return result;
 	}
+
+	function resetTimelineStream():Void {
+		timelineEpoch++;
+		emittedTimelineSequence = 0;
+		emittedGcTimestamp = -1.0;
+		emittedTimelineStacks.clear();
+	}
+
+	static function downsampleGc(values:Array<profiler.ProfilerSession.ProfileGcStats>, limit:Int):Array<Dynamic> {
+		if (values.length <= limit)
+			return [for (stats in values) gcStatsValue(stats)];
+		var result:Array<Dynamic> = [], step = (values.length - 1) / (limit - 1);
+		for (index in 0...limit) result.push(gcStatsValue(values[Math.round(index * step)]));
+		return result;
+	}
+
+	static function gcStatsValue(stats:profiler.ProfilerSession.ProfileGcStats):Dynamic
+		return {timestamp: stats.timestamp, allocated: stats.allocated, allocations: stats.allocations,
+			heap: stats.heap, collections: stats.collections, markMicros: stats.markMicros};
 
 	static function aggregateValue(value:ProfileAggregate):Dynamic
 		return {

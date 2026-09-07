@@ -139,11 +139,13 @@ class ProfileLeaf {
 }
 
 class ProfileTimelineSample {
+	public final sequence:Int;
 	public final timestamp:Float;
 	public final threadId:Int;
 	public final stackKey:String;
 
-	public function new(timestamp:Float, threadId:Int, stackKey:String) {
+	public function new(sequence:Int, timestamp:Float, threadId:Int, stackKey:String) {
+		this.sequence = sequence;
 		this.timestamp = timestamp;
 		this.threadId = threadId;
 		this.stackKey = stackKey;
@@ -236,6 +238,7 @@ class ProfilerSession {
 	public final gcStats:Array<ProfileGcStats> = [];
 	public final timelineSamples:Array<ProfileTimelineSample> = [];
 	public var timelineCapacity:Int = 50000;
+	var timelineSequence = 0;
 	final nativeSymbols = new Map<String, {name:String, module:String, base:Int64}>();
 	public var metadata(default, null):Null<HldiMetadata>;
 	public var lastError(default, null):Null<String>;
@@ -333,6 +336,7 @@ class ProfilerSession {
 		metadataChanges.resize(0);
 		gcStats.resize(0);
 		timelineSamples.resize(0);
+		timelineSequence = 0;
 		nativeSymbols.clear();
 		gcSamples = 0;
 	}
@@ -472,7 +476,7 @@ class ProfilerSession {
 			stack.samples++;
 			var threadSamples = stack.threadSamples.get(record.threadId);
 			stack.threadSamples.set(record.threadId, (threadSamples == null ? 0 : threadSamples) + 1);
-			timelineSamples.push(new ProfileTimelineSample(record.timestamp, record.threadId, key));
+			timelineSamples.push(new ProfileTimelineSample(++timelineSequence, record.timestamp, record.threadId, key));
 			if (timelineCapacity <= 0)
 				timelineSamples.resize(0);
 			else if (timelineSamples.length > timelineCapacity)

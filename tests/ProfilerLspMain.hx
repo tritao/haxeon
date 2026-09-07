@@ -37,22 +37,26 @@ class ProfilerLspMain {
 			if (!waitFor(messages, mutex, available, value -> value.id == 6).result.captureActive)
 				throw "Profiler capture did not start";
 			var notification = waitFor(messages, mutex, available,
-				value -> value.method == "haxeon/profilerSnapshot" && value.params.samples > 0 && value.params.leaves.length > 0);
-			var leaf = notification.params.leaves[0];
+				value -> value.method == "haxeon/profilerSnapshot" && value.params.samples > 0 && value.params.timeline.samples.length > 0);
+			if (notification.params.view != null || notification.params.stacks != null || notification.params.leaves != null)
+				throw "Incremental profiler notification repeated full snapshot data";
+			dispatcher.dispatch(command(8, "haxeon.profiler.snapshot", {}));
+			var full = waitFor(messages, mutex, available, value -> value.id == 8).result;
+			var leaf = full.leaves[0];
 			if (leaf.pc == null || leaf.offset == null || leaf.opcodeIndex == null || leaf.file == null)
 				throw "Profiler notification omitted raw leaf metadata";
-			if (notification.params.view.callTree.length == 0 || notification.params.view.flameGraph.length == 0
-				|| notification.params.viewDelta.nodes.length == 0 || notification.params.view.health.bufferCapacity == "0")
+			if (full.view.callTree.length == 0 || full.view.flameGraph.length == 0
+				|| notification.params.viewDelta.nodes.length == 0 || full.view.health.bufferCapacity == "0")
 				throw "Profiler notification omitted incremental editor view data";
 			var locatedFrame = false;
-			for (stack in cast(notification.params.stacks, Array<Dynamic>))
+			for (stack in cast(full.stacks, Array<Dynamic>))
 				for (frame in cast(stack.frameDetails, Array<Dynamic>))
 					if (frame.file != null && frame.line != null) locatedFrame = true;
 			if (!locatedFrame)
 				throw "Profiler stack frames omitted source navigation metadata";
 			if (notification.params.sampleRecords == "0" || notification.params.generatedBytes == "0"
 				|| notification.params.overheadMicrosPerSample <= 0 || notification.params.threads.length == 0 || notification.params.gcStats.length == 0
-				|| notification.params.timelineSamples.length == 0 || notification.params.timelineStacks.length == 0)
+				|| notification.params.timeline.samples.length == 0 || notification.params.timeline.stacks.length == 0)
 				throw "Profiler snapshot omitted calibration or thread telemetry";
 			dispatcher.dispatch(command(7, "haxeon.profiler.captureStop", {}));
 			if (waitFor(messages, mutex, available, value -> value.id == 7).result.captureActive || !sys.FileSystem.exists(capturePath))
