@@ -24,6 +24,7 @@ import compiler.ir.hl.HlLower;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ffi.CHeaderEmitter;
+import compiler.tools.CompilerArguments;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 import compiler.ir.IrGenerator;
@@ -679,6 +680,30 @@ class TestMain {
 				}
 			], "sample"))
 			throw "Typed native declarations did not emit a deterministic C FFI contract";
+		var compilerRequest = CompilerArguments.parse([
+			"--output=out/sample.hl",
+			"--entry=sample.Main",
+			"--root=source",
+			"--dump-function=42",
+			"--ffi-header=out/sample.h",
+			"--ffi-library=sample",
+			"source/Main.hx"
+		]);
+		if (compilerRequest.output != "out/sample.hl"
+			|| compilerRequest.entry != "sample.Main"
+			|| compilerRequest.dumpFunction != 42
+			|| compilerRequest.roots.length != 1
+			|| compilerRequest.paths.length != 1
+			|| compilerRequest.ffiLibrary != "sample")
+			throw "Compiler CLI did not produce a typed build request";
+		var rejectedFfiPair = false;
+		try {
+			CompilerArguments.parse(["--ffi-header=out/sample.h", "source/Main.hx"]);
+		} catch (error:Dynamic) {
+			rejectedFfiPair = true;
+		}
+		if (!rejectedFfiPair)
+			throw "Compiler CLI accepted an incomplete FFI output request";
 		var nativeStubProgram = Frontend.compile('@:hlNative("sample") private class Native { public static function read():Int return 0; } function main():Int { Native.read(); return 42; }');
 		var nativeStub = false, emittedStub = false;
 		for (native in nativeStubProgram.natives)

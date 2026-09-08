@@ -57,7 +57,7 @@ cc -shared -fPIC -DHL_NAME\(n\)=realtime_##n \
 
 mapfile -t sources < <(cd "$root_dir" && find src stdlib -type f -name '*.hx' -print | LC_ALL=C sort)
 command=("$hl" "$compiler" "--output=$output" \
-	--entry=compiler.tools.BootstrapCompiler --root=src --root=stdlib "${sources[@]}")
+	--entry=compiler.tools.HaxeonCompiler --root=src --root=stdlib "${sources[@]}")
 
 {
 	echo "bootstrap crash diagnostic"

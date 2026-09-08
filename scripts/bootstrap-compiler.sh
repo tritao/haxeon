@@ -5,8 +5,11 @@ root_dir=$(cd "$(dirname "$0")/.." && pwd)
 haxe="$root_dir/.tools/haxe/haxe"
 hl="$root_dir/vendor/hashlink/hl"
 runtime="$root_dir/out/realtime_runtime.hdll"
-compiler_a="$root_dir/bootstrap/compiler.hl"
-compiler_b="$root_dir/out/bootstrap/compiler-b.hl"
+checked_compiler="$root_dir/bootstrap/compiler.hl"
+seed_compiler="$root_dir/out/bootstrap/compiler-seed.hl"
+stage_one="$root_dir/out/bootstrap/compiler-stage-one.hl"
+stage_two="$root_dir/out/bootstrap/compiler-stage-two.hl"
+stage_three="$root_dir/out/bootstrap/compiler-stage-three.hl"
 self_compiler="$root_dir/out/bootstrap/compiler-self.hl"
 
 mode=${1:-bootstrap}
@@ -23,7 +26,7 @@ if [[ "$mode" == "bootstrap" && ! -x "$haxe" ]]; then
 	echo "missing reference Haxe compiler; run ./scripts/bootstrap-tools.sh first" >&2
 	exit 1
 fi
-if [[ "$mode" == "--self" && ! -f "$compiler_a" ]]; then
+if [[ "$mode" == "--self" && ! -f "$checked_compiler" ]]; then
 	echo "missing bootstrap/compiler.hl" >&2
 	exit 1
 fi
@@ -42,24 +45,33 @@ mapfile -t sources < <(cd "$root_dir" && find src stdlib -type f -name '*.hx' -p
 if [[ "$mode" == "--self" ]]; then
 	(
 		cd "$root_dir"
-		LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$compiler_a" \
-			--output=out/bootstrap/compiler-self.hl --entry=compiler.tools.BootstrapCompiler --root=src --root=stdlib "${sources[@]}"
+		LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$checked_compiler" \
+			--output=out/bootstrap/compiler-self.hl --entry=compiler.tools.HaxeonCompiler --root=src --root=stdlib "${sources[@]}"
 	)
-	cmp "$compiler_a" "$self_compiler"
-	cmp "$compiler_a.functions" "$self_compiler.functions"
+	cmp "$checked_compiler" "$self_compiler"
+	cmp "$checked_compiler.functions" "$self_compiler.functions"
 	echo "PASS: checked-in compiler rebuilt itself identically"
 	exit 0
 fi
 
-"$haxe" --cwd "$root_dir" -cp src --run compiler.tools.BootstrapCompiler \
-	--output=bootstrap/compiler.hl --entry=compiler.tools.BootstrapCompiler --root=src --root=stdlib "${sources[@]}"
+"$haxe" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--output=out/bootstrap/compiler-seed.hl --entry=compiler.tools.HaxeonCompiler --root=src --root=stdlib "${sources[@]}"
 
-(
-	cd "$root_dir"
-	LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$compiler_a" \
-		--output=out/bootstrap/compiler-b.hl --entry=compiler.tools.BootstrapCompiler --root=src --root=stdlib "${sources[@]}"
-)
+compile_with() {
+	local compiler=$1
+	local output=$2
+	(
+		cd "$root_dir"
+		LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$compiler" \
+			--output="$output" --entry=compiler.tools.HaxeonCompiler --root=src --root=stdlib "${sources[@]}"
+	)
+}
 
-cmp "$compiler_a" "$compiler_b"
-cmp "$compiler_a.functions" "$compiler_b.functions"
-echo "PASS: bootstrap compiler rebuilt an identical compiler"
+compile_with "$seed_compiler" out/bootstrap/compiler-stage-one.hl
+compile_with "$stage_one" out/bootstrap/compiler-stage-two.hl
+compile_with "$stage_two" out/bootstrap/compiler-stage-three.hl
+cmp "$stage_two" "$stage_three"
+cmp "$stage_two.functions" "$stage_three.functions"
+cp "$stage_three" "$checked_compiler"
+cp "$stage_three.functions" "$checked_compiler.functions"
+echo "PASS: bootstrap stages converged on an identical self-hosted compiler"

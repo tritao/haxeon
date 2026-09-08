@@ -3,8 +3,8 @@ package compiler.tools;
 import compiler.Compiler;
 import sys.io.File;
 
-/** Loads a deterministic source manifest into a compiler instance. */
-class BootstrapSources {
+/** Loads a deterministic explicit source manifest into a compiler instance. */
+class SourceManifestLoader {
 	public static function load(compiler:Compiler, roots:Array<String>, paths:Array<String>):Void {
 		var ordered = paths.copy();
 		ordered.sort(Reflect.compare);
@@ -12,7 +12,7 @@ class BootstrapSources {
 			try {
 				compiler.update(projectPath(path, roots), File.getContent(path));
 			} catch (error:Dynamic) {
-				throw "Could not load bootstrap source " + path + ": " + Std.string(error);
+				throw "Could not load compiler source " + path + ": " + Std.string(error);
 			}
 	}
 
