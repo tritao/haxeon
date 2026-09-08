@@ -76,7 +76,7 @@ class HotReloadMain {
 			throw "initial exception handler returned the wrong value";
 
 		compiler.update("Value.hx",
-			"function value():Int { var ratio:Float = 2.75; var label:String = \"patched source\"; var result = 0; while (result < 43) { result = result + 1; } return result * 2 / 2; }");
+			"function value():Int { var ratio:Float = 2.75; var label:String = \"patched source\"; var result = 0; while (result < 43) { result = result + 1; } return (result * 2) >> 1; }");
 		var changed = compiler.compile("Main");
 		var decoded = HlPatchReader.decode(changed.patchBytes);
 		if (decoded.moduleId.compare(initial.runtimeIdentity.sub(4, 16)) != 0)
@@ -456,7 +456,8 @@ class HotReloadMain {
 		var indices:Map<String, Int> = [], ids:Map<String, Int> = [];
 		indices.set("__init", 0);
 		ids.set("__init", compiler.hl.incremental.HlFunctionCache.INIT_STABLE_ID);
-		var identity = HlRuntimeIdentity.encode(moduleId, 1, indices, ids), invalidInitializer = identity.sub(0, identity.length);
+		var identity = HlRuntimeIdentity.encode(moduleId, 1, indices, ids),
+			invalidInitializer = identity.sub(0, identity.length);
 		invalidInitializer.setInt32(28, 1);
 		try {
 			Runtime.load(HlWriter.encode(code), invalidInitializer);
@@ -494,6 +495,31 @@ class HotReloadMain {
 
 	static function testLiveAbiPatchMatrix():Void {
 		var fixtures = [
+			{
+				name: "enum payload patch operands",
+				before: "enum Value { Number(n:Int); } function main():Int { var v = Value.Number(40); return switch v { case Number(n): n; }; }",
+				after: "enum Value { Number(n:Int); } function main():Int { var v = Value.Number(42); return switch v { case Number(n): n; }; }"
+			},
+			{
+				name: "integer patch opcodes",
+				before: "function main():Int { return 40; }",
+				after: "function main():Int { var n = 85; return ((((n % 86) << 1) >> 1) >>> 1) | ((n & 1) ^ 1); }"
+			},
+			{
+				name: "integer to float conversion",
+				before: "function main():Int { var n = 40; var f:Float = n; return f == 42.0 ? 42 : 40; }",
+				after: "function main():Int { var n = 42; var f:Float = n; return f == 42.0 ? 42 : 40; }"
+			},
+			{
+				name: "null patch operand",
+				before: "function main():Int { var s:Null<String> = null; return s == null ? 40 : 0; }",
+				after: "function main():Int { var s:Null<String> = null; return s == null ? 42 : 0; }"
+			},
+			{
+				name: "global reads and writes",
+				before: "class State { public static var value:Int = 40; } function main():Int { State.value = 40; return State.value; }",
+				after: "class State { public static var value:Int = 40; } function main():Int { State.value = 42; return State.value; }"
+			},
 			{
 				name: "top-level body",
 				before: "function main():Int { return 40; }",

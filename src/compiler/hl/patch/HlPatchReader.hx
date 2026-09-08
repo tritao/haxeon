@@ -24,8 +24,8 @@ class HlPatchReader {
 			if (revision <= base)
 				throw "Invalid patch revision range";
 			var baseInts = -1, baseFloats = -1, baseStrings = -1, baseTypes = -1, intPrefixHash = 0, floatPrefixHash = 0, stringPrefixHash = 0,
-				typePrefixHash = 0, ints = [], floats = [], strings = [], types = [], functions = [], debugFiles = [], sourceSnapshots = [], haveDebug = false,
-				haveSnapshots = false;
+				typePrefixHash = 0, ints = [], floats = [], strings = [], types = [], functions = [], debugFiles = [], sourceSnapshots = [],
+				haveDebug = false, haveSnapshots = false;
 			for (_ in 0...readUnsigned(input)) {
 				var tag = input.readByte(),
 					length = readUnsigned(input),
@@ -84,22 +84,39 @@ class HlPatchReader {
 								throw "HLP debug opcode count mismatch";
 							for (_ in 0...count) {
 								var file = readUnsigned(input),
-									line = readUnsigned(input), column = readUnsigned(input), endLine = readUnsigned(input), endColumn = readUnsigned(input),
-									sourceHash = input.readInt32(), start = readIndex(input) - 1, end = readIndex(input) - 1, flags = readUnsigned(input),
+									line = readUnsigned(input),
+									column = readUnsigned(input),
+									endLine = readUnsigned(input),
+									endColumn = readUnsigned(input),
+									sourceHash = input.readInt32(),
+									start = readIndex(input) - 1,
+									end = readIndex(input) - 1,
+									flags = readUnsigned(input),
 									validRange = start == -1 && end == -1 || start >= 0 && end >= start;
-								if (file >= debugFiles.length || line < 1 || column < 1 || endLine < line || endColumn < 1
-									|| endLine == line && endColumn < column || !validRange)
+								if (file >= debugFiles.length || line < 1 || column < 1 || endLine < line || endColumn < 1 || endLine == line
+									&& endColumn < column || !validRange)
 									throw "Invalid HLP debug location";
-								found.debug.push({file: file, line: line, column: column, endLine: endLine, endColumn: endColumn,
-									sourceHash: sourceHash, start: start, end: end, flags: flags});
+								found.debug.push({
+									file: file,
+									line: line,
+									column: column,
+									endLine: endLine,
+									endColumn: endColumn,
+									sourceHash: sourceHash,
+									start: start,
+									end: end,
+									flags: flags
+								});
 							}
 						}
 					case 4:
-						if (haveSnapshots) throw "Duplicate HLP source snapshot section";
+						if (haveSnapshots)
+							throw "Duplicate HLP source snapshot section";
 						haveSnapshots = true;
 						var seenHashes:Map<Int, Bool> = [];
 						for (_ in 0...readUnsigned(input)) {
-							var sourceHash = input.readInt32(), content = input.read(readUnsigned(input));
+							var sourceHash = input.readInt32(),
+								content = input.read(readUnsigned(input));
 							if (sourceHash == 0 || seenHashes.exists(sourceHash) || hashBytes(content) != sourceHash)
 								throw "Invalid HLP source snapshot";
 							seenHashes.set(sourceHash, true);
@@ -142,7 +159,8 @@ class HlPatchReader {
 
 	static function hashBytes(bytes:Bytes):Int {
 		var hash:Int = cast 0x811C9DC5;
-		for (index in 0...bytes.length) hash = (hash ^ bytes.get(index)) * 16777619;
+		for (index in 0...bytes.length)
+			hash = (hash ^ bytes.get(index)) * 16777619;
 		return hash;
 	}
 
@@ -211,13 +229,14 @@ class HlPatchReader {
 				operands;
 			case 91, 92: [readIndex(input), readIndex(input)];
 			case 93: [for (_ in 0...4) readIndex(input)];
-			case 0, 1, 2, 3, 5, 6, 33, 58, 59, 63, 65, 67, 68, 69, 72, 73, 82, 83, 84:
-				[
-					for (_ in 0...(op == 58 || op == 67 || op == 68 || op == 69 || op == 73 || op == 82 ? 1 : 2))
-						readIndex(input)
-				];
-			case 7, 8, 9, 10, 25, 34, 38, 39, 44, 77, 81:
-				[for (_ in 0...(3 - (op == 44 ? 1 : 0))) readIndex(input)];
+			case HlOpcode.Null, HlOpcode.JAlways, HlOpcode.Ret, HlOpcode.Throw, HlOpcode.Rethrow, HlOpcode.EndTrap, HlOpcode.New:
+				[readIndex(input)];
+			case HlOpcode.Mov, HlOpcode.Int, HlOpcode.Float, HlOpcode.Bool, HlOpcode.String, HlOpcode.StaticClosure, HlOpcode.GetGlobal, HlOpcode.SetGlobal,
+				HlOpcode.ToDyn, HlOpcode.ToSFloat, HlOpcode.SafeCast, HlOpcode.ToVirtual, HlOpcode.Trap, HlOpcode.ArraySize, HlOpcode.Type, HlOpcode.JTrue:
+				[readIndex(input), readIndex(input)];
+			case HlOpcode.Add, HlOpcode.Sub, HlOpcode.Mul, HlOpcode.SDiv, HlOpcode.SMod, HlOpcode.Shl, HlOpcode.SShr, HlOpcode.UShr, HlOpcode.And,
+				HlOpcode.Or, HlOpcode.Xor, HlOpcode.Call1, HlOpcode.InstanceClosure, HlOpcode.Field, HlOpcode.SetField, HlOpcode.GetArray, HlOpcode.SetArray:
+				[for (_ in 0...3) readIndex(input)];
 			case 24: [readIndex(input), readIndex(input)];
 			case 26: [for (_ in 0...4) readIndex(input)];
 			case 48, 51, 56: [for (_ in 0...3) readIndex(input)];
