@@ -15,6 +15,7 @@
 #include "runtime/maps.c"
 #include "runtime/strings.c"
 #include "runtime/files.c"
+#include "runtime/atomic_files.c"
 #include "runtime/system.c"
 #include "runtime/module_runtime.c"
 #include "runtime/bindings.c"

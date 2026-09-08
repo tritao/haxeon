@@ -1,9 +1,3 @@
-#ifndef HL_WIN
-#include <unistd.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <errno.h>
-#endif
 extern vbyte *hl_sys_get_cwd( void );
 extern vbyte *hl_sys_full_path( vbyte *path );
 extern vbyte *hl_sys_exe_path( void );
@@ -90,46 +84,6 @@ HL_PRIM bool HL_NAME(__sys_rename)( vbyte *path, vbyte *new_path ) {
 	free(owned_path);
 	free(owned_new_path);
 	return result;
-}
-
-/* A unique sibling and a single replacement preserve the old file on write
-   failure. Return false on unsupported hosts rather than use a weaker write. */
-HL_PRIM bool HL_NAME(__file_write_atomic)( vbyte *path, vbyte *content, bool replace ) {
-#ifdef HL_WIN
-	return false;
-#else
-	char *target = realtime_utf8_copy(path), *text = realtime_utf8_copy(content);
-	char *temporary = malloc(strlen(target) + 16);
-	if( temporary == NULL ) { free(target); free(text); return false; }
-	sprintf(temporary,"%s.XXXXXX",target);
-	struct stat metadata;
-	int status = stat(target,&metadata);
-	if( (status != 0 && errno != ENOENT) || (status == 0 && !S_ISREG(metadata.st_mode)) ) {
-		free(temporary); free(target); free(text); return false;
-	}
-	int fd = mkstemp(temporary);
-	bool ok = fd >= 0;
-	if( ok && status == 0 ) ok = fchmod(fd,metadata.st_mode & 0777) == 0;
-	size_t offset = 0, length = strlen(text);
-	while( ok && offset < length ) {
-		ssize_t count = write(fd,text + offset,length - offset);
-		if( count < 0 && errno == EINTR ) continue;
-		if( count <= 0 ) { ok = false; break; }
-		offset += (size_t)count;
-	}
-	if( ok ) ok = fsync(fd) == 0;
-	if( fd >= 0 && close(fd) != 0 ) ok = false;
-	if( ok ) {
-		if( replace ) ok = rename(temporary,target) == 0;
-		else {
-			ok = link(temporary,target) == 0;
-			if( ok ) unlink(temporary);
-		}
-	}
-	if( !ok && fd >= 0 ) unlink(temporary);
-	free(temporary); free(target); free(text);
-	return ok;
-#endif
 }
 
 HL_PRIM varray *HL_NAME(__sys_read_dir)( vbyte *path ) {
