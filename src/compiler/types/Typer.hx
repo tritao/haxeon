@@ -1784,6 +1784,9 @@ class Typer {
 				// A qualified name denotes a constant, never a new pattern binding.
 				if (name.indexOf(".") >= 0)
 					return null;
+				var owner = context.lexicalOwner;
+				if (owner != null && findStaticFieldNullable(owner, name) != null)
+					return null;
 				var info = enumCaseInfo(name);
 				if (info == null && name.indexOf(".") < 0) {
 					var expectedEnum = enumName(expected);
