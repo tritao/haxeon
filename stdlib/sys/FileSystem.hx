@@ -34,6 +34,9 @@ extern function fileSystemFullPath(path:String):String;
 @:hlNative("realtime_runtime", "__sys_read_dir")
 extern function fileSystemReadDirectory(path:String):Array<String>;
 
+@:hlNative("realtime_runtime", "__sys_metadata")
+extern function fileSystemMetadata(path:String):Null<Array<Int>>;
+
 @:hlNative("realtime_runtime", "__sys_create_dir")
 extern function fileSystemCreateDirectory(path:String, mode:Int):Bool;
 
@@ -63,6 +66,12 @@ class FileSystem {
 	public static inline function readDirectory(path:String):Array<String>
 		return fileSystemReadDirectory(path);
 
+	/** Lightweight metadata for change detection, or null when the path is unavailable. */
+	public static function metadata(path:String):Null<FileMetadata> {
+		var values = fileSystemMetadata(path);
+		return values == null ? null : new FileMetadata(values[5], values[3]);
+	}
+
 	public static inline function createDirectory(path:String):Void
 		fileSystemCreateDirectory(path, 493);
 
@@ -74,4 +83,15 @@ class FileSystem {
 
 	public static inline function rename(path:String, newPath:String):Void
 		if (!fileSystemRename(path, newPath)) throw 'Could not rename "$path" to "$newPath"';
+}
+
+class FileMetadata {
+	public final size:Int;
+	/** Last modification time in Unix seconds. */
+	public final modified:Int;
+
+	public function new(size:Int, modified:Int) {
+		this.size = size;
+		this.modified = modified;
+	}
 }

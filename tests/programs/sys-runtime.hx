@@ -66,9 +66,16 @@ function main():Int {
 		return 8;
 	sys.FileSystem.rename(fsDirectory, fsRenamed);
 	sys.io.File.saveContent(fsFile, "filesystem");
-	if (!sys.FileSystem.exists(fsFile) || sys.FileSystem.readDirectory(fsRenamed).indexOf("value-ß.txt") < 0)
+	var metadata = sys.FileSystem.metadata(fsFile);
+	if (!sys.FileSystem.exists(fsFile)
+		|| metadata == null
+		|| metadata.size != 10
+		|| metadata.modified <= 0
+		|| sys.FileSystem.readDirectory(fsRenamed).indexOf("value-ß.txt") < 0)
 		return 9;
 	sys.FileSystem.deleteFile(fsFile);
+	if (sys.FileSystem.metadata(fsFile) != null)
+		return 11;
 	sys.FileSystem.deleteDirectory(fsRenamed);
 	if (sys.FileSystem.exists(fsRenamed))
 		return 10;

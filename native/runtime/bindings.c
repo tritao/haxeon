@@ -237,6 +237,7 @@ DEFINE_PRIM(_BOOL,__sys_remove_dir,_BYTES);
 DEFINE_PRIM(_BOOL,__sys_delete,_BYTES);
 DEFINE_PRIM(_BOOL,__sys_rename,_BYTES _BYTES);
 DEFINE_PRIM(_ARR,__sys_read_dir,_BYTES);
+DEFINE_PRIM(_ARR,__sys_metadata,_BYTES);
 DEFINE_PRIM(_BYTES,__sys_get_env,_BYTES);
 DEFINE_PRIM(_BYTES,__sys_system_name,_NO_ARG);
 DEFINE_PRIM(_BOOL,__sys_put_env,_BYTES _BYTES);

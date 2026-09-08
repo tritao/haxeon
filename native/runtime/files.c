@@ -9,6 +9,7 @@ extern bool hl_sys_remove_dir( vbyte *path );
 extern bool hl_sys_delete( vbyte *path );
 extern bool hl_sys_rename( vbyte *path, vbyte *new_path );
 extern varray *hl_sys_read_dir( vbyte *path );
+extern varray *hl_sys_stat( vbyte *path );
 
 static char *realtime_utf8_copy( const vbyte *value ) {
 	const char *utf8 = value == NULL ? "" : hl_to_utf8((const uchar *)value);
@@ -101,6 +102,14 @@ HL_PRIM varray *HL_NAME(__sys_read_dir)( vbyte *path ) {
 		target[index] = realtime_string_from_platform(source[index]);
 	return result;
 #endif
+}
+
+HL_PRIM varray *HL_NAME(__sys_metadata)( vbyte *path ) {
+	char *owned;
+	vbyte *argument = realtime_platform_argument(path,&owned);
+	varray *result = hl_sys_stat(argument);
+	free(owned);
+	return result;
 }
 
 HL_PRIM void HL_NAME(__file_save_bytes)( vbyte *path, realtime_bytes *bytes ) {
