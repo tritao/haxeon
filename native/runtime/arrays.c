@@ -238,6 +238,16 @@ HL_PRIM VALUE_TYPE HL_NAME(__array_pop_##SUFFIX)( varray *array ) { \
 	memset(hl_aptr(array, vbyte) + array->size * hl_type_size(array->at), 0, hl_type_size(array->at)); \
 	return value; \
 } \
+HL_PRIM VALUE_TYPE HL_NAME(__array_shift_##SUFFIX)( varray *array ) { \
+	if (array->size <= 0) \
+		hl_error("Array.shift on an empty array"); \
+	VALUE_TYPE value = ((VALUE_TYPE *)hl_aptr(array, vbyte))[0]; \
+	int stride = hl_type_size(array->at); \
+	array->size--; \
+	memmove(hl_aptr(array, vbyte), hl_aptr(array, vbyte) + stride, (size_t)array->size * stride); \
+	memset(hl_aptr(array, vbyte) + array->size * stride, 0, stride); \
+	return value; \
+} \
 HL_PRIM void HL_NAME(__array_resize_##SUFFIX)( varray *array, int length ) { \
 	if (length < 0) \
 		hl_error("Array.resize length must be non-negative"); \

@@ -3502,6 +3502,11 @@ class Typer {
 				fail("E1008", "Array.pop expects no arguments", span);
 			return new TypedExpression(TArrayPop(receiver), element, span);
 		}
+		if (name == "shift") {
+			if (arguments.length != 0)
+				fail("E1008", "Array.shift expects no arguments", span);
+			return new TypedExpression(TCollectionCall(receiver, "shift", []), element, span);
+		}
 		if (name == "resize") {
 			if (arguments.length != 1)
 				fail("E1008", "Array.resize expects one argument", span);

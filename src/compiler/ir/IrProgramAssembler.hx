@@ -380,6 +380,13 @@ class IrProgramAssembler {
 					result: entry.type
 				});
 				program.natives.push({
+					name: '__array_shift_${entry.name}',
+					library: "realtime_runtime",
+					symbol: '__array_shift_${entry.name}',
+					arguments: [arrayType],
+					result: entry.type
+				});
+				program.natives.push({
 					name: '__array_resize_${entry.name}',
 					library: "realtime_runtime",
 					symbol: '__array_resize_${entry.name}',

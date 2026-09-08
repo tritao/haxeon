@@ -1251,6 +1251,7 @@ class LanguageService {
 				addMember("indexOf", "method", "indexOf(value):Int", prefix, result);
 				addMember("push", "method", "push(value):Int", prefix, result);
 				addMember("pop", "method", "pop():Element", prefix, result);
+				addMember("shift", "method", "shift():Element", prefix, result);
 			case TMap(_, _):
 				addMember("set", "method", "set(key,value):Void", prefix, result);
 				addMember("exists", "method", "exists(key):Bool", prefix, result);
