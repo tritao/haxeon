@@ -79,6 +79,23 @@ function main():Int {
 	sys.FileSystem.deleteDirectory(fsRenamed);
 	if (sys.FileSystem.exists(fsRenamed))
 		return 10;
+	var mutex = new sys.thread.Mutex(), threaded = [0];
+	sys.thread.Thread.create(function() {
+		mutex.acquire();
+		threaded[0] = 42;
+		mutex.release();
+	});
+	var attempts = 0;
+	while (attempts < 100) {
+		mutex.acquire();
+		var finished = threaded[0] == 42;
+		mutex.release();
+		if (finished) break;
+		Sys.sleep(0.001);
+		attempts++;
+	}
+	if (threaded[0] != 42)
+		return 12;
 	Sys.println("PASS: Sys UTF-8 marshalling ✓\n");
 	trace("PASS: trace UTF-8 marshalling ✓\n");
 	return 42;
