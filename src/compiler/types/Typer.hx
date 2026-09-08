@@ -2780,12 +2780,12 @@ class Typer {
 							}
 							var typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span);
 							if (implicitMethod.isStatic)
-								return applyCallEffect(new TypedExpression(TCall(methodKey, typed), lowerType(method.result), span), methodKey);
+								return applyCallEffect(new TypedExpression(TCall(methodKey, typed), lowerType(method.result), span), methodKey, scope);
 							var thisType = scope.resolve("this");
 							if (thisType == null)
 								fail("E1007", 'Instance method "$methodKey" requires an object', span);
 							var receiver = typeExpression(Variable("this", span), scope);
-							return applyCallEffect(new TypedExpression(TMethodCall(receiver, methodKey, typed), lowerType(method.result), span), methodKey);
+							return applyCallEffect(new TypedExpression(TMethodCall(receiver, methodKey, typed), lowerType(method.result), span), methodKey, scope);
 						}
 					}
 					var parts = splitPath(name),
@@ -2910,7 +2910,7 @@ class Typer {
 							semanticResult = declarations.resolve(method.result, method.span, substitutions),
 							physicalResult = isGenericNominal(methodOwnerType) ? TDynamic : semanticResult,
 							call = new TypedExpression(TMethodCall(resolvedReceiver, methodKey, typed), physicalResult, span);
-						applyCallEffect(abiBoundaryCast(call, semanticResult), methodKey);
+						applyCallEffect(abiBoundaryCast(call, semanticResult), methodKey, scope);
 					} else {
 						var hasSignature = signatures.exists(name);
 						if (hasSignature && isGeneric(requiredMapValue(signatures, name))) {
@@ -2942,7 +2942,7 @@ class Typer {
 							fail("E1008", 'Function "$name" expects ${expectedArguments.length} arguments, got ${arguments.length}', span);
 						var typed = hasSignature ? typeDeclaredCallArguments(arguments, requiredMapValue(signatures, name).arguments, scope, name,
 							span) : typeCallArguments(arguments, expectedArguments, scope, name);
-						applyCallEffect(new TypedExpression(TCall(name, typed), result, span), name);
+						applyCallEffect(new TypedExpression(TCall(name, typed), result, span), name, scope);
 					}
 				}
 			case ClosureCall(callee, arguments, span):
@@ -2958,8 +2958,12 @@ class Typer {
 				];
 				typedArguments = coerceArguments(typedArguments, functionType.arguments, "function expression");
 				for (captured in context.storage.candidateSourceNames()) scope.invalidate(captured);
+				scope.invalidateAllExpressions();
 				new TypedExpression(TClosureCall(typedCallee, typedArguments), functionType.result, span);
-			case MethodCall(object, name, arguments, span): typeMethodCall(object, name, arguments, span, scope, expectedType);
+			case MethodCall(object, name, arguments, span):
+				var call = typeMethodCall(object, name, arguments, span, scope, expectedType);
+				scope.invalidateAllExpressions();
+				call;
 		}
 
 	function typeMember(object:AstExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression {
@@ -3013,8 +3017,10 @@ class Typer {
 		return new TypedExpression(TAbiCast(coerce(constructed, representation, 'abstract constructor "$constructorName"', "E1003")), valueType, span);
 	}
 
-	function applyCallEffect(call:TypedExpression, name:String):TypedExpression
+	function applyCallEffect(call:TypedExpression, name:String, ?scope:Scope):TypedExpression {
+		if (scope != null) scope.invalidateAllExpressions();
 		return noReturnFunctions.exists(name) ? new TypedExpression(TNoReturn(call), TNever, call.span) : call;
+	}
 
 	function typeSuperCall(arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
 		var owner = context.lexicalOwner, baseType:Null<AstType> = null;
@@ -3371,7 +3377,7 @@ class Typer {
 		var semanticResult = declarations.resolve(method.result, method.span, substitutions),
 			physicalResult = isGenericNominal(methodOwnerType) ? TDynamic : semanticResult,
 			call = new TypedExpression(TMethodCall(receiver, methodKey, typed), physicalResult, span);
-		return applyCallEffect(abiBoundaryCast(call, semanticResult), methodKey);
+		return applyCallEffect(abiBoundaryCast(call, semanticResult), methodKey, scope);
 	}
 
 	function typeFunctionFieldCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):Null<TypedExpression> {

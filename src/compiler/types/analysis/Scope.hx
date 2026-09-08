@@ -122,6 +122,10 @@ class Scope {
 	public function invalidateExpressionNamespace(path:String):Void
 		facts.invalidateNamespace('$' + 'expression:$path');
 
+	/** Calls may mutate any reachable object, but cannot directly reassign uncaptured locals. */
+	public function invalidateAllExpressions():Void
+		facts.invalidateAllExpressions();
+
 	public function invalidateExpressionsForLocal(name:String):Void {
 		var local = resolveLocal(name);
 		if (local != null)

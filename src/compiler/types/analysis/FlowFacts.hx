@@ -51,4 +51,7 @@ class FlowFacts {
 				refinedTypes.remove(bindingId);
 		invalidatedNamespaces.push(prefix);
 	}
+
+	public function invalidateAllExpressions():Void
+		invalidateNamespace("$expression:");
 }
