@@ -86,14 +86,18 @@ grep -F 'Line 1 of "Main.hx" starts at address ' "$symbol_output" >/dev/null \
 (
   cd "$repo_dir/out"
   LD_LIBRARY_PATH="$repo_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-    gdb -q -batch "$repo_dir/vendor/hashlink/hl" "$core_file" -ex "backtrace 6"
+    gdb -q -batch "$repo_dir/vendor/hashlink/hl" "$core_file" \
+      -ex "backtrace 6" \
+      -ex "info line CrashPoint.hx:9"
 ) > "$core_output" 2>&1
 
 grep -F 'in patch_core_fault ()' "$core_output" >/dev/null \
-  && grep -F 'in CrashPoint.run () at CrashPoint.hx:1' "$core_output" >/dev/null || {
+  && grep -F 'in CrashPoint.run () at CrashPoint.hx:17' "$core_output" >/dev/null \
+  && grep -F 'Line 9 of "CrashPoint.hx"' "$core_output" >/dev/null \
+  && grep -F 'but contains no code.' "$core_output" >/dev/null || {
   echo "A fresh GDB process could not symbolize the hot-patched core" >&2
   cat "$core_output" >&2
   exit 1
 }
 
-echo "PASS: GDB resolved hot-patch symbols and offline core frames across $registrations registrations and $unregistrations unregistrations"
+echo "PASS: GDB retained only the active patch in offline cores across $registrations registrations and $unregistrations unregistrations"
