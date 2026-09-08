@@ -23,14 +23,33 @@ class ModuleSourceLoader {
 			return modules.get(name);
 		var relative = name.split(".").join("/") + ".hx";
 		for (root in roots) {
-			var path = root + "/" + relative;
-			if (!FileSystem.exists(path) || FileSystem.isDirectory(path))
+			var path = exactPath(root, relative);
+			if (path == null)
 				continue;
 			var state = new ModuleState(name, new SourceFile(path, File.getContent(path)));
 			modules.set(name, state);
 			return state;
 		}
 		return null;
+	}
+
+	/** Resolve a module path without allowing case-insensitive filesystem aliases. */
+	static function exactPath(root:String, relative:String):Null<String> {
+		var current = root;
+		for (segment in relative.split("/")) {
+			if (!FileSystem.exists(current) || !FileSystem.isDirectory(current))
+				return null;
+			var match:Null<String> = null;
+			for (entry in FileSystem.readDirectory(current))
+				if (entry == segment) {
+					match = entry;
+					break;
+				}
+			if (match == null)
+				return null;
+			current += "/" + match;
+		}
+		return current;
 	}
 
 	public function copy():ModuleSourceLoader {
