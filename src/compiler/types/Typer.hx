@@ -3070,7 +3070,7 @@ class Typer {
 			else if (defaultValue == null)
 				arguments.push(coerce(new TypedExpression(TNullLiteral, TNull, span), expected, 'default argument ${index + 1} to "$baseName"'));
 			else
-				arguments.push(coerce(typeExpression(defaultValue, scope, expected), expected, 'default argument ${index + 1} to "$baseName"'));
+				arguments.push(coerce(typeDefaultExpression(defaultValue, expected, baseName), expected, 'default argument ${index + 1} to "$baseName"'));
 		}
 		var semanticArguments = coerceArguments(arguments, semanticExpected, baseName),
 			result = declarations.resolve(fn.result, fn.span, substitutions),
@@ -3713,7 +3713,7 @@ class Typer {
 			else if (defaultValue == null)
 				typed.push(coerce(new TypedExpression(TNullLiteral, TNull, span), expected, 'default argument ${i + 1} to "$name"'));
 			else
-				typed.push(coerce(typeExpression(defaultValue, scope, expected), expected, 'default argument ${i + 1} to "$name"'));
+				typed.push(coerce(typeDefaultExpression(defaultValue, expected, name), expected, 'default argument ${i + 1} to "$name"'));
 		}
 		return coerceArguments(typed, [for (parameter in parameters) argumentType(parameter, substitutions)], name);
 	}
@@ -3788,7 +3788,7 @@ class Typer {
 				else if (defaultValue == null)
 					typed.push(new TypedExpression(TNullLiteral, TNull, span));
 				else
-					typed.push(typeExpression(defaultValue, scope, semanticExpected[index]));
+					typed.push(typeDefaultExpression(defaultValue, semanticExpected[index], constructorName));
 			}
 			typed = coerceArguments(typed, semanticExpected, constructorName);
 		}
@@ -3841,6 +3841,18 @@ class Typer {
 			default: false;
 		};
 
+	function typeDefaultExpression(expression:AstExpression, expected:CompilerType, declarationName:String):TypedExpression {
+		var body = enterBody("$default:" + declarationName, null, parentPath(declarationName));
+		try {
+			var typed = typeExpression(expression, new Scope(), expected);
+			leaveBody(body);
+			return typed;
+		} catch (error:Dynamic) {
+			leaveBody(body);
+			throw error;
+		}
+	}
+
 	function posInfosExpression(span:SourceSpan):AstExpression {
 		var owner = parentPath(context.name),
 			separator = context.name.lastIndexOf("."),
@@ -3881,6 +3893,8 @@ class Typer {
 			case Identity: value;
 			case IntToFloat:
 				new TypedExpression(TIntToFloat(value), TFloat, value.span);
+			case ReferenceCast:
+				new TypedExpression(TCast(value), expected, value.span);
 			case AbstractCast:
 				new TypedExpression(TAbiCast(value), expected, value.span);
 			case ToDynamic:

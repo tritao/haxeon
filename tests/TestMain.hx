@@ -256,6 +256,8 @@ class TestMain {
 		Sys.println("PASS: IR lowering allocates registers and deduplicates constants");
 
 		expectCompileError('function main():Int { return missing; }', 'Unknown variable "missing"');
+		Frontend.compile('class Defaults { public static inline final WIDTH = 220; public function new(width:Int = WIDTH) {} } function main():Int { new Defaults(); return Defaults.WIDTH; }');
+		expectCompileError('class Defaults { public static function read(value:Int = caller):Int return value; } function main():Int { var caller = 42; return Defaults.read(); }', 'Unknown variable "caller"');
 		expectCompileError('function add(a:Int, b:Int):Int { return a+b; } function main():Int { return add(1); }',
 			'Function "add" expects 2 arguments, got 1');
 		expectCompileError('function main():Int { if (1 < 2) return 1; }', 'Function main does not return on every path');
