@@ -34,9 +34,10 @@ enum WorkspaceResolution {
 /** Shared cross-module name and member resolution over current or last-good models. */
 class SemanticWorkspace {
 	final modules:Map<String, ModuleState>;
-	final symbolResolutionCache:Map<String, Null<SemanticSymbolId>> = [];
-	final typeResolutionCache:Map<String, Null<SemanticSymbolId>> = [];
+	final symbolResolutionIndex:Map<String, Null<SemanticSymbolId>> = [];
+	final typeResolutionIndex:Map<String, Null<SemanticSymbolId>> = [];
 	final enumCaseResolutionCache:Map<String, Null<SemanticSymbolId>> = [];
+	var resolutionIndexesValid = false;
 
 	public function new(modules:Map<String, ModuleState>)
 		this.modules = modules;
@@ -70,40 +71,46 @@ class SemanticWorkspace {
 		return memberInner(type, name, []);
 
 	public function resolveSymbolId(name:String):Null<SemanticSymbolId> {
-		if (symbolResolutionCache.exists(name))
-			return symbolResolutionCache.get(name);
-		var matches:Array<SemanticSymbolId> = [];
-		for (state in orderedStates()) {
-			var model = effectiveModel(state);
-			if (model == null)
-				continue;
-			var packagePrefix = model.program.packageName == null ? "" : Std.string(model.program.packageName) + ".";
-			for (symbol in model.index.symbols)
-				if (symbol.name == name || state.name + "." + symbol.name == name || packagePrefix + symbol.name == name)
-					matches.push(symbol.id);
-		}
-		var result = matches.length == 1 ? matches[0] : null;
-		symbolResolutionCache.set(name, result);
-		return result;
+		ensureResolutionIndexes();
+		return symbolResolutionIndex.get(name);
 	}
 
 	public function resolveTypeSymbolId(name:String):Null<SemanticSymbolId> {
-		if (typeResolutionCache.exists(name))
-			return typeResolutionCache.get(name);
-		var matches:Array<SemanticSymbolId> = [];
+		ensureResolutionIndexes();
+		return typeResolutionIndex.get(name);
+	}
+
+	function ensureResolutionIndexes():Void {
+		if (resolutionIndexesValid)
+			return;
+		symbolResolutionIndex.clear();
+		typeResolutionIndex.clear();
 		for (state in orderedStates()) {
 			var model = effectiveModel(state);
 			if (model == null)
 				continue;
 			var packagePrefix = model.program.packageName == null ? "" : Std.string(model.program.packageName) + ".";
-			for (symbol in model.index.symbols)
-				if (isTypeKind(symbol.kind)
-					&& (symbol.name == name || state.name + "." + symbol.name == name || packagePrefix + symbol.name == name))
-					matches.push(symbol.id);
+			for (symbol in model.index.symbols) {
+				addResolutionCandidate(symbolResolutionIndex, symbol.name, symbol.id);
+				addResolutionCandidate(symbolResolutionIndex, state.name + "." + symbol.name, symbol.id);
+				if (packagePrefix != "")
+					addResolutionCandidate(symbolResolutionIndex, packagePrefix + symbol.name, symbol.id);
+				if (isTypeKind(symbol.kind)) {
+					addResolutionCandidate(typeResolutionIndex, symbol.name, symbol.id);
+					addResolutionCandidate(typeResolutionIndex, state.name + "." + symbol.name, symbol.id);
+					if (packagePrefix != "")
+						addResolutionCandidate(typeResolutionIndex, packagePrefix + symbol.name, symbol.id);
+				}
+			}
 		}
-		var result = matches.length == 1 ? matches[0] : null;
-		typeResolutionCache.set(name, result);
-		return result;
+		resolutionIndexesValid = true;
+	}
+
+	static function addResolutionCandidate(index:Map<String, Null<SemanticSymbolId>>, name:String, id:SemanticSymbolId):Void {
+		if (!index.exists(name))
+			index.set(name, id);
+		else if (index.get(name) != id)
+			index.set(name, null);
 	}
 
 	static function isTypeKind(kind:DeclarationKind):Bool
@@ -136,8 +143,9 @@ class SemanticWorkspace {
 	}
 
 	public function invalidateResolutionCache():Void {
-		symbolResolutionCache.clear();
-		typeResolutionCache.clear();
+		resolutionIndexesValid = false;
+		symbolResolutionIndex.clear();
+		typeResolutionIndex.clear();
 		enumCaseResolutionCache.clear();
 	}
 
