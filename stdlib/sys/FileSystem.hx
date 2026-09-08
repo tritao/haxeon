@@ -73,5 +73,5 @@ class FileSystem {
 		fileSystemDeleteDirectory(path);
 
 	public static inline function rename(path:String, newPath:String):Void
-		fileSystemRename(path, newPath);
+		if (!fileSystemRename(path, newPath)) throw 'Could not rename "$path" to "$newPath"';
 }
