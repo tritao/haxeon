@@ -5,7 +5,8 @@ class ProfilerAllocationTarget {
 		while (Sys.time() < until) {
 			var allocation = [for (index in 0...256) index + value];
 			retained.push(allocation);
-			if (retained.length > 128) retained.shift();
+			if (retained.length > 128)
+				retained.shift();
 			value++;
 		}
 		Sys.println(value);

@@ -4,11 +4,14 @@ interface ValueSource {
 
 class ConstantSource implements ValueSource {
 	public function new() {}
-	public function value():Int return 42;
+
+	public function value():Int
+		return 42;
 }
 
 class Holder {
 	public final source:ValueSource;
+
 	public function new(source:ValueSource) {
 		this.source = source;
 	}

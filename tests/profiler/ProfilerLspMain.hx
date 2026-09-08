@@ -6,10 +6,14 @@ import sys.thread.Mutex;
 
 class ProfilerLspMain {
 	static function main():Void {
-		var args = Sys.args(), port = args.length == 1 ? Std.parseInt(args[0]) : null;
+		var args = Sys.args(),
+			port = args.length == 1 ? Std.parseInt(args[0]) : null;
 		if (port == null)
 			throw "Usage: profiler-lsp-test.hl PORT";
-		var messages:Array<String> = [], mutex = new Mutex(), available = new Lock(), protocol = new LspProtocol(),
+		var messages:Array<String> = [],
+			mutex = new Mutex(),
+			available = new Lock(),
+			protocol = new LspProtocol(),
 			dispatcher = new LspDispatcher(protocol, message -> {
 				mutex.acquire();
 				messages.push(message);
@@ -37,7 +41,9 @@ class ProfilerLspMain {
 			if (!waitFor(messages, mutex, available, value -> value.id == 6).result.captureActive)
 				throw "Profiler capture did not start";
 			var notification = waitFor(messages, mutex, available,
-				value -> value.method == "haxeon/profilerSnapshot" && value.params.samples > 0 && value.params.timeline.samples.length > 0);
+				value -> value.method == "haxeon/profilerSnapshot"
+					&& value.params.samples > 0
+					&& value.params.timeline.samples.length > 0);
 			if (notification.params.view != null || notification.params.stacks != null || notification.params.leaves != null)
 				throw "Incremental profiler notification repeated full snapshot data";
 			dispatcher.dispatch(command(8, "haxeon.profiler.snapshot", {}));
@@ -45,18 +51,25 @@ class ProfilerLspMain {
 			var leaf = full.leaves[0];
 			if (leaf.pc == null || leaf.offset == null || leaf.opcodeIndex == null || leaf.file == null)
 				throw "Profiler notification omitted raw leaf metadata";
-			if (full.view.callTree.length == 0 || full.view.flameGraph.length == 0
-				|| notification.params.viewDelta.nodes.length == 0 || full.view.health.bufferCapacity == "0")
+			if (full.view.callTree.length == 0
+				|| full.view.flameGraph.length == 0
+				|| notification.params.viewDelta.nodes.length == 0
+				|| full.view.health.bufferCapacity == "0")
 				throw "Profiler notification omitted incremental editor view data";
 			var locatedFrame = false;
 			for (stack in cast(full.stacks, Array<Dynamic>))
 				for (frame in cast(stack.frameDetails, Array<Dynamic>))
-					if (frame.file != null && frame.line != null) locatedFrame = true;
+					if (frame.file != null && frame.line != null)
+						locatedFrame = true;
 			if (!locatedFrame)
 				throw "Profiler stack frames omitted source navigation metadata";
-			if (notification.params.sampleRecords == "0" || notification.params.generatedBytes == "0"
-				|| notification.params.overheadMicrosPerSample <= 0 || notification.params.threads.length == 0 || notification.params.gcStats.length == 0
-				|| notification.params.timeline.samples.length == 0 || notification.params.timeline.stacks.length == 0
+			if (notification.params.sampleRecords == "0"
+				|| notification.params.generatedBytes == "0"
+				|| notification.params.overheadMicrosPerSample <= 0
+				|| notification.params.threads.length == 0
+				|| notification.params.gcStats.length == 0
+				|| notification.params.timeline.samples.length == 0
+				|| notification.params.timeline.stacks.length == 0
 				|| notification.params.timeline.allocations.length == 0)
 				throw "Profiler snapshot omitted calibration or thread telemetry";
 			dispatcher.dispatch(command(7, "haxeon.profiler.captureStop", {}));
@@ -96,7 +109,12 @@ class ProfilerLspMain {
 	}
 
 	static function request(id:Int, method:String, params:Dynamic):String
-		return Json.stringify({jsonrpc: "2.0", id: id, method: method, params: params});
+		return Json.stringify({
+			jsonrpc: "2.0",
+			id: id,
+			method: method,
+			params: params
+		});
 
 	static function command(id:Int, name:String, options:Dynamic):String
 		return request(id, "workspace/executeCommand", {command: name, arguments: [options]});

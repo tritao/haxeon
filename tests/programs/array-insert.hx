@@ -17,6 +17,10 @@ function main():Int {
 	strings.insert(0, "one");
 	var objects = [new Value(2)];
 	objects.insert(0, new Value(40));
-	return integers[0] + integers[1] + (floats[0] < 1.0 ? 1 : 0) + (booleans[0] ? 1 : 0)
-		+ (strings[0] == "one" ? 1 : 0) + objects[1].number - 4;
+	return integers[0]
+		+ integers[1]
+		+ (floats[0] < 1.0 ? 1 : 0)
+		+ (booleans[0] ? 1 : 0)
+		+ (strings[0] == "one" ? 1 : 0)
+		+ objects[1].number - 4;
 }

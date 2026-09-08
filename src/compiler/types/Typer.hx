@@ -2669,7 +2669,9 @@ class Typer {
 						fail("E1008", 'Function "Std.isOfType" expects 2 arguments, got ${arguments.length}', span);
 					var targetName = switch arguments[1] {
 						case Variable(value, _): value;
-						default: fail("E1009", "Std.isOfType expects a type as its second argument", span); "";
+						default:
+							fail("E1009", "Std.isOfType expects a type as its second argument", span);
+							"";
 					};
 					if (scope.resolve(targetName) != null)
 						fail("E1009", "Std.isOfType expects a type as its second argument", span);
@@ -2813,7 +2815,8 @@ class Typer {
 							if (thisType == null)
 								fail("E1007", 'Instance method "$methodKey" requires an object', span);
 							var receiver = typeExpression(Variable("this", span), scope);
-							return applyCallEffect(new TypedExpression(TMethodCall(receiver, methodKey, typed), lowerType(method.result), span), methodKey, scope);
+							return applyCallEffect(new TypedExpression(TMethodCall(receiver, methodKey, typed), lowerType(method.result), span), methodKey,
+								scope);
 						}
 					}
 					var parts = splitPath(name),
@@ -2974,18 +2977,22 @@ class Typer {
 					}
 				}
 			case ClosureCall(callee, arguments, span):
-				var typedCallee = typeExpression(callee, scope), functionType = switch typedCallee.type {
-					case TFunction(parameters, returnType): {arguments: parameters, result: returnType};
-					default: null;
-				};
-				if (functionType == null) fail("E1007", "Cannot call non-function expression", span);
+				var typedCallee = typeExpression(callee, scope),
+					functionType = switch typedCallee.type {
+						case TFunction(parameters, returnType): {arguments: parameters, result: returnType};
+						default: null;
+					};
+				if (functionType == null)
+					fail("E1007", "Cannot call non-function expression", span);
 				if (arguments.length != functionType.arguments.length)
 					fail("E1008", 'Function expression expects ${functionType.arguments.length} arguments, got ${arguments.length}', span);
 				var typedArguments = [
-					for (index in 0...arguments.length) typeExpression(arguments[index], scope, functionType.arguments[index])
+					for (index in 0...arguments.length)
+						typeExpression(arguments[index], scope, functionType.arguments[index])
 				];
 				typedArguments = coerceArguments(typedArguments, functionType.arguments, "function expression");
-				for (captured in context.storage.candidateSourceNames()) scope.invalidate(captured);
+				for (captured in context.storage.candidateSourceNames())
+					scope.invalidate(captured);
 				scope.invalidateAllExpressions();
 				new TypedExpression(TClosureCall(typedCallee, typedArguments), functionType.result, span);
 			case MethodCall(object, name, arguments, span):
@@ -3046,7 +3053,8 @@ class Typer {
 	}
 
 	function applyCallEffect(call:TypedExpression, name:String, ?scope:Scope):TypedExpression {
-		if (scope != null) scope.invalidateAllExpressions();
+		if (scope != null)
+			scope.invalidateAllExpressions();
 		return noReturnFunctions.exists(name) ? new TypedExpression(TNoReturn(call), TNever, call.span) : call;
 	}
 

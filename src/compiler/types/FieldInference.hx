@@ -22,8 +22,8 @@ class FieldInference {
 			case StringLiteral(_, _): StringType;
 			case Add(left, right, _) if (isConstantString(left) && isConstantString(right)): StringType;
 			case BoolLiteral(_, _): BoolType;
-			case Add(_, _, _), Sub(_, _, _), Mul(_, _, _), Div(_, _, _), Mod(_, _, _), BitAnd(_, _, _), BitXor(_, _, _), BitOr(_, _, _),
-				ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _): constantNumericType(field, initializer);
+			case Add(_, _, _), Sub(_, _, _), Mul(_, _, _), Div(_, _, _), Mod(_, _, _), BitAnd(_, _, _), BitXor(_, _, _), BitOr(_, _, _), ShiftLeft(_, _, _),
+				ShiftRight(_, _, _), UnsignedShiftRight(_, _, _): constantNumericType(field, initializer);
 			case New(typeName, _, _): NamedType(typeName);
 			case NewGeneric(typeName, typeArguments, _, _): AppliedType(typeName, typeArguments);
 			case NewArray(element, _, _): ArrayType(element);
@@ -66,20 +66,22 @@ class FieldInference {
 		};
 
 	static function numericPair(left:AstExpression, right:AstExpression):Null<AstType> {
-		var leftType = nullableNumericType(left), rightType = nullableNumericType(right);
-		if (leftType == null || rightType == null) return null;
+		var leftType = nullableNumericType(left),
+			rightType = nullableNumericType(right);
+		if (leftType == null || rightType == null)
+			return null;
 		return leftType == FloatType || rightType == FloatType ? FloatType : IntType;
 	}
 
-	public static function resolvedType(field:AstField, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>,
-			aliases:Map<String, String>):AstType {
+	public static function resolvedType(field:AstField, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:Map<String, String>):AstType {
 		return resolveField(field, owner, classes, aliases, []);
 	}
 
 	static function resolveField(field:AstField, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:Map<String, String>,
 			resolving:Map<String, Bool>):AstType {
 		var inferred = parsedType(field);
-		if (inferred != InferredType) return inferred;
+		if (inferred != InferredType)
+			return inferred;
 		var key = owner + "." + field.name;
 		if (resolving.exists(key))
 			throw new CompileError(new Diagnostic("E1002", 'Cyclic field type inference through "$key"', field.span));
@@ -87,10 +89,13 @@ class FieldInference {
 		var reference = staticFieldReference(field.initializer);
 		if (reference == null)
 			throw new CompileError(new Diagnostic("E1002", 'Cannot infer type of field "${field.name}" from this initializer', field.span));
-		var targetOwner = resolveOwner(reference.owner, owner, classes, aliases), targetClass = classes.get(targetOwner), target:Null<AstField> = null;
+		var targetOwner = resolveOwner(reference.owner, owner, classes, aliases),
+			targetClass = classes.get(targetOwner),
+			target:Null<AstField> = null;
 		if (targetClass != null)
 			for (candidate in targetClass.fields)
-				if (candidate.isStatic && candidate.name == reference.name) target = candidate;
+				if (candidate.isStatic && candidate.name == reference.name)
+					target = candidate;
 		if (target == null)
 			throw new CompileError(new Diagnostic("E1002",
 				'Cannot infer type of field "${field.name}" from unknown static field "${reference.owner}.${reference.name}"', field.span));
@@ -115,14 +120,19 @@ class FieldInference {
 	}
 
 	static function resolveOwner(name:String, currentOwner:String, classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:Map<String, String>):String {
-		if (aliases.exists(name) && classes.exists(aliases.get(name))) return aliases.get(name);
-		if (classes.exists(name)) return name;
-		var separator = currentOwner.lastIndexOf("."), local = separator < 0 ? name : currentOwner.substring(0, separator + 1) + name;
-		if (classes.exists(local)) return local;
+		if (aliases.exists(name) && classes.exists(aliases.get(name)))
+			return aliases.get(name);
+		if (classes.exists(name))
+			return name;
+		var separator = currentOwner.lastIndexOf("."),
+			local = separator < 0 ? name : currentOwner.substring(0, separator + 1) + name;
+		if (classes.exists(local))
+			return local;
 		var found:Null<String> = null;
 		for (candidate in classes.keys())
 			if (candidate == name || StringTools.endsWith(candidate, "." + name)) {
-				if (found != null) return name;
+				if (found != null)
+					return name;
 				found = candidate;
 			}
 		return found == null ? name : found;

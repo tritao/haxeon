@@ -192,7 +192,8 @@ class SemanticWorkspace {
 		var resolved = indexedSymbol(id), result:Array<SemanticSymbolId> = [];
 		if (resolved == null || !isTypeKind(resolved.symbol.kind))
 			return result;
-		var model = effectiveModel(resolved.state), parents:Array<compiler.syntax.Ast.AstType> = [];
+		var model = effectiveModel(resolved.state),
+			parents:Array<compiler.syntax.Ast.AstType> = [];
 		if (model == null)
 			return result;
 		for (decl in model.program.classes)
@@ -207,7 +208,8 @@ class SemanticWorkspace {
 		for (parent in parents) {
 			if (token != null)
 				token.check();
-			var declaration = global(resolved.state, ModuleCanonicalizer.astTypeName(parent)), symbol = declaration == null ? null : symbolFor(declaration);
+			var declaration = global(resolved.state, ModuleCanonicalizer.astTypeName(parent)),
+				symbol = declaration == null ? null : symbolFor(declaration);
 			if (symbol != null)
 				addTypeIdentity(result, symbol.id);
 		}
@@ -249,7 +251,8 @@ class SemanticWorkspace {
 
 	function hasDirectParent(state:ModuleState, parents:Array<compiler.syntax.Ast.AstType>, target:SemanticSymbolId):Bool {
 		for (parent in parents) {
-			var declaration = global(state, ModuleCanonicalizer.astTypeName(parent)), symbol = declaration == null ? null : symbolFor(declaration);
+			var declaration = global(state, ModuleCanonicalizer.astTypeName(parent)),
+				symbol = declaration == null ? null : symbolFor(declaration);
 			if (symbol != null && symbol.id == target)
 				return true;
 		}
@@ -279,7 +282,9 @@ class SemanticWorkspace {
 		var resolved = indexedSymbol(id);
 		if (resolved == null)
 			return [];
-		var owner:Null<String> = null, member:Null<String> = null, targetIsType = false;
+		var owner:Null<String> = null,
+			member:Null<String> = null,
+			targetIsType = false;
 		for (state in orderedStates()) {
 			var model = effectiveModel(state);
 			if (model == null)
@@ -307,7 +312,8 @@ class SemanticWorkspace {
 		}
 		if (owner == null)
 			return [];
-		var result:Array<WorkspaceDeclaration> = [], seen:Map<String, Bool> = [];
+		var result:Array<WorkspaceDeclaration> = [],
+			seen:Map<String, Bool> = [];
 		for (state in orderedStates()) {
 			if (token != null)
 				token.check();
@@ -423,7 +429,8 @@ class SemanticWorkspace {
 
 	/** Unique top-level declarations outside the current module's visibility set. */
 	public function importableSymbols(from:ModuleState, ?token:CancellationToken):Array<ImportableSymbol> {
-		var visible:Map<String, Bool> = [from.name => true], byName:Map<String, Array<ImportableSymbol>> = [];
+		var visible:Map<String, Bool> = [from.name => true],
+			byName:Map<String, Array<ImportableSymbol>> = [];
 		for (dependency in from.dependencies)
 			visible.set(dependency, true);
 		for (state in orderedStates()) {

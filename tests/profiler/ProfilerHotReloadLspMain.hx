@@ -6,10 +6,14 @@ import sys.thread.Mutex;
 
 class ProfilerHotReloadLspMain {
 	static function main():Void {
-		var args = Sys.args(), port = args.length == 1 ? Std.parseInt(args[0]) : null;
+		var args = Sys.args(),
+			port = args.length == 1 ? Std.parseInt(args[0]) : null;
 		if (port == null)
 			throw "Usage: profiler-hot-reload-lsp-test.hl PORT";
-		var messages:Array<String> = [], mutex = new Mutex(), available = new Lock(), protocol = new LspProtocol(),
+		var messages:Array<String> = [],
+			mutex = new Mutex(),
+			available = new Lock(),
+			protocol = new LspProtocol(),
 			dispatcher = new LspDispatcher(protocol, message -> {
 				mutex.acquire();
 				messages.push(message);
@@ -17,7 +21,12 @@ class ProfilerHotReloadLspMain {
 				available.release();
 			}, 16, 20);
 		try {
-			dispatcher.dispatch(command(1, "haxeon.profiler.connect", {port: port, timeoutSeconds: 3.0, leafCapacity: 64, maxEntries: 500}));
+			dispatcher.dispatch(command(1, "haxeon.profiler.connect", {
+				port: port,
+				timeoutSeconds: 3.0,
+				leafCapacity: 64,
+				maxEntries: 500
+			}));
 			var connected = waitFor(messages, mutex, available, value -> value.id == 1);
 			if (Reflect.hasField(connected, "error"))
 				throw Json.stringify(connected);
@@ -36,8 +45,10 @@ class ProfilerHotReloadLspMain {
 					return false;
 				var oldFound = false, newFound = false;
 				for (aggregate in cast(value.params.functions, Array<Dynamic>)) {
-					if (StringTools.startsWith(aggregate.key, moduleId + ":1:")) oldFound = true;
-					if (StringTools.startsWith(aggregate.key, moduleId + ":2:")) newFound = true;
+					if (StringTools.startsWith(aggregate.key, moduleId + ":1:"))
+						oldFound = true;
+					if (StringTools.startsWith(aggregate.key, moduleId + ":2:"))
+						newFound = true;
 				}
 				return oldFound && newFound;
 			});
@@ -45,7 +56,8 @@ class ProfilerHotReloadLspMain {
 				throw "Snapshot omitted revision history";
 			var mergedRevisionNode = false;
 			for (node in cast(snapshot.params.view.flameGraph, Array<Dynamic>))
-				if (node.revisions.length > 1) mergedRevisionNode = true;
+				if (node.revisions.length > 1)
+					mergedRevisionNode = true;
 			if (!mergedRevisionNode || snapshot.params.view.revisionMarkers.length == 0)
 				throw "Editor profiling view did not merge hot-reload revisions";
 			dispatcher.dispatch(command(3, "haxeon.profiler.pause", {}));
@@ -80,5 +92,10 @@ class ProfilerHotReloadLspMain {
 	}
 
 	static function command(id:Int, name:String, options:Dynamic):String
-		return Json.stringify({jsonrpc: "2.0", id: id, method: "workspace/executeCommand", params: {command: name, arguments: [options]}});
+		return Json.stringify({
+			jsonrpc: "2.0",
+			id: id,
+			method: "workspace/executeCommand",
+			params: {command: name, arguments: [options]}
+		});
 }

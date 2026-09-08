@@ -859,8 +859,12 @@ class TestMain {
 		var invalidTypeTestCompiler = new Compiler();
 		invalidTypeTestCompiler.update("Main.hx", 'function main():Int { var name = "String"; return Std.isOfType("value", name) ? 1 : 0; }');
 		var invalidTypeTestRejected = false;
-		try invalidTypeTestCompiler.compile("Main") catch (error:compiler.Diagnostic.CompileError) invalidTypeTestRejected = error.diagnostic.code == "E1009";
-		if (!invalidTypeTestRejected) throw "Std.isOfType accepted a runtime value as its type operand";
+		try
+			invalidTypeTestCompiler.compile("Main")
+		catch (error:compiler.Diagnostic.CompileError)
+			invalidTypeTestRejected = error.diagnostic.code == "E1009";
+		if (!invalidTypeTestRejected)
+			throw "Std.isOfType accepted a runtime value as its type operand";
 		Sys.println("PASS: Std.isOfType requires a compile-time type operand");
 		var nullObjectCompiler = new Compiler();
 		nullObjectCompiler.update("Main.hx", 'function main():Int { var value = { optional: null }; value.optional; return 42; }');

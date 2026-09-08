@@ -44,32 +44,46 @@ class ProfilerViewModel {
 
 	public function update(snapshot:Dynamic):{state:Dynamic, delta:Dynamic} {
 		var samples:Int = fieldInt(snapshot, "samples");
-		if (samples < lastSamples) reset();
+		if (samples < lastSamples)
+			reset();
 		lastSamples = samples;
 		var changed = new Map<String, Bool>();
 		for (stack in dynamicArray(snapshot, "stacks")) {
-			var key:String = Reflect.field(stack, "key"), total:Int = fieldInt(stack, "samples"), previous = stackSamples.get(key);
-			if (previous == null) previous = 0;
+			var key:String = Reflect.field(stack, "key"),
+				total:Int = fieldInt(stack, "samples"),
+				previous = stackSamples.get(key);
+			if (previous == null)
+				previous = 0;
 			var increment = total - previous;
 			stackSamples.set(key, total);
-			if (increment <= 0) continue;
+			if (increment <= 0)
+				continue;
 			var threadIncrements:Array<{id:Int, samples:Int}> = [];
 			for (thread in dynamicArray(stack, "threadSamples")) {
-				var id = fieldInt(thread, "threadId"), count = fieldInt(thread, "samples"), threadKey = key + "#" + id,
+				var id = fieldInt(thread, "threadId"),
+					count = fieldInt(thread, "samples"),
+					threadKey = key + "#" + id,
 					old = stackThreadSamples.get(threadKey);
-				if (old == null) old = 0;
+				if (old == null)
+					old = 0;
 				stackThreadSamples.set(threadKey, count);
-				if (count > old) threadIncrements.push({id: id, samples: count - old});
+				if (count > old)
+					threadIncrements.push({id: id, samples: count - old});
 			}
 			var parent:Null<String> = null, depth = 0, path = "", frames:Array<Dynamic> = Reflect.field(stack, "frameDetails");
 			for (frame in frames) {
-				var stableKey:String = Reflect.field(frame, "stableKey"), name:String = Reflect.field(frame, "name"), revision:Int = fieldInt(frame, "revision");
+				var stableKey:String = Reflect.field(frame, "stableKey"),
+					name:String = Reflect.field(frame, "name"),
+					revision:Int = fieldInt(frame, "revision");
 				path = path == "" ? stableKey : path + ">" + stableKey;
 				var node = nodes.get(path);
 				if (node == null) {
 					node = new ProfilerViewNode(path, parent, stableKey, name, depth);
 					nodes.set(path, node);
-					if (parent == null) roots.push(path); else nodes.get(parent).children.push(path);
+					if (parent == null)
+						roots.push(path);
+					else
+						nodes.get(parent).children.push(path);
 				}
 				node.totalSamples += increment;
 				node.revisions.set(revision, true);
@@ -86,9 +100,11 @@ class ProfilerViewModel {
 				parent = path;
 				depth++;
 			}
-			if (parent != null) nodes.get(parent).selfSamples += increment;
+			if (parent != null)
+				nodes.get(parent).selfSamples += increment;
 		}
-		var flame = sortedNodes(), changedValues = [for (id in changed.keys()) nodeValue(nodes.get(id))];
+		var flame = sortedNodes(),
+			changedValues = [for (id in changed.keys()) nodeValue(nodes.get(id))];
 		changedValues.sort(compareNodes);
 		return {
 			state: {
@@ -97,7 +113,12 @@ class ProfilerViewModel {
 				health: health(snapshot),
 				revisionMarkers: dynamicArray(snapshot, "metadataChanges")
 			},
-			delta: {samples: samples, nodes: changedValues, health: health(snapshot), revisionMarkers: dynamicArray(snapshot, "metadataChanges")}
+			delta: {
+				samples: samples,
+				nodes: changedValues,
+				health: health(snapshot),
+				revisionMarkers: dynamicArray(snapshot, "metadataChanges")
+			}
 		};
 	}
 
@@ -113,24 +134,50 @@ class ProfilerViewModel {
 	static function nodeValue(node:ProfilerViewNode):Dynamic {
 		var revisions = [for (revision in node.revisions.keys()) revision];
 		revisions.sort((a, b) -> a - b);
-		return {id: node.id, parentId: node.parentId, stableKey: node.stableKey, name: node.name, depth: node.depth, file: node.file, line: node.line,
-			selfSamples: node.selfSamples, totalSamples: node.totalSamples, revisions: revisions,
-			threadSamples: [for (threadId => samples in node.threadSamples) {threadId: threadId, samples: samples}]};
+		return {
+			id: node.id,
+			parentId: node.parentId,
+			stableKey: node.stableKey,
+			name: node.name,
+			depth: node.depth,
+			file: node.file,
+			line: node.line,
+			selfSamples: node.selfSamples,
+			totalSamples: node.totalSamples,
+			revisions: revisions,
+			threadSamples: [
+				for (threadId => samples in node.threadSamples)
+					{
+						threadId: threadId,
+						samples: samples
+					}
+			]
+		};
 	}
 
 	static function compareNodes(left:Dynamic, right:Dynamic):Int {
 		var depth = fieldInt(left, "depth") - fieldInt(right, "depth");
-		if (depth != 0) return depth;
+		if (depth != 0)
+			return depth;
 		return Reflect.compare(Reflect.field(left, "id"), Reflect.field(right, "id"));
 	}
 
 	static function health(snapshot:Dynamic):Dynamic
-		return {bufferCapacity: Reflect.field(snapshot, "bufferCapacity"), bufferUsed: Reflect.field(snapshot, "bufferUsed"),
-			bufferUtilization: Reflect.field(snapshot, "bufferUtilization"), dropped: Reflect.field(snapshot, "dropped"),
-			requestedSampleRate: Reflect.field(snapshot, "requestedSampleRate"), effectiveSampleRate: Reflect.field(snapshot, "effectiveSampleRate"),
-			metadataRefreshMs: Reflect.field(snapshot, "metadataRefreshMs"), overheadMicrosPerSample: Reflect.field(snapshot, "overheadMicrosPerSample"),
-			generatedBytes: Reflect.field(snapshot, "generatedBytes"), gcSamples: Reflect.field(snapshot, "gcSamples"), threads: Reflect.field(snapshot, "threads"),
-			gcStats: Reflect.field(snapshot, "gcStats"), nativeSymbolCount: Reflect.field(snapshot, "nativeSymbolCount")};
+		return {
+			bufferCapacity: Reflect.field(snapshot, "bufferCapacity"),
+			bufferUsed: Reflect.field(snapshot, "bufferUsed"),
+			bufferUtilization: Reflect.field(snapshot, "bufferUtilization"),
+			dropped: Reflect.field(snapshot, "dropped"),
+			requestedSampleRate: Reflect.field(snapshot, "requestedSampleRate"),
+			effectiveSampleRate: Reflect.field(snapshot, "effectiveSampleRate"),
+			metadataRefreshMs: Reflect.field(snapshot, "metadataRefreshMs"),
+			overheadMicrosPerSample: Reflect.field(snapshot, "overheadMicrosPerSample"),
+			generatedBytes: Reflect.field(snapshot, "generatedBytes"),
+			gcSamples: Reflect.field(snapshot, "gcSamples"),
+			threads: Reflect.field(snapshot, "threads"),
+			gcStats: Reflect.field(snapshot, "gcStats"),
+			nativeSymbolCount: Reflect.field(snapshot, "nativeSymbolCount")
+		};
 
 	static function dynamicArray(value:Dynamic, field:String):Array<Dynamic> {
 		var result:Dynamic = Reflect.field(value, field);

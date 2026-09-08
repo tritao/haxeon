@@ -31,7 +31,17 @@ typedef HlPatchFunction = {
 	final registers:Array<Int>;
 	final instructions:Array<HlPatchInstruction>;
 	final relocations:Array<{instruction:Int, stableId:Int}>;
-	final debug:Array<{file:Int, line:Int, column:Int, endLine:Int, endColumn:Int, sourceHash:Int, start:Int, end:Int, flags:Int}>;
+	final debug:Array<{
+		file:Int,
+		line:Int,
+		column:Int,
+		endLine:Int,
+		endColumn:Int,
+		sourceHash:Int,
+		start:Int,
+		end:Int,
+		flags:Int
+	}>;
 }
 
 /** Decoded numeric HashLink opcode and its wire operands. */

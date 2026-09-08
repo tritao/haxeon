@@ -70,31 +70,48 @@ class HldiCodec {
 			throw 'Unsupported HLDI metadata schema $schema';
 		var moduleCount = count(input, "modules"), symbols = [], revisions = new Map<String, Int>();
 		for (_ in 0...moduleCount) {
-			var moduleId = input.u64(), revision = input.u32(), regionCount = count(input, "regions"), files:Array<String> = [];
+			var moduleId = input.u64(),
+				revision = input.u32(),
+				regionCount = count(input, "regions"),
+				files:Array<String> = [];
 			revisions.set(Int64.toStr(moduleId), revision);
 			if (schema >= 2)
 				for (_ in 0...count(input, "debug files"))
 					files.push(input.take(count(input, "debug file bytes")).toString());
 			for (_ in 0...regionCount) {
-				var base = input.u64(), regionSize = input.u64(), flags = input.u32(), regionRevision = schema >= 4 ? input.u32() : revision,
+				var base = input.u64(),
+					regionSize = input.u64(),
+					flags = input.u32(),
+					regionRevision = schema >= 4 ? input.u32() : revision,
 					functionCount = count(input, "functions");
 				for (_ in 0...functionCount) {
-					var functionId = input.u32(), offset = input.u32(), size = input.u32(), name = input.take(count(input, "symbol name bytes")).toString();
+					var functionId = input.u32(),
+						offset = input.u32(),
+						size = input.u32(),
+						name = input.take(count(input, "symbol name bytes")).toString();
 					if (size <= 0)
 						throw 'Invalid empty HLDI symbol $name';
 					var lines:Array<HldiSourceLine> = [];
 					if (schema >= 2)
 						for (_ in 0...count(input, "source lines")) {
-							var jitOffset = input.u32(), endOffset = schema >= 3 ? input.u32() : 0;
-							var opcodeIndex = schema >= 3 ? input.u32() : 0, opcode = schema >= 3 ? input.u32() : 0;
+							var jitOffset = input.u32(),
+								endOffset = schema >= 3 ? input.u32() : 0;
+							var opcodeIndex = schema >= 3 ? input.u32() : 0,
+								opcode = schema >= 3 ? input.u32() : 0;
 							var fileId = input.u32(), line = input.u32();
-							if (jitOffset < 0 || jitOffset >= size || (schema >= 3 && (endOffset <= jitOffset || endOffset > size)) || fileId < 0 || fileId >= files.length || line <= 0)
+							if (jitOffset < 0
+								|| jitOffset >= size
+								|| (schema >= 3 && (endOffset <= jitOffset || endOffset > size))
+								|| fileId < 0
+								|| fileId >= files.length
+								|| line <= 0)
 								throw 'Invalid source mapping for $name';
 							if (lines.length != 0 && haxe.Int32.ucompare(jitOffset, lines[lines.length - 1].offset) < 0)
 								throw 'Unsorted source mapping for $name';
 							lines.push(new HldiSourceLine(jitOffset, endOffset, opcodeIndex, opcode, files[fileId], line));
 						}
-					var start = Int64.add(base, Int64.ofInt(offset)), end = Int64.add(start, Int64.ofInt(size));
+					var start = Int64.add(base, Int64.ofInt(offset)),
+						end = Int64.add(start, Int64.ofInt(size));
 					symbols.push(new HldiSymbol(moduleId, regionRevision, functionId, start, end, name, lines));
 				}
 			}
@@ -124,14 +141,21 @@ class HldiStreamDecoder {
 		combined.blit(pending.length, chunk, 0, chunk.length);
 		var records = [], position = 0;
 		while (combined.length - position >= 4) {
-			var prefix = new HldiReader(combined.sub(position, combined.length - position)), bodyLength = prefix.u32();
+			var prefix = new HldiReader(combined.sub(position, combined.length - position)),
+				bodyLength = prefix.u32();
 			if (bodyLength < 20 || bodyLength > 8 * 1024 * 1024)
 				throw 'Invalid HLDI record length $bodyLength';
 			if (combined.length - position < bodyLength + 4)
 				break;
-			var input = new HldiReader(combined.sub(position + 4, bodyLength)), kind = input.u8(), flags = input.u8();
+			var input = new HldiReader(combined.sub(position + 4, bodyLength)),
+				kind = input.u8(),
+				flags = input.u8();
 			input.u16();
-			var timestamp = input.f64(), threadId = input.u32(), value = input.u32(), frames:Array<Int64> = [], payload = Bytes.alloc(0);
+			var timestamp = input.f64(),
+				threadId = input.u32(),
+				value = input.u32(),
+				frames:Array<Int64> = [],
+				payload = Bytes.alloc(0);
 			if (kind == 1) {
 				if (value < 0 || input.remaining() != value * 8)
 					throw 'Invalid HLDI sample frame count $value';

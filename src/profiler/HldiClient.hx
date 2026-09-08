@@ -28,6 +28,7 @@ class HldiClient {
 	static inline final MAX_REPLY = 64 * 1024 * 1024;
 
 	public final hello:HldiHello;
+
 	var socket:Socket;
 	var nextRequestId = 1;
 	var closed = false;
@@ -43,7 +44,10 @@ class HldiClient {
 			close();
 			throw "Endpoint did not send an HLDI greeting";
 		}
-		var input = new HldiReader(bytes), magic = input.take(4), version = input.u16(), capabilities = input.u16();
+		var input = new HldiReader(bytes),
+			magic = input.take(4),
+			version = input.u16(),
+			capabilities = input.u16();
 		if (version != 1) {
 			close();
 			throw 'Unsupported HLDI version $version';
@@ -54,7 +58,9 @@ class HldiClient {
 				close();
 				throw "HLDI endpoint requires authentication";
 			}
-			try requestService(SERVICE_CONTROL, CONTROL_AUTHENTICATE, Bytes.ofString(token)) catch (error:Dynamic) {
+			try
+				requestService(SERVICE_CONTROL, CONTROL_AUTHENTICATE, Bytes.ofString(token))
+			catch (error:Dynamic) {
 				close();
 				throw "HLDI authentication failed";
 			}
@@ -67,7 +73,8 @@ class HldiClient {
 	public function configure(sampleRate:Int, enabled:Bool, allocationInterval:Int = 0):HldiStatus {
 		if (sampleRate <= 0)
 			throw 'Invalid profiler sample rate $sampleRate';
-		if (allocationInterval < 0) throw 'Invalid allocation sampling interval $allocationInterval';
+		if (allocationInterval < 0)
+			throw 'Invalid allocation sampling interval $allocationInterval';
 		var payload = Bytes.alloc(12);
 		put32(payload, 0, sampleRate);
 		put32(payload, 4, enabled ? 1 : 0);
@@ -84,7 +91,9 @@ class HldiClient {
 		put64(payload, 0, cursor);
 		put32(payload, 8, maxBytes);
 		var input = new HldiReader(request(PROFILE_READ, payload));
-		var next = input.u64(), dropped = input.u64(), bytes = input.take(input.remaining());
+		var next = input.u64(),
+			dropped = input.u64(),
+			bytes = input.take(input.remaining());
 		return new HldiReadResult(next, dropped, bytes);
 	}
 
@@ -98,7 +107,9 @@ class HldiClient {
 		if (closed)
 			return;
 		closed = true;
-		try socket.close() catch (_:Dynamic) {}
+		try
+			socket.close()
+		catch (_:Dynamic) {}
 	}
 
 	function request(type:Int, payload:Bytes):Bytes {
@@ -118,7 +129,12 @@ class HldiClient {
 			socket.output.writeFullBytes(payload, 0, payload.length);
 		socket.output.flush();
 
-		var reply = new HldiReader(readExact(16)), replyService = reply.u8(), replyType = reply.u8(), flags = reply.u16(), replyId = reply.u32(), length = reply.u32();
+		var reply = new HldiReader(readExact(16)),
+			replyService = reply.u8(),
+			replyType = reply.u8(),
+			flags = reply.u16(),
+			replyId = reply.u32(),
+			length = reply.u32();
 		reply.u32();
 		if (replyService != service || replyType != type || replyId != id || flags & FLAG_RESPONSE == 0)
 			throw 'Mismatched HLDI response for request $id';
@@ -145,10 +161,16 @@ class HldiClient {
 		if (bytes.length != 32 && bytes.length != 56 && bytes.length != 80)
 			throw 'Invalid HLDI status length ${bytes.length}';
 		var input = new HldiReader(bytes);
-		var first = input.u64(), next = input.u64(), dropped = input.u64(), rate = input.u32(), paused = input.u32() != 0;
+		var first = input.u64(),
+			next = input.u64(),
+			dropped = input.u64(),
+			rate = input.u32(),
+			paused = input.u32() != 0;
 		if (bytes.length == 32)
 			return new HldiStatus(first, next, dropped, rate, paused);
-		var capacity = input.u64(), consumer = input.u64(), requested = input.u32();
+		var capacity = input.u64(),
+			consumer = input.u64(),
+			requested = input.u32();
 		input.u32();
 		if (bytes.length == 56)
 			return new HldiStatus(first, next, dropped, rate, paused, capacity, consumer, requested);

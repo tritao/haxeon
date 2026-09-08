@@ -3,8 +3,10 @@ import profiler.ProfilerSession;
 
 class ProfilerCalibrationMain {
 	static function main():Void {
-		var args = Sys.args(), port = args.length == 1 ? Std.parseInt(args[0]) : null;
-		if (port == null) throw "Usage: profiler-calibration-test.hl PORT";
+		var args = Sys.args(),
+			port = args.length == 1 ? Std.parseInt(args[0]) : null;
+		if (port == null)
+			throw "Usage: profiler-calibration-test.hl PORT";
 		var session = new ProfilerSession(new HldiClient("127.0.0.1", port, 5.0));
 		for (rate in [100, 250, 1000]) {
 			session.start(rate);

@@ -10,30 +10,37 @@ import compiler.syntax.ConditionalCompilation;
 class SourceFormatter {
 	public static function format(source:String, tabSize:Int, insertSpaces:Bool, ?rangeStart:Int, ?rangeEnd:Int):Null<String> {
 		try {
-			var file = new SourceFile("<format>", source), conditional = ConditionalCompilation.process(file, []);
+			var file = new SourceFile("<format>", source),
+				conditional = ConditionalCompilation.process(file, []);
 			new Parser(new Lexer(file, conditional.text).tokenize()).parseProgram();
-		}
-		catch (_:CompileError)
+		} catch (_:CompileError)
 			return null
 		catch (_:Dynamic)
 			return null;
-		var newline = source.indexOf("\r\n") >= 0 ? "\r\n" : "\n", normalized = StringTools.replace(source, "\r\n", "\n"),
-			lines = normalized.split("\n"), trailingNewline = StringTools.endsWith(normalized, "\n"), output:Array<String> = [], lineStarts = [0], depth = 0,
-			blockComment = false, quote = -1, escaped = false, start = rangeStart == null ? 0 : rangeStart, end = rangeEnd == null ? source.length : rangeEnd;
+		var newline = source.indexOf("\r\n") >= 0 ? "\r\n" : "\n", normalized = StringTools.replace(source, "\r\n", "\n"), lines = normalized.split("\n"),
+			trailingNewline = StringTools.endsWith(normalized, "\n"), output:Array<String> = [], lineStarts = [0], depth = 0, blockComment = false,
+			quote = -1, escaped = false, start = rangeStart == null ? 0 : rangeStart, end = rangeEnd == null ? source.length : rangeEnd;
 		for (index in 0...source.length)
 			if (source.charCodeAt(index) == 10)
 				lineStarts.push(index + 1);
 		for (index in 0...lines.length) {
-			var line = lines[index], lineStart = lineStarts[index], lineEnd = index + 1 < lineStarts.length ? lineStarts[index + 1] - 1 : source.length;
+			var line = lines[index],
+				lineStart = lineStarts[index],
+				lineEnd = index + 1 < lineStarts.length ? lineStarts[index + 1] - 1 : source.length;
 			if (lineEnd > lineStart && source.charCodeAt(lineEnd - 1) == 13)
 				lineEnd--;
-			var selected = lineEnd >= start && lineStart < end, protectedAtStart = blockComment || quote >= 0,
-				trimmed = protectedAtStart ? line : StringTools.rtrim(StringTools.ltrim(line)), closes = !protectedAtStart && StringTools.startsWith(trimmed, "}"),
+			var selected = lineEnd >= start && lineStart < end,
+				protectedAtStart = blockComment || quote >= 0,
+				trimmed = protectedAtStart ? line : StringTools.rtrim(StringTools.ltrim(line)),
+				closes = !protectedAtStart && StringTools.startsWith(trimmed, "}"),
 				lineDepth = closes ? Std.int(Math.max(0, depth - 1)) : depth;
-			output.push(selected && !protectedAtStart && trimmed.length > 0 ? indentation(lineDepth, tabSize, insertSpaces) + trimmed : selected ? trimmed : line);
+			output.push(selected
+				&& !protectedAtStart
+				&& trimmed.length > 0 ? indentation(lineDepth, tabSize, insertSpaces) + trimmed : selected ? trimmed : line);
 			var position = 0;
 			while (position < line.length) {
-				var code = line.charCodeAt(position), next = position + 1 < line.length ? line.charCodeAt(position + 1) : -1;
+				var code = line.charCodeAt(position),
+					next = position + 1 < line.length ? line.charCodeAt(position + 1) : -1;
 				if (quote >= 0) {
 					if (escaped)
 						escaped = false;

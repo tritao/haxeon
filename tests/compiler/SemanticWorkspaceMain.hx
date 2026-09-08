@@ -21,7 +21,8 @@ class SemanticWorkspaceMain {
 		modules.set(child.name, child);
 		var workspace = new SemanticWorkspace(modules);
 		var resolvedBase = workspace.resolveTypeSymbolId("Base");
-		expect(resolvedBase != null && workspace.resolveTypeSymbolId("Base") == resolvedBase, "type resolution should be stable when cached");
+		expect(resolvedBase != null
+			&& workspace.resolveTypeSymbolId("Base") == resolvedBase, "type resolution should be stable when cached");
 		workspace.invalidateResolutionCache();
 		expect(workspace.resolveTypeSymbolId("Base") == resolvedBase, "invalidating resolution caches should preserve results");
 

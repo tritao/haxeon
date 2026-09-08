@@ -45,12 +45,16 @@ class LspDocument {
 			throw "LSP document change batch is empty";
 		var candidate = source;
 		for (change in changes) {
-			var text = stringField(change, "text"), range:Dynamic = Reflect.field(change, "range");
+			var text = stringField(change, "text"),
+				range:Dynamic = Reflect.field(change, "range");
 			if (range == null)
 				candidate = text;
 			else {
-				var view = new LspDocument(uri, path, this.version, candidate), start = positionField(range, "start"), end = positionField(range, "end"),
-					startOffset = view.offset(start.line, start.character), endOffset = view.offset(end.line, end.character);
+				var view = new LspDocument(uri, path, this.version, candidate),
+					start = positionField(range, "start"),
+					end = positionField(range, "end"),
+					startOffset = view.offset(start.line, start.character),
+					endOffset = view.offset(end.line, end.character);
 				if (endOffset < startOffset)
 					throw "LSP document change range is reversed";
 				var rawLength:Dynamic = Reflect.field(change, "rangeLength");
@@ -74,7 +78,8 @@ class LspDocument {
 		var position:Dynamic = Reflect.field(value, name);
 		if (position == null)
 			throw 'Missing field "$name"';
-		var line:Dynamic = Reflect.field(position, "line"), character:Dynamic = Reflect.field(position, "character");
+		var line:Dynamic = Reflect.field(position, "line"),
+			character:Dynamic = Reflect.field(position, "character");
 		if (!Std.isOfType(line, Int) || !Std.isOfType(character, Int))
 			throw "LSP positions require integer line and character fields";
 		return {line: cast line, character: cast character};

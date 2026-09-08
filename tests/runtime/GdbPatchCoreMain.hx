@@ -19,8 +19,7 @@ class GdbPatchCoreMain {
 		var generationOne = compiler.compile("Main");
 		if (generationOne.requiresReload || generationOne.patchBytes == null)
 			throw "first crash probe edit did not produce a hot patch";
-		Runtime.patchSet(live,
-			new PatchSet(initial.revision, generationOne.revision, generationOne.patchBytes, generationOne.changedFunctions));
+		Runtime.patchSet(live, new PatchSet(initial.revision, generationOne.revision, generationOne.patchBytes, generationOne.changedFunctions));
 		if (Runtime.callInt(live, runId) != 43)
 			throw "first crash probe patch returned the wrong value";
 		var generationTwoSource = [for (_ in 0...16) ""].join("\n") + "\nfunction run():Int { PatchCrash.fault(1); return 44; }";
@@ -28,8 +27,7 @@ class GdbPatchCoreMain {
 		var generationTwo = compiler.compile("Main");
 		if (generationTwo.requiresReload || generationTwo.patchBytes == null)
 			throw "second crash probe edit did not produce a hot patch";
-		Runtime.patchSet(live,
-			new PatchSet(generationOne.revision, generationTwo.revision, generationTwo.patchBytes, generationTwo.changedFunctions));
+		Runtime.patchSet(live, new PatchSet(generationOne.revision, generationTwo.revision, generationTwo.patchBytes, generationTwo.changedFunctions));
 		Runtime.callInt(live, runId);
 	}
 }

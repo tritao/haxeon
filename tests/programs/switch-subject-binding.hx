@@ -7,19 +7,21 @@ function describe(value:Value):Int
 	return switch value {
 		case Number(number): number;
 		case whole: switch whole {
-			case Text(_): 42;
-			case _: 0;
-		};
+				case Text(_): 42;
+				case _: 0;
+			};
 	};
 
 function describeStatement(value:Value):Int {
 	var result = 0;
 	switch value {
-		case Number(number): result = number;
-		case whole: result = switch whole {
-			case Text(_): 42;
-			case _: 0;
-		};
+		case Number(number):
+			result = number;
+		case whole:
+			result = switch whole {
+				case Text(_): 42;
+				case _: 0;
+			};
 	}
 	return result;
 }

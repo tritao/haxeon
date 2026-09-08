@@ -70,7 +70,8 @@ class LambdaCollector {
 					collectLambdaExpression(argument, functionName, module, generatedByModule);
 			case ClosureCall(callee, args, _):
 				collectLambdaExpression(callee, functionName, module, generatedByModule);
-				for (argument in args) collectLambdaExpression(argument, functionName, module, generatedByModule);
+				for (argument in args)
+					collectLambdaExpression(argument, functionName, module, generatedByModule);
 			case MethodCall(object, _, args, _):
 				collectLambdaExpression(object, functionName, module, generatedByModule);
 				for (argument in args)

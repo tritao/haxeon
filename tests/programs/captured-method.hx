@@ -10,7 +10,6 @@ class Counter {
 		return () -> addTwo();
 }
 
-
 function wrap(operation:Int->Int):Void->Int
 	return () -> operation(40);
 

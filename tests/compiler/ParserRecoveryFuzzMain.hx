@@ -20,7 +20,8 @@ class ParserRecoveryFuzzMain {
 					case 0: source.substring(0, position) + source.substring(end);
 					case 1: source.substring(0, position) + fragments[caseIndex % fragments.length] + source.substring(position);
 					default: source.substring(0, position) + fragments[caseIndex % fragments.length] + source.substring(end);
-				}, started = Sys.time();
+				},
+				started = Sys.time();
 			service.update("Main.hx", mutated);
 			try
 				service.analyze("Main")
@@ -44,7 +45,8 @@ class ParserRecoveryFuzzMain {
 	}
 
 	static function assertQueries(service:LanguageService, source:String, caseIndex:Int):Void {
-		var length = source.length, diagnostics = service.diagnostics("Main.hx");
+		var length = source.length,
+			diagnostics = service.diagnostics("Main.hx");
 		if (diagnostics.length > 20)
 			throw 'mutation $caseIndex exceeded the diagnostic budget';
 		for (diagnostic in diagnostics)

@@ -107,7 +107,9 @@ class HlValidator {
 		}
 		var snapshotHashes:Map<Int, Bool> = [];
 		for (snapshot in code.sourceSnapshots) {
-			if (snapshot.sourceHash == 0 || snapshotHashes.exists(snapshot.sourceHash) || hashBytes(snapshot.content) != snapshot.sourceHash)
+			if (snapshot.sourceHash == 0
+				|| snapshotHashes.exists(snapshot.sourceHash)
+				|| hashBytes(snapshot.content) != snapshot.sourceHash)
 				throw "Invalid source snapshot";
 			snapshotHashes.set(snapshot.sourceHash, true);
 		}
@@ -115,16 +117,19 @@ class HlValidator {
 			var encoded = HlWriter.encodeSourceSnapshots(code.sourceSnapshots), found = false;
 			for (section in code.debugSections)
 				if (section.kind == HlWriter.SOURCE_SNAPSHOTS && section.version == 1) {
-					if (section.payload.compare(encoded) != 0) throw "HLB source snapshot section does not match its model";
+					if (section.payload.compare(encoded) != 0)
+						throw "HLB source snapshot section does not match its model";
 					found = true;
 				}
-			if (!found) throw "Missing HLB source snapshot section";
+			if (!found)
+				throw "Missing HLB source snapshot section";
 		}
 	}
 
 	static function hashBytes(bytes:haxe.io.Bytes):Int {
 		var hash:Int = cast 0x811C9DC5;
-		for (index in 0...bytes.length) hash = (hash ^ bytes.get(index)) * 16777619;
+		for (index in 0...bytes.length)
+			hash = (hash ^ bytes.get(index)) * 16777619;
 		return hash;
 	}
 

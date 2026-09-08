@@ -37,11 +37,44 @@ private typedef DiagnosticSnapshot = {
 
 /** Minimal standard LSP adapter over the compiler-owned language service. */
 class LspProtocol {
-	static final SEMANTIC_TOKEN_TYPES = ["namespace", "type", "class", "enum", "interface", "struct", "typeParameter", "parameter", "variable",
-		"property", "enumMember", "event", "function", "method", "macro", "keyword", "modifier", "comment", "string", "number", "regexp", "operator",
-		"decorator"];
-	static final SEMANTIC_TOKEN_MODIFIERS = ["declaration", "definition", "readonly", "static", "deprecated", "abstract", "async", "modification",
-		"documentation", "defaultLibrary"];
+	static final SEMANTIC_TOKEN_TYPES = [
+		"namespace",
+		"type",
+		"class",
+		"enum",
+		"interface",
+		"struct",
+		"typeParameter",
+		"parameter",
+		"variable",
+		"property",
+		"enumMember",
+		"event",
+		"function",
+		"method",
+		"macro",
+		"keyword",
+		"modifier",
+		"comment",
+		"string",
+		"number",
+		"regexp",
+		"operator",
+		"decorator"
+	];
+	static final SEMANTIC_TOKEN_MODIFIERS = [
+		"declaration",
+		"definition",
+		"readonly",
+		"static",
+		"deprecated",
+		"abstract",
+		"async",
+		"modification",
+		"documentation",
+		"defaultLibrary"
+	];
+
 	final service:LanguageService;
 	final documents = new DocumentStore();
 	final profiler = new ProfilerService();
@@ -90,9 +123,9 @@ class LspProtocol {
 		var method:String = Reflect.field(request, "method"),
 			id:Dynamic = Reflect.field(request, "id");
 		if (method == null)
-			return id != null && (Reflect.hasField(request, "result") || Reflect.hasField(request, "error")) ? serverResponse(id) : id == null ? [] : [
-				error(id, -32600, "Invalid Request")
-			];
+			return id != null
+				&& (Reflect.hasField(request,
+					"result") || Reflect.hasField(request, "error")) ? serverResponse(id) : id == null ? [] : [error(id, -32600, "Invalid Request")];
 		if (shutdownRequested && method != "exit")
 			return id == null ? [] : [error(id, -32600, "Server has shut down")];
 		try {
@@ -287,7 +320,9 @@ class LspProtocol {
 				documentFormattingProvider: true,
 				documentRangeFormattingProvider: true,
 				selectionRangeProvider: true,
-				documentLinkProvider: {resolveProvider: false},
+				documentLinkProvider: {
+					resolveProvider: false
+				},
 				hoverProvider: true,
 				signatureHelpProvider: {triggerCharacters: ["(", ","]},
 				definitionProvider: true,
@@ -315,7 +350,9 @@ class LspProtocol {
 		};
 
 	function executeCommand(request:Dynamic):Dynamic {
-		var params = required(request, "params"), command = requiredString(params, "command"), rawArguments:Dynamic = Reflect.field(params, "arguments"),
+		var params = required(request, "params"),
+			command = requiredString(params, "command"),
+			rawArguments:Dynamic = Reflect.field(params, "arguments"),
 			arguments:Array<Dynamic> = rawArguments == null ? [] : cast rawArguments;
 		if (!Std.isOfType(arguments, Array))
 			throw 'Field "arguments" must be an array';
@@ -325,8 +362,11 @@ class LspProtocol {
 	}
 
 	function synchronize(request:Dynamic, opening:Bool):Array<String> {
-		var params:Dynamic = required(request, "params"), textDocument:Dynamic = required(params, "textDocument"), uri = requiredString(textDocument, "uri"),
-			version = requiredInt(textDocument, "version"), document:Null<LspDocument>;
+		var params:Dynamic = required(request, "params"),
+			textDocument:Dynamic = required(params, "textDocument"),
+			uri = requiredString(textDocument, "uri"),
+			version = requiredInt(textDocument, "version"),
+			document:Null<LspDocument>;
 		if (opening)
 			document = documents.open(uri, version, requiredString(textDocument, "text"));
 		else {
@@ -438,8 +478,10 @@ class LspProtocol {
 	}
 
 	function changeWorkspaceFolders(request:Dynamic):Array<String> {
-		var event = required(required(request, "params"), "event"), added = workspaceFolderUris(required(event, "added")),
-			removed = workspaceFolderUris(required(event, "removed")), previousUris:Map<String, Bool> = [];
+		var event = required(required(request, "params"), "event"),
+			added = workspaceFolderUris(required(event, "added")),
+			removed = workspaceFolderUris(required(event, "removed")),
+			previousUris:Map<String, Bool> = [];
 		for (state in service.compiler.modules)
 			previousUris.set(documents.uri(project.diskPath(state.source.path)), true);
 		project.changeWorkspaceFolders(added, removed, service, path -> documents.forPath(path) != null);
@@ -454,7 +496,8 @@ class LspProtocol {
 				publishedDiagnostics.set(uri, "");
 				result.push(notification("textDocument/publishDiagnostics", {uri: uri, diagnostics: []}));
 			}
-		var generation = ++analysisGeneration, targets = [for (module in service.compiler.modules.keys()) module];
+		var generation = ++analysisGeneration,
+			targets = [for (module in service.compiler.modules.keys()) module];
 		pendingDiagnosticTargets.clear();
 		if (deferDiagnostics) {
 			for (target in targets)
@@ -523,7 +566,8 @@ class LspProtocol {
 		var document = document(request);
 		ensureAnalyzed(document, token);
 		token.check();
-		var path = compilerPath(document), state = service.compiler.modules.get(ModulePath.fromFile(path));
+		var path = compilerPath(document),
+			state = service.compiler.modules.get(ModulePath.fromFile(path));
 		if (state == null || state.source.text != document.source)
 			throw new LspRequestError(-32801, "Diagnostic snapshot does not match the current document version");
 		var previous:Dynamic = Reflect.field(required(request, "params"), "previousResultId");
@@ -533,7 +577,9 @@ class LspProtocol {
 	}
 
 	function workspaceDiagnostic(request:Dynamic, token:CancellationToken):Dynamic {
-		var params = required(request, "params"), rawPrevious:Dynamic = Reflect.field(params, "previousResultIds"), previous:Map<String, String> = [];
+		var params = required(request, "params"),
+			rawPrevious:Dynamic = Reflect.field(params, "previousResultIds"),
+			previous:Map<String, String> = [];
 		if (rawPrevious != null) {
 			if (!Std.isOfType(rawPrevious, Array))
 				throw new LspRequestError(-32602, 'Field "previousResultIds" must be an array');
@@ -559,7 +605,10 @@ class LspProtocol {
 		var items:Array<Dynamic> = [];
 		for (state in states) {
 			token.check();
-			var diskPath = project.diskPath(state.source.path), uri = documents.uri(diskPath), open = documents.forPath(diskPath), version:Null<Int> = open == null ? null : open.version,
+			var diskPath = project.diskPath(state.source.path),
+				uri = documents.uri(diskPath),
+				open = documents.forPath(diskPath),
+				version:Null<Int> = open == null ? null : open.version,
 				report:Dynamic = diagnosticReport(uri, version, diagnosticContext(diskPath), state.diagnostics, previous.get(uri));
 			Reflect.setField(report, "uri", uri);
 			Reflect.setField(report, "version", version);
@@ -576,7 +625,12 @@ class LspProtocol {
 			resultId = snapshot.resultId;
 		else {
 			resultId = context + ":" + (version == null ? "disk" : Std.string(version)) + ":" + pullDiagnosticSequence++;
-			pullDiagnosticSnapshots.set(uri, {context: context, version: version, fingerprint: fingerprint, resultId: resultId});
+			pullDiagnosticSnapshots.set(uri, {
+				context: context,
+				version: version,
+				fingerprint: fingerprint,
+				resultId: resultId
+			});
 		}
 		pullDiagnosticMutex.release();
 		return previous == resultId ? {kind: "unchanged", resultId: resultId} : {
@@ -618,7 +672,9 @@ class LspProtocol {
 	}
 
 	function resolveWorkspaceSymbol(request:Dynamic, token:CancellationToken):Dynamic {
-		var item:Dynamic = required(request, "params"), data = required(item, "data"), identity = requiredString(data, "identity"),
+		var item:Dynamic = required(request, "params"),
+			data = required(item, "data"),
+			identity = requiredString(data, "identity"),
 			revision = requiredInt(data, "revision");
 		token.check();
 		var symbol = service.resolveWorkspaceSymbol(identity, revision);
@@ -645,19 +701,24 @@ class LspProtocol {
 			items: [
 				for (item in completion.items) {
 					var insertion = item.insertText == null ? item.label : item.insertText,
-						snippet = completionSnippets && StringTools.endsWith(insertion, "("), result:Dynamic = {
-						label: item.label,
-						kind: completionKind(item.kind),
-						detail: item.detail,
-						sortText: item.sortText,
-						insertTextFormat: snippet ? 2 : 1,
-						textEdit: {
-							range: document.range(start, offset),
-							newText: snippet ? insertion + "${1})" : insertion
-						}
-					};
-					if (item.identity != null)
-						Reflect.setField(result, "data", {uri: document.uri, identity: item.identity, revision: item.revision, importPath: item.importPath});
+						snippet = completionSnippets && StringTools.endsWith(insertion, "("),
+						result:Dynamic = {
+							label: item.label,
+							kind: completionKind(item.kind),
+							detail: item.detail,
+							sortText: item.sortText,
+							insertTextFormat: snippet ? 2 : 1,
+							textEdit: {
+								range: document.range(start, offset),
+								newText: snippet ? insertion + "${1})" : insertion
+							}
+						};
+					if (item.identity != null) Reflect.setField(result, "data", {
+						uri: document.uri,
+						identity: item.identity,
+						revision: item.revision,
+						importPath: item.importPath
+					});
 					result;
 				}
 			]
@@ -665,11 +726,14 @@ class LspProtocol {
 	}
 
 	function resolveCompletion(request:Dynamic, token:CancellationToken):Dynamic {
-		var item:Dynamic = required(request, "params"), data:Dynamic = Reflect.field(item, "data");
+		var item:Dynamic = required(request, "params"),
+			data:Dynamic = Reflect.field(item, "data");
 		if (data == null)
 			return item;
 		var uri = requiredString(data, "uri"),
-			document = documents.get(uri), identity = requiredString(data, "identity"), revision = requiredInt(data, "revision"),
+			document = documents.get(uri),
+			identity = requiredString(data, "identity"),
+			revision = requiredInt(data, "revision"),
 			importPath:Dynamic = Reflect.field(data, "importPath");
 		if (importPath != null && !Std.isOfType(importPath, String))
 			throw new LspRequestError(-32602, "Invalid completion import path");
@@ -698,13 +762,17 @@ class LspProtocol {
 
 	function semanticTokens(request:Dynamic, token:CancellationToken):Dynamic {
 		var document = document(request);
-		var data = encodedSemanticTokens(document, token), resultId = rememberSemanticTokens(document.uri, data);
+		var data = encodedSemanticTokens(document, token),
+			resultId = rememberSemanticTokens(document.uri, data);
 		return {data: data, resultId: resultId};
 	}
 
 	function semanticTokenDelta(request:Dynamic, token:CancellationToken):Dynamic {
-		var document = document(request), previousId = requiredString(required(request, "params"), "previousResultId"),
-			previous = semanticTokenSnapshot(previousId), data = encodedSemanticTokens(document, token), resultId = rememberSemanticTokens(document.uri, data);
+		var document = document(request),
+			previousId = requiredString(required(request, "params"), "previousResultId"),
+			previous = semanticTokenSnapshot(previousId),
+			data = encodedSemanticTokens(document, token),
+			resultId = rememberSemanticTokens(document.uri, data);
 		if (previous == null || previous.uri != document.uri || previous.context != semanticTokenContext(document))
 			return {data: data, resultId: resultId};
 		var oldTokens = Std.int(previous.data.length / 5), newTokens = Std.int(data.length / 5), prefix = 0;
@@ -713,7 +781,8 @@ class LspProtocol {
 			prefix++;
 		}
 		var suffix = 0;
-		while (suffix < oldTokens - prefix && suffix < newTokens - prefix
+		while (suffix < oldTokens - prefix
+			&& suffix < newTokens - prefix
 			&& sameSemanticToken(previous.data, data, oldTokens - suffix - 1, newTokens - suffix - 1)) {
 			token.check();
 			suffix++;
@@ -721,8 +790,12 @@ class LspProtocol {
 		if (prefix == oldTokens && prefix == newTokens)
 			return {edits: [], resultId: resultId};
 		// Include the first unchanged suffix token because its delta is relative to the replaced predecessor.
-		var rebase = suffix > 0 ? 1 : 0, oldEnd = oldTokens - suffix + rebase, newEnd = newTokens - suffix + rebase,
-			start = prefix * 5, deleteCount = (oldEnd - prefix) * 5, replacement = data.slice(start, newEnd * 5);
+		var rebase = suffix > 0 ? 1 : 0,
+			oldEnd = oldTokens - suffix + rebase,
+			newEnd = newTokens - suffix + rebase,
+			start = prefix * 5,
+			deleteCount = (oldEnd - prefix) * 5,
+			replacement = data.slice(start, newEnd * 5);
 		if (replacement.length + 3 >= data.length)
 			return {data: data, resultId: resultId};
 		return {edits: [{start: start, deleteCount: deleteCount, data: replacement}], resultId: resultId};
@@ -733,7 +806,8 @@ class LspProtocol {
 		requireCurrent(document);
 		var data:Array<Int> = [], previousLine = 0, previousCharacter = 0;
 		for (semantic in service.semanticTokens(compilerPath(document), token)) {
-			var start:Dynamic = document.position(semantic.span.start), end:Dynamic = document.position(semantic.span.end);
+			var start:Dynamic = document.position(semantic.span.start),
+				end:Dynamic = document.position(semantic.span.end);
 			appendSemanticToken(data, start.line, start.character, Std.int(end.character - start.character), semantic.type, semantic.modifiers, previousLine,
 				previousCharacter);
 			previousLine = start.line;
@@ -743,14 +817,20 @@ class LspProtocol {
 	}
 
 	function codeActions(request:Dynamic, token:CancellationToken):Array<Dynamic> {
-		var document = document(request), params = required(request, "params"), range = required(params, "range"),
-			start = positionOffset(document, required(range, "start")), end = positionOffset(document, required(range, "end"));
+		var document = document(request),
+			params = required(request, "params"),
+			range = required(params, "range"),
+			start = positionOffset(document, required(range, "start")),
+			end = positionOffset(document, required(range, "end"));
 		token.check();
 		return [
 			for (action in service.codeActions(compilerPath(document), start, end)) {
-				var changes:Map<String, Array<Dynamic>> = [], targets:Map<String, LspDocument> = [];
+				var changes:Map<String, Array<Dynamic>> = [],
+					targets:Map<String, LspDocument> = [];
 				for (edit in action.edits) {
-					var uri = documents.uri(project.diskPath(edit.path)), target = documentForPath(edit.path), existing = changes.get(uri);
+					var uri = documents.uri(project.diskPath(edit.path)),
+						target = documentForPath(edit.path),
+						existing = changes.get(uri);
 					if (existing == null)
 						changes.set(uri, existing = []);
 					targets.set(uri, target);
@@ -761,20 +841,23 @@ class LspProtocol {
 					kind: "quickfix",
 					diagnostics: [diagnosticJson(action.diagnostic)],
 					isPreferred: true,
-					edit: {documentChanges: [
-						for (uri => edits in changes)
-							{
-								textDocument: {uri: uri, version: documents.forPath(targets.get(uri).path) == null ? null : targets.get(uri).version},
-								edits: edits
-							}
-					]}
+					edit: {
+						documentChanges: [
+							for (uri => edits in changes)
+								{
+									textDocument: {uri: uri, version: documents.forPath(targets.get(uri).path) == null ? null : targets.get(uri).version},
+									edits: edits
+								}
+						]
+					}
 				}
 			}
 		];
 	}
 
 	function inlayHints(request:Dynamic, token:CancellationToken):Array<Dynamic> {
-		var document = document(request), range = required(required(request, "params"), "range");
+		var document = document(request),
+			range = required(required(request, "params"), "range");
 		ensureAnalyzed(document, token);
 		requireCurrent(document);
 		return [
@@ -799,7 +882,9 @@ class LspProtocol {
 	}
 
 	function callHierarchyCalls(request:Dynamic, token:CancellationToken, incoming:Bool):Array<Dynamic> {
-		var item:Dynamic = required(required(request, "params"), "item"), data = required(item, "data"), identity = requiredString(data, "identity"),
+		var item:Dynamic = required(required(request, "params"), "item"),
+			data = required(item, "data"),
+			identity = requiredString(data, "identity"),
 			revision = requiredInt(data, "revision");
 		if (!service.isCallHierarchyCurrent(identity, revision))
 			throw new LspRequestError(-32801, "Call hierarchy item no longer matches its source revision");
@@ -814,11 +899,12 @@ class LspProtocol {
 				var target = documentForPath(relation.item.path);
 				{to: callHierarchyItem(relation.item), fromRanges: [for (range in relation.ranges) target.range(range.start, range.end)]};
 			}
-		];
+			];
 	}
 
 	function callHierarchyItem(item:compiler.service.LanguageService.CallHierarchyItem):Dynamic {
-		var target = documentForPath(item.path), range = target.range(item.span.start, item.span.end);
+		var target = documentForPath(item.path),
+			range = target.range(item.span.start, item.span.end);
 		return {
 			name: item.name,
 			kind: symbolKind(item.kind),
@@ -826,7 +912,10 @@ class LspProtocol {
 			uri: documents.uri(project.diskPath(item.path)),
 			range: range,
 			selectionRange: range,
-			data: {identity: item.identity, revision: item.revision}
+			data: {
+				identity: item.identity,
+				revision: item.revision
+			}
 		};
 	}
 
@@ -839,7 +928,9 @@ class LspProtocol {
 	}
 
 	function typeHierarchyTypes(request:Dynamic, token:CancellationToken, supertypes:Bool):Array<Dynamic> {
-		var item:Dynamic = required(required(request, "params"), "item"), data = required(item, "data"), identity = requiredString(data, "identity"),
+		var item:Dynamic = required(required(request, "params"), "item"),
+			data = required(item, "data"),
+			identity = requiredString(data, "identity"),
 			revision = requiredInt(data, "revision");
 		if (!service.isTypeHierarchyCurrent(identity, revision))
 			throw new LspRequestError(-32801, "Type hierarchy item no longer matches its source revision");
@@ -848,7 +939,8 @@ class LspProtocol {
 	}
 
 	function typeHierarchyItem(item:compiler.service.LanguageService.TypeHierarchyItem):Dynamic {
-		var target = documentForPath(item.path), range = target.range(item.span.start, item.span.end);
+		var target = documentForPath(item.path),
+			range = target.range(item.span.start, item.span.end);
 		return {
 			name: item.name,
 			kind: symbolKind(item.kind),
@@ -856,7 +948,10 @@ class LspProtocol {
 			uri: documents.uri(project.diskPath(item.path)),
 			range: range,
 			selectionRange: range,
-			data: {identity: item.identity, revision: item.revision}
+			data: {
+				identity: item.identity,
+				revision: item.revision
+			}
 		};
 	}
 
@@ -867,26 +962,38 @@ class LspProtocol {
 		var result:Array<Dynamic> = [];
 		for (fold in service.foldingRanges(compilerPath(document))) {
 			token.check();
-			var start:Dynamic = document.position(fold.span.start), end:Dynamic = document.position(fold.span.end);
+			var start:Dynamic = document.position(fold.span.start),
+				end:Dynamic = document.position(fold.span.end);
 			if (start.line < end.line)
-				result.push({startLine: start.line, startCharacter: start.character, endLine: end.line, endCharacter: end.character, kind: fold.kind});
+				result.push({
+					startLine: start.line,
+					startCharacter: start.character,
+					endLine: end.line,
+					endCharacter: end.character,
+					kind: fold.kind
+				});
 		}
 		return result;
 	}
 
 	function formatting(request:Dynamic, token:CancellationToken, ranged:Bool):Array<Dynamic> {
 		token.check();
-		var document = document(request), params = required(request, "params"), options = required(params, "options"), tabSize = requiredInt(options, "tabSize"),
-			insertSpaces:Dynamic = required(options, "insertSpaces"), start = 0, end = document.source.length;
+		var document = document(request), params = required(request, "params"), options = required(params, "options"),
+			tabSize = requiredInt(options, "tabSize"), insertSpaces:Dynamic = required(options, "insertSpaces"), start = 0, end = document.source.length;
 		if (!Std.isOfType(insertSpaces, Bool) || tabSize <= 0)
 			throw new LspRequestError(-32602, "Formatting options require a positive tabSize and boolean insertSpaces");
 		if (ranged) {
-			var range = required(params, "range"), startPosition = required(range, "start"), endPosition = required(range, "end");
+			var range = required(params, "range"),
+				startPosition = required(range, "start"),
+				endPosition = required(range, "end");
 			start = document.offset(requiredInt(startPosition, "line"), requiredInt(startPosition, "character"));
 			end = document.offset(requiredInt(endPosition, "line"), requiredInt(endPosition, "character"));
 		}
 		var edits = service.format(compilerPath(document), start, end, tabSize, cast insertSpaces);
-		return [for (edit in edits) {range: document.range(edit.span.start, edit.span.end), newText: edit.replacement}];
+		return [
+			for (edit in edits)
+				{range: document.range(edit.span.start, edit.span.end), newText: edit.replacement}
+		];
 	}
 
 	function selectionRanges(request:Dynamic, token:CancellationToken):Array<Dynamic> {
@@ -897,7 +1004,10 @@ class LspProtocol {
 			token.check();
 			offsets.push(positionOffset(document, position));
 		}
-		return [for (spans in service.selectionRanges(compilerPath(document), offsets)) selectionRange(document, spans)];
+		return [
+			for (spans in service.selectionRanges(compilerPath(document), offsets))
+				selectionRange(document, spans)
+		];
 	}
 
 	static function selectionRange(document:LspDocument, spans:Array<compiler.Source.SourceSpan>):Dynamic {
@@ -929,11 +1039,13 @@ class LspProtocol {
 	function hover(request:Dynamic, token:CancellationToken):Dynamic {
 		var document = document(request);
 		ensureAnalyzed(document, token);
-		var offset = positionOffset(document, position(request)), value = service.hover(compilerPath(document), offset),
+		var offset = positionOffset(document, position(request)),
+			value = service.hover(compilerPath(document), offset),
 			documentation = service.hoverDocumentation(compilerPath(document), offset);
-		return value == null ? null : documentation == null || documentation.markdown.length == 0 ? {contents: {kind: "plaintext", value: value}} : {
-			contents: {kind: "markdown", value: "```haxe\n" + value + "\n```\n\n" + documentation.markdown}
-		};
+		return value == null ? null : documentation == null
+			|| documentation.markdown.length == 0 ? {contents: {kind: "plaintext", value: value}} : {
+				contents: {kind: "markdown", value: "```haxe\n" + value + "\n```\n\n" + documentation.markdown}
+			};
 	}
 
 	function signatureHelp(request:Dynamic, token:CancellationToken):Dynamic {
@@ -945,12 +1057,16 @@ class LspProtocol {
 				{
 					label: value.label,
 					documentation: value.documentation == null ? null : {kind: "markdown", value: value.documentation},
-					parameters: [for (index in 0...value.parameters.length) {
-						label: value.parameters[index],
-						documentation: value.parameterDocumentation == null || value.parameterDocumentation[index] == null ? null : {
-							kind: "markdown", value: value.parameterDocumentation[index]
-						}
-					}]
+					parameters: [
+						for (index in 0...value.parameters.length)
+							{
+								label: value.parameters[index],
+								documentation: value.parameterDocumentation == null
+								|| value.parameterDocumentation[index] == null ? null : {
+									kind: "markdown",
+									value: value.parameterDocumentation[index]
+								}}
+					]
 				}
 			],
 			activeSignature: 0,
@@ -1194,7 +1310,8 @@ class LspProtocol {
 	}
 
 	static function clientRefreshSupport(params:Dynamic, feature:String):Bool {
-		var capabilities:Dynamic = Reflect.field(params, "capabilities"), workspace:Dynamic = capabilities == null ? null : Reflect.field(capabilities, "workspace"),
+		var capabilities:Dynamic = Reflect.field(params, "capabilities"),
+			workspace:Dynamic = capabilities == null ? null : Reflect.field(capabilities, "workspace"),
 			options:Dynamic = workspace == null ? null : Reflect.field(workspace, feature);
 		return options != null && Reflect.field(options, "refreshSupport") == true;
 	}
@@ -1212,12 +1329,13 @@ class LspProtocol {
 	}
 
 	function beginRefresh(feature:String):String {
-		var id = "haxeon/refresh/" + feature + "/" + refreshSequence++, method = switch feature {
-			case "semanticTokens": "workspace/semanticTokens/refresh";
-			case "diagnostic": "workspace/diagnostic/refresh";
-			case "inlayHint": "workspace/inlayHint/refresh";
-			default: throw 'Unknown refresh feature "$feature"';
-		};
+		var id = "haxeon/refresh/" + feature + "/" + refreshSequence++,
+			method = switch feature {
+				case "semanticTokens": "workspace/semanticTokens/refresh";
+				case "diagnostic": "workspace/diagnostic/refresh";
+				case "inlayHint": "workspace/inlayHint/refresh";
+				default: throw 'Unknown refresh feature "$feature"';
+			};
 		refreshPending.set(feature, id);
 		refreshByRequest.set(id, feature);
 		return serverRequest(id, method, null);
@@ -1254,7 +1372,8 @@ class LspProtocol {
 	}
 
 	function rememberSemanticTokens(uri:String, data:Array<Int>):String {
-		var document = documents.get(uri), context = semanticTokenContext(document);
+		var document = documents.get(uri),
+			context = semanticTokenContext(document);
 		semanticTokenMutex.acquire();
 		var id = context + ":" + document.version + ":" + semanticTokenSequence++;
 		semanticTokenSnapshots.set(id, {uri: uri, context: context, data: data.copy()});
@@ -1267,11 +1386,12 @@ class LspProtocol {
 
 	function semanticTokenSnapshot(id:String):Null<SemanticTokenSnapshot> {
 		semanticTokenMutex.acquire();
-		var snapshot = semanticTokenSnapshots.get(id), result:Null<SemanticTokenSnapshot> = snapshot == null ? null : {
-			uri: snapshot.uri,
-			context: snapshot.context,
-			data: snapshot.data.copy()
-		};
+		var snapshot = semanticTokenSnapshots.get(id),
+			result:Null<SemanticTokenSnapshot> = snapshot == null ? null : {
+				uri: snapshot.uri,
+				context: snapshot.context,
+				data: snapshot.data.copy()
+			};
 		semanticTokenMutex.release();
 		return result;
 	}

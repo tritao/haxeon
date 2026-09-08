@@ -48,19 +48,24 @@ class LspProtocolMain {
 		var decoded = new DocumentStore().open("file:///workspace/My%20File.hx", 1, "");
 		if (decoded.path != "/workspace/My File.hx")
 			throw "LSP file URI was not decoded";
-		var incrementalStore = new DocumentStore(), incrementalDocument = incrementalStore.open("file:///workspace/Incremental.hx", 1, "one\n😀two\nthree");
+		var incrementalStore = new DocumentStore(),
+			incrementalDocument = incrementalStore.open("file:///workspace/Incremental.hx", 1, "one\n😀two\nthree");
 		incrementalStore.applyChanges(incrementalDocument.uri, 2, [
 			{range: {start: {line: 1, character: 2}, end: {line: 1, character: 5}}, rangeLength: 3, text: "TWO"},
 			{range: {start: {line: 1, character: 5}, end: {line: 1, character: 5}}, rangeLength: 0, text: "!"},
 			{range: {start: {line: 0, character: 0}, end: {line: 0, character: 3}}, rangeLength: 3, text: "ONE"}
 		]);
-		if (incrementalDocument.source != "ONE\n😀TWO!\nthree" || incrementalDocument.position(incrementalDocument.offset(1, 2)).character != 2)
+		if (incrementalDocument.source != "ONE\n😀TWO!\nthree"
+			|| incrementalDocument.position(incrementalDocument.offset(1, 2)).character != 2)
 			throw "incremental LSP edits did not apply sequentially with UTF-16 positions";
-		var beforeRejectedSource = incrementalDocument.source, rejectedIncrementalBatch = false;
-		try incrementalStore.applyChanges(incrementalDocument.uri, 3, [
-			{range: {start: {line: 0, character: 0}, end: {line: 0, character: 0}}, text: "discarded"},
-			{range: {start: {line: 99, character: 0}, end: {line: 99, character: 0}}, text: "invalid"}
-		]) catch (_:Dynamic)
+		var beforeRejectedSource = incrementalDocument.source,
+			rejectedIncrementalBatch = false;
+		try
+			incrementalStore.applyChanges(incrementalDocument.uri, 3, [
+				{range: {start: {line: 0, character: 0}, end: {line: 0, character: 0}}, text: "discarded"},
+				{range: {start: {line: 99, character: 0}, end: {line: 99, character: 0}}, text: "invalid"}
+			])
+		catch (_:Dynamic)
 			rejectedIncrementalBatch = true;
 		if (!rejectedIncrementalBatch || incrementalDocument.version != 2 || incrementalDocument.source != beforeRejectedSource)
 			throw "failed incremental LSP edit batch was not rolled back transactionally";
@@ -103,13 +108,22 @@ class LspProtocolMain {
 			throw "LSP did not accept the client watcher-registration response";
 		var refreshProtocol = new LspProtocol();
 		request(refreshProtocol, Json.stringify({
-			jsonrpc: "2.0", id: 11, method: "initialize",
-			params: {capabilities: {workspace: {
-				semanticTokens: {refreshSupport: true}, diagnostics: {refreshSupport: true}, inlayHint: {refreshSupport: true}
-			}}}
+			jsonrpc: "2.0",
+			id: 11,
+			method: "initialize",
+			params: {
+				capabilities: {
+					workspace: {
+						semanticTokens: {refreshSupport: true},
+						diagnostics: {refreshSupport: true},
+						inlayHint: {refreshSupport: true}
+					}
+				}
+			}
 		}));
 		var refreshChange = Json.stringify({jsonrpc: "2.0", method: "workspace/didChangeConfiguration", params: {settings: {}}}),
-			firstRefreshes = refreshProtocol.handle(refreshChange), refreshMethods:Map<String, String> = [];
+			firstRefreshes = refreshProtocol.handle(refreshChange),
+			refreshMethods:Map<String, String> = [];
 		for (message in firstRefreshes) {
 			var parsed:Dynamic = Json.parse(message);
 			refreshMethods.set(parsed.method, Std.string(parsed.id));
@@ -159,8 +173,12 @@ class LspProtocolMain {
 				searchPluginSymbol = symbol;
 		if (searchPluginSymbol == null || Reflect.hasField(searchPluginSymbol.location, "range"))
 			throw "workspace symbols did not index an unopened project source lazily";
-		var resolvedWorkspace = request(projectProtocol,
-			Json.stringify({jsonrpc: "2.0", id: 402, method: "workspaceSymbol/resolve", params: searchPluginSymbol}));
+		var resolvedWorkspace = request(projectProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 402,
+			method: "workspaceSymbol/resolve",
+			params: searchPluginSymbol
+		}));
 		if (!StringTools.endsWith(resolvedWorkspace.result.location.uri, "/pragtical/plugins/SearchPlugin.hx")
 			|| resolvedWorkspace.result.location.range == null)
 			throw "workspace symbol resolve did not map the exact disk location";
@@ -176,13 +194,14 @@ class LspProtocolMain {
 				}
 			}
 		}));
-		var documentLinks = request(projectProtocol, Json.stringify({
-			jsonrpc: "2.0",
-			id: 403,
-			method: "textDocument/documentLink",
-			params: {textDocument: {uri: fixtureMainUri}}
-		})), importStart = fixtureDocument.position(fixtureSource.indexOf("pragtical.api.Document")),
-			importEnd = fixtureDocument.position(fixtureSource.indexOf("pragtical.api.Document") + "pragtical.api.Document".length);
+		var documentLinks = request(projectProtocol,
+			Json.stringify({
+				jsonrpc: "2.0",
+				id: 403,
+				method: "textDocument/documentLink",
+				params: {textDocument: {uri: fixtureMainUri}}
+			})), importStart = fixtureDocument.position(fixtureSource.indexOf("pragtical.api.Document")), importEnd = fixtureDocument.position(fixtureSource.indexOf("pragtical.api.Document")
+				+ "pragtical.api.Document".length);
 		if (documentLinks.result.length != 1
 			|| !StringTools.endsWith(documentLinks.result[0].target, "/pragtical/api/Document.hx")
 			|| documentLinks.result[0].range.start.line != importStart.line
@@ -200,10 +219,13 @@ class LspProtocolMain {
 			throw "project-backed definition did not resolve an unopened dependency";
 		var parameterTypeUse = fixtureSource.indexOf("Document"),
 			parameterTypeDefinition = request(projectProtocol, Json.stringify({
-				jsonrpc: "2.0", id: 411, method: "textDocument/typeDefinition",
+				jsonrpc: "2.0",
+				id: 411,
+				method: "textDocument/typeDefinition",
 				params: {textDocument: {uri: fixtureMainUri}, position: fixtureDocument.position(parameterTypeUse + 2)}
 			}));
-		if (parameterTypeDefinition.result == null || !StringTools.endsWith(parameterTypeDefinition.result.uri, "/pragtical/api/Document.hx"))
+		if (parameterTypeDefinition.result == null
+			|| !StringTools.endsWith(parameterTypeDefinition.result.uri, "/pragtical/api/Document.hx"))
 			throw "LSP type definition did not resolve an unopened project type";
 		var memberOffset = fixtureSource.indexOf("document.selection") + "document.".length,
 			projectCompletion = request(projectProtocol, Json.stringify({
@@ -269,9 +291,13 @@ class LspProtocolMain {
 		}
 		if (!hasSelectedBuild || hasWrongBuild)
 			throw "selected build defines did not control LSP symbols";
-		var firstWorkspaceDiagnostics = request(watchProtocol, Json.stringify({
-			jsonrpc: "2.0", id: 431, method: "workspace/diagnostic", params: {previousResultIds: []}
-		})), previousWorkspaceDiagnostics:Array<Dynamic> = [], unopenedDiagnostic:Dynamic = null, openedDiagnostic:Dynamic = null, previousDiagnosticUri = "";
+		var firstWorkspaceDiagnostics = request(watchProtocol,
+			Json.stringify({
+				jsonrpc: "2.0",
+				id: 431,
+				method: "workspace/diagnostic",
+				params: {previousResultIds: []}
+			})), previousWorkspaceDiagnostics:Array<Dynamic> = [], unopenedDiagnostic:Dynamic = null, openedDiagnostic:Dynamic = null, previousDiagnosticUri = "";
 		for (report in cast(firstWorkspaceDiagnostics.result.items, Array<Dynamic>)) {
 			if (previousDiagnosticUri != "" && Reflect.compare(previousDiagnosticUri, report.uri) > 0)
 				throw "workspace diagnostics were not ordered deterministically";
@@ -282,11 +308,14 @@ class LspProtocolMain {
 			if (report.uri == watchMainUri)
 				openedDiagnostic = report;
 		}
-		if (unopenedDiagnostic == null || unopenedDiagnostic.kind != "full" || unopenedDiagnostic.version != null
-			|| openedDiagnostic == null || openedDiagnostic.version != 1)
+		if (unopenedDiagnostic == null || unopenedDiagnostic.kind != "full" || unopenedDiagnostic.version != null || openedDiagnostic == null
+			|| openedDiagnostic.version != 1)
 			throw "workspace diagnostics omitted open or indexed unopened sources";
 		var unchangedWorkspaceDiagnostics = request(watchProtocol, Json.stringify({
-			jsonrpc: "2.0", id: 432, method: "workspace/diagnostic", params: {previousResultIds: previousWorkspaceDiagnostics}
+			jsonrpc: "2.0",
+			id: 432,
+			method: "workspace/diagnostic",
+			params: {previousResultIds: previousWorkspaceDiagnostics}
 		}));
 		for (report in cast(unchangedWorkspaceDiagnostics.result.items, Array<Dynamic>))
 			if (report.kind != "unchanged")
@@ -294,12 +323,18 @@ class LspProtocolMain {
 		sys.io.File.saveContent(watchHelperPath, "package lib; class Helper {");
 		watchProtocol.handle(watchedFileMessage(watchHelperUri, 2));
 		var changedWorkspaceDiagnostics = request(watchProtocol, Json.stringify({
-			jsonrpc: "2.0", id: 433, method: "workspace/diagnostic", params: {previousResultIds: previousWorkspaceDiagnostics}
-		})), changedUnopened:Dynamic = null;
+			jsonrpc: "2.0",
+			id: 433,
+			method: "workspace/diagnostic",
+			params: {previousResultIds: previousWorkspaceDiagnostics}
+		})),
+			changedUnopened:Dynamic = null;
 		for (report in cast(changedWorkspaceDiagnostics.result.items, Array<Dynamic>))
 			if (report.uri == watchHelperUri)
 				changedUnopened = report;
-		if (changedUnopened == null || changedUnopened.kind != "full" || changedUnopened.items.length == 0
+		if (changedUnopened == null
+			|| changedUnopened.kind != "full"
+			|| changedUnopened.items.length == 0
 			|| changedUnopened.resultId == unopenedDiagnostic.resultId)
 			throw "workspace diagnostics did not invalidate an edited unopened source";
 		sys.io.File.saveContent(watchHelperPath,
@@ -370,10 +405,14 @@ class LspProtocolMain {
 			throw "explicit Haxe build selection did not override path ownership";
 		deleteTree(watchRoot);
 		var folderRoot = "/tmp/haxeon-lsp-folders-" + Std.string(Std.int(Sys.time() * 1000000)),
-			folderA = Path.join([folderRoot, "folder-a"]), folderB = Path.join([folderRoot, "folder-b"]),
-			folderASource = Path.join([folderA, "src"]), folderBSource = Path.join([folderB, "src"]),
-			folderAPath = Path.join([folderASource, "FolderA.hx"]), folderBPath = Path.join([folderBSource, "FolderB.hx"]),
-			folderAUri = "file://" + folderAPath, folderBUri = "file://" + folderBPath;
+			folderA = Path.join([folderRoot, "folder-a"]),
+			folderB = Path.join([folderRoot, "folder-b"]),
+			folderASource = Path.join([folderA, "src"]),
+			folderBSource = Path.join([folderB, "src"]),
+			folderAPath = Path.join([folderASource, "FolderA.hx"]),
+			folderBPath = Path.join([folderBSource, "FolderB.hx"]),
+			folderAUri = "file://" + folderAPath,
+			folderBUri = "file://" + folderBPath;
 		for (path in [folderRoot, folderA, folderB, folderASource, folderBSource])
 			sys.FileSystem.createDirectory(path);
 		sys.io.File.saveContent(Path.join([folderA, "build.hxml"]), "-cp src\n-main FolderA\n");
@@ -382,36 +421,60 @@ class LspProtocolMain {
 		sys.io.File.saveContent(folderBPath, "function main():Int return 2;");
 		var folderProtocol = new LspProtocol();
 		request(folderProtocol, Json.stringify({
-			jsonrpc: "2.0", id: 434, method: "initialize", params: {workspaceFolders: [{uri: "file://" + folderA, name: "folder-a"}]}
+			jsonrpc: "2.0",
+			id: 434,
+			method: "initialize",
+			params: {workspaceFolders: [{uri: "file://" + folderA, name: "folder-a"}]}
 		}));
 		if (!folderProtocol.project.hasDiskSource(folderAPath) || folderProtocol.project.hasDiskSource(folderBPath))
 			throw "initial workspace folders were not indexed independently";
 		folderProtocol.handle(Json.stringify({
-			jsonrpc: "2.0", method: "textDocument/didOpen",
-			params: {textDocument: {uri: folderAUri, languageId: "haxe", version: 1, text: sys.io.File.getContent(folderAPath)}}
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: folderAUri,
+					languageId: "haxe",
+					version: 1,
+					text: sys.io.File.getContent(folderAPath)
+				}
+			}
 		}));
 		var initialFolderTokens = request(folderProtocol, Json.stringify({
-			jsonrpc: "2.0", id: 4341, method: "textDocument/semanticTokens/full", params: {textDocument: {uri: folderAUri}}
+			jsonrpc: "2.0",
+			id: 4341,
+			method: "textDocument/semanticTokens/full",
+			params: {textDocument: {uri: folderAUri}}
 		}));
 		folderProtocol.handle(workspaceFolderChange([{uri: "file://" + folderB, name: "folder-b"}], [{uri: "file://" + folderA, name: "folder-a"}]));
 		if (folderProtocol.project.hasDiskSource(folderAPath) || !folderProtocol.project.hasDiskSource(folderBPath))
 			throw "workspace folder replacement did not update indexed disk sources";
 		var retainedSymbols = request(folderProtocol, Json.stringify({
-			jsonrpc: "2.0", id: 435, method: "textDocument/documentSymbol", params: {textDocument: {uri: folderAUri}}
+			jsonrpc: "2.0",
+			id: 435,
+			method: "textDocument/documentSymbol",
+			params: {textDocument: {uri: folderAUri}}
 		}));
 		if (retainedSymbols.result.length == 0)
 			throw "removing a workspace folder discarded its open document overlay";
 		var refreshedFolderTokens = request(folderProtocol, Json.stringify({
-			jsonrpc: "2.0", id: 4351, method: "textDocument/semanticTokens/full/delta",
+			jsonrpc: "2.0",
+			id: 4351,
+			method: "textDocument/semanticTokens/full/delta",
 			params: {textDocument: {uri: folderAUri}, previousResultId: initialFolderTokens.result.resultId}
 		}));
 		if (!Reflect.hasField(refreshedFolderTokens.result, "data"))
 			throw "workspace folder changes did not invalidate semantic token history";
 		folderProtocol.handle(Json.stringify({
-			jsonrpc: "2.0", method: "textDocument/didClose", params: {textDocument: {uri: folderAUri}}
+			jsonrpc: "2.0",
+			method: "textDocument/didClose",
+			params: {textDocument: {uri: folderAUri}}
 		}));
 		var folderDiagnostics = request(folderProtocol, Json.stringify({
-			jsonrpc: "2.0", id: 436, method: "workspace/diagnostic", params: {previousResultIds: []}
+			jsonrpc: "2.0",
+			id: 436,
+			method: "workspace/diagnostic",
+			params: {previousResultIds: []}
 		})), foundRemovedFolder = false, foundRetainedFolder = false;
 		for (report in cast(folderDiagnostics.result.items, Array<Dynamic>)) {
 			if (report.uri == folderAUri)
@@ -487,7 +550,14 @@ class LspProtocolMain {
 		protocol.handle(Json.stringify({
 			jsonrpc: "2.0",
 			method: "textDocument/didOpen",
-			params: {textDocument: {uri: brokenUri, languageId: "haxe", version: 1, text: brokenSource}}
+			params: {
+				textDocument: {
+					uri: brokenUri,
+					languageId: "haxe",
+					version: 1,
+					text: brokenSource
+				}
+			}
 		}));
 		var actions = request(protocol, Json.stringify({
 			jsonrpc: "2.0",
@@ -507,7 +577,8 @@ class LspProtocolMain {
 			|| actions.result[0].edit.documentChanges[0].edits[0].newText != "\"")
 			throw "LSP code actions did not expose the compiler-authored lexical fix";
 		var callSource = "/** Adds values.\n * @param left First value.\n * @param right Second value.\n * @return the sum.\n * @deprecated Use sum.\n */\nfunction add(left:Int, right:Int):Int return left + right; function main():Int return add(20, 22) + add(1, 2);",
-			callUri = "file:///workspace/Call.hx", callDocument = new LspDocument(callUri, "/workspace/Call.hx", 1, callSource);
+			callUri = "file:///workspace/Call.hx",
+			callDocument = new LspDocument(callUri, "/workspace/Call.hx", 1, callSource);
 		protocol.handle(Json.stringify({
 			jsonrpc: "2.0",
 			method: "textDocument/didOpen",
@@ -521,16 +592,22 @@ class LspProtocolMain {
 			}
 		}));
 		var callFolds = request(protocol, Json.stringify({
-			jsonrpc: "2.0", id: 59, method: "textDocument/foldingRange", params: {textDocument: {uri: callUri}}
+			jsonrpc: "2.0",
+			id: 59,
+			method: "textDocument/foldingRange",
+			params: {textDocument: {uri: callUri}}
 		})), hasDocumentationFold = false;
 		for (fold in cast(callFolds.result, Array<Dynamic>))
 			if (fold.kind == "comment" && fold.startLine == 0 && fold.endLine == 5)
 				hasDocumentationFold = true;
 		if (!hasDocumentationFold)
 			throw "LSP folding ranges omitted a multiline documentation comment";
-		var valuePosition = callDocument.position(callSource.indexOf("20")), declarationPosition = callDocument.position(callSource.indexOf("add") + 1),
+		var valuePosition = callDocument.position(callSource.indexOf("20")),
+			declarationPosition = callDocument.position(callSource.indexOf("add") + 1),
 			selections = request(protocol, Json.stringify({
-				jsonrpc: "2.0", id: 60, method: "textDocument/selectionRange",
+				jsonrpc: "2.0",
+				id: 60,
+				method: "textDocument/selectionRange",
 				params: {textDocument: {uri: callUri}, positions: [valuePosition, declarationPosition]}
 			}));
 		if (selections.result.length != 2
@@ -558,9 +635,13 @@ class LspProtocolMain {
 			params: {textDocument: {uri: callUri}, range: {start: {line: 0, character: 0}, end: callDocument.position(callSource.length)}}
 		})), hasLeftHint = false, hasRightHint = false;
 		for (hint in cast(callHints.result, Array<Dynamic>)) {
-			if (hint.kind == 2 && hint.label == "left:" && hint.position.character == callDocument.position(callSource.indexOf("20")).character)
+			if (hint.kind == 2
+				&& hint.label == "left:"
+				&& hint.position.character == callDocument.position(callSource.indexOf("20")).character)
 				hasLeftHint = true;
-			if (hint.kind == 2 && hint.label == "right:" && hint.position.character == callDocument.position(callSource.indexOf("22")).character)
+			if (hint.kind == 2
+				&& hint.label == "right:"
+				&& hint.position.character == callDocument.position(callSource.indexOf("22")).character)
 				hasRightHint = true;
 		}
 		if (!hasLeftHint || !hasRightHint)
@@ -615,32 +696,59 @@ class LspProtocolMain {
 		if (!foundRankedCall)
 			throw "LSP completion omitted compiler ranking or insertion metadata";
 		var plainCompletionItem:Dynamic = {label: "while", kind: 14},
-			resolvedPlain = request(protocol, Json.stringify({jsonrpc: "2.0", id: 79, method: "completionItem/resolve", params: plainCompletionItem}));
+			resolvedPlain = request(protocol, Json.stringify({
+				jsonrpc: "2.0",
+				id: 79,
+				method: "completionItem/resolve",
+				params: plainCompletionItem
+			}));
 		if (resolvedPlain.result.label != "while" || resolvedPlain.result.kind != 14)
 			throw "completion resolve did not preserve an item without deferred data";
-		var resolvedAdd = request(protocol, Json.stringify({jsonrpc: "2.0", id: 76, method: "completionItem/resolve", params: addCompletionItem}));
-		if (resolvedAdd.result.documentation.kind != "markdown" || resolvedAdd.result.documentation.value.indexOf("**Deprecated.** Use sum.") < 0)
+		var resolvedAdd = request(protocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 76,
+			method: "completionItem/resolve",
+			params: addCompletionItem
+		}));
+		if (resolvedAdd.result.documentation.kind != "markdown"
+			|| resolvedAdd.result.documentation.value.indexOf("**Deprecated.** Use sum.") < 0)
 			throw "completion resolve did not reuse compiler-owned documentation";
 		var addHoverPosition = callDocument.position(callSource.indexOf("add") + 1),
 			documentedHover = request(protocol, Json.stringify({
-				jsonrpc: "2.0", id: 77, method: "textDocument/hover", params: {textDocument: {uri: callUri}, position: addHoverPosition}
+				jsonrpc: "2.0",
+				id: 77,
+				method: "textDocument/hover",
+				params: {textDocument: {uri: callUri}, position: addHoverPosition}
 			}));
 		if (documentedHover.result.contents.kind != "markdown" || documentedHover.result.contents.value.indexOf("Adds values") < 0)
 			throw "hover did not reuse compiler-owned documentation";
 		var callSemantic = request(protocol, Json.stringify({
-			jsonrpc: "2.0", id: 78, method: "textDocument/semanticTokens/full", params: {textDocument: {uri: callUri}}
+			jsonrpc: "2.0",
+			id: 78,
+			method: "textDocument/semanticTokens/full",
+			params: {textDocument: {uri: callUri}}
 		})), addDeclaration = callDocument.position(callSource.indexOf("add"));
 		if (!hasSemanticToken(callSemantic.result.data, addDeclaration.line, addDeclaration.character, 12, 17))
 			throw "deprecated documentation did not annotate the semantic declaration token";
-		var importService = new LanguageService(), importProtocol = new LspProtocol(importService),
-			helperPath = "/workspace/tools/Helper.hx", helperUri = "file://" + helperPath,
-			importUri = "file:///workspace/ImportMain.hx", importSource = "function main():Int return 0; // Hel";
+		var importService = new LanguageService(),
+			importProtocol = new LspProtocol(importService),
+			helperPath = "/workspace/tools/Helper.hx",
+			helperUri = "file://" + helperPath,
+			importUri = "file:///workspace/ImportMain.hx",
+			importSource = "function main():Int return 0; // Hel";
 		importService.update(helperPath, "class Helper { public static function answer():Int return 42; } function main():Int return 0;");
 		request(importProtocol, '{"jsonrpc":"2.0","id":70,"method":"initialize","params":{}}');
 		importProtocol.handle(Json.stringify({
 			jsonrpc: "2.0",
 			method: "textDocument/didOpen",
-			params: {textDocument: {uri: importUri, languageId: "haxe", version: 1, text: importSource}}
+			params: {
+				textDocument: {
+					uri: importUri,
+					languageId: "haxe",
+					version: 1,
+					text: importSource
+				}
+			}
 		}));
 		var importCompletion = request(importProtocol, Json.stringify({
 			jsonrpc: "2.0",
@@ -653,7 +761,12 @@ class LspProtocolMain {
 				helperItem = item;
 		if (helperItem == null || helperItem.data == null || helperItem.data.importPath != "workspace.tools.Helper")
 			throw "completion omitted a unique auto-import candidate or its opaque resolve data";
-		var resolvedHelper = request(importProtocol, Json.stringify({jsonrpc: "2.0", id: 72, method: "completionItem/resolve", params: helperItem}));
+		var resolvedHelper = request(importProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 72,
+			method: "completionItem/resolve",
+			params: helperItem
+		}));
 		if (resolvedHelper.result.documentation.value.indexOf(helperPath) < 0
 			|| resolvedHelper.result.additionalTextEdits.length != 1
 			|| resolvedHelper.result.additionalTextEdits[0].newText != "import workspace.tools.Helper;\n")
@@ -671,10 +784,20 @@ class LspProtocolMain {
 				importedHelper = item;
 		if (importedHelper == null)
 			throw "completion omitted an already imported workspace symbol";
-		var resolvedImported = request(importProtocol, Json.stringify({jsonrpc: "2.0", id: 75, method: "completionItem/resolve", params: importedHelper}));
+		var resolvedImported = request(importProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 75,
+			method: "completionItem/resolve",
+			params: importedHelper
+		}));
 		if (importedHelper.data.importPath != null || resolvedImported.result.additionalTextEdits.length != 0)
 			throw "completion resolve proposed a duplicate import";
-		var staleResolve = importProtocol.handle(Json.stringify({jsonrpc: "2.0", id: 73, method: "completionItem/resolve", params: helperItem}));
+		var staleResolve = importProtocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			id: 73,
+			method: "completionItem/resolve",
+			params: helperItem
+		}));
 		if (staleResolve.length != 1 || Json.parse(staleResolve[0]).error.code != -32801)
 			throw "completion resolve accepted stale candidate data";
 		var blockingService = new BlockingLanguageService(),
@@ -944,17 +1067,31 @@ class LspProtocolMain {
 		}));
 		if (staleRename.length != 1 || Json.parse(staleRename[0]).error.code != -32801)
 			throw "LSP rename did not reject a stale semantic snapshot";
-		var deltaProtocol = new LspProtocol(), deltaUri = "file:///workspace/Delta.hx",
+		var deltaProtocol = new LspProtocol(),
+			deltaUri = "file:///workspace/Delta.hx",
 			deltaSource = "function main():Int { var a:Dynamic = 1; var b:Dynamic = 2; var c:Dynamic = 3; var d:Dynamic = 4; var e:Dynamic = 5; return 0; }";
 		request(deltaProtocol, '{"jsonrpc":"2.0","id":80,"method":"initialize","params":{}}');
 		deltaProtocol.handle(Json.stringify({
-			jsonrpc: "2.0", method: "textDocument/didOpen",
-			params: {textDocument: {uri: deltaUri, languageId: "haxe", version: 1, text: deltaSource}}
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: deltaUri,
+					languageId: "haxe",
+					version: 1,
+					text: deltaSource
+				}
+			}
 		}));
 		var firstTokens = request(deltaProtocol, Json.stringify({
-			jsonrpc: "2.0", id: 81, method: "textDocument/semanticTokens/full", params: {textDocument: {uri: deltaUri}}
+			jsonrpc: "2.0",
+			id: 81,
+			method: "textDocument/semanticTokens/full",
+			params: {textDocument: {uri: deltaUri}}
 		})), unchangedDelta = request(deltaProtocol, Json.stringify({
-			jsonrpc: "2.0", id: 82, method: "textDocument/semanticTokens/full/delta",
+			jsonrpc: "2.0",
+			id: 82,
+			method: "textDocument/semanticTokens/full/delta",
 			params: {textDocument: {uri: deltaUri}, previousResultId: firstTokens.result.resultId}
 		}));
 		if (unchangedDelta.result.edits.length != 0)
@@ -962,41 +1099,65 @@ class LspProtocolMain {
 		var changedDeltaSource = StringTools.replace(deltaSource, "= 3", "= \"three\"");
 		deltaProtocol.handle(documentChangeMessage(deltaUri, 2, changedDeltaSource));
 		var changedDelta = request(deltaProtocol, Json.stringify({
-			jsonrpc: "2.0", id: 83, method: "textDocument/semanticTokens/full/delta",
+			jsonrpc: "2.0",
+			id: 83,
+			method: "textDocument/semanticTokens/full/delta",
 			params: {textDocument: {uri: deltaUri}, previousResultId: unchangedDelta.result.resultId}
 		})), changedFull = request(deltaProtocol, Json.stringify({
-			jsonrpc: "2.0", id: 84, method: "textDocument/semanticTokens/full", params: {textDocument: {uri: deltaUri}}
+			jsonrpc: "2.0",
+			id: 84,
+			method: "textDocument/semanticTokens/full",
+			params: {textDocument: {uri: deltaUri}}
 		}));
 		if (!Reflect.hasField(changedDelta.result, "edits")
 			|| changedDelta.result.edits.length != 1
 			|| !sameInts(applySemanticEdits(firstTokens.result.data, changedDelta.result.edits), changedFull.result.data))
 			throw "semantic token delta did not reconstruct the current full token stream";
 		var unknownHistory = request(deltaProtocol, Json.stringify({
-			jsonrpc: "2.0", id: 85, method: "textDocument/semanticTokens/full/delta",
+			jsonrpc: "2.0",
+			id: 85,
+			method: "textDocument/semanticTokens/full/delta",
 			params: {textDocument: {uri: deltaUri}, previousResultId: "unknown"}
 		}));
 		if (!Reflect.hasField(unknownHistory.result, "data"))
 			throw "unknown semantic token history did not fall back to a full result";
-		var diagnosticProtocol = new LspProtocol(), diagnosticUri = "file:///workspace/PullDiagnostic.hx",
+		var diagnosticProtocol = new LspProtocol(),
+			diagnosticUri = "file:///workspace/PullDiagnostic.hx",
 			diagnosticSource = "function main():Int return 0;";
 		request(diagnosticProtocol, '{"jsonrpc":"2.0","id":86,"method":"initialize","params":{}}');
 		diagnosticProtocol.handle(Json.stringify({
-			jsonrpc: "2.0", method: "textDocument/didOpen",
-			params: {textDocument: {uri: diagnosticUri, languageId: "haxe", version: 1, text: diagnosticSource}}
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: diagnosticUri,
+					languageId: "haxe",
+					version: 1,
+					text: diagnosticSource
+				}
+			}
 		}));
 		var firstDiagnostics = request(diagnosticProtocol, Json.stringify({
-			jsonrpc: "2.0", id: 87, method: "textDocument/diagnostic", params: {textDocument: {uri: diagnosticUri}}
+			jsonrpc: "2.0",
+			id: 87,
+			method: "textDocument/diagnostic",
+			params: {textDocument: {uri: diagnosticUri}}
 		})), unchangedDiagnostics = request(diagnosticProtocol, Json.stringify({
-			jsonrpc: "2.0", id: 88, method: "textDocument/diagnostic",
+			jsonrpc: "2.0",
+			id: 88,
+			method: "textDocument/diagnostic",
 			params: {textDocument: {uri: diagnosticUri}, previousResultId: firstDiagnostics.result.resultId}
 		}));
-		if (firstDiagnostics.result.kind != "full" || firstDiagnostics.result.items.length != 0
+		if (firstDiagnostics.result.kind != "full"
+			|| firstDiagnostics.result.items.length != 0
 			|| unchangedDiagnostics.result.kind != "unchanged"
 			|| unchangedDiagnostics.result.resultId != firstDiagnostics.result.resultId)
 			throw "document pull diagnostics did not reuse an unchanged result";
 		diagnosticProtocol.handle(documentChangeMessage(diagnosticUri, 2, "function main():String return \"broken"));
 		var changedDiagnostics = request(diagnosticProtocol, Json.stringify({
-			jsonrpc: "2.0", id: 89, method: "textDocument/diagnostic",
+			jsonrpc: "2.0",
+			id: 89,
+			method: "textDocument/diagnostic",
 			params: {textDocument: {uri: diagnosticUri}, previousResultId: firstDiagnostics.result.resultId}
 		}));
 		if (changedDiagnostics.result.kind != "full"
@@ -1004,12 +1165,22 @@ class LspProtocolMain {
 			|| changedDiagnostics.result.items.length != 1
 			|| changedDiagnostics.result.items[0].code != "E0001")
 			throw "document pull diagnostics did not invalidate after an edit";
-		var blockingDiagnosticService = new BlockingDiagnosticLanguageService(), blockingDiagnosticProtocol = new LspProtocol(blockingDiagnosticService),
-			workspaceCancellation:String = null, workspaceCancellationDone = new sys.thread.Lock();
+		var blockingDiagnosticService = new BlockingDiagnosticLanguageService(),
+			blockingDiagnosticProtocol = new LspProtocol(blockingDiagnosticService),
+			workspaceCancellation:String = null,
+			workspaceCancellationDone = new sys.thread.Lock();
 		request(blockingDiagnosticProtocol, '{"jsonrpc":"2.0","id":891,"method":"initialize","params":{}}');
 		blockingDiagnosticProtocol.handle(Json.stringify({
-			jsonrpc: "2.0", method: "textDocument/didOpen",
-			params: {textDocument: {uri: diagnosticUri, languageId: "haxe", version: 1, text: diagnosticSource}}
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: diagnosticUri,
+					languageId: "haxe",
+					version: 1,
+					text: diagnosticSource
+				}
+			}
 		}));
 		blockingDiagnosticService.block = true;
 		var diagnosticDispatcher = new LspDispatcher(blockingDiagnosticProtocol, response -> {
@@ -1020,7 +1191,10 @@ class LspProtocolMain {
 			}
 		}, 4);
 		diagnosticDispatcher.dispatch(Json.stringify({
-			jsonrpc: "2.0", id: 892, method: "workspace/diagnostic", params: {previousResultIds: []}
+			jsonrpc: "2.0",
+			id: 892,
+			method: "workspace/diagnostic",
+			params: {previousResultIds: []}
 		}));
 		blockingDiagnosticService.entered.wait();
 		diagnosticDispatcher.dispatch('{"jsonrpc":"2.0","method":"$/cancelRequest","params":{"id":892}}');
@@ -1029,95 +1203,164 @@ class LspProtocolMain {
 		diagnosticDispatcher.finish();
 		if (Json.parse(workspaceCancellation).error.code != -32800)
 			throw "workspace pull diagnostics did not honor cancellation";
-		var incrementalProtocol = new LspProtocol(), incrementalUri = "file:///workspace/ProtocolIncremental.hx",
+		var incrementalProtocol = new LspProtocol(),
+			incrementalUri = "file:///workspace/ProtocolIncremental.hx",
 			incrementalSource = "function main():Int return 1;";
 		request(incrementalProtocol, '{"jsonrpc":"2.0","id":8921,"method":"initialize","params":{}}');
 		incrementalProtocol.handle(Json.stringify({
-			jsonrpc: "2.0", method: "textDocument/didOpen",
-			params: {textDocument: {uri: incrementalUri, languageId: "haxe", version: 1, text: incrementalSource}}
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: incrementalUri,
+					languageId: "haxe",
+					version: 1,
+					text: incrementalSource
+				}
+			}
 		}));
 		var numberOffset = incrementalSource.indexOf("1");
 		incrementalProtocol.handle(Json.stringify({
-			jsonrpc: "2.0", method: "textDocument/didChange",
+			jsonrpc: "2.0",
+			method: "textDocument/didChange",
 			params: {
 				textDocument: {uri: incrementalUri, version: 2},
-				contentChanges: [{
-					range: {start: {line: 0, character: numberOffset}, end: {line: 0, character: numberOffset + 1}},
-					rangeLength: 1,
-					text: "42"
-				}]
+				contentChanges: [
+					{
+						range: {start: {line: 0, character: numberOffset}, end: {line: 0, character: numberOffset + 1}},
+						rangeLength: 1,
+						text: "42"
+					}
+				]
 			}
 		}));
 		var incrementallyUpdatedTokens = request(incrementalProtocol, Json.stringify({
-			jsonrpc: "2.0", id: 8922, method: "textDocument/semanticTokens/full", params: {textDocument: {uri: incrementalUri}}
+			jsonrpc: "2.0",
+			id: 8922,
+			method: "textDocument/semanticTokens/full",
+			params: {textDocument: {uri: incrementalUri}}
 		}));
 		if (!hasSemanticToken(incrementallyUpdatedTokens.result.data, 0, numberOffset, 19, 0)
 			|| semanticTokenLength(incrementallyUpdatedTokens.result.data, 0, numberOffset, 19) != 2)
 			throw "incremental document change did not reach compiler-backed LSP queries";
-		var formattingProtocol = new LspProtocol(), formattingUri = "file:///workspace/Formatting.hx",
+		var formattingProtocol = new LspProtocol(),
+			formattingUri = "file:///workspace/Formatting.hx",
 			formattingSource = "function main():Int {\nvar text = \"{ literal }\"; // }\nif (true) {\nreturn 42;   \n}\n}\n",
 			formattingDocument = new LspDocument(formattingUri, "/workspace/Formatting.hx", 1, formattingSource);
 		request(formattingProtocol, '{"jsonrpc":"2.0","id":8923,"method":"initialize","params":{}}');
 		formattingProtocol.handle(Json.stringify({
-			jsonrpc: "2.0", method: "textDocument/didOpen",
-			params: {textDocument: {uri: formattingUri, languageId: "haxe", version: 1, text: formattingSource}}
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: formattingUri,
+					languageId: "haxe",
+					version: 1,
+					text: formattingSource
+				}
+			}
 		}));
 		var formattingResponse = request(formattingProtocol, Json.stringify({
-			jsonrpc: "2.0", id: 8924, method: "textDocument/formatting",
+			jsonrpc: "2.0",
+			id: 8924,
+			method: "textDocument/formatting",
 			params: {textDocument: {uri: formattingUri}, options: {tabSize: 2, insertSpaces: true}}
 		}));
-		if (formattingResponse.result.length != 1 || applyLspEdit(formattingDocument, formattingResponse.result[0]).indexOf("\n    return 42;\n") < 0)
+		if (formattingResponse.result.length != 1
+			|| applyLspEdit(formattingDocument, formattingResponse.result[0]).indexOf("\n    return 42;\n") < 0)
 			throw "LSP document formatting did not map the compiler edit";
 		var rangeFormattingResponse = request(formattingProtocol, Json.stringify({
-			jsonrpc: "2.0", id: 8925, method: "textDocument/rangeFormatting",
+			jsonrpc: "2.0",
+			id: 8925,
+			method: "textDocument/rangeFormatting",
 			params: {
-				textDocument: {uri: formattingUri}, options: {tabSize: 2, insertSpaces: true},
+				textDocument: {uri: formattingUri},
+				options: {tabSize: 2, insertSpaces: true},
 				range: {start: {line: 3, character: 0}, end: {line: 4, character: 0}}
 			}
-		})), rangeFormattedSource = applyLspEdit(formattingDocument, rangeFormattingResponse.result[0]);
+		})),
+			rangeFormattedSource = applyLspEdit(formattingDocument, rangeFormattingResponse.result[0]);
 		if (rangeFormattedSource.indexOf("\nvar text") < 0 || rangeFormattedSource.indexOf("\n    return 42;\n") < 0)
 			throw "LSP range formatting changed lines outside its requested range";
-		var implementationProtocol = new LspProtocol(), implementationUri = "file:///workspace/Implementation.hx",
+		var implementationProtocol = new LspProtocol(),
+			implementationUri = "file:///workspace/Implementation.hx",
 			implementationSource = "interface Worker { function work():Int; } class First implements Worker { public function work():Int return 1; } class Second implements Worker { public function work():Int return 2; } function main():Int return new First().work();",
 			implementationDocument = new LspDocument(implementationUri, "/workspace/Implementation.hx", 1, implementationSource);
 		request(implementationProtocol, '{"jsonrpc":"2.0","id":893,"method":"initialize","params":{}}');
 		implementationProtocol.handle(Json.stringify({
-			jsonrpc: "2.0", method: "textDocument/didOpen",
-			params: {textDocument: {uri: implementationUri, languageId: "haxe", version: 1, text: implementationSource}}
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: implementationUri,
+					languageId: "haxe",
+					version: 1,
+					text: implementationSource
+				}
+			}
 		}));
 		var implementationLocations = request(implementationProtocol, Json.stringify({
-			jsonrpc: "2.0", id: 894, method: "textDocument/implementation",
+			jsonrpc: "2.0",
+			id: 894,
+			method: "textDocument/implementation",
 			params: {textDocument: {uri: implementationUri}, position: implementationDocument.position(implementationSource.indexOf("Worker") + 2)}
 		}));
 		if (implementationLocations.result.length != 2 || implementationLocations.result[0].uri != implementationUri)
 			throw "LSP implementation navigation did not map multiple compiler locations";
-		var typeHierarchyProtocol = new LspProtocol(), typeHierarchyUri = "file:///workspace/TypeHierarchy.hx",
+		var typeHierarchyProtocol = new LspProtocol(),
+			typeHierarchyUri = "file:///workspace/TypeHierarchy.hx",
 			typeHierarchySource = "class Root {} interface Named {} class Branch extends Root implements Named {} class Leaf extends Branch {} function main():Int return 0;",
 			typeHierarchyDocument = new LspDocument(typeHierarchyUri, "/workspace/TypeHierarchy.hx", 1, typeHierarchySource);
 		request(typeHierarchyProtocol, '{"jsonrpc":"2.0","id":895,"method":"initialize","params":{}}');
 		typeHierarchyProtocol.handle(Json.stringify({
-			jsonrpc: "2.0", method: "textDocument/didOpen",
-			params: {textDocument: {uri: typeHierarchyUri, languageId: "haxe", version: 1, text: typeHierarchySource}}
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: typeHierarchyUri,
+					languageId: "haxe",
+					version: 1,
+					text: typeHierarchySource
+				}
+			}
 		}));
 		var preparedBranchType = request(typeHierarchyProtocol, Json.stringify({
-			jsonrpc: "2.0", id: 896, method: "textDocument/prepareTypeHierarchy",
+			jsonrpc: "2.0",
+			id: 896,
+			method: "textDocument/prepareTypeHierarchy",
 			params: {textDocument: {uri: typeHierarchyUri}, position: typeHierarchyDocument.position(typeHierarchySource.indexOf("Branch") + 2)}
-		})), preparedRootType = request(typeHierarchyProtocol, Json.stringify({
-			jsonrpc: "2.0", id: 897, method: "textDocument/prepareTypeHierarchy",
-			params: {textDocument: {uri: typeHierarchyUri}, position: typeHierarchyDocument.position(typeHierarchySource.indexOf("Root") + 1)}
-		}));
+		})),
+			preparedRootType = request(typeHierarchyProtocol, Json.stringify({
+				jsonrpc: "2.0",
+				id: 897,
+				method: "textDocument/prepareTypeHierarchy",
+				params: {textDocument: {uri: typeHierarchyUri}, position: typeHierarchyDocument.position(typeHierarchySource.indexOf("Root") + 1)}
+			}));
 		if (preparedBranchType.result == null || preparedRootType.result == null)
 			throw "LSP did not prepare type hierarchy items";
 		var branchSupertypes = request(typeHierarchyProtocol, Json.stringify({
-			jsonrpc: "2.0", id: 898, method: "typeHierarchy/supertypes", params: {item: preparedBranchType.result[0]}
+			jsonrpc: "2.0",
+			id: 898,
+			method: "typeHierarchy/supertypes",
+			params: {item: preparedBranchType.result[0]}
 		})), branchSubtypes = request(typeHierarchyProtocol, Json.stringify({
-			jsonrpc: "2.0", id: 899, method: "typeHierarchy/subtypes", params: {item: preparedBranchType.result[0]}
+			jsonrpc: "2.0",
+			id: 899,
+			method: "typeHierarchy/subtypes",
+			params: {item: preparedBranchType.result[0]}
 		})), rootSubtypes = request(typeHierarchyProtocol, Json.stringify({
-			jsonrpc: "2.0", id: 900, method: "typeHierarchy/subtypes", params: {item: preparedRootType.result[0]}
+			jsonrpc: "2.0",
+			id: 900,
+			method: "typeHierarchy/subtypes",
+			params: {item: preparedRootType.result[0]}
 		}));
-		if (branchSupertypes.result.length != 2 || branchSupertypes.result[0].name != "Named" || branchSupertypes.result[1].name != "Root"
-			|| branchSubtypes.result.length != 1 || branchSubtypes.result[0].name != "Leaf"
-			|| rootSubtypes.result.length != 1 || rootSubtypes.result[0].name != "Branch")
+		if (branchSupertypes.result.length != 2
+			|| branchSupertypes.result[0].name != "Named"
+			|| branchSupertypes.result[1].name != "Root"
+			|| branchSubtypes.result.length != 1
+			|| branchSubtypes.result[0].name != "Leaf"
+			|| rootSubtypes.result.length != 1
+			|| rootSubtypes.result[0].name != "Branch")
 			throw 'LSP type hierarchy did not map direct class and interface relationships: super=${Json.stringify(branchSupertypes.result)}, branch=${Json.stringify(branchSubtypes.result)}, root=${Json.stringify(rootSubtypes.result)}';
 		if (protocol.handle('{"jsonrpc":"2.0","method":"$/cancelRequest","params":{"id":999}}').length != 0)
 			throw "LSP cancellation notification produced a response";
@@ -1194,7 +1437,8 @@ class LspProtocolMain {
 	}
 
 	static function applyLspEdit(document:LspDocument, edit:Dynamic):String {
-		var start = document.offset(edit.range.start.line, edit.range.start.character), end = document.offset(edit.range.end.line, edit.range.end.character);
+		var start = document.offset(edit.range.start.line, edit.range.start.character),
+			end = document.offset(edit.range.end.line, edit.range.end.character);
 		return document.source.substring(0, start) + edit.newText + document.source.substring(end);
 	}
 

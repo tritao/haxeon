@@ -14,7 +14,8 @@ class CompilationTransaction {
 	final startingAssembler:Null<HlModuleAssembler>;
 	final indexSemantics:Bool;
 
-	public function new(compiler:Compiler, entryModule:String, token:Null<CancellationToken>, startingAssembler:Null<HlModuleAssembler>, ?indexSemantics = true) {
+	public function new(compiler:Compiler, entryModule:String, token:Null<CancellationToken>, startingAssembler:Null<HlModuleAssembler>,
+			?indexSemantics = true) {
 		this.compiler = compiler;
 		this.entryModule = entryModule;
 		this.token = token;

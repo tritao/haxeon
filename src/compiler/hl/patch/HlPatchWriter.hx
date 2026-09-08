@@ -118,7 +118,8 @@ class HlPatchWriter {
 				if (location.sourceHash != 0)
 					referenced.set(location.sourceHash, true);
 		var selected = [
-			for (snapshot in code.sourceSnapshots) if (referenced.exists(snapshot.sourceHash)) snapshot
+			for (snapshot in code.sourceSnapshots)
+				if (referenced.exists(snapshot.sourceHash)) snapshot
 		];
 		return selected.length == 0 ? null : HlWriter.encodeSourceSnapshots(selected);
 	}

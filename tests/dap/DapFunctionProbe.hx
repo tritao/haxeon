@@ -2,7 +2,7 @@ class DapFunctionProbe {
 	static function main() {
 		Sys.sleep(1.0);
 		var worker = new DapFunctionWorker();
-		for( value in 0...4 )
+		for (value in 0...4)
 			worker.tick(value);
 	}
 }

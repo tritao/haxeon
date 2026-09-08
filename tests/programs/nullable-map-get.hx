@@ -15,4 +15,3 @@ function main():Int {
 
 	return 42;
 }
-

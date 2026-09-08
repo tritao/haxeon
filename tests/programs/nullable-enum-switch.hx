@@ -24,4 +24,8 @@ function isPhysical(access:Null<Access>):Bool
 	};
 
 function main():Int
-	return !isPhysical(Get) && !isPhysical(Never) && isPhysical(Default) && isPhysical(null) && read(OptionalValue.Found(40)) + read(null) == 42 ? 42 : 1;
+	return !isPhysical(Get)
+		&& !isPhysical(Never)
+		&& isPhysical(Default)
+		&& isPhysical(null)
+		&& read(OptionalValue.Found(40)) + read(null) == 42 ? 42 : 1;

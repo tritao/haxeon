@@ -143,7 +143,8 @@ class DependencyScanner {
 					scanExpression(a, dependencies);
 			case ClosureCall(callee, args, _):
 				scanExpression(callee, dependencies);
-				for (a in args) scanExpression(a, dependencies);
+				for (a in args)
+					scanExpression(a, dependencies);
 			case New(typeName, args, _), NewGeneric(typeName, _, args, _):
 				dependencies.set(typeName, true);
 				for (a in args)

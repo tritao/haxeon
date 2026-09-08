@@ -83,8 +83,11 @@ class DebugMetadataMain {
 
 		var bytes = HlWriter.encode(code),
 			suffix = encodedAssignmentSuffix(fn.debugAssignments);
-		if (bytes.get(3) != 7 || code.debugSections.length != 2 || code.debugSections[0].kind != HlWriter.FUNCTION_IDENTITIES
-			|| code.debugSections[1].kind != HlWriter.OPCODE_SOURCE_SPANS || code.debugSections[1].payload.length == 0)
+		if (bytes.get(3) != 7
+			|| code.debugSections.length != 2
+			|| code.debugSections[0].kind != HlWriter.FUNCTION_IDENTITIES
+			|| code.debugSections[1].kind != HlWriter.OPCODE_SOURCE_SPANS
+			|| code.debugSections[1].payload.length == 0)
 			throw "HLB function identity and opcode source-span sections were not emitted";
 		if (bytes.compare(HlWriter.encode(code)) != 0)
 			throw "HLB debug section encoding is not deterministic";
@@ -92,18 +95,25 @@ class DebugMetadataMain {
 			throw "HLB output did not serialize canonical debug assignment triples";
 		Sys.println("PASS: HLB serializes deterministic local and function debug metadata");
 
-		var stableBySlot:Map<Int, Int> = [for (compiledFunction in code.functions) compiledFunction.functionIndex => compiledFunction.functionIndex],
-			patch = HlPatchReader.decode(HlPatchWriter.encode(code, haxe.io.Bytes.alloc(16), [for (compiledFunction in code.functions) compiledFunction.functionIndex],
-				stableBySlot, 0, 1));
+		var stableBySlot:Map<Int, Int> = [
+			for (compiledFunction in code.functions)
+				compiledFunction.functionIndex => compiledFunction.functionIndex
+		], patch = HlPatchReader.decode(HlPatchWriter.encode(code, haxe.io.Bytes.alloc(16),
+			[for (compiledFunction in code.functions) compiledFunction.functionIndex], stableBySlot, 0, 1));
 		for (index in 0...patch.functions.length) {
-			var actual = patch.functions[index].debug, expected = code.functions[index].debugLocations;
+			var actual = patch.functions[index].debug,
+				expected = code.functions[index].debugLocations;
 			if (actual.length != expected.length)
 				throw "HLP lost opcode source spans";
 			for (opcode in 0...actual.length)
-				if (patch.debugFiles[actual[opcode].file] != expected[opcode].path || actual[opcode].line != expected[opcode].line
-					|| actual[opcode].column != expected[opcode].column || actual[opcode].endLine != expected[opcode].endLine
-					|| actual[opcode].endColumn != expected[opcode].endColumn || actual[opcode].sourceHash != expected[opcode].sourceHash
-					|| actual[opcode].start != expected[opcode].start || actual[opcode].end != expected[opcode].end
+				if (patch.debugFiles[actual[opcode].file] != expected[opcode].path
+					|| actual[opcode].line != expected[opcode].line
+					|| actual[opcode].column != expected[opcode].column
+					|| actual[opcode].endLine != expected[opcode].endLine
+					|| actual[opcode].endColumn != expected[opcode].endColumn
+					|| actual[opcode].sourceHash != expected[opcode].sourceHash
+					|| actual[opcode].start != expected[opcode].start
+					|| actual[opcode].end != expected[opcode].end
 					|| actual[opcode].flags != expected[opcode].flags)
 					throw "HLP changed an opcode source span";
 		}
@@ -114,22 +124,30 @@ class DebugMetadataMain {
 	}
 
 	static function testSourceSnapshots():Void {
-		var text = "// café 😀\nfunction main():Int {\n  return 42;\n}", source = new SourceFile("snapshot.hx", text), compiler = new compiler.Compiler();
+		var text = "// café 😀\nfunction main():Int {\n  return 42;\n}",
+			source = new SourceFile("snapshot.hx", text),
+			compiler = new compiler.Compiler();
 		compiler.update(source.path, source.text);
 		compiler.update("unused.hx", "function unused():Int return 0;");
-		var result = compiler.compile("snapshot"), snapshots = result.module.sourceSnapshots;
+		var result = compiler.compile("snapshot"),
+			snapshots = result.module.sourceSnapshots;
 		if (snapshots.length != 1 || snapshots[0].sourceHash != source.contentHash() || snapshots[0].content.toString() != text)
 			throw "Compiler did not retain the reachable source snapshot";
-		var sections = [for (section in result.module.debugSections) if (section.kind == HlWriter.SOURCE_SNAPSHOTS) section];
-		if (sections.length != 1 || sections[0].version != 1
+		var sections = [
+			for (section in result.module.debugSections)
+				if (section.kind == HlWriter.SOURCE_SNAPSHOTS) section
+		];
+		if (sections.length != 1
+			|| sections[0].version != 1
 			|| sections[0].payload.compare(HlWriter.encodeSourceSnapshots(snapshots)) != 0)
 			throw "Compiler did not emit the canonical source snapshot section";
 		if (HlWriter.encode(result.module).compare(HlWriter.encode(result.module)) != 0)
 			throw "HLB source snapshot encoding is not deterministic";
 		var stableBySlot:Map<Int, Int> = [for (fn in result.module.functions) fn.functionIndex => fn.functionIndex],
-			patch = HlPatchReader.decode(HlPatchWriter.encode(result.module, Bytes.alloc(16),
-				[for (fn in result.module.functions) fn.functionIndex], stableBySlot, 0, 1));
-		if (patch.sourceSnapshots.length != 1 || patch.sourceSnapshots[0].sourceHash != source.contentHash()
+			patch = HlPatchReader.decode(HlPatchWriter.encode(result.module, Bytes.alloc(16), [for (fn in result.module.functions) fn.functionIndex],
+				stableBySlot, 0, 1));
+		if (patch.sourceSnapshots.length != 1
+			|| patch.sourceSnapshots[0].sourceHash != source.contentHash()
 			|| patch.sourceSnapshots[0].content.toString() != text)
 			throw "HLP did not preserve the referenced source snapshot";
 		Sys.println("PASS: compiler emits deterministic content-addressed source snapshots");

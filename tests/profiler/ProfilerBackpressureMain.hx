@@ -3,12 +3,15 @@ import profiler.ProfilerSession;
 
 class ProfilerBackpressureMain {
 	static function require(condition:Bool, message:String):Void {
-		if (!condition) throw message;
+		if (!condition)
+			throw message;
 	}
 
 	static function main():Void {
-		var args = Sys.args(), port = args.length == 1 ? Std.parseInt(args[0]) : null;
-		if (port == null) throw "Usage: profiler-backpressure-test.hl PORT";
+		var args = Sys.args(),
+			port = args.length == 1 ? Std.parseInt(args[0]) : null;
+		if (port == null)
+			throw "Usage: profiler-backpressure-test.hl PORT";
 		var session = new ProfilerSession(new HldiClient("127.0.0.1", port, 15.0));
 		try {
 			session.start(250);
@@ -26,7 +29,8 @@ class ProfilerBackpressureMain {
 				"adaptive sampling did not reduce the effective rate");
 			var sawRevision2 = false;
 			for (revision in snapshot.metadataRevisions)
-				if (revision == 2) sawRevision2 = true;
+				if (revision == 2)
+					sawRevision2 = true;
 			require(sawRevision2, "metadata did not follow hot reload under pressure");
 			require(snapshot.unresolvedFrames == 0, "slow transport produced unresolved frames");
 			Sys.println('PASS: bounded profiler pressure=${snapshot.bufferUtilization} rate=${snapshot.effectiveSampleRate}/${snapshot.requestedSampleRate} dropped=${snapshot.dropped}');

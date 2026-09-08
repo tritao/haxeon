@@ -10,8 +10,10 @@ enum AstType {
 	StringType;
 	VoidType;
 	InferredType;
+
 	/** Recovery-only placeholder for an incomplete or malformed type. */
 	ErrorType(span:SourceSpan);
+
 	NativeAbstractType(declaration:String, tag:String);
 	NamedType(name:String);
 	AppliedType(name:String, arguments:Array<AstType>);
@@ -141,8 +143,10 @@ enum AstExpression {
 	BoolLiteral(value:Bool, span:SourceSpan);
 	NullLiteral(span:SourceSpan);
 	Unreachable(span:SourceSpan);
+
 	/** Recovery-only placeholder for an incomplete or malformed expression. */
 	ErrorExpression(span:SourceSpan);
+
 	Variable(name:String, span:SourceSpan);
 	Member(object:AstExpression, name:String, span:SourceSpan);
 	Add(left:AstExpression, right:AstExpression, span:SourceSpan);
@@ -208,6 +212,7 @@ typedef AstSwitchExpressionCase = {
 enum AstStatement {
 	/** Recovery-only placeholder retaining the malformed statement location. */
 	ErrorStatement(span:SourceSpan);
+
 	UninitializedDeclaration(name:String, type:AstType, span:SourceSpan);
 	VarDeclaration(name:String, ?type:AstType, initializer:AstExpression, span:SourceSpan);
 	Assignment(name:String, expression:AstExpression, span:SourceSpan);

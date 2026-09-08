@@ -163,7 +163,8 @@ class ProjectWorkspace {
 	}
 
 	public function configurationFor(path:String):Null<HaxeProjectConfiguration> {
-		var normalized = normalize(path), detached = detachedConfigurations.get(normalized);
+		var normalized = normalize(path),
+			detached = detachedConfigurations.get(normalized);
 		if (detached != null)
 			return detached;
 		if (preferredConfigurationId != null)
@@ -191,7 +192,8 @@ class ProjectWorkspace {
 		return uriPath(uri);
 
 	function discover(service:LanguageService, isOpen:String->Bool):Void {
-		var configFiles:Array<String> = [], configuredRoots:Map<String, Bool> = [];
+		var configFiles:Array<String> = [],
+			configuredRoots:Map<String, Bool> = [];
 		for (root in workspaceRootPaths)
 			if (FileSystem.exists(root) && FileSystem.isDirectory(root))
 				for (name in FileSystem.readDirectory(root))

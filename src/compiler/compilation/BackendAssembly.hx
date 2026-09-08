@@ -71,8 +71,10 @@ class BackendAssembly {
 		var byHash:Map<Int, Bytes> = [];
 		for (state in context.modules) {
 			var source = state.source, hash = source.contentHash();
-			if (!referenced.exists(hash)) continue;
-			var content = Bytes.ofString(source.text), existing = byHash.get(hash);
+			if (!referenced.exists(hash))
+				continue;
+			var content = Bytes.ofString(source.text),
+				existing = byHash.get(hash);
 			if (existing != null && existing.compare(content) != 0)
 				throw 'Source snapshot hash collision for ${source.path}';
 			byHash.set(hash, content);
@@ -80,7 +82,11 @@ class BackendAssembly {
 		code.sourceSnapshots = [for (hash => content in byHash) {sourceHash: hash, content: content}];
 		code.sourceSnapshots.sort((left, right) -> left.sourceHash < right.sourceHash ? -1 : left.sourceHash > right.sourceHash ? 1 : 0);
 		if (code.sourceSnapshots.length > 0)
-			code.debugSections.push({kind: HlWriter.SOURCE_SNAPSHOTS, version: 1, flags: 0,
-				payload: HlWriter.encodeSourceSnapshots(code.sourceSnapshots)});
+			code.debugSections.push({
+				kind: HlWriter.SOURCE_SNAPSHOTS,
+				version: 1,
+				flags: 0,
+				payload: HlWriter.encodeSourceSnapshots(code.sourceSnapshots)
+			});
 	}
 }

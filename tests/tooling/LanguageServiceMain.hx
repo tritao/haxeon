@@ -10,16 +10,19 @@ class LanguageServiceMain {
 			expectedFormat = "function main():Int {\n  var text = \"{ literal }\"; // }\n  /* keep { } */\n  if (true) {\n    return 42;\n  }\n}\n";
 		if (formatted != expectedFormat || SourceFormatter.format(formatted, 2, true) != formatted)
 			throw "source formatting was not trivia-preserving and idempotent";
-		var returnStart = formatSource.indexOf("return 42"), returnEnd = returnStart + "return 42;   ".length,
+		var returnStart = formatSource.indexOf("return 42"),
+			returnEnd = returnStart + "return 42;   ".length,
 			rangeFormatted = SourceFormatter.format(formatSource, 2, true, returnStart, returnEnd);
 		if (rangeFormatted == null || rangeFormatted.indexOf("\nvar text") < 0 || rangeFormatted.indexOf("\n    return 42;") < 0)
 			throw "range formatting changed text outside the selected syntax line";
-		var crlfSource = StringTools.replace(formatSource, "\n", "\r\n"), crlfFormatted = SourceFormatter.format(crlfSource, 2, true);
+		var crlfSource = StringTools.replace(formatSource, "\n", "\r\n"),
+			crlfFormatted = SourceFormatter.format(crlfSource, 2, true);
 		if (crlfFormatted == null || crlfFormatted.indexOf("\r\n") < 0 || crlfFormatted.indexOf("\n") != crlfFormatted.indexOf("\r\n") + 1)
 			throw "source formatting did not preserve CRLF line endings";
 		if (SourceFormatter.format("function main(:Int {", 2, true) != null)
 			throw "source formatting rewrote malformed input";
-		var conditionalFormat = SourceFormatter.format("#if missing\nfunction main():Int return 1;\n#else\nfunction main():Int {\nreturn 2;\n}\n#end\n", 2, true);
+		var conditionalFormat = SourceFormatter.format("#if missing\nfunction main():Int return 1;\n#else\nfunction main():Int {\nreturn 2;\n}\n#end\n", 2,
+			true);
 		if (conditionalFormat == null || conditionalFormat.indexOf("#if missing") != 0 || conditionalFormat.indexOf("\n  return 2;") < 0)
 			throw "source formatting did not preserve conditional compilation";
 		var service = new LanguageService();
@@ -57,7 +60,8 @@ class LanguageServiceMain {
 				hasMain = true;
 		if (!hasMain || service.hover("Main.hx", hoverPosition) != "main():Int")
 			throw "language service completion or hover failed";
-		var linkService = new LanguageService(), aliasSource = "import tools.Helper as H; function main():Int return 0;";
+		var linkService = new LanguageService(),
+			aliasSource = "import tools.Helper as H; function main():Int return 0;";
 		linkService.update("tools/Helper.hx", "package tools; class Helper {}");
 		linkService.update("AliasMain.hx", aliasSource);
 		linkService.analyze("AliasMain");
@@ -278,9 +282,12 @@ class LanguageServiceMain {
 			baseImplementations = implementationService.implementations("base/Base.hx", baseSource.indexOf("Base") + 1),
 			baseMethodImplementations = implementationService.implementations("base/Base.hx", baseSource.indexOf("run") + 1),
 			leafImplementations = implementationService.implementations("impl/Direct.hx", directSource.indexOf("run") + 1);
-		var implementationCancellation = new CancellationToken(), implementationCancelled = false;
+		var implementationCancellation = new CancellationToken(),
+			implementationCancelled = false;
 		implementationCancellation.cancel();
-		try implementationService.implementations("api/Plugin.hx", contractSource.indexOf("Plugin") + 2, implementationCancellation) catch (_:compiler.service.CancellationError)
+		try
+			implementationService.implementations("api/Plugin.hx", contractSource.indexOf("Plugin") + 2, implementationCancellation)
+		catch (_:compiler.service.CancellationError)
 			implementationCancelled = true;
 		if (interfaceImplementations.length != 3
 			|| methodImplementations.length != 3
@@ -291,7 +298,9 @@ class LanguageServiceMain {
 			|| leafImplementations.length != 0
 			|| !implementationCancelled)
 			throw 'language service implementation navigation failed: interface=${interfaceImplementations.length}, method=${methodImplementations.length}, base=${baseImplementations.length}, override=${baseMethodImplementations.length}, leaf=${leafImplementations.length}';
-		var hierarchyTypeService = new LanguageService(), rootTypeSource = "package types; class Root {}", namedTypeSource = "package types; interface Named {}",
+		var hierarchyTypeService = new LanguageService(),
+			rootTypeSource = "package types; class Root {}",
+			namedTypeSource = "package types; interface Named {}",
 			branchTypeSource = "package types; import types.Root; import types.Named; class Branch extends Root implements Named {}",
 			leafTypeSource = "package types; import types.Branch; class Leaf extends Branch {}",
 			detailedTypeSource = "package types; import types.Named; interface Detailed extends Named {}",
@@ -312,10 +321,9 @@ class LanguageServiceMain {
 			branchSupertypes = hierarchyTypeService.typeSupertypes(preparedBranch.identity, preparedBranch.revision),
 			branchSubtypes = hierarchyTypeService.typeSubtypes(preparedBranch.identity, preparedBranch.revision),
 			namedSubtypes = hierarchyTypeService.typeSubtypes(preparedNamed.identity, preparedNamed.revision);
-		if (rootSubtypes.length != 1 || rootSubtypes[0].name != "Branch"
-			|| branchSupertypes.length != 2 || branchSupertypes[0].name != "Named" || branchSupertypes[1].name != "Root"
-			|| branchSubtypes.length != 1 || branchSubtypes[0].name != "Leaf"
-			|| namedSubtypes.length != 2 || namedSubtypes[0].name != "Branch" || namedSubtypes[1].name != "Detailed")
+		if (rootSubtypes.length != 1 || rootSubtypes[0].name != "Branch" || branchSupertypes.length != 2 || branchSupertypes[0].name != "Named"
+			|| branchSupertypes[1].name != "Root" || branchSubtypes.length != 1 || branchSubtypes[0].name != "Leaf" || namedSubtypes.length != 2
+			|| namedSubtypes[0].name != "Branch" || namedSubtypes[1].name != "Detailed")
 			throw "language service type hierarchy did not return direct class and interface relationships";
 		hierarchyTypeService.update("types/Root.hx", rootTypeSource + " ");
 		if (hierarchyTypeService.isTypeHierarchyCurrent(preparedRoot.identity, preparedRoot.revision))
@@ -429,7 +437,9 @@ class LanguageServiceMain {
 		var largeCompletionResult = largeService.completeResult("Large.hx", largeText.length),
 			firstLargeCompletion = largeCompletionResult.items,
 			secondLargeCompletion = largeService.complete("Large.hx", largeText.length);
-		if (!largeCompletionResult.isIncomplete || firstLargeCompletion.length != 200 || secondLargeCompletion.length != firstLargeCompletion.length)
+		if (!largeCompletionResult.isIncomplete
+			|| firstLargeCompletion.length != 200
+			|| secondLargeCompletion.length != firstLargeCompletion.length)
 			throw 'completion result limit was not enforced: ${firstLargeCompletion.length}';
 		for (index in 0...firstLargeCompletion.length)
 			if (firstLargeCompletion[index].label != secondLargeCompletion[index].label)
@@ -505,13 +515,13 @@ class LanguageServiceMain {
 		if (staleRename.length != 2 || !staleRename[0].stale || !staleRename[1].stale)
 			throw "rename did not preserve last-good semantic snapshot metadata";
 		var partialService = new LanguageService();
-		partialService.update("Partial.hx",
-			"function broken(:Int {} function alsoBroken(:Int {} function visible():Int return 42;");
+		partialService.update("Partial.hx", "function broken(:Int {} function alsoBroken(:Int {} function visible():Int return 42;");
 		try {
 			partialService.analyze("Partial");
 			throw "invalid partial source unexpectedly analyzed";
 		} catch (_:CompileError) {}
-		var partialSymbols = partialService.documentSymbols("Partial.hx"), foundVisible = false;
+		var partialSymbols = partialService.documentSymbols("Partial.hx"),
+			foundVisible = false;
 		for (symbol in partialSymbols)
 			if (symbol.name == "visible" && !symbol.stale)
 				foundVisible = true;
@@ -525,10 +535,12 @@ class LanguageServiceMain {
 			delimiterService.analyze("Delimiter");
 			throw "missing delimiter unexpectedly analyzed";
 		} catch (_:CompileError) {}
-		var delimiterSymbols = delimiterService.documentSymbols("Delimiter.hx"), delimiterDiagnostics = delimiterService.diagnostics("Delimiter.hx");
+		var delimiterSymbols = delimiterService.documentSymbols("Delimiter.hx"),
+			delimiterDiagnostics = delimiterService.diagnostics("Delimiter.hx");
 		if (delimiterSymbols.length != 2 || delimiterSymbols[0].name != "first" || delimiterSymbols[1].name != "second")
 			throw "missing semicolon recovery did not retain adjacent declarations";
-		if (delimiterDiagnostics.length != 1 || delimiterDiagnostics[0].fixes.length != 1
+		if (delimiterDiagnostics.length != 1
+			|| delimiterDiagnostics[0].fixes.length != 1
 			|| delimiterDiagnostics[0].fixes[0].edits[0].replacement != ";")
 			throw "missing semicolon recovery did not expose a deterministic fix";
 		var signatureService = new LanguageService();
@@ -544,7 +556,8 @@ class LanguageServiceMain {
 		try
 			memberService.analyze("Members")
 		catch (_:CompileError) {}
-		var memberSymbols = memberService.documentSymbols("Members.hx"), foundMethod = false;
+		var memberSymbols = memberService.documentSymbols("Members.hx"),
+			foundMethod = false;
 		for (symbol in memberSymbols)
 			if (symbol.name == "visible")
 				foundMethod = true;
@@ -564,8 +577,9 @@ class LanguageServiceMain {
 		try
 			expressionService.analyze("Expression")
 		catch (_:CompileError) {}
-		var expressionSymbols = expressionService.documentSymbols("Expression.hx"), expressionCompletion = expressionService.complete("Expression.hx",
-			expressionSource.length), completionNames = [for (item in expressionCompletion) item.label];
+		var expressionSymbols = expressionService.documentSymbols("Expression.hx"),
+			expressionCompletion = expressionService.complete("Expression.hx", expressionSource.length),
+			completionNames = [for (item in expressionCompletion) item.label];
 		if (expressionSymbols.length != 1 || expressionSymbols[0].name != "pending")
 			throw "incomplete expression discarded its enclosing declaration";
 		if (completionNames.indexOf("argument") < 0 || completionNames.indexOf("available") < 0)

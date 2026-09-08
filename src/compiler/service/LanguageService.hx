@@ -197,6 +197,7 @@ class LanguageService {
 	static inline final MAX_REFERENCE_RESULTS = 10000;
 
 	public final compiler:Compiler;
+
 	final workspaceIndex:Map<String, WorkspaceIndexEntry> = [];
 	final documentationIndex:Map<String, DocumentationIndexEntry> = [];
 	final structuralIndex:Map<String, StructuralIndexEntry> = [];
@@ -284,20 +285,24 @@ class LanguageService {
 					id: diagnostic.code + ":" + fix.id,
 					title: fix.title,
 					diagnostic: diagnostic,
-					edits: [for (edit in fix.edits) {
-						path: edit.span.file.path,
-						span: edit.span,
-						replacement: edit.replacement,
-						revision: state.revision,
-						stale: false
-					}]
+					edits: [
+						for (edit in fix.edits)
+							{
+								path: edit.span.file.path,
+								span: edit.span,
+								replacement: edit.replacement,
+								revision: state.revision,
+								stale: false
+							}
+					]
 				});
 		}
 		return result;
 	}
 
 	public function workspaceSymbols(query:String, ?token:CancellationToken):Array<WorkspaceSymbol> {
-		var normalized = query.toLowerCase(), result:Array<WorkspaceSymbol> = [];
+		var normalized = query.toLowerCase(),
+			result:Array<WorkspaceSymbol> = [];
 		for (state in compiler.modules) {
 			if (token != null)
 				token.check();
@@ -306,7 +311,8 @@ class LanguageService {
 					result.push(symbol);
 		}
 		result.sort(function(left, right) {
-			var leftPrefix = StringTools.startsWith(left.name.toLowerCase(), normalized), rightPrefix = StringTools.startsWith(right.name.toLowerCase(), normalized);
+			var leftPrefix = StringTools.startsWith(left.name.toLowerCase(), normalized),
+				rightPrefix = StringTools.startsWith(right.name.toLowerCase(), normalized);
 			if (leftPrefix != rightPrefix)
 				return leftPrefix ? -1 : 1;
 			var name = Reflect.compare(left.name, right.name);
@@ -325,7 +331,9 @@ class LanguageService {
 	}
 
 	public function inlayHints(path:String, start:Int, end:Int, ?token:CancellationToken):Array<InlayHint> {
-		var state = stateFor(path), model = state == null ? null : effectiveSemanticModel(state), tokens = state == null ? null : effectiveTokens(state),
+		var state = stateFor(path),
+			model = state == null ? null : effectiveSemanticModel(state),
+			tokens = state == null ? null : effectiveTokens(state),
 			result:Array<InlayHint> = [];
 		if (state == null || model == null || tokens == null)
 			return result;
@@ -336,14 +344,22 @@ class LanguageService {
 			if (current.span.start > end)
 				break;
 			if (current.kind == Var && index + 1 < tokens.length && tokens[index + 1].kind == Identifier) {
-				var name = tokens[index + 1], after = index + 2 < tokens.length ? tokens[index + 2] : null;
+				var name = tokens[index + 1],
+					after = index + 2 < tokens.length ? tokens[index + 2] : null;
 				if (name.span.end >= start && name.span.end <= end && (after == null || after.kind != Colon)) {
-					var context = model.index.completionContext(name.span.end), localType:Null<CompilerType> = null;
+					var context = model.index.completionContext(name.span.end),
+						localType:Null<CompilerType> = null;
 					for (local in context.locals)
 						if (local.name == name.text)
 							localType = local.type;
 					if (localType != null)
-						result.push({position: name.span.end, label: ": " + compilerTypeName(localType), kind: "type", paddingLeft: false, paddingRight: false});
+						result.push({
+							position: name.span.end,
+							label: ": " + compilerTypeName(localType),
+							kind: "type",
+							paddingLeft: false,
+							paddingRight: false
+						});
 				}
 			}
 			if (current.kind == LeftParen && index > 0 && (tokens[index - 1].kind == Identifier || tokens[index - 1].kind == New))
@@ -407,24 +423,29 @@ class LanguageService {
 		while (prefix < limit && source.charCodeAt(prefix) == formatted.charCodeAt(prefix))
 			prefix++;
 		var sourceSuffix = source.length, formattedSuffix = formatted.length;
-		while (sourceSuffix > prefix && formattedSuffix > prefix && source.charCodeAt(sourceSuffix - 1) == formatted.charCodeAt(formattedSuffix - 1)) {
+		while (sourceSuffix > prefix
+			&& formattedSuffix > prefix
+			&& source.charCodeAt(sourceSuffix - 1) == formatted.charCodeAt(formattedSuffix - 1)) {
 			sourceSuffix--;
 			formattedSuffix--;
 		}
-		return [{
-			path: path,
-			span: state.source.span(state.source.byteOffsetForStringOffset(prefix), state.source.byteOffsetForStringOffset(sourceSuffix)),
-			replacement: formatted.substring(prefix, formattedSuffix),
-			revision: state.revision,
-			stale: false
-		}];
+		return [
+			{
+				path: path,
+				span: state.source.span(state.source.byteOffsetForStringOffset(prefix), state.source.byteOffsetForStringOffset(sourceSuffix)),
+				replacement: formatted.substring(prefix, formattedSuffix),
+				revision: state.revision,
+				stale: false
+			}
+		];
 	}
 
 	public function selectionRanges(path:String, positions:Array<Int>):Array<Array<SourceSpan>> {
 		var state = stateFor(path), result:Array<Array<SourceSpan>> = [];
 		if (state == null)
 			return result;
-		var structure = indexedStructure(state), tokens = effectiveTokens(state);
+		var structure = indexedStructure(state),
+			tokens = effectiveTokens(state);
 		for (position in positions) {
 			var spans:Array<SourceSpan> = [];
 			if (tokens != null)
@@ -447,7 +468,9 @@ class LanguageService {
 	}
 
 	public function documentLinks(path:String, ?token:CancellationToken):Array<DocumentLink> {
-		var state = stateFor(path), tokens = state == null ? null : effectiveTokens(state), result:Array<DocumentLink> = [];
+		var state = stateFor(path),
+			tokens = state == null ? null : effectiveTokens(state),
+			result:Array<DocumentLink> = [];
 		if (state == null || tokens == null)
 			return result;
 		var index = 0;
@@ -461,14 +484,17 @@ class LanguageService {
 			index++;
 			if (index >= tokens.length || tokens[index].kind != Identifier)
 				continue;
-			var start = tokens[index].span.start, end = tokens[index].span.end, parts = [tokens[index].text];
+			var start = tokens[index].span.start,
+				end = tokens[index].span.end,
+				parts = [tokens[index].text];
 			index++;
 			while (index + 1 < tokens.length && tokens[index].kind == Dot && tokens[index + 1].kind == Identifier) {
 				parts.push(tokens[index + 1].text);
 				end = tokens[index + 1].span.end;
 				index += 2;
 			}
-			var importPath = parts.join("."), target = importedModule(importPath);
+			var importPath = parts.join("."),
+				target = importedModule(importPath);
 			if (target != null)
 				result.push({span: state.source.span(start, end), targetPath: target.source.path, tooltip: "Open " + importPath});
 		}
@@ -501,12 +527,15 @@ class LanguageService {
 		var resolved = compiler.semanticWorkspace.indexedSymbol(identity);
 		if (resolved == null)
 			return null;
-		var signature = compiler.semanticWorkspace.indexedSignature(identity), kind = switch resolved.symbol.kind {
-			case DeclarationKind.Function: "function";
-			case DeclarationKind.Class: "class";
-			case DeclarationKind.Member if (signature != null): "method";
-			default: return null;
-		}, documentation = documentationFor(resolved.state, resolved.symbol.declaration), detail = signature == null ? resolved.symbol.name : signature.label;
+		var signature = compiler.semanticWorkspace.indexedSignature(identity),
+			kind = switch resolved.symbol.kind {
+				case DeclarationKind.Function: "function";
+				case DeclarationKind.Class: "class";
+				case DeclarationKind.Member if (signature != null): "method";
+				default: return null;
+			},
+			documentation = documentationFor(resolved.state, resolved.symbol.declaration),
+			detail = signature == null ? resolved.symbol.name : signature.label;
 		if (documentation.markdown.length > 0)
 			detail += " — " + documentation.markdown.split("\n")[0];
 		return {
@@ -522,14 +551,18 @@ class LanguageService {
 	}
 
 	function hierarchyCalls(identity:String, revision:Int, incoming:Bool, ?token:CancellationToken):Array<CallHierarchyRelation> {
-		var origin = callHierarchyItem(cast identity), grouped:Map<String, CallHierarchyRelation> = [];
+		var origin = callHierarchyItem(cast identity),
+			grouped:Map<String, CallHierarchyRelation> = [];
 		if (origin == null || origin.revision != revision)
 			return [];
 		for (located in compiler.semanticWorkspace.indexedCalls(token)) {
-			var edge = located.edge, matches = incoming ? Std.string(edge.callee) == identity : Std.string(edge.caller) == identity;
+			var edge = located.edge,
+				matches = incoming ? Std.string(edge.callee) == identity : Std.string(edge.caller) == identity;
 			if (!matches)
 				continue;
-			var relatedId = incoming ? edge.caller : edge.callee, key = Std.string(relatedId), relation = grouped.get(key);
+			var relatedId = incoming ? edge.caller : edge.callee,
+				key = Std.string(relatedId),
+				relation = grouped.get(key);
 			if (relation == null) {
 				var item = callHierarchyItem(relatedId);
 				if (item == null)
@@ -569,7 +602,8 @@ class LanguageService {
 		var origin = typeHierarchyItem(cast identity);
 		if (origin == null || origin.revision != revision)
 			return [];
-		var identities = supertypes ? compiler.semanticWorkspace.directTypeSupertypes(cast identity, token) : compiler.semanticWorkspace.directTypeSubtypes(cast identity, token),
+		var identities = supertypes ? compiler.semanticWorkspace.directTypeSupertypes(cast identity,
+			token) : compiler.semanticWorkspace.directTypeSubtypes(cast identity, token),
 			result:Array<TypeHierarchyItem> = [];
 		for (related in identities) {
 			var item = typeHierarchyItem(related);
@@ -747,18 +781,23 @@ class LanguageService {
 				}
 		if (qualifier == null)
 			for (candidate in compiler.semanticWorkspace.importableSymbols(state, token)) {
-				var symbol = candidate.symbol, signature = compiler.semanticWorkspace.indexedSignature(symbol.id);
-				addMember(symbol.name, completionDeclarationKind(symbol.kind), symbol.name, prefix, result, 4,
-					signature == null ? null : symbol.name + "(", Std.string(symbol.id), candidate.importPath);
+				var symbol = candidate.symbol,
+					signature = compiler.semanticWorkspace.indexedSignature(symbol.id);
+				addMember(symbol.name, completionDeclarationKind(symbol.kind), symbol.name, prefix, result, 4, signature == null ? null : symbol.name + "(",
+					Std.string(symbol.id), candidate.importPath);
 			}
 		if (qualifier == null) {
-			var candidates = workspaceSymbols(prefix, token), counts:Map<String, Int> = [];
+			var candidates = workspaceSymbols(prefix, token),
+				counts:Map<String, Int> = [];
 			for (candidate in candidates)
 				if (candidate.container == null && isImportableCompletionKind(candidate.kind))
 					counts.set(candidate.name, (counts.exists(candidate.name) ? counts.get(candidate.name) : 0) + 1);
 			for (candidate in candidates) {
 				var module = ModulePath.fromFile(candidate.path);
-				if (candidate.container == null && isImportableCompletionKind(candidate.kind) && counts.get(candidate.name) == 1 && module != state.name)
+				if (candidate.container == null
+					&& isImportableCompletionKind(candidate.kind)
+					&& counts.get(candidate.name) == 1
+					&& module != state.name)
 					addMember(candidate.name, candidate.kind, candidate.detail, prefix, result, 4, null, "workspace|" + candidate.identity, module);
 			}
 		}
@@ -777,19 +816,22 @@ class LanguageService {
 			var candidate = workspaceSymbolIdentity(identity.substring("workspace|".length));
 			if (candidate == null)
 				return null;
-			var edits:Array<TextEdit> = [], edit = importPath == null ? null : importEdit(state, importPath);
+			var edits:Array<TextEdit> = [],
+				edit = importPath == null ? null : importEdit(state, importPath);
 			if (edit != null)
 				edits.push(edit);
 			return {
 				detail: candidate.detail,
-				documentation: candidate.documentation == null || candidate.documentation.length == 0 ? "Declared in " + candidate.path : candidate.documentation,
+				documentation: candidate.documentation == null
+				|| candidate.documentation.length == 0 ? "Declared in " + candidate.path : candidate.documentation,
 				edits: edits
 			};
 		}
 		var resolved = compiler.semanticWorkspace.indexedSymbol(cast identity);
 		if (resolved == null)
 			return null;
-		var signature = compiler.semanticWorkspace.indexedSignature(cast identity), edits:Array<TextEdit> = [];
+		var signature = compiler.semanticWorkspace.indexedSignature(cast identity),
+			edits:Array<TextEdit> = [];
 		if (importPath != null) {
 			var edit = importEdit(state, importPath);
 			if (edit != null)
@@ -806,7 +848,8 @@ class LanguageService {
 	public function documentHighlights(path:String, position:Int, ?token:CancellationToken):Array<DocumentHighlight> {
 		if (token != null)
 			token.check();
-		var context = semanticQuery(path, position), result:Array<DocumentHighlight> = [];
+		var context = semanticQuery(path, position),
+			result:Array<DocumentHighlight> = [];
 		if (context == null || context.symbol == null)
 			return result;
 		var declaration = context.model.index.symbol(context.symbol),
@@ -824,7 +867,8 @@ class LanguageService {
 	}
 
 	public function semanticTokens(path:String, ?token:CancellationToken):Array<SemanticToken> {
-		var state = stateFor(path), result:Array<SemanticToken> = [],
+		var state = stateFor(path),
+			result:Array<SemanticToken> = [],
 			tokens = state == null ? null : effectiveTokens(state),
 			model = state == null ? null : effectiveSemanticModel(state);
 		if (state == null || tokens == null)
@@ -836,15 +880,14 @@ class LanguageService {
 			if (lexical.kind == Eof)
 				continue;
 			var type:Null<String> = switch lexical.kind {
-				case Identifier:
-					var semantic = semanticTokenType(model, lexical.span.start);
-					semantic == "variable" && isParameterToken(tokens, index) ? "parameter" : semantic;
+				case Identifier: var semantic = semanticTokenType(model,
+						lexical.span.start); semantic == "variable" && isParameterToken(tokens, index) ? "parameter" : semantic;
 				case TypeInt, TypeBool, TypeFloat, TypeString, Void: "type";
 				case Integer, Float: "number";
 				case StringLiteral: "string";
-				case LeftParen, RightParen, LeftBrace, RightBrace, Colon, Semicolon, Comma, Dot, Assign, PlusAssign, MinusAssign, Increment,
-					Decrement, Plus, Minus, Arrow, Star, Slash, Percent, Less, Greater, LessEqual, GreaterEqual, EqualEqual, NotEqual, Not, AndAnd,
-					OrOr, Ampersand, Pipe, Caret, LeftBracket, RightBracket, Question, At: "operator";
+				case LeftParen, RightParen, LeftBrace, RightBrace, Colon, Semicolon, Comma, Dot, Assign, PlusAssign, MinusAssign, Increment, Decrement, Plus,
+					Minus, Arrow, Star, Slash, Percent, Less, Greater, LessEqual, GreaterEqual, EqualEqual, NotEqual, Not, AndAnd, OrOr, Ampersand, Pipe,
+					Caret, LeftBracket, RightBracket, Question, At: "operator";
 				default: "keyword";
 			};
 			if (type != null) {
@@ -877,7 +920,8 @@ class LanguageService {
 		if (indexedSignature != null)
 			return indexedSignature.label;
 		if (indexedId != null && model != null) {
-			var indexed = model.index.symbol(indexedId), indexedType = model.index.typeAt(position);
+			var indexed = model.index.symbol(indexedId),
+				indexedType = model.index.typeAt(position);
 			if (indexed != null && indexedType != null)
 				return indexed.name + ":" + compilerTypeName(indexedType);
 		}
@@ -946,13 +990,17 @@ class LanguageService {
 			parameters: signature.parameters,
 			activeParameter: active
 		};
-		var resolved = compiler.semanticWorkspace.indexedSymbol(id), documentation = resolved == null ? null : documentationFor(resolved.state, resolved.symbol.declaration);
+		var resolved = compiler.semanticWorkspace.indexedSymbol(id),
+			documentation = resolved == null ? null : documentationFor(resolved.state, resolved.symbol.declaration);
 		if (documentation != null) {
 			Reflect.setField(result, "documentation", documentation.markdown);
-			Reflect.setField(result, "parameterDocumentation", [for (parameter in signature.parameters) {
-				var separator = parameter.indexOf(":"), name = separator < 0 ? parameter : parameter.substring(0, separator);
-				documentation.parameters.get(name);
-			}]);
+			Reflect.setField(result, "parameterDocumentation", [
+				for (parameter in signature.parameters) {
+					var separator = parameter.indexOf(":"),
+						name = separator < 0 ? parameter : parameter.substring(0, separator);
+					documentation.parameters.get(name);
+				}
+			]);
 		}
 		tagResults([result], state);
 		return result;
@@ -1009,7 +1057,8 @@ class LanguageService {
 		var context = semanticQuery(path, position);
 		if (context == null)
 			return null;
-		var target:Null<SemanticSymbolId> = null, symbol = context.symbol == null ? null : compiler.semanticWorkspace.indexedSymbol(context.symbol);
+		var target:Null<SemanticSymbolId> = null,
+			symbol = context.symbol == null ? null : compiler.semanticWorkspace.indexedSymbol(context.symbol);
 		if (symbol != null && isTypeDeclaration(symbol.symbol.kind))
 			target = symbol.symbol.id;
 		else {
@@ -1286,13 +1335,16 @@ class LanguageService {
 		var ast = effectiveAst(state), tokens = effectiveTokens(state);
 		if (ast == null || tokens == null || ast.imports.indexOf(importPath) >= 0)
 			return null;
-		var separator = importPath.lastIndexOf("."), targetPackage = separator < 0 ? "" : importPath.substring(0, separator),
+		var separator = importPath.lastIndexOf("."),
+			targetPackage = separator < 0 ? "" : importPath.substring(0, separator),
 			currentPackage = ast.packageName == null ? "" : Std.string(ast.packageName);
 		if (targetPackage == currentPackage)
 			return null;
 		var insertion = 0;
 		for (index in 0...tokens.length)
-			if (tokens[index].kind == Semicolon && index > 0 && (tokens[index - 1].kind == Identifier || tokens[index - 1].kind == Package)) {
+			if (tokens[index].kind == Semicolon
+				&& index > 0
+				&& (tokens[index - 1].kind == Identifier || tokens[index - 1].kind == Package)) {
 				var cursor = index - 1;
 				while (cursor >= 0 && (tokens[cursor].kind == Identifier || tokens[cursor].kind == Dot))
 					cursor--;
@@ -1300,7 +1352,13 @@ class LanguageService {
 					insertion = tokens[index].span.end;
 			}
 		var replacement = insertion == 0 ? 'import $importPath;\n' : '\nimport $importPath;';
-		return {path: state.source.path, span: state.source.span(insertion, insertion), replacement: replacement, revision: state.revision, stale: false};
+		return {
+			path: state.source.path,
+			span: state.source.span(insertion, insertion),
+			replacement: replacement,
+			revision: state.revision,
+			stale: false
+		};
 	}
 
 	static function sortCompletion(result:Array<CompletionItem>):Void
@@ -1323,11 +1381,13 @@ class LanguageService {
 		}
 		if (position >= source.bytes.length)
 			return false;
-		var current = source.bytes.get(position), next = position + 1 < source.bytes.length ? source.bytes.get(position + 1) : -1;
+		var current = source.bytes.get(position),
+			next = position + 1 < source.bytes.length ? source.bytes.get(position + 1) : -1;
 		if (current == "=".code)
 			return next != "=".code && next != ">".code;
-		return (current == "+".code || current == "-".code || current == "*".code || current == "/".code || current == "%".code
-			|| current == "&".code || current == "|".code || current == "^".code) && next == "=".code;
+		return (current == "+".code || current == "-".code || current == "*".code || current == "/".code || current == "%".code || current == "&".code
+			|| current == "|".code || current == "^".code)
+			&& next == "=".code;
 	}
 
 	static function semanticTokenType(model:Null<SemanticModel>, position:Int):String {
@@ -1353,12 +1413,14 @@ class LanguageService {
 		var depth = 0, cursor = index - 1;
 		while (cursor >= 0) {
 			switch tokens[cursor].kind {
-				case RightParen: depth++;
+				case RightParen:
+					depth++;
 				case LeftParen:
 					if (depth == 0)
 						return cursor > 0 && (tokens[cursor - 1].kind == Identifier || tokens[cursor - 1].kind == New);
 					depth--;
-				case LeftBrace, RightBrace, Semicolon: return false;
+				case LeftBrace, RightBrace, Semicolon:
+					return false;
 				default:
 			}
 			cursor--;
@@ -1452,7 +1514,8 @@ class LanguageService {
 		while (cursor < tokens.length && depth > 0) {
 			var kind = tokens[cursor].kind;
 			switch kind {
-				case LeftParen, LeftBracket, LeftBrace: depth++;
+				case LeftParen, LeftBracket, LeftBrace:
+					depth++;
 				case RightParen, RightBracket, RightBrace:
 					depth--;
 					if (depth == 0) {
@@ -1470,15 +1533,23 @@ class LanguageService {
 		}
 	}
 
-	static function addParameterHint(tokens:Array<compiler.syntax.Token>, startIndex:Int, endIndex:Int, argument:Int, parameters:Array<String>, rangeStart:Int,
-			rangeEnd:Int, result:Array<InlayHint>):Void {
+	static function addParameterHint(tokens:Array<compiler.syntax.Token>, startIndex:Int, endIndex:Int, argument:Int, parameters:Array<String>,
+			rangeStart:Int, rangeEnd:Int, result:Array<InlayHint>):Void {
 		if (argument >= parameters.length || startIndex >= endIndex)
 			return;
-		var first = tokens[startIndex], parameter = parameters[argument], separator = parameter.indexOf(":"),
+		var first = tokens[startIndex],
+			parameter = parameters[argument],
+			separator = parameter.indexOf(":"),
 			name = separator < 0 ? parameter : parameter.substring(0, separator);
 		if (first.span.start < rangeStart || first.span.start > rangeEnd || first.kind == Identifier && first.text == name)
 			return;
-		result.push({position: first.span.start, label: name + ":", kind: "parameter", paddingLeft: false, paddingRight: true});
+		result.push({
+			position: first.span.start,
+			label: name + ":",
+			kind: "parameter",
+			paddingLeft: false,
+			paddingRight: true
+		});
 	}
 
 	function indexedWorkspaceSymbols(state:ModuleState):Array<WorkspaceSymbol> {
@@ -1538,15 +1609,23 @@ class LanguageService {
 		var cached = structuralIndex.get(state.name);
 		if (cached != null && cached.revision == state.revision)
 			return cached;
-		var folds:Array<FoldingRegion> = [], containers:Array<SourceSpan> = [], tokens = effectiveTokens(state), source = state.source;
+		var folds:Array<FoldingRegion> = [],
+			containers:Array<SourceSpan> = [],
+			tokens = effectiveTokens(state),
+			source = state.source;
 		if (tokens != null) {
-			var braces:Array<compiler.syntax.Token> = [], firstImport:Null<Int> = null, lastImport:Null<Int> = null, inImport = false;
+			var braces:Array<compiler.syntax.Token> = [],
+				firstImport:Null<Int> = null,
+				lastImport:Null<Int> = null,
+				inImport = false;
 			for (token in tokens)
 				switch token.kind {
-					case LeftBrace: braces.push(token);
+					case LeftBrace:
+						braces.push(token);
 					case RightBrace:
 						if (braces.length > 0) {
-							var open = braces.pop(), span = source.span(open.span.start, token.span.end);
+							var open = braces.pop(),
+								span = source.span(open.span.start, token.span.end);
 							folds.push({span: span, kind: "region"});
 							containers.push(span);
 						}
@@ -1584,7 +1663,10 @@ class LanguageService {
 			if (quote == "\"" || quote == "'") {
 				position++;
 				while (position < text.length)
-					if (text.charAt(position) == "\\") position += 2; else if (text.charAt(position++) == quote) break;
+					if (text.charAt(position) == "\\")
+						position += 2;
+					else if (text.charAt(position++) == quote)
+						break;
 				continue;
 			}
 			var marker = text.substr(position, 2), start = position;
@@ -1605,7 +1687,8 @@ class LanguageService {
 	static function addConditionalFolds(file:compiler.Source.SourceFile, folds:Array<FoldingRegion>, containers:Array<SourceSpan>):Void {
 		var source = file.text, offset = 0, stack:Array<Int> = [];
 		while (offset < source.length) {
-			var newline = source.indexOf("\n", offset), end = newline < 0 ? source.length : newline + 1,
+			var newline = source.indexOf("\n", offset),
+				end = newline < 0 ? source.length : newline + 1,
 				line = StringTools.trim(source.substring(offset, end));
 			if (StringTools.startsWith(line, "#if"))
 				stack.push(offset);
@@ -1657,18 +1740,25 @@ class LanguageService {
 		if (trimmed.length == 0)
 			return true;
 		// Metadata may legally sit between a doc comment and its declaration.
-		return StringTools.startsWith(trimmed, "@:") && trimmed.indexOf(";") < 0 && trimmed.indexOf("{") < 0 && trimmed.indexOf("}") < 0;
+		return StringTools.startsWith(trimmed, "@:")
+			&& trimmed.indexOf(";") < 0
+			&& trimmed.indexOf("{") < 0
+			&& trimmed.indexOf("}") < 0;
 	}
 
 	static function normalizeDocumentation(raw:String):SymbolDocumentation {
-		var body:Array<String> = [], parameters:Map<String, String> = [], deprecated = false;
+		var body:Array<String> = [],
+			parameters:Map<String, String> = [],
+			deprecated = false;
 		for (line in raw.split("\n")) {
 			var value = StringTools.trim(line);
 			if (StringTools.startsWith(value, "*"))
 				value = StringTools.trim(value.substring(1));
 			if (StringTools.startsWith(value, "@param ")) {
-				var content = StringTools.trim(value.substring(7)), separator = content.indexOf(" ");
-				parameters.set(separator < 0 ? content : content.substring(0, separator), separator < 0 ? "" : StringTools.trim(content.substring(separator + 1)));
+				var content = StringTools.trim(value.substring(7)),
+					separator = content.indexOf(" ");
+				parameters.set(separator < 0 ? content : content.substring(0, separator),
+					separator < 0 ? "" : StringTools.trim(content.substring(separator + 1)));
 			} else if (StringTools.startsWith(value, "@return "))
 				body.push("**Returns:** " + StringTools.trim(value.substring(8)));
 			else if (StringTools.startsWith(value, "@deprecated")) {

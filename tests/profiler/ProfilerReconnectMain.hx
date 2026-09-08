@@ -3,27 +3,34 @@ import profiler.ProfilerSession;
 
 class ProfilerReconnectMain {
 	static function main():Void {
-		var args = Sys.args(), port = args.length == 2 ? Std.parseInt(args[0]) : null;
-		if (port == null) throw "Usage: profiler-reconnect-test.hl PORT TOKEN";
+		var args = Sys.args(),
+			port = args.length == 2 ? Std.parseInt(args[0]) : null;
+		if (port == null)
+			throw "Usage: profiler-reconnect-test.hl PORT TOKEN";
 		var first = connect(port, args[1]), sawDisconnect = false;
 		while (!sawDisconnect) {
 			try {
 				Sys.sleep(0.05);
 				first.poll();
-			} catch (_:Dynamic) sawDisconnect = true;
+			} catch (_:Dynamic)
+				sawDisconnect = true;
 		}
 		first.close();
 		var delay = 0.1, deadline = Sys.time() + 10.0, second:Null<ProfilerSession> = null;
 		while (second == null && Sys.time() < deadline) {
-			try second = connect(port, args[1]) catch (_:Dynamic) {
+			try
+				second = connect(port, args[1])
+			catch (_:Dynamic) {
 				Sys.sleep(delay);
 				delay = Math.min(1.0, delay * 2);
 			}
 		}
-		if (second == null) throw "profiler did not reconnect after runtime restart";
+		if (second == null)
+			throw "profiler did not reconnect after runtime restart";
 		Sys.sleep(0.1);
 		second.poll();
-		if (second.snapshot().samples == 0) throw "reconnected profiler produced no samples";
+		if (second.snapshot().samples == 0)
+			throw "reconnected profiler produced no samples";
 		second.close();
 		Sys.println("PASS: profiler reconnects after runtime restart with bounded backoff");
 	}

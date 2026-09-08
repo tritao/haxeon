@@ -69,7 +69,9 @@ class HotReloadMain {
 		if (Runtime.callInt(loaded, valueIndex) != 42)
 			throw "initial generation did not return 42";
 		var initialLocation = Runtime.jitLocation(loaded, valueIndex);
-		if (initialLocation == null || initialLocation.indexOf("Value.value") < 0 || initialLocation.indexOf("function=") < 0
+		if (initialLocation == null
+			|| initialLocation.indexOf("Value.value") < 0
+			|| initialLocation.indexOf("function=") < 0
 			|| initialLocation.indexOf(" opcode=") < 0)
 			throw 'initial JIT target did not resolve to a function/opcode location: $initialLocation';
 		if (Runtime.callInt(loaded, readIndex) != 42)
@@ -128,7 +130,9 @@ class HotReloadMain {
 		if (Runtime.callInt(loaded, valueIndex) != 43)
 			throw "patched generation did not return 43";
 		var patchedLocation = Runtime.jitLocation(loaded, valueIndex);
-		if (patchedLocation == null || patchedLocation.indexOf("Value.value") < 0 || patchedLocation.indexOf("function=") < 0
+		if (patchedLocation == null
+			|| patchedLocation.indexOf("Value.value") < 0
+			|| patchedLocation.indexOf("function=") < 0
 			|| patchedLocation.indexOf(" opcode=") < 0)
 			throw 'patched JIT target did not resolve to a function/opcode location: $patchedLocation';
 		if (Runtime.debugRegionCount(loaded) != 1)
