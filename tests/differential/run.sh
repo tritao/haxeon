@@ -16,6 +16,8 @@ mkdir -p "$out_dir"
 
 run_case() {
 	local name=$1
+	local expected_status=${2:-}
+	local reference_target=${3:-hl}
 	local official_source="$root_dir/tests/differential/$name.official.hx"
 	local realtime_source="$root_dir/tests/differential/$name.realtime.hx"
 	local official_output="$out_dir/$name.official.hl"
@@ -31,12 +33,21 @@ run_case() {
 	set +e
 	local official_log="$out_dir/$name.official.log"
 	local realtime_log="$out_dir/$name.realtime.log"
-	LD_LIBRARY_PATH="$root_dir/vendor/hashlink" "$hl" "$official_output" >"$official_log" 2>&1
+	if [[ "$reference_target" == interp ]]; then
+		"$haxe" -cp "$official_dir" -main Main --interp >"$official_log" 2>&1
+	else
+		LD_LIBRARY_PATH="$root_dir/vendor/hashlink" "$hl" "$official_output" >"$official_log" 2>&1
+	fi
 	local official_status=$?
 	LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$realtime_output" >"$realtime_log" 2>&1
 	local realtime_status=$?
 	set -e
 
+	if [[ -n "$expected_status" && $official_status -ne $expected_status ]]; then
+		echo "$name: reference fixture expected exit $expected_status, got $official_status" >&2
+		cat "$official_log" >&2
+		exit 1
+	fi
 	if [[ $official_status -ne $realtime_status ]]; then
 		echo "$name: official=$official_status realtime=$realtime_status" >&2
 		exit 1
@@ -74,4 +85,9 @@ run_case control-flow
 run_case nullable
 run_case observable-output
 run_case compiler-audit
+run_case exception-capture-order 0
+# Haxe 4.3.7's HL backend loses the final local write before this throw;
+# its interpreter preserves it. Keep this case against the interpreter oracle.
+run_case exception-loop-control 0 interp
+run_case assignment-evaluation-order 0
 run_compile_failure type-error

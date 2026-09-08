@@ -998,7 +998,7 @@ class Typer {
 					else
 						output.push(TIncrement(scope.requireId(name), delta, span));
 				case Assignment(name, expression, span):
-					var dot = name.indexOf(".");
+					var dot = name.lastIndexOf(".");
 					if (dot < 0) {
 						var expected = scope.resolveDeclared(name);
 						if (expected == null) {

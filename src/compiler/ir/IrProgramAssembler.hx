@@ -215,11 +215,16 @@ class IrProgramAssembler {
 	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>,
 			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializer:IrFunction, ?entryPoint:String):IrProgram {
 		var program = new IrProgram("__entry");
+		var allFunctions:Array<IrFunction> = [];
+		if (staticInitializer != null)
+			allFunctions.push(staticInitializer);
+		for (fn in functions)
+			allFunctions.push(fn);
 		var needsArrayRuntime = false,
 			needsStringRuntime = false,
 			needsExceptionRuntime = false,
 			mapRuntimeNames:Map<String, Bool> = [];
-		for (fn in functions)
+		for (fn in allFunctions)
 			for (block in fn.blocks)
 				for (instruction in block.instructions)
 					switch instruction.value {
@@ -546,11 +551,6 @@ class IrProgramAssembler {
 		if (natives != null)
 			for (native in natives)
 				program.natives.push(native);
-		var allFunctions:Array<IrFunction> = [];
-		if (staticInitializer != null)
-			allFunctions.push(staticInitializer);
-		for (fn in functions)
-			allFunctions.push(fn);
 		for (fn in allFunctions)
 			program.functions.push(fn);
 		var mainFunction:Null<IrFunction> = null;

@@ -157,5 +157,5 @@ class Sys {
 		return sysGetChar(echo);
 
 	public static inline function println(value:String):Void
-		sysPrint(value);
+		sysPrint(value + "\n");
 }
