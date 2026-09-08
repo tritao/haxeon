@@ -179,6 +179,7 @@ enum AstExpression {
 		span:SourceSpan);
 	Range(start:AstExpression, end:AstExpression, span:SourceSpan);
 	Call(name:String, arguments:Array<AstExpression>, span:SourceSpan);
+	ClosureCall(callee:AstExpression, arguments:Array<AstExpression>, span:SourceSpan);
 	MethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan);
 	New(typeName:String, arguments:Array<AstExpression>, span:SourceSpan);
 	NewGeneric(typeName:String, typeArguments:Array<AstType>, arguments:Array<AstExpression>, span:SourceSpan);

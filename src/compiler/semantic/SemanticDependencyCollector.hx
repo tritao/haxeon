@@ -226,6 +226,9 @@ class SemanticDependencyCollector {
 				calls.set(target, true);
 				for (a in args)
 					scanCallExpression(a, calls, aliases);
+			case ClosureCall(callee, args, _):
+				scanCallExpression(callee, calls, aliases);
+				for (a in args) scanCallExpression(a, calls, aliases);
 			case MethodCall(object, _, args, _):
 				scanCallExpression(object, calls, aliases);
 				for (a in args)

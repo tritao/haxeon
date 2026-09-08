@@ -3,6 +3,6 @@ function twice(value:Int):Int {
 }
 
 function main():Int {
-	var f = twice;
-	return f(21);
+	var functions = [twice];
+	return functions[0](21);
 }

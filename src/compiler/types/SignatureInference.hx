@@ -174,6 +174,9 @@ class SignatureInference {
 								default:
 							}
 				}
+			case ClosureCall(callee, arguments, _):
+				collectExpressionCallConstraint(callee, environment, methods, constraints);
+				for (argument in arguments) collectExpressionCallConstraint(argument, environment, methods, constraints);
 			default:
 		}
 
@@ -371,6 +374,10 @@ class SignatureInference {
 			case Call(name, _, _):
 				var method = methods == null ? null : methods.get(localMethodName(name));
 				if (method != null && method.result != InferredType) method.result; else inferQualifiedCollectionCall(name, environment);
+			case ClosureCall(callee, _, _): switch inferExpression(callee, environment, enums, methods) {
+					case FunctionType(_, result): result;
+					default: null;
+				};
 			case MethodCall(object, name, _, _): inferCollectionMethod(inferExpression(object, environment, enums, methods), name);
 			case SwitchExpression(subject, cases, fallback, _):
 				var subjectType = inferExpression(subject, environment, enums, methods),

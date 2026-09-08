@@ -258,6 +258,10 @@ class CaptureAnalysis {
 			case Call(_, arguments, _):
 				for (argument in arguments)
 					collectMutableCaptureExpression(argument, outerDeclared, result);
+			case ClosureCall(callee, arguments, _):
+				collectMutableCaptureExpression(callee, outerDeclared, result);
+				for (argument in arguments)
+					collectMutableCaptureExpression(argument, outerDeclared, result);
 			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _),
 				BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _), UnsignedShiftRight(left, right, _),
 				Less(left, right, _), LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _),
@@ -341,6 +345,10 @@ class CaptureAnalysis {
 			case Call(name, arguments, _):
 				if (!writesOnly)
 					names.set(pathRoot(name), true);
+				for (argument in arguments)
+					collectExpressionVariables(argument, names, writesOnly);
+			case ClosureCall(callee, arguments, _):
+				collectExpressionVariables(callee, names, writesOnly);
 				for (argument in arguments)
 					collectExpressionVariables(argument, names, writesOnly);
 			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _),

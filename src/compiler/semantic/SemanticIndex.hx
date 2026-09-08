@@ -372,6 +372,9 @@ class SemanticIndex {
 				}
 				for (argument in arguments)
 					indexRecoveredExpression(argument);
+			case ClosureCall(callee, arguments, _):
+				indexRecoveredExpression(callee);
+				for (argument in arguments) indexRecoveredExpression(argument);
 			case MethodCall(object, name, arguments, span):
 				indexRecoveredExpression(object);
 				var callee = bindRecoveredMember(object, name, span);

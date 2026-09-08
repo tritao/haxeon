@@ -15,6 +15,7 @@ class AstChildren {
 				NotEqual(a, b, _), And(a, b, _), Or(a, b, _), Range(a, b, _), Index(a, b, _): [a, b];
 			case Conditional(predicate, yes, no, _): [predicate, yes, no];
 			case Call(_, arguments, _), New(_, arguments, _), NewGeneric(_, _, arguments, _), ArrayLiteral(arguments, _): arguments;
+			case ClosureCall(callee, arguments, _): [callee].concat(arguments);
 			case MethodCall(receiver, _, arguments, _): [receiver].concat(arguments);
 			case ObjectLiteral(fields, _): [for (field in fields) field.value];
 			case MapLiteral(entries, _):

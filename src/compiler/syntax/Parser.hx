@@ -1631,8 +1631,7 @@ class Parser {
 				var end = consume(TokenKind.RightParen).span;
 				expression = switch expression {
 					case Variable(name, start): Call(name, arguments, expressionSpan(expression).merge(end));
-					default:
-						throw new CompileError(new Diagnostic("E0002", "Call target must be a function or method", expressionSpan(expression)));
+					default: ClosureCall(expression, arguments, expressionSpan(expression).merge(end));
 				};
 				continue;
 			}
@@ -1934,7 +1933,7 @@ class Parser {
 				ErrorExpression(span), Variable(_, span), Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span), Div(_, _, span),
 				Mod(_, _, span), BitAnd(_, _, span), BitXor(_, _, span), BitOr(_, _, span), ShiftLeft(_, _, span), ShiftRight(_, _, span),
 				UnsignedShiftRight(_, _, span), Negate(_, span), Less(_, _, span), LessEqual(_, _, span), Greater(_, _, span), GreaterEqual(_, _, span),
-				Equal(_, _, span), NotEqual(_, _, span), Not(_, span), Call(_, _, span), MethodCall(_, _, _, span), New(_, _, span),
+				Equal(_, _, span), NotEqual(_, _, span), Not(_, span), Call(_, _, span), ClosureCall(_, _, span), MethodCall(_, _, _, span), New(_, _, span),
 				NewGeneric(_, _, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span), PostfixIncrement(_, _, span), Lambda(_, _, span),
 				And(_, _, span), Or(_, _, span), Conditional(_, _, _, span), BlockExpression(_, _, span), ThrowExpression(_, span),
 				SwitchExpression(_, _, _, span), Cast(_, _, span): span;

@@ -2942,6 +2942,20 @@ class Typer {
 						applyCallEffect(new TypedExpression(TCall(name, typed), result, span), name);
 					}
 				}
+			case ClosureCall(callee, arguments, span):
+				var typedCallee = typeExpression(callee, scope), functionType = switch typedCallee.type {
+					case TFunction(parameters, returnType): {arguments: parameters, result: returnType};
+					default: null;
+				};
+				if (functionType == null) fail("E1007", "Cannot call non-function expression", span);
+				if (arguments.length != functionType.arguments.length)
+					fail("E1008", 'Function expression expects ${functionType.arguments.length} arguments, got ${arguments.length}', span);
+				var typedArguments = [
+					for (index in 0...arguments.length) typeExpression(arguments[index], scope, functionType.arguments[index])
+				];
+				typedArguments = coerceArguments(typedArguments, functionType.arguments, "function expression");
+				for (captured in context.storage.candidateSourceNames()) scope.invalidate(captured);
+				new TypedExpression(TClosureCall(typedCallee, typedArguments), functionType.result, span);
 			case MethodCall(object, name, arguments, span): typeMethodCall(object, name, arguments, span, scope, expectedType);
 		}
 

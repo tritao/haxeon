@@ -422,6 +422,9 @@ class ModuleCanonicalizer {
 				else if (name.indexOf(".") < 0 && locals.exists(name))
 					resolved = module == entry && name == "main" ? "main" : module + "." + name;
 				Call(resolved, [for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
+			case ClosureCall(callee, args, s):
+				ClosureCall(canonicalExpression(callee, module, entry, locals, aliases),
+					[for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
 			case MethodCall(object, name, args,
 				s): MethodCall(canonicalExpression(object, module, entry, locals, aliases), name,
 					[for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
