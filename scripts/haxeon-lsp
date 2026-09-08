@@ -25,4 +25,5 @@ if [[ "$rebuild" == true ]]; then
 	"$haxe" --cwd "$root_dir" "$root_dir/haxeon-lsp.hxml"
 fi
 
+cd "$root_dir"
 exec "$hashlink" "$server"
