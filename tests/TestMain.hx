@@ -856,6 +856,10 @@ class TestMain {
 			'class Callbacks { public var callback:Void->Void = function() {}; public function new() {} } function main():Int { new Callbacks().callback(); return 42; }');
 		initializerLambdaCompiler.compile("Main");
 		Sys.println("PASS: closure-valued field initializers retain source-module ownership");
+		var nullObjectCompiler = new Compiler();
+		nullObjectCompiler.update("Main.hx", 'function main():Int { var value = { optional: null }; value.optional; return 42; }');
+		nullObjectCompiler.compile("Main");
+		Sys.println("PASS: unconstrained null object fields retain a storable runtime representation");
 		var conversionCompiler = new Compiler();
 		conversionCompiler.update("Value.hx", "abstract Value(Int) from Int to Int {}");
 		conversionCompiler.update("Main.hx", "import Value; function read(value:Value):Int return value; function main():Int return read(42);");

@@ -2417,6 +2417,8 @@ class Typer {
 					var value = typeExpression(field.value, scope, expectedField == null ? null : expectedField.type);
 					if (expectedField != null)
 						value = coerce(value, expectedField.type, 'object field "${field.name}"', "E1002");
+					else if (value.type == TNull)
+						value = coerce(value, TDynamic, 'object field "${field.name}"', "E1002");
 					typedFields.push({name: field.name, value: value});
 				}
 				if (expectedFields != null)
