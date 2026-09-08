@@ -23,6 +23,7 @@ import compiler.semantic.GenericSpecializationRegistry;
 import compiler.ir.hl.HlLower;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
+import compiler.ffi.CHeaderEmitter;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 import compiler.ir.IrGenerator;
@@ -633,6 +634,51 @@ class TestMain {
 				emittedExternBody = true;
 		if (nativeTime == null || nativeTime.library != "std" || nativeTime.symbol != "sys_time" || emittedExternBody)
 			throw "Source extern native binding was not preserved without emitting a body";
+		var ffiHeader = CHeaderEmitter.emit([
+			{
+				name: "sample.read",
+				library: "sample",
+				symbol: "read",
+				arguments: [I32, Bytes],
+				result: Bool
+			},
+			{
+				name: "sample.run",
+				library: "sample",
+				symbol: "run",
+				arguments: [Function([I32], Bytes)],
+				result: Void
+			},
+			{
+				name: "other.skip",
+				library: "other",
+				symbol: "skip",
+				arguments: [],
+				result: I32
+			}
+		], "sample");
+		if (ffiHeader.indexOf("HL_PRIM bool sample_read(int arg0, vbyte * arg1);") < 0
+			|| ffiHeader.indexOf("DEFINE_PRIM(_BOOL, read, _I32 _BYTES);") < 0
+			|| ffiHeader.indexOf("DEFINE_PRIM(_VOID, run, _FUN(_BYTES, _I32));") < 0
+			|| ffiHeader.indexOf("other_skip") >= 0
+			|| ffiHeader.indexOf("SAMPLE_FFI_H_SIGNATURE") < 0
+			|| ffiHeader != CHeaderEmitter.emit([
+				{
+					name: "sample.read",
+					library: "sample",
+					symbol: "read",
+					arguments: [I32, Bytes],
+					result: Bool
+				},
+				{
+					name: "sample.run",
+					library: "sample",
+					symbol: "run",
+					arguments: [Function([I32], Bytes)],
+					result: Void
+				}
+			], "sample"))
+			throw "Typed native declarations did not emit a deterministic C FFI contract";
 		var nativeStubProgram = Frontend.compile('@:hlNative("sample") private class Native { public static function read():Int return 0; } function main():Int { Native.read(); return 42; }');
 		var nativeStub = false, emittedStub = false;
 		for (native in nativeStubProgram.natives)
@@ -865,7 +911,8 @@ class TestMain {
 		Frontend.compile('function fallback():Bool return false; function read(values:Array<String>):String { var value:Null<String> = null, other:Null<String> = null; for (candidate in values) if (candidate == "ready") { value = candidate; break; } if (value == null) { try value = "fallback" catch (error:Dynamic) { fallback(); return "failed"; } } return value; } function main():Int return read([]).length;');
 		Frontend.compile('function load():String return "fallback"; function fallback():Bool return false; function read(values:Array<String>):String { var value:Null<String> = null, other:Null<String> = null; for (candidate in values) if (candidate == "ready") { value = candidate; break; } if (value == null) { try value = load() catch (error:Dynamic) { fallback(); return "failed"; } } return value; } function main():Int return read([]).length;');
 		Frontend.compile('interface Reader { function read(path:String):String; } class Owner { public final reader:Reader; public function new(reader:Reader) this.reader = reader; public function run(paths:Array<String>):Int { var value:Null<String> = null, other:Null<String> = null; for (path in paths) if (path == "ready") { value = path; break; } if (value == null) { try value = reader.read("file") catch (error:Dynamic) { consume(error); return 0; } } return value.length; } function consume(value:Dynamic):Void {} } class Concrete implements Reader { public function new() {} public function read(path:String):String return path; } function main():Int return new Owner(new Concrete()).run([]);');
-		expectCompileError('function load():String return "ready"; function consume(value:Dynamic):Void {} function main():Int { var value:Null<String> = null; if (value == null) { try value = load() catch (error:Dynamic) consume(error); } return value.length; }', 'Field "length" requires an object');
+		expectCompileError('function load():String return "ready"; function consume(value:Dynamic):Void {} function main():Int { var value:Null<String> = null; if (value == null) { try value = load() catch (error:Dynamic) consume(error); } return value.length; }',
+			'Field "length" requires an object');
 		Frontend.compile('function main():Int { while (true) { var value:Int; try { value = 42; } catch (error:Dynamic) { break; } return value; } return 0; }');
 		Frontend.compile("class Math { public static function answer():Int return 42; } function main():Int return Math.answer();");
 		Frontend.compile('class Constants { public static inline final ANSWER = 42; static inline final LABEL = "answer"; static final VALUES = new Array<Int>(0); } function main():Int return Constants.ANSWER;');

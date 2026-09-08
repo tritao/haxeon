@@ -7,6 +7,7 @@ import compiler.Compiler;
 import compiler.Compiler.CompileResult;
 import haxe.io.Bytes;
 import sys.io.File;
+import compiler.ffi.CHeaderEmitter;
 
 /** Builds the compiler project from an explicit, deterministic source manifest. */
 class BootstrapCompiler {
@@ -14,6 +15,8 @@ class BootstrapCompiler {
 		var output = "bootstrap/compiler.hl",
 			entry = "compiler.tools.BootstrapCompiler",
 			dumpFunction = -1,
+			ffiHeader:Null<String> = null,
+			ffiLibrary:Null<String> = null,
 			roots:Array<String> = [],
 			paths:Array<String> = [];
 		for (argument in Sys.args())
@@ -23,10 +26,16 @@ class BootstrapCompiler {
 				entry = argument.substring("--entry=".length, argument.length);
 			else if (StringTools.startsWith(argument, "--root="))
 				roots.push(argument.substring("--root=".length, argument.length));
+			else if (StringTools.startsWith(argument, "--ffi-header="))
+				ffiHeader = argument.substring("--ffi-header=".length, argument.length);
+			else if (StringTools.startsWith(argument, "--ffi-library="))
+				ffiLibrary = argument.substring("--ffi-library=".length, argument.length);
 			else if (StringTools.startsWith(argument, "--dump-function=")) {
 				dumpFunction = parseFunctionIndex(argument.substring("--dump-function=".length, argument.length));
 			} else
 				paths.push(argument);
+		if ((ffiHeader == null) != (ffiLibrary == null))
+			throw "--ffi-header and --ffi-library must be provided together";
 		if (roots.length == 0)
 			roots.push("src");
 		if (paths.length == 0)
@@ -56,6 +65,8 @@ class BootstrapCompiler {
 				}
 		File.saveBytes(output, HlWriter.encode(result.module));
 		File.saveBytes(output + ".functions", Bytes.ofString(functionMap(result.functionIndices)));
+		if (ffiHeader != null && ffiLibrary != null)
+			File.saveContent(ffiHeader, CHeaderEmitter.emit(result.ir.natives, ffiLibrary));
 		Sys.println("compiled " + Std.string(paths.length) + " source files -> " + output);
 	}
 
