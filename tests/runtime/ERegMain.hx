@@ -18,6 +18,14 @@ class ERegMain {
 			+ "  if (position.pos != 6 || position.len != 5 || expression.replace('world world', 'x') != 'x world') return 2;\n"
 			+ "  var global = ~/world/g;\n"
 			+ "  if (global.replace('world world', 'x') != 'x x' || global.split('oneworldtwo').length != 2) return 3;\n"
+			+ "  var captures = ~/(w.rld) ([0-9]+)/g;\n"
+			+ "  if (!captures.match('world 42') || captures.matched(1) != 'world' || captures.matched(2) != '42') return 4;\n"
+			+ "  if (captures.replace('world 42 world 7', '$2:$1') != '42:world 7:world') return 5;\n"
+			+ "  var zero = ~/(?=.)/g;\n"
+			+ "  if (zero.replace('ab', '_') != '_a_b') return 6;\n"
+			+ "  var invalid = false;\n"
+			+ "  try new EReg('(', '') catch (error:Dynamic) invalid = true;\n"
+			+ "  if (!invalid) return 7;\n"
 			+ "  return 42;\n"
 			+ "}");
 		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module));

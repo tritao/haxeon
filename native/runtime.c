@@ -14,6 +14,7 @@
 #include "runtime/arrays.c"
 #include "runtime/maps.c"
 #include "runtime/strings.c"
+#include "runtime/regex.c"
 #include "runtime/files.c"
 #include "runtime/atomic_files.c"
 #include "runtime/system.c"
