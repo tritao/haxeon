@@ -2274,6 +2274,10 @@ class Typer {
 				if (ControlFlow.alwaysExits(typedStatements, function(type, cases) return this.exhaustiveEnum(type, cases)))
 					return new TypedExpression(TBlockExpression(typedStatements, new TypedExpression(TUnreachable, TNever, span)), TNever, span);
 				var typedResult = typeExpression(result, blockScope, expectedType);
+				if (typedResult.type != TNever) {
+					scope.mergeAssignmentsFrom([blockScope]);
+					scope.mergeRefinementsFrom([blockScope]);
+				}
 				new TypedExpression(TBlockExpression(typedStatements, typedResult), typedResult.type, span);
 			case ThrowExpression(value, span):
 				new TypedExpression(TThrowExpression(typeExpression(value, scope)), TNever, span);
