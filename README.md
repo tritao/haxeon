@@ -218,13 +218,13 @@ the integration suites:
 ./tests/integration/test-hot-reload.sh
 ```
 
-The full test script runs program fixtures with four workers by default. Set
+The full test script runs program fixtures with 16 workers by default. Set
 `TEST_JOBS=1` for the sequential baseline, or invoke the driver directly to
 select a suite or test:
 
 ```sh
 TEST_JOBS=1 ./scripts/test.sh
-.tools/haxe/haxe -cp tests --run driver.TestDriver --suite programs --jobs 4
+.tools/haxe/haxe -cp tests --run driver.TestDriver --suite programs --jobs 16
 .tools/haxe/haxe -cp tests --run driver.TestDriver --suite compiler --test ParserRecovery
 ```
 
