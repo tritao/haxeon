@@ -2587,12 +2587,13 @@ class Typer {
 					return typeAbstractConstruction(typeName, typeArguments, arguments, span, scope);
 				if (!classDecls.exists(typeName) || interfaceDecls.exists(typeName))
 					fail("E1007", 'Unknown class "$typeName"', span);
-				var valueType = declarations.resolve(AppliedType(typeName, typeArguments), span),
+				var classDecl = requiredMapValue(classDecls, typeName),
+					valueType = declarations.resolve(AppliedType(typeName, typeArguments), span),
 					substitutions = nominalSubstitutions(valueType),
 					constructorName = typeName + ".new",
 					hasConstructor = signatures.exists(constructorName),
 					implicitConstructor = !hasConstructor && [
-						for (field in classDecls.get(typeName).fields)
+						for (field in classDecl.fields)
 							if (!field.isStatic && field.initializer != null) field
 					].length > 0;
 				if (!hasConstructor && arguments.length != 0)
@@ -2606,12 +2607,13 @@ class Typer {
 					return typeAbstractConstruction(typeName, [], arguments, span, scope);
 				if ((!classDecls.exists(typeName) && !PlatformAbi.isType(typeName)) || interfaceDecls.exists(typeName))
 					fail("E1007", 'Unknown class "$typeName"', span);
-				if (classDecls.exists(typeName) && classDecls.get(typeName).typeParameters.length > 0)
+				var classDecl = classDecls.exists(typeName) ? requiredMapValue(classDecls, typeName) : null;
+				if (classDecl != null && classDecl.typeParameters.length > 0)
 					return typeInferredClassConstruction(typeName, arguments, span, scope, expectedType);
 				var constructorName = typeName + ".new",
 					hasConstructor = signatures.exists(constructorName),
-					implicitConstructor = !hasConstructor && classDecls.exists(typeName) && [
-						for (field in classDecls.get(typeName).fields)
+					implicitConstructor = !hasConstructor && classDecl != null && [
+						for (field in classDecl.fields)
 							if (!field.isStatic && field.initializer != null) field
 					].length > 0;
 				var expected = hasConstructor ? [
