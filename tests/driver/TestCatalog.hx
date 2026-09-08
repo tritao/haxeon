@@ -71,6 +71,8 @@ class TestCatalog {
 
 	public static function executableCases():Array<ExecutableCase> {
 		return [
+			hxmlCase("runtime", "patch-opcodes", "tests/hxml/patch-opcodes-test.hxml", "patch-opcodes-test.hl", 0,
+				"compiler opcode coverage and malformed patch rejection"),
 			mainCase("runtime", "exceptions", "ExceptionMain", "exception.hl", 42, "exceptions can be chained, thrown, caught, and inspected"),
 			mainCase("runtime", "ereg", "ERegMain", "ereg.hl", 42, "regex literals and EReg operations executed"),
 			mainCase("runtime", "list", "ListMain", "list.hl", 42, "Array-backed List insertion and iteration executed"),

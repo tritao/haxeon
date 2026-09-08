@@ -34,6 +34,7 @@ class HotReloadMain {
 	}
 
 	static function main():Void {
+		PatchOpcodeTests.run();
 		testPatchContract();
 		testDecodedIrLifetime();
 		testBackendStateLifetime();

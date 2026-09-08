@@ -214,7 +214,7 @@ class HlPatchReader {
 			case 29, 30, 31, 32:
 				var first = readIndex(input),
 					second = readIndex(input),
-					count = readIndex(input),
+					count = readOperandCount(input),
 					operands = [first, second, count];
 				for (_ in 0...count)
 					operands.push(readIndex(input));
@@ -222,7 +222,7 @@ class HlPatchReader {
 			case 90:
 				var destination = readIndex(input),
 					constructor = readIndex(input),
-					count = readIndex(input),
+					count = readOperandCount(input),
 					operands = [destination, constructor, count];
 				for (_ in 0...count)
 					operands.push(readIndex(input));
@@ -242,6 +242,14 @@ class HlPatchReader {
 			case 48, 51, 56: [for (_ in 0...3) readIndex(input)];
 			default: throw 'Unsupported patch opcode $op';
 		}
+
+	static function readOperandCount(input:BytesInput):Int {
+		var count = readUnsigned(input);
+		// Match the native decoder's bound before reading any variable operands.
+		if (count > 0x1000000)
+			throw "Invalid variable operand count";
+		return count;
+	}
 
 	static function readUnsigned(input:BytesInput):Int {
 		var v = readIndex(input);
