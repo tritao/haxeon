@@ -947,6 +947,7 @@ class Typer {
 						if (!ControlFlow.alwaysExits(typedCatches[i].statements, function(type, cases) return this.exhaustiveEnum(type, cases)))
 							continuing.push(catchScopes[i]);
 					scope.mergeAssignmentsFrom(continuing);
+					scope.mergeRefinementsFrom(continuing);
 				case Break(span):
 					if (context.loopDepth == 0)
 						fail("E1017", "break is only valid inside a loop", span);
