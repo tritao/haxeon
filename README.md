@@ -274,6 +274,35 @@ do not enforce thresholds.
 
 ## 🧪 Development
 
+### Native build
+
+Haxeon uses CMake for its cross-platform native build and Ninja as the default
+backend. HashLink is built from the pinned `vendor/hashlink` submodule; the
+resulting VM and library are placed in `.tools/hashlink`, while Haxeon's runtime
+HDLL is placed in `out`.
+
+```sh
+cmake --preset release
+cmake --build --preset release
+```
+
+The same build can be driven by the cross-platform Haxe entry point:
+
+```sh
+.tools/haxe/haxe -cp src --run build.HaxeonBuild doctor
+.tools/haxe/haxe -cp src --run build.HaxeonBuild native release
+```
+
+On a fresh Windows checkout, run `scripts/setup.ps1` from a Visual Studio
+developer shell. It installs the pinned tools and selects the `windows-msvc`
+preset. Later native-only builds can use `scripts/build-native.ps1`. Unix
+environments may use `scripts/build-native.sh`. Set `HAXEON_CMAKE_PRESET` to
+override the wrapper's default preset.
+
+Pinned dependency versions, archive checksums, extraction, and submodule setup
+are defined once in `cmake/Bootstrap.cmake`. The platform setup scripts are
+thin launchers for that shared bootstrap rather than separate installers.
+
 Haxe sources use the repository-pinned Haxe Formatter:
 
 ```sh

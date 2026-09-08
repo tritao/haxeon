@@ -1,0 +1,56 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 24,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "dev",
+      "displayName": "Haxeon development",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/cmake/dev",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Haxeon release",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/cmake/release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "windows-msvc",
+      "displayName": "Windows MSVC development",
+      "inherits": "dev",
+      "binaryDir": "${sourceDir}/out/cmake/windows-msvc",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev",
+      "targets": ["haxeon-native"]
+    },
+    {
+      "name": "release",
+      "configurePreset": "release",
+      "targets": ["haxeon-native"]
+    },
+    {
+      "name": "windows-msvc",
+      "configurePreset": "windows-msvc",
+      "targets": ["haxeon-native"]
+    }
+  ]
+}

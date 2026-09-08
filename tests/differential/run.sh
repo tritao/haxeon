@@ -3,7 +3,7 @@ set -euo pipefail
 
 root_dir=$(cd "$(dirname "$0")/../.." && pwd)
 haxe="$root_dir/.tools/haxe/haxe"
-hl="$root_dir/vendor/hashlink/hl"
+hl="$root_dir/.tools/hashlink/hl"
 out_dir="$root_dir/out/differential"
 
 if [[ ! -x "$haxe" || ! -x "$hl" ]]; then
@@ -11,7 +11,7 @@ if [[ ! -x "$haxe" || ! -x "$hl" ]]; then
 	exit 1
 fi
 
-make -C "$root_dir/vendor/hashlink" -j2 libhl.so hl >/dev/null
+"$root_dir/scripts/build-native.sh" >/dev/null
 mkdir -p "$out_dir"
 
 run_case() {
@@ -36,10 +36,10 @@ run_case() {
 	if [[ "$reference_target" == interp ]]; then
 		"$haxe" -cp "$official_dir" -main Main --interp >"$official_log" 2>&1
 	else
-		LD_LIBRARY_PATH="$root_dir/vendor/hashlink" "$hl" "$official_output" >"$official_log" 2>&1
+		LD_LIBRARY_PATH="$root_dir/.tools/hashlink" "$hl" "$official_output" >"$official_log" 2>&1
 	fi
 	local official_status=$?
-	LD_LIBRARY_PATH="$root_dir/out:$root_dir/vendor/hashlink" "$hl" "$realtime_output" >"$realtime_log" 2>&1
+	LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink" "$hl" "$realtime_output" >"$realtime_log" 2>&1
 	local realtime_status=$?
 	set -e
 
