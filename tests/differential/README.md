@@ -18,10 +18,10 @@ prints `control:14`, agreeing with this compiler. The assignment `total += i`
 at `i == 2` must survive the throw. Other runtime fixtures use reference Haxe
 compiled to HashLink. The two source files for each new fixture are identical.
 
-## Remaining compiler limitation
+## No-return operands
 
-A call inferred as never returning is rejected in numeric operands, even if
-the function declares an `Int` result:
+A call inferred as never returning keeps its declared result while it is used
+as an operand:
 
 ```haxe
 function fail():Int { throw "stop"; }
@@ -32,8 +32,6 @@ function main():Int {
 }
 ```
 
-Accepting its `Never` type alone is insufficient: lowering then tries to emit
-an operation after the call's CFG terminator. This needs consistent propagation
-of expression termination through operand evaluation. The assignment fixture
-uses a throwing function with a possible return path to exercise exceptions
-without depending on this unfinished behavior.
+The call has no special no-return opcode in IR. Its runtime throw prevents the
+addition, while statement context still seals control flow for a standalone
+no-return call. The assignment fixture covers this behavior directly.

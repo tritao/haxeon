@@ -48,9 +48,7 @@ class Main {
 
 	static function fail():Int {
 		events += "X";
-		if (events.length > 0)
-			throw "stop";
-		return 0;
+		throw "stop";
 	}
 
 	static function swap(holder:Holder):Int {

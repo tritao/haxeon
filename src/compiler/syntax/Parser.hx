@@ -865,18 +865,9 @@ class Parser {
 				var span = expressionSpan(target).merge(end),
 					bindings:Array<AstStatement> = [];
 				if (assignmentKind != 0) {
-					var receiverName = "$compound:receiver:" + span.start,
-						indexName = "$compound:index:" + span.start;
-					switch target {
-						case Index(array, offset, targetSpan):
-							bindings.push(VarDeclaration(receiverName, null, array, expressionSpan(array)));
-							bindings.push(VarDeclaration(indexName, null, offset, expressionSpan(offset)));
-							target = Index(Variable(receiverName, expressionSpan(array)), Variable(indexName, expressionSpan(offset)), targetSpan);
-						case Member(object, field, targetSpan):
-							bindings.push(VarDeclaration(receiverName, null, object, expressionSpan(object)));
-							target = Member(Variable(receiverName, expressionSpan(object)), field, targetSpan);
-						default:
-					}
+					var stabilized = AssignmentTarget.stabilize(target, span, expressionSpan);
+					target = stabilized.target;
+					bindings = stabilized.bindings;
 				}
 				var assigned = assignmentKind == 0 ? value : assignmentKind == 1 ? Add(target, value,
 					expressionSpan(target).merge(expressionSpan(value))) : Sub(target, value, expressionSpan(target).merge(expressionSpan(value))),

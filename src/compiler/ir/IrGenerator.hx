@@ -493,6 +493,8 @@ class IrGenerator {
 					}
 				case TExpression(expression, _):
 					lowerExpression(expression, builder, localTypes);
+					if (expression.type == TNever)
+						builder.markUnreachable();
 			}
 		}
 	}
@@ -633,9 +635,9 @@ class IrGenerator {
 				builder.markUnreachable();
 				placeholder;
 			case TNoReturn(value):
-				var lowered = lowerExpression(value, builder, localTypes);
-				builder.markUnreachable();
-				lowered;
+				// Calls have no no-return marker in IR. Keep their declared result so
+				// surrounding operands can be lowered; statement context seals the CFG.
+				lowerExpression(value, builder, localTypes);
 			case TClassRef(_): throw "Class references are only valid for static members";
 			case TStaticField(name, field): builder.globalGet(name + "." + field, lowerType(expression.type));
 			case TNullableWrap(value):

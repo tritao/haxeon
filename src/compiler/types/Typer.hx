@@ -1081,7 +1081,11 @@ class Typer {
 								scope.refineExpression(entryPath, mapValue);
 							output.push(TMapAssign(typedArray, typedIndex, value, span));
 						default:
-							if (typedIndex.type != TInt)
+							if (typedIndex.type == TNever)
+								typedIndex = coerce(typedIndex, TInt, "array index", "E1014");
+							if (typedIndex.type == TNever)
+							typedIndex = coerce(typedIndex, TInt, "array index", "E1014");
+						if (typedIndex.type != TInt)
 								fail("E1014", "Array index must be Int", typedIndex.span);
 							var element = arrayElementType(typedArray.type, span);
 							var value = coerce(typeExpression(expression, scope, element), element, "array element", "E1002");
@@ -4114,6 +4118,10 @@ class Typer {
 
 	function arithmetic(a:AstExpression, b:AstExpression, scope:Scope, add:Bool, span:SourceSpan):TypedExpression {
 		var left = typeExpression(a, scope), right = typeExpression(b, scope);
+		if (left.type == TNever && isNumeric(right.type))
+			left = coerce(left, right.type, "arithmetic operand");
+		if (right.type == TNever && isNumeric(left.type))
+			right = coerce(right, left.type, "arithmetic operand");
 		if (add && (isStringConvertible(left.type) || isStringConvertible(right.type))) {
 			left = stringify(left);
 			right = stringify(right);
