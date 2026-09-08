@@ -13,10 +13,15 @@ Implicit conversions are deliberately limited:
 - An interface converts to its base interfaces.
 - A reference converts to a compatible `Null<T>`, and `null` converts to any
   nullable type.
-- Arrays are invariant. Maps and function values currently require equality.
-- Numeric types do not convert implicitly.
+- Arrays are invariant. Maps require equality.
+- Function values are contravariant in their arguments and covariant in their
+  result. Conversions preserve the declared callable type and adapt through the
+  runtime's checked function conversion.
+- `Int` converts to `Float`; other numeric conversions require explicit operations.
 
 Semantic conversions are represented explicitly in the typed AST. Declaration
 IDs, function-local binding IDs, and persistent runtime IDs are separate identity
-domains. Type-parameter symbols have a declaration representation, although the
-source language does not yet expose generic declarations.
+domains. A representation-preserving conversion still changes the semantic type
+of the expression; it must not silently replace an annotated binding's type.
+Generic declarations retain their semantic type arguments separately from their
+specialized runtime representation.

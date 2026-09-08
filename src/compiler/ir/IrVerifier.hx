@@ -48,103 +48,88 @@ class IrVerifier {
 
 	static function verifyFunction(fn:IrFunction, signatures:Map<String, {arguments:Array<IrType>, result:IrType}>, objects:Map<String, IrObject>,
 			interfaces:Map<String, IrInterface>, enums:Map<String, IrEnum>, globals:Map<String, IrType>):Void {
-		if (fn.blocks.length == 0)
-			throw 'IR function ${fn.name} has no entry block';
-		var blocks:Map<Int, IrBlock> = [], values:Map<Int, IrType> = [];
-		for (block in fn.blocks) {
-			if (blocks.exists(block.id))
-				throw 'Duplicate IR block ${block.id}';
-			blocks.set(block.id, block);
-		}
-		for (argument in fn.arguments)
+		var graph = new IrGraph(fn),
+			values:Map<Int, IrType> = [],
+			definitions:Map<Int, {block:Int, position:Int}> = [];
+		for (argument in fn.arguments) {
 			define(values, argument);
-		var reachable:Map<Int, Bool> = [], work = [fn.blocks[0].id];
-		while (work.length > 0) {
-			var id = work.pop();
-			if (reachable.exists(id))
-				continue;
-			if (!blocks.exists(id))
-				throw 'Unknown IR block $id in ${fn.name}';
-			var block = blocks.get(id);
-			reachable.set(id, true);
-			for (instruction in block.instructions)
-				switch instruction.value {
-					case BeginTry(catchBlock, afterBlock):
-						if (!blocks.exists(catchBlock))
-							throw 'Unknown IR block $catchBlock in ${fn.name}';
-						if (!blocks.exists(afterBlock))
-							throw 'Unknown IR block $afterBlock in ${fn.name}';
-						work.push(catchBlock);
+			definitions.set(argument.id, {block: fn.blocks[0].id, position: -1});
+		}
+		for (id in graph.order) {
+			var block = graph.block(id), ordinary = false;
+			for (position in 0...block.instructions.length) {
+				var instruction = block.instructions[position].value;
+				switch instruction {
+					case Phi(_, _):
+						if (ordinary)
+							throw "IR phis must precede ordinary instructions";
+					case BeginTry(_, _):
+						ordinary = true;
+						if (position != block.instructions.length - 1)
+							throw "IR trap entry must end its block";
 					default:
+						ordinary = true;
 				}
-			for (instruction in block.instructions)
-				switch instruction.value {
-					case Phi(out, _):
-						define(values, out);
-					default:
+				var output = IrOperands.output(instruction);
+				if (output != null) {
+					define(values, output);
+					definitions.set(output.id, {block: id, position: position});
 				}
-			for (instruction in block.instructions)
-				verifyInstruction(instruction.value, values, signatures, objects, interfaces, enums, globals);
-			var terminator = block.terminator;
-			if (terminator == null)
-				throw 'Reachable IR block $id in ${fn.name} has no terminator';
-			switch terminator.value {
-				case Return(value):
-					require(values, value);
-					if (!sameType(value.type, fn.result))
-						throw 'Wrong return type in ${fn.name}';
-				case Throw(value):
-					require(values, value);
-					if (value.type != Dyn)
-						throw 'IR throw value is not Dyn';
-				case Rethrow(value):
-					require(values, value);
-					if (value.type != Dyn)
-						throw 'IR rethrow value is not Dyn';
-				case Jump(target):
-					work.push(target);
-				case Branch(condition, yes, no):
-					require(values, condition);
-					if (!sameType(condition.type, Bool))
-						throw 'IR branch condition is not Bool';
-					work.push(yes);
-					work.push(no);
 			}
 		}
-		var predecessors:Map<Int, Map<Int, Bool>> = [];
-		for (block in fn.blocks) {
-			var terminator = block.terminator;
-			if (reachable.exists(block.id) && terminator != null)
-				switch terminator.value {
-					case Jump(target):
-						addPredecessor(predecessors, target, block.id);
-					case Branch(_, yes, no):
-						addPredecessor(predecessors, yes, block.id);
-						addPredecessor(predecessors, no, block.id);
+		for (id in graph.order) {
+			var block = graph.block(id);
+			for (position in 0...block.instructions.length) {
+				var instruction = block.instructions[position].value;
+				for (value in IrOperands.inputs(instruction))
+					verifyUse(value, id, position, values, definitions, graph);
+				switch instruction {
+					case Phi(out, inputs):
+						var expected = graph.predecessors.get(id),
+							seen:Map<Int, Bool> = [];
+						if (expected == null || inputs.length != expected.length)
+							throw 'Phi ${out.id} does not cover every predecessor';
+						for (input in inputs) {
+							if (expected.indexOf(input.block) < 0 || seen.exists(input.block))
+								throw 'Invalid phi predecessor ${input.block}';
+							seen.set(input.block, true);
+							verifyUse(input.value, input.block, graph.block(input.block).instructions.length, values, definitions, graph);
+							if (!sameType(input.value.type, out.type))
+								throw 'Wrong phi input type for ${out.id}';
+						}
 					default:
 				}
+				verifyInstruction(instruction, values, signatures, objects, interfaces, enums, globals);
+			}
+			var terminator = block.terminator;
+			if (terminator == null)
+				throw 'Reachable IR block $id has no terminator';
+			switch terminator.value {
+				case Return(value):
+					verifyUse(value, id, block.instructions.length, values, definitions, graph);
+					if (!sameType(value.type, fn.result))
+						throw 'Wrong return type in ${fn.name}';
+				case Throw(value), Rethrow(value):
+					verifyUse(value, id, block.instructions.length, values, definitions, graph);
+					if (value.type != Dyn)
+						throw "IR throw value is not Dyn";
+				case Branch(condition, _, _):
+					verifyUse(condition, id, block.instructions.length, values, definitions, graph);
+					if (condition.type != Bool)
+						throw "IR branch condition is not Bool";
+				case Jump(_):
+			}
 		}
-		for (block in fn.blocks)
-			if (reachable.exists(block.id))
-				for (instruction in block.instructions)
-					switch instruction.value {
-						case Phi(out, inputs):
-							if (!predecessors.exists(block.id))
-								throw 'Phi ${out.id} does not cover every predecessor';
-							var expected = predecessors.get(block.id),
-								seen:Map<Int, Bool> = [];
-							if (inputs.length != countKeys(expected))
-								throw 'Phi ${out.id} does not cover every predecessor';
-							for (input in inputs) {
-								if (!expected.exists(input.block) || seen.exists(input.block))
-									throw 'Invalid phi predecessor ${input.block}';
-								seen.set(input.block, true);
-								require(values, input.value);
-								if (!sameType(input.value.type, out.type))
-									throw 'Wrong phi input type for ${out.id}';
-							}
-						default:
-					}
+	}
+
+	static function verifyUse(value:IrValue, block:Int, position:Int, values:Map<Int, IrType>, definitions:Map<Int, {block:Int, position:Int}>,
+			graph:IrGraph):Void {
+		require(values, value);
+		var definition = definitions.get(value.id);
+		if (definition == null)
+			throw 'Unknown IR definition ${value.id}';
+		if (definition.block == block ? definition.position >= position : !graph.dominates(definition.block, block))
+			throw 'IR value ${value.id} does not dominate its use in block $block';
 	}
 
 	static function verifyInstruction(instruction:IrInstruction, values:Map<Int, IrType>, signatures, objects:Map<String, IrObject>,
@@ -153,54 +138,42 @@ class IrVerifier {
 			case Phi(_, _):
 			case ConstVoid(out):
 				expect(out, Void);
-				define(values, out);
 			case ConstInt(out, _):
 				expect(out, I32);
-				define(values, out);
 			case ConstFloat(out, _):
 				expect(out, F64);
-				define(values, out);
 			case ConstString(out, _):
 				expect(out, Bytes);
-				define(values, out);
 			case ConstBool(out, _):
 				expect(out, Bool);
-				define(values, out);
 			case ConstNull(out):
 				if (!isReference(out.type))
 					throw 'IR null constant must produce a reference value';
-				define(values, out);
 			case TypeValue(out, _):
 				expect(out, TypeRef);
-				define(values, out);
 			case ToDyn(out, value):
 				require(values, value);
 				if (out.type != Dyn)
 					throw 'IR dynamic conversion must produce Dyn';
-				define(values, out);
 			case IntToFloat(out, value):
 				require(values, value);
 				if (value.type != I32 || out.type != F64)
 					throw "IR Int-to-Float conversion requires I32 input and F64 output";
-				define(values, out);
 			case SafeCast(out, value):
 				require(values, value);
 				if (value.type != Dyn)
 					throw 'IR safe cast source must be Dyn';
-				define(values, out);
 			case BeginTry(catchBlock, afterBlock):
 			case EndTry(_):
 			case Catch(out):
 				if (out.type != Dyn)
 					throw 'IR catch value must be Dyn';
-				define(values, out);
 			case GlobalGet(out, name):
 				if (!globals.exists(name))
 					throw 'Unknown IR static field "$name"';
 				var type = globals.get(name);
 				if (!sameType(out.type, type))
 					throw 'Mismatched IR static field "$name" (declared=${Std.string(type)}, actual=${Std.string(out.type)})';
-				define(values, out);
 			case GlobalSet(name, value):
 				if (!globals.exists(name))
 					throw 'Unknown IR static field "$name"';
@@ -213,7 +186,6 @@ class IrVerifier {
 					throw "IR arithmetic requires matching numeric values";
 				require(values, a);
 				require(values, b);
-				define(values, out);
 			case Mod(out, a, b), BitAnd(out, a, b), BitXor(out, a, b), BitOr(out, a, b), ShiftLeft(out, a, b), ShiftRight(out, a, b),
 				UnsignedShiftRight(out, a, b):
 				expect(out, I32);
@@ -221,14 +193,12 @@ class IrVerifier {
 				expect(b, I32);
 				require(values, a);
 				require(values, b);
-				define(values, out);
 			case Less(out, a, b), LessEqual(out, a, b):
 				expect(out, Bool);
 				if (!sameType(a.type, b.type) || (a.type != I32 && a.type != F64))
 					throw 'IR ordered comparison requires matching Int or Float values';
 				require(values, a);
 				require(values, b);
-				define(values, out);
 			case Equal(out, a, b):
 				expect(out, Bool);
 				require(values, a);
@@ -236,7 +206,6 @@ class IrVerifier {
 				if (!sameType(a.type, b.type)
 					|| (!sameType(a.type, I32) && !sameType(a.type, F64) && !sameType(a.type, Bool) && !isReference(a.type)))
 					throw 'IR equality requires matching primitive or reference values';
-				define(values, out);
 			case Call(out, name, args):
 				if (!signatures.exists(name))
 					throw 'Unknown IR call "$name"';
@@ -250,14 +219,12 @@ class IrVerifier {
 				}
 				if (!sameType(out.type, signature.result) && !trustedNativeResult(name, out.type, signature.result))
 					throw 'Wrong IR result type for "$name"';
-				define(values, out);
 			case StaticClosure(out, name):
 				if (!signatures.exists(name))
 					throw 'Unknown IR closure target "$name"';
 				var signature = signatures.get(name);
 				if (!sameType(out.type, Function(signature.arguments, signature.result)))
 					throw 'Wrong IR closure type for "$name"';
-				define(values, out);
 			case InstanceClosure(out, name, receiver):
 				if (!signatures.exists(name))
 					throw 'Unknown or receiver-less IR closure target "$name"';
@@ -270,7 +237,6 @@ class IrVerifier {
 				var closureType:IrType = Function(signature.arguments.slice(1), signature.result);
 				if (!sameType(out.type, closureType))
 					throw 'Wrong IR instance closure type for "$name"';
-				define(values, out);
 			case CallClosure(out, closure, args):
 				require(values, closure);
 				var functionType = switch closure.type {
@@ -286,14 +252,12 @@ class IrVerifier {
 				}
 				if (!sameType(out.type, functionType.result))
 					throw 'Wrong IR closure result type';
-				define(values, out);
 			case ToVirtual(out, value):
 				require(values, value);
 				switch out.type {
 					case Virtual(_):
 					default: throw 'IR virtual conversion must produce a virtual value';
 				}
-				define(values, out);
 			case MethodCall(out, object, methodName, args):
 				var signature = methodSignature(object.type, methodName, signatures, objects, interfaces);
 				if (signature == null || signature.arguments.length != args.length + 1)
@@ -307,17 +271,14 @@ class IrVerifier {
 				}
 				if (!sameType(out.type, signature.result))
 					throw 'Wrong IR method result type';
-				define(values, out);
 			case NewObject(out, typeName):
 				if (!objects.exists(typeName) || !isObjectType(out.type, typeName))
 					throw 'Unknown or mismatched IR object "$typeName"';
-				define(values, out);
 			case FieldGet(out, object, fieldName):
 				var objectType = requireObject(object, values, objects),
 					field = findField(objectType, fieldName, objects);
 				if (field == null || !sameType(out.type, field.type))
 					throw 'Unknown or mismatched IR field "${objectType.name}.$fieldName"';
-				define(values, out);
 			case FieldSet(object, fieldName, value):
 				var objectType = requireObject(object, values, objects),
 					field = findField(objectType, fieldName, objects);
@@ -335,7 +296,6 @@ class IrVerifier {
 						if (!sameType(out.type, element)) throw 'IR array read has the wrong element type';
 					default: throw 'IR array read requires an Array value';
 				}
-				define(values, out);
 			case ArraySet(array, index, value):
 				require(values, array);
 				require(values, index);
@@ -353,7 +313,6 @@ class IrVerifier {
 					default: throw 'IR array size requires an Array value';
 				}
 				expect(out, I32);
-				define(values, out);
 			case MakeEnum(out, typeName, constructor, arguments):
 				if (!isEnumType(out.type, typeName, enums))
 					throw 'Unknown or mismatched IR enum "$typeName"';
@@ -370,7 +329,6 @@ class IrVerifier {
 					if (!sameType(arguments[i].type, constructorDecl.params[i]))
 						throw 'Wrong IR enum payload type for "$typeName"';
 				}
-				define(values, out);
 			case EnumIndex(out, value):
 				expect(out, I32);
 				require(values, value);
@@ -378,7 +336,6 @@ class IrVerifier {
 					case Enum(_):
 					default: throw 'IR enum index requires an enum value';
 				}
-				define(values, out);
 			case EnumField(out, value, constructor, field):
 				require(values, value);
 				var typeName = switch value.type {
@@ -393,7 +350,6 @@ class IrVerifier {
 				var constructorDecl = enumDecl.cases[constructor];
 				if (field < 0 || field >= constructorDecl.params.length || !sameType(out.type, constructorDecl.params[field]))
 					throw 'Invalid IR enum field';
-				define(values, out);
 		}
 
 	static function requireObject(value:IrValue, values:Map<Int, IrType>, objects:Map<String, IrObject>):IrObject {
@@ -489,24 +445,6 @@ class IrVerifier {
 		};
 	}
 
-	static function addPredecessor(map:Map<Int, Map<Int, Bool>>, target:Int, source:Int):Void {
-		var found:Map<Int, Bool>;
-		if (map.exists(target))
-			found = map.get(target);
-		else {
-			found = [];
-			map.set(target, found);
-		}
-		found.set(source, true);
-	}
-
-	static function countKeys(map:Map<Int, Bool>):Int {
-		var count = 0;
-		for (_ in map.keys())
-			count++;
-		return count;
-	}
-
 	static function addSignature(map:Map<String, {arguments:Array<IrType>, result:IrType}>, name:String, arguments:Array<IrType>, result:IrType):Void {
 		if (map.exists(name))
 			throw 'Duplicate IR function "$name"';
@@ -522,6 +460,8 @@ class IrVerifier {
 	static function require(values:Map<Int, IrType>, value:IrValue):Void {
 		if (!values.exists(value.id))
 			throw 'IR value ${value.id} is used before definition';
+		if (!sameType(values.get(value.id), value.type))
+			throw 'IR value ${value.id} disagrees with its definition type';
 	}
 
 	static function expect(value:IrValue, type:IrType):Void {

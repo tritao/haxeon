@@ -121,6 +121,21 @@ class IrGenerator {
 		return new CfgFunction(fn.name, arguments, lowerType(fn.result), builder.blocks, localTypes, builder.valueCount(), builder.debugLocals);
 	}
 
+	static function initializeLocal(name:String, value:CfgValue, builder:CfgBuilder, localTypes:Map<String, IrType>):Void {
+		localTypes.set(name, value.type);
+		builder.store(name, value);
+		var cellType = localTypes.get("__cell:" + name);
+		if (cellType != null)
+			switch cellType {
+				case Obj(cellClass):
+					var cell = builder.newObject(cellClass);
+					builder.fieldSet(cell, "value", value);
+					builder.store("$cell:" + name, cell);
+				default:
+					throw 'Invalid storage cell for "$name"';
+			}
+	}
+
 	static function lowerStatements(statements:Array<TypedStatement>, builder:CfgBuilder, localTypes:Map<String, IrType>, loops:Array<LoopContext>,
 			scopeEnd:Int):Void {
 		for (statement in statements) {
@@ -131,23 +146,15 @@ class IrGenerator {
 				case TDeclare(name, type, span):
 					localTypes.set(name, lowerType(type));
 					builder.debugLocal(name, span, scopeEnd);
+					var cellType = localTypes.get("__cell:" + name);
+					if (cellType != null)
+						switch cellType {
+							case Obj(cellClass): builder.store("$cell:" + name, builder.newObject(cellClass));
+							default: throw "Invalid exception cell type";
+						}
 				case TVar(name, initializer, span):
 					builder.debugLocal(name, span, scopeEnd);
-					var value = lowerExpression(initializer, builder, localTypes);
-					var cellKey = '__cell:$name';
-					if (!localTypes.exists(cellKey)) {
-						localTypes.set(name, lowerType(initializer.type));
-						builder.store(name, value);
-					} else {
-						var cellType = localTypes.get(cellKey);
-						var cellClass = switch cellType {
-							case Obj(name): name;
-							default: throw 'Invalid capture cell type for "$name"';
-						};
-						var cell = builder.newObject(cellClass);
-						builder.fieldSet(cell, "value", value);
-						builder.store('$' + 'cell:$name', cell);
-					}
+					initializeLocal(name, lowerExpression(initializer, builder, localTypes), builder, localTypes);
 				case TAssign(name, value, _):
 					builder.store(name, lowerExpression(value, builder, localTypes));
 				case TCellAssign(name, cellClass, value, _):
@@ -218,7 +225,7 @@ class IrGenerator {
 						localTypes.set(catchClause.name, catchIrType);
 						builder.debugLocal(catchClause.name, catchClause.span, catchClause.span.end);
 						var caught = builder.load(exceptionLocal, Dyn);
-						builder.store(catchClause.name, catchClause.type == TDynamic ? caught : builder.safeCast(caught, catchIrType));
+						initializeLocal(catchClause.name, catchClause.type == TDynamic ? caught : builder.safeCast(caught, catchIrType), builder, localTypes);
 						lowerStatements(catchClause.statements, builder, localTypes, loops, catchClause.span.end);
 						if (!builder.isTerminated()) {
 							catchActive = true;
@@ -398,10 +405,11 @@ class IrGenerator {
 					builder.select(bodyBlock);
 					var bodyArray = builder.load(arrayName, arrayType),
 						bodyIndex = builder.load(indexName, I32);
-					builder.store(name, builder.arrayGet(bodyArray, bodyIndex, elementType));
+					initializeLocal(name, builder.arrayGet(bodyArray, bodyIndex, elementType), builder, localTypes);
 					if (valueName != null)
-						builder.store(valueName,
-							lowerMapGet(builder, builder.load(mapName, lowerType(iterable.type)), builder.load(name, elementType), mapKey, mapValue));
+						initializeLocal(valueName,
+							lowerMapGet(builder, builder.load(mapName, lowerType(iterable.type)), builder.load(name, elementType), mapKey, mapValue), builder,
+							localTypes);
 					loops.push({
 						breakBlock: afterBlock,
 						continueBlock: conditionBlock,
@@ -449,7 +457,7 @@ class IrGenerator {
 						var subjectBinding = switchCase.subjectBinding;
 						if (subjectBinding != null && subjectBinding.length > 0) {
 							localTypes.set(subjectBinding, switchType);
-							builder.store(subjectBinding, builder.load(switchName, switchType));
+							initializeLocal(subjectBinding, builder.load(switchName, switchType), builder, localTypes);
 							builder.debugLocal(subjectBinding, switchCase.span, switchCase.span.end);
 						}
 						if (switchCase.constructorIndex >= 0)
@@ -458,7 +466,8 @@ class IrGenerator {
 								builder.debugLocal(binding.name, switchCase.span, switchCase.span.end);
 							}
 						for (binding in switchCase.bindings)
-							builder.store(binding.name, lowerEnumBinding(builder, builder.load(switchName, switchType), switchCase.constructorIndex, binding));
+							initializeLocal(binding.name,
+								lowerEnumBinding(builder, builder.load(switchName, switchType), switchCase.constructorIndex, binding), builder, localTypes);
 						var guard = switchCase.guard;
 						if (guard != null) {
 							builder.branch(lowerExpression(guard, builder, localTypes), bodyBlock, nextBlock);
@@ -538,6 +547,12 @@ class IrGenerator {
 			default: false;
 		};
 
+	static function referenceCastType(type:IrType):Bool
+		return switch type {
+			case Obj(_), Virtual(_), Function(_, _): true;
+			default: false;
+		};
+
 	static function abiBoundaryCast(builder:CfgBuilder, value:CfgValue, target:IrType):CfgValue {
 		if (sameIrType(value.type, target))
 			return value;
@@ -545,6 +560,8 @@ class IrGenerator {
 			return builder.toDyn(value);
 		if (value.type == Dyn)
 			return builder.safeCast(value, target);
+		if (referenceCastType(value.type) && referenceCastType(target))
+			return builder.safeCast(builder.toDyn(value), target);
 		throw 'Unsupported ABI boundary cast from ${value.type} to $target';
 	}
 
@@ -783,8 +800,9 @@ class IrGenerator {
 					target = lowerType(expression.type);
 				if (sameIrType(source.type,
 					target)) source; else if (source.type == Dyn) builder.safeCast(source,
-					target); else if (target == Dyn) builder.toDyn(source); else
-					throw 'Unsupported cast from ${source.type} to $target at ${expression.span.file.path}:${expression.span.start}';
+					target); else if (target == Dyn) builder.toDyn(source); else if (referenceCastType(source.type) && referenceCastType(target))
+					builder.safeCast(builder.toDyn(source),
+					target); else throw 'Unsupported cast from ${source.type} to $target at ${expression.span.file.path}:${expression.span.start}';
 			case TSwitchExpression(subject, cases, defaultExpression):
 				var subjectName = '$' + 'switch-expression-subject:${expression.span.start}',
 					resultName = '$' + 'switch-expression-result:${expression.span.start}',
@@ -846,11 +864,12 @@ class IrGenerator {
 					var subjectBinding = switchCase.subjectBinding;
 					if (subjectBinding != null && subjectBinding.length > 0) {
 						localTypes.set(subjectBinding, subjectType);
-						builder.store(subjectBinding, builder.load(subjectName, subjectType));
+						initializeLocal(subjectBinding, builder.load(subjectName, subjectType), builder, localTypes);
 					}
 					for (binding in switchCase.bindings) {
 						localTypes.set(binding.name, lowerType(binding.type));
-						builder.store(binding.name, lowerEnumBinding(builder, builder.load(subjectName, subjectType), switchCase.constructorIndex, binding));
+						initializeLocal(binding.name, lowerEnumBinding(builder, builder.load(subjectName, subjectType), switchCase.constructorIndex, binding),
+							builder, localTypes);
 					}
 					var guard = switchCase.guard;
 					if (guard != null) {
@@ -1168,8 +1187,9 @@ class IrGenerator {
 				builder.fieldSet(receiver, name, delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one));
 				oldValue;
 			case TPostfixIndex(array, index, delta):
-				var receiver = lowerExpression(array, builder, localTypes),
-					offset = lowerExpression(index, builder, localTypes),
+				var operands = lowerOperands([array, index], builder, localTypes),
+					receiver = operands[0],
+					offset = operands[1],
 					oldValue = builder.arrayGet(receiver, offset, lowerType(expression.type)),
 					one = incrementOne(expression.type, builder);
 				builder.arraySet(receiver, offset, delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one));
@@ -1186,26 +1206,18 @@ class IrGenerator {
 			case TStringLength(value):
 				builder.call("__string_length", [lowerExpression(value, builder, localTypes)], I32);
 			case TStringIndexOf(value, needle):
-				builder.call("__string_index_of", [
-					lowerExpression(value, builder, localTypes),
-					lowerExpression(needle, builder, localTypes)
-				], I32);
+				builder.call("__string_index_of", lowerOperands([value, needle], builder, localTypes), I32);
 			case TStringCharCodeAt(value, index):
-				builder.call("__string_char_code_at", [
-					lowerExpression(value, builder, localTypes),
-					lowerExpression(index, builder, localTypes)
-				], I32);
+				builder.call("__string_char_code_at", lowerOperands([value, index], builder, localTypes), I32);
 			case TStringCharAt(value, index):
-				builder.call("__string_char_at", [
-					lowerExpression(value, builder, localTypes),
-					lowerExpression(index, builder, localTypes)
-				], Bytes);
+				builder.call("__string_char_at", lowerOperands([value, index], builder, localTypes), Bytes);
 			case TStringFromCharCode(code):
 				builder.call("__string_from_char_code", [lowerExpression(code, builder, localTypes)], Bytes);
 			case TStringSubstring(value, start, end):
-				var loweredValue = lowerExpression(value, builder, localTypes),
-					loweredEnd = end == null ? builder.call("__string_length", [loweredValue], I32) : lowerExpression(end, builder, localTypes);
-				builder.call("__string_substring", [loweredValue, lowerExpression(start, builder, localTypes), loweredEnd], Bytes);
+				var operands = lowerOperands(end == null ? [value, start] : [value, start, end], builder, localTypes);
+				if (end == null)
+					operands.push(builder.call("__string_length", [operands[0]], I32));
+				builder.call("__string_substring", operands, Bytes);
 			case TArrayPush(array, value):
 				var element = switch array.type {
 					case TArray(valueType): valueType;

@@ -859,10 +859,27 @@ class Parser {
 			}
 			var assignmentKind = match(TokenKind.Assign) ? 0 : match(TokenKind.PlusAssign) ? 1 : match(TokenKind.MinusAssign) ? 2 : -1;
 			if (assignmentKind >= 0) {
-				var value = parseExpression(),
-					end = expressionEnd(value),
-					assigned = assignmentKind == 0 ? value : assignmentKind == 1 ? Add(target, value,
-						expressionSpan(target).merge(expressionSpan(value))) : Sub(target, value, expressionSpan(target).merge(expressionSpan(value))),
+				var value = parseExpression(), end = expressionEnd(value);
+				// Normalize compound lvalues before duplicating their read and write.
+				// The generated bindings cannot collide with source identifiers.
+				var span = expressionSpan(target).merge(end),
+					bindings:Array<AstStatement> = [];
+				if (assignmentKind != 0) {
+					var receiverName = "$compound:receiver:" + span.start,
+						indexName = "$compound:index:" + span.start;
+					switch target {
+						case Index(array, offset, targetSpan):
+							bindings.push(VarDeclaration(receiverName, null, array, expressionSpan(array)));
+							bindings.push(VarDeclaration(indexName, null, offset, expressionSpan(offset)));
+							target = Index(Variable(receiverName, expressionSpan(array)), Variable(indexName, expressionSpan(offset)), targetSpan);
+						case Member(object, field, targetSpan):
+							bindings.push(VarDeclaration(receiverName, null, object, expressionSpan(object)));
+							target = Member(Variable(receiverName, expressionSpan(object)), field, targetSpan);
+						default:
+					}
+				}
+				var assigned = assignmentKind == 0 ? value : assignmentKind == 1 ? Add(target, value,
+					expressionSpan(target).merge(expressionSpan(value))) : Sub(target, value, expressionSpan(target).merge(expressionSpan(value))),
 					assignment = switch target {
 						case Variable(name, _): Assignment(name, assigned, expressionSpan(target).merge(end));
 						case Index(array, offset, _): IndexAssignment(array, offset, assigned, expressionSpan(target).merge(end));
@@ -871,7 +888,10 @@ class Parser {
 							throw new CompileError(new Diagnostic("E0002", "Assignment target must be a variable, field, or array element",
 								expressionSpan(target)));
 					};
-				return assignment;
+				if (bindings.length == 0)
+					return assignment;
+				bindings.push(assignment);
+				return Expression(BlockExpression(bindings, IntegerLiteral(0, span), span), span);
 			}
 			position = saved;
 		}

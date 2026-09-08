@@ -8,6 +8,7 @@ enum ConversionPlan {
 	Identity;
 	IntToFloat;
 	AbstractCast;
+	ReferenceCast;
 	ToDynamic;
 	ToInterface(name:String);
 	WrapNullable;
@@ -36,12 +37,6 @@ class TypeRelations {
 		switch actual {
 			case TNullable(element) if (isReference(expected) && isAssignable(element, expected)):
 				return UnwrapNullable;
-			case TArray(actualElement):
-				switch expected {
-					case TArray(expectedElement) if (!equals(actualElement, expectedElement)):
-						return UnwrapNullable;
-					default:
-				}
 			default:
 		}
 		return switch expected {
@@ -57,8 +52,9 @@ class TypeRelations {
 								}
 							default: Identity;
 						}
-					default: Identity;
+					default: ReferenceCast;
 				}
+			case TFunction(_, _): ReferenceCast;
 			case TNullable(_): WrapNullable;
 			default: Identity;
 		};
@@ -108,7 +104,7 @@ class TypeRelations {
 				}
 			case TArray(expectedElement):
 				switch actual {
-					case TArray(actualElement): isAssignable(actualElement, expectedElement);
+					case TArray(actualElement): equals(actualElement, expectedElement);
 					default: false;
 				}
 			case TFunction(expectedArguments, expectedResult):

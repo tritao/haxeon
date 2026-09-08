@@ -23,7 +23,7 @@ class CaptureAnalysis {
 		collectAssignedLocals(statements, assigned);
 		collectDeclaredLocals(statements, declared);
 		collectMutableCaptureCandidates(statements, declared, mutableCaptures);
-		collectExceptionCellCandidates(statements, declared, exceptionCells);
+		collectExceptionCellCandidates(statements, [for (argument in arguments) argument => true], exceptionCells);
 		return {
 			assigned: assigned,
 			declared: declared,
@@ -32,35 +32,8 @@ class CaptureAnalysis {
 		};
 	}
 
-	public static function collectAssignedLocals(statements:Array<AstStatement>, names:Map<String, Bool>):Void {
-		for (statement in statements)
-			switch (statement) {
-				case Assignment(name, _, _):
-					if (name.indexOf(".") < 0)
-						names.set(name, true);
-				case Increment(name, _, _):
-					if (name.indexOf(".") < 0)
-						names.set(name, true);
-				case If(_, yes, no, _):
-					collectAssignedLocals(yes, names);
-					collectAssignedLocals(no, names);
-				case While(_, body, _):
-					collectAssignedLocals(body, names);
-				case DoWhile(body, _, _):
-					collectAssignedLocals(body, names);
-				case ForIn(_, _, _, body, _):
-					collectAssignedLocals(body, names);
-				case Switch(_, cases, defaultBranch, _, _):
-					for (switchCase in cases)
-						collectAssignedLocals(switchCase.statements, names);
-					collectAssignedLocals(defaultBranch, names);
-				case Try(tryBranch, catches, _):
-					collectAssignedLocals(tryBranch, names);
-					for (catchClause in catches)
-						collectAssignedLocals(catchClause.statements, names);
-				default:
-			}
-	}
+	public static function collectAssignedLocals(statements:Array<AstStatement>, names:Map<String, Bool>):Void
+		collectVariables(statements, names, true);
 
 	public static function collectDeclaredLocals(statements:Array<AstStatement>, names:Map<String, Bool>):Void {
 		for (statement in statements)
@@ -96,54 +69,56 @@ class CaptureAnalysis {
 			}
 	}
 
-	public static function collectVariables(statements:Array<AstStatement>, names:Map<String, Bool>):Void {
+	public static function collectVariables(statements:Array<AstStatement>, names:Map<String, Bool>, writesOnly:Bool = false):Void {
 		for (statement in statements)
 			switch statement {
 				case ErrorStatement(_):
 				case UninitializedDeclaration(_, _, _):
 				case VarDeclaration(_, _, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
-					collectExpressionVariables(expression, names);
+					collectExpressionVariables(expression, names, writesOnly);
 				case Assignment(name, expression, _):
-					names.set(pathRoot(name), true);
-					collectExpressionVariables(expression, names);
+					if (!writesOnly || name.indexOf(".") < 0)
+						names.set(pathRoot(name), true);
+					collectExpressionVariables(expression, names, writesOnly);
 				case IndexAssignment(array, offset, expression, _):
-					collectExpressionVariables(array, names);
-					collectExpressionVariables(offset, names);
-					collectExpressionVariables(expression, names);
+					collectExpressionVariables(array, names, writesOnly);
+					collectExpressionVariables(offset, names, writesOnly);
+					collectExpressionVariables(expression, names, writesOnly);
 				case FieldAssignment(object, _, expression, _):
-					collectExpressionVariables(object, names);
-					collectExpressionVariables(expression, names);
+					collectExpressionVariables(object, names, writesOnly);
+					collectExpressionVariables(expression, names, writesOnly);
 				case ReturnVoid(_):
 				case If(predicate, yes, no, _):
-					collectExpressionVariables(predicate, names);
-					collectVariables(yes, names);
-					collectVariables(no, names);
+					collectExpressionVariables(predicate, names, writesOnly);
+					collectVariables(yes, names, writesOnly);
+					collectVariables(no, names, writesOnly);
 				case While(predicate, body, _):
-					collectExpressionVariables(predicate, names);
-					collectVariables(body, names);
+					collectExpressionVariables(predicate, names, writesOnly);
+					collectVariables(body, names, writesOnly);
 				case DoWhile(body, predicate, _):
-					collectVariables(body, names);
-					collectExpressionVariables(predicate, names);
+					collectVariables(body, names, writesOnly);
+					collectExpressionVariables(predicate, names, writesOnly);
 				case ForIn(_, _, iterable, body, _):
-					collectExpressionVariables(iterable, names);
-					collectVariables(body, names);
+					collectExpressionVariables(iterable, names, writesOnly);
+					collectVariables(body, names, writesOnly);
 				case Switch(expression, cases, defaultBranch, _, _):
-					collectExpressionVariables(expression, names);
+					collectExpressionVariables(expression, names, writesOnly);
 					for (switchCase in cases) {
-						collectExpressionVariables(switchCase.value, names);
+						collectExpressionVariables(switchCase.value, names, writesOnly);
 						var guard = switchCase.guard;
 						if (guard != null)
-							collectExpressionVariables(guard, names);
-						collectVariables(switchCase.statements, names);
+							collectExpressionVariables(guard, names, writesOnly);
+						collectVariables(switchCase.statements, names, writesOnly);
 					}
-					collectVariables(defaultBranch, names);
+					collectVariables(defaultBranch, names, writesOnly);
 				case Try(tryBranch, catches, _):
-					collectVariables(tryBranch, names);
+					collectVariables(tryBranch, names, writesOnly);
 					for (catchClause in catches)
-						collectVariables(catchClause.statements, names);
+						collectVariables(catchClause.statements, names, writesOnly);
 				case Break(_), Continue(_):
 				case Increment(name, _, _):
-					names.set(pathRoot(name), true);
+					if (!writesOnly || name.indexOf(".") < 0)
+						names.set(pathRoot(name), true);
 			}
 	}
 
@@ -193,44 +168,68 @@ class CaptureAnalysis {
 	}
 
 	/**
-		Locals mutated in a protected region and observed by its handler need stable
-		storage: an exception can bypass SSA edge moves at any throwing instruction.
+		Conservatively keep outer locals written in a protected region in stable
+		storage, including values observed only after the handler returns. Names
+		here are candidates; the typer allocates cells per resolved binding ID.
 	**/
-	public static function collectExceptionCellCandidates(statements:Array<AstStatement>, declared:Map<String, Bool>, result:Map<String, Bool>):Void {
-		for (statement in statements)
+	public static function collectExceptionCellCandidates(statements:Array<AstStatement>, outer:Map<String, Bool>, result:Map<String, Bool>):Void {
+		var visible:Map<String, Bool> = [for (name in outer.keys()) name => true];
+		for (statement in statements) {
+			for (expression in compiler.syntax.AstChildren.statementExpressions(statement))
+				collectExceptionExpression(expression, visible, result);
 			switch statement {
+				case VarDeclaration(name, _, _, _), UninitializedDeclaration(name, _, _):
+					visible.set(name, true);
 				case Try(tryBranch, catches, _):
-					var assigned:Map<String, Bool> = [],
-						observed:Map<String, Bool> = [],
-						protectedLocals:Map<String, Bool> = [],
-						handlerLocals:Map<String, Bool> = [];
+					var assigned:Map<String, Bool> = [];
 					collectAssignedLocals(tryBranch, assigned);
-					collectDeclaredLocals(tryBranch, protectedLocals);
-					for (name in protectedLocals.keys())
-						assigned.remove(name);
-					for (catchClause in catches) {
-						collectVariables(catchClause.statements, observed);
-						collectDeclaredLocals(catchClause.statements, handlerLocals);
-					}
-					for (name in handlerLocals.keys())
-						observed.remove(name);
-					for (name in observed.keys())
-						if (assigned.exists(name) && declared.exists(name))
+					for (name in assigned.keys())
+						if (visible.exists(name))
 							result.set(name, true);
-					collectExceptionCellCandidates(tryBranch, declared, result);
-					for (catchClause in catches)
-						collectExceptionCellCandidates(catchClause.statements, declared, result);
+					collectExceptionCellCandidates(tryBranch, visible, result);
+					for (catchClause in catches) {
+						var caught:Map<String, Bool> = [for (name in visible.keys()) name => true];
+						caught.set(catchClause.name, true);
+						collectExceptionCellCandidates(catchClause.statements, caught, result);
+					}
 				case If(_, yes, no, _):
-					collectExceptionCellCandidates(yes, declared, result);
-					collectExceptionCellCandidates(no, declared, result);
-				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _):
-					collectExceptionCellCandidates(body, declared, result);
+					collectExceptionCellCandidates(yes, visible, result);
+					collectExceptionCellCandidates(no, visible, result);
+				case While(_, body, _), DoWhile(body, _, _):
+					collectExceptionCellCandidates(body, visible, result);
+				case ForIn(key, value, _, body, _):
+					var loop:Map<String, Bool> = [for (name in visible.keys()) name => true];
+					loop.set(key, true);
+					if (value != null)
+						loop.set(value, true);
+					collectExceptionCellCandidates(body, loop, result);
 				case Switch(_, cases, defaultBranch, _, _):
-					for (switchCase in cases)
-						collectExceptionCellCandidates(switchCase.statements, declared, result);
-					collectExceptionCellCandidates(defaultBranch, declared, result);
+					for (switchCase in cases) {
+						var arm:Map<String, Bool> = [for (name in visible.keys()) name => true];
+						collectExpressionVariables(switchCase.value, arm);
+						collectExceptionCellCandidates(switchCase.statements, arm, result);
+					}
+					collectExceptionCellCandidates(defaultBranch, visible, result);
 				default:
 			}
+		}
+	}
+
+	static function collectExceptionExpression(expression:AstExpression, visible:Map<String, Bool>, result:Map<String, Bool>):Void {
+		switch expression {
+			case BlockExpression(statements, value, _):
+				collectExceptionCellCandidates(statements, visible, result);
+				var inner:Map<String, Bool> = [for (name in visible.keys()) name => true];
+				for (statement in statements)
+					switch statement {
+						case VarDeclaration(name, _, _, _), UninitializedDeclaration(name, _, _): inner.set(name, true);
+						default:
+					}
+				collectExceptionExpression(value, inner, result);
+			default:
+				for (child in compiler.syntax.AstChildren.expressions(expression))
+					collectExceptionExpression(child, visible, result);
+		}
 	}
 
 	public static function collectMutableCaptureExpression(expression:AstExpression, outerDeclared:Map<String, Bool>, result:Map<String, Bool>):Void
@@ -328,93 +327,99 @@ class CaptureAnalysis {
 				ErrorExpression(_), NewMap(_, _, _):
 		}
 
-	public static function collectExpressionVariables(expression:AstExpression, names:Map<String, Bool>):Void
+	public static function collectExpressionVariables(expression:AstExpression, names:Map<String, Bool>, writesOnly:Bool = false):Void
 		switch expression {
 			case Variable(name, _):
-				names.set(pathRoot(name), true);
+				if (!writesOnly)
+					names.set(pathRoot(name), true);
 			case Member(object, _, _):
-				collectExpressionVariables(object, names);
+				collectExpressionVariables(object, names, writesOnly);
 			case MethodCall(object, _, arguments, _):
-				collectExpressionVariables(object, names);
+				collectExpressionVariables(object, names, writesOnly);
 				for (argument in arguments)
-					collectExpressionVariables(argument, names);
+					collectExpressionVariables(argument, names, writesOnly);
 			case Call(name, arguments, _):
-				names.set(pathRoot(name), true);
+				if (!writesOnly)
+					names.set(pathRoot(name), true);
 				for (argument in arguments)
-					collectExpressionVariables(argument, names);
+					collectExpressionVariables(argument, names, writesOnly);
 			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _),
 				BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _), UnsignedShiftRight(left, right, _),
 				Less(left, right, _), LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _),
 				NotEqual(left, right, _):
-				collectExpressionVariables(left, names);
-				collectExpressionVariables(right, names);
+				collectExpressionVariables(left, names, writesOnly);
+				collectExpressionVariables(right, names, writesOnly);
 			case Negate(value, _):
-				collectExpressionVariables(value, names);
+				collectExpressionVariables(value, names, writesOnly);
 			case Not(value, _):
-				collectExpressionVariables(value, names);
+				collectExpressionVariables(value, names, writesOnly);
 			case And(left, right, _), Or(left, right, _):
-				collectExpressionVariables(left, names);
-				collectExpressionVariables(right, names);
+				collectExpressionVariables(left, names, writesOnly);
+				collectExpressionVariables(right, names, writesOnly);
 			case Conditional(predicate, whenTrue, whenFalse, _):
 				for (item in [predicate, whenTrue, whenFalse])
-					collectExpressionVariables(item, names);
+					collectExpressionVariables(item, names, writesOnly);
 			case BlockExpression(statements, value, _):
-				collectVariables(statements, names);
-				collectExpressionVariables(value, names);
+				collectVariables(statements, names, writesOnly);
+				collectExpressionVariables(value, names, writesOnly);
 			case ThrowExpression(value, _):
-				collectExpressionVariables(value, names);
+				collectExpressionVariables(value, names, writesOnly);
 			case Cast(value, _, _):
-				collectExpressionVariables(value, names);
+				collectExpressionVariables(value, names, writesOnly);
 			case SwitchExpression(subject, cases, fallback, _):
-				collectExpressionVariables(subject, names);
+				collectExpressionVariables(subject, names, writesOnly);
 				for (switchCase in cases) {
-					collectExpressionVariables(switchCase.value, names);
+					collectExpressionVariables(switchCase.value, names, writesOnly);
 					var guard = switchCase.guard;
 					if (guard != null)
-						collectExpressionVariables(guard, names);
-					collectExpressionVariables(switchCase.result, names);
+						collectExpressionVariables(guard, names, writesOnly);
+					collectExpressionVariables(switchCase.result, names, writesOnly);
 				}
 				var resolvedFallback = fallback;
 				if (resolvedFallback != null)
-					collectExpressionVariables(resolvedFallback, names);
+					collectExpressionVariables(resolvedFallback, names, writesOnly);
 			case ObjectLiteral(fields, _):
 				for (field in fields)
-					collectExpressionVariables(field.value, names);
+					collectExpressionVariables(field.value, names, writesOnly);
 			case ArrayLiteral(values, _):
 				for (value in values)
-					collectExpressionVariables(value, names);
+					collectExpressionVariables(value, names, writesOnly);
 			case MapLiteral(entries, _):
 				for (entry in entries) {
-					collectExpressionVariables(entry.key, names);
-					collectExpressionVariables(entry.value, names);
+					collectExpressionVariables(entry.key, names, writesOnly);
+					collectExpressionVariables(entry.value, names, writesOnly);
 				}
 			case ArrayComprehension(_, _, iterable, predicate, value, _):
-				collectExpressionVariables(iterable, names);
+				collectExpressionVariables(iterable, names, writesOnly);
 				if (predicate != null)
-					collectExpressionVariables(predicate, names);
-				collectExpressionVariables(value, names);
+					collectExpressionVariables(predicate, names, writesOnly);
+				collectExpressionVariables(value, names, writesOnly);
 			case MapComprehension(_, _, iterable, predicate, key, value, _):
-				collectExpressionVariables(iterable, names);
+				collectExpressionVariables(iterable, names, writesOnly);
 				if (predicate != null)
-					collectExpressionVariables(predicate, names);
-				collectExpressionVariables(key, names);
-				collectExpressionVariables(value, names);
+					collectExpressionVariables(predicate, names, writesOnly);
+				collectExpressionVariables(key, names, writesOnly);
+				collectExpressionVariables(value, names, writesOnly);
 			case Range(start, rangeEnd, _):
-				collectExpressionVariables(start, names);
-				collectExpressionVariables(rangeEnd, names);
+				collectExpressionVariables(start, names, writesOnly);
+				collectExpressionVariables(rangeEnd, names, writesOnly);
 			case New(_, arguments, _), NewGeneric(_, _, arguments, _):
 				for (argument in arguments)
-					collectExpressionVariables(argument, names);
+					collectExpressionVariables(argument, names, writesOnly);
 			case NewArray(_, length, _):
-				collectExpressionVariables(length, names);
+				collectExpressionVariables(length, names, writesOnly);
 			case NewMap(_, _, _):
 			case Index(array, offset, _):
-				collectExpressionVariables(array, names);
-				collectExpressionVariables(offset, names);
+				collectExpressionVariables(array, names, writesOnly);
+				collectExpressionVariables(offset, names, writesOnly);
 			case PostfixIncrement(target, _, _):
-				collectExpressionVariables(target, names);
+				switch target {
+					case Variable(name, _) if (writesOnly && name.indexOf(".") < 0): names.set(name, true);
+					default: collectExpressionVariables(target, names, writesOnly);
+				}
 			case Lambda(_, body, _):
-				collectVariables(body, names);
+				if (!writesOnly)
+					collectVariables(body, names);
 			case IntegerLiteral(_, _):
 				return;
 			case FloatLiteral(_, _):

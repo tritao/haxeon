@@ -8,7 +8,11 @@ class BodyContext {
 	public final lexicalOwner:Null<String>;
 	public final typeSubstitutions:Map<String, CompilerType>;
 	public final assigned:Map<String, Bool> = [];
+
+	/** Candidate source names; actual storage is keyed by resolved binding IDs. */
 	public final cells:Map<String, String> = [];
+
+	public final boundCells:Map<String, String> = [];
 	public final cellTypes:Map<String, CompilerType> = [];
 	public final cellKinds:Map<String, compiler.types.TypedAst.CellStorageKind> = [];
 	public final localExpectedTypes:Map<String, CompilerType> = [];

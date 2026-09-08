@@ -787,12 +787,8 @@ class Typer {
 		for (argument in fn.arguments) {
 			var type = argumentType(argument);
 			scope.define(argument.name, type, argument.span);
-			if (context.cells.exists(argument.name))
-				context.cellTypes.set(argument.name, type);
-			var argumentId = argument.name;
-			if (!context.cells.exists(argument.name))
-				argumentId = scope.requireId(argument.name);
-			arguments.push({name: argumentId, type: type});
+			bindCell(argument.name, scope, type);
+			arguments.push({name: scope.requireId(argument.name), type: type});
 		}
 		var result = lowerType(fn.result);
 		context.resultType = result;
@@ -821,17 +817,33 @@ class Typer {
 			arguments: arguments,
 			result: result,
 			statements: statements,
-			cells: copyMap(context.cells),
+			cells: copyMap(context.boundCells),
 			cellCaptures: [],
 			span: fn.span
 		};
-		for (name in context.cells.keys()) {
+		for (name in context.boundCells.keys()) {
 			if (context.cellTypes.exists(name) && context.cellKinds.exists(name))
-				closureConversion.addCell(requiredMapValue(context.cells, name), requiredMapValue(context.cellTypes, name),
+				closureConversion.addCell(requiredMapValue(context.boundCells, name), requiredMapValue(context.cellTypes, name),
 					requiredMapValue(context.cellKinds, name));
 		}
 		leaveBody(functionContext);
 		return resultFunction;
+	}
+
+	function boundCell(name:String, scope:Scope):Null<String> {
+		var id = scope.resolveId(name);
+		return id == null ? null : context.boundCells.get(id);
+	}
+
+	function bindCell(name:String, scope:Scope, type:CompilerType):Void {
+		if (!context.cells.exists(name))
+			return;
+		var id = scope.requireId(name);
+		if (!context.boundCells.exists(id)) {
+			context.boundCells.set(id, requiredMapValue(context.cells, name) + ":" + id);
+			context.cellTypes.set(id, type);
+			context.cellKinds.set(id, requiredMapValue(context.cellKinds, name));
+		}
 	}
 
 	function typeStatements(statements:Array<AstStatement>, scope:Scope, result:Null<CompilerType>):Array<TypedStatement> {
@@ -848,9 +860,10 @@ class Typer {
 					continue;
 				case UninitializedDeclaration(name, declared, span):
 					var declaredType = lowerType(declared);
-					if (context.cells.exists(name))
+					if (context.cells.exists(name) && context.cellKinds.get(name) == MutableCapture)
 						fail("E1023", 'Captured local "$name" must be initialized at its declaration', span);
 					scope.define(name, declaredType, span, false);
+					bindCell(name, scope, declaredType);
 					output.push(TDeclare(scope.requireId(name), declaredType, span));
 				case VarDeclaration(name, declared, initializer, span):
 					var declaredType:Null<CompilerType>;
@@ -874,9 +887,8 @@ class Typer {
 					}
 					if (!predeclared)
 						scope.define(name, value.type, span);
-					if (context.cells.exists(name))
-						context.cellTypes.set(name, value.type);
-					output.push(TVar(context.cells.exists(name) ? name : scope.requireId(name), value, span));
+					bindCell(name, scope, value.type);
+					output.push(TVar(scope.requireId(name), value, span));
 				case Return(expression, span):
 					var expected = result == null ? context.inferredResult : result;
 					var value = typeExpression(expression, scope, expected);
@@ -924,6 +936,7 @@ class Typer {
 						var catchScope = new Scope(scope);
 						catchScopes.push(catchScope);
 						catchScope.define(catchClause.name, loweredCatchType, catchClause.span);
+						bindCell(catchClause.name, catchScope, loweredCatchType);
 						typedCatches.push({
 							name: catchScope.requireId(catchClause.name),
 							type: loweredCatchType,
@@ -980,8 +993,8 @@ class Typer {
 						if (!scope.isCellCapture(name))
 							fail("E1013", 'Captured variable "$name" requires mutable capture cells', span);
 						output.push(TCellCapturedIncrement(name, scope.requireCellClass(name), current, delta, span));
-					} else if (context.cells.exists(name))
-						output.push(TCellIncrement(name, requiredMapValue(context.cells, name), current, delta, span));
+					} else if (boundCell(name, scope) != null)
+						output.push(TCellIncrement(scope.requireId(name), requiredString(boundCell(name, scope)), current, delta, span));
 					else
 						output.push(TIncrement(scope.requireId(name), delta, span));
 				case Assignment(name, expression, span):
@@ -1018,8 +1031,8 @@ class Typer {
 								if (!scope.isCellCapture(name))
 									fail("E1013", 'Captured variable "$name" requires mutable capture cells', span);
 								output.push(TCellCapturedAssign(name, scope.requireCellClass(name), value, span));
-							} else if (context.cells.exists(name))
-								output.push(TCellAssign(name, requiredMapValue(context.cells, name), value, span));
+							} else if (boundCell(name, scope) != null)
+								output.push(TCellAssign(scope.requireId(name), requiredString(boundCell(name, scope)), value, span));
 							else
 								output.push(TAssign(scope.requireId(name), value, span));
 							scope.markAssigned(name);
@@ -1162,6 +1175,7 @@ class Typer {
 					};
 					var loopScope = new Scope(scope);
 					loopScope.define(name, element, span);
+					bindCell(name, loopScope, element);
 					if (valueName == null)
 						switch originalIterable.expression {
 							case TCollectionCall(map, "keys", []):
@@ -1175,7 +1189,9 @@ class Typer {
 						}
 					if (valueName != null)
 						switch originalIterable.type {
-							case TMap(_, value): loopScope.define(valueName, value, span);
+							case TMap(_, value):
+								loopScope.define(valueName, value, span);
+								bindCell(valueName, loopScope, value);
 							default: fail("E1014", "Key/value for-in requires a Map", span);
 						}
 					context.loopEarlyExits[context.loopDepth] = true;
@@ -1702,6 +1718,7 @@ class Typer {
 								predicates.push(typeEnumPredicate(arguments[index], parameterType, storageType, index, constantName));
 							} else {
 								scope.define(binding, parameterType, bindingSpan);
+								bindCell(binding, scope, parameterType);
 								bindings.push({
 									name: scope.requireId(binding),
 									type: parameterType,
@@ -1732,6 +1749,7 @@ class Typer {
 											case Variable(binding, bindingSpan):
 												if (binding != "_") {
 													scope.define(binding, elementType, bindingSpan);
+													bindCell(binding, scope, elementType);
 													bindings.push({
 														name: scope.requireId(binding),
 														type: elementType,
@@ -1766,6 +1784,9 @@ class Typer {
 	function switchSubjectBinding(value:AstExpression, expected:CompilerType, scope:Scope):Null<String> {
 		return switch value {
 			case Variable(name, span):
+				// A qualified name denotes a constant, never a new pattern binding.
+				if (name.indexOf(".") >= 0)
+					return null;
 				var info = enumCaseInfo(name);
 				if (info == null && name.indexOf(".") < 0) {
 					var expectedEnum = enumName(expected);
@@ -1774,6 +1795,7 @@ class Typer {
 				}
 				if (info != null) null; else if (name == "_") ""; else {
 					scope.define(name, expected, span);
+					bindCell(name, scope, expected);
 					scope.requireId(name);
 				}
 			default: null;
@@ -1900,8 +1922,9 @@ class Typer {
 					if (!scope.isAssigned(name))
 						fail("E1023", 'Local "$name" may be used before assignment', span);
 					new TypedExpression(scope.isCapture(name) ? (scope.isCellCapture(name) ? TCellCaptured(name,
-						scope.requireCellClass(name)) : TCaptured(name)) : (context.cells.exists(name) ? TCellLocal(name,
-							requiredMapValue(context.cells, name)) : TLocal(name == "this" ? name : scope.requireId(name))),
+						scope.requireCellClass(name)) : TCaptured(name)) : (boundCell(name,
+							scope) != null ? TCellLocal(scope.requireId(name),
+								requiredString(boundCell(name, scope))) : TLocal(name == "this" ? name : scope.requireId(name))),
 						type, span);
 				} else {
 					var localMethod = lexicalMethod(name);
@@ -2078,8 +2101,12 @@ class Typer {
 					if (scope.resolve("this") != null)
 						for (name in freeVariables.keys()) {
 							if (scope.resolve(name) == null) {
-								var method = lexicalMethod(name), receiverType = scope.resolve("this");
-								if (method != null && !method.isStatic || receiverType != null && findFieldType(receiverType, name) != null)
+								var method = lexicalMethod(name),
+									receiverType = scope.resolve("this");
+								if (method != null
+									&& !method.isStatic
+									|| receiverType != null
+									&& findFieldType(receiverType, name) != null)
 									freeVariables.set("this", true);
 							}
 						}
@@ -2092,21 +2119,21 @@ class Typer {
 							if (capturedType != null) {
 								var captureType:CompilerType = capturedType;
 								var cellClass:Null<String> = null;
-								if (context.cells.exists(name))
-									cellClass = requiredMapValue(context.cells, name);
+								if (boundCell(name, scope) != null)
+									cellClass = boundCell(name, scope);
 								if (cellClass == null && scope.isCellCapture(name))
 									cellClass = scope.requireCellClass(name);
 								if (cellClass == null && context.assigned.exists(name)) {
 									var newCellClass = '$' + 'cell:' + context.name + ':' + name;
-									cellClass = newCellClass;
 									context.cells.set(name, newCellClass);
-									context.cellTypes.set(name, captureType);
 									context.cellKinds.set(name, MutableCapture);
+									bindCell(name, scope, captureType);
+									cellClass = boundCell(name, scope);
 								}
 								var bindingId = scope.requireId(name),
 									captureSource:TypedCaptureSource = if (scope.isCellCapture(name)) CaptureCellEnvironmentField(name,
 										scope.requireCellClass(name)) else if (scope.isCapture(name)) CaptureEnvironmentField(name) else if (cellClass != null)
-										CaptureCellLocal(name, cellClass) else if (scope.isReceiver(name)) CaptureReceiver else CaptureLocal(bindingId);
+										CaptureCellLocal(bindingId, cellClass) else if (scope.isReceiver(name)) CaptureReceiver else CaptureLocal(bindingId);
 								lambdaScope.defineCapture(name, captureType, span, cellClass != null, cellClass, bindingId);
 								if (cellClass != null)
 									captureCells.set(name, cellClass);
@@ -2145,6 +2172,15 @@ class Typer {
 						context.cells.set(name, '$' + 'cell:' + lambdaName + ':' + name);
 						context.cellKinds.set(name, MutableCapture);
 					}
+					var exceptionCandidates:Map<String, Bool> = [];
+					CaptureAnalysis.collectExceptionCellCandidates(body, [for (argument in arguments) argument.name => true], exceptionCandidates);
+					for (name in exceptionCandidates.keys())
+						if (!context.cells.exists(name)) {
+							context.cells.set(name, "$cell:" + lambdaName + ":" + name);
+							context.cellKinds.set(name, ExceptionEdge);
+						}
+					for (i in 0...arguments.length)
+						bindCell(arguments[i].name == "_" ? "$discard:" + i : arguments[i].name, typedBodyScope, lambdaArguments[i].type);
 					var typedBody = typeStatements(body, typedBodyScope, expectedFunction == null
 						|| inferContextualResult ? null : expectedFunction.result);
 					var inferredResult:CompilerType;
@@ -2155,12 +2191,9 @@ class Typer {
 						inferredResult = contextualResult == null ? CompilerType.TVoid : contextualResult;
 					}
 					context.resultType = inferredResult;
-					var lambdaCells = copyMap(context.cells),
+					var lambdaCells = copyMap(context.boundCells),
 						lambdaCellTypes = copyMap(context.cellTypes),
 						lambdaCellKinds = copyMap(context.cellKinds);
-					for (i in 0...lambdaArguments.length)
-						if (lambdaCells.exists(arguments[i].name))
-							lambdaArguments[i] = {name: arguments[i].name, type: lambdaArguments[i].type};
 					leaveBody(lambdaContext);
 					if (inferredResult != TVoid
 						&& !ControlFlow.alwaysReturns(typedBody, function(type, cases) return this.exhaustiveEnum(type, cases)))
@@ -2703,14 +2736,18 @@ class Typer {
 					new TypedExpression(TClosureCall(typeExpression(Variable(name, span), scope), typed), functionType.result, span);
 				} else {
 					if (name.indexOf(".") < 0) {
-						var thisType = scope.resolve("this"), fieldType = thisType == null ? null : findFieldType(thisType, name);
+						var thisType = scope.resolve("this"),
+							fieldType = thisType == null ? null : findFieldType(thisType, name);
 						if (fieldType != null) {
 							var fieldCallable = typeExpression(Variable(name, span), scope);
 							switch fieldCallable.type {
 								case TFunction(argumentTypes, result):
 									if (arguments.length != argumentTypes.length)
 										fail("E1008", 'Function field "$name" expects ${argumentTypes.length} arguments, got ${arguments.length}', span);
-									var typed = [for (index in 0...arguments.length) typeExpression(arguments[index], scope, argumentTypes[index])];
+									var typed = [
+										for (index in 0...arguments.length)
+											typeExpression(arguments[index], scope, argumentTypes[index])
+									];
 									typed = coerceArguments(typed, argumentTypes, name);
 									return new TypedExpression(TClosureCall(fieldCallable, typed), result, span);
 								default: fail("E1007", 'Cannot call non-function field "$name"', span);
@@ -3365,15 +3402,18 @@ class Typer {
 		return applyCallEffect(abiBoundaryCast(call, semanticResult), methodKey);
 	}
 
-	function typeFunctionFieldCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan,
-			scope:Scope):Null<TypedExpression> {
+	function typeFunctionFieldCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):Null<TypedExpression> {
 		var callableFieldType = findFieldType(receiver.type, name);
-		if (callableFieldType == null) return null;
+		if (callableFieldType == null)
+			return null;
 		return switch callableFieldType {
 			case TFunction(argumentTypes, result):
 				if (arguments.length != argumentTypes.length)
 					fail("E1008", 'Function field "$name" expects ${argumentTypes.length} arguments, got ${arguments.length}', span);
-				var typed = [for (index in 0...arguments.length) typeExpression(arguments[index], scope, argumentTypes[index])];
+				var typed = [
+					for (index in 0...arguments.length)
+						typeExpression(arguments[index], scope, argumentTypes[index])
+				];
 				typed = coerceArguments(typed, argumentTypes, name);
 				new TypedExpression(TClosureCall(typedMember(receiver, name, span), typed), result, span);
 			default:

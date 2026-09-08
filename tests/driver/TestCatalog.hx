@@ -32,6 +32,7 @@ typedef ExecutableCase = {
 class TestCatalog {
 	static final compilerMains = [
 		"TestMain",
+		"AuditVerifierMain",
 		"ExternMain",
 		"CaptureAnalysisMain",
 		"ModuleCanonicalizerMain",

@@ -73,4 +73,5 @@ run_case fibonacci
 run_case control-flow
 run_case nullable
 run_case observable-output
+run_case compiler-audit
 run_compile_failure type-error

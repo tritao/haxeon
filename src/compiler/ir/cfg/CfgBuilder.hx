@@ -120,6 +120,11 @@ class CfgBuilder {
 	public function beginTry(catchBlock:CfgBlock, afterBlock:CfgBlock):Void {
 		emit(BeginTry(catchBlock.id, afterBlock.id));
 		activeTraps.push(catchBlock.id);
+		// Handler state belongs to trap entry, never to definitions after a call
+		// that can throw. Keep the protected body in a separate basic block.
+		var protectedBody = createBlock();
+		jump(protectedBody);
+		select(protectedBody);
 	}
 
 	public function endTry():Void {
