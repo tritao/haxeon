@@ -754,6 +754,9 @@ class IrGenerator {
 				lowerType(a.type) == Bytes ? builder.call("__string_equal", [left, right], Bool)
 					: lowerType(a.type) == Dyn || lowerType(b.type) == Dyn ? builder.call("__dynamic_equal", [left, right], Bool)
 					: builder.equal(left, right);
+			case TCall("__std_is_of_type", args):
+				if (args.length != 2) throw "Std.isOfType intrinsic requires value and type operands";
+				builder.call("__std_is_of_type", [lowerExpression(args[0], builder, localTypes), builder.typeValue(lowerType(args[1].type))], Bool);
 			case TCall(name, args): builder.call(name, lowerOperands(args, builder, localTypes), lowerType(expression.type));
 			case TCollectionCall(receiver, operation, args):
 				var nativeName = switch receiver.type {

@@ -2664,6 +2664,30 @@ class Typer {
 			case Call(name, arguments, span):
 				if (name == "super")
 					return typeSuperCall(arguments, span, scope);
+				if (name == "Std.isOfType") {
+					if (arguments.length != 2)
+						fail("E1008", 'Function "Std.isOfType" expects 2 arguments, got ${arguments.length}', span);
+					var targetName = switch arguments[1] {
+						case Variable(value, _): value;
+						default: fail("E1009", "Std.isOfType expects a type as its second argument", span); "";
+					};
+					if (scope.resolve(targetName) != null)
+						fail("E1009", "Std.isOfType expects a type as its second argument", span);
+					var targetType:CompilerType = switch targetName {
+						case "Int": TInt;
+						case "Float": TFloat;
+						case "Bool": TBool;
+						case "String": TString;
+						case "Array": TArray(TDynamic);
+						default:
+							if (!classDecls.exists(targetName) && !interfaceDecls.exists(targetName) && !enumDecls.exists(targetName))
+								fail("E1007", 'Unknown type "$targetName"', span);
+							declarations.resolve(NamedType(targetName), span);
+					};
+					var value = coerce(typeExpression(arguments[0], scope), TDynamic, "Std.isOfType value", "E1002"),
+						target = new TypedExpression(TClassRef(targetName), targetType, span);
+					return new TypedExpression(TCall("__std_is_of_type", [value, target]), TBool, span);
+				}
 				if (name == "Reflect.compare") {
 					if (arguments.length != 2)
 						fail("E1008", 'Function "Reflect.compare" expects 2 arguments, got ${arguments.length}', span);

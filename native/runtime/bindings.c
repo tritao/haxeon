@@ -292,3 +292,4 @@ DEFINE_PRIM(_F64,__date_get_time,_ABSTRACT(realtime_date));
 DEFINE_PRIM(_BYTES,__array_join_bytes,_ARR _BYTES);
 DEFINE_PRIM(_BYTES,__string_substring,_BYTES _I32 _I32);
 DEFINE_PRIM(_BOOL,__exception_matches,_DYN _TYPE);
+DEFINE_PRIM(_BOOL,__std_is_of_type,_DYN _TYPE);

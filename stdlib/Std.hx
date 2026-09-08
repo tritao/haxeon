@@ -55,4 +55,9 @@ class Std {
 	public static inline function random(limit:Int):Int {
 		return stdRandom(limit);
 	}
+
+	/** Runtime type test lowered intrinsically by the Haxeon compiler. */
+	public static function isOfType(value:Dynamic, type:Dynamic):Bool {
+		return false;
+	}
 }

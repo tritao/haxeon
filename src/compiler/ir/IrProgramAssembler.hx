@@ -223,6 +223,7 @@ class IrProgramAssembler {
 		var needsArrayRuntime = false,
 			needsStringRuntime = false,
 			needsExceptionRuntime = false,
+			needsTypeTestRuntime = false,
 			mapRuntimeNames:Map<String, Bool> = [];
 		for (fn in allFunctions)
 			for (block in fn.blocks)
@@ -231,6 +232,8 @@ class IrProgramAssembler {
 						case Call(_, name, _):
 							if (name == "__exception_matches")
 								needsExceptionRuntime = true;
+							if (name == "__std_is_of_type")
+								needsTypeTestRuntime = true;
 							if (StringTools.startsWith(name, "__array_"))
 								needsArrayRuntime = true;
 							if (name == "__string_concat" || name == "__string_length" || name == "__string_equal" || name == "__string_index_of"
@@ -260,6 +263,14 @@ class IrProgramAssembler {
 				name: "__exception_matches",
 				library: "realtime_runtime",
 				symbol: "__exception_matches",
+				arguments: [Dyn, TypeRef],
+				result: Bool
+			});
+		if (needsTypeTestRuntime)
+			program.natives.push({
+				name: "__std_is_of_type",
+				library: "realtime_runtime",
+				symbol: "__std_is_of_type",
 				arguments: [Dyn, TypeRef],
 				result: Bool
 			});

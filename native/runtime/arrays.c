@@ -2,6 +2,10 @@ HL_PRIM bool HL_NAME(__exception_matches)( vdynamic *value, hl_type *type ) {
 	return value != NULL && type != NULL && hl_safe_cast(value->t,type);
 }
 
+HL_PRIM bool HL_NAME(__std_is_of_type)(vdynamic *value, hl_type *type) {
+	return value != NULL && type != NULL && hl_safe_cast(value->t, type);
+}
+
 static vbyte **array_int_storage(vobj *object) {
 	hl_runtime_obj *runtime = hl_get_obj_rt(object->t);
 	return (vbyte **)((char *)object + runtime->fields_indexes[0]);
