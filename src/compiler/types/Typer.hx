@@ -1003,7 +1003,7 @@ class Typer {
 								if (thisType == null)
 									throw 'Missing "this" type for field "$name"';
 								var value = coerce(typeExpression(expression, scope, instanceField), instanceField, 'field "$name"', "E1002");
-								var receiver = new TypedExpression(TLocal("this"), thisType, span),
+								var receiver = typeExpression(Variable("this", span), scope),
 									propertySetter = instancePropertyAccessor(thisType, name, false);
 								if (propertySetter != null)
 									output.push(TExpression(new TypedExpression(TMethodCall(receiver, propertySetter, [value]), instanceField, span), span));
