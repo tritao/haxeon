@@ -67,7 +67,8 @@ GDB
   exit 1
 }
 
-grep -F 'Line 1 of "Main.hx" starts at address ' "$symbol_output" >/dev/null || {
+grep -F 'Line 1 of "Main.hx" starts at address ' "$symbol_output" >/dev/null \
+  && grep -F '<Counter.bump+' "$symbol_output" >/dev/null || {
   echo "GDB did not resolve the first hot-patch symbol and source line" >&2
   cat "$symbol_output" >&2
   exit 1
@@ -89,7 +90,7 @@ grep -F 'Line 1 of "Main.hx" starts at address ' "$symbol_output" >/dev/null || 
 ) > "$core_output" 2>&1
 
 grep -F 'in patch_core_fault ()' "$core_output" >/dev/null \
-  && grep -F 'in fun () at CrashPoint.hx:1' "$core_output" >/dev/null || {
+  && grep -F 'in CrashPoint.run () at CrashPoint.hx:1' "$core_output" >/dev/null || {
   echo "A fresh GDB process could not symbolize the hot-patched core" >&2
   cat "$core_output" >&2
   exit 1
