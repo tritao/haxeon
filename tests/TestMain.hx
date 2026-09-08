@@ -300,8 +300,7 @@ class TestMain {
 		expectCompileError('function main():Int { var text = "x"; return text++; }', 'Postfix increment requires a numeric target');
 		expectCompileError('function main():Int { var value; return 0; }', 'Uninitialized local "value" requires an explicit type');
 		expectCompileError('class Invalid { static final value; } function main():Int { return 0; }', 'Field "value" requires a type or initializer');
-		expectCompileError('class Invalid { static final value = 20 + 22; } function main():Int { return 0; }',
-			'Cannot infer type of field "value" from this initializer');
+		Frontend.compile('class Constants { static final integer = 4 * 10 + 2; static final fraction = 4 / 2; static final bits = (1 << 5) | 10; } function main():Int return Constants.integer;');
 		Frontend.compile("class Defaults { static final integer = -1; static final fraction = -0.5; static final prefix = '$' + 'abstract-' + 'result'; } function main():Int { return Defaults.integer; }");
 		Frontend.compile('class Base { public static inline final WIDTH = 220; } class Derived { public static inline final WIDTH = Base.WIDTH; } function main():Int return Derived.WIDTH;');
 		expectCompileError('class First { static final value = Second.value; } class Second { static final value = First.value; } function main():Int return 0;',

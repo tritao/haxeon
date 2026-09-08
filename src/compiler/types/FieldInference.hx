@@ -22,6 +22,8 @@ class FieldInference {
 			case StringLiteral(_, _): StringType;
 			case Add(left, right, _) if (isConstantString(left) && isConstantString(right)): StringType;
 			case BoolLiteral(_, _): BoolType;
+			case Add(_, _, _), Sub(_, _, _), Mul(_, _, _), Div(_, _, _), Mod(_, _, _), BitAnd(_, _, _), BitXor(_, _, _), BitOr(_, _, _),
+				ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _): constantNumericType(field, initializer);
 			case New(typeName, _, _): NamedType(typeName);
 			case NewGeneric(typeName, typeArguments, _, _): AppliedType(typeName, typeArguments);
 			case NewArray(element, _, _): ArrayType(element);
@@ -31,6 +33,42 @@ class FieldInference {
 			default:
 				throw new CompileError(new Diagnostic("E1002", 'Cannot infer type of field "${field.name}" from this initializer', field.span));
 		};
+	}
+
+	static function constantNumericType(field:AstField, expression:AstExpression):AstType {
+		var inferred:Null<AstType> = switch expression {
+			case IntegerLiteral(_, _): IntType;
+			case FloatLiteral(_, _): FloatType;
+			case Negate(value, _): nullableNumericType(value);
+			case Div(left, right, _): numericPair(left, right) == null ? null : FloatType;
+			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _): numericPair(left, right);
+			case Mod(left, right, _), BitAnd(left, right, _), BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _),
+				ShiftRight(left, right, _), UnsignedShiftRight(left, right, _):
+				var pair = numericPair(left, right);
+				pair == IntType ? IntType : null;
+			default: null;
+		};
+		if (inferred == null)
+			throw new CompileError(new Diagnostic("E1002", 'Cannot infer type of field "${field.name}" from this initializer', field.span));
+		return inferred;
+	}
+
+	static function nullableNumericType(expression:AstExpression):Null<AstType>
+		return switch expression {
+			case IntegerLiteral(_, _): IntType;
+			case FloatLiteral(_, _): FloatType;
+			case Negate(value, _): nullableNumericType(value);
+			case Div(left, right, _): numericPair(left, right) == null ? null : FloatType;
+			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _): numericPair(left, right);
+			case Mod(left, right, _), BitAnd(left, right, _), BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _),
+				ShiftRight(left, right, _), UnsignedShiftRight(left, right, _): numericPair(left, right) == IntType ? IntType : null;
+			default: null;
+		};
+
+	static function numericPair(left:AstExpression, right:AstExpression):Null<AstType> {
+		var leftType = nullableNumericType(left), rightType = nullableNumericType(right);
+		if (leftType == null || rightType == null) return null;
+		return leftType == FloatType || rightType == FloatType ? FloatType : IntType;
 	}
 
 	public static function resolvedType(field:AstField, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>,
