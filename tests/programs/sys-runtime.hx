@@ -1,7 +1,9 @@
 function main():Int {
 	var cwd = Sys.getCwd();
 	var now = Sys.time();
+	var systemName = Sys.systemName();
 	if (cwd.length == 0
+		|| ["Windows", "Mac", "Linux", "BSD", "Unknown"].indexOf(systemName) < 0
 		|| !Sys.exists(cwd)
 		|| !sys.FileSystem.exists(cwd)
 		|| !sys.FileSystem.isDirectory(cwd)

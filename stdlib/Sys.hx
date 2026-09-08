@@ -43,6 +43,9 @@ extern function sysExecutablePath():String;
 @:hlNative("realtime_runtime", "__sys_get_env")
 extern function sysGetEnv(name:String):Null<String>;
 
+@:hlNative("realtime_runtime", "__sys_system_name")
+extern function sysSystemName():String;
+
 @:hlNative("realtime_runtime", "__sys_exists")
 extern function sysExists(path:String):Bool;
 
@@ -113,6 +116,9 @@ class Sys {
 
 	public static inline function getEnv(name:String):Null<String>
 		return sysGetEnv(name);
+
+	public static inline function systemName():String
+		return sysSystemName();
 
 	public static inline function exists(path:String):Bool
 		return sysExists(path);

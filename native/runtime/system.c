@@ -3,6 +3,20 @@ extern bool hl_sys_put_env( vbyte *name, vbyte *value );
 extern int hl_sys_command( vbyte *command );
 extern void hl_sys_print( vbyte *value );
 
+HL_PRIM vbyte *HL_NAME(__sys_system_name)( void ) {
+#if defined(_WIN32)
+	return realtime_string_from_utf8("Windows");
+#elif defined(__APPLE__)
+	return realtime_string_from_utf8("Mac");
+#elif defined(__linux__)
+	return realtime_string_from_utf8("Linux");
+#elif defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
+	return realtime_string_from_utf8("BSD");
+#else
+	return realtime_string_from_utf8("Unknown");
+#endif
+}
+
 HL_PRIM vbyte *HL_NAME(__sys_get_env)( vbyte *name ) {
 	char *owned;
 	vbyte *argument = realtime_platform_argument(name,&owned);
