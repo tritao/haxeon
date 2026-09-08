@@ -4,6 +4,7 @@ import haxe.io.Bytes;
 import haxe.io.BytesInput;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlOpcode;
+import compiler.hl.HlOpcodeSchema;
 import compiler.hl.HlType;
 import compiler.hl.patch.HlPatch.HlPatchFunction;
 import compiler.hl.patch.HlPatch.HlPatchInstruction;
@@ -209,9 +210,9 @@ class HlPatchReader {
 	}
 
 	static function readOperands(input:BytesInput, op:Int):Array<Int>
-		return switch op {
-			case 66: [];
-			case 29, 30, 31, 32:
+		return switch HlOpcodeSchema.arity(op) {
+			case HlOpcodeSchema.UNSUPPORTED: throw 'Unsupported patch opcode $op';
+			case HlOpcodeSchema.VARIABLE_ARITY:
 				var first = readIndex(input),
 					second = readIndex(input),
 					count = readOperandCount(input),
@@ -219,28 +220,7 @@ class HlPatchReader {
 				for (_ in 0...count)
 					operands.push(readIndex(input));
 				operands;
-			case 90:
-				var destination = readIndex(input),
-					constructor = readIndex(input),
-					count = readOperandCount(input),
-					operands = [destination, constructor, count];
-				for (_ in 0...count)
-					operands.push(readIndex(input));
-				operands;
-			case 91, 92: [readIndex(input), readIndex(input)];
-			case 93: [for (_ in 0...4) readIndex(input)];
-			case HlOpcode.Null, HlOpcode.JAlways, HlOpcode.Ret, HlOpcode.Throw, HlOpcode.Rethrow, HlOpcode.EndTrap, HlOpcode.New:
-				[readIndex(input)];
-			case HlOpcode.Mov, HlOpcode.Int, HlOpcode.Float, HlOpcode.Bool, HlOpcode.String, HlOpcode.StaticClosure, HlOpcode.GetGlobal, HlOpcode.SetGlobal,
-				HlOpcode.ToDyn, HlOpcode.ToSFloat, HlOpcode.SafeCast, HlOpcode.ToVirtual, HlOpcode.Trap, HlOpcode.ArraySize, HlOpcode.Type, HlOpcode.JTrue:
-				[readIndex(input), readIndex(input)];
-			case HlOpcode.Add, HlOpcode.Sub, HlOpcode.Mul, HlOpcode.SDiv, HlOpcode.SMod, HlOpcode.Shl, HlOpcode.SShr, HlOpcode.UShr, HlOpcode.And,
-				HlOpcode.Or, HlOpcode.Xor, HlOpcode.Call1, HlOpcode.InstanceClosure, HlOpcode.Field, HlOpcode.SetField, HlOpcode.GetArray, HlOpcode.SetArray:
-				[for (_ in 0...3) readIndex(input)];
-			case 24: [readIndex(input), readIndex(input)];
-			case 26: [for (_ in 0...4) readIndex(input)];
-			case 48, 51, 56: [for (_ in 0...3) readIndex(input)];
-			default: throw 'Unsupported patch opcode $op';
+			case count: [for (_ in 0...count) readIndex(input)];
 		}
 
 	static function readOperandCount(input:BytesInput):Int {

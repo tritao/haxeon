@@ -470,6 +470,7 @@ class HlWriter {
 				case Rethrow(register):
 					{opcode: HlOpcode.Rethrow, operands: [register]};
 			}
+			HlOpcodeSchema.validate(encoded.opcode, encoded.operands);
 			result.push(encoded);
 		}
 		return result;

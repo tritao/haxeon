@@ -2,6 +2,7 @@ import compiler.hl.HlCode;
 import compiler.hl.HlFunction;
 import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlWriter;
+import compiler.hl.HlOpcode;
 import compiler.hl.HlType as HashLinkType;
 import Type as HaxeType;
 import compiler.hl.patch.HlPatchWriter;
@@ -175,7 +176,10 @@ class PatchOpcodeTests {
 
 	static function testMalformed():Void {
 		rejectBytes(rawPatch(255, []), "unknown opcode");
-		for (opcode in [29, 30, 32, 90]) {
+		var callThis = rawPatch(HlOpcode.CallThis, [0, 1, 0]);
+		HlPatchReader.decode(callThis);
+		Runtime.inspectPatch(callThis);
+		for (opcode in [HlOpcode.CallN, HlOpcode.CallMethod, HlOpcode.CallClosure, HlOpcode.MakeEnum]) {
 			rejectBytes(rawPatch(opcode, [0, 0, -1]), 'negative variable operand count $opcode');
 			rejectBytes(rawPatch(opcode, [0, 0, 0x1000001]), 'oversized variable operand count $opcode');
 			rejectBytes(rawPatch(opcode, [0, 0, 3, 0]), 'truncated variable operands $opcode');
