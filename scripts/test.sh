@@ -24,4 +24,4 @@ cc -shared -fPIC -DHL_NAME\(n\)=realtime_##n \
 	-o "$root_dir/out/realtime_runtime.hdll"
 
 "$root_dir/tests/differential/run.sh"
-"$haxe" --cwd "$root_dir" -cp tests --run driver.TestDriver --root "$root_dir"
+"$haxe" --cwd "$root_dir" -cp tests --run driver.TestDriver --root "$root_dir" --jobs "${TEST_JOBS:-1}"

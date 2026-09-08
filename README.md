@@ -218,6 +218,15 @@ the integration suites:
 ./tests/integration/test-hot-reload.sh
 ```
 
+The program fixtures run sequentially by default. Set `TEST_JOBS` to run them
+concurrently, or invoke the driver directly to select a suite or test:
+
+```sh
+TEST_JOBS=4 ./scripts/test.sh
+.tools/haxe/haxe -cp tests --run driver.TestDriver --suite programs --jobs 4
+.tools/haxe/haxe -cp tests --run driver.TestDriver --suite compiler --test ParserRecovery
+```
+
 `bootstrap/compiler.hl` is checked in. For ordinary compiler development,
 `bootstrap-compiler.sh --self` rebuilds it with the checked-in compiler and
 pinned HashLink without invoking the reference Haxe compiler.

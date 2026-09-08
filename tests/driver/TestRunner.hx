@@ -4,6 +4,20 @@ import driver.TestCatalog.CompileStep;
 import driver.TestCatalog.ExecutableCase;
 import driver.TestCatalog.ProgramCase;
 import haxe.io.Path;
+import sys.io.Process;
+import sys.thread.Deque;
+import sys.thread.Thread;
+
+private typedef CommandResult = {
+	var status:Int;
+	var output:String;
+}
+
+private typedef ProgramResult = {
+	var index:Int;
+	var passed:Bool;
+	var output:String;
+}
 
 class TestRunner {
 	final root:String;
@@ -51,20 +65,87 @@ class TestRunner {
 	}
 
 	public function runProgram(test:ProgramCase):Bool {
+		var result = runProgramCaptured(test, 0);
+		Sys.print(result.output);
+		return result.passed;
+	}
+
+	public function runPrograms(tests:Array<ProgramCase>, jobs:Int):Int {
+		if (tests.length == 0)
+			return 0;
+		if (jobs == 1) {
+			var failures = 0;
+			for (test in tests)
+				if (!runProgram(test))
+					failures++;
+			return failures;
+		}
+
+		var workerCount = Std.int(Math.min(jobs, tests.length));
+		var completed = new Deque<ProgramResult>();
+		for (workerIndex in 0...workerCount)
+			startProgramWorker(tests, workerIndex, workerCount, completed);
+
+		var ordered:Array<ProgramResult> = [];
+		for (_ in 0...tests.length) {
+			var result = completed.pop(true);
+			ordered[result.index] = result;
+		}
+		var failures = 0;
+		for (result in ordered) {
+			Sys.print(result.output);
+			if (!result.passed)
+				failures++;
+		}
+		return failures;
+	}
+
+	function startProgramWorker(tests:Array<ProgramCase>, offset:Int, stride:Int, completed:Deque<ProgramResult>):Void {
+		Thread.create(() -> {
+			var index = offset;
+			while (index < tests.length) {
+				try
+					completed.add(runProgramCaptured(tests[index], index))
+				catch (error:Dynamic)
+					completed.add({index: index, passed: false, output: 'FAIL: ${tests[index].name}: ${Std.string(error)}\n'});
+				index += stride;
+			}
+		});
+	}
+
+	function runProgramCaptured(test:ProgramCase, index:Int):ProgramResult {
 		var source = Path.join([root, "tests", "programs", test.name + ".hx"]);
 		var output = Path.join([root, "out", test.name + ".hl"]);
-		var compileStatus = Sys.command(haxe, ["--cwd", root, "-cp", "src", "--run", "Main", source, output]);
-		if (compileStatus != 0) {
-			Sys.stderr().writeString('FAIL: ${test.name} failed to compile\n');
-			return false;
+		var compilation = runCommand(haxe, ["--cwd", root, "-cp", "src", "--run", "Main", source, output]);
+		if (compilation.status != 0) {
+			return {
+				index: index,
+				passed: false,
+				output: compilation.output + 'FAIL: ${test.name} failed to compile\n'
+			};
 		}
-		var status = Sys.command(hl, [output]);
-		if (status != test.expectedExit) {
-			Sys.stderr().writeString('FAIL: ${test.name} expected exit ${test.expectedExit}, got $status\n');
-			return false;
+		var execution = runCommand(hl, [output]);
+		if (execution.status != test.expectedExit) {
+			return {
+				index: index,
+				passed: false,
+				output: compilation.output + execution.output + 'FAIL: ${test.name} expected exit ${test.expectedExit}, got ${execution.status}\n'
+			};
 		}
-		Sys.println('PASS: ${test.name} source compiled and executed (exit ${test.expectedExit})');
-		return true;
+		return {
+			index: index,
+			passed: true,
+			output: compilation.output + execution.output + 'PASS: ${test.name} source compiled and executed (exit ${test.expectedExit})\n'
+		};
+	}
+
+	function runCommand(command:String, arguments:Array<String>):CommandResult {
+		var process = new Process(command, arguments);
+		var stdout = process.stdout.readAll().toString();
+		var stderr = process.stderr.readAll().toString();
+		var status = process.exitCode();
+		process.close();
+		return {status: status, output: stdout + stderr};
 	}
 
 	public function runPosInfos():Bool {

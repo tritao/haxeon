@@ -7,6 +7,7 @@ private typedef DriverOptions = {
 	var suites:Array<String>;
 	var filter:Null<EReg>;
 	var listOnly:Bool;
+	var jobs:Int;
 }
 
 class TestDriver {
@@ -36,15 +37,18 @@ class TestDriver {
 				failures++;
 		}
 
+		var programs = [];
 		for (test in TestCatalog.loadPrograms(options.root)) {
 			if (!matches(options, "programs", test.name))
 				continue;
 			selected++;
 			if (options.listOnly)
 				Sys.println('programs\t${test.name}');
-			else if (!runner.runProgram(test))
-				failures++;
+			else
+				programs.push(test);
 		}
+		if (!options.listOnly)
+			failures += runner.runPrograms(programs, options.jobs);
 
 		for (test in TestCatalog.customCases()) {
 			if (!matches(options, test.suite, test.name))
@@ -76,6 +80,7 @@ class TestDriver {
 		var suites = ["all"];
 		var filter:Null<EReg> = null;
 		var listOnly = false;
+		var jobs = 1;
 		var index = 0;
 		while (index < args.length) {
 			switch args[index++] {
@@ -93,6 +98,12 @@ class TestDriver {
 					filter = new EReg(args[index++], "i");
 				case "--list":
 					listOnly = true;
+				case "--jobs":
+					if (index == args.length)
+						throw "--jobs requires a positive integer";
+					jobs = Std.parseInt(args[index++]);
+					if (jobs == null || jobs < 1)
+						throw "--jobs requires a positive integer";
 				case argument:
 					throw 'Unknown test driver argument: $argument';
 			}
@@ -101,7 +112,8 @@ class TestDriver {
 			root: FileSystem.fullPath(root),
 			suites: suites,
 			filter: filter,
-			listOnly: listOnly
+			listOnly: listOnly,
+			jobs: jobs
 		};
 	}
 }
