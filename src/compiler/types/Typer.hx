@@ -762,13 +762,10 @@ class Typer {
 		for (name in storage.assigned.keys())
 			context.assigned.set(name, true);
 		for (name in storage.mutableCaptures.keys()) {
-			context.cells.set(name, '$' + 'cell:' + context.name + ':' + name);
-			context.cellKinds.set(name, MutableCapture);
+			context.storage.request(name, '$' + 'cell:' + context.name + ':' + name, MutableCapture);
 		}
 		for (name in storage.exceptionCells.keys()) {
-			context.cells.set(name, '$' + 'cell:' + context.name + ':' + name);
-			if (!context.cellKinds.exists(name))
-				context.cellKinds.set(name, ExceptionEdge);
+			context.storage.request(name, '$' + 'cell:' + context.name + ':' + name, ExceptionEdge);
 		}
 		var scope = new Scope();
 		var isConstructor = owner != null && classDecls.exists(owner) && fn.name == "new";
@@ -817,14 +814,14 @@ class Typer {
 			arguments: arguments,
 			result: result,
 			statements: statements,
-			cells: copyMap(context.boundCells),
+			cells: copyMap(context.storage.cells),
 			cellCaptures: [],
 			span: fn.span
 		};
-		for (name in context.boundCells.keys()) {
-			if (context.cellTypes.exists(name) && context.cellKinds.exists(name))
-				closureConversion.addCell(requiredMapValue(context.boundCells, name), requiredMapValue(context.cellTypes, name),
-					requiredMapValue(context.cellKinds, name));
+		for (name in context.storage.cells.keys()) {
+			if (context.storage.types.exists(name) && context.storage.kinds.exists(name))
+				closureConversion.addCell(requiredMapValue(context.storage.cells, name), requiredMapValue(context.storage.types, name),
+					requiredMapValue(context.storage.kinds, name));
 		}
 		leaveBody(functionContext);
 		return resultFunction;
@@ -832,18 +829,12 @@ class Typer {
 
 	function boundCell(name:String, scope:Scope):Null<String> {
 		var id = scope.resolveId(name);
-		return id == null ? null : context.boundCells.get(id);
+		return id == null ? null : context.storage.cell(id);
 	}
 
 	function bindCell(name:String, scope:Scope, type:CompilerType):Void {
-		if (!context.cells.exists(name))
-			return;
 		var id = scope.requireId(name);
-		if (!context.boundCells.exists(id)) {
-			context.boundCells.set(id, requiredMapValue(context.cells, name) + ":" + id);
-			context.cellTypes.set(id, type);
-			context.cellKinds.set(id, requiredMapValue(context.cellKinds, name));
-		}
+		context.storage.bind(name, id, type);
 	}
 
 	function typeStatements(statements:Array<AstStatement>, scope:Scope, result:Null<CompilerType>):Array<TypedStatement> {
@@ -860,7 +851,7 @@ class Typer {
 					continue;
 				case UninitializedDeclaration(name, declared, span):
 					var declaredType = lowerType(declared);
-					if (context.cells.exists(name) && context.cellKinds.get(name) == MutableCapture)
+					if (context.storage.hasCandidate(name) && context.storage.candidateKind(name) == MutableCapture)
 						fail("E1023", 'Captured local "$name" must be initialized at its declaration', span);
 					scope.define(name, declaredType, span, false);
 					bindCell(name, scope, declaredType);
@@ -1083,9 +1074,7 @@ class Typer {
 						default:
 							if (typedIndex.type == TNever)
 								typedIndex = coerce(typedIndex, TInt, "array index", "E1014");
-							if (typedIndex.type == TNever)
-							typedIndex = coerce(typedIndex, TInt, "array index", "E1014");
-						if (typedIndex.type != TInt)
+							if (typedIndex.type != TInt)
 								fail("E1014", "Array index must be Int", typedIndex.span);
 							var element = arrayElementType(typedArray.type, span);
 							var value = coerce(typeExpression(expression, scope, element), element, "array element", "E1002");
@@ -2129,8 +2118,7 @@ class Typer {
 									cellClass = scope.requireCellClass(name);
 								if (cellClass == null && context.assigned.exists(name)) {
 									var newCellClass = '$' + 'cell:' + context.name + ':' + name;
-									context.cells.set(name, newCellClass);
-									context.cellKinds.set(name, MutableCapture);
+									context.storage.request(name, newCellClass, MutableCapture);
 									bindCell(name, scope, captureType);
 									cellClass = boundCell(name, scope);
 								}
@@ -2172,16 +2160,12 @@ class Typer {
 					var lambdaCandidates:Map<String, Bool> = [];
 					CaptureAnalysis.collectMutableCaptureCandidates(body, lambdaDeclared, lambdaCandidates);
 					for (name in lambdaCandidates.keys()) {
-						context.cells.set(name, '$' + 'cell:' + lambdaName + ':' + name);
-						context.cellKinds.set(name, MutableCapture);
+						context.storage.request(name, '$' + 'cell:' + lambdaName + ':' + name, MutableCapture);
 					}
 					var exceptionCandidates:Map<String, Bool> = [];
 					CaptureAnalysis.collectExceptionCellCandidates(body, [for (argument in arguments) argument.name => true], exceptionCandidates);
 					for (name in exceptionCandidates.keys())
-						if (!context.cells.exists(name)) {
-							context.cells.set(name, "$cell:" + lambdaName + ":" + name);
-							context.cellKinds.set(name, ExceptionEdge);
-						}
+						context.storage.request(name, "$cell:" + lambdaName + ":" + name, ExceptionEdge);
 					for (i in 0...arguments.length)
 						bindCell(arguments[i].name == "_" ? "$discard:" + i : arguments[i].name, typedBodyScope, lambdaArguments[i].type);
 					var typedBody = typeStatements(body, typedBodyScope, expectedFunction == null
@@ -2194,9 +2178,9 @@ class Typer {
 						inferredResult = contextualResult == null ? CompilerType.TVoid : contextualResult;
 					}
 					context.resultType = inferredResult;
-					var lambdaCells = copyMap(context.boundCells),
-						lambdaCellTypes = copyMap(context.cellTypes),
-						lambdaCellKinds = copyMap(context.cellKinds);
+					var lambdaCells = copyMap(context.storage.cells),
+						lambdaCellTypes = copyMap(context.storage.types),
+						lambdaCellKinds = copyMap(context.storage.kinds);
 					leaveBody(lambdaContext);
 					if (inferredResult != TVoid
 						&& !ControlFlow.alwaysReturns(typedBody, function(type, cases) return this.exhaustiveEnum(type, cases)))
@@ -2736,7 +2720,7 @@ class Typer {
 							typeExpression(arguments[i], scope, functionType.arguments[i])
 					];
 					typed = coerceArguments(typed, functionType.arguments, name);
-					for (captured in context.cells.keys())
+					for (captured in context.storage.candidateNames())
 						scope.invalidate(captured);
 					new TypedExpression(TClosureCall(typeExpression(Variable(name, span), scope), typed), functionType.result, span);
 				} else {

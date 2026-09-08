@@ -9,12 +9,9 @@ class BodyContext {
 	public final typeSubstitutions:Map<String, CompilerType>;
 	public final assigned:Map<String, Bool> = [];
 
-	/** Candidate source names; actual storage is keyed by resolved binding IDs. */
-	public final cells:Map<String, String> = [];
+	/** Owns the transition from conservative names to resolved lexical IDs. */
+	public final storage = new BindingStoragePlan();
 
-	public final boundCells:Map<String, String> = [];
-	public final cellTypes:Map<String, CompilerType> = [];
-	public final cellKinds:Map<String, compiler.types.TypedAst.CellStorageKind> = [];
 	public final localExpectedTypes:Map<String, CompilerType> = [];
 	public var loopDepth:Int = 0;
 	public final loopEarlyExits:Array<Bool> = [];

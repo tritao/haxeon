@@ -2,6 +2,9 @@ import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.Source.SourceFile;
 import compiler.types.analysis.CaptureAnalysis;
+import compiler.types.analysis.BindingStoragePlan;
+import compiler.types.Type.CompilerType;
+import compiler.types.TypedAst.CellStorageKind;
 
 class CaptureAnalysisMain {
 	static function main():Void {
@@ -17,6 +20,15 @@ class CaptureAnalysisMain {
 		var loopShadowing = analyze('function main():Int { try { for (name => state in [1 => 2]) { state = state + 1; trace(name); } } catch (error:Dynamic) { for (name => state in [3 => 4]) trace(name + state); } return 0; }');
 		expect(!loopShadowing.exceptionCells.exists("name"), "separate loop keys must not alias across an exception edge");
 		expect(!loopShadowing.exceptionCells.exists("state"), "separate loop values must not alias across an exception edge");
+
+		var plan = new BindingStoragePlan();
+		plan.request("value", "$cell:test:value", ExceptionEdge);
+		plan.request("value", "$cell:test:value", MutableCapture);
+		var outer = plan.bind("value", "$l0:value", CompilerType.TInt),
+			inner = plan.bind("value", "$l1:value", CompilerType.TInt);
+		expect(outer != inner, "shadowed bindings must receive distinct cells");
+		expect(plan.kinds.get("$l0:value") == MutableCapture, "mutable capture storage must take precedence over exception storage");
+		expect(!plan.cells.exists("value"), "source names must not escape into resolved cell maps");
 
 		Sys.println("PASS: capture and exception-edge storage analysis");
 	}
