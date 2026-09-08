@@ -30,8 +30,9 @@ class TestRunner {
 
 	public function new(root:String) {
 		this.root = root;
-		haxe = Path.join([root, ".tools", "haxe", "haxe"]);
-		hl = Path.join([root, "vendor", "hashlink", "hl"]);
+		var suffix = Sys.systemName() == "Windows" ? ".exe" : "";
+		haxe = Path.join([root, ".tools", "haxe", "haxe" + suffix]);
+		hl = Path.join([root, ".tools", "hashlink", "hl" + suffix]);
 		configureRuntimeLibraryPath();
 	}
 
@@ -206,11 +207,12 @@ class TestRunner {
 	}
 
 	function configureRuntimeLibraryPath():Void {
-		var paths = [Path.join([root, "out"]), Path.join([root, "vendor", "hashlink"])];
-		var existing = Sys.getEnv("LD_LIBRARY_PATH");
+		var paths = [Path.join([root, "out"]), Path.join([root, ".tools", "hashlink"])];
+		var variable = Sys.systemName() == "Windows" ? "PATH" : (Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH");
+		var existing = Sys.getEnv(variable);
 		if (existing != null && existing != "")
 			paths.push(existing);
-		Sys.putEnv("LD_LIBRARY_PATH", paths.join(":"));
+		Sys.putEnv(variable, paths.join(Sys.systemName() == "Windows" ? ";" : ":"));
 	}
 
 	function haxeMainArguments(main:String):Array<String> {

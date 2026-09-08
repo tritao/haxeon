@@ -18,4 +18,4 @@ fi
 mkdir -p "$root_dir/out"
 
 "$root_dir/tests/differential/run.sh"
-"$haxe" --cwd "$root_dir" -cp tests --run driver.TestDriver --root "$root_dir" --jobs "${TEST_JOBS:-16}"
+"$haxe" --cwd "$root_dir" -cp src --run build.HaxeonBuild test "${TEST_JOBS:-16}"

@@ -228,6 +228,15 @@ TEST_JOBS=1 ./scripts/test.sh
 .tools/haxe/haxe -cp tests --run driver.TestDriver --suite compiler --test ParserRecovery
 ```
 
+The cross-platform Haxe build entry point provides the native build, bootstrap,
+and core test workflow without Bash. This is the path used by Windows CI:
+
+```sh
+.tools/haxe/haxe -cp src --run build.HaxeonBuild native
+.tools/haxe/haxe -cp src --run build.HaxeonBuild bootstrap-self
+.tools/haxe/haxe -cp src --run build.HaxeonBuild test 16
+```
+
 `bootstrap/compiler.hl` is checked in. For ordinary compiler development,
 `bootstrap-compiler.sh --self` rebuilds it with the checked-in compiler and
 pinned HashLink without invoking the reference Haxe compiler.

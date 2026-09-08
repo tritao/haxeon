@@ -22,3 +22,21 @@ jobs:
         run: scripts/bootstrap-compiler.sh --self
       - name: Hot reload and GDB metadata gate
         run: tests/integration/test-gdb-hot-reload.sh
+
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Bootstrap pinned tools and native runtime
+        shell: pwsh
+        run: ./scripts/setup.ps1
+      - name: Verify self-hosted compiler
+        shell: pwsh
+        run: ./.tools/haxe/haxe.exe --cwd . -cp src --run build.HaxeonBuild bootstrap-self
+      - name: Run cross-platform core tests
+        shell: pwsh
+        run: ./.tools/haxe/haxe.exe --cwd . -cp src --run build.HaxeonBuild test 8

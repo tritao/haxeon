@@ -50,7 +50,8 @@ function main():Int {
 		return 5;
 	if (!Sys.putEnv("HAXEON_SYS_É", "válue-ß") || Sys.getEnv("HAXEON_SYS_É") != "válue-ß")
 		return 6;
-	if (Sys.command("test xé = xé") != 0)
+	var command = systemName == "Windows" ? "cmd /C \"echo xé>nul\"" : "test xé = xé";
+	if (Sys.command(command) != 0)
 		return 7;
 	var fsDirectory = "out/filesystem-runtime-é";
 	var fsRenamed = "out/filesystem-runtime-renamed-é";
@@ -90,7 +91,8 @@ function main():Int {
 		mutex.acquire();
 		var finished = threaded[0] == 42;
 		mutex.release();
-		if (finished) break;
+		if (finished)
+			break;
 		Sys.sleep(0.001);
 		attempts++;
 	}
