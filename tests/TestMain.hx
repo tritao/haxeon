@@ -862,6 +862,7 @@ class TestMain {
 		Frontend.compile("function main():Int { var value:Int; switch (1) { case 1: value = 40; default: value = 2; } return value; }");
 		Frontend.compile('function main():Int { var value:Int; try { value = 42; } catch (error:Dynamic) { throw "failed"; } return value; }');
 		Frontend.compile('function read():String { var value:Null<String> = null; if (value == null) { try value = "ready" catch (error:Dynamic) return "failed"; } return value; } function main():Int return read().length;');
+		Frontend.compile('function fallback():Bool return false; function read(values:Array<String>):String { var value:Null<String> = null, other:Null<String> = null; for (candidate in values) if (candidate == "ready") { value = candidate; break; } if (value == null) { try value = "fallback" catch (error:Dynamic) { fallback(); return "failed"; } } return value; } function main():Int return read([]).length;');
 		Frontend.compile('function main():Int { while (true) { var value:Int; try { value = 42; } catch (error:Dynamic) { break; } return value; } return 0; }');
 		Frontend.compile("class Math { public static function answer():Int return 42; } function main():Int return Math.answer();");
 		Frontend.compile('class Constants { public static inline final ANSWER = 42; static inline final LABEL = "answer"; static final VALUES = new Array<Int>(0); } function main():Int return Constants.ANSWER;');
