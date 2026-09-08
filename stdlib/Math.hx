@@ -25,6 +25,9 @@ extern function mathIsNaN(value:Float):Bool;
 @:hlNative("haxeon_runtime", "__math_is_finite")
 extern function mathIsFinite(value:Float):Bool;
 
+@:hlNative("realtime_runtime", "__math_pow")
+extern function mathPow(value:Float, exponent:Float):Float;
+
 /** Supported mathematical helpers backed by the stable runtime ABI. */
 class Math {
 	public static inline function isNaN(value:Float):Bool
@@ -32,4 +35,7 @@ class Math {
 
 	public static inline function isFinite(value:Float):Bool
 		return mathIsFinite(value);
+
+	public static inline function pow(value:Float, exponent:Float):Float
+		return mathPow(value, exponent);
 }

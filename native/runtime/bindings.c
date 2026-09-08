@@ -209,6 +209,7 @@ DEFINE_PRIM(_I32,__map_int_ref_size,_ABSTRACT(map_int_ref));
 DEFINE_PRIM(_BYTES,__string_concat,_BYTES _BYTES);
 DEFINE_PRIM(_BOOL,__math_is_nan,_F64);
 DEFINE_PRIM(_BOOL,__math_is_finite,_F64);
+DEFINE_PRIM(_F64,__math_pow,_F64 _F64);
 DEFINE_PRIM(_I32,__string_length,_BYTES);
 DEFINE_PRIM(_BOOL,__string_equal,_BYTES _BYTES);
 DEFINE_PRIM(_I32,__string_index_of,_BYTES _BYTES);
