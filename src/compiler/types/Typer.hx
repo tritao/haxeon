@@ -2150,7 +2150,6 @@ class Typer {
 								});
 							}
 						}
-					seedLambdaScope(body, lambdaScope);
 					var typedBodyScope = new Scope();
 					for (i in 0...lambdaArguments.length) {
 						var localName = arguments[i].name == "_" ? '$' + 'discard:$i' : arguments[i].name;
@@ -2664,6 +2663,8 @@ class Typer {
 							refined = entryPath == null ? null : scope.resolveExpression(entryPath);
 						new TypedExpression(TMapGet(typedArray, typedKey), refined == null ? nullableMapValue(value) : refined, span);
 					default:
+						if (typedIndex.type == TNever)
+							typedIndex = coerce(typedIndex, TInt, "array index", "E1014");
 						if (typedIndex.type != TInt)
 							fail("E1014", "Array index must be Int", typedIndex.span);
 						var element = arrayElementType(typedArray.type, span);
@@ -3035,40 +3036,6 @@ class Typer {
 			constructorName, span, substitutions) : typeCallArguments(arguments, resolvedExpected, scope, constructorName),
 			physicalArguments = isGenericNominal(baseInstance) ? [for (argument in semanticArguments) abiBoundaryCast(argument, TDynamic)] : semanticArguments;
 		return new TypedExpression(TSuperCall(resolvedBase, physicalArguments), TVoid, span);
-	}
-
-	function seedLambdaScope(statements:Array<AstStatement>, scope:Scope):Void {
-		for (statement in statements)
-			switch (statement) {
-				case UninitializedDeclaration(name, declared, span):
-					if (scope.resolve(name) == null)
-						scope.define(name, lowerType(declared), span, false);
-				case VarDeclaration(name, declared, initializer, span):
-					if (scope.resolve(name) == null) {
-						var value:TypedExpression;
-						if (declared == null)
-							value = typeExpression(initializer, scope);
-						else {
-							var declaredType = lowerType(declared);
-							value = coerce(typeExpression(initializer, scope, declaredType), declaredType, 'local "$name"', "E1002");
-						}
-						scope.define(name, value.type, span);
-					}
-				case If(_, yes, no, _):
-					seedLambdaScope(yes, scope);
-					seedLambdaScope(no, scope);
-				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _):
-					seedLambdaScope(body, scope);
-				case Try(tryBranch, catches, _):
-					seedLambdaScope(tryBranch, scope);
-					for (catchClause in catches)
-						seedLambdaScope(catchClause.statements, scope);
-				case Switch(_, cases, defaultBranch, _, _):
-					for (switchCase in cases)
-						seedLambdaScope(switchCase.statements, scope);
-					seedLambdaScope(defaultBranch, scope);
-				default:
-			}
 	}
 
 	function specializeGeneric(baseName:String, fn:AstFunction, arguments:Array<TypedExpression>, span:SourceSpan, scope:Scope, owner:Null<String>,

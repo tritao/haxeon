@@ -257,7 +257,10 @@ class TestMain {
 
 		expectCompileError('function main():Int { return missing; }', 'Unknown variable "missing"');
 		Frontend.compile('class Defaults { public static inline final WIDTH = 220; public function new(width:Int = WIDTH) {} } function main():Int { new Defaults(); return Defaults.WIDTH; }');
-		expectCompileError('class Defaults { public static function read(value:Int = caller):Int return value; } function main():Int { var caller = 42; return Defaults.read(); }', 'Unknown variable "caller"');
+		expectCompileError('class Defaults { public static function read(value:Int = caller):Int return value; } function main():Int { var caller = 42; return Defaults.read(); }',
+			'Unknown variable "caller"');
+		Frontend.compile('interface Reader { function read():Int; } class Source implements Reader { public function new() {} public function read():Int return 42; } function consume(reader:Reader):Int return reader.read(); function main():Int return consume(new Source());');
+		Frontend.compile('class Entry { public final value:String; public function new(value:String) this.value = value; } function invoke(callback:Null<Entry>->Void):Void callback(new Entry("ok")); function main():Int { invoke(function(entry) { if (entry != null) { var value = entry.value; } }); return 0; }');
 		expectCompileError('function add(a:Int, b:Int):Int { return a+b; } function main():Int { return add(1); }',
 			'Function "add" expects 2 arguments, got 1');
 		expectCompileError('function main():Int { if (1 < 2) return 1; }', 'Function main does not return on every path');
