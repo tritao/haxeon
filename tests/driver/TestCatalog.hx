@@ -82,6 +82,7 @@ class TestCatalog {
 			mainCase("runtime", "null-reference", "NullReferenceMain", "null-reference.hl", 42,
 				"null coerces to reference-like types while primitives remain strict"),
 			mainCase("runtime", "stdlib", "StdlibMain", "stdlib.hl", 42, "vendored stdlib compiled and executed"),
+			mainCase("runtime", "json", "JsonMain", "json.hl", 42, "JSON parsing, printing, reflection, Unicode, and rejection executed"),
 			mainCase("tooling", "utest-basic", "UtestMain", "utest-basic.hl", 0, "utest-compatible assertions and runner executed"),
 			mainCase("tooling", "utest-failure", "UtestMain", "utest-failure.hl", 5, "utest-compatible runner reports assertion failures",
 				["{output}", "tests/programs/utest-failure.hx"]),

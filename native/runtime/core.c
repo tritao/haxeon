@@ -3,6 +3,10 @@ typedef struct realtime_string_map realtime_string_map;
 HL_PRIM bool HL_NAME(__math_is_nan)( double value ) {
 	return isnan(value);
 }
+
+HL_PRIM bool HL_NAME(__math_is_finite)(double value) {
+	return isfinite(value);
+}
 extern realtime_string_map *hl_hballoc( void );
 extern void hl_hbset( realtime_string_map *map, uchar *key, vdynamic *value );
 extern bool hl_hbexists( realtime_string_map *map, uchar *key );

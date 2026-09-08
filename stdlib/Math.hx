@@ -22,8 +22,14 @@
 @:hlNative("realtime_runtime", "__math_is_nan")
 extern function mathIsNaN(value:Float):Bool;
 
+@:hlNative("realtime_runtime", "__math_is_finite")
+extern function mathIsFinite(value:Float):Bool;
+
 /** Supported mathematical helpers backed by the stable runtime ABI. */
 class Math {
 	public static inline function isNaN(value:Float):Bool
 		return mathIsNaN(value);
+
+	public static inline function isFinite(value:Float):Bool
+		return mathIsFinite(value);
 }
