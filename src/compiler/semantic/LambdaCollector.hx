@@ -11,7 +11,7 @@ class LambdaCollector {
 				case ErrorStatement(_):
 				case UninitializedDeclaration(_, _, _):
 				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
-					collectLambdaExpression(expression, functionName, module, generatedByModule);
+					collectExpression(expression, functionName, module, generatedByModule);
 				case Try(tryBranch, catches, _):
 					collect(tryBranch, functionName, module, generatedByModule);
 					for (catchClause in catches)
@@ -52,7 +52,8 @@ class LambdaCollector {
 			}
 	}
 
-	static function collectLambdaExpression(expression:AstExpression, functionName:String, module:String, generatedByModule:Map<String, Map<String, Bool>>):Void
+	public static function collectExpression(expression:AstExpression, functionName:String, module:String,
+			generatedByModule:Map<String, Map<String, Bool>>):Void
 		switch expression {
 			case Lambda(_, body, span):
 				var names:Map<String, Bool>;
@@ -150,4 +151,8 @@ class LambdaCollector {
 				collectLambdaExpression(target, functionName, module, generatedByModule);
 			default:
 		}
+
+	static inline function collectLambdaExpression(expression:AstExpression, functionName:String, module:String,
+			generatedByModule:Map<String, Map<String, Bool>>):Void
+		collectExpression(expression, functionName, module, generatedByModule);
 }

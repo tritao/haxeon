@@ -301,6 +301,23 @@ class SemanticAssembly {
 						callers.push(canonical.name);
 					}
 				}
+				var canonicalFields:Array<compiler.syntax.Ast.AstField> = [];
+				for (field in classDecl.fields) {
+					var initializer = ModuleCanonicalizer.canonicalOptionalExpression(field.initializer, name, entryModule, locals, aliases);
+					if (initializer != null)
+						LambdaCollector.collectExpression(initializer, className + ".__init", name, generatedByModule);
+					canonicalFields.push({
+						name: field.name,
+						type: ModuleCanonicalizer.canonicalType(FieldInference.resolvedType(field, className, classDeclarations, classAliases), classAliases,
+							classDecl.typeParameters),
+						initializer: initializer,
+						readAccess: field.readAccess,
+						writeAccess: field.writeAccess,
+						isStatic: field.isStatic,
+						isFinal: field.isFinal,
+						span: field.span
+					});
+				}
 				classes.push({
 					name: className,
 					isExtern: classDecl.isExtern,
@@ -313,20 +330,7 @@ class SemanticAssembly {
 						for (interfaceType in classDecl.interfaces)
 							ModuleCanonicalizer.canonicalType(interfaceType, classAliases, classDecl.typeParameters)
 					],
-					fields: [
-						for (field in classDecl.fields)
-							{
-								name: field.name,
-								type: ModuleCanonicalizer.canonicalType(FieldInference.resolvedType(field, className, classDeclarations, classAliases), classAliases,
-									classDecl.typeParameters),
-								initializer: ModuleCanonicalizer.canonicalOptionalExpression(field.initializer, name, entryModule, locals, aliases),
-								readAccess: field.readAccess,
-								writeAccess: field.writeAccess,
-								isStatic: field.isStatic,
-								isFinal: field.isFinal,
-								span: field.span
-							}
-					],
+					fields: canonicalFields,
 					methods: classMethods,
 					span: classDecl.span
 				});
