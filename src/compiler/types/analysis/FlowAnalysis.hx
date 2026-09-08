@@ -106,7 +106,7 @@ class FlowAnalysis {
 
 	static function nullableAccess(expression:TypedExpression):Null<{localName:String, path:String, nonNullType:CompilerType}> {
 		return switch expression.expression {
-			case TLocal(name), TCellLocal(name, _): switch expression.type {
+			case TLocal(name), TCellLocal(name, _), TCaptured(name), TCellCaptured(name, _): switch expression.type {
 					case TNullable(element): {localName: name, path: "", nonNullType: element};
 					default: null;
 				};
@@ -121,7 +121,7 @@ class FlowAnalysis {
 
 	public static function accessPath(expression:TypedExpression):Null<String>
 		return switch expression.expression {
-			case TLocal(name), TCellLocal(name, _): name;
+			case TLocal(name), TCellLocal(name, _), TCaptured(name), TCellCaptured(name, _): name;
 			case TField(object, name):
 				var parent = accessPath(object);
 				parent == null ? null : parent + "." + name;
