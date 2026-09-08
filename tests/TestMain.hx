@@ -846,6 +846,16 @@ class TestMain {
 		if (modularAbstractBodies.length != 3 || modularAbstractBodies.join(",") != resumedAbstractBodies.join(","))
 			throw "Generic abstract method specializations did not survive compiler restart";
 		Sys.println("PASS: generic abstracts resolve instantiated representations across modules");
+		var callEffectCompiler = new Compiler();
+		callEffectCompiler.update("Main.hx",
+			'class Service { public var failure:Null<String>; public function new() { failure = null; } function mutate():Void { failure = "changed"; } public function update():Void { if (failure != null) return; mutate(); if (failure != null) return; } } function main():Int { new Service().update(); return 42; }');
+		callEffectCompiler.compile("Main");
+		Sys.println("PASS: calls invalidate stale nullable field refinements before IR lowering");
+		var initializerLambdaCompiler = new Compiler();
+		initializerLambdaCompiler.update("Main.hx",
+			'class Callbacks { public var callback:Void->Void = function() {}; public function new() {} } function main():Int { new Callbacks().callback(); return 42; }');
+		initializerLambdaCompiler.compile("Main");
+		Sys.println("PASS: closure-valued field initializers retain source-module ownership");
 		var conversionCompiler = new Compiler();
 		conversionCompiler.update("Value.hx", "abstract Value(Int) from Int to Int {}");
 		conversionCompiler.update("Main.hx", "import Value; function read(value:Value):Int return value; function main():Int return read(42);");
