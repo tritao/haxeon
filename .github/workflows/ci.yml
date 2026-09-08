@@ -34,9 +34,9 @@ jobs:
       - name: Bootstrap pinned tools and native runtime
         shell: pwsh
         run: ./scripts/setup.ps1
-      - name: Verify self-hosted compiler
+      - name: Verify self-hosted compiler convergence
         shell: pwsh
-        run: ./.tools/haxe/haxe.exe --cwd . -cp src --run build.HaxeonBuild bootstrap-self
+        run: ./.tools/haxe/haxe.exe --cwd . -cp src --run build.HaxeonBuild bootstrap
       - name: Run cross-platform core tests
         shell: pwsh
         run: ./.tools/haxe/haxe.exe --cwd . -cp src --run build.HaxeonBuild test 8
