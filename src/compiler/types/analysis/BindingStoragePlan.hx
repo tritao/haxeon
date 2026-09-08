@@ -8,7 +8,7 @@ private typedef StorageCandidate = {
 	final kind:CellStorageKind;
 }
 
-/** Resolves conservative source-name storage requests to lexical binding IDs. */
+/** Resolves declaration-site storage requests to typed lexical binding IDs. */
 class BindingStoragePlan {
 	final candidates:Map<String, StorageCandidate> = [];
 
@@ -18,25 +18,31 @@ class BindingStoragePlan {
 
 	public function new() {}
 
-	public function request(sourceName:String, cellPrefix:String, kind:CellStorageKind):Void {
-		var current = candidates.get(sourceName);
+	public function request(declarationKey:String, cellPrefix:String, kind:CellStorageKind):Void {
+		var current = candidates.get(declarationKey);
 		if (current == null || current.kind == ExceptionEdge && kind == MutableCapture)
-			candidates.set(sourceName, {cellPrefix: cellPrefix, kind: kind});
+			candidates.set(declarationKey, {cellPrefix: cellPrefix, kind: kind});
 	}
 
-	public function hasCandidate(sourceName:String):Bool
-		return candidates.exists(sourceName);
+	public function hasCandidate(declarationKey:String):Bool
+		return candidates.exists(declarationKey);
 
-	public function candidateKind(sourceName:String):Null<CellStorageKind> {
-		var candidate = candidates.get(sourceName);
+	public function candidateKind(declarationKey:String):Null<CellStorageKind> {
+		var candidate = candidates.get(declarationKey);
 		return candidate == null ? null : candidate.kind;
 	}
 
-	public function candidateNames():Array<String>
-		return [for (name in candidates.keys()) name];
+	public function candidateSourceNames():Array<String> {
+		var result:Map<String, Bool> = [];
+		for (declarationKey in candidates.keys()) {
+			var separator = declarationKey.lastIndexOf("@");
+			result.set(separator < 0 ? declarationKey : declarationKey.substring(0, separator), true);
+		}
+		return [for (name in result.keys()) name];
+	}
 
-	public function bind(sourceName:String, bindingId:String, type:CompilerType):Null<String> {
-		var candidate = candidates.get(sourceName);
+	public function bind(declarationKey:String, bindingId:String, type:CompilerType):Null<String> {
+		var candidate = candidates.get(declarationKey);
 		if (candidate == null)
 			return null;
 		if (!cells.exists(bindingId)) {
@@ -44,6 +50,16 @@ class BindingStoragePlan {
 			types.set(bindingId, type);
 			kinds.set(bindingId, candidate.kind);
 		}
+		return cells.get(bindingId);
+	}
+
+	public function requestBinding(bindingId:String, cellPrefix:String, kind:CellStorageKind, type:CompilerType):String {
+		if (!cells.exists(bindingId)) {
+			cells.set(bindingId, cellPrefix + ":" + bindingId);
+			types.set(bindingId, type);
+			kinds.set(bindingId, kind);
+		} else if (kinds.get(bindingId) == ExceptionEdge && kind == MutableCapture)
+			kinds.set(bindingId, kind);
 		return cells.get(bindingId);
 	}
 

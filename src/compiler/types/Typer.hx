@@ -22,6 +22,7 @@ import compiler.types.analysis.AbstractConstructorNormalizer;
 import compiler.types.analysis.ClosureConversion;
 import compiler.types.analysis.ControlFlow;
 import compiler.types.analysis.FlowAnalysis;
+import compiler.types.analysis.LexicalStorageAnalysis;
 import compiler.types.analysis.Scope;
 import compiler.semantic.SemanticProgram;
 import compiler.semantic.SemanticProgram.SemanticMethodInfo;
@@ -759,13 +760,14 @@ class Typer {
 		var functionName = specializedName == null ? (owner == null ? fn.name : owner + "." + fn.name) : specializedName;
 		var functionContext = enterBody(functionName, substitutions, specializedName == null ? null : owner);
 		var storage = CaptureAnalysis.analyze(fn.statements, [for (argument in fn.arguments) argument.name]);
+		var lexicalStorage = LexicalStorageAnalysis.analyze(fn.statements, fn.arguments);
 		for (name in storage.assigned.keys())
 			context.assigned.set(name, true);
-		for (name in storage.mutableCaptures.keys()) {
-			context.storage.request(name, '$' + 'cell:' + context.name + ':' + name, MutableCapture);
+		for (binding in lexicalStorage.mutableCaptures.keys()) {
+			context.storage.request(binding, '$' + 'cell:' + context.name + ':' + binding, MutableCapture);
 		}
-		for (name in storage.exceptionCells.keys()) {
-			context.storage.request(name, '$' + 'cell:' + context.name + ':' + name, ExceptionEdge);
+		for (binding in lexicalStorage.exceptionCells.keys()) {
+			context.storage.request(binding, '$' + 'cell:' + context.name + ':' + binding, ExceptionEdge);
 		}
 		var scope = new Scope();
 		var isConstructor = owner != null && classDecls.exists(owner) && fn.name == "new";
@@ -784,7 +786,7 @@ class Typer {
 		for (argument in fn.arguments) {
 			var type = argumentType(argument);
 			scope.define(argument.name, type, argument.span);
-			bindCell(argument.name, scope, type);
+			bindCell(argument.name, argument.span, scope, type);
 			arguments.push({name: scope.requireId(argument.name), type: type});
 		}
 		var result = lowerType(fn.result);
@@ -832,9 +834,9 @@ class Typer {
 		return id == null ? null : context.storage.cell(id);
 	}
 
-	function bindCell(name:String, scope:Scope, type:CompilerType):Void {
+	function bindCell(name:String, span:SourceSpan, scope:Scope, type:CompilerType):Void {
 		var id = scope.requireId(name);
-		context.storage.bind(name, id, type);
+		context.storage.bind(LexicalStorageAnalysis.key(name, span), id, type);
 	}
 
 	function typeStatements(statements:Array<AstStatement>, scope:Scope, result:Null<CompilerType>):Array<TypedStatement> {
@@ -851,10 +853,11 @@ class Typer {
 					continue;
 				case UninitializedDeclaration(name, declared, span):
 					var declaredType = lowerType(declared);
-					if (context.storage.hasCandidate(name) && context.storage.candidateKind(name) == MutableCapture)
+					var declarationKey = LexicalStorageAnalysis.key(name, span);
+					if (context.storage.hasCandidate(declarationKey) && context.storage.candidateKind(declarationKey) == MutableCapture)
 						fail("E1023", 'Captured local "$name" must be initialized at its declaration', span);
 					scope.define(name, declaredType, span, false);
-					bindCell(name, scope, declaredType);
+					bindCell(name, span, scope, declaredType);
 					output.push(TDeclare(scope.requireId(name), declaredType, span));
 				case VarDeclaration(name, declared, initializer, span):
 					var declaredType:Null<CompilerType>;
@@ -878,7 +881,7 @@ class Typer {
 					}
 					if (!predeclared)
 						scope.define(name, value.type, span);
-					bindCell(name, scope, value.type);
+					bindCell(name, span, scope, value.type);
 					output.push(TVar(scope.requireId(name), value, span));
 				case Return(expression, span):
 					var expected = result == null ? context.inferredResult : result;
@@ -927,7 +930,7 @@ class Typer {
 						var catchScope = new Scope(scope);
 						catchScopes.push(catchScope);
 						catchScope.define(catchClause.name, loweredCatchType, catchClause.span);
-						bindCell(catchClause.name, catchScope, loweredCatchType);
+						bindCell(catchClause.name, catchClause.span, catchScope, loweredCatchType);
 						typedCatches.push({
 							name: catchScope.requireId(catchClause.name),
 							type: loweredCatchType,
@@ -1168,7 +1171,7 @@ class Typer {
 					};
 					var loopScope = new Scope(scope);
 					loopScope.define(name, element, span);
-					bindCell(name, loopScope, element);
+					bindCell(name, span, loopScope, element);
 					if (valueName == null)
 						switch originalIterable.expression {
 							case TCollectionCall(map, "keys", []):
@@ -1184,7 +1187,7 @@ class Typer {
 						switch originalIterable.type {
 							case TMap(_, value):
 								loopScope.define(valueName, value, span);
-								bindCell(valueName, loopScope, value);
+								bindCell(valueName, span, loopScope, value);
 							default: fail("E1014", "Key/value for-in requires a Map", span);
 						}
 					context.loopEarlyExits[context.loopDepth] = true;
@@ -1711,7 +1714,7 @@ class Typer {
 								predicates.push(typeEnumPredicate(arguments[index], parameterType, storageType, index, constantName));
 							} else {
 								scope.define(binding, parameterType, bindingSpan);
-								bindCell(binding, scope, parameterType);
+								bindCell(binding, bindingSpan, scope, parameterType);
 								bindings.push({
 									name: scope.requireId(binding),
 									type: parameterType,
@@ -1742,7 +1745,7 @@ class Typer {
 											case Variable(binding, bindingSpan):
 												if (binding != "_") {
 													scope.define(binding, elementType, bindingSpan);
-													bindCell(binding, scope, elementType);
+													bindCell(binding, bindingSpan, scope, elementType);
 													bindings.push({
 														name: scope.requireId(binding),
 														type: elementType,
@@ -1788,7 +1791,7 @@ class Typer {
 				}
 				if (info != null) null; else if (name == "_") ""; else {
 					scope.define(name, expected, span);
-					bindCell(name, scope, expected);
+					bindCell(name, span, scope, expected);
 					scope.requireId(name);
 				}
 			default: null;
@@ -2118,9 +2121,8 @@ class Typer {
 									cellClass = scope.requireCellClass(name);
 								if (cellClass == null && context.assigned.exists(name)) {
 									var newCellClass = '$' + 'cell:' + context.name + ':' + name;
-									context.storage.request(name, newCellClass, MutableCapture);
-									bindCell(name, scope, captureType);
-									cellClass = boundCell(name, scope);
+									var bindingId = scope.requireId(name);
+									cellClass = context.storage.requestBinding(bindingId, newCellClass, MutableCapture, captureType);
 								}
 								var bindingId = scope.requireId(name),
 									captureSource:TypedCaptureSource = if (scope.isCellCapture(name)) CaptureCellEnvironmentField(name,
@@ -2153,21 +2155,14 @@ class Typer {
 					context.resultType = expectedFunction == null || inferContextualResult ? TVoid : expectedFunction.result;
 					context.contextualVoidLambda = expectedFunction != null && expectedFunction.result == TVoid;
 					CaptureAnalysis.collectAssignedLocals(body, context.assigned);
-					var lambdaDeclared:Map<String, Bool> = [];
-					for (argument in arguments)
-						lambdaDeclared.set(argument.name, true);
-					CaptureAnalysis.collectDeclaredLocals(body, lambdaDeclared);
-					var lambdaCandidates:Map<String, Bool> = [];
-					CaptureAnalysis.collectMutableCaptureCandidates(body, lambdaDeclared, lambdaCandidates);
-					for (name in lambdaCandidates.keys()) {
-						context.storage.request(name, '$' + 'cell:' + lambdaName + ':' + name, MutableCapture);
+					var lambdaStorage = LexicalStorageAnalysis.analyze(body, arguments);
+					for (binding in lambdaStorage.mutableCaptures.keys()) {
+						context.storage.request(binding, '$' + 'cell:' + lambdaName + ':' + binding, MutableCapture);
 					}
-					var exceptionCandidates:Map<String, Bool> = [];
-					CaptureAnalysis.collectExceptionCellCandidates(body, [for (argument in arguments) argument.name => true], exceptionCandidates);
-					for (name in exceptionCandidates.keys())
-						context.storage.request(name, "$cell:" + lambdaName + ":" + name, ExceptionEdge);
+					for (binding in lambdaStorage.exceptionCells.keys())
+						context.storage.request(binding, "$cell:" + lambdaName + ":" + binding, ExceptionEdge);
 					for (i in 0...arguments.length)
-						bindCell(arguments[i].name == "_" ? "$discard:" + i : arguments[i].name, typedBodyScope, lambdaArguments[i].type);
+						bindCell(arguments[i].name == "_" ? "$discard:" + i : arguments[i].name, arguments[i].span, typedBodyScope, lambdaArguments[i].type);
 					var typedBody = typeStatements(body, typedBodyScope, expectedFunction == null
 						|| inferContextualResult ? null : expectedFunction.result);
 					var inferredResult:CompilerType;
@@ -2720,7 +2715,7 @@ class Typer {
 							typeExpression(arguments[i], scope, functionType.arguments[i])
 					];
 					typed = coerceArguments(typed, functionType.arguments, name);
-					for (captured in context.storage.candidateNames())
+					for (captured in context.storage.candidateSourceNames())
 						scope.invalidate(captured);
 					new TypedExpression(TClosureCall(typeExpression(Variable(name, span), scope), typed), functionType.result, span);
 				} else {
