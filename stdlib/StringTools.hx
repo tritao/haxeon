@@ -19,22 +19,22 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  * IN THE SOFTWARE.
  */
-@:hlNative("realtime_runtime", "__string_starts_with")
+@:hlNative("haxeon_runtime", "__string_starts_with")
 extern function stringToolsStartsWith(s:String, start:String):Bool;
 
-@:hlNative("realtime_runtime", "__string_ends_with")
+@:hlNative("haxeon_runtime", "__string_ends_with")
 extern function stringToolsEndsWith(s:String, end:String):Bool;
 
-@:hlNative("realtime_runtime", "__string_replace")
+@:hlNative("haxeon_runtime", "__string_replace")
 extern function stringToolsReplace(s:String, sub:String, by:String):String;
 
-@:hlNative("realtime_runtime", "__string_ltrim")
+@:hlNative("haxeon_runtime", "__string_ltrim")
 extern function stringToolsLtrim(s:String):String;
 
-@:hlNative("realtime_runtime", "__string_trim")
+@:hlNative("haxeon_runtime", "__string_trim")
 extern function stringToolsTrim(s:String):String;
 
-@:hlNative("realtime_runtime", "__string_is_space")
+@:hlNative("haxeon_runtime", "__string_is_space")
 extern function stringToolsIsSpace(s:String, pos:Int):Bool;
 
 /** Common string helpers backed by the stable runtime ABI where necessary. */

@@ -19,19 +19,19 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  * IN THE SOFTWARE.
  */
-@:hlNative("realtime_runtime", "__std_parse_int")
+@:hlNative("haxeon_runtime", "__std_parse_int")
 extern function stdParseInt(value:String):Int;
 
-@:hlNative("realtime_runtime", "__std_parse_float")
+@:hlNative("haxeon_runtime", "__std_parse_float")
 extern function stdParseFloat(value:String):Float;
 
-@:hlNative("realtime_runtime", "__std_int_f64")
+@:hlNative("haxeon_runtime", "__std_int_f64")
 extern function stdIntFloat(value:Float):Int;
 
-@:hlNative("realtime_runtime", "__std_random")
+@:hlNative("haxeon_runtime", "__std_random")
 extern function stdRandom(limit:Int):Int;
 
-@:hlNative("realtime_runtime", "__std_string")
+@:hlNative("haxeon_runtime", "__std_string")
 extern function stdString(value:Dynamic):String;
 
 /** Supported core conversions backed by the stable runtime ABI. */

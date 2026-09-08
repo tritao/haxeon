@@ -4,7 +4,7 @@ import haxe.io.Bytes;
 import sys.thread.Mutex;
 
 /** Private declarations for the native module lifecycle and invocation ABI. */
-@:hlNative("realtime_runtime")
+@:hlNative("haxeon_runtime")
 private class RuntimeNative {
 	public static function load(bytes:hl.Bytes, length:Int, identity:hl.Bytes, identityLength:Int):hl.Abstract<"realtime_module">
 		return null;

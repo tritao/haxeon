@@ -22,31 +22,31 @@
 
 package sys;
 
-@:hlNative("realtime_runtime", "__sys_exists")
+@:hlNative("haxeon_runtime", "__sys_exists")
 extern function fileSystemExists(path:String):Bool;
 
-@:hlNative("realtime_runtime", "__sys_is_dir")
+@:hlNative("haxeon_runtime", "__sys_is_dir")
 extern function fileSystemIsDirectory(path:String):Bool;
 
-@:hlNative("realtime_runtime", "__sys_full_path")
+@:hlNative("haxeon_runtime", "__sys_full_path")
 extern function fileSystemFullPath(path:String):String;
 
-@:hlNative("realtime_runtime", "__sys_read_dir")
+@:hlNative("haxeon_runtime", "__sys_read_dir")
 extern function fileSystemReadDirectory(path:String):Array<String>;
 
-@:hlNative("realtime_runtime", "__sys_metadata")
+@:hlNative("haxeon_runtime", "__sys_metadata")
 extern function fileSystemMetadata(path:String):Null<Array<Int>>;
 
-@:hlNative("realtime_runtime", "__sys_create_dir")
+@:hlNative("haxeon_runtime", "__sys_create_dir")
 extern function fileSystemCreateDirectory(path:String, mode:Int):Bool;
 
-@:hlNative("realtime_runtime", "__sys_delete")
+@:hlNative("haxeon_runtime", "__sys_delete")
 extern function fileSystemDeleteFile(path:String):Bool;
 
-@:hlNative("realtime_runtime", "__sys_remove_dir")
+@:hlNative("haxeon_runtime", "__sys_remove_dir")
 extern function fileSystemDeleteDirectory(path:String):Bool;
 
-@:hlNative("realtime_runtime", "__sys_rename")
+@:hlNative("haxeon_runtime", "__sys_rename")
 extern function fileSystemRename(path:String, newPath:String):Bool;
 
 /** Supported filesystem queries backed by the stable runtime ABI. */

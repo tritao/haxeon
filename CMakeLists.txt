@@ -18,10 +18,10 @@ set(WITH_VIDEO OFF CACHE BOOL "Do not build optional HashLink libraries" FORCE)
 set(WITH_HEAPS OFF CACHE BOOL "Do not build optional HashLink libraries" FORCE)
 add_subdirectory(vendor/hashlink hashlink EXCLUDE_FROM_ALL)
 
-add_library(realtime_runtime SHARED native/runtime.c)
-target_include_directories(realtime_runtime PRIVATE vendor/hashlink/src)
-target_link_libraries(realtime_runtime PRIVATE libhl)
-set_target_properties(realtime_runtime PROPERTIES
+add_library(haxeon_runtime SHARED native/runtime.c)
+target_include_directories(haxeon_runtime PRIVATE vendor/hashlink/src)
+target_link_libraries(haxeon_runtime PRIVATE libhl)
+set_target_properties(haxeon_runtime PROPERTIES
   PREFIX ""
   SUFFIX ".hdll"
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/out"
@@ -40,9 +40,9 @@ set_target_properties(hl libhl PROPERTIES
 set_target_properties(hl PROPERTIES ENABLE_EXPORTS ON)
 
 if(UNIX)
-  set_target_properties(realtime_runtime PROPERTIES
+  set_target_properties(haxeon_runtime PROPERTIES
     BUILD_RPATH "${CMAKE_SOURCE_DIR}/.tools/hashlink"
   )
 endif()
 
-add_custom_target(haxeon-native DEPENDS hl realtime_runtime)
+add_custom_target(haxeon-native DEPENDS hl haxeon_runtime)

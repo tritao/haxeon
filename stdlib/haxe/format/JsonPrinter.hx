@@ -1,10 +1,10 @@
 /* Derived from the Haxe standard library JsonPrinter under the MIT license. */
 package haxe.format;
 
-@:hlNative("realtime_runtime", "__json_value_kind")
+@:hlNative("haxeon_runtime", "__json_value_kind")
 extern function jsonValueKind(value:Dynamic):Int;
 
-@:hlNative("realtime_runtime", "__reflect_array_get")
+@:hlNative("haxeon_runtime", "__reflect_array_get")
 extern function jsonArrayGet(value:Dynamic, index:Int):Dynamic;
 
 class JsonPrinter {

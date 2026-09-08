@@ -19,28 +19,28 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  * IN THE SOFTWARE.
  */
-@:hlNative("realtime_runtime", "__reflect_compare")
+@:hlNative("haxeon_runtime", "__reflect_compare")
 extern function reflectCompare(left:Dynamic, right:Dynamic):Int;
 
 @:hlNative("std", "fun_compare")
 extern function reflectCompareMethods(left:Dynamic, right:Dynamic):Bool;
 
-@:hlNative("realtime_runtime", "__reflect_field")
+@:hlNative("haxeon_runtime", "__reflect_field")
 extern function reflectField(object:Dynamic, field:String):Dynamic;
 
-@:hlNative("realtime_runtime", "__reflect_set_field")
+@:hlNative("haxeon_runtime", "__reflect_set_field")
 extern function reflectSetField(object:Dynamic, field:String, value:Dynamic):Void;
 
-@:hlNative("realtime_runtime", "__reflect_has_field")
+@:hlNative("haxeon_runtime", "__reflect_has_field")
 extern function reflectHasField(object:Dynamic, field:String):Bool;
 
-@:hlNative("realtime_runtime", "__reflect_field_count")
+@:hlNative("haxeon_runtime", "__reflect_field_count")
 extern function reflectFieldCount(object:Dynamic):Int;
 
-@:hlNative("realtime_runtime", "__reflect_field_name")
+@:hlNative("haxeon_runtime", "__reflect_field_name")
 extern function reflectFieldName(object:Dynamic, index:Int):String;
 
-@:hlNative("realtime_runtime", "__reflect_is_function")
+@:hlNative("haxeon_runtime", "__reflect_is_function")
 extern function reflectIsFunction(value:Dynamic):Bool;
 
 /** Supported reflection helpers backed by the stable runtime ABI. */

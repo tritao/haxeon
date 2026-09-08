@@ -31,55 +31,55 @@ extern function sysThreadCpuTime():Float;
 @:hlNative("std", "sys_process_memory")
 extern function sysProcessMemory():Float;
 
-@:hlNative("realtime_runtime", "__sys_get_cwd")
+@:hlNative("haxeon_runtime", "__sys_get_cwd")
 extern function sysGetCwd():String;
 
-@:hlNative("realtime_runtime", "__sys_full_path")
+@:hlNative("haxeon_runtime", "__sys_full_path")
 extern function sysFullPath(path:String):String;
 
-@:hlNative("realtime_runtime", "__sys_exe_path")
+@:hlNative("haxeon_runtime", "__sys_exe_path")
 extern function sysExecutablePath():String;
 
-@:hlNative("realtime_runtime", "__sys_get_env")
+@:hlNative("haxeon_runtime", "__sys_get_env")
 extern function sysGetEnv(name:String):Null<String>;
 
-@:hlNative("realtime_runtime", "__sys_system_name")
+@:hlNative("haxeon_runtime", "__sys_system_name")
 extern function sysSystemName():String;
 
-@:hlNative("realtime_runtime", "__sys_exists")
+@:hlNative("haxeon_runtime", "__sys_exists")
 extern function sysExists(path:String):Bool;
 
-@:hlNative("realtime_runtime", "__sys_is_dir")
+@:hlNative("haxeon_runtime", "__sys_is_dir")
 extern function sysIsDir(path:String):Bool;
 
-@:hlNative("realtime_runtime", "__sys_read_dir")
+@:hlNative("haxeon_runtime", "__sys_read_dir")
 extern function sysReadDir(path:String):Array<String>;
 
 @:hlNative("std", "sys_getpid")
 extern function sysGetPid():Int;
 
-@:hlNative("realtime_runtime", "__sys_args")
+@:hlNative("haxeon_runtime", "__sys_args")
 extern function sysArgs():Array<String>;
 
-@:hlNative("realtime_runtime", "__sys_set_cwd")
+@:hlNative("haxeon_runtime", "__sys_set_cwd")
 extern function sysSetCwd(path:String):Bool;
 
-@:hlNative("realtime_runtime", "__sys_put_env")
+@:hlNative("haxeon_runtime", "__sys_put_env")
 extern function sysPutEnv(name:String, value:String):Bool;
 
-@:hlNative("realtime_runtime", "__sys_create_dir")
+@:hlNative("haxeon_runtime", "__sys_create_dir")
 extern function sysCreateDir(path:String, mode:Int):Bool;
 
-@:hlNative("realtime_runtime", "__sys_remove_dir")
+@:hlNative("haxeon_runtime", "__sys_remove_dir")
 extern function sysRemoveDir(path:String):Bool;
 
-@:hlNative("realtime_runtime", "__sys_delete")
+@:hlNative("haxeon_runtime", "__sys_delete")
 extern function sysDelete(path:String):Bool;
 
-@:hlNative("realtime_runtime", "__sys_rename")
+@:hlNative("haxeon_runtime", "__sys_rename")
 extern function sysRename(path:String, newPath:String):Bool;
 
-@:hlNative("realtime_runtime", "__sys_command")
+@:hlNative("haxeon_runtime", "__sys_command")
 extern function sysCommand(command:String):Int;
 
 @:hlNative("std", "sys_sleep")
@@ -88,7 +88,7 @@ extern function sysSleep(seconds:Float):Void;
 @:hlNative("std", "sys_get_char")
 extern function sysGetChar(echo:Bool):Int;
 
-@:hlNative("realtime_runtime", "__sys_print")
+@:hlNative("haxeon_runtime", "__sys_print")
 extern function sysPrint(value:String):Void;
 
 /** Supported host and process operations exposed through HashLink. */

@@ -24,16 +24,16 @@ package sys.io;
 
 import haxe.io.Bytes;
 
-@:hlNative("realtime_runtime", "__file_get_content")
+@:hlNative("haxeon_runtime", "__file_get_content")
 extern function fileGetContent(path:String):String;
 
-@:hlNative("realtime_runtime", "__file_get_bytes")
+@:hlNative("haxeon_runtime", "__file_get_bytes")
 extern function fileGetBytes(path:String):Bytes;
 
-@:hlNative("realtime_runtime", "__file_save_content")
+@:hlNative("haxeon_runtime", "__file_save_content")
 extern function fileSaveContent(path:String, content:String):Void;
 
-@:hlNative("realtime_runtime", "__file_save_bytes")
+@:hlNative("haxeon_runtime", "__file_save_bytes")
 extern function fileSaveBytes(path:String, bytes:Bytes):Void;
 
 /** Supported whole-file operations backed by the stable runtime ABI. */

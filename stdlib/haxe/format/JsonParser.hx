@@ -1,7 +1,7 @@
 /* Derived from the Haxe standard library JsonParser under the MIT license. */
 package haxe.format;
 
-@:hlNative("realtime_runtime", "__reflect_dynamic_object")
+@:hlNative("haxeon_runtime", "__reflect_dynamic_object")
 extern function jsonDynamicObject():Dynamic;
 
 class JsonParser {

@@ -24,9 +24,9 @@ package haxe.io;
 
 /** Supported byte-buffer constructors backed by the stable runtime ABI. */
 extern class Bytes {
-	@:hlNative("realtime_runtime", "__bytes_alloc")
+	@:hlNative("haxeon_runtime", "__bytes_alloc")
 	public static function alloc(length:Int):Bytes;
 
-	@:hlNative("realtime_runtime", "__bytes_of_string")
+	@:hlNative("haxeon_runtime", "__bytes_of_string")
 	public static function ofString(value:String):Bytes;
 }

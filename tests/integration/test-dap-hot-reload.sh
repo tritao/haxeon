@@ -29,7 +29,7 @@ PY
 make -C "$repo_dir/vendor/hashlink" -j2 libhl.so hl
 cc -shared -fPIC -DHL_NAME\(n\)=realtime_\#\#n -I "$repo_dir/vendor/hashlink/src" \
   "$repo_dir/native/runtime.c" -L "$repo_dir/vendor/hashlink" -lhl \
-  -Wl,-rpath,"$repo_dir/vendor/hashlink" -o "$repo_dir/out/realtime_runtime.hdll"
+  -Wl,-rpath,"$repo_dir/vendor/hashlink" -o "$repo_dir/out/haxeon_runtime.hdll"
 if [[ ! -d "$adapter_dir/node_modules" ]]; then npm --prefix "$adapter_dir" ci --ignore-scripts; fi
 (
   cd "$adapter_dir"

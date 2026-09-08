@@ -3,19 +3,19 @@ private typedef ERegMatch = {
 	final len:Int;
 }
 
-@:hlNative("realtime_runtime", "__regexp_new")
+@:hlNative("haxeon_runtime", "__regexp_new")
 extern function regexpNew(pattern:String, options:String):hl.Abstract<"ereg">;
 
-@:hlNative("realtime_runtime", "__regexp_match")
+@:hlNative("haxeon_runtime", "__regexp_match")
 extern function regexpMatch(expression:hl.Abstract<"ereg">, value:String, position:Int, length:Int):Bool;
 
-@:hlNative("realtime_runtime", "__regexp_matched_pos")
+@:hlNative("haxeon_runtime", "__regexp_matched_pos")
 extern function regexpMatchedPos(expression:hl.Abstract<"ereg">, group:Int):Int;
 
-@:hlNative("realtime_runtime", "__regexp_matched_length")
+@:hlNative("haxeon_runtime", "__regexp_matched_length")
 extern function regexpMatchedLength(expression:hl.Abstract<"ereg">, group:Int):Int;
 
-@:hlNative("realtime_runtime", "__regexp_matched_num")
+@:hlNative("haxeon_runtime", "__regexp_matched_num")
 extern function regexpMatchedNum(expression:hl.Abstract<"ereg">):Int;
 
 /** PCRE2-backed regular expressions with Haxe-compatible global iteration. */

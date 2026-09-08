@@ -19,10 +19,10 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  * IN THE SOFTWARE.
  */
-@:hlNative("realtime_runtime", "__math_is_nan")
+@:hlNative("haxeon_runtime", "__math_is_nan")
 extern function mathIsNaN(value:Float):Bool;
 
-@:hlNative("realtime_runtime", "__math_is_finite")
+@:hlNative("haxeon_runtime", "__math_is_finite")
 extern function mathIsFinite(value:Float):Bool;
 
 /** Supported mathematical helpers backed by the stable runtime ABI. */

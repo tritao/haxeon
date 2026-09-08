@@ -4,7 +4,7 @@ set -euo pipefail
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
 hl="$root_dir/vendor/hashlink/hl"
 compiler="$root_dir/bootstrap/compiler.hl"
-runtime="$root_dir/out/realtime_runtime.hdll"
+runtime="$root_dir/out/haxeon_runtime.hdll"
 output="$root_dir/out/bootstrap/compiler-diagnostic.hl"
 report=${REPORT:-"$root_dir/out/diagnostics/bootstrap-crash.log"}
 

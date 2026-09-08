@@ -261,7 +261,7 @@ class IrProgramAssembler {
 		if (needsExceptionRuntime)
 			program.natives.push({
 				name: "__exception_matches",
-				library: "realtime_runtime",
+				library: "haxeon_runtime",
 				symbol: "__exception_matches",
 				arguments: [Dyn, TypeRef],
 				result: Bool
@@ -269,7 +269,7 @@ class IrProgramAssembler {
 		if (needsTypeTestRuntime)
 			program.natives.push({
 				name: "__std_is_of_type",
-				library: "realtime_runtime",
+				library: "haxeon_runtime",
 				symbol: "__std_is_of_type",
 				arguments: [Dyn, TypeRef],
 				result: Bool
@@ -277,35 +277,35 @@ class IrProgramAssembler {
 		if (needsArrayRuntime) {
 			program.natives.push({
 				name: "__array_alloc_i32",
-				library: "realtime_runtime",
+				library: "haxeon_runtime",
 				symbol: "__array_alloc_i32",
 				arguments: [I32],
 				result: Array(I32)
 			});
 			program.natives.push({
 				name: "__array_alloc_f64",
-				library: "realtime_runtime",
+				library: "haxeon_runtime",
 				symbol: "__array_alloc_f64",
 				arguments: [I32],
 				result: Array(F64)
 			});
 			program.natives.push({
 				name: "__array_alloc_bytes",
-				library: "realtime_runtime",
+				library: "haxeon_runtime",
 				symbol: "__array_alloc_bytes",
 				arguments: [I32],
 				result: Array(Bytes)
 			});
 			program.natives.push({
 				name: "__array_alloc_bool",
-				library: "realtime_runtime",
+				library: "haxeon_runtime",
 				symbol: "__array_alloc_bool",
 				arguments: [I32],
 				result: Array(Bool)
 			});
 			program.natives.push({
 				name: "__array_alloc_ref",
-				library: "realtime_runtime",
+				library: "haxeon_runtime",
 				symbol: "__array_alloc_ref",
 				arguments: [I32],
 				result: Array(Dyn)
@@ -321,7 +321,7 @@ class IrProgramAssembler {
 				var arrayType:IrType = Array(entry.type);
 				program.natives.push({
 					name: '__array_copy_${entry.name}',
-					library: "realtime_runtime",
+					library: "haxeon_runtime",
 					symbol: '__array_copy_${entry.name}',
 					arguments: [arrayType],
 					result: arrayType
@@ -329,91 +329,91 @@ class IrProgramAssembler {
 				if (entry.name == "bytes")
 					program.natives.push({
 						name: "__array_join_bytes",
-						library: "realtime_runtime",
+						library: "haxeon_runtime",
 						symbol: "__array_join_bytes",
 						arguments: [arrayType, Bytes],
 						result: Bytes
 					});
 				program.natives.push({
 					name: '__array_concat_${entry.name}',
-					library: "realtime_runtime",
+					library: "haxeon_runtime",
 					symbol: '__array_concat_${entry.name}',
 					arguments: [arrayType, arrayType],
 					result: arrayType
 				});
 				program.natives.push({
 					name: '__array_slice_${entry.name}',
-					library: "realtime_runtime",
+					library: "haxeon_runtime",
 					symbol: '__array_slice_${entry.name}',
 					arguments: [arrayType, I32, I32],
 					result: arrayType
 				});
 				program.natives.push({
 					name: '__array_splice_${entry.name}',
-					library: "realtime_runtime",
+					library: "haxeon_runtime",
 					symbol: '__array_splice_${entry.name}',
 					arguments: [arrayType, I32, I32],
 					result: arrayType
 				});
 				program.natives.push({
 					name: '__array_index_of_${entry.name}',
-					library: "realtime_runtime",
+					library: "haxeon_runtime",
 					symbol: '__array_index_of_${entry.name}',
 					arguments: [arrayType, entry.type],
 					result: I32
 				});
 				program.natives.push({
 					name: '__array_push_${entry.name}',
-					library: "realtime_runtime",
+					library: "haxeon_runtime",
 					symbol: '__array_push_${entry.name}',
 					arguments: [arrayType, entry.type],
 					result: I32
 				});
 				program.natives.push({
 					name: '__array_unshift_${entry.name}',
-					library: "realtime_runtime",
+					library: "haxeon_runtime",
 					symbol: '__array_unshift_${entry.name}',
 					arguments: [arrayType, entry.type],
 					result: I32
 				});
 				program.natives.push({
 					name: '__array_insert_${entry.name}',
-					library: "realtime_runtime",
+					library: "haxeon_runtime",
 					symbol: '__array_insert_${entry.name}',
 					arguments: [arrayType, I32, entry.type],
 					result: Void
 				});
 				program.natives.push({
 					name: '__array_pop_${entry.name}',
-					library: "realtime_runtime",
+					library: "haxeon_runtime",
 					symbol: '__array_pop_${entry.name}',
 					arguments: [arrayType],
 					result: entry.type
 				});
 				program.natives.push({
 					name: '__array_shift_${entry.name}',
-					library: "realtime_runtime",
+					library: "haxeon_runtime",
 					symbol: '__array_shift_${entry.name}',
 					arguments: [arrayType],
 					result: entry.type
 				});
 				program.natives.push({
 					name: '__array_resize_${entry.name}',
-					library: "realtime_runtime",
+					library: "haxeon_runtime",
 					symbol: '__array_resize_${entry.name}',
 					arguments: [arrayType, I32],
 					result: Void
 				});
 				program.natives.push({
 					name: '__array_remove_${entry.name}',
-					library: "realtime_runtime",
+					library: "haxeon_runtime",
 					symbol: '__array_remove_${entry.name}',
 					arguments: [arrayType, entry.type],
 					result: Bool
 				});
 				program.natives.push({
 					name: '__array_reverse_${entry.name}',
-					library: "realtime_runtime",
+					library: "haxeon_runtime",
 					symbol: '__array_reverse_${entry.name}',
 					arguments: [arrayType],
 					result: Void
@@ -423,7 +423,7 @@ class IrProgramAssembler {
 		if (needsStringRuntime)
 			program.natives.push({
 				name: "__string_concat",
-				library: "realtime_runtime",
+				library: "haxeon_runtime",
 				symbol: "__string_concat",
 				arguments: [Bytes, Bytes],
 				result: Bytes
@@ -448,63 +448,63 @@ class IrProgramAssembler {
 			}
 			program.natives.push({
 				name: '__${mapName}_alloc',
-				library: "realtime_runtime",
+				library: "haxeon_runtime",
 				symbol: '__${mapName}_alloc',
 				arguments: [],
 				result: mapType
 			});
 			program.natives.push({
 				name: '__${mapName}_set',
-				library: "realtime_runtime",
+				library: "haxeon_runtime",
 				symbol: '__${mapName}_set',
 				arguments: [mapType, keyIrType, valueIrType],
 				result: Void
 			});
 			program.natives.push({
 				name: '__${mapName}_exists',
-				library: "realtime_runtime",
+				library: "haxeon_runtime",
 				symbol: '__${mapName}_exists',
 				arguments: [mapType, keyIrType],
 				result: Bool
 			});
 			program.natives.push({
 				name: '__${mapName}_get',
-				library: "realtime_runtime",
+				library: "haxeon_runtime",
 				symbol: '__${mapName}_get',
 				arguments: [mapType, keyIrType],
 				result: Dyn
 			});
 			program.natives.push({
 				name: '__${mapName}_keys',
-				library: "realtime_runtime",
+				library: "haxeon_runtime",
 				symbol: '__${mapName}_keys',
 				arguments: [mapType],
 				result: Array(keyIrType)
 			});
 			program.natives.push({
 				name: '__${mapName}_values',
-				library: "realtime_runtime",
+				library: "haxeon_runtime",
 				symbol: '__${mapName}_values',
 				arguments: [mapType],
 				result: Array(valueIrType)
 			});
 			program.natives.push({
 				name: '__${mapName}_remove',
-				library: "realtime_runtime",
+				library: "haxeon_runtime",
 				symbol: '__${mapName}_remove',
 				arguments: [mapType, keyIrType],
 				result: Bool
 			});
 			program.natives.push({
 				name: '__${mapName}_clear',
-				library: "realtime_runtime",
+				library: "haxeon_runtime",
 				symbol: '__${mapName}_clear',
 				arguments: [mapType],
 				result: Void
 			});
 			program.natives.push({
 				name: '__${mapName}_size',
-				library: "realtime_runtime",
+				library: "haxeon_runtime",
 				symbol: '__${mapName}_size',
 				arguments: [mapType],
 				result: I32
@@ -513,7 +513,7 @@ class IrProgramAssembler {
 		if (needsStringRuntime)
 			program.natives.push({
 				name: "__string_length",
-				library: "realtime_runtime",
+				library: "haxeon_runtime",
 				symbol: "__string_length",
 				arguments: [Bytes],
 				result: I32
@@ -521,7 +521,7 @@ class IrProgramAssembler {
 		if (needsStringRuntime)
 			program.natives.push({
 				name: "__string_equal",
-				library: "realtime_runtime",
+				library: "haxeon_runtime",
 				symbol: "__string_equal",
 				arguments: [Bytes, Bytes],
 				result: Bool
@@ -529,7 +529,7 @@ class IrProgramAssembler {
 		if (needsStringRuntime)
 			program.natives.push({
 				name: "__string_index_of",
-				library: "realtime_runtime",
+				library: "haxeon_runtime",
 				symbol: "__string_index_of",
 				arguments: [Bytes, Bytes],
 				result: I32
@@ -537,7 +537,7 @@ class IrProgramAssembler {
 		if (needsStringRuntime)
 			program.natives.push({
 				name: "__string_substring",
-				library: "realtime_runtime",
+				library: "haxeon_runtime",
 				symbol: "__string_substring",
 				arguments: [Bytes, I32, I32],
 				result: Bytes
@@ -545,7 +545,7 @@ class IrProgramAssembler {
 		if (needsStringRuntime)
 			program.natives.push({
 				name: "__string_from_char_code",
-				library: "realtime_runtime",
+				library: "haxeon_runtime",
 				symbol: "__string_from_char_code",
 				arguments: [I32],
 				result: Bytes
@@ -553,7 +553,7 @@ class IrProgramAssembler {
 		if (needsStringRuntime)
 			program.natives.push({
 				name: "__string_char_at",
-				library: "realtime_runtime",
+				library: "haxeon_runtime",
 				symbol: "__string_char_at",
 				arguments: [Bytes, I32],
 				result: Bytes
@@ -561,7 +561,7 @@ class IrProgramAssembler {
 		if (needsStringRuntime)
 			program.natives.push({
 				name: "__string_char_code_at",
-				library: "realtime_runtime",
+				library: "haxeon_runtime",
 				symbol: "__string_char_code_at",
 				arguments: [Bytes, I32],
 				result: I32

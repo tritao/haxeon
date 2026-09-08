@@ -22,9 +22,9 @@
 
 /** Supported date value backed by the stable runtime ABI. */
 extern abstract Date(hl.Abstract<"realtime_date">) {
-	@:hlNative("realtime_runtime", "__date_now")
+	@:hlNative("haxeon_runtime", "__date_now")
 	public static function now():Date;
 
-	@:hlNative("realtime_runtime", "__date_get_time")
+	@:hlNative("haxeon_runtime", "__date_get_time")
 	public function getTime():Float;
 }

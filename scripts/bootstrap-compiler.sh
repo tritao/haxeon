@@ -4,7 +4,7 @@ set -euo pipefail
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
 haxe="$root_dir/.tools/haxe/haxe"
 hl="$root_dir/.tools/hashlink/hl"
-runtime="$root_dir/out/realtime_runtime.hdll"
+runtime="$root_dir/out/haxeon_runtime.hdll"
 checked_compiler="$root_dir/bootstrap/compiler.hl"
 seed_compiler="$root_dir/out/bootstrap/compiler-seed.hl"
 stage_one="$root_dir/out/bootstrap/compiler-stage-one.hl"

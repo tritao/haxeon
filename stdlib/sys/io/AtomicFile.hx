@@ -2,7 +2,7 @@ package sys.io;
 
 import haxe.io.Bytes;
 
-@:hlNative("realtime_runtime", "__file_write_atomic")
+@:hlNative("haxeon_runtime", "__file_write_atomic")
 extern function writeAtomicBytes(path:String, content:Bytes, replace:Bool):Null<String>;
 
 /** Durable whole-file publication. The destination is changed only after all
