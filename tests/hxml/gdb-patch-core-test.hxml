@@ -1,0 +1,5 @@
+-cp src
+-cp tests
+-cp tests/runtime
+-main GdbPatchCoreMain
+-hl out/gdb-patch-core-test.hl
