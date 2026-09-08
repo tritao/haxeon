@@ -128,6 +128,7 @@ captured-shadowing	42
 dynamic-argument	42
 anonymous-record	42
 switch-expression	42
+string-switch-statement	42
 throw-expression	42
 array-literal	42
 empty-array-flow-inference	42

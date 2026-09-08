@@ -448,8 +448,11 @@ class IrGenerator {
 						var predicateBlock = switchCase.predicates.length == 0 ? matchBlock : builder.createBlock();
 						if (switchCase.subjectBinding != null)
 							builder.jump(predicateBlock);
-						else
-							builder.branch(builder.equal(switchValue, caseValue), predicateBlock, nextBlock);
+						else {
+							var matches = switchType == Bytes ? builder.call("__string_equal", [switchValue, caseValue],
+								Bool) : builder.equal(switchValue, caseValue);
+							builder.branch(matches, predicateBlock, nextBlock);
+						}
 						if (switchCase.predicates.length > 0)
 							lowerEnumPredicates(switchName, switchType, switchCase.constructorIndex, switchCase.predicates, predicateBlock, matchBlock,
 								nextBlock, builder, localTypes);
