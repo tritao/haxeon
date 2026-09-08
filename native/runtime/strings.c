@@ -200,6 +200,10 @@ HL_PRIM int HL_NAME(__reflect_compare)( vdynamic *left, vdynamic *right ) {
 	return hl_dyn_compare(left,right);
 }
 
+HL_PRIM bool HL_NAME(__dynamic_equal)(vdynamic *left, vdynamic *right) {
+	return HL_NAME(__reflect_compare)(left, right) == 0;
+}
+
 HL_PRIM bool HL_NAME(__string_starts_with)( vbyte *value, vbyte *prefix ) {
 	int value_length = value == NULL ? 0 : (int)ustrlen((const uchar *)value);
 	int prefix_length = prefix == NULL ? 0 : (int)ustrlen((const uchar *)prefix);

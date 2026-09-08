@@ -220,6 +220,7 @@ DEFINE_PRIM(_I32,__std_int_f64,_F64);
 DEFINE_PRIM(_I32,__std_random,_I32);
 DEFINE_PRIM(_BYTES,__std_string,_DYN);
 DEFINE_PRIM(_I32,__reflect_compare,_DYN _DYN);
+DEFINE_PRIM(_BOOL,__dynamic_equal,_DYN _DYN);
 DEFINE_PRIM(_BOOL,__string_starts_with,_BYTES _BYTES);
 DEFINE_PRIM(_BOOL,__string_ends_with,_BYTES _BYTES);
 DEFINE_PRIM(_BYTES,__string_replace,_BYTES _BYTES _BYTES);

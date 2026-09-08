@@ -751,7 +751,9 @@ class IrGenerator {
 					left = builder.enumIndex(left);
 					right = builder.enumIndex(right);
 				}
-				lowerType(a.type) == Bytes ? builder.call("__string_equal", [left, right], Bool) : builder.equal(left, right);
+				lowerType(a.type) == Bytes ? builder.call("__string_equal", [left, right], Bool)
+					: lowerType(a.type) == Dyn || lowerType(b.type) == Dyn ? builder.call("__dynamic_equal", [left, right], Bool)
+					: builder.equal(left, right);
 			case TCall(name, args): builder.call(name, lowerOperands(args, builder, localTypes), lowerType(expression.type));
 			case TCollectionCall(receiver, operation, args):
 				var nativeName = switch receiver.type {

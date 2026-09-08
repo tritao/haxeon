@@ -20,6 +20,7 @@ class CompilerIntrinsics {
 		definitions.push(native("trace", "realtime_runtime", "__sys_print", [TString], TVoid));
 		definitions.push(native("__std_int_f64", "realtime_runtime", "__std_int_f64", [TFloat], TInt));
 		definitions.push(native("__std_string", "realtime_runtime", "__std_string", [TDynamic], TString));
+		definitions.push(native("__dynamic_equal", "realtime_runtime", "__dynamic_equal", [TDynamic, TDynamic], TBool));
 
 		// Primitive String methods lowered directly by the typer.
 		definitions.push(native("__string_compare_full", "std", "string_compare_full", [TString, TString], TInt));
