@@ -15,7 +15,7 @@ enum HxiAbiValue {
 	VoidValue;
 	IntegerValue(bits:Int, sign:HxiIntegerSign);
 	FloatValue(bits:Int);
-	PointerValue(bits:Int, nullable:Bool);
+	PointerValue(bits:Int, nullable:Bool, opaque:Bool);
 	AggregateValue(size:Int, align:Int);
 }
 
@@ -84,10 +84,10 @@ class HxiAbi {
 					throw "Void has no value ABI";
 				VoidValue;
 			case Primitive(name): classifyPrimitive(name);
-			case Pointer(_): PointerValue(pointerBits, false);
+			case Pointer(element): PointerValue(pointerBits, false, opaquePointee(element));
 			case Nullable(element):
 				switch classify(element, allowVoid) {
-					case PointerValue(bits, _): PointerValue(bits, true);
+					case PointerValue(bits, _, opaque): PointerValue(bits, true, opaque);
 					case _: throw "Nullable ABI value must be a pointer";
 				}
 			case Const(element): classify(element, allowVoid);
@@ -102,6 +102,18 @@ class HxiAbi {
 					case Opaque(_, _): throw 'Opaque HXI type "$name" cannot be passed by value';
 					case _: throw 'HXI declaration "$name" is not a type';
 				}
+		};
+
+	function opaquePointee(type:HxiType):Bool
+		return switch type {
+			case Const(element): opaquePointee(element);
+			case Named(name):
+				switch declarations.get(name) {
+					case Opaque(_, _): true;
+					case Alias(_, target, _): opaquePointee(target);
+					case _: false;
+				}
+			case _: false;
 		};
 
 	function classifyPrimitive(name:String):HxiAbiValue

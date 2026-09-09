@@ -24,7 +24,7 @@ class HxiProjection {
 					supported = false;
 					break;
 				}
-				arguments.push(irType(value.code));
+				arguments.push(irType(value.code, false, value.nativePointer));
 				codes.push(Std.string(value.code));
 			}
 			var returnValue = project(fn.result, true);
@@ -81,35 +81,40 @@ class HxiProjection {
 		return output.toString();
 	}
 
-	static function project(value:HxiAbiValue, allowVoid:Bool):Null<{haxeType:String, code:Int}>
+	static function project(value:HxiAbiValue, allowVoid:Bool):Null<{haxeType:String, code:Int, nativePointer:Bool}>
 		return switch value {
-			case VoidValue: allowVoid ? {haxeType: "Void", code: 0} : null;
-			case IntegerValue(64, sign): {haxeType: "haxe.Int64", code: sign == Unsigned ? 8 : 7};
+			case VoidValue: allowVoid ? {haxeType: "Void", code: 0, nativePointer: false} : null;
+			case IntegerValue(64, sign): {haxeType: "haxe.Int64", code: sign == Unsigned ? 8 : 7, nativePointer: false};
 			case IntegerValue(bits, sign) if (bits <= 32):
 				var unsigned = sign == Unsigned || sign == PlainChar;
 				{
 					haxeType: "Int",
+					nativePointer: false,
 					code: switch bits {
 						case 8: unsigned ? 2 : 1;
 						case 16: unsigned ? 4 : 3;
 						default: unsigned ? 6 : 5;
 					}
 				};
-			case FloatValue(32): {haxeType: "Float", code: 9};
-			case FloatValue(64): {haxeType: "Float", code: 10};
-			case PointerValue(_, nullable): {haxeType: nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes", code: 11};
+			case FloatValue(32): {haxeType: "Float", code: 9, nativePointer: false};
+			case FloatValue(64): {haxeType: "Float", code: 10, nativePointer: false};
+			case PointerValue(_, nullable, opaque): {
+					haxeType: opaque ? (nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">') : (nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes"),
+					code: 11,
+					nativePointer: opaque
+				};
 			case _: null;
 		};
 
 	static function escape(value:String):String
 		return StringTools.replace(StringTools.replace(value, "\\", "\\\\"), '"', '\\"');
 
-	static function irType(code:Int, result:Bool = false):IrType
+	static function irType(code:Int, result:Bool = false, nativePointer:Bool = false):IrType
 		return switch code {
 			case 0: Void;
 			case 7 | 8: I64;
 			case 9 | 10: F64;
-			case 11: Abstract(result ? "native_pointer" : "realtime_bytes");
+			case 11: Abstract(result || nativePointer ? "native_pointer" : "realtime_bytes");
 			default: I32;
 		};
 }

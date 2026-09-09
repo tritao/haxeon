@@ -339,7 +339,20 @@ static vdynamic *haxeon_native_invoke( vbyte *library, vbyte *symbol, vbyte *sig
 		case HAXEON_NATIVE_F32: { float converted = (float)value->v.d; memcpy(slots + index * HAXEON_NATIVE_SLOT_SIZE,&converted,sizeof(float)); break; }
 		case HAXEON_NATIVE_F64: memcpy(slots + index * HAXEON_NATIVE_SLOT_SIZE,&value->v.d,sizeof(double)); break;
 		case HAXEON_NATIVE_POINTER: {
-			void *pointer = value->t->kind == HABSTRACT ? ((realtime_bytes *)value->v.ptr)->data : value->v.bytes;
+			void *pointer;
+			if( value->t->kind != HABSTRACT )
+				pointer = value->v.bytes;
+			else {
+				const char *abstract_name = hl_to_utf8(value->t->abs_name);
+				if( strcmp(abstract_name,"native_pointer") == 0 ) {
+					haxeon_native_pointer *native_pointer = (haxeon_native_pointer *)value->v.ptr;
+					if( native_pointer == NULL || native_pointer->value == NULL ) hl_error("Closed native pointer argument");
+					pointer = native_pointer->value;
+				} else if( strcmp(abstract_name,"realtime_bytes") == 0 )
+					pointer = ((realtime_bytes *)value->v.ptr)->data;
+				else
+					hl_error("Unsupported abstract ordinary C pointer argument");
+			}
 			memcpy(slots + index * HAXEON_NATIVE_SLOT_SIZE,&pointer,sizeof(void *));
 			break;
 		}
@@ -430,9 +443,23 @@ HL_PRIM bool HL_NAME(native_pointer_is_closed)( haxeon_native_pointer *pointer )
 	return pointer == NULL || pointer->value == NULL;
 }
 
-HL_PRIM haxeon_native_pointer *HL_NAME(native_pointer_invoke_0)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release ) {
-	return haxeon_native_pointer_invoke(library,symbol,signature,ownership,release,NULL,0);
-}
+HL_PRIM haxeon_native_pointer *HL_NAME(native_pointer_invoke_0)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release ) { return haxeon_native_pointer_invoke(library,symbol,signature,ownership,release,NULL,0); }
+HL_PRIM haxeon_native_pointer *HL_NAME(native_pointer_invoke_1)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, vdynamic *a0 ) { vdynamic *arguments[] = {a0}; return haxeon_native_pointer_invoke(library,symbol,signature,ownership,release,arguments,1); }
+HL_PRIM haxeon_native_pointer *HL_NAME(native_pointer_invoke_2)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, vdynamic *a0, vdynamic *a1 ) { vdynamic *arguments[] = {a0,a1}; return haxeon_native_pointer_invoke(library,symbol,signature,ownership,release,arguments,2); }
+HL_PRIM haxeon_native_pointer *HL_NAME(native_pointer_invoke_3)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, vdynamic *a0, vdynamic *a1, vdynamic *a2 ) { vdynamic *arguments[] = {a0,a1,a2}; return haxeon_native_pointer_invoke(library,symbol,signature,ownership,release,arguments,3); }
+HL_PRIM haxeon_native_pointer *HL_NAME(native_pointer_invoke_4)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3 ) { vdynamic *arguments[] = {a0,a1,a2,a3}; return haxeon_native_pointer_invoke(library,symbol,signature,ownership,release,arguments,4); }
+HL_PRIM haxeon_native_pointer *HL_NAME(native_pointer_invoke_5)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4}; return haxeon_native_pointer_invoke(library,symbol,signature,ownership,release,arguments,5); }
+HL_PRIM haxeon_native_pointer *HL_NAME(native_pointer_invoke_6)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5}; return haxeon_native_pointer_invoke(library,symbol,signature,ownership,release,arguments,6); }
+HL_PRIM haxeon_native_pointer *HL_NAME(native_pointer_invoke_7)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6}; return haxeon_native_pointer_invoke(library,symbol,signature,ownership,release,arguments,7); }
+HL_PRIM haxeon_native_pointer *HL_NAME(native_pointer_invoke_8)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7}; return haxeon_native_pointer_invoke(library,symbol,signature,ownership,release,arguments,8); }
+HL_PRIM haxeon_native_pointer *HL_NAME(native_pointer_invoke_9)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8}; return haxeon_native_pointer_invoke(library,symbol,signature,ownership,release,arguments,9); }
+HL_PRIM haxeon_native_pointer *HL_NAME(native_pointer_invoke_10)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9}; return haxeon_native_pointer_invoke(library,symbol,signature,ownership,release,arguments,10); }
+HL_PRIM haxeon_native_pointer *HL_NAME(native_pointer_invoke_11)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10}; return haxeon_native_pointer_invoke(library,symbol,signature,ownership,release,arguments,11); }
+HL_PRIM haxeon_native_pointer *HL_NAME(native_pointer_invoke_12)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11}; return haxeon_native_pointer_invoke(library,symbol,signature,ownership,release,arguments,12); }
+HL_PRIM haxeon_native_pointer *HL_NAME(native_pointer_invoke_13)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11, vdynamic *a12 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12}; return haxeon_native_pointer_invoke(library,symbol,signature,ownership,release,arguments,13); }
+HL_PRIM haxeon_native_pointer *HL_NAME(native_pointer_invoke_14)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11, vdynamic *a12, vdynamic *a13 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13}; return haxeon_native_pointer_invoke(library,symbol,signature,ownership,release,arguments,14); }
+HL_PRIM haxeon_native_pointer *HL_NAME(native_pointer_invoke_15)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11, vdynamic *a12, vdynamic *a13, vdynamic *a14 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13,a14}; return haxeon_native_pointer_invoke(library,symbol,signature,ownership,release,arguments,15); }
+HL_PRIM haxeon_native_pointer *HL_NAME(native_pointer_invoke_16)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11, vdynamic *a12, vdynamic *a13, vdynamic *a14, vdynamic *a15 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13,a14,a15}; return haxeon_native_pointer_invoke(library,symbol,signature,ownership,release,arguments,16); }
 
 HL_PRIM vdynamic *HL_NAME(native_invoke_0)( vbyte *library, vbyte *symbol, vbyte *signature ) { return haxeon_native_invoke(library,symbol,signature,NULL,0); }
 HL_PRIM vdynamic *HL_NAME(native_invoke_1)( vbyte *library, vbyte *symbol, vbyte *signature, vdynamic *a0 ) { vdynamic *a[] = {a0}; return haxeon_native_invoke(library,symbol,signature,a,1); }

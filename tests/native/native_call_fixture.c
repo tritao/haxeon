@@ -37,8 +37,10 @@ FIXTURE_API int32_t native_fixture_i64_check( int64_t value ) {
 static int32_t native_fixture_release_count;
 static int32_t native_fixture_borrowed_value = 42;
 
-FIXTURE_API void *native_fixture_owned( void ) {
-	return malloc(1);
+FIXTURE_API void *native_fixture_owned( int32_t value ) {
+	int32_t *result = (int32_t *)malloc(sizeof(int32_t));
+	if( result != NULL ) *result = value;
+	return result;
 }
 
 FIXTURE_API void native_fixture_release( void *value ) {
@@ -48,6 +50,10 @@ FIXTURE_API void native_fixture_release( void *value ) {
 
 FIXTURE_API void *native_fixture_borrowed( void ) {
 	return &native_fixture_borrowed_value;
+}
+
+FIXTURE_API int32_t native_fixture_pointer_value( const int32_t *value ) {
+	return value == NULL ? 0 : *value;
 }
 
 FIXTURE_API int32_t native_fixture_was_released( void ) {

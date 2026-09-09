@@ -70,8 +70,6 @@ class HlLower {
 				dispatchKey = '$arity:$pointerResult';
 			if (pointerResult && native.pointerOwnership == "unspecified")
 				throw 'Ordinary C pointer result "${native.name}" requires @borrowed or @owned metadata before execution';
-			if (pointerResult && arity != 0)
-				throw 'Ordinary C pointer results currently require a zero-argument function, got $arity for "${native.name}"';
 			if (!dispatchArities.exists(dispatchKey)) {
 				dispatchArities.set(dispatchKey, true);
 				cDispatchNatives.push({
@@ -759,7 +757,7 @@ class HlLower {
 
 	static function unsupportedCDispatchArgument(type:IrType):Bool
 		return switch type {
-			case I32, I64, Bool, F64, Abstract("realtime_bytes"): false;
+			case I32, I64, Bool, F64, Abstract("realtime_bytes"), Abstract("native_pointer"): false;
 			default: true;
 		};
 
