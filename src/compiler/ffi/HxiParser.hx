@@ -181,6 +181,7 @@ class HxiParser {
 				fail('Duplicate HXI declaration "${named.name}"', named.span);
 			names.set(named.name, named.span);
 		}
+		validateAliasCycles(value.declarations);
 		for (declaration in value.declarations)
 			switch declaration {
 				case Opaque(_, _) | Constant(_, _, _):
@@ -204,6 +205,41 @@ class HxiParser {
 					validateType(result, names, span, true);
 			}
 	}
+
+	function validateAliasCycles(declarations:Array<HxiDeclaration>):Void {
+		var aliases:Map<String, {type:HxiType, span:SourceSpan}> = [];
+		for (declaration in declarations)
+			switch declaration {
+				case Alias(name, type, span):
+					aliases.set(name, {type: type, span: span});
+				case _:
+			}
+		var visiting:Map<String, Bool> = [], complete:Map<String, Bool> = [];
+		function visit(name:String):Void {
+			if (complete.exists(name))
+				return;
+			if (visiting.exists(name))
+				fail('Cyclic HXI type alias "$name"', aliases.get(name).span);
+			var alias = aliases.get(name);
+			if (alias == null)
+				return;
+			visiting.set(name, true);
+			visitTypeAliases(alias.type, aliases, visit);
+			visiting.remove(name);
+			complete.set(name, true);
+		}
+		for (name in aliases.keys())
+			visit(name);
+	}
+
+	static function visitTypeAliases(type:HxiType, aliases:Map<String, {type:HxiType, span:SourceSpan}>, visit:String->Void):Void
+		switch type {
+			case Named(name) if (aliases.exists(name)):
+				visit(name);
+			case Pointer(element) | Const(element) | Array(element, _):
+				visitTypeAliases(element, aliases, visit);
+			case _:
+		}
 
 	function validateType(type:HxiType, names:Map<String, SourceSpan>, span:SourceSpan, allowVoid:Bool):Void
 		switch type {

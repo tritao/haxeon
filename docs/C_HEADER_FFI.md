@@ -39,6 +39,13 @@ Interfaces are parsed and registered before source loading. Their names must be
 unique, and the registered set becomes immutable after the first compilation,
 matching the existing native-table stability rule for live modules.
 
+The ABI classifier currently recognizes x86, x86-64, ARM, AArch64, RISC-V 64,
+and WebAssembly target triples. It preserves the Windows LLP64 distinction
+(`c_long` is 32-bit even with 64-bit pointers), represents plain `c_char`
+without inventing a signedness, and resolves function symbols into explicit
+integer, floating-point, pointer, or aggregate ABI values. Opaque types may
+only be used behind pointers.
+
 Clang must be available as `clang`. Variadic functions and flexible array
 members are rejected with declaration diagnostics instead of being assigned an
 unsafe approximation.

@@ -51,6 +51,7 @@ class TestCatalog {
 		"FunctionTypeSyntaxMain",
 		"CHeaderImporterMain",
 		"HxiParserMain",
+		"HxiAbiMain",
 	];
 
 	static final toolingMains = ["LanguageServiceMain", "ProtocolMain", "LspProtocolMain", "UtestDiscoveryMain"];
