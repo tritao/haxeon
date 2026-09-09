@@ -26,6 +26,7 @@ typedef struct native_fixture_arrays {
 
 static int32_t native_fixture_borrowed_value = 42;
 typedef int32_t (*native_fixture_binary_callback)( int32_t, int32_t );
+typedef int32_t (*native_fixture_event_callback)( const native_fixture_point *, void * );
 static native_fixture_binary_callback native_fixture_retained_callback;
 
 FIXTURE_API int32_t native_fixture_add( int32_t left, int32_t right ) {
@@ -34,6 +35,11 @@ FIXTURE_API int32_t native_fixture_add( int32_t left, int32_t right ) {
 
 FIXTURE_API int32_t native_fixture_call_callback( native_fixture_binary_callback callback, int32_t left, int32_t right ) {
 	return callback == NULL ? 0 : callback(left,right);
+}
+
+FIXTURE_API int32_t native_fixture_call_event( native_fixture_event_callback callback, int32_t with_user_data ) {
+	native_fixture_point event = {10, 11};
+	return callback == NULL ? 0 : callback(&event,with_user_data ? &native_fixture_borrowed_value : NULL);
 }
 
 FIXTURE_API void native_fixture_set_callback( native_fixture_binary_callback callback ) {

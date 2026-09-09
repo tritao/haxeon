@@ -52,6 +52,8 @@ typedef struct haxeon_native_callback {
 	hl_thread *thread;
 	ffi_type *argument_types[HAXEON_NATIVE_MAX_ARGUMENTS];
 	unsigned char argument_codes[HAXEON_NATIVE_MAX_ARGUMENTS];
+	int pointer_sizes[HAXEON_NATIVE_MAX_ARGUMENTS];
+	bool pointer_nullable[HAXEON_NATIVE_MAX_ARGUMENTS];
 	int argument_count;
 	int result_code;
 } haxeon_native_callback;
@@ -181,8 +183,15 @@ static void haxeon_native_callback_finalize( void *value ) {
 	haxeon_native_callback_release((haxeon_native_callback *)value);
 }
 
-static vdynamic *haxeon_native_callback_argument( int code, void *value ) {
+static void haxeon_native_scoped_bytes_finalize( void *value ) {
+	realtime_bytes *bytes = (realtime_bytes *)value;
+	bytes->data = NULL;
+	bytes->length = 0;
+}
+
+static vdynamic *haxeon_native_callback_argument( haxeon_native_callback *callback, int index, void *value, bool *valid ) {
 	vdynamic *result;
+	int code = callback->argument_codes[index];
 	switch( code ) {
 	case HAXEON_NATIVE_I8: result = hl_alloc_dynamic(&hlt_i32); result->v.i = *(int8_t *)value; return result;
 	case HAXEON_NATIVE_U8: result = hl_alloc_dynamic(&hlt_i32); result->v.i = *(uint8_t *)value; return result;
@@ -192,7 +201,47 @@ static vdynamic *haxeon_native_callback_argument( int code, void *value ) {
 	case HAXEON_NATIVE_I64: case HAXEON_NATIVE_U64: result = hl_alloc_dynamic(&hlt_i64); result->v.i64 = *(int64_t *)value; return result;
 	case HAXEON_NATIVE_F32: result = hl_alloc_dynamic(&hlt_f64); result->v.d = *(float *)value; return result;
 	case HAXEON_NATIVE_F64: result = hl_alloc_dynamic(&hlt_f64); result->v.d = *(double *)value; return result;
+	case HAXEON_NATIVE_POINTER: {
+		void *pointer = *(void **)value;
+		if( pointer == NULL ) {
+			if( !callback->pointer_nullable[index] ) *valid = false;
+			return NULL;
+		}
+		hl_type *expected = callback->closure->t->fun->args[index];
+		if( expected->kind != HABSTRACT ) { *valid = false; return NULL; }
+		const char *name = hl_to_utf8(expected->abs_name);
+		result = hl_alloc_dynamic(expected);
+		if( strcmp(name,"native_pointer") == 0 ) {
+			haxeon_native_pointer *wrapped = (haxeon_native_pointer *)hl_gc_alloc_finalizer(sizeof(haxeon_native_pointer));
+			memset(wrapped,0,sizeof(*wrapped));
+			wrapped->finalize = haxeon_native_pointer_finalize;
+			wrapped->value = pointer;
+			result->v.ptr = wrapped;
+			return result;
+		}
+		if( strcmp(name,"realtime_bytes") == 0 && callback->pointer_sizes[index] > 0 ) {
+			realtime_bytes *wrapped = (realtime_bytes *)hl_gc_alloc_finalizer(sizeof(realtime_bytes));
+			wrapped->finalize = haxeon_native_scoped_bytes_finalize;
+			wrapped->data = (vbyte *)pointer;
+			wrapped->length = callback->pointer_sizes[index];
+			result->v.ptr = wrapped;
+			return result;
+		}
+		*valid = false;
+		return NULL;
+	}
 	default: return NULL;
+	}
+}
+
+static void haxeon_native_callback_invalidate( vdynamic *argument ) {
+	if( argument == NULL || argument->t == NULL || argument->t->kind != HABSTRACT ) return;
+	const char *name = hl_to_utf8(argument->t->abs_name);
+	if( strcmp(name,"native_pointer") == 0 )
+		((haxeon_native_pointer *)argument->v.ptr)->value = NULL;
+	else if( strcmp(name,"realtime_bytes") == 0 ) {
+		((realtime_bytes *)argument->v.ptr)->data = NULL;
+		((realtime_bytes *)argument->v.ptr)->length = 0;
 	}
 }
 
@@ -215,10 +264,17 @@ static void haxeon_native_callback_dispatch( ffi_cif *cif, void *output, void **
 		return;
 	}
 	vdynamic *arguments[HAXEON_NATIVE_MAX_ARGUMENTS];
+	bool valid = true;
 	for( int index = 0; index < callback->argument_count; index++ )
-		arguments[index] = haxeon_native_callback_argument(callback->argument_codes[index],values[index]);
+		arguments[index] = haxeon_native_callback_argument(callback,index,values[index],&valid);
+	if( !valid ) {
+		for( int index = 0; index < callback->argument_count; index++ ) haxeon_native_callback_invalidate(arguments[index]);
+		haxeon_native_callback_zero(callback->result_code,output);
+		return;
+	}
 	bool raised = false;
 	vdynamic *result = hl_dyn_call_safe(callback->closure,arguments,callback->argument_count,&raised);
+	for( int index = 0; index < callback->argument_count; index++ ) haxeon_native_callback_invalidate(arguments[index]);
 	if( callback->result_code == HAXEON_NATIVE_VOID ) return;
 	if( raised || result == NULL ) { haxeon_native_callback_zero(callback->result_code,output); return; }
 	switch( callback->result_code ) {
@@ -397,7 +453,26 @@ static bool haxeon_native_parse_signature( const char *signature, unsigned char 
 	return true;
 }
 
-HL_PRIM haxeon_native_callback *HL_NAME(native_callback_create)( realtime_bytes *signature_bytes, vdynamic *value ) {
+static bool haxeon_native_parse_callback_metadata( realtime_bytes *bytes, int count, int *values ) {
+	if( bytes == NULL ) return count == 0;
+	char *text = haxeon_native_string(bytes->data,bytes->length), *cursor = text;
+	if( text == NULL ) return false;
+	for( int index = 0; index < count; index++ ) {
+		char *end;
+		long value = strtol(cursor,&end,10);
+		if( end == cursor || value < 0 || value > 0x7FFFFFFF || (index + 1 < count && *end != ',') || (index + 1 == count && *end != 0) ) {
+			free(text);
+			return false;
+		}
+		values[index] = (int)value;
+		cursor = *end == ',' ? end + 1 : end;
+	}
+	free(text);
+	return count > 0 || bytes->length == 0;
+}
+
+HL_PRIM haxeon_native_callback *HL_NAME(native_callback_create)( realtime_bytes *signature_bytes, realtime_bytes *pointer_sizes,
+	realtime_bytes *pointer_nullable, vdynamic *value ) {
 	char *signature = signature_bytes == NULL ? NULL : haxeon_native_string(signature_bytes->data,signature_bytes->length);
 	if( signature == NULL || value == NULL || value->t == NULL || value->t->kind != HFUN ) {
 		free(signature);
@@ -411,8 +486,12 @@ HL_PRIM haxeon_native_callback *HL_NAME(native_callback_create)( realtime_bytes 
 		hl_error("Invalid native callback signature");
 	}
 	free(signature);
+	int nullable_values[HAXEON_NATIVE_MAX_ARGUMENTS];
+	if( !haxeon_native_parse_callback_metadata(pointer_sizes,callback->argument_count,callback->pointer_sizes)
+		|| !haxeon_native_parse_callback_metadata(pointer_nullable,callback->argument_count,nullable_values) )
+		hl_error("Invalid native callback pointer metadata");
+	for( int index = 0; index < callback->argument_count; index++ ) callback->pointer_nullable[index] = nullable_values[index] != 0;
 	for( int index = 0; index < callback->argument_count; index++ ) {
-		if( callback->argument_codes[index] == HAXEON_NATIVE_POINTER ) hl_error("Pointer callback arguments are not supported yet");
 		callback->argument_types[index] = haxeon_native_ffi_type(callback->argument_codes[index],false);
 	}
 	if( callback->result_code == HAXEON_NATIVE_POINTER ) hl_error("Pointer callback results are not supported yet");

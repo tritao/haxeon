@@ -74,15 +74,29 @@ class HxiProjection {
 		for (declaration in model.declarations)
 			switch declaration {
 				case Callback(name, parameters, result, _):
-					var argumentTypes = [], codes = [], supported = true;
+					var argumentTypes = [], codes = [], pointerSizes = [], pointerNullable = [], supported = true;
 					for (parameter in parameters) {
-						var value = project(abi.classify(parameter.type), false);
+						var classified = abi.classify(parameter.type),
+							value = callbackProject(classified);
 						if (value == null) {
 							supported = false;
 							break;
 						}
 						argumentTypes.push('${parameter.name}:${value.haxeType}');
 						codes.push(Std.string(value.code));
+						switch classified {
+							case PointerValue(_, nullable, _, structure):
+								var declaration = structure == null ? null : declarations.get(structure),
+									size = switch declaration {
+										case Structure(_, value, _, _, _): value;
+										case _: 0;
+									};
+								pointerSizes.push(Std.string(size));
+								pointerNullable.push(nullable ? "1" : "0");
+							case _:
+								pointerSizes.push("0");
+								pointerNullable.push("0");
+						}
 					}
 					var returnValue = project(abi.classify(result, true), true);
 					if (!supported || returnValue == null)
@@ -90,7 +104,7 @@ class HxiProjection {
 					var signature = codes.join(",") + ">" + returnValue.code;
 					output.add('typedef $name = (${argumentTypes.join(", ")})->${returnValue.haxeType};\n');
 					output.add('abstract ${name}Callback(hl.Abstract<"native_callback">) {\n');
-					output.add('\tpublic inline function new(callback:$name) this = ${model.name}.__hxi_callback_create(haxe.io.Bytes.ofString("$signature"), callback);\n');
+					output.add('\tpublic inline function new(callback:$name) this = ${model.name}.__hxi_callback_create(haxe.io.Bytes.ofString("$signature"), haxe.io.Bytes.ofString("${pointerSizes.join(",")}"), haxe.io.Bytes.ofString("${pointerNullable.join(",")}"), callback);\n');
 					output.add('\tpublic inline function close():Bool return ${model.name}.__hxi_callback_close_$name(this);\n');
 					output.add('}\n');
 					output.add('@:hlNative("realtime_runtime", "native_callback_close") extern function __hxi_callback_close_$name(callback:${name}Callback):Bool;\n');
@@ -183,7 +197,7 @@ class HxiProjection {
 						case _: false;
 					}) declaration
 		].length > 0) {
-			output.add('@:hlNative("realtime_runtime", "native_callback_create") extern function __hxi_callback_create(signature:haxe.io.Bytes, callback:Dynamic):hl.Abstract<"native_callback">;\n');
+			output.add('@:hlNative("realtime_runtime", "native_callback_create") extern function __hxi_callback_create(signature:haxe.io.Bytes, pointerSizes:haxe.io.Bytes, pointerNullable:haxe.io.Bytes, callback:Dynamic):hl.Abstract<"native_callback">;\n');
 		}
 		for (access in ["I8", "U8", "I16", "U16", "I32", "I64", "F32", "F64"]) {
 			var types = structAccesses.get(access);
@@ -286,6 +300,22 @@ class HxiProjection {
 					nullable: nullable
 				};
 			case _: null;
+		};
+
+	static function callbackProject(value:HxiAbiValue):Null<{
+		haxeType:String,
+		code:Int,
+		nativePointer:Bool,
+		nullable:Bool
+	}>
+		return switch value {
+			case PointerValue(_, nullable, _, structure): {
+					haxeType: structure == null ? (nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">') : (nullable ? 'Null<$structure>' : structure),
+					code: 11,
+					nativePointer: structure == null,
+					nullable: nullable
+				};
+			case _: project(value, false);
 		};
 
 	static function escape(value:String):String

@@ -128,8 +128,15 @@ function; `close()` releases both resources and is idempotent. If C retains the
 function pointer, callers must retain this handle until they have unregistered
 the callback, then close it. Invocations are accepted only on the thread where
 the handle was created; a call from another thread does not enter Haxe and
-returns a zero value. Pointer callback arguments/results, variadic callbacks,
-and callbacks with more than sixteen arguments are rejected for now.
+returns a zero value. Pointer arguments are borrowed, scoped wrappers: opaque
+and `void *` values use non-owning pointer handles, while pointers to fixed-layout
+structures use typed byte views of exactly the declared structure size. Nullable
+pointers map to Haxe `null`. Every non-null wrapper is invalidated immediately
+after the callback returns, including exceptional returns, so retaining one does
+not extend the native address lifetime. A null address passed for a non-null HXI
+parameter causes the callback to return zero without entering Haxe. Pointer
+callback results, variadic callbacks, and callbacks with more than sixteen
+arguments are rejected for now.
 
 ## Native call runtime
 

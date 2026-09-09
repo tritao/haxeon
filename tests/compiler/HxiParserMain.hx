@@ -72,8 +72,11 @@ class HxiParserMain {
 		callbackCompiler.update("CallbackMain.hx",
 			"import callbacks; function main():Int { var callback = new BinaryCallback(function(left:Int, right:Int) return left + right); return callbacks.apply(callback); }");
 		callbackCompiler.analyze("CallbackMain");
-		expectError('interface bad @target("x86_64-linux-gnu") { callback Invalid = fn(value: ptr<void>) -> void; }',
-			"Callbacks currently support only scalar");
+		var pointerCallback = HxiParser.parse("pointer-callback.hxi",
+			'interface pointers @target("x86_64-linux-gnu") @library("pointers") { opaque Context; callback Visit = fn(context: nullable<ptr<Context>>) -> void; }');
+		expect(HxiProjection.source(pointerCallback).indexOf('context:Null<hl.Abstract<"native_pointer">>') >= 0,
+			"callback pointer arguments should project as borrowed typed handles");
+		expectError('interface bad @target("x86_64-linux-gnu") { callback Invalid = fn() -> ptr<void>; }', "Callbacks support scalar and pointer arguments");
 		expectError(valid + "garbage", "Unexpected token");
 		expectError(StringTools.replace(valid, "@offset(8)", "@offset(16)"), "invalid offset");
 		expectError('interface bad @target("x86_64-linux-gnu") { struct pair @layout(8, 4) { left: i32 @offset(0); right: i32 @offset(0); } }',
