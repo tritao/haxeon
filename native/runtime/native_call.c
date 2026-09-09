@@ -36,6 +36,13 @@ typedef struct haxeon_native_function {
 	int result_type;
 } haxeon_native_function;
 
+typedef struct haxeon_native_pointer {
+	void (*finalize)( void * );
+	haxeon_native_control *control;
+	void *value;
+	void (*release)( void * );
+} haxeon_native_pointer;
+
 #ifdef _WIN32
 #define HAXEON_NATIVE_TLS __declspec(thread)
 #else
@@ -89,6 +96,15 @@ static void haxeon_native_function_finalize( void *value ) {
 	haxeon_native_release_control(function->control);
 	function->control = NULL;
 	function->symbol = NULL;
+}
+
+static void haxeon_native_pointer_finalize( void *value ) {
+	haxeon_native_pointer *pointer = (haxeon_native_pointer *)value;
+	if( pointer->value != NULL && pointer->release != NULL ) pointer->release(pointer->value);
+	pointer->value = NULL;
+	pointer->release = NULL;
+	haxeon_native_release_control(pointer->control);
+	pointer->control = NULL;
 }
 
 static ffi_type *haxeon_native_ffi_type( int type, bool result ) {
@@ -356,6 +372,66 @@ static vdynamic *haxeon_native_invoke( vbyte *library, vbyte *symbol, vbyte *sig
 		result = hl_alloc_dynamic(&hlt_bytes); memcpy(&result->v.bytes,output,sizeof(void *)); return result;
 	default: hl_error("Unsupported ordinary C result type"); return NULL;
 	}
+}
+
+static haxeon_native_pointer *haxeon_native_pointer_invoke( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership,
+	vbyte *release, vdynamic **arguments, int argument_count ) {
+	vdynamic *result = haxeon_native_invoke(library,symbol,signature,arguments,argument_count);
+	if( result == NULL || result->t != &hlt_bytes ) hl_error("Ordinary C pointer call returned an invalid value");
+	const char *converted = hl_to_utf8((const uchar *)library);
+	char *library_name = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
+	converted = hl_to_utf8((const uchar *)symbol);
+	char *symbol_name = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
+	converted = hl_to_utf8((const uchar *)signature);
+	char *signature_text = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
+	if( library_name == NULL || symbol_name == NULL || signature_text == NULL ) hl_error("Could not retain ordinary C pointer descriptor");
+	haxeon_native_cached_call *entry = haxeon_native_cached_resolve(library_name,symbol_name,signature_text);
+	free(library_name);
+	free(symbol_name);
+	free(signature_text);
+	converted = hl_to_utf8((const uchar *)ownership);
+	char *ownership_text = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
+	converted = hl_to_utf8((const uchar *)release);
+	char *release_name = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
+	if( ownership_text == NULL || release_name == NULL ) hl_error("Could not retain ordinary C pointer policy");
+	haxeon_native_pointer *pointer = (haxeon_native_pointer *)hl_gc_alloc_finalizer(sizeof(haxeon_native_pointer));
+	memset(pointer,0,sizeof(*pointer));
+	pointer->finalize = haxeon_native_pointer_finalize;
+	pointer->value = result->v.bytes;
+	if( strcmp(ownership_text,"owned") == 0 ) {
+		if( release_name[0] == 0 ) hl_error("Owned ordinary C pointer has no release symbol");
+#ifdef _WIN32
+		pointer->release = (void (*)(void *))GetProcAddress((HMODULE)entry->function->control->handle,release_name);
+#else
+		dlerror();
+		pointer->release = (void (*)(void *))dlsym(entry->function->control->handle,release_name);
+#endif
+		if( pointer->release == NULL ) hl_error("Could not resolve ordinary C pointer release symbol");
+		pointer->control = entry->function->control;
+		pointer->control->references++;
+	} else if( strcmp(ownership_text,"borrowed") != 0 )
+		hl_error("Ordinary C pointer result has no ownership policy");
+	free(ownership_text);
+	free(release_name);
+	return pointer;
+}
+
+HL_PRIM bool HL_NAME(native_pointer_close)( haxeon_native_pointer *pointer ) {
+	if( pointer == NULL || pointer->value == NULL || pointer->release == NULL ) return false;
+	pointer->release(pointer->value);
+	pointer->value = NULL;
+	pointer->release = NULL;
+	haxeon_native_release_control(pointer->control);
+	pointer->control = NULL;
+	return true;
+}
+
+HL_PRIM bool HL_NAME(native_pointer_is_closed)( haxeon_native_pointer *pointer ) {
+	return pointer == NULL || pointer->value == NULL;
+}
+
+HL_PRIM haxeon_native_pointer *HL_NAME(native_pointer_invoke_0)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release ) {
+	return haxeon_native_pointer_invoke(library,symbol,signature,ownership,release,NULL,0);
 }
 
 HL_PRIM vdynamic *HL_NAME(native_invoke_0)( vbyte *library, vbyte *symbol, vbyte *signature ) { return haxeon_native_invoke(library,symbol,signature,NULL,0); }

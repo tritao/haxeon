@@ -120,6 +120,9 @@ typedef IrCNative = {
 	final library:String;
 	final symbol:String;
 	final signature:String;
+	final pointerOwnership:String;
+	final pointerRelease:Null<String>;
+	final pointerLength:Null<String>;
 	final arguments:Array<IrType>;
 	final result:IrType;
 }

@@ -24,12 +24,23 @@ typedef HxiParameter = {
 	final span:SourceSpan;
 }
 
+enum HxiPointerOwnership {
+	Unspecified;
+	Borrowed;
+	Owned(releaseSymbol:String);
+}
+
+typedef HxiResultPolicy = {
+	final ownership:HxiPointerOwnership;
+	final length:Null<String>;
+}
+
 enum HxiDeclaration {
 	Opaque(name:String, span:SourceSpan);
 	Alias(name:String, type:HxiType, span:SourceSpan);
 	Constant(name:String, value:String, span:SourceSpan);
 	Structure(name:String, size:Int, align:Int, fields:Array<HxiField>, span:SourceSpan);
-	Function(name:String, parameters:Array<HxiParameter>, result:HxiType, symbol:Null<String>, leaf:Bool, span:SourceSpan);
+	Function(name:String, parameters:Array<HxiParameter>, result:HxiType, symbol:Null<String>, leaf:Bool, resultPolicy:HxiResultPolicy, span:SourceSpan);
 }
 
 class HxiInterface {

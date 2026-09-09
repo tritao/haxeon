@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stddef.h>
+#include <stdlib.h>
 
 #ifdef _WIN32
 #define FIXTURE_API __declspec(dllexport)
@@ -31,4 +32,24 @@ FIXTURE_API int64_t native_fixture_i64_value( void ) {
 
 FIXTURE_API int32_t native_fixture_i64_check( int64_t value ) {
 	return value == INT64_C(0x10000002A) ? 42 : 0;
+}
+
+static int32_t native_fixture_release_count;
+static int32_t native_fixture_borrowed_value = 42;
+
+FIXTURE_API void *native_fixture_owned( void ) {
+	return malloc(1);
+}
+
+FIXTURE_API void native_fixture_release( void *value ) {
+	free(value);
+	native_fixture_release_count++;
+}
+
+FIXTURE_API void *native_fixture_borrowed( void ) {
+	return &native_fixture_borrowed_value;
+}
+
+FIXTURE_API int32_t native_fixture_was_released( void ) {
+	return native_fixture_release_count == 1 ? 42 : 0;
 }

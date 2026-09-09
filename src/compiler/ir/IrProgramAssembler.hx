@@ -48,6 +48,9 @@ class IrProgramAssembler {
 							library: native.library,
 							symbol: native.symbol,
 							signature: signature,
+							pointerOwnership: "unspecified",
+							pointerRelease: null,
+							pointerLength: null,
 							arguments: [for (argument in native.arguments) IrGenerator.lowerType(argument)],
 							result: IrGenerator.lowerType(native.result)
 						};

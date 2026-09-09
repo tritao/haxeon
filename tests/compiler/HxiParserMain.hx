@@ -2,6 +2,7 @@ import compiler.Diagnostic.CompileError;
 import compiler.Compiler;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiType;
+import compiler.ffi.HxiModel.HxiPointerOwnership;
 import compiler.ffi.HxiParser;
 
 class HxiParserMain {
@@ -30,7 +31,7 @@ class HxiParserMain {
 				throw "expected parsed structure";
 		}
 		switch parsed.declarations[5] {
-			case Function("nk_open", _, Named("nk_handle"), "nk_open_v1", false, _):
+			case Function("nk_open", _, Named("nk_handle"), "nk_open_v1", false, _, _):
 			case _:
 				throw "expected symbol-bound function";
 		}
@@ -42,6 +43,16 @@ class HxiParserMain {
 		expectError(StringTools.replace(valid, "@leaf", "@leaf(1)"), "does not accept values");
 		expectError(StringTools.replace(valid, "@leaf", "@unknown"), "Unsupported @unknown metadata");
 		expectError(StringTools.replace(valid, "ptr<const<nk_options>>", "nullable<i32>"), "nullable<> requires a pointer type");
+		var pointerPolicies = HxiParser.parse("pointers.hxi",
+			'interface pointers @target("x86_64-linux-gnu") @library("pointers") { opaque context; extern fn create() -> ptr<context> @owned("context_destroy") @length("context_size"); extern fn current() -> nullable<ptr<context>> @borrowed; }');
+		switch pointerPolicies.declarations[1] {
+			case Function(_, _, _, _, _, {ownership: Owned("context_destroy"), length: "context_size"}, _):
+			case _:
+				throw "owned pointer result policy was not retained";
+		}
+		expectError('interface bad @target("x86_64-linux-gnu") { opaque context; extern fn value() -> ptr<context> @borrowed @owned("free"); }',
+			"cannot combine @borrowed and @owned");
+		expectError('interface bad @target("x86_64-linux-gnu") { extern fn value() -> i32 @borrowed; }', "requires a pointer return type");
 		var compiler = new Compiler();
 		compiler.addFfiInterface("nativekit.hxi", valid);
 		expect(compiler.ffiInterfaces().length == 1

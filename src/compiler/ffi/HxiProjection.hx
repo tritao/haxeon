@@ -5,6 +5,7 @@ import compiler.ffi.HxiAbi.HxiIntegerSign;
 import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ir.Ir.IrCNative;
 import compiler.ir.Ir.IrType;
+import compiler.ffi.HxiModel.HxiPointerOwnership;
 
 /** Projects bridgeable HXI functions into a synthetic, source-visible module. */
 class HxiProjection {
@@ -27,6 +28,11 @@ class HxiProjection {
 				codes.push(Std.string(value.code));
 			}
 			var returnValue = project(fn.result, true);
+			var ownership = switch fn.resultPolicy.ownership {
+				case Unspecified: {kind: "unspecified", release: null};
+				case Borrowed: {kind: "borrowed", release: null};
+				case Owned(release): {kind: "owned", release: release};
+			};
 			if (supported && returnValue != null)
 				result.push({
 					name: model.name + "." + fn.name,
@@ -34,7 +40,10 @@ class HxiProjection {
 					symbol: fn.symbol,
 					signature: codes.join(",") + ">" + returnValue.code,
 					arguments: arguments,
-					result: irType(returnValue.code)
+					result: irType(returnValue.code, true),
+					pointerOwnership: ownership.kind,
+					pointerRelease: ownership.release,
+					pointerLength: fn.resultPolicy.length
 				});
 		}
 		return result;
@@ -66,7 +75,8 @@ class HxiProjection {
 			output.add('@:cNative("${escape(library)}", "${escape(fn.symbol)}", "$signature")\n');
 			output.add('extern function ${fn.name}(');
 			output.add([for (index in 0...argumentTypes.length) 'arg$index:${argumentTypes[index]}'].join(", "));
-			output.add('):${result.haxeType};\n');
+			var resultType = result.code == 11 ? 'hl.Abstract<"native_pointer">' : result.haxeType;
+			output.add('):$resultType;\n');
 		}
 		return output.toString();
 	}
@@ -94,12 +104,12 @@ class HxiProjection {
 	static function escape(value:String):String
 		return StringTools.replace(StringTools.replace(value, "\\", "\\\\"), '"', '\\"');
 
-	static function irType(code:Int):IrType
+	static function irType(code:Int, result:Bool = false):IrType
 		return switch code {
 			case 0: Void;
 			case 7 | 8: I64;
 			case 9 | 10: F64;
-			case 11: Abstract("realtime_bytes");
+			case 11: Abstract(result ? "native_pointer" : "realtime_bytes");
 			default: I32;
 		};
 }

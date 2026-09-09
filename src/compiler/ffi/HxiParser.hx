@@ -9,6 +9,7 @@ import compiler.ffi.HxiModel.HxiField;
 import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiModel.HxiParameter;
 import compiler.ffi.HxiModel.HxiType;
+import compiler.ffi.HxiModel.HxiPointerOwnership;
 
 private typedef HxiToken = {
 	final text:String;
@@ -145,12 +146,29 @@ class HxiParser {
 		expect(")");
 		expect("->");
 		var result = parseType(),
-			metadata = parseMetadata(["symbol", "leaf"]),
+			metadata = parseMetadata(["symbol", "leaf", "borrowed", "owned", "length"]),
 			symbol = metadataValue(metadata, "symbol", false),
 			leaf = metadataFlag(metadata, "leaf"),
+			borrowed = metadataFlag(metadata, "borrowed"),
+			owned = metadataValue(metadata, "owned", false),
+			length = metadataValue(metadata, "length", false),
 			end = expect(";").span;
-		return Function(name, parameters, result, symbol, leaf, start.merge(end));
+		if (borrowed && owned != null)
+			fail('Function "$name" cannot combine @borrowed and @owned', start);
+		if ((borrowed || owned != null || length != null) && !pointerLike(result))
+			fail('Pointer result metadata on "$name" requires a pointer return type', start);
+		return Function(name, parameters, result, symbol, leaf, {
+			ownership: owned != null ? Owned(owned) : borrowed ? Borrowed : Unspecified,
+			length: length
+		}, start.merge(end));
 	}
+
+	static function pointerLike(type:HxiType):Bool
+		return switch type {
+			case Pointer(_): true;
+			case Nullable(element) | Const(element): pointerLike(element);
+			case _: false;
+		};
 
 	function parseType():HxiType {
 		var name = identifier();
@@ -203,7 +221,7 @@ class HxiParser {
 							fail('Field "${field.name}" has an invalid offset for struct "$name"', field.span);
 						validateType(field.type, names, field.span, false);
 					}
-				case Function(_, parameters, result, _, _, span):
+				case Function(_, parameters, result, _, _, _, span):
 					for (parameter in parameters)
 						validateType(parameter.type, names, parameter.span, false);
 					validateType(result, names, span, true);
@@ -269,7 +287,7 @@ class HxiParser {
 
 	static function declarationName(value:HxiDeclaration):{name:String, span:SourceSpan}
 		return switch value {
-			case Opaque(name, span) | Alias(name, _, span) | Constant(name, _, span) | Structure(name, _, _, _, span) | Function(name, _, _, _, _, span):
+			case Opaque(name, span) | Alias(name, _, span) | Constant(name, _, span) | Structure(name, _, _, _, span) | Function(name, _, _, _, _, _, span):
 				{name: name, span: span};
 		}
 

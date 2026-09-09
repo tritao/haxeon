@@ -3,6 +3,7 @@ package compiler.ffi;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiModel.HxiType;
+import compiler.ffi.HxiModel.HxiResultPolicy;
 
 enum HxiIntegerSign {
 	Signed;
@@ -25,6 +26,7 @@ typedef HxiFunctionAbi = {
 	final arguments:Array<HxiAbiValue>;
 	final result:HxiAbiValue;
 	final leaf:Bool;
+	final resultPolicy:HxiResultPolicy;
 }
 
 /** Resolves target-dependent C types without conflating them with fixed-width types. */
@@ -60,14 +62,15 @@ class HxiAbi {
 		var result:Array<HxiFunctionAbi> = [];
 		for (declaration in model.declarations)
 			switch declaration {
-				case Function(name, parameters, returnType, symbol, leaf, _):
+				case Function(name, parameters, returnType, symbol, leaf, resultPolicy, _):
 					result.push({
 						name: name,
 						symbol: symbol == null ? name : symbol,
 						library: model.library,
 						arguments: [for (parameter in parameters) classify(parameter.type, false)],
 						result: classify(returnType, true),
-						leaf: leaf
+						leaf: leaf,
+						resultPolicy: resultPolicy
 					});
 				case _:
 			}
@@ -124,6 +127,6 @@ class HxiAbi {
 
 	static function nameOf(declaration:HxiDeclaration):String
 		return switch declaration {
-			case Opaque(name, _) | Alias(name, _, _) | Constant(name, _, _) | Structure(name, _, _, _, _) | Function(name, _, _, _, _, _): name;
+			case Opaque(name, _) | Alias(name, _, _) | Constant(name, _, _) | Structure(name, _, _, _, _) | Function(name, _, _, _, _, _, _): name;
 		};
 }

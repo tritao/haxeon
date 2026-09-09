@@ -60,20 +60,26 @@ class HlLower {
 	}
 
 	function lowerProgram(program:IrProgram):HlCode {
-		var dispatchArities:Map<Int, Bool> = [];
+		var dispatchArities:Map<String, Bool> = [];
 		for (native in program.cNatives) {
 			cNatives.set(native.name, native);
 			var arity = native.arguments.length;
 			if (arity > 16)
 				throw 'Ordinary C calls support at most 16 arguments, got $arity for "${native.name}"';
-			if (!dispatchArities.exists(arity)) {
-				dispatchArities.set(arity, true);
+			var pointerResult = isNativePointer(native.result),
+				dispatchKey = '$arity:$pointerResult';
+			if (pointerResult && native.pointerOwnership == "unspecified")
+				throw 'Ordinary C pointer result "${native.name}" requires @borrowed or @owned metadata before execution';
+			if (pointerResult && arity != 0)
+				throw 'Ordinary C pointer results currently require a zero-argument function, got $arity for "${native.name}"';
+			if (!dispatchArities.exists(dispatchKey)) {
+				dispatchArities.set(dispatchKey, true);
 				cDispatchNatives.push({
-					name: '__c_native_invoke_$arity',
+					name: pointerResult ? '__c_native_pointer_invoke_$arity' : '__c_native_invoke_$arity',
 					library: "realtime_runtime",
-					symbol: 'native_invoke_$arity',
-					arguments: [Bytes, Bytes, Bytes].concat([for (_ in 0...arity) Dyn]),
-					result: Dyn
+					symbol: pointerResult ? 'native_pointer_invoke_$arity' : 'native_invoke_$arity',
+					arguments: (pointerResult ? [Bytes, Bytes, Bytes, Bytes, Bytes] : [Bytes, Bytes, Bytes]).concat([for (_ in 0...arity) Dyn]),
+					result: pointerResult ? Abstract("native_pointer") : Dyn
 				});
 			}
 		}
@@ -436,6 +442,15 @@ class HlLower {
 						instructions.push(HlInstruction.LoadString(callArguments[0], internString(native.library)));
 						instructions.push(HlInstruction.LoadString(callArguments[1], internString(native.symbol)));
 						instructions.push(HlInstruction.LoadString(callArguments[2], internString(native.signature)));
+						var pointerResult = isNativePointer(native.result);
+						if (pointerResult) {
+							var ownership = temporaryRegister(Bytes, registerTypes),
+								release = temporaryRegister(Bytes, registerTypes);
+							instructions.push(HlInstruction.LoadString(ownership, internString(native.pointerOwnership)));
+							instructions.push(HlInstruction.LoadString(release, internString(native.pointerRelease == null ? "" : native.pointerRelease)));
+							callArguments.push(ownership);
+							callArguments.push(release);
+						}
 						for (argument in arguments) {
 							var boxed = temporaryRegister(Dyn, registerTypes);
 							if (nullValues.exists(argument.id))
@@ -444,10 +459,14 @@ class HlLower {
 								instructions.push(HlInstruction.ToDyn(boxed, requireRegister(argument, registers)));
 							callArguments.push(boxed);
 						}
-						var dynamicResult = temporaryRegister(Dyn, registerTypes);
-						instructions.push(HlInstruction.CallN(dynamicResult, requireFunction('__c_native_invoke_${arguments.length}'), callArguments));
+						var dynamicResult = temporaryRegister(pointerResult ? Abstract("native_pointer") : Dyn, registerTypes);
+						instructions.push(HlInstruction.CallN(dynamicResult,
+							requireFunction(pointerResult ? '__c_native_pointer_invoke_${arguments.length}' : '__c_native_invoke_${arguments.length}'),
+							callArguments));
 						if (native.result == Void)
 							defineRegister(output, registers, registerTypes);
+						else if (pointerResult)
+							instructions.push(HlInstruction.Move(defineRegister(output, registers, registerTypes), dynamicResult));
 						else
 							instructions.push(HlInstruction.SafeCast(defineRegister(output, registers, registerTypes), dynamicResult));
 					case StaticClosure(output, functionName):
@@ -746,8 +765,14 @@ class HlLower {
 
 	static function unsupportedCDispatchResult(type:IrType):Bool
 		return switch type {
-			case I32, I64, Bool, F64: false;
+			case I32, I64, Bool, F64, Abstract("native_pointer"): false;
 			default: true;
+		};
+
+	static function isNativePointer(type:IrType):Bool
+		return switch type {
+			case Abstract("native_pointer"): true;
+			case _: false;
 		};
 
 	static function instructionOutput(instruction:IrInstruction):Null<IrValue>
