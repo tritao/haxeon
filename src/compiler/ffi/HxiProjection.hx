@@ -88,7 +88,7 @@ class HxiProjection {
 				case _:
 			}
 		if (hasCallbacks)
-			output.add('enum abstract HxiCallbackError(Int) from Int to Int { var None = 0; var Exception = 1; var WrongThread = 2; var PointerContract = 3; var AggregateContract = 4; }\n');
+			output.add('enum abstract HxiCallbackError(Int) from Int to Int { var None = 0; var Exception = 1; var WrongThread = 2; var PointerContract = 3; var AggregateContract = 4; var StringContract = 5; }\n');
 		for (declaration in model.declarations)
 			switch declaration {
 				case Callback(name, parameters, result, callConvention, _):
@@ -110,6 +110,9 @@ class HxiProjection {
 										case _: 0;
 									};
 								pointerSizes.push(Std.string(size));
+								pointerNullable.push(nullable ? "1" : "0");
+							case Utf8Value(nullable):
+								pointerSizes.push("0");
 								pointerNullable.push(nullable ? "1" : "0");
 							case _:
 								pointerSizes.push("0");
@@ -304,6 +307,12 @@ class HxiProjection {
 					nativePointer: false,
 					nullable: false
 				};
+			case Utf8Value(nullable): {
+					haxeType: nullable ? "Null<String>" : "String",
+					code: 13,
+					nativePointer: false,
+					nullable: nullable
+				};
 			case FloatValue(32): {
 					haxeType: "Float",
 					code: 9,
@@ -384,6 +393,7 @@ class HxiProjection {
 			case FloatValue(64): "10";
 			case FloatValue(bits): throw 'Unsupported $bits-bit floating-point ABI value';
 			case PointerValue(_, _, _, _) | CallbackValue(_, _, _, _): "11";
+			case Utf8Value(nullable): nullable ? "14" : "13";
 		};
 
 	static function abiLayout(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>, abi:HxiAbi):{size:Int, align:Int}
@@ -406,6 +416,9 @@ class HxiProjection {
 				var size = Std.int(bits / 8);
 				{size: size, align: Std.int(Math.min(size, abi.pointerBits / 8))};
 			case PointerValue(_, _, _, _) | CallbackValue(_, _, _, _):
+				var size = Std.int(abi.pointerBits / 8);
+				{size: size, align: size};
+			case Utf8Value(_):
 				var size = Std.int(abi.pointerBits / 8);
 				{size: size, align: size};
 			case AggregateValue(_, size, align): {size: size, align: align};
@@ -485,6 +498,7 @@ class HxiProjection {
 			case 9 | 10: F64;
 			case 11: Abstract(result ? "native_pointer" : nativeAbstract == null ? "realtime_bytes" : nativeAbstract);
 			case 12: Abstract("realtime_bytes");
+			case 13: Bytes;
 			default: I32;
 		};
 }

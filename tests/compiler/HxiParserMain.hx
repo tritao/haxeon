@@ -99,6 +99,16 @@ class HxiParserMain {
 		expect(aggregateCallbackSource.indexOf("typedef Transform = (value:point)->point") >= 0
 			&& aggregateCallbackSource.indexOf("{8;4;5,5}>{8;4;5,5}") >= 0,
 			"aggregate callbacks should retain their recursive ABI descriptor");
+		var strings = HxiParser.parse("strings.hxi",
+			'interface strings @target("x86_64-linux-gnu") @library("strings") { callback Filter = fn(value: utf8) -> nullable<utf8>; extern fn check(value: utf8, optional: nullable<utf8>) -> i32; extern fn current() -> utf8 @borrowed; extern fn copy() -> utf8 @owned("release"); }');
+		var stringSource = HxiProjection.source(strings),
+			stringNatives = HxiProjection.cNatives(strings);
+		expect(stringSource.indexOf("typedef Filter = (value:String)->Null<String>") >= 0
+			&& stringSource.indexOf('haxe.io.Bytes.ofString("13>14")') >= 0
+			&& stringSource.indexOf("extern function check(arg0:String, arg1:Null<String>):Int") >= 0
+			&& stringNatives[0].signature == "13,14>5"
+			&& stringNatives[1].signature == ">13",
+			"UTF-8 strings should project explicit nullability and ABI descriptors");
 		expectError(valid + "garbage", "Unexpected token");
 		expectError(StringTools.replace(valid, "@offset(8)", "@offset(16)"), "invalid offset");
 		expectError('interface bad @target("x86_64-linux-gnu") { struct pair @layout(8, 4) { left: i32 @offset(0); right: i32 @offset(0); } }',

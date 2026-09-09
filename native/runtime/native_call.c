@@ -14,7 +14,9 @@ enum haxeon_native_type {
 	HAXEON_NATIVE_F32 = 9,
 	HAXEON_NATIVE_F64 = 10,
 	HAXEON_NATIVE_POINTER = 11,
-	HAXEON_NATIVE_AGGREGATE = 12
+	HAXEON_NATIVE_AGGREGATE = 12,
+	HAXEON_NATIVE_UTF8 = 13,
+	HAXEON_NATIVE_UTF8_NULLABLE = 14
 };
 
 typedef struct haxeon_native_control {
@@ -62,6 +64,7 @@ typedef struct haxeon_native_callback {
 	int result_size;
 	int result_align;
 	ffi_type *result_type;
+	char *utf8_result;
 	atomic_flag error_lock;
 	int error_kind;
 	char error[512];
@@ -72,7 +75,8 @@ enum haxeon_native_callback_error {
 	HAXEON_CALLBACK_ERROR_EXCEPTION = 1,
 	HAXEON_CALLBACK_ERROR_WRONG_THREAD = 2,
 	HAXEON_CALLBACK_ERROR_POINTER_CONTRACT = 3,
-	HAXEON_CALLBACK_ERROR_AGGREGATE_CONTRACT = 4
+	HAXEON_CALLBACK_ERROR_AGGREGATE_CONTRACT = 4,
+	HAXEON_CALLBACK_ERROR_STRING_CONTRACT = 5
 };
 
 #ifdef _WIN32
@@ -181,11 +185,15 @@ static ffi_type *haxeon_native_ffi_type( int type, bool result ) {
 	case HAXEON_NATIVE_F64: return &ffi_type_double;
 	case HAXEON_NATIVE_POINTER: return &ffi_type_pointer;
 	case HAXEON_NATIVE_AGGREGATE: return &ffi_type_pointer;
+	case HAXEON_NATIVE_UTF8: return &ffi_type_pointer;
+	case HAXEON_NATIVE_UTF8_NULLABLE: return &ffi_type_pointer;
 	default: return NULL;
 	}
 }
 
 static void haxeon_native_callback_release( haxeon_native_callback *callback ) {
+	free(callback->utf8_result);
+	callback->utf8_result = NULL;
 	if( callback->closure != NULL ) {
 		hl_remove_root(&callback->closure);
 		callback->closure = NULL;
@@ -214,6 +222,32 @@ static void haxeon_native_scoped_bytes_finalize( void *value ) {
 	realtime_bytes *bytes = (realtime_bytes *)value;
 	bytes->data = NULL;
 	bytes->length = 0;
+}
+
+static int haxeon_native_utf8_size( const char *value ) {
+	if( value == NULL ) return -1;
+	const unsigned char *cursor = (const unsigned char *)value;
+	int length = 0;
+	while( *cursor != 0 ) {
+		if( length == 16777216 ) return -1;
+		unsigned char first = *cursor++;
+		int remaining;
+		uint32_t codepoint;
+		if( first < 0x80 ) { remaining = 0; codepoint = first; }
+		else if( first >= 0xC2 && first <= 0xDF ) { remaining = 1; codepoint = first & 0x1F; }
+		else if( first >= 0xE0 && first <= 0xEF ) { remaining = 2; codepoint = first & 0x0F; }
+		else if( first >= 0xF0 && first <= 0xF4 ) { remaining = 3; codepoint = first & 0x07; }
+		else return -1;
+		for( int index = 0; index < remaining; index++ ) {
+			unsigned char next = *cursor++;
+			if( (next & 0xC0) != 0x80 ) return -1;
+			codepoint = (codepoint << 6) | (next & 0x3F);
+		}
+		if( (remaining == 2 && (codepoint < 0x800 || (codepoint >= 0xD800 && codepoint <= 0xDFFF)))
+			|| (remaining == 3 && (codepoint < 0x10000 || codepoint > 0x10FFFF)) ) return -1;
+		length += remaining + 1;
+	}
+	return length;
 }
 
 static vdynamic *haxeon_native_callback_argument( haxeon_native_callback *callback, int index, void *value, bool *valid ) {
@@ -271,6 +305,17 @@ static vdynamic *haxeon_native_callback_argument( haxeon_native_callback *callba
 		result->v.ptr = wrapped;
 		return result;
 	}
+	case HAXEON_NATIVE_UTF8: case HAXEON_NATIVE_UTF8_NULLABLE: {
+		char *pointer = *(char **)value;
+		if( pointer == NULL ) {
+			if( code == HAXEON_NATIVE_UTF8 ) *valid = false;
+			return NULL;
+		}
+		if( haxeon_native_utf8_size(pointer) < 0 ) { *valid = false; return NULL; }
+		result = hl_alloc_dynamic(&hlt_bytes);
+		result->v.bytes = realtime_string_from_utf8(pointer);
+		return result;
+	}
 	default: return NULL;
 	}
 }
@@ -290,6 +335,10 @@ static void haxeon_native_callback_zero( haxeon_native_callback *callback, void 
 	if( output == NULL || callback->result_code == HAXEON_NATIVE_VOID ) return;
 	if( callback->result_code == HAXEON_NATIVE_AGGREGATE ) {
 		memset(output,0,(size_t)callback->result_size);
+		return;
+	}
+	if( callback->result_code == HAXEON_NATIVE_UTF8 || callback->result_code == HAXEON_NATIVE_UTF8_NULLABLE ) {
+		*(void **)output = NULL;
 		return;
 	}
 	switch( callback->result_code ) {
@@ -314,7 +363,11 @@ static void haxeon_native_callback_dispatch( ffi_cif *cif, void *output, void **
 	for( int index = 0; index < callback->argument_count; index++ )
 		arguments[index] = haxeon_native_callback_argument(callback,index,values[index],&valid);
 	if( !valid ) {
-		haxeon_native_callback_set_error(callback,HAXEON_CALLBACK_ERROR_POINTER_CONTRACT,"Native callback received a pointer that violates its HXI contract");
+		bool string_failure = false;
+		for( int index = 0; index < callback->argument_count; index++ )
+			if( callback->argument_codes[index] == HAXEON_NATIVE_UTF8 || callback->argument_codes[index] == HAXEON_NATIVE_UTF8_NULLABLE ) string_failure = true;
+		haxeon_native_callback_set_error(callback,string_failure ? HAXEON_CALLBACK_ERROR_STRING_CONTRACT : HAXEON_CALLBACK_ERROR_POINTER_CONTRACT,
+			string_failure ? "Native callback received invalid UTF-8 or NULL for a non-null string" : "Native callback received a pointer that violates its HXI contract");
 		for( int index = 0; index < callback->argument_count; index++ ) haxeon_native_callback_invalidate(arguments[index]);
 		haxeon_native_callback_zero(callback,output);
 		return;
@@ -334,6 +387,28 @@ static void haxeon_native_callback_dispatch( ffi_cif *cif, void *output, void **
 				memcpy(output,bytes->data,(size_t)callback->result_size);
 		}
 	}
+	if( (callback->result_code == HAXEON_NATIVE_UTF8 || callback->result_code == HAXEON_NATIVE_UTF8_NULLABLE) && !raised ) {
+		free(callback->utf8_result);
+		callback->utf8_result = NULL;
+		if( result == NULL ) {
+			if( callback->result_code == HAXEON_NATIVE_UTF8 )
+				haxeon_native_callback_set_error(callback,HAXEON_CALLBACK_ERROR_STRING_CONTRACT,"Native callback returned NULL for a non-null UTF-8 result");
+		} else if( result->t == NULL || result->t->kind != HBYTES )
+			haxeon_native_callback_set_error(callback,HAXEON_CALLBACK_ERROR_STRING_CONTRACT,"Native callback returned a non-string UTF-8 result");
+		else {
+			const char *converted = hl_to_utf8((const uchar *)result->v.bytes);
+			int length = haxeon_native_utf8_size(converted);
+			if( length < 0 )
+				haxeon_native_callback_set_error(callback,HAXEON_CALLBACK_ERROR_STRING_CONTRACT,"Native callback returned invalid UTF-8");
+			else {
+				callback->utf8_result = haxeon_native_string((const vbyte *)converted,length);
+				if( callback->utf8_result == NULL )
+					haxeon_native_callback_set_error(callback,HAXEON_CALLBACK_ERROR_STRING_CONTRACT,"Could not retain native callback UTF-8 result");
+				else
+					*(char **)output = callback->utf8_result;
+			}
+		}
+	}
 	for( int index = 0; index < callback->argument_count; index++ ) haxeon_native_callback_invalidate(arguments[index]);
 	if( raised ) {
 		const char *message = result == NULL ? "Haxe callback raised an exception" : hl_to_utf8(hl_to_string(result));
@@ -341,7 +416,8 @@ static void haxeon_native_callback_dispatch( ffi_cif *cif, void *output, void **
 	}
 	if( callback->result_code == HAXEON_NATIVE_VOID ) return;
 	if( raised || result == NULL ) { haxeon_native_callback_zero(callback,output); return; }
-	if( callback->result_code == HAXEON_NATIVE_AGGREGATE ) return;
+	if( callback->result_code == HAXEON_NATIVE_AGGREGATE || callback->result_code == HAXEON_NATIVE_UTF8
+		|| callback->result_code == HAXEON_NATIVE_UTF8_NULLABLE ) return;
 	switch( callback->result_code ) {
 	case HAXEON_NATIVE_I8: *(int8_t *)output = (int8_t)result->v.i; break;
 	case HAXEON_NATIVE_U8: *(uint8_t *)output = (uint8_t)result->v.i; break;
@@ -528,7 +604,7 @@ static bool haxeon_native_parse_ffi_type( const char **cursor, unsigned char *co
 	if( **cursor != '{' ) {
 		char *end;
 		long value = strtol(*cursor,&end,10);
-		if( end == *cursor || value < HAXEON_NATIVE_VOID || value > HAXEON_NATIVE_POINTER ) return false;
+		if( end == *cursor || value < HAXEON_NATIVE_VOID || value > HAXEON_NATIVE_UTF8_NULLABLE || value == HAXEON_NATIVE_AGGREGATE ) return false;
 		*cursor = end;
 		*code = (unsigned char)value;
 		*type = haxeon_native_ffi_type((int)value,true);
@@ -755,7 +831,10 @@ static vdynamic *haxeon_native_invoke_aggregate( vbyte *library, vbyte *symbol, 
 	for( int index = 0; index < argument_count; index++ ) {
 		vdynamic *value = arguments[index];
 		if( value == NULL || value->t == NULL ) {
-			if( entry->argument_codes[index] == HAXEON_NATIVE_POINTER ) continue;
+			if( entry->argument_codes[index] == HAXEON_NATIVE_POINTER || entry->argument_codes[index] == HAXEON_NATIVE_UTF8_NULLABLE ) {
+				values[index] = slots + index * HAXEON_NATIVE_SLOT_SIZE;
+				continue;
+			}
 			hl_error("Null ordinary C scalar argument");
 		}
 		switch( entry->argument_codes[index] ) {
@@ -795,6 +874,13 @@ static vdynamic *haxeon_native_invoke_aggregate( vbyte *library, vbyte *symbol, 
 			values[index] = bytes->data;
 			continue;
 		}
+		case HAXEON_NATIVE_UTF8: case HAXEON_NATIVE_UTF8_NULLABLE: {
+			if( value->t->kind != HBYTES ) hl_error("Ordinary C UTF-8 argument requires a String");
+			const char *converted = hl_to_utf8((const uchar *)value->v.bytes);
+			if( haxeon_native_utf8_size(converted) < 0 ) hl_error("Ordinary C UTF-8 argument is invalid");
+			memcpy(slots + index * HAXEON_NATIVE_SLOT_SIZE,&converted,sizeof(converted));
+			break;
+		}
 		default: hl_error("Unsupported ordinary C argument type");
 		}
 		values[index] = slots + index * HAXEON_NATIVE_SLOT_SIZE;
@@ -828,6 +914,7 @@ static vdynamic *haxeon_native_invoke_aggregate( vbyte *library, vbyte *symbol, 
 	case HAXEON_NATIVE_I64: case HAXEON_NATIVE_U64:
 		result = hl_alloc_dynamic(&hlt_i64); memcpy(&result->v.i64,output,sizeof(int64_t)); return result;
 	case HAXEON_NATIVE_POINTER:
+	case HAXEON_NATIVE_UTF8: case HAXEON_NATIVE_UTF8_NULLABLE:
 		result = hl_alloc_dynamic(&hlt_bytes); memcpy(&result->v.bytes,output,sizeof(void *)); return result;
 	default: hl_error("Unsupported ordinary C result type"); return NULL;
 	}
@@ -931,6 +1018,67 @@ static realtime_bytes *haxeon_native_bytes_invoke( vbyte *library, vbyte *symbol
 	HL_NAME(native_pointer_close)(pointer);
 	return bytes;
 }
+
+static vbyte *haxeon_native_utf8_invoke( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership,
+	vbyte *release, bool nullable, vdynamic **arguments, int argument_count ) {
+	vdynamic *raw = haxeon_native_invoke(library,symbol,signature,arguments,argument_count);
+	if( raw == NULL || raw->t != &hlt_bytes ) hl_error("Ordinary C UTF-8 call returned an invalid value");
+	char *pointer = (char *)raw->v.bytes;
+	if( pointer == NULL ) {
+		if( nullable ) return NULL;
+		hl_error("Non-null ordinary C UTF-8 result returned NULL");
+	}
+	bool valid_utf8 = haxeon_native_utf8_size(pointer) >= 0;
+	vbyte *result = valid_utf8 ? realtime_string_from_utf8(pointer) : NULL;
+	const char *converted = hl_to_utf8((const uchar *)ownership);
+	char *ownership_text = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
+	converted = hl_to_utf8((const uchar *)release);
+	char *release_name = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
+	if( ownership_text == NULL || release_name == NULL ) hl_error("Could not retain ordinary C UTF-8 policy");
+	if( strcmp(ownership_text,"owned") == 0 ) {
+		if( release_name[0] == 0 ) hl_error("Owned ordinary C UTF-8 result has no release symbol");
+		converted = hl_to_utf8((const uchar *)library);
+		char *library_name = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
+		converted = hl_to_utf8((const uchar *)symbol);
+		char *symbol_name = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
+		converted = hl_to_utf8((const uchar *)signature);
+		char *signature_text = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
+		haxeon_native_cached_call *entry = haxeon_native_cached_resolve(library_name,symbol_name,signature_text);
+		free(library_name); free(symbol_name); free(signature_text);
+		void (*release_function)(void *);
+#ifdef _WIN32
+		release_function = (void (*)(void *))GetProcAddress((HMODULE)entry->function->control->handle,release_name);
+#else
+		dlerror();
+		release_function = (void (*)(void *))dlsym(entry->function->control->handle,release_name);
+#endif
+		if( release_function == NULL ) hl_error("Could not resolve ordinary C UTF-8 release symbol");
+		release_function(pointer);
+	} else if( strcmp(ownership_text,"borrowed") != 0 )
+		hl_error("Ordinary C UTF-8 result has no ownership policy");
+	free(ownership_text);
+	free(release_name);
+	if( !valid_utf8 ) hl_error("Ordinary C UTF-8 result is invalid or exceeds 16 MiB");
+	return result;
+}
+
+HL_PRIM vbyte *HL_NAME(native_utf8_invoke_0)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable ) { return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,NULL,0); }
+HL_PRIM vbyte *HL_NAME(native_utf8_invoke_1)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0 ) { vdynamic *arguments[] = {a0}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,1); }
+HL_PRIM vbyte *HL_NAME(native_utf8_invoke_2)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1 ) { vdynamic *arguments[] = {a0,a1}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,2); }
+HL_PRIM vbyte *HL_NAME(native_utf8_invoke_3)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2 ) { vdynamic *arguments[] = {a0,a1,a2}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,3); }
+HL_PRIM vbyte *HL_NAME(native_utf8_invoke_4)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3 ) { vdynamic *arguments[] = {a0,a1,a2,a3}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,4); }
+HL_PRIM vbyte *HL_NAME(native_utf8_invoke_5)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,5); }
+HL_PRIM vbyte *HL_NAME(native_utf8_invoke_6)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,6); }
+HL_PRIM vbyte *HL_NAME(native_utf8_invoke_7)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,7); }
+HL_PRIM vbyte *HL_NAME(native_utf8_invoke_8)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,8); }
+HL_PRIM vbyte *HL_NAME(native_utf8_invoke_9)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,9); }
+HL_PRIM vbyte *HL_NAME(native_utf8_invoke_10)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,10); }
+HL_PRIM vbyte *HL_NAME(native_utf8_invoke_11)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,11); }
+HL_PRIM vbyte *HL_NAME(native_utf8_invoke_12)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,12); }
+HL_PRIM vbyte *HL_NAME(native_utf8_invoke_13)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11, vdynamic *a12 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,13); }
+HL_PRIM vbyte *HL_NAME(native_utf8_invoke_14)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11, vdynamic *a12, vdynamic *a13 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,14); }
+HL_PRIM vbyte *HL_NAME(native_utf8_invoke_15)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11, vdynamic *a12, vdynamic *a13, vdynamic *a14 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13,a14}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,15); }
+HL_PRIM vbyte *HL_NAME(native_utf8_invoke_16)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11, vdynamic *a12, vdynamic *a13, vdynamic *a14, vdynamic *a15 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13,a14,a15}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,16); }
 
 HL_PRIM realtime_bytes *HL_NAME(native_bytes_invoke_0)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, vbyte *length_symbol, bool nullable ) { return haxeon_native_bytes_invoke(library,symbol,signature,ownership,release,length_symbol,nullable,NULL,0); }
 HL_PRIM realtime_bytes *HL_NAME(native_bytes_invoke_1)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, vbyte *length_symbol, bool nullable, vdynamic *a0 ) { vdynamic *arguments[] = {a0}; return haxeon_native_bytes_invoke(library,symbol,signature,ownership,release,length_symbol,nullable,arguments,1); }

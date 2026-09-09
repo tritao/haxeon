@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdlib.h>
+#include <string.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -32,11 +33,56 @@ typedef int32_t (*native_fixture_binary_callback)( int32_t, int32_t );
 typedef int32_t (*native_fixture_event_callback)( const native_fixture_point *, void * );
 typedef native_fixture_point (*native_fixture_point_callback)( native_fixture_point, native_fixture_point );
 typedef native_fixture_arrays (*native_fixture_arrays_callback)( native_fixture_arrays );
+typedef const char *(*native_fixture_utf8_callback)( const char * );
 FIXTURE_API int32_t native_fixture_check_arrays( const native_fixture_arrays *arrays );
 static native_fixture_binary_callback native_fixture_retained_callback;
+static int32_t native_fixture_utf8_release_count;
+static const char native_fixture_utf8_value[] = "ol\xC3\xA1 \xE2\x9C\x93";
+static const char native_fixture_invalid_utf8[] = {(char)0xC0, (char)0xAF, 0};
 
 FIXTURE_API int32_t native_fixture_add( int32_t left, int32_t right ) {
 	return left + right;
+}
+
+FIXTURE_API int32_t native_fixture_check_utf8( const char *value ) {
+	return value != NULL && strcmp(value,native_fixture_utf8_value) == 0 ? 42 : 0;
+}
+
+FIXTURE_API int32_t native_fixture_check_nullable_utf8( const char *value ) {
+	return value == NULL ? 42 : 0;
+}
+
+FIXTURE_API const char *native_fixture_borrowed_utf8( int32_t present ) {
+	return present == 0 ? NULL : native_fixture_utf8_value;
+}
+
+FIXTURE_API char *native_fixture_owned_utf8( void ) {
+	size_t length = strlen(native_fixture_utf8_value);
+	char *result = (char *)malloc(length + 1);
+	if( result != NULL ) memcpy(result,native_fixture_utf8_value,length + 1);
+	return result;
+}
+
+FIXTURE_API void native_fixture_utf8_release( void *value ) {
+	free(value);
+	native_fixture_utf8_release_count++;
+}
+
+FIXTURE_API int32_t native_fixture_utf8_was_released( void ) {
+	return native_fixture_utf8_release_count == 1 ? 42 : 0;
+}
+
+FIXTURE_API const char *native_fixture_invalid_utf8_result( void ) {
+	return native_fixture_invalid_utf8;
+}
+
+FIXTURE_API int32_t native_fixture_call_utf8_callback( native_fixture_utf8_callback callback ) {
+	const char *result = callback(native_fixture_utf8_value);
+	return result != NULL && strcmp(result,native_fixture_utf8_value) == 0 ? 42 : 0;
+}
+
+FIXTURE_API int32_t native_fixture_call_invalid_utf8_callback( native_fixture_utf8_callback callback ) {
+	return callback(native_fixture_invalid_utf8) == NULL ? 0 : -1;
 }
 
 FIXTURE_API int32_t native_fixture_call_callback( native_fixture_binary_callback callback, int32_t left, int32_t right ) {

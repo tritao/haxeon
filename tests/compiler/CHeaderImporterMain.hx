@@ -9,6 +9,8 @@ class CHeaderImporterMain {
 		expect(first.indexOf("struct sample_options @layout(32, 8)") >= 0, "record layout should come from Clang");
 		expect(first.indexOf("title: ptr<const<c_char>> @offset(8)") >= 0, "pointer field offset should be preserved");
 		expect(first.indexOf("extern fn sample_error() -> ptr<const<c_char>>") >= 0, "pointer results should import");
+		expect(first.indexOf("extern fn sample_check_utf8(value: utf8, optional: nullable<utf8>)") >= 0,
+			"explicit UTF-8 marker typedefs should import as string contracts");
 		expect(first.indexOf("extern fn sample_create(") >= 0, "functions should import");
 		expect(first.indexOf("type sample_handle = u32") >= 0, "fixed-width C types should use raw-HXI primitives");
 		expect(first.indexOf("callback sample_binary_callback = fn(arg0: i32, arg1: i32) -> i32") >= 0,

@@ -54,6 +54,20 @@ set +e
 (
 	cd "$repo_dir/out"
 	LD_LIBRARY_PATH="$repo_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+		"$repo_dir/vendor/hashlink/hl" hxi-call-test.hl.invalid-utf8
+) >"$invalid_output" 2>&1
+invalid_status=$?
+set -e
+if [[ $invalid_status -eq 0 ]] || ! rg -q "UTF-8 result is invalid" "$invalid_output"; then
+	echo "invalid HXI UTF-8 result was accepted or reported the wrong error" >&2
+	cat "$invalid_output" >&2
+	exit 1
+fi
+
+set +e
+(
+	cd "$repo_dir/out"
+	LD_LIBRARY_PATH="$repo_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 		"$repo_dir/vendor/hashlink/hl" hxi-call-test.hl.invalid-index
 ) >"$invalid_output" 2>&1
 invalid_status=$?

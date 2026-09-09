@@ -25,6 +25,7 @@ class HxiCallMain {
 			'\tstruct fixture_arrays @layout(28, 4) { values: array<i16, 3> @offset(0); name: array<u8, 4> @offset(6); points: array<fixture_point, 2> @offset(12); }\n'
 			+ '\tcallback FixturePointCallback = fn(left: fixture_point, right: fixture_point) -> fixture_point;\n'
 			+ '\tcallback FixtureArraysCallback = fn(value: fixture_arrays) -> fixture_arrays;\n'
+			+ '\tcallback FixtureUtf8Callback = fn(value: utf8) -> utf8;\n'
 			+ '\textern fn checkOptions(options: ptr<const<fixture_options>>) -> i32 @symbol("native_fixture_check_options");\n'
 			+ '\textern fn checkBox(box: ptr<const<fixture_box>>) -> i32 @symbol("native_fixture_check_box");\n'
 			+ '\textern fn checkHolder(holder: ptr<const<fixture_holder>>) -> i32 @symbol("native_fixture_check_holder");\n'
@@ -36,6 +37,14 @@ class HxiCallMain {
 			+ '\textern fn callPointCallback(callback: FixturePointCallback) -> i32 @symbol("native_fixture_call_point_callback");\n'
 			+ '\textern fn callPointCallbackOnThread(callback: FixturePointCallback) -> i32 @symbol("native_fixture_call_point_callback_on_thread");\n'
 			+ '\textern fn callArraysCallback(callback: FixtureArraysCallback) -> i32 @symbol("native_fixture_call_arrays_callback");\n'
+			+ '\textern fn checkUtf8(value: utf8) -> i32 @symbol("native_fixture_check_utf8");\n'
+			+ '\textern fn checkNullableUtf8(value: nullable<utf8>) -> i32 @symbol("native_fixture_check_nullable_utf8");\n'
+			+ '\textern fn borrowedUtf8(present: i32) -> nullable<utf8> @symbol("native_fixture_borrowed_utf8") @borrowed;\n'
+			+ '\textern fn ownedUtf8() -> utf8 @symbol("native_fixture_owned_utf8") @owned("native_fixture_utf8_release");\n'
+			+ '\textern fn utf8WasReleased() -> i32 @symbol("native_fixture_utf8_was_released");\n'
+			+ '\textern fn invalidUtf8() -> utf8 @symbol("native_fixture_invalid_utf8_result") @borrowed;\n'
+			+ '\textern fn callUtf8Callback(callback: FixtureUtf8Callback) -> i32 @symbol("native_fixture_call_utf8_callback");\n'
+			+ '\textern fn callInvalidUtf8Callback(callback: FixtureUtf8Callback) -> i32 @symbol("native_fixture_call_invalid_utf8_callback");\n'
 			+ '\textern fn add(left: i32, right: i32) -> i32 @symbol("native_fixture_add");\n'
 			+ '\textern fn systemAdd(left: i32, right: i32) -> i32 @symbol("native_fixture_add") @callconv("system");\n'
 			+ '\textern fn enumAdd(left: FixtureResult, right: FixtureResult) -> FixtureResult @symbol("native_fixture_add");\n'
@@ -83,12 +92,14 @@ class HxiCallMain {
 			"var pointCallback = new FixturePointCallbackCallback(function(left:fixture_point, right:fixture_point) { var result = new fixture_point(); result.set_x(left.get_x() + right.get_x()); result.set_y(left.get_y() + right.get_y()); return result; }); var arraysCallback = new FixtureArraysCallbackCallback(function(value:fixture_arrays) return value); var aggregateCallbacks = Fixture.callPointCallback(pointCallback) == 42 && Fixture.callArraysCallback(arraysCallback) == 42 && Fixture.callPointCallbackOnThread(pointCallback) == 0 && pointCallback.errorKind() == HxiCallbackError.WrongThread && pointCallback.takeError() != null && pointCallback.close() && arraysCallback.close(); var systemCallback = new FixtureSystemBinaryCallback(function(left:Int, right:Int) return left + right); var systemCalls = Fixture.systemAdd(19, 23) == 42 && Fixture.callSystemCallback(systemCallback, 20, 22) == 42 && systemCallback.close(); var callback = new FixtureBinaryCallback");
 		mainSource = StringTools.replace(mainSource, "var systemCallback = new FixtureSystemBinaryCallback",
 			'var invalidAggregate = new FixturePointCallbackCallback(function(left:fixture_point, right:fixture_point) { return haxe.io.Bytes.alloc(1); }); var aggregateFailure = Fixture.callPointCallback(invalidAggregate) == 0 && invalidAggregate.errorKind() == HxiCallbackError.AggregateContract && invalidAggregate.takeError() != null && invalidAggregate.close(); var throwingAggregate = new FixturePointCallbackCallback(function(left:fixture_point, right:fixture_point) { if (left.get_x() == 10) throw "aggregate callback boom"; return left; }); aggregateFailure = aggregateFailure && Fixture.callPointCallback(throwingAggregate) == 0 && throwingAggregate.errorKind() == HxiCallbackError.Exception && throwingAggregate.takeError() != null && throwingAggregate.close(); aggregateCallbacks = aggregateCallbacks && aggregateFailure; var systemCallback = new FixtureSystemBinaryCallback');
+		mainSource = StringTools.replace(mainSource, "var systemCallback = new FixtureSystemBinaryCallback",
+			'var utf8Callback = new FixtureUtf8CallbackCallback(function(value:String) return value); var utf8 = Fixture.checkUtf8("olá ✓") == 42 && Fixture.checkNullableUtf8(null) == 42 && Fixture.borrowedUtf8(1) == "olá ✓" && Fixture.borrowedUtf8(0) == null && Fixture.ownedUtf8() == "olá ✓" && Fixture.utf8WasReleased() == 42 && Fixture.callUtf8Callback(utf8Callback) == 42 && Fixture.callInvalidUtf8Callback(utf8Callback) == 0 && utf8Callback.errorKind() == HxiCallbackError.StringContract && utf8Callback.takeError() != null && utf8Callback.close(); var nullUtf8Callback = new FixtureUtf8CallbackCallback(function(value:String) { var result:String = null; return result; }); utf8 = utf8 && Fixture.callUtf8Callback(nullUtf8Callback) == 0 && nullUtf8Callback.errorKind() == HxiCallbackError.StringContract && nullUtf8Callback.takeError() != null && nullUtf8Callback.close(); var systemCallback = new FixtureSystemBinaryCallback');
 		mainSource = StringTools.replace(mainSource, "Fixture.clearCallback(); callbacks = callbacks && Fixture.callCallbackOnThread",
 			"var replacement = new FixtureBinaryCallback(function(left:Int, right:Int) return left * right); Fixture.setNullableCallback(replacement); callbacks = callbacks && Fixture.callRetainedCallback(6, 7) == 42; Fixture.setNullableCallback(null); callbacks = callbacks && Fixture.callRetainedCallback(6, 7) == 0 && replacement.close(); callbacks = callbacks && Fixture.callCallbackOnThread");
 		mainSource = StringTools.replace(mainSource, "return structure && buffers && pointers && ",
 			"return structure && buffers && pointers && Fixture.enumAdd(FixtureResult.TEN, FixtureResult.ELEVEN) == FixtureResult.TWENTY_ONE && ");
 		mainSource = StringTools.replace(mainSource, "return structure && buffers && pointers && ",
-			"return aggregateCallbacks && systemCalls && callbacks && structure && buffers && pointers && ");
+			"return utf8 && aggregateCallbacks && systemCalls && callbacks && structure && buffers && pointers && ");
 		compiler.update("Main.hx", mainSource);
 		compiler.compile("Main");
 		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module));
@@ -96,6 +107,8 @@ class HxiCallMain {
 		File.saveBytes(output + ".invalid-null", HlWriter.encode(compiler.compile("Main").module));
 		compiler.update("Main.hx", "import Fixture; function main():Int return Fixture.invalidData() == null ? 1 : 0;");
 		File.saveBytes(output + ".invalid-length", HlWriter.encode(compiler.compile("Main").module));
+		compiler.update("Main.hx", "import Fixture; function main():Int return Fixture.invalidUtf8() == null ? 1 : 0;");
+		File.saveBytes(output + ".invalid-utf8", HlWriter.encode(compiler.compile("Main").module));
 		compiler.update("Main.hx", "import Fixture; function main():Int { var arrays = new fixture_arrays(); return arrays.get_values(3); }");
 		File.saveBytes(output + ".invalid-index", HlWriter.encode(compiler.compile("Main").module));
 		compiler.update("Main.hx",

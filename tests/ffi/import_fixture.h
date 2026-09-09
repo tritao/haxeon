@@ -1,6 +1,8 @@
 #include <stdint.h>
 
 typedef uint32_t sample_handle;
+typedef const char *hxi_utf8;
+typedef const char *hxi_nullable_utf8;
 typedef int32_t (*sample_binary_callback)(int32_t, int32_t);
 typedef void (*sample_visit_callback)(const struct sample_options *, void *);
 #ifdef _WIN32
@@ -30,3 +32,4 @@ int32_t sample_apply(sample_binary_callback callback, int32_t left, int32_t righ
 int32_t sample_apply_nullable(sample_binary_callback _Nullable callback);
 enum sample_result sample_check_result(enum sample_result value);
 const char *sample_error(void);
+int32_t sample_check_utf8(hxi_utf8 value, hxi_nullable_utf8 optional);

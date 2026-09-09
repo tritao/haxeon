@@ -11,6 +11,11 @@ class HxiAbiMain {
 		expectInteger(linux.classify(compiler.ffi.HxiModel.HxiType.Primitive("c_long")), 64, Signed);
 		expectInteger(windows.classify(compiler.ffi.HxiModel.HxiType.Primitive("c_long")), 32, Signed);
 		expectInteger(linux.classify(compiler.ffi.HxiModel.HxiType.Primitive("c_char")), 8, PlainChar);
+		switch linux.classify(compiler.ffi.HxiModel.HxiType.Nullable(compiler.ffi.HxiModel.HxiType.Primitive("utf8"))) {
+			case Utf8Value(true):
+			case _:
+				throw "nullable UTF-8 ABI did not retain its contract";
+		}
 		expect(HxiProjection.source(linuxModel("x86_64-linux-gnu")).indexOf("haxe.Int64") >= 0, "LP64 c_long should project as haxe.Int64");
 		expect(HxiProjection.source(linuxModel("x86_64-pc-windows-msvc")).indexOf("haxe.Int64") < 0, "LLP64 c_long should remain a 32-bit Int");
 		var enumModel = HxiParser.parse("enum.hxi",

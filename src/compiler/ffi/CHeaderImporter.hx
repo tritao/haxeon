@@ -180,6 +180,8 @@ class CHeaderImporter {
 		if (StringTools.startsWith(value, "const "))
 			return 'const<${mapType(value.substring(6))}>';
 		return switch value {
+			case "hxi_utf8": "utf8";
+			case "hxi_nullable_utf8": "nullable<utf8>";
 			case "void": "void";
 			case "char": "c_char";
 			case "signed char": "c_schar";

@@ -18,6 +18,7 @@ enum HxiAbiValue {
 	CallbackValue(name:String, arguments:Array<HxiAbiValue>, result:HxiAbiValue, nullable:Bool);
 	FloatValue(bits:Int);
 	PointerValue(bits:Int, nullable:Bool, opaque:Bool, structure:Null<String>);
+	Utf8Value(nullable:Bool);
 	AggregateValue(name:String, size:Int, align:Int);
 }
 
@@ -93,6 +94,7 @@ class HxiAbi {
 				switch classify(element, allowVoid) {
 					case PointerValue(bits, _, opaque, structure): PointerValue(bits, true, opaque, structure);
 					case CallbackValue(name, arguments, result, _): CallbackValue(name, arguments, result, true);
+					case Utf8Value(_): Utf8Value(true);
 					case _: throw "Nullable ABI value must be a pointer";
 				}
 			case Const(element): classify(element, allowVoid);
@@ -158,6 +160,7 @@ class HxiAbi {
 			case "c_wchar": IntegerValue(wcharBits, wcharBits == 16 ? Unsigned : Signed);
 			case "f32": FloatValue(32);
 			case "f64": FloatValue(64);
+			case "utf8": Utf8Value(false);
 			default: throw 'Unsupported primitive HXI type "$name"';
 		};
 

@@ -189,6 +189,25 @@ typed buffers. Invalid signatures, layouts, and buffer sizes are rejected.
 Variadic calls remain unsupported. Prepared functions retain the underlying
 library safely even if the `NativeLibrary` wrapper is closed.
 
+## UTF-8 strings
+
+HXI uses `utf8` and `nullable<utf8>` for NUL-terminated UTF-8 text. This is an
+explicit contract and is not inferred from arbitrary `char *` declarations.
+Arguments project as `String`/`Null<String>` and are transcoded for the duration
+of the call. Results require `@borrowed` or `@owned("release_symbol")`; owned
+storage is released after conversion, including when validation fails. Results
+are validated as Unicode UTF-8 and bounded to 16 MiB before conversion.
+
+Callbacks accept the same string types. Incoming text is validated before Haxe
+is entered. Returned strings are retained by the callback handle until its next
+invocation or closure, and null or invalid results against a non-null contract
+are reported as `HxiCallbackError.StringContract` while returning `NULL` to C.
+
+The header importer recognizes deliberately named `hxi_utf8` and
+`hxi_nullable_utf8` typedef uses. It leaves ordinary character pointers alone,
+because neither encoding nor ownership can be inferred safely from C syntax.
+Result ownership must still be reviewed and added to the generated HXI.
+
 HXI maps 64-bit integer ABI values to the compiler's `haxe.Int64` primitive and
 the `I64` SSA/HashLink representation. Consequently `c_long` projects to
 `haxe.Int64` on LP64 targets while remaining `Int` on Windows LLP64 targets;

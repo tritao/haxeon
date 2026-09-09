@@ -34,6 +34,7 @@ class HxiParser {
 		"usize",
 		"f32",
 		"f64",
+		"utf8",
 		"c_char",
 		"c_schar",
 		"c_uchar",
@@ -261,6 +262,7 @@ class HxiParser {
 	static function pointerLike(type:HxiType):Bool
 		return switch type {
 			case Pointer(_): true;
+			case Primitive("utf8"): true;
 			case Nullable(element) | Const(element): pointerLike(element);
 			case _: false;
 		};
@@ -391,7 +393,7 @@ class HxiParser {
 		try {
 			switch abi.classify(type, allowVoid) {
 				case VoidValue if (allowVoid):
-				case IntegerValue(_, _) | EnumerationValue(_, _, _) | FloatValue(_) | AggregateValue(_, _, _):
+				case IntegerValue(_, _) | EnumerationValue(_, _, _) | FloatValue(_) | AggregateValue(_, _, _) | Utf8Value(_):
 				case PointerValue(_, _, _, _) if (!allowVoid):
 				case _:
 					fail("Callbacks support scalar, aggregate, and pointer arguments with scalar, aggregate, or void results", span);
@@ -523,6 +525,7 @@ class HxiParser {
 			case Nullable(element):
 				switch element {
 					case Pointer(_):
+					case Primitive("utf8"):
 					case Named(name):
 						switch declarations.get(name) {
 							case Callback(_, _, _, _, _):
