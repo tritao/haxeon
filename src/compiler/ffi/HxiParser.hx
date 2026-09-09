@@ -114,7 +114,7 @@ class HxiParser {
 		var name = identifier();
 		expect("=");
 		expect("fn");
-		var parameters = parseParameters();
+		var parameters = parseParameters(false);
 		expect("->");
 		var result = parseType(),
 			metadata = parseMetadata(["callconv"]),
@@ -123,14 +123,27 @@ class HxiParser {
 		return Callback(name, parameters, result, callConvention == null ? "cdecl" : callConvention, start.merge(end));
 	}
 
-	function parseParameters():Array<HxiParameter> {
+	function parseParameters(allowDirections:Bool):Array<HxiParameter> {
 		expect("(");
 		var parameters:Array<HxiParameter> = [];
 		if (!check(")"))
 			do {
 				var start = current().span, name = identifier();
 				expect(":");
-				parameters.push({name: name, type: parseType(), span: start.merge(previous().span)});
+				var type = parseType(),
+					metadata = parseMetadata(["out", "inout"]),
+					out = metadataFlag(metadata, "out"),
+					inout = metadataFlag(metadata, "inout");
+				if (out && inout)
+					fail('Parameter "$name" cannot combine @out and @inout', start);
+				if (!allowDirections && (out || inout))
+					fail('Callback parameter "$name" cannot use output direction metadata', start);
+				parameters.push({
+					name: name,
+					type: type,
+					direction: out ? Out : inout ? InOut : In,
+					span: start.merge(previous().span)
+				});
 			} while (match(","));
 		expect(")");
 		return parameters;
@@ -238,7 +251,7 @@ class HxiParser {
 		expect("extern");
 		expect("fn");
 		var name = identifier();
-		var parameters = parseParameters();
+		var parameters = parseParameters(true);
 		expect("->");
 		var result = parseType(),
 			metadata = parseMetadata(["symbol", "leaf", "borrowed", "owned", "length", "callconv"]),
@@ -370,8 +383,18 @@ class HxiParser {
 					validateCallbackType(result, abi, span, true);
 				case Function(name, parameters, result, _, _, callConvention, resultPolicy, span):
 					validateCallConvention(name, callConvention, abi, span);
-					for (parameter in parameters)
+					for (parameter in parameters) {
 						validateType(parameter.type, names, declarationsByName, parameter.span, false);
+						if (parameter.direction != In && !pointerLike(parameter.type))
+							fail('Output parameter "${parameter.name}" requires a pointer type', parameter.span);
+						if (parameter.direction != In && switch parameter.type {
+								case Nullable(_): true;
+								case _: false;
+							})
+							fail('Output parameter "${parameter.name}" cannot be nullable', parameter.span);
+						if (parameter.direction != In)
+							validateOutputType(parameter.name, parameter.type, abi, parameter.span);
+					}
 					validateType(result, names, declarationsByName, span, true);
 					switch abi.classify(result, true) {
 						case CallbackValue(_, _, _, _): fail('Function "$name" cannot return a callback handle yet', span);
@@ -380,6 +403,23 @@ class HxiParser {
 					if (resultPolicy.length != null && !bytePointerLike(result, declarationsByName))
 						fail('@length on "$name" requires a pointer to byte-sized data or void', span);
 			}
+	}
+
+	function validateOutputType(name:String, type:HxiType, abi:HxiAbi, span:SourceSpan):Void {
+		var pointee = switch type {
+			case Pointer(Const(_)): fail('Output parameter "$name" cannot point to const data', span);
+			case Pointer(value): value;
+			case _: return;
+		};
+		var classified = try abi.classify(pointee) catch (error:Dynamic) {
+			fail(Std.string(error), span);
+			VoidValue;
+		};
+		switch classified {
+			case IntegerValue(_, _) | EnumerationValue(_, _, _) | FloatValue(_) | AggregateValue(_, _, _):
+			case _:
+				fail('Output parameter "$name" currently requires a scalar or fixed-structure pointee', span);
+		}
 	}
 
 	function validateCallConvention(name:String, convention:String, abi:HxiAbi, span:SourceSpan):Void {

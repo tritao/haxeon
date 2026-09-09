@@ -23,7 +23,14 @@ typedef HxiField = {
 typedef HxiParameter = {
 	final name:String;
 	final type:HxiType;
+	final direction:HxiParameterDirection;
 	final span:SourceSpan;
+}
+
+enum HxiParameterDirection {
+	In;
+	Out;
+	InOut;
 }
 
 enum HxiPointerOwnership {

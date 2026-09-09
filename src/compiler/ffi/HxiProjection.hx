@@ -15,11 +15,14 @@ class HxiProjection {
 		if (library == null)
 			return [];
 		var result:Array<IrCNative> = [],
-			declarations:Map<String, HxiDeclaration> = [];
+			declarations:Map<String, HxiDeclaration> = [],
+			directed:Map<String, Bool> = [];
 		for (declaration in model.declarations)
 			switch declaration {
 				case Opaque(name, _) | Alias(name, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _):
 					declarations.set(name, declaration);
+				case Function(name, parameters, _, _, _, _, _, _):
+					directed.set(name, hasOutput(parameters));
 				case _:
 			}
 		var abi = HxiAbi.forInterface(model);
@@ -49,7 +52,7 @@ class HxiProjection {
 			};
 			if (supported && returnValue != null)
 				result.push({
-					name: model.name + "." + fn.name,
+					name: model.name + "." + (directed.get(fn.name) == true ? "__hxi_raw_" + fn.name : fn.name),
 					library: library,
 					symbol: fn.symbol,
 					signature: callSignature(codes.join(",") + ">" + abiDescriptor(fn.result, declarations, abi), fn.callConvention),
@@ -70,7 +73,8 @@ class HxiProjection {
 			return "";
 		var abi = HxiAbi.forInterface(model), output = new StringBuf();
 		var structAccesses:Map<String, {type:String, setterType:String}> = [],
-			declarations:Map<String, HxiDeclaration> = [];
+			declarations:Map<String, HxiDeclaration> = [],
+			functions:Map<String, HxiDeclaration> = [];
 		var usesNestedStructures = false,
 			usesPointerFields = false,
 			hasCallbacks = false;
@@ -78,6 +82,8 @@ class HxiProjection {
 			switch declaration {
 				case Opaque(name, _) | Alias(name, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _):
 					declarations.set(name, declaration);
+				case Function(name, _, _, _, _, _, _, _):
+					functions.set(name, declaration);
 				case _:
 			}
 		output.add('// Generated semantic projection of ${model.name}. Do not edit.\n');
@@ -208,6 +214,19 @@ class HxiProjection {
 					output.add('}\n');
 				case _:
 			}
+		for (declaration in model.declarations)
+			switch declaration {
+				case Function(_, parameters, _, _, _, _, _, _):
+					for (parameter in parameters)
+						if (parameter.direction != In) {
+							var value = outputInfo(parameter.type, abi);
+							if (!value.structure) {
+								var access = structAccess(value.code);
+								structAccesses.set(access, {type: value.haxeType, setterType: value.haxeType});
+							}
+						}
+				case _:
+			}
 		if (usesNestedStructures) {
 			output.add('@:hlNative("realtime_runtime", "structSlice") extern function __hxi_struct_slice(bytes:haxe.io.Bytes, offset:Int, length:Int):haxe.io.Bytes;\n');
 			output.add('@:hlNative("realtime_runtime", "structCopy") extern function __hxi_struct_copy(bytes:haxe.io.Bytes, offset:Int, value:haxe.io.Bytes, length:Int):Void;\n');
@@ -227,30 +246,152 @@ class HxiProjection {
 			output.add('@:hlNative("realtime_runtime", "set$access") extern function __hxi_struct_set$access(bytes:haxe.io.Bytes, offset:Int, value:${types.setterType}):Void;\n');
 		}
 		for (fn in abi.functions()) {
+			var parameters = switch functions.get(fn.name) {
+				case Function(_, value, _, _, _, _, _, _): value;
+				case _: throw 'Missing HXI function "${fn.name}"';
+			};
 			var argumentTypes:Array<String> = [],
 				codes:Array<String> = [],
 				supported = true;
-			for (argument in fn.arguments) {
+			for (index in 0...fn.arguments.length) {
+				var argument = fn.arguments[index];
 				var projected = project(argument, false);
 				if (projected == null) {
 					supported = false;
 					break;
 				}
-				argumentTypes.push(projected.haxeType);
+				var output = parameters[index].direction == In ? null : outputInfo(parameters[index].type, abi);
+				argumentTypes.push(output == null ? projected.haxeType : output.structure ? output.haxeType : "haxe.io.Bytes");
 				codes.push(abiDescriptor(argument, declarations, abi));
 			}
 			var result = project(fn.result, true);
 			if (!supported || result == null)
 				continue;
 			var signature = callSignature(codes.join(",") + ">" + abiDescriptor(fn.result, declarations, abi), fn.callConvention);
+			var directed = hasOutput(parameters),
+				rawName = directed ? "__hxi_raw_" + fn.name : fn.name;
 			output.add('@:cNative("${escape(library)}", "${escape(fn.symbol)}", "$signature")\n');
-			output.add('extern function ${fn.name}(');
+			output.add('extern function $rawName(');
 			output.add([for (index in 0...argumentTypes.length) 'arg$index:${argumentTypes[index]}'].join(", "));
 			var resultType = result.code == 11 ? (fn.resultPolicy.length != null ? (result.nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes") : (result.nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">')) : result.haxeType;
 			output.add('):$resultType;\n');
+			if (directed)
+				emitOutputWrapper(output, fn.name, parameters, argumentTypes, resultType, abi);
 		}
 		return output.toString();
 	}
+
+	static function hasOutput(parameters:Array<compiler.ffi.HxiModel.HxiParameter>):Bool {
+		for (parameter in parameters)
+			if (parameter.direction != In)
+				return true;
+		return false;
+	}
+
+	static function outputInfo(type:compiler.ffi.HxiModel.HxiType, abi:HxiAbi):{
+		haxeType:String,
+		code:Int,
+		size:Int,
+		structure:Bool
+	} {
+		var element = switch type {
+			case Pointer(value): value;
+			case _: throw "HXI output parameters require a pointer type";
+		};
+		var classified = abi.classify(element),
+			projected = project(classified, false);
+		if (projected == null)
+			throw "HXI output parameter has an unsupported pointee type";
+		return switch classified {
+			case AggregateValue(name, size, _): {
+					haxeType: name,
+					code: 12,
+					size: size,
+					structure: true
+				};
+			case IntegerValue(_, _) | EnumerationValue(_, _, _) | FloatValue(_):
+				var size = structSize(projected.code);
+				if (size == 0)
+					throw "HXI output parameter has an unsupported scalar type";
+				{
+					haxeType: projected.haxeType,
+					code: projected.code,
+					size: size,
+					structure: false
+				};
+			case _: throw "HXI output parameters currently support scalar and fixed-structure pointees";
+		};
+	}
+
+	static function emitOutputWrapper(output:StringBuf, name:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>, rawArgumentTypes:Array<String>,
+			resultType:String, abi:HxiAbi):Void {
+		var arguments:Array<String> = [],
+			callArguments:Array<String> = [],
+			setup:Array<String> = [],
+			values:Array<{name:String, type:String, expression:String}> = [];
+		for (index in 0...parameters.length) {
+			var parameter = parameters[index];
+			switch parameter.direction {
+				case In:
+					arguments.push('${parameter.name}:${rawArgumentTypes[index]}');
+					callArguments.push(parameter.name);
+				case Out | InOut:
+					var info = outputInfo(parameter.type, abi),
+						local = "__out_" + parameter.name;
+					if (parameter.direction == InOut)
+						arguments.push('${parameter.name}:${info.haxeType}');
+					if (info.structure)
+						setup.push('var $local:${info.haxeType} = ${parameter.direction == InOut ? parameter.name : "new " + info.haxeType + "()"};');
+					else {
+						setup.push('var $local = haxe.io.Bytes.alloc(${info.size});');
+						if (parameter.direction == InOut)
+							setup.push('__hxi_struct_set${structAccess(info.code)}($local, 0, ${parameter.name});');
+					}
+					callArguments.push(local);
+					values.push({
+						name: parameter.name,
+						type: info.haxeType,
+						expression: info.structure ? local : '__hxi_struct_get${structAccess(info.code)}($local, 0)'
+					});
+			}
+		}
+		var direct = resultType == "Void" && values.length == 1;
+		var wrapperResult = direct ? values[0].type : upperFirst(name) + "OutResult";
+		if (!direct) {
+			output.add('class $wrapperResult {\n');
+			var fields:Array<{name:String, type:String}> = [];
+			if (resultType != "Void")
+				fields.push({name: "status", type: resultType});
+			for (value in values)
+				fields.push({name: value.name, type: value.type});
+			for (field in fields)
+				output.add('\tpublic var ${field.name}:${field.type};\n');
+			output.add('\tpublic function new(${[for (field in fields) field.name + ":" + field.type].join(", ")}) {\n');
+			for (field in fields)
+				output.add('\t\tthis.${field.name} = ${field.name};\n');
+			output.add('\t}\n}\n');
+		}
+		output.add('function $name(${arguments.join(", ")}):$wrapperResult {\n');
+		for (statement in setup)
+			output.add('\t$statement\n');
+		var call = '__hxi_raw_$name(${callArguments.join(", ")})';
+		if (resultType == "Void")
+			output.add('\t$call;\n');
+		else
+			output.add('\tvar __status = $call;\n');
+		if (direct)
+			output.add('\treturn ${values[0].expression};\n');
+		else {
+			var resultValues = resultType == "Void" ? [] : ["__status"];
+			for (value in values)
+				resultValues.push(value.expression);
+			output.add('\treturn new $wrapperResult(${resultValues.join(", ")});\n');
+		}
+		output.add('}\n');
+	}
+
+	static function upperFirst(value:String):String
+		return value.length == 0 ? value : value.charAt(0).toUpperCase() + value.substr(1);
 
 	static function project(value:HxiAbiValue, allowVoid:Bool):Null<{
 		haxeType:String,

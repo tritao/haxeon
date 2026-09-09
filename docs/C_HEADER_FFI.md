@@ -115,6 +115,19 @@ declared structure stride. Array sizes, offsets, alignment, and multiplication
 overflow are covered by the same layout validation as other fields. Pointer
 arrays remain ABI-visible but unprojected pending an explicit lifetime model.
 
+Function parameters may be marked `@out` or `@inout` after a pointer type. The
+generated module keeps the pointer-shaped C entry point private and exposes a
+typed wrapper. Scalar pointees use correctly sized temporary native storage;
+fixed-layout structure pointees use their generated structure abstract. An
+`@out` parameter is omitted from the Haxe arguments, while `@inout` accepts the
+initial pointee value. A non-void C result is returned as the `status` field of
+a generated `<Function>OutResult` class alongside fields named after each
+directed parameter. A void function with one directed parameter returns that
+value directly. Structure `@inout` values are updated in place and also appear
+in the result. Output parameters cannot be nullable, and callback directions,
+pointer-to-pointer outputs, variable-length buffers, and ownership transfer
+through output slots remain unsupported until they have explicit contracts.
+
 Named HXI `enum` and `flags` declarations use an explicit `i8`/`u8`, `i16`/`u16`,
 or `i32`/`u32` representation. Their values accept decimal and hexadecimal
 integer literals, unary minus, parentheses, `<<`, `>>`, and bitwise `|`.

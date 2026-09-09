@@ -207,6 +207,24 @@ FIXTURE_API native_fixture_point native_fixture_add_points( native_fixture_point
 	return result;
 }
 
+FIXTURE_API int32_t native_fixture_get_point( int32_t base, native_fixture_point *point ) {
+	if( point == NULL ) return -1;
+	point->x = base;
+	point->y = base + 2;
+	return 42;
+}
+
+FIXTURE_API void native_fixture_double_value( int32_t *value ) {
+	if( value != NULL ) *value *= 2;
+}
+
+FIXTURE_API int32_t native_fixture_shift_point( native_fixture_point *point ) {
+	if( point == NULL ) return -1;
+	point->x += 1;
+	point->y += 1;
+	return 42;
+}
+
 FIXTURE_API int32_t native_fixture_check_box_value( native_fixture_box box ) {
 	return box.start.x == 10 && box.start.y == 11 && box.end.x == 20 && box.end.y == 21 ? 42 : 0;
 }

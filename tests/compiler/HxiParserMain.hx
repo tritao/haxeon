@@ -59,6 +59,27 @@ class HxiParserMain {
 		expectError('interface bad @target("x86_64-linux-gnu") { enum value : u8 { A = 256; } }', "outside the representation");
 		expectError('interface bad @target("x86_64-linux-gnu") { enum value : i32 { A = 0; B = 0; } }', "duplicates");
 		expectError('interface bad @target("x86_64-linux-gnu") { enum value : i32 { A = 1 << 32; } }', "shift count");
+		var outputs = HxiParser.parse("outputs.hxi",
+			'interface outputs @target("x86_64-linux-gnu") @library("outputs") { struct point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); } extern fn read(seed: i32, value: ptr<i32> @out, point: ptr<point> @out) -> i32; extern fn double(value: ptr<i32> @inout) -> void; }');
+		switch outputs.declarations[1] {
+			case Function(_, [_, {direction: Out}, {direction: Out}], _, _, _, _, _, _):
+			case _:
+				throw "expected parsed output directions";
+		}
+		var outputSource = HxiProjection.source(outputs),
+			outputNatives = HxiProjection.cNatives(outputs);
+		expect(outputSource.indexOf("extern function __hxi_raw_read") >= 0
+			&& outputSource.indexOf("class ReadOutResult") >= 0
+			&& outputSource.indexOf("function read(seed:Int):ReadOutResult") >= 0
+			&& outputSource.indexOf("function double(value:Int):Int") >= 0
+			&& outputNatives[0].name == "outputs.__hxi_raw_read",
+			"directed parameters should project private raw calls and typed public wrappers");
+		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(value: i32 @out) -> void; }', "requires a pointer type");
+		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(value: nullable<ptr<i32>> @out) -> void; }', "cannot be nullable");
+		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(value: ptr<const<i32>> @out) -> void; }', "cannot point to const data");
+		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(value: ptr<ptr<i32>> @out) -> void; }',
+			"requires a scalar or fixed-structure pointee");
+		expectError('interface bad @target("x86_64-linux-gnu") { callback Read = fn(value: ptr<i32> @out) -> void; }', "cannot use output direction");
 		var callbacks = HxiParser.parse("callbacks.hxi",
 			'interface callbacks @target("x86_64-linux-gnu") @library("callbacks") { callback Binary = fn(left: i32, right: i32) -> i32; extern fn apply(callback: Binary, left: i32, right: i32) -> i32; }');
 		var callbackSource = HxiProjection.source(callbacks);
