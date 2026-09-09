@@ -56,7 +56,17 @@ typedef struct haxeon_native_callback {
 	bool pointer_nullable[HAXEON_NATIVE_MAX_ARGUMENTS];
 	int argument_count;
 	int result_code;
+	atomic_flag error_lock;
+	int error_kind;
+	char error[512];
 } haxeon_native_callback;
+
+enum haxeon_native_callback_error {
+	HAXEON_CALLBACK_ERROR_NONE = 0,
+	HAXEON_CALLBACK_ERROR_EXCEPTION = 1,
+	HAXEON_CALLBACK_ERROR_WRONG_THREAD = 2,
+	HAXEON_CALLBACK_ERROR_POINTER_CONTRACT = 3
+};
 
 #ifdef _WIN32
 #define HAXEON_NATIVE_TLS __declspec(thread)
@@ -183,6 +193,15 @@ static void haxeon_native_callback_finalize( void *value ) {
 	haxeon_native_callback_release((haxeon_native_callback *)value);
 }
 
+static void haxeon_native_callback_set_error( haxeon_native_callback *callback, int kind, const char *message ) {
+	while( atomic_flag_test_and_set_explicit(&callback->error_lock,memory_order_acquire) ) {}
+	if( callback->error_kind == HAXEON_CALLBACK_ERROR_NONE ) {
+		callback->error_kind = kind;
+		snprintf(callback->error,sizeof(callback->error),"%s",message == NULL ? "Unknown callback failure" : message);
+	}
+	atomic_flag_clear_explicit(&callback->error_lock,memory_order_release);
+}
+
 static void haxeon_native_scoped_bytes_finalize( void *value ) {
 	realtime_bytes *bytes = (realtime_bytes *)value;
 	bytes->data = NULL;
@@ -260,6 +279,7 @@ static void haxeon_native_callback_dispatch( ffi_cif *cif, void *output, void **
 	(void)cif;
 	haxeon_native_callback *callback = (haxeon_native_callback *)user_data;
 	if( callback->closure == NULL || callback->thread != hl_thread_current() ) {
+		haxeon_native_callback_set_error(callback,HAXEON_CALLBACK_ERROR_WRONG_THREAD,"Native callback invoked on a different thread");
 		haxeon_native_callback_zero(callback->result_code,output);
 		return;
 	}
@@ -268,6 +288,7 @@ static void haxeon_native_callback_dispatch( ffi_cif *cif, void *output, void **
 	for( int index = 0; index < callback->argument_count; index++ )
 		arguments[index] = haxeon_native_callback_argument(callback,index,values[index],&valid);
 	if( !valid ) {
+		haxeon_native_callback_set_error(callback,HAXEON_CALLBACK_ERROR_POINTER_CONTRACT,"Native callback received a pointer that violates its HXI contract");
 		for( int index = 0; index < callback->argument_count; index++ ) haxeon_native_callback_invalidate(arguments[index]);
 		haxeon_native_callback_zero(callback->result_code,output);
 		return;
@@ -275,6 +296,10 @@ static void haxeon_native_callback_dispatch( ffi_cif *cif, void *output, void **
 	bool raised = false;
 	vdynamic *result = hl_dyn_call_safe(callback->closure,arguments,callback->argument_count,&raised);
 	for( int index = 0; index < callback->argument_count; index++ ) haxeon_native_callback_invalidate(arguments[index]);
+	if( raised ) {
+		const char *message = result == NULL ? "Haxe callback raised an exception" : hl_to_utf8(hl_to_string(result));
+		haxeon_native_callback_set_error(callback,HAXEON_CALLBACK_ERROR_EXCEPTION,message);
+	}
 	if( callback->result_code == HAXEON_NATIVE_VOID ) return;
 	if( raised || result == NULL ) { haxeon_native_callback_zero(callback->result_code,output); return; }
 	switch( callback->result_code ) {
@@ -481,6 +506,7 @@ HL_PRIM haxeon_native_callback *HL_NAME(native_callback_create)( realtime_bytes 
 	haxeon_native_callback *callback = (haxeon_native_callback *)hl_gc_alloc_finalizer(sizeof(haxeon_native_callback));
 	memset(callback,0,sizeof(*callback));
 	callback->finalize = haxeon_native_callback_finalize;
+	atomic_flag_clear(&callback->error_lock);
 	if( !haxeon_native_parse_signature(signature,callback->argument_codes,&callback->argument_count,&callback->result_code) ) {
 		free(signature);
 		hl_error("Invalid native callback signature");
@@ -514,6 +540,30 @@ HL_PRIM bool HL_NAME(native_callback_close)( haxeon_native_callback *callback ) 
 	if( callback == NULL || callback->closure_memory == NULL ) return false;
 	haxeon_native_callback_release(callback);
 	return true;
+}
+
+HL_PRIM int HL_NAME(native_callback_error_kind)( haxeon_native_callback *callback ) {
+	if( callback == NULL ) return HAXEON_CALLBACK_ERROR_NONE;
+	while( atomic_flag_test_and_set_explicit(&callback->error_lock,memory_order_acquire) ) {}
+	int result = callback->error_kind;
+	atomic_flag_clear_explicit(&callback->error_lock,memory_order_release);
+	return result;
+}
+
+HL_PRIM realtime_bytes *HL_NAME(native_callback_take_error)( haxeon_native_callback *callback ) {
+	if( callback == NULL ) return NULL;
+	while( atomic_flag_test_and_set_explicit(&callback->error_lock,memory_order_acquire) ) {}
+	if( callback->error_kind == HAXEON_CALLBACK_ERROR_NONE ) {
+		atomic_flag_clear_explicit(&callback->error_lock,memory_order_release);
+		return NULL;
+	}
+	int length = (int)strlen(callback->error);
+	realtime_bytes *result = realtime_bytes_make(length);
+	if( length > 0 ) memcpy(result->data,callback->error,(size_t)length);
+	callback->error_kind = HAXEON_CALLBACK_ERROR_NONE;
+	callback->error[0] = 0;
+	atomic_flag_clear_explicit(&callback->error_lock,memory_order_release);
+	return result;
 }
 
 static haxeon_native_cached_call *haxeon_native_cached_resolve( const char *library_name, const char *symbol, const char *signature ) {

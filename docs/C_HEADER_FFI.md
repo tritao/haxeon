@@ -138,6 +138,15 @@ parameter causes the callback to return zero without entering Haxe. Pointer
 callback results, variadic callbacks, and callbacks with more than sixteen
 arguments are rejected for now.
 
+Callback failures never unwind through the C stack. Each callback handle keeps
+the first unread failure in a small synchronized record and returns the ABI zero
+value to C. Generated `errorKind()` reports `HxiCallbackError.Exception`,
+`WrongThread`, or `PointerContract`; `takeError()` returns the diagnostic as
+managed UTF-8 bytes and atomically clears both the diagnostic and kind. This
+makes failures pollable from an application event loop and attributes them to
+the callback that failed. A later successful invocation does not erase an
+unread failure.
+
 ## Native call runtime
 
 The runtime has a separate ordinary-C call bridge built on libffi. This is not

@@ -12,6 +12,8 @@ DEFINE_PRIM(_I32,native_call,_ABSTRACT(native_function) _BYTES _I32 _BYTES _I32)
 DEFINE_PRIM(_I32,native_last_error,_BYTES _I32);
 DEFINE_PRIM(_ABSTRACT(native_callback),native_callback_create,_ABSTRACT(realtime_bytes) _ABSTRACT(realtime_bytes) _ABSTRACT(realtime_bytes) _DYN);
 DEFINE_PRIM(_BOOL,native_callback_close,_ABSTRACT(native_callback));
+DEFINE_PRIM(_I32,native_callback_error_kind,_ABSTRACT(native_callback));
+DEFINE_PRIM(_ABSTRACT(realtime_bytes),native_callback_take_error,_ABSTRACT(native_callback));
 DEFINE_PRIM(_ABSTRACT(realtime_bytes),native_bytes_invoke_0,_BYTES _BYTES _BYTES _BYTES _BYTES _BYTES _BOOL);
 DEFINE_PRIM(_ABSTRACT(realtime_bytes),native_bytes_invoke_1,_BYTES _BYTES _BYTES _BYTES _BYTES _BYTES _BOOL _DYN);
 DEFINE_PRIM(_ABSTRACT(realtime_bytes),native_bytes_invoke_2,_BYTES _BYTES _BYTES _BYTES _BYTES _BYTES _BOOL _DYN _DYN);

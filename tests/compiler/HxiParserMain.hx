@@ -64,6 +64,7 @@ class HxiParserMain {
 		var callbackSource = HxiProjection.source(callbacks);
 		expect(callbackSource.indexOf("typedef Binary = (left:Int, right:Int)->Int") >= 0
 			&& callbackSource.indexOf("abstract BinaryCallback") >= 0
+			&& callbackSource.indexOf("function takeError():Null<haxe.io.Bytes>") >= 0
 			&& callbackSource.indexOf("extern function apply(arg0:BinaryCallback") >= 0,
 			"callbacks should project typed functions behind explicitly owned native handles");
 		var callbackCompiler = new Compiler();

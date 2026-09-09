@@ -63,7 +63,9 @@ class HxiProjection {
 		var abi = HxiAbi.forInterface(model), output = new StringBuf();
 		var structAccesses:Map<String, {type:String, setterType:String}> = [],
 			declarations:Map<String, HxiDeclaration> = [];
-		var usesNestedStructures = false, usesPointerFields = false;
+		var usesNestedStructures = false,
+			usesPointerFields = false,
+			hasCallbacks = false;
 		for (declaration in model.declarations)
 			switch declaration {
 				case Opaque(name, _) | Alias(name, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _):
@@ -71,6 +73,14 @@ class HxiProjection {
 				case _:
 			}
 		output.add('// Generated semantic projection of ${model.name}. Do not edit.\n');
+		for (declaration in model.declarations)
+			switch declaration {
+				case Callback(_, _, _, _):
+					hasCallbacks = true;
+				case _:
+			}
+		if (hasCallbacks)
+			output.add('enum abstract HxiCallbackError(Int) from Int to Int { var None = 0; var Exception = 1; var WrongThread = 2; var PointerContract = 3; }\n');
 		for (declaration in model.declarations)
 			switch declaration {
 				case Callback(name, parameters, result, _):
@@ -106,8 +116,12 @@ class HxiProjection {
 					output.add('abstract ${name}Callback(hl.Abstract<"native_callback">) {\n');
 					output.add('\tpublic inline function new(callback:$name) this = ${model.name}.__hxi_callback_create(haxe.io.Bytes.ofString("$signature"), haxe.io.Bytes.ofString("${pointerSizes.join(",")}"), haxe.io.Bytes.ofString("${pointerNullable.join(",")}"), callback);\n');
 					output.add('\tpublic inline function close():Bool return ${model.name}.__hxi_callback_close_$name(this);\n');
+					output.add('\tpublic inline function errorKind():HxiCallbackError return ${model.name}.__hxi_callback_error_kind_$name(this);\n');
+					output.add('\tpublic inline function takeError():Null<haxe.io.Bytes> return ${model.name}.__hxi_callback_take_error_$name(this);\n');
 					output.add('}\n');
 					output.add('@:hlNative("realtime_runtime", "native_callback_close") extern function __hxi_callback_close_$name(callback:${name}Callback):Bool;\n');
+					output.add('@:hlNative("realtime_runtime", "native_callback_error_kind") extern function __hxi_callback_error_kind_$name(callback:${name}Callback):Int;\n');
+					output.add('@:hlNative("realtime_runtime", "native_callback_take_error") extern function __hxi_callback_take_error_$name(callback:${name}Callback):Null<haxe.io.Bytes>;\n');
 				case _:
 			}
 		for (declaration in model.declarations)
@@ -190,13 +204,7 @@ class HxiProjection {
 			output.add('@:hlNative("realtime_runtime", "structGetPointer") extern function __hxi_struct_get_pointer(bytes:haxe.io.Bytes, offset:Int, nullable:Bool):hl.Abstract<"native_pointer">;\n');
 			output.add('@:hlNative("realtime_runtime", "structSetPointer") extern function __hxi_struct_set_pointer(bytes:haxe.io.Bytes, offset:Int, value:hl.Abstract<"native_pointer">, nullable:Bool):Void;\n');
 		}
-		if ([
-			for (declaration in model.declarations)
-				if (switch declaration {
-						case Callback(_, _, _, _): true;
-						case _: false;
-					}) declaration
-		].length > 0) {
+		if (hasCallbacks) {
 			output.add('@:hlNative("realtime_runtime", "native_callback_create") extern function __hxi_callback_create(signature:haxe.io.Bytes, pointerSizes:haxe.io.Bytes, pointerNullable:haxe.io.Bytes, callback:Dynamic):hl.Abstract<"native_callback">;\n');
 		}
 		for (access in ["I8", "U8", "I16", "U16", "I32", "I64", "F32", "F64"]) {

@@ -3,8 +3,10 @@
 #include <stdlib.h>
 
 #ifdef _WIN32
+#include <windows.h>
 #define FIXTURE_API __declspec(dllexport)
 #else
+#include <pthread.h>
 #define FIXTURE_API __attribute__((visibility("default")))
 #endif
 
@@ -37,9 +39,43 @@ FIXTURE_API int32_t native_fixture_call_callback( native_fixture_binary_callback
 	return callback == NULL ? 0 : callback(left,right);
 }
 
+typedef struct native_fixture_callback_task {
+	native_fixture_binary_callback callback;
+	int32_t result;
+} native_fixture_callback_task;
+
+#ifdef _WIN32
+static DWORD WINAPI native_fixture_callback_thread( LPVOID value ) {
+#else
+static void *native_fixture_callback_thread( void *value ) {
+#endif
+	native_fixture_callback_task *task = (native_fixture_callback_task *)value;
+	task->result = task->callback(19,23);
+	return 0;
+}
+
+FIXTURE_API int32_t native_fixture_call_callback_on_thread( native_fixture_binary_callback callback ) {
+	native_fixture_callback_task task = {callback, -1};
+#ifdef _WIN32
+	HANDLE thread = CreateThread(NULL,0,native_fixture_callback_thread,&task,0,NULL);
+	if( thread == NULL ) return -1;
+	WaitForSingleObject(thread,INFINITE);
+	CloseHandle(thread);
+#else
+	pthread_t thread;
+	if( pthread_create(&thread,NULL,native_fixture_callback_thread,&task) != 0 ) return -1;
+	pthread_join(thread,NULL);
+#endif
+	return task.result;
+}
+
 FIXTURE_API int32_t native_fixture_call_event( native_fixture_event_callback callback, int32_t with_user_data ) {
 	native_fixture_point event = {10, 11};
 	return callback == NULL ? 0 : callback(&event,with_user_data ? &native_fixture_borrowed_value : NULL);
+}
+
+FIXTURE_API int32_t native_fixture_call_invalid_event( native_fixture_event_callback callback ) {
+	return callback == NULL ? 0 : callback(NULL,NULL);
 }
 
 FIXTURE_API void native_fixture_set_callback( native_fixture_binary_callback callback ) {
