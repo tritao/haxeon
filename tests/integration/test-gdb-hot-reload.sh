@@ -2,6 +2,7 @@
 set -euo pipefail
 
 repo_dir="$(cd "$(dirname "$0")/../.." && pwd)"
+hashlink_dir="$repo_dir/.tools/hashlink"
 gdb_commands="$(mktemp "${TMPDIR:-/tmp}/hashlink-gdb-patch.XXXXXX")"
 gdb_output="$(mktemp "${TMPDIR:-/tmp}/hashlink-gdb-patch-output.XXXXXX")"
 symbol_commands="$(mktemp "${TMPDIR:-/tmp}/hashlink-gdb-patch-symbols.XXXXXX")"
@@ -16,8 +17,8 @@ trap 'rm -f "$gdb_commands" "$gdb_output" "$symbol_commands" "$symbol_output" "$
 cc -shared -fPIC \
   -I "$repo_dir/vendor/hashlink/src" \
   "$repo_dir/tests/native/patch_core.c" \
-  -L "$repo_dir/vendor/hashlink" -lhl \
-  -Wl,-rpath,"$repo_dir/vendor/hashlink" \
+  -L "$hashlink_dir" -lhl \
+  -Wl,-rpath,"$hashlink_dir" \
   -o "$repo_dir/out/patch_core.hdll"
 "$repo_dir/.tools/haxe/haxe" "$repo_dir/tests/hxml/gdb-patch-core-test.hxml"
 
@@ -35,8 +36,8 @@ GDB
 
 (
   cd "$repo_dir/out"
-  LD_LIBRARY_PATH="$repo_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-    gdb -q -batch -x "$gdb_commands" "$repo_dir/vendor/hashlink/hl"
+  LD_LIBRARY_PATH="$hashlink_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+    gdb -q -batch -x "$gdb_commands" "$hashlink_dir/hl"
 ) > "$gdb_output" 2>&1
 
 registrations="$(grep -c 'JIT_EVENT=1' "$gdb_output" || true)"
@@ -59,8 +60,8 @@ GDB
 
 (
   cd "$repo_dir/out"
-  LD_LIBRARY_PATH="$repo_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-    gdb -q -batch -x "$symbol_commands" "$repo_dir/vendor/hashlink/hl"
+  LD_LIBRARY_PATH="$hashlink_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+    gdb -q -batch -x "$symbol_commands" "$hashlink_dir/hl"
 ) > "$symbol_output" 2>&1 || {
   echo "GDB could not inspect the first hot-patch registration" >&2
   cat "$symbol_output" >&2
@@ -76,17 +77,17 @@ grep -F 'Line 1 of "Main.hx" starts at address ' "$symbol_output" >/dev/null \
 
 (
   cd "$repo_dir/out"
-  LD_LIBRARY_PATH="$repo_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+  LD_LIBRARY_PATH="$hashlink_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
     gdb -q -batch \
       -ex "run gdb-patch-core-test.hl" \
       -ex "generate-core-file $core_file" \
-      "$repo_dir/vendor/hashlink/hl"
+      "$hashlink_dir/hl"
 ) >/dev/null 2>&1
 
 (
   cd "$repo_dir/out"
-  LD_LIBRARY_PATH="$repo_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-    gdb -q -batch "$repo_dir/vendor/hashlink/hl" "$core_file" \
+  LD_LIBRARY_PATH="$hashlink_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+    gdb -q -batch "$hashlink_dir/hl" "$core_file" \
       -ex "backtrace 6" \
       -ex "info line CrashPoint.hx:9"
 ) > "$core_output" 2>&1
