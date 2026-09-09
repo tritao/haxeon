@@ -67,6 +67,12 @@ class HxiParserMain {
 			&& callbackSource.indexOf("function takeError():Null<haxe.io.Bytes>") >= 0
 			&& callbackSource.indexOf("extern function apply(arg0:BinaryCallback") >= 0,
 			"callbacks should project typed functions behind explicitly owned native handles");
+		var nullableCallbacks = HxiParser.parse("nullable-callbacks.hxi",
+			'interface callbacks @target("x86_64-linux-gnu") @library("callbacks") { callback Binary = fn(value: i32) -> i32; extern fn set(callback: nullable<Binary>) -> void; }');
+		expect(HxiProjection.source(nullableCallbacks).indexOf("extern function set(arg0:Null<BinaryCallback>):Void") >= 0,
+			"nullable callback parameters should project as nullable managed handles");
+		expectError('interface bad @target("x86_64-linux-gnu") { callback Binary = fn(value: i32) -> i32; extern fn get() -> nullable<Binary>; }',
+			"cannot return a callback handle yet");
 		var callbackCompiler = new Compiler();
 		callbackCompiler.addFfiInterface("callbacks.hxi",
 			'interface callbacks @target("x86_64-linux-gnu") @library("callbacks") { callback Binary = fn(left: i32, right: i32) -> i32; extern fn apply(callback: Binary) -> i32; }');
@@ -88,7 +94,7 @@ class HxiParserMain {
 		expectError(StringTools.replace(valid, '@target("x86_64-linux-gnu")', "@target(42)"), "requires a string value");
 		expectError(StringTools.replace(valid, "@leaf", "@leaf(1)"), "does not accept values");
 		expectError(StringTools.replace(valid, "@leaf", "@unknown"), "Unsupported @unknown metadata");
-		expectError(StringTools.replace(valid, "ptr<const<nk_options>>", "nullable<i32>"), "nullable<> requires a pointer type");
+		expectError(StringTools.replace(valid, "ptr<const<nk_options>>", "nullable<i32>"), "nullable<> requires a pointer or callback type");
 		var pointerPolicies = HxiParser.parse("pointers.hxi",
 			'interface pointers @target("x86_64-linux-gnu") @library("pointers") { opaque context; extern fn create() -> ptr<u8> @owned("context_destroy") @length("context_size"); extern fn current() -> nullable<ptr<context>> @borrowed; }');
 		switch pointerPolicies.declarations[1] {

@@ -63,3 +63,17 @@ if [[ $invalid_status -eq 0 ]] || ! rg -q "HXI array index out of bounds" "$inva
 	cat "$invalid_output" >&2
 	exit 1
 fi
+
+set +e
+(
+	cd "$repo_dir/out"
+	LD_LIBRARY_PATH="$repo_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+		"$repo_dir/vendor/hashlink/hl" hxi-call-test.hl.closed-callback
+) >"$invalid_output" 2>&1
+invalid_status=$?
+set -e
+if [[ $invalid_status -eq 0 ]] || ! rg -q "Closed native callback argument" "$invalid_output"; then
+	echo "closed HXI callback was accepted or reported the wrong error" >&2
+	cat "$invalid_output" >&2
+	exit 1
+fi

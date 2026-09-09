@@ -24,7 +24,7 @@ class HxiAbiMain {
 		var callbackModel = HxiParser.parse("callback.hxi",
 			'interface sample @target("x86_64-linux-gnu") @library("sample") { callback Binary = fn(left: i32, right: i32) -> i32; extern fn apply(callback: Binary) -> i32; }');
 		switch HxiAbi.forInterface(callbackModel).functions()[0].arguments[0] {
-			case CallbackValue("Binary", [IntegerValue(32, Signed), IntegerValue(32, Signed)], IntegerValue(32, Signed)):
+			case CallbackValue("Binary", [IntegerValue(32, Signed), IntegerValue(32, Signed)], IntegerValue(32, Signed), false):
 			case _:
 				throw "callback ABI did not retain its typed signature";
 		}

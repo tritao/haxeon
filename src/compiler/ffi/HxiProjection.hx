@@ -26,7 +26,7 @@ class HxiProjection {
 					break;
 				}
 				var nativeAbstract = switch argument {
-					case CallbackValue(_, _, _): "native_callback";
+					case CallbackValue(_, _, _, _): "native_callback";
 					case _: value.nativePointer ? "native_pointer" : null;
 				};
 				arguments.push(irType(value.code, false, nativeAbstract));
@@ -283,8 +283,8 @@ class HxiProjection {
 						default: unsigned ? 6 : 5;
 					}
 				};
-			case CallbackValue(name, _, _): {
-					haxeType: name + "Callback",
+			case CallbackValue(name, _, _, nullable): {
+					haxeType: nullable ? 'Null<${name}Callback>' : name + "Callback",
 					code: 11,
 					nativePointer: true,
 					nullable: false

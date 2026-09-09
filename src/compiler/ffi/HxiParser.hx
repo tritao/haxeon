@@ -302,7 +302,7 @@ class HxiParser {
 			switch declaration {
 				case Opaque(_, _) | Constant(_, _, _):
 				case Alias(_, type, span):
-					validateType(type, names, span, false);
+					validateType(type, names, declarationsByName, span, false);
 				case Structure(name, size, align, fields, span):
 					if (size < 0 || align <= 0 || (align & (align - 1)) != 0 || size % align != 0)
 						fail('Struct "$name" has invalid layout', span);
@@ -322,7 +322,7 @@ class HxiParser {
 							if (field.offset < range.end && field.offset + layout.size > range.start)
 								fail('Field "${field.name}" overlaps field "${range.name}" in struct "$name"', field.span);
 						ranges.push({start: field.offset, end: field.offset + layout.size, name: field.name});
-						validateType(field.type, names, field.span, false);
+						validateType(field.type, names, declarationsByName, field.span, false);
 						switch field.ownership {
 							case Owned(_): fail('Owned pointer field "${field.name}" is not supported; keep ownership in a separate handle', field.span);
 							case Borrowed:
@@ -334,7 +334,7 @@ class HxiParser {
 							fail('@length_field on "${field.name}" is reserved until structures can retain input buffers', field.span);
 					}
 				case Enumeration(name, representation, _, values, span):
-					validateType(representation, names, span, false);
+					validateType(representation, names, declarationsByName, span, false);
 					var integer = switch abi.classify(representation) {
 						case IntegerValue(bits, sign) if (bits <= 32): {bits: bits, signed: sign == Signed};
 						case _: fail('Enum "$name" requires an 8/16/32-bit integer representation', span);
@@ -363,8 +363,12 @@ class HxiParser {
 					validateCallbackType(result, abi, span, true);
 				case Function(name, parameters, result, _, _, resultPolicy, span):
 					for (parameter in parameters)
-						validateType(parameter.type, names, parameter.span, false);
-					validateType(result, names, span, true);
+						validateType(parameter.type, names, declarationsByName, parameter.span, false);
+					validateType(result, names, declarationsByName, span, true);
+					switch abi.classify(result, true) {
+						case CallbackValue(_, _, _, _): fail('Function "$name" cannot return a callback handle yet', span);
+						case _:
+					}
 					if (resultPolicy.length != null && !bytePointerLike(result, declarationsByName))
 						fail('@length on "$name" requires a pointer to byte-sized data or void', span);
 			}
@@ -493,7 +497,7 @@ class HxiParser {
 			case _:
 		}
 
-	function validateType(type:HxiType, names:Map<String, SourceSpan>, span:SourceSpan, allowVoid:Bool):Void
+	function validateType(type:HxiType, names:Map<String, SourceSpan>, declarations:Map<String, HxiDeclaration>, span:SourceSpan, allowVoid:Bool):Void
 		switch type {
 			case Primitive("void") if (!allowVoid):
 				fail("Void is not valid in this ABI position", span);
@@ -502,17 +506,22 @@ class HxiParser {
 				fail('Unknown HXI type "$name"', span);
 			case Named(_):
 			case Pointer(element):
-				validateType(element, names, span, true);
+				validateType(element, names, declarations, span, true);
 			case Nullable(element):
 				switch element {
 					case Pointer(_):
-					default: fail("nullable<> requires a pointer type", span);
+					case Named(name):
+						switch declarations.get(name) {
+							case Callback(_, _, _, _):
+							case _: fail("nullable<> requires a pointer or callback type", span);
+						}
+					default: fail("nullable<> requires a pointer or callback type", span);
 				}
-				validateType(element, names, span, false);
+				validateType(element, names, declarations, span, false);
 			case Const(element):
-				validateType(element, names, span, allowVoid);
+				validateType(element, names, declarations, span, allowVoid);
 			case Array(element, _):
-				validateType(element, names, span, false);
+				validateType(element, names, declarations, span, false);
 		}
 
 	static function declarationName(value:HxiDeclaration):{name:String, span:SourceSpan}

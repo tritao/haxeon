@@ -98,7 +98,8 @@ class CHeaderImporter {
 				if (callback != null) {
 					output.add('\tcallback $name = fn(');
 					output.add([
-						for (index in 0...callback.arguments.length) 'arg$index: ${mapType(callback.arguments[index])}'
+						for (index in 0...callback.arguments.length)
+							'arg$index: ${mapType(callback.arguments[index])}'
 					].join(", "));
 					output.add(') -> ${mapType(callback.result)};\n');
 				} else if (!StringTools.startsWith(qualified, "struct ") && !StringTools.startsWith(qualified, "enum "))
@@ -147,6 +148,10 @@ class CHeaderImporter {
 
 	static function mapType(value:String):String {
 		value = StringTools.trim(value);
+		if (StringTools.endsWith(value, " _Nullable"))
+			return 'nullable<${mapType(value.substring(0, value.length - 10))}>';
+		if (StringTools.endsWith(value, " _Nonnull"))
+			return mapType(value.substring(0, value.length - 9));
 		if (StringTools.endsWith(value, "]")) {
 			var split = value.lastIndexOf("[");
 			if (split == value.length - 2)

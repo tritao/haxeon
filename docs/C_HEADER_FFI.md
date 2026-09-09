@@ -147,6 +147,16 @@ makes failures pollable from an application event loop and attributes them to
 the callback that failed. A later successful invocation does not erase an
 unread failure.
 
+Callback handles can be made nullable at an HXI use site with
+`nullable<CallbackName>`. They project as `Null<CallbackNameCallback>` and a
+Haxe `null` crosses the ABI as a null function pointer, matching conventional
+registration APIs that unregister with `set_handler(NULL)`. Clang `_Nullable`
+function-pointer parameters import in this form, while `_Nonnull` retains the
+plain callback type. A closed non-null handle is rejected before entering C.
+Applications must unregister a callback and only then call `close()`; closing a
+function pointer that native code may still invoke remains a caller lifetime
+error.
+
 ## Native call runtime
 
 The runtime has a separate ordinary-C call bridge built on libffi. This is not

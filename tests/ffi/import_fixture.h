@@ -23,5 +23,6 @@ typedef struct sample_options {
 
 int32_t sample_create(const sample_options *options, sample_handle *output);
 int32_t sample_apply(sample_binary_callback callback, int32_t left, int32_t right);
+int32_t sample_apply_nullable(sample_binary_callback _Nullable callback);
 enum sample_result sample_check_result(enum sample_result value);
 const char *sample_error(void);

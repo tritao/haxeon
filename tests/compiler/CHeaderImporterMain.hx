@@ -15,6 +15,8 @@ class CHeaderImporterMain {
 			"function pointer typedefs should import as typed callbacks");
 		expect(first.indexOf("callback sample_visit_callback = fn(arg0: ptr<const<sample_options>>, arg1: ptr<void>) -> void") >= 0,
 			"function pointer imports should preserve structure and user-data pointers");
+		expect(first.indexOf("extern fn sample_apply_nullable(callback: nullable<sample_binary_callback>)") >= 0,
+			"Clang callback nullability should survive HXI import");
 		expect(first.indexOf("const SAMPLE_FLAG = 8") >= 0, "constant expressions should use Clang's evaluated value");
 		expect(first.indexOf("enum sample_result : c_int") >= 0 && first.indexOf("SAMPLE_RESULT_FAILED = -1") >= 0,
 			"named C enums should import as nominal HXI enums");

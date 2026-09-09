@@ -15,7 +15,7 @@ enum HxiAbiValue {
 	VoidValue;
 	IntegerValue(bits:Int, sign:HxiIntegerSign);
 	EnumerationValue(name:String, bits:Int, sign:HxiIntegerSign);
-	CallbackValue(name:String, arguments:Array<HxiAbiValue>, result:HxiAbiValue);
+	CallbackValue(name:String, arguments:Array<HxiAbiValue>, result:HxiAbiValue, nullable:Bool);
 	FloatValue(bits:Int);
 	PointerValue(bits:Int, nullable:Bool, opaque:Bool, structure:Null<String>);
 	AggregateValue(size:Int, align:Int);
@@ -90,6 +90,7 @@ class HxiAbi {
 			case Nullable(element):
 				switch classify(element, allowVoid) {
 					case PointerValue(bits, _, opaque, structure): PointerValue(bits, true, opaque, structure);
+					case CallbackValue(name, arguments, result, _): CallbackValue(name, arguments, result, true);
 					case _: throw "Nullable ABI value must be a pointer";
 				}
 			case Const(element): classify(element, allowVoid);
@@ -106,7 +107,7 @@ class HxiAbi {
 							case _: throw 'Enum HXI type "$name" does not have an integer representation';
 						}
 					case Callback(_, parameters, result, _):
-						CallbackValue(name, [for (parameter in parameters) classify(parameter.type)], classify(result, true));
+						CallbackValue(name, [for (parameter in parameters) classify(parameter.type)], classify(result, true), false);
 					case Structure(_, size, align, _, _): AggregateValue(size, align);
 					case Opaque(_, _): throw 'Opaque HXI type "$name" cannot be passed by value';
 					case _: throw 'HXI declaration "$name" is not a type';
