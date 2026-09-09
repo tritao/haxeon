@@ -391,10 +391,10 @@ class HxiParser {
 		try {
 			switch abi.classify(type, allowVoid) {
 				case VoidValue if (allowVoid):
-				case IntegerValue(_, _) | EnumerationValue(_, _, _) | FloatValue(_):
+				case IntegerValue(_, _) | EnumerationValue(_, _, _) | FloatValue(_) | AggregateValue(_, _, _):
 				case PointerValue(_, _, _, _) if (!allowVoid):
 				case _:
-					fail("Callbacks support scalar and pointer arguments with scalar or void results", span);
+					fail("Callbacks support scalar, aggregate, and pointer arguments with scalar, aggregate, or void results", span);
 			}
 		} catch (error:Dynamic) {
 			fail(Std.string(error), span);

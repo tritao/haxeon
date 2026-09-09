@@ -124,9 +124,9 @@ native calls and structure fields retain the declared integer ABI. Clang-importe
 named C enums currently use `c_int` unless the header specifies a fixed underlying
 type; `flags` remains an explicit HXI authoring distinction rather than a heuristic.
 
-C function-pointer typedefs import as HXI `callback` declarations. Scalar
-callback arguments and results use the same integer and floating-point ABI
-classification as ordinary calls, with `void` also accepted as a result.
+C function-pointer typedefs import as HXI `callback` declarations. Scalar and
+by-value structure arguments and results use the same recursive ABI descriptors
+as ordinary calls, with `void` also accepted as a result.
 Projection generates a typed Haxe function alias and a distinct managed callback
 handle. Constructing the handle allocates a libffi closure and roots the Haxe
 function; `close()` releases both resources and is idempotent. If C retains the
@@ -135,7 +135,10 @@ the callback, then close it. Invocations are accepted only on the thread where
 the handle was created; a call from another thread does not enter Haxe and
 returns a zero value. Pointer arguments are borrowed, scoped wrappers: opaque
 and `void *` values use non-owning pointer handles, while pointers to fixed-layout
-structures use typed byte views of exactly the declared structure size. Nullable
+structures use typed byte views of exactly the declared structure size, while
+by-value structure arguments use equivalent callback-scoped views. Aggregate
+results are copied into libffi's return storage before scoped arguments expire,
+so a callback may return one of its by-value arguments. Nullable
 pointers map to Haxe `null`. Every non-null wrapper is invalidated immediately
 after the callback returns, including exceptional returns, so retaining one does
 not extend the native address lifetime. A null address passed for a non-null HXI
@@ -146,8 +149,8 @@ arguments are rejected for now.
 Callback failures never unwind through the C stack. Each callback handle keeps
 the first unread failure in a small synchronized record and returns the ABI zero
 value to C. Generated `errorKind()` reports `HxiCallbackError.Exception`,
-`WrongThread`, or `PointerContract`; `takeError()` returns the diagnostic as
-managed UTF-8 bytes and atomically clears both the diagnostic and kind. This
+`WrongThread`, `PointerContract`, or `AggregateContract`; `takeError()` returns
+the diagnostic as managed UTF-8 bytes and atomically clears both the diagnostic and kind. This
 makes failures pollable from an application event loop and attributes them to
 the callback that failed. A later successful invocation does not erase an
 unread failure.

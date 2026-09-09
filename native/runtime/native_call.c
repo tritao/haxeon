@@ -53,10 +53,15 @@ typedef struct haxeon_native_callback {
 	hl_thread *thread;
 	ffi_type *argument_types[HAXEON_NATIVE_MAX_ARGUMENTS];
 	unsigned char argument_codes[HAXEON_NATIVE_MAX_ARGUMENTS];
+	int argument_sizes[HAXEON_NATIVE_MAX_ARGUMENTS];
+	int argument_aligns[HAXEON_NATIVE_MAX_ARGUMENTS];
 	int pointer_sizes[HAXEON_NATIVE_MAX_ARGUMENTS];
 	bool pointer_nullable[HAXEON_NATIVE_MAX_ARGUMENTS];
 	int argument_count;
 	int result_code;
+	int result_size;
+	int result_align;
+	ffi_type *result_type;
 	atomic_flag error_lock;
 	int error_kind;
 	char error[512];
@@ -66,7 +71,8 @@ enum haxeon_native_callback_error {
 	HAXEON_CALLBACK_ERROR_NONE = 0,
 	HAXEON_CALLBACK_ERROR_EXCEPTION = 1,
 	HAXEON_CALLBACK_ERROR_WRONG_THREAD = 2,
-	HAXEON_CALLBACK_ERROR_POINTER_CONTRACT = 3
+	HAXEON_CALLBACK_ERROR_POINTER_CONTRACT = 3,
+	HAXEON_CALLBACK_ERROR_AGGREGATE_CONTRACT = 4
 };
 
 #ifdef _WIN32
@@ -251,6 +257,20 @@ static vdynamic *haxeon_native_callback_argument( haxeon_native_callback *callba
 		*valid = false;
 		return NULL;
 	}
+	case HAXEON_NATIVE_AGGREGATE: {
+		hl_type *expected = callback->closure->t->fun->args[index];
+		if( expected->kind != HABSTRACT || strcmp(hl_to_utf8(expected->abs_name),"realtime_bytes") != 0 ) {
+			*valid = false;
+			return NULL;
+		}
+		realtime_bytes *wrapped = (realtime_bytes *)hl_gc_alloc_finalizer(sizeof(realtime_bytes));
+		wrapped->finalize = haxeon_native_scoped_bytes_finalize;
+		wrapped->data = (vbyte *)value;
+		wrapped->length = callback->argument_sizes[index];
+		result = hl_alloc_dynamic(expected);
+		result->v.ptr = wrapped;
+		return result;
+	}
 	default: return NULL;
 	}
 }
@@ -266,9 +286,13 @@ static void haxeon_native_callback_invalidate( vdynamic *argument ) {
 	}
 }
 
-static void haxeon_native_callback_zero( int code, void *output ) {
-	if( output == NULL || code == HAXEON_NATIVE_VOID ) return;
-	switch( code ) {
+static void haxeon_native_callback_zero( haxeon_native_callback *callback, void *output ) {
+	if( output == NULL || callback->result_code == HAXEON_NATIVE_VOID ) return;
+	if( callback->result_code == HAXEON_NATIVE_AGGREGATE ) {
+		memset(output,0,(size_t)callback->result_size);
+		return;
+	}
+	switch( callback->result_code ) {
 	case HAXEON_NATIVE_I8: case HAXEON_NATIVE_U8: *(uint8_t *)output = 0; break;
 	case HAXEON_NATIVE_I16: case HAXEON_NATIVE_U16: *(uint16_t *)output = 0; break;
 	case HAXEON_NATIVE_I32: case HAXEON_NATIVE_U32: case HAXEON_NATIVE_F32: *(uint32_t *)output = 0; break;
@@ -282,7 +306,7 @@ static void haxeon_native_callback_dispatch( ffi_cif *cif, void *output, void **
 	haxeon_native_callback *callback = (haxeon_native_callback *)user_data;
 	if( callback->closure == NULL || callback->thread != hl_thread_current() ) {
 		haxeon_native_callback_set_error(callback,HAXEON_CALLBACK_ERROR_WRONG_THREAD,"Native callback invoked on a different thread");
-		haxeon_native_callback_zero(callback->result_code,output);
+		haxeon_native_callback_zero(callback,output);
 		return;
 	}
 	vdynamic *arguments[HAXEON_NATIVE_MAX_ARGUMENTS];
@@ -292,18 +316,32 @@ static void haxeon_native_callback_dispatch( ffi_cif *cif, void *output, void **
 	if( !valid ) {
 		haxeon_native_callback_set_error(callback,HAXEON_CALLBACK_ERROR_POINTER_CONTRACT,"Native callback received a pointer that violates its HXI contract");
 		for( int index = 0; index < callback->argument_count; index++ ) haxeon_native_callback_invalidate(arguments[index]);
-		haxeon_native_callback_zero(callback->result_code,output);
+		haxeon_native_callback_zero(callback,output);
 		return;
 	}
 	bool raised = false;
 	vdynamic *result = hl_dyn_call_safe(callback->closure,arguments,callback->argument_count,&raised);
+	if( callback->result_code == HAXEON_NATIVE_AGGREGATE && !raised && result != NULL ) {
+		if( result->t == NULL || result->t->kind != HABSTRACT || strcmp(hl_to_utf8(result->t->abs_name),"realtime_bytes") != 0 ) {
+			haxeon_native_callback_set_error(callback,HAXEON_CALLBACK_ERROR_AGGREGATE_CONTRACT,"Native callback returned a value that violates its HXI aggregate contract");
+			haxeon_native_callback_zero(callback,output);
+		} else {
+			realtime_bytes *bytes = (realtime_bytes *)result->v.ptr;
+			if( bytes == NULL || bytes->data == NULL || bytes->length != callback->result_size ) {
+				haxeon_native_callback_set_error(callback,HAXEON_CALLBACK_ERROR_AGGREGATE_CONTRACT,"Native callback returned an aggregate with the wrong size");
+				haxeon_native_callback_zero(callback,output);
+			} else
+				memcpy(output,bytes->data,(size_t)callback->result_size);
+		}
+	}
 	for( int index = 0; index < callback->argument_count; index++ ) haxeon_native_callback_invalidate(arguments[index]);
 	if( raised ) {
 		const char *message = result == NULL ? "Haxe callback raised an exception" : hl_to_utf8(hl_to_string(result));
 		haxeon_native_callback_set_error(callback,HAXEON_CALLBACK_ERROR_EXCEPTION,message);
 	}
 	if( callback->result_code == HAXEON_NATIVE_VOID ) return;
-	if( raised || result == NULL ) { haxeon_native_callback_zero(callback->result_code,output); return; }
+	if( raised || result == NULL ) { haxeon_native_callback_zero(callback,output); return; }
+	if( callback->result_code == HAXEON_NATIVE_AGGREGATE ) return;
 	switch( callback->result_code ) {
 	case HAXEON_NATIVE_I8: *(int8_t *)output = (int8_t)result->v.i; break;
 	case HAXEON_NATIVE_U8: *(uint8_t *)output = (uint8_t)result->v.i; break;
@@ -313,7 +351,7 @@ static void haxeon_native_callback_dispatch( ffi_cif *cif, void *output, void **
 	case HAXEON_NATIVE_I64: case HAXEON_NATIVE_U64: *(int64_t *)output = result->v.i64; break;
 	case HAXEON_NATIVE_F32: *(float *)output = (float)result->v.d; break;
 	case HAXEON_NATIVE_F64: *(double *)output = result->v.d; break;
-	default: haxeon_native_callback_zero(callback->result_code,output); break;
+	default: haxeon_native_callback_zero(callback,output); break;
 	}
 }
 
@@ -597,10 +635,8 @@ HL_PRIM haxeon_native_callback *HL_NAME(native_callback_create)( realtime_bytes 
 	callback->finalize = haxeon_native_callback_finalize;
 	atomic_flag_clear(&callback->error_lock);
 	ffi_abi call_abi;
-	int argument_sizes[HAXEON_NATIVE_MAX_ARGUMENTS], argument_aligns[HAXEON_NATIVE_MAX_ARGUMENTS], result_size, result_align;
-	ffi_type *result;
-	if( !haxeon_native_parse_signature(signature,callback->argument_codes,callback->argument_types,argument_sizes,argument_aligns,
-		&callback->argument_count,&callback->result_code,&result,&result_size,&result_align,&call_abi) ) {
+	if( !haxeon_native_parse_signature(signature,callback->argument_codes,callback->argument_types,callback->argument_sizes,callback->argument_aligns,
+		&callback->argument_count,&callback->result_code,&callback->result_type,&callback->result_size,&callback->result_align,&call_abi) ) {
 		free(signature);
 		hl_error("Invalid native callback signature");
 	}
@@ -610,12 +646,17 @@ HL_PRIM haxeon_native_callback *HL_NAME(native_callback_create)( realtime_bytes 
 		|| !haxeon_native_parse_callback_metadata(pointer_nullable,callback->argument_count,nullable_values) )
 		hl_error("Invalid native callback pointer metadata");
 	for( int index = 0; index < callback->argument_count; index++ ) callback->pointer_nullable[index] = nullable_values[index] != 0;
-	for( int index = 0; index < callback->argument_count; index++ )
-		if( callback->argument_codes[index] == HAXEON_NATIVE_AGGREGATE ) hl_error("Aggregate callback arguments are not supported yet");
-	if( callback->result_code == HAXEON_NATIVE_POINTER || callback->result_code == HAXEON_NATIVE_AGGREGATE )
-		hl_error("Pointer and aggregate callback results are not supported yet");
-	if( result == NULL || ffi_prep_cif(&callback->cif,call_abi,(unsigned int)callback->argument_count,result,callback->argument_types) != FFI_OK )
+	if( callback->result_code == HAXEON_NATIVE_POINTER ) hl_error("Pointer callback results are not supported yet");
+	if( callback->result_type == NULL || ffi_prep_cif(&callback->cif,call_abi,(unsigned int)callback->argument_count,callback->result_type,callback->argument_types) != FFI_OK )
 		hl_error("Could not prepare native callback signature");
+	for( int index = 0; index < callback->argument_count; index++ )
+		if( callback->argument_codes[index] == HAXEON_NATIVE_AGGREGATE
+			&& ((int)callback->argument_types[index]->size != callback->argument_sizes[index]
+				|| (int)callback->argument_types[index]->alignment != callback->argument_aligns[index]) )
+			hl_error("Native callback aggregate argument layout does not match the platform ABI");
+	if( callback->result_code == HAXEON_NATIVE_AGGREGATE
+		&& ((int)callback->result_type->size != callback->result_size || (int)callback->result_type->alignment != callback->result_align) )
+		hl_error("Native callback aggregate result layout does not match the platform ABI");
 	callback->closure_memory = ffi_closure_alloc(sizeof(ffi_closure),&callback->code);
 	if( callback->closure_memory == NULL || callback->code == NULL ) hl_error("Could not allocate executable native callback memory");
 	callback->closure = (vclosure *)value;

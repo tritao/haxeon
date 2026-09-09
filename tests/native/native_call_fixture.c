@@ -30,6 +30,9 @@ typedef struct native_fixture_padded { int8_t tag; int32_t value; } native_fixtu
 static int32_t native_fixture_borrowed_value = 42;
 typedef int32_t (*native_fixture_binary_callback)( int32_t, int32_t );
 typedef int32_t (*native_fixture_event_callback)( const native_fixture_point *, void * );
+typedef native_fixture_point (*native_fixture_point_callback)( native_fixture_point, native_fixture_point );
+typedef native_fixture_arrays (*native_fixture_arrays_callback)( native_fixture_arrays );
+FIXTURE_API int32_t native_fixture_check_arrays( const native_fixture_arrays *arrays );
 static native_fixture_binary_callback native_fixture_retained_callback;
 
 FIXTURE_API int32_t native_fixture_add( int32_t left, int32_t right ) {
@@ -73,6 +76,49 @@ FIXTURE_API int32_t native_fixture_call_callback_on_thread( native_fixture_binar
 FIXTURE_API int32_t native_fixture_call_event( native_fixture_event_callback callback, int32_t with_user_data ) {
 	native_fixture_point event = {10, 11};
 	return callback == NULL ? 0 : callback(&event,with_user_data ? &native_fixture_borrowed_value : NULL);
+}
+
+FIXTURE_API int32_t native_fixture_call_point_callback( native_fixture_point_callback callback ) {
+	native_fixture_point left = {10, 11}, right = {20, 21};
+	native_fixture_point result = callback(left,right);
+	return result.x == 30 && result.y == 32 ? 42 : 0;
+}
+
+typedef struct native_fixture_point_callback_task {
+	native_fixture_point_callback callback;
+	native_fixture_point result;
+} native_fixture_point_callback_task;
+
+#ifdef _WIN32
+static DWORD WINAPI native_fixture_point_callback_thread( LPVOID value ) {
+#else
+static void *native_fixture_point_callback_thread( void *value ) {
+#endif
+	native_fixture_point_callback_task *task = (native_fixture_point_callback_task *)value;
+	native_fixture_point left = {10, 11}, right = {20, 21};
+	task->result = task->callback(left,right);
+	return 0;
+}
+
+FIXTURE_API int32_t native_fixture_call_point_callback_on_thread( native_fixture_point_callback callback ) {
+	native_fixture_point_callback_task task = {callback, {-1, -1}};
+#ifdef _WIN32
+	HANDLE thread = CreateThread(NULL,0,native_fixture_point_callback_thread,&task,0,NULL);
+	if( thread == NULL ) return -1;
+	WaitForSingleObject(thread,INFINITE);
+	CloseHandle(thread);
+#else
+	pthread_t thread;
+	if( pthread_create(&thread,NULL,native_fixture_point_callback_thread,&task) != 0 ) return -1;
+	pthread_join(thread,NULL);
+#endif
+	return task.result.x == 0 && task.result.y == 0 ? 0 : -1;
+}
+
+FIXTURE_API int32_t native_fixture_call_arrays_callback( native_fixture_arrays_callback callback ) {
+	native_fixture_arrays value = {{10, 11, 12}, {'A', 'B', 'C', 'D'}, {{10, 11}, {20, 21}}};
+	native_fixture_arrays result = callback(value);
+	return native_fixture_check_arrays(&result);
 }
 
 FIXTURE_API int32_t native_fixture_call_invalid_event( native_fixture_event_callback callback ) {

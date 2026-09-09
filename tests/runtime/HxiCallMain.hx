@@ -23,6 +23,8 @@ class HxiCallMain {
 			'\tstruct fixture_holder @layout(16, 8) { required: ptr<fixture_context> @offset(0) @borrowed; optional: nullable<ptr<fixture_context>> @offset(8) @borrowed; }\n'
 			+
 			'\tstruct fixture_arrays @layout(28, 4) { values: array<i16, 3> @offset(0); name: array<u8, 4> @offset(6); points: array<fixture_point, 2> @offset(12); }\n'
+			+ '\tcallback FixturePointCallback = fn(left: fixture_point, right: fixture_point) -> fixture_point;\n'
+			+ '\tcallback FixtureArraysCallback = fn(value: fixture_arrays) -> fixture_arrays;\n'
 			+ '\textern fn checkOptions(options: ptr<const<fixture_options>>) -> i32 @symbol("native_fixture_check_options");\n'
 			+ '\textern fn checkBox(box: ptr<const<fixture_box>>) -> i32 @symbol("native_fixture_check_box");\n'
 			+ '\textern fn checkHolder(holder: ptr<const<fixture_holder>>) -> i32 @symbol("native_fixture_check_holder");\n'
@@ -31,6 +33,9 @@ class HxiCallMain {
 			+ '\textern fn checkBoxValue(box: fixture_box) -> i32 @symbol("native_fixture_check_box_value");\n'
 			+ '\textern fn checkArraysValue(arrays: fixture_arrays) -> i32 @symbol("native_fixture_check_arrays_value");\n'
 			+ '\textern fn makePadded(value: i32) -> fixture_padded @symbol("native_fixture_make_padded");\n'
+			+ '\textern fn callPointCallback(callback: FixturePointCallback) -> i32 @symbol("native_fixture_call_point_callback");\n'
+			+ '\textern fn callPointCallbackOnThread(callback: FixturePointCallback) -> i32 @symbol("native_fixture_call_point_callback_on_thread");\n'
+			+ '\textern fn callArraysCallback(callback: FixtureArraysCallback) -> i32 @symbol("native_fixture_call_arrays_callback");\n'
 			+ '\textern fn add(left: i32, right: i32) -> i32 @symbol("native_fixture_add");\n'
 			+ '\textern fn systemAdd(left: i32, right: i32) -> i32 @symbol("native_fixture_add") @callconv("system");\n'
 			+ '\textern fn enumAdd(left: FixtureResult, right: FixtureResult) -> FixtureResult @symbol("native_fixture_add");\n'
@@ -75,13 +80,15 @@ class HxiCallMain {
 		mainSource = StringTools.replace(mainSource, "var options = new fixture_options();",
 			'var callback = new FixtureBinaryCallback(function(left:Int, right:Int) return left + right); var callbacks = Fixture.callCallback(callback, 19, 23) == 42; Fixture.setCallback(callback); callbacks = callbacks && Fixture.callRetainedCallback(20, 22) == 42; Fixture.clearCallback(); callbacks = callbacks && Fixture.callCallbackOnThread(callback) == 0 && callback.errorKind() == HxiCallbackError.WrongThread && callback.takeError() != null && callback.errorKind() == HxiCallbackError.None && callback.close() && !callback.close(); var failing = new FixtureBinaryCallback(function(left:Int, right:Int) { if (left == 1) throw "callback boom"; return right; }); callbacks = callbacks && Fixture.callCallback(failing, 1, 2) == 0 && failing.errorKind() == HxiCallbackError.Exception; var failure = failing.takeError(); callbacks = callbacks && failure != null && failing.errorKind() == HxiCallbackError.None && failing.takeError() == null && failing.close(); var retained:Null<hl.Abstract<"native_pointer">> = null; var eventCallback = new FixtureEventCallback(function(event:fixture_point, userData:Null<hl.Abstract<"native_pointer">>) { retained = userData; return event.get_x() + event.get_y() + (userData == null ? 0 : 1); }); callbacks = callbacks && Fixture.callEvent(eventCallback, 1) == 22 && retained != null && NativePointer.native_pointer_is_closed(retained) && Fixture.callEvent(eventCallback, 0) == 21 && Fixture.callInvalidEvent(eventCallback) == 0 && eventCallback.errorKind() == HxiCallbackError.PointerContract; var pointerFailure = eventCallback.takeError(); callbacks = callbacks && pointerFailure != null && eventCallback.takeError() == null && eventCallback.close(); var options = new fixture_options();');
 		mainSource = StringTools.replace(mainSource, "var callback = new FixtureBinaryCallback",
-			"var systemCallback = new FixtureSystemBinaryCallback(function(left:Int, right:Int) return left + right); var systemCalls = Fixture.systemAdd(19, 23) == 42 && Fixture.callSystemCallback(systemCallback, 20, 22) == 42 && systemCallback.close(); var callback = new FixtureBinaryCallback");
+			"var pointCallback = new FixturePointCallbackCallback(function(left:fixture_point, right:fixture_point) { var result = new fixture_point(); result.set_x(left.get_x() + right.get_x()); result.set_y(left.get_y() + right.get_y()); return result; }); var arraysCallback = new FixtureArraysCallbackCallback(function(value:fixture_arrays) return value); var aggregateCallbacks = Fixture.callPointCallback(pointCallback) == 42 && Fixture.callArraysCallback(arraysCallback) == 42 && Fixture.callPointCallbackOnThread(pointCallback) == 0 && pointCallback.errorKind() == HxiCallbackError.WrongThread && pointCallback.takeError() != null && pointCallback.close() && arraysCallback.close(); var systemCallback = new FixtureSystemBinaryCallback(function(left:Int, right:Int) return left + right); var systemCalls = Fixture.systemAdd(19, 23) == 42 && Fixture.callSystemCallback(systemCallback, 20, 22) == 42 && systemCallback.close(); var callback = new FixtureBinaryCallback");
+		mainSource = StringTools.replace(mainSource, "var systemCallback = new FixtureSystemBinaryCallback",
+			'var invalidAggregate = new FixturePointCallbackCallback(function(left:fixture_point, right:fixture_point) { return haxe.io.Bytes.alloc(1); }); var aggregateFailure = Fixture.callPointCallback(invalidAggregate) == 0 && invalidAggregate.errorKind() == HxiCallbackError.AggregateContract && invalidAggregate.takeError() != null && invalidAggregate.close(); var throwingAggregate = new FixturePointCallbackCallback(function(left:fixture_point, right:fixture_point) { if (left.get_x() == 10) throw "aggregate callback boom"; return left; }); aggregateFailure = aggregateFailure && Fixture.callPointCallback(throwingAggregate) == 0 && throwingAggregate.errorKind() == HxiCallbackError.Exception && throwingAggregate.takeError() != null && throwingAggregate.close(); aggregateCallbacks = aggregateCallbacks && aggregateFailure; var systemCallback = new FixtureSystemBinaryCallback');
 		mainSource = StringTools.replace(mainSource, "Fixture.clearCallback(); callbacks = callbacks && Fixture.callCallbackOnThread",
 			"var replacement = new FixtureBinaryCallback(function(left:Int, right:Int) return left * right); Fixture.setNullableCallback(replacement); callbacks = callbacks && Fixture.callRetainedCallback(6, 7) == 42; Fixture.setNullableCallback(null); callbacks = callbacks && Fixture.callRetainedCallback(6, 7) == 0 && replacement.close(); callbacks = callbacks && Fixture.callCallbackOnThread");
 		mainSource = StringTools.replace(mainSource, "return structure && buffers && pointers && ",
 			"return structure && buffers && pointers && Fixture.enumAdd(FixtureResult.TEN, FixtureResult.ELEVEN) == FixtureResult.TWENTY_ONE && ");
 		mainSource = StringTools.replace(mainSource, "return structure && buffers && pointers && ",
-			"return systemCalls && callbacks && structure && buffers && pointers && ");
+			"return aggregateCallbacks && systemCalls && callbacks && structure && buffers && pointers && ");
 		compiler.update("Main.hx", mainSource);
 		compiler.compile("Main");
 		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module));

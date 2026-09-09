@@ -91,7 +91,14 @@ class HxiParserMain {
 			'interface pointers @target("x86_64-linux-gnu") @library("pointers") { opaque Context; callback Visit = fn(context: nullable<ptr<Context>>) -> void; }');
 		expect(HxiProjection.source(pointerCallback).indexOf('context:Null<hl.Abstract<"native_pointer">>') >= 0,
 			"callback pointer arguments should project as borrowed typed handles");
-		expectError('interface bad @target("x86_64-linux-gnu") { callback Invalid = fn() -> ptr<void>; }', "Callbacks support scalar and pointer arguments");
+		expectError('interface bad @target("x86_64-linux-gnu") { callback Invalid = fn() -> ptr<void>; }',
+			"Callbacks support scalar, aggregate, and pointer arguments");
+		var aggregateCallbacks = HxiParser.parse("aggregate-callbacks.hxi",
+			'interface aggregates @target("x86_64-linux-gnu") @library("aggregates") { struct point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); } callback Transform = fn(value: point) -> point; }');
+		var aggregateCallbackSource = HxiProjection.source(aggregateCallbacks);
+		expect(aggregateCallbackSource.indexOf("typedef Transform = (value:point)->point") >= 0
+			&& aggregateCallbackSource.indexOf("{8;4;5,5}>{8;4;5,5}") >= 0,
+			"aggregate callbacks should retain their recursive ABI descriptor");
 		expectError(valid + "garbage", "Unexpected token");
 		expectError(StringTools.replace(valid, "@offset(8)", "@offset(16)"), "invalid offset");
 		expectError('interface bad @target("x86_64-linux-gnu") { struct pair @layout(8, 4) { left: i32 @offset(0); right: i32 @offset(0); } }',

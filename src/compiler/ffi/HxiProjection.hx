@@ -88,7 +88,7 @@ class HxiProjection {
 				case _:
 			}
 		if (hasCallbacks)
-			output.add('enum abstract HxiCallbackError(Int) from Int to Int { var None = 0; var Exception = 1; var WrongThread = 2; var PointerContract = 3; }\n');
+			output.add('enum abstract HxiCallbackError(Int) from Int to Int { var None = 0; var Exception = 1; var WrongThread = 2; var PointerContract = 3; var AggregateContract = 4; }\n');
 		for (declaration in model.declarations)
 			switch declaration {
 				case Callback(name, parameters, result, callConvention, _):
@@ -101,7 +101,7 @@ class HxiProjection {
 							break;
 						}
 						argumentTypes.push('${parameter.name}:${value.haxeType}');
-						codes.push(Std.string(value.code));
+						codes.push(abiDescriptor(classified, declarations, abi));
 						switch classified {
 							case PointerValue(_, nullable, _, structure):
 								var declaration = structure == null ? null : declarations.get(structure),
@@ -119,7 +119,8 @@ class HxiProjection {
 					var returnValue = project(abi.classify(result, true), true);
 					if (!supported || returnValue == null)
 						continue;
-					var signature = callSignature(codes.join(",") + ">" + returnValue.code, callConvention);
+					var classifiedResult = abi.classify(result, true);
+					var signature = callSignature(codes.join(",") + ">" + abiDescriptor(classifiedResult, declarations, abi), callConvention);
 					output.add('typedef $name = (${argumentTypes.join(", ")})->${returnValue.haxeType};\n');
 					output.add('abstract ${name}Callback(hl.Abstract<"native_callback">) {\n');
 					output.add('\tpublic inline function new(callback:$name) this = ${model.name}.__hxi_callback_create(haxe.io.Bytes.ofString("$signature"), haxe.io.Bytes.ofString("${pointerSizes.join(",")}"), haxe.io.Bytes.ofString("${pointerNullable.join(",")}"), callback);\n');
