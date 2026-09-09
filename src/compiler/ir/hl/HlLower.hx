@@ -64,8 +64,8 @@ class HlLower {
 		for (native in program.cNatives) {
 			cNatives.set(native.name, native);
 			var arity = native.arguments.length;
-			if (arity > 4)
-				throw 'Ordinary C calls currently support at most 4 arguments, got $arity for "${native.name}"';
+			if (arity > 16)
+				throw 'Ordinary C calls support at most 16 arguments, got $arity for "${native.name}"';
 			if (!dispatchArities.exists(arity)) {
 				dispatchArities.set(arity, true);
 				cDispatchNatives.push({
@@ -264,6 +264,7 @@ class HlLower {
 		var registers:Map<Int, Int> = [];
 		var registerTypes:Array<Int> = [];
 		var catchValues:Map<Int, IrValue> = [];
+		var nullValues:Map<Int, Bool> = [];
 		for (argument in fn.arguments)
 			defineRegister(argument, registers, registerTypes);
 		for (block in fn.blocks)
@@ -271,6 +272,11 @@ class HlLower {
 				var output = instructionOutput(instruction.value);
 				if (output != null)
 					defineRegister(output, registers, registerTypes);
+				switch instruction.value {
+					case ConstNull(value):
+						nullValues.set(value.id, true);
+					case _:
+				}
 			}
 		var edges:Map<String, Array<{destination:IrValue, source:IrValue}>> = [];
 		for (block in fn.blocks)
@@ -432,7 +438,10 @@ class HlLower {
 						instructions.push(HlInstruction.LoadString(callArguments[2], internString(native.signature)));
 						for (argument in arguments) {
 							var boxed = temporaryRegister(Dyn, registerTypes);
-							instructions.push(HlInstruction.ToDyn(boxed, requireRegister(argument, registers)));
+							if (nullValues.exists(argument.id))
+								instructions.push(HlInstruction.LoadNull(boxed));
+							else
+								instructions.push(HlInstruction.ToDyn(boxed, requireRegister(argument, registers)));
 							callArguments.push(boxed);
 						}
 						var dynamicResult = temporaryRegister(Dyn, registerTypes);

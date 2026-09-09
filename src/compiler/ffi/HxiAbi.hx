@@ -14,7 +14,7 @@ enum HxiAbiValue {
 	VoidValue;
 	IntegerValue(bits:Int, sign:HxiIntegerSign);
 	FloatValue(bits:Int);
-	PointerValue(bits:Int);
+	PointerValue(bits:Int, nullable:Bool);
 	AggregateValue(size:Int, align:Int);
 }
 
@@ -81,7 +81,12 @@ class HxiAbi {
 					throw "Void has no value ABI";
 				VoidValue;
 			case Primitive(name): classifyPrimitive(name);
-			case Pointer(_): PointerValue(pointerBits);
+			case Pointer(_): PointerValue(pointerBits, false);
+			case Nullable(element):
+				switch classify(element, allowVoid) {
+					case PointerValue(bits, _): PointerValue(bits, true);
+					case _: throw "Nullable ABI value must be a pointer";
+				}
 			case Const(element): classify(element, allowVoid);
 			case Array(_, _): throw "C arrays cannot be passed by value";
 			case Named(name):

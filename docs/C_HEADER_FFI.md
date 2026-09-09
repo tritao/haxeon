@@ -70,8 +70,9 @@ serialization. The HashLink backend lowers scalar calls through the ordinary-C
 runtime bridge. Libraries and prepared libffi functions are cached by library,
 symbol, and signature, so repeated calls do not repeat loading or lookup.
 Integer and floating-point arguments and results, `void` results, and managed
-byte-buffer pointer arguments are executable. Calls currently accept at most
-four arguments. Raw pointer results remain rejected because an unbounded C
+byte-buffer pointer arguments—including explicit `nullable<ptr<T>>` values—are
+executable. Calls accept up to sixteen
+arguments. Raw pointer results remain rejected because an unbounded C
 pointer cannot safely become a managed `haxe.io.Bytes` value without separate
 length and ownership information.
 

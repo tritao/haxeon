@@ -86,7 +86,7 @@ class HxiProjection {
 				};
 			case FloatValue(32): {haxeType: "Float", code: 9};
 			case FloatValue(64): {haxeType: "Float", code: 10};
-			case PointerValue(_): {haxeType: "haxe.io.Bytes", code: 11};
+			case PointerValue(_, nullable): {haxeType: nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes", code: 11};
 			case _: null;
 		};
 

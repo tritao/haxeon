@@ -312,7 +312,10 @@ static vdynamic *haxeon_native_invoke( vbyte *library, vbyte *symbol, vbyte *sig
 	memset(slots,0,sizeof(slots));
 	for( int index = 0; index < argument_count; index++ ) {
 		vdynamic *value = arguments[index];
-		if( value == NULL ) hl_error("Null ordinary C scalar argument");
+		if( value == NULL || value->t == NULL ) {
+			if( entry->argument_codes[index] == HAXEON_NATIVE_POINTER ) continue;
+			hl_error("Null ordinary C scalar argument");
+		}
 		switch( entry->argument_codes[index] ) {
 		case HAXEON_NATIVE_I8: case HAXEON_NATIVE_U8: case HAXEON_NATIVE_I16: case HAXEON_NATIVE_U16:
 		case HAXEON_NATIVE_I32: case HAXEON_NATIVE_U32: memcpy(slots + index * HAXEON_NATIVE_SLOT_SIZE,&value->v.i,sizeof(int)); break;
@@ -357,6 +360,18 @@ HL_PRIM vdynamic *HL_NAME(native_invoke_1)( vbyte *library, vbyte *symbol, vbyte
 HL_PRIM vdynamic *HL_NAME(native_invoke_2)( vbyte *library, vbyte *symbol, vbyte *signature, vdynamic *a0, vdynamic *a1 ) { vdynamic *a[] = {a0,a1}; return haxeon_native_invoke(library,symbol,signature,a,2); }
 HL_PRIM vdynamic *HL_NAME(native_invoke_3)( vbyte *library, vbyte *symbol, vbyte *signature, vdynamic *a0, vdynamic *a1, vdynamic *a2 ) { vdynamic *a[] = {a0,a1,a2}; return haxeon_native_invoke(library,symbol,signature,a,3); }
 HL_PRIM vdynamic *HL_NAME(native_invoke_4)( vbyte *library, vbyte *symbol, vbyte *signature, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3 ) { vdynamic *a[] = {a0,a1,a2,a3}; return haxeon_native_invoke(library,symbol,signature,a,4); }
+HL_PRIM vdynamic *HL_NAME(native_invoke_5)( vbyte *l, vbyte *s, vbyte *g, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4 ) { vdynamic *a[] = {a0,a1,a2,a3,a4}; return haxeon_native_invoke(l,s,g,a,5); }
+HL_PRIM vdynamic *HL_NAME(native_invoke_6)( vbyte *l, vbyte *s, vbyte *g, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5 ) { vdynamic *a[] = {a0,a1,a2,a3,a4,a5}; return haxeon_native_invoke(l,s,g,a,6); }
+HL_PRIM vdynamic *HL_NAME(native_invoke_7)( vbyte *l, vbyte *s, vbyte *g, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6 ) { vdynamic *a[] = {a0,a1,a2,a3,a4,a5,a6}; return haxeon_native_invoke(l,s,g,a,7); }
+HL_PRIM vdynamic *HL_NAME(native_invoke_8)( vbyte *l, vbyte *s, vbyte *g, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7 ) { vdynamic *a[] = {a0,a1,a2,a3,a4,a5,a6,a7}; return haxeon_native_invoke(l,s,g,a,8); }
+HL_PRIM vdynamic *HL_NAME(native_invoke_9)( vbyte *l, vbyte *s, vbyte *g, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8 ) { vdynamic *a[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8}; return haxeon_native_invoke(l,s,g,a,9); }
+HL_PRIM vdynamic *HL_NAME(native_invoke_10)( vbyte *l, vbyte *s, vbyte *g, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9 ) { vdynamic *a[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9}; return haxeon_native_invoke(l,s,g,a,10); }
+HL_PRIM vdynamic *HL_NAME(native_invoke_11)( vbyte *l, vbyte *s, vbyte *g, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10 ) { vdynamic *a[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10}; return haxeon_native_invoke(l,s,g,a,11); }
+HL_PRIM vdynamic *HL_NAME(native_invoke_12)( vbyte *l, vbyte *s, vbyte *g, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11 ) { vdynamic *a[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11}; return haxeon_native_invoke(l,s,g,a,12); }
+HL_PRIM vdynamic *HL_NAME(native_invoke_13)( vbyte *l, vbyte *s, vbyte *g, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11, vdynamic *a12 ) { vdynamic *a[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12}; return haxeon_native_invoke(l,s,g,a,13); }
+HL_PRIM vdynamic *HL_NAME(native_invoke_14)( vbyte *l, vbyte *s, vbyte *g, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11, vdynamic *a12, vdynamic *a13 ) { vdynamic *a[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13}; return haxeon_native_invoke(l,s,g,a,14); }
+HL_PRIM vdynamic *HL_NAME(native_invoke_15)( vbyte *l, vbyte *s, vbyte *g, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11, vdynamic *a12, vdynamic *a13, vdynamic *a14 ) { vdynamic *a[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13,a14}; return haxeon_native_invoke(l,s,g,a,15); }
+HL_PRIM vdynamic *HL_NAME(native_invoke_16)( vbyte *l, vbyte *s, vbyte *g, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11, vdynamic *a12, vdynamic *a13, vdynamic *a14, vdynamic *a15 ) { vdynamic *a[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13,a14,a15}; return haxeon_native_invoke(l,s,g,a,16); }
 
 HL_PRIM int HL_NAME(native_last_error)( vbyte *output, int capacity ) {
 	int length = (int)strlen(haxeon_native_error);

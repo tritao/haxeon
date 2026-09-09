@@ -6,6 +6,7 @@ enum HxiType {
 	Primitive(name:String);
 	Named(name:String);
 	Pointer(element:HxiType);
+	Nullable(element:HxiType);
 	Const(element:HxiType);
 	Array(element:HxiType, length:Int);
 }

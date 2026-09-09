@@ -154,11 +154,15 @@ class HxiParser {
 
 	function parseType():HxiType {
 		var name = identifier();
-		if (name == "ptr" || name == "const") {
+		if (name == "ptr" || name == "const" || name == "nullable") {
 			expect("<");
 			var element = parseType();
 			expect(">");
-			return name == "ptr" ? Pointer(element) : Const(element);
+			return switch name {
+				case "ptr": Pointer(element);
+				case "nullable": Nullable(element);
+				default: Const(element);
+			};
 		}
 		if (name == "array") {
 			expect("<");
@@ -236,7 +240,7 @@ class HxiParser {
 		switch type {
 			case Named(name) if (aliases.exists(name)):
 				visit(name);
-			case Pointer(element) | Const(element) | Array(element, _):
+			case Pointer(element) | Nullable(element) | Const(element) | Array(element, _):
 				visitTypeAliases(element, aliases, visit);
 			case _:
 		}
@@ -251,6 +255,12 @@ class HxiParser {
 			case Named(_):
 			case Pointer(element):
 				validateType(element, names, span, true);
+			case Nullable(element):
+				switch element {
+					case Pointer(_):
+					default: fail("nullable<> requires a pointer type", span);
+				}
+				validateType(element, names, span, false);
 			case Const(element):
 				validateType(element, names, span, allowVoid);
 			case Array(element, _):
