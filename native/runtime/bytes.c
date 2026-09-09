@@ -65,6 +65,25 @@ HL_PRIM int HL_NAME(__bytes_get)( realtime_bytes *bytes, int position ) {
 	return bytes->data[position];
 }
 
+HL_PRIM int HL_NAME(getI8)( realtime_bytes *bytes, int offset ) { int8_t value; realtime_bytes_bounds(bytes,offset,sizeof(value)); memcpy(&value,bytes->data + offset,sizeof(value)); return value; }
+HL_PRIM int HL_NAME(getU8)( realtime_bytes *bytes, int offset ) { uint8_t value; realtime_bytes_bounds(bytes,offset,sizeof(value)); memcpy(&value,bytes->data + offset,sizeof(value)); return value; }
+HL_PRIM int HL_NAME(getI16)( realtime_bytes *bytes, int offset ) { int16_t value; realtime_bytes_bounds(bytes,offset,sizeof(value)); memcpy(&value,bytes->data + offset,sizeof(value)); return value; }
+HL_PRIM int HL_NAME(getU16)( realtime_bytes *bytes, int offset ) { uint16_t value; realtime_bytes_bounds(bytes,offset,sizeof(value)); memcpy(&value,bytes->data + offset,sizeof(value)); return value; }
+HL_PRIM int HL_NAME(getI32)( realtime_bytes *bytes, int offset ) { int32_t value; realtime_bytes_bounds(bytes,offset,sizeof(value)); memcpy(&value,bytes->data + offset,sizeof(value)); return value; }
+HL_PRIM int64_t HL_NAME(getI64)( realtime_bytes *bytes, int offset ) { int64_t value; realtime_bytes_bounds(bytes,offset,sizeof(value)); memcpy(&value,bytes->data + offset,sizeof(value)); return value; }
+HL_PRIM double HL_NAME(getF32)( realtime_bytes *bytes, int offset ) { float value; realtime_bytes_bounds(bytes,offset,sizeof(value)); memcpy(&value,bytes->data + offset,sizeof(value)); return value; }
+HL_PRIM double HL_NAME(getF64)( realtime_bytes *bytes, int offset ) { double value; realtime_bytes_bounds(bytes,offset,sizeof(value)); memcpy(&value,bytes->data + offset,sizeof(value)); return value; }
+
+#define HAXEON_STRUCT_SET_INT(NAME,TYPE) HL_PRIM void HL_NAME(NAME)( realtime_bytes *bytes, int offset, int value ) { TYPE converted = (TYPE)value; realtime_bytes_bounds(bytes,offset,sizeof(converted)); memcpy(bytes->data + offset,&converted,sizeof(converted)); }
+HAXEON_STRUCT_SET_INT(setI8,int8_t)
+HAXEON_STRUCT_SET_INT(setU8,uint8_t)
+HAXEON_STRUCT_SET_INT(setI16,int16_t)
+HAXEON_STRUCT_SET_INT(setU16,uint16_t)
+HAXEON_STRUCT_SET_INT(setI32,int32_t)
+HL_PRIM void HL_NAME(setI64)( realtime_bytes *bytes, int offset, int64_t value ) { realtime_bytes_bounds(bytes,offset,sizeof(value)); memcpy(bytes->data + offset,&value,sizeof(value)); }
+HL_PRIM void HL_NAME(setF32)( realtime_bytes *bytes, int offset, double value ) { float converted = (float)value; realtime_bytes_bounds(bytes,offset,sizeof(converted)); memcpy(bytes->data + offset,&converted,sizeof(converted)); }
+HL_PRIM void HL_NAME(setF64)( realtime_bytes *bytes, int offset, double value ) { realtime_bytes_bounds(bytes,offset,sizeof(value)); memcpy(bytes->data + offset,&value,sizeof(value)); }
+
 HL_PRIM int HL_NAME(__bytes_get_i32)( realtime_bytes *bytes, int position ) {
 	realtime_bytes_bounds(bytes, position, 4);
 	return (int)((unsigned int)bytes->data[position]
@@ -85,6 +104,19 @@ HL_PRIM realtime_bytes *HL_NAME(__bytes_sub)( realtime_bytes *bytes, int positio
 	realtime_bytes *result = realtime_bytes_make(length);
 	if( length > 0 ) memcpy(result->data, bytes->data + position, (size_t)length);
 	return result;
+}
+
+HL_PRIM realtime_bytes *HL_NAME(structSlice)( realtime_bytes *bytes, int offset, int length ) {
+	realtime_bytes_bounds(bytes,offset,length);
+	realtime_bytes *result = realtime_bytes_make(length);
+	if( length > 0 ) memcpy(result->data,bytes->data + offset,(size_t)length);
+	return result;
+}
+
+HL_PRIM void HL_NAME(structCopy)( realtime_bytes *bytes, int offset, realtime_bytes *value, int length ) {
+	realtime_bytes_bounds(bytes,offset,length);
+	realtime_bytes_bounds(value,0,length);
+	if( length > 0 ) memcpy(bytes->data + offset,value->data,(size_t)length);
 }
 HL_PRIM int HL_NAME(__bytes_compare)( realtime_bytes *left, realtime_bytes *right ) {
 	int common = left->length < right->length ? left->length : right->length;

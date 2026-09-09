@@ -18,7 +18,7 @@ class HxiAbiMain {
 				name: "open",
 				symbol: "open_v1",
 				library: "sample",
-				arguments: [PointerValue(64, false, true)],
+				arguments: [PointerValue(64, false, true, null)],
 				result: IntegerValue(32, Signed)
 			}:
 			case _:

@@ -39,6 +39,10 @@ class HxiParserMain {
 		expectError(StringTools.replace(valid, "ptr<nk_context>", "ptr<missing>"), 'Unknown HXI type "missing"');
 		expectError(valid + "garbage", "Unexpected token");
 		expectError(StringTools.replace(valid, "@offset(8)", "@offset(16)"), "invalid offset");
+		expectError('interface bad @target("x86_64-linux-gnu") { struct pair @layout(8, 4) { left: i32 @offset(0); right: i32 @offset(0); } }',
+			"overlaps field");
+		expectError('interface bad @target("x86_64-linux-gnu") { struct item @layout(16, 8) { value: f64 @offset(4); } }', "invalid offset");
+		expectError('interface bad @target("x86_64-linux-gnu") { struct item @layout(12, 4) { value: i64 @offset(8); } }', "invalid offset");
 		expectError(StringTools.replace(valid, "type nk_handle = u32;", "type nk_handle = u32; type nk_handle = u64;"), "Duplicate HXI declaration");
 		expectError(StringTools.replace(valid, '@target("x86_64-linux-gnu")', "@target(42)"), "requires a string value");
 		expectError(StringTools.replace(valid, "@leaf", "@leaf(1)"), "does not accept values");
@@ -62,9 +66,16 @@ class HxiParserMain {
 			&& compiler.ffiInterfaces()[0].library == "nativekit", "compiler should retain validated FFI models");
 		var projection = compiler.modules.get("nativekit");
 		expect(projection != null
+			&& projection.source.text.indexOf("abstract nk_options(haxe.io.Bytes) from haxe.io.Bytes to haxe.io.Bytes") >= 0
+			&& projection.source.text.indexOf("function set_flags") >= 0
 			&& projection.source.text.indexOf('@:cNative("nativekit", "nk_open_v1", "11>6")') >= 0
 			&& projection.source.text.indexOf('extern function nk_version():Int;') >= 0,
 			"compiler should expose bridgeable HXI functions through a generated source module");
+		var nested = HxiParser.parse("nested.hxi",
+			'interface nested @target("x86_64-linux-gnu") @library("nested") { struct point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); } struct box @layout(16, 4) { start: point @offset(0); end: point @offset(8); } }');
+		var nestedSource = HxiProjection.source(nested);
+		expect(nestedSource.indexOf("function get_start():point") >= 0 && nestedSource.indexOf("__hxi_struct_copy") >= 0,
+			"nested fixed-layout structs should project typed copy accessors");
 		compiler.update("Main.hx", "import nativekit; function main():Int return nativekit.nk_version();");
 		compiler.analyze("Main");
 		expect(compiler.irCNatives().length == 2 && compiler.irCNatives()[1].name == "nativekit.nk_version",

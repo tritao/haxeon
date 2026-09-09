@@ -86,6 +86,15 @@ symbol for owned results. Borrowed memory is never released. Nullable pointer
 results become Haxe `null`; a non-null result contract returning `NULL` is a
 runtime boundary error. `@length` is rejected for opaque resource pointers.
 
+HXI structures with explicit `@layout(size, align)` and field `@offset(...)`
+metadata project to typed Haxe abstracts backed by managed bytes. Constructing
+the abstract zero-initializes exactly the declared size. Generated `get_field`
+and `set_field` methods support native-endian integer and floating-point scalar
+fields. Nested fixed-layout structures use typed copy getters and setters, and
+`ptr<struct>` parameters pass the managed backing storage to C. Validation
+rejects misaligned, overlapping, and out-of-bounds fields before projection.
+By-value structures and pointer-valued structure fields are not executable yet.
+
 ## Native call runtime
 
 The runtime has a separate ordinary-C call bridge built on libffi. This is not

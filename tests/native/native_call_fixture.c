@@ -8,8 +8,27 @@
 #define FIXTURE_API __attribute__((visibility("default")))
 #endif
 
+typedef struct native_fixture_options {
+	int32_t count;
+	double scale;
+	int64_t token;
+	int16_t delta;
+} native_fixture_options;
+
+typedef struct native_fixture_point { int32_t x, y; } native_fixture_point;
+typedef struct native_fixture_box { native_fixture_point start, end; } native_fixture_box;
+
 FIXTURE_API int32_t native_fixture_add( int32_t left, int32_t right ) {
 	return left + right;
+}
+
+FIXTURE_API int32_t native_fixture_check_options( const native_fixture_options *options ) {
+	return options != NULL && options->count == 40 && options->scale == 1.5
+		&& options->token == INT64_C(0x10000002A) && options->delta == 2 ? 42 : 0;
+}
+
+FIXTURE_API int32_t native_fixture_check_box( const native_fixture_box *box ) {
+	return box != NULL && box->start.x == 10 && box->start.y == 11 && box->end.x == 20 && box->end.y == 21 ? 42 : 0;
 }
 
 FIXTURE_API double native_fixture_multiply( double left, double right ) {

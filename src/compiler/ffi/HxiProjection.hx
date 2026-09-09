@@ -3,6 +3,7 @@ package compiler.ffi;
 import compiler.ffi.HxiAbi.HxiAbiValue;
 import compiler.ffi.HxiAbi.HxiIntegerSign;
 import compiler.ffi.HxiModel.HxiInterface;
+import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ir.Ir.IrCNative;
 import compiler.ir.Ir.IrType;
 import compiler.ffi.HxiModel.HxiPointerOwnership;
@@ -56,7 +57,53 @@ class HxiProjection {
 		if (library == null)
 			return "";
 		var abi = HxiAbi.forInterface(model), output = new StringBuf();
+		var structAccesses:Map<String, {type:String, setterType:String}> = [],
+			declarations:Map<String, HxiDeclaration> = [];
+		var usesNestedStructures = false;
+		for (declaration in model.declarations)
+			switch declaration {
+				case Opaque(name, _) | Alias(name, _, _) | Structure(name, _, _, _, _):
+					declarations.set(name, declaration);
+				case _:
+			}
 		output.add('// Generated semantic projection of ${model.name}. Do not edit.\n');
+		for (declaration in model.declarations)
+			switch declaration {
+				case Structure(name, size, _, fields, _):
+					output.add('abstract $name(haxe.io.Bytes) from haxe.io.Bytes to haxe.io.Bytes {\n');
+					output.add('\tpublic inline function new() this = haxe.io.Bytes.alloc($size);\n');
+					for (field in fields) {
+						var nested = structureType(field.type, declarations);
+						if (nested != null) {
+							usesNestedStructures = true;
+							output.add('\tpublic inline function get_${field.name}():${nested.name} return ${model.name}.__hxi_struct_slice(this, ${field.offset}, ${nested.size});\n');
+							output.add('\tpublic inline function set_${field.name}(value:${nested.name}):Void ${model.name}.__hxi_struct_copy(this, ${field.offset}, value, ${nested.size});\n');
+							continue;
+						}
+						var value = project(abi.classify(field.type), false);
+						if (value == null || value.code == 11)
+							continue;
+						var access = structAccess(value.code);
+						if (access == null)
+							continue;
+						structAccesses.set(access, {type: value.haxeType, setterType: value.haxeType});
+						output.add('\tpublic inline function get_${field.name}():${value.haxeType} return ${model.name}.__hxi_struct_get${access}(this, ${field.offset});\n');
+						output.add('\tpublic inline function set_${field.name}(value:${value.haxeType}):Void ${model.name}.__hxi_struct_set${access}(this, ${field.offset}, value);\n');
+					}
+					output.add('}\n');
+				case _:
+			}
+		if (usesNestedStructures) {
+			output.add('@:hlNative("realtime_runtime", "structSlice") extern function __hxi_struct_slice(bytes:haxe.io.Bytes, offset:Int, length:Int):haxe.io.Bytes;\n');
+			output.add('@:hlNative("realtime_runtime", "structCopy") extern function __hxi_struct_copy(bytes:haxe.io.Bytes, offset:Int, value:haxe.io.Bytes, length:Int):Void;\n');
+		}
+		for (access in ["I8", "U8", "I16", "U16", "I32", "I64", "F32", "F64"]) {
+			var types = structAccesses.get(access);
+			if (types == null)
+				continue;
+			output.add('@:hlNative("realtime_runtime", "get$access") extern function __hxi_struct_get$access(bytes:haxe.io.Bytes, offset:Int):${types.type};\n');
+			output.add('@:hlNative("realtime_runtime", "set$access") extern function __hxi_struct_set$access(bytes:haxe.io.Bytes, offset:Int, value:${types.setterType}):Void;\n');
+		}
 		for (fn in abi.functions()) {
 			var argumentTypes:Array<String> = [],
 				codes:Array<String> = [],
@@ -126,8 +173,8 @@ class HxiProjection {
 					nativePointer: false,
 					nullable: false
 				};
-			case PointerValue(_, nullable, opaque): {
-					haxeType: opaque ? (nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">') : (nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes"),
+			case PointerValue(_, nullable, opaque, structure): {
+					haxeType: opaque ? (nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">') : structure != null ? (nullable ? 'Null<$structure>' : structure) : (nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes"),
 					code: 11,
 					nativePointer: opaque,
 					nullable: nullable
@@ -137,6 +184,31 @@ class HxiProjection {
 
 	static function escape(value:String):String
 		return StringTools.replace(StringTools.replace(value, "\\", "\\\\"), '"', '\\"');
+
+	static function structAccess(code:Int):Null<String>
+		return switch code {
+			case 1: "I8";
+			case 2: "U8";
+			case 3: "I16";
+			case 4: "U16";
+			case 5 | 6: "I32";
+			case 7 | 8: "I64";
+			case 9: "F32";
+			case 10: "F64";
+			case _: null;
+		};
+
+	static function structureType(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>):Null<{name:String, size:Int}>
+		return switch type {
+			case Const(element): structureType(element, declarations);
+			case Named(name):
+				switch declarations.get(name) {
+					case Alias(_, target, _): structureType(target, declarations);
+					case Structure(_, size, _, _, _): {name: name, size: size};
+					case _: null;
+				}
+			case _: null;
+		};
 
 	static function irType(code:Int, result:Bool = false, nativePointer:Bool = false):IrType
 		return switch code {

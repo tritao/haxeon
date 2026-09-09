@@ -10,6 +10,7 @@ import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiModel.HxiParameter;
 import compiler.ffi.HxiModel.HxiType;
 import compiler.ffi.HxiModel.HxiPointerOwnership;
+import compiler.ffi.HxiAbi.HxiAbiValue;
 
 private typedef HxiToken = {
 	final text:String;
@@ -206,21 +207,31 @@ class HxiParser {
 			declarationsByName.set(named.name, declaration);
 		}
 		validateAliasCycles(value.declarations);
+		var abi = HxiAbi.forInterface(value);
 		for (declaration in value.declarations)
 			switch declaration {
 				case Opaque(_, _) | Constant(_, _, _):
 				case Alias(_, type, span):
 					validateType(type, names, span, false);
 				case Structure(name, size, align, fields, span):
-					if (size < 0 || align <= 0 || (align & (align - 1)) != 0)
+					if (size < 0 || align <= 0 || (align & (align - 1)) != 0 || size % align != 0)
 						fail('Struct "$name" has invalid layout', span);
 					var fieldNames:Map<String, Bool> = [];
+					var ranges:Array<{start:Int, end:Int, name:String}> = [];
 					for (field in fields) {
 						if (fieldNames.exists(field.name))
 							fail('Duplicate field "${field.name}" in struct "$name"', field.span);
 						fieldNames.set(field.name, true);
-						if (field.offset == null || field.offset < 0 || field.offset >= size)
+						var layout = typeLayout(field.type, abi, declarationsByName, []);
+						if (layout == null)
+							fail('Field "${field.name}" in struct "$name" has no fixed C layout', field.span);
+						if (field.offset == null || field.offset < 0 || layout.align > align || field.offset % layout.align != 0
+							|| field.offset > size - layout.size)
 							fail('Field "${field.name}" has an invalid offset for struct "$name"', field.span);
+						for (range in ranges)
+							if (field.offset < range.end && field.offset + layout.size > range.start)
+								fail('Field "${field.name}" overlaps field "${range.name}" in struct "$name"', field.span);
+						ranges.push({start: field.offset, end: field.offset + layout.size, name: field.name});
 						validateType(field.type, names, field.span, false);
 					}
 				case Function(name, parameters, result, _, _, resultPolicy, span):
@@ -231,6 +242,39 @@ class HxiParser {
 						fail('@length on "$name" requires a pointer to byte-sized data or void', span);
 			}
 	}
+
+	static function typeLayout(type:HxiType, abi:HxiAbi, declarations:Map<String, HxiDeclaration>, resolving:Map<String, Bool>):Null<{
+		size:Int,
+		align:Int
+	}>
+		return switch type {
+			case Const(element): typeLayout(element, abi, declarations, resolving);
+			case Nullable(_): null;
+			case Pointer(_): {size: Std.int(abi.pointerBits / 8), align: Std.int(abi.pointerBits / 8)};
+			case Array(element, length): var item = typeLayout(element, abi, declarations,
+					resolving); item == null || item.size > Std.int(0x7FFFFFFF / length) ? null : {size: item.size * length, align: item.align};
+			case Primitive(_):
+				switch abi.classify(type) {
+					case IntegerValue(bits, _):
+						var size = Std.int(bits / 8);
+						{size: size, align: Std.int(Math.min(size, abi.pointerBits / 8))};
+					case FloatValue(bits):
+						var size = Std.int(bits / 8);
+						{size: size, align: Std.int(Math.min(size, abi.pointerBits / 8))};
+					case _: null;
+				}
+			case Named(name):
+				if (resolving.exists(name)) null; else {
+					resolving.set(name, true);
+					var result = switch declarations.get(name) {
+						case Alias(_, target, _): typeLayout(target, abi, declarations, resolving);
+						case Structure(_, size, align, _, _): {size: size, align: align};
+						case _: null;
+					};
+					resolving.remove(name);
+					result;
+				}
+		};
 
 	function validateAliasCycles(declarations:Array<HxiDeclaration>):Void {
 		var aliases:Map<String, {type:HxiType, span:SourceSpan}> = [];
