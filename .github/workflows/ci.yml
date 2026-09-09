@@ -40,6 +40,14 @@ jobs:
       - name: Run cross-platform core tests
         shell: pwsh
         run: ./.tools/haxe/haxe.exe --cwd . -cp src --run build.HaxeonBuild test 8
+      - name: Build with the MSVC Debug CRT
+        shell: pwsh
+        run: |
+          cmake --preset windows-msvc-debug -S .
+          cmake --build --preset windows-msvc-debug --parallel
+      - name: Run core tests with the MSVC Debug CRT
+        shell: pwsh
+        run: ./.tools/haxe/haxe.exe --cwd . -cp src --run build.HaxeonBuild test 8
 
   macos:
     runs-on: macos-15-intel

@@ -37,6 +37,20 @@
         "lhs": "${hostSystemName}",
         "rhs": "Windows"
       }
+    },
+    {
+      "name": "windows-msvc-debug",
+      "displayName": "Windows MSVC Debug CRT",
+      "inherits": "dev",
+      "binaryDir": "${sourceDir}/out/cmake/windows-msvc-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
     }
   ],
   "buildPresets": [
@@ -53,6 +67,11 @@
     {
       "name": "windows-msvc",
       "configurePreset": "windows-msvc",
+      "targets": ["haxeon-native"]
+    },
+    {
+      "name": "windows-msvc-debug",
+      "configurePreset": "windows-msvc-debug",
       "targets": ["haxeon-native"]
     }
   ]

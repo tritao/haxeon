@@ -2,6 +2,14 @@ cmake_minimum_required(VERSION 3.24)
 
 project(haxeon_native LANGUAGES C CXX)
 
+# Keep the CRT choice explicit for every MSVC-compatible compiler. This makes
+# the Release and Debug presets use the matching dynamic CRT (/MD and /MDd)
+# instead of inheriting an undocumented toolchain default.
+if(MSVC AND NOT DEFINED CMAKE_MSVC_RUNTIME_LIBRARY)
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL" CACHE STRING
+    "MSVC runtime library used by Haxeon and HashLink")
+endif()
+
 # HashLink already carries the platform-specific compiler, linker, and system
 # library knowledge. Keep it as a real CMake dependency instead of duplicating
 # that knowledge in Haxeon's launch scripts.
