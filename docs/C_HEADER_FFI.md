@@ -6,6 +6,7 @@ deterministic raw HXI description:
 ```sh
 scripts/haxeon-ffi-import \
   --target=x86_64-linux-gnu \
+  --library=nativekit \
   --include=/path/to/library/include \
   --output=generated/library.hxi \
   /path/to/library/include/library.h
@@ -21,6 +22,9 @@ fixed-size arrays, pointers, `const`, and non-variadic function declarations.
 It maps fixed-width integer typedefs and `size_t`-family types to raw HXI
 primitives. Structs carry Clang-computed `@layout` and `@offset` annotations.
 Output is sorted so the same header and target produce byte-identical results.
+Plain C integer types retain ABI-specific names such as `c_int` and `c_long`;
+they are not incorrectly assumed to have a platform-independent width. The
+optional library name becomes interface-level `@library` metadata.
 
 Clang must be available as `clang`. Variadic functions and flexible array
 members are rejected with declaration diagnostics instead of being assigned an
@@ -28,5 +32,7 @@ unsafe approximation.
 
 Raw HXI is the generated ABI interchange layer. It deliberately contains no
 high-level ownership, lifetime, event, or error semantics; those belong in a
-small handwritten Haxe wrapper. The main Haxeon frontend does not consume this
-format yet. Parser and type-checker integration is the next stage.
+small handwritten Haxe wrapper. Haxeon parses it into a validated ABI model,
+including opaque types and `@symbol`/`@leaf` function metadata. The main
+frontend does not load that model yet; module loading and lowering are the next
+stage.
