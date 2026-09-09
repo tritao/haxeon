@@ -20,3 +20,18 @@ cc -shared -fPIC "$repo_dir/tests/native/native_call_fixture.c" -o "$repo_dir/ou
 		exit 1
 	fi
 )
+
+invalid_output="$repo_dir/out/hxi-invalid-null.txt"
+set +e
+(
+	cd "$repo_dir/out"
+	LD_LIBRARY_PATH="$repo_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+		"$repo_dir/vendor/hashlink/hl" hxi-call-test.hl.invalid-null
+) >"$invalid_output" 2>&1
+invalid_status=$?
+set -e
+if [[ $invalid_status -eq 0 ]] || ! rg -q "Non-null ordinary C pointer result returned NULL" "$invalid_output"; then
+	echo "non-null HXI pointer result accepted NULL or reported the wrong error" >&2
+	cat "$invalid_output" >&2
+	exit 1
+fi

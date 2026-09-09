@@ -76,7 +76,7 @@ class HlLower {
 					name: pointerResult ? '__c_native_pointer_invoke_$arity' : '__c_native_invoke_$arity',
 					library: "realtime_runtime",
 					symbol: pointerResult ? 'native_pointer_invoke_$arity' : 'native_invoke_$arity',
-					arguments: (pointerResult ? [Bytes, Bytes, Bytes, Bytes, Bytes] : [Bytes, Bytes, Bytes]).concat([for (_ in 0...arity) Dyn]),
+					arguments: (pointerResult ? [Bytes, Bytes, Bytes, Bytes, Bytes, Bool] : [Bytes, Bytes, Bytes]).concat([for (_ in 0...arity) Dyn]),
 					result: pointerResult ? Abstract("native_pointer") : Dyn
 				});
 			}
@@ -443,11 +443,14 @@ class HlLower {
 						var pointerResult = isNativePointer(native.result);
 						if (pointerResult) {
 							var ownership = temporaryRegister(Bytes, registerTypes),
-								release = temporaryRegister(Bytes, registerTypes);
+								release = temporaryRegister(Bytes, registerTypes),
+								nullable = temporaryRegister(Bool, registerTypes);
 							instructions.push(HlInstruction.LoadString(ownership, internString(native.pointerOwnership)));
 							instructions.push(HlInstruction.LoadString(release, internString(native.pointerRelease == null ? "" : native.pointerRelease)));
+							instructions.push(HlInstruction.LoadBool(nullable, native.pointerNullable));
 							callArguments.push(ownership);
 							callArguments.push(release);
+							callArguments.push(nullable);
 						}
 						for (argument in arguments) {
 							var boxed = temporaryRegister(Dyn, registerTypes);

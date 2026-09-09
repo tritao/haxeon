@@ -123,6 +123,7 @@ typedef IrCNative = {
 	final pointerOwnership:String;
 	final pointerRelease:Null<String>;
 	final pointerLength:Null<String>;
+	final pointerNullable:Bool;
 	final arguments:Array<IrType>;
 	final result:IrType;
 }

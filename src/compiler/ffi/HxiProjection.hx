@@ -43,7 +43,8 @@ class HxiProjection {
 					result: irType(returnValue.code, true),
 					pointerOwnership: ownership.kind,
 					pointerRelease: ownership.release,
-					pointerLength: fn.resultPolicy.length
+					pointerLength: fn.resultPolicy.length,
+					pointerNullable: returnValue.nullable
 				});
 		}
 		return result;
@@ -75,33 +76,60 @@ class HxiProjection {
 			output.add('@:cNative("${escape(library)}", "${escape(fn.symbol)}", "$signature")\n');
 			output.add('extern function ${fn.name}(');
 			output.add([for (index in 0...argumentTypes.length) 'arg$index:${argumentTypes[index]}'].join(", "));
-			var resultType = result.code == 11 ? 'hl.Abstract<"native_pointer">' : result.haxeType;
+			var resultType = result.code == 11 ? (result.nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">') : result.haxeType;
 			output.add('):$resultType;\n');
 		}
 		return output.toString();
 	}
 
-	static function project(value:HxiAbiValue, allowVoid:Bool):Null<{haxeType:String, code:Int, nativePointer:Bool}>
+	static function project(value:HxiAbiValue, allowVoid:Bool):Null<{
+		haxeType:String,
+		code:Int,
+		nativePointer:Bool,
+		nullable:Bool
+	}>
 		return switch value {
-			case VoidValue: allowVoid ? {haxeType: "Void", code: 0, nativePointer: false} : null;
-			case IntegerValue(64, sign): {haxeType: "haxe.Int64", code: sign == Unsigned ? 8 : 7, nativePointer: false};
+			case VoidValue: allowVoid ? {
+					haxeType: "Void",
+					code: 0,
+					nativePointer: false,
+					nullable: false
+				} : null;
+			case IntegerValue(64, sign): {
+					haxeType: "haxe.Int64",
+					code: sign == Unsigned ? 8 : 7,
+					nativePointer: false,
+					nullable: false
+				};
 			case IntegerValue(bits, sign) if (bits <= 32):
 				var unsigned = sign == Unsigned || sign == PlainChar;
 				{
 					haxeType: "Int",
 					nativePointer: false,
+					nullable: false,
 					code: switch bits {
 						case 8: unsigned ? 2 : 1;
 						case 16: unsigned ? 4 : 3;
 						default: unsigned ? 6 : 5;
 					}
 				};
-			case FloatValue(32): {haxeType: "Float", code: 9, nativePointer: false};
-			case FloatValue(64): {haxeType: "Float", code: 10, nativePointer: false};
+			case FloatValue(32): {
+					haxeType: "Float",
+					code: 9,
+					nativePointer: false,
+					nullable: false
+				};
+			case FloatValue(64): {
+					haxeType: "Float",
+					code: 10,
+					nativePointer: false,
+					nullable: false
+				};
 			case PointerValue(_, nullable, opaque): {
 					haxeType: opaque ? (nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">') : (nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes"),
 					code: 11,
-					nativePointer: opaque
+					nativePointer: opaque,
+					nullable: nullable
 				};
 			case _: null;
 		};

@@ -4,6 +4,7 @@ import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiType;
 import compiler.ffi.HxiModel.HxiPointerOwnership;
 import compiler.ffi.HxiParser;
+import compiler.ffi.HxiProjection;
 
 class HxiParserMain {
 	static final valid = '// generated ABI\n'
@@ -66,6 +67,9 @@ class HxiParserMain {
 		compiler.analyze("Main");
 		expect(compiler.irCNatives().length == 2 && compiler.irCNatives()[1].name == "nativekit.nk_version",
 			"compiler should retain executable C descriptors for projected functions");
+		var pointerDescriptors = HxiProjection.cNatives(pointerPolicies);
+		expect(!pointerDescriptors[0].pointerNullable
+			&& pointerDescriptors[1].pointerNullable, "pointer result nullability should survive IR projection");
 		var duplicateRejected = false;
 		try
 			compiler.addFfiInterface("duplicate.hxi", valid)

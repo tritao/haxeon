@@ -52,6 +52,14 @@ FIXTURE_API void *native_fixture_borrowed( void ) {
 	return &native_fixture_borrowed_value;
 }
 
+FIXTURE_API void *native_fixture_maybe_borrowed( int32_t present ) {
+	return present == 0 ? NULL : &native_fixture_borrowed_value;
+}
+
+FIXTURE_API void *native_fixture_invalid_non_null( void ) {
+	return NULL;
+}
+
 FIXTURE_API int32_t native_fixture_pointer_value( const int32_t *value ) {
 	return value == NULL ? 0 : *value;
 }
