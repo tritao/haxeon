@@ -138,6 +138,8 @@ raw HXI declarations from a constrained C ABI. It preserves record layouts and
 keeps system-header implementation details out of the generated interface. A
 strict parser validates types, layouts, symbols, and ABI metadata before use. See
 [C header FFI import](docs/C_HEADER_FFI.md) for usage and the supported subset.
+The runtime also contains a restricted libffi-based ordinary-C symbol bridge;
+it remains deliberately separate from HashLink's `@:hlNative` convention.
 
 ### Source-declared HashLink bindings
 

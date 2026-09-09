@@ -5,6 +5,12 @@ HL_PRIM int HL_NAME(inspect_patch)( vbyte *bytes, int length ) {
 	return (base_revision << 22) | (revision << 12) | function_count;
 }
 
+DEFINE_PRIM(_ABSTRACT(native_library),native_open,_BYTES _I32);
+DEFINE_PRIM(_BOOL,native_close,_ABSTRACT(native_library));
+DEFINE_PRIM(_ABSTRACT(native_function),native_resolve,_ABSTRACT(native_library) _BYTES _I32 _BYTES _I32 _I32);
+DEFINE_PRIM(_I32,native_call,_ABSTRACT(native_function) _BYTES _I32 _BYTES _I32);
+DEFINE_PRIM(_I32,native_last_error,_BYTES _I32);
+
 DEFINE_PRIM(_ABSTRACT(realtime_module),load,_BYTES _I32 _BYTES _I32);
 DEFINE_PRIM(_I32,call_i32,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_VOID,call_void,_ABSTRACT(realtime_module) _I32);
