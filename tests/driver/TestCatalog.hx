@@ -49,6 +49,7 @@ class TestCatalog {
 		"ParserRecoveryFuzzMain",
 		"ConditionalCompilationMain",
 		"FunctionTypeSyntaxMain",
+		"CHeaderImporterMain",
 	];
 
 	static final toolingMains = ["LanguageServiceMain", "ProtocolMain", "LspProtocolMain", "UtestDiscoveryMain"];

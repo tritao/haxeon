@@ -131,6 +131,13 @@ realtime operations remain in a separately versioned ABI.
 Unsupported ABI combinations produce explicit typed diagnostics instead of
 silently falling back to dynamic behavior.
 
+### C header import
+
+A standalone Clang-based importer can generate deterministic, target-specific
+raw HXI declarations from a constrained C ABI. It preserves record layouts and
+keeps system-header implementation details out of the generated interface. See
+[C header FFI import](docs/C_HEADER_FFI.md) for usage and the supported subset.
+
 ### Source-declared HashLink bindings
 
 Target functions can be declared without a Haxe body by combining `extern`
