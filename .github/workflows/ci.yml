@@ -26,6 +26,10 @@ jobs:
   linux-arm64:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
+    env:
+      # The pinned Linux Haxe release is x86-64 and runs through QEMU here;
+      # keep compiler fan-out below the emulated runner's CPU capacity.
+      TEST_JOBS: 4
     steps:
       - uses: actions/checkout@v4
         with:
