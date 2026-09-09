@@ -20,6 +20,7 @@ class SemanticSignature {
 	public static function type(semanticType:CompilerType):String
 		return switch semanticType {
 			case TInt: "Int";
+			case TInt64: "haxe.Int64";
 			case TBool: "Bool";
 			case TFloat: "Float";
 			case TString: "String";

@@ -98,6 +98,7 @@ class NativeRegistry {
 		return switch type {
 			case TAbstract(_, _, representation): irType(representation);
 			case TInt: I32;
+			case TInt64: I64;
 			case TBool: Bool;
 			case TFloat: F64;
 			case TString: IrType.Bytes;

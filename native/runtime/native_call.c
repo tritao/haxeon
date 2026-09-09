@@ -319,6 +319,7 @@ static vdynamic *haxeon_native_invoke( vbyte *library, vbyte *symbol, vbyte *sig
 		switch( entry->argument_codes[index] ) {
 		case HAXEON_NATIVE_I8: case HAXEON_NATIVE_U8: case HAXEON_NATIVE_I16: case HAXEON_NATIVE_U16:
 		case HAXEON_NATIVE_I32: case HAXEON_NATIVE_U32: memcpy(slots + index * HAXEON_NATIVE_SLOT_SIZE,&value->v.i,sizeof(int)); break;
+		case HAXEON_NATIVE_I64: case HAXEON_NATIVE_U64: memcpy(slots + index * HAXEON_NATIVE_SLOT_SIZE,&value->v.i64,sizeof(int64_t)); break;
 		case HAXEON_NATIVE_F32: { float converted = (float)value->v.d; memcpy(slots + index * HAXEON_NATIVE_SLOT_SIZE,&converted,sizeof(float)); break; }
 		case HAXEON_NATIVE_F64: memcpy(slots + index * HAXEON_NATIVE_SLOT_SIZE,&value->v.d,sizeof(double)); break;
 		case HAXEON_NATIVE_POINTER: {
@@ -349,6 +350,8 @@ static vdynamic *haxeon_native_invoke( vbyte *library, vbyte *symbol, vbyte *sig
 	case HAXEON_NATIVE_F32: { float value; memcpy(&value,output,sizeof(float)); result = hl_alloc_dynamic(&hlt_f64); result->v.d = value; return result; }
 	case HAXEON_NATIVE_F64:
 		result = hl_alloc_dynamic(&hlt_f64); memcpy(&result->v.d,output,sizeof(double)); return result;
+	case HAXEON_NATIVE_I64: case HAXEON_NATIVE_U64:
+		result = hl_alloc_dynamic(&hlt_i64); memcpy(&result->v.i64,output,sizeof(int64_t)); return result;
 	case HAXEON_NATIVE_POINTER:
 		result = hl_alloc_dynamic(&hlt_bytes); memcpy(&result->v.bytes,output,sizeof(void *)); return result;
 	default: hl_error("Unsupported ordinary C result type"); return NULL;

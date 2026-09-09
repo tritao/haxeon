@@ -24,3 +24,11 @@ FIXTURE_API int32_t native_fixture_sum16( int32_t a0, int32_t a1, int32_t a2, in
 	int32_t a10, int32_t a11, int32_t a12, int32_t a13, int32_t a14, int32_t a15 ) {
 	return a0 + a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13 + a14 + a15;
 }
+
+FIXTURE_API int64_t native_fixture_i64_value( void ) {
+	return INT64_C(0x10000002A);
+}
+
+FIXTURE_API int32_t native_fixture_i64_check( int64_t value ) {
+	return value == INT64_C(0x10000002A) ? 42 : 0;
+}

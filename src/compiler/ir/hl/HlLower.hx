@@ -740,13 +740,13 @@ class HlLower {
 
 	static function unsupportedCDispatchArgument(type:IrType):Bool
 		return switch type {
-			case I32, Bool, F64, Abstract("realtime_bytes"): false;
+			case I32, I64, Bool, F64, Abstract("realtime_bytes"): false;
 			default: true;
 		};
 
 	static function unsupportedCDispatchResult(type:IrType):Bool
 		return switch type {
-			case I32, Bool, F64: false;
+			case I32, I64, Bool, F64: false;
 			default: true;
 		};
 

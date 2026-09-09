@@ -415,6 +415,8 @@ class TestMain {
 		if (Std.string(IrTypeCodec.decode(persistedTypeBytes)) != Std.string(persistedType)
 			|| persistedTypeBytes.compare(IrTypeCodec.encode(persistedType)) != 0)
 			throw "IR type state did not round trip deterministically";
+		if (IrTypeCodec.decode(IrTypeCodec.encode(I64)) != I64)
+			throw "64-bit IR type state did not round trip";
 		var trailingType = HaxeBytes.alloc(persistedTypeBytes.length + 1);
 		trailingType.blit(0, persistedTypeBytes, 0, persistedTypeBytes.length);
 		expectStringError(function() IrTypeCodec.decode(trailingType), "Trailing IR type state data");

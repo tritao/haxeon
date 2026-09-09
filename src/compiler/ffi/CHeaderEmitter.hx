@@ -60,6 +60,7 @@ class CHeaderEmitter {
 		return switch type {
 			case Void if (result): "void";
 			case I32: "int";
+			case I64: "int64_t";
 			case Bool: "bool";
 			case F64: "double";
 			case Bytes: "vbyte *";
@@ -74,6 +75,7 @@ class CHeaderEmitter {
 		return switch type {
 			case Void: "_VOID";
 			case I32: "_I32";
+			case I64: "_I64";
 			case Bool: "_BOOL";
 			case F64: "_F64";
 			case Bytes: "_BYTES";
@@ -88,6 +90,7 @@ class CHeaderEmitter {
 		return switch type {
 			case Void: "Void";
 			case I32: "Int";
+			case I64: "haxe.Int64";
 			case Bool: "Bool";
 			case F64: "Float";
 			case Bytes: "Bytes";

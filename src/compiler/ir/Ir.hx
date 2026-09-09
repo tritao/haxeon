@@ -6,6 +6,7 @@ import compiler.ir.SourceProvenance.Located;
 enum IrType {
 	Void;
 	I32;
+	I64;
 	Bool;
 	F64;
 	Bytes;

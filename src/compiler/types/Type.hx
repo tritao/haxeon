@@ -17,6 +17,7 @@ enum abstract NominalKind(String) {
  */
 enum CompilerType {
 	TInt;
+	TInt64;
 	TBool;
 	TFloat;
 	TString;

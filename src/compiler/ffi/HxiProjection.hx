@@ -74,6 +74,7 @@ class HxiProjection {
 	static function project(value:HxiAbiValue, allowVoid:Bool):Null<{haxeType:String, code:Int}>
 		return switch value {
 			case VoidValue: allowVoid ? {haxeType: "Void", code: 0} : null;
+			case IntegerValue(64, sign): {haxeType: "haxe.Int64", code: sign == Unsigned ? 8 : 7};
 			case IntegerValue(bits, sign) if (bits <= 32):
 				var unsigned = sign == Unsigned || sign == PlainChar;
 				{
@@ -96,6 +97,7 @@ class HxiProjection {
 	static function irType(code:Int):IrType
 		return switch code {
 			case 0: Void;
+			case 7 | 8: I64;
 			case 9 | 10: F64;
 			case 11: Abstract("realtime_bytes");
 			default: I32;

@@ -2,6 +2,7 @@ import compiler.ffi.HxiAbi;
 import compiler.ffi.HxiAbi.HxiAbiValue;
 import compiler.ffi.HxiAbi.HxiIntegerSign;
 import compiler.ffi.HxiParser;
+import compiler.ffi.HxiProjection;
 
 class HxiAbiMain {
 	static function main():Void {
@@ -10,6 +11,8 @@ class HxiAbiMain {
 		expectInteger(linux.classify(compiler.ffi.HxiModel.HxiType.Primitive("c_long")), 64, Signed);
 		expectInteger(windows.classify(compiler.ffi.HxiModel.HxiType.Primitive("c_long")), 32, Signed);
 		expectInteger(linux.classify(compiler.ffi.HxiModel.HxiType.Primitive("c_char")), 8, PlainChar);
+		expect(HxiProjection.source(linuxModel("x86_64-linux-gnu")).indexOf("haxe.Int64") >= 0, "LP64 c_long should project as haxe.Int64");
+		expect(HxiProjection.source(linuxModel("x86_64-pc-windows-msvc")).indexOf("haxe.Int64") < 0, "LLP64 c_long should remain a 32-bit Int");
 		switch linux.functions()[0] {
 			case {
 				name: "open",
@@ -32,11 +35,16 @@ class HxiAbiMain {
 	}
 
 	static function parse(target:String):HxiAbi {
+		return HxiAbi.forInterface(linuxModel(target));
+	}
+
+	static function linuxModel(target:String):compiler.ffi.HxiModel.HxiInterface {
 		var source = 'interface sample @target("$target") @library("sample") {'
 			+ ' opaque context; type result = c_int;'
 			+ ' extern fn open(value: ptr<context>) -> result @symbol("open_v1");'
+			+ ' extern fn longValue() -> c_long;'
 			+ '}';
-		return HxiAbi.forInterface(HxiParser.parse("sample.hxi", source));
+		return HxiParser.parse("sample.hxi", source);
 	}
 
 	static function expectInteger(value:HxiAbiValue, bits:Int, sign:HxiIntegerSign):Void

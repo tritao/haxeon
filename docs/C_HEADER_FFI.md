@@ -57,9 +57,9 @@ model, including opaque types and `@symbol`/`@leaf` function metadata.
 
 Bridgeable functions are also projected into a generated Haxe module named
 after the HXI interface. The initial projection accepts 8/16/32-bit integers,
-`float`, `double`, pointers, and `void` results. Unsupported declarations such
-as by-value aggregates and 64-bit integers remain available in the raw ABI
-model but are omitted from the source module until their Haxe representation is
+64-bit integers, `float`, `double`, pointers, and `void` results. Unsupported
+declarations such as by-value aggregates remain available in the raw ABI model
+but are omitted from the source module until their Haxe representation is
 defined.
 
 Each projected function carries private `@:cNative(library, symbol, signature)`
@@ -69,7 +69,8 @@ native calling convention throughout typed AST, CFG, SSA IR, verification, and
 serialization. The HashLink backend lowers scalar calls through the ordinary-C
 runtime bridge. Libraries and prepared libffi functions are cached by library,
 symbol, and signature, so repeated calls do not repeat loading or lookup.
-Integer and floating-point arguments and results, `void` results, and managed
+Integer—including native 64-bit and target-sized integer—and floating-point
+arguments and results, `void` results, and managed
 byte-buffer pointer arguments—including explicit `nullable<ptr<T>>` values—are
 executable. Calls accept up to sixteen
 arguments. Raw pointer results remain rejected because an unbounded C
@@ -88,6 +89,11 @@ integers, `float`, `double`, and pointers. It rejects invalid signatures and
 buffer sizes. Variadics, callbacks, arrays, and aggregates passed by value are
 not supported. Prepared functions retain the underlying library safely even if
 the `NativeLibrary` wrapper is closed.
+
+HXI maps 64-bit integer ABI values to the compiler's `haxe.Int64` primitive and
+the `I64` SSA/HashLink representation. Consequently `c_long` projects to
+`haxe.Int64` on LP64 targets while remaining `Int` on Windows LLP64 targets;
+`isize` and `usize` likewise follow the selected target's pointer width.
 
 The implementation uses `LoadLibraryW`/`GetProcAddress` on Windows and
 `dlopen`/`dlsym` on Unix platforms. Loader and invocation failures are copied
