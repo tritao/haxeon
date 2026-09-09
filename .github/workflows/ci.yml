@@ -64,3 +64,21 @@ jobs:
         run: ./scripts/test.sh
       - name: Self-hosted compiler gate
         run: ./scripts/bootstrap-compiler.sh --self
+
+  macos-arm64:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Verify Apple Silicon runner
+        run: test "$(uname -m)" = arm64
+      - name: Install build dependencies
+        run: brew install cmake ninja node
+      - name: Bootstrap pinned tools and native runtime
+        run: ./scripts/bootstrap-tools.sh
+      - name: Compiler, differential, and runtime gates
+        run: ./scripts/test.sh
+      - name: Self-hosted compiler gate
+        run: ./scripts/bootstrap-compiler.sh --self
