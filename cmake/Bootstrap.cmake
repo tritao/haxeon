@@ -90,6 +90,31 @@ elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
   set(haxe_executable "${TOOLS_DIR}/haxe/haxe")
   set(hashlink_executable "${TOOLS_DIR}/hashlink/hl")
   set(native_preset "release")
+
+  # Haxe publishes a Linux x86-64 binary, but GitHub also provides native
+  # AArch64 runners. Keep one pinned compiler everywhere by running that
+  # binary through QEMU on Linux ARM instead of silently trying to execute it
+  # as a native ELF.
+  execute_process(
+    COMMAND uname -m
+    OUTPUT_VARIABLE linux_host_arch
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+  )
+  if(linux_host_arch MATCHES "^(aarch64|arm64)$")
+    find_program(QEMU_X86_64_EXECUTABLE qemu-x86_64)
+    if(NOT QEMU_X86_64_EXECUTABLE)
+      message(FATAL_ERROR
+        "Linux AArch64 requires qemu-x86_64 to run the pinned Haxe ${HAXE_VERSION} binary")
+    endif()
+    set(HAXE_X86_64_SYSROOT "/usr/x86_64-linux-gnu")
+    if(NOT EXISTS "${HAXE_X86_64_SYSROOT}/lib64/ld-linux-x86-64.so.2")
+      message(FATAL_ERROR
+        "Linux AArch64 requires the x86-64 cross sysroot at ${HAXE_X86_64_SYSROOT}; "
+        "install libc6-amd64-cross")
+    endif()
+    set(HAXE_X86_64_BINARY "${TOOLS_DIR}/haxe/haxe-x86_64")
+  endif()
 elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
   set(haxe_archive "${TOOLS_DIR}/haxe-${HAXE_VERSION}-osx.tar.gz")
   set(haxe_url "https://github.com/HaxeFoundation/haxe/releases/download/${HAXE_VERSION}/haxe-${HAXE_VERSION}-osx.tar.gz")
@@ -103,6 +128,24 @@ endif()
 
 download_checked("${haxe_url}" "${haxe_archive}" "${haxe_sha256}")
 extract_single_directory("${haxe_archive}" "${TOOLS_DIR}/haxe")
+
+if(DEFINED HAXE_X86_64_BINARY)
+  # Keep the public .tools/haxe/haxe path stable for all scripts. The wrapper
+  # is regenerated idempotently and delegates to the extracted x86-64 binary.
+  if(EXISTS "${haxe_executable}" AND NOT EXISTS "${HAXE_X86_64_BINARY}")
+    file(RENAME "${haxe_executable}" "${HAXE_X86_64_BINARY}")
+  endif()
+  if(NOT EXISTS "${HAXE_X86_64_BINARY}")
+    message(FATAL_ERROR "Pinned Haxe binary is missing: ${HAXE_X86_64_BINARY}")
+  endif()
+  file(WRITE "${haxe_executable}"
+    "#!/usr/bin/env sh\n"
+    "set -eu\n"
+    "exec \"${QEMU_X86_64_EXECUTABLE}\" -L \"${HAXE_X86_64_SYSROOT}\" "
+    "\"${HAXE_X86_64_BINARY}\" \"$@\"\n"
+  )
+  execute_process(COMMAND chmod +x "${haxe_executable}")
+endif()
 
 set(formatter_archive "${TOOLS_DIR}/formatter-${FORMATTER_VERSION}.zip")
 download_checked(

@@ -33,7 +33,7 @@ jobs:
       - name: Verify ARM64 runner
         run: test "$(uname -m)" = aarch64
       - name: Install build dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build curl unzip nodejs gdb libpcre2-dev libuv1-dev
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build curl unzip nodejs gdb qemu-user libc6-amd64-cross libpcre2-dev libuv1-dev
       - name: Bootstrap pinned tools
         run: scripts/bootstrap-tools.sh
       - name: Compiler, differential, and runtime gates
