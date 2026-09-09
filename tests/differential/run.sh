@@ -64,6 +64,10 @@ run_case() {
 	fi
 	if [[ $official_status -ne $realtime_status ]]; then
 		echo "$name: official=$official_status realtime=$realtime_status" >&2
+		echo "--- official output ---" >&2
+		cat "$official_log" >&2 || true
+		echo "--- realtime output ---" >&2
+		cat "$realtime_log" >&2 || true
 		exit 1
 	fi
 	if ! cmp -s "$official_log" "$realtime_log"; then
