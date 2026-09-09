@@ -11,6 +11,10 @@ extern bool hl_sys_rename( vbyte *path, vbyte *new_path );
 extern varray *hl_sys_read_dir( vbyte *path );
 extern varray *hl_sys_stat( vbyte *path );
 
+#ifdef HL_WIN
+#include <wchar.h>
+#endif
+
 static char *realtime_utf8_copy( const vbyte *value ) {
 	const char *utf8 = value == NULL ? "" : hl_to_utf8((const uchar *)value);
 	char *result = (char *)malloc(strlen(utf8) + 1);
@@ -113,9 +117,13 @@ HL_PRIM varray *HL_NAME(__sys_metadata)( vbyte *path ) {
 }
 
 HL_PRIM void HL_NAME(__file_save_bytes)( vbyte *path, realtime_bytes *bytes ) {
+#ifdef HL_WIN
+	FILE *file = _wfopen((const wchar_t *)path,L"wb");
+#else
 	char *path_utf8 = realtime_utf8_copy(path);
 	FILE *file = fopen(path_utf8, "wb");
 	free(path_utf8);
+#endif
 	if( file == NULL ) hl_error("Could not open output file");
 	if( bytes->length > 0 && fwrite(bytes->data, 1, (size_t)bytes->length, file) != (size_t)bytes->length ) {
 		fclose(file);
@@ -125,10 +133,14 @@ HL_PRIM void HL_NAME(__file_save_bytes)( vbyte *path, realtime_bytes *bytes ) {
 }
 
 HL_PRIM void HL_NAME(__file_save_content)( vbyte *path, vbyte *content ) {
+#ifdef HL_WIN
+	FILE *file = _wfopen((const wchar_t *)path,L"wb");
+#else
 	char *owned_path = realtime_utf8_copy(path);
-	const char *utf8 = content == NULL ? "" : hl_to_utf8((const uchar *)content);
 	FILE *file = fopen(owned_path, "wb");
 	free(owned_path);
+#endif
+	const char *utf8 = content == NULL ? "" : hl_to_utf8((const uchar *)content);
 	if( file == NULL ) hl_error("Could not open output file");
 	size_t length = strlen(utf8);
 	if( length > 0 && fwrite(utf8, 1, length, file) != length ) {
@@ -140,9 +152,13 @@ HL_PRIM void HL_NAME(__file_save_content)( vbyte *path, vbyte *content ) {
 
 
 static vbyte *realtime_file_read( vbyte *path, int *length ) {
+#ifdef HL_WIN
+	FILE *file = _wfopen((const wchar_t *)path,L"rb");
+#else
 	char *path_utf8 = realtime_utf8_copy(path);
 	FILE *file = fopen(path_utf8, "rb");
 	free(path_utf8);
+#endif
 	if( file == NULL ) hl_error("Could not open source file");
 	if( fseek(file, 0, SEEK_END) != 0 ) {
 		fclose(file);
