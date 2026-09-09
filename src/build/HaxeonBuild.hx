@@ -110,8 +110,12 @@ class HaxeonBuild {
 		return failed || !FileSystem.exists(haxe()) ? 1 : 0;
 	}
 
-	static function compileWith(compiler:String, output:String, sources:Array<String>):Int
-		return run(hashlink(), [compiler].concat(compilerArguments(output, sources)));
+	static function compileWith(compiler:String, output:String, sources:Array<String>):Int {
+		var status = run(hashlink(), [compiler].concat(compilerArguments(output, sources)));
+		if (status != 0)
+			Sys.stderr().writeString('HashLink compiler failed ($status): $compiler -> $output\n');
+		return status;
+	}
 
 	static function compilerArguments(output:String, sources:Array<String>):Array<String>
 		return [
