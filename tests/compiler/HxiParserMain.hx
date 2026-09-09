@@ -84,6 +84,14 @@ class HxiParserMain {
 				throw "borrowed pointer field policy was not retained";
 		}
 		expect(HxiProjection.source(pointerFields).indexOf("function set_context") >= 0, "borrowed opaque pointer fields should project typed accessors");
+		var arrays = HxiParser.parse("arrays.hxi",
+			'interface arrays @target("x86_64-linux-gnu") @library("arrays") { struct point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); } struct values @layout(24, 4) { bytes: array<u8, 4> @offset(0); numbers: array<i32, 3> @offset(4); points: array<point, 1> @offset(16); } }');
+		var arraySource = HxiProjection.source(arrays);
+		expect(arraySource.indexOf("function get_numbers(index:Int):Int") >= 0
+			&& arraySource.indexOf("function set_bytes_bytes") >= 0
+			&& arraySource.indexOf("function get_points(index:Int):point") >= 0,
+			"fixed scalar, byte, and nested structure arrays should project typed accessors");
+		expectError('interface bad @target("x86_64-linux-gnu") { struct values @layout(12, 4) { numbers: array<i32, 2> @offset(2); } }', "invalid offset");
 		expectError('interface bad @target("x86_64-linux-gnu") { opaque context; struct holder @layout(8, 8) { context: ptr<context> @offset(0) @owned("destroy"); } }',
 			"Owned pointer field");
 		expectError('interface bad @target("x86_64-linux-gnu") { struct holder @layout(16, 8) { data: ptr<u8> @offset(0) @length_field("size"); size: usize @offset(8); } }',

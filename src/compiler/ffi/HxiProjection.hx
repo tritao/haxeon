@@ -73,6 +73,34 @@ class HxiProjection {
 					output.add('abstract $name(haxe.io.Bytes) from haxe.io.Bytes to haxe.io.Bytes {\n');
 					output.add('\tpublic inline function new() this = haxe.io.Bytes.alloc($size);\n');
 					for (field in fields) {
+						var array = arrayType(field.type, declarations);
+						if (array != null) {
+							var nestedElement = structureType(array.element, declarations);
+							if (nestedElement != null) {
+								usesNestedStructures = true;
+								output.add('\tpublic inline function get_${field.name}(index:Int):${nestedElement.name} { if (index < 0 || index >= ${array.length}) throw "HXI array index out of bounds"; return ${model.name}.__hxi_struct_slice(this, ${field.offset} + index * ${nestedElement.size}, ${nestedElement.size}); }\n');
+								output.add('\tpublic inline function set_${field.name}(index:Int, value:${nestedElement.name}):Void { if (index < 0 || index >= ${array.length}) throw "HXI array index out of bounds"; ${model.name}.__hxi_struct_copy(this, ${field.offset} + index * ${nestedElement.size}, value, ${nestedElement.size}); }\n');
+								continue;
+							}
+							if (arrayType(array.element, declarations) != null)
+								continue;
+							var element = project(abi.classify(array.element), false);
+							if (element == null || element.code == 11)
+								continue;
+							var arrayAccess = structAccess(element.code),
+								stride = structSize(element.code);
+							if (arrayAccess == null || stride == 0)
+								continue;
+							structAccesses.set(arrayAccess, {type: element.haxeType, setterType: element.haxeType});
+							output.add('\tpublic inline function get_${field.name}(index:Int):${element.haxeType} { if (index < 0 || index >= ${array.length}) throw "HXI array index out of bounds"; return ${model.name}.__hxi_struct_get${arrayAccess}(this, ${field.offset} + index * $stride); }\n');
+							output.add('\tpublic inline function set_${field.name}(index:Int, value:${element.haxeType}):Void { if (index < 0 || index >= ${array.length}) throw "HXI array index out of bounds"; ${model.name}.__hxi_struct_set${arrayAccess}(this, ${field.offset} + index * $stride, value); }\n');
+							if (element.code == 1 || element.code == 2) {
+								usesNestedStructures = true;
+								output.add('\tpublic inline function get_${field.name}_bytes():haxe.io.Bytes return ${model.name}.__hxi_struct_slice(this, ${field.offset}, ${array.length});\n');
+								output.add('\tpublic inline function set_${field.name}_bytes(value:haxe.io.Bytes):Void ${model.name}.__hxi_struct_copy(this, ${field.offset}, value, ${array.length});\n');
+							}
+							continue;
+						}
 						var nested = structureType(field.type, declarations);
 						if (nested != null) {
 							usesNestedStructures = true;
@@ -205,6 +233,30 @@ class HxiProjection {
 			case 7 | 8: "I64";
 			case 9: "F32";
 			case 10: "F64";
+			case _: null;
+		};
+
+	static function structSize(code:Int):Int
+		return switch code {
+			case 1 | 2: 1;
+			case 3 | 4: 2;
+			case 5 | 6 | 9: 4;
+			case 7 | 8 | 10: 8;
+			case _: 0;
+		};
+
+	static function arrayType(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>):Null<{
+		element:compiler.ffi.HxiModel.HxiType,
+		length:Int
+	}>
+		return switch type {
+			case Const(element): arrayType(element, declarations);
+			case Array(element, length): {element: element, length: length};
+			case Named(name):
+				switch declarations.get(name) {
+					case Alias(_, target, _): arrayType(target, declarations);
+					case _: null;
+				}
 			case _: null;
 		};
 

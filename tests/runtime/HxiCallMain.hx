@@ -16,9 +16,12 @@ class HxiCallMain {
 			+ '\tstruct fixture_box @layout(16, 4) { start: fixture_point @offset(0); end: fixture_point @offset(8); }\n'
 			+
 			'\tstruct fixture_holder @layout(16, 8) { required: ptr<fixture_context> @offset(0) @borrowed; optional: nullable<ptr<fixture_context>> @offset(8) @borrowed; }\n'
+			+
+			'\tstruct fixture_arrays @layout(28, 4) { values: array<i16, 3> @offset(0); name: array<u8, 4> @offset(6); points: array<fixture_point, 2> @offset(12); }\n'
 			+ '\textern fn checkOptions(options: ptr<const<fixture_options>>) -> i32 @symbol("native_fixture_check_options");\n'
 			+ '\textern fn checkBox(box: ptr<const<fixture_box>>) -> i32 @symbol("native_fixture_check_box");\n'
 			+ '\textern fn checkHolder(holder: ptr<const<fixture_holder>>) -> i32 @symbol("native_fixture_check_holder");\n'
+			+ '\textern fn checkArrays(arrays: ptr<const<fixture_arrays>>) -> i32 @symbol("native_fixture_check_arrays");\n'
 			+ '\textern fn add(left: i32, right: i32) -> i32 @symbol("native_fixture_add");\n'
 			+ '\textern fn multiply(left: f64, right: f64) -> f64 @symbol("native_fixture_multiply");\n'
 			+ '\textern fn isNull(value: nullable<ptr<const<void>>>) -> i32 @symbol("native_fixture_is_null");\n'
@@ -43,11 +46,18 @@ class HxiCallMain {
 			+ '}\n');
 		compiler.update("Main.hx",
 			"import Fixture; import runtime.NativePointer; function main():Int { var options = new fixture_options(); options.set_count(40); options.set_scale(1.5); options.set_token(Fixture.i64Value()); options.set_delta(2); var start = new fixture_point(); start.set_x(10); start.set_y(11); var end = new fixture_point(); end.set_x(20); end.set_y(21); var box = new fixture_box(); box.set_start(start); box.set_end(end); var copied = box.get_start(); var borrowed = Fixture.borrowed(); var holder = new fixture_holder(); holder.set_required(borrowed); holder.set_optional(null); var structure = options.get_count() == 40 && options.get_scale() == 1.5 && options.get_delta() == 2 && Fixture.checkOptions(options) == 42 && copied.get_x() == 10 && copied.get_y() == 11 && Fixture.checkBox(box) == 42 && Fixture.pointerValue(holder.get_required()) == 42 && holder.get_optional() == null && Fixture.checkHolder(holder) == 42; var owned = Fixture.owned(41); var maybe = Fixture.maybeBorrowed(1); var ownedData = Fixture.ownedData(40); var borrowedData = Fixture.borrowedData(1); var buffers = Fixture.dataCheck(ownedData) == 42 && borrowedData != null && Fixture.dataCheck(borrowedData) == 42 && Fixture.borrowedData(0) == null && Fixture.dataWasReleased() == 42; var pointers = !NativePointer.native_pointer_is_closed(owned) && !NativePointer.native_pointer_is_closed(borrowed) && Fixture.maybeBorrowed(0) == null && maybe != null && Fixture.pointerValue(owned) == 41 && Fixture.pointerValue(borrowed) == 42 && Fixture.nullablePointerValue(maybe) == 42 && Fixture.nullablePointerValue(null) == 0 && NativePointer.native_pointer_close(owned) && !NativePointer.native_pointer_close(owned) && !NativePointer.native_pointer_close(borrowed) && Fixture.wasReleased() == 42; return structure && buffers && pointers && Fixture.multiply(6.0, 7.0) == 42.0 && Fixture.isNull(haxe.io.Bytes.alloc(1)) == 0 && Fixture.isNull(null) == 42 && Fixture.sum16(1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 0, 0, 0, 0, 0) == 42 && Fixture.i64Check(Fixture.i64Value()) == 42 ? Fixture.add(Fixture.add(10, 11), 21) : 1; }");
+		var mainSource = compiler.modules.get("Main").source.text;
+		mainSource = StringTools.replace(mainSource, "var borrowed = Fixture.borrowed();",
+			'var arrays = new fixture_arrays(); arrays.set_values(0, 10); arrays.set_values(1, 11); arrays.set_values(2, 12); arrays.set_name_bytes(haxe.io.Bytes.ofString("ABCD")); arrays.set_points(0, start); arrays.set_points(1, end); var arrayFields = arrays.get_values(1) == 11 && arrays.get_name(2) == 67 && arrays.get_points(1).get_x() == 20 && Fixture.checkArrays(arrays) == 42; var borrowed = Fixture.borrowed();');
+		mainSource = StringTools.replace(mainSource, "var structure = ", "var structure = arrayFields && ");
+		compiler.update("Main.hx", mainSource);
 		compiler.compile("Main");
 		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module));
 		compiler.update("Main.hx", "import Fixture; function main():Int return Fixture.invalidNonNull() == null ? 1 : 0;");
 		File.saveBytes(output + ".invalid-null", HlWriter.encode(compiler.compile("Main").module));
 		compiler.update("Main.hx", "import Fixture; function main():Int return Fixture.invalidData() == null ? 1 : 0;");
 		File.saveBytes(output + ".invalid-length", HlWriter.encode(compiler.compile("Main").module));
+		compiler.update("Main.hx", "import Fixture; function main():Int { var arrays = new fixture_arrays(); return arrays.get_values(3); }");
+		File.saveBytes(output + ".invalid-index", HlWriter.encode(compiler.compile("Main").module));
 	}
 }

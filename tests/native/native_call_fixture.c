@@ -18,6 +18,11 @@ typedef struct native_fixture_options {
 typedef struct native_fixture_point { int32_t x, y; } native_fixture_point;
 typedef struct native_fixture_box { native_fixture_point start, end; } native_fixture_box;
 typedef struct native_fixture_holder { void *required, *optional; } native_fixture_holder;
+typedef struct native_fixture_arrays {
+	int16_t values[3];
+	uint8_t name[4];
+	native_fixture_point points[2];
+} native_fixture_arrays;
 
 static int32_t native_fixture_borrowed_value = 42;
 
@@ -36,6 +41,12 @@ FIXTURE_API int32_t native_fixture_check_box( const native_fixture_box *box ) {
 
 FIXTURE_API int32_t native_fixture_check_holder( const native_fixture_holder *holder ) {
 	return holder != NULL && holder->required == &native_fixture_borrowed_value && holder->optional == NULL ? 42 : 0;
+}
+
+FIXTURE_API int32_t native_fixture_check_arrays( const native_fixture_arrays *arrays ) {
+	return arrays != NULL && arrays->values[0] == 10 && arrays->values[2] == 12
+		&& arrays->name[0] == 'A' && arrays->name[3] == 'D'
+		&& arrays->points[0].x == 10 && arrays->points[1].y == 21 ? 42 : 0;
 }
 
 FIXTURE_API double native_fixture_multiply( double left, double right ) {

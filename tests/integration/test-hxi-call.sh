@@ -49,3 +49,17 @@ if [[ $invalid_status -eq 0 ]] || ! rg -q "exceeds the 256 MiB safety limit" "$i
 	cat "$invalid_output" >&2
 	exit 1
 fi
+
+set +e
+(
+	cd "$repo_dir/out"
+	LD_LIBRARY_PATH="$repo_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+		"$repo_dir/vendor/hashlink/hl" hxi-call-test.hl.invalid-index
+) >"$invalid_output" 2>&1
+invalid_status=$?
+set -e
+if [[ $invalid_status -eq 0 ]] || ! rg -q "HXI array index out of bounds" "$invalid_output"; then
+	echo "out-of-bounds HXI array access was accepted or reported the wrong error" >&2
+	cat "$invalid_output" >&2
+	exit 1
+fi

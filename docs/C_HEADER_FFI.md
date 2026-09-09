@@ -102,6 +102,14 @@ is likewise reserved until structures can retain input buffers. Unannotated
 pointer fields remain in the ABI model but receive no unsafe generated
 accessors. By-value structures are not executable yet.
 
+Fixed-size `array<T, N>` fields project indexed getters and setters for integer
+and floating-point elements, with bounds checks against `N` before an address
+is calculated. Byte arrays additionally provide whole-field managed-byte copy
+helpers. Arrays of fixed-layout structures use typed element copies with the
+declared structure stride. Array sizes, offsets, alignment, and multiplication
+overflow are covered by the same layout validation as other fields. Pointer
+arrays remain ABI-visible but unprojected pending an explicit lifetime model.
+
 ## Native call runtime
 
 The runtime has a separate ordinary-C call bridge built on libffi. This is not
