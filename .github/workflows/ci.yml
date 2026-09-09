@@ -23,6 +23,26 @@ jobs:
       - name: Hot reload and GDB metadata gate
         run: tests/integration/test-gdb-hot-reload.sh
 
+  linux-arm64:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Verify ARM64 runner
+        run: test "$(uname -m)" = aarch64
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build curl unzip nodejs gdb libpcre2-dev libuv1-dev
+      - name: Bootstrap pinned tools
+        run: scripts/bootstrap-tools.sh
+      - name: Compiler, differential, and runtime gates
+        run: scripts/test.sh
+      - name: Self-hosted compiler gate
+        run: scripts/bootstrap-compiler.sh --self
+      - name: Hot reload and GDB metadata gate
+        run: tests/integration/test-gdb-hot-reload.sh
+
   windows:
     runs-on: windows-2022
     timeout-minutes: 30
