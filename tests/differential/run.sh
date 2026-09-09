@@ -5,6 +5,20 @@ root_dir=$(cd "$(dirname "$0")/../.." && pwd)
 haxe="$root_dir/.tools/haxe/haxe"
 hl="$root_dir/.tools/hashlink/hl"
 out_dir="$root_dir/out/differential"
+runtime_library_variable=LD_LIBRARY_PATH
+if [[ "$(uname -s)" == "Darwin" ]]; then
+	runtime_library_variable=DYLD_LIBRARY_PATH
+fi
+
+run_hl() {
+	local library_path=$1
+	shift
+	local existing="${!runtime_library_variable:-}"
+	if [[ -n "$existing" ]]; then
+		library_path="$library_path:$existing"
+	fi
+	env "$runtime_library_variable=$library_path" "$hl" "$@"
+}
 
 if [[ ! -x "$haxe" || ! -x "$hl" ]]; then
 	echo "missing local toolchain; run ./scripts/bootstrap-tools.sh first" >&2
@@ -36,10 +50,10 @@ run_case() {
 	if [[ "$reference_target" == interp ]]; then
 		"$haxe" -cp "$official_dir" -main Main --interp >"$official_log" 2>&1
 	else
-		LD_LIBRARY_PATH="$root_dir/.tools/hashlink" "$hl" "$official_output" >"$official_log" 2>&1
+		run_hl "$root_dir/.tools/hashlink" "$official_output" >"$official_log" 2>&1
 	fi
 	local official_status=$?
-	LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink" "$hl" "$realtime_output" >"$realtime_log" 2>&1
+	run_hl "$root_dir/out:$root_dir/.tools/hashlink" "$realtime_output" >"$realtime_log" 2>&1
 	local realtime_status=$?
 	set -e
 

@@ -40,3 +40,19 @@ jobs:
       - name: Run cross-platform core tests
         shell: pwsh
         run: ./.tools/haxe/haxe.exe --cwd . -cp src --run build.HaxeonBuild test 8
+
+  macos:
+    runs-on: macos-15-intel
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install build dependencies
+        run: brew install cmake ninja node
+      - name: Bootstrap pinned tools and native runtime
+        run: ./scripts/bootstrap-tools.sh
+      - name: Compiler, differential, and runtime gates
+        run: ./scripts/test.sh
+      - name: Self-hosted compiler gate
+        run: ./scripts/bootstrap-compiler.sh --self

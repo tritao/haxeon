@@ -305,8 +305,10 @@ The same build can be driven by the cross-platform Haxe entry point:
 On a fresh Windows checkout, run `scripts/setup.ps1` from a Visual Studio
 developer shell. It installs the pinned tools and selects the `windows-msvc`
 preset. Later native-only builds can use `scripts/build-native.ps1`. Unix
-environments may use `scripts/build-native.sh`. Set `HAXEON_CMAKE_PRESET` to
-override the wrapper's default preset.
+environments may use `scripts/bootstrap-tools.sh` followed by
+`scripts/build-native.sh`; the macOS CI job runs on an Intel runner because the
+current HashLink JIT targets x86-64. Set `HAXEON_CMAKE_PRESET` to override the
+wrapper's default preset.
 
 Pinned dependency versions, archive checksums, extraction, and submodule setup
 are defined once in `cmake/Bootstrap.cmake`. The platform setup scripts are
