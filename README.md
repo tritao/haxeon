@@ -313,6 +313,11 @@ the latter using HashLink's AArch64 JIT. The `macos-arm64` preset can also be
 used for an explicit arm64 build on Darwin. Set `HAXEON_CMAKE_PRESET` to
 override the wrapper's default preset.
 
+Linux AArch64 hosts need `qemu-user` and `libc6-amd64-cross`: the pinned Haxe
+release is currently Linux x86-64, so the shared bootstrap keeps the normal
+`.tools/haxe/haxe` path and runs that compiler through an explicit QEMU
+wrapper. The native HashLink and runtime still build and execute for AArch64.
+
 Pinned dependency versions, archive checksums, extraction, and submodule setup
 are defined once in `cmake/Bootstrap.cmake`. The platform setup scripts are
 thin launchers for that shared bootstrap rather than separate installers.
