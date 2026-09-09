@@ -37,6 +37,28 @@ class HxiParserMain {
 				throw "expected symbol-bound function";
 		}
 		expectError(StringTools.replace(valid, "ptr<nk_context>", "ptr<missing>"), 'Unknown HXI type "missing"');
+		var enumerations = HxiParser.parse("enums.hxi",
+			'interface enums @target("x86_64-linux-gnu") @library("enums") { enum Result : i32 { OK = 0; ERROR = -1; } flags Options : u32 { NONE = 0; FIRST = 1; SECOND = 1 << 1; BOTH = 1 | (1 << 1); HIGH = 0x80000000; } extern fn check(value: Result, options: Options) -> Result; }');
+		switch enumerations.declarations[1] {
+			case Enumeration("Options", _, true, values, _):
+				expect(values[3].value == 3 && values[4].value < 0, "flag expressions should evaluate as 32-bit values");
+			case _:
+				throw "expected parsed flags";
+		}
+		var enumSource = HxiProjection.source(enumerations);
+		expect(enumSource.indexOf("enum abstract Result(Int) from Int to Int") >= 0
+			&& enumSource.indexOf("var BOTH = 3") >= 0
+			&& enumSource.indexOf("extern function check(arg0:Result, arg1:Options):Result") >= 0,
+			"enums should retain nominal types while projecting integer ABI calls");
+		var enumCompiler = new Compiler();
+		enumCompiler.addFfiInterface("enums.hxi",
+			'interface enums @target("x86_64-linux-gnu") @library("enums") { enum Result : i32 { OK = 0; ERROR = -1; } extern fn check(value: Result) -> Result; }');
+		enumCompiler.update("EnumMain.hx", "import enums; function main():Result return enums.check(Result.OK);");
+		enumCompiler.analyze("EnumMain");
+		expectError('interface bad @target("x86_64-linux-gnu") { enum value : i64 { A = 0; } }', "requires an 8/16/32-bit integer representation");
+		expectError('interface bad @target("x86_64-linux-gnu") { enum value : u8 { A = 256; } }', "outside the representation");
+		expectError('interface bad @target("x86_64-linux-gnu") { enum value : i32 { A = 0; B = 0; } }', "duplicates");
+		expectError('interface bad @target("x86_64-linux-gnu") { enum value : i32 { A = 1 << 32; } }', "shift count");
 		expectError(valid + "garbage", "Unexpected token");
 		expectError(StringTools.replace(valid, "@offset(8)", "@offset(16)"), "invalid offset");
 		expectError('interface bad @target("x86_64-linux-gnu") { struct pair @layout(8, 4) { left: i32 @offset(0); right: i32 @offset(0); } }',

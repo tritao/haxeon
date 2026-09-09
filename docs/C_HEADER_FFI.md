@@ -17,7 +17,7 @@ offsets are target-specific. Include paths may be repeated. Declarations from
 the input header and those include roots are imported; declarations from system
 headers are excluded.
 
-The initial importer supports C typedefs, integer enum constants, structs,
+The importer supports C typedefs, anonymous integer enum constants, named enums, structs,
 fixed-size arrays, pointers, `const`, and non-variadic function declarations.
 It maps fixed-width integer typedefs and `size_t`-family types to raw HXI
 primitives. Structs carry Clang-computed `@layout` and `@offset` annotations.
@@ -109,6 +109,15 @@ helpers. Arrays of fixed-layout structures use typed element copies with the
 declared structure stride. Array sizes, offsets, alignment, and multiplication
 overflow are covered by the same layout validation as other fields. Pointer
 arrays remain ABI-visible but unprojected pending an explicit lifetime model.
+
+Named HXI `enum` and `flags` declarations use an explicit `i8`/`u8`, `i16`/`u16`,
+or `i32`/`u32` representation. Their values accept decimal and hexadecimal
+integer literals, unary minus, parentheses, `<<`, `>>`, and bitwise `|`.
+Validation catches duplicate names and values, invalid shifts, and values outside
+representable widths. Both forms project as nominal Haxe enum abstracts while
+native calls and structure fields retain the declared integer ABI. Clang-imported
+named C enums currently use `c_int` unless the header specifies a fixed underlying
+type; `flags` remains an explicit HXI authoring distinction rather than a heuristic.
 
 ## Native call runtime
 

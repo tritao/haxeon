@@ -62,11 +62,23 @@ class HxiProjection {
 		var usesNestedStructures = false, usesPointerFields = false;
 		for (declaration in model.declarations)
 			switch declaration {
-				case Opaque(name, _) | Alias(name, _, _) | Structure(name, _, _, _, _):
+				case Opaque(name, _) | Alias(name, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _):
 					declarations.set(name, declaration);
 				case _:
 			}
 		output.add('// Generated semantic projection of ${model.name}. Do not edit.\n');
+		for (declaration in model.declarations)
+			switch declaration {
+				case Enumeration(name, representation, _, values, _):
+					var underlying = project(abi.classify(representation), false);
+					if (underlying == null)
+						continue;
+					output.add('enum abstract $name(${underlying.haxeType}) from ${underlying.haxeType} to ${underlying.haxeType} {\n');
+					for (value in values)
+						output.add('\tvar ${value.name} = ${value.value};\n');
+					output.add('}\n');
+				case _:
+			}
 		for (declaration in model.declarations)
 			switch declaration {
 				case Structure(name, size, _, fields, _):
@@ -191,6 +203,18 @@ class HxiProjection {
 				var unsigned = sign == Unsigned || sign == PlainChar;
 				{
 					haxeType: "Int",
+					nativePointer: false,
+					nullable: false,
+					code: switch bits {
+						case 8: unsigned ? 2 : 1;
+						case 16: unsigned ? 4 : 3;
+						default: unsigned ? 6 : 5;
+					}
+				};
+			case EnumerationValue(name, bits, sign) if (bits <= 32):
+				var unsigned = sign == Unsigned || sign == PlainChar;
+				{
+					haxeType: name,
 					nativePointer: false,
 					nullable: false,
 					code: switch bits {

@@ -12,6 +12,10 @@ class CHeaderImporterMain {
 		expect(first.indexOf("extern fn sample_create(") >= 0, "functions should import");
 		expect(first.indexOf("type sample_handle = u32") >= 0, "fixed-width C types should use raw-HXI primitives");
 		expect(first.indexOf("const SAMPLE_FLAG = 8") >= 0, "constant expressions should use Clang's evaluated value");
+		expect(first.indexOf("enum sample_result : c_int") >= 0 && first.indexOf("SAMPLE_RESULT_FAILED = -1") >= 0,
+			"named C enums should import as nominal HXI enums");
+		expect(first.indexOf("extern fn sample_check_result(value: sample_result) -> sample_result") >= 0,
+			"enum function signatures should retain their nominal type");
 		expect(first.indexOf("int_fast16_t") < 0, "system-header declarations should not leak into imported HXI");
 		var parsed = HxiParser.parse("import_fixture.hxi", first);
 		expect(parsed.target == "x86_64-linux-gnu", "generated HXI should satisfy the validated parser contract");

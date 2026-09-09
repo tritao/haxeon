@@ -59,11 +59,11 @@ class CHeaderImporter {
 			name:String = field(node, "name");
 		if (name != null
 			&& !StringTools.startsWith(name, "__")
-			&& (kind == "TypedefDecl" || kind == "RecordDecl" || kind == "FunctionDecl" || kind == "EnumConstantDecl")
+			&& (kind == "TypedefDecl" || kind == "RecordDecl" || kind == "FunctionDecl" || kind == "EnumDecl" || kind == "EnumConstantDecl")
 			&& isUserDeclaration(node, roots, currentFile))
 			output.push(node);
 		var inner:Array<Dynamic> = field(node, "inner");
-		if (inner != null)
+		if (inner != null && !(kind == "EnumDecl" && name != null))
 			for (child in inner)
 				currentFile = collect(child, output, roots, currentFile);
 		return currentFile;
@@ -74,6 +74,19 @@ class CHeaderImporter {
 			name:String = field(node, "name"),
 			type:Dynamic = field(node, "type");
 		switch kind {
+			case "EnumDecl":
+				var fixed:Dynamic = field(node, "fixedUnderlyingType"), representation = fixed == null ? "c_int" : mapType(field(fixed, "qualType")),
+					values = [
+						for (child in children(node)) if (field(child, "kind") == "EnumConstantDecl") child
+					];
+				output.add('\tenum $name : $representation {\n');
+				for (entry in values) {
+					var entryName:String = field(entry, "name"),
+						value = constantValue(entry);
+					if (value != null)
+						output.add('\t\t$entryName = $value;\n');
+				}
+				output.add("\t}\n");
 			case "EnumConstantDecl":
 				var value = constantValue(node);
 				if (value != null)
@@ -153,7 +166,7 @@ class CHeaderImporter {
 			case "intptr_t": "isize";
 			case "uintptr_t": "usize";
 			case "size_t": "usize";
-			default: StringTools.startsWith(value, "struct ") ? value.substring(7) : value;
+			default: StringTools.startsWith(value, "struct ") ? value.substring(7) : StringTools.startsWith(value, "enum ") ? value.substring(5) : value;
 		}
 	}
 

@@ -6,6 +6,7 @@ import compiler.Source.SourceFile;
 import compiler.Source.SourceSpan;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiField;
+import compiler.ffi.HxiModel.HxiEnumValue;
 import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiModel.HxiParameter;
 import compiler.ffi.HxiModel.HxiType;
@@ -99,9 +100,75 @@ class HxiParser {
 				var value = integer(), end = expect(";").span;
 				Constant(name, value, start.merge(end));
 			case "struct": parseStructure(start);
+			case "enum": parseEnumeration(start, false);
+			case "flags": parseEnumeration(start, true);
 			case "extern": parseFunction(start);
 			default: fail('Expected HXI declaration, got "${current().text}"', current().span);
 		}
+	}
+
+	function parseEnumeration(start:SourceSpan, flags:Bool):HxiDeclaration {
+		advance();
+		var name = identifier();
+		expect(":");
+		var representation = parseType();
+		expect("{");
+		var values:Array<HxiEnumValue> = [];
+		while (!check("}")) {
+			var valueStart = current().span, valueName = identifier();
+			expect("=");
+			var value = parseEnumExpression(), end = expect(";").span;
+			values.push({name: valueName, value: value, span: valueStart.merge(end)});
+		}
+		var end = expect("}").span;
+		return Enumeration(name, representation, flags, values, start.merge(end));
+	}
+
+	function parseEnumExpression():Int {
+		var value = parseEnumShift();
+		while (match("|"))
+			value |= parseEnumShift();
+		return value;
+	}
+
+	function parseEnumShift():Int {
+		var value = parseEnumPrimary();
+		while (check("<<") || check(">>")) {
+			var operation = advance().text, shift = parseEnumPrimary();
+			if (shift < 0 || shift > 31)
+				fail("Enum shift count must be between 0 and 31", previous().span);
+			value = operation == "<<" ? value << shift : value >> shift;
+		}
+		return value;
+	}
+
+	function parseEnumPrimary():Int {
+		if (match("(")) {
+			var value = parseEnumExpression();
+			expect(")");
+			return value;
+		}
+		if (match("-"))
+			return -parseEnumPrimary();
+		var token = current(), value:Null<Int> = null;
+		if (~/^0[xX][0-9A-Fa-f]+$/.match(token.text))
+			value = parseHex(token.text);
+		else if (~/^-?[0-9]+$/.match(token.text))
+			value = Std.parseInt(token.text);
+		if (value == null)
+			fail('Expected enum integer expression, got "${token.text}"', token.span);
+		advance();
+		return value;
+	}
+
+	static function parseHex(text:String):Int {
+		var value = 0;
+		for (index in 2...text.length) {
+			var code = text.charCodeAt(index),
+				digit = code >= 48 && code <= 57 ? code - 48 : code >= 65 && code <= 70 ? code - 55 : code - 87;
+			value = (value << 4) | digit;
+		}
+		return value;
 	}
 
 	function parseStructure(start:SourceSpan):HxiDeclaration {
@@ -250,6 +317,28 @@ class HxiParser {
 						if (field.lengthField != null)
 							fail('@length_field on "${field.name}" is reserved until structures can retain input buffers', field.span);
 					}
+				case Enumeration(name, representation, _, values, span):
+					validateType(representation, names, span, false);
+					var integer = switch abi.classify(representation) {
+						case IntegerValue(bits, sign) if (bits <= 32): {bits: bits, signed: sign == Signed};
+						case _: fail('Enum "$name" requires an 8/16/32-bit integer representation', span);
+					};
+					var valueNames:Map<String, Bool> = [],
+						seenValues:Map<Int, String> = [];
+					for (entry in values) {
+						if (valueNames.exists(entry.name))
+							fail('Duplicate value "${entry.name}" in enum "$name"', entry.span);
+						valueNames.set(entry.name, true);
+						if (integer.bits < 32) {
+							var minimum = integer.signed ? -(1 << (integer.bits - 1)) : 0;
+							var maximum = integer.signed ? (1 << (integer.bits - 1)) - 1 : (1 << integer.bits) - 1;
+							if (entry.value < minimum || entry.value > maximum)
+								fail('Value "${entry.name}" is outside the representation of enum "$name"', entry.span);
+						}
+						if (seenValues.exists(entry.value))
+							fail('Value "${entry.name}" duplicates "${seenValues.get(entry.value)}" in enum "$name"', entry.span);
+						seenValues.set(entry.value, entry.name);
+					}
 				case Function(name, parameters, result, _, _, resultPolicy, span):
 					for (parameter in parameters)
 						validateType(parameter.type, names, parameter.span, false);
@@ -272,6 +361,9 @@ class HxiParser {
 			case Primitive(_):
 				switch abi.classify(type) {
 					case IntegerValue(bits, _):
+						var size = Std.int(bits / 8);
+						{size: size, align: Std.int(Math.min(size, abi.pointerBits / 8))};
+					case EnumerationValue(_, bits, _):
 						var size = Std.int(bits / 8);
 						{size: size, align: Std.int(Math.min(size, abi.pointerBits / 8))};
 					case FloatValue(bits):
@@ -390,7 +482,8 @@ class HxiParser {
 
 	static function declarationName(value:HxiDeclaration):{name:String, span:SourceSpan}
 		return switch value {
-			case Opaque(name, span) | Alias(name, _, span) | Constant(name, _, span) | Structure(name, _, _, _, span) | Function(name, _, _, _, _, _, span):
+			case Opaque(name, span) | Alias(name, _, span) | Constant(name, _, span) | Structure(name, _, _, _, span) | Enumeration(name, _, _, _, span) |
+				Function(name, _, _, _, _, _, span):
 				{name: name, span: span};
 		}
 
@@ -489,6 +582,11 @@ class HxiParser {
 	}
 
 	function expect(text:String):HxiToken {
+		if (text == ">" && check(">>")) {
+			var combined = advance();
+			tokens.insert(position, {text: ">", span: combined.span});
+			return {text: ">", span: combined.span};
+		}
 		if (!check(text))
 			fail('Expected "$text", got "${current().text}"', current().span);
 		return advance();
@@ -545,11 +643,21 @@ class HxiParser {
 			} else if ((code >= 48 && code <= 57)
 				|| (code == 45 && position + 1 < bytes.length && bytes.get(position + 1) >= 48 && bytes.get(position + 1) <= 57)) {
 				position++;
-				while (position < bytes.length && bytes.get(position) >= 48 && bytes.get(position) <= 57)
+				if (code == 48 && position < bytes.length && (bytes.get(position) == 120 || bytes.get(position) == 88)) {
 					position++;
+					while (position < bytes.length
+						&& ((bytes.get(position) >= 48 && bytes.get(position) <= 57)
+							|| (bytes.get(position) >= 65 && bytes.get(position) <= 70)
+							|| (bytes.get(position) >= 97 && bytes.get(position) <= 102)))
+						position++;
+				} else
+					while (position < bytes.length && bytes.get(position) >= 48 && bytes.get(position) <= 57)
+						position++;
 			} else if (code == 45 && position + 1 < bytes.length && bytes.get(position + 1) == 62)
 				position += 2;
-			else if ("{}()<>:,;=@".indexOf(String.fromCharCode(code)) >= 0)
+			else if ((code == 60 || code == 62) && position + 1 < bytes.length && bytes.get(position + 1) == code)
+				position += 2;
+			else if ("{}()<>:,;=@|-".indexOf(String.fromCharCode(code)) >= 0)
 				position++;
 			else
 				throw new CompileError(new Diagnostic("E3001", 'Unexpected HXI character "${String.fromCharCode(code)}"', source.span(start, start + 1)));

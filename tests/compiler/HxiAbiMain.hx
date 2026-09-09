@@ -13,6 +13,14 @@ class HxiAbiMain {
 		expectInteger(linux.classify(compiler.ffi.HxiModel.HxiType.Primitive("c_char")), 8, PlainChar);
 		expect(HxiProjection.source(linuxModel("x86_64-linux-gnu")).indexOf("haxe.Int64") >= 0, "LP64 c_long should project as haxe.Int64");
 		expect(HxiProjection.source(linuxModel("x86_64-pc-windows-msvc")).indexOf("haxe.Int64") < 0, "LLP64 c_long should remain a 32-bit Int");
+		var enumModel = HxiParser.parse("enum.hxi",
+			'interface sample @target("x86_64-linux-gnu") @library("sample") { enum result : i32 { OK = 0; ERROR = -1; } extern fn check(value: result) -> result; }'),
+			enumAbi = HxiAbi.forInterface(enumModel);
+		switch enumAbi.functions()[0] {
+			case {arguments: [EnumerationValue("result", 32, Signed)], result: EnumerationValue("result", 32, Signed)}:
+			case _:
+				throw "enum ABI did not retain its nominal type";
+		}
 		switch linux.functions()[0] {
 			case {
 				name: "open",

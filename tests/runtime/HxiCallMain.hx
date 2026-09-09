@@ -11,6 +11,7 @@ class HxiCallMain {
 		compiler.addFfiInterface("fixture.hxi",
 			'interface Fixture @target("x86_64-linux-gnu") @library("$library") {\n'
 			+ '\topaque fixture_context;\n'
+			+ '\tenum FixtureResult : i32 { TEN = 10; ELEVEN = 11; TWENTY_ONE = 21; }\n'
 			+ '\tstruct fixture_options @layout(32, 8) { count: i32 @offset(0); scale: f64 @offset(8); token: i64 @offset(16); delta: i16 @offset(24); }\n'
 			+ '\tstruct fixture_point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); }\n'
 			+ '\tstruct fixture_box @layout(16, 4) { start: fixture_point @offset(0); end: fixture_point @offset(8); }\n'
@@ -23,6 +24,7 @@ class HxiCallMain {
 			+ '\textern fn checkHolder(holder: ptr<const<fixture_holder>>) -> i32 @symbol("native_fixture_check_holder");\n'
 			+ '\textern fn checkArrays(arrays: ptr<const<fixture_arrays>>) -> i32 @symbol("native_fixture_check_arrays");\n'
 			+ '\textern fn add(left: i32, right: i32) -> i32 @symbol("native_fixture_add");\n'
+			+ '\textern fn enumAdd(left: FixtureResult, right: FixtureResult) -> FixtureResult @symbol("native_fixture_add");\n'
 			+ '\textern fn multiply(left: f64, right: f64) -> f64 @symbol("native_fixture_multiply");\n'
 			+ '\textern fn isNull(value: nullable<ptr<const<void>>>) -> i32 @symbol("native_fixture_is_null");\n'
 			+
@@ -50,6 +52,8 @@ class HxiCallMain {
 		mainSource = StringTools.replace(mainSource, "var borrowed = Fixture.borrowed();",
 			'var arrays = new fixture_arrays(); arrays.set_values(0, 10); arrays.set_values(1, 11); arrays.set_values(2, 12); arrays.set_name_bytes(haxe.io.Bytes.ofString("ABCD")); arrays.set_points(0, start); arrays.set_points(1, end); var arrayFields = arrays.get_values(1) == 11 && arrays.get_name(2) == 67 && arrays.get_points(1).get_x() == 20 && Fixture.checkArrays(arrays) == 42; var borrowed = Fixture.borrowed();');
 		mainSource = StringTools.replace(mainSource, "var structure = ", "var structure = arrayFields && ");
+		mainSource = StringTools.replace(mainSource, "return structure && buffers && pointers && ",
+			"return structure && buffers && pointers && Fixture.enumAdd(FixtureResult.TEN, FixtureResult.ELEVEN) == FixtureResult.TWENTY_ONE && ");
 		compiler.update("Main.hx", mainSource);
 		compiler.compile("Main");
 		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module));
