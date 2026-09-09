@@ -157,6 +157,16 @@ Applications must unregister a callback and only then call `close()`; closing a
 function pointer that native code may still invoke remains a caller lifetime
 error.
 
+Functions and callbacks accept `@callconv("cdecl")`, `@callconv("stdcall")`, or
+`@callconv("system")`; omitted metadata means `cdecl`. The convention is encoded
+in the executable ABI signature, so call-cache entries with different
+conventions cannot alias. `system` selects `stdcall` on 32-bit Windows and the
+platform default elsewhere. Explicit `stdcall` is accepted only for Windows
+targets, maps to libffi's stdcall ABI on 32-bit Windows, and uses the unified
+default ABI on 64-bit Windows. Clang `__stdcall` declarations and function-pointer
+typedefs retain this metadata during import. Associated byte-length helper calls
+use the same convention as their pointer-returning function.
+
 ## Native call runtime
 
 The runtime has a separate ordinary-C call bridge built on libffi. This is not

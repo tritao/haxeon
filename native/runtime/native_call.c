@@ -455,7 +455,30 @@ typedef struct haxeon_native_cached_call {
 
 static haxeon_native_cached_call *haxeon_native_call_cache;
 
-static bool haxeon_native_parse_signature( const char *signature, unsigned char *arguments, int *argument_count, int *result ) {
+static bool haxeon_native_calling_convention( const char *name, ffi_abi *abi ) {
+	if( name == NULL || strcmp(name,"cdecl") == 0 ) { *abi = FFI_DEFAULT_ABI; return true; }
+	if( strcmp(name,"system") == 0 ) {
+#if defined(_WIN32) && (defined(__i386__) || defined(_M_IX86))
+		*abi = FFI_STDCALL;
+#else
+		*abi = FFI_DEFAULT_ABI;
+#endif
+		return true;
+	}
+	if( strcmp(name,"stdcall") == 0 ) {
+#if defined(_WIN32) && (defined(__i386__) || defined(_M_IX86))
+		*abi = FFI_STDCALL;
+#elif defined(_WIN32)
+		*abi = FFI_DEFAULT_ABI;
+#else
+		return false;
+#endif
+		return true;
+	}
+	return false;
+}
+
+static bool haxeon_native_parse_signature( const char *signature, unsigned char *arguments, int *argument_count, int *result, ffi_abi *abi ) {
 	const char *cursor = signature;
 	int count = 0;
 	while( *cursor != '>' ) {
@@ -472,7 +495,11 @@ static bool haxeon_native_parse_signature( const char *signature, unsigned char 
 	cursor++;
 	char *end;
 	long result_code = strtol(cursor,&end,10);
-	if( end == cursor || *end != 0 || result_code < HAXEON_NATIVE_VOID || result_code > HAXEON_NATIVE_POINTER ) return false;
+	if( end == cursor || result_code < HAXEON_NATIVE_VOID || result_code > HAXEON_NATIVE_POINTER ) return false;
+	const char *convention = NULL;
+	if( *end == '@' ) convention = end + 1;
+	else if( *end != 0 ) return false;
+	if( !haxeon_native_calling_convention(convention,abi) ) return false;
 	*argument_count = count;
 	*result = (int)result_code;
 	return true;
@@ -507,7 +534,8 @@ HL_PRIM haxeon_native_callback *HL_NAME(native_callback_create)( realtime_bytes 
 	memset(callback,0,sizeof(*callback));
 	callback->finalize = haxeon_native_callback_finalize;
 	atomic_flag_clear(&callback->error_lock);
-	if( !haxeon_native_parse_signature(signature,callback->argument_codes,&callback->argument_count,&callback->result_code) ) {
+	ffi_abi call_abi;
+	if( !haxeon_native_parse_signature(signature,callback->argument_codes,&callback->argument_count,&callback->result_code,&call_abi) ) {
 		free(signature);
 		hl_error("Invalid native callback signature");
 	}
@@ -522,7 +550,7 @@ HL_PRIM haxeon_native_callback *HL_NAME(native_callback_create)( realtime_bytes 
 	}
 	if( callback->result_code == HAXEON_NATIVE_POINTER ) hl_error("Pointer callback results are not supported yet");
 	ffi_type *result = haxeon_native_ffi_type(callback->result_code,true);
-	if( result == NULL || ffi_prep_cif(&callback->cif,FFI_DEFAULT_ABI,(unsigned int)callback->argument_count,result,callback->argument_types) != FFI_OK )
+	if( result == NULL || ffi_prep_cif(&callback->cif,call_abi,(unsigned int)callback->argument_count,result,callback->argument_types) != FFI_OK )
 		hl_error("Could not prepare native callback signature");
 	callback->closure_memory = ffi_closure_alloc(sizeof(ffi_closure),&callback->code);
 	if( callback->closure_memory == NULL || callback->code == NULL ) hl_error("Could not allocate executable native callback memory");
@@ -571,13 +599,17 @@ static haxeon_native_cached_call *haxeon_native_cached_resolve( const char *libr
 		if( strcmp(entry->library,library_name) == 0 && strcmp(entry->symbol,symbol) == 0 && strcmp(entry->signature,signature) == 0 ) return entry;
 	haxeon_native_cached_call *entry = (haxeon_native_cached_call *)calloc(1,sizeof(haxeon_native_cached_call));
 	if( entry == NULL ) hl_error("Could not allocate ordinary C call cache entry");
-	if( !haxeon_native_parse_signature(signature,entry->argument_codes,&entry->argument_count,&entry->result_code) )
+	ffi_abi call_abi;
+	if( !haxeon_native_parse_signature(signature,entry->argument_codes,&entry->argument_count,&entry->result_code,&call_abi) )
 		hl_error("Invalid ordinary C call signature");
 	haxeon_native_library *library = HL_NAME(native_open)((vbyte *)library_name,(int)strlen(library_name));
 	if( library == NULL ) hl_error("Could not open ordinary C library: %s",haxeon_native_error);
 	entry->function = HL_NAME(native_resolve)(library,(vbyte *)symbol,(int)strlen(symbol),entry->argument_codes,entry->argument_count,entry->result_code);
 	HL_NAME(native_close)(library);
 	if( entry->function == NULL ) hl_error("Could not resolve ordinary C symbol: %s",haxeon_native_error);
+	ffi_type *ffi_result = haxeon_native_ffi_type(entry->result_code,true);
+	if( ffi_prep_cif(&entry->function->cif,call_abi,(unsigned int)entry->argument_count,ffi_result,entry->function->argument_types) != FFI_OK )
+		hl_error("Could not prepare ordinary C calling convention");
 	entry->library = haxeon_native_string((const vbyte *)library_name,(int)strlen(library_name));
 	entry->symbol = haxeon_native_string((const vbyte *)symbol,(int)strlen(symbol));
 	entry->signature = haxeon_native_string((const vbyte *)signature,(int)strlen(signature));
@@ -735,11 +767,14 @@ static realtime_bytes *haxeon_native_bytes_invoke( vbyte *library, vbyte *symbol
 	const char *separator = strchr(signature_utf8,'>');
 	if( separator == NULL ) hl_error("Invalid ordinary C byte pointer signature");
 	size_t prefix = (size_t)(separator - signature_utf8) + 1;
-	char length_signature[HAXEON_NATIVE_MAX_ARGUMENTS * 3 + 4];
-	if( prefix + 2 > sizeof(length_signature) ) hl_error("Ordinary C byte length signature is too large");
+	const char *convention = strchr(separator,'@');
+	size_t convention_length = convention == NULL ? 0 : strlen(convention);
+	char length_signature[HAXEON_NATIVE_MAX_ARGUMENTS * 3 + 20];
+	if( prefix + 2 + convention_length > sizeof(length_signature) ) hl_error("Ordinary C byte length signature is too large");
 	memcpy(length_signature,signature_utf8,prefix);
 	length_signature[prefix] = sizeof(size_t) == 8 ? '8' : '6';
-	length_signature[prefix + 1] = 0;
+	if( convention_length > 0 ) memcpy(length_signature + prefix + 1,convention,convention_length);
+	length_signature[prefix + 1 + convention_length] = 0;
 	vbyte *length_signature_value = realtime_string_from_utf8(length_signature);
 	vdynamic *length_result = haxeon_native_invoke(library,length_symbol,length_signature_value,arguments,argument_count);
 	uint64_t length;

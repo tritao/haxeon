@@ -3,6 +3,10 @@
 typedef uint32_t sample_handle;
 typedef int32_t (*sample_binary_callback)(int32_t, int32_t);
 typedef void (*sample_visit_callback)(const struct sample_options *, void *);
+#ifdef _WIN32
+typedef int32_t (__stdcall *sample_stdcall_callback)(int32_t);
+int32_t __stdcall sample_stdcall_function(int32_t value);
+#endif
 
 enum {
     SAMPLE_OK = 0,

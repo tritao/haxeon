@@ -44,7 +44,7 @@ class HxiProjection {
 					name: model.name + "." + fn.name,
 					library: library,
 					symbol: fn.symbol,
-					signature: codes.join(",") + ">" + returnValue.code,
+					signature: callSignature(codes.join(",") + ">" + returnValue.code, fn.callConvention),
 					arguments: arguments,
 					result: managedBytes ? Abstract("realtime_bytes") : irType(returnValue.code, true),
 					pointerOwnership: ownership.kind,
@@ -68,14 +68,14 @@ class HxiProjection {
 			hasCallbacks = false;
 		for (declaration in model.declarations)
 			switch declaration {
-				case Opaque(name, _) | Alias(name, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _):
+				case Opaque(name, _) | Alias(name, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _):
 					declarations.set(name, declaration);
 				case _:
 			}
 		output.add('// Generated semantic projection of ${model.name}. Do not edit.\n');
 		for (declaration in model.declarations)
 			switch declaration {
-				case Callback(_, _, _, _):
+				case Callback(_, _, _, _, _):
 					hasCallbacks = true;
 				case _:
 			}
@@ -83,7 +83,7 @@ class HxiProjection {
 			output.add('enum abstract HxiCallbackError(Int) from Int to Int { var None = 0; var Exception = 1; var WrongThread = 2; var PointerContract = 3; }\n');
 		for (declaration in model.declarations)
 			switch declaration {
-				case Callback(name, parameters, result, _):
+				case Callback(name, parameters, result, callConvention, _):
 					var argumentTypes = [], codes = [], pointerSizes = [], pointerNullable = [], supported = true;
 					for (parameter in parameters) {
 						var classified = abi.classify(parameter.type),
@@ -111,7 +111,7 @@ class HxiProjection {
 					var returnValue = project(abi.classify(result, true), true);
 					if (!supported || returnValue == null)
 						continue;
-					var signature = codes.join(",") + ">" + returnValue.code;
+					var signature = callSignature(codes.join(",") + ">" + returnValue.code, callConvention);
 					output.add('typedef $name = (${argumentTypes.join(", ")})->${returnValue.haxeType};\n');
 					output.add('abstract ${name}Callback(hl.Abstract<"native_callback">) {\n');
 					output.add('\tpublic inline function new(callback:$name) this = ${model.name}.__hxi_callback_create(haxe.io.Bytes.ofString("$signature"), haxe.io.Bytes.ofString("${pointerSizes.join(",")}"), haxe.io.Bytes.ofString("${pointerNullable.join(",")}"), callback);\n');
@@ -230,7 +230,7 @@ class HxiProjection {
 			var result = project(fn.result, true);
 			if (!supported || result == null)
 				continue;
-			var signature = codes.join(",") + ">" + result.code;
+			var signature = callSignature(codes.join(",") + ">" + result.code, fn.callConvention);
 			output.add('@:cNative("${escape(library)}", "${escape(fn.symbol)}", "$signature")\n');
 			output.add('extern function ${fn.name}(');
 			output.add([for (index in 0...argumentTypes.length) 'arg$index:${argumentTypes[index]}'].join(", "));
@@ -328,6 +328,9 @@ class HxiProjection {
 
 	static function escape(value:String):String
 		return StringTools.replace(StringTools.replace(value, "\\", "\\\\"), '"', '\\"');
+
+	static function callSignature(signature:String, convention:String):String
+		return convention == "cdecl" ? signature : signature + "@" + convention;
 
 	static function structAccess(code:Int):Null<String>
 		return switch code {

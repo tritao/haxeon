@@ -13,6 +13,7 @@ class HxiCallMain {
 			+ '\topaque fixture_context;\n'
 			+ '\tenum FixtureResult : i32 { TEN = 10; ELEVEN = 11; TWENTY_ONE = 21; }\n'
 			+ '\tcallback FixtureBinary = fn(left: i32, right: i32) -> i32;\n'
+			+ '\tcallback FixtureSystemBinary = fn(left: i32, right: i32) -> i32 @callconv("system");\n'
 			+ '\tcallback FixtureEvent = fn(event: ptr<const<fixture_point>>, userData: nullable<ptr<void>>) -> i32;\n'
 			+ '\tstruct fixture_options @layout(32, 8) { count: i32 @offset(0); scale: f64 @offset(8); token: i64 @offset(16); delta: i16 @offset(24); }\n'
 			+ '\tstruct fixture_point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); }\n'
@@ -26,8 +27,11 @@ class HxiCallMain {
 			+ '\textern fn checkHolder(holder: ptr<const<fixture_holder>>) -> i32 @symbol("native_fixture_check_holder");\n'
 			+ '\textern fn checkArrays(arrays: ptr<const<fixture_arrays>>) -> i32 @symbol("native_fixture_check_arrays");\n'
 			+ '\textern fn add(left: i32, right: i32) -> i32 @symbol("native_fixture_add");\n'
+			+ '\textern fn systemAdd(left: i32, right: i32) -> i32 @symbol("native_fixture_add") @callconv("system");\n'
 			+ '\textern fn enumAdd(left: FixtureResult, right: FixtureResult) -> FixtureResult @symbol("native_fixture_add");\n'
 			+ '\textern fn callCallback(callback: FixtureBinary, left: i32, right: i32) -> i32 @symbol("native_fixture_call_callback");\n'
+			+
+			'\textern fn callSystemCallback(callback: FixtureSystemBinary, left: i32, right: i32) -> i32 @symbol("native_fixture_call_callback") @callconv("system");\n'
 			+ '\textern fn callCallbackOnThread(callback: FixtureBinary) -> i32 @symbol("native_fixture_call_callback_on_thread");\n'
 			+ '\textern fn callEvent(callback: FixtureEvent, withUserData: i32) -> i32 @symbol("native_fixture_call_event");\n'
 			+ '\textern fn callInvalidEvent(callback: FixtureEvent) -> i32 @symbol("native_fixture_call_invalid_event");\n'
@@ -62,13 +66,16 @@ class HxiCallMain {
 		mainSource = StringTools.replace(mainSource, "var borrowed = Fixture.borrowed();",
 			'var arrays = new fixture_arrays(); arrays.set_values(0, 10); arrays.set_values(1, 11); arrays.set_values(2, 12); arrays.set_name_bytes(haxe.io.Bytes.ofString("ABCD")); arrays.set_points(0, start); arrays.set_points(1, end); var arrayFields = arrays.get_values(1) == 11 && arrays.get_name(2) == 67 && arrays.get_points(1).get_x() == 20 && Fixture.checkArrays(arrays) == 42; var borrowed = Fixture.borrowed();');
 		mainSource = StringTools.replace(mainSource, "var structure = ", "var structure = arrayFields && ");
-		mainSource = StringTools.replace(mainSource, "Fixture.clearCallback(); callbacks = callbacks && Fixture.callCallbackOnThread",
-			"var replacement = new FixtureBinaryCallback(function(left:Int, right:Int) return left * right); Fixture.setNullableCallback(replacement); callbacks = callbacks && Fixture.callRetainedCallback(6, 7) == 42; Fixture.setNullableCallback(null); callbacks = callbacks && Fixture.callRetainedCallback(6, 7) == 0 && replacement.close(); callbacks = callbacks && Fixture.callCallbackOnThread");
 		mainSource = StringTools.replace(mainSource, "var options = new fixture_options();",
 			'var callback = new FixtureBinaryCallback(function(left:Int, right:Int) return left + right); var callbacks = Fixture.callCallback(callback, 19, 23) == 42; Fixture.setCallback(callback); callbacks = callbacks && Fixture.callRetainedCallback(20, 22) == 42; Fixture.clearCallback(); callbacks = callbacks && Fixture.callCallbackOnThread(callback) == 0 && callback.errorKind() == HxiCallbackError.WrongThread && callback.takeError() != null && callback.errorKind() == HxiCallbackError.None && callback.close() && !callback.close(); var failing = new FixtureBinaryCallback(function(left:Int, right:Int) { if (left == 1) throw "callback boom"; return right; }); callbacks = callbacks && Fixture.callCallback(failing, 1, 2) == 0 && failing.errorKind() == HxiCallbackError.Exception; var failure = failing.takeError(); callbacks = callbacks && failure != null && failing.errorKind() == HxiCallbackError.None && failing.takeError() == null && failing.close(); var retained:Null<hl.Abstract<"native_pointer">> = null; var eventCallback = new FixtureEventCallback(function(event:fixture_point, userData:Null<hl.Abstract<"native_pointer">>) { retained = userData; return event.get_x() + event.get_y() + (userData == null ? 0 : 1); }); callbacks = callbacks && Fixture.callEvent(eventCallback, 1) == 22 && retained != null && NativePointer.native_pointer_is_closed(retained) && Fixture.callEvent(eventCallback, 0) == 21 && Fixture.callInvalidEvent(eventCallback) == 0 && eventCallback.errorKind() == HxiCallbackError.PointerContract; var pointerFailure = eventCallback.takeError(); callbacks = callbacks && pointerFailure != null && eventCallback.takeError() == null && eventCallback.close(); var options = new fixture_options();');
+		mainSource = StringTools.replace(mainSource, "var callback = new FixtureBinaryCallback",
+			"var systemCallback = new FixtureSystemBinaryCallback(function(left:Int, right:Int) return left + right); var systemCalls = Fixture.systemAdd(19, 23) == 42 && Fixture.callSystemCallback(systemCallback, 20, 22) == 42 && systemCallback.close(); var callback = new FixtureBinaryCallback");
+		mainSource = StringTools.replace(mainSource, "Fixture.clearCallback(); callbacks = callbacks && Fixture.callCallbackOnThread",
+			"var replacement = new FixtureBinaryCallback(function(left:Int, right:Int) return left * right); Fixture.setNullableCallback(replacement); callbacks = callbacks && Fixture.callRetainedCallback(6, 7) == 42; Fixture.setNullableCallback(null); callbacks = callbacks && Fixture.callRetainedCallback(6, 7) == 0 && replacement.close(); callbacks = callbacks && Fixture.callCallbackOnThread");
 		mainSource = StringTools.replace(mainSource, "return structure && buffers && pointers && ",
 			"return structure && buffers && pointers && Fixture.enumAdd(FixtureResult.TEN, FixtureResult.ELEVEN) == FixtureResult.TWENTY_ONE && ");
-		mainSource = StringTools.replace(mainSource, "return structure && buffers && pointers && ", "return callbacks && structure && buffers && pointers && ");
+		mainSource = StringTools.replace(mainSource, "return structure && buffers && pointers && ",
+			"return systemCalls && callbacks && structure && buffers && pointers && ");
 		compiler.update("Main.hx", mainSource);
 		compiler.compile("Main");
 		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module));

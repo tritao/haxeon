@@ -49,8 +49,9 @@ enum HxiDeclaration {
 	Constant(name:String, value:String, span:SourceSpan);
 	Structure(name:String, size:Int, align:Int, fields:Array<HxiField>, span:SourceSpan);
 	Enumeration(name:String, representation:HxiType, flags:Bool, values:Array<HxiEnumValue>, span:SourceSpan);
-	Callback(name:String, parameters:Array<HxiParameter>, result:HxiType, span:SourceSpan);
-	Function(name:String, parameters:Array<HxiParameter>, result:HxiType, symbol:Null<String>, leaf:Bool, resultPolicy:HxiResultPolicy, span:SourceSpan);
+	Callback(name:String, parameters:Array<HxiParameter>, result:HxiType, callConvention:String, span:SourceSpan);
+	Function(name:String, parameters:Array<HxiParameter>, result:HxiType, symbol:Null<String>, leaf:Bool, callConvention:String, resultPolicy:HxiResultPolicy,
+		span:SourceSpan);
 }
 
 class HxiInterface {

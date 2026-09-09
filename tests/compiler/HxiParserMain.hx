@@ -32,7 +32,7 @@ class HxiParserMain {
 				throw "expected parsed structure";
 		}
 		switch parsed.declarations[5] {
-			case Function("nk_open", _, Named("nk_handle"), "nk_open_v1", false, _, _):
+			case Function("nk_open", _, Named("nk_handle"), "nk_open_v1", false, "cdecl", _, _):
 			case _:
 				throw "expected symbol-bound function";
 		}
@@ -71,6 +71,14 @@ class HxiParserMain {
 			'interface callbacks @target("x86_64-linux-gnu") @library("callbacks") { callback Binary = fn(value: i32) -> i32; extern fn set(callback: nullable<Binary>) -> void; }');
 		expect(HxiProjection.source(nullableCallbacks).indexOf("extern function set(arg0:Null<BinaryCallback>):Void") >= 0,
 			"nullable callback parameters should project as nullable managed handles");
+		var conventions = HxiParser.parse("conventions.hxi",
+			'interface conventions @target("i686-pc-windows-msvc") @library("calls") { callback Hook = fn(value: i32) -> i32 @callconv("stdcall"); extern fn invoke(hook: Hook) -> i32 @callconv("system"); }');
+		var conventionSource = HxiProjection.source(conventions);
+		expect(conventionSource.indexOf('haxe.io.Bytes.ofString("5>5@stdcall")') >= 0
+			&& conventionSource.indexOf('@:cNative("calls", "invoke", "11>5@system")') >= 0,
+			"calling conventions should be part of callback and function ABI identity");
+		expectError('interface bad @target("x86_64-linux-gnu") { extern fn value() -> i32 @callconv("stdcall"); }', "only available for Windows");
+		expectError('interface bad @target("x86_64-linux-gnu") { callback Value = fn() -> i32 @callconv("fastcall"); }', "unsupported calling convention");
 		expectError('interface bad @target("x86_64-linux-gnu") { callback Binary = fn(value: i32) -> i32; extern fn get() -> nullable<Binary>; }',
 			"cannot return a callback handle yet");
 		var callbackCompiler = new Compiler();
@@ -98,7 +106,7 @@ class HxiParserMain {
 		var pointerPolicies = HxiParser.parse("pointers.hxi",
 			'interface pointers @target("x86_64-linux-gnu") @library("pointers") { opaque context; extern fn create() -> ptr<u8> @owned("context_destroy") @length("context_size"); extern fn current() -> nullable<ptr<context>> @borrowed; }');
 		switch pointerPolicies.declarations[1] {
-			case Function(_, _, _, _, _, {ownership: Owned("context_destroy"), length: "context_size"}, _):
+			case Function(_, _, _, _, _, "cdecl", {ownership: Owned("context_destroy"), length: "context_size"}, _):
 			case _:
 				throw "owned pointer result policy was not retained";
 		}

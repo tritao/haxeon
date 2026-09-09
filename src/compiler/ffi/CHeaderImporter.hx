@@ -101,7 +101,7 @@ class CHeaderImporter {
 						for (index in 0...callback.arguments.length)
 							'arg$index: ${mapType(callback.arguments[index])}'
 					].join(", "));
-					output.add(') -> ${mapType(callback.result)};\n');
+					output.add(') -> ${mapType(callback.result)}${callback.callConvention == "cdecl" ? "" : ' @callconv("' + callback.callConvention + '")'};\n');
 				} else if (!StringTools.startsWith(qualified, "struct ") && !StringTools.startsWith(qualified, "enum "))
 					output.add('\ttype $name = ${mapType(qualified)};\n');
 			case "RecordDecl":
@@ -125,25 +125,42 @@ class CHeaderImporter {
 				if (field(node, "variadic") == true)
 					throw '${declarationLocation(node)}: unsupported variadic function "$name"';
 				var parameters = [for (child in children(node)) if (field(child, "kind") == "ParmVarDecl") child];
-				var signature:String = field(type, "qualType"),
+				var rawSignature:String = field(type, "qualType"),
+					callConvention = callingConvention(rawSignature),
+					signature = stripCallingConvention(rawSignature),
 					result = StringTools.trim(signature.substring(0, signature.lastIndexOf("(")));
 				output.add('\textern fn $name(');
 				output.add([
 					for (parameter in parameters)
 						'${field(parameter, "name")}: ${mapType(field(field(parameter, "type"), "qualType"))}'
 				].join(", "));
-				output.add(') -> ${mapType(result)};\n');
+				output.add(') -> ${mapType(result)}${callConvention == "cdecl" ? "" : ' @callconv("' + callConvention + '")'};\n');
 		}
 	}
 
-	static function functionPointer(type:String):Null<{arguments:Array<String>, result:String}> {
+	static function functionPointer(type:String):Null<{arguments:Array<String>, result:String, callConvention:String}> {
+		var callConvention = callingConvention(type);
+		type = stripCallingConvention(type);
 		var pattern = ~/^(.+)\(\s*\*\s*\)\s*\((.*)\)$/;
 		if (!pattern.match(StringTools.trim(type)))
 			return null;
 		var arguments = StringTools.trim(pattern.matched(2));
 		return {
 			result: StringTools.trim(pattern.matched(1)),
-			arguments: arguments == "" || arguments == "void" ? [] : [for (argument in arguments.split(",")) StringTools.trim(argument)]};
+			arguments: arguments == "" || arguments == "void" ? [] : [for (argument in arguments.split(",")) StringTools.trim(argument)],
+			callConvention: callConvention
+		};
+	}
+
+	static function callingConvention(type:String):String
+		return type.indexOf("__attribute__((stdcall))") >= 0 || type.indexOf("__stdcall") >= 0 ? "stdcall" : "cdecl";
+
+	static function stripCallingConvention(type:String):String {
+		type = StringTools.replace(type, " __attribute__((stdcall))", "");
+		type = StringTools.replace(type, " __attribute__((cdecl))", "");
+		type = StringTools.replace(type, " __stdcall", "");
+		type = StringTools.replace(type, " __cdecl", "");
+		return StringTools.trim(type);
 	}
 
 	static function mapType(value:String):String {

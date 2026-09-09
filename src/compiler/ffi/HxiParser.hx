@@ -115,8 +115,11 @@ class HxiParser {
 		expect("fn");
 		var parameters = parseParameters();
 		expect("->");
-		var result = parseType(), end = expect(";").span;
-		return Callback(name, parameters, result, start.merge(end));
+		var result = parseType(),
+			metadata = parseMetadata(["callconv"]),
+			callConvention = metadataValue(metadata, "callconv", false);
+		var end = expect(";").span;
+		return Callback(name, parameters, result, callConvention == null ? "cdecl" : callConvention, start.merge(end));
 	}
 
 	function parseParameters():Array<HxiParameter> {
@@ -237,18 +240,19 @@ class HxiParser {
 		var parameters = parseParameters();
 		expect("->");
 		var result = parseType(),
-			metadata = parseMetadata(["symbol", "leaf", "borrowed", "owned", "length"]),
+			metadata = parseMetadata(["symbol", "leaf", "borrowed", "owned", "length", "callconv"]),
 			symbol = metadataValue(metadata, "symbol", false),
 			leaf = metadataFlag(metadata, "leaf"),
 			borrowed = metadataFlag(metadata, "borrowed"),
 			owned = metadataValue(metadata, "owned", false),
 			length = metadataValue(metadata, "length", false),
+			callConvention = metadataValue(metadata, "callconv", false),
 			end = expect(";").span;
 		if (borrowed && owned != null)
 			fail('Function "$name" cannot combine @borrowed and @owned', start);
 		if ((borrowed || owned != null || length != null) && !pointerLike(result))
 			fail('Pointer result metadata on "$name" requires a pointer return type', start);
-		return Function(name, parameters, result, symbol, leaf, {
+		return Function(name, parameters, result, symbol, leaf, callConvention == null ? "cdecl" : callConvention, {
 			ownership: owned != null ? Owned(owned) : borrowed ? Borrowed : Unspecified,
 			length: length
 		}, start.merge(end));
@@ -355,13 +359,15 @@ class HxiParser {
 							fail('Value "${entry.name}" duplicates "${seenValues.get(entry.value)}" in enum "$name"', entry.span);
 						seenValues.set(entry.value, entry.name);
 					}
-				case Callback(name, parameters, result, span):
+				case Callback(name, parameters, result, callConvention, span):
+					validateCallConvention(name, callConvention, abi, span);
 					if (parameters.length > 16)
 						fail('Callback "$name" exceeds the 16 argument limit', span);
 					for (parameter in parameters)
 						validateCallbackType(parameter.type, abi, parameter.span, false);
 					validateCallbackType(result, abi, span, true);
-				case Function(name, parameters, result, _, _, resultPolicy, span):
+				case Function(name, parameters, result, _, _, callConvention, resultPolicy, span):
+					validateCallConvention(name, callConvention, abi, span);
 					for (parameter in parameters)
 						validateType(parameter.type, names, declarationsByName, parameter.span, false);
 					validateType(result, names, declarationsByName, span, true);
@@ -372,6 +378,13 @@ class HxiParser {
 					if (resultPolicy.length != null && !bytePointerLike(result, declarationsByName))
 						fail('@length on "$name" requires a pointer to byte-sized data or void', span);
 			}
+	}
+
+	function validateCallConvention(name:String, convention:String, abi:HxiAbi, span:SourceSpan):Void {
+		if (convention != "cdecl" && convention != "stdcall" && convention != "system")
+			fail('Declaration "$name" has unsupported calling convention "$convention"', span);
+		if (convention == "stdcall" && abi.target.indexOf("windows") < 0 && abi.target.indexOf("mingw") < 0 && abi.target.indexOf("msvc") < 0)
+			fail('Calling convention "stdcall" is only available for Windows targets', span);
 	}
 
 	function validateCallbackType(type:HxiType, abi:HxiAbi, span:SourceSpan, allowVoid:Bool):Void
@@ -512,7 +525,7 @@ class HxiParser {
 					case Pointer(_):
 					case Named(name):
 						switch declarations.get(name) {
-							case Callback(_, _, _, _):
+							case Callback(_, _, _, _, _):
 							case _: fail("nullable<> requires a pointer or callback type", span);
 						}
 					default: fail("nullable<> requires a pointer or callback type", span);
@@ -527,7 +540,7 @@ class HxiParser {
 	static function declarationName(value:HxiDeclaration):{name:String, span:SourceSpan}
 		return switch value {
 			case Opaque(name, span) | Alias(name, _, span) | Constant(name, _, span) | Structure(name, _, _, _, span) | Enumeration(name, _, _, _, span) |
-				Callback(name, _, _, span) | Function(name, _, _, _, _, _, span):
+				Callback(name, _, _, _, span) | Function(name, _, _, _, _, _, _, span):
 				{name: name, span: span};
 		}
 

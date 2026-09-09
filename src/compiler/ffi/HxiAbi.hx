@@ -28,6 +28,7 @@ typedef HxiFunctionAbi = {
 	final arguments:Array<HxiAbiValue>;
 	final result:HxiAbiValue;
 	final leaf:Bool;
+	final callConvention:String;
 	final resultPolicy:HxiResultPolicy;
 }
 
@@ -64,7 +65,7 @@ class HxiAbi {
 		var result:Array<HxiFunctionAbi> = [];
 		for (declaration in model.declarations)
 			switch declaration {
-				case Function(name, parameters, returnType, symbol, leaf, resultPolicy, _):
+				case Function(name, parameters, returnType, symbol, leaf, callConvention, resultPolicy, _):
 					result.push({
 						name: name,
 						symbol: symbol == null ? name : symbol,
@@ -72,6 +73,7 @@ class HxiAbi {
 						arguments: [for (parameter in parameters) classify(parameter.type, false)],
 						result: classify(returnType, true),
 						leaf: leaf,
+						callConvention: callConvention,
 						resultPolicy: resultPolicy
 					});
 				case _:
@@ -106,7 +108,7 @@ class HxiAbi {
 							case IntegerValue(bits, sign): EnumerationValue(name, bits, sign);
 							case _: throw 'Enum HXI type "$name" does not have an integer representation';
 						}
-					case Callback(_, parameters, result, _):
+					case Callback(_, parameters, result, _, _):
 						CallbackValue(name, [for (parameter in parameters) classify(parameter.type)], classify(result, true), false);
 					case Structure(_, size, align, _, _): AggregateValue(size, align);
 					case Opaque(_, _): throw 'Opaque HXI type "$name" cannot be passed by value';
@@ -162,6 +164,6 @@ class HxiAbi {
 	static function nameOf(declaration:HxiDeclaration):String
 		return switch declaration {
 			case Opaque(name, _) | Alias(name, _, _) | Constant(name, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _) |
-				Callback(name, _, _, _) | Function(name, _, _, _, _, _, _): name;
+				Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _, _): name;
 		};
 }

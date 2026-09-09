@@ -25,6 +25,11 @@ class CHeaderImporterMain {
 		expect(first.indexOf("int_fast16_t") < 0, "system-header declarations should not leak into imported HXI");
 		var parsed = HxiParser.parse("import_fixture.hxi", first);
 		expect(parsed.target == "x86_64-linux-gnu", "generated HXI should satisfy the validated parser contract");
+		var windows = CHeaderImporter.importHeader("tests/ffi/import_fixture.h", "i686-w64-windows-gnu", ["tests/ffi"]);
+		expect(windows.indexOf('callback sample_stdcall_callback = fn(arg0: i32) -> i32 @callconv("stdcall")') >= 0
+			&& windows.indexOf('extern fn sample_stdcall_function(value: i32) -> i32 @callconv("stdcall")') >= 0,
+			"Clang calling conventions should survive callback and function import");
+		HxiParser.parse("import_fixture-windows.hxi", windows);
 		var diagnostic = "";
 		try
 			CHeaderImporter.importHeader("tests/ffi/unsupported_fixture.h", "x86_64-linux-gnu", ["tests/ffi"])
