@@ -687,6 +687,8 @@ class TestMain {
 			"--dump-function=42",
 			"--ffi-header=out/sample.h",
 			"--ffi-library=sample",
+			"--ffi-interface=generated/nativekit.hxi",
+			"--ffi-interface=generated/system.hxi",
 			"source/Main.hx"
 		]);
 		if (compilerRequest.output != "out/sample.hl"
@@ -694,6 +696,7 @@ class TestMain {
 			|| compilerRequest.dumpFunction != 42
 			|| compilerRequest.roots.length != 1
 			|| compilerRequest.paths.length != 1
+			|| compilerRequest.ffiInterfaces.join(",") != "generated/nativekit.hxi,generated/system.hxi"
 			|| compilerRequest.ffiLibrary != "sample")
 			throw "Compiler CLI did not produce a typed build request";
 		var rejectedFfiPair = false;

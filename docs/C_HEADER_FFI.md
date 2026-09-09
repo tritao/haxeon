@@ -26,13 +26,26 @@ Plain C integer types retain ABI-specific names such as `c_int` and `c_long`;
 they are not incorrectly assumed to have a platform-independent width. The
 optional library name becomes interface-level `@library` metadata.
 
+Pass one or more generated interfaces to the compiler with repeatable options:
+
+```sh
+haxeon-compiler \
+  --ffi-interface=generated/nativekit.hxi \
+  --entry=app.Main \
+  sources.manifest
+```
+
+Interfaces are parsed and registered before source loading. Their names must be
+unique, and the registered set becomes immutable after the first compilation,
+matching the existing native-table stability rule for live modules.
+
 Clang must be available as `clang`. Variadic functions and flexible array
 members are rejected with declaration diagnostics instead of being assigned an
 unsafe approximation.
 
 Raw HXI is the generated ABI interchange layer. It deliberately contains no
 high-level ownership, lifetime, event, or error semantics; those belong in a
-small handwritten Haxe wrapper. Haxeon parses it into a validated ABI model,
-including opaque types and `@symbol`/`@leaf` function metadata. The main
-frontend does not load that model yet; module loading and lowering are the next
-stage.
+small handwritten Haxe wrapper. Haxeon parses and loads it into a validated ABI
+model, including opaque types and `@symbol`/`@leaf` function metadata. Imported
+declarations are not source-visible yet; semantic projection and lowering are
+the next stage.

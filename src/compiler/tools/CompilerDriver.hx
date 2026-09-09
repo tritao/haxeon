@@ -15,6 +15,10 @@ class CompilerDriver {
 		report("loading " + Std.string(request.paths.length) + " sources");
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
+		for (path in request.ffiInterfaces) {
+			report("loading FFI interface " + path);
+			compiler.addFfiInterface(path, File.getContent(path));
+		}
 		compiler.addSourceRoot("stdlib");
 		SourceManifestLoader.load(compiler, request.roots, request.paths);
 		report("compiling entry " + request.entry);

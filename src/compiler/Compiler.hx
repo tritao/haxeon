@@ -47,6 +47,13 @@ import compiler.modules.ModuleSourceLoader;
 import compiler.semantic.ModuleCanonicalizer;
 import compiler.semantic.LambdaCollector;
 import compiler.semantic.SemanticWorkspace;
+import compiler.ffi.HxiModel.HxiInterface;
+import compiler.ffi.HxiParser;
+
+typedef FfiInterfaceSource = {
+	final path:String;
+	final text:String;
+}
 
 /** Public alias for a host-native declaration accepted by the compiler. */
 typedef NativeFunction = NativeDefinition;
@@ -143,6 +150,8 @@ class Compiler {
 	public var types(default, null):TypeRegistry;
 
 	final natives:NativeRegistry;
+	final ffiInterfaceSources:Array<FfiInterfaceSource> = [];
+	final ffiInterfaceModels:Map<String, HxiInterface> = [];
 	var objectCache:Map<String, IrObject> = [];
 	var publishedAbi:Null<RuntimeAbiDescriptor>;
 	var compiledOnce = false;
@@ -154,9 +163,12 @@ class Compiler {
 	var cachedCompileResult:Null<CompileResult>;
 	var cachedSemanticProgram:Null<SemanticProgram>;
 
-	public function new(?identityState:Bytes, ?nativeConfiguration:Array<NativeFunction>) {
+	public function new(?identityState:Bytes, ?nativeConfiguration:Array<NativeFunction>, ?ffiConfiguration:Array<FfiInterfaceSource>) {
 		semanticWorkspace = new SemanticWorkspace(modules);
 		natives = new NativeRegistry(nativeConfiguration);
+		if (ffiConfiguration != null)
+			for (source in ffiConfiguration)
+				addFfiInterface(source.path, source.text);
 		if (identityState == null) {
 			genericSpecializations = new GenericSpecializationRegistry();
 			moduleId = HlRuntimeIdentity.createModuleId();
@@ -230,6 +242,28 @@ class Compiler {
 	public function nativeConfiguration():Array<NativeFunction> {
 		return natives.configuration();
 	}
+
+	/** Parse and register one immutable target-specific ABI interface before compilation. */
+	public function addFfiInterface(path:String, source:String):Void {
+		if (compiledOnce)
+			throw "FFI interfaces are frozen after the first compilation";
+		var model = HxiParser.parse(path, source);
+		if (ffiInterfaceModels.exists(model.name))
+			throw 'FFI interface "${model.name}" is already registered';
+		ffiInterfaceModels.set(model.name, model);
+		ffiInterfaceSources.push({path: path, text: source});
+		sourceGeneration++;
+	}
+
+	/** Validated ABI interfaces in deterministic interface-name order. */
+	public function ffiInterfaces():Array<HxiInterface> {
+		var names = [for (name in ffiInterfaceModels.keys()) name];
+		names.sort(Reflect.compare);
+		return [for (name in names) ffiInterfaceModels.get(name)];
+	}
+
+	function ffiConfiguration():Array<FfiInterfaceSource>
+		return [for (source in ffiInterfaceSources) {path: source.path, text: source.text}];
 
 	/** Add a filesystem root whose modules are loaded on demand during resolution. */
 	public function addSourceRoot(path:String):Void {
@@ -342,7 +376,7 @@ class Compiler {
 	}
 
 	function fork():Compiler {
-		var candidate = new Compiler(exportIdentityState(), nativeConfiguration());
+		var candidate = new Compiler(exportIdentityState(), nativeConfiguration(), ffiConfiguration());
 		candidate.sourceLoader = sourceLoader.copy();
 		candidate.configurationIdentity = configurationIdentity;
 		candidate.configurationScopeIdentity = configurationScopeIdentity;
@@ -474,7 +508,7 @@ class Compiler {
 	}
 
 	function createCandidate(snapshot:CompilerSnapshot, startingAssembler:Null<HlModuleAssembler>):Compiler {
-		var candidate = new Compiler(exportIdentityState(), nativeConfiguration());
+		var candidate = new Compiler(exportIdentityState(), nativeConfiguration(), ffiConfiguration());
 		candidate.sourceLoader = sourceLoader.copy();
 		candidate.configurationIdentity = configurationIdentity;
 		candidate.configurationScopeIdentity = configurationScopeIdentity;

@@ -8,6 +8,7 @@ class CompilerArguments {
 			dumpFunction = -1,
 			ffiHeader:Null<String> = null,
 			ffiLibrary:Null<String> = null,
+			ffiInterfaces:Array<String> = [],
 			roots:Array<String> = [],
 			paths:Array<String> = [];
 		for (argument in arguments)
@@ -21,6 +22,8 @@ class CompilerArguments {
 				ffiHeader = value(argument, "--ffi-header=");
 			else if (StringTools.startsWith(argument, "--ffi-library="))
 				ffiLibrary = value(argument, "--ffi-library=");
+			else if (StringTools.startsWith(argument, "--ffi-interface="))
+				ffiInterfaces.push(value(argument, "--ffi-interface="));
 			else if (StringTools.startsWith(argument, "--dump-function="))
 				dumpFunction = parseIndex(value(argument, "--dump-function="));
 			else if (StringTools.startsWith(argument, "--"))
@@ -39,6 +42,7 @@ class CompilerArguments {
 			dumpFunction: dumpFunction,
 			ffiHeader: ffiHeader,
 			ffiLibrary: ffiLibrary,
+			ffiInterfaces: ffiInterfaces,
 			roots: roots,
 			paths: paths
 		};

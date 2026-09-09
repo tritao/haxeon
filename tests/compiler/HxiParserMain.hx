@@ -1,4 +1,5 @@
 import compiler.Diagnostic.CompileError;
+import compiler.Compiler;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiType;
 import compiler.ffi.HxiParser;
@@ -40,6 +41,16 @@ class HxiParserMain {
 		expectError(StringTools.replace(valid, '@target("x86_64-linux-gnu")', "@target(42)"), "requires a string value");
 		expectError(StringTools.replace(valid, "@leaf", "@leaf(1)"), "does not accept values");
 		expectError(StringTools.replace(valid, "@leaf", "@unknown"), "Unsupported @unknown metadata");
+		var compiler = new Compiler();
+		compiler.addFfiInterface("nativekit.hxi", valid);
+		expect(compiler.ffiInterfaces().length == 1
+			&& compiler.ffiInterfaces()[0].library == "nativekit", "compiler should retain validated FFI models");
+		var duplicateRejected = false;
+		try
+			compiler.addFfiInterface("duplicate.hxi", valid)
+		catch (_:Dynamic)
+			duplicateRejected = true;
+		expect(duplicateRejected, "compiler should reject duplicate FFI interface names");
 		Sys.println("PASS: raw HXI parses into a validated ABI model");
 	}
 

@@ -6,6 +6,7 @@ typedef CompilerRequest = {
 	final dumpFunction:Int;
 	final ffiHeader:Null<String>;
 	final ffiLibrary:Null<String>;
+	final ffiInterfaces:Array<String>;
 	final roots:Array<String>;
 	final paths:Array<String>;
 }
