@@ -425,6 +425,9 @@ class SsaBuilder {
 				case Call(out, name, args):
 					var result = define(out);
 					emit(target, Call(result, name, [for (arg in args) resolve(arg)]), provenance);
+				case CNativeCall(out, name, args):
+					var result = define(out);
+					emit(target, CNativeCall(result, name, [for (arg in args) resolve(arg)]), provenance);
 				case StaticClosure(out, name):
 					var result = define(out);
 					emit(target, StaticClosure(result, name), provenance);

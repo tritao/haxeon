@@ -53,9 +53,21 @@ unsafe approximation.
 Raw HXI is the generated ABI interchange layer. It deliberately contains no
 high-level ownership, lifetime, event, or error semantics; those belong in a
 small handwritten Haxe wrapper. Haxeon parses and loads it into a validated ABI
-model, including opaque types and `@symbol`/`@leaf` function metadata. Imported
-declarations are not source-visible yet; semantic projection and lowering are
-the next stage.
+model, including opaque types and `@symbol`/`@leaf` function metadata.
+
+Bridgeable functions are also projected into a generated Haxe module named
+after the HXI interface. The initial projection accepts 8/16/32-bit integers,
+`float`, `double`, pointers, and `void` results. Unsupported declarations such
+as by-value aggregates and 64-bit integers remain available in the raw ABI
+model but are omitted from the source module until their Haxe representation is
+defined.
+
+Each projected function carries private `@:cNative(library, symbol, signature)`
+metadata. The typer preserves that descriptor and emits a dedicated
+`CNativeCall` instruction, keeping ordinary C calls separate from HashLink's
+native calling convention throughout typed AST, CFG, SSA IR, verification, and
+serialization. Backend execution lowering is not implemented yet and rejects
+these calls explicitly instead of treating them as HashLink natives.
 
 ## Native call runtime
 

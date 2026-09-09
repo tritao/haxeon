@@ -72,6 +72,7 @@ enum TypedExpressionKind {
 		value:TypedExpression);
 	TRange(start:TypedExpression, end:TypedExpression);
 	TCall(name:String, arguments:Array<TypedExpression>);
+	TCNativeCall(name:String, arguments:Array<TypedExpression>);
 	TCollectionCall(receiver:TypedExpression, operation:String, arguments:Array<TypedExpression>);
 	TClosureCall(callee:TypedExpression, arguments:Array<TypedExpression>);
 	TToInterface(value:TypedExpression, name:String);
@@ -297,4 +298,10 @@ typedef TypedNative = {
 	final symbol:String;
 	final arguments:Array<CompilerType>;
 	final result:CompilerType;
+	final convention:NativeConvention;
+}
+
+enum NativeConvention {
+	HashLinkNative;
+	CNative(signature:String);
 }

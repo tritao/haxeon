@@ -34,6 +34,7 @@ import compiler.types.TypedAst.TypedEnum;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedInterface;
 import compiler.types.TypedAst.TypedMapEntry;
+import compiler.types.TypedAst.NativeConvention;
 import compiler.types.TypedAst.TypedObjectField;
 import compiler.types.TypedAst.TypedClass;
 import compiler.types.TypedAst.TypedCatch;
@@ -87,6 +88,7 @@ class Typer {
 	final genericSpecializations:GenericSpecializationRegistry;
 	final emittedGenericBodies:Map<String, Bool> = [];
 	final noReturnFunctions:Map<String, Bool> = [];
+	final cNativeFunctions:Map<String, Bool> = [];
 
 	inline function get_context():BodyContext
 		return bodyContexts[bodyContexts.length - 1];
@@ -183,6 +185,12 @@ class Typer {
 						declarationTypeSubstitutions(abstractDecl.name, abstractDecl.typeParameters)) : null;
 					typedNatives.push(typeExtern(method, nativeName, receiverType, defaultLibrary, resultOverride));
 				}
+			}
+		for (native in typedNatives)
+			switch native.convention {
+				case CNative(_):
+					cNativeFunctions.set(native.name, true);
+				case HashLinkNative:
 			}
 		var setupDoneAt = Sys.time() * 1000.0;
 		inferNoReturnFunctions();
@@ -318,7 +326,8 @@ class Typer {
 			allowStubBody:Bool = false):compiler.types.TypedAst.TypedNative {
 		if (fn.statements.length != 0 && !allowStubBody)
 			fail("E1021", 'Extern function "${fn.name}" cannot have a body', fn.span);
-		var binding:Null<compiler.syntax.Ast.AstMetadata> = null;
+		var binding:Null<compiler.syntax.Ast.AstMetadata> = null,
+			cBinding:Null<compiler.syntax.Ast.AstMetadata> = null;
 		var metadata = fn.metadata;
 		if (metadata != null)
 			for (entry in metadata)
@@ -326,16 +335,31 @@ class Typer {
 					if (binding != null)
 						fail("E1021", 'Extern function "${fn.name}" has duplicate @:hlNative metadata', entry.span);
 					binding = entry;
+				} else if (entry.name == "cNative") {
+					if (cBinding != null)
+						fail("E1021", 'Extern function "${fn.name}" has duplicate @:cNative metadata', entry.span);
+					cBinding = entry;
 				}
-		if (binding == null && defaultLibrary == null)
+		if (binding != null && cBinding != null)
+			fail("E1021", 'Extern function "${fn.name}" cannot combine @:hlNative and @:cNative', fn.span);
+		if (binding == null && cBinding == null && defaultLibrary == null)
 			fail("E1021", 'Extern function "${fn.name}" requires @:hlNative(library, symbol)', fn.span);
 		var library = defaultLibrary, symbol = fn.name;
+		var convention = compiler.types.TypedAst.NativeConvention.HashLinkNative;
 		if (binding != null) {
 			if (binding.arguments.length != 2)
 				fail("E1021", '@:hlNative requires a library and symbol string', binding.span);
 			var values = metadataStrings(binding, "@:hlNative arguments must be string literals");
 			library = values[0];
 			symbol = values[1];
+		}
+		if (cBinding != null) {
+			if (cBinding.arguments.length != 3)
+				fail("E1021", "@:cNative requires library, symbol, and ABI signature strings", cBinding.span);
+			var values = metadataStrings(cBinding, "@:cNative arguments must be string literals");
+			library = values[0];
+			symbol = values[1];
+			convention = compiler.types.TypedAst.NativeConvention.CNative(values[2]);
 		}
 		var arguments = [for (argument in fn.arguments) argumentType(argument)];
 		if (receiverType != null)
@@ -345,7 +369,8 @@ class Typer {
 			library: library,
 			symbol: symbol,
 			arguments: arguments,
-			result: resultOverride == null ? lowerType(fn.result) : resultOverride
+			result: resultOverride == null ? lowerType(fn.result) : resultOverride,
+			convention: convention
 		};
 	}
 
@@ -2973,7 +2998,8 @@ class Typer {
 							fail("E1008", 'Function "$name" expects ${expectedArguments.length} arguments, got ${arguments.length}', span);
 						var typed = hasSignature ? typeDeclaredCallArguments(arguments, requiredMapValue(signatures, name).arguments, scope, name,
 							span) : typeCallArguments(arguments, expectedArguments, scope, name);
-						applyCallEffect(new TypedExpression(TCall(name, typed), result, span), name, scope);
+						applyCallEffect(new TypedExpression(cNativeFunctions.exists(name) ? TCNativeCall(name, typed) : TCall(name, typed), result, span),
+							name, scope);
 					}
 				}
 			case ClosureCall(callee, arguments, span):

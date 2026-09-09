@@ -49,6 +49,7 @@ import compiler.semantic.LambdaCollector;
 import compiler.semantic.SemanticWorkspace;
 import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiParser;
+import compiler.ffi.HxiProjection;
 
 typedef FfiInterfaceSource = {
 	final path:String;
@@ -166,9 +167,6 @@ class Compiler {
 	public function new(?identityState:Bytes, ?nativeConfiguration:Array<NativeFunction>, ?ffiConfiguration:Array<FfiInterfaceSource>) {
 		semanticWorkspace = new SemanticWorkspace(modules);
 		natives = new NativeRegistry(nativeConfiguration);
-		if (ffiConfiguration != null)
-			for (source in ffiConfiguration)
-				addFfiInterface(source.path, source.text);
 		if (identityState == null) {
 			genericSpecializations = new GenericSpecializationRegistry();
 			moduleId = HlRuntimeIdentity.createModuleId();
@@ -195,6 +193,9 @@ class Compiler {
 				beginRehydration(assembler);
 			}
 		}
+		if (ffiConfiguration != null)
+			for (source in ffiConfiguration)
+				registerFfiInterface(source.path, source.text, false);
 	}
 
 	public function exportIdentityState():Bytes {
@@ -245,14 +246,22 @@ class Compiler {
 
 	/** Parse and register one immutable target-specific ABI interface before compilation. */
 	public function addFfiInterface(path:String, source:String):Void {
-		if (compiledOnce)
+		registerFfiInterface(path, source, true);
+	}
+
+	function registerFfiInterface(path:String, source:String, enforceFreeze:Bool):Void {
+		if (enforceFreeze && compiledOnce)
 			throw "FFI interfaces are frozen after the first compilation";
 		var model = HxiParser.parse(path, source);
 		if (ffiInterfaceModels.exists(model.name))
 			throw 'FFI interface "${model.name}" is already registered';
 		ffiInterfaceModels.set(model.name, model);
 		ffiInterfaceSources.push({path: path, text: source});
-		sourceGeneration++;
+		var projection = HxiProjection.source(model);
+		if (projection.length > 0)
+			update(model.name + ".hx", projection);
+		else
+			sourceGeneration++;
 	}
 
 	/** Validated ABI interfaces in deterministic interface-name order. */

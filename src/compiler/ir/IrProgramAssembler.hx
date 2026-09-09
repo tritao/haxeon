@@ -8,6 +8,8 @@ import compiler.types.TypedAst.TypedCaptureSource;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrNative;
+import compiler.ir.Ir.IrCNative;
+import compiler.types.TypedAst.NativeConvention;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrObjectField;
 import compiler.ir.Ir.IrObjectMethod;
@@ -19,18 +21,36 @@ import compiler.ir.Ir.IrStaticField;
 class IrProgramAssembler {
 	public static function generate(typed:TypedProgram):IrProgram {
 		return assemble([for (fn in typed.functions) IrGenerator.generateFunction(fn)], nativesFrom(typed), objectsFrom(typed), interfacesFrom(typed),
-			enumsFrom(typed), staticFieldsFrom(typed), staticInitializerFrom(typed));
+			enumsFrom(typed), staticFieldsFrom(typed), staticInitializerFrom(typed), null, cNativesFrom(typed));
 	}
 
 	public static function nativesFrom(typed:TypedProgram):Array<IrNative>
 		return [
 			for (native in typed.natives)
-				{
+				if (native.convention == HashLinkNative) {
 					name: native.name,
 					library: native.library,
 					symbol: native.symbol,
 					arguments: [for (argument in native.arguments) IrGenerator.lowerType(argument)],
 					result: IrGenerator.lowerType(native.result)
+				}
+		];
+
+	public static function cNativesFrom(typed:TypedProgram):Array<IrCNative>
+		return [
+			for (native in typed.natives)
+				switch native.convention {
+					case CNative(signature):
+						{
+							name: native.name,
+							library: native.library,
+							symbol: native.symbol,
+							signature: signature,
+							arguments: [for (argument in native.arguments) IrGenerator.lowerType(argument)],
+							result: IrGenerator.lowerType(native.result)
+						};
+					case HashLinkNative:
+						continue;
 				}
 		];
 
@@ -213,7 +233,7 @@ class IrProgramAssembler {
 	}
 
 	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>,
-			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializer:IrFunction, ?entryPoint:String):IrProgram {
+			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializer:IrFunction, ?entryPoint:String, ?cNatives:Array<IrCNative>):IrProgram {
 		var program = new IrProgram("__entry");
 		var allFunctions:Array<IrFunction> = [];
 		if (staticInitializer != null)
@@ -248,6 +268,7 @@ class IrProgramAssembler {
 						default:
 					}
 		program.objects = objects == null ? [] : objects;
+		program.cNatives = cNatives == null ? [] : cNatives;
 		program.interfaces = interfaces == null ? [] : interfaces;
 		program.enums = enums == null ? [] : enums;
 		program.staticFields = staticFields == null ? [] : staticFields;

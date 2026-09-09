@@ -286,6 +286,12 @@ class CfgBuilder {
 		return out;
 	}
 
+	public function cNativeCall(name:String, args:Array<CfgValue>, result:IrType):CfgValue {
+		var out = temporary(result);
+		emit(CNativeCall(out, name, args));
+		return out;
+	}
+
 	public function staticClosure(name:String, type:IrType):CfgValue {
 		var out = temporary(type);
 		emit(StaticClosure(out, name));

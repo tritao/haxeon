@@ -762,6 +762,7 @@ class IrGenerator {
 					builder.typeValue(lowerType(args[1].type))
 				], Bool);
 			case TCall(name, args): builder.call(name, lowerOperands(args, builder, localTypes), lowerType(expression.type));
+			case TCNativeCall(name, args): builder.cNativeCall(name, lowerOperands(args, builder, localTypes), lowerType(expression.type));
 			case TCollectionCall(receiver, operation, args):
 				var nativeName = switch receiver.type {
 					case TArray(element): RuntimeType.arrayNative(element, operation);

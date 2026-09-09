@@ -178,6 +178,11 @@ class IrInstructionCodec {
 				writeValue(output, value);
 				writeText(output, name);
 				writeValues(output, arguments);
+			case CNativeCall(value, name, arguments):
+				begin(output, "CNativeCall", 3);
+				writeValue(output, value);
+				writeText(output, name);
+				writeValues(output, arguments);
 			case StaticClosure(value, name):
 				begin(output, "StaticClosure", 2);
 				writeValue(output, value);
@@ -339,6 +344,9 @@ class IrInstructionCodec {
 			case "Call":
 				arity(3);
 				Call(readValue(input, values), readText(input, totalLength), readValues(input, values));
+			case "CNativeCall":
+				arity(3);
+				CNativeCall(readValue(input, values), readText(input, totalLength), readValues(input, values));
 			case "StaticClosure":
 				arity(2);
 				StaticClosure(readValue(input, values), readText(input, totalLength));

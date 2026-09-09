@@ -56,6 +56,7 @@ enum CfgInstruction {
 	LessEqual(output:CfgValue, left:CfgValue, right:CfgValue);
 	Equal(output:CfgValue, left:CfgValue, right:CfgValue);
 	Call(output:CfgValue, functionName:String, arguments:Array<CfgValue>);
+	CNativeCall(output:CfgValue, functionName:String, arguments:Array<CfgValue>);
 	StaticClosure(output:CfgValue, functionName:String);
 	InstanceClosure(output:CfgValue, functionName:String, receiver:CfgValue);
 	CallClosure(output:CfgValue, closure:CfgValue, arguments:Array<CfgValue>);

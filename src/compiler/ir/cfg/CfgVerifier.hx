@@ -147,7 +147,7 @@ class CfgVerifier {
 						|| (!sameType(a.type, I32) && !sameType(a.type, F64) && !sameType(a.type, Bool) && !isReference(a.type)))
 						throw 'CFG equality requires matching primitive or reference values';
 					define(out, defined, available, block.id);
-				case Call(out, _, arguments):
+				case Call(out, _, arguments), CNativeCall(out, _, arguments):
 					for (argument in arguments)
 						require(argument, available, block.id);
 					define(out, defined, available, block.id);

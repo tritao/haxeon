@@ -245,7 +245,8 @@ class IrFunctionStateCodec {
 				collectValue(output, values);
 				collectValue(left, values);
 				collectValue(right, values);
-			case Call(output, _, arguments), CallClosure(output, _, arguments), MethodCall(output, _, _, arguments), MakeEnum(output, _, _, arguments):
+			case Call(output, _, arguments), CNativeCall(output, _, arguments), CallClosure(output, _, arguments), MethodCall(output, _, _, arguments),
+				MakeEnum(output, _, _, arguments):
 				collectValue(output, values);
 				for (argument in arguments)
 					collectValue(argument, values);

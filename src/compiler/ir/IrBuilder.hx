@@ -138,6 +138,12 @@ class IrBuilder {
 		return out;
 	}
 
+	public function cNativeCall(name:String, args:Array<IrValue>, result:IrType):IrValue {
+		var out = temporary(result);
+		emit(CNativeCall(out, name, args));
+		return out;
+	}
+
 	public function staticClosure(name:String, type:IrType):IrValue {
 		var out = temporary(type);
 		emit(StaticClosure(out, name));

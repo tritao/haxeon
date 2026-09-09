@@ -45,6 +45,13 @@ class HxiParserMain {
 		compiler.addFfiInterface("nativekit.hxi", valid);
 		expect(compiler.ffiInterfaces().length == 1
 			&& compiler.ffiInterfaces()[0].library == "nativekit", "compiler should retain validated FFI models");
+		var projection = compiler.modules.get("nativekit");
+		expect(projection != null
+			&& projection.source.text.indexOf('@:cNative("nativekit", "nk_open_v1", "11>6")') >= 0
+			&& projection.source.text.indexOf('extern function nk_version():Int;') >= 0,
+			"compiler should expose bridgeable HXI functions through a generated source module");
+		compiler.update("Main.hx", "import nativekit; function main():Int return nativekit.nk_version();");
+		compiler.analyze("Main");
 		var duplicateRejected = false;
 		try
 			compiler.addFfiInterface("duplicate.hxi", valid)

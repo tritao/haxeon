@@ -381,6 +381,8 @@ class HlLower {
 							case 2: instructions.push(HlInstruction.Call2(destination, functionIndex, args[0], args[1]));
 							default: instructions.push(HlInstruction.CallN(destination, functionIndex, args));
 						}
+					case CNativeCall(_, functionName, _):
+						throw 'Ordinary C call lowering is not implemented yet for "$functionName"';
 					case StaticClosure(output, functionName):
 						instructions.push(HlInstruction.StaticClosure(defineRegister(output, registers, registerTypes), requireFunction(functionName)));
 					case InstanceClosure(output, functionName, receiver):
