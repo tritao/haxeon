@@ -15,6 +15,8 @@ typedef HxiField = {
 	final name:String;
 	final type:HxiType;
 	final offset:Null<Int>;
+	final ownership:HxiPointerOwnership;
+	final lengthField:Null<String>;
 	final span:SourceSpan;
 }
 

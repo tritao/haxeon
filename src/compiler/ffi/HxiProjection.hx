@@ -59,7 +59,7 @@ class HxiProjection {
 		var abi = HxiAbi.forInterface(model), output = new StringBuf();
 		var structAccesses:Map<String, {type:String, setterType:String}> = [],
 			declarations:Map<String, HxiDeclaration> = [];
-		var usesNestedStructures = false;
+		var usesNestedStructures = false, usesPointerFields = false;
 		for (declaration in model.declarations)
 			switch declaration {
 				case Opaque(name, _) | Alias(name, _, _) | Structure(name, _, _, _, _):
@@ -81,6 +81,12 @@ class HxiProjection {
 							continue;
 						}
 						var value = project(abi.classify(field.type), false);
+						if (value != null && value.code == 11 && value.nativePointer && field.ownership == Borrowed) {
+							usesPointerFields = true;
+							output.add('\tpublic inline function get_${field.name}():${value.haxeType} return ${model.name}.__hxi_struct_get_pointer(this, ${field.offset}, ${value.nullable});\n');
+							output.add('\tpublic inline function set_${field.name}(value:${value.haxeType}):Void ${model.name}.__hxi_struct_set_pointer(this, ${field.offset}, value, ${value.nullable});\n');
+							continue;
+						}
 						if (value == null || value.code == 11)
 							continue;
 						var access = structAccess(value.code);
@@ -96,6 +102,10 @@ class HxiProjection {
 		if (usesNestedStructures) {
 			output.add('@:hlNative("realtime_runtime", "structSlice") extern function __hxi_struct_slice(bytes:haxe.io.Bytes, offset:Int, length:Int):haxe.io.Bytes;\n');
 			output.add('@:hlNative("realtime_runtime", "structCopy") extern function __hxi_struct_copy(bytes:haxe.io.Bytes, offset:Int, value:haxe.io.Bytes, length:Int):Void;\n');
+		}
+		if (usesPointerFields) {
+			output.add('@:hlNative("realtime_runtime", "structGetPointer") extern function __hxi_struct_get_pointer(bytes:haxe.io.Bytes, offset:Int, nullable:Bool):hl.Abstract<"native_pointer">;\n');
+			output.add('@:hlNative("realtime_runtime", "structSetPointer") extern function __hxi_struct_set_pointer(bytes:haxe.io.Bytes, offset:Int, value:hl.Abstract<"native_pointer">, nullable:Bool):Void;\n');
 		}
 		for (access in ["I8", "U8", "I16", "U16", "I32", "I64", "F32", "F64"]) {
 			var types = structAccesses.get(access);

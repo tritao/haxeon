@@ -93,7 +93,14 @@ and `set_field` methods support native-endian integer and floating-point scalar
 fields. Nested fixed-layout structures use typed copy getters and setters, and
 `ptr<struct>` parameters pass the managed backing storage to C. Validation
 rejects misaligned, overlapping, and out-of-bounds fields before projection.
-By-value structures and pointer-valued structure fields are not executable yet.
+Borrowed pointers to opaque types can be marked with field-level `@borrowed`;
+their generated accessors read and write `NativePointer` handles and preserve
+`nullable<...>` behavior. The source handle must remain live for as long as C
+may read the structure field. Owned pointer fields are rejected because a
+managed-byte structure cannot retain their destructor safely. `@length_field`
+is likewise reserved until structures can retain input buffers. Unannotated
+pointer fields remain in the ABI model but receive no unsafe generated
+accessors. By-value structures are not executable yet.
 
 ## Native call runtime
 

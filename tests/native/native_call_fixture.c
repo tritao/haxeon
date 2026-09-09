@@ -17,6 +17,9 @@ typedef struct native_fixture_options {
 
 typedef struct native_fixture_point { int32_t x, y; } native_fixture_point;
 typedef struct native_fixture_box { native_fixture_point start, end; } native_fixture_box;
+typedef struct native_fixture_holder { void *required, *optional; } native_fixture_holder;
+
+static int32_t native_fixture_borrowed_value = 42;
 
 FIXTURE_API int32_t native_fixture_add( int32_t left, int32_t right ) {
 	return left + right;
@@ -29,6 +32,10 @@ FIXTURE_API int32_t native_fixture_check_options( const native_fixture_options *
 
 FIXTURE_API int32_t native_fixture_check_box( const native_fixture_box *box ) {
 	return box != NULL && box->start.x == 10 && box->start.y == 11 && box->end.x == 20 && box->end.y == 21 ? 42 : 0;
+}
+
+FIXTURE_API int32_t native_fixture_check_holder( const native_fixture_holder *holder ) {
+	return holder != NULL && holder->required == &native_fixture_borrowed_value && holder->optional == NULL ? 42 : 0;
 }
 
 FIXTURE_API double native_fixture_multiply( double left, double right ) {
@@ -54,7 +61,6 @@ FIXTURE_API int32_t native_fixture_i64_check( int64_t value ) {
 }
 
 static int32_t native_fixture_release_count;
-static int32_t native_fixture_borrowed_value = 42;
 static int32_t native_fixture_data_release_count;
 static const uint8_t native_fixture_borrowed_bytes[] = {40, 41, 42};
 

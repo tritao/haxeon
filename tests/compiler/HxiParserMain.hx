@@ -76,6 +76,18 @@ class HxiParserMain {
 		var nestedSource = HxiProjection.source(nested);
 		expect(nestedSource.indexOf("function get_start():point") >= 0 && nestedSource.indexOf("__hxi_struct_copy") >= 0,
 			"nested fixed-layout structs should project typed copy accessors");
+		var pointerFields = HxiParser.parse("pointer-fields.hxi",
+			'interface fields @target("x86_64-linux-gnu") @library("fields") { opaque context; struct holder @layout(8, 8) { context: nullable<ptr<context>> @offset(0) @borrowed; } }');
+		switch pointerFields.declarations[1] {
+			case Structure(_, _, _, [{ownership: Borrowed}], _):
+			case _:
+				throw "borrowed pointer field policy was not retained";
+		}
+		expect(HxiProjection.source(pointerFields).indexOf("function set_context") >= 0, "borrowed opaque pointer fields should project typed accessors");
+		expectError('interface bad @target("x86_64-linux-gnu") { opaque context; struct holder @layout(8, 8) { context: ptr<context> @offset(0) @owned("destroy"); } }',
+			"Owned pointer field");
+		expectError('interface bad @target("x86_64-linux-gnu") { struct holder @layout(16, 8) { data: ptr<u8> @offset(0) @length_field("size"); size: usize @offset(8); } }',
+			"reserved until structures can retain input buffers");
 		compiler.update("Main.hx", "import nativekit; function main():Int return nativekit.nk_version();");
 		compiler.analyze("Main");
 		expect(compiler.irCNatives().length == 2 && compiler.irCNatives()[1].name == "nativekit.nk_version",

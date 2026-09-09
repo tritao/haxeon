@@ -107,6 +107,33 @@ static void haxeon_native_pointer_finalize( void *value ) {
 	pointer->control = NULL;
 }
 
+HL_PRIM haxeon_native_pointer *HL_NAME(structGetPointer)( realtime_bytes *bytes, int offset, bool nullable ) {
+	realtime_bytes_bounds(bytes,offset,sizeof(void *));
+	void *value;
+	memcpy(&value,bytes->data + offset,sizeof(value));
+	if( value == NULL ) {
+		if( nullable ) return NULL;
+		hl_error("Non-null HXI structure pointer field contains NULL");
+	}
+	haxeon_native_pointer *pointer = (haxeon_native_pointer *)hl_gc_alloc_finalizer(sizeof(haxeon_native_pointer));
+	memset(pointer,0,sizeof(*pointer));
+	pointer->finalize = haxeon_native_pointer_finalize;
+	pointer->value = value;
+	return pointer;
+}
+
+HL_PRIM void HL_NAME(structSetPointer)( realtime_bytes *bytes, int offset, haxeon_native_pointer *pointer, bool nullable ) {
+	realtime_bytes_bounds(bytes,offset,sizeof(void *));
+	void *value = NULL;
+	if( pointer == NULL ) {
+		if( !nullable ) hl_error("Cannot assign NULL to a non-null HXI structure pointer field");
+	} else {
+		if( pointer->value == NULL ) hl_error("Cannot assign a closed native pointer to an HXI structure field");
+		value = pointer->value;
+	}
+	memcpy(bytes->data + offset,&value,sizeof(value));
+}
+
 static ffi_type *haxeon_native_ffi_type( int type, bool result ) {
 	switch( type ) {
 	case HAXEON_NATIVE_VOID: return result ? &ffi_type_void : NULL;

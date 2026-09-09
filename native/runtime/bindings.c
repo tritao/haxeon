@@ -46,6 +46,8 @@ DEFINE_PRIM(_ABSTRACT(native_pointer),native_pointer_invoke_15,_BYTES _BYTES _BY
 DEFINE_PRIM(_ABSTRACT(native_pointer),native_pointer_invoke_16,_BYTES _BYTES _BYTES _BYTES _BYTES _BOOL _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN);
 DEFINE_PRIM(_BOOL,native_pointer_close,_ABSTRACT(native_pointer));
 DEFINE_PRIM(_BOOL,native_pointer_is_closed,_ABSTRACT(native_pointer));
+DEFINE_PRIM(_ABSTRACT(native_pointer),structGetPointer,_ABSTRACT(realtime_bytes) _I32 _BOOL);
+DEFINE_PRIM(_VOID,structSetPointer,_ABSTRACT(realtime_bytes) _I32 _ABSTRACT(native_pointer) _BOOL);
 DEFINE_PRIM(_DYN,native_invoke_0,_BYTES _BYTES _BYTES);
 DEFINE_PRIM(_DYN,native_invoke_1,_BYTES _BYTES _BYTES _DYN);
 DEFINE_PRIM(_DYN,native_invoke_2,_BYTES _BYTES _BYTES _DYN _DYN);

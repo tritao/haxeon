@@ -117,13 +117,20 @@ class HxiParser {
 			var fieldStart = current().span, fieldName = identifier();
 			expect(":");
 			var type = parseType(),
-				fieldMetadata = parseMetadata(["offset"]),
+				fieldMetadata = parseMetadata(["offset", "borrowed", "owned", "length_field"]),
 				offset = metadataInteger(fieldMetadata, "offset", true),
+				borrowed = metadataFlag(fieldMetadata, "borrowed"),
+				owned = metadataValue(fieldMetadata, "owned", false),
+				lengthField = metadataValue(fieldMetadata, "length_field", false),
 				end = expect(";").span;
+			if (borrowed && owned != null)
+				fail('Field "$fieldName" cannot combine @borrowed and @owned', fieldStart);
 			fields.push({
 				name: fieldName,
 				type: type,
 				offset: offset,
+				ownership: owned != null ? Owned(owned) : borrowed ? Borrowed : Unspecified,
+				lengthField: lengthField,
 				span: fieldStart.merge(end)
 			});
 		}
@@ -233,6 +240,15 @@ class HxiParser {
 								fail('Field "${field.name}" overlaps field "${range.name}" in struct "$name"', field.span);
 						ranges.push({start: field.offset, end: field.offset + layout.size, name: field.name});
 						validateType(field.type, names, field.span, false);
+						switch field.ownership {
+							case Owned(_): fail('Owned pointer field "${field.name}" is not supported; keep ownership in a separate handle', field.span);
+							case Borrowed:
+								if (!opaquePointerLike(field.type,
+									declarationsByName)) fail('@borrowed field "${field.name}" requires a pointer to an opaque type', field.span);
+							case Unspecified:
+						}
+						if (field.lengthField != null)
+							fail('@length_field on "${field.name}" is reserved until structures can retain input buffers', field.span);
 					}
 				case Function(name, parameters, result, _, _, resultPolicy, span):
 					for (parameter in parameters)
@@ -249,7 +265,7 @@ class HxiParser {
 	}>
 		return switch type {
 			case Const(element): typeLayout(element, abi, declarations, resolving);
-			case Nullable(_): null;
+			case Nullable(element): pointerLike(element) ? typeLayout(element, abi, declarations, resolving) : null;
 			case Pointer(_): {size: Std.int(abi.pointerBits / 8), align: Std.int(abi.pointerBits / 8)};
 			case Array(element, length): var item = typeLayout(element, abi, declarations,
 					resolving); item == null || item.size > Std.int(0x7FFFFFFF / length) ? null : {size: item.size * length, align: item.align};
@@ -307,6 +323,25 @@ class HxiParser {
 		return switch type {
 			case Nullable(element) | Const(element): bytePointerLike(element, names);
 			case Pointer(element): byteElement(element, names);
+			case _: false;
+		};
+
+	static function opaquePointerLike(type:HxiType, names:Map<String, HxiDeclaration>):Bool
+		return switch type {
+			case Nullable(element) | Const(element): opaquePointerLike(element, names);
+			case Pointer(element): opaqueElement(element, names);
+			case _: false;
+		};
+
+	static function opaqueElement(type:HxiType, names:Map<String, HxiDeclaration>):Bool
+		return switch type {
+			case Const(element): opaqueElement(element, names);
+			case Named(name):
+				switch names.get(name) {
+					case Opaque(_, _): true;
+					case Alias(_, target, _): opaqueElement(target, names);
+					case _: false;
+				}
 			case _: false;
 		};
 
