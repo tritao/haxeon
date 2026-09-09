@@ -80,6 +80,24 @@ class HxiParserMain {
 		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(value: ptr<ptr<i32>> @out) -> void; }',
 			"requires a scalar or fixed-structure pointee");
 		expectError('interface bad @target("x86_64-linux-gnu") { callback Read = fn(value: ptr<i32> @out) -> void; }', "cannot use output direction");
+		var buffers = HxiParser.parse("buffers.hxi",
+			'interface buffers @target("x86_64-linux-gnu") @library("buffers") { extern fn read(seed: i32, data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout) -> i32; }');
+		switch buffers.declarations[0] {
+			case Function(_, [_, {direction: OutBuffer("size")}, {direction: InOut}], _, _, _, _, _, _):
+			case _:
+				throw "expected parsed output buffer contract";
+		}
+		var bufferSource = HxiProjection.source(buffers);
+		expect(bufferSource.indexOf("function read(seed:Int):ReadOutResult") >= 0
+			&& bufferSource.indexOf("__hxi_raw_read(seed, null, __out_size)") >= 0
+			&& bufferSource.indexOf("haxe.io.Bytes.alloc(__capacity)") >= 0,
+			"output buffers should project a bounded size-query and fill wrapper");
+		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(data: ptr<u8> @out_buffer("size"), size: ptr<u32> @inout) -> void; }',
+			"must be nullable");
+		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(data: nullable<ptr<u8>> @out_buffer("missing"), size: ptr<u32> @inout) -> void; }',
+			"references missing size parameter");
+		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u64> @inout) -> void; }',
+			"must be ptr<u32>");
 		var callbacks = HxiParser.parse("callbacks.hxi",
 			'interface callbacks @target("x86_64-linux-gnu") @library("callbacks") { callback Binary = fn(left: i32, right: i32) -> i32; extern fn apply(callback: Binary, left: i32, right: i32) -> i32; }');
 		var callbackSource = HxiProjection.source(callbacks);

@@ -225,6 +225,20 @@ FIXTURE_API int32_t native_fixture_shift_point( native_fixture_point *point ) {
 	return 42;
 }
 
+FIXTURE_API int32_t native_fixture_read_bytes( int32_t first, uint8_t *data, uint32_t *size ) {
+	const uint32_t required = 3;
+	if( size == NULL ) return -1;
+	if( data == NULL || *size < required ) {
+		*size = required;
+		return 1;
+	}
+	data[0] = (uint8_t)first;
+	data[1] = 41;
+	data[2] = 42;
+	*size = required;
+	return 42;
+}
+
 FIXTURE_API int32_t native_fixture_check_box_value( native_fixture_box box ) {
 	return box.start.x == 10 && box.start.y == 11 && box.end.x == 20 && box.end.y == 21 ? 42 : 0;
 }

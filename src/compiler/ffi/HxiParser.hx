@@ -131,17 +131,18 @@ class HxiParser {
 				var start = current().span, name = identifier();
 				expect(":");
 				var type = parseType(),
-					metadata = parseMetadata(["out", "inout"]),
+					metadata = parseMetadata(["out", "inout", "out_buffer"]),
 					out = metadataFlag(metadata, "out"),
-					inout = metadataFlag(metadata, "inout");
-				if (out && inout)
-					fail('Parameter "$name" cannot combine @out and @inout', start);
-				if (!allowDirections && (out || inout))
+					inout = metadataFlag(metadata, "inout"),
+					bufferSize = metadataValue(metadata, "out_buffer", false);
+				if ((out ? 1 : 0) + (inout ? 1 : 0) + (bufferSize == null ? 0 : 1) > 1)
+					fail('Parameter "$name" cannot combine output direction metadata', start);
+				if (!allowDirections && (out || inout || bufferSize != null))
 					fail('Callback parameter "$name" cannot use output direction metadata', start);
 				parameters.push({
 					name: name,
 					type: type,
-					direction: out ? Out : inout ? InOut : In,
+					direction: out ? Out : inout ? InOut : bufferSize == null ? In : OutBuffer(bufferSize),
 					span: start.merge(previous().span)
 				});
 			} while (match(","));
@@ -383,18 +384,32 @@ class HxiParser {
 					validateCallbackType(result, abi, span, true);
 				case Function(name, parameters, result, _, _, callConvention, resultPolicy, span):
 					validateCallConvention(name, callConvention, abi, span);
+					var outputBuffer:Null<{name:String, sizeParameter:String, span:SourceSpan}> = null;
 					for (parameter in parameters) {
 						validateType(parameter.type, names, declarationsByName, parameter.span, false);
-						if (parameter.direction != In && !pointerLike(parameter.type))
-							fail('Output parameter "${parameter.name}" requires a pointer type', parameter.span);
-						if (parameter.direction != In && switch parameter.type {
-								case Nullable(_): true;
-								case _: false;
-							})
-							fail('Output parameter "${parameter.name}" cannot be nullable', parameter.span);
-						if (parameter.direction != In)
-							validateOutputType(parameter.name, parameter.type, abi, parameter.span);
+						switch parameter.direction {
+							case OutBuffer(sizeParameter):
+								if (outputBuffer != null)
+									fail('Function "$name" cannot declare more than one output buffer', parameter.span);
+								if (!bytePointerLike(parameter.type, declarationsByName))
+									fail('Output buffer "${parameter.name}" requires a byte pointer', parameter.span);
+								if (!nullablePointer(parameter.type))
+									fail('Output buffer "${parameter.name}" must be nullable for its size query', parameter.span);
+								outputBuffer = {name: parameter.name, sizeParameter: sizeParameter, span: parameter.span};
+							case Out | InOut:
+								if (!pointerLike(parameter.type))
+									fail('Output parameter "${parameter.name}" requires a pointer type', parameter.span);
+								if (switch parameter.type {
+										case Nullable(_): true;
+										case _: false;
+									})
+									fail('Output parameter "${parameter.name}" cannot be nullable', parameter.span);
+								validateOutputType(parameter.name, parameter.type, abi, parameter.span);
+							case In:
+						}
 					}
+					if (outputBuffer != null)
+						validateOutputBuffer(name, outputBuffer, parameters, abi, span);
 					validateType(result, names, declarationsByName, span, true);
 					switch abi.classify(result, true) {
 						case CallbackValue(_, _, _, _): fail('Function "$name" cannot return a callback handle yet', span);
@@ -421,6 +436,40 @@ class HxiParser {
 				fail('Output parameter "$name" currently requires a scalar or fixed-structure pointee', span);
 		}
 	}
+
+	function validateOutputBuffer(functionName:String, buffer:{name:String, sizeParameter:String, span:SourceSpan}, parameters:Array<HxiParameter>,
+			abi:HxiAbi, span:SourceSpan):Void {
+		var size:HxiParameter = null;
+		for (parameter in parameters)
+			if (parameter.name == buffer.sizeParameter)
+				size = parameter;
+		if (size == null)
+			fail('Output buffer "${buffer.name}" references missing size parameter "${buffer.sizeParameter}"', buffer.span);
+		if (size.direction != InOut)
+			fail('Output buffer size parameter "${size.name}" must use @inout', size.span);
+		var pointee = switch size.type {
+			case Pointer(value): value;
+			case _: fail('Output buffer size parameter "${size.name}" must be ptr<u32>', size.span);
+		};
+		switch abi.classify(pointee) {
+			case IntegerValue(32, Unsigned):
+			case _:
+				fail('Output buffer size parameter "${size.name}" must be ptr<u32>', size.span);
+		}
+		for (parameter in parameters)
+			switch parameter.direction {
+				case OutBuffer(_) | In:
+				case InOut if (parameter.name == size.name):
+				case _:
+					fail('Function "$functionName" cannot mix an output buffer with unrelated output parameters', span);
+			}
+	}
+
+	static function nullablePointer(type:HxiType):Bool
+		return switch type {
+			case Nullable(Pointer(_)): true;
+			case _: false;
+		};
 
 	function validateCallConvention(name:String, convention:String, abi:HxiAbi, span:SourceSpan):Void {
 		if (convention != "cdecl" && convention != "stdcall" && convention != "system")

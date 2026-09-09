@@ -218,12 +218,16 @@ class HxiProjection {
 			switch declaration {
 				case Function(_, parameters, _, _, _, _, _, _):
 					for (parameter in parameters)
-						if (parameter.direction != In) {
-							var value = outputInfo(parameter.type, abi);
-							if (!value.structure) {
-								var access = structAccess(value.code);
-								structAccesses.set(access, {type: value.haxeType, setterType: value.haxeType});
-							}
+						switch parameter.direction {
+							case Out | InOut:
+								var value = outputInfo(parameter.type, abi);
+								if (!value.structure) {
+									var access = structAccess(value.code);
+									structAccesses.set(access, {type: value.haxeType, setterType: value.haxeType});
+								}
+							case OutBuffer(_):
+								usesNestedStructures = true;
+							case In:
 						}
 				case _:
 			}
@@ -260,7 +264,10 @@ class HxiProjection {
 					supported = false;
 					break;
 				}
-				var output = parameters[index].direction == In ? null : outputInfo(parameters[index].type, abi);
+				var output = switch parameters[index].direction {
+					case Out | InOut: outputInfo(parameters[index].type, abi);
+					case In | OutBuffer(_): null;
+				};
 				argumentTypes.push(output == null ? projected.haxeType : output.structure ? output.haxeType : "haxe.io.Bytes");
 				codes.push(abiDescriptor(argument, declarations, abi));
 			}
@@ -275,8 +282,13 @@ class HxiProjection {
 			output.add([for (index in 0...argumentTypes.length) 'arg$index:${argumentTypes[index]}'].join(", "));
 			var resultType = result.code == 11 ? (fn.resultPolicy.length != null ? (result.nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes") : (result.nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">')) : result.haxeType;
 			output.add('):$resultType;\n');
-			if (directed)
-				emitOutputWrapper(output, fn.name, parameters, argumentTypes, resultType, abi);
+			if (directed) {
+				var buffer = outputBuffer(parameters);
+				if (buffer == null)
+					emitOutputWrapper(output, fn.name, parameters, argumentTypes, resultType, abi);
+				else
+					emitBufferWrapper(output, fn.name, parameters, argumentTypes, resultType, buffer);
+			}
 		}
 		return output.toString();
 	}
@@ -286,6 +298,16 @@ class HxiProjection {
 			if (parameter.direction != In)
 				return true;
 		return false;
+	}
+
+	static function outputBuffer(parameters:Array<compiler.ffi.HxiModel.HxiParameter>):Null<{name:String, sizeParameter:String}> {
+		for (parameter in parameters)
+			switch parameter.direction {
+				case OutBuffer(sizeParameter):
+					return {name: parameter.name, sizeParameter: sizeParameter};
+				case _:
+			}
+		return null;
 	}
 
 	static function outputInfo(type:compiler.ffi.HxiModel.HxiType, abi:HxiAbi):{
@@ -353,6 +375,8 @@ class HxiProjection {
 						type: info.haxeType,
 						expression: info.structure ? local : '__hxi_struct_get${structAccess(info.code)}($local, 0)'
 					});
+				case OutBuffer(_):
+					throw "Output buffers require their dedicated wrapper";
 			}
 		}
 		var direct = resultType == "Void" && values.length == 1;
@@ -389,6 +413,64 @@ class HxiProjection {
 		}
 		output.add('}\n');
 	}
+
+	static function emitBufferWrapper(output:StringBuf, name:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>, rawArgumentTypes:Array<String>,
+			resultType:String, buffer:{
+			name:String,
+			sizeParameter:String
+		}):Void {
+		var arguments:Array<String> = [],
+			queryArguments:Array<String> = [],
+			callArguments:Array<String> = [];
+		for (index in 0...parameters.length) {
+			var parameter = parameters[index];
+			switch parameter.direction {
+				case In:
+					arguments.push('${parameter.name}:${rawArgumentTypes[index]}');
+					queryArguments.push(parameter.name);
+					callArguments.push(parameter.name);
+				case OutBuffer(_):
+					queryArguments.push("null");
+					callArguments.push("__out_" + buffer.name);
+				case InOut:
+					queryArguments.push("__out_" + buffer.sizeParameter);
+					callArguments.push("__out_" + buffer.sizeParameter);
+				case Out:
+					throw "Output buffers cannot be mixed with ordinary output parameters";
+			}
+		}
+		var direct = resultType == "Void",
+			wrapperResult = direct ? "haxe.io.Bytes" : upperFirst(name) + "OutResult";
+		if (!direct) {
+			output.add('class $wrapperResult {\n');
+			output.add('\tpublic var status:$resultType;\n');
+			output.add('\tpublic var ${buffer.name}:haxe.io.Bytes;\n');
+			output.add('\tpublic function new(status:$resultType, ${buffer.name}:haxe.io.Bytes) {\n');
+			output.add('\t\tthis.status = status;\n');
+			output.add('\t\tthis.${buffer.name} = ${buffer.name};\n');
+			output.add('\t}\n}\n');
+		}
+		output.add('function $name(${arguments.join(", ")}):$wrapperResult {\n');
+		output.add('\tvar __out_${buffer.sizeParameter} = haxe.io.Bytes.alloc(4);\n');
+		output.add('\t__hxi_struct_setI32(__out_${buffer.sizeParameter}, 0, 0);\n');
+		output.add('\t__hxi_raw_$name(${queryArguments.join(", ")});\n');
+		output.add('\tvar __capacity = __hxi_struct_getI32(__out_${buffer.sizeParameter}, 0);\n');
+		output.add('\tif (__capacity < 0 || __capacity > 268435456) throw "HXI output buffer size exceeds the safety limit";\n');
+		output.add('\tvar __out_${buffer.name} = haxe.io.Bytes.alloc(__capacity);\n');
+		output.add('\t__hxi_struct_setI32(__out_${buffer.sizeParameter}, 0, __capacity);\n');
+		if (resultType == "Void")
+			output.add('\t__hxi_raw_$name(${callArguments.join(", ")});\n');
+		else
+			output.add('\tvar __status = __hxi_raw_$name(${callArguments.join(", ")});\n');
+		output.add('\tvar __length = __hxi_struct_getI32(__out_${buffer.sizeParameter}, 0);\n');
+		output.add('\tif (__length < 0 || __length > __capacity) throw "HXI output buffer wrote an invalid size";\n');
+		output.add('\tif (__length != __capacity) __out_${buffer.name} = __hxi_struct_slice(__out_${buffer.name}, 0, __length);\n');
+		if (direct)
+			output.add('\treturn __out_${buffer.name};\n');
+		else
+			output.add('\treturn new $wrapperResult(__status, __out_${buffer.name});\n');
+		output.add('}\n');
+		}
 
 	static function upperFirst(value:String):String
 		return value.length == 0 ? value : value.charAt(0).toUpperCase() + value.substr(1);

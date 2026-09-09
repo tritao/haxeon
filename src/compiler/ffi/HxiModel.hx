@@ -31,6 +31,7 @@ enum HxiParameterDirection {
 	In;
 	Out;
 	InOut;
+	OutBuffer(sizeParameter:String);
 }
 
 enum HxiPointerOwnership {

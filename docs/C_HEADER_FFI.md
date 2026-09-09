@@ -124,9 +124,29 @@ initial pointee value. A non-void C result is returned as the `status` field of
 a generated `<Function>OutResult` class alongside fields named after each
 directed parameter. A void function with one directed parameter returns that
 value directly. Structure `@inout` values are updated in place and also appear
-in the result. Output parameters cannot be nullable, and callback directions,
-pointer-to-pointer outputs, variable-length buffers, and ownership transfer
-through output slots remain unsupported until they have explicit contracts.
+in the result. Output parameters cannot be nullable. Callback directions,
+pointer-to-pointer outputs, and ownership transfer through output slots remain
+unsupported until they have explicit contracts.
+
+A conventional two-call byte buffer uses an explicit paired contract:
+
+```hxi
+extern fn read(
+    data: nullable<ptr<u8>> @out_buffer("size"),
+    size: ptr<u32> @inout
+) -> i32;
+```
+
+The wrapper first calls the function with a null buffer and zero capacity,
+allocates the returned size, then calls it again with managed storage. The final
+`size` is validated against the allocation and trims the result when fewer bytes
+were written. Sizes are limited to 256 MiB. The size parameter must be
+`ptr<u32> @inout`; it and the buffer are hidden from the public Haxe signature.
+The first call's result is intentionally ignored, since many C APIs report
+insufficient capacity during a successful size query. Other input parameters
+are passed identically to both calls, so such functions must make their query
+invocation side-effect safe. Multiple output buffers and mixtures with other
+output parameters are rejected for now.
 
 Named HXI `enum` and `flags` declarations use an explicit `i8`/`u8`, `i16`/`u16`,
 or `i32`/`u32` representation. Their values accept decimal and hexadecimal
