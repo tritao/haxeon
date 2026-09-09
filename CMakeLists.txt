@@ -26,6 +26,13 @@ set_target_properties(hl PROPERTIES ENABLE_EXPORTS ON)
 add_library(haxeon_runtime SHARED native/runtime.c)
 target_include_directories(haxeon_runtime PRIVATE vendor/hashlink/src)
 target_link_libraries(haxeon_runtime PRIVATE libhl hl)
+if(APPLE)
+  # The runtime bridge resolves HashLink's host-owned runtime API from the
+  # executable that loads it. Apple ld requires this to be explicit for a
+  # shared library; ELF linkers allow the same unresolved host symbols by
+  # default.
+  target_link_options(haxeon_runtime PRIVATE "-Wl,-undefined,dynamic_lookup")
+endif()
 set_target_properties(haxeon_runtime PROPERTIES
   PREFIX ""
   SUFFIX ".hdll"
