@@ -45,7 +45,7 @@ class HxiParserMain {
 		expectError(StringTools.replace(valid, "@leaf", "@unknown"), "Unsupported @unknown metadata");
 		expectError(StringTools.replace(valid, "ptr<const<nk_options>>", "nullable<i32>"), "nullable<> requires a pointer type");
 		var pointerPolicies = HxiParser.parse("pointers.hxi",
-			'interface pointers @target("x86_64-linux-gnu") @library("pointers") { opaque context; extern fn create() -> ptr<context> @owned("context_destroy") @length("context_size"); extern fn current() -> nullable<ptr<context>> @borrowed; }');
+			'interface pointers @target("x86_64-linux-gnu") @library("pointers") { opaque context; extern fn create() -> ptr<u8> @owned("context_destroy") @length("context_size"); extern fn current() -> nullable<ptr<context>> @borrowed; }');
 		switch pointerPolicies.declarations[1] {
 			case Function(_, _, _, _, _, {ownership: Owned("context_destroy"), length: "context_size"}, _):
 			case _:
@@ -54,6 +54,8 @@ class HxiParserMain {
 		expectError('interface bad @target("x86_64-linux-gnu") { opaque context; extern fn value() -> ptr<context> @borrowed @owned("free"); }',
 			"cannot combine @borrowed and @owned");
 		expectError('interface bad @target("x86_64-linux-gnu") { extern fn value() -> i32 @borrowed; }', "requires a pointer return type");
+		expectError('interface bad @target("x86_64-linux-gnu") { opaque context; extern fn value() -> ptr<context> @borrowed @length("size"); }',
+			"requires a pointer to byte-sized data");
 		var compiler = new Compiler();
 		compiler.addFfiInterface("nativekit.hxi", valid);
 		expect(compiler.ffiInterfaces().length == 1

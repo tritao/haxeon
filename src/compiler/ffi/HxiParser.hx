@@ -196,12 +196,14 @@ class HxiParser {
 	}
 
 	function validate(value:HxiInterface):Void {
-		var names:Map<String, SourceSpan> = [];
+		var names:Map<String, SourceSpan> = [],
+			declarationsByName:Map<String, HxiDeclaration> = [];
 		for (declaration in value.declarations) {
 			var named = declarationName(declaration);
 			if (names.exists(named.name))
 				fail('Duplicate HXI declaration "${named.name}"', named.span);
 			names.set(named.name, named.span);
+			declarationsByName.set(named.name, declaration);
 		}
 		validateAliasCycles(value.declarations);
 		for (declaration in value.declarations)
@@ -221,10 +223,12 @@ class HxiParser {
 							fail('Field "${field.name}" has an invalid offset for struct "$name"', field.span);
 						validateType(field.type, names, field.span, false);
 					}
-				case Function(_, parameters, result, _, _, _, span):
+				case Function(name, parameters, result, _, _, resultPolicy, span):
 					for (parameter in parameters)
 						validateType(parameter.type, names, parameter.span, false);
 					validateType(result, names, span, true);
+					if (resultPolicy.length != null && !bytePointerLike(result, declarationsByName))
+						fail('@length on "$name" requires a pointer to byte-sized data or void', span);
 			}
 	}
 
@@ -250,9 +254,29 @@ class HxiParser {
 			visiting.remove(name);
 			complete.set(name, true);
 		}
+
 		for (name in aliases.keys())
 			visit(name);
 	}
+
+	static function bytePointerLike(type:HxiType, names:Map<String, HxiDeclaration>):Bool
+		return switch type {
+			case Nullable(element) | Const(element): bytePointerLike(element, names);
+			case Pointer(element): byteElement(element, names);
+			case _: false;
+		};
+
+	static function byteElement(type:HxiType, names:Map<String, HxiDeclaration>):Bool
+		return switch type {
+			case Const(element): byteElement(element, names);
+			case Primitive("void" | "i8" | "u8" | "c_char" | "c_schar" | "c_uchar"): true;
+			case Named(name):
+				switch names.get(name) {
+					case Alias(_, target, _): byteElement(target, names);
+					case _: false;
+				}
+			case _: false;
+		};
 
 	static function visitTypeAliases(type:HxiType, aliases:Map<String, {type:HxiType, span:SourceSpan}>, visit:String->Void):Void
 		switch type {

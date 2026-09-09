@@ -25,12 +25,21 @@ class HxiCallMain {
 			+ '\textern fn pointerValue(value: ptr<const<fixture_context>>) -> i32 @symbol("native_fixture_pointer_value");\n'
 			+ '\textern fn nullablePointerValue(value: nullable<ptr<const<fixture_context>>>) -> i32 @symbol("native_fixture_pointer_value");\n'
 			+ '\textern fn wasReleased() -> i32 @symbol("native_fixture_was_released");\n'
+			+
+			'\textern fn ownedData(first: i32) -> ptr<u8> @symbol("native_fixture_owned_data") @owned("native_fixture_data_release") @length("native_fixture_data_length");\n'
+			+
+			'\textern fn borrowedData(present: i32) -> nullable<ptr<const<u8>>> @symbol("native_fixture_borrowed_data") @borrowed @length("native_fixture_data_length");\n'
+			+ '\textern fn dataWasReleased() -> i32 @symbol("native_fixture_data_was_released");\n'
+			+ '\textern fn dataCheck(data: ptr<const<u8>>) -> i32 @symbol("native_fixture_data_check");\n'
+			+ '\textern fn invalidData() -> ptr<const<u8>> @symbol("native_fixture_invalid_data") @borrowed @length("native_fixture_invalid_data_length");\n'
 			+ '}\n');
 		compiler.update("Main.hx",
-			"import Fixture; import runtime.NativePointer; function main():Int { var owned = Fixture.owned(41); var borrowed = Fixture.borrowed(); var maybe = Fixture.maybeBorrowed(1); var pointers = !NativePointer.native_pointer_is_closed(owned) && !NativePointer.native_pointer_is_closed(borrowed) && Fixture.maybeBorrowed(0) == null && maybe != null && Fixture.pointerValue(owned) == 41 && Fixture.pointerValue(borrowed) == 42 && Fixture.nullablePointerValue(maybe) == 42 && Fixture.nullablePointerValue(null) == 0 && NativePointer.native_pointer_close(owned) && !NativePointer.native_pointer_close(owned) && !NativePointer.native_pointer_close(borrowed) && Fixture.wasReleased() == 42; return pointers && Fixture.multiply(6.0, 7.0) == 42.0 && Fixture.isNull(haxe.io.Bytes.alloc(1)) == 0 && Fixture.isNull(null) == 42 && Fixture.sum16(1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 0, 0, 0, 0, 0) == 42 && Fixture.i64Check(Fixture.i64Value()) == 42 ? Fixture.add(Fixture.add(10, 11), 21) : 1; }");
+			"import Fixture; import runtime.NativePointer; function main():Int { var owned = Fixture.owned(41); var borrowed = Fixture.borrowed(); var maybe = Fixture.maybeBorrowed(1); var ownedData = Fixture.ownedData(40); var borrowedData = Fixture.borrowedData(1); var buffers = Fixture.dataCheck(ownedData) == 42 && borrowedData != null && Fixture.dataCheck(borrowedData) == 42 && Fixture.borrowedData(0) == null && Fixture.dataWasReleased() == 42; var pointers = !NativePointer.native_pointer_is_closed(owned) && !NativePointer.native_pointer_is_closed(borrowed) && Fixture.maybeBorrowed(0) == null && maybe != null && Fixture.pointerValue(owned) == 41 && Fixture.pointerValue(borrowed) == 42 && Fixture.nullablePointerValue(maybe) == 42 && Fixture.nullablePointerValue(null) == 0 && NativePointer.native_pointer_close(owned) && !NativePointer.native_pointer_close(owned) && !NativePointer.native_pointer_close(borrowed) && Fixture.wasReleased() == 42; return buffers && pointers && Fixture.multiply(6.0, 7.0) == 42.0 && Fixture.isNull(haxe.io.Bytes.alloc(1)) == 0 && Fixture.isNull(null) == 42 && Fixture.sum16(1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 0, 0, 0, 0, 0) == 42 && Fixture.i64Check(Fixture.i64Value()) == 42 ? Fixture.add(Fixture.add(10, 11), 21) : 1; }");
 		compiler.compile("Main");
 		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module));
 		compiler.update("Main.hx", "import Fixture; function main():Int return Fixture.invalidNonNull() == null ? 1 : 0;");
 		File.saveBytes(output + ".invalid-null", HlWriter.encode(compiler.compile("Main").module));
+		compiler.update("Main.hx", "import Fixture; function main():Int return Fixture.invalidData() == null ? 1 : 0;");
+		File.saveBytes(output + ".invalid-length", HlWriter.encode(compiler.compile("Main").module));
 	}
 }

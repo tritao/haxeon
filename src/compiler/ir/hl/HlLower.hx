@@ -67,17 +67,19 @@ class HlLower {
 			if (arity > 16)
 				throw 'Ordinary C calls support at most 16 arguments, got $arity for "${native.name}"';
 			var pointerResult = isNativePointer(native.result),
-				dispatchKey = '$arity:$pointerResult';
-			if (pointerResult && native.pointerOwnership == "unspecified")
+				bytesResult = isManagedPointerBytes(native),
+				dispatchKey = '$arity:$pointerResult:$bytesResult';
+			if ((pointerResult || bytesResult) && native.pointerOwnership == "unspecified")
 				throw 'Ordinary C pointer result "${native.name}" requires @borrowed or @owned metadata before execution';
 			if (!dispatchArities.exists(dispatchKey)) {
 				dispatchArities.set(dispatchKey, true);
 				cDispatchNatives.push({
-					name: pointerResult ? '__c_native_pointer_invoke_$arity' : '__c_native_invoke_$arity',
+					name: pointerResult ? '__c_native_pointer_invoke_$arity' : bytesResult ? '__c_native_bytes_invoke_$arity' : '__c_native_invoke_$arity',
 					library: "realtime_runtime",
-					symbol: pointerResult ? 'native_pointer_invoke_$arity' : 'native_invoke_$arity',
-					arguments: (pointerResult ? [Bytes, Bytes, Bytes, Bytes, Bytes, Bool] : [Bytes, Bytes, Bytes]).concat([for (_ in 0...arity) Dyn]),
-					result: pointerResult ? Abstract("native_pointer") : Dyn
+					symbol: pointerResult ? 'native_pointer_invoke_$arity' : bytesResult ? 'native_bytes_invoke_$arity' : 'native_invoke_$arity',
+					arguments: (pointerResult ? [Bytes, Bytes, Bytes, Bytes, Bytes, Bool] : bytesResult ? [Bytes, Bytes, Bytes, Bytes, Bytes, Bytes, Bool] : [Bytes, Bytes, Bytes])
+						.concat([for (_ in 0...arity) Dyn]),
+					result: pointerResult ? Abstract("native_pointer") : bytesResult ? Abstract("realtime_bytes") : Dyn
 				});
 			}
 		}
@@ -440,8 +442,9 @@ class HlLower {
 						instructions.push(HlInstruction.LoadString(callArguments[0], internString(native.library)));
 						instructions.push(HlInstruction.LoadString(callArguments[1], internString(native.symbol)));
 						instructions.push(HlInstruction.LoadString(callArguments[2], internString(native.signature)));
-						var pointerResult = isNativePointer(native.result);
-						if (pointerResult) {
+						var pointerResult = isNativePointer(native.result),
+							bytesResult = isManagedPointerBytes(native);
+						if (pointerResult || bytesResult) {
 							var ownership = temporaryRegister(Bytes, registerTypes),
 								release = temporaryRegister(Bytes, registerTypes),
 								nullable = temporaryRegister(Bool, registerTypes);
@@ -450,6 +453,11 @@ class HlLower {
 							instructions.push(HlInstruction.LoadBool(nullable, native.pointerNullable));
 							callArguments.push(ownership);
 							callArguments.push(release);
+							if (bytesResult) {
+								var length = temporaryRegister(Bytes, registerTypes);
+								instructions.push(HlInstruction.LoadString(length, internString(native.pointerLength)));
+								callArguments.push(length);
+							}
 							callArguments.push(nullable);
 						}
 						for (argument in arguments) {
@@ -460,13 +468,14 @@ class HlLower {
 								instructions.push(HlInstruction.ToDyn(boxed, requireRegister(argument, registers)));
 							callArguments.push(boxed);
 						}
-						var dynamicResult = temporaryRegister(pointerResult ? Abstract("native_pointer") : Dyn, registerTypes);
+						var dynamicResult = temporaryRegister(pointerResult ? Abstract("native_pointer") : bytesResult ? Abstract("realtime_bytes") : Dyn,
+							registerTypes);
 						instructions.push(HlInstruction.CallN(dynamicResult,
-							requireFunction(pointerResult ? '__c_native_pointer_invoke_${arguments.length}' : '__c_native_invoke_${arguments.length}'),
+							requireFunction(pointerResult ? '__c_native_pointer_invoke_${arguments.length}' : bytesResult ? '__c_native_bytes_invoke_${arguments.length}' : '__c_native_invoke_${arguments.length}'),
 							callArguments));
 						if (native.result == Void)
 							defineRegister(output, registers, registerTypes);
-						else if (pointerResult)
+						else if (pointerResult || bytesResult)
 							instructions.push(HlInstruction.Move(defineRegister(output, registers, registerTypes), dynamicResult));
 						else
 							instructions.push(HlInstruction.SafeCast(defineRegister(output, registers, registerTypes), dynamicResult));
@@ -766,13 +775,19 @@ class HlLower {
 
 	static function unsupportedCDispatchResult(type:IrType):Bool
 		return switch type {
-			case I32, I64, Bool, F64, Abstract("native_pointer"): false;
+			case I32, I64, Bool, F64, Abstract("native_pointer"), Abstract("realtime_bytes"): false;
 			default: true;
 		};
 
 	static function isNativePointer(type:IrType):Bool
 		return switch type {
 			case Abstract("native_pointer"): true;
+			case _: false;
+		};
+
+	static function isManagedPointerBytes(native:IrCNative):Bool
+		return native.pointerLength != null && switch native.result {
+			case Abstract("realtime_bytes"): true;
 			case _: false;
 		};
 

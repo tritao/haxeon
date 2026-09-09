@@ -50,10 +50,11 @@ Clang must be available as `clang`. Variadic functions and flexible array
 members are rejected with declaration diagnostics instead of being assigned an
 unsafe approximation.
 
-Raw HXI is the generated ABI interchange layer. It deliberately contains no
-high-level ownership, lifetime, event, or error semantics; those belong in a
-small handwritten Haxe wrapper. Haxeon parses and loads it into a validated ABI
-model, including opaque types and `@symbol`/`@leaf` function metadata.
+Raw HXI is the generated ABI interchange layer. Imported headers leave pointer
+ownership unspecified for later review. Handwritten or enriched HXI can mark
+pointer results with `@borrowed` or `@owned("release_symbol")`, and byte-like
+pointer results with `@length("length_symbol")`. Haxeon parses these policies
+alongside opaque types and `@symbol`/`@leaf` function metadata.
 
 Bridgeable functions are also projected into a generated Haxe module named
 after the HXI interface. The initial projection accepts 8/16/32-bit integers,
@@ -72,10 +73,18 @@ symbol, and signature, so repeated calls do not repeat loading or lookup.
 Integer—including native 64-bit and target-sized integer—and floating-point
 arguments and results, `void` results, and managed
 byte-buffer pointer arguments—including explicit `nullable<ptr<T>>` values—are
-executable. Calls accept up to sixteen
-arguments. Raw pointer results remain rejected because an unbounded C
-pointer cannot safely become a managed `haxe.io.Bytes` value without separate
-length and ownership information.
+executable. Calls accept up to sixteen arguments. Pointers to opaque types use
+opaque handles with explicit, idempotent close operations and finalizer
+fallback for owned values. Unannotated pointer results remain rejected at
+execution time.
+
+`@length("length_symbol")` turns a pointer to byte-sized data or `void` into a
+managed `haxe.io.Bytes` result. The length function receives the same arguments
+as the pointer function and returns `size_t`. The runtime validates the length
+against a 256 MiB safety limit, copies the bytes, and then calls the release
+symbol for owned results. Borrowed memory is never released. Nullable pointer
+results become Haxe `null`; a non-null result contract returning `NULL` is a
+runtime boundary error. `@length` is rejected for opaque resource pointers.
 
 ## Native call runtime
 

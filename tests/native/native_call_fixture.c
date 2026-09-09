@@ -36,6 +36,8 @@ FIXTURE_API int32_t native_fixture_i64_check( int64_t value ) {
 
 static int32_t native_fixture_release_count;
 static int32_t native_fixture_borrowed_value = 42;
+static int32_t native_fixture_data_release_count;
+static const uint8_t native_fixture_borrowed_bytes[] = {40, 41, 42};
 
 FIXTURE_API void *native_fixture_owned( int32_t value ) {
 	int32_t *result = (int32_t *)malloc(sizeof(int32_t));
@@ -66,4 +68,44 @@ FIXTURE_API int32_t native_fixture_pointer_value( const int32_t *value ) {
 
 FIXTURE_API int32_t native_fixture_was_released( void ) {
 	return native_fixture_release_count == 1 ? 42 : 0;
+}
+
+FIXTURE_API uint8_t *native_fixture_owned_data( int32_t first ) {
+	uint8_t *data = (uint8_t *)malloc(3);
+	if( data != NULL ) {
+		data[0] = (uint8_t)first;
+		data[1] = 41;
+		data[2] = 42;
+	}
+	return data;
+}
+
+FIXTURE_API void native_fixture_data_release( void *value ) {
+	free(value);
+	native_fixture_data_release_count++;
+}
+
+FIXTURE_API const uint8_t *native_fixture_borrowed_data( int32_t present ) {
+	return present == 0 ? NULL : native_fixture_borrowed_bytes;
+}
+
+FIXTURE_API size_t native_fixture_data_length( int32_t ignored ) {
+	(void)ignored;
+	return 3;
+}
+
+FIXTURE_API int32_t native_fixture_data_was_released( void ) {
+	return native_fixture_data_release_count == 1 ? 42 : 0;
+}
+
+FIXTURE_API int32_t native_fixture_data_check( const uint8_t *data ) {
+	return data != NULL && data[0] == 40 && data[1] == 41 && data[2] == 42 ? 42 : 0;
+}
+
+FIXTURE_API const uint8_t *native_fixture_invalid_data( void ) {
+	return native_fixture_borrowed_bytes;
+}
+
+FIXTURE_API size_t native_fixture_invalid_data_length( void ) {
+	return SIZE_MAX;
 }

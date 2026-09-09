@@ -28,6 +28,7 @@ class HxiProjection {
 				codes.push(Std.string(value.code));
 			}
 			var returnValue = project(fn.result, true);
+			var managedBytes = fn.resultPolicy.length != null;
 			var ownership = switch fn.resultPolicy.ownership {
 				case Unspecified: {kind: "unspecified", release: null};
 				case Borrowed: {kind: "borrowed", release: null};
@@ -40,7 +41,7 @@ class HxiProjection {
 					symbol: fn.symbol,
 					signature: codes.join(",") + ">" + returnValue.code,
 					arguments: arguments,
-					result: irType(returnValue.code, true),
+					result: managedBytes ? Abstract("realtime_bytes") : irType(returnValue.code, true),
 					pointerOwnership: ownership.kind,
 					pointerRelease: ownership.release,
 					pointerLength: fn.resultPolicy.length,
@@ -76,7 +77,7 @@ class HxiProjection {
 			output.add('@:cNative("${escape(library)}", "${escape(fn.symbol)}", "$signature")\n');
 			output.add('extern function ${fn.name}(');
 			output.add([for (index in 0...argumentTypes.length) 'arg$index:${argumentTypes[index]}'].join(", "));
-			var resultType = result.code == 11 ? (result.nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">') : result.haxeType;
+			var resultType = result.code == 11 ? (fn.resultPolicy.length != null ? (result.nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes") : (result.nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">')) : result.haxeType;
 			output.add('):$resultType;\n');
 		}
 		return output.toString();
