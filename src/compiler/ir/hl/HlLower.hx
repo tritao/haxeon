@@ -68,18 +68,19 @@ class HlLower {
 				throw 'Ordinary C calls support at most 16 arguments, got $arity for "${native.name}"';
 			var pointerResult = isNativePointer(native.result),
 				bytesResult = isManagedPointerBytes(native),
-				dispatchKey = '$arity:$pointerResult:$bytesResult';
+				aggregateResult = isAggregateResult(native),
+				dispatchKey = '$arity:$pointerResult:$bytesResult:$aggregateResult';
 			if ((pointerResult || bytesResult) && native.pointerOwnership == "unspecified")
 				throw 'Ordinary C pointer result "${native.name}" requires @borrowed or @owned metadata before execution';
 			if (!dispatchArities.exists(dispatchKey)) {
 				dispatchArities.set(dispatchKey, true);
 				cDispatchNatives.push({
-					name: pointerResult ? '__c_native_pointer_invoke_$arity' : bytesResult ? '__c_native_bytes_invoke_$arity' : '__c_native_invoke_$arity',
+					name: pointerResult ? '__c_native_pointer_invoke_$arity' : bytesResult ? '__c_native_bytes_invoke_$arity' : aggregateResult ? '__c_native_aggregate_invoke_$arity' : '__c_native_invoke_$arity',
 					library: "realtime_runtime",
-					symbol: pointerResult ? 'native_pointer_invoke_$arity' : bytesResult ? 'native_bytes_invoke_$arity' : 'native_invoke_$arity',
+					symbol: pointerResult ? 'native_pointer_invoke_$arity' : bytesResult ? 'native_bytes_invoke_$arity' : aggregateResult ? 'native_aggregate_invoke_$arity' : 'native_invoke_$arity',
 					arguments: (pointerResult ? [Bytes, Bytes, Bytes, Bytes, Bytes, Bool] : bytesResult ? [Bytes, Bytes, Bytes, Bytes, Bytes, Bytes, Bool] : [Bytes, Bytes, Bytes])
 						.concat([for (_ in 0...arity) Dyn]),
-					result: pointerResult ? Abstract("native_pointer") : bytesResult ? Abstract("realtime_bytes") : Dyn
+					result: pointerResult ? Abstract("native_pointer") : (bytesResult || aggregateResult) ? Abstract("realtime_bytes") : Dyn
 				});
 			}
 		}
@@ -443,7 +444,8 @@ class HlLower {
 						instructions.push(HlInstruction.LoadString(callArguments[1], internString(native.symbol)));
 						instructions.push(HlInstruction.LoadString(callArguments[2], internString(native.signature)));
 						var pointerResult = isNativePointer(native.result),
-							bytesResult = isManagedPointerBytes(native);
+							bytesResult = isManagedPointerBytes(native),
+							aggregateResult = isAggregateResult(native);
 						if (pointerResult || bytesResult) {
 							var ownership = temporaryRegister(Bytes, registerTypes),
 								release = temporaryRegister(Bytes, registerTypes),
@@ -468,14 +470,14 @@ class HlLower {
 								instructions.push(HlInstruction.ToDyn(boxed, requireRegister(argument, registers)));
 							callArguments.push(boxed);
 						}
-						var dynamicResult = temporaryRegister(pointerResult ? Abstract("native_pointer") : bytesResult ? Abstract("realtime_bytes") : Dyn,
+						var dynamicResult = temporaryRegister(pointerResult ? Abstract("native_pointer") : (bytesResult || aggregateResult) ? Abstract("realtime_bytes") : Dyn,
 							registerTypes);
 						instructions.push(HlInstruction.CallN(dynamicResult,
-							requireFunction(pointerResult ? '__c_native_pointer_invoke_${arguments.length}' : bytesResult ? '__c_native_bytes_invoke_${arguments.length}' : '__c_native_invoke_${arguments.length}'),
+							requireFunction(pointerResult ? '__c_native_pointer_invoke_${arguments.length}' : bytesResult ? '__c_native_bytes_invoke_${arguments.length}' : aggregateResult ? '__c_native_aggregate_invoke_${arguments.length}' : '__c_native_invoke_${arguments.length}'),
 							callArguments));
 						if (native.result == Void)
 							defineRegister(output, registers, registerTypes);
-						else if (pointerResult || bytesResult)
+						else if (pointerResult || bytesResult || aggregateResult)
 							instructions.push(HlInstruction.Move(defineRegister(output, registers, registerTypes), dynamicResult));
 						else
 							instructions.push(HlInstruction.SafeCast(defineRegister(output, registers, registerTypes), dynamicResult));
@@ -799,6 +801,12 @@ class HlLower {
 			throw 'IR value ${value.id} is used before definition';
 		return registers.get(value.id);
 	}
+
+	static function isAggregateResult(native:IrCNative):Bool
+		return native.pointerLength == null && switch (native.result) {
+			case Abstract("realtime_bytes"): true;
+			case _: false;
+		};
 
 	function internInt(value:Int):Int {
 		return symbols.internInt(value);

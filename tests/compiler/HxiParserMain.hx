@@ -146,6 +146,14 @@ class HxiParserMain {
 			&& arraySource.indexOf("function set_bytes_bytes") >= 0
 			&& arraySource.indexOf("function get_points(index:Int):point") >= 0,
 			"fixed scalar, byte, and nested structure arrays should project typed accessors");
+		var unnatural = HxiParser.parse("unnatural.hxi",
+			'interface bad @target("x86_64-linux-gnu") @library("bad") { struct values @layout(12, 4) { byte: u8 @offset(0); number: i32 @offset(8); } extern fn consume(value: values) -> void; }');
+		var unnaturalRejected = false;
+		try
+			HxiProjection.cNatives(unnatural)
+		catch (error:Dynamic)
+			unnaturalRejected = Std.string(error).indexOf("natural C struct") >= 0;
+		expect(unnaturalRejected, "non-natural layouts should be rejected when passed by value");
 		expectError('interface bad @target("x86_64-linux-gnu") { struct values @layout(12, 4) { numbers: array<i32, 2> @offset(2); } }', "invalid offset");
 		expectError('interface bad @target("x86_64-linux-gnu") { opaque context; struct holder @layout(8, 8) { context: ptr<context> @offset(0) @owned("destroy"); } }',
 			"Owned pointer field");

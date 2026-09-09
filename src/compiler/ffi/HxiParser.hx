@@ -308,7 +308,7 @@ class HxiParser {
 				case Alias(_, type, span):
 					validateType(type, names, declarationsByName, span, false);
 				case Structure(name, size, align, fields, span):
-					if (size < 0 || align <= 0 || (align & (align - 1)) != 0 || size % align != 0)
+					if (size <= 0 || align <= 0 || (align & (align - 1)) != 0 || size % align != 0)
 						fail('Struct "$name" has invalid layout', span);
 					var fieldNames:Map<String, Bool> = [];
 					var ranges:Array<{start:Int, end:Int, name:String}> = [];

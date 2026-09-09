@@ -14,8 +14,16 @@ class HxiProjection {
 		var library = model.library;
 		if (library == null)
 			return [];
-		var result:Array<IrCNative> = [];
-		for (fn in HxiAbi.forInterface(model).functions()) {
+		var result:Array<IrCNative> = [],
+			declarations:Map<String, HxiDeclaration> = [];
+		for (declaration in model.declarations)
+			switch declaration {
+				case Opaque(name, _) | Alias(name, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _):
+					declarations.set(name, declaration);
+				case _:
+			}
+		var abi = HxiAbi.forInterface(model);
+		for (fn in abi.functions()) {
 			var arguments:Array<IrType> = [],
 				codes:Array<String> = [],
 				supported = true;
@@ -30,7 +38,7 @@ class HxiProjection {
 					case _: value.nativePointer ? "native_pointer" : null;
 				};
 				arguments.push(irType(value.code, false, nativeAbstract));
-				codes.push(Std.string(value.code));
+				codes.push(abiDescriptor(argument, declarations, abi));
 			}
 			var returnValue = project(fn.result, true);
 			var managedBytes = fn.resultPolicy.length != null;
@@ -44,7 +52,7 @@ class HxiProjection {
 					name: model.name + "." + fn.name,
 					library: library,
 					symbol: fn.symbol,
-					signature: callSignature(codes.join(",") + ">" + returnValue.code, fn.callConvention),
+					signature: callSignature(codes.join(",") + ">" + abiDescriptor(fn.result, declarations, abi), fn.callConvention),
 					arguments: arguments,
 					result: managedBytes ? Abstract("realtime_bytes") : irType(returnValue.code, true),
 					pointerOwnership: ownership.kind,
@@ -225,12 +233,12 @@ class HxiProjection {
 					break;
 				}
 				argumentTypes.push(projected.haxeType);
-				codes.push(Std.string(projected.code));
+				codes.push(abiDescriptor(argument, declarations, abi));
 			}
 			var result = project(fn.result, true);
 			if (!supported || result == null)
 				continue;
-			var signature = callSignature(codes.join(",") + ">" + result.code, fn.callConvention);
+			var signature = callSignature(codes.join(",") + ">" + abiDescriptor(fn.result, declarations, abi), fn.callConvention);
 			output.add('@:cNative("${escape(library)}", "${escape(fn.symbol)}", "$signature")\n');
 			output.add('extern function ${fn.name}(');
 			output.add([for (index in 0...argumentTypes.length) 'arg$index:${argumentTypes[index]}'].join(", "));
@@ -289,6 +297,12 @@ class HxiProjection {
 					nativePointer: true,
 					nullable: false
 				};
+			case AggregateValue(name, _, _): {
+					haxeType: name,
+					code: 12,
+					nativePointer: false,
+					nullable: false
+				};
 			case FloatValue(32): {
 					haxeType: "Float",
 					code: 9,
@@ -331,6 +345,88 @@ class HxiProjection {
 
 	static function callSignature(signature:String, convention:String):String
 		return convention == "cdecl" ? signature : signature + "@" + convention;
+
+	static function abiDescriptor(value:HxiAbiValue, declarations:Map<String, HxiDeclaration>, abi:HxiAbi):String
+		return switch value {
+			case AggregateValue(name, size, align):
+				switch declarations.get(name) {
+					case Structure(_, _, _, fields, _):
+						var ordered = fields.copy();
+						ordered.sort((left, right) -> left.offset - right.offset);
+						var cursor = 0, naturalAlign = 1;
+						for (field in ordered) {
+							var layout = abiLayout(field.type, declarations, abi);
+							cursor = (cursor + layout.align - 1) & -layout.align;
+							if (field.offset != cursor)
+								throw 'HXI structure "$name" cannot be passed by value because its layout is not a natural C struct';
+							cursor += layout.size;
+							naturalAlign = Std.int(Math.max(naturalAlign, layout.align));
+						}
+						if (naturalAlign != align || ((cursor + naturalAlign - 1) & -naturalAlign) != size)
+							throw 'HXI structure "$name" cannot be passed by value because its layout is not a natural C struct';
+						'{$size;$align;${[for (field in ordered) for (entry in fieldDescriptors(field.type, declarations, abi)) entry].join(",")}}';
+					case _: throw 'Missing HXI structure "$name"';
+				}
+			case VoidValue: "0";
+			case IntegerValue(64, sign): sign == Unsigned ? "8" : "7";
+			case IntegerValue(bits, sign): Std.string(switch bits {
+					case 8: sign == Signed ? 1 : 2;
+					case 16: sign == Signed ? 3 : 4;
+					case _: sign == Signed ? 5 : 6;
+				});
+			case EnumerationValue(_, bits, sign): Std.string(switch bits {
+					case 8: sign == Signed ? 1 : 2;
+					case 16: sign == Signed ? 3 : 4;
+					case _: sign == Signed ? 5 : 6;
+				});
+			case FloatValue(32): "9";
+			case FloatValue(64): "10";
+			case FloatValue(bits): throw 'Unsupported $bits-bit floating-point ABI value';
+			case PointerValue(_, _, _, _) | CallbackValue(_, _, _, _): "11";
+		};
+
+	static function abiLayout(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>, abi:HxiAbi):{size:Int, align:Int}
+		return switch type {
+			case Const(element): abiLayout(element, declarations, abi);
+			case Array(element, length):
+				var item = abiLayout(element, declarations, abi);
+				{size: item.size * length, align: item.align};
+			case Named(name):
+				switch declarations.get(name) {
+					case Alias(_, target, _): abiLayout(target, declarations, abi);
+					case _: valueLayout(abi.classify(type), abi);
+				}
+			case _: valueLayout(abi.classify(type), abi);
+		};
+
+	static function valueLayout(value:HxiAbiValue, abi:HxiAbi):{size:Int, align:Int}
+		return switch value {
+			case IntegerValue(bits, _) | EnumerationValue(_, bits, _) | FloatValue(bits):
+				var size = Std.int(bits / 8);
+				{size: size, align: Std.int(Math.min(size, abi.pointerBits / 8))};
+			case PointerValue(_, _, _, _) | CallbackValue(_, _, _, _):
+				var size = Std.int(abi.pointerBits / 8);
+				{size: size, align: size};
+			case AggregateValue(_, size, align): {size: size, align: align};
+			case VoidValue: throw "Void field has no C layout";
+		};
+
+	static function fieldDescriptors(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>, abi:HxiAbi):Array<String>
+		return switch type {
+			case Const(element): fieldDescriptors(element, declarations, abi);
+			case Array(element, length): [
+					for (_ in 0...length)
+						for (entry in fieldDescriptors(element, declarations, abi))
+							entry
+				];
+			case Named(name):
+				switch declarations.get(name) {
+					case Alias(_, target, _): fieldDescriptors(target, declarations, abi);
+					case Structure(_, _, _, _, _): [abiDescriptor(abi.classify(type), declarations, abi)];
+					case _: [abiDescriptor(abi.classify(type), declarations, abi)];
+				}
+			case _: [abiDescriptor(abi.classify(type), declarations, abi)];
+		};
 
 	static function structAccess(code:Int):Null<String>
 		return switch code {
@@ -387,6 +483,7 @@ class HxiProjection {
 			case 7 | 8: I64;
 			case 9 | 10: F64;
 			case 11: Abstract(result ? "native_pointer" : nativeAbstract == null ? "realtime_bytes" : nativeAbstract);
+			case 12: Abstract("realtime_bytes");
 			default: I32;
 		};
 }

@@ -18,7 +18,7 @@ enum HxiAbiValue {
 	CallbackValue(name:String, arguments:Array<HxiAbiValue>, result:HxiAbiValue, nullable:Bool);
 	FloatValue(bits:Int);
 	PointerValue(bits:Int, nullable:Bool, opaque:Bool, structure:Null<String>);
-	AggregateValue(size:Int, align:Int);
+	AggregateValue(name:String, size:Int, align:Int);
 }
 
 typedef HxiFunctionAbi = {
@@ -110,7 +110,7 @@ class HxiAbi {
 						}
 					case Callback(_, parameters, result, _, _):
 						CallbackValue(name, [for (parameter in parameters) classify(parameter.type)], classify(result, true), false);
-					case Structure(_, size, align, _, _): AggregateValue(size, align);
+					case Structure(_, size, align, _, _): AggregateValue(name, size, align);
 					case Opaque(_, _): throw 'Opaque HXI type "$name" cannot be passed by value';
 					case _: throw 'HXI declaration "$name" is not a type';
 				}

@@ -100,7 +100,12 @@ may read the structure field. Owned pointer fields are rejected because a
 managed-byte structure cannot retain their destructor safely. `@length_field`
 is likewise reserved until structures can retain input buffers. Unannotated
 pointer fields remain in the ABI model but receive no unsafe generated
-accessors. By-value structures are not executable yet.
+accessors. Naturally laid-out structures can also be passed and returned by
+value. Their recursive field layout is encoded in the native call descriptor,
+including nested structures and fixed arrays; the runtime asks libffi to apply
+the platform's aggregate calling convention and verifies the resulting size
+and alignment. Packed, over-aligned, or manually gapped layouts remain usable
+through pointers but are rejected when projected into a by-value call.
 
 Fixed-size `array<T, N>` fields project indexed getters and setters for integer
 and floating-point elements, with bounds checks against `N` before an address
@@ -174,11 +179,12 @@ the HashLink `@:hlNative` ABI. `runtime.NativeLibrary` explicitly opens and
 closes a dynamic library, resolves a `runtime.NativeFunction` with a fixed
 signature, and invokes it through native-endian eight-byte value slots.
 
-The first runtime slice accepts `void`, signed and unsigned 8/16/32/64-bit
-integers, `float`, `double`, and pointers. It rejects invalid signatures and
-buffer sizes. Variadics, arrays, and aggregates passed by value are
-not supported. Prepared functions retain the underlying library safely even if
-the `NativeLibrary` wrapper is closed.
+The runtime accepts `void`, signed and unsigned 8/16/32/64-bit integers,
+`float`, `double`, pointers, and recursively described C structures. Aggregate
+arguments use fixed-size managed buffers and aggregate results return new owned
+typed buffers. Invalid signatures, layouts, and buffer sizes are rejected.
+Variadic calls remain unsupported. Prepared functions retain the underlying
+library safely even if the `NativeLibrary` wrapper is closed.
 
 HXI maps 64-bit integer ABI values to the compiler's `haxe.Int64` primitive and
 the `I64` SSA/HashLink representation. Consequently `c_long` projects to

@@ -25,6 +25,7 @@ typedef struct native_fixture_arrays {
 	uint8_t name[4];
 	native_fixture_point points[2];
 } native_fixture_arrays;
+typedef struct native_fixture_padded { int8_t tag; int32_t value; } native_fixture_padded;
 
 static int32_t native_fixture_borrowed_value = 42;
 typedef int32_t (*native_fixture_binary_callback)( int32_t, int32_t );
@@ -107,6 +108,24 @@ FIXTURE_API int32_t native_fixture_check_arrays( const native_fixture_arrays *ar
 	return arrays != NULL && arrays->values[0] == 10 && arrays->values[2] == 12
 		&& arrays->name[0] == 'A' && arrays->name[3] == 'D'
 		&& arrays->points[0].x == 10 && arrays->points[1].y == 21 ? 42 : 0;
+}
+
+FIXTURE_API native_fixture_point native_fixture_add_points( native_fixture_point left, native_fixture_point right ) {
+	native_fixture_point result = {left.x + right.x, left.y + right.y};
+	return result;
+}
+
+FIXTURE_API int32_t native_fixture_check_box_value( native_fixture_box box ) {
+	return box.start.x == 10 && box.start.y == 11 && box.end.x == 20 && box.end.y == 21 ? 42 : 0;
+}
+
+FIXTURE_API int32_t native_fixture_check_arrays_value( native_fixture_arrays arrays ) {
+	return native_fixture_check_arrays(&arrays);
+}
+
+FIXTURE_API native_fixture_padded native_fixture_make_padded( int32_t value ) {
+	native_fixture_padded result = {(int8_t)2, value};
+	return result;
 }
 
 FIXTURE_API double native_fixture_multiply( double left, double right ) {
