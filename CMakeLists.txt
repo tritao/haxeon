@@ -23,6 +23,13 @@ add_subdirectory(vendor/hashlink hashlink EXCLUDE_FROM_ALL)
 # also produces the import information required by Windows executable exports.
 set_target_properties(hl PROPERTIES ENABLE_EXPORTS ON)
 
+# HashLink's generic Win64 unwind record does not describe every dynamic stack
+# allocation emitted by this JIT. Use its bounded stack-scan diagnostics path
+# for Haxeon's VM until per-function unwind opcodes are available.
+if(WIN32)
+  target_compile_definitions(hl PRIVATE HL_DISABLE_WIN64_UNWIND_TABLES)
+endif()
+
 add_library(haxeon_runtime SHARED native/runtime.c)
 target_include_directories(haxeon_runtime PRIVATE vendor/hashlink/src)
 target_link_libraries(haxeon_runtime PRIVATE libhl hl)
