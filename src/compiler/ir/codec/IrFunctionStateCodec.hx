@@ -217,6 +217,7 @@ class IrFunctionStateCodec {
 	public static function verify(functions:Array<IrFunction>, context:compiler.ir.Ir.IrProgram):Void {
 		var program = new compiler.ir.Ir.IrProgram(context.entryPoint);
 		program.natives = context.natives;
+		program.cNatives = context.cNatives;
 		program.objects = context.objects;
 		program.interfaces = context.interfaces;
 		program.enums = context.enums;

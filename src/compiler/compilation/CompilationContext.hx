@@ -6,6 +6,7 @@ import compiler.runtime.NativeRegistry.NativeDefinition;
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.hl.incremental.HlModuleAssembler;
 import compiler.ir.Ir.IrNative;
+import compiler.ir.Ir.IrCNative;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrProgram;
 import compiler.modules.ModuleGraph;
@@ -76,6 +77,9 @@ class CompilationContext {
 
 	public function irNatives():Array<IrNative>
 		return owner.irNatives();
+
+	public function irCNatives():Array<IrCNative>
+		return owner.irCNatives();
 
 	public function rehydratedChanges(regenerated:Array<String>, program:IrProgram):Array<String>
 		return owner.rehydratedChanges(regenerated, program);

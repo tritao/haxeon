@@ -10,6 +10,11 @@ DEFINE_PRIM(_BOOL,native_close,_ABSTRACT(native_library));
 DEFINE_PRIM(_ABSTRACT(native_function),native_resolve,_ABSTRACT(native_library) _BYTES _I32 _BYTES _I32 _I32);
 DEFINE_PRIM(_I32,native_call,_ABSTRACT(native_function) _BYTES _I32 _BYTES _I32);
 DEFINE_PRIM(_I32,native_last_error,_BYTES _I32);
+DEFINE_PRIM(_DYN,native_invoke_0,_BYTES _BYTES _BYTES);
+DEFINE_PRIM(_DYN,native_invoke_1,_BYTES _BYTES _BYTES _DYN);
+DEFINE_PRIM(_DYN,native_invoke_2,_BYTES _BYTES _BYTES _DYN _DYN);
+DEFINE_PRIM(_DYN,native_invoke_3,_BYTES _BYTES _BYTES _DYN _DYN _DYN);
+DEFINE_PRIM(_DYN,native_invoke_4,_BYTES _BYTES _BYTES _DYN _DYN _DYN _DYN);
 
 DEFINE_PRIM(_ABSTRACT(realtime_module),load,_BYTES _I32 _BYTES _I32);
 DEFINE_PRIM(_I32,call_i32,_ABSTRACT(realtime_module) _I32);

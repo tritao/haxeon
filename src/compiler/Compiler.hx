@@ -22,6 +22,7 @@ import compiler.hl.persistence.HlAssemblerStateCodec;
 import haxe.io.Bytes;
 import compiler.types.Type.CompilerType;
 import compiler.ir.Ir.IrNative;
+import compiler.ir.Ir.IrCNative;
 import compiler.ir.Ir.IrObject;
 import compiler.types.TypeRegistry;
 import compiler.types.TypeRegistry.TypeCompatibility;
@@ -269,6 +270,14 @@ class Compiler {
 		var names = [for (name in ffiInterfaceModels.keys()) name];
 		names.sort(Reflect.compare);
 		return [for (name in names) ffiInterfaceModels.get(name)];
+	}
+
+	public function irCNatives():Array<IrCNative> {
+		var result:Array<IrCNative> = [];
+		for (model in ffiInterfaces())
+			for (native in HxiProjection.cNatives(model))
+				result.push(native);
+		return result;
 	}
 
 	function ffiConfiguration():Array<FfiInterfaceSource>

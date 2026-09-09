@@ -236,6 +236,128 @@ HL_PRIM int HL_NAME(native_call)( haxeon_native_function *function, vbyte *argum
 	return 0;
 }
 
+typedef struct haxeon_native_cached_call {
+	struct haxeon_native_cached_call *next;
+	char *library;
+	char *symbol;
+	char *signature;
+	haxeon_native_function *function;
+	unsigned char argument_codes[HAXEON_NATIVE_MAX_ARGUMENTS];
+	int argument_count;
+	int result_code;
+} haxeon_native_cached_call;
+
+static haxeon_native_cached_call *haxeon_native_call_cache;
+
+static bool haxeon_native_parse_signature( const char *signature, unsigned char *arguments, int *argument_count, int *result ) {
+	const char *cursor = signature;
+	int count = 0;
+	while( *cursor != '>' ) {
+		char *end;
+		long code;
+		if( *cursor == 0 || count == HAXEON_NATIVE_MAX_ARGUMENTS ) return false;
+		code = strtol(cursor,&end,10);
+		if( end == cursor || code < HAXEON_NATIVE_I8 || code > HAXEON_NATIVE_POINTER ) return false;
+		arguments[count++] = (unsigned char)code;
+		cursor = end;
+		if( *cursor == ',' ) cursor++;
+		else if( *cursor != '>' ) return false;
+	}
+	cursor++;
+	char *end;
+	long result_code = strtol(cursor,&end,10);
+	if( end == cursor || *end != 0 || result_code < HAXEON_NATIVE_VOID || result_code > HAXEON_NATIVE_POINTER ) return false;
+	*argument_count = count;
+	*result = (int)result_code;
+	return true;
+}
+
+static haxeon_native_cached_call *haxeon_native_cached_resolve( const char *library_name, const char *symbol, const char *signature ) {
+	for( haxeon_native_cached_call *entry = haxeon_native_call_cache; entry != NULL; entry = entry->next )
+		if( strcmp(entry->library,library_name) == 0 && strcmp(entry->symbol,symbol) == 0 && strcmp(entry->signature,signature) == 0 ) return entry;
+	haxeon_native_cached_call *entry = (haxeon_native_cached_call *)calloc(1,sizeof(haxeon_native_cached_call));
+	if( entry == NULL ) hl_error("Could not allocate ordinary C call cache entry");
+	if( !haxeon_native_parse_signature(signature,entry->argument_codes,&entry->argument_count,&entry->result_code) )
+		hl_error("Invalid ordinary C call signature");
+	haxeon_native_library *library = HL_NAME(native_open)((vbyte *)library_name,(int)strlen(library_name));
+	if( library == NULL ) hl_error("Could not open ordinary C library: %s",haxeon_native_error);
+	entry->function = HL_NAME(native_resolve)(library,(vbyte *)symbol,(int)strlen(symbol),entry->argument_codes,entry->argument_count,entry->result_code);
+	HL_NAME(native_close)(library);
+	if( entry->function == NULL ) hl_error("Could not resolve ordinary C symbol: %s",haxeon_native_error);
+	entry->library = haxeon_native_string((const vbyte *)library_name,(int)strlen(library_name));
+	entry->symbol = haxeon_native_string((const vbyte *)symbol,(int)strlen(symbol));
+	entry->signature = haxeon_native_string((const vbyte *)signature,(int)strlen(signature));
+	if( entry->library == NULL || entry->symbol == NULL || entry->signature == NULL ) hl_error("Could not retain ordinary C call descriptor");
+	hl_add_root(&entry->function);
+	entry->next = haxeon_native_call_cache;
+	haxeon_native_call_cache = entry;
+	return entry;
+}
+
+static vdynamic *haxeon_native_invoke( vbyte *library, vbyte *symbol, vbyte *signature, vdynamic **arguments, int argument_count ) {
+	if( library == NULL || symbol == NULL || signature == NULL ) hl_error("Null ordinary C call descriptor");
+	const char *converted = hl_to_utf8((const uchar *)library);
+	char *library_name = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
+	converted = hl_to_utf8((const uchar *)symbol);
+	char *symbol_name = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
+	converted = hl_to_utf8((const uchar *)signature);
+	char *signature_text = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
+	if( library_name == NULL || symbol_name == NULL || signature_text == NULL ) hl_error("Could not convert ordinary C call descriptor");
+	haxeon_native_cached_call *entry = haxeon_native_cached_resolve(library_name,symbol_name,signature_text);
+	free(library_name);
+	free(symbol_name);
+	free(signature_text);
+	if( entry->argument_count != argument_count ) hl_error("Ordinary C argument count does not match its signature");
+	unsigned char slots[HAXEON_NATIVE_MAX_ARGUMENTS * HAXEON_NATIVE_SLOT_SIZE];
+	memset(slots,0,sizeof(slots));
+	for( int index = 0; index < argument_count; index++ ) {
+		vdynamic *value = arguments[index];
+		if( value == NULL ) hl_error("Null ordinary C scalar argument");
+		switch( entry->argument_codes[index] ) {
+		case HAXEON_NATIVE_I8: case HAXEON_NATIVE_U8: case HAXEON_NATIVE_I16: case HAXEON_NATIVE_U16:
+		case HAXEON_NATIVE_I32: case HAXEON_NATIVE_U32: memcpy(slots + index * HAXEON_NATIVE_SLOT_SIZE,&value->v.i,sizeof(int)); break;
+		case HAXEON_NATIVE_F32: { float converted = (float)value->v.d; memcpy(slots + index * HAXEON_NATIVE_SLOT_SIZE,&converted,sizeof(float)); break; }
+		case HAXEON_NATIVE_F64: memcpy(slots + index * HAXEON_NATIVE_SLOT_SIZE,&value->v.d,sizeof(double)); break;
+		case HAXEON_NATIVE_POINTER: {
+			void *pointer = value->t->kind == HABSTRACT ? ((realtime_bytes *)value->v.ptr)->data : value->v.bytes;
+			memcpy(slots + index * HAXEON_NATIVE_SLOT_SIZE,&pointer,sizeof(void *));
+			break;
+		}
+		default: hl_error("Unsupported ordinary C argument type");
+		}
+	}
+	unsigned char output[HAXEON_NATIVE_SLOT_SIZE] = {0};
+	if( HL_NAME(native_call)(entry->function,slots,argument_count * HAXEON_NATIVE_SLOT_SIZE,output,sizeof(output)) != 0 )
+		hl_error("Ordinary C call failed: %s",haxeon_native_error);
+	if( entry->result_code == HAXEON_NATIVE_VOID ) return NULL;
+	vdynamic *result;
+	switch( entry->result_code ) {
+	case HAXEON_NATIVE_I8: case HAXEON_NATIVE_U8: case HAXEON_NATIVE_I16: case HAXEON_NATIVE_U16:
+	case HAXEON_NATIVE_I32: case HAXEON_NATIVE_U32:
+		result = hl_alloc_dynamic(&hlt_i32);
+		switch( entry->result_code ) {
+		case HAXEON_NATIVE_I8: { int8_t value; memcpy(&value,output,sizeof(value)); result->v.i = value; break; }
+		case HAXEON_NATIVE_U8: { uint8_t value; memcpy(&value,output,sizeof(value)); result->v.i = value; break; }
+		case HAXEON_NATIVE_I16: { int16_t value; memcpy(&value,output,sizeof(value)); result->v.i = value; break; }
+		case HAXEON_NATIVE_U16: { uint16_t value; memcpy(&value,output,sizeof(value)); result->v.i = value; break; }
+		default: memcpy(&result->v.i,output,sizeof(int)); break;
+		}
+		return result;
+	case HAXEON_NATIVE_F32: { float value; memcpy(&value,output,sizeof(float)); result = hl_alloc_dynamic(&hlt_f64); result->v.d = value; return result; }
+	case HAXEON_NATIVE_F64:
+		result = hl_alloc_dynamic(&hlt_f64); memcpy(&result->v.d,output,sizeof(double)); return result;
+	case HAXEON_NATIVE_POINTER:
+		result = hl_alloc_dynamic(&hlt_bytes); memcpy(&result->v.bytes,output,sizeof(void *)); return result;
+	default: hl_error("Unsupported ordinary C result type"); return NULL;
+	}
+}
+
+HL_PRIM vdynamic *HL_NAME(native_invoke_0)( vbyte *library, vbyte *symbol, vbyte *signature ) { return haxeon_native_invoke(library,symbol,signature,NULL,0); }
+HL_PRIM vdynamic *HL_NAME(native_invoke_1)( vbyte *library, vbyte *symbol, vbyte *signature, vdynamic *a0 ) { vdynamic *a[] = {a0}; return haxeon_native_invoke(library,symbol,signature,a,1); }
+HL_PRIM vdynamic *HL_NAME(native_invoke_2)( vbyte *library, vbyte *symbol, vbyte *signature, vdynamic *a0, vdynamic *a1 ) { vdynamic *a[] = {a0,a1}; return haxeon_native_invoke(library,symbol,signature,a,2); }
+HL_PRIM vdynamic *HL_NAME(native_invoke_3)( vbyte *library, vbyte *symbol, vbyte *signature, vdynamic *a0, vdynamic *a1, vdynamic *a2 ) { vdynamic *a[] = {a0,a1,a2}; return haxeon_native_invoke(library,symbol,signature,a,3); }
+HL_PRIM vdynamic *HL_NAME(native_invoke_4)( vbyte *library, vbyte *symbol, vbyte *signature, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3 ) { vdynamic *a[] = {a0,a1,a2,a3}; return haxeon_native_invoke(library,symbol,signature,a,4); }
+
 HL_PRIM int HL_NAME(native_last_error)( vbyte *output, int capacity ) {
 	int length = (int)strlen(haxeon_native_error);
 	if( output == NULL || capacity < length ) return -length;

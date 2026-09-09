@@ -13,6 +13,7 @@ import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrTerminator;
 import compiler.ir.Ir.IrBlock;
 import compiler.ir.Ir.IrNative;
+import compiler.ir.Ir.IrCNative;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
@@ -29,6 +30,8 @@ class HlLower {
 	final objectTypeIndices:Map<String, Int> = [];
 	final objects:Map<String, IrObject> = [];
 	final enumTypeIndices:Map<String, Int> = [];
+	final cNatives:Map<String, IrCNative> = [];
+	final cDispatchNatives:Array<IrNative> = [];
 
 	public static function lower(program:IrProgram):HlCode {
 		IrVerifier.verify(program);
@@ -57,6 +60,23 @@ class HlLower {
 	}
 
 	function lowerProgram(program:IrProgram):HlCode {
+		var dispatchArities:Map<Int, Bool> = [];
+		for (native in program.cNatives) {
+			cNatives.set(native.name, native);
+			var arity = native.arguments.length;
+			if (arity > 4)
+				throw 'Ordinary C calls currently support at most 4 arguments, got $arity for "${native.name}"';
+			if (!dispatchArities.exists(arity)) {
+				dispatchArities.set(arity, true);
+				cDispatchNatives.push({
+					name: '__c_native_invoke_$arity',
+					library: "realtime_runtime",
+					symbol: 'native_invoke_$arity',
+					arguments: [Bytes, Bytes, Bytes].concat([for (_ in 0...arity) Dyn]),
+					result: Dyn
+				});
+			}
+		}
 		var hasFunctionIndices = false;
 		for (_ in functionIndices)
 			hasFunctionIndices = true;
@@ -64,8 +84,18 @@ class HlLower {
 			var nextFunction = 0;
 			for (native in program.natives)
 				addFunctionName(native.name, nextFunction++);
+			for (native in cDispatchNatives)
+				addFunctionName(native.name, nextFunction++);
 			for (fn in program.functions)
 				addFunctionName(fn.name, nextFunction++);
+		} else {
+			var nextFunction = 0;
+			for (index in functionIndices)
+				if (index >= nextFunction)
+					nextFunction = index + 1;
+			for (native in cDispatchNatives)
+				if (!functionIndices.exists(native.name))
+					addFunctionName(native.name, nextFunction++);
 		}
 		for (enumDecl in program.enums)
 			symbols.reserveEnum(enumDecl.name);
@@ -126,6 +156,8 @@ class HlLower {
 		for (field in program.staticFields)
 			symbols.internGlobal(field.name, field.type);
 		for (native in program.natives)
+			lowerNative(native);
+		for (native in cDispatchNatives)
 			lowerNative(native);
 		for (fn in program.functions)
 			try {
@@ -381,8 +413,34 @@ class HlLower {
 							case 2: instructions.push(HlInstruction.Call2(destination, functionIndex, args[0], args[1]));
 							default: instructions.push(HlInstruction.CallN(destination, functionIndex, args));
 						}
-					case CNativeCall(_, functionName, _):
-						throw 'Ordinary C call lowering is not implemented yet for "$functionName"';
+					case CNativeCall(output, functionName, arguments):
+						var native = cNatives.get(functionName);
+						if (native == null)
+							throw 'Unknown ordinary C function "$functionName"';
+						for (type in native.arguments)
+							if (unsupportedCDispatchArgument(type))
+								throw 'Ordinary C function "$functionName" uses an unsupported executable argument type $type';
+						if (native.result != Void && unsupportedCDispatchResult(native.result))
+							throw 'Ordinary C function "$functionName" uses an unsupported executable result type ${native.result}';
+						var callArguments = [
+							temporaryRegister(Bytes, registerTypes),
+							temporaryRegister(Bytes, registerTypes),
+							temporaryRegister(Bytes, registerTypes)
+						];
+						instructions.push(HlInstruction.LoadString(callArguments[0], internString(native.library)));
+						instructions.push(HlInstruction.LoadString(callArguments[1], internString(native.symbol)));
+						instructions.push(HlInstruction.LoadString(callArguments[2], internString(native.signature)));
+						for (argument in arguments) {
+							var boxed = temporaryRegister(Dyn, registerTypes);
+							instructions.push(HlInstruction.ToDyn(boxed, requireRegister(argument, registers)));
+							callArguments.push(boxed);
+						}
+						var dynamicResult = temporaryRegister(Dyn, registerTypes);
+						instructions.push(HlInstruction.CallN(dynamicResult, requireFunction('__c_native_invoke_${arguments.length}'), callArguments));
+						if (native.result == Void)
+							defineRegister(output, registers, registerTypes);
+						else
+							instructions.push(HlInstruction.SafeCast(defineRegister(output, registers, registerTypes), dynamicResult));
 					case StaticClosure(output, functionName):
 						instructions.push(HlInstruction.StaticClosure(defineRegister(output, registers, registerTypes), requireFunction(functionName)));
 					case InstanceClosure(output, functionName, receiver):
@@ -664,6 +722,24 @@ class HlLower {
 		types.push(internType(value.type));
 		return index;
 	}
+
+	function temporaryRegister(type:IrType, types:Array<Int>):Int {
+		var index = types.length;
+		types.push(internType(type));
+		return index;
+	}
+
+	static function unsupportedCDispatchArgument(type:IrType):Bool
+		return switch type {
+			case I32, Bool, F64, Abstract("realtime_bytes"): false;
+			default: true;
+		};
+
+	static function unsupportedCDispatchResult(type:IrType):Bool
+		return switch type {
+			case I32, Bool, F64: false;
+			default: true;
+		};
 
 	static function instructionOutput(instruction:IrInstruction):Null<IrValue>
 		return compiler.ir.IrOperands.output(instruction);

@@ -6,6 +6,7 @@ import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypedAst.TypedCaptureSource;
 import compiler.ir.Ir.IrProgram;
+import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.Ir.IrCNative;
@@ -16,6 +17,7 @@ import compiler.ir.Ir.IrObjectMethod;
 import compiler.ir.Ir.IrInterface;
 import compiler.ir.Ir.IrEnum;
 import compiler.ir.Ir.IrStaticField;
+import compiler.ir.SourceProvenance.Located;
 
 /** Builds complete IR programs and selects their required runtime surface. */
 class IrProgramAssembler {
@@ -269,6 +271,15 @@ class IrProgramAssembler {
 					}
 		program.objects = objects == null ? [] : objects;
 		program.cNatives = cNatives == null ? [] : cNatives;
+		var cNativeNames:Map<String, Bool> = [for (native in program.cNatives) native.name => true];
+		for (fn in allFunctions)
+			for (block in fn.blocks)
+				for (index in 0...block.instructions.length)
+					switch block.instructions[index].value {
+						case Call(output, name, arguments) if (cNativeNames.exists(name)):
+							block.instructions[index] = new Located(CNativeCall(output, name, arguments), block.instructions[index].provenance);
+						case _:
+					}
 		program.interfaces = interfaces == null ? [] : interfaces;
 		program.enums = enums == null ? [] : enums;
 		program.staticFields = staticFields == null ? [] : staticFields;

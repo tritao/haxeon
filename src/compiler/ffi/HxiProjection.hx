@@ -3,9 +3,43 @@ package compiler.ffi;
 import compiler.ffi.HxiAbi.HxiAbiValue;
 import compiler.ffi.HxiAbi.HxiIntegerSign;
 import compiler.ffi.HxiModel.HxiInterface;
+import compiler.ir.Ir.IrCNative;
+import compiler.ir.Ir.IrType;
 
 /** Projects bridgeable HXI functions into a synthetic, source-visible module. */
 class HxiProjection {
+	public static function cNatives(model:HxiInterface):Array<IrCNative> {
+		var library = model.library;
+		if (library == null)
+			return [];
+		var result:Array<IrCNative> = [];
+		for (fn in HxiAbi.forInterface(model).functions()) {
+			var arguments:Array<IrType> = [],
+				codes:Array<String> = [],
+				supported = true;
+			for (argument in fn.arguments) {
+				var value = project(argument, false);
+				if (value == null) {
+					supported = false;
+					break;
+				}
+				arguments.push(irType(value.code));
+				codes.push(Std.string(value.code));
+			}
+			var returnValue = project(fn.result, true);
+			if (supported && returnValue != null)
+				result.push({
+					name: model.name + "." + fn.name,
+					library: library,
+					symbol: fn.symbol,
+					signature: codes.join(",") + ">" + returnValue.code,
+					arguments: arguments,
+					result: irType(returnValue.code)
+				});
+		}
+		return result;
+	}
+
 	public static function source(model:HxiInterface):String {
 		var library = model.library;
 		if (library == null)
@@ -58,4 +92,12 @@ class HxiProjection {
 
 	static function escape(value:String):String
 		return StringTools.replace(StringTools.replace(value, "\\", "\\\\"), '"', '\\"');
+
+	static function irType(code:Int):IrType
+		return switch code {
+			case 0: Void;
+			case 9 | 10: F64;
+			case 11: Abstract("realtime_bytes");
+			default: I32;
+		};
 }

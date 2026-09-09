@@ -52,6 +52,8 @@ class HxiParserMain {
 			"compiler should expose bridgeable HXI functions through a generated source module");
 		compiler.update("Main.hx", "import nativekit; function main():Int return nativekit.nk_version();");
 		compiler.analyze("Main");
+		expect(compiler.irCNatives().length == 2 && compiler.irCNatives()[1].name == "nativekit.nk_version",
+			"compiler should retain executable C descriptors for projected functions");
 		var duplicateRejected = false;
 		try
 			compiler.addFfiInterface("duplicate.hxi", valid)

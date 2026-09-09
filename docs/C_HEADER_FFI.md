@@ -66,8 +66,14 @@ Each projected function carries private `@:cNative(library, symbol, signature)`
 metadata. The typer preserves that descriptor and emits a dedicated
 `CNativeCall` instruction, keeping ordinary C calls separate from HashLink's
 native calling convention throughout typed AST, CFG, SSA IR, verification, and
-serialization. Backend execution lowering is not implemented yet and rejects
-these calls explicitly instead of treating them as HashLink natives.
+serialization. The HashLink backend lowers scalar calls through the ordinary-C
+runtime bridge. Libraries and prepared libffi functions are cached by library,
+symbol, and signature, so repeated calls do not repeat loading or lookup.
+Integer and floating-point arguments and results, `void` results, and managed
+byte-buffer pointer arguments are executable. Calls currently accept at most
+four arguments. Raw pointer results remain rejected because an unbounded C
+pointer cannot safely become a managed `haxe.io.Bytes` value without separate
+length and ownership information.
 
 ## Native call runtime
 
