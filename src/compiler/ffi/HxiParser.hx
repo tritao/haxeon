@@ -102,9 +102,34 @@ class HxiParser {
 			case "struct": parseStructure(start);
 			case "enum": parseEnumeration(start, false);
 			case "flags": parseEnumeration(start, true);
+			case "callback": parseCallback(start);
 			case "extern": parseFunction(start);
 			default: fail('Expected HXI declaration, got "${current().text}"', current().span);
 		}
+	}
+
+	function parseCallback(start:SourceSpan):HxiDeclaration {
+		advance();
+		var name = identifier();
+		expect("=");
+		expect("fn");
+		var parameters = parseParameters();
+		expect("->");
+		var result = parseType(), end = expect(";").span;
+		return Callback(name, parameters, result, start.merge(end));
+	}
+
+	function parseParameters():Array<HxiParameter> {
+		expect("(");
+		var parameters:Array<HxiParameter> = [];
+		if (!check(")"))
+			do {
+				var start = current().span, name = identifier();
+				expect(":");
+				parameters.push({name: name, type: parseType(), span: start.merge(previous().span)});
+			} while (match(","));
+		expect(")");
+		return parameters;
 	}
 
 	function parseEnumeration(start:SourceSpan, flags:Bool):HxiDeclaration {
@@ -209,16 +234,7 @@ class HxiParser {
 		expect("extern");
 		expect("fn");
 		var name = identifier();
-		expect("(");
-		var parameters:Array<HxiParameter> = [];
-		if (!check(")"))
-			do {
-				var parameterStart = current().span,
-					parameterName = identifier();
-				expect(":");
-				parameters.push({name: parameterName, type: parseType(), span: parameterStart.merge(previous().span)});
-			} while (match(","));
-		expect(")");
+		var parameters = parseParameters();
 		expect("->");
 		var result = parseType(),
 			metadata = parseMetadata(["symbol", "leaf", "borrowed", "owned", "length"]),
@@ -339,6 +355,12 @@ class HxiParser {
 							fail('Value "${entry.name}" duplicates "${seenValues.get(entry.value)}" in enum "$name"', entry.span);
 						seenValues.set(entry.value, entry.name);
 					}
+				case Callback(name, parameters, result, span):
+					if (parameters.length > 16)
+						fail('Callback "$name" exceeds the 16 argument limit', span);
+					for (parameter in parameters)
+						validateCallbackType(parameter.type, abi, parameter.span, false);
+					validateCallbackType(result, abi, span, true);
 				case Function(name, parameters, result, _, _, resultPolicy, span):
 					for (parameter in parameters)
 						validateType(parameter.type, names, parameter.span, false);
@@ -347,6 +369,18 @@ class HxiParser {
 						fail('@length on "$name" requires a pointer to byte-sized data or void', span);
 			}
 	}
+
+	function validateCallbackType(type:HxiType, abi:HxiAbi, span:SourceSpan, allowVoid:Bool):Void
+		try {
+			switch abi.classify(type, allowVoid) {
+				case VoidValue if (allowVoid):
+				case IntegerValue(_, _) | EnumerationValue(_, _, _) | FloatValue(_):
+				case _:
+					fail("Callbacks currently support only scalar arguments and results", span);
+			}
+		} catch (error:Dynamic) {
+			fail(Std.string(error), span);
+		}
 
 	static function typeLayout(type:HxiType, abi:HxiAbi, declarations:Map<String, HxiDeclaration>, resolving:Map<String, Bool>):Null<{
 		size:Int,
@@ -483,7 +517,7 @@ class HxiParser {
 	static function declarationName(value:HxiDeclaration):{name:String, span:SourceSpan}
 		return switch value {
 			case Opaque(name, span) | Alias(name, _, span) | Constant(name, _, span) | Structure(name, _, _, _, span) | Enumeration(name, _, _, _, span) |
-				Function(name, _, _, _, _, _, span):
+				Callback(name, _, _, span) | Function(name, _, _, _, _, _, span):
 				{name: name, span: span};
 		}
 

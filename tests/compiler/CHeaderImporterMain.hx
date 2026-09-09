@@ -11,6 +11,8 @@ class CHeaderImporterMain {
 		expect(first.indexOf("extern fn sample_error() -> ptr<const<c_char>>") >= 0, "pointer results should import");
 		expect(first.indexOf("extern fn sample_create(") >= 0, "functions should import");
 		expect(first.indexOf("type sample_handle = u32") >= 0, "fixed-width C types should use raw-HXI primitives");
+		expect(first.indexOf("callback sample_binary_callback = fn(arg0: i32, arg1: i32) -> i32") >= 0,
+			"function pointer typedefs should import as typed callbacks");
 		expect(first.indexOf("const SAMPLE_FLAG = 8") >= 0, "constant expressions should use Clang's evaluated value");
 		expect(first.indexOf("enum sample_result : c_int") >= 0 && first.indexOf("SAMPLE_RESULT_FAILED = -1") >= 0,
 			"named C enums should import as nominal HXI enums");

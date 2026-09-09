@@ -769,7 +769,7 @@ class HlLower {
 
 	static function unsupportedCDispatchArgument(type:IrType):Bool
 		return switch type {
-			case I32, I64, Bool, F64, Abstract("realtime_bytes"), Abstract("native_pointer"): false;
+			case I32, I64, Bool, F64, Abstract("realtime_bytes"), Abstract("native_pointer"), Abstract("native_callback"): false;
 			default: true;
 		};
 

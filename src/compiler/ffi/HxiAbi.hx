@@ -15,6 +15,7 @@ enum HxiAbiValue {
 	VoidValue;
 	IntegerValue(bits:Int, sign:HxiIntegerSign);
 	EnumerationValue(name:String, bits:Int, sign:HxiIntegerSign);
+	CallbackValue(name:String, arguments:Array<HxiAbiValue>, result:HxiAbiValue);
 	FloatValue(bits:Int);
 	PointerValue(bits:Int, nullable:Bool, opaque:Bool, structure:Null<String>);
 	AggregateValue(size:Int, align:Int);
@@ -104,6 +105,8 @@ class HxiAbi {
 							case IntegerValue(bits, sign): EnumerationValue(name, bits, sign);
 							case _: throw 'Enum HXI type "$name" does not have an integer representation';
 						}
+					case Callback(_, parameters, result, _):
+						CallbackValue(name, [for (parameter in parameters) classify(parameter.type)], classify(result, true));
 					case Structure(_, size, align, _, _): AggregateValue(size, align);
 					case Opaque(_, _): throw 'Opaque HXI type "$name" cannot be passed by value';
 					case _: throw 'HXI declaration "$name" is not a type';
@@ -158,6 +161,6 @@ class HxiAbi {
 	static function nameOf(declaration:HxiDeclaration):String
 		return switch declaration {
 			case Opaque(name, _) | Alias(name, _, _) | Constant(name, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _) |
-				Function(name, _, _, _, _, _, _): name;
+				Callback(name, _, _, _) | Function(name, _, _, _, _, _, _): name;
 		};
 }

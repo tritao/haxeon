@@ -59,6 +59,21 @@ class HxiParserMain {
 		expectError('interface bad @target("x86_64-linux-gnu") { enum value : u8 { A = 256; } }', "outside the representation");
 		expectError('interface bad @target("x86_64-linux-gnu") { enum value : i32 { A = 0; B = 0; } }', "duplicates");
 		expectError('interface bad @target("x86_64-linux-gnu") { enum value : i32 { A = 1 << 32; } }', "shift count");
+		var callbacks = HxiParser.parse("callbacks.hxi",
+			'interface callbacks @target("x86_64-linux-gnu") @library("callbacks") { callback Binary = fn(left: i32, right: i32) -> i32; extern fn apply(callback: Binary, left: i32, right: i32) -> i32; }');
+		var callbackSource = HxiProjection.source(callbacks);
+		expect(callbackSource.indexOf("typedef Binary = (left:Int, right:Int)->Int") >= 0
+			&& callbackSource.indexOf("abstract BinaryCallback") >= 0
+			&& callbackSource.indexOf("extern function apply(arg0:BinaryCallback") >= 0,
+			"callbacks should project typed functions behind explicitly owned native handles");
+		var callbackCompiler = new Compiler();
+		callbackCompiler.addFfiInterface("callbacks.hxi",
+			'interface callbacks @target("x86_64-linux-gnu") @library("callbacks") { callback Binary = fn(left: i32, right: i32) -> i32; extern fn apply(callback: Binary) -> i32; }');
+		callbackCompiler.update("CallbackMain.hx",
+			"import callbacks; function main():Int { var callback = new BinaryCallback(function(left:Int, right:Int) return left + right); return callbacks.apply(callback); }");
+		callbackCompiler.analyze("CallbackMain");
+		expectError('interface bad @target("x86_64-linux-gnu") { callback Invalid = fn(value: ptr<void>) -> void; }',
+			"Callbacks currently support only scalar");
 		expectError(valid + "garbage", "Unexpected token");
 		expectError(StringTools.replace(valid, "@offset(8)", "@offset(16)"), "invalid offset");
 		expectError('interface bad @target("x86_64-linux-gnu") { struct pair @layout(8, 4) { left: i32 @offset(0); right: i32 @offset(0); } }',

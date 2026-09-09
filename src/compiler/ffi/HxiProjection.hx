@@ -25,7 +25,11 @@ class HxiProjection {
 					supported = false;
 					break;
 				}
-				arguments.push(irType(value.code, false, value.nativePointer));
+				var nativeAbstract = switch argument {
+					case CallbackValue(_, _, _): "native_callback";
+					case _: value.nativePointer ? "native_pointer" : null;
+				};
+				arguments.push(irType(value.code, false, nativeAbstract));
 				codes.push(Std.string(value.code));
 			}
 			var returnValue = project(fn.result, true);
@@ -62,11 +66,36 @@ class HxiProjection {
 		var usesNestedStructures = false, usesPointerFields = false;
 		for (declaration in model.declarations)
 			switch declaration {
-				case Opaque(name, _) | Alias(name, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _):
+				case Opaque(name, _) | Alias(name, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _):
 					declarations.set(name, declaration);
 				case _:
 			}
 		output.add('// Generated semantic projection of ${model.name}. Do not edit.\n');
+		for (declaration in model.declarations)
+			switch declaration {
+				case Callback(name, parameters, result, _):
+					var argumentTypes = [], codes = [], supported = true;
+					for (parameter in parameters) {
+						var value = project(abi.classify(parameter.type), false);
+						if (value == null) {
+							supported = false;
+							break;
+						}
+						argumentTypes.push('${parameter.name}:${value.haxeType}');
+						codes.push(Std.string(value.code));
+					}
+					var returnValue = project(abi.classify(result, true), true);
+					if (!supported || returnValue == null)
+						continue;
+					var signature = codes.join(",") + ">" + returnValue.code;
+					output.add('typedef $name = (${argumentTypes.join(", ")})->${returnValue.haxeType};\n');
+					output.add('abstract ${name}Callback(hl.Abstract<"native_callback">) {\n');
+					output.add('\tpublic inline function new(callback:$name) this = ${model.name}.__hxi_callback_create(haxe.io.Bytes.ofString("$signature"), callback);\n');
+					output.add('\tpublic inline function close():Bool return ${model.name}.__hxi_callback_close_$name(this);\n');
+					output.add('}\n');
+					output.add('@:hlNative("realtime_runtime", "native_callback_close") extern function __hxi_callback_close_$name(callback:${name}Callback):Bool;\n');
+				case _:
+			}
 		for (declaration in model.declarations)
 			switch declaration {
 				case Enumeration(name, representation, _, values, _):
@@ -147,6 +176,15 @@ class HxiProjection {
 			output.add('@:hlNative("realtime_runtime", "structGetPointer") extern function __hxi_struct_get_pointer(bytes:haxe.io.Bytes, offset:Int, nullable:Bool):hl.Abstract<"native_pointer">;\n');
 			output.add('@:hlNative("realtime_runtime", "structSetPointer") extern function __hxi_struct_set_pointer(bytes:haxe.io.Bytes, offset:Int, value:hl.Abstract<"native_pointer">, nullable:Bool):Void;\n');
 		}
+		if ([
+			for (declaration in model.declarations)
+				if (switch declaration {
+						case Callback(_, _, _, _): true;
+						case _: false;
+					}) declaration
+		].length > 0) {
+			output.add('@:hlNative("realtime_runtime", "native_callback_create") extern function __hxi_callback_create(signature:haxe.io.Bytes, callback:Dynamic):hl.Abstract<"native_callback">;\n');
+		}
 		for (access in ["I8", "U8", "I16", "U16", "I32", "I64", "F32", "F64"]) {
 			var types = structAccesses.get(access);
 			if (types == null)
@@ -223,6 +261,12 @@ class HxiProjection {
 						default: unsigned ? 6 : 5;
 					}
 				};
+			case CallbackValue(name, _, _): {
+					haxeType: name + "Callback",
+					code: 11,
+					nativePointer: true,
+					nullable: false
+				};
 			case FloatValue(32): {
 					haxeType: "Float",
 					code: 9,
@@ -296,12 +340,12 @@ class HxiProjection {
 			case _: null;
 		};
 
-	static function irType(code:Int, result:Bool = false, nativePointer:Bool = false):IrType
+	static function irType(code:Int, result:Bool = false, nativeAbstract:Null<String> = null):IrType
 		return switch code {
 			case 0: Void;
 			case 7 | 8: I64;
 			case 9 | 10: F64;
-			case 11: Abstract(result || nativePointer ? "native_pointer" : "realtime_bytes");
+			case 11: Abstract(result ? "native_pointer" : nativeAbstract == null ? "realtime_bytes" : nativeAbstract);
 			default: I32;
 		};
 }

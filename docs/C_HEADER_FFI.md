@@ -119,6 +119,18 @@ native calls and structure fields retain the declared integer ABI. Clang-importe
 named C enums currently use `c_int` unless the header specifies a fixed underlying
 type; `flags` remains an explicit HXI authoring distinction rather than a heuristic.
 
+C function-pointer typedefs import as HXI `callback` declarations. Scalar
+callback arguments and results use the same integer and floating-point ABI
+classification as ordinary calls, with `void` also accepted as a result.
+Projection generates a typed Haxe function alias and a distinct managed callback
+handle. Constructing the handle allocates a libffi closure and roots the Haxe
+function; `close()` releases both resources and is idempotent. If C retains the
+function pointer, callers must retain this handle until they have unregistered
+the callback, then close it. Invocations are accepted only on the thread where
+the handle was created; a call from another thread does not enter Haxe and
+returns a zero value. Pointer callback arguments/results, variadic callbacks,
+and callbacks with more than sixteen arguments are rejected for now.
+
 ## Native call runtime
 
 The runtime has a separate ordinary-C call bridge built on libffi. This is not
@@ -128,7 +140,7 @@ signature, and invokes it through native-endian eight-byte value slots.
 
 The first runtime slice accepts `void`, signed and unsigned 8/16/32/64-bit
 integers, `float`, `double`, and pointers. It rejects invalid signatures and
-buffer sizes. Variadics, callbacks, arrays, and aggregates passed by value are
+buffer sizes. Variadics, arrays, and aggregates passed by value are
 not supported. Prepared functions retain the underlying library safely even if
 the `NativeLibrary` wrapper is closed.
 

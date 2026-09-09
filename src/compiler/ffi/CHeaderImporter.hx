@@ -77,7 +77,8 @@ class CHeaderImporter {
 			case "EnumDecl":
 				var fixed:Dynamic = field(node, "fixedUnderlyingType"), representation = fixed == null ? "c_int" : mapType(field(fixed, "qualType")),
 					values = [
-						for (child in children(node)) if (field(child, "kind") == "EnumConstantDecl") child
+						for (child in children(node))
+							if (field(child, "kind") == "EnumConstantDecl") child
 					];
 				output.add('\tenum $name : $representation {\n');
 				for (entry in values) {
@@ -93,7 +94,14 @@ class CHeaderImporter {
 					output.add('\tconst $name = $value;\n');
 			case "TypedefDecl":
 				var qualified:String = field(type, "qualType");
-				if (!StringTools.startsWith(qualified, "struct ") && !StringTools.startsWith(qualified, "enum "))
+				var callback = functionPointer(qualified);
+				if (callback != null) {
+					output.add('\tcallback $name = fn(');
+					output.add([
+						for (index in 0...callback.arguments.length) 'arg$index: ${mapType(callback.arguments[index])}'
+					].join(", "));
+					output.add(') -> ${mapType(callback.result)};\n');
+				} else if (!StringTools.startsWith(qualified, "struct ") && !StringTools.startsWith(qualified, "enum "))
 					output.add('\ttype $name = ${mapType(qualified)};\n');
 			case "RecordDecl":
 				var fields:Array<Dynamic> = [for (child in children(node)) if (field(child, "kind") == "FieldDecl") child];
@@ -125,6 +133,16 @@ class CHeaderImporter {
 				].join(", "));
 				output.add(') -> ${mapType(result)};\n');
 		}
+	}
+
+	static function functionPointer(type:String):Null<{arguments:Array<String>, result:String}> {
+		var pattern = ~/^(.+)\(\s*\*\s*\)\s*\((.*)\)$/;
+		if (!pattern.match(StringTools.trim(type)))
+			return null;
+		var arguments = StringTools.trim(pattern.matched(2));
+		return {
+			result: StringTools.trim(pattern.matched(1)),
+			arguments: arguments == "" || arguments == "void" ? [] : [for (argument in arguments.split(",")) StringTools.trim(argument)]};
 	}
 
 	static function mapType(value:String):String {
