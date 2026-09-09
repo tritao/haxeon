@@ -29,6 +29,9 @@
       "displayName": "Windows MSVC development",
       "inherits": "dev",
       "binaryDir": "${sourceDir}/out/cmake/windows-msvc",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      },
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
