@@ -552,6 +552,7 @@ class HxiParser {
 					resolving.set(name, true);
 					var result = switch declarations.get(name) {
 						case Alias(_, target, _): typeLayout(target, abi, declarations, resolving);
+						case Enumeration(_, representation, _, _, _): typeLayout(representation, abi, declarations, resolving);
 						case Structure(_, size, align, _, _): {size: size, align: align};
 						case _: null;
 					};
