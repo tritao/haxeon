@@ -8,10 +8,14 @@ class CHeaderImporterMain {
 		expect(first == second, "C header import must be deterministic");
 		expect(first.indexOf("struct sample_options @layout(32, 8)") >= 0, "record layout should come from Clang");
 		expect(first.indexOf("title: ptr<const<c_char>> @offset(8)") >= 0, "pointer field offset should be preserved");
-		expect(first.indexOf("extern fn sample_error() -> ptr<const<c_char>>") >= 0, "pointer results should import");
+		expect(first.indexOf("extern fn sample_error() -> utf8 @borrowed") >= 0,
+			"annotated borrowed UTF-8 results should import with their ownership contract");
 		expect(first.indexOf("extern fn sample_check_utf8(value: utf8, optional: nullable<utf8>)") >= 0,
 			"explicit UTF-8 marker typedefs should import as string contracts");
 		expect(first.indexOf("extern fn sample_create(") >= 0, "functions should import");
+		expect(first.indexOf("output: ptr<sample_handle> @out") >= 0, "output annotations should import as parameter directions");
+		expect(first.indexOf('data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout') >= 0,
+			"paired output-buffer annotations should retain their size parameter");
 		expect(first.indexOf("type sample_handle = u32") >= 0, "fixed-width C types should use raw-HXI primitives");
 		expect(first.indexOf("callback sample_binary_callback = fn(arg0: i32, arg1: i32) -> i32") >= 0,
 			"function pointer typedefs should import as typed callbacks");
@@ -27,6 +31,9 @@ class CHeaderImporterMain {
 		expect(first.indexOf("int_fast16_t") < 0, "system-header declarations should not leak into imported HXI");
 		var parsed = HxiParser.parse("import_fixture.hxi", first);
 		expect(parsed.target == "x86_64-linux-gnu", "generated HXI should satisfy the validated parser contract");
+		var named = CHeaderImporter.importHeader("tests/ffi/import_fixture.h", "x86_64-linux-gnu", ["tests/ffi"], "clang", "sample", "Sample");
+		expect(named.indexOf('interface Sample @target("x86_64-linux-gnu") @library("sample")') >= 0,
+			"callers should be able to select a stable projected interface name");
 		var windows = CHeaderImporter.importHeader("tests/ffi/import_fixture.h", "i686-w64-windows-gnu", ["tests/ffi"]);
 		expect(windows.indexOf('callback sample_stdcall_callback = fn(arg0: i32) -> i32 @callconv("stdcall")') >= 0
 			&& windows.indexOf('extern fn sample_stdcall_function(value: i32) -> i32 @callconv("stdcall")') >= 0,
