@@ -6,6 +6,8 @@ import haxe.io.Bytes;
 class NativeLibrary {
 	var handle:Null<hl.Abstract<"native_library">>;
 
+	/** Opens a logical library name or an explicit filename/path.
+		Logical names receive the platform's native prefix and extension. */
 	public static function open(path:String):NativeLibrary {
 		var encoded = Bytes.ofString(path),
 			handle = NativeCallApi.native_open(encoded.getData(), encoded.length);

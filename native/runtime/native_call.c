@@ -481,10 +481,35 @@ static void haxeon_native_callback_dispatch( ffi_cif *cif, void *output, void **
 	}
 }
 
+static char *haxeon_native_library_path( const char *name ) {
+	if( strchr(name,'/') != NULL || strchr(name,'\\') != NULL || strchr(name,'.') != NULL )
+		return haxeon_native_string((const vbyte *)name,(int)strlen(name));
+#ifdef _WIN32
+	const char *prefix = "", *suffix = ".dll";
+#elif defined(__APPLE__)
+	const char *prefix = "lib", *suffix = ".dylib";
+#else
+	const char *prefix = "lib", *suffix = ".so";
+#endif
+	size_t prefix_length = strlen(prefix), name_length = strlen(name), suffix_length = strlen(suffix);
+	char *path = (char *)malloc(prefix_length + name_length + suffix_length + 1);
+	if( path == NULL ) return NULL;
+	memcpy(path,prefix,prefix_length);
+	memcpy(path + prefix_length,name,name_length);
+	memcpy(path + prefix_length + name_length,suffix,suffix_length + 1);
+	return path;
+}
+
 HL_PRIM haxeon_native_library *HL_NAME(native_open)( vbyte *path_bytes, int path_length ) {
-	char *path = haxeon_native_string(path_bytes,path_length);
-	if( path == NULL ) {
+	char *name = haxeon_native_string(path_bytes,path_length);
+	if( name == NULL ) {
 		haxeon_native_set_error("Invalid or out-of-memory library path");
+		return NULL;
+	}
+	char *path = haxeon_native_library_path(name);
+	free(name);
+	if( path == NULL ) {
+		haxeon_native_set_error("Could not resolve native library name");
 		return NULL;
 	}
 	void *handle = NULL;

@@ -7,11 +7,11 @@ mkdir -p "$repo_dir/out"
 "$repo_dir/scripts/build-runtime.sh"
 cc -shared -fPIC "$repo_dir/tests/native/native_call_fixture.c" -o "$repo_dir/out/libnative_call_fixture.so"
 "$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/tests/runtime" --run HxiCallMain \
-	"$repo_dir/out/hxi-call-test.hl" "$repo_dir/out/libnative_call_fixture.so"
+	"$repo_dir/out/hxi-call-test.hl" native_call_fixture
 (
 	cd "$repo_dir/out"
 	set +e
-	LD_LIBRARY_PATH="$repo_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+	LD_LIBRARY_PATH="$repo_dir/out:$repo_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 		"$repo_dir/vendor/hashlink/hl" hxi-call-test.hl
 	status=$?
 	set -e
@@ -25,7 +25,7 @@ invalid_output="$repo_dir/out/hxi-invalid-null.txt"
 set +e
 (
 	cd "$repo_dir/out"
-	LD_LIBRARY_PATH="$repo_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+	LD_LIBRARY_PATH="$repo_dir/out:$repo_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 		"$repo_dir/vendor/hashlink/hl" hxi-call-test.hl.invalid-null
 ) >"$invalid_output" 2>&1
 invalid_status=$?
@@ -39,7 +39,7 @@ fi
 set +e
 (
 	cd "$repo_dir/out"
-	LD_LIBRARY_PATH="$repo_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+	LD_LIBRARY_PATH="$repo_dir/out:$repo_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 		"$repo_dir/vendor/hashlink/hl" hxi-call-test.hl.invalid-length
 ) >"$invalid_output" 2>&1
 invalid_status=$?
@@ -53,7 +53,7 @@ fi
 set +e
 (
 	cd "$repo_dir/out"
-	LD_LIBRARY_PATH="$repo_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+	LD_LIBRARY_PATH="$repo_dir/out:$repo_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 		"$repo_dir/vendor/hashlink/hl" hxi-call-test.hl.invalid-utf8
 ) >"$invalid_output" 2>&1
 invalid_status=$?
@@ -67,7 +67,7 @@ fi
 set +e
 (
 	cd "$repo_dir/out"
-	LD_LIBRARY_PATH="$repo_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+	LD_LIBRARY_PATH="$repo_dir/out:$repo_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 		"$repo_dir/vendor/hashlink/hl" hxi-call-test.hl.invalid-index
 ) >"$invalid_output" 2>&1
 invalid_status=$?
@@ -81,7 +81,7 @@ fi
 set +e
 (
 	cd "$repo_dir/out"
-	LD_LIBRARY_PATH="$repo_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+	LD_LIBRARY_PATH="$repo_dir/out:$repo_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 		"$repo_dir/vendor/hashlink/hl" hxi-call-test.hl.closed-callback
 ) >"$invalid_output" 2>&1
 invalid_status=$?

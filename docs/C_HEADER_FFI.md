@@ -146,6 +146,12 @@ nonzero. After a successful comparison, `--output=library-abi64.hxi` writes a
 single canonical interface using `@target("portable-abi64")`; failed audits do
 not touch the output file.
 
+HXI `@library` values without a path separator or filename extension are
+logical library names. The runtime maps `nativekit` to `libnativekit.so` on
+Linux, `libnativekit.dylib` on macOS, and `nativekit.dll` on Windows. Values
+containing a path separator or dot are treated as explicit paths or filenames
+and passed to the platform loader unchanged.
+
 Function parameters may be marked `@out` or `@inout` after a pointer type. The
 generated module keeps the pointer-shaped C entry point private and exposes a
 typed wrapper. Scalar pointees use correctly sized temporary native storage;
