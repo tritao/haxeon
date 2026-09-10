@@ -11,6 +11,18 @@ HL_PRIM bool HL_NAME(__math_is_finite)(double value) {
 HL_PRIM double HL_NAME(__math_pow)(double value, double exponent) {
 	return pow(value, exponent);
 }
+
+HL_PRIM double HL_NAME(__math_cos)(double value) {
+	return cos(value);
+}
+
+HL_PRIM double HL_NAME(__math_sin)(double value) {
+	return sin(value);
+}
+
+HL_PRIM double HL_NAME(__math_tan)(double value) {
+	return tan(value);
+}
 extern realtime_string_map *hl_hballoc( void );
 extern void hl_hbset( realtime_string_map *map, uchar *key, vdynamic *value );
 extern bool hl_hbexists( realtime_string_map *map, uchar *key );
