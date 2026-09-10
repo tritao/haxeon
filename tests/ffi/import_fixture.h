@@ -4,6 +4,8 @@
 #define HXI_INOUT __attribute__((annotate("hxi:inout")))
 #define HXI_OUT_BUFFER(size) __attribute__((annotate("hxi:out_buffer")))
 #define HXI_RETURNS_BORROWED_UTF8 __attribute__((annotate("hxi:returns_borrowed_utf8")))
+#define HXI_BORROWED __attribute__((annotate("hxi:borrowed")))
+#define HXI_LENGTH_FIELD(size) __attribute__((annotate("hxi:length_field")))
 
 typedef uint32_t sample_handle;
 typedef const char *hxi_utf8;
@@ -32,6 +34,11 @@ typedef struct sample_options {
     uint64_t reserved[2];
 } sample_options;
 
+typedef struct sample_event {
+    const void *data HXI_BORROWED HXI_LENGTH_FIELD(data_size);
+    uint64_t data_size;
+} sample_event;
+
 int32_t sample_create(const sample_options *options, sample_handle *output HXI_OUT);
 int32_t sample_read(uint8_t *_Nullable data HXI_OUT_BUFFER(size), uint32_t *size HXI_INOUT);
 int32_t sample_apply(sample_binary_callback callback, int32_t left, int32_t right);
@@ -39,3 +46,4 @@ int32_t sample_apply_nullable(sample_binary_callback _Nullable callback);
 enum sample_result sample_check_result(enum sample_result value);
 const char *sample_error(void) HXI_RETURNS_BORROWED_UTF8;
 int32_t sample_check_utf8(hxi_utf8 value, hxi_nullable_utf8 optional);
+int32_t sample_paths(const char *const *paths, const char **out_path);

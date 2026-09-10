@@ -213,8 +213,16 @@ class HxiParserMain {
 		expectError('interface bad @target("x86_64-linux-gnu") { struct values @layout(12, 4) { numbers: array<i32, 2> @offset(2); } }', "invalid offset");
 		expectError('interface bad @target("x86_64-linux-gnu") { opaque context; struct holder @layout(8, 8) { context: ptr<context> @offset(0) @owned("destroy"); } }',
 			"Owned pointer field");
-		expectError('interface bad @target("x86_64-linux-gnu") { struct holder @layout(16, 8) { data: ptr<u8> @offset(0) @length_field("size"); size: usize @offset(8); } }',
-			"reserved until structures can retain input buffers");
+		var borrowedBuffer = HxiParser.parse("borrowed-buffer.hxi",
+			'interface buffers @target("x86_64-linux-gnu") @library("buffers") { struct holder @layout(16, 8) { data: ptr<const<void>> @offset(0) @borrowed @length_field("size"); size: u64 @offset(8); } }');
+		var borrowedBufferSource = HxiProjection.source(borrowedBuffer);
+		expect(borrowedBufferSource.indexOf("function get_data_bytes():haxe.io.Bytes") >= 0
+			&& borrowedBufferSource.indexOf("__hxi_struct_copy_pointer(this, 0, 8, 8)") >= 0,
+			"borrowed structure buffers should project bounded copying accessors");
+		expectError('interface bad @target("x86_64-linux-gnu") { struct holder @layout(16, 8) { data: ptr<u8> @offset(0) @length_field("size"); size: u64 @offset(8); } }',
+			"requires a borrowed byte or void pointer");
+		expectError('interface bad @target("x86_64-linux-gnu") { struct holder @layout(16, 8) { data: ptr<u8> @offset(0) @borrowed @length_field("missing"); size: u64 @offset(8); } }',
+			"references missing field");
 		compiler.update("Main.hx", "import nativekit; function main():Int return nativekit.nk_version();");
 		compiler.analyze("Main");
 		expect(compiler.irCNatives().length == 2 && compiler.irCNatives()[1].name == "nativekit.nk_version",

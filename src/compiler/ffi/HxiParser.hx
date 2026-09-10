@@ -343,15 +343,26 @@ class HxiParser {
 								fail('Field "${field.name}" overlaps field "${range.name}" in struct "$name"', field.span);
 						ranges.push({start: field.offset, end: field.offset + layout.size, name: field.name});
 						validateType(field.type, names, declarationsByName, field.span, false);
+						if (field.lengthField != null) {
+							if (field.ownership != Borrowed || !bytePointerLike(field.type, declarationsByName))
+								fail('@length_field on "${field.name}" requires a borrowed byte or void pointer', field.span);
+							var length = Lambda.find(fields, candidate -> candidate.name == field.lengthField);
+							if (length == null)
+								fail('@length_field on "${field.name}" references missing field "${field.lengthField}"', field.span);
+							switch abi.classify(length.type) {
+								case IntegerValue(32 | 64, Unsigned):
+								case _:
+									fail('@length_field on "${field.name}" requires an unsigned 32- or 64-bit length field', length.span);
+							}
+						}
 						switch field.ownership {
 							case Owned(_): fail('Owned pointer field "${field.name}" is not supported; keep ownership in a separate handle', field.span);
 							case Borrowed:
-								if (!opaquePointerLike(field.type,
-									declarationsByName)) fail('@borrowed field "${field.name}" requires a pointer to an opaque type', field.span);
+								if (field.lengthField == null
+									&& !opaquePointerLike(field.type,
+										declarationsByName)) fail('@borrowed field "${field.name}" requires a pointer to an opaque type', field.span);
 							case Unspecified:
 						}
-						if (field.lengthField != null)
-							fail('@length_field on "${field.name}" is reserved until structures can retain input buffers', field.span);
 					}
 				case Enumeration(name, representation, _, values, span):
 					validateType(representation, names, declarationsByName, span, false);

@@ -118,6 +118,28 @@ HL_PRIM void HL_NAME(structCopy)( realtime_bytes *bytes, int offset, realtime_by
 	realtime_bytes_bounds(value,0,length);
 	if( length > 0 ) memcpy(bytes->data + offset,value->data,(size_t)length);
 }
+
+HL_PRIM realtime_bytes *HL_NAME(structCopyPointer)( realtime_bytes *bytes, int pointer_offset, int length_offset, int length_bytes ) {
+	realtime_bytes_bounds(bytes,pointer_offset,sizeof(void *));
+	realtime_bytes_bounds(bytes,length_offset,length_bytes);
+	void *pointer = NULL;
+	uint64_t length = 0;
+	memcpy(&pointer,bytes->data + pointer_offset,sizeof(pointer));
+	if( length_bytes == 4 ) {
+		uint32_t value;
+		memcpy(&value,bytes->data + length_offset,sizeof(value));
+		length = value;
+	} else if( length_bytes == 8 ) {
+		memcpy(&length,bytes->data + length_offset,sizeof(length));
+	} else {
+		hl_error("HXI borrowed buffer length must be 32 or 64 bits");
+	}
+	if( length > 268435456 ) hl_error("HXI borrowed buffer exceeds the safety limit");
+	if( pointer == NULL && length != 0 ) hl_error("HXI borrowed buffer contains NULL with a non-zero length");
+	realtime_bytes *result = realtime_bytes_make((int)length);
+	if( length != 0 ) memcpy(result->data,pointer,(size_t)length);
+	return result;
+}
 HL_PRIM int HL_NAME(__bytes_compare)( realtime_bytes *left, realtime_bytes *right ) {
 	int common = left->length < right->length ? left->length : right->length;
 	int compared = common == 0 ? 0 : memcmp(left->data, right->data, (size_t)common);

@@ -77,6 +77,7 @@ class HxiProjection {
 			functions:Map<String, HxiDeclaration> = [];
 		var usesNestedStructures = false,
 			usesPointerFields = false,
+			usesBorrowedBuffers = false,
 			hasCallbacks = false;
 		for (declaration in model.declarations)
 			switch declaration {
@@ -160,6 +161,17 @@ class HxiProjection {
 					output.add('abstract $name(haxe.io.Bytes) from haxe.io.Bytes to haxe.io.Bytes {\n');
 					output.add('\tpublic inline function new() this = haxe.io.Bytes.alloc($size);\n');
 					for (field in fields) {
+						if (field.lengthField != null) {
+							var lengthField = Lambda.find(fields, candidate -> candidate.name == field.lengthField),
+								lengthValue = abi.classify(lengthField.type),
+								lengthBytes = switch lengthValue {
+									case IntegerValue(bits, _): Std.int(bits / 8);
+									case _: throw 'Invalid length field "${lengthField.name}"';
+								};
+							usesBorrowedBuffers = true;
+							output.add('\tpublic inline function get_${field.name}_bytes():haxe.io.Bytes return ${model.name}.__hxi_struct_copy_pointer(this, ${field.offset}, ${lengthField.offset}, $lengthBytes);\n');
+							continue;
+						}
 						var array = arrayType(field.type, declarations);
 						if (array != null) {
 							var nestedElement = structureType(array.element, declarations);
@@ -239,6 +251,8 @@ class HxiProjection {
 			output.add('@:hlNative("realtime_runtime", "structGetPointer") extern function __hxi_struct_get_pointer(bytes:haxe.io.Bytes, offset:Int, nullable:Bool):hl.Abstract<"native_pointer">;\n');
 			output.add('@:hlNative("realtime_runtime", "structSetPointer") extern function __hxi_struct_set_pointer(bytes:haxe.io.Bytes, offset:Int, value:hl.Abstract<"native_pointer">, nullable:Bool):Void;\n');
 		}
+		if (usesBorrowedBuffers)
+			output.add('@:hlNative("realtime_runtime", "structCopyPointer") extern function __hxi_struct_copy_pointer(bytes:haxe.io.Bytes, pointerOffset:Int, lengthOffset:Int, lengthBytes:Int):haxe.io.Bytes;\n');
 		if (hasCallbacks) {
 			output.add('@:hlNative("realtime_runtime", "native_callback_create") extern function __hxi_callback_create(signature:haxe.io.Bytes, pointerSizes:haxe.io.Bytes, pointerNullable:haxe.io.Bytes, callback:Dynamic):hl.Abstract<"native_callback">;\n');
 		}

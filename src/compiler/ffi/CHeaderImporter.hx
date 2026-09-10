@@ -121,7 +121,7 @@ class CHeaderImporter {
 						offset = layout == null ? null : layout.offsets.get(fieldName);
 					if (StringTools.endsWith(qualifiedType, "[]"))
 						throw '${declarationLocation(entry)}: unsupported flexible array field "$fieldName"';
-					output.add('\t\t$fieldName: ${mapType(qualifiedType)}${offset == null ? "" : " @offset(" + offset + ")"};\n');
+					output.add('\t\t$fieldName: ${mapType(qualifiedType)}${offset == null ? "" : " @offset(" + offset + ")"}${fieldPolicy(entry)};\n');
 				}
 				output.add("\t}\n");
 			case "FunctionDecl":
@@ -140,6 +140,29 @@ class CHeaderImporter {
 				].join(", "));
 				output.add(') -> ${borrowedUtf8 ? "utf8" : mapType(result)}${callConvention == "cdecl" ? "" : ' @callconv("' + callConvention + '")'}${borrowedUtf8 ? " @borrowed" : ""};\n');
 		}
+	}
+
+	static function fieldPolicy(entry:Dynamic):String {
+		var result = "";
+		for (child in children(entry)) {
+			if (field(child, "kind") != "AnnotateAttr")
+				continue;
+			var annotation = annotationSource(entry, child);
+			if (annotation.indexOf("hxi:borrowed") >= 0)
+				result += " @borrowed";
+			if (annotation.indexOf("hxi:length_field") >= 0) {
+				var direct = ~/hxi:length_field=([A-Za-z_][A-Za-z0-9_]*)/;
+				if (direct.match(annotation))
+					result += ' @length_field("${direct.matched(1)}")';
+				else {
+					var argument = expansionArgument(entry, child);
+					if (argument == null)
+						throw '${declarationLocation(entry)}: could not resolve borrowed-buffer length field';
+					result += ' @length_field("$argument")';
+				}
+			}
+		}
+		return result;
 	}
 
 	static function parameterProjection(parameter:Dynamic):String {
@@ -220,6 +243,32 @@ class CHeaderImporter {
 		return false;
 	}
 
+	static function annotationSource(node:Dynamic, annotation:Dynamic):String {
+		var range:Dynamic = field(annotation, "range"),
+			begin:Dynamic = field(range, "begin"),
+			end:Dynamic = field(range, "end"),
+			spellingBegin:Dynamic = field(begin, "spellingLoc"),
+			spellingEnd:Dynamic = field(end, "spellingLoc"),
+			file:String = field(node, "_hxiFile");
+		return sourceRange(file, spellingBegin == null ? begin : spellingBegin, spellingEnd == null ? end : spellingEnd);
+	}
+
+	static function expansionArgument(node:Dynamic, annotation:Dynamic):Null<String> {
+		var range:Dynamic = field(annotation, "range"),
+			begin:Dynamic = field(range, "begin"),
+			expansion:Dynamic = field(begin, "expansionLoc"),
+			offset:Dynamic = field(expansion, "offset"),
+			file:String = field(expansion, "file");
+		if (offset == null)
+			return null;
+		if (file == null)
+			file = field(node, "_hxiFile");
+		var source = File.getContent(file),
+			invocation = source.substring(offset, Std.int(Math.min(source.length, offset + 256))),
+			argument = ~/^[A-Za-z_][A-Za-z0-9_]*\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)/;
+		return argument.match(invocation) ? argument.matched(1) : null;
+	}
+
 	static function sourceRange(defaultFile:String, begin:Dynamic, end:Dynamic):String {
 		var start:Dynamic = field(begin, "offset"),
 			finish:Dynamic = field(end, "offset"),
@@ -282,8 +331,13 @@ class CHeaderImporter {
 				throw 'Unsupported flexible array type "$value"';
 			return 'array<${mapType(value.substring(0, split))}, ${value.substring(split + 1, value.length - 1)}>';
 		}
-		if (StringTools.endsWith(value, " *"))
-			return 'ptr<${mapType(value.substring(0, value.length - 2))}>';
+		if (StringTools.endsWith(value, "*")) {
+			var pointee = StringTools.trim(value.substring(0, value.length - 1)),
+				qualifiedPointer = ~/^(.*)\*\s*const$/;
+			if (qualifiedPointer.match(pointee))
+				return 'ptr<const<ptr<${mapType(qualifiedPointer.matched(1))}>>>';
+			return 'ptr<${mapType(pointee)}>';
+		}
 		if (StringTools.startsWith(value, "const "))
 			return 'const<${mapType(value.substring(6))}>';
 		return switch value {

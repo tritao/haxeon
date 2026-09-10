@@ -8,6 +8,8 @@ class CHeaderImporterMain {
 		expect(first == second, "C header import must be deterministic");
 		expect(first.indexOf("struct sample_options @layout(32, 8)") >= 0, "record layout should come from Clang");
 		expect(first.indexOf("title: ptr<const<c_char>> @offset(8)") >= 0, "pointer field offset should be preserved");
+		expect(first.indexOf('data: ptr<const<void>> @offset(0) @borrowed @length_field("data_size")') >= 0,
+			"borrowed buffer field annotations should retain their length contract");
 		expect(first.indexOf("extern fn sample_error() -> utf8 @borrowed") >= 0,
 			"annotated borrowed UTF-8 results should import with their ownership contract");
 		expect(first.indexOf("extern fn sample_check_utf8(value: utf8, optional: nullable<utf8>)") >= 0,
@@ -23,6 +25,8 @@ class CHeaderImporterMain {
 			"function pointer imports should preserve structure and user-data pointers");
 		expect(first.indexOf("extern fn sample_apply_nullable(callback: nullable<sample_binary_callback>)") >= 0,
 			"Clang callback nullability should survive HXI import");
+		expect(first.indexOf("paths: ptr<const<ptr<const<c_char>>>>, out_path: ptr<ptr<const<c_char>>>") >= 0,
+			"pointer-to-pointer types should preserve pointee qualifiers");
 		expect(first.indexOf("const SAMPLE_FLAG = 8") >= 0, "constant expressions should use Clang's evaluated value");
 		expect(first.indexOf("enum sample_result : c_int") >= 0 && first.indexOf("SAMPLE_RESULT_FAILED = -1") >= 0,
 			"named C enums should import as nominal HXI enums");
