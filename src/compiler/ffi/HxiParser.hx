@@ -56,15 +56,17 @@ class HxiParser {
 
 	final source:SourceFile;
 	final comments:Array<DocumentationComment>;
+	final visibleDeclarations:Array<HxiDeclaration>;
 	final documentation:Map<String, HxiDocumentation> = [];
 	final tokens:Array<HxiToken>;
 	var position = 0;
 
-	public static function parse(path:String, text:String):HxiInterface
-		return new HxiParser(new SourceFile(path, text)).parseInterface();
+	public static function parse(path:String, text:String, ?visibleDeclarations:Array<HxiDeclaration>):HxiInterface
+		return new HxiParser(new SourceFile(path, text), visibleDeclarations).parseInterface();
 
-	function new(source:SourceFile) {
+	function new(source:SourceFile, ?visibleDeclarations:Array<HxiDeclaration>) {
 		this.source = source;
+		this.visibleDeclarations = visibleDeclarations == null ? [] : visibleDeclarations;
 		comments = DocumentationTools.scan(source);
 		tokens = tokenize(source);
 	}
@@ -84,7 +86,7 @@ class HxiParser {
 			library = metadataValue(metadata, "library", false),
 			dependencies = metadataStrings(metadata, "depends"),
 			result = new HxiInterface(name, target, library, dependencies, declarations, start.merge(end), documentation);
-		validate(result);
+		validate(result, visibleDeclarations);
 		return result;
 	}
 
@@ -321,9 +323,16 @@ class HxiParser {
 		return primitives.indexOf(name) >= 0 ? Primitive(name) : Named(name);
 	}
 
-	function validate(value:HxiInterface):Void {
+	function validate(value:HxiInterface, visible:Array<HxiDeclaration>):Void {
 		var names:Map<String, SourceSpan> = [],
 			declarationsByName:Map<String, HxiDeclaration> = [];
+		for (declaration in visible) {
+			var visibleName = declarationName(declaration);
+			if (names.exists(visibleName.name))
+				fail('Duplicate visible HXI declaration "${visibleName.name}"', visibleName.span);
+			names.set(visibleName.name, visibleName.span);
+			declarationsByName.set(visibleName.name, declaration);
+		}
 		for (declaration in value.declarations) {
 			var named = declarationName(declaration);
 			if (names.exists(named.name))
@@ -332,7 +341,7 @@ class HxiParser {
 			declarationsByName.set(named.name, declaration);
 		}
 		validateAliasCycles(value.declarations);
-		var abi = HxiAbi.forInterface(value);
+		var abi = HxiAbi.forInterface(value, declarationsByName);
 		for (declaration in value.declarations)
 			switch declaration {
 				case Opaque(_, _) | Constant(_, _, _):

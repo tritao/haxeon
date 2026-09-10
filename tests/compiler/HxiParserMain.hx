@@ -28,6 +28,11 @@ class HxiParserMain {
 			'interface dependent @target("x86_64-linux-gnu") @library("dependent") @depends("nativekit", "platform") { extern fn draw() -> void; }');
 		expect(dependencyParsed.dependencies.length == 2 && dependencyParsed.dependencies[0] == "nativekit"
 			&& dependencyParsed.dependencies[1] == "platform", "HXI dependencies should parse in declaration order");
+		var dependencyTypes = HxiParser.parse("dependency-types.hxi",
+			'interface dependency_types @target("x86_64-linux-gnu") { opaque external_handle; }');
+		HxiParser.parse("visible-dependency.hxi",
+			'interface visible_dependency @target("x86_64-linux-gnu") @depends("dependency_types") { extern fn use_handle(value: ptr<external_handle>) -> void; }',
+			dependencyTypes.declarations);
 		expect(parsed.declarations.length == 7, "all declarations should parse");
 		var constantSource = HxiProjection.source(parsed);
 		expect(constantSource.indexOf("class NativekitConstants") >= 0
