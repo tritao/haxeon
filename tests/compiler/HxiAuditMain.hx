@@ -15,6 +15,8 @@ class HxiAuditMain {
 		var canonical = HxiParser.parse("canonical.hxi", HxiAudit.canonical("tests/ffi/audit_portable.h", targets[0], ["tests/ffi"]));
 		if (canonical.target != "portable-abi64" || HxiAbi.forInterface(canonical).pointerBits != 64)
 			throw "canonical audit output should carry the portable 64-bit target contract";
+		if (canonical.documentation.get("audit_open").raw.indexOf("fixture handle") < 0)
+			throw "canonical audit output should preserve Doxygen comments";
 		Sys.println("PASS: C header ABI audit compares normalized target models");
 	}
 }

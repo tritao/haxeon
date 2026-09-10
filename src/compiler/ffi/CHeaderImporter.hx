@@ -6,6 +6,7 @@ import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 import sys.io.Process;
+import compiler.documentation.Documentation.DocumentationTools;
 
 typedef CLayout = {
 	var size:Int;
@@ -15,6 +16,8 @@ typedef CLayout = {
 
 /** Imports the ABI-visible subset of a C header into deterministic raw HXI. */
 class CHeaderImporter {
+	static final sourceCache:Map<String, String> = [];
+
 	public static function importHeader(header:String, target:String, includes:Array<String>, clang:String = "clang", ?library:String,
 			?interfaceName:String, ?dependencies:Array<String>):String {
 		if (interfaceName != null && !~/^[A-Za-z_][A-Za-z0-9_]*$/.match(interfaceName))
@@ -89,36 +92,47 @@ class CHeaderImporter {
 						for (child in children(node))
 							if (field(child, "kind") == "EnumConstantDecl") child
 					];
+					emitDocumentation(node, output);
 				output.add('\tenum $name : $representation {\n');
 				for (entry in values) {
 					var entryName:String = field(entry, "name"),
 						value = constantValue(entry);
-					if (value != null)
+					if (value != null) {
+						if (field(entry, "_hxiFile") == null)
+							Reflect.setField(entry, "_hxiFile", field(node, "_hxiFile"));
+						emitDocumentation(entry, output, "\t\t");
 						output.add('\t\t$entryName = $value;\n');
+					}
 				}
 				output.add("\t}\n");
 			case "EnumConstantDecl":
 				var value = projectedConstantValue(node);
-				if (value != null)
+				if (value != null) {
+					emitDocumentation(node, output);
 					output.add('\tconst $name = $value;\n');
+				}
 			case "TypedefDecl":
 				var qualified:String = field(type, "qualType");
 				var callback = functionPointer(qualified);
 				if (callback != null) {
+					emitDocumentation(node, output);
 					output.add('\tcallback $name = fn(');
 					output.add([
 						for (index in 0...callback.arguments.length)
 							'arg$index: ${mapType(callback.arguments[index])}'
 					].join(", "));
 					output.add(') -> ${mapType(callback.result)}${callback.callConvention == "cdecl" ? "" : ' @callconv("' + callback.callConvention + '")'};\n');
-				} else if (!StringTools.startsWith(qualified, "struct ") && !StringTools.startsWith(qualified, "enum "))
+				} else if (!StringTools.startsWith(qualified, "struct ") && !StringTools.startsWith(qualified, "enum ")) {
+					emitDocumentation(node, output);
 					output.add('\ttype $name = ${mapType(qualified)};\n');
+				}
 			case "RecordDecl":
 				var fields:Array<Dynamic> = [for (child in children(node)) if (field(child, "kind") == "FieldDecl") child];
 				if (fields.length == 0)
 					return;
 				var layout = layouts.get(name),
 					annotation = layout == null ? "" : ' @layout(${layout.size}, ${layout.align})';
+				emitDocumentation(node, output);
 				output.add('\tstruct $name$annotation {\n');
 				for (entry in fields) {
 					var fieldName:String = field(entry, "name"),
@@ -127,6 +141,7 @@ class CHeaderImporter {
 						offset = layout == null ? null : layout.offsets.get(fieldName);
 					if (StringTools.endsWith(qualifiedType, "[]"))
 						throw '${declarationLocation(entry)}: unsupported flexible array field "$fieldName"';
+					emitDocumentation(entry, output, "\t\t");
 					output.add('\t\t$fieldName: ${fieldTypeProjection(entry, qualifiedType)}${offset == null ? "" : " @offset(" + offset + ")"}${fieldPolicy(entry)};\n');
 				}
 				output.add("\t}\n");
@@ -139,6 +154,7 @@ class CHeaderImporter {
 					signature = stripCallingConvention(rawSignature),
 					result = StringTools.trim(signature.substring(0, signature.indexOf("("))),
 					borrowedUtf8 = hasAnnotation(node, "hxi:returns_borrowed_utf8");
+					emitDocumentation(node, output);
 				output.add('\textern fn $name(');
 				output.add([
 					for (parameter in parameters)
@@ -146,6 +162,46 @@ class CHeaderImporter {
 				].join(", "));
 				output.add(') -> ${borrowedUtf8 ? "utf8" : mapType(result)}${callConvention == "cdecl" ? "" : ' @callconv("' + callConvention + '")'}${borrowedUtf8 ? " @borrowed" : ""};\n');
 		}
+	}
+
+	static function emitDocumentation(node:Dynamic, output:StringBuf, indent:String = "\t"):Void {
+		var raw = documentation(node);
+		if (raw == null)
+			return;
+		var normalized = DocumentationTools.normalize(raw).raw;
+		if (normalized.length == 0)
+			return;
+		output.add(indent + "/**\n");
+		for (line in normalized.split("\n"))
+			output.add(indent + " *" + (line.length == 0 ? "" : " " + line) + "\n");
+		output.add(indent + " */\n");
+	}
+
+	static function documentation(node:Dynamic):Null<String> {
+		var comment:Dynamic = null;
+		for (child in children(node))
+			if (field(child, "kind") == "FullComment") {
+				comment = child;
+				break;
+			}
+		if (comment == null)
+			return null;
+		var file:String = field(node, "_hxiFile"),
+			range:Dynamic = field(comment, "range"),
+			begin:Dynamic = field(range, "begin"),
+			offset:Dynamic = field(begin, "offset");
+		if (file == null || offset == null || !FileSystem.exists(file))
+			return null;
+		var source = sourceCache.get(file);
+		if (source == null) {
+			source = File.getContent(file);
+			sourceCache.set(file, source);
+		}
+		var start = source.lastIndexOf("/**", Std.int(offset));
+		if (start < 0)
+			return null;
+		var close = source.indexOf("*/", start + 3);
+		return close < 0 ? null : source.substring(start + 3, close);
 	}
 
 	static function fieldPolicy(entry:Dynamic):String {

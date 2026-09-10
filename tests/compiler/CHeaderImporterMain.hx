@@ -71,6 +71,30 @@ class CHeaderImporterMain {
 			diagnostic = Std.string(error);
 		expect(diagnostic.indexOf("unsupported_fixture.h:1:") >= 0 && diagnostic.indexOf("unsupported variadic function") >= 0,
 			"unsupported declarations should report their source location");
+		var documented = CHeaderImporter.importHeader("tests/ffi/documentation_fixture.h", "x86_64-linux-gnu", ["tests/ffi"], "clang", "docs",
+			"Docs");
+		expect(documented.indexOf("/**") >= 0 && documented.indexOf("An opaque resource identifier used by the documentation fixture.") >= 0,
+			"Doxygen comments should be preserved in generated HXI");
+		expect(documented.indexOf("@param options Creation options; the label is copied before returning.") >= 0,
+			"Doxygen parameter comments should be preserved in generated HXI");
+		var documentedModel = HxiParser.parse("documentation_fixture.hxi", documented),
+			documentation = documentedModel.documentation;
+		expect(documentation.get("docs_mode").raw.indexOf("Display mode accepted") >= 0,
+			"generated HXI type documentation should be retained by the parser");
+		expect(documentation.get("docs_mode.DOCS_MODE_DEFAULT").raw.indexOf("platform default") >= 0,
+			"generated HXI enum-value documentation should be retained by the parser");
+		expect(documentation.get("docs_options").raw.indexOf("Options supplied") >= 0,
+			"generated HXI structure documentation should be retained by the parser");
+		expect(documentation.get("docs_create").raw.indexOf("@param options") >= 0,
+			"generated HXI documentation should be retained by the parser");
+		expect(documentation.get("docs_options.count").raw.indexOf("Number of entries") >= 0,
+			"generated HXI field documentation should be retained by the parser");
+		var documentedProjection = HxiProjection.source(documentedModel);
+		expect(documentedProjection.indexOf("Creates a documented resource.") >= 0
+			&& documentedProjection.indexOf("@param options Creation options") >= 0,
+			"C documentation should reach the generated Haxe projection");
+		expect(documentedProjection.indexOf("Number of entries to reserve.") >= 0,
+			"structure field documentation should reach generated Haxe accessors");
 		Sys.println("PASS: Clang C headers import into deterministic raw HXI");
 	}
 

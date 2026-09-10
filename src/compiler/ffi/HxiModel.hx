@@ -2,6 +2,11 @@ package compiler.ffi;
 
 import compiler.Source.SourceSpan;
 
+/** Normalized documentation attached to one HXI declaration or member. */
+typedef HxiDocumentation = {
+	final raw:String;
+}
+
 enum HxiType {
 	Primitive(name:String);
 	Named(name:String);
@@ -75,14 +80,18 @@ class HxiInterface {
 	 */
 	public final dependencies:Array<String>;
 	public final declarations:Array<HxiDeclaration>;
+	/** Documentation keyed by declaration name or `type.member` name. */
+	public final documentation:Map<String, HxiDocumentation>;
 	public final span:SourceSpan;
 
-	public function new(name:String, target:String, library:Null<String>, dependencies:Array<String>, declarations:Array<HxiDeclaration>, span:SourceSpan) {
+	public function new(name:String, target:String, library:Null<String>, dependencies:Array<String>, declarations:Array<HxiDeclaration>, span:SourceSpan,
+			?documentation:Map<String, HxiDocumentation>) {
 		this.name = name;
 		this.target = target;
 		this.library = library;
 		this.dependencies = dependencies;
 		this.declarations = declarations;
+		this.documentation = documentation == null ? [] : documentation;
 		this.span = span;
 	}
 }

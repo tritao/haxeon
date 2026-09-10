@@ -57,13 +57,13 @@ class DocumentationTools {
 	}
 
 	public static function forSpan(file:SourceFile, comments:Array<DocumentationComment>, span:SourceSpan):Documentation {
-		var found:Null<Documentation> = null;
+		var candidate:Null<DocumentationComment> = null;
 		for (comment in comments)
 			if (comment.end > span.start)
 				break;
-			else if (isDocumentationGap(file.slice(comment.end, span.start)))
-				found = comment.documentation;
-		return found == null ? empty() : found;
+			else
+				candidate = comment;
+		return candidate != null && isDocumentationGap(file.slice(candidate.end, span.start)) ? candidate.documentation : empty();
 	}
 
 	public static function empty():Documentation

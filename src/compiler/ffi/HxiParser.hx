@@ -8,10 +8,13 @@ import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiField;
 import compiler.ffi.HxiModel.HxiEnumValue;
 import compiler.ffi.HxiModel.HxiInterface;
+import compiler.ffi.HxiModel.HxiDocumentation;
 import compiler.ffi.HxiModel.HxiParameter;
 import compiler.ffi.HxiModel.HxiType;
 import compiler.ffi.HxiModel.HxiPointerOwnership;
 import compiler.ffi.HxiAbi.HxiAbiValue;
+import compiler.documentation.Documentation.DocumentationComment;
+import compiler.documentation.Documentation.DocumentationTools;
 
 private typedef HxiToken = {
 	final text:String;
@@ -52,6 +55,8 @@ class HxiParser {
 	];
 
 	final source:SourceFile;
+	final comments:Array<DocumentationComment>;
+	final documentation:Map<String, HxiDocumentation> = [];
 	final tokens:Array<HxiToken>;
 	var position = 0;
 
@@ -60,6 +65,7 @@ class HxiParser {
 
 	function new(source:SourceFile) {
 		this.source = source;
+		comments = DocumentationTools.scan(source);
 		tokens = tokenize(source);
 	}
 
@@ -77,14 +83,14 @@ class HxiParser {
 		var target = metadataValue(metadata, "target", true),
 			library = metadataValue(metadata, "library", false),
 			dependencies = metadataStrings(metadata, "depends"),
-			result = new HxiInterface(name, target, library, dependencies, declarations, start.merge(end));
+			result = new HxiInterface(name, target, library, dependencies, declarations, start.merge(end), documentation);
 		validate(result);
 		return result;
 	}
 
 	function parseDeclaration():HxiDeclaration {
 		var start = current().span;
-		return switch current().text {
+		var declaration = switch current().text {
 			case "opaque":
 				advance();
 				var name = identifier(), end = expect(";").span;
@@ -107,7 +113,10 @@ class HxiParser {
 			case "callback": parseCallback(start);
 			case "extern": parseFunction(start);
 			default: fail('Expected HXI declaration, got "${current().text}"', current().span);
-		}
+		};
+		var named = declarationName(declaration);
+		rememberDocumentation(named.name, named.span);
+		return declaration;
 	}
 
 	function parseCallback(start:SourceSpan):HxiDeclaration {
@@ -162,8 +171,10 @@ class HxiParser {
 		while (!check("}")) {
 			var valueStart = current().span, valueName = identifier();
 			expect("=");
-			var value = parseEnumExpression(), end = expect(";").span;
-			values.push({name: valueName, value: value, span: valueStart.merge(end)});
+			var value = parseEnumExpression(), end = expect(";").span,
+				valueSpan = valueStart.merge(end);
+			values.push({name: valueName, value: value, span: valueSpan});
+			rememberDocumentation('$name.$valueName', valueSpan);
 		}
 		var end = expect("}").span;
 		return Enumeration(name, representation, flags, values, start.merge(end));
@@ -237,14 +248,16 @@ class HxiParser {
 				end = expect(";").span;
 			if (borrowed && owned != null)
 				fail('Field "$fieldName" cannot combine @borrowed and @owned', fieldStart);
+			var fieldSpan = fieldStart.merge(end);
 			fields.push({
 				name: fieldName,
 				type: type,
 				offset: offset,
 				ownership: owned != null ? Owned(owned) : borrowed ? Borrowed : Unspecified,
 				lengthField: lengthField,
-				span: fieldStart.merge(end)
+				span: fieldSpan
 			});
+			rememberDocumentation('$name.$fieldName', fieldSpan);
 		}
 		var end = expect("}").span;
 		return Structure(name, layout[0], layout[1], fields, start.merge(end));
@@ -704,6 +717,12 @@ class HxiParser {
 				{name: name, span: span};
 		}
 
+	function rememberDocumentation(name:String, span:SourceSpan):Void {
+		var value = DocumentationTools.forSpan(source, comments, span);
+		if (value.raw.length > 0)
+			documentation.set(name, {raw: value.raw});
+	}
+
 	function parseMetadata(allowed:Array<String>):Map<String, Array<String>> {
 		var result:Map<String, Array<String>> = [];
 		while (match("@")) {
@@ -857,6 +876,16 @@ class HxiParser {
 				position += 2;
 				while (position < bytes.length && bytes.get(position) != 10)
 					position++;
+				continue;
+			}
+			if (code == 47 && position + 1 < bytes.length && bytes.get(position + 1) == 42) {
+				var commentStart = position;
+				position += 2;
+				while (position + 1 < bytes.length && !(bytes.get(position) == 42 && bytes.get(position + 1) == 47))
+					position++;
+				if (position + 1 >= bytes.length)
+					throw new CompileError(new Diagnostic("E3001", "Unterminated HXI block comment", source.span(commentStart, position)));
+				position += 2;
 				continue;
 			}
 			var start = position;
