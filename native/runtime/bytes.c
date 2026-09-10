@@ -1,5 +1,7 @@
 static void realtime_bytes_finalize( void *value ) {
 	realtime_bytes *bytes = (realtime_bytes *)value;
+	for( int index = 0; index < bytes->owned_utf8_count; index++ ) free(bytes->owned_utf8[index].value);
+	free(bytes->owned_utf8);
 	free(bytes->data);
 	bytes->data = NULL;
 }
@@ -21,6 +23,9 @@ static realtime_bytes *realtime_bytes_make( int length ) {
 	realtime_bytes *bytes = (realtime_bytes *)hl_gc_alloc_finalizer(sizeof(realtime_bytes));
 	bytes->finalize = realtime_bytes_finalize;
 	bytes->length = length;
+	bytes->owned_utf8 = NULL;
+	bytes->owned_utf8_count = 0;
+	bytes->owned_utf8_capacity = 0;
 	bytes->data = length == 0 ? NULL : (vbyte *)calloc((size_t)length, 1);
 	if( length > 0 && bytes->data == NULL ) hl_error("Could not allocate bytes");
 	return bytes;

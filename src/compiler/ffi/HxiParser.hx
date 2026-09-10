@@ -510,6 +510,7 @@ class HxiParser {
 			case Const(element): typeLayout(element, abi, declarations, resolving);
 			case Nullable(element): pointerLike(element) ? typeLayout(element, abi, declarations, resolving) : null;
 			case Pointer(_): {size: Std.int(abi.pointerBits / 8), align: Std.int(abi.pointerBits / 8)};
+			case Primitive("utf8"): {size: Std.int(abi.pointerBits / 8), align: Std.int(abi.pointerBits / 8)};
 			case Array(element, length): var item = typeLayout(element, abi, declarations,
 					resolving); item == null || item.size > Std.int(0x7FFFFFFF / length) ? null : {size: item.size * length, align: item.align};
 			case Primitive(_):

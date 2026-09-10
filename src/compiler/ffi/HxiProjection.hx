@@ -77,6 +77,7 @@ class HxiProjection {
 			functions:Map<String, HxiDeclaration> = [];
 		var usesNestedStructures = false,
 			usesPointerFields = false,
+			usesUtf8Fields = false,
 			usesBorrowedBuffers = false,
 			hasCallbacks = false;
 		for (declaration in model.declarations)
@@ -224,6 +225,12 @@ class HxiProjection {
 							continue;
 						}
 						var value = project(abi.classify(field.type), false);
+						if (value != null && value.code == 13) {
+							usesUtf8Fields = true;
+							output.add('\tpublic inline function get_${field.name}():${value.haxeType} return cast ${model.name}.__hxi_struct_get_utf8(this, ${field.offset}, ${value.nullable});\n');
+							output.add('\tpublic inline function set_${field.name}(value:${value.haxeType}):Void ${model.name}.__hxi_struct_set_utf8(this, ${field.offset}, value, ${value.nullable});\n');
+							continue;
+						}
 						if (value != null && value.code == 11 && value.nativePointer && field.ownership == Borrowed) {
 							usesPointerFields = true;
 							output.add('\tpublic inline function get_${field.name}():${value.haxeType} return ${model.name}.__hxi_struct_get_pointer(this, ${field.offset}, ${value.nullable});\n');
@@ -266,6 +273,10 @@ class HxiProjection {
 		if (usesPointerFields) {
 			output.add('@:hlNative("realtime_runtime", "structGetPointer") extern function __hxi_struct_get_pointer(bytes:haxe.io.Bytes, offset:Int, nullable:Bool):hl.Abstract<"native_pointer">;\n');
 			output.add('@:hlNative("realtime_runtime", "structSetPointer") extern function __hxi_struct_set_pointer(bytes:haxe.io.Bytes, offset:Int, value:hl.Abstract<"native_pointer">, nullable:Bool):Void;\n');
+		}
+		if (usesUtf8Fields) {
+			output.add('@:hlNative("realtime_runtime", "structGetUtf8") extern function __hxi_struct_get_utf8(bytes:haxe.io.Bytes, offset:Int, nullable:Bool):Null<String>;\n');
+			output.add('@:hlNative("realtime_runtime", "structSetUtf8") extern function __hxi_struct_set_utf8(bytes:haxe.io.Bytes, offset:Int, value:Null<String>, nullable:Bool):Void;\n');
 		}
 		if (usesBorrowedBuffers)
 			output.add('@:hlNative("realtime_runtime", "structCopyPointer") extern function __hxi_struct_copy_pointer(bytes:haxe.io.Bytes, pointerOffset:Int, lengthOffset:Int, lengthBytes:Int):haxe.io.Bytes;\n');

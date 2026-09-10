@@ -1,5 +1,6 @@
 import compiler.ffi.CHeaderImporter;
 import compiler.ffi.HxiParser;
+import compiler.ffi.HxiProjection;
 
 class CHeaderImporterMain {
 	static function main():Void {
@@ -7,7 +8,7 @@ class CHeaderImporterMain {
 			second = CHeaderImporter.importHeader("tests/ffi/import_fixture.h", "x86_64-linux-gnu", ["tests/ffi"]);
 		expect(first == second, "C header import must be deterministic");
 		expect(first.indexOf("struct sample_options @layout(32, 8)") >= 0, "record layout should come from Clang");
-		expect(first.indexOf("title: ptr<const<c_char>> @offset(8)") >= 0, "pointer field offset should be preserved");
+		expect(first.indexOf("title: nullable<utf8> @offset(8)") >= 0, "annotated UTF-8 field offsets should be preserved");
 		expect(first.indexOf('data: ptr<const<void>> @offset(0) @borrowed @length_field("data_size")') >= 0,
 			"borrowed buffer field annotations should retain their length contract");
 		expect(first.indexOf("extern fn sample_error() -> utf8 @borrowed") >= 0,
@@ -39,6 +40,9 @@ class CHeaderImporterMain {
 		var parsed = HxiParser.parse("import_fixture.hxi", first);
 		expect(parsed.target == "x86_64-linux-gnu", "generated HXI should satisfy the validated parser contract");
 		var named = CHeaderImporter.importHeader("tests/ffi/import_fixture.h", "x86_64-linux-gnu", ["tests/ffi"], "clang", "sample", "Sample");
+		var projected = HxiProjection.source(HxiParser.parse("import_fixture.hxi", named));
+		expect(projected.indexOf("function set_title(value:Null<String>)") >= 0 && projected.indexOf("structSetUtf8") >= 0,
+			"UTF-8 structure fields should project managed accessors");
 		expect(named.indexOf('interface Sample @target("x86_64-linux-gnu") @library("sample")') >= 0,
 			"callers should be able to select a stable projected interface name");
 		var windows = CHeaderImporter.importHeader("tests/ffi/import_fixture.h", "i686-w64-windows-gnu", ["tests/ffi"]);

@@ -122,7 +122,7 @@ class CHeaderImporter {
 						offset = layout == null ? null : layout.offsets.get(fieldName);
 					if (StringTools.endsWith(qualifiedType, "[]"))
 						throw '${declarationLocation(entry)}: unsupported flexible array field "$fieldName"';
-					output.add('\t\t$fieldName: ${mapType(qualifiedType)}${offset == null ? "" : " @offset(" + offset + ")"}${fieldPolicy(entry)};\n');
+					output.add('\t\t$fieldName: ${fieldTypeProjection(entry, qualifiedType)}${offset == null ? "" : " @offset(" + offset + ")"}${fieldPolicy(entry)};\n');
 				}
 				output.add("\t}\n");
 			case "FunctionDecl":
@@ -164,6 +164,16 @@ class CHeaderImporter {
 			}
 		}
 		return result;
+	}
+
+	static function fieldTypeProjection(entry:Dynamic, qualifiedType:String):String {
+		for (child in children(entry)) {
+			if (field(child, "kind") != "AnnotateAttr") continue;
+			var annotation = annotationSource(entry, child);
+			if (annotation.indexOf("hxi:nullable_utf8") >= 0) return "nullable<utf8>";
+			if (annotation.indexOf("hxi:utf8") >= 0) return "utf8";
+		}
+		return mapType(qualifiedType);
 	}
 
 	static function parameterProjection(parameter:Dynamic):String {

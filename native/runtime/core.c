@@ -43,9 +43,17 @@ extern bool hl_hiremove( realtime_int_map *map, int key );
 extern void hl_hiclear( realtime_int_map *map );
 
 typedef struct {
+	int offset;
+	char *value;
+} realtime_bytes_owned_utf8;
+
+typedef struct {
 	void (*finalize)( void * );
 	vbyte *data;
 	int length;
+	realtime_bytes_owned_utf8 *owned_utf8;
+	int owned_utf8_count;
+	int owned_utf8_capacity;
 } realtime_bytes;
 
 typedef struct {

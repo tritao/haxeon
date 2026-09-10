@@ -33,7 +33,7 @@ enum sample_result {
 
 typedef struct sample_options {
     uint32_t struct_size;
-    const char *title;
+    const char *title HXI_NULLABLE_UTF8;
     uint64_t reserved[2];
 } sample_options;
 

@@ -102,6 +102,8 @@ static char *haxeon_native_string( const vbyte *bytes, int length ) {
 	return result;
 }
 
+static int haxeon_native_utf8_size( const char *value );
+
 static void haxeon_native_unload( void *handle ) {
 	if( handle == NULL ) return;
 #ifdef _WIN32
@@ -168,6 +170,47 @@ HL_PRIM void HL_NAME(structSetPointer)( realtime_bytes *bytes, int offset, haxeo
 		value = pointer->value;
 	}
 	memcpy(bytes->data + offset,&value,sizeof(value));
+}
+
+HL_PRIM vbyte *HL_NAME(structGetUtf8)( realtime_bytes *bytes, int offset, bool nullable ) {
+	realtime_bytes_bounds(bytes,offset,sizeof(void *));
+	const char *value = NULL;
+	memcpy(&value,bytes->data + offset,sizeof(value));
+	if( value == NULL ) {
+		if( nullable ) return NULL;
+		hl_error("Non-null HXI UTF-8 structure field contains NULL");
+	}
+	if( haxeon_native_utf8_size(value) < 0 ) hl_error("HXI structure field contains invalid UTF-8");
+	return realtime_string_from_utf8(value);
+}
+
+HL_PRIM void HL_NAME(structSetUtf8)( realtime_bytes *bytes, int offset, vbyte *input, bool nullable ) {
+	realtime_bytes_bounds(bytes,offset,sizeof(void *));
+	if( input == NULL && !nullable ) hl_error("Cannot assign NULL to a non-null HXI UTF-8 structure field");
+	char *copy = NULL;
+	if( input != NULL ) {
+		const char *value = hl_to_utf8((const uchar *)input);
+		int length = haxeon_native_utf8_size(value);
+		if( length < 0 ) hl_error("HXI UTF-8 structure field is invalid");
+		copy = haxeon_native_string((const vbyte *)value,length);
+		if( copy == NULL ) hl_error("Could not retain HXI UTF-8 structure field");
+	}
+	for( int index = 0; index < bytes->owned_utf8_count; index++ ) {
+		if( bytes->owned_utf8[index].offset != offset ) continue;
+		free(bytes->owned_utf8[index].value);
+		bytes->owned_utf8[index].value = copy;
+		memcpy(bytes->data + offset,&copy,sizeof(copy));
+		return;
+	}
+	if( bytes->owned_utf8_count == bytes->owned_utf8_capacity ) {
+		int capacity = bytes->owned_utf8_capacity == 0 ? 2 : bytes->owned_utf8_capacity * 2;
+		realtime_bytes_owned_utf8 *grown = (realtime_bytes_owned_utf8 *)realloc(bytes->owned_utf8,(size_t)capacity * sizeof(*grown));
+		if( grown == NULL ) { free(copy); hl_error("Could not retain HXI UTF-8 structure field"); }
+		bytes->owned_utf8 = grown;
+		bytes->owned_utf8_capacity = capacity;
+	}
+	bytes->owned_utf8[bytes->owned_utf8_count++] = (realtime_bytes_owned_utf8){offset,copy};
+	memcpy(bytes->data + offset,&copy,sizeof(copy));
 }
 
 static ffi_type *haxeon_native_ffi_type( int type, bool result ) {
