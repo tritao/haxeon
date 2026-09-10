@@ -131,18 +131,19 @@ class HxiParser {
 				var start = current().span, name = identifier();
 				expect(":");
 				var type = parseType(),
-					metadata = parseMetadata(["out", "inout", "out_buffer"]),
+					metadata = parseMetadata(["out", "inout", "out_buffer", "in_array"]),
 					out = metadataFlag(metadata, "out"),
 					inout = metadataFlag(metadata, "inout"),
-					bufferSize = metadataValue(metadata, "out_buffer", false);
-				if ((out ? 1 : 0) + (inout ? 1 : 0) + (bufferSize == null ? 0 : 1) > 1)
+					bufferSize = metadataValue(metadata, "out_buffer", false),
+					arrayCount = metadataValue(metadata, "in_array", false);
+				if ((out ? 1 : 0) + (inout ? 1 : 0) + (bufferSize == null ? 0 : 1) + (arrayCount == null ? 0 : 1) > 1)
 					fail('Parameter "$name" cannot combine output direction metadata', start);
-				if (!allowDirections && (out || inout || bufferSize != null))
+				if (!allowDirections && (out || inout || bufferSize != null || arrayCount != null))
 					fail('Callback parameter "$name" cannot use output direction metadata', start);
 				parameters.push({
 					name: name,
 					type: type,
-					direction: out ? Out : inout ? InOut : bufferSize == null ? In : OutBuffer(bufferSize),
+					direction: out ? Out : inout ? InOut : bufferSize != null ? OutBuffer(bufferSize) : arrayCount != null ? InArray(arrayCount) : In,
 					span: start.merge(previous().span)
 				});
 			} while (match(","));
@@ -408,7 +409,7 @@ class HxiParser {
 								if (!nullablePointer(parameter.type))
 									fail('Output buffer "${parameter.name}" must be nullable for its size query', parameter.span);
 								outputBuffer = {name: parameter.name, sizeParameter: sizeParameter, span: parameter.span};
-							case Out | InOut:
+						case Out | InOut:
 								if (!pointerLike(parameter.type))
 									fail('Output parameter "${parameter.name}" requires a pointer type', parameter.span);
 								if (switch parameter.type {
@@ -417,7 +418,17 @@ class HxiParser {
 									})
 									fail('Output parameter "${parameter.name}" cannot be nullable', parameter.span);
 								validateOutputType(parameter.name, parameter.type, abi, parameter.span);
-							case In:
+						case InArray(countParameter):
+							if (structurePointerType(parameter.type, declarationsByName) == null && !utf8ArrayPointer(parameter.type))
+								fail('Input array "${parameter.name}" requires a structure or UTF-8 pointer array', parameter.span);
+							var count = Lambda.find(parameters, candidate -> candidate.name == countParameter);
+							if (count == null)
+								fail('Input array "${parameter.name}" references missing count parameter "$countParameter"', parameter.span);
+							switch abi.classify(count.type) {
+								case IntegerValue(32, Unsigned):
+								case _: fail('Input array "${parameter.name}" requires an unsigned 32-bit count parameter', count.span);
+							}
+						case In:
 						}
 					}
 					if (outputBuffer != null)
@@ -584,6 +595,13 @@ class HxiParser {
 					case _: null;
 				}
 			case _: null;
+		};
+
+	static function utf8ArrayPointer(type:HxiType):Bool
+		return switch type {
+			case Const(element): utf8ArrayPointer(element);
+			case Pointer(Const(Primitive("utf8"))) | Pointer(Primitive("utf8")): true;
+			case _: false;
 		};
 
 	static function opaquePointerLike(type:HxiType, names:Map<String, HxiDeclaration>):Bool

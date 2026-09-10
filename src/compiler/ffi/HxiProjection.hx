@@ -269,7 +269,7 @@ class HxiProjection {
 									var access = structAccess(value.code);
 									structAccesses.set(access, {type: value.haxeType, setterType: value.haxeType});
 								}
-							case OutBuffer(_):
+							case OutBuffer(_) | InArray(_):
 								usesNestedStructures = true;
 							case In:
 						}
@@ -318,7 +318,7 @@ class HxiProjection {
 				}
 				var output = switch parameters[index].direction {
 					case Out | InOut: outputInfo(parameters[index].type, abi);
-					case In | OutBuffer(_): null;
+					case In | InArray(_) | OutBuffer(_): null;
 				};
 				argumentTypes.push(output == null ? projected.haxeType : output.structure ? output.haxeType : "haxe.io.Bytes");
 				codes.push(abiDescriptor(argument, declarations, abi));
@@ -403,12 +403,28 @@ class HxiProjection {
 			callArguments:Array<String> = [],
 			setup:Array<String> = [],
 			values:Array<{name:String, type:String, expression:String}> = [];
+		var arrayCounts:Map<String, String> = [];
+		for (parameter in parameters) switch parameter.direction {
+			case InArray(count): arrayCounts.set(count, parameter.name);
+			case _:
+		}
 		for (index in 0...parameters.length) {
 			var parameter = parameters[index];
 			switch parameter.direction {
 				case In:
-					arguments.push('${parameter.name}:${rawArgumentTypes[index]}');
-					callArguments.push(parameter.name);
+					var arrayName = arrayCounts.get(parameter.name);
+					if (arrayName == null) {
+						arguments.push('${parameter.name}:${rawArgumentTypes[index]}');
+						callArguments.push(parameter.name);
+					} else callArguments.push('$arrayName.length');
+				case InArray(_):
+					var utf8 = utf8ArrayPointer(parameter.type), elementType = rawArgumentTypes[index];
+					if (elementType == "haxe.io.Bytes" && !utf8) throw "Input arrays require structure or UTF-8 elements";
+					arguments.push('${parameter.name}:Array<${utf8 ? "String" : elementType}>');
+					setup.push(utf8
+						? 'var __array_${parameter.name} = __hxi_struct_alloc(${parameter.name}.length * ${Std.int(abi.pointerBits / 8)}); for (__index in 0...${parameter.name}.length) __hxi_struct_set_utf8(__array_${parameter.name}, __index * ${Std.int(abi.pointerBits / 8)}, ${parameter.name}[__index], false);'
+						: 'var __array_${parameter.name} = $elementType.array(${parameter.name});');
+					callArguments.push('__array_${parameter.name}');
 				case Out | InOut:
 					var info = outputInfo(parameter.type, abi),
 						local = "__out_" + parameter.name;
@@ -431,9 +447,10 @@ class HxiProjection {
 					throw "Output buffers require their dedicated wrapper";
 			}
 		}
-		var direct = resultType == "Void" && values.length == 1;
-		var wrapperResult = direct ? values[0].type : upperFirst(name) + "OutResult";
-		if (!direct) {
+		var direct = resultType == "Void" && values.length == 1,
+			resultOnly = values.length == 0;
+		var wrapperResult = direct ? values[0].type : resultOnly ? resultType : upperFirst(name) + "OutResult";
+		if (!direct && !resultOnly) {
 			output.add('class $wrapperResult {\n');
 			var fields:Array<{name:String, type:String}> = [];
 			if (resultType != "Void")
@@ -455,7 +472,9 @@ class HxiProjection {
 			output.add('\t$call;\n');
 		else
 			output.add('\tvar __status = $call;\n');
-		if (direct)
+		if (resultOnly) {
+			if (resultType != "Void") output.add('\treturn __status;\n');
+		} else if (direct)
 			output.add('\treturn ${values[0].expression};\n');
 		else {
 			var resultValues = resultType == "Void" ? [] : ["__status"];
@@ -481,6 +500,7 @@ class HxiProjection {
 					arguments.push('${parameter.name}:${rawArgumentTypes[index]}');
 					queryArguments.push(parameter.name);
 					callArguments.push(parameter.name);
+				case InArray(_): throw "Input arrays cannot be combined with output buffers";
 				case OutBuffer(_):
 					queryArguments.push("null");
 					callArguments.push("__out_" + buffer.name);
@@ -778,6 +798,13 @@ class HxiProjection {
 					case _: null;
 				}
 			case _: null;
+		};
+
+	static function utf8ArrayPointer(type:compiler.ffi.HxiModel.HxiType):Bool
+		return switch type {
+			case Const(element): utf8ArrayPointer(element);
+			case Pointer(Const(Primitive("utf8"))) | Pointer(Primitive("utf8")): true;
+			case _: false;
 		};
 
 	static function irType(code:Int, result:Bool = false, nativeAbstract:Null<String> = null):IrType

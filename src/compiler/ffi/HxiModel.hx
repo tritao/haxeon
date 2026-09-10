@@ -29,6 +29,7 @@ typedef HxiParameter = {
 
 enum HxiParameterDirection {
 	In;
+	InArray(countParameter:String);
 	Out;
 	InOut;
 	OutBuffer(sizeParameter:String);

@@ -21,6 +21,9 @@ class CHeaderImporterMain {
 		expect(first.indexOf("output: ptr<sample_handle> @out") >= 0, "output annotations should import as parameter directions");
 		expect(first.indexOf('data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout') >= 0,
 			"paired output-buffer annotations should retain their size parameter");
+		expect(first.indexOf('options: ptr<const<sample_options>> @in_array("count"), count: u32') >= 0
+			&& first.indexOf('paths: ptr<utf8> @in_array("count"), count: u32') >= 0,
+			"paired structure and UTF-8 input arrays should retain their count parameter");
 		expect(first.indexOf("type sample_handle = u32") >= 0, "fixed-width C types should use raw-HXI primitives");
 		expect(first.indexOf("callback sample_binary_callback = fn(arg0: i32, arg1: i32) -> i32") >= 0,
 			"function pointer typedefs should import as typed callbacks");

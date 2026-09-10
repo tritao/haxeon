@@ -3,6 +3,8 @@
 #define HXI_OUT __attribute__((annotate("hxi:out")))
 #define HXI_INOUT __attribute__((annotate("hxi:inout")))
 #define HXI_OUT_BUFFER(size) __attribute__((annotate("hxi:out_buffer")))
+#define HXI_IN_ARRAY(count) __attribute__((annotate("hxi:in_array")))
+#define HXI_IN_UTF8_ARRAY(count) __attribute__((annotate("hxi:in_array"))) __attribute__((annotate("hxi:utf8_array")))
 #define HXI_RETURNS_BORROWED_UTF8 __attribute__((annotate("hxi:returns_borrowed_utf8")))
 #define HXI_UTF8 __attribute__((annotate("hxi:utf8")))
 #define HXI_NULLABLE_UTF8 __attribute__((annotate("hxi:nullable_utf8")))
@@ -43,6 +45,8 @@ typedef struct sample_event {
 } sample_event;
 
 int32_t sample_create(const sample_options *options, sample_handle *output HXI_OUT);
+int32_t sample_options_many(const sample_options *options HXI_IN_ARRAY(count), uint32_t count);
+int32_t sample_paths_many(const char *const *paths HXI_IN_UTF8_ARRAY(count), uint32_t count);
 int32_t sample_read(uint8_t *_Nullable data HXI_OUT_BUFFER(size), uint32_t *size HXI_INOUT);
 int32_t sample_apply(sample_binary_callback callback, int32_t left, int32_t right);
 int32_t sample_apply_nullable(sample_binary_callback _Nullable callback);

@@ -115,8 +115,15 @@ and floating-point elements, with bounds checks against `N` before an address
 is calculated. Byte arrays additionally provide whole-field managed-byte copy
 helpers. Arrays of fixed-layout structures use typed element copies with the
 declared structure stride. Array sizes, offsets, alignment, and multiplication
-overflow are covered by the same layout validation as other fields. Pointer
-arrays remain ABI-visible but unprojected pending an explicit lifetime model.
+overflow are covered by the same layout validation as other fields.
+
+Function parameters can pair a pointer with an unsigned 32-bit count using
+`@in_array("count")`. Fixed-layout structure elements project as `Array<T>` and
+are packed into contiguous managed ABI storage for the call. A `ptr<utf8>`
+input array projects as `Array<String>` and builds a retained native pointer
+table. In both forms the paired count parameter is omitted from the Haxe API
+and derived from the array length. Unannotated pointer arrays remain
+ABI-visible but receive no managed array projection.
 
 Function parameters may be marked `@out` or `@inout` after a pointer type. The
 generated module keeps the pointer-shaped C entry point private and exposes a

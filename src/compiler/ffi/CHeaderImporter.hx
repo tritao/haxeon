@@ -180,6 +180,8 @@ class CHeaderImporter {
 		var direction = parameterDirection(parameter),
 			type:Dynamic = field(parameter, "type"),
 			qualified:String = field(type, "qualType");
+		if (hasAnnotation(parameter, "hxi:utf8_array"))
+			return '${field(parameter, "name")}: ptr<utf8>$direction';
 		if (hasAnnotation(parameter, "hxi:nullable_utf8"))
 			return '${field(parameter, "name")}: nullable<utf8>$direction';
 		if (hasAnnotation(parameter, "hxi:utf8"))
@@ -212,6 +214,11 @@ class CHeaderImporter {
 			if (spellingEnd == null)
 				spellingEnd = end;
 			var annotation = sourceRange(file, spellingBegin, spellingEnd);
+			if (annotation.indexOf("hxi:in_array") >= 0) {
+				var argument = expansionArgument(parameter, child);
+				if (argument == null) throw '${declarationLocation(parameter)}: could not resolve input-array count parameter';
+				return ' @in_array("$argument")';
+			}
 			if (annotation.indexOf("hxi:out_buffer") >= 0) {
 				var direct = ~/hxi:out_buffer=([A-Za-z_][A-Za-z0-9_]*)/;
 				if (direct.match(annotation))
