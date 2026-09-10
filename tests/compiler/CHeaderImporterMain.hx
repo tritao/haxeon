@@ -46,6 +46,12 @@ class CHeaderImporterMain {
 			&& windows.indexOf('extern fn sample_stdcall_function(value: i32) -> i32 @callconv("stdcall")') >= 0,
 			"Clang calling conventions should survive callback and function import");
 		HxiParser.parse("import_fixture-windows.hxi", windows);
+		var orderAb = CHeaderImporter.importHeader("tests/ffi/import_order_ab.h", "x86_64-linux-gnu", ["tests/ffi"], "clang", "sample", "Order"),
+			orderBa = CHeaderImporter.importHeader("tests/ffi/import_order_ba.h", "x86_64-linux-gnu", ["tests/ffi"], "clang", "sample", "Order");
+		var bodyAb = orderAb.substring(orderAb.indexOf("interface ")),
+			bodyBa = orderBa.substring(orderBa.indexOf("interface "));
+		expect(bodyAb == bodyBa && bodyAb.indexOf("extern fn import_order_a") >= 0 && bodyAb.indexOf("extern fn import_order_b") >= 0,
+			"included declarations should be complete and deterministic regardless of include order");
 		var diagnostic = "";
 		try
 			CHeaderImporter.importHeader("tests/ffi/unsupported_fixture.h", "x86_64-linux-gnu", ["tests/ffi"])

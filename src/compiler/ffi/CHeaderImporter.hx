@@ -287,13 +287,17 @@ class CHeaderImporter {
 
 	static function locationPath(node:Dynamic):Null<String> {
 		var location:Dynamic = field(node, "loc"),
-			path:String = field(location, "file");
+			range:Dynamic = field(node, "range"),
+			begin:Dynamic = field(range, "begin"),
+			expansion:Dynamic = field(begin, "expansionLoc"),
+			path:String = field(expansion, "file");
 		if (path != null)
 			return path;
-		var range:Dynamic = field(node, "range"),
-			begin:Dynamic = field(range, "begin"),
-			expansion:Dynamic = field(begin, "expansionLoc");
-		path = field(expansion, "file");
+		path = field(location, "file");
+		if (path != null)
+			return path;
+		var spelling:Dynamic = field(begin, "spellingLoc");
+		path = field(spelling, "file");
 		if (path != null)
 			return path;
 		return field(begin, "file");
