@@ -13,7 +13,9 @@ class AndroidBuild {
 		if (arguments.length != 2)
 			throw "Usage: haxe -cp src --run tools.AndroidBuild <source.hx> <output.hl>";
 
-		var sourcePath = arguments[0], outputPath = arguments[1], compiler = new Compiler();
+		var sourcePath = arguments[0],
+			outputPath = arguments[1],
+			compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
 		compiler.enablePublicationTracking();
 		compiler.addSourceRoot("stdlib");
@@ -28,8 +30,6 @@ class AndroidBuild {
 	}
 
 	static function sidecar(outputPath:String, suffix:String):String {
-		return StringTools.endsWith(outputPath, ".hl")
-			? outputPath.substr(0, outputPath.length - 3) + suffix
-			: outputPath + suffix;
+		return StringTools.endsWith(outputPath, ".hl") ? outputPath.substr(0, outputPath.length - 3) + suffix : outputPath + suffix;
 	}
 }

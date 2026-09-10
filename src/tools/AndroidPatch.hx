@@ -14,7 +14,9 @@ class AndroidPatch {
 		if (arguments.length != 3)
 			throw "Usage: haxe -cp src --run tools.AndroidPatch <source.hx> <baseline.hcs> <output.hlp>";
 
-		var sourcePath = FileSystem.fullPath(arguments[0]), statePath = arguments[1], patchPath = arguments[2],
+		var sourcePath = FileSystem.fullPath(arguments[0]),
+			statePath = arguments[1],
+			patchPath = arguments[2],
 			compiler = new Compiler(File.getBytes(statePath), CompilerIntrinsics.configuration());
 		compiler.addSourceRoot("stdlib");
 		compiler.update(sourcePath, File.getContent(sourcePath));

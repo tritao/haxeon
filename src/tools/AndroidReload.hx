@@ -17,7 +17,9 @@ class AndroidReload {
 		if (arguments.length != 3)
 			throw "Usage: haxe -cp src --run tools.AndroidReload <source.hx> <baseline.hcs> <output.hxr>";
 
-		var sourcePath = FileSystem.fullPath(arguments[0]), statePath = arguments[1], bundlePath = arguments[2],
+		var sourcePath = FileSystem.fullPath(arguments[0]),
+			statePath = arguments[1],
+			bundlePath = arguments[2],
 			compiler = new Compiler(File.getBytes(statePath), CompilerIntrinsics.configuration());
 		compiler.addSourceRoot("stdlib");
 		compiler.update(sourcePath, File.getContent(sourcePath));
@@ -28,7 +30,8 @@ class AndroidReload {
 		var entry = result.functionIds.get("main");
 		if (entry == null)
 			throw "Android reload module has no main function";
-		var module = HlWriter.encode(result.module), bundle = encode(module, result.runtimeIdentity, entry);
+		var module = HlWriter.encode(result.module),
+			bundle = encode(module, result.runtimeIdentity, entry);
 		File.saveBytes(bundlePath, bundle);
 		compiler.acknowledgePublication(result.revision);
 		File.saveBytes(statePath + ".pending", compiler.exportIdentityState());
