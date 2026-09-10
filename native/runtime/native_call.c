@@ -172,6 +172,13 @@ HL_PRIM void HL_NAME(structSetPointer)( realtime_bytes *bytes, int offset, haxeo
 	memcpy(bytes->data + offset,&value,sizeof(value));
 }
 
+HL_PRIM void HL_NAME(structSetBorrowedBytes)( realtime_bytes *bytes, int offset, realtime_bytes *value ) {
+	realtime_bytes_bounds(bytes,offset,sizeof(void *));
+	if( value == NULL ) hl_error("Cannot assign NULL to a borrowed HXI structure array");
+	void *pointer = value->data;
+	memcpy(bytes->data + offset,&pointer,sizeof(pointer));
+}
+
 HL_PRIM vbyte *HL_NAME(structGetUtf8)( realtime_bytes *bytes, int offset, bool nullable ) {
 	realtime_bytes_bounds(bytes,offset,sizeof(void *));
 	const char *value = NULL;

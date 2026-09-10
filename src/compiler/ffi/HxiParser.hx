@@ -344,8 +344,9 @@ class HxiParser {
 						ranges.push({start: field.offset, end: field.offset + layout.size, name: field.name});
 						validateType(field.type, names, declarationsByName, field.span, false);
 						if (field.lengthField != null) {
-							if (field.ownership != Borrowed || !bytePointerLike(field.type, declarationsByName))
-								fail('@length_field on "${field.name}" requires a borrowed byte or void pointer', field.span);
+							if (field.ownership != Borrowed || (!bytePointerLike(field.type, declarationsByName)
+								&& structurePointerType(field.type, declarationsByName) == null))
+								fail('@length_field on "${field.name}" requires a borrowed byte, void, or structure pointer', field.span);
 							var length = Lambda.find(fields, candidate -> candidate.name == field.lengthField);
 							if (length == null)
 								fail('@length_field on "${field.name}" references missing field "${field.lengthField}"', field.span);
@@ -571,6 +572,18 @@ class HxiParser {
 			case Nullable(element) | Const(element): bytePointerLike(element, names);
 			case Pointer(element): byteElement(element, names);
 			case _: false;
+		};
+
+	static function structurePointerType(type:HxiType, names:Map<String, HxiDeclaration>):Null<String>
+		return switch type {
+			case Nullable(element) | Const(element): structurePointerType(element, names);
+			case Pointer(Const(Named(name))) | Pointer(Named(name)):
+				switch names.get(name) {
+					case Structure(_, _, _, _, _): name;
+					case Alias(_, target, _): structurePointerType(Pointer(target), names);
+					case _: null;
+				}
+			case _: null;
 		};
 
 	static function opaquePointerLike(type:HxiType, names:Map<String, HxiDeclaration>):Bool

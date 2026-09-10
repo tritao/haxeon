@@ -223,8 +223,15 @@ class HxiParserMain {
 		expect(borrowedBufferSource.indexOf("function get_data_bytes():haxe.io.Bytes") >= 0
 			&& borrowedBufferSource.indexOf("__hxi_struct_copy_pointer(this, 0, 8, 8)") >= 0,
 			"borrowed structure buffers should project bounded copying accessors");
+		var borrowedArray = HxiParser.parse("borrowed-array.hxi",
+			'interface arrays @target("x86_64-linux-gnu") @library("arrays") { struct item @layout(8, 8) { name: utf8 @offset(0); } struct holder @layout(16, 8) { items: ptr<const<item>> @offset(0) @borrowed @length_field("count"); count: u32 @offset(8); } }');
+		var borrowedArraySource = HxiProjection.source(borrowedArray);
+		expect(borrowedArraySource.indexOf("static function array(values:Array<item>)") >= 0
+			&& borrowedArraySource.indexOf("function set_items(value:item)") >= 0
+			&& borrowedArraySource.indexOf("structSetBorrowedBytes") >= 0,
+			"borrowed structure arrays should project contiguous packing and pointer accessors");
 		expectError('interface bad @target("x86_64-linux-gnu") { struct holder @layout(16, 8) { data: ptr<u8> @offset(0) @length_field("size"); size: u64 @offset(8); } }',
-			"requires a borrowed byte or void pointer");
+			"requires a borrowed byte, void, or structure pointer");
 		expectError('interface bad @target("x86_64-linux-gnu") { struct holder @layout(16, 8) { data: ptr<u8> @offset(0) @borrowed @length_field("missing"); size: u64 @offset(8); } }',
 			"references missing field");
 		compiler.update("Main.hx",

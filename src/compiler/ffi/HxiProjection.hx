@@ -177,9 +177,17 @@ class HxiProjection {
 				case Structure(name, size, _, fields, _):
 					output.add('abstract $name(haxe.io.Bytes) from haxe.io.Bytes to haxe.io.Bytes {\n');
 					output.add('\tpublic static inline function size():Int return $size;\n');
+					output.add('\tpublic static function array(values:Array<$name>):$name { var bytes = ${model.name}.__hxi_struct_alloc(values.length * $size); for (index in 0...values.length) ${model.name}.__hxi_struct_copy(bytes, index * $size, values[index], $size); return cast bytes; }\n');
+					usesNestedStructures = true;
 					output.add('\tpublic inline function new() this = haxe.io.Bytes.alloc($size);\n');
 					for (field in fields) {
 						if (field.lengthField != null) {
+							var pointed = structurePointerType(field.type, declarations);
+							if (pointed != null) {
+								usesPointerFields = true;
+								output.add('\tpublic inline function set_${field.name}(value:$pointed):Void ${model.name}.__hxi_struct_set_borrowed_bytes(this, ${field.offset}, value);\n');
+								continue;
+							}
 							var lengthField = Lambda.find(fields, candidate -> candidate.name == field.lengthField),
 								lengthValue = abi.classify(lengthField.type),
 								lengthBytes = switch lengthValue {
@@ -268,12 +276,14 @@ class HxiProjection {
 				case _:
 			}
 		if (usesNestedStructures) {
+			output.add('@:hlNative("realtime_runtime", "__bytes_alloc") extern function __hxi_struct_alloc(length:Int):haxe.io.Bytes;\n');
 			output.add('@:hlNative("realtime_runtime", "structSlice") extern function __hxi_struct_slice(bytes:haxe.io.Bytes, offset:Int, length:Int):haxe.io.Bytes;\n');
 			output.add('@:hlNative("realtime_runtime", "structCopy") extern function __hxi_struct_copy(bytes:haxe.io.Bytes, offset:Int, value:haxe.io.Bytes, length:Int):Void;\n');
 		}
 		if (usesPointerFields) {
 			output.add('@:hlNative("realtime_runtime", "structGetPointer") extern function __hxi_struct_get_pointer(bytes:haxe.io.Bytes, offset:Int, nullable:Bool):hl.Abstract<"native_pointer">;\n');
 			output.add('@:hlNative("realtime_runtime", "structSetPointer") extern function __hxi_struct_set_pointer(bytes:haxe.io.Bytes, offset:Int, value:hl.Abstract<"native_pointer">, nullable:Bool):Void;\n');
+			output.add('@:hlNative("realtime_runtime", "structSetBorrowedBytes") extern function __hxi_struct_set_borrowed_bytes(bytes:haxe.io.Bytes, offset:Int, value:haxe.io.Bytes):Void;\n');
 		}
 		if (usesUtf8Fields) {
 			output.add('@:hlNative("realtime_runtime", "structGetUtf8") extern function __hxi_struct_get_utf8(bytes:haxe.io.Bytes, offset:Int, nullable:Bool):Null<String>;\n');
@@ -751,6 +761,20 @@ class HxiProjection {
 				switch declarations.get(name) {
 					case Alias(_, target, _): structureType(target, declarations);
 					case Structure(_, size, _, _, _): {name: name, size: size};
+					case _: null;
+				}
+			case _: null;
+		};
+
+	static function structurePointerType(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>):Null<String>
+		return switch type {
+			case Nullable(element) | Const(element): structurePointerType(element, declarations);
+			case Pointer(element):
+				var structure = structureType(element, declarations);
+				structure == null ? null : structure.name;
+			case Named(name):
+				switch declarations.get(name) {
+					case Alias(_, target, _): structurePointerType(target, declarations);
 					case _: null;
 				}
 			case _: null;

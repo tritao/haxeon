@@ -97,10 +97,13 @@ Borrowed pointers to opaque types can be marked with field-level `@borrowed`;
 their generated accessors read and write `NativePointer` handles and preserve
 `nullable<...>` behavior. The source handle must remain live for as long as C
 may read the structure field. Owned pointer fields are rejected because a
-managed-byte structure cannot retain their destructor safely. `@length_field`
-is likewise reserved until structures can retain input buffers. Unannotated
-pointer fields remain in the ABI model but receive no unsafe generated
-accessors. Naturally laid-out structures can also be passed and returned by
+managed-byte structure cannot retain their destructor safely. A borrowed
+`ptr<struct>` field paired with an unsigned count through `@length_field`
+accepts storage produced by the element structure's generated `array()` packer.
+The owner of that storage must remain reachable through the synchronous native
+call; bindings should retain it alongside the containing options structure.
+Unannotated pointer fields remain in the ABI model but receive no unsafe
+generated accessors. Naturally laid-out structures can also be passed and returned by
 value. Their recursive field layout is encoded in the native call descriptor,
 including nested structures and fixed arrays; the runtime asks libffi to apply
 the platform's aggregate calling convention and verifies the resulting size

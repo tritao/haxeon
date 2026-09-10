@@ -70,6 +70,7 @@ DEFINE_PRIM(_BOOL,native_pointer_close,_ABSTRACT(native_pointer));
 DEFINE_PRIM(_BOOL,native_pointer_is_closed,_ABSTRACT(native_pointer));
 DEFINE_PRIM(_ABSTRACT(native_pointer),structGetPointer,_ABSTRACT(realtime_bytes) _I32 _BOOL);
 DEFINE_PRIM(_VOID,structSetPointer,_ABSTRACT(realtime_bytes) _I32 _ABSTRACT(native_pointer) _BOOL);
+DEFINE_PRIM(_VOID,structSetBorrowedBytes,_ABSTRACT(realtime_bytes) _I32 _ABSTRACT(realtime_bytes));
 DEFINE_PRIM(_BYTES,structGetUtf8,_ABSTRACT(realtime_bytes) _I32 _BOOL);
 DEFINE_PRIM(_VOID,structSetUtf8,_ABSTRACT(realtime_bytes) _I32 _BYTES _BOOL);
 DEFINE_PRIM(_ABSTRACT(realtime_bytes),native_aggregate_invoke_0,_BYTES _BYTES _BYTES);
