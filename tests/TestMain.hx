@@ -25,6 +25,8 @@ import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ffi.CHeaderEmitter;
 import compiler.tools.CompilerArguments;
+import compiler.documentation.Documentation.DocumentationTools;
+import compiler.documentation.HaxeXmlWriter;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 import compiler.ir.IrGenerator;
@@ -684,6 +686,8 @@ class TestMain {
 			throw "Typed native declarations did not emit a deterministic C FFI contract";
 		var compilerRequest = CompilerArguments.parse([
 			"--output=out/sample.hl",
+			"--xml",
+			"out/api.xml",
 			"--entry=sample.Main",
 			"--root=source",
 			"--dump-function=42",
@@ -694,6 +698,7 @@ class TestMain {
 			"source/Main.hx"
 		]);
 		if (compilerRequest.output != "out/sample.hl"
+			|| compilerRequest.xmlOutput != "out/api.xml"
 			|| compilerRequest.entry != "sample.Main"
 			|| compilerRequest.dumpFunction != 42
 			|| compilerRequest.roots.length != 1
@@ -701,6 +706,40 @@ class TestMain {
 			|| compilerRequest.ffiInterfaces.join(",") != "generated/nativekit.hxi,generated/system.hxi"
 			|| compilerRequest.ffiLibrary != "sample")
 			throw "Compiler CLI did not produce a typed build request";
+		var equalsXmlRequest = CompilerArguments.parse(["--xml=out/equals.xml", "source/Main.hx"]);
+		if (equalsXmlRequest.xmlOutput != "out/equals.xml")
+			throw "Compiler CLI did not accept the equals form of --xml";
+		var missingXmlOutput = false;
+		try {
+			CompilerArguments.parse(["source/Main.hx", "--xml"]);
+		} catch (error:Dynamic) {
+			missingXmlOutput = true;
+		}
+		if (!missingXmlOutput)
+			throw "Compiler CLI accepted --xml without an output path";
+		var normalizedDocumentation = DocumentationTools.normalize(" Adds values.\n * @param left First value.\n * @returns the sum.\n * @throws Overflow on failure.\n * @since 1.0");
+		if (normalizedDocumentation.parameters.get("left") != "First value."
+			|| normalizedDocumentation.markdown.indexOf("**Returns:** the sum.") < 0
+			|| normalizedDocumentation.markdown.indexOf("**Throws:** Overflow on failure.") < 0
+			|| normalizedDocumentation.raw.indexOf("@since 1.0") < 0)
+			throw "Haxe documentation normalization lost structured or raw content";
+		var documentationCompiler = new Compiler();
+		documentationCompiler.update("sample/Widget.hx",
+			"package sample; /** Widget <docs>. */ class Widget { /** Current value. */ public var value:Int; /** Adds values. @param amount Operand. */ public function add(amount:Int):Int return value + amount; }");
+		documentationCompiler.update("sample/Choice.hx",
+			"package sample; /** Available choices. */ enum Choice { /** First choice. */ First; Second(value:Int); }");
+		documentationCompiler.update("sample/Main.hx",
+			"package sample; import sample.Widget; import sample.Choice; function main():Int { Choice.Second(1); return new Widget().add(1); }");
+		documentationCompiler.compile("sample.Main");
+		var documentationXml = HaxeXmlWriter.emit(documentationCompiler.modules);
+		if (documentationXml.indexOf('<class path="sample.Widget"') < 0
+			|| documentationXml.indexOf("Widget &lt;docs&gt;.") < 0
+			|| documentationXml.indexOf("Current value.") < 0
+			|| documentationXml.indexOf("@param amount Operand.") < 0
+			|| documentationXml.indexOf('<add public="1" set="method"') < 0
+			|| documentationXml.indexOf('<enum path="sample.Choice"') < 0
+			|| documentationXml != HaxeXmlWriter.emit(documentationCompiler.modules))
+			throw "Haxe XML documentation output was incomplete, unsafe, or nondeterministic";
 		var rejectedFfiPair = false;
 		try {
 			CompilerArguments.parse(["--ffi-header=out/sample.h", "source/Main.hx"]);

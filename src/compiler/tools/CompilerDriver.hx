@@ -7,6 +7,7 @@ import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import haxe.io.Bytes;
 import sys.io.File;
+import compiler.documentation.HaxeXmlWriter;
 
 /** Executes one compiler request and writes its deterministic artifacts. */
 class CompilerDriver {
@@ -27,6 +28,8 @@ class CompilerDriver {
 			dumpFunction(result, request.dumpFunction, report);
 		File.saveBytes(request.output, HlWriter.encode(result.module));
 		File.saveBytes(request.output + ".functions", Bytes.ofString(functionMap(result.functionIndices)));
+		if (request.xmlOutput != null)
+			File.saveContent(request.xmlOutput, HaxeXmlWriter.emit(compiler.modules));
 		if (request.ffiHeader != null && request.ffiLibrary != null)
 			File.saveContent(request.ffiHeader, CHeaderEmitter.emit(result.ir.natives, request.ffiLibrary));
 		report("compiled " + Std.string(request.paths.length) + " source files -> " + request.output);

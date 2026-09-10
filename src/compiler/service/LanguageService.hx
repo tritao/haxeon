@@ -21,6 +21,9 @@ import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.syntax.ConditionalCompilation;
 import compiler.Diagnostic.CompileError;
+import compiler.documentation.Documentation;
+import compiler.documentation.Documentation.DocumentationTools;
+import compiler.documentation.Documentation.DocumentationComment;
 
 /** Editor-facing declaration summary, optionally marked as stale. */
 typedef DocumentSymbol = {
@@ -51,11 +54,7 @@ typedef ResolvedCompletion = {
 	final edits:Array<TextEdit>;
 }
 
-typedef SymbolDocumentation = {
-	final markdown:String;
-	final parameters:Map<String, String>;
-	final deprecated:Bool;
-}
+typedef SymbolDocumentation = Documentation;
 
 typedef CompletionResult = {
 	final items:Array<CompletionItem>;
@@ -153,7 +152,7 @@ private typedef WorkspaceIndexEntry = {
 
 private typedef DocumentationIndexEntry = {
 	final revision:Int;
-	final comments:Array<{end:Int, documentation:SymbolDocumentation}>;
+	final comments:Array<DocumentationComment>;
 }
 
 /** Source location returned by a semantic navigation query. */
@@ -1593,16 +1592,10 @@ class LanguageService {
 	function documentationFor(state:ModuleState, span:SourceSpan):SymbolDocumentation {
 		var cached = documentationIndex.get(state.name);
 		if (cached == null || cached.revision != state.revision) {
-			cached = {revision: state.revision, comments: scanDocumentation(state.source)};
+			cached = {revision: state.revision, comments: DocumentationTools.scan(state.source)};
 			documentationIndex.set(state.name, cached);
 		}
-		var found:Null<SymbolDocumentation> = null;
-		for (comment in cached.comments)
-			if (comment.end <= span.start && documentationGap(state.source.slice(comment.end, span.start)))
-				found = comment.documentation;
-			else
-				break;
-		return found == null ? {markdown: "", parameters: [], deprecated: false} : found;
+		return DocumentationTools.forSpan(state.source, cached.comments, span);
 	}
 
 	function indexedStructure(state:ModuleState):StructuralIndexEntry {
@@ -1699,82 +1692,6 @@ class LanguageService {
 			}
 			offset = end;
 		}
-	}
-
-	static function scanDocumentation(file:SourceFile):Array<{end:Int, documentation:SymbolDocumentation}> {
-		var result = [], source = file.text, position = 0;
-		while (position + 2 < source.length) {
-			var quote = source.charAt(position);
-			if (quote == "\"" || quote == "'") {
-				position++;
-				while (position < source.length)
-					if (source.charAt(position) == "\\")
-						position += 2;
-					else if (source.charAt(position++) == quote)
-						break;
-				continue;
-			}
-			if (source.substr(position, 2) == "//") {
-				var newline = source.indexOf("\n", position + 2);
-				position = newline < 0 ? source.length : newline + 1;
-				continue;
-			}
-			if (source.substr(position, 3) != "/**") {
-				position++;
-				continue;
-			}
-			var close = source.indexOf("*/", position + 3);
-			if (close < 0)
-				break;
-			result.push({
-				end: file.byteOffsetForStringOffset(close + 2),
-				documentation: normalizeDocumentation(source.substring(position + 3, close))
-			});
-			position = close + 2;
-		}
-		return result;
-	}
-
-	static function documentationGap(gap:String):Bool {
-		var trimmed = StringTools.trim(gap);
-		if (trimmed.length == 0)
-			return true;
-		// Metadata may legally sit between a doc comment and its declaration.
-		return StringTools.startsWith(trimmed, "@:")
-			&& trimmed.indexOf(";") < 0
-			&& trimmed.indexOf("{") < 0
-			&& trimmed.indexOf("}") < 0;
-	}
-
-	static function normalizeDocumentation(raw:String):SymbolDocumentation {
-		var body:Array<String> = [],
-			parameters:Map<String, String> = [],
-			deprecated = false;
-		for (line in raw.split("\n")) {
-			var value = StringTools.trim(line);
-			if (StringTools.startsWith(value, "*"))
-				value = StringTools.trim(value.substring(1));
-			if (StringTools.startsWith(value, "@param ")) {
-				var content = StringTools.trim(value.substring(7)),
-					separator = content.indexOf(" ");
-				parameters.set(separator < 0 ? content : content.substring(0, separator),
-					separator < 0 ? "" : StringTools.trim(content.substring(separator + 1)));
-			} else if (StringTools.startsWith(value, "@return "))
-				body.push("**Returns:** " + StringTools.trim(value.substring(8)));
-			else if (StringTools.startsWith(value, "@deprecated")) {
-				deprecated = true;
-				var message = StringTools.trim(value.substring(11));
-				body.push("**Deprecated.**" + (message.length == 0 ? "" : " " + message));
-			} else if (StringTools.startsWith(value, "@see "))
-				body.push("**See:** " + StringTools.trim(value.substring(5)));
-			else
-				body.push(value);
-		}
-		while (body.length > 0 && body[0].length == 0)
-			body.shift();
-		while (body.length > 0 && body[body.length - 1].length == 0)
-			body.pop();
-		return {markdown: body.join("\n"), parameters: parameters, deprecated: deprecated};
 	}
 
 	function addWorkspaceSymbol(result:Array<WorkspaceSymbol>, state:ModuleState, name:String, kind:String, container:Null<String>, detail:String,

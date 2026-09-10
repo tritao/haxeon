@@ -4,6 +4,7 @@ package compiler.tools;
 class CompilerArguments {
 	public static function parse(arguments:Array<String>):CompilerRequest {
 		var output = "out/main.hl",
+			xmlOutput:Null<String> = null,
 			entry = "compiler.tools.HaxeonCompiler",
 			dumpFunction = -1,
 			ffiHeader:Null<String> = null,
@@ -11,10 +12,20 @@ class CompilerArguments {
 			ffiInterfaces:Array<String> = [],
 			roots:Array<String> = [],
 			paths:Array<String> = [];
-		for (argument in arguments)
+		var index = 0;
+		while (index < arguments.length) {
+			var argument = arguments[index++];
 			if (StringTools.startsWith(argument, "--output="))
 				output = value(argument, "--output=");
-			else if (StringTools.startsWith(argument, "--entry="))
+			else if (StringTools.startsWith(argument, "--xml="))
+				xmlOutput = value(argument, "--xml=");
+			else if (argument == "--xml") {
+				if (index >= arguments.length)
+					throw 'Compiler option "--xml" requires a value';
+				xmlOutput = arguments[index++];
+				if (xmlOutput.length == 0)
+					throw 'Compiler option "--xml" requires a value';
+			} else if (StringTools.startsWith(argument, "--entry="))
 				entry = value(argument, "--entry=");
 			else if (StringTools.startsWith(argument, "--root="))
 				roots.push(value(argument, "--root="));
@@ -30,6 +41,7 @@ class CompilerArguments {
 				throw 'Unknown compiler option "$argument"';
 			else
 				paths.push(argument);
+		}
 		if ((ffiHeader == null) != (ffiLibrary == null))
 			throw "--ffi-header and --ffi-library must be provided together";
 		if (roots.length == 0)
@@ -38,6 +50,7 @@ class CompilerArguments {
 			throw "Haxeon compiler requires an explicit source manifest";
 		return {
 			output: output,
+			xmlOutput: xmlOutput,
 			entry: entry,
 			dumpFunction: dumpFunction,
 			ffiHeader: ffiHeader,

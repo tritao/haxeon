@@ -2,6 +2,7 @@ package compiler.tools;
 
 typedef CompilerRequest = {
 	final output:String;
+	final xmlOutput:Null<String>;
 	final entry:String;
 	final dumpFunction:Int;
 	final ffiHeader:Null<String>;

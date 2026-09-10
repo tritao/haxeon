@@ -300,6 +300,26 @@ bridge before compilation.
 The writer currently targets HashLink bytecode format version 6, matching the
 decoder in `src/code.c`.
 
+### API documentation
+
+Haxeon recognizes Haxe documentation comments beginning with `/**`. Their
+Markdown and `@param`, `@return`/`@returns`, `@deprecated`, `@see`, `@throws`,
+`@exception`, and `@since` tags are shared by editor hover, completion, and
+signature help.
+
+The compiler can also emit deterministic Haxe type-description XML for tools
+such as [dox](https://github.com/HaxeFoundation/dox):
+
+```sh
+compiler.hl --xml=docs/api.xml --output=out/app.hl \
+  --entry=my.app.Main --root=src src/my/app/Main.hx
+haxelib run dox -i docs -o docs/html
+```
+
+Both `--xml=docs/api.xml` and the standard two-argument form
+`--xml docs/api.xml` are accepted. Documentation generation does not change
+runtime fingerprints or hot-reload compatibility.
+
 ## 📊 Benchmarks
 
 Run the repeatable edit-to-runtime benchmark:
