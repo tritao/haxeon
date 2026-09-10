@@ -176,6 +176,7 @@ class HxiProjection {
 			switch declaration {
 				case Structure(name, size, _, fields, _):
 					output.add('abstract $name(haxe.io.Bytes) from haxe.io.Bytes to haxe.io.Bytes {\n');
+					output.add('\tpublic static inline function size():Int return $size;\n');
 					output.add('\tpublic inline function new() this = haxe.io.Bytes.alloc($size);\n');
 					for (field in fields) {
 						if (field.lengthField != null) {

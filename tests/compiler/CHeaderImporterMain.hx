@@ -41,6 +41,8 @@ class CHeaderImporterMain {
 		expect(parsed.target == "x86_64-linux-gnu", "generated HXI should satisfy the validated parser contract");
 		var named = CHeaderImporter.importHeader("tests/ffi/import_fixture.h", "x86_64-linux-gnu", ["tests/ffi"], "clang", "sample", "Sample");
 		var projected = HxiProjection.source(HxiParser.parse("import_fixture.hxi", named));
+		expect(projected.indexOf("static inline function size():Int return 32") >= 0,
+			"projected structures should expose their generated ABI size");
 		expect(projected.indexOf("function set_title(value:Null<String>)") >= 0 && projected.indexOf("structSetUtf8") >= 0,
 			"UTF-8 structure fields should project managed accessors");
 		expect(named.indexOf('interface Sample @target("x86_64-linux-gnu") @library("sample")') >= 0,
