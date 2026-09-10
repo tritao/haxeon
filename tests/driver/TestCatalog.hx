@@ -50,6 +50,7 @@ class TestCatalog {
 		"ConditionalCompilationMain",
 		"FunctionTypeSyntaxMain",
 		"CHeaderImporterMain",
+		"HxiAuditMain",
 		"HxiParserMain",
 		"HxiAbiMain",
 	];

@@ -19,7 +19,7 @@ class CHeaderImporter {
 			?interfaceName:String):String {
 		if (interfaceName != null && !~/^[A-Za-z_][A-Za-z0-9_]*$/.match(interfaceName))
 			throw 'Invalid HXI interface name "$interfaceName"';
-		var base = ["-x", "c", "-std=c11", "-target", target];
+		var base = ["-x", "c", "-std=c11", "-ffreestanding", "-target", target];
 		for (include in includes)
 			base.push('-I$include');
 		var process = new Process(clang, base.concat(["-Xclang", "-ast-dump=json", "-fsyntax-only", header])),

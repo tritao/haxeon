@@ -125,6 +125,25 @@ table. In both forms the paired count parameter is omitted from the Haxe API
 and derived from the array length. Unannotated pointer arrays remain
 ABI-visible but receive no managed array projection.
 
+Use `scripts/haxeon-ffi-audit` to import one public header for multiple targets
+and compare its normalized declarations and layouts. The `portable-abi64`
+profile additionally rejects ABI-dependent public scalars such as `long`,
+`size_t`, `wchar_t`, and C `bool`. Audits run Clang in freestanding mode, so
+headers limited to the portable C ABI can be checked for Apple and Windows
+targets without installing their platform SDKs:
+
+```bash
+scripts/haxeon-ffi-audit header.h \
+  --target=x86_64-linux-gnu \
+  --target=x86_64-w64-windows-gnu \
+  --target=arm64-apple-darwin \
+  --profile=portable-abi64
+```
+
+`--format=json` emits the same result as a machine-readable CI report. Any
+import failure, portability violation, or normalized ABI difference exits
+nonzero.
+
 Function parameters may be marked `@out` or `@inout` after a pointer type. The
 generated module keeps the pointer-shaped C entry point private and exposes a
 typed wrapper. Scalar pointees use correctly sized temporary native storage;
