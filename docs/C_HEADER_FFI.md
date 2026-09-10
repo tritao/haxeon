@@ -24,7 +24,10 @@ primitives. Structs carry Clang-computed `@layout` and `@offset` annotations.
 Output is sorted so the same header and target produce byte-identical results.
 Plain C integer types retain ABI-specific names such as `c_int` and `c_long`;
 they are not incorrectly assumed to have a platform-independent width. The
-optional library name becomes interface-level `@library` metadata.
+optional library name becomes interface-level `@library` metadata. Use
+`--source-label=<repository-relative-path>` for checked-in generated files so
+the provenance comment is stable across machines; the input header itself may
+still be an absolute path.
 
 An interface may compose declarations from an already registered interface with
 repeatable `--depends` options:
