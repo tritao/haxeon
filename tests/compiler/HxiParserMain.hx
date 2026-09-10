@@ -24,6 +24,10 @@ class HxiParserMain {
 	static function main():Void {
 		var parsed = HxiParser.parse("nativekit.hxi", valid);
 		expect(parsed.name == "nativekit" && parsed.target == "x86_64-linux-gnu" && parsed.library == "nativekit", "interface metadata should parse");
+		var dependencyParsed = HxiParser.parse("dependent.hxi",
+			'interface dependent @target("x86_64-linux-gnu") @library("dependent") @depends("nativekit", "platform") { extern fn draw() -> void; }');
+		expect(dependencyParsed.dependencies.length == 2 && dependencyParsed.dependencies[0] == "nativekit"
+			&& dependencyParsed.dependencies[1] == "platform", "HXI dependencies should parse in declaration order");
 		expect(parsed.declarations.length == 7, "all declarations should parse");
 		var constantSource = HxiProjection.source(parsed);
 		expect(constantSource.indexOf("class NativekitConstants") >= 0
@@ -185,6 +189,26 @@ class HxiParserMain {
 		compiler.addFfiInterface("nativekit.hxi", valid);
 		expect(compiler.ffiInterfaces().length == 1
 			&& compiler.ffiInterfaces()[0].library == "nativekit", "compiler should retain validated FFI models");
+		var composed = new Compiler();
+		composed.addFfiInterface("base.hxi",
+			'interface base @target("x86_64-linux-gnu") @library("base") { struct point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); } extern fn open(value: point) -> point; }');
+		composed.addFfiInterface("dependent.hxi",
+			'interface dependent @target("x86_64-linux-gnu") @library("dependent") @depends("base") { struct point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); } extern fn open(value: point) -> point; extern fn draw(value: point) -> point; }');
+		var dependentProjection = composed.modules.get("dependent");
+		expect(dependentProjection != null && dependentProjection.source.text.indexOf("abstract point(") < 0
+			&& dependentProjection.source.text.indexOf("extern function draw(arg0:point):point;") >= 0
+			&& dependentProjection.source.text.indexOf("function open(") < 0,
+			"dependent HXI projections should reuse shared declarations and omit duplicate natives");
+		var composedNatives = composed.irCNatives();
+		expect(composedNatives.length == 2 && composedNatives[0].name == "base.open" && composedNatives[1].name == "dependent.draw",
+			"dependent HXI interfaces should contribute only their owned native functions");
+		var unknownDependencyRejected = false;
+		try {
+			new Compiler().addFfiInterface("missing.hxi",
+				'interface missing @target("x86_64-linux-gnu") @depends("does_not_exist") { }');
+		} catch (_:Dynamic)
+			unknownDependencyRejected = true;
+		expect(unknownDependencyRejected, "unknown HXI dependencies should be rejected before projection");
 		var projection = compiler.modules.get("nativekit");
 		expect(projection != null
 			&& projection.source.text.indexOf("abstract nk_options(haxe.io.Bytes) from haxe.io.Bytes to haxe.io.Bytes") >= 0

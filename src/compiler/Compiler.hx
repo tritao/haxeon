@@ -49,12 +49,18 @@ import compiler.semantic.ModuleCanonicalizer;
 import compiler.semantic.LambdaCollector;
 import compiler.semantic.SemanticWorkspace;
 import compiler.ffi.HxiModel.HxiInterface;
+import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiParser;
 import compiler.ffi.HxiProjection;
 
 typedef FfiInterfaceSource = {
 	final path:String;
 	final text:String;
+}
+
+typedef FfiComposition = {
+	final omitted:Map<String, Bool>;
+	final declarations:Map<String, HxiDeclaration>;
 }
 
 /** Public alias for a host-native declaration accepted by the compiler. */
@@ -256,13 +262,12 @@ class Compiler {
 		var model = HxiParser.parse(path, source);
 		if (ffiInterfaceModels.exists(model.name))
 			throw 'FFI interface "${model.name}" is already registered';
+		for (dependency in model.dependencies)
+			if (!ffiInterfaceModels.exists(dependency))
+				throw 'FFI interface "${model.name}" depends on unknown interface "$dependency"';
 		ffiInterfaceModels.set(model.name, model);
 		ffiInterfaceSources.push({path: path, text: source});
-		var projection = HxiProjection.source(model);
-		if (projection.length > 0)
-			update(model.name + ".hx", projection);
-		else
-			sourceGeneration++;
+		refreshFfiProjections();
 	}
 
 	/** Validated ABI interfaces in deterministic interface-name order. */
@@ -274,11 +279,65 @@ class Compiler {
 
 	public function irCNatives():Array<IrCNative> {
 		var result:Array<IrCNative> = [];
-		for (model in ffiInterfaces())
-			for (native in HxiProjection.cNatives(model))
+		for (model in ffiInterfaces()) {
+			var composition = ffiComposition(model);
+			for (native in HxiProjection.cNatives(model, composition.omitted, composition.declarations))
 				result.push(native);
+		}
 		return result;
 	}
+
+	function refreshFfiProjections():Void {
+		for (model in ffiInterfaces()) {
+			var composition = ffiComposition(model),
+				projection = HxiProjection.source(model, composition.omitted, composition.declarations);
+			if (projection.length > 0)
+				update(model.name + ".hx", projection);
+			else
+				sourceGeneration++;
+		}
+	}
+
+	function ffiComposition(model:HxiInterface):FfiComposition {
+		// Imported HXI files can repeat declarations from included headers. Keep
+		// those snapshots available for ABI classification, but emit each shared
+		// declaration and native symbol from its owning interface only.
+		var omitted:Map<String, Bool> = [],
+			declarations:Map<String, HxiDeclaration> = [],
+			visited:Map<String, Bool> = [],
+			active:Map<String, Bool> = [];
+		for (dependency in model.dependencies)
+			collectFfiDependency(model.name, dependency, omitted, declarations, visited, active);
+		return {omitted: omitted, declarations: declarations};
+	}
+
+	function collectFfiDependency(owner:String, name:String, omitted:Map<String, Bool>, declarations:Map<String, HxiDeclaration>,
+		visited:Map<String, Bool>, active:Map<String, Bool>):Void {
+		if (active.get(name) == true)
+			throw 'Cyclic HXI dependency involving "$owner" and "$name"';
+		if (visited.get(name) == true)
+			return;
+		var dependency = ffiInterfaceModels.get(name);
+		if (dependency == null)
+			throw 'FFI interface "$owner" depends on unknown interface "$name"';
+		active.set(name, true);
+		for (nested in dependency.dependencies)
+			collectFfiDependency(owner, nested, omitted, declarations, visited, active);
+		active.remove(name);
+		visited.set(name, true);
+		for (declaration in dependency.declarations) {
+			var declarationName = ffiDeclarationName(declaration);
+			omitted.set(declarationName, true);
+			if (!declarations.exists(declarationName))
+				declarations.set(declarationName, declaration);
+		}
+	}
+
+	static function ffiDeclarationName(declaration:HxiDeclaration):String
+		return switch declaration {
+			case Opaque(name, _) | Alias(name, _, _) | Constant(name, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _) |
+				Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _, _): name;
+		};
 
 	function ffiConfiguration():Array<FfiInterfaceSource>
 		return [for (source in ffiInterfaceSources) {path: source.path, text: source.text}];

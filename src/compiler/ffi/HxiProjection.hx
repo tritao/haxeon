@@ -11,13 +11,16 @@ import compiler.ffi.HxiModel.HxiPointerOwnership;
 
 /** Projects bridgeable HXI functions into a synthetic, source-visible module. */
 class HxiProjection {
-	public static function cNatives(model:HxiInterface):Array<IrCNative> {
+	public static function cNatives(model:HxiInterface, ?omitted:Map<String, Bool>, ?visibleDeclarations:Map<String, HxiDeclaration>):Array<IrCNative> {
 		var library = model.library;
 		if (library == null)
 			return [];
 		var result:Array<IrCNative> = [],
 			declarations:Map<String, HxiDeclaration> = [],
 			directed:Map<String, Bool> = [];
+		if (visibleDeclarations != null)
+			for (name => declaration in visibleDeclarations)
+				declarations.set(name, declaration);
 		for (declaration in model.declarations)
 			switch declaration {
 				case Opaque(name, _) | Alias(name, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _):
@@ -26,8 +29,10 @@ class HxiProjection {
 					directed.set(name, hasOutput(parameters));
 				case _:
 			}
-		var abi = HxiAbi.forInterface(model);
+		var abi = HxiAbi.forInterface(model, declarations);
 		for (fn in abi.functions()) {
+			if (isOmitted(omitted, fn.name))
+				continue;
 			var arguments:Array<IrType> = [],
 				codes:Array<String> = [],
 				supported = true;
@@ -68,11 +73,11 @@ class HxiProjection {
 		return result;
 	}
 
-	public static function source(model:HxiInterface):String {
+	public static function source(model:HxiInterface, ?omitted:Map<String, Bool>, ?visibleDeclarations:Map<String, HxiDeclaration>):String {
 		var library = model.library;
 		if (library == null)
 			return "";
-		var abi = HxiAbi.forInterface(model), output = new StringBuf();
+		var abi = HxiAbi.forInterface(model, visibleDeclarations), output = new StringBuf();
 		var structAccesses:Map<String, {type:String, setterType:String}> = [],
 			declarations:Map<String, HxiDeclaration> = [],
 			functions:Map<String, HxiDeclaration> = [];
@@ -81,6 +86,9 @@ class HxiProjection {
 			usesUtf8Fields = false,
 			usesBorrowedBuffers = false,
 			hasCallbacks = false;
+		if (visibleDeclarations != null)
+			for (name => declaration in visibleDeclarations)
+				declarations.set(name, declaration);
 		for (declaration in model.declarations)
 			switch declaration {
 				case Opaque(name, _) | Alias(name, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _):
@@ -94,7 +102,8 @@ class HxiProjection {
 		for (declaration in model.declarations)
 			switch declaration {
 				case Constant(name, value, _):
-					constants.push({name: name, value: value});
+					if (!isOmitted(omitted, name))
+						constants.push({name: name, value: value});
 				case _:
 			}
 		if (constants.length != 0) {
@@ -105,7 +114,7 @@ class HxiProjection {
 		}
 		for (declaration in model.declarations)
 			switch declaration {
-				case Callback(_, _, _, _, _):
+				case Callback(name, _, _, _, _) if (!isOmitted(omitted, name)):
 					hasCallbacks = true;
 				case _:
 			}
@@ -113,7 +122,7 @@ class HxiProjection {
 			output.add('enum abstract HxiCallbackError(Int) from Int to Int { var None = 0; var Exception = 1; var WrongThread = 2; var PointerContract = 3; var AggregateContract = 4; var StringContract = 5; }\n');
 		for (declaration in model.declarations)
 			switch declaration {
-				case Callback(name, parameters, result, callConvention, _):
+				case Callback(name, parameters, result, callConvention, _) if (!isOmitted(omitted, name)):
 					var argumentTypes = [], codes = [], pointerSizes = [], pointerNullable = [], supported = true;
 					for (parameter in parameters) {
 						var classified = abi.classify(parameter.type),
@@ -160,7 +169,7 @@ class HxiProjection {
 			}
 		for (declaration in model.declarations)
 			switch declaration {
-				case Enumeration(name, representation, _, values, _):
+				case Enumeration(name, representation, _, values, _) if (!isOmitted(omitted, name)):
 					var underlying = project(abi.classify(representation), false);
 					if (underlying == null)
 						continue;
@@ -172,7 +181,7 @@ class HxiProjection {
 			}
 		for (declaration in model.declarations)
 			switch declaration {
-				case Structure(name, size, _, fields, _):
+				case Structure(name, size, _, fields, _) if (!isOmitted(omitted, name)):
 					output.add('abstract $name(haxe.io.Bytes) from haxe.io.Bytes to haxe.io.Bytes {\n');
 					output.add('\tpublic static inline function size():Int return $size;\n');
 					output.add('\tpublic static function array(values:Array<$name>):$name { var bytes = ${model.name}.__hxi_struct_alloc(values.length * $size); for (index in 0...values.length) ${model.name}.__hxi_struct_copy(bytes, index * $size, values[index], $size); return cast bytes; }\n');
@@ -260,7 +269,7 @@ class HxiProjection {
 			}
 		for (declaration in model.declarations)
 			switch declaration {
-				case Function(_, parameters, _, _, _, _, _, _):
+				case Function(name, parameters, _, _, _, _, _, _) if (!isOmitted(omitted, name)):
 					for (parameter in parameters)
 						switch parameter.direction {
 							case Out | InOut:
@@ -302,6 +311,8 @@ class HxiProjection {
 			output.add('@:hlNative("realtime_runtime", "set$access") extern function __hxi_struct_set$access(bytes:haxe.io.Bytes, offset:Int, value:${types.setterType}):Void;\n');
 		}
 		for (fn in abi.functions()) {
+			if (isOmitted(omitted, fn.name))
+				continue;
 			var parameters = switch functions.get(fn.name) {
 				case Function(_, value, _, _, _, _, _, _): value;
 				case _: throw 'Missing HXI function "${fn.name}"';
@@ -344,6 +355,9 @@ class HxiProjection {
 		}
 		return output.toString();
 	}
+
+	static function isOmitted(omitted:Null<Map<String, Bool>>, name:String):Bool
+		return omitted != null && omitted.get(name) == true;
 
 	static function hasOutput(parameters:Array<compiler.ffi.HxiModel.HxiParameter>):Bool {
 		for (parameter in parameters)

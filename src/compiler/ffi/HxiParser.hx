@@ -66,7 +66,7 @@ class HxiParser {
 	function parseInterface():HxiInterface {
 		var start = expect("interface").span,
 			name = identifier(),
-			metadata = parseMetadata(["target", "library"]);
+			metadata = parseMetadata(["target", "library", "depends"]);
 		expect("{");
 		var declarations = [];
 		while (!check("}"))
@@ -76,7 +76,8 @@ class HxiParser {
 			fail('Unexpected token "${current().text}"', current().span);
 		var target = metadataValue(metadata, "target", true),
 			library = metadataValue(metadata, "library", false),
-			result = new HxiInterface(name, target, library, declarations, start.merge(end));
+			dependencies = metadataStrings(metadata, "depends"),
+			result = new HxiInterface(name, target, library, dependencies, declarations, start.merge(end));
 		validate(result);
 		return result;
 	}
@@ -737,6 +738,24 @@ class HxiParser {
 		if (!StringTools.startsWith(entry[0], '"'))
 			fail('@$name requires a string value', current().span);
 		return entry[0].substring(1, entry[0].length - 1);
+	}
+
+	function metadataStrings(values:Map<String, Array<String>>, name:String):Array<String> {
+		var entry = values.get(name);
+		if (entry == null)
+			return [];
+		if (entry.length == 0)
+			fail('@$name requires at least one interface name', current().span);
+		var result:Array<String> = [];
+		for (value in entry) {
+			if (!StringTools.startsWith(value, '"'))
+				fail('@$name requires string values', current().span);
+			var dependency = value.substring(1, value.length - 1);
+			if (!~/^[A-Za-z_][A-Za-z0-9_]*$/.match(dependency))
+				fail('@$name contains an invalid interface name "$dependency"', current().span);
+			result.push(dependency);
+		}
+		return result;
 	}
 
 	function metadataInteger(values:Map<String, Array<String>>, name:String, required:Bool):Null<Int> {

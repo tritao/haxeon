@@ -26,6 +26,28 @@ Plain C integer types retain ABI-specific names such as `c_int` and `c_long`;
 they are not incorrectly assumed to have a platform-independent width. The
 optional library name becomes interface-level `@library` metadata.
 
+An interface may compose declarations from an already registered interface with
+repeatable `--depends` options:
+
+```sh
+scripts/haxeon-ffi-import \
+  --target=x86_64-linux-gnu \
+  --library=nativekit_ui \
+  --interface=NativeKitUI \
+  --depends=NativeKit \
+  --output=generated/nativekit-ui.hxi \
+  /path/to/nativekit_ui_import.h
+```
+
+This emits `@depends("NativeKit")` on the HXI interface. The dependency must
+be passed to the compiler before the dependent interface. Shared declarations
+are projected once from the dependency, while functions and types owned by the
+dependent interface remain in its generated Haxe module. Dependencies define
+ABI visibility and symbol ownership; each interface still retains its own
+`@library` for native functions. A generated raw HXI may still contain included
+header declarations as an ABI snapshot; those declarations are not emitted a
+second time in the composed Haxe module or native descriptor list.
+
 Pass one or more generated interfaces to the compiler with repeatable options:
 
 ```sh

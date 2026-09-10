@@ -67,13 +67,21 @@ class HxiInterface {
 	public final name:String;
 	public final target:String;
 	public final library:Null<String>;
+	/** Other HXI interfaces whose declarations are visible to this interface.
+	 *
+	 * Dependencies are a composition boundary, not another native library
+	 * load.  Their declarations are projected by the owning interface and are
+	 * omitted from this interface's generated source/native list.
+	 */
+	public final dependencies:Array<String>;
 	public final declarations:Array<HxiDeclaration>;
 	public final span:SourceSpan;
 
-	public function new(name:String, target:String, library:Null<String>, declarations:Array<HxiDeclaration>, span:SourceSpan) {
+	public function new(name:String, target:String, library:Null<String>, dependencies:Array<String>, declarations:Array<HxiDeclaration>, span:SourceSpan) {
 		this.name = name;
 		this.target = target;
 		this.library = library;
+		this.dependencies = dependencies;
 		this.declarations = declarations;
 		this.span = span;
 	}

@@ -50,6 +50,9 @@ class CHeaderImporterMain {
 			"UTF-8 structure fields should project managed accessors");
 		expect(named.indexOf('interface Sample @target("x86_64-linux-gnu") @library("sample")') >= 0,
 			"callers should be able to select a stable projected interface name");
+		var dependent = CHeaderImporter.importHeader("tests/ffi/import_fixture.h", "x86_64-linux-gnu", ["tests/ffi"], "clang", "sample", "Dependent",
+			["Sample"]);
+		expect(dependent.indexOf('@depends("Sample")') >= 0, "header importer should preserve HXI dependency metadata");
 		var windows = CHeaderImporter.importHeader("tests/ffi/import_fixture.h", "i686-w64-windows-gnu", ["tests/ffi"]);
 		expect(windows.indexOf('callback sample_stdcall_callback = fn(arg0: i32) -> i32 @callconv("stdcall")') >= 0
 			&& windows.indexOf('extern fn sample_stdcall_function(value: i32) -> i32 @callconv("stdcall")') >= 0,

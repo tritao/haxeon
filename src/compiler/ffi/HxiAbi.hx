@@ -43,10 +43,10 @@ class HxiAbi {
 	final declarations:Map<String, HxiDeclaration> = [];
 	final model:HxiInterface;
 
-	public static function forInterface(model:HxiInterface):HxiAbi
-		return new HxiAbi(model);
+	public static function forInterface(model:HxiInterface, ?visibleDeclarations:Map<String, HxiDeclaration>):HxiAbi
+		return new HxiAbi(model, visibleDeclarations);
 
-	function new(model:HxiInterface) {
+	function new(model:HxiInterface, visibleDeclarations:Null<Map<String, HxiDeclaration>>) {
 		this.model = model;
 		target = model.target.toLowerCase();
 		var architecture = target == "portable-abi64" ? "portable64" : target.split("-")[0];
@@ -59,6 +59,9 @@ class HxiAbi {
 		var windows = target.indexOf("windows") >= 0 || target.indexOf("mingw") >= 0 || target.indexOf("msvc") >= 0;
 		longBits = windows ? 32 : pointerBits;
 		wcharBits = windows ? 16 : 32;
+		if (visibleDeclarations != null)
+			for (name => declaration in visibleDeclarations)
+				declarations.set(name, declaration);
 		for (declaration in model.declarations)
 			declarations.set(nameOf(declaration), declaration);
 	}
