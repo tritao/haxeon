@@ -25,6 +25,10 @@ class HxiParserMain {
 		var parsed = HxiParser.parse("nativekit.hxi", valid);
 		expect(parsed.name == "nativekit" && parsed.target == "x86_64-linux-gnu" && parsed.library == "nativekit", "interface metadata should parse");
 		expect(parsed.declarations.length == 7, "all declarations should parse");
+		var constantSource = HxiProjection.source(parsed);
+		expect(constantSource.indexOf("class NativekitConstants") >= 0
+			&& constantSource.indexOf("public static inline final NK_OK:Int = 0") >= 0,
+			"HXI constants should project as named compile-time values");
 		switch parsed.declarations[4] {
 			case Structure("nk_options", 16, 8, fields, _):
 				expect(fields.length == 2 && fields[1].offset == 8, "layout and offsets should parse");
@@ -223,7 +227,8 @@ class HxiParserMain {
 			"requires a borrowed byte or void pointer");
 		expectError('interface bad @target("x86_64-linux-gnu") { struct holder @layout(16, 8) { data: ptr<u8> @offset(0) @borrowed @length_field("missing"); size: u64 @offset(8); } }',
 			"references missing field");
-		compiler.update("Main.hx", "import nativekit; function main():Int return nativekit.nk_version();");
+		compiler.update("Main.hx",
+			"import nativekit; import nativekit.NativekitConstants; function main():Int return nativekit.nk_version() + NativekitConstants.NK_OK;");
 		compiler.analyze("Main");
 		expect(compiler.irCNatives().length == 2 && compiler.irCNatives()[1].name == "nativekit.nk_version",
 			"compiler should retain executable C descriptors for projected functions");

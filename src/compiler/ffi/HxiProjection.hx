@@ -88,6 +88,22 @@ class HxiProjection {
 				case _:
 			}
 		output.add('// Generated semantic projection of ${model.name}. Do not edit.\n');
+		var constants = [
+			for (declaration in model.declarations)
+				switch declaration {
+					case Constant(name, value, _):
+						{name: name, value: value};
+					case _:
+						null;
+				}
+		];
+		constants = constants.filter(value -> value != null);
+		if (constants.length != 0) {
+			output.add('class ${upperFirst(model.name)}Constants {\n');
+			for (constant in constants)
+				output.add('\tpublic static inline final ${constant.name}:Int = ${constant.value};\n');
+			output.add('}\n');
+		}
 		for (declaration in model.declarations)
 			switch declaration {
 				case Callback(_, _, _, _, _):
