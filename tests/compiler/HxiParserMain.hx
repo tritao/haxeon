@@ -55,8 +55,10 @@ class HxiParserMain {
 			&& enumSource.indexOf("extern function check(arg0:Result, arg1:Options):Result") >= 0,
 			"enums should retain nominal types while projecting integer ABI calls");
 		var enumField = HxiParser.parse("enum-field.hxi",
-			'interface enums @target("x86_64-linux-gnu") @library("enums") { enum Result : c_int { OK = 0; ERROR = -1; } struct Status @layout(4, 4) { result: Result @offset(0); } }');
-		expect(HxiProjection.source(enumField).indexOf("function get_result()") >= 0,
+			'interface enums @target("x86_64-linux-gnu") @library("enums") { enum result : c_int { OK = 0; ERROR = -1; } struct Status @layout(4, 4) { result: result @offset(0); } }');
+		var enumFieldSource = HxiProjection.source(enumField);
+		expect(enumFieldSource.indexOf("enum abstract Result(Int)") >= 0
+			&& enumFieldSource.indexOf("function get_result():Result") >= 0,
 			"named enums should retain their nominal type in fixed-layout structure fields");
 		var enumCompiler = new Compiler();
 		enumCompiler.addFfiInterface("enums.hxi",

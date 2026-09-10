@@ -164,7 +164,7 @@ class HxiProjection {
 					var underlying = project(abi.classify(representation), false);
 					if (underlying == null)
 						continue;
-					output.add('enum abstract $name(${underlying.haxeType}) from ${underlying.haxeType} to ${underlying.haxeType} {\n');
+					output.add('enum abstract ${upperFirst(name)}(${underlying.haxeType}) from ${underlying.haxeType} to ${underlying.haxeType} {\n');
 					for (value in values)
 						output.add('\tvar ${value.name} = ${value.value};\n');
 					output.add('}\n');
@@ -589,7 +589,7 @@ class HxiProjection {
 			case EnumerationValue(name, bits, sign) if (bits <= 32):
 				var unsigned = sign == Unsigned || sign == PlainChar;
 				{
-					haxeType: name,
+					haxeType: upperFirst(name),
 					nativePointer: false,
 					nullable: false,
 					code: switch bits {
