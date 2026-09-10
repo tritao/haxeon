@@ -142,7 +142,9 @@ scripts/haxeon-ffi-audit header.h \
 
 `--format=json` emits the same result as a machine-readable CI report. Any
 import failure, portability violation, or normalized ABI difference exits
-nonzero.
+nonzero. After a successful comparison, `--output=library-abi64.hxi` writes a
+single canonical interface using `@target("portable-abi64")`; failed audits do
+not touch the output file.
 
 Function parameters may be marked `@out` or `@inout` after a pointer type. The
 generated module keeps the pointer-shaped C entry point private and exposes a

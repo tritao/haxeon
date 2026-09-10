@@ -49,10 +49,11 @@ class HxiAbi {
 	function new(model:HxiInterface) {
 		this.model = model;
 		target = model.target.toLowerCase();
-		var architecture = target.split("-")[0];
+		var architecture = target == "portable-abi64" ? "portable64" : target.split("-")[0];
 		pointerBits = switch architecture {
 			case "i386" | "i486" | "i586" | "i686" | "x86" | "arm" | "armv7" | "wasm32": 32;
 			case "x86_64" | "amd64" | "aarch64" | "arm64" | "riscv64" | "wasm64": 64;
+			case "portable64": 64;
 			default: throw 'Unsupported HXI target architecture "$architecture"';
 		}
 		var windows = target.indexOf("windows") >= 0 || target.indexOf("mingw") >= 0 || target.indexOf("msvc") >= 0;
