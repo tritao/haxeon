@@ -12,7 +12,7 @@ if [[ ! -x "$haxe_bin" ]]; then
 fi
 
 mkdir -p "$(dirname "$output_file")"
-rm -f "$root_dir/android/app/src/main/assets/app.hlp" "$root_dir/android/app/src/main/assets/app.hcs.pending"
+rm -f "$root_dir/android/app/src/main/assets/app.hlp" "$root_dir/android/app/src/main/assets/app.hxr" "$root_dir/android/app/src/main/assets/app.hcs.pending"
 
 export LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 "$haxe_bin" --cwd "$root_dir" -cp src --run tools.AndroidBuild "$root_dir/android/demo/Main.hx" "$output_file"

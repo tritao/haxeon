@@ -29,6 +29,7 @@ public final class MainActivity extends Activity {
 
     private static native int nativeLoad(android.content.res.AssetManager assets);
     private static native int nativeApplyPatch(byte[] patch);
+    private static native int nativeApplyReload(byte[] bundle);
     private static native int nativeRevision();
     private static native int nativeDispose();
 
@@ -85,18 +86,32 @@ public final class MainActivity extends Activity {
         int length = input.readInt();
         if (length <= 0 || length > 32 * 1024 * 1024)
             throw new IOException("invalid HLP length: " + length);
-        byte[] patch = new byte[length];
-        input.readFully(patch);
+        byte[] payload = new byte[length];
+        input.readFully(payload);
 
-        int result = nativeApplyPatch(patch);
+        boolean reload;
+        if (hasMagic(payload, 'H', 'L', 'P')) {
+            reload = false;
+        } else if (hasMagic(payload, 'H', 'X', 'R')) {
+            reload = true;
+        } else {
+            throw new IOException("unknown Haxeon artifact");
+        }
+        int result = reload ? nativeApplyReload(payload) : nativeApplyPatch(payload);
         int revision = nativeRevision();
         DataOutputStream output = new DataOutputStream(new BufferedOutputStream(client.getOutputStream()));
         output.writeInt(result);
         output.writeInt(revision);
         output.flush();
+        String artifact = reload ? "module reload" : "patch";
         runOnUiThread(() -> status.setText(result == 0
-            ? "Haxeon applied patch\nrevision: " + revision
-            : "Haxeon rejected patch\nstatus: " + result + "\nrevision: " + revision));
+            ? "Haxeon applied " + artifact + "\nrevision: " + revision
+            : "Haxeon rejected " + artifact + "\nstatus: " + result + "\nrevision: " + revision));
+    }
+
+    private static boolean hasMagic(byte[] payload, int first, int second, int third) {
+        return payload.length >= 3 && payload[0] == (byte)first
+            && payload[1] == (byte)second && payload[2] == (byte)third;
     }
 
     @Override

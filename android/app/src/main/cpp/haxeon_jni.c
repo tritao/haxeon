@@ -6,6 +6,7 @@
 #include <pthread.h>
 #include <string.h>
 #include <limits.h>
+#include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
 
@@ -13,11 +14,17 @@
 #include <hlmodule.h>
 
 #define HAXEON_LOG_TAG "Haxeon"
+#define HAXEON_MAX_ARTIFACT_SIZE (32 * 1024 * 1024)
 
 static pthread_mutex_t runtime_mutex = PTHREAD_MUTEX_INITIALIZER;
 static hl_runtime_module *runtime_module = NULL;
 static int runtime_entry_id = -1;
 static bool runtime_initialized = false;
+
+static uint32_t read_u32_le(const unsigned char *bytes) {
+    return ((uint32_t)bytes[0]) | ((uint32_t)bytes[1] << 8)
+        | ((uint32_t)bytes[2] << 16) | ((uint32_t)bytes[3] << 24);
+}
 
 static int read_asset(AAssetManager *assets, const char *name, unsigned char **bytes, int *size) {
     AAsset *asset = AAssetManager_open(assets, name, AASSET_MODE_BUFFER);
@@ -163,7 +170,7 @@ Java_org_haxeon_android_MainActivity_nativeApplyPatch(JNIEnv *env, jclass clazz,
         return HL_RUNTIME_BAD_ARGUMENT;
 
     jsize length = (*env)->GetArrayLength(env, patch_array);
-    if (length <= 0 || length > 32 * 1024 * 1024)
+    if (length <= 0 || length > HAXEON_MAX_ARTIFACT_SIZE)
         return HL_RUNTIME_BAD_ARGUMENT;
 
     unsigned char *bytes = (unsigned char*)malloc((size_t)length);
@@ -196,6 +203,115 @@ Java_org_haxeon_android_MainActivity_nativeApplyPatch(JNIEnv *env, jclass clazz,
         hl_unregister_thread();
     pthread_mutex_unlock(&runtime_mutex);
     return status;
+}
+
+JNIEXPORT jint JNICALL
+Java_org_haxeon_android_MainActivity_nativeApplyReload(JNIEnv *env, jclass clazz, jbyteArray bundle_array) {
+    (void)clazz;
+    if (bundle_array == NULL)
+        return HL_RUNTIME_BAD_ARGUMENT;
+
+    jsize length = (*env)->GetArrayLength(env, bundle_array);
+    if (length <= 0 || length > HAXEON_MAX_ARTIFACT_SIZE)
+        return HL_RUNTIME_BAD_ARGUMENT;
+
+    unsigned char *bundle = (unsigned char*)malloc((size_t)length);
+    if (bundle == NULL)
+        return HL_RUNTIME_JIT_FAILED;
+    (*env)->GetByteArrayRegion(env, bundle_array, 0, length, (jbyte*)bundle);
+
+    /* HXR v1: magic, version, little-endian HLB/HLI lengths, entry stable ID. */
+    if (length < 16 || memcmp(bundle, "HXR", 3) != 0 || bundle[3] != 1) {
+        free(bundle);
+        return HL_RUNTIME_BAD_FORMAT;
+    }
+    uint32_t module_size = read_u32_le(bundle + 4);
+    uint32_t identity_size = read_u32_le(bundle + 8);
+    uint32_t entry_value = read_u32_le(bundle + 12);
+    if (module_size == 0 || module_size > HAXEON_MAX_ARTIFACT_SIZE
+        || identity_size < 28 || identity_size > HAXEON_MAX_ARTIFACT_SIZE
+        || entry_value > INT_MAX) {
+        free(bundle);
+        return HL_RUNTIME_BAD_FORMAT;
+    }
+    size_t payload_offset = 16;
+    if ((size_t)module_size > (size_t)length - payload_offset) {
+        free(bundle);
+        return HL_RUNTIME_BAD_FORMAT;
+    }
+    payload_offset += module_size;
+    const unsigned char *identity = bundle + payload_offset;
+    if (identity_size < 28 || memcmp(identity, "HLI", 3) != 0
+        || (identity[3] != 2 && identity[3] != 3)
+        || (identity[3] == 3 && identity_size < 32)
+        || (size_t)identity_size != (size_t)length - payload_offset) {
+        free(bundle);
+        return HL_RUNTIME_BAD_FORMAT;
+    }
+
+    int stack_marker = 0;
+    pthread_mutex_lock(&runtime_mutex);
+    if (runtime_module == NULL) {
+        pthread_mutex_unlock(&runtime_mutex);
+        free(bundle);
+        return HL_RUNTIME_BAD_ARGUMENT;
+    }
+    bool registered = register_current_thread(&stack_marker);
+    hl_runtime_module *old_runtime = runtime_module;
+    hl_runtime_module *loaded = NULL;
+    hl_runtime_status status = hl_runtime_module_load(bundle + 16, (int)module_size,
+        identity, (int)identity_size, &loaded);
+    if (status != HL_RUNTIME_OK || loaded == NULL) {
+        __android_log_print(ANDROID_LOG_ERROR, HAXEON_LOG_TAG,
+            "could not load reload bundle (status %d)", status);
+        if (registered)
+            hl_unregister_thread();
+        pthread_mutex_unlock(&runtime_mutex);
+        free(bundle);
+        return status;
+    }
+
+    vdynamic *exception = NULL;
+    status = hl_runtime_module_call_void(loaded, (int)entry_value, &exception);
+    if (status != HL_RUNTIME_OK) {
+        report_exception(exception, "reloaded app.main");
+        hl_runtime_status release_status = hl_runtime_module_release(loaded);
+        if (release_status != HL_RUNTIME_OK)
+            __android_log_print(ANDROID_LOG_ERROR, HAXEON_LOG_TAG,
+                "could not discard failed reload (status %d)", release_status);
+        if (registered)
+            hl_unregister_thread();
+        pthread_mutex_unlock(&runtime_mutex);
+        free(bundle);
+        return status;
+    }
+
+    status = hl_runtime_module_release(old_runtime);
+    if (status != HL_RUNTIME_OK) {
+        __android_log_print(ANDROID_LOG_ERROR, HAXEON_LOG_TAG,
+            "could not retire old runtime during reload (status %d)", status);
+        hl_runtime_status release_status = hl_runtime_module_release(loaded);
+        if (release_status != HL_RUNTIME_OK)
+            __android_log_print(ANDROID_LOG_ERROR, HAXEON_LOG_TAG,
+                "could not discard blocked reload (status %d)", release_status);
+        if (registered)
+            hl_unregister_thread();
+        pthread_mutex_unlock(&runtime_mutex);
+        free(bundle);
+        return status;
+    }
+
+    runtime_module = loaded;
+    runtime_entry_id = (int)entry_value;
+    hl_runtime_failed_retirements_retry();
+    __android_log_print(ANDROID_LOG_INFO, HAXEON_LOG_TAG,
+        "reloaded HLB/HLI module; runtime revision is now %d",
+        hl_runtime_module_revision(runtime_module));
+    if (registered)
+        hl_unregister_thread();
+    pthread_mutex_unlock(&runtime_mutex);
+    free(bundle);
+    return HL_RUNTIME_OK;
 }
 
 JNIEXPORT jint JNICALL

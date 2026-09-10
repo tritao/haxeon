@@ -242,8 +242,17 @@ and send a compatible body patch without rebuilding the APK:
 
 The patch compiler stages a new baseline beside `android/app/src/main/assets/app.hcs`;
 the send command promotes it only after the device acknowledges the patch.
-Structural edits report that they require a domain reload; the next step for
-those is replacing the loaded module and its HLI manifest.
+Structural edits are sent as a full domain reload, still without rebuilding the
+APK:
+
+```sh
+./scripts/build-android-reload.sh
+./scripts/android-send-reload.sh
+```
+
+The reload bundle replaces the loaded HLB module and HLI manifest only after
+the new module initializes and its `main` call succeeds. Its staged compiler
+baseline is promoted only after the device acknowledges the replacement.
 
 The local Android SDK, NDK, CMake, Gradle, and emulator are kept under
 `.tools/`. Source `scripts/android-env.sh` when using `adb`, `emulator`, or
