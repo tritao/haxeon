@@ -322,6 +322,7 @@ DEFINE_PRIM(_ARR,__string_split,_BYTES _BYTES);
 DEFINE_PRIM(_BYTES,__string_ltrim,_BYTES);
 DEFINE_PRIM(_BYTES,__string_trim,_BYTES);
 DEFINE_PRIM(_BYTES,__string_to_lower_case,_BYTES);
+DEFINE_PRIM(_BYTES,__string_to_upper_case,_BYTES);
 DEFINE_PRIM(_BOOL,__string_is_space,_BYTES _I32);
 DEFINE_PRIM(_I32,__string_last_index_of,_BYTES _BYTES);
 DEFINE_PRIM(_I32,__string_char_code_at,_BYTES _I32);

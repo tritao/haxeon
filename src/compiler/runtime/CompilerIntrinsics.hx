@@ -27,6 +27,7 @@ class CompilerIntrinsics {
 		definitions.push(native("__string_last_index_of", "haxeon_runtime", "__string_last_index_of", [TString, TString], TInt));
 		definitions.push(native("__string_index_of_from", "haxeon_runtime", "__string_index_of_from", [TString, TString, TInt], TInt));
 		definitions.push(native("__string_to_lower_case", "haxeon_runtime", "__string_to_lower_case", [TString], TString));
+		definitions.push(native("__string_to_upper_case", "haxeon_runtime", "__string_to_upper_case", [TString], TString));
 		definitions.push(native("__string_split", "haxeon_runtime", "__string_split", [TString, TString], TArray(TString)));
 		definitions.push(native("__string_from_bytes", "haxeon_runtime", "__string_from_bytes", [THlBytes, TInt], TString));
 		definitions.push(native("__string_bytes", "haxeon_runtime", "__string_bytes", [TString], THlBytes));

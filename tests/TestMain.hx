@@ -305,6 +305,8 @@ class TestMain {
 		expectCompileError('function main():Int { var value; return 0; }', 'Uninitialized local "value" requires an explicit type');
 		expectCompileError('class Invalid { static final value; } function main():Int { return 0; }', 'Field "value" requires a type or initializer');
 		Frontend.compile('class Constants { static final integer = 4 * 10 + 2; static final fraction = 4 / 2; static final bits = (1 << 5) | 10; } function main():Int return Constants.integer;');
+		Frontend.compile('class Constants { static final names = ["a", "b"]; } function main():Int return Constants.names.length;');
+		Frontend.compile('enum Value { Number(value:Int); Empty; } function main():Int { var bits = 1; bits |= 2; bits &= 3; bits ^= 1; bits *= 4; bits %= 5; var fraction = 8.0; fraction /= 2; var recovered = try 1 catch (_:Dynamic) 2; var input:Value = Number(2); var selected = switch input { case Number(1) | Number(2): 3; case _: 0; }; var flat = [for (left in [1, 2]) for (right in [3, 4]) left + right]; return bits + recovered + selected + flat.length + (flat.contains(6) ? 1 : 0); }');
 		Frontend.compile("class Defaults { static final integer = -1; static final fraction = -0.5; static final prefix = '$' + 'abstract-' + 'result'; } function main():Int { return Defaults.integer; }");
 		Frontend.compile('class Base { public static inline final WIDTH = 220; } class Derived { public static inline final WIDTH = Base.WIDTH; } function main():Int return Derived.WIDTH;');
 		expectCompileError('class First { static final value = Second.value; } class Second { static final value = First.value; } function main():Int return 0;',

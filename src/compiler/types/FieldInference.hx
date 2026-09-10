@@ -27,6 +27,7 @@ class FieldInference {
 			case New(typeName, _, _): NamedType(typeName);
 			case NewGeneric(typeName, typeArguments, _, _): AppliedType(typeName, typeArguments);
 			case NewArray(element, _, _): ArrayType(element);
+			case ArrayLiteral(values, _): arrayLiteralType(field, values);
 			case NewMap(key, value, _): MapType(key, value);
 			case Member(_, _, _): InferredType;
 			case Variable(name, _) if (name.indexOf(".") > 0): InferredType;
@@ -34,6 +35,27 @@ class FieldInference {
 				throw new CompileError(new Diagnostic("E1002", 'Cannot infer type of field "${field.name}" from this initializer', field.span));
 		};
 	}
+
+	static function arrayLiteralType(field:AstField, values:Array<AstExpression>):AstType {
+		if (values.length == 0)
+			throw new CompileError(new Diagnostic("E1002", 'Cannot infer type of empty array field "${field.name}"', field.span));
+		var element = literalElementType(values[0]);
+		if (element == null)
+			throw new CompileError(new Diagnostic("E1002", 'Cannot infer type of field "${field.name}" from this array initializer', field.span));
+		for (index in 1...values.length)
+			if (literalElementType(values[index]) != element)
+				throw new CompileError(new Diagnostic("E1002", 'Array initializer for field "${field.name}" has mixed element types', field.span));
+		return ArrayType(element);
+	}
+
+	static function literalElementType(value:AstExpression):Null<AstType>
+		return switch value {
+			case IntegerLiteral(_, _): IntType;
+			case FloatLiteral(_, _): FloatType;
+			case StringLiteral(_, _): StringType;
+			case BoolLiteral(_, _): BoolType;
+			default: null;
+		};
 
 	static function constantNumericType(field:AstField, expression:AstExpression):AstType {
 		var inferred:Null<AstType> = switch expression {

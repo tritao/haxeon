@@ -190,13 +190,23 @@ class Lexer {
 					if (position < source.length && source.get(position) == "&".code) {
 						position++;
 						TokenKind.AndAnd;
+					} else if (position < source.length && source.get(position) == "=".code) {
+						position++;
+						TokenKind.AndAssign;
 					} else TokenKind.Ampersand;
 				case "|":
 					if (position < source.length && source.get(position) == "|".code) {
 						position++;
 						TokenKind.OrOr;
+					} else if (position < source.length && source.get(position) == "=".code) {
+						position++;
+						TokenKind.OrAssign;
 					} else TokenKind.Pipe;
-				case "^": TokenKind.Caret;
+				case "^":
+					if (position < source.length && source.get(position) == "=".code) {
+						position++;
+						TokenKind.XorAssign;
+					} else TokenKind.Caret;
 				case "[": TokenKind.LeftBracket;
 				case "]": TokenKind.RightBracket;
 				case "?": TokenKind.Question;
@@ -221,9 +231,21 @@ class Lexer {
 						position++;
 						TokenKind.Decrement;
 					} else TokenKind.Minus;
-				case "*": TokenKind.Star;
-				case "/": TokenKind.Slash;
-				case "%": TokenKind.Percent;
+				case "*":
+					if (position < source.length && source.get(position) == "=".code) {
+						position++;
+						TokenKind.StarAssign;
+					} else TokenKind.Star;
+				case "/":
+					if (position < source.length && source.get(position) == "=".code) {
+						position++;
+						TokenKind.SlashAssign;
+					} else TokenKind.Slash;
+				case "%":
+					if (position < source.length && source.get(position) == "=".code) {
+						position++;
+						TokenKind.PercentAssign;
+					} else TokenKind.Percent;
 				default: throw new CompileError(new Diagnostic("E0001", 'Unexpected character "${String.fromCharCode(code)}"', file.span(start, position)));
 			}
 			tokens.push(new Token(kind, text(start, position), file.span(start, position)));

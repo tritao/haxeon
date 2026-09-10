@@ -818,9 +818,10 @@ class Parser {
 			consume(TokenKind.LeftBrace);
 			var cases = [];
 			while (match(TokenKind.Case)) {
-				var caseStart = previous().span, values = [parseExpression()];
+				var caseStart = previous().span,
+					values = expandPatternAlternatives(parseExpression());
 				while (match(TokenKind.Comma))
-					values.push(parseExpression());
+					appendExpressions(values, expandPatternAlternatives(parseExpression()));
 				var guard = parseSwitchGuard();
 				consume(TokenKind.Colon);
 				var statements = [];
@@ -857,7 +858,7 @@ class Parser {
 					default: throw new CompileError(new Diagnostic("E0002", "Increment target must be a variable", expressionSpan(target)));
 				};
 			}
-			var assignmentKind = match(TokenKind.Assign) ? 0 : match(TokenKind.PlusAssign) ? 1 : match(TokenKind.MinusAssign) ? 2 : -1;
+			var assignmentKind = match(TokenKind.Assign) ? 0 : match(TokenKind.PlusAssign) ? 1 : match(TokenKind.MinusAssign) ? 2 : match(TokenKind.StarAssign) ? 3 : match(TokenKind.SlashAssign) ? 4 : match(TokenKind.PercentAssign) ? 5 : match(TokenKind.AndAssign) ? 6 : match(TokenKind.OrAssign) ? 7 : match(TokenKind.XorAssign) ? 8 : -1;
 			if (assignmentKind >= 0) {
 				var value = parseExpression(), end = expressionEnd(value);
 				// Normalize compound lvalues before duplicating their read and write.
@@ -869,8 +870,18 @@ class Parser {
 					target = stabilized.target;
 					bindings = stabilized.bindings;
 				}
-				var assigned = assignmentKind == 0 ? value : assignmentKind == 1 ? Add(target, value,
-					expressionSpan(target).merge(expressionSpan(value))) : Sub(target, value, expressionSpan(target).merge(expressionSpan(value))),
+				var operationSpan = expressionSpan(target).merge(expressionSpan(value)),
+					assigned = switch assignmentKind {
+						case 0: value;
+						case 1: Add(target, value, operationSpan);
+						case 2: Sub(target, value, operationSpan);
+						case 3: Mul(target, value, operationSpan);
+						case 4: Div(target, value, operationSpan);
+						case 5: Mod(target, value, operationSpan);
+						case 6: BitAnd(target, value, operationSpan);
+						case 7: BitOr(target, value, operationSpan);
+						default: BitXor(target, value, operationSpan);
+					},
 					assignment = switch target {
 						case Variable(name, _): Assignment(name, assigned, expressionSpan(target).merge(end));
 						case Index(array, offset, _): IndexAssignment(array, offset, assigned, expressionSpan(target).merge(end));
@@ -1158,6 +1169,8 @@ class Parser {
 		}
 		if (match(TokenKind.Switch))
 			return parseSwitchExpression(previous().span);
+		if (match(TokenKind.Try))
+			return parseTryExpression(previous().span);
 		if (match(TokenKind.Throw)) {
 			var start = previous().span, value = parseExpression();
 			return ThrowExpression(value, start.merge(expressionSpan(value)));
@@ -1484,9 +1497,31 @@ class Parser {
 	}
 
 	function parseComprehensionValue():AstExpression {
+		if (match(TokenKind.For))
+			return parseNestedArrayComprehension(previous().span);
 		if (check(TokenKind.LeftBrace) && !(peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon))
 			return parseExpressionBranch();
 		return parseExpression();
+	}
+
+	function parseNestedArrayComprehension(start:SourceSpan):AstExpression {
+		consume(TokenKind.LeftParen);
+		var keyName = consume(TokenKind.Identifier).text, valueName = null;
+		if (match(TokenKind.Assign)) {
+			consume(TokenKind.Greater);
+			valueName = consume(TokenKind.Identifier).text;
+		}
+		consume(TokenKind.In);
+		var iterable = parseExpression();
+		consume(TokenKind.RightParen);
+		var condition = null;
+		if (match(TokenKind.If)) {
+			consume(TokenKind.LeftParen);
+			condition = parseExpression();
+			consume(TokenKind.RightParen);
+		}
+		var value = parseComprehensionValue();
+		return ArrayComprehension(keyName, valueName, iterable, condition, value, start.merge(expressionSpan(value)));
 	}
 
 	function parseExpressionBranch():AstExpression {
@@ -1533,9 +1568,10 @@ class Parser {
 		consume(TokenKind.LeftBrace);
 		var cases = [];
 		while (match(TokenKind.Case)) {
-			var caseStart = previous().span, values = [parseExpression()];
+			var caseStart = previous().span,
+				values = expandPatternAlternatives(parseExpression());
 			while (match(TokenKind.Comma))
-				values.push(parseExpression());
+				appendExpressions(values, expandPatternAlternatives(parseExpression()));
 			var guard = parseSwitchGuard();
 			consume(TokenKind.Colon);
 			var result = parseSwitchExpressionBranch();
@@ -1554,6 +1590,63 @@ class Parser {
 		}
 		var end = consume(TokenKind.RightBrace).span;
 		return parsePostfix(SwitchExpression(subject, cases, fallback, start.merge(end)));
+	}
+
+	static function appendExpressions(target:Array<AstExpression>, values:Array<AstExpression>):Void
+		for (value in values)
+			target.push(value);
+
+	static function expandPatternAlternatives(pattern:AstExpression):Array<AstExpression>
+		return switch pattern {
+			case BitOr(left, right, _):
+				var values = expandPatternAlternatives(left);
+				appendExpressions(values, expandPatternAlternatives(right));
+				values;
+			case Call(name, arguments, span):
+				expandCallPattern(name, arguments, span);
+			case _: [pattern];
+		};
+
+	static function expandCallPattern(name:String, arguments:Array<AstExpression>, span:SourceSpan):Array<AstExpression> {
+		var combinations:Array<Array<AstExpression>> = [[]];
+		for (argument in arguments) {
+			var expanded = expandPatternAlternatives(argument),
+				next:Array<Array<AstExpression>> = [];
+			for (combination in combinations)
+				for (alternative in expanded) {
+					var copy = combination.copy();
+					copy.push(alternative);
+					next.push(copy);
+				}
+			combinations = next;
+		}
+		return [for (arguments in combinations) Call(name, arguments, span)];
+	}
+
+	function parseTryExpression(start:SourceSpan):AstExpression {
+		var value = parseExpressionBranch(),
+			catches:Array<compiler.syntax.Ast.AstCatch> = [],
+			end = expressionSpan(value);
+		do {
+			var catchStart = consume(TokenKind.Catch).span;
+			consume(TokenKind.LeftParen);
+			var name = consume(TokenKind.Identifier).text;
+			consume(TokenKind.Colon);
+			var type = parseType();
+			consume(TokenKind.RightParen);
+			var caught = parseExpressionBranch();
+			end = expressionSpan(caught);
+			catches.push({
+				name: name,
+				type: type,
+				statements: [Return(caught, end)],
+				span: catchStart.merge(end)
+			});
+		} while (check(TokenKind.Catch));
+		var body = [
+			compiler.syntax.Ast.AstStatement.Try([Return(value, expressionSpan(value))], catches, start.merge(end))
+		], lambda = compiler.syntax.Ast.AstExpression.Lambda([], body, start.merge(end));
+		return parsePostfix(ClosureCall(lambda, [], start.merge(end)));
 	}
 
 	function parseSwitchGuard():Null<AstExpression> {
@@ -1597,7 +1690,7 @@ class Parser {
 
 	static function statementTerminates(statement:AstStatement):Bool
 		return switch statement {
-			case Return(_, _), ReturnVoid(_), Throw(_, _): true;
+			case Return(_, _), ReturnVoid(_), Throw(_, _), Break(_), Continue(_): true;
 			case If(_, yes, no, _): no.length > 0 && statementTerminates(yes[yes.length - 1]) && statementTerminates(no[no.length - 1]);
 			default: false;
 		};

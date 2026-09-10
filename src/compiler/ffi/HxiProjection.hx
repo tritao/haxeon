@@ -4,6 +4,7 @@ import compiler.ffi.HxiAbi.HxiAbiValue;
 import compiler.ffi.HxiAbi.HxiIntegerSign;
 import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiModel.HxiDeclaration;
+import compiler.ffi.HxiModel.HxiField;
 import compiler.ir.Ir.IrCNative;
 import compiler.ir.Ir.IrType;
 import compiler.ffi.HxiModel.HxiPointerOwnership;
@@ -45,7 +46,7 @@ class HxiProjection {
 			}
 			var returnValue = project(fn.result, true);
 			var managedBytes = fn.resultPolicy.length != null;
-			var ownership = switch fn.resultPolicy.ownership {
+			var ownership:{kind:String, release:Null<String>} = switch fn.resultPolicy.ownership {
 				case Unspecified: {kind: "unspecified", release: null};
 				case Borrowed: {kind: "borrowed", release: null};
 				case Owned(release): {kind: "owned", release: release};
@@ -89,16 +90,13 @@ class HxiProjection {
 				case _:
 			}
 		output.add('// Generated semantic projection of ${model.name}. Do not edit.\n');
-		var constants = [
-			for (declaration in model.declarations)
-				switch declaration {
-					case Constant(name, value, _):
-						{name: name, value: value};
-					case _:
-						null;
-				}
-		];
-		constants = constants.filter(value -> value != null);
+		var constants:Array<{name:String, value:String}> = [];
+		for (declaration in model.declarations)
+			switch declaration {
+				case Constant(name, value, _):
+					constants.push({name: name, value: value});
+				case _:
+			}
 		if (constants.length != 0) {
 			output.add('class ${upperFirst(model.name)}Constants {\n');
 			for (constant in constants)
@@ -188,8 +186,10 @@ class HxiProjection {
 								output.add('\tpublic inline function set_${field.name}(value:$pointed):Void ${model.name}.__hxi_struct_set_borrowed_bytes(this, ${field.offset}, value);\n');
 								continue;
 							}
-							var lengthField = Lambda.find(fields, candidate -> candidate.name == field.lengthField),
-								lengthValue = abi.classify(lengthField.type),
+							var lengthField = Lambda.find(fields, candidate -> candidate.name == field.lengthField);
+							if (lengthField == null)
+								throw 'Missing length field "${field.lengthField}"';
+							var lengthValue = abi.classify(lengthField.type),
 								lengthBytes = switch lengthValue {
 									case IntegerValue(bits, _): Std.int(bits / 8);
 									case _: throw 'Invalid length field "${lengthField.name}"';
@@ -404,10 +404,12 @@ class HxiProjection {
 			setup:Array<String> = [],
 			values:Array<{name:String, type:String, expression:String}> = [];
 		var arrayCounts:Map<String, String> = [];
-		for (parameter in parameters) switch parameter.direction {
-			case InArray(count): arrayCounts.set(count, parameter.name);
-			case _:
-		}
+		for (parameter in parameters)
+			switch parameter.direction {
+				case InArray(count):
+					arrayCounts.set(count, parameter.name);
+				case _:
+			}
 		for (index in 0...parameters.length) {
 			var parameter = parameters[index];
 			switch parameter.direction {
@@ -416,14 +418,15 @@ class HxiProjection {
 					if (arrayName == null) {
 						arguments.push('${parameter.name}:${rawArgumentTypes[index]}');
 						callArguments.push(parameter.name);
-					} else callArguments.push('$arrayName.length');
+					} else
+						callArguments.push('$arrayName.length');
 				case InArray(_):
-					var utf8 = utf8ArrayPointer(parameter.type), elementType = rawArgumentTypes[index];
-					if (elementType == "haxe.io.Bytes" && !utf8) throw "Input arrays require structure or UTF-8 elements";
+					var utf8 = utf8ArrayPointer(parameter.type),
+						elementType = rawArgumentTypes[index];
+					if (elementType == "haxe.io.Bytes" && !utf8)
+						throw "Input arrays require structure or UTF-8 elements";
 					arguments.push('${parameter.name}:Array<${utf8 ? "String" : elementType}>');
-					setup.push(utf8
-						? 'var __array_${parameter.name} = __hxi_struct_alloc(${parameter.name}.length * ${Std.int(abi.pointerBits / 8)}); for (__index in 0...${parameter.name}.length) __hxi_struct_set_utf8(__array_${parameter.name}, __index * ${Std.int(abi.pointerBits / 8)}, ${parameter.name}[__index], false);'
-						: 'var __array_${parameter.name} = $elementType.array(${parameter.name});');
+					setup.push(utf8 ? 'var __array_${parameter.name} = __hxi_struct_alloc(${parameter.name}.length * ${Std.int(abi.pointerBits / 8)}); for (__index in 0...${parameter.name}.length) __hxi_struct_set_utf8(__array_${parameter.name}, __index * ${Std.int(abi.pointerBits / 8)}, ${parameter.name}[__index], false);' : 'var __array_${parameter.name} = $elementType.array(${parameter.name});');
 					callArguments.push('__array_${parameter.name}');
 				case Out | InOut:
 					var info = outputInfo(parameter.type, abi),
@@ -473,7 +476,8 @@ class HxiProjection {
 		else
 			output.add('\tvar __status = $call;\n');
 		if (resultOnly) {
-			if (resultType != "Void") output.add('\treturn __status;\n');
+			if (resultType != "Void")
+				output.add('\treturn __status;\n');
 		} else if (direct)
 			output.add('\treturn ${values[0].expression};\n');
 		else {
@@ -500,7 +504,8 @@ class HxiProjection {
 					arguments.push('${parameter.name}:${rawArgumentTypes[index]}');
 					queryArguments.push(parameter.name);
 					callArguments.push(parameter.name);
-				case InArray(_): throw "Input arrays cannot be combined with output buffers";
+				case InArray(_):
+					throw "Input arrays cannot be combined with output buffers";
 				case OutBuffer(_):
 					queryArguments.push("null");
 					callArguments.push("__out_" + buffer.name);
@@ -657,7 +662,7 @@ class HxiProjection {
 				switch declarations.get(name) {
 					case Structure(_, _, _, fields, _):
 						var ordered = fields.copy();
-						ordered.sort((left, right) -> left.offset - right.offset);
+						ordered.sort(function(left:HxiField, right:HxiField) return fieldOffset(left) - fieldOffset(right));
 						var cursor = 0, naturalAlign = 1;
 						for (field in ordered) {
 							var layout = abiLayout(field.type, declarations, abi);
@@ -689,6 +694,7 @@ class HxiProjection {
 			case FloatValue(bits): throw 'Unsupported $bits-bit floating-point ABI value';
 			case PointerValue(_, _, _, _) | CallbackValue(_, _, _, _): "11";
 			case Utf8Value(nullable): nullable ? "14" : "13";
+			case _: throw "Unsupported HXI ABI value";
 		};
 
 	static function abiLayout(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>, abi:HxiAbi):{size:Int, align:Int}
@@ -736,6 +742,13 @@ class HxiProjection {
 				}
 			case _: [abiDescriptor(abi.classify(type), declarations, abi)];
 		};
+
+	static function fieldOffset(field:HxiField):Int {
+		var offset = field.offset;
+		if (offset == null)
+			throw 'HXI field "${field.name}" has no offset';
+		return offset;
+	}
 
 	static function structAccess(code:Int):Null<String>
 		return switch code {
@@ -803,7 +816,14 @@ class HxiProjection {
 	static function utf8ArrayPointer(type:compiler.ffi.HxiModel.HxiType):Bool
 		return switch type {
 			case Const(element): utf8ArrayPointer(element);
-			case Pointer(Const(Primitive("utf8"))) | Pointer(Primitive("utf8")): true;
+			case Pointer(element): utf8ArrayElement(element);
+			case _: false;
+		};
+
+	static function utf8ArrayElement(type:compiler.ffi.HxiModel.HxiType):Bool
+		return switch type {
+			case Const(element): utf8ArrayElement(element);
+			case Primitive("utf8"): true;
 			case _: false;
 		};
 

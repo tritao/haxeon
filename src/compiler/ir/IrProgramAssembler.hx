@@ -38,27 +38,27 @@ class IrProgramAssembler {
 				}
 		];
 
-	public static function cNativesFrom(typed:TypedProgram):Array<IrCNative>
-		return [
-			for (native in typed.natives)
-				switch native.convention {
-					case CNative(signature):
-						{
-							name: native.name,
-							library: native.library,
-							symbol: native.symbol,
-							signature: signature,
-							pointerOwnership: "unspecified",
-							pointerRelease: null,
-							pointerLength: null,
-							pointerNullable: false,
-							arguments: [for (argument in native.arguments) IrGenerator.lowerType(argument)],
-							result: IrGenerator.lowerType(native.result)
-						};
-					case HashLinkNative:
-						continue;
-				}
-		];
+	public static function cNativesFrom(typed:TypedProgram):Array<IrCNative> {
+		var result:Array<IrCNative> = [];
+		for (native in typed.natives)
+			switch native.convention {
+				case CNative(signature):
+					result.push({
+						name: native.name,
+						library: native.library,
+						symbol: native.symbol,
+						signature: signature,
+						pointerOwnership: "unspecified",
+						pointerRelease: null,
+						pointerLength: null,
+						pointerNullable: false,
+						arguments: [for (argument in native.arguments) IrGenerator.lowerType(argument)],
+						result: IrGenerator.lowerType(native.result)
+					});
+				case HashLinkNative:
+			}
+		return result;
+	}
 
 	/** Build the module boot function from static field initializers. */
 	public static function staticInitializerFrom(typed:TypedProgram, ?classOrder:Array<String>):Null<IrFunction> {

@@ -345,8 +345,9 @@ class HxiParser {
 						ranges.push({start: field.offset, end: field.offset + layout.size, name: field.name});
 						validateType(field.type, names, declarationsByName, field.span, false);
 						if (field.lengthField != null) {
-							if (field.ownership != Borrowed || (!bytePointerLike(field.type, declarationsByName)
-								&& structurePointerType(field.type, declarationsByName) == null))
+							if (field.ownership != Borrowed
+								|| (!bytePointerLike(field.type, declarationsByName)
+									&& structurePointerType(field.type, declarationsByName) == null))
 								fail('@length_field on "${field.name}" requires a borrowed byte, void, or structure pointer', field.span);
 							var length = Lambda.find(fields, candidate -> candidate.name == field.lengthField);
 							if (length == null)
@@ -409,7 +410,7 @@ class HxiParser {
 								if (!nullablePointer(parameter.type))
 									fail('Output buffer "${parameter.name}" must be nullable for its size query', parameter.span);
 								outputBuffer = {name: parameter.name, sizeParameter: sizeParameter, span: parameter.span};
-						case Out | InOut:
+							case Out | InOut:
 								if (!pointerLike(parameter.type))
 									fail('Output parameter "${parameter.name}" requires a pointer type', parameter.span);
 								if (switch parameter.type {
@@ -418,17 +419,17 @@ class HxiParser {
 									})
 									fail('Output parameter "${parameter.name}" cannot be nullable', parameter.span);
 								validateOutputType(parameter.name, parameter.type, abi, parameter.span);
-						case InArray(countParameter):
-							if (structurePointerType(parameter.type, declarationsByName) == null && !utf8ArrayPointer(parameter.type))
-								fail('Input array "${parameter.name}" requires a structure or UTF-8 pointer array', parameter.span);
-							var count = Lambda.find(parameters, candidate -> candidate.name == countParameter);
-							if (count == null)
-								fail('Input array "${parameter.name}" references missing count parameter "$countParameter"', parameter.span);
-							switch abi.classify(count.type) {
-								case IntegerValue(32, Unsigned):
-								case _: fail('Input array "${parameter.name}" requires an unsigned 32-bit count parameter', count.span);
-							}
-						case In:
+							case InArray(countParameter):
+								if (structurePointerType(parameter.type, declarationsByName) == null && !utf8ArrayPointer(parameter.type))
+									fail('Input array "${parameter.name}" requires a structure or UTF-8 pointer array', parameter.span);
+								var count = Lambda.find(parameters, candidate -> candidate.name == countParameter);
+								if (count == null)
+									fail('Input array "${parameter.name}" references missing count parameter "$countParameter"', parameter.span);
+								switch abi.classify(count.type) {
+									case IntegerValue(32, Unsigned):
+									case _: fail('Input array "${parameter.name}" requires an unsigned 32-bit count parameter', count.span);
+								}
+							case In:
 						}
 					}
 					if (outputBuffer != null)
@@ -445,8 +446,11 @@ class HxiParser {
 
 	function validateOutputType(name:String, type:HxiType, abi:HxiAbi, span:SourceSpan):Void {
 		var pointee = switch type {
-			case Pointer(Const(_)): fail('Output parameter "$name" cannot point to const data', span);
-			case Pointer(value): value;
+			case Pointer(value):
+				switch value {
+					case Const(_): fail('Output parameter "$name" cannot point to const data', span);
+					case _: value;
+				}
 			case _: return;
 		};
 		var classified = try abi.classify(pointee) catch (error:Dynamic) {
@@ -490,7 +494,11 @@ class HxiParser {
 
 	static function nullablePointer(type:HxiType):Bool
 		return switch type {
-			case Nullable(Pointer(_)): true;
+			case Nullable(inner):
+				switch inner {
+					case Pointer(_): true;
+					case _: false;
+				}
 			case _: false;
 		};
 
@@ -560,22 +568,22 @@ class HxiParser {
 				case _:
 			}
 		var visiting:Map<String, Bool> = [], complete:Map<String, Bool> = [];
-		function visit(name:String):Void {
-			if (complete.exists(name))
-				return;
-			if (visiting.exists(name))
-				fail('Cyclic HXI type alias "$name"', aliases.get(name).span);
-			var alias = aliases.get(name);
-			if (alias == null)
-				return;
-			visiting.set(name, true);
-			visitTypeAliases(alias.type, aliases, visit);
-			visiting.remove(name);
-			complete.set(name, true);
-		}
-
 		for (name in aliases.keys())
-			visit(name);
+			visitAlias(name, aliases, visiting, complete);
+	}
+
+	function visitAlias(name:String, aliases:Map<String, {type:HxiType, span:SourceSpan}>, visiting:Map<String, Bool>, complete:Map<String, Bool>):Void {
+		if (complete.exists(name))
+			return;
+		var alias = aliases.get(name);
+		if (alias == null)
+			return;
+		if (visiting.exists(name))
+			fail('Cyclic HXI type alias "$name"', alias.span);
+		visiting.set(name, true);
+		visitTypeAliases(alias.type, aliases, visiting, complete);
+		visiting.remove(name);
+		complete.set(name, true);
 	}
 
 	static function bytePointerLike(type:HxiType, names:Map<String, HxiDeclaration>):Bool
@@ -588,10 +596,17 @@ class HxiParser {
 	static function structurePointerType(type:HxiType, names:Map<String, HxiDeclaration>):Null<String>
 		return switch type {
 			case Nullable(element) | Const(element): structurePointerType(element, names);
-			case Pointer(Const(Named(name))) | Pointer(Named(name)):
+			case Pointer(element): structureElementType(element, names);
+			case _: null;
+		};
+
+	static function structureElementType(type:HxiType, names:Map<String, HxiDeclaration>):Null<String>
+		return switch type {
+			case Const(element): structureElementType(element, names);
+			case Named(name):
 				switch names.get(name) {
 					case Structure(_, _, _, _, _): name;
-					case Alias(_, target, _): structurePointerType(Pointer(target), names);
+					case Alias(_, target, _): structureElementType(target, names);
 					case _: null;
 				}
 			case _: null;
@@ -600,7 +615,14 @@ class HxiParser {
 	static function utf8ArrayPointer(type:HxiType):Bool
 		return switch type {
 			case Const(element): utf8ArrayPointer(element);
-			case Pointer(Const(Primitive("utf8"))) | Pointer(Primitive("utf8")): true;
+			case Pointer(element): utf8ArrayElement(element);
+			case _: false;
+		};
+
+	static function utf8ArrayElement(type:HxiType):Bool
+		return switch type {
+			case Const(element): utf8ArrayElement(element);
+			case Primitive("utf8"): true;
 			case _: false;
 		};
 
@@ -635,12 +657,12 @@ class HxiParser {
 			case _: false;
 		};
 
-	static function visitTypeAliases(type:HxiType, aliases:Map<String, {type:HxiType, span:SourceSpan}>, visit:String->Void):Void
+	function visitTypeAliases(type:HxiType, aliases:Map<String, {type:HxiType, span:SourceSpan}>, visiting:Map<String, Bool>, complete:Map<String, Bool>):Void
 		switch type {
 			case Named(name) if (aliases.exists(name)):
-				visit(name);
+				visitAlias(name, aliases, visiting, complete);
 			case Pointer(element) | Nullable(element) | Const(element) | Array(element, _):
-				visitTypeAliases(element, aliases, visit);
+				visitTypeAliases(element, aliases, visiting, complete);
 			case _:
 		}
 

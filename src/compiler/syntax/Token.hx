@@ -59,6 +59,12 @@ enum TokenKind {
 	Assign;
 	PlusAssign;
 	MinusAssign;
+	StarAssign;
+	SlashAssign;
+	PercentAssign;
+	AndAssign;
+	OrAssign;
+	XorAssign;
 	Increment;
 	Decrement;
 	Plus;
