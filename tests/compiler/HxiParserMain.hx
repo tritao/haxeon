@@ -266,6 +266,8 @@ class HxiParserMain {
 		expect(inputArraySource.indexOf("function send(items:Array<item>):Int") >= 0
 			&& inputArraySource.indexOf("function paths(items:Array<String>):Int") >= 0
 			&& inputArraySource.indexOf("function bytes(data:haxe.io.Bytes):Int") >= 0
+			&& inputArraySource.indexOf("function bytes_slice(data:haxe.io.Bytes, offset:Int, length:Int):Int") >= 0
+			&& inputArraySource.indexOf("haxe.io.Bytes.view(data, offset, length)") >= 0
 			&& inputArraySource.indexOf("items.length") >= 0,
 			"input arrays should hide count parameters and project managed Haxe arrays");
 		expectError('interface bad @target("x86_64-linux-gnu") { struct holder @layout(16, 8) { data: ptr<u8> @offset(0) @length_field("size"); size: u64 @offset(8); } }',

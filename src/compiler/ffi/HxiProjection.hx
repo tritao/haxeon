@@ -370,6 +370,9 @@ class HxiProjection {
 				else
 					emitBufferWrapper(output, fn.name, parameters, argumentTypes, resultType, buffer, model.documentation.get(fn.name));
 			}
+			if (byteArrayParameter(parameters) != null)
+				emitByteSliceWrapper(output, fn.name, parameters, argumentTypes, resultType,
+					directed ? outputWrapperResult(fn.name, parameters, resultType, abi) : resultType, abi);
 		}
 		return output.toString();
 	}
@@ -536,6 +539,98 @@ class HxiProjection {
 		}
 		output.add('}\n');
 	}
+
+	static function emitByteSliceWrapper(output:StringBuf, name:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>, rawArgumentTypes:Array<String>,
+			resultType:String, wrapperResult:String, abi:HxiAbi):Void {
+		var byteIndex = byteArrayParameter(parameters);
+		if (byteIndex == null)
+			return;
+		var byteName = parameters[byteIndex].name,
+			offsetName = "offset",
+			lengthName = "length",
+			used:Map<String, Bool> = [];
+		for (parameter in parameters)
+			used.set(parameter.name, true);
+		if (used.exists(offsetName)) offsetName = byteName + "_offset";
+		if (used.exists(lengthName) || offsetName == lengthName) lengthName = byteName + "_length";
+		var arguments:Array<String> = [], callArguments:Array<String> = [], arrayCounts:Map<String, String> = [];
+		for (parameter in parameters)
+			switch parameter.direction {
+				case InArray(count): arrayCounts.set(count, parameter.name);
+				case _:
+			}
+		for (index in 0...parameters.length) {
+			var parameter = parameters[index];
+			switch parameter.direction {
+				case In:
+					if (arrayCounts.get(parameter.name) == null) {
+						arguments.push('${parameter.name}:${rawArgumentTypes[index]}');
+						callArguments.push(parameter.name);
+					}
+				case InArray(_):
+					if (index == byteIndex) {
+						arguments.push('${parameter.name}:haxe.io.Bytes');
+						arguments.push('$offsetName:Int');
+						arguments.push('$lengthName:Int');
+						callArguments.push('haxe.io.Bytes.view(${parameter.name}, $offsetName, $lengthName)');
+					} else {
+						var utf8 = utf8ArrayPointer(parameter.type), elementType = rawArgumentTypes[index];
+						arguments.push('${parameter.name}:${utf8 ? "Array<String>" : "Array<" + elementType + ">"}');
+						callArguments.push(parameter.name);
+					}
+				case InOut:
+					var info = outputInfo(parameter.type, abi);
+					arguments.push('${parameter.name}:${info.haxeType}');
+					callArguments.push(parameter.name);
+				case Out:
+				case OutBuffer(_):
+					return;
+			}
+		}
+		output.add('/** Calls $name with a validated zero-copy byte slice. */\n');
+		output.add('function ${name}_slice(${arguments.join(", ")}):$wrapperResult {\n');
+		output.add('\tif ($offsetName < 0 || $offsetName > $byteName.length || $lengthName < 0 || $lengthName > $byteName.length - $offsetName) throw "Byte slice is out of bounds";\n');
+		output.add('\treturn $name(${callArguments.join(", ")});\n');
+		output.add('}\n');
+	}
+
+	static function outputWrapperResult(name:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>, resultType:String, abi:HxiAbi):String {
+		var count = 0, valueType = "";
+		for (parameter in parameters)
+			switch parameter.direction {
+				case Out | InOut:
+					count++;
+					if (valueType == "") valueType = outputInfo(parameter.type, abi).haxeType;
+				case In | InArray(_) | OutBuffer(_):
+				}
+		return resultType == "Void" && count == 1 ? valueType : count == 0 ? resultType : upperFirst(name) + "OutResult";
+	}
+
+	static function byteArrayParameter(parameters:Array<compiler.ffi.HxiModel.HxiParameter>):Null<Int> {
+		var result:Null<Int> = null;
+		for (index in 0...parameters.length)
+			switch parameters[index].direction {
+				case InArray(_) if (isByteArray(parameters[index].type)):
+					if (result != null) return null;
+					result = index;
+				case _:
+			}
+		return result;
+	}
+
+	static function isByteArray(type:compiler.ffi.HxiModel.HxiType):Bool
+		return switch type {
+			case Const(element): isByteArray(element);
+			case Pointer(element): isByteElement(element);
+			case _: false;
+		};
+
+	static function isByteElement(type:compiler.ffi.HxiModel.HxiType):Bool
+		return switch type {
+			case Const(element): isByteElement(element);
+			case Primitive("u8"): true;
+			case _: false;
+		};
 
 	static function emitBufferWrapper(output:StringBuf, name:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>, rawArgumentTypes:Array<String>,
 			resultType:String, buffer:{

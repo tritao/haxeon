@@ -2,7 +2,12 @@ static void realtime_bytes_finalize( void *value ) {
 	realtime_bytes *bytes = (realtime_bytes *)value;
 	for( int index = 0; index < bytes->owned_utf8_count; index++ ) free(bytes->owned_utf8[index].value);
 	free(bytes->owned_utf8);
-	free(bytes->data);
+	if( bytes->owner != NULL ) {
+		hl_remove_root(&bytes->owner);
+		bytes->owner = NULL;
+	} else {
+		free(bytes->data);
+	}
 	bytes->data = NULL;
 }
 
@@ -26,6 +31,7 @@ static realtime_bytes *realtime_bytes_make( int length ) {
 	bytes->owned_utf8 = NULL;
 	bytes->owned_utf8_count = 0;
 	bytes->owned_utf8_capacity = 0;
+	bytes->owner = NULL;
 	bytes->data = length == 0 ? NULL : (vbyte *)calloc((size_t)length, 1);
 	if( length > 0 && bytes->data == NULL ) hl_error("Could not allocate bytes");
 	return bytes;
@@ -34,6 +40,20 @@ static realtime_bytes *realtime_bytes_make( int length ) {
 static void realtime_bytes_bounds( realtime_bytes *bytes, int position, int length ) {
 	if( bytes == NULL || position < 0 || length < 0 || position > bytes->length - length )
 		hl_error("Bytes access out of bounds");
+}
+
+HL_PRIM realtime_bytes *HL_NAME(__bytes_view)( realtime_bytes *bytes, int offset, int length ) {
+	realtime_bytes_bounds(bytes,offset,length);
+	realtime_bytes *result = (realtime_bytes *)hl_gc_alloc_finalizer(sizeof(realtime_bytes));
+	result->finalize = realtime_bytes_finalize;
+	result->data = length == 0 ? NULL : bytes->data + offset;
+	result->length = length;
+	result->owned_utf8 = NULL;
+	result->owned_utf8_count = 0;
+	result->owned_utf8_capacity = 0;
+	result->owner = bytes;
+	hl_add_root(&result->owner);
+	return result;
 }
 
 static void realtime_bytes_output_reserve( realtime_bytes_output *output, int extra ) {

@@ -86,6 +86,7 @@ class TestCatalog {
 			mainCase("runtime", "null-reference", "NullReferenceMain", "null-reference.hl", 42,
 				"null coerces to reference-like types while primitives remain strict"),
 			mainCase("runtime", "stdlib", "StdlibMain", "stdlib.hl", 42, "vendored stdlib compiled and executed"),
+			mainCase("runtime", "bytes-view", "BytesViewMain", "bytes-view.hl", 42, "managed byte views alias their source"),
 			mainCase("runtime", "language-features", "LanguageFeaturesMain", "language-features.hl", 42,
 				"self-hosted FFI language constructs compiled and executed"),
 			mainCase("runtime", "json", "JsonMain", "json.hl", 42, "JSON parsing, printing, reflection, Unicode, and rejection executed"),

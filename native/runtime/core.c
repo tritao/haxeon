@@ -47,13 +47,14 @@ typedef struct {
 	char *value;
 } realtime_bytes_owned_utf8;
 
-typedef struct {
+typedef struct realtime_bytes {
 	void (*finalize)( void * );
 	vbyte *data;
 	int length;
 	realtime_bytes_owned_utf8 *owned_utf8;
 	int owned_utf8_count;
 	int owned_utf8_capacity;
+	struct realtime_bytes *owner;
 } realtime_bytes;
 
 typedef struct {
