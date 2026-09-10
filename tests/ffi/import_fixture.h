@@ -4,6 +4,8 @@
 #define HXI_INOUT __attribute__((annotate("hxi:inout")))
 #define HXI_OUT_BUFFER(size) __attribute__((annotate("hxi:out_buffer")))
 #define HXI_RETURNS_BORROWED_UTF8 __attribute__((annotate("hxi:returns_borrowed_utf8")))
+#define HXI_UTF8 __attribute__((annotate("hxi:utf8")))
+#define HXI_NULLABLE_UTF8 __attribute__((annotate("hxi:nullable_utf8")))
 #define HXI_BORROWED __attribute__((annotate("hxi:borrowed")))
 #define HXI_LENGTH_FIELD(size) __attribute__((annotate("hxi:length_field")))
 
@@ -46,4 +48,6 @@ int32_t sample_apply_nullable(sample_binary_callback _Nullable callback);
 enum sample_result sample_check_result(enum sample_result value);
 const char *sample_error(void) HXI_RETURNS_BORROWED_UTF8;
 int32_t sample_check_utf8(hxi_utf8 value, hxi_nullable_utf8 optional);
+int32_t sample_check_annotated_utf8(const char *value HXI_UTF8,
+                                    const char *optional HXI_NULLABLE_UTF8);
 int32_t sample_paths(const char *const *paths, const char **out_path);

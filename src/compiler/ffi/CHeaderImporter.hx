@@ -169,6 +169,10 @@ class CHeaderImporter {
 		var direction = parameterDirection(parameter),
 			type:Dynamic = field(parameter, "type"),
 			qualified:String = field(type, "qualType");
+		if (hasAnnotation(parameter, "hxi:nullable_utf8"))
+			return '${field(parameter, "name")}: nullable<utf8>$direction';
+		if (hasAnnotation(parameter, "hxi:utf8"))
+			return '${field(parameter, "name")}: utf8$direction';
 		if (StringTools.startsWith(direction, " @out_buffer")) {
 			var desugared:String = field(type, "desugaredQualType");
 			if (desugared != null)

@@ -14,6 +14,8 @@ class CHeaderImporterMain {
 			"annotated borrowed UTF-8 results should import with their ownership contract");
 		expect(first.indexOf("extern fn sample_check_utf8(value: utf8, optional: nullable<utf8>)") >= 0,
 			"explicit UTF-8 marker typedefs should import as string contracts");
+		expect(first.indexOf("extern fn sample_check_annotated_utf8(value: utf8, optional: nullable<utf8>)") >= 0,
+			"parameter annotations should import as UTF-8 string contracts");
 		expect(first.indexOf("extern fn sample_create(") >= 0, "functions should import");
 		expect(first.indexOf("output: ptr<sample_handle> @out") >= 0, "output annotations should import as parameter directions");
 		expect(first.indexOf('data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout') >= 0,
