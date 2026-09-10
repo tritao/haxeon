@@ -30,6 +30,7 @@ class CHeaderImporterMain {
 		expect(first.indexOf("paths: ptr<const<ptr<const<c_char>>>>, out_path: ptr<ptr<const<c_char>>>") >= 0,
 			"pointer-to-pointer types should preserve pointee qualifiers");
 		expect(first.indexOf("const SAMPLE_FLAG = 8") >= 0, "constant expressions should use Clang's evaluated value");
+		expect(first.indexOf("const SAMPLE_U32_MAX = -1") >= 0, "unsigned 32-bit constants should preserve their bit pattern as Haxe Int values");
 		expect(first.indexOf("enum sample_result : c_int") >= 0 && first.indexOf("SAMPLE_RESULT_FAILED = -1") >= 0,
 			"named C enums should import as nominal HXI enums");
 		expect(first.indexOf("extern fn sample_check_result(value: sample_result) -> sample_result") >= 0,

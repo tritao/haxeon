@@ -1,6 +1,7 @@
 package compiler.ffi;
 
 import haxe.Json;
+import haxe.Int64;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -92,7 +93,7 @@ class CHeaderImporter {
 				}
 				output.add("\t}\n");
 			case "EnumConstantDecl":
-				var value = constantValue(node);
+				var value = projectedConstantValue(node);
 				if (value != null)
 					output.add('\tconst $name = $value;\n');
 			case "TypedefDecl":
@@ -417,6 +418,20 @@ class CHeaderImporter {
 				return value;
 		}
 		return null;
+	}
+
+	static function projectedConstantValue(node:Dynamic):Null<String> {
+		var value = constantValue(node);
+		if (value == null || !~/^-?[0-9]+$/.match(value))
+			return value;
+		var parsed = Int64.parseString(value),
+			minimum = Int64.parseString("-2147483648"),
+			maximum = Int64.parseString("4294967295");
+		if (Int64.compare(parsed, minimum) < 0 || Int64.compare(parsed, maximum) > 0)
+			throw '${declarationLocation(node)}: untyped constant "$value" does not fit a 32-bit Haxe Int';
+		if (Int64.compare(parsed, Int64.parseString("2147483647")) > 0)
+			parsed = Int64.sub(parsed, Int64.parseString("4294967296"));
+		return Int64.toStr(parsed);
 	}
 
 	static function field(value:Dynamic, name:String):Dynamic

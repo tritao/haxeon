@@ -22,7 +22,8 @@ int32_t __stdcall sample_stdcall_function(int32_t value);
 enum {
     SAMPLE_OK = 0,
     SAMPLE_FAILED = -1,
-    SAMPLE_FLAG = 1u << 3
+    SAMPLE_FLAG = 1u << 3,
+    SAMPLE_U32_MAX = 0xffffffffu
 };
 
 enum sample_result {
