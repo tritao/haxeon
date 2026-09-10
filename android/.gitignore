@@ -1,0 +1,11 @@
+.gradle/
+.cxx/
+build/
+local.properties
+app/build/
+app/src/main/assets/app.hl
+app/src/main/assets/app.hli
+app/src/main/assets/app.entry
+app/src/main/assets/app.hcs
+app/src/main/assets/app.hcs.pending
+app/src/main/assets/app.hlp

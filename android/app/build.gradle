@@ -1,0 +1,48 @@
+plugins {
+    id 'com.android.application'
+}
+
+def haxeonRoot = rootProject.projectDir.parentFile
+
+android {
+    namespace 'org.haxeon.android'
+    compileSdk 36
+    ndkVersion '30.0.16248370'
+
+    defaultConfig {
+        applicationId 'org.haxeon.android'
+        minSdk 28
+        targetSdk 36
+        versionCode 1
+        versionName '0.1'
+
+        ndk {
+            abiFilters 'arm64-v8a', 'x86_64'
+        }
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+        }
+        release {
+            minifyEnabled false
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file('src/main/cpp/CMakeLists.txt')
+            version '3.30.5'
+        }
+    }
+}
+
+tasks.register('generateHaxeonAsset', Exec) {
+    workingDir haxeonRoot
+    commandLine 'bash', new File(haxeonRoot, 'scripts/build-android-demo.sh').absolutePath
+}
+
+tasks.named('preBuild').configure {
+    dependsOn tasks.named('generateHaxeonAsset')
+}
