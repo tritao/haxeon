@@ -423,11 +423,14 @@ class HxiProjection {
 				case InArray(_):
 					var utf8 = utf8ArrayPointer(parameter.type),
 						elementType = rawArgumentTypes[index];
-					if (elementType == "haxe.io.Bytes" && !utf8)
-						throw "Input arrays require structure or UTF-8 elements";
-					arguments.push('${parameter.name}:Array<${utf8 ? "String" : elementType}>');
-					setup.push(utf8 ? 'var __array_${parameter.name} = __hxi_struct_alloc(${parameter.name}.length * ${Std.int(abi.pointerBits / 8)}); for (__index in 0...${parameter.name}.length) __hxi_struct_set_utf8(__array_${parameter.name}, __index * ${Std.int(abi.pointerBits / 8)}, ${parameter.name}[__index], false);' : 'var __array_${parameter.name} = $elementType.array(${parameter.name});');
-					callArguments.push('__array_${parameter.name}');
+					if (elementType == "haxe.io.Bytes" && !utf8) {
+						arguments.push('${parameter.name}:haxe.io.Bytes');
+						callArguments.push(parameter.name);
+					} else {
+						arguments.push('${parameter.name}:Array<${utf8 ? "String" : elementType}>');
+						setup.push(utf8 ? 'var __array_${parameter.name} = __hxi_struct_alloc(${parameter.name}.length * ${Std.int(abi.pointerBits / 8)}); for (__index in 0...${parameter.name}.length) __hxi_struct_set_utf8(__array_${parameter.name}, __index * ${Std.int(abi.pointerBits / 8)}, ${parameter.name}[__index], false);' : 'var __array_${parameter.name} = $elementType.array(${parameter.name});');
+						callArguments.push('__array_${parameter.name}');
+					}
 				case Out | InOut:
 					var info = outputInfo(parameter.type, abi),
 						local = "__out_" + parameter.name;

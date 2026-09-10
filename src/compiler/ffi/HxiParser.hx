@@ -420,8 +420,9 @@ class HxiParser {
 									fail('Output parameter "${parameter.name}" cannot be nullable', parameter.span);
 								validateOutputType(parameter.name, parameter.type, abi, parameter.span);
 							case InArray(countParameter):
-								if (structurePointerType(parameter.type, declarationsByName) == null && !utf8ArrayPointer(parameter.type))
-									fail('Input array "${parameter.name}" requires a structure or UTF-8 pointer array', parameter.span);
+								if (structurePointerType(parameter.type, declarationsByName) == null && !utf8ArrayPointer(parameter.type)
+									&& !bytePointerLike(parameter.type, declarationsByName))
+									fail('Input array "${parameter.name}" requires a byte, structure, or UTF-8 pointer array', parameter.span);
 								var count = Lambda.find(parameters, candidate -> candidate.name == countParameter);
 								if (count == null)
 									fail('Input array "${parameter.name}" references missing count parameter "$countParameter"', parameter.span);
