@@ -259,12 +259,23 @@ class Compiler {
 	function registerFfiInterface(path:String, source:String, enforceFreeze:Bool):Void {
 		if (enforceFreeze && compiledOnce)
 			throw "FFI interfaces are frozen after the first compilation";
-		var model = HxiParser.parse(path, source);
+		var visibleDeclarations:Array<HxiDeclaration> = [];
+		for (dependency in ffiInterfaceModels)
+			for (declaration in dependency.declarations)
+				visibleDeclarations.push(declaration);
+		var model = HxiParser.parse(path, source, visibleDeclarations);
 		if (ffiInterfaceModels.exists(model.name))
 			throw 'FFI interface "${model.name}" is already registered';
 		for (dependency in model.dependencies)
 			if (!ffiInterfaceModels.exists(dependency))
 				throw 'FFI interface "${model.name}" depends on unknown interface "$dependency"';
+		var dependencyDeclarations:Array<HxiDeclaration> = [];
+		for (dependencyName in model.dependencies) {
+			var dependencyModel = ffiInterfaceModels.get(dependencyName);
+			for (declaration in dependencyModel.declarations)
+				dependencyDeclarations.push(declaration);
+		}
+		model = HxiParser.parse(path, source, dependencyDeclarations);
 		ffiInterfaceModels.set(model.name, model);
 		ffiInterfaceSources.push({path: path, text: source});
 		refreshFfiProjections();

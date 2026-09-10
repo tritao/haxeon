@@ -325,17 +325,19 @@ class HxiParser {
 
 	function validate(value:HxiInterface, visible:Array<HxiDeclaration>):Void {
 		var names:Map<String, SourceSpan> = [],
-			declarationsByName:Map<String, HxiDeclaration> = [];
+			declarationsByName:Map<String, HxiDeclaration> = [],
+			visibleNames:Map<String, Bool> = [];
 		for (declaration in visible) {
 			var visibleName = declarationName(declaration);
 			if (names.exists(visibleName.name))
 				fail('Duplicate visible HXI declaration "${visibleName.name}"', visibleName.span);
 			names.set(visibleName.name, visibleName.span);
 			declarationsByName.set(visibleName.name, declaration);
+			visibleNames.set(visibleName.name, true);
 		}
 		for (declaration in value.declarations) {
 			var named = declarationName(declaration);
-			if (names.exists(named.name))
+			if (names.exists(named.name) && !visibleNames.exists(named.name))
 				fail('Duplicate HXI declaration "${named.name}"', named.span);
 			names.set(named.name, named.span);
 			declarationsByName.set(named.name, declaration);
