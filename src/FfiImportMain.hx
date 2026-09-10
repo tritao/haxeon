@@ -5,7 +5,7 @@ import sys.io.File;
 class FfiImportMain {
 	static function main():Void {
 		var args = Sys.args(), target = "", output = "", library:Null<String> = null, interfaceName:Null<String> = null, includes:Array<String> = [],
-			dependencies:Array<String> = [], sourceLabel:Null<String> = null,
+			dependencies:Array<String> = [], sourceLabel:Null<String> = null, excludedHeaders:Array<String> = [],
 			paths:Array<String> = [];
 		for (arg in args)
 			if (StringTools.startsWith(arg, "--target="))
@@ -22,13 +22,16 @@ class FfiImportMain {
 				dependencies.push(arg.substring(10));
 			else if (StringTools.startsWith(arg, "--source-label="))
 				sourceLabel = arg.substring(15);
+			else if (StringTools.startsWith(arg, "--exclude-header="))
+				excludedHeaders.push(arg.substring(17));
 			else if (StringTools.startsWith(arg, "--"))
 				throw 'Unknown FFI import option "$arg"';
 			else
 				paths.push(arg);
 		if (target.length == 0 || output.length == 0 || paths.length != 1)
-			throw "Usage: haxeon-ffi-import --target=<triple> --output=<file> [--library=<name>] [--interface=<name>] [--depends=<interface>] [--include=<dir>] [--source-label=<path>] <header>";
-		File.saveContent(output, CHeaderImporter.importHeader(paths[0], target, includes, "clang", library, interfaceName, dependencies, sourceLabel));
+			throw "Usage: haxeon-ffi-import --target=<triple> --output=<file> [--library=<name>] [--interface=<name>] [--depends=<interface>] [--include=<dir>] [--source-label=<path>] [--exclude-header=<path>] <header>";
+		File.saveContent(output, CHeaderImporter.importHeader(paths[0], target, includes, "clang", library, interfaceName, dependencies, sourceLabel,
+			excludedHeaders));
 		Sys.println('imported ${paths[0]} -> $output');
 	}
 }

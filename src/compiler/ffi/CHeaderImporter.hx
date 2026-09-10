@@ -19,7 +19,7 @@ class CHeaderImporter {
 	static final sourceCache:Map<String, String> = [];
 
 	public static function importHeader(header:String, target:String, includes:Array<String>, clang:String = "clang", ?library:String,
-			?interfaceName:String, ?dependencies:Array<String>, ?sourceLabel:String):String {
+			?interfaceName:String, ?dependencies:Array<String>, ?sourceLabel:String, ?excludedHeaders:Array<String>):String {
 		if (interfaceName != null && !~/^[A-Za-z_][A-Za-z0-9_]*$/.match(interfaceName))
 			throw 'Invalid HXI interface name "$interfaceName"';
 		if (dependencies != null)
@@ -45,9 +45,13 @@ class CHeaderImporter {
 		var layouts = parseLayouts(layoutText),
 			declarations:Array<Dynamic> = [],
 			roots = [FileSystem.fullPath(Path.directory(header))];
+		var excluded = [];
+		if (excludedHeaders != null)
+			for (excludedHeader in excludedHeaders)
+				excluded.push(FileSystem.fullPath(excludedHeader));
 		for (include in includes)
 			roots.push(FileSystem.fullPath(include));
-		collect(Json.parse(astText), declarations, roots, FileSystem.fullPath(header));
+		collect(Json.parse(astText), declarations, roots, FileSystem.fullPath(header), excluded);
 		declarations.sort(function(left, right) return Reflect.compare(key(left), key(right)));
 		var output = new StringBuf(),
 			libraryMetadata = library == null ? "" : ' @library("$library")',
@@ -60,7 +64,7 @@ class CHeaderImporter {
 		return output.toString();
 	}
 
-	static function collect(node:Dynamic, output:Array<Dynamic>, roots:Array<String>, currentFile:String):String {
+	static function collect(node:Dynamic, output:Array<Dynamic>, roots:Array<String>, currentFile:String, excluded:Array<String>):String {
 		if (node == null)
 			return currentFile;
 		var locationFile:String = locationPath(node);
@@ -72,12 +76,13 @@ class CHeaderImporter {
 		if (name != null
 			&& !StringTools.startsWith(name, "__")
 			&& (kind == "TypedefDecl" || kind == "RecordDecl" || kind == "FunctionDecl" || kind == "EnumDecl" || kind == "EnumConstantDecl")
-			&& isUserDeclaration(node, roots, currentFile))
+			&& isUserDeclaration(node, roots, currentFile)
+			&& excluded.indexOf(currentFile) < 0)
 			output.push(node);
 		var inner:Array<Dynamic> = field(node, "inner");
 		if (inner != null && !(kind == "EnumDecl" && name != null))
 			for (child in inner)
-				currentFile = collect(child, output, roots, currentFile);
+				currentFile = collect(child, output, roots, currentFile, excluded);
 		return currentFile;
 	}
 
