@@ -53,6 +53,12 @@ linear-memory environment containing the function slot and receiver. Direct
 object calls and interface calls remain semantic until Wasm lowering; virtual
 calls dispatch through the object type ID in the managed header.
 
+Ordinary `@:cNative` declarations are emitted as typed WebAssembly function
+imports. The import module is the declared native library (or `env` when the
+library is empty), and the import field is the declared symbol. Pointer-like
+Haxeon IR values use the linear-memory reference representation; no native
+call is silently treated as a HashLink runtime function.
+
 ## Building and testing
 
 Bootstrap the pinned local tools once:
@@ -89,10 +95,10 @@ module plus a function manifest:
 ## Deliberate boundaries
 
 `Wasm64` and Wasm GC are represented as target configurations below canonical
-IR, but are not enabled by this bring-up yet. Ordinary `@:cNative` calls also
-remain explicit backend errors: they require a Wasm host-import ABI rather
-than being silently treated as HashLink natives. Use the HashLink backend for
-those programs until that import contract is added.
+IR, but are not enabled by this bring-up yet. C-native signatures that require
+multi-value aggregates or unsupported scalar representations still fail
+explicitly during Wasm lowering; those need a versioned ABI extension rather
+than an implicit representation guess.
 
 `WasmTarget` already models linear32, linear64, and Wasm-GC reference modes.
 Those modes remain below IR; adding them must not change `IrType` or

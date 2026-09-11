@@ -17,12 +17,16 @@ import compiler.backend.wasm.WasmModule.WasmCustomSection;
 class WasmEncoder {
 	public static function encode(module:WasmModule):Bytes {
 		WasmValidator.validate(module);
+		for (imported in module.imports)
+			module.typeIndex(imported.type);
 		for (fn in module.functions)
 			module.typeIndex(fn.type);
 		var output = new BytesOutput();
 		for (byte in [0, 97, 115, 109, 1, 0, 0, 0])
 			output.writeByte(byte);
 		writeSection(output, 1, encodeTypes(module.types));
+		if (module.imports.length > 0)
+			writeSection(output, 2, encodeImports(module));
 		writeSection(output, 3, encodeFunctionTypes(module));
 		if (module.tableMin != null)
 			writeSection(output, 4, encodeTable(module.tableMin));
@@ -72,6 +76,18 @@ class WasmEncoder {
 		writeU32(body, module.functions.length);
 		for (fn in module.functions)
 			writeU32(body, module.typeIndex(fn.type));
+		return body.getBytes();
+	}
+
+	static function encodeImports(module:WasmModule):Bytes {
+		var body = new BytesOutput();
+		writeU32(body, module.imports.length);
+		for (imported in module.imports) {
+			writeString(body, imported.module);
+			writeString(body, imported.name);
+			body.writeByte(0);
+			writeU32(body, module.typeIndex(imported.type));
+		}
 		return body.getBytes();
 	}
 
@@ -176,9 +192,13 @@ class WasmEncoder {
 		var subsection = new BytesOutput();
 		subsection.writeByte(1);
 		var names = new BytesOutput();
-		writeU32(names, module.functions.length);
-		for (index in 0...module.functions.length) {
+		writeU32(names, module.functionCount());
+		for (index in 0...module.imports.length) {
 			writeU32(names, index);
+			writeString(names, module.imports[index].name);
+		}
+		for (index in 0...module.functions.length) {
+			writeU32(names, module.imports.length + index);
 			writeString(names, module.functions[index].name);
 		}
 		var nameBytes = names.getBytes();

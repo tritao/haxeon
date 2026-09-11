@@ -49,6 +49,9 @@ fi
 	--target=wasm32 --output=out/wasm-cli-map-anonymous-enum.wasm --entry=map-anonymous-enum \
 	--root=tests/programs tests/programs/map-anonymous-enum.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --output=out/wasm-cli-cnative-import.wasm --entry=wasm-cnative-import \
+	--root=tests tests/wasm-cnative-import.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm32 --output=out/wasm-cli-try-catch.wasm --entry=try-catch \
 	--root=tests/programs tests/programs/try-catch.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
@@ -91,6 +94,7 @@ const cases = [
 	["out/wasm-cli-map-key-value-for-in.wasm", 42],
 	["out/wasm-cli-map-object.wasm", 42],
 	["out/wasm-cli-map-anonymous-enum.wasm", 42],
+	["out/wasm-cli-cnative-import.wasm", 42],
   ["out/wasm-cli-try-catch.wasm", 42],
   ["out/wasm-cli-try-nested.wasm", 42],
   ["out/wasm-cli-try-bounds.wasm", 42],
@@ -101,7 +105,10 @@ const cases = [
 (async () => {
   for (const [relative, expected] of cases) {
     const bytes = fs.readFileSync(`${root}/${relative}`);
-    const {instance} = await WebAssembly.instantiate(bytes);
+    const imports = relative.endsWith("cnative-import.wasm")
+      ? {fixture: {fixture_add: (left, right) => left + right}}
+      : undefined;
+    const {instance} = await WebAssembly.instantiate(bytes, imports);
     const value = instance.exports.main();
     if (value !== expected)
       throw new Error(`${relative}: expected ${expected}, got ${value}`);

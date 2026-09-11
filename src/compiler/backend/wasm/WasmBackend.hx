@@ -63,12 +63,13 @@ class WasmBackend implements Backend {
 			globals.set(field.name, module.globals.length);
 			module.globals.push({type: requireValueType(field.type), mutable: true, init: zeroValue(field.type)});
 		}
+		var functions:Map<String, Int> = [];
+		addCNativeImports(module, functions, program);
 		var allocator = addAllocator(module);
 		var preferredEntry = hasFunction(program, "main") ? "main" : hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint;
 		var reachable = reachableFunctions(program, preferredEntry);
 		if (preferredEntry != program.entryPoint && hasFunction(program, "__init"))
 			reachable.set("__init", true);
-		var functions:Map<String, Int> = [];
 		functions.set("__haxeon_alloc", allocator);
 		addRuntimeFunctions(module, functions, program, allocator);
 		for (native in program.natives) {
@@ -102,8 +103,9 @@ class WasmBackend implements Backend {
 		for (index in 0...emitted.length) {
 			var fn = emitted[index];
 			var functionIndex = functions.get(fn.name);
-			module.functions[functionIndex] = WasmFunctionLower.lower(fn, functions, module.functions[functionIndex].type, layout, allocator, globals,
-				strings, methods, closureTypes, tableSlots, exceptionTag);
+			module.setFunction(functionIndex,
+				WasmFunctionLower.lower(fn, functions, module.functionType(functionIndex), layout, allocator, globals, strings, methods, closureTypes,
+					tableSlots, exceptionTag));
 		}
 		var entry = functions.get(preferredEntry);
 		if (entry == null)
@@ -119,6 +121,18 @@ class WasmBackend implements Backend {
 		}
 		module.exports.push({name: "main", functionIndex: entry});
 		return {target: options.target, bytes: WasmEncoder.encode(module)};
+	}
+
+	static function addCNativeImports(module:WasmModule, functions:Map<String, Int>, program:IrProgram):Void {
+		for (native in program.cNatives) {
+			var type:WasmFunctionType = {
+				parameters: [for (argument in native.arguments) requireValueType(argument)],
+				results: resultTypes(native.result)
+			};
+			var importModule = native.library == null || native.library == "" ? "env" : native.library,
+				importName = native.symbol == null || native.symbol == "" ? native.name : native.symbol;
+			functions.set(native.name, module.addImport(importModule, importName, type));
+		}
 	}
 
 	static function addRuntimeFunctions(module:WasmModule, functions:Map<String, Int>, program:IrProgram, allocator:Int):Void {
@@ -2998,8 +3012,15 @@ class WasmFunctionLower {
 				body.push(Call(functionIndex));
 				if (output.type != Void)
 					body.push(LocalSet(values.get(output.id)));
-			case CNativeCall(_, name, _):
-				throw 'Wasm backend cannot lower ordinary C native call "$name" without a Wasm import contract';
+			case CNativeCall(output, name, arguments):
+				for (argument in arguments)
+					body.push(LocalGet(values.get(argument.id)));
+				var importIndex = functions.get(name);
+				if (importIndex == null)
+					throw 'Wasm C native call "$name" has no declared import contract';
+				body.push(Call(importIndex));
+				if (output.type != Void)
+					body.push(LocalSet(values.get(output.id)));
 		}
 	}
 

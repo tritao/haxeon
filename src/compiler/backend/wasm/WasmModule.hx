@@ -10,6 +10,12 @@ typedef WasmDataSegment = {
 	final bytes:haxe.io.Bytes;
 }
 
+typedef WasmImport = {
+	final module:String;
+	final name:String;
+	final type:WasmFunctionType;
+}
+
 typedef WasmLocal = {final type:WasmValueType;}
 
 class WasmFunction {
@@ -45,6 +51,7 @@ typedef WasmCustomSection = {
 /** In-memory Wasm module, kept separate from Haxeon lowering and byte encoding. */
 class WasmModule {
 	public final types:Array<WasmFunctionType> = [];
+	public final imports:Array<WasmImport> = [];
 	public final functions:Array<WasmFunction> = [];
 	public final globals:Array<WasmGlobal> = [];
 	public final exports:Array<WasmExport> = [];
@@ -77,7 +84,33 @@ class WasmModule {
 
 	public function addFunction(fn:WasmFunction):Int {
 		functions.push(fn);
-		return functions.length - 1;
+		return imports.length + functions.length - 1;
+	}
+
+	public function addImport(module:String, name:String, type:WasmFunctionType):Int {
+		imports.push({module: module, name: name, type: type});
+		return imports.length - 1;
+	}
+
+	public function functionCount():Int
+		return imports.length + functions.length;
+
+	public function functionType(index:Int):WasmFunctionType {
+		if (index < 0 || index >= functionCount())
+			throw 'Unknown Wasm function index $index';
+		return index < imports.length ? imports[index].type : functions[index - imports.length].type;
+	}
+
+	public function functionAt(index:Int):WasmFunction {
+		if (index < imports.length || index >= functionCount())
+			throw 'Wasm function index $index is not a defined function';
+		return functions[index - imports.length];
+	}
+
+	public function setFunction(index:Int, fn:WasmFunction):Void {
+		if (index < imports.length || index >= functionCount())
+			throw 'Wasm function index $index is not a defined function';
+		functions[index - imports.length] = fn;
 	}
 
 	function sameType(left:WasmFunctionType, right:WasmFunctionType):Bool {

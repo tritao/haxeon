@@ -17,13 +17,14 @@ private typedef WasmControl = {
 class WasmValidator {
 	public static function validate(module:WasmModule):Void {
 		for (fn in module.functions)
-			validateFunction(fn, module.functions, module.globals, module.types, module.tableMin, module.exceptionTagType);
+			validateFunction(fn, [for (index in 0...module.functionCount()) module.functionType(index)], module.globals, module.types, module.tableMin,
+				module.exceptionTagType);
 		for (entry in module.exports)
-			if (entry.functionIndex < 0 || entry.functionIndex >= module.functions.length)
+			if (entry.functionIndex < 0 || entry.functionIndex >= module.functionCount())
 				throw 'Wasm export "${entry.name}" references function ${entry.functionIndex}';
 	}
 
-	static function validateFunction(fn:WasmFunction, functions:Array<WasmFunction>, globals:Array<WasmGlobal>, types:Array<WasmFunctionType>,
+	static function validateFunction(fn:WasmFunction, functions:Array<WasmFunctionType>, globals:Array<WasmGlobal>, types:Array<WasmFunctionType>,
 			tableMin:Null<Int>, tagType:Null<Int>):Void {
 		var labels:Array<Bool> = [],
 			localCount = fn.type.parameters.length + fn.locals.length;
@@ -72,7 +73,7 @@ class WasmValidator {
 		validateStack(fn, functions, globals, types, tagType);
 	}
 
-	static function validateStack(fn:WasmFunction, functions:Array<WasmFunction>, globals:Array<WasmGlobal>, types:Array<WasmFunctionType>,
+	static function validateStack(fn:WasmFunction, functions:Array<WasmFunctionType>, globals:Array<WasmGlobal>, types:Array<WasmFunctionType>,
 			tagType:Null<Int>):Void {
 		var locals:Array<WasmValueType> = fn.type.parameters.copy();
 		for (local in fn.locals)
@@ -136,7 +137,7 @@ class WasmValidator {
 					pop(stack, I32, fn);
 					reachable = false;
 				case Call(index):
-					var type = functions[index].type;
+					var type = functions[index];
 					for (index in 0...type.parameters.length)
 						pop(stack, type.parameters[type.parameters.length - index - 1], fn);
 					for (result in type.results)
