@@ -53,12 +53,14 @@ class WasmModule {
 	public var tableMin:Null<Int>;
 	public final tableElements:Array<Int> = [];
 	public var memoryMin:Null<Int>;
+	public var exceptionTagType:Null<Int>;
 	public var exportMemory:Bool;
 	public var customName:Null<String>;
 
 	public function new(?customName:String) {
 		this.customName = customName;
 		memoryMin = null;
+		exceptionTagType = null;
 		exportMemory = false;
 		tableMin = null;
 	}

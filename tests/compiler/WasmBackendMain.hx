@@ -67,6 +67,7 @@ class WasmBackendMain {
 		var enumValue = compile("enum Answer { No; Yes(value:Int); } function main():Int { var answer:Answer = Yes(42); return switch (answer) { case Yes(value): value; case No: 0; }; }");
 		var floatEnum = compile("enum Measurement { Value(prefix:Int, value:Float); } function main():Int { var measurement:Measurement = Value(7, 40.5); return switch (measurement) { case Value(prefix, value): prefix + (value == 40.5 ? 35 : 0); }; }");
 		var inheritedField = compile("class Base { public var value:Int; public function new() { value = 42; } } class Child extends Base { public function new() { super(); } } function main():Int { var child = new Child(); return child.value; }");
+		var largeArray = compile("function main():Int { var values = new Array<Int>(20000); return values.length; }");
 		var closure = compile("function increment(value:Int):Int return value + 1; function main():Int { var fn = increment; return fn(41); }");
 		var instanceClosure = compile("class Adder { public function new() {} public function add(value:Int):Int return value + 1; } function main():Int { var adder = new Adder(); var fn = adder.add; return fn(41); }");
 		var virtualCall = compile("interface Adder { function add(value:Int):Int; } class Concrete implements Adder { public function new() {} public function add(value:Int):Int return value + 1; } function main():Int { var adder:Adder = new Concrete(); return adder.add(41); }");
@@ -86,6 +87,7 @@ class WasmBackendMain {
 		File.saveBytes("out/wasm-backend-enum.wasm", enumValue);
 		File.saveBytes("out/wasm-backend-float-enum.wasm", floatEnum);
 		File.saveBytes("out/wasm-backend-inherited-field.wasm", inheritedField);
+		File.saveBytes("out/wasm-backend-large-array.wasm", largeArray);
 		File.saveBytes("out/wasm-backend-closure.wasm", closure);
 		File.saveBytes("out/wasm-backend-instance-closure.wasm", instanceClosure);
 		File.saveBytes("out/wasm-backend-virtual.wasm", virtualCall);

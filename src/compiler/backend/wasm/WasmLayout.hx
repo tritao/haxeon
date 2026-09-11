@@ -30,7 +30,11 @@ class WasmLayout {
 	public static inline final HEADER_SIZE = 8;
 	public static inline final ARRAY_LENGTH_OFFSET = 8;
 	public static inline final ARRAY_CAPACITY_OFFSET = 12;
-	public static inline final ARRAY_DATA_OFFSET = 16;
+	public static inline final ARRAY_DATA_POINTER_OFFSET = 16;
+	public static inline final ARRAY_HEADER_SIZE = 24;
+	public static inline final DYN_PAYLOAD_OFFSET = 4;
+	public static inline final DYN_I32_SIZE = 8;
+	public static inline final DYN_F64_SIZE = 16;
 
 	public final objects:Map<String, WasmObjectLayout> = [];
 	public final enums:Map<String, WasmEnumLayout> = [];
@@ -129,7 +133,7 @@ class WasmLayout {
 		return type == F64 ? 8 : 4;
 
 	public static function arrayAllocationSize(type:IrType, length:Int):Int
-		return ARRAY_DATA_OFFSET + arrayStride(type) * length;
+		return ARRAY_HEADER_SIZE + arrayStride(type) * length;
 
 	public static inline final STRING_LENGTH_OFFSET = 8;
 	public static inline final STRING_DATA_OFFSET = 16;

@@ -65,13 +65,16 @@ class WasmBackend implements Backend {
 		}
 		var allocator = addAllocator(module);
 		var preferredEntry = hasFunction(program, "main") ? "main" : hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint;
+		var reachable = reachableFunctions(program, preferredEntry);
+		if (preferredEntry != program.entryPoint && hasFunction(program, "__init"))
+			reachable.set("__init", true);
 		var functions:Map<String, Int> = [];
 		functions.set("__haxeon_alloc", allocator);
 		addRuntimeFunctions(module, functions, program, allocator);
 		for (native in program.natives) {
 			var stride = arrayStrideForNative(native.name);
 			if (stride != null)
-				functions.set(native.name, addArrayAllocator(module, native.name, stride));
+				functions.set(native.name, addArrayAllocator(module, native.name, stride, allocator));
 		}
 		var methods:Map<String, String> = [];
 		for (object in program.objects)
@@ -79,23 +82,28 @@ class WasmBackend implements Backend {
 				methods.set(object.name + "." + method.name, method.functionName);
 		var emitted:Array<IrFunction> = [];
 		for (fn in program.functions) {
+			if (!reachable.exists(fn.name))
+				continue;
 			if (fn.name == "__entry" && preferredEntry != "__entry")
 				continue;
 			var type:WasmFunctionType = {parameters: [for (argument in fn.arguments) requireValueType(argument.type)], results: resultTypes(fn.result)};
 			functions.set(fn.name, module.addFunction(new WasmFunction(fn.name, type)));
 			emitted.push(fn);
 		}
-		var closureTypes = collectClosureTypes(module, program);
-		module.tableMin = module.functions.length;
-		for (index in 0...module.functions.length)
-			module.tableElements.push(index);
+		var closureTypes = collectClosureTypes(module, program),
+			tableSlots = buildTableSlots(module, functions),
+			exceptionTag = hasExceptions(program) ? module.typeIndex({
+				parameters: [I32],
+				results: []
+			}) : null;
+		module.exceptionTagType = exceptionTag;
 		module.customSections.push({name: "haxeon.gc.roots", bytes: WasmGcRoots.encode(program)});
 		module.customSections.push({name: "haxeon.patch", bytes: WasmPatch.manifest(program)});
 		for (index in 0...emitted.length) {
 			var fn = emitted[index];
 			var functionIndex = functions.get(fn.name);
 			module.functions[functionIndex] = WasmFunctionLower.lower(fn, functions, module.functions[functionIndex].type, layout, allocator, globals,
-				strings, methods, closureTypes);
+				strings, methods, closureTypes, tableSlots, exceptionTag);
 		}
 		var entry = functions.get(preferredEntry);
 		if (entry == null)
@@ -133,30 +141,92 @@ class WasmBackend implements Backend {
 					functions.set(native.name,
 						module.addFunction(new WasmFunction(native.name, {parameters: [I32], results: [I32]}, [], [LocalGet(0), Return])));
 				case "__dynamic_equal":
-					functions.set(native.name,
-						module.addFunction(new WasmFunction(native.name, {parameters: [I32, I32], results: [I32]}, [],
-							[LocalGet(0), LocalGet(1), I32Eq, Return])));
-				case "__std_is_of_type":
-					functions.set(native.name,
-						module.addFunction(new WasmFunction(native.name, {parameters: [I32, I32], results: [I32]}, [],
-							[LocalGet(0), I32Load(0), LocalGet(1), I32Eq, Return])));
+					// Emitted after the native scan so the string helper has an index.
+				case "__std_is_of_type", "__exception_matches":
+					functions.set(native.name, addTypeTest(module, native.name, program));
 				case "__array_copy_i32", "__array_copy_bool", "__array_copy_ref", "__array_copy_bytes":
 					functions.set(native.name, addArrayCopy(module, native.name, 4, allocator));
 				case "__array_copy_f64":
 					functions.set(native.name, addArrayCopy(module, native.name, 8, allocator));
+				case "__array_index_of_i32", "__array_index_of_bool", "__array_index_of_ref":
+					functions.set(native.name, addArrayIndexOf(module, native.name, 4, I32, null));
+				case "__array_index_of_bytes":
+					var stringEqual = functions.get("__string_equal");
+					if (stringEqual == null) {
+						stringEqual = addStringEqual(module, "__string_equal");
+						functions.set("__string_equal", stringEqual);
+					}
+					functions.set(native.name, addArrayIndexOf(module, native.name, 4, I32, stringEqual));
+				case "__array_index_of_f64":
+					functions.set(native.name, addArrayIndexOf(module, native.name, 8, F64, null));
+				case "__array_slice_i32", "__array_slice_bool", "__array_slice_ref", "__array_slice_bytes":
+					functions.set(native.name, addArraySlice(module, native.name, 4, allocator));
+				case "__array_slice_f64":
+					functions.set(native.name, addArraySlice(module, native.name, 8, allocator));
+				case "__array_join_bytes":
+					var stringConcat = functions.get("__string_concat");
+					if (stringConcat == null) {
+						stringConcat = addStringConcat(module, "__string_concat", allocator);
+						functions.set("__string_concat", stringConcat);
+					}
+					functions.set(native.name, addArrayJoinBytes(module, native.name, allocator, stringConcat));
 				case "__array_concat_i32", "__array_concat_bool", "__array_concat_ref", "__array_concat_bytes":
 					functions.set(native.name, addArrayConcat(module, native.name, 4, allocator));
 				case "__array_concat_f64":
 					functions.set(native.name, addArrayConcat(module, native.name, 8, allocator));
 				case "__array_push_i32", "__array_push_bool", "__array_push_ref", "__array_push_bytes":
-					functions.set(native.name, addArrayPush(module, native.name, 4, I32));
+					functions.set(native.name, addArrayPush(module, native.name, 4, I32, allocator));
 				case "__array_push_f64":
-					functions.set(native.name, addArrayPush(module, native.name, 8, F64));
+					functions.set(native.name, addArrayPush(module, native.name, 8, F64, allocator));
 				case "__array_pop_i32", "__array_pop_bool", "__array_pop_ref", "__array_pop_bytes":
 					functions.set(native.name, addArrayPop(module, native.name, 4, I32));
 				case "__array_pop_f64":
 					functions.set(native.name, addArrayPop(module, native.name, 8, F64));
+				case "__array_unshift_i32", "__array_unshift_bool", "__array_unshift_ref", "__array_unshift_bytes":
+					functions.set(native.name, addArrayUnshift(module, native.name, 4, I32, allocator));
+				case "__array_unshift_f64":
+					functions.set(native.name, addArrayUnshift(module, native.name, 8, F64, allocator));
+				case "__array_insert_i32", "__array_insert_bool", "__array_insert_ref", "__array_insert_bytes":
+					functions.set(native.name, addArrayInsert(module, native.name, 4, I32, allocator));
+				case "__array_insert_f64":
+					functions.set(native.name, addArrayInsert(module, native.name, 8, F64, allocator));
+				case "__array_shift_i32", "__array_shift_bool", "__array_shift_ref", "__array_shift_bytes":
+					functions.set(native.name, addArrayShift(module, native.name, 4, I32));
+				case "__array_shift_f64":
+					functions.set(native.name, addArrayShift(module, native.name, 8, F64));
+				case "__array_resize_i32", "__array_resize_bool", "__array_resize_ref", "__array_resize_bytes":
+					functions.set(native.name, addArrayResize(module, native.name, 4, I32, allocator));
+				case "__array_resize_f64":
+					functions.set(native.name, addArrayResize(module, native.name, 8, F64, allocator));
+				case "__array_remove_i32", "__array_remove_bool", "__array_remove_ref":
+					functions.set(native.name, addArrayRemove(module, native.name, 4, I32, null));
+				case "__array_remove_bytes":
+					var stringEqual = functions.get("__string_equal");
+					if (stringEqual == null) {
+						stringEqual = addStringEqual(module, "__string_equal");
+						functions.set("__string_equal", stringEqual);
+					}
+					functions.set(native.name, addArrayRemove(module, native.name, 4, I32, stringEqual));
+				case "__array_remove_f64":
+					functions.set(native.name, addArrayRemove(module, native.name, 8, F64, null));
+				case "__array_reverse_i32", "__array_reverse_bool", "__array_reverse_ref", "__array_reverse_bytes":
+					functions.set(native.name, addArrayReverse(module, native.name, 4, I32));
+				case "__array_reverse_f64":
+					functions.set(native.name, addArrayReverse(module, native.name, 8, F64));
+				case "__array_splice_i32", "__array_splice_bool", "__array_splice_ref", "__array_splice_bytes":
+					functions.set(native.name, addArraySplice(module, native.name, 4, allocator));
+				case "__array_splice_f64":
+					functions.set(native.name, addArraySplice(module, native.name, 8, allocator));
 				default:
+			}
+		for (native in program.natives)
+			if (native.name == "__dynamic_equal") {
+				var stringEqual = functions.get("__string_equal");
+				if (stringEqual == null) {
+					stringEqual = addStringEqual(module, "__string_equal");
+					functions.set("__string_equal", stringEqual);
+				}
+				functions.set(native.name, addDynamicEqual(module, native.name, stringEqual));
 			}
 	}
 
@@ -210,6 +280,66 @@ class WasmBackend implements Backend {
 		return result;
 	}
 
+	static function buildTableSlots(module:WasmModule, functions:Map<String, Int>):Map<String, Int> {
+		var names = [for (fn in module.functions) fn.name];
+		names.sort(Reflect.compare);
+		var slots:Map<String, Int> = [];
+		for (index in 0...names.length) {
+			slots.set(names[index], index);
+			module.tableElements.push(functions.get(names[index]));
+		}
+		module.tableMin = names.length;
+		return slots;
+	}
+
+	static function addTypeTest(module:WasmModule, name:String, program:IrProgram):Int {
+		var body:Array<WasmInstruction> = [
+			LocalGet(0),
+			I32Eqz,
+			If(null),
+			I32Const(0),
+			LocalSet(2),
+			Else,
+			LocalGet(0),
+			I32Load(0),
+			LocalGet(1),
+			I32Eq,
+			LocalSet(2),
+		];
+		for (object in program.objects) {
+			var accepted = [typeId(Obj(object.name))];
+			var base = object.base;
+			while (base != null) {
+				accepted.push(typeId(Obj(base)));
+				var next:Null<String> = null;
+				for (candidate in program.objects)
+					if (candidate.name == base)
+						next = candidate.base;
+				base = next;
+			}
+			for (interfaceName in object.interfaces)
+				accepted.push(typeId(Virtual(interfaceName)));
+			body.push(LocalGet(0));
+			body.push(I32Load(0));
+			body.push(I32Const(typeId(Obj(object.name))));
+			body.push(I32Eq);
+			body.push(If(null));
+			for (index in 0...accepted.length) {
+				body.push(LocalGet(1));
+				body.push(I32Const(accepted[index]));
+				body.push(I32Eq);
+				if (index > 0)
+					body.push(I32Or);
+			}
+			body.push(LocalSet(2));
+			body.push(End);
+		}
+		body.push(End);
+		body.push(LocalGet(2));
+		body.push(Return);
+		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}], body));
+	}
+
 	static function addStringCharCodeAt(module:WasmModule, name:String):Int {
 		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}], [
 			LocalGet(0),
@@ -237,6 +367,9 @@ class WasmBackend implements Backend {
 			I32Add,
 			Call(allocator),
 			LocalSet(4),
+			LocalGet(4),
+			I32Const(typeId(Bytes)),
+			I32Store(0),
 			LocalGet(4),
 			I32Const(WasmLayout.STRING_DATA_OFFSET),
 			I32Add,
@@ -333,29 +466,36 @@ class WasmBackend implements Backend {
 	}
 
 	static function addArrayCopy(module:WasmModule, name:String, stride:Int, allocator:Int):Int {
-		return module.addFunction(new WasmFunction(name, {parameters: [I32], results: [I32]}, [{type: I32}, {type: I32}], [
+		return module.addFunction(new WasmFunction(name, {parameters: [I32], results: [I32]}, [for (_ in 0...4) {type: I32}], [
 			LocalGet(0),
 			I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
 			LocalSet(1),
-			LocalGet(1),
-			I32Const(stride),
-			I32Mul,
-			I32Const(WasmLayout.ARRAY_DATA_OFFSET),
-			I32Add,
+			I32Const(WasmLayout.ARRAY_HEADER_SIZE),
 			Call(allocator),
 			LocalSet(2),
+			LocalGet(2),
+			I32Const(typeId(Array(Dyn))),
+			I32Store(0),
 			LocalGet(2),
 			LocalGet(1),
 			I32Store(WasmLayout.ARRAY_LENGTH_OFFSET),
 			LocalGet(2),
 			LocalGet(1),
+			I32Const(8),
+			I32Add,
+			LocalTee(4),
 			I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
+			LocalGet(4),
+			I32Const(stride),
+			I32Mul,
+			Call(allocator),
+			LocalSet(3),
 			LocalGet(2),
-			I32Const(WasmLayout.ARRAY_DATA_OFFSET),
-			I32Add,
+			LocalGet(3),
+			I32Store(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(3),
 			LocalGet(0),
-			I32Const(WasmLayout.ARRAY_DATA_OFFSET),
-			I32Add,
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
 			LocalGet(1),
 			I32Const(stride),
 			I32Mul,
@@ -365,21 +505,224 @@ class WasmBackend implements Backend {
 		]));
 	}
 
+	static function addArrayJoinBytes(module:WasmModule, name:String, allocator:Int, stringConcat:Int):Int {
+		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32], results: [I32]}, [for (_ in 0...4) {type: I32}], [
+			I32Const(WasmLayout.STRING_DATA_OFFSET),
+			Call(allocator),
+			LocalSet(2),
+			LocalGet(2),
+			I32Const(typeId(Bytes)),
+			I32Store(0),
+			LocalGet(2),
+			I32Const(0),
+			I32Store(WasmLayout.STRING_LENGTH_OFFSET),
+			LocalGet(2),
+			I32Const(0),
+			I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
+			I32Const(0),
+			LocalSet(3),
+			Block(null),
+			Loop(null),
+			LocalGet(3),
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
+			I32LtS,
+			If(null),
+			LocalGet(3),
+			I32Eqz,
+			If(null),
+			Else,
+			LocalGet(2),
+			LocalGet(1),
+			Call(stringConcat),
+			LocalSet(2),
+			End,
+			LocalGet(2),
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(3),
+			I32Const(4),
+			I32Mul,
+			I32Add,
+			I32Load(0),
+			Call(stringConcat),
+			LocalSet(2),
+			LocalGet(3),
+			I32Const(1),
+			I32Add,
+			LocalSet(3),
+			Br(1),
+			Else,
+			Br(0),
+			End,
+			End,
+			End,
+			LocalGet(2),
+			Return
+		]));
+	}
+
+	static function addArrayIndexOf(module:WasmModule, name:String, stride:Int, elementType:WasmValueType, stringEqual:Null<Int>):Int {
+		var compare = stringEqual == null ? (elementType == F64 ? F64Eq : I32Eq) : null;
+		return module.addFunction(new WasmFunction(name, {parameters: [I32, elementType], results: [I32]}, [{type: I32}, {type: I32}], [
+			I32Const(0),
+			LocalSet(2),
+			I32Const(-1),
+			LocalSet(3),
+			Block(null),
+			Loop(null),
+			LocalGet(2),
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
+			I32LtS,
+			If(null),
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(2),
+			I32Const(stride),
+			I32Mul,
+			I32Add,
+			elementType == F64 ? F64Load(0) : I32Load(0),
+			LocalGet(1),
+			stringEqual == null ? compare : Call(stringEqual),
+			If(null),
+			LocalGet(2),
+			LocalSet(3),
+			Br(3),
+			End,
+			LocalGet(2),
+			I32Const(1),
+			I32Add,
+			LocalSet(2),
+			Br(1),
+			Else,
+			End,
+			End,
+			End,
+			LocalGet(3),
+			Return
+		]));
+	}
+
+	static function addArraySlice(module:WasmModule, name:String, stride:Int, allocator:Int):Int {
+		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32, I32], results: [I32]}, [for (_ in 0...6) {type: I32}], [
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
+			LocalSet(3),
+			LocalGet(1),
+			I32Const(0),
+			I32LtS,
+			If(null),
+			LocalGet(3),
+			LocalGet(1),
+			I32Add,
+			LocalSet(4),
+			Else,
+			LocalGet(1),
+			LocalSet(4),
+			End,
+			LocalGet(4),
+			I32Const(0),
+			I32LtS,
+			If(null),
+			I32Const(0),
+			LocalSet(4),
+			End,
+			LocalGet(4),
+			LocalGet(3),
+			I32LtS,
+			If(null),
+			Else,
+			LocalGet(3),
+			LocalSet(4),
+			End,
+			LocalGet(2),
+			I32Const(0),
+			I32LtS,
+			If(null),
+			LocalGet(3),
+			LocalGet(2),
+			I32Add,
+			LocalSet(5),
+			Else,
+			LocalGet(2),
+			LocalSet(5),
+			End,
+			LocalGet(5),
+			I32Const(0),
+			I32LtS,
+			If(null),
+			I32Const(0),
+			LocalSet(5),
+			End,
+			LocalGet(5),
+			LocalGet(3),
+			I32LtS,
+			If(null),
+			Else,
+			LocalGet(3),
+			LocalSet(5),
+			End,
+			LocalGet(5),
+			LocalGet(4),
+			I32LtS,
+			If(null),
+			LocalGet(4),
+			LocalSet(5),
+			End,
+			LocalGet(5),
+			LocalGet(4),
+			I32Sub,
+			LocalSet(6),
+			I32Const(WasmLayout.ARRAY_HEADER_SIZE),
+			Call(allocator),
+			LocalSet(7),
+			LocalGet(7),
+			I32Const(typeId(Array(Dyn))),
+			I32Store(0),
+			LocalGet(7),
+			LocalGet(6),
+			I32Store(WasmLayout.ARRAY_LENGTH_OFFSET),
+			LocalGet(7),
+			LocalGet(6),
+			I32Const(8),
+			I32Add,
+			I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
+			LocalGet(6),
+			I32Const(8),
+			I32Add,
+			I32Const(stride),
+			I32Mul,
+			Call(allocator),
+			LocalSet(8),
+			LocalGet(7),
+			LocalGet(8),
+			I32Store(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(8),
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(4),
+			I32Const(stride),
+			I32Mul,
+			I32Add,
+			LocalGet(6),
+			I32Const(stride),
+			I32Mul,
+			MemoryCopy,
+			LocalGet(7),
+			Return
+		]));
+	}
+
 	static function addArrayConcat(module:WasmModule, name:String, stride:Int, allocator:Int):Int {
-		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}], [
+		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32], results: [I32]}, [for (_ in 0...4) {type: I32}], [
 			LocalGet(0),
 			I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
 			LocalSet(2),
 			LocalGet(1),
 			I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
 			LocalSet(3),
-			LocalGet(2),
-			LocalGet(3),
-			I32Add,
-			I32Const(stride),
-			I32Mul,
-			I32Const(WasmLayout.ARRAY_DATA_OFFSET),
-			I32Add,
+			I32Const(WasmLayout.ARRAY_HEADER_SIZE),
 			Call(allocator),
 			LocalSet(4),
 			LocalGet(4),
@@ -391,27 +734,38 @@ class WasmBackend implements Backend {
 			LocalGet(2),
 			LocalGet(3),
 			I32Add,
+			I32Const(8),
+			I32Add,
 			I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
 			LocalGet(4),
-			I32Const(WasmLayout.ARRAY_DATA_OFFSET),
+			I32Const(typeId(Array(Dyn))),
+			I32Store(0),
+			LocalGet(2),
+			LocalGet(3),
 			I32Add,
+			I32Const(8),
+			I32Add,
+			I32Const(stride),
+			I32Mul,
+			Call(allocator),
+			LocalSet(5),
+			LocalGet(4),
+			LocalGet(5),
+			I32Store(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(5),
 			LocalGet(0),
-			I32Const(WasmLayout.ARRAY_DATA_OFFSET),
-			I32Add,
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
 			LocalGet(2),
 			I32Const(stride),
 			I32Mul,
 			MemoryCopy,
-			LocalGet(4),
-			I32Const(WasmLayout.ARRAY_DATA_OFFSET),
-			I32Add,
+			LocalGet(5),
 			LocalGet(2),
 			I32Const(stride),
 			I32Mul,
 			I32Add,
 			LocalGet(1),
-			I32Const(WasmLayout.ARRAY_DATA_OFFSET),
-			I32Add,
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
 			LocalGet(3),
 			I32Const(stride),
 			I32Mul,
@@ -421,8 +775,8 @@ class WasmBackend implements Backend {
 		]));
 	}
 
-	static function addArrayPush(module:WasmModule, name:String, stride:Int, elementType:WasmValueType):Int {
-		return module.addFunction(new WasmFunction(name, {parameters: [I32, elementType], results: [I32]}, [{type: I32}, {type: I32}], [
+	static function addArrayPush(module:WasmModule, name:String, stride:Int, elementType:WasmValueType, allocator:Int):Int {
+		return module.addFunction(new WasmFunction(name, {parameters: [I32, elementType], results: [I32]}, [for (_ in 0...4) {type: I32}], [
 			LocalGet(0),
 			I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
 			LocalSet(2),
@@ -431,9 +785,41 @@ class WasmBackend implements Backend {
 			I32Load(WasmLayout.ARRAY_CAPACITY_OFFSET),
 			I32LtS,
 			If(null),
+			Else,
 			LocalGet(0),
-			I32Const(WasmLayout.ARRAY_DATA_OFFSET),
-			I32Add,
+			I32Load(WasmLayout.ARRAY_CAPACITY_OFFSET),
+			LocalTee(3),
+			I32Eqz,
+			If(null),
+			I32Const(8),
+			LocalSet(3),
+			Else,
+			LocalGet(3),
+			I32Const(2),
+			I32Mul,
+			LocalSet(3),
+			End,
+			LocalGet(3),
+			I32Const(stride),
+			I32Mul,
+			Call(allocator),
+			LocalSet(4),
+			LocalGet(4),
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(2),
+			I32Const(stride),
+			I32Mul,
+			MemoryCopy,
+			LocalGet(0),
+			LocalGet(4),
+			I32Store(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(0),
+			LocalGet(3),
+			I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
+			End,
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
 			LocalGet(2),
 			I32Const(stride),
 			I32Mul,
@@ -444,12 +830,9 @@ class WasmBackend implements Backend {
 			LocalGet(2),
 			I32Const(1),
 			I32Add,
-			LocalTee(3),
+			LocalTee(5),
 			I32Store(WasmLayout.ARRAY_LENGTH_OFFSET),
-			Else,
-			Unreachable,
-			End,
-			LocalGet(3),
+			LocalGet(5),
 			Return
 		]));
 	}
@@ -468,8 +851,7 @@ class WasmBackend implements Backend {
 			I32Sub,
 			LocalSet(2),
 			LocalGet(0),
-			I32Const(WasmLayout.ARRAY_DATA_OFFSET),
-			I32Add,
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
 			LocalGet(2),
 			I32Const(stride),
 			I32Mul,
@@ -487,9 +869,637 @@ class WasmBackend implements Backend {
 		]));
 	}
 
+	static function addArrayUnshift(module:WasmModule, name:String, stride:Int, elementType:WasmValueType, allocator:Int):Int {
+		return module.addFunction(new WasmFunction(name, {parameters: [I32, elementType], results: [I32]}, [for (_ in 0...4) {type: I32}], [
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
+			LocalSet(2),
+			LocalGet(2),
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_CAPACITY_OFFSET),
+			I32LtS,
+			If(null),
+			Else,
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_CAPACITY_OFFSET),
+			LocalTee(4),
+			I32Eqz,
+			If(null),
+			I32Const(8),
+			LocalSet(4),
+			Else,
+			LocalGet(4),
+			I32Const(2),
+			I32Mul,
+			LocalSet(4),
+			End,
+			LocalGet(4),
+			I32Const(stride),
+			I32Mul,
+			Call(allocator),
+			LocalSet(5),
+			LocalGet(5),
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(2),
+			I32Const(stride),
+			I32Mul,
+			MemoryCopy,
+			LocalGet(0),
+			LocalGet(5),
+			I32Store(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(0),
+			LocalGet(4),
+			I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
+			End,
+			LocalGet(2),
+			LocalSet(3),
+			Block(null),
+			Loop(null),
+			I32Const(0),
+			LocalGet(3),
+			I32LtS,
+			If(null),
+			LocalGet(3),
+			I32Const(1),
+			I32Sub,
+			LocalSet(3),
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(3),
+			I32Const(1),
+			I32Add,
+			I32Const(stride),
+			I32Mul,
+			I32Add,
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(3),
+			I32Const(stride),
+			I32Mul,
+			I32Add,
+			elementType == F64 ? F64Load(0) : I32Load(0),
+			elementType == F64 ? F64Store(0) : I32Store(0),
+			Br(1),
+			Else,
+			Br(2),
+			End,
+			End,
+			End,
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(1),
+			elementType == F64 ? F64Store(0) : I32Store(0),
+			LocalGet(0),
+			LocalGet(2),
+			I32Const(1),
+			I32Add,
+			LocalTee(3),
+			I32Store(WasmLayout.ARRAY_LENGTH_OFFSET),
+			LocalGet(3),
+			Return
+		]));
+	}
+
+	static function addArrayInsert(module:WasmModule, name:String, stride:Int, elementType:WasmValueType, allocator:Int):Int {
+		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32, elementType], results: []}, [for (_ in 0...5) {type: I32}], [
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
+			LocalSet(3),
+			LocalGet(1),
+			I32Const(0),
+			I32LtS,
+			If(null),
+			I32Const(0),
+			LocalSet(4),
+			Else,
+			LocalGet(1),
+			LocalSet(4),
+			End,
+			LocalGet(4),
+			LocalGet(3),
+			I32LtS,
+			If(null),
+			Else,
+			LocalGet(3),
+			LocalSet(4),
+			End,
+			LocalGet(3),
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_CAPACITY_OFFSET),
+			I32LtS,
+			If(null),
+			Else,
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_CAPACITY_OFFSET),
+			LocalTee(6),
+			I32Eqz,
+			If(null),
+			I32Const(8),
+			LocalSet(6),
+			Else,
+			LocalGet(6),
+			I32Const(2),
+			I32Mul,
+			LocalSet(6),
+			End,
+			LocalGet(6),
+			I32Const(stride),
+			I32Mul,
+			Call(allocator),
+			LocalSet(7),
+			LocalGet(7),
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(3),
+			I32Const(stride),
+			I32Mul,
+			MemoryCopy,
+			LocalGet(0),
+			LocalGet(7),
+			I32Store(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(0),
+			LocalGet(6),
+			I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
+			End,
+			LocalGet(3),
+			LocalSet(5),
+			Block(null),
+			Loop(null),
+			LocalGet(4),
+			LocalGet(5),
+			I32LtS,
+			If(null),
+			LocalGet(5),
+			I32Const(1),
+			I32Sub,
+			LocalSet(5),
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(5),
+			I32Const(1),
+			I32Add,
+			I32Const(stride),
+			I32Mul,
+			I32Add,
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(5),
+			I32Const(stride),
+			I32Mul,
+			I32Add,
+			elementType == F64 ? F64Load(0) : I32Load(0),
+			elementType == F64 ? F64Store(0) : I32Store(0),
+			Br(1),
+			Else,
+			Br(2),
+			End,
+			End,
+			End,
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(4),
+			I32Const(stride),
+			I32Mul,
+			I32Add,
+			LocalGet(2),
+			elementType == F64 ? F64Store(0) : I32Store(0),
+			LocalGet(0),
+			LocalGet(3),
+			I32Const(1),
+			I32Add,
+			I32Store(WasmLayout.ARRAY_LENGTH_OFFSET)
+		]));
+	}
+
+	static function addArrayShift(module:WasmModule, name:String, stride:Int, elementType:WasmValueType):Int {
+		return module.addFunction(new WasmFunction(name, {parameters: [I32], results: [elementType]}, [{type: I32}, {type: elementType}, {type: I32}], [
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
+			LocalSet(1),
+			I32Const(0),
+			LocalGet(1),
+			I32LtS,
+			If(null),
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			elementType == F64 ? F64Load(0) : I32Load(0),
+			LocalSet(2),
+			I32Const(1),
+			LocalSet(3),
+			Block(null),
+			Loop(null),
+			LocalGet(3),
+			LocalGet(1),
+			I32LtS,
+			If(null),
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(3),
+			I32Const(1),
+			I32Sub,
+			I32Const(stride),
+			I32Mul,
+			I32Add,
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(3),
+			I32Const(stride),
+			I32Mul,
+			I32Add,
+			elementType == F64 ? F64Load(0) : I32Load(0),
+			elementType == F64 ? F64Store(0) : I32Store(0),
+			LocalGet(3),
+			I32Const(1),
+			I32Add,
+			LocalSet(3),
+			Br(1),
+			Else,
+			Br(2),
+			End,
+			End,
+			End,
+			LocalGet(0),
+			LocalGet(1),
+			I32Const(1),
+			I32Sub,
+			I32Store(WasmLayout.ARRAY_LENGTH_OFFSET),
+			Else,
+			Unreachable,
+			End,
+			LocalGet(2),
+			Return
+		]));
+	}
+
+	static function addArrayResize(module:WasmModule, name:String, stride:Int, elementType:WasmValueType, allocator:Int):Int {
+		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32], results: []}, [for (_ in 0...4) {type: I32}], [
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
+			LocalSet(2),
+			LocalGet(1),
+			I32Const(0),
+			I32LtS,
+			If(null),
+			Unreachable,
+			Else,
+			LocalGet(1),
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_CAPACITY_OFFSET),
+			I32LeS,
+			If(null),
+			LocalGet(2),
+			LocalSet(3),
+			Block(null),
+			Loop(null),
+			LocalGet(3),
+			LocalGet(1),
+			I32LtS,
+			If(null),
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(3),
+			I32Const(stride),
+			I32Mul,
+			I32Add,
+			elementType == F64 ? F64Const(0.0) : I32Const(0),
+			elementType == F64 ? F64Store(0) : I32Store(0),
+			LocalGet(3),
+			I32Const(1),
+			I32Add,
+			LocalSet(3),
+			Br(1),
+			Else,
+			Br(2),
+			End,
+			End,
+			End,
+			LocalGet(0),
+			LocalGet(1),
+			I32Store(WasmLayout.ARRAY_LENGTH_OFFSET),
+			Else,
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_CAPACITY_OFFSET),
+			I32Const(2),
+			I32Mul,
+			LocalSet(4),
+			LocalGet(4),
+			LocalGet(1),
+			I32LtS,
+			If(null),
+			LocalGet(1),
+			LocalSet(4),
+			End,
+			LocalGet(4),
+			I32Const(stride),
+			I32Mul,
+			Call(allocator),
+			LocalSet(5),
+			LocalGet(5),
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(2),
+			I32Const(stride),
+			I32Mul,
+			MemoryCopy,
+			LocalGet(0),
+			LocalGet(5),
+			I32Store(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(0),
+			LocalGet(4),
+			I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
+			End,
+			End
+		]));
+	}
+
+	static function addArrayRemove(module:WasmModule, name:String, stride:Int, elementType:WasmValueType, stringEqual:Null<Int>):Int {
+		var compare = stringEqual == null ? (elementType == F64 ? F64Eq : I32Eq) : null;
+		return module.addFunction(new WasmFunction(name, {parameters: [I32, elementType], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}], [
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
+			LocalSet(2),
+			I32Const(0),
+			LocalSet(3),
+			I32Const(-1),
+			LocalSet(4),
+			Block(null),
+			Loop(null),
+			LocalGet(3),
+			LocalGet(2),
+			I32LtS,
+			If(null),
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(3),
+			I32Const(stride),
+			I32Mul,
+			I32Add,
+			elementType == F64 ? F64Load(0) : I32Load(0),
+			LocalGet(1),
+			stringEqual == null ? compare : Call(stringEqual),
+			If(null),
+			LocalGet(3),
+			LocalSet(4),
+			Br(3),
+			End,
+			LocalGet(3),
+			I32Const(1),
+			I32Add,
+			LocalSet(3),
+			Br(1),
+			Else,
+			Br(2),
+			End,
+			End,
+			End,
+			I32Const(-1),
+			LocalGet(4),
+			I32LtS,
+			If(null),
+			LocalGet(4),
+			I32Const(1),
+			I32Add,
+			LocalSet(3),
+			Block(null),
+			Loop(null),
+			LocalGet(3),
+			LocalGet(2),
+			I32LtS,
+			If(null),
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(3),
+			I32Const(1),
+			I32Sub,
+			I32Const(stride),
+			I32Mul,
+			I32Add,
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(3),
+			I32Const(stride),
+			I32Mul,
+			I32Add,
+			elementType == F64 ? F64Load(0) : I32Load(0),
+			elementType == F64 ? F64Store(0) : I32Store(0),
+			LocalGet(3),
+			I32Const(1),
+			I32Add,
+			LocalSet(3),
+			Br(1),
+			Else,
+			Br(2),
+			End,
+			End,
+			End,
+			LocalGet(0),
+			LocalGet(2),
+			I32Const(1),
+			I32Sub,
+			I32Store(WasmLayout.ARRAY_LENGTH_OFFSET),
+			I32Const(1),
+			LocalSet(4),
+			Else,
+			I32Const(0),
+			LocalSet(4),
+			End,
+			LocalGet(4),
+			Return
+		]));
+	}
+
+	static function addArrayReverse(module:WasmModule, name:String, stride:Int, elementType:WasmValueType):Int {
+		return module.addFunction(new WasmFunction(name, {parameters: [I32], results: []}, [{type: I32}, {type: I32}, {type: I32}, {type: elementType}], [
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
+			LocalSet(1),
+			I32Const(0),
+			LocalSet(2),
+			LocalGet(1),
+			I32Const(1),
+			I32Sub,
+			LocalSet(3),
+			Block(null),
+			Loop(null),
+			LocalGet(2),
+			LocalGet(3),
+			I32LtS,
+			If(null),
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(2),
+			I32Const(stride),
+			I32Mul,
+			I32Add,
+			elementType == F64 ? F64Load(0) : I32Load(0),
+			LocalSet(4),
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(2),
+			I32Const(stride),
+			I32Mul,
+			I32Add,
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(3),
+			I32Const(stride),
+			I32Mul,
+			I32Add,
+			elementType == F64 ? F64Load(0) : I32Load(0),
+			elementType == F64 ? F64Store(0) : I32Store(0),
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(3),
+			I32Const(stride),
+			I32Mul,
+			I32Add,
+			LocalGet(4),
+			elementType == F64 ? F64Store(0) : I32Store(0),
+			LocalGet(2),
+			I32Const(1),
+			I32Add,
+			LocalSet(2),
+			LocalGet(3),
+			I32Const(1),
+			I32Sub,
+			LocalSet(3),
+			Br(1),
+			Else,
+			Br(2),
+			End,
+			End,
+			End
+		]));
+	}
+
+	static function addArraySplice(module:WasmModule, name:String, stride:Int, allocator:Int):Int {
+		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32, I32], results: [I32]}, [for (_ in 0...6) {type: I32}], [
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
+			LocalSet(3),
+			LocalGet(1),
+			I32Const(0),
+			I32LtS,
+			If(null),
+			LocalGet(3),
+			LocalGet(1),
+			I32Add,
+			LocalSet(4),
+			Else,
+			LocalGet(1),
+			LocalSet(4),
+			End,
+			LocalGet(4),
+			I32Const(0),
+			I32LtS,
+			If(null),
+			I32Const(0),
+			LocalSet(4),
+			End,
+			LocalGet(4),
+			LocalGet(3),
+			I32LtS,
+			If(null),
+			Else,
+			LocalGet(3),
+			LocalSet(4),
+			End,
+			LocalGet(2),
+			I32Const(0),
+			I32LtS,
+			If(null),
+			I32Const(0),
+			LocalSet(5),
+			Else,
+			LocalGet(2),
+			LocalSet(5),
+			End,
+			LocalGet(5),
+			LocalGet(3),
+			LocalGet(4),
+			I32Sub,
+			I32LtS,
+			If(null),
+			Else,
+			LocalGet(3),
+			LocalGet(4),
+			I32Sub,
+			LocalSet(5),
+			End,
+			I32Const(WasmLayout.ARRAY_HEADER_SIZE),
+			Call(allocator),
+			LocalSet(6),
+			LocalGet(6),
+			I32Const(typeId(Array(Dyn))),
+			I32Store(0),
+			LocalGet(6),
+			LocalGet(5),
+			I32Store(WasmLayout.ARRAY_LENGTH_OFFSET),
+			LocalGet(6),
+			LocalGet(5),
+			I32Const(8),
+			I32Add,
+			I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
+			LocalGet(5),
+			I32Const(8),
+			I32Add,
+			I32Const(stride),
+			I32Mul,
+			Call(allocator),
+			LocalSet(8),
+			LocalGet(6),
+			LocalGet(8),
+			I32Store(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(8),
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(4),
+			I32Const(stride),
+			I32Mul,
+			I32Add,
+			LocalGet(5),
+			I32Const(stride),
+			I32Mul,
+			MemoryCopy,
+			LocalGet(3),
+			LocalGet(4),
+			I32Sub,
+			LocalGet(5),
+			I32Sub,
+			LocalSet(7),
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(4),
+			I32Const(stride),
+			I32Mul,
+			I32Add,
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+			LocalGet(4),
+			LocalGet(5),
+			I32Add,
+			I32Const(stride),
+			I32Mul,
+			I32Add,
+			LocalGet(7),
+			I32Const(stride),
+			I32Mul,
+			MemoryCopy,
+			LocalGet(0),
+			LocalGet(3),
+			LocalGet(5),
+			I32Sub,
+			I32Store(WasmLayout.ARRAY_LENGTH_OFFSET),
+			LocalGet(6),
+			Return
+		]));
+	}
+
 	static function stringBytes(value:String):HaxeBytes {
 		var raw = HaxeBytes.ofString(value),
 			bytes = HaxeBytes.alloc(WasmLayout.STRING_DATA_OFFSET + raw.length + 1);
+		bytes.setInt32(0, typeId(Bytes));
 		bytes.setInt32(WasmLayout.STRING_LENGTH_OFFSET, raw.length);
 		bytes.setInt32(WasmLayout.ARRAY_CAPACITY_OFFSET, raw.length);
 		for (index in 0...raw.length)
@@ -509,22 +1519,48 @@ class WasmBackend implements Backend {
 
 	static function addAllocator(module:WasmModule):Int {
 		var type:WasmFunctionType = {parameters: [I32], results: [I32]};
-		return module.addFunction(new WasmFunction("__haxeon_alloc", type, [{type: I32}], [
+		return module.addFunction(new WasmFunction("__haxeon_alloc", type, [{type: I32}, {type: I32}, {type: I32}], [
 			GlobalGet(0),
 			LocalTee(1),
 			LocalGet(0),
 			I32Add,
+			LocalTee(2),
+			MemorySize,
+			I32Const(65536),
+			I32Mul,
+			LocalGet(2),
+			I32LtS,
+			If(null),
+			LocalGet(2),
+			I32Const(65535),
+			I32Add,
+			I32Const(65536),
+			I32DivS,
+			MemorySize,
+			I32Sub,
+			MemoryGrow,
+			I32Const(-1),
+			I32Eq,
+			If(null),
+			Unreachable,
+			End,
+			End,
+			LocalGet(2),
 			GlobalSet(0),
 			LocalGet(1),
 			Return
 		]));
 	}
 
-	static function addArrayAllocator(module:WasmModule, name:String, stride:Int):Int {
+	static function addArrayAllocator(module:WasmModule, name:String, stride:Int, allocator:Int):Int {
 		var type:WasmFunctionType = {parameters: [I32], results: [I32]};
-		return module.addFunction(new WasmFunction(name, type, [{type: I32}, {type: I32}], [
-			GlobalGet(0),
+		return module.addFunction(new WasmFunction(name, type, [{type: I32}, {type: I32}, {type: I32}], [
+			I32Const(WasmLayout.ARRAY_HEADER_SIZE),
+			Call(allocator),
 			LocalSet(1),
+			LocalGet(1),
+			I32Const(typeId(Array(Dyn))),
+			I32Store(0),
 			LocalGet(1),
 			LocalGet(0),
 			I32Store(WasmLayout.ARRAY_LENGTH_OFFSET),
@@ -532,17 +1568,16 @@ class WasmBackend implements Backend {
 			LocalGet(0),
 			I32Const(8),
 			I32Add,
+			LocalTee(2),
 			I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
-			LocalGet(1),
-			LocalGet(0),
-			I32Const(8),
-			I32Add,
+			LocalGet(2),
 			I32Const(stride),
 			I32Mul,
-			I32Const(WasmLayout.ARRAY_DATA_OFFSET),
-			I32Add,
-			I32Add,
-			GlobalSet(0),
+			Call(allocator),
+			LocalSet(3),
+			LocalGet(1),
+			LocalGet(3),
+			I32Store(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
 			LocalGet(1),
 			Return
 		]));
@@ -560,6 +1595,191 @@ class WasmBackend implements Backend {
 			if (fn.name == name)
 				return true;
 		return false;
+	}
+
+	static function hasExceptions(program:IrProgram):Bool {
+		for (fn in program.functions) {
+			for (block in fn.blocks) {
+				for (located in block.instructions)
+					switch located.value {
+						case BeginTry(_, _), EndTry(_), Catch(_):
+							return true;
+						default:
+					}
+				if (block.terminator != null)
+					switch block.terminator.value {
+						case Throw(_), Rethrow(_):
+							return true;
+						default:
+					}
+			}
+		}
+		return false;
+	}
+
+	static function reachableFunctions(program:IrProgram, entry:String):Map<String, Bool> {
+		var byName:Map<String, IrFunction> = [],
+			reachable:Map<String, Bool> = [],
+			pending:Array<String> = [entry];
+		for (fn in program.functions)
+			byName.set(fn.name, fn);
+		while (pending.length > 0) {
+			var name = pending.pop();
+			if (reachable.exists(name) || !byName.exists(name))
+				continue;
+			reachable.set(name, true);
+			var fn = byName.get(name);
+			for (block in fn.blocks)
+				for (located in block.instructions)
+					switch located.value {
+						case Call(_, target, _):
+							enqueueFunction(target, byName, pending);
+						case StaticClosure(_, target), InstanceClosure(_, target, _):
+							enqueueFunction(target, byName, pending);
+						case MethodCall(_, object, method, _):
+							switch object.type {
+								case Obj(objectName): enqueueFunction(findMethod(program, objectName, method), byName, pending);
+								case Virtual(interfaceName):
+									for (candidate in program.objects)
+										if (implementsInterface(program, candidate.name, interfaceName))
+											enqueueFunction(findMethod(program, candidate.name, method), byName, pending);
+								default:
+							}
+						default:
+					}
+		}
+		return reachable;
+	}
+
+	static function enqueueFunction(name:Null<String>, byName:Map<String, IrFunction>, pending:Array<String>):Void
+		if (name != null && byName.exists(name))
+			pending.push(name);
+
+	static function findMethod(program:IrProgram, objectName:String, methodName:String):Null<String> {
+		for (object in program.objects)
+			if (object.name == objectName) {
+				for (method in object.methods)
+					if (method.name == methodName)
+						return method.functionName;
+				return object.base == null ? null : findMethod(program, object.base, methodName);
+			}
+		return null;
+	}
+
+	static function implementsInterface(program:IrProgram, objectName:String, interfaceName:String):Bool {
+		for (object in program.objects)
+			if (object.name == objectName) {
+				for (implemented in object.interfaces)
+					if (interfaceExtends(program, implemented, interfaceName))
+						return true;
+				return object.base != null && implementsInterface(program, object.base, interfaceName);
+			}
+		return false;
+	}
+
+	static function interfaceExtends(program:IrProgram, actual:String, expected:String):Bool {
+		if (actual == expected)
+			return true;
+		for (interfaceDecl in program.interfaces)
+			if (interfaceDecl.name == actual)
+				for (base in interfaceDecl.bases)
+					if (interfaceExtends(program, base, expected))
+						return true;
+		return false;
+	}
+
+	static function typeId(type:IrType):Int {
+		var text = Std.string(type), hash:Int = -2128831035;
+		for (index in 0...text.length) {
+			hash = Std.int(hash ^ text.charCodeAt(index));
+			hash = Std.int(hash * 16777619);
+		}
+		return hash;
+	}
+
+	static function addDynamicEqual(module:WasmModule, name:String, stringEqual:Int):Int {
+		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}], [
+			I32Const(0),
+			LocalSet(2),
+			LocalGet(0),
+			LocalGet(1),
+			I32Eq,
+			If(null),
+			I32Const(1),
+			LocalSet(2),
+			Else,
+			LocalGet(0),
+			I32Eqz,
+			If(null),
+			Else,
+			LocalGet(1),
+			I32Eqz,
+			If(null),
+			Else,
+			LocalGet(0),
+			I32Load(0),
+			LocalSet(3),
+			LocalGet(1),
+			I32Load(0),
+			LocalSet(4),
+			LocalGet(3),
+			LocalGet(4),
+			I32Eq,
+			If(null),
+			LocalGet(3),
+			I32Const(typeId(Bytes)),
+			I32Eq,
+			If(null),
+			LocalGet(0),
+			LocalGet(1),
+			Call(stringEqual),
+			LocalSet(2),
+			Else,
+			LocalGet(3),
+			I32Const(typeId(I32)),
+			I32Eq,
+			If(null),
+			LocalGet(0),
+			I32Load(WasmLayout.DYN_PAYLOAD_OFFSET),
+			LocalGet(1),
+			I32Load(WasmLayout.DYN_PAYLOAD_OFFSET),
+			I32Eq,
+			LocalSet(2),
+			Else,
+			LocalGet(3),
+			I32Const(typeId(Bool)),
+			I32Eq,
+			If(null),
+			LocalGet(0),
+			I32Load(WasmLayout.DYN_PAYLOAD_OFFSET),
+			LocalGet(1),
+			I32Load(WasmLayout.DYN_PAYLOAD_OFFSET),
+			I32Eq,
+			LocalSet(2),
+			Else,
+			LocalGet(3),
+			I32Const(typeId(F64)),
+			I32Eq,
+			If(null),
+			LocalGet(0),
+			F64Load(WasmLayout.DYN_PAYLOAD_OFFSET),
+			LocalGet(1),
+			F64Load(WasmLayout.DYN_PAYLOAD_OFFSET),
+			F64Eq,
+			LocalSet(2),
+			Else,
+			End,
+			End,
+			End,
+			End,
+			Else,
+			End,
+			End,
+			End,
+			End,
+			LocalGet(2),
+			Return
+		]));
 	}
 
 	static function programFunction(program:IrProgram, name:String):IrFunction {
@@ -582,16 +1802,61 @@ class WasmBackend implements Backend {
 }
 
 class WasmFunctionLower {
+	static var activeTableSlots:Map<String, Int>;
+	static var activeArrayTemps:{
+		len:Int,
+		capacity:Int,
+		data:Int,
+		required:Int
+	};
+	static var activeExceptionState:Null<{
+		handler:Int,
+		exception:Int,
+		saved:Map<Int, Int>,
+		blocks:Map<Int, Int>,
+		tag:Int
+	}>;
+
 	public static function lower(fn:IrFunction, functions:Map<String, Int>, type:WasmFunctionType, layout:WasmLayout, allocator:Int, globals:Map<String, Int>,
-			strings:Map<String, Int>, methods:Map<String, String>, closureTypes:Map<String, WasmClosureTypes>):WasmFunction {
+			strings:Map<String, Int>, methods:Map<String, String>, closureTypes:Map<String, WasmClosureTypes>, tableSlots:Map<String, Int>,
+			exceptionTag:Null<Int>):WasmFunction {
+		activeTableSlots = tableSlots;
 		var analysis = new WasmCfgAnalysis(fn),
 			placement = new WasmValuePlacement(fn),
 			valueLocals = placement.values,
 			locals = placement.locals;
+		activeArrayTemps = {
+			len: placement.allocate(I32),
+			capacity: placement.allocate(I32),
+			data: placement.allocate(I32),
+			required: placement.allocate(I32)
+		};
+		activeExceptionState = null;
+		if (exceptionTag != null && hasExceptions(fn)) {
+			var blocks:Map<Int, Int> = [], orderIndex = 0;
+			for (id in analysis.graph.order)
+				blocks.set(id, orderIndex++);
+			var saved:Map<Int, Int> = [];
+			for (block in fn.blocks)
+				for (located in block.instructions)
+					switch located.value {
+						case BeginTry(catchBlock, _):
+							if (!saved.exists(catchBlock))
+								saved.set(catchBlock, placement.allocate(I32));
+						default:
+					}
+			activeExceptionState = {
+				handler: placement.allocate(I32),
+				exception: placement.allocate(I32),
+				saved: saved,
+				blocks: blocks,
+				tag: exceptionTag
+			};
+		}
 		var predecessor = placement.allocate(I32);
 		var structurer = new WasmStructurer(fn),
 			body:Array<WasmInstruction> = null;
-		if (structurer.canUseStructured())
+		if (activeExceptionState == null && structurer.canUseStructured())
 			try
 				body = lowerStructured(fn, structurer, functions, valueLocals, predecessor, layout, allocator, globals, strings, methods, closureTypes)
 			catch (_:Dynamic) {}
@@ -599,6 +1864,7 @@ class WasmFunctionLower {
 			var pc = placement.allocate(I32);
 			body = lowerDispatcher(fn, analysis, functions, valueLocals, pc, predecessor, layout, allocator, globals, strings, methods, closureTypes);
 		}
+		body = WasmOptimizer.optimize(body);
 		return new WasmFunction(fn.name, type, locals, body);
 	}
 
@@ -740,7 +2006,12 @@ class WasmFunctionLower {
 			I32Const(-1),
 			LocalSet(predecessor)
 		]);
+		if (activeExceptionState != null) {
+			emit(body, [I32Const(-1), LocalSet(activeExceptionState.handler)]);
+		}
 		emit(body, [Block(null), Loop(null)]);
+		if (activeExceptionState != null)
+			body.push(Try(null));
 		for (index in 0...analysis.graph.order.length) {
 			var block = analysis.graph.block(analysis.graph.order[index]);
 			emit(body, [LocalGet(pc), I32Const(index), I32Eq, If(null)]);
@@ -752,8 +2023,52 @@ class WasmFunctionLower {
 		}
 		for (_ in 0...analysis.graph.order.length)
 			body.push(End);
-		emit(body, [Br(0), End, End, Unreachable]);
+		if (activeExceptionState == null) {
+			emit(body, [Br(0), End, End, Unreachable]);
+		} else {
+			emit(body, [Br(1), Catch(activeExceptionState.tag), LocalSet(activeExceptionState.exception)]);
+			emit(body, [LocalGet(activeExceptionState.handler), I32Const(-1), I32Eq, If(null)]);
+			emit(body, [LocalGet(activeExceptionState.exception), Throw(activeExceptionState.tag), Else]);
+			var catches = [for (catchBlock in activeExceptionState.saved.keys()) catchBlock];
+			catches.sort(function(left, right) return left - right);
+			for (catchBlock in catches) {
+				emit(body, [
+					LocalGet(activeExceptionState.handler),
+					I32Const(blockIndex.get(catchBlock)),
+					I32Eq,
+					If(null)
+				]);
+				emit(body, [LocalGet(activeExceptionState.handler), LocalSet(pc)]);
+				emit(body, [
+					LocalGet(activeExceptionState.saved.get(catchBlock)),
+					LocalSet(activeExceptionState.handler)
+				]);
+				body.push(Else);
+			}
+			body.push(Unreachable);
+			for (_ in catches)
+				body.push(End);
+			emit(body, [End, Br(1), End, End, End, Unreachable]);
+		}
 		return body;
+	}
+
+	static function hasExceptions(fn:IrFunction):Bool {
+		for (block in fn.blocks) {
+			for (located in block.instructions)
+				switch located.value {
+					case BeginTry(_, _), EndTry(_), Catch(_):
+						return true;
+					default:
+				}
+			if (block.terminator != null)
+				switch block.terminator.value {
+					case Throw(_), Rethrow(_):
+						return true;
+					default:
+				}
+		}
+		return false;
 	}
 
 	static function lowerBlock(body:Array<WasmInstruction>, block:IrBlock, values:Map<Int, Int>, functions:Map<String, Int>, pc:Int, predecessor:Int,
@@ -773,8 +2088,11 @@ class WasmFunctionLower {
 				if (value.type != Void)
 					body.push(LocalGet(values.get(value.id)));
 				body.push(Return);
-			case Throw(_), Rethrow(_):
-				body.push(Unreachable);
+			case Throw(value), Rethrow(value):
+				if (activeExceptionState == null)
+					body.push(Unreachable);
+				else
+					emit(body, [LocalGet(values.get(value.id)), Throw(activeExceptionState.tag)]);
 			case Jump(target):
 				setPcAndContinue(body, pc, predecessor, block.id, blockIndex.get(target));
 			case Branch(condition, yes, no):
@@ -789,6 +2107,9 @@ class WasmFunctionLower {
 	static function setPcAndContinue(body:Array<WasmInstruction>, pc:Int, predecessor:Int, sourceBlock:Int, target:Int):Void {
 		emit(body, [I32Const(sourceBlock), LocalSet(predecessor), I32Const(target), LocalSet(pc)]);
 	}
+
+	static function trapOrThrow():Array<WasmInstruction>
+		return activeExceptionState == null ? [Unreachable] : [I32Const(0), Throw(activeExceptionState.tag)];
 
 	static function setPredecessor(body:Array<WasmInstruction>, predecessor:Int, sourceBlock:Int):Void
 		emit(body, [I32Const(sourceBlock), LocalSet(predecessor)]);
@@ -809,10 +2130,76 @@ class WasmFunctionLower {
 			case ConstVoid(_):
 			case TypeValue(output, type):
 				emit(body, [I32Const(typeId(type)), LocalSet(values.get(output.id))]);
-			case ToDyn(output, value), SafeCast(output, value):
-				emit(body, [LocalGet(values.get(value.id)), LocalSet(values.get(output.id))]);
-			case BeginTry(_, _), EndTry(_), Catch(_):
-				throw 'Wasm exception lowering is not enabled for ${Std.string(instruction)}';
+			case ToDyn(output, value):
+				switch value.type {
+					case I32, Bool:
+						emit(body, [
+							I32Const(WasmLayout.DYN_I32_SIZE),
+							Call(allocator),
+							LocalTee(values.get(output.id)),
+							I32Const(typeId(value.type)),
+							I32Store(0),
+							LocalGet(values.get(output.id)),
+							LocalGet(values.get(value.id)),
+							I32Store(WasmLayout.DYN_PAYLOAD_OFFSET)
+						]);
+					case F64:
+						emit(body, [
+							I32Const(WasmLayout.DYN_F64_SIZE),
+							Call(allocator),
+							LocalTee(values.get(output.id)),
+							I32Const(typeId(F64)),
+							I32Store(0),
+							LocalGet(values.get(output.id)),
+							LocalGet(values.get(value.id)),
+							F64Store(WasmLayout.DYN_PAYLOAD_OFFSET)
+						]);
+					default:
+						emit(body, [LocalGet(values.get(value.id)), LocalSet(values.get(output.id))]);
+				}
+			case SafeCast(output, value):
+				switch output.type {
+					case I32, Bool, F64 if (value.type == Dyn):
+						emit(body, [
+							LocalGet(values.get(value.id)),
+							I32Load(0),
+							I32Const(typeId(output.type)),
+							I32Eq,
+							If(null),
+							LocalGet(values.get(value.id)),
+							load(output.type, WasmLayout.DYN_PAYLOAD_OFFSET),
+							LocalSet(values.get(output.id)),
+							Else,
+							Unreachable,
+							End
+						]);
+					default:
+						emit(body, [LocalGet(values.get(value.id)), LocalSet(values.get(output.id))]);
+				}
+			case BeginTry(catchBlock, _):
+				if (activeExceptionState == null)
+					throw 'Wasm exception lowering has no active exception state';
+				var saved = activeExceptionState.saved.get(catchBlock),
+					target = activeExceptionState.blocks.get(catchBlock);
+				if (saved == null || target == null)
+					throw 'Wasm try handler $catchBlock has no dispatcher state';
+				emit(body, [
+					LocalGet(activeExceptionState.handler),
+					LocalSet(saved),
+					I32Const(target),
+					LocalSet(activeExceptionState.handler)
+				]);
+			case EndTry(catchBlock):
+				if (activeExceptionState == null)
+					throw 'Wasm exception lowering has no active exception state';
+				var saved = activeExceptionState.saved.get(catchBlock);
+				if (saved == null)
+					throw 'Wasm try handler $catchBlock has no saved state';
+				emit(body, [LocalGet(saved), LocalSet(activeExceptionState.handler)]);
+			case Catch(output):
+				if (activeExceptionState == null)
+					throw 'Wasm exception lowering has no active exception state';
+				emit(body, [LocalGet(activeExceptionState.exception), LocalSet(values.get(output.id))]);
 			case GlobalGet(output, name):
 				var global = globals.get(name);
 				if (global == null)
@@ -827,7 +2214,10 @@ class WasmFunctionLower {
 				var functionIndex = functions.get(name);
 				if (functionIndex == null)
 					throw 'Wasm closure target "$name" is not emitted';
-				emit(body, [I32Const(functionIndex * 2 + 1), LocalSet(values.get(output.id))]);
+				var tableSlot = activeTableSlots.get(name);
+				if (tableSlot == null)
+					throw 'Wasm closure target "$name" has no stable table slot';
+				emit(body, [I32Const(tableSlot * 2 + 1), LocalSet(values.get(output.id))]);
 			case CallClosure(output, closure, arguments):
 				var typeInfo = closureTypes.get(Std.string(closure.type));
 				if (typeInfo == null)
@@ -870,11 +2260,14 @@ class WasmFunctionLower {
 				var functionIndex = functions.get(name);
 				if (functionIndex == null)
 					throw 'Wasm instance closure target "$name" is not emitted';
+				var tableSlot = activeTableSlots.get(name);
+				if (tableSlot == null)
+					throw 'Wasm instance closure target "$name" has no stable table slot';
 				emit(body, [
 					I32Const(WasmLayout.CLOSURE_SIZE),
 					Call(allocator),
 					LocalTee(values.get(output.id)),
-					I32Const(functionIndex),
+					I32Const(tableSlot),
 					I32Store(WasmLayout.CLOSURE_FUNCTION_OFFSET),
 					LocalGet(values.get(output.id)),
 					LocalGet(values.get(receiver.id)),
@@ -998,12 +2391,9 @@ class WasmFunctionLower {
 			case ArrayGet(output, array, index):
 				var element = arrayElement(array),
 					stride = WasmLayout.arrayStride(element);
-				emit(body, [
-					LocalGet(values.get(index.id)),
-					I32Const(0),
-					I32LtS,
-					If(null),
-					Unreachable,
+				var arrayBody:Array<WasmInstruction> = [LocalGet(values.get(index.id)), I32Const(0), I32LtS, If(null)];
+				arrayBody = arrayBody.concat(trapOrThrow());
+				arrayBody = arrayBody.concat([
 					Else,
 					LocalGet(values.get(index.id)),
 					LocalGet(values.get(array.id)),
@@ -1011,28 +2401,24 @@ class WasmFunctionLower {
 					I32LtS,
 					If(null),
 					LocalGet(values.get(array.id)),
-					I32Const(WasmLayout.ARRAY_DATA_OFFSET),
-					I32Add,
+					I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
 					LocalGet(values.get(index.id)),
 					I32Const(stride),
 					I32Mul,
 					I32Add,
 					load(element, 0),
 					LocalSet(values.get(output.id)),
-					Else,
-					Unreachable,
-					End,
-					End
 				]);
+				arrayBody.push(Else);
+				arrayBody = arrayBody.concat(trapOrThrow());
+				arrayBody = arrayBody.concat([End, End]);
+				emit(body, arrayBody);
 			case ArraySet(array, index, value):
 				var element = arrayElement(array),
 					stride = WasmLayout.arrayStride(element);
-				emit(body, [
-					LocalGet(values.get(index.id)),
-					I32Const(0),
-					I32LtS,
-					If(null),
-					Unreachable,
+				var arrayBody:Array<WasmInstruction> = [LocalGet(values.get(index.id)), I32Const(0), I32LtS, If(null)];
+				arrayBody = arrayBody.concat(trapOrThrow());
+				arrayBody = arrayBody.concat([
 					Else,
 					LocalGet(values.get(index.id)),
 					LocalGet(values.get(array.id)),
@@ -1040,19 +2426,99 @@ class WasmFunctionLower {
 					I32LtS,
 					If(null),
 					LocalGet(values.get(array.id)),
-					I32Const(WasmLayout.ARRAY_DATA_OFFSET),
-					I32Add,
+					I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
 					LocalGet(values.get(index.id)),
 					I32Const(stride),
 					I32Mul,
 					I32Add,
 					LocalGet(values.get(value.id)),
 					store(element, 0),
+					Else
+				]);
+				arrayBody = arrayBody.concat([
+					LocalGet(values.get(array.id)),
+					I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
+					LocalSet(activeArrayTemps.len),
+					LocalGet(values.get(index.id)),
+					I32Const(1),
+					I32Add,
+					LocalSet(activeArrayTemps.required),
+					LocalGet(activeArrayTemps.required),
+					LocalGet(values.get(array.id)),
+					I32Load(WasmLayout.ARRAY_CAPACITY_OFFSET),
+					I32LeS,
+					If(null),
 					Else,
-					Unreachable,
+					LocalGet(values.get(array.id)),
+					I32Load(WasmLayout.ARRAY_CAPACITY_OFFSET),
+					I32Const(2),
+					I32Mul,
+					LocalSet(activeArrayTemps.capacity),
+					LocalGet(activeArrayTemps.capacity),
+					LocalGet(activeArrayTemps.required),
+					I32LtS,
+					If(null),
+					LocalGet(activeArrayTemps.required),
+					LocalSet(activeArrayTemps.capacity),
+					End,
+					LocalGet(activeArrayTemps.capacity),
+					I32Const(stride),
+					I32Mul,
+					Call(allocator),
+					LocalSet(activeArrayTemps.data),
+					LocalGet(activeArrayTemps.data),
+					LocalGet(values.get(array.id)),
+					I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+					LocalGet(activeArrayTemps.len),
+					I32Const(stride),
+					I32Mul,
+					MemoryCopy,
+					LocalGet(values.get(array.id)),
+					LocalGet(activeArrayTemps.data),
+					I32Store(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+					LocalGet(values.get(array.id)),
+					LocalGet(activeArrayTemps.capacity),
+					I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
+					End,
+					Block(null),
+					Loop(null),
+					LocalGet(activeArrayTemps.len),
+					LocalGet(activeArrayTemps.required),
+					I32LtS,
+					If(null),
+					LocalGet(values.get(array.id)),
+					I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+					LocalGet(activeArrayTemps.len),
+					I32Const(stride),
+					I32Mul,
+					I32Add,
+					element == F64 ? F64Const(0.0) : I32Const(0),
+					element == F64 ? F64Store(0) : I32Store(0),
+					LocalGet(activeArrayTemps.len),
+					I32Const(1),
+					I32Add,
+					LocalSet(activeArrayTemps.len),
+					Br(1),
+					Else,
+					Br(2),
+					End,
+					End,
+					End,
+					LocalGet(values.get(array.id)),
+					I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+					LocalGet(values.get(index.id)),
+					I32Const(stride),
+					I32Mul,
+					I32Add,
+					LocalGet(values.get(value.id)),
+					store(element, 0),
+					LocalGet(values.get(array.id)),
+					LocalGet(activeArrayTemps.required),
+					I32Store(WasmLayout.ARRAY_LENGTH_OFFSET),
 					End,
 					End
 				]);
+				emit(body, arrayBody);
 			case ArraySize(output, array):
 				emit(body, [
 					LocalGet(values.get(array.id)),

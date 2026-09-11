@@ -2704,10 +2704,10 @@ class Typer {
 					var value = coerce(typeExpression(arguments[0], scope, TString), TString, "byte string", "E1002");
 					return new TypedExpression(TCall("haxe.io.Bytes.ofString", [value]), TBytes, span);
 				}
-				if (name == "Std.int") {
+				if (name == "Std.int" || name == "Std.stdIntFloat") {
 					if (arguments.length != 1)
 						fail("E1008", 'Function "Std.int" expects 1 argument, got ${arguments.length}', span);
-					var value = typeExpression(arguments[0], scope);
+					var value = typeExpression(arguments[0], scope, name == "Std.stdIntFloat" ? TFloat : null);
 					return switch value.type {
 						case TInt: value;
 						case TFloat: new TypedExpression(TCall("__std_int_f64", [value]), TInt, span);
@@ -2715,6 +2715,12 @@ class Typer {
 							fail("E1009", "Std.int expects an Int or Float", value.span);
 							new TypedExpression(TIntLiteral(0), TInt, span);
 					};
+				}
+				if (name == "Std.stdString") {
+					if (arguments.length != 1)
+						fail("E1008", 'Function "Std.string" expects 1 argument, got ${arguments.length}', span);
+					var value = coerce(typeExpression(arguments[0], scope), TDynamic, "Std.string value", "E1002");
+					return new TypedExpression(TCall("__std_string", [value]), TString, span);
 				}
 				if (name == "String.__alloc__") {
 					if (arguments.length != 2)

@@ -17,25 +17,28 @@ private typedef WasmControl = {
 class WasmValidator {
 	public static function validate(module:WasmModule):Void {
 		for (fn in module.functions)
-			validateFunction(fn, module.functions, module.globals, module.types, module.tableMin);
+			validateFunction(fn, module.functions, module.globals, module.types, module.tableMin, module.exceptionTagType);
 		for (entry in module.exports)
 			if (entry.functionIndex < 0 || entry.functionIndex >= module.functions.length)
 				throw 'Wasm export "${entry.name}" references function ${entry.functionIndex}';
 	}
 
 	static function validateFunction(fn:WasmFunction, functions:Array<WasmFunction>, globals:Array<WasmGlobal>, types:Array<WasmFunctionType>,
-			tableMin:Null<Int>):Void {
+			tableMin:Null<Int>, tagType:Null<Int>):Void {
 		var labels:Array<Bool> = [],
 			localCount = fn.type.parameters.length + fn.locals.length;
-		for (instruction in fn.body)
+		for (instruction in fn.body) {
 			switch instruction {
-				case Block(_), Loop(_):
+				case Block(_), Loop(_), Try(_):
 					labels.push(false);
 				case If(_):
 					labels.push(true);
 				case Else:
 					if (labels.length == 0 || !labels[labels.length - 1])
 						throw 'Wasm function ${fn.name} has an else without an if';
+				case Catch(tag):
+					if (tagType == null)
+						throw 'Wasm function ${fn.name} references an invalid exception tag $tag';
 				case End:
 					if (labels.length == 0)
 						throw 'Wasm function ${fn.name} has an unmatched end';
@@ -63,19 +66,21 @@ class WasmValidator {
 						throw 'Wasm function ${fn.name} references invalid global $index';
 				default:
 			}
+		}
 		if (labels.length != 0)
 			throw 'Wasm function ${fn.name} has ${labels.length} unclosed control blocks';
-		validateStack(fn, functions, globals, types);
+		validateStack(fn, functions, globals, types, tagType);
 	}
 
-	static function validateStack(fn:WasmFunction, functions:Array<WasmFunction>, globals:Array<WasmGlobal>, types:Array<WasmFunctionType>):Void {
+	static function validateStack(fn:WasmFunction, functions:Array<WasmFunction>, globals:Array<WasmGlobal>, types:Array<WasmFunctionType>,
+			tagType:Null<Int>):Void {
 		var locals:Array<WasmValueType> = fn.type.parameters.copy();
 		for (local in fn.locals)
 			locals.push(local.type);
 		var stack:Array<WasmValueType> = [],
 			controls:Array<WasmControl> = [],
 			reachable = true;
-		for (instruction in fn.body)
+		for (instruction in fn.body) {
 			switch instruction {
 				case Unreachable:
 					reachable = false;
@@ -83,6 +88,8 @@ class WasmValidator {
 					controls.push({kind: 0, result: result, height: stack.length});
 				case Loop(result):
 					controls.push({kind: 1, result: result, height: stack.length});
+				case Try(result):
+					controls.push({kind: 3, result: result, height: stack.length});
 				case If(result):
 					pop(stack, I32, fn);
 					controls.push({kind: 2, result: result, height: stack.length});
@@ -91,6 +98,15 @@ class WasmValidator {
 						throw 'Wasm function ${fn.name} has an invalid else frame';
 					var frame = controls[controls.length - 1];
 					reset(stack, frame.height, frame.result, reachable, fn);
+					reachable = true;
+				case Catch(tag):
+					if (tagType == null)
+						throw 'Wasm function ${fn.name} references an invalid exception tag $tag';
+					if (controls.length == 0 || controls[controls.length - 1].kind != 3)
+						throw 'Wasm function ${fn.name} has a catch without a try';
+					var catchFrame = controls[controls.length - 1];
+					reset(stack, catchFrame.height, catchFrame.result, reachable, fn);
+					stack.push(I32);
 					reachable = true;
 				case End:
 					if (controls.length == 0)
@@ -114,6 +130,11 @@ class WasmValidator {
 					for (index in 0...fn.type.results.length)
 						pop(stack, fn.type.results[fn.type.results.length - index - 1], fn);
 					reachable = false;
+				case Throw(tag):
+					if (tagType == null)
+						throw 'Wasm function ${fn.name} references an invalid exception tag $tag';
+					pop(stack, I32, fn);
+					reachable = false;
 				case Call(index):
 					var type = functions[index].type;
 					for (index in 0...type.parameters.length)
@@ -135,6 +156,14 @@ class WasmValidator {
 						pop(stack, I32, fn);
 						pop(stack, I32, fn);
 						pop(stack, I32, fn);
+					}
+				case MemorySize:
+					if (reachable)
+						stack.push(I32);
+				case MemoryGrow:
+					if (reachable) {
+						pop(stack, I32, fn);
+						stack.push(I32);
 					}
 				case LocalGet(index):
 					if (reachable)
@@ -205,6 +234,7 @@ class WasmValidator {
 						stack.push(I32);
 				case Nop:
 			}
+		}
 		if (controls.length != 0)
 			throw 'Wasm function ${fn.name} has unclosed stack control frames';
 	}

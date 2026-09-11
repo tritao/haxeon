@@ -28,6 +28,8 @@ class WasmEncoder {
 			writeSection(output, 4, encodeTable(module.tableMin));
 		if (module.memoryMin != null)
 			writeSection(output, 5, encodeMemory(module.memoryMin));
+		if (module.exceptionTagType != null)
+			writeSection(output, 13, encodeTags(module.exceptionTagType));
 		if (module.globals.length > 0)
 			writeSection(output, 6, encodeGlobals(module.globals));
 		var exports = module.exports.copy();
@@ -160,6 +162,14 @@ class WasmEncoder {
 		return body.getBytes();
 	}
 
+	static function encodeTags(typeIndex:Int):Bytes {
+		var body = new BytesOutput();
+		writeU32(body, 1);
+		body.writeByte(0);
+		writeU32(body, typeIndex);
+		return body.getBytes();
+	}
+
 	static function encodeName(name:String, module:WasmModule):Bytes {
 		var body = new BytesOutput();
 		writeString(body, "name");
@@ -219,11 +229,17 @@ class WasmEncoder {
 				case Loop(result):
 					output.writeByte(0x03);
 					output.writeByte(blockType(result));
+				case Try(result):
+					output.writeByte(0x06);
+					output.writeByte(blockType(result));
 				case If(result):
 					output.writeByte(0x04);
 					output.writeByte(blockType(result));
 				case Else:
 					output.writeByte(0x05);
+				case Catch(tag):
+					output.writeByte(0x07);
+					writeU32(output, tag);
 				case End:
 					output.writeByte(0x0b);
 				case Br(depth):
@@ -240,6 +256,9 @@ class WasmEncoder {
 					writeU32(output, defaultDepth);
 				case Return:
 					output.writeByte(0x0f);
+				case Throw(tag):
+					output.writeByte(0x08);
+					writeU32(output, tag);
 				case Call(index):
 					output.writeByte(0x10);
 					writeU32(output, index);
@@ -252,6 +271,12 @@ class WasmEncoder {
 					writeU32(output, 10);
 					writeU32(output, 0);
 					writeU32(output, 0);
+				case MemorySize:
+					output.writeByte(0x3f);
+					output.writeByte(0);
+				case MemoryGrow:
+					output.writeByte(0x40);
+					output.writeByte(0);
 				case Drop:
 					output.writeByte(0x1a);
 				case LocalGet(index):
