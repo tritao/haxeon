@@ -23,6 +23,7 @@ import compiler.ir.IrBuilder;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrNative;
+import compiler.ir.Ir.IrCNative;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrObjectField;
 import compiler.ir.Ir.IrObjectMethod;
@@ -62,8 +63,8 @@ class IrGenerator {
 		return IrProgramAssembler.staticFieldsFrom(typed);
 
 	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>,
-			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializer:IrFunction, ?entryPoint:String):IrProgram
-		return IrProgramAssembler.assemble(functions, natives, objects, interfaces, enums, staticFields, staticInitializer, entryPoint);
+			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializer:IrFunction, ?entryPoint:String, ?cNatives:Array<IrCNative>):IrProgram
+		return IrProgramAssembler.assemble(functions, natives, objects, interfaces, enums, staticFields, staticInitializer, entryPoint, cNatives);
 
 	static function lastSeparator(value:String):Int {
 		var index = value.length - 1;
@@ -182,8 +183,10 @@ class IrGenerator {
 					lowerMapSet(builder, operands[0], operands[1], operands[2], mapType.key, mapType.value);
 				case TReturn(expression, _):
 					var returnValue = lowerExpression(expression, builder, localTypes);
-					builder.closeTrapsForExit();
-					builder.returnValue(returnValue);
+					if (!builder.isTerminated()) {
+						builder.closeTrapsForExit();
+						builder.returnValue(returnValue);
+					}
 				case TReturnVoid(_):
 					builder.closeTrapsForExit();
 					builder.returnVoid();
@@ -234,7 +237,7 @@ class IrGenerator {
 						if (nextDispatch != null)
 							builder.select(nextDispatch);
 					}
-					if (!hasDynamicCatch)
+					if (!hasDynamicCatch && !builder.isTerminated())
 						builder.rethrowValue(builder.load(exceptionLocal, Dyn));
 					builder.select(afterBlock);
 					if (!tryActive && !catchActive)
@@ -762,6 +765,7 @@ class IrGenerator {
 					builder.typeValue(lowerType(args[1].type))
 				], Bool);
 			case TCall(name, args): builder.call(name, lowerOperands(args, builder, localTypes), lowerType(expression.type));
+			case TCNativeCall(name, args): builder.cNativeCall(name, lowerOperands(args, builder, localTypes), lowerType(expression.type));
 			case TCollectionCall(receiver, operation, args):
 				var nativeName = switch receiver.type {
 					case TArray(element): RuntimeType.arrayNative(element, operation);
@@ -890,7 +894,7 @@ class IrGenerator {
 						builder.branch(lowerExpression(guard, builder, localTypes), bodyBlock, nextBlock);
 						builder.select(bodyBlock);
 					}
-					var caseResult = lowerExpression(switchCase.result, builder, localTypes);
+					var caseResult = abiBoundaryCast(builder, lowerExpression(switchCase.result, builder, localTypes), resultType);
 					if (!builder.isTerminated()) {
 						builder.store(resultName, caseResult);
 						builder.jump(afterBlock);
@@ -899,7 +903,7 @@ class IrGenerator {
 				var fallback = defaultExpression;
 				if (fallback != null) {
 					builder.select(fallbackBlock);
-					var fallbackResult = lowerExpression(fallback, builder, localTypes);
+					var fallbackResult = abiBoundaryCast(builder, lowerExpression(fallback, builder, localTypes), resultType);
 					if (!builder.isTerminated()) {
 						builder.store(resultName, fallbackResult);
 						builder.jump(afterBlock);
@@ -1005,7 +1009,12 @@ class IrGenerator {
 					builder.store(inputName,
 						builder.call(RuntimeType.mapNative(mapTypes.key, mapTypes.value, "keys"), [builder.load(mapName, loweredMapType)], inputType));
 				}
-				var capacity = condition == null ? builder.arraySize(builder.load(inputName, inputType)) : builder.constInt(0);
+				var flattened = switch value.expression {
+					case TArrayComprehension(_, _, _, _, _): true;
+					case _: false;
+				};
+				var capacity = condition == null
+					&& !flattened ? builder.arraySize(builder.load(inputName, inputType)) : builder.constInt(0);
 				builder.store(resultName, lowerArrayAllocation(builder, resultElement, capacity));
 				builder.store(indexName, builder.constInt(0));
 				var conditionBlock = builder.createBlock(),
@@ -1023,8 +1032,12 @@ class IrGenerator {
 							mapTypes.value));
 				var conditionValue = condition;
 				if (conditionValue == null) {
-					var loweredValue = lowerExpression(value, builder, localTypes);
-					builder.arraySet(builder.load(resultName, resultType), builder.load(indexName, I32), loweredValue);
+					if (flattened)
+						appendFlattenedComprehension(value, resultName, resultType, resultElement, builder, localTypes);
+					else {
+						var loweredValue = lowerExpression(value, builder, localTypes);
+						builder.arraySet(builder.load(resultName, resultType), builder.load(indexName, I32), loweredValue);
+					}
 				} else {
 					var includeBlock = builder.createBlock(),
 						excludeBlock = builder.createBlock(),
@@ -1033,8 +1046,12 @@ class IrGenerator {
 					builder.select(excludeBlock);
 					builder.jump(nextBlock);
 					builder.select(includeBlock);
-					var loweredValue = lowerExpression(value, builder, localTypes);
-					lowerArrayNativeCall(builder, resultElement, "push", [builder.load(resultName, resultType), loweredValue], I32);
+					if (flattened)
+						appendFlattenedComprehension(value, resultName, resultType, resultElement, builder, localTypes);
+					else {
+						var loweredValue = lowerExpression(value, builder, localTypes);
+						lowerArrayNativeCall(builder, resultElement, "push", [builder.load(resultName, resultType), loweredValue], I32);
+					}
 					builder.jump(nextBlock);
 					builder.select(nextBlock);
 				}
@@ -1339,6 +1356,29 @@ class IrGenerator {
 		lowerMapSet(builder, builder.load(resultName, resultType), operands[0], operands[1], types.key, types.value);
 	}
 
+	static function appendFlattenedComprehension(value:TypedExpression, resultName:String, resultType:IrType, resultElement:CompilerType, builder:CfgBuilder,
+			localTypes:Map<String, IrType>):Void {
+		var sourceType = lowerType(value.type),
+			sourceName = '$' + 'flattened-comprehension:${value.span.start}',
+			indexName = sourceName + ":index";
+		localTypes.set(sourceName, sourceType);
+		localTypes.set(indexName, I32);
+		builder.store(sourceName, lowerExpression(value, builder, localTypes));
+		builder.store(indexName, builder.constInt(0));
+		var conditionBlock = builder.createBlock(),
+			bodyBlock = builder.createBlock(),
+			afterBlock = builder.createBlock();
+		builder.jump(conditionBlock);
+		builder.select(conditionBlock);
+		builder.branch(builder.less(builder.load(indexName, I32), builder.arraySize(builder.load(sourceName, sourceType))), bodyBlock, afterBlock);
+		builder.select(bodyBlock);
+		var element = builder.arrayGet(builder.load(sourceName, sourceType), builder.load(indexName, I32), lowerType(resultElement));
+		lowerArrayNativeCall(builder, resultElement, "push", [builder.load(resultName, resultType), element], I32);
+		builder.store(indexName, builder.add(builder.load(indexName, I32), builder.constInt(1)));
+		builder.jump(conditionBlock);
+		builder.select(afterBlock);
+	}
+
 	static function lowerEnumPredicates(subjectName:String, subjectType:IrType, constructorIndex:Int, predicates:Array<TypedSwitchPredicate>,
 			firstBlock:CfgBlock, matchBlock:CfgBlock, nextBlock:CfgBlock, builder:CfgBuilder, localTypes:Map<String, IrType>):Void {
 		var checkBlock = firstBlock;
@@ -1459,6 +1499,7 @@ class IrGenerator {
 		return switch type {
 			case TAbstract(_, _, representation): lowerType(representation);
 			case TInt: I32;
+			case TInt64: I64;
 			case TBool: Bool;
 			case TFloat: F64;
 			case TString: Bytes;
@@ -1529,7 +1570,8 @@ class IrGenerator {
 		return "__array_alloc_" + RuntimeType.requireArrayName(element);
 
 	static function lowerArrayAllocation(builder:CfgBuilder, element:CompilerType, length:CfgValue):CfgValue {
-		var elementType = lowerType(element), arrayType = Array(elementType);
+		var elementType = lowerType(element),
+			arrayType:IrType = Array(elementType);
 		return builder.call(arrayAllocatorName(element), [length], arrayType);
 	}
 

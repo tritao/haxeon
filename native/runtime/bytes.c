@@ -1,6 +1,13 @@
 static void realtime_bytes_finalize( void *value ) {
 	realtime_bytes *bytes = (realtime_bytes *)value;
-	free(bytes->data);
+	for( int index = 0; index < bytes->owned_utf8_count; index++ ) free(bytes->owned_utf8[index].value);
+	free(bytes->owned_utf8);
+	if( bytes->owner != NULL ) {
+		hl_remove_root(&bytes->owner);
+		bytes->owner = NULL;
+	} else {
+		free(bytes->data);
+	}
 	bytes->data = NULL;
 }
 
@@ -21,6 +28,10 @@ static realtime_bytes *realtime_bytes_make( int length ) {
 	realtime_bytes *bytes = (realtime_bytes *)hl_gc_alloc_finalizer(sizeof(realtime_bytes));
 	bytes->finalize = realtime_bytes_finalize;
 	bytes->length = length;
+	bytes->owned_utf8 = NULL;
+	bytes->owned_utf8_count = 0;
+	bytes->owned_utf8_capacity = 0;
+	bytes->owner = NULL;
 	bytes->data = length == 0 ? NULL : (vbyte *)calloc((size_t)length, 1);
 	if( length > 0 && bytes->data == NULL ) hl_error("Could not allocate bytes");
 	return bytes;
@@ -29,6 +40,20 @@ static realtime_bytes *realtime_bytes_make( int length ) {
 static void realtime_bytes_bounds( realtime_bytes *bytes, int position, int length ) {
 	if( bytes == NULL || position < 0 || length < 0 || position > bytes->length - length )
 		hl_error("Bytes access out of bounds");
+}
+
+HL_PRIM realtime_bytes *HL_NAME(__bytes_view)( realtime_bytes *bytes, int offset, int length ) {
+	realtime_bytes_bounds(bytes,offset,length);
+	realtime_bytes *result = (realtime_bytes *)hl_gc_alloc_finalizer(sizeof(realtime_bytes));
+	result->finalize = realtime_bytes_finalize;
+	result->data = length == 0 ? NULL : bytes->data + offset;
+	result->length = length;
+	result->owned_utf8 = NULL;
+	result->owned_utf8_count = 0;
+	result->owned_utf8_capacity = 0;
+	result->owner = bytes;
+	hl_add_root(&result->owner);
+	return result;
 }
 
 static void realtime_bytes_output_reserve( realtime_bytes_output *output, int extra ) {
@@ -65,6 +90,25 @@ HL_PRIM int HL_NAME(__bytes_get)( realtime_bytes *bytes, int position ) {
 	return bytes->data[position];
 }
 
+HL_PRIM int HL_NAME(getI8)( realtime_bytes *bytes, int offset ) { int8_t value; realtime_bytes_bounds(bytes,offset,sizeof(value)); memcpy(&value,bytes->data + offset,sizeof(value)); return value; }
+HL_PRIM int HL_NAME(getU8)( realtime_bytes *bytes, int offset ) { uint8_t value; realtime_bytes_bounds(bytes,offset,sizeof(value)); memcpy(&value,bytes->data + offset,sizeof(value)); return value; }
+HL_PRIM int HL_NAME(getI16)( realtime_bytes *bytes, int offset ) { int16_t value; realtime_bytes_bounds(bytes,offset,sizeof(value)); memcpy(&value,bytes->data + offset,sizeof(value)); return value; }
+HL_PRIM int HL_NAME(getU16)( realtime_bytes *bytes, int offset ) { uint16_t value; realtime_bytes_bounds(bytes,offset,sizeof(value)); memcpy(&value,bytes->data + offset,sizeof(value)); return value; }
+HL_PRIM int HL_NAME(getI32)( realtime_bytes *bytes, int offset ) { int32_t value; realtime_bytes_bounds(bytes,offset,sizeof(value)); memcpy(&value,bytes->data + offset,sizeof(value)); return value; }
+HL_PRIM int64_t HL_NAME(getI64)( realtime_bytes *bytes, int offset ) { int64_t value; realtime_bytes_bounds(bytes,offset,sizeof(value)); memcpy(&value,bytes->data + offset,sizeof(value)); return value; }
+HL_PRIM double HL_NAME(getF32)( realtime_bytes *bytes, int offset ) { float value; realtime_bytes_bounds(bytes,offset,sizeof(value)); memcpy(&value,bytes->data + offset,sizeof(value)); return value; }
+HL_PRIM double HL_NAME(getF64)( realtime_bytes *bytes, int offset ) { double value; realtime_bytes_bounds(bytes,offset,sizeof(value)); memcpy(&value,bytes->data + offset,sizeof(value)); return value; }
+
+#define HAXEON_STRUCT_SET_INT(NAME,TYPE) HL_PRIM void HL_NAME(NAME)( realtime_bytes *bytes, int offset, int value ) { TYPE converted = (TYPE)value; realtime_bytes_bounds(bytes,offset,sizeof(converted)); memcpy(bytes->data + offset,&converted,sizeof(converted)); }
+HAXEON_STRUCT_SET_INT(setI8,int8_t)
+HAXEON_STRUCT_SET_INT(setU8,uint8_t)
+HAXEON_STRUCT_SET_INT(setI16,int16_t)
+HAXEON_STRUCT_SET_INT(setU16,uint16_t)
+HAXEON_STRUCT_SET_INT(setI32,int32_t)
+HL_PRIM void HL_NAME(setI64)( realtime_bytes *bytes, int offset, int64_t value ) { realtime_bytes_bounds(bytes,offset,sizeof(value)); memcpy(bytes->data + offset,&value,sizeof(value)); }
+HL_PRIM void HL_NAME(setF32)( realtime_bytes *bytes, int offset, double value ) { float converted = (float)value; realtime_bytes_bounds(bytes,offset,sizeof(converted)); memcpy(bytes->data + offset,&converted,sizeof(converted)); }
+HL_PRIM void HL_NAME(setF64)( realtime_bytes *bytes, int offset, double value ) { realtime_bytes_bounds(bytes,offset,sizeof(value)); memcpy(bytes->data + offset,&value,sizeof(value)); }
+
 HL_PRIM int HL_NAME(__bytes_get_i32)( realtime_bytes *bytes, int position ) {
 	realtime_bytes_bounds(bytes, position, 4);
 	return (int)((unsigned int)bytes->data[position]
@@ -80,10 +124,110 @@ HL_PRIM void HL_NAME(__bytes_set_i32)( realtime_bytes *bytes, int position, int 
 	realtime_bytes_bounds(bytes, position, 4);
 	for( int i = 0; i < 4; i++ ) bytes->data[position + i] = (vbyte)(value >> (i * 8));
 }
+
+static bool realtime_bytes_owned_utf8_overlaps( int field_offset, int offset, int length ) {
+	return field_offset < offset + length && field_offset + (int)sizeof(void *) > offset;
+}
+
+static void realtime_bytes_owned_utf8_check_range( realtime_bytes *bytes, int offset, int length ) {
+	for( int index = 0; index < bytes->owned_utf8_count; index++ ) {
+		int field_offset = bytes->owned_utf8[index].offset;
+		if( realtime_bytes_owned_utf8_overlaps(field_offset,offset,length)
+			&& (field_offset < offset || field_offset + (int)sizeof(void *) > offset + length) )
+			hl_error("HXI structure operation splits an owned UTF-8 field");
+	}
+}
+
+static void realtime_bytes_owned_utf8_reserve( realtime_bytes *bytes, int capacity ) {
+	if( capacity <= bytes->owned_utf8_capacity ) return;
+	realtime_bytes_owned_utf8 *grown = (realtime_bytes_owned_utf8 *)realloc(bytes->owned_utf8,(size_t)capacity * sizeof(*grown));
+	if( grown == NULL ) hl_error("Could not retain HXI UTF-8 structure field");
+	bytes->owned_utf8 = grown;
+	bytes->owned_utf8_capacity = capacity;
+}
+
+static char *realtime_bytes_owned_utf8_clone( const char *value ) {
+	if( value == NULL ) return NULL;
+	size_t length = strlen(value);
+	char *copy = (char *)malloc(length + 1);
+	if( copy == NULL ) hl_error("Could not retain HXI UTF-8 structure field");
+	memcpy(copy,value,length + 1);
+	return copy;
+}
+
+static void realtime_bytes_owned_utf8_remove_range( realtime_bytes *bytes, int offset, int length ) {
+	int write = 0;
+	for( int index = 0; index < bytes->owned_utf8_count; index++ ) {
+		realtime_bytes_owned_utf8 entry = bytes->owned_utf8[index];
+		if( realtime_bytes_owned_utf8_overlaps(entry.offset,offset,length) ) {
+			free(entry.value);
+			continue;
+		}
+		bytes->owned_utf8[write++] = entry;
+	}
+	bytes->owned_utf8_count = write;
+}
+
 HL_PRIM realtime_bytes *HL_NAME(__bytes_sub)( realtime_bytes *bytes, int position, int length ) {
 	realtime_bytes_bounds(bytes, position, length);
 	realtime_bytes *result = realtime_bytes_make(length);
 	if( length > 0 ) memcpy(result->data, bytes->data + position, (size_t)length);
+	return result;
+}
+
+HL_PRIM realtime_bytes *HL_NAME(structSlice)( realtime_bytes *bytes, int offset, int length ) {
+	realtime_bytes_bounds(bytes,offset,length);
+	realtime_bytes_owned_utf8_check_range(bytes,offset,length);
+	realtime_bytes *result = realtime_bytes_make(length);
+	if( length > 0 ) memcpy(result->data,bytes->data + offset,(size_t)length);
+	for( int index = 0; index < bytes->owned_utf8_count; index++ ) {
+		realtime_bytes_owned_utf8 entry = bytes->owned_utf8[index];
+		if( entry.offset < offset || entry.offset + (int)sizeof(void *) > offset + length ) continue;
+		realtime_bytes_owned_utf8_reserve(result,result->owned_utf8_count + 1);
+		char *copy = realtime_bytes_owned_utf8_clone(entry.value);
+		int target_offset = entry.offset - offset;
+		result->owned_utf8[result->owned_utf8_count++] = (realtime_bytes_owned_utf8){target_offset,copy};
+		memcpy(result->data + target_offset,&copy,sizeof(copy));
+	}
+	return result;
+}
+
+HL_PRIM void HL_NAME(structCopy)( realtime_bytes *bytes, int offset, realtime_bytes *value, int length ) {
+	realtime_bytes_bounds(bytes,offset,length);
+	realtime_bytes_bounds(value,0,length);
+	realtime_bytes_owned_utf8_check_range(bytes,offset,length);
+	realtime_bytes *snapshot = HL_NAME(structSlice)(value,0,length);
+	realtime_bytes_owned_utf8_reserve(bytes,bytes->owned_utf8_count + snapshot->owned_utf8_count);
+	realtime_bytes_owned_utf8_remove_range(bytes,offset,length);
+	if( length > 0 ) memcpy(bytes->data + offset,snapshot->data,(size_t)length);
+	for( int index = 0; index < snapshot->owned_utf8_count; index++ ) {
+		realtime_bytes_owned_utf8 *entry = &snapshot->owned_utf8[index];
+		int target_offset = offset + entry->offset;
+		bytes->owned_utf8[bytes->owned_utf8_count++] = (realtime_bytes_owned_utf8){target_offset,entry->value};
+		memcpy(bytes->data + target_offset,&entry->value,sizeof(entry->value));
+		entry->value = NULL;
+	}
+}
+
+HL_PRIM realtime_bytes *HL_NAME(structCopyPointer)( realtime_bytes *bytes, int pointer_offset, int length_offset, int length_bytes ) {
+	realtime_bytes_bounds(bytes,pointer_offset,sizeof(void *));
+	realtime_bytes_bounds(bytes,length_offset,length_bytes);
+	void *pointer = NULL;
+	uint64_t length = 0;
+	memcpy(&pointer,bytes->data + pointer_offset,sizeof(pointer));
+	if( length_bytes == 4 ) {
+		uint32_t value;
+		memcpy(&value,bytes->data + length_offset,sizeof(value));
+		length = value;
+	} else if( length_bytes == 8 ) {
+		memcpy(&length,bytes->data + length_offset,sizeof(length));
+	} else {
+		hl_error("HXI borrowed buffer length must be 32 or 64 bits");
+	}
+	if( length > 268435456 ) hl_error("HXI borrowed buffer exceeds the safety limit");
+	if( pointer == NULL && length != 0 ) hl_error("HXI borrowed buffer contains NULL with a non-zero length");
+	realtime_bytes *result = realtime_bytes_make((int)length);
+	if( length != 0 ) memcpy(result->data,pointer,(size_t)length);
 	return result;
 }
 HL_PRIM int HL_NAME(__bytes_compare)( realtime_bytes *left, realtime_bytes *right ) {

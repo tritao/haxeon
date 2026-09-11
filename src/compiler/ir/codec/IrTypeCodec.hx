@@ -74,6 +74,8 @@ class IrTypeCodec {
 				for (argument in arguments)
 					writeType(output, argument, depth + 1);
 				writeType(output, result, depth + 1);
+			case I64:
+				output.writeByte(13);
 		}
 	}
 
@@ -98,6 +100,7 @@ class IrTypeCodec {
 				if (count < 0 || count > MAX_ARGUMENTS)
 					throw "Invalid IR function type argument count";
 				Function([for (_ in 0...count) readType(input, totalLength, depth + 1)], readType(input, totalLength, depth + 1));
+			case 13: I64;
 			default: throw "Unknown IR type tag";
 		};
 	}

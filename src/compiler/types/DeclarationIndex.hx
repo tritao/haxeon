@@ -158,6 +158,7 @@ class DeclarationIndex {
 			case NamedType(name):
 				switch name {
 					case "Dynamic", "Any": TDynamic;
+					case "haxe.Int64", "Int64": TInt64;
 					case "haxe.io.Bytes": TBytes;
 					default: resolveNamedType(name, span, resolving, substitutions);
 				}
@@ -354,6 +355,7 @@ class DeclarationIndex {
 	static function typeKey(type:CompilerType):String
 		return switch type {
 			case TInt: "Int";
+			case TInt64: "haxe.Int64";
 			case TBool: "Bool";
 			case TFloat: "Float";
 			case TString: "String";

@@ -53,7 +53,7 @@ mkdir -p "$(dirname "$report")" "$(dirname "$output")"
 make -C "$root_dir/vendor/hashlink" -j2 libhl.so hl >/dev/null
 cc -shared -fPIC -DHL_NAME\(n\)=realtime_##n \
 	-I "$root_dir/vendor/hashlink/src" "$root_dir/native/runtime.c" \
-	-L "$root_dir/vendor/hashlink" -lhl -Wl,-rpath,"$root_dir/vendor/hashlink" -o "$runtime"
+	-L "$root_dir/vendor/hashlink" -lhl -lffi -ldl -Wl,-rpath,"$root_dir/vendor/hashlink" -o "$runtime"
 
 mapfile -t sources < <(cd "$root_dir" && find src stdlib -type f -name '*.hx' -print | LC_ALL=C sort)
 command=("$hl" "$compiler" "--output=$output" \

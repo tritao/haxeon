@@ -3,13 +3,8 @@ package compiler;
 /** Operations on canonical dot-separated compiler names. */
 class QualifiedName {
 	public static function parent(path:String):Null<String> {
-		var cursor = path.length - 1;
-		while (cursor >= 0) {
-			if (path.charCodeAt(cursor) == 46)
-				return path.substring(0, cursor);
-			cursor--;
-		}
-		return null;
+		var separator = path.lastIndexOf(".");
+		return separator < 0 ? null : path.substring(0, separator);
 	}
 
 	public static function parentOrEmpty(path:String):String {
@@ -18,23 +13,13 @@ class QualifiedName {
 	}
 
 	public static function first(path:String):String {
-		var cursor = 0;
-		while (cursor < path.length) {
-			if (path.charCodeAt(cursor) == 46)
-				return path.substring(0, cursor);
-			cursor++;
-		}
-		return path;
+		var separator = path.indexOf(".");
+		return separator < 0 ? path : path.substring(0, separator);
 	}
 
 	public static function last(path:String):String {
-		var cursor = path.length - 1;
-		while (cursor >= 0) {
-			if (path.charCodeAt(cursor) == 46)
-				return path.substring(cursor + 1, path.length);
-			cursor--;
-		}
-		return path;
+		var separator = path.lastIndexOf(".");
+		return separator < 0 ? path : path.substring(separator + 1, path.length);
 	}
 
 	public static function split(path:String):Array<String> {

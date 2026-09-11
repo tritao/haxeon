@@ -301,9 +301,13 @@ class FrontendCompilation {
 					throw 'Native "${native.name}" is declared more than once';
 			irNatives.push(native);
 		}
+		var irCNatives = context.irCNatives();
+		for (native in IrProgramAssembler.cNativesFrom(typedNew))
+			if (![for (existing in irCNatives) existing.name].contains(native.name))
+				irCNatives.push(native);
 		var ir = IrGenerator.assemble(cached, irNatives, [for (name in objectNames) objectCache.get(name)], IrGenerator.interfacesFrom(typedNew),
 			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew), IrGenerator.staticInitializerFrom(typedNew, initializationClasses),
-			entryPoint);
+			entryPoint, irCNatives);
 		var irAssemblyDoneAt = Sys.time() * 1000.0;
 		return {
 			ir: ir,

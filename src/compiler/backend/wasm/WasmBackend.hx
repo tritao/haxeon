@@ -2562,6 +2562,8 @@ class WasmFunctionLower {
 				body.push(Call(functionIndex));
 				if (output.type != Void)
 					body.push(LocalSet(values.get(output.id)));
+			case CNativeCall(_, name, _):
+				throw 'Wasm backend cannot lower ordinary C native call "$name" without a Wasm import contract';
 		}
 	}
 
@@ -2663,9 +2665,10 @@ class WasmFunctionLower {
 				ConstNull(output), TypeValue(output, _), ToDyn(output, _), IntToFloat(output, _), SafeCast(output, _), Catch(output), GlobalGet(output, _),
 				Add(output, _, _), Sub(output, _, _), Mul(output, _, _), Div(output, _, _), Mod(output, _, _), BitAnd(output, _, _), BitXor(output, _, _),
 				BitOr(output, _, _), ShiftLeft(output, _, _), ShiftRight(output, _, _), UnsignedShiftRight(output, _, _), Less(output, _, _),
-				LessEqual(output, _, _), Equal(output, _, _), Call(output, _, _), StaticClosure(output, _), InstanceClosure(output, _, _),
-				CallClosure(output, _, _), ToVirtual(output, _), MethodCall(output, _, _, _), NewObject(output, _), FieldGet(output, _, _),
-				ArrayGet(output, _, _), ArraySize(output, _), MakeEnum(output, _, _, _), EnumIndex(output, _), EnumField(output, _, _, _): output;
+				LessEqual(output, _, _), Equal(output, _, _), Call(output, _, _), CNativeCall(output, _, _), StaticClosure(output, _),
+				InstanceClosure(output, _, _), CallClosure(output, _, _), ToVirtual(output, _), MethodCall(output, _, _, _), NewObject(output, _),
+				FieldGet(output, _, _), ArrayGet(output, _, _), ArraySize(output, _), MakeEnum(output, _, _, _), EnumIndex(output, _),
+				EnumField(output, _, _, _): output;
 			case BeginTry(_, _), EndTry(_), GlobalSet(_, _), FieldSet(_, _, _), ArraySet(_, _, _): null;
 		};
 }

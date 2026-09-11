@@ -11,7 +11,7 @@ dap=(npx --yes @roblourens/dap-cli@0.3.0)
 mkdir -p "$repo_dir/out" "$dap_home/config"
 make -C "$repo_dir/vendor/hashlink" -j2 libhl.so hl >/dev/null
 cc -shared -fPIC -DHL_NAME\(n\)=realtime_\#\#n -I "$repo_dir/vendor/hashlink/src" \
-	"$repo_dir/native/runtime.c" -L "$repo_dir/vendor/hashlink" -lhl \
+	"$repo_dir/native/runtime.c" -L "$repo_dir/vendor/hashlink" -lhl -lffi -ldl \
 	-Wl,-rpath,"$repo_dir/vendor/hashlink" -o "$repo_dir/out/haxeon_runtime.hdll"
 if [[ ! -d "$adapter_dir/node_modules" ]]; then npm --prefix "$adapter_dir" ci --ignore-scripts; fi
 (

@@ -11,6 +11,7 @@ import compiler.backend.wasm.WasmBackend;
 import compiler.ir.Ir.IrProgram;
 import haxe.io.Bytes;
 import sys.io.File;
+import compiler.documentation.HaxeXmlWriter;
 
 /** Executes one compiler request and writes its deterministic artifacts. */
 class CompilerDriver {
@@ -19,6 +20,10 @@ class CompilerDriver {
 		report("loading " + Std.string(request.paths.length) + " sources");
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
+		for (path in request.ffiInterfaces) {
+			report("loading FFI interface " + path);
+			compiler.addFfiInterface(path, File.getContent(path));
+		}
 		compiler.addSourceRoot("stdlib");
 		SourceManifestLoader.load(compiler, request.roots, request.paths);
 		report("compiling entry " + request.entry);
@@ -32,6 +37,8 @@ class CompilerDriver {
 			File.saveContent(request.output + ".functions", wasmFunctionMap(result.ir));
 		if (request.target != "wasm32")
 			File.saveBytes(request.output + ".functions", Bytes.ofString(functionMap(result.functionIndices)));
+		if (request.xmlOutput != null)
+			File.saveContent(request.xmlOutput, HaxeXmlWriter.emit(compiler.modules));
 		if (request.ffiHeader != null && request.ffiLibrary != null)
 			File.saveContent(request.ffiHeader, CHeaderEmitter.emit(result.ir.natives, request.ffiLibrary));
 		report("compiled " + Std.string(request.paths.length) + " source files -> " + request.output);

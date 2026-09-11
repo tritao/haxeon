@@ -23,6 +23,9 @@ class SemanticWorkspaceMain {
 		var resolvedBase = workspace.resolveTypeSymbolId("Base");
 		expect(resolvedBase != null
 			&& workspace.resolveTypeSymbolId("Base") == resolvedBase, "type resolution should be stable when cached");
+		expect(workspace.resolveTypeSymbolId("demo.Base") == resolvedBase, "qualified type resolution should share the indexed symbol");
+		expect(workspace.resolveSymbolId("Base") == resolvedBase && workspace.resolveSymbolId("demo.Base") == resolvedBase,
+			"general symbol resolution should support bare and qualified names");
 		workspace.invalidateResolutionCache();
 		expect(workspace.resolveTypeSymbolId("Base") == resolvedBase, "invalidating resolution caches should preserve results");
 

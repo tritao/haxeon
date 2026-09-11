@@ -6,6 +6,7 @@ import compiler.ir.SourceProvenance.Located;
 enum IrType {
 	Void;
 	I32;
+	I64;
 	Bool;
 	F64;
 	Bytes;
@@ -68,6 +69,7 @@ enum IrInstruction {
 	LessEqual(output:IrValue, left:IrValue, right:IrValue);
 	Equal(output:IrValue, left:IrValue, right:IrValue);
 	Call(output:IrValue, functionName:String, arguments:Array<IrValue>);
+	CNativeCall(output:IrValue, functionName:String, arguments:Array<IrValue>);
 	StaticClosure(output:IrValue, functionName:String);
 	InstanceClosure(output:IrValue, functionName:String, receiver:IrValue);
 	CallClosure(output:IrValue, closure:IrValue, arguments:Array<IrValue>);
@@ -112,6 +114,20 @@ typedef IrNative = {
 	final result:IrType;
 }
 
+/** Ordinary C ABI symbol required by an IR program. */
+typedef IrCNative = {
+	final name:String;
+	final library:String;
+	final symbol:String;
+	final signature:String;
+	final pointerOwnership:String;
+	final pointerRelease:Null<String>;
+	final pointerLength:Null<String>;
+	final pointerNullable:Bool;
+	final arguments:Array<IrType>;
+	final result:IrType;
+}
+
 /** Runtime-visible field in an IR object layout. */
 typedef IrObjectField = {final name:String; final type:IrType;}
 
@@ -146,6 +162,7 @@ typedef IrStaticField = {final name:String; final type:IrType;}
 /** Complete register-independent program assembled into a HashLink module. */
 class IrProgram {
 	public var natives:Array<IrNative> = [];
+	public var cNatives:Array<IrCNative> = [];
 	public var functions:Array<IrFunction> = [];
 	public var objects:Array<IrObject> = [];
 	public var interfaces:Array<IrInterface> = [];

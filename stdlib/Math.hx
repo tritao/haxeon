@@ -25,11 +25,41 @@ extern function mathIsNaN(value:Float):Bool;
 @:hlNative("haxeon_runtime", "__math_is_finite")
 extern function mathIsFinite(value:Float):Bool;
 
+@:hlNative("haxeon_runtime", "__math_pow")
+extern function mathPow(value:Float, exponent:Float):Float;
+
+@:hlNative("haxeon_runtime", "__math_cos")
+extern function mathCos(value:Float):Float;
+
+@:hlNative("haxeon_runtime", "__math_sin")
+extern function mathSin(value:Float):Float;
+
+@:hlNative("haxeon_runtime", "__math_tan")
+extern function mathTan(value:Float):Float;
+
 /** Supported mathematical helpers backed by the stable runtime ABI. */
 class Math {
+	public static inline function min(left:Float, right:Float):Float
+		return left < right ? left : right;
+
+	public static inline function max(left:Float, right:Float):Float
+		return left > right ? left : right;
+
 	public static inline function isNaN(value:Float):Bool
 		return mathIsNaN(value);
 
 	public static inline function isFinite(value:Float):Bool
 		return mathIsFinite(value);
+
+	public static inline function pow(value:Float, exponent:Float):Float
+		return mathPow(value, exponent);
+
+	public static inline function cos(value:Float):Float
+		return mathCos(value);
+
+	public static inline function sin(value:Float):Float
+		return mathSin(value);
+
+	public static inline function tan(value:Float):Float
+		return mathTan(value);
 }

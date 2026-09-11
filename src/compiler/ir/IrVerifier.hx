@@ -10,6 +10,8 @@ class IrVerifier {
 		var signatures:Map<String, {arguments:Array<IrType>, result:IrType}> = [];
 		for (native in program.natives)
 			addSignature(signatures, native.name, native.arguments, native.result);
+		for (native in program.cNatives)
+			addSignature(signatures, native.name, native.arguments, native.result);
 		for (fn in program.functions)
 			addSignature(signatures, fn.name, [for (a in fn.arguments) a.type], fn.result);
 		var objects:Map<String, IrObject> = [];
@@ -206,7 +208,7 @@ class IrVerifier {
 				if (!sameType(a.type, b.type)
 					|| (!sameType(a.type, I32) && !sameType(a.type, F64) && !sameType(a.type, Bool) && !isReference(a.type)))
 					throw 'IR equality requires matching primitive or reference values';
-			case Call(out, name, args):
+			case Call(out, name, args), CNativeCall(out, name, args):
 				if (!signatures.exists(name))
 					throw 'Unknown IR call "$name"';
 				var signature = signatures.get(name);

@@ -136,6 +136,16 @@ realtime operations remain in a separately versioned ABI.
 Unsupported ABI combinations produce explicit typed diagnostics instead of
 silently falling back to dynamic behavior.
 
+### C header import
+
+A standalone Clang-based importer can generate deterministic, target-specific
+raw HXI declarations from a constrained C ABI. It preserves record layouts and
+keeps system-header implementation details out of the generated interface. A
+strict parser validates types, layouts, symbols, and ABI metadata before use. See
+[C header FFI import](docs/C_HEADER_FFI.md) for usage and the supported subset.
+The runtime also contains a restricted libffi-based ordinary-C symbol bridge;
+it remains deliberately separate from HashLink's `@:hlNative` convention.
+
 ### Source-declared HashLink bindings
 
 Target functions can be declared without a Haxe body by combining `extern`
@@ -294,6 +304,26 @@ bridge before compilation.
 
 The writer currently targets HashLink bytecode format version 6, matching the
 decoder in `src/code.c`.
+
+### API documentation
+
+Haxeon recognizes Haxe documentation comments beginning with `/**`. Their
+Markdown and `@param`, `@return`/`@returns`, `@deprecated`, `@see`, `@throws`,
+`@exception`, and `@since` tags are shared by editor hover, completion, and
+signature help.
+
+The compiler can also emit deterministic Haxe type-description XML for tools
+such as [dox](https://github.com/HaxeFoundation/dox):
+
+```sh
+compiler.hl --xml=docs/api.xml --output=out/app.hl \
+  --entry=my.app.Main --root=src src/my/app/Main.hx
+haxelib run dox -i docs -o docs/html
+```
+
+Both `--xml=docs/api.xml` and the standard two-argument form
+`--xml docs/api.xml` are accepted. Documentation generation does not change
+runtime fingerprints or hot-reload compatibility.
 
 ## 📊 Benchmarks
 

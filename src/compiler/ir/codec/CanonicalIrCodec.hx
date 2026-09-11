@@ -5,6 +5,7 @@ import compiler.ir.Ir.IrEnumCase;
 import compiler.ir.Ir.IrInterface;
 import compiler.ir.Ir.IrInterfaceMethod;
 import compiler.ir.Ir.IrNative;
+import compiler.ir.Ir.IrCNative;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrObjectField;
 import compiler.ir.Ir.IrObjectMethod;
@@ -19,7 +20,7 @@ import haxe.io.BytesOutput;
 
 /** Stable target-neutral container for the complete verified Haxeon IR. */
 class CanonicalIrCodec {
-	public static inline final VERSION:Int = 1;
+	public static inline final VERSION:Int = 2;
 	static inline final MAGIC = "HIR";
 	static inline final MAX_ITEMS = 0x100000;
 
@@ -31,6 +32,7 @@ class CanonicalIrCodec {
 		output.writeByte(VERSION);
 		IrTypeCodec.writeString(output, program.entryPoint);
 		writeNatives(output, program.natives);
+		writeCNatives(output, program.cNatives);
 		writeObjects(output, program.objects);
 		writeInterfaces(output, program.interfaces);
 		writeEnums(output, program.enums);
@@ -45,10 +47,12 @@ class CanonicalIrCodec {
 		try {
 			if (input.readString(3) != MAGIC)
 				throw "Invalid canonical Haxeon IR";
-			if (input.readByte() != VERSION)
+			var version = input.readByte();
+			if (version < 1 || version > VERSION)
 				throw "Unsupported canonical Haxeon IR version";
 			var program = new IrProgram(IrTypeCodec.readString(input, bytes.length));
 			program.natives = readNatives(input, bytes.length);
+			program.cNatives = version >= 2 ? readCNatives(input, bytes.length) : [];
 			program.objects = readObjects(input, bytes.length);
 			program.interfaces = readInterfaces(input, bytes.length);
 			program.enums = readEnums(input, bytes.length);
@@ -84,6 +88,51 @@ class CanonicalIrCodec {
 				arguments: readTypes(input, limit),
 				result: IrTypeCodec.readType(input, limit, 0)
 			});
+		return result;
+	}
+
+	static function writeCNatives(output:BytesOutput, natives:Array<IrCNative>):Void {
+		writeCount(output, natives.length);
+		for (native in natives) {
+			IrTypeCodec.writeString(output, native.name);
+			IrTypeCodec.writeString(output, native.library);
+			IrTypeCodec.writeString(output, native.symbol);
+			IrTypeCodec.writeString(output, native.signature);
+			IrTypeCodec.writeString(output, native.pointerOwnership);
+			writeNullableString(output, native.pointerRelease);
+			writeNullableString(output, native.pointerLength);
+			output.writeByte(native.pointerNullable ? 1 : 0);
+			writeTypes(output, native.arguments);
+			IrTypeCodec.writeType(output, native.result, 0);
+		}
+	}
+
+	static function readCNatives(input:BytesInput, limit:Int):Array<IrCNative> {
+		var result:Array<IrCNative> = [];
+		for (_ in 0...readCount(input)) {
+			var name = IrTypeCodec.readString(input, limit),
+				library = IrTypeCodec.readString(input, limit),
+				symbol = IrTypeCodec.readString(input, limit),
+				signature = IrTypeCodec.readString(input, limit),
+				pointerOwnership = IrTypeCodec.readString(input, limit),
+				pointerRelease = readNullableString(input, limit),
+				pointerLength = readNullableString(input, limit),
+				pointerNullable = input.readByte();
+			if (pointerNullable != 0 && pointerNullable != 1)
+				throw "Invalid canonical IR native nullability";
+			result.push({
+				name: name,
+				library: library,
+				symbol: symbol,
+				signature: signature,
+				pointerOwnership: pointerOwnership,
+				pointerRelease: pointerRelease,
+				pointerLength: pointerLength,
+				pointerNullable: pointerNullable == 1,
+				arguments: readTypes(input, limit),
+				result: IrTypeCodec.readType(input, limit, 0)
+			});
+		}
 		return result;
 	}
 

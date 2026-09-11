@@ -107,6 +107,7 @@ class HlModuleAssembler {
 		cache.update(program.functions);
 		var ordered = new IrProgram(program.entryPoint);
 		ordered.natives = program.natives;
+		ordered.cNatives = program.cNatives;
 		ordered.objects = program.objects;
 		ordered.interfaces = program.interfaces;
 		ordered.enums = program.enums;

@@ -844,7 +844,7 @@ class SemanticIndex {
 				indexExpression(fn, object, resolve, resolveEnumCase);
 				for (argument in arguments)
 					indexExpression(fn, argument, resolve, resolveEnumCase);
-			case TCall(name, arguments):
+			case TCall(name, arguments), TCNativeCall(name, arguments):
 				addCall(bindNamed(resolve, name, expression.span), expression.span, name);
 				for (argument in arguments)
 					indexExpression(fn, argument, resolve, resolveEnumCase);
@@ -1148,6 +1148,7 @@ class SemanticIndex {
 	static function displayType(type:CompilerType):String
 		return switch type {
 			case TInt: "Int";
+			case TInt64: "haxe.Int64";
 			case TFloat: "Float";
 			case TBool: "Bool";
 			case TString: "String";

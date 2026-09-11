@@ -7,6 +7,22 @@ HL_PRIM bool HL_NAME(__math_is_nan)( double value ) {
 HL_PRIM bool HL_NAME(__math_is_finite)(double value) {
 	return isfinite(value);
 }
+
+HL_PRIM double HL_NAME(__math_pow)(double value, double exponent) {
+	return pow(value, exponent);
+}
+
+HL_PRIM double HL_NAME(__math_cos)(double value) {
+	return cos(value);
+}
+
+HL_PRIM double HL_NAME(__math_sin)(double value) {
+	return sin(value);
+}
+
+HL_PRIM double HL_NAME(__math_tan)(double value) {
+	return tan(value);
+}
 extern realtime_string_map *hl_hballoc( void );
 extern void hl_hbset( realtime_string_map *map, uchar *key, vdynamic *value );
 extern bool hl_hbexists( realtime_string_map *map, uchar *key );
@@ -39,9 +55,18 @@ extern bool hl_hiremove( realtime_int_map *map, int key );
 extern void hl_hiclear( realtime_int_map *map );
 
 typedef struct {
+	int offset;
+	char *value;
+} realtime_bytes_owned_utf8;
+
+typedef struct realtime_bytes {
 	void (*finalize)( void * );
 	vbyte *data;
 	int length;
+	realtime_bytes_owned_utf8 *owned_utf8;
+	int owned_utf8_count;
+	int owned_utf8_capacity;
+	struct realtime_bytes *owner;
 } realtime_bytes;
 
 typedef struct {

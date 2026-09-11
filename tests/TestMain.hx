@@ -25,6 +25,8 @@ import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ffi.CHeaderEmitter;
 import compiler.tools.CompilerArguments;
+import compiler.documentation.Documentation.DocumentationTools;
+import compiler.documentation.HaxeXmlWriter;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 import compiler.ir.IrGenerator;
@@ -303,6 +305,8 @@ class TestMain {
 		expectCompileError('function main():Int { var value; return 0; }', 'Uninitialized local "value" requires an explicit type');
 		expectCompileError('class Invalid { static final value; } function main():Int { return 0; }', 'Field "value" requires a type or initializer');
 		Frontend.compile('class Constants { static final integer = 4 * 10 + 2; static final fraction = 4 / 2; static final bits = (1 << 5) | 10; } function main():Int return Constants.integer;');
+		Frontend.compile('class Constants { static final names = ["a", "b"]; } function main():Int return Constants.names.length;');
+		Frontend.compile('enum Value { Number(value:Int); Empty; } function main():Int { var bits = 1; bits |= 2; bits &= 3; bits ^= 1; bits *= 4; bits %= 5; var fraction = 8.0; fraction /= 2; var recovered = try 1 catch (_:Dynamic) 2; var input:Value = Number(2); var selected = switch input { case Number(1) | Number(2): 3; case _: 0; }; var flat = [for (left in [1, 2]) for (right in [3, 4]) left + right]; return bits + recovered + selected + flat.length + (flat.contains(6) ? 1 : 0); }');
 		Frontend.compile("class Defaults { static final integer = -1; static final fraction = -0.5; static final prefix = '$' + 'abstract-' + 'result'; } function main():Int { return Defaults.integer; }");
 		Frontend.compile('class Base { public static inline final WIDTH = 220; } class Derived { public static inline final WIDTH = Base.WIDTH; } function main():Int return Derived.WIDTH;');
 		expectCompileError('class First { static final value = Second.value; } class Second { static final value = First.value; } function main():Int return 0;',
@@ -415,6 +419,8 @@ class TestMain {
 		if (Std.string(IrTypeCodec.decode(persistedTypeBytes)) != Std.string(persistedType)
 			|| persistedTypeBytes.compare(IrTypeCodec.encode(persistedType)) != 0)
 			throw "IR type state did not round trip deterministically";
+		if (IrTypeCodec.decode(IrTypeCodec.encode(I64)) != I64)
+			throw "64-bit IR type state did not round trip";
 		var trailingType = HaxeBytes.alloc(persistedTypeBytes.length + 1);
 		trailingType.blit(0, persistedTypeBytes, 0, persistedTypeBytes.length);
 		expectStringError(function() IrTypeCodec.decode(trailingType), "Trailing IR type state data");
@@ -683,21 +689,61 @@ class TestMain {
 		var compilerRequest = CompilerArguments.parse([
 			"--target=wasm32",
 			"--output=out/sample.hl",
+			"--xml",
+			"out/api.xml",
 			"--entry=sample.Main",
 			"--root=source",
 			"--dump-function=42",
 			"--ffi-header=out/sample.h",
 			"--ffi-library=sample",
+			"--ffi-interface=generated/nativekit.hxi",
+			"--ffi-interface=generated/system.hxi",
 			"source/Main.hx"
 		]);
 		if (compilerRequest.target != "wasm32"
 			|| compilerRequest.output != "out/sample.hl"
+			|| compilerRequest.xmlOutput != "out/api.xml"
 			|| compilerRequest.entry != "sample.Main"
 			|| compilerRequest.dumpFunction != 42
 			|| compilerRequest.roots.length != 1
 			|| compilerRequest.paths.length != 1
+			|| compilerRequest.ffiInterfaces.join(",") != "generated/nativekit.hxi,generated/system.hxi"
 			|| compilerRequest.ffiLibrary != "sample")
 			throw "Compiler CLI did not produce a typed build request";
+		var equalsXmlRequest = CompilerArguments.parse(["--xml=out/equals.xml", "source/Main.hx"]);
+		if (equalsXmlRequest.xmlOutput != "out/equals.xml")
+			throw "Compiler CLI did not accept the equals form of --xml";
+		var missingXmlOutput = false;
+		try {
+			CompilerArguments.parse(["source/Main.hx", "--xml"]);
+		} catch (error:Dynamic) {
+			missingXmlOutput = true;
+		}
+		if (!missingXmlOutput)
+			throw "Compiler CLI accepted --xml without an output path";
+		var normalizedDocumentation = DocumentationTools.normalize(" Adds values.\n * @param left First value.\n * @returns the sum.\n * @throws Overflow on failure.\n * @since 1.0");
+		if (normalizedDocumentation.parameters.get("left") != "First value."
+			|| normalizedDocumentation.markdown.indexOf("**Returns:** the sum.") < 0
+			|| normalizedDocumentation.markdown.indexOf("**Throws:** Overflow on failure.") < 0
+			|| normalizedDocumentation.raw.indexOf("@since 1.0") < 0)
+			throw "Haxe documentation normalization lost structured or raw content";
+		var documentationCompiler = new Compiler();
+		documentationCompiler.update("sample/Widget.hx",
+			"package sample; /** Widget <docs>. */ class Widget { /** Current value. */ public var value:Int; /** Adds values. @param amount Operand. */ public function add(amount:Int):Int return value + amount; }");
+		documentationCompiler.update("sample/Choice.hx",
+			"package sample; /** Available choices. */ enum Choice { /** First choice. */ First; Second(value:Int); }");
+		documentationCompiler.update("sample/Main.hx",
+			"package sample; import sample.Widget; import sample.Choice; function main():Int { Choice.Second(1); return new Widget().add(1); }");
+		documentationCompiler.compile("sample.Main");
+		var documentationXml = HaxeXmlWriter.emit(documentationCompiler.modules);
+		if (documentationXml.indexOf('<class path="sample.Widget"') < 0
+			|| documentationXml.indexOf("Widget &lt;docs&gt;.") < 0
+			|| documentationXml.indexOf("Current value.") < 0
+			|| documentationXml.indexOf("@param amount Operand.") < 0
+			|| documentationXml.indexOf('<add public="1" set="method"') < 0
+			|| documentationXml.indexOf('<enum path="sample.Choice"') < 0
+			|| documentationXml != HaxeXmlWriter.emit(documentationCompiler.modules))
+			throw "Haxe XML documentation output was incomplete, unsafe, or nondeterministic";
 		var rejectedFfiPair = false;
 		try {
 			CompilerArguments.parse(["--ffi-header=out/sample.h", "source/Main.hx"]);

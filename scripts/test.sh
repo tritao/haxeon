@@ -19,3 +19,5 @@ mkdir -p "$root_dir/out"
 
 "$root_dir/tests/differential/run.sh"
 "$haxe" --cwd "$root_dir" -cp src --run build.HaxeonBuild test "${TEST_JOBS:-16}"
+"$root_dir/tests/integration/test-native-call.sh"
+"$root_dir/tests/integration/test-hxi-call.sh"

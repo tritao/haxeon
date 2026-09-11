@@ -211,6 +211,7 @@ class HlSymbolTable {
 			default: HlTypeDef.Simple(switch type {
 					case Void: HlType.Void;
 					case I32: HlType.I32;
+					case I64: HlType.I64;
 					case Bool: HlType.Bool;
 					case F64: HlType.F64;
 					case Bytes: HlType.Bytes;
@@ -442,6 +443,7 @@ class HlSymbolTable {
 		return switch type {
 			case Void: "void";
 			case I32: "i32";
+			case I64: "i64";
 			case Bool: "bool";
 			case F64: "f64";
 			case Bytes: "bytes";

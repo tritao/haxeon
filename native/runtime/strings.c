@@ -117,6 +117,19 @@ HL_PRIM vbyte *HL_NAME(__string_to_lower_case)( vbyte *value ) {
 	return result;
 }
 
+HL_PRIM vbyte *HL_NAME(__string_to_upper_case)( vbyte *value ) {
+	const uchar *text = (const uchar *)value;
+	int length = value == NULL ? 0 : (int)ustrlen(text);
+	vbyte *result = hl_alloc_bytes((length + 1) * (int)sizeof(uchar));
+	uchar *output = (uchar *)result;
+	for( int index = 0; index < length; index++ ) {
+		uchar code = text[index];
+		output[index] = code >= 'a' && code <= 'z' ? code - ('a' - 'A') : code;
+	}
+	output[length] = 0;
+	return result;
+}
+
 HL_PRIM bool HL_NAME(__string_is_space)( vbyte *value, int position ) {
 	int length = value == NULL ? 0 : (int)ustrlen((const uchar *)value);
 	if( position < 0 || position >= length ) return false;

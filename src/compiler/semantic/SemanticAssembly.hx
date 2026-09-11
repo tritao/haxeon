@@ -389,6 +389,21 @@ class SemanticAssembly {
 		}
 		for (name in bodyChanged.keys())
 			invalidate(invalid, invalidationReasons, name, BodyChanged, name);
+		var reverseBodyDependencies:Map<String, Array<String>> = [];
+		for (moduleName in names) {
+			if (!modules.exists(moduleName))
+				continue;
+			for (owner => dependencies in modules.get(moduleName).semanticDependencies)
+				for (dependency in dependencies)
+					if (dependency.kind == compiler.modules.ModuleState.SemanticDependencyKind.Body && dependency.targetId != null) {
+						var dependents = reverseBodyDependencies.get(dependency.targetId);
+						if (dependents == null) {
+							dependents = [];
+							reverseBodyDependencies.set(dependency.targetId, dependents);
+						}
+						dependents.push(owner);
+					}
+		}
 		var work:Array<String> = [for (name in signatureChanged.keys()) name], workCursor = 0;
 		for (name in bodyChanged.keys())
 			if (genericOrigins.exists(name)) {
@@ -404,19 +419,13 @@ class SemanticAssembly {
 			else if (!invalid.exists(changed))
 				invalidate(invalid, invalidationReasons, changed, DependencySignature, changed);
 			var changedId = context.resolveSemanticSymbol(changed);
-			if (changedId != null)
-				for (moduleName in names) {
-					if (!modules.exists(moduleName))
-						continue;
-					for (owner => dependencies in modules.get(moduleName).semanticDependencies)
-						for (dependency in dependencies)
-							if (dependency.kind == compiler.modules.ModuleState.SemanticDependencyKind.Body
-								&& dependency.targetId == changedId
-								&& !invalid.exists(owner)) {
-								work.push(owner);
-								invalidate(invalid, invalidationReasons, owner, DependencySignature, changed, changedId, Std.string(dependency.kind));
-							}
-				}
+			if (changedId != null && reverseBodyDependencies.exists(changedId))
+				for (owner in reverseBodyDependencies.get(changedId))
+					if (!invalid.exists(owner)) {
+						work.push(owner);
+						invalidate(invalid, invalidationReasons, owner, DependencySignature, changed, changedId,
+							Std.string(compiler.modules.ModuleState.SemanticDependencyKind.Body));
+					}
 			if (reverseCalls.exists(changed)) {
 				var callers = reverseCalls.get(changed);
 				for (caller in callers)

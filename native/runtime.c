@@ -5,6 +5,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
+#include <stdatomic.h>
+#include <ffi.h>
+
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <dlfcn.h>
+#endif
 
 /* Keep this as the stable build entry point. The implementation is organized
    by runtime domain below while remaining one translation unit, which lets the
@@ -19,5 +28,6 @@
 #include "runtime/files.c"
 #include "runtime/atomic_files.c"
 #include "runtime/system.c"
+#include "runtime/native_call.c"
 #include "runtime/module_runtime.c"
 #include "runtime/bindings.c"

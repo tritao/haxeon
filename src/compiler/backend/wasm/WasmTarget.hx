@@ -26,7 +26,7 @@ class WasmTarget {
 			case Wasm32: {
 					target: target,
 					referenceModel: Linear32,
-					exceptions: false,
+					exceptions: true,
 					bulkMemory: true,
 					simd: false,
 					threads: false,

@@ -6,26 +6,30 @@ import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypedAst.TypedCaptureSource;
 import compiler.ir.Ir.IrProgram;
+import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrNative;
+import compiler.ir.Ir.IrCNative;
+import compiler.types.TypedAst.NativeConvention;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrObjectField;
 import compiler.ir.Ir.IrObjectMethod;
 import compiler.ir.Ir.IrInterface;
 import compiler.ir.Ir.IrEnum;
 import compiler.ir.Ir.IrStaticField;
+import compiler.ir.SourceProvenance.Located;
 
 /** Builds complete IR programs and selects their required runtime surface. */
 class IrProgramAssembler {
 	public static function generate(typed:TypedProgram):IrProgram {
 		return assemble([for (fn in typed.functions) IrGenerator.generateFunction(fn)], nativesFrom(typed), objectsFrom(typed), interfacesFrom(typed),
-			enumsFrom(typed), staticFieldsFrom(typed), staticInitializerFrom(typed));
+			enumsFrom(typed), staticFieldsFrom(typed), staticInitializerFrom(typed), null, cNativesFrom(typed));
 	}
 
 	public static function nativesFrom(typed:TypedProgram):Array<IrNative>
 		return [
 			for (native in typed.natives)
-				{
+				if (native.convention == HashLinkNative) {
 					name: native.name,
 					library: native.library,
 					symbol: native.symbol,
@@ -33,6 +37,28 @@ class IrProgramAssembler {
 					result: IrGenerator.lowerType(native.result)
 				}
 		];
+
+	public static function cNativesFrom(typed:TypedProgram):Array<IrCNative> {
+		var result:Array<IrCNative> = [];
+		for (native in typed.natives)
+			switch native.convention {
+				case CNative(signature):
+					result.push({
+						name: native.name,
+						library: native.library,
+						symbol: native.symbol,
+						signature: signature,
+						pointerOwnership: "unspecified",
+						pointerRelease: null,
+						pointerLength: null,
+						pointerNullable: false,
+						arguments: [for (argument in native.arguments) IrGenerator.lowerType(argument)],
+						result: IrGenerator.lowerType(native.result)
+					});
+				case HashLinkNative:
+			}
+		return result;
+	}
 
 	/** Build the module boot function from static field initializers. */
 	public static function staticInitializerFrom(typed:TypedProgram, ?classOrder:Array<String>):Null<IrFunction> {
@@ -213,7 +239,7 @@ class IrProgramAssembler {
 	}
 
 	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>,
-			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializer:IrFunction, ?entryPoint:String):IrProgram {
+			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializer:IrFunction, ?entryPoint:String, ?cNatives:Array<IrCNative>):IrProgram {
 		var program = new IrProgram("__entry");
 		var allFunctions:Array<IrFunction> = [];
 		if (staticInitializer != null)
@@ -248,6 +274,16 @@ class IrProgramAssembler {
 						default:
 					}
 		program.objects = objects == null ? [] : objects;
+		program.cNatives = cNatives == null ? [] : cNatives;
+		var cNativeNames:Map<String, Bool> = [for (native in program.cNatives) native.name => true];
+		for (fn in allFunctions)
+			for (block in fn.blocks)
+				for (index in 0...block.instructions.length)
+					switch block.instructions[index].value {
+						case Call(output, name, arguments) if (cNativeNames.exists(name)):
+							block.instructions[index] = new Located(CNativeCall(output, name, arguments), block.instructions[index].provenance);
+						case _:
+					}
 		program.interfaces = interfaces == null ? [] : interfaces;
 		program.enums = enums == null ? [] : enums;
 		program.staticFields = staticFields == null ? [] : staticFields;

@@ -20,6 +20,7 @@ enum WasmRuntimeOperation {
 	EnumConstruction;
 	EnumAccess;
 	StringOperation;
+	NativeCall;
 	Throw;
 	Catch;
 	Allocate;
@@ -60,6 +61,7 @@ class WasmRuntimeAbi {
 			case MakeEnum(_, _, _, _): EnumConstruction;
 			case EnumIndex(_, _), EnumField(_, _, _, _): EnumAccess;
 			case ConstString(_, _): StringOperation;
+			case CNativeCall(_, _, _): NativeCall;
 			case BeginTry(_, _), EndTry(_): Catch;
 			case Call(_, name, _) if (StringTools.startsWith(name, "__array_alloc_")): AllocateArray;
 			case Call(_, name, _) if (StringTools.startsWith(name, "__array_")): Allocate;

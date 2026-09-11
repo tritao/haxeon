@@ -13,6 +13,7 @@ import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrTerminator;
 import compiler.ir.Ir.IrBlock;
 import compiler.ir.Ir.IrNative;
+import compiler.ir.Ir.IrCNative;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
@@ -29,6 +30,8 @@ class HlLower {
 	final objectTypeIndices:Map<String, Int> = [];
 	final objects:Map<String, IrObject> = [];
 	final enumTypeIndices:Map<String, Int> = [];
+	final cNatives:Map<String, IrCNative> = [];
+	final cDispatchNatives:Array<IrNative> = [];
 
 	public static function lower(program:IrProgram):HlCode {
 		IrVerifier.verify(program);
@@ -57,6 +60,31 @@ class HlLower {
 	}
 
 	function lowerProgram(program:IrProgram):HlCode {
+		var dispatchArities:Map<String, Bool> = [];
+		for (native in program.cNatives) {
+			cNatives.set(native.name, native);
+			var arity = native.arguments.length;
+			if (arity > 16)
+				throw 'Ordinary C calls support at most 16 arguments, got $arity for "${native.name}"';
+			var pointerResult = isNativePointer(native.result),
+				bytesResult = isManagedPointerBytes(native),
+				aggregateResult = isAggregateResult(native),
+				utf8Result = isUtf8Result(native),
+				dispatchKey = '$arity:$pointerResult:$bytesResult:$aggregateResult:$utf8Result';
+			if ((pointerResult || bytesResult || utf8Result) && native.pointerOwnership == "unspecified")
+				throw 'Ordinary C pointer result "${native.name}" requires @borrowed or @owned metadata before execution';
+			if (!dispatchArities.exists(dispatchKey)) {
+				dispatchArities.set(dispatchKey, true);
+				cDispatchNatives.push({
+					name: pointerResult ? '__c_native_pointer_invoke_$arity' : bytesResult ? '__c_native_bytes_invoke_$arity' : aggregateResult ? '__c_native_aggregate_invoke_$arity' : utf8Result ? '__c_native_utf8_invoke_$arity' : '__c_native_invoke_$arity',
+					library: "haxeon_runtime",
+					symbol: pointerResult ? 'native_pointer_invoke_$arity' : bytesResult ? 'native_bytes_invoke_$arity' : aggregateResult ? 'native_aggregate_invoke_$arity' : utf8Result ? 'native_utf8_invoke_$arity' : 'native_invoke_$arity',
+					arguments: ((pointerResult || utf8Result) ? [Bytes, Bytes, Bytes, Bytes, Bytes, Bool] : bytesResult ? [Bytes, Bytes, Bytes, Bytes, Bytes, Bytes, Bool] : [Bytes, Bytes, Bytes])
+						.concat([for (_ in 0...arity) Dyn]),
+					result: pointerResult ? Abstract("native_pointer") : (bytesResult || aggregateResult) ? Abstract("realtime_bytes") : utf8Result ? Bytes : Dyn
+				});
+			}
+		}
 		var hasFunctionIndices = false;
 		for (_ in functionIndices)
 			hasFunctionIndices = true;
@@ -64,8 +92,18 @@ class HlLower {
 			var nextFunction = 0;
 			for (native in program.natives)
 				addFunctionName(native.name, nextFunction++);
+			for (native in cDispatchNatives)
+				addFunctionName(native.name, nextFunction++);
 			for (fn in program.functions)
 				addFunctionName(fn.name, nextFunction++);
+		} else {
+			var nextFunction = 0;
+			for (index in functionIndices)
+				if (index >= nextFunction)
+					nextFunction = index + 1;
+			for (native in cDispatchNatives)
+				if (!functionIndices.exists(native.name))
+					addFunctionName(native.name, nextFunction++);
 		}
 		for (enumDecl in program.enums)
 			symbols.reserveEnum(enumDecl.name);
@@ -126,6 +164,8 @@ class HlLower {
 		for (field in program.staticFields)
 			symbols.internGlobal(field.name, field.type);
 		for (native in program.natives)
+			lowerNative(native);
+		for (native in cDispatchNatives)
 			lowerNative(native);
 		for (fn in program.functions)
 			try {
@@ -232,6 +272,7 @@ class HlLower {
 		var registers:Map<Int, Int> = [];
 		var registerTypes:Array<Int> = [];
 		var catchValues:Map<Int, IrValue> = [];
+		var nullValues:Map<Int, Bool> = [];
 		for (argument in fn.arguments)
 			defineRegister(argument, registers, registerTypes);
 		for (block in fn.blocks)
@@ -239,6 +280,11 @@ class HlLower {
 				var output = instructionOutput(instruction.value);
 				if (output != null)
 					defineRegister(output, registers, registerTypes);
+				switch instruction.value {
+					case ConstNull(value):
+						nullValues.set(value.id, true);
+					case _:
+				}
 			}
 		var edges:Map<String, Array<{destination:IrValue, source:IrValue}>> = [];
 		for (block in fn.blocks)
@@ -381,6 +427,62 @@ class HlLower {
 							case 2: instructions.push(HlInstruction.Call2(destination, functionIndex, args[0], args[1]));
 							default: instructions.push(HlInstruction.CallN(destination, functionIndex, args));
 						}
+					case CNativeCall(output, functionName, arguments):
+						var native = cNatives.get(functionName);
+						if (native == null)
+							throw 'Unknown ordinary C function "$functionName"';
+						for (type in native.arguments)
+							if (unsupportedCDispatchArgument(type))
+								throw 'Ordinary C function "$functionName" uses an unsupported executable argument type $type';
+						if (native.result != Void && unsupportedCDispatchResult(native.result))
+							throw 'Ordinary C function "$functionName" uses an unsupported executable result type ${native.result}';
+						var callArguments = [
+							temporaryRegister(Bytes, registerTypes),
+							temporaryRegister(Bytes, registerTypes),
+							temporaryRegister(Bytes, registerTypes)
+						];
+						instructions.push(HlInstruction.LoadString(callArguments[0], internString(native.library)));
+						instructions.push(HlInstruction.LoadString(callArguments[1], internString(native.symbol)));
+						instructions.push(HlInstruction.LoadString(callArguments[2], internString(native.signature)));
+						var pointerResult = isNativePointer(native.result),
+							bytesResult = isManagedPointerBytes(native),
+							aggregateResult = isAggregateResult(native),
+							utf8Result = isUtf8Result(native);
+						if (pointerResult || bytesResult || utf8Result) {
+							var ownership = temporaryRegister(Bytes, registerTypes),
+								release = temporaryRegister(Bytes, registerTypes),
+								nullable = temporaryRegister(Bool, registerTypes);
+							instructions.push(HlInstruction.LoadString(ownership, internString(native.pointerOwnership)));
+							instructions.push(HlInstruction.LoadString(release, internString(native.pointerRelease == null ? "" : native.pointerRelease)));
+							instructions.push(HlInstruction.LoadBool(nullable, native.pointerNullable));
+							callArguments.push(ownership);
+							callArguments.push(release);
+							if (bytesResult) {
+								var length = temporaryRegister(Bytes, registerTypes);
+								instructions.push(HlInstruction.LoadString(length, internString(native.pointerLength)));
+								callArguments.push(length);
+							}
+							callArguments.push(nullable);
+						}
+						for (argument in arguments) {
+							var boxed = temporaryRegister(Dyn, registerTypes);
+							if (nullValues.exists(argument.id))
+								instructions.push(HlInstruction.LoadNull(boxed));
+							else
+								instructions.push(HlInstruction.ToDyn(boxed, requireRegister(argument, registers)));
+							callArguments.push(boxed);
+						}
+						var dynamicResult = temporaryRegister(pointerResult ? Abstract("native_pointer") : (bytesResult || aggregateResult) ? Abstract("realtime_bytes") : utf8Result ? Bytes : Dyn,
+							registerTypes);
+						instructions.push(HlInstruction.CallN(dynamicResult,
+							requireFunction(pointerResult ? '__c_native_pointer_invoke_${arguments.length}' : bytesResult ? '__c_native_bytes_invoke_${arguments.length}' : aggregateResult ? '__c_native_aggregate_invoke_${arguments.length}' : utf8Result ? '__c_native_utf8_invoke_${arguments.length}' : '__c_native_invoke_${arguments.length}'),
+							callArguments));
+						if (native.result == Void)
+							defineRegister(output, registers, registerTypes);
+						else if (pointerResult || bytesResult || aggregateResult || utf8Result)
+							instructions.push(HlInstruction.Move(defineRegister(output, registers, registerTypes), dynamicResult));
+						else
+							instructions.push(HlInstruction.SafeCast(defineRegister(output, registers, registerTypes), dynamicResult));
 					case StaticClosure(output, functionName):
 						instructions.push(HlInstruction.StaticClosure(defineRegister(output, registers, registerTypes), requireFunction(functionName)));
 					case InstanceClosure(output, functionName, receiver):
@@ -663,6 +765,36 @@ class HlLower {
 		return index;
 	}
 
+	function temporaryRegister(type:IrType, types:Array<Int>):Int {
+		var index = types.length;
+		types.push(internType(type));
+		return index;
+	}
+
+	static function unsupportedCDispatchArgument(type:IrType):Bool
+		return switch type {
+			case I32, I64, Bool, F64, Bytes, Abstract("realtime_bytes"), Abstract("native_pointer"), Abstract("native_callback"): false;
+			default: true;
+		};
+
+	static function unsupportedCDispatchResult(type:IrType):Bool
+		return switch type {
+			case I32, I64, Bool, F64, Bytes, Abstract("native_pointer"), Abstract("realtime_bytes"): false;
+			default: true;
+		};
+
+	static function isNativePointer(type:IrType):Bool
+		return switch type {
+			case Abstract("native_pointer"): true;
+			case _: false;
+		};
+
+	static function isManagedPointerBytes(native:IrCNative):Bool
+		return native.pointerLength != null && switch native.result {
+			case Abstract("realtime_bytes"): true;
+			case _: false;
+		};
+
 	static function instructionOutput(instruction:IrInstruction):Null<IrValue>
 		return compiler.ir.IrOperands.output(instruction);
 
@@ -670,6 +802,20 @@ class HlLower {
 		if (!registers.exists(value.id))
 			throw 'IR value ${value.id} is used before definition';
 		return registers.get(value.id);
+	}
+
+	static function isAggregateResult(native:IrCNative):Bool
+		return native.pointerLength == null && switch (native.result) {
+			case Abstract("realtime_bytes"): true;
+			case _: false;
+		};
+
+	static function isUtf8Result(native:IrCNative):Bool {
+		var separator = native.signature.indexOf(">");
+		if (separator < 0)
+			return false;
+		var result = native.signature.substr(separator + 1);
+		return StringTools.startsWith(result, "13") || StringTools.startsWith(result, "14");
 	}
 
 	function internInt(value:Int):Int {

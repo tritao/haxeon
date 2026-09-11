@@ -22,6 +22,7 @@ import compiler.hl.persistence.HlAssemblerStateCodec;
 import haxe.io.Bytes;
 import compiler.types.Type.CompilerType;
 import compiler.ir.Ir.IrNative;
+import compiler.ir.Ir.IrCNative;
 import compiler.ir.Ir.IrObject;
 import compiler.types.TypeRegistry;
 import compiler.types.TypeRegistry.TypeCompatibility;
@@ -47,6 +48,20 @@ import compiler.modules.ModuleSourceLoader;
 import compiler.semantic.ModuleCanonicalizer;
 import compiler.semantic.LambdaCollector;
 import compiler.semantic.SemanticWorkspace;
+import compiler.ffi.HxiModel.HxiInterface;
+import compiler.ffi.HxiModel.HxiDeclaration;
+import compiler.ffi.HxiParser;
+import compiler.ffi.HxiProjection;
+
+typedef FfiInterfaceSource = {
+	final path:String;
+	final text:String;
+}
+
+typedef FfiComposition = {
+	final omitted:Map<String, Bool>;
+	final declarations:Map<String, HxiDeclaration>;
+}
 
 /** Public alias for a host-native declaration accepted by the compiler. */
 typedef NativeFunction = NativeDefinition;
@@ -143,6 +158,8 @@ class Compiler {
 	public var types(default, null):TypeRegistry;
 
 	final natives:NativeRegistry;
+	final ffiInterfaceSources:Array<FfiInterfaceSource> = [];
+	final ffiInterfaceModels:Map<String, HxiInterface> = [];
 	var objectCache:Map<String, IrObject> = [];
 	var publishedAbi:Null<RuntimeAbiDescriptor>;
 	var compiledOnce = false;
@@ -154,7 +171,7 @@ class Compiler {
 	var cachedCompileResult:Null<CompileResult>;
 	var cachedSemanticProgram:Null<SemanticProgram>;
 
-	public function new(?identityState:Bytes, ?nativeConfiguration:Array<NativeFunction>) {
+	public function new(?identityState:Bytes, ?nativeConfiguration:Array<NativeFunction>, ?ffiConfiguration:Array<FfiInterfaceSource>) {
 		semanticWorkspace = new SemanticWorkspace(modules);
 		natives = new NativeRegistry(nativeConfiguration);
 		if (identityState == null) {
@@ -183,6 +200,9 @@ class Compiler {
 				beginRehydration(assembler);
 			}
 		}
+		if (ffiConfiguration != null)
+			for (source in ffiConfiguration)
+				registerFfiInterface(source.path, source.text, false);
 	}
 
 	public function exportIdentityState():Bytes {
@@ -230,6 +250,108 @@ class Compiler {
 	public function nativeConfiguration():Array<NativeFunction> {
 		return natives.configuration();
 	}
+
+	/** Parse and register one immutable target-specific ABI interface before compilation. */
+	public function addFfiInterface(path:String, source:String):Void {
+		registerFfiInterface(path, source, true);
+	}
+
+	function registerFfiInterface(path:String, source:String, enforceFreeze:Bool):Void {
+		if (enforceFreeze && compiledOnce)
+			throw "FFI interfaces are frozen after the first compilation";
+		var visibleDeclarations:Array<HxiDeclaration> = [];
+		for (dependency in ffiInterfaceModels)
+			for (declaration in dependency.declarations)
+				visibleDeclarations.push(declaration);
+		var model = HxiParser.parse(path, source, visibleDeclarations);
+		if (ffiInterfaceModels.exists(model.name))
+			throw 'FFI interface "${model.name}" is already registered';
+		for (dependency in model.dependencies)
+			if (!ffiInterfaceModels.exists(dependency))
+				throw 'FFI interface "${model.name}" depends on unknown interface "$dependency"';
+		var dependencyDeclarations:Array<HxiDeclaration> = [];
+		for (dependencyName in model.dependencies) {
+			var dependencyModel = ffiInterfaceModels.get(dependencyName);
+			for (declaration in dependencyModel.declarations)
+				dependencyDeclarations.push(declaration);
+		}
+		model = HxiParser.parse(path, source, dependencyDeclarations);
+		ffiInterfaceModels.set(model.name, model);
+		ffiInterfaceSources.push({path: path, text: source});
+		refreshFfiProjections();
+	}
+
+	/** Validated ABI interfaces in deterministic interface-name order. */
+	public function ffiInterfaces():Array<HxiInterface> {
+		var names = [for (name in ffiInterfaceModels.keys()) name];
+		names.sort(Reflect.compare);
+		return [for (name in names) ffiInterfaceModels.get(name)];
+	}
+
+	public function irCNatives():Array<IrCNative> {
+		var result:Array<IrCNative> = [];
+		for (model in ffiInterfaces()) {
+			var composition = ffiComposition(model);
+			for (native in HxiProjection.cNatives(model, composition.omitted, composition.declarations))
+				result.push(native);
+		}
+		return result;
+	}
+
+	function refreshFfiProjections():Void {
+		for (model in ffiInterfaces()) {
+			var composition = ffiComposition(model),
+				projection = HxiProjection.source(model, composition.omitted, composition.declarations);
+			if (projection.length > 0)
+				update(model.name + ".hx", projection);
+			else
+				sourceGeneration++;
+		}
+	}
+
+	function ffiComposition(model:HxiInterface):FfiComposition {
+		// Imported HXI files can repeat declarations from included headers. Keep
+		// those snapshots available for ABI classification, but emit each shared
+		// declaration and native symbol from its owning interface only.
+		var omitted:Map<String, Bool> = [],
+			declarations:Map<String, HxiDeclaration> = [],
+			visited:Map<String, Bool> = [],
+			active:Map<String, Bool> = [];
+		for (dependency in model.dependencies)
+			collectFfiDependency(model.name, dependency, omitted, declarations, visited, active);
+		return {omitted: omitted, declarations: declarations};
+	}
+
+	function collectFfiDependency(owner:String, name:String, omitted:Map<String, Bool>, declarations:Map<String, HxiDeclaration>, visited:Map<String, Bool>,
+			active:Map<String, Bool>):Void {
+		if (active.get(name) == true)
+			throw 'Cyclic HXI dependency involving "$owner" and "$name"';
+		if (visited.get(name) == true)
+			return;
+		var dependency = ffiInterfaceModels.get(name);
+		if (dependency == null)
+			throw 'FFI interface "$owner" depends on unknown interface "$name"';
+		active.set(name, true);
+		for (nested in dependency.dependencies)
+			collectFfiDependency(owner, nested, omitted, declarations, visited, active);
+		active.remove(name);
+		visited.set(name, true);
+		for (declaration in dependency.declarations) {
+			var declarationName = ffiDeclarationName(declaration);
+			omitted.set(declarationName, true);
+			if (!declarations.exists(declarationName))
+				declarations.set(declarationName, declaration);
+		}
+	}
+
+	static function ffiDeclarationName(declaration:HxiDeclaration):String
+		return switch declaration {
+			case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _) | Constant(name, _, _) | Structure(name, _, _, _, _) |
+				Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _, _): name;
+		};
+
+	function ffiConfiguration():Array<FfiInterfaceSource>
+		return [for (source in ffiInterfaceSources) {path: source.path, text: source.text}];
 
 	/** Add a filesystem root whose modules are loaded on demand during resolution. */
 	public function addSourceRoot(path:String):Void {
@@ -342,7 +464,7 @@ class Compiler {
 	}
 
 	function fork():Compiler {
-		var candidate = new Compiler(exportIdentityState(), nativeConfiguration());
+		var candidate = new Compiler(exportIdentityState(), nativeConfiguration(), ffiConfiguration());
 		candidate.sourceLoader = sourceLoader.copy();
 		candidate.configurationIdentity = configurationIdentity;
 		candidate.configurationScopeIdentity = configurationScopeIdentity;
@@ -474,7 +596,7 @@ class Compiler {
 	}
 
 	function createCandidate(snapshot:CompilerSnapshot, startingAssembler:Null<HlModuleAssembler>):Compiler {
-		var candidate = new Compiler(exportIdentityState(), nativeConfiguration());
+		var candidate = new Compiler(exportIdentityState(), nativeConfiguration(), ffiConfiguration());
 		candidate.sourceLoader = sourceLoader.copy();
 		candidate.configurationIdentity = configurationIdentity;
 		candidate.configurationScopeIdentity = configurationScopeIdentity;

@@ -29,4 +29,8 @@ extern class Bytes {
 
 	@:hlNative("haxeon_runtime", "__bytes_of_string")
 	public static function ofString(value:String):Bytes;
+
+	/** Returns a zero-copy view over a validated byte range. */
+	@:hlNative("haxeon_runtime", "__bytes_view")
+	public static function view(bytes:Bytes, offset:Int, length:Int):Bytes;
 }
