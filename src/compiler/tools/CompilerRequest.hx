@@ -4,6 +4,7 @@ typedef CompilerRequest = {
 	final target:String;
 	final output:String;
 	final xmlOutput:Null<String>;
+	final irOutput:Null<String>;
 	final entry:String;
 	final dumpFunction:Int;
 	final ffiHeader:Null<String>;

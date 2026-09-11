@@ -12,6 +12,7 @@ import compiler.ir.Ir.IrProgram;
 import haxe.io.Bytes;
 import sys.io.File;
 import compiler.documentation.HaxeXmlWriter;
+import compiler.ir.codec.CanonicalIrCodec;
 
 /** Executes one compiler request and writes its deterministic artifacts. */
 class CompilerDriver {
@@ -39,6 +40,8 @@ class CompilerDriver {
 			File.saveBytes(request.output + ".functions", Bytes.ofString(functionMap(result.functionIndices)));
 		if (request.xmlOutput != null)
 			File.saveContent(request.xmlOutput, HaxeXmlWriter.emit(compiler.modules));
+		if (request.irOutput != null)
+			File.saveBytes(request.irOutput, CanonicalIrCodec.encode(result.ir));
 		if (request.ffiHeader != null && request.ffiLibrary != null)
 			File.saveContent(request.ffiHeader, CHeaderEmitter.emit(result.ir.natives, request.ffiLibrary));
 		report("compiled " + Std.string(request.paths.length) + " source files -> " + request.output);

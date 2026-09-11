@@ -3,8 +3,8 @@ package compiler.tools;
 /** Parses and validates the stable command-line build interface. */
 class CompilerArguments {
 	public static function parse(arguments:Array<String>):CompilerRequest {
-		var target = "hl", output = "out/main.hl", xmlOutput:Null<String> = null, entry = "compiler.tools.HaxeonCompiler", dumpFunction = -1,
-			ffiHeader:Null<String> = null, ffiLibrary:Null<String> = null, ffiInterfaces:Array<String> = [], roots:Array<String> = [],
+		var target = "hl", output = "out/main.hl", xmlOutput:Null<String> = null, irOutput:Null<String> = null, entry = "compiler.tools.HaxeonCompiler",
+			dumpFunction = -1, ffiHeader:Null<String> = null, ffiLibrary:Null<String> = null, ffiInterfaces:Array<String> = [], roots:Array<String> = [],
 			paths:Array<String> = [];
 		var index = 0;
 		while (index < arguments.length) {
@@ -23,6 +23,8 @@ class CompilerArguments {
 					throw 'Compiler option "--xml" requires a value';
 			} else if (StringTools.startsWith(argument, "--entry="))
 				entry = value(argument, "--entry=");
+			else if (StringTools.startsWith(argument, "--ir-output="))
+				irOutput = value(argument, "--ir-output=");
 			else if (StringTools.startsWith(argument, "--root="))
 				roots.push(value(argument, "--root="));
 			else if (StringTools.startsWith(argument, "--ffi-header="))
@@ -50,6 +52,7 @@ class CompilerArguments {
 			target: target,
 			output: output,
 			xmlOutput: xmlOutput,
+			irOutput: irOutput,
 			entry: entry,
 			dumpFunction: dumpFunction,
 			ffiHeader: ffiHeader,

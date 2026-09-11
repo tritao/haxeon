@@ -691,6 +691,7 @@ class TestMain {
 			"--output=out/sample.hl",
 			"--xml",
 			"out/api.xml",
+			"--ir-output=out/sample.hir",
 			"--entry=sample.Main",
 			"--root=source",
 			"--dump-function=42",
@@ -703,6 +704,7 @@ class TestMain {
 		if (compilerRequest.target != "wasm32"
 			|| compilerRequest.output != "out/sample.hl"
 			|| compilerRequest.xmlOutput != "out/api.xml"
+			|| compilerRequest.irOutput != "out/sample.hir"
 			|| compilerRequest.entry != "sample.Main"
 			|| compilerRequest.dumpFunction != 42
 			|| compilerRequest.roots.length != 1
