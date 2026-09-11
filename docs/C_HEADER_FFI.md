@@ -17,8 +17,8 @@ offsets are target-specific. Include paths may be repeated. Declarations from
 the input header and those include roots are imported; declarations from system
 headers are excluded.
 
-The importer supports C typedefs, annotated opaque handles, anonymous integer enum constants, named enums, structs,
-fixed-size arrays, pointers, `const`, and non-variadic function declarations.
+The importer supports C typedefs, annotated opaque handles, anonymous integer enum constants, named enums, fixed-width
+enum aliases, structs, fixed-size arrays, pointers, `const`, and non-variadic function declarations.
 It maps fixed-width integer typedefs and `size_t`-family types to raw HXI
 primitives. Structs carry Clang-computed `@layout` and `@offset` annotations.
 Output is sorted so the same header and target produce byte-identical results.
@@ -263,6 +263,22 @@ representable widths. Both forms project as nominal Haxe enum abstracts while
 native calls and structure fields retain the declared integer ABI. Clang-imported
 named C enums currently use `c_int` unless the header specifies a fixed underlying
 type; `flags` remains an explicit HXI authoring distinction rather than a heuristic.
+
+Headers that must keep a fixed-width typedef ABI can opt into the same nominal
+projection without changing the C type. Place an `hxi:enum:<typedef>` annotation
+on the anonymous enum, for example:
+
+```c
+#define HXI_ENUM(name) __attribute__((annotate("hxi:enum:" #name)))
+typedef uint32_t sample_mode;
+enum HXI_ENUM(sample_mode) { SAMPLE_MODE_DEFAULT = 0, SAMPLE_MODE_ALTERNATE };
+```
+
+The importer emits `enum sample_mode : u32` and omits the duplicate scalar alias.
+The typedef remains the ABI source of truth, while enum values retain their
+documentation and implicit C enumerator values are materialized in HXI. The
+semantic Haxe projection also keeps enum members in its constants class for
+source compatibility with callers that use generated constants.
 
 C function-pointer typedefs import as HXI `callback` declarations. Scalar and
 by-value structure arguments and results use the same recursive ABI descriptors

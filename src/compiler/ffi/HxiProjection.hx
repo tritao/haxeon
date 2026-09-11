@@ -108,6 +108,10 @@ class HxiProjection {
 				case Constant(name, value, _):
 					if (!isOmitted(omitted, name))
 						constants.push({name: name, value: value});
+				case Enumeration(_, _, _, values, _):
+					for (value in values)
+						if (!isOmitted(omitted, value.name))
+							constants.push({name: value.name, value: Std.string(value.value)});
 				case _:
 			}
 		if (constants.length != 0) {

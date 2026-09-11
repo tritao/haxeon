@@ -36,6 +36,13 @@ enum sample_result {
     SAMPLE_RESULT_FAILED = -1
 };
 
+#define HXI_ENUM(name) __attribute__((annotate("hxi:enum:" #name)))
+typedef uint32_t sample_mode;
+enum HXI_ENUM(sample_mode) {
+    SAMPLE_MODE_DEFAULT = 0,
+    SAMPLE_MODE_ALTERNATE
+};
+
 typedef struct sample_options {
     uint32_t struct_size;
     const char *title HXI_NULLABLE_UTF8;
@@ -55,6 +62,7 @@ int32_t sample_read(uint8_t *_Nullable data HXI_OUT_BUFFER(size), uint32_t *size
 int32_t sample_apply(sample_binary_callback callback, int32_t left, int32_t right);
 int32_t sample_apply_nullable(sample_binary_callback _Nullable callback);
 enum sample_result sample_check_result(enum sample_result value);
+sample_mode sample_check_mode(sample_mode value);
 const char *sample_error(void) HXI_RETURNS_BORROWED_UTF8;
 int32_t sample_check_utf8(hxi_utf8 value, hxi_nullable_utf8 optional);
 int32_t sample_check_annotated_utf8(const char *value HXI_UTF8,

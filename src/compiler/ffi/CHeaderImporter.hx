@@ -52,6 +52,23 @@ class CHeaderImporter {
 		for (include in includes)
 			roots.push(FileSystem.fullPath(include));
 		collect(Json.parse(astText), declarations, roots, FileSystem.fullPath(header), excluded);
+		for (declaration in declarations) {
+			if (field(declaration, "kind") != "EnumDecl")
+				continue;
+			var enumName:String = field(declaration, "_hxiEnumName");
+			if (enumName == null)
+				continue;
+			var alias:Dynamic = enumAlias(enumName, declarations),
+				representation = alias == null ? null : mapType(field(field(alias, "type"), "qualType"));
+			if (alias == null)
+				throw '${declarationLocation(declaration)}: annotated enum "$enumName" has no matching typedef';
+			if (representation != "i8" && representation != "u8" && representation != "i16" && representation != "u16"
+				&& representation != "i32" && representation != "u32")
+				throw '${declarationLocation(declaration)}: annotated enum "$enumName" must use an 8-, 16-, or 32-bit fixed-width integer typedef';
+			Reflect.setField(declaration, "_hxiEnumRepresentation", representation);
+			Reflect.setField(declaration, "_hxiDocumentationNode", alias);
+			Reflect.setField(alias, "_hxiEnumAlias", true);
+		}
 		declarations.sort(function(left, right) return Reflect.compare(key(left), key(right)));
 		var handleNames:Map<String, Bool> = [],
 			handleRecords:Map<String, Dynamic> = [];
@@ -83,15 +100,19 @@ class CHeaderImporter {
 			currentFile = FileSystem.fullPath(locationFile);
 		Reflect.setField(node, "_hxiFile", currentFile);
 		var kind:String = field(node, "kind"),
-			name:String = field(node, "name");
-		if (name != null
+			name:String = field(node, "name"),
+			annotatedEnumName:String = kind == "EnumDecl" ? enumAnnotation(node) : null;
+		if (annotatedEnumName != null)
+			Reflect.setField(node, "_hxiEnumName", annotatedEnumName);
+		var userDeclaration = annotatedEnumName != null || (name != null
 			&& !StringTools.startsWith(name, "__")
-			&& (kind == "TypedefDecl" || kind == "RecordDecl" || kind == "FunctionDecl" || kind == "EnumDecl" || kind == "EnumConstantDecl")
+			&& (kind == "TypedefDecl" || kind == "RecordDecl" || kind == "FunctionDecl" || kind == "EnumDecl" || kind == "EnumConstantDecl"));
+		if (userDeclaration
 			&& isUserDeclaration(node, roots, currentFile)
 			&& excluded.indexOf(currentFile) < 0)
 			output.push(node);
 		var inner:Array<Dynamic> = field(node, "inner");
-		if (inner != null && !(kind == "EnumDecl" && name != null))
+		if (inner != null && !(kind == "EnumDecl" && (name != null || annotatedEnumName != null)))
 			for (child in inner)
 				currentFile = collect(child, output, roots, currentFile, excluded);
 		return currentFile;
@@ -103,21 +124,33 @@ class CHeaderImporter {
 			type:Dynamic = field(node, "type");
 		switch kind {
 			case "EnumDecl":
-				var fixed:Dynamic = field(node, "fixedUnderlyingType"), representation = fixed == null ? "c_int" : mapType(field(fixed, "qualType")),
-					values = [
-						for (child in children(node))
-							if (field(child, "kind") == "EnumConstantDecl") child
-					];
-				emitDocumentation(node, output);
-				output.add('\tenum $name : $representation {\n');
+				var enumName:String = field(node, "_hxiEnumName"),
+					annotatedRepresentation:String = field(node, "_hxiEnumRepresentation"),
+					fixed:Dynamic = field(node, "fixedUnderlyingType"),
+					representation = annotatedRepresentation == null
+						? (fixed == null ? "c_int" : mapType(field(fixed, "qualType")))
+						: annotatedRepresentation,
+				values = [
+					for (child in children(node))
+						if (field(child, "kind") == "EnumConstantDecl") child
+				];
+				if (enumName == null)
+					enumName = name;
+				var documentationNode:Dynamic = field(node, "_hxiDocumentationNode");
+				emitDocumentation(documentationNode == null ? node : documentationNode, output);
+				output.add('\tenum $enumName : $representation {\n');
+				var nextValue = Int64.parseString("0");
 				for (entry in values) {
 					var entryName:String = field(entry, "name"),
-						value = constantValue(entry);
-					if (value != null) {
+						rawValue = constantValue(entry);
+					if (rawValue == null)
+						rawValue = Int64.toStr(nextValue);
+					if (rawValue != null) {
 						if (field(entry, "_hxiFile") == null)
 							Reflect.setField(entry, "_hxiFile", field(node, "_hxiFile"));
 						emitDocumentation(entry, output, "\t\t");
-						output.add('\t\t$entryName = $value;\n');
+						output.add('\t\t$entryName = ${projectedIntegerValue(entry, rawValue)};\n');
+						nextValue = Int64.add(Int64.parseString(rawValue), Int64.parseString("1"));
 					}
 				}
 				output.add("\t}\n");
@@ -142,6 +175,8 @@ class CHeaderImporter {
 							'arg$index: ${mapType(callback.arguments[index])}'
 					].join(", "));
 					output.add(') -> ${mapType(callback.result)}${callback.callConvention == "cdecl" ? "" : ' @callconv("' + callback.callConvention + '")'};\n');
+				} else if (field(node, "_hxiEnumAlias") == true) {
+					// The fixed-width typedef is represented by the paired HXI enum.
 				} else if (!StringTools.startsWith(qualified, "struct ") && !StringTools.startsWith(qualified, "enum ")) {
 					emitDocumentation(node, output);
 					output.add('\ttype $name = ${mapType(qualified)};\n');
@@ -548,6 +583,10 @@ class CHeaderImporter {
 		var value = constantValue(node);
 		if (value == null || !~/^-?[0-9]+$/.match(value))
 			return value;
+		return projectedIntegerValue(node, value);
+	}
+
+	static function projectedIntegerValue(node:Dynamic, value:String):String {
 		var parsed = Int64.parseString(value),
 			minimum = Int64.parseString("-2147483648"),
 			maximum = Int64.parseString("4294967295");
@@ -558,11 +597,38 @@ class CHeaderImporter {
 		return Int64.toStr(parsed);
 	}
 
+	/** Returns the fixed-width enum type named by an hxi:enum annotation. */
+	static function enumAnnotation(node:Dynamic):Null<String> {
+		for (child in children(node)) {
+			if (field(child, "kind") != "AnnotateAttr")
+				continue;
+			var source = annotationSource(node, child);
+			if (source.indexOf("hxi:enum:") < 0)
+				continue;
+			var direct = ~/hxi:enum:([A-Za-z_][A-Za-z0-9_]*)/;
+			if (direct.match(source))
+				return direct.matched(1);
+			var argument = expansionArgument(node, child);
+			if (argument != null)
+				return argument;
+			throw '${declarationLocation(node)}: could not resolve annotated enum type';
+		}
+		return null;
+	}
+
+	static function enumAlias(name:String, declarations:Array<Dynamic>):Dynamic {
+		for (declaration in declarations)
+			if (field(declaration, "kind") == "TypedefDecl" && field(declaration, "name") == name)
+				return declaration;
+		return null;
+	}
+
 	static function field(value:Dynamic, name:String):Dynamic
 		return value == null ? null : Reflect.field(value, name);
 
 	static function key(value:Dynamic):String
-		return Std.string(field(value, "kind")) + ":" + Std.string(field(value, "name"));
+		return Std.string(field(value, "kind")) + ":"
+			+ Std.string(field(value, "name") == null ? field(value, "_hxiEnumName") : field(value, "name"));
 
 	static function moduleName(path:String):String {
 		var name = path.split("/").pop();
