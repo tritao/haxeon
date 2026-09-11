@@ -5,6 +5,7 @@ import compiler.ffi.HxiModel.HxiType;
 import compiler.ffi.HxiModel.HxiPointerOwnership;
 import compiler.ffi.HxiParser;
 import compiler.ffi.HxiProjection;
+import compiler.ffi.HxiProjectionProfile;
 
 class HxiParserMain {
 	static final valid = '// generated ABI\n'
@@ -61,10 +62,50 @@ class HxiParserMain {
 		}
 		var enumSource = HxiProjection.source(enumerations);
 		expect(enumSource.indexOf("enum abstract Result(Int) from Int to Int") >= 0
-			&& enumSource.indexOf("var BOTH = 3") >= 0
-			&& enumSource.indexOf("public static inline final OK:Int = 0") >= 0
+			&& enumSource.indexOf("var Ok = 0") >= 0
+			&& enumSource.indexOf("var Both = 3") >= 0
 			&& enumSource.indexOf("extern function check(arg0:Result, arg1:Options):Result") >= 0,
-			"enums should retain nominal types, compatibility constants, and integer ABI calls");
+			"enums should retain concise nominal types and integer ABI calls");
+		var nativeNames = HxiParser.parse("native-names.hxi",
+			'interface native_names @target("x86_64-linux-gnu") @library("native_names") { enum nk_result : i32 { NK_OK = 0; NK_ERROR_INVALID_ARGUMENT = -2; } extern fn check(value: nk_result) -> nk_result; }');
+		var nativeProfile = HxiProjectionProfile.parse("native-names.hxmap",
+			'{"interface":"native_names","typePrefix":"nk_","enumValuePrefixes":["NK_"]}');
+		var nativeNameSource = HxiProjection.source(nativeNames, null, null, null, nativeProfile);
+		expect(nativeNameSource.indexOf("enum abstract Result(Int)") >= 0
+			&& nativeNameSource.indexOf("extern function check(arg0:Result):Result") >= 0,
+			"snake-case enum names should project to concise PascalCase");
+		var genericProfile = HxiProjectionProfile.parse("generic.hxmap",
+			'{"interface":"generic","typePrefix":"lib_","enumValuePrefixes":["LIB_"],"functionNames":{"check":"validate"},"fieldNames":{"lib_point":{"color":"shade"}},"constantNames":{"LIB_VERSION":"version"}}');
+		var genericModel = HxiParser.parse("generic.hxi",
+			'interface generic @target("x86_64-linux-gnu") @library("generic") { const LIB_VERSION = 1; enum lib_color : i32 { LIB_RED = 1; } handle lib_handle : u32; struct lib_point @layout(4, 4) { color: lib_color @offset(0); } extern fn check(value: lib_point) -> lib_handle; }');
+		var genericSource = HxiProjection.source(genericModel, null, null, null, genericProfile),
+			genericNatives = HxiProjection.cNatives(genericModel, null, null, null, genericProfile);
+		expect(genericSource.indexOf("enum abstract Color(Int)") >= 0
+			&& genericSource.indexOf("abstract Handle(Int)") >= 0
+			&& genericSource.indexOf("abstract Point(haxe.io.Bytes)") >= 0
+			&& genericSource.indexOf("get_shade():Color") >= 0
+			&& genericSource.indexOf("extern function validate(arg0:Point):Handle") >= 0
+			&& genericSource.indexOf("public static inline final version:Int = 1") >= 0
+			&& genericNatives[0].name == "generic.validate",
+			"projection policies should rename types, fields, functions, constants, and native references consistently");
+		var styleProfile = HxiProjectionProfile.parse("style.hxmap",
+			'{"interface":"style","typePrefix":"lib_","functionPrefix":"lib_","functionCase":"camel","fieldCase":"camel","constantPrefix":"LIB_","constantCase":"camel"}');
+		var styleModel = HxiParser.parse("style.hxi",
+			'interface style @target("x86_64-linux-gnu") @library("style") { const LIB_VERSION = 1; struct lib_point @layout(4, 4) { text_value: i32 @offset(0); } extern fn lib_check_value(value: lib_point) -> i32; }');
+		var styleSource = HxiProjection.source(styleModel, null, null, null, styleProfile),
+			styleNatives = HxiProjection.cNatives(styleModel, null, null, null, styleProfile);
+		expect(styleSource.indexOf("public static inline final version:Int = 1") >= 0
+			&& styleSource.indexOf("get_textValue():Int") >= 0
+			&& styleSource.indexOf("extern function checkValue(arg0:Point):Int") >= 0
+			&& styleNatives[0].name == "style.checkValue",
+			"projection profiles should provide reusable C naming transforms");
+		var aliasCompiler = new Compiler();
+		aliasCompiler.addFfiProjection("native-names.hxmap",
+			'{"interface":"native_names","typePrefix":"nk_","enumValuePrefixes":["NK_"]}');
+		aliasCompiler.addFfiInterface("native-names.hxi",
+			'interface native_names @target("x86_64-linux-gnu") @library("native_names") { enum nk_result : i32 { NK_OK = 0; } extern fn check(value: nk_result) -> nk_result; }');
+		aliasCompiler.update("AliasMain.hx", "import native_names.Result; function main():Int { var value:Result = Result.Ok; return value; }");
+		aliasCompiler.analyze("AliasMain");
 		var enumField = HxiParser.parse("enum-field.hxi",
 			'interface enums @target("x86_64-linux-gnu") @library("enums") { enum result : c_int { OK = 0; ERROR = -1; } struct Status @layout(4, 4) { result: result @offset(0); } }');
 		var enumFieldSource = HxiProjection.source(enumField);
@@ -73,7 +114,7 @@ class HxiParserMain {
 		var enumCompiler = new Compiler();
 		enumCompiler.addFfiInterface("enums.hxi",
 			'interface enums @target("x86_64-linux-gnu") @library("enums") { enum Result : i32 { OK = 0; ERROR = -1; } extern fn check(value: Result) -> Result; }');
-		enumCompiler.update("EnumMain.hx", "import enums; function main():Result return enums.check(Result.OK);");
+		enumCompiler.update("EnumMain.hx", "import enums; function main():Result return enums.check(Result.Ok);");
 		enumCompiler.analyze("EnumMain");
 		expectError('interface bad @target("x86_64-linux-gnu") { enum value : i64 { A = 0; } }', "requires an 8/16/32-bit integer representation");
 		expectError('interface bad @target("x86_64-linux-gnu") { enum value : u8 { A = 256; } }', "outside the representation");

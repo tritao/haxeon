@@ -21,6 +21,10 @@ class CompilerDriver {
 		report("loading " + Std.string(request.paths.length) + " sources");
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
+		for (path in request.ffiProjections) {
+			report("loading FFI projection " + path);
+			compiler.addFfiProjection(path, File.getContent(path));
+		}
 		for (path in request.ffiInterfaces) {
 			report("loading FFI interface " + path);
 			compiler.addFfiInterface(path, File.getContent(path));

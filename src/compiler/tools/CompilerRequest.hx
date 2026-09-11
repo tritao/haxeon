@@ -10,6 +10,7 @@ typedef CompilerRequest = {
 	final ffiHeader:Null<String>;
 	final ffiLibrary:Null<String>;
 	final ffiInterfaces:Array<String>;
+	final ffiProjections:Array<String>;
 	final roots:Array<String>;
 	final paths:Array<String>;
 }

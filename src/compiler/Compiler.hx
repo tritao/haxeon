@@ -53,6 +53,7 @@ import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiAbi;
 import compiler.ffi.HxiParser;
 import compiler.ffi.HxiProjection;
+import compiler.ffi.HxiProjectionProfile;
 
 typedef FfiInterfaceSource = {
 	final path:String;
@@ -161,6 +162,7 @@ class Compiler {
 	final natives:NativeRegistry;
 	final ffiInterfaceSources:Array<FfiInterfaceSource> = [];
 	final ffiInterfaceModels:Map<String, HxiInterface> = [];
+	final ffiProjectionProfiles:Map<String, HxiProjectionProfile> = [];
 	final ffiProjectionCache:Map<String, String> = [];
 	final ffiCompositionCache:Map<String, FfiComposition> = [];
 	final ffiAbiCache:Map<String, HxiAbi> = [];
@@ -260,6 +262,24 @@ class Compiler {
 		registerFfiInterface(path, source, true);
 	}
 
+	/** Register Haxe-only naming policy without changing the generated ABI model. */
+	public function addFfiProjection(path:String, source:String):Void {
+		if (compiledOnce)
+			throw "FFI projections are frozen after the first compilation";
+		var profile = HxiProjectionProfile.parse(path, source),
+			name = profile.interfaceName;
+		if (name == null)
+			throw 'FFI projection "$path" does not name an interface';
+		if (ffiProjectionProfiles.exists(name))
+			throw 'FFI projection for interface "$name" is already registered';
+		ffiProjectionProfiles.set(name, profile);
+		var model = ffiInterfaceModels.get(name);
+		if (model != null) {
+			ffiProjectionCache.remove(name);
+			refreshFfiProjection(model);
+		}
+	}
+
 	function registerFfiInterface(path:String, source:String, enforceFreeze:Bool):Void {
 		if (enforceFreeze && compiledOnce)
 			throw "FFI interfaces are frozen after the first compilation";
@@ -296,7 +316,8 @@ class Compiler {
 		var result:Array<IrCNative> = [];
 		for (model in ffiInterfaces()) {
 			var composition = ffiComposition(model);
-			for (native in HxiProjection.cNatives(model, composition.omitted, composition.declarations, ffiAbi(model, composition)))
+			for (native in HxiProjection.cNatives(model, composition.omitted, composition.declarations, ffiAbi(model, composition),
+				ffiProjectionProfiles.get(model.name)))
 				result.push(native);
 		}
 		return result;
@@ -306,7 +327,8 @@ class Compiler {
 		var projection = ffiProjectionCache.get(model.name);
 		if (projection == null) {
 			var composition = ffiComposition(model);
-			projection = HxiProjection.source(model, composition.omitted, composition.declarations, ffiAbi(model, composition));
+			projection = HxiProjection.source(model, composition.omitted, composition.declarations, ffiAbi(model, composition),
+				ffiProjectionProfiles.get(model.name));
 			ffiProjectionCache.set(model.name, projection);
 		}
 		if (projection.length > 0)

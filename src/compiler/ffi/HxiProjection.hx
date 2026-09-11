@@ -6,6 +6,7 @@ import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiModel.HxiDocumentation;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiField;
+import compiler.ffi.HxiModel.HxiEnumValue;
 import compiler.ir.Ir.IrCNative;
 import compiler.ir.Ir.IrType;
 import compiler.ffi.HxiModel.HxiPointerOwnership;
@@ -13,10 +14,12 @@ import compiler.ffi.HxiModel.HxiPointerOwnership;
 /** Projects bridgeable HXI functions into a synthetic, source-visible module. */
 class HxiProjection {
 	public static function cNatives(model:HxiInterface, ?omitted:Map<String, Bool>, ?visibleDeclarations:Map<String, HxiDeclaration>,
-			?providedAbi:HxiAbi):Array<IrCNative> {
+			?providedAbi:HxiAbi, ?profile:HxiProjectionProfile):Array<IrCNative> {
 		var library = model.library;
 		if (library == null)
 			return [];
+		if (profile == null)
+			profile = HxiProjectionProfile.empty();
 		var result:Array<IrCNative> = [],
 			declarations:Map<String, HxiDeclaration> = [],
 			directed:Map<String, Bool> = [],
@@ -62,7 +65,7 @@ class HxiProjection {
 			};
 			if (supported && returnValue != null)
 				result.push({
-					name: model.name + "." + (directed.get(fn.name) == true ? "__hxi_raw_" + fn.name : fn.name),
+					name: model.name + "." + (directed.get(fn.name) == true ? "__hxi_raw_" + fn.name : projectedFunctionName(fn.name, profile)),
 					library: library,
 					symbol: fn.symbol,
 					signature: callSignature(codes.join(",") + ">" + abiDescriptor(fn.result, declarations, abi, aggregateDescriptors), fn.callConvention),
@@ -78,10 +81,12 @@ class HxiProjection {
 	}
 
 	public static function source(model:HxiInterface, ?omitted:Map<String, Bool>, ?visibleDeclarations:Map<String, HxiDeclaration>,
-			?providedAbi:HxiAbi):String {
+			?providedAbi:HxiAbi, ?profile:HxiProjectionProfile):String {
 		var library = model.library;
 		if (library == null)
 			return "";
+		if (profile == null)
+			profile = HxiProjectionProfile.empty();
 		var abi = providedAbi == null ? HxiAbi.forInterface(model, visibleDeclarations) : providedAbi,
 			output = new StringBuf(),
 			aggregateDescriptors:Map<String, String> = [];
@@ -123,9 +128,6 @@ class HxiProjection {
 					declarations.set(name, declaration);
 					if (!isOmitted(omitted, name))
 						enumDeclarations.push(declaration);
-					for (value in values)
-						if (!isOmitted(omitted, value.name))
-							constants.push({name: value.name, value: Std.string(value.value)});
 				case Handle(name, _, _):
 					declarations.set(name, declaration);
 					if (!isOmitted(omitted, name))
@@ -142,7 +144,7 @@ class HxiProjection {
 			output.add('class ${upperFirst(model.name)}Constants {\n');
 			for (constant in constants) {
 				emitDocumentation(output, model, constant.name, "\t");
-				output.add('\tpublic static inline final ${constant.name}:Int = ${constant.value};\n');
+				output.add('\tpublic static inline final ${projectedConstantName(constant.name, profile)}:Int = ${constant.value};\n');
 			}
 			output.add('}\n');
 		}
@@ -151,10 +153,11 @@ class HxiProjection {
 		for (callbackDeclaration in callbackDeclarations)
 			switch callbackDeclaration {
 				case Callback(name, parameters, result, callConvention, _):
+					var projectedName = projectedTypeName(name, profile);
 					var argumentTypes = [], codes = [], pointerSizes = [], pointerNullable = [], supported = true;
 					for (parameter in parameters) {
 						var classified = abi.classify(parameter.type),
-							value = callbackProject(classified);
+						value = callbackProject(classified, profile);
 						if (value == null) {
 							supported = false;
 							break;
@@ -179,34 +182,36 @@ class HxiProjection {
 						}
 					}
 					var classifiedResult = abi.classify(result, true),
-						returnValue = project(classifiedResult, true);
+						returnValue = project(classifiedResult, true, profile);
 					if (!supported || returnValue == null)
 						continue;
 					var signature = callSignature(codes.join(",") + ">" + abiDescriptor(classifiedResult, declarations, abi, aggregateDescriptors), callConvention);
 					emitDocumentation(output, model, name);
-					output.add('typedef $name = (${argumentTypes.join(", ")})->${returnValue.haxeType};\n');
-					output.add('abstract ${name}Callback(hl.Abstract<"native_callback">) {\n');
-					output.add('\tpublic inline function new(callback:$name) this = ${model.name}.__hxi_callback_create(haxe.io.Bytes.ofString("$signature"), haxe.io.Bytes.ofString("${pointerSizes.join(",")}"), haxe.io.Bytes.ofString("${pointerNullable.join(",")}"), callback);\n');
+					output.add('typedef $projectedName = (${argumentTypes.join(", ")})->${returnValue.haxeType};\n');
+					output.add('abstract ${projectedName}Callback(hl.Abstract<"native_callback">) {\n');
+					output.add('\tpublic inline function new(callback:$projectedName) this = ${model.name}.__hxi_callback_create(haxe.io.Bytes.ofString("$signature"), haxe.io.Bytes.ofString("${pointerSizes.join(",")}"), haxe.io.Bytes.ofString("${pointerNullable.join(",")}"), callback);\n');
 					output.add('\tpublic inline function close():Bool return ${model.name}.__hxi_callback_close_$name(this);\n');
 					output.add('\tpublic inline function errorKind():HxiCallbackError return ${model.name}.__hxi_callback_error_kind_$name(this);\n');
 					output.add('\tpublic inline function takeError():Null<haxe.io.Bytes> return ${model.name}.__hxi_callback_take_error_$name(this);\n');
 					output.add('}\n');
-					output.add('@:hlNative("haxeon_runtime", "native_callback_close") extern function __hxi_callback_close_$name(callback:${name}Callback):Bool;\n');
-					output.add('@:hlNative("haxeon_runtime", "native_callback_error_kind") extern function __hxi_callback_error_kind_$name(callback:${name}Callback):Int;\n');
-					output.add('@:hlNative("haxeon_runtime", "native_callback_take_error") extern function __hxi_callback_take_error_$name(callback:${name}Callback):Null<haxe.io.Bytes>;\n');
+					output.add('@:hlNative("haxeon_runtime", "native_callback_close") extern function __hxi_callback_close_$name(callback:${projectedName}Callback):Bool;\n');
+					output.add('@:hlNative("haxeon_runtime", "native_callback_error_kind") extern function __hxi_callback_error_kind_$name(callback:${projectedName}Callback):Int;\n');
+					output.add('@:hlNative("haxeon_runtime", "native_callback_take_error") extern function __hxi_callback_take_error_$name(callback:${projectedName}Callback):Null<haxe.io.Bytes>;\n');
 				case _:
 			}
 		for (declaration in enumDeclarations)
 			switch declaration {
 				case Enumeration(name, representation, _, values, _):
-					var underlying = project(abi.classify(representation), false);
+					var underlying = project(abi.classify(representation), false, profile);
 					if (underlying == null)
 						continue;
+					var projectedName = enumTypeName(name, profile), valuePrefix = enumValuePrefix(values, profile);
 					emitDocumentation(output, model, name);
-					output.add('enum abstract ${upperFirst(name)}(${underlying.haxeType}) from ${underlying.haxeType} to ${underlying.haxeType} {\n');
+					output.add('enum abstract $projectedName(${underlying.haxeType}) from ${underlying.haxeType} to ${underlying.haxeType} {\n');
 					for (value in values) {
 						emitDocumentation(output, model, '$name.${value.name}', "\t");
-						output.add('\tvar ${value.name} = ${value.value};\n');
+						var projectedValue = enumValueName(value.name, valuePrefix, name, profile);
+						output.add('\tvar $projectedValue = ${value.value};\n');
 					}
 					output.add('}\n');
 				case _:
@@ -214,10 +219,11 @@ class HxiProjection {
 		for (declaration in handleDeclarations)
 			switch declaration {
 				case Handle(name, _, _):
+					var projectedName = projectedTypeName(name, profile);
 					emitDocumentation(output, model, name);
-					output.add('abstract $name(Int) from Int to Int {\n');
+					output.add('abstract $projectedName(Int) from Int to Int {\n');
 					output.add('\tpublic inline function new(value:Int = 0) this = value;\n');
-					output.add('\tpublic static inline function invalid():$name return new $name();\n');
+					output.add('\tpublic static inline function invalid():$projectedName return new $projectedName();\n');
 					output.add('\tpublic inline function isValid():Bool return this != 0;\n');
 					output.add('\tpublic inline function rawValue():Int return this;\n');
 					output.add('}\n');
@@ -226,19 +232,21 @@ class HxiProjection {
 		for (declaration in structureDeclarations)
 			switch declaration {
 				case Structure(name, size, _, fields, _):
+					var projectedName = projectedTypeName(name, profile);
 					emitDocumentation(output, model, name);
-					output.add('abstract $name(haxe.io.Bytes) from haxe.io.Bytes to haxe.io.Bytes {\n');
+					output.add('abstract $projectedName(haxe.io.Bytes) from haxe.io.Bytes to haxe.io.Bytes {\n');
 					output.add('\tpublic static inline function size():Int return $size;\n');
-					output.add('\tpublic static function array(values:Array<$name>):$name { var bytes = ${model.name}.__hxi_struct_alloc(values.length * $size); for (index in 0...values.length) ${model.name}.__hxi_struct_copy(bytes, index * $size, values[index], $size); return cast bytes; }\n');
+					output.add('\tpublic static function array(values:Array<$projectedName>):$projectedName { var bytes = ${model.name}.__hxi_struct_alloc(values.length * $size); for (index in 0...values.length) ${model.name}.__hxi_struct_copy(bytes, index * $size, values[index], $size); return cast bytes; }\n');
 					usesNestedStructures = true;
 					output.add('\tpublic inline function new() this = haxe.io.Bytes.alloc($size);\n');
 					for (field in fields) {
+						var fieldName = projectedFieldName(name, field.name, profile);
 						if (field.lengthField != null) {
-							var pointed = structurePointerType(field.type, declarations);
+							var pointed = structurePointerType(field.type, declarations, profile);
 							if (pointed != null) {
 								usesPointerFields = true;
 								emitDocumentation(output, model, '$name.${field.name}', "\t");
-								output.add('\tpublic inline function set_${field.name}(value:$pointed):Void ${model.name}.__hxi_struct_set_borrowed_bytes(this, ${field.offset}, value);\n');
+								output.add('\tpublic inline function set_$fieldName(value:$pointed):Void ${model.name}.__hxi_struct_set_borrowed_bytes(this, ${field.offset}, value);\n');
 								continue;
 							}
 							var lengthField = Lambda.find(fields, candidate -> candidate.name == field.lengthField);
@@ -251,22 +259,22 @@ class HxiProjection {
 								};
 							usesBorrowedBuffers = true;
 							emitDocumentation(output, model, '$name.${field.name}', "\t");
-							output.add('\tpublic inline function get_${field.name}_bytes():haxe.io.Bytes return ${model.name}.__hxi_struct_copy_pointer(this, ${field.offset}, ${lengthField.offset}, $lengthBytes);\n');
+							output.add('\tpublic inline function get_${fieldName}_bytes():haxe.io.Bytes return ${model.name}.__hxi_struct_copy_pointer(this, ${field.offset}, ${lengthField.offset}, $lengthBytes);\n');
 							continue;
 						}
 						var array = arrayType(field.type, declarations);
 						if (array != null) {
-							var nestedElement = structureType(array.element, declarations);
+							var nestedElement = structureType(array.element, declarations, profile);
 							if (nestedElement != null) {
 								usesNestedStructures = true;
 								emitDocumentation(output, model, '$name.${field.name}', "\t");
-								output.add('\tpublic inline function get_${field.name}(index:Int):${nestedElement.name} { if (index < 0 || index >= ${array.length}) throw "HXI array index out of bounds"; return ${model.name}.__hxi_struct_slice(this, ${field.offset} + index * ${nestedElement.size}, ${nestedElement.size}); }\n');
-								output.add('\tpublic inline function set_${field.name}(index:Int, value:${nestedElement.name}):Void { if (index < 0 || index >= ${array.length}) throw "HXI array index out of bounds"; ${model.name}.__hxi_struct_copy(this, ${field.offset} + index * ${nestedElement.size}, value, ${nestedElement.size}); }\n');
+								output.add('\tpublic inline function get_${fieldName}(index:Int):${nestedElement.name} { if (index < 0 || index >= ${array.length}) throw "HXI array index out of bounds"; return ${model.name}.__hxi_struct_slice(this, ${field.offset} + index * ${nestedElement.size}, ${nestedElement.size}); }\n');
+								output.add('\tpublic inline function set_${fieldName}(index:Int, value:${nestedElement.name}):Void { if (index < 0 || index >= ${array.length}) throw "HXI array index out of bounds"; ${model.name}.__hxi_struct_copy(this, ${field.offset} + index * ${nestedElement.size}, value, ${nestedElement.size}); }\n');
 								continue;
 							}
 							if (arrayType(array.element, declarations) != null)
 								continue;
-							var element = project(abi.classify(array.element), false);
+							var element = project(abi.classify(array.element), false, profile);
 							if (element == null || element.code == 11)
 								continue;
 							var arrayAccess = structAccess(element.code),
@@ -275,36 +283,36 @@ class HxiProjection {
 								continue;
 							structAccesses.set(arrayAccess, {type: element.haxeType, setterType: element.haxeType});
 							emitDocumentation(output, model, '$name.${field.name}', "\t");
-							output.add('\tpublic inline function get_${field.name}(index:Int):${element.haxeType} { if (index < 0 || index >= ${array.length}) throw "HXI array index out of bounds"; return ${model.name}.__hxi_struct_get${arrayAccess}(this, ${field.offset} + index * $stride); }\n');
-							output.add('\tpublic inline function set_${field.name}(index:Int, value:${element.haxeType}):Void { if (index < 0 || index >= ${array.length}) throw "HXI array index out of bounds"; ${model.name}.__hxi_struct_set${arrayAccess}(this, ${field.offset} + index * $stride, value); }\n');
+							output.add('\tpublic inline function get_${fieldName}(index:Int):${element.haxeType} { if (index < 0 || index >= ${array.length}) throw "HXI array index out of bounds"; return ${model.name}.__hxi_struct_get${arrayAccess}(this, ${field.offset} + index * $stride); }\n');
+							output.add('\tpublic inline function set_${fieldName}(index:Int, value:${element.haxeType}):Void { if (index < 0 || index >= ${array.length}) throw "HXI array index out of bounds"; ${model.name}.__hxi_struct_set${arrayAccess}(this, ${field.offset} + index * $stride, value); }\n');
 							if (element.code == 1 || element.code == 2) {
 								usesNestedStructures = true;
-								output.add('\tpublic inline function get_${field.name}_bytes():haxe.io.Bytes return ${model.name}.__hxi_struct_slice(this, ${field.offset}, ${array.length});\n');
-								output.add('\tpublic inline function set_${field.name}_bytes(value:haxe.io.Bytes):Void ${model.name}.__hxi_struct_copy(this, ${field.offset}, value, ${array.length});\n');
+								output.add('\tpublic inline function get_${fieldName}_bytes():haxe.io.Bytes return ${model.name}.__hxi_struct_slice(this, ${field.offset}, ${array.length});\n');
+								output.add('\tpublic inline function set_${fieldName}_bytes(value:haxe.io.Bytes):Void ${model.name}.__hxi_struct_copy(this, ${field.offset}, value, ${array.length});\n');
 							}
 							continue;
 						}
-						var nested = structureType(field.type, declarations);
+						var nested = structureType(field.type, declarations, profile);
 						if (nested != null) {
 							usesNestedStructures = true;
 							emitDocumentation(output, model, '$name.${field.name}', "\t");
-							output.add('\tpublic inline function get_${field.name}():${nested.name} return ${model.name}.__hxi_struct_slice(this, ${field.offset}, ${nested.size});\n');
-							output.add('\tpublic inline function set_${field.name}(value:${nested.name}):Void ${model.name}.__hxi_struct_copy(this, ${field.offset}, value, ${nested.size});\n');
+							output.add('\tpublic inline function get_$fieldName():${nested.name} return ${model.name}.__hxi_struct_slice(this, ${field.offset}, ${nested.size});\n');
+							output.add('\tpublic inline function set_$fieldName(value:${nested.name}):Void ${model.name}.__hxi_struct_copy(this, ${field.offset}, value, ${nested.size});\n');
 							continue;
 						}
-						var value = project(abi.classify(field.type), false);
+						var value = project(abi.classify(field.type), false, profile);
 						if (value != null && value.code == 13) {
 							usesUtf8Fields = true;
 							emitDocumentation(output, model, '$name.${field.name}', "\t");
-							output.add('\tpublic inline function get_${field.name}():${value.haxeType} return cast ${model.name}.__hxi_struct_get_utf8(this, ${field.offset}, ${value.nullable});\n');
-							output.add('\tpublic inline function set_${field.name}(value:${value.haxeType}):Void ${model.name}.__hxi_struct_set_utf8(this, ${field.offset}, value, ${value.nullable});\n');
+							output.add('\tpublic inline function get_$fieldName():${value.haxeType} return cast ${model.name}.__hxi_struct_get_utf8(this, ${field.offset}, ${value.nullable});\n');
+							output.add('\tpublic inline function set_$fieldName(value:${value.haxeType}):Void ${model.name}.__hxi_struct_set_utf8(this, ${field.offset}, value, ${value.nullable});\n');
 							continue;
 						}
 						if (value != null && value.code == 11 && value.nativePointer && field.ownership == Borrowed) {
 							usesPointerFields = true;
 							emitDocumentation(output, model, '$name.${field.name}', "\t");
-							output.add('\tpublic inline function get_${field.name}():${value.haxeType} return ${model.name}.__hxi_struct_get_pointer(this, ${field.offset}, ${value.nullable});\n');
-							output.add('\tpublic inline function set_${field.name}(value:${value.haxeType}):Void ${model.name}.__hxi_struct_set_pointer(this, ${field.offset}, value, ${value.nullable});\n');
+							output.add('\tpublic inline function get_$fieldName():${value.haxeType} return ${model.name}.__hxi_struct_get_pointer(this, ${field.offset}, ${value.nullable});\n');
+							output.add('\tpublic inline function set_$fieldName(value:${value.haxeType}):Void ${model.name}.__hxi_struct_set_pointer(this, ${field.offset}, value, ${value.nullable});\n');
 							continue;
 						}
 						if (value == null || value.code == 11)
@@ -314,8 +322,8 @@ class HxiProjection {
 							continue;
 						structAccesses.set(access, {type: value.haxeType, setterType: value.haxeType});
 						emitDocumentation(output, model, '$name.${field.name}', "\t");
-						output.add('\tpublic inline function get_${field.name}():${value.haxeType} return ${model.name}.__hxi_struct_get${access}(this, ${field.offset});\n');
-						output.add('\tpublic inline function set_${field.name}(value:${value.haxeType}):Void ${model.name}.__hxi_struct_set${access}(this, ${field.offset}, value);\n');
+						output.add('\tpublic inline function get_$fieldName():${value.haxeType} return ${model.name}.__hxi_struct_get${access}(this, ${field.offset});\n');
+						output.add('\tpublic inline function set_$fieldName(value:${value.haxeType}):Void ${model.name}.__hxi_struct_set${access}(this, ${field.offset}, value);\n');
 					}
 					output.add('}\n');
 				case _:
@@ -326,7 +334,7 @@ class HxiProjection {
 					for (parameter in parameters)
 						switch parameter.direction {
 							case Out | InOut:
-								var value = outputInfo(parameter.type, abi);
+								var value = outputInfo(parameter.type, abi, profile);
 								if (!value.structure) {
 									var access = structAccess(value.code);
 									structAccesses.set(access, {type: value.haxeType, setterType: value.haxeType});
@@ -366,6 +374,7 @@ class HxiProjection {
 		for (fn in abi.functions()) {
 			if (isOmitted(omitted, fn.name))
 				continue;
+			var publicName = projectedFunctionName(fn.name, profile);
 			var parameters = switch functions.get(fn.name) {
 				case Function(_, value, _, _, _, _, _, _): value;
 				case _: throw 'Missing HXI function "${fn.name}"';
@@ -375,24 +384,24 @@ class HxiProjection {
 				supported = true;
 			for (index in 0...fn.arguments.length) {
 				var argument = fn.arguments[index];
-				var projected = project(argument, false);
+				var projected = project(argument, false, profile);
 				if (projected == null) {
 					supported = false;
 					break;
 				}
 				var outputValue = switch parameters[index].direction {
-					case Out | InOut: outputInfo(parameters[index].type, abi);
+					case Out | InOut: outputInfo(parameters[index].type, abi, profile);
 					case In | InArray(_) | OutBuffer(_): null;
 				};
 				argumentTypes.push(outputValue == null ? projected.haxeType : outputValue.structure ? outputValue.haxeType : "haxe.io.Bytes");
 				codes.push(abiDescriptor(argument, declarations, abi, aggregateDescriptors));
 			}
-			var result = project(fn.result, true);
+			var result = project(fn.result, true, profile);
 			if (!supported || result == null)
 				continue;
 			var signature = callSignature(codes.join(",") + ">" + abiDescriptor(fn.result, declarations, abi, aggregateDescriptors), fn.callConvention);
 			var directed = hasOutput(parameters),
-				rawName = directed ? "__hxi_raw_" + fn.name : fn.name;
+				rawName = directed ? "__hxi_raw_" + fn.name : publicName;
 			if (!directed)
 				emitDocumentation(output, model, fn.name);
 			output.add('@:cNative("${escape(library)}", "${escape(fn.symbol)}", "$signature")\n');
@@ -403,14 +412,14 @@ class HxiProjection {
 			if (directed) {
 				var buffer = outputBuffer(parameters);
 				if (buffer == null)
-					emitOutputWrapper(output, fn.name, parameters, argumentTypes, resultType, abi, model.documentation.get(fn.name));
+					emitOutputWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, abi, profile, model.documentation.get(fn.name));
 				else
-					emitBufferWrapper(output, fn.name, parameters, argumentTypes, resultType, buffer, model.documentation.get(fn.name));
+					emitBufferWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, buffer, model.documentation.get(fn.name));
 			}
 			var byteIndex = byteArrayParameter(parameters);
 			if (byteIndex != null)
-				emitByteSliceWrapper(output, fn.name, parameters, argumentTypes, resultType,
-					directed ? outputWrapperResult(fn.name, parameters, resultType, abi) : resultType, abi, byteIndex);
+				emitByteSliceWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType,
+					directed ? outputWrapperResult(publicName, parameters, resultType, abi, profile) : resultType, abi, byteIndex, profile);
 		}
 		return output.toString();
 	}
@@ -453,7 +462,7 @@ class HxiProjection {
 		return null;
 	}
 
-	static function outputInfo(type:compiler.ffi.HxiModel.HxiType, abi:HxiAbi):{
+	static function outputInfo(type:compiler.ffi.HxiModel.HxiType, abi:HxiAbi, profile:HxiProjectionProfile):{
 		haxeType:String,
 		code:Int,
 		size:Int,
@@ -465,12 +474,12 @@ class HxiProjection {
 			case _: throw "HXI output parameters require a pointer type";
 		};
 		var classified = abi.classify(element),
-			projected = project(classified, false);
+			projected = project(classified, false, profile);
 		if (projected == null)
 			throw "HXI output parameter has an unsupported pointee type";
 		return switch classified {
 			case AggregateValue(name, size, _): {
-					haxeType: name,
+					haxeType: projectedTypeName(name, profile),
 					code: 12,
 					size: size,
 					structure: true,
@@ -498,8 +507,8 @@ class HxiProjection {
 		};
 	}
 
-	static function emitOutputWrapper(output:StringBuf, name:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>, rawArgumentTypes:Array<String>,
-			resultType:String, abi:HxiAbi, documentation:Null<HxiDocumentation>):Void {
+	static function emitOutputWrapper(output:StringBuf, nativeName:String, publicName:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>, rawArgumentTypes:Array<String>,
+			resultType:String, abi:HxiAbi, profile:HxiProjectionProfile, documentation:Null<HxiDocumentation>):Void {
 		var arguments:Array<String> = [],
 			callArguments:Array<String> = [],
 			setup:Array<String> = [],
@@ -533,7 +542,7 @@ class HxiProjection {
 						callArguments.push('__array_${parameter.name}');
 					}
 				case Out | InOut:
-					var info = outputInfo(parameter.type, abi),
+					var info = outputInfo(parameter.type, abi, profile),
 						local = "__out_" + parameter.name;
 					if (parameter.direction == InOut)
 						arguments.push('${parameter.name}:${info.haxeType}');
@@ -559,7 +568,7 @@ class HxiProjection {
 		}
 		var direct = resultType == "Void" && values.length == 1,
 			resultOnly = values.length == 0;
-		var wrapperResult = direct ? values[0].type : resultOnly ? resultType : upperFirst(name) + "OutResult";
+		var wrapperResult = direct ? values[0].type : resultOnly ? resultType : upperFirst(publicName) + "OutResult";
 		if (!direct && !resultOnly) {
 			output.add('class $wrapperResult {\n');
 			var fields:Array<{name:String, type:String}> = [];
@@ -575,10 +584,10 @@ class HxiProjection {
 			output.add('\t}\n}\n');
 		}
 		emitDocumentationValue(output, documentation);
-		output.add('function $name(${arguments.join(", ")}):$wrapperResult {\n');
+		output.add('function $publicName(${arguments.join(", ")}):$wrapperResult {\n');
 		for (statement in setup)
 			output.add('\t$statement\n');
-		var call = '__hxi_raw_$name(${callArguments.join(", ")})';
+		var call = '__hxi_raw_$nativeName(${callArguments.join(", ")})';
 		if (resultType == "Void")
 			output.add('\t$call;\n');
 		else
@@ -597,8 +606,8 @@ class HxiProjection {
 		output.add('}\n');
 	}
 
-	static function emitByteSliceWrapper(output:StringBuf, name:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>, rawArgumentTypes:Array<String>,
-			resultType:String, wrapperResult:String, abi:HxiAbi, byteIndex:Null<Int>):Void {
+	static function emitByteSliceWrapper(output:StringBuf, nativeName:String, publicName:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>, rawArgumentTypes:Array<String>,
+			resultType:String, wrapperResult:String, abi:HxiAbi, byteIndex:Null<Int>, profile:HxiProjectionProfile):Void {
 		if (byteIndex == null)
 			return;
 		var byteName = parameters[byteIndex].name,
@@ -641,7 +650,7 @@ class HxiProjection {
 						callArguments.push(parameter.name);
 					}
 				case InOut:
-					var info = outputInfo(parameter.type, abi);
+					var info = outputInfo(parameter.type, abi, profile);
 					arguments.push('${parameter.name}:${info.haxeType}');
 					callArguments.push(parameter.name);
 				case Out:
@@ -649,21 +658,22 @@ class HxiProjection {
 					return;
 			}
 		}
-		output.add('/** Calls $name with a validated zero-copy byte slice. */\n');
-		output.add('function ${name}_slice(${arguments.join(", ")}):$wrapperResult {\n');
+		output.add('/** Calls $publicName with a validated zero-copy byte slice. */\n');
+		output.add('function ${publicName}_slice(${arguments.join(", ")}):$wrapperResult {\n');
 		output.add('\tif ($offsetName < 0 || $offsetName > $byteName.length || $lengthName < 0 || $lengthName > $byteName.length - $offsetName) throw "Byte slice is out of bounds";\n');
-		output.add('\treturn $name(${callArguments.join(", ")});\n');
+		output.add('\treturn $publicName(${callArguments.join(", ")});\n');
 		output.add('}\n');
 	}
 
-	static function outputWrapperResult(name:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>, resultType:String, abi:HxiAbi):String {
+	static function outputWrapperResult(name:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>, resultType:String, abi:HxiAbi,
+			profile:HxiProjectionProfile):String {
 		var count = 0, valueType = "";
 		for (parameter in parameters)
 			switch parameter.direction {
 				case Out | InOut:
 					count++;
 					if (valueType == "")
-						valueType = outputInfo(parameter.type, abi).haxeType;
+						valueType = outputInfo(parameter.type, abi, profile).haxeType;
 				case In | InArray(_) | OutBuffer(_):
 			}
 		return resultType == "Void" && count == 1 ? valueType : count == 0 ? resultType : upperFirst(name) + "OutResult";
@@ -696,7 +706,7 @@ class HxiProjection {
 			case _: false;
 		};
 
-	static function emitBufferWrapper(output:StringBuf, name:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>, rawArgumentTypes:Array<String>,
+	static function emitBufferWrapper(output:StringBuf, nativeName:String, publicName:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>, rawArgumentTypes:Array<String>,
 			resultType:String, buffer:{
 			name:String,
 			sizeParameter:String
@@ -724,7 +734,7 @@ class HxiProjection {
 			}
 		}
 		var direct = resultType == "Void",
-			wrapperResult = direct ? "haxe.io.Bytes" : upperFirst(name) + "OutResult";
+			wrapperResult = direct ? "haxe.io.Bytes" : upperFirst(publicName) + "OutResult";
 		if (!direct) {
 			output.add('class $wrapperResult {\n');
 			output.add('\tpublic var status:$resultType;\n');
@@ -735,18 +745,18 @@ class HxiProjection {
 			output.add('\t}\n}\n');
 		}
 		emitDocumentationValue(output, documentation);
-		output.add('function $name(${arguments.join(", ")}):$wrapperResult {\n');
+		output.add('function $publicName(${arguments.join(", ")}):$wrapperResult {\n');
 		output.add('\tvar __out_${buffer.sizeParameter} = haxe.io.Bytes.alloc(4);\n');
 		output.add('\t__hxi_struct_setI32(__out_${buffer.sizeParameter}, 0, 0);\n');
-		output.add('\t__hxi_raw_$name(${queryArguments.join(", ")});\n');
+		output.add('\t__hxi_raw_$nativeName(${queryArguments.join(", ")});\n');
 		output.add('\tvar __capacity:Int = __hxi_struct_getI32(__out_${buffer.sizeParameter}, 0);\n');
 		output.add('\tif (__capacity < 0 || __capacity > 268435456) throw "HXI output buffer size exceeds the safety limit";\n');
 		output.add('\tvar __out_${buffer.name} = haxe.io.Bytes.alloc(__capacity);\n');
 		output.add('\t__hxi_struct_setI32(__out_${buffer.sizeParameter}, 0, __capacity);\n');
 		if (resultType == "Void")
-			output.add('\t__hxi_raw_$name(${callArguments.join(", ")});\n');
+			output.add('\t__hxi_raw_$nativeName(${callArguments.join(", ")});\n');
 		else
-			output.add('\tvar __status = __hxi_raw_$name(${callArguments.join(", ")});\n');
+			output.add('\tvar __status = __hxi_raw_$nativeName(${callArguments.join(", ")});\n');
 		output.add('\tvar __length:Int = __hxi_struct_getI32(__out_${buffer.sizeParameter}, 0);\n');
 		output.add('\tif (__length < 0 || __length > __capacity) throw "HXI output buffer wrote an invalid size";\n');
 		output.add('\tif (__length != __capacity) __out_${buffer.name} = __hxi_struct_slice(__out_${buffer.name}, 0, __length);\n');
@@ -760,7 +770,129 @@ class HxiProjection {
 	static function upperFirst(value:String):String
 		return value.length == 0 ? value : value.charAt(0).toUpperCase() + value.substr(1);
 
-	static function project(value:HxiAbiValue, allowVoid:Bool):Null<{
+	static function projectedFunctionName(value:String, profile:Null<HxiProjectionProfile>):String {
+		if (profile == null)
+			return value;
+		var mapped = profile.functionNames.get(value);
+		if (mapped != null)
+			return mapped;
+		var stripped = stripPrefix(value, profile.functionPrefix);
+		return profile.functionCase == "camel" ? camelCase(stripped) : value;
+	}
+
+	static function projectedConstantName(value:String, profile:Null<HxiProjectionProfile>):String {
+		if (profile == null)
+			return value;
+		var mapped = profile.constantNames.get(value);
+		if (mapped != null)
+			return mapped;
+		var stripped = stripPrefix(value, profile.constantPrefix);
+		return profile.constantCase == "camel" ? camelCase(stripped) : value;
+	}
+
+	static function projectedFieldName(typeName:String, value:String, profile:Null<HxiProjectionProfile>):String {
+		if (profile == null)
+			return value;
+		var mapped = profile.fieldNames.get(typeName + "." + value);
+		return mapped == null ? profile.fieldCase == "camel" ? camelCase(value) : value : mapped;
+	}
+
+	static function stripPrefix(value:String, prefix:Null<String>):String
+		return prefix != null && StringTools.startsWith(value, prefix) ? value.substr(prefix.length) : value;
+
+	static function enumTypeName(value:String, ?profile:HxiProjectionProfile):String {
+		if (profile != null) {
+			var explicit = profile.enumNames.get(value);
+			if (explicit != null)
+				return explicit;
+		}
+		if (profile != null) {
+			var mapped = profile.typeNames.get(value);
+			if (mapped != null)
+				return mapped;
+		}
+		var parts = value.split("_");
+		if (profile != null && profile.typePrefix != null && StringTools.startsWith(value, profile.typePrefix))
+			parts = value.substr(profile.typePrefix.length).split("_");
+		return pascalCase(parts);
+	}
+
+	static function projectedTypeName(value:String, profile:Null<HxiProjectionProfile>):String {
+		if (profile == null)
+			return value;
+		var explicit = profile.typeNames.get(value);
+		if (explicit != null)
+			return explicit;
+		var prefix = profile.typePrefix;
+		if (prefix == null || !StringTools.startsWith(value, prefix))
+			return value;
+		return pascalCase(value.substr(prefix.length).split("_"));
+	}
+
+	static function enumValuePrefix(values:Array<HxiEnumValue>, ?profile:HxiProjectionProfile):Array<String> {
+		if (values.length == 0)
+			return [];
+		var prefix = values[0].name.split("_");
+		for (index in 1...values.length) {
+			var parts = values[index].name.split("_"), length = 0;
+			while (length < prefix.length && length < parts.length && prefix[length].toUpperCase() == parts[length].toUpperCase())
+				length++;
+			prefix = prefix.slice(0, length);
+		}
+		if (prefix.length == values[0].name.split("_").length && profile != null)
+			for (configured in profile.enumValuePrefixes) {
+				var configuredParts = configured.split("_");
+				if (configuredParts.length != 0 && configuredParts[configuredParts.length - 1].length == 0)
+					configuredParts.pop();
+				if (configuredParts.length < prefix.length) {
+					var matches = true;
+					for (index in 0...configuredParts.length)
+						if (configuredParts[index].toUpperCase() != prefix[index].toUpperCase())
+							matches = false;
+					if (matches) {
+						prefix = prefix.slice(0, configuredParts.length);
+						break;
+					}
+				}
+			}
+		return prefix;
+	}
+
+	static function enumValueName(value:String, prefix:Array<String>, ?enumName:String, ?profile:HxiProjectionProfile):String {
+		if (profile != null && enumName != null) {
+			var values = profile.enumValueNames.get(enumName);
+			if (values != null) {
+				var explicit = values.get(value);
+				if (explicit != null)
+					return explicit;
+			}
+		}
+		var parts = value.split("_"), start = prefix.length < parts.length ? prefix.length : 0,
+			projected = pascalCase(parts.slice(start));
+		if (projected.length == 0)
+			projected = pascalCase(parts);
+		if (projected.length != 0 && projected.charCodeAt(0) >= "0".code && projected.charCodeAt(0) <= "9".code)
+			projected = "Value" + projected;
+		return projected;
+	}
+
+	static function pascalCase(parts:Array<String>):String {
+		var result = "";
+		for (part in parts)
+			if (part.length != 0)
+				result += part.charAt(0).toUpperCase() + part.substr(1).toLowerCase();
+		return result;
+	}
+
+	static function camelCase(value:String):String {
+		var parts = value.split("_");
+		if (parts.length == 0)
+			return value;
+		var first = parts.shift();
+		return first.toLowerCase() + pascalCase(parts);
+	}
+
+	static function project(value:HxiAbiValue, allowVoid:Bool, ?profile:HxiProjectionProfile):Null<{
 		haxeType:String,
 		code:Int,
 		nativePointer:Bool,
@@ -794,7 +926,7 @@ class HxiProjection {
 			case EnumerationValue(name, bits, sign) if (bits <= 32):
 				var unsigned = sign == Unsigned || sign == PlainChar;
 				{
-					haxeType: upperFirst(name),
+					haxeType: enumTypeName(name, profile),
 					nativePointer: false,
 					nullable: false,
 					code: switch bits {
@@ -804,19 +936,19 @@ class HxiProjection {
 					}
 				};
 			case CallbackValue(name, _, _, nullable): {
-					haxeType: nullable ? 'Null<${name}Callback>' : name + "Callback",
+					haxeType: nullable ? 'Null<${projectedTypeName(name, profile)}Callback>' : projectedTypeName(name, profile) + "Callback",
 					code: 11,
 					nativePointer: true,
 					nullable: false
 				};
 			case AggregateValue(name, _, _): {
-					haxeType: name,
+					haxeType: projectedTypeName(name, profile),
 					code: 12,
 					nativePointer: false,
 					nullable: false
 				};
 			case HandleValue(name): {
-					haxeType: name,
+					haxeType: projectedTypeName(name, profile),
 					code: 6,
 					nativePointer: false,
 					nullable: false
@@ -840,7 +972,7 @@ class HxiProjection {
 					nullable: false
 				};
 			case PointerValue(_, nullable, opaque, structure): {
-					haxeType: opaque ? (nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">') : structure != null ? (nullable ? 'Null<$structure>' : structure) : (nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes"),
+					haxeType: opaque ? (nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">') : structure != null ? (nullable ? 'Null<${projectedTypeName(structure, profile)}>' : projectedTypeName(structure, profile)) : (nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes"),
 					code: 11,
 					nativePointer: opaque,
 					nullable: nullable
@@ -848,20 +980,20 @@ class HxiProjection {
 			case _: null;
 		};
 
-	static function callbackProject(value:HxiAbiValue):Null<{
+	static function callbackProject(value:HxiAbiValue, ?profile:HxiProjectionProfile):Null<{
 		haxeType:String,
 		code:Int,
 		nativePointer:Bool,
 		nullable:Bool
 	}>
 		return switch value {
-			case PointerValue(_, nullable, _, structure): {
-					haxeType: structure == null ? (nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">') : (nullable ? 'Null<$structure>' : structure),
+		case PointerValue(_, nullable, _, structure): {
+					haxeType: structure == null ? (nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">') : (nullable ? 'Null<${projectedTypeName(structure, profile)}>' : projectedTypeName(structure, profile)),
 					code: 11,
 					nativePointer: structure == null,
 					nullable: nullable
 				};
-			case _: project(value, false);
+			case _: project(value, false, profile);
 		};
 
 	static function escape(value:String):String {
@@ -1019,27 +1151,27 @@ class HxiProjection {
 			case _: null;
 		};
 
-	static function structureType(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>):Null<{name:String, size:Int}>
+	static function structureType(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>, profile:Null<HxiProjectionProfile>):Null<{name:String, size:Int}>
 		return switch type {
-			case Const(element): structureType(element, declarations);
+			case Const(element): structureType(element, declarations, profile);
 			case Named(name):
 				switch declarations.get(name) {
-					case Alias(_, target, _): structureType(target, declarations);
-					case Structure(_, size, _, _, _): {name: name, size: size};
+					case Alias(_, target, _): structureType(target, declarations, profile);
+					case Structure(_, size, _, _, _): {name: projectedTypeName(name, profile), size: size};
 					case _: null;
 				}
 			case _: null;
 		};
 
-	static function structurePointerType(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>):Null<String>
+	static function structurePointerType(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>, profile:Null<HxiProjectionProfile>):Null<String>
 		return switch type {
-			case Nullable(element) | Const(element): structurePointerType(element, declarations);
+			case Nullable(element) | Const(element): structurePointerType(element, declarations, profile);
 			case Pointer(element):
-				var structure = structureType(element, declarations);
+				var structure = structureType(element, declarations, profile);
 				structure == null ? null : structure.name;
 			case Named(name):
 				switch declarations.get(name) {
-					case Alias(_, target, _): structurePointerType(target, declarations);
+					case Alias(_, target, _): structurePointerType(target, declarations, profile);
 					case _: null;
 				}
 			case _: null;

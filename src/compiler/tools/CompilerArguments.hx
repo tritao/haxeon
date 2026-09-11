@@ -4,7 +4,7 @@ package compiler.tools;
 class CompilerArguments {
 	public static function parse(arguments:Array<String>):CompilerRequest {
 		var target = "hl", output = "out/main.hl", xmlOutput:Null<String> = null, irOutput:Null<String> = null, entry = "compiler.tools.HaxeonCompiler",
-			dumpFunction = -1, ffiHeader:Null<String> = null, ffiLibrary:Null<String> = null, ffiInterfaces:Array<String> = [], roots:Array<String> = [],
+			dumpFunction = -1, ffiHeader:Null<String> = null, ffiLibrary:Null<String> = null, ffiInterfaces:Array<String> = [], ffiProjections:Array<String> = [], roots:Array<String> = [],
 			paths:Array<String> = [];
 		var index = 0;
 		while (index < arguments.length) {
@@ -33,6 +33,8 @@ class CompilerArguments {
 				ffiLibrary = value(argument, "--ffi-library=");
 			else if (StringTools.startsWith(argument, "--ffi-interface="))
 				ffiInterfaces.push(value(argument, "--ffi-interface="));
+			else if (StringTools.startsWith(argument, "--ffi-projection="))
+				ffiProjections.push(value(argument, "--ffi-projection="));
 			else if (StringTools.startsWith(argument, "--dump-function="))
 				dumpFunction = parseIndex(value(argument, "--dump-function="));
 			else if (StringTools.startsWith(argument, "--"))
@@ -58,6 +60,7 @@ class CompilerArguments {
 			ffiHeader: ffiHeader,
 			ffiLibrary: ffiLibrary,
 			ffiInterfaces: ffiInterfaces,
+			ffiProjections: ffiProjections,
 			roots: roots,
 			paths: paths
 		};

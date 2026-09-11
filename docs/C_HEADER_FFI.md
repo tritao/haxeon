@@ -95,6 +95,7 @@ Pass one or more generated interfaces to the compiler with repeatable options:
 ```sh
 haxeon-compiler \
   --ffi-interface=generated/nativekit.hxi \
+  --ffi-projection=generated/nativekit.hxmap \
   --entry=app.Main \
   sources.manifest
 ```
@@ -102,6 +103,29 @@ haxeon-compiler \
 Interfaces are parsed and registered before source loading. Their names must be
 unique, and the registered set becomes immutable after the first compilation,
 matching the existing native-table stability rule for live modules.
+
+Projection manifests are optional Haxe-only JSON files selected with
+`--ffi-projection`. They are layered on top of generated HXI and never change
+native symbols, layouts, or pointer contracts. A reusable profile can strip a
+library prefix and apply C naming transforms, while explicit maps handle
+library-specific exceptions:
+
+```json
+{
+  "interface": "NativeKit",
+  "typePrefix": "nk_",
+  "enumValuePrefixes": ["NK_"],
+  "functionPrefix": "nk_",
+  "functionCase": "camel",
+  "fieldCase": "camel"
+}
+```
+
+The projection precedence is explicit declaration mapping, configured naming
+rule, then the original HXI name. The `@:cNative` symbol always remains the
+native C spelling. This keeps C headers and generated ABI snapshots
+language-neutral while allowing each target language to define its own naming
+policy.
 
 The ABI classifier currently recognizes x86, x86-64, ARM, AArch64, RISC-V 64,
 and WebAssembly target triples. It preserves the Windows LLP64 distinction
@@ -277,8 +301,11 @@ enum HXI_ENUM(sample_mode) { SAMPLE_MODE_DEFAULT = 0, SAMPLE_MODE_ALTERNATE };
 The importer emits `enum sample_mode : u32` and omits the duplicate scalar alias.
 The typedef remains the ABI source of truth, while enum values retain their
 documentation and implicit C enumerator values are materialized in HXI. The
-semantic Haxe projection also keeps enum members in its constants class for
-source compatibility with callers that use generated constants.
+semantic Haxe projection exposes those values through the typed enum abstract.
+
+Semantic projections name snake-case enums in concise PascalCase, such as
+`Result.Ok` and `EventKind.WindowClose`. The C/HXI spellings remain unchanged
+at the native interface boundary.
 
 C function-pointer typedefs import as HXI `callback` declarations. Scalar and
 by-value structure arguments and results use the same recursive ABI descriptors
