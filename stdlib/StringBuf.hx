@@ -22,31 +22,38 @@
 
 /** An efficient mutable buffer for incrementally constructing strings. */
 class StringBuf {
-	var b:String;
+	var parts:Array<String>;
+	var totalLength:Int;
 
 	public var length(get, never):Int;
 
 	public inline function new() {
-		b = "";
+		parts = [];
+		totalLength = 0;
 	}
 
 	inline function get_length():Int {
-		return b.length;
+		return totalLength;
 	}
 
 	public inline function add<T>(x:T):Void {
-		b += x;
+		var value = Std.string(x);
+		parts.push(value);
+		totalLength += value.length;
 	}
 
 	public inline function addChar(c:Int):Void {
-		b += String.fromCharCode(c);
+		parts.push(String.fromCharCode(c));
+		totalLength++;
 	}
 
 	public inline function addSub(s:String, pos:Int, ?len:Int):Void {
-		b += (len == null ? s.substr(pos) : s.substr(pos, len));
+		var value = len == null ? s.substr(pos) : s.substr(pos, len);
+		parts.push(value);
+		totalLength += value.length;
 	}
 
 	public inline function toString():String {
-		return b;
+		return parts.join("");
 	}
 }
