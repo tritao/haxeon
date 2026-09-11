@@ -48,7 +48,14 @@ class WasmPatch {
 			for (name in changed)
 				selected.set(name, true);
 		}
-		var all = identities(program), output = new BytesOutput();
+		var all = identities(program), byName:Map<String, Bool> = [];
+		for (entry in all)
+			byName.set(entry.name, true);
+		if (selected != null)
+			for (name in selected.keys())
+				if (!byName.exists(name))
+					throw 'Unknown changed Wasm function "$name"';
+		var output = new BytesOutput();
 		output.bigEndian = false;
 		output.writeString("HWP");
 		output.writeByte(VERSION);
