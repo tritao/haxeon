@@ -25,16 +25,16 @@ extern function mathIsNaN(value:Float):Bool;
 @:hlNative("haxeon_runtime", "__math_is_finite")
 extern function mathIsFinite(value:Float):Bool;
 
-@:hlNative("realtime_runtime", "__math_pow")
+@:hlNative("haxeon_runtime", "__math_pow")
 extern function mathPow(value:Float, exponent:Float):Float;
 
-@:hlNative("realtime_runtime", "__math_cos")
+@:hlNative("haxeon_runtime", "__math_cos")
 extern function mathCos(value:Float):Float;
 
-@:hlNative("realtime_runtime", "__math_sin")
+@:hlNative("haxeon_runtime", "__math_sin")
 extern function mathSin(value:Float):Float;
 
-@:hlNative("realtime_runtime", "__math_tan")
+@:hlNative("haxeon_runtime", "__math_tan")
 extern function mathTan(value:Float):Float;
 
 /** Supported mathematical helpers backed by the stable runtime ABI. */

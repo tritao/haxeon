@@ -1,7 +1,7 @@
 package runtime;
 
 /** Lifetime operations for opaque pointers returned through HXI. */
-@:hlNative("realtime_runtime")
+@:hlNative("haxeon_runtime")
 class NativePointer {
 	/** Releases an owned pointer once. Borrowed and already-closed pointers return false. */
 	public static function native_pointer_close(pointer:hl.Abstract<"native_pointer">):Bool

@@ -77,7 +77,7 @@ class HlLower {
 				dispatchArities.set(dispatchKey, true);
 				cDispatchNatives.push({
 					name: pointerResult ? '__c_native_pointer_invoke_$arity' : bytesResult ? '__c_native_bytes_invoke_$arity' : aggregateResult ? '__c_native_aggregate_invoke_$arity' : utf8Result ? '__c_native_utf8_invoke_$arity' : '__c_native_invoke_$arity',
-					library: "realtime_runtime",
+					library: "haxeon_runtime",
 					symbol: pointerResult ? 'native_pointer_invoke_$arity' : bytesResult ? 'native_bytes_invoke_$arity' : aggregateResult ? 'native_aggregate_invoke_$arity' : utf8Result ? 'native_utf8_invoke_$arity' : 'native_invoke_$arity',
 					arguments: ((pointerResult || utf8Result) ? [Bytes, Bytes, Bytes, Bytes, Bytes, Bool] : bytesResult ? [Bytes, Bytes, Bytes, Bytes, Bytes, Bytes, Bool] : [Bytes, Bytes, Bytes])
 						.concat([for (_ in 0...arity) Dyn]),

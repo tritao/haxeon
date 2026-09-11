@@ -2,7 +2,7 @@ package runtime;
 
 /** Private-by-convention HashLink entry points backing the ordinary C ABI bridge. */
 @:noCompletion
-@:hlNative("realtime_runtime")
+@:hlNative("haxeon_runtime")
 class NativeCallApi {
 	public static function native_open(path:hl.Bytes, length:Int):hl.Abstract<"native_library">
 		return null;

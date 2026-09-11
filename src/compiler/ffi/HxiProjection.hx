@@ -166,9 +166,9 @@ class HxiProjection {
 					output.add('\tpublic inline function errorKind():HxiCallbackError return ${model.name}.__hxi_callback_error_kind_$name(this);\n');
 					output.add('\tpublic inline function takeError():Null<haxe.io.Bytes> return ${model.name}.__hxi_callback_take_error_$name(this);\n');
 					output.add('}\n');
-					output.add('@:hlNative("realtime_runtime", "native_callback_close") extern function __hxi_callback_close_$name(callback:${name}Callback):Bool;\n');
-					output.add('@:hlNative("realtime_runtime", "native_callback_error_kind") extern function __hxi_callback_error_kind_$name(callback:${name}Callback):Int;\n');
-					output.add('@:hlNative("realtime_runtime", "native_callback_take_error") extern function __hxi_callback_take_error_$name(callback:${name}Callback):Null<haxe.io.Bytes>;\n');
+					output.add('@:hlNative("haxeon_runtime", "native_callback_close") extern function __hxi_callback_close_$name(callback:${name}Callback):Bool;\n');
+					output.add('@:hlNative("haxeon_runtime", "native_callback_error_kind") extern function __hxi_callback_error_kind_$name(callback:${name}Callback):Int;\n');
+					output.add('@:hlNative("haxeon_runtime", "native_callback_take_error") extern function __hxi_callback_take_error_$name(callback:${name}Callback):Null<haxe.io.Bytes>;\n');
 				case _:
 			}
 		for (declaration in model.declarations)
@@ -301,30 +301,30 @@ class HxiProjection {
 				case _:
 			}
 		if (usesNestedStructures) {
-			output.add('@:hlNative("realtime_runtime", "__bytes_alloc") extern function __hxi_struct_alloc(length:Int):haxe.io.Bytes;\n');
-			output.add('@:hlNative("realtime_runtime", "structSlice") extern function __hxi_struct_slice(bytes:haxe.io.Bytes, offset:Int, length:Int):haxe.io.Bytes;\n');
-			output.add('@:hlNative("realtime_runtime", "structCopy") extern function __hxi_struct_copy(bytes:haxe.io.Bytes, offset:Int, value:haxe.io.Bytes, length:Int):Void;\n');
+			output.add('@:hlNative("haxeon_runtime", "__bytes_alloc") extern function __hxi_struct_alloc(length:Int):haxe.io.Bytes;\n');
+			output.add('@:hlNative("haxeon_runtime", "structSlice") extern function __hxi_struct_slice(bytes:haxe.io.Bytes, offset:Int, length:Int):haxe.io.Bytes;\n');
+			output.add('@:hlNative("haxeon_runtime", "structCopy") extern function __hxi_struct_copy(bytes:haxe.io.Bytes, offset:Int, value:haxe.io.Bytes, length:Int):Void;\n');
 		}
 		if (usesPointerFields) {
-			output.add('@:hlNative("realtime_runtime", "structGetPointer") extern function __hxi_struct_get_pointer(bytes:haxe.io.Bytes, offset:Int, nullable:Bool):hl.Abstract<"native_pointer">;\n');
-			output.add('@:hlNative("realtime_runtime", "structSetPointer") extern function __hxi_struct_set_pointer(bytes:haxe.io.Bytes, offset:Int, value:hl.Abstract<"native_pointer">, nullable:Bool):Void;\n');
-			output.add('@:hlNative("realtime_runtime", "structSetBorrowedBytes") extern function __hxi_struct_set_borrowed_bytes(bytes:haxe.io.Bytes, offset:Int, value:haxe.io.Bytes):Void;\n');
+			output.add('@:hlNative("haxeon_runtime", "structGetPointer") extern function __hxi_struct_get_pointer(bytes:haxe.io.Bytes, offset:Int, nullable:Bool):hl.Abstract<"native_pointer">;\n');
+			output.add('@:hlNative("haxeon_runtime", "structSetPointer") extern function __hxi_struct_set_pointer(bytes:haxe.io.Bytes, offset:Int, value:hl.Abstract<"native_pointer">, nullable:Bool):Void;\n');
+			output.add('@:hlNative("haxeon_runtime", "structSetBorrowedBytes") extern function __hxi_struct_set_borrowed_bytes(bytes:haxe.io.Bytes, offset:Int, value:haxe.io.Bytes):Void;\n');
 		}
 		if (usesUtf8Fields) {
-			output.add('@:hlNative("realtime_runtime", "structGetUtf8") extern function __hxi_struct_get_utf8(bytes:haxe.io.Bytes, offset:Int, nullable:Bool):Null<String>;\n');
-			output.add('@:hlNative("realtime_runtime", "structSetUtf8") extern function __hxi_struct_set_utf8(bytes:haxe.io.Bytes, offset:Int, value:Null<String>, nullable:Bool):Void;\n');
+			output.add('@:hlNative("haxeon_runtime", "structGetUtf8") extern function __hxi_struct_get_utf8(bytes:haxe.io.Bytes, offset:Int, nullable:Bool):Null<String>;\n');
+			output.add('@:hlNative("haxeon_runtime", "structSetUtf8") extern function __hxi_struct_set_utf8(bytes:haxe.io.Bytes, offset:Int, value:Null<String>, nullable:Bool):Void;\n');
 		}
 		if (usesBorrowedBuffers)
-			output.add('@:hlNative("realtime_runtime", "structCopyPointer") extern function __hxi_struct_copy_pointer(bytes:haxe.io.Bytes, pointerOffset:Int, lengthOffset:Int, lengthBytes:Int):haxe.io.Bytes;\n');
+			output.add('@:hlNative("haxeon_runtime", "structCopyPointer") extern function __hxi_struct_copy_pointer(bytes:haxe.io.Bytes, pointerOffset:Int, lengthOffset:Int, lengthBytes:Int):haxe.io.Bytes;\n');
 		if (hasCallbacks) {
-			output.add('@:hlNative("realtime_runtime", "native_callback_create") extern function __hxi_callback_create(signature:haxe.io.Bytes, pointerSizes:haxe.io.Bytes, pointerNullable:haxe.io.Bytes, callback:Dynamic):hl.Abstract<"native_callback">;\n');
+			output.add('@:hlNative("haxeon_runtime", "native_callback_create") extern function __hxi_callback_create(signature:haxe.io.Bytes, pointerSizes:haxe.io.Bytes, pointerNullable:haxe.io.Bytes, callback:Dynamic):hl.Abstract<"native_callback">;\n');
 		}
 		for (access in ["I8", "U8", "I16", "U16", "I32", "I64", "F32", "F64"]) {
 			var types = structAccesses.get(access);
 			if (types == null)
 				continue;
-			output.add('@:hlNative("realtime_runtime", "get$access") extern function __hxi_struct_get$access(bytes:haxe.io.Bytes, offset:Int):${types.type};\n');
-			output.add('@:hlNative("realtime_runtime", "set$access") extern function __hxi_struct_set$access(bytes:haxe.io.Bytes, offset:Int, value:${types.setterType}):Void;\n');
+			output.add('@:hlNative("haxeon_runtime", "get$access") extern function __hxi_struct_get$access(bytes:haxe.io.Bytes, offset:Int):${types.type};\n');
+			output.add('@:hlNative("haxeon_runtime", "set$access") extern function __hxi_struct_set$access(bytes:haxe.io.Bytes, offset:Int, value:${types.setterType}):Void;\n');
 		}
 		for (fn in abi.functions()) {
 			if (isOmitted(omitted, fn.name))
