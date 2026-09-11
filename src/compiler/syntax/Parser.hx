@@ -1898,7 +1898,7 @@ class Parser {
 		return statements;
 	}
 
-	function match(kind:TokenKind):Bool {
+	inline function match(kind:TokenKind):Bool {
 		if (!check(kind))
 			return false;
 		advance();
@@ -2006,7 +2006,7 @@ class Parser {
 		};
 	}
 
-	function check(kind:TokenKind):Bool
+	inline function check(kind:TokenKind):Bool
 		return current().kind == kind;
 
 	function advance():Token
