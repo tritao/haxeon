@@ -46,9 +46,15 @@ sections:
 - `haxeon.gc.roots` contains precise SSA liveness at allocation/call
   safepoints. Generated functions also maintain typed shadow frames in a
   reserved linear-memory root area, so the runtime has an actual root chain,
-  not just an offline map.
+  not just an offline map. The current collector is a non-moving mark/sweep
+  collector with compacted allocation metadata, a free list, and precise
+  static/shadow-frame roots; allocation runs collection before selecting a
+  block so a freshly returned reference cannot be reclaimed.
 - `haxeon.patch` contains stable function identities and semantic signatures
-  for validating replacement table entries.
+  for validating replacement table entries. `haxeon.patch.slots` maps those
+  stable names to exported function-table slots. `WasmBackend.compilePatch`
+  produces a validated replacement artifact and filtered manifest; the host
+  can instantiate it and publish changed table entries atomically.
 
 Static closures use stable table entries. Bound method closures use a small
 linear-memory environment containing the function slot and receiver. Direct
@@ -93,6 +99,8 @@ module plus a function manifest:
   conservative native-stack scans; generated shadow frames are the runtime
   root-chain boundary.
 - Runtime ABI decisions use semantic declarations, not byte offsets.
+- Stable closures use exported table slots and versioned patch metadata; a
+  patch decision is made from `RuntimeAbi`, never from Wasm code offsets.
 - CFG normalization is an explicit pass; the dispatcher is only a correctness
   fallback for CFGs the current region builder cannot structure.
 
