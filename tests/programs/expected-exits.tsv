@@ -4,6 +4,7 @@ bytes-codec	42
 call-many	42
 function-call	42
 function-value	42
+function-wrapper	42
 lambda	42
 expression-lambda	42
 single-argument-lambda	43
