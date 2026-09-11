@@ -2672,6 +2672,8 @@ class WasmFunctionLower {
 		top:Int,
 		frameTop:Int,
 		slots:Array<Int>,
+		slotByValue:Map<Int, Int>,
+		live:Map<String, Map<Int, Bool>>,
 		size:Int
 	}>;
 
@@ -2689,22 +2691,32 @@ class WasmFunctionLower {
 			data: placement.allocate(I32),
 			required: placement.allocate(I32)
 		};
-		var rootLocals:Array<Int> = [];
-		for (argument in fn.arguments)
-			if (WasmTarget.isReference(argument.type))
-				rootLocals.push(valueLocals.get(argument.id));
-		for (block in fn.blocks)
-			for (located in block.instructions) {
-				var output = IrOperands.output(located.value);
-				if (output != null && WasmTarget.isReference(output.type))
-					rootLocals.push(valueLocals.get(output.id));
+		var rootLocals:Array<Int> = [],
+			rootIds:Map<Int, Bool> = [],
+			live:Map<String, Map<Int, Bool>> = [];
+		for (point in WasmGcRoots.analyze(fn)) {
+			var pointLive:Map<Int, Bool> = [];
+			for (valueId in point.liveReferences) {
+				pointLive.set(valueId, true);
+				rootIds.set(valueId, true);
 			}
+			live.set(rootKey(point.block, point.instruction), pointLive);
+		}
+		var rootValueIds = [for (valueId in rootIds.keys()) valueId];
+		rootValueIds.sort(function(left, right) return left - right);
+		var slotByValue:Map<Int, Int> = [];
+		for (index in 0...rootValueIds.length) {
+			slotByValue.set(rootValueIds[index], index);
+			rootLocals.push(valueLocals.get(rootValueIds[index]));
+		}
 		var rootFrame = rootLocals.length == 0 ? null : placement.allocate(I32);
 		activeGcRootState = rootFrame == null ? null : {
 			frame: rootFrame,
 			top: rootTop,
 			frameTop: rootFrameTop,
 			slots: rootLocals,
+			slotByValue: slotByValue,
+			live: live,
 			size: align(12 + rootLocals.length * 4, 8)
 		};
 		activeExceptionState = null;
@@ -2867,15 +2879,16 @@ class WasmFunctionLower {
 			layout:WasmLayout, allocator:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
 			closureTypes:Map<String, WasmClosureTypes>):Void {
 		snapshotRoots(body);
-		for (located in block.instructions) {
-			snapshotRoots(body);
+		for (index in 0...block.instructions.length) {
+			var located = block.instructions[index];
+			snapshotRoots(body, block.id, index);
 			switch located.value {
 				case Phi(output, inputs):
 					WasmPhiLower.emit(body, output, inputs, values, predecessor);
 				default:
 					lowerInstruction(body, located.value, values, functions, layout, allocator, globals, strings, methods, closureTypes);
 			}
-			snapshotRoots(body);
+			snapshotRoots(body, block.id, index);
 		}
 		snapshotRoots(body);
 	}
@@ -2962,15 +2975,16 @@ class WasmFunctionLower {
 			blockIndex:Map<Int, Int>, layout:WasmLayout, allocator:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
 			closureTypes:Map<String, WasmClosureTypes>):Void {
 		snapshotRoots(body);
-		for (located in block.instructions) {
-			snapshotRoots(body);
+		for (index in 0...block.instructions.length) {
+			var located = block.instructions[index];
+			snapshotRoots(body, block.id, index);
 			switch located.value {
 				case Phi(output, inputs):
 					WasmPhiLower.emit(body, output, inputs, values, predecessor);
 				default:
 					lowerInstruction(body, located.value, values, functions, layout, allocator, globals, strings, methods, closureTypes);
 			}
-			snapshotRoots(body);
+			snapshotRoots(body, block.id, index);
 		}
 		snapshotRoots(body);
 		if (block.terminator == null)
@@ -3583,11 +3597,17 @@ class WasmFunctionLower {
 		return result;
 	}
 
-	static function snapshotRoots(body:Array<WasmInstruction>):Void {
+	static function snapshotRoots(body:Array<WasmInstruction>, ?block:Int = -1, ?instruction:Int = -1):Void {
 		if (activeGcRootState == null)
 			return;
 		var state = activeGcRootState;
-		for (index in 0...state.slots.length) {
+		var live = state.live.get(rootKey(block, instruction));
+		if (live == null)
+			return;
+		for (valueId in live.keys()) {
+			var index = state.slotByValue.get(valueId);
+			if (index == null)
+				continue;
 			body.push(LocalGet(state.frame));
 			body.push(I32Const(WasmLayout.ROOT_VALUES_OFFSET + index * 4));
 			body.push(I32Add);
@@ -3595,6 +3615,9 @@ class WasmFunctionLower {
 			body.push(I32Store(0));
 		}
 	}
+
+	static function rootKey(block:Int, instruction:Int):String
+		return block + ":" + instruction;
 
 	static function restoreRoots(body:Array<WasmInstruction>):Void {
 		if (activeGcRootState != null) {
