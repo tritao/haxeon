@@ -1057,7 +1057,7 @@ class Typer {
 								output.push(TAssign(scope.requireId(name), value, span));
 							scope.markAssigned(name);
 							scope.invalidateExpressionsForLocal(name);
-							scope.refine(name, assignedValue.type);
+							scope.refine(name, value.type);
 						}
 					} else {
 						var objectName = name.substring(0, dot),

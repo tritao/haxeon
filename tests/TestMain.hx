@@ -915,6 +915,11 @@ class TestMain {
 			'class Service { public var failure:Null<String>; public function new() { failure = null; } function mutate():Void { failure = "changed"; } public function update():Void { if (failure != null) return; mutate(); if (failure != null) return; } } function main():Int { new Service().update(); return 42; }');
 		callEffectCompiler.compile("Main");
 		Sys.println("PASS: calls invalidate stale nullable field refinements before IR lowering");
+		var assignmentConversionCompiler = new Compiler();
+		assignmentConversionCompiler.update("Main.hx",
+			'enum Resize { Changed(width:Int, height:Int); } class View { public function new() {} public function setViewport(width:Float, height:Float):Void {} } function main():Int { var view = new View(); var width = 900.0; var height = 650.0; switch Resize.Changed(1200, 800) { case Resize.Changed(nextWidth, nextHeight): width = nextWidth; height = nextHeight; } view.setViewport(width, height); return 42; }');
+		assignmentConversionCompiler.compile("Main");
+		Sys.println("PASS: flow refinement preserves coerced local types after numeric assignments");
 		var initializerLambdaCompiler = new Compiler();
 		initializerLambdaCompiler.update("Main.hx",
 			'class Callbacks { public var callback:Void->Void = function() {}; public function new() {} } function main():Int { new Callbacks().callback(); return 42; }');
