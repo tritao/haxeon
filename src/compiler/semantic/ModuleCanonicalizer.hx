@@ -52,10 +52,13 @@ class ModuleCanonicalizer {
 		return [for (name => target in aliases) name => target];
 
 	static function combinedTypeParameters(owner:Array<String>, member:Null<Array<String>>):Array<String> {
+		if (member == null || member.length == 0)
+			return owner;
+		if (owner.length == 0)
+			return member;
 		var result = owner.copy();
-		if (member != null)
-			for (parameter in member)
-				result.push(parameter);
+		for (parameter in member)
+			result.push(parameter);
 		return result;
 	}
 
@@ -160,9 +163,10 @@ class ModuleCanonicalizer {
 	static function canonicalAbstractMethod(method:AstFunction, ownerTypeParameters:Array<String>, module:String, entry:String, locals:Map<String, Bool>,
 			name:String, aliases:Map<String, String>):AstFunction {
 		var parameters = combinedTypeParameters(ownerTypeParameters, method.typeParameters),
-			methodAliases = copyAliases(aliases);
-		for (parameter in parameters)
-			methodAliases.set(parameter, parameter);
+			methodAliases = parameters.length == 0 ? aliases : copyAliases(aliases);
+		if (parameters.length > 0)
+			for (parameter in parameters)
+				methodAliases.set(parameter, parameter);
 		return {
 			name: name,
 			isStatic: method.isStatic,
