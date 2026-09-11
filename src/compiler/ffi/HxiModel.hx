@@ -6,6 +6,8 @@ import compiler.Source.SourceSpan;
 typedef HxiDocumentation = {
 	final raw:String;
 	final lines:Array<String>;
+	final source:String;
+	final indentedSource:String;
 }
 
 enum HxiType {

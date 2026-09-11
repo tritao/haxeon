@@ -263,11 +263,7 @@ class Compiler {
 	function registerFfiInterface(path:String, source:String, enforceFreeze:Bool):Void {
 		if (enforceFreeze && compiledOnce)
 			throw "FFI interfaces are frozen after the first compilation";
-		var visibleDeclarations:Array<HxiDeclaration> = [];
-		for (dependency in ffiInterfaceModels)
-			for (declaration in dependency.declarations)
-				visibleDeclarations.push(declaration);
-		var model = HxiParser.parse(path, source, visibleDeclarations);
+		var model = HxiParser.parseUnvalidated(path, source);
 		if (ffiInterfaceModels.exists(model.name))
 			throw 'FFI interface "${model.name}" is already registered';
 		for (dependency in model.dependencies)
@@ -281,10 +277,8 @@ class Compiler {
 			for (declaration in dependencyModel.declarations)
 				dependencyDeclarations.push(declaration);
 		}
-		// The first parse discovers the interface's dependency list and validates
-		// against all previously registered declarations. Revalidate the already
-		// parsed model against the declared dependencies instead of lexing and
-		// parsing the same source a second time.
+		// Parsing discovers the interface's dependency list. Validate the composed
+		// model once against exactly those declared dependencies.
 		HxiParser.validate(model, dependencyDeclarations);
 		ffiInterfaceModels.set(model.name, model);
 		ffiInterfaceSources.push({path: path, text: source});

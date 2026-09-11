@@ -64,14 +64,20 @@ class HxiParser {
 	final visibleDeclarations:Array<HxiDeclaration>;
 	final documentation:Map<String, HxiDocumentation> = [];
 	final tokens:Array<HxiToken>;
+	final validateParsed:Bool;
 	var position = 0;
 
 	public static function parse(path:String, text:String, ?visibleDeclarations:Array<HxiDeclaration>):HxiInterface
 		return new HxiParser(new SourceFile(path, text), visibleDeclarations).parseInterface();
 
-	function new(source:SourceFile, ?visibleDeclarations:Array<HxiDeclaration>) {
+	/** Parses HXI syntax without validation for callers that will validate a composed model. */
+	public static function parseUnvalidated(path:String, text:String):HxiInterface
+		return new HxiParser(new SourceFile(path, text), null, false).parseInterface();
+
+	function new(source:SourceFile, ?visibleDeclarations:Array<HxiDeclaration>, validateParsed:Bool = true) {
 		this.source = source;
 		this.visibleDeclarations = visibleDeclarations == null ? [] : visibleDeclarations;
+		this.validateParsed = validateParsed;
 		var lexed = tokenize(source);
 		comments = lexed.comments;
 		tokens = lexed.tokens;
@@ -92,7 +98,8 @@ class HxiParser {
 			library = metadataValue(metadata, "library", false),
 			dependencies = metadataStrings(metadata, "depends"),
 			result = new HxiInterface(name, target, library, dependencies, declarations, start.merge(end), documentation);
-		validate(result, visibleDeclarations);
+		if (validateParsed)
+			validate(result, visibleDeclarations);
 		return result;
 	}
 
@@ -756,7 +763,21 @@ class HxiParser {
 	function rememberDocumentation(name:String, span:SourceSpan):Void {
 		var value = DocumentationTools.forSpan(source, comments, span);
 		if (value.raw.length > 0)
-			documentation.set(name, {raw: value.raw, lines: value.lines});
+			documentation.set(name, {
+			raw: value.raw,
+			lines: value.lines,
+			source: projectionDocumentation(value.lines),
+			indentedSource: projectionDocumentation(value.lines, "\t")
+		});
+	}
+
+	static function projectionDocumentation(lines:Array<String>, indent:String = ""):String {
+		var output = new StringBuf();
+		output.add(indent + "/**\n");
+		for (line in lines)
+			output.add(indent + " *" + (line.length == 0 ? "" : " " + line) + "\n");
+		output.add(indent + " */\n");
+		return output.toString();
 	}
 
 	function parseMetadata(allowed:Array<String>):Map<String, Array<String>> {
@@ -906,7 +927,7 @@ class HxiParser {
 	function checkString():Bool
 		return StringTools.startsWith(current().text, '"');
 
-	function match(text:String):Bool {
+	inline function match(text:String):Bool {
 		if (!check(text))
 			return false;
 		advance();

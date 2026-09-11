@@ -421,11 +421,16 @@ class HxiProjection {
 	static function emitDocumentationValue(output:StringBuf, documentation:Null<HxiDocumentation>, indent:String = ""):Void {
 		if (documentation == null || documentation.raw.length == 0)
 			return;
-		var lines = documentation.lines;
-		output.add(indent + "/**\n");
-		for (line in lines)
-			output.add(indent + " *" + (line.length == 0 ? "" : " " + line) + "\n");
-		output.add(indent + " */\n");
+		if (indent.length == 0)
+			output.add(documentation.source);
+		else if (indent == "\t")
+			output.add(documentation.indentedSource);
+		else {
+			output.add(indent + "/**\n");
+			for (line in documentation.lines)
+				output.add(indent + " *" + (line.length == 0 ? "" : " " + line) + "\n");
+			output.add(indent + " */\n");
+		}
 	}
 
 	static inline function isOmitted(omitted:Null<Map<String, Bool>>, name:String):Bool
