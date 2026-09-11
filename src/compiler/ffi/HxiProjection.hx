@@ -864,8 +864,11 @@ class HxiProjection {
 			case _: project(value, false);
 		};
 
-	static function escape(value:String):String
+	static function escape(value:String):String {
+		if (value.indexOf("\\") < 0 && value.indexOf('"') < 0)
+			return value;
 		return StringTools.replace(StringTools.replace(value, "\\", "\\\\"), '"', '\\"');
+	}
 
 	static function callSignature(signature:String, convention:String):String
 		return convention == "cdecl" ? signature : signature + "@" + convention;
