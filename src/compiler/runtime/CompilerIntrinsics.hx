@@ -21,6 +21,7 @@ class CompilerIntrinsics {
 		definitions.push(native("__std_int_f64", "haxeon_runtime", "__std_int_f64", [TFloat], TInt));
 		definitions.push(native("__std_string", "haxeon_runtime", "__std_string", [TDynamic], TString));
 		definitions.push(native("__dynamic_equal", "haxeon_runtime", "__dynamic_equal", [TDynamic, TDynamic], TBool));
+		definitions.push(native("__math_fmod", "haxeon_runtime", "__math_fmod", [TFloat, TFloat], TFloat));
 
 		// Primitive String methods lowered directly by the typer.
 		definitions.push(native("__string_compare_full", "std", "string_compare_full", [TString, TString], TInt));

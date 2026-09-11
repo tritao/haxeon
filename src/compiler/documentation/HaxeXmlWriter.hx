@@ -16,7 +16,10 @@ class HaxeXmlWriter {
 		var output = new StringBuf();
 		output.add('<?xml version="1.0" encoding="utf-8"?>\n<haxe>\n');
 		for (name in names) {
-			var state = modules.get(name), program = state.ast;
+			var state = modules.get(name);
+			if (state == null)
+				continue;
+			var program = state.ast;
 			if (program != null)
 				emitModule(output, state, program);
 		}

@@ -272,6 +272,8 @@ class Compiler {
 		var dependencyDeclarations:Array<HxiDeclaration> = [];
 		for (dependencyName in model.dependencies) {
 			var dependencyModel = ffiInterfaceModels.get(dependencyName);
+			if (dependencyModel == null)
+				throw 'FFI interface "${model.name}" depends on unknown interface "$dependencyName"';
 			for (declaration in dependencyModel.declarations)
 				dependencyDeclarations.push(declaration);
 		}

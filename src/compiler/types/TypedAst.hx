@@ -113,6 +113,8 @@ typedef TypedMapEntry = {final key:TypedExpression; final value:TypedExpression;
 typedef TypedSwitchExpressionCase = {
 	final value:TypedExpression;
 	final subjectBinding:Null<String>;
+	/** True when the source arm is the wildcard pattern `_`, which has no binding name. */
+	final isCatchAll:Bool;
 	final guard:Null<TypedExpression>;
 	final result:TypedExpression;
 	final enumName:Null<String>;
@@ -153,6 +155,8 @@ enum TypedStatement {
 typedef TypedSwitchCase = {
 	final value:TypedExpression;
 	final subjectBinding:Null<String>;
+	/** True when the source arm is the wildcard pattern `_`, which has no binding name. */
+	final isCatchAll:Bool;
 	final guard:Null<TypedExpression>;
 	final statements:Array<TypedStatement>;
 	final enumName:Null<String>;

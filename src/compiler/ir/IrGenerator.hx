@@ -449,7 +449,7 @@ class IrGenerator {
 							caseValue = switchCase.constructorIndex >= 0 ? builder.constInt(switchCase.constructorIndex) : lowerExpression(switchCase.value,
 								builder, localTypes);
 						var predicateBlock = switchCase.predicates.length == 0 ? matchBlock : builder.createBlock();
-						if (switchCase.subjectBinding != null)
+						if (switchCase.isCatchAll || switchCase.subjectBinding != null)
 							builder.jump(predicateBlock);
 						else {
 							var matches = switchType == Bytes ? builder.call("__string_equal", [switchValue, caseValue],
@@ -869,7 +869,8 @@ class IrGenerator {
 						matches = subject.type == TString ? builder.call("__string_equal", [comparisonValue, caseValue],
 							Bool) : builder.equal(comparisonValue, caseValue);
 					var matchBlock = matchBlocks[caseIndex];
-					if (switchCase.subjectBinding != null || (isExhaustiveFinalCase && switchCase.predicates.length == 0))
+					if (switchCase.isCatchAll || switchCase.subjectBinding != null
+						|| (isExhaustiveFinalCase && switchCase.predicates.length == 0))
 						builder.jump(bodyBlock);
 					else {
 						var predicateBlock = switchCase.predicates.length == 0 ? matchBlock : builder.createBlock();

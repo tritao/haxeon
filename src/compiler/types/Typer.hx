@@ -911,7 +911,7 @@ class Typer {
 				case Return(expression, span):
 					var expected = result == null ? context.inferredResult : result;
 					var value = typeExpression(expression, scope, expected);
-					if (expected == TVoid && context.contextualVoidLambda) {
+					if (expected != null && expected == TVoid && context.contextualVoidLambda) {
 						output.push(TExpression(value, span));
 						output.push(TReturnVoid(span));
 						continue;
@@ -1232,8 +1232,9 @@ class Typer {
 					for (switchCase in cases) {
 						var caseScope = new Scope(scope),
 							subjectBinding = switchSubjectBinding(switchCase.value, typedExpression.type, caseScope),
+							isCatchAll = isSwitchCatchAll(switchCase.value),
 							pattern = subjectBinding == null ? typeEnumPattern(switchCase.value, typedExpression.type, caseScope) : null,
-							typedValue = subjectBinding != null ? typedExpression : pattern == null ? coerce(typeExpression(switchCase.value, scope,
+							typedValue = isCatchAll || subjectBinding != null ? typedExpression : pattern == null ? coerce(typeExpression(switchCase.value, scope,
 								typedExpression.type), typedExpression.type, "switch case", "E1019") : pattern.value;
 						var parsedGuard = switchCase.guard,
 							typedGuard = parsedGuard == null ? null : coerce(typeExpression(parsedGuard, caseScope), TBool, "switch guard", "E1003");
@@ -1253,7 +1254,7 @@ class Typer {
 							}
 						}
 						var caseKey = switchCaseKey(typedValue, predicates);
-						if (subjectBinding != null)
+						if (isCatchAll || subjectBinding != null)
 							seenCases.set("$catchall", true);
 						if (caseKey != null && typedGuard == null) {
 							if (seenCases.exists(caseKey))
@@ -1263,6 +1264,7 @@ class Typer {
 						typedCases.push({
 							value: typedValue,
 							subjectBinding: subjectBinding,
+							isCatchAll: isCatchAll,
 							guard: typedGuard,
 							statements: typedBody,
 							enumName: enumName,
@@ -1818,7 +1820,11 @@ class Typer {
 					if (expectedEnum != null)
 						info = enumCaseInfo(expectedEnum + "." + name);
 				}
-				if (info != null) null; else if (name == "_") ""; else {
+				if (info != null)
+					null;
+				else if (name == "_")
+					null;
+				else {
 					scope.define(name, expected, span);
 					bindCell(name, span, scope, expected);
 					scope.requireId(name);
@@ -1826,6 +1832,12 @@ class Typer {
 			default: null;
 		}
 	}
+
+	static function isSwitchCatchAll(value:AstExpression):Bool
+		return switch value {
+			case Variable(name, _): name == "_";
+			default: false;
+		};
 
 	function typeEnumPredicate(value:AstExpression, type:CompilerType, storageType:CompilerType, index:Int, constantName:Null<String>, arrayIndex:Int = -1,
 			?fieldStorageType:CompilerType):TypedSwitchPredicate {
@@ -2340,8 +2352,9 @@ class Typer {
 				for (switchCase in cases) {
 					var caseScope = new Scope(scope),
 						subjectBinding = switchSubjectBinding(switchCase.value, typedSubject.type, caseScope),
+						isCatchAll = isSwitchCatchAll(switchCase.value),
 						pattern = subjectBinding == null ? typeEnumPattern(switchCase.value, typedSubject.type, caseScope) : null,
-						typedValue = subjectBinding != null ? typedSubject : pattern == null ? coerce(typeExpression(switchCase.value, scope,
+						typedValue = isCatchAll || subjectBinding != null ? typedSubject : pattern == null ? coerce(typeExpression(switchCase.value, scope,
 							typedSubject.type), typedSubject.type, "switch case", "E1019") : pattern.value;
 					var parsedGuard = switchCase.guard,
 						typedGuard = parsedGuard == null ? null : coerce(typeExpression(parsedGuard, caseScope), TBool, "switch guard", "E1003");
@@ -2365,7 +2378,7 @@ class Typer {
 						}
 					}
 					var caseKey = switchCaseKey(typedValue, predicates);
-					if (subjectBinding != null)
+					if (isCatchAll || subjectBinding != null)
 						seenCases.set("$catchall", true);
 					if (caseKey != null && typedGuard == null) {
 						if (seenCases.exists(caseKey))
@@ -2375,6 +2388,7 @@ class Typer {
 					typedCases.push({
 						value: typedValue,
 						subjectBinding: subjectBinding,
+						isCatchAll: isCatchAll,
 						guard: typedGuard,
 						result: typedResult,
 						enumName: enumName,
@@ -2400,6 +2414,7 @@ class Typer {
 						{
 							value: switchCase.value,
 							subjectBinding: switchCase.subjectBinding,
+							isCatchAll: switchCase.isCatchAll,
 							guard: switchCase.guard,
 							result: coerce(switchCase.result, resultType, "switch branch", "E1003"),
 							enumName: switchCase.enumName,
@@ -2818,8 +2833,12 @@ class Typer {
 							if (method == null)
 								fail("E1007", 'Missing signature for method "$methodKey"', span);
 							if (isGeneric(method)) {
-								if (!implicitMethod.isStatic)
-									fail("E1007", "Generic instance methods are not supported yet", span);
+								var receiver:Null<TypedExpression> = null;
+								if (!implicitMethod.isStatic) {
+									if (scope.resolve("this") == null)
+										fail("E1007", 'Instance method "$methodKey" requires an object', span);
+									receiver = typeExpression(Variable("this", span), scope);
+								}
 								var preset:Map<String, CompilerType> = [],
 									parameters = functionTypeParameters(method),
 									hasLambda = false;
@@ -2841,7 +2860,8 @@ class Typer {
 										typeExpression(arguments[index], scope,
 											declarations.resolve(method.arguments[index].type, method.arguments[index].span, typingSubstitutions), true)
 								] : [for (argument in arguments) typeExpression(argument, scope)];
-								var specialized = specializeGeneric(methodKey, method, genericArguments, span, scope, implicitMethod.owner, true, preset);
+								var specialized = specializeGeneric(methodKey, method, genericArguments, span, scope, implicitMethod.owner,
+									implicitMethod.isStatic, preset, receiver);
 								return specialized;
 							}
 							var typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span);
@@ -4262,9 +4282,12 @@ class Typer {
 
 	function modulo(a:AstExpression, b:AstExpression, scope:Scope, span:SourceSpan):TypedExpression {
 		var left = typeExpression(a, scope), right = typeExpression(b, scope);
-		if (!sameType(left.type, TInt) || !sameType(right.type, TInt))
-			fail("E1010", "Modulo requires matching Int operands", span);
-		return new TypedExpression(TMod(left, right), TInt, span);
+		if (!isNumeric(left.type) || !isNumeric(right.type))
+			fail("E1010", "Modulo requires matching Int or Float operands", span);
+		var promoted = promoteNumericOperands(left, right);
+		return sameType(promoted.type, TInt)
+			? new TypedExpression(TMod(promoted.left, promoted.right), TInt, span)
+			: new TypedExpression(TCall("__math_fmod", [promoted.left, promoted.right]), TFloat, span);
 	}
 
 	function bitwise(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan):TypedExpression {
@@ -4358,7 +4381,7 @@ class Typer {
 		var enumDecl = requiredMapValue(enumDecls, enumName);
 		var seen:Map<Int, Bool> = [];
 		for (switchCase in cases)
-			if (switchCase.subjectBinding != null)
+			if (switchCase.isCatchAll || switchCase.subjectBinding != null)
 				return true;
 			else if (switchCase.constructorIndex >= 0)
 				seen.set(switchCase.constructorIndex, true);

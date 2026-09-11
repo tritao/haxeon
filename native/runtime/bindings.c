@@ -317,6 +317,8 @@ DEFINE_PRIM(_F64,__math_pow,_F64 _F64);
 DEFINE_PRIM(_F64,__math_cos,_F64);
 DEFINE_PRIM(_F64,__math_sin,_F64);
 DEFINE_PRIM(_F64,__math_tan,_F64);
+DEFINE_PRIM(_F64,__math_fmod,_F64 _F64);
+DEFINE_PRIM(_I32,__math_round,_F64);
 DEFINE_PRIM(_I32,__string_length,_BYTES);
 DEFINE_PRIM(_BOOL,__string_equal,_BYTES _BYTES);
 DEFINE_PRIM(_I32,__string_index_of,_BYTES _BYTES);

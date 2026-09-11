@@ -37,8 +37,13 @@ extern function mathSin(value:Float):Float;
 @:hlNative("haxeon_runtime", "__math_tan")
 extern function mathTan(value:Float):Float;
 
+@:hlNative("haxeon_runtime", "__math_round")
+extern function mathRound(value:Float):Int;
+
 /** Supported mathematical helpers backed by the stable runtime ABI. */
 class Math {
+	public static inline var PI:Float = 3.141592653589793;
+
 	public static inline function min(left:Float, right:Float):Float
 		return left < right ? left : right;
 
@@ -62,4 +67,7 @@ class Math {
 
 	public static inline function tan(value:Float):Float
 		return mathTan(value);
+
+	public static inline function round(value:Float):Int
+		return mathRound(value);
 }

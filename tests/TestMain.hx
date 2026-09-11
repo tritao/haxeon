@@ -123,6 +123,8 @@ class TestMain {
 		Frontend.compile('function choose<T>(value:T, enabled:Bool = true):T return value; function main():Int return choose(42);');
 		Frontend.compile('function choose<T>(value:T, ?message:String):T return value; function main():Int return choose(42);');
 		Frontend.compile('class GenericDefaults { public static function same<T>(expected:T, actual:T, message:String = ""):Bool return expected == actual; } function main():Int return GenericDefaults.same(42, 42) ? 42 : 0;');
+		Frontend.compile('class GenericInstance { public function keep<T>(value:T):T return value; } function main():Int return new GenericInstance().keep(42);');
+		Frontend.compile('function main():Int { var remainder = 5.5 % 2.0; return remainder == 1.5 ? 42 : 0; }');
 		expectCompileError('function choose<T>(value:T, enabled:Bool = true):T return value; function main():Int return choose();',
 			'Function "choose" expects 1 to 2 arguments, got 0');
 		Frontend.compile('function fail():Void throw "failure"; function value():String { fail(); return null; } function main():Int return 42;');

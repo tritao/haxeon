@@ -82,7 +82,7 @@ class HxiAbi {
 						callConvention: callConvention,
 						resultPolicy: resultPolicy
 					});
-				case _:
+				default:
 			}
 		return result;
 	}
