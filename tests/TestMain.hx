@@ -731,6 +731,17 @@ class TestMain {
 			|| normalizedDocumentation.markdown.indexOf("**Throws:** Overflow on failure.") < 0
 			|| normalizedDocumentation.raw.indexOf("@since 1.0") < 0)
 			throw "Haxe documentation normalization lost structured or raw content";
+		var documentationSource = new SourceFile("documentation-index.hx",
+			"var label = \"é /** not documentation */\";\n/* block */ /** Widget docs. */\npublic class Widget {}\n/** Main docs. */\nfunction main():Int return 0;");
+		var documentationComments = DocumentationTools.scan(documentationSource),
+			widgetStart = documentationSource.byteOffsetForStringOffset(documentationSource.text.indexOf("class Widget")),
+			mainStart = documentationSource.byteOffsetForStringOffset(documentationSource.text.indexOf("function main")),
+			widgetDocumentation = DocumentationTools.forSpan(documentationSource, documentationComments, documentationSource.span(widgetStart, widgetStart + 5)),
+			mainDocumentation = DocumentationTools.forSpan(documentationSource, documentationComments, documentationSource.span(mainStart, mainStart + 8));
+		if (documentationComments.length != 2
+			|| widgetDocumentation.raw != "Widget docs."
+			|| mainDocumentation.raw != "Main docs.")
+			throw "Haxe documentation scanning or indexed association lost comments";
 		var documentationCompiler = new Compiler();
 		documentationCompiler.update("sample/Widget.hx",
 			"package sample; /** Widget <docs>. */ class Widget { /** Current value. */ public var value:Int; /** Adds values. @param amount Operand. */ public function add(amount:Int):Int return value + amount; }");

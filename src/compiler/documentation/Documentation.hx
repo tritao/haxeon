@@ -20,49 +20,63 @@ typedef DocumentationComment = {
 /** Extracts and associates Haxe `/** ... *\/` comments without affecting semantic artifacts. */
 class DocumentationTools {
 	public static function scan(file:SourceFile):Array<DocumentationComment> {
-		var result:Array<DocumentationComment> = [], source = file.text, position = 0;
-		while (position + 2 < source.length) {
-			var quote = source.charAt(position);
-			if (quote == "\"" || quote == "'") {
+		var result:Array<DocumentationComment> = [], bytes = file.bytes, position = 0;
+		while (position + 2 < bytes.length) {
+			var code = bytes.get(position);
+			if (code == "\"".code || code == "'".code) {
 				position++;
-				while (position < source.length)
-					if (source.charAt(position) == "\\")
+				while (position < bytes.length)
+					if (bytes.get(position) == "\\".code)
 						position += 2;
-					else if (source.charAt(position++) == quote)
+					else if (bytes.get(position++) == code)
 						break;
 				continue;
 			}
-			if (source.substr(position, 2) == "//") {
-				var newline = source.indexOf("\n", position + 2);
-				position = newline < 0 ? source.length : newline + 1;
-				continue;
-			}
-			if (source.substr(position, 2) == "/*" && source.substr(position, 3) != "/**") {
-				var blockClose = source.indexOf("*/", position + 2);
-				position = blockClose < 0 ? source.length : blockClose + 2;
-				continue;
-			}
-			if (source.substr(position, 3) != "/**") {
+			if (code != "/".code || position + 1 >= bytes.length) {
 				position++;
 				continue;
 			}
-			var close = source.indexOf("*/", position + 3);
-			if (close < 0)
-				break;
-			var raw = source.substring(position + 3, close);
-			result.push({end: file.byteOffsetForStringOffset(close + 2), documentation: normalize(raw)});
-			position = close + 2;
+			var next = bytes.get(position + 1);
+			if (next == "/".code) {
+				position += 2;
+				while (position < bytes.length && bytes.get(position) != "\n".code)
+					position++;
+				continue;
+			}
+			if (next != "*".code) {
+				position++;
+				continue;
+			}
+			var commentStart = position,
+				documentation = position + 2 < bytes.length && bytes.get(position + 2) == "*".code;
+			position += 2;
+			while (position + 1 < bytes.length && !(bytes.get(position) == "*".code && bytes.get(position + 1) == "/".code))
+				position++;
+			if (position + 1 >= bytes.length) {
+				if (documentation)
+					break;
+				position = bytes.length;
+				continue;
+			}
+			// Keep the historical `/**/` behavior: it is a block comment, not a
+			// documentation comment, because the closing marker starts too early.
+			if (documentation && position >= commentStart + 3)
+				result.push({end: position + 2, documentation: normalize(file.slice(commentStart + 3, position))});
+			position += 2;
 		}
 		return result;
 	}
 
 	public static function forSpan(file:SourceFile, comments:Array<DocumentationComment>, span:SourceSpan):Documentation {
-		var candidate:Null<DocumentationComment> = null;
-		for (comment in comments)
-			if (comment.end > span.start)
-				break;
+		var low = 0, high = comments.length;
+		while (low < high) {
+			var middle = low + ((high - low) >> 1);
+			if (comments[middle].end <= span.start)
+				low = middle + 1;
 			else
-				candidate = comment;
+				high = middle;
+		}
+		var candidate:Null<DocumentationComment> = low == 0 ? null : comments[low - 1];
 		return candidate != null && isDocumentationGap(file.slice(candidate.end, span.start)) ? candidate.documentation : empty();
 	}
 
@@ -128,29 +142,30 @@ class DocumentationTools {
 		// the `function`/`var` keyword. Metadata may also precede that prefix.
 		if (StringTools.startsWith(trimmed, "@:"))
 			return true;
-		for (word in words(trimmed))
-			if (word != "public" && word != "private" && word != "static" && word != "final" && word != "extern" && word != "override" && word != "inline"
-				&& word != "dynamic" && word != "function" && word != "var")
+		var position = 0;
+		while (position < trimmed.length) {
+			while (position < trimmed.length && isWhitespace(trimmed.charAt(position)))
+				position++;
+			if (position == trimmed.length)
+				break;
+			var end = position;
+			while (end < trimmed.length && !isWhitespace(trimmed.charAt(end)))
+				end++;
+			if (!isDeclarationWord(trimmed.substring(position, end)))
 				return false;
+			position = end;
+		}
 		return true;
 	}
 
-	static function words(value:String):Array<String> {
-		var result = [], current = "";
-		for (index in 0...value.length) {
-			var character = value.charAt(index);
-			if (character == " " || character == "\t" || character == "\r" || character == "\n") {
-				if (current.length > 0) {
-					result.push(current);
-					current = "";
-				}
-			} else
-				current += character;
-		}
-		if (current.length > 0)
-			result.push(current);
-		return result;
-	}
+	static inline function isWhitespace(value:String):Bool
+		return value == " " || value == "\t" || value == "\r" || value == "\n";
+
+	static function isDeclarationWord(value:String):Bool
+		return switch value {
+			case "public" | "private" | "static" | "final" | "extern" | "override" | "inline" | "dynamic" | "function" | "var": true;
+			case _: false;
+		};
 
 	static function trimEmpty(lines:Array<String>):Void {
 		while (lines.length > 0 && lines[0].length == 0)

@@ -402,10 +402,18 @@ class HxiProjection {
 	static function emitDocumentationValue(output:StringBuf, documentation:Null<HxiDocumentation>, indent:String = ""):Void {
 		if (documentation == null || documentation.raw.length == 0)
 			return;
-		output.add(indent + "/**\n");
-		for (line in documentation.raw.split("\n"))
-			output.add(indent + " *" + (line.length == 0 ? "" : " " + line) + "\n");
-		output.add(indent + " */\n");
+		var raw = documentation.raw, start = 0, formatted = new StringBuf();
+		formatted.add(indent + "/**\n");
+		while (true) {
+			var end = raw.indexOf("\n", start), lineEnd = end < 0 ? raw.length : end,
+				line = raw.substring(start, lineEnd);
+			formatted.add(indent + " *" + (line.length == 0 ? "" : " " + line) + "\n");
+			if (end < 0)
+				break;
+			start = end + 1;
+		}
+		formatted.add(indent + " */\n");
+		output.add(formatted.toString());
 	}
 
 	static function isOmitted(omitted:Null<Map<String, Bool>>, name:String):Bool

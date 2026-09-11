@@ -1,0 +1,3 @@
+-cp tests/profiler
+-main ProfilerWaitTarget
+-hl out/profiler-wait-target.hl

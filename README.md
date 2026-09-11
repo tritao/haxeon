@@ -405,6 +405,17 @@ Haxe sources use the repository-pinned Haxe Formatter:
 ./scripts/format.sh --check
 ```
 
+For short-lived compiler profiling runs, start the HashLink process with
+`--diagnostics-wait`. It opens the diagnostics socket, holds the program before
+its entrypoint, and resumes after `hlprof-live` configures sampling. Run the
+first command in one terminal and the second in another:
+
+```sh
+LD_LIBRARY_PATH="$PWD/out:$PWD/.tools/hashlink" \
+  .tools/hashlink/hl --diagnostics 24020 --diagnostics-wait out/compiler.hl
+vendor/hashlink/hlprof-live --rate 500 --output out/compiler.hlpc 24020
+```
+
 `bootstrap-status.sh` runs the real lexer, parser, and typer over the compiler
 source tree and reports bootstrap progress. Pass `--json` for a machine-readable
 dashboard.

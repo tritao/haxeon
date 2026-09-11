@@ -21,6 +21,11 @@ private typedef HxiToken = {
 	final span:SourceSpan;
 }
 
+private typedef HxiLexResult = {
+	final tokens:Array<HxiToken>;
+	final comments:Array<DocumentationComment>;
+}
+
 /** Parses and validates Haxeon's generated, target-specific ABI interface format. */
 class HxiParser {
 	static final primitives = [
@@ -67,8 +72,9 @@ class HxiParser {
 	function new(source:SourceFile, ?visibleDeclarations:Array<HxiDeclaration>) {
 		this.source = source;
 		this.visibleDeclarations = visibleDeclarations == null ? [] : visibleDeclarations;
-		comments = DocumentationTools.scan(source);
-		tokens = tokenize(source);
+		var lexed = tokenize(source);
+		comments = lexed.comments;
+		tokens = lexed.tokens;
 	}
 
 	function parseInterface():HxiInterface {
@@ -333,7 +339,7 @@ class HxiParser {
 		return primitives.indexOf(name) >= 0 ? Primitive(name) : Named(name);
 	}
 
-	function validate(value:HxiInterface, visible:Array<HxiDeclaration>):Void {
+	public static function validate(value:HxiInterface, visible:Array<HxiDeclaration>):Void {
 		var names:Map<String, SourceSpan> = [],
 			declarationsByName:Map<String, HxiDeclaration> = [],
 			visibleNames:Map<String, Bool> = [];
@@ -487,7 +493,7 @@ class HxiParser {
 			}
 	}
 
-	function validateOutputType(name:String, type:HxiType, abi:HxiAbi, span:SourceSpan):Void {
+	static function validateOutputType(name:String, type:HxiType, abi:HxiAbi, span:SourceSpan):Void {
 		var pointee = switch type {
 			case Pointer(value):
 				switch value {
@@ -507,7 +513,7 @@ class HxiParser {
 		}
 	}
 
-	function validateOutputBuffer(functionName:String, buffer:{name:String, sizeParameter:String, span:SourceSpan}, parameters:Array<HxiParameter>,
+	static function validateOutputBuffer(functionName:String, buffer:{name:String, sizeParameter:String, span:SourceSpan}, parameters:Array<HxiParameter>,
 			abi:HxiAbi, span:SourceSpan):Void {
 		var size:HxiParameter = null;
 		for (parameter in parameters)
@@ -545,14 +551,14 @@ class HxiParser {
 			case _: false;
 		};
 
-	function validateCallConvention(name:String, convention:String, abi:HxiAbi, span:SourceSpan):Void {
+	static function validateCallConvention(name:String, convention:String, abi:HxiAbi, span:SourceSpan):Void {
 		if (convention != "cdecl" && convention != "stdcall" && convention != "system")
 			fail('Declaration "$name" has unsupported calling convention "$convention"', span);
 		if (convention == "stdcall" && abi.target.indexOf("windows") < 0 && abi.target.indexOf("mingw") < 0 && abi.target.indexOf("msvc") < 0)
 			fail('Calling convention "stdcall" is only available for Windows targets', span);
 	}
 
-	function validateCallbackType(type:HxiType, abi:HxiAbi, span:SourceSpan, allowVoid:Bool):Void
+	static function validateCallbackType(type:HxiType, abi:HxiAbi, span:SourceSpan, allowVoid:Bool):Void
 		try {
 			switch abi.classify(type, allowVoid) {
 				case VoidValue if (allowVoid):
@@ -604,7 +610,7 @@ class HxiParser {
 				}
 		};
 
-	function validateAliasCycles(declarations:Array<HxiDeclaration>):Void {
+	static function validateAliasCycles(declarations:Array<HxiDeclaration>):Void {
 		var aliases:Map<String, {type:HxiType, span:SourceSpan}> = [];
 		for (declaration in declarations)
 			switch declaration {
@@ -617,7 +623,7 @@ class HxiParser {
 			visitAlias(name, aliases, visiting, complete);
 	}
 
-	function visitAlias(name:String, aliases:Map<String, {type:HxiType, span:SourceSpan}>, visiting:Map<String, Bool>, complete:Map<String, Bool>):Void {
+	static function visitAlias(name:String, aliases:Map<String, {type:HxiType, span:SourceSpan}>, visiting:Map<String, Bool>, complete:Map<String, Bool>):Void {
 		if (complete.exists(name))
 			return;
 		var alias = aliases.get(name);
@@ -702,7 +708,7 @@ class HxiParser {
 			case _: false;
 		};
 
-	function visitTypeAliases(type:HxiType, aliases:Map<String, {type:HxiType, span:SourceSpan}>, visiting:Map<String, Bool>, complete:Map<String, Bool>):Void
+	static function visitTypeAliases(type:HxiType, aliases:Map<String, {type:HxiType, span:SourceSpan}>, visiting:Map<String, Bool>, complete:Map<String, Bool>):Void
 		switch type {
 			case Named(name) if (aliases.exists(name)):
 				visitAlias(name, aliases, visiting, complete);
@@ -711,7 +717,7 @@ class HxiParser {
 			case _:
 		}
 
-	function validateType(type:HxiType, names:Map<String, SourceSpan>, declarations:Map<String, HxiDeclaration>, span:SourceSpan, allowVoid:Bool):Void
+	static function validateType(type:HxiType, names:Map<String, SourceSpan>, declarations:Map<String, HxiDeclaration>, span:SourceSpan, allowVoid:Bool):Void
 		switch type {
 			case Primitive("void") if (!allowVoid):
 				fail("Void is not valid in this ABI position", span);
@@ -840,11 +846,25 @@ class HxiParser {
 
 	function identifier():String {
 		var token = current();
-		if (!~/^[A-Za-z_][A-Za-z0-9_]*$/.match(token.text))
+		if (!isIdentifier(token.text))
 			fail('Expected identifier, got "${token.text}"', token.span);
 		advance();
 		return token.text;
 	}
+
+	static function isIdentifier(value:String):Bool {
+		if (value.length == 0 || !isIdentifierStart(value.charCodeAt(0)))
+			return false;
+		for (index in 1...value.length) {
+			var code = value.charCodeAt(index);
+			if (!isIdentifierStart(code) && !(code >= "0".code && code <= "9".code))
+				return false;
+		}
+		return true;
+	}
+
+	static inline function isIdentifierStart(code:Int):Bool
+		return (code >= "A".code && code <= "Z".code) || (code >= "a".code && code <= "z".code) || code == "_".code;
 
 	function integer():String {
 		var token = current();
@@ -890,65 +910,68 @@ class HxiParser {
 	function atEnd():Bool
 		return position >= tokens.length;
 
-	function fail(message:String, span:SourceSpan):Dynamic
+	static function fail(message:String, span:SourceSpan):Dynamic
 		throw new CompileError(new Diagnostic("E3001", message, span));
 
-	static function tokenize(source:SourceFile):Array<HxiToken> {
-		var result = [], bytes = source.bytes, position = 0;
+	static function tokenize(source:SourceFile):HxiLexResult {
+		var result:Array<HxiToken> = [], comments:Array<DocumentationComment> = [], bytes = source.bytes, position = 0;
 		while (position < bytes.length) {
 			var code = bytes.get(position);
-			if (code == 32 || code == 9 || code == 10 || code == 13) {
+			if (code == " ".code || code == "\t".code || code == "\n".code || code == "\r".code) {
 				position++;
 				continue;
 			}
-			if (code == 47 && position + 1 < bytes.length && bytes.get(position + 1) == 47) {
+			if (code == "/".code && position + 1 < bytes.length && bytes.get(position + 1) == "/".code) {
 				position += 2;
-				while (position < bytes.length && bytes.get(position) != 10)
+				while (position < bytes.length && bytes.get(position) != "\n".code)
 					position++;
 				continue;
 			}
-			if (code == 47 && position + 1 < bytes.length && bytes.get(position + 1) == 42) {
+			if (code == "/".code && position + 1 < bytes.length && bytes.get(position + 1) == "*".code) {
 				var commentStart = position;
 				position += 2;
-				while (position + 1 < bytes.length && !(bytes.get(position) == 42 && bytes.get(position + 1) == 47))
+				while (position + 1 < bytes.length && !(bytes.get(position) == "*".code && bytes.get(position + 1) == "/".code))
 					position++;
 				if (position + 1 >= bytes.length)
 					throw new CompileError(new Diagnostic("E3001", "Unterminated HXI block comment", source.span(commentStart, position)));
+				if (commentStart + 2 < bytes.length && bytes.get(commentStart + 2) == "*".code && position >= commentStart + 3)
+					comments.push({end: position + 2, documentation: DocumentationTools.normalize(source.slice(commentStart + 3, position))});
 				position += 2;
 				continue;
 			}
 			var start = position;
-			if (code == 34) {
+			if (code == "\"".code) {
 				position++;
-				while (position < bytes.length && bytes.get(position) != 34)
-					position += bytes.get(position) == 92 && position + 1 < bytes.length ? 2 : 1;
+				while (position < bytes.length && bytes.get(position) != "\"".code)
+					position += bytes.get(position) == "\\".code && position + 1 < bytes.length ? 2 : 1;
 				if (position >= bytes.length)
 					throw new CompileError(new Diagnostic("E3001", "Unterminated HXI string", source.span(start, position)));
 				position++;
-			} else if ((code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code == 95) {
+			} else if ((code >= "A".code && code <= "Z".code) || (code >= "a".code && code <= "z".code) || code == "_".code) {
 				position++;
 				while (position < bytes.length) {
 					code = bytes.get(position);
-					if (!((code >= 65 && code <= 90) || (code >= 97 && code <= 122) || (code >= 48 && code <= 57) || code == 95))
+					if (!((code >= "A".code && code <= "Z".code) || (code >= "a".code && code <= "z".code)
+						|| (code >= "0".code && code <= "9".code) || code == "_".code))
 						break;
 					position++;
 				}
-			} else if ((code >= 48 && code <= 57)
-				|| (code == 45 && position + 1 < bytes.length && bytes.get(position + 1) >= 48 && bytes.get(position + 1) <= 57)) {
+			} else if ((code >= "0".code && code <= "9".code)
+				|| (code == "-".code && position + 1 < bytes.length && bytes.get(position + 1) >= "0".code && bytes.get(position + 1) <= "9".code)) {
 				position++;
-				if (code == 48 && position < bytes.length && (bytes.get(position) == 120 || bytes.get(position) == 88)) {
+				if (code == "0".code && position < bytes.length && (bytes.get(position) == "x".code || bytes.get(position) == "X".code)) {
 					position++;
 					while (position < bytes.length
-						&& ((bytes.get(position) >= 48 && bytes.get(position) <= 57)
-							|| (bytes.get(position) >= 65 && bytes.get(position) <= 70)
-							|| (bytes.get(position) >= 97 && bytes.get(position) <= 102)))
+						&& ((bytes.get(position) >= "0".code && bytes.get(position) <= "9".code)
+							|| (bytes.get(position) >= "A".code && bytes.get(position) <= "F".code)
+							|| (bytes.get(position) >= "a".code && bytes.get(position) <= "f".code)))
 						position++;
 				} else
-					while (position < bytes.length && bytes.get(position) >= 48 && bytes.get(position) <= 57)
+					while (position < bytes.length && bytes.get(position) >= "0".code && bytes.get(position) <= "9".code)
 						position++;
-			} else if (code == 45 && position + 1 < bytes.length && bytes.get(position + 1) == 62)
+			} else if (code == "-".code && position + 1 < bytes.length && bytes.get(position + 1) == ">".code)
 				position += 2;
-			else if ((code == 60 || code == 62) && position + 1 < bytes.length && bytes.get(position + 1) == code)
+			else if ((code == "<".code || code == ">".code) && position + 1 < bytes.length && bytes.get(position + 1) == code)
 				position += 2;
 			else if ("{}()<>:,;=@|-".indexOf(String.fromCharCode(code)) >= 0)
 				position++;
@@ -956,6 +979,6 @@ class HxiParser {
 				throw new CompileError(new Diagnostic("E3001", 'Unexpected HXI character "${String.fromCharCode(code)}"', source.span(start, start + 1)));
 			result.push({text: source.slice(start, position), span: source.span(start, position)});
 		}
-		return result;
+		return {tokens: result, comments: comments};
 	}
 }

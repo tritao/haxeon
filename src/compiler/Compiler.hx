@@ -160,6 +160,7 @@ class Compiler {
 	final natives:NativeRegistry;
 	final ffiInterfaceSources:Array<FfiInterfaceSource> = [];
 	final ffiInterfaceModels:Map<String, HxiInterface> = [];
+	final ffiProjectionCache:Map<String, String> = [];
 	var objectCache:Map<String, IrObject> = [];
 	var publishedAbi:Null<RuntimeAbiDescriptor>;
 	var compiledOnce = false;
@@ -277,7 +278,11 @@ class Compiler {
 			for (declaration in dependencyModel.declarations)
 				dependencyDeclarations.push(declaration);
 		}
-		model = HxiParser.parse(path, source, dependencyDeclarations);
+		// The first parse discovers the interface's dependency list and validates
+		// against all previously registered declarations. Revalidate the already
+		// parsed model against the declared dependencies instead of lexing and
+		// parsing the same source a second time.
+		HxiParser.validate(model, dependencyDeclarations);
 		ffiInterfaceModels.set(model.name, model);
 		ffiInterfaceSources.push({path: path, text: source});
 		refreshFfiProjections();
@@ -302,8 +307,12 @@ class Compiler {
 
 	function refreshFfiProjections():Void {
 		for (model in ffiInterfaces()) {
-			var composition = ffiComposition(model),
+			var projection = ffiProjectionCache.get(model.name);
+			if (projection == null) {
+				var composition = ffiComposition(model);
 				projection = HxiProjection.source(model, composition.omitted, composition.declarations);
+				ffiProjectionCache.set(model.name, projection);
+			}
 			if (projection.length > 0)
 				update(model.name + ".hx", projection);
 			else

@@ -43,6 +43,8 @@ class HxiAbi {
 
 	final declarations:Map<String, HxiDeclaration> = [];
 	final model:HxiInterface;
+	final classifications:Map<String, HxiAbiValue> = [];
+	var cachedFunctions:Null<Array<HxiFunctionAbi>>;
 
 	public static function forInterface(model:HxiInterface, ?visibleDeclarations:Map<String, HxiDeclaration>):HxiAbi
 		return new HxiAbi(model, visibleDeclarations);
@@ -68,6 +70,8 @@ class HxiAbi {
 	}
 
 	public function functions():Array<HxiFunctionAbi> {
+		if (cachedFunctions != null)
+			return cachedFunctions;
 		var result:Array<HxiFunctionAbi> = [];
 		for (declaration in model.declarations)
 			switch declaration {
@@ -84,11 +88,16 @@ class HxiAbi {
 					});
 				default:
 			}
+		cachedFunctions = result;
 		return result;
 	}
 
-	public function classify(type:HxiType, allowVoid:Bool = false):HxiAbiValue
-		return switch type {
+	public function classify(type:HxiType, allowVoid:Bool = false):HxiAbiValue {
+		var key = (allowVoid ? "allow-void:" : "value:") + typeKey(type),
+			cached = classifications.get(key);
+		if (cached != null)
+			return cached;
+		var result = switch type {
 			case Primitive("void"):
 				if (!allowVoid)
 					throw "Void has no value ABI";
@@ -126,6 +135,19 @@ class HxiAbi {
 					case Opaque(_, _): throw 'Opaque HXI type "$name" cannot be passed by value';
 					case _: throw 'HXI declaration "$name" is not a type';
 				}
+		};
+		classifications.set(key, result);
+		return result;
+	}
+
+	function typeKey(type:HxiType):String
+		return switch type {
+			case Primitive(name): "primitive:" + name;
+			case Named(name): "named:" + name;
+			case Pointer(element): "pointer<" + typeKey(element) + ">";
+			case Nullable(element): "nullable<" + typeKey(element) + ">";
+			case Const(element): "const<" + typeKey(element) + ">";
+			case Array(element, length): "array<" + typeKey(element) + "," + length + ">";
 		};
 
 	function structurePointee(type:HxiType):Null<String>
