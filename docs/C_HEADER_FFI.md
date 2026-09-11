@@ -17,7 +17,7 @@ offsets are target-specific. Include paths may be repeated. Declarations from
 the input header and those include roots are imported; declarations from system
 headers are excluded.
 
-The importer supports C typedefs, anonymous integer enum constants, named enums, structs,
+The importer supports C typedefs, annotated opaque handles, anonymous integer enum constants, named enums, structs,
 fixed-size arrays, pointers, `const`, and non-variadic function declarations.
 It maps fixed-width integer typedefs and `size_t`-family types to raw HXI
 primitives. Structs carry Clang-computed `@layout` and `@offset` annotations.
@@ -28,6 +28,29 @@ optional library name becomes interface-level `@library` metadata. Use
 `--source-label=<repository-relative-path>` for checked-in generated files so
 the provenance comment is stable across machines; the input header itself may
 still be an absolute path.
+
+NativeKit-style C handles are annotated with `hxi:handle` and must have a
+fixed unsigned 32-bit representation. The importer emits them as nominal raw
+HXI declarations rather than ordinary structs:
+
+```c
+#define NK_HANDLE __attribute__((annotate("hxi:handle")))
+#define NK_DECLARE_HANDLE(name) \
+    typedef struct name { uint32_t id; } name NK_HANDLE
+
+NK_DECLARE_HANDLE(nkui_resource);
+```
+
+```hxi
+handle nkui_resource : u32;
+```
+
+Handles remain named and type-distinct at the Haxe boundary while retaining a
+four-byte value ABI. Their generated Haxe abstracts are copyable, comparable,
+hashable, and provide `invalid()`, `isValid()`, and `rawValue()` helpers; the
+backing value is not exposed as a writable struct field. A zero value is the
+invalid handle convention. This preserves subsystem-specific C types without
+collapsing every handle into one universal `nk_handle` parameter type.
 
 An interface may compose declarations from an already registered interface with
 repeatable `--depends` options:

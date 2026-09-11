@@ -103,6 +103,7 @@ class HxiParser {
 				expect("=");
 				var type = parseType(), end = expect(";").span;
 				Alias(name, type, start.merge(end));
+			case "handle": parseHandle(start);
 			case "const":
 				advance();
 				var name = identifier();
@@ -119,6 +120,14 @@ class HxiParser {
 		var named = declarationName(declaration);
 		rememberDocumentation(named.name, named.span);
 		return declaration;
+	}
+
+	function parseHandle(start:SourceSpan):HxiDeclaration {
+		advance();
+		var name = identifier();
+		expect(":");
+		var representation = parseType(), end = expect(";").span;
+		return Handle(name, representation, start.merge(end));
 	}
 
 	function parseCallback(start:SourceSpan):HxiDeclaration {
@@ -349,6 +358,12 @@ class HxiParser {
 				case Opaque(_, _) | Constant(_, _, _):
 				case Alias(_, type, span):
 					validateType(type, names, declarationsByName, span, false);
+				case Handle(name, representation, span):
+					validateType(representation, names, declarationsByName, span, false);
+					switch abi.classify(representation) {
+						case IntegerValue(32, Unsigned):
+						case _: fail('Handle "$name" requires an unsigned 32-bit representation', span);
+					}
 				case Structure(name, size, align, fields, span):
 					if (size <= 0 || align <= 0 || (align & (align - 1)) != 0 || size % align != 0)
 						fail('Struct "$name" has invalid layout', span);
@@ -484,7 +499,7 @@ class HxiParser {
 			VoidValue;
 		};
 		switch classified {
-			case IntegerValue(_, _) | EnumerationValue(_, _, _) | FloatValue(_) | AggregateValue(_, _, _):
+			case IntegerValue(_, _) | EnumerationValue(_, _, _) | HandleValue(_) | FloatValue(_) | AggregateValue(_, _, _):
 			case _:
 				fail('Output parameter "$name" currently requires a scalar or fixed-structure pointee', span);
 		}
@@ -539,7 +554,7 @@ class HxiParser {
 		try {
 			switch abi.classify(type, allowVoid) {
 				case VoidValue if (allowVoid):
-				case IntegerValue(_, _) | EnumerationValue(_, _, _) | FloatValue(_) | AggregateValue(_, _, _) | Utf8Value(_):
+				case IntegerValue(_, _) | EnumerationValue(_, _, _) | HandleValue(_) | FloatValue(_) | AggregateValue(_, _, _) | Utf8Value(_):
 				case PointerValue(_, _, _, _) if (!allowVoid):
 				case _:
 					fail("Callbacks support scalar, aggregate, and pointer arguments with scalar, aggregate, or void results", span);
@@ -577,6 +592,7 @@ class HxiParser {
 					resolving.set(name, true);
 					var result = switch declarations.get(name) {
 						case Alias(_, target, _): typeLayout(target, abi, declarations, resolving);
+						case Handle(_, _, _): {size: 4, align: 4};
 						case Enumeration(_, representation, _, _, _): typeLayout(representation, abi, declarations, resolving);
 						case Structure(_, size, align, _, _): {size: size, align: align};
 						case _: null;
@@ -723,7 +739,7 @@ class HxiParser {
 
 	static function declarationName(value:HxiDeclaration):{name:String, span:SourceSpan}
 		return switch value {
-			case Opaque(name, span) | Alias(name, _, span) | Constant(name, _, span) | Structure(name, _, _, _, span) | Enumeration(name, _, _, _, span) |
+			case Opaque(name, span) | Alias(name, _, span) | Handle(name, _, span) | Constant(name, _, span) | Structure(name, _, _, _, span) | Enumeration(name, _, _, _, span) |
 				Callback(name, _, _, _, span) | Function(name, _, _, _, _, _, _, span):
 				{name: name, span: span};
 		}

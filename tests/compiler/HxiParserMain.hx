@@ -145,6 +145,20 @@ class HxiParserMain {
 		callbackCompiler.update("CallbackMain.hx",
 			"import callbacks; function main():Int { var callback = new BinaryCallback(function(left:Int, right:Int) return left + right); return callbacks.apply(callback); }");
 		callbackCompiler.analyze("CallbackMain");
+		var handle = HxiParser.parse("handle.hxi",
+			'interface handles @target("x86_64-linux-gnu") @library("handles") { handle resource : u32; extern fn create() -> resource; extern fn use(value: resource) -> resource; }');
+		switch handle.declarations[0] {
+			case Handle("resource", Primitive("u32"), _):
+			case _:
+				throw "handle declarations should retain their fixed-width representation";
+		}
+		expectError('interface bad @target("x86_64-linux-gnu") { handle resource : u64; }', "requires an unsigned 32-bit representation");
+		var handleCompiler = new Compiler();
+		handleCompiler.addFfiInterface("handles.hxi",
+			'interface handles @target("x86_64-linux-gnu") @library("handles") { handle resource : u32; extern fn create() -> resource; }');
+		handleCompiler.update("HandleMain.hx",
+			"import handles; function main():Int { var value:resource = new resource(); value = handles.create(); var raw:Int = value; var reconstructed:resource = raw; return reconstructed.isValid() ? reconstructed.rawValue() : 0; }");
+		handleCompiler.compile("HandleMain");
 		var pointerCallback = HxiParser.parse("pointer-callback.hxi",
 			'interface pointers @target("x86_64-linux-gnu") @library("pointers") { opaque Context; callback Visit = fn(context: nullable<ptr<Context>>) -> void; }');
 		expect(HxiProjection.source(pointerCallback).indexOf('context:Null<hl.Abstract<"native_pointer">>') >= 0,

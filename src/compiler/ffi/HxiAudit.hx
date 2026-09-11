@@ -106,6 +106,7 @@ class HxiAudit {
 			issues.push({target: target, kind: "non-portable-target", message: "portable-abi64 requires 64-bit pointers"});
 		for (declaration in model.declarations) switch declaration {
 			case Alias(name, type, _): auditType(type, target, 'alias "$name"', issues);
+			case Handle(name, representation, _): auditType(representation, target, 'handle "$name"', issues);
 			case Structure(name, _, _, fields, _): for (field in fields) auditType(field.type, target, 'field "$name.${field.name}"', issues);
 			case Enumeration(name, representation, _, _, _): auditType(representation, target, 'enum "$name"', issues);
 			case Callback(name, parameters, result, _, _):

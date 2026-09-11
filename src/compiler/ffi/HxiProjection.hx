@@ -24,7 +24,7 @@ class HxiProjection {
 				declarations.set(name, declaration);
 		for (declaration in model.declarations)
 			switch declaration {
-				case Opaque(name, _) | Alias(name, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _):
+				case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _):
 					declarations.set(name, declaration);
 				case Function(name, parameters, _, _, _, _, _, _):
 					directed.set(name, hasOutput(parameters));
@@ -92,7 +92,7 @@ class HxiProjection {
 				declarations.set(name, declaration);
 		for (declaration in model.declarations)
 			switch declaration {
-				case Opaque(name, _) | Alias(name, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _):
+				case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _):
 					declarations.set(name, declaration);
 				case Function(name, _, _, _, _, _, _, _):
 					functions.set(name, declaration);
@@ -183,6 +183,18 @@ class HxiProjection {
 						emitDocumentation(output, model, '$name.${value.name}', "\t");
 						output.add('\tvar ${value.name} = ${value.value};\n');
 					}
+					output.add('}\n');
+				case _:
+			}
+		for (declaration in model.declarations)
+			switch declaration {
+				case Handle(name, _, _) if (!isOmitted(omitted, name)):
+					emitDocumentation(output, model, name);
+					output.add('abstract $name(Int) from Int to Int {\n');
+					output.add('\tpublic inline function new(value:Int = 0) this = value;\n');
+					output.add('\tpublic static inline function invalid():$name return new $name();\n');
+					output.add('\tpublic inline function isValid():Bool return this != 0;\n');
+					output.add('\tpublic inline function rawValue():Int return this;\n');
 					output.add('}\n');
 				case _:
 			}
@@ -413,7 +425,8 @@ class HxiProjection {
 		haxeType:String,
 		code:Int,
 		size:Int,
-		structure:Bool
+		structure:Bool,
+		handle:Bool
 	} {
 		var element = switch type {
 			case Pointer(value): value;
@@ -428,7 +441,15 @@ class HxiProjection {
 					haxeType: name,
 					code: 12,
 					size: size,
-					structure: true
+					structure: true,
+					handle: false
+				};
+			case HandleValue(_): {
+					haxeType: projected.haxeType,
+					code: projected.code,
+					size: 4,
+					structure: false,
+					handle: true
 				};
 			case IntegerValue(_, _) | EnumerationValue(_, _, _) | FloatValue(_):
 				var size = structSize(projected.code);
@@ -438,7 +459,8 @@ class HxiProjection {
 					haxeType: projected.haxeType,
 					code: projected.code,
 					size: size,
-					structure: false
+					structure: false,
+					handle: false
 				};
 			case _: throw "HXI output parameters currently support scalar and fixed-structure pointees";
 		};
@@ -491,10 +513,13 @@ class HxiProjection {
 							setup.push('__hxi_struct_set${structAccess(info.code)}($local, 0, ${parameter.name});');
 					}
 					callArguments.push(local);
+					var expression = info.structure ? local : '__hxi_struct_get${structAccess(info.code)}($local, 0)';
+					if (info.handle)
+						expression = 'cast($expression, ${info.haxeType})';
 					values.push({
 						name: parameter.name,
 						type: info.haxeType,
-						expression: info.structure ? local : '__hxi_struct_get${structAccess(info.code)}($local, 0)'
+						expression: expression
 					});
 				case OutBuffer(_):
 					throw "Output buffers require their dedicated wrapper";
@@ -675,7 +700,7 @@ class HxiProjection {
 		output.add('\tvar __out_${buffer.sizeParameter} = haxe.io.Bytes.alloc(4);\n');
 		output.add('\t__hxi_struct_setI32(__out_${buffer.sizeParameter}, 0, 0);\n');
 		output.add('\t__hxi_raw_$name(${queryArguments.join(", ")});\n');
-		output.add('\tvar __capacity = __hxi_struct_getI32(__out_${buffer.sizeParameter}, 0);\n');
+		output.add('\tvar __capacity:Int = __hxi_struct_getI32(__out_${buffer.sizeParameter}, 0);\n');
 		output.add('\tif (__capacity < 0 || __capacity > 268435456) throw "HXI output buffer size exceeds the safety limit";\n');
 		output.add('\tvar __out_${buffer.name} = haxe.io.Bytes.alloc(__capacity);\n');
 		output.add('\t__hxi_struct_setI32(__out_${buffer.sizeParameter}, 0, __capacity);\n');
@@ -683,7 +708,7 @@ class HxiProjection {
 			output.add('\t__hxi_raw_$name(${callArguments.join(", ")});\n');
 		else
 			output.add('\tvar __status = __hxi_raw_$name(${callArguments.join(", ")});\n');
-		output.add('\tvar __length = __hxi_struct_getI32(__out_${buffer.sizeParameter}, 0);\n');
+		output.add('\tvar __length:Int = __hxi_struct_getI32(__out_${buffer.sizeParameter}, 0);\n');
 		output.add('\tif (__length < 0 || __length > __capacity) throw "HXI output buffer wrote an invalid size";\n');
 		output.add('\tif (__length != __capacity) __out_${buffer.name} = __hxi_struct_slice(__out_${buffer.name}, 0, __length);\n');
 		if (direct)
@@ -748,6 +773,12 @@ class HxiProjection {
 			case AggregateValue(name, _, _): {
 					haxeType: name,
 					code: 12,
+					nativePointer: false,
+					nullable: false
+				};
+			case HandleValue(name): {
+					haxeType: name,
+					code: 6,
 					nativePointer: false,
 					nullable: false
 				};
@@ -833,6 +864,7 @@ class HxiProjection {
 					case 16: sign == Signed ? 3 : 4;
 					case _: sign == Signed ? 5 : 6;
 				});
+			case HandleValue(_): "6";
 			case FloatValue(32): "9";
 			case FloatValue(64): "10";
 			case FloatValue(bits): throw 'Unsupported $bits-bit floating-point ABI value';
@@ -850,6 +882,7 @@ class HxiProjection {
 			case Named(name):
 				switch declarations.get(name) {
 					case Alias(_, target, _): abiLayout(target, declarations, abi);
+					case Handle(_, _, _): {size: 4, align: 4};
 					case _: valueLayout(abi.classify(type), abi);
 				}
 			case _: valueLayout(abi.classify(type), abi);
@@ -866,6 +899,7 @@ class HxiProjection {
 			case Utf8Value(_):
 				var size = Std.int(abi.pointerBits / 8);
 				{size: size, align: size};
+			case HandleValue(_): {size: 4, align: 4};
 			case AggregateValue(_, size, align): {size: size, align: align};
 			case VoidValue: throw "Void field has no C layout";
 		};

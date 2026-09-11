@@ -15,6 +15,7 @@ enum HxiAbiValue {
 	VoidValue;
 	IntegerValue(bits:Int, sign:HxiIntegerSign);
 	EnumerationValue(name:String, bits:Int, sign:HxiIntegerSign);
+	HandleValue(name:String);
 	CallbackValue(name:String, arguments:Array<HxiAbiValue>, result:HxiAbiValue, nullable:Bool);
 	FloatValue(bits:Int);
 	PointerValue(bits:Int, nullable:Bool, opaque:Bool, structure:Null<String>);
@@ -109,6 +110,11 @@ class HxiAbi {
 					throw 'Unknown HXI type "$name"';
 				switch declaration {
 					case Alias(_, target, _): classify(target, allowVoid);
+					case Handle(handleName, representation, _):
+						switch classify(representation, allowVoid) {
+							case IntegerValue(32, Unsigned): HandleValue(handleName);
+							case _: throw 'Handle HXI type "$name" requires an unsigned 32-bit representation';
+						}
 					case Enumeration(_, representation, _, _, _):
 						switch classify(representation, allowVoid) {
 							case IntegerValue(bits, sign): EnumerationValue(name, bits, sign);
@@ -170,7 +176,7 @@ class HxiAbi {
 
 	static function nameOf(declaration:HxiDeclaration):String
 		return switch declaration {
-			case Opaque(name, _) | Alias(name, _, _) | Constant(name, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _) |
+			case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _) | Constant(name, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _) |
 				Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _, _): name;
 		};
 }

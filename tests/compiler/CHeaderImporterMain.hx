@@ -25,7 +25,9 @@ class CHeaderImporterMain {
 		expect(first.indexOf('options: ptr<const<sample_options>> @in_array("count"), count: u32') >= 0
 			&& first.indexOf('paths: ptr<utf8> @in_array("count"), count: u32') >= 0,
 			"paired structure and UTF-8 input arrays should retain their count parameter");
-		expect(first.indexOf("type sample_handle = u32") >= 0, "fixed-width C types should use raw-HXI primitives");
+		expect(first.indexOf("handle sample_handle : u32") >= 0, "annotated fixed-width handles should use nominal HXI handles");
+		expect(first.indexOf("handle sample_resource : u32") >= 0 && first.indexOf("struct sample_resource") < 0,
+			"annotated one-field handle records should use nominal HXI handles");
 		expect(first.indexOf("callback sample_binary_callback = fn(arg0: i32, arg1: i32) -> i32") >= 0,
 			"function pointer typedefs should import as typed callbacks");
 		expect(first.indexOf("callback sample_visit_callback = fn(arg0: ptr<const<sample_options>>, arg1: ptr<void>) -> void") >= 0,
@@ -57,7 +59,7 @@ class CHeaderImporterMain {
 		var dependencyHeader = FileSystem.fullPath("tests/ffi/import_fixture.h"),
 			filtered = CHeaderImporter.importHeader("tests/ffi/dependency_wrapper.h", "x86_64-linux-gnu", ["tests/ffi"], "clang", "sample", "Filtered",
 				["Sample"], null, [dependencyHeader]);
-		expect(filtered.indexOf("type sample_handle") < 0 && filtered.indexOf("struct sample_options") < 0,
+		expect(filtered.indexOf("handle sample_handle") < 0 && filtered.indexOf("struct sample_options") < 0,
 			"excluded dependency headers should not be projected into the dependent HXI");
 		expect(filtered.indexOf("struct dependency_extra") >= 0 && filtered.indexOf("extern fn dependency_use(value: sample_handle") >= 0,
 			"dependent headers should retain their own declarations and dependency references");

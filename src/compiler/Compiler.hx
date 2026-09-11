@@ -346,7 +346,7 @@ class Compiler {
 
 	static function ffiDeclarationName(declaration:HxiDeclaration):String
 		return switch declaration {
-			case Opaque(name, _) | Alias(name, _, _) | Constant(name, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _) |
+			case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _) | Constant(name, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _) |
 				Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _, _): name;
 		};
 

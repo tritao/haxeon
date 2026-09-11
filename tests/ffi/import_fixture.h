@@ -10,8 +10,11 @@
 #define HXI_NULLABLE_UTF8 __attribute__((annotate("hxi:nullable_utf8")))
 #define HXI_BORROWED __attribute__((annotate("hxi:borrowed")))
 #define HXI_LENGTH_FIELD(size) __attribute__((annotate("hxi:length_field")))
+#define HXI_HANDLE __attribute__((annotate("hxi:handle")))
+#define HXI_DECLARE_HANDLE(name) typedef struct name { uint32_t id; } name HXI_HANDLE
 
-typedef uint32_t sample_handle;
+typedef uint32_t sample_handle HXI_HANDLE;
+HXI_DECLARE_HANDLE(sample_resource);
 typedef const char *hxi_utf8;
 typedef const char *hxi_nullable_utf8;
 typedef int32_t (*sample_binary_callback)(int32_t, int32_t);
@@ -45,6 +48,7 @@ typedef struct sample_event {
 } sample_event;
 
 int32_t sample_create(const sample_options *options, sample_handle *output HXI_OUT);
+int32_t sample_use_resource(sample_resource resource);
 int32_t sample_options_many(const sample_options *options HXI_IN_ARRAY(count), uint32_t count);
 int32_t sample_paths_many(const char *const *paths HXI_IN_UTF8_ARRAY(count), uint32_t count);
 int32_t sample_read(uint8_t *_Nullable data HXI_OUT_BUFFER(size), uint32_t *size HXI_INOUT);

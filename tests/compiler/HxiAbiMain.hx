@@ -31,8 +31,23 @@ class HxiAbiMain {
 		switch HxiAbi.forInterface(callbackModel).functions()[0].arguments[0] {
 			case CallbackValue("Binary", [IntegerValue(32, Signed), IntegerValue(32, Signed)], IntegerValue(32, Signed), false):
 			case _:
-				throw "callback ABI did not retain its typed signature";
+			throw "callback ABI did not retain its typed signature";
 		}
+		var handleModel = HxiParser.parse("handle.hxi",
+			'interface sample @target("x86_64-linux-gnu") @library("sample") { handle resource : u32; extern fn use(value: resource) -> resource; }'),
+			handleAbi = HxiAbi.forInterface(handleModel);
+		switch handleAbi.functions()[0] {
+			case {arguments: [HandleValue("resource")], result: HandleValue("resource")}:
+			case _:
+				throw "handle ABI did not retain its nominal type";
+		}
+		var handleSource = HxiProjection.source(handleModel);
+		expect(handleSource.indexOf("abstract resource(Int) from Int to Int") >= 0
+			&& handleSource.indexOf("function new(value:Int = 0)") >= 0
+			&& handleSource.indexOf("function isValid():Bool return this != 0") >= 0
+			&& handleSource.indexOf("function rawValue():Int") >= 0
+			&& handleSource.indexOf("\tid:") < 0,
+			"handles should project as opaque value abstracts");
 		switch linux.functions()[0] {
 			case {
 				name: "open",

@@ -60,6 +60,7 @@ typedef HxiEnumValue = {
 enum HxiDeclaration {
 	Opaque(name:String, span:SourceSpan);
 	Alias(name:String, type:HxiType, span:SourceSpan);
+	Handle(name:String, representation:HxiType, span:SourceSpan);
 	Constant(name:String, value:String, span:SourceSpan);
 	Structure(name:String, size:Int, align:Int, fields:Array<HxiField>, span:SourceSpan);
 	Enumeration(name:String, representation:HxiType, flags:Bool, values:Array<HxiEnumValue>, span:SourceSpan);
