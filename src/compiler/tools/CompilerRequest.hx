@@ -1,6 +1,7 @@
 package compiler.tools;
 
 typedef CompilerRequest = {
+	final target:String;
 	final output:String;
 	final entry:String;
 	final dumpFunction:Int;

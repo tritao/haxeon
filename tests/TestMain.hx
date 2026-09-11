@@ -681,6 +681,7 @@ class TestMain {
 			], "sample"))
 			throw "Typed native declarations did not emit a deterministic C FFI contract";
 		var compilerRequest = CompilerArguments.parse([
+			"--target=wasm32",
 			"--output=out/sample.hl",
 			"--entry=sample.Main",
 			"--root=source",
@@ -689,7 +690,8 @@ class TestMain {
 			"--ffi-library=sample",
 			"source/Main.hx"
 		]);
-		if (compilerRequest.output != "out/sample.hl"
+		if (compilerRequest.target != "wasm32"
+			|| compilerRequest.output != "out/sample.hl"
 			|| compilerRequest.entry != "sample.Main"
 			|| compilerRequest.dumpFunction != 42
 			|| compilerRequest.roots.length != 1

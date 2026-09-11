@@ -3,16 +3,13 @@ package compiler.tools;
 /** Parses and validates the stable command-line build interface. */
 class CompilerArguments {
 	public static function parse(arguments:Array<String>):CompilerRequest {
-		var output = "out/main.hl",
-			entry = "compiler.tools.HaxeonCompiler",
-			dumpFunction = -1,
-			ffiHeader:Null<String> = null,
-			ffiLibrary:Null<String> = null,
-			roots:Array<String> = [],
-			paths:Array<String> = [];
+		var target = "hl", output = "out/main.hl", entry = "compiler.tools.HaxeonCompiler", dumpFunction = -1, ffiHeader:Null<String> = null,
+			ffiLibrary:Null<String> = null, roots:Array<String> = [], paths:Array<String> = [];
 		for (argument in arguments)
 			if (StringTools.startsWith(argument, "--output="))
 				output = value(argument, "--output=");
+			else if (StringTools.startsWith(argument, "--target="))
+				target = value(argument, "--target=");
 			else if (StringTools.startsWith(argument, "--entry="))
 				entry = value(argument, "--entry=");
 			else if (StringTools.startsWith(argument, "--root="))
@@ -33,7 +30,10 @@ class CompilerArguments {
 			roots.push("src");
 		if (paths.length == 0)
 			throw "Haxeon compiler requires an explicit source manifest";
+		if (target != "hl" && target != "wasm32")
+			throw 'Unsupported compiler target "$target"';
 		return {
+			target: target,
 			output: output,
 			entry: entry,
 			dumpFunction: dumpFunction,
