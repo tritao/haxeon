@@ -82,6 +82,7 @@ class SemanticIndex {
 	final functionReceivers:Array<{span:SourceSpan, type:CompilerType}> = [];
 	final completionTypes:Array<{span:SourceSpan, type:CompilerType}> = [];
 	final declarationTypes:Map<SemanticSymbolId, CompilerType> = [];
+	final declarationSymbolsBySpan:Map<String, SemanticSymbolId> = [];
 	final recoveredMembers:Map<String, SemanticSymbolId> = [];
 	final tokens:Array<Token>;
 	final module:String;
@@ -108,6 +109,7 @@ class SemanticIndex {
 				kind: declaration.kind,
 				declaration: declaration.span
 			});
+			declarationSymbolsBySpan.set(spanKey(declaration.span), id);
 			var binding = declarationToken(tokens, declaration.span, sourceName(declaration.name));
 			if (binding != null)
 				bind(id, binding.span);
@@ -153,10 +155,19 @@ class SemanticIndex {
 			catch (_:Dynamic) {}
 	}
 
-	function setDeclarationType(name:String, span:SourceSpan, type:CompilerType):Void
+	function setDeclarationType(name:String, span:SourceSpan, type:CompilerType):Void {
+		var id = declarationSymbolsBySpan.get(spanKey(span));
+		if (id != null) {
+			declarationTypes.set(id, type);
+			return;
+		}
 		for (symbol in symbols)
-			if (symbol.name == name || symbol.declaration.start == span.start && symbol.declaration.end == span.end)
+			if (symbol.name == name)
 				declarationTypes.set(symbol.id, type);
+	}
+
+	static inline function spanKey(span:SourceSpan):String
+		return span.start + ":" + span.end;
 
 	function setDeclaredSignature(symbolName:String, label:String, parameters:Array<String>, result:String):Void
 		for (symbol in symbols)
@@ -1119,25 +1130,40 @@ class SemanticIndex {
 	}
 
 	static function declarationToken(tokens:Array<Token>, declaration:SourceSpan, name:String):Null<Token> {
-		for (token in tokens)
-			if (token.span.start >= declaration.start
-				&& token.span.end <= declaration.end
-				&& token.kind == TokenKind.Identifier
-				&& token.text == name)
+		var index = tokenIndexAtOrAfter(tokens, declaration.start);
+		while (index < tokens.length) {
+			var token = tokens[index++];
+			if (token.span.start >= declaration.end)
+				break;
+			if (token.span.end <= declaration.end && token.kind == TokenKind.Identifier && token.text == name)
 				return token;
+		}
 		return null;
 	}
 
 	static function referenceToken(tokens:Array<Token>, expression:SourceSpan, name:String):Null<Token> {
-		var result:Null<Token> = null;
-		for (token in tokens)
-			if (token.span.start >= expression.start
-				&& token.span.end <= expression.end
-				&& token.kind == TokenKind.Identifier
-				&& token.text == name
-				&& (result == null || token.span.start < result.span.start))
-				result = token;
-		return result;
+		var index = tokenIndexAtOrAfter(tokens, expression.start);
+		while (index < tokens.length) {
+			var token = tokens[index++];
+			if (token.span.start >= expression.end)
+				break;
+			if (token.span.end <= expression.end && token.kind == TokenKind.Identifier && token.text == name)
+				return token;
+		}
+		return null;
+	}
+
+	/** Find the first token whose source range starts at or after an offset. */
+	static function tokenIndexAtOrAfter(tokens:Array<Token>, offset:Int):Int {
+		var low = 0, high = tokens.length;
+		while (low < high) {
+			var middle = low + ((high - low) >> 1);
+			if (tokens[middle].span.start < offset)
+				low = middle + 1;
+			else
+				high = middle;
+		}
+		return low;
 	}
 
 	static function sourceName(name:String):String {

@@ -225,9 +225,9 @@ class HxiParser {
 		if (match("-"))
 			return -parseEnumPrimary();
 		var token = current(), value:Null<Int> = null;
-		if (~/^0[xX][0-9A-Fa-f]+$/.match(token.text))
+		if (isHexInteger(token.text))
 			value = parseHex(token.text);
-		else if (~/^-?[0-9]+$/.match(token.text))
+		else if (isIntegerLiteral(token.text))
 			value = Std.parseInt(token.text);
 		if (value == null)
 			fail('Expected enum integer expression, got "${token.text}"', token.span);
@@ -239,7 +239,8 @@ class HxiParser {
 		var value = 0;
 		for (index in 2...text.length) {
 			var code = text.charCodeAt(index),
-				digit = code >= 48 && code <= 57 ? code - 48 : code >= 65 && code <= 70 ? code - 55 : code - 87;
+				digit = code >= "0".code && code <= "9".code ? code - "0".code
+					: code >= "A".code && code <= "F".code ? code - "A".code + 10 : code - "a".code + 10;
 			value = (value << 4) | digit;
 		}
 		return value;
@@ -767,7 +768,7 @@ class HxiParser {
 			if (match("(")) {
 				if (!check(")"))
 					do {
-						if (!checkString() && !~/^-?[0-9]+$/.match(current().text))
+						if (!checkString() && !isIntegerLiteral(current().text))
 							fail("Metadata values must be strings or integers", current().span);
 						values.push(advance().text);
 					} while (match(","));
@@ -805,7 +806,7 @@ class HxiParser {
 			if (!StringTools.startsWith(value, '"'))
 				fail('@$name requires string values', current().span);
 			var dependency = value.substring(1, value.length - 1);
-			if (!~/^[A-Za-z_][A-Za-z0-9_]*$/.match(dependency))
+			if (!isIdentifier(dependency))
 				fail('@$name contains an invalid interface name "$dependency"', current().span);
 			result.push(dependency);
 		}
@@ -868,10 +869,38 @@ class HxiParser {
 
 	function integer():String {
 		var token = current();
-		if (!~/^-?[0-9]+$/.match(token.text))
+		if (!isIntegerLiteral(token.text))
 			fail('Expected integer, got "${token.text}"', token.span);
 		advance();
 		return token.text;
+	}
+
+	static function isIntegerLiteral(value:String):Bool {
+		if (value.length == 0)
+			return false;
+		var index = value.charCodeAt(0) == "-".code ? 1 : 0;
+		if (index == value.length)
+			return false;
+		while (index < value.length) {
+			var code = value.charCodeAt(index);
+			if (code < "0".code || code > "9".code)
+				return false;
+			index++;
+		}
+		return true;
+	}
+
+	static function isHexInteger(value:String):Bool {
+		if (value.length < 3 || value.charCodeAt(0) != "0".code
+			|| (value.charCodeAt(1) != "x".code && value.charCodeAt(1) != "X".code))
+			return false;
+		for (index in 2...value.length) {
+			var code = value.charCodeAt(index);
+			if (!((code >= "0".code && code <= "9".code) || (code >= "A".code && code <= "F".code)
+				|| (code >= "a".code && code <= "f".code)))
+				return false;
+		}
+		return true;
 	}
 
 	function checkString():Bool
@@ -973,7 +1002,7 @@ class HxiParser {
 				position += 2;
 			else if ((code == "<".code || code == ">".code) && position + 1 < bytes.length && bytes.get(position + 1) == code)
 				position += 2;
-			else if ("{}()<>:,;=@|-".indexOf(String.fromCharCode(code)) >= 0)
+			else if (isPunctuation(code))
 				position++;
 			else
 				throw new CompileError(new Diagnostic("E3001", 'Unexpected HXI character "${String.fromCharCode(code)}"', source.span(start, start + 1)));
@@ -981,4 +1010,9 @@ class HxiParser {
 		}
 		return {tokens: result, comments: comments};
 	}
+
+	static inline function isPunctuation(code:Int):Bool
+		return code == "{".code || code == "}".code || code == "(".code || code == ")".code || code == "<".code || code == ">".code
+			|| code == ":".code || code == ",".code || code == ";".code || code == "=".code || code == "@".code || code == "|".code
+			|| code == "-".code;
 }
