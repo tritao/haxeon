@@ -38,6 +38,7 @@ scripts/haxeon-ffi-import \
   --library=nativekit_ui \
   --interface=NativeKitUI \
   --depends=NativeKit \
+  --exclude-header=/path/to/nativekit/include/nativekit.h \
   --output=generated/nativekit-ui.hxi \
   /path/to/nativekit_ui_import.h
 ```
@@ -47,9 +48,24 @@ be passed to the compiler before the dependent interface. Shared declarations
 are projected once from the dependency, while functions and types owned by the
 dependent interface remain in its generated Haxe module. Dependencies define
 ABI visibility and symbol ownership; each interface still retains its own
-`@library` for native functions. A generated raw HXI may still contain included
-header declarations as an ABI snapshot; those declarations are not emitted a
-second time in the composed Haxe module or native descriptor list.
+`@library` for native functions. `--exclude-header` removes declarations whose
+source location belongs to a supplied dependency header, leaving references to
+those types for the dependency HXI to provide. This keeps the raw artifact and
+the composed Haxe module free of duplicate declarations.
+
+When auditing a filtered dependent header, pass the corresponding dependency
+artifact with `--dependency-hxi` so the standalone audit can validate external
+type references:
+
+```sh
+scripts/haxeon-ffi-audit \
+  --target=x86_64-linux-gnu \
+  --target=x86_64-w64-windows-gnu \
+  --depends=NativeKit \
+  --dependency-hxi=generated/nativekit.hxi \
+  --exclude-header=/path/to/nativekit/include/nativekit.h \
+  /path/to/nativekit_ui_import.h
+```
 
 Pass one or more generated interfaces to the compiler with repeatable options:
 
@@ -149,6 +165,12 @@ input array projects as `Array<String>` and builds a retained native pointer
 table. In both forms the paired count parameter is omitted from the Haxe API
 and derived from the array length. Unannotated pointer arrays remain
 ABI-visible but receive no managed array projection.
+
+Byte input arrays also receive a generated `<Function>_slice` companion. It
+accepts `haxe.io.Bytes`, an offset, and a length, validates the range, and
+submits a managed view without copying the selected bytes. This is intended
+for coarse command and upload transactions; it does not add per-element FFI
+calls.
 
 Use `scripts/haxeon-ffi-audit` to import one public header for multiple targets
 and compare its normalized declarations and layouts. The `portable-abi64`
