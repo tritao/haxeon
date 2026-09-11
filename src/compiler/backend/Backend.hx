@@ -2,6 +2,7 @@ package compiler.backend;
 
 import compiler.ir.Ir.IrProgram;
 import haxe.io.Bytes;
+import compiler.backend.MemoryContract.MemoryContract;
 
 /** Target selected by the compiler after canonical Haxeon IR is available. */
 enum BackendTarget {
@@ -17,6 +18,7 @@ typedef BackendOptions = {
 	final debugNames:Bool;
 	final ?importMemory:Bool;
 	final ?memoryBase:Int;
+	final ?memoryContract:MemoryContract;
 	final ?exports:Array<String>;
 }
 

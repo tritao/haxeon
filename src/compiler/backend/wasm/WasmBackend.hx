@@ -4,6 +4,7 @@ import compiler.backend.Backend;
 import compiler.backend.Backend.BackendOptions;
 import compiler.backend.Backend.BackendResult;
 import compiler.backend.Backend.BackendTarget;
+import compiler.backend.MemoryContract.MemoryContractCodec;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
@@ -66,8 +67,14 @@ class WasmBackend implements Backend {
 		IrVerifier.verify(program);
 		var module = new WasmModule(target.debugNames ? "haxeon" : null),
 			importMemory = options.importMemory == true,
-			memoryBase = options.memoryBase == null ? 0 : options.memoryBase,
+			contract = options.memoryContract,
+			memoryBase = contract == null ? (options.memoryBase == null ? 0 : options.memoryBase) : contract.guestBase,
 			exportedFunctions = options.exports == null ? [] : options.exports;
+		if (contract != null) {
+			if (!importMemory)
+				throw "A Wasm memory contract requires imported memory";
+			MemoryContractCodec.validate(contract);
+		}
 		if (memoryBase < 0 || (memoryBase & 7) != 0)
 			throw 'Wasm memory base must be a non-negative 8-byte-aligned value, got $memoryBase';
 		module.importMemory = importMemory;
@@ -101,7 +108,9 @@ class WasmBackend implements Backend {
 			rootReserve = WasmLayout.ROOT_RESERVE,
 			metadataBase = rootBase + rootReserve,
 			heapStart = metadataBase + WasmLayout.GC_METADATA_RESERVE;
-		module.memoryMin = memoryPages(heapStart);
+		if (contract != null && heapStart > contract.guestLimit)
+			throw 'Wasm guest layout exceeds memory contract guest limit ${contract.guestLimit}';
+		module.memoryMin = contract == null ? memoryPages(heapStart) : memoryPages(contract.memorySize);
 		module.globals.push({type: I32, mutable: true, init: [I32Const(heapStart)]});
 		var rootTop = module.globals.length;
 		module.globals.push({type: I32, mutable: true, init: [I32Const(rootBase)]});
@@ -165,6 +174,8 @@ class WasmBackend implements Backend {
 		module.customSections.push({name: "haxeon.gc.roots", bytes: WasmGcRoots.encode(program)});
 		module.customSections.push({name: "haxeon.patch", bytes: WasmPatch.manifest(program, patchChanged)});
 		module.customSections.push({name: "haxeon.patch.slots", bytes: WasmPatch.tableManifest(tableSlots)});
+		if (contract != null)
+			module.customSections.push({name: MemoryContractCodec.SECTION_NAME, bytes: MemoryContractCodec.encode(contract)});
 		for (index in 0...emitted.length) {
 			var fn = emitted[index];
 			var functionIndex = functions.get(fn.name);

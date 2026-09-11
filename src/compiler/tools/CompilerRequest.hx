@@ -10,6 +10,7 @@ typedef CompilerRequest = {
 	final dumpFunction:Int;
 	final importMemory:Bool;
 	final memoryBase:Int;
+	final memoryContract:Null<String>;
 	final exports:Array<String>;
 	final ffiHeader:Null<String>;
 	final ffiLibrary:Null<String>;

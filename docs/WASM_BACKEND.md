@@ -40,8 +40,14 @@ correct while structured exception regions mature; ordinary reducible scalar
 CFGs use the structured lowering path, with the dispatcher retained as a
 correctness fallback.
 
-The module exports `main` and `memory`. It also carries two versioned custom
+The module exports `main` and `memory`. It also carries versioned custom
 sections:
+
+When the module is embedded into a host-owned memory, the compiler accepts
+`--wasm-import-memory --wasm-memory-contract=<path>`. The JSON contract is
+validated at compile time and copied into the `haxeon.memory.contract` custom
+section. Hosts must compare that section with their own contract before calling
+the guest.
 
 - `haxeon.gc.roots` contains precise SSA liveness at allocation/call
   safepoints. Generated functions also maintain typed shadow frames in a

@@ -6,6 +6,7 @@ import compiler.ffi.CHeaderEmitter;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.backend.Backend;
 import compiler.backend.Backend.BackendTarget;
+import compiler.backend.MemoryContract.MemoryContractCodec;
 import compiler.backend.hl.HlBackend;
 import compiler.backend.wasm.WasmBackend;
 import compiler.ir.Ir.IrProgram;
@@ -18,6 +19,7 @@ import compiler.ir.codec.CanonicalIrCodec;
 class CompilerDriver {
 	public static function compile(request:CompilerRequest, ?progress:String->Void):CompileResult {
 		var report = progress == null ? function(message:String) {} : progress;
+		var memoryContract = request.memoryContract == null ? null : MemoryContractCodec.load(request.memoryContract);
 		report("loading " + Std.string(request.paths.length) + " sources");
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
@@ -52,6 +54,7 @@ class CompilerDriver {
 				debugNames: true,
 				importMemory: request.importMemory,
 				memoryBase: request.memoryBase,
+				memoryContract: memoryContract,
 				exports: request.exports
 			});
 		File.saveBytes(request.output, backendResult.bytes);
