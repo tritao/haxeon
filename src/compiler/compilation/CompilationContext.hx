@@ -35,14 +35,14 @@ class CompilationContext {
 	public var compiledOnce(get, set):Bool;
 	public var cachedSemanticProgram(get, set):Null<SemanticProgram>;
 
-	public function new(owner:Compiler) {
+	public function new(owner:Compiler, ?buildSemanticModels = true) {
 		this.owner = owner;
 		modules = owner.modules;
 		graph = owner.graph;
 		objectCache = owner.objectCache;
 		moduleId = owner.moduleId;
 		genericSpecializations = owner.genericSpecializations;
-		moduleAnalyzer = new ModuleAnalyzer(modules, owner.types, owner.natives, owner.compiledOnce, owner.defines, owner.sourceLoader);
+		moduleAnalyzer = new ModuleAnalyzer(modules, owner.types, owner.natives, owner.compiledOnce, owner.defines, owner.sourceLoader, buildSemanticModels);
 	}
 
 	public function writableState(name:String, rollback:Map<String, ModuleState>):ModuleState

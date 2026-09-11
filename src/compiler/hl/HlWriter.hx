@@ -127,15 +127,14 @@ class HlWriter {
 			files:Array<String> = [],
 			fileIndices:Map<String, Int> = [],
 			byFunction:Map<Int, Array<compiler.hl.HlCode.HlOpcodeSourceSpan>> = [],
-			seen:Map<String, Bool> = [];
+			fileIndex:Null<Int>;
 		for (span in spans) {
 			var validRange = span.start == -1 && span.end == -1 || span.start >= 0 && span.end >= span.start;
-			var key = span.stableId + ":" + span.opcode;
 			if (span.stableId < 0 || span.opcode < 0 || span.sourcePath == "" || span.line < 1 || span.column < 1 || span.endLine < span.line
-				|| span.endColumn < 1 || span.endLine == span.line && span.endColumn < span.column || span.flags < 0 || !validRange || seen.exists(key))
+				|| span.endColumn < 1 || span.endLine == span.line && span.endColumn < span.column || span.flags < 0 || !validRange)
 				throw "Invalid HLB opcode source span";
-			seen.set(key, true);
-			if (!fileIndices.exists(span.sourcePath)) {
+			fileIndex = fileIndices.get(span.sourcePath);
+			if (fileIndex == null) {
 				fileIndices.set(span.sourcePath, files.length);
 				files.push(span.sourcePath);
 			}
@@ -159,11 +158,16 @@ class HlWriter {
 			mappings.sort((left, right) -> left.opcode - right.opcode);
 			writer.writeUnsignedIndex(stableId);
 			writer.writeUnsignedIndex(mappings.length);
+			var previousOpcode = -1;
 			for (span in mappings) {
+				if (span.opcode == previousOpcode)
+					throw "Invalid HLB opcode source span";
+				previousOpcode = span.opcode;
 				writer.writeUnsignedIndex(span.opcode);
-				if (!fileIndices.exists(span.sourcePath))
+				fileIndex = fileIndices.get(span.sourcePath);
+				if (fileIndex == null)
 					throw 'Missing debug source index for "${span.sourcePath}"';
-				writer.writeUnsignedIndex(fileIndices.get(span.sourcePath));
+				writer.writeUnsignedIndex(fileIndex);
 				writer.writeIndex(span.start + 1);
 				writer.writeIndex(span.end + 1);
 				writer.writeUnsignedIndex(span.line);

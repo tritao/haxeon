@@ -19,16 +19,18 @@ class ModuleAnalyzer {
 	final types:TypeRegistry;
 	final natives:NativeRegistry;
 	final compiledOnce:Bool;
+	final buildSemanticModels:Bool;
 	final defines:Map<String, String>;
 	final sourceLoader:ModuleSourceLoader;
 	final declarationOwners:Map<String, String> = [];
 
 	public function new(modules:Map<String, ModuleState>, types:TypeRegistry, natives:NativeRegistry, compiledOnce:Bool, defines:Map<String, String>,
-			sourceLoader:ModuleSourceLoader) {
+			sourceLoader:ModuleSourceLoader, ?buildSemanticModels = true) {
 		this.modules = modules;
 		this.types = types;
 		this.natives = natives;
 		this.compiledOnce = compiledOnce;
+		this.buildSemanticModels = buildSemanticModels;
 		this.defines = defines;
 		this.sourceLoader = sourceLoader;
 		for (name => state in modules)
@@ -38,15 +40,19 @@ class ModuleAnalyzer {
 
 	public function parse(state:ModuleState, entry:String, bodyChanged:Map<String, Bool>, signatureChanged:Map<String, Bool>,
 			structuralChanged:Map<String, Bool>):Void {
-		if (state.ast != null)
+		if (state.ast != null) {
+			if (buildSemanticModels && state.semanticModel == null)
+				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.revision, state.tokens);
 			return;
+		}
 		try {
 			var conditional = ConditionalCompilation.process(state.source, defines);
 			state.conditionalDefines = conditional.defines;
 			state.tokens = new Lexer(state.source, conditional.text).tokenize();
 			state.ast = new Parser(state.tokens).parseProgram();
 			indexDeclarations(state.name, state.parsedAst());
-			state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.revision, state.tokens);
+			if (buildSemanticModels)
+				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.revision, state.tokens);
 			state.parseVersion++;
 		} catch (error:CompileError) {
 			state.diagnostics.push(error.diagnostic);

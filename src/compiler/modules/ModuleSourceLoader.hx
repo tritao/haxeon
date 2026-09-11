@@ -6,6 +6,7 @@ import sys.io.File;
 
 /** Lazily materializes source modules from configured filesystem roots. */
 class ModuleSourceLoader {
+	static final caseSensitiveFileSystem:Bool = Sys.systemName() != "Windows" && Sys.systemName() != "Mac";
 	final roots:Array<String> = [];
 
 	public function new() {}
@@ -35,6 +36,10 @@ class ModuleSourceLoader {
 
 	/** Resolve a module path without allowing case-insensitive filesystem aliases. */
 	static function exactPath(root:String, relative:String):Null<String> {
+		if (caseSensitiveFileSystem) {
+			var direct = root + "/" + relative;
+			return FileSystem.exists(direct) ? direct : null;
+		}
 		var current = root;
 		for (segment in relative.split("/")) {
 			if (!FileSystem.exists(current) || !FileSystem.isDirectory(current))

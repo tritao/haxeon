@@ -19,6 +19,8 @@ private typedef ConditionalFrame = {
 /** Source-offset-preserving evaluation of Haxe conditional directives. */
 class ConditionalCompilation {
 	public static function process(file:SourceFile, defines:Map<String, String>):ConditionalSource {
+		if (file.text.indexOf("#") < 0)
+			return {text: file.text, defines: []};
 		var source = file.bytes, output = new StringBuf(), referenced:Map<String, Bool> = [], frames:Array<ConditionalFrame> = [], cursor = 0, scan = 0,
 			quote = 0, escaped = false, lineComment = false, blockComment = false;
 		while (scan < source.length) {
