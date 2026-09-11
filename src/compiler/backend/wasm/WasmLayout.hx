@@ -39,6 +39,10 @@ class WasmLayout {
 	public static inline final MAP_CAPACITY_OFFSET = 12;
 	public static inline final MAP_ENTRIES_OFFSET = 16;
 	public static inline final MAP_HEADER_SIZE = 24;
+	public static inline final ROOT_PREVIOUS_OFFSET = 0;
+	public static inline final ROOT_COUNT_OFFSET = 4;
+	public static inline final ROOT_VALUES_OFFSET = 8;
+	public static inline final ROOT_RESERVE = 65536;
 
 	public final objects:Map<String, WasmObjectLayout> = [];
 	public final enums:Map<String, WasmEnumLayout> = [];

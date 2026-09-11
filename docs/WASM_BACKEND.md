@@ -44,7 +44,9 @@ The module exports `main` and `memory`. It also carries two versioned custom
 sections:
 
 - `haxeon.gc.roots` contains precise SSA liveness at allocation/call
-  safepoints.
+  safepoints. Generated functions also maintain typed shadow frames in a
+  reserved linear-memory root area, so the runtime has an actual root chain,
+  not just an offline map.
 - `haxeon.patch` contains stable function identities and semantic signatures
   for validating replacement table entries.
 
@@ -87,7 +89,9 @@ module plus a function manifest:
 - Haxeon IR owns semantic types and operations.
 - Backend lowering owns physical representations.
 - Wasm encoding owns binary sections and opcodes.
-- GC roots are derived from SSA liveness, not conservative native-stack scans.
+- GC roots are derived from SSA reference types and SSA liveness metadata, not
+  conservative native-stack scans; generated shadow frames are the runtime
+  root-chain boundary.
 - Runtime ABI decisions use semantic declarations, not byte offsets.
 - CFG normalization is an explicit pass; the dispatcher is only a correctness
   fallback for CFGs the current region builder cannot structure.
