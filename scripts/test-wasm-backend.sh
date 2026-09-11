@@ -49,6 +49,9 @@ fi
 	--target=wasm32 --output=out/wasm-cli-map-anonymous-enum.wasm --entry=map-anonymous-enum \
 	--root=tests/programs tests/programs/map-anonymous-enum.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --output=out/wasm-cli-gc-reuse.wasm --entry=wasm-gc-reuse \
+	--root=tests/programs tests/programs/wasm-gc-reuse.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm32 --output=out/wasm-cli-cnative-import.wasm --entry=wasm-cnative-import \
 	--root=tests tests/wasm-cnative-import.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
@@ -94,6 +97,7 @@ const cases = [
 	["out/wasm-cli-map-key-value-for-in.wasm", 42],
 	["out/wasm-cli-map-object.wasm", 42],
 	["out/wasm-cli-map-anonymous-enum.wasm", 42],
+	["out/wasm-cli-gc-reuse.wasm", 42],
 	["out/wasm-cli-cnative-import.wasm", 42],
   ["out/wasm-cli-try-catch.wasm", 42],
   ["out/wasm-cli-try-nested.wasm", 42],
@@ -109,6 +113,8 @@ const cases = [
       ? {fixture: {fixture_add: (left, right) => left + right}}
       : undefined;
     const {instance} = await WebAssembly.instantiate(bytes, imports);
+    if (relative.includes("closure") && !(instance.exports.table instanceof WebAssembly.Table))
+      throw new Error(`${relative}: stable Wasm function table was not exported`);
     const value = instance.exports.main();
     if (value !== expected)
       throw new Error(`${relative}: expected ${expected}, got ${value}`);
