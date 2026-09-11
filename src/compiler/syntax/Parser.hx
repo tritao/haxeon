@@ -2012,7 +2012,7 @@ class Parser {
 	function advance():Token
 		return tokens[position++];
 
-	function current():Token
+	inline function current():Token
 		return tokens[position];
 
 	function peekKind(offset:Int):TokenKind
