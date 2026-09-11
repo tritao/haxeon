@@ -323,9 +323,21 @@ class WasmEncoder {
 					output.writeByte(0x28);
 					writeU32(output, 2);
 					writeU32(output, offset);
+				case I32Load8S(offset):
+					output.writeByte(0x2c);
+					writeU32(output, 0);
+					writeU32(output, offset);
 				case I32Load8U(offset):
 					output.writeByte(0x2d);
 					writeU32(output, 0);
+					writeU32(output, offset);
+				case I32Load16S(offset):
+					output.writeByte(0x2e);
+					writeU32(output, 1);
+					writeU32(output, offset);
+				case I32Load16U(offset):
+					output.writeByte(0x2f);
+					writeU32(output, 1);
 					writeU32(output, offset);
 				case I32Store(offset):
 					output.writeByte(0x36);
@@ -334,6 +346,26 @@ class WasmEncoder {
 				case I32Store8(offset):
 					output.writeByte(0x3a);
 					writeU32(output, 0);
+					writeU32(output, offset);
+				case I32Store16(offset):
+					output.writeByte(0x3b);
+					writeU32(output, 1);
+					writeU32(output, offset);
+				case I64Load(offset):
+					output.writeByte(0x29);
+					writeU32(output, 3);
+					writeU32(output, offset);
+				case I64Store(offset):
+					output.writeByte(0x37);
+					writeU32(output, 3);
+					writeU32(output, offset);
+				case F32Load(offset):
+					output.writeByte(0x2a);
+					writeU32(output, 2);
+					writeU32(output, offset);
+				case F32Store(offset):
+					output.writeByte(0x38);
+					writeU32(output, 2);
 					writeU32(output, offset);
 				case F64Load(offset):
 					output.writeByte(0x2b);
@@ -382,6 +414,36 @@ class WasmEncoder {
 					output.writeByte(0x48);
 				case I32LeS:
 					output.writeByte(0x4c);
+				case I64Add:
+					output.writeByte(0x7c);
+				case I64Sub:
+					output.writeByte(0x7d);
+				case I64Mul:
+					output.writeByte(0x7e);
+				case I64DivS:
+					output.writeByte(0x7f);
+				case I64RemS:
+					output.writeByte(0x81);
+				case I64And:
+					output.writeByte(0x83);
+				case I64Xor:
+					output.writeByte(0x85);
+				case I64Or:
+					output.writeByte(0x84);
+				case I64Shl:
+					output.writeByte(0x86);
+				case I64ShrS:
+					output.writeByte(0x87);
+				case I64ShrU:
+					output.writeByte(0x88);
+				case I64Eqz:
+					output.writeByte(0x50);
+				case I64Eq:
+					output.writeByte(0x51);
+				case I64LtS:
+					output.writeByte(0x53);
+				case I64LeS:
+					output.writeByte(0x57);
 				case F64Add:
 					output.writeByte(0xa0);
 				case F64Sub:
@@ -398,6 +460,14 @@ class WasmEncoder {
 					output.writeByte(0x65);
 				case F64ConvertI32S:
 					output.writeByte(0xb7);
+				case F64ConvertI64S:
+					output.writeByte(0xb9);
+				case F64PromoteF32:
+					output.writeByte(0xbb);
+				case F32DemoteF64:
+					output.writeByte(0xb6);
+				case I32WrapI64:
+					output.writeByte(0xa7);
 				case I32TruncF64S:
 					output.writeByte(0xaa);
 			}

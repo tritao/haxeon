@@ -34,6 +34,7 @@ class WasmLayout {
 	public static inline final ARRAY_HEADER_SIZE = 24;
 	public static inline final DYN_PAYLOAD_OFFSET = 4;
 	public static inline final DYN_I32_SIZE = 8;
+	public static inline final DYN_I64_SIZE = 16;
 	public static inline final DYN_F64_SIZE = 16;
 	public static inline final MAP_COUNT_OFFSET = 8;
 	public static inline final MAP_CAPACITY_OFFSET = 12;
@@ -135,13 +136,14 @@ class WasmLayout {
 
 	public static function sizeOf(type:IrType):Int
 		return switch type {
+			case I64: 8;
 			case F64: 8;
 			case Void: 0;
 			default: 4;
 		};
 
 	public static function arrayStride(type:IrType):Int
-		return type == F64 ? 8 : 4;
+		return type == F64 || type == I64 ? 8 : 4;
 
 	public static function arrayAllocationSize(type:IrType, length:Int):Int
 		return ARRAY_HEADER_SIZE + arrayStride(type) * length;
@@ -153,7 +155,7 @@ class WasmLayout {
 	public static inline final CLOSURE_SIZE = 16;
 
 	public static function alignmentOf(type:IrType):Int
-		return type == F64 ? 8 : 4;
+		return type == F64 || type == I64 ? 8 : 4;
 
 	static function align(value:Int, boundary:Int):Int
 		return (value + boundary - 1) & ~(boundary - 1);

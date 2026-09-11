@@ -186,19 +186,39 @@ class WasmValidator {
 				case GlobalSet(index):
 					if (reachable)
 						pop(stack, globals[index].type, fn);
-				case I32Load(_), I32Load8U(_):
+				case I32Load(_), I32Load8S(_), I32Load8U(_), I32Load16S(_), I32Load16U(_):
 					if (reachable) {
 						pop(stack, I32, fn);
 						stack.push(I32);
+					}
+				case I64Load(_):
+					if (reachable) {
+						pop(stack, I32, fn);
+						stack.push(I64);
+					}
+				case F32Load(_):
+					if (reachable) {
+						pop(stack, I32, fn);
+						stack.push(F32);
 					}
 				case F64Load(_):
 					if (reachable) {
 						pop(stack, I32, fn);
 						stack.push(F64);
 					}
-				case I32Store(_), I32Store8(_):
+				case I32Store(_), I32Store8(_), I32Store16(_):
 					if (reachable) {
 						pop(stack, I32, fn);
+						pop(stack, I32, fn);
+					}
+				case I64Store(_):
+					if (reachable) {
+						pop(stack, I64, fn);
+						pop(stack, I32, fn);
+					}
+				case F32Store(_):
+					if (reachable) {
+						pop(stack, F32, fn);
 						pop(stack, I32, fn);
 					}
 				case F64Store(_):
@@ -217,6 +237,10 @@ class WasmValidator {
 						stack.push(F64);
 				case I32Add, I32Sub, I32Mul, I32DivS, I32RemS, I32And, I32Xor, I32Or, I32Shl, I32ShrS, I32ShrU, I32Eq, I32LtS, I32LeS:
 					binary(stack, I32, I32, fn);
+				case I64Add, I64Sub, I64Mul, I64DivS, I64RemS, I64And, I64Xor, I64Or, I64Shl, I64ShrS, I64ShrU:
+					binary(stack, I64, I64, fn);
+				case I64Eq, I64LtS, I64LeS:
+					binary(stack, I64, I32, fn);
 				case F64Add, F64Sub, F64Mul, F64Div:
 					binary(stack, F64, F64, fn);
 				case F64Eq, F64Lt, F64Le:
@@ -225,10 +249,30 @@ class WasmValidator {
 					pop(stack, I32, fn);
 					if (reachable)
 						stack.push(I32);
+				case I64Eqz:
+					pop(stack, I64, fn);
+					if (reachable)
+						stack.push(I32);
 				case F64ConvertI32S:
 					pop(stack, I32, fn);
 					if (reachable)
 						stack.push(F64);
+				case F64ConvertI64S:
+					pop(stack, I64, fn);
+					if (reachable)
+						stack.push(F64);
+				case F64PromoteF32:
+					pop(stack, F32, fn);
+					if (reachable)
+						stack.push(F64);
+				case F32DemoteF64:
+					pop(stack, F64, fn);
+					if (reachable)
+						stack.push(F32);
+				case I32WrapI64:
+					pop(stack, I64, fn);
+					if (reachable)
+						stack.push(I32);
 				case I32TruncF64S:
 					pop(stack, F64, fn);
 					if (reachable)
