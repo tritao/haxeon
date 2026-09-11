@@ -44,6 +44,7 @@ class HxiAbi {
 	final declarations:Map<String, HxiDeclaration> = [];
 	final model:HxiInterface;
 	final classifications:Map<String, HxiAbiValue> = [];
+	final voidClassifications:Map<String, HxiAbiValue> = [];
 	var cachedFunctions:Null<Array<HxiFunctionAbi>>;
 
 	public static function forInterface(model:HxiInterface, ?visibleDeclarations:Map<String, HxiDeclaration>):HxiAbi
@@ -93,8 +94,9 @@ class HxiAbi {
 	}
 
 	public function classify(type:HxiType, allowVoid:Bool = false):HxiAbiValue {
-		var key = (allowVoid ? "allow-void:" : "value:") + typeKey(type),
-			cached = classifications.get(key);
+		var key = typeKey(type),
+			cache = allowVoid ? voidClassifications : classifications,
+			cached = cache.get(key);
 		if (cached != null)
 			return cached;
 		var result = switch type {
@@ -136,7 +138,7 @@ class HxiAbi {
 					case _: throw 'HXI declaration "$name" is not a type';
 				}
 		};
-		classifications.set(key, result);
+		cache.set(key, result);
 		return result;
 	}
 

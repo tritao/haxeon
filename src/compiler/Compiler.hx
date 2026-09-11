@@ -50,6 +50,7 @@ import compiler.semantic.LambdaCollector;
 import compiler.semantic.SemanticWorkspace;
 import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiModel.HxiDeclaration;
+import compiler.ffi.HxiAbi;
 import compiler.ffi.HxiParser;
 import compiler.ffi.HxiProjection;
 
@@ -161,6 +162,8 @@ class Compiler {
 	final ffiInterfaceSources:Array<FfiInterfaceSource> = [];
 	final ffiInterfaceModels:Map<String, HxiInterface> = [];
 	final ffiProjectionCache:Map<String, String> = [];
+	final ffiCompositionCache:Map<String, FfiComposition> = [];
+	final ffiAbiCache:Map<String, HxiAbi> = [];
 	var objectCache:Map<String, IrObject> = [];
 	var publishedAbi:Null<RuntimeAbiDescriptor>;
 	var compiledOnce = false;
@@ -285,7 +288,7 @@ class Compiler {
 		HxiParser.validate(model, dependencyDeclarations);
 		ffiInterfaceModels.set(model.name, model);
 		ffiInterfaceSources.push({path: path, text: source});
-		refreshFfiProjections();
+		refreshFfiProjection(model);
 	}
 
 	/** Validated ABI interfaces in deterministic interface-name order. */
@@ -299,28 +302,38 @@ class Compiler {
 		var result:Array<IrCNative> = [];
 		for (model in ffiInterfaces()) {
 			var composition = ffiComposition(model);
-			for (native in HxiProjection.cNatives(model, composition.omitted, composition.declarations))
+			for (native in HxiProjection.cNatives(model, composition.omitted, composition.declarations, ffiAbi(model, composition)))
 				result.push(native);
 		}
 		return result;
 	}
 
-	function refreshFfiProjections():Void {
-		for (model in ffiInterfaces()) {
-			var projection = ffiProjectionCache.get(model.name);
-			if (projection == null) {
-				var composition = ffiComposition(model);
-				projection = HxiProjection.source(model, composition.omitted, composition.declarations);
-				ffiProjectionCache.set(model.name, projection);
-			}
-			if (projection.length > 0)
-				update(model.name + ".hx", projection);
-			else
-				sourceGeneration++;
+	function refreshFfiProjection(model:HxiInterface):Void {
+		var projection = ffiProjectionCache.get(model.name);
+		if (projection == null) {
+			var composition = ffiComposition(model);
+			projection = HxiProjection.source(model, composition.omitted, composition.declarations, ffiAbi(model, composition));
+			ffiProjectionCache.set(model.name, projection);
 		}
+		if (projection.length > 0)
+			update(model.name + ".hx", projection);
+		else
+			sourceGeneration++;
+	}
+
+	function ffiAbi(model:HxiInterface, composition:FfiComposition):HxiAbi {
+		var abi = ffiAbiCache.get(model.name);
+		if (abi == null) {
+			abi = HxiAbi.forInterface(model, composition.declarations);
+			ffiAbiCache.set(model.name, abi);
+		}
+		return abi;
 	}
 
 	function ffiComposition(model:HxiInterface):FfiComposition {
+		var cached = ffiCompositionCache.get(model.name);
+		if (cached != null)
+			return cached;
 		// Imported HXI files can repeat declarations from included headers. Keep
 		// those snapshots available for ABI classification, but emit each shared
 		// declaration and native symbol from its owning interface only.
@@ -330,7 +343,9 @@ class Compiler {
 			active:Map<String, Bool> = [];
 		for (dependency in model.dependencies)
 			collectFfiDependency(model.name, dependency, omitted, declarations, visited, active);
-		return {omitted: omitted, declarations: declarations};
+		var result:FfiComposition = {omitted: omitted, declarations: declarations};
+		ffiCompositionCache.set(model.name, result);
+		return result;
 	}
 
 	function collectFfiDependency(owner:String, name:String, omitted:Map<String, Bool>, declarations:Map<String, HxiDeclaration>, visited:Map<String, Bool>,

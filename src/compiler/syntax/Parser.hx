@@ -1243,6 +1243,10 @@ class Parser {
 			var start = previous().span, value = parsePrimary();
 			return Not(value, start.merge(expressionSpan(value)));
 		}
+		if (match(TokenKind.BitNot)) {
+			var start = previous().span, value = parsePrimary();
+			return BitXor(value, IntegerLiteral(-1, start), start.merge(expressionSpan(value)));
+		}
 		if (match(TokenKind.Integer))
 			return parsePostfix(IntegerLiteral(Std.parseInt(previous().text), previous().span));
 		if (match(TokenKind.Float))

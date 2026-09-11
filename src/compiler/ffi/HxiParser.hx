@@ -756,7 +756,7 @@ class HxiParser {
 	function rememberDocumentation(name:String, span:SourceSpan):Void {
 		var value = DocumentationTools.forSpan(source, comments, span);
 		if (value.raw.length > 0)
-			documentation.set(name, {raw: value.raw});
+			documentation.set(name, {raw: value.raw, lines: value.lines});
 	}
 
 	function parseMetadata(allowed:Array<String>):Map<String, Array<String>> {

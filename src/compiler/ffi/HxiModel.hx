@@ -5,6 +5,7 @@ import compiler.Source.SourceSpan;
 /** Normalized documentation attached to one HXI declaration or member. */
 typedef HxiDocumentation = {
 	final raw:String;
+	final lines:Array<String>;
 }
 
 enum HxiType {

@@ -80,6 +80,7 @@ enum TokenKind {
 	EqualEqual;
 	NotEqual;
 	Not;
+	BitNot;
 	AndAnd;
 	OrOr;
 	Ampersand;

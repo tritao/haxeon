@@ -12,13 +12,15 @@ import compiler.ffi.HxiModel.HxiPointerOwnership;
 
 /** Projects bridgeable HXI functions into a synthetic, source-visible module. */
 class HxiProjection {
-	public static function cNatives(model:HxiInterface, ?omitted:Map<String, Bool>, ?visibleDeclarations:Map<String, HxiDeclaration>):Array<IrCNative> {
+	public static function cNatives(model:HxiInterface, ?omitted:Map<String, Bool>, ?visibleDeclarations:Map<String, HxiDeclaration>,
+			?providedAbi:HxiAbi):Array<IrCNative> {
 		var library = model.library;
 		if (library == null)
 			return [];
 		var result:Array<IrCNative> = [],
 			declarations:Map<String, HxiDeclaration> = [],
-			directed:Map<String, Bool> = [];
+			directed:Map<String, Bool> = [],
+			aggregateDescriptors:Map<String, String> = [];
 		if (visibleDeclarations != null)
 			for (name => declaration in visibleDeclarations)
 				declarations.set(name, declaration);
@@ -31,7 +33,7 @@ class HxiProjection {
 					directed.set(name, hasOutput(parameters));
 				case _:
 			}
-		var abi = HxiAbi.forInterface(model, declarations);
+		var abi = providedAbi == null ? HxiAbi.forInterface(model, declarations) : providedAbi;
 		for (fn in abi.functions()) {
 			if (isOmitted(omitted, fn.name))
 				continue;
@@ -49,7 +51,7 @@ class HxiProjection {
 					case _: value.nativePointer ? "native_pointer" : null;
 				};
 				arguments.push(irType(value.code, false, nativeAbstract));
-				codes.push(abiDescriptor(argument, declarations, abi));
+				codes.push(abiDescriptor(argument, declarations, abi, aggregateDescriptors));
 			}
 			var returnValue = project(fn.result, true);
 			var managedBytes = fn.resultPolicy.length != null;
@@ -63,7 +65,7 @@ class HxiProjection {
 					name: model.name + "." + (directed.get(fn.name) == true ? "__hxi_raw_" + fn.name : fn.name),
 					library: library,
 					symbol: fn.symbol,
-					signature: callSignature(codes.join(",") + ">" + abiDescriptor(fn.result, declarations, abi), fn.callConvention),
+					signature: callSignature(codes.join(",") + ">" + abiDescriptor(fn.result, declarations, abi, aggregateDescriptors), fn.callConvention),
 					arguments: arguments,
 					result: managedBytes ? Abstract("realtime_bytes") : irType(returnValue.code, true),
 					pointerOwnership: ownership.kind,
@@ -75,15 +77,23 @@ class HxiProjection {
 		return result;
 	}
 
-	public static function source(model:HxiInterface, ?omitted:Map<String, Bool>, ?visibleDeclarations:Map<String, HxiDeclaration>):String {
+	public static function source(model:HxiInterface, ?omitted:Map<String, Bool>, ?visibleDeclarations:Map<String, HxiDeclaration>,
+			?providedAbi:HxiAbi):String {
 		var library = model.library;
 		if (library == null)
 			return "";
-		var abi = HxiAbi.forInterface(model, visibleDeclarations),
-			output = new StringBuf();
+		var abi = providedAbi == null ? HxiAbi.forInterface(model, visibleDeclarations) : providedAbi,
+			output = new StringBuf(),
+			aggregateDescriptors:Map<String, String> = [];
 		var structAccesses:Map<String, {type:String, setterType:String}> = [],
 			declarations:Map<String, HxiDeclaration> = [],
-			functions:Map<String, HxiDeclaration> = [];
+			functions:Map<String, HxiDeclaration> = [],
+			constants:Array<{name:String, value:String}> = [],
+			callbackDeclarations:Array<HxiDeclaration> = [],
+			enumDeclarations:Array<HxiDeclaration> = [],
+			handleDeclarations:Array<HxiDeclaration> = [],
+			structureDeclarations:Array<HxiDeclaration> = [],
+			functionDeclarations:Array<HxiDeclaration> = [];
 		var usesNestedStructures = false,
 			usesPointerFields = false,
 			usesUtf8Fields = false,
@@ -92,28 +102,42 @@ class HxiProjection {
 		if (visibleDeclarations != null)
 			for (name => declaration in visibleDeclarations)
 				declarations.set(name, declaration);
-		for (declaration in model.declarations)
+		for (declaration in model.declarations) {
 			switch declaration {
-				case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _) |
-					Callback(name, _, _, _, _):
+				case Opaque(name, _) | Alias(name, _, _):
 					declarations.set(name, declaration);
 				case Function(name, _, _, _, _, _, _, _):
 					functions.set(name, declaration);
-				case _:
-			}
-		output.add('// Generated semantic projection of ${model.name}. Do not edit.\n');
-		var constants:Array<{name:String, value:String}> = [];
-		for (declaration in model.declarations)
-			switch declaration {
+					if (!isOmitted(omitted, name))
+						functionDeclarations.push(declaration);
+				case Callback(name, _, _, _, _):
+					declarations.set(name, declaration);
+					if (!isOmitted(omitted, name)) {
+						callbackDeclarations.push(declaration);
+						hasCallbacks = true;
+					}
 				case Constant(name, value, _):
 					if (!isOmitted(omitted, name))
 						constants.push({name: name, value: value});
-				case Enumeration(_, _, _, values, _):
+				case Enumeration(name, _, _, values, _):
+					declarations.set(name, declaration);
+					if (!isOmitted(omitted, name))
+						enumDeclarations.push(declaration);
 					for (value in values)
 						if (!isOmitted(omitted, value.name))
 							constants.push({name: value.name, value: Std.string(value.value)});
+				case Handle(name, _, _):
+					declarations.set(name, declaration);
+					if (!isOmitted(omitted, name))
+						handleDeclarations.push(declaration);
+				case Structure(name, _, _, _, _):
+					declarations.set(name, declaration);
+					if (!isOmitted(omitted, name))
+						structureDeclarations.push(declaration);
 				case _:
 			}
+		}
+		output.add('// Generated semantic projection of ${model.name}. Do not edit.\n');
 		if (constants.length != 0) {
 			output.add('class ${upperFirst(model.name)}Constants {\n');
 			for (constant in constants) {
@@ -122,17 +146,11 @@ class HxiProjection {
 			}
 			output.add('}\n');
 		}
-		for (declaration in model.declarations)
-			switch declaration {
-				case Callback(name, _, _, _, _) if (!isOmitted(omitted, name)):
-					hasCallbacks = true;
-				case _:
-			}
 		if (hasCallbacks)
 			output.add('enum abstract HxiCallbackError(Int) from Int to Int { var None = 0; var Exception = 1; var WrongThread = 2; var PointerContract = 3; var AggregateContract = 4; var StringContract = 5; }\n');
-		for (declaration in model.declarations)
-			switch declaration {
-				case Callback(name, parameters, result, callConvention, _) if (!isOmitted(omitted, name)):
+		for (callbackDeclaration in callbackDeclarations)
+			switch callbackDeclaration {
+				case Callback(name, parameters, result, callConvention, _):
 					var argumentTypes = [], codes = [], pointerSizes = [], pointerNullable = [], supported = true;
 					for (parameter in parameters) {
 						var classified = abi.classify(parameter.type),
@@ -142,11 +160,11 @@ class HxiProjection {
 							break;
 						}
 						argumentTypes.push('${parameter.name}:${value.haxeType}');
-						codes.push(abiDescriptor(classified, declarations, abi));
+						codes.push(abiDescriptor(classified, declarations, abi, aggregateDescriptors));
 						switch classified {
 							case PointerValue(_, nullable, _, structure):
-								var declaration = structure == null ? null : declarations.get(structure),
-									size = switch declaration {
+								var structureDeclaration = structure == null ? null : declarations.get(structure),
+									size = switch structureDeclaration {
 										case Structure(_, value, _, _, _): value;
 										case _: 0;
 									};
@@ -160,11 +178,11 @@ class HxiProjection {
 								pointerNullable.push("0");
 						}
 					}
-					var returnValue = project(abi.classify(result, true), true);
+					var classifiedResult = abi.classify(result, true),
+						returnValue = project(classifiedResult, true);
 					if (!supported || returnValue == null)
 						continue;
-					var classifiedResult = abi.classify(result, true);
-					var signature = callSignature(codes.join(",") + ">" + abiDescriptor(classifiedResult, declarations, abi), callConvention);
+					var signature = callSignature(codes.join(",") + ">" + abiDescriptor(classifiedResult, declarations, abi, aggregateDescriptors), callConvention);
 					emitDocumentation(output, model, name);
 					output.add('typedef $name = (${argumentTypes.join(", ")})->${returnValue.haxeType};\n');
 					output.add('abstract ${name}Callback(hl.Abstract<"native_callback">) {\n');
@@ -178,9 +196,9 @@ class HxiProjection {
 					output.add('@:hlNative("haxeon_runtime", "native_callback_take_error") extern function __hxi_callback_take_error_$name(callback:${name}Callback):Null<haxe.io.Bytes>;\n');
 				case _:
 			}
-		for (declaration in model.declarations)
+		for (declaration in enumDeclarations)
 			switch declaration {
-				case Enumeration(name, representation, _, values, _) if (!isOmitted(omitted, name)):
+				case Enumeration(name, representation, _, values, _):
 					var underlying = project(abi.classify(representation), false);
 					if (underlying == null)
 						continue;
@@ -193,9 +211,9 @@ class HxiProjection {
 					output.add('}\n');
 				case _:
 			}
-		for (declaration in model.declarations)
+		for (declaration in handleDeclarations)
 			switch declaration {
-				case Handle(name, _, _) if (!isOmitted(omitted, name)):
+				case Handle(name, _, _):
 					emitDocumentation(output, model, name);
 					output.add('abstract $name(Int) from Int to Int {\n');
 					output.add('\tpublic inline function new(value:Int = 0) this = value;\n');
@@ -205,9 +223,9 @@ class HxiProjection {
 					output.add('}\n');
 				case _:
 			}
-		for (declaration in model.declarations)
+		for (declaration in structureDeclarations)
 			switch declaration {
-				case Structure(name, size, _, fields, _) if (!isOmitted(omitted, name)):
+				case Structure(name, size, _, fields, _):
 					emitDocumentation(output, model, name);
 					output.add('abstract $name(haxe.io.Bytes) from haxe.io.Bytes to haxe.io.Bytes {\n');
 					output.add('\tpublic static inline function size():Int return $size;\n');
@@ -302,9 +320,9 @@ class HxiProjection {
 					output.add('}\n');
 				case _:
 			}
-		for (declaration in model.declarations)
+		for (declaration in functionDeclarations)
 			switch declaration {
-				case Function(name, parameters, _, _, _, _, _, _) if (!isOmitted(omitted, name)):
+				case Function(name, parameters, _, _, _, _, _, _):
 					for (parameter in parameters)
 						switch parameter.direction {
 							case Out | InOut:
@@ -362,17 +380,17 @@ class HxiProjection {
 					supported = false;
 					break;
 				}
-				var output = switch parameters[index].direction {
+				var outputValue = switch parameters[index].direction {
 					case Out | InOut: outputInfo(parameters[index].type, abi);
 					case In | InArray(_) | OutBuffer(_): null;
 				};
-				argumentTypes.push(output == null ? projected.haxeType : output.structure ? output.haxeType : "haxe.io.Bytes");
-				codes.push(abiDescriptor(argument, declarations, abi));
+				argumentTypes.push(outputValue == null ? projected.haxeType : outputValue.structure ? outputValue.haxeType : "haxe.io.Bytes");
+				codes.push(abiDescriptor(argument, declarations, abi, aggregateDescriptors));
 			}
 			var result = project(fn.result, true);
 			if (!supported || result == null)
 				continue;
-			var signature = callSignature(codes.join(",") + ">" + abiDescriptor(fn.result, declarations, abi), fn.callConvention);
+			var signature = callSignature(codes.join(",") + ">" + abiDescriptor(fn.result, declarations, abi, aggregateDescriptors), fn.callConvention);
 			var directed = hasOutput(parameters),
 				rawName = directed ? "__hxi_raw_" + fn.name : fn.name;
 			if (!directed)
@@ -389,34 +407,28 @@ class HxiProjection {
 				else
 					emitBufferWrapper(output, fn.name, parameters, argumentTypes, resultType, buffer, model.documentation.get(fn.name));
 			}
-			if (byteArrayParameter(parameters) != null)
+			var byteIndex = byteArrayParameter(parameters);
+			if (byteIndex != null)
 				emitByteSliceWrapper(output, fn.name, parameters, argumentTypes, resultType,
-					directed ? outputWrapperResult(fn.name, parameters, resultType, abi) : resultType, abi);
+					directed ? outputWrapperResult(fn.name, parameters, resultType, abi) : resultType, abi, byteIndex);
 		}
 		return output.toString();
 	}
 
-	static function emitDocumentation(output:StringBuf, model:HxiInterface, name:String, indent:String = ""):Void
+	static inline function emitDocumentation(output:StringBuf, model:HxiInterface, name:String, indent:String = ""):Void
 		emitDocumentationValue(output, model.documentation.get(name), indent);
 
 	static function emitDocumentationValue(output:StringBuf, documentation:Null<HxiDocumentation>, indent:String = ""):Void {
 		if (documentation == null || documentation.raw.length == 0)
 			return;
-		var raw = documentation.raw, start = 0, formatted = new StringBuf();
-		formatted.add(indent + "/**\n");
-		while (true) {
-			var end = raw.indexOf("\n", start), lineEnd = end < 0 ? raw.length : end,
-				line = raw.substring(start, lineEnd);
-			formatted.add(indent + " *" + (line.length == 0 ? "" : " " + line) + "\n");
-			if (end < 0)
-				break;
-			start = end + 1;
-		}
-		formatted.add(indent + " */\n");
-		output.add(formatted.toString());
+		var lines = documentation.lines;
+		output.add(indent + "/**\n");
+		for (line in lines)
+			output.add(indent + " *" + (line.length == 0 ? "" : " " + line) + "\n");
+		output.add(indent + " */\n");
 	}
 
-	static function isOmitted(omitted:Null<Map<String, Bool>>, name:String):Bool
+	static inline function isOmitted(omitted:Null<Map<String, Bool>>, name:String):Bool
 		return omitted != null && omitted.get(name) == true;
 
 	static function hasOutput(parameters:Array<compiler.ffi.HxiModel.HxiParameter>):Bool {
@@ -581,8 +593,7 @@ class HxiProjection {
 	}
 
 	static function emitByteSliceWrapper(output:StringBuf, name:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>, rawArgumentTypes:Array<String>,
-			resultType:String, wrapperResult:String, abi:HxiAbi):Void {
-		var byteIndex = byteArrayParameter(parameters);
+			resultType:String, wrapperResult:String, abi:HxiAbi, byteIndex:Null<Int>):Void {
 		if (byteIndex == null)
 			return;
 		var byteName = parameters[byteIndex].name,
@@ -854,27 +865,10 @@ class HxiProjection {
 	static function callSignature(signature:String, convention:String):String
 		return convention == "cdecl" ? signature : signature + "@" + convention;
 
-	static function abiDescriptor(value:HxiAbiValue, declarations:Map<String, HxiDeclaration>, abi:HxiAbi):String
+	static function abiDescriptor(value:HxiAbiValue, declarations:Map<String, HxiDeclaration>, abi:HxiAbi,
+			aggregateDescriptors:Null<Map<String, String>> = null):String
 		return switch value {
-			case AggregateValue(name, size, align):
-				switch declarations.get(name) {
-					case Structure(_, _, _, fields, _):
-						var ordered = fields.copy();
-						ordered.sort(function(left:HxiField, right:HxiField) return fieldOffset(left) - fieldOffset(right));
-						var cursor = 0, naturalAlign = 1;
-						for (field in ordered) {
-							var layout = abiLayout(field.type, declarations, abi);
-							cursor = (cursor + layout.align - 1) & -layout.align;
-							if (field.offset != cursor)
-								throw 'HXI structure "$name" cannot be passed by value because its layout is not a natural C struct';
-							cursor += layout.size;
-							naturalAlign = Std.int(Math.max(naturalAlign, layout.align));
-						}
-						if (naturalAlign != align || ((cursor + naturalAlign - 1) & -naturalAlign) != size)
-							throw 'HXI structure "$name" cannot be passed by value because its layout is not a natural C struct';
-						'{$size;$align;${[for (field in ordered) for (entry in fieldDescriptors(field.type, declarations, abi)) entry].join(",")}}';
-					case _: throw 'Missing HXI structure "$name"';
-				}
+			case AggregateValue(name, size, align): aggregateDescriptor(name, size, align, declarations, abi, aggregateDescriptors);
 			case VoidValue: "0";
 			case IntegerValue(64, sign): sign == Unsigned ? "8" : "7";
 			case IntegerValue(bits, sign): Std.string(switch bits {
@@ -895,6 +889,34 @@ class HxiProjection {
 			case Utf8Value(nullable): nullable ? "14" : "13";
 			case _: throw "Unsupported HXI ABI value";
 		};
+
+	static function aggregateDescriptor(name:String, size:Int, align:Int, declarations:Map<String, HxiDeclaration>, abi:HxiAbi,
+			aggregateDescriptors:Null<Map<String, String>>):String {
+		var cached = aggregateDescriptors == null ? null : aggregateDescriptors.get(name);
+		if (cached != null)
+			return cached;
+		var descriptor = switch declarations.get(name) {
+			case Structure(_, _, _, fields, _):
+				var ordered = fields.copy();
+				ordered.sort(function(left:HxiField, right:HxiField) return fieldOffset(left) - fieldOffset(right));
+				var cursor = 0, naturalAlign = 1;
+				for (field in ordered) {
+					var layout = abiLayout(field.type, declarations, abi);
+					cursor = (cursor + layout.align - 1) & -layout.align;
+					if (field.offset != cursor)
+						throw 'HXI structure "$name" cannot be passed by value because its layout is not a natural C struct';
+					cursor += layout.size;
+					naturalAlign = Std.int(Math.max(naturalAlign, layout.align));
+				}
+				if (naturalAlign != align || ((cursor + naturalAlign - 1) & -naturalAlign) != size)
+					throw 'HXI structure "$name" cannot be passed by value because its layout is not a natural C struct';
+				'{$size;$align;${[for (field in ordered) for (entry in fieldDescriptors(field.type, declarations, abi, aggregateDescriptors)) entry].join(",")}}';
+			case _: throw 'Missing HXI structure "$name"';
+		};
+		if (aggregateDescriptors != null)
+			aggregateDescriptors.set(name, descriptor);
+		return descriptor;
+	}
 
 	static function abiLayout(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>, abi:HxiAbi):{size:Int, align:Int}
 		return switch type {
@@ -927,21 +949,22 @@ class HxiProjection {
 			case VoidValue: throw "Void field has no C layout";
 		};
 
-	static function fieldDescriptors(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>, abi:HxiAbi):Array<String>
+	static function fieldDescriptors(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>, abi:HxiAbi,
+			aggregateDescriptors:Null<Map<String, String>> = null):Array<String>
 		return switch type {
-			case Const(element): fieldDescriptors(element, declarations, abi);
+			case Const(element): fieldDescriptors(element, declarations, abi, aggregateDescriptors);
 			case Array(element, length): [
 					for (_ in 0...length)
-						for (entry in fieldDescriptors(element, declarations, abi))
+						for (entry in fieldDescriptors(element, declarations, abi, aggregateDescriptors))
 							entry
 				];
 			case Named(name):
 				switch declarations.get(name) {
-					case Alias(_, target, _): fieldDescriptors(target, declarations, abi);
-					case Structure(_, _, _, _, _): [abiDescriptor(abi.classify(type), declarations, abi)];
-					case _: [abiDescriptor(abi.classify(type), declarations, abi)];
+					case Alias(_, target, _): fieldDescriptors(target, declarations, abi, aggregateDescriptors);
+					case Structure(_, _, _, _, _): [abiDescriptor(abi.classify(type), declarations, abi, aggregateDescriptors)];
+					case _: [abiDescriptor(abi.classify(type), declarations, abi, aggregateDescriptors)];
 				}
-			case _: [abiDescriptor(abi.classify(type), declarations, abi)];
+			case _: [abiDescriptor(abi.classify(type), declarations, abi, aggregateDescriptors)];
 		};
 
 	static function fieldOffset(field:HxiField):Int {

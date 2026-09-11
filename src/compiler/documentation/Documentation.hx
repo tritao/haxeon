@@ -6,6 +6,7 @@ import compiler.Source.SourceSpan;
 /** Normalized Haxe documentation shared by editor and export tooling. */
 typedef Documentation = {
 	final raw:String;
+	final lines:Array<String>;
 	final markdown:String;
 	final parameters:Map<String, String>;
 	final deprecated:Bool;
@@ -81,9 +82,10 @@ class DocumentationTools {
 	}
 
 	public static function empty():Documentation
-		return {
-			raw: "",
-			markdown: "",
+	return {
+		raw: "",
+		lines: [],
+		markdown: "",
 			parameters: [],
 			deprecated: false
 		};
@@ -124,9 +126,10 @@ class DocumentationTools {
 		}
 		trimEmpty(body);
 		trimEmpty(normalized);
-		return {
-			raw: normalized.join("\n"),
-			markdown: body.join("\n"),
+	return {
+		raw: normalized.join("\n"),
+		lines: normalized,
+		markdown: body.join("\n"),
 			parameters: parameters,
 			deprecated: deprecated
 		};

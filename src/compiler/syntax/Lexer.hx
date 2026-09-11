@@ -186,6 +186,7 @@ class Lexer {
 						position++;
 						TokenKind.NotEqual;
 					} else TokenKind.Not;
+				case "~": TokenKind.BitNot;
 				case "&":
 					if (position < source.length && source.get(position) == "&".code) {
 						position++;

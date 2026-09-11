@@ -885,7 +885,7 @@ class LanguageService {
 				case Integer, Float: "number";
 				case StringLiteral: "string";
 				case LeftParen, RightParen, LeftBrace, RightBrace, Colon, Semicolon, Comma, Dot, Assign, PlusAssign, MinusAssign, Increment, Decrement, Plus,
-					Minus, Arrow, Star, Slash, Percent, Less, Greater, LessEqual, GreaterEqual, EqualEqual, NotEqual, Not, AndAnd, OrOr, Ampersand, Pipe,
+					Minus, Arrow, Star, Slash, Percent, Less, Greater, LessEqual, GreaterEqual, EqualEqual, NotEqual, Not, BitNot, AndAnd, OrOr, Ampersand, Pipe,
 					Caret, LeftBracket, RightBracket, Question, At: "operator";
 				default: "keyword";
 			};
