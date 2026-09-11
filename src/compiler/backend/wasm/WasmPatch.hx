@@ -7,6 +7,7 @@ import compiler.ir.IrFunction;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.codec.IrTypeCodec;
 import haxe.io.Bytes;
+import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
 
 typedef WasmFunctionIdentity = {
@@ -78,6 +79,44 @@ class WasmPatch {
 		return output.getBytes();
 	}
 
+	public static function readManifest(bytes:Bytes):Array<WasmFunctionIdentity> {
+		var input = new BytesInput(bytes);
+		input.bigEndian = false;
+		if (input.readString(3) != "HWP" || input.readByte() != VERSION)
+			throw "Invalid Wasm patch manifest";
+		var result:Array<WasmFunctionIdentity> = [];
+		for (_ in 0...readCount(input, bytes.length)) {
+			var name = IrTypeCodec.readString(input, bytes.length),
+				id = input.readInt32(),
+				signature = IrTypeCodec.readString(input, bytes.length);
+			if (id != stableId(name))
+				throw 'Invalid stable ID for Wasm patch function "$name"';
+			result.push({name: name, stableId: id, signature: signature});
+		}
+		if (input.position != bytes.length)
+			throw "Trailing Wasm patch manifest data";
+		return result;
+	}
+
+	public static function readTableManifest(bytes:Bytes):Array<WasmTableIdentity> {
+		var input = new BytesInput(bytes);
+		input.bigEndian = false;
+		if (input.readString(3) != "HWT" || input.readByte() != VERSION)
+			throw "Invalid Wasm table manifest";
+		var result:Array<WasmTableIdentity> = [];
+		for (_ in 0...readCount(input, bytes.length)) {
+			var name = IrTypeCodec.readString(input, bytes.length),
+				id = input.readInt32(),
+				slot = input.readInt32();
+			if (id != stableId(name) || slot < 0)
+				throw 'Invalid Wasm table identity for "$name"';
+			result.push({name: name, stableId: id, slot: slot});
+		}
+		if (input.position != bytes.length)
+			throw "Trailing Wasm table manifest data";
+		return result;
+	}
+
 	public static function plan(previous:Null<IrProgram>, next:IrProgram):PatchDecision
 		return PatchPlanner.plan(previous == null ? null : RuntimeAbi.describe(previous), RuntimeAbi.describe(next));
 
@@ -91,5 +130,12 @@ class WasmPatch {
 			hash = Std.int(hash * 16777619);
 		}
 		return hash;
+	}
+
+	static function readCount(input:BytesInput, limit:Int):Int {
+		var count = input.readInt32();
+		if (count < 0 || count > 0x100000 || input.position > limit)
+			throw "Invalid Wasm patch manifest count";
+		return count;
 	}
 }

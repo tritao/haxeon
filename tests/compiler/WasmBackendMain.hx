@@ -41,7 +41,8 @@ class WasmBackendMain {
 		if (WasmPatch.manifest(referenceProgram).length == 0 || WasmPatch.plan(referenceProgram, canonical) != Patch)
 			throw "Wasm patch metadata must preserve a compatible semantic ABI";
 		var patchArtifact = new WasmBackend().compilePatch(referenceProgram, canonical, ["main"], {target: Wasm32, debugNames: true});
-		if (patchArtifact.bytes.length < 8 || patchArtifact.manifest.length == 0 || patchArtifact.changed.length != 1)
+		var patchEntries = WasmPatch.readManifest(patchArtifact.manifest);
+		if (patchArtifact.bytes.length < 8 || patchEntries.length != 1 || patchEntries[0].name != "main" || patchArtifact.changed.length != 1)
 			throw "Wasm patch compilation must produce a validated replacement artifact";
 		var objectBytes = objectProgram();
 		if (new IrInterpreter(Frontend.compile("class Box { public var value:Int; public function new() {} } function main():Int { var box = new Box(); box.value = 42; return box.value; }"))
