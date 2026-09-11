@@ -27,6 +27,13 @@ are 32-bit references at this layer; scalar `Int`/`Bool` values are `i32` and
 `Float` values are `f64`. `WasmLayout` is the only owner of object, array,
 enum, closure, and string offsets.
 
+The backend emits the WebAssembly exception tag/try/catch instructions for
+programs with Haxeon exception edges. Exception-bearing functions currently
+use the explicit CFG dispatcher so handler state and rethrow behavior remain
+correct while structured exception regions mature; ordinary reducible scalar
+CFGs use the structured lowering path, with the dispatcher retained as a
+correctness fallback.
+
 The module exports `main` and `memory`. It also carries two versioned custom
 sections:
 
@@ -72,6 +79,14 @@ module plus a function manifest:
 - Runtime ABI decisions use semantic declarations, not byte offsets.
 - CFG normalization is an explicit pass; the dispatcher is only a correctness
   fallback for CFGs the current region builder cannot structure.
+
+## Deliberate boundaries
+
+`Wasm64` and Wasm GC are represented as target configurations below canonical
+IR, but are not enabled by this bring-up yet. Ordinary `@:cNative` calls also
+remain explicit backend errors: they require a Wasm host-import ABI rather
+than being silently treated as HashLink natives. Use the HashLink backend for
+those programs until that import contract is added.
 
 `WasmTarget` already models linear32, linear64, and Wasm-GC reference modes.
 Those modes remain below IR; adding them must not change `IrType` or
