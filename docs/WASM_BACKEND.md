@@ -90,6 +90,11 @@ module plus a function manifest:
   --root=stdlib --root=tests/programs tests/programs/add.hx
 ```
 
+The same compile can publish the verified target-neutral IR container with
+`--ir-output=out/main.hir`. The HIR is versioned, preserves SSA value identity,
+CFG edges, semantic runtime declarations, and typed native contracts, and can
+be decoded independently before any Wasm or HashLink lowering.
+
 ## Architectural invariants
 
 - Haxeon IR owns semantic types and operations.
