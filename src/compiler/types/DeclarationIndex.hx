@@ -270,21 +270,36 @@ class DeclarationIndex {
 	}
 
 	function resolveNamedType(name:String, span:SourceSpan, resolving:Map<String, Bool>, substitutions:Map<String, CompilerType>):CompilerType {
-		return if (substitutions.exists(name)) substitutions.get(name); else if (aliases.exists(name)) {
-			var alias = aliases.get(name);
+		var substituted = substitutions.get(name);
+		if (substituted != null)
+			return substituted;
+		var alias = aliases.get(name);
+		if (alias != null) {
 			if (alias.typeParameters.length != 0)
 				fail('Type "$name" expects ${alias.typeParameters.length} type arguments, got 0', span);
-			resolveAlias(alias, resolving, substitutions);
-		} else if (enumAbstracts.exists(name)) resolveInner(enumAbstracts.get(name).underlying, span, resolving,
-			substitutions); else if (abstracts.exists(name)) {
-			var decl = abstracts.get(name);
+			return resolveAlias(alias, resolving, substitutions);
+		}
+		var enumAbstract = enumAbstracts.get(name);
+		if (enumAbstract != null)
+			return resolveInner(enumAbstract.underlying, span, resolving, substitutions);
+		var decl = abstracts.get(name);
+		if (decl != null) {
 			if (decl.typeParameters.length != 0)
 				fail('Type "$name" expects ${decl.typeParameters.length} type arguments, got 0', span);
-			TAbstract(name, [], resolveAbstract(decl, span, resolving, substitutions));
-		} else if (interfaces.exists(name)) resolveBareNominal(name, NominalKind.Interface, interfaces.get(name).typeParameters.length,
-			span); else if (enums.exists(name)) resolveBareNominal(name, NominalKind.Enum, enums.get(name).typeParameters.length,
-			span); else if (classes.exists(name)) resolveBareNominal(name, NominalKind.Class, classes.get(name).typeParameters.length,
-			span); else if (PlatformAbi.isType(name)) PlatformAbi.valueType(name); else {
+			return TAbstract(name, [], resolveAbstract(decl, span, resolving, substitutions));
+		}
+		var interfaceDecl = interfaces.get(name);
+		if (interfaceDecl != null)
+			return resolveBareNominal(name, NominalKind.Interface, interfaceDecl.typeParameters.length, span);
+		var enumDecl = enums.get(name);
+		if (enumDecl != null)
+			return resolveBareNominal(name, NominalKind.Enum, enumDecl.typeParameters.length, span);
+		var classDecl = classes.get(name);
+		if (classDecl != null)
+			return resolveBareNominal(name, NominalKind.Class, classDecl.typeParameters.length, span);
+		return if (PlatformAbi.isType(name))
+			PlatformAbi.valueType(name);
+		else {
 			fail('Unknown type "$name"', span);
 			TVoid;
 		};
