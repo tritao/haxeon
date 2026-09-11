@@ -21,6 +21,10 @@ class CompilerDriver {
 		report("loading " + Std.string(request.paths.length) + " sources");
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
+		var defines = request.defines.copy();
+		for (define in targetDefines(request.target))
+			defines.push(define);
+		compiler.configure("cli:" + request.target + ":" + defines.join("|"), "cli:" + request.target, defines);
 		for (path in request.ffiProjections) {
 			report("loading FFI projection " + path);
 			compiler.addFfiProjection(path, File.getContent(path));
@@ -43,7 +47,13 @@ class CompilerDriver {
 				default: HashLink;
 			},
 			backend:Backend = isWasm ? new WasmBackend() : new HlBackend(),
-			backendResult = backend.compile(result.ir, {target: wasmTarget, debugNames: true});
+			backendResult = backend.compile(result.ir, {
+				target: wasmTarget,
+				debugNames: true,
+				importMemory: request.importMemory,
+				memoryBase: request.memoryBase,
+				exports: request.exports
+			});
 		File.saveBytes(request.output, backendResult.bytes);
 		if (isWasm)
 			File.saveContent(request.output + ".functions", wasmFunctionMap(result.ir));
@@ -56,6 +66,27 @@ class CompilerDriver {
 		if (request.ffiHeader != null && request.ffiLibrary != null)
 			File.saveContent(request.ffiHeader, CHeaderEmitter.emit(result.ir.natives, request.ffiLibrary));
 		report("compiled " + Std.string(request.paths.length) + " source files -> " + request.output);
+		return result;
+	}
+
+	/** Defines supplied by the command-line target before user source is analyzed. */
+	public static function targetDefines(target:String):Array<String> {
+		var result = ["haxeon", "target=" + target];
+		switch target {
+			case "wasm32":
+				result.push("wasm");
+				result.push("wasm32");
+			case "wasm64":
+				result.push("wasm");
+				result.push("wasm64");
+			case "wasmgc", "wasm-gc":
+				result.push("wasm");
+				result.push("wasmgc");
+			case "hl":
+				result.push("hl");
+				result.push("sys");
+			default:
+		}
 		return result;
 	}
 

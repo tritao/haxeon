@@ -245,6 +245,10 @@ class ModuleAnalyzer {
 			indexDeclaration(prefix + declaration.name, moduleName);
 		for (declaration in ast.enums)
 			indexDeclaration(prefix + declaration.name, moduleName);
+		for (declaration in ast.enumAbstracts)
+			indexDeclaration(prefix + declaration.name, moduleName);
+		for (declaration in ast.abstracts)
+			indexDeclaration(prefix + declaration.name, moduleName);
 		for (declaration in ast.interfaces)
 			indexDeclaration(prefix + declaration.name, moduleName);
 		for (declaration in ast.classes)

@@ -90,6 +90,20 @@ module plus a function manifest:
   --root=stdlib --root=tests/programs tests/programs/add.hx
 ```
 
+The driver also supplies target defines before source analysis. Every build
+gets `haxeon` and `target=<target>`; `wasm32` adds `wasm` and `wasm32`, while
+the HashLink target adds `hl` and `sys`. Project-specific defines can be added
+with repeated `--define=NAME` or `--define=NAME=value` options:
+
+```sh
+... --target=wasm32 --define=nativekit_web --define=feature=on ...
+```
+
+Target defines are reserved and are applied after command-line project
+defines, so the selected compiler target remains authoritative. Keep
+platform-specific entry loops in small host classes; use conditional
+compilation in shared code only for genuinely target-sensitive behavior.
+
 The same compile can publish the verified target-neutral IR container with
 `--ir-output=out/main.hir`. The HIR is versioned, preserves SSA value identity,
 CFG edges, semantic runtime declarations, and typed native contracts, and can

@@ -25,6 +25,7 @@ import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ffi.CHeaderEmitter;
 import compiler.tools.CompilerArguments;
+import compiler.tools.CompilerDriver;
 import compiler.documentation.Documentation.DocumentationTools;
 import compiler.documentation.HaxeXmlWriter;
 import compiler.ir.IrBuilder;
@@ -697,6 +698,8 @@ class TestMain {
 			"--ir-output=out/sample.hir",
 			"--entry=sample.Main",
 			"--root=source",
+			"--define=feature",
+			"--define=version=3.0",
 			"--dump-function=42",
 			"--ffi-header=out/sample.h",
 			"--ffi-library=sample",
@@ -705,6 +708,7 @@ class TestMain {
 			"source/Main.hx"
 		]);
 		if (compilerRequest.target != "wasm32"
+			|| compilerRequest.defines.join(",") != "feature,version=3.0"
 			|| compilerRequest.output != "out/sample.hl"
 			|| compilerRequest.xmlOutput != "out/api.xml"
 			|| compilerRequest.irOutput != "out/sample.hir"
@@ -715,6 +719,10 @@ class TestMain {
 			|| compilerRequest.ffiInterfaces.join(",") != "generated/nativekit.hxi,generated/system.hxi"
 			|| compilerRequest.ffiLibrary != "sample")
 			throw "Compiler CLI did not produce a typed build request";
+		var wasmDefines = CompilerDriver.targetDefines("wasm32"), hlDefines = CompilerDriver.targetDefines("hl");
+		if (wasmDefines.join(",") != "haxeon,target=wasm32,wasm,wasm32"
+			|| hlDefines.join(",") != "haxeon,target=hl,hl,sys")
+			throw "Compiler targets did not expose their canonical conditional defines";
 		var equalsXmlRequest = CompilerArguments.parse(["--xml=out/equals.xml", "source/Main.hx"]);
 		if (equalsXmlRequest.xmlOutput != "out/equals.xml")
 			throw "Compiler CLI did not accept the equals form of --xml";

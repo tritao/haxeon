@@ -22,6 +22,13 @@ class WasmValidator {
 		for (entry in module.exports)
 			if (entry.functionIndex < 0 || entry.functionIndex >= module.functionCount())
 				throw 'Wasm export "${entry.name}" references function ${entry.functionIndex}';
+		if (module.start != null) {
+			if (module.start < 0 || module.start >= module.functionCount())
+				throw 'Wasm start references function ${module.start}';
+			var startType = module.functionType(module.start);
+			if (startType.parameters.length != 0 || startType.results.length != 0)
+				throw 'Wasm start function must have no parameters or results';
+		}
 	}
 
 	static function validateFunction(fn:WasmFunction, functions:Array<WasmFunctionType>, globals:Array<WasmGlobal>, types:Array<WasmFunctionType>,

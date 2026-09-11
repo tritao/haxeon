@@ -25,12 +25,12 @@ class WasmEncoder {
 		for (byte in [0, 97, 115, 109, 1, 0, 0, 0])
 			output.writeByte(byte);
 		writeSection(output, 1, encodeTypes(module.types));
-		if (module.imports.length > 0)
+		if (module.imports.length > 0 || module.importMemory)
 			writeSection(output, 2, encodeImports(module));
 		writeSection(output, 3, encodeFunctionTypes(module));
 		if (module.tableMin != null)
 			writeSection(output, 4, encodeTable(module.tableMin));
-		if (module.memoryMin != null)
+		if (module.memoryMin != null && !module.importMemory)
 			writeSection(output, 5, encodeMemory(module.memoryMin));
 		if (module.exceptionTagType != null)
 			writeSection(output, 13, encodeTags(module.exceptionTagType));
@@ -43,6 +43,8 @@ class WasmEncoder {
 			exports.push({name: "table", functionIndex: -2});
 		if (exports.length > 0)
 			writeSection(output, 7, encodeExports(exports, module.exportMemory, module.exportTable));
+		if (module.start != null)
+			writeSection(output, 8, encodeStart(module.start));
 		if (module.tableMin != null && module.tableElements.length > 0)
 			writeSection(output, 9, encodeElements(module.tableElements));
 		writeSection(output, 10, encodeCode(module));
@@ -83,12 +85,19 @@ class WasmEncoder {
 
 	static function encodeImports(module:WasmModule):Bytes {
 		var body = new BytesOutput();
-		writeU32(body, module.imports.length);
+		writeU32(body, module.imports.length + (module.importMemory ? 1 : 0));
 		for (imported in module.imports) {
 			writeString(body, imported.module);
 			writeString(body, imported.name);
 			body.writeByte(0);
 			writeU32(body, module.typeIndex(imported.type));
+		}
+		if (module.importMemory) {
+			writeString(body, "env");
+			writeString(body, "memory");
+			body.writeByte(2);
+			body.writeByte(0);
+			writeU32(body, module.memoryMin == null ? 0 : module.memoryMin);
 		}
 		return body.getBytes();
 	}
@@ -151,6 +160,12 @@ class WasmEncoder {
 				writeU32(body, entry.functionIndex);
 			}
 		}
+		return body.getBytes();
+	}
+
+	static function encodeStart(functionIndex:Int):Bytes {
+		var body = new BytesOutput();
+		writeU32(body, functionIndex);
 		return body.getBytes();
 	}
 

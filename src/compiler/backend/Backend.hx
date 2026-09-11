@@ -15,6 +15,9 @@ enum BackendTarget {
 typedef BackendOptions = {
 	final target:BackendTarget;
 	final debugNames:Bool;
+	final ?importMemory:Bool;
+	final ?memoryBase:Int;
+	final ?exports:Array<String>;
 }
 
 /** Backend artifact returned after lowering a verified Haxeon program. */

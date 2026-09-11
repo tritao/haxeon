@@ -64,14 +64,23 @@ class WasmBackend implements Backend {
 		if (target.referenceModel != Linear32)
 			throw 'Wasm backend target ${options.target} is not implemented yet';
 		IrVerifier.verify(program);
-		var module = new WasmModule(target.debugNames ? "haxeon" : null);
-		var preferredEntry = hasFunction(program, "main") ? "main" : hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint,
-			reachable = reachableFunctions(program, preferredEntry),
-			usedCNatives = reachableCNatives(program, reachable),
+		var module = new WasmModule(target.debugNames ? "haxeon" : null),
+			importMemory = options.importMemory == true,
+			memoryBase = options.memoryBase == null ? 0 : options.memoryBase,
+			exportedFunctions = options.exports == null ? [] : options.exports;
+		if (memoryBase < 0 || (memoryBase & 7) != 0)
+			throw 'Wasm memory base must be a non-negative 8-byte-aligned value, got $memoryBase';
+		module.importMemory = importMemory;
+		var preferredEntry = hasFunction(program, "main") ? "main" :
+			hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint,
+			reachable = reachableFunctions(program, preferredEntry, exportedFunctions);
+		if (hasFunction(program, "__init"))
+			reachable.set("__init", true);
+		var usedCNatives = reachableCNatives(program, reachable),
 			usedNatives = reachableNatives(program, reachable);
 		var layout = new WasmLayout(program);
 		var strings:Map<String, Int> = [],
-			nextData = WasmLayout.STRING_DATA_OFFSET;
+			nextData = memoryBase + WasmLayout.STRING_DATA_OFFSET;
 		for (fn in program.functions)
 			for (block in fn.blocks)
 				for (located in block.instructions)
@@ -87,7 +96,7 @@ class WasmBackend implements Backend {
 						default:
 					}
 		module.memoryMin = 1;
-		module.exportMemory = true;
+		module.exportMemory = !importMemory;
 		var rootBase = align(Std.int(Math.max(1024, nextData)), 8),
 			rootReserve = WasmLayout.ROOT_RESERVE,
 			metadataBase = rootBase + rootReserve,
@@ -116,8 +125,6 @@ class WasmBackend implements Backend {
 		var mark = addGcMark(module, metadataBase, metadataTop);
 		var collector = addGcCollector(module, rootFrameTop, metadataBase, metadataTop, freeHead, mark, rootGlobals);
 		var allocator = addAllocator(module, collector, metadataBase, metadataTop, freeHead);
-		if (preferredEntry != program.entryPoint && hasFunction(program, "__init"))
-			reachable.set("__init", true);
 		functions.set("__haxeon_alloc", allocator);
 		addRuntimeFunctions(module, functions, program, allocator);
 		for (native in program.natives) {
@@ -168,16 +175,15 @@ class WasmBackend implements Backend {
 		var entry = functions.get(preferredEntry);
 		if (entry == null)
 			throw 'Wasm entry point $preferredEntry was not emitted';
-		if (preferredEntry != program.entryPoint && hasFunction(program, "__init")) {
-			var entryType:WasmFunctionType = {parameters: [], results: resultTypes(programFunction(program, preferredEntry).result)};
-			var wrapperBody:Array<WasmInstruction> = [Call(functions.get("__init")), Call(entry)];
-			if (entryType.results.length == 0)
-				wrapperBody.push(Return);
-			else
-				wrapperBody.push(Return);
-			entry = module.addFunction(new WasmFunction("__haxeon_entry", entryType, [], wrapperBody));
-		}
+		if (hasFunction(program, "__init"))
+			module.start = functions.get("__init");
 		module.exports.push({name: "main", functionIndex: entry});
+		for (exported in exportedFunctions) {
+			var exportIndex = functions.get(exported);
+			if (exportIndex == null)
+				throw 'Wasm export "$exported" is not a reachable function';
+			module.exports.push({name: exported, functionIndex: exportIndex});
+		}
 		return {target: options.target, bytes: WasmEncoder.encode(module)};
 	}
 
@@ -585,27 +591,33 @@ class WasmBackend implements Backend {
 
 	static function addStructSetBorrowedBytes(module:WasmModule, name:String):Int {
 		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32, I32], results: []}, [], [
-			LocalGet(0), LocalGet(1), I32Add, LocalGet(2), I32Const(WasmLayout.STRING_DATA_OFFSET), I32Add, I32Store(0), Return
+			LocalGet(0), I32Const(WasmLayout.STRING_DATA_OFFSET), I32Add, LocalGet(1), I32Add,
+			LocalGet(2), I32Const(WasmLayout.STRING_DATA_OFFSET), I32Add, I32Store(0), Return
 		]));
 	}
 
 	static function addStructGetPointer(module:WasmModule, name:String):Int {
-		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32, I32], results: [I32]}, [], [LocalGet(0), LocalGet(1), I32Add, I32Load(0), Return]));
+		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32, I32], results: [I32]}, [], [
+			LocalGet(0), I32Const(WasmLayout.STRING_DATA_OFFSET), I32Add, LocalGet(1), I32Add, I32Load(0), Return
+		]));
 	}
 
 	static function addStructSetPointer(module:WasmModule, name:String):Int {
-		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32, I32, I32], results: []}, [], [LocalGet(0), LocalGet(1), I32Add, LocalGet(2), I32Store(0), Return]));
+		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32, I32, I32], results: []}, [], [
+			LocalGet(0), I32Const(WasmLayout.STRING_DATA_OFFSET), I32Add, LocalGet(1), I32Add, LocalGet(2), I32Store(0), Return
+		]));
 	}
 
 	static function addStructSetUtf8(module:WasmModule, name:String):Int {
 		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32, I32, I32], results: []}, [], [
-			LocalGet(0), LocalGet(1), I32Add, LocalGet(2), I32Const(WasmLayout.STRING_DATA_OFFSET), I32Add, I32Store(0), Return
+			LocalGet(0), I32Const(WasmLayout.STRING_DATA_OFFSET), I32Add, LocalGet(1), I32Add,
+			LocalGet(2), I32Const(WasmLayout.STRING_DATA_OFFSET), I32Add, I32Store(0), Return
 		]));
 	}
 
 	static function addStructGetUtf8(module:WasmModule, name:String, allocator:Int):Int {
 		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32, I32], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}], [
-			LocalGet(0), LocalGet(1), I32Add, I32Load(0), LocalSet(3),
+			LocalGet(0), I32Const(WasmLayout.STRING_DATA_OFFSET), I32Add, LocalGet(1), I32Add, I32Load(0), LocalSet(3),
 			LocalGet(3), I32Eqz, If(null),
 			I32Const(0), LocalSet(2),
 			Else,
@@ -628,8 +640,8 @@ class WasmBackend implements Backend {
 
 	static function addStructCopyPointer(module:WasmModule, name:String, allocator:Int):Int {
 		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32, I32, I32], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}], [
-			LocalGet(0), LocalGet(1), I32Add, I32Load(0), LocalSet(4),
-			LocalGet(0), LocalGet(2), I32Add, I32Load(0), LocalSet(5),
+			LocalGet(0), I32Const(WasmLayout.STRING_DATA_OFFSET), I32Add, LocalGet(1), I32Add, I32Load(0), LocalSet(4),
+			LocalGet(0), I32Const(WasmLayout.STRING_DATA_OFFSET), I32Add, LocalGet(2), I32Add, I32Load(0), LocalSet(5),
 			LocalGet(5), I32Const(WasmLayout.STRING_DATA_OFFSET), I32Add, Call(allocator), LocalSet(6),
 			LocalGet(6), I32Const(typeId(Bytes)), I32Store(0),
 			LocalGet(6), LocalGet(5), I32Store(WasmLayout.STRING_LENGTH_OFFSET),
@@ -2722,10 +2734,13 @@ class WasmBackend implements Backend {
 		return false;
 	}
 
-	static function reachableFunctions(program:IrProgram, entry:String):Map<String, Bool> {
+	static function reachableFunctions(program:IrProgram, entry:String, ?additionalRoots:Array<String>):Map<String, Bool> {
 		var byName:Map<String, IrFunction> = [],
 			reachable:Map<String, Bool> = [],
 			pending:Array<String> = [entry];
+		if (additionalRoots != null)
+			for (root in additionalRoots)
+				pending.push(root);
 		for (fn in program.functions)
 			byName.set(fn.name, fn);
 		while (pending.length > 0) {
@@ -3749,13 +3764,23 @@ class WasmFunctionLower {
 					body.push(LocalSet(values.get(output.id)));
 			case CNativeCall(output, name, arguments):
 				for (argument in arguments)
-					body.push(LocalGet(values.get(argument.id)));
+					nativeArgument(body, argument, values);
 				var importIndex = functions.get(name);
 				if (importIndex == null)
 					throw 'Wasm C native call "$name" has no declared import contract';
 				body.push(Call(importIndex));
 				if (output.type != Void)
 					body.push(LocalSet(values.get(output.id)));
+		}
+	}
+
+	static function nativeArgument(body:Array<WasmInstruction>, argument:IrValue, values:Map<Int, Int>):Void {
+		body.push(LocalGet(values.get(argument.id)));
+		switch argument.type {
+			case Bytes, Abstract("realtime_bytes"):
+				body.push(I32Const(WasmLayout.STRING_DATA_OFFSET));
+				body.push(I32Add);
+			case _:
 		}
 	}
 

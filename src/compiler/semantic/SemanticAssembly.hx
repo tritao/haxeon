@@ -66,9 +66,16 @@ class SemanticAssembly {
 					enumConstructorCounts.set(enumCase.name, count + 1);
 				}
 			}
-			for (declaration in program.enumAbstracts)
+			for (declaration in program.enumAbstracts) {
+				var canonicalName = ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name);
 				sourceTypeAliases.set(ModuleCanonicalizer.sourceDeclarationPath(moduleName, declaration.name),
-					ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name));
+					canonicalName);
+				enumCasesByType.set(canonicalName, [for (enumCase in declaration.values) enumCase.name]);
+				for (enumCase in declaration.values) {
+					var count = enumConstructorCounts.exists(enumCase.name) ? enumConstructorCounts.get(enumCase.name) : 0;
+					enumConstructorCounts.set(enumCase.name, count + 1);
+				}
+			}
 			for (declaration in program.abstracts)
 				sourceTypeAliases.set(ModuleCanonicalizer.sourceDeclarationPath(moduleName, declaration.name),
 					ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name));

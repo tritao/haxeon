@@ -4,8 +4,8 @@ package compiler.tools;
 class CompilerArguments {
 	public static function parse(arguments:Array<String>):CompilerRequest {
 		var target = "hl", output = "out/main.hl", xmlOutput:Null<String> = null, irOutput:Null<String> = null, entry = "compiler.tools.HaxeonCompiler",
-			dumpFunction = -1, ffiHeader:Null<String> = null, ffiLibrary:Null<String> = null, ffiInterfaces:Array<String> = [], ffiProjections:Array<String> = [], roots:Array<String> = [],
-			paths:Array<String> = [];
+			dumpFunction = -1, importMemory = false, memoryBase = 0, exports:Array<String> = [], ffiHeader:Null<String> = null, ffiLibrary:Null<String> = null, ffiInterfaces:Array<String> = [], ffiProjections:Array<String> = [], roots:Array<String> = [],
+			defines:Array<String> = [], paths:Array<String> = [];
 		var index = 0;
 		while (index < arguments.length) {
 			var argument = arguments[index++];
@@ -35,8 +35,16 @@ class CompilerArguments {
 				ffiInterfaces.push(value(argument, "--ffi-interface="));
 			else if (StringTools.startsWith(argument, "--ffi-projection="))
 				ffiProjections.push(value(argument, "--ffi-projection="));
+			else if (StringTools.startsWith(argument, "--define="))
+				defines.push(parseDefine(value(argument, "--define=")));
 			else if (StringTools.startsWith(argument, "--dump-function="))
 				dumpFunction = parseIndex(value(argument, "--dump-function="));
+			else if (argument == "--wasm-import-memory")
+				importMemory = true;
+			else if (StringTools.startsWith(argument, "--wasm-memory-base="))
+				memoryBase = parseIndex(value(argument, "--wasm-memory-base="));
+			else if (StringTools.startsWith(argument, "--export="))
+				exports.push(value(argument, "--export="));
 			else if (StringTools.startsWith(argument, "--"))
 				throw 'Unknown compiler option "$argument"';
 			else
@@ -50,13 +58,19 @@ class CompilerArguments {
 			throw "Haxeon compiler requires an explicit source manifest";
 		if (target != "hl" && target != "wasm32" && target != "wasm64" && target != "wasmgc" && target != "wasm-gc")
 			throw 'Unsupported compiler target "$target"';
+		if ((importMemory || memoryBase != 0 || exports.length != 0) && target != "wasm32")
+			throw "Wasm-specific options require --target=wasm32";
 		return {
 			target: target,
+			defines: defines,
 			output: output,
 			xmlOutput: xmlOutput,
 			irOutput: irOutput,
 			entry: entry,
 			dumpFunction: dumpFunction,
+			importMemory: importMemory,
+			memoryBase: memoryBase,
+			exports: exports,
 			ffiHeader: ffiHeader,
 			ffiLibrary: ffiLibrary,
 			ffiInterfaces: ffiInterfaces,
@@ -82,5 +96,18 @@ class CompilerArguments {
 			result = result * 10 + digit;
 		}
 		return result;
+	}
+
+	static function parseDefine(value:String):String {
+		var separator = value.indexOf("=");
+		var name = separator < 0 ? value : value.substr(0, separator);
+		if (name.length == 0)
+			throw 'Compiler option "--define=" requires a non-empty name';
+		for (index in 0...name.length) {
+			var code = name.charCodeAt(index);
+			if (code == 32 || code == 9 || code == 10 || code == 13)
+				throw 'Invalid conditional define name "$name"';
+		}
+		return value;
 	}
 }

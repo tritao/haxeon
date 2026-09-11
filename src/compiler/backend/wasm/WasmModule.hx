@@ -57,9 +57,11 @@ class WasmModule {
 	public final exports:Array<WasmExport> = [];
 	public final data:Array<WasmDataSegment> = [];
 	public final customSections:Array<WasmCustomSection> = [];
+	public var start:Null<Int>;
 	public var tableMin:Null<Int>;
 	public final tableElements:Array<Int> = [];
 	public var memoryMin:Null<Int>;
+	public var importMemory:Bool;
 	public var exceptionTagType:Null<Int>;
 	public var exportMemory:Bool;
 	public var exportTable:Bool;
@@ -68,10 +70,12 @@ class WasmModule {
 	public function new(?customName:String) {
 		this.customName = customName;
 		memoryMin = null;
+		importMemory = false;
 		exceptionTagType = null;
 		exportMemory = false;
 		exportTable = false;
 		tableMin = null;
+		start = null;
 	}
 
 	public function typeIndex(type:WasmFunctionType):Int {
