@@ -20,6 +20,7 @@ class SsaBuilder {
 	var immediate:Map<Int, Int> = [];
 	var children:Map<Int, Array<Int>> = [];
 	var frontiers:Map<Int, Map<Int, Bool>> = [];
+	var frontierKeys:Map<Int, Array<Int>> = [];
 	var liveIn:Map<Int, Map<String, Bool>> = [];
 	var phis:Map<Int, Map<String, SsaPhi>> = [];
 	var phiNames:Map<Int, Array<String>> = [];
@@ -205,6 +206,9 @@ class SsaBuilder {
 				}
 			}
 		}
+		for (block in cfg.blocks)
+			if (reachable.exists(block.id))
+				frontierKeys.set(block.id, sortedIntKeys(frontiers.get(block.id)));
 	}
 
 	function computeLiveness():Void {
@@ -287,7 +291,7 @@ class SsaBuilder {
 			var cursor = 0;
 			while (cursor < work.length) {
 				var block = work[cursor++];
-				for (join in sortedIntKeys(frontiers.get(block)))
+				for (join in frontierKeys.get(block))
 					if (!placed.exists(join) && liveIn.get(join).exists(name)) {
 						placed.set(join, true);
 						var map:Map<String, SsaPhi>;
