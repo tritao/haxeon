@@ -111,8 +111,9 @@ be decoded independently before any Wasm or HashLink lowering.
 
 ## Deliberate boundaries
 
-`Wasm64` and Wasm GC are represented as target configurations below canonical
-IR, but are not enabled by this bring-up yet. C-native signatures that require
+`Wasm64` and Wasm GC are accepted as explicit target requests so capability
+errors occur at the Wasm backend boundary, but are not enabled by this
+bring-up yet. C-native signatures that require
 multi-value aggregates or unsupported scalar representations still fail
 explicitly during Wasm lowering; those need a versioned ABI extension rather
 than an implicit representation guess.
