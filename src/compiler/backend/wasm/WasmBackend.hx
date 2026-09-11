@@ -59,19 +59,31 @@ class WasmBackend implements Backend {
 		module.exportMemory = true;
 		var rootBase = align(Std.int(Math.max(1024, nextData)), 8),
 			rootReserve = WasmLayout.ROOT_RESERVE,
-			heapStart = rootBase + rootReserve;
+			metadataBase = rootBase + rootReserve,
+			heapStart = metadataBase + WasmLayout.GC_METADATA_RESERVE;
 		module.memoryMin = memoryPages(heapStart);
 		module.globals.push({type: I32, mutable: true, init: [I32Const(heapStart)]});
 		var rootTop = module.globals.length;
 		module.globals.push({type: I32, mutable: true, init: [I32Const(rootBase)]});
+		var rootFrameTop = module.globals.length;
+		module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
+		var metadataTop = module.globals.length;
+		module.globals.push({type: I32, mutable: true, init: [I32Const(metadataBase)]});
+		var freeHead = module.globals.length;
+		module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
 		var globals:Map<String, Int> = [];
+		var rootGlobals:Array<Int> = [];
 		for (field in program.staticFields) {
 			globals.set(field.name, module.globals.length);
 			module.globals.push({type: requireValueType(field.type), mutable: true, init: zeroValue(field.type)});
+			if (WasmTarget.isReference(field.type))
+				rootGlobals.push(globals.get(field.name));
 		}
 		var functions:Map<String, Int> = [];
 		addCNativeImports(module, functions, program);
-		var allocator = addAllocator(module);
+		var mark = addGcMark(module, metadataBase, metadataTop);
+		var collector = addGcCollector(module, rootFrameTop, metadataBase, metadataTop, freeHead, mark, rootGlobals);
+		var allocator = addAllocator(module, collector, metadataBase, metadataTop, freeHead);
 		var preferredEntry = hasFunction(program, "main") ? "main" : hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint;
 		var reachable = reachableFunctions(program, preferredEntry);
 		if (preferredEntry != program.entryPoint && hasFunction(program, "__init"))
@@ -83,6 +95,7 @@ class WasmBackend implements Backend {
 			if (stride != null)
 				functions.set(native.name, addArrayAllocator(module, native.name, stride, allocator));
 		}
+		wrapRuntimeFunctions(module, rootTop, rootFrameTop);
 		var methods:Map<String, String> = [];
 		for (object in program.objects)
 			for (method in object.methods)
@@ -110,8 +123,8 @@ class WasmBackend implements Backend {
 			var fn = emitted[index];
 			var functionIndex = functions.get(fn.name);
 			module.setFunction(functionIndex,
-				WasmFunctionLower.lower(fn, functions, module.functionType(functionIndex), layout, allocator, rootTop, globals, strings, methods,
-					closureTypes, tableSlots, exceptionTag));
+				WasmFunctionLower.lower(fn, functions, module.functionType(functionIndex), layout, allocator, rootTop, rootFrameTop, globals, strings,
+					methods, closureTypes, tableSlots, exceptionTag));
 		}
 		var entry = functions.get(preferredEntry);
 		if (entry == null)
@@ -143,6 +156,92 @@ class WasmBackend implements Backend {
 
 	static function memoryPages(bytes:Int):Int
 		return Std.int(Math.ceil(bytes / 65536.0));
+
+	static function wrapRuntimeFunctions(module:WasmModule, rootTop:Int, rootFrameTop:Int):Void {
+		var count = module.functions.length;
+		for (index in 0...count) {
+			var fn = module.functions[index];
+			if (fn.name == "__haxeon_gc_mark" || fn.name == "__haxeon_gc_collect")
+				continue;
+			module.setFunction(module.imports.length + index, wrapRuntimeFunction(fn, rootTop, rootFrameTop));
+		}
+	}
+
+	static function wrapRuntimeFunction(fn:WasmFunction, rootTop:Int, rootFrameTop:Int):WasmFunction {
+		var rootSlots:Array<Int> = [];
+		for (index in 0...fn.type.parameters.length)
+			if (fn.type.parameters[index] == I32)
+				rootSlots.push(index);
+		for (index in 0...fn.locals.length)
+			if (fn.locals[index].type == I32)
+				rootSlots.push(fn.type.parameters.length + index);
+		if (rootSlots.length == 0)
+			return fn;
+		var frame = fn.type.parameters.length + fn.locals.length,
+			locals = fn.locals.copy();
+		locals.push({type: I32});
+		var frameSize = align(12 + rootSlots.length * 4, 8),
+			body:Array<WasmInstruction> = [
+				GlobalGet(rootTop),
+				LocalTee(frame),
+				GlobalGet(rootTop),
+				I32Store(WasmLayout.ROOT_PREVIOUS_TOP_OFFSET),
+				LocalGet(frame),
+				GlobalGet(rootFrameTop),
+				I32Store(WasmLayout.ROOT_PREVIOUS_FRAME_OFFSET),
+				LocalGet(frame),
+				I32Const(rootSlots.length),
+				I32Store(WasmLayout.ROOT_COUNT_OFFSET),
+				LocalGet(frame),
+				I32Const(frameSize),
+				I32Add,
+				GlobalSet(rootTop),
+				LocalGet(frame),
+				GlobalSet(rootFrameTop)
+			];
+		for (instruction in fn.body) {
+			if (isRuntimeCall(instruction))
+				appendRuntimeRootSnapshot(body, frame, rootSlots);
+			if (instruction == Return) {
+				body.push(LocalGet(frame));
+				body.push(I32Load(WasmLayout.ROOT_PREVIOUS_TOP_OFFSET));
+				body.push(GlobalSet(rootTop));
+				body.push(LocalGet(frame));
+				body.push(I32Load(WasmLayout.ROOT_PREVIOUS_FRAME_OFFSET));
+				body.push(GlobalSet(rootFrameTop));
+			}
+			body.push(instruction);
+			if (isRuntimeLocalWrite(instruction))
+				appendRuntimeRootSnapshot(body, frame, rootSlots);
+		}
+		return new WasmFunction(fn.name, fn.type, locals, body);
+	}
+
+	static function isRuntimeCall(instruction:WasmInstruction):Bool
+		return switch instruction {
+			case Call(_): true;
+			default: false;
+		};
+
+	static function isRuntimeLocalWrite(instruction:WasmInstruction):Bool
+		return switch instruction {
+			case LocalSet(_), LocalTee(_): true;
+			default: false;
+		};
+
+	static function appendRuntimeRootSnapshot(body:Array<WasmInstruction>, frame:Int, slots:Array<Int>):Void {
+		for (index in 0...slots.length) {
+			body.push(LocalGet(frame));
+			body.push(I32Const(WasmLayout.ROOT_VALUES_OFFSET + index * 4));
+			body.push(I32Add);
+			body.push(LocalGet(slots[index]));
+			body.push(I32Store(0));
+		}
+	}
+
+	static function appendRuntime(body:Array<WasmInstruction>, instructions:Array<WasmInstruction>):Void
+		for (instruction in instructions)
+			body.push(instruction);
 
 	static function addRuntimeFunctions(module:WasmModule, functions:Map<String, Int>, program:IrProgram, allocator:Int):Void {
 		for (native in program.natives) {
@@ -740,7 +839,7 @@ class WasmBackend implements Backend {
 	}
 
 	static function buildTableSlots(module:WasmModule, functions:Map<String, Int>):Map<String, Int> {
-		var names = [for (fn in module.functions) fn.name];
+		var names = [for (fn in module.functions) if (functions.exists(fn.name)) fn.name];
 		names.sort(Reflect.compare);
 		var slots:Map<String, Int> = [];
 		for (index in 0...names.length) {
@@ -1976,14 +2075,254 @@ class WasmBackend implements Backend {
 	static function align(value:Int, boundary:Int):Int
 		return (value + boundary - 1) & ~(boundary - 1);
 
-	static function addAllocator(module:WasmModule):Int {
+	static function addGcMark(module:WasmModule, metadataBase:Int, metadataTop:Int):Int {
+		var type:WasmFunctionType = {parameters: [I32], results: []},
+			index = module.addFunction(new WasmFunction("__haxeon_gc_mark", type));
+		var body:Array<WasmInstruction> = [
+			LocalGet(0),
+			I32Eqz,
+			If(null),
+			Else,
+			I32Const(metadataBase),
+			LocalSet(1),
+			Block(null),
+			Loop(null),
+			LocalGet(1),
+			GlobalGet(metadataTop),
+			I32LtS,
+			If(null),
+			LocalGet(1),
+			I32Load(0),
+			LocalGet(0),
+			I32Eq,
+			If(null),
+			LocalGet(1),
+			I32Const(8),
+			I32Add,
+			I32Load(0),
+			I32Eqz,
+			If(null),
+			LocalGet(1),
+			I32Const(8),
+			I32Add,
+			I32Const(1),
+			I32Store(0),
+			LocalGet(1),
+			I32Load(4),
+			LocalSet(2),
+			I32Const(0),
+			LocalSet(3),
+			Block(null),
+			Loop(null),
+			LocalGet(3),
+			LocalGet(2),
+			I32LtS,
+			If(null),
+			LocalGet(0),
+			LocalGet(3),
+			I32Add,
+			I32Load(0),
+			Call(index),
+			LocalGet(3),
+			I32Const(4),
+			I32Add,
+			LocalSet(3),
+			Br(1),
+			Else,
+			Br(2),
+			End,
+			End,
+			End,
+			Return,
+			End,
+			Else,
+			LocalGet(1),
+			I32Const(WasmLayout.GC_RECORD_SIZE),
+			I32Add,
+			LocalSet(1),
+			Br(2),
+			End,
+			End,
+			End,
+			End,
+			End,
+			Return
+		];
+		module.setFunction(index, new WasmFunction("__haxeon_gc_mark", type, [{type: I32}, {type: I32}, {type: I32}], body));
+		return index;
+	}
+
+	static function addGcCollector(module:WasmModule, rootFrameTop:Int, metadataBase:Int, metadataTop:Int, freeHead:Int, mark:Int, rootGlobals:Array<Int>):Int {
+		var type:WasmFunctionType = {parameters: [], results: []},
+			body:Array<WasmInstruction> = [
+				GlobalGet(rootFrameTop),
+				LocalSet(0),
+				Block(null),
+				Loop(null),
+				LocalGet(0),
+				I32Eqz,
+				If(null),
+				Br(2),
+				Else,
+				LocalGet(0),
+				I32Load(WasmLayout.ROOT_COUNT_OFFSET),
+				LocalSet(1),
+				I32Const(0),
+				LocalSet(2),
+				Block(null),
+				Loop(null),
+				LocalGet(2),
+				LocalGet(1),
+				I32LtS,
+				If(null),
+				LocalGet(0),
+				I32Const(WasmLayout.ROOT_VALUES_OFFSET),
+				I32Add,
+				LocalGet(2),
+				I32Const(4),
+				I32Mul,
+				I32Add,
+				I32Load(0),
+				Call(mark),
+				LocalGet(2),
+				I32Const(1),
+				I32Add,
+				LocalSet(2),
+				Br(1),
+				Else,
+				Br(2),
+				End,
+				End,
+				End,
+				LocalGet(0),
+				I32Load(WasmLayout.ROOT_PREVIOUS_FRAME_OFFSET),
+				LocalSet(0),
+				Br(1),
+				End,
+				End,
+				End,
+			];
+		for (global in rootGlobals) {
+			body.push(GlobalGet(global));
+			body.push(Call(mark));
+		}
+		body = body.concat([
+			I32Const(metadataBase),
+			LocalSet(3),
+			I32Const(metadataBase),
+			LocalSet(4),
+			Block(null),
+			Loop(null),
+			LocalGet(3),
+			GlobalGet(metadataTop),
+			I32LtS,
+			If(null),
+			LocalGet(3),
+			I32Const(8),
+			I32Add,
+			I32Load(0),
+			LocalSet(5),
+			LocalGet(3),
+			I32Load(0),
+			LocalSet(6),
+			LocalGet(3),
+			I32Load(4),
+			LocalSet(7),
+			LocalGet(5),
+			If(null),
+			LocalGet(4),
+			LocalGet(6),
+			I32Store(0),
+			LocalGet(4),
+			LocalGet(7),
+			I32Store(4),
+			LocalGet(4),
+			I32Const(8),
+			I32Add,
+			I32Const(0),
+			I32Store(0),
+			LocalGet(4),
+			I32Const(WasmLayout.GC_RECORD_SIZE),
+			I32Add,
+			LocalSet(4),
+			Else,
+			LocalGet(6),
+			GlobalGet(freeHead),
+			I32Store(0),
+			LocalGet(6),
+			LocalGet(7),
+			I32Store(4),
+			LocalGet(6),
+			GlobalSet(freeHead),
+			End,
+			LocalGet(3),
+			I32Const(WasmLayout.GC_RECORD_SIZE),
+			I32Add,
+			LocalSet(3),
+			Br(1),
+			Else,
+			Br(2),
+			End,
+			End,
+			End,
+			LocalGet(4),
+			GlobalSet(metadataTop),
+			Return
+		]);
+		return module.addFunction(new WasmFunction("__haxeon_gc_collect", type, [for (_ in 0...8) {type: I32}], body));
+	}
+
+	static function addAllocator(module:WasmModule, collector:Int, metadataBase:Int, metadataTop:Int, freeHead:Int):Int {
 		var type:WasmFunctionType = {parameters: [I32], results: [I32]};
-		return module.addFunction(new WasmFunction("__haxeon_alloc", type, [{type: I32}, {type: I32}, {type: I32}], [
+		var index = module.addFunction(new WasmFunction("__haxeon_alloc", type));
+		var body:Array<WasmInstruction> = [
+			LocalGet(0),
+			I32Const(7),
+			I32Add,
+			I32Const(-8),
+			I32And,
+			LocalSet(0),
+			Call(collector),
+			I32Const(0),
+			LocalSet(1),
+			GlobalGet(freeHead),
+			LocalSet(3),
+			Block(null),
+			Loop(null),
+			LocalGet(3),
+			I32Eqz,
+			If(null),
+			Br(2),
+			Else,
+			LocalGet(0),
+			LocalGet(3),
+			I32Load(4),
+			I32LeS,
+			If(null),
+			LocalGet(3),
+			LocalSet(1),
+			LocalGet(3),
+			I32Load(0),
+			GlobalSet(freeHead),
+			Br(3),
+			Else,
+			LocalGet(3),
+			I32Load(0),
+			LocalSet(3),
+			End,
+			End,
+			Br(1),
+			End,
+			End,
+			LocalGet(1),
+			I32Eqz,
+			If(null),
 			GlobalGet(0),
-			LocalTee(1),
+			LocalSet(1),
+			LocalGet(1),
 			LocalGet(0),
 			I32Add,
-			LocalTee(2),
+			LocalSet(2),
 			MemorySize,
 			I32Const(65536),
 			I32Mul,
@@ -2003,12 +2342,36 @@ class WasmBackend implements Backend {
 			If(null),
 			Unreachable,
 			End,
+			Else,
 			End,
 			LocalGet(2),
 			GlobalSet(0),
+			Else,
+			End,
+			LocalGet(1),
+			GlobalGet(metadataTop),
+			LocalSet(5),
+			LocalGet(5),
+			LocalGet(1),
+			I32Store(0),
+			LocalGet(5),
+			LocalGet(0),
+			I32Store(4),
+			LocalGet(5),
+			I32Const(8),
+			I32Add,
+			I32Const(0),
+			I32Store(0),
+			LocalGet(5),
+			I32Const(WasmLayout.GC_RECORD_SIZE),
+			I32Add,
+			GlobalSet(metadataTop),
 			LocalGet(1),
 			Return
-		]));
+		];
+		module.setFunction(index,
+			new WasmFunction("__haxeon_alloc", type, [{type: I32}, {type: I32}, {type: I32}, {type: I32}, {type: I32}, {type: I32}], body));
+		return index;
 	}
 
 	static function addArrayAllocator(module:WasmModule, name:String, stride:Int, allocator:Int):Int {
@@ -2278,12 +2641,13 @@ class WasmFunctionLower {
 	static var activeGcRootState:Null<{
 		frame:Int,
 		top:Int,
+		frameTop:Int,
 		slots:Array<Int>,
 		size:Int
 	}>;
 
 	public static function lower(fn:IrFunction, functions:Map<String, Int>, type:WasmFunctionType, layout:WasmLayout, allocator:Int, rootTop:Int,
-			globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>, closureTypes:Map<String, WasmClosureTypes>,
+			rootFrameTop:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>, closureTypes:Map<String, WasmClosureTypes>,
 			tableSlots:Map<String, Int>, exceptionTag:Null<Int>):WasmFunction {
 		activeTableSlots = tableSlots;
 		var analysis = new WasmCfgAnalysis(fn),
@@ -2310,8 +2674,9 @@ class WasmFunctionLower {
 		activeGcRootState = rootFrame == null ? null : {
 			frame: rootFrame,
 			top: rootTop,
+			frameTop: rootFrameTop,
 			slots: rootLocals,
-			size: align(8 + rootLocals.length * 4, 8)
+			size: align(12 + rootLocals.length * 4, 8)
 		};
 		activeExceptionState = null;
 		if (exceptionTag != null && hasExceptions(fn)) {
@@ -2473,13 +2838,16 @@ class WasmFunctionLower {
 			layout:WasmLayout, allocator:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
 			closureTypes:Map<String, WasmClosureTypes>):Void {
 		snapshotRoots(body);
-		for (located in block.instructions)
+		for (located in block.instructions) {
+			snapshotRoots(body);
 			switch located.value {
 				case Phi(output, inputs):
 					WasmPhiLower.emit(body, output, inputs, values, predecessor);
 				default:
 					lowerInstruction(body, located.value, values, functions, layout, allocator, globals, strings, methods, closureTypes);
 			}
+			snapshotRoots(body);
+		}
 		snapshotRoots(body);
 	}
 
@@ -2565,13 +2933,16 @@ class WasmFunctionLower {
 			blockIndex:Map<Int, Int>, layout:WasmLayout, allocator:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
 			closureTypes:Map<String, WasmClosureTypes>):Void {
 		snapshotRoots(body);
-		for (located in block.instructions)
+		for (located in block.instructions) {
+			snapshotRoots(body);
 			switch located.value {
 				case Phi(output, inputs):
 					WasmPhiLower.emit(body, output, inputs, values, predecessor);
 				default:
 					lowerInstruction(body, located.value, values, functions, layout, allocator, globals, strings, methods, closureTypes);
 			}
+			snapshotRoots(body);
+		}
 		snapshotRoots(body);
 		if (block.terminator == null)
 			throw 'Missing terminator in Wasm block ${block.id}';
@@ -3158,6 +3529,7 @@ class WasmFunctionLower {
 	static function rootPrologue(state:{
 		frame:Int,
 		top:Int,
+		frameTop:Int,
 		slots:Array<Int>,
 		size:Int
 	}):Array<WasmInstruction> {
@@ -3165,14 +3537,19 @@ class WasmFunctionLower {
 			GlobalGet(state.top),
 			LocalTee(state.frame),
 			GlobalGet(state.top),
-			I32Store(WasmLayout.ROOT_PREVIOUS_OFFSET),
+			I32Store(WasmLayout.ROOT_PREVIOUS_TOP_OFFSET),
+			LocalGet(state.frame),
+			GlobalGet(state.frameTop),
+			I32Store(WasmLayout.ROOT_PREVIOUS_FRAME_OFFSET),
 			LocalGet(state.frame),
 			I32Const(state.slots.length),
 			I32Store(WasmLayout.ROOT_COUNT_OFFSET),
 			LocalGet(state.frame),
 			I32Const(state.size),
 			I32Add,
-			GlobalSet(state.top)
+			GlobalSet(state.top),
+			LocalGet(state.frame),
+			GlobalSet(state.frameTop)
 		];
 		return result;
 	}
@@ -3193,8 +3570,11 @@ class WasmFunctionLower {
 	static function restoreRoots(body:Array<WasmInstruction>):Void {
 		if (activeGcRootState != null) {
 			body.push(LocalGet(activeGcRootState.frame));
-			body.push(I32Load(WasmLayout.ROOT_PREVIOUS_OFFSET));
+			body.push(I32Load(WasmLayout.ROOT_PREVIOUS_TOP_OFFSET));
 			body.push(GlobalSet(activeGcRootState.top));
+			body.push(LocalGet(activeGcRootState.frame));
+			body.push(I32Load(WasmLayout.ROOT_PREVIOUS_FRAME_OFFSET));
+			body.push(GlobalSet(activeGcRootState.frameTop));
 		}
 	}
 
