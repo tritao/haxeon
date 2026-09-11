@@ -46,7 +46,7 @@ class CompilerArguments {
 			roots.push("src");
 		if (paths.length == 0)
 			throw "Haxeon compiler requires an explicit source manifest";
-		if (target != "hl" && target != "wasm32")
+		if (target != "hl" && target != "wasm32" && target != "wasm64" && target != "wasmgc" && target != "wasm-gc")
 			throw 'Unsupported compiler target "$target"';
 		return {
 			target: target,

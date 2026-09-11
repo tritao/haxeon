@@ -31,10 +31,17 @@ class CompilerDriver {
 		var result = compiler.compile(request.entry, null, false);
 		if (request.dumpFunction >= 0)
 			dumpFunction(result, request.dumpFunction, report);
-		var backend:Backend = request.target == "wasm32" ? new WasmBackend() : new HlBackend(),
-			backendResult = backend.compile(result.ir, {target: request.target == "wasm32" ? Wasm32 : HashLink, debugNames: true});
+		var isWasm = StringTools.startsWith(request.target, "wasm"),
+			wasmTarget = switch request.target {
+				case "wasm32": Wasm32;
+				case "wasm64": Wasm64;
+				case "wasmgc", "wasm-gc": WasmGc;
+				default: HashLink;
+			},
+			backend:Backend = isWasm ? new WasmBackend() : new HlBackend(),
+			backendResult = backend.compile(result.ir, {target: wasmTarget, debugNames: true});
 		File.saveBytes(request.output, backendResult.bytes);
-		if (request.target == "wasm32")
+		if (isWasm)
 			File.saveContent(request.output + ".functions", wasmFunctionMap(result.ir));
 		if (request.target != "wasm32")
 			File.saveBytes(request.output + ".functions", Bytes.ofString(functionMap(result.functionIndices)));
