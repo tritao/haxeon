@@ -62,6 +62,7 @@ class WasmModule {
 	public var memoryMin:Null<Int>;
 	public var exceptionTagType:Null<Int>;
 	public var exportMemory:Bool;
+	public var exportTable:Bool;
 	public var customName:Null<String>;
 
 	public function new(?customName:String) {
@@ -69,6 +70,7 @@ class WasmModule {
 		memoryMin = null;
 		exceptionTagType = null;
 		exportMemory = false;
+		exportTable = false;
 		tableMin = null;
 	}
 

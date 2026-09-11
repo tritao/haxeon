@@ -15,6 +15,19 @@ typedef WasmFunctionIdentity = {
 	final signature:String;
 }
 
+typedef WasmPatchArtifact = {
+	final bytes:Bytes;
+	final manifest:Bytes;
+	final decision:PatchDecision;
+	final changed:Array<String>;
+}
+
+typedef WasmTableIdentity = {
+	final name:String;
+	final slot:Int;
+	final stableId:Int;
+}
+
 /** Stable semantic manifest used to validate replacement Wasm table entries. */
 class WasmPatch {
 	public static inline final VERSION:Int = 1;
@@ -44,6 +57,23 @@ class WasmPatch {
 			IrTypeCodec.writeString(output, entry.name);
 			output.writeInt32(entry.stableId);
 			IrTypeCodec.writeString(output, entry.signature);
+		}
+		return output.getBytes();
+	}
+
+	/** Maps the stable function names used by host-side table publication to slots. */
+	public static function tableManifest(slots:Map<String, Int>):Bytes {
+		var names = [for (name in slots.keys()) name];
+		names.sort(Reflect.compare);
+		var output = new BytesOutput();
+		output.bigEndian = false;
+		output.writeString("HWT");
+		output.writeByte(VERSION);
+		output.writeInt32(names.length);
+		for (name in names) {
+			IrTypeCodec.writeString(output, name);
+			output.writeInt32(stableId(name));
+			output.writeInt32(slots.get(name));
 		}
 		return output.getBytes();
 	}

@@ -39,8 +39,10 @@ class WasmEncoder {
 		var exports = module.exports.copy();
 		if (module.exportMemory)
 			exports.push({name: "memory", functionIndex: -1});
+		if (module.exportTable)
+			exports.push({name: "table", functionIndex: -2});
 		if (exports.length > 0)
-			writeSection(output, 7, encodeExports(exports, module.exportMemory));
+			writeSection(output, 7, encodeExports(exports, module.exportMemory, module.exportTable));
 		if (module.tableMin != null && module.tableElements.length > 0)
 			writeSection(output, 9, encodeElements(module.tableElements));
 		writeSection(output, 10, encodeCode(module));
@@ -133,13 +135,16 @@ class WasmEncoder {
 		return body.getBytes();
 	}
 
-	static function encodeExports(exports:Array<WasmExport>, exportMemory:Bool):Bytes {
+	static function encodeExports(exports:Array<WasmExport>, exportMemory:Bool, exportTable:Bool):Bytes {
 		var body = new BytesOutput();
 		writeU32(body, exports.length);
 		for (entry in exports) {
 			writeString(body, entry.name);
-			if (exportMemory && entry.functionIndex < 0) {
+			if (exportMemory && entry.functionIndex == -1) {
 				body.writeByte(0x02);
+				writeU32(body, 0);
+			} else if (exportTable && entry.functionIndex == -2) {
+				body.writeByte(0x01);
 				writeU32(body, 0);
 			} else {
 				body.writeByte(0x00);

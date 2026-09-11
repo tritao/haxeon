@@ -20,6 +20,7 @@ import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmLocal;
 import compiler.backend.wasm.WasmModule.WasmModule;
+import compiler.backend.wasm.WasmPatch.WasmPatchArtifact;
 import compiler.backend.wasm.WasmStructurer.WasmLoopInfo;
 import compiler.backend.wasm.WasmLayout.WasmFieldLayout;
 
@@ -33,6 +34,32 @@ class WasmBackend implements Backend {
 	public function new() {}
 
 	public function compile(program:IrProgram, options:BackendOptions):BackendResult {
+		return compileInternal(program, options, null);
+	}
+
+	/**
+	 * Builds a replacement Wasm patch artifact after the semantic ABI planner has
+	 * confirmed that table publication is safe. The module remains self-contained
+	 * for now so its runtime dependencies are validated by the same encoder as a
+	 * full build; the filtered manifest is what the host publishes atomically.
+	 */
+	public function compilePatch(previous:Null<IrProgram>, program:IrProgram, changed:Array<String>, options:BackendOptions):WasmPatchArtifact {
+		var decision = WasmPatch.plan(previous, program);
+		switch decision {
+			case Patch:
+			default:
+				throw 'Wasm patch rejected by semantic ABI: ${Std.string(decision)}';
+		}
+		var result = compileInternal(program, options, changed);
+		return {
+			bytes: result.bytes,
+			manifest: WasmPatch.manifest(program, changed),
+			decision: decision,
+			changed: changed.copy()
+		};
+	}
+
+	function compileInternal(program:IrProgram, options:BackendOptions, patchChanged:Null<Array<String>>):BackendResult {
 		var target = WasmTarget.forBackend(options.target, options.debugNames);
 		if (target.referenceModel != Linear32)
 			throw 'Wasm backend target ${options.target} is not implemented yet';
@@ -117,8 +144,10 @@ class WasmBackend implements Backend {
 				results: []
 			}) : null;
 		module.exceptionTagType = exceptionTag;
+		module.exportTable = module.tableMin != null;
 		module.customSections.push({name: "haxeon.gc.roots", bytes: WasmGcRoots.encode(program)});
-		module.customSections.push({name: "haxeon.patch", bytes: WasmPatch.manifest(program)});
+		module.customSections.push({name: "haxeon.patch", bytes: WasmPatch.manifest(program, patchChanged)});
+		module.customSections.push({name: "haxeon.patch.slots", bytes: WasmPatch.tableManifest(tableSlots)});
 		for (index in 0...emitted.length) {
 			var fn = emitted[index];
 			var functionIndex = functions.get(fn.name);
