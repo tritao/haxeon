@@ -53,10 +53,15 @@ class HxiAbi {
 	function new(model:HxiInterface, visibleDeclarations:Null<Map<String, HxiDeclaration>>) {
 		this.model = model;
 		target = model.target.toLowerCase();
-		var architecture = target == "portable-abi64" ? "portable64" : target.split("-")[0];
+		var architecture = switch target {
+			case "portable-abi64": "portable64";
+			case "portable-abi32": "portable32";
+			default: target.split("-")[0];
+		};
 		pointerBits = switch architecture {
 			case "i386" | "i486" | "i586" | "i686" | "x86" | "arm" | "armv7" | "wasm32": 32;
 			case "x86_64" | "amd64" | "aarch64" | "arm64" | "riscv64" | "wasm64": 64;
+			case "portable32": 32;
 			case "portable64": 64;
 			default: throw 'Unsupported HXI target architecture "$architecture"';
 		}

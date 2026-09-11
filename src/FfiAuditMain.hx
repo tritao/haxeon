@@ -47,7 +47,7 @@ class FfiAuditMain {
 			else
 				paths.push(argument);
 		if (paths.length != 1 || targets.length < 2 || (format != "text" && format != "json"))
-			throw "Usage: haxeon-ffi-audit --target=<triple> --target=<triple> [--profile=portable-abi64] [--format=text|json] [--output=<file>] [--library=<name>] [--interface=<name>] [--depends=<interface>] [--dependency-hxi=<path>] [--include=<dir>] [--source-label=<path>] [--exclude-header=<path>] <header>";
+			throw "Usage: haxeon-ffi-audit --target=<triple> --target=<triple> [--profile=portable-abi64|portable-abi32] [--format=text|json] [--output=<file>] [--library=<name>] [--interface=<name>] [--depends=<interface>] [--dependency-hxi=<path>] [--include=<dir>] [--source-label=<path>] [--exclude-header=<path>] <header>";
 		var dependencyInterfaces = [for (path in dependencyPaths) HxiParser.parse(path, File.getContent(path))],
 			report = HxiAudit.audit(paths[0], targets, includes, profile, library, interfaceName, dependencies, excludedHeaders, dependencyInterfaces);
 		if (format == "json")
@@ -61,7 +61,8 @@ class FfiAuditMain {
 			Sys.exit(1);
 		if (output != null) {
 			var temporary = output + ".tmp." + Std.int(Sys.time() * 1000000);
-			File.saveContent(temporary, HxiAudit.canonical(paths[0], targets[0], includes, library, interfaceName, sourceLabel, excludedHeaders, dependencies));
+			File.saveContent(temporary, HxiAudit.canonical(paths[0], targets[0], includes, library, interfaceName, sourceLabel, excludedHeaders, dependencies,
+				profile == null ? "portable-abi64" : profile));
 			FileSystem.rename(temporary, output);
 			Sys.println('wrote canonical ABI -> $output');
 		}
