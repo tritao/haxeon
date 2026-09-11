@@ -9,6 +9,9 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build HashLink as a static library for the
 set(WITH_VM OFF CACHE BOOL "The Android host supplies the VM executable sources" FORCE)
 set(HL_BUILD_TESTS OFF CACHE BOOL "Do not build HashLink tests for Android" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "Do not build HashLink tests for Android" FORCE)
+option(HL_JIT_AARCH64_OLD
+    "Use the legacy direct HL-bytecode AArch64 JIT instead of the HL2 IR backend"
+    OFF)
 
 set(HASHLINK_ROOT "${HAXEON_ROOT}/vendor/hashlink")
 file(GLOB HASHLINK_PCRE_SOURCES CONFIGURE_DEPENDS "${HASHLINK_ROOT}/include/pcre/*.c")
@@ -50,11 +53,23 @@ set(HAXEON_VM_SOURCES
 )
 
 if(ANDROID_ABI STREQUAL "arm64-v8a")
-    set(HAXEON_JIT_SOURCES
-        "${HAXEON_ROOT}/vendor/hashlink/src/jit_arm64.c"
-        "${HAXEON_ROOT}/vendor/hashlink/src/jit_arm64_compat.c"
-        "${HAXEON_ROOT}/vendor/hashlink/src/jit_gdb.c"
-    )
+    if(HL_JIT_AARCH64_OLD)
+        set(HAXEON_JIT_SOURCES
+            "${HAXEON_ROOT}/vendor/hashlink/src/jit_arm64.c"
+            "${HAXEON_ROOT}/vendor/hashlink/src/jit_arm64_compat.c"
+            "${HAXEON_ROOT}/vendor/hashlink/src/jit_gdb.c"
+        )
+    else()
+        set(HAXEON_JIT_SOURCES
+            "${HAXEON_ROOT}/vendor/hashlink/src/jit.c"
+            "${HAXEON_ROOT}/vendor/hashlink/src/jit_emit.c"
+            "${HAXEON_ROOT}/vendor/hashlink/src/jit_regs.c"
+            "${HAXEON_ROOT}/vendor/hashlink/src/jit_aarch64.c"
+            "${HAXEON_ROOT}/vendor/hashlink/src/jit_aarch64_emit.c"
+            "${HAXEON_ROOT}/vendor/hashlink/src/jit_dump.c"
+            "${HAXEON_ROOT}/vendor/hashlink/src/jit_gdb.c"
+        )
+    endif()
 else()
     set(HAXEON_JIT_SOURCES
         "${HAXEON_ROOT}/vendor/hashlink/src/jit.c"
