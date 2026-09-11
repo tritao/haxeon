@@ -35,6 +35,10 @@ class WasmLayout {
 	public static inline final DYN_PAYLOAD_OFFSET = 4;
 	public static inline final DYN_I32_SIZE = 8;
 	public static inline final DYN_F64_SIZE = 16;
+	public static inline final MAP_COUNT_OFFSET = 8;
+	public static inline final MAP_CAPACITY_OFFSET = 12;
+	public static inline final MAP_ENTRIES_OFFSET = 16;
+	public static inline final MAP_HEADER_SIZE = 24;
 
 	public final objects:Map<String, WasmObjectLayout> = [];
 	public final enums:Map<String, WasmEnumLayout> = [];

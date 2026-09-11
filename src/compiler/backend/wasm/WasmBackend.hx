@@ -122,103 +122,108 @@ class WasmBackend implements Backend {
 	}
 
 	static function addRuntimeFunctions(module:WasmModule, functions:Map<String, Int>, program:IrProgram, allocator:Int):Void {
-		for (native in program.natives)
-			switch native.name {
-				case "__string_length":
-					functions.set(native.name,
-						module.addFunction(new WasmFunction(native.name, {parameters: [I32], results: [I32]}, [],
-							[LocalGet(0), I32Load(WasmLayout.STRING_LENGTH_OFFSET), Return])));
-				case "__string_char_code_at":
-					functions.set(native.name, addStringCharCodeAt(module, native.name));
-				case "__string_concat":
-					functions.set(native.name, addStringConcat(module, native.name, allocator));
-				case "__string_equal":
-					functions.set(native.name, addStringEqual(module, native.name));
-				case "__std_int_f64":
-					functions.set(native.name,
-						module.addFunction(new WasmFunction(native.name, {parameters: [F64], results: [I32]}, [], [LocalGet(0), I32TruncF64S, Return])));
-				case "__std_string":
-					functions.set(native.name,
-						module.addFunction(new WasmFunction(native.name, {parameters: [I32], results: [I32]}, [], [LocalGet(0), Return])));
-				case "__dynamic_equal":
-					// Emitted after the native scan so the string helper has an index.
-				case "__std_is_of_type", "__exception_matches":
-					functions.set(native.name, addTypeTest(module, native.name, program));
-				case "__array_copy_i32", "__array_copy_bool", "__array_copy_ref", "__array_copy_bytes":
-					functions.set(native.name, addArrayCopy(module, native.name, 4, allocator));
-				case "__array_copy_f64":
-					functions.set(native.name, addArrayCopy(module, native.name, 8, allocator));
-				case "__array_index_of_i32", "__array_index_of_bool", "__array_index_of_ref":
-					functions.set(native.name, addArrayIndexOf(module, native.name, 4, I32, null));
-				case "__array_index_of_bytes":
-					var stringEqual = functions.get("__string_equal");
-					if (stringEqual == null) {
-						stringEqual = addStringEqual(module, "__string_equal");
-						functions.set("__string_equal", stringEqual);
-					}
-					functions.set(native.name, addArrayIndexOf(module, native.name, 4, I32, stringEqual));
-				case "__array_index_of_f64":
-					functions.set(native.name, addArrayIndexOf(module, native.name, 8, F64, null));
-				case "__array_slice_i32", "__array_slice_bool", "__array_slice_ref", "__array_slice_bytes":
-					functions.set(native.name, addArraySlice(module, native.name, 4, allocator));
-				case "__array_slice_f64":
-					functions.set(native.name, addArraySlice(module, native.name, 8, allocator));
-				case "__array_join_bytes":
-					var stringConcat = functions.get("__string_concat");
-					if (stringConcat == null) {
-						stringConcat = addStringConcat(module, "__string_concat", allocator);
-						functions.set("__string_concat", stringConcat);
-					}
-					functions.set(native.name, addArrayJoinBytes(module, native.name, allocator, stringConcat));
-				case "__array_concat_i32", "__array_concat_bool", "__array_concat_ref", "__array_concat_bytes":
-					functions.set(native.name, addArrayConcat(module, native.name, 4, allocator));
-				case "__array_concat_f64":
-					functions.set(native.name, addArrayConcat(module, native.name, 8, allocator));
-				case "__array_push_i32", "__array_push_bool", "__array_push_ref", "__array_push_bytes":
-					functions.set(native.name, addArrayPush(module, native.name, 4, I32, allocator));
-				case "__array_push_f64":
-					functions.set(native.name, addArrayPush(module, native.name, 8, F64, allocator));
-				case "__array_pop_i32", "__array_pop_bool", "__array_pop_ref", "__array_pop_bytes":
-					functions.set(native.name, addArrayPop(module, native.name, 4, I32));
-				case "__array_pop_f64":
-					functions.set(native.name, addArrayPop(module, native.name, 8, F64));
-				case "__array_unshift_i32", "__array_unshift_bool", "__array_unshift_ref", "__array_unshift_bytes":
-					functions.set(native.name, addArrayUnshift(module, native.name, 4, I32, allocator));
-				case "__array_unshift_f64":
-					functions.set(native.name, addArrayUnshift(module, native.name, 8, F64, allocator));
-				case "__array_insert_i32", "__array_insert_bool", "__array_insert_ref", "__array_insert_bytes":
-					functions.set(native.name, addArrayInsert(module, native.name, 4, I32, allocator));
-				case "__array_insert_f64":
-					functions.set(native.name, addArrayInsert(module, native.name, 8, F64, allocator));
-				case "__array_shift_i32", "__array_shift_bool", "__array_shift_ref", "__array_shift_bytes":
-					functions.set(native.name, addArrayShift(module, native.name, 4, I32));
-				case "__array_shift_f64":
-					functions.set(native.name, addArrayShift(module, native.name, 8, F64));
-				case "__array_resize_i32", "__array_resize_bool", "__array_resize_ref", "__array_resize_bytes":
-					functions.set(native.name, addArrayResize(module, native.name, 4, I32, allocator));
-				case "__array_resize_f64":
-					functions.set(native.name, addArrayResize(module, native.name, 8, F64, allocator));
-				case "__array_remove_i32", "__array_remove_bool", "__array_remove_ref":
-					functions.set(native.name, addArrayRemove(module, native.name, 4, I32, null));
-				case "__array_remove_bytes":
-					var stringEqual = functions.get("__string_equal");
-					if (stringEqual == null) {
-						stringEqual = addStringEqual(module, "__string_equal");
-						functions.set("__string_equal", stringEqual);
-					}
-					functions.set(native.name, addArrayRemove(module, native.name, 4, I32, stringEqual));
-				case "__array_remove_f64":
-					functions.set(native.name, addArrayRemove(module, native.name, 8, F64, null));
-				case "__array_reverse_i32", "__array_reverse_bool", "__array_reverse_ref", "__array_reverse_bytes":
-					functions.set(native.name, addArrayReverse(module, native.name, 4, I32));
-				case "__array_reverse_f64":
-					functions.set(native.name, addArrayReverse(module, native.name, 8, F64));
-				case "__array_splice_i32", "__array_splice_bool", "__array_splice_ref", "__array_splice_bytes":
-					functions.set(native.name, addArraySplice(module, native.name, 4, allocator));
-				case "__array_splice_f64":
-					functions.set(native.name, addArraySplice(module, native.name, 8, allocator));
-				default:
-			}
+		for (native in program.natives) {
+			var mapParts = mapNativeParts(native.name);
+			if (mapParts != null)
+				functions.set(native.name, addMapRuntimeFunction(module, functions, native.name, mapParts.mapName, mapParts.operation, allocator));
+			else
+				switch native.name {
+					case "__string_length":
+						functions.set(native.name,
+							module.addFunction(new WasmFunction(native.name, {parameters: [I32], results: [I32]}, [],
+								[LocalGet(0), I32Load(WasmLayout.STRING_LENGTH_OFFSET), Return])));
+					case "__string_char_code_at":
+						functions.set(native.name, addStringCharCodeAt(module, native.name));
+					case "__string_concat":
+						functions.set(native.name, addStringConcat(module, native.name, allocator));
+					case "__string_equal":
+						functions.set(native.name, addStringEqual(module, native.name));
+					case "__std_int_f64":
+						functions.set(native.name,
+							module.addFunction(new WasmFunction(native.name, {parameters: [F64], results: [I32]}, [], [LocalGet(0), I32TruncF64S, Return])));
+					case "__std_string":
+						functions.set(native.name,
+							module.addFunction(new WasmFunction(native.name, {parameters: [I32], results: [I32]}, [], [LocalGet(0), Return])));
+					case "__dynamic_equal":
+						// Emitted after the native scan so the string helper has an index.
+					case "__std_is_of_type", "__exception_matches":
+						functions.set(native.name, addTypeTest(module, native.name, program));
+					case "__array_copy_i32", "__array_copy_bool", "__array_copy_ref", "__array_copy_bytes":
+						functions.set(native.name, addArrayCopy(module, native.name, 4, allocator));
+					case "__array_copy_f64":
+						functions.set(native.name, addArrayCopy(module, native.name, 8, allocator));
+					case "__array_index_of_i32", "__array_index_of_bool", "__array_index_of_ref":
+						functions.set(native.name, addArrayIndexOf(module, native.name, 4, I32, null));
+					case "__array_index_of_bytes":
+						var stringEqual = functions.get("__string_equal");
+						if (stringEqual == null) {
+							stringEqual = addStringEqual(module, "__string_equal");
+							functions.set("__string_equal", stringEqual);
+						}
+						functions.set(native.name, addArrayIndexOf(module, native.name, 4, I32, stringEqual));
+					case "__array_index_of_f64":
+						functions.set(native.name, addArrayIndexOf(module, native.name, 8, F64, null));
+					case "__array_slice_i32", "__array_slice_bool", "__array_slice_ref", "__array_slice_bytes":
+						functions.set(native.name, addArraySlice(module, native.name, 4, allocator));
+					case "__array_slice_f64":
+						functions.set(native.name, addArraySlice(module, native.name, 8, allocator));
+					case "__array_join_bytes":
+						var stringConcat = functions.get("__string_concat");
+						if (stringConcat == null) {
+							stringConcat = addStringConcat(module, "__string_concat", allocator);
+							functions.set("__string_concat", stringConcat);
+						}
+						functions.set(native.name, addArrayJoinBytes(module, native.name, allocator, stringConcat));
+					case "__array_concat_i32", "__array_concat_bool", "__array_concat_ref", "__array_concat_bytes":
+						functions.set(native.name, addArrayConcat(module, native.name, 4, allocator));
+					case "__array_concat_f64":
+						functions.set(native.name, addArrayConcat(module, native.name, 8, allocator));
+					case "__array_push_i32", "__array_push_bool", "__array_push_ref", "__array_push_bytes":
+						functions.set(native.name, addArrayPush(module, native.name, 4, I32, allocator));
+					case "__array_push_f64":
+						functions.set(native.name, addArrayPush(module, native.name, 8, F64, allocator));
+					case "__array_pop_i32", "__array_pop_bool", "__array_pop_ref", "__array_pop_bytes":
+						functions.set(native.name, addArrayPop(module, native.name, 4, I32));
+					case "__array_pop_f64":
+						functions.set(native.name, addArrayPop(module, native.name, 8, F64));
+					case "__array_unshift_i32", "__array_unshift_bool", "__array_unshift_ref", "__array_unshift_bytes":
+						functions.set(native.name, addArrayUnshift(module, native.name, 4, I32, allocator));
+					case "__array_unshift_f64":
+						functions.set(native.name, addArrayUnshift(module, native.name, 8, F64, allocator));
+					case "__array_insert_i32", "__array_insert_bool", "__array_insert_ref", "__array_insert_bytes":
+						functions.set(native.name, addArrayInsert(module, native.name, 4, I32, allocator));
+					case "__array_insert_f64":
+						functions.set(native.name, addArrayInsert(module, native.name, 8, F64, allocator));
+					case "__array_shift_i32", "__array_shift_bool", "__array_shift_ref", "__array_shift_bytes":
+						functions.set(native.name, addArrayShift(module, native.name, 4, I32));
+					case "__array_shift_f64":
+						functions.set(native.name, addArrayShift(module, native.name, 8, F64));
+					case "__array_resize_i32", "__array_resize_bool", "__array_resize_ref", "__array_resize_bytes":
+						functions.set(native.name, addArrayResize(module, native.name, 4, I32, allocator));
+					case "__array_resize_f64":
+						functions.set(native.name, addArrayResize(module, native.name, 8, F64, allocator));
+					case "__array_remove_i32", "__array_remove_bool", "__array_remove_ref":
+						functions.set(native.name, addArrayRemove(module, native.name, 4, I32, null));
+					case "__array_remove_bytes":
+						var stringEqual = functions.get("__string_equal");
+						if (stringEqual == null) {
+							stringEqual = addStringEqual(module, "__string_equal");
+							functions.set("__string_equal", stringEqual);
+						}
+						functions.set(native.name, addArrayRemove(module, native.name, 4, I32, stringEqual));
+					case "__array_remove_f64":
+						functions.set(native.name, addArrayRemove(module, native.name, 8, F64, null));
+					case "__array_reverse_i32", "__array_reverse_bool", "__array_reverse_ref", "__array_reverse_bytes":
+						functions.set(native.name, addArrayReverse(module, native.name, 4, I32));
+					case "__array_reverse_f64":
+						functions.set(native.name, addArrayReverse(module, native.name, 8, F64));
+					case "__array_splice_i32", "__array_splice_bool", "__array_splice_ref", "__array_splice_bytes":
+						functions.set(native.name, addArraySplice(module, native.name, 4, allocator));
+					case "__array_splice_f64":
+						functions.set(native.name, addArraySplice(module, native.name, 8, allocator));
+					default:
+				}
+		}
 		for (native in program.natives)
 			if (native.name == "__dynamic_equal") {
 				var stringEqual = functions.get("__string_equal");
@@ -229,6 +234,437 @@ class WasmBackend implements Backend {
 				functions.set(native.name, addDynamicEqual(module, native.name, stringEqual));
 			}
 	}
+
+	static function mapNativeParts(name:String):Null<{mapName:String, operation:String}> {
+		if (!StringTools.startsWith(name, "__map_"))
+			return null;
+		var separator = name.lastIndexOf("_");
+		if (separator <= 6 || separator == name.length - 1)
+			return null;
+		return {
+			mapName: name.substring(2, separator),
+			operation: name.substring(separator + 1, name.length)
+		};
+	}
+
+	static function mapKeyType(mapName:String):IrType
+		return StringTools.startsWith(mapName, "map_string_") ? Bytes : I32;
+
+	static function mapValueType(mapName:String):IrType
+		return if (StringTools.endsWith(mapName,
+			"_i32")) I32; else if (StringTools.endsWith(mapName,
+			"_bool")) Bool; else if (StringTools.endsWith(mapName,
+			"_f64")) F64; else if (StringTools.endsWith(mapName,
+			"_bytes")) Bytes; else if (StringTools.endsWith(mapName, "_ref")) Dyn; else throw 'Unknown Wasm map value ABI "$mapName"';
+
+	static function mapEntrySize(valueType:IrType):Int
+		return valueType == F64 ? 16 : 8;
+
+	static function mapValueOffset(valueType:IrType):Int
+		return valueType == F64 ? 8 : 4;
+
+	static function ensureStringEqual(module:WasmModule, functions:Map<String, Int>):Int {
+		var result = functions.get("__string_equal");
+		if (result == null) {
+			result = addStringEqual(module, "__string_equal");
+			functions.set("__string_equal", result);
+		}
+		return result;
+	}
+
+	static function ensureMapFind(module:WasmModule, functions:Map<String, Int>, mapName:String, keyType:IrType, valueType:IrType, stringEqual:Int):Int {
+		var name = "__haxeon_map_find_" + mapName,
+			result = functions.get(name);
+		if (result == null) {
+			result = addMapFind(module, name, keyType, valueType, stringEqual);
+			functions.set(name, result);
+		}
+		return result;
+	}
+
+	static function ensureMapArrayAllocator(module:WasmModule, functions:Map<String, Int>, allocator:Int, valueType:IrType):Int {
+		var suffix = valueType == F64 ? "f64" : "i32",
+			name = "__array_alloc_" + suffix,
+			result = functions.get(name);
+		if (result == null) {
+			result = addArrayAllocator(module, name, valueType == F64 ? 8 : 4, allocator);
+			functions.set(name, result);
+		}
+		return result;
+	}
+
+	static function addMapRuntimeFunction(module:WasmModule, functions:Map<String, Int>, name:String, mapName:String, operation:String, allocator:Int):Int {
+		var keyType = mapKeyType(mapName),
+			valueType = mapValueType(mapName),
+			stringEqual:Null<Int> = null;
+		if (keyType == Bytes)
+			stringEqual = ensureStringEqual(module, functions);
+		var entrySize = mapEntrySize(valueType),
+			valueOffset = mapValueOffset(valueType);
+		return switch operation {
+			case "alloc": addMapAlloc(module, name, mapName, entrySize, allocator);
+			case "set": addMapSet(module, name, keyType, valueType, entrySize, valueOffset, allocator, stringEqual);
+			case "exists": addMapExists(module, name, keyType, valueType, stringEqual,
+					ensureMapFind(module, functions, mapName, keyType, valueType, stringEqual));
+			case "get": addMapGet(module, name, keyType, valueType, entrySize, valueOffset, allocator, stringEqual,
+					ensureMapFind(module, functions, mapName, keyType, valueType, stringEqual));
+			case "keys": addMapProjection(module, name, keyType, entrySize, 0, allocator, ensureMapArrayAllocator(module, functions, allocator, keyType));
+			case "values": addMapProjection(module, name, valueType, entrySize, valueOffset, allocator,
+					ensureMapArrayAllocator(module, functions, allocator, valueType));
+			case "remove": addMapRemove(module, name, keyType, valueType, entrySize, stringEqual,
+					ensureMapFind(module, functions, mapName, keyType, valueType, stringEqual));
+			case "clear": addMapClear(module, name);
+			case "size": addMapSize(module, name);
+			default: throw 'Unknown Wasm map operation "$operation"';
+		};
+	}
+
+	static function addMapAlloc(module:WasmModule, name:String, mapName:String, entrySize:Int, allocator:Int):Int {
+		return module.addFunction(new WasmFunction(name, {parameters: [], results: [I32]}, [{type: I32}, {type: I32}], [
+			I32Const(WasmLayout.MAP_HEADER_SIZE),
+			Call(allocator),
+			LocalTee(0),
+			I32Const(typeId(Abstract(mapName))),
+			I32Store(0),
+			LocalGet(0),
+			I32Const(0),
+			I32Store(WasmLayout.MAP_COUNT_OFFSET),
+			LocalGet(0),
+			I32Const(8),
+			I32Store(WasmLayout.MAP_CAPACITY_OFFSET),
+			I32Const(entrySize * 8),
+			Call(allocator),
+			LocalSet(1),
+			LocalGet(0),
+			LocalGet(1),
+			I32Store(WasmLayout.MAP_ENTRIES_OFFSET),
+			LocalGet(0),
+			Return
+		]));
+	}
+
+	static function mapEntryAddress(entriesLocal:Int, indexLocal:Int, entrySize:Int):Array<WasmInstruction>
+		return [
+			LocalGet(entriesLocal),
+			LocalGet(indexLocal),
+			I32Const(entrySize),
+			I32Mul,
+			I32Add
+		];
+
+	static function append(body:Array<WasmInstruction>, instructions:Array<WasmInstruction>):Void
+		for (instruction in instructions)
+			body.push(instruction);
+
+	static function mapKeyCompare(keyType:IrType, stringEqual:Null<Int>):Array<WasmInstruction>
+		return keyType == Bytes ? [LocalGet(1), Call(stringEqual),] : [LocalGet(1), I32Eq];
+
+	static function loadMapValue(type:IrType, offset:Int):WasmInstruction
+		return type == F64 ? F64Load(offset) : I32Load(offset);
+
+	static function storeMapValue(type:IrType, offset:Int):WasmInstruction
+		return type == F64 ? F64Store(offset) : I32Store(offset);
+
+	static function addMapFind(module:WasmModule, name:String, keyType:IrType, valueType:IrType, stringEqual:Int):Int {
+		var entrySize = mapEntrySize(valueType),
+			body:Array<WasmInstruction> = [
+				I32Const(0),
+				LocalSet(2),
+				Block(null),
+				Loop(null),
+				LocalGet(2),
+				LocalGet(0),
+				I32Load(WasmLayout.MAP_COUNT_OFFSET),
+				I32LtS,
+				If(null)
+			];
+		append(body, [LocalGet(0), I32Load(WasmLayout.MAP_ENTRIES_OFFSET), LocalSet(3)]);
+		for (instruction in mapEntryAddress(3, 2, entrySize))
+			body.push(instruction);
+		body.push(I32Load(0));
+		for (instruction in mapKeyCompare(keyType, stringEqual))
+			body.push(instruction);
+		append(body, [
+			If(null),
+			LocalGet(2),
+			Return,
+			End,
+			LocalGet(2),
+			I32Const(1),
+			I32Add,
+			LocalSet(2),
+			Br(1),
+			Else,
+			Br(2),
+			End,
+			End,
+			End,
+			I32Const(-1),
+			Return
+		]);
+		return module.addFunction(new WasmFunction(name, {parameters: [I32, requireValueType(keyType)], results: [I32]}, [{type: I32}, {type: I32}], body));
+	}
+
+	static function addMapSet(module:WasmModule, name:String, keyType:IrType, valueType:IrType, entrySize:Int, valueOffset:Int, allocator:Int,
+			stringEqual:Null<Int>):Int {
+		var body:Array<WasmInstruction> = [
+			                         I32Const(0), LocalSet(3), Block(null),  Loop(null),                            LocalGet(3), LocalGet(0),
+			I32Load(WasmLayout.MAP_COUNT_OFFSET),      I32LtS,    If(null), LocalGet(0), I32Load(WasmLayout.MAP_ENTRIES_OFFSET), LocalSet(4)
+		];
+		for (instruction in mapEntryAddress(4, 3, entrySize))
+			body.push(instruction);
+		body.push(I32Load(0));
+		for (instruction in mapKeyCompare(keyType, stringEqual))
+			body.push(instruction);
+		body.push(If(null));
+		for (instruction in mapEntryAddress(4, 3, entrySize))
+			body.push(instruction);
+		append(body, [LocalGet(1), I32Store(0)]);
+		for (instruction in mapEntryAddress(4, 3, entrySize))
+			body.push(instruction);
+		append(body, [
+			LocalGet(2),
+			storeMapValue(valueType, valueOffset),
+			Return,
+			End,
+			LocalGet(3),
+			I32Const(1),
+			I32Add,
+			LocalSet(3),
+			Br(1),
+			Else,
+			Br(2),
+			End,
+			End,
+			End,
+			LocalGet(0),
+			I32Load(WasmLayout.MAP_COUNT_OFFSET),
+			LocalSet(5),
+			LocalGet(0),
+			I32Load(WasmLayout.MAP_CAPACITY_OFFSET),
+			LocalSet(6),
+			LocalGet(5),
+			LocalGet(6),
+			I32Eq,
+			If(null),
+			LocalGet(6),
+			I32Const(2),
+			I32Mul,
+			LocalSet(7),
+			LocalGet(7),
+			I32Const(entrySize),
+			I32Mul,
+			Call(allocator),
+			LocalSet(8),
+			LocalGet(8),
+			LocalGet(0),
+			I32Load(WasmLayout.MAP_ENTRIES_OFFSET),
+			LocalGet(5),
+			I32Const(entrySize),
+			I32Mul,
+			MemoryCopy,
+			LocalGet(0),
+			LocalGet(8),
+			I32Store(WasmLayout.MAP_ENTRIES_OFFSET),
+			LocalGet(0),
+			LocalGet(7),
+			I32Store(WasmLayout.MAP_CAPACITY_OFFSET),
+			End,
+			LocalGet(0),
+			I32Load(WasmLayout.MAP_ENTRIES_OFFSET),
+			LocalSet(4)
+		]);
+		for (instruction in mapEntryAddress(4, 5, entrySize))
+			body.push(instruction);
+		append(body, [LocalGet(1), I32Store(0)]);
+		for (instruction in mapEntryAddress(4, 5, entrySize))
+			body.push(instruction);
+		append(body, [
+			LocalGet(2),
+			storeMapValue(valueType, valueOffset),
+			LocalGet(0),
+			LocalGet(5),
+			I32Const(1),
+			I32Add,
+			I32Store(WasmLayout.MAP_COUNT_OFFSET),
+		]);
+		return module.addFunction(new WasmFunction(name, {parameters: [I32, requireValueType(keyType), requireValueType(valueType)], results: []},
+			[{type: I32}, {type: I32}, {type: I32}, {type: I32}, {type: I32}, {type: I32}], body));
+	}
+
+	static function addMapExists(module:WasmModule, name:String, keyType:IrType, valueType:IrType, stringEqual:Int, find:Int):Int
+		return module.addFunction(new WasmFunction(name, {parameters: [I32, requireValueType(keyType)], results: [I32]}, [],
+			[LocalGet(0), LocalGet(1), Call(find), I32Const(-1), I32Eq, I32Eqz, Return]));
+
+	static function addMapGet(module:WasmModule, name:String, keyType:IrType, valueType:IrType, entrySize:Int, valueOffset:Int, allocator:Int,
+			stringEqual:Null<Int>, find:Int):Int {
+		var body:Array<WasmInstruction> = [
+			LocalGet(0),
+			LocalGet(1),
+			Call(find),
+			LocalSet(2),
+			LocalGet(2),
+			I32Const(-1),
+			I32Eq,
+			If(null),
+			I32Const(0),
+			LocalSet(4),
+			Else,
+			LocalGet(0),
+			I32Load(WasmLayout.MAP_ENTRIES_OFFSET),
+			LocalSet(3)
+		];
+		if (valueType == I32 || valueType == Bool) {
+			append(body, [
+				I32Const(WasmLayout.DYN_I32_SIZE),
+				Call(allocator),
+				LocalSet(4),
+				LocalGet(4),
+				I32Const(typeId(valueType)),
+				I32Store(0)
+			]);
+			append(body, [LocalGet(4)]);
+			for (instruction in mapEntryAddress(3, 2, entrySize))
+				body.push(instruction);
+			append(body, [I32Load(valueOffset), I32Store(WasmLayout.DYN_PAYLOAD_OFFSET)]);
+		} else if (valueType == F64) {
+			append(body, [
+				I32Const(WasmLayout.DYN_F64_SIZE),
+				Call(allocator),
+				LocalSet(4),
+				LocalGet(4),
+				I32Const(typeId(F64)),
+				I32Store(0)
+			]);
+			append(body, [LocalGet(4)]);
+			for (instruction in mapEntryAddress(3, 2, entrySize))
+				body.push(instruction);
+			append(body, [F64Load(valueOffset), F64Store(WasmLayout.DYN_PAYLOAD_OFFSET)]);
+		} else {
+			for (instruction in mapEntryAddress(3, 2, entrySize))
+				body.push(instruction);
+			append(body, [loadMapValue(valueType, valueOffset), LocalSet(4)]);
+		}
+		append(body, [End, LocalGet(4), Return]);
+		return module.addFunction(new WasmFunction(name, {parameters: [I32, requireValueType(keyType)], results: [I32]},
+			[{type: I32}, {type: I32}, {type: I32}], body));
+	}
+
+	static function addMapProjection(module:WasmModule, name:String, elementType:IrType, entrySize:Int, valueOffset:Int, allocator:Int,
+			arrayAllocator:Int):Int {
+		var stride = WasmLayout.arrayStride(elementType),
+			body:Array<WasmInstruction> = [
+				LocalGet(0),
+				I32Load(WasmLayout.MAP_COUNT_OFFSET),
+				Call(arrayAllocator),
+				LocalSet(1),
+				LocalGet(0),
+				I32Load(WasmLayout.MAP_ENTRIES_OFFSET),
+				LocalSet(2),
+				I32Const(0),
+				LocalSet(3),
+				Block(null),
+				Loop(null),
+				LocalGet(3),
+				LocalGet(0),
+				I32Load(WasmLayout.MAP_COUNT_OFFSET),
+				I32LtS,
+				If(null),
+				LocalGet(1),
+				I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+				LocalGet(3),
+				I32Const(stride),
+				I32Mul,
+				I32Add
+			];
+		for (instruction in mapEntryAddress(2, 3, entrySize))
+			body.push(instruction);
+		append(body, [
+			loadMapValue(elementType, valueOffset),
+			storeMapValue(elementType, 0),
+			LocalGet(3),
+			I32Const(1),
+			I32Add,
+			LocalSet(3),
+			Br(1),
+			Else,
+			Br(2),
+			End,
+			End,
+			End,
+			LocalGet(1),
+			Return
+		]);
+		return module.addFunction(new WasmFunction(name, {parameters: [I32], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}], body));
+	}
+
+	static function addMapRemove(module:WasmModule, name:String, keyType:IrType, valueType:IrType, entrySize:Int, stringEqual:Int, find:Int):Int {
+		var body:Array<WasmInstruction> = [
+			LocalGet(0),
+			LocalGet(1),
+			Call(find),
+			LocalTee(2),
+			I32Const(-1),
+			I32Eq,
+			If(I32),
+			I32Const(0),
+			Else,
+			LocalGet(0),
+			I32Load(WasmLayout.MAP_ENTRIES_OFFSET),
+			LocalSet(3),
+			LocalGet(0),
+			I32Load(WasmLayout.MAP_COUNT_OFFSET),
+			LocalSet(4),
+			LocalGet(4),
+			LocalGet(2),
+			I32Sub,
+			I32Const(1),
+			I32Sub,
+			LocalSet(5),
+			I32Const(0),
+			LocalGet(5),
+			I32LtS,
+			If(null)
+		];
+		var destination = mapEntryAddress(3, 2, entrySize),
+			source:Array<WasmInstruction> = [
+				LocalGet(3),
+				LocalGet(2),
+				I32Const(1),
+				I32Add,
+				I32Const(entrySize),
+				I32Mul,
+				I32Add
+			];
+		for (instruction in destination)
+			body.push(instruction);
+		for (instruction in source)
+			body.push(instruction);
+		append(body, [
+			LocalGet(5),
+			I32Const(entrySize),
+			I32Mul,
+			MemoryCopy,
+			End,
+			LocalGet(0),
+			LocalGet(4),
+			I32Const(1),
+			I32Sub,
+			I32Store(WasmLayout.MAP_COUNT_OFFSET),
+			I32Const(1),
+			End,
+			Return
+		]);
+		return module.addFunction(new WasmFunction(name, {parameters: [I32, requireValueType(keyType)], results: [I32]},
+			[{type: I32}, {type: I32}, {type: I32}, {type: I32}], body));
+	}
+
+	static function addMapClear(module:WasmModule, name:String):Int
+		return module.addFunction(new WasmFunction(name, {parameters: [I32], results: []}, [],
+			[LocalGet(0), I32Const(0), I32Store(WasmLayout.MAP_COUNT_OFFSET)]));
+
+	static function addMapSize(module:WasmModule, name:String):Int
+		return module.addFunction(new WasmFunction(name, {parameters: [I32], results: [I32]}, [], [LocalGet(0), I32Load(WasmLayout.MAP_COUNT_OFFSET), Return]));
 
 	static function collectClosureTypes(module:WasmModule, program:IrProgram):Map<String, WasmClosureTypes> {
 		var result:Map<String, WasmClosureTypes> = [];

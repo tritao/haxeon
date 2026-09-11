@@ -27,6 +27,12 @@ are 32-bit references at this layer; scalar `Int`/`Bool` values are `i32` and
 `Float` values are `f64`. `WasmLayout` is the only owner of object, array,
 enum, closure, and string offsets.
 
+Map operations are also implemented by the linear-memory runtime. Maps use a
+fixed header plus pointer-backed entry storage, linear key lookup, capacity
+growth, compact removal, and typed `keys()`/`values()` projections. Primitive
+`get()` results are boxed into the existing dynamic-value layout so nullable
+map reads retain the canonical IR semantics.
+
 The backend emits the WebAssembly exception tag/try/catch instructions for
 programs with Haxeon exception edges. Exception-bearing functions currently
 use the explicit CFG dispatcher so handler state and rethrow behavior remain

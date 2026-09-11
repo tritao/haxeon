@@ -28,6 +28,27 @@ fi
 	--target=wasm32 --output=out/wasm-cli-array-growth.wasm --entry=array-growth-wasm \
 	--root=tests/programs tests/programs/array-growth-wasm.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --output=out/wasm-cli-map-basic.wasm --entry=map-basic \
+	--root=tests/programs tests/programs/map-basic.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --output=out/wasm-cli-map-int.wasm --entry=map-int \
+	--root=tests/programs tests/programs/map-int.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --output=out/wasm-cli-map-primitive-types.wasm --entry=map-primitive-types \
+	--root=tests/programs tests/programs/map-primitive-types.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --output=out/wasm-cli-map-for-in.wasm --entry=map-for-in \
+	--root=tests/programs tests/programs/map-for-in.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --output=out/wasm-cli-map-key-value-for-in.wasm --entry=map-key-value-for-in \
+	--root=tests/programs tests/programs/map-key-value-for-in.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --output=out/wasm-cli-map-object.wasm --entry=map-object \
+	--root=tests/programs tests/programs/map-object.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --output=out/wasm-cli-map-anonymous-enum.wasm --entry=map-anonymous-enum \
+	--root=tests/programs tests/programs/map-anonymous-enum.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm32 --output=out/wasm-cli-try-catch.wasm --entry=try-catch \
 	--root=tests/programs tests/programs/try-catch.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
@@ -61,8 +82,15 @@ const cases = [
   ["out/wasm-cli-dynamic.wasm", 42],
   ["out/wasm-cli-type-test.wasm", 42],
   ["out/wasm-cli-array-slice.wasm", 42],
-  ["out/wasm-cli-array-mutation.wasm", 42],
-  ["out/wasm-cli-array-growth.wasm", 42],
+	["out/wasm-cli-array-mutation.wasm", 42],
+	["out/wasm-cli-array-growth.wasm", 42],
+	["out/wasm-cli-map-basic.wasm", 42],
+	["out/wasm-cli-map-int.wasm", 42],
+	["out/wasm-cli-map-primitive-types.wasm", 42],
+	["out/wasm-cli-map-for-in.wasm", 52],
+	["out/wasm-cli-map-key-value-for-in.wasm", 42],
+	["out/wasm-cli-map-object.wasm", 42],
+	["out/wasm-cli-map-anonymous-enum.wasm", 42],
   ["out/wasm-cli-try-catch.wasm", 42],
   ["out/wasm-cli-try-nested.wasm", 42],
   ["out/wasm-cli-try-bounds.wasm", 42],

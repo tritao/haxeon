@@ -9,6 +9,7 @@ enum WasmRuntimeOperation {
 	GetField;
 	SetField;
 	AllocateArray;
+	MapOperation;
 	GetArray;
 	SetArray;
 	ArraySize;
@@ -65,6 +66,7 @@ class WasmRuntimeAbi {
 			case BeginTry(_, _), EndTry(_): Catch;
 			case Call(_, name, _) if (StringTools.startsWith(name, "__array_alloc_")): AllocateArray;
 			case Call(_, name, _) if (StringTools.startsWith(name, "__array_")): Allocate;
+			case Call(_, name, _) if (StringTools.startsWith(name, "__map_")): MapOperation;
 			case Call(_, name, _) if (StringTools.startsWith(name, "__string_")): StringOperation;
 			case Call(_, "__haxeon_alloc", _): Allocate;
 			default: null;
