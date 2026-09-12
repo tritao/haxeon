@@ -92,7 +92,10 @@ the guest.
   preserving Haxe's default values for fields, array elements, and byte storage
   just as newly grown Wasm memory does. The legacy `metadata_base` and
   `metadata_top` diagnostic exports remain temporarily available and report an
-  empty region for hosts that still display those counters.
+  empty region for hosts that still display those counters. Run
+  `scripts/benchmark-wasm-gc.sh [samples]` for a non-gating comparison of
+  stress versus budgeted allocation and deep/wide graph tracing; it reports
+  timings alongside allocation, collection, and linear-memory counters.
 - `haxeon.patch` contains stable function identities and semantic signatures
   for validating replacement table entries. `haxeon.patch.slots` maps those
   stable names to exported function-table slots. `WasmBackend.compilePatch`
