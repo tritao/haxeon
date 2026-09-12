@@ -885,8 +885,8 @@ class LanguageService {
 				case Integer, Float: "number";
 				case StringLiteral: "string";
 				case LeftParen, RightParen, LeftBrace, RightBrace, Colon, Semicolon, Comma, Dot, Assign, PlusAssign, MinusAssign, Increment, Decrement, Plus,
-					Minus, Arrow, Star, Slash, Percent, Less, Greater, LessEqual, GreaterEqual, EqualEqual, NotEqual, Not, BitNot, AndAnd, OrOr, Ampersand, Pipe,
-					Caret, LeftBracket, RightBracket, Question, At: "operator";
+					Minus, Arrow, Star, Slash, Percent, Less, Greater, LessEqual, GreaterEqual, EqualEqual, NotEqual, Not, BitNot, AndAnd, OrOr, Ampersand,
+					Pipe, Caret, LeftBracket, RightBracket, Question, At: "operator";
 				default: "keyword";
 			};
 			if (type != null) {
@@ -1866,6 +1866,7 @@ class LanguageService {
 			case TString: "String";
 			case TVoid: "Void";
 			case TArray(element): 'Array<${compilerTypeName(element)}>';
+			case TIterator(element): 'Iterator<${compilerTypeName(element)}>';
 			case TMap(key, value): 'Map<${compilerTypeName(key)},${compilerTypeName(value)}>';
 			case TNullable(element): 'Null<${compilerTypeName(element)}>';
 			case TInstance(_, name, arguments): arguments.length == 0 ? name : name

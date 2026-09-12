@@ -409,11 +409,11 @@ class SignatureInference {
 	static function inferCollectionMethod(receiver:Null<AstType>, name:String):Null<AstType>
 		return switch receiver {
 			case MapType(_, value) if (name == "get"): NullableType(value);
-			case MapType(key, _) if (name == "keys"): ArrayType(key);
-			case MapType(_, value) if (name == "values"): ArrayType(value);
+			case MapType(key, _) if (name == "keys"): AppliedType("Iterator", [key]);
+			case MapType(_, value) if (name == "values"): AppliedType("Iterator", [value]);
 			case MapType(_, _) if (name == "exists" || name == "remove"): BoolType;
-			case ArrayType(element) if (name == "iterator"): ArrayType(element);
-			case AppliedType("List", [element]) if (name == "iterator"): ArrayType(element);
+			case ArrayType(element) if (name == "iterator"): AppliedType("Iterator", [element]);
+			case AppliedType("List", [element]) if (name == "iterator"): AppliedType("Iterator", [element]);
 			default: null;
 		};
 

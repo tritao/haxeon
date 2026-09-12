@@ -1214,6 +1214,7 @@ class Typer {
 						originalIterable = typedIterable;
 					var element:CompilerType = switch typedIterable.type {
 						case TArray(element): element;
+						case TIterator(element): element;
 						case TRange: TInt;
 						case TMap(key, value):
 							var mapName = RuntimeType.mapName(key, value);
@@ -1224,23 +1225,24 @@ class Typer {
 								value;
 							} else key;
 						default:
-							fail("E1014", "For-in iterable must be an Array or Map", span);
+							fail("E1014", "For-in iterable must be an Array, Iterator, or Map", span);
 							TInt;
 					};
 					var loopScope = new Scope(scope);
 					loopScope.define(name, element, span);
 					bindCell(name, span, loopScope, element);
-					if (valueName == null)
-						switch originalIterable.expression {
-							case TCollectionCall(map, "keys", []):
-								var key = new TypedExpression(TLocal(loopScope.requireId(name)), element, span),
-									entryPath = FlowAnalysis.mapEntryPath(map, key);
-								if (entryPath != null) switch map.type {
+					if (valueName == null) {
+						var map = mapKeyIteratorSource(originalIterable);
+						if (map != null) {
+							var key = new TypedExpression(TLocal(loopScope.requireId(name)), element, span),
+								entryPath = FlowAnalysis.mapEntryPath(map, key);
+							if (entryPath != null)
+								switch map.type {
 									case TMap(_, value): loopScope.refineExpression(entryPath, value);
 									default:
 								}
-							default:
 						}
+					}
 					if (valueName != null)
 						switch originalIterable.type {
 							case TMap(_, value):
@@ -1709,6 +1711,8 @@ class Typer {
 			return right;
 		if (right == TNever || sameType(left, right))
 			return left;
+		if ((left == TInt && right == TFloat) || (left == TFloat && right == TInt))
+			return TFloat;
 		switch left {
 			case TNull:
 				return right == TVoid ? null : (isNullable(right) ? right : TNullable(right));
@@ -2178,6 +2182,8 @@ class Typer {
 					CaptureAnalysis.collectDeclaredLocals(body, declared);
 					var freeVariables:Map<String, Bool> = [];
 					CaptureAnalysis.collectVariables(body, freeVariables);
+					var lambdaAssignments:Map<String, Bool> = [];
+					CaptureAnalysis.collectAssignedLocals(body, lambdaAssignments);
 					// An unqualified instance method in a lambda is resolved through the
 					// lexical receiver even though `this` is not present in the syntax.
 					if (scope.resolve("this") != null)
@@ -2205,7 +2211,7 @@ class Typer {
 									cellClass = boundCell(name, scope);
 								if (cellClass == null && scope.isCellCapture(name))
 									cellClass = scope.requireCellClass(name);
-								if (cellClass == null && context.assigned.exists(name)) {
+								if (cellClass == null && (context.assigned.exists(name) || lambdaAssignments.exists(name))) {
 									var newCellClass = '$' + 'cell:' + context.name + ':' + name;
 									var bindingId = scope.requireId(name);
 									cellClass = context.storage.requestBinding(bindingId, newCellClass, MutableCapture, captureType);
@@ -2590,6 +2596,10 @@ class Typer {
 						if (valueName != null)
 							fail("E1014", "Key/value array comprehension requires a Map", span);
 						keyType = element;
+					case TIterator(element):
+						if (valueName != null)
+							fail("E1014", "Key/value array comprehension requires a Map", span);
+						keyType = element;
 					case TRange:
 						if (valueName != null)
 							fail("E1014", "Key/value array comprehension requires a Map", span);
@@ -2600,7 +2610,7 @@ class Typer {
 						keyType = valueName == null ? mapValue : key;
 						if (valueName == null) typedIterable = new TypedExpression(TCollectionCall(typedIterable, "values", []), TArray(mapValue), span);
 					default:
-						fail("E1014", "Array comprehension iterable must be an Array or Map", span);
+						fail("E1014", "Array comprehension iterable must be an Array, Iterator, or Map", span);
 				}
 				if (keyType == null)
 					throw "Array comprehension item type was not resolved";
@@ -2635,6 +2645,10 @@ class Typer {
 						if (valueName != null)
 							fail("E1014", "Key/value map comprehension requires a Map", span);
 						itemType = element;
+					case TIterator(element):
+						if (valueName != null)
+							fail("E1014", "Key/value map comprehension requires a Map", span);
+						itemType = element;
 					case TRange:
 						if (valueName != null)
 							fail("E1014", "Key/value map comprehension requires a Map", span);
@@ -2645,7 +2659,7 @@ class Typer {
 						itemType = valueName == null ? mapValue : mapKey;
 						if (valueName == null) typedIterable = new TypedExpression(TCollectionCall(typedIterable, "values", []), TArray(mapValue), span);
 					default:
-						fail("E1014", "Map comprehension iterable must be an Array or Map", span);
+						fail("E1014", "Map comprehension iterable must be an Array, Iterator, or Map", span);
 				}
 				if (itemType == null)
 					throw "Map comprehension item type was not resolved";
@@ -2998,6 +3012,8 @@ class Typer {
 							return typeMapMethod(resolvedReceiver, resolvedMethodName, arguments, span, scope);
 						if (isArray(receiverType))
 							return typeArrayMethod(resolvedReceiver, resolvedMethodName, arguments, span, scope);
+						if (isIterator(receiverType))
+							return typeIteratorMethod(resolvedReceiver, resolvedMethodName, arguments, span);
 						var platformMethod = PlatformAbi.method(receiverType, resolvedMethodName);
 						if (platformMethod != null) {
 							var typed = typeCallArguments(arguments, platformMethod.arguments, scope, resolvedMethodName),
@@ -3345,6 +3361,8 @@ class Typer {
 				}
 			case AppliedType(name, patternArguments):
 				switch actual {
+					case TIterator(actualElement) if (name == "Iterator" && patternArguments.length == 1):
+						inferTypeParameters(patternArguments[0], actualElement, parameters, substitutions, span);
 					case TInstance(_, actualName, actualArguments) if (actualName == name
 						&& patternArguments.length == actualArguments.length):
 						for (index in 0...patternArguments.length)
@@ -3576,6 +3594,8 @@ class Typer {
 			return typeMapMethod(receiver, name, arguments, span, scope);
 		if (isArray(receiver.type))
 			return typeArrayMethod(receiver, name, arguments, span, scope);
+		if (isIterator(receiver.type))
+			return typeIteratorMethod(receiver, name, arguments, span);
 		var abstractCall = typeAbstractMethodCall(receiver, name, arguments, span, scope);
 		if (abstractCall != null)
 			return abstractCall;
@@ -3751,7 +3771,7 @@ class Typer {
 		if (name == "iterator") {
 			if (arguments.length != 0)
 				fail("E1008", "Array.iterator expects no arguments", span);
-			return receiver;
+			return iterator(receiver, element, span);
 		}
 		if (name == "unshift") {
 			if (arguments.length != 1)
@@ -3860,6 +3880,33 @@ class Typer {
 		throw new CompileError(new Diagnostic("E1007", 'Unknown array method "$name"', span));
 	}
 
+	function iterator(values:TypedExpression, element:CompilerType, span:SourceSpan):TypedExpression {
+		var dynamicValues = coerce(values, TDynamic, "iterator source", "E1014");
+		return new TypedExpression(TCall("__iterator_new", [dynamicValues]), TIterator(element), span);
+	}
+
+	static function mapKeyIteratorSource(value:TypedExpression):Null<TypedExpression>
+		return switch value.expression {
+			case TCollectionCall(map, "keys", []): map;
+			case TCall("__iterator_new", [source]), TToDynamic(source), TCast(source), TAbiCast(source): mapKeyIteratorSource(source);
+			default: null;
+		};
+
+	function typeIteratorMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan):TypedExpression {
+		if (arguments.length != 0)
+			fail("E1008", 'Iterator.$name expects no arguments', span);
+		return switch name {
+			case "hasNext": new TypedExpression(TCall("__iterator_has_next", [receiver]), TBool, span);
+			case "next":
+				var element = switch receiver.type {
+					case TIterator(value): value;
+					default: throw "Not an iterator";
+				};
+				coerce(new TypedExpression(TCall("__iterator_next", [receiver]), TDynamic, span), element, "Iterator.next", "E1014");
+			default: throw new CompileError(new Diagnostic("E1007", 'Unknown Iterator method "$name"', span));
+		};
+	}
+
 	function hasInstanceField(type:CompilerType, name:String):Bool
 		return switch type {
 			case TInstance(Class, className, []):
@@ -3897,12 +3944,14 @@ class Typer {
 		if (name == "keys") {
 			if (arguments.length != 0)
 				fail("E1008", "Map.keys expects no arguments", span);
-			return new TypedExpression(TCollectionCall(receiver, "keys", []), TArray(mapType.key), span);
+			var values = new TypedExpression(TCollectionCall(receiver, "keys", []), TArray(mapType.key), span);
+			return iterator(values, mapType.key, span);
 		}
 		if (name == "values") {
 			if (arguments.length != 0)
 				fail("E1008", "Map.values expects no arguments", span);
-			return new TypedExpression(TCollectionCall(receiver, "values", []), TArray(mapType.value), span);
+			var values = new TypedExpression(TCollectionCall(receiver, "values", []), TArray(mapType.value), span);
+			return iterator(values, mapType.value, span);
 		}
 		if (name == "clear") {
 			if (arguments.length != 0)
@@ -4167,6 +4216,12 @@ class Typer {
 	function coerce(value:TypedExpression, expected:CompilerType, context:String, code:String = "E1009"):TypedExpression {
 		if (value.type == TNever)
 			return new TypedExpression(value.expression, expected, value.span);
+		switch expected {
+			case TNullable(element) if (value.type != TNull && !isNullable(value.type)):
+				var converted = coerce(value, element, context, code);
+				return new TypedExpression(TNullableWrap(converted), expected, value.span);
+			default:
+		}
 		return switch relations.conversion(value.type, expected) {
 			case Identity: value;
 			case IntToFloat:
@@ -4597,7 +4652,7 @@ class Typer {
 		if (operation == 2 && sameType(left.type, right.type))
 			switch left.type {
 				case TDynamic, TNativeAbstract(_), TAbstract(_, _, _), TInstance(Class, _, []), TInstance(Interface, _, []), TInstance(Enum, _, _),
-					TNullable(_), TArray(_), TMap(_, _), TFunction(_, _), TAnonymous(_, _):
+					TNullable(_), TArray(_), TIterator(_), TMap(_, _), TFunction(_, _), TAnonymous(_, _):
 					return new TypedExpression(TEqual(left, right), TBool, span);
 				default:
 			}
@@ -4676,6 +4731,12 @@ class Typer {
 			default: false;
 		};
 
+	static function isIterator(type:CompilerType):Bool
+		return switch type {
+			case TIterator(_): true;
+			default: false;
+		};
+
 	static function isMap(type:CompilerType):Bool
 		return switch type {
 			case TMap(_, _): true;
@@ -4703,7 +4764,8 @@ class Typer {
 
 	static function isReference(type:CompilerType):Bool
 		return switch type {
-			case TString, TDynamic, TInstance(Class, _, []), TInstance(Interface, _, []), TAnonymous(_, _), TArray(_), TFunction(_, _), TMap(_, _): true;
+			case TString, TDynamic, TInstance(Class, _, []), TInstance(Interface, _, []), TAnonymous(_, _), TArray(_), TIterator(_), TFunction(_, _),
+				TMap(_, _): true;
 			default: false;
 		};
 
@@ -4726,7 +4788,7 @@ class Typer {
 				anonymousTypes.set(name, fields);
 				for (field in fields)
 					registerAnonymousTypes(field.type);
-			case TNullable(element), TArray(element):
+			case TNullable(element), TArray(element), TIterator(element):
 				registerAnonymousTypes(element);
 			case TMap(key, value):
 				registerAnonymousTypes(key);

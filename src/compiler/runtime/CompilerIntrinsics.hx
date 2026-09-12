@@ -22,6 +22,9 @@ class CompilerIntrinsics {
 		definitions.push(native("__std_int_dynamic", "haxeon_runtime", "__std_int_dynamic", [TDynamic], TInt));
 		definitions.push(native("__std_string", "haxeon_runtime", "__std_string", [TDynamic], TString));
 		definitions.push(native("__dynamic_equal", "haxeon_runtime", "__dynamic_equal", [TDynamic, TDynamic], TBool));
+		definitions.push(native("__iterator_new", "haxeon_runtime", "__iterator_new", [TDynamic], TNativeAbstract("realtime_iterator")));
+		definitions.push(native("__iterator_has_next", "haxeon_runtime", "__iterator_has_next", [TNativeAbstract("realtime_iterator")], TBool));
+		definitions.push(native("__iterator_next", "haxeon_runtime", "__iterator_next", [TNativeAbstract("realtime_iterator")], TDynamic));
 		definitions.push(native("__reflect_is_object", "haxeon_runtime", "__reflect_is_object", [TDynamic], TBool));
 		definitions.push(native("__math_ceil", "haxeon_runtime", "__math_ceil", [TFloat], TInt));
 		definitions.push(native("__math_fmod", "haxeon_runtime", "__math_fmod", [TFloat, TFloat], TFloat));

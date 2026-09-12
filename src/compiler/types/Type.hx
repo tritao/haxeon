@@ -34,6 +34,7 @@ enum CompilerType {
 	TNull;
 	TNullable(element:CompilerType);
 	TArray(element:CompilerType);
+	TIterator(element:CompilerType);
 	TMap(key:CompilerType, value:CompilerType);
 	TFunction(arguments:Array<CompilerType>, result:CompilerType);
 	TAnonymous(name:String, fields:Array<AnonymousField>);

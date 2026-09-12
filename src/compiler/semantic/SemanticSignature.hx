@@ -44,6 +44,7 @@ class SemanticSignature {
 			case TNull: "null";
 			case TNullable(element): 'Null<${type(element)}>';
 			case TArray(element): 'Array<${type(element)}>';
+			case TIterator(element): 'Iterator<${type(element)}>';
 			case TMap(key, value): 'Map<${type(key)},${type(value)}>';
 			case TFunction(arguments, result): '(${[for (argument in arguments) type(argument)].join(",")})->${type(result)}';
 			case TAnonymous(name, _): name;

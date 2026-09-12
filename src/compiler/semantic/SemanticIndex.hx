@@ -1180,6 +1180,7 @@ class SemanticIndex {
 			case TString: "String";
 			case TVoid: "Void";
 			case TArray(element): 'Array<${displayType(element)}>';
+			case TIterator(element): 'Iterator<${displayType(element)}>';
 			case TMap(key, value): 'Map<${displayType(key)},${displayType(value)}>';
 			case TNullable(element): 'Null<${displayType(element)}>';
 			case TInstance(_, name, arguments): arguments.length == 0 ? name : name

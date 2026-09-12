@@ -356,7 +356,11 @@ class IrGenerator {
 					var arrayName = '$' + 'for-array:${span.start}',
 						mapName = '$' + 'for-map:${span.start}',
 						indexName = '$' + 'for-index:${span.start}',
-						breakFlag = '$' + 'for-break:${span.start}';
+						breakFlag = '$' + 'for-break:${span.start}',
+						iterator = switch iterable.type {
+							case TIterator(_): true;
+							default: false;
+						};
 					var mapKey:CompilerType = TVoid,
 						mapValue:CompilerType = TVoid;
 					switch iterable.type {
@@ -371,6 +375,7 @@ class IrGenerator {
 					};
 					var elementType = switch iterable.type {
 						case TArray(element): lowerType(element);
+						case TIterator(element): lowerType(element);
 						case TRange: I32;
 						case TMap(key, _): lowerType(key);
 						default: throw 'For-in iterable is not an array';
@@ -391,7 +396,8 @@ class IrGenerator {
 						builder.store(arrayName,
 							builder.call(RuntimeType.mapNative(mapKey, mapValue, "keys"), [builder.load(mapName, loweredMapType)], arrayType));
 					}
-					builder.store(indexName, builder.constInt(-1));
+					if (!iterator)
+						builder.store(indexName, builder.constInt(-1));
 					builder.store(breakFlag, builder.constBool(false));
 					var conditionBlock = builder.createBlock(),
 						checkBlock = builder.createBlock(),
@@ -401,14 +407,23 @@ class IrGenerator {
 					builder.select(conditionBlock);
 					builder.branch(builder.load(breakFlag, Bool), afterBlock, checkBlock);
 					builder.select(checkBlock);
-					var indexValue = builder.add(builder.load(indexName, I32), builder.constInt(1));
-					builder.store(indexName, indexValue);
-					var arrayValue = builder.load(arrayName, arrayType);
-					builder.branch(builder.less(indexValue, builder.arraySize(arrayValue)), bodyBlock, afterBlock);
+					if (iterator)
+						builder.branch(builder.call("__iterator_has_next", [builder.load(arrayName, arrayType)], Bool), bodyBlock, afterBlock);
+					else {
+						var indexValue = builder.add(builder.load(indexName, I32), builder.constInt(1));
+						builder.store(indexName, indexValue);
+						var arrayValue = builder.load(arrayName, arrayType);
+						builder.branch(builder.less(indexValue, builder.arraySize(arrayValue)), bodyBlock, afterBlock);
+					}
 					builder.select(bodyBlock);
-					var bodyArray = builder.load(arrayName, arrayType),
-						bodyIndex = builder.load(indexName, I32);
-					initializeLocal(name, builder.arrayGet(bodyArray, bodyIndex, elementType), builder, localTypes);
+					if (iterator) {
+						var next = builder.call("__iterator_next", [builder.load(arrayName, arrayType)], Dyn);
+						initializeLocal(name, builder.safeCast(next, elementType), builder, localTypes);
+					} else {
+						var bodyArray = builder.load(arrayName, arrayType),
+							bodyIndex = builder.load(indexName, I32);
+						initializeLocal(name, builder.arrayGet(bodyArray, bodyIndex, elementType), builder, localTypes);
+					}
 					if (valueName != null)
 						initializeLocal(valueName,
 							lowerMapGet(builder, builder.load(mapName, lowerType(iterable.type)), builder.load(name, elementType), mapKey, mapValue), builder,
@@ -995,12 +1010,17 @@ class IrGenerator {
 					resultName = '$' + 'comprehension-result:${expression.span.start}',
 					indexName = '$' + 'comprehension-index:${expression.span.start}',
 					mapTypes = mapTypesOrVoid(iterable.type),
+					iterator = switch iterable.type {
+						case TIterator(_): true;
+						default: false;
+					},
 					keyType = valueName == null ? switch iterable.type {
 						case TArray(element): element;
+						case TIterator(element): element;
 						case TRange: TInt;
-						default: throw "Array comprehension requires an array iterable";
+						default: throw "Array comprehension requires an array or iterator iterable";
 					} : mapTypes.key,
-					inputType:IrType = Array(lowerType(keyType)),
+					inputType:IrType = iterator ? Abstract("realtime_iterator") : Array(lowerType(keyType)),
 					resultElement = switch expression.type {
 						case TArray(element): element;
 						default: throw "Array comprehension requires an array result";
@@ -1024,7 +1044,8 @@ class IrGenerator {
 					case TArrayComprehension(_, _, _, _, _): true;
 					case _: false;
 				};
-				var capacity = condition == null
+				var capacity = !iterator
+					&& condition == null
 					&& !flattened ? builder.arraySize(builder.load(inputName, inputType)) : builder.constInt(0);
 				builder.store(resultName, lowerArrayAllocation(builder, resultElement, capacity));
 				builder.store(indexName, builder.constInt(0));
@@ -1034,9 +1055,16 @@ class IrGenerator {
 				builder.jump(conditionBlock);
 				builder.select(conditionBlock);
 				var index = builder.load(indexName, I32);
-				builder.branch(builder.less(index, builder.arraySize(builder.load(inputName, inputType))), bodyBlock, afterBlock);
+				if (iterator)
+					builder.branch(builder.call("__iterator_has_next", [builder.load(inputName, inputType)], Bool), bodyBlock, afterBlock);
+				else
+					builder.branch(builder.less(index, builder.arraySize(builder.load(inputName, inputType))), bodyBlock, afterBlock);
 				builder.select(bodyBlock);
-				builder.store(keyName, builder.arrayGet(builder.load(inputName, inputType), builder.load(indexName, I32), lowerType(keyType)));
+				if (iterator) {
+					var next = builder.call("__iterator_next", [builder.load(inputName, inputType)], Dyn);
+					builder.store(keyName, builder.safeCast(next, lowerType(keyType)));
+				} else
+					builder.store(keyName, builder.arrayGet(builder.load(inputName, inputType), builder.load(indexName, I32), lowerType(keyType)));
 				if (valueName != null)
 					builder.store(valueName,
 						lowerMapGet(builder, builder.load(mapName, lowerType(iterable.type)), builder.load(keyName, lowerType(keyType)), mapTypes.key,
@@ -1076,12 +1104,17 @@ class IrGenerator {
 					resultName = '$' + 'map-comprehension-result:${expression.span.start}',
 					indexName = '$' + 'map-comprehension-index:${expression.span.start}',
 					sourceMapTypes = mapTypesOrVoid(iterable.type),
+					iterator = switch iterable.type {
+						case TIterator(_): true;
+						default: false;
+					},
 					itemType = valueName == null ? switch iterable.type {
 						case TArray(element): element;
+						case TIterator(element): element;
 						case TRange: TInt;
-						default: throw "Map comprehension requires an array iterable";
+						default: throw "Map comprehension requires an array or iterator iterable";
 					} : sourceMapTypes.key,
-					inputType:IrType = Array(lowerType(itemType)),
+					inputType:IrType = iterator ? Abstract("realtime_iterator") : Array(lowerType(itemType)),
 					resultTypes:MapTypes = switch expression.type {
 						case TMap(mapKey, mapValue): {key: mapKey, value: mapValue};
 						default: throw "Map comprehension requires a map result";
@@ -1109,9 +1142,16 @@ class IrGenerator {
 					afterBlock = builder.createBlock();
 				builder.jump(conditionBlock);
 				builder.select(conditionBlock);
-				builder.branch(builder.less(builder.load(indexName, I32), builder.arraySize(builder.load(inputName, inputType))), bodyBlock, afterBlock);
+				if (iterator)
+					builder.branch(builder.call("__iterator_has_next", [builder.load(inputName, inputType)], Bool), bodyBlock, afterBlock);
+				else
+					builder.branch(builder.less(builder.load(indexName, I32), builder.arraySize(builder.load(inputName, inputType))), bodyBlock, afterBlock);
 				builder.select(bodyBlock);
-				builder.store(keyName, builder.arrayGet(builder.load(inputName, inputType), builder.load(indexName, I32), lowerType(itemType)));
+				if (iterator) {
+					var next = builder.call("__iterator_next", [builder.load(inputName, inputType)], Dyn);
+					builder.store(keyName, builder.safeCast(next, lowerType(itemType)));
+				} else
+					builder.store(keyName, builder.arrayGet(builder.load(inputName, inputType), builder.load(indexName, I32), lowerType(itemType)));
 				if (valueName != null)
 					builder.store(valueName,
 						lowerMapGet(builder, builder.load(sourceMapName, lowerType(iterable.type)), builder.load(keyName, lowerType(itemType)),
@@ -1533,6 +1573,7 @@ class IrGenerator {
 			case TNull: Void;
 			case TNullable(element): TypeRelations.isReference(element) ? lowerType(element) : Dyn;
 			case TArray(element): Array(lowerType(element));
+			case TIterator(_): Abstract("realtime_iterator");
 			case TFunction(arguments, result): Function([for (argument in arguments) lowerType(argument)], lowerType(result));
 			case TAnonymous(name, _): Obj(name);
 		};

@@ -15,7 +15,7 @@ function main():Int {
 	if (item == null || item.value != 42)
 		return 0;
 	var items = values.values();
-	if (items.length != 1 || items[0].value != 42)
+	if (!items.hasNext() || items.next().value != 42 || items.hasNext())
 		return 0;
 	if (!values.remove("answer") || values.exists("answer"))
 		return 0;

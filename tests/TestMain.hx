@@ -117,6 +117,7 @@ class TestMain {
 		Frontend.compile('function main():Int { var values:Map<String, Int> = []; values["answer"] = 42; return values["answer"]; }');
 		Frontend.compile('function main():Int { var values:Map<String, Bool> = []; values["answer"] = true; values.clear(); values["answer"] = true; return values.get("answer") ? 42 : 0; }');
 		Frontend.compile('function main():Int { var values:Map<String, Int> = ["answer" => 42]; for (key in values.keys()) return values.get(key); return 0; }');
+		Frontend.compile('function consume(values:Iterator<Int>):Int { var total = 0; while (values.hasNext()) total += values.next(); return total; } function main():Int return consume([20, 22].iterator());');
 		expectCompileError('function main():Int { var values:Map<String, Int> = []; return values.get("answer"); }', "Type mismatch for return");
 		expectCompileError('function main():Int { var values:Map<String, Int> = []; if (values.exists("answer")) { values.remove("answer"); return values.get("answer"); } return 0; }',
 			"Type mismatch for return");
@@ -294,6 +295,7 @@ class TestMain {
 		Frontend.compile('typedef Location = { path:String, start:Null<Int> }; function contains(location:Location, path:String, minimum:Int):Bool return location.path == path && location.start != null && location.start >= minimum; function main():Int return 0;');
 		Frontend.compile('function nullablePrimitive(value:Int):Null<Int> return value; function main():Int return nullablePrimitive(42) == null ? 0 : 42;');
 		Frontend.compile('function invoke(?done:Void->Void):Void { var outer = function() { var inner = function() { if (done != null) done(); }; inner(); }; outer(); } function main():Int { invoke(); return 0; }');
+		Frontend.compile('function main():Int { var value = 0; var update = function() { value = 42; }; update(); return value; }');
 		expectCompileError('function invoke(?done:Void->Void):Void { var outer = function() { done(); }; outer(); } function main():Int { invoke(); return 0; }',
 			'Cannot call non-function "done"');
 		Frontend.compile('function main():Int { var values:Map<String, Array<Int>> = []; var found = values.get("key"); return found == null ? 0 : found.length; }');
@@ -316,6 +318,7 @@ class TestMain {
 		expectCompileError('function main():Int { return switch 1 { case 1: 42; default: "wrong"; }; }', 'Type mismatch for switch branch');
 		expectCompileError('function main():Int { return switch 1 { case 1: 40; case 1: 2; default: 0; }; }', 'Duplicate switch case');
 		Frontend.compile('function main():Int { var value = switch 2 { case 1, 2: 42; default: 0; }; switch (value) { case 41, 42: return value; default: return 0; } }');
+		Frontend.compile('function number(value:Int):Float return switch value { case 0: 0; default: 1.5; }; function main():Int return Std.int(number(0));');
 		Frontend.compile('function main():Int { switch 42 { case 42: return 42; default: return 0; } }');
 		expectCompileError('function text():String { return "hello"; } function main():Int { var value:Float = 1.25; var wrong:String = value; return 0; }',
 			'Type mismatch for local "wrong"');

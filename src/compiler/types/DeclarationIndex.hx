@@ -167,6 +167,10 @@ class DeclarationIndex {
 					if (arguments.length != 1)
 						fail('Type "List" expects 1 type argument, got ${arguments.length}', span);
 					TArray(resolveInner(arguments[0], span, resolving, substitutions));
+				} else if (name == "Iterator") {
+					if (arguments.length != 1)
+						fail('Type "Iterator" expects 1 type argument, got ${arguments.length}', span);
+					TIterator(resolveInner(arguments[0], span, resolving, substitutions));
 				} else if (aliases.exists(name)) {
 					var alias = aliases.get(name);
 					if (arguments.length != alias.typeParameters.length)
@@ -360,8 +364,8 @@ class DeclarationIndex {
 	static function nullable(type:CompilerType):CompilerType
 		return switch type {
 			case TNullable(_): type;
-			case TInt, TInt64, TBool, TFloat, TString, TDynamic, TNativeAbstract(_), TInstance(_, _, _), TAnonymous(_, _), TArray(_), TFunction(_, _),
-				TMap(_, _):
+			case TInt, TInt64, TBool, TFloat, TString, TDynamic, TNativeAbstract(_), TInstance(_, _, _), TAnonymous(_, _), TArray(_), TIterator(_),
+				TFunction(_, _), TMap(_, _):
 				TNullable(type);
 			default: type;
 		};
@@ -386,6 +390,7 @@ class DeclarationIndex {
 			case TNull: "null";
 			case TNullable(element): 'Null<${typeKey(element)}>';
 			case TArray(element): 'Array<${typeKey(element)}>';
+			case TIterator(element): 'Iterator<${typeKey(element)}>';
 			case TMap(key, value): 'Map<${typeKey(key)},${typeKey(value)}>';
 			case TFunction(arguments, result): '(${[for (argument in arguments) typeKey(argument)].join(",")})->${typeKey(result)}';
 			case TAnonymous(name, _): name;

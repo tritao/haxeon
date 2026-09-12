@@ -409,7 +409,7 @@ class FrontendCompilation {
 				addResolvedNamedTypeDependency(result, owner, kind, name, context);
 				for (argument in arguments)
 					addResolvedTypeDependency(result, owner, kind, argument, context);
-			case TNullable(element), TArray(element):
+			case TNullable(element), TArray(element), TIterator(element):
 				addResolvedTypeDependency(result, owner, kind, element, context);
 			case TMap(key, value):
 				addResolvedTypeDependency(result, owner, kind, key, context);

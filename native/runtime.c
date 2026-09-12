@@ -22,6 +22,7 @@
 #include "runtime/core.c"
 #include "runtime/bytes.c"
 #include "runtime/arrays.c"
+#include "runtime/iterators.c"
 #include "runtime/maps.c"
 #include "runtime/strings.c"
 #include "runtime/regex.c"

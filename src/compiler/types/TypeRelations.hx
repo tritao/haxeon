@@ -121,6 +121,11 @@ class TypeRelations {
 					case TArray(actualElement): equals(actualElement, expectedElement);
 					default: false;
 				}
+			case TIterator(expectedElement):
+				switch actual {
+					case TIterator(actualElement): equals(actualElement, expectedElement);
+					default: false;
+				}
 			case TFunction(expectedArguments, expectedResult):
 				switch actual {
 					case TFunction(actualArguments, actualResult):
@@ -153,6 +158,10 @@ class TypeRelations {
 			case TNativeAbstract(name): sameNativeAbstract(right, name);
 			case TNullable(element): sameUnary(right, element, true);
 			case TArray(element): sameUnary(right, element, false);
+			case TIterator(element): switch right {
+					case TIterator(other): equals(element, other);
+					default: false;
+				};
 			case TMap(key, value):
 				switch right {
 					case TMap(otherKey, otherValue): equals(key, otherKey) && equals(value, otherValue);
@@ -230,7 +239,8 @@ class TypeRelations {
 	public static function isReference(type:CompilerType):Bool
 		return switch type {
 			case TAbstract(_, _, representation): isReference(representation);
-			case TString, TBytes, THlBytes, TDynamic, TNativeAbstract(_), TInstance(_, _, _), TAnonymous(_, _), TArray(_), TFunction(_, _), TMap(_, _): true;
+			case TString, TBytes, THlBytes, TDynamic, TNativeAbstract(_), TInstance(_, _, _), TAnonymous(_, _), TArray(_), TIterator(_), TFunction(_, _),
+				TMap(_, _): true;
 			default: false;
 		};
 
