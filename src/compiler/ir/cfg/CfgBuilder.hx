@@ -182,6 +182,12 @@ class CfgBuilder {
 		return out;
 	}
 
+	public function floatToInt(value:CfgValue):CfgValue {
+		var out = temporary(I32);
+		emit(FloatToInt(out, value));
+		return out;
+	}
+
 	public function typeValue(type:IrType):CfgValue {
 		var out = temporary(TypeRef);
 		emit(TypeValue(out, type));

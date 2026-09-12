@@ -101,6 +101,11 @@ class CfgVerifier {
 					expect(value, I32);
 					expect(out, I64);
 					define(out, defined, available, block.id);
+				case FloatToInt(out, value):
+					require(value, available, block.id);
+					expect(value, F64);
+					expect(out, I32);
+					define(out, defined, available, block.id);
 				case SafeCast(out, value):
 					require(value, available, block.id);
 					expect(value, Dyn);

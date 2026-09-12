@@ -34,6 +34,12 @@ class InlineConstantEvaluator {
 					default: null;
 				}
 			case TIntToInt64(inner): evaluateValue(inner);
+			case TFloatToInt(inner):
+				switch evaluateValue(inner) {
+					case InlineConstantValue.Floating(number): InlineConstantValue.Integer(Std.int(number));
+					case InlineConstantValue.Integer(number): InlineConstantValue.Integer(number);
+					default: null;
+				}
 			case TNullableWrap(inner), TCast(inner), TAbiCast(inner): evaluateValue(inner);
 			case TAdd(left, right): add(evaluateValue(left), evaluateValue(right));
 			case TSub(left, right): numericBinary(evaluateValue(left), evaluateValue(right), 1);

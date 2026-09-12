@@ -31,6 +31,10 @@ HL_PRIM double HL_NAME(__math_fmod)(double value, double modulus) {
 HL_PRIM int HL_NAME(__math_round)(double value) {
 	return (int)floor(value + 0.5);
 }
+
+HL_PRIM int HL_NAME(__math_ceil)(double value) {
+	return (int)ceil(value);
+}
 extern realtime_string_map *hl_hballoc( void );
 extern void hl_hbset( realtime_string_map *map, uchar *key, vdynamic *value );
 extern bool hl_hbexists( realtime_string_map *map, uchar *key );

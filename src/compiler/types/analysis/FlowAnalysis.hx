@@ -31,6 +31,11 @@ class FlowAnalysis {
 			scope.refineExpression(mapEntry.path, mapEntry.valueType);
 			return;
 		}
+		var typeTest = typeTest(condition);
+		if (typeTest != null && truthy == typeTest.narrowsWhenTrue) {
+			refinePath(scope, typeTest.path, typeTest.type);
+			return;
+		}
 		var comparison = nullComparison(condition);
 		if (comparison != null) {
 			var nonNull = truthy == comparison.nonNullWhenTrue,
@@ -40,6 +45,25 @@ class FlowAnalysis {
 			else
 				scope.refineExpression(comparison.path, refined);
 		}
+	}
+
+	static function typeTest(condition:TypedExpression):Null<{path:String, type:CompilerType, narrowsWhenTrue:Bool}> {
+		return switch condition.expression {
+			case TCall("__std_is_of_type", [value, target]):
+				var path = accessPath(value);
+				path == null ? null : {path: path, type: target.type, narrowsWhenTrue: true};
+			case TNot(value):
+				var nested = typeTest(value);
+				nested == null ? null : {path: nested.path, type: nested.type, narrowsWhenTrue: !nested.narrowsWhenTrue};
+			default: null;
+		};
+	}
+
+	static function refinePath(scope:Scope, path:String, type:CompilerType):Void {
+		if (path.indexOf(".") < 0)
+			scope.refine(path, type);
+		else
+			scope.refineExpression(path, type);
 	}
 
 	static function mapExistence(condition:TypedExpression):Null<{path:String, valueType:CompilerType, existsWhenTrue:Bool}> {
@@ -125,7 +149,7 @@ class FlowAnalysis {
 			case TField(object, name):
 				var parent = accessPath(object);
 				parent == null ? null : parent + "." + name;
-			case TCast(value), TAbiCast(value): accessPath(value);
+			case TCast(value), TAbiCast(value), TToDynamic(value): accessPath(value);
 			default: null;
 		};
 

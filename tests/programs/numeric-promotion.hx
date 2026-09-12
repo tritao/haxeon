@@ -10,5 +10,7 @@ function main():Int {
 		return 1;
 	if (!(2 < 2.5) || !(3.0 == 3) || !takesFloat(6))
 		return 2;
+	if (Math.ceil(2.5) != 3 || Math.ceil(-2.5) != -2)
+		return 3;
 	return 42;
 }

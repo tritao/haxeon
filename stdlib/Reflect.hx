@@ -43,6 +43,9 @@ extern function reflectFieldName(object:Dynamic, index:Int):String;
 @:hlNative("haxeon_runtime", "__reflect_is_function")
 extern function reflectIsFunction(value:Dynamic):Bool;
 
+@:hlNative("haxeon_runtime", "__reflect_is_object")
+extern function reflectIsObject(value:Dynamic):Bool;
+
 /** Supported reflection helpers backed by the stable runtime ABI. */
 class Reflect {
 	public static inline function field(object:Dynamic, field:String):Dynamic
@@ -56,12 +59,16 @@ class Reflect {
 
 	public static function fields(object:Dynamic):Array<String> {
 		var result:Array<String> = [];
-		for (index in 0...reflectFieldCount(object)) result.push(reflectFieldName(object, index));
+		for (index in 0...reflectFieldCount(object))
+			result.push(reflectFieldName(object, index));
 		return result;
 	}
 
 	public static inline function isFunction(value:Dynamic):Bool
 		return reflectIsFunction(value);
+
+	public static inline function isObject(value:Dynamic):Bool
+		return reflectIsObject(value);
 
 	public static inline function compare(left:Dynamic, right:Dynamic):Int
 		return reflectCompare(left, right);

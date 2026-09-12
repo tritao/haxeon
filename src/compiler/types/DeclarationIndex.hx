@@ -297,9 +297,7 @@ class DeclarationIndex {
 		var classDecl = classes.get(name);
 		if (classDecl != null)
 			return resolveBareNominal(name, NominalKind.Class, classDecl.typeParameters.length, span);
-		return if (PlatformAbi.isType(name))
-			PlatformAbi.valueType(name);
-		else {
+		return if (PlatformAbi.isType(name)) PlatformAbi.valueType(name); else {
 			fail('Unknown type "$name"', span);
 			TVoid;
 		};
@@ -362,7 +360,8 @@ class DeclarationIndex {
 	static function nullable(type:CompilerType):CompilerType
 		return switch type {
 			case TNullable(_): type;
-			case TString, TDynamic, TNativeAbstract(_), TInstance(_, _, _), TAnonymous(_, _), TArray(_), TFunction(_, _), TMap(_, _):
+			case TInt, TInt64, TBool, TFloat, TString, TDynamic, TNativeAbstract(_), TInstance(_, _, _), TAnonymous(_, _), TArray(_), TFunction(_, _),
+				TMap(_, _):
 				TNullable(type);
 			default: type;
 		};

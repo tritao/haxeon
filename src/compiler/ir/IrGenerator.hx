@@ -656,6 +656,7 @@ class IrGenerator {
 				}
 			case TIntToFloat(value): builder.intToFloat(lowerExpression(value, builder, localTypes));
 			case TIntToInt64(value): builder.intToInt64(lowerExpression(value, builder, localTypes));
+			case TFloatToInt(value): builder.floatToInt(lowerExpression(value, builder, localTypes));
 			case TToDynamic(value): switch value.expression {
 					case TNullLiteral: builder.constNull(Dyn);
 					default: builder.toDyn(lowerExpression(value, builder, localTypes));
@@ -877,7 +878,8 @@ class IrGenerator {
 						matches = subject.type == TString ? builder.call("__string_equal", [comparisonValue, caseValue],
 							Bool) : builder.equal(comparisonValue, caseValue);
 					var matchBlock = matchBlocks[caseIndex];
-					if (switchCase.isCatchAll || switchCase.subjectBinding != null
+					if (switchCase.isCatchAll
+						|| switchCase.subjectBinding != null
 						|| (isExhaustiveFinalCase && switchCase.predicates.length == 0))
 						builder.jump(bodyBlock);
 					else {

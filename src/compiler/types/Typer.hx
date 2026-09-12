@@ -1087,7 +1087,7 @@ class Typer {
 								output.push(TAssign(scope.requireId(name), value, span));
 							scope.markAssigned(name);
 							scope.invalidateExpressionsForLocal(name);
-							scope.refine(name, value.type);
+							scope.refine(name, assignmentFlowType(assignedValue.type, value.type));
 						}
 					} else {
 						var objectName = name.substring(0, dot),
@@ -1266,8 +1266,10 @@ class Typer {
 							subjectBinding = switchSubjectBinding(switchCase.value, typedExpression.type, caseScope),
 							isCatchAll = isSwitchCatchAll(switchCase.value),
 							pattern = subjectBinding == null ? typeEnumPattern(switchCase.value, typedExpression.type, caseScope) : null,
-							typedValue = isCatchAll || subjectBinding != null ? typedExpression : pattern == null ? coerce(typeExpression(switchCase.value, scope,
-								typedExpression.type), typedExpression.type, "switch case", "E1019") : pattern.value;
+							typedValue = isCatchAll
+								|| subjectBinding != null ? typedExpression : pattern == null ? coerce(typeExpression(switchCase.value, scope,
+									typedExpression.type), typedExpression.type, "switch case",
+									"E1019") : pattern.value;
 						var parsedGuard = switchCase.guard,
 							typedGuard = parsedGuard == null ? null : coerce(typeExpression(parsedGuard, caseScope), TBool, "switch guard", "E1003");
 						if (typedGuard != null)
@@ -1852,11 +1854,7 @@ class Typer {
 					if (expectedEnum != null)
 						info = enumCaseInfo(expectedEnum + "." + name);
 				}
-				if (info != null)
-					null;
-				else if (name == "_")
-					null;
-				else {
+				if (info != null) null; else if (name == "_") null; else {
 					scope.define(name, expected, span);
 					bindCell(name, span, scope, expected);
 					scope.requireId(name);
@@ -1998,6 +1996,9 @@ class Typer {
 								requiredString(boundCell(name, scope))) : TLocal(name == "this" ? name : scope.requireId(name))),
 						type, span);
 				} else {
+					var enumLiteral = expectedEnumLiteral(name, expectedType, span);
+					if (enumLiteral != null)
+						return enumLiteral;
 					var localMethod = lexicalMethod(name);
 					if (localMethod != null && !localMethod.isStatic)
 						return typeMember(Variable("this", span), name, span, scope);
@@ -2391,8 +2392,9 @@ class Typer {
 						subjectBinding = switchSubjectBinding(switchCase.value, typedSubject.type, caseScope),
 						isCatchAll = isSwitchCatchAll(switchCase.value),
 						pattern = subjectBinding == null ? typeEnumPattern(switchCase.value, typedSubject.type, caseScope) : null,
-						typedValue = isCatchAll || subjectBinding != null ? typedSubject : pattern == null ? coerce(typeExpression(switchCase.value, scope,
-							typedSubject.type), typedSubject.type, "switch case", "E1019") : pattern.value;
+						typedValue = isCatchAll
+							|| subjectBinding != null ? typedSubject : pattern == null ? coerce(typeExpression(switchCase.value, scope, typedSubject.type),
+								typedSubject.type, "switch case", "E1019") : pattern.value;
 					var parsedGuard = switchCase.guard,
 						typedGuard = parsedGuard == null ? null : coerce(typeExpression(parsedGuard, caseScope), TBool, "switch guard", "E1003");
 					if (typedGuard != null)
@@ -2780,6 +2782,18 @@ class Typer {
 					if (sameType(left.type, TString) && sameType(right.type, TString))
 						return new TypedExpression(TCall("__string_compare_full", [left, right]), TInt, span);
 				}
+				if (name == "Reflect.isObject") {
+					if (arguments.length != 1)
+						fail("E1008", 'Function "Reflect.isObject" expects 1 argument, got ${arguments.length}', span);
+					var value = coerce(typeExpression(arguments[0], scope), TDynamic, "Reflect.isObject value", "E1002");
+					return new TypedExpression(TCall("__reflect_is_object", [value]), TBool, span);
+				}
+				if (name == "Math.ceil") {
+					if (arguments.length != 1)
+						fail("E1008", 'Function "Math.ceil" expects 1 argument, got ${arguments.length}', span);
+					var value = coerce(typeExpression(arguments[0], scope), TFloat, "Math.ceil value", "E1002");
+					return new TypedExpression(TCall("__math_ceil", [value]), TInt, span);
+				}
 				if (name == "haxe.io.Bytes.ofString") {
 					if (arguments.length < 1 || arguments.length > 2)
 						fail("E1008", 'Function "haxe.io.Bytes.ofString" expects 1 or 2 arguments, got ${arguments.length}', span);
@@ -2793,6 +2807,7 @@ class Typer {
 					return switch value.type {
 						case TInt: value;
 						case TFloat: new TypedExpression(TCall("__std_int_f64", [value]), TInt, span);
+						case TDynamic: new TypedExpression(TCall("__std_int_dynamic", [value]), TInt, span);
 						default:
 							fail("E1009", "Std.int expects an Int or Float", value.span);
 							new TypedExpression(TIntLiteral(0), TInt, span);
@@ -3119,6 +3134,12 @@ class Typer {
 	}
 
 	function typedMemberWithFlow(object:TypedExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression {
+		var objectPath = FlowAnalysis.accessPath(object);
+		if (objectPath != null) {
+			var refinedObject = scope.resolveExpression(objectPath);
+			if (refinedObject != null && !sameType(object.type, refinedObject))
+				object = new TypedExpression(TCast(object), refinedObject, object.span);
+		}
 		var member = typedMember(object, name, span),
 			path = FlowAnalysis.accessPath(member);
 		if (path == null)
@@ -3197,7 +3218,7 @@ class Typer {
 	function specializeGeneric(baseName:String, fn:AstFunction, arguments:Array<TypedExpression>, span:SourceSpan, scope:Scope, owner:Null<String>,
 			isStatic:Bool, ?presetSubstitutions:Map<String, CompilerType>, ?receiver:TypedExpression):TypedExpression {
 		var required = fn.arguments.length;
-		while (required > 0 && fn.arguments[required - 1].optional)
+		while (required > 0 && fn.arguments[required - 1].optional == true)
 			required--;
 		if (arguments.length < required || arguments.length > fn.arguments.length) {
 			var expected = required == fn.arguments.length ? '$required' : '$required to ${fn.arguments.length}';
@@ -3375,7 +3396,7 @@ class Typer {
 		try {
 			var initializer = coerce(typeExpression(field.initializer, new Scope(), staticField.type), staticField.type,
 				'inline field "${staticField.owner}.$name"', "E1002"),
-			literal = InlineConstantEvaluator.evaluate(initializer);
+				literal = InlineConstantEvaluator.evaluate(initializer);
 			if (literal == null)
 				fail("E1002", 'Inline field "${staticField.owner}.$name" requires a compile-time constant initializer', field.span);
 			resolved = {
@@ -3783,7 +3804,7 @@ class Typer {
 		if (name == "concat") {
 			if (arguments.length != 1)
 				fail("E1008", "Array.concat expects one argument", span);
-			var other = typeExpression(arguments[0], scope),
+			var other = typeExpression(arguments[0], scope, TArray(element)),
 				otherElement = arrayElementType(other.type, span);
 			if (!sameType(otherElement, element))
 				fail("E1002", "Array.concat expects matching element types", span);
@@ -3941,7 +3962,7 @@ class Typer {
 	function typeDeclaredCallArguments(arguments:Array<AstExpression>, parameters:Array<compiler.syntax.Ast.AstArgument>, scope:Scope, name:String,
 			span:SourceSpan, ?substitutions:Map<String, CompilerType>):Array<TypedExpression> {
 		var required = parameters.length;
-		while (required > 0 && parameters[required - 1].optional)
+		while (required > 0 && parameters[required - 1].optional == true)
 			required--;
 		if (arguments.length < required || arguments.length > parameters.length) {
 			var expected = required == parameters.length ? '$required' : '$required to ${parameters.length}';
@@ -3998,7 +4019,7 @@ class Typer {
 		} else {
 			var constructor = requiredMapValue(signatures, constructorName),
 				required = constructor.arguments.length;
-			while (required > 0 && constructor.arguments[required - 1].optional)
+			while (required > 0 && constructor.arguments[required - 1].optional == true)
 				required--;
 			if (arguments.length < required || arguments.length > constructor.arguments.length) {
 				var expected = required == constructor.arguments.length ? '$required' : '$required to ${constructor.arguments.length}';
@@ -4079,11 +4100,11 @@ class Typer {
 			var inferred = knownExpressionType(argument.defaultValue);
 			inferred == null ? TDynamic : inferred;
 		} else substitutions == null ? lowerType(argument.type) : declarations.resolve(argument.type, argument.span, substitutions);
-		return argument.optional && argument.defaultValue == null ? CompilerType.TNullable(type) : type;
+		return argument.optional == true && argument.defaultValue == null ? CompilerType.TNullable(type) : type;
 	}
 
 	static function isPosInfosParameter(argument:compiler.syntax.Ast.AstArgument):Bool
-		return argument.optional && switch argument.type {
+		return argument.optional == true && switch argument.type {
 			case NamedType("haxe.PosInfos"): true;
 			default: false;
 		};
@@ -4143,7 +4164,7 @@ class Typer {
 			case IntToInt64:
 				new TypedExpression(TIntToInt64(value), TInt64, value.span);
 			case ReferenceCast:
-				new TypedExpression(TCast(value), expected, value.span);
+				functionAdapter(value, expected, value.span);
 			case AbstractCast:
 				new TypedExpression(TAbiCast(value), expected, value.span);
 			case ToDynamic:
@@ -4220,8 +4241,19 @@ class Typer {
 			return new TypedExpression(TIntToFloat(value), TFloat, span);
 		if (value.type == TInt && target == TInt64)
 			return new TypedExpression(TIntToInt64(value), TInt64, span);
+		if (value.type == TFloat && target == TInt)
+			return new TypedExpression(TFloatToInt(value), TInt, span);
 		return new TypedExpression(TCast(value), target, span);
 	}
+
+	static function assignmentFlowType(source:CompilerType, stored:CompilerType):CompilerType
+		return switch source {
+			case TNull, TNullable(_), TDynamic: stored;
+			default: switch stored {
+					case TNullable(element): element;
+					default: stored;
+				};
+		};
 
 	function isAssignable(actual:CompilerType, expected:CompilerType):Bool {
 		return relations.isAssignable(actual, expected);
@@ -4346,6 +4378,32 @@ class Typer {
 		}
 	}
 
+	function expectedEnumLiteral(name:String, expectedType:Null<CompilerType>, span:SourceSpan):Null<TypedExpression> {
+		var expectedEnumName = enumName(expectedType);
+		if (expectedEnumName == null || !enumDecls.exists(expectedEnumName))
+			return null;
+		var declaration = enumDecls.get(expectedEnumName),
+			caseName = lastPathSegment(name);
+		for (index in 0...declaration.cases.length) {
+			var enumCase = declaration.cases[index];
+			if (enumCase.name == caseName && enumCase.params.length == 0) {
+				var literalType:CompilerType = TInstance(NominalKind.Enum, declaration.name, []);
+				switch expectedType {
+					case TInstance(Enum, _, arguments):
+						literalType = TInstance(NominalKind.Enum, declaration.name, arguments);
+					case TNullable(element):
+						switch element {
+							case TInstance(Enum, _, arguments): literalType = TInstance(NominalKind.Enum, declaration.name, arguments);
+							default:
+						}
+					default:
+				}
+				return new TypedExpression(TEnumLiteral(declaration.name, index), literalType, span);
+			}
+		}
+		return null;
+	}
+
 	function resolveReceiver(name:String, span:SourceSpan, scope:Scope):Null<TypedExpression> {
 		if (scope.resolve(name) != null)
 			return typeExpression(Variable(name, span), scope);
@@ -4451,9 +4509,9 @@ class Typer {
 		if (!isNumeric(left.type) || !isNumeric(right.type))
 			fail("E1010", "Modulo requires matching Int or Float operands", span);
 		var promoted = promoteNumericOperands(left, right);
-		return sameType(promoted.type, TInt)
-			? new TypedExpression(TMod(promoted.left, promoted.right), TInt, span)
-			: new TypedExpression(TCall("__math_fmod", [promoted.left, promoted.right]), TFloat, span);
+		return sameType(promoted.type,
+			TInt) ? new TypedExpression(TMod(promoted.left, promoted.right), TInt,
+				span) : new TypedExpression(TCall("__math_fmod", [promoted.left, promoted.right]), TFloat, span);
 	}
 
 	function bitwise(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan):TypedExpression {

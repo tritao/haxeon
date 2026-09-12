@@ -19,8 +19,11 @@ class CompilerIntrinsics {
 		// Language primitives.
 		definitions.push(native("trace", "haxeon_runtime", "__sys_print", [TString], TVoid));
 		definitions.push(native("__std_int_f64", "haxeon_runtime", "__std_int_f64", [TFloat], TInt));
+		definitions.push(native("__std_int_dynamic", "haxeon_runtime", "__std_int_dynamic", [TDynamic], TInt));
 		definitions.push(native("__std_string", "haxeon_runtime", "__std_string", [TDynamic], TString));
 		definitions.push(native("__dynamic_equal", "haxeon_runtime", "__dynamic_equal", [TDynamic, TDynamic], TBool));
+		definitions.push(native("__reflect_is_object", "haxeon_runtime", "__reflect_is_object", [TDynamic], TBool));
+		definitions.push(native("__math_ceil", "haxeon_runtime", "__math_ceil", [TFloat], TInt));
 		definitions.push(native("__math_fmod", "haxeon_runtime", "__math_fmod", [TFloat, TFloat], TFloat));
 
 		// Primitive String methods lowered directly by the typer.
@@ -45,6 +48,7 @@ class CompilerIntrinsics {
 		definitions.push(native("__bytes_set", "haxeon_runtime", "__bytes_set", [bytes, TInt, TInt], TVoid));
 		definitions.push(native("__bytes_set_i32", "haxeon_runtime", "__bytes_set_i32", [bytes, TInt, TInt], TVoid));
 		definitions.push(native("__bytes_set_float", "haxeon_runtime", "setF32", [bytes, TInt, TFloat], TVoid));
+		definitions.push(native("__bytes_set_double", "haxeon_runtime", "setF64", [bytes, TInt, TFloat], TVoid));
 		definitions.push(native("__bytes_sub", "haxeon_runtime", "__bytes_sub", [bytes, TInt, TInt], bytes));
 		definitions.push(native("__bytes_compare", "haxeon_runtime", "__bytes_compare", [bytes, bytes], TInt));
 		definitions.push(native("__bytes_to_string", "haxeon_runtime", "__bytes_to_string", [bytes], TString));

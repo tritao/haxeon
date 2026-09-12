@@ -1,12 +1,45 @@
 class Value {
 	public function new() {}
+
+	public function getValue():Int
+		return 42;
 }
+
+function stringLength(value:Dynamic):Int {
+	if (Std.isOfType(value, String))
+		return value.length;
+	return 0;
+}
+
+function functionValue():Int
+	return 42;
 
 function main():Int {
 	var text:Dynamic = "value",
 		number:Dynamic = 42,
+		fraction:Dynamic = 42.9,
+		flag:Dynamic = true,
+		wide:haxe.Int64 = 42,
+		dynamicWide:Dynamic = wide,
 		values:Dynamic = [1, 2],
-		object:Dynamic = new Value();
-	return Std.isOfType(text, String) && !Std.isOfType(text, Int) && Std.isOfType(number, Int) && Std.isOfType(values, Array)
-		&& Std.isOfType(object, Value) && !Std.isOfType(null, Value) ? 42 : 1;
+		objectValue = new Value(),
+		object:Dynamic = objectValue,
+		callable:Dynamic = functionValue,
+		boundMethod:Dynamic = objectValue.getValue;
+	return Std.isOfType(text, String)
+		&& !Std.isOfType(text, Int)
+		&& Std.isOfType(number, Int)
+		&& Std.isOfType(values, Array)
+		&& Std.isOfType(object, Value)
+		&& !Std.isOfType(null, Value)
+		&& stringLength(text) == 5
+		&& stringLength(number) == 0
+		&& Std.int(fraction) == 42
+		&& Std.int(flag) == 1
+		&& Std.int(dynamicWide) == 42
+		&& Reflect.isObject(values)
+		&& Reflect.isObject(object)
+		&& !Reflect.isObject(text)
+		&& !Reflect.isObject(callable)
+		&& !Reflect.isObject(boundMethod) ? 42 : 1;
 }

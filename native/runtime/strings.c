@@ -191,6 +191,9 @@ HL_PRIM double HL_NAME(__std_parse_float)( vbyte *value ) {
 }
 
 HL_PRIM int HL_NAME(__std_int_f64)( double value ) { return (int)value; }
+HL_PRIM int HL_NAME(__std_int_dynamic)( vdynamic *value ) {
+	return value == NULL ? 0 : hl_dyn_casti(&value, &hlt_dyn, &hlt_i32);
+}
 HL_PRIM int HL_NAME(__std_random)( int limit ) { return limit <= 0 ? 0 : rand() % limit; }
 
 HL_PRIM vbyte *HL_NAME(__std_string)( vdynamic *value ) {

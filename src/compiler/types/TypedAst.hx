@@ -30,6 +30,7 @@ enum TypedExpressionKind {
 	TNullableWrap(value:TypedExpression);
 	TIntToFloat(value:TypedExpression);
 	TIntToInt64(value:TypedExpression);
+	TFloatToInt(value:TypedExpression);
 	TToDynamic(value:TypedExpression);
 	TLocal(name:String);
 	TCellLocal(name:String, cellClass:String);
@@ -114,8 +115,10 @@ typedef TypedMapEntry = {final key:TypedExpression; final value:TypedExpression;
 typedef TypedSwitchExpressionCase = {
 	final value:TypedExpression;
 	final subjectBinding:Null<String>;
+
 	/** True when the source arm is the wildcard pattern `_`, which has no binding name. */
 	final isCatchAll:Bool;
+
 	final guard:Null<TypedExpression>;
 	final result:TypedExpression;
 	final enumName:Null<String>;
@@ -156,8 +159,10 @@ enum TypedStatement {
 typedef TypedSwitchCase = {
 	final value:TypedExpression;
 	final subjectBinding:Null<String>;
+
 	/** True when the source arm is the wildcard pattern `_`, which has no binding name. */
 	final isCatchAll:Bool;
+
 	final guard:Null<TypedExpression>;
 	final statements:Array<TypedStatement>;
 	final enumName:Null<String>;
@@ -223,8 +228,10 @@ typedef TypedField = {
 	final name:String;
 	final type:CompilerType;
 	final initializer:Null<TypedExpression>;
+
 	/** Evaluated constant retained for compile-time inline-field substitution. */
 	final inlineValue:Null<TypedExpression>;
+
 	final readAccess:Null<compiler.syntax.Ast.AstFieldAccess>;
 	final writeAccess:Null<compiler.syntax.Ast.AstFieldAccess>;
 	final isStatic:Bool;

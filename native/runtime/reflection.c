@@ -53,6 +53,22 @@ HL_PRIM bool HL_NAME(__reflect_is_function)(vdynamic *value) {
 	return value && (value->t->kind == HFUN || value->t->kind == HMETHOD);
 }
 
+HL_PRIM bool HL_NAME(__reflect_is_object)(vdynamic *value) {
+	if (!value) return false;
+	switch (value->t->kind) {
+	case HOBJ:
+	case HARRAY:
+	case HTYPE:
+	case HVIRTUAL:
+	case HDYNOBJ:
+	case HENUM:
+	case HSTRUCT:
+		return true;
+	default:
+		return false;
+	}
+}
+
 HL_PRIM vdynamic *HL_NAME(__reflect_array_get)(vdynamic *value, int index) {
 	if (!value || value->t->kind != HARRAY) hl_error("Value is not an array");
 	varray *array = (varray *)value;

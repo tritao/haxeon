@@ -40,6 +40,9 @@ extern function mathTan(value:Float):Float;
 @:hlNative("haxeon_runtime", "__math_round")
 extern function mathRound(value:Float):Int;
 
+@:hlNative("haxeon_runtime", "__math_ceil")
+extern function mathCeil(value:Float):Int;
+
 /** Supported mathematical helpers backed by the stable runtime ABI. */
 class Math {
 	public static inline var PI:Float = 3.141592653589793;
@@ -70,4 +73,7 @@ class Math {
 
 	public static inline function round(value:Float):Int
 		return mathRound(value);
+
+	public static inline function ceil(value:Float):Int
+		return mathCeil(value);
 }

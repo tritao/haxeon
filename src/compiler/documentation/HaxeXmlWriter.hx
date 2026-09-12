@@ -72,7 +72,8 @@ class HaxeXmlWriter {
 			output.add('</class>\n');
 		}
 		for (decl in program.classes) {
-			openType(output, "class", qualified(program, decl.name), decl.typeParameters, state, decl.span, decl.isPrivate, decl.isExtern ? ' extern="1"' : "");
+			openType(output, "class", qualified(program, decl.name), decl.typeParameters, state, decl.span, decl.isPrivate,
+				decl.isExtern == true ? ' extern="1"' : "");
 			if (decl.base != null) {
 				output.add('<extends>');
 				emitType(output, decl.base);
@@ -104,7 +105,8 @@ class HaxeXmlWriter {
 			output.add('</class>\n');
 		}
 		for (decl in program.abstracts) {
-			openType(output, "abstract", qualified(program, decl.name), decl.typeParameters, state, decl.span, false, decl.isExtern ? ' extern="1"' : "");
+			openType(output, "abstract", qualified(program, decl.name), decl.typeParameters, state, decl.span, false,
+				decl.isExtern == true ? ' extern="1"' : "");
 			output.add('<this>');
 			emitType(output, decl.underlying);
 			output.add('</this>');
@@ -169,7 +171,7 @@ class HaxeXmlWriter {
 		output.add(escape([for (argument in fn.arguments) argument.name].join(":")));
 		output.add('">');
 		for (argument in fn.arguments)
-			emitType(output, argument.optional ? NullableType(argument.type) : argument.type);
+			emitType(output, argument.optional == true ? NullableType(argument.type) : argument.type);
 		emitType(output, fn.result);
 		output.add('</f>');
 		emitDocumentation(output, state, comments, fn.span);

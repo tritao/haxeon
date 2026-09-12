@@ -79,9 +79,23 @@ class HlLower {
 					name: pointerResult ? '__c_native_pointer_invoke_$arity' : bytesResult ? '__c_native_bytes_invoke_$arity' : aggregateResult ? '__c_native_aggregate_invoke_$arity' : utf8Result ? '__c_native_utf8_invoke_$arity' : '__c_native_invoke_$arity',
 					library: "haxeon_runtime",
 					symbol: pointerResult ? 'native_pointer_invoke_$arity' : bytesResult ? 'native_bytes_invoke_$arity' : aggregateResult ? 'native_aggregate_invoke_$arity' : utf8Result ? 'native_utf8_invoke_$arity' : 'native_invoke_$arity',
-					arguments: ((pointerResult || utf8Result) ? [Bytes, Bytes, Bytes, Bytes, Bytes, Bool] : bytesResult ? [Bytes, Bytes, Bytes, Bytes, Bytes, Bytes, Bool] : [Bytes, Bytes, Bytes])
-						.concat([for (_ in 0...arity) Dyn]),
-					result: pointerResult ? Abstract("native_pointer") : (bytesResult || aggregateResult) ? Abstract("realtime_bytes") : utf8Result ? Bytes : Dyn
+					arguments: ((pointerResult || utf8Result) ? [
+						IrType.Bytes,
+						IrType.Bytes,
+						IrType.Bytes,
+						IrType.Bytes,
+						IrType.Bytes,
+						IrType.Bool
+					] : bytesResult ? [
+						IrType.Bytes,
+						IrType.Bytes,
+						IrType.Bytes,
+						IrType.Bytes,
+						IrType.Bytes,
+						IrType.Bytes,
+						IrType.Bool
+					] : [IrType.Bytes, IrType.Bytes, IrType.Bytes]).concat([for (_ in 0...arity) IrType.Dyn]),
+					result: pointerResult ? IrType.Abstract("native_pointer") : (bytesResult || aggregateResult) ? IrType.Abstract("realtime_bytes") : utf8Result ? IrType.Bytes : IrType.Dyn
 				});
 			}
 		}
@@ -441,9 +455,9 @@ class HlLower {
 						if (native.result != Void && unsupportedCDispatchResult(native.result))
 							throw 'Ordinary C function "$functionName" uses an unsupported executable result type ${native.result}';
 						var callArguments = [
-							temporaryRegister(Bytes, registerTypes),
-							temporaryRegister(Bytes, registerTypes),
-							temporaryRegister(Bytes, registerTypes)
+							temporaryRegister(IrType.Bytes, registerTypes),
+							temporaryRegister(IrType.Bytes, registerTypes),
+							temporaryRegister(IrType.Bytes, registerTypes)
 						];
 						instructions.push(HlInstruction.LoadString(callArguments[0], internString(native.library)));
 						instructions.push(HlInstruction.LoadString(callArguments[1], internString(native.symbol)));
@@ -453,30 +467,30 @@ class HlLower {
 							aggregateResult = isAggregateResult(native),
 							utf8Result = isUtf8Result(native);
 						if (pointerResult || bytesResult || utf8Result) {
-							var ownership = temporaryRegister(Bytes, registerTypes),
-								release = temporaryRegister(Bytes, registerTypes),
-								nullable = temporaryRegister(Bool, registerTypes);
+							var ownership = temporaryRegister(IrType.Bytes, registerTypes),
+								release = temporaryRegister(IrType.Bytes, registerTypes),
+								nullable = temporaryRegister(IrType.Bool, registerTypes);
 							instructions.push(HlInstruction.LoadString(ownership, internString(native.pointerOwnership)));
 							instructions.push(HlInstruction.LoadString(release, internString(native.pointerRelease == null ? "" : native.pointerRelease)));
 							instructions.push(HlInstruction.LoadBool(nullable, native.pointerNullable));
 							callArguments.push(ownership);
 							callArguments.push(release);
 							if (bytesResult) {
-								var length = temporaryRegister(Bytes, registerTypes);
+								var length = temporaryRegister(IrType.Bytes, registerTypes);
 								instructions.push(HlInstruction.LoadString(length, internString(native.pointerLength)));
 								callArguments.push(length);
 							}
 							callArguments.push(nullable);
 						}
 						for (argument in arguments) {
-							var boxed = temporaryRegister(Dyn, registerTypes);
+							var boxed = temporaryRegister(IrType.Dyn, registerTypes);
 							if (nullValues.exists(argument.id))
 								instructions.push(HlInstruction.LoadNull(boxed));
 							else
 								instructions.push(HlInstruction.ToDyn(boxed, requireRegister(argument, registers)));
 							callArguments.push(boxed);
 						}
-						var dynamicResult = temporaryRegister(pointerResult ? Abstract("native_pointer") : (bytesResult || aggregateResult) ? Abstract("realtime_bytes") : utf8Result ? Bytes : Dyn,
+						var dynamicResult = temporaryRegister(pointerResult ? IrType.Abstract("native_pointer") : (bytesResult || aggregateResult) ? IrType.Abstract("realtime_bytes") : utf8Result ? IrType.Bytes : IrType.Dyn,
 							registerTypes);
 						instructions.push(HlInstruction.CallN(dynamicResult,
 							requireFunction(pointerResult ? '__c_native_pointer_invoke_${arguments.length}' : bytesResult ? '__c_native_bytes_invoke_${arguments.length}' : aggregateResult ? '__c_native_aggregate_invoke_${arguments.length}' : utf8Result ? '__c_native_utf8_invoke_${arguments.length}' : '__c_native_invoke_${arguments.length}'),
@@ -777,25 +791,26 @@ class HlLower {
 
 	static function unsupportedCDispatchArgument(type:IrType):Bool
 		return switch type {
-			case I32, I64, Bool, F64, Bytes, Abstract("realtime_bytes"), Abstract("native_pointer"), Abstract("native_callback"): false;
+			case I32, I64, IrType.Bool, F64, IrType.Bytes, IrType.Abstract("realtime_bytes"), IrType.Abstract("native_pointer"),
+				IrType.Abstract("native_callback"): false;
 			default: true;
 		};
 
 	static function unsupportedCDispatchResult(type:IrType):Bool
 		return switch type {
-			case I32, I64, Bool, F64, Bytes, Abstract("native_pointer"), Abstract("realtime_bytes"): false;
+			case I32, I64, IrType.Bool, F64, IrType.Bytes, IrType.Abstract("native_pointer"), IrType.Abstract("realtime_bytes"): false;
 			default: true;
 		};
 
 	static function isNativePointer(type:IrType):Bool
 		return switch type {
-			case Abstract("native_pointer"): true;
+			case IrType.Abstract("native_pointer"): true;
 			case _: false;
 		};
 
 	static function isManagedPointerBytes(native:IrCNative):Bool
 		return native.pointerLength != null && switch native.result {
-			case Abstract("realtime_bytes"): true;
+			case IrType.Abstract("realtime_bytes"): true;
 			case _: false;
 		};
 
@@ -810,7 +825,7 @@ class HlLower {
 
 	static function isAggregateResult(native:IrCNative):Bool
 		return native.pointerLength == null && switch (native.result) {
-			case Abstract("realtime_bytes"): true;
+			case IrType.Abstract("realtime_bytes"): true;
 			case _: false;
 		};
 

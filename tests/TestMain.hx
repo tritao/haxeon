@@ -753,9 +753,9 @@ class TestMain {
 			|| compilerRequest.ffiInterfaces.join(",") != "generated/nativekit.hxi,generated/system.hxi"
 			|| compilerRequest.ffiLibrary != "sample")
 			throw "Compiler CLI did not produce a typed build request";
-		var wasmDefines = CompilerDriver.targetDefines("wasm32"), hlDefines = CompilerDriver.targetDefines("hl");
-		if (wasmDefines.join(",") != "haxeon,target=wasm32,wasm,wasm32"
-			|| hlDefines.join(",") != "haxeon,target=hl,hl,sys")
+		var wasmDefines = CompilerDriver.targetDefines("wasm32"),
+			hlDefines = CompilerDriver.targetDefines("hl");
+		if (wasmDefines.join(",") != "haxeon,target=wasm32,wasm,wasm32" || hlDefines.join(",") != "haxeon,target=hl,hl,sys")
 			throw "Compiler targets did not expose their canonical conditional defines";
 		var equalsXmlRequest = CompilerArguments.parse(["--xml=out/equals.xml", "source/Main.hx"]);
 		if (equalsXmlRequest.xmlOutput != "out/equals.xml")
@@ -779,11 +779,10 @@ class TestMain {
 		var documentationComments = DocumentationTools.scan(documentationSource),
 			widgetStart = documentationSource.byteOffsetForStringOffset(documentationSource.text.indexOf("class Widget")),
 			mainStart = documentationSource.byteOffsetForStringOffset(documentationSource.text.indexOf("function main")),
-			widgetDocumentation = DocumentationTools.forSpan(documentationSource, documentationComments, documentationSource.span(widgetStart, widgetStart + 5)),
+			widgetDocumentation = DocumentationTools.forSpan(documentationSource, documentationComments,
+				documentationSource.span(widgetStart, widgetStart + 5)),
 			mainDocumentation = DocumentationTools.forSpan(documentationSource, documentationComments, documentationSource.span(mainStart, mainStart + 8));
-		if (documentationComments.length != 2
-			|| widgetDocumentation.raw != "Widget docs."
-			|| mainDocumentation.raw != "Main docs.")
+		if (documentationComments.length != 2 || widgetDocumentation.raw != "Widget docs." || mainDocumentation.raw != "Main docs.")
 			throw "Haxe documentation scanning or indexed association lost comments";
 		var documentationCompiler = new Compiler();
 		documentationCompiler.update("sample/Widget.hx",
@@ -977,6 +976,8 @@ class TestMain {
 		if (!invalidTypeTestRejected)
 			throw "Std.isOfType accepted a runtime value as its type operand";
 		Sys.println("PASS: Std.isOfType requires a compile-time type operand");
+		Frontend.compile('function read(value:Dynamic):Int { if (Std.isOfType(value, String)) return value.length; return 0; } function convert(value:Dynamic):Int return Std.int(value); function main():Int return read("haxeon") + convert(42.5);');
+		Sys.println("PASS: Dynamic type tests refine locals and Std.int accepts numeric Dynamic values");
 		var nullObjectCompiler = new Compiler();
 		nullObjectCompiler.update("Main.hx", 'function main():Int { var value = { optional: null }; value.optional; return 42; }');
 		nullObjectCompiler.compile("Main");
