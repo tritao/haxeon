@@ -102,7 +102,7 @@ class NativeRegistry {
 			case TBool: Bool;
 			case TFloat: F64;
 			case TString: IrType.Bytes;
-			case TBytes: Abstract("realtime_bytes");
+			case TBytes: ManagedBytes;
 			case THlBytes: IrType.Bytes;
 			case TDynamic: Dyn;
 			case TNativeAbstract(name): Abstract(name);

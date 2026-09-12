@@ -3269,7 +3269,7 @@ class WasmBackend implements Backend {
 			case I32, Bool: I32;
 			case I64: I64;
 			case F64: F64;
-			case Bytes, Dyn, TypeRef, Array(_), Enum(_), Obj(_), Abstract(_), Virtual(_), Function(_, _): I32;
+			case Bytes, ManagedBytes, Dyn, TypeRef, Array(_), Enum(_), Obj(_), Abstract(_), Virtual(_), Function(_, _): I32;
 			default: throw 'Wasm scalar backend does not yet support IR type ${Std.string(type)}';
 		};
 }
@@ -4163,7 +4163,7 @@ class WasmFunctionLower {
 	static function nativeArgument(body:Array<WasmInstruction>, argument:IrValue, values:Map<Int, Int>):Void {
 		body.push(LocalGet(requiredLocal(values, argument.id)));
 		switch argument.type {
-			case Bytes, Abstract("realtime_bytes"):
+			case Bytes, ManagedBytes, Abstract("realtime_bytes"):
 				body.push(I32Const(WasmLayout.STRING_DATA_OFFSET));
 				body.push(I32Add);
 			case _:

@@ -6,7 +6,7 @@ import haxe.io.BytesOutput;
 
 /** Deterministic, strictly validated persistence for IR types. */
 class IrTypeCodec {
-	static inline final VERSION = 1;
+	static inline final VERSION = 2;
 	static inline final MAX_DEPTH = 64;
 	static inline final MAX_ARGUMENTS = 0x10000;
 	static inline final MAX_STRING_BYTES = 0x100000;
@@ -26,7 +26,8 @@ class IrTypeCodec {
 		try {
 			if (input.readString(3) != "IRT")
 				throw "Invalid IR type state";
-			if (input.readByte() != VERSION)
+			var version = input.readByte();
+			if (version < 1 || version > VERSION)
 				throw "Unsupported IR type state version";
 			var result = readType(input, bytes.length, 0);
 			if (input.position != bytes.length)
@@ -51,6 +52,8 @@ class IrTypeCodec {
 				output.writeByte(3);
 			case Bytes:
 				output.writeByte(4);
+			case ManagedBytes:
+				output.writeByte(14);
 			case Dyn:
 				output.writeByte(5);
 			case TypeRef:
@@ -88,6 +91,7 @@ class IrTypeCodec {
 			case 2: Bool;
 			case 3: F64;
 			case 4: Bytes;
+			case 14: ManagedBytes;
 			case 5: Dyn;
 			case 6: TypeRef;
 			case 7: Array(readType(input, totalLength, depth + 1));

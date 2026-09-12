@@ -551,7 +551,7 @@ class IrGenerator {
 	 */
 	static function requiresDynamicBox(type:IrType):Bool
 		return switch type {
-			case Abstract(_), Bytes, TypeRef: true;
+			case Abstract(_), Bytes, ManagedBytes, TypeRef: true;
 			default: false;
 		};
 
@@ -1514,7 +1514,7 @@ class IrGenerator {
 			case TBool: Bool;
 			case TFloat: F64;
 			case TString: Bytes;
-			case TBytes: Abstract("realtime_bytes");
+			case TBytes: ManagedBytes;
 			case THlBytes: Bytes;
 			case TDynamic: Dyn;
 			case TNativeAbstract(name): Abstract(name);
@@ -1590,7 +1590,7 @@ class IrGenerator {
 		var nativeName = RuntimeType.arrayNative(element, operation);
 		var nativeResult = RuntimeType.requireArrayName(element) == "ref" ? switch resultType {
 			case Array(_): return builder.call(nativeName, arguments, resultType);
-			case Obj(_), Enum(_), Abstract(_), Virtual(_), Function(_, _): Dyn;
+			case Obj(_), Enum(_), ManagedBytes, Abstract(_), Virtual(_), Function(_, _): Dyn;
 			default: resultType;
 		} : resultType;
 		return referenceResultCast(builder, builder.call(nativeName, arguments, nativeResult), resultType);

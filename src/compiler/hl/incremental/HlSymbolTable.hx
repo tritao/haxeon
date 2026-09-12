@@ -207,6 +207,7 @@ class HlSymbolTable {
 		if (typeKey(type).indexOf("obj:") == 0)
 			throw 'Object type "$type" must be registered before use';
 		types.push(switch type {
+			case ManagedBytes: HlTypeDef.Abstract(internString("realtime_bytes"));
 			case Abstract(name): HlTypeDef.Abstract(internString(name));
 			default: HlTypeDef.Simple(switch type {
 					case Void: HlType.Void;
@@ -215,6 +216,7 @@ class HlSymbolTable {
 					case Bool: HlType.Bool;
 					case F64: HlType.F64;
 					case Bytes: HlType.Bytes;
+					case ManagedBytes: throw 'Managed byte type must be handled by the outer type switch';
 					case Dyn: HlType.Dyn;
 					case TypeRef: HlType.Type;
 					case Array(_): HlType.Array;
@@ -447,6 +449,7 @@ class HlSymbolTable {
 			case Bool: "bool";
 			case F64: "f64";
 			case Bytes: "bytes";
+			case ManagedBytes: "abstract:realtime_bytes";
 			case Dyn: "dyn";
 			case TypeRef: "type";
 			case Array(element): 'array:${typeKey(element)}';

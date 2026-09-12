@@ -70,7 +70,7 @@ class HxiProjection {
 					symbol: fn.symbol,
 					signature: callSignature(codes.join(",") + ">" + abiDescriptor(fn.result, declarations, abi, aggregateDescriptors), fn.callConvention),
 					arguments: arguments,
-					result: managedBytes ? Abstract("realtime_bytes") : irType(returnValue.code, true),
+					result: managedBytes ? ManagedBytes : irType(returnValue.code, true),
 					pointerOwnership: ownership.kind,
 					pointerRelease: ownership.release,
 					pointerLength: fn.resultPolicy.length,
@@ -1205,8 +1205,8 @@ class HxiProjection {
 			case 0: Void;
 			case 7 | 8: I64;
 			case 9 | 10: F64;
-			case 11: Abstract(result ? "native_pointer" : nativeAbstract == null ? "realtime_bytes" : nativeAbstract);
-			case 12: Abstract("realtime_bytes");
+			case 11: result ? Abstract("native_pointer") : nativeAbstract == null ? ManagedBytes : Abstract(nativeAbstract);
+			case 12: ManagedBytes;
 			case 13: Bytes;
 			default: I32;
 		};

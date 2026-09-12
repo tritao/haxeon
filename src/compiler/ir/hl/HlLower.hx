@@ -490,7 +490,7 @@ class HlLower {
 								instructions.push(HlInstruction.ToDyn(boxed, requireRegister(argument, registers)));
 							callArguments.push(boxed);
 						}
-						var dynamicResult = temporaryRegister(pointerResult ? IrType.Abstract("native_pointer") : (bytesResult || aggregateResult) ? IrType.Abstract("realtime_bytes") : utf8Result ? IrType.Bytes : IrType.Dyn,
+						var dynamicResult = temporaryRegister(pointerResult ? IrType.Abstract("native_pointer") : (bytesResult || aggregateResult) ? IrType.ManagedBytes : utf8Result ? IrType.Bytes : IrType.Dyn,
 							registerTypes);
 						instructions.push(HlInstruction.CallN(dynamicResult,
 							requireFunction(pointerResult ? '__c_native_pointer_invoke_${arguments.length}' : bytesResult ? '__c_native_bytes_invoke_${arguments.length}' : aggregateResult ? '__c_native_aggregate_invoke_${arguments.length}' : utf8Result ? '__c_native_utf8_invoke_${arguments.length}' : '__c_native_invoke_${arguments.length}'),
@@ -791,14 +791,14 @@ class HlLower {
 
 	static function unsupportedCDispatchArgument(type:IrType):Bool
 		return switch type {
-			case I32, I64, IrType.Bool, F64, IrType.Bytes, IrType.Abstract("realtime_bytes"), IrType.Abstract("native_pointer"),
+			case I32, I64, IrType.Bool, F64, IrType.Bytes, IrType.ManagedBytes, IrType.Abstract("realtime_bytes"), IrType.Abstract("native_pointer"),
 				IrType.Abstract("native_callback"): false;
 			default: true;
 		};
 
 	static function unsupportedCDispatchResult(type:IrType):Bool
 		return switch type {
-			case I32, I64, IrType.Bool, F64, IrType.Bytes, IrType.Abstract("native_pointer"), IrType.Abstract("realtime_bytes"): false;
+			case I32, I64, IrType.Bool, F64, IrType.Bytes, IrType.ManagedBytes, IrType.Abstract("native_pointer"), IrType.Abstract("realtime_bytes"): false;
 			default: true;
 		};
 
@@ -810,7 +810,7 @@ class HlLower {
 
 	static function isManagedPointerBytes(native:IrCNative):Bool
 		return native.pointerLength != null && switch native.result {
-			case IrType.Abstract("realtime_bytes"): true;
+			case IrType.ManagedBytes, IrType.Abstract("realtime_bytes"): true;
 			case _: false;
 		};
 
@@ -825,7 +825,7 @@ class HlLower {
 
 	static function isAggregateResult(native:IrCNative):Bool
 		return native.pointerLength == null && switch (native.result) {
-			case IrType.Abstract("realtime_bytes"): true;
+			case IrType.ManagedBytes, IrType.Abstract("realtime_bytes"): true;
 			case _: false;
 		};
 

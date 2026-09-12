@@ -452,13 +452,22 @@ class TestMain {
 		expectCfgError(new CfgFunction("bad", [], I32, [crossBlockA, crossBlockB], [], 1),
 			"CFG value 0 is used outside its defining block or before definition in block 1");
 		Sys.println("PASS: CFG verifier rejects malformed blocks, edges, and values");
-		var persistedType = Function([I32, Array(Obj("demo.Box")), Function([Bytes], Bool)], Virtual("demo.Plugin")),
+		var persistedType = Function([I32, Array(Obj("demo.Box")), Function([Bytes, ManagedBytes], Bool)], Virtual("demo.Plugin")),
 			persistedTypeBytes = IrTypeCodec.encode(persistedType);
 		if (Std.string(IrTypeCodec.decode(persistedTypeBytes)) != Std.string(persistedType)
 			|| persistedTypeBytes.compare(IrTypeCodec.encode(persistedType)) != 0)
 			throw "IR type state did not round trip deterministically";
 		if (IrTypeCodec.decode(IrTypeCodec.encode(I64)) != I64)
 			throw "64-bit IR type state did not round trip";
+		if (IrTypeCodec.decode(IrTypeCodec.encode(ManagedBytes)) != ManagedBytes)
+			throw "managed byte IR type state did not round trip";
+		var legacyTypeState = new haxe.io.BytesOutput();
+		legacyTypeState.bigEndian = false;
+		legacyTypeState.writeString("IRT");
+		legacyTypeState.writeByte(1);
+		legacyTypeState.writeByte(1);
+		if (IrTypeCodec.decode(legacyTypeState.getBytes()) != I32)
+			throw "legacy IR type state did not remain readable";
 		var trailingType = HaxeBytes.alloc(persistedTypeBytes.length + 1);
 		trailingType.blit(0, persistedTypeBytes, 0, persistedTypeBytes.length);
 		expectStringError(function() IrTypeCodec.decode(trailingType), "Trailing IR type state data");
@@ -551,7 +560,10 @@ class TestMain {
 		var symbolTable = new HlSymbolTable();
 		var intIndex = symbolTable.internInt(42),
 			stringIndex = symbolTable.internString("stable"),
-			typeIndex = symbolTable.internType(I32);
+			typeIndex = symbolTable.internType(I32),
+			managedBytesIndex = symbolTable.internType(ManagedBytes);
+		if (managedBytesIndex != symbolTable.internType(Abstract("realtime_bytes")))
+			throw "Managed bytes and the runtime abstract did not share their HashLink type";
 		var restoredSymbols = HlSymbolTable.fromState(symbolTable.exportState());
 		if (restoredSymbols.internInt(42) != intIndex
 			|| restoredSymbols.internString("stable") != stringIndex
@@ -691,7 +703,7 @@ class TestMain {
 				name: "sample.run",
 				library: "sample",
 				symbol: "run",
-				arguments: [Function([I32], Bytes)],
+				arguments: [Function([I32], Bytes), ManagedBytes],
 				result: Void
 			},
 			{
@@ -703,8 +715,9 @@ class TestMain {
 			}
 		], "sample");
 		if (ffiHeader.indexOf("HL_PRIM bool sample_read(int arg0, vbyte * arg1);") < 0
+			|| ffiHeader.indexOf("HL_PRIM void sample_run(vclosure * arg0, void * arg1);") < 0
 			|| ffiHeader.indexOf("DEFINE_PRIM(_BOOL, read, _I32 _BYTES);") < 0
-			|| ffiHeader.indexOf("DEFINE_PRIM(_VOID, run, _FUN(_BYTES, _I32));") < 0
+			|| ffiHeader.indexOf("DEFINE_PRIM(_VOID, run, _FUN(_BYTES, _I32) _ABSTRACT(realtime_bytes));") < 0
 			|| ffiHeader.indexOf("other_skip") >= 0
 			|| ffiHeader.indexOf("SAMPLE_FFI_H_SIGNATURE") < 0
 			|| ffiHeader != CHeaderEmitter.emit([
@@ -719,7 +732,7 @@ class TestMain {
 					name: "sample.run",
 					library: "sample",
 					symbol: "run",
-					arguments: [Function([I32], Bytes)],
+					arguments: [Function([I32], Bytes), ManagedBytes],
 					result: Void
 				}
 			], "sample"))

@@ -64,6 +64,7 @@ class CHeaderEmitter {
 			case Bool: "bool";
 			case F64: "double";
 			case Bytes: "vbyte *";
+			case ManagedBytes: "void *";
 			case Dyn: "vdynamic *";
 			case TypeRef: "hl_type *";
 			case Array(_): "varray *";
@@ -79,6 +80,7 @@ class CHeaderEmitter {
 			case Bool: "_BOOL";
 			case F64: "_F64";
 			case Bytes: "_BYTES";
+			case ManagedBytes: "_ABSTRACT(realtime_bytes)";
 			case Dyn: "_DYN";
 			case TypeRef: "_TYPE";
 			case Array(element): '_ARR(${hlType(element)})';
@@ -94,6 +96,7 @@ class CHeaderEmitter {
 			case Bool: "Bool";
 			case F64: "Float";
 			case Bytes: "Bytes";
+			case ManagedBytes: "haxe.io.Bytes";
 			case Dyn: "Dynamic";
 			case TypeRef: "Type";
 			case Array(element): 'Array<${typeName(element)}>';

@@ -8,13 +8,14 @@ import haxe.io.BytesOutput;
 
 /** Canonical value table used by persisted IR functions. */
 class IrValueTableCodec {
+	static inline final VERSION = 2;
 	public static inline final MAX_VALUES = 0x100000;
 
 	public static function encode(values:Array<IrValue>):HaxeBytes {
 		var output = new BytesOutput();
 		output.bigEndian = false;
 		output.writeString("IRV");
-		output.writeByte(1);
+		output.writeByte(VERSION);
 		write(output, values);
 		return output.getBytes();
 	}
@@ -25,7 +26,8 @@ class IrValueTableCodec {
 		try {
 			if (input.readString(3) != "IRV")
 				throw "Invalid IR value table";
-			if (input.readByte() != 1)
+			var version = input.readByte();
+			if (version < 1 || version > VERSION)
 				throw "Unsupported IR value table version";
 			var result = read(input, bytes.length);
 			if (input.position != bytes.length)

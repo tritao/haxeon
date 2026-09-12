@@ -10,6 +10,8 @@ enum IrType {
 	Bool;
 	F64;
 	Bytes;
+	/** GC-managed byte storage used by haxe.io.Bytes and projected HXI structs. */
+	ManagedBytes;
 	Dyn;
 	TypeRef;
 	Array(element:IrType);

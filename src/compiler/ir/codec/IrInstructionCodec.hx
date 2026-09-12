@@ -11,6 +11,7 @@ import compiler.ir.codec.IrValueTableCodec;
 
 /** Closed, versioned encoding for every persisted IR instruction operand. */
 class IrInstructionCodec {
+	static inline final VERSION = 2;
 	static final CONSTRUCTORS:Map<String, Bool> = [
 		"Phi" => true,
 		"ConstVoid" => true,
@@ -66,7 +67,7 @@ class IrInstructionCodec {
 		var output = new BytesOutput();
 		output.bigEndian = false;
 		output.writeString("IRI");
-		output.writeByte(1);
+		output.writeByte(VERSION);
 		write(output, instruction);
 		return output.getBytes();
 	}
@@ -75,7 +76,8 @@ class IrInstructionCodec {
 		var input = new BytesInput(bytes);
 		input.bigEndian = false;
 		try {
-			if (input.readString(3) != "IRI" || input.readByte() != 1)
+			var magic = input.readString(3), version = input.readByte();
+			if (magic != "IRI" || version < 1 || version > VERSION)
 				throw "Invalid IR instruction state";
 			var result = read(input, bytes.length, values);
 			if (input.position != bytes.length)

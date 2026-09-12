@@ -53,6 +53,7 @@ class TestCatalog {
 		"CHeaderImporterMain",
 		"HxiAuditMain",
 		"HxiParserMain",
+		"ManagedBytesMain",
 		"HxiAbiMain",
 	];
 
