@@ -16,6 +16,9 @@ fi
 	--target=wasm32 --output=out/wasm-cli-dynamic.wasm --entry=dynamic-equality \
 	--root=tests/programs tests/programs/dynamic-equality.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --output=out/wasm-cli-function-wrapper.wasm --entry=function-wrapper \
+	--root=tests/programs tests/programs/function-wrapper.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm32 --output=out/wasm-cli-type-test.wasm --entry=std-is-of-type \
 	--root=tests/programs tests/programs/std-is-of-type.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
@@ -86,6 +89,7 @@ const cases = [
   ["out/wasm-backend-large-array.wasm", 20000],
   ["out/wasm-cli-backend.wasm", 42],
   ["out/wasm-cli-dynamic.wasm", 42],
+	["out/wasm-cli-function-wrapper.wasm", 42],
   ["out/wasm-cli-type-test.wasm", 42],
   ["out/wasm-cli-array-slice.wasm", 42],
 	["out/wasm-cli-array-mutation.wasm", 42],

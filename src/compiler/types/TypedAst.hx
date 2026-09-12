@@ -262,6 +262,7 @@ enum TypedCaptureSource {
 	CaptureCellLocal(name:String, cellClass:String);
 	CaptureEnvironmentField(name:String);
 	CaptureCellEnvironmentField(name:String, cellClass:String);
+	CaptureExpression(expression:TypedExpression);
 }
 
 /** A closure capture tied to its resolved lexical binding and storage source. */

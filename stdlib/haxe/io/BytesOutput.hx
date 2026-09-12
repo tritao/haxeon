@@ -22,8 +22,8 @@ extern abstract BytesOutput(hl.Abstract<"realtime_bytes_output">) {
 	@:hlNative("haxeon_runtime", "__bytes_output_write")
 	public function write(bytes:Bytes):Void;
 
-	@:hlNative("haxeon_runtime", "__bytes_output_write")
-	public function writeBytes(bytes:Bytes):Void;
+	@:hlNative("haxeon_runtime", "__bytes_output_write_range")
+	public function writeBytes(bytes:Bytes, position:Int, length:Int):Int;
 
 	@:hlNative("haxeon_runtime", "__bytes_output_get_bytes")
 	public function getBytes():Bytes;

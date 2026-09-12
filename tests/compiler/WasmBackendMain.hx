@@ -13,6 +13,7 @@ import compiler.ir.IrInterpreter;
 import compiler.ir.codec.CanonicalIrCodec;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
+import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import sys.io.File;
@@ -32,6 +33,34 @@ class WasmBackendMain {
 			throw "Scalar Wasm IR should not require runtime operations";
 		if (WasmGcRoots.analyze(Frontend.compile("function main():Int return 42;").functions[0]).length != 0)
 			throw "Scalar functions should not have managed GC roots";
+		var boxingProgram = Frontend.compile("class Marker { public function new() {} } function main():Int { var marker = new Marker(); var boxed:Dynamic = 1; return boxed == 1 && marker != null ? 42 : 0; }");
+		var boxingFunction:Null<IrFunction> = null;
+		for (fn in boxingProgram.functions)
+			if (fn.name == "main")
+				boxingFunction = fn;
+		if (boxingFunction == null)
+			throw "Primitive boxing fixture is missing its entry function";
+		var markerValue:Null<Int> = null;
+		for (block in boxingFunction.blocks)
+			for (instruction in block.instructions)
+				switch instruction.value {
+					case NewObject(output, "Marker"):
+						markerValue = output.id;
+					default:
+				}
+		var rootsBoxingSafepoint = false;
+		for (point in WasmGcRoots.analyze(boxingFunction))
+			for (block in boxingFunction.blocks)
+				if (block.id == point.block && point.instruction < block.instructions.length)
+					switch block.instructions[point.instruction].value {
+						case ToDyn(_, value) if (value.type == I32
+							&& markerValue != null
+							&& point.liveReferences.indexOf(markerValue) >= 0):
+							rootsBoxingSafepoint = true;
+						default:
+					}
+		if (!rootsBoxingSafepoint)
+			throw "Primitive ToDyn allocation must be a safepoint that retains live managed references";
 		var referenceProgram = Frontend.compile("function sum(value:Int):Int { var result = 0; while (value > 0) { result = result + value; value = value - 1; } return result; } function main():Int return sum(3);");
 		if (new IrInterpreter(referenceProgram).run("main") != 6)
 			throw "The SSA reference interpreter disagrees with canonical IR semantics";

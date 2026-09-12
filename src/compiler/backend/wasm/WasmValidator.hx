@@ -151,9 +151,9 @@ class WasmValidator {
 						stack.push(result);
 				case CallIndirect(typeIndex):
 					var type = types[typeIndex];
+					pop(stack, I32, fn);
 					for (index in 0...type.parameters.length)
 						pop(stack, type.parameters[type.parameters.length - index - 1], fn);
-					pop(stack, I32, fn);
 					for (result in type.results)
 						stack.push(result);
 				case Drop:

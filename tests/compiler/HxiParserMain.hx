@@ -67,10 +67,13 @@ class HxiParserMain {
 			&& enumSource.indexOf("var Both = 3") >= 0
 			&& enumSource.indexOf("extern function check(arg0:Result, arg1:Options):Result") >= 0,
 			"enums should retain concise nominal types and integer ABI calls");
+		var mixedCaseEnum = HxiParser.parse("mixed-case-enum.hxi",
+			'interface mixed @target("x86_64-linux-gnu") @library("mixed") { enum FixtureResult : i32 { FIXTURE_OK = 0; } extern fn check(value: FixtureResult) -> FixtureResult; }');
+		expect(HxiProjection.source(mixedCaseEnum).indexOf("enum abstract FixtureResult(Int)") >= 0,
+			"already mixed-case enum names should retain their spelling in the Haxe projection");
 		var nativeNames = HxiParser.parse("native-names.hxi",
 			'interface native_names @target("x86_64-linux-gnu") @library("native_names") { enum nk_result : i32 { NK_OK = 0; NK_ERROR_INVALID_ARGUMENT = -2; } extern fn check(value: nk_result) -> nk_result; }');
-		var nativeProfile = HxiProjectionProfile.parse("native-names.hxmap",
-			'{"interface":"native_names","typePrefix":"nk_","enumValuePrefixes":["NK_"]}');
+		var nativeProfile = HxiProjectionProfile.parse("native-names.hxmap", '{"interface":"native_names","typePrefix":"nk_","enumValuePrefixes":["NK_"]}');
 		var nativeNameSource = HxiProjection.source(nativeNames, null, null, null, nativeProfile);
 		expect(nativeNameSource.indexOf("enum abstract Result(Int)") >= 0
 			&& nativeNameSource.indexOf("extern function check(arg0:Result):Result") >= 0,

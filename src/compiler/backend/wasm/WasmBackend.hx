@@ -3577,6 +3577,8 @@ class WasmFunctionLower {
 				]);
 			case IntToFloat(output, value):
 				emit(body, [LocalGet(values.get(value.id)), value.type == I64 ? F64ConvertI64S : F64ConvertI32S, LocalSet(values.get(output.id))]);
+			case FloatToInt(output, value):
+				emit(body, [LocalGet(values.get(value.id)), I32TruncF64S, LocalSet(values.get(output.id))]);
 			case NewObject(output, typeName):
 				emit(body, [
 					I32Const(layout.object(typeName).size),

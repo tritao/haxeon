@@ -811,6 +811,8 @@ class HxiProjection {
 			if (mapped != null)
 				return mapped;
 		}
+		if (value.indexOf("_") < 0 && value.toLowerCase() != value && value.toUpperCase() != value)
+			return value;
 		var parts = value.split("_");
 		if (profile != null && profile.typePrefix != null && StringTools.startsWith(value, profile.typePrefix))
 			parts = value.substr(profile.typePrefix.length).split("_");

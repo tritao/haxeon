@@ -106,7 +106,7 @@ class HxiCallMain {
 		mainSource = StringTools.replace(mainSource, "Fixture.clearCallback(); callbacks = callbacks && Fixture.callCallbackOnThread",
 			"var replacement = new FixtureBinaryCallback(function(left:Int, right:Int) return left * right); Fixture.setNullableCallback(replacement); callbacks = callbacks && Fixture.callRetainedCallback(6, 7) == 42; Fixture.setNullableCallback(null); callbacks = callbacks && Fixture.callRetainedCallback(6, 7) == 0 && replacement.close(); callbacks = callbacks && Fixture.callCallbackOnThread");
 		mainSource = StringTools.replace(mainSource, "return structure && buffers && pointers && ",
-			"return structure && buffers && pointers && Fixture.enumAdd(FixtureResult.TEN, FixtureResult.ELEVEN) == FixtureResult.TWENTY_ONE && ");
+			"return structure && buffers && pointers && Fixture.enumAdd(FixtureResult.Ten, FixtureResult.Eleven) == FixtureResult.TwentyOne && ");
 		mainSource = StringTools.replace(mainSource, "return structure && buffers && pointers && ",
 			"return managedFields && utf8 && aggregateCallbacks && systemCalls && callbacks && structure && buffers && pointers && ");
 		compiler.update("Main.hx", mainSource);

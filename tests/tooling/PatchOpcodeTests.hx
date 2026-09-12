@@ -59,6 +59,7 @@ class PatchOpcodeTests {
 			{instruction: Jump("target"), opcode: 58, operands: [-2]},
 			{instruction: ToDyn(0, 1), opcode: 59, operands: [0, 1]},
 			{instruction: ToSFloat(0, 1), opcode: 60, operands: [0, 1]},
+			{instruction: ToInt(0, 1), opcode: 62, operands: [0, 1]},
 			{instruction: SafeCast(0, 1), opcode: 63, operands: [0, 1]},
 			{instruction: ToVirtual(0, 1), opcode: 65, operands: [0, 1]},
 			{instruction: Label("other"), opcode: 66, operands: []},

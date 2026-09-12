@@ -172,6 +172,9 @@ class HlValidator {
 				case ToSFloat(destination, source):
 					requireRegister(fn, destination);
 					requireRegister(fn, source);
+				case ToInt(destination, source):
+					requireRegister(fn, destination);
+					requireRegister(fn, source);
 				case SafeCast(destination, source):
 					requireRegister(fn, destination);
 					requireRegister(fn, source);

@@ -169,6 +169,7 @@ class StdlibMain {
 			"__bytes_output_write_f64" => true,
 			"__bytes_output_write_string" => true,
 			"__bytes_output_write" => true,
+			"__bytes_output_write_range" => true,
 			"__bytes_output_get_bytes" => true
 		];
 		for (native in result.module.natives) {

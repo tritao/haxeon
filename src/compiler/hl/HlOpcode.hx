@@ -50,6 +50,7 @@ enum abstract HlOpcode(Int) from Int to Int {
 	var Ret = 67;
 	var ToDyn = 59;
 	var ToSFloat = 60;
+	var ToInt = 62;
 	var SafeCast = 63;
 	var Throw = 68;
 	var Rethrow = 69;

@@ -679,6 +679,7 @@ class IrGenerator {
 					var object = builder.newObject(environment);
 					for (capture in captures) {
 						var value = switch capture.source {
+							case CaptureExpression(expression): lowerExpression(expression, builder, localTypes);
 							case CaptureLocal(bindingId):
 								builder.load(bindingId, requireLocalType(localTypes, bindingId, 'Missing captured binding "$bindingId"'));
 							case CaptureReceiver:
@@ -820,7 +821,9 @@ class IrGenerator {
 					target)) source; else if (source.type == Dyn) builder.safeCast(source,
 					target); else if (target == Dyn) builder.toDyn(source); else if (referenceCastType(source.type) && referenceCastType(target))
 					builder.safeCast(builder.toDyn(source),
-					target); else throw 'Unsupported cast from ${source.type} to $target at ${expression.span.file.path}:${expression.span.start}';
+					target); else if (source.type == F64 && target == I32) builder.floatToInt(source); else if (source.type == I32 && target == F64)
+					builder.intToFloat(source); else
+					throw 'Unsupported cast from ${source.type} to $target at ${expression.span.file.path}:${expression.span.start}';
 			case TSwitchExpression(subject, cases, defaultExpression):
 				var subjectName = '$' + 'switch-expression-subject:${expression.span.start}',
 					resultName = '$' + 'switch-expression-result:${expression.span.start}',

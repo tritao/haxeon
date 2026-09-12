@@ -96,6 +96,7 @@ class Typer {
 	final cNativeFunctions:Map<String, Bool> = [];
 	final inlineConstants:Map<String, ResolvedInlineConstant> = [];
 	final inlineConstantsInProgress:Map<String, Bool> = [];
+	var functionAdapterCounter = 0;
 
 	inline function get_context():BodyContext
 		return bodyContexts[bodyContexts.length - 1];
@@ -2358,7 +2359,8 @@ class Typer {
 				var targetType = target == null ? expectedType : lowerType(target);
 				if (targetType == null)
 					fail("E1003", "Untyped cast requires an expected type", span);
-				new TypedExpression(TCast(typeExpression(value, scope)), targetType, span);
+				var typedValue = typeExpression(value, scope);
+				functionAdapter(typedValue, targetType, span);
 			case PostfixIncrement(target, delta, span):
 				var typedTarget = typeExpression(target, scope);
 				if (!sameType(typedTarget.type, TInt) && !sameType(typedTarget.type, TFloat))
@@ -4152,6 +4154,67 @@ class Typer {
 				fail(code, 'Type mismatch for $context', value.span);
 				value;
 		};
+	}
+
+	function functionAdapter(value:TypedExpression, expected:CompilerType, span:SourceSpan):TypedExpression {
+		var sourceSignature = expectedFunctionType(value.type),
+			targetSignature = expectedFunctionType(expected);
+		if (sourceSignature == null || targetSignature == null)
+			return new TypedExpression(TCast(value), expected, span);
+		var sourceArguments = sourceSignature.arguments,
+			sourceResult = sourceSignature.result,
+			targetArguments = targetSignature.arguments,
+			targetResult = targetSignature.result;
+		if (sourceArguments.length != targetArguments.length || sameType(value.type, expected))
+			return new TypedExpression(TCast(value), expected, span);
+		var adapterId = functionAdapterCounter++, adapterName = '$' + 'function-adapter:${context.name}:$adapterId',
+			environmentName = '$' + 'function-adapter-env:${context.name}:$adapterId', captureName = '__adapted_callable', arguments = [
+				for (index in 0...targetArguments.length)
+					{
+						name: '$' + 'adapter_arg_$index',
+						type: targetArguments[index]
+					}
+			], captures:Array<TypedCapture> = [
+				{
+					field: captureName,
+					bindingId: captureName,
+					type: value.type,
+					source: CaptureExpression(value)
+				}
+			], callable = new TypedExpression(TCaptured(captureName), value.type, span), callArguments = [
+				for (index in 0...arguments.length)
+					adaptFunctionValue(new TypedExpression(TLocal(arguments[index].name), arguments[index].type, span), sourceArguments[index], span)
+			], call = new TypedExpression(TClosureCall(callable, callArguments), sourceResult, span), statements:Array<TypedStatement> = [];
+		if (targetResult == TVoid) {
+			statements.push(TExpression(call, span));
+			statements.push(TReturnVoid(span));
+		} else if (sourceResult != TVoid)
+			statements.push(TReturn(adaptFunctionValue(call, targetResult, span), span));
+		else
+			return new TypedExpression(TCast(value), expected, span);
+		closureConversion.addEnvironment(environmentName, captures);
+		closureConversion.addFunction({
+			name: adapterName,
+			genericOrigin: context.name,
+			owner: environmentName,
+			isStatic: false,
+			isConstructor: false,
+			arguments: arguments,
+			result: targetResult,
+			statements: statements,
+			cells: [],
+			cellCaptures: [],
+			span: span
+		});
+		return new TypedExpression(TLambda(adapterName, environmentName, captures), expected, span);
+	}
+
+	function adaptFunctionValue(value:TypedExpression, target:CompilerType, span:SourceSpan):TypedExpression {
+		if (sameType(value.type, target))
+			return value;
+		if (value.type == TInt && target == TFloat)
+			return new TypedExpression(TIntToFloat(value), TFloat, span);
+		return new TypedExpression(TCast(value), target, span);
 	}
 
 	function isAssignable(actual:CompilerType, expected:CompilerType):Bool {

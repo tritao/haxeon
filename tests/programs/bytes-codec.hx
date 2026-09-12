@@ -9,7 +9,8 @@ function main():Int {
 	output.writeInt32(35);
 	output.writeDouble(1.5);
 	output.writeString("ok");
-	output.write(Bytes.ofString("!"));
+	if (output.writeBytes(Bytes.ofString("xyz!"), 3, 1) != 1)
+		return 1;
 	var bytes = output.getBytes();
 	if (bytes.length != 16 || bytes.get(0) != 7 || bytes.sub(13, 3).compare(Bytes.ofString("ok!")) != 0)
 		return 1;

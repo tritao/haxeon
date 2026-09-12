@@ -376,6 +376,14 @@ HL_PRIM void HL_NAME(__bytes_output_write)( realtime_bytes_output *output, realt
 	if( bytes->length > 0 ) memcpy(output->data + output->length, bytes->data, (size_t)bytes->length);
 	output->length += bytes->length;
 }
+HL_PRIM int HL_NAME(__bytes_output_write_range)( realtime_bytes_output *output, realtime_bytes *bytes, int position, int length ) {
+	if( position < 0 || length < 0 || position > bytes->length - length )
+		hl_error("BytesOutput.writeBytes range is out of bounds");
+	realtime_bytes_output_reserve(output, length);
+	if( length > 0 ) memcpy(output->data + output->length, bytes->data + position, (size_t)length);
+	output->length += length;
+	return length;
+}
 HL_PRIM realtime_bytes *HL_NAME(__bytes_output_get_bytes)( realtime_bytes_output *output ) {
 	realtime_bytes *bytes = realtime_bytes_make(output->length);
 	if( output->length > 0 ) memcpy(bytes->data, output->data, (size_t)output->length);

@@ -415,6 +415,7 @@ DEFINE_PRIM(_VOID,__bytes_output_write_i32,_ABSTRACT(realtime_bytes_output) _I32
 DEFINE_PRIM(_VOID,__bytes_output_write_f64,_ABSTRACT(realtime_bytes_output) _F64);
 DEFINE_PRIM(_VOID,__bytes_output_write_string,_ABSTRACT(realtime_bytes_output) _BYTES);
 DEFINE_PRIM(_VOID,__bytes_output_write,_ABSTRACT(realtime_bytes_output) _ABSTRACT(realtime_bytes));
+DEFINE_PRIM(_I32,__bytes_output_write_range,_ABSTRACT(realtime_bytes_output) _ABSTRACT(realtime_bytes) _I32 _I32);
 DEFINE_PRIM(_ABSTRACT(realtime_bytes),__bytes_output_get_bytes,_ABSTRACT(realtime_bytes_output));
 DEFINE_PRIM(_VOID,__file_save_bytes,_BYTES _ABSTRACT(realtime_bytes));
 DEFINE_PRIM(_ABSTRACT(realtime_bytes),__file_get_bytes,_BYTES);
