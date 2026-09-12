@@ -24,7 +24,8 @@ mkdir -p "$root_dir/out"
 
 "$haxe_bin" --cwd "$root_dir" -cp "$root_dir/src" --run compiler.tools.HaxeonCompiler \
 	--target=wasm32 --wasm-memory-stats --export=wasm-gc-invariants.allocationBurst \
-	--export=wasm-gc-invariants.growBeyondInitialMemory --output="$normal_artifact" \
+	--export=wasm-gc-invariants.growBeyondInitialMemory --export=wasm-gc-invariants.deepGraphExercise \
+	--export=wasm-gc-invariants.wideGraphExercise --output="$normal_artifact" \
 	--entry=wasm-gc-invariants --root="$root_dir/tests/programs" "$root_dir/tests/programs/wasm-gc-invariants.hx"
 
 "$haxe_bin" --cwd "$root_dir" -cp "$root_dir/src" --run compiler.tools.HaxeonCompiler \
@@ -136,6 +137,11 @@ const mapArtifact = process.argv[4];
 	if (normal["haxeon.memory.collection_count"]() <= collectionsBeforeGrowth)
 		throw new Error("Allocator grew linear memory without first collecting under pressure");
 	console.log("PASS: Wasm GC allocation budget and collect-before-grow policy");
+	if (normal["wasm-gc-invariants.deepGraphExercise"](20000) !== 42)
+		throw new Error("Iterative GC failed to retain a deep reference graph");
+	if (normal["wasm-gc-invariants.wideGraphExercise"](30000) !== 42)
+		throw new Error("Iterative GC failed to retain a wide graph through its worklist");
+	console.log("PASS: Wasm GC iterative tracing handles deep and wide graphs");
 	const mapBytes = fs.readFileSync(mapArtifact);
 	const {instance: mapInstance} = await WebAssembly.instantiate(mapBytes, {});
 	if (mapInstance.exports.main() !== 42)

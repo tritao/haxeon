@@ -81,7 +81,10 @@ the guest.
   live count. Array/map backing blocks link to their owner to recover those
   logical bounds. Closures and iterators visit their receiver/array; scalar
   boxes and `Bytes` are leaves. Only opaque layouts use conservative word
-  scanning. Normal allocation
+  scanning. Marking is iterative: newly marked blocks are queued in temporary
+  linear memory above `heap_top`, growing Wasm memory only when that queue needs
+  more room. Queue entries are cleared as they are consumed, so later heap
+  growth still observes zero-initialized memory. Normal allocation
   consumes a byte budget (at least 256 KiB, scaled with heap size) between
   collections and forces collection plus a free-list retry before growing Wasm
   memory. `--wasm-gc-stress` restores collection-before-every-allocation for

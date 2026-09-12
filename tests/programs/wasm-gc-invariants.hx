@@ -11,6 +11,13 @@ class GcCycleProbe {
 	public function new() {}
 }
 
+class GcChainProbe {
+	public var value:Int;
+	public var next:GcChainProbe;
+
+	public function new() {}
+}
+
 class GcClosureProbe {
 	public var value:Int;
 
@@ -129,6 +136,43 @@ function iteratorRootExercise():Int {
 		index = index + 1;
 	}
 	return iterator.next().value;
+}
+
+function deepGraphExercise(count:Int):Int {
+	var head:GcChainProbe = null;
+	var index = 0;
+	while (index < count) {
+		var node = new GcChainProbe();
+		node.value = index;
+		node.next = head;
+		head = node;
+		index = index + 1;
+	}
+	var total = 0;
+	var current = head;
+	while (current != null) {
+		total = total + current.value;
+		current = current.next;
+	}
+	return total == count * (count - 1) / 2 ? 42 : 0;
+}
+
+function wideGraphExercise(count:Int):Int {
+	var values = new Array<GcRootProbe>(count);
+	var index = 0;
+	while (index < count) {
+		var probe = new GcRootProbe();
+		probe.value = index;
+		values[index] = probe;
+		index = index + 1;
+	}
+	var total = 0;
+	index = 0;
+	while (index < count) {
+		total = total + values[index].value;
+		index = index + 1;
+	}
+	return total == count * (count - 1) / 2 ? 42 : 0;
 }
 
 function releaseArray(size:Int):Void {
