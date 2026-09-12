@@ -24,12 +24,10 @@ class HxiProjectionProfile {
 	public final fieldNames:Map<String, String>;
 	public final constantNames:Map<String, String>;
 
-	public function new(?interfaceName:Null<String>, ?typePrefix:Null<String>, ?enumValuePrefixes:Array<String>,
-			?typeNames:Map<String, String>, ?enumNames:Map<String, String>,
-			?enumValueNames:Map<String, Map<String, String>>, ?functionNames:Map<String, String>,
-			?fieldNames:Map<String, String>, ?constantNames:Map<String, String>, ?functionPrefix:Null<String>,
-			functionCase:String = "preserve", fieldCase:String = "preserve", ?constantPrefix:Null<String>,
-			constantCase:String = "preserve") {
+	public function new(?interfaceName:Null<String>, ?typePrefix:Null<String>, ?enumValuePrefixes:Array<String>, ?typeNames:Map<String, String>,
+			?enumNames:Map<String, String>, ?enumValueNames:Map<String, Map<String, String>>, ?functionNames:Map<String, String>,
+			?fieldNames:Map<String, String>, ?constantNames:Map<String, String>, ?functionPrefix:Null<String>, functionCase:String = "preserve",
+			fieldCase:String = "preserve", ?constantPrefix:Null<String>, constantCase:String = "preserve") {
 		this.interfaceName = interfaceName;
 		this.typePrefix = typePrefix;
 		this.functionPrefix = functionPrefix;
@@ -75,8 +73,8 @@ class HxiProjectionProfile {
 			functionNames = stringMap(value, "functionNames", path),
 			fieldNames = nestedStringMap(value, "fieldNames", path),
 			constantNames = stringMap(value, "constantNames", path);
-		return new HxiProjectionProfile(interfaceName, typePrefix, enumValuePrefixes, typeNames, enumNames, enumValueNames,
-			functionNames, flattenFieldNames(fieldNames), constantNames, functionPrefix, functionCase, fieldCase, constantPrefix, constantCase);
+		return new HxiProjectionProfile(interfaceName, typePrefix, enumValuePrefixes, typeNames, enumNames, enumValueNames, functionNames,
+			flattenFieldNames(fieldNames), constantNames, functionPrefix, functionCase, fieldCase, constantPrefix, constantCase);
 	}
 
 	static function optionalCase(value:Dynamic, field:String, path:String):String {
@@ -122,8 +120,8 @@ class HxiProjectionProfile {
 		var raw = Reflect.field(value, field);
 		if (!Std.isOfType(raw, Array))
 			throw 'Invalid Haxe projection profile "$path": "$field" must be an array';
-		var result:Array<String> = [];
-		for (item in (cast raw:Array<Dynamic>)) {
+		var items:Array<Dynamic> = cast raw, result:Array<String> = [];
+		for (item in items) {
 			if (!Std.isOfType(item, String))
 				throw 'Invalid Haxe projection profile "$path": "$field" must contain only strings';
 			result.push(item);

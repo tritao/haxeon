@@ -104,8 +104,7 @@ class HxiParserMain {
 			&& styleNatives[0].name == "style.checkValue",
 			"projection profiles should provide reusable C naming transforms");
 		var aliasCompiler = new Compiler();
-		aliasCompiler.addFfiProjection("native-names.hxmap",
-			'{"interface":"native_names","typePrefix":"nk_","enumValuePrefixes":["NK_"]}');
+		aliasCompiler.addFfiProjection("native-names.hxmap", '{"interface":"native_names","typePrefix":"nk_","enumValuePrefixes":["NK_"]}');
 		aliasCompiler.addFfiInterface("native-names.hxi",
 			'interface native_names @target("x86_64-linux-gnu") @library("native_names") { enum nk_result : i32 { NK_OK = 0; } extern fn check(value: nk_result) -> nk_result; }');
 		aliasCompiler.update("AliasMain.hx", "import native_names.Result; function main():Int { var value:Result = Result.Ok; return value; }");

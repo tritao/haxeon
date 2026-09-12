@@ -13,8 +13,8 @@ import compiler.ffi.HxiModel.HxiPointerOwnership;
 
 /** Projects bridgeable HXI functions into a synthetic, source-visible module. */
 class HxiProjection {
-	public static function cNatives(model:HxiInterface, ?omitted:Map<String, Bool>, ?visibleDeclarations:Map<String, HxiDeclaration>,
-			?providedAbi:HxiAbi, ?profile:HxiProjectionProfile):Array<IrCNative> {
+	public static function cNatives(model:HxiInterface, ?omitted:Map<String, Bool>, ?visibleDeclarations:Map<String, HxiDeclaration>, ?providedAbi:HxiAbi,
+			?profile:HxiProjectionProfile):Array<IrCNative> {
 		var library = model.library;
 		if (library == null)
 			return [];
@@ -80,8 +80,8 @@ class HxiProjection {
 		return result;
 	}
 
-	public static function source(model:HxiInterface, ?omitted:Map<String, Bool>, ?visibleDeclarations:Map<String, HxiDeclaration>,
-			?providedAbi:HxiAbi, ?profile:HxiProjectionProfile):String {
+	public static function source(model:HxiInterface, ?omitted:Map<String, Bool>, ?visibleDeclarations:Map<String, HxiDeclaration>, ?providedAbi:HxiAbi,
+			?profile:HxiProjectionProfile):String {
 		var library = model.library;
 		if (library == null)
 			return "";
@@ -157,7 +157,7 @@ class HxiProjection {
 					var argumentTypes = [], codes = [], pointerSizes = [], pointerNullable = [], supported = true;
 					for (parameter in parameters) {
 						var classified = abi.classify(parameter.type),
-						value = callbackProject(classified, profile);
+							value = callbackProject(classified, profile);
 						if (value == null) {
 							supported = false;
 							break;
@@ -185,7 +185,8 @@ class HxiProjection {
 						returnValue = project(classifiedResult, true, profile);
 					if (!supported || returnValue == null)
 						continue;
-					var signature = callSignature(codes.join(",") + ">" + abiDescriptor(classifiedResult, declarations, abi, aggregateDescriptors), callConvention);
+					var signature = callSignature(codes.join(",") + ">" + abiDescriptor(classifiedResult, declarations, abi, aggregateDescriptors),
+						callConvention);
 					emitDocumentation(output, model, name);
 					output.add('typedef $projectedName = (${argumentTypes.join(", ")})->${returnValue.haxeType};\n');
 					output.add('abstract ${projectedName}Callback(hl.Abstract<"native_callback">) {\n');
@@ -205,7 +206,8 @@ class HxiProjection {
 					var underlying = project(abi.classify(representation), false, profile);
 					if (underlying == null)
 						continue;
-					var projectedName = enumTypeName(name, profile), valuePrefix = enumValuePrefix(values, profile);
+					var projectedName = enumTypeName(name, profile),
+						valuePrefix = enumValuePrefix(values, profile);
 					emitDocumentation(output, model, name);
 					output.add('enum abstract $projectedName(${underlying.haxeType}) from ${underlying.haxeType} to ${underlying.haxeType} {\n');
 					for (value in values) {
@@ -507,8 +509,8 @@ class HxiProjection {
 		};
 	}
 
-	static function emitOutputWrapper(output:StringBuf, nativeName:String, publicName:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>, rawArgumentTypes:Array<String>,
-			resultType:String, abi:HxiAbi, profile:HxiProjectionProfile, documentation:Null<HxiDocumentation>):Void {
+	static function emitOutputWrapper(output:StringBuf, nativeName:String, publicName:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>,
+			rawArgumentTypes:Array<String>, resultType:String, abi:HxiAbi, profile:HxiProjectionProfile, documentation:Null<HxiDocumentation>):Void {
 		var arguments:Array<String> = [],
 			callArguments:Array<String> = [],
 			setup:Array<String> = [],
@@ -606,8 +608,8 @@ class HxiProjection {
 		output.add('}\n');
 	}
 
-	static function emitByteSliceWrapper(output:StringBuf, nativeName:String, publicName:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>, rawArgumentTypes:Array<String>,
-			resultType:String, wrapperResult:String, abi:HxiAbi, byteIndex:Null<Int>, profile:HxiProjectionProfile):Void {
+	static function emitByteSliceWrapper(output:StringBuf, nativeName:String, publicName:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>,
+			rawArgumentTypes:Array<String>, resultType:String, wrapperResult:String, abi:HxiAbi, byteIndex:Null<Int>, profile:HxiProjectionProfile):Void {
 		if (byteIndex == null)
 			return;
 		var byteName = parameters[byteIndex].name,
@@ -706,8 +708,8 @@ class HxiProjection {
 			case _: false;
 		};
 
-	static function emitBufferWrapper(output:StringBuf, nativeName:String, publicName:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>, rawArgumentTypes:Array<String>,
-			resultType:String, buffer:{
+	static function emitBufferWrapper(output:StringBuf, nativeName:String, publicName:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>,
+			rawArgumentTypes:Array<String>, resultType:String, buffer:{
 			name:String,
 			sizeParameter:String
 		}, documentation:Null<HxiDocumentation>):Void {
@@ -869,7 +871,8 @@ class HxiProjection {
 					return explicit;
 			}
 		}
-		var parts = value.split("_"), start = prefix.length < parts.length ? prefix.length : 0,
+		var parts = value.split("_"),
+			start = prefix.length < parts.length ? prefix.length : 0,
 			projected = pascalCase(parts.slice(start));
 		if (projected.length == 0)
 			projected = pascalCase(parts);
@@ -974,7 +977,8 @@ class HxiProjection {
 					nullable: false
 				};
 			case PointerValue(_, nullable, opaque, structure): {
-					haxeType: opaque ? (nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">') : structure != null ? (nullable ? 'Null<${projectedTypeName(structure, profile)}>' : projectedTypeName(structure, profile)) : (nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes"),
+					haxeType: opaque ? (nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">') : structure != null ? (nullable ? 'Null<${projectedTypeName(structure, profile)}>' : projectedTypeName(structure,
+						profile)) : (nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes"),
 					code: 11,
 					nativePointer: opaque,
 					nullable: nullable
@@ -989,8 +993,9 @@ class HxiProjection {
 		nullable:Bool
 	}>
 		return switch value {
-		case PointerValue(_, nullable, _, structure): {
-					haxeType: structure == null ? (nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">') : (nullable ? 'Null<${projectedTypeName(structure, profile)}>' : projectedTypeName(structure, profile)),
+			case PointerValue(_, nullable, _, structure): {
+					haxeType: structure == null ? (nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">') : (nullable ? 'Null<${projectedTypeName(structure, profile)}>' : projectedTypeName(structure,
+						profile)),
 					code: 11,
 					nativePointer: structure == null,
 					nullable: nullable
@@ -1153,7 +1158,8 @@ class HxiProjection {
 			case _: null;
 		};
 
-	static function structureType(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>, profile:Null<HxiProjectionProfile>):Null<{name:String, size:Int}>
+	static function structureType(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>,
+			profile:Null<HxiProjectionProfile>):Null<{name:String, size:Int}>
 		return switch type {
 			case Const(element): structureType(element, declarations, profile);
 			case Named(name):
@@ -1165,7 +1171,8 @@ class HxiProjection {
 			case _: null;
 		};
 
-	static function structurePointerType(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>, profile:Null<HxiProjectionProfile>):Null<String>
+	static function structurePointerType(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>,
+			profile:Null<HxiProjectionProfile>):Null<String>
 		return switch type {
 			case Nullable(element) | Const(element): structurePointerType(element, declarations, profile);
 			case Pointer(element):

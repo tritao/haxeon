@@ -26,7 +26,18 @@ class CHeaderImporter {
 			for (dependency in dependencies)
 				if (!~/^[A-Za-z_][A-Za-z0-9_]*$/.match(dependency))
 					throw 'Invalid HXI dependency name "$dependency"';
-		var base = ["-x", "c", "-std=c11", "-ffreestanding", "-target", target];
+		// Bound stderr while the AST dump is drained first to avoid Clang blocking on a full diagnostics pipe.
+		var base = [
+			"-x",
+			"c",
+			"-std=c11",
+			"-ffreestanding",
+			"-target",
+			target,
+			"-w",
+			"-ferror-limit=1",
+			"-fno-caret-diagnostics"
+		];
 		for (include in includes)
 			base.push('-I$include');
 		var process = new Process(clang, base.concat(["-Xclang", "-ast-dump=json", "-fsyntax-only", header])),
@@ -62,8 +73,8 @@ class CHeaderImporter {
 				representation = alias == null ? null : mapType(field(field(alias, "type"), "qualType"));
 			if (alias == null)
 				throw '${declarationLocation(declaration)}: annotated enum "$enumName" has no matching typedef';
-			if (representation != "i8" && representation != "u8" && representation != "i16" && representation != "u16"
-				&& representation != "i32" && representation != "u32")
+			if (representation != "i8" && representation != "u8" && representation != "i16" && representation != "u16" && representation != "i32"
+				&& representation != "u32")
 				throw '${declarationLocation(declaration)}: annotated enum "$enumName" must use an 8-, 16-, or 32-bit fixed-width integer typedef';
 			Reflect.setField(declaration, "_hxiEnumRepresentation", representation);
 			Reflect.setField(declaration, "_hxiDocumentationNode", alias);
@@ -104,12 +115,11 @@ class CHeaderImporter {
 			annotatedEnumName:String = kind == "EnumDecl" ? enumAnnotation(node) : null;
 		if (annotatedEnumName != null)
 			Reflect.setField(node, "_hxiEnumName", annotatedEnumName);
-		var userDeclaration = annotatedEnumName != null || (name != null
-			&& !StringTools.startsWith(name, "__")
-			&& (kind == "TypedefDecl" || kind == "RecordDecl" || kind == "FunctionDecl" || kind == "EnumDecl" || kind == "EnumConstantDecl"));
-		if (userDeclaration
-			&& isUserDeclaration(node, roots, currentFile)
-			&& excluded.indexOf(currentFile) < 0)
+		var userDeclaration = annotatedEnumName != null
+			|| (name != null
+				&& !StringTools.startsWith(name, "__")
+				&& (kind == "TypedefDecl" || kind == "RecordDecl" || kind == "FunctionDecl" || kind == "EnumDecl" || kind == "EnumConstantDecl"));
+		if (userDeclaration && isUserDeclaration(node, roots, currentFile) && excluded.indexOf(currentFile) < 0)
 			output.push(node);
 		var inner:Array<Dynamic> = field(node, "inner");
 		if (inner != null && !(kind == "EnumDecl" && (name != null || annotatedEnumName != null)))
@@ -124,16 +134,13 @@ class CHeaderImporter {
 			type:Dynamic = field(node, "type");
 		switch kind {
 			case "EnumDecl":
-				var enumName:String = field(node, "_hxiEnumName"),
-					annotatedRepresentation:String = field(node, "_hxiEnumRepresentation"),
+				var enumName:String = field(node, "_hxiEnumName"), annotatedRepresentation:String = field(node, "_hxiEnumRepresentation"),
 					fixed:Dynamic = field(node, "fixedUnderlyingType"),
-					representation = annotatedRepresentation == null
-						? (fixed == null ? "c_int" : mapType(field(fixed, "qualType")))
-						: annotatedRepresentation,
-				values = [
-					for (child in children(node))
-						if (field(child, "kind") == "EnumConstantDecl") child
-				];
+					representation = annotatedRepresentation == null ? (fixed == null ? "c_int" : mapType(field(fixed, "qualType"))) : annotatedRepresentation,
+					values = [
+						for (child in children(node))
+							if (field(child, "kind") == "EnumConstantDecl") child
+					];
 				if (enumName == null)
 					enumName = name;
 				var documentationNode:Dynamic = field(node, "_hxiDocumentationNode");
@@ -627,8 +634,7 @@ class CHeaderImporter {
 		return value == null ? null : Reflect.field(value, name);
 
 	static function key(value:Dynamic):String
-		return Std.string(field(value, "kind")) + ":"
-			+ Std.string(field(value, "name") == null ? field(value, "_hxiEnumName") : field(value, "name"));
+		return Std.string(field(value, "kind")) + ":" + Std.string(field(value, "name") == null ? field(value, "_hxiEnumName") : field(value, "name"));
 
 	static function moduleName(path:String):String {
 		var name = path.split("/").pop();

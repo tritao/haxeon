@@ -42,7 +42,8 @@ class CHeaderImporterMain {
 			"named C enums should import as nominal HXI enums");
 		expect(first.indexOf("extern fn sample_check_result(value: sample_result) -> sample_result") >= 0,
 			"enum function signatures should retain their nominal type");
-		expect(first.indexOf("enum sample_mode : u32") >= 0 && first.indexOf("SAMPLE_MODE_ALTERNATE = 1") >= 0
+		expect(first.indexOf("enum sample_mode : u32") >= 0
+			&& first.indexOf("SAMPLE_MODE_ALTERNATE = 1") >= 0
 			&& first.indexOf("type sample_mode = u32") < 0,
 			"annotated fixed-width enum aliases should import as nominal HXI enums");
 		expect(first.indexOf("extern fn sample_check_mode(value: sample_mode) -> sample_mode") >= 0,
