@@ -282,7 +282,9 @@ Paths in the project file are relative to that file. Host builds go to
 builds go to `build/android/app-debug.apk`. Android projects require a
 top-level `main():Void` entry function and an installed Android SDK/NDK. Use
 `--device SERIAL` with `run --target android` when more than one device is
-connected. Use `--project path/to/haxeon.json` to select another project, repeat
+connected. The first Android native build downloads a hash-verified libffi
+source archive into Gradle's native-build cache. Use
+`--project path/to/haxeon.json` to select another project, repeat
 `--define NAME[=VALUE]` to add conditional defines, and pass arguments to a
 running program after `--`:
 
