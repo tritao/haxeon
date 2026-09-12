@@ -87,6 +87,9 @@ bash "$root_dir/scripts/test-wasm-gc-invariants.sh"
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm-gc --output=out/wasm-cli-gc-arrays.wasm --entry=wasm-gc-arrays \
 	--root=tests/programs tests/programs/wasm-gc-arrays.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm-gc --output=out/wasm-cli-gc-enums.wasm --entry=wasm-gc-enums \
+	--root=tests/programs tests/programs/wasm-gc-enums.hx
 node - "$root_dir" <<'JS'
 const fs = require("fs");
 const root = process.argv[2];
@@ -142,7 +145,9 @@ const cases = [
 	["out/wasm-gc-objects.wasm", 42],
 	["out/wasm-cli-gc-objects.wasm", 42],
 	["out/wasm-gc-arrays.wasm", 42],
-	["out/wasm-cli-gc-arrays.wasm", 42]
+	["out/wasm-cli-gc-arrays.wasm", 42],
+	["out/wasm-gc-enums.wasm", 42],
+	["out/wasm-cli-gc-enums.wasm", 42]
 ];
 (async () => {
   for (const [relative, expected] of cases) {

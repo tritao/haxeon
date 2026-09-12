@@ -25,6 +25,10 @@ interface WasmRepresentation {
 	public function iteratorNew(array:IrValue, destination:Int, arrayLocal:Int):Null<Array<WasmInstruction>>;
 	public function iteratorHasNext(iterator:IrValue, destination:Int, iteratorLocal:Int):Null<Array<WasmInstruction>>;
 	public function iteratorNext(iterator:IrValue, output:IrValue, destination:Int, iteratorLocal:Int):Null<Array<WasmInstruction>>;
+	public function makeEnum(typeName:String, constructor:Int, arguments:Array<IrValue>, destination:Int,
+		argumentLocals:Array<Int>):Null<Array<WasmInstruction>>;
+	public function enumIndex(value:IrValue, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>>;
+	public function enumField(value:IrValue, constructor:Int, field:Int, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>>;
 }
 
 /** Linear32 representation: managed references remain i32 pointers into the custom heap. */
@@ -102,6 +106,16 @@ class WasmLinearRepresentation implements WasmRepresentation {
 		return null;
 
 	public function iteratorNext(iterator:IrValue, output:IrValue, destination:Int, iteratorLocal:Int):Null<Array<WasmInstruction>>
+		return null;
+
+	public function makeEnum(typeName:String, constructor:Int, arguments:Array<IrValue>, destination:Int,
+			argumentLocals:Array<Int>):Null<Array<WasmInstruction>>
+		return null;
+
+	public function enumIndex(value:IrValue, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>>
+		return null;
+
+	public function enumField(value:IrValue, constructor:Int, field:Int, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>>
 		return null;
 
 	function objectField(object:IrValue, name:String):WasmFieldLayout {
@@ -409,6 +423,37 @@ class WasmGcRepresentation implements WasmRepresentation {
 		return body;
 	}
 
+	public function makeEnum(typeName:String, constructor:Int, arguments:Array<IrValue>, destination:Int,
+			argumentLocals:Array<Int>):Null<Array<WasmInstruction>> {
+		var body:Array<WasmInstruction> = [I32Const(constructor)];
+		for (local in argumentLocals)
+			body.push(LocalGet(local));
+		body.push(StructNew(plan.enumConstructorType(typeName, constructor)));
+		body.push(LocalSet(destination));
+		return body;
+	}
+
+	public function enumIndex(value:IrValue, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>> {
+		var typeName = requireEnumName(value.type);
+		return [
+			LocalGet(valueLocal),
+			StructGet(plan.enumType(typeName), 0),
+			LocalSet(destination)
+		];
+	}
+
+	public function enumField(value:IrValue, constructor:Int, field:Int, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>> {
+		var typeName = requireEnumName(value.type),
+			constructorType = plan.enumConstructorType(typeName, constructor),
+			fieldIndex = plan.enumFieldIndex(typeName, constructor, field);
+		return [
+			LocalGet(valueLocal),
+			RefCast({nullable: false, heap: Type(constructorType)}),
+			StructGet(constructorType, fieldIndex),
+			LocalSet(destination)
+		];
+	}
+
 	function arrayReferenceLocal(element:IrType):Int {
 		var key = WasmGcTypePlan.typeKey(element),
 			local = arrayReferenceLocals.get(key);
@@ -462,6 +507,12 @@ class WasmGcRepresentation implements WasmRepresentation {
 		return switch type {
 			case Iterator(element): element;
 			default: throw 'Wasm GC iterator operation requires an iterator, got ${Std.string(type)}';
+		};
+
+	static function requireEnumName(type:IrType):String
+		return switch type {
+			case Enum(name): name;
+			default: throw 'Wasm GC enum operation requires an enum, got ${Std.string(type)}';
 		};
 
 	static function arrayNativeSuffix(type:IrType):String

@@ -262,14 +262,14 @@ class WasmBackend implements Backend {
 			|| (options.memoryBase != null && options.memoryBase != 0)
 			|| options.memoryContract != null
 			|| options.wasmMemoryStats == true)
-			throw "Wasm GC object lowering does not use linear-memory options";
+			throw "Wasm GC lowering does not use linear-memory options";
 		IrVerifier.verify(program);
 		var preferredEntry = hasFunction(program, "main") ? "main" : hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint,
 			exportedFunctions = options.exports == null ? [] : options.exports,
 			reachable = reachableFunctions(program, preferredEntry, exportedFunctions);
 		if (hasFunction(program, "__init"))
 			reachable.set("__init", true);
-		validateGcObjectSubset(program, reachable, preferredEntry);
+		validateGcSubset(program, reachable, preferredEntry);
 
 		var plan = new WasmGcTypePlan(program),
 			representation:WasmRepresentation = new WasmGcRepresentation(plan),
@@ -317,15 +317,15 @@ class WasmBackend implements Backend {
 		return {target: options.target, bytes: WasmEncoder.encode(module)};
 	}
 
-	static function validateGcObjectSubset(program:IrProgram, reachable:Map<String, Bool>, preferredEntry:String):Void {
+	static function validateGcSubset(program:IrProgram, reachable:Map<String, Bool>, preferredEntry:String):Void {
 		var usedNatives = reachableNatives(program, reachable),
 			usedCNatives = reachableCNatives(program, reachable);
 		for (native in program.natives)
 			if (usedNatives.exists(native.name) && !isSupportedGcArrayNative(native.name))
-				throw 'Wasm GC object lowering does not support runtime native "${native.name}" yet';
+				throw 'Wasm GC lowering does not support runtime native "${native.name}" yet';
 		for (native in program.cNatives)
 			if (usedCNatives.exists(native.name))
-				throw 'Wasm GC object lowering does not support C native "${native.name}" yet';
+				throw 'Wasm GC lowering does not support C native "${native.name}" yet';
 		var declaredFunctions:Map<String, Bool> = [];
 		for (fn in program.functions)
 			declaredFunctions.set(fn.name, true);
@@ -333,7 +333,7 @@ class WasmBackend implements Backend {
 			if (!reachable.exists(fn.name) || (fn.name == "__entry" && preferredEntry != "__entry"))
 				continue;
 			if (WasmFunctionLower.hasExceptions(fn))
-				throw 'Wasm GC object lowering does not support exceptions in "${fn.name}" yet';
+				throw 'Wasm GC lowering does not support exceptions in "${fn.name}" yet';
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
@@ -341,11 +341,12 @@ class WasmBackend implements Backend {
 							GlobalSet(_, _), Add(_, _, _), Sub(_, _, _), Mul(_, _, _), Div(_, _, _), Mod(_, _, _), BitAnd(_, _, _), BitXor(_, _, _),
 							BitOr(_, _, _), ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _), Less(_, _, _), LessEqual(_, _, _),
 							Equal(_, _, _), NewObject(_, _), FieldGet(_, _, _), FieldSet(_, _, _), ArrayGet(_, _, _), ArraySet(_, _, _), ArraySize(_, _),
-							IteratorNew(_, _), IteratorHasNext(_, _), IteratorNext(_, _), IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _):
+							IteratorNew(_, _), IteratorHasNext(_, _), IteratorNext(_, _), MakeEnum(_, _, _, _), EnumIndex(_, _), EnumField(_, _, _, _),
+							IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _):
 						case Call(_, name, _) if (declaredFunctions.exists(name) || isSupportedGcArrayNative(name)):
 						case MethodCall(_, receiver, _, _) if (isObjectReference(receiver.type)):
 						default:
-							throw 'Wasm GC object lowering does not support instruction ${Std.string(located.value)} in "${fn.name}" yet';
+							throw 'Wasm GC lowering does not support instruction ${Std.string(located.value)} in "${fn.name}" yet';
 					}
 		}
 	}
@@ -5063,48 +5064,63 @@ class WasmFunctionLower {
 					throw 'Wasm string literal was not placed in a data segment';
 				emit(body, [I32Const(pointer), LocalSet(requiredLocal(values, output.id))]);
 			case MakeEnum(output, typeName, constructor, arguments):
-				var enumLayout = layout.enumType(typeName);
-				emit(body, [
-					I32Const(enumLayout.size),
-					Call(allocator),
-					LocalTee(requiredLocal(values, output.id)),
-					I32Const(typeId(Enum(typeName))),
-					I32Store(0),
-					LocalGet(requiredLocal(values, output.id)),
-					I32Const(constructor),
-					I32Store(WasmLayout.HEADER_SIZE)
-				]);
-				var offset = WasmLayout.HEADER_SIZE + 4;
-				for (argument in arguments) {
-					offset = align(offset, WasmLayout.alignmentOf(argument.type));
+				var represented = activeRepresentation.makeEnum(typeName, constructor, arguments, requiredLocal(values, output.id),
+					[for (argument in arguments) requiredLocal(values, argument.id)]);
+				if (represented != null)
+					emit(body, represented);
+				else {
+					var enumLayout = layout.enumType(typeName);
 					emit(body, [
+						I32Const(enumLayout.size),
+						Call(allocator),
+						LocalTee(requiredLocal(values, output.id)),
+						I32Const(typeId(Enum(typeName))),
+						I32Store(0),
 						LocalGet(requiredLocal(values, output.id)),
-						I32Const(offset),
-						I32Add,
-						LocalGet(requiredLocal(values, argument.id)),
-						store(argument.type, 0)
+						I32Const(constructor),
+						I32Store(WasmLayout.HEADER_SIZE)
 					]);
-					offset += WasmLayout.sizeOf(argument.type);
+					var offset = WasmLayout.HEADER_SIZE + 4;
+					for (argument in arguments) {
+						offset = align(offset, WasmLayout.alignmentOf(argument.type));
+						emit(body, [
+							LocalGet(requiredLocal(values, output.id)),
+							I32Const(offset),
+							I32Add,
+							LocalGet(requiredLocal(values, argument.id)),
+							store(argument.type, 0)
+						]);
+						offset += WasmLayout.sizeOf(argument.type);
+					}
 				}
 			case EnumIndex(output, value):
-				emit(body, [
-					LocalGet(requiredLocal(values, value.id)),
-					I32Load(WasmLayout.HEADER_SIZE),
-					LocalSet(requiredLocal(values, output.id))
-				]);
+				var represented = activeRepresentation.enumIndex(value, requiredLocal(values, output.id), requiredLocal(values, value.id));
+				if (represented != null)
+					emit(body, represented);
+				else
+					emit(body, [
+						LocalGet(requiredLocal(values, value.id)),
+						I32Load(WasmLayout.HEADER_SIZE),
+						LocalSet(requiredLocal(values, output.id))
+					]);
 			case EnumField(output, value, constructor, field):
-				var enumType = switch value.type {
-					case Enum(name): name;
-					default: throw 'Wasm enum field access requires an enum value, got ${Std.string(value.type)}';
-				};
-				var fieldLayout = layout.enumField(enumType, constructor, field);
-				emit(body, [
-					LocalGet(requiredLocal(values, value.id)),
-					I32Const(fieldLayout.offset),
-					I32Add,
-					load(fieldLayout.type, 0),
-					LocalSet(requiredLocal(values, output.id))
-				]);
+				var represented = activeRepresentation.enumField(value, constructor, field, requiredLocal(values, output.id), requiredLocal(values, value.id));
+				if (represented != null)
+					emit(body, represented);
+				else {
+					var enumType = switch value.type {
+						case Enum(name): name;
+						default: throw 'Wasm enum field access requires an enum value, got ${Std.string(value.type)}';
+					};
+					var fieldLayout = layout.enumField(enumType, constructor, field);
+					emit(body, [
+						LocalGet(requiredLocal(values, value.id)),
+						I32Const(fieldLayout.offset),
+						I32Add,
+						load(fieldLayout.type, 0),
+						LocalSet(requiredLocal(values, output.id))
+					]);
+				}
 			case IntToFloat(output, value):
 				emit(body, [
 					LocalGet(requiredLocal(values, value.id)),
