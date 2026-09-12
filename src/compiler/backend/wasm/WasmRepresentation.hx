@@ -29,6 +29,10 @@ interface WasmRepresentation {
 		argumentLocals:Array<Int>):Null<Array<WasmInstruction>>;
 	public function enumIndex(value:IrValue, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>>;
 	public function enumField(value:IrValue, constructor:Int, field:Int, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>>;
+	public function staticClosure(name:String, tableSlots:Map<String, Int>, destination:Int):Null<Array<WasmInstruction>>;
+	public function instanceClosure(name:String, tableSlots:Map<String, Int>, receiverLocal:Int, destination:Int):Null<Array<WasmInstruction>>;
+	public function callClosure(staticType:Int, instanceType:Null<Int>, arguments:Array<IrValue>, closureLocal:Int, destination:Int,
+		argumentLocals:Array<Int>):Null<Array<WasmInstruction>>;
 }
 
 /** Linear32 representation: managed references remain i32 pointers into the custom heap. */
@@ -116,6 +120,16 @@ class WasmLinearRepresentation implements WasmRepresentation {
 		return null;
 
 	public function enumField(value:IrValue, constructor:Int, field:Int, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>>
+		return null;
+
+	public function staticClosure(name:String, tableSlots:Map<String, Int>, destination:Int):Null<Array<WasmInstruction>>
+		return null;
+
+	public function instanceClosure(name:String, tableSlots:Map<String, Int>, receiverLocal:Int, destination:Int):Null<Array<WasmInstruction>>
+		return null;
+
+	public function callClosure(staticType:Int, instanceType:Null<Int>, arguments:Array<IrValue>, closureLocal:Int, destination:Int,
+			argumentLocals:Array<Int>):Null<Array<WasmInstruction>>
 		return null;
 
 	function objectField(object:IrValue, name:String):WasmFieldLayout {
@@ -452,6 +466,81 @@ class WasmGcRepresentation implements WasmRepresentation {
 			StructGet(constructorType, fieldIndex),
 			LocalSet(destination)
 		];
+	}
+
+	public function staticClosure(name:String, tableSlots:Map<String, Int>, destination:Int):Null<Array<WasmInstruction>> {
+		var tableSlot = tableSlots.get(name);
+		if (tableSlot == null)
+			throw 'Wasm GC closure target "$name" has no stable table slot';
+		return [
+			I32Const(tableSlot * 2 + 1),
+			RefNull(Any),
+			StructNew(plan.closureTypeIndex),
+			LocalSet(destination)
+		];
+	}
+
+	public function instanceClosure(name:String, tableSlots:Map<String, Int>, receiverLocal:Int, destination:Int):Null<Array<WasmInstruction>> {
+		var tableSlot = tableSlots.get(WasmBackend.gcClosureThunkName(name));
+		if (tableSlot == null)
+			throw 'Wasm GC instance closure target "$name" has no stable table slot';
+		return [
+			I32Const(tableSlot * 2),
+			LocalGet(receiverLocal),
+			StructNew(plan.closureTypeIndex),
+			LocalSet(destination)
+		];
+	}
+
+	public function callClosure(staticType:Int, instanceType:Null<Int>, arguments:Array<IrValue>, closureLocal:Int, destination:Int,
+			argumentLocals:Array<Int>):Null<Array<WasmInstruction>> {
+		var body:Array<WasmInstruction> = [];
+		if (instanceType == null) {
+			for (local in argumentLocals)
+				body.push(LocalGet(local));
+			body = body.concat([
+				LocalGet(closureLocal),
+				StructGet(plan.closureTypeIndex, 0),
+				CallIndirect(staticType)
+			]);
+			if (destination >= 0)
+				body.push(LocalSet(destination));
+			return body;
+		}
+		body = body.concat([
+			LocalGet(closureLocal),
+			StructGet(plan.closureTypeIndex, 0),
+			I32Const(1),
+			I32And,
+			If(null)
+		]);
+		for (local in argumentLocals)
+			body.push(LocalGet(local));
+		body = body.concat([
+			LocalGet(closureLocal),
+			StructGet(plan.closureTypeIndex, 0),
+			I32Const(1),
+			I32ShrU,
+			CallIndirect(staticType)
+		]);
+		if (destination >= 0)
+			body.push(LocalSet(destination));
+		body.push(Else);
+		body.push(LocalGet(closureLocal));
+		body.push(StructGet(plan.closureTypeIndex, 1));
+		for (local in argumentLocals)
+			body.push(LocalGet(local));
+		body = body.concat([
+			LocalGet(closureLocal),
+			StructGet(plan.closureTypeIndex, 0),
+			I32Const(1),
+			I32ShrU,
+			CallIndirect(instanceType)
+		]);
+		if (destination >= 0)
+			body.push(LocalSet(destination));
+		body.push(End);
+		return body;
 	}
 
 	function arrayReferenceLocal(element:IrType):Int {

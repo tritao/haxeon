@@ -291,17 +291,21 @@ class WasmBackend implements Backend {
 			var type = plan.wasmFunctionType([for (argument in fn.arguments) argument.type], fn.result);
 			functions.set(fn.name, module.addFunction(new WasmFunction(fn.name, type)));
 		}
+		var closureTypes = collectGcClosureTypes(module, plan, program);
+		addGcClosureThunks(module, plan, functions, program, reachable);
+		var tableSlots = buildTableSlots(module, functions);
 
 		for (fn in program.functions) {
 			if (!reachable.exists(fn.name) || (fn.name == "__entry" && preferredEntry != "__entry"))
 				continue;
 			var functionIndex = requiredFunctionIndex(functions, fn.name);
 			module.setFunction(functionIndex,
-				WasmFunctionLower.lower(fn, functions, module.functionType(functionIndex), null, -1, 0, 0, 0, globals, [], methods, [], [], null, [], program,
-					representation));
+				WasmFunctionLower.lower(fn, functions, module.functionType(functionIndex), null, -1, 0, 0, 0, globals, [], methods, closureTypes, tableSlots,
+					null, [], program, representation));
 		}
+		module.exportTable = module.tableMin != null;
 		module.customSections.push({name: "haxeon.patch", bytes: WasmPatch.manifest(program, patchChanged)});
-		module.customSections.push({name: "haxeon.patch.slots", bytes: WasmPatch.tableManifest([])});
+		module.customSections.push({name: "haxeon.patch.slots", bytes: WasmPatch.tableManifest(tableSlots)});
 		var entry = functions.get(preferredEntry);
 		if (entry == null)
 			throw 'Wasm GC entry point $preferredEntry was not emitted';
@@ -344,6 +348,9 @@ class WasmBackend implements Backend {
 							IteratorNew(_, _), IteratorHasNext(_, _), IteratorNext(_, _), MakeEnum(_, _, _, _), EnumIndex(_, _), EnumField(_, _, _, _),
 							IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _):
 						case Call(_, name, _) if (declaredFunctions.exists(name) || isSupportedGcArrayNative(name)):
+						case StaticClosure(_, name) if (declaredFunctions.exists(name)):
+						case InstanceClosure(_, name, receiver) if (declaredFunctions.exists(name) && isObjectReference(receiver.type)):
+						case CallClosure(_, closure, _) if (isFunctionType(closure.type)):
 						case MethodCall(_, receiver, _, _) if (isObjectReference(receiver.type)):
 						default:
 							throw 'Wasm GC lowering does not support instruction ${Std.string(located.value)} in "${fn.name}" yet';
@@ -354,6 +361,12 @@ class WasmBackend implements Backend {
 	static function isObjectReference(type:IrType):Bool
 		return switch type {
 			case Obj(_): true;
+			default: false;
+		};
+
+	static function isFunctionType(type:IrType):Bool
+		return switch type {
+			case Function(_, _): true;
 			default: false;
 		};
 
@@ -1551,6 +1564,107 @@ class WasmBackend implements Backend {
 					}
 		return result;
 	}
+
+	static function collectGcClosureTypes(module:WasmModule, plan:WasmGcTypePlan, program:IrProgram):Map<String, WasmClosureTypes> {
+		var result:Map<String, WasmClosureTypes> = [];
+		for (fn in program.functions)
+			for (block in fn.blocks)
+				for (located in block.instructions)
+					switch located.value {
+						case CallClosure(_, closure, _):
+							recordGcClosureType(module, plan, result, closure.type, false);
+						case StaticClosure(output, _):
+							recordGcClosureType(module, plan, result, output.type, false);
+						case InstanceClosure(output, _, _):
+							recordGcClosureType(module, plan, result, output.type, true);
+						default:
+					}
+		return result;
+	}
+
+	static function recordGcClosureType(module:WasmModule, plan:WasmGcTypePlan, closureTypes:Map<String, WasmClosureTypes>, closureType:IrType,
+			includeInstance:Bool):Void {
+		var arguments = switch closureType {
+			case Function(args, _): args;
+			default: throw 'Wasm GC closure has a non-function type ${Std.string(closureType)}';
+		}, resultType = switch closureType {
+			case Function(_, result): result;
+			default: Void;
+		}, key = Std.string(closureType), staticType = module.typeIndex(plan.wasmFunctionType(arguments, resultType)), existing = closureTypes.get(key);
+		if (existing == null) {
+			existing = {staticType: staticType, instanceType: null};
+			closureTypes.set(key, existing);
+		}
+		if (includeInstance) {
+			var instanceType = module.typeIndex({
+				parameters: [Ref({nullable: true, heap: Any})].concat([for (argument in arguments) plan.valueType(argument)]),
+				results: switch resultType {
+					case Void: [];
+					default: [plan.valueType(resultType)];
+				}
+			});
+			if (existing.instanceType == null)
+				existing.instanceType = instanceType;
+			else if (existing.instanceType != instanceType)
+				throw 'Wasm GC closure signature ${Std.string(closureType)} has conflicting instance call types';
+		}
+	}
+
+	static function addGcClosureThunks(module:WasmModule, plan:WasmGcTypePlan, functions:Map<String, Int>, program:IrProgram,
+			reachable:Map<String, Bool>):Void {
+		var targets:Map<String, Bool> = [];
+		for (fn in program.functions)
+			if (reachable.exists(fn.name))
+				for (block in fn.blocks)
+					for (located in block.instructions)
+						switch located.value {
+							case InstanceClosure(_, target, _):
+								targets.set(target, true);
+							default:
+						}
+		var names = [for (name in targets.keys()) name];
+		names.sort(Reflect.compare);
+		for (targetName in names) {
+			var target = findFunction(program, targetName);
+			if (target == null || target.arguments.length == 0)
+				throw 'Wasm GC instance closure target "$targetName" has no receiver parameter';
+			var receiverType = switch target.arguments[0].type {
+				case Obj(name): name;
+				default: throw 'Wasm GC instance closure target "$targetName" has unsupported receiver type ${Std.string(target.arguments[0].type)}';
+			}, thunkName = gcClosureThunkName(targetName), functionIndex = functions.get(targetName);
+			if (functionIndex == null)
+				throw 'Wasm GC instance closure target "$targetName" is not reachable';
+			if (functions.exists(thunkName))
+				throw 'Wasm GC closure thunk name collides with function "$thunkName"';
+			var parameters = [Ref({nullable: true, heap: Any})].concat([for (argument in target.arguments.slice(1)) plan.valueType(argument.type)]),
+				results = switch target.result {
+					case Void: [];
+					default: [plan.valueType(target.result)];
+				},
+				type:WasmFunctionType = {parameters: parameters, results: results},
+				thunkIndex = module.addFunction(new WasmFunction(thunkName, type));
+			functions.set(thunkName, thunkIndex);
+			var body:Array<WasmInstruction> = [
+				LocalGet(0),
+				RefCast({nullable: false, heap: Type(plan.objectType(receiverType))})
+			];
+			for (index in 1...target.arguments.length)
+				body.push(LocalGet(index));
+			body.push(Call(functionIndex));
+			body.push(Return);
+			module.setFunction(thunkIndex, new WasmFunction(thunkName, type, [], body));
+		}
+	}
+
+	static function findFunction(program:IrProgram, name:String):Null<IrFunction> {
+		for (fn in program.functions)
+			if (fn.name == name)
+				return fn;
+		return null;
+	}
+
+	public static inline function gcClosureThunkName(target:String):String
+		return "__haxeon_gc_closure_thunk_" + target;
 
 	static function buildTableSlots(module:WasmModule, functions:Map<String, Int>):Map<String, Int> {
 		var names = [for (fn in module.functions) if (functions.exists(fn.name)) fn.name];
@@ -4952,13 +5066,22 @@ class WasmFunctionLower {
 				var tableSlot = activeTableSlots.get(name);
 				if (tableSlot == null)
 					throw 'Wasm closure target "$name" has no stable table slot';
-				emit(body, [I32Const(tableSlot * 2 + 1), LocalSet(requiredLocal(values, output.id))]);
+				var represented = activeRepresentation.staticClosure(name, activeTableSlots, requiredLocal(values, output.id));
+				if (represented != null)
+					emit(body, represented);
+				else
+					emit(body, [I32Const(tableSlot * 2 + 1), LocalSet(requiredLocal(values, output.id))]);
 			case CallClosure(output, closure, arguments):
 				var typeInfo = closureTypes.get(Std.string(closure.type));
 				if (typeInfo == null)
 					throw 'Wasm closure type ${Std.string(closure.type)} has no indirect signature';
-				var instanceType = typeInfo.instanceType;
-				if (instanceType == null) {
+				var instanceType = typeInfo.instanceType,
+					destination = output.type == Void ? -1 : requiredLocal(values, output.id),
+					represented = activeRepresentation.callClosure(typeInfo.staticType, instanceType, arguments, requiredLocal(values, closure.id),
+						destination, [for (argument in arguments) requiredLocal(values, argument.id)]);
+				if (represented != null)
+					emit(body, represented);
+				else if (instanceType == null) {
 					for (argument in arguments)
 						body.push(LocalGet(requiredLocal(values, argument.id)));
 					body.push(LocalGet(requiredLocal(values, closure.id)));
@@ -4999,19 +5122,24 @@ class WasmFunctionLower {
 				var tableSlot = activeTableSlots.get(name);
 				if (tableSlot == null)
 					throw 'Wasm instance closure target "$name" has no stable table slot';
-				emit(body, [
-					I32Const(WasmLayout.CLOSURE_SIZE),
-					Call(allocator),
-					LocalTee(requiredLocal(values, output.id)),
-					I32Const(WasmLayout.CLOSURE_TYPE_ID),
-					I32Store(0),
-					LocalGet(requiredLocal(values, output.id)),
-					I32Const(tableSlot),
-					I32Store(WasmLayout.CLOSURE_FUNCTION_OFFSET),
-					LocalGet(requiredLocal(values, output.id)),
-					LocalGet(requiredLocal(values, receiver.id)),
-					I32Store(WasmLayout.CLOSURE_RECEIVER_OFFSET)
-				]);
+				var represented = activeRepresentation.instanceClosure(name, activeTableSlots, requiredLocal(values, receiver.id),
+					requiredLocal(values, output.id));
+				if (represented != null)
+					emit(body, represented);
+				else
+					emit(body, [
+						I32Const(WasmLayout.CLOSURE_SIZE),
+						Call(allocator),
+						LocalTee(requiredLocal(values, output.id)),
+						I32Const(WasmLayout.CLOSURE_TYPE_ID),
+						I32Store(0),
+						LocalGet(requiredLocal(values, output.id)),
+						I32Const(tableSlot),
+						I32Store(WasmLayout.CLOSURE_FUNCTION_OFFSET),
+						LocalGet(requiredLocal(values, output.id)),
+						LocalGet(requiredLocal(values, receiver.id)),
+						I32Store(WasmLayout.CLOSURE_RECEIVER_OFFSET)
+					]);
 			case ToVirtual(output, value):
 				emit(body, [
 					LocalGet(requiredLocal(values, value.id)),
