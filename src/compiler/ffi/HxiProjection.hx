@@ -236,6 +236,7 @@ class HxiProjection {
 				case Structure(name, size, _, fields, _):
 					var projectedName = projectedTypeName(name, profile);
 					emitDocumentation(output, model, name);
+					output.add('/** Managed storage; this struct value may be retained and reused across native calls. Native pointers derived from it are call-scoped. */\n');
 					output.add('abstract $projectedName(haxe.io.Bytes) from haxe.io.Bytes to haxe.io.Bytes {\n');
 					output.add('\tpublic static inline function size():Int return $size;\n');
 					output.add('\tpublic static function array(values:Array<$projectedName>):$projectedName { var bytes = ${model.name}.__hxi_struct_alloc(values.length * $size); for (index in 0...values.length) ${model.name}.__hxi_struct_copy(bytes, index * $size, values[index], $size); return cast bytes; }\n');
@@ -884,8 +885,18 @@ class HxiProjection {
 	static function pascalCase(parts:Array<String>):String {
 		var result = "";
 		for (part in parts)
-			if (part.length != 0)
-				result += part.charAt(0).toUpperCase() + part.substr(1).toLowerCase();
+			if (part.length != 0) {
+				var hasLowerCase = false;
+				for (index in 0...part.length) {
+					var code = part.charCodeAt(index);
+					if (code >= "a".code && code <= "z".code) {
+						hasLowerCase = true;
+						break;
+					}
+				}
+				var normalized = hasLowerCase ? part : part.toLowerCase();
+				result += normalized.charAt(0).toUpperCase() + normalized.substr(1);
+			}
 		return result;
 	}
 

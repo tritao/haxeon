@@ -1,0 +1,7 @@
+interface Retained @target("portable-abi32") @library("retained") {
+	struct retained_point @layout(8, 4) {
+		x: i32 @offset(0);
+		y: i32 @offset(4);
+	}
+	extern fn check(point: ptr<const<retained_point>>) -> i32 @symbol("retained_check");
+}

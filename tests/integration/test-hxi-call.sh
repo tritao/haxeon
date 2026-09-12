@@ -21,6 +21,21 @@ cc -shared -fPIC "$repo_dir/tests/native/native_call_fixture.c" -o "$repo_dir/ou
 	fi
 )
 
+"$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/tests/runtime" --run HxiRetainedMain \
+	"$repo_dir/out/hxi-retained-test.hl" native_call_fixture
+(
+	cd "$repo_dir/out"
+	set +e
+	LD_LIBRARY_PATH="$repo_dir/out:$repo_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+		"$repo_dir/.tools/hashlink/hl" hxi-retained-test.hl
+	status=$?
+	set -e
+	if [[ $status -ne 42 ]]; then
+		echo "retained HXI struct returned $status, expected 42" >&2
+		exit 1
+	fi
+)
+
 invalid_output="$repo_dir/out/hxi-invalid-null.txt"
 set +e
 (

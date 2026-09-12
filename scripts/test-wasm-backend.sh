@@ -69,6 +69,12 @@ fi
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm32 --output=out/wasm-cli-try-bounds.wasm --entry=try-array-bounds \
 	--root=tests/programs tests/programs/try-array-bounds.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --output=out/wasm-cli-hxi-retained.wasm --entry=wasm-hxi-retained \
+	--root=tests --ffi-interface=tests/ffi/retained_struct.hxi tests/wasm-hxi-retained.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --output=out/wasm-cli-hxi-retained-imported.wasm --entry=wasm-hxi-retained \
+	--wasm-import-memory --root=tests --ffi-interface=tests/ffi/retained_struct.hxi tests/wasm-hxi-retained.hx
 node - "$root_dir" <<'JS'
 const fs = require("fs");
 const root = process.argv[2];
@@ -107,9 +113,11 @@ const cases = [
 	["out/wasm-cli-map-anonymous-enum.wasm", 42],
 	["out/wasm-cli-gc-reuse.wasm", 42],
 	["out/wasm-cli-cnative-import.wasm", 42],
-  ["out/wasm-cli-try-catch.wasm", 42],
-  ["out/wasm-cli-try-nested.wasm", 42],
-  ["out/wasm-cli-try-bounds.wasm", 42],
+	["out/wasm-cli-hxi-retained.wasm", 42],
+	["out/wasm-cli-hxi-retained-imported.wasm", 42],
+	["out/wasm-cli-try-catch.wasm", 42],
+	["out/wasm-cli-try-nested.wasm", 42],
+	["out/wasm-cli-try-bounds.wasm", 42],
   ["out/wasm-backend-closure.wasm", 42],
   ["out/wasm-backend-instance-closure.wasm", 42],
   ["out/wasm-backend-virtual.wasm", 42]
@@ -117,12 +125,23 @@ const cases = [
 (async () => {
   for (const [relative, expected] of cases) {
     const bytes = fs.readFileSync(`${root}/${relative}`);
+    const importedMemory = relative.endsWith("hxi-retained-imported.wasm");
+    const memory = importedMemory ? new WebAssembly.Memory({initial: 3}) : null;
+    let moduleInstance = null;
     const imports = {};
     if (relative.endsWith("cnative-import.wasm"))
       imports.fixture = {fixture_add: (left, right) => left + right};
     if (relative.endsWith("numeric-promotion.wasm"))
       imports.haxeon_runtime = {__math_ceil: Math.ceil};
-    const {instance} = await WebAssembly.instantiate(bytes, imports);
+    if (relative.includes("hxi-retained"))
+      imports.retained = {retained_check: pointer => {
+        const view = new DataView((memory == null ? moduleInstance.exports.memory : memory).buffer);
+        return view.getInt32(pointer, true) + view.getInt32(pointer + 4, true);
+      }};
+    if (importedMemory)
+      imports.env = {memory};
+    moduleInstance = (await WebAssembly.instantiate(bytes, imports)).instance;
+    const instance = moduleInstance;
     if (relative.includes("closure") && !(instance.exports.table instanceof WebAssembly.Table))
       throw new Error(`${relative}: stable Wasm function table was not exported`);
     const value = instance.exports.main();

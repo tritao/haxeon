@@ -69,7 +69,9 @@ class HxiParserMain {
 			"enums should retain concise nominal types and integer ABI calls");
 		var mixedCaseEnum = HxiParser.parse("mixed-case-enum.hxi",
 			'interface mixed @target("x86_64-linux-gnu") @library("mixed") { enum FixtureResult : i32 { FIXTURE_OK = 0; } extern fn check(value: FixtureResult) -> FixtureResult; }');
-		expect(HxiProjection.source(mixedCaseEnum).indexOf("enum abstract FixtureResult(Int)") >= 0,
+		var mixedCaseSource = HxiProjection.source(mixedCaseEnum);
+		expect(mixedCaseSource.indexOf("enum abstract FixtureResult(Int)") >= 0
+			&& mixedCaseSource.indexOf("extern function check(arg0:FixtureResult):FixtureResult") >= 0,
 			"already mixed-case enum names should retain their spelling in the Haxe projection");
 		var nativeNames = HxiParser.parse("native-names.hxi",
 			'interface native_names @target("x86_64-linux-gnu") @library("native_names") { enum nk_result : i32 { NK_OK = 0; NK_ERROR_INVALID_ARGUMENT = -2; } extern fn check(value: nk_result) -> nk_result; }');
