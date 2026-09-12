@@ -588,7 +588,112 @@ class HxiParser {
 					if (resultPolicy.length != null && !bytePointerLike(result, declarationsByName))
 						fail('@length on "$name" requires a pointer to byte-sized data or void', span);
 			}
+		validatePointerResultContracts(value, declarationsByName, abi);
 	}
+
+	static function validatePointerResultContracts(value:HxiInterface, declarations:Map<String, HxiDeclaration>, abi:HxiAbi):Void {
+		for (declaration in value.declarations)
+			switch declaration {
+				case Function(name, parameters, result, _, _, callConvention, resultPolicy, span):
+					switch resultPolicy.ownership {
+						case Owned(releaseSymbol):
+							validateReleaseFunction(value, name, result, releaseSymbol, declarations, span);
+						case Borrowed | Unspecified:
+					}
+					if (resultPolicy.length != null)
+						validateLengthFunction(value, name, parameters, callConvention, resultPolicy.length, declarations, abi, span);
+				case _:
+			}
+	}
+
+	static function validateReleaseFunction(value:HxiInterface, owner:String, result:HxiType, releaseSymbol:String, declarations:Map<String, HxiDeclaration>,
+			span:SourceSpan):Void {
+		var release = referencedFunction(value, owner, "release", releaseSymbol, span);
+		switch release {
+			case Function(releaseName, parameters, releaseResult, _, _, callConvention, _, releaseSpan):
+				var resultPointee = pointerPointee(result, declarations),
+					releasePointee = parameters.length == 1 ? pointerPointee(parameters[0].type, declarations) : null,
+					returnsVoid = switch releaseResult {
+						case Primitive("void"): true;
+						case _: false;
+					},
+					matchesPointee = resultPointee != null
+						&& releasePointee != null
+						&& (canonicalTypeKey(releasePointee, declarations) == canonicalTypeKey(Primitive("void"), declarations)
+							|| canonicalTypeKey(resultPointee, declarations) == canonicalTypeKey(releasePointee, declarations));
+				if (callConvention != "cdecl" || parameters.length != 1 || parameters[0].direction != In || !matchesPointee || !returnsVoid)
+					fail('Release function "$releaseName" for owned result "$owner" must be cdecl, accept one compatible input pointer, and return void',
+						releaseSpan);
+			case _:
+				fail('Internal error resolving release symbol "$releaseSymbol"', span);
+		}
+	}
+
+	static function validateLengthFunction(value:HxiInterface, owner:String, parameters:Array<HxiParameter>, callConvention:String, lengthSymbol:String,
+			declarations:Map<String, HxiDeclaration>, abi:HxiAbi, span:SourceSpan):Void {
+		var length = referencedFunction(value, owner, "length", lengthSymbol, span);
+		switch length {
+			case Function(lengthName, lengthParameters, lengthResult, _, _, lengthCallConvention, _, lengthSpan):
+				if (lengthCallConvention != callConvention)
+					fail('Length function "$lengthName" for "$owner" must use calling convention "$callConvention"', lengthSpan);
+				if (lengthParameters.length != parameters.length)
+					fail('Length function "$lengthName" for "$owner" must accept the same arguments', lengthSpan);
+				for (index in 0...parameters.length)
+					if (canonicalTypeKey(parameters[index].type, declarations) != canonicalTypeKey(lengthParameters[index].type, declarations))
+						fail('Argument ${index + 1} of length function "$lengthName" for "$owner" must match the pointer function ABI type',
+							lengthParameters[index].span);
+				switch abi.classify(lengthResult, true) {
+					case IntegerValue(bits, Unsigned) if (bits == abi.pointerBits):
+					case _: fail('Length function "$lengthName" for "$owner" must return target-sized unsigned size_t', lengthSpan);
+				}
+			case _:
+				fail('Internal error resolving length symbol "$lengthSymbol"', span);
+		}
+	}
+
+	static function referencedFunction(value:HxiInterface, owner:String, role:String, symbol:String, span:SourceSpan):HxiDeclaration {
+		if (symbol.length == 0)
+			fail('@$role on "$owner" requires a non-empty native function symbol', span);
+		var found:Null<HxiDeclaration> = null;
+		for (declaration in value.declarations)
+			switch declaration {
+				case Function(name, _, _, declaredSymbol, _, _, _, _) if ((declaredSymbol == null ? name : declaredSymbol) == symbol):
+					if (found != null)
+						fail('Native $role symbol "$symbol" referenced by "$owner" is ambiguous in interface "${value.name}"', span);
+					found = declaration;
+				case _:
+			}
+		if (found == null)
+			fail('Native $role symbol "$symbol" referenced by "$owner" must name a function declared in interface "${value.name}"', span);
+		return found;
+	}
+
+	static function pointerPointee(type:HxiType, declarations:Map<String, HxiDeclaration>):Null<HxiType>
+		return switch type {
+			case Const(element) | Nullable(element): pointerPointee(element, declarations);
+			case Pointer(element): element;
+			case Primitive("utf8"): Primitive("c_char");
+			case Named(name):
+				switch declarations.get(name) {
+					case Alias(_, target, _): pointerPointee(target, declarations);
+					case _: null;
+				}
+			case _: null;
+		};
+
+	static function canonicalTypeKey(type:HxiType, declarations:Map<String, HxiDeclaration>):String
+		return switch type {
+			case Primitive(name): 'primitive:$name';
+			case Named(name):
+				switch declarations.get(name) {
+					case Alias(_, target, _): canonicalTypeKey(target, declarations);
+					case _: 'named:$name';
+				}
+			case Pointer(element): 'pointer<${canonicalTypeKey(element, declarations)}>';
+			case Nullable(element): 'nullable<${canonicalTypeKey(element, declarations)}>';
+			case Const(element): 'const<${canonicalTypeKey(element, declarations)}>';
+			case Array(element, length): 'array<${canonicalTypeKey(element, declarations)},$length>';
+		};
 
 	static function validateOutputType(name:String, type:HxiType, abi:HxiAbi, span:SourceSpan):Void {
 		var pointee = switch type {

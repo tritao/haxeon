@@ -347,7 +347,7 @@ class HxiParserMain {
 			&& aggregateCallbackSource.indexOf("{8;4;5,5}>{8;4;5,5}") >= 0,
 			"aggregate callbacks should retain their recursive ABI descriptor");
 		var strings = HxiParser.parse("strings.hxi",
-			'interface strings @target("x86_64-linux-gnu") @library("strings") { callback Filter = fn(value: utf8) -> nullable<utf8>; extern fn check(value: utf8, optional: nullable<utf8>) -> i32; extern fn current() -> utf8 @borrowed; extern fn copy() -> utf8 @owned("release"); }');
+			'interface strings @target("x86_64-linux-gnu") @library("strings") { callback Filter = fn(value: utf8) -> nullable<utf8>; extern fn check(value: utf8, optional: nullable<utf8>) -> i32; extern fn current() -> utf8 @borrowed; extern fn copy() -> utf8 @owned("release"); extern fn release(value: ptr<void>) -> void @symbol("release"); }');
 		var stringSource = HxiProjection.source(strings),
 			stringNatives = HxiProjection.cNatives(strings);
 		expect(stringSource.indexOf("typedef Filter = (value:String)->Null<String>") >= 0
@@ -368,7 +368,7 @@ class HxiParserMain {
 		expectError(StringTools.replace(valid, "@leaf", "@unknown"), "Unsupported @unknown metadata");
 		expectError(StringTools.replace(valid, "ptr<const<nk_options>>", "nullable<i32>"), "nullable<> requires a pointer or callback type");
 		var pointerPolicies = HxiParser.parse("pointers.hxi",
-			'interface pointers @target("x86_64-linux-gnu") @library("pointers") { opaque context; extern fn create() -> ptr<u8> @owned("context_destroy") @length("context_size"); extern fn current() -> nullable<ptr<context>> @borrowed; }');
+			'interface pointers @target("x86_64-linux-gnu") @library("pointers") { opaque context; extern fn create() -> ptr<u8> @owned("context_destroy") @length("context_size"); extern fn current() -> nullable<ptr<context>> @borrowed; extern fn destroy(value: ptr<void>) -> void @symbol("context_destroy"); extern fn size() -> c_size @symbol("context_size"); }');
 		switch pointerPolicies.declarations[1] {
 			case Function(_, _, _, _, _, "cdecl", {ownership: Owned("context_destroy"), length: "context_size"}, _):
 			case _:
@@ -379,6 +379,22 @@ class HxiParserMain {
 		expectError('interface bad @target("x86_64-linux-gnu") { extern fn value() -> i32 @borrowed; }', "requires a pointer return type");
 		expectError('interface bad @target("x86_64-linux-gnu") { opaque context; extern fn value() -> ptr<context> @borrowed @length("size"); }',
 			"requires a pointer to byte-sized data");
+		expectError('interface bad @target("x86_64-linux-gnu") @library("bad") { extern fn create() -> ptr<u8> @owned("missing_release"); }',
+			"must name a function declared in interface");
+		expectError('interface bad @target("x86_64-linux-gnu") @library("bad") { opaque context; extern fn create() -> ptr<context> @owned("release"); extern fn release(value: ptr<i32>) -> void @symbol("release"); }',
+			"compatible input pointer");
+		expectError('interface bad @target("x86_64-linux-gnu") @library("bad") { extern fn create() -> ptr<u8> @owned("release"); extern fn release(value: ptr<void>) -> i32 @symbol("release"); }',
+			"return void");
+		expectError('interface bad @target("x86_64-w64-windows-gnu") @library("bad") { extern fn create() -> ptr<u8> @owned("release"); extern fn release(value: ptr<void>) -> void @symbol("release") @callconv("system"); }',
+			"must be cdecl");
+		expectError('interface bad @target("x86_64-linux-gnu") @library("bad") { extern fn create() -> ptr<u8> @borrowed @length("missing_length"); }',
+			"must name a function declared in interface");
+		expectError('interface bad @target("x86_64-linux-gnu") @library("bad") { extern fn create(value: i32) -> ptr<u8> @borrowed @length("length"); extern fn length(value: u64) -> c_size @symbol("length"); }',
+			"must match the pointer function ABI type");
+		expectError('interface bad @target("x86_64-linux-gnu") @library("bad") { extern fn create() -> ptr<u8> @borrowed @length("length"); extern fn length() -> u32 @symbol("length"); }',
+			"return target-sized unsigned size_t");
+		expectError('interface bad @target("x86_64-w64-windows-gnu") @library("bad") { extern fn create() -> ptr<u8> @borrowed @length("length"); extern fn length() -> c_size @symbol("length") @callconv("system"); }',
+			"must use calling convention");
 		var compiler = new Compiler();
 		compiler.addFfiInterface("nativekit.hxi", valid);
 		expect(compiler.ffiInterfaces().length == 1

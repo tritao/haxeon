@@ -48,6 +48,7 @@ class HxiCallMain {
 			+ '\textern fn checkNullableUtf8(value: nullable<utf8>) -> i32 @symbol("native_fixture_check_nullable_utf8");\n'
 			+ '\textern fn borrowedUtf8(present: i32) -> nullable<utf8> @symbol("native_fixture_borrowed_utf8") @borrowed;\n'
 			+ '\textern fn ownedUtf8() -> utf8 @symbol("native_fixture_owned_utf8") @owned("native_fixture_utf8_release");\n'
+			+ '\textern fn releaseOwnedUtf8(value: ptr<void>) -> void @symbol("native_fixture_utf8_release");\n'
 			+ '\textern fn utf8WasReleased() -> i32 @symbol("native_fixture_utf8_was_released");\n'
 			+ '\textern fn invalidUtf8() -> utf8 @symbol("native_fixture_invalid_utf8_result") @borrowed;\n'
 			+ '\textern fn callUtf8Callback(callback: FixtureUtf8Callback) -> i32 @symbol("native_fixture_call_utf8_callback");\n'
@@ -72,6 +73,7 @@ class HxiCallMain {
 			+ '\textern fn i64Value() -> i64 @symbol("native_fixture_i64_value");\n'
 			+ '\textern fn i64Check(value: i64) -> i32 @symbol("native_fixture_i64_check");\n'
 			+ '\textern fn owned(value: i32) -> ptr<fixture_context> @symbol("native_fixture_owned") @owned("native_fixture_release");\n'
+			+ '\textern fn releaseOwnedContext(value: ptr<void>) -> void @symbol("native_fixture_release");\n'
 			+ '\textern fn borrowed() -> ptr<fixture_context> @symbol("native_fixture_borrowed") @borrowed;\n'
 			+ '\textern fn maybeBorrowed(present: i32) -> nullable<ptr<fixture_context>> @symbol("native_fixture_maybe_borrowed") @borrowed;\n'
 			+ '\textern fn invalidNonNull() -> ptr<fixture_context> @symbol("native_fixture_invalid_non_null") @borrowed;\n'
@@ -80,11 +82,14 @@ class HxiCallMain {
 			+ '\textern fn wasReleased() -> i32 @symbol("native_fixture_was_released");\n'
 			+
 			'\textern fn ownedData(first: i32) -> ptr<u8> @symbol("native_fixture_owned_data") @owned("native_fixture_data_release") @length("native_fixture_data_length");\n'
+			+ '\textern fn releaseOwnedData(value: ptr<void>) -> void @symbol("native_fixture_data_release");\n'
+			+ '\textern fn dataLength(ignored: i32) -> c_size @symbol("native_fixture_data_length");\n'
 			+
 			'\textern fn borrowedData(present: i32) -> nullable<ptr<const<u8>>> @symbol("native_fixture_borrowed_data") @borrowed @length("native_fixture_data_length");\n'
 			+ '\textern fn dataWasReleased() -> i32 @symbol("native_fixture_data_was_released");\n'
 			+ '\textern fn dataCheck(data: ptr<const<u8>>) -> i32 @symbol("native_fixture_data_check");\n'
 			+ '\textern fn invalidData() -> ptr<const<u8>> @symbol("native_fixture_invalid_data") @borrowed @length("native_fixture_invalid_data_length");\n'
+			+ '\textern fn invalidDataLength() -> c_size @symbol("native_fixture_invalid_data_length");\n'
 			+ '}\n');
 		compiler.update("Main.hx",
 			"import Fixture; import runtime.NativePointer; function main():Int { var options = new fixture_options(); options.set_count(40); options.set_scale(1.5); options.set_token(Fixture.i64Value()); options.set_delta(2); var start = new fixture_point(); start.set_x(10); start.set_y(11); var end = new fixture_point(); end.set_x(20); end.set_y(21); var box = new fixture_box(); box.set_start(start); box.set_end(end); var copied = box.get_start(); var borrowed = Fixture.borrowed(); var holder = new fixture_holder(); holder.set_required(borrowed); holder.set_optional(null); var structure = options.get_count() == 40 && options.get_scale() == 1.5 && options.get_delta() == 2 && Fixture.checkOptions(options) == 42 && copied.get_x() == 10 && copied.get_y() == 11 && Fixture.checkBox(box) == 42 && Fixture.pointerValue(holder.get_required()) == 42 && holder.get_optional() == null && Fixture.checkHolder(holder) == 42; var owned = Fixture.owned(41); var maybe = Fixture.maybeBorrowed(1); var ownedData = Fixture.ownedData(40); var borrowedData = Fixture.borrowedData(1); var buffers = Fixture.dataCheck(ownedData) == 42 && borrowedData != null && Fixture.dataCheck(borrowedData) == 42 && Fixture.borrowedData(0) == null && Fixture.dataWasReleased() == 42; var pointers = !NativePointer.native_pointer_is_closed(owned) && !NativePointer.native_pointer_is_closed(borrowed) && Fixture.maybeBorrowed(0) == null && maybe != null && Fixture.pointerValue(owned) == 41 && Fixture.pointerValue(borrowed) == 42 && Fixture.nullablePointerValue(maybe) == 42 && Fixture.nullablePointerValue(null) == 0 && NativePointer.native_pointer_close(owned) && !NativePointer.native_pointer_close(owned) && !NativePointer.native_pointer_close(borrowed) && Fixture.wasReleased() == 42; return structure && buffers && pointers && Fixture.multiply(6.0, 7.0) == 42.0 && Fixture.isNull(haxe.io.Bytes.alloc(1)) == 0 && Fixture.isNull(null) == 42 && Fixture.sum16(1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 0, 0, 0, 0, 0) == 42 && Fixture.i64Check(Fixture.i64Value()) == 42 ? Fixture.add(Fixture.add(10, 11), 21) : 1; }");

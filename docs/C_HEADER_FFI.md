@@ -144,6 +144,15 @@ pointer results with `@borrowed` or `@owned("release_symbol")`, and byte-like
 pointer results with `@length("length_symbol")`. Haxeon parses these policies
 alongside opaque types and `@symbol`/`@leaf` function metadata.
 
+The symbols named by `@owned` and `@length` must also be declared as functions
+in the same HXI interface, with matching `@symbol` metadata where the C name
+differs from the HXI name. An owned-result release function must use the C
+calling convention and have the shape `void release(pointer)`, where the
+pointer accepts the result's pointee type or `void *`. A length function must
+use the result function's calling convention and argument types, and return an
+unsigned target-sized integer (`usize` or `c_size`). These contracts are
+validated before projection rather than deferred to runtime symbol lookup.
+
 Bridgeable functions are also projected into a generated Haxe module named
 after the HXI interface. The initial projection accepts 8/16/32-bit integers,
 64-bit integers, `float`, `double`, pointers, and `void` results. Unsupported
@@ -168,11 +177,12 @@ execution time.
 
 `@length("length_symbol")` turns a pointer to byte-sized data or `void` into a
 managed `haxe.io.Bytes` result. The length function receives the same arguments
-as the pointer function and returns `size_t`. The runtime validates the length
-against a 256 MiB safety limit, copies the bytes, and then calls the release
-symbol for owned results. Borrowed memory is never released. Nullable pointer
-results become Haxe `null`; a non-null result contract returning `NULL` is a
-runtime boundary error. `@length` is rejected for opaque resource pointers.
+as the pointer function and returns `size_t`; HXI validation checks that its
+declared signature matches. The runtime validates the length against a 256 MiB
+safety limit, copies the bytes, and then calls the declared release symbol for
+owned results. Borrowed memory is never released. Nullable pointer results
+become Haxe `null`; a non-null result contract returning `NULL` is a runtime
+boundary error. `@length` is rejected for opaque resource pointers.
 
 HXI structures with explicit `@layout(size, align)` and field `@offset(...)`
 metadata project to typed Haxe abstracts backed by managed bytes. Constructing
