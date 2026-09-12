@@ -75,9 +75,11 @@ the guest.
   block header.
   The block header identifies payloads that may contain managed references.
   Numeric-array backing stores and `Bytes` payloads are atomic and skipped during
-  tracing; reference arrays and object fields remain traced. Collection still
-  runs before selecting a block for each allocation, preserving the current
-  safepoint/rooting guarantees. Recycled blocks are zero-filled before reuse,
+  tracing; reference arrays and object fields remain traced. Normal allocation
+  consumes a byte budget (at least 256 KiB, scaled with heap size) between
+  collections and forces collection plus a free-list retry before growing Wasm
+  memory. `--wasm-gc-stress` restores collection-before-every-allocation for
+  collector tests. Recycled blocks are zero-filled before reuse,
   preserving Haxe's default values for fields, array elements, and byte storage
   just as newly grown Wasm memory does. The legacy `metadata_base` and
   `metadata_top` diagnostic exports remain temporarily available and report an

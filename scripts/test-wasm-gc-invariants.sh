@@ -4,6 +4,7 @@ set -euo pipefail
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
 haxe_bin="$root_dir/.tools/haxe/haxe"
 artifact="$root_dir/out/wasm-gc-invariants.wasm"
+normal_artifact="$root_dir/out/wasm-gc-budget.wasm"
 
 if [[ ! -x "$haxe_bin" ]]; then
 	echo "missing pinned Haxe; run ./scripts/bootstrap-tools.sh first" >&2
@@ -12,13 +13,20 @@ fi
 
 mkdir -p "$root_dir/out"
 "$haxe_bin" --cwd "$root_dir" -cp "$root_dir/src" --run compiler.tools.HaxeonCompiler \
-	--target=wasm32 --wasm-memory-stats --export=wasm-gc-invariants.exercise --export=wasm-gc-invariants.rootSnapshotExercise \
-	--export=wasm-gc-invariants.throwThroughRoots --export=wasm-gc-invariants.reallocateLargeArray --output="$artifact" \
+	--target=wasm32 --wasm-memory-stats --wasm-gc-stress --export=wasm-gc-invariants.exercise --export=wasm-gc-invariants.rootSnapshotExercise \
+	--export=wasm-gc-invariants.throwThroughRoots --export=wasm-gc-invariants.reallocateLargeArray --export=wasm-gc-invariants.allocationBurst \
+	--export=wasm-gc-invariants.growBeyondInitialMemory --output="$artifact" \
 	--entry=wasm-gc-invariants --root="$root_dir/tests/programs" "$root_dir/tests/programs/wasm-gc-invariants.hx"
 
-node - "$artifact" <<'JS'
+"$haxe_bin" --cwd "$root_dir" -cp "$root_dir/src" --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --wasm-memory-stats --export=wasm-gc-invariants.allocationBurst \
+	--export=wasm-gc-invariants.growBeyondInitialMemory --output="$normal_artifact" \
+	--entry=wasm-gc-invariants --root="$root_dir/tests/programs" "$root_dir/tests/programs/wasm-gc-invariants.hx"
+
+node - "$artifact" "$normal_artifact" <<'JS'
 const fs = require("fs");
 const artifact = process.argv[2];
+const normalArtifact = process.argv[3];
 
 (async () => {
 	const bytes = fs.readFileSync(artifact);
@@ -86,6 +94,25 @@ const artifact = process.argv[2];
 	}
 	assertHeapBlocks();
 	console.log("PASS: Wasm GC free-list split/unlink and exceptional root-frame cleanup");
+	const normalBytes = fs.readFileSync(normalArtifact);
+	const {instance: normalInstance} = await WebAssembly.instantiate(normalBytes, {});
+	const normal = normalInstance.exports;
+	if (normal.main() !== 42)
+		throw new Error("Normal-policy GC fixture returned the wrong value");
+	const collectionsBeforeBurst = normal["haxeon.memory.collection_count"]();
+	if (normal["wasm-gc-invariants.allocationBurst"](128) !== 42)
+		throw new Error("Normal-policy allocation burst returned the wrong value");
+	if (normal["haxeon.memory.collection_count"]() !== collectionsBeforeBurst)
+		throw new Error("Normal Wasm allocation policy collected during a small allocation burst");
+	const pagesBeforeGrowth = normal.memory.buffer.byteLength;
+	const collectionsBeforeGrowth = normal["haxeon.memory.collection_count"]();
+	if (normal["wasm-gc-invariants.growBeyondInitialMemory"]() !== 20000)
+		throw new Error("Normal-policy heap-growth fixture returned the wrong value");
+	if (normal.memory.buffer.byteLength <= pagesBeforeGrowth)
+		throw new Error("Heap-growth fixture did not grow linear memory");
+	if (normal["haxeon.memory.collection_count"]() <= collectionsBeforeGrowth)
+		throw new Error("Allocator grew linear memory without first collecting under pressure");
+	console.log("PASS: Wasm GC allocation budget and collect-before-grow policy");
 })().catch(error => {
 	console.error(error);
 	process.exitCode = 1;

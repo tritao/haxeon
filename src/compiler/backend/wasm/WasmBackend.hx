@@ -119,6 +119,11 @@ class WasmBackend implements Backend {
 		module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
 		var freeHead = module.globals.length;
 		module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
+		var gcBudget = -1;
+		if (options.wasmGcStress != true) {
+			gcBudget = module.globals.length;
+			module.globals.push({type: I32, mutable: true, init: [I32Const(WasmLayout.GC_MIN_ALLOCATION_BUDGET)]});
+		}
 		var allocationCount = -1, allocationBytes = -1, collectionCount = -1;
 		if (options.wasmMemoryStats == true) {
 			allocationCount = module.globals.length;
@@ -141,7 +146,7 @@ class WasmBackend implements Backend {
 		addRuntimeImports(module, program, usedNatives);
 		var mark = addGcMark(module, heapStart, heapTop);
 		var collector = addGcCollector(module, heapStart, heapTop, rootFrameTop, freeHead, mark, rootGlobals, collectionCount);
-		var allocator = addAllocator(module, collector, heapTop, freeHead, allocationCount, allocationBytes);
+		var allocator = addAllocator(module, collector, heapStart, heapTop, freeHead, gcBudget, options.wasmGcStress == true, allocationCount, allocationBytes);
 		functions.set("__haxeon_alloc", allocator);
 		addRuntimeFunctions(module, functions, program, allocator);
 		for (native in program.natives) {
@@ -3103,7 +3108,7 @@ class WasmBackend implements Backend {
 			I32Const(WasmLayout.GC_BLOCK_FLAGS_OFFSET),
 			I32Add,
 			LocalGet(5),
-			I32Const(-1 ^ WasmLayout.GC_BLOCK_MARKED),
+			I32Const(WasmLayout.GC_BLOCK_CLEAR_MARKED_MASK),
 			I32And,
 			I32Store(0),
 			Else
@@ -3129,37 +3134,21 @@ class WasmBackend implements Backend {
 		return module.addFunction(new WasmFunction("__haxeon_gc_collect", type, [for (_ in 0...8) {type: I32}], body));
 	}
 
-	static function addAllocator(module:WasmModule, collector:Int, heapTop:Int, freeHead:Int, allocationCount:Int, allocationBytes:Int):Int {
+	static function addAllocator(module:WasmModule, collector:Int, heapStart:Int, heapTop:Int, freeHead:Int, gcBudget:Int, gcStress:Bool, allocationCount:Int,
+			allocationBytes:Int):Int {
 		var type:WasmFunctionType = {parameters: [I32], results: [I32]};
 		var index = module.addFunction(new WasmFunction("__haxeon_alloc", type));
-		// local 10 preserves the payload request size for diagnostics; local 0
-		// becomes the full physical block size, including its inline header.
-		var body:Array<WasmInstruction> = [LocalGet(0), I32Const(7), I32Add, I32Const(-8), I32And, LocalSet(10)];
-		if (allocationCount >= 0 && allocationBytes >= 0)
-			body = body.concat([
-				GlobalGet(allocationCount),
-				I32Const(1),
-				I32Add,
-				GlobalSet(allocationCount),
-				GlobalGet(allocationBytes),
-				LocalGet(10),
-				I32Add,
-				GlobalSet(allocationBytes)
-			]);
-		body = body.concat([
-			LocalGet(10),
-			I32Const(WasmLayout.GC_BLOCK_HEADER_SIZE),
-			I32Add,
-			LocalSet(0),
-			Call(collector),
+		// local 10 keeps requested payload bytes for diagnostics; local 0 becomes
+		// the complete physical block size. Locals 5/11/12 track GC/reuse state.
+		var findFreeBlock:Array<WasmInstruction> = [
 			I32Const(0),
 			LocalSet(1),
 			I32Const(0),
 			LocalSet(4),
-			GlobalGet(freeHead),
-			LocalSet(3),
 			I32Const(0),
 			LocalSet(11),
+			GlobalGet(freeHead),
+			LocalSet(3),
 			Block(null),
 			Loop(null),
 			LocalGet(3),
@@ -3187,7 +3176,7 @@ class WasmBackend implements Backend {
 			I32Const(WasmLayout.GC_BLOCK_HEADER_SIZE),
 			I32LtS,
 			If(null),
-			// A tail too small to hold a header is consumed with the block.
+			// Consume a tail too small to hold another complete block header.
 			LocalGet(7),
 			LocalSet(6),
 			LocalGet(4),
@@ -3248,7 +3237,88 @@ class WasmBackend implements Backend {
 			End,
 			Br(0),
 			End,
+			End
+		];
+		var replenishBudget:Array<WasmInstruction> = [
+			GlobalGet(heapTop),
+			I32Const(heapStart),
+			I32Sub,
+			LocalSet(12),
+			LocalGet(12),
+			I32Const(WasmLayout.GC_MIN_ALLOCATION_BUDGET),
+			I32LtS,
+			If(null),
+			I32Const(WasmLayout.GC_MIN_ALLOCATION_BUDGET),
+			LocalSet(12),
 			End,
+			LocalGet(12),
+			LocalGet(0),
+			I32Sub,
+			GlobalSet(gcBudget)
+		];
+		var body:Array<WasmInstruction> = [LocalGet(0), I32Const(7), I32Add, I32Const(-8), I32And, LocalSet(10)];
+		if (allocationCount >= 0 && allocationBytes >= 0)
+			body = body.concat([
+				GlobalGet(allocationCount),
+				I32Const(1),
+				I32Add,
+				GlobalSet(allocationCount),
+				GlobalGet(allocationBytes),
+				LocalGet(10),
+				I32Add,
+				GlobalSet(allocationBytes)
+			]);
+		body = body.concat([
+			LocalGet(10),
+			I32Const(WasmLayout.GC_BLOCK_HEADER_SIZE),
+			I32Add,
+			LocalSet(0),
+			I32Const(0),
+			LocalSet(5)
+		]);
+		if (gcStress) {
+			body = body.concat([Call(collector), I32Const(1), LocalSet(5)]);
+		} else {
+			body = body.concat([
+				GlobalGet(gcBudget),
+				LocalGet(0),
+				I32LtS,
+				If(null),
+				Call(collector),
+				I32Const(1),
+				LocalSet(5)
+			]);
+			body = body.concat(replenishBudget);
+			body = body.concat([Else, GlobalGet(gcBudget), LocalGet(0), I32Sub, GlobalSet(gcBudget), End]);
+		}
+		body = body.concat(findFreeBlock);
+		body = body.concat([
+			LocalGet(1),
+			I32Eqz,
+			If(null),
+			GlobalGet(heapTop),
+			LocalGet(0),
+			I32Add,
+			LocalSet(2),
+			MemorySize,
+			I32Const(65536),
+			I32Mul,
+			LocalGet(2),
+			I32LtS,
+			If(null),
+			LocalGet(5),
+			I32Eqz,
+			If(null),
+			// Collection on pressure is mandatory even before the budget expires.
+			Call(collector),
+			I32Const(1),
+			LocalSet(5)
+		]);
+		if (!gcStress)
+			body = body.concat(replenishBudget);
+		body = body.concat(findFreeBlock);
+		body = body.concat([End, End, End]);
+		body = body.concat([
 			LocalGet(1),
 			I32Eqz,
 			If(null),
@@ -3317,7 +3387,7 @@ class WasmBackend implements Backend {
 			I32Add,
 			Return
 		]);
-		module.setFunction(index, new WasmFunction("__haxeon_alloc", type, [for (_ in 0...11) {type: I32}], body));
+		module.setFunction(index, new WasmFunction("__haxeon_alloc", type, [for (_ in 0...12) {type: I32}], body));
 		return index;
 	}
 
@@ -3358,7 +3428,7 @@ class WasmBackend implements Backend {
 				I32Const(WasmLayout.GC_BLOCK_FLAGS_OFFSET),
 				I32Add,
 				I32Load(0),
-				I32Const(-1 ^ WasmLayout.GC_BLOCK_SCAN_REFERENCES),
+				I32Const(WasmLayout.GC_BLOCK_CLEAR_SCAN_MASK),
 				I32And,
 				I32Store(0)
 			]);

@@ -798,6 +798,7 @@ class TestMain {
 			"--define=version=3.0",
 			"--dump-function=42",
 			"--wasm-memory-stats",
+			"--wasm-gc-stress",
 			"--ffi-header=out/sample.h",
 			"--ffi-library=sample",
 			"--ffi-interface=generated/nativekit.hxi",
@@ -812,6 +813,7 @@ class TestMain {
 			|| compilerRequest.entry != "sample.Main"
 			|| compilerRequest.dumpFunction != 42
 			|| !compilerRequest.wasmMemoryStats
+			|| !compilerRequest.wasmGcStress
 			|| compilerRequest.roots.length != 1
 			|| compilerRequest.paths.length != 1
 			|| compilerRequest.ffiInterfaces.join(",") != "generated/nativekit.hxi,generated/system.hxi"
@@ -823,6 +825,14 @@ class TestMain {
 		} catch (error:Dynamic) {
 			memoryStatsRejectedForHashLink = true;
 		}
+		var gcStressRejectedForHashLink = false;
+		try {
+			CompilerArguments.parse(["--wasm-gc-stress", "source/Main.hx"]);
+		} catch (error:Dynamic) {
+			gcStressRejectedForHashLink = true;
+		}
+		if (!gcStressRejectedForHashLink)
+			throw "Wasm GC stress mode was accepted for HashLink";
 		if (!memoryStatsRejectedForHashLink)
 			throw "Compiler CLI accepted Wasm allocator statistics for a non-Wasm target";
 		var wasmDefines = CompilerDriver.targetDefines("wasm32"),

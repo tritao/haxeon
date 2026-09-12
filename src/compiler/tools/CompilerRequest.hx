@@ -12,6 +12,7 @@ typedef CompilerRequest = {
 	final memoryBase:Int;
 	final memoryContract:Null<String>;
 	final wasmMemoryStats:Bool;
+	final wasmGcStress:Bool;
 	final exports:Array<String>;
 	final ffiHeader:Null<String>;
 	final ffiLibrary:Null<String>;

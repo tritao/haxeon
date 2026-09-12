@@ -15,6 +15,21 @@ function reallocateLargeArray():Int {
 	return values.length;
 }
 
+function allocationBurst(count:Int):Int {
+	var index = 0;
+	while (index < count) {
+		var probe = new GcRootProbe();
+		probe.value = index;
+		index = index + 1;
+	}
+	return 42;
+}
+
+function growBeyondInitialMemory():Int {
+	var values = new Array<Int>(20000);
+	return values.length;
+}
+
 function releaseArray(size:Int):Void {
 	var values = new Array<Int>(size);
 	if (size > 0)

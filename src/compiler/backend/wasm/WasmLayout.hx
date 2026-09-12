@@ -58,6 +58,9 @@ class WasmLayout {
 	public static inline final GC_BLOCK_ALLOCATED = 1;
 	public static inline final GC_BLOCK_MARKED = 2;
 	public static inline final GC_BLOCK_SCAN_REFERENCES = 4;
+	public static inline final GC_BLOCK_CLEAR_MARKED_MASK = -3;
+	public static inline final GC_BLOCK_CLEAR_SCAN_MASK = -5;
+	public static inline final GC_MIN_ALLOCATION_BUDGET = 262144;
 
 	public final objects:Map<String, WasmObjectLayout> = [];
 	public final enums:Map<String, WasmEnumLayout> = [];
