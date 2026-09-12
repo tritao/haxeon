@@ -16,6 +16,7 @@ mkdir -p "$root_dir/out"
 "$haxe_bin" --cwd "$root_dir" -cp "$root_dir/src" --run compiler.tools.HaxeonCompiler \
 	--target=wasm32 --wasm-memory-stats --wasm-gc-stress --export=wasm-gc-invariants.exercise --export=wasm-gc-invariants.rootSnapshotExercise \
 	--export=wasm-gc-invariants.throwThroughRoots --export=wasm-gc-invariants.reallocateLargeArray --export=wasm-gc-invariants.allocationBurst \
+	--export=wasm-gc-invariants.runtimeRootFrameExercise \
 	--export=wasm-gc-invariants.growBeyondInitialMemory --export=wasm-gc-invariants.referenceArrayRootExercise \
 	--export=wasm-gc-invariants.referenceArrayGrowthExercise \
 	--export=wasm-gc-invariants.cycleExercise --export=wasm-gc-invariants.enumRootExercise \
@@ -95,6 +96,9 @@ const mapArtifact = process.argv[4];
 	assertHeapBlocks();
 	if (exports["wasm-gc-invariants.rootSnapshotExercise"]() !== 42)
 		throw new Error("GC root-snapshot exercise returned the wrong value");
+	if (exports["wasm-gc-invariants.runtimeRootFrameExercise"](2000) !== 0)
+		throw new Error("Runtime helper calls did not restore their shadow-root frames");
+	console.log("PASS: Wasm runtime helper shadow-root frames are balanced");
 	const afterRootWarmup = exports["haxeon.memory.heap_top"]();
 	for (let index = 0; index < 4; index++) {
 		if (exports["wasm-gc-invariants.rootSnapshotExercise"]() !== 42)

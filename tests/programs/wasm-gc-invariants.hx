@@ -204,6 +204,16 @@ function rootSnapshotExercise():Int {
 	return 42;
 }
 
+function runtimeRootFrameExercise(count:Int):Int {
+	var events:Array<Dynamic> = [];
+	var index = 0;
+	while (index < count) {
+		events.resize(0);
+		index = index + 1;
+	}
+	return events.length;
+}
+
 function throwFromRootedHelper(root:GcRootProbe):Void {
 	var nested = new GcRootProbe();
 	if (root != null && nested != null)

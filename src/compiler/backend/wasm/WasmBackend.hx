@@ -349,37 +349,42 @@ class WasmBackend implements Backend {
 			if (isRuntimeCall(instruction))
 				appendRuntimeRootSnapshot(body, frame, rootSlots);
 			if (instruction == Return) {
-				body.push(LocalGet(frame));
-				body.push(I32Load(WasmLayout.ROOT_PREVIOUS_TOP_OFFSET));
-				body.push(GlobalSet(rootTop));
-				body.push(LocalGet(frame));
-				body.push(I32Load(WasmLayout.ROOT_PREVIOUS_FRAME_OFFSET));
-				body.push(GlobalSet(rootFrameTop));
+				emitRuntimeRootFrameRestore(body, frame, rootTop, rootFrameTop);
 			}
 			body.push(instruction);
 			if (isRuntimeLocalWrite(instruction))
 				appendRuntimeRootSnapshot(body, frame, rootSlots);
 		}
+		// Runtime helpers often use Wasm's implicit void return instead of an
+		// explicit Return instruction. Balance their shadow-root frame on that
+		// normal fallthrough path as well; otherwise each helper call permanently
+		// consumes root-stack space until a later call traps at rootLimit.
+		if (fn.body.length == 0 || fn.body[fn.body.length - 1] != Return)
+			emitRuntimeRootFrameRestore(body, frame, rootTop, rootFrameTop);
 		if (exceptionTag != null) {
 			var protectedBody:Array<WasmInstruction> = [Try(null)];
 			protectedBody = protectedBody.concat(body);
-			protectedBody = protectedBody.concat([
-				Catch(exceptionTag),
-				LocalSet(exceptionLocal),
-				LocalGet(frame),
-				I32Load(WasmLayout.ROOT_PREVIOUS_TOP_OFFSET),
-				GlobalSet(rootTop),
-				LocalGet(frame),
-				I32Load(WasmLayout.ROOT_PREVIOUS_FRAME_OFFSET),
-				GlobalSet(rootFrameTop),
-				LocalGet(exceptionLocal),
-				Throw(exceptionTag),
-				End,
-				Unreachable
-			]);
+			protectedBody.push(Catch(exceptionTag));
+			protectedBody.push(LocalSet(exceptionLocal));
+			emitRuntimeRootFrameRestore(protectedBody, frame, rootTop, rootFrameTop);
+			protectedBody = protectedBody.concat([LocalGet(exceptionLocal), Throw(exceptionTag), End]);
+			// Result-bearing runtime helpers terminate with explicit Return
+			// instructions. Keep the unreachable marker for validation of those
+			// result paths; void helpers may complete via implicit fallthrough.
+			if (fn.type.results.length != 0)
+				protectedBody.push(Unreachable);
 			body = protectedBody;
 		}
 		return new WasmFunction(fn.name, fn.type, locals, body);
+	}
+
+	static function emitRuntimeRootFrameRestore(body:Array<WasmInstruction>, frame:Int, rootTop:Int, rootFrameTop:Int):Void {
+		body.push(LocalGet(frame));
+		body.push(I32Load(WasmLayout.ROOT_PREVIOUS_TOP_OFFSET));
+		body.push(GlobalSet(rootTop));
+		body.push(LocalGet(frame));
+		body.push(I32Load(WasmLayout.ROOT_PREVIOUS_FRAME_OFFSET));
+		body.push(GlobalSet(rootFrameTop));
 	}
 
 	static function isRuntimeCall(instruction:WasmInstruction):Bool
