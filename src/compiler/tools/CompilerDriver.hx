@@ -56,6 +56,7 @@ class CompilerDriver {
 				memoryBase: request.memoryBase,
 				memoryContract: memoryContract,
 				wasmMemoryStats: request.wasmMemoryStats,
+				wasmGcStress: request.wasmGcStress,
 				exports: request.exports
 			});
 		File.saveBytes(request.output, backendResult.bytes);

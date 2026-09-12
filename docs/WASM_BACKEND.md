@@ -61,17 +61,41 @@ the guest.
   safepoints. Generated functions also maintain typed shadow frames in a
   reserved linear-memory root area, so the runtime has an actual root chain,
   not just an offline map. The current collector is a non-moving mark/sweep
-  collector with compacted allocation metadata, a free list, and precise
-  static/shadow-frame roots. Each allocation has an aligned private prefix
-  pointing to its GC record, so tracing resolves references directly instead
-  of scanning every record; metadata compaction refreshes those back-pointers.
-  The prefix also identifies payloads that may contain managed references.
-  Numeric-array backing stores and `Bytes` payloads are atomic and skipped during
-  tracing; reference arrays and object fields remain traced. Collection still
-  runs before selecting a block for each allocation, preserving the current
-  safepoint/rooting guarantees. Recycled blocks are zero-filled before reuse,
+  collector with precise static/shadow-frame roots. Every aligned heap block
+  has an inline 16-byte header containing its physical size, state/trace flags,
+  an exact payload-owner pointer, and an auxiliary link. While a block is
+  allocated, the link identifies the owning array or map for reference-bearing
+  backing stores; while free, it links the free list. Marking resolves a
+  reference directly to that header; sweeping walks the heap linearly and
+  merges adjacent dead/free blocks while rebuilding the free list. This avoids
+  a separate fixed-capacity allocation-metadata table.
+  Shadow frames publish a dense snapshot of the references live at the current
+  safepoint; rooted functions restore their frame chain on tagged exception
+  unwinding. The fixed shadow-root reservation is bounds-checked and traps on
+  exhaustion. First-fit free-list reuse unlinks the selected block without
+  dropping earlier nodes and splits blocks when the remainder can hold a full
+  block header.
+  Known layouts are traced by type: objects visit declared reference fields,
+  enums visit reference fields in the active case, arrays visit only elements
+  below their logical length, and maps visit typed keys and values below their
+  live count. Array/map backing blocks link to their owner to recover those
+  logical bounds. Closures and iterators visit their receiver/array; scalar
+  boxes and `Bytes` are leaves. Only opaque layouts use conservative word
+  scanning. Marking is iterative: newly marked blocks are queued in temporary
+  linear memory above `heap_top`, growing Wasm memory only when that queue needs
+  more room. Queue entries are cleared as they are consumed, so later heap
+  growth still observes zero-initialized memory. Normal allocation
+  consumes a byte budget (at least 256 KiB, scaled with heap size) between
+  collections and forces collection plus a free-list retry before growing Wasm
+  memory. `--wasm-gc-stress` restores collection-before-every-allocation for
+  collector tests. Recycled blocks are zero-filled before reuse,
   preserving Haxe's default values for fields, array elements, and byte storage
-  just as newly grown Wasm memory does.
+  just as newly grown Wasm memory does. The legacy `metadata_base` and
+  `metadata_top` diagnostic exports remain temporarily available and report an
+  empty region for hosts that still display those counters. Run
+  `scripts/benchmark-wasm-gc.sh [samples]` for a non-gating comparison of
+  stress versus budgeted allocation and deep/wide graph tracing; it reports
+  timings alongside allocation, collection, and linear-memory counters.
 - `haxeon.patch` contains stable function identities and semantic signatures
   for validating replacement table entries. `haxeon.patch.slots` maps those
   stable names to exported function-table slots. `WasmBackend.compilePatch`

@@ -4,8 +4,9 @@ package compiler.tools;
 class CompilerArguments {
 	public static function parse(arguments:Array<String>):CompilerRequest {
 		var target = "hl", output = "out/main.hl", xmlOutput:Null<String> = null, irOutput:Null<String> = null, entry = "compiler.tools.HaxeonCompiler",
-			dumpFunction = -1, importMemory = false, memoryBase = 0, memoryContract:Null<String> = null, wasmMemoryStats = false, exports:Array<String> = [], ffiHeader:Null<String> = null, ffiLibrary:Null<String> = null, ffiInterfaces:Array<String> = [], ffiProjections:Array<String> = [], roots:Array<String> = [],
-			defines:Array<String> = [], paths:Array<String> = [];
+			dumpFunction = -1, importMemory = false, memoryBase = 0, memoryContract:Null<String> = null, wasmMemoryStats = false, wasmGcStress = false,
+			exports:Array<String> = [], ffiHeader:Null<String> = null, ffiLibrary:Null<String> = null, ffiInterfaces:Array<String> = [],
+			ffiProjections:Array<String> = [], roots:Array<String> = [], defines:Array<String> = [], paths:Array<String> = [];
 		var index = 0;
 		while (index < arguments.length) {
 			var argument = arguments[index++];
@@ -47,6 +48,8 @@ class CompilerArguments {
 				memoryContract = value(argument, "--wasm-memory-contract=");
 			else if (argument == "--wasm-memory-stats")
 				wasmMemoryStats = true;
+			else if (argument == "--wasm-gc-stress")
+				wasmGcStress = true;
 			else if (StringTools.startsWith(argument, "--export="))
 				exports.push(value(argument, "--export="));
 			else if (StringTools.startsWith(argument, "--"))
@@ -62,7 +65,7 @@ class CompilerArguments {
 			throw "Haxeon compiler requires an explicit source manifest";
 		if (target != "hl" && target != "wasm32" && target != "wasm64" && target != "wasmgc" && target != "wasm-gc")
 			throw 'Unsupported compiler target "$target"';
-		if ((importMemory || memoryBase != 0 || wasmMemoryStats || exports.length != 0) && target != "wasm32")
+		if ((importMemory || memoryBase != 0 || wasmMemoryStats || wasmGcStress || exports.length != 0) && target != "wasm32")
 			throw "Wasm-specific options require --target=wasm32";
 		if (memoryContract != null && target != "wasm32")
 			throw "--wasm-memory-contract requires --target=wasm32";
@@ -82,6 +85,7 @@ class CompilerArguments {
 			memoryBase: memoryBase,
 			memoryContract: memoryContract,
 			wasmMemoryStats: wasmMemoryStats,
+			wasmGcStress: wasmGcStress,
 			exports: exports,
 			ffiHeader: ffiHeader,
 			ffiLibrary: ffiLibrary,

@@ -13,6 +13,7 @@ fi
 mkdir -p "$root_dir/out"
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm32 --output="$artifact" --entry=wasm-gc-reuse \
+	--wasm-gc-stress \
 	--root=tests/programs tests/programs/wasm-gc-reuse.hx
 
 node - "$artifact" <<'JS'
