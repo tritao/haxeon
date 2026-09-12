@@ -103,16 +103,22 @@ class HxiProjection {
 		var moduleNames:Map<String, String> = [],
 			constantMembers:Map<String, String> = [],
 			hasCallbacks = false,
+			hasOpaqueTypes = false,
 			hasConstants = false;
 		for (declaration in model.declarations)
 			if (!isOmitted(omitted, declarationName(declaration)))
 				switch declaration {
 					case Callback(_, _, _, _, _): hasCallbacks = true;
+					case Opaque(_, _): hasOpaqueTypes = true;
 					case Constant(_, _, _): hasConstants = true;
 					case _:
 				}
 		if (hasCallbacks)
 			addProjectedName(path, "module", "HxiCallbackError", "generated callback error type", moduleNames);
+		if (hasOpaqueTypes) {
+			addProjectedName(path, "module", '__hxi_${model.name}_native_pointer_close', "opaque handle close helper", moduleNames);
+			addProjectedName(path, "module", '__hxi_${model.name}_native_pointer_is_closed', "opaque handle state helper", moduleNames);
+		}
 		if (hasConstants)
 			addProjectedName(path, "module", upperFirst(model.name) + "Constants", "generated constants type", moduleNames);
 
@@ -131,6 +137,8 @@ class HxiProjection {
 					for (value in values)
 						addProjectedName(path, 'enum "$name"', enumValueName(value.name, prefix, name, profile),
 							'enum value "$name.${value.name}"', members);
+				case Opaque(name, _):
+					addProjectedName(path, "module", projectedTypeName(name, profile), 'opaque type "$name"', moduleNames);
 				case Handle(name, _, _) | Structure(name, _, _, _, _):
 					addProjectedName(path, "module", projectedTypeName(name, profile), 'type "$name"', moduleNames);
 					var fields = switch declaration {
@@ -171,7 +179,7 @@ class HxiProjection {
 
 	static function isProjectedType(declaration:HxiDeclaration):Bool
 		return switch declaration {
-			case Handle(_, _, _) | Structure(_, _, _, _, _) | Enumeration(_, _, _, _, _) | Callback(_, _, _, _, _): true;
+			case Opaque(_, _) | Handle(_, _, _) | Structure(_, _, _, _, _) | Enumeration(_, _, _, _, _) | Callback(_, _, _, _, _): true;
 			case _: false;
 		};
 
@@ -316,11 +324,14 @@ class HxiProjection {
 			return "";
 		if (profile == null)
 			profile = HxiProjectionProfile.empty();
-		var abi = providedAbi == null ? HxiAbi.forInterface(model, visibleDeclarations) : providedAbi,
+		var pointerCloseHelper = '__hxi_${model.name}_native_pointer_close',
+			pointerIsClosedHelper = '__hxi_${model.name}_native_pointer_is_closed',
+			abi = providedAbi == null ? HxiAbi.forInterface(model, visibleDeclarations) : providedAbi,
 			output = new StringBuf(),
 			aggregateDescriptors:Map<String, String> = [];
 		var structAccesses:Map<String, {type:String, setterType:String}> = [],
 			declarations:Map<String, HxiDeclaration> = [],
+			opaqueDeclarations:Array<HxiDeclaration> = [],
 			functions:Map<String, HxiDeclaration> = [],
 			constants:Array<{name:String, value:String}> = [],
 			callbackDeclarations:Array<HxiDeclaration> = [],
@@ -338,7 +349,11 @@ class HxiProjection {
 				declarations.set(name, declaration);
 		for (declaration in model.declarations) {
 			switch declaration {
-				case Opaque(name, _) | Alias(name, _, _):
+				case Opaque(name, _):
+					declarations.set(name, declaration);
+					if (!isOmitted(omitted, name))
+						opaqueDeclarations.push(declaration);
+				case Alias(name, _, _):
 					declarations.set(name, declaration);
 				case Function(name, _, _, _, _, _, _, _):
 					functions.set(name, declaration);
@@ -379,6 +394,21 @@ class HxiProjection {
 		}
 		if (hasCallbacks)
 			output.add('enum abstract HxiCallbackError(Int) from Int to Int { var None = 0; var Exception = 1; var WrongThread = 2; var PointerContract = 3; var AggregateContract = 4; var StringContract = 5; }\n');
+		for (declaration in opaqueDeclarations)
+			switch declaration {
+				case Opaque(name, _):
+					var projectedName = projectedTypeName(name, profile);
+					emitDocumentation(output, model, name);
+					output.add('abstract $projectedName(hl.Abstract<"native_pointer">) {\n');
+					output.add('\tpublic inline function close():Bool return ${model.name}.$pointerCloseHelper(cast this);\n');
+					output.add('\tpublic inline function isClosed():Bool return ${model.name}.$pointerIsClosedHelper(cast this);\n');
+					output.add('}\n');
+				case _:
+			}
+		if (opaqueDeclarations.length != 0) {
+			output.add('@:hlNative("haxeon_runtime", "native_pointer_close") extern function $pointerCloseHelper(pointer:hl.Abstract<"native_pointer">):Bool;\n');
+			output.add('@:hlNative("haxeon_runtime", "native_pointer_is_closed") extern function $pointerIsClosedHelper(pointer:hl.Abstract<"native_pointer">):Bool;\n');
+		}
 		for (callbackDeclaration in callbackDeclarations)
 			switch callbackDeclaration {
 				case Callback(name, parameters, result, callConvention, _):
@@ -572,8 +602,8 @@ class HxiProjection {
 						if (value != null && value.code == 11 && value.nativePointer && field.ownership == Borrowed) {
 							usesPointerFields = true;
 							emitDocumentation(output, model, '$name.${field.name}', "\t");
-							output.add('\tpublic inline function get_$fieldName():${value.haxeType} return ${model.name}.__hxi_struct_get_pointer(this, ${field.offset}, ${value.nullable});\n');
-							output.add('\tpublic inline function set_$fieldName(value:${value.haxeType}):Void ${model.name}.__hxi_struct_set_pointer(this, ${field.offset}, value, ${value.nullable});\n');
+							output.add('\tpublic inline function get_$fieldName():${value.haxeType} return cast ${model.name}.__hxi_struct_get_pointer(this, ${field.offset}, ${value.nullable});\n');
+							output.add('\tpublic inline function set_$fieldName(value:${value.haxeType}):Void ${model.name}.__hxi_struct_set_pointer(this, ${field.offset}, cast value, ${value.nullable});\n');
 							continue;
 						}
 						if (value == null || value.code == 11)
@@ -668,7 +698,17 @@ class HxiProjection {
 			output.add('@:cNative("${escape(library)}", "${escape(fn.symbol)}", "$signature")\n');
 			output.add('extern function $rawName(');
 			output.add([for (index in 0...argumentTypes.length) 'arg$index:${argumentTypes[index]}'].join(", "));
-			var resultType = result.code == 11 ? (fn.resultPolicy.length != null ? (result.nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes") : (result.nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">')) : result.haxeType;
+			var resultType = result.haxeType;
+			if (result.code == 11)
+				if (fn.resultPolicy.length != null)
+					resultType = result.nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes";
+				else
+					switch fn.result {
+						case PointerValue(_, _, opaquePointee, _) if (opaquePointee != null):
+							resultType = result.haxeType;
+						case _:
+							resultType = result.nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">';
+					}
 			output.add('):$resultType;\n');
 			if (directed) {
 				var buffer = outputBuffer(parameters);
@@ -1275,11 +1315,12 @@ class HxiProjection {
 					nativePointer: false,
 					nullable: false
 				};
-			case PointerValue(_, nullable, opaque, structure): {
-					haxeType: opaque ? (nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">') : structure != null ? (nullable ? 'Null<${projectedTypeName(structure, profile)}>' : projectedTypeName(structure,
+			case PointerValue(_, nullable, opaquePointee, structure): {
+					haxeType: opaquePointee != null ? (nullable ? 'Null<${projectedTypeName(opaquePointee, profile)}>' : projectedTypeName(opaquePointee,
+						profile)) : structure != null ? (nullable ? 'Null<${projectedTypeName(structure, profile)}>' : projectedTypeName(structure,
 						profile)) : (nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes"),
 					code: 11,
-					nativePointer: opaque,
+					nativePointer: opaquePointee != null,
 					nullable: nullable
 				};
 			case _: null;
@@ -1292,11 +1333,12 @@ class HxiProjection {
 		nullable:Bool
 	}>
 		return switch value {
-			case PointerValue(_, nullable, _, structure): {
-					haxeType: structure == null ? (nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">') : (nullable ? 'Null<${projectedTypeName(structure, profile)}>' : projectedTypeName(structure,
+			case PointerValue(_, nullable, opaquePointee, structure): {
+					haxeType: opaquePointee != null ? (nullable ? 'Null<${projectedTypeName(opaquePointee, profile)}>' : projectedTypeName(opaquePointee,
+						profile)) : structure == null ? (nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">') : (nullable ? 'Null<${projectedTypeName(structure, profile)}>' : projectedTypeName(structure,
 						profile)),
 					code: 11,
-					nativePointer: structure == null,
+					nativePointer: opaquePointee != null || structure == null,
 					nullable: nullable
 				};
 			case _: project(value, false, profile);

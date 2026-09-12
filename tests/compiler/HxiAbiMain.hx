@@ -3,6 +3,8 @@ import compiler.ffi.HxiAbi.HxiAbiValue;
 import compiler.ffi.HxiAbi.HxiIntegerSign;
 import compiler.ffi.HxiParser;
 import compiler.ffi.HxiProjection;
+import compiler.ffi.HxiProjectionProfile;
+import compiler.ir.Ir.IrType;
 
 class HxiAbiMain {
 	static function main():Void {
@@ -53,12 +55,63 @@ class HxiAbiMain {
 				name: "open",
 				symbol: "open_v1",
 				library: "sample",
-				arguments: [PointerValue(64, false, true, null)],
+				arguments: [PointerValue(64, false, "context", null)],
 				result: IntegerValue(32, Signed)
 			}:
 			case _:
 				throw "function ABI did not resolve";
 		}
+		var opaqueModel = HxiParser.parse("opaque.hxi",
+			'interface sample @target("x86_64-linux-gnu") @library("sample") { opaque Context; opaque Window; type ContextAlias = Context; extern fn use_context(value: ptr<ContextAlias>) -> void; extern fn maybe_context(value: nullable<ptr<const<Context>>>) -> void; extern fn use_window(value: ptr<Window>) -> void; extern fn create_context() -> ptr<Context> @borrowed; extern fn maybe_return_context() -> nullable<ptr<Context>> @borrowed; }'),
+			opaqueAbi = HxiAbi.forInterface(opaqueModel);
+		switch opaqueAbi.functions()[0].arguments[0] {
+			case PointerValue(64, false, "Context", null):
+			case _:
+				throw "opaque pointer ABI should preserve its canonical pointee through aliases";
+		}
+		switch opaqueAbi.functions()[1].arguments[0] {
+			case PointerValue(64, true, "Context", null):
+			case _:
+				throw "nullable const opaque pointer ABI should preserve its pointee identity";
+		}
+		switch opaqueAbi.functions()[3].result {
+			case PointerValue(64, false, "Context", null):
+			case _:
+				throw "opaque pointer results should preserve their pointee identity";
+		}
+		switch opaqueAbi.functions()[4].result {
+			case PointerValue(64, true, "Context", null):
+			case _:
+				throw "nullable opaque pointer results should preserve their pointee identity";
+		}
+		var opaqueSource = HxiProjection.source(opaqueModel);
+		expect(opaqueSource.indexOf('abstract Context(hl.Abstract<"native_pointer">) {') >= 0
+			&& opaqueSource.indexOf("extern function use_context(arg0:Context):Void") >= 0
+			&& opaqueSource.indexOf("extern function maybe_context(arg0:Null<Context>):Void") >= 0
+			&& opaqueSource.indexOf("extern function use_window(arg0:Window):Void") >= 0
+			&& opaqueSource.indexOf("extern function create_context():Context") >= 0
+			&& opaqueSource.indexOf("extern function maybe_return_context():Null<Context>") >= 0,
+			"opaque pointer types should project as distinct nominal Haxe handles");
+		var opaqueNative = HxiProjection.cNatives(opaqueModel)[0];
+		expect(opaqueNative.signature == "11>0", "opaque handle identity must not change the C pointer ABI signature");
+		switch opaqueNative.arguments[0] {
+			case Abstract("native_pointer"):
+			case _:
+				throw "opaque Haxe handles should retain the generic native pointer ABI representation";
+		}
+		var opaqueResultNative = HxiProjection.cNatives(opaqueModel)[3];
+		expect(opaqueResultNative.signature == ">11", "opaque pointer results must keep the generic C pointer ABI signature");
+		switch opaqueResultNative.result {
+			case Abstract("native_pointer"):
+			case _:
+				throw "opaque Haxe handle results should retain the generic native pointer ABI representation";
+		}
+		var opaqueProfile = HxiProjectionProfile.parse("opaque.hxmap", '{"interface":"sample","typeNames":{"Context":"ContextHandle"}}');
+		HxiProjection.validateProfile("opaque.hxmap", opaqueModel, null, null, opaqueProfile);
+		var mappedOpaqueSource = HxiProjection.source(opaqueModel, null, null, null, opaqueProfile);
+		expect(mappedOpaqueSource.indexOf('abstract ContextHandle(hl.Abstract<"native_pointer">)') >= 0
+			&& mappedOpaqueSource.indexOf("extern function use_context(arg0:ContextHandle):Void") >= 0,
+			"opaque handle types should respect Haxe projection naming rules");
 		var cycle = 'interface bad @target("x86_64-linux-gnu") { type a = b; type b = a; }';
 		var rejected = false;
 		try

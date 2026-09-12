@@ -18,7 +18,7 @@ enum HxiAbiValue {
 	HandleValue(name:String);
 	CallbackValue(name:String, arguments:Array<HxiAbiValue>, result:HxiAbiValue, nullable:Bool);
 	FloatValue(bits:Int);
-	PointerValue(bits:Int, nullable:Bool, opaque:Bool, structure:Null<String>);
+	PointerValue(bits:Int, nullable:Bool, opaquePointee:Null<String>, structure:Null<String>);
 	Utf8Value(nullable:Bool);
 	AggregateValue(name:String, size:Int, align:Int);
 }
@@ -113,7 +113,7 @@ class HxiAbi {
 			case Pointer(element): PointerValue(pointerBits, false, opaquePointee(element), structurePointee(element));
 			case Nullable(element):
 				switch classify(element, allowVoid) {
-					case PointerValue(bits, _, opaque, structure): PointerValue(bits, true, opaque, structure);
+					case PointerValue(bits, _, opaquePointee, structure): PointerValue(bits, true, opaquePointee, structure);
 					case CallbackValue(name, arguments, result, _): CallbackValue(name, arguments, result, true);
 					case Utf8Value(_): Utf8Value(true);
 					case _: throw "Nullable ABI value must be a pointer";
@@ -169,16 +169,16 @@ class HxiAbi {
 			case _: null;
 		};
 
-	function opaquePointee(type:HxiType):Bool
+	function opaquePointee(type:HxiType):Null<String>
 		return switch type {
 			case Const(element): opaquePointee(element);
 			case Named(name):
 				switch declarations.get(name) {
-					case Opaque(_, _): true;
+					case Opaque(_, _): name;
 					case Alias(_, target, _): opaquePointee(target);
-					case _: false;
+					case _: null;
 				}
-			case _: false;
+			case _: null;
 		};
 
 	function classifyPrimitive(name:String):HxiAbiValue

@@ -171,8 +171,11 @@ Integer—including native 64-bit and target-sized integer—and floating-point
 arguments and results, `void` results, and managed
 byte-buffer pointer arguments—including explicit `nullable<ptr<T>>` values—are
 executable. Calls accept up to sixteen arguments. Pointers to opaque types use
-opaque handles with explicit, idempotent close operations and finalizer
-fallback for owned values. Unannotated pointer results remain rejected at
+nominal Haxe abstract handles over the same native pointer representation, so
+different opaque HXI types cannot be interchanged accidentally. Handles expose
+`close()` and `isClosed()`; close is idempotent, and owned values retain the
+finalizer fallback. Aliases and `const` qualification preserve the underlying
+opaque handle identity. Unannotated pointer results remain rejected at
 execution time.
 
 `@length("length_symbol")` turns a pointer to byte-sized data or `void` into a

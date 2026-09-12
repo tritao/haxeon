@@ -334,9 +334,44 @@ class HxiParserMain {
 		handleCompiler.update("HandleMain.hx",
 			"import handles; function main():Int { var value:resource = new resource(); value = handles.create(); var raw:Int = value; var reconstructed:resource = raw; return reconstructed.isValid() ? reconstructed.rawValue() : 0; }");
 		handleCompiler.compile("HandleMain");
+		var opaqueCompiler = new Compiler();
+		opaqueCompiler.addFfiInterface("opaque_handles.hxi",
+			'interface opaque_handles @target("x86_64-linux-gnu") @library("opaque_handles") { opaque Context; opaque Window; type ContextAlias = Context; extern fn create_context() -> ptr<Context> @borrowed; extern fn maybe_context(value: i32) -> nullable<ptr<Context>> @borrowed; extern fn use_context(value: ptr<ContextAlias>) -> void; extern fn use_window(value: ptr<Window>) -> void; extern fn create_window() -> ptr<Window> @borrowed; }');
+		opaqueCompiler.update("OpaqueMain.hx",
+			"import opaque_handles; function main():Int { var context:Context = opaque_handles.create_context(); opaque_handles.use_context(context); var maybe:Null<Context> = opaque_handles.maybe_context(1); if (maybe != null) opaque_handles.use_context(maybe); context.isClosed(); context.close(); var window:Window = opaque_handles.create_window(); opaque_handles.use_window(window); return 0; }");
+		opaqueCompiler.compile("OpaqueMain");
+		var opaqueCallbackCompiler = new Compiler();
+		opaqueCallbackCompiler.addFfiInterface("opaque_callbacks.hxi",
+			'interface opaque_callbacks @target("x86_64-linux-gnu") @library("opaque_callbacks") { opaque Context; callback Visit = fn(context: nullable<ptr<Context>>) -> void; extern fn visit(callback: Visit) -> void; }');
+		opaqueCallbackCompiler.update("OpaqueCallbackMain.hx",
+			"import opaque_callbacks; function main():Int { var callback = new VisitCallback(function(value:Null<Context>) {}); opaque_callbacks.visit(callback); callback.close(); return 0; }");
+		opaqueCallbackCompiler.analyze("OpaqueCallbackMain");
+		var distinctOpaqueCompiler = new Compiler();
+		distinctOpaqueCompiler.addFfiInterface("opaque_handles.hxi",
+			'interface opaque_handles @target("x86_64-linux-gnu") @library("opaque_handles") { opaque Context; opaque Window; extern fn create_context() -> ptr<Context> @borrowed; extern fn use_window(value: ptr<Window>) -> void; }');
+		distinctOpaqueCompiler.update("OpaqueMain.hx",
+			"import opaque_handles; function main():Int { opaque_handles.use_window(opaque_handles.create_context()); return 0; }");
+		var distinctOpaqueRejected = false;
+		try {
+			distinctOpaqueCompiler.compile("OpaqueMain");
+		} catch (_:CompileError)
+			distinctOpaqueRejected = true;
+		expect(distinctOpaqueRejected, "distinct opaque native pointer handles should not be interchangeable");
+		var genericOpaqueCompiler = new Compiler();
+		genericOpaqueCompiler.addFfiInterface("opaque_handles.hxi",
+			'interface opaque_handles @target("x86_64-linux-gnu") @library("opaque_handles") { opaque Context; extern fn create_context() -> ptr<Context> @borrowed; }');
+		genericOpaqueCompiler.update("OpaqueMain.hx",
+			"import opaque_handles; function main():Int { var raw:hl.Abstract<\"native_pointer\"> = opaque_handles.create_context(); return 0; }");
+		var genericOpaqueRejected = false;
+		try {
+			genericOpaqueCompiler.compile("OpaqueMain");
+		} catch (_:CompileError)
+			genericOpaqueRejected = true;
+		expect(genericOpaqueRejected, "opaque handles should not implicitly erase their nominal type");
 		var pointerCallback = HxiParser.parse("pointer-callback.hxi",
 			'interface pointers @target("x86_64-linux-gnu") @library("pointers") { opaque Context; callback Visit = fn(context: nullable<ptr<Context>>) -> void; }');
-		expect(HxiProjection.source(pointerCallback).indexOf('context:Null<hl.Abstract<"native_pointer">>') >= 0,
+		expect(HxiProjection.source(pointerCallback).indexOf('abstract Context(hl.Abstract<"native_pointer">)') >= 0
+			&& HxiProjection.source(pointerCallback).indexOf("context:Null<Context>") >= 0,
 			"callback pointer arguments should project as borrowed typed handles");
 		expectError('interface bad @target("x86_64-linux-gnu") { callback Invalid = fn() -> ptr<void>; }',
 			"Callbacks support scalar, aggregate, and pointer arguments");
