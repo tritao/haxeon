@@ -16,6 +16,15 @@ interface WasmRepresentation {
 	public function fieldGet(object:IrValue, fieldName:String, destination:Int, objectLocal:Int):Array<WasmInstruction>;
 	public function fieldSet(object:IrValue, fieldName:String, objectLocal:Int, valueLocal:Int):Array<WasmInstruction>;
 	public function equal(output:Int, left:IrValue, right:IrValue, leftLocal:Int, rightLocal:Int):Array<WasmInstruction>;
+	public function beginFunction(allocateLocal:WasmValueType->Int):Void;
+	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
+		argumentLocals:Array<Int>):Null<Array<WasmInstruction>>;
+	public function arrayGet(array:IrValue, index:IrValue, destination:Int, arrayLocal:Int, indexLocal:Int):Null<Array<WasmInstruction>>;
+	public function arraySet(array:IrValue, index:IrValue, value:IrValue, arrayLocal:Int, indexLocal:Int, valueLocal:Int):Null<Array<WasmInstruction>>;
+	public function arraySize(array:IrValue, destination:Int, arrayLocal:Int):Null<Array<WasmInstruction>>;
+	public function iteratorNew(array:IrValue, destination:Int, arrayLocal:Int):Null<Array<WasmInstruction>>;
+	public function iteratorHasNext(iterator:IrValue, destination:Int, iteratorLocal:Int):Null<Array<WasmInstruction>>;
+	public function iteratorNext(iterator:IrValue, output:IrValue, destination:Int, iteratorLocal:Int):Null<Array<WasmInstruction>>;
 }
 
 /** Linear32 representation: managed references remain i32 pointers into the custom heap. */
@@ -71,6 +80,30 @@ class WasmLinearRepresentation implements WasmRepresentation {
 		return [LocalGet(leftLocal), LocalGet(rightLocal), instruction, LocalSet(output)];
 	}
 
+	public function beginFunction(allocateLocal:WasmValueType->Int):Void {}
+
+	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
+			argumentLocals:Array<Int>):Null<Array<WasmInstruction>>
+		return null;
+
+	public function arrayGet(array:IrValue, index:IrValue, destination:Int, arrayLocal:Int, indexLocal:Int):Null<Array<WasmInstruction>>
+		return null;
+
+	public function arraySet(array:IrValue, index:IrValue, value:IrValue, arrayLocal:Int, indexLocal:Int, valueLocal:Int):Null<Array<WasmInstruction>>
+		return null;
+
+	public function arraySize(array:IrValue, destination:Int, arrayLocal:Int):Null<Array<WasmInstruction>>
+		return null;
+
+	public function iteratorNew(array:IrValue, destination:Int, arrayLocal:Int):Null<Array<WasmInstruction>>
+		return null;
+
+	public function iteratorHasNext(iterator:IrValue, destination:Int, iteratorLocal:Int):Null<Array<WasmInstruction>>
+		return null;
+
+	public function iteratorNext(iterator:IrValue, output:IrValue, destination:Int, iteratorLocal:Int):Null<Array<WasmInstruction>>
+		return null;
+
 	function objectField(object:IrValue, name:String):WasmFieldLayout {
 		return switch object.type {
 			case Obj(objectName): layout.field(objectName, name);
@@ -96,6 +129,10 @@ class WasmLinearRepresentation implements WasmRepresentation {
 /** Native Wasm GC representation: engine references and declared struct/array fields. */
 class WasmGcRepresentation implements WasmRepresentation {
 	final plan:WasmGcTypePlan;
+	final arrayReferenceLocals:Map<String, Int> = [];
+	var allocateLocal:WasmValueType->Int;
+	var requiredArrayLengthLocal:Null<Int>;
+	var arrayCapacityLocal:Null<Int>;
 
 	public function new(plan:WasmGcTypePlan)
 		this.plan = plan;
@@ -151,6 +188,290 @@ class WasmGcRepresentation implements WasmRepresentation {
 				throw "Wasm GC cannot compare void values";
 		};
 	}
+
+	public function beginFunction(allocateLocal:WasmValueType->Int):Void {
+		this.allocateLocal = allocateLocal;
+		arrayReferenceLocals.clear();
+		requiredArrayLengthLocal = null;
+		arrayCapacityLocal = null;
+	}
+
+	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
+			argumentLocals:Array<Int>):Null<Array<WasmInstruction>> {
+		if (StringTools.startsWith(name, "__array_alloc_")) {
+			if (arguments.length != 1 || argumentLocals.length != 1)
+				throw 'Invalid Wasm GC array allocator signature for "$name"';
+			var element = requireArrayElement(output.type),
+				suffix = arrayNativeSuffix(element);
+			if (name != "__array_alloc_" + suffix)
+				throw 'Wasm GC array allocator "$name" does not match its $element result type';
+			var length = argumentLocals[0];
+			return [
+				LocalGet(length),
+				LocalGet(length),
+				I32Const(8),
+				I32Add,
+				ArrayNewDefault(plan.arrayStorageType(element)),
+				StructNew(plan.arrayType(element)),
+				LocalSet(outputLocal)
+			];
+		}
+		if (StringTools.startsWith(name, "__array_push_")) {
+			if (arguments.length != 2 || argumentLocals.length != 2 || output.type != I32)
+				throw 'Invalid Wasm GC array push signature for "$name"';
+			var element = requireArrayElement(arguments[0].type),
+				suffix = arrayNativeSuffix(element);
+			if (name != "__array_push_" + suffix)
+				throw 'Wasm GC array push "$name" does not match its $element array';
+			var array = arguments[0],
+				value = arguments[1],
+				lengthLocal = allocateLocal(I32),
+				arrayType = plan.arrayType(element),
+				arrayLocal = argumentLocals[0];
+			var body:Array<WasmInstruction> = [
+				LocalGet(arrayLocal),
+				StructGet(arrayType, WasmGcTypePlan.arrayLengthFieldIndex()),
+				LocalSet(lengthLocal)
+			];
+			body = body.concat(requireInstructions(arraySet(array, new IrValue(-1, "push-index", I32), value, arrayLocal, lengthLocal, argumentLocals[1])));
+			body = body.concat([LocalGet(lengthLocal), I32Const(1), I32Add, LocalSet(outputLocal)]);
+			return body;
+		}
+		return null;
+	}
+
+	public function arrayGet(array:IrValue, index:IrValue, destination:Int, arrayLocal:Int, indexLocal:Int):Null<Array<WasmInstruction>> {
+		var element = requireArrayElement(array.type),
+			wrapperType = plan.arrayType(element),
+			storageType = plan.arrayStorageType(element);
+		var body:Array<WasmInstruction> = checkedIndex(indexLocal, arrayLocal, wrapperType);
+		body = body.concat([
+			LocalGet(arrayLocal),
+			StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+			LocalGet(indexLocal),
+			ArrayGet(storageType),
+			LocalSet(destination)
+		]);
+		return body;
+	}
+
+	public function arraySet(array:IrValue, index:IrValue, value:IrValue, arrayLocal:Int, indexLocal:Int, valueLocal:Int):Null<Array<WasmInstruction>> {
+		var element = requireArrayElement(array.type),
+			wrapperType = plan.arrayType(element),
+			storageType = plan.arrayStorageType(element),
+			newStorageLocal = arrayReferenceLocal(element),
+			requiredLength = requiredArrayLength(),
+			capacity = arrayCapacity();
+		var body:Array<WasmInstruction> = [
+			LocalGet(indexLocal),
+			I32Const(0),
+			I32LtS,
+			If(null),
+			Unreachable,
+			End,
+			LocalGet(indexLocal),
+			LocalGet(arrayLocal),
+			StructGet(wrapperType, WasmGcTypePlan.arrayLengthFieldIndex()),
+			I32LtS,
+			If(null),
+			LocalGet(arrayLocal),
+			StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+			LocalGet(indexLocal),
+			LocalGet(valueLocal),
+			ArraySet(storageType),
+			Else,
+			LocalGet(indexLocal),
+			I32Const(1),
+			I32Add,
+			LocalSet(requiredLength),
+			LocalGet(requiredLength),
+			LocalGet(arrayLocal),
+			StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+			ArrayLen,
+			I32LeS,
+			If(null),
+			LocalGet(arrayLocal),
+			LocalGet(requiredLength),
+			StructSet(wrapperType, WasmGcTypePlan.arrayLengthFieldIndex()),
+			LocalGet(arrayLocal),
+			StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+			LocalGet(indexLocal),
+			LocalGet(valueLocal),
+			ArraySet(storageType),
+			Else,
+			LocalGet(arrayLocal),
+			StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+			ArrayLen,
+			I32Const(2),
+			I32Mul,
+			LocalSet(capacity),
+			LocalGet(capacity),
+			LocalGet(requiredLength),
+			I32LtS,
+			If(null),
+			LocalGet(requiredLength),
+			LocalSet(capacity),
+			End,
+			LocalGet(capacity),
+			ArrayNewDefault(storageType),
+			LocalSet(newStorageLocal),
+			LocalGet(newStorageLocal),
+			I32Const(0),
+			LocalGet(arrayLocal),
+			StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+			I32Const(0),
+			LocalGet(arrayLocal),
+			StructGet(wrapperType, WasmGcTypePlan.arrayLengthFieldIndex()),
+			ArrayCopy(storageType, storageType),
+			LocalGet(arrayLocal),
+			LocalGet(newStorageLocal),
+			StructSet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+			LocalGet(arrayLocal),
+			LocalGet(requiredLength),
+			StructSet(wrapperType, WasmGcTypePlan.arrayLengthFieldIndex()),
+			LocalGet(arrayLocal),
+			StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+			LocalGet(indexLocal),
+			LocalGet(valueLocal),
+			ArraySet(storageType),
+			End,
+			End
+		];
+		return body;
+	}
+
+	public function arraySize(array:IrValue, destination:Int, arrayLocal:Int):Null<Array<WasmInstruction>> {
+		var element = requireArrayElement(array.type),
+			wrapperType = plan.arrayType(element);
+		return [
+			LocalGet(arrayLocal),
+			StructGet(wrapperType, WasmGcTypePlan.arrayLengthFieldIndex()),
+			LocalSet(destination)
+		];
+	}
+
+	public function iteratorNew(array:IrValue, destination:Int, arrayLocal:Int):Null<Array<WasmInstruction>> {
+		var element = requireArrayElement(array.type),
+			iteratorType = plan.iteratorType(element);
+		return [
+			LocalGet(arrayLocal),
+			I32Const(0),
+			StructNew(iteratorType),
+			LocalSet(destination)
+		];
+	}
+
+	public function iteratorHasNext(iterator:IrValue, destination:Int, iteratorLocal:Int):Null<Array<WasmInstruction>> {
+		var element = requireIteratorElement(iterator.type),
+			iteratorType = plan.iteratorType(element),
+			arrayType = plan.arrayType(element);
+		return [
+			LocalGet(iteratorLocal),
+			StructGet(iteratorType, WasmGcTypePlan.iteratorPositionFieldIndex()),
+			LocalGet(iteratorLocal),
+			StructGet(iteratorType, WasmGcTypePlan.iteratorArrayFieldIndex()),
+			StructGet(arrayType, WasmGcTypePlan.arrayLengthFieldIndex()),
+			I32LtS,
+			LocalSet(destination)
+		];
+	}
+
+	public function iteratorNext(iterator:IrValue, output:IrValue, destination:Int, iteratorLocal:Int):Null<Array<WasmInstruction>> {
+		var element = requireIteratorElement(iterator.type),
+			iteratorType = plan.iteratorType(element),
+			arrayType = plan.arrayType(element),
+			storageType = plan.arrayStorageType(element);
+		var body:Array<WasmInstruction> = [
+			LocalGet(iteratorLocal),
+			StructGet(iteratorType, WasmGcTypePlan.iteratorPositionFieldIndex()),
+			LocalGet(iteratorLocal),
+			StructGet(iteratorType, WasmGcTypePlan.iteratorArrayFieldIndex()),
+			StructGet(arrayType, WasmGcTypePlan.arrayLengthFieldIndex()),
+			I32LtS,
+			If(null),
+			LocalGet(iteratorLocal),
+			StructGet(iteratorType, WasmGcTypePlan.iteratorArrayFieldIndex()),
+			StructGet(arrayType, WasmGcTypePlan.arrayDataFieldIndex()),
+			LocalGet(iteratorLocal),
+			StructGet(iteratorType, WasmGcTypePlan.iteratorPositionFieldIndex()),
+			ArrayGet(storageType),
+			LocalSet(destination),
+			LocalGet(iteratorLocal),
+			LocalGet(iteratorLocal),
+			StructGet(iteratorType, WasmGcTypePlan.iteratorPositionFieldIndex()),
+			I32Const(1),
+			I32Add,
+			StructSet(iteratorType, WasmGcTypePlan.iteratorPositionFieldIndex()),
+			Else,
+			Unreachable,
+			End
+		];
+		return body;
+	}
+
+	function arrayReferenceLocal(element:IrType):Int {
+		var key = WasmGcTypePlan.typeKey(element),
+			local = arrayReferenceLocals.get(key);
+		if (local == null) {
+			local = allocateLocal(Ref({nullable: false, heap: Type(plan.arrayStorageType(element))}));
+			arrayReferenceLocals.set(key, local);
+		}
+		return local;
+	}
+
+	function requiredArrayLength():Int {
+		if (requiredArrayLengthLocal == null)
+			requiredArrayLengthLocal = allocateLocal(I32);
+		return requiredArrayLengthLocal;
+	}
+
+	function arrayCapacity():Int {
+		if (arrayCapacityLocal == null)
+			arrayCapacityLocal = allocateLocal(I32);
+		return arrayCapacityLocal;
+	}
+
+	static function checkedIndex(indexLocal:Int, arrayLocal:Int, wrapperType:Int):Array<WasmInstruction>
+		return [
+			LocalGet(indexLocal),
+			I32Const(0),
+			I32LtS,
+			If(null),
+			Unreachable,
+			End,
+			LocalGet(indexLocal),
+			LocalGet(arrayLocal),
+			StructGet(wrapperType, WasmGcTypePlan.arrayLengthFieldIndex()),
+			I32LtS,
+			I32Eqz,
+			If(null),
+			Unreachable,
+			End
+		];
+
+	static function requireInstructions(instructions:Null<Array<WasmInstruction>>):Array<WasmInstruction>
+		return if (instructions == null) throw "Wasm GC array operation was not lowered" else instructions;
+
+	static function requireArrayElement(type:IrType):IrType
+		return switch type {
+			case Array(element): element;
+			default: throw 'Wasm GC array operation requires an array, got ${Std.string(type)}';
+		};
+
+	static function requireIteratorElement(type:IrType):IrType
+		return switch type {
+			case Iterator(element): element;
+			default: throw 'Wasm GC iterator operation requires an iterator, got ${Std.string(type)}';
+		};
+
+	static function arrayNativeSuffix(type:IrType):String
+		return switch type {
+			case I32: "i32";
+			case Bool: "bool";
+			case F64: "f64";
+			case Bytes, ManagedBytes: "bytes";
+			default: "ref";
+		};
 
 	static function requireObjectName(type:IrType):String
 		return switch type {

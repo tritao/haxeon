@@ -484,8 +484,9 @@ class WasmGcTypePlan {
 		for (element in iteratorElements) {
 			var arrayIndex = arrayType(element),
 				iteratorIndex = iteratorType(element);
+			// Haxe arrays are nullable references, so iterators preserve that in their source field.
 			setType(iteratorIndex, true, [], Struct([
-				{type: Value(Ref({nullable: false, heap: Type(arrayIndex)})), mutable: true},
+				{type: Value(Ref({nullable: true, heap: Type(arrayIndex)})), mutable: true},
 				{type: Value(I32), mutable: true}
 			]));
 		}

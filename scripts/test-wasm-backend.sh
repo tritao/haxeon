@@ -84,6 +84,9 @@ bash "$root_dir/scripts/test-wasm-gc-invariants.sh"
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm-gc --output=out/wasm-cli-gc-objects.wasm --entry=wasm-gc-objects \
 	--root=tests/programs tests/programs/wasm-gc-objects.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm-gc --output=out/wasm-cli-gc-arrays.wasm --entry=wasm-gc-arrays \
+	--root=tests/programs tests/programs/wasm-gc-arrays.hx
 node - "$root_dir" <<'JS'
 const fs = require("fs");
 const root = process.argv[2];
@@ -137,7 +140,9 @@ const cases = [
 	["out/wasm-gc-model.wasm", 42],
 	["out/wasm-gc-type-plan.wasm", 42],
 	["out/wasm-gc-objects.wasm", 42],
-	["out/wasm-cli-gc-objects.wasm", 42]
+	["out/wasm-cli-gc-objects.wasm", 42],
+	["out/wasm-gc-arrays.wasm", 42],
+	["out/wasm-cli-gc-arrays.wasm", 42]
 ];
 (async () => {
   for (const [relative, expected] of cases) {
@@ -157,7 +162,7 @@ const cases = [
       }};
     if (importedMemory)
       imports.env = {memory};
-    if (relative.endsWith("wasm-gc-objects.wasm")) {
+    if (relative.includes("gc-")) {
       const compiled = new WebAssembly.Module(bytes);
       if (WebAssembly.Module.imports(compiled).length !== 0
           || WebAssembly.Module.exports(compiled).some(entry => entry.name === "memory")

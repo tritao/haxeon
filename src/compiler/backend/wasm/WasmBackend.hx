@@ -321,7 +321,7 @@ class WasmBackend implements Backend {
 		var usedNatives = reachableNatives(program, reachable),
 			usedCNatives = reachableCNatives(program, reachable);
 		for (native in program.natives)
-			if (usedNatives.exists(native.name))
+			if (usedNatives.exists(native.name) && !isSupportedGcArrayNative(native.name))
 				throw 'Wasm GC object lowering does not support runtime native "${native.name}" yet';
 		for (native in program.cNatives)
 			if (usedCNatives.exists(native.name))
@@ -340,8 +340,9 @@ class WasmBackend implements Backend {
 						case Phi(_, _), ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstBool(_, _), ConstNull(_), TypeValue(_, _), GlobalGet(_, _),
 							GlobalSet(_, _), Add(_, _, _), Sub(_, _, _), Mul(_, _, _), Div(_, _, _), Mod(_, _, _), BitAnd(_, _, _), BitXor(_, _, _),
 							BitOr(_, _, _), ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _), Less(_, _, _), LessEqual(_, _, _),
-							Equal(_, _, _), NewObject(_, _), FieldGet(_, _, _), FieldSet(_, _, _), IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _):
-						case Call(_, name, _) if (declaredFunctions.exists(name)):
+							Equal(_, _, _), NewObject(_, _), FieldGet(_, _, _), FieldSet(_, _, _), ArrayGet(_, _, _), ArraySet(_, _, _), ArraySize(_, _),
+							IteratorNew(_, _), IteratorHasNext(_, _), IteratorNext(_, _), IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _):
+						case Call(_, name, _) if (declaredFunctions.exists(name) || isSupportedGcArrayNative(name)):
 						case MethodCall(_, receiver, _, _) if (isObjectReference(receiver.type)):
 						default:
 							throw 'Wasm GC object lowering does not support instruction ${Std.string(located.value)} in "${fn.name}" yet';
@@ -352,6 +353,13 @@ class WasmBackend implements Backend {
 	static function isObjectReference(type:IrType):Bool
 		return switch type {
 			case Obj(_): true;
+			default: false;
+		};
+
+	static function isSupportedGcArrayNative(name:String):Bool
+		return switch name {
+			case "__array_alloc_i32", "__array_alloc_bool", "__array_alloc_f64", "__array_alloc_bytes", "__array_alloc_ref", "__array_push_i32",
+				"__array_push_bool", "__array_push_f64", "__array_push_bytes", "__array_push_ref": true;
 			default: false;
 		};
 
@@ -4474,6 +4482,7 @@ class WasmFunctionLower {
 			placement = new WasmValuePlacement(fn, representation),
 			valueLocals = placement.values,
 			locals = placement.locals;
+		representation.beginFunction(function(type) return placement.allocate(type));
 		activeArrayTemps = {
 			len: placement.allocate(I32),
 			capacity: placement.allocate(I32),
@@ -5121,226 +5130,256 @@ class WasmFunctionLower {
 			case FieldSet(object, fieldName, value):
 				emit(body, activeRepresentation.fieldSet(object, fieldName, requiredLocal(values, object.id), requiredLocal(values, value.id)));
 			case ArrayGet(output, array, index):
-				var element = arrayElement(array),
-					stride = WasmLayout.arrayStride(element);
-				var arrayBody:Array<WasmInstruction> = [LocalGet(requiredLocal(values, index.id)), I32Const(0), I32LtS, If(null)];
-				arrayBody = arrayBody.concat(trapOrThrow());
-				arrayBody = arrayBody.concat([
-					Else,
-					LocalGet(requiredLocal(values, index.id)),
-					LocalGet(requiredLocal(values, array.id)),
-					I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
-					I32LtS,
-					If(null),
-					LocalGet(requiredLocal(values, array.id)),
-					I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
-					LocalGet(requiredLocal(values, index.id)),
-					I32Const(stride),
-					I32Mul,
-					I32Add,
-					load(element, 0),
-					LocalSet(requiredLocal(values, output.id)),
-				]);
-				arrayBody.push(Else);
-				arrayBody = arrayBody.concat(trapOrThrow());
-				arrayBody = arrayBody.concat([End, End]);
-				emit(body, arrayBody);
+				var represented = activeRepresentation.arrayGet(array, index, requiredLocal(values, output.id), requiredLocal(values, array.id),
+					requiredLocal(values, index.id));
+				if (represented != null)
+					emit(body, represented);
+				else {
+					var element = arrayElement(array),
+						stride = WasmLayout.arrayStride(element);
+					var arrayBody:Array<WasmInstruction> = [LocalGet(requiredLocal(values, index.id)), I32Const(0), I32LtS, If(null)];
+					arrayBody = arrayBody.concat(trapOrThrow());
+					arrayBody = arrayBody.concat([
+						Else,
+						LocalGet(requiredLocal(values, index.id)),
+						LocalGet(requiredLocal(values, array.id)),
+						I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
+						I32LtS,
+						If(null),
+						LocalGet(requiredLocal(values, array.id)),
+						I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+						LocalGet(requiredLocal(values, index.id)),
+						I32Const(stride),
+						I32Mul,
+						I32Add,
+						load(element, 0),
+						LocalSet(requiredLocal(values, output.id)),
+					]);
+					arrayBody.push(Else);
+					arrayBody = arrayBody.concat(trapOrThrow());
+					arrayBody = arrayBody.concat([End, End]);
+					emit(body, arrayBody);
+				}
 			case ArraySet(array, index, value):
-				var element = arrayElement(array),
-					stride = WasmLayout.arrayStride(element);
-				var arrayBody:Array<WasmInstruction> = [LocalGet(requiredLocal(values, index.id)), I32Const(0), I32LtS, If(null)];
-				arrayBody = arrayBody.concat(trapOrThrow());
-				arrayBody = arrayBody.concat([
-					Else,
-					LocalGet(requiredLocal(values, index.id)),
-					LocalGet(requiredLocal(values, array.id)),
-					I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
-					I32LtS,
-					If(null),
-					LocalGet(requiredLocal(values, array.id)),
-					I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
-					LocalGet(requiredLocal(values, index.id)),
-					I32Const(stride),
-					I32Mul,
-					I32Add,
-					LocalGet(requiredLocal(values, value.id)),
-					store(element, 0),
-					Else
-				]);
-				arrayBody = arrayBody.concat([
-					LocalGet(requiredLocal(values, array.id)),
-					I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
-					LocalSet(activeArrayTemps.len),
-					LocalGet(requiredLocal(values, index.id)),
-					I32Const(1),
-					I32Add,
-					LocalSet(activeArrayTemps.required),
-					LocalGet(activeArrayTemps.required),
-					LocalGet(requiredLocal(values, array.id)),
-					I32Load(WasmLayout.ARRAY_CAPACITY_OFFSET),
-					I32LeS,
-					If(null),
-					Else,
-					LocalGet(requiredLocal(values, array.id)),
-					I32Load(WasmLayout.ARRAY_CAPACITY_OFFSET),
-					I32Const(2),
-					I32Mul,
-					LocalSet(activeArrayTemps.capacity),
-					LocalGet(activeArrayTemps.capacity),
-					LocalGet(activeArrayTemps.required),
-					I32LtS,
-					If(null),
-					LocalGet(activeArrayTemps.required),
-					LocalSet(activeArrayTemps.capacity),
-					End,
-					LocalGet(activeArrayTemps.capacity),
-					I32Const(stride),
-					I32Mul,
-					Call(allocator),
-					LocalSet(activeArrayTemps.data),
-					LocalGet(activeArrayTemps.data),
-					LocalGet(requiredLocal(values, array.id)),
-					I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
-					LocalGet(activeArrayTemps.len),
-					I32Const(stride),
-					I32Mul,
-					MemoryCopy,
-					LocalGet(requiredLocal(values, array.id)),
-					LocalGet(activeArrayTemps.data),
-					I32Store(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
-					LocalGet(requiredLocal(values, array.id)),
-					LocalGet(activeArrayTemps.capacity),
-					I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
-					End,
-					Block(null),
-					Loop(null),
-					LocalGet(activeArrayTemps.len),
-					LocalGet(activeArrayTemps.required),
-					I32LtS,
-					If(null),
-					LocalGet(requiredLocal(values, array.id)),
-					I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
-					LocalGet(activeArrayTemps.len),
-					I32Const(stride),
-					I32Mul,
-					I32Add,
-					element == F64 ? F64Const(0.0) : I32Const(0),
-					element == F64 ? F64Store(0) : I32Store(0),
-					LocalGet(activeArrayTemps.len),
-					I32Const(1),
-					I32Add,
-					LocalSet(activeArrayTemps.len),
-					Br(1),
-					Else,
-					Br(2),
-					End,
-					End,
-					End,
-					LocalGet(requiredLocal(values, array.id)),
-					I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
-					LocalGet(requiredLocal(values, index.id)),
-					I32Const(stride),
-					I32Mul,
-					I32Add,
-					LocalGet(requiredLocal(values, value.id)),
-					store(element, 0),
-					LocalGet(requiredLocal(values, array.id)),
-					LocalGet(activeArrayTemps.required),
-					I32Store(WasmLayout.ARRAY_LENGTH_OFFSET),
-					End,
-					End
-				]);
-				emit(body, arrayBody);
+				var represented = activeRepresentation.arraySet(array, index, value, requiredLocal(values, array.id), requiredLocal(values, index.id),
+					requiredLocal(values, value.id));
+				if (represented != null)
+					emit(body, represented);
+				else {
+					var element = arrayElement(array),
+						stride = WasmLayout.arrayStride(element);
+					var arrayBody:Array<WasmInstruction> = [LocalGet(requiredLocal(values, index.id)), I32Const(0), I32LtS, If(null)];
+					arrayBody = arrayBody.concat(trapOrThrow());
+					arrayBody = arrayBody.concat([
+						Else,
+						LocalGet(requiredLocal(values, index.id)),
+						LocalGet(requiredLocal(values, array.id)),
+						I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
+						I32LtS,
+						If(null),
+						LocalGet(requiredLocal(values, array.id)),
+						I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+						LocalGet(requiredLocal(values, index.id)),
+						I32Const(stride),
+						I32Mul,
+						I32Add,
+						LocalGet(requiredLocal(values, value.id)),
+						store(element, 0),
+						Else
+					]);
+					arrayBody = arrayBody.concat([
+						LocalGet(requiredLocal(values, array.id)),
+						I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
+						LocalSet(activeArrayTemps.len),
+						LocalGet(requiredLocal(values, index.id)),
+						I32Const(1),
+						I32Add,
+						LocalSet(activeArrayTemps.required),
+						LocalGet(activeArrayTemps.required),
+						LocalGet(requiredLocal(values, array.id)),
+						I32Load(WasmLayout.ARRAY_CAPACITY_OFFSET),
+						I32LeS,
+						If(null),
+						Else,
+						LocalGet(requiredLocal(values, array.id)),
+						I32Load(WasmLayout.ARRAY_CAPACITY_OFFSET),
+						I32Const(2),
+						I32Mul,
+						LocalSet(activeArrayTemps.capacity),
+						LocalGet(activeArrayTemps.capacity),
+						LocalGet(activeArrayTemps.required),
+						I32LtS,
+						If(null),
+						LocalGet(activeArrayTemps.required),
+						LocalSet(activeArrayTemps.capacity),
+						End,
+						LocalGet(activeArrayTemps.capacity),
+						I32Const(stride),
+						I32Mul,
+						Call(allocator),
+						LocalSet(activeArrayTemps.data),
+						LocalGet(activeArrayTemps.data),
+						LocalGet(requiredLocal(values, array.id)),
+						I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+						LocalGet(activeArrayTemps.len),
+						I32Const(stride),
+						I32Mul,
+						MemoryCopy,
+						LocalGet(requiredLocal(values, array.id)),
+						LocalGet(activeArrayTemps.data),
+						I32Store(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+						LocalGet(requiredLocal(values, array.id)),
+						LocalGet(activeArrayTemps.capacity),
+						I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
+						End,
+						Block(null),
+						Loop(null),
+						LocalGet(activeArrayTemps.len),
+						LocalGet(activeArrayTemps.required),
+						I32LtS,
+						If(null),
+						LocalGet(requiredLocal(values, array.id)),
+						I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+						LocalGet(activeArrayTemps.len),
+						I32Const(stride),
+						I32Mul,
+						I32Add,
+						element == F64 ? F64Const(0.0) : I32Const(0),
+						element == F64 ? F64Store(0) : I32Store(0),
+						LocalGet(activeArrayTemps.len),
+						I32Const(1),
+						I32Add,
+						LocalSet(activeArrayTemps.len),
+						Br(1),
+						Else,
+						Br(2),
+						End,
+						End,
+						End,
+						LocalGet(requiredLocal(values, array.id)),
+						I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+						LocalGet(requiredLocal(values, index.id)),
+						I32Const(stride),
+						I32Mul,
+						I32Add,
+						LocalGet(requiredLocal(values, value.id)),
+						store(element, 0),
+						LocalGet(requiredLocal(values, array.id)),
+						LocalGet(activeArrayTemps.required),
+						I32Store(WasmLayout.ARRAY_LENGTH_OFFSET),
+						End,
+						End
+					]);
+					emit(body, arrayBody);
+				}
 			case ArraySize(output, array):
-				emit(body, [
-					LocalGet(requiredLocal(values, array.id)),
-					I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
-					LocalSet(requiredLocal(values, output.id))
-				]);
+				var represented = activeRepresentation.arraySize(array, requiredLocal(values, output.id), requiredLocal(values, array.id));
+				if (represented != null)
+					emit(body, represented);
+				else
+					emit(body, [
+						LocalGet(requiredLocal(values, array.id)),
+						I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
+						LocalSet(requiredLocal(values, output.id))
+					]);
 			case IteratorNew(output, array):
-				var iteratorLocal = requiredLocal(values, output.id);
-				emit(body, [
-					I32Const(WasmLayout.ITERATOR_SIZE),
-					Call(allocator),
-					LocalTee(iteratorLocal),
-					I32Const(typeId(Abstract("realtime_iterator"))),
-					I32Store(0),
-					LocalGet(iteratorLocal),
-					I32Const(WasmLayout.ITERATOR_SIZE),
-					I32Store(4),
-					LocalGet(iteratorLocal),
-					LocalGet(requiredLocal(values, array.id)),
-					I32Store(WasmLayout.ITERATOR_ARRAY_OFFSET),
-					LocalGet(iteratorLocal),
-					I32Const(0),
-					I32Store(WasmLayout.ITERATOR_POSITION_OFFSET)
-				]);
+				var iteratorLocal = requiredLocal(values, output.id),
+					represented = activeRepresentation.iteratorNew(array, iteratorLocal, requiredLocal(values, array.id));
+				if (represented != null)
+					emit(body, represented);
+				else
+					emit(body, [
+						I32Const(WasmLayout.ITERATOR_SIZE),
+						Call(allocator),
+						LocalTee(iteratorLocal),
+						I32Const(typeId(Abstract("realtime_iterator"))),
+						I32Store(0),
+						LocalGet(iteratorLocal),
+						I32Const(WasmLayout.ITERATOR_SIZE),
+						I32Store(4),
+						LocalGet(iteratorLocal),
+						LocalGet(requiredLocal(values, array.id)),
+						I32Store(WasmLayout.ITERATOR_ARRAY_OFFSET),
+						LocalGet(iteratorLocal),
+						I32Const(0),
+						I32Store(WasmLayout.ITERATOR_POSITION_OFFSET)
+					]);
 			case IteratorHasNext(output, iterator):
 				var iteratorLocal = requiredLocal(values, iterator.id),
-					arrayOffset = WasmLayout.ITERATOR_ARRAY_OFFSET,
-					positionOffset = WasmLayout.ITERATOR_POSITION_OFFSET;
-				emit(body, [
-					LocalGet(iteratorLocal),
-					I32Eqz,
-					If(I32),
-					I32Const(0),
-					Else,
-					LocalGet(iteratorLocal),
-					I32Load(arrayOffset),
-					I32Eqz,
-					If(I32),
-					I32Const(0),
-					Else,
-					LocalGet(iteratorLocal),
-					I32Load(positionOffset),
-					LocalGet(iteratorLocal),
-					I32Load(arrayOffset),
-					I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
-					I32LtS,
-					End,
-					End,
-					LocalSet(requiredLocal(values, output.id))
-				]);
+					represented = activeRepresentation.iteratorHasNext(iterator, requiredLocal(values, output.id), iteratorLocal);
+				if (represented != null)
+					emit(body, represented);
+				else {
+					var arrayOffset = WasmLayout.ITERATOR_ARRAY_OFFSET,
+						positionOffset = WasmLayout.ITERATOR_POSITION_OFFSET;
+					emit(body, [
+						LocalGet(iteratorLocal),
+						I32Eqz,
+						If(I32),
+						I32Const(0),
+						Else,
+						LocalGet(iteratorLocal),
+						I32Load(arrayOffset),
+						I32Eqz,
+						If(I32),
+						I32Const(0),
+						Else,
+						LocalGet(iteratorLocal),
+						I32Load(positionOffset),
+						LocalGet(iteratorLocal),
+						I32Load(arrayOffset),
+						I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
+						I32LtS,
+						End,
+						End,
+						LocalSet(requiredLocal(values, output.id))
+					]);
+				}
 			case IteratorNext(output, iterator):
 				var iteratorLocal = requiredLocal(values, iterator.id),
-					arrayOffset = WasmLayout.ITERATOR_ARRAY_OFFSET,
-					positionOffset = WasmLayout.ITERATOR_POSITION_OFFSET,
-					stride = WasmLayout.arrayStride(output.type),
-					outputLocal = requiredLocal(values, output.id);
-				var iteratorBody:Array<WasmInstruction> = [LocalGet(iteratorLocal), I32Eqz, If(null)];
-				iteratorBody = iteratorBody.concat(trapOrThrow());
-				iteratorBody = iteratorBody.concat([Else, LocalGet(iteratorLocal), I32Load(arrayOffset), I32Eqz, If(null)]);
-				iteratorBody = iteratorBody.concat(trapOrThrow());
-				iteratorBody = iteratorBody.concat([
-					Else,
-					LocalGet(iteratorLocal),
-					I32Load(positionOffset),
-					LocalGet(iteratorLocal),
-					I32Load(arrayOffset),
-					I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
-					I32LtS,
-					If(null),
-					LocalGet(iteratorLocal),
-					I32Load(arrayOffset),
-					I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
-					LocalGet(iteratorLocal),
-					I32Load(positionOffset),
-					I32Const(stride),
-					I32Mul,
-					I32Add,
-					load(output.type, 0),
-					LocalSet(outputLocal),
-					LocalGet(iteratorLocal),
-					LocalGet(iteratorLocal),
-					I32Load(positionOffset),
-					I32Const(1),
-					I32Add,
-					I32Store(positionOffset),
-					Else
-				]);
-				iteratorBody = iteratorBody.concat(trapOrThrow());
-				iteratorBody = iteratorBody.concat([End, End, End]);
-				emit(body, iteratorBody);
+					represented = activeRepresentation.iteratorNext(iterator, output, requiredLocal(values, output.id), iteratorLocal);
+				if (represented != null)
+					emit(body, represented);
+				else {
+					var arrayOffset = WasmLayout.ITERATOR_ARRAY_OFFSET,
+						positionOffset = WasmLayout.ITERATOR_POSITION_OFFSET,
+						stride = WasmLayout.arrayStride(output.type),
+						outputLocal = requiredLocal(values, output.id);
+					var iteratorBody:Array<WasmInstruction> = [LocalGet(iteratorLocal), I32Eqz, If(null)];
+					iteratorBody = iteratorBody.concat(trapOrThrow());
+					iteratorBody = iteratorBody.concat([Else, LocalGet(iteratorLocal), I32Load(arrayOffset), I32Eqz, If(null)]);
+					iteratorBody = iteratorBody.concat(trapOrThrow());
+					iteratorBody = iteratorBody.concat([
+						Else,
+						LocalGet(iteratorLocal),
+						I32Load(positionOffset),
+						LocalGet(iteratorLocal),
+						I32Load(arrayOffset),
+						I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
+						I32LtS,
+						If(null),
+						LocalGet(iteratorLocal),
+						I32Load(arrayOffset),
+						I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+						LocalGet(iteratorLocal),
+						I32Load(positionOffset),
+						I32Const(stride),
+						I32Mul,
+						I32Add,
+						load(output.type, 0),
+						LocalSet(outputLocal),
+						LocalGet(iteratorLocal),
+						LocalGet(iteratorLocal),
+						I32Load(positionOffset),
+						I32Const(1),
+						I32Add,
+						I32Store(positionOffset),
+						Else
+					]);
+					iteratorBody = iteratorBody.concat(trapOrThrow());
+					iteratorBody = iteratorBody.concat([End, End, End]);
+					emit(body, iteratorBody);
+				}
 			case Add(output, left, right):
 				binary(body, output, left, right, values, arithmeticInstruction(left.type, F64Add, I64Add, I32Add));
 			case Sub(output, left, right):
@@ -5371,7 +5410,12 @@ class WasmFunctionLower {
 				emit(body,
 					activeRepresentation.equal(requiredLocal(values, output.id), left, right, requiredLocal(values, left.id), requiredLocal(values, right.id)));
 			case Call(output, name, arguments):
-				if (!lowerInt64Native(body, output, name, arguments, values)) {
+				var outputLocal = output.type == Void ? -1 : requiredLocal(values, output.id),
+					represented = activeRepresentation.lowerRuntimeCall(name, output, arguments, outputLocal,
+						[for (argument in arguments) requiredLocal(values, argument.id)]);
+				if (represented != null)
+					emit(body, represented);
+				else if (!lowerInt64Native(body, output, name, arguments, values)) {
 					for (argument in arguments)
 						body.push(LocalGet(requiredLocal(values, argument.id)));
 					var functionIndex = functions.get(name);

@@ -326,6 +326,7 @@ class WasmBackendMain {
 		File.saveBytes("out/wasm-gc-model.wasm", compileGcTypeModel());
 		File.saveBytes("out/wasm-gc-type-plan.wasm", compileGcTypePlan());
 		File.saveBytes("out/wasm-gc-objects.wasm", compileGcObjectProgram());
+		File.saveBytes("out/wasm-gc-arrays.wasm", compileGcArrayProgram());
 		Sys.println("PASS: Wasm scalar backend");
 	}
 
@@ -341,6 +342,21 @@ class WasmBackendMain {
 		])
 			if (containsBytes(bytes, forbidden))
 				throw 'Wasm GC object module unexpectedly contains linear collector metadata "$forbidden"';
+		return bytes;
+	}
+
+	static function compileGcArrayProgram():haxe.io.Bytes {
+		var source = File.getContent("tests/programs/wasm-gc-arrays.hx"),
+			bytes = new WasmBackend().compile(Frontend.compile(source), {target: WasmGc, debugNames: true}).bytes;
+		for (forbidden in [
+			"__haxeon_alloc",
+			"__haxeon_gc_mark",
+			"__haxeon_gc_trace",
+			"__haxeon_gc_collect",
+			"haxeon.gc.roots"
+		])
+			if (containsBytes(bytes, forbidden))
+				throw 'Wasm GC array module unexpectedly contains linear collector metadata "$forbidden"';
 		return bytes;
 	}
 
@@ -461,7 +477,7 @@ class WasmBackendMain {
 				default: false;
 			},
 			iteratorArrayType = switch iteratorFields[0].type {
-				case Value(Ref(ref)): !ref.nullable && isTypeHeap(ref.heap, nodesArrayIndex);
+				case Value(Ref(ref)): ref.nullable && isTypeHeap(ref.heap, nodesArrayIndex);
 				default: false;
 			};
 		var callbackUsesClosure = switch plan.valueType(Function([Obj("Node")], Enum("Choice"))) {
