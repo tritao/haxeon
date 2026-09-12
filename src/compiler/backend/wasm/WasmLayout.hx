@@ -52,7 +52,7 @@ class WasmLayout {
 	public static inline final GC_BLOCK_SIZE_OFFSET = 0;
 	public static inline final GC_BLOCK_FLAGS_OFFSET = 4;
 	public static inline final GC_BLOCK_OWNER_OFFSET = 8;
-	public static inline final GC_BLOCK_NEXT_FREE_OFFSET = 12;
+	public static inline final GC_BLOCK_LINK_OFFSET = 12;
 	public static inline final GC_BLOCK_MAGIC = 0x48470000;
 	public static inline final GC_BLOCK_MAGIC_MASK = -65536;
 	public static inline final GC_BLOCK_ALLOCATED = 1;

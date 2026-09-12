@@ -5,6 +5,7 @@ root_dir=$(cd "$(dirname "$0")/.." && pwd)
 haxe_bin="$root_dir/.tools/haxe/haxe"
 artifact="$root_dir/out/wasm-gc-invariants.wasm"
 normal_artifact="$root_dir/out/wasm-gc-budget.wasm"
+map_artifact="$root_dir/out/wasm-gc-map-object.wasm"
 
 if [[ ! -x "$haxe_bin" ]]; then
 	echo "missing pinned Haxe; run ./scripts/bootstrap-tools.sh first" >&2
@@ -15,7 +16,10 @@ mkdir -p "$root_dir/out"
 "$haxe_bin" --cwd "$root_dir" -cp "$root_dir/src" --run compiler.tools.HaxeonCompiler \
 	--target=wasm32 --wasm-memory-stats --wasm-gc-stress --export=wasm-gc-invariants.exercise --export=wasm-gc-invariants.rootSnapshotExercise \
 	--export=wasm-gc-invariants.throwThroughRoots --export=wasm-gc-invariants.reallocateLargeArray --export=wasm-gc-invariants.allocationBurst \
-	--export=wasm-gc-invariants.growBeyondInitialMemory --output="$artifact" \
+	--export=wasm-gc-invariants.growBeyondInitialMemory --export=wasm-gc-invariants.referenceArrayRootExercise \
+	--export=wasm-gc-invariants.referenceArrayGrowthExercise \
+	--export=wasm-gc-invariants.cycleExercise --export=wasm-gc-invariants.enumRootExercise \
+	--export=wasm-gc-invariants.closureRootExercise --export=wasm-gc-invariants.iteratorRootExercise --output="$artifact" \
 	--entry=wasm-gc-invariants --root="$root_dir/tests/programs" "$root_dir/tests/programs/wasm-gc-invariants.hx"
 
 "$haxe_bin" --cwd "$root_dir" -cp "$root_dir/src" --run compiler.tools.HaxeonCompiler \
@@ -23,10 +27,15 @@ mkdir -p "$root_dir/out"
 	--export=wasm-gc-invariants.growBeyondInitialMemory --output="$normal_artifact" \
 	--entry=wasm-gc-invariants --root="$root_dir/tests/programs" "$root_dir/tests/programs/wasm-gc-invariants.hx"
 
-node - "$artifact" "$normal_artifact" <<'JS'
+"$haxe_bin" --cwd "$root_dir" -cp "$root_dir/src" --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --wasm-gc-stress --output="$map_artifact" \
+	--entry=map-object --root="$root_dir/tests/programs" "$root_dir/tests/programs/map-object.hx"
+
+node - "$artifact" "$normal_artifact" "$map_artifact" <<'JS'
 const fs = require("fs");
 const artifact = process.argv[2];
 const normalArtifact = process.argv[3];
+const mapArtifact = process.argv[4];
 
 (async () => {
 	const bytes = fs.readFileSync(artifact);
@@ -62,6 +71,20 @@ const normalArtifact = process.argv[3];
 		throw new Error("GC coalescing fixture returned the wrong value");
 	if (exports["haxeon.memory.heap_top"]() !== heapTop)
 		throw new Error("GC failed to coalesce adjacent dead blocks before a large reallocation");
+	assertHeapBlocks();
+	if (exports["wasm-gc-invariants.referenceArrayRootExercise"]() !== 39)
+		throw new Error("GC failed to trace active reference-array elements");
+	if (exports["wasm-gc-invariants.referenceArrayGrowthExercise"]() !== 39)
+		throw new Error("GC failed to trace reference-array elements after backing-store growth");
+	assertHeapBlocks();
+	if (exports["wasm-gc-invariants.cycleExercise"]() !== 39)
+		throw new Error("GC failed to terminate and preserve a cyclic reference graph");
+	if (exports["wasm-gc-invariants.enumRootExercise"]() !== 39)
+		throw new Error("GC failed to trace the active reference-bearing enum case");
+	if (exports["wasm-gc-invariants.closureRootExercise"]() !== 39)
+		throw new Error("GC failed to trace a bound closure receiver");
+	if (exports["wasm-gc-invariants.iteratorRootExercise"]() !== 39)
+		throw new Error("GC failed to trace an iterator's source array");
 	assertHeapBlocks();
 	if (exports["wasm-gc-invariants.exercise"](24) !== 42)
 		throw new Error("GC free-list exercise returned the wrong value");
@@ -113,6 +136,11 @@ const normalArtifact = process.argv[3];
 	if (normal["haxeon.memory.collection_count"]() <= collectionsBeforeGrowth)
 		throw new Error("Allocator grew linear memory without first collecting under pressure");
 	console.log("PASS: Wasm GC allocation budget and collect-before-grow policy");
+	const mapBytes = fs.readFileSync(mapArtifact);
+	const {instance: mapInstance} = await WebAssembly.instantiate(mapBytes, {});
+	if (mapInstance.exports.main() !== 42)
+		throw new Error("Stress collection corrupted reference map keys/values");
+	console.log("PASS: Wasm GC tracing preserves reference map entries");
 })().catch(error => {
 	console.error(error);
 	process.exitCode = 1;

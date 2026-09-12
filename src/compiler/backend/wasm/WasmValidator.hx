@@ -46,7 +46,7 @@ class WasmValidator {
 					if (labels.length == 0 || !labels[labels.length - 1])
 						throw 'Wasm function ${fn.name} has an else without an if';
 				case Catch(tag):
-					if (tagType == null)
+					if (tagType == null || tag != 0)
 						throw 'Wasm function ${fn.name} references an invalid exception tag $tag';
 				case End:
 					if (labels.length == 0)
@@ -140,7 +140,7 @@ class WasmValidator {
 						pop(stack, fn.type.results[fn.type.results.length - index - 1], fn);
 					reachable = false;
 				case Throw(tag):
-					if (tagType == null)
+					if (tagType == null || tag != 0)
 						throw 'Wasm function ${fn.name} references an invalid exception tag $tag';
 					pop(stack, I32, fn);
 					reachable = false;

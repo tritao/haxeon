@@ -63,7 +63,9 @@ the guest.
   not just an offline map. The current collector is a non-moving mark/sweep
   collector with precise static/shadow-frame roots. Every aligned heap block
   has an inline 16-byte header containing its physical size, state/trace flags,
-  an exact payload-owner pointer, and a free-list link. Marking resolves a
+  an exact payload-owner pointer, and an auxiliary link. While a block is
+  allocated, the link identifies the owning array or map for reference-bearing
+  backing stores; while free, it links the free list. Marking resolves a
   reference directly to that header; sweeping walks the heap linearly and
   merges adjacent dead/free blocks while rebuilding the free list. This avoids
   a separate fixed-capacity allocation-metadata table.
@@ -73,9 +75,13 @@ the guest.
   exhaustion. First-fit free-list reuse unlinks the selected block without
   dropping earlier nodes and splits blocks when the remainder can hold a full
   block header.
-  The block header identifies payloads that may contain managed references.
-  Numeric-array backing stores and `Bytes` payloads are atomic and skipped during
-  tracing; reference arrays and object fields remain traced. Normal allocation
+  Known layouts are traced by type: objects visit declared reference fields,
+  enums visit reference fields in the active case, arrays visit only elements
+  below their logical length, and maps visit typed keys and values below their
+  live count. Array/map backing blocks link to their owner to recover those
+  logical bounds. Closures and iterators visit their receiver/array; scalar
+  boxes and `Bytes` are leaves. Only opaque layouts use conservative word
+  scanning. Normal allocation
   consumes a byte budget (at least 256 KiB, scaled with heap size) between
   collections and forces collection plus a free-list retry before growing Wasm
   memory. `--wasm-gc-stress` restores collection-before-every-allocation for
