@@ -4016,7 +4016,7 @@ class Typer {
 		}
 		var typed:Array<TypedExpression> = [];
 		for (i in 0...arguments.length) {
-			var supplied = suppliedArgumentType(parameters[i], substitutions),
+			var supplied = argumentType(parameters[i], substitutions),
 				value = typeExpression(arguments[i], scope, supplied);
 			typed.push(coerce(value, supplied, 'argument ${i + 1} to "$name"'));
 		}
@@ -4033,17 +4033,6 @@ class Typer {
 		}
 		return coerceArguments(typed, [for (parameter in parameters) argumentType(parameter, substitutions)], name);
 	}
-
-	function suppliedArgumentType(argument:compiler.syntax.Ast.AstArgument, ?substitutions:Map<String, CompilerType>):CompilerType {
-		var type = argumentType(argument, substitutions);
-		return argument.optional == true && argument.defaultValue == null ? unwrapNullableType(type) : type;
-	}
-
-	static function unwrapNullableType(type:CompilerType):CompilerType
-		return switch type {
-			case TNullable(element): element;
-			default: type;
-		};
 
 	function typeInferredClassConstruction(typeName:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>):TypedExpression {

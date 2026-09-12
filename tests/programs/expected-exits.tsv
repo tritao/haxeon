@@ -144,6 +144,7 @@ cast-expression	42
 do-while	42
 postfix-increment	42
 optional-enum-parameter	42
+optional-argument-forwarding	42
 default-parameter-inference	42
 generic-functions	42
 generic-abstract	42
