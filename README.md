@@ -493,7 +493,7 @@ first command in one terminal and the second in another:
 ```sh
 LD_LIBRARY_PATH="$PWD/out:$PWD/.tools/hashlink" \
   .tools/hashlink/hl --diagnostics 24020 --diagnostics-wait out/compiler.hl
-vendor/hashlink/hlprof-live --rate 500 --output out/compiler.hlpc 24020
+.tools/hashlink/hlprof-live --connect-timeout 10 --rate 500 --output out/compiler.hlpc 24020
 ```
 
 `bootstrap-status.sh` runs the real lexer, parser, and typer over the compiler

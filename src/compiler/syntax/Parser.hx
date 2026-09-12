@@ -1901,18 +1901,21 @@ class Parser {
 	}
 
 	inline function match(kind:TokenKind):Bool {
-		if (!check(kind))
+		if (tokens[position].kind != kind)
 			return false;
-		advance();
+		position++;
 		return true;
 	}
 
 	function consume(kind:TokenKind):Token {
-		if (check(kind))
-			return advance();
+		var token = tokens[position];
+		if (token.kind == kind) {
+			position++;
+			return token;
+		}
 		if (recovering && canInsert(kind))
 			return insertMissing(kind);
-		fail(current(), 'Expected $kind, got ${current().kind}');
+		fail(token, 'Expected $kind, got ${token.kind}');
 		return null;
 	}
 
@@ -2009,7 +2012,7 @@ class Parser {
 	}
 
 	inline function check(kind:TokenKind):Bool
-		return current().kind == kind;
+		return tokens[position].kind == kind;
 
 	function advance():Token
 		return tokens[position++];

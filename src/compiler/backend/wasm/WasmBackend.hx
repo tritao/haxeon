@@ -24,6 +24,7 @@ import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmPatch.WasmPatchArtifact;
 import compiler.backend.wasm.WasmStructurer.WasmLoopInfo;
 import compiler.backend.wasm.WasmLayout.WasmFieldLayout;
+import compiler.backend.wasm.WasmGcRoots.WasmSafepoint;
 
 private typedef WasmClosureTypes = {
 	final staticType:Int;
@@ -145,7 +146,6 @@ class WasmBackend implements Backend {
 		for (object in program.objects)
 			for (method in object.methods)
 				methods.set(object.name + "." + method.name, method.functionName);
-		var emitted:Array<IrFunction> = [];
 		for (fn in program.functions) {
 			if (!reachable.exists(fn.name))
 				continue;
@@ -164,7 +164,6 @@ class WasmBackend implements Backend {
 				throw 'Wasm function ${fn.name} has an unsupported result type: $error';
 			var type:WasmFunctionType = {parameters: parameters, results: results};
 			functions.set(fn.name, module.addFunction(new WasmFunction(fn.name, type)));
-			emitted.push(fn);
 		}
 		var closureTypes = collectClosureTypes(module, program),
 			tableSlots = buildTableSlots(module, functions),
@@ -174,18 +173,19 @@ class WasmBackend implements Backend {
 			}) : null;
 		module.exceptionTagType = exceptionTag;
 		module.exportTable = module.tableMin != null;
-		module.customSections.push({name: "haxeon.gc.roots", bytes: WasmGcRoots.encode(program)});
+		var gcRootMetadata = WasmGcRoots.encodeAndVisit(program, function(fn, rootPoints) {
+			if (!reachable.exists(fn.name) || (fn.name == "__entry" && preferredEntry != "__entry"))
+				return;
+			var functionIndex = requiredFunctionIndex(functions, fn.name);
+			module.setFunction(functionIndex,
+				WasmFunctionLower.lower(fn, functions, module.functionType(functionIndex), layout, allocator, rootTop, rootFrameTop, globals, strings,
+					methods, closureTypes, tableSlots, exceptionTag, rootPoints));
+		});
+		module.customSections.push({name: "haxeon.gc.roots", bytes: gcRootMetadata});
 		module.customSections.push({name: "haxeon.patch", bytes: WasmPatch.manifest(program, patchChanged)});
 		module.customSections.push({name: "haxeon.patch.slots", bytes: WasmPatch.tableManifest(tableSlots)});
 		if (contract != null)
 			module.customSections.push({name: MemoryContractCodec.SECTION_NAME, bytes: MemoryContractCodec.encode(contract)});
-		for (index in 0...emitted.length) {
-			var fn = emitted[index];
-			var functionIndex = requiredFunctionIndex(functions, fn.name);
-			module.setFunction(functionIndex,
-				WasmFunctionLower.lower(fn, functions, module.functionType(functionIndex), layout, allocator, rootTop, rootFrameTop, globals, strings,
-					methods, closureTypes, tableSlots, exceptionTag));
-		}
 		var entry = functions.get(preferredEntry);
 		if (entry == null)
 			throw 'Wasm entry point $preferredEntry was not emitted';
@@ -3295,7 +3295,7 @@ class WasmFunctionLower {
 		frameTop:Int,
 		slots:Array<Int>,
 		slotByValue:Map<Int, Int>,
-		live:Map<String, Map<Int, Bool>>,
+		live:Map<Int, Map<Int, Array<Int>>>,
 		size:Int
 	}>;
 
@@ -3313,7 +3313,7 @@ class WasmFunctionLower {
 
 	public static function lower(fn:IrFunction, functions:Map<String, Int>, type:WasmFunctionType, layout:WasmLayout, allocator:Int, rootTop:Int,
 			rootFrameTop:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>, closureTypes:Map<String, WasmClosureTypes>,
-			tableSlots:Map<String, Int>, exceptionTag:Null<Int>):WasmFunction {
+			tableSlots:Map<String, Int>, exceptionTag:Null<Int>, rootPoints:Array<WasmSafepoint>):WasmFunction {
 		activeTableSlots = tableSlots;
 		var analysis = new WasmCfgAnalysis(fn),
 			placement = new WasmValuePlacement(fn),
@@ -3327,14 +3327,17 @@ class WasmFunctionLower {
 		};
 		var rootLocals:Array<Int> = [],
 			rootIds:Map<Int, Bool> = [],
-			live:Map<String, Map<Int, Bool>> = [];
-		for (point in WasmGcRoots.analyze(fn)) {
-			var pointLive:Map<Int, Bool> = [];
+			live:Map<Int, Map<Int, Array<Int>>> = [];
+		for (point in rootPoints) {
+			var blockLive = live.get(point.block);
+			if (blockLive == null) {
+				blockLive = [];
+				live.set(point.block, blockLive);
+			}
+			blockLive.set(point.instruction, point.liveReferences);
 			for (valueId in point.liveReferences) {
-				pointLive.set(valueId, true);
 				rootIds.set(valueId, true);
 			}
-			live.set(rootKey(point.block, point.instruction), pointLive);
 		}
 		var rootValueIds = [for (valueId in rootIds.keys()) valueId];
 		rootValueIds.sort(function(left, right) return left - right);
@@ -3513,9 +3516,9 @@ class WasmFunctionLower {
 	static function emitBlockInstructions(body:Array<WasmInstruction>, block:IrBlock, values:Map<Int, Int>, functions:Map<String, Int>, predecessor:Int,
 			layout:WasmLayout, allocator:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
 			closureTypes:Map<String, WasmClosureTypes>):Void {
-		snapshotRoots(body);
 		for (index in 0...block.instructions.length) {
 			var located = block.instructions[index];
+			// Safepoint liveness describes the instruction's entry state; snapshot before it can allocate or collect.
 			snapshotRoots(body, block.id, index);
 			switch located.value {
 				case Phi(output, inputs):
@@ -3523,9 +3526,7 @@ class WasmFunctionLower {
 				default:
 					lowerInstruction(body, located.value, values, functions, layout, allocator, globals, strings, methods, closureTypes);
 			}
-			snapshotRoots(body, block.id, index);
 		}
-		snapshotRoots(body);
 	}
 
 	static function lowerDispatcher(fn:IrFunction, analysis:WasmCfgAnalysis, functions:Map<String, Int>, values:Map<Int, Int>, pc:Int, predecessor:Int,
@@ -3611,7 +3612,6 @@ class WasmFunctionLower {
 			blockIndex:Map<Int, Int>, layout:WasmLayout, allocator:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
 			closureTypes:Map<String, WasmClosureTypes>):Void {
 		var exceptionState = activeExceptionState;
-		snapshotRoots(body);
 		for (index in 0...block.instructions.length) {
 			var located = block.instructions[index];
 			snapshotRoots(body, block.id, index);
@@ -3621,9 +3621,7 @@ class WasmFunctionLower {
 				default:
 					lowerInstruction(body, located.value, values, functions, layout, allocator, globals, strings, methods, closureTypes);
 			}
-			snapshotRoots(body, block.id, index);
 		}
-		snapshotRoots(body);
 		if (block.terminator == null)
 			throw 'Missing terminator in Wasm block ${block.id}';
 		switch block.terminator.value {
@@ -4286,7 +4284,7 @@ class WasmFunctionLower {
 		frameTop:Int,
 		slots:Array<Int>,
 		slotByValue:Map<Int, Int>,
-		live:Map<String, Map<Int, Bool>>,
+		live:Map<Int, Map<Int, Array<Int>>>,
 		size:Int
 	}):Array<WasmInstruction> {
 		var result:Array<WasmInstruction> = [
@@ -4312,13 +4310,16 @@ class WasmFunctionLower {
 
 	static function snapshotRoots(body:Array<WasmInstruction>, ?block:Int = -1, ?instruction:Int = -1):Void {
 		var rootState = activeGcRootState;
-		if (rootState == null)
+		if (rootState == null || block < 0 || instruction < 0)
 			return;
 		var state = rootState;
-		var live = state.live.get(rootKey(block, instruction));
+		var blockLive = state.live.get(block);
+		if (blockLive == null)
+			return;
+		var live = blockLive.get(instruction);
 		if (live == null)
 			return;
-		for (valueId in live.keys()) {
+		for (valueId in live) {
 			var index = state.slotByValue.get(valueId);
 			if (index == null)
 				continue;
@@ -4329,9 +4330,6 @@ class WasmFunctionLower {
 			body.push(I32Store(0));
 		}
 	}
-
-	static function rootKey(block:Int, instruction:Int):String
-		return block + ":" + instruction;
 
 	static function restoreRoots(body:Array<WasmInstruction>):Void {
 		var rootState = activeGcRootState;

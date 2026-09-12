@@ -16,37 +16,54 @@ typedef WasmSafepoint = {
 	final liveReferences:Array<Int>;
 }
 
+typedef WasmAnalysisVisitor = IrFunction->Array<WasmSafepoint>->Void;
+
 /** Computes precise managed-reference roots from SSA liveness at safepoints. */
 class WasmGcRoots {
 	public static inline final SECTION_VERSION:Int = 1;
 
 	public static function analyze(fn:IrFunction):Array<WasmSafepoint> {
 		var graph = new IrGraph(fn),
-			liveIn:Map<Int, Map<Int, Bool>> = [],
-			liveOut:Map<Int, Map<Int, Bool>> = [];
+			referenceIds:Array<Int> = [],
+			seenReferences:Map<Int, Bool> = [];
+		for (argument in fn.arguments)
+			addReferenceId(referenceIds, seenReferences, argument);
+		for (block in fn.blocks)
+			for (located in block.instructions) {
+				var output = IrOperands.output(located.value);
+				if (output != null)
+					addReferenceId(referenceIds, seenReferences, output);
+			}
+		referenceIds.sort(function(left, right) return left - right);
+		var referenceIndices:Map<Int, Int> = [];
+		for (index in 0...referenceIds.length)
+			referenceIndices.set(referenceIds[index], index);
+		var wordCount = (referenceIds.length + 31) >> 5,
+			liveIn:Map<Int, Array<Int>> = [],
+			liveOut:Map<Int, Array<Int>> = [];
 		for (id in graph.order) {
-			liveIn.set(id, []);
-			liveOut.set(id, []);
+			liveIn.set(id, emptyBitSet(wordCount));
+			liveOut.set(id, emptyBitSet(wordCount));
 		}
 		var changed = true;
 		while (changed) {
 			changed = false;
 			for (position in 0...graph.order.length) {
 				var id = graph.order[graph.order.length - 1 - position],
-					out:Map<Int, Bool> = [];
+					out = emptyBitSet(wordCount);
 				for (successor in graph.successors.get(id))
-					unionInto(out, liveIn.get(successor));
-				var current = copySet(out), block = graph.block(id);
+					unionBitsInto(out, liveIn.get(successor));
+				var current = out.copy(), block = graph.block(id);
 				for (index in 0...block.instructions.length) {
 					var instruction = block.instructions[block.instructions.length - 1 - index].value,
 						output = IrOperands.output(instruction);
 					if (output != null && WasmTarget.isReference(output.type))
-						current.remove(output.id);
+						clearBit(current, requiredIndex(referenceIndices, output.id));
 					for (input in IrOperands.inputs(instruction))
 						if (WasmTarget.isReference(input.type))
-							current.set(input.id, true);
+							setBit(current, requiredIndex(referenceIndices, input.id));
 				}
-				if (!sameSet(out, liveOut.get(id)) || !sameSet(current, liveIn.get(id))) {
+				if (!sameBitSet(out, liveOut.get(id)) || !sameBitSet(current, liveIn.get(id))) {
 					liveOut.set(id, out);
 					liveIn.set(id, current);
 					changed = true;
@@ -55,17 +72,17 @@ class WasmGcRoots {
 		}
 		var result:Array<WasmSafepoint> = [];
 		for (id in graph.order) {
-			var block = graph.block(id), current = copySet(liveOut.get(id));
+			var block = graph.block(id), current = liveOut.get(id).copy();
 			for (index in 0...block.instructions.length) {
 				var instruction = block.instructions[block.instructions.length - 1 - index].value;
 				var output = IrOperands.output(instruction);
 				if (output != null && WasmTarget.isReference(output.type))
-					current.remove(output.id);
+					clearBit(current, requiredIndex(referenceIndices, output.id));
 				for (input in IrOperands.inputs(instruction))
 					if (WasmTarget.isReference(input.type))
-						current.set(input.id, true);
+						setBit(current, requiredIndex(referenceIndices, input.id));
 				if (isSafepoint(instruction))
-					result.push({block: id, instruction: block.instructions.length - 1 - index, liveReferences: sorted(current)});
+					result.push({block: id, instruction: block.instructions.length - 1 - index, liveReferences: liveReferenceIds(current, referenceIds)});
 			}
 		}
 		result.sort(function(left, right) return left.block == right.block ? left.instruction - right.instruction : left.block - right.block);
@@ -73,7 +90,11 @@ class WasmGcRoots {
 	}
 
 	/** Stable root metadata consumed by a future precise Wasm collector. */
-	public static function encode(program:IrProgram):Bytes {
+	public static function encode(program:IrProgram):Bytes
+		return encodeAndVisit(program);
+
+	/** Encodes root metadata and lets the caller consume each function analysis before moving on. */
+	public static function encodeAndVisit(program:IrProgram, ?visit:WasmAnalysisVisitor):Bytes {
 		var output = new BytesOutput();
 		output.bigEndian = false;
 		output.writeString("HGR");
@@ -90,6 +111,8 @@ class WasmGcRoots {
 				for (value in point.liveReferences)
 					output.writeInt32(value);
 			}
+			if (visit != null)
+				visit(fn, points);
 		}
 		return output.getBytes();
 	}
@@ -106,29 +129,47 @@ class WasmGcRoots {
 			default: false;
 		};
 
-	static function sorted(set:Map<Int, Bool>):Array<Int> {
-		var result = [for (key in set.keys()) key];
-		result.sort(function(left, right) return left - right);
-		return result;
+	static function addReferenceId(ids:Array<Int>, seen:Map<Int, Bool>, value:IrValue):Void {
+		if (WasmTarget.isReference(value.type) && !seen.exists(value.id)) {
+			seen.set(value.id, true);
+			ids.push(value.id);
+		}
 	}
 
-	static function copySet(set:Map<Int, Bool>):Map<Int, Bool> {
-		var result:Map<Int, Bool> = [];
-		unionInto(result, set);
-		return result;
-	}
+	static function emptyBitSet(wordCount:Int):Array<Int>
+		return [for (_ in 0...wordCount) 0];
 
-	static function unionInto(target:Map<Int, Bool>, source:Map<Int, Bool>):Void
-		for (key in source.keys())
-			target.set(key, true);
+	static function unionBitsInto(target:Array<Int>, source:Array<Int>):Void
+		for (index in 0...target.length)
+			target[index] |= source[index];
 
-	static function sameSet(left:Map<Int, Bool>, right:Map<Int, Bool>):Bool {
-		for (key in left.keys())
-			if (!right.exists(key))
-				return false;
-		for (key in right.keys())
-			if (!left.exists(key))
+	static function sameBitSet(left:Array<Int>, right:Array<Int>):Bool {
+		for (index in 0...left.length)
+			if (left[index] != right[index])
 				return false;
 		return true;
+	}
+
+	static inline function setBit(set:Array<Int>, index:Int):Void
+		set[index >> 5] |= 1 << (index & 31);
+
+	static inline function clearBit(set:Array<Int>, index:Int):Void
+		set[index >> 5] &= ~(1 << (index & 31));
+
+	static inline function hasBit(set:Array<Int>, index:Int):Bool
+		return set[index >> 5] & (1 << (index & 31)) != 0;
+
+	static function liveReferenceIds(set:Array<Int>, ids:Array<Int>):Array<Int> {
+		var result = [];
+		for (index in 0...ids.length)
+			if (hasBit(set, index))
+				result.push(ids[index]);
+		return result;
+	}
+
+	static function requiredIndex(indices:Map<Int, Int>, valueId:Int):Int {
+		if (!indices.exists(valueId))
+			throw 'Missing Wasm GC-root index for value $valueId';
+		return indices.get(valueId);
 	}
 }

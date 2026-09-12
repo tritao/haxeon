@@ -5,7 +5,7 @@ root=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$root"
 port=${1:-24020}
 runtime="$root/.tools/hashlink/hl"
-client="$root/vendor/hashlink/hlprof-live"
+client="$root/.tools/hashlink/hlprof-live"
 target="$root/out/profiler-wait-target.hl"
 log=$(mktemp /tmp/haxeon-profiler-wait-XXXXXX.log)
 capture=$(mktemp /tmp/haxeon-profiler-wait-XXXXXX.hlpc)
@@ -31,7 +31,7 @@ if ! kill -0 "$pid" 2>/dev/null || rg -q '^started$' "$log"; then
 	exit 1
 fi
 
-"$client" --rate 100 --duration 1 --output "$capture" "$port" >/dev/null
+"$client" --connect-timeout 5 --rate 100 --duration 1 --output "$capture" "$port" >/dev/null
 wait "$pid"
 rg -q '^started$' "$log"
 echo "PASS: diagnostics-wait holds startup until hlprof-live attaches"

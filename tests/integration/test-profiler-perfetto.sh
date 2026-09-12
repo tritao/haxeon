@@ -6,7 +6,8 @@ if [[ $# -ne 1 ]]; then
   exit 2
 fi
 
-profiler_tool="${HLPROF_LIVE:-vendor/hashlink/hlprof-live}"
+root=$(cd "$(dirname "$0")/../.." && pwd)
+profiler_tool="${HLPROF_LIVE:-$root/.tools/hashlink/hlprof-live}"
 output_file="$(mktemp /tmp/haxeon-perfetto-XXXXXX.json)"
 trap 'rm -f "$output_file"' EXIT
 

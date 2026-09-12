@@ -10,25 +10,27 @@ import compiler.ir.SourceProvenance.SourceOrigin;
 /** Pending phi definition populated while mutable locals are renamed. */
 private typedef SsaPhi = {output:IrValue, inputs:Array<IrPhiInput>};
 
+private typedef SsaDefinitionBlocks = {blocks:Array<Int>, contains:Map<Int, Bool>};
+
 /** Constructs minimal SSA with dominance frontiers, then renames mutable locals. */
 class SsaBuilder {
 	var cfg:CfgFunction;
 	var output:Array<IrBlock>;
-	var predecessors:Map<Int, Array<Int>> = [];
-	var successors:Map<Int, Array<Int>> = [];
-	var reachable:Map<Int, Bool> = [];
-	var immediate:Map<Int, Int> = [];
-	var children:Map<Int, Array<Int>> = [];
-	var frontiers:Map<Int, Map<Int, Bool>> = [];
-	var frontierKeys:Map<Int, Array<Int>> = [];
-	var liveIn:Map<Int, Map<String, Bool>> = [];
-	var phis:Map<Int, Map<String, SsaPhi>> = [];
-	var phiNames:Map<Int, Array<String>> = [];
+	var predecessors:Array<Array<Int>> = [];
+	var successors:Array<Array<Int>> = [];
+	var reachable:Array<Bool> = [];
+	var immediate:Array<Int> = [];
+	var children:Array<Array<Int>> = [];
+	var frontiers:Array<Map<Int, Bool>> = [];
+	var frontierKeys:Array<Array<Int>> = [];
+	var liveIn:Array<Map<String, Bool>> = [];
+	var phis:Array<Map<String, SsaPhi>> = [];
+	var phiNames:Array<Array<String>> = [];
 	var roots:Array<Int> = [];
 	var stacks:Map<String, Array<IrValue>> = [];
-	var temporaries:Map<Int, IrValue> = [];
+	var temporaries:Array<Null<IrValue>> = [];
 	var nextValue:Int = 0;
-	var renamed:Map<Int, Bool> = [];
+	var renamed:Array<Bool> = [];
 	var debugBindings:Array<compiler.ir.IrFunction.IrDebugBinding> = [];
 	var debugLocals:Map<String, compiler.ir.cfg.Cfg.CfgDebugLocal> = [];
 
@@ -46,6 +48,18 @@ class SsaBuilder {
 
 	function run():IrFunction {
 		output = [for (block in cfg.blocks) new IrBlock(block.id)];
+		predecessors = [for (_ in cfg.blocks) []];
+		successors = [for (_ in cfg.blocks) []];
+		reachable = [for (_ in cfg.blocks) false];
+		immediate = [for (_ in cfg.blocks) -1];
+		children = [for (_ in cfg.blocks) []];
+		frontiers = [for (_ in cfg.blocks) []];
+		frontierKeys = [for (_ in cfg.blocks) []];
+		liveIn = [for (_ in cfg.blocks) []];
+		phis = [for (_ in cfg.blocks) []];
+		phiNames = [for (_ in cfg.blocks) []];
+		renamed = [for (_ in cfg.blocks) false];
+		temporaries = [for (_ in 0...cfg.valueCount) null];
 		buildGraph();
 		computeDominators();
 		computeFrontiers();
@@ -63,7 +77,7 @@ class SsaBuilder {
 		for (root in orderedRoots)
 			rename(root);
 		for (block in cfg.blocks)
-			if (reachable.exists(block.id) && roots.indexOf(block.id) < 0 && immediate.exists(block.id) && immediate.get(block.id) == -1)
+			if (reachable[block.id] && roots.indexOf(block.id) < 0 && immediate[block.id] == -1)
 				rename(block.id);
 		return new IrFunction(cfg.name, arguments, cfg.result, output, debugBindings);
 	}
@@ -73,11 +87,11 @@ class SsaBuilder {
 		var work = [0];
 		while (work.length > 0) {
 			var id = work.pop();
-			if (reachable.exists(id))
-				continue;
-			reachable.set(id, true);
 			if (id < 0 || id >= cfg.blocks.length)
 				throw 'Unknown CFG block $id';
+			if (reachable[id])
+				continue;
+			reachable[id] = true;
 			var block = cfg.blocks[id];
 			var handlers:Array<Int> = [];
 			for (located in block.instructions)
@@ -97,127 +111,106 @@ class SsaBuilder {
 			for (handler in handlers)
 				if (next.indexOf(handler) < 0)
 					next.push(handler);
-			successors.set(id, next);
+			successors[id] = next;
 			for (target in next) {
-				var found:Array<Int>;
-				if (predecessors.exists(target))
-					found = predecessors.get(target);
-				else {
-					found = [];
-					predecessors.set(target, found);
-				}
-				found.push(id);
+				predecessors[target].push(id);
 				work.push(target);
 			}
 		}
 	}
 
 	function computeDominators():Void {
-		var visited:Map<Int, Bool> = [], postorder:Array<Int> = [];
+		var visited:Array<Bool> = [for (_ in cfg.blocks) false],
+			postorder:Array<Int> = [];
 		for (root in roots)
 			dominancePostorder(root, visited, postorder);
 		postorder.reverse();
-		var order:Map<Int, Int> = [];
+		var order:Array<Int> = [for (_ in cfg.blocks) -1];
 		for (index in 0...postorder.length)
-			order.set(postorder[index], index);
+			order[postorder[index]] = index;
 		for (root in roots)
-			immediate.set(root, root);
+			immediate[root] = root;
 		var changed = true;
 		while (changed) {
 			changed = false;
 			for (index in 1...postorder.length) {
 				var id = postorder[index];
-				if (!predecessors.exists(id) || predecessors.get(id).length == 0)
+				if (predecessors[id].length == 0)
 					throw 'Reachable SSA block $id has no predecessor or handler root';
 				var next = -1;
-				for (predecessor in predecessors.get(id))
-					if (immediate.exists(predecessor))
+				for (predecessor in predecessors[id])
+					if (immediate[predecessor] >= 0)
 						next = next < 0 ? predecessor : intersectDominators(predecessor, next, immediate, order);
-				if (next >= 0 && (!immediate.exists(id) || immediate.get(id) != next)) {
-					immediate.set(id, next);
+				if (next >= 0 && immediate[id] != next) {
+					immediate[id] = next;
 					changed = true;
 				}
 			}
 		}
 		for (id in postorder)
 			if (roots.indexOf(id) < 0) {
-				if (!immediate.exists(id))
+				if (immediate[id] < 0)
 					throw 'Reachable SSA block $id has no immediate dominator';
-				var parent = immediate.get(id), list:Array<Int>;
-				if (children.exists(parent))
-					list = children.get(parent);
-				else {
-					list = [];
-					children.set(parent, list);
-				}
-				list.push(id);
+				children[immediate[id]].push(id);
 			}
+		for (nested in children)
+			nested.sort(function(a, b) return a - b);
 	}
 
-	function dominancePostorder(id:Int, visited:Map<Int, Bool>, result:Array<Int>):Void {
-		if (visited.exists(id))
+	function dominancePostorder(id:Int, visited:Array<Bool>, result:Array<Int>):Void {
+		if (visited[id])
 			return;
-		visited.set(id, true);
-		if (successors.exists(id))
-			for (successor in successors.get(id))
-				dominancePostorder(successor, visited, result);
+		visited[id] = true;
+		for (successor in successors[id])
+			dominancePostorder(successor, visited, result);
 		result.push(id);
 	}
 
-	static function intersectDominators(left:Int, right:Int, immediate:Map<Int, Int>, order:Map<Int, Int>):Int {
+	static function intersectDominators(left:Int, right:Int, immediate:Array<Int>, order:Array<Int>):Int {
 		while (left != right) {
-			while (requiredInt(order, left, "dominance order") > requiredInt(order, right, "dominance order"))
-				left = requiredInt(immediate, left, "immediate dominator");
-			while (requiredInt(order, right, "dominance order") > requiredInt(order, left, "dominance order"))
-				right = requiredInt(immediate, right, "immediate dominator");
+			while (order[left] > order[right])
+				left = immediate[left];
+			while (order[right] > order[left])
+				right = immediate[right];
 		}
 		return left;
 	}
 
-	static function requiredInt(values:Map<Int, Int>, key:Int, context:String):Int {
-		if (!values.exists(key))
-			throw 'Missing $context for SSA block $key';
-		return values.get(key);
-	}
-
 	function computeFrontiers():Void {
 		for (block in cfg.blocks)
-			if (reachable.exists(block.id))
-				frontiers.set(block.id, []);
+			if (reachable[block.id])
+				frontiers[block.id] = [];
 		for (cfgBlock in cfg.blocks) {
 			var block = cfgBlock.id;
-			if (!reachable.exists(block))
+			if (!reachable[block])
 				continue;
-			if (!predecessors.exists(block))
-				continue;
-			var preds = predecessors.get(block);
+			var preds = predecessors[block];
 			if (preds.length < 2)
 				continue;
 			for (pred in preds) {
 				var runner = pred;
-				while (runner != immediate.get(block)) {
-					if (frontiers.exists(runner))
-						frontiers.get(runner).set(block, true);
+				while (runner != immediate[block]) {
+					if (!frontiers[runner].exists(block)) {
+						frontiers[runner].set(block, true);
+						frontierKeys[runner].push(block);
+					}
 					if (runner == 0 || roots.indexOf(runner) >= 0)
 						break;
-					if (!immediate.exists(runner))
+					if (immediate[runner] < 0)
 						break;
-					runner = immediate.get(runner);
+					runner = immediate[runner];
 				}
 			}
 		}
-		for (block in cfg.blocks)
-			if (reachable.exists(block.id))
-				frontierKeys.set(block.id, sortedIntKeys(frontiers.get(block.id)));
 	}
 
 	function computeLiveness():Void {
-		var uses:Map<Int, Map<String, Bool>> = [],
-			defs:Map<Int, Map<String, Bool>> = [],
-			liveOut:Map<Int, Map<String, Bool>> = [];
+		var uses:Array<Map<String, Bool>> = [for (_ in cfg.blocks) []],
+			defs:Array<Map<String, Bool>> = [for (_ in cfg.blocks) []],
+			liveOut:Array<Map<String, Bool>> = [for (_ in cfg.blocks) []];
 		for (block in cfg.blocks) {
 			var id = block.id;
-			if (!reachable.exists(id))
+			if (!reachable[id])
 				continue;
 			var use:Map<String, Bool> = [], def:Map<String, Bool> = [];
 			for (located in cfg.blocks[id].instructions)
@@ -229,55 +222,54 @@ class SsaBuilder {
 						def.set(name, true);
 					default:
 				}
-			uses.set(id, use);
-			defs.set(id, def);
-			liveIn.set(id, []);
-			liveOut.set(id, []);
+			uses[id] = use;
+			defs[id] = def;
+			liveIn[id] = [];
+			liveOut[id] = [];
 		}
-		var work:Array<Int> = [], queued:Map<Int, Bool> = [];
+		var work:Array<Int> = [],
+			queued:Array<Bool> = [for (_ in cfg.blocks) false];
 		for (block in cfg.blocks)
-			if (reachable.exists(block.id)) {
+			if (reachable[block.id]) {
 				work.push(block.id);
-				queued.set(block.id, true);
+				queued[block.id] = true;
 			}
 		while (work.length > 0) {
 			var id = work.pop();
-			queued.remove(id);
-			var out = liveOut.get(id);
-			if (successors.exists(id))
-				for (successor in successors.get(id))
-					for (name in liveIn.get(successor).keys())
-						if (!out.exists(name))
-							out.set(name, true);
-			var input = liveIn.get(id), changed = false;
-			for (name in uses.get(id).keys())
+			queued[id] = false;
+			var out = liveOut[id];
+			for (successor in successors[id])
+				for (name in liveIn[successor].keys())
+					if (!out.exists(name))
+						out.set(name, true);
+			var input = liveIn[id], changed = false;
+			for (name in uses[id].keys())
 				if (!input.exists(name)) {
 					input.set(name, true);
 					changed = true;
 				}
 			for (name in out.keys())
-				if (!defs.get(id).exists(name) && !input.exists(name)) {
+				if (!defs[id].exists(name) && !input.exists(name)) {
 					input.set(name, true);
 					changed = true;
 				}
 			if (changed) {
-				if (predecessors.exists(id))
-					for (predecessor in predecessors.get(id))
-						if (!queued.exists(predecessor)) {
-							queued.set(predecessor, true);
-							work.push(predecessor);
-						}
+				for (predecessor in predecessors[id])
+					if (!queued[predecessor]) {
+						queued[predecessor] = true;
+						work.push(predecessor);
+					}
 			}
 		}
 	}
 
 	function insertPhis():Void {
-		var definitions:Map<String, Map<Int, Bool>> = [],
+		var definitions:Map<String, SsaDefinitionBlocks> = [],
 			definitionNames:Array<String> = [];
 		for (argument in cfg.arguments)
 			addDefinition(definitions, definitionNames, argument.name, 0);
 		for (block in cfg.blocks)
-			if (reachable.exists(block.id))
+			if (reachable[block.id])
 				for (located in block.instructions)
 					switch located.value {
 						case StoreLocal(name, _):
@@ -285,26 +277,20 @@ class SsaBuilder {
 						default:
 					}
 		for (name in definitionNames) {
-			var blocks = definitions.get(name),
-				work = sortedIntKeys(blocks),
+			var definitionBlocks = definitions.get(name);
+			if (definitionBlocks == null)
+				throw 'Missing SSA definitions for local "$name"';
+			var work = definitionBlocks.blocks.copy(),
 				placed:Map<Int, Bool> = [];
 			var cursor = 0;
 			while (cursor < work.length) {
 				var block = work[cursor++];
-				for (join in frontierKeys.get(block))
-					if (!placed.exists(join) && liveIn.get(join).exists(name)) {
+				for (join in frontierKeys[block])
+					if (!placed.exists(join) && liveIn[join].exists(name)) {
 						placed.set(join, true);
-						var map:Map<String, SsaPhi>;
-						if (phis.exists(join))
-							map = phis.get(join);
-						else {
-							map = [];
-							phis.set(join, map);
-							phiNames.set(join, []);
-						}
-						map.set(name, {output: allocate(name, cfg.localTypes.get(name)), inputs: []});
-						phiNames.get(join).push(name);
-						if (!blocks.exists(join))
+						phis[join].set(name, {output: allocate(name, cfg.localTypes.get(name)), inputs: []});
+						phiNames[join].push(name);
+						if (!definitionBlocks.contains.exists(join))
 							work.push(join);
 					}
 			}
@@ -312,17 +298,15 @@ class SsaBuilder {
 	}
 
 	function rename(id:Int):Void {
-		if (renamed.exists(id))
+		if (renamed[id])
 			return;
-		renamed.set(id, true);
+		renamed[id] = true;
 		var block = cfg.blocks[id],
 			target = output[id],
 			pushed:Array<String> = [];
-		if (phis.exists(id)) {
-			var blockPhis = phis.get(id);
-			if (!phiNames.exists(id))
-				throw 'Missing SSA phi-name list for block $id';
-			for (name in phiNames.get(id)) {
+		if (phiNames[id].length > 0) {
+			var blockPhis = phis[id];
+			for (name in phiNames[id]) {
 				if (!blockPhis.exists(name))
 					throw 'Missing SSA phi "$name" for block $id';
 				var phi = blockPhis.get(name);
@@ -336,7 +320,8 @@ class SsaBuilder {
 			var provenance = located.provenance;
 			switch located.value {
 				case LoadLocal(out, name):
-					temporaries.set(out.id, current(name));
+					var id:Int = out.id;
+					temporaries[id] = current(name);
 				case StoreLocal(name, value):
 					var resolved = resolve(value);
 					push(name, resolved);
@@ -490,27 +475,19 @@ class SsaBuilder {
 			case Jump(to): Jump(to);
 			case Branch(condition, yes, no): Branch(resolve(condition), yes, no);
 		}, terminator.provenance);
-		if (successors.exists(id))
-			for (successor in successors.get(id)) {
-				if (phis.exists(successor)) {
-					var successorPhis = phis.get(successor);
-					if (!phiNames.exists(successor))
-						throw 'Missing SSA phi-name list for successor block $successor';
-					for (name in phiNames.get(successor)) {
-						if (!successorPhis.exists(name))
-							throw 'Missing SSA phi "$name" for successor block $successor';
-						var phi = successorPhis.get(name);
-						var inputs = phi.inputs;
-						inputs.push({block: id, value: current(name)});
-					}
+		for (successor in successors[id])
+			if (phiNames[successor].length > 0) {
+				var successorPhis = phis[successor];
+				for (name in phiNames[successor]) {
+					if (!successorPhis.exists(name))
+						throw 'Missing SSA phi "$name" for successor block $successor';
+					var phi = successorPhis.get(name);
+					var inputs = phi.inputs;
+					inputs.push({block: id, value: current(name)});
 				}
 			}
-		if (children.exists(id)) {
-			var nested = children.get(id);
-			nested.sort(function(a, b) return a - b);
-			for (child in nested)
-				rename(child);
-		}
+		for (child in children[id])
+			rename(child);
 		var pushedIndex = pushed.length;
 		while (pushedIndex > 0) {
 			pushedIndex--;
@@ -519,8 +496,9 @@ class SsaBuilder {
 	}
 
 	function define(value:CfgValue):IrValue {
+		var id:Int = value.id;
 		var result = allocate('v${value.id}', value.type);
-		temporaries.set(value.id, result);
+		temporaries[id] = result;
 		return result;
 	}
 
@@ -538,9 +516,13 @@ class SsaBuilder {
 	}
 
 	function resolve(value:CfgValue):IrValue {
-		if (!temporaries.exists(value.id))
+		var id:Int = value.id;
+		if (id < 0 || id >= temporaries.length)
 			throw 'CFG value ${value.id} used before definition';
-		return temporaries.get(value.id);
+		var resolved = temporaries[id];
+		if (resolved == null)
+			throw 'CFG value ${value.id} used before definition';
+		return resolved;
 	}
 
 	function allocate(name:String, type:IrType):IrValue {
@@ -582,21 +564,16 @@ class SsaBuilder {
 		return stack[stack.length - 1];
 	}
 
-	function addDefinition(map:Map<String, Map<Int, Bool>>, names:Array<String>, name:String, id:Int):Void {
-		var found:Map<Int, Bool>;
-		if (map.exists(name))
-			found = map.get(name);
-		else {
-			found = [];
+	function addDefinition(map:Map<String, SsaDefinitionBlocks>, names:Array<String>, name:String, id:Int):Void {
+		var found = map.get(name);
+		if (found == null) {
+			found = {blocks: [], contains: []};
 			map.set(name, found);
 			names.push(name);
 		}
-		found.set(id, true);
-	}
-
-	static function sortedIntKeys(map:Map<Int, Bool>):Array<Int> {
-		var result = [for (id in map.keys()) id];
-		result.sort(function(a, b) return a - b);
-		return result;
+		if (!found.contains.exists(id)) {
+			found.contains.set(id, true);
+			found.blocks.push(id);
+		}
 	}
 }

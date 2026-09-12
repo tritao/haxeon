@@ -17,6 +17,7 @@ import compiler.ir.IrFunction;
 import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
+import compiler.ir.Ir.IrValue;
 import sys.io.File;
 
 class WasmBackendMain {
@@ -62,7 +63,28 @@ class WasmBackendMain {
 					}
 		if (!rootsBoxingSafepoint)
 			throw "Primitive ToDyn allocation must be a safepoint that retains live managed references";
+		var manyRootsBuilder = new IrBuilder(),
+			manyRootArguments:Array<IrValue> = [];
+		for (index in 0...40)
+			manyRootArguments.push(manyRootsBuilder.argument('root$index', Obj("Marker")));
+		manyRootsBuilder.call("root_safepoint", manyRootArguments, Void);
+		manyRootsBuilder.returnValue(manyRootsBuilder.constInt(0));
+		var manyRootsFunction = new IrFunction("manyRoots", manyRootsBuilder.arguments, I32, manyRootsBuilder.blocks),
+			manyLiveReferences:Array<Int> = [];
+		for (point in WasmGcRoots.analyze(manyRootsFunction))
+			if (point.block == 0 && point.instruction == 0)
+				manyLiveReferences = point.liveReferences;
+		if (manyLiveReferences.length != manyRootArguments.length)
+			throw "Wasm GC-root bitsets lost references across a word boundary";
+		for (index in 0...manyRootArguments.length)
+			if (manyLiveReferences[index] != manyRootArguments[index].id)
+				throw "Wasm GC-root bitsets did not preserve deterministic reference ordering";
 		var referenceProgram = Frontend.compile("function sum(value:Int):Int { var result = 0; while (value > 0) { result = result + value; value = value - 1; } return result; } function main():Int return sum(3);");
+		var visitedRootFunctions:Array<String> = [];
+		var streamedRoots = WasmGcRoots.encodeAndVisit(referenceProgram, function(fn, _) visitedRootFunctions.push(fn.name));
+		if (streamedRoots.compare(WasmGcRoots.encode(referenceProgram)) != 0
+			|| visitedRootFunctions.length != referenceProgram.functions.length)
+			throw "Streaming Wasm GC-root analysis changed canonical metadata or skipped a function";
 		if (new IrInterpreter(referenceProgram).run("main") != 6)
 			throw "The SSA reference interpreter disagrees with canonical IR semantics";
 		var entryLoopBuilder = new IrBuilder(),

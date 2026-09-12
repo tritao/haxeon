@@ -25,6 +25,9 @@ set(WITH_UV OFF CACHE BOOL "Do not build optional HashLink libraries" FORCE)
 set(WITH_VIDEO OFF CACHE BOOL "Do not build optional HashLink libraries" FORCE)
 set(WITH_HEAPS OFF CACHE BOOL "Do not build optional HashLink libraries" FORCE)
 add_subdirectory(vendor/hashlink hashlink EXCLUDE_FROM_ALL)
+set_target_properties(hlprof-live PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "$<1:${CMAKE_SOURCE_DIR}/.tools/hashlink>"
+)
 
 # Haxeon's HDLL calls the patching API compiled into the VM executable. This is
 # the portable CMake equivalent of HashLink's Makefile --export-dynamic flag and
@@ -64,4 +67,4 @@ if(UNIX)
   )
 endif()
 
-add_custom_target(haxeon-native DEPENDS hl haxeon_runtime)
+add_custom_target(haxeon-native DEPENDS hl hlprof-live haxeon_runtime)

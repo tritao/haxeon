@@ -42,6 +42,7 @@ import compiler.ir.cfg.Cfg.CfgBlock;
 import compiler.ir.cfg.Cfg.CfgFunction;
 import compiler.ir.cfg.Cfg.CfgValue;
 import compiler.ir.cfg.CfgVerifier;
+import compiler.backend.wasm.WasmCfgAnalysis;
 import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.Located;
 import compiler.syntax.Lexer;
@@ -442,6 +443,24 @@ class TestMain {
 		if (phis != 2)
 			throw 'Pruned SSA expected two live loop phis, got $phis';
 		Sys.println("PASS: mutable CFG lowers through pruned dominance-based SSA");
+
+		var postdomBuilder = new IrBuilder(),
+			postdomValue = postdomBuilder.constInt(42),
+			postdomBlocks = [postdomBuilder.currentBlock()];
+		for (_ in 1...41)
+			postdomBlocks.push(postdomBuilder.createBlock());
+		for (index in 0...postdomBlocks.length) {
+			postdomBuilder.select(postdomBlocks[index]);
+			if (index + 1 == postdomBlocks.length)
+				postdomBuilder.returnValue(postdomValue);
+			else
+				postdomBuilder.jump(postdomBlocks[index + 1]);
+		}
+		var postdom = new WasmCfgAnalysis(new IrFunction("postdom-chain", [], IrType.I32, postdomBuilder.blocks));
+		for (index in 0...postdomBlocks.length - 1)
+			if (postdom.postImmediate.get(index) != index + 1)
+				throw 'Post-dominator chain failed across bitset word boundary at block $index';
+		Sys.println("PASS: Wasm post-dominator bitsets preserve chains across word boundaries");
 
 		var unterminated = new CfgBlock(0);
 		expectCfgError(new CfgFunction("bad", [], I32, [unterminated], [], 0), "Reachable CFG block 0 in bad has no terminator");
