@@ -4,9 +4,11 @@ import compiler.Compiler;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiType;
 import compiler.ffi.HxiModel.HxiPointerOwnership;
+import compiler.ffi.HxiModel.HxiParameterDirection;
 import compiler.ffi.HxiParser;
 import compiler.ffi.HxiProjection;
 import compiler.ffi.HxiProjectionProfile;
+import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrInstruction;
 
 class HxiParserMain {
@@ -272,7 +274,33 @@ class HxiParserMain {
 		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(value: nullable<ptr<i32>> @out) -> void; }', "cannot be nullable");
 		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(value: ptr<const<i32>> @out) -> void; }', "cannot point to const data");
 		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(value: ptr<ptr<i32>> @out) -> void; }',
-			"requires a scalar or fixed-structure pointee");
+			"requires a scalar, fixed-structure, or explicitly owned opaque-pointer pointee");
+		var pointerOutputs = HxiParser.parse("pointer-outputs.hxi",
+			'interface pointer_outputs @target("x86_64-linux-gnu") @library("pointer_outputs") { opaque Context; extern fn create_owned(value: ptr<nullable<ptr<Context>>> @out @owned("destroy_context")) -> void; extern fn create_borrowed(value: ptr<nullable<ptr<Context>>> @out @borrowed) -> void; extern fn create_required(value: ptr<ptr<Context>> @out @borrowed) -> void; extern fn create_owned_status(result: ptr<nullable<ptr<Context>>> @out @owned("destroy_context")) -> i32; extern fn destroy_context(value: ptr<void>) -> void @symbol("destroy_context"); }');
+		switch pointerOutputs.declarations[1] {
+			case Function("create_owned", [{direction: Out, ownership: Owned("destroy_context")}], _, _, _, _, _, _):
+			case _:
+				throw "opaque pointer output ownership should be retained in the parameter model";
+		}
+		var pointerOutputSource = HxiProjection.source(pointerOutputs),
+			pointerOutputNative = HxiProjection.cNatives(pointerOutputs)[0];
+		expect(pointerOutputSource.indexOf("function create_owned():Null<OwnedContext>") >= 0
+			&& pointerOutputSource.indexOf("function create_borrowed():Null<Context>") >= 0
+			&& pointerOutputSource.indexOf("function create_required():Context") >= 0
+			&& pointerOutputSource.indexOf("class Create_owned_statusOutResult") >= 0
+			&& pointerOutputSource.indexOf("public var result:Null<OwnedContext>") >= 0
+			&& pointerOutputSource.indexOf("native_pointer_owned_from_slot") >= 0
+			&& pointerOutputNative.signature == "11>0"
+			&& pointerOutputNative.arguments[0] == ManagedBytes,
+			"opaque pointer output slots should project nullable typed handles over the unchanged C pointer ABI");
+		expectError('interface bad @target("x86_64-linux-gnu") { opaque Context; extern fn create(value: ptr<ptr<Context>> @out) -> void; }',
+			"requires @borrowed or @owned");
+		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(value: ptr<i32> @out @borrowed) -> void; }',
+			"requires a pointer to an opaque handle");
+		expectError('interface bad @target("x86_64-linux-gnu") { opaque Context; extern fn create(value: ptr<ptr<Context>> @inout @owned("release")) -> void; }',
+			"only with @out");
+		expectError('interface bad @target("x86_64-linux-gnu") { opaque Context; extern fn create(value: ptr<ptr<Context>> @out @owned("release")) -> void; extern fn release(value: ptr<i32>) -> void @symbol("release"); }',
+			"compatible input pointer");
 		expectError('interface bad @target("x86_64-linux-gnu") { callback Read = fn(value: ptr<i32> @out) -> void; }', "cannot use output direction");
 		var buffers = HxiParser.parse("buffers.hxi",
 			'interface buffers @target("x86_64-linux-gnu") @library("buffers") { extern fn read(seed: i32, data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout) -> i32; }');
@@ -335,10 +363,11 @@ class HxiParserMain {
 			"import handles; function main():Int { var value:resource = new resource(); value = handles.create(); var raw:Int = value; var reconstructed:resource = raw; return reconstructed.isValid() ? reconstructed.rawValue() : 0; }");
 		handleCompiler.compile("HandleMain");
 		var opaqueCompiler = new Compiler();
+		opaqueCompiler.addSourceRoot("stdlib");
 		opaqueCompiler.addFfiInterface("opaque_handles.hxi",
-			'interface opaque_handles @target("x86_64-linux-gnu") @library("opaque_handles") { opaque Context; opaque Window; type ContextAlias = Context; extern fn create_context() -> ptr<Context> @borrowed; extern fn maybe_context(value: i32) -> nullable<ptr<Context>> @borrowed; extern fn create_owned_context() -> ptr<Context> @owned("destroy_context"); extern fn maybe_create_owned_context() -> nullable<ptr<Context>> @owned("destroy_context"); extern fn destroy_context(value: ptr<void>) -> void @symbol("destroy_context"); extern fn use_context(value: ptr<ContextAlias>) -> void; extern fn use_window(value: ptr<Window>) -> void; extern fn create_window() -> ptr<Window> @borrowed; }');
+			'interface opaque_handles @target("x86_64-linux-gnu") @library("opaque_handles") { opaque Context; opaque Window; type ContextAlias = Context; extern fn create_context() -> ptr<Context> @borrowed; extern fn maybe_context(value: i32) -> nullable<ptr<Context>> @borrowed; extern fn create_owned_context() -> ptr<Context> @owned("destroy_context"); extern fn maybe_create_owned_context() -> nullable<ptr<Context>> @owned("destroy_context"); extern fn create_owned_out(result: ptr<nullable<ptr<Context>>> @out @owned("destroy_context")) -> void; extern fn create_borrowed_out(result: ptr<nullable<ptr<Context>>> @out @borrowed) -> void; extern fn create_owned_status(result: ptr<nullable<ptr<Context>>> @out @owned("destroy_context")) -> i32; extern fn destroy_context(value: ptr<void>) -> void @symbol("destroy_context"); extern fn use_context(value: ptr<ContextAlias>) -> void; extern fn use_window(value: ptr<Window>) -> void; extern fn create_window() -> ptr<Window> @borrowed; }');
 		opaqueCompiler.update("OpaqueMain.hx",
-			"import opaque_handles; function main():Int { var context:Context = opaque_handles.create_context(); opaque_handles.use_context(context); var maybe:Null<Context> = opaque_handles.maybe_context(1); if (maybe != null) opaque_handles.use_context(maybe); context.isClosed(); var owner:OwnedContext = opaque_handles.create_owned_context(); opaque_handles.use_context(owner.borrow()); owner.isClosed(); owner.close(); var maybeOwner:Null<OwnedContext> = opaque_handles.maybe_create_owned_context(); if (maybeOwner != null) maybeOwner.close(); var window:Window = opaque_handles.create_window(); opaque_handles.use_window(window); return 0; }");
+			"import opaque_handles; function main():Int { var context:Context = opaque_handles.create_context(); opaque_handles.use_context(context); var maybe:Null<Context> = opaque_handles.maybe_context(1); if (maybe != null) opaque_handles.use_context(maybe); context.isClosed(); var owner:OwnedContext = opaque_handles.create_owned_context(); opaque_handles.use_context(owner.borrow()); owner.isClosed(); owner.close(); var maybeOwner:Null<OwnedContext> = opaque_handles.maybe_create_owned_context(); if (maybeOwner != null) maybeOwner.close(); var outOwner:Null<OwnedContext> = opaque_handles.create_owned_out(); var outBorrowed:Null<Context> = opaque_handles.create_borrowed_out(); if (outOwner != null) outOwner.close(); if (outBorrowed != null) opaque_handles.use_context(outBorrowed); var statusOutput = opaque_handles.create_owned_status(); if (statusOutput.result != null) statusOutput.result.close(); if (statusOutput.status == 0) return 1; var window:Window = opaque_handles.create_window(); opaque_handles.use_window(window); return 0; }");
 		opaqueCompiler.compile("OpaqueMain");
 		var borrowedCloseCompiler = new Compiler();
 		borrowedCloseCompiler.addFfiInterface("opaque_handles.hxi",

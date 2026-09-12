@@ -11,6 +11,7 @@ import compiler.ffi.HxiModel.HxiEnumValue;
 import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiModel.HxiDocumentation;
 import compiler.ffi.HxiModel.HxiParameter;
+import compiler.ffi.HxiModel.HxiParameterDirection;
 import compiler.ffi.HxiModel.HxiType;
 import compiler.ffi.HxiModel.HxiPointerOwnership;
 import compiler.ffi.HxiAbi.HxiAbiValue;
@@ -166,19 +167,27 @@ class HxiParser {
 				var start = current().span, name = identifier();
 				expect(":");
 				var type = parseType(),
-					metadata = parseMetadata(["out", "inout", "out_buffer", "in_array"]),
+					metadata = parseMetadata(["out", "inout", "out_buffer", "in_array", "borrowed", "owned"]),
 					out = metadataFlag(metadata, "out"),
 					inout = metadataFlag(metadata, "inout"),
+					borrowed = metadataFlag(metadata, "borrowed"),
+					owned = metadataValue(metadata, "owned", false),
 					bufferSize = metadataValue(metadata, "out_buffer", false),
-					arrayCount = metadataValue(metadata, "in_array", false);
+					arrayCount = metadataValue(metadata, "in_array", false),
+					direction = out ? Out : inout ? InOut : bufferSize != null ? OutBuffer(bufferSize) : arrayCount != null ? InArray(arrayCount) : In;
 				if ((out ? 1 : 0) + (inout ? 1 : 0) + (bufferSize == null ? 0 : 1) + (arrayCount == null ? 0 : 1) > 1)
 					fail('Parameter "$name" cannot combine output direction metadata', start);
-				if (!allowDirections && (out || inout || bufferSize != null || arrayCount != null))
+				if (borrowed && owned != null)
+					fail('Parameter "$name" cannot combine @borrowed and @owned', start);
+				if (!allowDirections && (direction != In || borrowed || owned != null))
 					fail('Callback parameter "$name" cannot use output direction metadata', start);
+				if ((borrowed || owned != null) && direction != Out)
+					fail('Parameter "$name" can use @borrowed or @owned only with @out', start);
 				parameters.push({
 					name: name,
 					type: type,
-					direction: out ? Out : inout ? InOut : bufferSize != null ? OutBuffer(bufferSize) : arrayCount != null ? InArray(arrayCount) : In,
+					direction: direction,
+					ownership: owned != null ? Owned(owned) : borrowed ? Borrowed : Unspecified,
 					span: start.merge(previous().span)
 				});
 			} while (match(","));
@@ -562,7 +571,7 @@ class HxiParser {
 										case _: false;
 									})
 									fail('Output parameter "${parameter.name}" cannot be nullable', parameter.span);
-								validateOutputType(parameter.name, parameter.type, abi, parameter.span);
+								validateOutputType(parameter.name, parameter.type, parameter.ownership, abi, parameter.span);
 							case InArray(countParameter):
 								if (structurePointerType(parameter.type, declarationsByName) == null
 									&& !utf8ArrayPointer(parameter.type)
@@ -600,6 +609,15 @@ class HxiParser {
 							validateReleaseFunction(value, name, result, releaseSymbol, declarations, span);
 						case Borrowed | Unspecified:
 					}
+					for (parameter in parameters)
+						switch parameter.ownership {
+							case Owned(releaseSymbol):
+								var outputValue = pointerPointee(parameter.type, declarations);
+								if (outputValue == null)
+									fail('Owned output parameter "${parameter.name}" must point to a typed opaque pointer', parameter.span);
+								validateReleaseFunction(value, '$name.${parameter.name}', outputValue, releaseSymbol, declarations, parameter.span);
+							case Borrowed | Unspecified:
+						}
 					if (resultPolicy.length != null)
 						validateLengthFunction(value, name, parameters, callConvention, resultPolicy.length, declarations, abi, span);
 				case _:
@@ -695,7 +713,7 @@ class HxiParser {
 			case Array(element, length): 'array<${canonicalTypeKey(element, declarations)},$length>';
 		};
 
-	static function validateOutputType(name:String, type:HxiType, abi:HxiAbi, span:SourceSpan):Void {
+	static function validateOutputType(name:String, type:HxiType, ownership:HxiPointerOwnership, abi:HxiAbi, span:SourceSpan):Void {
 		var pointee = switch type {
 			case Pointer(value):
 				switch value {
@@ -710,8 +728,15 @@ class HxiParser {
 		};
 		switch classified {
 			case IntegerValue(_, _) | EnumerationValue(_, _, _) | HandleValue(_) | FloatValue(_) | AggregateValue(_, _, _):
+				if (ownership != Unspecified)
+					fail('Output parameter "$name" ownership metadata requires a pointer to an opaque handle', span);
+			case PointerValue(_, _, opaquePointee, _) if (opaquePointee != null):
+				switch ownership {
+					case Borrowed | Owned(_):
+					case Unspecified: fail('Opaque pointer output parameter "$name" requires @borrowed or @owned("release_symbol")', span);
+				}
 			case _:
-				fail('Output parameter "$name" currently requires a scalar or fixed-structure pointee', span);
+				fail('Output parameter "$name" currently requires a scalar, fixed-structure, or explicitly owned opaque-pointer pointee', span);
 		}
 	}
 

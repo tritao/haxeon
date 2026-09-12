@@ -885,6 +885,57 @@ static haxeon_native_cached_call *haxeon_native_cached_resolve( const char *libr
 	return entry;
 }
 
+static haxeon_native_pointer *haxeon_native_pointer_wrap_owned( void *value, haxeon_native_cached_call *entry, const char *release_name ) {
+	if( value == NULL || entry == NULL || release_name == NULL || release_name[0] == 0 )
+		hl_error("Owned ordinary C pointer has an invalid slot or release descriptor");
+	void (*release)(void *);
+#ifdef _WIN32
+	release = (void (*)(void *))GetProcAddress((HMODULE)entry->function->control->handle,release_name);
+#else
+	dlerror();
+	release = (void (*)(void *))dlsym(entry->function->control->handle,release_name);
+#endif
+	if( release == NULL ) hl_error("Could not resolve ordinary C pointer release symbol");
+	haxeon_native_pointer *pointer = (haxeon_native_pointer *)hl_gc_alloc_finalizer(sizeof(haxeon_native_pointer));
+	memset(pointer,0,sizeof(*pointer));
+	pointer->finalize = haxeon_native_pointer_finalize;
+	pointer->value = value;
+	pointer->release = release;
+	pointer->control = entry->function->control;
+	pointer->control->references++;
+	return pointer;
+}
+
+HL_PRIM haxeon_native_pointer *HL_NAME(native_pointer_owned_from_slot)( realtime_bytes *bytes, int offset, vbyte *library, vbyte *symbol,
+	vbyte *signature, vbyte *release, bool nullable ) {
+	if( bytes == NULL || library == NULL || symbol == NULL || signature == NULL || release == NULL )
+		hl_error("Owned ordinary C pointer slot has an invalid descriptor");
+	realtime_bytes_bounds(bytes,offset,sizeof(void *));
+	void *value;
+	memcpy(&value,bytes->data + offset,sizeof(value));
+	if( value == NULL ) {
+		if( nullable ) return NULL;
+		hl_error("Non-null ordinary C output pointer returned NULL");
+	}
+	const char *converted = hl_to_utf8((const uchar *)library);
+	char *library_name = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
+	converted = hl_to_utf8((const uchar *)symbol);
+	char *symbol_name = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
+	converted = hl_to_utf8((const uchar *)signature);
+	char *signature_text = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
+	converted = hl_to_utf8((const uchar *)release);
+	char *release_name = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
+	if( library_name == NULL || symbol_name == NULL || signature_text == NULL || release_name == NULL )
+		hl_error("Could not retain ordinary C output pointer descriptor");
+	haxeon_native_cached_call *entry = haxeon_native_cached_resolve(library_name,symbol_name,signature_text);
+	free(library_name);
+	free(symbol_name);
+	free(signature_text);
+	haxeon_native_pointer *pointer = haxeon_native_pointer_wrap_owned(value,entry,release_name);
+	free(release_name);
+	return pointer;
+}
+
 static vdynamic *haxeon_native_invoke_aggregate( vbyte *library, vbyte *symbol, vbyte *signature, vdynamic **arguments, int argument_count,
 	realtime_bytes **aggregate_output ) {
 	if( library == NULL || symbol == NULL || signature == NULL ) hl_error("Null ordinary C call descriptor");
@@ -1023,22 +1074,15 @@ static haxeon_native_pointer *haxeon_native_pointer_invoke( vbyte *library, vbyt
 	converted = hl_to_utf8((const uchar *)release);
 	char *release_name = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
 	if( ownership_text == NULL || release_name == NULL ) hl_error("Could not retain ordinary C pointer policy");
-	haxeon_native_pointer *pointer = (haxeon_native_pointer *)hl_gc_alloc_finalizer(sizeof(haxeon_native_pointer));
-	memset(pointer,0,sizeof(*pointer));
-	pointer->finalize = haxeon_native_pointer_finalize;
-	pointer->value = result->v.bytes;
+	haxeon_native_pointer *pointer;
 	if( strcmp(ownership_text,"owned") == 0 ) {
-		if( release_name[0] == 0 ) hl_error("Owned ordinary C pointer has no release symbol");
-#ifdef _WIN32
-		pointer->release = (void (*)(void *))GetProcAddress((HMODULE)entry->function->control->handle,release_name);
-#else
-		dlerror();
-		pointer->release = (void (*)(void *))dlsym(entry->function->control->handle,release_name);
-#endif
-		if( pointer->release == NULL ) hl_error("Could not resolve ordinary C pointer release symbol");
-		pointer->control = entry->function->control;
-		pointer->control->references++;
-	} else if( strcmp(ownership_text,"borrowed") != 0 )
+		pointer = haxeon_native_pointer_wrap_owned(result->v.bytes,entry,release_name);
+	} else if( strcmp(ownership_text,"borrowed") == 0 ) {
+		pointer = (haxeon_native_pointer *)hl_gc_alloc_finalizer(sizeof(haxeon_native_pointer));
+		memset(pointer,0,sizeof(*pointer));
+		pointer->finalize = haxeon_native_pointer_finalize;
+		pointer->value = result->v.bytes;
+	} else
 		hl_error("Ordinary C pointer result has no ownership policy");
 	free(ownership_text);
 	free(release_name);

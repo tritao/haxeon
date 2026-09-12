@@ -271,9 +271,26 @@ initial pointee value. A non-void C result is returned as the `status` field of
 a generated `<Function>OutResult` class alongside fields named after each
 directed parameter. A void function with one directed parameter returns that
 value directly. Structure `@inout` values are updated in place and also appear
-in the result. Output parameters cannot be nullable. Callback directions,
-pointer-to-pointer outputs, and ownership transfer through output slots remain
-unsupported until they have explicit contracts.
+in the result. The outer pointer that represents an output slot cannot be
+nullable. Callback directions and `@inout` pointer-to-pointer slots remain
+unsupported. Opaque handle output slots are supported when their ownership is
+explicit:
+
+```hxi
+opaque context;
+extern fn create_context(
+    result: ptr<nullable<ptr<context>>> @out @owned("context_release")
+) -> void;
+```
+
+For an opaque `T *` written through a `T **` slot, use `@borrowed` or
+`@owned("release_symbol")` on the `@out` parameter. The inner
+`nullable<ptr<T>>` controls whether the slot may contain `NULL`; for a `void`
+function with one output, the Haxe wrapper returns `Null<T>` or the nullable
+generated owned-handle type, respectively. Owned slot values are adopted into
+the same closeable handle type as owned pointer results. Scalar and
+fixed-structure outputs keep their existing contracts; unannotated or
+non-opaque pointer slots remain rejected.
 
 A conventional two-call byte buffer uses an explicit paired contract:
 

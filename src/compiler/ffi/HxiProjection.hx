@@ -104,13 +104,23 @@ class HxiProjection {
 			constantMembers:Map<String, String> = [],
 			hasCallbacks = false,
 			hasOpaqueTypes = false,
+			hasOwnedPointerOutputs = false,
 			hasConstants = false;
 		for (declaration in model.declarations)
 			if (!isOmitted(omitted, declarationName(declaration)))
 				switch declaration {
-					case Callback(_, _, _, _, _): hasCallbacks = true;
-					case Opaque(_, _): hasOpaqueTypes = true;
-					case Constant(_, _, _): hasConstants = true;
+					case Callback(_, _, _, _, _):
+						hasCallbacks = true;
+					case Opaque(_, _):
+						hasOpaqueTypes = true;
+					case Function(_, parameters, _, _, _, _, _, _):
+						if (Lambda.exists(parameters, parameter -> switch parameter.ownership {
+							case Owned(_): true;
+							case Borrowed | Unspecified: false;
+						}))
+							hasOwnedPointerOutputs = true;
+					case Constant(_, _, _):
+						hasConstants = true;
 					case _:
 				}
 		if (hasCallbacks)
@@ -119,6 +129,8 @@ class HxiProjection {
 			addProjectedName(path, "module", '__hxi_${model.name}_native_pointer_close', "opaque handle close helper", moduleNames);
 			addProjectedName(path, "module", '__hxi_${model.name}_native_pointer_is_closed', "opaque handle state helper", moduleNames);
 		}
+		if (hasOwnedPointerOutputs)
+			addProjectedName(path, "module", '__hxi_${model.name}_native_pointer_owned_from_slot', "owned opaque output helper", moduleNames);
 		if (hasConstants)
 			addProjectedName(path, "module", upperFirst(model.name) + "Constants", "generated constants type", moduleNames);
 
@@ -327,6 +339,7 @@ class HxiProjection {
 			profile = HxiProjectionProfile.empty();
 		var pointerCloseHelper = '__hxi_${model.name}_native_pointer_close',
 			pointerIsClosedHelper = '__hxi_${model.name}_native_pointer_is_closed',
+			pointerOwnedSlotHelper = '__hxi_${model.name}_native_pointer_owned_from_slot',
 			abi = providedAbi == null ? HxiAbi.forInterface(model, visibleDeclarations) : providedAbi,
 			output = new StringBuf(),
 			aggregateDescriptors:Map<String, String> = [];
@@ -342,6 +355,7 @@ class HxiProjection {
 			functionDeclarations:Array<HxiDeclaration> = [];
 		var usesNestedStructures = false,
 			usesPointerFields = false,
+			usesOwnedPointerSlots = false,
 			usesUtf8Fields = false,
 			usesBorrowedBuffers = false,
 			hasCallbacks = false;
@@ -631,8 +645,12 @@ class HxiProjection {
 					for (parameter in parameters)
 						switch parameter.direction {
 							case Out | InOut:
-								var value = outputInfo(parameter.type, abi, profile);
-								if (!value.structure) {
+								var value = outputInfo(parameter, abi, profile);
+								if (value.opaquePointer) {
+									usesPointerFields = true;
+									if (value.owned)
+										usesOwnedPointerSlots = true;
+								} else if (!value.structure) {
 									var access = structAccess(value.code);
 									structAccesses.set(access, {type: value.haxeType, setterType: value.haxeType});
 								}
@@ -652,6 +670,8 @@ class HxiProjection {
 			output.add('@:hlNative("haxeon_runtime", "structSetPointer") extern function __hxi_struct_set_pointer(bytes:haxe.io.Bytes, offset:Int, value:hl.Abstract<"native_pointer">, nullable:Bool):Void;\n');
 			output.add('@:hlNative("haxeon_runtime", "structSetBorrowedBytes") extern function __hxi_struct_set_borrowed_bytes(bytes:haxe.io.Bytes, offset:Int, value:haxe.io.Bytes):Void;\n');
 		}
+		if (usesOwnedPointerSlots)
+			output.add('@:hlNative("haxeon_runtime", "native_pointer_owned_from_slot") extern function $pointerOwnedSlotHelper(bytes:haxe.io.Bytes, offset:Int, library:String, symbol:String, signature:String, release:String, nullable:Bool):hl.Abstract<"native_pointer">;\n');
 		if (usesUtf8Fields) {
 			output.add('@:hlNative("haxeon_runtime", "structGetUtf8") extern function __hxi_struct_get_utf8(bytes:haxe.io.Bytes, offset:Int, nullable:Bool):Null<String>;\n');
 			output.add('@:hlNative("haxeon_runtime", "structSetUtf8") extern function __hxi_struct_set_utf8(bytes:haxe.io.Bytes, offset:Int, value:Null<String>, nullable:Bool):Void;\n');
@@ -687,7 +707,7 @@ class HxiProjection {
 					break;
 				}
 				var outputValue = switch parameters[index].direction {
-					case Out | InOut: outputInfo(parameters[index].type, abi, profile);
+					case Out | InOut: outputInfo(parameters[index], abi, profile);
 					case In | InArray(_) | OutBuffer(_): null;
 				};
 				argumentTypes.push(outputValue == null ? projected.haxeType : outputValue.structure ? outputValue.haxeType : "haxe.io.Bytes");
@@ -720,9 +740,14 @@ class HxiProjection {
 					}
 			output.add('):$resultType;\n');
 			if (directed) {
+				var nativeSymbol = switch functions.get(fn.name) {
+					case Function(_, _, _, symbol, _, _, _, _): symbol == null ? fn.name : symbol;
+					case _: fn.name;
+				};
 				var buffer = outputBuffer(parameters);
 				if (buffer == null)
-					emitOutputWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, abi, profile, model.documentation.get(fn.name));
+					emitOutputWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, abi, profile, library, nativeSymbol, signature,
+						pointerOwnedSlotHelper, model.documentation.get(fn.name));
 				else
 					emitBufferWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, buffer, model.documentation.get(fn.name));
 			}
@@ -787,14 +812,17 @@ class HxiProjection {
 		return null;
 	}
 
-	static function outputInfo(type:compiler.ffi.HxiModel.HxiType, abi:HxiAbi, profile:HxiProjectionProfile):{
+	static function outputInfo(parameter:compiler.ffi.HxiModel.HxiParameter, abi:HxiAbi, profile:HxiProjectionProfile):{
 		haxeType:String,
 		code:Int,
 		size:Int,
 		structure:Bool,
-		handle:Bool
+		handle:Bool,
+		opaquePointer:Bool,
+		nullable:Bool,
+		owned:Bool
 	} {
-		var element = switch type {
+		var element = switch parameter.type {
 			case Pointer(value): value;
 			case _: throw "HXI output parameters require a pointer type";
 		};
@@ -808,14 +836,20 @@ class HxiProjection {
 					code: 12,
 					size: size,
 					structure: true,
-					handle: false
+					handle: false,
+					opaquePointer: false,
+					nullable: false,
+					owned: false
 				};
 			case HandleValue(_): {
 					haxeType: projected.haxeType,
 					code: projected.code,
 					size: 4,
 					structure: false,
-					handle: true
+					handle: true,
+					opaquePointer: false,
+					nullable: false,
+					owned: false
 				};
 			case IntegerValue(_, _) | EnumerationValue(_, _, _) | FloatValue(_):
 				var size = structSize(projected.code);
@@ -826,14 +860,34 @@ class HxiProjection {
 					code: projected.code,
 					size: size,
 					structure: false,
-					handle: false
+					handle: false,
+					opaquePointer: false,
+					nullable: false,
+					owned: false
 				};
-			case _: throw "HXI output parameters currently support scalar and fixed-structure pointees";
+			case PointerValue(_, nullable, opaquePointee, _) if (opaquePointee != null):
+				var owned = switch parameter.ownership {
+					case Owned(_): true;
+					case Borrowed: false;
+					case Unspecified: throw 'Opaque pointer output parameter "${parameter.name}" requires an ownership contract';
+				}, typeName = owned ? ownedTypeName(opaquePointee, profile) : projectedTypeName(opaquePointee, profile);
+				{
+					haxeType: nullable ? 'Null<$typeName>' : typeName,
+					code: 11,
+					size: Std.int(abi.pointerBits / 8),
+					structure: false,
+					handle: false,
+					opaquePointer: true,
+					nullable: nullable,
+					owned: owned
+				};
+			case _: throw "HXI output parameters currently support scalar, fixed-structure, and typed opaque-pointer pointees";
 		};
 	}
 
 	static function emitOutputWrapper(output:StringBuf, nativeName:String, publicName:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>,
-			rawArgumentTypes:Array<String>, resultType:String, abi:HxiAbi, profile:HxiProjectionProfile, documentation:Null<HxiDocumentation>):Void {
+			rawArgumentTypes:Array<String>, resultType:String, abi:HxiAbi, profile:HxiProjectionProfile, library:String, nativeSymbol:String,
+			signature:String, pointerOwnedSlotHelper:String, documentation:Null<HxiDocumentation>):Void {
 		var arguments:Array<String> = [],
 			callArguments:Array<String> = [],
 			setup:Array<String> = [],
@@ -867,7 +921,7 @@ class HxiProjection {
 						callArguments.push('__array_${parameter.name}');
 					}
 				case Out | InOut:
-					var info = outputInfo(parameter.type, abi, profile),
+					var info = outputInfo(parameter, abi, profile),
 						local = "__out_" + parameter.name;
 					if (parameter.direction == InOut)
 						arguments.push('${parameter.name}:${info.haxeType}');
@@ -879,8 +933,19 @@ class HxiProjection {
 							setup.push('__hxi_struct_set${structAccess(info.code)}($local, 0, ${parameter.name});');
 					}
 					callArguments.push(local);
-					var expression = info.structure ? local : '__hxi_struct_get${structAccess(info.code)}($local, 0)';
+					var expression = if (info.opaquePointer) {
+						if (info.owned) {
+							var release = switch parameter.ownership {
+							case Owned(symbol): symbol;
+							case _: "";
+						};
+							'$pointerOwnedSlotHelper($local, 0, "${escape(library)}", "${escape(nativeSymbol)}", "${escape(signature)}", "${escape(release)}", ${info.nullable})';
+						} else
+							'__hxi_struct_get_pointer($local, 0, ${info.nullable})';
+					} else info.structure ? local : '__hxi_struct_get${structAccess(info.code)}($local, 0)';
 					if (info.handle)
+						expression = 'cast($expression, ${info.haxeType})';
+					else if (info.opaquePointer)
 						expression = 'cast($expression, ${info.haxeType})';
 					values.push({
 						name: parameter.name,
@@ -975,7 +1040,7 @@ class HxiProjection {
 						callArguments.push(parameter.name);
 					}
 				case InOut:
-					var info = outputInfo(parameter.type, abi, profile);
+					var info = outputInfo(parameter, abi, profile);
 					arguments.push('${parameter.name}:${info.haxeType}');
 					callArguments.push(parameter.name);
 				case Out:
@@ -998,7 +1063,7 @@ class HxiProjection {
 				case Out | InOut:
 					count++;
 					if (valueType == "")
-						valueType = outputInfo(parameter.type, abi, profile).haxeType;
+						valueType = outputInfo(parameter, abi, profile).haxeType;
 				case In | InArray(_) | OutBuffer(_):
 			}
 		return resultType == "Void" && count == 1 ? valueType : count == 0 ? resultType : upperFirst(name) + "OutResult";
