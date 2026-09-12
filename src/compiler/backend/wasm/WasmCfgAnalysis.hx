@@ -53,30 +53,31 @@ class WasmCfgAnalysis {
 	}
 
 	function computePostDominators():Void {
-		var exits:Array<Int> = [];
+		var exits:Map<Int, Bool> = [], blockIndices:Map<Int, Int> = [];
+		for (index in 0...graph.order.length)
+			blockIndices.set(graph.order[index], index);
 		for (id in graph.order)
 			if (requiredSuccessors(graph.successors, id).length == 0)
-				exits.push(id);
-		if (exits.length == 0)
+				exits.set(id, true);
+		if (!exits.keys().hasNext())
 			throw 'CFG ${functionName} has no exit block';
-		var all:Map<Int, Bool> = [];
+		var wordCount = (graph.order.length + 31) >> 5,
+			all = fullBitSet(wordCount),
+			sets:Map<Int, Array<Int>> = [];
 		for (id in graph.order)
-			all.set(id, true);
-		var sets:Map<Int, Map<Int, Bool>> = [];
-		for (id in graph.order)
-			sets.set(id, exits.indexOf(id) >= 0 ? [id => true] : copySet(all));
+			sets.set(id, exits.exists(id) ? singletonBitSet(requiredIndex(blockIndices, id), wordCount) : all.copy());
 		var changed = true;
 		while (changed) {
 			changed = false;
 			for (id in graph.order) {
-				if (exits.indexOf(id) >= 0)
+				if (exits.exists(id))
 					continue;
 				var successors = requiredSuccessors(graph.successors, id),
-					next = copySet(all);
+					next = all.copy();
 				for (successor in successors)
-					next = intersectSets(next, requiredSet(sets, successor));
-				next.set(id, true);
-				if (!sameSet(next, requiredSet(sets, id))) {
+					intersectBitSet(next, requiredBitSet(sets, successor));
+				setBit(next, requiredIndex(blockIndices, id));
+				if (!sameBitSet(next, requiredBitSet(sets, id))) {
 					sets.set(id, next);
 					changed = true;
 				}
@@ -84,14 +85,15 @@ class WasmCfgAnalysis {
 		}
 		for (id in graph.order) {
 			var candidates:Array<Int> = [];
-			for (candidate in requiredSet(sets, id).keys())
-				if (candidate != id)
-					candidates.push(candidate);
+			var set = requiredBitSet(sets, id);
+			for (index in 0...graph.order.length)
+				if (hasBit(set, index) && graph.order[index] != id)
+					candidates.push(graph.order[index]);
 			var immediate:Null<Int> = null;
 			for (candidate in candidates) {
 				var closest = true;
 				for (other in candidates)
-					if (other != candidate && requiredSet(sets, other).exists(candidate)) {
+					if (other != candidate && hasBit(requiredBitSet(sets, other), requiredIndex(blockIndices, candidate))) {
 						closest = false;
 						break;
 					}
@@ -199,30 +201,37 @@ class WasmCfgAnalysis {
 		return true;
 	}
 
-	static function copySet(source:Map<Int, Bool>):Map<Int, Bool> {
-		var result:Map<Int, Bool> = [];
-		for (key in source.keys())
-			result.set(key, true);
+	static function fullBitSet(wordCount:Int):Array<Int> {
+		var result = [];
+		for (_ in 0...wordCount)
+			result.push(-1);
 		return result;
 	}
 
-	static function intersectSets(left:Map<Int, Bool>, right:Map<Int, Bool>):Map<Int, Bool> {
-		var result:Map<Int, Bool> = [];
-		for (key in left.keys())
-			if (right.exists(key))
-				result.set(key, true);
+	static function singletonBitSet(index:Int, wordCount:Int):Array<Int> {
+		var result = [];
+		for (_ in 0...wordCount)
+			result.push(0);
+		setBit(result, index);
 		return result;
 	}
 
-	static function sameSet(left:Map<Int, Bool>, right:Map<Int, Bool>):Bool {
-		for (key in left.keys())
-			if (!right.exists(key))
-				return false;
-		for (key in right.keys())
-			if (!left.exists(key))
+	static function intersectBitSet(left:Array<Int>, right:Array<Int>):Void
+		for (index in 0...left.length)
+			left[index] &= right[index];
+
+	static function sameBitSet(left:Array<Int>, right:Array<Int>):Bool {
+		for (index in 0...left.length)
+			if (left[index] != right[index])
 				return false;
 		return true;
 	}
+
+	static inline function setBit(set:Array<Int>, index:Int):Void
+		set[index >> 5] |= 1 << (index & 31);
+
+	static inline function hasBit(set:Array<Int>, index:Int):Bool
+		return set[index >> 5] & (1 << (index & 31)) != 0;
 
 	static function requiredSuccessors(source:Map<Int, Array<Int>>, block:Int):Array<Int> {
 		if (!source.exists(block))
@@ -230,7 +239,7 @@ class WasmCfgAnalysis {
 		return source.get(block);
 	}
 
-	static function requiredSet(source:Map<Int, Map<Int, Bool>>, block:Int):Map<Int, Bool> {
+	static function requiredBitSet(source:Map<Int, Array<Int>>, block:Int):Array<Int> {
 		if (!source.exists(block))
 			throw 'CFG is missing dominance set for block $block';
 		return source.get(block);
