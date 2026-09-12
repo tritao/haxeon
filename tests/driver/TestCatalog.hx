@@ -52,6 +52,7 @@ class TestCatalog {
 		"WasmBackendMain",
 		"CHeaderImporterMain",
 		"HxiAuditMain",
+		"HxiFlagsMain",
 		"HxiParserMain",
 		"ManagedBytesMain",
 		"HxiAbiMain",

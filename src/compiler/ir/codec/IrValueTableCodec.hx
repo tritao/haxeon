@@ -8,7 +8,7 @@ import haxe.io.BytesOutput;
 
 /** Canonical value table used by persisted IR functions. */
 class IrValueTableCodec {
-	static inline final VERSION = 2;
+	static inline final VERSION = 3;
 	public static inline final MAX_VALUES = 0x100000;
 
 	public static function encode(values:Array<IrValue>):HaxeBytes {

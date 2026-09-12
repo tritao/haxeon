@@ -23,6 +23,24 @@ extern class Int64 {
 	@:hlNative("haxeon_runtime", "__int64_sub")
 	public static function sub(left:haxe.Int64, right:haxe.Int64):haxe.Int64;
 
+	@:hlNative("haxeon_runtime", "__int64_and")
+	public static function and(left:haxe.Int64, right:haxe.Int64):haxe.Int64;
+
+	@:hlNative("haxeon_runtime", "__int64_or")
+	public static function or(left:haxe.Int64, right:haxe.Int64):haxe.Int64;
+
+	@:hlNative("haxeon_runtime", "__int64_xor")
+	public static function xor(left:haxe.Int64, right:haxe.Int64):haxe.Int64;
+
+	@:hlNative("haxeon_runtime", "__int64_shl")
+	public static function shl(value:haxe.Int64, shift:Int):haxe.Int64;
+
+	@:hlNative("haxeon_runtime", "__int64_shr")
+	public static function shr(value:haxe.Int64, shift:Int):haxe.Int64;
+
+	@:hlNative("haxeon_runtime", "__int64_ushr")
+	public static function ushr(value:haxe.Int64, shift:Int):haxe.Int64;
+
 	@:hlNative("haxeon_runtime", "__int64_compare")
 	public static function compare(left:haxe.Int64, right:haxe.Int64):Int;
 

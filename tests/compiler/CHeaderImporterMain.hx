@@ -46,8 +46,16 @@ class CHeaderImporterMain {
 			&& first.indexOf("SAMPLE_MODE_ALTERNATE = 1") >= 0
 			&& first.indexOf("type sample_mode = u32") < 0,
 			"annotated fixed-width enum aliases should import as nominal HXI enums");
+		expect(first.indexOf("flags sample_flags : u32") >= 0
+			&& first.indexOf("SAMPLE_FLAGS_READ_WRITE = 3") >= 0
+			&& first.indexOf("flags sample_wide_flags : u64") >= 0
+			&& first.indexOf("SAMPLE_WIDE_FLAGS_HIGH = -9223372036854775808") >= 0,
+			"annotated fixed-width bitmask aliases should retain flags semantics and 64-bit values");
 		expect(first.indexOf("extern fn sample_check_mode(value: sample_mode) -> sample_mode") >= 0,
 			"annotated enum aliases should retain their nominal type in function signatures");
+		expect(first.indexOf("extern fn sample_check_flags(value: sample_flags) -> sample_flags") >= 0
+			&& first.indexOf("extern fn sample_check_wide_flags(value: sample_wide_flags) -> sample_wide_flags") >= 0,
+			"annotated flags aliases should retain their nominal type in function signatures");
 		expect(first.indexOf("int_fast16_t") < 0, "system-header declarations should not leak into imported HXI");
 		var parsed = HxiParser.parse("import_fixture.hxi", first);
 		expect(parsed.target == "x86_64-linux-gnu", "generated HXI should satisfy the validated parser contract");
@@ -56,6 +64,10 @@ class CHeaderImporterMain {
 		expect(projected.indexOf("static inline function size():Int return 32") >= 0, "projected structures should expose their generated ABI size");
 		expect(projected.indexOf("function set_title(value:Null<String>)") >= 0 && projected.indexOf("structSetUtf8") >= 0,
 			"UTF-8 structure fields should project managed accessors");
+		expect(projected.indexOf("enum abstract SampleFlags(Int)") >= 0
+			&& projected.indexOf("abstract SampleWideFlags(haxe.Int64)") >= 0
+			&& projected.indexOf("function contains(flag:SampleWideFlags):Bool") >= 0,
+			"C header flags should project to nominal Haxe bitmasks at both integer widths");
 		expect(named.indexOf('interface Sample @target("x86_64-linux-gnu") @library("sample")') >= 0,
 			"callers should be able to select a stable projected interface name");
 		var dependent = CHeaderImporter.importHeader("tests/ffi/import_fixture.h", "x86_64-linux-gnu", ["tests/ffi"], "clang", "sample", "Dependent",

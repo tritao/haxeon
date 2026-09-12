@@ -120,7 +120,7 @@ class WasmGcRoots {
 	static function isSafepoint(instruction:IrInstruction):Bool
 		return switch instruction {
 			case Call(_, _, _), CNativeCall(_, _, _), CallClosure(_, _, _), MethodCall(_, _, _, _), NewObject(_, _), InstanceClosure(_, _, _),
-				MakeEnum(_, _, _, _), BeginTry(_, _): true;
+				MakeEnum(_, _, _, _), IteratorNew(_, _), BeginTry(_, _): true;
 			case ToDyn(_, value):
 				switch value.type {
 					case I32, Bool, I64, F64: true;

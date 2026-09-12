@@ -70,6 +70,9 @@ enum CfgInstruction {
 	ArrayGet(output:CfgValue, array:CfgValue, index:CfgValue);
 	ArraySet(array:CfgValue, index:CfgValue, value:CfgValue);
 	ArraySize(output:CfgValue, array:CfgValue);
+	IteratorNew(output:CfgValue, array:CfgValue);
+	IteratorHasNext(output:CfgValue, iterator:CfgValue);
+	IteratorNext(output:CfgValue, iterator:CfgValue);
 	MakeEnum(output:CfgValue, typeName:String, constructor:Int, arguments:Array<CfgValue>);
 	EnumIndex(output:CfgValue, value:CfgValue);
 	EnumField(output:CfgValue, value:CfgValue, constructor:Int, field:Int);

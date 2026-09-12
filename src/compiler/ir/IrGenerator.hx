@@ -408,7 +408,7 @@ class IrGenerator {
 					builder.branch(builder.load(breakFlag, Bool), afterBlock, checkBlock);
 					builder.select(checkBlock);
 					if (iterator)
-						builder.branch(builder.call("__iterator_has_next", [builder.load(arrayName, arrayType)], Bool), bodyBlock, afterBlock);
+						builder.branch(builder.iteratorHasNext(builder.load(arrayName, arrayType)), bodyBlock, afterBlock);
 					else {
 						var indexValue = builder.add(builder.load(indexName, I32), builder.constInt(1));
 						builder.store(indexName, indexValue);
@@ -417,8 +417,8 @@ class IrGenerator {
 					}
 					builder.select(bodyBlock);
 					if (iterator) {
-						var next = builder.call("__iterator_next", [builder.load(arrayName, arrayType)], Dyn);
-						initializeLocal(name, builder.safeCast(next, elementType), builder, localTypes);
+						var next = builder.iteratorNext(builder.load(arrayName, arrayType), elementType);
+						initializeLocal(name, next, builder, localTypes);
 					} else {
 						var bodyArray = builder.load(arrayName, arrayType),
 							bodyIndex = builder.load(indexName, I32);
@@ -566,7 +566,7 @@ class IrGenerator {
 	 */
 	static function requiresDynamicBox(type:IrType):Bool
 		return switch type {
-			case Abstract(_), Bytes, ManagedBytes, TypeRef: true;
+			case Abstract(_), Bytes, ManagedBytes, TypeRef, Iterator(_): true;
 			default: false;
 		};
 
@@ -614,6 +614,10 @@ class IrGenerator {
 				};
 			case Array(element): switch right {
 					case Array(other): sameIrType(element, other);
+					default: false;
+				};
+			case Iterator(element): switch right {
+					case Iterator(other): sameIrType(element, other);
 					default: false;
 				};
 			case Function(arguments, result): switch right {
@@ -779,6 +783,9 @@ class IrGenerator {
 				lowerType(a.type) == Bytes ? builder.call("__string_equal", [left, right],
 					Bool) : lowerType(a.type) == Dyn
 				|| lowerType(b.type) == Dyn ? builder.call("__dynamic_equal", [left, right], Bool) : builder.equal(left, right);
+			case TCall("__iterator_new", [source]): builder.iteratorNew(lowerExpression(iteratorArraySource(source), builder, localTypes));
+			case TCall("__iterator_has_next", [iterator]): builder.iteratorHasNext(lowerExpression(iterator, builder, localTypes));
+			case TCall("__iterator_next", [iterator]): builder.iteratorNext(lowerExpression(iterator, builder, localTypes), lowerType(expression.type));
 			case TCall("__std_is_of_type", args):
 				if (args.length != 2)
 					throw "Std.isOfType intrinsic requires value and type operands";
@@ -1020,7 +1027,7 @@ class IrGenerator {
 						case TRange: TInt;
 						default: throw "Array comprehension requires an array or iterator iterable";
 					} : mapTypes.key,
-					inputType:IrType = iterator ? Abstract("realtime_iterator") : Array(lowerType(keyType)),
+					inputType:IrType = iterator ? lowerType(iterable.type) : Array(lowerType(keyType)),
 					resultElement = switch expression.type {
 						case TArray(element): element;
 						default: throw "Array comprehension requires an array result";
@@ -1056,13 +1063,13 @@ class IrGenerator {
 				builder.select(conditionBlock);
 				var index = builder.load(indexName, I32);
 				if (iterator)
-					builder.branch(builder.call("__iterator_has_next", [builder.load(inputName, inputType)], Bool), bodyBlock, afterBlock);
+					builder.branch(builder.iteratorHasNext(builder.load(inputName, inputType)), bodyBlock, afterBlock);
 				else
 					builder.branch(builder.less(index, builder.arraySize(builder.load(inputName, inputType))), bodyBlock, afterBlock);
 				builder.select(bodyBlock);
 				if (iterator) {
-					var next = builder.call("__iterator_next", [builder.load(inputName, inputType)], Dyn);
-					builder.store(keyName, builder.safeCast(next, lowerType(keyType)));
+					var next = builder.iteratorNext(builder.load(inputName, inputType), lowerType(keyType));
+					builder.store(keyName, next);
 				} else
 					builder.store(keyName, builder.arrayGet(builder.load(inputName, inputType), builder.load(indexName, I32), lowerType(keyType)));
 				if (valueName != null)
@@ -1114,7 +1121,7 @@ class IrGenerator {
 						case TRange: TInt;
 						default: throw "Map comprehension requires an array or iterator iterable";
 					} : sourceMapTypes.key,
-					inputType:IrType = iterator ? Abstract("realtime_iterator") : Array(lowerType(itemType)),
+					inputType:IrType = iterator ? lowerType(iterable.type) : Array(lowerType(itemType)),
 					resultTypes:MapTypes = switch expression.type {
 						case TMap(mapKey, mapValue): {key: mapKey, value: mapValue};
 						default: throw "Map comprehension requires a map result";
@@ -1143,13 +1150,13 @@ class IrGenerator {
 				builder.jump(conditionBlock);
 				builder.select(conditionBlock);
 				if (iterator)
-					builder.branch(builder.call("__iterator_has_next", [builder.load(inputName, inputType)], Bool), bodyBlock, afterBlock);
+					builder.branch(builder.iteratorHasNext(builder.load(inputName, inputType)), bodyBlock, afterBlock);
 				else
 					builder.branch(builder.less(builder.load(indexName, I32), builder.arraySize(builder.load(inputName, inputType))), bodyBlock, afterBlock);
 				builder.select(bodyBlock);
 				if (iterator) {
-					var next = builder.call("__iterator_next", [builder.load(inputName, inputType)], Dyn);
-					builder.store(keyName, builder.safeCast(next, lowerType(itemType)));
+					var next = builder.iteratorNext(builder.load(inputName, inputType), lowerType(itemType));
+					builder.store(keyName, next);
 				} else
 					builder.store(keyName, builder.arrayGet(builder.load(inputName, inputType), builder.load(indexName, I32), lowerType(itemType)));
 				if (valueName != null)
@@ -1546,6 +1553,17 @@ class IrGenerator {
 			default: {key: TVoid, value: TVoid};
 		};
 
+	static function iteratorArraySource(source:TypedExpression):TypedExpression {
+		var unwrapped = switch source.expression {
+			case TToDynamic(value), TCast(value), TAbiCast(value), TNullableWrap(value): iteratorArraySource(value);
+			default: source;
+		};
+		return switch unwrapped.type {
+			case TArray(_): unwrapped;
+			default: throw 'Iterator source must be an Array, got ${unwrapped.type}';
+		};
+	}
+
 	public static function lowerType(type:CompilerType):IrType
 		return switch type {
 			case TAbstract(_, _, representation): lowerType(representation);
@@ -1573,7 +1591,7 @@ class IrGenerator {
 			case TNull: Void;
 			case TNullable(element): TypeRelations.isReference(element) ? lowerType(element) : Dyn;
 			case TArray(element): Array(lowerType(element));
-			case TIterator(_): Abstract("realtime_iterator");
+			case TIterator(element): Iterator(lowerType(element));
 			case TFunction(arguments, result): Function([for (argument in arguments) lowerType(argument)], lowerType(result));
 			case TAnonymous(name, _): Obj(name);
 		};

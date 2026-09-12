@@ -20,7 +20,7 @@ import compiler.ir.SourceProvenance.SourceOrigin;
 
 /** Deterministic framing for a complete SSA IR function. */
 class IrFunctionStateCodec {
-	static inline final VERSION = 6;
+	static inline final VERSION = 8;
 	static inline final MAX_BLOCKS = 0x100000;
 	static inline final MAX_INSTRUCTIONS = 0x1000000;
 
@@ -236,7 +236,8 @@ class IrFunctionStateCodec {
 				TypeValue(output, _), Catch(output), GlobalGet(output, _), StaticClosure(output, _), NewObject(output, _):
 				collectValue(output, values);
 			case ToDyn(output, value), IntToFloat(output, value), IntToInt64(output, value), FloatToInt(output, value), SafeCast(output, value),
-				InstanceClosure(output, _, value), ToVirtual(output, value), ArraySize(output, value), EnumIndex(output, value), EnumField(output, value, _, _):
+				InstanceClosure(output, _, value), ToVirtual(output, value), ArraySize(output, value), IteratorNew(output, value),
+				IteratorHasNext(output, value), IteratorNext(output, value), EnumIndex(output, value), EnumField(output, value, _, _):
 				collectValue(output, values);
 				collectValue(value, values);
 			case Add(output, left, right), Sub(output, left, right), Mul(output, left, right), Div(output, left, right), Mod(output, left, right),

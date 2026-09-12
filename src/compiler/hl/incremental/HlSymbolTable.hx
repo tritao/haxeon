@@ -209,6 +209,7 @@ class HlSymbolTable {
 		types.push(switch type {
 			case ManagedBytes: HlTypeDef.Abstract(internString("realtime_bytes"));
 			case Abstract(name): HlTypeDef.Abstract(internString(name));
+			case Iterator(_): HlTypeDef.Abstract(internString("realtime_iterator"));
 			default: HlTypeDef.Simple(switch type {
 					case Void: HlType.Void;
 					case I32: HlType.I32;
@@ -220,6 +221,7 @@ class HlSymbolTable {
 					case Dyn: HlType.Dyn;
 					case TypeRef: HlType.Type;
 					case Array(_): HlType.Array;
+					case Iterator(_): throw 'Iterator type must be handled by the outer type switch';
 					case Obj(name): throw 'Object type "$name" must be registered before use';
 					case Abstract(name): throw 'Abstract type "$name" must be handled by the outer type switch';
 					case Virtual(name): throw 'Virtual type "$name" must be registered before use';
@@ -453,6 +455,7 @@ class HlSymbolTable {
 			case Dyn: "dyn";
 			case TypeRef: "type";
 			case Array(element): 'array:${typeKey(element)}';
+			case Iterator(_): 'abstract:realtime_iterator';
 			case Obj(name): 'obj:$name';
 			case Abstract(name): 'abstract:$name';
 			case Enum(name): 'enum:$name';

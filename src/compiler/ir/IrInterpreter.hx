@@ -143,6 +143,15 @@ class IrInterpreter {
 				arraySet(value(values, array), Std.int(value(values, index)), value(values, input));
 				null;
 			case ArraySize(_, array): interpArray(value(values, array)).values.length;
+			case IteratorNew(_, array): new InterpIterator(interpArray(value(values, array)));
+			case IteratorHasNext(_, iterator):
+				var cursor = interpIterator(value(values, iterator));
+				cursor.position < cursor.values.values.length;
+			case IteratorNext(_, iterator):
+				var cursor = interpIterator(value(values, iterator));
+				if (cursor.position >= cursor.values.values.length)
+					throw "Iterator has no next value";
+				cursor.values.values[cursor.position++];
 			case Call(_, name, arguments):
 				var args = [for (argument in arguments) value(values, argument)];
 				functions.exists(name) ? execute(functions.get(name), args) : executeNative(name, args);
@@ -272,6 +281,13 @@ class IrInterpreter {
 		return array;
 	}
 
+	function interpIterator(value:Dynamic):InterpIterator {
+		var iterator:InterpIterator = cast value;
+		if (iterator == null)
+			throw "IR interpreter iterator access on null";
+		return iterator;
+	}
+
 	function interpObject(value:Dynamic):InterpObject {
 		var object:InterpObject = cast value;
 		if (object == null)
@@ -313,7 +329,8 @@ class IrInterpreter {
 				UnsignedShiftRight(output, _, _), Less(output, _, _), LessEqual(output, _, _), Equal(output, _, _), Call(output, _, _),
 				CNativeCall(output, _, _), StaticClosure(output, _), InstanceClosure(output, _, _), CallClosure(output, _, _), ToVirtual(output, _),
 				MethodCall(output, _, _, _), NewObject(output, _), FieldGet(output, _, _), ArrayGet(output, _, _), ArraySize(output, _),
-				MakeEnum(output, _, _, _), EnumIndex(output, _), EnumField(output, _, _, _): output;
+				IteratorNew(output, _), IteratorHasNext(output, _), IteratorNext(output, _), MakeEnum(output, _, _, _), EnumIndex(output, _),
+				EnumField(output, _, _, _): output;
 			case BeginTry(_, _), EndTry(_), GlobalSet(_, _), FieldSet(_, _, _), ArraySet(_, _, _): null;
 		};
 }
@@ -334,6 +351,14 @@ private class InterpArray {
 		this.values = values;
 		this.capacity = capacity == null ? values.length : capacity;
 	}
+}
+
+private class InterpIterator {
+	public final values:InterpArray;
+	public var position:Int = 0;
+
+	public function new(values:InterpArray)
+		this.values = values;
 }
 
 private class InterpEnum {

@@ -32,6 +32,9 @@ class WasmLayout {
 	public static inline final ARRAY_CAPACITY_OFFSET = 12;
 	public static inline final ARRAY_DATA_POINTER_OFFSET = 16;
 	public static inline final ARRAY_HEADER_SIZE = 24;
+	public static inline final ITERATOR_ARRAY_OFFSET = 8;
+	public static inline final ITERATOR_POSITION_OFFSET = 12;
+	public static inline final ITERATOR_SIZE = 16;
 	public static inline final DYN_PAYLOAD_OFFSET = 4;
 	public static inline final DYN_I32_SIZE = 8;
 	public static inline final DYN_I64_SIZE = 16;

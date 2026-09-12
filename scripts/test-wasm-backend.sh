@@ -9,6 +9,7 @@ if [[ ! -x "$haxe_bin" ]]; then
 fi
 
 "$haxe_bin" --cwd "$root_dir" -cp src -cp tests/compiler --run WasmBackendMain
+bash "$root_dir/scripts/test-wasm-gc-reuse.sh"
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm32 --output=out/wasm-cli-backend.wasm --entry=add \
 	--root=tests/programs tests/programs/add.hx
@@ -34,6 +35,9 @@ fi
 	--target=wasm32 --output=out/wasm-cli-array-growth.wasm --entry=array-growth-wasm \
 	--root=tests/programs tests/programs/array-growth-wasm.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --output=out/wasm-cli-array-iterator.wasm --entry=array-iterator-wasm \
+	--root=tests/programs tests/programs/array-iterator-wasm.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm32 --output=out/wasm-cli-map-basic.wasm --entry=map-basic \
 	--root=tests/programs tests/programs/map-basic.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
@@ -54,9 +58,6 @@ fi
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm32 --output=out/wasm-cli-map-anonymous-enum.wasm --entry=map-anonymous-enum \
 	--root=tests/programs tests/programs/map-anonymous-enum.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
-	--target=wasm32 --output=out/wasm-cli-gc-reuse.wasm --entry=wasm-gc-reuse \
-	--root=tests/programs tests/programs/wasm-gc-reuse.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm32 --output=out/wasm-cli-cnative-import.wasm --entry=wasm-cnative-import \
 	--root=tests tests/wasm-cnative-import.hx
@@ -104,6 +105,7 @@ const cases = [
   ["out/wasm-cli-array-slice.wasm", 42],
 	["out/wasm-cli-array-mutation.wasm", 42],
 	["out/wasm-cli-array-growth.wasm", 42],
+	["out/wasm-cli-array-iterator.wasm", 42],
 	["out/wasm-cli-map-basic.wasm", 42],
 	["out/wasm-cli-map-int.wasm", 42],
 	["out/wasm-cli-map-primitive-types.wasm", 42],
@@ -111,7 +113,6 @@ const cases = [
 	["out/wasm-cli-map-key-value-for-in.wasm", 42],
 	["out/wasm-cli-map-object.wasm", 42],
 	["out/wasm-cli-map-anonymous-enum.wasm", 42],
-	["out/wasm-cli-gc-reuse.wasm", 42],
 	["out/wasm-cli-cnative-import.wasm", 42],
 	["out/wasm-cli-hxi-retained.wasm", 42],
 	["out/wasm-cli-hxi-retained-imported.wasm", 42],

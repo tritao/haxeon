@@ -6,7 +6,7 @@ import haxe.io.BytesOutput;
 
 /** Deterministic, strictly validated persistence for IR types. */
 class IrTypeCodec {
-	static inline final VERSION = 2;
+	static inline final VERSION = 3;
 	static inline final MAX_DEPTH = 64;
 	static inline final MAX_ARGUMENTS = 0x10000;
 	static inline final MAX_STRING_BYTES = 0x100000;
@@ -61,6 +61,9 @@ class IrTypeCodec {
 			case Array(element):
 				output.writeByte(7);
 				writeType(output, element, depth + 1);
+			case Iterator(element):
+				output.writeByte(15);
+				writeType(output, element, depth + 1);
 			case Enum(name):
 				writeNamed(output, 8, name);
 			case Obj(name):
@@ -92,6 +95,7 @@ class IrTypeCodec {
 			case 3: F64;
 			case 4: Bytes;
 			case 14: ManagedBytes;
+			case 15: Iterator(readType(input, totalLength, depth + 1));
 			case 5: Dyn;
 			case 6: TypeRef;
 			case 7: Array(readType(input, totalLength, depth + 1));

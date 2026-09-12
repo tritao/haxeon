@@ -19,6 +19,7 @@ typedef BackendOptions = {
 	final ?importMemory:Bool;
 	final ?memoryBase:Int;
 	final ?memoryContract:MemoryContract;
+	final ?wasmMemoryStats:Bool;
 	final ?exports:Array<String>;
 }
 

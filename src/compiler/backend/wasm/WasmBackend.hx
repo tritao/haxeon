@@ -120,6 +120,13 @@ class WasmBackend implements Backend {
 		module.globals.push({type: I32, mutable: true, init: [I32Const(metadataBase)]});
 		var freeHead = module.globals.length;
 		module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
+		var allocationCount = -1, allocationBytes = -1;
+		if (options.wasmMemoryStats == true) {
+			allocationCount = module.globals.length;
+			module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
+			allocationBytes = module.globals.length;
+			module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
+		}
 		var globals:Map<String, Int> = [];
 		var rootGlobals:Array<Int> = [];
 		for (field in program.staticFields) {
@@ -133,7 +140,7 @@ class WasmBackend implements Backend {
 		addRuntimeImports(module, program, usedNatives);
 		var mark = addGcMark(module, metadataBase, metadataTop);
 		var collector = addGcCollector(module, rootFrameTop, metadataBase, metadataTop, freeHead, mark, rootGlobals);
-		var allocator = addAllocator(module, collector, metadataBase, metadataTop, freeHead);
+		var allocator = addAllocator(module, collector, metadataBase, metadataTop, freeHead, allocationCount, allocationBytes);
 		functions.set("__haxeon_alloc", allocator);
 		addRuntimeFunctions(module, functions, program, allocator);
 		for (native in program.natives) {
@@ -198,7 +205,20 @@ class WasmBackend implements Backend {
 				throw 'Wasm export "$exported" is not a reachable function';
 			module.exports.push({name: exported, functionIndex: exportIndex});
 		}
+		if (options.wasmMemoryStats == true) {
+			addMemoryStatExport(module, "haxeon.memory.heap_base", [I32Const(heapStart)]);
+			addMemoryStatExport(module, "haxeon.memory.heap_top", [GlobalGet(0)]);
+			addMemoryStatExport(module, "haxeon.memory.metadata_base", [I32Const(metadataBase)]);
+			addMemoryStatExport(module, "haxeon.memory.metadata_top", [GlobalGet(metadataTop)]);
+			addMemoryStatExport(module, "haxeon.memory.allocation_count", [GlobalGet(allocationCount)]);
+			addMemoryStatExport(module, "haxeon.memory.allocated_bytes", [GlobalGet(allocationBytes)]);
+		}
 		return {target: options.target, bytes: WasmEncoder.encode(module)};
+	}
+
+	static function addMemoryStatExport(module:WasmModule, name:String, body:Array<WasmInstruction>):Void {
+		var index = module.addFunction(new WasmFunction(name, {parameters: [], results: [I32]}, [], body));
+		module.exports.push({name: name, functionIndex: index});
 	}
 
 	static function addCNativeImports(module:WasmModule, functions:Map<String, Int>, program:IrProgram, used:Map<String, Bool>):Void {
@@ -2895,16 +2915,23 @@ class WasmBackend implements Backend {
 		return module.addFunction(new WasmFunction("__haxeon_gc_collect", type, [for (_ in 0...8) {type: I32}], body));
 	}
 
-	static function addAllocator(module:WasmModule, collector:Int, metadataBase:Int, metadataTop:Int, freeHead:Int):Int {
+	static function addAllocator(module:WasmModule, collector:Int, metadataBase:Int, metadataTop:Int, freeHead:Int, allocationCount:Int,
+			allocationBytes:Int):Int {
 		var type:WasmFunctionType = {parameters: [I32], results: [I32]};
 		var index = module.addFunction(new WasmFunction("__haxeon_alloc", type));
-		var body:Array<WasmInstruction> = [
-			LocalGet(0),
-			I32Const(7),
-			I32Add,
-			I32Const(-8),
-			I32And,
-			LocalSet(0),
+		var body:Array<WasmInstruction> = [LocalGet(0), I32Const(7), I32Add, I32Const(-8), I32And, LocalSet(0),];
+		if (allocationCount >= 0 && allocationBytes >= 0)
+			body = body.concat([
+				GlobalGet(allocationCount),
+				I32Const(1),
+				I32Add,
+				GlobalSet(allocationCount),
+				GlobalGet(allocationBytes),
+				LocalGet(0),
+				I32Add,
+				GlobalSet(allocationBytes)
+			]);
+		body = body.concat([
 			Call(collector),
 			I32Const(0),
 			LocalSet(1),
@@ -2970,6 +2997,12 @@ class WasmBackend implements Backend {
 			LocalGet(2),
 			GlobalSet(0),
 			Else,
+			// WebAssembly grow pages start zeroed, but GC-reused blocks retain
+			// their previous contents. Preserve Haxe's zero-default semantics.
+			LocalGet(1),
+			I32Const(0),
+			LocalGet(0),
+			MemoryFill,
 			End,
 			LocalGet(1),
 			GlobalGet(metadataTop),
@@ -2991,7 +3024,7 @@ class WasmBackend implements Backend {
 			GlobalSet(metadataTop),
 			LocalGet(1),
 			Return
-		];
+		]);
 		module.setFunction(index,
 			new WasmFunction("__haxeon_alloc", type, [{type: I32}, {type: I32}, {type: I32}, {type: I32}, {type: I32}, {type: I32}], body));
 		return index;
@@ -3137,7 +3170,10 @@ class WasmBackend implements Backend {
 	}
 
 	static function typeId(type:IrType):Int {
-		var text = Std.string(type), hash:Int = -2128831035;
+		var identity = switch type {
+			case Iterator(_): Abstract("realtime_iterator");
+			default: type;
+		}, text = Std.string(identity), hash:Int = -2128831035;
 		for (index in 0...text.length) {
 			hash = Std.int(hash ^ text.charCodeAt(index));
 			hash = Std.int(hash * 16777619);
@@ -3269,7 +3305,7 @@ class WasmBackend implements Backend {
 			case I32, Bool: I32;
 			case I64: I64;
 			case F64: F64;
-			case Bytes, ManagedBytes, Dyn, TypeRef, Array(_), Enum(_), Obj(_), Abstract(_), Virtual(_), Function(_, _): I32;
+			case Bytes, ManagedBytes, Dyn, TypeRef, Array(_), Enum(_), Obj(_), Abstract(_), Virtual(_), Iterator(_), Function(_, _): I32;
 			default: throw 'Wasm scalar backend does not yet support IR type ${Std.string(type)}';
 		};
 }
@@ -4109,6 +4145,90 @@ class WasmFunctionLower {
 					I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
 					LocalSet(requiredLocal(values, output.id))
 				]);
+			case IteratorNew(output, array):
+				var iteratorLocal = requiredLocal(values, output.id);
+				emit(body, [
+					I32Const(WasmLayout.ITERATOR_SIZE),
+					Call(allocator),
+					LocalTee(iteratorLocal),
+					I32Const(typeId(Abstract("realtime_iterator"))),
+					I32Store(0),
+					LocalGet(iteratorLocal),
+					I32Const(WasmLayout.ITERATOR_SIZE),
+					I32Store(4),
+					LocalGet(iteratorLocal),
+					LocalGet(requiredLocal(values, array.id)),
+					I32Store(WasmLayout.ITERATOR_ARRAY_OFFSET),
+					LocalGet(iteratorLocal),
+					I32Const(0),
+					I32Store(WasmLayout.ITERATOR_POSITION_OFFSET)
+				]);
+			case IteratorHasNext(output, iterator):
+				var iteratorLocal = requiredLocal(values, iterator.id),
+					arrayOffset = WasmLayout.ITERATOR_ARRAY_OFFSET,
+					positionOffset = WasmLayout.ITERATOR_POSITION_OFFSET;
+				emit(body, [
+					LocalGet(iteratorLocal),
+					I32Eqz,
+					If(I32),
+					I32Const(0),
+					Else,
+					LocalGet(iteratorLocal),
+					I32Load(arrayOffset),
+					I32Eqz,
+					If(I32),
+					I32Const(0),
+					Else,
+					LocalGet(iteratorLocal),
+					I32Load(positionOffset),
+					LocalGet(iteratorLocal),
+					I32Load(arrayOffset),
+					I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
+					I32LtS,
+					End,
+					End,
+					LocalSet(requiredLocal(values, output.id))
+				]);
+			case IteratorNext(output, iterator):
+				var iteratorLocal = requiredLocal(values, iterator.id),
+					arrayOffset = WasmLayout.ITERATOR_ARRAY_OFFSET,
+					positionOffset = WasmLayout.ITERATOR_POSITION_OFFSET,
+					stride = WasmLayout.arrayStride(output.type),
+					outputLocal = requiredLocal(values, output.id);
+				var iteratorBody:Array<WasmInstruction> = [LocalGet(iteratorLocal), I32Eqz, If(null)];
+				iteratorBody = iteratorBody.concat(trapOrThrow());
+				iteratorBody = iteratorBody.concat([Else, LocalGet(iteratorLocal), I32Load(arrayOffset), I32Eqz, If(null)]);
+				iteratorBody = iteratorBody.concat(trapOrThrow());
+				iteratorBody = iteratorBody.concat([
+					Else,
+					LocalGet(iteratorLocal),
+					I32Load(positionOffset),
+					LocalGet(iteratorLocal),
+					I32Load(arrayOffset),
+					I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
+					I32LtS,
+					If(null),
+					LocalGet(iteratorLocal),
+					I32Load(arrayOffset),
+					I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+					LocalGet(iteratorLocal),
+					I32Load(positionOffset),
+					I32Const(stride),
+					I32Mul,
+					I32Add,
+					load(output.type, 0),
+					LocalSet(outputLocal),
+					LocalGet(iteratorLocal),
+					LocalGet(iteratorLocal),
+					I32Load(positionOffset),
+					I32Const(1),
+					I32Add,
+					I32Store(positionOffset),
+					Else
+				]);
+				iteratorBody = iteratorBody.concat(trapOrThrow());
+				iteratorBody = iteratorBody.concat([End, End, End]);
+				emit(body, iteratorBody);
 			case Add(output, left, right):
 				binary(body, output, left, right, values, arithmeticInstruction(left.type, F64Add, I64Add, I32Add));
 			case Sub(output, left, right):
@@ -4138,14 +4258,16 @@ class WasmFunctionLower {
 			case Equal(output, left, right):
 				binary(body, output, left, right, values, comparisonInstruction(left.type, F64Eq, I64Eq, I32Eq));
 			case Call(output, name, arguments):
-				for (argument in arguments)
-					body.push(LocalGet(requiredLocal(values, argument.id)));
-				var functionIndex = functions.get(name);
-				if (functionIndex == null)
-					throw 'Wasm call to unsupported native or missing function "$name"';
-				body.push(Call(functionIndex));
-				if (output.type != Void)
-					body.push(LocalSet(requiredLocal(values, output.id)));
+				if (!lowerInt64Native(body, output, name, arguments, values)) {
+					for (argument in arguments)
+						body.push(LocalGet(requiredLocal(values, argument.id)));
+					var functionIndex = functions.get(name);
+					if (functionIndex == null)
+						throw 'Wasm call to unsupported native or missing function "$name"';
+					body.push(Call(functionIndex));
+					if (output.type != Void)
+						body.push(LocalSet(requiredLocal(values, output.id)));
+				}
 			case CNativeCall(output, name, arguments):
 				for (argument in arguments)
 					nativeArgument(body, argument, values);
@@ -4156,6 +4278,104 @@ class WasmFunctionLower {
 				if (output.type != Void)
 					body.push(LocalSet(requiredLocal(values, output.id)));
 		}
+	}
+
+	static function lowerInt64Native(body:Array<WasmInstruction>, output:IrValue, name:String, arguments:Array<IrValue>, values:Map<Int, Int>):Bool {
+		if (name == "haxe.Int64.compare") {
+			if (arguments.length != 2 || output.type != I32)
+				throw "Invalid haxe.Int64.compare Wasm native signature";
+			var outputLocal = requiredLocal(values, output.id),
+				leftLocal = requiredLocal(values, arguments[0].id),
+				rightLocal = requiredLocal(values, arguments[1].id);
+			body.push(LocalGet(leftLocal));
+			body.push(LocalGet(rightLocal));
+			body.push(I64LtS);
+			body.push(If(null));
+			body.push(I32Const(-1));
+			body.push(LocalSet(outputLocal));
+			body.push(Else);
+			body.push(LocalGet(leftLocal));
+			body.push(LocalGet(rightLocal));
+			body.push(I64Eq);
+			body.push(If(null));
+			body.push(I32Const(0));
+			body.push(LocalSet(outputLocal));
+			body.push(Else);
+			body.push(I32Const(1));
+			body.push(LocalSet(outputLocal));
+			body.push(End);
+			body.push(End);
+			return true;
+		}
+		if (name == "haxe.Int64.shl" || name == "haxe.Int64.shr" || name == "haxe.Int64.ushr") {
+			if (arguments.length != 2 || output.type != I64)
+				throw 'Invalid $name Wasm native signature';
+			var valueLocal = requiredLocal(values, arguments[0].id),
+				shiftLocal = requiredLocal(values, arguments[1].id),
+				outputLocal = requiredLocal(values, output.id);
+			body.push(LocalGet(shiftLocal));
+			body.push(I32Const(0));
+			body.push(I32LtS);
+			body.push(LocalGet(shiftLocal));
+			body.push(I32Const(64));
+			body.push(I32LtS);
+			body.push(I32Eqz);
+			body.push(I32Or);
+			body.push(If(null));
+			if (name == "haxe.Int64.shr") {
+				body.push(LocalGet(valueLocal));
+				body.push(I64Const(0));
+				body.push(I64LtS);
+				body.push(If(null));
+				body.push(I64Const(-1));
+				body.push(LocalSet(outputLocal));
+				body.push(Else);
+				body.push(I64Const(0));
+				body.push(LocalSet(outputLocal));
+				body.push(End);
+			} else {
+				body.push(I64Const(0));
+				body.push(LocalSet(outputLocal));
+			}
+			body.push(Else);
+			body.push(LocalGet(valueLocal));
+			body.push(LocalGet(shiftLocal));
+			body.push(I64ExtendI32U);
+			body.push(name == "haxe.Int64.shl" ? I64Shl : name == "haxe.Int64.shr" ? I64ShrS : I64ShrU);
+			body.push(LocalSet(outputLocal));
+			body.push(End);
+			return true;
+		}
+		var operation = switch name {
+			case "haxe.Int64.add": I64Add;
+			case "haxe.Int64.sub": I64Sub;
+			case "haxe.Int64.and": I64And;
+			case "haxe.Int64.or": I64Or;
+			case "haxe.Int64.xor": I64Xor;
+			case _: null;
+		};
+		if (name == "haxe.Int64.make") {
+			if (arguments.length != 2 || output.type != I64)
+				throw "Invalid haxe.Int64.make Wasm native signature";
+			body.push(LocalGet(requiredLocal(values, arguments[0].id)));
+			body.push(I64ExtendI32S);
+			body.push(I64Const(32));
+			body.push(I64Shl);
+			body.push(LocalGet(requiredLocal(values, arguments[1].id)));
+			body.push(I64ExtendI32U);
+			body.push(I64Or);
+			body.push(LocalSet(requiredLocal(values, output.id)));
+			return true;
+		}
+		if (operation == null)
+			return false;
+		if (arguments.length != 2 || output.type != I64)
+			throw 'Invalid $name Wasm native signature';
+		body.push(LocalGet(requiredLocal(values, arguments[0].id)));
+		body.push(LocalGet(requiredLocal(values, arguments[1].id)));
+		body.push(operation);
+		body.push(LocalSet(requiredLocal(values, output.id)));
+		return true;
 	}
 
 	static function nativeArgument(body:Array<WasmInstruction>, argument:IrValue, values:Map<Int, Int>):Void {
@@ -4244,7 +4464,10 @@ class WasmFunctionLower {
 	}
 
 	static function typeId(type:IrType):Int {
-		var text = Std.string(type), hash:Int = -2128831035;
+		var identity = switch type {
+			case Iterator(_): Abstract("realtime_iterator");
+			default: type;
+		}, text = Std.string(identity), hash:Int = -2128831035;
 		for (index in 0...text.length) {
 			hash = Std.int(hash ^ text.charCodeAt(index));
 			hash = Std.int(hash * 16777619);
@@ -4356,7 +4579,8 @@ class WasmFunctionLower {
 				UnsignedShiftRight(output, _, _), Less(output, _, _), LessEqual(output, _, _), Equal(output, _, _), Call(output, _, _),
 				CNativeCall(output, _, _), StaticClosure(output, _), InstanceClosure(output, _, _), CallClosure(output, _, _), ToVirtual(output, _),
 				MethodCall(output, _, _, _), NewObject(output, _), FieldGet(output, _, _), ArrayGet(output, _, _), ArraySize(output, _),
-				MakeEnum(output, _, _, _), EnumIndex(output, _), EnumField(output, _, _, _): output;
+				IteratorNew(output, _), IteratorHasNext(output, _), IteratorNext(output, _), MakeEnum(output, _, _, _), EnumIndex(output, _),
+				EnumField(output, _, _, _): output;
 			case BeginTry(_, _), EndTry(_), GlobalSet(_, _), FieldSet(_, _, _), ArraySet(_, _, _): null;
 		};
 }

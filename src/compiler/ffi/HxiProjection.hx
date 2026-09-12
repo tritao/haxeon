@@ -202,20 +202,49 @@ class HxiProjection {
 			}
 		for (declaration in enumDeclarations)
 			switch declaration {
-				case Enumeration(name, representation, _, values, _):
+				case Enumeration(name, representation, flags, values, _):
 					var underlying = project(abi.classify(representation), false, profile);
 					if (underlying == null)
 						continue;
 					var projectedName = enumTypeName(name, profile),
-						valuePrefix = enumValuePrefix(values, profile);
+						valuePrefix = enumValuePrefix(values, profile),
+						bits = switch abi.classify(representation) {
+							case IntegerValue(valueBits, _): valueBits;
+							case _: 0;
+						};
 					emitDocumentation(output, model, name);
-					output.add('enum abstract $projectedName(${underlying.haxeType}) from ${underlying.haxeType} to ${underlying.haxeType} {\n');
-					for (value in values) {
-						emitDocumentation(output, model, '$name.${value.name}', "\t");
-						var projectedValue = enumValueName(value.name, valuePrefix, name, profile);
-						output.add('\tvar $projectedValue = ${value.value};\n');
+					if (flags && bits == 64) {
+						output.add('abstract $projectedName(haxe.Int64) from haxe.Int64 to haxe.Int64 {\n');
+						for (value in values) {
+							emitDocumentation(output, model, '$name.${value.name}', "\t");
+							var projectedValue = enumValueName(value.name, valuePrefix, name, profile),
+								methodName = lowerFirst(projectedValue),
+								low = haxe.Int64.and(value.value, haxe.Int64.parseString("4294967295")),
+								high = haxe.Int64.ushr(value.value, 32),
+								highLiteral = int64PartAsInt(high),
+								lowLiteral = int64PartAsInt(low);
+							output.add('\tpublic static inline function $methodName():$projectedName return cast haxe.Int64.make($highLiteral, $lowLiteral);\n');
+						}
+						output.add('\tpublic inline function contains(flag:$projectedName):Bool return haxe.Int64.compare(haxe.Int64.and(this, flag), flag) == 0;\n');
+						output.add('\tpublic inline function with(flag:$projectedName):$projectedName return cast haxe.Int64.or(this, flag);\n');
+						output.add('\tpublic inline function without(flag:$projectedName):$projectedName return cast haxe.Int64.and(this, haxe.Int64.xor(flag, -1));\n');
+						output.add('\tpublic inline function rawValue():haxe.Int64 return this;\n');
+						output.add('}\n');
+					} else {
+						output.add('enum abstract $projectedName(${underlying.haxeType}) from ${underlying.haxeType} to ${underlying.haxeType} {\n');
+						for (value in values) {
+							emitDocumentation(output, model, '$name.${value.name}', "\t");
+							var projectedValue = enumValueName(value.name, valuePrefix, name, profile),
+								literalValue = flags
+									&& bits == 32
+									&& haxe.Int64.compare(value.value,
+										haxe.Int64.parseString("2147483647")) > 0 ? haxe.Int64.sub(value.value,
+										haxe.Int64.parseString("4294967296")) : value.value,
+								literal = haxe.Int64.toStr(literalValue);
+							output.add('\tvar $projectedValue = $literal;\n');
+						}
+						output.add('}\n');
 					}
-					output.add('}\n');
 				case _:
 			}
 		for (declaration in handleDeclarations)
@@ -770,8 +799,17 @@ class HxiProjection {
 		output.add('}\n');
 		}
 
+	static function int64PartAsInt(value:haxe.Int64):String {
+		if (haxe.Int64.compare(value, haxe.Int64.parseString("2147483647")) > 0)
+			value = haxe.Int64.sub(value, haxe.Int64.parseString("4294967296"));
+		return haxe.Int64.toStr(value);
+	}
+
 	static function upperFirst(value:String):String
 		return value.length == 0 ? value : value.charAt(0).toUpperCase() + value.substr(1);
+
+	static function lowerFirst(value:String):String
+		return value.length == 0 ? value : value.charAt(0).toLowerCase() + value.substr(1);
 
 	static function projectedFunctionName(value:String, profile:Null<HxiProjectionProfile>):String {
 		if (profile == null)
@@ -938,6 +976,12 @@ class HxiProjection {
 						case 16: unsigned ? 4 : 3;
 						default: unsigned ? 6 : 5;
 					}
+				};
+			case EnumerationValue(name, 64, sign): {
+					haxeType: "haxe.Int64",
+					nativePointer: false,
+					nullable: false,
+					code: sign == Unsigned ? 8 : 7
 				};
 			case EnumerationValue(name, bits, sign) if (bits <= 32):
 				var unsigned = sign == Unsigned || sign == PlainChar;

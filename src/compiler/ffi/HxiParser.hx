@@ -1,5 +1,6 @@
 package compiler.ffi;
 
+import haxe.Int64;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceFile;
@@ -190,12 +191,13 @@ class HxiParser {
 		var name = identifier();
 		expect(":");
 		var representation = parseType();
+		var wideFlags = flags;
 		expect("{");
 		var values:Array<HxiEnumValue> = [];
 		while (!check("}")) {
 			var valueStart = current().span, valueName = identifier();
 			expect("=");
-			var value = parseEnumExpression(),
+			var value = wideFlags ? parseWideEnumExpression() : Int64.ofInt(parseEnumExpression()),
 				end = expect(";").span,
 				valueSpan = valueStart.merge(end);
 			values.push({name: valueName, value: value, span: valueSpan});
@@ -203,6 +205,67 @@ class HxiParser {
 		}
 		var end = expect("}").span;
 		return Enumeration(name, representation, flags, values, start.merge(end));
+	}
+
+	function parseWideEnumExpression():Int64 {
+		var value = parseWideEnumShift();
+		while (match("|"))
+			value = Int64.or(value, parseWideEnumShift());
+		return value;
+	}
+
+	function parseWideEnumShift():Int64 {
+		var value = parseWideEnumPrimary();
+		while (check("<<") || check(">>")) {
+			var operation = advance().text,
+				shiftValue = parseWideEnumPrimary();
+			if (Int64.compare(shiftValue, Int64.ofInt(0)) < 0 || Int64.compare(shiftValue, Int64.ofInt(63)) > 0)
+				fail("Flag shift count must be between 0 and 63", previous().span);
+			var shift = Std.parseInt(Int64.toStr(shiftValue));
+			value = operation == "<<" ? Int64.shl(value, shift) : Int64.ushr(value, shift);
+		}
+		return value;
+	}
+
+	function parseWideEnumPrimary():Int64 {
+		if (match("(")) {
+			var value = parseWideEnumExpression();
+			expect(")");
+			return value;
+		}
+		if (match("-"))
+			return Int64.sub(Int64.ofInt(0), parseWideEnumPrimary());
+		var token = current();
+		var value = Int64.ofInt(0);
+		var parsed = false;
+		if (isHexInteger(token.text)) {
+			value = parseHex64(token.text, token.span);
+			parsed = true;
+		} else if (isIntegerLiteral(token.text)) {
+			try {
+				value = Int64.parseString(token.text);
+				parsed = true;
+			} catch (_:Dynamic)
+				fail('Flag integer literal "${token.text}" is outside the signed 64-bit range', token.span);
+		}
+		if (!parsed)
+			fail('Expected flag integer expression, got "${token.text}"', token.span);
+		advance();
+		return value;
+	}
+
+	function parseHex64(text:String, span:SourceSpan):Int64 {
+		var value = Int64.ofInt(0);
+		for (index in 2...text.length) {
+			if (Int64.compare(Int64.ushr(value, 60), Int64.ofInt(0)) != 0)
+				fail('Flag integer literal "$text" exceeds 64 bits', span);
+			var code = text.charCodeAt(index),
+				digit = code >= "0".code
+					&& code <= "9".code ? code - "0".code : code >= "A".code
+						&& code <= "F".code ? code - "A".code + 10 : code - "a".code + 10;
+			value = Int64.or(Int64.shl(value, 4), Int64.ofInt(digit));
+		}
+		return value;
 	}
 
 	function parseEnumExpression():Int {
@@ -246,8 +309,9 @@ class HxiParser {
 		var value = 0;
 		for (index in 2...text.length) {
 			var code = text.charCodeAt(index),
-				digit = code >= "0".code && code <= "9".code ? code - "0".code
-					: code >= "A".code && code <= "F".code ? code - "A".code + 10 : code - "a".code + 10;
+				digit = code >= "0".code
+					&& code <= "9".code ? code - "0".code : code >= "A".code
+						&& code <= "F".code ? code - "A".code + 10 : code - "a".code + 10;
 			value = (value << 4) | digit;
 		}
 		return value;
@@ -422,27 +486,52 @@ class HxiParser {
 							case Unspecified:
 						}
 					}
-				case Enumeration(name, representation, _, values, span):
+				case Enumeration(name, representation, flags, values, span):
 					validateType(representation, names, declarationsByName, span, false);
 					var integer = switch abi.classify(representation) {
-						case IntegerValue(bits, sign) if (bits <= 32): {bits: bits, signed: sign == Signed};
-						case _: fail('Enum "$name" requires an 8/16/32-bit integer representation', span);
+						case IntegerValue(bits, sign) if ((!flags && bits <= 32) || (flags && bits <= 64 && sign == Unsigned)):
+							{bits: bits, signed: sign == Signed};
+						case _:
+							fail(flags ? 'Flags "$name" require an unsigned 8/16/32/64-bit integer representation' : 'Enum "$name" requires an 8/16/32-bit integer representation',
+								span);
 					};
 					var valueNames:Map<String, Bool> = [],
-						seenValues:Map<Int, String> = [];
+						seenValues:Map<String, String> = [];
 					for (entry in values) {
 						if (valueNames.exists(entry.name))
 							fail('Duplicate value "${entry.name}" in enum "$name"', entry.span);
 						valueNames.set(entry.name, true);
-						if (integer.bits < 32) {
+						if (!flags && integer.bits < 32) {
 							var minimum = integer.signed ? -(1 << (integer.bits - 1)) : 0;
 							var maximum = integer.signed ? (1 << (integer.bits - 1)) - 1 : (1 << integer.bits) - 1;
-							if (entry.value < minimum || entry.value > maximum)
+							if (Int64.compare(entry.value, Int64.ofInt(minimum)) < 0
+								|| Int64.compare(entry.value, Int64.ofInt(maximum)) > 0)
 								fail('Value "${entry.name}" is outside the representation of enum "$name"', entry.span);
 						}
-						if (seenValues.exists(entry.value))
-							fail('Value "${entry.name}" duplicates "${seenValues.get(entry.value)}" in enum "$name"', entry.span);
-						seenValues.set(entry.value, entry.name);
+						var key = Int64.toStr(entry.value);
+						if (seenValues.exists(key))
+							fail('Value "${entry.name}" duplicates "${seenValues.get(key)}" in enum "$name"', entry.span);
+						seenValues.set(key, entry.name);
+					}
+					if (flags) {
+						var knownBits = Int64.ofInt(0),
+							zero = Int64.ofInt(0),
+							one = Int64.ofInt(1),
+							mask = integer.bits == 64 ? Int64.ofInt(-1) : Int64.sub(Int64.shl(one, integer.bits), one);
+						for (entry in values) {
+							var minimum = integer.bits == 32 ? Int64.parseString("-2147483648") : zero,
+								maximum = integer.bits == 64 ? Int64.parseString("9223372036854775807") : Int64.sub(Int64.shl(one, integer.bits), one);
+							if (integer.bits != 64 && (Int64.compare(entry.value, minimum) < 0 || Int64.compare(entry.value, maximum) > 0))
+								fail('Flag value "${entry.name}" is outside the representation of flags "$name"', entry.span);
+							var value = Int64.and(entry.value, mask);
+							if (Int64.compare(value, zero) != 0 && Int64.compare(Int64.and(value, Int64.sub(value, one)), zero) == 0)
+								knownBits = Int64.or(knownBits, value);
+						}
+						for (entry in values) {
+							var value = Int64.and(entry.value, mask);
+							if (Int64.compare(Int64.and(value, Int64.xor(knownBits, Int64.ofInt(-1))), zero) != 0)
+								fail('Flag value "${entry.name}" contains bits not declared by a single-bit flag in "$name"', entry.span);
+						}
 					}
 				case Callback(name, parameters, result, callConvention, span):
 					validateCallConvention(name, callConvention, abi, span);
@@ -716,7 +805,8 @@ class HxiParser {
 			case _: false;
 		};
 
-	static function visitTypeAliases(type:HxiType, aliases:Map<String, {type:HxiType, span:SourceSpan}>, visiting:Map<String, Bool>, complete:Map<String, Bool>):Void
+	static function visitTypeAliases(type:HxiType, aliases:Map<String, {type:HxiType, span:SourceSpan}>, visiting:Map<String, Bool>,
+			complete:Map<String, Bool>):Void
 		switch type {
 			case Named(name) if (aliases.exists(name)):
 				visitAlias(name, aliases, visiting, complete);
@@ -764,11 +854,11 @@ class HxiParser {
 		var value = DocumentationTools.forSpan(source, comments, span);
 		if (value.raw.length > 0)
 			documentation.set(name, {
-			raw: value.raw,
-			lines: value.lines,
-			source: projectionDocumentation(value.lines),
-			indentedSource: projectionDocumentation(value.lines, "\t")
-		});
+				raw: value.raw,
+				lines: value.lines,
+				source: projectionDocumentation(value.lines),
+				indentedSource: projectionDocumentation(value.lines, "\t")
+			});
 	}
 
 	static function projectionDocumentation(lines:Array<String>, indent:String = ""):String {
@@ -912,12 +1002,12 @@ class HxiParser {
 	}
 
 	static function isHexInteger(value:String):Bool {
-		if (value.length < 3 || value.charCodeAt(0) != "0".code
-			|| (value.charCodeAt(1) != "x".code && value.charCodeAt(1) != "X".code))
+		if (value.length < 3 || value.charCodeAt(0) != "0".code || (value.charCodeAt(1) != "x".code && value.charCodeAt(1) != "X".code))
 			return false;
 		for (index in 2...value.length) {
 			var code = value.charCodeAt(index);
-			if (!((code >= "0".code && code <= "9".code) || (code >= "A".code && code <= "F".code)
+			if (!((code >= "0".code && code <= "9".code)
+				|| (code >= "A".code && code <= "F".code)
 				|| (code >= "a".code && code <= "f".code)))
 				return false;
 		}
@@ -1001,8 +1091,10 @@ class HxiParser {
 				position++;
 				while (position < bytes.length) {
 					code = bytes.get(position);
-					if (!((code >= "A".code && code <= "Z".code) || (code >= "a".code && code <= "z".code)
-						|| (code >= "0".code && code <= "9".code) || code == "_".code))
+					if (!((code >= "A".code && code <= "Z".code)
+						|| (code >= "a".code && code <= "z".code)
+						|| (code >= "0".code && code <= "9".code)
+						|| code == "_".code))
 						break;
 					position++;
 				}
@@ -1033,7 +1125,6 @@ class HxiParser {
 	}
 
 	static inline function isPunctuation(code:Int):Bool
-		return code == "{".code || code == "}".code || code == "(".code || code == ")".code || code == "<".code || code == ">".code
-			|| code == ":".code || code == ",".code || code == ";".code || code == "=".code || code == "@".code || code == "|".code
-			|| code == "-".code;
+		return code == "{".code || code == "}".code || code == "(".code || code == ")".code || code == "<".code || code == ">".code || code == ":".code
+			|| code == ",".code || code == ";".code || code == "=".code || code == "@".code || code == "|".code || code == "-".code;
 }

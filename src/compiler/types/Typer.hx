@@ -3902,7 +3902,7 @@ class Typer {
 					case TIterator(value): value;
 					default: throw "Not an iterator";
 				};
-				coerce(new TypedExpression(TCall("__iterator_next", [receiver]), TDynamic, span), element, "Iterator.next", "E1014");
+				new TypedExpression(TCall("__iterator_next", [receiver]), element, span);
 			default: throw new CompileError(new Diagnostic("E1007", 'Unknown Iterator method "$name"', span));
 		};
 	}

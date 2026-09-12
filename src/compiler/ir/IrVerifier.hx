@@ -328,6 +328,27 @@ class IrVerifier {
 					default: throw 'IR array size requires an Array value';
 				}
 				expect(out, I32);
+			case IteratorNew(out, array):
+				require(values, array);
+				switch array.type {
+					case Array(element): expect(out, Iterator(element));
+					default: throw 'IR iterator creation requires an Array value';
+				}
+			case IteratorHasNext(out, iterator):
+				require(values, iterator);
+				switch iterator.type {
+					case Iterator(_):
+					default: throw 'IR hasNext requires an Iterator value';
+				}
+				expect(out, Bool);
+			case IteratorNext(out, iterator):
+				require(values, iterator);
+				switch iterator.type {
+					case Iterator(element): expect(out, element);
+					default: throw 'IR next requires an Iterator value';
+				}
+				if (out.type == Void)
+					throw 'IR iterator next cannot produce Void';
 			case MakeEnum(out, typeName, constructor, arguments):
 				if (!isEnumType(out.type, typeName, enums))
 					throw 'Unknown or mismatched IR enum "$typeName"';
@@ -506,6 +527,10 @@ class IrVerifier {
 					case Array(b): sameType(a, b);
 					default: false;
 				};
+			case Iterator(a): switch right {
+					case Iterator(b): sameType(a, b);
+					default: false;
+				};
 			case Function(aArgs, aResult): switch right {
 					case Function(bArgs, bResult):
 						if (aArgs.length != bArgs.length) false; else {
@@ -522,7 +547,7 @@ class IrVerifier {
 
 	static function isReference(type:IrType):Bool
 		return switch type {
-			case Bytes, ManagedBytes, Dyn, Obj(_), Enum(_), Abstract(_), Virtual(_), Array(_), Function(_, _): true;
+			case Bytes, ManagedBytes, Dyn, Obj(_), Enum(_), Abstract(_), Virtual(_), Array(_), Iterator(_), Function(_, _): true;
 			default: false;
 		};
 

@@ -33,6 +33,14 @@ growth, compact removal, and typed `keys()`/`values()` projections. Primitive
 `get()` results are boxed into the existing dynamic-value layout so nullable
 map reads retain the canonical IR semantics.
 
+Array-backed `Iterator<T>` creation, `hasNext()`, and `next()` are explicit
+typed IR operations. HashLink adapts them to its existing dynamic native ABI;
+Wasm stores the source array and cursor in a GC-managed iterator record and
+loads each item using its statically known element type. This keeps iteration
+typed on Wasm without per-element dynamic boxing. The cursor observes the
+array's current length on each `hasNext()`, and separate iterators over one
+array maintain independent positions.
+
 The backend emits the WebAssembly exception tag/try/catch instructions for
 programs with Haxeon exception edges. Exception-bearing functions currently
 use the explicit CFG dispatcher so handler state and rethrow behavior remain
@@ -55,7 +63,9 @@ the guest.
   not just an offline map. The current collector is a non-moving mark/sweep
   collector with compacted allocation metadata, a free list, and precise
   static/shadow-frame roots; allocation runs collection before selecting a
-  block so a freshly returned reference cannot be reclaimed.
+  block so a freshly returned reference cannot be reclaimed. Recycled blocks
+  are zero-filled before reuse, preserving Haxe's default values for fields,
+  array elements, and byte storage just as newly grown Wasm memory does.
 - `haxeon.patch` contains stable function identities and semantic signatures
   for validating replacement table entries. `haxeon.patch.slots` maps those
   stable names to exported function-table slots. `WasmBackend.compilePatch`

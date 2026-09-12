@@ -483,8 +483,21 @@ class TestMain {
 		expectCfgError(new CfgFunction("bad", [], I32, [crossBlockA, crossBlockB], [], 1),
 			"CFG value 0 is used outside its defining block or before definition in block 1");
 		Sys.println("PASS: CFG verifier rejects malformed blocks, edges, and values");
-		var persistedType = Function([I32, Array(Obj("demo.Box")), Function([Bytes, ManagedBytes], Bool)], Virtual("demo.Plugin")),
-			persistedTypeBytes = IrTypeCodec.encode(persistedType);
+		var mismatchedIterator = new compiler.ir.Ir.IrValue(0, "iterator", Iterator(I32)),
+			wrongIteratorElement = new compiler.ir.Ir.IrValue(1, "wrongElement", Bytes),
+			mismatchedIteratorBlock = new compiler.ir.Ir.IrBlock(0);
+		mismatchedIteratorBlock.instructions.push(located(compiler.ir.Ir.IrInstruction.IteratorNext(wrongIteratorElement, mismatchedIterator)));
+		mismatchedIteratorBlock.terminator = located(compiler.ir.Ir.IrTerminator.Return(wrongIteratorElement));
+		var mismatchedIteratorProgram = new IrProgram("main");
+		mismatchedIteratorProgram.functions.push(new IrFunction("main", [mismatchedIterator], Bytes, [mismatchedIteratorBlock]));
+		expectIrError(mismatchedIteratorProgram, "IR verification failed for main: IR value 1 has the wrong type");
+		Sys.println("PASS: IR verifier rejects iterator element type mismatches");
+		var persistedType = Function([
+			I32,
+			Array(Obj("demo.Box")),
+			Function([Bytes, ManagedBytes], Bool),
+			Iterator(I32)
+		], Virtual("demo.Plugin")), persistedTypeBytes = IrTypeCodec.encode(persistedType);
 		if (Std.string(IrTypeCodec.decode(persistedTypeBytes)) != Std.string(persistedType)
 			|| persistedTypeBytes.compare(IrTypeCodec.encode(persistedType)) != 0)
 			throw "IR type state did not round trip deterministically";
@@ -492,6 +505,8 @@ class TestMain {
 			throw "64-bit IR type state did not round trip";
 		if (IrTypeCodec.decode(IrTypeCodec.encode(ManagedBytes)) != ManagedBytes)
 			throw "managed byte IR type state did not round trip";
+		if (Std.string(IrTypeCodec.decode(IrTypeCodec.encode(Iterator(Array(I32))))) != Std.string(Iterator(Array(I32))))
+			throw "generic iterator IR type state did not round trip";
 		var legacyTypeState = new haxe.io.BytesOutput();
 		legacyTypeState.bigEndian = false;
 		legacyTypeState.writeString("IRT");
@@ -508,12 +523,15 @@ class TestMain {
 		Sys.println("PASS: IR types persist deterministically and reject malformed state");
 		var persistedValues = [
 			new compiler.ir.Ir.IrValue(9, "result", I32),
-			new compiler.ir.Ir.IrValue(2, "input", Array(Bytes))
+			new compiler.ir.Ir.IrValue(2, "input", Array(Bytes)),
+			new compiler.ir.Ir.IrValue(12, "iterator", Iterator(I32))
 		], persistedValueBytes = IrValueTableCodec.encode(persistedValues), decodedValues = IrValueTableCodec.decode(persistedValueBytes);
 		if ((decodedValues[0].id : Int) != 2
 			|| (decodedValues[1].id : Int) != 9
-				|| Std.string(decodedValues[0].type) != Std.string(Array(Bytes))
-				|| persistedValueBytes.compare(IrValueTableCodec.encode(persistedValues)) != 0)
+				|| (decodedValues[2].id : Int) != 12
+					|| Std.string(decodedValues[0].type) != Std.string(Array(Bytes))
+					|| Std.string(decodedValues[2].type) != Std.string(Iterator(I32))
+					|| persistedValueBytes.compare(IrValueTableCodec.encode(persistedValues)) != 0)
 			throw "IR value table did not round trip canonically";
 		var badReference = IrValueTableCodec.byId(decodedValues);
 		var referenceBytes = new haxe.io.BytesOutput();
@@ -521,7 +539,7 @@ class TestMain {
 		referenceBytes.writeInt32(99);
 		expectStringError(function() IrValueTableCodec.readReference(new BytesInput(referenceBytes.getBytes()), badReference), "Unknown IR value reference");
 		Sys.println("PASS: canonical IR value tables preserve identity and reject unknown references");
-		var instructionProgram = Frontend.compile("function add(a:Int, b:Int):Int { var sum = a + b; return sum; } function widen(value:Int):haxe.Int64 return value; function main():Int { return add(20, 22); }");
+		var instructionProgram = Frontend.compile("function add(a:Int, b:Int):Int { var sum = a + b; return sum; } function widen(value:Int):haxe.Int64 return value; function iterate(values:Array<Int>):Int { var sum = 0; for (value in values.iterator()) sum += value; return sum; } function main():Int { return add(20, 22); }");
 		var decodedFunctions = [];
 		for (fn in instructionProgram.functions) {
 			var instructionValues:Map<Int, compiler.ir.Ir.IrValue> = [];
@@ -779,6 +797,7 @@ class TestMain {
 			"--define=feature",
 			"--define=version=3.0",
 			"--dump-function=42",
+			"--wasm-memory-stats",
 			"--ffi-header=out/sample.h",
 			"--ffi-library=sample",
 			"--ffi-interface=generated/nativekit.hxi",
@@ -792,11 +811,20 @@ class TestMain {
 			|| compilerRequest.irOutput != "out/sample.hir"
 			|| compilerRequest.entry != "sample.Main"
 			|| compilerRequest.dumpFunction != 42
+			|| !compilerRequest.wasmMemoryStats
 			|| compilerRequest.roots.length != 1
 			|| compilerRequest.paths.length != 1
 			|| compilerRequest.ffiInterfaces.join(",") != "generated/nativekit.hxi,generated/system.hxi"
 			|| compilerRequest.ffiLibrary != "sample")
 			throw "Compiler CLI did not produce a typed build request";
+		var memoryStatsRejectedForHashLink = false;
+		try {
+			CompilerArguments.parse(["--wasm-memory-stats", "source/Main.hx"]);
+		} catch (error:Dynamic) {
+			memoryStatsRejectedForHashLink = true;
+		}
+		if (!memoryStatsRejectedForHashLink)
+			throw "Compiler CLI accepted Wasm allocator statistics for a non-Wasm target";
 		var wasmDefines = CompilerDriver.targetDefines("wasm32"),
 			hlDefines = CompilerDriver.targetDefines("hl");
 		if (wasmDefines.join(",") != "haxeon,target=wasm32,wasm,wasm32" || hlDefines.join(",") != "haxeon,target=hl,hl,sys")
@@ -1381,6 +1409,16 @@ class TestMain {
 		try {
 			CfgVerifier.verify(cfg);
 			throw 'CFG verifier accepted invalid graph; expected "$expected"';
+		} catch (error:String) {
+			if (error != expected)
+				throw error;
+		}
+	}
+
+	static function expectIrError(program:IrProgram, expected:String):Void {
+		try {
+			compiler.ir.IrVerifier.verify(program);
+			throw 'IR verifier accepted invalid program; expected "$expected"';
 		} catch (error:String) {
 			if (error != expected)
 				throw error;

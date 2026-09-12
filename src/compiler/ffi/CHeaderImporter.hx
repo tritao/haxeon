@@ -62,14 +62,18 @@ class CHeaderImporter {
 		for (declaration in declarations) {
 			if (field(declaration, "kind") != "EnumDecl")
 				continue;
-			var enumName:String = field(declaration, "_hxiEnumName");
+			var enumName:String = field(declaration, "_hxiEnumName"),
+				isFlags:Bool = field(declaration, "_hxiFlags") == true;
 			if (enumName == null)
 				continue;
 			var alias:Dynamic = enumAlias(enumName, declarations),
 				representation = alias == null ? null : mapType(field(field(alias, "type"), "qualType"));
 			if (alias == null)
 				throw '${declarationLocation(declaration)}: annotated enum "$enumName" has no matching typedef';
-			if (representation != "i8" && representation != "u8" && representation != "i16" && representation != "u16" && representation != "i32"
+			if (isFlags) {
+				if (representation != "u8" && representation != "u16" && representation != "u32" && representation != "u64")
+					throw '${declarationLocation(declaration)}: annotated flags "$enumName" must use an unsigned 8-, 16-, 32-, or 64-bit fixed-width integer typedef';
+			} else if (representation != "i8" && representation != "u8" && representation != "i16" && representation != "u16" && representation != "i32"
 				&& representation != "u32")
 				throw '${declarationLocation(declaration)}: annotated enum "$enumName" must use an 8-, 16-, or 32-bit fixed-width integer typedef';
 			Reflect.setField(declaration, "_hxiEnumRepresentation", representation);
@@ -111,17 +115,23 @@ class CHeaderImporter {
 		Reflect.setField(node, "_hxiFile", currentFile);
 		var kind:String = field(node, "kind"),
 			name:String = field(node, "name"),
-			annotatedEnumName:String = kind == "EnumDecl" ? enumAnnotation(node) : null;
+			annotatedEnumName:String = kind == "EnumDecl" ? enumAnnotation(node) : null,
+			annotatedFlagsName:String = kind == "EnumDecl" ? flagsAnnotation(node) : null;
 		if (annotatedEnumName != null)
 			Reflect.setField(node, "_hxiEnumName", annotatedEnumName);
+		if (annotatedFlagsName != null) {
+			Reflect.setField(node, "_hxiEnumName", annotatedFlagsName);
+			Reflect.setField(node, "_hxiFlags", true);
+		}
 		var userDeclaration = annotatedEnumName != null
+			|| annotatedFlagsName != null
 			|| (name != null
 				&& !StringTools.startsWith(name, "__")
 				&& (kind == "TypedefDecl" || kind == "RecordDecl" || kind == "FunctionDecl" || kind == "EnumDecl" || kind == "EnumConstantDecl"));
 		if (userDeclaration && isUserDeclaration(node, roots, currentFile) && excluded.indexOf(currentFile) < 0)
 			output.push(node);
 		var inner:Array<Dynamic> = field(node, "inner");
-		if (inner != null && !(kind == "EnumDecl" && (name != null || annotatedEnumName != null)))
+		if (inner != null && !(kind == "EnumDecl" && (name != null || annotatedEnumName != null || annotatedFlagsName != null)))
 			for (child in inner)
 				currentFile = collect(child, output, roots, currentFile, excluded);
 		return currentFile;
@@ -144,7 +154,7 @@ class CHeaderImporter {
 					enumName = name;
 				var documentationNode:Dynamic = field(node, "_hxiDocumentationNode");
 				emitDocumentation(documentationNode == null ? node : documentationNode, output);
-				output.add('\tenum $enumName : $representation {\n');
+				output.add('\t${field(node, "_hxiFlags") == true ? "flags" : "enum"} $enumName : $representation {\n');
 				var nextValue = Int64.parseString("0");
 				for (entry in values) {
 					var entryName:String = field(entry, "name"),
@@ -152,11 +162,12 @@ class CHeaderImporter {
 					if (rawValue == null)
 						rawValue = Int64.toStr(nextValue);
 					if (rawValue != null) {
+						var projectedValue = projectedIntegerValue(entry, rawValue, field(node, "_hxiFlags") == true);
 						if (field(entry, "_hxiFile") == null)
 							Reflect.setField(entry, "_hxiFile", field(node, "_hxiFile"));
 						emitDocumentation(entry, output, "\t\t");
-						output.add('\t\t$entryName = ${projectedIntegerValue(entry, rawValue)};\n');
-						nextValue = Int64.add(Int64.parseString(rawValue), Int64.parseString("1"));
+						output.add('\t\t$entryName = $projectedValue;\n');
+						nextValue = Int64.add(Int64.parseString(projectedValue), Int64.parseString("1"));
 					}
 				}
 				output.add("\t}\n");
@@ -592,32 +603,82 @@ class CHeaderImporter {
 		return projectedIntegerValue(node, value);
 	}
 
-	static function projectedIntegerValue(node:Dynamic, value:String):String {
+	static function projectedIntegerValue(node:Dynamic, value:String, allowUnsigned64:Bool = false):String {
+		if (allowUnsigned64 && StringTools.startsWith(value, "-")) {
+			var parsedNegative = Int64.parseString(value);
+			if (Int64.compare(parsedNegative, Int64.parseString("-9223372036854775808")) < 0)
+				throw '${declarationLocation(node)}: flag constant "$value" does not fit a 64-bit Haxe Int64';
+			return Int64.toStr(parsedNegative);
+		}
+		if (allowUnsigned64 && compareDecimal(value, "9223372036854775807") > 0) {
+			if (compareDecimal(value, "18446744073709551615") > 0)
+				throw '${declarationLocation(node)}: flag constant "$value" does not fit a 64-bit unsigned integer';
+			value = "-" + subtractDecimal("18446744073709551616", value);
+			return Int64.toStr(Int64.parseString(value));
+		}
 		var parsed = Int64.parseString(value),
 			minimum = Int64.parseString("-2147483648"),
-			maximum = Int64.parseString("4294967295");
+			maximum = Int64.parseString(allowUnsigned64 ? "9223372036854775807" : "4294967295");
 		if (Int64.compare(parsed, minimum) < 0 || Int64.compare(parsed, maximum) > 0)
-			throw '${declarationLocation(node)}: untyped constant "$value" does not fit a 32-bit Haxe Int';
-		if (Int64.compare(parsed, Int64.parseString("2147483647")) > 0)
+			throw '${declarationLocation(node)}: untyped constant "$value" does not fit a ${allowUnsigned64 ? "64-bit" : "32-bit"} Haxe Int';
+		if (!allowUnsigned64 && Int64.compare(parsed, Int64.parseString("2147483647")) > 0)
 			parsed = Int64.sub(parsed, Int64.parseString("4294967296"));
 		return Int64.toStr(parsed);
 	}
 
+	static function compareDecimal(left:String, right:String):Int {
+		left = stripDecimalZeros(left);
+		right = stripDecimalZeros(right);
+		if (left.length != right.length)
+			return left.length < right.length ? -1 : 1;
+		return left < right ? -1 : left > right ? 1 : 0;
+	}
+
+	static function subtractDecimal(left:String, right:String):String {
+		var result = new StringBuf(), borrow = 0, rightIndex = right.length - 1;
+		for (index in 0...left.length) {
+			var leftDigit = left.charCodeAt(left.length - index - 1) - "0".code,
+				rightDigit = rightIndex >= 0 ? right.charCodeAt(rightIndex--) - "0".code : 0,
+				digit = leftDigit - rightDigit - borrow;
+			borrow = digit < 0 ? 1 : 0;
+			if (digit < 0)
+				digit += 10;
+			result.addChar("0".code + digit);
+		}
+		var digits = result.toString(), reversed = new StringBuf();
+		for (index in 0...digits.length)
+			reversed.addChar(digits.charCodeAt(digits.length - index - 1));
+		return stripDecimalZeros(reversed.toString());
+	}
+
+	static function stripDecimalZeros(value:String):String {
+		var index = 0;
+		while (index + 1 < value.length && value.charCodeAt(index) == "0".code)
+			index++;
+		return value.substr(index);
+	}
+
 	/** Returns the fixed-width enum type named by an hxi:enum annotation. */
-	static function enumAnnotation(node:Dynamic):Null<String> {
+	static function enumAnnotation(node:Dynamic):Null<String>
+		return integerAnnotation(node, "hxi:enum:", "enum");
+
+	static function flagsAnnotation(node:Dynamic):Null<String>
+		return integerAnnotation(node, "hxi:flags:", "flags");
+
+	static function integerAnnotation(node:Dynamic, marker:String, kind:String):Null<String> {
 		for (child in children(node)) {
 			if (field(child, "kind") != "AnnotateAttr")
 				continue;
 			var source = annotationSource(node, child);
-			if (source.indexOf("hxi:enum:") < 0)
+			if (source.indexOf(marker) < 0)
 				continue;
-			var direct = ~/hxi:enum:([A-Za-z_][A-Za-z0-9_]*)/;
+			var direct = new EReg(marker + "([A-Za-z_][A-Za-z0-9_]*)", "");
 			if (direct.match(source))
 				return direct.matched(1);
 			var argument = expansionArgument(node, child);
 			if (argument != null)
 				return argument;
-			throw '${declarationLocation(node)}: could not resolve annotated enum type';
+			throw '${declarationLocation(node)}: could not resolve annotated $kind type';
 		}
 		return null;
 	}

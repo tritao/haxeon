@@ -32,6 +32,7 @@ enum WasmInstruction {
 	Call(functionIndex:Int);
 	CallIndirect(typeIndex:Int);
 	MemoryCopy;
+	MemoryFill;
 	MemorySize;
 	MemoryGrow;
 	Drop;
@@ -97,6 +98,7 @@ enum WasmInstruction {
 	F64ConvertI32S;
 	F64ConvertI64S;
 	I64ExtendI32S;
+	I64ExtendI32U;
 	F64PromoteF32;
 	F32DemoteF64;
 	I32WrapI64;

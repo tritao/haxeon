@@ -60,7 +60,20 @@ class HlLower {
 	}
 
 	function lowerProgram(program:IrProgram):HlCode {
-		var dispatchArities:Map<String, Bool> = [];
+		var runtimeNatives = program.natives.copy(),
+			dispatchArities:Map<String, Bool> = [];
+		for (fn in program.functions)
+			for (block in fn.blocks)
+				for (located in block.instructions)
+					switch located.value {
+						case IteratorNew(_, _):
+							ensureNative(runtimeNatives, "__iterator_new", [IrType.Dyn], IrType.Abstract("realtime_iterator"));
+						case IteratorHasNext(_, _):
+							ensureNative(runtimeNatives, "__iterator_has_next", [IrType.Abstract("realtime_iterator")], IrType.Bool);
+						case IteratorNext(_, _):
+							ensureNative(runtimeNatives, "__iterator_next", [IrType.Abstract("realtime_iterator")], IrType.Dyn);
+						default:
+					}
 		for (native in program.cNatives) {
 			cNatives.set(native.name, native);
 			var arity = native.arguments.length;
@@ -104,7 +117,7 @@ class HlLower {
 			hasFunctionIndices = true;
 		if (!hasFunctionIndices) {
 			var nextFunction = 0;
-			for (native in program.natives)
+			for (native in runtimeNatives)
 				addFunctionName(native.name, nextFunction++);
 			for (native in cDispatchNatives)
 				addFunctionName(native.name, nextFunction++);
@@ -115,6 +128,9 @@ class HlLower {
 			for (index in functionIndices)
 				if (index >= nextFunction)
 					nextFunction = index + 1;
+			for (native in runtimeNatives)
+				if (!functionIndices.exists(native.name))
+					addFunctionName(native.name, nextFunction++);
 			for (native in cDispatchNatives)
 				if (!functionIndices.exists(native.name))
 					addFunctionName(native.name, nextFunction++);
@@ -177,7 +193,7 @@ class HlLower {
 		}
 		for (field in program.staticFields)
 			symbols.internGlobal(field.name, field.type);
-		for (native in program.natives)
+		for (native in runtimeNatives)
 			lowerNative(native);
 		for (native in cDispatchNatives)
 			lowerNative(native);
@@ -272,6 +288,25 @@ class HlLower {
 				ready;
 			default: true;
 		};
+
+	static function ensureNative(natives:Array<IrNative>, name:String, arguments:Array<IrType>, result:IrType):Void {
+		for (native in natives)
+			if (native.name == name) {
+				if (native.arguments.length != arguments.length || Std.string(native.result) != Std.string(result))
+					throw 'Conflicting HashLink runtime native signature for "$name": ${native.arguments} -> ${native.result}, expected $arguments -> $result';
+				for (index in 0...arguments.length)
+					if (Std.string(native.arguments[index]) != Std.string(arguments[index]))
+						throw 'Conflicting HashLink runtime native signature for "$name": ${native.arguments} -> ${native.result}, expected $arguments -> $result';
+				return;
+			}
+		natives.push({
+			name: name,
+			library: "haxeon_runtime",
+			symbol: name,
+			arguments: arguments,
+			result: result
+		});
+	}
 
 	function lowerNative(native:IrNative):Void {
 		code.natives.push({
@@ -445,6 +480,19 @@ class HlLower {
 							case 2: instructions.push(HlInstruction.Call2(destination, functionIndex, args[0], args[1]));
 							default: instructions.push(HlInstruction.CallN(destination, functionIndex, args));
 						}
+					case IteratorNew(output, array):
+						var destination = defineRegister(output, registers, registerTypes),
+							boxedArray = temporaryRegister(IrType.Dyn, registerTypes);
+						instructions.push(HlInstruction.ToDyn(boxedArray, requireRegister(array, registers)));
+						instructions.push(HlInstruction.Call1(destination, requireFunction("__iterator_new"), boxedArray));
+					case IteratorHasNext(output, iterator):
+						instructions.push(HlInstruction.Call1(defineRegister(output, registers, registerTypes), requireFunction("__iterator_has_next"),
+							requireRegister(iterator, registers)));
+					case IteratorNext(output, iterator):
+						var destination = defineRegister(output, registers, registerTypes),
+							dynamicResult = temporaryRegister(IrType.Dyn, registerTypes);
+						instructions.push(HlInstruction.Call1(dynamicResult, requireFunction("__iterator_next"), requireRegister(iterator, registers)));
+						instructions.push(HlInstruction.SafeCast(destination, dynamicResult));
 					case CNativeCall(output, functionName, arguments):
 						var native = cNatives.get(functionName);
 						if (native == null)

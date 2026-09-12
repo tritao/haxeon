@@ -454,6 +454,15 @@ class SsaBuilder {
 				case ArraySize(out, array):
 					var result = define(out);
 					emit(target, ArraySize(result, resolve(array)), provenance);
+				case IteratorNew(out, array):
+					var result = define(out);
+					emit(target, IteratorNew(result, resolve(array)), provenance);
+				case IteratorHasNext(out, iterator):
+					var result = define(out);
+					emit(target, IteratorHasNext(result, resolve(iterator)), provenance);
+				case IteratorNext(out, iterator):
+					var result = define(out);
+					emit(target, IteratorNext(result, resolve(iterator)), provenance);
 				case MakeEnum(out, typeName, constructor, arguments):
 					var result = define(out);
 					emit(target, MakeEnum(result, typeName, constructor, [for (argument in arguments) resolve(argument)]), provenance);

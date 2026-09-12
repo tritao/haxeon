@@ -100,6 +100,7 @@ class CHeaderEmitter {
 			case Dyn: "Dynamic";
 			case TypeRef: "Type";
 			case Array(element): 'Array<${typeName(element)}>';
+			case Iterator(element): 'Iterator<${typeName(element)}>';
 			case Function(arguments, result): '(${[for (argument in arguments) typeName(argument)].join(",")})->${typeName(result)}';
 			case Enum(name): 'Enum<$name>';
 			case Obj(name): 'Object<$name>';

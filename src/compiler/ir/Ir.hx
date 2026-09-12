@@ -10,8 +10,10 @@ enum IrType {
 	Bool;
 	F64;
 	Bytes;
+
 	/** GC-managed byte storage used by haxe.io.Bytes and projected HXI structs. */
 	ManagedBytes;
+
 	Dyn;
 	TypeRef;
 	Array(element:IrType);
@@ -19,6 +21,7 @@ enum IrType {
 	Obj(name:String);
 	Abstract(name:String);
 	Virtual(name:String);
+	Iterator(element:IrType);
 	Function(arguments:Array<IrType>, result:IrType);
 }
 
@@ -85,6 +88,9 @@ enum IrInstruction {
 	ArrayGet(output:IrValue, array:IrValue, index:IrValue);
 	ArraySet(array:IrValue, index:IrValue, value:IrValue);
 	ArraySize(output:IrValue, array:IrValue);
+	IteratorNew(output:IrValue, array:IrValue);
+	IteratorHasNext(output:IrValue, iterator:IrValue);
+	IteratorNext(output:IrValue, iterator:IrValue);
 	MakeEnum(output:IrValue, typeName:String, constructor:Int, arguments:Array<IrValue>);
 	EnumIndex(output:IrValue, value:IrValue);
 	EnumField(output:IrValue, value:IrValue, constructor:Int, field:Int);

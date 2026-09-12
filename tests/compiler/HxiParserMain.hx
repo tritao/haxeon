@@ -1,3 +1,4 @@
+import haxe.Int64;
 import compiler.Diagnostic.CompileError;
 import compiler.Compiler;
 import compiler.ffi.HxiModel.HxiDeclaration;
@@ -57,7 +58,9 @@ class HxiParserMain {
 			'interface enums @target("x86_64-linux-gnu") @library("enums") { enum Result : i32 { OK = 0; ERROR = -1; } flags Options : u32 { NONE = 0; FIRST = 1; SECOND = 1 << 1; BOTH = 1 | (1 << 1); HIGH = 0x80000000; } extern fn check(value: Result, options: Options) -> Result; }');
 		switch enumerations.declarations[1] {
 			case Enumeration("Options", _, true, values, _):
-				expect(values[3].value == 3 && values[4].value < 0, "flag expressions should evaluate as 32-bit values");
+				expect(Int64.compare(values[3].value, Int64.ofInt(3)) == 0
+					&& Int64.compare(values[4].value, Int64.parseString("2147483648")) == 0,
+					"flag expressions should preserve their 32-bit representation");
 			case _:
 				throw "expected parsed flags";
 		}
@@ -67,6 +70,32 @@ class HxiParserMain {
 			&& enumSource.indexOf("var Both = 3") >= 0
 			&& enumSource.indexOf("extern function check(arg0:Result, arg1:Options):Result") >= 0,
 			"enums should retain concise nominal types and integer ABI calls");
+		var flagWidthsSource = 'interface flag_widths @target("x86_64-linux-gnu") @library("flag_widths") { '
+			+ 'flags ByteFlags : u8 { NONE = 0; FIRST = 1; SECOND = 2; BOTH = 3; } '
+			+ 'flags ShortFlags : u16 { NONE = 0; FIRST = 1; SECOND = 2; BOTH = 3; } '
+			+ 'flags WordFlags : u32 { NONE = 0; FIRST = 1; SECOND = 2; BOTH = 3; } '
+			+ 'flags WideFlags : u64 { NONE = 0; FIRST = 1; HIGH = 1 << 63; BOTH = (1 << 63) | 1; } '
+			+ 'extern fn check_wide(value: WideFlags) -> WideFlags; }';
+		var flagWidths = HxiParser.parse("flag-widths.hxi", flagWidthsSource),
+			flagWidthsProjection = HxiProjection.source(flagWidths),
+			flagWidthsNatives = HxiProjection.cNatives(flagWidths);
+		expect(flagWidthsProjection.indexOf("enum abstract ByteFlags(Int)") >= 0
+			&& flagWidthsProjection.indexOf("abstract WideFlags(haxe.Int64)") >= 0
+			&& flagWidthsProjection.indexOf("haxe.Int64.make(-2147483648, 0)") >= 0
+			&& flagWidthsProjection.indexOf("function contains(flag:WideFlags):Bool") >= 0
+			&& flagWidthsNatives.length == 1,
+			"flags should project as bitwise-friendly nominal types for 8/16/32/64-bit ABI storage");
+		var flagsCompiler = new Compiler();
+		flagsCompiler.addSourceRoot("stdlib");
+		flagsCompiler.addFfiInterface("flag-widths.hxi", flagWidthsSource);
+		var flagsMainSource = 'import flag_widths; function main():Int { var combined:WordFlags = WordFlags.First | WordFlags.Second; var unknown:WordFlags = cast 8; var preserved:WordFlags = combined | unknown; var wide:WideFlags = WideFlags.first().with(WideFlags.high()); return wide.contains(WideFlags.high()) && preserved == 11 ? 42 : 0; }';
+		flagsCompiler.update("FlagsMain.hx", flagsMainSource);
+		flagsCompiler.analyze("FlagsMain");
+		expectError('interface bad @target("x86_64-linux-gnu") { flags value : i32 { A = 1; } }', "require an unsigned 8/16/32/64-bit integer representation");
+		expectError('interface bad @target("x86_64-linux-gnu") { flags value : u8 { A = 256; } }', "outside the representation");
+		expectError('interface bad @target("x86_64-linux-gnu") { flags value : u32 { FIRST = 1; UNKNOWN = 5; } }', "not declared by a single-bit flag");
+		expectError('interface bad @target("x86_64-linux-gnu") { flags value : u32 { FIRST = 1; DUPLICATE = 1; } }', "duplicates");
+		expectError('interface bad @target("x86_64-linux-gnu") { flags value : u64 { A = 1 << 64; } }', "between 0 and 63");
 		var mixedCaseEnum = HxiParser.parse("mixed-case-enum.hxi",
 			'interface mixed @target("x86_64-linux-gnu") @library("mixed") { enum FixtureResult : i32 { FIXTURE_OK = 0; } extern fn check(value: FixtureResult) -> FixtureResult; }');
 		var mixedCaseSource = HxiProjection.source(mixedCaseEnum);

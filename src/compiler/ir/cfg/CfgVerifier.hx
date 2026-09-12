@@ -245,6 +245,30 @@ class CfgVerifier {
 					}
 					expect(out, I32);
 					define(out, defined, available, block.id);
+				case IteratorNew(out, array):
+					require(array, available, block.id);
+					switch array.type {
+						case Array(element): expect(out, Iterator(element));
+						default: throw 'CFG iterator creation requires an Array value';
+					}
+					define(out, defined, available, block.id);
+				case IteratorHasNext(out, iterator):
+					require(iterator, available, block.id);
+					switch iterator.type {
+						case Iterator(_):
+						default: throw 'CFG hasNext requires an Iterator value';
+					}
+					expect(out, Bool);
+					define(out, defined, available, block.id);
+				case IteratorNext(out, iterator):
+					require(iterator, available, block.id);
+					switch iterator.type {
+						case Iterator(element): expect(out, element);
+						default: throw 'CFG next requires an Iterator value';
+					}
+					if (out.type == Void)
+						throw 'CFG iterator next cannot produce Void';
+					define(out, defined, available, block.id);
 				case MakeEnum(out, _, _, arguments):
 					switch out.type {
 						case Enum(_):
@@ -343,6 +367,10 @@ class CfgVerifier {
 					case Array(b): sameType(a, b);
 					default: false;
 				};
+			case Iterator(a): switch right {
+					case Iterator(b): sameType(a, b);
+					default: false;
+				};
 			case Function(aArgs, aResult): switch right {
 					case Function(bArgs, bResult):
 						if (aArgs.length != bArgs.length) false; else {
@@ -359,7 +387,7 @@ class CfgVerifier {
 
 	static function isReference(type:IrType):Bool
 		return switch type {
-			case Bytes, ManagedBytes, Dyn, Obj(_), Enum(_), Abstract(_), Virtual(_), Array(_), Function(_, _): true;
+			case Bytes, ManagedBytes, Dyn, Obj(_), Enum(_), Abstract(_), Virtual(_), Array(_), Iterator(_), Function(_, _): true;
 			default: false;
 		};
 }

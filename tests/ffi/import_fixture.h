@@ -12,6 +12,7 @@
 #define HXI_LENGTH_FIELD(size) __attribute__((annotate("hxi:length_field")))
 #define HXI_HANDLE __attribute__((annotate("hxi:handle")))
 #define HXI_DECLARE_HANDLE(name) typedef struct name { uint32_t id; } name HXI_HANDLE
+#define HXI_FLAGS(name) __attribute__((annotate("hxi:flags:" #name))) name##_flags_enum
 
 typedef uint32_t sample_handle HXI_HANDLE;
 HXI_DECLARE_HANDLE(sample_resource);
@@ -43,6 +44,20 @@ enum HXI_ENUM(sample_mode) {
     SAMPLE_MODE_ALTERNATE
 };
 
+typedef uint32_t sample_flags;
+enum HXI_FLAGS(sample_flags) {
+    SAMPLE_FLAGS_NONE = 0,
+    SAMPLE_FLAGS_READ = 1u << 0,
+    SAMPLE_FLAGS_WRITE = 1u << 1,
+    SAMPLE_FLAGS_READ_WRITE = SAMPLE_FLAGS_READ | SAMPLE_FLAGS_WRITE
+};
+
+typedef uint64_t sample_wide_flags;
+enum HXI_FLAGS(sample_wide_flags) {
+    SAMPLE_WIDE_FLAGS_LOW = UINT64_C(1) << 0,
+    SAMPLE_WIDE_FLAGS_HIGH = UINT64_C(1) << 63
+};
+
 typedef struct sample_options {
     uint32_t struct_size;
     const char *title HXI_NULLABLE_UTF8;
@@ -63,6 +78,8 @@ int32_t sample_apply(sample_binary_callback callback, int32_t left, int32_t righ
 int32_t sample_apply_nullable(sample_binary_callback _Nullable callback);
 enum sample_result sample_check_result(enum sample_result value);
 sample_mode sample_check_mode(sample_mode value);
+sample_flags sample_check_flags(sample_flags value);
+sample_wide_flags sample_check_wide_flags(sample_wide_flags value);
 const char *sample_error(void) HXI_RETURNS_BORROWED_UTF8;
 int32_t sample_check_utf8(hxi_utf8 value, hxi_nullable_utf8 optional);
 int32_t sample_check_annotated_utf8(const char *value HXI_UTF8,

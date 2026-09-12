@@ -364,6 +364,28 @@ class CfgBuilder {
 		return out;
 	}
 
+	public function iteratorNew(array:CfgValue):CfgValue {
+		var element = switch array.type {
+			case Array(element): element;
+			default: throw "Iterator creation requires an Array value";
+		};
+		var out = temporary(Iterator(element));
+		emit(IteratorNew(out, array));
+		return out;
+	}
+
+	public function iteratorHasNext(iterator:CfgValue):CfgValue {
+		var out = temporary(Bool);
+		emit(IteratorHasNext(out, iterator));
+		return out;
+	}
+
+	public function iteratorNext(iterator:CfgValue, elementType:IrType):CfgValue {
+		var out = temporary(elementType);
+		emit(IteratorNext(out, iterator));
+		return out;
+	}
+
 	public function makeEnum(typeName:String, constructor:Int, arguments:Array<CfgValue>):CfgValue {
 		var out = temporary(Enum(typeName));
 		emit(MakeEnum(out, typeName, constructor, arguments));

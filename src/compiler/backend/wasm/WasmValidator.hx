@@ -166,6 +166,12 @@ class WasmValidator {
 						pop(stack, I32, fn);
 						pop(stack, I32, fn);
 					}
+				case MemoryFill:
+					if (reachable) {
+						pop(stack, I32, fn);
+						pop(stack, I32, fn);
+						pop(stack, I32, fn);
+					}
 				case MemorySize:
 					if (reachable)
 						stack.push(I32);
@@ -269,7 +275,7 @@ class WasmValidator {
 					pop(stack, I64, fn);
 					if (reachable)
 						stack.push(F64);
-				case I64ExtendI32S:
+				case I64ExtendI32S, I64ExtendI32U:
 					pop(stack, I32, fn);
 					if (reachable)
 						stack.push(I64);

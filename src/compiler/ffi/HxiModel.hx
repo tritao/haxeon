@@ -56,7 +56,10 @@ typedef HxiResultPolicy = {
 
 typedef HxiEnumValue = {
 	final name:String;
-	final value:Int;
+
+	/** Signed 64-bit storage of the ABI bit pattern; unsigned values use two's-complement. */
+	final value:haxe.Int64;
+
 	final span:SourceSpan;
 }
 

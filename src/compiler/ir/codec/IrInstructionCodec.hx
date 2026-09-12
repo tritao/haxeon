@@ -11,7 +11,7 @@ import compiler.ir.codec.IrValueTableCodec;
 
 /** Closed, versioned encoding for every persisted IR instruction operand. */
 class IrInstructionCodec {
-	static inline final VERSION = 2;
+	static inline final VERSION = 3;
 	static final CONSTRUCTORS:Map<String, Bool> = [
 		"Phi" => true,
 		"ConstVoid" => true,
@@ -58,6 +58,9 @@ class IrInstructionCodec {
 		"ArrayGet" => true,
 		"ArraySet" => true,
 		"ArraySize" => true,
+		"IteratorNew" => true,
+		"IteratorHasNext" => true,
+		"IteratorNext" => true,
 		"MakeEnum" => true,
 		"EnumIndex" => true,
 		"EnumField" => true
@@ -234,6 +237,12 @@ class IrInstructionCodec {
 				writeThreeValues(output, "ArraySet", array, index, value);
 			case ArraySize(value, array):
 				writeTwoValues(output, "ArraySize", value, array);
+			case IteratorNew(value, array):
+				writeTwoValues(output, "IteratorNew", value, array);
+			case IteratorHasNext(value, iterator):
+				writeTwoValues(output, "IteratorHasNext", value, iterator);
+			case IteratorNext(value, iterator):
+				writeTwoValues(output, "IteratorNext", value, iterator);
 			case MakeEnum(value, name, constructor, arguments):
 				begin(output, "MakeEnum", 4);
 				writeValue(output, value);
@@ -395,6 +404,15 @@ class IrInstructionCodec {
 			case "ArraySize":
 				arity(2);
 				ArraySize(readValue(input, values), readValue(input, values));
+			case "IteratorNew":
+				arity(2);
+				IteratorNew(readValue(input, values), readValue(input, values));
+			case "IteratorHasNext":
+				arity(2);
+				IteratorHasNext(readValue(input, values), readValue(input, values));
+			case "IteratorNext":
+				arity(2);
+				IteratorNext(readValue(input, values), readValue(input, values));
 			case "MakeEnum":
 				arity(4);
 				MakeEnum(readValue(input, values), readText(input, totalLength), readInt(input), readValues(input, values));

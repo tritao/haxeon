@@ -311,6 +311,10 @@ class WasmEncoder {
 					writeU32(output, 10);
 					writeU32(output, 0);
 					writeU32(output, 0);
+				case MemoryFill:
+					output.writeByte(0xfc);
+					writeU32(output, 11);
+					writeU32(output, 0);
 				case MemorySize:
 					output.writeByte(0x3f);
 					output.writeByte(0);
@@ -479,6 +483,8 @@ class WasmEncoder {
 					output.writeByte(0xb9);
 				case I64ExtendI32S:
 					output.writeByte(0xac);
+				case I64ExtendI32U:
+					output.writeByte(0xad);
 				case F64PromoteF32:
 					output.writeByte(0xbb);
 				case F32DemoteF64:

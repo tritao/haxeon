@@ -5,6 +5,7 @@ import compiler.backend.wasm.WasmBackend;
 import compiler.backend.wasm.WasmTarget;
 import compiler.backend.wasm.WasmTarget.WasmReferenceModel;
 import compiler.backend.wasm.WasmLayout;
+import compiler.backend.wasm.WasmCfgAnalysis;
 import compiler.backend.wasm.WasmRuntimeAbi;
 import compiler.backend.wasm.WasmGcRoots;
 import compiler.backend.wasm.WasmStructurer;
@@ -101,6 +102,38 @@ class WasmBackendMain {
 			entryLoopStructurer = new WasmStructurer(entryLoop);
 		if (!entryLoopStructurer.analysis.reducible || !entryLoopStructurer.canUseStructured())
 			throw "An entry-rooted single-header loop must remain reducible and structurably emitted";
+		var diamondBuilder = new IrBuilder(),
+			diamondCondition = diamondBuilder.argument("condition", Bool),
+			diamondEntry = diamondBuilder.currentBlock().id,
+			diamondLeft = diamondBuilder.createBlock(),
+			diamondRight = diamondBuilder.createBlock(),
+			diamondMerge = diamondBuilder.createBlock();
+		diamondBuilder.branch(diamondCondition, diamondLeft, diamondRight);
+		diamondBuilder.select(diamondLeft);
+		diamondBuilder.jump(diamondMerge);
+		diamondBuilder.select(diamondRight);
+		diamondBuilder.jump(diamondMerge);
+		diamondBuilder.select(diamondMerge);
+		diamondBuilder.returnValue(diamondBuilder.constInt(42));
+		var diamondAnalysis = new WasmCfgAnalysis(new IrFunction("diamond", diamondBuilder.arguments, I32, diamondBuilder.blocks));
+		if (diamondAnalysis.postImmediate.get(diamondEntry) != diamondMerge.id
+			|| diamondAnalysis.postImmediate.get(diamondLeft.id) != diamondMerge.id
+			|| diamondAnalysis.postImmediate.get(diamondRight.id) != diamondMerge.id
+			|| diamondAnalysis.mergeFor(diamondLeft.id, diamondRight.id) != diamondMerge.id)
+			throw "Bitset post-dominators must preserve the nearest common merge for a diamond CFG";
+		var exitsBuilder = new IrBuilder(),
+			exitsCondition = exitsBuilder.argument("condition", Bool),
+			exitsEntry = exitsBuilder.currentBlock().id,
+			exitsLeft = exitsBuilder.createBlock(),
+			exitsRight = exitsBuilder.createBlock();
+		exitsBuilder.branch(exitsCondition, exitsLeft, exitsRight);
+		exitsBuilder.select(exitsLeft);
+		exitsBuilder.returnValue(exitsBuilder.constInt(1));
+		exitsBuilder.select(exitsRight);
+		exitsBuilder.returnValue(exitsBuilder.constInt(2));
+		var exitsAnalysis = new WasmCfgAnalysis(new IrFunction("multipleExits", exitsBuilder.arguments, I32, exitsBuilder.blocks));
+		if (exitsAnalysis.postImmediate.get(exitsEntry) != exitsEntry || exitsAnalysis.mergeFor(exitsLeft.id, exitsRight.id) != null)
+			throw "Post-dominators must not invent a shared merge for distinct function exits";
 		var canonical = CanonicalIrCodec.decode(CanonicalIrCodec.encode(referenceProgram));
 		if (new IrInterpreter(canonical).run("main") != 6)
 			throw "Canonical Haxeon IR did not round-trip through its versioned codec";
@@ -116,6 +149,12 @@ class WasmBackendMain {
 			throw "The SSA interpreter must execute object field semantics";
 		if (new IrInterpreter(Frontend.compile("function main():Int { var values = new Array<Int>(1); values[0] = 42; return values[0]; }")).run("main") != 42)
 			throw "The SSA interpreter must execute array semantics";
+		var iteratorProgram = Frontend.compile("function main():Int { var values = [20, 22]; var first = values.iterator(); var second = values.iterator(); if (first.next() != 20 || second.next() != 20 || first.next() != 22 || second.next() != 22 || first.hasNext() || second.hasNext()) return 0; return 42; }");
+		if (new IrInterpreter(iteratorProgram).run("main") != 42)
+			throw "The SSA interpreter must preserve typed iterator cursors and array iteration semantics";
+		var canonicalIteratorProgram = CanonicalIrCodec.decode(CanonicalIrCodec.encode(iteratorProgram));
+		if (new IrInterpreter(canonicalIteratorProgram).run("main") != 42)
+			throw "Canonical IR persistence must preserve generic iterator types and cursor semantics";
 		if (new IrInterpreter(Frontend.compile("function fail():Void { throw \"boom\"; } function main():Int { var value = 0; try { fail(); } catch (error:Dynamic) { value = 42; } return value; }"))
 			.run("main") != 42)
 			throw "The SSA interpreter must execute exception edges";
@@ -123,6 +162,96 @@ class WasmBackendMain {
 			.run("main") != 42)
 			throw "The SSA interpreter must preserve inherited object fields";
 		var first = compile("function main():Int return 40 + 2;");
+		var int64FlagsBuilder = new IrBuilder(),
+			highWord = int64FlagsBuilder.constInt(-2147483648),
+			zeroWord = int64FlagsBuilder.constInt(0),
+			lowWord = int64FlagsBuilder.constInt(1),
+			highFlag = int64FlagsBuilder.call("haxe.Int64.make", [highWord, zeroWord], I64),
+			lowFlag = int64FlagsBuilder.call("haxe.Int64.make", [zeroWord, lowWord], I64),
+			shiftCount = int64FlagsBuilder.constInt(32),
+			leftShifted = int64FlagsBuilder.call("haxe.Int64.shl", [lowFlag, shiftCount], I64),
+			arithmeticShifted = int64FlagsBuilder.call("haxe.Int64.shr", [leftShifted, shiftCount], I64),
+			logicalShifted = int64FlagsBuilder.call("haxe.Int64.ushr", [arithmeticShifted, shiftCount], I64),
+			combinedFlags = int64FlagsBuilder.call("haxe.Int64.or", [highFlag, lowFlag], I64),
+			clearedFlags = int64FlagsBuilder.call("haxe.Int64.xor", [combinedFlags, lowFlag], I64),
+			remainingFlags = int64FlagsBuilder.call("haxe.Int64.and", [clearedFlags, highFlag], I64),
+			flagsEqual = int64FlagsBuilder.call("haxe.Int64.compare", [remainingFlags, highFlag], I32);
+		int64FlagsBuilder.returnValue(flagsEqual);
+		var int64FlagsProgram = new IrProgram("main");
+		int64FlagsProgram.natives = [
+			{
+				name: "haxe.Int64.make",
+				library: "haxeon_runtime",
+				symbol: "__int64_make",
+				arguments: [I32, I32],
+				result: I64
+			},
+			{
+				name: "haxe.Int64.shl",
+				library: "haxeon_runtime",
+				symbol: "__int64_shl",
+				arguments: [I64, I32],
+				result: I64
+			},
+			{
+				name: "haxe.Int64.shr",
+				library: "haxeon_runtime",
+				symbol: "__int64_shr",
+				arguments: [I64, I32],
+				result: I64
+			},
+			{
+				name: "haxe.Int64.ushr",
+				library: "haxeon_runtime",
+				symbol: "__int64_ushr",
+				arguments: [I64, I32],
+				result: I64
+			},
+			{
+				name: "haxe.Int64.or",
+				library: "haxeon_runtime",
+				symbol: "__int64_or",
+				arguments: [I64, I64],
+				result: I64
+			},
+			{
+				name: "haxe.Int64.xor",
+				library: "haxeon_runtime",
+				symbol: "__int64_xor",
+				arguments: [I64, I64],
+				result: I64
+			},
+			{
+				name: "haxe.Int64.and",
+				library: "haxeon_runtime",
+				symbol: "__int64_and",
+				arguments: [I64, I64],
+				result: I64
+			},
+			{
+				name: "haxe.Int64.compare",
+				library: "haxeon_runtime",
+				symbol: "__int64_compare",
+				arguments: [I64, I64],
+				result: I32
+			}
+		];
+		int64FlagsProgram.functions.push(new IrFunction("main", [], I32, int64FlagsBuilder.blocks));
+		var int64FlagsWasm = new WasmBackend().compile(int64FlagsProgram, {target: Wasm32, debugNames: true});
+		if (int64FlagsWasm.bytes.length < 8 || int64FlagsWasm.bytes.get(0) != 0 || int64FlagsWasm.bytes.get(1) != 97)
+			throw "Wasm Int64 flag operations failed to lower into a module";
+		var memoryStats = new WasmBackend().compile(Frontend.compile("function main():Int { var values = [1, 2, 3]; return values.length; }"),
+			{target: Wasm32, debugNames: true, wasmMemoryStats: true});
+		for (name in [
+			"haxeon.memory.heap_base",
+			"haxeon.memory.heap_top",
+			"haxeon.memory.metadata_base",
+			"haxeon.memory.metadata_top",
+			"haxeon.memory.allocation_count",
+			"haxeon.memory.allocated_bytes"
+		])
+			if (!containsBytes(memoryStats.bytes, name))
+				throw 'Wasm allocator diagnostics omitted export "$name"';
 		var branch = compile("function main():Int { var value:Int; if (true) value = 40; else value = 2; return value + 2; }");
 		var loop = compile("function sum(value:Int):Int { var result = 0; while (value > 0) { result = result + value; value = value - 1; } return result; } function main():Int return sum(3);");
 		var array = compile("function main():Int { var values = new Array<Int>(1); values[0] = 42; return values[0]; }");
@@ -188,5 +317,19 @@ class WasmBackendMain {
 		if (result.bytes.length < 8 || result.bytes.get(0) != 0 || result.bytes.get(1) != 97 || result.bytes.get(2) != 115 || result.bytes.get(3) != 109)
 			throw "Wasm module is missing its binary header";
 		return result.bytes;
+	}
+
+	static function containsBytes(bytes:haxe.io.Bytes, value:String):Bool {
+		for (start in 0...bytes.length - value.length + 1) {
+			var found = true;
+			for (offset in 0...value.length)
+				if (bytes.get(start + offset) != value.charCodeAt(offset)) {
+					found = false;
+					break;
+				}
+			if (found)
+				return true;
+		}
+		return false;
 	}
 }

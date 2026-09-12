@@ -13,6 +13,7 @@ enum WasmRuntimeOperation {
 	GetArray;
 	SetArray;
 	ArraySize;
+	IteratorOperation;
 	MakeClosure;
 	CallClosure;
 	MethodDispatch;
@@ -28,7 +29,7 @@ enum WasmRuntimeOperation {
 }
 
 class WasmRuntimeAbi {
-	public static inline final VERSION:Int = 1;
+	public static inline final VERSION:Int = 2;
 
 	public static function operations(program:IrProgram):Array<WasmRuntimeOperation> {
 		var seen:Map<String, Bool> = [],
@@ -54,6 +55,7 @@ class WasmRuntimeAbi {
 			case ArrayGet(_, _, _): GetArray;
 			case ArraySet(_, _, _): SetArray;
 			case ArraySize(_, _): ArraySize;
+			case IteratorNew(_, _), IteratorHasNext(_, _), IteratorNext(_, _): IteratorOperation;
 			case StaticClosure(_, _), InstanceClosure(_, _, _): MakeClosure;
 			case CallClosure(_, _, _): CallClosure;
 			case MethodCall(_, _, _, _), ToVirtual(_, _): MethodDispatch;
