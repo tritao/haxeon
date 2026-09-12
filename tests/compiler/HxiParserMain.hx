@@ -140,6 +140,22 @@ class HxiParserMain {
 			'interface native_names @target("x86_64-linux-gnu") @library("native_names") { enum nk_result : i32 { NK_OK = 0; } extern fn check(value: nk_result) -> nk_result; }');
 		aliasCompiler.update("AliasMain.hx", "import native_names.Result; function main():Int { var value:Result = Result.Ok; return value; }");
 		aliasCompiler.analyze("AliasMain");
+		var forkedProjectionCompiler = new Compiler();
+		forkedProjectionCompiler.addFfiProjection("renamed.hxmap", '{"interface":"renamed","functionNames":{"check":"validate"}}');
+		forkedProjectionCompiler.addFfiInterface("renamed.hxi",
+			'interface renamed @target("x86_64-linux-gnu") @library("renamed") { extern fn check() -> i32; }');
+		forkedProjectionCompiler.addSourceRoot("stdlib");
+		var forkedProjectionMain = "import renamed; function main():Int return renamed.validate();";
+		forkedProjectionCompiler.update("ProfileForkMain.hx", forkedProjectionMain);
+		forkedProjectionCompiler.analyze("ProfileForkMain");
+		var forkedProjectionCompile = forkedProjectionCompiler.compile("ProfileForkMain");
+		expect(forkedProjectionCompile.ir.cNatives.length == 1
+			&& forkedProjectionCompile.ir.cNatives[0].name == "renamed.validate"
+			&& forkedProjectionCompile.ir.cNatives[0].symbol == "check",
+			"transactional compiler candidates should preserve projected native names while retaining the C symbol");
+		var forkedProjectionValidation = forkedProjectionCompiler.validate("ProfileForkMain.hx", forkedProjectionMain, "ProfileForkMain");
+		expect(forkedProjectionValidation.valid,
+			"forked compiler validation should retain Haxe projection names and their matching native registrations");
 		var enumField = HxiParser.parse("enum-field.hxi",
 			'interface enums @target("x86_64-linux-gnu") @library("enums") { enum result : c_int { OK = 0; ERROR = -1; } struct Status @layout(4, 4) { result: result @offset(0); } }');
 		var enumFieldSource = HxiProjection.source(enumField);

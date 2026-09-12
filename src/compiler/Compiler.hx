@@ -60,6 +60,28 @@ typedef FfiInterfaceSource = {
 	final text:String;
 }
 
+typedef FfiProjectionSource = {
+	final path:String;
+	final text:String;
+}
+
+/** Immutable source snapshot used when rebuilding a compiler candidate. */
+class FfiConfiguration {
+	final interfaces:Array<FfiInterfaceSource>;
+	final projections:Array<FfiProjectionSource>;
+
+	public function new(?interfaces:Array<FfiInterfaceSource>, ?projections:Array<FfiProjectionSource>) {
+		this.interfaces = interfaces == null ? [] : [for (source in interfaces) {path: source.path, text: source.text}];
+		this.projections = projections == null ? [] : [for (source in projections) {path: source.path, text: source.text}];
+	}
+
+	public function interfaceSources():Array<FfiInterfaceSource>
+		return [for (source in interfaces) {path: source.path, text: source.text}];
+
+	public function projectionSources():Array<FfiProjectionSource>
+		return [for (source in projections) {path: source.path, text: source.text}];
+}
+
 typedef FfiComposition = {
 	final omitted:Map<String, Bool>;
 	final declarations:Map<String, HxiDeclaration>;
@@ -162,6 +184,7 @@ class Compiler {
 	final natives:NativeRegistry;
 	final ffiInterfaceSources:Array<FfiInterfaceSource> = [];
 	final ffiInterfaceModels:Map<String, HxiInterface> = [];
+	final ffiProjectionSources:Array<FfiProjectionSource> = [];
 	final ffiProjectionProfiles:Map<String, HxiProjectionProfile> = [];
 	final ffiProjectionCache:Map<String, String> = [];
 	final ffiCompositionCache:Map<String, FfiComposition> = [];
@@ -177,7 +200,7 @@ class Compiler {
 	var cachedCompileResult:Null<CompileResult>;
 	var cachedSemanticProgram:Null<SemanticProgram>;
 
-	public function new(?identityState:Bytes, ?nativeConfiguration:Array<NativeFunction>, ?ffiConfiguration:Array<FfiInterfaceSource>) {
+	public function new(?identityState:Bytes, ?nativeConfiguration:Array<NativeFunction>, ?ffiConfiguration:FfiConfiguration) {
 		semanticWorkspace = new SemanticWorkspace(modules);
 		natives = new NativeRegistry(nativeConfiguration);
 		if (identityState == null) {
@@ -206,9 +229,12 @@ class Compiler {
 				beginRehydration(assembler);
 			}
 		}
-		if (ffiConfiguration != null)
-			for (source in ffiConfiguration)
+		if (ffiConfiguration != null) {
+			for (source in ffiConfiguration.interfaceSources())
 				registerFfiInterface(source.path, source.text, false);
+			for (source in ffiConfiguration.projectionSources())
+				registerFfiProjection(source.path, source.text, false);
+		}
 	}
 
 	public function exportIdentityState():Bytes {
@@ -264,7 +290,11 @@ class Compiler {
 
 	/** Register Haxe-only naming policy without changing the generated ABI model. */
 	public function addFfiProjection(path:String, source:String):Void {
-		if (compiledOnce)
+		registerFfiProjection(path, source, true);
+	}
+
+	function registerFfiProjection(path:String, source:String, enforceFreeze:Bool):Void {
+		if (enforceFreeze && compiledOnce)
 			throw "FFI projections are frozen after the first compilation";
 		var profile = HxiProjectionProfile.parse(path, source),
 			name = profile.interfaceName;
@@ -273,6 +303,7 @@ class Compiler {
 		if (ffiProjectionProfiles.exists(name))
 			throw 'FFI projection for interface "$name" is already registered';
 		ffiProjectionProfiles.set(name, profile);
+		ffiProjectionSources.push({path: path, text: source});
 		var model = ffiInterfaceModels.get(name);
 		if (model != null) {
 			ffiProjectionCache.remove(name);
@@ -392,8 +423,8 @@ class Compiler {
 				Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _, _): name;
 		};
 
-	function ffiConfiguration():Array<FfiInterfaceSource>
-		return [for (source in ffiInterfaceSources) {path: source.path, text: source.text}];
+	function ffiConfigurationSnapshot():FfiConfiguration
+		return new FfiConfiguration(ffiInterfaceSources, ffiProjectionSources);
 
 	/** Add a filesystem root whose modules are loaded on demand during resolution. */
 	public function addSourceRoot(path:String):Void {
@@ -506,7 +537,7 @@ class Compiler {
 	}
 
 	function fork():Compiler {
-		var candidate = new Compiler(exportIdentityState(), nativeConfiguration(), ffiConfiguration());
+		var candidate = new Compiler(exportIdentityState(), nativeConfiguration(), ffiConfigurationSnapshot());
 		candidate.sourceLoader = sourceLoader.copy();
 		candidate.configurationIdentity = configurationIdentity;
 		candidate.configurationScopeIdentity = configurationScopeIdentity;
@@ -638,7 +669,7 @@ class Compiler {
 	}
 
 	function createCandidate(snapshot:CompilerSnapshot, startingAssembler:Null<HlModuleAssembler>):Compiler {
-		var candidate = new Compiler(exportIdentityState(), nativeConfiguration(), ffiConfiguration());
+		var candidate = new Compiler(exportIdentityState(), nativeConfiguration(), ffiConfigurationSnapshot());
 		candidate.sourceLoader = sourceLoader.copy();
 		candidate.configurationIdentity = configurationIdentity;
 		candidate.configurationScopeIdentity = configurationScopeIdentity;
