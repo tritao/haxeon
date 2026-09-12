@@ -50,6 +50,8 @@ set_target_properties(haxeon_runtime PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/out"
 )
 
+add_subdirectory(tests/native)
+
 set_target_properties(hl libhl PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/.tools/hashlink"
   LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/.tools/hashlink"

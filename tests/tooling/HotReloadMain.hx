@@ -24,6 +24,7 @@ import runtime.RuntimeError;
 import runtime.RuntimeStatus;
 import runtime.PatchSet;
 import runtime.ModuleRetirementStatus.ModuleRetirementFlag;
+import sys.io.File;
 
 class HotReloadMain {
 	static function requireFunctionId(result:CompileResult, name:String):Int {
@@ -38,6 +39,7 @@ class HotReloadMain {
 		testPatchContract();
 		testDecodedIrLifetime();
 		testBackendStateLifetime();
+		testJitSupportModuleRetirement();
 		testLiveAbiPatchMatrix();
 		testRetainedPatchedClosure();
 		if (Runtime.retryRetirements() != 0)
@@ -402,10 +404,15 @@ class HotReloadMain {
 		var initial = compiler.compile("Main"),
 			loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
 		var makeId = initial.functionIds.get("Main.make");
+		var initialClosure = Runtime.retainClosure(loaded, makeId);
+		if (Runtime.callRetainedClosureInt(initialClosure) != 40)
+			throw "initial static closure returned the wrong value";
 		compiler.update("Main.hx",
 			"function value():Int { return 41; } function make():() -> Int { var marker = 1; return value; } function main():Int { return value(); }");
 		var first = compiler.compile("Main");
 		Runtime.patchSet(loaded, new PatchSet(initial.revision, first.revision, first.patchBytes, first.changedFunctions));
+		if (Runtime.callRetainedClosureInt(initialClosure) != 41)
+			throw "initial static closure did not follow its stable function slot";
 		var retained = Runtime.retainClosure(loaded, makeId);
 		if (Runtime.liveAllocationCount(loaded) == 0)
 			throw "retained closure was not attributed to its module";
@@ -415,15 +422,39 @@ class HotReloadMain {
 			"function value():Int { return 42; } function make():() -> Int { var marker = 2; return value; } function main():Int { return value(); }");
 		var second = compiler.compile("Main");
 		Runtime.patchSet(loaded, new PatchSet(first.revision, second.revision, second.patchBytes, second.changedFunctions));
-		if (Runtime.callRetainedClosureInt(retained) != 42)
+		if (Runtime.callRetainedClosureInt(initialClosure) != 42 || Runtime.callRetainedClosureInt(retained) != 42)
 			throw "retained closure did not follow its stable function slot";
 		if (Runtime.retiredCodeAllocationCount(loaded) != 0)
 			throw "stable closure dispatch retained superseded JIT code";
 		Runtime.dispose(loaded);
-		if (Runtime.callRetainedClosureInt(retained) != 42)
+		if (Runtime.callRetainedClosureInt(initialClosure) != 42 || Runtime.callRetainedClosureInt(retained) != 42)
 			throw "module disposal invalidated a retained closure";
+		initialClosure.release();
 		retained.release();
 		Runtime.dispose(loaded);
+	}
+
+	static function testJitSupportModuleRetirement():Void {
+		var owner = new Compiler();
+		owner.update("Main.hx", "function main():Int { return 41; }");
+		var ownerResult = owner.compile("Main");
+		var survivor = new Compiler();
+		survivor.update("Main.hx", "function main():Int { return 42; }");
+		var survivorResult = survivor.compile("Main");
+		var prefix = Sys.getCwd() + "/jit-support-lifetime";
+		File.saveBytes(prefix + "-owner.hl", HlWriter.encode(ownerResult.module));
+		File.saveBytes(prefix + "-owner.hli", ownerResult.runtimeIdentity);
+		File.saveContent(prefix + "-owner.id", Std.string(ownerResult.functionIds.get("main")));
+		File.saveBytes(prefix + "-survivor.hl", HlWriter.encode(survivorResult.module));
+		File.saveBytes(prefix + "-survivor.hli", survivorResult.runtimeIdentity);
+		File.saveContent(prefix + "-survivor.id", Std.string(survivorResult.functionIds.get("main")));
+		var test = Sys.getCwd() + "/../.tools/hashlink/haxeon-jit-support-lifetime";
+		#if windows
+		test += ".exe";
+		#end
+		var status = Sys.command(test, [prefix + "-owner", prefix + "-survivor"]);
+		if (status != 0)
+			throw 'JIT support trampoline did not survive owner-module retirement (exit $status)';
 	}
 
 	static function testPhysicalModuleReclamation():Void {
