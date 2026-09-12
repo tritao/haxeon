@@ -61,23 +61,27 @@ the guest.
   safepoints. Generated functions also maintain typed shadow frames in a
   reserved linear-memory root area, so the runtime has an actual root chain,
   not just an offline map. The current collector is a non-moving mark/sweep
-  collector with compacted allocation metadata, a free list, and precise
-  static/shadow-frame roots. Each allocation has an aligned private prefix
-  pointing to its GC record, so tracing resolves references directly instead
-  of scanning every record; metadata compaction refreshes those back-pointers.
+  collector with precise static/shadow-frame roots. Every aligned heap block
+  has an inline 16-byte header containing its physical size, state/trace flags,
+  an exact payload-owner pointer, and a free-list link. Marking resolves a
+  reference directly to that header; sweeping walks the heap linearly and
+  merges adjacent dead/free blocks while rebuilding the free list. This avoids
+  a separate fixed-capacity allocation-metadata table.
   Shadow frames publish a dense snapshot of the references live at the current
   safepoint; rooted functions restore their frame chain on tagged exception
-  unwinding. The fixed root and metadata reservations are bounds-checked and
-  trap on exhaustion. First-fit free-list reuse unlinks the selected block
-  without dropping earlier nodes and splits blocks when the remainder can hold
-  a free-list header.
-  The prefix also identifies payloads that may contain managed references.
+  unwinding. The fixed shadow-root reservation is bounds-checked and traps on
+  exhaustion. First-fit free-list reuse unlinks the selected block without
+  dropping earlier nodes and splits blocks when the remainder can hold a full
+  block header.
+  The block header identifies payloads that may contain managed references.
   Numeric-array backing stores and `Bytes` payloads are atomic and skipped during
   tracing; reference arrays and object fields remain traced. Collection still
   runs before selecting a block for each allocation, preserving the current
   safepoint/rooting guarantees. Recycled blocks are zero-filled before reuse,
   preserving Haxe's default values for fields, array elements, and byte storage
-  just as newly grown Wasm memory does.
+  just as newly grown Wasm memory does. The legacy `metadata_base` and
+  `metadata_top` diagnostic exports remain temporarily available and report an
+  empty region for hosts that still display those counters.
 - `haxeon.patch` contains stable function identities and semantic signatures
   for validating replacement table entries. `haxeon.patch.slots` maps those
   stable names to exported function-table slots. `WasmBackend.compilePatch`

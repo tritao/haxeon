@@ -106,10 +106,8 @@ class WasmBackend implements Backend {
 		module.exportMemory = !importMemory;
 		var rootBase = align(Std.int(Math.max(1024, nextData)), 8),
 			rootReserve = WasmLayout.ROOT_RESERVE,
-			metadataBase = rootBase + rootReserve,
-			rootLimit = metadataBase,
-			metadataLimit = metadataBase + WasmLayout.GC_METADATA_RESERVE,
-			heapStart = metadataBase + WasmLayout.GC_METADATA_RESERVE;
+			rootLimit = rootBase + rootReserve,
+			heapStart = rootLimit;
 		if (contract != null && heapStart > contract.guestLimit)
 			throw 'Wasm guest layout exceeds memory contract guest limit ${contract.guestLimit}';
 		module.memoryMin = contract == null ? memoryPages(heapStart) : memoryPages(contract.memorySize);
@@ -119,8 +117,6 @@ class WasmBackend implements Backend {
 		module.globals.push({type: I32, mutable: true, init: [I32Const(rootBase)]});
 		var rootFrameTop = module.globals.length;
 		module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
-		var metadataTop = module.globals.length;
-		module.globals.push({type: I32, mutable: true, init: [I32Const(metadataBase)]});
 		var freeHead = module.globals.length;
 		module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
 		var allocationCount = -1, allocationBytes = -1, collectionCount = -1;
@@ -143,9 +139,9 @@ class WasmBackend implements Backend {
 		var functions:Map<String, Int> = [];
 		addCNativeImports(module, functions, program, usedCNatives);
 		addRuntimeImports(module, program, usedNatives);
-		var mark = addGcMark(module, heapStart, heapTop, metadataBase, metadataTop);
-		var collector = addGcCollector(module, rootFrameTop, metadataBase, metadataTop, freeHead, mark, rootGlobals, collectionCount);
-		var allocator = addAllocator(module, collector, heapTop, metadataLimit, metadataTop, freeHead, allocationCount, allocationBytes);
+		var mark = addGcMark(module, heapStart, heapTop);
+		var collector = addGcCollector(module, heapStart, heapTop, rootFrameTop, freeHead, mark, rootGlobals, collectionCount);
+		var allocator = addAllocator(module, collector, heapTop, freeHead, allocationCount, allocationBytes);
 		functions.set("__haxeon_alloc", allocator);
 		addRuntimeFunctions(module, functions, program, allocator);
 		for (native in program.natives) {
@@ -213,9 +209,11 @@ class WasmBackend implements Backend {
 		}
 		if (options.wasmMemoryStats == true) {
 			addMemoryStatExport(module, "haxeon.memory.heap_base", [I32Const(heapStart)]);
-			addMemoryStatExport(module, "haxeon.memory.heap_top", [GlobalGet(0)]);
-			addMemoryStatExport(module, "haxeon.memory.metadata_base", [I32Const(metadataBase)]);
-			addMemoryStatExport(module, "haxeon.memory.metadata_top", [GlobalGet(metadataTop)]);
+			addMemoryStatExport(module, "haxeon.memory.heap_top", [GlobalGet(heapTop)]);
+			// Kept temporarily for hosts that still display the old metadata counters.
+			// In-block headers make out-of-line GC metadata a zero-sized region.
+			addMemoryStatExport(module, "haxeon.memory.metadata_base", [I32Const(heapStart)]);
+			addMemoryStatExport(module, "haxeon.memory.metadata_top", [I32Const(heapStart)]);
 			addMemoryStatExport(module, "haxeon.memory.allocation_count", [GlobalGet(allocationCount)]);
 			addMemoryStatExport(module, "haxeon.memory.allocated_bytes", [GlobalGet(allocationBytes)]);
 			addMemoryStatExport(module, "haxeon.memory.collection_count", [GlobalGet(collectionCount)]);
@@ -2755,7 +2753,7 @@ class WasmBackend implements Backend {
 	static function align(value:Int, boundary:Int):Int
 		return (value + boundary - 1) & ~(boundary - 1);
 
-	static function addGcMark(module:WasmModule, heapStart:Int, heapTop:Int, metadataBase:Int, metadataTop:Int):Int {
+	static function addGcMark(module:WasmModule, heapStart:Int, heapTop:Int):Int {
 		var type:WasmFunctionType = {parameters: [I32], results: []},
 			index = module.addFunction(new WasmFunction("__haxeon_gc_mark", type));
 		var body:Array<WasmInstruction> = [
@@ -2765,67 +2763,104 @@ class WasmBackend implements Backend {
 			Return,
 			End,
 			LocalGet(0),
-			I32Const(heapStart + WasmLayout.GC_ALLOCATION_HEADER_SIZE),
+			I32Const(heapStart + WasmLayout.GC_BLOCK_HEADER_SIZE),
 			I32LtS,
 			If(null),
 			Return,
 			End,
-			GlobalGet(heapTop),
 			LocalGet(0),
-			I32LeS,
+			I32Const(7),
+			I32And,
+			I32Eqz,
+			I32Eqz,
 			If(null),
 			Return,
 			End,
 			LocalGet(0),
-			I32Const(WasmLayout.GC_ALLOCATION_HEADER_SIZE),
+			I32Const(WasmLayout.GC_BLOCK_HEADER_SIZE),
 			I32Sub,
 			LocalSet(1),
+			GlobalGet(heapTop),
 			LocalGet(1),
-			I32Load(0),
-			LocalSet(2),
-			LocalGet(2),
-			I32Const(metadataBase),
-			I32LtS,
-			If(null),
-			Return,
-			End,
-			GlobalGet(metadataTop),
-			LocalGet(2),
 			I32LeS,
 			If(null),
 			Return,
 			End,
-			GlobalGet(metadataTop),
-			LocalGet(2),
-			I32Sub,
-			I32Const(WasmLayout.GC_RECORD_SIZE),
-			I32LtS,
+			LocalGet(0),
+			GlobalGet(heapTop),
+			I32LeS,
+			I32Eqz,
 			If(null),
 			Return,
 			End,
-			LocalGet(2),
-			I32Load(0),
 			LocalGet(1),
+			I32Load(WasmLayout.GC_BLOCK_FLAGS_OFFSET),
+			LocalSet(2),
+			LocalGet(2),
+			I32Const(WasmLayout.GC_BLOCK_MAGIC_MASK),
+			I32And,
+			I32Const(WasmLayout.GC_BLOCK_MAGIC),
 			I32Eq,
 			I32Eqz,
 			If(null),
 			Return,
 			End,
 			LocalGet(2),
-			I32Const(8),
-			I32Add,
-			I32Load(0),
+			I32Const(WasmLayout.GC_BLOCK_ALLOCATED),
+			I32And,
 			I32Eqz,
 			If(null),
-			LocalGet(2),
-			I32Const(8),
-			I32Add,
-			I32Const(1),
-			I32Store(0),
+			Return,
+			End,
 			LocalGet(1),
-			I32Const(WasmLayout.GC_ALLOCATION_SCAN_REFERENCES_OFFSET),
+			I32Load(WasmLayout.GC_BLOCK_OWNER_OFFSET),
+			LocalGet(0),
+			I32Eq,
+			I32Eqz,
+			If(null),
+			Return,
+			End,
+			LocalGet(1),
+			I32Load(WasmLayout.GC_BLOCK_SIZE_OFFSET),
+			LocalSet(3),
+			LocalGet(3),
+			I32Const(WasmLayout.GC_BLOCK_HEADER_SIZE),
+			I32LtS,
+			If(null),
+			Return,
+			End,
+			LocalGet(3),
+			I32Const(7),
+			I32And,
+			I32Eqz,
+			I32Eqz,
+			If(null),
+			Return,
+			End,
+			LocalGet(3),
+			GlobalGet(heapTop),
+			LocalGet(1),
+			I32Sub,
+			I32LeS,
+			I32Eqz,
+			If(null),
+			Return,
+			End,
+			LocalGet(2),
+			I32Const(WasmLayout.GC_BLOCK_MARKED),
+			I32And,
+			I32Eqz,
+			If(null),
+			LocalGet(1),
+			I32Const(WasmLayout.GC_BLOCK_FLAGS_OFFSET),
 			I32Add,
-			I32Load(0),
+			LocalGet(2),
+			I32Const(WasmLayout.GC_BLOCK_MARKED),
+			I32Or,
+			I32Store(0),
+			LocalGet(2),
+			I32Const(WasmLayout.GC_BLOCK_SCAN_REFERENCES),
+			I32And,
 			I32Eqz,
 			If(null),
 			Return,
@@ -2865,9 +2900,8 @@ class WasmBackend implements Backend {
 			If(null),
 			Return,
 			End,
-			LocalGet(2),
-			I32Load(4),
-			I32Const(WasmLayout.GC_ALLOCATION_HEADER_SIZE),
+			LocalGet(3),
+			I32Const(WasmLayout.GC_BLOCK_HEADER_SIZE),
 			I32Sub,
 			LocalSet(3),
 			I32Const(0),
@@ -2896,11 +2930,11 @@ class WasmBackend implements Backend {
 			End,
 			Return
 		];
-		module.setFunction(index, new WasmFunction("__haxeon_gc_mark", type, [{type: I32}, {type: I32}, {type: I32}, {type: I32}], body));
+		module.setFunction(index, new WasmFunction("__haxeon_gc_mark", type, [for (_ in 0...5) {type: I32}], body));
 		return index;
 	}
 
-	static function addGcCollector(module:WasmModule, rootFrameTop:Int, metadataBase:Int, metadataTop:Int, freeHead:Int, mark:Int, rootGlobals:Array<Int>,
+	static function addGcCollector(module:WasmModule, heapStart:Int, heapTop:Int, rootFrameTop:Int, freeHead:Int, mark:Int, rootGlobals:Array<Int>,
 			collectionCount:Int):Int {
 		var type:WasmFunctionType = {parameters: [], results: []},
 			body:Array<WasmInstruction> = [];
@@ -2958,60 +2992,129 @@ class WasmBackend implements Backend {
 			body.push(GlobalGet(global));
 			body.push(Call(mark));
 		}
-		body = body.concat([
-			I32Const(metadataBase),
-			LocalSet(3),
-			I32Const(metadataBase),
-			LocalSet(4),
-			Block(null),
-			Loop(null),
-			LocalGet(3),
-			GlobalGet(metadataTop),
-			I32LtS,
-			If(null),
-			LocalGet(3),
-			I32Const(8),
-			I32Add,
-			I32Load(0),
-			LocalSet(5),
-			LocalGet(3),
-			I32Load(0),
-			LocalSet(6),
-			LocalGet(3),
-			I32Load(4),
-			LocalSet(7),
-			LocalGet(5),
-			If(null),
-			LocalGet(6),
-			LocalGet(4),
-			I32Store(0),
-			LocalGet(4),
-			LocalGet(6),
-			I32Store(0),
-			LocalGet(4),
+		var appendFreeRun:Array<WasmInstruction> = [
 			LocalGet(7),
-			I32Store(4),
+			I32Eqz,
+			If(null),
+			LocalGet(3),
+			LocalSet(6),
+			End,
+			LocalGet(7),
 			LocalGet(4),
-			I32Const(8),
+			I32Add,
+			LocalSet(7)
+		];
+		var flushFreeRun:Array<WasmInstruction> = [
+			LocalGet(7),
+			I32Eqz,
+			I32Eqz,
+			If(null),
+			LocalGet(6),
+			LocalGet(7),
+			I32Store(WasmLayout.GC_BLOCK_SIZE_OFFSET),
+			LocalGet(6),
+			I32Const(WasmLayout.GC_BLOCK_FLAGS_OFFSET),
+			I32Add,
+			I32Const(WasmLayout.GC_BLOCK_MAGIC),
+			I32Store(0),
+			LocalGet(6),
+			I32Const(WasmLayout.GC_BLOCK_OWNER_OFFSET),
 			I32Add,
 			I32Const(0),
 			I32Store(0),
-			LocalGet(4),
-			I32Const(WasmLayout.GC_RECORD_SIZE),
-			I32Add,
-			LocalSet(4),
-			Else,
 			LocalGet(6),
+			I32Const(WasmLayout.GC_BLOCK_NEXT_FREE_OFFSET),
+			I32Add,
 			GlobalGet(freeHead),
 			I32Store(0),
 			LocalGet(6),
-			LocalGet(7),
-			I32Store(4),
-			LocalGet(6),
 			GlobalSet(freeHead),
+			End
+		];
+		body = body.concat([
+			I32Const(0),
+			GlobalSet(freeHead),
+			I32Const(heapStart),
+			LocalSet(3),
+			I32Const(0),
+			LocalSet(6),
+			I32Const(0),
+			LocalSet(7),
+			Block(null),
+			Loop(null),
+			LocalGet(3),
+			GlobalGet(heapTop),
+			I32LtS,
+			If(null),
+			LocalGet(3),
+			I32Load(WasmLayout.GC_BLOCK_SIZE_OFFSET),
+			LocalSet(4),
+			LocalGet(4),
+			I32Const(WasmLayout.GC_BLOCK_HEADER_SIZE),
+			I32LtS,
+			If(null),
+			Unreachable,
+			End,
+			LocalGet(4),
+			I32Const(7),
+			I32And,
+			I32Eqz,
+			I32Eqz,
+			If(null),
+			Unreachable,
+			End,
+			LocalGet(4),
+			GlobalGet(heapTop),
+			LocalGet(3),
+			I32Sub,
+			I32LeS,
+			I32Eqz,
+			If(null),
+			Unreachable,
 			End,
 			LocalGet(3),
-			I32Const(WasmLayout.GC_RECORD_SIZE),
+			I32Load(WasmLayout.GC_BLOCK_FLAGS_OFFSET),
+			LocalSet(5),
+			LocalGet(5),
+			I32Const(WasmLayout.GC_BLOCK_MAGIC_MASK),
+			I32And,
+			I32Const(WasmLayout.GC_BLOCK_MAGIC),
+			I32Eq,
+			I32Eqz,
+			If(null),
+			Unreachable,
+			End,
+			LocalGet(5),
+			I32Const(WasmLayout.GC_BLOCK_ALLOCATED),
+			I32And,
+			If(null),
+			LocalGet(5),
+			I32Const(WasmLayout.GC_BLOCK_MARKED),
+			I32And,
+			If(null)
+		]);
+		body = body.concat(flushFreeRun);
+		body = body.concat([
+			I32Const(0),
+			LocalSet(6),
+			I32Const(0),
+			LocalSet(7),
+			LocalGet(3),
+			I32Const(WasmLayout.GC_BLOCK_FLAGS_OFFSET),
+			I32Add,
+			LocalGet(5),
+			I32Const(-1 ^ WasmLayout.GC_BLOCK_MARKED),
+			I32And,
+			I32Store(0),
+			Else
+		]);
+		body = body.concat(appendFreeRun);
+		body = body.concat([End, Else]);
+		body = body.concat(appendFreeRun);
+		body = body.concat([
+			End,
+			LocalGet(3),
+			LocalGet(4),
 			I32Add,
 			LocalSet(3),
 			Br(1),
@@ -3019,19 +3122,19 @@ class WasmBackend implements Backend {
 			Br(2),
 			End,
 			End,
-			End,
-			LocalGet(4),
-			GlobalSet(metadataTop),
-			Return
+			End
 		]);
+		body = body.concat(flushFreeRun);
+		body.push(Return);
 		return module.addFunction(new WasmFunction("__haxeon_gc_collect", type, [for (_ in 0...8) {type: I32}], body));
 	}
 
-	static function addAllocator(module:WasmModule, collector:Int, heapTop:Int, metadataLimit:Int, metadataTop:Int, freeHead:Int, allocationCount:Int,
-			allocationBytes:Int):Int {
+	static function addAllocator(module:WasmModule, collector:Int, heapTop:Int, freeHead:Int, allocationCount:Int, allocationBytes:Int):Int {
 		var type:WasmFunctionType = {parameters: [I32], results: [I32]};
 		var index = module.addFunction(new WasmFunction("__haxeon_alloc", type));
-		var body:Array<WasmInstruction> = [LocalGet(0), I32Const(7), I32Add, I32Const(-8), I32And, LocalSet(0),];
+		// local 10 preserves the payload request size for diagnostics; local 0
+		// becomes the full physical block size, including its inline header.
+		var body:Array<WasmInstruction> = [LocalGet(0), I32Const(7), I32Add, I32Const(-8), I32And, LocalSet(10)];
 		if (allocationCount >= 0 && allocationBytes >= 0)
 			body = body.concat([
 				GlobalGet(allocationCount),
@@ -3039,30 +3142,24 @@ class WasmBackend implements Backend {
 				I32Add,
 				GlobalSet(allocationCount),
 				GlobalGet(allocationBytes),
-				LocalGet(0),
+				LocalGet(10),
 				I32Add,
 				GlobalSet(allocationBytes)
 			]);
-		body = body.concat([LocalGet(0), I32Const(WasmLayout.GC_ALLOCATION_HEADER_SIZE), I32Add, LocalSet(0)]);
 		body = body.concat([
-			Call(collector),
-			// Every allocation creates one metadata record. Trap before touching
-			// the adjacent heap if the reserved metadata region is exhausted.
-			GlobalGet(metadataTop),
-			I32Const(WasmLayout.GC_RECORD_SIZE),
+			LocalGet(10),
+			I32Const(WasmLayout.GC_BLOCK_HEADER_SIZE),
 			I32Add,
-			I32Const(metadataLimit),
-			I32LeS,
-			I32Eqz,
-			If(null),
-			Unreachable,
-			End,
+			LocalSet(0),
+			Call(collector),
 			I32Const(0),
 			LocalSet(1),
 			I32Const(0),
 			LocalSet(4),
 			GlobalGet(freeHead),
 			LocalSet(3),
+			I32Const(0),
+			LocalSet(11),
 			Block(null),
 			Loop(null),
 			LocalGet(3),
@@ -3071,26 +3168,26 @@ class WasmBackend implements Backend {
 			Br(2),
 			Else,
 			LocalGet(3),
-			I32Load(4),
+			I32Load(WasmLayout.GC_BLOCK_SIZE_OFFSET),
 			LocalSet(7),
+			LocalGet(3),
+			I32Load(WasmLayout.GC_BLOCK_NEXT_FREE_OFFSET),
+			LocalSet(9),
 			LocalGet(0),
 			LocalGet(7),
 			I32LeS,
 			If(null),
 			LocalGet(3),
 			LocalSet(1),
-			LocalGet(3),
-			I32Load(0),
-			LocalSet(9),
 			LocalGet(7),
 			LocalGet(0),
 			I32Sub,
 			LocalSet(8),
 			LocalGet(8),
-			I32Const(WasmLayout.GC_ALLOCATION_HEADER_SIZE),
+			I32Const(WasmLayout.GC_BLOCK_HEADER_SIZE),
 			I32LtS,
 			If(null),
-			// A fragment smaller than a free-list header is consumed whole.
+			// A tail too small to hold a header is consumed with the block.
 			LocalGet(7),
 			LocalSet(6),
 			LocalGet(4),
@@ -3101,10 +3198,9 @@ class WasmBackend implements Backend {
 			Else,
 			LocalGet(4),
 			LocalGet(9),
-			I32Store(0),
+			I32Store(WasmLayout.GC_BLOCK_NEXT_FREE_OFFSET),
 			End,
 			Else,
-			// Split a sufficiently large block and link its remainder in place.
 			LocalGet(0),
 			LocalSet(6),
 			LocalGet(3),
@@ -3112,11 +3208,23 @@ class WasmBackend implements Backend {
 			I32Add,
 			LocalSet(2),
 			LocalGet(2),
-			LocalGet(9),
+			LocalGet(8),
+			I32Store(WasmLayout.GC_BLOCK_SIZE_OFFSET),
+			LocalGet(2),
+			I32Const(WasmLayout.GC_BLOCK_FLAGS_OFFSET),
+			I32Add,
+			I32Const(WasmLayout.GC_BLOCK_MAGIC),
 			I32Store(0),
 			LocalGet(2),
-			LocalGet(8),
-			I32Store(4),
+			I32Const(WasmLayout.GC_BLOCK_OWNER_OFFSET),
+			I32Add,
+			I32Const(0),
+			I32Store(0),
+			LocalGet(2),
+			I32Const(WasmLayout.GC_BLOCK_NEXT_FREE_OFFSET),
+			I32Add,
+			LocalGet(9),
+			I32Store(0),
 			LocalGet(4),
 			I32Eqz,
 			If(null),
@@ -3125,15 +3233,16 @@ class WasmBackend implements Backend {
 			Else,
 			LocalGet(4),
 			LocalGet(2),
-			I32Store(0),
+			I32Store(WasmLayout.GC_BLOCK_NEXT_FREE_OFFSET),
 			End,
 			End,
+			I32Const(1),
+			LocalSet(11),
 			Br(3),
 			Else,
 			LocalGet(3),
 			LocalSet(4),
-			LocalGet(3),
-			I32Load(0),
+			LocalGet(9),
 			LocalSet(3),
 			End,
 			End,
@@ -3143,7 +3252,7 @@ class WasmBackend implements Backend {
 			LocalGet(1),
 			I32Eqz,
 			If(null),
-			GlobalGet(0),
+			GlobalGet(heapTop),
 			LocalSet(1),
 			LocalGet(0),
 			LocalSet(6),
@@ -3170,48 +3279,45 @@ class WasmBackend implements Backend {
 			If(null),
 			Unreachable,
 			End,
-			Else,
 			End,
 			LocalGet(2),
-			GlobalSet(0),
-			Else,
-			// WebAssembly grow pages start zeroed, but GC-reused blocks retain
-			// their previous contents. Preserve Haxe's zero-default semantics.
+			GlobalSet(heapTop),
+			End,
+			// Reused blocks must be cleared to preserve Haxe's zero defaults;
+			// newly grown linear-memory pages are already zero-filled.
+			LocalGet(11),
+			If(null),
 			LocalGet(1),
 			I32Const(0),
 			LocalGet(6),
 			MemoryFill,
 			End,
 			LocalGet(1),
-			GlobalGet(metadataTop),
-			LocalSet(5),
-			LocalGet(5),
-			LocalGet(1),
-			I32Store(0),
-			LocalGet(5),
 			LocalGet(6),
-			I32Store(4),
-			LocalGet(5),
-			I32Const(8),
+			I32Store(WasmLayout.GC_BLOCK_SIZE_OFFSET),
+			LocalGet(1),
+			I32Const(WasmLayout.GC_BLOCK_FLAGS_OFFSET),
+			I32Add,
+			I32Const(WasmLayout.GC_BLOCK_MAGIC | WasmLayout.GC_BLOCK_ALLOCATED | WasmLayout.GC_BLOCK_SCAN_REFERENCES),
+			I32Store(0),
+			LocalGet(1),
+			I32Const(WasmLayout.GC_BLOCK_OWNER_OFFSET),
+			I32Add,
+			LocalGet(1),
+			I32Const(WasmLayout.GC_BLOCK_HEADER_SIZE),
+			I32Add,
+			I32Store(0),
+			LocalGet(1),
+			I32Const(WasmLayout.GC_BLOCK_NEXT_FREE_OFFSET),
 			I32Add,
 			I32Const(0),
 			I32Store(0),
-			LocalGet(5),
-			I32Const(WasmLayout.GC_RECORD_SIZE),
-			I32Add,
-			GlobalSet(metadataTop),
 			LocalGet(1),
-			LocalGet(5),
-			I32Store(WasmLayout.GC_ALLOCATION_RECORD_POINTER_OFFSET),
-			LocalGet(1),
-			I32Const(1),
-			I32Store(WasmLayout.GC_ALLOCATION_SCAN_REFERENCES_OFFSET),
-			LocalGet(1),
-			I32Const(WasmLayout.GC_ALLOCATION_HEADER_SIZE),
+			I32Const(WasmLayout.GC_BLOCK_HEADER_SIZE),
 			I32Add,
 			Return
 		]);
-		module.setFunction(index, new WasmFunction("__haxeon_alloc", type, [for (_ in 0...9) {type: I32}], body));
+		module.setFunction(index, new WasmFunction("__haxeon_alloc", type, [for (_ in 0...11) {type: I32}], body));
 		return index;
 	}
 
@@ -3242,10 +3348,19 @@ class WasmBackend implements Backend {
 		if (name == "__array_alloc_i32" || name == "__array_alloc_bool" || name == "__array_alloc_f64")
 			body = body.concat([
 				LocalGet(3),
-				I32Const(WasmLayout.GC_ALLOCATION_HEADER_SIZE),
+				I32Const(WasmLayout.GC_BLOCK_HEADER_SIZE),
 				I32Sub,
-				I32Const(0),
-				I32Store(WasmLayout.GC_ALLOCATION_SCAN_REFERENCES_OFFSET)
+				I32Const(WasmLayout.GC_BLOCK_FLAGS_OFFSET),
+				I32Add,
+				LocalGet(3),
+				I32Const(WasmLayout.GC_BLOCK_HEADER_SIZE),
+				I32Sub,
+				I32Const(WasmLayout.GC_BLOCK_FLAGS_OFFSET),
+				I32Add,
+				I32Load(0),
+				I32Const(-1 ^ WasmLayout.GC_BLOCK_SCAN_REFERENCES),
+				I32And,
+				I32Store(0)
 			]);
 		body = body.concat([
 			LocalGet(1),

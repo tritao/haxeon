@@ -9,6 +9,12 @@ function releaseLargeArray():Void {
 	values[0] = 7;
 }
 
+function reallocateLargeArray():Int {
+	var values = new Array<Int>(1024);
+	values[0] = 42;
+	return values.length;
+}
+
 function releaseArray(size:Int):Void {
 	var values = new Array<Int>(size);
 	if (size > 0)

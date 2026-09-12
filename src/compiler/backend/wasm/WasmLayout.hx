@@ -48,11 +48,16 @@ class WasmLayout {
 	public static inline final ROOT_COUNT_OFFSET = 8;
 	public static inline final ROOT_VALUES_OFFSET = 12;
 	public static inline final ROOT_RESERVE = 65536;
-	public static inline final GC_RECORD_SIZE = 12;
-	public static inline final GC_ALLOCATION_HEADER_SIZE = 8;
-	public static inline final GC_ALLOCATION_RECORD_POINTER_OFFSET = 0;
-	public static inline final GC_ALLOCATION_SCAN_REFERENCES_OFFSET = 4;
-	public static inline final GC_METADATA_RESERVE = 65536;
+	public static inline final GC_BLOCK_HEADER_SIZE = 16;
+	public static inline final GC_BLOCK_SIZE_OFFSET = 0;
+	public static inline final GC_BLOCK_FLAGS_OFFSET = 4;
+	public static inline final GC_BLOCK_OWNER_OFFSET = 8;
+	public static inline final GC_BLOCK_NEXT_FREE_OFFSET = 12;
+	public static inline final GC_BLOCK_MAGIC = 0x48470000;
+	public static inline final GC_BLOCK_MAGIC_MASK = -65536;
+	public static inline final GC_BLOCK_ALLOCATED = 1;
+	public static inline final GC_BLOCK_MARKED = 2;
+	public static inline final GC_BLOCK_SCAN_REFERENCES = 4;
 
 	public final objects:Map<String, WasmObjectLayout> = [];
 	public final enums:Map<String, WasmEnumLayout> = [];
