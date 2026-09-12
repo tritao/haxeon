@@ -107,6 +107,8 @@ class WasmBackend implements Backend {
 		var rootBase = align(Std.int(Math.max(1024, nextData)), 8),
 			rootReserve = WasmLayout.ROOT_RESERVE,
 			metadataBase = rootBase + rootReserve,
+			rootLimit = metadataBase,
+			metadataLimit = metadataBase + WasmLayout.GC_METADATA_RESERVE,
 			heapStart = metadataBase + WasmLayout.GC_METADATA_RESERVE;
 		if (contract != null && heapStart > contract.guestLimit)
 			throw 'Wasm guest layout exceeds memory contract guest limit ${contract.guestLimit}';
@@ -143,7 +145,7 @@ class WasmBackend implements Backend {
 		addRuntimeImports(module, program, usedNatives);
 		var mark = addGcMark(module, heapStart, heapTop, metadataBase, metadataTop);
 		var collector = addGcCollector(module, rootFrameTop, metadataBase, metadataTop, freeHead, mark, rootGlobals, collectionCount);
-		var allocator = addAllocator(module, collector, heapTop, metadataBase, metadataTop, freeHead, allocationCount, allocationBytes);
+		var allocator = addAllocator(module, collector, heapTop, metadataLimit, metadataTop, freeHead, allocationCount, allocationBytes);
 		functions.set("__haxeon_alloc", allocator);
 		addRuntimeFunctions(module, functions, program, allocator);
 		for (native in program.natives) {
@@ -151,7 +153,7 @@ class WasmBackend implements Backend {
 			if (stride != null)
 				functions.set(native.name, addArrayAllocator(module, native.name, stride, allocator));
 		}
-		wrapRuntimeFunctions(module, rootTop, rootFrameTop);
+		var runtimeFunctionCount = module.functions.length;
 		var methods:Map<String, String> = [];
 		for (object in program.objects)
 			for (method in object.methods)
@@ -182,14 +184,15 @@ class WasmBackend implements Backend {
 				results: []
 			}) : null;
 		module.exceptionTagType = exceptionTag;
+		wrapRuntimeFunctions(module, runtimeFunctionCount, rootTop, rootFrameTop, rootLimit, exceptionTag);
 		module.exportTable = module.tableMin != null;
 		var gcRootMetadata = WasmGcRoots.encodeAndVisit(program, function(fn, rootPoints) {
 			if (!reachable.exists(fn.name) || (fn.name == "__entry" && preferredEntry != "__entry"))
 				return;
 			var functionIndex = requiredFunctionIndex(functions, fn.name);
 			module.setFunction(functionIndex,
-				WasmFunctionLower.lower(fn, functions, module.functionType(functionIndex), layout, allocator, rootTop, rootFrameTop, globals, strings,
-					methods, closureTypes, tableSlots, exceptionTag, rootPoints));
+				WasmFunctionLower.lower(fn, functions, module.functionType(functionIndex), layout, allocator, rootTop, rootFrameTop, rootLimit, globals,
+					strings, methods, closureTypes, tableSlots, exceptionTag, rootPoints));
 		});
 		module.customSections.push({name: "haxeon.gc.roots", bytes: gcRootMetadata});
 		module.customSections.push({name: "haxeon.patch", bytes: WasmPatch.manifest(program, patchChanged)});
@@ -282,17 +285,16 @@ class WasmBackend implements Backend {
 	static function memoryPages(bytes:Int):Int
 		return Std.int(Math.ceil(bytes / 65536.0));
 
-	static function wrapRuntimeFunctions(module:WasmModule, rootTop:Int, rootFrameTop:Int):Void {
-		var count = module.functions.length;
+	static function wrapRuntimeFunctions(module:WasmModule, count:Int, rootTop:Int, rootFrameTop:Int, rootLimit:Int, exceptionTag:Null<Int>):Void {
 		for (index in 0...count) {
 			var fn = module.functions[index];
 			if (fn.name == "__haxeon_gc_mark" || fn.name == "__haxeon_gc_collect")
 				continue;
-			module.setFunction(module.imports.length + index, wrapRuntimeFunction(fn, rootTop, rootFrameTop));
+			module.setFunction(module.imports.length + index, wrapRuntimeFunction(fn, rootTop, rootFrameTop, rootLimit, exceptionTag));
 		}
 	}
 
-	static function wrapRuntimeFunction(fn:WasmFunction, rootTop:Int, rootFrameTop:Int):WasmFunction {
+	static function wrapRuntimeFunction(fn:WasmFunction, rootTop:Int, rootFrameTop:Int, rootLimit:Int, exceptionTag:Null<Int>):WasmFunction {
 		var rootSlots:Array<Int> = [];
 		for (index in 0...fn.type.parameters.length)
 			if (fn.type.parameters[index] == I32)
@@ -303,10 +305,22 @@ class WasmBackend implements Backend {
 		if (rootSlots.length == 0)
 			return fn;
 		var frame = fn.type.parameters.length + fn.locals.length,
-			locals = fn.locals.copy();
+			locals = fn.locals.copy(),
+			exceptionLocal = frame + 1;
 		locals.push({type: I32});
+		if (exceptionTag != null)
+			locals.push({type: I32});
 		var frameSize = align(12 + rootSlots.length * 4, 8),
 			body:Array<WasmInstruction> = [
+				GlobalGet(rootTop),
+				I32Const(frameSize),
+				I32Add,
+				I32Const(rootLimit),
+				I32LeS,
+				I32Eqz,
+				If(null),
+				Unreachable,
+				End,
 				GlobalGet(rootTop),
 				LocalTee(frame),
 				GlobalGet(rootTop),
@@ -338,6 +352,25 @@ class WasmBackend implements Backend {
 			body.push(instruction);
 			if (isRuntimeLocalWrite(instruction))
 				appendRuntimeRootSnapshot(body, frame, rootSlots);
+		}
+		if (exceptionTag != null) {
+			var protectedBody:Array<WasmInstruction> = [Try(null)];
+			protectedBody = protectedBody.concat(body);
+			protectedBody = protectedBody.concat([
+				Catch(exceptionTag),
+				LocalSet(exceptionLocal),
+				LocalGet(frame),
+				I32Load(WasmLayout.ROOT_PREVIOUS_TOP_OFFSET),
+				GlobalSet(rootTop),
+				LocalGet(frame),
+				I32Load(WasmLayout.ROOT_PREVIOUS_FRAME_OFFSET),
+				GlobalSet(rootFrameTop),
+				LocalGet(exceptionLocal),
+				Throw(exceptionTag),
+				End,
+				Unreachable
+			]);
+			body = protectedBody;
 		}
 		return new WasmFunction(fn.name, fn.type, locals, body);
 	}
@@ -2994,7 +3027,7 @@ class WasmBackend implements Backend {
 		return module.addFunction(new WasmFunction("__haxeon_gc_collect", type, [for (_ in 0...8) {type: I32}], body));
 	}
 
-	static function addAllocator(module:WasmModule, collector:Int, heapTop:Int, metadataBase:Int, metadataTop:Int, freeHead:Int, allocationCount:Int,
+	static function addAllocator(module:WasmModule, collector:Int, heapTop:Int, metadataLimit:Int, metadataTop:Int, freeHead:Int, allocationCount:Int,
 			allocationBytes:Int):Int {
 		var type:WasmFunctionType = {parameters: [I32], results: [I32]};
 		var index = module.addFunction(new WasmFunction("__haxeon_alloc", type));
@@ -3013,8 +3046,21 @@ class WasmBackend implements Backend {
 		body = body.concat([LocalGet(0), I32Const(WasmLayout.GC_ALLOCATION_HEADER_SIZE), I32Add, LocalSet(0)]);
 		body = body.concat([
 			Call(collector),
+			// Every allocation creates one metadata record. Trap before touching
+			// the adjacent heap if the reserved metadata region is exhausted.
+			GlobalGet(metadataTop),
+			I32Const(WasmLayout.GC_RECORD_SIZE),
+			I32Add,
+			I32Const(metadataLimit),
+			I32LeS,
+			I32Eqz,
+			If(null),
+			Unreachable,
+			End,
 			I32Const(0),
 			LocalSet(1),
+			I32Const(0),
+			LocalSet(4),
 			GlobalGet(freeHead),
 			LocalSet(3),
 			Block(null),
@@ -3024,24 +3070,74 @@ class WasmBackend implements Backend {
 			If(null),
 			Br(2),
 			Else,
-			LocalGet(0),
 			LocalGet(3),
 			I32Load(4),
+			LocalSet(7),
+			LocalGet(0),
+			LocalGet(7),
 			I32LeS,
 			If(null),
 			LocalGet(3),
 			LocalSet(1),
 			LocalGet(3),
 			I32Load(0),
+			LocalSet(9),
+			LocalGet(7),
+			LocalGet(0),
+			I32Sub,
+			LocalSet(8),
+			LocalGet(8),
+			I32Const(WasmLayout.GC_ALLOCATION_HEADER_SIZE),
+			I32LtS,
+			If(null),
+			// A fragment smaller than a free-list header is consumed whole.
+			LocalGet(7),
+			LocalSet(6),
+			LocalGet(4),
+			I32Eqz,
+			If(null),
+			LocalGet(9),
 			GlobalSet(freeHead),
+			Else,
+			LocalGet(4),
+			LocalGet(9),
+			I32Store(0),
+			End,
+			Else,
+			// Split a sufficiently large block and link its remainder in place.
+			LocalGet(0),
+			LocalSet(6),
+			LocalGet(3),
+			LocalGet(0),
+			I32Add,
+			LocalSet(2),
+			LocalGet(2),
+			LocalGet(9),
+			I32Store(0),
+			LocalGet(2),
+			LocalGet(8),
+			I32Store(4),
+			LocalGet(4),
+			I32Eqz,
+			If(null),
+			LocalGet(2),
+			GlobalSet(freeHead),
+			Else,
+			LocalGet(4),
+			LocalGet(2),
+			I32Store(0),
+			End,
+			End,
 			Br(3),
 			Else,
+			LocalGet(3),
+			LocalSet(4),
 			LocalGet(3),
 			I32Load(0),
 			LocalSet(3),
 			End,
 			End,
-			Br(1),
+			Br(0),
 			End,
 			End,
 			LocalGet(1),
@@ -3049,6 +3145,8 @@ class WasmBackend implements Backend {
 			If(null),
 			GlobalGet(0),
 			LocalSet(1),
+			LocalGet(0),
+			LocalSet(6),
 			LocalGet(1),
 			LocalGet(0),
 			I32Add,
@@ -3081,7 +3179,7 @@ class WasmBackend implements Backend {
 			// their previous contents. Preserve Haxe's zero-default semantics.
 			LocalGet(1),
 			I32Const(0),
-			LocalGet(0),
+			LocalGet(6),
 			MemoryFill,
 			End,
 			LocalGet(1),
@@ -3091,7 +3189,7 @@ class WasmBackend implements Backend {
 			LocalGet(1),
 			I32Store(0),
 			LocalGet(5),
-			LocalGet(0),
+			LocalGet(6),
 			I32Store(4),
 			LocalGet(5),
 			I32Const(8),
@@ -3113,8 +3211,7 @@ class WasmBackend implements Backend {
 			I32Add,
 			Return
 		]);
-		module.setFunction(index,
-			new WasmFunction("__haxeon_alloc", type, [{type: I32}, {type: I32}, {type: I32}, {type: I32}, {type: I32}, {type: I32}], body));
+		module.setFunction(index, new WasmFunction("__haxeon_alloc", type, [for (_ in 0...9) {type: I32}], body));
 		return index;
 	}
 
@@ -3447,8 +3544,8 @@ class WasmFunctionLower {
 	}
 
 	public static function lower(fn:IrFunction, functions:Map<String, Int>, type:WasmFunctionType, layout:WasmLayout, allocator:Int, rootTop:Int,
-			rootFrameTop:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>, closureTypes:Map<String, WasmClosureTypes>,
-			tableSlots:Map<String, Int>, exceptionTag:Null<Int>, rootPoints:Array<WasmSafepoint>):WasmFunction {
+			rootFrameTop:Int, rootLimit:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
+			closureTypes:Map<String, WasmClosureTypes>, tableSlots:Map<String, Int>, exceptionTag:Null<Int>, rootPoints:Array<WasmSafepoint>):WasmFunction {
 		activeTableSlots = tableSlots;
 		var analysis = new WasmCfgAnalysis(fn),
 			placement = new WasmValuePlacement(fn),
@@ -3526,8 +3623,17 @@ class WasmFunctionLower {
 		}
 		var rootState = activeGcRootState;
 		if (rootState != null) {
-			var rooted:Array<WasmInstruction> = rootPrologue(rootState);
+			var rooted:Array<WasmInstruction> = rootPrologue(rootState, rootLimit);
 			rooted = rooted.concat(body);
+			if (exceptionTag != null) {
+				var exceptionLocal = placement.allocate(I32),
+					protectedBody:Array<WasmInstruction> = [Try(null)];
+				protectedBody = protectedBody.concat(rooted);
+				protectedBody = protectedBody.concat([Catch(exceptionTag), LocalSet(exceptionLocal)]);
+				restoreRoots(protectedBody);
+				protectedBody = protectedBody.concat([LocalGet(exceptionLocal), Throw(exceptionTag), End, Unreachable]);
+				rooted = protectedBody;
+			}
 			body = rooted;
 		}
 		body = WasmOptimizer.optimize(body);
@@ -4608,8 +4714,17 @@ class WasmFunctionLower {
 		slotByValue:Map<Int, Int>,
 		live:Map<Int, Map<Int, Array<Int>>>,
 		size:Int
-	}):Array<WasmInstruction> {
+	}, rootLimit:Int):Array<WasmInstruction> {
 		var result:Array<WasmInstruction> = [
+			GlobalGet(state.top),
+			I32Const(state.size),
+			I32Add,
+			I32Const(rootLimit),
+			I32LeS,
+			I32Eqz,
+			If(null),
+			Unreachable,
+			End,
 			GlobalGet(state.top),
 			LocalTee(state.frame),
 			GlobalGet(state.top),
@@ -4618,7 +4733,7 @@ class WasmFunctionLower {
 			GlobalGet(state.frameTop),
 			I32Store(WasmLayout.ROOT_PREVIOUS_FRAME_OFFSET),
 			LocalGet(state.frame),
-			I32Const(state.slots.length),
+			I32Const(0),
 			I32Store(WasmLayout.ROOT_COUNT_OFFSET),
 			LocalGet(state.frame),
 			I32Const(state.size),
@@ -4641,12 +4756,16 @@ class WasmFunctionLower {
 		var live = blockLive.get(instruction);
 		if (live == null)
 			return;
-		for (valueId in live) {
+		body.push(LocalGet(state.frame));
+		body.push(I32Const(live.length));
+		body.push(I32Store(WasmLayout.ROOT_COUNT_OFFSET));
+		for (denseIndex in 0...live.length) {
+			var valueId = live[denseIndex];
 			var index = state.slotByValue.get(valueId);
 			if (index == null)
 				continue;
 			body.push(LocalGet(state.frame));
-			body.push(I32Const(WasmLayout.ROOT_VALUES_OFFSET + index * 4));
+			body.push(I32Const(WasmLayout.ROOT_VALUES_OFFSET + denseIndex * 4));
 			body.push(I32Add);
 			body.push(LocalGet(state.slots[index]));
 			body.push(I32Store(0));

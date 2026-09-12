@@ -65,6 +65,12 @@ the guest.
   static/shadow-frame roots. Each allocation has an aligned private prefix
   pointing to its GC record, so tracing resolves references directly instead
   of scanning every record; metadata compaction refreshes those back-pointers.
+  Shadow frames publish a dense snapshot of the references live at the current
+  safepoint; rooted functions restore their frame chain on tagged exception
+  unwinding. The fixed root and metadata reservations are bounds-checked and
+  trap on exhaustion. First-fit free-list reuse unlinks the selected block
+  without dropping earlier nodes and splits blocks when the remainder can hold
+  a free-list header.
   The prefix also identifies payloads that may contain managed references.
   Numeric-array backing stores and `Bytes` payloads are atomic and skipped during
   tracing; reference arrays and object fields remain traced. Collection still

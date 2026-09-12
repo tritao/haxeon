@@ -10,6 +10,7 @@ fi
 
 "$haxe_bin" --cwd "$root_dir" -cp src -cp tests/compiler --run WasmBackendMain
 bash "$root_dir/scripts/test-wasm-gc-reuse.sh"
+bash "$root_dir/scripts/test-wasm-gc-invariants.sh"
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm32 --output=out/wasm-cli-backend.wasm --entry=add \
 	--root=tests/programs tests/programs/add.hx
