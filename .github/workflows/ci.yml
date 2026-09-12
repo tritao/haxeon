@@ -18,6 +18,8 @@ jobs:
         run: scripts/bootstrap-tools.sh
       - name: Compiler, differential, and runtime gates
         run: scripts/test.sh
+      - name: Project CLI smoke test
+        run: tests/integration/test-haxeon-cli.sh
       - name: Self-hosted compiler gate
         run: scripts/bootstrap-compiler.sh --self
       - name: Hot reload and GDB metadata gate
@@ -42,6 +44,8 @@ jobs:
         run: scripts/bootstrap-tools.sh
       - name: Compiler, differential, and runtime gates
         run: scripts/test.sh
+      - name: Project CLI smoke test
+        run: tests/integration/test-haxeon-cli.sh
       - name: Self-hosted compiler gate
         run: scripts/bootstrap-compiler.sh --self
       - name: Hot reload and GDB metadata gate
@@ -72,6 +76,9 @@ jobs:
       - name: Run core tests with the MSVC Debug CRT
         shell: pwsh
         run: ./.tools/haxe/haxe.exe --cwd . -cp src --run build.HaxeonBuild test 8
+      - name: Project CLI smoke test
+        shell: pwsh
+        run: ./tests/integration/test-haxeon-cli.ps1
 
   macos:
     runs-on: macos-15-intel
@@ -86,6 +93,8 @@ jobs:
         run: ./scripts/bootstrap-tools.sh
       - name: Compiler, differential, and runtime gates
         run: ./scripts/test.sh
+      - name: Project CLI smoke test
+        run: ./tests/integration/test-haxeon-cli.sh
       - name: Self-hosted compiler gate
         run: ./scripts/bootstrap-compiler.sh --self
 
@@ -104,5 +113,7 @@ jobs:
         run: ./scripts/bootstrap-tools.sh
       - name: Compiler, differential, and runtime gates
         run: ./scripts/test.sh
+      - name: Project CLI smoke test
+        run: ./tests/integration/test-haxeon-cli.sh
       - name: Self-hosted compiler gate
         run: ./scripts/bootstrap-compiler.sh --self

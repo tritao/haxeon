@@ -233,6 +233,50 @@ the integration suites:
 ./tests/integration/test-hot-reload.sh
 ```
 
+### Project CLI
+
+The project CLI creates a small `haxeon.json` manifest, builds HashLink programs
+for the current desktop host, and can launch them through the local HashLink
+runtime. The same command is available on Unix-like systems and Windows:
+
+```sh
+./scripts/haxeon init
+./scripts/haxeon doctor
+./scripts/haxeon platforms
+./scripts/haxeon build
+./scripts/haxeon run
+./scripts/haxeon build --target wasm32
+```
+
+On Windows, use `scripts/haxeon.cmd` or `scripts/haxeon.ps1`. `haxeon init`
+creates `src/Main.hx` and a project file like this:
+
+```json
+{
+  "version": 1,
+  "entry": "Main",
+  "sources": ["src/Main.hx"],
+  "sourceRoots": ["src"],
+  "target": "host",
+  "defines": [],
+  "outputDir": "build"
+}
+```
+
+Paths in the project file are relative to that file. Host builds go to
+`build/host/main.hl`; Wasm32 builds go to `build/wasm32/main.wasm`. Use
+`--project path/to/haxeon.json` to select another project, repeat
+`--define NAME[=VALUE]` to add conditional defines, and pass arguments to a
+running program after `--`:
+
+```sh
+./scripts/haxeon run -- --verbose
+```
+
+The CLI currently runs only HashLink output on the current host. Wasm32 is
+build-only here, and Android remains available through the Gradle and `adb`
+scripts below.
+
 ### Android host
 
 The first Android host embeds the HashLink runtime and the existing JIT
