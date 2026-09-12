@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <errno.h>
 #include <stdatomic.h>
 #include <ffi.h>
 
@@ -26,8 +27,10 @@
 #include "runtime/regex.c"
 #include "runtime/reflection.c"
 #include "runtime/files.c"
+#include "runtime/int64.c"
 #include "runtime/atomic_files.c"
 #include "runtime/system.c"
+#include "runtime/processes.c"
 #include "runtime/native_call.c"
 #include "runtime/module_runtime.c"
 #include "runtime/bindings.c"

@@ -83,22 +83,7 @@ class Lexer {
 			if (code == "\"".code || code == "'".code) {
 				var quote = code;
 				position++;
-				var escaped = false, closed = false;
-				while (position < source.length) {
-					var current = source.get(position++);
-					if (escaped) {
-						escaped = false;
-						continue;
-					}
-					if (current == "\\".code) {
-						escaped = true;
-						continue;
-					}
-					if (current == quote) {
-						closed = true;
-						break;
-					}
-				}
+				var closed = scanString(quote);
 				if (!closed)
 					throw new CompileError(new Diagnostic("E0001", "Unterminated string literal", file.span(start, position), DiagnosticSeverity.Error, [
 						{
@@ -253,6 +238,66 @@ class Lexer {
 		}
 		tokens.push(new Token(TokenKind.Eof, "", file.span(position, position)));
 		return tokens;
+	}
+
+	/** Advances over a string body, including complete expressions embedded in single-quoted strings. */
+	function scanString(quote:Int):Bool {
+		while (position < source.length) {
+			var current = source.get(position++);
+			if (current == "\\".code) {
+				if (position < source.length)
+					position++;
+				continue;
+			}
+			if (quote == "'".code && current == "$".code && position < source.length && source.get(position) == "{".code) {
+				position++;
+				if (!scanInterpolation())
+					return false;
+				continue;
+			}
+			if (current == quote)
+				return true;
+		}
+		return false;
+	}
+
+	/** Advances to the matching interpolation brace while respecting nested lexical constructs. */
+	function scanInterpolation():Bool {
+		var depth = 1;
+		while (position < source.length) {
+			var current = source.get(position++);
+			if (current == "\"".code || current == "'".code) {
+				if (!scanString(current))
+					return false;
+				continue;
+			}
+			if (current == "/".code && position < source.length) {
+				var next = source.get(position);
+				if (next == "/".code) {
+					position++;
+					while (position < source.length && source.get(position) != "\n".code)
+						position++;
+					continue;
+				}
+				if (next == "*".code) {
+					position++;
+					while (position + 1 < source.length && !(source.get(position) == "*".code && source.get(position + 1) == "/".code))
+						position++;
+					if (position + 1 >= source.length)
+						return false;
+					position += 2;
+					continue;
+				}
+			}
+			if (current == "{".code)
+				depth++;
+			else if (current == "}".code) {
+				depth--;
+				if (depth == 0)
+					return true;
+			}
+		}
+		return false;
 	}
 
 	inline function text(start:Int, end:Int):String

@@ -147,6 +147,19 @@ HL_PRIM int HL_NAME(__string_last_index_of)( vbyte *value, vbyte *needle ) {
 	return -1;
 }
 
+HL_PRIM int HL_NAME(__string_last_index_of_from)( vbyte *value, vbyte *needle, int start ) {
+	if( value == NULL || needle == NULL || start < 0 ) return -1;
+	const uchar *text = (const uchar *)value, *search = (const uchar *)needle;
+	int text_length = (int)ustrlen(text), search_length = (int)ustrlen(search);
+	if( start > text_length ) start = text_length;
+	if( search_length == 0 ) return start;
+	if( search_length > text_length ) return -1;
+	if( start > text_length - search_length ) start = text_length - search_length;
+	for( int index = start; index >= 0; index-- )
+		if( memcmp(text + index,search,search_length * sizeof(uchar)) == 0 ) return index;
+	return -1;
+}
+
 HL_PRIM int HL_NAME(__string_char_code_at)( vbyte *value, int index ) {
 	int length = value == NULL ? 0 : (int)ustrlen((const uchar *)value);
 	if( index < 0 || index >= length ) return -1;

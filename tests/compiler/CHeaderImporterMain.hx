@@ -85,7 +85,7 @@ class CHeaderImporterMain {
 		catch (error:Dynamic)
 			diagnostic = Std.string(error);
 		expect(diagnostic.indexOf("unsupported_fixture.h:1:") >= 0 && diagnostic.indexOf("unsupported variadic function") >= 0,
-			"unsupported declarations should report their source location");
+			'unsupported declarations should report their source location: $diagnostic');
 		var documented = CHeaderImporter.importHeader("tests/ffi/documentation_fixture.h", "x86_64-linux-gnu", ["tests/ffi"], "clang", "docs", "Docs");
 		expect(documented.indexOf("/**") >= 0
 			&& documented.indexOf("An opaque resource identifier used by the documentation fixture.") >= 0,

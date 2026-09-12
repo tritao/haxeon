@@ -5,7 +5,6 @@ import haxe.Int64;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
-import sys.io.Process;
 import compiler.documentation.Documentation.DocumentationTools;
 
 typedef CLayout = {
@@ -26,7 +25,7 @@ class CHeaderImporter {
 			for (dependency in dependencies)
 				if (!~/^[A-Za-z_][A-Za-z0-9_]*$/.match(dependency))
 					throw 'Invalid HXI dependency name "$dependency"';
-		// Bound stderr while the AST dump is drained first to avoid Clang blocking on a full diagnostics pipe.
+		// Keep failures bounded for Haxe's eval Process implementation; warnings are not part of the importer result.
 		var base = [
 			"-x",
 			"c",
@@ -40,19 +39,16 @@ class CHeaderImporter {
 		];
 		for (include in includes)
 			base.push('-I$include');
-		var process = new Process(clang, base.concat(["-Xclang", "-ast-dump=json", "-fsyntax-only", header])),
-			astText = process.stdout.readAll().toString(),
-			diagnostics = process.stderr.readAll().toString(),
-			exitCode = process.exitCode();
-		process.close();
-		if (exitCode != 0)
-			throw 'Clang could not import $header:\n$diagnostics';
-		process = new Process(clang, base.concat(["-Xclang", "-fdump-record-layouts-complete", "-fsyntax-only", header]));
-		var layoutText = process.stdout.readAll().toString() + process.stderr.readAll().toString();
-		exitCode = process.exitCode();
-		process.close();
-		if (exitCode != 0)
-			throw 'Clang could not calculate layouts for $header';
+		var astProcess = ProcessOutputCapture.capture(clang, base.concat(["-Xclang", "-ast-dump=json", "-fsyntax-only", header]),
+			ProcessOutputCapture.defaultDiagnosticLimit);
+		if (astProcess.exitCode != 0)
+			throw 'Clang could not import $header:\n${diagnostics(astProcess.stderr, astProcess.stderrTruncated)}';
+		var layoutProcess = ProcessOutputCapture.capture(clang, base.concat(["-Xclang", "-fdump-record-layouts-complete", "-fsyntax-only", header]),
+			ProcessOutputCapture.defaultDiagnosticLimit);
+		if (layoutProcess.exitCode != 0)
+			throw 'Clang could not calculate layouts for $header:\n${diagnostics(layoutProcess.stderr, layoutProcess.stderrTruncated)}';
+		var astText = astProcess.stdout,
+			layoutText = layoutProcess.stdout + layoutProcess.stderr;
 		var layouts = parseLayouts(layoutText),
 			declarations:Array<Dynamic> = [],
 			roots = [FileSystem.fullPath(Path.directory(header))];
@@ -102,6 +98,9 @@ class CHeaderImporter {
 		output.add("}\n");
 		return output.toString();
 	}
+
+	static function diagnostics(text:String, truncated:Bool):String
+		return truncated ? '$text\n[Clang diagnostics truncated after ${ProcessOutputCapture.defaultDiagnosticLimit} bytes]' : text;
 
 	static function collect(node:Dynamic, output:Array<Dynamic>, roots:Array<String>, currentFile:String, excluded:Array<String>):String {
 		if (node == null)

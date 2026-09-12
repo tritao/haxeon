@@ -8,6 +8,7 @@ enum ConversionPlan {
 	Identity;
 	IntToFloat;
 	IntToInt64;
+	FromDynamic;
 	AbstractCast;
 	ReferenceCast;
 	ToDynamic;
@@ -31,6 +32,11 @@ class TypeRelations {
 			return IntToFloat;
 		if (actual == TInt && expected == TInt64)
 			return IntToInt64;
+		if (actual == TDynamic)
+			return switch expected {
+				case TNull, TVoid, TNever: Incompatible;
+				default: FromDynamic;
+			};
 		if (actual == TNull && isReference(expected))
 			return WrapNullable;
 		if (abstractConversion(actual, expected))
@@ -70,6 +76,11 @@ class TypeRelations {
 			return true;
 		if (equals(actual, expected))
 			return true;
+		if (actual == TDynamic)
+			return switch expected {
+				case TNull, TVoid, TNever: false;
+				default: true;
+			};
 		if (actual == TNull && isReference(expected))
 			return true;
 		switch actual {

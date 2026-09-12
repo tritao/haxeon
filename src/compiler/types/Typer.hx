@@ -1372,7 +1372,10 @@ class Typer {
 					return TArray(element);
 			default:
 		}
-		return usesLocalExpectedType(initializer) ? context.localExpectedTypes.get(name) : null;
+		if (!usesLocalExpectedType(initializer))
+			return null;
+		var expected = context.localExpectedTypes.get(name);
+		return expected != null && containsNullLiteral(initializer) && !isNullable(expected) ? TNullable(expected) : expected;
 	}
 
 	function pushedElementType(name:String, statements:Array<AstStatement>, start:Int, ?bindings:Map<String, CompilerType>):Null<CompilerType> {
@@ -1706,20 +1709,25 @@ class Typer {
 			return right;
 		if (right == TNever || sameType(left, right))
 			return left;
+		switch left {
+			case TNull:
+				return right == TVoid ? null : (isNullable(right) ? right : TNullable(right));
+			case TNullable(inner) if (sameType(inner, right)):
+				return TNullable(inner);
+			default:
+		}
+		switch right {
+			case TNull:
+				return left == TVoid ? null : (isNullable(left) ? left : TNullable(left));
+			case TNullable(inner) if (sameType(left, inner)):
+				return TNullable(inner);
+			default:
+		}
 		if (isAssignable(left, right))
 			return right;
 		if (isAssignable(right, left))
 			return left;
-		return switch left {
-			case TNull: right == TVoid ? null : TNullable(right);
-			case TNullable(inner): sameType(inner, right) ? TNullable(inner) : null;
-			default:
-				switch right {
-					case TNull: left == TVoid ? null : TNullable(left);
-					case TNullable(inner): sameType(left, inner) ? TNullable(inner) : null;
-					default: null;
-				}
-		};
+		return null;
 	}
 
 	function typeEnumPattern(value:AstExpression, expected:CompilerType, scope:Scope):Null<{
@@ -2286,8 +2294,8 @@ class Typer {
 					lambdaResult;
 				}
 			case Member(object, name, span): typeMember(object, name, span, scope);
-			case Add(left, right, span): arithmetic(left, right, scope, true, span);
-			case Sub(left, right, span): arithmetic(left, right, scope, false, span);
+			case Add(left, right, span): arithmetic(left, right, scope, true, span, expectedType);
+			case Sub(left, right, span): arithmetic(left, right, scope, false, span, expectedType);
 			case Mul(left, right, span): numeric(left, right, scope, 2, span);
 			case Div(left, right, span): numeric(left, right, scope, 3, span);
 			case Mod(left, right, span): modulo(left, right, scope, span);
@@ -3682,31 +3690,26 @@ class Typer {
 		if (name == "indexOf") {
 			if (arguments.length < 1 || arguments.length > 2)
 				fail("E1008", 'Function "String.indexOf" expects 1 or 2 arguments, got ${arguments.length}', span);
-			var needle = typeExpression(arguments[0], scope);
-			if (!sameType(needle.type, TString))
-				fail("E1009", "String.indexOf expects a String needle", needle.span);
+			var needle = coerce(typeExpression(arguments[0], scope, TString), TString, "String.indexOf needle", "E1009");
 			if (arguments.length == 1)
 				return new TypedExpression(TStringIndexOf(receiver, needle), TInt, span);
-			var start = typeExpression(arguments[1], scope, TInt);
-			if (!sameType(start.type, TInt))
-				fail("E1009", "String.indexOf expects an Int start index", start.span);
+			var start = coerce(typeExpression(arguments[1], scope, TInt), TInt, "String.indexOf start index", "E1009");
 			return new TypedExpression(TCall("__string_index_of_from", [receiver, needle, start]), TInt, span);
 		}
 		if (name == "lastIndexOf") {
-			if (arguments.length != 1)
-				fail("E1008", 'Function "String.lastIndexOf" expects 1 argument, got ${arguments.length}', span);
-			var needle = typeExpression(arguments[0], scope, TString);
-			if (!sameType(needle.type, TString))
-				fail("E1009", "String.lastIndexOf expects a String needle", needle.span);
-			return new TypedExpression(TCall("__string_last_index_of", [receiver, needle]), TInt, span);
+			if (arguments.length < 1 || arguments.length > 2)
+				fail("E1008", 'Function "String.lastIndexOf" expects 1 or 2 arguments, got ${arguments.length}', span);
+			var needle = coerce(typeExpression(arguments[0], scope, TString), TString, "String.lastIndexOf needle", "E1009");
+			if (arguments.length == 1)
+				return new TypedExpression(TCall("__string_last_index_of", [receiver, needle]), TInt, span);
+			var start = coerce(typeExpression(arguments[1], scope, TInt), TInt, "String.lastIndexOf start index", "E1009");
+			return new TypedExpression(TCall("__string_last_index_of_from", [receiver, needle, start]), TInt, span);
 		}
 		if (name == "substring" || name == "substr") {
 			if (arguments.length < 1 || arguments.length > 2)
 				fail("E1008", 'Function "String.$name" expects 1 or 2 arguments, got ${arguments.length}', span);
-			var start = typeExpression(arguments[0], scope),
-				end:Null<TypedExpression> = arguments.length == 1 ? null : typeExpression(arguments[1], scope);
-			if (!sameType(start.type, TInt) || (end != null && !sameType(end.type, TInt)))
-				fail("E1009", "String.$name expects Int bounds", span);
+			var start = coerce(typeExpression(arguments[0], scope, TInt), TInt, 'String.$name start', "E1009"),
+				end:Null<TypedExpression> = arguments.length == 1 ? null : coerce(typeExpression(arguments[1], scope, TInt), TInt, 'String.$name end', "E1009");
 			if (name == "substr" && end != null)
 				end = new TypedExpression(TAdd(start, end), TInt, span);
 			return new TypedExpression(TStringSubstring(receiver, start, end), TString, span);
@@ -3714,25 +3717,19 @@ class Typer {
 		if (name == "charCodeAt") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "String.charCodeAt" expects 1 argument, got ${arguments.length}', span);
-			var index = typeExpression(arguments[0], scope, TInt);
-			if (!sameType(index.type, TInt))
-				fail("E1009", "String.charCodeAt expects an Int index", index.span);
+			var index = coerce(typeExpression(arguments[0], scope, TInt), TInt, "String.charCodeAt index", "E1009");
 			return new TypedExpression(TStringCharCodeAt(receiver, index), TInt, span);
 		}
 		if (name == "charAt") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "String.charAt" expects 1 argument, got ${arguments.length}', span);
-			var index = typeExpression(arguments[0], scope, TInt);
-			if (!sameType(index.type, TInt))
-				fail("E1009", "String.charAt expects an Int index", index.span);
+			var index = coerce(typeExpression(arguments[0], scope, TInt), TInt, "String.charAt index", "E1009");
 			return new TypedExpression(TStringCharAt(receiver, index), TString, span);
 		}
 		if (name == "split") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "String.split" expects one argument, got ${arguments.length}', span);
-			var separator = typeExpression(arguments[0], scope, TString);
-			if (!sameType(separator.type, TString))
-				fail("E1009", "String.split expects a String separator", separator.span);
+			var separator = coerce(typeExpression(arguments[0], scope, TString), TString, "String.split separator", "E1009");
 			return new TypedExpression(TCall("__string_split", [receiver, separator]), TArray(TString), span);
 		}
 		throw new CompileError(new Diagnostic("E1007", 'Unknown String method "$name"', span));
@@ -3968,10 +3965,12 @@ class Typer {
 			var expected = required == parameters.length ? '$required' : '$required to ${parameters.length}';
 			fail("E1008", 'Function "$name" expects $expected arguments, got ${arguments.length}', span);
 		}
-		var typed = [
-			for (i in 0...arguments.length)
-				typeExpression(arguments[i], scope, argumentType(parameters[i], substitutions))
-		];
+		var typed:Array<TypedExpression> = [];
+		for (i in 0...arguments.length) {
+			var supplied = suppliedArgumentType(parameters[i], substitutions),
+				value = typeExpression(arguments[i], scope, supplied);
+			typed.push(coerce(value, supplied, 'argument ${i + 1} to "$name"'));
+		}
 		for (i in arguments.length...parameters.length) {
 			var parameter = parameters[i],
 				expected = argumentType(parameter, substitutions),
@@ -3985,6 +3984,17 @@ class Typer {
 		}
 		return coerceArguments(typed, [for (parameter in parameters) argumentType(parameter, substitutions)], name);
 	}
+
+	function suppliedArgumentType(argument:compiler.syntax.Ast.AstArgument, ?substitutions:Map<String, CompilerType>):CompilerType {
+		var type = argumentType(argument, substitutions);
+		return argument.optional == true && argument.defaultValue == null ? unwrapNullableType(type) : type;
+	}
+
+	static function unwrapNullableType(type:CompilerType):CompilerType
+		return switch type {
+			case TNullable(element): element;
+			default: type;
+		};
 
 	function typeInferredClassConstruction(typeName:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>):TypedExpression {
@@ -4163,6 +4173,8 @@ class Typer {
 				new TypedExpression(TIntToFloat(value), TFloat, value.span);
 			case IntToInt64:
 				new TypedExpression(TIntToInt64(value), TInt64, value.span);
+			case FromDynamic:
+				new TypedExpression(TCast(value), expected, value.span);
 			case ReferenceCast:
 				functionAdapter(value, expected, value.span);
 			case AbstractCast:
@@ -4444,8 +4456,14 @@ class Typer {
 			default: null;
 		};
 
-	function arithmetic(a:AstExpression, b:AstExpression, scope:Scope, add:Bool, span:SourceSpan):TypedExpression {
+	function arithmetic(a:AstExpression, b:AstExpression, scope:Scope, add:Bool, span:SourceSpan, expected:Null<CompilerType>):TypedExpression {
 		var left = typeExpression(a, scope), right = typeExpression(b, scope);
+		if (expected != null && isNumeric(expected)) {
+			if (left.type == TDynamic)
+				left = coerce(left, expected, "arithmetic operand", "E1010");
+			if (right.type == TDynamic)
+				right = coerce(right, expected, "arithmetic operand", "E1010");
+		}
 		if (left.type == TNever && isNumeric(right.type))
 			left = coerce(left, right.type, "arithmetic operand");
 		if (right.type == TNever && isNumeric(left.type))

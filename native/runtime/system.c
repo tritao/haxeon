@@ -48,3 +48,28 @@ HL_PRIM void HL_NAME(__sys_print)( vbyte *value ) {
 	   UTF-16 string representation and performs its own console conversion. */
 	hl_sys_print(value);
 }
+
+typedef struct realtime_file_output { FILE *stream; } realtime_file_output;
+static realtime_file_output realtime_stdout = {NULL};
+static realtime_file_output realtime_stderr = {NULL};
+
+HL_PRIM realtime_file_output *HL_NAME(__sys_stdout)( void ) {
+	realtime_stdout.stream = stdout;
+	return &realtime_stdout;
+}
+
+HL_PRIM realtime_file_output *HL_NAME(__sys_stderr)( void ) {
+	realtime_stderr.stream = stderr;
+	return &realtime_stderr;
+}
+
+HL_PRIM void HL_NAME(__file_output_write_string)( realtime_file_output *output, vbyte *value ) {
+	if( output == NULL || output->stream == NULL ) hl_error("Invalid file output");
+	const char *utf8 = value == NULL ? "" : hl_to_utf8((const uchar *)value);
+	size_t length = strlen(utf8);
+	if( length > 0 && fwrite(utf8,1,length,output->stream) != length ) hl_error("Could not write file output");
+}
+
+HL_PRIM void HL_NAME(__file_output_flush)( realtime_file_output *output ) {
+	if( output == NULL || output->stream == NULL || fflush(output->stream) != 0 ) hl_error("Could not flush file output");
+}

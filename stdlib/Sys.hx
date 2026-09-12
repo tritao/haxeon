@@ -91,6 +91,12 @@ extern function sysGetChar(echo:Bool):Int;
 @:hlNative("haxeon_runtime", "__sys_print")
 extern function sysPrint(value:String):Void;
 
+@:hlNative("haxeon_runtime", "__sys_stdout")
+extern function sysStdout():sys.io.FileOutput;
+
+@:hlNative("haxeon_runtime", "__sys_stderr")
+extern function sysStderr():sys.io.FileOutput;
+
 /** Supported host and process operations exposed through HashLink. */
 class Sys {
 	public static inline function time():Float
@@ -164,4 +170,10 @@ class Sys {
 
 	public static inline function println(value:String):Void
 		sysPrint(value + "\n");
+
+	public static inline function stdout():sys.io.FileOutput
+		return sysStdout();
+
+	public static inline function stderr():sys.io.FileOutput
+		return sysStderr();
 }

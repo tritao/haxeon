@@ -65,6 +65,8 @@ class TestMain {
 			|| lexicalForms[1].kind != compiler.syntax.Token.TokenKind.Question
 			|| lexicalForms[2].kind != compiler.syntax.Token.TokenKind.At)
 			throw "Common Haxe lexical forms were not tokenized";
+		new Parser(new Lexer(new SourceFile("nested-interpolation.hx",
+			"function nested():String return 'value ${true ? 'nested' : 'other'}';")).tokenize()).parseProgram();
 		var unicodeSource = new SourceFile("unicode.hx", "é\nx");
 		if (unicodeSource.bytes.length != 4
 			|| unicodeSource.slice(0, 2) != "é"
@@ -295,8 +297,15 @@ class TestMain {
 		expectCompileError('function invoke(?done:Void->Void):Void { var outer = function() { done(); }; outer(); } function main():Int { invoke(); return 0; }',
 			'Cannot call non-function "done"');
 		Frontend.compile('function main():Int { var values:Map<String, Array<Int>> = []; var found = values.get("key"); return found == null ? 0 : found.length; }');
+		Frontend.compile('function main():Int { var dynamicValue:Dynamic = "value"; var text:String = dynamicValue; dynamicValue = 42; var integer:Int = dynamicValue; return text.length + integer; }');
+		Frontend.compile('function accept(value:Float):Float return value; function main():Int { var dynamicValue:Dynamic = 40; return Std.int(accept(dynamicValue + 2)); }');
+		Frontend.compile('function wait(?seconds:Float):Float return seconds == null ? 0.0 : seconds; function main():Int return Std.int(wait(10));');
+		Frontend.compile('function main():Int return "abcabc".lastIndexOf("abc", 4);');
+		Frontend.compile('function main():Int { var start:Dynamic = 1; return "abc".substring(start).length; }');
 		Frontend.compile('enum Choice { First; Second; } function choose(flag:Bool, other:Choice):Choice return flag ? First : other; function reverse(flag:Bool, other:Choice):Choice return flag ? other : Second; function main():Int return 0;');
 		Frontend.compile('function choose(value:Null<String>):Int { var chosen = value == null ? (true ? "fallback" : "unused") : value; return chosen.length; } function main():Int return choose(null);');
+		Frontend.compile('function text(value:Dynamic):String return "value"; function choose(value:Dynamic):Null<String> return value == null ? null : text(value); function main():Int return choose(null) == null ? 0 : 1;');
+		Frontend.compile('function lookup(values:Map<String, Int>, key:Null<String>):Int { var found = key == null ? null : values.get(key); if (found == null) return 0; return found; } function main():Int return lookup([], null);');
 		Frontend.compile('class Values { public var items:Null<Array<Int>>; public function new(items:Null<Array<Int>>) { this.items = items; } } function choose(values:Values):Array<Int> { var result = values.items == null ? [] : values.items; return result; } function main():Int return choose(new Values(null)).length;');
 		Frontend.compile('typedef ValuesRecord = { items:Null<Array<Int>> }; function choose(values:ValuesRecord):Array<Int> { var result = values.items == null ? [] : values.items; return result; } function main():Int return 0;');
 		Frontend.compile('typedef OptionalValues = { ?items:Array<Int> }; function choose(values:OptionalValues):Array<Int> { var result = values.items == null ? [] : values.items; return result; } function main():Int return 0;');
