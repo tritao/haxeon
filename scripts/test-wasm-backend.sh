@@ -81,6 +81,9 @@ bash "$root_dir/scripts/test-wasm-gc-invariants.sh"
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm32 --output=out/wasm-cli-hxi-retained-imported.wasm --entry=wasm-hxi-retained \
 	--wasm-import-memory --root=tests --ffi-interface=tests/ffi/retained_struct.hxi tests/wasm-hxi-retained.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm-gc --output=out/wasm-cli-gc-objects.wasm --entry=wasm-gc-objects \
+	--root=tests/programs tests/programs/wasm-gc-objects.hx
 node - "$root_dir" <<'JS'
 const fs = require("fs");
 const root = process.argv[2];
@@ -132,7 +135,9 @@ const cases = [
   ["out/wasm-backend-instance-closure.wasm", 42],
   ["out/wasm-backend-virtual.wasm", 42],
 	["out/wasm-gc-model.wasm", 42],
-	["out/wasm-gc-type-plan.wasm", 42]
+	["out/wasm-gc-type-plan.wasm", 42],
+	["out/wasm-gc-objects.wasm", 42],
+	["out/wasm-cli-gc-objects.wasm", 42]
 ];
 (async () => {
   for (const [relative, expected] of cases) {
@@ -152,7 +157,16 @@ const cases = [
       }};
     if (importedMemory)
       imports.env = {memory};
-    moduleInstance = (await WebAssembly.instantiate(bytes, imports)).instance;
+    if (relative.endsWith("wasm-gc-objects.wasm")) {
+      const compiled = new WebAssembly.Module(bytes);
+      if (WebAssembly.Module.imports(compiled).length !== 0
+          || WebAssembly.Module.exports(compiled).some(entry => entry.name === "memory")
+          || WebAssembly.Module.customSections(compiled, "haxeon.gc.roots").length !== 0)
+        throw new Error("Wasm GC object module unexpectedly includes linear memory or custom root metadata");
+      moduleInstance = new WebAssembly.Instance(compiled, imports);
+    } else {
+      moduleInstance = (await WebAssembly.instantiate(bytes, imports)).instance;
+    }
     const instance = moduleInstance;
     if (relative.includes("closure") && !(instance.exports.table instanceof WebAssembly.Table))
       throw new Error(`${relative}: stable Wasm function table was not exported`);

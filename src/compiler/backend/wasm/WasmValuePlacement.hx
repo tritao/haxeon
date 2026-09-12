@@ -27,9 +27,12 @@ class WasmValuePlacement {
 	public final values:Map<Int, Int> = [];
 	public final locals:Array<WasmLocal> = [];
 
+	final representation:WasmRepresentation;
+
 	var nextLocal:Int;
 
-	public function new(fn:IrFunction) {
+	public function new(fn:IrFunction, representation:WasmRepresentation) {
+		this.representation = representation;
 		var intervals:Array<WasmInterval> = [], starts:Map<Int, Int> = [], ends:Map<Int, Int> = [], position = 0;
 		for (index in 0...fn.arguments.length)
 			values.set(fn.arguments[index].id, index);
@@ -43,7 +46,7 @@ class WasmValuePlacement {
 					var output = IrOperands.output(located.value);
 					if (output != null && output.type != Void && !values.exists(output.id)) {
 						values.set(output.id, nextLocal++);
-						locals.push({type: WasmBackend.requireValueType(output.type)});
+						locals.push({type: representation.valueType(output.type)});
 					}
 				}
 			return;
@@ -82,7 +85,7 @@ class WasmValuePlacement {
 				if (output != null && output.type != Void && starts.exists(output.id))
 					intervals.push({
 						valueId: output.id,
-						type: WasmBackend.requireValueType(output.type),
+						type: representation.valueType(output.type),
 						start: requiredPosition(starts, output.id),
 						end: requiredPosition(ends, output.id)
 					});
