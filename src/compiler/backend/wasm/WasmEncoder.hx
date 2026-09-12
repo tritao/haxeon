@@ -477,6 +477,8 @@ class WasmEncoder {
 					output.writeByte(0xb7);
 				case F64ConvertI64S:
 					output.writeByte(0xb9);
+				case I64ExtendI32S:
+					output.writeByte(0xac);
 				case F64PromoteF32:
 					output.writeByte(0xbb);
 				case F32DemoteF64:

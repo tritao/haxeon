@@ -1978,7 +1978,9 @@ class Typer {
 
 	function typeExpression(expression:AstExpression, scope:Scope, ?expectedType:CompilerType, inferDynamicLambdaResult:Bool = false):TypedExpression
 		return switch expression {
-			case IntegerLiteral(value, span): new TypedExpression(TIntLiteral(value), TInt, span);
+			case IntegerLiteral(value, span):
+				var type = expectedType == TInt64 ? TInt64 : TInt;
+				new TypedExpression(TIntLiteral(value), type, span);
 			case FloatLiteral(value, span): new TypedExpression(TFloatLiteral(value), TFloat, span);
 			case StringLiteral(value, span): new TypedExpression(TStringLiteral(value), TString, span);
 			case BoolLiteral(value, span): new TypedExpression(TBoolLiteral(value), TBool, span);
@@ -2295,9 +2297,9 @@ class Typer {
 			case ShiftRight(left, right, span): bitwise(left, right, scope, 4, span);
 			case UnsignedShiftRight(left, right, span): bitwise(left, right, scope, 5, span);
 			case Negate(value, span):
-				var typedValue = typeExpression(value, scope);
-				if (!sameType(typedValue.type, TInt) && !sameType(typedValue.type, TFloat))
-					fail("E1010", "Numeric negation requires an Int or Float operand", span);
+				var typedValue = typeExpression(value, scope, expectedType == TInt64 ? TInt64 : null);
+				if (!sameType(typedValue.type, TInt) && !sameType(typedValue.type, TInt64) && !sameType(typedValue.type, TFloat))
+					fail("E1010", "Numeric negation requires an Int, Int64, or Float operand", span);
 				new TypedExpression(TNegate(typedValue), typedValue.type, span);
 			case Less(left, right, span): comparison(left, right, scope, 0, span);
 			case LessEqual(left, right, span): comparison(left, right, scope, 1, span);
@@ -4138,6 +4140,8 @@ class Typer {
 			case Identity: value;
 			case IntToFloat:
 				new TypedExpression(TIntToFloat(value), TFloat, value.span);
+			case IntToInt64:
+				new TypedExpression(TIntToInt64(value), TInt64, value.span);
 			case ReferenceCast:
 				new TypedExpression(TCast(value), expected, value.span);
 			case AbstractCast:
@@ -4214,6 +4218,8 @@ class Typer {
 			return value;
 		if (value.type == TInt && target == TFloat)
 			return new TypedExpression(TIntToFloat(value), TFloat, span);
+		if (value.type == TInt && target == TInt64)
+			return new TypedExpression(TIntToInt64(value), TInt64, span);
 		return new TypedExpression(TCast(value), target, span);
 	}
 

@@ -3577,6 +3577,8 @@ class WasmFunctionLower {
 				]);
 			case IntToFloat(output, value):
 				emit(body, [LocalGet(values.get(value.id)), value.type == I64 ? F64ConvertI64S : F64ConvertI32S, LocalSet(values.get(output.id))]);
+			case IntToInt64(output, value):
+				emit(body, [LocalGet(values.get(value.id)), I64ExtendI32S, LocalSet(values.get(output.id))]);
 			case FloatToInt(output, value):
 				emit(body, [LocalGet(values.get(value.id)), I32TruncF64S, LocalSet(values.get(output.id))]);
 			case NewObject(output, typeName):
@@ -3975,7 +3977,7 @@ class WasmFunctionLower {
 	static function outputOf(instruction:IrInstruction):Null<IrValue>
 		return switch instruction {
 			case Phi(output, _), ConstVoid(output), ConstInt(output, _), ConstFloat(output, _), ConstString(output, _), ConstBool(output, _),
-				ConstNull(output), TypeValue(output, _), ToDyn(output, _), IntToFloat(output, _), SafeCast(output, _), Catch(output), GlobalGet(output, _),
+				ConstNull(output), TypeValue(output, _), ToDyn(output, _), IntToFloat(output, _), IntToInt64(output, _), SafeCast(output, _), Catch(output), GlobalGet(output, _),
 				Add(output, _, _), Sub(output, _, _), Mul(output, _, _), Div(output, _, _), Mod(output, _, _), BitAnd(output, _, _), BitXor(output, _, _),
 				BitOr(output, _, _), ShiftLeft(output, _, _), ShiftRight(output, _, _), UnsignedShiftRight(output, _, _), Less(output, _, _),
 				LessEqual(output, _, _), Equal(output, _, _), Call(output, _, _), CNativeCall(output, _, _), StaticClosure(output, _),

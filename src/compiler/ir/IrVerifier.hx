@@ -141,7 +141,10 @@ class IrVerifier {
 			case ConstVoid(out):
 				expect(out, Void);
 			case ConstInt(out, _):
-				expect(out, I32);
+				switch out.type {
+					case I32, I64:
+					default: throw 'IR integer constant ${out.id} must produce I32 or I64';
+				}
 			case ConstFloat(out, _):
 				expect(out, F64);
 			case ConstString(out, _):
@@ -161,6 +164,10 @@ class IrVerifier {
 				require(values, value);
 				if (value.type != I32 || out.type != F64)
 					throw "IR Int-to-Float conversion requires I32 input and F64 output";
+			case IntToInt64(out, value):
+				require(values, value);
+				if (value.type != I32 || out.type != I64)
+					throw "IR Int-to-Int64 conversion requires I32 input and I64 output";
 			case FloatToInt(out, value):
 				require(values, value);
 				if (value.type != F64 || out.type != I32)
@@ -188,7 +195,9 @@ class IrVerifier {
 					throw 'Mismatched IR static field "$name" (declared=${Std.string(type)}, actual=${Std.string(value.type)})';
 				require(values, value);
 			case Add(out, a, b), Sub(out, a, b), Mul(out, a, b), Div(out, a, b):
-				if (!sameType(out.type, a.type) || !sameType(a.type, b.type) || (!sameType(a.type, I32) && !sameType(a.type, F64)))
+				if (!sameType(out.type, a.type)
+					|| !sameType(a.type, b.type)
+					|| (!sameType(a.type, I32) && !sameType(a.type, I64) && !sameType(a.type, F64)))
 					throw "IR arithmetic requires matching numeric values";
 				require(values, a);
 				require(values, b);

@@ -22,6 +22,7 @@ class IrInstructionCodec {
 		"TypeValue" => true,
 		"ToDyn" => true,
 		"IntToFloat" => true,
+		"IntToInt64" => true,
 		"FloatToInt" => true,
 		"SafeCast" => true,
 		"BeginTry" => true,
@@ -127,6 +128,8 @@ class IrInstructionCodec {
 				writeTwoValues(output, "ToDyn", outputValue, value);
 			case IntToFloat(outputValue, value):
 				writeTwoValues(output, "IntToFloat", outputValue, value);
+			case IntToInt64(outputValue, value):
+				writeTwoValues(output, "IntToInt64", outputValue, value);
 			case FloatToInt(outputValue, value):
 				writeTwoValues(output, "FloatToInt", outputValue, value);
 			case SafeCast(outputValue, value):
@@ -285,6 +288,9 @@ class IrInstructionCodec {
 			case "IntToFloat":
 				arity(2);
 				IntToFloat(readValue(input, values), readValue(input, values));
+			case "IntToInt64":
+				arity(2);
+				IntToInt64(readValue(input, values), readValue(input, values));
 			case "FloatToInt":
 				arity(2);
 				FloatToInt(readValue(input, values), readValue(input, values));

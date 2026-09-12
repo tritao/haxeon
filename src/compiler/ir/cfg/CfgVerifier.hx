@@ -66,7 +66,10 @@ class CfgVerifier {
 					expect(out, Void);
 					define(out, defined, available, block.id);
 				case ConstInt(out, _):
-					expect(out, I32);
+					switch out.type {
+						case I32, I64:
+						default: throw 'CFG integer constant ${out.id} must produce I32 or I64';
+					}
 					define(out, defined, available, block.id);
 				case ConstFloat(out, _):
 					expect(out, F64);
@@ -92,6 +95,11 @@ class CfgVerifier {
 					require(value, available, block.id);
 					expect(value, I32);
 					expect(out, F64);
+					define(out, defined, available, block.id);
+				case IntToInt64(out, value):
+					require(value, available, block.id);
+					expect(value, I32);
+					expect(out, I64);
 					define(out, defined, available, block.id);
 				case SafeCast(out, value):
 					require(value, available, block.id);
@@ -121,7 +129,9 @@ class CfgVerifier {
 				case Add(out, a, b), Sub(out, a, b), Mul(out, a, b), Div(out, a, b):
 					require(a, available, block.id);
 					require(b, available, block.id);
-					if (!sameType(out.type, a.type) || !sameType(a.type, b.type) || (!sameType(a.type, I32) && !sameType(a.type, F64)))
+					if (!sameType(out.type, a.type)
+						|| !sameType(a.type, b.type)
+						|| (!sameType(a.type, I32) && !sameType(a.type, I64) && !sameType(a.type, F64)))
 						throw "CFG arithmetic requires matching numeric values";
 					define(out, defined, available, block.id);
 				case Mod(out, a, b), BitAnd(out, a, b), BitXor(out, a, b), BitOr(out, a, b), ShiftLeft(out, a, b), ShiftRight(out, a, b),

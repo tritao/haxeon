@@ -359,6 +359,8 @@ class HlLower {
 						instructions.push(HlInstruction.ToDyn(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
 					case IntToFloat(output, value):
 						instructions.push(HlInstruction.ToSFloat(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
+					case IntToInt64(output, value):
+						instructions.push(HlInstruction.ToInt(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
 					case FloatToInt(output, value):
 						instructions.push(HlInstruction.ToInt(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
 					case SafeCast(output, value):

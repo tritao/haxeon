@@ -7,6 +7,7 @@ import compiler.types.Type.NominalKind;
 enum ConversionPlan {
 	Identity;
 	IntToFloat;
+	IntToInt64;
 	AbstractCast;
 	ReferenceCast;
 	ToDynamic;
@@ -28,6 +29,8 @@ class TypeRelations {
 			return Identity;
 		if (actual == TInt && expected == TFloat)
 			return IntToFloat;
+		if (actual == TInt && expected == TInt64)
+			return IntToInt64;
 		if (actual == TNull && isReference(expected))
 			return WrapNullable;
 		if (abstractConversion(actual, expected))

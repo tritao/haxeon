@@ -112,7 +112,7 @@ class IrInterpreter {
 			case ConstBool(_, value): value;
 			case ConstNull(_): null;
 			case TypeValue(_, type): new InterpTypeRef(type);
-			case ToDyn(_, input), SafeCast(_, input): value(values, input);
+			case ToDyn(_, input), IntToInt64(_, input), SafeCast(_, input): value(values, input);
 			case Add(_, left, right): value(values, left) + value(values, right);
 			case Sub(_, left, right): value(values, left) - value(values, right);
 			case Mul(_, left, right): value(values, left) * value(values, right);
@@ -298,7 +298,7 @@ class IrInterpreter {
 	static function outputOf(instruction:IrInstruction):Null<IrValue>
 		return switch instruction {
 			case Phi(output, _), ConstVoid(output), ConstInt(output, _), ConstFloat(output, _), ConstString(output, _), ConstBool(output, _),
-				ConstNull(output), TypeValue(output, _), ToDyn(output, _), IntToFloat(output, _), FloatToInt(output, _), SafeCast(output, _), Catch(output),
+				ConstNull(output), TypeValue(output, _), ToDyn(output, _), IntToFloat(output, _), IntToInt64(output, _), FloatToInt(output, _), SafeCast(output, _), Catch(output),
 				GlobalGet(output, _), Add(output, _, _), Sub(output, _, _), Mul(output, _, _), Div(output, _, _), Mod(output, _, _), BitAnd(output, _, _),
 				BitXor(output, _, _), BitOr(output, _, _), ShiftLeft(output, _, _), ShiftRight(output, _, _), UnsignedShiftRight(output, _, _),
 				Less(output, _, _), LessEqual(output, _, _), Equal(output, _, _), Call(output, _, _), CNativeCall(output, _, _), StaticClosure(output, _),

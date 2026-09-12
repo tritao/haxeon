@@ -80,6 +80,20 @@ class TestMain {
 			throw "Hexadecimal integer literals were not tokenized";
 		Frontend.compile('function main():Int return "=".code;');
 		Frontend.compile('function main():Int { return 0x2A; }');
+		Frontend.compile('function zero():haxe.Int64 return 0; function negative():haxe.Int64 return -1; function main():Int return 0;');
+		var int64Widening = Frontend.compile('function widen(value:Int):haxe.Int64 return value; function main():Int return 0;'),
+			wideningLowered = false;
+		for (fn in int64Widening.functions)
+			if (fn.name == "widen")
+				for (block in fn.blocks)
+					for (instruction in block.instructions)
+						switch instruction.value {
+							case compiler.ir.Ir.IrInstruction.IntToInt64(_, _):
+								wideningLowered = true;
+							default:
+						}
+		if (!wideningLowered)
+			throw "Int-to-Int64 widening was not preserved through IR lowering";
 		Frontend.compile('function main():Int return ~0;');
 		Frontend.compile('enum Kind { Void; Float; } function main():Int { var value:Kind = Kind.Float; return switch value { case Kind.Void: 0; case Kind.Float: 42; }; }');
 		Frontend.compile('enum Kind { First; Second; } function main():Int { var value:Kind = Second; return switch value { case First: 0; case Second: 42; }; }');
@@ -467,7 +481,7 @@ class TestMain {
 		referenceBytes.writeInt32(99);
 		expectStringError(function() IrValueTableCodec.readReference(new BytesInput(referenceBytes.getBytes()), badReference), "Unknown IR value reference");
 		Sys.println("PASS: canonical IR value tables preserve identity and reject unknown references");
-		var instructionProgram = Frontend.compile("function add(a:Int, b:Int):Int { var sum = a + b; return sum; } function main():Int { return add(20, 22); }");
+		var instructionProgram = Frontend.compile("function add(a:Int, b:Int):Int { var sum = a + b; return sum; } function widen(value:Int):haxe.Int64 return value; function main():Int { return add(20, 22); }");
 		var decodedFunctions = [];
 		for (fn in instructionProgram.functions) {
 			var instructionValues:Map<Int, compiler.ir.Ir.IrValue> = [];

@@ -96,6 +96,7 @@ enum WasmInstruction {
 	F64Le;
 	F64ConvertI32S;
 	F64ConvertI64S;
+	I64ExtendI32S;
 	F64PromoteF32;
 	F32DemoteF64;
 	I32WrapI64;

@@ -1,5 +1,6 @@
 package compiler.types;
 
+import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedExpression;
 
 private enum InlineConstantValue {
@@ -16,7 +17,7 @@ class InlineConstantEvaluator {
 		var value = evaluateValue(expression);
 		if (value == null)
 			return null;
-		return literal(value, expression.span);
+		return literal(value, expression.span, expression.type);
 	}
 
 	static function evaluateValue(expression:TypedExpression):Null<InlineConstantValue> {
@@ -32,6 +33,7 @@ class InlineConstantEvaluator {
 					case InlineConstantValue.Floating(number): InlineConstantValue.Floating(number);
 					default: null;
 				}
+			case TIntToInt64(inner): evaluateValue(inner);
 			case TNullableWrap(inner), TCast(inner), TAbiCast(inner): evaluateValue(inner);
 			case TAdd(left, right): add(evaluateValue(left), evaluateValue(right));
 			case TSub(left, right): numericBinary(evaluateValue(left), evaluateValue(right), 1);
@@ -64,9 +66,9 @@ class InlineConstantEvaluator {
 		};
 	}
 
-	static function literal(value:InlineConstantValue, span:compiler.Source.SourceSpan):TypedExpression {
+	static function literal(value:InlineConstantValue, span:compiler.Source.SourceSpan, type:CompilerType):TypedExpression {
 		return switch value {
-			case InlineConstantValue.Integer(number): new TypedExpression(TIntLiteral(number), TInt, span);
+			case InlineConstantValue.Integer(number): new TypedExpression(TIntLiteral(number), type == TInt64 ? TInt64 : TInt, span);
 			case InlineConstantValue.Floating(number): new TypedExpression(TFloatLiteral(number), TFloat, span);
 			case InlineConstantValue.Text(text): new TypedExpression(TStringLiteral(text), TString, span);
 			case InlineConstantValue.Boolean(flag): new TypedExpression(TBoolLiteral(flag), TBool, span);

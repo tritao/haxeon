@@ -629,7 +629,7 @@ class IrGenerator {
 
 	static function lowerExpressionAt(expression:TypedExpression, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue
 		return switch expression.expression {
-			case TIntLiteral(value): builder.constInt(value);
+			case TIntLiteral(value): builder.constInt(value, lowerType(expression.type));
 			case TFloatLiteral(value): builder.constFloat(value);
 			case TStringLiteral(value): builder.constString(value);
 			case TBoolLiteral(value): builder.constBool(value);
@@ -655,6 +655,7 @@ class IrGenerator {
 						sameIrType(lowered.type, target) ? lowered : abiBoundaryCast(builder, lowered, target);
 				}
 			case TIntToFloat(value): builder.intToFloat(lowerExpression(value, builder, localTypes));
+			case TIntToInt64(value): builder.intToInt64(lowerExpression(value, builder, localTypes));
 			case TToDynamic(value): switch value.expression {
 					case TNullLiteral: builder.constNull(Dyn);
 					default: builder.toDyn(lowerExpression(value, builder, localTypes));
@@ -734,7 +735,11 @@ class IrGenerator {
 				builder.unsignedShiftRight(values[0], values[1]);
 			case TNegate(value):
 				var typed = lowerExpression(value, builder, localTypes);
-				value.type == TInt ? builder.sub(builder.constInt(0), typed) : builder.sub(builder.constFloat(0.0), typed);
+				switch value.type {
+					case TInt, TInt64: builder.sub(builder.constInt(0, lowerType(value.type)), typed);
+					case TFloat: builder.sub(builder.constFloat(0.0), typed);
+					default: throw 'Cannot lower numeric negation for ${value.type}';
+				}
 			case TLess(a, b):
 				var values = lowerOperands([a, b], builder, localTypes);
 				builder.less(values[0], values[1]);

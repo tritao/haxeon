@@ -369,6 +369,9 @@ class SsaBuilder {
 				case IntToFloat(out, value):
 					var result = define(out);
 					emit(target, IntToFloat(result, resolve(value)), provenance);
+				case IntToInt64(out, value):
+					var result = define(out);
+					emit(target, IntToInt64(result, resolve(value)), provenance);
 				case SafeCast(out, value):
 					var result = define(out);
 					emit(target, SafeCast(result, resolve(value)), provenance);

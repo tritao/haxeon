@@ -176,6 +176,12 @@ class CfgBuilder {
 		return out;
 	}
 
+	public function intToInt64(value:CfgValue):CfgValue {
+		var out = temporary(I64);
+		emit(IntToInt64(out, value));
+		return out;
+	}
+
 	public function typeValue(type:IrType):CfgValue {
 		var out = temporary(TypeRef);
 		emit(TypeValue(out, type));
@@ -200,8 +206,8 @@ class CfgBuilder {
 	public function globalSet(name:String, value:CfgValue):Void
 		emit(GlobalSet(name, value));
 
-	public function constInt(value:Int):CfgValue {
-		var out = temporary(I32);
+	public function constInt(value:Int, type:IrType = I32):CfgValue {
+		var out = temporary(type);
 		emit(ConstInt(out, value));
 		return out;
 	}

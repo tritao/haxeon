@@ -268,6 +268,10 @@ class WasmValidator {
 					pop(stack, I64, fn);
 					if (reachable)
 						stack.push(F64);
+				case I64ExtendI32S:
+					pop(stack, I32, fn);
+					if (reachable)
+						stack.push(I64);
 				case F64PromoteF32:
 					pop(stack, F32, fn);
 					if (reachable)
