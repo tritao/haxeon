@@ -222,9 +222,12 @@ typedef TypedField = {
 	final name:String;
 	final type:CompilerType;
 	final initializer:Null<TypedExpression>;
+	/** Evaluated constant retained for compile-time inline-field substitution. */
+	final inlineValue:Null<TypedExpression>;
 	final readAccess:Null<compiler.syntax.Ast.AstFieldAccess>;
 	final writeAccess:Null<compiler.syntax.Ast.AstFieldAccess>;
 	final isStatic:Bool;
+	final isInline:Bool;
 	final isFinal:Bool;
 	final span:SourceSpan;
 }

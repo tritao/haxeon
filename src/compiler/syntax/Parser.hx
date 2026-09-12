@@ -493,7 +493,7 @@ class Parser {
 					skipMacroFunction();
 					continue;
 				}
-				var isStatic = false, isFinal = false;
+				var isStatic = false, isInline = false, isFinal = false;
 				while (true) {
 					if (current().kind == TokenKind.Identifier && current().text == "override") {
 						advance();
@@ -507,6 +507,7 @@ class Parser {
 							isStatic = true;
 						case TokenKind.Inline:
 							advance();
+							isInline = true;
 						case TokenKind.Final:
 							advance();
 							isFinal = true;
@@ -546,6 +547,7 @@ class Parser {
 						readAccess: readAccess,
 						writeAccess: writeAccess,
 						isStatic: isStatic,
+						isInline: isInline,
 						isFinal: isFinal,
 						span: fieldStart.merge(end)
 					});

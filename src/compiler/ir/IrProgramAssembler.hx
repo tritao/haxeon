@@ -68,7 +68,7 @@ class IrProgramAssembler {
 		for (classDecl in classes)
 			for (field in classDecl.fields) {
 				var initializer = field.initializer;
-				if (field.isStatic && initializer != null) {
+				if (field.isStatic && !field.isInline && initializer != null) {
 					if (spans.length == 0)
 						spans.push(field.span);
 					statements.push(TStaticFieldAssign(classDecl.name, field.name, initializer, field.span));
@@ -231,7 +231,7 @@ class IrProgramAssembler {
 		var result = [];
 		for (classDecl in typed.classes)
 			for (field in classDecl.fields) {
-				if (field.isStatic)
+				if (field.isStatic && !field.isInline)
 					result.push({name: classDecl.name + "." + field.name, type: IrGenerator.lowerType(field.type)});
 			}
 		result.sort(function(a, b) return Reflect.compare(a.name, b.name));

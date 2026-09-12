@@ -69,6 +69,11 @@ typedef MeasuredTypedProgram = {
 	final metrics:TyperPhaseMetrics;
 }
 
+private typedef ResolvedInlineConstant = {
+	final initializer:TypedExpression;
+	final value:TypedExpression;
+}
+
 /** Resolves bindings and converts parsed syntax into the typed semantic tree. */
 class Typer {
 	var signatures:Map<String, AstFunction> = [];
@@ -89,6 +94,8 @@ class Typer {
 	final emittedGenericBodies:Map<String, Bool> = [];
 	final noReturnFunctions:Map<String, Bool> = [];
 	final cNativeFunctions:Map<String, Bool> = [];
+	final inlineConstants:Map<String, ResolvedInlineConstant> = [];
+	final inlineConstantsInProgress:Map<String, Bool> = [];
 
 	inline function get_context():BodyContext
 		return bodyContexts[bodyContexts.length - 1];
@@ -599,28 +606,48 @@ class Typer {
 		for (field in classDecl.fields) {
 			if (fieldNames.exists(field.name))
 				fail("E1000", 'Duplicate field "${classDecl.name}.${field.name}"', field.span);
+			if (field.isInline && !field.isStatic)
+				fail("E1002", 'Inline field "${classDecl.name}.${field.name}" must be static', field.span);
+			if (field.isInline && field.initializer == null)
+				fail("E1002", 'Inline field "${classDecl.name}.${field.name}" requires an initializer', field.span);
 			var type = declarations.resolve(declarations.resolvedFieldType(classDecl.name, field), field.span, erasedSubstitutions);
 			if (type == TVoid)
 				fail("E1002", 'Field "${classDecl.name}.${field.name}" cannot have type Void', field.span);
 			var initializer:Null<TypedExpression> = null,
+				inlineValue:Null<TypedExpression> = null,
 				parsedInitializer = field.initializer;
 			if (parsedInitializer != null) {
-				var initializerContext = enterBody(classDecl.name + ".__init", erasedSubstitutions);
-				var scope = new Scope();
-				if (!field.isStatic)
-					scope.defineReceiver(TInstance(NominalKind.Class, classDecl.name, []), field.span);
-				initializer = coerce(typeExpression(parsedInitializer, scope, type), type,
-					(field.isStatic ? 'static field "${classDecl.name}.${field.name}"' : 'field "${classDecl.name}.${field.name}"'), "E1002");
-				leaveBody(initializerContext);
+				if (field.isInline) {
+					var resolved = resolveInlineConstant(classDecl.name, field.name, field.span);
+					if (resolved == null)
+						fail("E1002", 'Unable to resolve inline constant "${classDecl.name}.${field.name}"', field.span);
+					initializer = resolved.initializer;
+					inlineValue = resolved.value;
+				} else {
+					var initializerContext = enterBody(classDecl.name + ".__init", erasedSubstitutions),
+						scope = new Scope();
+					if (!field.isStatic)
+						scope.defineReceiver(TInstance(NominalKind.Class, classDecl.name, []), field.span);
+					try {
+						initializer = coerce(typeExpression(parsedInitializer, scope, type), type,
+							(field.isStatic ? 'static field "${classDecl.name}.${field.name}"' : 'field "${classDecl.name}.${field.name}"'), "E1002");
+					} catch (error:Dynamic) {
+						leaveBody(initializerContext);
+						throw error;
+					}
+					leaveBody(initializerContext);
+				}
 			}
 			fieldNames.set(field.name, true);
 			fields.push({
 				name: field.name,
 				type: type,
 				initializer: initializer,
+				inlineValue: inlineValue,
 				readAccess: field.readAccess,
 				writeAccess: field.writeAccess,
 				isStatic: field.isStatic,
+				isInline: field.isInline,
 				isFinal: field.isFinal,
 				span: field.span
 			});
@@ -1001,6 +1028,7 @@ class Typer {
 							staticField = findStaticFieldNullable(owner, fieldName);
 						if (staticField == null || (!sameType(staticField.type, TInt) && !sameType(staticField.type, TFloat)))
 							fail("E1018", 'Increment requires a numeric local or static field "$name"', span);
+						rejectInlineFieldMutation(staticField.owner, fieldName, span);
 						var oldValue = new TypedExpression(TStaticField(staticField.owner, fieldName), staticField.type, span),
 							one:TypedExpression = sameType(staticField.type,
 								TInt) ? new TypedExpression(TIntLiteral(1), TInt, span) : new TypedExpression(TFloatLiteral(1.0), TFloat, span),
@@ -1041,6 +1069,7 @@ class Typer {
 									staticField = findStaticFieldNullable(owner, name);
 								if (staticField == null)
 									fail("E1005", 'Unknown variable "$name"', span);
+								rejectInlineFieldMutation(staticField.owner, name, span);
 								var value = coerce(typeExpression(expression, scope, staticField.type), staticField.type, 'field "$name"', "E1002");
 								output.push(TStaticFieldAssign(staticField.owner, name, value, span));
 							}
@@ -1067,6 +1096,7 @@ class Typer {
 						switch object.expression {
 							case TClassRef(className):
 								var staticField = findStaticField(className, fieldName, span);
+								rejectInlineFieldMutation(staticField.owner, fieldName, span);
 								var value = coerce(typeExpression(expression, scope, staticField.type), staticField.type, 'field "$name"', "E1002");
 								output.push(TStaticFieldAssign(staticField.owner, fieldName, value, span));
 							default:
@@ -1115,6 +1145,7 @@ class Typer {
 					switch object.expression {
 						case TClassRef(className):
 							var staticField = findStaticField(className, fieldName, span);
+							rejectInlineFieldMutation(staticField.owner, fieldName, span);
 							value = coerce(value, staticField.type, 'field "$fieldName"', "E1002");
 							output.push(TStaticFieldAssign(staticField.owner, fieldName, value, span));
 						default:
@@ -1988,8 +2019,10 @@ class Typer {
 							staticField:Null<{owner:String, type:CompilerType}> = null;
 						if (owner != null)
 							staticField = findStaticFieldNullable(owner, name);
-						if (staticField != null)
-							return new TypedExpression(TStaticField(staticField.owner, name), staticField.type, span);
+						if (staticField != null) {
+							var inlineValue = inlineStaticFieldExpression(staticField.owner, name, span);
+							return inlineValue == null ? new TypedExpression(TStaticField(staticField.owner, name), staticField.type, span) : inlineValue;
+						}
 						var dot = name.indexOf(".");
 						if (dot <= 0) {
 							var expectedEnumName = enumName(expectedType);
@@ -3310,6 +3343,58 @@ class Typer {
 			default:
 		}
 
+	/** Resolve and memoize an inline field so every use shares its typed value. */
+	function resolveInlineConstant(owner:String, name:String, span:SourceSpan):Null<ResolvedInlineConstant> {
+		var classDecl = classDecls.get(owner);
+		if (classDecl == null)
+			return null;
+		var field:Null<compiler.syntax.Ast.AstField> = null;
+		for (candidate in classDecl.fields)
+			if (candidate.isStatic && candidate.isInline && candidate.name == name) {
+				field = candidate;
+				break;
+			}
+		if (field == null || field.initializer == null)
+			return null;
+		var staticField = findStaticFieldNullable(owner, name);
+		if (staticField == null)
+			return null;
+		var key = staticField.owner + "." + name,
+			cached = inlineConstants.get(key);
+		if (cached != null)
+			return cached;
+		if (inlineConstantsInProgress.exists(key))
+			fail("E1002", 'Cyclic inline constant reference through "$key"', span);
+		inlineConstantsInProgress.set(key, true);
+		var body = enterBody(staticField.owner + ".__inline", declarationTypeSubstitutions(staticField.owner, classDecl.typeParameters), staticField.owner),
+			resolved:ResolvedInlineConstant;
+		try {
+			var initializer = coerce(typeExpression(field.initializer, new Scope(), staticField.type), staticField.type,
+				'inline field "${staticField.owner}.$name"', "E1002"),
+			literal = InlineConstantEvaluator.evaluate(initializer);
+			if (literal == null)
+				fail("E1002", 'Inline field "${staticField.owner}.$name" requires a compile-time constant initializer', field.span);
+			resolved = {
+				initializer: initializer,
+				value: coerce(literal, staticField.type, 'inline field "${staticField.owner}.$name"', "E1002")
+			};
+		} catch (error:Dynamic) {
+			leaveBody(body);
+			inlineConstantsInProgress.remove(key);
+			throw error;
+		}
+		leaveBody(body);
+		inlineConstantsInProgress.remove(key);
+		inlineConstants.set(key, resolved);
+		return resolved;
+	}
+
+	/** Resolve an inline static field to its memoized compile-time value. */
+	function inlineStaticFieldExpression(owner:String, name:String, span:SourceSpan):Null<TypedExpression> {
+		var resolved = resolveInlineConstant(owner, name, span);
+		return resolved == null ? null : new TypedExpression(resolved.value.expression, resolved.value.type, span);
+	}
+
 	function typedMember(typedObject:TypedExpression, name:String, span:SourceSpan):TypedExpression {
 		switch typedObject.type {
 			case TNullable(_):
@@ -3325,7 +3410,8 @@ class Typer {
 							return typeExpression(value.value, new Scope(), lowerType(abstractDecl.underlying));
 				}
 				var staticField = findStaticField(className, name, span);
-				return new TypedExpression(TStaticField(staticField.owner, name), staticField.type, span);
+				var inlineValue = inlineStaticFieldExpression(staticField.owner, name, span);
+				return inlineValue == null ? new TypedExpression(TStaticField(staticField.owner, name), staticField.type, span) : inlineValue;
 			default:
 		}
 		if (name == "length" && isArray(typedObject.type))
@@ -3431,6 +3517,15 @@ class Typer {
 				return {owner: className, type: lowerType(declarations.resolvedFieldType(className, field))};
 		var base = classDecl.base;
 		return base == null ? null : findStaticFieldNullable(inheritanceName(base), name);
+	}
+
+	function rejectInlineFieldMutation(owner:String, name:String, span:SourceSpan):Void {
+		var classDecl = classDecls.get(owner);
+		if (classDecl == null)
+			return;
+		for (field in classDecl.fields)
+			if (field.isStatic && field.isInline && field.name == name)
+				fail("E1002", 'Cannot assign to inline field "$owner.$name"', span);
 	}
 
 	function typeMethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
@@ -4192,8 +4287,10 @@ class Typer {
 			staticField:Null<{owner:String, type:CompilerType}> = null;
 		if (owner != null)
 			staticField = findStaticFieldNullable(owner, name);
-		if (staticField != null)
-			return new TypedExpression(TStaticField(staticField.owner, name), staticField.type, span);
+		if (staticField != null) {
+			var inlineValue = inlineStaticFieldExpression(staticField.owner, name, span);
+			return inlineValue == null ? new TypedExpression(TStaticField(staticField.owner, name), staticField.type, span) : inlineValue;
+		}
 		return null;
 	}
 

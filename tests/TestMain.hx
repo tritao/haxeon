@@ -313,6 +313,26 @@ class TestMain {
 		Frontend.compile('enum Value { Number(value:Int); Empty; } function main():Int { var bits = 1; bits |= 2; bits &= 3; bits ^= 1; bits *= 4; bits %= 5; var fraction = 8.0; fraction /= 2; var recovered = try 1 catch (_:Dynamic) 2; var input:Value = Number(2); var selected = switch input { case Number(1) | Number(2): 3; case _: 0; }; var flat = [for (left in [1, 2]) for (right in [3, 4]) left + right]; return bits + recovered + selected + flat.length + (flat.contains(6) ? 1 : 0); }');
 		Frontend.compile("class Defaults { static final integer = -1; static final fraction = -0.5; static final prefix = '$' + 'abstract-' + 'result'; } function main():Int { return Defaults.integer; }");
 		Frontend.compile('class Base { public static inline final WIDTH = 220; } class Derived { public static inline final WIDTH = Base.WIDTH; } function main():Int return Derived.WIDTH;');
+		var inlineTyped = Typer.type(new Parser(new Lexer(new SourceFile("inline-constant.hx",
+			'class Constants { public static inline final BASE:Int = 16; public static inline final TOTAL:Int = BASE + 4; } function main():Int return Constants.TOTAL;'))
+			.tokenize()).parseProgram()),
+			storedInlineValue = false;
+		for (classDecl in inlineTyped.classes)
+			for (field in classDecl.fields)
+				if (field.name == "TOTAL" && field.inlineValue != null)
+					switch field.inlineValue.expression {
+						case compiler.types.TypedAst.TypedExpressionKind.TIntLiteral(20):
+							storedInlineValue = true;
+						default:
+					}
+		if (!storedInlineValue)
+			throw "Typed inline fields did not retain their evaluated constant value";
+		expectCompileError('class Invalid { public static inline final VALUE:Int = read(); } function read():Int return 16; function main():Int return 0;',
+			'Inline field "Invalid.VALUE" requires a compile-time constant initializer');
+		expectCompileError('class Invalid { public static inline final VALUE:Int = 16; public static function mutate():Void VALUE = 20; } function main():Int return 0;',
+			'Cannot assign to inline field "Invalid.VALUE"');
+		expectCompileError('class Invalid { public static inline final VALUE:Int = Invalid.VALUE; } function main():Int return 0;',
+			'Cyclic inline constant reference through "Invalid.VALUE"');
 		expectCompileError('class First { static final value = Second.value; } class Second { static final value = First.value; } function main():Int return 0;',
 			'Cyclic field type inference through "First.value"');
 		expectCompileError('class Invalid { static final value = "count: " + 1; } function main():Int { return 0; }',

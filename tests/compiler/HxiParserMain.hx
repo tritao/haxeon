@@ -6,6 +6,7 @@ import compiler.ffi.HxiModel.HxiPointerOwnership;
 import compiler.ffi.HxiParser;
 import compiler.ffi.HxiProjection;
 import compiler.ffi.HxiProjectionProfile;
+import compiler.ir.Ir.IrInstruction;
 
 class HxiParserMain {
 	static final valid = '// generated ABI\n'
@@ -340,6 +341,28 @@ class HxiParserMain {
 		compiler.analyze("Main");
 		expect(compiler.irCNatives().length == 2 && compiler.irCNatives()[1].name == "nativekit.nk_version",
 			"compiler should retain executable C descriptors for projected functions");
+		var constantCompiler = new Compiler();
+		constantCompiler.addFfiInterface("fixture.hxi", 'interface fixture @target("x86_64-linux-gnu") @library("fixture") { const VALUE = 16; }');
+		constantCompiler.update("Main.hx",
+			"import fixture; import fixture.FixtureConstants; class LayoutConstants { public static inline var HEADER:Int = FixtureConstants.VALUE; public static inline final TOTAL:Int = LayoutConstants.HEADER + 4; } function main():Int return LayoutConstants.TOTAL;");
+		var constantResult = constantCompiler.compile("Main"),
+			folded = false,
+			runtimeRead = false;
+		for (fn in constantResult.ir.functions)
+			for (block in fn.blocks)
+				for (instruction in block.instructions)
+					switch instruction.value {
+						case IrInstruction.ConstInt(_, value) if (value == 20):
+							folded = true;
+						case IrInstruction.GlobalGet(_, _):
+							runtimeRead = true;
+						default:
+					}
+		var inlineStorage = false;
+		for (field in constantResult.ir.staticFields)
+			if (field.name.indexOf("LayoutConstants.") >= 0 || field.name.indexOf("FixtureConstants.") >= 0)
+				inlineStorage = true;
+		expect(folded && !runtimeRead && !inlineStorage, "inline HXI constants should lower to literals without runtime global reads or storage");
 		var pointerDescriptors = HxiProjection.cNatives(pointerPolicies);
 		expect(!pointerDescriptors[0].pointerNullable
 			&& pointerDescriptors[1].pointerNullable, "pointer result nullability should survive IR projection");

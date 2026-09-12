@@ -54,6 +54,7 @@ typedef AstField = {
 	final readAccess:Null<AstFieldAccess>;
 	final writeAccess:Null<AstFieldAccess>;
 	final isStatic:Bool;
+	final isInline:Bool;
 	final isFinal:Bool;
 	final span:SourceSpan;
 }

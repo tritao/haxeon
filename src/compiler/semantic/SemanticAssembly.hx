@@ -321,6 +321,7 @@ class SemanticAssembly {
 						readAccess: field.readAccess,
 						writeAccess: field.writeAccess,
 						isStatic: field.isStatic,
+						isInline: field.isInline,
 						isFinal: field.isFinal,
 						span: field.span
 					});
