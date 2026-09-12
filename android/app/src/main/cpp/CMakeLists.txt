@@ -20,44 +20,15 @@ option(HL_JIT_AARCH64_OLD
     ${HL_JIT_AARCH64_OLD_DEFAULT})
 
 # Android does not ship libffi headers or a runtime library in its NDK. Build
-# the pinned upstream release with the same NDK compiler and link it statically
-# so Haxeon's native-call bridge remains available in Android projects.
+# the pinned upstream submodule with the same NDK compiler and link it
+# statically so Haxeon's native-call bridge remains available in Android
+# projects.
 set(HAXEON_LIBFFI_VERSION "3.8.0")
-set(HAXEON_LIBFFI_SHA256 "7da3e2d9a171eb0a038f592ecad3ff2bb2550f3496d87b3b29ad0cf4430c0db4")
-set(HAXEON_LIBFFI_ARCHIVE "${CMAKE_CURRENT_BINARY_DIR}/libffi-${HAXEON_LIBFFI_VERSION}.tar.gz")
-set(HAXEON_LIBFFI_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/haxeon-libffi-src/libffi-${HAXEON_LIBFFI_VERSION}")
+set(HAXEON_LIBFFI_SOURCE_DIR "${HAXEON_ROOT}/vendor/libffi")
 set(HAXEON_LIBFFI_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/haxeon-libffi-generated")
-
-if(EXISTS "${HAXEON_LIBFFI_ARCHIVE}")
-    file(SHA256 "${HAXEON_LIBFFI_ARCHIVE}" HAXEON_LIBFFI_CACHED_SHA256)
-    if(NOT HAXEON_LIBFFI_CACHED_SHA256 STREQUAL HAXEON_LIBFFI_SHA256)
-        file(REMOVE "${HAXEON_LIBFFI_ARCHIVE}")
-    endif()
-endif()
-
-if(NOT EXISTS "${HAXEON_LIBFFI_ARCHIVE}")
-    file(DOWNLOAD
-        "https://github.com/libffi/libffi/releases/download/v${HAXEON_LIBFFI_VERSION}/libffi-${HAXEON_LIBFFI_VERSION}.tar.gz"
-        "${HAXEON_LIBFFI_ARCHIVE}"
-        EXPECTED_HASH "SHA256=${HAXEON_LIBFFI_SHA256}"
-        TLS_VERIFY ON
-        SHOW_PROGRESS
-        STATUS HAXEON_LIBFFI_DOWNLOAD_STATUS)
-    list(GET HAXEON_LIBFFI_DOWNLOAD_STATUS 0 HAXEON_LIBFFI_DOWNLOAD_STATUS_CODE)
-    if(NOT HAXEON_LIBFFI_DOWNLOAD_STATUS_CODE EQUAL 0)
-        message(FATAL_ERROR "Could not download libffi ${HAXEON_LIBFFI_VERSION}: ${HAXEON_LIBFFI_DOWNLOAD_STATUS}")
-    endif()
-endif()
-
-file(SHA256 "${HAXEON_LIBFFI_ARCHIVE}" HAXEON_LIBFFI_ARCHIVE_SHA256)
-if(NOT HAXEON_LIBFFI_ARCHIVE_SHA256 STREQUAL HAXEON_LIBFFI_SHA256)
-    message(FATAL_ERROR "Downloaded libffi archive failed SHA-256 verification: ${HAXEON_LIBFFI_ARCHIVE}")
-endif()
-file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/haxeon-libffi-src")
-if(NOT EXISTS "${HAXEON_LIBFFI_SOURCE_DIR}/configure")
-    file(ARCHIVE_EXTRACT
-        INPUT "${HAXEON_LIBFFI_ARCHIVE}"
-        DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/haxeon-libffi-src")
+if(NOT EXISTS "${HAXEON_LIBFFI_SOURCE_DIR}/include/ffi.h.in")
+    message(FATAL_ERROR
+        "libffi ${HAXEON_LIBFFI_VERSION} submodule is missing; run git submodule update --init vendor/libffi")
 endif()
 file(MAKE_DIRECTORY "${HAXEON_LIBFFI_GENERATED_DIR}")
 

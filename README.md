@@ -282,8 +282,9 @@ Paths in the project file are relative to that file. Host builds go to
 builds go to `build/android/app-debug.apk`. Android projects require a
 top-level `main():Void` entry function and an installed Android SDK/NDK. Use
 `--device SERIAL` with `run --target android` when more than one device is
-connected. The first Android native build downloads a hash-verified libffi
-source archive into Gradle's native-build cache. Use
+connected. Android builds use the pinned `vendor/libffi` submodule, which is
+initialized by `scripts/bootstrap-tools.sh` or with
+`git submodule update --init vendor/libffi`. Use
 `--project path/to/haxeon.json` to select another project, repeat
 `--define NAME[=VALUE]` to add conditional defines, and pass arguments to a
 running program after `--`:
@@ -473,9 +474,9 @@ release is currently Linux x86-64, so the shared bootstrap keeps the normal
 `.tools/haxe/haxe` path and runs that compiler through an explicit QEMU
 wrapper. The native HashLink and runtime still build and execute for AArch64.
 
-Pinned dependency versions, archive checksums, extraction, and submodule setup
-are defined once in `cmake/Bootstrap.cmake`. The platform setup scripts are
-thin launchers for that shared bootstrap rather than separate installers.
+Pinned tool versions, archive checksums, extraction, and submodule setup are
+defined once in `cmake/Bootstrap.cmake`. The platform setup scripts are thin
+launchers for that shared bootstrap rather than separate installers.
 
 Haxe sources use the repository-pinned Haxe Formatter:
 

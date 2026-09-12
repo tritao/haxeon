@@ -60,7 +60,7 @@ endfunction()
 # Initialize exact gitlinks first. The fallback is temporary support for the
 # currently unreachable HashLink gitlink and can be removed once it is updated.
 run_checked("Support submodule initialization"
-  "${GIT_EXECUTABLE}" submodule update --init vendor/hashlink-debugger vendor/utest)
+  "${GIT_EXECUTABLE}" submodule update --init vendor/hashlink-debugger vendor/utest vendor/libffi)
 if(NOT EXISTS "${HAXEON_ROOT}/vendor/hashlink/.git")
   execute_process(
     COMMAND "${GIT_EXECUTABLE}" submodule update --init vendor/hashlink
