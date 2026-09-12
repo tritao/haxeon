@@ -131,7 +131,8 @@ const cases = [
   ["out/wasm-backend-closure.wasm", 42],
   ["out/wasm-backend-instance-closure.wasm", 42],
   ["out/wasm-backend-virtual.wasm", 42],
-  ["out/wasm-gc-model.wasm", 42]
+	["out/wasm-gc-model.wasm", 42],
+	["out/wasm-gc-type-plan.wasm", 42]
 ];
 (async () => {
   for (const [relative, expected] of cases) {

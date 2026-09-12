@@ -5,6 +5,7 @@ import compiler.backend.wasm.WasmBackend;
 import compiler.backend.wasm.WasmTarget;
 import compiler.backend.wasm.WasmTarget.WasmReferenceModel;
 import compiler.backend.wasm.WasmLayout;
+import compiler.backend.wasm.WasmGcTypePlan;
 import compiler.backend.wasm.WasmCfgAnalysis;
 import compiler.backend.wasm.WasmRuntimeAbi;
 import compiler.backend.wasm.WasmGcRoots;
@@ -323,8 +324,200 @@ class WasmBackendMain {
 		File.saveBytes("out/wasm-backend-virtual.wasm", virtualCall);
 		validateGcModelRejectsInvalidModules();
 		File.saveBytes("out/wasm-gc-model.wasm", compileGcTypeModel());
+		File.saveBytes("out/wasm-gc-type-plan.wasm", compileGcTypePlan());
 		Sys.println("PASS: Wasm scalar backend");
 	}
+
+	static function compileGcTypePlan():haxe.io.Bytes {
+		var program = new IrProgram("main");
+		program.interfaces.push({
+			name: "Readable",
+			bases: [],
+			methods: [{name: "read", arguments: [], result: I32}]
+		});
+		program.objects.push({
+			name: "Base",
+			isValue: false,
+			base: null,
+			interfaces: [],
+			fields: [{name: "id", type: I32}],
+			methods: []
+		});
+		program.objects.push({
+			name: "Node",
+			isValue: false,
+			base: "Base",
+			interfaces: ["Readable"],
+			fields: [
+				{name: "parent", type: Obj("Node")},
+				{name: "children", type: Array(Obj("Node"))}
+			],
+			methods: []
+		});
+		program.enums.push({
+			name: "Choice",
+			cases: [
+				{name: "None", params: []},
+				{name: "Some", params: [I32]},
+				{name: "Node", params: [Obj("Node")]}
+			]
+		});
+		program.staticFields = [
+			{name: "nodes", type: Array(Obj("Node"))},
+			{name: "iterator", type: Iterator(Obj("Node"))},
+			{name: "callback", type: Function([Obj("Node")], Enum("Choice"))},
+			{name: "dynamic", type: Dyn},
+			{name: "type", type: TypeRef},
+			{name: "bytes", type: Bytes},
+			{name: "managedBytes", type: ManagedBytes},
+			{name: "abstract", type: Abstract("Handle")},
+			{name: "virtual", type: Virtual("Readable")}
+		];
+		var mainBuilder = new IrBuilder();
+		mainBuilder.returnValue(mainBuilder.constInt(42));
+		program.functions.push(new IrFunction("main", mainBuilder.arguments, I32, mainBuilder.blocks));
+
+		var plan = new WasmGcTypePlan(program),
+			baseIndex = plan.objectType("Base"),
+			nodeIndex = plan.objectType("Node");
+		var repeatedPlan = new WasmGcTypePlan(program);
+		if (repeatedPlan.objectType("Node") != nodeIndex
+			|| repeatedPlan.enumConstructorType("Choice", 2) != plan.enumConstructorType("Choice", 2)
+			|| repeatedPlan.arrayStorageType(Obj("Node")) != plan.arrayStorageType(Obj("Node"))
+			|| repeatedPlan.functionTypeIndex([], I32) != plan.functionTypeIndex([], I32))
+			throw "Wasm GC type indices must be stable for identical IR programs";
+		if (baseIndex >= nodeIndex
+			|| plan.objectFieldIndex("Node", "id") != 0
+			|| plan.objectFieldIndex("Node", "parent") != 1
+			|| plan.objectFieldIndex("Node", "children") != 2)
+			throw "Wasm GC object types must reserve parent-first field indices";
+		var enumIndex = plan.enumType("Choice"),
+			nodeConstructorIndex = plan.enumConstructorType("Choice", 2);
+		if (plan.enumFieldIndex("Choice", 2, 0) != 1)
+			throw "Wasm GC enum payload fields must follow the shared tag";
+		var nodesArrayIndex = plan.arrayType(Obj("Node")),
+			nodeStorageIndex = plan.arrayStorageType(Obj("Node")),
+			iteratorIndex = plan.iteratorType(Obj("Node"));
+		var dynamicIsAnyRef = switch plan.valueType(Dyn) {
+			case Ref(ref): ref.nullable && isAnyHeapType(ref.heap);
+			default: false;
+		};
+		var managedBytesIsByteArray = switch plan.valueType(ManagedBytes) {
+			case Ref(ref): ref.nullable && isTypeHeap(ref.heap, plan.byteArrayTypeIndex);
+			default: false;
+		};
+		if (!dynamicIsAnyRef
+			|| plan.valueType(TypeRef) != I32
+			|| !managedBytesIsByteArray
+			|| plan.boxedPrimitiveType(Bool) == plan.boxedPrimitiveType(I32))
+			throw "Wasm GC value and box types must preserve the planned representations";
+
+		var module = new WasmModule("WasmGcTypePlanMain");
+		plan.addTo(module);
+		var nodeFields = switch module.typeAt(nodeIndex).composite {
+			case Struct(fields): fields;
+			default: throw "A Haxe object must plan as a GC struct";
+		};
+		var recursiveParent = switch nodeFields[1].type {
+			case Value(Ref(ref)): isTypeHeap(ref.heap, nodeIndex);
+			default: false;
+		};
+		var objectSubtype = module.typeAt(nodeIndex).supertypes.length == 1 && module.typeAt(nodeIndex).supertypes[0] == baseIndex;
+		var nodeArrayType = switch module.typeAt(nodesArrayIndex).composite {
+			case Struct(fields): fields;
+			default: throw "A Haxe array must plan as a wrapper struct";
+		};
+		var storageType = switch module.typeAt(nodeStorageIndex).composite {
+			case Array(field): field;
+			default: throw "A Haxe array must have a separate GC storage array";
+		};
+		var iteratorFields = switch module.typeAt(iteratorIndex).composite {
+			case Struct(fields): fields;
+			default: throw "A Haxe iterator must plan as a GC struct";
+		};
+		var enumSubtype = module.typeAt(nodeConstructorIndex),
+			nodeElementType = switch storageType.type {
+				case Value(Ref(ref)): isTypeHeap(ref.heap, nodeIndex);
+				default: false;
+			},
+			arrayDataType = switch nodeArrayType[1].type {
+				case Value(Ref(ref)): !ref.nullable && isTypeHeap(ref.heap, nodeStorageIndex);
+				default: false;
+			},
+			iteratorArrayType = switch iteratorFields[0].type {
+				case Value(Ref(ref)): !ref.nullable && isTypeHeap(ref.heap, nodesArrayIndex);
+				default: false;
+			};
+		var callbackUsesClosure = switch plan.valueType(Function([Obj("Node")], Enum("Choice"))) {
+			case Ref(ref): ref.nullable && isTypeHeap(ref.heap, plan.closureTypeIndex);
+			default: false;
+		};
+		if (!recursiveParent || !objectSubtype || !nodeElementType || !arrayDataType || !iteratorArrayType || !callbackUsesClosure
+			|| enumSubtype.supertypes[0] != enumIndex)
+			throw "Wasm GC type plan lost a recursive reference, wrapper, iterator, or enum subtype";
+
+		var signature = plan.wasmFunctionType([], I32),
+			plannedSignatureIndex = plan.functionTypeIndex([], I32);
+		if (module.typeIndex(signature) != plannedSignatureIndex)
+			throw "Function lowering must reuse a signature reserved by the Wasm GC type plan";
+		var callbackSignature = plan.wasmFunctionType([Obj("Node")], Enum("Choice"));
+		if (module.typeIndex(callbackSignature) != plan.functionTypeIndex([Obj("Node")], Enum("Choice")))
+			throw "Closure call signatures must be reserved before function lowering";
+		module.addFunction(new WasmFunction("main", signature, [], [I32Const(42), Return]));
+		module.exports.push({name: "main", functionIndex: 0});
+		validateGcTypePlanRejectsInvalidPrograms();
+		return WasmEncoder.encode(module);
+	}
+
+	static function validateGcTypePlanRejectsInvalidPrograms():Void {
+		var cycle = new IrProgram("main");
+		cycle.objects = [
+			{
+				name: "First",
+				isValue: false,
+				base: "Second",
+				interfaces: [],
+				fields: [],
+				methods: []
+			},
+			{
+				name: "Second",
+				isValue: false,
+				base: "First",
+				interfaces: [],
+				fields: [],
+				methods: []
+			}
+		];
+		assertGcTypePlanRejected(cycle, "The Wasm GC type planner accepted cyclic class inheritance");
+
+		var missing = new IrProgram("main");
+		missing.staticFields.push({name: "missing", type: Obj("Missing")});
+		assertGcTypePlanRejected(missing, "The Wasm GC type planner accepted an undeclared object reference");
+	}
+
+	static function assertGcTypePlanRejected(program:IrProgram, message:String):Void {
+		var rejected = false;
+		try {
+			new WasmGcTypePlan(program);
+		} catch (_:Dynamic) {
+			rejected = true;
+		}
+		if (!rejected)
+			throw message;
+	}
+
+	static function isAnyHeapType(heap:WasmHeapType):Bool
+		return switch heap {
+			case Any: true;
+			default: false;
+		};
+
+	static function isTypeHeap(heap:WasmHeapType, index:Int):Bool
+		return switch heap {
+			case Type(actual): actual == index;
+			default: false;
+		};
 
 	static function compileGcTypeModel():haxe.io.Bytes {
 		var module = new WasmModule("WasmGcModelMain"),
