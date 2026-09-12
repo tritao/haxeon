@@ -236,8 +236,9 @@ the integration suites:
 ### Project CLI
 
 The project CLI creates a small `haxeon.json` manifest, builds HashLink programs
-for the current desktop host, and can launch them through the local HashLink
-runtime. The same command is available on Unix-like systems and Windows:
+for the current desktop host, experimental Wasm32 modules, and Android APKs, and
+can launch host programs or install and launch an Android app. The same command
+is available on Unix-like systems and Windows:
 
 ```sh
 ./scripts/haxeon init
@@ -246,6 +247,10 @@ runtime. The same command is available on Unix-like systems and Windows:
 ./scripts/haxeon build
 ./scripts/haxeon run
 ./scripts/haxeon build --target wasm32
+./scripts/haxeon init --target android
+./scripts/haxeon build --target android
+./scripts/haxeon run --target android
+./scripts/haxeon devices
 ```
 
 On Windows, use `scripts/haxeon.cmd` or `scripts/haxeon.ps1`. `haxeon init`
@@ -263,9 +268,21 @@ creates `src/Main.hx` and a project file like this:
 }
 ```
 
+`haxeon init --target android` also adds Android settings to the manifest:
+
+```json
+"android": {
+  "applicationId": "org.haxeon.android",
+  "label": "Haxeon"
+}
+```
+
 Paths in the project file are relative to that file. Host builds go to
-`build/host/main.hl`; Wasm32 builds go to `build/wasm32/main.wasm`. Use
-`--project path/to/haxeon.json` to select another project, repeat
+`build/host/main.hl`; Wasm32 builds go to `build/wasm32/main.wasm`; Android
+builds go to `build/android/app-debug.apk`. Android projects require a
+top-level `main():Void` entry function and an installed Android SDK/NDK. Use
+`--device SERIAL` with `run --target android` when more than one device is
+connected. Use `--project path/to/haxeon.json` to select another project, repeat
 `--define NAME[=VALUE]` to add conditional defines, and pass arguments to a
 running program after `--`:
 
@@ -273,16 +290,31 @@ running program after `--`:
 ./scripts/haxeon run -- --verbose
 ```
 
-The CLI currently runs only HashLink output on the current host. Wasm32 is
-build-only here, and Android remains available through the Gradle and `adb`
-scripts below.
+The `doctor` command checks the local compiler, HashLink runtime, and Android
+SDK tools. `platforms` lists CLI targets, and `devices` reports connected
+Android devices. Wasm32 is build-only; host output runs through HashLink on the
+current machine.
 
 ### Android host
 
 The first Android host embeds the HashLink runtime and the existing JIT
 backends directly in `libhaxeon.so`; it does not translate Haxeon to JVM or
 Android VM bytecode. Gradle generates a small `.hl` asset and packages the
-host for `arm64-v8a` and `x86_64`:
+host for `arm64-v8a` and `x86_64`. The project CLI sends its manifest to Gradle
+and copies the resulting APK to `build/android/app-debug.apk`:
+
+```sh
+./scripts/haxeon init --target android
+./scripts/haxeon build --target android
+./scripts/haxeon run --target android [--device SERIAL]
+```
+
+Set `android.applicationId` and `android.label` in `haxeon.json` to customize
+the installed package name and launcher label. `run` installs the APK and
+launches it on the selected device or the only online device. `haxeon devices`
+lists connected devices.
+
+For the bundled demo, Gradle can still be called directly:
 
 ```sh
 source scripts/android-env.sh
@@ -314,9 +346,10 @@ the new module initializes and its `main` call succeeds. Its staged compiler
 baseline is promoted only after the device acknowledges the replacement.
 
 The local Android SDK, NDK, CMake, Gradle, and emulator are kept under
-`.tools/`. Source `scripts/android-env.sh` when using `adb`, `emulator`, or
-Gradle directly. The disposable API 36 emulator used for the smoke test is
-named `haxeon-api36-x86_64`.
+`.tools/`. The CLI configures these paths automatically. Source
+`scripts/android-env.sh` when using `adb`, `emulator`, or Gradle directly. The
+disposable API 36 emulator used for the smoke test is named
+`haxeon-api36-x86_64`.
 
 The full test script runs program fixtures with 16 workers by default. Set
 `TEST_JOBS=1` for the sequential baseline, or invoke the driver directly to

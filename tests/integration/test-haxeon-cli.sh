@@ -26,6 +26,25 @@ HX
 	test "$wasm_header" = "0061736d"
 )
 
+android_project="$project_dir/android project"
+mkdir -p "$android_project"
+(
+	cd "$android_project"
+	"$cli" init --target android
+)
+"$repo_dir/.tools/haxe/haxe" --cwd "$repo_dir" -cp "$repo_dir/src" --run tools.AndroidBuild \
+	--project "$android_project/haxeon.json" "$android_project/build/app.hl"
+for artifact in app.hl app.hli app.entry app.hcs; do
+	test -s "$android_project/build/$artifact"
+done
+
+android_demo="$project_dir/android demo"
+"$repo_dir/.tools/haxe/haxe" --cwd "$repo_dir" -cp "$repo_dir/src" --run tools.AndroidBuild \
+	"$repo_dir/android/demo/Main.hx" "$android_demo/app.hl"
+for artifact in app.hl app.hli app.entry app.hcs; do
+	test -s "$android_demo/$artifact"
+done
+
 set +e
 "$cli" run --project "$project_dir/haxeon.json" -- hello
 run_status=$?
@@ -35,4 +54,4 @@ if [[ $run_status -ne 42 ]]; then
 	exit 1
 fi
 
-echo "PASS: project CLI init, doctor, target listing, host run, and wasm32 build"
+echo "PASS: project CLI init, doctor, target listing, host run, wasm32 build, and Android asset generation"

@@ -3,6 +3,12 @@ plugins {
 }
 
 def haxeonRoot = rootProject.projectDir.parentFile
+def haxeonApplicationId = providers.gradleProperty('haxeonApplicationId').getOrElse('org.haxeon.android')
+def haxeonAppLabel = providers.gradleProperty('haxeonAppLabel').getOrElse('Haxeon')
+def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
+def haxeExecutable = new File(haxeonRoot, '.tools/haxe/haxe' + (isWindows ? '.exe' : ''))
+def appAssets = file('src/main/assets')
+def appAsset = new File(appAssets, 'app.hl')
 
 android {
     namespace 'org.haxeon.android'
@@ -10,11 +16,12 @@ android {
     ndkVersion '30.0.16248370'
 
     defaultConfig {
-        applicationId 'org.haxeon.android'
+        applicationId haxeonApplicationId
         minSdk 28
         targetSdk 36
         versionCode 1
         versionName '0.1'
+        manifestPlaceholders = [appLabel: haxeonAppLabel]
 
         ndk {
             abiFilters 'arm64-v8a', 'x86_64'
@@ -40,7 +47,22 @@ android {
 
 tasks.register('generateHaxeonAsset', Exec) {
     workingDir haxeonRoot
-    commandLine 'bash', new File(haxeonRoot, 'scripts/build-android-demo.sh').absolutePath
+    doFirst {
+        if (!haxeExecutable.isFile()) {
+            throw new GradleException("Pinned Haxe compiler is missing: ${haxeExecutable}; run scripts/bootstrap-tools.sh")
+        }
+        delete fileTree(appAssets) {
+            include 'app.hl', 'app.hli', 'app.entry', 'app.hcs', 'app.hlp', 'app.hxr', 'app.hcs.pending'
+        }
+        def projectManifest = providers.gradleProperty('haxeonProject').orNull
+        if (projectManifest != null) {
+            commandLine haxeExecutable.absolutePath, '-cp', new File(haxeonRoot, 'src').absolutePath,
+                '--run', 'tools.AndroidBuild', '--project', projectManifest, appAsset.absolutePath
+        } else {
+            commandLine haxeExecutable.absolutePath, '-cp', new File(haxeonRoot, 'src').absolutePath,
+                '--run', 'tools.AndroidBuild', new File(haxeonRoot, 'android/demo/Main.hx').absolutePath, appAsset.absolutePath
+        }
+    }
 }
 
 tasks.named('preBuild').configure {
