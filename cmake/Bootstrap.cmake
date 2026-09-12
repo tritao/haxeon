@@ -57,24 +57,9 @@ function(extract_single_directory archive destination)
   file(REMOVE_RECURSE "${temp_dir}")
 endfunction()
 
-# Initialize exact gitlinks first. The fallback is temporary support for the
-# currently unreachable HashLink gitlink and can be removed once it is updated.
-run_checked("Support submodule initialization"
-  "${GIT_EXECUTABLE}" submodule update --init vendor/hashlink-debugger vendor/utest vendor/libffi)
-if(NOT EXISTS "${HAXEON_ROOT}/vendor/hashlink/.git")
-  execute_process(
-    COMMAND "${GIT_EXECUTABLE}" submodule update --init vendor/hashlink
-    WORKING_DIRECTORY "${HAXEON_ROOT}"
-    RESULT_VARIABLE submodule_status
-  )
-  if(NOT submodule_status EQUAL 0)
-    message(WARNING "Recorded HashLink commit is unavailable; using haxeon/integrated-runtime")
-    run_checked("HashLink integration-branch fetch"
-      "${GIT_EXECUTABLE}" -C "${HAXEON_ROOT}/vendor/hashlink" fetch origin haxeon/integrated-runtime)
-    run_checked("HashLink integration-branch checkout"
-      "${GIT_EXECUTABLE}" -C "${HAXEON_ROOT}/vendor/hashlink" checkout FETCH_HEAD)
-  endif()
-endif()
+# Initialize the exact submodule revisions recorded by this checkout.
+run_checked("Submodule initialization"
+  "${GIT_EXECUTABLE}" submodule update --init vendor/hashlink vendor/hashlink-debugger vendor/utest vendor/libffi)
 
 if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
   set(haxe_archive "${TOOLS_DIR}/haxe-${HAXE_VERSION}-win64.zip")
