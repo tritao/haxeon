@@ -3,6 +3,7 @@ set -euo pipefail
 
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
 haxe_bin="$root_dir/.tools/haxe/haxe"
+mkdir -p "$root_dir/out"
 if [[ ! -x "$haxe_bin" ]]; then
 	echo "missing pinned Haxe; run ./scripts/bootstrap-tools.sh first" >&2
 	exit 1
@@ -129,7 +130,8 @@ const cases = [
 	["out/wasm-cli-try-bounds.wasm", 42],
   ["out/wasm-backend-closure.wasm", 42],
   ["out/wasm-backend-instance-closure.wasm", 42],
-  ["out/wasm-backend-virtual.wasm", 42]
+  ["out/wasm-backend-virtual.wasm", 42],
+  ["out/wasm-gc-model.wasm", 42]
 ];
 (async () => {
   for (const [relative, expected] of cases) {

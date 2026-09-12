@@ -5,6 +5,13 @@ import haxe.io.BytesOutput;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
+import compiler.backend.wasm.WasmTypes.WasmRefType;
+import compiler.backend.wasm.WasmTypes.WasmHeapType;
+import compiler.backend.wasm.WasmTypes.WasmStorageType;
+import compiler.backend.wasm.WasmTypes.WasmFieldType;
+import compiler.backend.wasm.WasmTypes.WasmCompositeType;
+import compiler.backend.wasm.WasmTypes.WasmSubtype;
+import compiler.backend.wasm.WasmTypes.WasmTypeGroup;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmLocal;
 import compiler.backend.wasm.WasmModule.WasmModule;
@@ -64,15 +71,63 @@ class WasmEncoder {
 		return body.getBytes();
 	}
 
-	static function encodeTypes(types:Array<WasmFunctionType>):Bytes {
+	static function encodeTypes(types:Array<WasmTypeGroup>):Bytes {
 		var body = new BytesOutput();
 		writeU32(body, types.length);
-		for (type in types) {
-			body.writeByte(0x60);
-			writeTypes(body, type.parameters);
-			writeTypes(body, type.results);
-		}
+		for (group in types)
+			switch group {
+				case Single(type):
+					writeSubtype(body, type);
+				case RecGroup(groupTypes):
+					body.writeByte(0x4e);
+					writeU32(body, groupTypes.length);
+					for (type in groupTypes)
+						writeSubtype(body, type);
+			}
 		return body.getBytes();
+	}
+
+	static function writeSubtype(output:BytesOutput, type:WasmSubtype):Void {
+		if (!type.finalType || type.supertypes.length != 0) {
+			output.writeByte(type.finalType ? 0x4f : 0x50);
+			writeU32(output, type.supertypes.length);
+			for (supertype in type.supertypes)
+				writeU32(output, supertype);
+		}
+		writeCompositeType(output, type.composite);
+	}
+
+	static function writeCompositeType(output:BytesOutput, type:WasmCompositeType):Void {
+		switch type {
+			case Func(functionType):
+				output.writeByte(0x60);
+				writeTypes(output, functionType.parameters);
+				writeTypes(output, functionType.results);
+			case Struct(fields):
+				output.writeByte(0x5f);
+				writeU32(output, fields.length);
+				for (field in fields)
+					writeFieldType(output, field);
+			case Array(field):
+				output.writeByte(0x5e);
+				writeFieldType(output, field);
+		}
+	}
+
+	static function writeFieldType(output:BytesOutput, field:WasmFieldType):Void {
+		writeStorageType(output, field.type);
+		output.writeByte(field.mutable ? 1 : 0);
+	}
+
+	static function writeStorageType(output:BytesOutput, type:WasmStorageType):Void {
+		switch type {
+			case Value(value):
+				writeValueType(output, value);
+			case I8:
+				output.writeByte(0x78);
+			case I16:
+				output.writeByte(0x77);
+		}
 	}
 
 	static function encodeFunctionTypes(module:WasmModule):Bytes {
@@ -106,7 +161,7 @@ class WasmEncoder {
 		var body = new BytesOutput();
 		writeU32(body, globals.length);
 		for (global in globals) {
-			body.writeByte(valueType(global.type));
+			writeValueType(body, global.type);
 			body.writeByte(global.mutable ? 1 : 0);
 			writeInstructions(body, global.init);
 			body.writeByte(0x0b);
@@ -238,7 +293,7 @@ class WasmEncoder {
 	static function writeLocals(output:BytesOutput, locals:Array<WasmLocal>):Void {
 		var groups:Array<{type:WasmValueType, count:Int}> = [];
 		for (local in locals) {
-			if (groups.length > 0 && groups[groups.length - 1].type == local.type)
+			if (groups.length > 0 && sameValueType(groups[groups.length - 1].type, local.type))
 				groups[groups.length - 1].count++;
 			else
 				groups.push({type: local.type, count: 1});
@@ -246,14 +301,14 @@ class WasmEncoder {
 		writeU32(output, groups.length);
 		for (group in groups) {
 			writeU32(output, group.count);
-			output.writeByte(valueType(group.type));
+			writeValueType(output, group.type);
 		}
 	}
 
 	static function writeTypes(output:BytesOutput, types:Array<WasmValueType>):Void {
 		writeU32(output, types.length);
 		for (type in types)
-			output.writeByte(valueType(type));
+			writeValueType(output, type);
 	}
 
 	static function writeInstructions(output:BytesOutput, instructions:Array<WasmInstruction>):Void {
@@ -265,16 +320,16 @@ class WasmEncoder {
 					output.writeByte(0x01);
 				case Block(result):
 					output.writeByte(0x02);
-					output.writeByte(blockType(result));
+					writeBlockType(output, result);
 				case Loop(result):
 					output.writeByte(0x03);
-					output.writeByte(blockType(result));
+					writeBlockType(output, result);
 				case Try(result):
 					output.writeByte(0x06);
-					output.writeByte(blockType(result));
+					writeBlockType(output, result);
 				case If(result):
 					output.writeByte(0x04);
-					output.writeByte(blockType(result));
+					writeBlockType(output, result);
 				case Else:
 					output.writeByte(0x05);
 				case Catch(tag):
@@ -497,19 +552,152 @@ class WasmEncoder {
 					output.writeByte(0xaa);
 				case I64ReinterpretF64:
 					output.writeByte(0xbd);
+				case RefNull(heapType):
+					output.writeByte(0xd0);
+					writeHeapType(output, heapType);
+				case RefIsNull:
+					output.writeByte(0xd1);
+				case RefEq:
+					output.writeByte(0xd3);
+				case RefTest(type):
+					output.writeByte(0xfb);
+					writeU32(output, type.nullable ? 21 : 20);
+					writeHeapType(output, type.heap);
+				case RefCast(type):
+					output.writeByte(0xfb);
+					writeU32(output, type.nullable ? 23 : 22);
+					writeHeapType(output, type.heap);
+				case StructNew(typeIndex):
+					writeGcOpcode(output, 0, typeIndex);
+				case StructNewDefault(typeIndex):
+					writeGcOpcode(output, 1, typeIndex);
+				case StructGet(typeIndex, fieldIndex):
+					writeGcOpcode(output, 2, typeIndex);
+					writeU32(output, fieldIndex);
+				case StructGetSigned(typeIndex, fieldIndex):
+					writeGcOpcode(output, 3, typeIndex);
+					writeU32(output, fieldIndex);
+				case StructGetUnsigned(typeIndex, fieldIndex):
+					writeGcOpcode(output, 4, typeIndex);
+					writeU32(output, fieldIndex);
+				case StructSet(typeIndex, fieldIndex):
+					writeGcOpcode(output, 5, typeIndex);
+					writeU32(output, fieldIndex);
+				case ArrayNew(typeIndex):
+					writeGcOpcode(output, 6, typeIndex);
+				case ArrayNewDefault(typeIndex):
+					writeGcOpcode(output, 7, typeIndex);
+				case ArrayGet(typeIndex):
+					writeGcOpcode(output, 11, typeIndex);
+				case ArrayGetSigned(typeIndex):
+					writeGcOpcode(output, 12, typeIndex);
+				case ArrayGetUnsigned(typeIndex):
+					writeGcOpcode(output, 13, typeIndex);
+				case ArraySet(typeIndex):
+					writeGcOpcode(output, 14, typeIndex);
+				case ArrayLen:
+					output.writeByte(0xfb);
+					writeU32(output, 15);
+				case ArrayCopy(destinationTypeIndex, sourceTypeIndex):
+					output.writeByte(0xfb);
+					writeU32(output, 17);
+					writeU32(output, destinationTypeIndex);
+					writeU32(output, sourceTypeIndex);
 			}
 	}
 
-	static function valueType(type:WasmValueType):Int
-		return switch type {
-			case I32: 0x7f;
-			case I64: 0x7e;
-			case F32: 0x7d;
-			case F64: 0x7c;
-		};
+	static function writeGcOpcode(output:BytesOutput, subopcode:Int, typeIndex:Int):Void {
+		output.writeByte(0xfb);
+		writeU32(output, subopcode);
+		writeU32(output, typeIndex);
+	}
 
-	static function blockType(type:Null<WasmValueType>):Int
-		return type == null ? 0x40 : valueType(type);
+	static function writeBlockType(output:BytesOutput, type:Null<WasmValueType>):Void {
+		switch type {
+			case null:
+				output.writeByte(0x40);
+			default:
+				writeValueType(output, type);
+		}
+	}
+
+	static function writeValueType(output:BytesOutput, type:WasmValueType):Void {
+		switch type {
+			case I32:
+				output.writeByte(0x7f);
+			case I64:
+				output.writeByte(0x7e);
+			case F32:
+				output.writeByte(0x7d);
+			case F64:
+				output.writeByte(0x7c);
+			case Ref(refType):
+				writeRefType(output, refType);
+		}
+	}
+
+	static function writeRefType(output:BytesOutput, type:WasmRefType):Void {
+		if (type.nullable) {
+			switch type.heap {
+				case Any, Eq, I31, Struct, Array, Func, Extern, None, NoExtern, NoFunc, Exn, NoExn:
+					writeHeapType(output, type.heap);
+				default:
+					output.writeByte(0x63);
+					writeHeapType(output, type.heap);
+			}
+		} else {
+			output.writeByte(0x64);
+			writeHeapType(output, type.heap);
+		}
+	}
+
+	static function writeHeapType(output:BytesOutput, type:WasmHeapType):Void {
+		switch type {
+			case Any:
+				output.writeByte(0x6e);
+			case Eq:
+				output.writeByte(0x6d);
+			case I31:
+				output.writeByte(0x6c);
+			case Struct:
+				output.writeByte(0x6b);
+			case Array:
+				output.writeByte(0x6a);
+			case Func:
+				output.writeByte(0x70);
+			case Extern:
+				output.writeByte(0x6f);
+			case None:
+				output.writeByte(0x71);
+			case NoExtern:
+				output.writeByte(0x72);
+			case NoFunc:
+				output.writeByte(0x73);
+			case Exn:
+				output.writeByte(0x69);
+			case NoExn:
+				output.writeByte(0x74);
+			case Type(index):
+				writeS32(output, index);
+		}
+	}
+
+	static function sameValueType(left:WasmValueType, right:WasmValueType):Bool {
+		return switch [left, right] {
+			case [I32, I32], [I64, I64], [F32, F32], [F64, F64]: true;
+			case [Ref(leftType), Ref(rightType)]: leftType.nullable == rightType.nullable && sameHeapType(leftType.heap, rightType.heap);
+			default: false;
+		};
+	}
+
+	static function sameHeapType(left:WasmHeapType, right:WasmHeapType):Bool {
+		return switch [left, right] {
+			case [Any, Any], [Eq, Eq], [I31, I31], [Struct, Struct], [Array, Array], [Func, Func], [Extern, Extern], [None, None], [NoExtern, NoExtern],
+				[NoFunc, NoFunc], [Exn, Exn], [NoExn, NoExn]: true;
+			case [Type(leftIndex), Type(rightIndex)]: leftIndex == rightIndex;
+			default: false;
+		};
+	}
 
 	static function writeString(output:BytesOutput, value:String):Void {
 		var bytes = Bytes.ofString(value);

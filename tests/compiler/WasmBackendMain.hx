@@ -10,6 +10,17 @@ import compiler.backend.wasm.WasmRuntimeAbi;
 import compiler.backend.wasm.WasmGcRoots;
 import compiler.backend.wasm.WasmStructurer;
 import compiler.backend.wasm.WasmPatch;
+import compiler.backend.wasm.WasmEncoder;
+import compiler.backend.wasm.WasmValidator;
+import compiler.backend.wasm.WasmModule.WasmModule;
+import compiler.backend.wasm.WasmModule.WasmFunction;
+import compiler.backend.wasm.WasmTypes.WasmValueType;
+import compiler.backend.wasm.WasmTypes.WasmInstruction;
+import compiler.backend.wasm.WasmTypes.WasmFunctionType;
+import compiler.backend.wasm.WasmTypes.WasmHeapType;
+import compiler.backend.wasm.WasmTypes.WasmStorageType;
+import compiler.backend.wasm.WasmTypes.WasmCompositeType;
+import compiler.backend.wasm.WasmTypes.WasmSubtype;
 import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.ir.IrInterpreter;
 import compiler.ir.codec.CanonicalIrCodec;
@@ -310,7 +321,191 @@ class WasmBackendMain {
 		File.saveBytes("out/wasm-backend-closure.wasm", closure);
 		File.saveBytes("out/wasm-backend-instance-closure.wasm", instanceClosure);
 		File.saveBytes("out/wasm-backend-virtual.wasm", virtualCall);
+		validateGcModelRejectsInvalidModules();
+		File.saveBytes("out/wasm-gc-model.wasm", compileGcTypeModel());
 		Sys.println("PASS: Wasm scalar backend");
+	}
+
+	static function compileGcTypeModel():haxe.io.Bytes {
+		var module = new WasmModule("WasmGcModelMain"),
+			nodeType:WasmSubtype = {
+				finalType: false,
+				supertypes: [],
+				composite: Struct([
+					{type: Value(I32), mutable: true},
+					{type: Value(Ref({nullable: true, heap: Type(0)})), mutable: true},
+					{type: I8, mutable: true},
+					{type: I16, mutable: true}
+				])
+			};
+		var childType:WasmSubtype = {
+			finalType: true,
+			supertypes: [0],
+			composite: Struct([
+				{type: Value(I32), mutable: true},
+				{type: Value(Ref({nullable: true, heap: Type(0)})), mutable: true},
+				{type: I8, mutable: true},
+				{type: I16, mutable: true},
+				{type: Value(I32), mutable: true}
+			])
+		};
+		if (module.addRecGroup([nodeType, childType]) != 0)
+			throw "The first recursive Wasm GC type must receive index zero";
+		var intArrayType = module.addType({
+			finalType: true,
+			supertypes: [],
+			composite: Array({type: Value(I32), mutable: true})
+		});
+		if (intArrayType != 2)
+			throw "Type indices after a recursive group must count its contained types";
+		var byteArrayType = module.addType({
+			finalType: true,
+			supertypes: [],
+			composite: Array({type: I8, mutable: true})
+		});
+		var signature:WasmFunctionType = {parameters: [], results: [I32]},
+			body:Array<WasmInstruction> = [
+				StructNewDefault(0),
+				LocalSet(0),
+				I32Const(0),
+				RefNull(Type(0)),
+				I32Const(0),
+				I32Const(0),
+				I32Const(0),
+				StructNew(1),
+				LocalSet(1),
+				LocalGet(0),
+				I32Const(39),
+				StructSet(0, 0),
+				LocalGet(0),
+				LocalGet(1),
+				StructSet(0, 1),
+				LocalGet(0),
+				I32Const(255),
+				StructSet(0, 2),
+				LocalGet(0),
+				I32Const(65535),
+				StructSet(0, 3),
+				LocalGet(0),
+				StructGetSigned(0, 2),
+				Drop,
+				LocalGet(0),
+				StructGetUnsigned(0, 3),
+				Drop,
+				LocalGet(0),
+				StructGet(0, 1),
+				RefTest({
+					nullable: true,
+					heap: Type(0)
+				}),
+				LocalGet(0),
+				StructGet(0, 1),
+				RefCast({nullable: false, heap: Type(0)}),
+				Drop,
+				LocalGet(0),
+				StructGet(0, 1),
+				LocalGet(1),
+				RefEq,
+				LocalGet(1),
+				StructGet(0, 1),
+				RefIsNull,
+				LocalGet(0),
+				StructGet(0, 0),
+				I32Add,
+				I32Add,
+				I32Add,
+				I32Const(42),
+				I32Eq,
+				I32Const(7),
+				I32Const(2),
+				ArrayNew(intArrayType),
+				LocalSet(2),
+				LocalGet(2),
+				ArrayLen,
+				I32Const(2),
+				I32Eq,
+				I32And,
+				I32Const(2),
+				ArrayNewDefault(intArrayType),
+				LocalSet(3),
+				LocalGet(2),
+				I32Const(1),
+				I32Const(42),
+				ArraySet(intArrayType),
+				LocalGet(3),
+				I32Const(0),
+				LocalGet(2),
+				I32Const(1),
+				I32Const(1),
+				ArrayCopy(intArrayType, intArrayType),
+				LocalGet(3),
+				I32Const(0),
+				ArrayGet(intArrayType),
+				I32Const(42),
+				I32Eq,
+				I32And,
+				I32Const(255),
+				I32Const(1),
+				ArrayNew(byteArrayType),
+				LocalSet(4),
+				LocalGet(4),
+				I32Const(0),
+				I32Const(255),
+				ArraySet(byteArrayType),
+				LocalGet(4),
+				I32Const(0),
+				ArrayGetSigned(byteArrayType),
+				Drop,
+				LocalGet(4),
+				I32Const(0),
+				ArrayGetUnsigned(byteArrayType),
+				Drop,
+				If(I32),
+				I32Const(42),
+				Else,
+				I32Const(0),
+				End
+			];
+		module.addFunction(new WasmFunction("main", signature, [
+			{type: Ref({nullable: false, heap: Type(0)})},
+			{type: Ref({nullable: false, heap: Type(1)})},
+			{type: Ref({nullable: false, heap: Type(intArrayType)})},
+			{type: Ref({nullable: false, heap: Type(intArrayType)})},
+			{type: Ref({nullable: false, heap: Type(byteArrayType)})}
+		], body));
+		module.exports.push({name: "main", functionIndex: 0});
+		return WasmEncoder.encode(module);
+	}
+
+	static function validateGcModelRejectsInvalidModules():Void {
+		var invalidReference = new WasmModule();
+		invalidReference.addType({
+			finalType: true,
+			supertypes: [],
+			composite: Array({type: Value(Ref({nullable: true, heap: Type(1)})), mutable: true})
+		});
+		assertGcModuleRejected(invalidReference, "The Wasm validator accepted a forward reference outside its recursive group");
+
+		var immutableField = new WasmModule(),
+			voidSignature:WasmFunctionType = {parameters: [], results: []};
+		immutableField.addType({
+			finalType: true,
+			supertypes: [],
+			composite: Struct([{type: Value(I32), mutable: false}])
+		});
+		immutableField.addFunction(new WasmFunction("writeImmutable", voidSignature, [], [StructNewDefault(0), I32Const(7), StructSet(0, 0)]));
+		assertGcModuleRejected(immutableField, "The Wasm validator accepted a write to an immutable GC field");
+	}
+
+	static function assertGcModuleRejected(module:WasmModule, message:String):Void {
+		var rejected = false;
+		try {
+			WasmValidator.validate(module);
+		} catch (_:Dynamic) {
+			rejected = true;
+		}
+		if (!rejected)
+			throw message;
 	}
 
 	static function objectProgram():haxe.io.Bytes {

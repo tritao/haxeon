@@ -4,6 +4,9 @@ import haxe.io.Bytes;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
+import compiler.backend.wasm.WasmTypes.WasmCompositeType;
+import compiler.backend.wasm.WasmTypes.WasmSubtype;
+import compiler.backend.wasm.WasmTypes.WasmTypeGroup;
 
 typedef WasmDataSegment = {
 	final offset:Int;
@@ -50,7 +53,9 @@ typedef WasmCustomSection = {
 
 /** In-memory Wasm module, kept separate from Haxeon lowering and byte encoding. */
 class WasmModule {
-	public final types:Array<WasmFunctionType> = [];
+	/** Type-section entries. Indices address the flattened subtype sequence across groups. */
+	public final types:Array<WasmTypeGroup> = [];
+
 	public final imports:Array<WasmImport> = [];
 	public final functions:Array<WasmFunction> = [];
 	public final globals:Array<WasmGlobal> = [];
@@ -79,13 +84,66 @@ class WasmModule {
 	}
 
 	public function typeIndex(type:WasmFunctionType):Int {
-		for (index in 0...types.length) {
-			var candidate = types[index];
-			if (sameType(candidate, type))
-				return index;
+		for (index in 0...typeCount()) {
+			var candidate = typeAt(index);
+			switch candidate.composite {
+				case Func(functionType) if (sameType(functionType, type)):
+					return index;
+				default:
+			}
 		}
-		types.push(type);
-		return types.length - 1;
+		return addType({finalType: true, supertypes: [], composite: Func(type)});
+	}
+
+	/** Adds one type and returns its flattened type index. */
+	public function addType(type:WasmSubtype):Int {
+		var index = typeCount();
+		types.push(Single(type));
+		return index;
+	}
+
+	/** Adds a mutually recursive type group and returns the index of its first type. */
+	public function addRecGroup(group:Array<WasmSubtype>):Int {
+		var index = typeCount();
+		types.push(RecGroup(group));
+		return index;
+	}
+
+	public function typeCount():Int {
+		var count = 0;
+		for (group in types)
+			switch group {
+				case Single(_):
+					count++;
+				case RecGroup(groupTypes):
+					count += groupTypes.length;
+			}
+		return count;
+	}
+
+	public function typeAt(index:Int):WasmSubtype {
+		if (index < 0)
+			throw 'Unknown Wasm type index $index';
+		var current = 0;
+		for (group in types)
+			switch group {
+				case Single(type):
+					if (current == index)
+						return type;
+					current++;
+				case RecGroup(groupTypes):
+					if (index < current + groupTypes.length)
+						return groupTypes[index - current];
+					current += groupTypes.length;
+			}
+		throw 'Unknown Wasm type index $index';
+	}
+
+	public function functionTypeAt(typeIndex:Int):WasmFunctionType {
+		return switch typeAt(typeIndex).composite {
+			case Func(type): type;
+			default: throw 'Wasm type index $typeIndex does not identify a function type';
+		};
 	}
 
 	public function addFunction(fn:WasmFunction):Int {
@@ -123,11 +181,28 @@ class WasmModule {
 		if (left.parameters.length != right.parameters.length || left.results.length != right.results.length)
 			return false;
 		for (index in 0...left.parameters.length)
-			if (left.parameters[index] != right.parameters[index])
+			if (!sameValueType(left.parameters[index], right.parameters[index]))
 				return false;
 		for (index in 0...left.results.length)
-			if (left.results[index] != right.results[index])
+			if (!sameValueType(left.results[index], right.results[index]))
 				return false;
 		return true;
+	}
+
+	function sameValueType(left:WasmValueType, right:WasmValueType):Bool {
+		return switch [left, right] {
+			case [I32, I32], [I64, I64], [F32, F32], [F64, F64]: true;
+			case [Ref(leftType), Ref(rightType)]: leftType.nullable == rightType.nullable && sameHeapType(leftType.heap, rightType.heap);
+			default: false;
+		};
+	}
+
+	function sameHeapType(left:WasmTypes.WasmHeapType, right:WasmTypes.WasmHeapType):Bool {
+		return switch [left, right] {
+			case [Any, Any], [Eq, Eq], [I31, I31], [Struct, Struct], [Array, Array], [Func, Func], [Extern, Extern], [None, None], [NoExtern, NoExtern],
+				[NoFunc, NoFunc], [Exn, Exn], [NoExn, NoExn]: true;
+			case [Type(leftIndex), Type(rightIndex)]: leftIndex == rightIndex;
+			default: false;
+		};
 	}
 }

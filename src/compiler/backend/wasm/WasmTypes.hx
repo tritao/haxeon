@@ -1,11 +1,66 @@
 package compiler.backend.wasm;
 
-/** Value types currently supported by the self-hosted Wasm model. */
+/** Value types supported by the self-hosted Wasm model. */
 enum WasmValueType {
 	I32;
 	I64;
 	F32;
 	F64;
+	Ref(type:WasmRefType);
+}
+
+/** A typed WebAssembly reference. */
+typedef WasmRefType = {
+	final nullable:Bool;
+	final heap:WasmHeapType;
+}
+
+/** Abstract or module-defined heap type used by a reference. */
+enum WasmHeapType {
+	Any;
+	Eq;
+	I31;
+	Struct;
+	Array;
+	Func;
+	Extern;
+	None;
+	NoExtern;
+	NoFunc;
+	Exn;
+	NoExn;
+	Type(index:Int);
+}
+
+/** Storage used by a struct field or GC array element. */
+enum WasmStorageType {
+	Value(type:WasmValueType);
+	I8;
+	I16;
+}
+
+typedef WasmFieldType = {
+	final type:WasmStorageType;
+	final mutable:Bool;
+}
+
+enum WasmCompositeType {
+	Func(type:WasmFunctionType);
+	Struct(fields:Array<WasmFieldType>);
+	Array(field:WasmFieldType);
+}
+
+/** A subtype declaration. Final types with no declared supertypes use the compact composite encoding. */
+typedef WasmSubtype = {
+	final finalType:Bool;
+	final supertypes:Array<Int>;
+	final composite:WasmCompositeType;
+}
+
+/** A type-section entry is either one subtype or an explicitly recursive group. */
+enum WasmTypeGroup {
+	Single(type:WasmSubtype);
+	RecGroup(types:Array<WasmSubtype>);
 }
 
 typedef WasmFunctionType = {
@@ -105,4 +160,23 @@ enum WasmInstruction {
 	I32WrapI64;
 	I32TruncF64S;
 	I64ReinterpretF64;
+	RefNull(heapType:WasmHeapType);
+	RefIsNull;
+	RefEq;
+	RefTest(type:WasmRefType);
+	RefCast(type:WasmRefType);
+	StructNew(typeIndex:Int);
+	StructNewDefault(typeIndex:Int);
+	StructGet(typeIndex:Int, fieldIndex:Int);
+	StructGetSigned(typeIndex:Int, fieldIndex:Int);
+	StructGetUnsigned(typeIndex:Int, fieldIndex:Int);
+	StructSet(typeIndex:Int, fieldIndex:Int);
+	ArrayNew(typeIndex:Int);
+	ArrayNewDefault(typeIndex:Int);
+	ArrayGet(typeIndex:Int);
+	ArrayGetSigned(typeIndex:Int);
+	ArrayGetUnsigned(typeIndex:Int);
+	ArraySet(typeIndex:Int);
+	ArrayLen;
+	ArrayCopy(destinationTypeIndex:Int, sourceTypeIndex:Int);
 }
