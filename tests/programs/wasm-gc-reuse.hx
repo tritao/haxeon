@@ -24,7 +24,6 @@ function releaseBytes():Void {
 }
 
 function main():Int {
-	// The next same-sized allocation reuses the just-collected object block.
 	// A field with no initializer must still have its Haxe default value.
 	releaseObject();
 	var fresh = new ReusedObject();
@@ -39,6 +38,8 @@ function main():Int {
 	if (freshBytes.get(0) != 0)
 		return 3;
 
+	var retainedObject = new ReusedObject("reference array must remain traced");
+	var retainedReferences = [retainedObject];
 	var retained = [40];
 	var index = 0;
 	while (index < 200) {
@@ -47,5 +48,7 @@ function main():Int {
 			return 0;
 		index = index + 1;
 	}
+	if (retainedReferences[0].value != "reference array must remain traced")
+		return 4;
 	return retained[0] + 2;
 }

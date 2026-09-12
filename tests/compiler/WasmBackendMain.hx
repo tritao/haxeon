@@ -248,7 +248,8 @@ class WasmBackendMain {
 			"haxeon.memory.metadata_base",
 			"haxeon.memory.metadata_top",
 			"haxeon.memory.allocation_count",
-			"haxeon.memory.allocated_bytes"
+			"haxeon.memory.allocated_bytes",
+			"haxeon.memory.collection_count"
 		])
 			if (!containsBytes(memoryStats.bytes, name))
 				throw 'Wasm allocator diagnostics omitted export "$name"';

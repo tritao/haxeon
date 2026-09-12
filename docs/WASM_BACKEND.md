@@ -62,10 +62,16 @@ the guest.
   reserved linear-memory root area, so the runtime has an actual root chain,
   not just an offline map. The current collector is a non-moving mark/sweep
   collector with compacted allocation metadata, a free list, and precise
-  static/shadow-frame roots; allocation runs collection before selecting a
-  block so a freshly returned reference cannot be reclaimed. Recycled blocks
-  are zero-filled before reuse, preserving Haxe's default values for fields,
-  array elements, and byte storage just as newly grown Wasm memory does.
+  static/shadow-frame roots. Each allocation has an aligned private prefix
+  pointing to its GC record, so tracing resolves references directly instead
+  of scanning every record; metadata compaction refreshes those back-pointers.
+  The prefix also identifies payloads that may contain managed references.
+  Numeric-array backing stores and `Bytes` payloads are atomic and skipped during
+  tracing; reference arrays and object fields remain traced. Collection still
+  runs before selecting a block for each allocation, preserving the current
+  safepoint/rooting guarantees. Recycled blocks are zero-filled before reuse,
+  preserving Haxe's default values for fields, array elements, and byte storage
+  just as newly grown Wasm memory does.
 - `haxeon.patch` contains stable function identities and semantic signatures
   for validating replacement table entries. `haxeon.patch.slots` maps those
   stable names to exported function-table slots. `WasmBackend.compilePatch`

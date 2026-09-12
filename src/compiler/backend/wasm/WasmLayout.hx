@@ -49,6 +49,9 @@ class WasmLayout {
 	public static inline final ROOT_VALUES_OFFSET = 12;
 	public static inline final ROOT_RESERVE = 65536;
 	public static inline final GC_RECORD_SIZE = 12;
+	public static inline final GC_ALLOCATION_HEADER_SIZE = 8;
+	public static inline final GC_ALLOCATION_RECORD_POINTER_OFFSET = 0;
+	public static inline final GC_ALLOCATION_SCAN_REFERENCES_OFFSET = 4;
 	public static inline final GC_METADATA_RESERVE = 65536;
 
 	public final objects:Map<String, WasmObjectLayout> = [];
