@@ -172,11 +172,14 @@ arguments and results, `void` results, and managed
 byte-buffer pointer arguments—including explicit `nullable<ptr<T>>` values—are
 executable. Calls accept up to sixteen arguments. Pointers to opaque types use
 nominal Haxe abstract handles over the same native pointer representation, so
-different opaque HXI types cannot be interchanged accidentally. Handles expose
-`close()` and `isClosed()`; close is idempotent, and owned values retain the
-finalizer fallback. Aliases and `const` qualification preserve the underlying
-opaque handle identity. Unannotated pointer results remain rejected at
-execution time.
+different opaque HXI types cannot be interchanged accidentally. Borrowed opaque
+handles expose `isClosed()`. An `@owned` opaque result is instead returned as
+`Owned<Type>`, which exposes idempotent `close()`, `isClosed()`, and an explicit
+`borrow()` view for APIs expecting `<Type>`; owned values retain the finalizer fallback.
+Borrowed views are not statically tied to their owner's lifetime and become
+invalid after that owner is closed. Aliases and `const` qualification preserve
+the underlying opaque handle identity. Unannotated pointer results remain
+rejected at execution time.
 
 `@length("length_symbol")` turns a pointer to byte-sized data or `void` into a
 managed `haxe.io.Bytes` result. The length function receives the same arguments

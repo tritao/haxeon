@@ -336,10 +336,31 @@ class HxiParserMain {
 		handleCompiler.compile("HandleMain");
 		var opaqueCompiler = new Compiler();
 		opaqueCompiler.addFfiInterface("opaque_handles.hxi",
-			'interface opaque_handles @target("x86_64-linux-gnu") @library("opaque_handles") { opaque Context; opaque Window; type ContextAlias = Context; extern fn create_context() -> ptr<Context> @borrowed; extern fn maybe_context(value: i32) -> nullable<ptr<Context>> @borrowed; extern fn use_context(value: ptr<ContextAlias>) -> void; extern fn use_window(value: ptr<Window>) -> void; extern fn create_window() -> ptr<Window> @borrowed; }');
+			'interface opaque_handles @target("x86_64-linux-gnu") @library("opaque_handles") { opaque Context; opaque Window; type ContextAlias = Context; extern fn create_context() -> ptr<Context> @borrowed; extern fn maybe_context(value: i32) -> nullable<ptr<Context>> @borrowed; extern fn create_owned_context() -> ptr<Context> @owned("destroy_context"); extern fn maybe_create_owned_context() -> nullable<ptr<Context>> @owned("destroy_context"); extern fn destroy_context(value: ptr<void>) -> void @symbol("destroy_context"); extern fn use_context(value: ptr<ContextAlias>) -> void; extern fn use_window(value: ptr<Window>) -> void; extern fn create_window() -> ptr<Window> @borrowed; }');
 		opaqueCompiler.update("OpaqueMain.hx",
-			"import opaque_handles; function main():Int { var context:Context = opaque_handles.create_context(); opaque_handles.use_context(context); var maybe:Null<Context> = opaque_handles.maybe_context(1); if (maybe != null) opaque_handles.use_context(maybe); context.isClosed(); context.close(); var window:Window = opaque_handles.create_window(); opaque_handles.use_window(window); return 0; }");
+			"import opaque_handles; function main():Int { var context:Context = opaque_handles.create_context(); opaque_handles.use_context(context); var maybe:Null<Context> = opaque_handles.maybe_context(1); if (maybe != null) opaque_handles.use_context(maybe); context.isClosed(); var owner:OwnedContext = opaque_handles.create_owned_context(); opaque_handles.use_context(owner.borrow()); owner.isClosed(); owner.close(); var maybeOwner:Null<OwnedContext> = opaque_handles.maybe_create_owned_context(); if (maybeOwner != null) maybeOwner.close(); var window:Window = opaque_handles.create_window(); opaque_handles.use_window(window); return 0; }");
 		opaqueCompiler.compile("OpaqueMain");
+		var borrowedCloseCompiler = new Compiler();
+		borrowedCloseCompiler.addFfiInterface("opaque_handles.hxi",
+			'interface opaque_handles @target("x86_64-linux-gnu") @library("opaque_handles") { opaque Context; extern fn create_context() -> ptr<Context> @borrowed; }');
+		borrowedCloseCompiler.update("OpaqueMain.hx", "import opaque_handles; function main():Int { opaque_handles.create_context().close(); return 0; }");
+		var borrowedCloseRejected = false;
+		try {
+			borrowedCloseCompiler.compile("OpaqueMain");
+		} catch (_:CompileError)
+			borrowedCloseRejected = true;
+		expect(borrowedCloseRejected, "borrowed opaque handles should not expose close()");
+		var implicitBorrowCompiler = new Compiler();
+		implicitBorrowCompiler.addFfiInterface("opaque_handles.hxi",
+			'interface opaque_handles @target("x86_64-linux-gnu") @library("opaque_handles") { opaque Context; extern fn create_owned_context() -> ptr<Context> @owned("destroy_context"); extern fn destroy_context(value: ptr<void>) -> void @symbol("destroy_context"); extern fn use_context(value: ptr<Context>) -> void; }');
+		implicitBorrowCompiler.update("OpaqueMain.hx",
+			"import opaque_handles; function main():Int { opaque_handles.use_context(opaque_handles.create_owned_context()); return 0; }");
+		var implicitBorrowRejected = false;
+		try {
+			implicitBorrowCompiler.compile("OpaqueMain");
+		} catch (_:CompileError)
+			implicitBorrowRejected = true;
+		expect(implicitBorrowRejected, "owned opaque handles should require an explicit borrow() view");
 		var opaqueCallbackCompiler = new Compiler();
 		opaqueCallbackCompiler.addFfiInterface("opaque_callbacks.hxi",
 			'interface opaque_callbacks @target("x86_64-linux-gnu") @library("opaque_callbacks") { opaque Context; callback Visit = fn(context: nullable<ptr<Context>>) -> void; extern fn visit(callback: Visit) -> void; }');

@@ -139,6 +139,7 @@ class HxiProjection {
 							'enum value "$name.${value.name}"', members);
 				case Opaque(name, _):
 					addProjectedName(path, "module", projectedTypeName(name, profile), 'opaque type "$name"', moduleNames);
+					addProjectedName(path, "module", ownedTypeName(name, profile), 'owned opaque type "$name"', moduleNames);
 				case Handle(name, _, _) | Structure(name, _, _, _, _):
 					addProjectedName(path, "module", projectedTypeName(name, profile), 'type "$name"', moduleNames);
 					var fields = switch declaration {
@@ -400,6 +401,11 @@ class HxiProjection {
 					var projectedName = projectedTypeName(name, profile);
 					emitDocumentation(output, model, name);
 					output.add('abstract $projectedName(hl.Abstract<"native_pointer">) {\n');
+					output.add('\tpublic inline function isClosed():Bool return ${model.name}.$pointerIsClosedHelper(cast this);\n');
+					output.add('}\n');
+					var ownedName = ownedTypeName(name, profile);
+					output.add('abstract $ownedName(hl.Abstract<"native_pointer">) {\n');
+					output.add('\tpublic inline function borrow():$projectedName return cast this;\n');
 					output.add('\tpublic inline function close():Bool return ${model.name}.$pointerCloseHelper(cast this);\n');
 					output.add('\tpublic inline function isClosed():Bool return ${model.name}.$pointerIsClosedHelper(cast this);\n');
 					output.add('}\n');
@@ -704,8 +710,11 @@ class HxiProjection {
 					resultType = result.nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes";
 				else
 					switch fn.result {
-						case PointerValue(_, _, opaquePointee, _) if (opaquePointee != null):
-							resultType = result.haxeType;
+						case PointerValue(_, nullable, opaquePointee, _) if (opaquePointee != null):
+							resultType = switch fn.resultPolicy.ownership {
+								case Owned(_): nullable ? 'Null<${ownedTypeName(opaquePointee, profile)}>' : ownedTypeName(opaquePointee, profile);
+								case Borrowed | Unspecified: result.haxeType;
+							};
 						case _:
 							resultType = result.nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">';
 					}
@@ -1154,6 +1163,12 @@ class HxiProjection {
 		if (prefix == null || !StringTools.startsWith(value, prefix))
 			return value;
 		return pascalCase(value.substr(prefix.length).split("_"));
+	}
+
+	static function ownedTypeName(value:String, profile:Null<HxiProjectionProfile>):String {
+		var projected = projectedTypeName(value, profile),
+			separator = projected.lastIndexOf(".");
+		return (separator < 0 ? "" : projected.substr(0, separator + 1)) + "Owned" + projected.substr(separator + 1);
 	}
 
 	static function enumValuePrefix(values:Array<HxiEnumValue>, ?profile:HxiProjectionProfile):Array<String> {

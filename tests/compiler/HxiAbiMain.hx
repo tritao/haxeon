@@ -62,7 +62,7 @@ class HxiAbiMain {
 				throw "function ABI did not resolve";
 		}
 		var opaqueModel = HxiParser.parse("opaque.hxi",
-			'interface sample @target("x86_64-linux-gnu") @library("sample") { opaque Context; opaque Window; type ContextAlias = Context; extern fn use_context(value: ptr<ContextAlias>) -> void; extern fn maybe_context(value: nullable<ptr<const<Context>>>) -> void; extern fn use_window(value: ptr<Window>) -> void; extern fn create_context() -> ptr<Context> @borrowed; extern fn maybe_return_context() -> nullable<ptr<Context>> @borrowed; }'),
+			'interface sample @target("x86_64-linux-gnu") @library("sample") { opaque Context; opaque Window; type ContextAlias = Context; extern fn use_context(value: ptr<ContextAlias>) -> void; extern fn maybe_context(value: nullable<ptr<const<Context>>>) -> void; extern fn use_window(value: ptr<Window>) -> void; extern fn create_context() -> ptr<Context> @borrowed; extern fn maybe_return_context() -> nullable<ptr<Context>> @borrowed; extern fn create_owned_context() -> ptr<Context> @owned("destroy_context"); extern fn maybe_create_owned_context() -> nullable<ptr<Context>> @owned("destroy_context"); extern fn destroy_context(value: ptr<void>) -> void @symbol("destroy_context"); }'),
 			opaqueAbi = HxiAbi.forInterface(opaqueModel);
 		switch opaqueAbi.functions()[0].arguments[0] {
 			case PointerValue(64, false, "Context", null):
@@ -90,8 +90,19 @@ class HxiAbiMain {
 			&& opaqueSource.indexOf("extern function maybe_context(arg0:Null<Context>):Void") >= 0
 			&& opaqueSource.indexOf("extern function use_window(arg0:Window):Void") >= 0
 			&& opaqueSource.indexOf("extern function create_context():Context") >= 0
-			&& opaqueSource.indexOf("extern function maybe_return_context():Null<Context>") >= 0,
+			&& opaqueSource.indexOf("extern function maybe_return_context():Null<Context>") >= 0
+			&& opaqueSource.indexOf("abstract OwnedContext(hl.Abstract<\"native_pointer\">)") >= 0
+			&& opaqueSource.indexOf("function borrow():Context") >= 0
+			&& opaqueSource.indexOf("extern function create_owned_context():OwnedContext") >= 0
+			&& opaqueSource.indexOf("extern function maybe_create_owned_context():Null<OwnedContext>") >= 0,
 			"opaque pointer types should project as distinct nominal Haxe handles");
+		var borrowedOpaqueStart = opaqueSource.indexOf('abstract Context(hl.Abstract<"native_pointer">) {'),
+			ownedOpaqueStart = opaqueSource.indexOf('abstract OwnedContext(hl.Abstract<"native_pointer">) {');
+		expect(borrowedOpaqueStart >= 0
+			&& ownedOpaqueStart > borrowedOpaqueStart
+			&& opaqueSource.substr(borrowedOpaqueStart, ownedOpaqueStart - borrowedOpaqueStart).indexOf("function close()") < 0
+			&& opaqueSource.substr(ownedOpaqueStart).indexOf("function close():Bool") >= 0,
+			"only owned opaque results should expose close()");
 		var opaqueNative = HxiProjection.cNatives(opaqueModel)[0];
 		expect(opaqueNative.signature == "11>0", "opaque handle identity must not change the C pointer ABI signature");
 		switch opaqueNative.arguments[0] {
@@ -106,12 +117,28 @@ class HxiAbiMain {
 			case _:
 				throw "opaque Haxe handle results should retain the generic native pointer ABI representation";
 		}
+		var ownedOpaqueNative = HxiProjection.cNatives(opaqueModel)[5];
+		expect(ownedOpaqueNative.signature == ">11"
+			&& ownedOpaqueNative.pointerOwnership == "owned"
+			&& ownedOpaqueNative.pointerRelease == "destroy_context",
+			"owned opaque results should retain ownership metadata without changing the C pointer ABI");
 		var opaqueProfile = HxiProjectionProfile.parse("opaque.hxmap", '{"interface":"sample","typeNames":{"Context":"ContextHandle"}}');
 		HxiProjection.validateProfile("opaque.hxmap", opaqueModel, null, null, opaqueProfile);
 		var mappedOpaqueSource = HxiProjection.source(opaqueModel, null, null, null, opaqueProfile);
 		expect(mappedOpaqueSource.indexOf('abstract ContextHandle(hl.Abstract<"native_pointer">)') >= 0
-			&& mappedOpaqueSource.indexOf("extern function use_context(arg0:ContextHandle):Void") >= 0,
+			&& mappedOpaqueSource.indexOf("abstract OwnedContextHandle(hl.Abstract<\"native_pointer\">)") >= 0
+			&& mappedOpaqueSource.indexOf("extern function use_context(arg0:ContextHandle):Void") >= 0
+			&& mappedOpaqueSource.indexOf("extern function create_owned_context():OwnedContextHandle") >= 0,
 			"opaque handle types should respect Haxe projection naming rules");
+		var ownerCollisionModel = HxiParser.parse("owner-collision.hxi",
+			'interface owner_collision @target("x86_64-linux-gnu") @library("owner_collision") { opaque Context; opaque OwnedContext; }'),
+			ownerCollisionRejected = false;
+		try {
+			HxiProjection.validateProfile("owner-collision.hxmap", ownerCollisionModel, null, null,
+				HxiProjectionProfile.parse("owner-collision.hxmap", '{"interface":"owner_collision"}'));
+		} catch (_:Dynamic)
+			ownerCollisionRejected = true;
+		expect(ownerCollisionRejected, "generated owned opaque type names should participate in Haxe collision checks");
 		var cycle = 'interface bad @target("x86_64-linux-gnu") { type a = b; type b = a; }';
 		var rejected = false;
 		try
