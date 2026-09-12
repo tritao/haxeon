@@ -13,6 +13,235 @@ import compiler.ffi.HxiModel.HxiPointerOwnership;
 
 /** Projects bridgeable HXI functions into a synthetic, source-visible module. */
 class HxiProjection {
+	/** Validate Haxe naming rules against the declarations the profile can project. */
+	public static function validateProfile(path:String, model:HxiInterface, ?omitted:Map<String, Bool>,
+			?visibleDeclarations:Map<String, HxiDeclaration>, profile:HxiProjectionProfile):Void {
+		if (profile.interfaceName != model.name)
+			profileError(path, 'names interface "${profile.interfaceName}" but was applied to "${model.name}"');
+
+		var declarations:Map<String, HxiDeclaration> = [],
+			local:Map<String, HxiDeclaration> = [];
+		if (visibleDeclarations != null)
+			for (name => declaration in visibleDeclarations)
+				declarations.set(name, declaration);
+		for (declaration in model.declarations) {
+			var name = declarationName(declaration);
+			declarations.set(name, declaration);
+			local.set(name, declaration);
+		}
+
+		for (name in sortedKeys(profile.typeNames)) {
+			var declaration = declarations.get(name), entry = 'typeNames.$name';
+			if (declaration == null)
+				profileError(path, '$entry references unknown HXI type "$name"');
+			if (!isProjectedType(declaration))
+				profileError(path, '$entry refers to "$name", which has no generated Haxe type');
+			validateTypePath(path, entry, profile.typeNames.get(name), local.exists(name) && !isOmitted(omitted, name));
+		}
+		for (name in sortedKeys(profile.enumNames)) {
+			var declaration = declarations.get(name), entry = 'enumNames.$name';
+			if (declaration == null)
+				profileError(path, '$entry references unknown HXI enum "$name"');
+			if (!isEnumeration(declaration))
+				profileError(path, '$entry refers to "$name", which is not an enum');
+			validateTypePath(path, entry, profile.enumNames.get(name), local.exists(name) && !isOmitted(omitted, name));
+			var typeName = profile.typeNames.get(name);
+			if (typeName != null && typeName != profile.enumNames.get(name))
+				profileError(path, '$entry conflicts with typeNames.$name');
+		}
+		for (enumName in sortedKeys(profile.enumValueNames)) {
+			var declaration = declarations.get(enumName), entry = 'enumValueNames.$enumName';
+			if (declaration == null)
+				profileError(path, '$entry references unknown HXI enum "$enumName"');
+			var values = switch declaration {
+				case Enumeration(_, _, _, values, _): values;
+				case _: profileError(path, '$entry refers to "$enumName", which is not an enum'); [];
+			};
+			if (!local.exists(enumName) || isOmitted(omitted, enumName))
+				profileError(path, '$entry refers to an enum projected by a dependency; rename its values in that interface profile');
+			var valueNames:Map<String, Bool> = [for (value in values) value.name => true];
+			for (valueName in sortedKeys(profile.enumValueNames.get(enumName))) {
+				if (!valueNames.exists(valueName))
+					profileError(path, '$entry.$valueName references an unknown enum value');
+				validateIdentifier(path, '$entry.$valueName', profile.enumValueNames.get(enumName).get(valueName));
+			}
+		}
+		for (name in sortedKeys(profile.functionNames)) {
+			var declaration = local.get(name), entry = 'functionNames.$name';
+			if (declaration == null)
+				profileError(path, '$entry references an unknown function in this interface');
+			if (!isFunction(declaration) || isOmitted(omitted, name))
+				profileError(path, '$entry does not refer to a function projected by this interface');
+			validateIdentifier(path, entry, profile.functionNames.get(name));
+		}
+		for (key in sortedKeys(profile.fieldNames)) {
+			var separator = key.indexOf("."),
+				typeName = separator < 0 ? "" : key.substr(0, separator),
+				fieldName = separator < 0 ? "" : key.substr(separator + 1),
+				entry = 'fieldNames.$typeName.$fieldName',
+				declaration = local.get(typeName);
+			if (separator <= 0 || separator == key.length - 1)
+				profileError(path, 'fieldNames key "$key" must have the form "type.field"');
+			var fields = switch declaration {
+				case Structure(_, _, _, fields, _) if (!isOmitted(omitted, typeName)): fields;
+				case null: profileError(path, '$entry references an unknown structure in this interface'); [];
+				case _: profileError(path, '$entry does not refer to a structure projected by this interface'); [];
+			};
+			if (!Lambda.exists(fields, field -> field.name == fieldName))
+				profileError(path, '$entry references an unknown structure field');
+			validateIdentifier(path, entry, profile.fieldNames.get(key));
+		}
+		for (name in sortedKeys(profile.constantNames)) {
+			var declaration = local.get(name), entry = 'constantNames.$name';
+			if (declaration == null)
+				profileError(path, '$entry references an unknown constant in this interface');
+			if (!isConstant(declaration) || isOmitted(omitted, name))
+				profileError(path, '$entry does not refer to a constant projected by this interface');
+			validateIdentifier(path, entry, profile.constantNames.get(name));
+		}
+
+		var moduleNames:Map<String, String> = [],
+			constantMembers:Map<String, String> = [],
+			hasCallbacks = false,
+			hasConstants = false;
+		for (declaration in model.declarations)
+			if (!isOmitted(omitted, declarationName(declaration)))
+				switch declaration {
+					case Callback(_, _, _, _, _): hasCallbacks = true;
+					case Constant(_, _, _): hasConstants = true;
+					case _:
+				}
+		if (hasCallbacks)
+			addProjectedName(path, "module", "HxiCallbackError", "generated callback error type", moduleNames);
+		if (hasConstants)
+			addProjectedName(path, "module", upperFirst(model.name) + "Constants", "generated constants type", moduleNames);
+
+		for (declaration in model.declarations) {
+			var declarationName = declarationName(declaration);
+			if (isOmitted(omitted, declarationName))
+				continue;
+			switch declaration {
+				case Callback(name, _, _, _, _):
+					var projected = projectedTypeName(name, profile);
+					addProjectedName(path, "module", projected, 'callback "$name"', moduleNames);
+					addProjectedName(path, "module", projected + "Callback", 'callback wrapper for "$name"', moduleNames);
+				case Enumeration(name, _, _, values, _):
+					addProjectedName(path, "module", enumTypeName(name, profile), 'enum "$name"', moduleNames);
+					var members:Map<String, String> = [], prefix = enumValuePrefix(values, profile);
+					for (value in values)
+						addProjectedName(path, 'enum "$name"', enumValueName(value.name, prefix, name, profile),
+							'enum value "$name.${value.name}"', members);
+				case Handle(name, _, _) | Structure(name, _, _, _, _):
+					addProjectedName(path, "module", projectedTypeName(name, profile), 'type "$name"', moduleNames);
+					var fields = switch declaration {
+						case Structure(_, _, _, fields, _): fields;
+						case _: [];
+					};
+					var members:Map<String, String> = [];
+					for (field in fields)
+						addProjectedName(path, 'structure "$name"', projectedFieldName(name, field.name, profile),
+							'structure field "$name.${field.name}"', members);
+				case Function(name, parameters, result, _, _, _, _, _):
+					var publicName = projectedFunctionName(name, profile);
+					addProjectedName(path, "module", publicName, 'function "$name"', moduleNames);
+					if (hasOutput(parameters))
+						addProjectedName(path, "module", '__hxi_raw_$name', 'raw wrapper for "$name"', moduleNames);
+					if (hasGeneratedOutputResult(parameters, result))
+						addProjectedName(path, "module", upperFirst(publicName) + "OutResult", 'output result type for "$name"', moduleNames);
+					if (byteArrayParameter(parameters) != null)
+						addProjectedName(path, "module", publicName + "_slice", 'byte-slice wrapper for "$name"', moduleNames);
+				case Constant(name, _, _):
+					addProjectedName(path, "constants", projectedConstantName(name, profile), 'constant "$name"', constantMembers);
+				case _:
+			}
+		}
+	}
+
+	static function declarationName(declaration:HxiDeclaration):String
+		return switch declaration {
+			case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _) | Constant(name, _, _) | Structure(name, _, _, _, _) |
+				Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _, _): name;
+		};
+
+	static function sortedKeys<T>(values:Map<String, T>):Array<String> {
+		var result = [for (name in values.keys()) name];
+		result.sort(Reflect.compare);
+		return result;
+	}
+
+	static function isProjectedType(declaration:HxiDeclaration):Bool
+		return switch declaration {
+			case Handle(_, _, _) | Structure(_, _, _, _, _) | Enumeration(_, _, _, _, _) | Callback(_, _, _, _, _): true;
+			case _: false;
+		};
+
+	static function isEnumeration(declaration:HxiDeclaration):Bool
+		return switch declaration {
+			case Enumeration(_, _, _, _, _): true;
+			case _: false;
+		};
+
+	static function isFunction(declaration:HxiDeclaration):Bool
+		return switch declaration {
+			case Function(_, _, _, _, _, _, _, _): true;
+			case _: false;
+		};
+
+	static function isConstant(declaration:HxiDeclaration):Bool
+		return switch declaration {
+			case Constant(_, _, _): true;
+			case _: false;
+		};
+
+	static function validateTypePath(path:String, entry:String, projected:String, isLocal:Bool):Void {
+		var parts = projected == null ? [] : projected.split(".");
+		if (parts.length == 0 || (isLocal && parts.length != 1))
+			profileError(path, '$entry must be an unqualified type name for a declaration emitted by this interface');
+		for (part in parts)
+			if (!isHaxeIdentifier(part))
+				profileError(path, '$entry projects to invalid Haxe type name "$projected"');
+	}
+
+	static function validateIdentifier(path:String, entry:String, projected:String):Void
+		if (!isHaxeIdentifier(projected))
+			profileError(path, '$entry projects to invalid Haxe identifier "$projected"');
+
+	static function isHaxeIdentifier(value:String):Bool {
+		if (value == null || value.length == 0)
+			return false;
+		for (index in 0...value.length) {
+			var code = value.charCodeAt(index),
+				letter = code >= "a".code && code <= "z".code || code >= "A".code && code <= "Z".code;
+			if (index == 0) {
+				if (!letter && code != "_".code)
+					return false;
+			} else if (!letter && (code < "0".code || code > "9".code) && code != "_".code)
+				return false;
+		}
+		return !isHaxeKeyword(value);
+	}
+
+	static function isHaxeKeyword(value:String):Bool
+		return switch value {
+			case "abstract" | "break" | "case" | "cast" | "catch" | "class" | "continue" | "default" | "do" | "dynamic" | "else" | "enum" |
+				"extends" | "extern" | "false" | "final" | "for" | "from" | "function" | "if" | "implements" | "import" | "in" | "inline" |
+				"interface" | "macro" | "new" | "null" | "operator" | "overload" | "override" | "package" | "private" | "public" | "return" |
+				"static" | "super" | "switch" | "this" | "throw" | "to" | "true" | "try" | "typedef" | "untyped" | "using" | "var" | "while" |
+				"Bool" | "Float" | "Int" | "String" | "Void": true;
+			case _: false;
+		};
+
+	static function addProjectedName(path:String, scope:String, projected:String, origin:String, names:Map<String, String>):Void {
+		validateIdentifier(path, '$scope.$origin', projected);
+		var previous = names.get(projected);
+		if (previous != null)
+			profileError(path, '$scope collision: $origin and $previous both project to "$projected"');
+		names.set(projected, origin);
+	}
+
+	static function profileError(path:String, message:String):Void
+		throw 'Invalid Haxe projection profile "$path": $message';
+
 	public static function cNatives(model:HxiInterface, ?omitted:Map<String, Bool>, ?visibleDeclarations:Map<String, HxiDeclaration>, ?providedAbi:HxiAbi,
 			?profile:HxiProjectionProfile):Array<IrCNative> {
 		var library = model.library;
@@ -482,6 +711,21 @@ class HxiProjection {
 			if (parameter.direction != In)
 				return true;
 		return false;
+	}
+
+	static function hasGeneratedOutputResult(parameters:Array<compiler.ffi.HxiModel.HxiParameter>, result:compiler.ffi.HxiModel.HxiType):Bool {
+		var outputCount = 0, hasBuffer = false;
+		for (parameter in parameters)
+			switch parameter.direction {
+				case Out | InOut: outputCount++;
+				case OutBuffer(_): hasBuffer = true;
+				case In | InArray(_):
+			}
+		var isVoid = switch result {
+			case Primitive("void"): true;
+			case _: false;
+		};
+		return hasBuffer ? !isVoid : outputCount > 0 && (outputCount > 1 || !isVoid);
 	}
 
 	static function outputBuffer(parameters:Array<compiler.ffi.HxiModel.HxiParameter>):Null<{name:String, sizeParameter:String}> {

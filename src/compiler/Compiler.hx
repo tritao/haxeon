@@ -186,6 +186,7 @@ class Compiler {
 	final ffiInterfaceModels:Map<String, HxiInterface> = [];
 	final ffiProjectionSources:Array<FfiProjectionSource> = [];
 	final ffiProjectionProfiles:Map<String, HxiProjectionProfile> = [];
+	final ffiProjectionPaths:Map<String, String> = [];
 	final ffiProjectionCache:Map<String, String> = [];
 	final ffiCompositionCache:Map<String, FfiComposition> = [];
 	final ffiAbiCache:Map<String, HxiAbi> = [];
@@ -302,9 +303,14 @@ class Compiler {
 			throw 'FFI projection "$path" does not name an interface';
 		if (ffiProjectionProfiles.exists(name))
 			throw 'FFI projection for interface "$name" is already registered';
-		ffiProjectionProfiles.set(name, profile);
-		ffiProjectionSources.push({path: path, text: source});
 		var model = ffiInterfaceModels.get(name);
+		if (model != null) {
+			var composition = ffiComposition(model);
+			HxiProjection.validateProfile(path, model, composition.omitted, composition.declarations, profile);
+		}
+		ffiProjectionProfiles.set(name, profile);
+		ffiProjectionPaths.set(name, path);
+		ffiProjectionSources.push({path: path, text: source});
 		if (model != null) {
 			ffiProjectionCache.remove(name);
 			refreshFfiProjection(model);
@@ -331,8 +337,12 @@ class Compiler {
 		// Parsing discovers the interface's dependency list. Validate the composed
 		// model once against exactly those declared dependencies.
 		HxiParser.validate(model, dependencyDeclarations);
+		var composition = buildFfiComposition(model), profile = ffiProjectionProfiles.get(model.name);
+		if (profile != null)
+			HxiProjection.validateProfile(ffiProjectionPaths.get(model.name), model, composition.omitted, composition.declarations, profile);
 		ffiInterfaceModels.set(model.name, model);
 		ffiInterfaceSources.push({path: path, text: source});
+		ffiCompositionCache.set(model.name, composition);
 		refreshFfiProjection(model);
 	}
 
@@ -344,6 +354,9 @@ class Compiler {
 	}
 
 	public function irCNatives():Array<IrCNative> {
+		for (name in sortedFfiProjectionNames())
+			if (!ffiInterfaceModels.exists(name))
+				throw 'FFI projection "${ffiProjectionPaths.get(name)}" names unknown interface "$name"';
 		var result:Array<IrCNative> = [];
 		for (model in ffiInterfaces()) {
 			var composition = ffiComposition(model);
@@ -381,6 +394,12 @@ class Compiler {
 		var cached = ffiCompositionCache.get(model.name);
 		if (cached != null)
 			return cached;
+		var result = buildFfiComposition(model);
+		ffiCompositionCache.set(model.name, result);
+		return result;
+	}
+
+	function buildFfiComposition(model:HxiInterface):FfiComposition {
 		// Imported HXI files can repeat declarations from included headers. Keep
 		// those snapshots available for ABI classification, but emit each shared
 		// declaration and native symbol from its owning interface only.
@@ -390,9 +409,13 @@ class Compiler {
 			active:Map<String, Bool> = [];
 		for (dependency in model.dependencies)
 			collectFfiDependency(model.name, dependency, omitted, declarations, visited, active);
-		var result:FfiComposition = {omitted: omitted, declarations: declarations};
-		ffiCompositionCache.set(model.name, result);
-		return result;
+		return {omitted: omitted, declarations: declarations};
+	}
+
+	function sortedFfiProjectionNames():Array<String> {
+		var names = [for (name in ffiProjectionProfiles.keys()) name];
+		names.sort(Reflect.compare);
+		return names;
 	}
 
 	function collectFfiDependency(owner:String, name:String, omitted:Map<String, Bool>, declarations:Map<String, HxiDeclaration>, visited:Map<String, Bool>,
