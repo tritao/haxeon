@@ -154,6 +154,9 @@ class WasmLayout {
 	public static inline final CLOSURE_RECEIVER_OFFSET = 12;
 	public static inline final CLOSURE_SIZE = 16;
 
+	/** Reserved header tag so runtime reflection can distinguish bound closures from objects. */
+	public static inline final CLOSURE_TYPE_ID = 0x484C4346;
+
 	public static function alignmentOf(type:IrType):Int
 		return type == F64 || type == I64 ? 8 : 4;
 

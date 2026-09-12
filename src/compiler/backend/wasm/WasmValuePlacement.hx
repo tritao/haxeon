@@ -7,7 +7,6 @@ import compiler.ir.IrFunction;
 import compiler.ir.IrOperands;
 import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrTerminator;
-import compiler.ir.IrGraph;
 
 private typedef WasmInterval = {
 	final valueId:Int;
@@ -34,7 +33,10 @@ class WasmValuePlacement {
 		for (index in 0...fn.arguments.length)
 			values.set(fn.arguments[index].id, index);
 		nextLocal = fn.arguments.length;
-		if (hasBackEdge(fn)) {
+		// Linear intervals cannot represent values that remain live across CFG
+		// edges or phi operands. Keep blockful functions uncoalesced until a
+		// CFG-aware interference analysis can prove those values do not overlap.
+		if (fn.blocks.length > 1) {
 			for (block in fn.blocks)
 				for (located in block.instructions) {
 					var output = IrOperands.output(located.value);
@@ -80,8 +82,8 @@ class WasmValuePlacement {
 					intervals.push({
 						valueId: output.id,
 						type: WasmBackend.requireValueType(output.type),
-						start: starts.get(output.id),
-						end: ends.get(output.id)
+						start: requiredPosition(starts, output.id),
+						end: requiredPosition(ends, output.id)
 					});
 			}
 		intervals.sort(function(left, right) return left.start == right.start ? left.valueId - right.valueId : left.start - right.start);
@@ -90,7 +92,7 @@ class WasmValuePlacement {
 			var reusable:Null<WasmLocalInterval> = null;
 			for (candidate in active)
 				if (candidate.end < interval.start
-					&& candidate.type == interval.type
+					&& sameValueType(candidate.type, interval.type)
 					&& (reusable == null || candidate.end < reusable.end))
 					reusable = candidate;
 			var local:Int;
@@ -115,7 +117,7 @@ class WasmValuePlacement {
 	public function local(valueId:Int):Int {
 		if (!values.exists(valueId))
 			throw 'Wasm value $valueId has no placement';
-		return values.get(valueId);
+		return requiredPosition(values, valueId);
 	}
 
 	static function terminatorInputs(terminator:IrTerminator):Array<compiler.ir.Ir.IrValue>
@@ -125,12 +127,29 @@ class WasmValuePlacement {
 			case Branch(condition, _, _): [condition];
 		};
 
-	static function hasBackEdge(fn:IrFunction):Bool {
-		var graph = new IrGraph(fn);
-		for (from in graph.order)
-			for (to in graph.successors.get(from))
-				if (graph.dominates(to, from))
-					return true;
-		return false;
+	static function requiredPosition(values:Map<Int, Int>, valueId:Int):Int {
+		if (!values.exists(valueId))
+			throw 'Missing Wasm value placement for $valueId';
+		return values.get(valueId);
 	}
+
+	static function sameValueType(left:WasmValueType, right:WasmValueType):Bool
+		return switch left {
+			case I32: switch right {
+					case I32: true;
+					default: false;
+				};
+			case I64: switch right {
+					case I64: true;
+					default: false;
+				};
+			case F32: switch right {
+					case F32: true;
+					default: false;
+				};
+			case F64: switch right {
+					case F64: true;
+					default: false;
+				};
+		};
 }

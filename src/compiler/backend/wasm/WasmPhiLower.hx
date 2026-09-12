@@ -13,11 +13,18 @@ class WasmPhiLower {
 				WasmInstruction.I32Const(input.block),
 				WasmInstruction.I32Eq,
 				WasmInstruction.If(null),
-				WasmInstruction.LocalGet(values.get(input.value.id)),
-				WasmInstruction.LocalSet(values.get(output.id)),
+				WasmInstruction.LocalGet(requiredLocal(values, input.value.id)),
+				WasmInstruction.LocalSet(requiredLocal(values, output.id)),
 				WasmInstruction.End
 			]);
 		}
+	}
+
+	static function requiredLocal(values:Map<Int, Int>, valueId:Int):Int {
+		var local = values.get(valueId);
+		if (local == null)
+			throw 'Missing Wasm local for value $valueId';
+		return local;
 	}
 
 	static function push(body:Array<WasmInstruction>, instructions:Array<WasmInstruction>):Void

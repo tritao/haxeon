@@ -22,6 +22,9 @@ fi
 	--target=wasm32 --output=out/wasm-cli-type-test.wasm --entry=std-is-of-type \
 	--root=tests/programs tests/programs/std-is-of-type.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --output=out/wasm-cli-numeric-promotion.wasm --entry=numeric-promotion \
+	--root=tests/programs tests/programs/numeric-promotion.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm32 --output=out/wasm-cli-array-slice.wasm --entry=array-slice-index \
 	--root=tests/programs tests/programs/array-slice-index.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
@@ -89,8 +92,9 @@ const cases = [
   ["out/wasm-backend-large-array.wasm", 20000],
   ["out/wasm-cli-backend.wasm", 42],
   ["out/wasm-cli-dynamic.wasm", 42],
-	["out/wasm-cli-function-wrapper.wasm", 42],
+  ["out/wasm-cli-function-wrapper.wasm", 42],
   ["out/wasm-cli-type-test.wasm", 42],
+	["out/wasm-cli-numeric-promotion.wasm", 42],
   ["out/wasm-cli-array-slice.wasm", 42],
 	["out/wasm-cli-array-mutation.wasm", 42],
 	["out/wasm-cli-array-growth.wasm", 42],
@@ -113,9 +117,11 @@ const cases = [
 (async () => {
   for (const [relative, expected] of cases) {
     const bytes = fs.readFileSync(`${root}/${relative}`);
-    const imports = relative.endsWith("cnative-import.wasm")
-      ? {fixture: {fixture_add: (left, right) => left + right}}
-      : undefined;
+    const imports = {};
+    if (relative.endsWith("cnative-import.wasm"))
+      imports.fixture = {fixture_add: (left, right) => left + right};
+    if (relative.endsWith("numeric-promotion.wasm"))
+      imports.haxeon_runtime = {__math_ceil: Math.ceil};
     const {instance} = await WebAssembly.instantiate(bytes, imports);
     if (relative.includes("closure") && !(instance.exports.table instanceof WebAssembly.Table))
       throw new Error(`${relative}: stable Wasm function table was not exported`);

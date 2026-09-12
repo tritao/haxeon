@@ -26,7 +26,7 @@ class WasmStructurer {
 		if (!analysis.reducible)
 			return false;
 		for (id in analysis.graph.order) {
-			var successors = analysis.graph.successors.get(id);
+			var successors = requiredSuccessors(analysis.graph.successors, id);
 			if (successors.length <= 1)
 				continue;
 			if (successors.length != 2 || successors[0] == successors[1])
@@ -50,7 +50,7 @@ class WasmStructurer {
 			sources.push(edge.from);
 		}
 		for (header in analysis.graph.order) {
-			var successors = analysis.graph.successors.get(header);
+			var successors = requiredSuccessors(analysis.graph.successors, header);
 			if (successors.length != 2)
 				continue;
 			var sources = backSources.get(header);
@@ -80,9 +80,18 @@ class WasmStructurer {
 			if (current == stop || seen.exists(current))
 				continue;
 			seen.set(current, true);
-			for (successor in analysis.graph.successors.get(current))
+			for (successor in requiredSuccessors(analysis.graph.successors, current))
 				work.push(successor);
 		}
 		return false;
+	}
+
+	static function requiredSuccessors(graph:Map<Int, Array<Int>>, block:Int):Array<Int> {
+		if (!graph.exists(block))
+			throw 'CFG is missing adjacency for block $block';
+		var successors = graph.get(block);
+		if (successors == null)
+			throw 'CFG has null adjacency for block $block';
+		return successors;
 	}
 }

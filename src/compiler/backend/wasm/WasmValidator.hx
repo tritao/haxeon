@@ -22,10 +22,11 @@ class WasmValidator {
 		for (entry in module.exports)
 			if (entry.functionIndex < 0 || entry.functionIndex >= module.functionCount())
 				throw 'Wasm export "${entry.name}" references function ${entry.functionIndex}';
-		if (module.start != null) {
-			if (module.start < 0 || module.start >= module.functionCount())
-				throw 'Wasm start references function ${module.start}';
-			var startType = module.functionType(module.start);
+		var start = module.start;
+		if (start != null) {
+			if (start < 0 || start >= module.functionCount())
+				throw 'Wasm start references function $start';
+			var startType = module.functionType(start);
 			if (startType.parameters.length != 0 || startType.results.length != 0)
 				throw 'Wasm start function must have no parameters or results';
 		}
@@ -179,7 +180,7 @@ class WasmValidator {
 				case LocalSet(index):
 					if (reachable) {
 						var actual = popAny(stack, fn);
-						if (actual != locals[index])
+						if (!sameValueType(actual, locals[index]))
 							throw 'Wasm function ${fn.name} local $index expects ${locals[index]}, got $actual';
 					}
 				case LocalTee(index):
@@ -303,9 +304,29 @@ class WasmValidator {
 
 	static function pop(stack:Array<WasmValueType>, expected:WasmValueType, fn:WasmFunction):Void {
 		var actual = popAny(stack, fn);
-		if (actual != expected)
+		if (!sameValueType(actual, expected))
 			throw 'Wasm function ${fn.name} expected $expected on the value stack, got $actual';
 	}
+
+	static function sameValueType(left:WasmValueType, right:WasmValueType):Bool
+		return switch left {
+			case I32: switch right {
+					case I32: true;
+					default: false;
+				};
+			case I64: switch right {
+					case I64: true;
+					default: false;
+				};
+			case F32: switch right {
+					case F32: true;
+					default: false;
+				};
+			case F64: switch right {
+					case F64: true;
+					default: false;
+				};
+		};
 
 	static function popAny(stack:Array<WasmValueType>, fn:WasmFunction):WasmValueType {
 		if (stack.length == 0)
@@ -318,8 +339,12 @@ class WasmValidator {
 			throw 'Wasm function ${fn.name} ended a control frame with too few values';
 		while (stack.length > height)
 			stack.pop();
-		if (reachable && result != null)
-			stack.push(result);
+		if (reachable)
+			switch result {
+				case null:
+				default:
+					stack.push(result);
+			}
 	}
 
 	static function validateBranch(controls:Array<WasmControl>, depth:Int, fn:WasmFunction):Void {

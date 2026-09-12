@@ -9,6 +9,15 @@ typedef WasmCfgScc = {
 	final cyclic:Bool;
 }
 
+private typedef WasmSccTraversal = {
+	var nextIndex:Int;
+	final stack:Array<Int>;
+	final onStack:Map<Int, Bool>;
+	final indices:Map<Int, Int>;
+	final low:Map<Int, Int>;
+	final result:Array<WasmCfgScc>;
+}
+
 /** CFG facts consumed by structuring and diagnostics; no Wasm representation leaks in. */
 class WasmCfgAnalysis {
 	public final functionName:String;
@@ -37,7 +46,7 @@ class WasmCfgAnalysis {
 	public function backEdges():Array<{from:Int, to:Int}> {
 		var result = [];
 		for (from in graph.order)
-			for (to in graph.successors.get(from))
+			for (to in requiredSuccessors(graph.successors, from))
 				if (graph.dominates(to, from))
 					result.push({from: from, to: to});
 		return result;
@@ -46,7 +55,7 @@ class WasmCfgAnalysis {
 	function computePostDominators():Void {
 		var exits:Array<Int> = [];
 		for (id in graph.order)
-			if (graph.successors.get(id).length == 0)
+			if (requiredSuccessors(graph.successors, id).length == 0)
 				exits.push(id);
 		if (exits.length == 0)
 			throw 'CFG ${functionName} has no exit block';
@@ -62,11 +71,12 @@ class WasmCfgAnalysis {
 			for (id in graph.order) {
 				if (exits.indexOf(id) >= 0)
 					continue;
-				var successors = graph.successors.get(id), next = copySet(all);
+				var successors = requiredSuccessors(graph.successors, id),
+					next = copySet(all);
 				for (successor in successors)
-					next = intersectSets(next, sets.get(successor));
+					next = intersectSets(next, requiredSet(sets, successor));
 				next.set(id, true);
-				if (!sameSet(next, sets.get(id))) {
+				if (!sameSet(next, requiredSet(sets, id))) {
 					sets.set(id, next);
 					changed = true;
 				}
@@ -74,14 +84,14 @@ class WasmCfgAnalysis {
 		}
 		for (id in graph.order) {
 			var candidates:Array<Int> = [];
-			for (candidate in sets.get(id).keys())
+			for (candidate in requiredSet(sets, id).keys())
 				if (candidate != id)
 					candidates.push(candidate);
 			var immediate:Null<Int> = null;
 			for (candidate in candidates) {
 				var closest = true;
 				for (other in candidates)
-					if (other != candidate && sets.get(other).exists(candidate)) {
+					if (other != candidate && requiredSet(sets, other).exists(candidate)) {
 						closest = false;
 						break;
 					}
@@ -108,39 +118,46 @@ class WasmCfgAnalysis {
 	}
 
 	function computeSccs():Array<WasmCfgScc> {
-		var nextIndex = 0, stack:Array<Int> = [], onStack:Map<Int, Bool> = [], indices:Map<Int, Int> = [], low:Map<Int, Int> = [],
-			result:Array<WasmCfgScc> = [];
-		function visit(id:Int):Void {
-			indices.set(id, nextIndex);
-			low.set(id, nextIndex++);
-			stack.push(id);
-			onStack.set(id, true);
-			for (successor in graph.successors.get(id)) {
-				if (!indices.exists(successor)) {
-					visit(successor);
-					low.set(id, Std.int(Math.min(low.get(id), low.get(successor))));
-				} else if (onStack.exists(successor))
-					low.set(id, Std.int(Math.min(low.get(id), indices.get(successor))));
-			}
-			if (low.get(id) == indices.get(id)) {
-				var members = [], member:Int;
-				do {
-					member = stack.pop();
-					onStack.remove(member);
-					members.push(member);
-				} while (member != id);
-				var cyclic = members.length > 1;
-				if (!cyclic)
-					for (successor in graph.successors.get(id))
-						if (successor == id)
-							cyclic = true;
-				result.push({blocks: members, cyclic: cyclic});
-			}
-		}
+		var traversal:WasmSccTraversal = {
+			nextIndex: 0,
+			stack: [],
+			onStack: [],
+			indices: [],
+			low: [],
+			result: []
+		};
 		for (id in graph.order)
-			if (!indices.exists(id))
-				visit(id);
-		return result;
+			if (!traversal.indices.exists(id))
+				visitScc(graph, id, traversal);
+		return traversal.result;
+	}
+
+	static function visitScc(graph:IrGraph, id:Int, traversal:WasmSccTraversal):Void {
+		traversal.indices.set(id, traversal.nextIndex);
+		traversal.low.set(id, traversal.nextIndex++);
+		traversal.stack.push(id);
+		traversal.onStack.set(id, true);
+		for (successor in requiredSuccessors(graph.successors, id)) {
+			if (!traversal.indices.exists(successor)) {
+				visitScc(graph, successor, traversal);
+				traversal.low.set(id, Std.int(Math.min(requiredIndex(traversal.low, id), requiredIndex(traversal.low, successor))));
+			} else if (traversal.onStack.exists(successor))
+				traversal.low.set(id, Std.int(Math.min(requiredIndex(traversal.low, id), requiredIndex(traversal.indices, successor))));
+		}
+		if (requiredIndex(traversal.low, id) != requiredIndex(traversal.indices, id))
+			return;
+		var members:Array<Int> = [], member:Int;
+		do {
+			member = traversal.stack.pop();
+			traversal.onStack.remove(member);
+			members.push(member);
+		} while (member != id);
+		var cyclic = members.length > 1;
+		if (!cyclic)
+			for (successor in requiredSuccessors(graph.successors, id))
+				if (successor == id)
+					cyclic = true;
+		traversal.result.push({blocks: members, cyclic: cyclic});
 	}
 
 	function isReducible():Bool {
@@ -152,9 +169,15 @@ class WasmCfgAnalysis {
 				members.set(id, true);
 			var entries:Map<Int, Bool> = [];
 			for (id in scc.blocks)
-				for (predecessor in graph.predecessors.get(id))
+				for (predecessor in requiredSuccessors(graph.predecessors, id))
 					if (!members.exists(predecessor))
 						entries.set(id, true);
+			// The function entry has an implicit predecessor outside the CFG. Model
+			// it as an entry when it belongs to this SCC, so entry-rooted loops get
+			// the same single-header reducibility check as other loops.
+			var functionEntry = graph.order[0];
+			if (members.exists(functionEntry))
+				entries.set(functionEntry, true);
 			if (entries.keys().hasNext()) {
 				var header:Null<Int> = null;
 				for (candidate in entries.keys()) {
@@ -199,5 +222,23 @@ class WasmCfgAnalysis {
 			if (!left.exists(key))
 				return false;
 		return true;
+	}
+
+	static function requiredSuccessors(source:Map<Int, Array<Int>>, block:Int):Array<Int> {
+		if (!source.exists(block))
+			throw 'CFG is missing adjacency for block $block';
+		return source.get(block);
+	}
+
+	static function requiredSet(source:Map<Int, Map<Int, Bool>>, block:Int):Map<Int, Bool> {
+		if (!source.exists(block))
+			throw 'CFG is missing dominance set for block $block';
+		return source.get(block);
+	}
+
+	static function requiredIndex(source:Map<Int, Int>, block:Int):Int {
+		if (!source.exists(block))
+			throw 'CFG is missing index for block $block';
+		return source.get(block);
 	}
 }

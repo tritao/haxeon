@@ -7,6 +7,7 @@ import compiler.backend.wasm.WasmTarget.WasmReferenceModel;
 import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.WasmRuntimeAbi;
 import compiler.backend.wasm.WasmGcRoots;
+import compiler.backend.wasm.WasmStructurer;
 import compiler.backend.wasm.WasmPatch;
 import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.ir.IrInterpreter;
@@ -64,6 +65,20 @@ class WasmBackendMain {
 		var referenceProgram = Frontend.compile("function sum(value:Int):Int { var result = 0; while (value > 0) { result = result + value; value = value - 1; } return result; } function main():Int return sum(3);");
 		if (new IrInterpreter(referenceProgram).run("main") != 6)
 			throw "The SSA reference interpreter disagrees with canonical IR semantics";
+		var entryLoopBuilder = new IrBuilder(),
+			entryLoopCondition = entryLoopBuilder.argument("continue", Bool),
+			entryBlock = entryLoopBuilder.currentBlock(),
+			entryLoopBody = entryLoopBuilder.createBlock(),
+			entryLoopExit = entryLoopBuilder.createBlock();
+		entryLoopBuilder.branch(entryLoopCondition, entryLoopBody, entryLoopExit);
+		entryLoopBuilder.select(entryLoopBody);
+		entryLoopBuilder.jump(entryBlock);
+		entryLoopBuilder.select(entryLoopExit);
+		entryLoopBuilder.returnValue(entryLoopBuilder.constInt(0));
+		var entryLoop = new IrFunction("entryLoop", entryLoopBuilder.arguments, I32, entryLoopBuilder.blocks),
+			entryLoopStructurer = new WasmStructurer(entryLoop);
+		if (!entryLoopStructurer.analysis.reducible || !entryLoopStructurer.canUseStructured())
+			throw "An entry-rooted single-header loop must remain reducible and structurably emitted";
 		var canonical = CanonicalIrCodec.decode(CanonicalIrCodec.encode(referenceProgram));
 		if (new IrInterpreter(canonical).run("main") != 6)
 			throw "Canonical Haxeon IR did not round-trip through its versioned codec";

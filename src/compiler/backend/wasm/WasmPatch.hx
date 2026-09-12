@@ -81,7 +81,7 @@ class WasmPatch {
 		for (name in names) {
 			IrTypeCodec.writeString(output, name);
 			output.writeInt32(stableId(name));
-			output.writeInt32(slots.get(name));
+			output.writeInt32(requiredSlot(slots, name));
 		}
 		return output.getBytes();
 	}
@@ -126,6 +126,13 @@ class WasmPatch {
 
 	public static function plan(previous:Null<IrProgram>, next:IrProgram):PatchDecision
 		return PatchPlanner.plan(previous == null ? null : RuntimeAbi.describe(previous), RuntimeAbi.describe(next));
+
+	static function requiredSlot(slots:Map<String, Int>, name:String):Int {
+		var slot = slots.get(name);
+		if (slot == null)
+			throw 'Missing Wasm table slot for "$name"';
+		return slot;
+	}
 
 	static function signature(fn:IrFunction):String
 		return "(" + [for (argument in fn.arguments) Std.string(argument.type)].join(",") + ")->" + Std.string(fn.result);
