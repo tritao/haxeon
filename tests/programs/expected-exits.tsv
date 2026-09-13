@@ -96,6 +96,7 @@ map-object	42
 map-anonymous-enum	42
 wasm-gc-reuse	42
 wasm-gc-invariants	42
+wasm-bytes-compare	42
 map-for-in	52
 map-key-value-for-in	42
 map-nullable-get	42

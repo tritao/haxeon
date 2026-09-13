@@ -153,8 +153,11 @@ class TestCatalog {
 		for (test in programs)
 			expected.set(test.name + ".hx", true);
 		var directory = Path.join([root, "tests", "programs"]);
+		// Unlisted Wasm-GC sources are exercised by their backend-specific runtime scripts.
 		for (file in FileSystem.readDirectory(directory)) {
-			if (!StringTools.endsWith(file, ".hx") || StringTools.startsWith(file, "utest-"))
+			if (!StringTools.endsWith(file, ".hx")
+				|| StringTools.startsWith(file, "utest-")
+				|| (StringTools.startsWith(file, "wasm-gc-") && !expected.exists(file)))
 				continue;
 			if (!expected.exists(file))
 				throw 'Program fixture is missing from expected-exits.tsv: $file';

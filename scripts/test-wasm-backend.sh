@@ -107,7 +107,7 @@ bash "$root_dir/scripts/test-wasm-gc-invariants.sh"
 	--root=tests/programs tests/programs/wasm-gc-bytes.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm-gc --output=out/wasm-cli-gc-ffi-bytes.wasm --entry=wasm-gc-ffi-bytes \
-	--root=tests/programs --ffi-interface=tests/ffi/gc_bytes.hxi tests/programs/wasm-gc-ffi-bytes.hx
+	--root=tests/ffi --ffi-interface=tests/ffi/gc_bytes.hxi tests/ffi/wasm-gc-ffi-bytes.hx
 node - "$root_dir" <<'JS'
 const fs = require("fs");
 const root = process.argv[2];

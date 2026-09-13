@@ -10,6 +10,9 @@ if [[ ! -x "$haxe_bin" ]]; then
 	exit 1
 fi
 
+# The full GC Bytes fixture also checks aliasing Bytes.view, which Linear32
+# still copies. Keep that runtime-only case separate and compare shared Bytes
+# ordering semantics here.
 cases=(objects arrays enums closures dynamic exceptions strings)
 for case_name in "${cases[@]}"; do
 	source="tests/programs/wasm-gc-$case_name.hx"
@@ -19,6 +22,14 @@ for case_name in "${cases[@]}"; do
 			--entry="wasm-gc-$case_name" --root=tests/programs "$source"
 	done
 done
+
+for target in wasm32 wasm-gc; do
+	"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+		--target="$target" --output="out/wasm-parity-$target-bytes-compare.wasm" \
+		--entry=wasm-bytes-compare --root=tests/programs tests/programs/wasm-bytes-compare.hx
+done
+
+cases+=(bytes-compare)
 
 node - "$root_dir" "${cases[@]}" <<'JS'
 const fs = require("fs");
