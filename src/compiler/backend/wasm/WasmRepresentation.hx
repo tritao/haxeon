@@ -615,7 +615,7 @@ class WasmGcRepresentation implements WasmRepresentation {
 				throw 'Invalid Wasm GC array unshift signature for "$name"';
 			var element = requireArrayElement(arguments[0].type),
 				suffix = arrayNativeSuffix(element);
-			if (name != "__array_unshift_" + suffix || arguments[1].type != element)
+			if (name != "__array_unshift_" + suffix || WasmGcTypePlan.typeKey(arguments[1].type) != WasmGcTypePlan.typeKey(element))
 				throw 'Wasm GC array unshift "$name" does not match its $element array';
 			return arrayUnshift(element, argumentLocals[0], argumentLocals[1], outputLocal);
 		}
@@ -633,7 +633,7 @@ class WasmGcRepresentation implements WasmRepresentation {
 				throw 'Invalid Wasm GC array shift signature for "$name"';
 			var element = requireArrayElement(arguments[0].type),
 				suffix = arrayNativeSuffix(element);
-			if (name != "__array_shift_" + suffix || output.type != element)
+			if (name != "__array_shift_" + suffix || WasmGcTypePlan.typeKey(output.type) != WasmGcTypePlan.typeKey(element))
 				throw 'Wasm GC array shift "$name" does not match its $element array';
 			return arrayShift(element, argumentLocals[0], outputLocal);
 		}
@@ -649,12 +649,21 @@ class WasmGcRepresentation implements WasmRepresentation {
 				throw 'Wasm GC array splice "$name" requires I32 bounds, got ${Std.string(arguments[1].type)} and ${Std.string(arguments[2].type)}';
 			return arraySplice(element, resultElement, argumentLocals[0], argumentLocals[1], argumentLocals[2], outputLocal);
 		}
+		if (StringTools.startsWith(name, "__array_remove_")) {
+			if (arguments.length != 2 || argumentLocals.length != 2 || output.type != Bool)
+				throw 'Invalid Wasm GC array remove signature for "$name"';
+			var element = requireArrayElement(arguments[0].type),
+				suffix = arrayNativeSuffix(element);
+			if (name != "__array_remove_" + suffix || WasmGcTypePlan.typeKey(arguments[1].type) != WasmGcTypePlan.typeKey(element))
+				throw 'Wasm GC array remove "$name" does not match its $element array';
+			return arrayRemove(element, argumentLocals[0], argumentLocals[1], outputLocal);
+		}
 		if (StringTools.startsWith(name, "__array_index_of_")) {
 			if (arguments.length != 2 || argumentLocals.length != 2 || output.type != I32)
 				throw 'Invalid Wasm GC array indexOf signature for "$name"';
 			var element = requireArrayElement(arguments[0].type),
 				suffix = arrayNativeSuffix(element);
-			if (name != "__array_index_of_" + suffix || arguments[1].type != element)
+			if (name != "__array_index_of_" + suffix || WasmGcTypePlan.typeKey(arguments[1].type) != WasmGcTypePlan.typeKey(element))
 				throw 'Wasm GC array indexOf "$name" does not match its $element array';
 			return arrayIndexOf(element, argumentLocals[0], argumentLocals[1], outputLocal);
 		}
@@ -664,7 +673,7 @@ class WasmGcRepresentation implements WasmRepresentation {
 			var element = requireArrayElement(arguments[0].type),
 				suffix = arrayNativeSuffix(element);
 			if (name != "__array_slice_" + suffix
-				|| requireArrayElement(output.type) != element
+				|| WasmGcTypePlan.typeKey(requireArrayElement(output.type)) != WasmGcTypePlan.typeKey(element)
 				|| arguments[1].type != I32
 				|| arguments[2].type != I32)
 				throw 'Wasm GC array slice "$name" does not match its $element array';
@@ -1154,6 +1163,27 @@ class WasmGcRepresentation implements WasmRepresentation {
 			LocalGet(removedArray),
 			LocalSet(destination)
 		]);
+		return body;
+	}
+
+	function arrayRemove(element:IrType, arrayLocal:Int, valueLocal:Int, destination:Int):Array<WasmInstruction> {
+		var index = allocateLocal(I32),
+			count = allocateLocal(I32),
+			removedArray = allocateLocal(Ref({nullable: false, heap: Type(plan.arrayType(element))})),
+			body = arrayIndexOf(element, arrayLocal, valueLocal, index);
+		body = body.concat([
+			LocalGet(index),
+			I32Const(0),
+			I32LtS,
+			If(null),
+			I32Const(0),
+			LocalSet(destination),
+			Else,
+			I32Const(1),
+			LocalSet(count)
+		]);
+		body = body.concat(arraySplice(element, element, arrayLocal, index, count, removedArray));
+		body = body.concat([I32Const(1), LocalSet(destination), End]);
 		return body;
 	}
 
