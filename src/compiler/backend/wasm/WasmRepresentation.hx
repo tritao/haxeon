@@ -562,6 +562,15 @@ class WasmGcRepresentation implements WasmRepresentation {
 				throw "Invalid Wasm GC string equality signature";
 			return bytesEqual(outputLocal, argumentLocals[0], argumentLocals[1]);
 		}
+		if (name == "__array_join_bytes") {
+			if (output.type != Bytes
+				|| arguments.length != 2
+				|| argumentLocals.length != 2
+				|| requireArrayElement(arguments[0].type) != Bytes
+				|| arguments[1].type != Bytes)
+				throw "Invalid Wasm GC Array<String>.join signature";
+			return arrayJoinBytes(argumentLocals[0], argumentLocals[1], outputLocal);
+		}
 		if (StringTools.startsWith(name, "__array_alloc_")) {
 			if (arguments.length != 1 || argumentLocals.length != 1)
 				throw 'Invalid Wasm GC array allocator signature for "$name"';
@@ -1747,9 +1756,11 @@ class WasmGcRepresentation implements WasmRepresentation {
 	function stringConcat(output:IrValue, arguments:Array<IrValue>, destination:Int, argumentLocals:Array<Int>):Array<WasmInstruction> {
 		if (output.type != Bytes || arguments.length != 2 || argumentLocals.length != 2 || arguments[0].type != Bytes || arguments[1].type != Bytes)
 			throw "Invalid Wasm GC string concatenation signature";
-		var leftLocal = argumentLocals[0],
-			rightLocal = argumentLocals[1],
-			leftLength = allocateLocal(I32),
+		return concatStrings(argumentLocals[0], argumentLocals[1], destination);
+	}
+
+	function concatStrings(leftLocal:Int, rightLocal:Int, destination:Int):Array<WasmInstruction> {
+		var leftLength = allocateLocal(I32),
 			rightLength = allocateLocal(I32),
 			totalLength = allocateLocal(I32),
 			storage = allocateLocal(Ref({
@@ -1791,6 +1802,80 @@ class WasmGcRepresentation implements WasmRepresentation {
 				StructNew(plan.bytesTypeIndex),
 				LocalSet(destination)
 			];
+		return body;
+	}
+
+	function arrayJoinBytes(arrayLocal:Int, separatorLocal:Int, destination:Int):Array<WasmInstruction> {
+		var wrapperType = plan.arrayType(Bytes),
+			storageType = plan.arrayStorageType(Bytes),
+			length = allocateLocal(I32),
+			index = allocateLocal(I32),
+			empty = allocateLocal(Ref({
+				nullable: false,
+				heap: Type(plan.bytesTypeIndex)
+			})),
+			accumulator = allocateLocal(Ref({nullable: false, heap: Type(plan.bytesTypeIndex)})),
+			separator = allocateLocal(valueType(Bytes)),
+			element = allocateLocal(valueType(Bytes)),
+			body:Array<WasmInstruction> = [
+				I32Const(0),
+				ArrayNewDefault(plan.byteArrayTypeIndex),
+				I32Const(0),
+				I32Const(0),
+				StructNew(plan.bytesTypeIndex),
+				LocalSet(empty),
+				LocalGet(empty),
+				LocalSet(accumulator),
+				LocalGet(separatorLocal),
+				LocalSet(separator),
+				LocalGet(separator),
+				RefIsNull,
+				If(null),
+				LocalGet(empty),
+				LocalSet(separator),
+				End,
+				LocalGet(arrayLocal),
+				StructGet(wrapperType, WasmGcTypePlan.arrayLengthFieldIndex()),
+				LocalSet(length),
+				I32Const(0),
+				LocalSet(index),
+				Loop(null),
+				LocalGet(index),
+				LocalGet(length),
+				I32LtS,
+				If(null),
+				LocalGet(index),
+				I32Eqz,
+				If(null),
+				Else
+			];
+		body = body.concat(concatStrings(accumulator, separator, accumulator));
+		body = body.concat([
+			End,
+			LocalGet(arrayLocal),
+			StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+			LocalGet(index),
+			ArrayGet(storageType),
+			LocalSet(element),
+			LocalGet(element),
+			RefIsNull,
+			If(null),
+			LocalGet(empty),
+			LocalSet(element),
+			End
+		]);
+		body = body.concat(concatStrings(accumulator, element, accumulator));
+		body = body.concat([
+			LocalGet(index),
+			I32Const(1),
+			I32Add,
+			LocalSet(index),
+			Br(1),
+			End,
+			End,
+			LocalGet(accumulator),
+			LocalSet(destination)
+		]);
 		return body;
 	}
 

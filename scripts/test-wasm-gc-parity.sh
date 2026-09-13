@@ -29,7 +29,7 @@ for target in wasm32 wasm-gc; do
 		--entry=wasm-bytes-compare --root=tests/programs tests/programs/wasm-bytes-compare.hx
 done
 
-shared_cases=(add array-iterator-wasm array-slice-index numeric-promotion function-wrapper try-catch try-nested try-array-bounds)
+shared_cases=(add array-iterator-wasm array-slice-index dynamic-equality numeric-promotion function-wrapper try-catch try-nested try-array-bounds)
 for case_name in "${shared_cases[@]}"; do
 	for target in wasm32 wasm-gc; do
 		"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
