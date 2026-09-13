@@ -6531,9 +6531,9 @@ class WasmFunctionLower {
 	static function nativeArgument(body:Array<WasmInstruction>, argument:IrValue, values:Map<Int, Int>, bytesDataPointer:Int):Void {
 		body.push(LocalGet(requiredLocal(values, argument.id)));
 		switch argument.type {
-			case Bytes:
+			case Bytes, ManagedBytes:
 				body.push(Call(bytesDataPointer));
-			case ManagedBytes, Abstract("realtime_bytes"):
+			case Abstract("realtime_bytes"):
 				body.push(I32Const(WasmLayout.STRING_DATA_OFFSET));
 				body.push(I32Add);
 			case _:

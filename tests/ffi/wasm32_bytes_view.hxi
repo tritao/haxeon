@@ -1,0 +1,3 @@
+interface Wasm32BytesView @target("portable-abi32") @library("wasm32_bytes_view") {
+	extern fn inspect(data: ptr<const<u8>> @in_array("length"), length: u32) -> i32 @symbol("inspect_bytes");
+}
