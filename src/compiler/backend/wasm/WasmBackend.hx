@@ -28,17 +28,12 @@ import compiler.backend.wasm.WasmPatch.WasmPatchArtifact;
 import compiler.backend.wasm.WasmStructurer.WasmLoopInfo;
 import compiler.backend.wasm.WasmLayout.WasmFieldLayout;
 import compiler.backend.wasm.WasmGcRoots.WasmSafepoint;
-import compiler.backend.wasm.WasmRepresentation.WasmRepresentation;
-import compiler.backend.wasm.WasmRepresentation.WasmLinearRepresentation;
+import compiler.backend.wasm.WasmRepresentation.WasmRepresentationSet;
+import compiler.backend.wasm.WasmRepresentation.WasmFunctionRepresentationContext;
 import compiler.backend.wasm.WasmRepresentation.WasmGcRepresentation;
 import compiler.backend.wasm.WasmGcMaps;
-import compiler.backend.wasm.linear.WasmLinearContext;
-import compiler.backend.wasm.linear.WasmLinearGc;
-import compiler.backend.wasm.linear.WasmLinearAllocator;
-import compiler.backend.wasm.linear.WasmLinearArrays;
-import compiler.backend.wasm.linear.WasmLinearRuntime;
 
-private typedef WasmClosureTypes = {
+typedef WasmClosureTypes = {
 	final staticType:Int;
 	var instanceType:Null<Int>;
 }
@@ -77,205 +72,9 @@ class WasmBackend implements Backend {
 		var target = WasmTarget.forBackend(options.target, options.debugNames);
 		if (target.referenceModel == Gc)
 			return compileGcInternal(program, options, patchChanged);
-		if (target.referenceModel != Linear32)
-			throw 'Wasm backend target ${options.target} is not implemented yet';
-		IrVerifier.verify(program);
-		var module = new WasmModule(target.debugNames ? "haxeon" : null),
-			importMemory = options.importMemory == true,
-			contract = options.memoryContract,
-			memoryBase = contract == null ? (options.memoryBase == null ? 0 : options.memoryBase) : contract.guestBase,
-			exportedFunctions = options.exports == null ? [] : options.exports;
-		if (contract != null) {
-			if (!importMemory)
-				throw "A Wasm memory contract requires imported memory";
-			MemoryContractCodec.validate(contract);
-		}
-		if (memoryBase < 0 || (memoryBase & 7) != 0)
-			throw 'Wasm memory base must be a non-negative 8-byte-aligned value, got $memoryBase';
-		module.importMemory = importMemory;
-		var preferredEntry = hasFunction(program, "main") ? "main" : hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint,
-			roots = exportedFunctions.copy();
-		if (hasFunction(program, "__init"))
-			roots.push("__init");
-		var reachable = reachableFunctions(program, preferredEntry, roots);
-		var usedCNatives = reachableCNatives(program, reachable),
-			usedNatives = reachableNatives(program, reachable);
-		var layout = new WasmLayout(program);
-		var strings:Map<String, Int> = [],
-			nextData = memoryBase + WasmLayout.STRING_DATA_OFFSET;
-		for (fn in program.functions)
-			for (block in fn.blocks)
-				for (located in block.instructions)
-					switch located.value {
-						case ConstString(_, value):
-							if (!strings.exists(value)) {
-								var bytes = stringBytes(value);
-								var offset = nextData;
-								module.data.push({offset: offset, bytes: bytes});
-								strings.set(value, offset);
-								nextData = align(offset + bytes.length, 8);
-							}
-						default:
-					}
-		for (value in ["null", "true", "false"])
-			if (!strings.exists(value)) {
-				var bytes = stringBytes(value), offset = nextData;
-				module.data.push({offset: offset, bytes: bytes});
-				strings.set(value, offset);
-				nextData = align(offset + bytes.length, 8);
-			}
-		var staticData = placeStaticData(program, module, nextData, reachable);
-		nextData = staticData.end;
-		WasmFunctionLower.setStaticDataAddresses(staticData.addresses);
-		module.memoryMin = 1;
-		module.exportMemory = !importMemory;
-		var rootBase = align(Std.int(Math.max(1024, nextData)), 8),
-			rootReserve = WasmLayout.ROOT_RESERVE,
-			rootLimit = rootBase + rootReserve,
-			heapStart = rootLimit;
-		if (contract != null && heapStart > contract.guestLimit)
-			throw 'Wasm guest layout exceeds memory contract guest limit ${contract.guestLimit}';
-		module.memoryMin = contract == null ? memoryPages(heapStart) : memoryPages(contract.memorySize);
-		var heapTop = module.globals.length;
-		module.globals.push({type: I32, mutable: true, init: [I32Const(heapStart)]});
-		var rootTop = module.globals.length;
-		module.globals.push({type: I32, mutable: true, init: [I32Const(rootBase)]});
-		var rootFrameTop = module.globals.length;
-		module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
-		var freeHead = module.globals.length;
-		module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
-		var markStackTop = module.globals.length;
-		module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
-		var gcBudget = -1;
-		if (options.wasmGcStress != true) {
-			gcBudget = module.globals.length;
-			module.globals.push({type: I32, mutable: true, init: [I32Const(WasmLayout.GC_MIN_ALLOCATION_BUDGET)]});
-		}
-		var allocationCount = -1,
-			allocationBytes = -1,
-			largestAllocation = -1,
-			collectionCount = -1;
-		if (options.wasmMemoryStats == true) {
-			allocationCount = module.globals.length;
-			module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
-			allocationBytes = module.globals.length;
-			module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
-			largestAllocation = module.globals.length;
-			module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
-			collectionCount = module.globals.length;
-			module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
-		}
-		var globals:Map<String, Int> = [];
-		var rootGlobals:Array<Int> = [];
-		for (field in program.staticFields) {
-			globals.set(field.name, module.globals.length);
-			module.globals.push({type: requireValueType(field.type), mutable: true, init: zeroValue(field.type)});
-			if (WasmTarget.isReference(field.type))
-				rootGlobals.push(requiredGlobal(globals, field.name));
-		}
-		var functions:Map<String, Int> = [];
-		var linear = new WasmLinearContext(module, program, layout, options);
-		linear.heapStart = heapStart;
-		linear.heapTop = heapTop;
-		linear.rootBase = rootBase;
-		linear.rootTop = rootTop;
-		linear.rootFrameTop = rootFrameTop;
-		linear.rootLimit = rootLimit;
-		linear.freeHead = freeHead;
-		linear.markStackTop = markStackTop;
-		linear.gcBudget = gcBudget;
-		linear.allocationCount = allocationCount;
-		linear.allocationBytes = allocationBytes;
-		linear.largestAllocation = largestAllocation;
-		linear.collectionCount = collectionCount;
-		linear.functions = functions;
-		linear.globals = globals;
-		linear.rootGlobals = rootGlobals;
-		linear.strings = strings;
-		addCNativeImports(module, functions, program, usedCNatives);
-		WasmLinearRuntime.addImports(linear, usedNatives);
-		WasmLinearGc.build(linear);
-		var allocator = WasmLinearAllocator.build(linear);
-		functions.set("__haxeon_alloc", allocator);
-		WasmLinearRuntime.register(linear);
-		WasmLinearArrays.registerNativeAllocators(linear);
-		var runtimeFunctionCount = module.functions.length;
-		var methods:Map<String, String> = [];
-		for (object in program.objects)
-			for (method in object.methods)
-				methods.set(object.name + "." + method.name, method.functionName);
-		for (fn in program.functions) {
-			if (!reachable.exists(fn.name))
-				continue;
-			if (fn.name == "__entry" && preferredEntry != "__entry")
-				continue;
-			var parameters:Array<WasmValueType> = [];
-			for (argument in fn.arguments)
-				try
-					parameters.push(requireValueType(argument.type))
-				catch (error:Dynamic)
-					throw 'Wasm function ${fn.name} has an unsupported parameter type: $error';
-			var results:Array<WasmValueType> = [];
-			try
-				results = resultTypes(fn.result)
-			catch (error:Dynamic)
-				throw 'Wasm function ${fn.name} has an unsupported result type: $error';
-			var type:WasmFunctionType = {parameters: parameters, results: results};
-			functions.set(fn.name, module.addFunction(new WasmFunction(fn.name, type)));
-		}
-		var closureTypes = collectClosureTypes(module, program),
-			representation:WasmRepresentation = new WasmLinearRepresentation(layout, allocator),
-			tableSlots = buildTableSlots(module, functions),
-			exceptionTagType:Null<Int> = hasExceptions(program) ? module.typeIndex({
-				parameters: [I32],
-				results: []
-			}) : null, // The module declares one tag; instruction immediates use its tag index, not this type index.
-			exceptionTag:Null<Int> = exceptionTagType == null ? null : 0;
-		module.exceptionTagType = exceptionTagType;
-		linear.exceptionTag = exceptionTag;
-		WasmLinearGc.wrapRuntimeFunctions(linear, runtimeFunctionCount);
-		module.exportTable = module.tableMin != null;
-		var gcRootMetadata = WasmGcRoots.encodeAndVisit(program, function(fn, rootPoints) {
-			if (!reachable.exists(fn.name) || (fn.name == "__entry" && preferredEntry != "__entry"))
-				return;
-			var functionIndex = requiredFunctionIndex(functions, fn.name);
-			module.setFunction(functionIndex,
-				WasmFunctionLower.lower(fn, functions, module.functionType(functionIndex), layout, allocator, rootTop, rootFrameTop, rootLimit, globals,
-					strings, methods, closureTypes, tableSlots, exceptionTag, rootPoints, program, representation));
-		});
-		module.customSections.push({name: "haxeon.gc.roots", bytes: gcRootMetadata});
-		module.customSections.push({name: "haxeon.patch", bytes: WasmPatch.manifest(program, patchChanged)});
-		module.customSections.push({name: "haxeon.patch.slots", bytes: WasmPatch.tableManifest(tableSlots)});
-		if (contract != null)
-			module.customSections.push({name: MemoryContractCodec.SECTION_NAME, bytes: MemoryContractCodec.encode(contract)});
-		var entry = functions.get(preferredEntry);
-		if (entry == null)
-			throw 'Wasm entry point $preferredEntry was not emitted';
-		if (hasFunction(program, "__init"))
-			module.start = functions.get("__init");
-		module.exports.push({name: "main", functionIndex: entry});
-		for (exported in exportedFunctions) {
-			var exportIndex = functions.get(exported);
-			if (exportIndex == null)
-				throw 'Wasm export "$exported" is not a reachable function';
-			module.exports.push({name: exported, functionIndex: exportIndex});
-		}
-		if (options.wasmMemoryStats == true) {
-			addMemoryStatExport(module, "haxeon.memory.heap_base", [I32Const(heapStart)]);
-			addMemoryStatExport(module, "haxeon.memory.heap_top", [GlobalGet(heapTop)]);
-			addMemoryStatExport(module, "haxeon.memory.root_base", [I32Const(rootBase)]);
-			addMemoryStatExport(module, "haxeon.memory.root_top", [GlobalGet(rootTop)]);
-			addMemoryStatExport(module, "haxeon.memory.root_limit", [I32Const(rootLimit)]);
-			// Kept temporarily for hosts that still display the old metadata counters.
-			// In-block headers make out-of-line GC metadata a zero-sized region.
-			addMemoryStatExport(module, "haxeon.memory.metadata_base", [I32Const(heapStart)]);
-			addMemoryStatExport(module, "haxeon.memory.metadata_top", [I32Const(heapStart)]);
-			addMemoryStatExport(module, "haxeon.memory.allocation_count", [GlobalGet(allocationCount)]);
-			addMemoryStatExport(module, "haxeon.memory.allocated_bytes", [GlobalGet(allocationBytes)]);
-			addMemoryStatExport(module, "haxeon.memory.largest_allocation_bytes", [GlobalGet(largestAllocation)]);
-			addMemoryStatExport(module, "haxeon.memory.collection_count", [GlobalGet(collectionCount)]);
-		}
-		return {target: options.target, bytes: WasmEncoder.encode(module)};
+		if (target.referenceModel == Linear32)
+			return WasmLinearModuleBuilder.compile(program, options, patchChanged, target);
+		throw "Wasm backend target " + Std.string(options.target) + " is not implemented yet";
 	}
 
 	function compileGcInternal(program:IrProgram, options:BackendOptions, patchChanged:Null<Array<String>>):BackendResult {
@@ -314,7 +113,7 @@ class WasmBackend implements Backend {
 
 		var plan = new WasmGcTypePlan(program),
 			gcRepresentation = new WasmGcRepresentation(plan),
-			representation:WasmRepresentation = gcRepresentation,
+			representation:WasmRepresentationSet = WasmRepresentationSet.gc(gcRepresentation),
 			module = new WasmModule(options.debugNames ? "haxeon" : null),
 			globals:Map<String, Int> = [],
 			functions:Map<String, Int> = [],
@@ -335,18 +134,18 @@ class WasmBackend implements Backend {
 		addGcCNativeImports(module, functions, program, usedCNatives);
 		gcRepresentation.configureNativePointerReleases(gcPointerReleaseFunctionIndices(program, reachable, functions));
 		addGcMapRuntimeFunctions(module, functions, plan, program, usedNatives);
-		addGcRuntimeNativeFunctions(module, functions, plan, representation, program, usedNatives);
+		addGcRuntimeNativeFunctions(module, functions, plan, gcRepresentation, program, usedNatives);
 		addGcMapProjectionFunctions(module, functions, plan, program, reachable);
 		if (requiresScratchMemory) {
 			var scratchAllocator = addGcScratchAllocator(module, scratchTop);
 			gcRepresentation.configureCNativeScratch(scratchTop, scratchAllocator);
 		}
-		var exceptionTagType:Null<Int> = hasExceptions(program) ? module.typeIndex({parameters: [representation.valueType(Dyn)], results: []}) : null,
+		var exceptionTagType:Null<Int> = hasExceptions(program) ? module.typeIndex({parameters: [representation.values.valueType(Dyn)], results: []}) : null,
 			exceptionTag:Null<Int> = exceptionTagType == null ? null : 0;
 		module.exceptionTagType = exceptionTagType;
 		for (field in program.staticFields) {
 			globals.set(field.name, module.globals.length);
-			module.globals.push({type: representation.valueType(field.type), mutable: true, init: representation.zeroValue(field.type)});
+			module.globals.push({type: representation.values.valueType(field.type), mutable: true, init: representation.values.zeroValue(field.type)});
 		}
 		for (object in program.objects)
 			for (method in object.methods)
@@ -481,7 +280,7 @@ class WasmBackend implements Backend {
 			}
 	}
 
-	static function addGcRuntimeNativeFunctions(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, representation:WasmRepresentation,
+	static function addGcRuntimeNativeFunctions(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, representation:WasmGcRepresentation,
 			program:IrProgram, used:Map<String, Bool>):Void {
 		for (native in program.natives)
 			if (used.exists(native.name) && native.name == "__string_compare_full") {
@@ -493,12 +292,12 @@ class WasmBackend implements Backend {
 						locals.push({type: type});
 						return index;
 					};
-				representation.beginFunction(allocateLocal, null, null);
+				var functionRepresentation = representation.forFunction({allocateLocal: allocateLocal, exceptionTag: null, irFunction: null});
 				var arguments = [
 					for (index in 0...native.arguments.length)
 						new IrValue(index, native.name + "_argument_" + index, native.arguments[index])
 				], result = new IrValue(-1, native.name + "_result", native.result), resultLocal = allocateLocal(plan.valueType(native.result)),
-					body = representation.lowerRuntimeCall(native.name, result, arguments, resultLocal, [for (index in 0...arguments.length) index]);
+					body = functionRepresentation.lowerRuntimeCall(native.name, result, arguments, resultLocal, [for (index in 0...arguments.length) index]);
 				if (body == null)
 					throw 'Wasm GC runtime native "${native.name}" has no wrapper implementation';
 				body.push(LocalGet(resultLocal));
@@ -772,12 +571,12 @@ class WasmBackend implements Backend {
 		return false;
 	}
 
-	static function addMemoryStatExport(module:WasmModule, name:String, body:Array<WasmInstruction>):Void {
+	public static function addMemoryStatExport(module:WasmModule, name:String, body:Array<WasmInstruction>):Void {
 		var index = module.addFunction(new WasmFunction(name, {parameters: [], results: [I32]}, [], body));
 		module.exports.push({name: name, functionIndex: index});
 	}
 
-	static function addCNativeImports(module:WasmModule, functions:Map<String, Int>, program:IrProgram, used:Map<String, Bool>):Void {
+	public static function addCNativeImports(module:WasmModule, functions:Map<String, Int>, program:IrProgram, used:Map<String, Bool>):Void {
 		for (native in program.cNatives) {
 			if (!used.exists(native.name))
 				continue;
@@ -791,7 +590,7 @@ class WasmBackend implements Backend {
 		}
 	}
 
-	static function reachableNatives(program:IrProgram, reachable:Map<String, Bool>):Map<String, Bool> {
+	public static function reachableNatives(program:IrProgram, reachable:Map<String, Bool>):Map<String, Bool> {
 		var result:Map<String, Bool> = [];
 		for (fn in program.functions)
 			if (reachable.exists(fn.name))
@@ -805,7 +604,7 @@ class WasmBackend implements Backend {
 		return result;
 	}
 
-	static function reachableCNatives(program:IrProgram, reachable:Map<String, Bool>):Map<String, Bool> {
+	public static function reachableCNatives(program:IrProgram, reachable:Map<String, Bool>):Map<String, Bool> {
 		var result:Map<String, Bool> = [];
 		for (fn in program.functions)
 			if (reachable.exists(fn.name))
@@ -908,10 +707,10 @@ class WasmBackend implements Backend {
 		throw 'Wasm GC byte result references missing length import "$symbol"';
 	}
 
-	static function memoryPages(bytes:Int):Int
+	public static function memoryPages(bytes:Int):Int
 		return Std.int(Math.ceil(bytes / 65536.0));
 
-	static function resultTypes(type:IrType):Array<WasmValueType>
+	public static function resultTypes(type:IrType):Array<WasmValueType>
 		return type == Void ? [] : [requireValueType(type)];
 
 	public static function mapNativeParts(name:String):Null<{mapName:String, operation:String}> {
@@ -926,7 +725,7 @@ class WasmBackend implements Backend {
 		};
 	}
 
-	static function collectClosureTypes(module:WasmModule, program:IrProgram):Map<String, WasmClosureTypes> {
+	public static function collectClosureTypes(module:WasmModule, program:IrProgram):Map<String, WasmClosureTypes> {
 		var result:Map<String, WasmClosureTypes> = [];
 		for (fn in program.functions)
 			for (block in fn.blocks)
@@ -1077,7 +876,7 @@ class WasmBackend implements Backend {
 	public static inline function gcClosureThunkName(target:String):String
 		return "__haxeon_gc_closure_thunk_" + target;
 
-	static function buildTableSlots(module:WasmModule, functions:Map<String, Int>):Map<String, Int> {
+	public static function buildTableSlots(module:WasmModule, functions:Map<String, Int>):Map<String, Int> {
 		var names = [for (fn in module.functions) if (functions.exists(fn.name)) fn.name];
 		names.sort(Reflect.compare);
 		var slots:Map<String, Int> = [];
@@ -1089,7 +888,7 @@ class WasmBackend implements Backend {
 		return slots;
 	}
 
-	static function stringBytes(value:String):HaxeBytes {
+	public static function stringBytes(value:String):HaxeBytes {
 		var raw = HaxeBytes.ofString(value),
 			bytes = HaxeBytes.alloc(WasmLayout.STRING_DATA_OFFSET + raw.length + 1);
 		bytes.setInt32(0, typeId(Bytes));
@@ -1100,7 +899,7 @@ class WasmBackend implements Backend {
 		return bytes;
 	}
 
-	static function zeroValue(type:IrType):Array<WasmInstruction>
+	public static function zeroValue(type:IrType):Array<WasmInstruction>
 		return switch type {
 			case I64: [I64Const(0)];
 			case F64: [F64Const(0.0)];
@@ -1111,7 +910,7 @@ class WasmBackend implements Backend {
 	public static function align(value:Int, boundary:Int):Int
 		return (value + boundary - 1) & ~(boundary - 1);
 
-	static function placeStaticData(program:IrProgram, module:WasmModule, start:Int, reachable:Map<String, Bool>):{addresses:Map<String, Int>, end:Int} {
+	public static function placeStaticData(program:IrProgram, module:WasmModule, start:Int, reachable:Map<String, Bool>):{addresses:Map<String, Int>, end:Int} {
 		var addresses:Map<String, Int> = [], next = start;
 		for (fn in program.functions)
 			if (reachable.exists(fn.name))
@@ -1122,7 +921,7 @@ class WasmBackend implements Backend {
 								var key = staticDataKey(bytes);
 								if (!addresses.exists(key)) {
 									var offset = align(next, 8),
-										data = HaxeBytes.alloc(bytes.length);
+									data = HaxeBytes.alloc(bytes.length);
 									for (index in 0...bytes.length)
 										data.set(index, bytes[index]);
 									module.data.push({offset: offset, bytes: data});
@@ -1143,14 +942,14 @@ class WasmBackend implements Backend {
 		return key.toString();
 	}
 
-	static function hasFunction(program:IrProgram, name:String):Bool {
+	public static function hasFunction(program:IrProgram, name:String):Bool {
 		for (fn in program.functions)
 			if (fn.name == name)
 				return true;
 		return false;
 	}
 
-	static function hasExceptions(program:IrProgram):Bool {
+	public static function hasExceptions(program:IrProgram):Bool {
 		for (fn in program.functions) {
 			for (block in fn.blocks) {
 				for (located in block.instructions)
@@ -1170,7 +969,7 @@ class WasmBackend implements Backend {
 		return false;
 	}
 
-	static function reachableFunctions(program:IrProgram, entry:String, ?additionalRoots:Array<String>):Map<String, Bool> {
+	public static function reachableFunctions(program:IrProgram, entry:String, ?additionalRoots:Array<String>):Map<String, Bool> {
 		var byName:Map<String, IrFunction> = [],
 			reachable:Map<String, Bool> = [],
 			pending:Array<String> = [entry];
@@ -1275,13 +1074,13 @@ class WasmBackend implements Backend {
 		throw 'Unknown IR function "$name"';
 	}
 
-	static function requiredGlobal(globals:Map<String, Int>, name:String):Int {
+	public static function requiredGlobal(globals:Map<String, Int>, name:String):Int {
 		if (!globals.exists(name))
 			throw 'Unknown Wasm global "$name"';
 		return globals.get(name);
 	}
 
-	static function requiredFunctionIndex(functions:Map<String, Int>, name:String):Int {
+	public static function requiredFunctionIndex(functions:Map<String, Int>, name:String):Int {
 		if (!functions.exists(name))
 			throw 'Unknown Wasm function "$name"';
 		return functions.get(name);
@@ -1299,7 +1098,7 @@ class WasmBackend implements Backend {
 
 class WasmFunctionLower {
 	static var activeProgram:IrProgram;
-	static var activeRepresentation:WasmRepresentation;
+	static var activeRepresentation:WasmRepresentationSet;
 	static var activeTableSlots:Map<String, Int>;
 	static var activeStaticDataAddresses:Map<String, Int>;
 	static var activeElidedDynamicArrayCasts:Map<Int, IrValue>;
@@ -1335,11 +1134,11 @@ class WasmFunctionLower {
 		return locals.get(valueId);
 	}
 
-	static function elidedDynamicArrayCasts(fn:IrFunction, representation:WasmRepresentation):Map<Int, IrValue> {
+	static function elidedDynamicArrayCasts(fn:IrFunction, representation:WasmRepresentationSet):Map<Int, IrValue> {
 		// A GC Array<Dynamic> wrapper cannot cast an element-typed array wrapper. When
 		// flow narrowing is immediately erased again, preserve the original anyref.
 		var result:Map<Int, IrValue> = [];
-		if (!Std.isOfType(representation, WasmGcRepresentation))
+		if (!Std.isOfType(representation.values, WasmGcRepresentation))
 			return result;
 		var candidates:Map<Int, IrValue> = [],
 			invalid:Map<Int, Bool> = [],
@@ -1382,16 +1181,20 @@ class WasmFunctionLower {
 	public static function lower(fn:IrFunction, functions:Map<String, Int>, type:WasmFunctionType, layout:WasmLayout, allocator:Int, rootTop:Int,
 			rootFrameTop:Int, rootLimit:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
 			closureTypes:Map<String, WasmClosureTypes>, tableSlots:Map<String, Int>, exceptionTag:Null<Int>, rootPoints:Array<WasmSafepoint>,
-			program:IrProgram, representation:WasmRepresentation):WasmFunction {
+			program:IrProgram, representation:WasmRepresentationSet):WasmFunction {
 		activeProgram = program;
-		activeRepresentation = representation;
 		activeTableSlots = tableSlots;
-		activeElidedDynamicArrayCasts = elidedDynamicArrayCasts(fn, representation);
 		var analysis = new WasmCfgAnalysis(fn),
-			placement = new WasmValuePlacement(fn, representation),
+			placement = new WasmValuePlacement(fn, representation.values),
 			valueLocals = placement.values,
 			locals = placement.locals;
-		representation.beginFunction(function(type) return placement.allocate(type), exceptionTag, fn);
+		var functionContext:WasmFunctionRepresentationContext = {
+			allocateLocal: function(type) return placement.allocate(type),
+			exceptionTag: exceptionTag,
+			irFunction: fn
+		};
+		activeRepresentation = representation.forFunction(functionContext);
+		activeElidedDynamicArrayCasts = elidedDynamicArrayCasts(fn, activeRepresentation);
 		activeArrayTemps = {
 			len: placement.allocate(I32),
 			capacity: placement.allocate(I32),
@@ -1445,7 +1248,7 @@ class WasmFunctionLower {
 					}
 			activeExceptionState = {
 				handler: placement.allocate(I32),
-				exception: placement.allocate(activeRepresentation.valueType(Dyn)),
+				exception: placement.allocate(activeRepresentation.values.valueType(Dyn)),
 				saved: saved,
 				blocks: blocks,
 				tag: exceptionTag
@@ -1467,7 +1270,7 @@ class WasmFunctionLower {
 			var rooted:Array<WasmInstruction> = rootPrologue(rootState, rootLimit);
 			rooted = rooted.concat(body);
 			if (exceptionTag != null) {
-				var exceptionLocal = placement.allocate(activeRepresentation.valueType(Dyn)),
+				var exceptionLocal = placement.allocate(activeRepresentation.values.valueType(Dyn)),
 					protectedBody:Array<WasmInstruction> = [Try(null)];
 				protectedBody = protectedBody.concat(rooted);
 				protectedBody = protectedBody.concat([Catch(exceptionTag), LocalSet(exceptionLocal)]);
@@ -1734,7 +1537,7 @@ class WasmFunctionLower {
 
 	static function trapOrThrow():Array<WasmInstruction> {
 		var exceptionState = activeExceptionState;
-		return exceptionState == null ? [Unreachable] : activeRepresentation.zeroValue(Dyn).concat([Throw(exceptionState.tag)]);
+		return exceptionState == null ? [Unreachable] : activeRepresentation.values.zeroValue(Dyn).concat([Throw(exceptionState.tag)]);
 	}
 
 	static function setPredecessor(body:Array<WasmInstruction>, predecessor:Int, sourceBlock:Int):Void
@@ -1756,14 +1559,14 @@ class WasmFunctionLower {
 			case ConstFloat(output, value):
 				emit(body, [F64Const(value), LocalSet(requiredLocal(values, output.id))]);
 			case ConstNull(output):
-				emit(body, activeRepresentation.nullValue(output.type, requiredLocal(values, output.id)));
+				emit(body, activeRepresentation.values.nullValue(output.type, requiredLocal(values, output.id)));
 			case ConstVoid(_):
 			case TypeValue(output, type):
 				emit(body, [I32Const(typeId(type)), LocalSet(requiredLocal(values, output.id))]);
 			case ToDyn(output, value):
 				var original = activeElidedDynamicArrayCasts.get(value.id),
 					dynamicValue = original == null ? value : original,
-					represented = activeRepresentation.toDynamic(dynamicValue, requiredLocal(values, output.id), requiredLocal(values, dynamicValue.id));
+					represented = activeRepresentation.values.toDynamic(dynamicValue, requiredLocal(values, output.id), requiredLocal(values, dynamicValue.id));
 				if (represented != null)
 					emit(body, represented);
 				else
@@ -1809,7 +1612,7 @@ class WasmFunctionLower {
 					}
 			case SafeCast(output, value):
 				if (!activeElidedDynamicArrayCasts.exists(output.id)) {
-					var represented = activeRepresentation.safeCast(output, value, requiredLocal(values, output.id), requiredLocal(values, value.id));
+					var represented = activeRepresentation.values.safeCast(output, value, requiredLocal(values, output.id), requiredLocal(values, value.id));
 					if (represented != null)
 						emit(body, represented);
 					else
@@ -1872,7 +1675,8 @@ class WasmFunctionLower {
 				var tableSlot = activeTableSlots.get(name);
 				if (tableSlot == null)
 					throw 'Wasm closure target "$name" has no stable table slot';
-				var represented = activeRepresentation.staticClosure(name, activeTableSlots, requiredLocal(values, output.id));
+				var calls = activeRepresentation.calls,
+					represented = calls == null ? null : calls.staticClosure(name, activeTableSlots, requiredLocal(values, output.id));
 				if (represented != null)
 					emit(body, represented);
 				else
@@ -1881,9 +1685,10 @@ class WasmFunctionLower {
 				var typeInfo = closureTypes.get(Std.string(closure.type));
 				if (typeInfo == null)
 					throw 'Wasm closure type ${Std.string(closure.type)} has no indirect signature';
-				var instanceType = typeInfo.instanceType,
+				var calls = activeRepresentation.calls,
+					instanceType = typeInfo.instanceType,
 					destination = output.type == Void ? -1 : requiredLocal(values, output.id),
-					represented = activeRepresentation.callClosure(typeInfo.staticType, instanceType, arguments, requiredLocal(values, closure.id),
+					represented = calls == null ? null : calls.callClosure(typeInfo.staticType, instanceType, arguments, requiredLocal(values, closure.id),
 						destination, [for (argument in arguments) requiredLocal(values, argument.id)]);
 				if (represented != null)
 					emit(body, represented);
@@ -1928,8 +1733,9 @@ class WasmFunctionLower {
 				var tableSlot = activeTableSlots.get(name);
 				if (tableSlot == null)
 					throw 'Wasm instance closure target "$name" has no stable table slot';
-				var represented = activeRepresentation.instanceClosure(name, activeTableSlots, requiredLocal(values, receiver.id),
-					requiredLocal(values, output.id));
+				var calls = activeRepresentation.calls,
+					represented = calls == null ? null : calls.instanceClosure(name, activeTableSlots, requiredLocal(values, receiver.id),
+						requiredLocal(values, output.id));
 				if (represented != null)
 					emit(body, represented);
 				else
@@ -1947,7 +1753,7 @@ class WasmFunctionLower {
 						I32Store(WasmLayout.CLOSURE_RECEIVER_OFFSET)
 					]);
 			case ToVirtual(output, value):
-				var represented = activeRepresentation.toVirtual(value, requiredLocal(values, output.id), requiredLocal(values, value.id));
+				var represented = activeRepresentation.values.toVirtual(value, requiredLocal(values, output.id), requiredLocal(values, value.id));
 				if (represented != null)
 					emit(body, represented);
 				else
@@ -1959,9 +1765,11 @@ class WasmFunctionLower {
 				switch object.type {
 					case Obj(objectName):
 						var targets = classVirtualTargets(activeProgram, objectName, methodName, functions),
-							represented = targets.length == 0 ? null : activeRepresentation.virtualCall(output, object, arguments, targets,
-								requiredLocal(values, object.id), output.type == Void ? -1 : requiredLocal(values, output.id),
-								[for (argument in arguments) requiredLocal(values, argument.id)]);
+							calls = activeRepresentation.calls,
+							represented = targets.length == 0
+								|| calls == null ? null : calls.virtualCall(output, object, arguments, targets, requiredLocal(values, object.id),
+									output.type == Void ? -1 : requiredLocal(values, output.id),
+									[for (argument in arguments) requiredLocal(values, argument.id)]);
 						if (represented != null) emit(body, represented); else if (targets.length == 0) {
 							var functionName = findMethod(activeProgram, objectName, methodName),
 								functionIndex = functionName == null ? null : functions.get(functionName);
@@ -2001,8 +1809,9 @@ class WasmFunctionLower {
 						var targets = virtualTargets(activeProgram, interfaceName, methodName, functions);
 						if (targets.length == 0)
 							throw 'Wasm interface method "$interfaceName.$methodName" has no implementations';
-						var represented = activeRepresentation.virtualCall(output, object, arguments, targets, requiredLocal(values, object.id),
-							output.type == Void ? -1 : requiredLocal(values, output.id), [for (argument in arguments) requiredLocal(values, argument.id)]);
+						var calls = activeRepresentation.calls,
+							represented = calls == null ? null : calls.virtualCall(output, object, arguments, targets, requiredLocal(values, object.id),
+								output.type == Void ? -1 : requiredLocal(values, output.id), [for (argument in arguments) requiredLocal(values, argument.id)]);
 						if (represented != null) emit(body, represented); else {
 							for (index in 0...targets.length) {
 								var target = targets[index];
@@ -2031,7 +1840,7 @@ class WasmFunctionLower {
 						throw 'Wasm method call requires an object or virtual receiver';
 				}
 			case ConstString(output, value):
-				var represented = activeRepresentation.constantString(value, requiredLocal(values, output.id), strings);
+				var represented = activeRepresentation.values.constantString(value, requiredLocal(values, output.id), strings);
 				if (represented != null)
 					emit(body, represented);
 				else {
@@ -2046,7 +1855,7 @@ class WasmFunctionLower {
 					throw "Wasm static data address was not placed in the data section";
 				emit(body, [I32Const(address), LocalSet(requiredLocal(values, output.id))]);
 			case MakeEnum(output, typeName, constructor, arguments):
-				var represented = activeRepresentation.makeEnum(typeName, constructor, arguments, requiredLocal(values, output.id),
+				var represented = activeRepresentation.aggregates.makeEnum(typeName, constructor, arguments, requiredLocal(values, output.id),
 					[for (argument in arguments) requiredLocal(values, argument.id)]);
 				if (represented != null)
 					emit(body, represented);
@@ -2076,7 +1885,7 @@ class WasmFunctionLower {
 					}
 				}
 			case EnumIndex(output, value):
-				var represented = activeRepresentation.enumIndex(value, requiredLocal(values, output.id), requiredLocal(values, value.id));
+				var represented = activeRepresentation.aggregates.enumIndex(value, requiredLocal(values, output.id), requiredLocal(values, value.id));
 				if (represented != null)
 					emit(body, represented);
 				else
@@ -2086,7 +1895,8 @@ class WasmFunctionLower {
 						LocalSet(requiredLocal(values, output.id))
 					]);
 			case EnumField(output, value, constructor, field):
-				var represented = activeRepresentation.enumField(value, constructor, field, requiredLocal(values, output.id), requiredLocal(values, value.id));
+				var represented = activeRepresentation.aggregates.enumField(value, constructor, field, requiredLocal(values, output.id),
+					requiredLocal(values, value.id));
 				if (represented != null)
 					emit(body, represented);
 				else {
@@ -2122,13 +1932,13 @@ class WasmFunctionLower {
 					LocalSet(requiredLocal(values, output.id))
 				]);
 			case NewObject(output, typeName):
-				emit(body, activeRepresentation.newObject(typeName, requiredLocal(values, output.id)));
+				emit(body, activeRepresentation.aggregates.newObject(typeName, requiredLocal(values, output.id)));
 			case FieldGet(output, object, fieldName):
-				emit(body, activeRepresentation.fieldGet(object, fieldName, requiredLocal(values, output.id), requiredLocal(values, object.id)));
+				emit(body, activeRepresentation.aggregates.fieldGet(object, fieldName, requiredLocal(values, output.id), requiredLocal(values, object.id)));
 			case FieldSet(object, fieldName, value):
-				emit(body, activeRepresentation.fieldSet(object, fieldName, requiredLocal(values, object.id), requiredLocal(values, value.id)));
+				emit(body, activeRepresentation.aggregates.fieldSet(object, fieldName, requiredLocal(values, object.id), requiredLocal(values, value.id)));
 			case ArrayGet(output, array, index):
-				var represented = activeRepresentation.arrayGet(array, index, requiredLocal(values, output.id), requiredLocal(values, array.id),
+				var represented = activeRepresentation.aggregates.arrayGet(array, index, requiredLocal(values, output.id), requiredLocal(values, array.id),
 					requiredLocal(values, index.id));
 				if (represented != null)
 					emit(body, represented);
@@ -2159,8 +1969,8 @@ class WasmFunctionLower {
 					emit(body, arrayBody);
 				}
 			case ArraySet(array, index, value):
-				var represented = activeRepresentation.arraySet(array, index, value, requiredLocal(values, array.id), requiredLocal(values, index.id),
-					requiredLocal(values, value.id));
+				var represented = activeRepresentation.aggregates.arraySet(array, index, value, requiredLocal(values, array.id),
+					requiredLocal(values, index.id), requiredLocal(values, value.id));
 				if (represented != null)
 					emit(body, represented);
 				else {
@@ -2271,7 +2081,7 @@ class WasmFunctionLower {
 					emit(body, arrayBody);
 				}
 			case ArraySize(output, array):
-				var represented = activeRepresentation.arraySize(array, requiredLocal(values, output.id), requiredLocal(values, array.id));
+				var represented = activeRepresentation.aggregates.arraySize(array, requiredLocal(values, output.id), requiredLocal(values, array.id));
 				if (represented != null)
 					emit(body, represented);
 				else
@@ -2282,7 +2092,7 @@ class WasmFunctionLower {
 					]);
 			case IteratorNew(output, array):
 				var iteratorLocal = requiredLocal(values, output.id),
-					represented = activeRepresentation.iteratorNew(array, iteratorLocal, requiredLocal(values, array.id));
+					represented = activeRepresentation.aggregates.iteratorNew(array, iteratorLocal, requiredLocal(values, array.id));
 				if (represented != null)
 					emit(body, represented);
 				else
@@ -2304,7 +2114,7 @@ class WasmFunctionLower {
 					]);
 			case IteratorHasNext(output, iterator):
 				var iteratorLocal = requiredLocal(values, iterator.id),
-					represented = activeRepresentation.iteratorHasNext(iterator, requiredLocal(values, output.id), iteratorLocal);
+					represented = activeRepresentation.aggregates.iteratorHasNext(iterator, requiredLocal(values, output.id), iteratorLocal);
 				if (represented != null)
 					emit(body, represented);
 				else {
@@ -2335,7 +2145,7 @@ class WasmFunctionLower {
 				}
 			case IteratorNext(output, iterator):
 				var iteratorLocal = requiredLocal(values, iterator.id),
-					represented = activeRepresentation.iteratorNext(iterator, output, requiredLocal(values, output.id), iteratorLocal);
+					represented = activeRepresentation.aggregates.iteratorNext(iterator, output, requiredLocal(values, output.id), iteratorLocal);
 				if (represented != null)
 					emit(body, represented);
 				else {
@@ -2406,14 +2216,16 @@ class WasmFunctionLower {
 				binary(body, output, left, right, values, comparisonInstruction(left.type, F64Le, I64LeS, I32LeS));
 			case Equal(output, left, right):
 				emit(body,
-					activeRepresentation.equal(requiredLocal(values, output.id), left, right, requiredLocal(values, left.id), requiredLocal(values, right.id)));
+					activeRepresentation.values.equal(requiredLocal(values, output.id), left, right, requiredLocal(values, left.id),
+						requiredLocal(values, right.id)));
 			case Call(output, name, arguments):
 				var runtimeName = name;
 				for (native in activeProgram.natives)
 					if (native.name == name)
 						runtimeName = native.symbol;
 				var outputLocal = output.type == Void ? -1 : requiredLocal(values, output.id),
-					represented = activeRepresentation.lowerRuntimeCall(runtimeName, output, arguments, outputLocal,
+					interop = activeRepresentation.interop,
+					represented = interop == null ? null : interop.lowerRuntimeCall(runtimeName, output, arguments, outputLocal,
 						[for (argument in arguments) requiredLocal(values, argument.id)]);
 				if (represented != null)
 					emit(body, represented);
@@ -2467,7 +2279,8 @@ class WasmFunctionLower {
 							}
 				}
 				var outputLocal = output.type == Void ? -1 : requiredLocal(values, output.id),
-					represented = activeRepresentation.lowerCNativeCall(native, arguments, outputLocal,
+					interop = activeRepresentation.interop,
+					represented = interop == null ? null : interop.lowerCNativeCall(native, arguments, outputLocal,
 						[for (argument in arguments) requiredLocal(values, argument.id)], importIndex, pointerLengthImportIndex, pointerReleaseImportIndex);
 				if (represented != null)
 					emit(body, represented);

@@ -12,32 +12,30 @@ import compiler.backend.wasm.WasmLayout.WasmFieldLayout;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 
-/** Operations whose representation differs between linear pointers and Wasm references. */
-interface WasmRepresentation {
+typedef WasmFunctionRepresentationContext = {
+	final allocateLocal:WasmValueType->Int;
+	final exceptionTag:Null<Int>;
+	final irFunction:Null<IrFunction>;
+}
+
+/** Value typing and representation-sensitive value operations. */
+interface WasmValueRepresentation {
 	public function valueType(type:IrType):WasmValueType;
 	public function zeroValue(type:IrType):Array<WasmInstruction>;
 	public function nullValue(type:IrType, destination:Int):Array<WasmInstruction>;
 	public function constantString(value:String, destination:Int, strings:Map<String, Int>):Null<Array<WasmInstruction>>;
-	public function newObject(typeName:String, destination:Int):Array<WasmInstruction>;
-	public function fieldGet(object:IrValue, fieldName:String, destination:Int, objectLocal:Int):Array<WasmInstruction>;
-	public function fieldSet(object:IrValue, fieldName:String, objectLocal:Int, valueLocal:Int):Array<WasmInstruction>;
 	public function toDynamic(value:IrValue, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>>;
 	public function safeCast(output:IrValue, value:IrValue, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>>;
 	public function toVirtual(value:IrValue, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>>;
 	public function equal(output:Int, left:IrValue, right:IrValue, leftLocal:Int, rightLocal:Int):Array<WasmInstruction>;
 	public function dynamicEqual(output:Int, leftLocal:Int, rightLocal:Int):Null<Array<WasmInstruction>>;
-	public function virtualCall(output:IrValue, receiver:IrValue, arguments:Array<IrValue>, targets:Array<{
-		typeName:String,
-		functionIndex:Int,
-		argumentTypes:Array<IrType>,
-		resultType:IrType
-	}>, receiverLocal:Int, destination:Int,
-		argumentLocals:Array<Int>):Null<Array<WasmInstruction>>;
-	public function beginFunction(allocateLocal:WasmValueType->Int, exceptionTag:Null<Int>, irFunction:Null<IrFunction>):Void;
-	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
-		argumentLocals:Array<Int>):Null<Array<WasmInstruction>>;
-	public function lowerCNativeCall(native:IrCNative, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>, importIndex:Int,
-		pointerLengthImportIndex:Int, pointerReleaseImportIndex:Int):Null<Array<WasmInstruction>>;
+}
+
+/** Heap aggregates, arrays, iterators, and enums. */
+interface WasmAggregateRepresentation {
+	public function newObject(typeName:String, destination:Int):Array<WasmInstruction>;
+	public function fieldGet(object:IrValue, fieldName:String, destination:Int, objectLocal:Int):Array<WasmInstruction>;
+	public function fieldSet(object:IrValue, fieldName:String, objectLocal:Int, valueLocal:Int):Array<WasmInstruction>;
 	public function arrayGet(array:IrValue, index:IrValue, destination:Int, arrayLocal:Int, indexLocal:Int):Null<Array<WasmInstruction>>;
 	public function arraySet(array:IrValue, index:IrValue, value:IrValue, arrayLocal:Int, indexLocal:Int, valueLocal:Int):Null<Array<WasmInstruction>>;
 	public function arraySize(array:IrValue, destination:Int, arrayLocal:Int):Null<Array<WasmInstruction>>;
@@ -48,14 +46,62 @@ interface WasmRepresentation {
 		argumentLocals:Array<Int>):Null<Array<WasmInstruction>>;
 	public function enumIndex(value:IrValue, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>>;
 	public function enumField(value:IrValue, constructor:Int, field:Int, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>>;
+}
+
+/** Closures and dynamic dispatch. */
+interface WasmCallRepresentation {
+	public function virtualCall(output:IrValue, receiver:IrValue, arguments:Array<IrValue>, targets:Array<{
+		typeName:String,
+		functionIndex:Int,
+		argumentTypes:Array<IrType>,
+		resultType:IrType
+	}>, receiverLocal:Int, destination:Int,
+		argumentLocals:Array<Int>):Null<Array<WasmInstruction>>;
 	public function staticClosure(name:String, tableSlots:Map<String, Int>, destination:Int):Null<Array<WasmInstruction>>;
 	public function instanceClosure(name:String, tableSlots:Map<String, Int>, receiverLocal:Int, destination:Int):Null<Array<WasmInstruction>>;
 	public function callClosure(staticType:Int, instanceType:Null<Int>, arguments:Array<IrValue>, closureLocal:Int, destination:Int,
 		argumentLocals:Array<Int>):Null<Array<WasmInstruction>>;
 }
 
+/** Runtime and C-native calls whose ABI depends on the reference model. */
+interface WasmInteropRepresentation {
+	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
+		argumentLocals:Array<Int>):Null<Array<WasmInstruction>>;
+	public function lowerCNativeCall(native:IrCNative, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>, importIndex:Int,
+		pointerLengthImportIndex:Int, pointerReleaseImportIndex:Int):Null<Array<WasmInstruction>>;
+}
+
+/** Explicit capability set selected once per module and instantiated per function. */
+class WasmRepresentationSet {
+	public final values:WasmValueRepresentation;
+	public final aggregates:WasmAggregateRepresentation;
+	public final calls:Null<WasmCallRepresentation>;
+	public final interop:Null<WasmInteropRepresentation>;
+
+	final makeFunction:WasmFunctionRepresentationContext->WasmRepresentationSet;
+
+	public function new(values:WasmValueRepresentation, aggregates:WasmAggregateRepresentation, calls:Null<WasmCallRepresentation>,
+			interop:Null<WasmInteropRepresentation>, makeFunction:WasmFunctionRepresentationContext->WasmRepresentationSet) {
+		this.values = values;
+		this.aggregates = aggregates;
+		this.calls = calls;
+		this.interop = interop;
+		this.makeFunction = makeFunction;
+	}
+
+	public function forFunction(context:WasmFunctionRepresentationContext):WasmRepresentationSet
+		return makeFunction(context);
+
+	public static function linear(representation:WasmLinearRepresentation):WasmRepresentationSet
+		return new WasmRepresentationSet(representation, representation, null, representation, function(_) return WasmRepresentationSet.linear(representation));
+
+	public static function gc(representation:WasmGcRepresentation):WasmRepresentationSet
+		return new WasmRepresentationSet(representation, representation, representation, representation,
+			function(context) return WasmRepresentationSet.gc(representation.forFunction(context)));
+}
+
 /** Linear32 representation: managed references remain i32 pointers into the custom heap. */
-class WasmLinearRepresentation implements WasmRepresentation {
+class WasmLinearRepresentation implements WasmValueRepresentation implements WasmAggregateRepresentation implements WasmInteropRepresentation {
 	final layout:WasmLayout;
 	final allocator:Int;
 
@@ -122,17 +168,6 @@ class WasmLinearRepresentation implements WasmRepresentation {
 	public function dynamicEqual(output:Int, leftLocal:Int, rightLocal:Int):Null<Array<WasmInstruction>>
 		return null;
 
-	public function virtualCall(output:IrValue, receiver:IrValue, arguments:Array<IrValue>, targets:Array<{
-		typeName:String,
-		functionIndex:Int,
-		argumentTypes:Array<IrType>,
-		resultType:IrType
-	}>, receiverLocal:Int, destination:Int,
-			argumentLocals:Array<Int>):Null<Array<WasmInstruction>>
-		return null;
-
-	public function beginFunction(allocateLocal:WasmValueType->Int, exceptionTag:Null<Int>, irFunction:Null<IrFunction>):Void {}
-
 	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
 			argumentLocals:Array<Int>):Null<Array<WasmInstruction>> {
 		if (name == "__wasm_memory_load_i32") {
@@ -140,12 +175,12 @@ class WasmLinearRepresentation implements WasmRepresentation {
 				throw "Invalid Wasm runtime memory.load i32 signature";
 			return [LocalGet(argumentLocals[0]), I32Load(0), LocalSet(outputLocal)];
 		}
-		if (name == "__f64_to_i64_bits") {
+		if (name == "__f64_to_i64_bits" || name == "runtime.FloatBits.toInt64") {
 			if (output.type != I64 || arguments.length != 1 || arguments[0].type != F64 || argumentLocals.length != 1)
 				throw "Invalid Wasm FloatBits.toInt64 signature";
 			return [LocalGet(argumentLocals[0]), I64ReinterpretF64, LocalSet(outputLocal)];
 		}
-		if (name == "__i64_to_f64_bits") {
+		if (name == "__i64_to_f64_bits" || name == "runtime.FloatBits.fromInt64") {
 			if (output.type != F64 || arguments.length != 1 || arguments[0].type != I64 || argumentLocals.length != 1)
 				throw "Invalid Wasm FloatBits.fromInt64 signature";
 			return [LocalGet(argumentLocals[0]), F64ReinterpretI64, LocalSet(outputLocal)];
@@ -185,16 +220,6 @@ class WasmLinearRepresentation implements WasmRepresentation {
 	public function enumField(value:IrValue, constructor:Int, field:Int, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>>
 		return null;
 
-	public function staticClosure(name:String, tableSlots:Map<String, Int>, destination:Int):Null<Array<WasmInstruction>>
-		return null;
-
-	public function instanceClosure(name:String, tableSlots:Map<String, Int>, receiverLocal:Int, destination:Int):Null<Array<WasmInstruction>>
-		return null;
-
-	public function callClosure(staticType:Int, instanceType:Null<Int>, arguments:Array<IrValue>, closureLocal:Int, destination:Int,
-			argumentLocals:Array<Int>):Null<Array<WasmInstruction>>
-		return null;
-
 	function objectField(object:IrValue, name:String):WasmFieldLayout {
 		return switch object.type {
 			case Obj(objectName): layout.field(objectName, name);
@@ -218,11 +243,12 @@ class WasmLinearRepresentation implements WasmRepresentation {
 }
 
 /** Native Wasm GC representation: engine references and declared struct/array fields. */
-class WasmGcRepresentation implements WasmRepresentation {
+class WasmGcRepresentation implements WasmValueRepresentation implements WasmAggregateRepresentation implements WasmCallRepresentation
+		implements WasmInteropRepresentation {
 	final plan:WasmGcTypePlan;
 	final arrayReferenceLocals:Map<String, Int> = [];
-	var allocateLocal:WasmValueType->Int;
-	var exceptionTag:Null<Int>;
+	final functionContext:Null<WasmFunctionRepresentationContext>;
+	final exceptionTag:Null<Int>;
 	var requiredArrayLengthLocal:Null<Int>;
 	var arrayCapacityLocal:Null<Int>;
 	var scratchAllocator:Int = -1;
@@ -231,8 +257,34 @@ class WasmGcRepresentation implements WasmRepresentation {
 	var nativePointerReleaseBySymbol:Map<String, Int> = [];
 	var functionStringConstants:Map<Int, String> = [];
 
-	public function new(plan:WasmGcTypePlan)
+	public function new(plan:WasmGcTypePlan, ?functionContext:WasmFunctionRepresentationContext, ?scratchTop:Int = -1, ?scratchAllocator:Int = -1) {
 		this.plan = plan;
+		this.functionContext = functionContext;
+		this.exceptionTag = functionContext == null ? null : functionContext.exceptionTag;
+		this.scratchTop = scratchTop;
+		this.scratchAllocator = scratchAllocator;
+	}
+
+	public function forFunction(context:WasmFunctionRepresentationContext):WasmGcRepresentation {
+		var functionRepresentation = new WasmGcRepresentation(plan, context, scratchTop, scratchAllocator);
+		functionRepresentation.nativePointerReleaseIndices = nativePointerReleaseIndices.copy();
+		functionRepresentation.nativePointerReleaseBySymbol = nativePointerReleaseBySymbol.copy();
+		if (context.irFunction != null)
+			for (block in context.irFunction.blocks)
+				for (located in block.instructions)
+					switch located.value {
+						case ConstString(output, value):
+							functionRepresentation.functionStringConstants.set(output.id, value);
+						case _:
+					}
+		return functionRepresentation;
+	}
+
+	function allocateLocal(type:WasmValueType):Int {
+		if (functionContext == null)
+			throw "Wasm GC operation requires a function representation context";
+		return functionContext.allocateLocal(type);
+	}
 
 	public function configureCNativeScratch(scratchTop:Int, scratchAllocator:Int):Void {
 		this.scratchTop = scratchTop;
@@ -243,6 +295,38 @@ class WasmGcRepresentation implements WasmRepresentation {
 		nativePointerReleaseBySymbol = releases;
 		nativePointerReleaseIndices = [for (index in releases) index];
 		nativePointerReleaseIndices.sort((left, right) -> left - right);
+	}
+
+	function nativePointerRaw(pointerLocal:Int):Array<WasmInstruction>
+		return [
+			LocalGet(pointerLocal),
+			RefIsNull,
+			If(I32),
+			I32Const(0),
+			Else,
+			LocalGet(pointerLocal),
+			StructGet(plan.nativePointerTypeIndex, 0),
+			End
+		];
+
+	function wrapNativePointer(rawLocal:Int, releaseFunction:Int, nullableLocal:Null<Int>, nullable:Bool, destination:Int):Array<WasmInstruction> {
+		var body:Array<WasmInstruction> = [LocalGet(rawLocal), I32Eqz, If(null)];
+		if (nullableLocal != null)
+			body = body.concat([LocalGet(nullableLocal), I32Eqz, If(null), Unreachable, End]);
+		else if (!nullable)
+			body.push(Unreachable);
+		body = body.concat([
+			RefNull(Type(plan.nativePointerTypeIndex)),
+			LocalSet(destination),
+			Else,
+			LocalGet(rawLocal),
+			I32Const(releaseFunction),
+			I32Const(0),
+			StructNew(plan.nativePointerTypeIndex),
+			LocalSet(destination),
+			End
+		]);
+		return body;
 	}
 
 	public function valueType(type:IrType):WasmValueType
@@ -854,58 +938,9 @@ class WasmGcRepresentation implements WasmRepresentation {
 		return [LocalSet(temporary)].concat(requireInstructions(converted));
 	}
 
-	public function beginFunction(allocateLocal:WasmValueType->Int, exceptionTag:Null<Int>, irFunction:Null<IrFunction>):Void {
-		this.allocateLocal = allocateLocal;
-		this.exceptionTag = exceptionTag;
-		arrayReferenceLocals.clear();
-		requiredArrayLengthLocal = null;
-		arrayCapacityLocal = null;
-		functionStringConstants = [];
-		if (irFunction != null)
-			for (block in irFunction.blocks)
-				for (located in block.instructions)
-					switch located.value {
-						case ConstString(output, value):
-							functionStringConstants.set(output.id, value);
-						case _:
-					}
-	}
-
-	function nativePointerRaw(pointerLocal:Int):Array<WasmInstruction>
-		return [
-			LocalGet(pointerLocal),
-			RefIsNull,
-			If(I32),
-			I32Const(0),
-			Else,
-			LocalGet(pointerLocal),
-			StructGet(plan.nativePointerTypeIndex, 0),
-			End
-		];
-
-	function wrapNativePointer(rawLocal:Int, releaseFunction:Int, nullableLocal:Null<Int>, nullable:Bool, destination:Int):Array<WasmInstruction> {
-		var body:Array<WasmInstruction> = [LocalGet(rawLocal), I32Eqz, If(null)];
-		if (nullableLocal != null)
-			body = body.concat([LocalGet(nullableLocal), I32Eqz, If(null), Unreachable, End]);
-		else if (!nullable)
-			body.push(Unreachable);
-		body = body.concat([
-			RefNull(Type(plan.nativePointerTypeIndex)),
-			LocalSet(destination),
-			Else,
-			LocalGet(rawLocal),
-			I32Const(releaseFunction),
-			I32Const(0),
-			StructNew(plan.nativePointerTypeIndex),
-			LocalSet(destination),
-			End
-		]);
-		return body;
-	}
-
 	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
 			argumentLocals:Array<Int>):Null<Array<WasmInstruction>> {
-		if (name == "__runtime_string_from_ascii") {
+		if (name == "__runtime_string_from_ascii" || name == "runtime.RuntimeData.stringFromAscii") {
 			if (output.type != Bytes
 				|| arguments.length != 3
 				|| !Type.enumEq(arguments[0].type, Array(I32))
@@ -915,17 +950,17 @@ class WasmGcRepresentation implements WasmRepresentation {
 				throw "Invalid Wasm GC runtime string.fromAscii signature";
 			return stringFromAscii(argumentLocals[0], argumentLocals[1], argumentLocals[2], outputLocal);
 		}
-		if (name == "__wasm_memory_load_i32") {
+		if (name == "__wasm_memory_load_i32" || name == "runtime.RuntimeData.loadI32") {
 			if (output.type != I32 || arguments.length != 1 || arguments[0].type != I32 || argumentLocals.length != 1)
 				throw "Invalid Wasm GC runtime memory.load i32 signature";
 			return [LocalGet(argumentLocals[0]), I32Load(0), LocalSet(outputLocal)];
 		}
-		if (name == "__f64_to_i64_bits") {
+		if (name == "__f64_to_i64_bits" || name == "runtime.FloatBits.toInt64") {
 			if (output.type != I64 || arguments.length != 1 || arguments[0].type != F64 || argumentLocals.length != 1)
 				throw "Invalid Wasm GC FloatBits.toInt64 signature";
 			return [LocalGet(argumentLocals[0]), I64ReinterpretF64, LocalSet(outputLocal)];
 		}
-		if (name == "__i64_to_f64_bits") {
+		if (name == "__i64_to_f64_bits" || name == "runtime.FloatBits.fromInt64") {
 			if (output.type != F64 || arguments.length != 1 || arguments[0].type != I64 || argumentLocals.length != 1)
 				throw "Invalid Wasm GC FloatBits.fromInt64 signature";
 			return [LocalGet(argumentLocals[0]), F64ReinterpretI64, LocalSet(outputLocal)];

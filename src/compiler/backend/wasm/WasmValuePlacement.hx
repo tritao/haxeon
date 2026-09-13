@@ -3,6 +3,7 @@ package compiler.backend.wasm;
 import compiler.backend.wasm.WasmModule.WasmLocal;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.backend.wasm.WasmTypes.WasmHeapType;
+import compiler.backend.wasm.WasmRepresentation.WasmValueRepresentation;
 import compiler.ir.Ir.IrType;
 import compiler.ir.IrFunction;
 import compiler.ir.IrOperands;
@@ -27,11 +28,11 @@ class WasmValuePlacement {
 	public final values:Map<Int, Int> = [];
 	public final locals:Array<WasmLocal> = [];
 
-	final representation:WasmRepresentation;
+	final representation:WasmValueRepresentation;
 
 	var nextLocal:Int;
 
-	public function new(fn:IrFunction, representation:WasmRepresentation) {
+	public function new(fn:IrFunction, representation:WasmValueRepresentation) {
 		this.representation = representation;
 		var intervals:Array<WasmInterval> = [], starts:Map<Int, Int> = [], ends:Map<Int, Int> = [], position = 0;
 		for (index in 0...fn.arguments.length)
