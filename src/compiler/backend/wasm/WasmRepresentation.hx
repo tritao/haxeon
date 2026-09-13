@@ -12,6 +12,7 @@ interface WasmRepresentation {
 	public function valueType(type:IrType):WasmValueType;
 	public function zeroValue(type:IrType):Array<WasmInstruction>;
 	public function nullValue(type:IrType, destination:Int):Array<WasmInstruction>;
+	public function constantString(value:String, destination:Int, strings:Map<String, Int>):Null<Array<WasmInstruction>>;
 	public function newObject(typeName:String, destination:Int):Array<WasmInstruction>;
 	public function fieldGet(object:IrValue, fieldName:String, destination:Int, objectLocal:Int):Array<WasmInstruction>;
 	public function fieldSet(object:IrValue, fieldName:String, objectLocal:Int, valueLocal:Int):Array<WasmInstruction>;
@@ -22,7 +23,7 @@ interface WasmRepresentation {
 	public function dynamicEqual(output:Int, leftLocal:Int, rightLocal:Int):Null<Array<WasmInstruction>>;
 	public function virtualCall(output:IrValue, receiver:IrValue, arguments:Array<IrValue>, targets:Array<{typeName:String, functionIndex:Int}>,
 		receiverLocal:Int, destination:Int, argumentLocals:Array<Int>):Null<Array<WasmInstruction>>;
-	public function beginFunction(allocateLocal:WasmValueType->Int):Void;
+	public function beginFunction(allocateLocal:WasmValueType->Int, exceptionTag:Null<Int>):Void;
 	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
 		argumentLocals:Array<Int>):Null<Array<WasmInstruction>>;
 	public function arrayGet(array:IrValue, index:IrValue, destination:Int, arrayLocal:Int, indexLocal:Int):Null<Array<WasmInstruction>>;
@@ -64,6 +65,9 @@ class WasmLinearRepresentation implements WasmRepresentation {
 
 	public function nullValue(type:IrType, destination:Int):Array<WasmInstruction>
 		return [I32Const(0), LocalSet(destination)];
+
+	public function constantString(value:String, destination:Int, strings:Map<String, Int>):Null<Array<WasmInstruction>>
+		return null;
 
 	public function newObject(typeName:String, destination:Int):Array<WasmInstruction> {
 		return [
@@ -110,7 +114,7 @@ class WasmLinearRepresentation implements WasmRepresentation {
 			receiverLocal:Int, destination:Int, argumentLocals:Array<Int>):Null<Array<WasmInstruction>>
 		return null;
 
-	public function beginFunction(allocateLocal:WasmValueType->Int):Void {}
+	public function beginFunction(allocateLocal:WasmValueType->Int, exceptionTag:Null<Int>):Void {}
 
 	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
 			argumentLocals:Array<Int>):Null<Array<WasmInstruction>>
@@ -181,6 +185,7 @@ class WasmGcRepresentation implements WasmRepresentation {
 	final plan:WasmGcTypePlan;
 	final arrayReferenceLocals:Map<String, Int> = [];
 	var allocateLocal:WasmValueType->Int;
+	var exceptionTag:Null<Int>;
 	var requiredArrayLengthLocal:Null<Int>;
 	var arrayCapacityLocal:Null<Int>;
 
@@ -204,6 +209,12 @@ class WasmGcRepresentation implements WasmRepresentation {
 			case Ref(ref): [RefNull(ref.heap), LocalSet(destination)];
 			default: throw 'Wasm GC null value requires a reference type, got $type';
 		};
+
+	public function constantString(value:String, destination:Int, strings:Map<String, Int>):Null<Array<WasmInstruction>> {
+		if (value == "Reached compiler-generated unreachable block")
+			return [Unreachable];
+		throw "Wasm GC string constants are not supported yet";
+	}
 
 	public function newObject(typeName:String, destination:Int):Array<WasmInstruction>
 		return [StructNewDefault(plan.objectType(typeName)), LocalSet(destination)];
@@ -383,8 +394,9 @@ class WasmGcRepresentation implements WasmRepresentation {
 		return instructions;
 	}
 
-	public function beginFunction(allocateLocal:WasmValueType->Int):Void {
+	public function beginFunction(allocateLocal:WasmValueType->Int, exceptionTag:Null<Int>):Void {
 		this.allocateLocal = allocateLocal;
+		this.exceptionTag = exceptionTag;
 		arrayReferenceLocals.clear();
 		requiredArrayLengthLocal = null;
 		arrayCapacityLocal = null;
@@ -461,13 +473,10 @@ class WasmGcRepresentation implements WasmRepresentation {
 			newStorageLocal = arrayReferenceLocal(element),
 			requiredLength = requiredArrayLength(),
 			capacity = arrayCapacity();
-		var body:Array<WasmInstruction> = [
-			LocalGet(indexLocal),
-			I32Const(0),
-			I32LtS,
-			If(null),
-			Unreachable,
-			End,
+		var body:Array<WasmInstruction> = [LocalGet(indexLocal), I32Const(0), I32LtS, If(null)];
+		body = body.concat(trapInstructions());
+		body.push(End);
+		body = body.concat([
 			LocalGet(indexLocal),
 			LocalGet(arrayLocal),
 			StructGet(wrapperType, WasmGcTypePlan.arrayLengthFieldIndex()),
@@ -535,7 +544,7 @@ class WasmGcRepresentation implements WasmRepresentation {
 			ArraySet(storageType),
 			End,
 			End
-		];
+		]);
 		return body;
 	}
 
@@ -601,10 +610,10 @@ class WasmGcRepresentation implements WasmRepresentation {
 			I32Const(1),
 			I32Add,
 			StructSet(iteratorType, WasmGcTypePlan.iteratorPositionFieldIndex()),
-			Else,
-			Unreachable,
-			End
+			Else
 		];
+		body = body.concat(trapInstructions());
+		body.push(End);
 		return body;
 	}
 
@@ -736,23 +745,25 @@ class WasmGcRepresentation implements WasmRepresentation {
 		return arrayCapacityLocal;
 	}
 
-	static function checkedIndex(indexLocal:Int, arrayLocal:Int, wrapperType:Int):Array<WasmInstruction>
-		return [
-			LocalGet(indexLocal),
-			I32Const(0),
-			I32LtS,
-			If(null),
-			Unreachable,
-			End,
+	function checkedIndex(indexLocal:Int, arrayLocal:Int, wrapperType:Int):Array<WasmInstruction> {
+		var body:Array<WasmInstruction> = [LocalGet(indexLocal), I32Const(0), I32LtS, If(null)];
+		body = body.concat(trapInstructions());
+		body.push(End);
+		body = body.concat([
 			LocalGet(indexLocal),
 			LocalGet(arrayLocal),
 			StructGet(wrapperType, WasmGcTypePlan.arrayLengthFieldIndex()),
 			I32LtS,
 			I32Eqz,
-			If(null),
-			Unreachable,
-			End
-		];
+			If(null)
+		]);
+		body = body.concat(trapInstructions());
+		body.push(End);
+		return body;
+	}
+
+	function trapInstructions():Array<WasmInstruction>
+		return exceptionTag == null ? [Unreachable] : [RefNull(Any), Throw(exceptionTag)];
 
 	static function requireInstructions(instructions:Null<Array<WasmInstruction>>):Array<WasmInstruction>
 		return if (instructions == null) throw "Wasm GC array operation was not lowered" else instructions;

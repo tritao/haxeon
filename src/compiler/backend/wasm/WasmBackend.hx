@@ -278,6 +278,9 @@ class WasmBackend implements Backend {
 			functions:Map<String, Int> = [],
 			methods:Map<String, String> = [];
 		plan.addTo(module);
+		var exceptionTagType:Null<Int> = hasExceptions(program) ? module.typeIndex({parameters: [representation.valueType(Dyn)], results: []}) : null,
+			exceptionTag:Null<Int> = exceptionTagType == null ? null : 0;
+		module.exceptionTagType = exceptionTagType;
 		for (field in program.staticFields) {
 			globals.set(field.name, module.globals.length);
 			module.globals.push({type: representation.valueType(field.type), mutable: true, init: representation.zeroValue(field.type)});
@@ -301,7 +304,7 @@ class WasmBackend implements Backend {
 			var functionIndex = requiredFunctionIndex(functions, fn.name);
 			module.setFunction(functionIndex,
 				WasmFunctionLower.lower(fn, functions, module.functionType(functionIndex), null, -1, 0, 0, 0, globals, [], methods, closureTypes, tableSlots,
-					null, [], program, representation));
+					exceptionTag, [], program, representation));
 		}
 		module.exportTable = module.tableMin != null;
 		module.customSections.push({name: "haxeon.patch", bytes: WasmPatch.manifest(program, patchChanged)});
@@ -336,17 +339,17 @@ class WasmBackend implements Backend {
 		for (fn in program.functions) {
 			if (!reachable.exists(fn.name) || (fn.name == "__entry" && preferredEntry != "__entry"))
 				continue;
-			if (WasmFunctionLower.hasExceptions(fn))
-				throw 'Wasm GC lowering does not support exceptions in "${fn.name}" yet';
-			for (block in fn.blocks)
-				for (located in block.instructions)
+			var cfg = new WasmCfgAnalysis(fn);
+			for (blockId in cfg.graph.order)
+				for (located in cfg.graph.block(blockId).instructions)
 					switch located.value {
 						case Phi(_, _), ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstBool(_, _), ConstNull(_), TypeValue(_, _), GlobalGet(_, _),
 							GlobalSet(_, _), Add(_, _, _), Sub(_, _, _), Mul(_, _, _), Div(_, _, _), Mod(_, _, _), BitAnd(_, _, _), BitXor(_, _, _),
 							BitOr(_, _, _), ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _), Less(_, _, _), LessEqual(_, _, _),
 							Equal(_, _, _), NewObject(_, _), FieldGet(_, _, _), FieldSet(_, _, _), ArrayGet(_, _, _), ArraySet(_, _, _), ArraySize(_, _),
 							IteratorNew(_, _), IteratorHasNext(_, _), IteratorNext(_, _), MakeEnum(_, _, _, _), EnumIndex(_, _), EnumField(_, _, _, _),
-							IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _):
+							IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _), BeginTry(_, _), EndTry(_), Catch(_):
+						case ConstString(_, "Reached compiler-generated unreachable block"):
 						case ToDyn(_, _), SafeCast(_, _), ToVirtual(_, _):
 						case Call(_, name, _) if (declaredFunctions.exists(name) || isSupportedGcRuntimeNative(name)):
 						case StaticClosure(_, name) if (declaredFunctions.exists(name)):
@@ -4604,7 +4607,7 @@ class WasmFunctionLower {
 			placement = new WasmValuePlacement(fn, representation),
 			valueLocals = placement.values,
 			locals = placement.locals;
-		representation.beginFunction(function(type) return placement.allocate(type));
+		representation.beginFunction(function(type) return placement.allocate(type), exceptionTag);
 		activeArrayTemps = {
 			len: placement.allocate(I32),
 			capacity: placement.allocate(I32),
@@ -4643,7 +4646,7 @@ class WasmFunctionLower {
 			size: align(12 + rootLocals.length * 4, 8)
 		};
 		activeExceptionState = null;
-		if (exceptionTag != null && hasExceptions(fn)) {
+		if (exceptionTag != null) {
 			var blocks:Map<Int, Int> = [], orderIndex = 0;
 			for (id in analysis.graph.order)
 				blocks.set(id, orderIndex++);
@@ -4658,7 +4661,7 @@ class WasmFunctionLower {
 					}
 			activeExceptionState = {
 				handler: placement.allocate(I32),
-				exception: placement.allocate(I32),
+				exception: placement.allocate(activeRepresentation.valueType(Dyn)),
 				saved: saved,
 				blocks: blocks,
 				tag: exceptionTag
@@ -4680,7 +4683,7 @@ class WasmFunctionLower {
 			var rooted:Array<WasmInstruction> = rootPrologue(rootState, rootLimit);
 			rooted = rooted.concat(body);
 			if (exceptionTag != null) {
-				var exceptionLocal = placement.allocate(I32),
+				var exceptionLocal = placement.allocate(activeRepresentation.valueType(Dyn)),
 					protectedBody:Array<WasmInstruction> = [Try(null)];
 				protectedBody = protectedBody.concat(rooted);
 				protectedBody = protectedBody.concat([Catch(exceptionTag), LocalSet(exceptionLocal)]);
@@ -4947,7 +4950,7 @@ class WasmFunctionLower {
 
 	static function trapOrThrow():Array<WasmInstruction> {
 		var exceptionState = activeExceptionState;
-		return exceptionState == null ? [Unreachable] : [I32Const(0), Throw(exceptionState.tag)];
+		return exceptionState == null ? [Unreachable] : activeRepresentation.zeroValue(Dyn).concat([Throw(exceptionState.tag)]);
 	}
 
 	static function setPredecessor(body:Array<WasmInstruction>, predecessor:Int, sourceBlock:Int):Void
@@ -5210,10 +5213,15 @@ class WasmFunctionLower {
 						throw 'Wasm method call requires an object or virtual receiver';
 				}
 			case ConstString(output, value):
-				var pointer = strings.get(value);
-				if (pointer == null)
-					throw 'Wasm string literal was not placed in a data segment';
-				emit(body, [I32Const(pointer), LocalSet(requiredLocal(values, output.id))]);
+				var represented = activeRepresentation.constantString(value, requiredLocal(values, output.id), strings);
+				if (represented != null)
+					emit(body, represented);
+				else {
+					var pointer = strings.get(value);
+					if (pointer == null)
+						throw 'Wasm string literal was not placed in a data segment';
+					emit(body, [I32Const(pointer), LocalSet(requiredLocal(values, output.id))]);
+				}
 			case MakeEnum(output, typeName, constructor, arguments):
 				var represented = activeRepresentation.makeEnum(typeName, constructor, arguments, requiredLocal(values, output.id),
 					[for (argument in arguments) requiredLocal(values, argument.id)]);

@@ -330,6 +330,7 @@ class WasmBackendMain {
 		File.saveBytes("out/wasm-gc-enums.wasm", compileGcEnumProgram());
 		File.saveBytes("out/wasm-gc-closures.wasm", compileGcClosureProgram());
 		File.saveBytes("out/wasm-gc-dynamic.wasm", compileGcDynamicProgram());
+		File.saveBytes("out/wasm-gc-exceptions.wasm", compileGcExceptionProgram());
 		Sys.println("PASS: Wasm scalar backend");
 	}
 
@@ -413,6 +414,21 @@ class WasmBackendMain {
 		])
 			if (containsBytes(bytes, forbidden))
 				throw 'Wasm GC Dynamic module unexpectedly contains linear collector metadata "$forbidden"';
+		return bytes;
+	}
+
+	static function compileGcExceptionProgram():haxe.io.Bytes {
+		var source = File.getContent("tests/programs/wasm-gc-exceptions.hx"),
+			bytes = new WasmBackend().compile(Frontend.compile(source), {target: WasmGc, debugNames: true}).bytes;
+		for (forbidden in [
+			"__haxeon_alloc",
+			"__haxeon_gc_mark",
+			"__haxeon_gc_trace",
+			"__haxeon_gc_collect",
+			"haxeon.gc.roots"
+		])
+			if (containsBytes(bytes, forbidden))
+				throw 'Wasm GC exception module unexpectedly contains linear collector metadata "$forbidden"';
 		return bytes;
 	}
 

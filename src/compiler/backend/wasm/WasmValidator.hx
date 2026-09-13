@@ -23,6 +23,14 @@ private typedef WasmControl = {
 class WasmValidator {
 	public static function validate(module:WasmModule):Void {
 		validateTypes(module);
+		if (module.exceptionTagType != null) {
+			var tagType = module.exceptionTagType;
+			if (tagType < 0 || tagType >= module.typeCount())
+				throw 'Wasm exception tag references invalid function type $tagType';
+			var signature = module.functionTypeAt(tagType);
+			if (signature.results.length != 0)
+				throw "Wasm exception tag function type must not have results";
+		}
 		for (fn in module.functions)
 			validateFunction(fn, [for (index in 0...module.functionCount()) module.functionType(index)], module.globals, module, module.tableMin,
 				module.exceptionTagType);
@@ -199,6 +207,7 @@ class WasmValidator {
 			locals.push(local.type);
 		var stack:Array<WasmValueType> = [],
 			controls:Array<WasmControl> = [],
+			tagParameters = tagType == null ? [] : module.functionTypeAt(tagType).parameters,
 			reachable = true;
 		for (instruction in fn.body) {
 			switch instruction {
@@ -226,7 +235,8 @@ class WasmValidator {
 						throw 'Wasm function ${fn.name} has a catch without a try';
 					var catchFrame = controls[controls.length - 1];
 					reset(stack, catchFrame.height, catchFrame.result, reachable, fn, module, false);
-					stack.push(I32);
+					for (parameter in tagParameters)
+						stack.push(parameter);
 					reachable = true;
 				case End:
 					if (controls.length == 0)
@@ -253,7 +263,10 @@ class WasmValidator {
 				case Throw(tag):
 					if (tagType == null || tag != 0)
 						throw 'Wasm function ${fn.name} references an invalid exception tag $tag';
-					pop(stack, I32, fn);
+					if (reachable) {
+						for (index in 0...tagParameters.length)
+							pop(stack, tagParameters[tagParameters.length - index - 1], fn, module);
+					}
 					reachable = false;
 				case Call(index):
 					var type = functions[index];
