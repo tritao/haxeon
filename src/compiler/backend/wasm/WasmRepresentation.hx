@@ -619,6 +619,15 @@ class WasmGcRepresentation implements WasmRepresentation {
 				throw 'Wasm GC array unshift "$name" does not match its $element array';
 			return arrayUnshift(element, argumentLocals[0], argumentLocals[1], outputLocal);
 		}
+		if (StringTools.startsWith(name, "__array_insert_")) {
+			if (arguments.length != 3 || argumentLocals.length != 3 || output.type != Void || arguments[1].type != I32)
+				throw 'Invalid Wasm GC array insert signature for "$name"';
+			var element = requireArrayElement(arguments[0].type),
+				suffix = arrayNativeSuffix(element);
+			if (name != "__array_insert_" + suffix || WasmGcTypePlan.typeKey(arguments[2].type) != WasmGcTypePlan.typeKey(element))
+				throw 'Wasm GC array insert "$name" does not match its $element array';
+			return arrayInsert(element, argumentLocals[0], argumentLocals[1], argumentLocals[2]);
+		}
 		if (StringTools.startsWith(name, "__array_resize_")) {
 			if (arguments.length != 2 || argumentLocals.length != 2 || output.type != Void || arguments[1].type != I32)
 				throw 'Invalid Wasm GC array resize signature for "$name"';
@@ -890,6 +899,114 @@ class WasmGcRepresentation implements WasmRepresentation {
 				StructSet(wrapperType, WasmGcTypePlan.arrayLengthFieldIndex()),
 				LocalGet(requiredLength),
 				LocalSet(destination)
+			];
+		return body;
+	}
+
+	function arrayInsert(element:IrType, arrayLocal:Int, indexArgument:Int, valueLocal:Int):Array<WasmInstruction> {
+		var wrapperType = plan.arrayType(element),
+			storageType = plan.arrayStorageType(element),
+			length = allocateLocal(I32),
+			index = allocateLocal(I32),
+			start = allocateLocal(I32),
+			requiredLength = allocateLocal(I32),
+			capacity = allocateLocal(I32),
+			storage = allocateLocal(Ref({
+				nullable: false,
+				heap: Type(storageType)
+			})),
+			newStorage = allocateLocal(Ref({nullable: false, heap: Type(storageType)})),
+			body:Array<WasmInstruction> = [
+				LocalGet(arrayLocal),
+				StructGet(wrapperType, WasmGcTypePlan.arrayLengthFieldIndex()),
+				LocalSet(length),
+				LocalGet(indexArgument),
+				LocalSet(index),
+				LocalGet(arrayLocal),
+				StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+				LocalSet(storage),
+				LocalGet(index),
+				I32Const(0),
+				I32LtS,
+				If(null),
+				I32Const(0),
+				LocalSet(index),
+				End,
+				LocalGet(length),
+				LocalGet(index),
+				I32LtS,
+				If(null),
+				LocalGet(length),
+				LocalSet(index),
+				End,
+				LocalGet(index),
+				LocalSet(start),
+				LocalGet(length),
+				I32Const(1),
+				I32Add,
+				LocalSet(requiredLength),
+				LocalGet(storage),
+				ArrayLen,
+				LocalSet(capacity),
+				LocalGet(capacity),
+				LocalGet(requiredLength),
+				I32LtS,
+				If(null),
+				LocalGet(capacity),
+				I32Const(2),
+				I32Mul,
+				LocalSet(capacity),
+				LocalGet(capacity),
+				LocalGet(requiredLength),
+				I32LtS,
+				If(null),
+				LocalGet(requiredLength),
+				LocalSet(capacity),
+				End,
+				LocalGet(capacity),
+				ArrayNewDefault(storageType),
+				LocalSet(newStorage),
+				LocalGet(newStorage),
+				I32Const(0),
+				LocalGet(storage),
+				I32Const(0),
+				LocalGet(length),
+				ArrayCopy(storageType, storageType),
+				LocalGet(newStorage),
+				LocalSet(storage),
+				End,
+				LocalGet(length),
+				LocalSet(index),
+				Loop(null),
+				LocalGet(start),
+				LocalGet(index),
+				I32LtS,
+				If(null),
+				LocalGet(index),
+				I32Const(1),
+				I32Sub,
+				LocalSet(index),
+				LocalGet(storage),
+				LocalGet(index),
+				I32Const(1),
+				I32Add,
+				LocalGet(storage),
+				LocalGet(index),
+				I32Const(1),
+				ArrayCopy(storageType, storageType),
+				Br(1),
+				End,
+				End,
+				LocalGet(storage),
+				LocalGet(index),
+				LocalGet(valueLocal),
+				ArraySet(storageType),
+				LocalGet(arrayLocal),
+				LocalGet(storage),
+				StructSet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+				LocalGet(arrayLocal),
+				LocalGet(requiredLength),
+				StructSet(wrapperType, WasmGcTypePlan.arrayLengthFieldIndex())
 			];
 		return body;
 	}
