@@ -5,6 +5,8 @@
 #define HXI_OUT_BUFFER(size) __attribute__((annotate("hxi:out_buffer")))
 #define HXI_IN_ARRAY(count) __attribute__((annotate("hxi:in_array")))
 #define HXI_IN_UTF8_ARRAY(count) __attribute__((annotate("hxi:in_array"))) __attribute__((annotate("hxi:utf8_array")))
+#define HXI_OUT_UTF8_ARRAY(count) __attribute__((annotate("hxi:out_array"))) __attribute__((annotate("hxi:utf8_array")))
+#define HXI_RETAINED __attribute__((annotate("hxi:retained")))
 #define HXI_RETURNS_BORROWED_UTF8 __attribute__((annotate("hxi:returns_borrowed_utf8")))
 #define HXI_UTF8 __attribute__((annotate("hxi:utf8")))
 #define HXI_NULLABLE_UTF8 __attribute__((annotate("hxi:nullable_utf8")))
@@ -76,6 +78,9 @@ int32_t sample_paths_many(const char *const *paths HXI_IN_UTF8_ARRAY(count), uin
 int32_t sample_read(uint8_t *_Nullable data HXI_OUT_BUFFER(size), uint32_t *size HXI_INOUT);
 int32_t sample_apply(sample_binary_callback callback, int32_t left, int32_t right);
 int32_t sample_apply_nullable(sample_binary_callback _Nullable callback);
+void sample_set_retained(sample_binary_callback callback HXI_RETAINED);
+int32_t sample_read_strings(const char **_Nullable values HXI_OUT_UTF8_ARRAY(count),
+                            uint32_t *count HXI_INOUT);
 enum sample_result sample_check_result(enum sample_result value);
 sample_mode sample_check_mode(sample_mode value);
 sample_flags sample_check_flags(sample_flags value);

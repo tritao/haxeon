@@ -167,20 +167,25 @@ class HxiParser {
 				var start = current().span, name = identifier();
 				expect(":");
 				var type = parseType(),
-					metadata = parseMetadata(["out", "inout", "out_buffer", "in_array", "borrowed", "owned"]),
+					metadata = parseMetadata(["out", "inout", "out_buffer", "in_array", "out_array", "borrowed", "owned", "retained"]),
 					out = metadataFlag(metadata, "out"),
 					inout = metadataFlag(metadata, "inout"),
 					borrowed = metadataFlag(metadata, "borrowed"),
+					retained = metadataFlag(metadata, "retained"),
 					owned = metadataValue(metadata, "owned", false),
 					bufferSize = metadataValue(metadata, "out_buffer", false),
 					arrayCount = metadataValue(metadata, "in_array", false),
-					direction = out ? Out : inout ? InOut : bufferSize != null ? OutBuffer(bufferSize) : arrayCount != null ? InArray(arrayCount) : In;
-				if ((out ? 1 : 0) + (inout ? 1 : 0) + (bufferSize == null ? 0 : 1) + (arrayCount == null ? 0 : 1) > 1)
+					outputArrayCount = metadataValue(metadata, "out_array", false),
+					direction = out ? Out : inout ? InOut : bufferSize != null ? OutBuffer(bufferSize) : arrayCount != null ? InArray(arrayCount) : outputArrayCount != null ? OutArray(outputArrayCount) : In;
+				if ((out ? 1 : 0) + (inout ? 1 : 0) + (bufferSize == null ? 0 : 1) + (arrayCount == null ? 0 : 1)
+					+ (outputArrayCount == null ? 0 : 1) > 1)
 					fail('Parameter "$name" cannot combine output direction metadata', start);
 				if (borrowed && owned != null)
 					fail('Parameter "$name" cannot combine @borrowed and @owned', start);
 				if (!allowDirections && (direction != In || borrowed || owned != null))
 					fail('Callback parameter "$name" cannot use output direction metadata', start);
+				if (!allowDirections && retained)
+					fail('Callback parameter "$name" cannot use @retained', start);
 				if ((borrowed || owned != null) && direction != Out)
 					fail('Parameter "$name" can use @borrowed or @owned only with @out', start);
 				parameters.push({
@@ -188,6 +193,7 @@ class HxiParser {
 					type: type,
 					direction: direction,
 					ownership: owned != null ? Owned(owned) : borrowed ? Borrowed : Unspecified,
+					retained: retained,
 					span: start.merge(previous().span)
 				});
 			} while (match(","));
@@ -551,9 +557,15 @@ class HxiParser {
 					validateCallbackType(result, abi, span, true);
 				case Function(name, parameters, result, _, _, callConvention, resultPolicy, span):
 					validateCallConvention(name, callConvention, abi, span);
-					var outputBuffer:Null<{name:String, sizeParameter:String, span:SourceSpan}> = null;
+					var outputBuffer:Null<{name:String, sizeParameter:String, span:SourceSpan}> = null,
+						outputArray:Null<{name:String, countParameter:String, span:SourceSpan}> = null;
 					for (parameter in parameters) {
 						validateType(parameter.type, names, declarationsByName, parameter.span, false);
+						if (parameter.retained)
+						switch abi.classify(parameter.type) {
+							case CallbackValue(_, _, _, _):
+							case _: fail('Parameter "${parameter.name}" can use @retained only with a callback type', parameter.span);
+						}
 						switch parameter.direction {
 							case OutBuffer(sizeParameter):
 								if (outputBuffer != null)
@@ -563,6 +575,12 @@ class HxiParser {
 								if (!nullablePointer(parameter.type))
 									fail('Output buffer "${parameter.name}" must be nullable for its size query', parameter.span);
 								outputBuffer = {name: parameter.name, sizeParameter: sizeParameter, span: parameter.span};
+							case OutArray(countParameter):
+								if (outputArray != null)
+									fail('Function "$name" cannot declare more than one output array', parameter.span);
+								if (!nullablePointer(parameter.type) || !utf8ArrayPointer(parameter.type))
+									fail('Output array "${parameter.name}" requires a nullable pointer to a UTF-8 pointer array', parameter.span);
+								outputArray = {name: parameter.name, countParameter: countParameter, span: parameter.span};
 							case Out | InOut:
 								if (!pointerLike(parameter.type))
 									fail('Output parameter "${parameter.name}" requires a pointer type', parameter.span);
@@ -587,8 +605,12 @@ class HxiParser {
 							case In:
 						}
 					}
+					if (outputArray != null)
+						validateOutputArray(name, outputArray, parameters, abi, span);
 					if (outputBuffer != null)
 						validateOutputBuffer(name, outputBuffer, parameters, abi, span);
+					if (outputArray != null && outputBuffer != null)
+						fail('Function "$name" cannot combine an output array with an output buffer', span);
 					validateType(result, names, declarationsByName, span, true);
 					switch abi.classify(result, true) {
 						case CallbackValue(_, _, _, _): fail('Function "$name" cannot return a callback handle yet', span);
@@ -765,6 +787,30 @@ class HxiParser {
 				case InOut if (parameter.name == size.name):
 				case _:
 					fail('Function "$functionName" cannot mix an output buffer with unrelated output parameters', span);
+		}
+	}
+
+	static function validateOutputArray(functionName:String, array:{name:String, countParameter:String, span:SourceSpan}, parameters:Array<HxiParameter>,
+			abi:HxiAbi, span:SourceSpan):Void {
+		var count = Lambda.find(parameters, parameter -> parameter.name == array.countParameter);
+		if (count == null)
+			fail('Output array "${array.name}" references missing count parameter "${array.countParameter}"', array.span);
+		if (count.direction != InOut)
+			fail('Output array count parameter "${count.name}" must use @inout', count.span);
+		var pointee = switch count.type {
+			case Pointer(value): value;
+			case _: fail('Output array count parameter "${count.name}" must be ptr<u32>', count.span);
+		};
+		switch abi.classify(pointee) {
+			case IntegerValue(32, Unsigned):
+			case _: fail('Output array count parameter "${count.name}" must be ptr<u32>', count.span);
+		}
+		for (parameter in parameters)
+			switch parameter.direction {
+				case OutArray(_) | In:
+				case InOut if (parameter.name == count.name):
+				case _:
+					fail('Function "$functionName" cannot mix an output array with unrelated directed parameters', span);
 			}
 	}
 
@@ -892,7 +938,7 @@ class HxiParser {
 
 	static function utf8ArrayPointer(type:HxiType):Bool
 		return switch type {
-			case Const(element): utf8ArrayPointer(element);
+			case Const(element) | Nullable(element): utf8ArrayPointer(element);
 			case Pointer(element): utf8ArrayElement(element);
 			case _: false;
 		};

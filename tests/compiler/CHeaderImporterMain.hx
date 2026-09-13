@@ -22,6 +22,8 @@ class CHeaderImporterMain {
 		expect(first.indexOf("output: ptr<sample_handle> @out") >= 0, "output annotations should import as parameter directions");
 		expect(first.indexOf('data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout') >= 0,
 			"paired output-buffer annotations should retain their size parameter");
+		expect(first.indexOf('values: nullable<ptr<utf8>> @out_array("count"), count: ptr<u32> @inout') >= 0,
+			"counted UTF-8 pointer-array outputs should import with their count contract");
 		expect(first.indexOf('options: ptr<const<sample_options>> @in_array("count"), count: u32') >= 0
 			&& first.indexOf('paths: ptr<utf8> @in_array("count"), count: u32') >= 0,
 			"paired structure and UTF-8 input arrays should retain their count parameter");
@@ -34,6 +36,8 @@ class CHeaderImporterMain {
 			"function pointer imports should preserve structure and user-data pointers");
 		expect(first.indexOf("extern fn sample_apply_nullable(callback: nullable<sample_binary_callback>)") >= 0,
 			"Clang callback nullability should survive HXI import");
+		expect(first.indexOf("extern fn sample_set_retained(callback: sample_binary_callback @retained)") >= 0,
+			"retained callback annotations should survive C header import");
 		expect(first.indexOf("paths: ptr<const<ptr<const<c_char>>>>, out_path: ptr<ptr<const<c_char>>>") >= 0,
 			"pointer-to-pointer types should preserve pointee qualifiers");
 		expect(first.indexOf("const SAMPLE_FLAG = 8") >= 0, "constant expressions should use Clang's evaluated value");

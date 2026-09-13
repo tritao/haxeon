@@ -333,13 +333,16 @@ class CHeaderImporter {
 	static function parameterProjection(parameter:Dynamic):String {
 		var direction = parameterDirection(parameter),
 			type:Dynamic = field(parameter, "type"),
-			qualified:String = field(type, "qualType");
-		if (hasAnnotation(parameter, "hxi:utf8_array"))
-			return '${field(parameter, "name")}: ptr<utf8>$direction';
+			qualified:String = field(type, "qualType"),
+			retained = hasAnnotation(parameter, "hxi:retained") ? " @retained" : "";
+		if (hasAnnotation(parameter, "hxi:utf8_array")) {
+			var arrayType = StringTools.startsWith(direction, " @out_array") ? "nullable<ptr<utf8>>" : "ptr<utf8>";
+			return '${field(parameter, "name")}: $arrayType$direction$retained';
+		}
 		if (hasAnnotation(parameter, "hxi:nullable_utf8"))
-			return '${field(parameter, "name")}: nullable<utf8>$direction';
+			return '${field(parameter, "name")}: nullable<utf8>$direction$retained';
 		if (hasAnnotation(parameter, "hxi:utf8"))
-			return '${field(parameter, "name")}: utf8$direction';
+			return '${field(parameter, "name")}: utf8$direction$retained';
 		if (StringTools.startsWith(direction, " @out_buffer")) {
 			var desugared:String = field(type, "desugaredQualType");
 			if (desugared != null)
@@ -348,7 +351,7 @@ class CHeaderImporter {
 		var projected = mapType(qualified);
 		if (StringTools.startsWith(direction, " @out_buffer") && !StringTools.startsWith(projected, "nullable<"))
 			projected = 'nullable<$projected>';
-		return '${field(parameter, "name")}: $projected$direction';
+		return '${field(parameter, "name")}: $projected$direction$retained';
 	}
 
 	static function parameterDirection(parameter:Dynamic):String {
@@ -368,6 +371,12 @@ class CHeaderImporter {
 			if (spellingEnd == null)
 				spellingEnd = end;
 			var annotation = sourceRange(file, spellingBegin, spellingEnd);
+			if (annotation.indexOf("hxi:out_array") >= 0) {
+				var argument = expansionArgument(parameter, child);
+				if (argument == null)
+					throw '${declarationLocation(parameter)}: could not resolve output-array count parameter';
+				return ' @out_array("$argument")';
+			}
 			if (annotation.indexOf("hxi:in_array") >= 0) {
 				var argument = expansionArgument(parameter, child);
 				if (argument == null)

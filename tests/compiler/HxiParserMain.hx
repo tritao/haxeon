@@ -276,7 +276,7 @@ class HxiParserMain {
 		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(value: ptr<ptr<i32>> @out) -> void; }',
 			"requires a scalar, fixed-structure, or explicitly owned opaque-pointer pointee");
 		var pointerOutputs = HxiParser.parse("pointer-outputs.hxi",
-			'interface pointer_outputs @target("x86_64-linux-gnu") @library("pointer_outputs") { opaque Context; extern fn create_owned(value: ptr<nullable<ptr<Context>>> @out @owned("destroy_context")) -> void; extern fn create_borrowed(value: ptr<nullable<ptr<Context>>> @out @borrowed) -> void; extern fn create_required(value: ptr<ptr<Context>> @out @borrowed) -> void; extern fn create_owned_status(result: ptr<nullable<ptr<Context>>> @out @owned("destroy_context")) -> i32; extern fn destroy_context(value: ptr<void>) -> void @symbol("destroy_context"); }');
+			'interface pointer_outputs @target("x86_64-linux-gnu") @library("pointer_outputs") { opaque Context; extern fn create_owned(value: ptr<nullable<ptr<Context>>> @out @owned("destroy_context")) -> void; extern fn create_borrowed(value: ptr<nullable<ptr<Context>>> @out @borrowed) -> void; extern fn create_required(value: ptr<ptr<Context>> @out @borrowed) -> void; extern fn create_owned_status(result: ptr<nullable<ptr<Context>>> @out @owned("destroy_context")) -> i32; extern fn destroy_context(value: ptr<void>) -> void @symbol("destroy_context"); struct Sample @layout(4,4) { value: i32 @offset(0); } }');
 		switch pointerOutputs.declarations[1] {
 			case Function("create_owned", [{direction: Out, ownership: Owned("destroy_context")}], _, _, _, _, _, _):
 			case _:
@@ -284,7 +284,9 @@ class HxiParserMain {
 		}
 		var pointerOutputSource = HxiProjection.source(pointerOutputs),
 			pointerOutputNative = HxiProjection.cNatives(pointerOutputs)[0];
-		expect(pointerOutputSource.indexOf("function create_owned():Null<OwnedContext>") >= 0
+		expect(pointerOutputSource.indexOf("function new() { var bytes = haxe.io.Bytes.alloc(") >= 0
+			&& pointerOutputSource.indexOf("bytes.set(index, 0); this = bytes;") >= 0
+			&& pointerOutputSource.indexOf("function create_owned():Null<OwnedContext>") >= 0
 			&& pointerOutputSource.indexOf("function create_borrowed():Null<Context>") >= 0
 			&& pointerOutputSource.indexOf("function create_required():Context") >= 0
 			&& pointerOutputSource.indexOf("class Create_owned_statusOutResult") >= 0
@@ -320,6 +322,19 @@ class HxiParserMain {
 			"references missing size parameter");
 		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u64> @inout) -> void; }',
 			"must be ptr<u32>");
+		var pointerArrays = HxiParser.parse("pointer-arrays.hxi",
+			'interface pointer_arrays @target("portable-abi64") @library("pointer_arrays") { extern fn read(seed: i32, values: nullable<ptr<utf8>> @out_array("count"), count: ptr<u32> @inout) -> i32; }');
+		var pointerArraySource = HxiProjection.source(pointerArrays);
+		expect(pointerArraySource.indexOf("function read(seed:Int):ReadOutResult") >= 0
+			&& pointerArraySource.indexOf("__hxi_raw_read(seed, null, __out_count)") >= 0
+			&& pointerArraySource.indexOf("__hxi_raw_read(seed, __out_values, __out_count)") >= 0
+			&& pointerArraySource.indexOf("Array<Null<String>>") >= 0
+			&& pointerArraySource.indexOf("__hxi_struct_get_utf8(__out_values") >= 0,
+			"counted UTF-8 pointer outputs should project as a bounded query-and-copy array wrapper");
+		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(values: nullable<ptr<utf8>> @out_array("count"), count: ptr<u32>) -> i32; }',
+			"must use @inout");
+		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(values: nullable<ptr<u8>> @out_array("count"), count: ptr<u32> @inout) -> i32; }',
+			"UTF-8 pointer array");
 		var callbacks = HxiParser.parse("callbacks.hxi",
 			'interface callbacks @target("x86_64-linux-gnu") @library("callbacks") { callback Binary = fn(left: i32, right: i32) -> i32; extern fn apply(callback: Binary, left: i32, right: i32) -> i32; }');
 		var callbackSource = HxiProjection.source(callbacks);
@@ -332,6 +347,17 @@ class HxiParserMain {
 			'interface callbacks @target("x86_64-linux-gnu") @library("callbacks") { callback Binary = fn(value: i32) -> i32; extern fn set(callback: nullable<Binary>) -> void; }');
 		expect(HxiProjection.source(nullableCallbacks).indexOf("extern function set(arg0:Null<BinaryCallback>):Void") >= 0,
 			"nullable callback parameters should project as nullable managed handles");
+		var retainedCallbacks = HxiParser.parse("retained-callbacks.hxi",
+			'interface callbacks @target("x86_64-linux-gnu") @library("callbacks") { callback Frame = fn() -> void; extern fn set(callback: nullable<Frame> @retained) -> void; }');
+		var retainedCallbackSource = HxiProjection.source(retainedCallbacks);
+		switch retainedCallbacks.declarations[1] {
+			case Function(_, [parameter], _, _, _, _, _, _) if (parameter.retained):
+			case _: throw "retained callback metadata should be represented in the HXI model";
+		}
+		expect(retainedCallbackSource.indexOf("Native retains this callback beyond the call") >= 0,
+			"retained callback lifetime should remain visible in the projected binding");
+		expectError('interface bad @target("x86_64-linux-gnu") { extern fn set(value: i32 @retained) -> void; }',
+			'can use @retained only with a callback type');
 		var conventions = HxiParser.parse("conventions.hxi",
 			'interface conventions @target("i686-pc-windows-msvc") @library("calls") { callback Hook = fn(value: i32) -> i32 @callconv("stdcall"); extern fn invoke(hook: Hook) -> i32 @callconv("system"); }');
 		var conventionSource = HxiProjection.source(conventions);
