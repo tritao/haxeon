@@ -105,6 +105,9 @@ bash "$root_dir/scripts/test-wasm-gc-invariants.sh"
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm-gc --output=out/wasm-cli-gc-bytes.wasm --entry=wasm-gc-bytes \
 	--root=tests/programs tests/programs/wasm-gc-bytes.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm-gc --output=out/wasm-cli-gc-ffi-bytes.wasm --entry=wasm-gc-ffi-bytes \
+	--root=tests/programs --ffi-interface=tests/ffi/gc_bytes.hxi tests/programs/wasm-gc-ffi-bytes.hx
 node - "$root_dir" <<'JS'
 const fs = require("fs");
 const root = process.argv[2];
@@ -171,7 +174,8 @@ const cases = [
 	["out/wasm-cli-gc-exceptions.wasm", 42],
 	["out/wasm-gc-strings.wasm", 42],
 	["out/wasm-cli-gc-strings.wasm", 42],
-	["out/wasm-cli-gc-bytes.wasm", 42]
+	["out/wasm-cli-gc-bytes.wasm", 42],
+	["out/wasm-cli-gc-ffi-bytes.wasm", 42]
 ];
 (async () => {
   for (const [relative, expected] of cases) {
@@ -184,6 +188,14 @@ const cases = [
       imports.fixture = {fixture_add: (left, right) => left + right};
     if (relative.endsWith("numeric-promotion.wasm"))
       imports.haxeon_runtime = {__math_ceil: Math.ceil};
+    if (relative.endsWith("wasm-cli-gc-ffi-bytes.wasm"))
+      imports.gc_bytes = {inspect_bytes: (pointer, length) => {
+        const expected = [103, 99, 32, 98, 121, 116, 101, 115];
+        const actual = new Uint8Array(moduleInstance.exports.memory.buffer, pointer, length);
+        if (length === expected.length && expected.every((value, index) => actual[index] === value))
+          return 42;
+        return length === 70000 && actual[0] === 0 && actual[1] === 1 && actual[255] === 255 && actual[256] === 0 && actual[69999] === 111 ? 42 : 0;
+      }};
     if (relative.includes("hxi-retained"))
       imports.retained = {retained_check: pointer => {
         const view = new DataView((memory == null ? moduleInstance.exports.memory : memory).buffer);
@@ -193,8 +205,10 @@ const cases = [
       imports.env = {memory};
     if (relative.includes("gc-")) {
       const compiled = new WebAssembly.Module(bytes);
-      if (WebAssembly.Module.imports(compiled).length !== 0
-          || WebAssembly.Module.exports(compiled).some(entry => entry.name === "memory")
+      const ffiBytes = relative.endsWith("wasm-cli-gc-ffi-bytes.wasm");
+      const hasMemory = WebAssembly.Module.exports(compiled).some(entry => entry.name === "memory");
+      if ((!ffiBytes && (WebAssembly.Module.imports(compiled).length !== 0 || hasMemory))
+          || (ffiBytes && (WebAssembly.Module.imports(compiled).length !== 1 || !hasMemory))
           || WebAssembly.Module.customSections(compiled, "haxeon.gc.roots").length !== 0)
         throw new Error("Wasm GC object module unexpectedly includes linear memory or custom root metadata");
       moduleInstance = new WebAssembly.Instance(compiled, imports);

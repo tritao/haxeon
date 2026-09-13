@@ -6,6 +6,7 @@ import compiler.ir.Ir.IrInterface;
 import compiler.ir.Ir.IrInterfaceMethod;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.Ir.IrCNative;
+import compiler.ir.Ir.IrCNativeArgumentMode;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrObjectField;
 import compiler.ir.Ir.IrObjectMethod;
@@ -20,7 +21,7 @@ import haxe.io.BytesOutput;
 
 /** Stable target-neutral container for the complete verified Haxeon IR. */
 class CanonicalIrCodec {
-	public static inline final VERSION:Int = 4;
+	public static inline final VERSION:Int = 5;
 	static inline final MAGIC = "HIR";
 	static inline final MAX_ITEMS = 0x100000;
 
@@ -52,7 +53,7 @@ class CanonicalIrCodec {
 				throw "Unsupported canonical Haxeon IR version";
 			var program = new IrProgram(IrTypeCodec.readString(input, bytes.length));
 			program.natives = readNatives(input, bytes.length);
-			program.cNatives = version >= 2 ? readCNatives(input, bytes.length) : [];
+			program.cNatives = version >= 2 ? readCNatives(input, bytes.length, version) : [];
 			program.objects = readObjects(input, bytes.length);
 			program.interfaces = readInterfaces(input, bytes.length);
 			program.enums = readEnums(input, bytes.length);
@@ -103,11 +104,30 @@ class CanonicalIrCodec {
 			writeNullableString(output, native.pointerLength);
 			output.writeByte(native.pointerNullable ? 1 : 0);
 			writeTypes(output, native.arguments);
+			writeCount(output, native.argumentModes.length);
+			for (mode in native.argumentModes)
+				switch mode {
+					case Value:
+						output.writeByte(0);
+					case BytesInput(lengthArgument):
+						output.writeByte(1);
+						writeCount(output, lengthArgument);
+					case BytesOutput(lengthArgument):
+						output.writeByte(2);
+						writeCount(output, lengthArgument);
+					case Output:
+						output.writeByte(3);
+					case InputOutput:
+						output.writeByte(4);
+					case BytesInputOutput(lengthArgument):
+						output.writeByte(5);
+						writeCount(output, lengthArgument);
+				}
 			IrTypeCodec.writeType(output, native.result, 0);
 		}
 	}
 
-	static function readCNatives(input:BytesInput, limit:Int):Array<IrCNative> {
+	static function readCNatives(input:BytesInput, limit:Int, version:Int):Array<IrCNative> {
 		var result:Array<IrCNative> = [];
 		for (_ in 0...readCount(input)) {
 			var name = IrTypeCodec.readString(input, limit),
@@ -117,9 +137,29 @@ class CanonicalIrCodec {
 				pointerOwnership = IrTypeCodec.readString(input, limit),
 				pointerRelease = readNullableString(input, limit),
 				pointerLength = readNullableString(input, limit),
-				pointerNullable = input.readByte();
+				pointerNullable = input.readByte(),
+				arguments = readTypes(input, limit),
+				argumentModes:Array<IrCNativeArgumentMode> = [];
 			if (pointerNullable != 0 && pointerNullable != 1)
 				throw "Invalid canonical IR native nullability";
+			if (version >= 5) {
+				var modeCount = readCount(input);
+				if (modeCount != arguments.length)
+					throw "Canonical IR C native argument mode count does not match its signature";
+				for (_ in 0...modeCount)
+					argumentModes.push(switch input.readByte() {
+						case 0: Value;
+						case 1: BytesInput(readCount(input));
+						case 2: BytesOutput(readCount(input));
+						case 3: Output;
+						case 4: InputOutput;
+						case 5: BytesInputOutput(readCount(input));
+						case _: throw "Invalid canonical IR C native argument mode";
+					});
+			} else {
+				for (_ in 0...arguments.length)
+					argumentModes.push(Value);
+			}
 			result.push({
 				name: name,
 				library: library,
@@ -129,7 +169,8 @@ class CanonicalIrCodec {
 				pointerRelease: pointerRelease,
 				pointerLength: pointerLength,
 				pointerNullable: pointerNullable == 1,
-				arguments: readTypes(input, limit),
+				arguments: arguments,
+				argumentModes: argumentModes,
 				result: IrTypeCodec.readType(input, limit, 0)
 			});
 		}

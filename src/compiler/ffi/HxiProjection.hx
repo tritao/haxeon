@@ -8,14 +8,17 @@ import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiField;
 import compiler.ffi.HxiModel.HxiEnumValue;
 import compiler.ir.Ir.IrCNative;
+import compiler.ir.Ir.IrCNativeArgumentMode;
 import compiler.ir.Ir.IrType;
 import compiler.ffi.HxiModel.HxiPointerOwnership;
+import compiler.ffi.HxiModel.HxiParameter;
+import compiler.ffi.HxiModel.HxiParameterDirection;
 
 /** Projects bridgeable HXI functions into a synthetic, source-visible module. */
 class HxiProjection {
 	/** Validate Haxe naming rules against the declarations the profile can project. */
-	public static function validateProfile(path:String, model:HxiInterface, ?omitted:Map<String, Bool>,
-			?visibleDeclarations:Map<String, HxiDeclaration>, profile:HxiProjectionProfile):Void {
+	public static function validateProfile(path:String, model:HxiInterface, ?omitted:Map<String, Bool>, ?visibleDeclarations:Map<String, HxiDeclaration>,
+			profile:HxiProjectionProfile):Void {
 		if (profile.interfaceName != model.name)
 			profileError(path, 'names interface "${profile.interfaceName}" but was applied to "${model.name}"');
 
@@ -31,7 +34,8 @@ class HxiProjection {
 		}
 
 		for (name in sortedKeys(profile.typeNames)) {
-			var declaration = declarations.get(name), entry = 'typeNames.$name';
+			var declaration = declarations.get(name),
+				entry = 'typeNames.$name';
 			if (declaration == null)
 				profileError(path, '$entry references unknown HXI type "$name"');
 			if (!isProjectedType(declaration))
@@ -39,7 +43,8 @@ class HxiProjection {
 			validateTypePath(path, entry, profile.typeNames.get(name), local.exists(name) && !isOmitted(omitted, name));
 		}
 		for (name in sortedKeys(profile.enumNames)) {
-			var declaration = declarations.get(name), entry = 'enumNames.$name';
+			var declaration = declarations.get(name),
+				entry = 'enumNames.$name';
 			if (declaration == null)
 				profileError(path, '$entry references unknown HXI enum "$name"');
 			if (!isEnumeration(declaration))
@@ -50,12 +55,15 @@ class HxiProjection {
 				profileError(path, '$entry conflicts with typeNames.$name');
 		}
 		for (enumName in sortedKeys(profile.enumValueNames)) {
-			var declaration = declarations.get(enumName), entry = 'enumValueNames.$enumName';
+			var declaration = declarations.get(enumName),
+				entry = 'enumValueNames.$enumName';
 			if (declaration == null)
 				profileError(path, '$entry references unknown HXI enum "$enumName"');
 			var values = switch declaration {
 				case Enumeration(_, _, _, values, _): values;
-				case _: profileError(path, '$entry refers to "$enumName", which is not an enum'); [];
+				case _:
+					profileError(path, '$entry refers to "$enumName", which is not an enum');
+					[];
 			};
 			if (!local.exists(enumName) || isOmitted(omitted, enumName))
 				profileError(path, '$entry refers to an enum projected by a dependency; rename its values in that interface profile');
@@ -84,8 +92,12 @@ class HxiProjection {
 				profileError(path, 'fieldNames key "$key" must have the form "type.field"');
 			var fields = switch declaration {
 				case Structure(_, _, _, fields, _) if (!isOmitted(omitted, typeName)): fields;
-				case null: profileError(path, '$entry references an unknown structure in this interface'); [];
-				case _: profileError(path, '$entry does not refer to a structure projected by this interface'); [];
+				case null:
+					profileError(path, '$entry references an unknown structure in this interface');
+					[];
+				case _:
+					profileError(path, '$entry does not refer to a structure projected by this interface');
+					[];
 			};
 			if (!Lambda.exists(fields, field -> field.name == fieldName))
 				profileError(path, '$entry references an unknown structure field');
@@ -117,8 +129,8 @@ class HxiProjection {
 						if (Lambda.exists(parameters, parameter -> switch parameter.ownership {
 							case Owned(_): true;
 							case Borrowed | Unspecified: false;
-						}))
-							hasOwnedPointerOutputs = true;
+					}))
+						hasOwnedPointerOutputs = true;
 					case Constant(_, _, _):
 						hasConstants = true;
 					case _:
@@ -145,7 +157,8 @@ class HxiProjection {
 					addProjectedName(path, "module", projected + "Callback", 'callback wrapper for "$name"', moduleNames);
 				case Enumeration(name, _, _, values, _):
 					addProjectedName(path, "module", enumTypeName(name, profile), 'enum "$name"', moduleNames);
-					var members:Map<String, String> = [], prefix = enumValuePrefix(values, profile);
+					var members:Map<String, String> = [],
+						prefix = enumValuePrefix(values, profile);
 					for (value in values)
 						addProjectedName(path, 'enum "$name"', enumValueName(value.name, prefix, name, profile),
 							'enum value "$name.${value.name}"', members);
@@ -160,8 +173,8 @@ class HxiProjection {
 					};
 					var members:Map<String, String> = [];
 					for (field in fields)
-						addProjectedName(path, 'structure "$name"', projectedFieldName(name, field.name, profile),
-							'structure field "$name.${field.name}"', members);
+						addProjectedName(path, 'structure "$name"', projectedFieldName(name, field.name, profile), 'structure field "$name.${field.name}"',
+							members);
 				case Function(name, parameters, result, _, _, _, _, _):
 					var publicName = projectedFunctionName(name, profile);
 					addProjectedName(path, "module", publicName, 'function "$name"', moduleNames);
@@ -244,11 +257,10 @@ class HxiProjection {
 
 	static function isHaxeKeyword(value:String):Bool
 		return switch value {
-			case "abstract" | "break" | "case" | "cast" | "catch" | "class" | "continue" | "default" | "do" | "dynamic" | "else" | "enum" |
-				"extends" | "extern" | "false" | "final" | "for" | "from" | "function" | "if" | "implements" | "import" | "in" | "inline" |
-				"interface" | "macro" | "new" | "null" | "operator" | "overload" | "override" | "package" | "private" | "public" | "return" |
-				"static" | "super" | "switch" | "this" | "throw" | "to" | "true" | "try" | "typedef" | "untyped" | "using" | "var" | "while" |
-				"Bool" | "Float" | "Int" | "String" | "Void": true;
+			case "abstract" | "break" | "case" | "cast" | "catch" | "class" | "continue" | "default" | "do" | "dynamic" | "else" | "enum" | "extends" |
+				"extern" | "false" | "final" | "for" | "from" | "function" | "if" | "implements" | "import" | "in" | "inline" | "interface" | "macro" |
+				"new" | "null" | "operator" | "overload" | "override" | "package" | "private" | "public" | "return" | "static" | "super" | "switch" | "this" |
+				"throw" | "to" | "true" | "try" | "typedef" | "untyped" | "using" | "var" | "while" | "Bool" | "Float" | "Int" | "String" | "Void": true;
 			case _: false;
 		};
 
@@ -273,6 +285,7 @@ class HxiProjection {
 		var result:Array<IrCNative> = [],
 			declarations:Map<String, HxiDeclaration> = [],
 			directed:Map<String, Bool> = [],
+			functionParameters:Map<String, Array<HxiParameter>> = [],
 			aggregateDescriptors:Map<String, String> = [];
 		if (visibleDeclarations != null)
 			for (name => declaration in visibleDeclarations)
@@ -284,6 +297,7 @@ class HxiProjection {
 					declarations.set(name, declaration);
 				case Function(name, parameters, _, _, _, _, _, _):
 					directed.set(name, hasOutput(parameters));
+					functionParameters.set(name, parameters);
 				case _:
 			}
 		var abi = providedAbi == null ? HxiAbi.forInterface(model, declarations) : providedAbi;
@@ -291,9 +305,12 @@ class HxiProjection {
 			if (isOmitted(omitted, fn.name))
 				continue;
 			var arguments:Array<IrType> = [],
+				argumentModes:Array<IrCNativeArgumentMode> = [],
 				codes:Array<String> = [],
-				supported = true;
-			for (argument in fn.arguments) {
+				parameters = functionParameters.get(fn.name),
+				supported = parameters != null && parameters.length == fn.arguments.length;
+			for (index in 0...fn.arguments.length) {
+				var argument = fn.arguments[index];
 				var value = project(argument, false);
 				if (value == null) {
 					supported = false;
@@ -304,6 +321,16 @@ class HxiProjection {
 					case _: value.nativePointer ? "native_pointer" : null;
 				};
 				arguments.push(irType(value.code, false, nativeAbstract));
+				var mode = switch parameters[index].direction {
+					case In: Value;
+					case InArray(lengthName):
+						var lengthIndex = parameterIndex(parameters, lengthName);
+						isConstPointer(parameters[index].type) ? BytesInput(lengthIndex) : BytesInputOutput(lengthIndex);
+					case OutBuffer(lengthName): BytesOutput(parameterIndex(parameters, lengthName));
+					case Out: Output;
+					case InOut: InputOutput;
+				};
+				argumentModes.push(mode);
 				codes.push(abiDescriptor(argument, declarations, abi, aggregateDescriptors));
 			}
 			var returnValue = project(fn.result, true);
@@ -320,6 +347,7 @@ class HxiProjection {
 					symbol: fn.symbol,
 					signature: callSignature(codes.join(",") + ">" + abiDescriptor(fn.result, declarations, abi, aggregateDescriptors), fn.callConvention),
 					arguments: arguments,
+					argumentModes: argumentModes,
 					result: managedBytes ? ManagedBytes : irType(returnValue.code, true),
 					pointerOwnership: ownership.kind,
 					pointerRelease: ownership.release,
@@ -1517,6 +1545,20 @@ class HxiProjection {
 
 	static function callSignature(signature:String, convention:String):String
 		return convention == "cdecl" ? signature : signature + "@" + convention;
+
+	static function parameterIndex(parameters:Array<HxiParameter>, name:String):Int {
+		for (index in 0...parameters.length)
+			if (parameters[index].name == name)
+				return index;
+		throw 'Unknown HXI argument length parameter "$name"';
+	}
+
+	static function isConstPointer(type:compiler.ffi.HxiModel.HxiType):Bool
+		return switch type {
+			case Pointer(Const(_)): true;
+			case Const(element): isConstPointer(element);
+			case _: false;
+		};
 
 	static function abiDescriptor(value:HxiAbiValue, declarations:Map<String, HxiDeclaration>, abi:HxiAbi,
 			aggregateDescriptors:Null<Map<String, String>> = null):String

@@ -9,6 +9,8 @@ import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
 import compiler.ir.Ir.IrInstruction;
+import compiler.ir.Ir.IrCNative;
+import compiler.ir.Ir.IrCNativeArgumentMode;
 import compiler.ir.Ir.IrTerminator;
 import compiler.ir.Ir.IrBlock;
 import compiler.ir.IrVerifier;
@@ -270,14 +272,37 @@ class WasmBackend implements Backend {
 		if (hasFunction(program, "__init"))
 			reachable.set("__init", true);
 		validateGcSubset(program, reachable, preferredEntry);
+		var usedCNatives = reachableCNatives(program, reachable),
+			requiresScratchMemory = false;
+		for (native in program.cNatives)
+			if (usedCNatives.exists(native.name))
+				for (mode in native.argumentModes)
+					switch mode {
+						case BytesInput(_):
+							requiresScratchMemory = true;
+						case Value | BytesOutput(_) | BytesInputOutput(_) | Output | InputOutput:
+					}
 
 		var plan = new WasmGcTypePlan(program),
-			representation:WasmRepresentation = new WasmGcRepresentation(plan),
+			gcRepresentation = new WasmGcRepresentation(plan),
+			representation:WasmRepresentation = gcRepresentation,
 			module = new WasmModule(options.debugNames ? "haxeon" : null),
 			globals:Map<String, Int> = [],
 			functions:Map<String, Int> = [],
 			methods:Map<String, String> = [];
 		plan.addTo(module);
+		var scratchTop = -1;
+		if (requiresScratchMemory) {
+			module.memoryMin = 1;
+			module.exportMemory = true;
+			scratchTop = module.globals.length;
+			module.globals.push({type: I32, mutable: true, init: [I32Const(8)]});
+		}
+		addGcCNativeImports(module, functions, program, usedCNatives);
+		if (requiresScratchMemory) {
+			var scratchAllocator = addGcScratchAllocator(module, scratchTop);
+			gcRepresentation.configureCNativeScratch(scratchTop, scratchAllocator);
+		}
 		var exceptionTagType:Null<Int> = hasExceptions(program) ? module.typeIndex({parameters: [representation.valueType(Dyn)], results: []}) : null,
 			exceptionTag:Null<Int> = exceptionTagType == null ? null : 0;
 		module.exceptionTagType = exceptionTagType;
@@ -332,10 +357,13 @@ class WasmBackend implements Backend {
 				throw 'Wasm GC lowering does not support runtime native "${native.name}" yet';
 		for (native in program.cNatives)
 			if (usedCNatives.exists(native.name))
-				throw 'Wasm GC lowering does not support C native "${native.name}" yet';
+				validateGcCNative(native);
 		var declaredFunctions:Map<String, Bool> = [];
 		for (fn in program.functions)
 			declaredFunctions.set(fn.name, true);
+		var declaredCNatives:Map<String, Bool> = [];
+		for (native in program.cNatives)
+			declaredCNatives.set(native.name, true);
 		for (fn in program.functions) {
 			if (!reachable.exists(fn.name) || (fn.name == "__entry" && preferredEntry != "__entry"))
 				continue;
@@ -352,6 +380,7 @@ class WasmBackend implements Backend {
 						case ConstString(_, _):
 						case ToDyn(_, _), SafeCast(_, _), ToVirtual(_, _):
 						case Call(_, name, _) if (declaredFunctions.exists(name) || isSupportedGcNative(program, name)):
+						case CNativeCall(_, name, _) if (declaredCNatives.exists(name)):
 						case StaticClosure(_, name) if (declaredFunctions.exists(name)):
 						case InstanceClosure(_, name, receiver) if (declaredFunctions.exists(name) && isObjectReference(receiver.type)):
 						case CallClosure(_, closure, _) if (isFunctionType(closure.type)):
@@ -388,6 +417,100 @@ class WasmBackend implements Backend {
 				"__bytes_to_string", "__bytes_get_string", "__string_length", "__string_char_code_at", "__string_concat", "__string_equal": true;
 			default: false;
 		};
+
+	static function validateGcCNative(native:IrCNative):Void {
+		if (native.argumentModes.length != native.arguments.length)
+			throw 'Wasm GC C native "${native.name}" has invalid argument ABI metadata';
+		for (index in 0...native.arguments.length)
+			switch native.argumentModes[index] {
+				case Value:
+					gcCNativeValueType(native.arguments[index]);
+				case BytesInput(lengthArgument):
+					if (native.arguments[index] != ManagedBytes
+						|| lengthArgument < 0
+						|| lengthArgument >= native.arguments.length
+						|| native.arguments[lengthArgument] != I32)
+						throw 'Wasm GC C native "${native.name}" requires byte input followed by an I32 length';
+				case BytesOutput(_) | BytesInputOutput(_) | Output | InputOutput:
+					throw 'Wasm GC C native "${native.name}" supports input byte slices only so far';
+			}
+		switch native.result {
+			case Void:
+			case I32, Bool, I64, F64:
+				gcCNativeValueType(native.result);
+			case _:
+				throw 'Wasm GC C native "${native.name}" has unsupported result type ${Std.string(native.result)}';
+		}
+	}
+
+	static function gcCNativeValueType(type:IrType):WasmValueType
+		return switch type {
+			case I32, Bool: I32;
+			case I64: I64;
+			case F64: F64;
+			case _: throw 'Wasm GC C ABI supports scalar arguments only, got ${Std.string(type)}';
+		};
+
+	static function addGcCNativeImports(module:WasmModule, functions:Map<String, Int>, program:IrProgram, used:Map<String, Bool>):Void {
+		for (native in program.cNatives) {
+			if (!used.exists(native.name))
+				continue;
+			var parameters:Array<WasmValueType> = [];
+			for (index in 0...native.arguments.length)
+				parameters.push(switch native.argumentModes[index] {
+					case BytesInput(_): I32;
+					case Value: gcCNativeValueType(native.arguments[index]);
+					case _: throw 'Wasm GC C native "${native.name}" has unsupported argument direction';
+				});
+			var type:WasmFunctionType = {
+				parameters: parameters,
+				results: switch native.result {
+					case Void: [];
+					case _: [gcCNativeValueType(native.result)];
+				}
+			}, importModule = native.library == null
+				|| native.library == "" ? "env" : native.library, importName = native.symbol == null
+					|| native.symbol == "" ? native.name : native.symbol;
+			functions.set(native.name, module.addImport(importModule, importName, type));
+		}
+	}
+
+	static function addGcScratchAllocator(module:WasmModule, scratchTop:Int):Int {
+		var body:Array<WasmInstruction> = [
+			GlobalGet(scratchTop),
+			LocalTee(1),
+			LocalGet(0),
+			I32Add,
+			LocalTee(2),
+			GlobalSet(scratchTop),
+			LocalGet(2),
+			I32Const(65535),
+			I32Add,
+			I32Const(16),
+			I32ShrU,
+			LocalSet(3),
+			MemorySize,
+			LocalSet(4),
+			LocalGet(4),
+			LocalGet(3),
+			I32LtS,
+			If(null),
+			LocalGet(3),
+			LocalGet(4),
+			I32Sub,
+			MemoryGrow,
+			I32Const(-1),
+			I32Eq,
+			If(null),
+			Unreachable,
+			End,
+			End,
+			LocalGet(1),
+			Return
+		];
+		var type:WasmFunctionType = {parameters: [I32], results: [I32]};
+		return module.addFunction(new WasmFunction("__haxeon_gc_ffi_scratch_alloc", type, [{type: I32}, {type: I32}, {type: I32}, {type: I32}], body));
+	}
 
 	static function isSupportedGcNative(program:IrProgram, name:String):Bool {
 		if (isSupportedGcRuntimeNative(name))
@@ -5616,14 +5739,27 @@ class WasmFunctionLower {
 						body.push(LocalSet(requiredLocal(values, output.id)));
 				}
 			case CNativeCall(output, name, arguments):
-				for (argument in arguments)
-					nativeArgument(body, argument, values);
+				var native:Null<IrCNative> = null;
+				for (candidate in activeProgram.cNatives)
+					if (candidate.name == name)
+						native = candidate;
+				if (native == null)
+					throw 'Wasm C native call "$name" has no declared import contract';
 				var importIndex = functions.get(name);
 				if (importIndex == null)
 					throw 'Wasm C native call "$name" has no declared import contract';
-				body.push(Call(importIndex));
-				if (output.type != Void)
-					body.push(LocalSet(requiredLocal(values, output.id)));
+				var outputLocal = output.type == Void ? -1 : requiredLocal(values, output.id),
+					represented = activeRepresentation.lowerCNativeCall(native, arguments, outputLocal,
+						[for (argument in arguments) requiredLocal(values, argument.id)], importIndex);
+				if (represented != null)
+					emit(body, represented);
+				else {
+					for (argument in arguments)
+						nativeArgument(body, argument, values);
+					body.push(Call(importIndex));
+					if (output.type != Void)
+						body.push(LocalSet(requiredLocal(values, output.id)));
+				}
 		}
 	}
 

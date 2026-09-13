@@ -125,6 +125,15 @@ typedef IrNative = {
 }
 
 /** Ordinary C ABI symbol required by an IR program. */
+enum IrCNativeArgumentMode {
+	Value;
+	BytesInput(lengthArgument:Int);
+	BytesInputOutput(lengthArgument:Int);
+	BytesOutput(lengthArgument:Int);
+	Output;
+	InputOutput;
+}
+
 typedef IrCNative = {
 	final name:String;
 	final library:String;
@@ -135,6 +144,7 @@ typedef IrCNative = {
 	final pointerLength:Null<String>;
 	final pointerNullable:Bool;
 	final arguments:Array<IrType>;
+	final argumentModes:Array<IrCNativeArgumentMode>;
 	final result:IrType;
 }
 

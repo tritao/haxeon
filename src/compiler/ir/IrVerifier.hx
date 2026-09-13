@@ -3,6 +3,7 @@ package compiler.ir;
 import compiler.ir.Ir;
 import compiler.ir.Ir.IrInterface;
 import compiler.ir.Ir.IrEnum;
+import compiler.ir.Ir.IrCNativeArgumentMode;
 
 /** Rejects malformed or ill-typed SSA programs before backend lowering. */
 class IrVerifier {
@@ -10,6 +11,8 @@ class IrVerifier {
 		var signatures:Map<String, {arguments:Array<IrType>, result:IrType}> = [];
 		for (native in program.natives)
 			addSignature(signatures, native.name, native.arguments, native.result);
+		for (native in program.cNatives)
+			verifyCNative(native);
 		for (native in program.cNatives)
 			addSignature(signatures, native.name, native.arguments, native.result);
 		for (fn in program.functions)
@@ -45,6 +48,33 @@ class IrVerifier {
 				verifyFunction(fn, signatures, objects, interfaces, enums, globals);
 			} catch (error:String) {
 				throw 'IR verification failed for ${fn.name}: $error';
+			}
+	}
+
+	static function verifyCNative(native:IrCNative):Void {
+		if (native.argumentModes == null || native.argumentModes.length != native.arguments.length)
+			throw 'C native "${native.name}" has mismatched argument ABI metadata';
+		for (index in 0...native.argumentModes.length)
+			switch native.argumentModes[index] {
+				case BytesInput(lengthArgument):
+					if (native.arguments[index] != ManagedBytes
+						|| lengthArgument < 0
+						|| lengthArgument >= native.arguments.length
+						|| native.arguments[lengthArgument] != I32)
+						throw 'C native "${native.name}" has invalid byte-buffer argument metadata';
+				case BytesInputOutput(lengthArgument):
+					if (native.arguments[index] != ManagedBytes
+						|| lengthArgument < 0
+						|| lengthArgument >= native.arguments.length
+						|| native.arguments[lengthArgument] != I32)
+						throw 'C native "${native.name}" has invalid mutable byte-buffer argument metadata';
+				case BytesOutput(sizeArgument):
+					if (native.arguments[index] != ManagedBytes
+						|| sizeArgument < 0
+						|| sizeArgument >= native.arguments.length
+						|| native.arguments[sizeArgument] != ManagedBytes)
+						throw 'C native "${native.name}" has invalid output-buffer argument metadata';
+				case Value | Output | InputOutput:
 			}
 	}
 

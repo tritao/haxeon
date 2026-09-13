@@ -3,6 +3,8 @@ package compiler.backend.wasm;
 import haxe.io.Bytes as HaxeBytes;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
+import compiler.ir.Ir.IrCNative;
+import compiler.ir.Ir.IrCNativeArgumentMode;
 import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.WasmLayout.WasmFieldLayout;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
@@ -27,6 +29,8 @@ interface WasmRepresentation {
 	public function beginFunction(allocateLocal:WasmValueType->Int, exceptionTag:Null<Int>):Void;
 	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
 		argumentLocals:Array<Int>):Null<Array<WasmInstruction>>;
+	public function lowerCNativeCall(native:IrCNative, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>,
+		importIndex:Int):Null<Array<WasmInstruction>>;
 	public function arrayGet(array:IrValue, index:IrValue, destination:Int, arrayLocal:Int, indexLocal:Int):Null<Array<WasmInstruction>>;
 	public function arraySet(array:IrValue, index:IrValue, value:IrValue, arrayLocal:Int, indexLocal:Int, valueLocal:Int):Null<Array<WasmInstruction>>;
 	public function arraySize(array:IrValue, destination:Int, arrayLocal:Int):Null<Array<WasmInstruction>>;
@@ -121,6 +125,10 @@ class WasmLinearRepresentation implements WasmRepresentation {
 			argumentLocals:Array<Int>):Null<Array<WasmInstruction>>
 		return null;
 
+	public function lowerCNativeCall(native:IrCNative, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>,
+			importIndex:Int):Null<Array<WasmInstruction>>
+		return null;
+
 	public function arrayGet(array:IrValue, index:IrValue, destination:Int, arrayLocal:Int, indexLocal:Int):Null<Array<WasmInstruction>>
 		return null;
 
@@ -189,9 +197,16 @@ class WasmGcRepresentation implements WasmRepresentation {
 	var exceptionTag:Null<Int>;
 	var requiredArrayLengthLocal:Null<Int>;
 	var arrayCapacityLocal:Null<Int>;
+	var scratchAllocator:Int = -1;
+	var scratchTop:Int = -1;
 
 	public function new(plan:WasmGcTypePlan)
 		this.plan = plan;
+
+	public function configureCNativeScratch(scratchTop:Int, scratchAllocator:Int):Void {
+		this.scratchTop = scratchTop;
+		this.scratchAllocator = scratchAllocator;
+	}
 
 	public function valueType(type:IrType):WasmValueType
 		return plan.valueType(type);
@@ -576,6 +591,87 @@ class WasmGcRepresentation implements WasmRepresentation {
 			return body;
 		}
 		return null;
+	}
+
+	public function lowerCNativeCall(native:IrCNative, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>,
+			importIndex:Int):Null<Array<WasmInstruction>> {
+		var hasByteInputs = false;
+		for (mode in native.argumentModes)
+			switch mode {
+				case BytesInput(_):
+					hasByteInputs = true;
+				case Value:
+				case BytesOutput(_) | BytesInputOutput(_) | Output | InputOutput:
+					throw 'Wasm GC C native "${native.name}" supports input byte slices only so far';
+			}
+		if (hasByteInputs && (scratchAllocator < 0 || scratchTop < 0))
+			throw 'Wasm GC C native "${native.name}" requires a configured linear scratch bridge';
+		var body:Array<WasmInstruction> = [],
+			savedTop = hasByteInputs ? allocateLocal(I32) : -1,
+			bytePointers:Array<Null<Int>> = [];
+		if (hasByteInputs)
+			body = body.concat([GlobalGet(scratchTop), LocalSet(savedTop)]);
+		for (index in 0...arguments.length)
+			switch native.argumentModes[index] {
+				case BytesInput(_):
+					if (arguments[index].type != ManagedBytes)
+						throw 'Wasm GC C native "${native.name}" byte input $index has type ${Std.string(arguments[index].type)}';
+					var bytesLocal = argumentLocals[index],
+						pointer = allocateLocal(I32),
+						position = allocateLocal(I32);
+					bytePointers[index] = pointer;
+					body = body.concat([
+						LocalGet(bytesLocal),
+						StructGet(plan.managedBytesTypeIndex, 2),
+						Call(scratchAllocator),
+						LocalSet(pointer),
+						I32Const(0),
+						LocalSet(position),
+						Block(null),
+						Loop(null),
+						LocalGet(position),
+						LocalGet(bytesLocal),
+						StructGet(plan.managedBytesTypeIndex, 2),
+						I32LtS,
+						I32Eqz,
+						BrIf(1),
+						LocalGet(pointer),
+						LocalGet(position),
+						I32Add,
+						LocalGet(bytesLocal),
+						StructGet(plan.managedBytesTypeIndex, 0),
+						LocalGet(bytesLocal),
+						StructGet(plan.managedBytesTypeIndex, 1),
+						LocalGet(position),
+						I32Add,
+						ArrayGetUnsigned(plan.byteArrayTypeIndex),
+						I32Store8(0),
+						LocalGet(position),
+						I32Const(1),
+						I32Add,
+						LocalSet(position),
+						Br(0),
+						End,
+						End
+					]);
+				case Value:
+					bytePointers[index] = null;
+				case _:
+					throw 'Wasm GC C native "${native.name}" has an unsupported argument direction';
+			}
+		for (index in 0...arguments.length) {
+			var pointer = bytePointers[index];
+			body.push(LocalGet(pointer == null ? argumentLocals[index] : pointer));
+		}
+		var resultLocal = native.result == Void ? -1 : allocateLocal(valueType(native.result));
+		body.push(Call(importIndex));
+		if (resultLocal >= 0)
+			body.push(LocalSet(resultLocal));
+		if (hasByteInputs)
+			body = body.concat([LocalGet(savedTop), GlobalSet(scratchTop)]);
+		if (resultLocal >= 0)
+			body = body.concat([LocalGet(resultLocal), LocalSet(outputLocal)]);
+		return body;
 	}
 
 	public function arrayGet(array:IrValue, index:IrValue, destination:Int, arrayLocal:Int, indexLocal:Int):Null<Array<WasmInstruction>> {

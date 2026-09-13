@@ -10,6 +10,7 @@ import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.Ir.IrCNative;
+import compiler.ir.Ir.IrCNativeArgumentMode;
 import compiler.types.TypedAst.NativeConvention;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrObjectField;
@@ -53,6 +54,7 @@ class IrProgramAssembler {
 						pointerLength: null,
 						pointerNullable: false,
 						arguments: [for (argument in native.arguments) IrGenerator.lowerType(argument)],
+						argumentModes: [for (_ in native.arguments) Value],
 						result: IrGenerator.lowerType(native.result)
 					});
 				case HashLinkNative:
