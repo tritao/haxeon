@@ -1,5 +1,6 @@
 package compiler.backend.wasm;
 
+import haxe.io.Bytes as HaxeBytes;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
 import compiler.backend.wasm.WasmLayout;
@@ -213,7 +214,28 @@ class WasmGcRepresentation implements WasmRepresentation {
 	public function constantString(value:String, destination:Int, strings:Map<String, Int>):Null<Array<WasmInstruction>> {
 		if (value == "Reached compiler-generated unreachable block")
 			return [Unreachable];
-		throw "Wasm GC string constants are not supported yet";
+		var bytes = HaxeBytes.ofString(value),
+			storage = allocateLocal(Ref({nullable: false, heap: Type(plan.byteArrayTypeIndex)})),
+			body:Array<WasmInstruction> = [
+				I32Const(bytes.length),
+				ArrayNewDefault(plan.byteArrayTypeIndex),
+				LocalSet(storage)
+			];
+		for (index in 0...bytes.length)
+			body = body.concat([
+				LocalGet(storage),
+				I32Const(index),
+				I32Const(bytes.get(index)),
+				ArraySet(plan.byteArrayTypeIndex)
+			]);
+		body = body.concat([
+			LocalGet(storage),
+			I32Const(0),
+			I32Const(bytes.length),
+			StructNew(plan.bytesTypeIndex),
+			LocalSet(destination)
+		]);
+		return body;
 	}
 
 	public function newObject(typeName:String, destination:Int):Array<WasmInstruction>
@@ -357,10 +379,32 @@ class WasmGcRepresentation implements WasmRepresentation {
 				Else
 			]);
 		}
+		var leftBytes = allocateLocal(Ref({nullable: false, heap: Type(plan.bytesTypeIndex)})),
+			rightBytes = allocateLocal(Ref({nullable: false, heap: Type(plan.bytesTypeIndex)}));
 		instructions = instructions.concat([
-			 LocalGet(leftLocal), RefCast({nullable: true, heap: Eq}),
-			LocalGet(rightLocal), RefCast({nullable: true, heap: Eq}),
-			               RefEq,                    LocalSet(output)
+			LocalGet(leftLocal),
+			RefTest({nullable: false, heap: Type(plan.bytesTypeIndex)}),
+			LocalGet(rightLocal),
+			RefTest({nullable: false, heap: Type(plan.bytesTypeIndex)}),
+			I32And,
+			If(null),
+			LocalGet(leftLocal),
+			RefCast({nullable: false, heap: Type(plan.bytesTypeIndex)}),
+			LocalSet(leftBytes),
+			LocalGet(rightLocal),
+			RefCast({nullable: false, heap: Type(plan.bytesTypeIndex)}),
+			LocalSet(rightBytes)
+		]);
+		instructions = instructions.concat(bytesEqual(output, leftBytes, rightBytes));
+		instructions = instructions.concat([
+			Else,
+			LocalGet(leftLocal),
+			RefCast({nullable: true, heap: Eq}),
+			LocalGet(rightLocal),
+			RefCast({nullable: true, heap: Eq}),
+			RefEq,
+			LocalSet(output),
+			End
 		]);
 		for (_ in boxedTypes)
 			instructions.push(End);
@@ -408,6 +452,24 @@ class WasmGcRepresentation implements WasmRepresentation {
 			if (output.type != Bool || arguments.length != 2 || argumentLocals.length != 2 || arguments[0].type != Dyn || arguments[1].type != Dyn)
 				throw "Invalid Wasm GC dynamic equality signature";
 			return dynamicEqual(outputLocal, argumentLocals[0], argumentLocals[1]);
+		}
+		if (name == "__string_length") {
+			if (output.type != I32 || arguments.length != 1 || argumentLocals.length != 1 || arguments[0].type != Bytes)
+				throw "Invalid Wasm GC string length signature";
+			return [
+				LocalGet(argumentLocals[0]),
+				StructGet(plan.bytesTypeIndex, 2),
+				LocalSet(outputLocal)
+			];
+		}
+		if (name == "__string_char_code_at")
+			return stringCharCodeAt(output, arguments, outputLocal, argumentLocals);
+		if (name == "__string_concat")
+			return stringConcat(output, arguments, outputLocal, argumentLocals);
+		if (name == "__string_equal") {
+			if (output.type != Bool || arguments.length != 2 || argumentLocals.length != 2 || arguments[0].type != Bytes || arguments[1].type != Bytes)
+				throw "Invalid Wasm GC string equality signature";
+			return bytesEqual(outputLocal, argumentLocals[0], argumentLocals[1]);
 		}
 		if (StringTools.startsWith(name, "__array_alloc_")) {
 			if (arguments.length != 1 || argumentLocals.length != 1)
@@ -764,6 +826,148 @@ class WasmGcRepresentation implements WasmRepresentation {
 
 	function trapInstructions():Array<WasmInstruction>
 		return exceptionTag == null ? [Unreachable] : [RefNull(Any), Throw(exceptionTag)];
+
+	function stringCharCodeAt(output:IrValue, arguments:Array<IrValue>, destination:Int, argumentLocals:Array<Int>):Array<WasmInstruction> {
+		if (output.type != I32 || arguments.length != 2 || argumentLocals.length != 2 || arguments[0].type != Bytes || arguments[1].type != I32)
+			throw "Invalid Wasm GC string charCodeAt signature";
+		var stringLocal = argumentLocals[0],
+			indexLocal = argumentLocals[1],
+			body:Array<WasmInstruction> = [LocalGet(indexLocal), I32Const(0), I32LtS, If(null)];
+		body = body.concat(trapInstructions());
+		body = body.concat([
+			End,
+			LocalGet(indexLocal),
+			LocalGet(stringLocal),
+			StructGet(plan.bytesTypeIndex, 2),
+			I32LtS,
+			I32Eqz,
+			If(null)
+		]);
+		body = body.concat(trapInstructions());
+		body = body.concat([
+			End,
+			LocalGet(stringLocal),
+			StructGet(plan.bytesTypeIndex, 0),
+			LocalGet(stringLocal),
+			StructGet(plan.bytesTypeIndex, 1),
+			LocalGet(indexLocal),
+			I32Add,
+			ArrayGetUnsigned(plan.byteArrayTypeIndex),
+			LocalSet(destination)
+		]);
+		return body;
+	}
+
+	function stringConcat(output:IrValue, arguments:Array<IrValue>, destination:Int, argumentLocals:Array<Int>):Array<WasmInstruction> {
+		if (output.type != Bytes || arguments.length != 2 || argumentLocals.length != 2 || arguments[0].type != Bytes || arguments[1].type != Bytes)
+			throw "Invalid Wasm GC string concatenation signature";
+		var leftLocal = argumentLocals[0],
+			rightLocal = argumentLocals[1],
+			leftLength = allocateLocal(I32),
+			rightLength = allocateLocal(I32),
+			totalLength = allocateLocal(I32),
+			storage = allocateLocal(Ref({
+				nullable: false,
+				heap: Type(plan.byteArrayTypeIndex)
+			})),
+			body:Array<WasmInstruction> = [
+				LocalGet(leftLocal),
+				StructGet(plan.bytesTypeIndex, 2),
+				LocalSet(leftLength),
+				LocalGet(rightLocal),
+				StructGet(plan.bytesTypeIndex, 2),
+				LocalSet(rightLength),
+				LocalGet(leftLength),
+				LocalGet(rightLength),
+				I32Add,
+				LocalTee(totalLength),
+				ArrayNewDefault(plan.byteArrayTypeIndex),
+				LocalSet(storage),
+				LocalGet(storage),
+				I32Const(0),
+				LocalGet(leftLocal),
+				StructGet(plan.bytesTypeIndex, 0),
+				LocalGet(leftLocal),
+				StructGet(plan.bytesTypeIndex, 1),
+				LocalGet(leftLength),
+				ArrayCopy(plan.byteArrayTypeIndex, plan.byteArrayTypeIndex),
+				LocalGet(storage),
+				LocalGet(leftLength),
+				LocalGet(rightLocal),
+				StructGet(plan.bytesTypeIndex, 0),
+				LocalGet(rightLocal),
+				StructGet(plan.bytesTypeIndex, 1),
+				LocalGet(rightLength),
+				ArrayCopy(plan.byteArrayTypeIndex, plan.byteArrayTypeIndex),
+				LocalGet(storage),
+				I32Const(0),
+				LocalGet(totalLength),
+				StructNew(plan.bytesTypeIndex),
+				LocalSet(destination)
+			];
+		return body;
+	}
+
+	function bytesEqual(output:Int, leftLocal:Int, rightLocal:Int):Array<WasmInstruction> {
+		var leftLength = allocateLocal(I32),
+			rightLength = allocateLocal(I32),
+			index = allocateLocal(I32),
+			body:Array<WasmInstruction> = [
+				LocalGet(leftLocal),
+				StructGet(plan.bytesTypeIndex, 2),
+				LocalSet(leftLength),
+				LocalGet(rightLocal),
+				StructGet(plan.bytesTypeIndex, 2),
+				LocalSet(rightLength),
+				I32Const(0),
+				LocalSet(output),
+				LocalGet(leftLength),
+				LocalGet(rightLength),
+				I32Eq,
+				If(null),
+				I32Const(1),
+				LocalSet(output),
+				I32Const(0),
+				LocalSet(index),
+				Block(null),
+				Loop(null),
+				LocalGet(index),
+				LocalGet(leftLength),
+				I32LtS,
+				I32Eqz,
+				BrIf(1),
+				LocalGet(leftLocal),
+				StructGet(plan.bytesTypeIndex, 0),
+				LocalGet(leftLocal),
+				StructGet(plan.bytesTypeIndex, 1),
+				LocalGet(index),
+				I32Add,
+				ArrayGetUnsigned(plan.byteArrayTypeIndex),
+				LocalGet(rightLocal),
+				StructGet(plan.bytesTypeIndex, 0),
+				LocalGet(rightLocal),
+				StructGet(plan.bytesTypeIndex, 1),
+				LocalGet(index),
+				I32Add,
+				ArrayGetUnsigned(plan.byteArrayTypeIndex),
+				I32Eq,
+				I32Eqz,
+				If(null),
+				I32Const(0),
+				LocalSet(output),
+				Br(2),
+				End,
+				LocalGet(index),
+				I32Const(1),
+				I32Add,
+				LocalSet(index),
+				Br(0),
+				End,
+				End,
+				End
+			];
+		return body;
+	}
 
 	static function requireInstructions(instructions:Null<Array<WasmInstruction>>):Array<WasmInstruction>
 		return if (instructions == null) throw "Wasm GC array operation was not lowered" else instructions;

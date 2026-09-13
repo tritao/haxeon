@@ -349,7 +349,7 @@ class WasmBackend implements Backend {
 							Equal(_, _, _), NewObject(_, _), FieldGet(_, _, _), FieldSet(_, _, _), ArrayGet(_, _, _), ArraySet(_, _, _), ArraySize(_, _),
 							IteratorNew(_, _), IteratorHasNext(_, _), IteratorNext(_, _), MakeEnum(_, _, _, _), EnumIndex(_, _), EnumField(_, _, _, _),
 							IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _), BeginTry(_, _), EndTry(_), Catch(_):
-						case ConstString(_, "Reached compiler-generated unreachable block"):
+						case ConstString(_, _):
 						case ToDyn(_, _), SafeCast(_, _), ToVirtual(_, _):
 						case Call(_, name, _) if (declaredFunctions.exists(name) || isSupportedGcRuntimeNative(name)):
 						case StaticClosure(_, name) if (declaredFunctions.exists(name)):
@@ -383,7 +383,8 @@ class WasmBackend implements Backend {
 	static function isSupportedGcRuntimeNative(name:String):Bool
 		return switch name {
 			case "__array_alloc_i32", "__array_alloc_bool", "__array_alloc_f64", "__array_alloc_bytes", "__array_alloc_ref", "__array_push_i32",
-				"__array_push_bool", "__array_push_f64", "__array_push_bytes", "__array_push_ref", "__dynamic_equal": true;
+				"__array_push_bool", "__array_push_f64", "__array_push_bytes", "__array_push_ref", "__dynamic_equal", "__string_length",
+				"__string_char_code_at", "__string_concat", "__string_equal": true;
 			default: false;
 		};
 

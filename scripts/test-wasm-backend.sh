@@ -99,6 +99,9 @@ bash "$root_dir/scripts/test-wasm-gc-invariants.sh"
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm-gc --output=out/wasm-cli-gc-exceptions.wasm --entry=wasm-gc-exceptions \
 	--root=tests/programs tests/programs/wasm-gc-exceptions.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm-gc --output=out/wasm-cli-gc-strings.wasm --entry=wasm-gc-strings \
+	--root=tests/programs tests/programs/wasm-gc-strings.hx
 node - "$root_dir" <<'JS'
 const fs = require("fs");
 const root = process.argv[2];
@@ -162,7 +165,9 @@ const cases = [
 	["out/wasm-gc-dynamic.wasm", 42],
 	["out/wasm-cli-gc-dynamic.wasm", 42],
 	["out/wasm-gc-exceptions.wasm", 42],
-	["out/wasm-cli-gc-exceptions.wasm", 42]
+	["out/wasm-cli-gc-exceptions.wasm", 42],
+	["out/wasm-gc-strings.wasm", 42],
+	["out/wasm-cli-gc-strings.wasm", 42]
 ];
 (async () => {
   for (const [relative, expected] of cases) {
