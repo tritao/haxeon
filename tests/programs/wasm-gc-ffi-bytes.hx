@@ -12,6 +12,11 @@ function main():Int {
 	var output = GcBytes.read(7);
 	if (output.status != 9 || output.data.length != 5 || output.data.get(0) != 104 || output.data.get(4) != 111)
 		return 0;
+	var fetched = GcBytes.fetch();
+	if (fetched.length != 8 || fetched.get(0) != 70 || fetched.get(7) != 33)
+		return 0;
+	if (GcBytes.optional() != null)
+		return 0;
 	var largePayload = Bytes.alloc(70000), index = 0;
 	while (index < largePayload.length) {
 		largePayload.set(index, index & 255);

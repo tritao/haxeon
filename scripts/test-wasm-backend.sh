@@ -217,7 +217,15 @@ const cases = [
           new Uint8Array(memory.buffer, pointer, 5).set([104, 101, 108, 108, 111]);
           view.setUint32(sizePointer, 5, true);
           return 9;
-        }
+        },
+        fetch_bytes: () => {
+          const pointer = 128;
+          new Uint8Array(moduleInstance.exports.memory.buffer, pointer, 8).set([70, 70, 73, 32, 98, 121, 116, 33]);
+          return pointer;
+        },
+        fetch_size: () => 8,
+        optional_bytes: () => 0,
+        optional_size: () => { throw new Error("nullable native pointer must skip its length import"); }
       };
     if (relative.includes("hxi-retained"))
       imports.retained = {retained_check: pointer => {
@@ -231,7 +239,7 @@ const cases = [
       const ffiBytes = relative.endsWith("wasm-cli-gc-ffi-bytes.wasm");
       const hasMemory = WebAssembly.Module.exports(compiled).some(entry => entry.name === "memory");
       if ((!ffiBytes && (WebAssembly.Module.imports(compiled).length !== 0 || hasMemory))
-          || (ffiBytes && (WebAssembly.Module.imports(compiled).length !== 3 || !hasMemory))
+          || (ffiBytes && (WebAssembly.Module.imports(compiled).length !== 7 || !hasMemory))
           || WebAssembly.Module.customSections(compiled, "haxeon.gc.roots").length !== 0)
         throw new Error("Wasm GC object module unexpectedly includes linear memory or custom root metadata");
       moduleInstance = new WebAssembly.Instance(compiled, imports);

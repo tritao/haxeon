@@ -272,16 +272,20 @@ class WasmBackend implements Backend {
 		if (hasFunction(program, "__init"))
 			reachable.set("__init", true);
 		validateGcSubset(program, reachable, preferredEntry);
-		var usedCNatives = reachableCNatives(program, reachable),
-			requiresScratchMemory = false;
+		var usedCNatives = reachableGcCNatives(program, reachable),
+			requiresScratchMemory = false,
+			requiresLinearMemory = false;
 		for (native in program.cNatives)
-			if (usedCNatives.exists(native.name))
+			if (usedCNatives.exists(native.name)) {
+				if (native.result == ManagedBytes && native.pointerLength != null)
+					requiresLinearMemory = true;
 				for (mode in native.argumentModes)
 					switch mode {
 						case BytesInput(_) | BytesInputOutput(_) | BytesOutput(_) | BytesSize:
 							requiresScratchMemory = true;
 						case Value | Output | InputOutput:
 					}
+			}
 
 		var plan = new WasmGcTypePlan(program),
 			gcRepresentation = new WasmGcRepresentation(plan),
@@ -292,9 +296,11 @@ class WasmBackend implements Backend {
 			methods:Map<String, String> = [];
 		plan.addTo(module);
 		var scratchTop = -1;
-		if (requiresScratchMemory) {
+		if (requiresScratchMemory || requiresLinearMemory) {
 			module.memoryMin = 1;
 			module.exportMemory = true;
+		}
+		if (requiresScratchMemory) {
 			scratchTop = module.globals.length;
 			module.globals.push({type: I32, mutable: true, init: [I32Const(8)]});
 		}
@@ -351,13 +357,19 @@ class WasmBackend implements Backend {
 
 	static function validateGcSubset(program:IrProgram, reachable:Map<String, Bool>, preferredEntry:String):Void {
 		var usedNatives = reachableNatives(program, reachable),
-			usedCNatives = reachableCNatives(program, reachable);
+			usedCNatives = reachableGcCNatives(program, reachable);
 		for (native in program.natives)
 			if (usedNatives.exists(native.name) && !isSupportedGcNative(program, native.name))
 				throw 'Wasm GC lowering does not support runtime native "${native.name}" yet';
 		for (native in program.cNatives)
-			if (usedCNatives.exists(native.name))
+			if (usedCNatives.exists(native.name)) {
 				validateGcCNative(native);
+				if (native.result == ManagedBytes && native.pointerLength != null) {
+					var lengthNative = requiredCNativeBySymbol(program, native.pointerLength);
+					validateGcCNative(lengthNative);
+					validateGcPointerLength(native, lengthNative);
+				}
+			}
 		var declaredFunctions:Map<String, Bool> = [];
 		for (fn in program.functions)
 			declaredFunctions.set(fn.name, true);
@@ -455,9 +467,22 @@ class WasmBackend implements Backend {
 			case Void:
 			case I32, Bool, I64, F64:
 				gcCNativeValueType(native.result);
+			case ManagedBytes if (native.pointerLength != null):
+				if (native.pointerOwnership != "borrowed")
+					throw 'Wasm GC C native "${native.name}" supports borrowed byte pointer results only so far';
 			case _:
 				throw 'Wasm GC C native "${native.name}" has unsupported result type ${Std.string(native.result)}';
 		}
+	}
+
+	static function validateGcPointerLength(pointer:IrCNative, length:IrCNative):Void {
+		if (length.result != I32 || pointer.arguments.length != length.arguments.length)
+			throw 'Wasm GC C native "${pointer.name}" has an incompatible byte-result length import';
+		for (index in 0...pointer.arguments.length)
+			if (pointer.arguments[index] != length.arguments[index]
+				|| pointer.argumentModes[index] != Value
+				|| length.argumentModes[index] != Value)
+				throw 'Wasm GC C native "${pointer.name}" requires scalar value arguments for its byte-result length import';
 	}
 
 	static function gcCNativeValueType(type:IrType):WasmValueType
@@ -483,6 +508,7 @@ class WasmBackend implements Backend {
 				parameters: parameters,
 				results: switch native.result {
 					case Void: [];
+					case ManagedBytes if (native.pointerLength != null): [I32];
 					case _: [gcCNativeValueType(native.result)];
 				}
 			}, importModule = native.library == null
@@ -595,6 +621,21 @@ class WasmBackend implements Backend {
 							default:
 						}
 		return result;
+	}
+
+	static function reachableGcCNatives(program:IrProgram, reachable:Map<String, Bool>):Map<String, Bool> {
+		var result = reachableCNatives(program, reachable);
+		for (native in program.cNatives)
+			if (result.exists(native.name) && native.result == ManagedBytes && native.pointerLength != null)
+				result.set(requiredCNativeBySymbol(program, native.pointerLength).name, true);
+		return result;
+	}
+
+	static function requiredCNativeBySymbol(program:IrProgram, symbol:String):IrCNative {
+		for (native in program.cNatives)
+			if (native.symbol == symbol)
+				return native;
+		throw 'Wasm GC byte result references missing length import "$symbol"';
 	}
 
 	static function memoryPages(bytes:Int):Int
@@ -5765,9 +5806,21 @@ class WasmFunctionLower {
 				var importIndex = functions.get(name);
 				if (importIndex == null)
 					throw 'Wasm C native call "$name" has no declared import contract';
+				var pointerLengthImportIndex = -1;
+				if (native.result == ManagedBytes && native.pointerLength != null) {
+					var lengthNative:Null<IrCNative> = null;
+					for (candidate in activeProgram.cNatives)
+						if (candidate.symbol == native.pointerLength)
+							lengthNative = candidate;
+					if (lengthNative == null)
+						throw 'Wasm C native call "$name" has no declared byte-result length import';
+					pointerLengthImportIndex = functions.get(lengthNative.name);
+					if (pointerLengthImportIndex == null)
+						throw 'Wasm C native call "$name" has no imported byte-result length function';
+				}
 				var outputLocal = output.type == Void ? -1 : requiredLocal(values, output.id),
 					represented = activeRepresentation.lowerCNativeCall(native, arguments, outputLocal,
-						[for (argument in arguments) requiredLocal(values, argument.id)], importIndex);
+						[for (argument in arguments) requiredLocal(values, argument.id)], importIndex, pointerLengthImportIndex);
 				if (represented != null)
 					emit(body, represented);
 				else {
