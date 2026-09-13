@@ -500,8 +500,8 @@ class WasmBackend implements Backend {
 				"__bytes_input_set_big_endian", "__bytes_input_read_byte", "__bytes_input_read_i32", "__bytes_input_read_f64", "__bytes_input_read_string",
 				"__bytes_input_read", "__bytes_output_new", "__bytes_output_big_endian", "__bytes_output_set_big_endian", "__bytes_output_write_byte",
 				"__bytes_output_write_i32", "__bytes_output_write_f64", "__bytes_output_write_string", "__bytes_output_write", "__bytes_output_write_range",
-				"__bytes_output_get_bytes", "__string_length", "__string_char_code_at", "__string_concat", "__string_equal", "__string_compare_full",
-				"__string_split": true;
+				"__bytes_output_get_bytes", "__string_length", "__string_char_at", "__string_char_code_at", "__string_concat", "__string_equal",
+				"__string_compare_full", "__string_index_of", "__string_index_of_from", "__string_split", "__string_substring": true;
 			default: false;
 		};
 	}

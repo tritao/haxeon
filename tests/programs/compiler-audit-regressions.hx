@@ -209,5 +209,13 @@ function main():Int {
 		return 19;
 	if (auditRepresentative(Text) != DynamicValue)
 		return 20;
+	if ("abcabc".indexOf("bc", 2) != 4 || "abcabc".indexOf("bc", 5) != -1)
+		return 21;
+	if ("abc".indexOf("", 0) != 0 || "abc".indexOf("", 3) != 3 || "abc".indexOf("", 4) != -1)
+		return 22;
+	if ("abc".indexOf("a", -3) != 0 || "abc".indexOf("z") != -1)
+		return 23;
+	if ("xabcx".substring(1, 4).indexOf("b") != 1)
+		return 24;
 	return 42;
 }
