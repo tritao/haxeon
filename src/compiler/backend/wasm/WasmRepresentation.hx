@@ -610,6 +610,24 @@ class WasmGcRepresentation implements WasmRepresentation {
 			body = body.concat([LocalGet(lengthLocal), I32Const(1), I32Add, LocalSet(outputLocal)]);
 			return body;
 		}
+		if (StringTools.startsWith(name, "__array_unshift_")) {
+			if (arguments.length != 2 || argumentLocals.length != 2 || output.type != I32)
+				throw 'Invalid Wasm GC array unshift signature for "$name"';
+			var element = requireArrayElement(arguments[0].type),
+				suffix = arrayNativeSuffix(element);
+			if (name != "__array_unshift_" + suffix || arguments[1].type != element)
+				throw 'Wasm GC array unshift "$name" does not match its $element array';
+			return arrayUnshift(element, argumentLocals[0], argumentLocals[1], outputLocal);
+		}
+		if (StringTools.startsWith(name, "__array_resize_")) {
+			if (arguments.length != 2 || argumentLocals.length != 2 || output.type != Void || arguments[1].type != I32)
+				throw 'Invalid Wasm GC array resize signature for "$name"';
+			var element = requireArrayElement(arguments[0].type),
+				suffix = arrayNativeSuffix(element);
+			if (name != "__array_resize_" + suffix)
+				throw 'Wasm GC array resize "$name" does not match its $element array';
+			return arrayResize(element, argumentLocals[0], argumentLocals[1]);
+		}
 		if (StringTools.startsWith(name, "__array_index_of_")) {
 			if (arguments.length != 2 || argumentLocals.length != 2 || output.type != I32)
 				throw 'Invalid Wasm GC array indexOf signature for "$name"';
@@ -768,6 +786,193 @@ class WasmGcRepresentation implements WasmRepresentation {
 			LocalGet(storage),
 			StructNew(wrapperType),
 			LocalSet(destination)
+		]);
+		return body;
+	}
+
+	function arrayUnshift(element:IrType, arrayLocal:Int, valueLocal:Int, destination:Int):Array<WasmInstruction> {
+		var wrapperType = plan.arrayType(element),
+			storageType = plan.arrayStorageType(element),
+			length = allocateLocal(I32),
+			requiredLength = allocateLocal(I32),
+			capacity = allocateLocal(I32),
+			storage = allocateLocal(Ref({
+				nullable: false,
+				heap: Type(storageType)
+			})),
+			newStorage = allocateLocal(Ref({nullable: false, heap: Type(storageType)})),
+			body:Array<WasmInstruction> = [
+				LocalGet(arrayLocal),
+				StructGet(wrapperType, WasmGcTypePlan.arrayLengthFieldIndex()),
+				LocalSet(length),
+				LocalGet(arrayLocal),
+				StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+				LocalSet(storage),
+				LocalGet(length),
+				I32Const(1),
+				I32Add,
+				LocalSet(requiredLength),
+				LocalGet(storage),
+				ArrayLen,
+				LocalSet(capacity),
+				LocalGet(capacity),
+				LocalGet(requiredLength),
+				I32LtS,
+				If(null),
+				LocalGet(capacity),
+				I32Const(2),
+				I32Mul,
+				LocalSet(capacity),
+				LocalGet(capacity),
+				LocalGet(requiredLength),
+				I32LtS,
+				If(null),
+				LocalGet(requiredLength),
+				LocalSet(capacity),
+				End,
+				LocalGet(capacity),
+				ArrayNewDefault(storageType),
+				LocalSet(newStorage),
+				LocalGet(newStorage),
+				I32Const(0),
+				LocalGet(storage),
+				I32Const(0),
+				LocalGet(length),
+				ArrayCopy(storageType, storageType),
+				LocalGet(newStorage),
+				LocalSet(storage),
+				End,
+				LocalGet(storage),
+				I32Const(1),
+				LocalGet(storage),
+				I32Const(0),
+				LocalGet(length),
+				ArrayCopy(storageType, storageType),
+				LocalGet(storage),
+				I32Const(0),
+				LocalGet(valueLocal),
+				ArraySet(storageType),
+				LocalGet(arrayLocal),
+				LocalGet(storage),
+				StructSet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+				LocalGet(arrayLocal),
+				LocalGet(requiredLength),
+				StructSet(wrapperType, WasmGcTypePlan.arrayLengthFieldIndex()),
+				LocalGet(requiredLength),
+				LocalSet(destination)
+			];
+		return body;
+	}
+
+	function arrayResize(element:IrType, arrayLocal:Int, requestedLength:Int):Array<WasmInstruction> {
+		var wrapperType = plan.arrayType(element),
+			storageType = plan.arrayStorageType(element),
+			length = allocateLocal(I32),
+			capacity = allocateLocal(I32),
+			index = allocateLocal(I32),
+			storage = allocateLocal(Ref({
+				nullable: false,
+				heap: Type(storageType)
+			})),
+			newStorage = allocateLocal(Ref({nullable: false, heap: Type(storageType)})),
+			body:Array<WasmInstruction> = [LocalGet(requestedLength), I32Const(0), I32LtS, If(null)];
+		body = body.concat(trapInstructions());
+		body = body.concat([
+			End,
+			LocalGet(arrayLocal),
+			StructGet(wrapperType, WasmGcTypePlan.arrayLengthFieldIndex()),
+			LocalSet(length),
+			LocalGet(arrayLocal),
+			StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+			LocalSet(storage),
+			LocalGet(storage),
+			ArrayLen,
+			LocalSet(capacity),
+			LocalGet(requestedLength),
+			LocalGet(capacity),
+			I32LeS,
+			If(null),
+			LocalGet(length),
+			LocalGet(requestedLength),
+			I32LtS,
+			If(null),
+			LocalGet(length),
+			LocalSet(index),
+			Loop(null),
+			LocalGet(index),
+			LocalGet(requestedLength),
+			I32LtS,
+			If(null),
+			LocalGet(storage),
+			LocalGet(index)
+		]);
+		body = body.concat(zeroValue(element));
+		body = body.concat([
+			ArraySet(storageType),
+			LocalGet(index),
+			I32Const(1),
+			I32Add,
+			LocalSet(index),
+			Br(1),
+			End,
+			End,
+			Else,
+			LocalGet(requestedLength),
+			LocalGet(length),
+			I32LtS,
+			If(null),
+			LocalGet(requestedLength),
+			LocalSet(index),
+			Loop(null),
+			LocalGet(index),
+			LocalGet(length),
+			I32LtS,
+			If(null),
+			LocalGet(storage),
+			LocalGet(index)
+		]);
+		body = body.concat(zeroValue(element));
+		body = body.concat([
+			ArraySet(storageType),
+			LocalGet(index),
+			I32Const(1),
+			I32Add,
+			LocalSet(index),
+			Br(1),
+			End,
+			End,
+			End,
+			End,
+			Else,
+			LocalGet(capacity),
+			I32Const(2),
+			I32Mul,
+			LocalSet(capacity),
+			LocalGet(capacity),
+			LocalGet(requestedLength),
+			I32LtS,
+			If(null),
+			LocalGet(requestedLength),
+			LocalSet(capacity),
+			End,
+			LocalGet(capacity),
+			ArrayNewDefault(storageType),
+			LocalSet(newStorage),
+			LocalGet(newStorage),
+			I32Const(0),
+			LocalGet(storage),
+			I32Const(0),
+			LocalGet(length),
+			ArrayCopy(storageType, storageType),
+			LocalGet(arrayLocal),
+			LocalGet(newStorage),
+			StructSet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+			End
+		]);
+		body = body.concat([
+			LocalGet(arrayLocal),
+			LocalGet(requestedLength),
+			StructSet(wrapperType, WasmGcTypePlan.arrayLengthFieldIndex())
 		]);
 		return body;
 	}
