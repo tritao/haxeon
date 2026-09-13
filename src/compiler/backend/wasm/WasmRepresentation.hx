@@ -30,7 +30,7 @@ interface WasmRepresentation {
 	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
 		argumentLocals:Array<Int>):Null<Array<WasmInstruction>>;
 	public function lowerCNativeCall(native:IrCNative, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>, importIndex:Int,
-		pointerLengthImportIndex:Int):Null<Array<WasmInstruction>>;
+		pointerLengthImportIndex:Int, pointerReleaseImportIndex:Int):Null<Array<WasmInstruction>>;
 	public function arrayGet(array:IrValue, index:IrValue, destination:Int, arrayLocal:Int, indexLocal:Int):Null<Array<WasmInstruction>>;
 	public function arraySet(array:IrValue, index:IrValue, value:IrValue, arrayLocal:Int, indexLocal:Int, valueLocal:Int):Null<Array<WasmInstruction>>;
 	public function arraySize(array:IrValue, destination:Int, arrayLocal:Int):Null<Array<WasmInstruction>>;
@@ -126,7 +126,7 @@ class WasmLinearRepresentation implements WasmRepresentation {
 		return null;
 
 	public function lowerCNativeCall(native:IrCNative, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>, importIndex:Int,
-			pointerLengthImportIndex:Int):Null<Array<WasmInstruction>>
+			pointerLengthImportIndex:Int, pointerReleaseImportIndex:Int):Null<Array<WasmInstruction>>
 		return null;
 
 	public function arrayGet(array:IrValue, index:IrValue, destination:Int, arrayLocal:Int, indexLocal:Int):Null<Array<WasmInstruction>>
@@ -595,7 +595,7 @@ class WasmGcRepresentation implements WasmRepresentation {
 	}
 
 	public function lowerCNativeCall(native:IrCNative, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>, importIndex:Int,
-			pointerLengthImportIndex:Int):Null<Array<WasmInstruction>> {
+			pointerLengthImportIndex:Int, pointerReleaseImportIndex:Int):Null<Array<WasmInstruction>> {
 		var usesScratchBridge = false;
 		for (mode in native.argumentModes)
 			switch mode {
@@ -610,6 +610,8 @@ class WasmGcRepresentation implements WasmRepresentation {
 		var bytePointerResult = native.result == ManagedBytes && native.pointerLength != null;
 		if (bytePointerResult && pointerLengthImportIndex < 0)
 			throw 'Wasm GC C native "${native.name}" has no imported byte-result length function';
+		if (bytePointerResult && native.pointerOwnership == "owned" && pointerReleaseImportIndex < 0)
+			throw 'Wasm GC C native "${native.name}" has no imported byte-result release function';
 		var body:Array<WasmInstruction> = [],
 			savedTop = usesScratchBridge ? allocateLocal(I32) : -1,
 			bytePointers:Array<Null<Int>> = [];
@@ -713,13 +715,14 @@ class WasmGcRepresentation implements WasmRepresentation {
 		if (usesScratchBridge)
 			body = body.concat([LocalGet(savedTop), GlobalSet(scratchTop)]);
 		if (bytePointerResult)
-			body = body.concat(copyNativeBytesResult(native, argumentLocals, resultLocal, outputLocal, pointerLengthImportIndex));
+			body = body.concat(copyNativeBytesResult(native, argumentLocals, resultLocal, outputLocal, pointerLengthImportIndex, pointerReleaseImportIndex));
 		else if (resultLocal >= 0)
 			body = body.concat([LocalGet(resultLocal), LocalSet(outputLocal)]);
 		return body;
 	}
 
-	function copyNativeBytesResult(native:IrCNative, argumentLocals:Array<Int>, pointer:Int, outputLocal:Int, lengthImportIndex:Int):Array<WasmInstruction> {
+	function copyNativeBytesResult(native:IrCNative, argumentLocals:Array<Int>, pointer:Int, outputLocal:Int, lengthImportIndex:Int,
+			releaseImportIndex:Int):Array<WasmInstruction> {
 		var length = allocateLocal(I32),
 			storage = allocateLocal(Ref({nullable: false, heap: Type(plan.byteArrayTypeIndex)})),
 			position = allocateLocal(I32),
@@ -770,9 +773,11 @@ class WasmGcRepresentation implements WasmRepresentation {
 			I32Const(0),
 			LocalGet(length),
 			StructNew(plan.managedBytesTypeIndex),
-			LocalSet(outputLocal),
-			End
+			LocalSet(outputLocal)
 		]);
+		if (native.pointerOwnership == "owned")
+			body = body.concat([LocalGet(pointer), Call(releaseImportIndex)]);
+		body.push(End);
 		return body;
 	}
 

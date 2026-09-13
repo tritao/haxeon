@@ -17,6 +17,9 @@ function main():Int {
 		return 0;
 	if (GcBytes.optional() != null)
 		return 0;
+	var owned = GcBytes.fetchOwned();
+	if (owned.length != 4 || owned.get(0) != 79 || owned.get(3) != 33)
+		return 0;
 	var largePayload = Bytes.alloc(70000), index = 0;
 	while (index < largePayload.length) {
 		largePayload.set(index, index & 255);

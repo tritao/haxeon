@@ -357,17 +357,28 @@ class WasmBackend implements Backend {
 
 	static function validateGcSubset(program:IrProgram, reachable:Map<String, Bool>, preferredEntry:String):Void {
 		var usedNatives = reachableNatives(program, reachable),
+			directCNatives = reachableCNatives(program, reachable),
 			usedCNatives = reachableGcCNatives(program, reachable);
 		for (native in program.natives)
 			if (usedNatives.exists(native.name) && !isSupportedGcNative(program, native.name))
 				throw 'Wasm GC lowering does not support runtime native "${native.name}" yet';
 		for (native in program.cNatives)
 			if (usedCNatives.exists(native.name)) {
-				validateGcCNative(native);
+				if (directCNatives.exists(native.name) && isGcPointerRelease(program, native))
+					throw 'Wasm GC native release function "${native.name}" is callable only as owned byte-result cleanup';
+				if (isGcPointerRelease(program, native))
+					validateGcPointerReleaseImport(native);
+				else
+					validateGcCNative(native);
 				if (native.result == ManagedBytes && native.pointerLength != null) {
 					var lengthNative = requiredCNativeBySymbol(program, native.pointerLength);
 					validateGcCNative(lengthNative);
 					validateGcPointerLength(native, lengthNative);
+					if (native.pointerOwnership == "owned") {
+						if (native.pointerRelease == null)
+							throw 'Wasm GC C native "${native.name}" is missing its owned pointer release symbol';
+						validateGcPointerRelease(native, requiredCNativeBySymbol(program, native.pointerRelease));
+					}
 				}
 			}
 		var declaredFunctions:Map<String, Bool> = [];
@@ -468,8 +479,8 @@ class WasmBackend implements Backend {
 			case I32, Bool, I64, F64:
 				gcCNativeValueType(native.result);
 			case ManagedBytes if (native.pointerLength != null):
-				if (native.pointerOwnership != "borrowed")
-					throw 'Wasm GC C native "${native.name}" supports borrowed byte pointer results only so far';
+				if (native.pointerOwnership != "borrowed" && native.pointerOwnership != "owned")
+					throw 'Wasm GC C native "${native.name}" requires borrowed or owned pointer metadata';
 			case _:
 				throw 'Wasm GC C native "${native.name}" has unsupported result type ${Std.string(native.result)}';
 		}
@@ -479,11 +490,35 @@ class WasmBackend implements Backend {
 		if (length.result != I32 || pointer.arguments.length != length.arguments.length)
 			throw 'Wasm GC C native "${pointer.name}" has an incompatible byte-result length import';
 		for (index in 0...pointer.arguments.length)
-			if (pointer.arguments[index] != length.arguments[index]
+			if (!Type.enumEq(pointer.arguments[index], length.arguments[index])
 				|| pointer.argumentModes[index] != Value
 				|| length.argumentModes[index] != Value)
 				throw 'Wasm GC C native "${pointer.name}" requires scalar value arguments for its byte-result length import';
 	}
+
+	static function validateGcPointerRelease(pointer:IrCNative, release:IrCNative):Void {
+		if (pointer.pointerOwnership != "owned"
+			|| pointer.pointerRelease != release.symbol
+			|| release.result != Void
+			|| release.arguments.length != 1
+			|| !isGcNativePointerArgument(release.arguments[0])
+			|| release.argumentModes[0] != Value)
+			throw 'Wasm GC C native "${pointer.name}" requires a void release import accepting one raw native pointer';
+	}
+
+	static function validateGcPointerReleaseImport(release:IrCNative):Void {
+		if (release.result != Void
+			|| release.arguments.length != 1
+			|| !isGcNativePointerArgument(release.arguments[0])
+			|| release.argumentModes[0] != Value)
+			throw 'Wasm GC C release import "${release.name}" must accept one raw native pointer and return void';
+	}
+
+	static function isGcNativePointerArgument(type:IrType):Bool
+		return switch type {
+			case ManagedBytes | Abstract("native_pointer"): true;
+			case _: false;
+		};
 
 	static function gcCNativeValueType(type:IrType):WasmValueType
 		return switch type {
@@ -498,12 +533,15 @@ class WasmBackend implements Backend {
 			if (!used.exists(native.name))
 				continue;
 			var parameters:Array<WasmValueType> = [];
-			for (index in 0...native.arguments.length)
-				parameters.push(switch native.argumentModes[index] {
-					case BytesInput(_) | BytesInputOutput(_) | BytesOutput(_) | BytesSize: I32;
-					case Value: gcCNativeValueType(native.arguments[index]);
-					case _: throw 'Wasm GC C native "${native.name}" has unsupported argument direction';
-				});
+			if (isGcPointerRelease(program, native))
+				parameters.push(I32);
+			else
+				for (index in 0...native.arguments.length)
+					parameters.push(switch native.argumentModes[index] {
+						case BytesInput(_) | BytesInputOutput(_) | BytesOutput(_) | BytesSize: I32;
+						case Value: gcCNativeValueType(native.arguments[index]);
+						case _: throw 'Wasm GC C native "${native.name}" has unsupported argument direction';
+					});
 			var type:WasmFunctionType = {
 				parameters: parameters,
 				results: switch native.result {
@@ -626,9 +664,22 @@ class WasmBackend implements Backend {
 	static function reachableGcCNatives(program:IrProgram, reachable:Map<String, Bool>):Map<String, Bool> {
 		var result = reachableCNatives(program, reachable);
 		for (native in program.cNatives)
-			if (result.exists(native.name) && native.result == ManagedBytes && native.pointerLength != null)
+			if (result.exists(native.name) && native.result == ManagedBytes && native.pointerLength != null) {
 				result.set(requiredCNativeBySymbol(program, native.pointerLength).name, true);
+				if (native.pointerOwnership == "owned" && native.pointerRelease != null)
+					result.set(requiredCNativeBySymbol(program, native.pointerRelease).name, true);
+			}
 		return result;
+	}
+
+	static function isGcPointerRelease(program:IrProgram, candidate:IrCNative):Bool {
+		for (native in program.cNatives)
+			if (native.result == ManagedBytes
+				&& native.pointerLength != null
+				&& native.pointerOwnership == "owned"
+				&& native.pointerRelease == candidate.symbol)
+				return true;
+		return false;
 	}
 
 	static function requiredCNativeBySymbol(program:IrProgram, symbol:String):IrCNative {
@@ -5806,21 +5857,29 @@ class WasmFunctionLower {
 				var importIndex = functions.get(name);
 				if (importIndex == null)
 					throw 'Wasm C native call "$name" has no declared import contract';
-				var pointerLengthImportIndex = -1;
+				var pointerLengthImportIndex = -1,
+					pointerReleaseImportIndex = -1;
 				if (native.result == ManagedBytes && native.pointerLength != null) {
 					var lengthNative:Null<IrCNative> = null;
 					for (candidate in activeProgram.cNatives)
 						if (candidate.symbol == native.pointerLength)
 							lengthNative = candidate;
-					if (lengthNative == null)
-						throw 'Wasm C native call "$name" has no declared byte-result length import';
-					pointerLengthImportIndex = functions.get(lengthNative.name);
-					if (pointerLengthImportIndex == null)
-						throw 'Wasm C native call "$name" has no imported byte-result length function';
+					if (lengthNative != null) {
+						var importedLength = functions.get(lengthNative.name);
+						if (importedLength != null)
+							pointerLengthImportIndex = importedLength;
+					}
+					if (native.pointerOwnership == "owned" && native.pointerRelease != null)
+						for (candidate in activeProgram.cNatives)
+							if (candidate.symbol == native.pointerRelease) {
+								var importedRelease = functions.get(candidate.name);
+								if (importedRelease != null)
+									pointerReleaseImportIndex = importedRelease;
+							}
 				}
 				var outputLocal = output.type == Void ? -1 : requiredLocal(values, output.id),
 					represented = activeRepresentation.lowerCNativeCall(native, arguments, outputLocal,
-						[for (argument in arguments) requiredLocal(values, argument.id)], importIndex, pointerLengthImportIndex);
+						[for (argument in arguments) requiredLocal(values, argument.id)], importIndex, pointerLengthImportIndex, pointerReleaseImportIndex);
 				if (represented != null)
 					emit(body, represented);
 				else {

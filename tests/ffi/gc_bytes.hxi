@@ -6,4 +6,7 @@ interface GcBytes @target("portable-abi32") @library("gc_bytes") {
 	extern fn fetchSize() -> u32 @symbol("fetch_size");
 	extern fn optional() -> nullable<ptr<const<u8>>> @borrowed @length("optional_size") @symbol("optional_bytes");
 	extern fn optionalSize() -> u32 @symbol("optional_size");
+	extern fn fetchOwned() -> ptr<const<u8>> @owned("release_bytes") @length("owned_size") @symbol("fetch_owned_bytes");
+	extern fn ownedSize() -> u32 @symbol("owned_size");
+	extern fn releaseBytes(value: ptr<void>) -> void @symbol("release_bytes");
 }

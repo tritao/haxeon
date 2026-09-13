@@ -183,6 +183,7 @@ const cases = [
     const importedMemory = relative.endsWith("hxi-retained-imported.wasm");
     const memory = importedMemory ? new WebAssembly.Memory({initial: 3}) : null;
     let moduleInstance = null;
+    let ownedBytesReleased = false;
     const imports = {};
     if (relative.endsWith("cnative-import.wasm"))
       imports.fixture = {fixture_add: (left, right) => left + right};
@@ -225,7 +226,19 @@ const cases = [
         },
         fetch_size: () => 8,
         optional_bytes: () => 0,
-        optional_size: () => { throw new Error("nullable native pointer must skip its length import"); }
+        optional_size: () => { throw new Error("nullable native pointer must skip its length import"); },
+        fetch_owned_bytes: () => {
+          const pointer = 192;
+          new Uint8Array(moduleInstance.exports.memory.buffer, pointer, 4).set([79, 87, 78, 33]);
+          return pointer;
+        },
+        owned_size: () => 4,
+        release_bytes: pointer => {
+          if (pointer !== 192)
+            throw new Error("owned byte result released the wrong pointer");
+          ownedBytesReleased = true;
+          new Uint8Array(moduleInstance.exports.memory.buffer, pointer, 4).fill(0);
+        }
       };
     if (relative.includes("hxi-retained"))
       imports.retained = {retained_check: pointer => {
@@ -239,7 +252,7 @@ const cases = [
       const ffiBytes = relative.endsWith("wasm-cli-gc-ffi-bytes.wasm");
       const hasMemory = WebAssembly.Module.exports(compiled).some(entry => entry.name === "memory");
       if ((!ffiBytes && (WebAssembly.Module.imports(compiled).length !== 0 || hasMemory))
-          || (ffiBytes && (WebAssembly.Module.imports(compiled).length !== 7 || !hasMemory))
+          || (ffiBytes && (WebAssembly.Module.imports(compiled).length !== 10 || !hasMemory))
           || WebAssembly.Module.customSections(compiled, "haxeon.gc.roots").length !== 0)
         throw new Error("Wasm GC object module unexpectedly includes linear memory or custom root metadata");
       moduleInstance = new WebAssembly.Instance(compiled, imports);
@@ -252,6 +265,8 @@ const cases = [
     const value = instance.exports.main();
     if (value !== expected)
       throw new Error(`${relative}: expected ${expected}, got ${value}`);
+    if (relative.endsWith("wasm-cli-gc-ffi-bytes.wasm") && !ownedBytesReleased)
+      throw new Error("owned byte result was not released after copying");
   }
   const int64Module = (await WebAssembly.instantiate(
     fs.readFileSync(`${root}/out/wasm-backend-std-string-i64.wasm`))).instance;
