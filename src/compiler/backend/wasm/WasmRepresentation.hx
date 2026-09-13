@@ -468,6 +468,11 @@ class WasmGcRepresentation implements WasmRepresentation {
 				throw "Invalid Wasm GC Math.ceil signature";
 			return [LocalGet(argumentLocals[0]), F64Ceil, I32TruncF64S, LocalSet(outputLocal)];
 		}
+		if (name == "__std_int_f64") {
+			if (output.type != I32 || arguments.length != 1 || arguments[0].type != F64 || argumentLocals.length != 1)
+				throw "Invalid Wasm GC Std.int(Float) signature";
+			return [LocalGet(argumentLocals[0]), I32TruncF64S, LocalSet(outputLocal)];
+		}
 		if (name == "__dynamic_equal") {
 			if (output.type != Bool || arguments.length != 2 || argumentLocals.length != 2 || arguments[0].type != Dyn || arguments[1].type != Dyn)
 				throw "Invalid Wasm GC dynamic equality signature";
@@ -1282,6 +1287,8 @@ class WasmGcRepresentation implements WasmRepresentation {
 			body = body.concat([
 				LocalGet(closureLocal),
 				StructGet(plan.closureTypeIndex, 0),
+				I32Const(1),
+				I32ShrU,
 				CallIndirect(staticType)
 			]);
 			if (destination >= 0)

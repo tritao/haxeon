@@ -29,7 +29,7 @@ for target in wasm32 wasm-gc; do
 		--entry=wasm-bytes-compare --root=tests/programs tests/programs/wasm-bytes-compare.hx
 done
 
-shared_cases=(add array-iterator-wasm array-slice-index numeric-promotion try-catch try-nested try-array-bounds)
+shared_cases=(add array-iterator-wasm array-slice-index numeric-promotion function-wrapper try-catch try-nested try-array-bounds)
 for case_name in "${shared_cases[@]}"; do
 	for target in wasm32 wasm-gc; do
 		"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
@@ -61,7 +61,10 @@ const cases = process.argv.slice(3);
           throw new Error(`${name}: GC module contains linear memory or custom root metadata`);
       }
       const imports = target === "wasm32"
-        ? { haxeon_runtime: { __math_ceil: value => Math.ceil(value) } }
+        ? { haxeon_runtime: {
+            __math_ceil: value => Math.ceil(value),
+            __std_int_f64: value => Math.trunc(value)
+          } }
         : {};
       const instance = await WebAssembly.instantiate(module, imports);
       results[target] = instance.exports.main();

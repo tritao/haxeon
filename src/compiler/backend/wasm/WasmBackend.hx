@@ -438,9 +438,10 @@ class WasmBackend implements Backend {
 			case "__array_alloc_i32", "__array_alloc_bool", "__array_alloc_f64", "__array_alloc_bytes", "__array_alloc_ref", "__array_push_i32",
 				"__array_push_bool", "__array_push_f64", "__array_push_bytes", "__array_push_ref", "__array_index_of_i32", "__array_index_of_bool",
 				"__array_index_of_f64", "__array_index_of_bytes", "__array_index_of_ref", "__array_slice_i32", "__array_slice_bool", "__array_slice_f64",
-				"__array_slice_bytes", "__array_slice_ref", "__math_ceil", "__dynamic_equal", "__bytes_alloc", "__bytes_of_string", "__bytes_length",
-				"__bytes_get", "__bytes_set", "__bytes_get_i32", "__bytes_set_i32", "getI32", "setI32", "__bytes_view", "__bytes_sub", "__bytes_compare",
-				"__bytes_to_string", "__bytes_get_string", "structSlice", "__string_length", "__string_char_code_at", "__string_concat", "__string_equal": true;
+				"__array_slice_bytes", "__array_slice_ref", "__math_ceil", "__std_int_f64", "__dynamic_equal", "__bytes_alloc", "__bytes_of_string",
+				"__bytes_length", "__bytes_get", "__bytes_set", "__bytes_get_i32", "__bytes_set_i32", "getI32", "setI32", "__bytes_view", "__bytes_sub",
+				"__bytes_compare", "__bytes_to_string", "__bytes_get_string", "structSlice", "__string_length", "__string_char_code_at", "__string_concat",
+				"__string_equal": true;
 			default: false;
 		};
 
