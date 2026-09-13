@@ -303,9 +303,13 @@ a structure result is an `i32` pointer supplied by the host adapter; the
 adapter must use the HXI structure's size, alignment, and field layout. The GC
 backend copies these bytes to or from GC-managed storage. Borrowed opaque
 pointers can be returned, passed to imports, and read from output slots as
-32-bit native handles; HXI interfaces with a 64-bit pointer ABI are rejected
-for this bridge. Owned opaque pointer handles still require host lifetime
-management and are rejected by the GC backend.
+32-bit native handles. Owned opaque pointers are supported for direct results
+and output slots when the matching release import is declared; their generated
+`close()` method calls that import at most once, and `isClosed()` reports the
+state. Closing is explicit: Wasm GC does not run the Haxe release import when
+an owner becomes unreachable. HXI interfaces with a 64-bit pointer ABI are
+rejected by this bridge, and fixed-layout structures containing pointer fields
+remain unsupported.
 
 A conventional two-call byte buffer uses an explicit paired contract:
 

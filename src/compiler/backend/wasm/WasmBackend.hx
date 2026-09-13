@@ -332,6 +332,7 @@ class WasmBackend implements Backend {
 			module.globals.push({type: I32, mutable: true, init: [I32Const(8)]});
 		}
 		addGcCNativeImports(module, functions, program, usedCNatives);
+		gcRepresentation.configureNativePointerReleases(gcPointerReleaseFunctionIndices(program, reachable, functions));
 		addGcMapRuntimeFunctions(module, functions, plan, program, usedNatives);
 		addGcRuntimeNativeFunctions(module, functions, plan, representation, program, usedNatives);
 		addGcMapProjectionFunctions(module, functions, plan, program, reachable);
@@ -392,18 +393,21 @@ class WasmBackend implements Backend {
 			usedCNatives = reachableGcCNatives(program, reachable);
 		for (native in program.natives)
 			if (usedNatives.exists(native.name) && !isSupportedGcNative(program, native.name)) {
-				if (native.symbol == "native_pointer_close" || native.symbol == "native_pointer_owned_from_slot")
-					throw 'Wasm GC lowering does not support owned opaque native pointers yet ("${native.name}")';
 				throw 'Wasm GC lowering does not support runtime native "${native.name}" yet';
 			}
 		for (native in program.cNatives)
 			if (usedCNatives.exists(native.name)) {
 				if (directCNatives.exists(native.name) && isGcPointerRelease(program, native))
-					throw 'Wasm GC native release function "${native.name}" is callable only as owned byte-result cleanup';
+					throw 'Wasm GC native release function "${native.name}" is callable only by owned pointer or byte-result cleanup';
 				if (isGcPointerRelease(program, native))
 					validateGcPointerReleaseImport(native);
 				else
 					validateGcCNative(native);
+				if (isGcNativePointerType(native.result) && native.pointerOwnership == "owned") {
+					if (native.pointerRelease == null)
+						throw 'Wasm GC C native "${native.name}" is missing its owned pointer release symbol';
+					validateGcPointerRelease(native, requiredCNativeBySymbol(program, native.pointerRelease));
+				}
 				if (native.result == ManagedBytes && native.pointerLength != null) {
 					var lengthNative = requiredCNativeBySymbol(program, native.pointerLength);
 					validateGcCNative(lengthNative);
@@ -488,7 +492,7 @@ class WasmBackend implements Backend {
 						locals.push({type: type});
 						return index;
 					};
-				representation.beginFunction(allocateLocal, null);
+				representation.beginFunction(allocateLocal, null, null);
 				var arguments = [
 					for (index in 0...native.arguments.length)
 						new IrValue(index, native.name + "_argument_" + index, native.arguments[index])
@@ -525,10 +529,10 @@ class WasmBackend implements Backend {
 				"__bytes_input_set_big_endian", "__bytes_input_read_byte", "__bytes_input_read_i32", "__bytes_input_read_f64", "__bytes_input_read_string",
 				"__bytes_input_read", "__bytes_output_new", "__bytes_output_big_endian", "__bytes_output_set_big_endian", "__bytes_output_write_byte",
 				"__bytes_output_write_i32", "__bytes_output_write_f64", "__bytes_output_write_string", "__bytes_output_write", "__bytes_output_write_range",
-				"__bytes_output_get_bytes", "structGetPointer", "native_pointer_is_closed", "__string_length", "__string_char_at", "__string_char_code_at",
-				"__string_concat", "__string_equal", "__string_compare_full", "__string_index_of", "__string_index_of_from", "__string_last_index_of",
-				"__string_last_index_of_from", "__string_to_lower_case", "__string_to_upper_case", "__string_split", "__string_substring",
-				"__string_from_char_code": true;
+				"__bytes_output_get_bytes", "structGetPointer", "native_pointer_close", "native_pointer_is_closed", "native_pointer_owned_from_slot",
+				"__string_length", "__string_char_at", "__string_char_code_at", "__string_concat", "__string_equal", "__string_compare_full",
+				"__string_index_of", "__string_index_of_from", "__string_last_index_of", "__string_last_index_of_from", "__string_to_lower_case",
+				"__string_to_upper_case", "__string_split", "__string_substring", "__string_from_char_code": true;
 			default: false;
 		};
 	}
@@ -594,9 +598,11 @@ class WasmBackend implements Backend {
 			case ManagedBytes if (native.pointerLength != null):
 				if (native.pointerOwnership != "borrowed" && native.pointerOwnership != "owned")
 					throw 'Wasm GC C native "${native.name}" requires borrowed or owned pointer metadata';
-			case Abstract("native_pointer") if (native.pointerLength == null && native.pointerOwnership == "borrowed"):
+			case Abstract("native_pointer")
+				if (native.pointerLength == null
+					&& (native.pointerOwnership == "borrowed" || (native.pointerOwnership == "owned" && native.pointerRelease != null))):
 			case Abstract("native_pointer"):
-				throw 'Wasm GC C native "${native.name}" supports borrowed opaque pointer results only; owned pointer lifetime management is not implemented yet';
+				throw 'Wasm GC C native "${native.name}" requires borrowed or releasable owned opaque pointer metadata';
 			case _:
 				throw 'Wasm GC C native "${native.name}" has unsupported result type ${Std.string(native.result)}';
 		}
@@ -661,6 +667,12 @@ class WasmBackend implements Backend {
 	static function isGcNativePointerArgument(type:IrType):Bool
 		return switch type {
 			case ManagedBytes | Abstract("native_pointer"): true;
+			case _: false;
+		};
+
+	public static function isGcNativePointerType(type:IrType):Bool
+		return switch type {
+			case Abstract("native_pointer"): true;
 			case _: false;
 		};
 
@@ -807,20 +819,81 @@ class WasmBackend implements Backend {
 	static function reachableGcCNatives(program:IrProgram, reachable:Map<String, Bool>):Map<String, Bool> {
 		var result = reachableCNatives(program, reachable);
 		for (native in program.cNatives)
-			if (result.exists(native.name) && native.result == ManagedBytes && native.pointerLength != null) {
-				result.set(requiredCNativeBySymbol(program, native.pointerLength).name, true);
-				if (native.pointerOwnership == "owned" && native.pointerRelease != null)
+			if (result.exists(native.name)) {
+				if (native.result == ManagedBytes && native.pointerLength != null) {
+					result.set(requiredCNativeBySymbol(program, native.pointerLength).name, true);
+					if (native.pointerOwnership == "owned" && native.pointerRelease != null)
+						result.set(requiredCNativeBySymbol(program, native.pointerRelease).name, true);
+				} else if (isGcNativePointerType(native.result) && native.pointerOwnership == "owned" && native.pointerRelease != null)
 					result.set(requiredCNativeBySymbol(program, native.pointerRelease).name, true);
 			}
+		for (symbol in gcPointerReleaseSymbols(program, reachable).keys())
+			result.set(requiredCNativeBySymbol(program, symbol).name, true);
+		return result;
+	}
+
+	static function gcPointerReleaseSymbols(program:IrProgram, reachable:Map<String, Bool>):Map<String, Bool> {
+		var result:Map<String, Bool> = [],
+			usedCNatives = reachableCNatives(program, reachable);
+		for (native in program.cNatives)
+			if (usedCNatives.exists(native.name)
+				&& native.pointerOwnership == "owned"
+				&& native.pointerRelease != null
+				&& ((isGcNativePointerType(native.result) && native.pointerLength == null)
+					|| (native.result == ManagedBytes && native.pointerLength != null)))
+				result.set(native.pointerRelease, true);
+		for (fn in program.functions)
+			if (reachable.exists(fn.name)) {
+				var strings:Map<Int, String> = [];
+				for (block in fn.blocks)
+					for (located in block.instructions)
+						switch located.value {
+							case ConstString(output, value):
+								strings.set(output.id, value);
+							case _:
+						}
+				for (block in fn.blocks)
+					for (located in block.instructions)
+						switch located.value {
+							case Call(_, name, arguments) if (runtimeNativeSymbol(program, name) == "native_pointer_owned_from_slot"):
+								if (arguments.length == 7) {
+									var release = strings.get(arguments[5].id);
+									if (release != null && release != "")
+										result.set(release, true);
+								}
+							case _:
+						}
+			}
+		return result;
+	}
+
+	static function runtimeNativeSymbol(program:IrProgram, name:String):String {
+		for (native in program.natives)
+			if (native.name == name)
+				return native.symbol;
+		return name;
+	}
+
+	static function gcPointerReleaseFunctionIndices(program:IrProgram, reachable:Map<String, Bool>, functions:Map<String, Int>):Map<String, Int> {
+		var result:Map<String, Int> = [],
+			symbols = [for (symbol in gcPointerReleaseSymbols(program, reachable).keys()) symbol];
+		symbols.sort(Reflect.compare);
+		for (symbol in symbols) {
+			var release = requiredCNativeBySymbol(program, symbol),
+				functionIndex = functions.get(release.name);
+			if (functionIndex == null)
+				throw 'Wasm GC has no imported release function "$symbol"';
+			result.set(symbol, functionIndex);
+		}
 		return result;
 	}
 
 	static function isGcPointerRelease(program:IrProgram, candidate:IrCNative):Bool {
 		for (native in program.cNatives)
-			if (native.result == ManagedBytes
-				&& native.pointerLength != null
-				&& native.pointerOwnership == "owned"
-				&& native.pointerRelease == candidate.symbol)
+			if (native.pointerOwnership == "owned"
+				&& native.pointerRelease == candidate.symbol
+				&& ((native.result == ManagedBytes && native.pointerLength != null)
+					|| (isGcNativePointerType(native.result) && native.pointerLength == null)))
 				return true;
 		return false;
 	}
@@ -1279,7 +1352,7 @@ class WasmFunctionLower {
 			placement = new WasmValuePlacement(fn, representation),
 			valueLocals = placement.values,
 			locals = placement.locals;
-		representation.beginFunction(function(type) return placement.allocate(type), exceptionTag);
+		representation.beginFunction(function(type) return placement.allocate(type), exceptionTag, fn);
 		activeArrayTemps = {
 			len: placement.allocate(I32),
 			capacity: placement.allocate(I32),
@@ -2328,15 +2401,18 @@ class WasmFunctionLower {
 					throw 'Wasm C native call "$name" has no declared import contract';
 				var pointerLengthImportIndex = -1,
 					pointerReleaseImportIndex = -1;
-				if (native.result == ManagedBytes && native.pointerLength != null) {
+				if ((native.result == ManagedBytes && native.pointerLength != null)
+					|| (WasmBackend.isGcNativePointerType(native.result) && native.pointerOwnership == "owned")) {
 					var lengthNative:Null<IrCNative> = null;
-					for (candidate in activeProgram.cNatives)
-						if (candidate.symbol == native.pointerLength)
-							lengthNative = candidate;
-					if (lengthNative != null) {
-						var importedLength = functions.get(lengthNative.name);
-						if (importedLength != null)
-							pointerLengthImportIndex = importedLength;
+					if (native.result == ManagedBytes && native.pointerLength != null) {
+						for (candidate in activeProgram.cNatives)
+							if (candidate.symbol == native.pointerLength)
+								lengthNative = candidate;
+						if (lengthNative != null) {
+							var importedLength = functions.get(lengthNative.name);
+							if (importedLength != null)
+								pointerLengthImportIndex = importedLength;
+						}
 					}
 					if (native.pointerOwnership == "owned" && native.pointerRelease != null)
 						for (candidate in activeProgram.cNatives)

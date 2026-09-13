@@ -12,9 +12,14 @@ interface GcBytes @target("portable-abi32") @library("gc_bytes") {
 	extern fn sumPoint(point: gc_value_point) -> i32 @symbol("sum_point");
 	extern fn makePoint(seed: i32) -> gc_value_point @symbol("make_point");
 	extern fn borrowedContext() -> nullable<ptr<gc_context>> @borrowed @symbol("borrowed_context");
+	extern fn ownedContext() -> ptr<gc_context> @owned("release_context") @symbol("owned_context");
+	extern fn nullableOwnedContext(value: i32) -> nullable<ptr<gc_context>> @owned("release_context") @symbol("nullable_owned_context");
 	extern fn inspectContext(value: ptr<gc_context>) -> i32 @symbol("inspect_context");
 	extern fn storeContext(value: ptr<nullable<ptr<gc_context>>> @out @borrowed) -> void @symbol("store_context");
 	extern fn storeNullContext(value: ptr<nullable<ptr<gc_context>>> @out @borrowed) -> void @symbol("store_null_context");
+	extern fn storeOwnedContext(value: ptr<nullable<ptr<gc_context>>> @out @owned("release_context")) -> void @symbol("store_owned_context");
+	extern fn storeNullOwnedContext(value: ptr<nullable<ptr<gc_context>>> @out @owned("release_context")) -> void @symbol("store_null_owned_context");
+	extern fn releaseContext(value: ptr<void>) -> void @symbol("release_context");
 	extern fn read(seed: i32, data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout) -> i32 @symbol("read_bytes");
 	extern fn fetch() -> ptr<const<u8>> @borrowed @length("fetch_size") @symbol("fetch_bytes");
 	extern fn fetchSize() -> u32 @symbol("fetch_size");

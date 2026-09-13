@@ -32,6 +32,31 @@ function main():Int {
 		|| GcBytes.inspectContext(outputContext) != 42
 		|| nullContext != null)
 		return 0;
+	var ownedContext = GcBytes.ownedContext(),
+		nullableOwnedContext = GcBytes.nullableOwnedContext(1),
+		nullOwnedContext = GcBytes.nullableOwnedContext(0),
+		outputOwnedContext = GcBytes.storeOwnedContext(),
+		nullOutputOwnedContext = GcBytes.storeNullOwnedContext();
+	if (ownedContext.isClosed()
+		|| GcBytes.inspectContext(ownedContext.borrow()) != 42
+		|| nullableOwnedContext == null
+		|| nullableOwnedContext.isClosed()
+		|| GcBytes.inspectContext(nullableOwnedContext.borrow()) != 42
+		|| nullOwnedContext != null
+		|| outputOwnedContext == null
+		|| outputOwnedContext.isClosed()
+		|| GcBytes.inspectContext(outputOwnedContext.borrow()) != 42
+		|| nullOutputOwnedContext != null)
+		return 0;
+	if (!ownedContext.close()
+		|| ownedContext.close()
+		|| !ownedContext.isClosed()
+		|| GcBytes.inspectContext(ownedContext.borrow()) != 0
+		|| !nullableOwnedContext.close()
+		|| nullableOwnedContext.close()
+		|| !outputOwnedContext.close()
+		|| outputOwnedContext.close())
+		return 0;
 	var payload = Bytes.ofString("gc bytes");
 	if (GcBytes.inspect(payload) != 42)
 		return 0;
