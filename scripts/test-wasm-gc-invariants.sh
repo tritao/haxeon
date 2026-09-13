@@ -65,7 +65,14 @@ const mapArtifact = process.argv[4];
 	};
 	if (exports.main() !== 42)
 		throw new Error("GC allocator invariant fixture returned the wrong value");
+	const largestAllocation = exports["haxeon.memory.largest_allocation_bytes"]();
+	if (largestAllocation <= 0 || largestAllocation > exports["haxeon.memory.allocated_bytes"]())
+		throw new Error("Peak Wasm allocation diagnostic is inconsistent");
 	const heapTop = exports["haxeon.memory.heap_top"]();
+	const rootBase = exports["haxeon.memory.root_base"]();
+	const rootLimit = exports["haxeon.memory.root_limit"]();
+	if (rootLimit <= rootBase || exports["haxeon.memory.root_top"]() !== rootBase)
+		throw new Error("Shadow-root stack did not begin in its declared range");
 	assertHeapBlocks();
 	if (exports["haxeon.memory.metadata_top"]() !== exports["haxeon.memory.metadata_base"]())
 		throw new Error("inline GC block headers unexpectedly allocated out-of-line metadata");
@@ -98,6 +105,8 @@ const mapArtifact = process.argv[4];
 		throw new Error("GC root-snapshot exercise returned the wrong value");
 	if (exports["wasm-gc-invariants.runtimeRootFrameExercise"](2000) !== 0)
 		throw new Error("Runtime helper calls did not restore their shadow-root frames");
+	if (exports["haxeon.memory.root_top"]() !== rootBase)
+		throw new Error("Runtime helper calls leaked shadow-root stack space");
 	console.log("PASS: Wasm runtime helper shadow-root frames are balanced");
 	const afterRootWarmup = exports["haxeon.memory.heap_top"]();
 	for (let index = 0; index < 4; index++) {

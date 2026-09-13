@@ -36,6 +36,8 @@ class CompilerDriver {
 			compiler.addFfiInterface(path, File.getContent(path));
 		}
 		compiler.addSourceRoot("stdlib");
+		for (root in request.roots)
+			compiler.addSourceRoot(root);
 		SourceManifestLoader.load(compiler, request.roots, request.paths);
 		report("compiling entry " + request.entry);
 		var result = compiler.compile(request.entry, null, false);

@@ -249,6 +249,7 @@ class WasmBackendMain {
 			"haxeon.memory.metadata_top",
 			"haxeon.memory.allocation_count",
 			"haxeon.memory.allocated_bytes",
+			"haxeon.memory.largest_allocation_bytes",
 			"haxeon.memory.collection_count"
 		])
 			if (!containsBytes(memoryStats.bytes, name))
@@ -261,6 +262,15 @@ class WasmBackendMain {
 		var arrayMutation = compile("function main():Int { var values = [40]; values.push(2); return values.pop() + values[0]; }");
 		var string = compile("function main():Int return \"haxeon\".length;");
 		var stringOps = compile("function main():Int return (\"ha\" + \"xeon\" == \"haxeon\") ? 42 : 0;");
+		var stdStringProgram = Frontend.compile("function main():Int { var context = \"layoutSession.item(\" + 9001 + \")\"; var minimum = \"\" + (-2147483647 - 1); return (\"\" + 42) == \"42\" && minimum == \"-2147483648\" && (\"\" + true) == \"true\" && (\"\" + false) == \"false\" && (\"\" + null) == \"null\" && context == \"layoutSession.item(9001)\" ? 42 : 0; }");
+		stdStringProgram.natives.push({
+			name: "__std_string",
+			library: "haxeon_runtime",
+			symbol: "__std_string",
+			arguments: [Dyn],
+			result: Bytes
+		});
+		var stdString = new WasmBackend().compile(stdStringProgram, {target: Wasm32, debugNames: true}).bytes;
 		var method = compile("class Counter { public var value:Int; public function new() { value = 40; } public function add(delta:Int):Int return value + delta; } function main():Int { var counter = new Counter(); return counter.add(2); }");
 		var global = compile("class State { public static var value:Int = 40; } function main():Int { State.value = State.value + 2; return State.value; }");
 		var floatGlobal = compile("class FloatState { public static var value:Float = 40.0; } function main():Int return FloatState.value == 40.0 ? 42 : 0;");
@@ -281,6 +291,7 @@ class WasmBackendMain {
 		File.saveBytes("out/wasm-backend-array-mutation.wasm", arrayMutation);
 		File.saveBytes("out/wasm-backend-string.wasm", string);
 		File.saveBytes("out/wasm-backend-string-ops.wasm", stringOps);
+		File.saveBytes("out/wasm-backend-std-string.wasm", stdString);
 		File.saveBytes("out/wasm-backend-method.wasm", method);
 		File.saveBytes("out/wasm-backend-global.wasm", global);
 		File.saveBytes("out/wasm-backend-float-global.wasm", floatGlobal);

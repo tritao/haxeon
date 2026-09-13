@@ -96,6 +96,9 @@ the guest.
   `scripts/benchmark-wasm-gc.sh [samples]` for a non-gating comparison of
   stress versus budgeted allocation and deep/wide graph tracing; it reports
   timings alongside allocation, collection, and linear-memory counters.
+  `--wasm-memory-stats` also exports the shadow-root stack's base, current top,
+  and limit so hosts can distinguish root exhaustion from linear-memory growth,
+  plus the largest individual allocation request for diagnosing heap spikes.
 - `haxeon.patch` contains stable function identities and semantic signatures
   for validating replacement table entries. `haxeon.patch.slots` maps those
   stable names to exported function-table slots. `WasmBackend.compilePatch`

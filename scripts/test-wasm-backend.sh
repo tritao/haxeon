@@ -15,6 +15,9 @@ bash "$root_dir/scripts/test-wasm-gc-invariants.sh"
 	--target=wasm32 --output=out/wasm-cli-backend.wasm --entry=add \
 	--root=tests/programs tests/programs/add.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --output=out/wasm-cli-source-root.wasm --entry=Main \
+	--root=tests/fixtures/source_root tests/fixtures/source_root/Main.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm32 --output=out/wasm-cli-dynamic.wasm --entry=dynamic-equality \
 	--root=tests/programs tests/programs/dynamic-equality.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
@@ -91,6 +94,7 @@ const cases = [
   ["out/wasm-backend-array-mutation.wasm", 42],
   ["out/wasm-backend-string.wasm", 6],
   ["out/wasm-backend-string-ops.wasm", 42],
+	["out/wasm-backend-std-string.wasm", 42],
   ["out/wasm-backend-method.wasm", 42],
   ["out/wasm-backend-global.wasm", 42],
   ["out/wasm-backend-float-global.wasm", 42],
@@ -99,6 +103,7 @@ const cases = [
   ["out/wasm-backend-inherited-field.wasm", 42],
   ["out/wasm-backend-large-array.wasm", 20000],
   ["out/wasm-cli-backend.wasm", 42],
+	["out/wasm-cli-source-root.wasm", 42],
   ["out/wasm-cli-dynamic.wasm", 42],
   ["out/wasm-cli-function-wrapper.wasm", 42],
   ["out/wasm-cli-type-test.wasm", 42],

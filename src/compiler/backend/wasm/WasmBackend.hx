@@ -102,6 +102,13 @@ class WasmBackend implements Backend {
 							}
 						default:
 					}
+		for (value in ["null", "true", "false"])
+			if (!strings.exists(value)) {
+				var bytes = stringBytes(value), offset = nextData;
+				module.data.push({offset: offset, bytes: bytes});
+				strings.set(value, offset);
+				nextData = align(offset + bytes.length, 8);
+			}
 		module.memoryMin = 1;
 		module.exportMemory = !importMemory;
 		var rootBase = align(Std.int(Math.max(1024, nextData)), 8),
@@ -126,11 +133,13 @@ class WasmBackend implements Backend {
 			gcBudget = module.globals.length;
 			module.globals.push({type: I32, mutable: true, init: [I32Const(WasmLayout.GC_MIN_ALLOCATION_BUDGET)]});
 		}
-		var allocationCount = -1, allocationBytes = -1, collectionCount = -1;
+		var allocationCount = -1, allocationBytes = -1, largestAllocation = -1, collectionCount = -1;
 		if (options.wasmMemoryStats == true) {
 			allocationCount = module.globals.length;
 			module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
 			allocationBytes = module.globals.length;
+			module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
+			largestAllocation = module.globals.length;
 			module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
 			collectionCount = module.globals.length;
 			module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
@@ -149,9 +158,10 @@ class WasmBackend implements Backend {
 		var mark = addGcMark(module, heapStart, heapTop, markStackTop);
 		var trace = addGcTrace(module, program, layout, mark);
 		var collector = addGcCollector(module, heapStart, heapTop, rootFrameTop, freeHead, mark, trace, markStackTop, rootGlobals, collectionCount);
-		var allocator = addAllocator(module, collector, heapStart, heapTop, freeHead, gcBudget, options.wasmGcStress == true, allocationCount, allocationBytes);
+		var allocator = addAllocator(module, collector, heapStart, heapTop, freeHead, gcBudget, options.wasmGcStress == true, allocationCount,
+			allocationBytes, largestAllocation);
 		functions.set("__haxeon_alloc", allocator);
-		addRuntimeFunctions(module, functions, program, allocator);
+		addRuntimeFunctions(module, functions, program, allocator, strings);
 		for (native in program.natives) {
 			var stride = arrayStrideForNative(native.name);
 			if (stride != null)
@@ -219,12 +229,16 @@ class WasmBackend implements Backend {
 		if (options.wasmMemoryStats == true) {
 			addMemoryStatExport(module, "haxeon.memory.heap_base", [I32Const(heapStart)]);
 			addMemoryStatExport(module, "haxeon.memory.heap_top", [GlobalGet(heapTop)]);
+			addMemoryStatExport(module, "haxeon.memory.root_base", [I32Const(rootBase)]);
+			addMemoryStatExport(module, "haxeon.memory.root_top", [GlobalGet(rootTop)]);
+			addMemoryStatExport(module, "haxeon.memory.root_limit", [I32Const(rootLimit)]);
 			// Kept temporarily for hosts that still display the old metadata counters.
 			// In-block headers make out-of-line GC metadata a zero-sized region.
 			addMemoryStatExport(module, "haxeon.memory.metadata_base", [I32Const(heapStart)]);
 			addMemoryStatExport(module, "haxeon.memory.metadata_top", [I32Const(heapStart)]);
 			addMemoryStatExport(module, "haxeon.memory.allocation_count", [GlobalGet(allocationCount)]);
 			addMemoryStatExport(module, "haxeon.memory.allocated_bytes", [GlobalGet(allocationBytes)]);
+			addMemoryStatExport(module, "haxeon.memory.largest_allocation_bytes", [GlobalGet(largestAllocation)]);
 			addMemoryStatExport(module, "haxeon.memory.collection_count", [GlobalGet(collectionCount)]);
 		}
 		return {target: options.target, bytes: WasmEncoder.encode(module)};
@@ -413,7 +427,8 @@ class WasmBackend implements Backend {
 		for (instruction in instructions)
 			body.push(instruction);
 
-	static function addRuntimeFunctions(module:WasmModule, functions:Map<String, Int>, program:IrProgram, allocator:Int):Void {
+	static function addRuntimeFunctions(module:WasmModule, functions:Map<String, Int>, program:IrProgram, allocator:Int,
+			strings:Map<String, Int>):Void {
 		for (native in program.natives) {
 			var runtimeFunction = addRuntimeNativeFunction(module, native, allocator);
 			if (runtimeFunction != null)
@@ -443,8 +458,7 @@ class WasmBackend implements Backend {
 						case "__reflect_is_object":
 							functions.set(native.name, addDynamicIsObject(module, native.name, program));
 						case "__std_string":
-							functions.set(native.name,
-								module.addFunction(new WasmFunction(native.name, {parameters: [I32], results: [I32]}, [], [LocalGet(0), Return])));
+							functions.set(native.name, addDynamicString(module, native.name, allocator, strings));
 						case "__dynamic_equal":
 							// Emitted after the native scan so the string helper has an index.
 						case "__std_is_of_type", "__exception_matches":
@@ -1676,6 +1690,166 @@ class WasmBackend implements Backend {
 			LocalGet(4),
 			Return
 		]));
+	}
+
+	static function addIntToString(module:WasmModule, name:String, allocator:Int):Int {
+		var type:WasmFunctionType = {parameters: [I32], results: [I32]},
+			body:Array<WasmInstruction> = [
+				LocalGet(0),
+				LocalSet(1),
+				I32Const(0),
+				LocalSet(2),
+				LocalGet(0),
+				I32Const(0),
+				I32LtS,
+				LocalSet(3),
+				Block(null),
+				Loop(null),
+				LocalGet(2),
+				I32Const(1),
+				I32Add,
+				LocalSet(2),
+				LocalGet(1),
+				I32Const(10),
+				I32DivS,
+				LocalTee(1),
+				I32Eqz,
+				BrIf(1),
+				Br(0),
+				End,
+				End,
+				LocalGet(2),
+				LocalGet(3),
+				I32Add,
+				I32Const(WasmLayout.STRING_DATA_OFFSET),
+				I32Add,
+				Call(allocator),
+				LocalSet(4),
+				LocalGet(4),
+				I32Const(typeId(Bytes)),
+				I32Store(0),
+			LocalGet(4),
+			LocalGet(2),
+			LocalGet(3),
+			I32Add,
+			I32Store(WasmLayout.STRING_LENGTH_OFFSET),
+			LocalGet(4),
+			LocalGet(2),
+			LocalGet(3),
+			I32Add,
+			I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
+			LocalGet(0),
+			LocalSet(1),
+			LocalGet(2),
+			LocalGet(3),
+			I32Add,
+			I32Const(1),
+			I32Sub,
+			LocalSet(5),
+			Block(null),
+			Loop(null),
+			LocalGet(2),
+			I32Eqz,
+			BrIf(1),
+			LocalGet(1),
+			I32Const(10),
+			I32RemS,
+			LocalSet(6),
+			LocalGet(1),
+			I32Const(10),
+			I32DivS,
+			LocalSet(1),
+			LocalGet(4),
+			I32Const(WasmLayout.STRING_DATA_OFFSET),
+			I32Add,
+			LocalGet(5),
+			I32Add,
+			LocalGet(3),
+			If(null),
+			I32Const(48),
+			LocalGet(6),
+			I32Sub,
+			LocalSet(7),
+			Else,
+			I32Const(48),
+			LocalGet(6),
+			I32Add,
+			LocalSet(7),
+			End,
+			LocalGet(7),
+			I32Store8(0),
+			LocalGet(2),
+			I32Const(1),
+			I32Sub,
+			LocalSet(2),
+			LocalGet(5),
+			I32Const(1),
+			I32Sub,
+			LocalSet(5),
+			Br(0),
+			End,
+			End,
+			LocalGet(3),
+			If(null),
+			LocalGet(4),
+			I32Const(WasmLayout.STRING_DATA_OFFSET),
+			I32Add,
+			I32Const(45),
+			I32Store8(0),
+			End,
+			LocalGet(4),
+			Return
+			];
+		return module.addFunction(new WasmFunction(name, type, [for (_ in 0...7) {type: I32}], body));
+	}
+
+	static function addDynamicString(module:WasmModule, name:String, allocator:Int, strings:Map<String, Int>):Int {
+		var integerString = addIntToString(module, "__haxeon_i32_to_string", allocator),
+			nullString = requiredStringOffset(strings, "null"),
+			trueString = requiredStringOffset(strings, "true"),
+			falseString = requiredStringOffset(strings, "false"),
+			body:Array<WasmInstruction> = [
+				LocalGet(0),
+				I32Eqz,
+				If(null),
+				I32Const(nullString),
+				Return,
+				End,
+				LocalGet(0),
+				I32Load(0),
+				I32Const(typeId(Bytes)),
+				I32Eq,
+				If(null),
+				LocalGet(0),
+				Return,
+				End,
+				LocalGet(0),
+				I32Load(0),
+				I32Const(typeId(I32)),
+				I32Eq,
+				If(null),
+				LocalGet(0),
+				I32Load(WasmLayout.DYN_PAYLOAD_OFFSET),
+				Call(integerString),
+				Return,
+				End,
+				LocalGet(0),
+				I32Load(0),
+				I32Const(typeId(Bool)),
+				I32Eq,
+				If(null),
+				LocalGet(0),
+				I32Load(WasmLayout.DYN_PAYLOAD_OFFSET),
+				If(I32),
+				I32Const(trueString),
+				Else,
+				I32Const(falseString),
+				End,
+				Return,
+				End,
+				Unreachable
+			];
+		return module.addFunction(new WasmFunction(name, {parameters: [I32], results: [I32]}, [{type: I32}], body));
 	}
 
 	static function addStringEqual(module:WasmModule, name:String):Int {
@@ -3425,7 +3599,7 @@ class WasmBackend implements Backend {
 	}
 
 	static function addAllocator(module:WasmModule, collector:Int, heapStart:Int, heapTop:Int, freeHead:Int, gcBudget:Int, gcStress:Bool, allocationCount:Int,
-			allocationBytes:Int):Int {
+			allocationBytes:Int, largestAllocation:Int):Int {
 		var type:WasmFunctionType = {parameters: [I32], results: [I32]};
 		var index = module.addFunction(new WasmFunction("__haxeon_alloc", type));
 		// local 10 keeps requested payload bytes for diagnostics; local 0 becomes
@@ -3557,6 +3731,16 @@ class WasmBackend implements Backend {
 				LocalGet(10),
 				I32Add,
 				GlobalSet(allocationBytes)
+			]);
+		if (largestAllocation >= 0)
+			body = body.concat([
+				GlobalGet(largestAllocation),
+				LocalGet(10),
+				I32LtS,
+				If(null),
+				LocalGet(10),
+				GlobalSet(largestAllocation),
+				End
 			]);
 		body = body.concat([
 			LocalGet(10),
@@ -3960,6 +4144,13 @@ class WasmBackend implements Backend {
 
 	static function resultTypes(type:IrType):Array<WasmValueType>
 		return type == Void ? [] : [requireValueType(type)];
+
+	static function requiredStringOffset(strings:Map<String, Int>, value:String):Int {
+		var offset = strings.get(value);
+		if (offset == null)
+			throw 'Missing Wasm string data for "$value"';
+		return offset;
+	}
 
 	static function requiredGlobal(globals:Map<String, Int>, name:String):Int {
 		if (!globals.exists(name))
