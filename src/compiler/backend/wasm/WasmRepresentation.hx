@@ -3475,7 +3475,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 	}
 
 	public function instanceClosure(name:String, tableSlots:Map<String, Int>, receiverLocal:Int, destination:Int):WasmLoweringResult {
-		var tableSlot = tableSlots.get(WasmBackend.gcClosureThunkName(name));
+		var tableSlot = tableSlots.get(WasmGcModuleBuilder.gcClosureThunkName(name));
 		if (tableSlot == null)
 			throw 'Wasm GC instance closure target "$name" has no stable table slot';
 		return [

@@ -5,7 +5,7 @@ import compiler.backend.Backend.BackendResult;
 import compiler.backend.MemoryContract.MemoryContract;
 import compiler.backend.MemoryContract.MemoryContractCodec;
 import compiler.backend.wasm.WasmBackend.WasmClosureTypes;
-import compiler.backend.wasm.WasmBackend.WasmFunctionLower;
+import compiler.backend.wasm.WasmFunctionLower;
 import compiler.backend.wasm.WasmEncoder;
 import compiler.backend.wasm.WasmGcRoots;
 import compiler.backend.wasm.WasmLayout;
