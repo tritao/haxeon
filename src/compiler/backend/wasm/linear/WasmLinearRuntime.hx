@@ -8,6 +8,7 @@ import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmModule;
+import compiler.backend.wasm.WasmFunctionBuilder.WasmFunctionBuilder;
 import compiler.backend.wasm.WasmBackend;
 
 class WasmLinearRuntime {
@@ -67,7 +68,7 @@ class WasmLinearRuntime {
 					switch native.name {
 						case "__string_length":
 							functions.set(native.name,
-								module.addFunction(new WasmFunction(native.name, {parameters: [I32], results: [I32]}, [],
+								module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [I32], results: [I32]}, [],
 									[LocalGet(0), I32Load(WasmLayout.STRING_LENGTH_OFFSET), Return])));
 						case "__string_char_code_at":
 							functions.set(native.name, addStringCharCodeAt(module, native.name));
@@ -79,7 +80,7 @@ class WasmLinearRuntime {
 							functions.set(native.name, addStringCompareFull(module, native.name));
 						case "__std_int_f64":
 							functions.set(native.name,
-								module.addFunction(new WasmFunction(native.name, {parameters: [F64], results: [I32]}, [],
+								module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [F64], results: [I32]}, [],
 									[LocalGet(0), I32TruncF64S, Return])));
 						case "__std_int_dynamic":
 							functions.set(native.name, addDynamicInt(module, native.name));
@@ -223,7 +224,7 @@ class WasmLinearRuntime {
 	}
 
 	static function addBytesAlloc(module:WasmModule, name:String, allocator:Int):Int {
-		return module.addFunction(new WasmFunction(name, {parameters: [I32], results: [I32]}, [{type: I32}], [
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [{type: I32}], [
 			LocalGet(0),
 			I32Const(WasmLayout.STRING_DATA_OFFSET),
 			I32Add,
@@ -244,7 +245,7 @@ class WasmLinearRuntime {
 	}
 
 	static function addBytesFromString(module:WasmModule, name:String, allocator:Int):Int {
-		return module.addFunction(new WasmFunction(name, {parameters: [I32], results: [I32]}, [{type: I32}], [
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [{type: I32}], [
 			LocalGet(0),
 			I32Load(WasmLayout.STRING_LENGTH_OFFSET),
 			I32Const(WasmLayout.STRING_DATA_OFFSET),
@@ -277,11 +278,11 @@ class WasmLinearRuntime {
 	}
 
 	static function addBytesLength(module:WasmModule, name:String):Int
-		return module.addFunction(new WasmFunction(name, {parameters: [I32], results: [I32]}, [],
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [],
 			[LocalGet(0), I32Load(WasmLayout.STRING_LENGTH_OFFSET), Return]));
 
 	static function addBytesCompare(module:WasmModule, name:String):Int {
-		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32], results: [I32]},
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]},
 			[{type: I32}, {type: I32}, {type: I32}, {type: I32}, {type: I32}, {type: I32}], [
 				LocalGet(0),
 				I32Load(WasmLayout.STRING_LENGTH_OFFSET),
@@ -368,11 +369,11 @@ class WasmLinearRuntime {
 	}
 
 	static function addBytesData(module:WasmModule, name:String):Int
-		return module.addFunction(new WasmFunction(name, {parameters: [I32], results: [I32]}, [],
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [],
 			[LocalGet(0), I32Const(WasmLayout.STRING_DATA_OFFSET), I32Add, Return]));
 
 	static function addBytesIdentity(module:WasmModule, name:String):Int
-		return module.addFunction(new WasmFunction(name, {parameters: [I32], results: [I32]}, [], [LocalGet(0), Return]));
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [], [LocalGet(0), Return]));
 
 	static function addBytesLoad(module:WasmModule, name:String, result:WasmValueType, instruction:WasmInstruction, ?after:Array<WasmInstruction>):Int {
 		var body:Array<WasmInstruction> = [
@@ -387,7 +388,7 @@ class WasmLinearRuntime {
 			for (item in after)
 				body.push(item);
 		body.push(Return);
-		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32], results: [result]}, [], body));
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [result]}, [], body));
 	}
 
 	static function addBytesStore(module:WasmModule, name:String, valueType:WasmValueType, instruction:WasmInstruction, ?before:Array<WasmInstruction>):Int {
@@ -404,11 +405,11 @@ class WasmLinearRuntime {
 				body.push(item);
 		body.push(instruction);
 		body.push(Return);
-		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32, valueType], results: []}, [], body));
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32, valueType], results: []}, [], body));
 	}
 
 	static function addBytesSlice(module:WasmModule, name:String, allocator:Int):Int {
-		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32, I32], results: [I32]}, [{type: I32}], [
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32, I32], results: [I32]}, [{type: I32}], [
 			LocalGet(2),
 			I32Const(WasmLayout.STRING_DATA_OFFSET),
 			I32Add,
@@ -439,7 +440,7 @@ class WasmLinearRuntime {
 	}
 
 	static function addBytesPrefix(module:WasmModule, name:String, allocator:Int):Int {
-		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}], [
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}], [
 			LocalGet(1),
 			I32Const(WasmLayout.STRING_DATA_OFFSET),
 			I32Add,
@@ -468,7 +469,7 @@ class WasmLinearRuntime {
 	}
 
 	static function addStructCopy(module:WasmModule, name:String):Int {
-		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32, I32, I32], results: []}, [], [
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32, I32, I32], results: []}, [], [
 			LocalGet(0),
 			I32Const(WasmLayout.STRING_DATA_OFFSET),
 			I32Add,
@@ -484,14 +485,14 @@ class WasmLinearRuntime {
 	}
 
 	static function addStructSetBorrowedBytes(module:WasmModule, name:String):Int {
-		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32, I32], results: []}, [], [
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32, I32], results: []}, [], [
 			LocalGet(0), I32Const(WasmLayout.STRING_DATA_OFFSET), I32Add, LocalGet(1), I32Add,
 			LocalGet(2), I32Const(WasmLayout.STRING_DATA_OFFSET), I32Add, I32Store(0), Return
 		]));
 	}
 
 	static function addStructGetPointer(module:WasmModule, name:String):Int {
-		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32, I32], results: [I32]}, [], [
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32, I32], results: [I32]}, [], [
 			LocalGet(0),
 			I32Const(WasmLayout.STRING_DATA_OFFSET),
 			I32Add,
@@ -503,7 +504,7 @@ class WasmLinearRuntime {
 	}
 
 	static function addStructSetPointer(module:WasmModule, name:String):Int {
-		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32, I32, I32], results: []}, [], [
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32, I32, I32], results: []}, [], [
 			LocalGet(0),
 			I32Const(WasmLayout.STRING_DATA_OFFSET),
 			I32Add,
@@ -516,14 +517,14 @@ class WasmLinearRuntime {
 	}
 
 	static function addStructSetUtf8(module:WasmModule, name:String):Int {
-		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32, I32, I32], results: []}, [], [
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32, I32, I32], results: []}, [], [
 			LocalGet(0), I32Const(WasmLayout.STRING_DATA_OFFSET), I32Add, LocalGet(1), I32Add,
 			LocalGet(2), I32Const(WasmLayout.STRING_DATA_OFFSET), I32Add, I32Store(0), Return
 		]));
 	}
 
 	static function addStructGetUtf8(module:WasmModule, name:String, allocator:Int):Int {
-		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32, I32], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}], [
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32, I32], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}], [
 			LocalGet(0),
 			I32Const(WasmLayout.STRING_DATA_OFFSET),
 			I32Add,
@@ -583,44 +584,45 @@ class WasmLinearRuntime {
 	}
 
 	static function addStructCopyPointer(module:WasmModule, name:String, allocator:Int):Int {
-		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32, I32, I32], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}], [
-			LocalGet(0),
-			I32Const(WasmLayout.STRING_DATA_OFFSET),
-			I32Add,
-			LocalGet(1),
-			I32Add,
-			I32Load(0),
-			LocalSet(4),
-			LocalGet(0),
-			I32Const(WasmLayout.STRING_DATA_OFFSET),
-			I32Add,
-			LocalGet(2),
-			I32Add,
-			I32Load(0),
-			LocalSet(5),
-			LocalGet(5),
-			I32Const(WasmLayout.STRING_DATA_OFFSET),
-			I32Add,
-			Call(allocator),
-			LocalSet(6),
-			LocalGet(6),
-			I32Const(WasmBackend.typeId(Bytes)),
-			I32Store(0),
-			LocalGet(6),
-			LocalGet(5),
-			I32Store(WasmLayout.STRING_LENGTH_OFFSET),
-			LocalGet(6),
-			LocalGet(5),
-			I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
-			LocalGet(6),
-			I32Const(WasmLayout.STRING_DATA_OFFSET),
-			I32Add,
-			LocalGet(4),
-			LocalGet(5),
-			MemoryCopy,
-			LocalGet(6),
-			Return
-		]));
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32, I32, I32], results: [I32]},
+			[{type: I32}, {type: I32}, {type: I32}], [
+				LocalGet(0),
+				I32Const(WasmLayout.STRING_DATA_OFFSET),
+				I32Add,
+				LocalGet(1),
+				I32Add,
+				I32Load(0),
+				LocalSet(4),
+				LocalGet(0),
+				I32Const(WasmLayout.STRING_DATA_OFFSET),
+				I32Add,
+				LocalGet(2),
+				I32Add,
+				I32Load(0),
+				LocalSet(5),
+				LocalGet(5),
+				I32Const(WasmLayout.STRING_DATA_OFFSET),
+				I32Add,
+				Call(allocator),
+				LocalSet(6),
+				LocalGet(6),
+				I32Const(WasmBackend.typeId(Bytes)),
+				I32Store(0),
+				LocalGet(6),
+				LocalGet(5),
+				I32Store(WasmLayout.STRING_LENGTH_OFFSET),
+				LocalGet(6),
+				LocalGet(5),
+				I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
+				LocalGet(6),
+				I32Const(WasmLayout.STRING_DATA_OFFSET),
+				I32Add,
+				LocalGet(4),
+				LocalGet(5),
+				MemoryCopy,
+				LocalGet(6),
+				Return
+			]));
 	}
 
 	public static function mapKeyType(mapName:String):IrType
@@ -694,7 +696,7 @@ class WasmLinearRuntime {
 	}
 
 	static function addMapAlloc(module:WasmModule, name:String, mapName:String, entrySize:Int, allocator:Int):Int {
-		return module.addFunction(new WasmFunction(name, {parameters: [], results: [I32]}, [{type: I32}, {type: I32}], [
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [], results: [I32]}, [{type: I32}, {type: I32}], [
 			I32Const(WasmLayout.MAP_HEADER_SIZE),
 			Call(allocator),
 			LocalTee(0),
@@ -783,7 +785,7 @@ class WasmLinearRuntime {
 			I32Const(-1),
 			Return
 		]);
-		return module.addFunction(new WasmFunction(name, {parameters: [I32, WasmBackend.requireValueType(keyType)], results: [I32]},
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, WasmBackend.requireValueType(keyType)], results: [I32]},
 			[{type: I32}, {type: I32}], body));
 	}
 
@@ -877,7 +879,7 @@ class WasmLinearRuntime {
 			I32Add,
 			I32Store(WasmLayout.MAP_COUNT_OFFSET),
 		]);
-		return module.addFunction(new WasmFunction(name, {
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {
 			parameters: [
 				I32,
 				WasmBackend.requireValueType(keyType),
@@ -889,7 +891,7 @@ class WasmLinearRuntime {
 	}
 
 	static function addMapExists(module:WasmModule, name:String, keyType:IrType, valueType:IrType, stringEqual:Int, find:Int):Int
-		return module.addFunction(new WasmFunction(name, {parameters: [I32, WasmBackend.requireValueType(keyType)], results: [I32]}, [],
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, WasmBackend.requireValueType(keyType)], results: [I32]}, [],
 			[LocalGet(0), LocalGet(1), Call(find), I32Const(-1), I32Eq, I32Eqz, Return]));
 
 	static function addMapGet(module:WasmModule, name:String, keyType:IrType, valueType:IrType, entrySize:Int, valueOffset:Int, allocator:Int,
@@ -942,7 +944,7 @@ class WasmLinearRuntime {
 			append(body, [loadMapValue(valueType, valueOffset), LocalSet(4)]);
 		}
 		append(body, [End, LocalGet(4), Return]);
-		return module.addFunction(new WasmFunction(name, {parameters: [I32, WasmBackend.requireValueType(keyType)], results: [I32]},
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, WasmBackend.requireValueType(keyType)], results: [I32]},
 			[{type: I32}, {type: I32}, {type: I32}], body));
 	}
 
@@ -991,7 +993,7 @@ class WasmLinearRuntime {
 			LocalGet(1),
 			Return
 		]);
-		return module.addFunction(new WasmFunction(name, {parameters: [I32], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}], body));
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}], body));
 	}
 
 	static function addMapRemove(module:WasmModule, name:String, keyType:IrType, valueType:IrType, entrySize:Int, stringEqual:Int, find:Int):Int {
@@ -1051,19 +1053,20 @@ class WasmLinearRuntime {
 			End,
 			Return
 		]);
-		return module.addFunction(new WasmFunction(name, {parameters: [I32, WasmBackend.requireValueType(keyType)], results: [I32]},
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, WasmBackend.requireValueType(keyType)], results: [I32]},
 			[{type: I32}, {type: I32}, {type: I32}, {type: I32}], body));
 	}
 
 	static function addMapClear(module:WasmModule, name:String):Int
-		return module.addFunction(new WasmFunction(name, {parameters: [I32], results: []}, [],
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: []}, [],
 			[LocalGet(0), I32Const(0), I32Store(WasmLayout.MAP_COUNT_OFFSET)]));
 
 	static function addMapSize(module:WasmModule, name:String):Int
-		return module.addFunction(new WasmFunction(name, {parameters: [I32], results: [I32]}, [], [LocalGet(0), I32Load(WasmLayout.MAP_COUNT_OFFSET), Return]));
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [],
+			[LocalGet(0), I32Load(WasmLayout.MAP_COUNT_OFFSET), Return]));
 
 	static function addDynamicInt(module:WasmModule, name:String):Int
-		return module.addFunction(new WasmFunction(name, {parameters: [I32], results: [I32]}, [], [
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [], [
 			LocalGet(0),
 			I32Eqz,
 			If(null),
@@ -1196,7 +1199,7 @@ class WasmLinearRuntime {
 			I32Const(1),
 			Return
 		]);
-		return module.addFunction(new WasmFunction(name, {parameters: [I32], results: [I32]}, [], body));
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [], body));
 	}
 
 	static function addTypeTest(module:WasmModule, name:String, program:IrProgram):Int {
@@ -1244,11 +1247,11 @@ class WasmLinearRuntime {
 		body.push(End);
 		body.push(LocalGet(2));
 		body.push(Return);
-		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}], body));
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}], body));
 	}
 
 	static function addStringCharCodeAt(module:WasmModule, name:String):Int {
-		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}], [
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}], [
 			LocalGet(0),
 			I32Const(WasmLayout.STRING_DATA_OFFSET),
 			I32Add,
@@ -1260,7 +1263,7 @@ class WasmLinearRuntime {
 	}
 
 	static function addStringConcat(module:WasmModule, name:String, allocator:Int):Int {
-		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}], [
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}], [
 			LocalGet(0),
 			I32Load(WasmLayout.STRING_LENGTH_OFFSET),
 			LocalSet(2),
@@ -1418,7 +1421,7 @@ class WasmLinearRuntime {
 				LocalGet(4),
 				Return
 			];
-		return module.addFunction(new WasmFunction(name, type, [for (_ in 0...7) {type: I32}], body));
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, type, [for (_ in 0...7) {type: I32}], body));
 	}
 
 	static function addInt64ToString(module:WasmModule, name:String, allocator:Int):Int {
@@ -1531,7 +1534,7 @@ class WasmLinearRuntime {
 			LocalGet(4),
 			Return
 		];
-		return module.addFunction(new WasmFunction(name, {parameters: [I64], results: [I32]}, [
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I64], results: [I32]}, [
 			{type: I32},
 			{type: I32},
 			{type: I64},
@@ -1612,73 +1615,74 @@ class WasmLinearRuntime {
 				End,
 				Unreachable
 			];
-		return module.addFunction(new WasmFunction(name, {parameters: [I32], results: [I32]}, [{type: I32}], body));
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [{type: I32}], body));
 	}
 
 	static function addStringEqual(module:WasmModule, name:String):Int {
-		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}, {type: I32}], [
-			LocalGet(0),
-			I32Load(WasmLayout.STRING_LENGTH_OFFSET),
-			LocalSet(2),
-			LocalGet(1),
-			I32Load(WasmLayout.STRING_LENGTH_OFFSET),
-			LocalSet(3),
-			I32Const(0),
-			LocalSet(4),
-			I32Const(0),
-			LocalSet(5),
-			LocalGet(2),
-			LocalGet(3),
-			I32Eq,
-			If(null),
-			I32Const(1),
-			LocalSet(5),
-			Block(null),
-			Loop(null),
-			LocalGet(4),
-			LocalGet(2),
-			I32LtS,
-			If(null),
-			LocalGet(0),
-			I32Const(WasmLayout.STRING_DATA_OFFSET),
-			I32Add,
-			LocalGet(4),
-			I32Add,
-			I32Load8U(0),
-			LocalGet(1),
-			I32Const(WasmLayout.STRING_DATA_OFFSET),
-			I32Add,
-			LocalGet(4),
-			I32Add,
-			I32Load8U(0),
-			I32Eq,
-			If(null),
-			LocalGet(4),
-			I32Const(1),
-			I32Add,
-			LocalSet(4),
-			Br(2),
-			Else,
-			I32Const(0),
-			LocalSet(5),
-			Br(3),
-			End,
-			Else,
-			Br(2),
-			End,
-			End,
-			End,
-			Else,
-			I32Const(0),
-			LocalSet(5),
-			End,
-			LocalGet(5),
-			Return
-		]));
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]},
+			[{type: I32}, {type: I32}, {type: I32}, {type: I32}], [
+				LocalGet(0),
+				I32Load(WasmLayout.STRING_LENGTH_OFFSET),
+				LocalSet(2),
+				LocalGet(1),
+				I32Load(WasmLayout.STRING_LENGTH_OFFSET),
+				LocalSet(3),
+				I32Const(0),
+				LocalSet(4),
+				I32Const(0),
+				LocalSet(5),
+				LocalGet(2),
+				LocalGet(3),
+				I32Eq,
+				If(null),
+				I32Const(1),
+				LocalSet(5),
+				Block(null),
+				Loop(null),
+				LocalGet(4),
+				LocalGet(2),
+				I32LtS,
+				If(null),
+				LocalGet(0),
+				I32Const(WasmLayout.STRING_DATA_OFFSET),
+				I32Add,
+				LocalGet(4),
+				I32Add,
+				I32Load8U(0),
+				LocalGet(1),
+				I32Const(WasmLayout.STRING_DATA_OFFSET),
+				I32Add,
+				LocalGet(4),
+				I32Add,
+				I32Load8U(0),
+				I32Eq,
+				If(null),
+				LocalGet(4),
+				I32Const(1),
+				I32Add,
+				LocalSet(4),
+				Br(2),
+				Else,
+				I32Const(0),
+				LocalSet(5),
+				Br(3),
+				End,
+				Else,
+				Br(2),
+				End,
+				End,
+				End,
+				Else,
+				I32Const(0),
+				LocalSet(5),
+				End,
+				LocalGet(5),
+				Return
+			]));
 	}
 
 	static function addStringCompareFull(module:WasmModule, name:String):Int {
-		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32], results: [I32]}, [for (_ in 0...7) {type: I32}], [
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]}, [for (_ in 0...7) {type: I32}], [
 			LocalGet(0),
 			LocalGet(1),
 			I32Eq,
@@ -1769,10 +1773,11 @@ class WasmLinearRuntime {
 	}
 
 	static function addMathIsNaN(module:WasmModule, name:String):Int
-		return module.addFunction(new WasmFunction(name, {parameters: [F64], results: [I32]}, [], [LocalGet(0), LocalGet(0), F64Eq, I32Eqz, Return]));
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [F64], results: [I32]}, [],
+			[LocalGet(0), LocalGet(0), F64Eq, I32Eqz, Return]));
 
 	static function addDynamicEqual(module:WasmModule, name:String, stringEqual:Int):Int {
-		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}], [
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}], [
 			I32Const(0),
 			LocalSet(2),
 			LocalGet(0),

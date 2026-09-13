@@ -9,6 +9,7 @@ import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmBackend;
+import compiler.backend.wasm.WasmFunctionBuilder.WasmFunctionBuilder;
 
 class WasmLinearGc {
 	public static function build(context:WasmLinearContext):Void {
@@ -105,7 +106,7 @@ class WasmLinearGc {
 				protectedBody.push(Unreachable);
 			body = protectedBody;
 		}
-		return new WasmFunction(fn.name, fn.type, locals, body);
+		return WasmFunctionBuilder.fromRaw(fn.name, fn.type, locals, body);
 	}
 
 	static function emitRuntimeRootFrameRestore(body:Array<WasmInstruction>, frame:Int, context:WasmLinearContext):Void {
@@ -150,144 +151,164 @@ class WasmLinearGc {
 			heapTop = context.heapTop,
 			markStackTop = context.markStackTop;
 		var type:WasmFunctionType = {parameters: [I32], results: []},
-			index = module.addFunction(new WasmFunction("__haxeon_gc_mark", type));
-		var body:Array<WasmInstruction> = [
-			LocalGet(0),
-			I32Eqz,
-			If(null),
-			Return,
-			End,
-			LocalGet(0),
-			I32Const(heapStart + WasmLayout.GC_BLOCK_HEADER_SIZE),
-			I32LtS,
-			If(null),
-			Return,
-			End,
-			LocalGet(0),
-			I32Const(7),
-			I32And,
-			I32Eqz,
-			I32Eqz,
-			If(null),
-			Return,
-			End,
-			LocalGet(0),
-			I32Const(WasmLayout.GC_BLOCK_HEADER_SIZE),
-			I32Sub,
-			LocalSet(1),
-			GlobalGet(heapTop),
-			LocalGet(1),
-			I32LeS,
-			If(null),
-			Return,
-			End,
-			LocalGet(0),
-			GlobalGet(heapTop),
-			I32LeS,
-			I32Eqz,
-			If(null),
-			Return,
-			End,
-			LocalGet(1),
-			I32Load(WasmLayout.GC_BLOCK_FLAGS_OFFSET),
-			LocalSet(2),
-			LocalGet(2),
-			I32Const(WasmLayout.GC_BLOCK_MAGIC_MASK),
-			I32And,
-			I32Const(WasmLayout.GC_BLOCK_MAGIC),
-			I32Eq,
-			I32Eqz,
-			If(null),
-			Return,
-			End,
-			LocalGet(2),
-			I32Const(WasmLayout.GC_BLOCK_ALLOCATED),
-			I32And,
-			I32Eqz,
-			If(null),
-			Return,
-			End,
-			LocalGet(1),
-			I32Load(WasmLayout.GC_BLOCK_OWNER_OFFSET),
-			LocalGet(0),
-			I32Eq,
-			I32Eqz,
-			If(null),
-			Return,
-			End,
-			LocalGet(1),
-			I32Load(WasmLayout.GC_BLOCK_SIZE_OFFSET),
-			LocalSet(3),
-			LocalGet(3),
-			I32Const(WasmLayout.GC_BLOCK_HEADER_SIZE),
-			I32LtS,
-			If(null),
-			Return,
-			End,
-			LocalGet(3),
-			I32Const(7),
-			I32And,
-			I32Eqz,
-			I32Eqz,
-			If(null),
-			Return,
-			End,
-			LocalGet(3),
-			GlobalGet(heapTop),
-			LocalGet(1),
-			I32Sub,
-			I32LeS,
-			I32Eqz,
-			If(null),
-			Return,
-			End,
-			LocalGet(2),
-			I32Const(WasmLayout.GC_BLOCK_MARKED),
-			I32And,
-			If(null),
-			Return,
-			End,
-			LocalGet(1),
-			I32Const(WasmLayout.GC_BLOCK_FLAGS_OFFSET),
-			I32Add,
-			LocalGet(2),
-			I32Const(WasmLayout.GC_BLOCK_MARKED),
-			I32Or,
-			I32Store(0),
-			LocalGet(2),
-			I32Const(WasmLayout.GC_BLOCK_SCAN_REFERENCES),
-			I32And,
-			I32Eqz,
-			If(null),
-			Return,
-			End,
-			GlobalGet(markStackTop),
-			I32Const(4),
-			I32Add,
-			MemorySize,
-			I32Const(65536),
-			I32Mul,
-			I32LeS,
-			I32Eqz,
-			If(null),
-			I32Const(1),
-			MemoryGrow,
-			I32Const(-1),
-			I32Eq,
-			If(null),
-			Unreachable,
-			End,
-			End,
-			GlobalGet(markStackTop),
-			LocalGet(1),
-			I32Store(0),
-			GlobalGet(markStackTop),
-			I32Const(4),
-			I32Add,
-			GlobalSet(markStackTop),
-			Return
-		];
-		module.setFunction(index, new WasmFunction("__haxeon_gc_mark", type, [for (_ in 0...3) {type: I32}], body));
+			builder = new WasmFunctionBuilder("__haxeon_gc_mark", type),
+			index = builder.register(module),
+			value = builder.parameter("value", 0),
+			header = builder.local("header", I32),
+			flags = builder.local("flags", I32),
+			size = builder.local("size", I32);
+
+		builder.localGet(value);
+		builder.i32Eqz();
+		builder.emit(If(null));
+		builder.return_();
+		builder.emit(End);
+
+		builder.localGet(value);
+		builder.i32Const(heapStart + WasmLayout.GC_BLOCK_HEADER_SIZE);
+		builder.emit(I32LtS);
+		builder.emit(If(null));
+		builder.return_();
+		builder.emit(End);
+
+		builder.localGet(value);
+		builder.i32Const(7);
+		builder.emit(I32And);
+		builder.i32Eqz();
+		builder.i32Eqz();
+		builder.emit(If(null));
+		builder.return_();
+		builder.emit(End);
+
+		builder.localGet(value);
+		builder.i32Const(WasmLayout.GC_BLOCK_HEADER_SIZE);
+		builder.i32Sub();
+		builder.localSet(header);
+		builder.globalGet(builder.global(heapTop));
+		builder.localGet(header);
+		builder.emit(I32LeS);
+		builder.emit(If(null));
+		builder.return_();
+		builder.emit(End);
+
+		builder.localGet(value);
+		builder.globalGet(builder.global(heapTop));
+		builder.emit(I32LeS);
+		builder.i32Eqz();
+		builder.emit(If(null));
+		builder.return_();
+		builder.emit(End);
+
+		builder.localGet(header);
+		builder.emit(I32Load(WasmLayout.GC_BLOCK_FLAGS_OFFSET));
+		builder.localSet(flags);
+		builder.localGet(flags);
+		builder.i32Const(WasmLayout.GC_BLOCK_MAGIC_MASK);
+		builder.emit(I32And);
+		builder.i32Const(WasmLayout.GC_BLOCK_MAGIC);
+		builder.emit(I32Eq);
+		builder.i32Eqz();
+		builder.emit(If(null));
+		builder.return_();
+		builder.emit(End);
+
+		builder.localGet(flags);
+		builder.i32Const(WasmLayout.GC_BLOCK_ALLOCATED);
+		builder.emit(I32And);
+		builder.i32Eqz();
+		builder.emit(If(null));
+		builder.return_();
+		builder.emit(End);
+
+		builder.localGet(header);
+		builder.emit(I32Load(WasmLayout.GC_BLOCK_OWNER_OFFSET));
+		builder.localGet(value);
+		builder.emit(I32Eq);
+		builder.i32Eqz();
+		builder.emit(If(null));
+		builder.return_();
+		builder.emit(End);
+
+		builder.localGet(header);
+		builder.emit(I32Load(WasmLayout.GC_BLOCK_SIZE_OFFSET));
+		builder.localSet(size);
+		builder.localGet(size);
+		builder.i32Const(WasmLayout.GC_BLOCK_HEADER_SIZE);
+		builder.emit(I32LtS);
+		builder.emit(If(null));
+		builder.return_();
+		builder.emit(End);
+
+		builder.localGet(size);
+		builder.i32Const(7);
+		builder.emit(I32And);
+		builder.i32Eqz();
+		builder.i32Eqz();
+		builder.emit(If(null));
+		builder.return_();
+		builder.emit(End);
+
+		builder.localGet(size);
+		builder.globalGet(builder.global(heapTop));
+		builder.localGet(header);
+		builder.i32Sub();
+		builder.emit(I32LeS);
+		builder.i32Eqz();
+		builder.emit(If(null));
+		builder.return_();
+		builder.emit(End);
+
+		builder.localGet(flags);
+		builder.i32Const(WasmLayout.GC_BLOCK_MARKED);
+		builder.emit(I32And);
+		builder.emit(If(null));
+		builder.return_();
+		builder.emit(End);
+
+		builder.localGet(header);
+		builder.i32Const(WasmLayout.GC_BLOCK_FLAGS_OFFSET);
+		builder.i32Add();
+		builder.localGet(flags);
+		builder.i32Const(WasmLayout.GC_BLOCK_MARKED);
+		builder.emit(I32Or);
+		builder.emit(I32Store(0));
+
+		builder.localGet(flags);
+		builder.i32Const(WasmLayout.GC_BLOCK_SCAN_REFERENCES);
+		builder.emit(I32And);
+		builder.i32Eqz();
+		builder.emit(If(null));
+		builder.return_();
+		builder.emit(End);
+
+		builder.globalGet(builder.global(markStackTop));
+		builder.i32Const(4);
+		builder.i32Add();
+		builder.emit(MemorySize);
+		builder.i32Const(65536);
+		builder.emit(I32Mul);
+		builder.emit(I32LeS);
+		builder.i32Eqz();
+		builder.emit(If(null));
+		builder.i32Const(1);
+		builder.emit(MemoryGrow);
+		builder.i32Const(-1);
+		builder.emit(I32Eq);
+		builder.emit(If(null));
+		builder.emit(Unreachable);
+		builder.emit(End);
+		builder.emit(End);
+
+		builder.globalGet(builder.global(markStackTop));
+		builder.localGet(header);
+		builder.emit(I32Store(0));
+		builder.globalGet(builder.global(markStackTop));
+		builder.i32Const(4);
+		builder.i32Add();
+		builder.globalSet(builder.global(markStackTop));
+		builder.return_();
+
+		module.setFunction(index, builder.finish());
 		return index;
 	}
 
@@ -297,7 +318,7 @@ class WasmLinearGc {
 			layout = context.layout,
 			mark = context.markFunction;
 		var type:WasmFunctionType = {parameters: [I32], results: []},
-			index = module.addFunction(new WasmFunction("__haxeon_gc_trace", type));
+			index = module.addFunction(WasmFunctionBuilder.fromRaw("__haxeon_gc_trace", type));
 		var body:Array<WasmInstruction> = [LocalGet(0), I32Const(WasmLayout.GC_BLOCK_HEADER_SIZE), I32Sub, LocalSet(1)];
 		var mapNames:Array<String> = [];
 		for (native in program.natives) {
@@ -383,7 +404,7 @@ class WasmLinearGc {
 		appendGcTraceCase(body, WasmLayout.CLOSURE_TYPE_ID, [LocalGet(0), I32Load(WasmLayout.CLOSURE_RECEIVER_OFFSET), Call(mark)]);
 		appendGcConservativeTrace(body, mark);
 		body.push(Return);
-		module.setFunction(index, new WasmFunction("__haxeon_gc_trace", type, [for (_ in 0...5) {type: I32}], body));
+		module.setFunction(index, WasmFunctionBuilder.fromRaw("__haxeon_gc_trace", type, [for (_ in 0...5) {type: I32}], body));
 		return index;
 	}
 
@@ -518,53 +539,63 @@ class WasmLinearGc {
 			rootGlobals = context.rootGlobals,
 			collectionCount = context.collectionCount;
 		var type:WasmFunctionType = {parameters: [], results: []},
+			builder = new WasmFunctionBuilder("__haxeon_gc_collect", type),
+			rootFrame = builder.local("rootFrame", I32),
+			rootCount = builder.local("rootCount", I32),
+			rootIndex = builder.local("rootIndex", I32),
+			blockCursor = builder.local("blockCursor", I32),
+			previousFreeBlock = builder.local("previousFreeBlock", I32),
+			flags = builder.local("flags", I32),
+			freeRunStart = builder.local("freeRunStart", I32),
+			freeRunSize = builder.local("freeRunSize", I32),
+			pendingBlock = builder.local("pendingBlock", I32),
 			body:Array<WasmInstruction> = [];
 		body = body.concat([GlobalGet(heapTop), GlobalSet(markStackTop)]);
 		if (collectionCount >= 0)
 			body = body.concat([GlobalGet(collectionCount), I32Const(1), I32Add, GlobalSet(collectionCount)]);
 		body = body.concat([
 			GlobalGet(rootFrameTop),
-			LocalSet(0),
+			LocalSet(rootFrame),
 			Block(null),
 			Loop(null),
-			LocalGet(0),
+			LocalGet(rootFrame),
 			I32Eqz,
 			If(null),
 			Br(2),
 			Else,
-			LocalGet(0),
+			LocalGet(rootFrame),
 			I32Load(WasmLayout.ROOT_COUNT_OFFSET),
-			LocalSet(1),
+			LocalSet(rootCount),
 			I32Const(0),
-			LocalSet(2),
+			LocalSet(rootIndex),
 			Block(null),
 			Loop(null),
-			LocalGet(2),
-			LocalGet(1),
+			LocalGet(rootIndex),
+			LocalGet(rootCount),
 			I32LtS,
 			If(null),
-			LocalGet(0),
+			LocalGet(rootFrame),
 			I32Const(WasmLayout.ROOT_VALUES_OFFSET),
 			I32Add,
-			LocalGet(2),
+			LocalGet(rootIndex),
 			I32Const(4),
 			I32Mul,
 			I32Add,
 			I32Load(0),
 			Call(mark),
-			LocalGet(2),
+			LocalGet(rootIndex),
 			I32Const(1),
 			I32Add,
-			LocalSet(2),
+			LocalSet(rootIndex),
 			Br(1),
 			Else,
 			Br(2),
 			End,
 			End,
 			End,
-			LocalGet(0),
+			LocalGet(rootFrame),
 			I32Load(WasmLayout.ROOT_PREVIOUS_FRAME_OFFSET),
-			LocalSet(0),
+			LocalSet(rootFrame),
 			Br(1),
 			End,
 			End,
@@ -587,11 +618,11 @@ class WasmLinearGc {
 			GlobalSet(markStackTop),
 			GlobalGet(markStackTop),
 			I32Load(0),
-			LocalSet(8),
+			LocalSet(pendingBlock),
 			GlobalGet(markStackTop),
 			I32Const(0),
 			I32Store(0),
-			LocalGet(8),
+			LocalGet(pendingBlock),
 			I32Const(WasmLayout.GC_BLOCK_HEADER_SIZE),
 			I32Add,
 			Call(trace),
@@ -600,41 +631,41 @@ class WasmLinearGc {
 			End
 		]);
 		var appendFreeRun:Array<WasmInstruction> = [
-			LocalGet(7),
+			LocalGet(freeRunSize),
 			I32Eqz,
 			If(null),
-			LocalGet(3),
-			LocalSet(6),
+			LocalGet(blockCursor),
+			LocalSet(freeRunStart),
 			End,
-			LocalGet(7),
-			LocalGet(4),
+			LocalGet(freeRunSize),
+			LocalGet(previousFreeBlock),
 			I32Add,
-			LocalSet(7)
+			LocalSet(freeRunSize)
 		];
 		var flushFreeRun:Array<WasmInstruction> = [
-			LocalGet(7),
+			LocalGet(freeRunSize),
 			I32Eqz,
 			I32Eqz,
 			If(null),
-			LocalGet(6),
-			LocalGet(7),
+			LocalGet(freeRunStart),
+			LocalGet(freeRunSize),
 			I32Store(WasmLayout.GC_BLOCK_SIZE_OFFSET),
-			LocalGet(6),
+			LocalGet(freeRunStart),
 			I32Const(WasmLayout.GC_BLOCK_FLAGS_OFFSET),
 			I32Add,
 			I32Const(WasmLayout.GC_BLOCK_MAGIC),
 			I32Store(0),
-			LocalGet(6),
+			LocalGet(freeRunStart),
 			I32Const(WasmLayout.GC_BLOCK_OWNER_OFFSET),
 			I32Add,
 			I32Const(0),
 			I32Store(0),
-			LocalGet(6),
+			LocalGet(freeRunStart),
 			I32Const(WasmLayout.GC_BLOCK_LINK_OFFSET),
 			I32Add,
 			GlobalGet(freeHead),
 			I32Store(0),
-			LocalGet(6),
+			LocalGet(freeRunStart),
 			GlobalSet(freeHead),
 			End
 		];
@@ -642,27 +673,27 @@ class WasmLinearGc {
 			I32Const(0),
 			GlobalSet(freeHead),
 			I32Const(heapStart),
-			LocalSet(3),
+			LocalSet(blockCursor),
 			I32Const(0),
-			LocalSet(6),
+			LocalSet(freeRunStart),
 			I32Const(0),
-			LocalSet(7),
+			LocalSet(freeRunSize),
 			Block(null),
 			Loop(null),
-			LocalGet(3),
+			LocalGet(blockCursor),
 			GlobalGet(heapTop),
 			I32LtS,
 			If(null),
-			LocalGet(3),
+			LocalGet(blockCursor),
 			I32Load(WasmLayout.GC_BLOCK_SIZE_OFFSET),
-			LocalSet(4),
-			LocalGet(4),
+			LocalSet(previousFreeBlock),
+			LocalGet(previousFreeBlock),
 			I32Const(WasmLayout.GC_BLOCK_HEADER_SIZE),
 			I32LtS,
 			If(null),
 			Unreachable,
 			End,
-			LocalGet(4),
+			LocalGet(previousFreeBlock),
 			I32Const(7),
 			I32And,
 			I32Eqz,
@@ -670,19 +701,19 @@ class WasmLinearGc {
 			If(null),
 			Unreachable,
 			End,
-			LocalGet(4),
+			LocalGet(previousFreeBlock),
 			GlobalGet(heapTop),
-			LocalGet(3),
+			LocalGet(blockCursor),
 			I32Sub,
 			I32LeS,
 			I32Eqz,
 			If(null),
 			Unreachable,
 			End,
-			LocalGet(3),
+			LocalGet(blockCursor),
 			I32Load(WasmLayout.GC_BLOCK_FLAGS_OFFSET),
-			LocalSet(5),
-			LocalGet(5),
+			LocalSet(flags),
+			LocalGet(flags),
 			I32Const(WasmLayout.GC_BLOCK_MAGIC_MASK),
 			I32And,
 			I32Const(WasmLayout.GC_BLOCK_MAGIC),
@@ -691,11 +722,11 @@ class WasmLinearGc {
 			If(null),
 			Unreachable,
 			End,
-			LocalGet(5),
+			LocalGet(flags),
 			I32Const(WasmLayout.GC_BLOCK_ALLOCATED),
 			I32And,
 			If(null),
-			LocalGet(5),
+			LocalGet(flags),
 			I32Const(WasmLayout.GC_BLOCK_MARKED),
 			I32And,
 			If(null)
@@ -703,13 +734,13 @@ class WasmLinearGc {
 		body = body.concat(flushFreeRun);
 		body = body.concat([
 			I32Const(0),
-			LocalSet(6),
+			LocalSet(freeRunStart),
 			I32Const(0),
-			LocalSet(7),
-			LocalGet(3),
+			LocalSet(freeRunSize),
+			LocalGet(blockCursor),
 			I32Const(WasmLayout.GC_BLOCK_FLAGS_OFFSET),
 			I32Add,
-			LocalGet(5),
+			LocalGet(flags),
 			I32Const(WasmLayout.GC_BLOCK_CLEAR_MARKED_MASK),
 			I32And,
 			I32Store(0),
@@ -720,10 +751,10 @@ class WasmLinearGc {
 		body = body.concat(appendFreeRun);
 		body = body.concat([
 			End,
-			LocalGet(3),
-			LocalGet(4),
+			LocalGet(blockCursor),
+			LocalGet(previousFreeBlock),
 			I32Add,
-			LocalSet(3),
+			LocalSet(blockCursor),
 			Br(1),
 			Else,
 			Br(2),
@@ -733,7 +764,8 @@ class WasmLinearGc {
 		]);
 		body = body.concat(flushFreeRun);
 		body.push(Return);
-		return module.addFunction(new WasmFunction("__haxeon_gc_collect", type, [for (_ in 0...9) {type: I32}], body));
+		builder.emitAll(body);
+		return module.addFunction(builder.finish());
 	}
 
 	public static function appendGcContainerOwner(body:Array<WasmInstruction>, backing:Int, owner:Int):Void {
