@@ -29,7 +29,10 @@ for target in wasm32 wasm-gc; do
 		--entry=wasm-bytes-compare --root=tests/programs tests/programs/wasm-bytes-compare.hx
 done
 
-shared_cases=(add inheritance-class override-method virtual-dispatch array-iterator-wasm array-slice-index array-growth-wasm array-alias-growth array-index-growth array-resize array-expression-mutation array-field-mutation
+shared_cases=(add call-many function-call function-value lambda single-argument-lambda contextual-callbacks enum-array-pattern anonymous-function enum-abstract computed-property
+	mutable-capture nested-mutable-capture captured-lambda captured-this nullable-basic nullable-compound object-array for-in loop-control modulo switch-enum
+	multiple-implements captured-method anonymous-record array-comprehension filtered-array-comprehension range-iteration cast-expression optional-argument-forwarding
+	default-parameter-inference generic-functions generic-abstract bounded-generic generic-class inheritance-class override-method virtual-dispatch array-iterator-wasm array-slice-index array-growth-wasm array-alias-growth array-index-growth array-resize array-expression-mutation array-field-mutation
 	array-copy-concat array-unshift array-insert array-splice array-remove array-object-mutation array-reverse dynamic-equality numeric-promotion function-wrapper std-is-of-type
 	map-basic map-int map-primitive-types map-literal map-object map-anonymous-enum map-for-in map-key-value-for-in map-comprehension map-nullable-get nullable-map-get map-string-equality
 	try-catch try-nested try-array-bounds concise-try try-typed-class try-typed-mismatch try-typed-int try-multiple-catches reflect-compare-sort generic-contextual-callback)
@@ -48,7 +51,7 @@ const fs = require("fs");
 const path = require("path");
 const root = process.argv[2];
 const cases = process.argv.slice(3);
-const expectedResults = { "array-object-mutation": 8, "array-field-mutation": 11, "inheritance-class": 43, "map-for-in": 52, "virtual-dispatch": 71 };
+const expectedResults = { "array-object-mutation": 8, "array-field-mutation": 11, "single-argument-lambda": 43, "mutable-capture": 78, "nested-mutable-capture": 3, "inheritance-class": 43, "map-for-in": 52, "virtual-dispatch": 71 };
 
 (async () => {
   for (const name of cases) {

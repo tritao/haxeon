@@ -26,7 +26,7 @@ mkdir -p "$root_dir/out"
 	--target=wasm-gc --output=out/wasm-gc-wasmtime-bytes.wasm --entry=wasm-gc-bytes \
 	--root=tests/programs tests/programs/wasm-gc-bytes.hx
 
-for case_name in add array-iterator-wasm array-slice-index array-growth-wasm array-alias-growth array-index-growth array-resize array-expression-mutation array-field-mutation array-copy-concat array-unshift array-insert array-splice array-remove array-object-mutation array-reverse dynamic-equality numeric-promotion function-wrapper inheritance-class override-method virtual-dispatch wasm-gc-reuse std-is-of-type map-basic map-int map-primitive-types map-literal map-object map-anonymous-enum map-for-in map-key-value-for-in map-comprehension map-nullable-get nullable-map-get map-string-equality string-concat-mixed string-split string-split-edge string-from-char-code bytes-codec bytes-stream-edge reflect-compare-sort generic-interface generic-contextual-callback interface-dispatch interface-inheritance interface-upcast interface-field try-catch try-nested try-array-bounds concise-try try-typed-class try-typed-mismatch try-typed-int try-multiple-catches enum-argument-string string-interpolation std-string-dynamic compiler-audit-regressions wasm-gc-string-operations; do
+for case_name in add call-many function-call function-value lambda single-argument-lambda contextual-callbacks enum-array-pattern anonymous-function enum-abstract computed-property mutable-capture nested-mutable-capture captured-lambda captured-this nullable-basic nullable-compound object-array for-in loop-control modulo switch-enum multiple-implements captured-method anonymous-record array-comprehension filtered-array-comprehension range-iteration cast-expression optional-argument-forwarding default-parameter-inference generic-functions generic-abstract bounded-generic generic-class array-iterator-wasm array-slice-index array-growth-wasm array-alias-growth array-index-growth array-resize array-expression-mutation array-field-mutation array-copy-concat array-unshift array-insert array-splice array-remove array-object-mutation array-reverse dynamic-equality numeric-promotion function-wrapper inheritance-class override-method virtual-dispatch wasm-gc-reuse std-is-of-type map-basic map-int map-primitive-types map-literal map-object map-anonymous-enum map-for-in map-key-value-for-in map-comprehension map-nullable-get nullable-map-get map-string-equality string-concat-mixed string-split string-split-edge string-from-char-code bytes-codec bytes-stream-edge reflect-compare-sort generic-interface generic-contextual-callback interface-dispatch interface-inheritance interface-upcast interface-field try-catch try-nested try-array-bounds concise-try try-typed-class try-typed-mismatch try-typed-int try-multiple-catches enum-argument-string string-interpolation std-string-dynamic compiler-audit-regressions wasm-gc-string-operations; do
 	"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 		--target=wasm-gc --output="out/wasm-gc-wasmtime-$case_name.wasm" --entry="$case_name" \
 		--root=tests/programs "tests/programs/$case_name.hx"
@@ -49,6 +49,40 @@ for artifact in \
 	wasm-gc-strings \
 	wasm-gc-wasmtime-bytes \
 	wasm-gc-wasmtime-add \
+	wasm-gc-wasmtime-call-many \
+	wasm-gc-wasmtime-function-call \
+	wasm-gc-wasmtime-function-value \
+	wasm-gc-wasmtime-lambda \
+	wasm-gc-wasmtime-single-argument-lambda \
+	wasm-gc-wasmtime-contextual-callbacks \
+	wasm-gc-wasmtime-enum-array-pattern \
+	wasm-gc-wasmtime-anonymous-function \
+	wasm-gc-wasmtime-enum-abstract \
+	wasm-gc-wasmtime-computed-property \
+	wasm-gc-wasmtime-mutable-capture \
+	wasm-gc-wasmtime-nested-mutable-capture \
+	wasm-gc-wasmtime-captured-lambda \
+	wasm-gc-wasmtime-captured-this \
+	wasm-gc-wasmtime-nullable-basic \
+	wasm-gc-wasmtime-nullable-compound \
+	wasm-gc-wasmtime-object-array \
+	wasm-gc-wasmtime-for-in \
+	wasm-gc-wasmtime-loop-control \
+	wasm-gc-wasmtime-modulo \
+	wasm-gc-wasmtime-switch-enum \
+	wasm-gc-wasmtime-multiple-implements \
+	wasm-gc-wasmtime-captured-method \
+	wasm-gc-wasmtime-anonymous-record \
+	wasm-gc-wasmtime-array-comprehension \
+	wasm-gc-wasmtime-filtered-array-comprehension \
+	wasm-gc-wasmtime-range-iteration \
+	wasm-gc-wasmtime-cast-expression \
+	wasm-gc-wasmtime-optional-argument-forwarding \
+	wasm-gc-wasmtime-default-parameter-inference \
+	wasm-gc-wasmtime-generic-functions \
+	wasm-gc-wasmtime-generic-abstract \
+	wasm-gc-wasmtime-bounded-generic \
+	wasm-gc-wasmtime-generic-class \
 	wasm-gc-wasmtime-array-iterator-wasm \
 	wasm-gc-wasmtime-array-slice-index \
 	wasm-gc-wasmtime-array-growth-wasm \
@@ -122,6 +156,12 @@ for artifact in \
 		expected=8
 	elif [[ "$artifact" == "wasm-gc-wasmtime-array-field-mutation" ]]; then
 		expected=11
+	elif [[ "$artifact" == "wasm-gc-wasmtime-single-argument-lambda" ]]; then
+		expected=43
+	elif [[ "$artifact" == "wasm-gc-wasmtime-mutable-capture" ]]; then
+		expected=78
+	elif [[ "$artifact" == "wasm-gc-wasmtime-nested-mutable-capture" ]]; then
+		expected=3
 	elif [[ "$artifact" == "wasm-gc-wasmtime-map-for-in" ]]; then
 		expected=52
 	elif [[ "$artifact" == "wasm-gc-wasmtime-interface-inheritance" ]]; then
