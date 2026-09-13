@@ -322,11 +322,22 @@ class WasmLinearGc {
 			builder.return_();
 		});
 
-		// Primitive boxes and byte payloads are leaves. Other known layouts are
-		// traced from their declared reference fields, not by scanning scalars.
-		var leafTypes:Array<IrType> = [Bytes, I32, Bool, I64, F64];
+		// Primitive boxes are leaves. Byte views trace their backing owner; other
+		// known layouts are traced from declared reference fields.
+		var leafTypes:Array<IrType> = [I32, Bool, I64, F64];
 		for (leaf in leafTypes)
 			appendGcTraceCase(builder, value, WasmBackend.typeId(leaf), function(_) {});
+		appendGcTraceCase(builder, value, WasmBackend.typeId(Bytes), function(builder) {
+			builder.localGet(value);
+			builder.emit(I32Load(WasmLayout.BYTES_VIEW_MARKER_OFFSET));
+			builder.i32Const(WasmLayout.BYTES_VIEW_MAGIC);
+			builder.emit(I32Eq);
+			builder.if_(function(builder) {
+				builder.localGet(value);
+				builder.emit(I32Load(WasmLayout.BYTES_VIEW_OWNER_OFFSET));
+				builder.call(builder.functionRef(mark));
+			});
+		});
 		for (object in program.objects)
 			appendGcTraceCase(builder, value, WasmBackend.typeId(Obj(object.name)), function(builder) {
 				for (field in layout.object(object.name).fields)

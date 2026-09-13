@@ -2311,8 +2311,11 @@ class WasmFunctionLower {
 				if (represented != null)
 					emit(body, represented);
 				else {
+					var bytesDataPointer = functions.get("__haxeon_bytes_data_pointer");
+					if (bytesDataPointer == null)
+						throw "Wasm byte data pointer helper is missing";
 					for (argument in arguments)
-						nativeArgument(body, argument, values);
+						nativeArgument(body, argument, values, bytesDataPointer);
 					body.push(Call(importIndex));
 					if (output.type != Void)
 						body.push(LocalSet(requiredLocal(values, output.id)));
@@ -2418,10 +2421,12 @@ class WasmFunctionLower {
 		return true;
 	}
 
-	static function nativeArgument(body:Array<WasmInstruction>, argument:IrValue, values:Map<Int, Int>):Void {
+	static function nativeArgument(body:Array<WasmInstruction>, argument:IrValue, values:Map<Int, Int>, bytesDataPointer:Int):Void {
 		body.push(LocalGet(requiredLocal(values, argument.id)));
 		switch argument.type {
-			case Bytes, ManagedBytes, Abstract("realtime_bytes"):
+			case Bytes, ManagedBytes:
+				body.push(Call(bytesDataPointer));
+			case Abstract("realtime_bytes"):
 				body.push(I32Const(WasmLayout.STRING_DATA_OFFSET));
 				body.push(I32Add);
 			case _:
