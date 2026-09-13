@@ -24,8 +24,13 @@ interface WasmRepresentation {
 	public function toVirtual(value:IrValue, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>>;
 	public function equal(output:Int, left:IrValue, right:IrValue, leftLocal:Int, rightLocal:Int):Array<WasmInstruction>;
 	public function dynamicEqual(output:Int, leftLocal:Int, rightLocal:Int):Null<Array<WasmInstruction>>;
-	public function virtualCall(output:IrValue, receiver:IrValue, arguments:Array<IrValue>, targets:Array<{typeName:String, functionIndex:Int}>,
-		receiverLocal:Int, destination:Int, argumentLocals:Array<Int>):Null<Array<WasmInstruction>>;
+	public function virtualCall(output:IrValue, receiver:IrValue, arguments:Array<IrValue>, targets:Array<{
+		typeName:String,
+		functionIndex:Int,
+		argumentTypes:Array<IrType>,
+		resultType:IrType
+	}>, receiverLocal:Int, destination:Int,
+		argumentLocals:Array<Int>):Null<Array<WasmInstruction>>;
 	public function beginFunction(allocateLocal:WasmValueType->Int, exceptionTag:Null<Int>):Void;
 	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
 		argumentLocals:Array<Int>):Null<Array<WasmInstruction>>;
@@ -115,8 +120,13 @@ class WasmLinearRepresentation implements WasmRepresentation {
 	public function dynamicEqual(output:Int, leftLocal:Int, rightLocal:Int):Null<Array<WasmInstruction>>
 		return null;
 
-	public function virtualCall(output:IrValue, receiver:IrValue, arguments:Array<IrValue>, targets:Array<{typeName:String, functionIndex:Int}>,
-			receiverLocal:Int, destination:Int, argumentLocals:Array<Int>):Null<Array<WasmInstruction>>
+	public function virtualCall(output:IrValue, receiver:IrValue, arguments:Array<IrValue>, targets:Array<{
+		typeName:String,
+		functionIndex:Int,
+		argumentTypes:Array<IrType>,
+		resultType:IrType
+	}>, receiverLocal:Int, destination:Int,
+			argumentLocals:Array<Int>):Null<Array<WasmInstruction>>
 		return null;
 
 	public function beginFunction(allocateLocal:WasmValueType->Int, exceptionTag:Null<Int>):Void {}
@@ -909,14 +919,21 @@ class WasmGcRepresentation implements WasmRepresentation {
 		return body;
 	}
 
-	public function virtualCall(output:IrValue, receiver:IrValue, arguments:Array<IrValue>, targets:Array<{typeName:String, functionIndex:Int}>,
-			receiverLocal:Int, destination:Int, argumentLocals:Array<Int>):Null<Array<WasmInstruction>> {
+	public function virtualCall(output:IrValue, receiver:IrValue, arguments:Array<IrValue>, targets:Array<{
+		typeName:String,
+		functionIndex:Int,
+		argumentTypes:Array<IrType>,
+		resultType:IrType
+	}>, receiverLocal:Int, destination:Int,
+			argumentLocals:Array<Int>):Null<Array<WasmInstruction>> {
 		if (targets.length == 0)
 			throw 'Wasm GC interface method on ${Std.string(receiver.type)} has no implementations';
 		var instructions:Array<WasmInstruction> = [];
 		for (index in 0...targets.length) {
 			var target = targets[index],
 				objectType = plan.objectType(target.typeName);
+			if (target.argumentTypes.length != argumentLocals.length + 1)
+				throw 'Wasm GC interface target "${target.typeName}" has an incompatible argument count';
 			instructions = instructions.concat([
 				LocalGet(receiverLocal),
 				RefTest({nullable: false, heap: Type(objectType)}),
@@ -924,16 +941,69 @@ class WasmGcRepresentation implements WasmRepresentation {
 				LocalGet(receiverLocal),
 				RefCast({nullable: false, heap: Type(objectType)})
 			]);
-			for (local in argumentLocals)
-				instructions.push(LocalGet(local));
+			for (argumentIndex in 0...argumentLocals.length)
+				instructions = instructions.concat(virtualArgument(arguments[argumentIndex], target.argumentTypes[argumentIndex + 1],
+					argumentLocals[argumentIndex]));
 			instructions.push(Call(target.functionIndex));
 			if (output.type != Void)
-				instructions.push(LocalSet(destination));
+				instructions = instructions.concat(virtualResult(output, target.resultType, destination));
 			instructions = instructions.concat(index < targets.length - 1 ? [Else] : [Else, Unreachable]);
 		}
 		for (_ in targets)
 			instructions.push(End);
 		return instructions;
+	}
+
+	function virtualArgument(argument:IrValue, targetType:IrType, sourceLocal:Int):Array<WasmInstruction> {
+		if (WasmGcTypePlan.typeKey(argument.type) == WasmGcTypePlan.typeKey(targetType))
+			return [LocalGet(sourceLocal)];
+		var targetValue = new IrValue(-1, "virtual-argument", targetType),
+			temporary = allocateLocal(valueType(targetType)),
+			converted:Null<Array<WasmInstruction>> = null;
+		switch [argument.type, targetType] {
+			case [I32 | Bool | I64 | F64 | TypeRef, Dyn]:
+				converted = toDynamic(argument, temporary, sourceLocal);
+			case [Dyn, I32 | Bool | I64 | F64 | TypeRef]:
+				converted = safeCast(targetValue, argument, temporary, sourceLocal);
+			case [I32, Bool] | [Bool, I32]:
+				return [LocalGet(sourceLocal)];
+			case [I32, F64]:
+				return [LocalGet(sourceLocal), F64ConvertI32S];
+			case [F64, I32]:
+				return [LocalGet(sourceLocal), I32TruncF64S];
+			case [_, _]:
+				return switch valueType(targetType) {
+					case Ref(reference): [LocalGet(sourceLocal), RefCast(reference)];
+					case _: throw 'Wasm GC cannot pass ${Std.string(argument.type)} to interface parameter ${Std.string(targetType)}';
+				};
+		}
+		return requireInstructions(converted).concat([LocalGet(temporary)]);
+	}
+
+	function virtualResult(output:IrValue, sourceType:IrType, destination:Int):Array<WasmInstruction> {
+		if (WasmGcTypePlan.typeKey(output.type) == WasmGcTypePlan.typeKey(sourceType))
+			return [LocalSet(destination)];
+		var sourceValue = new IrValue(-1, "virtual-result", sourceType),
+			temporary = allocateLocal(valueType(sourceType)),
+			converted:Null<Array<WasmInstruction>> = null;
+		switch [sourceType, output.type] {
+			case [I32 | Bool | I64 | F64 | TypeRef, Dyn]:
+				converted = toDynamic(sourceValue, destination, temporary);
+			case [Dyn, I32 | Bool | I64 | F64 | TypeRef]:
+				converted = safeCast(output, sourceValue, destination, temporary);
+			case [I32, Bool] | [Bool, I32]:
+				return [LocalSet(destination)];
+			case [I32, F64]:
+				return [LocalSet(temporary), LocalGet(temporary), F64ConvertI32S, LocalSet(destination)];
+			case [F64, I32]:
+				return [LocalSet(temporary), LocalGet(temporary), I32TruncF64S, LocalSet(destination)];
+			case [_, _]:
+				return switch [valueType(sourceType), valueType(output.type)] {
+					case [Ref(_), Ref(_)]: [LocalSet(destination)];
+					case _: throw 'Wasm GC cannot return ${Std.string(sourceType)} from interface method as ${Std.string(output.type)}';
+				};
+		}
+		return [LocalSet(temporary)].concat(requireInstructions(converted));
 	}
 
 	public function beginFunction(allocateLocal:WasmValueType->Int, exceptionTag:Null<Int>):Void {

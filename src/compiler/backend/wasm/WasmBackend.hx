@@ -6371,17 +6371,38 @@ class WasmFunctionLower {
 			default: I32Store(offset);
 		};
 
-	static function virtualTargets(program:IrProgram, interfaceName:String, methodName:String,
-			functions:Map<String, Int>):Array<{typeName:String, functionIndex:Int}> {
-		var result:Array<{typeName:String, functionIndex:Int}> = [];
+	static function virtualTargets(program:IrProgram, interfaceName:String, methodName:String, functions:Map<String, Int>):Array<{
+		typeName:String,
+		functionIndex:Int,
+		argumentTypes:Array<IrType>,
+		resultType:IrType
+	}> {
+		var result:Array<{
+			typeName:String,
+			functionIndex:Int,
+			argumentTypes:Array<IrType>,
+			resultType:IrType
+		}> = [];
 		for (object in program.objects) {
 			if (!implementsInterface(program, object.name, interfaceName))
 				continue;
 			var functionName = findMethod(program, object.name, methodName);
 			if (functionName != null) {
-				var functionIndex = functions.get(functionName);
-				if (functionIndex != null)
-					result.push({typeName: object.name, functionIndex: functionIndex});
+				var functionIndex = functions.get(functionName),
+					targetFunction:Null<IrFunction> = null;
+				for (candidate in program.functions)
+					if (candidate.name == functionName)
+						targetFunction = candidate;
+				if (functionIndex != null) {
+					if (targetFunction == null)
+						throw 'Wasm interface target "$functionName" has no Haxe function signature';
+					result.push({
+						typeName: object.name,
+						functionIndex: functionIndex,
+						argumentTypes: [for (argument in targetFunction.arguments) argument.type],
+						resultType: targetFunction.result
+					});
+				}
 			}
 		}
 		result.sort(function(left, right) return objectInheritanceDepth(program, right.typeName) - objectInheritanceDepth(program, left.typeName));
