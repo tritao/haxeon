@@ -18,17 +18,27 @@ typedef WasmFunctionRepresentationContext = {
 	final irFunction:Null<IrFunction>;
 }
 
+enum WasmLoweringKind {
+	Handled(instructions:Array<WasmInstruction>);
+	UseDefault;
+}
+
+abstract WasmLoweringResult(WasmLoweringKind) from WasmLoweringKind {
+	@:from static function fromInstructions(instructions:Array<WasmInstruction>):WasmLoweringResult
+		return Handled(instructions);
+}
+
 /** Value typing and representation-sensitive value operations. */
 interface WasmValueRepresentation {
 	public function valueType(type:IrType):WasmValueType;
 	public function zeroValue(type:IrType):Array<WasmInstruction>;
 	public function nullValue(type:IrType, destination:Int):Array<WasmInstruction>;
-	public function constantString(value:String, destination:Int, strings:Map<String, Int>):Null<Array<WasmInstruction>>;
-	public function toDynamic(value:IrValue, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>>;
-	public function safeCast(output:IrValue, value:IrValue, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>>;
-	public function toVirtual(value:IrValue, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>>;
+	public function constantString(value:String, destination:Int, strings:Map<String, Int>):WasmLoweringResult;
+	public function toDynamic(value:IrValue, destination:Int, valueLocal:Int):WasmLoweringResult;
+	public function safeCast(output:IrValue, value:IrValue, destination:Int, valueLocal:Int):WasmLoweringResult;
+	public function toVirtual(value:IrValue, destination:Int, valueLocal:Int):WasmLoweringResult;
 	public function equal(output:Int, left:IrValue, right:IrValue, leftLocal:Int, rightLocal:Int):Array<WasmInstruction>;
-	public function dynamicEqual(output:Int, leftLocal:Int, rightLocal:Int):Null<Array<WasmInstruction>>;
+	public function dynamicEqual(output:Int, leftLocal:Int, rightLocal:Int):WasmLoweringResult;
 }
 
 /** Heap aggregates, arrays, iterators, and enums. */
@@ -36,16 +46,15 @@ interface WasmAggregateRepresentation {
 	public function newObject(typeName:String, destination:Int):Array<WasmInstruction>;
 	public function fieldGet(object:IrValue, fieldName:String, destination:Int, objectLocal:Int):Array<WasmInstruction>;
 	public function fieldSet(object:IrValue, fieldName:String, objectLocal:Int, valueLocal:Int):Array<WasmInstruction>;
-	public function arrayGet(array:IrValue, index:IrValue, destination:Int, arrayLocal:Int, indexLocal:Int):Null<Array<WasmInstruction>>;
-	public function arraySet(array:IrValue, index:IrValue, value:IrValue, arrayLocal:Int, indexLocal:Int, valueLocal:Int):Null<Array<WasmInstruction>>;
-	public function arraySize(array:IrValue, destination:Int, arrayLocal:Int):Null<Array<WasmInstruction>>;
-	public function iteratorNew(array:IrValue, destination:Int, arrayLocal:Int):Null<Array<WasmInstruction>>;
-	public function iteratorHasNext(iterator:IrValue, destination:Int, iteratorLocal:Int):Null<Array<WasmInstruction>>;
-	public function iteratorNext(iterator:IrValue, output:IrValue, destination:Int, iteratorLocal:Int):Null<Array<WasmInstruction>>;
-	public function makeEnum(typeName:String, constructor:Int, arguments:Array<IrValue>, destination:Int,
-		argumentLocals:Array<Int>):Null<Array<WasmInstruction>>;
-	public function enumIndex(value:IrValue, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>>;
-	public function enumField(value:IrValue, constructor:Int, field:Int, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>>;
+	public function arrayGet(array:IrValue, index:IrValue, destination:Int, arrayLocal:Int, indexLocal:Int):WasmLoweringResult;
+	public function arraySet(array:IrValue, index:IrValue, value:IrValue, arrayLocal:Int, indexLocal:Int, valueLocal:Int):WasmLoweringResult;
+	public function arraySize(array:IrValue, destination:Int, arrayLocal:Int):WasmLoweringResult;
+	public function iteratorNew(array:IrValue, destination:Int, arrayLocal:Int):WasmLoweringResult;
+	public function iteratorHasNext(iterator:IrValue, destination:Int, iteratorLocal:Int):WasmLoweringResult;
+	public function iteratorNext(iterator:IrValue, output:IrValue, destination:Int, iteratorLocal:Int):WasmLoweringResult;
+	public function makeEnum(typeName:String, constructor:Int, arguments:Array<IrValue>, destination:Int, argumentLocals:Array<Int>):WasmLoweringResult;
+	public function enumIndex(value:IrValue, destination:Int, valueLocal:Int):WasmLoweringResult;
+	public function enumField(value:IrValue, constructor:Int, field:Int, destination:Int, valueLocal:Int):WasmLoweringResult;
 }
 
 /** Closures and dynamic dispatch. */
@@ -56,19 +65,18 @@ interface WasmCallRepresentation {
 		argumentTypes:Array<IrType>,
 		resultType:IrType
 	}>, receiverLocal:Int, destination:Int,
-		argumentLocals:Array<Int>):Null<Array<WasmInstruction>>;
-	public function staticClosure(name:String, tableSlots:Map<String, Int>, destination:Int):Null<Array<WasmInstruction>>;
-	public function instanceClosure(name:String, tableSlots:Map<String, Int>, receiverLocal:Int, destination:Int):Null<Array<WasmInstruction>>;
+		argumentLocals:Array<Int>):WasmLoweringResult;
+	public function staticClosure(name:String, tableSlots:Map<String, Int>, destination:Int):WasmLoweringResult;
+	public function instanceClosure(name:String, tableSlots:Map<String, Int>, receiverLocal:Int, destination:Int):WasmLoweringResult;
 	public function callClosure(staticType:Int, instanceType:Null<Int>, arguments:Array<IrValue>, closureLocal:Int, destination:Int,
-		argumentLocals:Array<Int>):Null<Array<WasmInstruction>>;
+		argumentLocals:Array<Int>):WasmLoweringResult;
 }
 
 /** Runtime and C-native calls whose ABI depends on the reference model. */
 interface WasmInteropRepresentation {
-	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
-		argumentLocals:Array<Int>):Null<Array<WasmInstruction>>;
+	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>):WasmLoweringResult;
 	public function lowerCNativeCall(native:IrCNative, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>, importIndex:Int,
-		pointerLengthImportIndex:Int, pointerReleaseImportIndex:Int):Null<Array<WasmInstruction>>;
+		pointerLengthImportIndex:Int, pointerReleaseImportIndex:Int):WasmLoweringResult;
 }
 
 /** Explicit capability set selected once per module and instantiated per function. */
@@ -124,8 +132,8 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	public function nullValue(type:IrType, destination:Int):Array<WasmInstruction>
 		return [I32Const(0), LocalSet(destination)];
 
-	public function constantString(value:String, destination:Int, strings:Map<String, Int>):Null<Array<WasmInstruction>>
-		return null;
+	public function constantString(value:String, destination:Int, strings:Map<String, Int>):WasmLoweringResult
+		return UseDefault;
 
 	public function newObject(typeName:String, destination:Int):Array<WasmInstruction> {
 		return [
@@ -147,14 +155,14 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		return [LocalGet(objectLocal), LocalGet(valueLocal), store(field.type, field.offset)];
 	}
 
-	public function toDynamic(value:IrValue, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>>
-		return null;
+	public function toDynamic(value:IrValue, destination:Int, valueLocal:Int):WasmLoweringResult
+		return UseDefault;
 
-	public function safeCast(output:IrValue, value:IrValue, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>>
-		return null;
+	public function safeCast(output:IrValue, value:IrValue, destination:Int, valueLocal:Int):WasmLoweringResult
+		return UseDefault;
 
-	public function toVirtual(value:IrValue, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>>
-		return null;
+	public function toVirtual(value:IrValue, destination:Int, valueLocal:Int):WasmLoweringResult
+		return UseDefault;
 
 	public function equal(output:Int, left:IrValue, right:IrValue, leftLocal:Int, rightLocal:Int):Array<WasmInstruction> {
 		var instruction = switch left.type {
@@ -165,11 +173,11 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		return [LocalGet(leftLocal), LocalGet(rightLocal), instruction, LocalSet(output)];
 	}
 
-	public function dynamicEqual(output:Int, leftLocal:Int, rightLocal:Int):Null<Array<WasmInstruction>>
-		return null;
+	public function dynamicEqual(output:Int, leftLocal:Int, rightLocal:Int):WasmLoweringResult
+		return UseDefault;
 
 	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
-			argumentLocals:Array<Int>):Null<Array<WasmInstruction>> {
+			argumentLocals:Array<Int>):WasmLoweringResult {
 		if (name == "__wasm_memory_load_i32") {
 			if (output.type != I32 || arguments.length != 1 || arguments[0].type != I32 || argumentLocals.length != 1)
 				throw "Invalid Wasm runtime memory.load i32 signature";
@@ -185,40 +193,40 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 				throw "Invalid Wasm FloatBits.fromInt64 signature";
 			return [LocalGet(argumentLocals[0]), F64ReinterpretI64, LocalSet(outputLocal)];
 		}
-		return null;
+		return UseDefault;
 	}
 
 	public function lowerCNativeCall(native:IrCNative, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>, importIndex:Int,
-			pointerLengthImportIndex:Int, pointerReleaseImportIndex:Int):Null<Array<WasmInstruction>>
-		return null;
+			pointerLengthImportIndex:Int, pointerReleaseImportIndex:Int):WasmLoweringResult
+		return UseDefault;
 
-	public function arrayGet(array:IrValue, index:IrValue, destination:Int, arrayLocal:Int, indexLocal:Int):Null<Array<WasmInstruction>>
-		return null;
 
-	public function arraySet(array:IrValue, index:IrValue, value:IrValue, arrayLocal:Int, indexLocal:Int, valueLocal:Int):Null<Array<WasmInstruction>>
-		return null;
+	public function arrayGet(array:IrValue, index:IrValue, destination:Int, arrayLocal:Int, indexLocal:Int):WasmLoweringResult
+		return UseDefault;
 
-	public function arraySize(array:IrValue, destination:Int, arrayLocal:Int):Null<Array<WasmInstruction>>
-		return null;
+	public function arraySet(array:IrValue, index:IrValue, value:IrValue, arrayLocal:Int, indexLocal:Int, valueLocal:Int):WasmLoweringResult
+		return UseDefault;
 
-	public function iteratorNew(array:IrValue, destination:Int, arrayLocal:Int):Null<Array<WasmInstruction>>
-		return null;
+	public function arraySize(array:IrValue, destination:Int, arrayLocal:Int):WasmLoweringResult
+		return UseDefault;
 
-	public function iteratorHasNext(iterator:IrValue, destination:Int, iteratorLocal:Int):Null<Array<WasmInstruction>>
-		return null;
+	public function iteratorNew(array:IrValue, destination:Int, arrayLocal:Int):WasmLoweringResult
+		return UseDefault;
 
-	public function iteratorNext(iterator:IrValue, output:IrValue, destination:Int, iteratorLocal:Int):Null<Array<WasmInstruction>>
-		return null;
+	public function iteratorHasNext(iterator:IrValue, destination:Int, iteratorLocal:Int):WasmLoweringResult
+		return UseDefault;
 
-	public function makeEnum(typeName:String, constructor:Int, arguments:Array<IrValue>, destination:Int,
-			argumentLocals:Array<Int>):Null<Array<WasmInstruction>>
-		return null;
+	public function iteratorNext(iterator:IrValue, output:IrValue, destination:Int, iteratorLocal:Int):WasmLoweringResult
+		return UseDefault;
 
-	public function enumIndex(value:IrValue, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>>
-		return null;
+	public function makeEnum(typeName:String, constructor:Int, arguments:Array<IrValue>, destination:Int, argumentLocals:Array<Int>):WasmLoweringResult
+		return UseDefault;
 
-	public function enumField(value:IrValue, constructor:Int, field:Int, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>>
-		return null;
+	public function enumIndex(value:IrValue, destination:Int, valueLocal:Int):WasmLoweringResult
+		return UseDefault;
+
+	public function enumField(value:IrValue, constructor:Int, field:Int, destination:Int, valueLocal:Int):WasmLoweringResult
+		return UseDefault;
 
 	function objectField(object:IrValue, name:String):WasmFieldLayout {
 		return switch object.type {
@@ -347,7 +355,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			default: throw 'Wasm GC null value requires a reference type, got $type';
 		};
 
-	public function constantString(value:String, destination:Int, strings:Map<String, Int>):Null<Array<WasmInstruction>> {
+	public function constantString(value:String, destination:Int, strings:Map<String, Int>):WasmLoweringResult {
 		if (value == "Reached compiler-generated unreachable block")
 			return [Unreachable];
 		return stringLiteral(value, destination);
@@ -395,7 +403,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return [LocalGet(objectLocal), LocalGet(valueLocal), StructSet(typeIndex, fieldIndex)];
 	}
 
-	public function toDynamic(value:IrValue, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>> {
+	public function toDynamic(value:IrValue, destination:Int, valueLocal:Int):WasmLoweringResult {
 		if (isNativePointerType(value.type))
 			throw "Wasm GC cannot convert a borrowed native pointer to Dynamic";
 		var boxed = switch value.type {
@@ -412,7 +420,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return [LocalGet(valueLocal), StructNew(boxed), LocalSet(destination)];
 	}
 
-	public function safeCast(output:IrValue, value:IrValue, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>> {
+	public function safeCast(output:IrValue, value:IrValue, destination:Int, valueLocal:Int):WasmLoweringResult {
 		if (isNativePointerType(output.type) && value.type == Dyn)
 			throw "Wasm GC cannot cast Dynamic to a borrowed native pointer";
 		var boxType = switch output.type {
@@ -467,7 +475,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		};
 	}
 
-	public function toVirtual(value:IrValue, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>>
+	public function toVirtual(value:IrValue, destination:Int, valueLocal:Int):WasmLoweringResult
 		return switch value.type {
 			case Abstract("native_pointer"): throw "Wasm GC cannot cast a borrowed native pointer to a virtual interface";
 			case Obj(_), Enum(_), Array(_), Iterator(_), Function(_, _), Bytes, ManagedBytes, Dyn, Abstract(_), Virtual(_):
@@ -499,7 +507,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		};
 	}
 
-	public function dynamicEqual(output:Int, leftLocal:Int, rightLocal:Int):Null<Array<WasmInstruction>> {
+	public function dynamicEqual(output:Int, leftLocal:Int, rightLocal:Int):WasmLoweringResult {
 		var instructions:Array<WasmInstruction> = [I32Const(0), LocalSet(output)];
 		var boxedTypes:Array<IrType> = [I32, Bool, I64, F64, TypeRef];
 		for (type in boxedTypes) {
@@ -857,7 +865,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		argumentTypes:Array<IrType>,
 		resultType:IrType
 	}>, receiverLocal:Int, destination:Int,
-			argumentLocals:Array<Int>):Null<Array<WasmInstruction>> {
+			argumentLocals:Array<Int>):WasmLoweringResult {
 		if (targets.length == 0)
 			throw 'Wasm GC interface method on ${Std.string(receiver.type)} has no implementations';
 		var instructions:Array<WasmInstruction> = [];
@@ -891,7 +899,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			return [LocalGet(sourceLocal)];
 		var targetValue = new IrValue(-1, "virtual-argument", targetType),
 			temporary = allocateLocal(valueType(targetType)),
-			converted:Null<Array<WasmInstruction>> = null;
+			converted:WasmLoweringResult = UseDefault;
 		switch [argument.type, targetType] {
 			case [I32 | Bool | I64 | F64 | TypeRef, Dyn]:
 				converted = toDynamic(argument, temporary, sourceLocal);
@@ -909,7 +917,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 					case _: throw 'Wasm GC cannot pass ${Std.string(argument.type)} to interface parameter ${Std.string(targetType)}';
 				};
 		}
-		return requireInstructions(converted).concat([LocalGet(temporary)]);
+		return requireHandled(converted).concat([LocalGet(temporary)]);
 	}
 
 	function virtualResult(output:IrValue, sourceType:IrType, destination:Int):Array<WasmInstruction> {
@@ -917,7 +925,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			return [LocalSet(destination)];
 		var sourceValue = new IrValue(-1, "virtual-result", sourceType),
 			temporary = allocateLocal(valueType(sourceType)),
-			converted:Null<Array<WasmInstruction>> = null;
+			converted:WasmLoweringResult = UseDefault;
 		switch [sourceType, output.type] {
 			case [I32 | Bool | I64 | F64 | TypeRef, Dyn]:
 				converted = toDynamic(sourceValue, destination, temporary);
@@ -935,11 +943,11 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 					case _: throw 'Wasm GC cannot return ${Std.string(sourceType)} from interface method as ${Std.string(output.type)}';
 				};
 		}
-		return [LocalSet(temporary)].concat(requireInstructions(converted));
+		return [LocalSet(temporary)].concat(requireHandled(converted));
 	}
 
 	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
-			argumentLocals:Array<Int>):Null<Array<WasmInstruction>> {
+			argumentLocals:Array<Int>):WasmLoweringResult {
 		if (name == "__runtime_string_from_ascii" || name == "runtime.RuntimeData.stringFromAscii") {
 			if (output.type != Bytes
 				|| arguments.length != 3
@@ -1292,7 +1300,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				StructGet(arrayType, WasmGcTypePlan.arrayLengthFieldIndex()),
 				LocalSet(lengthLocal)
 			];
-			body = body.concat(requireInstructions(arraySet(array, new IrValue(-1, "push-index", I32), value, arrayLocal, lengthLocal, argumentLocals[1])));
+			body = body.concat(requireHandled(arraySet(array, new IrValue(-1, "push-index", I32), value, arrayLocal, lengthLocal, argumentLocals[1])));
 			body = body.concat([LocalGet(lengthLocal), I32Const(1), I32Add, LocalSet(outputLocal)]);
 			return body;
 		}
@@ -1392,7 +1400,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				throw 'Wasm GC array slice "$name" does not match its $element array';
 			return arraySlice(element, argumentLocals[0], argumentLocals[1], argumentLocals[2], outputLocal);
 		}
-		return null;
+		return UseDefault;
 	}
 
 	static function isNativePointerType(type:IrType):Bool
@@ -2851,7 +2859,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		];
 
 	public function lowerCNativeCall(native:IrCNative, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>, importIndex:Int,
-			pointerLengthImportIndex:Int, pointerReleaseImportIndex:Int):Null<Array<WasmInstruction>> {
+			pointerLengthImportIndex:Int, pointerReleaseImportIndex:Int):WasmLoweringResult {
 		var usesScratchBridge = false;
 		for (mode in native.argumentModes)
 			switch mode {
@@ -3258,7 +3266,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			End
 		];
 
-	public function arrayGet(array:IrValue, index:IrValue, destination:Int, arrayLocal:Int, indexLocal:Int):Null<Array<WasmInstruction>> {
+	public function arrayGet(array:IrValue, index:IrValue, destination:Int, arrayLocal:Int, indexLocal:Int):WasmLoweringResult {
 		var element = requireArrayElement(array.type),
 			wrapperType = plan.arrayType(element),
 			storageType = plan.arrayStorageType(element);
@@ -3273,7 +3281,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
-	public function arraySet(array:IrValue, index:IrValue, value:IrValue, arrayLocal:Int, indexLocal:Int, valueLocal:Int):Null<Array<WasmInstruction>> {
+	public function arraySet(array:IrValue, index:IrValue, value:IrValue, arrayLocal:Int, indexLocal:Int, valueLocal:Int):WasmLoweringResult {
 		var element = requireArrayElement(array.type),
 			wrapperType = plan.arrayType(element),
 			storageType = plan.arrayStorageType(element),
@@ -3355,7 +3363,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
-	public function arraySize(array:IrValue, destination:Int, arrayLocal:Int):Null<Array<WasmInstruction>> {
+	public function arraySize(array:IrValue, destination:Int, arrayLocal:Int):WasmLoweringResult {
 		var element = requireArrayElement(array.type),
 			wrapperType = plan.arrayType(element);
 		return [
@@ -3365,7 +3373,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		];
 	}
 
-	public function iteratorNew(array:IrValue, destination:Int, arrayLocal:Int):Null<Array<WasmInstruction>> {
+	public function iteratorNew(array:IrValue, destination:Int, arrayLocal:Int):WasmLoweringResult {
 		var element = requireArrayElement(array.type),
 			iteratorType = plan.iteratorType(element);
 		return [
@@ -3376,7 +3384,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		];
 	}
 
-	public function iteratorHasNext(iterator:IrValue, destination:Int, iteratorLocal:Int):Null<Array<WasmInstruction>> {
+	public function iteratorHasNext(iterator:IrValue, destination:Int, iteratorLocal:Int):WasmLoweringResult {
 		var element = requireIteratorElement(iterator.type),
 			iteratorType = plan.iteratorType(element),
 			arrayType = plan.arrayType(element);
@@ -3391,7 +3399,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		];
 	}
 
-	public function iteratorNext(iterator:IrValue, output:IrValue, destination:Int, iteratorLocal:Int):Null<Array<WasmInstruction>> {
+	public function iteratorNext(iterator:IrValue, output:IrValue, destination:Int, iteratorLocal:Int):WasmLoweringResult {
 		var element = requireIteratorElement(iterator.type),
 			iteratorType = plan.iteratorType(element),
 			arrayType = plan.arrayType(element),
@@ -3424,8 +3432,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
-	public function makeEnum(typeName:String, constructor:Int, arguments:Array<IrValue>, destination:Int,
-			argumentLocals:Array<Int>):Null<Array<WasmInstruction>> {
+	public function makeEnum(typeName:String, constructor:Int, arguments:Array<IrValue>, destination:Int, argumentLocals:Array<Int>):WasmLoweringResult {
 		var body:Array<WasmInstruction> = [I32Const(constructor)];
 		for (local in argumentLocals)
 			body.push(LocalGet(local));
@@ -3434,7 +3441,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
-	public function enumIndex(value:IrValue, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>> {
+	public function enumIndex(value:IrValue, destination:Int, valueLocal:Int):WasmLoweringResult {
 		var typeName = requireEnumName(value.type);
 		return [
 			LocalGet(valueLocal),
@@ -3443,7 +3450,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		];
 	}
 
-	public function enumField(value:IrValue, constructor:Int, field:Int, destination:Int, valueLocal:Int):Null<Array<WasmInstruction>> {
+	public function enumField(value:IrValue, constructor:Int, field:Int, destination:Int, valueLocal:Int):WasmLoweringResult {
 		var typeName = requireEnumName(value.type),
 			constructorType = plan.enumConstructorType(typeName, constructor),
 			fieldIndex = plan.enumFieldIndex(typeName, constructor, field);
@@ -3455,7 +3462,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		];
 	}
 
-	public function staticClosure(name:String, tableSlots:Map<String, Int>, destination:Int):Null<Array<WasmInstruction>> {
+	public function staticClosure(name:String, tableSlots:Map<String, Int>, destination:Int):WasmLoweringResult {
 		var tableSlot = tableSlots.get(name);
 		if (tableSlot == null)
 			throw 'Wasm GC closure target "$name" has no stable table slot';
@@ -3467,7 +3474,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		];
 	}
 
-	public function instanceClosure(name:String, tableSlots:Map<String, Int>, receiverLocal:Int, destination:Int):Null<Array<WasmInstruction>> {
+	public function instanceClosure(name:String, tableSlots:Map<String, Int>, receiverLocal:Int, destination:Int):WasmLoweringResult {
 		var tableSlot = tableSlots.get(WasmBackend.gcClosureThunkName(name));
 		if (tableSlot == null)
 			throw 'Wasm GC instance closure target "$name" has no stable table slot';
@@ -3480,7 +3487,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 	}
 
 	public function callClosure(staticType:Int, instanceType:Null<Int>, arguments:Array<IrValue>, closureLocal:Int, destination:Int,
-			argumentLocals:Array<Int>):Null<Array<WasmInstruction>> {
+			argumentLocals:Array<Int>):WasmLoweringResult {
 		var body:Array<WasmInstruction> = [];
 		if (instanceType == null) {
 			for (local in argumentLocals)
@@ -5029,8 +5036,11 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
-	static function requireInstructions(instructions:Null<Array<WasmInstruction>>):Array<WasmInstruction>
-		return if (instructions == null) throw "Wasm GC array operation was not lowered" else instructions;
+	static function requireHandled(result:WasmLoweringResult):Array<WasmInstruction>
+		return switch result {
+			case Handled(instructions): instructions;
+			case UseDefault: throw "Wasm GC representation unexpectedly declined a required operation";
+		};
 
 	static function isNamedAbstract(type:IrType, name:String):Bool
 		return switch type {
