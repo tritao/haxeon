@@ -29,7 +29,7 @@ for target in wasm32 wasm-gc; do
 		--entry=wasm-bytes-compare --root=tests/programs tests/programs/wasm-bytes-compare.hx
 done
 
-shared_cases=(add array-iterator-wasm array-slice-index array-growth-wasm array-copy-concat array-unshift array-insert array-splice array-remove
+shared_cases=(add array-iterator-wasm array-slice-index array-growth-wasm array-alias-growth array-index-growth array-copy-concat array-unshift array-insert array-splice array-remove
 	array-object-mutation array-reverse dynamic-equality numeric-promotion function-wrapper std-is-of-type try-catch try-nested try-array-bounds)
 for case_name in "${shared_cases[@]}"; do
 	for target in wasm32 wasm-gc; do
