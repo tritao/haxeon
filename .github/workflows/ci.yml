@@ -22,6 +22,8 @@ jobs:
           node-version: "22.21.1"
       - name: Wasm backend runtime gates
         run: scripts/test-wasm-backend.sh
+      - name: Wasm GC parity gate
+        run: scripts/test-wasm-gc-parity.sh
       - name: Set up Wasmtime GC runtime
         uses: bytecodealliance/actions/wasmtime/setup@v1
         with:
