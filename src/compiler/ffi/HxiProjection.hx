@@ -324,8 +324,10 @@ class HxiProjection {
 				var mode = switch parameters[index].direction {
 					case In: Value;
 					case InArray(lengthName):
-						var lengthIndex = parameterIndex(parameters, lengthName);
-						isConstPointer(parameters[index].type) ? BytesInput(lengthIndex) : BytesInputOutput(lengthIndex);
+						if (!isByteArray(parameters[index].type)) Value; else {
+							var lengthIndex = parameterIndex(parameters, lengthName);
+							isConstPointer(parameters[index].type) ? BytesInput(lengthIndex) : BytesInputOutput(lengthIndex);
+						}
 					case OutBuffer(lengthName): BytesOutput(parameterIndex(parameters, lengthName));
 					case Out: Output;
 					case InOut: InputOutput;

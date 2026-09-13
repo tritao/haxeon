@@ -598,10 +598,10 @@ class WasmGcRepresentation implements WasmRepresentation {
 		var hasByteInputs = false;
 		for (mode in native.argumentModes)
 			switch mode {
-				case BytesInput(_):
+				case BytesInput(_) | BytesInputOutput(_):
 					hasByteInputs = true;
 				case Value:
-				case BytesOutput(_) | BytesInputOutput(_) | Output | InputOutput:
+				case BytesOutput(_) | Output | InputOutput:
 					throw 'Wasm GC C native "${native.name}" supports input byte slices only so far';
 			}
 		if (hasByteInputs && (scratchAllocator < 0 || scratchTop < 0))
@@ -613,7 +613,7 @@ class WasmGcRepresentation implements WasmRepresentation {
 			body = body.concat([GlobalGet(scratchTop), LocalSet(savedTop)]);
 		for (index in 0...arguments.length)
 			switch native.argumentModes[index] {
-				case BytesInput(_):
+				case BytesInput(_) | BytesInputOutput(_):
 					if (arguments[index].type != ManagedBytes)
 						throw 'Wasm GC C native "${native.name}" byte input $index has type ${Std.string(arguments[index].type)}';
 					var bytesLocal = argumentLocals[index],
@@ -667,6 +667,46 @@ class WasmGcRepresentation implements WasmRepresentation {
 		body.push(Call(importIndex));
 		if (resultLocal >= 0)
 			body.push(LocalSet(resultLocal));
+		for (index in 0...arguments.length)
+			switch native.argumentModes[index] {
+				case BytesInputOutput(_):
+					var pointer = bytePointers[index];
+					if (pointer == null)
+						throw 'Wasm GC C native "${native.name}" mutable byte input $index has no scratch pointer';
+					var bytesLocal = argumentLocals[index],
+						position = allocateLocal(I32);
+					body = body.concat([
+						I32Const(0),
+						LocalSet(position),
+						Block(null),
+						Loop(null),
+						LocalGet(position),
+						LocalGet(bytesLocal),
+						StructGet(plan.managedBytesTypeIndex, 2),
+						I32LtS,
+						I32Eqz,
+						BrIf(1),
+						LocalGet(bytesLocal),
+						StructGet(plan.managedBytesTypeIndex, 0),
+						LocalGet(bytesLocal),
+						StructGet(plan.managedBytesTypeIndex, 1),
+						LocalGet(position),
+						I32Add,
+						LocalGet(pointer),
+						LocalGet(position),
+						I32Add,
+						I32Load8U(0),
+						ArraySet(plan.byteArrayTypeIndex),
+						LocalGet(position),
+						I32Const(1),
+						I32Add,
+						LocalSet(position),
+						Br(0),
+						End,
+						End
+					]);
+				case _:
+			}
 		if (hasByteInputs)
 			body = body.concat([LocalGet(savedTop), GlobalSet(scratchTop)]);
 		if (resultLocal >= 0)

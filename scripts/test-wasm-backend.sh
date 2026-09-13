@@ -189,13 +189,23 @@ const cases = [
     if (relative.endsWith("numeric-promotion.wasm"))
       imports.haxeon_runtime = {__math_ceil: Math.ceil};
     if (relative.endsWith("wasm-cli-gc-ffi-bytes.wasm"))
-      imports.gc_bytes = {inspect_bytes: (pointer, length) => {
-        const expected = [103, 99, 32, 98, 121, 116, 101, 115];
-        const actual = new Uint8Array(moduleInstance.exports.memory.buffer, pointer, length);
-        if (length === expected.length && expected.every((value, index) => actual[index] === value))
-          return 42;
-        return length === 70000 && actual[0] === 0 && actual[1] === 1 && actual[255] === 255 && actual[256] === 0 && actual[69999] === 111 ? 42 : 0;
-      }};
+      imports.gc_bytes = {
+        inspect_bytes: (pointer, length) => {
+          const expected = [103, 99, 32, 98, 121, 116, 101, 115];
+          const actual = new Uint8Array(moduleInstance.exports.memory.buffer, pointer, length);
+          if (length === expected.length && expected.every((value, index) => actual[index] === value))
+            return 42;
+          return length === 70000 && actual[0] === 0 && actual[1] === 1 && actual[255] === 255 && actual[256] === 0 && actual[69999] === 111 ? 42 : 0;
+        },
+        mutate_bytes: (pointer, length) => {
+          const actual = new Uint8Array(moduleInstance.exports.memory.buffer, pointer, length);
+          if (length !== 8)
+            return 0;
+          actual[0] = 84;
+          actual[7] = 33;
+          return 17;
+        }
+      };
     if (relative.includes("hxi-retained"))
       imports.retained = {retained_check: pointer => {
         const view = new DataView((memory == null ? moduleInstance.exports.memory : memory).buffer);
@@ -208,7 +218,7 @@ const cases = [
       const ffiBytes = relative.endsWith("wasm-cli-gc-ffi-bytes.wasm");
       const hasMemory = WebAssembly.Module.exports(compiled).some(entry => entry.name === "memory");
       if ((!ffiBytes && (WebAssembly.Module.imports(compiled).length !== 0 || hasMemory))
-          || (ffiBytes && (WebAssembly.Module.imports(compiled).length !== 1 || !hasMemory))
+          || (ffiBytes && (WebAssembly.Module.imports(compiled).length !== 2 || !hasMemory))
           || WebAssembly.Module.customSections(compiled, "haxeon.gc.roots").length !== 0)
         throw new Error("Wasm GC object module unexpectedly includes linear memory or custom root metadata");
       moduleInstance = new WebAssembly.Instance(compiled, imports);

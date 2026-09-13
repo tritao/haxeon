@@ -278,9 +278,9 @@ class WasmBackend implements Backend {
 			if (usedCNatives.exists(native.name))
 				for (mode in native.argumentModes)
 					switch mode {
-						case BytesInput(_):
+						case BytesInput(_) | BytesInputOutput(_):
 							requiresScratchMemory = true;
-						case Value | BytesOutput(_) | BytesInputOutput(_) | Output | InputOutput:
+						case Value | BytesOutput(_) | Output | InputOutput:
 					}
 
 		var plan = new WasmGcTypePlan(program),
@@ -431,7 +431,13 @@ class WasmBackend implements Backend {
 						|| lengthArgument >= native.arguments.length
 						|| native.arguments[lengthArgument] != I32)
 						throw 'Wasm GC C native "${native.name}" requires byte input followed by an I32 length';
-				case BytesOutput(_) | BytesInputOutput(_) | Output | InputOutput:
+				case BytesInputOutput(lengthArgument):
+					if (native.arguments[index] != ManagedBytes
+						|| lengthArgument < 0
+						|| lengthArgument >= native.arguments.length
+						|| native.arguments[lengthArgument] != I32)
+						throw 'Wasm GC C native "${native.name}" requires mutable byte input followed by an I32 length';
+				case BytesOutput(_) | Output | InputOutput:
 					throw 'Wasm GC C native "${native.name}" supports input byte slices only so far';
 			}
 		switch native.result {
@@ -458,7 +464,7 @@ class WasmBackend implements Backend {
 			var parameters:Array<WasmValueType> = [];
 			for (index in 0...native.arguments.length)
 				parameters.push(switch native.argumentModes[index] {
-					case BytesInput(_): I32;
+					case BytesInput(_) | BytesInputOutput(_): I32;
 					case Value: gcCNativeValueType(native.arguments[index]);
 					case _: throw 'Wasm GC C native "${native.name}" has unsupported argument direction';
 				});
