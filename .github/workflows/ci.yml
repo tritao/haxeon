@@ -16,6 +16,18 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y build-essential curl unzip nodejs gdb libpcre2-dev libuv1-dev
       - name: Bootstrap pinned tools
         run: scripts/bootstrap-tools.sh
+      - name: Set up Node.js runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.21.1"
+      - name: Wasm backend runtime gates
+        run: scripts/test-wasm-backend.sh
+      - name: Set up Wasmtime GC runtime
+        uses: bytecodealliance/actions/wasmtime/setup@v1
+        with:
+          version: "47.0.0"
+      - name: Wasm GC runtime gate
+        run: scripts/test-wasm-gc-wasmtime.sh
       - name: Compiler, differential, and runtime gates
         run: scripts/test.sh
       - name: Project CLI smoke test
