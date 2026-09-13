@@ -650,6 +650,24 @@ class WasmGcRepresentation implements WasmRepresentation {
 				throw 'Wasm GC array insert "$name" does not match its $element array';
 			return arrayInsert(element, argumentLocals[0], argumentLocals[1], argumentLocals[2]);
 		}
+		if (StringTools.startsWith(name, "__array_pop_")) {
+			if (arguments.length != 1 || argumentLocals.length != 1)
+				throw 'Invalid Wasm GC array pop signature for "$name"';
+			var element = requireArrayElement(arguments[0].type),
+				suffix = arrayNativeSuffix(element);
+			if (name != "__array_pop_" + suffix)
+				throw 'Wasm GC array pop "$name" does not match its $element array';
+			return arrayPop(element, argumentLocals[0], outputLocal);
+		}
+		if (StringTools.startsWith(name, "__array_reverse_")) {
+			if (arguments.length != 1 || argumentLocals.length != 1 || output.type != Void)
+				throw 'Invalid Wasm GC array reverse signature for "$name"';
+			var element = requireArrayElement(arguments[0].type),
+				suffix = arrayNativeSuffix(element);
+			if (name != "__array_reverse_" + suffix)
+				throw 'Wasm GC array reverse "$name" does not match its $element array';
+			return arrayReverse(element, argumentLocals[0]);
+		}
 		if (StringTools.startsWith(name, "__array_resize_")) {
 			if (arguments.length != 2 || argumentLocals.length != 2 || output.type != Void || arguments[1].type != I32)
 				throw 'Invalid Wasm GC array resize signature for "$name"';
@@ -907,6 +925,111 @@ class WasmGcRepresentation implements WasmRepresentation {
 				LocalGet(storage),
 				StructNew(wrapperType),
 				LocalSet(destination)
+			];
+		return body;
+	}
+
+	function arrayPop(element:IrType, arrayLocal:Int, destination:Int):Array<WasmInstruction> {
+		var wrapperType = plan.arrayType(element),
+			storageType = plan.arrayStorageType(element),
+			length = allocateLocal(I32),
+			newLength = allocateLocal(I32),
+			storage = allocateLocal(Ref({
+				nullable: false,
+				heap: Type(storageType)
+			})),
+			body:Array<WasmInstruction> = [
+				LocalGet(arrayLocal),
+				StructGet(wrapperType, WasmGcTypePlan.arrayLengthFieldIndex()),
+				LocalSet(length),
+				LocalGet(length),
+				I32Eqz,
+				If(null)
+			];
+		body = body.concat(trapInstructions());
+		body = body.concat([
+			End,
+			LocalGet(arrayLocal),
+			StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+			LocalSet(storage),
+			LocalGet(length),
+			I32Const(1),
+			I32Sub,
+			LocalSet(newLength),
+			LocalGet(storage),
+			LocalGet(newLength),
+			ArrayGet(storageType),
+			LocalSet(destination),
+			LocalGet(storage),
+			LocalGet(newLength)
+		]);
+		body = body.concat(zeroValue(element));
+		body = body.concat([
+			ArraySet(storageType),
+			LocalGet(arrayLocal),
+			LocalGet(newLength),
+			StructSet(wrapperType, WasmGcTypePlan.arrayLengthFieldIndex())
+		]);
+		return body;
+	}
+
+	function arrayReverse(element:IrType, arrayLocal:Int):Array<WasmInstruction> {
+		var wrapperType = plan.arrayType(element),
+			storageType = plan.arrayStorageType(element),
+			length = allocateLocal(I32),
+			left = allocateLocal(I32),
+			right = allocateLocal(I32),
+			storage = allocateLocal(Ref({
+				nullable: false,
+				heap: Type(storageType)
+			})),
+			leftValue = allocateLocal(valueType(element)),
+			rightValue = allocateLocal(valueType(element)),
+			body:Array<WasmInstruction> = [
+				LocalGet(arrayLocal),
+				StructGet(wrapperType, WasmGcTypePlan.arrayLengthFieldIndex()),
+				LocalSet(length),
+				I32Const(0),
+				LocalSet(left),
+				LocalGet(length),
+				I32Const(1),
+				I32Sub,
+				LocalSet(right),
+				LocalGet(arrayLocal),
+				StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+				LocalSet(storage),
+				Loop(null),
+				LocalGet(left),
+				LocalGet(right),
+				I32LtS,
+				If(null),
+				LocalGet(storage),
+				LocalGet(left),
+				ArrayGet(storageType),
+				LocalSet(leftValue),
+				LocalGet(storage),
+				LocalGet(right),
+				ArrayGet(storageType),
+				LocalSet(rightValue),
+				LocalGet(storage),
+				LocalGet(left),
+				LocalGet(rightValue),
+				ArraySet(storageType),
+				LocalGet(storage),
+				LocalGet(right),
+				LocalGet(leftValue),
+				ArraySet(storageType),
+				LocalGet(left),
+				I32Const(1),
+				I32Add,
+				LocalSet(left),
+				LocalGet(right),
+				I32Const(1),
+				I32Sub,
+				LocalSet(right),
+				Br(1),
+				End,
+				End
 			];
 		return body;
 	}

@@ -437,18 +437,19 @@ class WasmBackend implements Backend {
 		return switch name {
 			case "__array_alloc_i32", "__array_alloc_bool", "__array_alloc_f64", "__array_alloc_bytes", "__array_alloc_ref", "__array_push_i32",
 				"__array_copy_i32", "__array_copy_bool", "__array_copy_f64", "__array_copy_bytes", "__array_copy_ref", "__array_concat_i32",
-				"__array_concat_bool", "__array_concat_f64", "__array_concat_bytes", "__array_concat_ref", "__array_push_bool", "__array_push_f64",
-				"__array_push_bytes", "__array_push_ref", "__array_unshift_i32", "__array_unshift_bool", "__array_unshift_f64", "__array_unshift_bytes",
-				"__array_unshift_ref", "__array_resize_i32", "__array_resize_bool", "__array_resize_f64", "__array_insert_i32", "__array_insert_bool",
-				"__array_insert_f64", "__array_insert_bytes", "__array_insert_ref", "__array_resize_bytes", "__array_resize_ref", "__array_shift_i32",
-				"__array_shift_bool", "__array_shift_f64", "__array_shift_bytes", "__array_shift_ref", "__array_splice_i32", "__array_splice_bool",
-				"__array_splice_f64", "__array_splice_bytes", "__array_splice_ref", "__array_remove_i32", "__array_remove_bool", "__array_remove_f64",
-				"__array_remove_bytes", "__array_remove_ref", "__array_index_of_i32", "__array_index_of_bool", "__array_index_of_f64",
-				"__array_index_of_bytes", "__array_index_of_ref", "__array_slice_i32", "__array_slice_bool", "__array_slice_f64", "__array_slice_bytes",
-				"__array_slice_ref", "__array_join_bytes", "__math_ceil", "__std_int_f64", "__dynamic_equal", "__bytes_alloc", "__bytes_of_string",
-				"__bytes_length", "__bytes_get", "__bytes_set", "__bytes_get_i32", "__bytes_set_i32", "getI32", "setI32", "__bytes_view", "__bytes_sub",
-				"__bytes_compare", "__bytes_to_string", "__bytes_get_string", "structSlice", "__string_length", "__string_char_code_at", "__string_concat",
-				"__string_equal": true;
+				"__array_concat_bool", "__array_concat_f64", "__array_concat_bytes", "__array_concat_ref", "__array_pop_i32", "__array_pop_bool",
+				"__array_pop_f64", "__array_pop_bytes", "__array_pop_ref", "__array_reverse_i32", "__array_reverse_bool", "__array_reverse_f64",
+				"__array_reverse_bytes", "__array_reverse_ref", "__array_push_bool", "__array_push_f64", "__array_push_bytes", "__array_push_ref",
+				"__array_unshift_i32", "__array_unshift_bool", "__array_unshift_f64", "__array_unshift_bytes", "__array_unshift_ref", "__array_resize_i32",
+				"__array_resize_bool", "__array_resize_f64", "__array_insert_i32", "__array_insert_bool", "__array_insert_f64", "__array_insert_bytes",
+				"__array_insert_ref", "__array_resize_bytes", "__array_resize_ref", "__array_shift_i32", "__array_shift_bool", "__array_shift_f64",
+				"__array_shift_bytes", "__array_shift_ref", "__array_splice_i32", "__array_splice_bool", "__array_splice_f64", "__array_splice_bytes",
+				"__array_splice_ref", "__array_remove_i32", "__array_remove_bool", "__array_remove_f64", "__array_remove_bytes", "__array_remove_ref",
+				"__array_index_of_i32", "__array_index_of_bool", "__array_index_of_f64", "__array_index_of_bytes", "__array_index_of_ref",
+				"__array_slice_i32", "__array_slice_bool", "__array_slice_f64", "__array_slice_bytes", "__array_slice_ref", "__array_join_bytes",
+				"__math_ceil", "__std_int_f64", "__dynamic_equal", "__bytes_alloc", "__bytes_of_string", "__bytes_length", "__bytes_get", "__bytes_set",
+				"__bytes_get_i32", "__bytes_set_i32", "getI32", "setI32", "__bytes_view", "__bytes_sub", "__bytes_compare", "__bytes_to_string",
+				"__bytes_get_string", "structSlice", "__string_length", "__string_char_code_at", "__string_concat", "__string_equal": true;
 			default: false;
 		};
 

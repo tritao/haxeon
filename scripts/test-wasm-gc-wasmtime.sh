@@ -26,7 +26,7 @@ mkdir -p "$root_dir/out"
 	--target=wasm-gc --output=out/wasm-gc-wasmtime-bytes.wasm --entry=wasm-gc-bytes \
 	--root=tests/programs tests/programs/wasm-gc-bytes.hx
 
-for case_name in add array-iterator-wasm array-slice-index array-growth-wasm array-copy-concat array-unshift array-insert array-splice array-remove dynamic-equality numeric-promotion function-wrapper try-catch try-nested try-array-bounds; do
+for case_name in add array-iterator-wasm array-slice-index array-growth-wasm array-copy-concat array-unshift array-insert array-splice array-remove array-object-mutation array-reverse dynamic-equality numeric-promotion function-wrapper try-catch try-nested try-array-bounds; do
 	"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 		--target=wasm-gc --output="out/wasm-gc-wasmtime-$case_name.wasm" --entry="$case_name" \
 		--root=tests/programs "tests/programs/$case_name.hx"
@@ -57,6 +57,8 @@ for artifact in \
 	wasm-gc-wasmtime-array-insert \
 	wasm-gc-wasmtime-array-splice \
 	wasm-gc-wasmtime-array-remove \
+	wasm-gc-wasmtime-array-object-mutation \
+	wasm-gc-wasmtime-array-reverse \
 	wasm-gc-wasmtime-dynamic-equality \
 	wasm-gc-wasmtime-numeric-promotion \
 	wasm-gc-wasmtime-function-wrapper \
@@ -70,9 +72,13 @@ for artifact in \
 		echo "Wasmtime failed to run $artifact" >&2
 		exit 1
 	}
-	if [[ "$result" != "42" ]]; then
+	expected=42
+	if [[ "$artifact" == "wasm-gc-wasmtime-array-object-mutation" ]]; then
+		expected=8
+	fi
+	if [[ "$result" != "$expected" ]]; then
 		cat "$root_dir/out/wasmtime-stderr.txt" >&2
-		echo "Wasmtime returned '$result' for $artifact, expected 42" >&2
+		echo "Wasmtime returned '$result' for $artifact, expected $expected" >&2
 		exit 1
 	fi
 done

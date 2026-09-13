@@ -30,7 +30,7 @@ for target in wasm32 wasm-gc; do
 done
 
 shared_cases=(add array-iterator-wasm array-slice-index array-growth-wasm array-copy-concat array-unshift array-insert array-splice array-remove
-	dynamic-equality numeric-promotion function-wrapper try-catch try-nested try-array-bounds)
+	array-object-mutation array-reverse dynamic-equality numeric-promotion function-wrapper try-catch try-nested try-array-bounds)
 for case_name in "${shared_cases[@]}"; do
 	for target in wasm32 wasm-gc; do
 		"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
@@ -46,6 +46,7 @@ const fs = require("fs");
 const path = require("path");
 const root = process.argv[2];
 const cases = process.argv.slice(3);
+const expectedResults = { "array-object-mutation": 8 };
 
 (async () => {
   for (const name of cases) {
@@ -69,8 +70,9 @@ const cases = process.argv.slice(3);
         : {};
       const instance = await WebAssembly.instantiate(module, imports);
       results[target] = instance.exports.main();
-      if (results[target] !== 42)
-        throw new Error(`${name} (${target}): expected 42, got ${results[target]}`);
+      const expected = expectedResults[name] ?? 42;
+      if (results[target] !== expected)
+        throw new Error(`${name} (${target}): expected ${expected}, got ${results[target]}`);
     }
     if (results.wasm32 !== results["wasm-gc"])
       throw new Error(`${name}: Wasm32 returned ${results.wasm32}, Wasm GC returned ${results["wasm-gc"]}`);
