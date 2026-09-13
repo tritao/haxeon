@@ -219,6 +219,20 @@ const cases = [
           actual[7] = 33;
           return 17;
         },
+        store_values: (valuePointer, countPointer) => {
+          if (valuePointer % 8 !== 0 || countPointer % 8 !== 0)
+            throw new Error("scalar output scratch slots are not eight-byte aligned");
+          const view = new DataView(moduleInstance.exports.memory.buffer);
+          if (view.getUint32(valuePointer, true) !== 0 || view.getUint32(countPointer, true) !== 0)
+            throw new Error("scalar @out scratch slots were not zero-initialized");
+          view.setUint32(valuePointer, 11, true);
+          view.setUint32(countPointer, 0x12345678, true);
+        },
+        modify_i32: pointer => {
+          const view = new DataView(moduleInstance.exports.memory.buffer);
+          view.setInt32(pointer, view.getInt32(pointer, true) + 5, true);
+          return 9;
+        },
         read_bytes: (seed, pointer, sizePointer) => {
           const memory = moduleInstance.exports.memory;
           const view = new DataView(memory.buffer);
@@ -265,7 +279,7 @@ const cases = [
       const ffiBytes = relative.endsWith("wasm-cli-gc-ffi-bytes.wasm");
       const hasMemory = WebAssembly.Module.exports(compiled).some(entry => entry.name === "memory");
       if ((!ffiBytes && (WebAssembly.Module.imports(compiled).length !== 0 || hasMemory))
-          || (ffiBytes && (WebAssembly.Module.imports(compiled).length !== 10 || !hasMemory))
+          || (ffiBytes && (WebAssembly.Module.imports(compiled).length !== 12 || !hasMemory))
           || WebAssembly.Module.customSections(compiled, "haxeon.gc.roots").length !== 0)
         throw new Error("Wasm GC object module unexpectedly includes linear memory or custom root metadata");
       moduleInstance = new WebAssembly.Instance(compiled, imports);

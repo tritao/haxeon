@@ -2826,11 +2826,9 @@ class WasmGcRepresentation implements WasmRepresentation {
 		var usesScratchBridge = false;
 		for (mode in native.argumentModes)
 			switch mode {
-				case BytesInput(_) | BytesInputOutput(_) | BytesOutput(_) | BytesSize:
+				case BytesInput(_) | BytesInputOutput(_) | BytesOutput(_) | BytesSize | Output | InputOutput:
 					usesScratchBridge = true;
 				case Value:
-				case Output | InputOutput:
-					throw 'Wasm GC C native "${native.name}" requires byte-backed pointer directions';
 			}
 		if (usesScratchBridge && (scratchAllocator < 0 || scratchTop < 0))
 			throw 'Wasm GC C native "${native.name}" requires a configured linear scratch bridge';
@@ -2858,6 +2856,20 @@ class WasmGcRepresentation implements WasmRepresentation {
 						Call(scratchAllocator),
 						LocalSet(pointer)
 					]);
+					body = body.concat(copyGcBytesToLinear(bytesLocal, pointer));
+				case Output | InputOutput:
+					if (arguments[index].type != ManagedBytes)
+						throw 'Wasm GC C native "${native.name}" scalar output pointer $index must use managed bytes';
+					var bytesLocal = argumentLocals[index],
+						pointer = allocateLocal(I32);
+					bytePointers[index] = pointer;
+					body = body.concat([
+						LocalGet(bytesLocal),
+						StructGet(plan.managedBytesTypeIndex, 2),
+						Call(scratchAllocator),
+						LocalSet(pointer)
+					]);
+					// HXI zeroes @out buffers and seeds @inout buffers before this call.
 					body = body.concat(copyGcBytesToLinear(bytesLocal, pointer));
 				case BytesOutput(sizeArgument):
 					if (arguments[index].type != ManagedBytes)
@@ -2929,6 +2941,11 @@ class WasmGcRepresentation implements WasmRepresentation {
 					var pointer = bytePointers[index];
 					if (pointer == null)
 						throw 'Wasm GC C native "${native.name}" byte argument $index has no scratch pointer';
+					body = body.concat(copyLinearToGcBytes(argumentLocals[index], pointer));
+				case Output | InputOutput:
+					var pointer = bytePointers[index];
+					if (pointer == null)
+						throw 'Wasm GC C native "${native.name}" scalar output pointer $index has no scratch pointer';
 					body = body.concat(copyLinearToGcBytes(argumentLocals[index], pointer));
 				case BytesOutput(_):
 					var pointer = bytePointers[index];

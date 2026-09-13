@@ -309,7 +309,9 @@ class WasmBackend implements Backend {
 					switch mode {
 						case BytesInput(_) | BytesInputOutput(_) | BytesOutput(_) | BytesSize:
 							requiresScratchMemory = true;
-						case Value | Output | InputOutput:
+						case Value:
+						case Output | InputOutput:
+							requiresScratchMemory = true;
 					}
 			}
 
@@ -558,7 +560,8 @@ class WasmBackend implements Backend {
 					if (native.arguments[index] != ManagedBytes)
 						throw 'Wasm GC C native "${native.name}" requires a GC byte view for output size pointers';
 				case Output | InputOutput:
-					throw 'Wasm GC C native "${native.name}" supports byte slices and HXI output buffers only so far';
+					if (native.arguments[index] != ManagedBytes)
+						throw 'Wasm GC C native "${native.name}" requires a managed byte buffer for scalar output pointers';
 			}
 		switch native.result {
 			case Void:
@@ -652,9 +655,8 @@ class WasmBackend implements Backend {
 			else
 				for (index in 0...native.arguments.length)
 					parameters.push(switch native.argumentModes[index] {
-						case BytesInput(_) | BytesInputOutput(_) | BytesOutput(_) | BytesSize: I32;
+						case BytesInput(_) | BytesInputOutput(_) | BytesOutput(_) | BytesSize | Output | InputOutput: I32;
 						case Value: gcCNativeValueType(native.arguments[index]);
-						case _: throw 'Wasm GC C native "${native.name}" has unsupported argument direction';
 					});
 			var type:WasmFunctionType = {
 				parameters: parameters,
@@ -671,8 +673,13 @@ class WasmBackend implements Backend {
 	}
 
 	static function addGcScratchAllocator(module:WasmModule, scratchTop:Int):Int {
+		// Keep C scalar pointer arguments aligned even after arbitrary byte-slice allocations.
 		var body:Array<WasmInstruction> = [
 			GlobalGet(scratchTop),
+			I32Const(7),
+			I32Add,
+			I32Const(-8),
+			I32And,
 			LocalTee(1),
 			LocalGet(0),
 			I32Add,

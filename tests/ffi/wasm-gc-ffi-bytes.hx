@@ -2,6 +2,12 @@ import GcBytes;
 import haxe.io.Bytes;
 
 function main():Int {
+	var modified = GcBytes.modify(37);
+	if (modified.status != 9 || modified.value != 42)
+		return 0;
+	var stored = GcBytes.store();
+	if (stored.value != 11 || stored.count != 0x12345678)
+		return 0;
 	var payload = Bytes.ofString("gc bytes");
 	if (GcBytes.inspect(payload) != 42)
 		return 0;

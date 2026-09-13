@@ -84,12 +84,12 @@ and enum relationships needed by generated code while Haxe runtime type IDs
 remain available for reflection and dispatch.
 
 An ordinary Wasm-GC module exports `main` and does not export linear memory.
-The current FFI boundary can add memory when needed: scalar C-native arguments
-use typed Wasm imports, while declared byte-slice inputs and outputs are copied
-through guest scratch memory. Returned native byte pointers also require guest
-memory. Other aggregate and raw-memory ABI forms remain unsupported. Wasm-GC
-compilation rejects the Wasm32 memory import, base, contract, and statistics
-options.
+The current FFI boundary can add memory when needed: scalar C-native values use
+typed Wasm imports, while HXI scalar `@out`/`@inout` slots and declared byte
+slices are copied through guest scratch memory. Returned native byte pointers
+also require guest memory. Other aggregate and raw-memory ABI forms remain
+unsupported. Wasm-GC compilation rejects the Wasm32 memory import, base,
+contract, and statistics options.
 
 Wasm32 accepts `--wasm-import-memory --wasm-memory-contract=<path>` for a
 host-owned memory. The JSON contract is validated at compile time and copied
