@@ -282,90 +282,97 @@ class WasmLinearRuntime {
 			[LocalGet(0), I32Load(WasmLayout.STRING_LENGTH_OFFSET), Return]));
 
 	static function addBytesCompare(module:WasmModule, name:String):Int {
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]},
-			[{type: I32}, {type: I32}, {type: I32}, {type: I32}, {type: I32}, {type: I32}], [
-				LocalGet(0),
-				I32Load(WasmLayout.STRING_LENGTH_OFFSET),
-				LocalSet(2),
-				LocalGet(1),
-				I32Load(WasmLayout.STRING_LENGTH_OFFSET),
-				LocalSet(3),
-				I32Const(0),
-				LocalSet(4),
-				I32Const(0),
-				LocalSet(5),
-				Block(null),
-				Loop(null),
-				LocalGet(4),
-				LocalGet(2),
-				I32LtS,
-				I32Eqz,
-				LocalGet(4),
-				LocalGet(3),
-				I32LtS,
-				I32Eqz,
-				I32Or,
-				BrIf(1),
-				LocalGet(0),
-				I32Const(WasmLayout.STRING_DATA_OFFSET),
-				I32Add,
-				LocalGet(4),
-				I32Add,
-				I32Load8U(0),
-				LocalSet(6),
-				LocalGet(1),
-				I32Const(WasmLayout.STRING_DATA_OFFSET),
-				I32Add,
-				LocalGet(4),
-				I32Add,
-				I32Load8U(0),
-				LocalSet(7),
-				LocalGet(6),
-				LocalGet(7),
-				I32Eq,
-				I32Eqz,
-				If(null),
-				LocalGet(6),
-				LocalGet(7),
-				I32LtS,
-				If(null),
-				I32Const(-1),
-				LocalSet(5),
-				Else,
-				I32Const(1),
-				LocalSet(5),
-				End,
-				Br(2),
-				End,
-				LocalGet(4),
-				I32Const(1),
-				I32Add,
-				LocalSet(4),
-				Br(0),
-				End,
-				End,
-				LocalGet(5),
-				I32Eqz,
-				If(null),
-				LocalGet(2),
-				LocalGet(3),
-				I32LtS,
-				If(null),
-				I32Const(-1),
-				LocalSet(5),
-				Else,
-				LocalGet(3),
-				LocalGet(2),
-				I32LtS,
-				If(null),
-				I32Const(1),
-				LocalSet(5),
-				End,
-				End,
-				End,
-				LocalGet(5),
-				Return
-			]));
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]}),
+			left = builder.parameter("left", 0),
+			right = builder.parameter("right", 1),
+			leftLength = builder.local("leftLength", I32),
+			rightLength = builder.local("rightLength", I32),
+			index = builder.local("index", I32),
+			result = builder.local("result", I32),
+			leftByte = builder.local("leftByte", I32),
+			rightByte = builder.local("rightByte", I32);
+		builder.localGet(left);
+		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localSet(leftLength);
+		builder.localGet(right);
+		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localSet(rightLength);
+		builder.i32Const(0);
+		builder.localSet(index);
+		builder.i32Const(0);
+		builder.localSet(result);
+		builder.block(function(builder) {
+			builder.loop(function(builder) {
+				builder.localGet(index);
+				builder.localGet(leftLength);
+				builder.emit(I32LtS);
+				builder.i32Eqz();
+				builder.localGet(index);
+				builder.localGet(rightLength);
+				builder.emit(I32LtS);
+				builder.i32Eqz();
+				builder.emit(I32Or);
+				builder.emit(BrIf(1));
+				builder.localGet(left);
+				builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+				builder.i32Add();
+				builder.localGet(index);
+				builder.i32Add();
+				builder.emit(I32Load8U(0));
+				builder.localSet(leftByte);
+				builder.localGet(right);
+				builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+				builder.i32Add();
+				builder.localGet(index);
+				builder.i32Add();
+				builder.emit(I32Load8U(0));
+				builder.localSet(rightByte);
+				builder.localGet(leftByte);
+				builder.localGet(rightByte);
+				builder.emit(I32Eq);
+				builder.i32Eqz();
+				builder.if_(function(builder) {
+					builder.localGet(leftByte);
+					builder.localGet(rightByte);
+					builder.emit(I32LtS);
+					builder.ifElse(function(builder) {
+						builder.i32Const(-1);
+						builder.localSet(result);
+					}, function(builder) {
+						builder.i32Const(1);
+						builder.localSet(result);
+					});
+					builder.emit(Br(2));
+				});
+				builder.localGet(index);
+				builder.i32Const(1);
+				builder.i32Add();
+				builder.localSet(index);
+				builder.emit(Br(0));
+			});
+		});
+		builder.localGet(result);
+		builder.i32Eqz();
+		builder.if_(function(builder) {
+			builder.localGet(leftLength);
+			builder.localGet(rightLength);
+			builder.emit(I32LtS);
+			builder.ifElse(function(builder) {
+				builder.i32Const(-1);
+				builder.localSet(result);
+			}, function(builder) {
+				builder.localGet(rightLength);
+				builder.localGet(leftLength);
+				builder.emit(I32LtS);
+				builder.if_(function(builder) {
+					builder.i32Const(1);
+					builder.localSet(result);
+				});
+			});
+		});
+		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
 	}
 
 	static function addBytesData(module:WasmModule, name:String):Int
@@ -524,63 +531,67 @@ class WasmLinearRuntime {
 	}
 
 	static function addStructGetUtf8(module:WasmModule, name:String, allocator:Int):Int {
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32, I32], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}], [
-			LocalGet(0),
-			I32Const(WasmLayout.STRING_DATA_OFFSET),
-			I32Add,
-			LocalGet(1),
-			I32Add,
-			I32Load(0),
-			LocalSet(3),
-			LocalGet(3),
-			I32Eqz,
-			If(null),
-			I32Const(0),
-			LocalSet(2),
-			Else,
-			I32Const(0),
-			LocalSet(4),
-			Block(null),
-			Loop(null),
-			LocalGet(3),
-			LocalGet(4),
-			I32Add,
-			I32Load8U(0),
-			I32Eqz,
-			If(null),
-			Br(1),
-			End,
-			LocalGet(4),
-			I32Const(1),
-			I32Add,
-			LocalSet(4),
-			Br(0),
-			End,
-			End,
-			LocalGet(4),
-			I32Const(WasmLayout.STRING_DATA_OFFSET),
-			I32Add,
-			Call(allocator),
-			LocalSet(2),
-			LocalGet(2),
-			I32Const(WasmBackend.typeId(Bytes)),
-			I32Store(0),
-			LocalGet(2),
-			LocalGet(4),
-			I32Store(WasmLayout.STRING_LENGTH_OFFSET),
-			LocalGet(2),
-			LocalGet(4),
-			I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
-			LocalGet(2),
-			I32Const(WasmLayout.STRING_DATA_OFFSET),
-			I32Add,
-			LocalGet(3),
-			LocalGet(4),
-			MemoryCopy,
-			End,
-			LocalGet(2),
-			Return
-		]));
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32, I32], results: [I32]}),
+			value = builder.parameter("value", 0),
+			offset = builder.parameter("offset", 1),
+			result = builder.parameter("result", 2),
+			pointer = builder.local("pointer", I32),
+			index = builder.local("index", I32),
+			_unused = builder.local("unused", I32);
+		builder.localGet(value);
+		builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+		builder.i32Add();
+		builder.localGet(offset);
+		builder.i32Add();
+		builder.emit(I32Load(0));
+		builder.localSet(pointer);
+		builder.localGet(pointer);
+		builder.i32Eqz();
+		builder.ifElse(function(builder) {
+			builder.i32Const(0);
+			builder.localSet(result);
+		}, function(builder) {
+			builder.i32Const(0);
+			builder.localSet(index);
+			builder.block(function(builder) {
+				builder.loop(function(builder) {
+					builder.localGet(pointer);
+					builder.localGet(index);
+					builder.i32Add();
+					builder.emit(I32Load8U(0));
+					builder.i32Eqz();
+					builder.if_(function(builder) builder.emit(Br(1)));
+					builder.localGet(index);
+					builder.i32Const(1);
+					builder.i32Add();
+					builder.localSet(index);
+					builder.emit(Br(0));
+				});
+			});
+			builder.localGet(index);
+			builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+			builder.i32Add();
+			builder.call(builder.functionRef(allocator));
+			builder.localSet(result);
+			builder.localGet(result);
+			builder.i32Const(WasmBackend.typeId(Bytes));
+			builder.emit(I32Store(0));
+			builder.localGet(result);
+			builder.localGet(index);
+			builder.emit(I32Store(WasmLayout.STRING_LENGTH_OFFSET));
+			builder.localGet(result);
+			builder.localGet(index);
+			builder.emit(I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET));
+			builder.localGet(result);
+			builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+			builder.i32Add();
+			builder.localGet(pointer);
+			builder.localGet(index);
+			builder.emit(MemoryCopy);
+		});
+		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
 	}
 
 	static function addStructCopyPointer(module:WasmModule, name:String, allocator:Int):Int {
@@ -750,144 +761,182 @@ class WasmLinearRuntime {
 
 	static function addMapFind(module:WasmModule, name:String, keyType:IrType, valueType:IrType, stringEqual:Int):Int {
 		var entrySize = mapEntrySize(valueType),
-			body:Array<WasmInstruction> = [
-				I32Const(0),
-				LocalSet(2),
-				Block(null),
-				Loop(null),
-				LocalGet(2),
-				LocalGet(0),
-				I32Load(WasmLayout.MAP_COUNT_OFFSET),
-				I32LtS,
-				If(null)
-			];
-		append(body, [LocalGet(0), I32Load(WasmLayout.MAP_ENTRIES_OFFSET), LocalSet(3)]);
-		for (instruction in mapEntryAddress(3, 2, entrySize))
-			body.push(instruction);
-		body.push(I32Load(0));
-		for (instruction in mapKeyCompare(keyType, stringEqual))
-			body.push(instruction);
-		append(body, [
-			If(null),
-			LocalGet(2),
-			Return,
-			End,
-			LocalGet(2),
-			I32Const(1),
-			I32Add,
-			LocalSet(2),
-			Br(1),
-			Else,
-			Br(2),
-			End,
-			End,
-			End,
-			I32Const(-1),
-			Return
-		]);
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, WasmBackend.requireValueType(keyType)], results: [I32]},
-			[{type: I32}, {type: I32}], body));
+			builder = new WasmFunctionBuilder(name, {parameters: [I32, WasmBackend.requireValueType(keyType)], results: [I32]}),
+			map = builder.parameter("map", 0),
+			key = builder.parameter("key", 1),
+			index = builder.local("index", I32),
+			entries = builder.local("entries", I32);
+		builder.i32Const(0);
+		builder.localSet(index);
+		builder.block(function(builder) {
+			builder.loop(function(builder) {
+				builder.localGet(index);
+				builder.localGet(map);
+				builder.emit(I32Load(WasmLayout.MAP_COUNT_OFFSET));
+				builder.emit(I32LtS);
+				builder.ifElse(function(builder) {
+					builder.localGet(map);
+					builder.emit(I32Load(WasmLayout.MAP_ENTRIES_OFFSET));
+					builder.localSet(entries);
+					builder.localGet(entries);
+					builder.localGet(index);
+					builder.i32Const(entrySize);
+					builder.emit(I32Mul);
+					builder.i32Add();
+					builder.emit(I32Load(0));
+					builder.localGet(key);
+					if (keyType == Bytes)
+						builder.call(builder.functionRef(stringEqual));
+					else
+						builder.emit(I32Eq);
+					builder.if_(function(builder) {
+						builder.localGet(index);
+						builder.return_();
+					});
+					builder.localGet(index);
+					builder.i32Const(1);
+					builder.i32Add();
+					builder.localSet(index);
+					builder.emit(Br(1));
+				}, function(builder) builder.emit(Br(2)));
+			});
+		});
+		builder.i32Const(-1);
+		builder.return_();
+		return module.addFunction(builder.finish());
 	}
 
 	static function addMapSet(module:WasmModule, name:String, keyType:IrType, valueType:IrType, entrySize:Int, valueOffset:Int, allocator:Int,
 			stringEqual:Int):Int {
-		var body:Array<WasmInstruction> = [
-			                         I32Const(0), LocalSet(3), Block(null),  Loop(null),                            LocalGet(3), LocalGet(0),
-			I32Load(WasmLayout.MAP_COUNT_OFFSET),      I32LtS,    If(null), LocalGet(0), I32Load(WasmLayout.MAP_ENTRIES_OFFSET), LocalSet(4)
-		];
-		for (instruction in mapEntryAddress(4, 3, entrySize))
-			body.push(instruction);
-		body.push(I32Load(0));
-		for (instruction in mapKeyCompare(keyType, stringEqual))
-			body.push(instruction);
-		body.push(If(null));
-		for (instruction in mapEntryAddress(4, 3, entrySize))
-			body.push(instruction);
-		append(body, [LocalGet(1), I32Store(0)]);
-		for (instruction in mapEntryAddress(4, 3, entrySize))
-			body.push(instruction);
-		append(body, [
-			LocalGet(2),
-			storeMapValue(valueType, valueOffset),
-			Return,
-			End,
-			LocalGet(3),
-			I32Const(1),
-			I32Add,
-			LocalSet(3),
-			Br(1),
-			Else,
-			Br(2),
-			End,
-			End,
-			End,
-			LocalGet(0),
-			I32Load(WasmLayout.MAP_COUNT_OFFSET),
-			LocalSet(5),
-			LocalGet(0),
-			I32Load(WasmLayout.MAP_CAPACITY_OFFSET),
-			LocalSet(6),
-			LocalGet(5),
-			LocalGet(6),
-			I32Eq,
-			If(null),
-			LocalGet(6),
-			I32Const(2),
-			I32Mul,
-			LocalSet(7),
-			LocalGet(7),
-			I32Const(entrySize),
-			I32Mul,
-			Call(allocator),
-			LocalSet(8),
-			LocalGet(8),
-			LocalGet(0),
-			I32Load(WasmLayout.MAP_ENTRIES_OFFSET),
-			LocalGet(5),
-			I32Const(entrySize),
-			I32Mul,
-			MemoryCopy,
-			LocalGet(8),
-			I32Const(WasmLayout.GC_BLOCK_HEADER_SIZE),
-			I32Sub,
-			I32Const(WasmLayout.GC_BLOCK_LINK_OFFSET),
-			I32Add,
-			LocalGet(0),
-			I32Store(0),
-			LocalGet(0),
-			LocalGet(8),
-			I32Store(WasmLayout.MAP_ENTRIES_OFFSET),
-			LocalGet(0),
-			LocalGet(7),
-			I32Store(WasmLayout.MAP_CAPACITY_OFFSET),
-			End,
-			LocalGet(0),
-			I32Load(WasmLayout.MAP_ENTRIES_OFFSET),
-			LocalSet(4)
-		]);
-		for (instruction in mapEntryAddress(4, 5, entrySize))
-			body.push(instruction);
-		append(body, [LocalGet(1), I32Store(0)]);
-		for (instruction in mapEntryAddress(4, 5, entrySize))
-			body.push(instruction);
-		append(body, [
-			LocalGet(2),
-			storeMapValue(valueType, valueOffset),
-			LocalGet(0),
-			LocalGet(5),
-			I32Const(1),
-			I32Add,
-			I32Store(WasmLayout.MAP_COUNT_OFFSET),
-		]);
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {
+		var type:WasmFunctionType = {
 			parameters: [
 				I32,
 				WasmBackend.requireValueType(keyType),
 				WasmBackend.requireValueType(valueType)
 			],
 			results: []
-		},
-			[{type: I32}, {type: I32}, {type: I32}, {type: I32}, {type: I32}, {type: I32}], body));
+		};
+		var builder = new WasmFunctionBuilder(name, type),
+			map = builder.parameter("map", 0),
+			key = builder.parameter("key", 1),
+			value = builder.parameter("value", 2),
+			index = builder.local("index", I32),
+			entries = builder.local("entries", I32),
+			count = builder.local("count", I32),
+			capacity = builder.local("capacity", I32),
+			newCapacity = builder.local("newCapacity", I32),
+			newEntries = builder.local("newEntries", I32);
+		builder.i32Const(0);
+		builder.localSet(index);
+		builder.block(function(builder) {
+			builder.loop(function(builder) {
+				builder.localGet(index);
+				builder.localGet(map);
+				builder.emit(I32Load(WasmLayout.MAP_COUNT_OFFSET));
+				builder.emit(I32LtS);
+				builder.ifElse(function(builder) {
+					builder.localGet(map);
+					builder.emit(I32Load(WasmLayout.MAP_ENTRIES_OFFSET));
+					builder.localSet(entries);
+					builder.localGet(entries);
+					builder.localGet(index);
+					builder.i32Const(entrySize);
+					builder.emit(I32Mul);
+					builder.i32Add();
+					builder.emit(I32Load(0));
+					builder.localGet(key);
+					if (keyType == Bytes)
+						builder.call(builder.functionRef(stringEqual));
+					else
+						builder.emit(I32Eq);
+					builder.if_(function(builder) {
+						builder.localGet(entries);
+						builder.localGet(index);
+						builder.i32Const(entrySize);
+						builder.emit(I32Mul);
+						builder.i32Add();
+						builder.localGet(key);
+						builder.emit(I32Store(0));
+						builder.localGet(entries);
+						builder.localGet(index);
+						builder.i32Const(entrySize);
+						builder.emit(I32Mul);
+						builder.i32Add();
+						builder.localGet(value);
+						builder.emit(storeMapValue(valueType, valueOffset));
+						builder.return_();
+					});
+					builder.localGet(index);
+					builder.i32Const(1);
+					builder.i32Add();
+					builder.localSet(index);
+					builder.emit(Br(1));
+				}, function(builder) builder.emit(Br(2)));
+			});
+		});
+		builder.localGet(map);
+		builder.emit(I32Load(WasmLayout.MAP_COUNT_OFFSET));
+		builder.localSet(count);
+		builder.localGet(map);
+		builder.emit(I32Load(WasmLayout.MAP_CAPACITY_OFFSET));
+		builder.localSet(capacity);
+		builder.localGet(count);
+		builder.localGet(capacity);
+		builder.emit(I32Eq);
+		builder.if_(function(builder) {
+			builder.localGet(capacity);
+			builder.i32Const(2);
+			builder.emit(I32Mul);
+			builder.localSet(newCapacity);
+			builder.localGet(newCapacity);
+			builder.i32Const(entrySize);
+			builder.emit(I32Mul);
+			builder.call(builder.functionRef(allocator));
+			builder.localSet(newEntries);
+			builder.localGet(newEntries);
+			builder.localGet(map);
+			builder.emit(I32Load(WasmLayout.MAP_ENTRIES_OFFSET));
+			builder.localGet(count);
+			builder.i32Const(entrySize);
+			builder.emit(I32Mul);
+			builder.emit(MemoryCopy);
+			builder.localGet(newEntries);
+			builder.i32Const(WasmLayout.GC_BLOCK_HEADER_SIZE);
+			builder.i32Sub();
+			builder.i32Const(WasmLayout.GC_BLOCK_LINK_OFFSET);
+			builder.i32Add();
+			builder.localGet(map);
+			builder.emit(I32Store(0));
+			builder.localGet(map);
+			builder.localGet(newEntries);
+			builder.emit(I32Store(WasmLayout.MAP_ENTRIES_OFFSET));
+			builder.localGet(map);
+			builder.localGet(newCapacity);
+			builder.emit(I32Store(WasmLayout.MAP_CAPACITY_OFFSET));
+		});
+		builder.localGet(map);
+		builder.emit(I32Load(WasmLayout.MAP_ENTRIES_OFFSET));
+		builder.localSet(entries);
+		builder.localGet(entries);
+		builder.localGet(count);
+		builder.i32Const(entrySize);
+		builder.emit(I32Mul);
+		builder.i32Add();
+		builder.localGet(key);
+		builder.emit(I32Store(0));
+		builder.localGet(entries);
+		builder.localGet(count);
+		builder.i32Const(entrySize);
+		builder.emit(I32Mul);
+		builder.i32Add();
+		builder.localGet(value);
+		builder.emit(storeMapValue(valueType, valueOffset));
+		builder.localGet(map);
+		builder.localGet(count);
+		builder.i32Const(1);
+		builder.i32Add();
+		builder.emit(I32Store(WasmLayout.MAP_COUNT_OFFSET));
+		return module.addFunction(builder.finish());
 	}
 
 	static function addMapExists(module:WasmModule, name:String, keyType:IrType, valueType:IrType, stringEqual:Int, find:Int):Int
@@ -896,165 +945,181 @@ class WasmLinearRuntime {
 
 	static function addMapGet(module:WasmModule, name:String, keyType:IrType, valueType:IrType, entrySize:Int, valueOffset:Int, allocator:Int,
 			stringEqual:Int, find:Int):Int {
-		var body:Array<WasmInstruction> = [
-			LocalGet(0),
-			LocalGet(1),
-			Call(find),
-			LocalSet(2),
-			LocalGet(2),
-			I32Const(-1),
-			I32Eq,
-			If(null),
-			I32Const(0),
-			LocalSet(4),
-			Else,
-			LocalGet(0),
-			I32Load(WasmLayout.MAP_ENTRIES_OFFSET),
-			LocalSet(3)
-		];
-		if (valueType == I32 || valueType == Bool) {
-			append(body, [
-				I32Const(WasmLayout.DYN_I32_SIZE),
-				Call(allocator),
-				LocalSet(4),
-				LocalGet(4),
-				I32Const(WasmBackend.typeId(valueType)),
-				I32Store(0)
-			]);
-			append(body, [LocalGet(4)]);
-			for (instruction in mapEntryAddress(3, 2, entrySize))
-				body.push(instruction);
-			append(body, [I32Load(valueOffset), I32Store(WasmLayout.DYN_PAYLOAD_OFFSET)]);
-		} else if (valueType == F64) {
-			append(body, [
-				I32Const(WasmLayout.DYN_F64_SIZE),
-				Call(allocator),
-				LocalSet(4),
-				LocalGet(4),
-				I32Const(WasmBackend.typeId(F64)),
-				I32Store(0)
-			]);
-			append(body, [LocalGet(4)]);
-			for (instruction in mapEntryAddress(3, 2, entrySize))
-				body.push(instruction);
-			append(body, [F64Load(valueOffset), F64Store(WasmLayout.DYN_PAYLOAD_OFFSET)]);
-		} else {
-			for (instruction in mapEntryAddress(3, 2, entrySize))
-				body.push(instruction);
-			append(body, [loadMapValue(valueType, valueOffset), LocalSet(4)]);
-		}
-		append(body, [End, LocalGet(4), Return]);
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, WasmBackend.requireValueType(keyType)], results: [I32]},
-			[{type: I32}, {type: I32}, {type: I32}], body));
+		var type:WasmFunctionType = {parameters: [I32, WasmBackend.requireValueType(keyType)], results: [I32]},
+			builder = new WasmFunctionBuilder(name, type),
+			map = builder.parameter("map", 0),
+			key = builder.parameter("key", 1),
+			index = builder.local("index", I32),
+			entries = builder.local("entries", I32),
+			result = builder.local("result", I32);
+		builder.localGet(map);
+		builder.localGet(key);
+		builder.call(builder.functionRef(find));
+		builder.localSet(index);
+		builder.localGet(index);
+		builder.i32Const(-1);
+		builder.emit(I32Eq);
+		builder.ifElse(function(builder) {
+			builder.i32Const(0);
+			builder.localSet(result);
+		}, function(builder) {
+			builder.localGet(map);
+			builder.emit(I32Load(WasmLayout.MAP_ENTRIES_OFFSET));
+			builder.localSet(entries);
+			if (valueType == I32 || valueType == Bool) {
+				builder.i32Const(WasmLayout.DYN_I32_SIZE);
+				builder.call(builder.functionRef(allocator));
+				builder.localSet(result);
+				builder.localGet(result);
+				builder.i32Const(WasmBackend.typeId(valueType));
+				builder.emit(I32Store(0));
+				builder.localGet(result);
+				builder.localGet(entries);
+				builder.localGet(index);
+				builder.i32Const(entrySize);
+				builder.emit(I32Mul);
+				builder.i32Add();
+				builder.emit(I32Load(valueOffset));
+				builder.emit(I32Store(WasmLayout.DYN_PAYLOAD_OFFSET));
+			} else if (valueType == F64) {
+				builder.i32Const(WasmLayout.DYN_F64_SIZE);
+				builder.call(builder.functionRef(allocator));
+				builder.localSet(result);
+				builder.localGet(result);
+				builder.i32Const(WasmBackend.typeId(F64));
+				builder.emit(I32Store(0));
+				builder.localGet(result);
+				builder.localGet(entries);
+				builder.localGet(index);
+				builder.i32Const(entrySize);
+				builder.emit(I32Mul);
+				builder.i32Add();
+				builder.emit(F64Load(valueOffset));
+				builder.emit(F64Store(WasmLayout.DYN_PAYLOAD_OFFSET));
+			} else {
+				builder.localGet(entries);
+				builder.localGet(index);
+				builder.i32Const(entrySize);
+				builder.emit(I32Mul);
+				builder.i32Add();
+				builder.emit(loadMapValue(valueType, valueOffset));
+				builder.localSet(result);
+			}
+		});
+		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
 	}
 
 	static function addMapProjection(module:WasmModule, name:String, elementType:IrType, entrySize:Int, valueOffset:Int, allocator:Int,
 			arrayAllocator:Int):Int {
 		var stride = WasmLayout.arrayStride(elementType),
-			body:Array<WasmInstruction> = [
-				LocalGet(0),
-				I32Load(WasmLayout.MAP_COUNT_OFFSET),
-				Call(arrayAllocator),
-				LocalSet(1),
-				LocalGet(0),
-				I32Load(WasmLayout.MAP_ENTRIES_OFFSET),
-				LocalSet(2),
-				I32Const(0),
-				LocalSet(3),
-				Block(null),
-				Loop(null),
-				LocalGet(3),
-				LocalGet(0),
-				I32Load(WasmLayout.MAP_COUNT_OFFSET),
-				I32LtS,
-				If(null),
-				LocalGet(1),
-				I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
-				LocalGet(3),
-				I32Const(stride),
-				I32Mul,
-				I32Add
-			];
-		for (instruction in mapEntryAddress(2, 3, entrySize))
-			body.push(instruction);
-		append(body, [
-			loadMapValue(elementType, valueOffset),
-			storeMapValue(elementType, 0),
-			LocalGet(3),
-			I32Const(1),
-			I32Add,
-			LocalSet(3),
-			Br(1),
-			Else,
-			Br(2),
-			End,
-			End,
-			End,
-			LocalGet(1),
-			Return
-		]);
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}], body));
+			builder = new WasmFunctionBuilder(name, {parameters: [I32], results: [I32]}),
+			map = builder.parameter("map", 0),
+			array = builder.local("array", I32),
+			entries = builder.local("entries", I32),
+			index = builder.local("index", I32);
+		builder.localGet(map);
+		builder.emit(I32Load(WasmLayout.MAP_COUNT_OFFSET));
+		builder.call(builder.functionRef(arrayAllocator));
+		builder.localSet(array);
+		builder.localGet(map);
+		builder.emit(I32Load(WasmLayout.MAP_ENTRIES_OFFSET));
+		builder.localSet(entries);
+		builder.i32Const(0);
+		builder.localSet(index);
+		builder.block(function(builder) {
+			builder.loop(function(builder) {
+				builder.localGet(index);
+				builder.localGet(map);
+				builder.emit(I32Load(WasmLayout.MAP_COUNT_OFFSET));
+				builder.emit(I32LtS);
+				builder.ifElse(function(builder) {
+					builder.localGet(array);
+					builder.emit(I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET));
+					builder.localGet(index);
+					builder.i32Const(stride);
+					builder.emit(I32Mul);
+					builder.i32Add();
+					builder.localGet(entries);
+					builder.localGet(index);
+					builder.i32Const(entrySize);
+					builder.emit(I32Mul);
+					builder.i32Add();
+					builder.emit(loadMapValue(elementType, valueOffset));
+					builder.emit(storeMapValue(elementType, 0));
+					builder.localGet(index);
+					builder.i32Const(1);
+					builder.i32Add();
+					builder.localSet(index);
+					builder.emit(Br(1));
+				}, function(builder) builder.emit(Br(2)));
+			});
+		});
+		builder.localGet(array);
+		builder.return_();
+		return module.addFunction(builder.finish());
 	}
 
 	static function addMapRemove(module:WasmModule, name:String, keyType:IrType, valueType:IrType, entrySize:Int, stringEqual:Int, find:Int):Int {
-		var body:Array<WasmInstruction> = [
-			LocalGet(0),
-			LocalGet(1),
-			Call(find),
-			LocalTee(2),
-			I32Const(-1),
-			I32Eq,
-			If(I32),
-			I32Const(0),
-			Else,
-			LocalGet(0),
-			I32Load(WasmLayout.MAP_ENTRIES_OFFSET),
-			LocalSet(3),
-			LocalGet(0),
-			I32Load(WasmLayout.MAP_COUNT_OFFSET),
-			LocalSet(4),
-			LocalGet(4),
-			LocalGet(2),
-			I32Sub,
-			I32Const(1),
-			I32Sub,
-			LocalSet(5),
-			I32Const(0),
-			LocalGet(5),
-			I32LtS,
-			If(null)
-		];
-		var destination = mapEntryAddress(3, 2, entrySize),
-			source:Array<WasmInstruction> = [
-				LocalGet(3),
-				LocalGet(2),
-				I32Const(1),
-				I32Add,
-				I32Const(entrySize),
-				I32Mul,
-				I32Add
-			];
-		for (instruction in destination)
-			body.push(instruction);
-		for (instruction in source)
-			body.push(instruction);
-		append(body, [
-			LocalGet(5),
-			I32Const(entrySize),
-			I32Mul,
-			MemoryCopy,
-			End,
-			LocalGet(0),
-			LocalGet(4),
-			I32Const(1),
-			I32Sub,
-			I32Store(WasmLayout.MAP_COUNT_OFFSET),
-			I32Const(1),
-			End,
-			Return
-		]);
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, WasmBackend.requireValueType(keyType)], results: [I32]},
-			[{type: I32}, {type: I32}, {type: I32}, {type: I32}], body));
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, WasmBackend.requireValueType(keyType)], results: [I32]}),
+			map = builder.parameter("map", 0),
+			key = builder.parameter("key", 1),
+			index = builder.local("index", I32),
+			entries = builder.local("entries", I32),
+			count = builder.local("count", I32),
+			tailCount = builder.local("tailCount", I32);
+		builder.localGet(map);
+		builder.localGet(key);
+		builder.call(builder.functionRef(find));
+		builder.localTee(index);
+		builder.i32Const(-1);
+		builder.emit(I32Eq);
+		builder.ifElse(function(builder) {
+			builder.i32Const(0);
+		}, function(builder) {
+			builder.localGet(map);
+			builder.emit(I32Load(WasmLayout.MAP_ENTRIES_OFFSET));
+			builder.localSet(entries);
+			builder.localGet(map);
+			builder.emit(I32Load(WasmLayout.MAP_COUNT_OFFSET));
+			builder.localSet(count);
+			builder.localGet(count);
+			builder.localGet(index);
+			builder.i32Sub();
+			builder.i32Const(1);
+			builder.i32Sub();
+			builder.localSet(tailCount);
+			builder.i32Const(0);
+			builder.localGet(tailCount);
+			builder.emit(I32LtS);
+			builder.if_(function(builder) {
+				builder.localGet(entries);
+				builder.localGet(index);
+				builder.i32Const(entrySize);
+				builder.emit(I32Mul);
+				builder.i32Add();
+				builder.localGet(entries);
+				builder.localGet(index);
+				builder.i32Const(1);
+				builder.i32Add();
+				builder.i32Const(entrySize);
+				builder.emit(I32Mul);
+				builder.i32Add();
+				builder.localGet(tailCount);
+				builder.i32Const(entrySize);
+				builder.emit(I32Mul);
+				builder.emit(MemoryCopy);
+			});
+			builder.localGet(map);
+			builder.localGet(count);
+			builder.i32Const(1);
+			builder.i32Sub();
+			builder.emit(I32Store(WasmLayout.MAP_COUNT_OFFSET));
+			builder.i32Const(1);
+		}, I32);
+		builder.return_();
+		return module.addFunction(builder.finish());
 	}
 
 	static function addMapClear(module:WasmModule, name:String):Int
@@ -1065,189 +1130,155 @@ class WasmLinearRuntime {
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [],
 			[LocalGet(0), I32Load(WasmLayout.MAP_COUNT_OFFSET), Return]));
 
-	static function addDynamicInt(module:WasmModule, name:String):Int
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [], [
-			LocalGet(0),
-			I32Eqz,
-			If(null),
-			I32Const(0),
-			Return,
-			End,
-			LocalGet(0),
-			I32Load(0),
-			I32Const(WasmBackend.typeId(I32)),
-			I32Eq,
-			If(null),
-			LocalGet(0),
-			I32Load(WasmLayout.DYN_PAYLOAD_OFFSET),
-			Return,
-			End,
-			LocalGet(0),
-			I32Load(0),
-			I32Const(WasmBackend.typeId(Bool)),
-			I32Eq,
-			If(null),
-			LocalGet(0),
-			I32Load(WasmLayout.DYN_PAYLOAD_OFFSET),
-			Return,
-			End,
-			LocalGet(0),
-			I32Load(0),
-			I32Const(WasmBackend.typeId(F64)),
-			I32Eq,
-			If(null),
-			LocalGet(0),
-			F64Load(WasmLayout.DYN_PAYLOAD_OFFSET),
-			I32TruncF64S,
-			Return,
-			End,
-			LocalGet(0),
-			I32Load(0),
-			I32Const(WasmBackend.typeId(I64)),
-			I32Eq,
-			If(null),
-			LocalGet(0),
-			I64Load(WasmLayout.DYN_PAYLOAD_OFFSET),
-			I32WrapI64,
-			Return,
-			End,
-			Unreachable
-		]));
+	static function addDynamicInt(module:WasmModule, name:String):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32], results: [I32]}),
+			value = builder.parameter("value", 0),
+			dynamicTypes:Array<IrType> = [I32, Bool];
+		builder.localGet(value);
+		builder.i32Eqz();
+		builder.if_(function(builder) {
+			builder.i32Const(0);
+			builder.return_();
+		});
+		for (type in dynamicTypes) {
+			builder.localGet(value);
+			builder.emit(I32Load(0));
+			builder.i32Const(WasmBackend.typeId(type));
+			builder.emit(I32Eq);
+			builder.if_(function(builder) {
+				builder.localGet(value);
+				builder.emit(I32Load(WasmLayout.DYN_PAYLOAD_OFFSET));
+				builder.return_();
+			});
+		}
+		builder.localGet(value);
+		builder.emit(I32Load(0));
+		builder.i32Const(WasmBackend.typeId(F64));
+		builder.emit(I32Eq);
+		builder.if_(function(builder) {
+			builder.localGet(value);
+			builder.emit(F64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
+			builder.emit(I32TruncF64S);
+			builder.return_();
+		});
+		builder.localGet(value);
+		builder.emit(I32Load(0));
+		builder.i32Const(WasmBackend.typeId(I64));
+		builder.emit(I32Eq);
+		builder.if_(function(builder) {
+			builder.localGet(value);
+			builder.emit(I64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
+			builder.emit(I32WrapI64);
+			builder.return_();
+		});
+		builder.emit(Unreachable);
+		return module.addFunction(builder.finish());
+	}
 
 	static function addDynamicIsObject(module:WasmModule, name:String, program:IrProgram):Int {
-		var body:Array<WasmInstruction> = [];
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32], results: [I32]}),
+			value = builder.parameter("value", 0);
 		for (object in program.objects) {
-			body.push(LocalGet(0));
-			body.push(I32Const(WasmBackend.typeId(Obj(object.name))));
-			body.push(I32Eq);
-			body.push(If(null));
-			body.push(I32Const(1));
-			body.push(Return);
-			body.push(End);
+			builder.localGet(value);
+			builder.i32Const(WasmBackend.typeId(Obj(object.name)));
+			builder.emit(I32Eq);
+			builder.if_(function(builder) {
+				builder.i32Const(1);
+				builder.return_();
+			});
 		}
 		for (enumDecl in program.enums) {
-			body.push(LocalGet(0));
-			body.push(I32Const(WasmBackend.typeId(Enum(enumDecl.name))));
-			body.push(I32Eq);
-			body.push(If(null));
-			body.push(I32Const(1));
-			body.push(Return);
-			body.push(End);
+			builder.localGet(value);
+			builder.i32Const(WasmBackend.typeId(Enum(enumDecl.name)));
+			builder.emit(I32Eq);
+			builder.if_(function(builder) {
+				builder.i32Const(1);
+				builder.return_();
+			});
 		}
-		body = body.concat([
-			LocalGet(0),
-			I32Const(1),
-			I32And,
-			If(null),
-			I32Const(0),
-			Return,
-			End,
-			LocalGet(0),
-			I32Eqz,
-			If(null),
-			I32Const(0),
-			Return,
-			End,
-			LocalGet(0),
-			I32Load(0),
-			I32Const(WasmLayout.CLOSURE_TYPE_ID),
-			I32Eq,
-			If(null),
-			I32Const(0),
-			Return,
-			End,
-			LocalGet(0),
-			I32Load(0),
-			I32Const(WasmBackend.typeId(I32)),
-			I32Eq,
-			If(null),
-			I32Const(0),
-			Return,
-			End,
-			LocalGet(0),
-			I32Load(0),
-			I32Const(WasmBackend.typeId(Bool)),
-			I32Eq,
-			If(null),
-			I32Const(0),
-			Return,
-			End,
-			LocalGet(0),
-			I32Load(0),
-			I32Const(WasmBackend.typeId(I64)),
-			I32Eq,
-			If(null),
-			I32Const(0),
-			Return,
-			End,
-			LocalGet(0),
-			I32Load(0),
-			I32Const(WasmBackend.typeId(F64)),
-			I32Eq,
-			If(null),
-			I32Const(0),
-			Return,
-			End,
-			LocalGet(0),
-			I32Load(0),
-			I32Const(WasmBackend.typeId(Bytes)),
-			I32Eq,
-			If(null),
-			I32Const(0),
-			Return,
-			End,
-			I32Const(1),
-			Return
-		]);
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [], body));
+		builder.localGet(value);
+		builder.i32Const(1);
+		builder.emit(I32And);
+		builder.if_(function(builder) {
+			builder.i32Const(0);
+			builder.return_();
+		});
+		builder.localGet(value);
+		builder.i32Eqz();
+		builder.if_(function(builder) {
+			builder.i32Const(0);
+			builder.return_();
+		});
+		for (typeId in [
+			WasmLayout.CLOSURE_TYPE_ID,
+			WasmBackend.typeId(I32),
+			WasmBackend.typeId(Bool),
+			WasmBackend.typeId(I64),
+			WasmBackend.typeId(F64),
+			WasmBackend.typeId(Bytes)
+		]) {
+			builder.localGet(value);
+			builder.emit(I32Load(0));
+			builder.i32Const(typeId);
+			builder.emit(I32Eq);
+			builder.if_(function(builder) {
+				builder.i32Const(0);
+				builder.return_();
+			});
+		}
+		builder.i32Const(1);
+		builder.return_();
+		return module.addFunction(builder.finish());
 	}
 
 	static function addTypeTest(module:WasmModule, name:String, program:IrProgram):Int {
-		var body:Array<WasmInstruction> = [
-			LocalGet(0),
-			I32Eqz,
-			If(null),
-			I32Const(0),
-			LocalSet(2),
-			Else,
-			LocalGet(0),
-			I32Load(0),
-			LocalGet(1),
-			I32Eq,
-			LocalSet(2),
-		];
-		for (object in program.objects) {
-			var accepted = [WasmBackend.typeId(Obj(object.name))];
-			var base = object.base;
-			while (base != null) {
-				accepted.push(WasmBackend.typeId(Obj(base)));
-				var next:Null<String> = null;
-				for (candidate in program.objects)
-					if (candidate.name == base)
-						next = candidate.base;
-				base = next;
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]}),
+			value = builder.parameter("value", 0),
+			typeId = builder.parameter("typeId", 1),
+			result = builder.local("result", I32);
+		builder.localGet(value);
+		builder.i32Eqz();
+		builder.ifElse(function(builder) {
+			builder.i32Const(0);
+			builder.localSet(result);
+		}, function(builder) {
+			builder.localGet(value);
+			builder.emit(I32Load(0));
+			builder.localGet(typeId);
+			builder.emit(I32Eq);
+			builder.localSet(result);
+			for (object in program.objects) {
+				var accepted = [WasmBackend.typeId(Obj(object.name))];
+				var base = object.base;
+				while (base != null) {
+					accepted.push(WasmBackend.typeId(Obj(base)));
+					var next:Null<String> = null;
+					for (candidate in program.objects)
+						if (candidate.name == base)
+							next = candidate.base;
+					base = next;
+				}
+				for (interfaceName in object.interfaces)
+					accepted.push(WasmBackend.typeId(Virtual(interfaceName)));
+				builder.localGet(value);
+				builder.emit(I32Load(0));
+				builder.i32Const(WasmBackend.typeId(Obj(object.name)));
+				builder.emit(I32Eq);
+				builder.if_(function(builder) {
+					for (index in 0...accepted.length) {
+						builder.localGet(typeId);
+						builder.i32Const(accepted[index]);
+						builder.emit(I32Eq);
+						if (index > 0)
+							builder.emit(I32Or);
+					}
+					builder.localSet(result);
+				});
 			}
-			for (interfaceName in object.interfaces)
-				accepted.push(WasmBackend.typeId(Virtual(interfaceName)));
-			body.push(LocalGet(0));
-			body.push(I32Load(0));
-			body.push(I32Const(WasmBackend.typeId(Obj(object.name))));
-			body.push(I32Eq);
-			body.push(If(null));
-			for (index in 0...accepted.length) {
-				body.push(LocalGet(1));
-				body.push(I32Const(accepted[index]));
-				body.push(I32Eq);
-				if (index > 0)
-					body.push(I32Or);
-			}
-			body.push(LocalSet(2));
-			body.push(End);
-		}
-		body.push(End);
-		body.push(LocalGet(2));
-		body.push(Return);
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}], body));
+		});
+		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
 	}
 
 	static function addStringCharCodeAt(module:WasmModule, name:String):Int {
@@ -1314,235 +1345,240 @@ class WasmLinearRuntime {
 	}
 
 	static function addIntToString(module:WasmModule, name:String, allocator:Int):Int {
-		var type:WasmFunctionType = {parameters: [I32], results: [I32]},
-			body:Array<WasmInstruction> = [
-				LocalGet(0),
-				LocalSet(1),
-				I32Const(0),
-				LocalSet(2),
-				LocalGet(0),
-				I32Const(0),
-				I32LtS,
-				LocalSet(3),
-				Block(null),
-				Loop(null),
-				LocalGet(2),
-				I32Const(1),
-				I32Add,
-				LocalSet(2),
-				LocalGet(1),
-				I32Const(10),
-				I32DivS,
-				LocalTee(1),
-				I32Eqz,
-				BrIf(1),
-				Br(0),
-				End,
-				End,
-				LocalGet(2),
-				LocalGet(3),
-				I32Add,
-				I32Const(WasmLayout.STRING_DATA_OFFSET),
-				I32Add,
-				Call(allocator),
-				LocalSet(4),
-				LocalGet(4),
-				I32Const(WasmBackend.typeId(Bytes)),
-				I32Store(0),
-				LocalGet(4),
-				LocalGet(2),
-				LocalGet(3),
-				I32Add,
-				I32Store(WasmLayout.STRING_LENGTH_OFFSET),
-				LocalGet(4),
-				LocalGet(2),
-				LocalGet(3),
-				I32Add,
-				I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
-				LocalGet(0),
-				LocalSet(1),
-				LocalGet(2),
-				LocalGet(3),
-				I32Add,
-				I32Const(1),
-				I32Sub,
-				LocalSet(5),
-				Block(null),
-				Loop(null),
-				LocalGet(2),
-				I32Eqz,
-				BrIf(1),
-				LocalGet(1),
-				I32Const(10),
-				I32RemS,
-				LocalSet(6),
-				LocalGet(1),
-				I32Const(10),
-				I32DivS,
-				LocalSet(1),
-				LocalGet(4),
-				I32Const(WasmLayout.STRING_DATA_OFFSET),
-				I32Add,
-				LocalGet(5),
-				I32Add,
-				LocalGet(3),
-				If(null),
-				I32Const(48),
-				LocalGet(6),
-				I32Sub,
-				LocalSet(7),
-				Else,
-				I32Const(48),
-				LocalGet(6),
-				I32Add,
-				LocalSet(7),
-				End,
-				LocalGet(7),
-				I32Store8(0),
-				LocalGet(2),
-				I32Const(1),
-				I32Sub,
-				LocalSet(2),
-				LocalGet(5),
-				I32Const(1),
-				I32Sub,
-				LocalSet(5),
-				Br(0),
-				End,
-				End,
-				LocalGet(3),
-				If(null),
-				LocalGet(4),
-				I32Const(WasmLayout.STRING_DATA_OFFSET),
-				I32Add,
-				I32Const(45),
-				I32Store8(0),
-				End,
-				LocalGet(4),
-				Return
-			];
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, type, [for (_ in 0...7) {type: I32}], body));
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32], results: [I32]}),
+			value = builder.parameter("value", 0),
+			number = builder.local("number", I32),
+			digitCount = builder.local("digitCount", I32),
+			isNegative = builder.local("isNegative", I32),
+			result = builder.local("result", I32),
+			lastIndex = builder.local("lastIndex", I32),
+			digit = builder.local("digit", I32),
+			character = builder.local("character", I32);
+		builder.localGet(value);
+		builder.localSet(number);
+		builder.i32Const(0);
+		builder.localSet(digitCount);
+		builder.localGet(value);
+		builder.i32Const(0);
+		builder.emit(I32LtS);
+		builder.localSet(isNegative);
+		builder.block(function(builder) {
+			builder.loop(function(builder) {
+				builder.localGet(digitCount);
+				builder.i32Const(1);
+				builder.i32Add();
+				builder.localSet(digitCount);
+				builder.localGet(number);
+				builder.i32Const(10);
+				builder.emit(I32DivS);
+				builder.localTee(number);
+				builder.i32Eqz();
+				builder.emit(BrIf(1));
+				builder.emit(Br(0));
+			});
+		});
+		builder.localGet(digitCount);
+		builder.localGet(isNegative);
+		builder.i32Add();
+		builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+		builder.i32Add();
+		builder.call(builder.functionRef(allocator));
+		builder.localSet(result);
+		builder.localGet(result);
+		builder.i32Const(WasmBackend.typeId(Bytes));
+		builder.emit(I32Store(0));
+		builder.localGet(result);
+		builder.localGet(digitCount);
+		builder.localGet(isNegative);
+		builder.i32Add();
+		builder.emit(I32Store(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localGet(result);
+		builder.localGet(digitCount);
+		builder.localGet(isNegative);
+		builder.i32Add();
+		builder.emit(I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET));
+		builder.localGet(value);
+		builder.localSet(number);
+		builder.localGet(digitCount);
+		builder.localGet(isNegative);
+		builder.i32Add();
+		builder.i32Const(1);
+		builder.i32Sub();
+		builder.localSet(lastIndex);
+		builder.block(function(builder) {
+			builder.loop(function(builder) {
+				builder.localGet(digitCount);
+				builder.i32Eqz();
+				builder.emit(BrIf(1));
+				builder.localGet(number);
+				builder.i32Const(10);
+				builder.emit(I32RemS);
+				builder.localSet(digit);
+				builder.localGet(number);
+				builder.i32Const(10);
+				builder.emit(I32DivS);
+				builder.localSet(number);
+				builder.localGet(result);
+				builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+				builder.i32Add();
+				builder.localGet(lastIndex);
+				builder.i32Add();
+				builder.localGet(isNegative);
+				builder.ifElse(function(builder) {
+					builder.i32Const(48);
+					builder.localGet(digit);
+					builder.i32Sub();
+					builder.localSet(character);
+				}, function(builder) {
+					builder.i32Const(48);
+					builder.localGet(digit);
+					builder.i32Add();
+					builder.localSet(character);
+				});
+				builder.localGet(character);
+				builder.emit(I32Store8(0));
+				builder.localGet(digitCount);
+				builder.i32Const(1);
+				builder.i32Sub();
+				builder.localSet(digitCount);
+				builder.localGet(lastIndex);
+				builder.i32Const(1);
+				builder.i32Sub();
+				builder.localSet(lastIndex);
+				builder.emit(Br(0));
+			});
+		});
+		builder.localGet(isNegative);
+		builder.if_(function(builder) {
+			builder.localGet(result);
+			builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+			builder.i32Add();
+			builder.i32Const(45);
+			builder.emit(I32Store8(0));
+		});
+		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
 	}
 
 	static function addInt64ToString(module:WasmModule, name:String, allocator:Int):Int {
-		var body:Array<WasmInstruction> = [
-			LocalGet(0),
-			I64Const(0),
-			I64LtS,
-			LocalSet(1),
-			LocalGet(1),
-			If(I64),
-			LocalGet(0),
-			Else,
-			I64Const(0),
-			LocalGet(0),
-			I64Sub,
-			End,
-			LocalSet(3),
-			I32Const(1),
-			LocalSet(2),
-			Block(null),
-			Loop(null),
-			LocalGet(3),
-			I64Const(-10),
-			I64LeS,
-			I32Eqz,
-			BrIf(1),
-			LocalGet(3),
-			I64Const(10),
-			I64DivS,
-			LocalSet(3),
-			LocalGet(2),
-			I32Const(1),
-			I32Add,
-			LocalSet(2),
-			Br(0),
-			End,
-			End,
-			LocalGet(1),
-			If(I64),
-			LocalGet(0),
-			Else,
-			I64Const(0),
-			LocalGet(0),
-			I64Sub,
-			End,
-			LocalSet(3),
-			LocalGet(2),
-			LocalGet(1),
-			I32Add,
-			LocalTee(5),
-			I32Const(WasmLayout.STRING_DATA_OFFSET),
-			I32Add,
-			Call(allocator),
-			LocalSet(4),
-			LocalGet(4),
-			I32Const(WasmBackend.typeId(Bytes)),
-			I32Store(0),
-			LocalGet(4),
-			LocalGet(5),
-			I32Store(WasmLayout.STRING_LENGTH_OFFSET),
-			LocalGet(4),
-			LocalGet(5),
-			I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
-			LocalGet(2),
-			I32Const(1),
-			I32Sub,
-			LocalGet(1),
-			I32Add,
-			LocalSet(6),
-			Block(null),
-			Loop(null),
-			I32Const(0),
-			LocalGet(3),
-			I64Const(10),
-			I64RemS,
-			I32WrapI64,
-			I32Sub,
-			I32Const(48),
-			I32Add,
-			LocalSet(7),
-			LocalGet(4),
-			I32Const(WasmLayout.STRING_DATA_OFFSET),
-			I32Add,
-			LocalGet(6),
-			I32Add,
-			LocalGet(7),
-			I32Store8(0),
-			LocalGet(3),
-			I64Const(10),
-			I64DivS,
-			LocalSet(3),
-			LocalGet(3),
-			I64Eqz,
-			BrIf(1),
-			LocalGet(6),
-			I32Const(1),
-			I32Sub,
-			LocalSet(6),
-			Br(0),
-			End,
-			End,
-			LocalGet(1),
-			If(null),
-			LocalGet(4),
-			I32Const(WasmLayout.STRING_DATA_OFFSET),
-			I32Add,
-			I32Const(45),
-			I32Store8(0),
-			End,
-			LocalGet(4),
-			Return
-		];
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I64], results: [I32]}, [
-			{type: I32},
-			{type: I32},
-			{type: I64},
-			{type: I32},
-			{type: I32},
-			{type: I32},
-			{type: I32}
-		], body));
+		var builder = new WasmFunctionBuilder(name, {parameters: [I64], results: [I32]}),
+			value = builder.parameter("value", 0),
+			isNegative = builder.local("isNegative", I32),
+			digitCount = builder.local("digitCount", I32),
+			number = builder.local("number", I64),
+			result = builder.local("result", I32),
+			length = builder.local("length", I32),
+			index = builder.local("index", I32),
+			character = builder.local("character", I32);
+		builder.localGet(value);
+		builder.emit(I64Const(0));
+		builder.emit(I64LtS);
+		builder.localSet(isNegative);
+		builder.localGet(isNegative);
+		builder.ifElse(function(builder) {
+			builder.localGet(value);
+		}, function(builder) {
+			builder.emit(I64Const(0));
+			builder.localGet(value);
+			builder.emit(I64Sub);
+		}, I64);
+		builder.localSet(number);
+		builder.i32Const(1);
+		builder.localSet(digitCount);
+		builder.block(function(builder) {
+			builder.loop(function(builder) {
+				builder.localGet(number);
+				builder.emit(I64Const(-10));
+				builder.emit(I64LeS);
+				builder.i32Eqz();
+				builder.emit(BrIf(1));
+				builder.localGet(number);
+				builder.emit(I64Const(10));
+				builder.emit(I64DivS);
+				builder.localSet(number);
+				builder.localGet(digitCount);
+				builder.i32Const(1);
+				builder.i32Add();
+				builder.localSet(digitCount);
+				builder.emit(Br(0));
+			});
+		});
+		builder.localGet(isNegative);
+		builder.ifElse(function(builder) {
+			builder.localGet(value);
+		}, function(builder) {
+			builder.emit(I64Const(0));
+			builder.localGet(value);
+			builder.emit(I64Sub);
+		}, I64);
+		builder.localSet(number);
+		builder.localGet(digitCount);
+		builder.localGet(isNegative);
+		builder.i32Add();
+		builder.localTee(length);
+		builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+		builder.i32Add();
+		builder.call(builder.functionRef(allocator));
+		builder.localSet(result);
+		builder.localGet(result);
+		builder.i32Const(WasmBackend.typeId(Bytes));
+		builder.emit(I32Store(0));
+		builder.localGet(result);
+		builder.localGet(length);
+		builder.emit(I32Store(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localGet(result);
+		builder.localGet(length);
+		builder.emit(I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET));
+		builder.localGet(digitCount);
+		builder.i32Const(1);
+		builder.i32Sub();
+		builder.localGet(isNegative);
+		builder.i32Add();
+		builder.localSet(index);
+		builder.block(function(builder) {
+			builder.loop(function(builder) {
+				builder.i32Const(0);
+				builder.localGet(number);
+				builder.emit(I64Const(10));
+				builder.emit(I64RemS);
+				builder.emit(I32WrapI64);
+				builder.i32Sub();
+				builder.i32Const(48);
+				builder.i32Add();
+				builder.localSet(character);
+				builder.localGet(result);
+				builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+				builder.i32Add();
+				builder.localGet(index);
+				builder.i32Add();
+				builder.localGet(character);
+				builder.emit(I32Store8(0));
+				builder.localGet(number);
+				builder.emit(I64Const(10));
+				builder.emit(I64DivS);
+				builder.localSet(number);
+				builder.localGet(number);
+				builder.emit(I64Eqz);
+				builder.emit(BrIf(1));
+				builder.localGet(index);
+				builder.i32Const(1);
+				builder.i32Sub();
+				builder.localSet(index);
+				builder.emit(Br(0));
+			});
+		});
+		builder.localGet(isNegative);
+		builder.if_(function(builder) {
+			builder.localGet(result);
+			builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+			builder.i32Add();
+			builder.i32Const(45);
+			builder.emit(I32Store8(0));
+		});
+		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
 	}
 
 	static function addDynamicString(module:WasmModule, name:String, allocator:Int, strings:Map<String, Int>, ryuTableBase:Int):Int {
@@ -1554,222 +1590,218 @@ class WasmLinearRuntime {
 			nullString = requiredStringOffset(strings, "null"),
 			trueString = requiredStringOffset(strings, "true"),
 			falseString = requiredStringOffset(strings, "false"),
-			body:Array<WasmInstruction> = [
-				LocalGet(0),
-				I32Eqz,
-				If(null),
-				I32Const(nullString),
-				Return,
-				End,
-				LocalGet(0),
-				I32Load(0),
-				I32Const(WasmBackend.typeId(I64)),
-				I32Eq,
-				If(null),
-				LocalGet(0),
-				I64Load(WasmLayout.DYN_PAYLOAD_OFFSET),
-				Call(int64String),
-				Return,
-				End,
-				LocalGet(0),
-				I32Load(0),
-				I32Const(WasmBackend.typeId(F64)),
-				I32Eq,
-				If(null),
-				LocalGet(0),
-				F64Load(WasmLayout.DYN_PAYLOAD_OFFSET),
-				Call(floatString),
-				Return,
-				End,
-				LocalGet(0),
-				I32Load(0),
-				I32Const(WasmBackend.typeId(Bytes)),
-				I32Eq,
-				If(null),
-				LocalGet(0),
-				Return,
-				End,
-				LocalGet(0),
-				I32Load(0),
-				I32Const(WasmBackend.typeId(I32)),
-				I32Eq,
-				If(null),
-				LocalGet(0),
-				I32Load(WasmLayout.DYN_PAYLOAD_OFFSET),
-				Call(integerString),
-				Return,
-				End,
-				LocalGet(0),
-				I32Load(0),
-				I32Const(WasmBackend.typeId(Bool)),
-				I32Eq,
-				If(null),
-				LocalGet(0),
-				I32Load(WasmLayout.DYN_PAYLOAD_OFFSET),
-				If(I32),
-				I32Const(trueString),
-				Else,
-				I32Const(falseString),
-				End,
-				Return,
-				End,
-				Unreachable
-			];
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [{type: I32}], body));
+			dynamicTypes:Array<IrType> = [I64, F64, Bytes, I32];
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32], results: [I32]}),
+			value = builder.parameter("value", 0),
+			_unused = builder.local("unused", I32);
+		builder.localGet(value);
+		builder.i32Eqz();
+		builder.if_(function(builder) {
+			builder.i32Const(nullString);
+			builder.return_();
+		});
+		for (type in dynamicTypes) {
+			builder.localGet(value);
+			builder.emit(I32Load(0));
+			builder.i32Const(WasmBackend.typeId(type));
+			builder.emit(I32Eq);
+			builder.if_(function(builder) {
+				builder.localGet(value);
+				switch type {
+					case I64:
+						builder.emit(I64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
+						builder.call(builder.functionRef(int64String));
+					case F64:
+						builder.emit(F64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
+						builder.call(builder.functionRef(floatString));
+					case Bytes:
+					default:
+						builder.emit(I32Load(WasmLayout.DYN_PAYLOAD_OFFSET));
+						builder.call(builder.functionRef(integerString));
+				}
+				builder.return_();
+			});
+		}
+		builder.localGet(value);
+		builder.emit(I32Load(0));
+		builder.i32Const(WasmBackend.typeId(Bool));
+		builder.emit(I32Eq);
+		builder.if_(function(builder) {
+			builder.localGet(value);
+			builder.emit(I32Load(WasmLayout.DYN_PAYLOAD_OFFSET));
+			builder.ifElse(function(builder) {
+				builder.i32Const(trueString);
+			}, function(builder) {
+				builder.i32Const(falseString);
+			}, I32);
+			builder.return_();
+		});
+		builder.emit(Unreachable);
+		return module.addFunction(builder.finish());
 	}
 
 	static function addStringEqual(module:WasmModule, name:String):Int {
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]},
-			[{type: I32}, {type: I32}, {type: I32}, {type: I32}], [
-				LocalGet(0),
-				I32Load(WasmLayout.STRING_LENGTH_OFFSET),
-				LocalSet(2),
-				LocalGet(1),
-				I32Load(WasmLayout.STRING_LENGTH_OFFSET),
-				LocalSet(3),
-				I32Const(0),
-				LocalSet(4),
-				I32Const(0),
-				LocalSet(5),
-				LocalGet(2),
-				LocalGet(3),
-				I32Eq,
-				If(null),
-				I32Const(1),
-				LocalSet(5),
-				Block(null),
-				Loop(null),
-				LocalGet(4),
-				LocalGet(2),
-				I32LtS,
-				If(null),
-				LocalGet(0),
-				I32Const(WasmLayout.STRING_DATA_OFFSET),
-				I32Add,
-				LocalGet(4),
-				I32Add,
-				I32Load8U(0),
-				LocalGet(1),
-				I32Const(WasmLayout.STRING_DATA_OFFSET),
-				I32Add,
-				LocalGet(4),
-				I32Add,
-				I32Load8U(0),
-				I32Eq,
-				If(null),
-				LocalGet(4),
-				I32Const(1),
-				I32Add,
-				LocalSet(4),
-				Br(2),
-				Else,
-				I32Const(0),
-				LocalSet(5),
-				Br(3),
-				End,
-				Else,
-				Br(2),
-				End,
-				End,
-				End,
-				Else,
-				I32Const(0),
-				LocalSet(5),
-				End,
-				LocalGet(5),
-				Return
-			]));
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]}),
+			left = builder.parameter("left", 0),
+			right = builder.parameter("right", 1),
+			leftLength = builder.local("leftLength", I32),
+			rightLength = builder.local("rightLength", I32),
+			index = builder.local("index", I32),
+			result = builder.local("result", I32);
+		builder.localGet(left);
+		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localSet(leftLength);
+		builder.localGet(right);
+		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localSet(rightLength);
+		builder.i32Const(0);
+		builder.localSet(index);
+		builder.i32Const(0);
+		builder.localSet(result);
+		builder.localGet(leftLength);
+		builder.localGet(rightLength);
+		builder.emit(I32Eq);
+		builder.ifElse(function(builder) {
+			builder.i32Const(1);
+			builder.localSet(result);
+			builder.block(function(builder) {
+				builder.loop(function(builder) {
+					builder.localGet(index);
+					builder.localGet(leftLength);
+					builder.emit(I32LtS);
+					builder.ifElse(function(builder) {
+						builder.localGet(left);
+						builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+						builder.i32Add();
+						builder.localGet(index);
+						builder.i32Add();
+						builder.emit(I32Load8U(0));
+						builder.localGet(right);
+						builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+						builder.i32Add();
+						builder.localGet(index);
+						builder.i32Add();
+						builder.emit(I32Load8U(0));
+						builder.emit(I32Eq);
+						builder.ifElse(function(builder) {
+							builder.localGet(index);
+							builder.i32Const(1);
+							builder.i32Add();
+							builder.localSet(index);
+							builder.emit(Br(2));
+						}, function(builder) {
+							builder.i32Const(0);
+							builder.localSet(result);
+							builder.emit(Br(3));
+						});
+					}, function(builder) builder.emit(Br(2)));
+				});
+			});
+		}, function(builder) {
+			builder.i32Const(0);
+			builder.localSet(result);
+		});
+		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
 	}
 
 	static function addStringCompareFull(module:WasmModule, name:String):Int {
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]}, [for (_ in 0...7) {type: I32}], [
-			LocalGet(0),
-			LocalGet(1),
-			I32Eq,
-			If(null),
-			I32Const(0),
-			Return,
-			End,
-			LocalGet(0),
-			I32Eqz,
-			If(null),
-			I32Const(-1),
-			Return,
-			End,
-			LocalGet(1),
-			I32Eqz,
-			If(null),
-			I32Const(1),
-			Return,
-			End,
-			LocalGet(0),
-			I32Load(WasmLayout.STRING_LENGTH_OFFSET),
-			LocalSet(2),
-			LocalGet(1),
-			I32Load(WasmLayout.STRING_LENGTH_OFFSET),
-			LocalSet(3),
-			LocalGet(2),
-			LocalGet(3),
-			I32LtS,
-			If(I32),
-			LocalGet(2),
-			Else,
-			LocalGet(3),
-			End,
-			LocalSet(4),
-			I32Const(0),
-			LocalSet(5),
-			I32Const(0),
-			LocalSet(8),
-			Block(null),
-			Loop(null),
-			LocalGet(5),
-			LocalGet(4),
-			I32LtS,
-			I32Eqz,
-			BrIf(1),
-			LocalGet(0),
-			I32Const(WasmLayout.STRING_DATA_OFFSET),
-			I32Add,
-			LocalGet(5),
-			I32Add,
-			I32Load8U(0),
-			LocalSet(6),
-			LocalGet(1),
-			I32Const(WasmLayout.STRING_DATA_OFFSET),
-			I32Add,
-			LocalGet(5),
-			I32Add,
-			I32Load8U(0),
-			LocalSet(7),
-			LocalGet(6),
-			LocalGet(7),
-			I32Sub,
-			LocalSet(8),
-			LocalGet(8),
-			I32Eqz,
-			I32Eqz,
-			If(null),
-			Br(2),
-			End,
-			LocalGet(5),
-			I32Const(1),
-			I32Add,
-			LocalSet(5),
-			Br(0),
-			End,
-			End,
-			LocalGet(8),
-			I32Eqz,
-			If(null),
-			LocalGet(2),
-			LocalGet(3),
-			I32Sub,
-			LocalSet(8),
-			End,
-			LocalGet(8),
-			Return
-		]));
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]}),
+			left = builder.parameter("left", 0),
+			right = builder.parameter("right", 1),
+			leftLength = builder.local("leftLength", I32),
+			rightLength = builder.local("rightLength", I32),
+			limit = builder.local("limit", I32),
+			index = builder.local("index", I32),
+			leftByte = builder.local("leftByte", I32),
+			rightByte = builder.local("rightByte", I32),
+			result = builder.local("result", I32);
+		builder.localGet(left);
+		builder.localGet(right);
+		builder.emit(I32Eq);
+		builder.if_(function(builder) {
+			builder.i32Const(0);
+			builder.return_();
+		});
+		builder.localGet(left);
+		builder.i32Eqz();
+		builder.if_(function(builder) {
+			builder.i32Const(-1);
+			builder.return_();
+		});
+		builder.localGet(right);
+		builder.i32Eqz();
+		builder.if_(function(builder) {
+			builder.i32Const(1);
+			builder.return_();
+		});
+		builder.localGet(left);
+		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localSet(leftLength);
+		builder.localGet(right);
+		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localSet(rightLength);
+		builder.localGet(leftLength);
+		builder.localGet(rightLength);
+		builder.emit(I32LtS);
+		builder.ifElse(function(builder) {
+			builder.localGet(leftLength);
+		}, function(builder) {
+			builder.localGet(rightLength);
+		}, I32);
+		builder.localSet(limit);
+		builder.i32Const(0);
+		builder.localSet(index);
+		builder.i32Const(0);
+		builder.localSet(result);
+		builder.block(function(builder) {
+			builder.loop(function(builder) {
+				builder.localGet(index);
+				builder.localGet(limit);
+				builder.emit(I32LtS);
+				builder.i32Eqz();
+				builder.emit(BrIf(1));
+				builder.localGet(left);
+				builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+				builder.i32Add();
+				builder.localGet(index);
+				builder.i32Add();
+				builder.emit(I32Load8U(0));
+				builder.localSet(leftByte);
+				builder.localGet(right);
+				builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+				builder.i32Add();
+				builder.localGet(index);
+				builder.i32Add();
+				builder.emit(I32Load8U(0));
+				builder.localSet(rightByte);
+				builder.localGet(leftByte);
+				builder.localGet(rightByte);
+				builder.i32Sub();
+				builder.localSet(result);
+				builder.localGet(result);
+				builder.i32Eqz();
+				builder.i32Eqz();
+				builder.if_(function(builder) builder.emit(Br(2)));
+				builder.localGet(index);
+				builder.i32Const(1);
+				builder.i32Add();
+				builder.localSet(index);
+				builder.emit(Br(0));
+			});
+		});
+		builder.localGet(result);
+		builder.i32Eqz();
+		builder.if_(function(builder) {
+			builder.localGet(leftLength);
+			builder.localGet(rightLength);
+			builder.i32Sub();
+			builder.localSet(result);
+		});
+		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
 	}
 
 	static function addMathIsNaN(module:WasmModule, name:String):Int
@@ -1777,120 +1809,121 @@ class WasmLinearRuntime {
 			[LocalGet(0), LocalGet(0), F64Eq, I32Eqz, Return]));
 
 	static function addDynamicEqual(module:WasmModule, name:String, stringEqual:Int):Int {
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}], [
-			I32Const(0),
-			LocalSet(2),
-			LocalGet(0),
-			LocalGet(1),
-			I32Eq,
-			If(null),
-			LocalGet(0),
-			I32Eqz,
-			If(null),
-			I32Const(1),
-			LocalSet(2),
-			Else,
-			LocalGet(0),
-			I32Load(0),
-			I32Const(WasmBackend.typeId(F64)),
-			I32Eq,
-			If(null),
-			LocalGet(0),
-			F64Load(WasmLayout.DYN_PAYLOAD_OFFSET),
-			LocalGet(1),
-			F64Load(WasmLayout.DYN_PAYLOAD_OFFSET),
-			F64Eq,
-			LocalSet(2),
-			Else,
-			I32Const(1),
-			LocalSet(2),
-			End,
-			End,
-			Else,
-			LocalGet(0),
-			I32Eqz,
-			If(null),
-			Else,
-			LocalGet(1),
-			I32Eqz,
-			If(null),
-			Else,
-			LocalGet(0),
-			I32Load(0),
-			LocalSet(3),
-			LocalGet(1),
-			I32Load(0),
-			LocalSet(4),
-			LocalGet(3),
-			LocalGet(4),
-			I32Eq,
-			If(null),
-			LocalGet(3),
-			I32Const(WasmBackend.typeId(Bytes)),
-			I32Eq,
-			If(null),
-			LocalGet(0),
-			LocalGet(1),
-			Call(stringEqual),
-			LocalSet(2),
-			Else,
-			LocalGet(3),
-			I32Const(WasmBackend.typeId(I32)),
-			I32Eq,
-			If(null),
-			LocalGet(0),
-			I32Load(WasmLayout.DYN_PAYLOAD_OFFSET),
-			LocalGet(1),
-			I32Load(WasmLayout.DYN_PAYLOAD_OFFSET),
-			I32Eq,
-			LocalSet(2),
-			Else,
-			LocalGet(3),
-			I32Const(WasmBackend.typeId(Bool)),
-			I32Eq,
-			If(null),
-			LocalGet(0),
-			I32Load(WasmLayout.DYN_PAYLOAD_OFFSET),
-			LocalGet(1),
-			I32Load(WasmLayout.DYN_PAYLOAD_OFFSET),
-			I32Eq,
-			LocalSet(2),
-			Else,
-			LocalGet(3),
-			I32Const(WasmBackend.typeId(F64)),
-			I32Eq,
-			If(null),
-			LocalGet(0),
-			F64Load(WasmLayout.DYN_PAYLOAD_OFFSET),
-			LocalGet(1),
-			F64Load(WasmLayout.DYN_PAYLOAD_OFFSET),
-			F64Eq,
-			LocalSet(2),
-			Else,
-			LocalGet(3),
-			I32Const(WasmBackend.typeId(I64)),
-			I32Eq,
-			If(null),
-			LocalGet(0),
-			I64Load(WasmLayout.DYN_PAYLOAD_OFFSET),
-			LocalGet(1),
-			I64Load(WasmLayout.DYN_PAYLOAD_OFFSET),
-			I64Eq,
-			LocalSet(2),
-			Else,
-			End,
-			End,
-			End,
-			End,
-			End,
-			Else,
-			End,
-			End,
-			End,
-			End,
-			LocalGet(2),
-			Return
-		]));
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]}),
+			left = builder.parameter("left", 0),
+			right = builder.parameter("right", 1),
+			result = builder.local("result", I32),
+			leftType = builder.local("leftType", I32),
+			rightType = builder.local("rightType", I32);
+		builder.i32Const(0);
+		builder.localSet(result);
+		builder.localGet(left);
+		builder.localGet(right);
+		builder.emit(I32Eq);
+		builder.ifElse(function(builder) {
+			builder.localGet(left);
+			builder.i32Eqz();
+			builder.ifElse(function(builder) {
+				builder.i32Const(1);
+				builder.localSet(result);
+			}, function(builder) {
+				builder.localGet(left);
+				builder.emit(I32Load(0));
+				builder.i32Const(WasmBackend.typeId(F64));
+				builder.emit(I32Eq);
+				builder.ifElse(function(builder) {
+					builder.localGet(left);
+					builder.emit(F64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
+					builder.localGet(right);
+					builder.emit(F64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
+					builder.emit(F64Eq);
+					builder.localSet(result);
+				}, function(builder) {
+					builder.i32Const(1);
+					builder.localSet(result);
+				});
+			});
+		}, function(builder) {
+			builder.localGet(left);
+			builder.i32Eqz();
+			builder.ifElse(function(_) {}, function(builder) {
+				builder.localGet(right);
+				builder.i32Eqz();
+				builder.ifElse(function(_) {}, function(builder) {
+					builder.localGet(left);
+					builder.emit(I32Load(0));
+					builder.localSet(leftType);
+					builder.localGet(right);
+					builder.emit(I32Load(0));
+					builder.localSet(rightType);
+					builder.localGet(leftType);
+					builder.localGet(rightType);
+					builder.emit(I32Eq);
+					builder.ifElse(function(builder) {
+						builder.localGet(leftType);
+						builder.i32Const(WasmBackend.typeId(Bytes));
+						builder.emit(I32Eq);
+						builder.ifElse(function(builder) {
+							builder.localGet(left);
+							builder.localGet(right);
+							builder.call(builder.functionRef(stringEqual));
+							builder.localSet(result);
+						}, function(builder) {
+							builder.localGet(leftType);
+							builder.i32Const(WasmBackend.typeId(I32));
+							builder.emit(I32Eq);
+							builder.ifElse(function(builder) {
+								builder.localGet(left);
+								builder.emit(I32Load(WasmLayout.DYN_PAYLOAD_OFFSET));
+								builder.localGet(right);
+								builder.emit(I32Load(WasmLayout.DYN_PAYLOAD_OFFSET));
+								builder.emit(I32Eq);
+								builder.localSet(result);
+							}, function(builder) {
+								builder.localGet(leftType);
+								builder.i32Const(WasmBackend.typeId(Bool));
+								builder.emit(I32Eq);
+								builder.ifElse(function(builder) {
+									builder.localGet(left);
+									builder.emit(I32Load(WasmLayout.DYN_PAYLOAD_OFFSET));
+									builder.localGet(right);
+									builder.emit(I32Load(WasmLayout.DYN_PAYLOAD_OFFSET));
+									builder.emit(I32Eq);
+									builder.localSet(result);
+								}, function(builder) {
+									builder.localGet(leftType);
+									builder.i32Const(WasmBackend.typeId(F64));
+									builder.emit(I32Eq);
+									builder.ifElse(function(builder) {
+										builder.localGet(left);
+										builder.emit(F64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
+										builder.localGet(right);
+										builder.emit(F64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
+										builder.emit(F64Eq);
+										builder.localSet(result);
+									}, function(builder) {
+										builder.localGet(leftType);
+										builder.i32Const(WasmBackend.typeId(I64));
+										builder.emit(I32Eq);
+										builder.ifElse(function(builder) {
+											builder.localGet(left);
+											builder.emit(I64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
+											builder.localGet(right);
+											builder.emit(I64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
+											builder.emit(I64Eq);
+											builder.localSet(result);
+										}, function(_) {});
+									});
+								});
+							});
+						});
+					}, function(_) {});
+				});
+			});
+		});
+		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
 	}
 
 	static function requiredStringOffset(strings:Map<String, Int>, value:String):Int {

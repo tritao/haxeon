@@ -26,8 +26,8 @@ class WasmLinearAllocator {
 			allocationCount = context.allocationCount,
 			allocationBytes = context.allocationBytes,
 			largestAllocation = context.largestAllocation;
-		var type:WasmFunctionType = {parameters: [I32], results: [I32]};
-		var builder = new WasmFunctionBuilder("__haxeon_alloc", type),
+		var type:WasmFunctionType = {parameters: [I32], results: [I32]},
+			builder = new WasmFunctionBuilder("__haxeon_alloc", type),
 			index = builder.register(module),
 			requestedSize = builder.parameter("requestedSize", 0),
 			selectedBlock = builder.local("selectedBlock", I32),
@@ -42,280 +42,267 @@ class WasmLinearAllocator {
 			alignedPayloadSize = builder.local("alignedPayloadSize", I32),
 			reusedBlock = builder.local("reusedBlock", I32),
 			heapUsed = builder.local("heapUsed", I32);
-		// The parameter is promoted to a physical block size after alignedPayloadSize
-		// captures the requested payload bytes for diagnostics.
-		var findFreeBlock:Array<WasmInstruction> = [
-			I32Const(0),
-			LocalSet(selectedBlock),
-			I32Const(0),
-			LocalSet(previousFreeBlock),
-			I32Const(0),
-			LocalSet(reusedBlock),
-			GlobalGet(freeHead),
-			LocalSet(freeCursor),
-			Block(null),
-			Loop(null),
-			LocalGet(freeCursor),
-			I32Eqz,
-			If(null),
-			Br(2),
-			Else,
-			LocalGet(freeCursor),
-			I32Load(WasmLayout.GC_BLOCK_SIZE_OFFSET),
-			LocalSet(freeBlockSize),
-			LocalGet(freeCursor),
-			I32Load(WasmLayout.GC_BLOCK_LINK_OFFSET),
-			LocalSet(nextFreeBlock),
-			LocalGet(requestedSize),
-			LocalGet(freeBlockSize),
-			I32LeS,
-			If(null),
-			LocalGet(freeCursor),
-			LocalSet(selectedBlock),
-			LocalGet(freeBlockSize),
-			LocalGet(requestedSize),
-			I32Sub,
-			LocalSet(remainderSize),
-			LocalGet(remainderSize),
-			I32Const(WasmLayout.GC_BLOCK_HEADER_SIZE),
-			I32LtS,
-			If(null),
-			// Consume a tail too small to hold another complete block header.
-			LocalGet(freeBlockSize),
-			LocalSet(blockSize),
-			LocalGet(previousFreeBlock),
-			I32Eqz,
-			If(null),
-			LocalGet(nextFreeBlock),
-			GlobalSet(freeHead),
-			Else,
-			LocalGet(previousFreeBlock),
-			LocalGet(nextFreeBlock),
-			I32Store(WasmLayout.GC_BLOCK_LINK_OFFSET),
-			End,
-			Else,
-			LocalGet(requestedSize),
-			LocalSet(blockSize),
-			LocalGet(freeCursor),
-			LocalGet(requestedSize),
-			I32Add,
-			LocalSet(heapEnd),
-			LocalGet(heapEnd),
-			LocalGet(remainderSize),
-			I32Store(WasmLayout.GC_BLOCK_SIZE_OFFSET),
-			LocalGet(heapEnd),
-			I32Const(WasmLayout.GC_BLOCK_FLAGS_OFFSET),
-			I32Add,
-			I32Const(WasmLayout.GC_BLOCK_MAGIC),
-			I32Store(0),
-			LocalGet(heapEnd),
-			I32Const(WasmLayout.GC_BLOCK_OWNER_OFFSET),
-			I32Add,
-			I32Const(0),
-			I32Store(0),
-			LocalGet(heapEnd),
-			I32Const(WasmLayout.GC_BLOCK_LINK_OFFSET),
-			I32Add,
-			LocalGet(nextFreeBlock),
-			I32Store(0),
-			LocalGet(previousFreeBlock),
-			I32Eqz,
-			If(null),
-			LocalGet(heapEnd),
-			GlobalSet(freeHead),
-			Else,
-			LocalGet(previousFreeBlock),
-			LocalGet(heapEnd),
-			I32Store(WasmLayout.GC_BLOCK_LINK_OFFSET),
-			End,
-			End,
-			I32Const(1),
-			LocalSet(reusedBlock),
-			Br(3),
-			Else,
-			LocalGet(freeCursor),
-			LocalSet(previousFreeBlock),
-			LocalGet(nextFreeBlock),
-			LocalSet(freeCursor),
-			End,
-			End,
-			Br(0),
-			End,
-			End
-		];
-		var replenishBudget:Array<WasmInstruction> = [
-			GlobalGet(heapTop),
-			I32Const(heapStart),
-			I32Sub,
-			LocalSet(heapUsed),
-			LocalGet(heapUsed),
-			I32Const(WasmLayout.GC_MIN_ALLOCATION_BUDGET),
-			I32LtS,
-			If(null),
-			I32Const(WasmLayout.GC_MIN_ALLOCATION_BUDGET),
-			LocalSet(heapUsed),
-			End,
-			LocalGet(heapUsed),
-			LocalGet(requestedSize),
-			I32Sub,
-			GlobalSet(gcBudget)
-		];
-		var body:Array<WasmInstruction> = [
-			LocalGet(requestedSize),
-			I32Const(7),
-			I32Add,
-			I32Const(-8),
-			I32And,
-			LocalSet(alignedPayloadSize)
-		];
-		if (allocationCount >= 0 && allocationBytes >= 0)
-			body = body.concat([
-				GlobalGet(allocationCount),
-				I32Const(1),
-				I32Add,
-				GlobalSet(allocationCount),
-				GlobalGet(allocationBytes),
-				LocalGet(alignedPayloadSize),
-				I32Add,
-				GlobalSet(allocationBytes)
-			]);
-		if (largestAllocation >= 0)
-			body = body.concat([
-				GlobalGet(largestAllocation),
-				LocalGet(alignedPayloadSize),
-				I32LtS,
-				If(null),
-				LocalGet(alignedPayloadSize),
-				GlobalSet(largestAllocation),
-				End
-			]);
-		body = body.concat([
-			LocalGet(alignedPayloadSize),
-			I32Const(WasmLayout.GC_BLOCK_HEADER_SIZE),
-			I32Add,
-			LocalSet(requestedSize),
-			I32Const(0),
-			LocalSet(collectionAttempted)
-		]);
-		if (gcStress) {
-			body = body.concat([Call(collector), I32Const(1), LocalSet(collectionAttempted)]);
-		} else {
-			body = body.concat([
-				GlobalGet(gcBudget),
-				LocalGet(requestedSize),
-				I32LtS,
-				If(null),
-				Call(collector),
-				I32Const(1),
-				LocalSet(collectionAttempted)
-			]);
-			body = body.concat(replenishBudget);
-			body = body.concat([
-				Else,
-				GlobalGet(gcBudget),
-				LocalGet(requestedSize),
-				I32Sub,
-				GlobalSet(gcBudget),
-				End
-			]);
+
+		function replenishBudget(builder:WasmFunctionBuilder):Void {
+			builder.globalGet(builder.global(heapTop));
+			builder.i32Const(heapStart);
+			builder.i32Sub();
+			builder.localSet(heapUsed);
+			builder.localGet(heapUsed);
+			builder.i32Const(WasmLayout.GC_MIN_ALLOCATION_BUDGET);
+			builder.emit(I32LtS);
+			builder.if_(function(builder) {
+				builder.i32Const(WasmLayout.GC_MIN_ALLOCATION_BUDGET);
+				builder.localSet(heapUsed);
+			});
+			builder.localGet(heapUsed);
+			builder.localGet(requestedSize);
+			builder.i32Sub();
+			builder.globalSet(builder.global(gcBudget));
 		}
-		body = body.concat(findFreeBlock);
-		body = body.concat([
-			LocalGet(selectedBlock),
-			I32Eqz,
-			If(null),
-			GlobalGet(heapTop),
-			LocalGet(requestedSize),
-			I32Add,
-			LocalSet(heapEnd),
-			MemorySize,
-			I32Const(65536),
-			I32Mul,
-			LocalGet(heapEnd),
-			I32LtS,
-			If(null),
-			LocalGet(collectionAttempted),
-			I32Eqz,
-			If(null),
-			// Collection on pressure is mandatory even before the budget expires.
-			Call(collector),
-			I32Const(1),
-			LocalSet(collectionAttempted)
-		]);
-		if (!gcStress)
-			body = body.concat(replenishBudget);
-		body = body.concat(findFreeBlock);
-		body = body.concat([End, End, End]);
-		body = body.concat([
-			LocalGet(selectedBlock),
-			I32Eqz,
-			If(null),
-			GlobalGet(heapTop),
-			LocalSet(selectedBlock),
-			LocalGet(requestedSize),
-			LocalSet(blockSize),
-			LocalGet(selectedBlock),
-			LocalGet(requestedSize),
-			I32Add,
-			LocalSet(heapEnd),
-			MemorySize,
-			I32Const(65536),
-			I32Mul,
-			LocalGet(heapEnd),
-			I32LtS,
-			If(null),
-			LocalGet(heapEnd),
-			I32Const(65535),
-			I32Add,
-			I32Const(65536),
-			I32DivS,
-			MemorySize,
-			I32Sub,
-			MemoryGrow,
-			I32Const(-1),
-			I32Eq,
-			If(null),
-			Unreachable,
-			End,
-			End,
-			LocalGet(heapEnd),
-			GlobalSet(heapTop),
-			End,
-			// Reused blocks must be cleared to preserve Haxe's zero defaults;
-			// newly grown linear-memory pages are already zero-filled.
-			LocalGet(reusedBlock),
-			If(null),
-			LocalGet(selectedBlock),
-			I32Const(0),
-			LocalGet(blockSize),
-			MemoryFill,
-			End,
-			LocalGet(selectedBlock),
-			LocalGet(blockSize),
-			I32Store(WasmLayout.GC_BLOCK_SIZE_OFFSET),
-			LocalGet(selectedBlock),
-			I32Const(WasmLayout.GC_BLOCK_FLAGS_OFFSET),
-			I32Add,
-			I32Const(WasmLayout.GC_BLOCK_MAGIC | WasmLayout.GC_BLOCK_ALLOCATED | WasmLayout.GC_BLOCK_SCAN_REFERENCES),
-			I32Store(0),
-			LocalGet(selectedBlock),
-			I32Const(WasmLayout.GC_BLOCK_OWNER_OFFSET),
-			I32Add,
-			LocalGet(selectedBlock),
-			I32Const(WasmLayout.GC_BLOCK_HEADER_SIZE),
-			I32Add,
-			I32Store(0),
-			LocalGet(selectedBlock),
-			I32Const(WasmLayout.GC_BLOCK_LINK_OFFSET),
-			I32Add,
-			I32Const(0),
-			I32Store(0),
-			LocalGet(selectedBlock),
-			I32Const(WasmLayout.GC_BLOCK_HEADER_SIZE),
-			I32Add,
-			Return
-		]);
-		builder.emitAll(body);
+
+		function findFreeBlock(builder:WasmFunctionBuilder):Void {
+			builder.i32Const(0);
+			builder.localSet(selectedBlock);
+			builder.i32Const(0);
+			builder.localSet(previousFreeBlock);
+			builder.i32Const(0);
+			builder.localSet(reusedBlock);
+			builder.globalGet(builder.global(freeHead));
+			builder.localSet(freeCursor);
+			builder.block(function(builder) {
+				builder.loop(function(builder) {
+					builder.localGet(freeCursor);
+					builder.i32Eqz();
+					builder.ifElse(function(builder) {
+						builder.emit(Br(2));
+					}, function(builder) {
+						builder.localGet(freeCursor);
+						builder.emit(I32Load(WasmLayout.GC_BLOCK_SIZE_OFFSET));
+						builder.localSet(freeBlockSize);
+						builder.localGet(freeCursor);
+						builder.emit(I32Load(WasmLayout.GC_BLOCK_LINK_OFFSET));
+						builder.localSet(nextFreeBlock);
+						builder.localGet(requestedSize);
+						builder.localGet(freeBlockSize);
+						builder.emit(I32LeS);
+						builder.ifElse(function(builder) {
+							builder.localGet(freeCursor);
+							builder.localSet(selectedBlock);
+							builder.localGet(freeBlockSize);
+							builder.localGet(requestedSize);
+							builder.i32Sub();
+							builder.localSet(remainderSize);
+							builder.localGet(remainderSize);
+							builder.i32Const(WasmLayout.GC_BLOCK_HEADER_SIZE);
+							builder.emit(I32LtS);
+							builder.ifElse(function(builder) {
+								builder.localGet(freeBlockSize);
+								builder.localSet(blockSize);
+								builder.localGet(previousFreeBlock);
+								builder.i32Eqz();
+								builder.ifElse(function(builder) {
+									builder.localGet(nextFreeBlock);
+									builder.globalSet(builder.global(freeHead));
+								}, function(builder) {
+									builder.localGet(previousFreeBlock);
+									builder.localGet(nextFreeBlock);
+									builder.emit(I32Store(WasmLayout.GC_BLOCK_LINK_OFFSET));
+								});
+							}, function(builder) {
+								builder.localGet(requestedSize);
+								builder.localSet(blockSize);
+								builder.localGet(freeCursor);
+								builder.localGet(requestedSize);
+								builder.i32Add();
+								builder.localSet(heapEnd);
+								builder.localGet(heapEnd);
+								builder.localGet(remainderSize);
+								builder.emit(I32Store(WasmLayout.GC_BLOCK_SIZE_OFFSET));
+								builder.localGet(heapEnd);
+								builder.i32Const(WasmLayout.GC_BLOCK_FLAGS_OFFSET);
+								builder.i32Add();
+								builder.i32Const(WasmLayout.GC_BLOCK_MAGIC);
+								builder.emit(I32Store(0));
+								builder.localGet(heapEnd);
+								builder.i32Const(WasmLayout.GC_BLOCK_OWNER_OFFSET);
+								builder.i32Add();
+								builder.i32Const(0);
+								builder.emit(I32Store(0));
+								builder.localGet(heapEnd);
+								builder.i32Const(WasmLayout.GC_BLOCK_LINK_OFFSET);
+								builder.i32Add();
+								builder.localGet(nextFreeBlock);
+								builder.emit(I32Store(0));
+								builder.localGet(previousFreeBlock);
+								builder.i32Eqz();
+								builder.ifElse(function(builder) {
+									builder.localGet(heapEnd);
+									builder.globalSet(builder.global(freeHead));
+								}, function(builder) {
+									builder.localGet(previousFreeBlock);
+									builder.localGet(heapEnd);
+									builder.emit(I32Store(WasmLayout.GC_BLOCK_LINK_OFFSET));
+								});
+							});
+							builder.i32Const(1);
+							builder.localSet(reusedBlock);
+							builder.emit(Br(3));
+						}, function(builder) {
+							builder.localGet(freeCursor);
+							builder.localSet(previousFreeBlock);
+							builder.localGet(nextFreeBlock);
+							builder.localSet(freeCursor);
+						});
+					});
+					builder.emit(Br(0));
+				});
+			});
+		}
+
+		builder.localGet(requestedSize);
+		builder.i32Const(7);
+		builder.i32Add();
+		builder.i32Const(-8);
+		builder.emit(I32And);
+		builder.localSet(alignedPayloadSize);
+		if (allocationCount >= 0 && allocationBytes >= 0) {
+			builder.globalGet(builder.global(allocationCount));
+			builder.i32Const(1);
+			builder.i32Add();
+			builder.globalSet(builder.global(allocationCount));
+			builder.globalGet(builder.global(allocationBytes));
+			builder.localGet(alignedPayloadSize);
+			builder.i32Add();
+			builder.globalSet(builder.global(allocationBytes));
+		}
+		if (largestAllocation >= 0) {
+			builder.globalGet(builder.global(largestAllocation));
+			builder.localGet(alignedPayloadSize);
+			builder.emit(I32LtS);
+			builder.if_(function(builder) {
+				builder.localGet(alignedPayloadSize);
+				builder.globalSet(builder.global(largestAllocation));
+			});
+		}
+		builder.localGet(alignedPayloadSize);
+		builder.i32Const(WasmLayout.GC_BLOCK_HEADER_SIZE);
+		builder.i32Add();
+		builder.localSet(requestedSize);
+		builder.i32Const(0);
+		builder.localSet(collectionAttempted);
+		if (gcStress) {
+			builder.call(builder.functionRef(collector));
+			builder.i32Const(1);
+			builder.localSet(collectionAttempted);
+		} else {
+			builder.globalGet(builder.global(gcBudget));
+			builder.localGet(requestedSize);
+			builder.emit(I32LtS);
+			builder.ifElse(function(builder) {
+				builder.call(builder.functionRef(collector));
+				builder.i32Const(1);
+				builder.localSet(collectionAttempted);
+				replenishBudget(builder);
+			}, function(builder) {
+				builder.globalGet(builder.global(gcBudget));
+				builder.localGet(requestedSize);
+				builder.i32Sub();
+				builder.globalSet(builder.global(gcBudget));
+			});
+		}
+		findFreeBlock(builder);
+		builder.localGet(selectedBlock);
+		builder.i32Eqz();
+		builder.if_(function(builder) {
+			builder.globalGet(builder.global(heapTop));
+			builder.localGet(requestedSize);
+			builder.i32Add();
+			builder.localSet(heapEnd);
+			builder.emit(MemorySize);
+			builder.i32Const(65536);
+			builder.emit(I32Mul);
+			builder.localGet(heapEnd);
+			builder.emit(I32LtS);
+			builder.if_(function(builder) {
+				builder.localGet(collectionAttempted);
+				builder.i32Eqz();
+				builder.if_(function(builder) {
+					// Collection on pressure is mandatory even before the budget expires.
+					builder.call(builder.functionRef(collector));
+					builder.i32Const(1);
+					builder.localSet(collectionAttempted);
+					if (!gcStress)
+						replenishBudget(builder);
+					findFreeBlock(builder);
+				});
+			});
+		});
+		builder.localGet(selectedBlock);
+		builder.i32Eqz();
+		builder.if_(function(builder) {
+			builder.globalGet(builder.global(heapTop));
+			builder.localSet(selectedBlock);
+			builder.localGet(requestedSize);
+			builder.localSet(blockSize);
+			builder.localGet(selectedBlock);
+			builder.localGet(requestedSize);
+			builder.i32Add();
+			builder.localSet(heapEnd);
+			builder.emit(MemorySize);
+			builder.i32Const(65536);
+			builder.emit(I32Mul);
+			builder.localGet(heapEnd);
+			builder.emit(I32LtS);
+			builder.if_(function(builder) {
+				builder.localGet(heapEnd);
+				builder.i32Const(65535);
+				builder.i32Add();
+				builder.i32Const(65536);
+				builder.emit(I32DivS);
+				builder.emit(MemorySize);
+				builder.emit(I32Sub);
+				builder.emit(MemoryGrow);
+				builder.i32Const(-1);
+				builder.emit(I32Eq);
+				builder.if_(function(builder) builder.emit(Unreachable));
+			});
+			builder.localGet(heapEnd);
+			builder.globalSet(builder.global(heapTop));
+		});
+		// Reused blocks must be cleared to preserve Haxe's zero defaults;
+		// newly grown linear-memory pages are already zero-filled.
+		builder.localGet(reusedBlock);
+		builder.if_(function(builder) {
+			builder.localGet(selectedBlock);
+			builder.i32Const(0);
+			builder.localGet(blockSize);
+			builder.emit(MemoryFill);
+		});
+		builder.localGet(selectedBlock);
+		builder.localGet(blockSize);
+		builder.emit(I32Store(WasmLayout.GC_BLOCK_SIZE_OFFSET));
+		builder.localGet(selectedBlock);
+		builder.i32Const(WasmLayout.GC_BLOCK_FLAGS_OFFSET);
+		builder.i32Add();
+		builder.i32Const(WasmLayout.GC_BLOCK_MAGIC | WasmLayout.GC_BLOCK_ALLOCATED | WasmLayout.GC_BLOCK_SCAN_REFERENCES);
+		builder.emit(I32Store(0));
+		builder.localGet(selectedBlock);
+		builder.i32Const(WasmLayout.GC_BLOCK_OWNER_OFFSET);
+		builder.i32Add();
+		builder.localGet(selectedBlock);
+		builder.i32Const(WasmLayout.GC_BLOCK_HEADER_SIZE);
+		builder.i32Add();
+		builder.emit(I32Store(0));
+		builder.localGet(selectedBlock);
+		builder.i32Const(WasmLayout.GC_BLOCK_LINK_OFFSET);
+		builder.i32Add();
+		builder.i32Const(0);
+		builder.emit(I32Store(0));
+		builder.localGet(selectedBlock);
+		builder.i32Const(WasmLayout.GC_BLOCK_HEADER_SIZE);
+		builder.i32Add();
+		builder.return_();
 		module.setFunction(index, builder.finish());
 		return index;
 	}

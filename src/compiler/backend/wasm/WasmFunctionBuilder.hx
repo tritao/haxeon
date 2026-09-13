@@ -125,4 +125,68 @@ class WasmFunctionBuilder {
 
 	public inline function return_():Void
 		emit(Return);
+
+	/** Emit one structured if scope and close it after the callback. */
+	public function if_(body:WasmFunctionBuilder->Void, ?result:Null<WasmValueType>):Void {
+		emit(If(result));
+		body(this);
+		emit(End);
+	}
+
+	/** Emit a structured if/else scope and close it after both callbacks. */
+	public function ifElse(thenBody:WasmFunctionBuilder->Void, elseBody:WasmFunctionBuilder->Void, ?result:Null<WasmValueType>):Void {
+		emit(If(result));
+		thenBody(this);
+		emit(Else);
+		elseBody(this);
+		emit(End);
+	}
+
+	/** Emit one structured block scope and close it after the callback. */
+	public function block(body:WasmFunctionBuilder->Void, ?result:Null<WasmValueType>):Void {
+		emit(Block(result));
+		body(this);
+		emit(End);
+	}
+
+	/** Emit one structured loop scope and close it after the callback. */
+	public function loop(body:WasmFunctionBuilder->Void, ?result:Null<WasmValueType>):Void {
+		emit(Loop(result));
+		body(this);
+		emit(End);
+	}
+
+	/** Emit one structured try scope; the callback emits its catch clauses. */
+	public function try_(body:WasmFunctionBuilder->Void, ?result:Null<WasmValueType>):Void {
+		emit(Try(result));
+		body(this);
+		emit(End);
+	}
+
+	/** Return when the selected i32 local is zero. */
+	public function returnIfZero(local:WasmLocalRef):Void {
+		localGet(local);
+		i32Eqz();
+		if_(function(builder) builder.return_());
+	}
+
+	/** Return when the selected i32 local is not aligned to a power-of-two byte size. */
+	public function returnIfNotAligned(local:WasmLocalRef, alignment:Int):Void {
+		if (alignment <= 0 || (alignment & (alignment - 1)) != 0)
+			throw 'Alignment must be a positive power of two, got $alignment';
+		localGet(local);
+		i32Const(alignment - 1);
+		emit(I32And);
+		i32Eqz();
+		i32Eqz();
+		if_(function(builder) builder.return_());
+	}
+
+	/** Return when the selected i32 local compares less than a constant. */
+	public function returnIfI32LtS(local:WasmLocalRef, value:Int):Void {
+		localGet(local);
+		i32Const(value);
+		emit(I32LtS);
+		if_(function(builder) builder.return_());
+	}
 }
