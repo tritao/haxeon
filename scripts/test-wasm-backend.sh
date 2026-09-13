@@ -93,8 +93,9 @@ const cases = [
   ["out/wasm-backend-array-ops.wasm", 42],
   ["out/wasm-backend-array-mutation.wasm", 42],
   ["out/wasm-backend-string.wasm", 6],
-  ["out/wasm-backend-string-ops.wasm", 42],
+	["out/wasm-backend-string-ops.wasm", 42],
 	["out/wasm-backend-std-string.wasm", 42],
+	["out/wasm-backend-std-string-i64.wasm", 42],
   ["out/wasm-backend-method.wasm", 42],
   ["out/wasm-backend-global.wasm", 42],
   ["out/wasm-backend-float-global.wasm", 42],
@@ -154,6 +155,24 @@ const cases = [
     const value = instance.exports.main();
     if (value !== expected)
       throw new Error(`${relative}: expected ${expected}, got ${value}`);
+  }
+  const int64Module = (await WebAssembly.instantiate(
+    fs.readFileSync(`${root}/out/wasm-backend-std-string-i64.wasm`))).instance;
+  const int64Cases = [
+    [0, 0, "0"],
+    [0, 42, "42"],
+    [-1, -42, "-42"],
+    [0x00200000, 1, "9007199254740993"],
+    [0x7fffffff, -1, "9223372036854775807"],
+    [-2147483648, 0, "-9223372036854775808"]
+  ];
+  const view = new DataView(int64Module.exports.memory.buffer);
+  for (const [high, low, expected] of int64Cases) {
+    const pointer = int64Module.exports.stringifyInt64(high, low) >>> 0;
+    const length = view.getUint32(pointer + 8, true);
+    const actual = new TextDecoder().decode(new Uint8Array(view.buffer, pointer + 16, length));
+    if (actual !== expected)
+      throw new Error(`Std.string(Int64(${high}, ${low})): expected ${expected}, got ${actual}`);
   }
   console.log("PASS: Wasm modules validate and execute");
 })().catch(error => {
