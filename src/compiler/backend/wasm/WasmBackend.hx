@@ -309,6 +309,7 @@ class WasmBackend implements Backend {
 		}
 		addGcCNativeImports(module, functions, program, usedCNatives);
 		addGcMapRuntimeFunctions(module, functions, plan, program, usedNatives);
+		addGcRuntimeNativeFunctions(module, functions, plan, representation, program, usedNatives);
 		addGcMapProjectionFunctions(module, functions, plan, program, reachable);
 		if (requiresScratchMemory) {
 			var scratchAllocator = addGcScratchAllocator(module, scratchTop);
@@ -410,7 +411,7 @@ class WasmBackend implements Backend {
 						case ToDyn(_, _), SafeCast(_, _), ToVirtual(_, _):
 						case Call(_, name, _) if (declaredFunctions.exists(name) || isSupportedGcNative(program, name)):
 						case CNativeCall(_, name, _) if (declaredCNatives.exists(name)):
-						case StaticClosure(_, name) if (declaredFunctions.exists(name)):
+						case StaticClosure(_, name) if (declaredFunctions.exists(name) || isSupportedGcNative(program, name)):
 						case InstanceClosure(_, name, receiver) if (declaredFunctions.exists(name) && isObjectReference(receiver.type)):
 						case CallClosure(_, closure, _) if (isFunctionType(closure.type)):
 						case MethodCall(_, receiver, _, _) if (isObjectReference(receiver.type) || isVirtualReference(receiver.type)):
@@ -448,6 +449,32 @@ class WasmBackend implements Backend {
 			}
 	}
 
+	static function addGcRuntimeNativeFunctions(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, representation:WasmRepresentation,
+			program:IrProgram, used:Map<String, Bool>):Void {
+		for (native in program.natives)
+			if (used.exists(native.name) && native.name == "__string_compare_full") {
+				var functionType = plan.wasmFunctionType(native.arguments, native.result),
+					locals:Array<WasmLocal> = [],
+					nextLocal = native.arguments.length,
+					allocateLocal:WasmValueType->Int = function(type) {
+						var index = nextLocal++;
+						locals.push({type: type});
+						return index;
+					};
+				representation.beginFunction(allocateLocal, null);
+				var arguments = [
+					for (index in 0...native.arguments.length)
+						new IrValue(index, native.name + "_argument_" + index, native.arguments[index])
+				], result = new IrValue(-1, native.name + "_result", native.result), resultLocal = allocateLocal(plan.valueType(native.result)),
+					body = representation.lowerRuntimeCall(native.name, result, arguments, resultLocal, [for (index in 0...arguments.length) index]);
+				if (body == null)
+					throw 'Wasm GC runtime native "${native.name}" has no wrapper implementation';
+				body.push(LocalGet(resultLocal));
+				body.push(Return);
+				functions.set(native.name, module.addFunction(new WasmFunction(native.name, functionType, locals, body)));
+			}
+	}
+
 	static function isSupportedGcRuntimeNative(name:String):Bool {
 		if (mapNativeParts(name) != null)
 			return true;
@@ -464,14 +491,15 @@ class WasmBackend implements Backend {
 				"__array_splice_ref", "__array_remove_i32", "__array_remove_bool", "__array_remove_f64", "__array_remove_bytes", "__array_remove_ref",
 				"__array_index_of_i32", "__array_index_of_bool", "__array_index_of_f64", "__array_index_of_bytes", "__array_index_of_ref",
 				"__array_slice_i32", "__array_slice_bool", "__array_slice_f64", "__array_slice_bytes", "__array_slice_ref", "__array_join_bytes",
-				"__math_ceil", "__std_int_f64", "__std_int_dynamic", "__std_string", "__std_is_of_type", "__exception_matches", "__reflect_is_object",
-				"__dynamic_equal", "__bytes_alloc", "__bytes_of_string", "__bytes_length", "__bytes_get", "__bytes_set", "__bytes_get_i32", "__bytes_set_i32",
-				"getI32", "setI32", "__bytes_view", "__bytes_sub", "__bytes_compare", "__bytes_to_string", "__bytes_get_string", "structSlice",
-				"__bytes_input_new", "__bytes_input_position", "__bytes_input_big_endian", "__bytes_input_set_big_endian", "__bytes_input_read_byte",
-				"__bytes_input_read_i32", "__bytes_input_read_f64", "__bytes_input_read_string", "__bytes_input_read", "__bytes_output_new",
-				"__bytes_output_big_endian", "__bytes_output_set_big_endian", "__bytes_output_write_byte", "__bytes_output_write_i32",
-				"__bytes_output_write_f64", "__bytes_output_write_string", "__bytes_output_write", "__bytes_output_write_range", "__bytes_output_get_bytes",
-				"__string_length", "__string_char_code_at", "__string_concat", "__string_equal", "__string_split": true;
+				"__math_ceil", "Math.mathIsNaN", "__math_is_nan", "__std_int_f64", "__std_int_dynamic", "__std_string", "__std_is_of_type",
+				"__exception_matches", "__reflect_is_object", "__dynamic_equal", "__bytes_alloc", "__bytes_of_string", "__bytes_length", "__bytes_get",
+				"__bytes_set", "__bytes_get_i32", "__bytes_set_i32", "getI32", "setI32", "__bytes_view", "__bytes_sub", "__bytes_compare",
+				"__bytes_to_string", "__bytes_get_string", "structSlice", "__bytes_input_new", "__bytes_input_position", "__bytes_input_big_endian",
+				"__bytes_input_set_big_endian", "__bytes_input_read_byte", "__bytes_input_read_i32", "__bytes_input_read_f64", "__bytes_input_read_string",
+				"__bytes_input_read", "__bytes_output_new", "__bytes_output_big_endian", "__bytes_output_set_big_endian", "__bytes_output_write_byte",
+				"__bytes_output_write_i32", "__bytes_output_write_f64", "__bytes_output_write_string", "__bytes_output_write", "__bytes_output_write_range",
+				"__bytes_output_get_bytes", "__string_length", "__string_char_code_at", "__string_concat", "__string_equal", "__string_compare_full",
+				"__string_split": true;
 			default: false;
 		};
 	}
@@ -687,9 +715,9 @@ class WasmBackend implements Backend {
 		for (native in program.natives)
 			if (used.exists(native.name))
 				switch native.symbol {
-					case "__math_is_nan", "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_fmod", "__math_round",
-						"__math_ceil", "__sys_print", "__sys_args", "__date_now", "__date_get_time", "sys_time", "sys_cpu_time", "sys_thread_cpu_time",
-						"sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit":
+					case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_fmod", "__math_round", "__math_ceil",
+						"__sys_print", "__sys_args", "__date_now", "__date_get_time", "sys_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory",
+						"sys_getpid", "sys_sleep", "sys_get_char", "sys_exit":
 						runtimeImport(module, native);
 					default:
 				}
@@ -897,6 +925,8 @@ class WasmBackend implements Backend {
 							functions.set(native.name, addStringConcat(module, native.name, allocator));
 						case "__string_equal":
 							functions.set(native.name, addStringEqual(module, native.name));
+						case "__string_compare_full":
+							functions.set(native.name, addStringCompareFull(module, native.name));
 						case "__std_int_f64":
 							functions.set(native.name,
 								module.addFunction(new WasmFunction(native.name, {parameters: [F64], results: [I32]}, [],
@@ -1002,9 +1032,10 @@ class WasmBackend implements Backend {
 	/** Lower the stable haxeon_runtime symbol names used by generated HXI and stdlib code. */
 	static function addRuntimeNativeFunction(module:WasmModule, native:compiler.ir.Ir.IrNative, allocator:Int):Null<Int> {
 		return switch native.symbol {
-			case "__math_is_nan", "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_fmod", "__math_round", "__math_ceil",
+			case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_fmod", "__math_round", "__math_ceil",
 				"__bytes_output_write", "__bytes_output_write_range", "__sys_print", "__sys_args", "__date_now", "__date_get_time":
 				runtimeImportIndex(module, native);
+			case "__math_is_nan": addMathIsNaN(module, native.name);
 			case "sys_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit":
 				runtimeImportIndex(module, native);
 			case "__bytes_alloc": addBytesAlloc(module, native.name, allocator);
@@ -2689,6 +2720,100 @@ class WasmBackend implements Backend {
 			Return
 		]));
 	}
+
+	static function addStringCompareFull(module:WasmModule, name:String):Int {
+		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32], results: [I32]}, [for (_ in 0...7) {type: I32}], [
+			LocalGet(0),
+			LocalGet(1),
+			I32Eq,
+			If(null),
+			I32Const(0),
+			Return,
+			End,
+			LocalGet(0),
+			I32Eqz,
+			If(null),
+			I32Const(-1),
+			Return,
+			End,
+			LocalGet(1),
+			I32Eqz,
+			If(null),
+			I32Const(1),
+			Return,
+			End,
+			LocalGet(0),
+			I32Load(WasmLayout.STRING_LENGTH_OFFSET),
+			LocalSet(2),
+			LocalGet(1),
+			I32Load(WasmLayout.STRING_LENGTH_OFFSET),
+			LocalSet(3),
+			LocalGet(2),
+			LocalGet(3),
+			I32LtS,
+			If(I32),
+			LocalGet(2),
+			Else,
+			LocalGet(3),
+			End,
+			LocalSet(4),
+			I32Const(0),
+			LocalSet(5),
+			I32Const(0),
+			LocalSet(8),
+			Block(null),
+			Loop(null),
+			LocalGet(5),
+			LocalGet(4),
+			I32LtS,
+			I32Eqz,
+			BrIf(1),
+			LocalGet(0),
+			I32Const(WasmLayout.STRING_DATA_OFFSET),
+			I32Add,
+			LocalGet(5),
+			I32Add,
+			I32Load8U(0),
+			LocalSet(6),
+			LocalGet(1),
+			I32Const(WasmLayout.STRING_DATA_OFFSET),
+			I32Add,
+			LocalGet(5),
+			I32Add,
+			I32Load8U(0),
+			LocalSet(7),
+			LocalGet(6),
+			LocalGet(7),
+			I32Sub,
+			LocalSet(8),
+			LocalGet(8),
+			I32Eqz,
+			I32Eqz,
+			If(null),
+			Br(2),
+			End,
+			LocalGet(5),
+			I32Const(1),
+			I32Add,
+			LocalSet(5),
+			Br(0),
+			End,
+			End,
+			LocalGet(8),
+			I32Eqz,
+			If(null),
+			LocalGet(2),
+			LocalGet(3),
+			I32Sub,
+			LocalSet(8),
+			End,
+			LocalGet(8),
+			Return
+		]));
+	}
+
+	static function addMathIsNaN(module:WasmModule, name:String):Int
+		return module.addFunction(new WasmFunction(name, {parameters: [F64], results: [I32]}, [], [LocalGet(0), LocalGet(0), F64Eq, I32Eqz, Return]));
 
 	static function addArrayCopy(module:WasmModule, name:String, stride:Int, allocator:Int):Int {
 		return module.addFunction(new WasmFunction(name, {parameters: [I32], results: [I32]}, [for (_ in 0...4) {type: I32}], [

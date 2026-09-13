@@ -946,6 +946,17 @@ class WasmGcRepresentation implements WasmRepresentation {
 
 	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
 			argumentLocals:Array<Int>):Null<Array<WasmInstruction>> {
+		if (name == "Math.mathIsNaN" || name == "__math_is_nan") {
+			if (output.type != Bool || arguments.length != 1 || arguments[0].type != F64 || argumentLocals.length != 1)
+				throw 'Invalid Wasm GC $name signature';
+			return [
+				LocalGet(argumentLocals[0]),
+				LocalGet(argumentLocals[0]),
+				F64Eq,
+				I32Eqz,
+				LocalSet(outputLocal)
+			];
+		}
 		var bytesInput = lowerBytesInputRuntimeCall(name, output, arguments, outputLocal, argumentLocals);
 		if (bytesInput != null)
 			return bytesInput;
@@ -1070,6 +1081,11 @@ class WasmGcRepresentation implements WasmRepresentation {
 			if (output.type != Bool || arguments.length != 2 || argumentLocals.length != 2 || arguments[0].type != Bytes || arguments[1].type != Bytes)
 				throw "Invalid Wasm GC string equality signature";
 			return bytesEqual(outputLocal, argumentLocals[0], argumentLocals[1]);
+		}
+		if (name == "__string_compare_full") {
+			if (output.type != I32 || arguments.length != 2 || argumentLocals.length != 2 || arguments[0].type != Bytes || arguments[1].type != Bytes)
+				throw "Invalid Wasm GC full string comparison signature";
+			return stringCompare(argumentLocals[0], argumentLocals[1], outputLocal);
 		}
 		if (name == "__string_split") {
 			if (!Type.enumEq(output.type, Array(Bytes))
@@ -4026,6 +4042,127 @@ class WasmGcRepresentation implements WasmRepresentation {
 				LocalSet(index),
 				Br(0),
 				End,
+				End,
+				End
+			];
+		return body;
+	}
+
+	function stringCompare(leftLocal:Int, rightLocal:Int, destination:Int):Array<WasmInstruction> {
+		var leftLength = allocateLocal(I32),
+			rightLength = allocateLocal(I32),
+			commonLength = allocateLocal(I32),
+			index = allocateLocal(I32),
+			leftByte = allocateLocal(I32),
+			rightByte = allocateLocal(I32),
+			result = allocateLocal(I32),
+			body:Array<WasmInstruction> = [
+				LocalGet(leftLocal),
+				RefIsNull,
+				If(null),
+				LocalGet(rightLocal),
+				RefIsNull,
+				If(null),
+				I32Const(0),
+				LocalSet(destination),
+				Else,
+				I32Const(-1),
+				LocalSet(destination),
+				End,
+				Else,
+				LocalGet(rightLocal),
+				RefIsNull,
+				If(null),
+				I32Const(1),
+				LocalSet(destination),
+				Else,
+				LocalGet(leftLocal),
+				StructGet(plan.bytesTypeIndex, 2),
+				LocalSet(leftLength),
+				LocalGet(rightLocal),
+				StructGet(plan.bytesTypeIndex, 2),
+				LocalSet(rightLength),
+				LocalGet(leftLength),
+				LocalGet(rightLength),
+				I32LtS,
+				If(I32),
+				LocalGet(leftLength),
+				Else,
+				LocalGet(rightLength),
+				End,
+				LocalSet(commonLength),
+				I32Const(0),
+				LocalSet(index),
+				I32Const(0),
+				LocalSet(result),
+				Block(null),
+				Loop(null),
+				LocalGet(index),
+				LocalGet(commonLength),
+				I32LtS,
+				I32Eqz,
+				BrIf(1),
+				LocalGet(leftLocal),
+				StructGet(plan.bytesTypeIndex, 0),
+				LocalGet(leftLocal),
+				StructGet(plan.bytesTypeIndex, 1),
+				LocalGet(index),
+				I32Add,
+				ArrayGetUnsigned(plan.byteArrayTypeIndex),
+				LocalSet(leftByte),
+				LocalGet(rightLocal),
+				StructGet(plan.bytesTypeIndex, 0),
+				LocalGet(rightLocal),
+				StructGet(plan.bytesTypeIndex, 1),
+				LocalGet(index),
+				I32Add,
+				ArrayGetUnsigned(plan.byteArrayTypeIndex),
+				LocalSet(rightByte),
+				LocalGet(leftByte),
+				LocalGet(rightByte),
+				I32LtS,
+				If(null),
+				I32Const(-1),
+				LocalSet(result),
+				Br(2),
+				End,
+				LocalGet(rightByte),
+				LocalGet(leftByte),
+				I32LtS,
+				If(null),
+				I32Const(1),
+				LocalSet(result),
+				Br(2),
+				End,
+				LocalGet(index),
+				I32Const(1),
+				I32Add,
+				LocalSet(index),
+				Br(0),
+				End,
+				End,
+				LocalGet(result),
+				I32Eqz,
+				If(null),
+				LocalGet(leftLength),
+				LocalGet(rightLength),
+				I32LtS,
+				If(I32),
+				I32Const(-1),
+				Else,
+				LocalGet(rightLength),
+				LocalGet(leftLength),
+				I32LtS,
+				If(I32),
+				I32Const(1),
+				Else,
+				I32Const(0),
+				End,
+				End,
+				LocalSet(result),
+				End,
+				LocalGet(result),
+				LocalSet(destination),
 				End,
 				End
 			];
