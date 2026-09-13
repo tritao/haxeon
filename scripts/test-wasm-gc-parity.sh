@@ -30,7 +30,7 @@ for target in wasm32 wasm-gc; do
 done
 
 shared_cases=(add array-iterator-wasm array-slice-index array-growth-wasm array-copy-concat array-unshift array-insert array-splice array-remove
-	array-object-mutation array-reverse dynamic-equality numeric-promotion function-wrapper try-catch try-nested try-array-bounds)
+	array-object-mutation array-reverse dynamic-equality numeric-promotion function-wrapper std-is-of-type try-catch try-nested try-array-bounds)
 for case_name in "${shared_cases[@]}"; do
 	for target in wasm32 wasm-gc; do
 		"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \

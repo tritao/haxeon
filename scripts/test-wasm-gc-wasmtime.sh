@@ -26,7 +26,7 @@ mkdir -p "$root_dir/out"
 	--target=wasm-gc --output=out/wasm-gc-wasmtime-bytes.wasm --entry=wasm-gc-bytes \
 	--root=tests/programs tests/programs/wasm-gc-bytes.hx
 
-for case_name in add array-iterator-wasm array-slice-index array-growth-wasm array-copy-concat array-unshift array-insert array-splice array-remove array-object-mutation array-reverse dynamic-equality numeric-promotion function-wrapper try-catch try-nested try-array-bounds; do
+for case_name in add array-iterator-wasm array-slice-index array-growth-wasm array-copy-concat array-unshift array-insert array-splice array-remove array-object-mutation array-reverse dynamic-equality numeric-promotion function-wrapper std-is-of-type try-catch try-nested try-array-bounds; do
 	"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 		--target=wasm-gc --output="out/wasm-gc-wasmtime-$case_name.wasm" --entry="$case_name" \
 		--root=tests/programs "tests/programs/$case_name.hx"
@@ -62,6 +62,7 @@ for artifact in \
 	wasm-gc-wasmtime-dynamic-equality \
 	wasm-gc-wasmtime-numeric-promotion \
 	wasm-gc-wasmtime-function-wrapper \
+	wasm-gc-wasmtime-std-is-of-type \
 	wasm-gc-wasmtime-try-catch \
 	wasm-gc-wasmtime-try-nested \
 	wasm-gc-wasmtime-try-array-bounds \

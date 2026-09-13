@@ -135,6 +135,13 @@ class WasmGcTypePlan {
 	public function arrayStorageType(element:IrType):Int
 		return arrayPlan(element).storageTypeIndex;
 
+	/** Returns every concrete array wrapper planned for this program. */
+	public function arrayWrapperTypes():Array<Int> {
+		var keys = [for (key in arrayTypes.keys()) key];
+		keys.sort(Reflect.compare);
+		return [for (key in keys) arrayTypes.get(key).wrapperTypeIndex];
+	}
+
 	public static inline function arrayLengthFieldIndex():Int
 		return 0;
 

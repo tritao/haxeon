@@ -1,8 +1,18 @@
-class Value {
+interface HasValue {
+	function getValue():Int;
+}
+
+class BaseValue {}
+
+class Value extends BaseValue implements HasValue {
 	public function new() {}
 
 	public function getValue():Int
 		return 42;
+}
+
+enum State {
+	Ready;
 }
 
 function stringLength(value:Dynamic):Int {
@@ -25,12 +35,16 @@ function main():Int {
 		objectValue = new Value(),
 		object:Dynamic = objectValue,
 		callable:Dynamic = functionValue,
-		boundMethod:Dynamic = objectValue.getValue;
+		boundMethod:Dynamic = objectValue.getValue,
+		state:Dynamic = State.Ready;
 	return Std.isOfType(text, String)
 		&& !Std.isOfType(text, Int)
 		&& Std.isOfType(number, Int)
 		&& Std.isOfType(values, Array)
 		&& Std.isOfType(object, Value)
+		&& Std.isOfType(object, BaseValue)
+		&& Std.isOfType(object, HasValue)
+		&& Std.isOfType(state, State)
 		&& !Std.isOfType(null, Value)
 		&& stringLength(text) == 5
 		&& stringLength(number) == 0

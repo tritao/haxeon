@@ -426,6 +426,123 @@ class WasmGcRepresentation implements WasmRepresentation {
 		return instructions;
 	}
 
+	function dynamicInt(valueLocal:Int, outputLocal:Int):Array<WasmInstruction> {
+		var instructions:Array<WasmInstruction> = [
+			LocalGet(valueLocal),
+			RefIsNull,
+			If(null),
+			I32Const(0),
+			LocalSet(outputLocal),
+			Else
+		];
+		var primitiveTypes:Array<IrType> = [IrType.I32, IrType.Bool, IrType.F64, IrType.I64];
+		for (type in primitiveTypes) {
+			var box = plan.boxedPrimitiveType(type),
+				unbox:Array<WasmInstruction> = switch type {
+					case I32, Bool: [StructGet(box, 0)];
+					case F64: [StructGet(box, 0), I32TruncF64S];
+					case I64: [StructGet(box, 0), I32WrapI64];
+					default: throw 'Unsupported Wasm GC dynamic Int conversion from $type';
+				};
+			instructions = instructions.concat([
+				LocalGet(valueLocal),
+				RefTest({nullable: false, heap: Type(box)}),
+				If(null),
+				LocalGet(valueLocal),
+				RefCast({nullable: false, heap: Type(box)})
+			]);
+			instructions = instructions.concat(unbox);
+			instructions = instructions.concat([LocalSet(outputLocal), Else]);
+		}
+		instructions.push(Unreachable);
+		for (_ in primitiveTypes)
+			instructions.push(End);
+		instructions.push(End);
+		return instructions;
+	}
+
+	function dynamicTypeTest(valueLocal:Int, typeLocal:Int, outputLocal:Int):Array<WasmInstruction> {
+		var body:Array<WasmInstruction> = [I32Const(0), LocalSet(outputLocal)];
+		appendTypeTest(body, valueLocal, typeLocal, outputLocal, I32, plan.boxedPrimitiveType(I32));
+		appendTypeTest(body, valueLocal, typeLocal, outputLocal, Bool, plan.boxedPrimitiveType(Bool));
+		appendTypeTest(body, valueLocal, typeLocal, outputLocal, F64, plan.boxedPrimitiveType(F64));
+		appendTypeTest(body, valueLocal, typeLocal, outputLocal, I64, plan.boxedPrimitiveType(I64));
+		appendTypeTest(body, valueLocal, typeLocal, outputLocal, Bytes, plan.bytesTypeIndex);
+		for (object in plan.program.objects)
+			appendTypeTest(body, valueLocal, typeLocal, outputLocal, Obj(object.name), plan.objectType(object.name));
+		for (enumDecl in plan.program.enums)
+			appendTypeTest(body, valueLocal, typeLocal, outputLocal, Enum(enumDecl.name), plan.enumType(enumDecl.name));
+		appendArrayTypeTest(body, valueLocal, typeLocal, outputLocal);
+		for (interfaceDecl in plan.program.interfaces)
+			appendInterfaceTypeTest(body, valueLocal, typeLocal, outputLocal, interfaceDecl.name);
+		return body;
+	}
+
+	function appendTypeTest(body:Array<WasmInstruction>, valueLocal:Int, typeLocal:Int, outputLocal:Int, haxeType:IrType, wasmType:Int):Void {
+		body.push(LocalGet(typeLocal));
+		body.push(I32Const(WasmBackend.typeId(haxeType)));
+		body.push(I32Eq);
+		body.push(If(null));
+		body.push(LocalGet(valueLocal));
+		body.push(RefTest({nullable: false, heap: Type(wasmType)}));
+		body.push(LocalSet(outputLocal));
+		body.push(End);
+	}
+
+	function appendArrayTypeTest(body:Array<WasmInstruction>, valueLocal:Int, typeLocal:Int, outputLocal:Int):Void {
+		body.push(LocalGet(typeLocal));
+		body.push(I32Const(WasmBackend.typeId(Array(Dyn))));
+		body.push(I32Eq);
+		body.push(If(null));
+		body.push(I32Const(0));
+		for (arrayType in plan.arrayWrapperTypes()) {
+			body.push(LocalGet(valueLocal));
+			body.push(RefTest({nullable: false, heap: Type(arrayType)}));
+			body.push(I32Or);
+		}
+		body.push(LocalSet(outputLocal));
+		body.push(End);
+	}
+
+	function appendInterfaceTypeTest(body:Array<WasmInstruction>, valueLocal:Int, typeLocal:Int, outputLocal:Int, interfaceName:String):Void {
+		body.push(LocalGet(typeLocal));
+		body.push(I32Const(WasmBackend.typeId(Virtual(interfaceName))));
+		body.push(I32Eq);
+		body.push(If(null));
+		body.push(I32Const(0));
+		for (implementorType in plan.interfaceImplementors(interfaceName)) {
+			body.push(LocalGet(valueLocal));
+			body.push(RefTest({nullable: false, heap: Type(implementorType)}));
+			body.push(I32Or);
+		}
+		body.push(LocalSet(outputLocal));
+		body.push(End);
+	}
+
+	function dynamicIsObject(valueLocal:Int, outputLocal:Int):Array<WasmInstruction> {
+		var body:Array<WasmInstruction> = [LocalGet(valueLocal), RefTest({nullable: false, heap: Eq})];
+		var primitiveTypes:Array<IrType> = [IrType.I32, IrType.Bool, IrType.I64, IrType.F64, IrType.TypeRef];
+		for (type in primitiveTypes)
+			body = body.concat([
+				LocalGet(valueLocal),
+				RefTest({nullable: false, heap: Type(plan.boxedPrimitiveType(type))}),
+				I32Eqz,
+				I32And
+			]);
+		body = body.concat([
+			LocalGet(valueLocal),
+			RefTest({nullable: false, heap: Type(plan.bytesTypeIndex)}),
+			I32Eqz,
+			I32And,
+			LocalGet(valueLocal),
+			RefTest({nullable: false, heap: Type(plan.closureTypeIndex)}),
+			I32Eqz,
+			I32And,
+			LocalSet(outputLocal)
+		]);
+		return body;
+	}
+
 	public function virtualCall(output:IrValue, receiver:IrValue, arguments:Array<IrValue>, targets:Array<{typeName:String, functionIndex:Int}>,
 			receiverLocal:Int, destination:Int, argumentLocals:Array<Int>):Null<Array<WasmInstruction>> {
 		if (targets.length == 0)
@@ -472,6 +589,21 @@ class WasmGcRepresentation implements WasmRepresentation {
 			if (output.type != I32 || arguments.length != 1 || arguments[0].type != F64 || argumentLocals.length != 1)
 				throw "Invalid Wasm GC Std.int(Float) signature";
 			return [LocalGet(argumentLocals[0]), I32TruncF64S, LocalSet(outputLocal)];
+		}
+		if (name == "__std_int_dynamic") {
+			if (output.type != I32 || arguments.length != 1 || arguments[0].type != Dyn || argumentLocals.length != 1)
+				throw "Invalid Wasm GC Std.int(Dynamic) signature";
+			return dynamicInt(argumentLocals[0], outputLocal);
+		}
+		if (name == "__std_is_of_type") {
+			if (output.type != Bool || arguments.length != 2 || arguments[0].type != Dyn || arguments[1].type != TypeRef || argumentLocals.length != 2)
+				throw "Invalid Wasm GC Std.isOfType signature";
+			return dynamicTypeTest(argumentLocals[0], argumentLocals[1], outputLocal);
+		}
+		if (name == "__reflect_is_object") {
+			if (output.type != Bool || arguments.length != 1 || arguments[0].type != Dyn || argumentLocals.length != 1)
+				throw "Invalid Wasm GC Reflect.isObject signature";
+			return dynamicIsObject(argumentLocals[0], outputLocal);
 		}
 		if (name == "__dynamic_equal") {
 			if (output.type != Bool || arguments.length != 2 || argumentLocals.length != 2 || arguments[0].type != Dyn || arguments[1].type != Dyn)
