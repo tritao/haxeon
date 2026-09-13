@@ -206,6 +206,8 @@ class WasmGcTypePlan {
 			case ManagedBytes: Ref(nullableType(managedBytesTypeIndex));
 			case Abstract("realtime_bytes_input"): Ref(nullableType(bytesInputTypeIndex));
 			case Abstract("realtime_bytes_output"): Ref(nullableType(bytesOutputTypeIndex));
+			// Native opaque handles are host pointers crossing the FFI boundary, not GC references.
+			case Abstract("native_pointer"): I32;
 			case Abstract(name) if (mapTypes.exists(name)): Ref(nullableType(mapType(name)));
 			// Abstracts and virtual interfaces retain Haxe's existing dispatch metadata and begin as opaque anyrefs.
 			case Dyn, Abstract(_), Virtual(_): Ref({nullable: true, heap: Any});

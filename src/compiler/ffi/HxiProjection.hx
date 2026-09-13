@@ -13,6 +13,7 @@ import compiler.ir.Ir.IrType;
 import compiler.ffi.HxiModel.HxiPointerOwnership;
 import compiler.ffi.HxiModel.HxiParameter;
 import compiler.ffi.HxiModel.HxiParameterDirection;
+import compiler.ffi.HxiModel.HxiType;
 
 /** Projects bridgeable HXI functions into a synthetic, source-visible module. */
 class HxiProjection {
@@ -303,6 +304,7 @@ class HxiProjection {
 			declarations:Map<String, HxiDeclaration> = [],
 			directed:Map<String, Bool> = [],
 			functionParameters:Map<String, Array<HxiParameter>> = [],
+			functionResultTypes:Map<String, HxiType> = [],
 			aggregateDescriptors:Map<String, String> = [];
 		if (visibleDeclarations != null)
 			for (name => declaration in visibleDeclarations)
@@ -312,9 +314,10 @@ class HxiProjection {
 				case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _) |
 					Callback(name, _, _, _, _):
 					declarations.set(name, declaration);
-				case Function(name, parameters, _, _, _, _, _, _):
+				case Function(name, parameters, result, _, _, _, _, _):
 					directed.set(name, hasOutput(parameters));
 					functionParameters.set(name, parameters);
+					functionResultTypes.set(name, result);
 				case _:
 			}
 		var abi = providedAbi == null ? HxiAbi.forInterface(model, declarations) : providedAbi;
@@ -325,6 +328,7 @@ class HxiProjection {
 				argumentModes:Array<IrCNativeArgumentMode> = [],
 				codes:Array<String> = [],
 				parameters = functionParameters.get(fn.name),
+				abiArguments = fn.arguments,
 				supported = parameters != null && parameters.length == fn.arguments.length;
 			var outputBufferSizes:Map<String, Bool> = [];
 			if (parameters != null)
@@ -347,7 +351,15 @@ class HxiProjection {
 				};
 				arguments.push(irType(value.code, false, nativeAbstract));
 				var mode = switch parameters[index].direction {
-					case In: Value;
+					case In:
+						switch abiArguments[index] {
+							case AggregateValue(_, size, alignment):
+								FixedValue(size, alignment, pointerFreeValue(parameters[index].type, declarations, []));
+							case PointerValue(_, _, _, structure) if (structure != null):
+								var layout = fixedStructureLayout(structure, declarations);
+								layout == null ? Value : FixedInput(layout.size, layout.alignment, pointerFreeOutput(parameters[index].type, declarations));
+							case _: Value;
+						}
 					case InArray(lengthName):
 						if (!isByteArray(parameters[index].type)) Value; else {
 							var lengthIndex = parameterIndex(parameters, lengthName);
@@ -355,14 +367,29 @@ class HxiProjection {
 						}
 					case OutBuffer(lengthName): BytesOutput(parameterIndex(parameters, lengthName));
 					case OutArray(_): Output;
-					case Out: Output;
+					case Out:
+						var info = outputInfo(parameters[index], abi, profile);
+						(info.structure || info.opaquePointer) ? FixedOutput(info.size,
+							info.alignment, info.opaquePointer || pointerFreeOutput(parameters[index].type, declarations)) : Output;
 					case InOut if (outputBufferSizes.exists(parameters[index].name)): BytesSize;
-					case InOut: InputOutput;
+					case InOut:
+						var info = outputInfo(parameters[index], abi, profile);
+						(info.structure || info.opaquePointer) ? FixedInputOutput(info.size,
+							info.alignment, info.opaquePointer || pointerFreeOutput(parameters[index].type, declarations)) : InputOutput;
 				};
 				argumentModes.push(mode);
 				codes.push(abiDescriptor(argument, declarations, abi, aggregateDescriptors));
 			}
-			var returnValue = project(fn.result, true);
+			var abiResult = fn.result,
+				returnValue = project(abiResult, true),
+				fixedResult:Null<compiler.ir.Ir.IrCNativeFixedLayout> = switch abiResult {
+					case AggregateValue(_, size, alignment): {
+							size: size,
+							alignment: alignment,
+							pointerFree: pointerFreeValue(functionResultTypes.get(fn.name), declarations, [])
+						};
+					case _: null;
+				};
 			var managedBytes = fn.resultPolicy.length != null;
 			var ownership:{kind:String, release:Null<String>} = switch fn.resultPolicy.ownership {
 				case Unspecified: {kind: "unspecified", release: null};
@@ -377,11 +404,13 @@ class HxiProjection {
 					signature: callSignature(codes.join(",") + ">" + abiDescriptor(fn.result, declarations, abi, aggregateDescriptors), fn.callConvention),
 					arguments: arguments,
 					argumentModes: argumentModes,
-					result: managedBytes ? ManagedBytes : irType(returnValue.code, true),
+					result: managedBytes || fixedResult != null ? ManagedBytes : irType(returnValue.code, true),
 					pointerOwnership: ownership.kind,
 					pointerRelease: ownership.release,
 					pointerLength: fn.resultPolicy.length,
-					pointerNullable: returnValue.nullable
+					pointerNullable: returnValue.nullable,
+					pointerSize: Std.int(abi.pointerBits / 8),
+					fixedResult: fixedResult
 				});
 		}
 		return result;
@@ -926,6 +955,7 @@ class HxiProjection {
 		haxeType:String,
 		code:Int,
 		size:Int,
+		alignment:Int,
 		structure:Bool,
 		handle:Bool,
 		opaquePointer:Bool,
@@ -941,10 +971,11 @@ class HxiProjection {
 		if (projected == null)
 			throw "HXI output parameter has an unsupported pointee type";
 		return switch classified {
-			case AggregateValue(name, size, _): {
+			case AggregateValue(name, size, alignment): {
 					haxeType: projectedTypeName(name, profile),
 					code: 12,
 					size: size,
+					alignment: alignment,
 					structure: true,
 					handle: false,
 					opaquePointer: false,
@@ -955,6 +986,7 @@ class HxiProjection {
 					haxeType: projected.haxeType,
 					code: projected.code,
 					size: 4,
+					alignment: 4,
 					structure: false,
 					handle: true,
 					opaquePointer: false,
@@ -969,6 +1001,7 @@ class HxiProjection {
 					haxeType: projected.haxeType,
 					code: projected.code,
 					size: size,
+					alignment: size,
 					structure: false,
 					handle: false,
 					opaquePointer: false,
@@ -985,6 +1018,7 @@ class HxiProjection {
 					haxeType: nullable ? 'Null<$typeName>' : typeName,
 					code: 11,
 					size: Std.int(abi.pointerBits / 8),
+					alignment: Std.int(abi.pointerBits / 8),
 					structure: false,
 					handle: false,
 					opaquePointer: true,
@@ -992,6 +1026,43 @@ class HxiProjection {
 					owned: owned
 				};
 			case _: throw "HXI output parameters currently support scalar, fixed-structure, and typed opaque-pointer pointees";
+		};
+	}
+
+	static function pointerFreeOutput(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>):Bool {
+		var pointee = switch type {
+			case Pointer(value): value;
+			case _: return false;
+		};
+		return pointerFreeValue(pointee, declarations, []);
+	}
+
+	static function fixedStructureLayout(name:String, declarations:Map<String, HxiDeclaration>):Null<{size:Int, alignment:Int}> {
+		return switch declarations.get(name) {
+			case Structure(_, size, alignment, _, _): {size: size, alignment: alignment};
+			case Alias(_, Named(alias), _): fixedStructureLayout(alias, declarations);
+			case _: null;
+		};
+	}
+
+	static function pointerFreeValue(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>, visiting:Map<String, Bool>):Bool {
+		return switch type {
+			case Const(element) | Nullable(element): pointerFreeValue(element, declarations, visiting);
+			case Array(element, _): pointerFreeValue(element, declarations, visiting);
+			case Pointer(_): false;
+			case Primitive(name): name != "utf8" && name != "void" && name != "c_void";
+			case Named(name):
+				if (visiting.exists(name)) false; else {
+					visiting.set(name, true);
+					var result = switch declarations.get(name) {
+						case Alias(_, target, _): pointerFreeValue(target, declarations, visiting);
+						case Structure(_, _, _, fields, _): Lambda.foreach(fields, field -> pointerFreeValue(field.type, declarations, visiting));
+						case Handle(_, _, _) | Enumeration(_, _, _, _, _): true;
+						case _: false;
+					};
+					visiting.remove(name);
+					result;
+				}
 		};
 	}
 

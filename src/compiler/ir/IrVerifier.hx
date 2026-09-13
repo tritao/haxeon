@@ -54,6 +54,11 @@ class IrVerifier {
 	static function verifyCNative(native:IrCNative):Void {
 		if (native.argumentModes == null || native.argumentModes.length != native.arguments.length)
 			throw 'C native "${native.name}" has mismatched argument ABI metadata';
+		if (native.pointerSize != null && native.pointerSize != 4 && native.pointerSize != 8)
+			throw 'C native "${native.name}" has invalid pointer-size metadata';
+		if (native.fixedResult != null
+			&& (native.result != ManagedBytes || !validAggregateLayout(native.fixedResult.size, native.fixedResult.alignment)))
+			throw 'C native "${native.name}" has invalid fixed aggregate result metadata';
 		for (index in 0...native.argumentModes.length)
 			switch native.argumentModes[index] {
 				case BytesInput(lengthArgument):
@@ -77,9 +82,15 @@ class IrVerifier {
 				case BytesSize:
 					if (native.arguments[index] != ManagedBytes)
 						throw 'C native "${native.name}" has invalid output-buffer size metadata';
+				case FixedInput(size, alignment, _) | FixedValue(size, alignment, _) | FixedOutput(size, alignment, _) | FixedInputOutput(size, alignment, _):
+					if (native.arguments[index] != ManagedBytes || !validAggregateLayout(size, alignment))
+						throw 'C native "${native.name}" has invalid fixed output layout metadata';
 				case Value | Output | InputOutput:
 			}
 	}
+
+	static function validAggregateLayout(size:Int, alignment:Int):Bool
+		return size > 0 && size <= 0x10000000 && alignment > 0 && alignment <= 0x10000 && (alignment & (alignment - 1)) == 0;
 
 	static function verifyFunction(fn:IrFunction, signatures:Map<String, {arguments:Array<IrType>, result:IrType}>, objects:Map<String, IrObject>,
 			interfaces:Map<String, IrInterface>, enums:Map<String, IrEnum>, globals:Map<String, IrType>):Void {

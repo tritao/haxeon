@@ -1,8 +1,20 @@
 interface GcBytes @target("portable-abi32") @library("gc_bytes") {
+	opaque gc_context;
+	struct gc_fixture_point @layout(16, 16) { x: i32 @offset(0); y: i32 @offset(4); }
+	struct gc_value_point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); }
 	extern fn inspect(data: ptr<const<u8>> @in_array("length"), length: u32) -> i32 @symbol("inspect_bytes");
 	extern fn mutate(data: ptr<u8> @in_array("length"), length: u32) -> i32 @symbol("mutate_bytes");
 	extern fn store(value: ptr<u32> @out, count: ptr<u32> @out) -> void @symbol("store_values");
 	extern fn modify(value: ptr<i32> @inout) -> i32 @symbol("modify_i32");
+	extern fn storePoint(point: ptr<gc_fixture_point> @out) -> void @symbol("store_point");
+	extern fn shiftPoint(point: ptr<gc_fixture_point> @inout) -> void @symbol("shift_point");
+	extern fn readPoint(point: ptr<const<gc_value_point>>) -> i32 @symbol("read_point");
+	extern fn sumPoint(point: gc_value_point) -> i32 @symbol("sum_point");
+	extern fn makePoint(seed: i32) -> gc_value_point @symbol("make_point");
+	extern fn borrowedContext() -> nullable<ptr<gc_context>> @borrowed @symbol("borrowed_context");
+	extern fn inspectContext(value: ptr<gc_context>) -> i32 @symbol("inspect_context");
+	extern fn storeContext(value: ptr<nullable<ptr<gc_context>>> @out @borrowed) -> void @symbol("store_context");
+	extern fn storeNullContext(value: ptr<nullable<ptr<gc_context>>> @out @borrowed) -> void @symbol("store_null_context");
 	extern fn read(seed: i32, data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout) -> i32 @symbol("read_bytes");
 	extern fn fetch() -> ptr<const<u8>> @borrowed @length("fetch_size") @symbol("fetch_bytes");
 	extern fn fetchSize() -> u32 @symbol("fetch_size");

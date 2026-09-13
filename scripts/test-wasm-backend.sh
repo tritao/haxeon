@@ -111,6 +111,9 @@ bash "$root_dir/scripts/test-wasm-gc-invariants.sh"
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm-gc --output=out/wasm-cli-gc-ffi-bytes.wasm --entry=wasm-gc-ffi-bytes \
 	--root=tests/ffi --ffi-interface=tests/ffi/gc_bytes.hxi tests/ffi/wasm-gc-ffi-bytes.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm-gc --output=out/wasm-cli-gc-ffi-short-struct.wasm --entry=wasm-gc-ffi-short-struct \
+	--root=tests/ffi --ffi-interface=tests/ffi/gc_bytes.hxi tests/ffi/wasm-gc-ffi-short-struct.hx
 node - "$root_dir" <<'JS'
 const fs = require("fs");
 const root = process.argv[2];
@@ -179,7 +182,8 @@ const cases = [
 	["out/wasm-gc-strings.wasm", 42],
 	["out/wasm-cli-gc-strings.wasm", 42],
 	["out/wasm-cli-gc-bytes.wasm", 42],
-	["out/wasm-cli-gc-ffi-bytes.wasm", 42]
+	["out/wasm-cli-gc-ffi-bytes.wasm", 42],
+	["out/wasm-cli-gc-ffi-short-struct.wasm", 42]
 ];
 (async () => {
   for (const [relative, expected] of cases) {
@@ -189,6 +193,7 @@ const cases = [
     let moduleInstance = null;
     let ownedBytesReleased = false;
     let byteViewCalls = 0;
+    let shortStructImportCalled = false;
     const imports = {};
     if (relative.endsWith("cnative-import.wasm"))
       imports.fixture = {fixture_add: (left, right) => left + right};
@@ -233,6 +238,52 @@ const cases = [
           view.setInt32(pointer, view.getInt32(pointer, true) + 5, true);
           return 9;
         },
+        store_point: pointer => {
+          if (pointer % 16 !== 0)
+            throw new Error("over-aligned aggregate scratch slot is not sixteen-byte aligned");
+          const view = new DataView(moduleInstance.exports.memory.buffer);
+          if (view.getInt32(pointer, true) !== 0 || view.getInt32(pointer + 4, true) !== 0
+              || view.getUint32(pointer + 8, true) !== 0 || view.getUint32(pointer + 12, true) !== 0)
+            throw new Error("aggregate @out scratch slot was not zero-initialized");
+          view.setInt32(pointer, 17, true);
+          view.setInt32(pointer + 4, 25, true);
+        },
+        shift_point: pointer => {
+          const view = new DataView(moduleInstance.exports.memory.buffer);
+          view.setInt32(pointer, view.getInt32(pointer, true) + 1, true);
+          view.setInt32(pointer + 4, view.getInt32(pointer + 4, true) + 2, true);
+        },
+        read_point: pointer => {
+          if (pointer % 4 !== 0)
+            throw new Error("fixed pointer input scratch slot is not four-byte aligned");
+          const view = new DataView(moduleInstance.exports.memory.buffer);
+          return view.getInt32(pointer, true) + view.getInt32(pointer + 4, true);
+        },
+        sum_point: pointer => {
+          if (pointer % 4 !== 0)
+            throw new Error("by-value aggregate scratch slot is not four-byte aligned");
+          const view = new DataView(moduleInstance.exports.memory.buffer);
+          return view.getInt32(pointer, true) + view.getInt32(pointer + 4, true);
+        },
+        make_point: seed => {
+          const pointer = 1024;
+          const view = new DataView(moduleInstance.exports.memory.buffer);
+          view.setInt32(pointer, seed, true);
+          view.setInt32(pointer + 4, seed + 2, true);
+          view.setUint32(pointer + 8, 0, true);
+          view.setUint32(pointer + 12, 0, true);
+          return pointer;
+        },
+        borrowed_context: () => 0x1234,
+        inspect_context: pointer => pointer === 0x1234 ? 42 : 0,
+        store_context: pointer => {
+          if (pointer % 4 !== 0)
+            throw new Error("opaque pointer output slot is not four-byte aligned");
+          new DataView(moduleInstance.exports.memory.buffer).setUint32(pointer, 0x1234, true);
+        },
+        store_null_context: pointer => {
+          new DataView(moduleInstance.exports.memory.buffer).setUint32(pointer, 0, true);
+        },
         read_bytes: (seed, pointer, sizePointer) => {
           const memory = moduleInstance.exports.memory;
           const view = new DataView(memory.buffer);
@@ -267,6 +318,8 @@ const cases = [
           new Uint8Array(moduleInstance.exports.memory.buffer, pointer, 4).fill(0);
         }
       };
+    if (relative.endsWith("wasm-cli-gc-ffi-short-struct.wasm"))
+      imports.gc_bytes = {shift_point: () => { shortStructImportCalled = true; }};
     if (relative.includes("hxi-retained"))
       imports.retained = {retained_check: pointer => {
         const view = new DataView((memory == null ? moduleInstance.exports.memory : memory).buffer);
@@ -277,9 +330,11 @@ const cases = [
     if (relative.includes("gc-")) {
       const compiled = new WebAssembly.Module(bytes);
       const ffiBytes = relative.endsWith("wasm-cli-gc-ffi-bytes.wasm");
+      const shortStruct = relative.endsWith("wasm-cli-gc-ffi-short-struct.wasm");
       const hasMemory = WebAssembly.Module.exports(compiled).some(entry => entry.name === "memory");
-      if ((!ffiBytes && (WebAssembly.Module.imports(compiled).length !== 0 || hasMemory))
-          || (ffiBytes && (WebAssembly.Module.imports(compiled).length !== 12 || !hasMemory))
+      if ((!ffiBytes && !shortStruct && (WebAssembly.Module.imports(compiled).length !== 0 || hasMemory))
+          || (ffiBytes && (WebAssembly.Module.imports(compiled).length !== 21 || !hasMemory))
+          || (shortStruct && (WebAssembly.Module.imports(compiled).length !== 1 || !hasMemory))
           || WebAssembly.Module.customSections(compiled, "haxeon.gc.roots").length !== 0)
         throw new Error("Wasm GC object module unexpectedly includes linear memory or custom root metadata");
       moduleInstance = new WebAssembly.Instance(compiled, imports);
@@ -289,6 +344,17 @@ const cases = [
     const instance = moduleInstance;
     if (relative.includes("closure") && !(instance.exports.table instanceof WebAssembly.Table))
       throw new Error(`${relative}: stable Wasm function table was not exported`);
+    if (relative.endsWith("wasm-cli-gc-ffi-short-struct.wasm")) {
+      let trapped = false;
+      try {
+        instance.exports.main();
+      } catch (error) {
+        trapped = error instanceof WebAssembly.RuntimeError;
+      }
+      if (!trapped || shortStructImportCalled)
+        throw new Error("wrong-sized fixed-layout structure reached the native import instead of trapping");
+      continue;
+    }
     const value = instance.exports.main();
     if (value !== expected)
       throw new Error(`${relative}: expected ${expected}, got ${value}`);

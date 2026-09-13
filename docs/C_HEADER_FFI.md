@@ -292,6 +292,21 @@ the same closeable handle type as owned pointer results. Scalar and
 fixed-structure outputs keep their existing contracts; unannotated or
 non-opaque pointer slots remain rejected.
 
+The `wasm-gc` target bridges scalar slots and pointer-free fixed-layout
+structure slots through temporary linear-memory storage. The declared size
+and alignment are carried in IR and checked during lowering; a structure value
+with the wrong backing length traps before entering the native import. This
+bridge supports input, output, and in/out structure pointers, plus structure
+arguments and results declared by value. At the Wasm import boundary, a
+structure argument is passed as an `i32` pointer to aligned scratch bytes, and
+a structure result is an `i32` pointer supplied by the host adapter; the
+adapter must use the HXI structure's size, alignment, and field layout. The GC
+backend copies these bytes to or from GC-managed storage. Borrowed opaque
+pointers can be returned, passed to imports, and read from output slots as
+32-bit native handles; HXI interfaces with a 64-bit pointer ABI are rejected
+for this bridge. Owned opaque pointer handles still require host lifetime
+management and are rejected by the GC backend.
+
 A conventional two-call byte buffer uses an explicit paired contract:
 
 ```hxi

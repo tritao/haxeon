@@ -296,7 +296,8 @@ class HxiParserMain {
 			&& pointerOutputSource.indexOf("public var result:Null<OwnedContext>") >= 0
 			&& pointerOutputSource.indexOf("native_pointer_owned_from_slot") >= 0
 			&& pointerOutputNative.signature == "11>0"
-			&& pointerOutputNative.arguments[0] == ManagedBytes,
+			&& pointerOutputNative.arguments[0] == ManagedBytes
+			&& Type.enumEq(pointerOutputNative.argumentModes[0], FixedOutput(8, 8, true)),
 			"opaque pointer output slots should project nullable typed handles over the unchanged C pointer ABI");
 		expectError('interface bad @target("x86_64-linux-gnu") { opaque Context; extern fn create(value: ptr<ptr<Context>> @out) -> void; }',
 			"requires @borrowed or @owned");
@@ -328,6 +329,37 @@ class HxiParserMain {
 			&& Type.enumEq(restoredBufferNative.argumentModes[1], BytesOutput(2))
 			&& restoredBufferNative.argumentModes[2] == BytesSize,
 			"output buffer and size-pointer ABI modes should round-trip through canonical IR");
+		var fixedOutputs = HxiParser.parse("fixed-outputs.hxi",
+			'interface fixed_outputs @target("x86_64-linux-gnu") @library("fixed_outputs") { struct position @layout(16, 16) { x: i32 @offset(0); y: i32 @offset(4); } extern fn write(value: ptr<position> @out) -> void; extern fn update(value: ptr<position> @inout) -> void; }'),
+			fixedOutputNatives = HxiProjection.cNatives(fixedOutputs),
+			fixedOutputProgram = compiler.Frontend.compile("function main():Int return 0;");
+		fixedOutputProgram.cNatives = fixedOutputNatives;
+		var restoredFixedOutputs = CanonicalIrCodec.decode(CanonicalIrCodec.encode(fixedOutputProgram)).cNatives;
+		expect(Type.enumEq(fixedOutputNatives[0].argumentModes[0], FixedOutput(16, 16, true))
+			&& Type.enumEq(fixedOutputNatives[1].argumentModes[0], FixedInputOutput(16, 16, true))
+			&& Type.enumEq(restoredFixedOutputs[0].argumentModes[0], FixedOutput(16, 16, true))
+			&& Type.enumEq(restoredFixedOutputs[1].argumentModes[0], FixedInputOutput(16, 16, true))
+			&& restoredFixedOutputs[0].pointerSize == 8,
+			"fixed-layout HXI output pointers should preserve size and alignment through canonical IR");
+		var pointerFieldOutput = HxiParser.parse("pointer-field-output.hxi",
+			'interface pointer_field_output @target("x86_64-linux-gnu") @library("pointer_field_output") { opaque Context; struct holder @layout(8, 8) { context: ptr<Context> @offset(0) @borrowed; } extern fn read(value: ptr<holder> @out) -> void; }'),
+			pointerFieldMode = HxiProjection.cNatives(pointerFieldOutput)[0].argumentModes[0];
+		expect(Type.enumEq(pointerFieldMode, FixedOutput(8, 8, false)),
+			"fixed-layout output metadata should flag structures with raw pointer fields for backend-specific validation");
+		var fixedCalls = HxiParser.parse("fixed-calls.hxi",
+			'interface fixed_calls @target("portable-abi32") @library("fixed_calls") { struct position @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); } extern fn read_pointer(value: ptr<const<position>>) -> i32; extern fn sum_value(value: position) -> i32; extern fn make_value(seed: i32) -> position; }'),
+			fixedCallNatives = HxiProjection.cNatives(fixedCalls),
+			fixedCallProgram = compiler.Frontend.compile("function main():Int return 0;");
+		fixedCallProgram.cNatives = fixedCallNatives;
+		var restoredFixedCalls = CanonicalIrCodec.decode(CanonicalIrCodec.encode(fixedCallProgram)).cNatives;
+		expect(Type.enumEq(fixedCallNatives[0].argumentModes[0], FixedInput(8, 4, true))
+			&& Type.enumEq(fixedCallNatives[1].argumentModes[0], FixedValue(8, 4, true))
+			&& fixedCallNatives[2].fixedResult != null
+			&& fixedCallNatives[2].fixedResult.size == 8
+			&& fixedCallNatives[2].fixedResult.alignment == 4
+			&& restoredFixedCalls[2].fixedResult != null
+			&& restoredFixedCalls[2].fixedResult.pointerFree,
+			"fixed-layout aggregate inputs and results should retain their ABI metadata through canonical IR");
 		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(data: ptr<u8> @out_buffer("size"), size: ptr<u32> @inout) -> void; }',
 			"must be nullable");
 		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(data: nullable<ptr<u8>> @out_buffer("missing"), size: ptr<u32> @inout) -> void; }',

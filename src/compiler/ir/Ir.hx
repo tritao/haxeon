@@ -133,6 +133,16 @@ enum IrCNativeArgumentMode {
 	BytesSize;
 	Output;
 	InputOutput;
+	FixedInput(size:Int, alignment:Int, pointerFree:Bool);
+	FixedValue(size:Int, alignment:Int, pointerFree:Bool);
+	FixedOutput(size:Int, alignment:Int, pointerFree:Bool);
+	FixedInputOutput(size:Int, alignment:Int, pointerFree:Bool);
+}
+
+typedef IrCNativeFixedLayout = {
+	final size:Int;
+	final alignment:Int;
+	final pointerFree:Bool;
 }
 
 typedef IrCNative = {
@@ -144,6 +154,8 @@ typedef IrCNative = {
 	final pointerRelease:Null<String>;
 	final pointerLength:Null<String>;
 	final pointerNullable:Bool;
+	@:optional final pointerSize:Null<Int>;
+	@:optional final fixedResult:Null<IrCNativeFixedLayout>;
 	final arguments:Array<IrType>;
 	final argumentModes:Array<IrCNativeArgumentMode>;
 	final result:IrType;

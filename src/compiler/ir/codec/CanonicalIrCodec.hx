@@ -21,7 +21,7 @@ import haxe.io.BytesOutput;
 
 /** Stable target-neutral container for the complete verified Haxeon IR. */
 class CanonicalIrCodec {
-	public static inline final VERSION:Int = 6;
+	public static inline final VERSION:Int = 9;
 	static inline final MAGIC = "HIR";
 	static inline final MAX_ITEMS = 0x100000;
 
@@ -103,6 +103,11 @@ class CanonicalIrCodec {
 			writeNullableString(output, native.pointerRelease);
 			writeNullableString(output, native.pointerLength);
 			output.writeByte(native.pointerNullable ? 1 : 0);
+			if (native.pointerSize != null)
+				writeCount(output, native.pointerSize);
+			else
+				writeCount(output, 0);
+			writeFixedLayout(output, native.fixedResult);
 			writeTypes(output, native.arguments);
 			writeCount(output, native.argumentModes.length);
 			for (mode in native.argumentModes)
@@ -124,6 +129,26 @@ class CanonicalIrCodec {
 						writeCount(output, lengthArgument);
 					case BytesSize:
 						output.writeByte(6);
+					case FixedOutput(size, alignment, pointerFree):
+						output.writeByte(7);
+						output.writeInt32(size);
+						output.writeInt32(alignment);
+						output.writeByte(pointerFree ? 1 : 0);
+					case FixedInputOutput(size, alignment, pointerFree):
+						output.writeByte(8);
+						output.writeInt32(size);
+						output.writeInt32(alignment);
+						output.writeByte(pointerFree ? 1 : 0);
+					case FixedInput(size, alignment, pointerFree):
+						output.writeByte(9);
+						output.writeInt32(size);
+						output.writeInt32(alignment);
+						output.writeByte(pointerFree ? 1 : 0);
+					case FixedValue(size, alignment, pointerFree):
+						output.writeByte(10);
+						output.writeInt32(size);
+						output.writeInt32(alignment);
+						output.writeByte(pointerFree ? 1 : 0);
 				}
 			IrTypeCodec.writeType(output, native.result, 0);
 		}
@@ -140,6 +165,8 @@ class CanonicalIrCodec {
 				pointerRelease = readNullableString(input, limit),
 				pointerLength = readNullableString(input, limit),
 				pointerNullable = input.readByte(),
+				pointerSize = version >= 8 ? readCount(input) : 0,
+				fixedResult = version >= 9 ? readFixedLayout(input) : null,
 				arguments = readTypes(input, limit),
 				argumentModes:Array<IrCNativeArgumentMode> = [];
 			if (pointerNullable != 0 && pointerNullable != 1)
@@ -157,6 +184,10 @@ class CanonicalIrCodec {
 						case 4: InputOutput;
 						case 5: BytesInputOutput(readCount(input));
 						case 6 if (version >= 6): BytesSize;
+						case 7 if (version >= 7): FixedOutput(input.readInt32(), input.readInt32(), readByteBool(input));
+						case 8 if (version >= 7): FixedInputOutput(input.readInt32(), input.readInt32(), readByteBool(input));
+						case 9 if (version >= 9): FixedInput(input.readInt32(), input.readInt32(), readByteBool(input));
+						case 10 if (version >= 9): FixedValue(input.readInt32(), input.readInt32(), readByteBool(input));
 						case _: throw "Invalid canonical IR C native argument mode";
 					});
 			} else {
@@ -172,6 +203,8 @@ class CanonicalIrCodec {
 				pointerRelease: pointerRelease,
 				pointerLength: pointerLength,
 				pointerNullable: pointerNullable == 1,
+				pointerSize: pointerSize == 0 ? null : pointerSize,
+				fixedResult: fixedResult,
 				arguments: arguments,
 				argumentModes: argumentModes,
 				result: IrTypeCodec.readType(input, limit, 0)
@@ -343,11 +376,40 @@ class CanonicalIrCodec {
 			IrTypeCodec.writeString(output, value);
 	}
 
+	static function writeFixedLayout(output:BytesOutput, value:Null<compiler.ir.Ir.IrCNativeFixedLayout>):Void {
+		output.writeByte(value == null ? 0 : 1);
+		if (value != null) {
+			output.writeInt32(value.size);
+			output.writeInt32(value.alignment);
+			output.writeByte(value.pointerFree ? 1 : 0);
+		}
+	}
+
+	static function readFixedLayout(input:BytesInput):Null<compiler.ir.Ir.IrCNativeFixedLayout> {
+		return switch input.readByte() {
+			case 0: null;
+			case 1: {
+					size: input.readInt32(),
+					alignment: input.readInt32(),
+					pointerFree: readByteBool(input)
+				};
+			default: throw "Invalid canonical IR fixed layout";
+		};
+	}
+
 	static function readNullableString(input:BytesInput, limit:Int):Null<String> {
 		return switch input.readByte() {
 			case 0: null;
 			case 1: IrTypeCodec.readString(input, limit);
 			default: throw "Invalid nullable canonical IR string";
+		};
+	}
+
+	static function readByteBool(input:BytesInput):Bool {
+		return switch input.readByte() {
+			case 0: false;
+			case 1: true;
+			default: throw "Invalid canonical IR boolean";
 		};
 	}
 

@@ -303,15 +303,14 @@ class WasmBackend implements Backend {
 			requiresLinearMemory = false;
 		for (native in program.cNatives)
 			if (usedCNatives.exists(native.name)) {
-				if (native.result == ManagedBytes && native.pointerLength != null)
+				if ((native.result == ManagedBytes && native.pointerLength != null) || native.fixedResult != null)
 					requiresLinearMemory = true;
 				for (mode in native.argumentModes)
 					switch mode {
-						case BytesInput(_) | BytesInputOutput(_) | BytesOutput(_) | BytesSize:
+						case BytesInput(_) | BytesInputOutput(_) | BytesOutput(_) | BytesSize | Output | InputOutput | FixedInput(_, _, _) |
+							FixedValue(_, _, _) | FixedOutput(_, _, _) | FixedInputOutput(_, _, _):
 							requiresScratchMemory = true;
 						case Value:
-						case Output | InputOutput:
-							requiresScratchMemory = true;
 					}
 			}
 
@@ -392,8 +391,11 @@ class WasmBackend implements Backend {
 			directCNatives = reachableCNatives(program, reachable),
 			usedCNatives = reachableGcCNatives(program, reachable);
 		for (native in program.natives)
-			if (usedNatives.exists(native.name) && !isSupportedGcNative(program, native.name))
+			if (usedNatives.exists(native.name) && !isSupportedGcNative(program, native.name)) {
+				if (native.symbol == "native_pointer_close" || native.symbol == "native_pointer_owned_from_slot")
+					throw 'Wasm GC lowering does not support owned opaque native pointers yet ("${native.name}")';
 				throw 'Wasm GC lowering does not support runtime native "${native.name}" yet';
+			}
 		for (native in program.cNatives)
 			if (usedCNatives.exists(native.name)) {
 				if (directCNatives.exists(native.name) && isGcPointerRelease(program, native))
@@ -523,9 +525,10 @@ class WasmBackend implements Backend {
 				"__bytes_input_set_big_endian", "__bytes_input_read_byte", "__bytes_input_read_i32", "__bytes_input_read_f64", "__bytes_input_read_string",
 				"__bytes_input_read", "__bytes_output_new", "__bytes_output_big_endian", "__bytes_output_set_big_endian", "__bytes_output_write_byte",
 				"__bytes_output_write_i32", "__bytes_output_write_f64", "__bytes_output_write_string", "__bytes_output_write", "__bytes_output_write_range",
-				"__bytes_output_get_bytes", "__string_length", "__string_char_at", "__string_char_code_at", "__string_concat", "__string_equal",
-				"__string_compare_full", "__string_index_of", "__string_index_of_from", "__string_last_index_of", "__string_last_index_of_from",
-				"__string_to_lower_case", "__string_to_upper_case", "__string_split", "__string_substring", "__string_from_char_code": true;
+				"__bytes_output_get_bytes", "structGetPointer", "native_pointer_is_closed", "__string_length", "__string_char_at", "__string_char_code_at",
+				"__string_concat", "__string_equal", "__string_compare_full", "__string_index_of", "__string_index_of_from", "__string_last_index_of",
+				"__string_last_index_of_from", "__string_to_lower_case", "__string_to_upper_case", "__string_split", "__string_substring",
+				"__string_from_char_code": true;
 			default: false;
 		};
 	}
@@ -533,6 +536,16 @@ class WasmBackend implements Backend {
 	static function validateGcCNative(native:IrCNative):Void {
 		if (native.argumentModes.length != native.arguments.length)
 			throw 'Wasm GC C native "${native.name}" has invalid argument ABI metadata';
+		if (native.pointerSize != null && native.pointerSize != 4)
+			throw 'Wasm GC C native "${native.name}" requires a 32-bit HXI pointer ABI for Wasm linear scratch addresses';
+		if (native.fixedResult != null
+			&& (!native.fixedResult.pointerFree
+				|| native.fixedResult.size <= 0
+				|| native.fixedResult.size > 0x10000000
+				|| native.fixedResult.alignment <= 0
+				|| native.fixedResult.alignment > 0x10000
+				|| (native.fixedResult.alignment & (native.fixedResult.alignment - 1)) != 0))
+			throw 'Wasm GC C native "${native.name}" requires a pointer-free fixed aggregate result layout';
 		for (index in 0...native.arguments.length)
 			switch native.argumentModes[index] {
 				case Value:
@@ -559,6 +572,16 @@ class WasmBackend implements Backend {
 				case BytesSize:
 					if (native.arguments[index] != ManagedBytes)
 						throw 'Wasm GC C native "${native.name}" requires a GC byte view for output size pointers';
+				case FixedInput(size, alignment, pointerFree) | FixedValue(size, alignment, pointerFree) | FixedOutput(size, alignment, pointerFree) |
+					FixedInputOutput(size, alignment, pointerFree):
+					if (native.arguments[index] != ManagedBytes
+						|| !pointerFree
+						|| size <= 0
+						|| size > 0x10000000
+						|| alignment <= 0
+						|| alignment > 0x10000
+						|| (alignment & (alignment - 1)) != 0)
+						throw 'Wasm GC C native "${native.name}" requires a managed byte buffer with a valid fixed aggregate layout';
 				case Output | InputOutput:
 					if (native.arguments[index] != ManagedBytes)
 						throw 'Wasm GC C native "${native.name}" requires a managed byte buffer for scalar output pointers';
@@ -567,9 +590,13 @@ class WasmBackend implements Backend {
 			case Void:
 			case I32, Bool, I64, F64:
 				gcCNativeValueType(native.result);
+			case ManagedBytes if (native.fixedResult != null):
 			case ManagedBytes if (native.pointerLength != null):
 				if (native.pointerOwnership != "borrowed" && native.pointerOwnership != "owned")
 					throw 'Wasm GC C native "${native.name}" requires borrowed or owned pointer metadata';
+			case Abstract("native_pointer") if (native.pointerLength == null && native.pointerOwnership == "borrowed"):
+			case Abstract("native_pointer"):
+				throw 'Wasm GC C native "${native.name}" supports borrowed opaque pointer results only; owned pointer lifetime management is not implemented yet';
 			case _:
 				throw 'Wasm GC C native "${native.name}" has unsupported result type ${Std.string(native.result)}';
 		}
@@ -642,6 +669,7 @@ class WasmBackend implements Backend {
 			case I32, Bool: I32;
 			case I64: I64;
 			case F64: F64;
+			case Abstract("native_pointer"): I32;
 			case _: throw 'Wasm GC C ABI supports scalar arguments only, got ${Std.string(type)}';
 		};
 
@@ -655,13 +683,15 @@ class WasmBackend implements Backend {
 			else
 				for (index in 0...native.arguments.length)
 					parameters.push(switch native.argumentModes[index] {
-						case BytesInput(_) | BytesInputOutput(_) | BytesOutput(_) | BytesSize | Output | InputOutput: I32;
+						case BytesInput(_) | BytesInputOutput(_) | BytesOutput(_) | BytesSize | Output | InputOutput | FixedInput(_, _, _) |
+							FixedValue(_, _, _) | FixedOutput(_, _, _) | FixedInputOutput(_, _, _): I32;
 						case Value: gcCNativeValueType(native.arguments[index]);
 					});
 			var type:WasmFunctionType = {
 				parameters: parameters,
 				results: switch native.result {
 					case Void: [];
+					case ManagedBytes if (native.fixedResult != null): [I32];
 					case ManagedBytes if (native.pointerLength != null): [I32];
 					case _: [gcCNativeValueType(native.result)];
 				}
@@ -673,32 +703,36 @@ class WasmBackend implements Backend {
 	}
 
 	static function addGcScratchAllocator(module:WasmModule, scratchTop:Int):Int {
-		// Keep C scalar pointer arguments aligned even after arbitrary byte-slice allocations.
+		// Keep C pointers aligned even after arbitrary byte-slice allocations, including over-aligned structs.
 		var body:Array<WasmInstruction> = [
 			GlobalGet(scratchTop),
-			I32Const(7),
+			LocalGet(1),
+			I32Const(1),
+			I32Sub,
 			I32Add,
-			I32Const(-8),
+			I32Const(0),
+			LocalGet(1),
+			I32Sub,
 			I32And,
-			LocalTee(1),
+			LocalTee(2),
 			LocalGet(0),
 			I32Add,
-			LocalTee(2),
+			LocalTee(3),
 			GlobalSet(scratchTop),
-			LocalGet(2),
+			LocalGet(3),
 			I32Const(65535),
 			I32Add,
 			I32Const(16),
 			I32ShrU,
-			LocalSet(3),
-			MemorySize,
 			LocalSet(4),
+			MemorySize,
+			LocalSet(5),
+			LocalGet(5),
 			LocalGet(4),
-			LocalGet(3),
 			I32LtS,
 			If(null),
-			LocalGet(3),
 			LocalGet(4),
+			LocalGet(5),
 			I32Sub,
 			MemoryGrow,
 			I32Const(-1),
@@ -707,10 +741,10 @@ class WasmBackend implements Backend {
 			Unreachable,
 			End,
 			End,
-			LocalGet(1),
+			LocalGet(2),
 			Return
 		];
-		var type:WasmFunctionType = {parameters: [I32], results: [I32]};
+		var type:WasmFunctionType = {parameters: [I32, I32], results: [I32]};
 		return module.addFunction(new WasmFunction("__haxeon_gc_ffi_scratch_alloc", type, [{type: I32}, {type: I32}, {type: I32}, {type: I32}], body));
 	}
 

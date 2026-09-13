@@ -8,6 +8,30 @@ function main():Int {
 	var stored = GcBytes.store();
 	if (stored.value != 11 || stored.count != 0x12345678)
 		return 0;
+	var point = GcBytes.storePoint();
+	if (point.get_x() != 17 || point.get_y() != 25)
+		return 0;
+	point.set_x(20);
+	point.set_y(30);
+	point = GcBytes.shiftPoint(point);
+	if (point.get_x() != 21 || point.get_y() != 32)
+		return 0;
+	var valuePoint = GcBytes.makePoint(20);
+	if (valuePoint.get_x() != 20
+		|| valuePoint.get_y() != 22
+		|| GcBytes.readPoint(valuePoint) != 42
+		|| GcBytes.sumPoint(valuePoint) != 42)
+		return 0;
+	var context = GcBytes.borrowedContext(),
+		outputContext = GcBytes.storeContext(),
+		nullContext = GcBytes.storeNullContext();
+	if (context == null
+		|| context.isClosed()
+		|| GcBytes.inspectContext(context) != 42
+		|| outputContext == null
+		|| GcBytes.inspectContext(outputContext) != 42
+		|| nullContext != null)
+		return 0;
 	var payload = Bytes.ofString("gc bytes");
 	if (GcBytes.inspect(payload) != 42)
 		return 0;
