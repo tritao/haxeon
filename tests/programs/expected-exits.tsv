@@ -1,5 +1,6 @@
 # program\texpected exit
 add	42
+bytes-view	42
 bytes-codec	42
 bytes-stream-edge	42
 call-many	42

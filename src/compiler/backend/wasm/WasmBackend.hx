@@ -911,8 +911,10 @@ class WasmBackend implements Backend {
 
 	static function addRuntimeFunctions(module:WasmModule, functions:Map<String, Int>, program:IrProgram, allocator:Int, strings:Map<String, Int>,
 			ryuTableBase:Int):Void {
+		var bytesDataPointer = addBytesDataPointer(module);
+		functions.set("__haxeon_bytes_data_pointer", bytesDataPointer);
 		for (native in program.natives) {
-			var runtimeFunction = addRuntimeNativeFunction(module, native, allocator);
+			var runtimeFunction = addRuntimeNativeFunction(module, native, allocator, bytesDataPointer);
 			if (runtimeFunction != null)
 				functions.set(native.name, runtimeFunction);
 			else {
@@ -1036,7 +1038,7 @@ class WasmBackend implements Backend {
 	}
 
 	/** Lower the stable haxeon_runtime symbol names used by generated HXI and stdlib code. */
-	static function addRuntimeNativeFunction(module:WasmModule, native:compiler.ir.Ir.IrNative, allocator:Int):Null<Int> {
+	static function addRuntimeNativeFunction(module:WasmModule, native:compiler.ir.Ir.IrNative, allocator:Int, bytesDataPointer:Int):Null<Int> {
 		return switch native.symbol {
 			case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_fmod", "__math_round", "__math_ceil",
 				"__bytes_output_write", "__bytes_output_write_range", "__sys_print", "__sys_args", "__date_now", "__date_get_time":
@@ -1046,27 +1048,28 @@ class WasmBackend implements Backend {
 				runtimeImportIndex(module, native);
 			case "__bytes_alloc": addBytesAlloc(module, native.name, allocator);
 			case "__bytes_of_string": addBytesFromString(module, native.name, allocator);
-			case "__bytes_view", "__bytes_sub", "structSlice": addBytesSlice(module, native.name, allocator);
+			case "__bytes_view": addBytesView(module, native.name, allocator);
+			case "__bytes_sub", "structSlice": addBytesSlice(module, native.name, allocator, bytesDataPointer);
 			case "__bytes_length": addBytesLength(module, native.name);
-			case "__bytes_compare": addBytesCompare(module, native.name);
-			case "__bytes_get", "getU8": addBytesLoad(module, native.name, I32, I32Load8U(0));
-			case "getI8": addBytesLoad(module, native.name, I32, I32Load8S(0));
-			case "getU16": addBytesLoad(module, native.name, I32, I32Load16U(0));
-			case "getI16": addBytesLoad(module, native.name, I32, I32Load16S(0));
-			case "__bytes_get_i32", "getI32": addBytesLoad(module, native.name, I32, I32Load(0));
-			case "getI64": addBytesLoad(module, native.name, I64, I64Load(0));
-			case "getF32": addBytesLoad(module, native.name, F64, F32Load(0), [F64PromoteF32]);
-			case "getF64": addBytesLoad(module, native.name, F64, F64Load(0));
-			case "__bytes_set", "setI8", "setU8": addBytesStore(module, native.name, I32, I32Store8(0));
-			case "__bytes_set_i32", "setI32": addBytesStore(module, native.name, I32, I32Store(0));
-			case "setI16", "setU16": addBytesStore(module, native.name, I32, I32Store16(0));
-			case "setI64": addBytesStore(module, native.name, I64, I64Store(0));
-			case "setF32": addBytesStore(module, native.name, F64, F32Store(0), [F32DemoteF64]);
-			case "setF64": addBytesStore(module, native.name, F64, F64Store(0));
-			case "__bytes_get_data": addBytesData(module, native.name);
-			case "__bytes_to_string": addBytesIdentity(module, native.name);
-			case "__bytes_get_string": addBytesSlice(module, native.name, allocator);
-			case "__string_from_bytes": addBytesPrefix(module, native.name, allocator);
+			case "__bytes_compare": addBytesCompare(module, native.name, bytesDataPointer);
+			case "__bytes_get", "getU8": addBytesLoad(module, native.name, I32, I32Load8U(0), bytesDataPointer);
+			case "getI8": addBytesLoad(module, native.name, I32, I32Load8S(0), bytesDataPointer);
+			case "getU16": addBytesLoad(module, native.name, I32, I32Load16U(0), bytesDataPointer);
+			case "getI16": addBytesLoad(module, native.name, I32, I32Load16S(0), bytesDataPointer);
+			case "__bytes_get_i32", "getI32": addBytesLoad(module, native.name, I32, I32Load(0), bytesDataPointer);
+			case "getI64": addBytesLoad(module, native.name, I64, I64Load(0), bytesDataPointer);
+			case "getF32": addBytesLoad(module, native.name, F64, F32Load(0), bytesDataPointer, [F64PromoteF32]);
+			case "getF64": addBytesLoad(module, native.name, F64, F64Load(0), bytesDataPointer);
+			case "__bytes_set", "setI8", "setU8": addBytesStore(module, native.name, I32, I32Store8(0), bytesDataPointer);
+			case "__bytes_set_i32", "setI32": addBytesStore(module, native.name, I32, I32Store(0), bytesDataPointer);
+			case "setI16", "setU16": addBytesStore(module, native.name, I32, I32Store16(0), bytesDataPointer);
+			case "setI64": addBytesStore(module, native.name, I64, I64Store(0), bytesDataPointer);
+			case "setF32": addBytesStore(module, native.name, F64, F32Store(0), bytesDataPointer, [F32DemoteF64]);
+			case "setF64": addBytesStore(module, native.name, F64, F64Store(0), bytesDataPointer);
+			case "__bytes_get_data": addBytesData(module, native.name, bytesDataPointer);
+			case "__bytes_to_string": addBytesToString(module, native.name, allocator, bytesDataPointer);
+			case "__bytes_get_string": addBytesSlice(module, native.name, allocator, bytesDataPointer);
+			case "__string_from_bytes": addBytesPrefix(module, native.name, allocator, bytesDataPointer);
 			case "structCopy": addStructCopy(module, native.name);
 			case "structCopyPointer": addStructCopyPointer(module, native.name, allocator);
 			case "structSetBorrowedBytes": addStructSetBorrowedBytes(module, native.name);
@@ -1097,6 +1100,32 @@ class WasmBackend implements Backend {
 				return index;
 		}
 		return null;
+	}
+
+	static function addBytesDataPointer(module:WasmModule):Int {
+		return module.addFunction(new WasmFunction("__haxeon_bytes_data_pointer", {parameters: [I32], results: [I32]}, [{type: I32}], [
+			LocalGet(0),
+			I32Load(WasmLayout.BYTES_VIEW_MARKER_OFFSET),
+			I32Const(WasmLayout.BYTES_VIEW_MAGIC),
+			I32Eq,
+			If(null),
+			LocalGet(0),
+			I32Load(WasmLayout.BYTES_VIEW_OWNER_OFFSET),
+			I32Const(WasmLayout.STRING_DATA_OFFSET),
+			I32Add,
+			LocalGet(0),
+			I32Load(WasmLayout.BYTES_VIEW_DATA_OFFSET),
+			I32Add,
+			LocalSet(1),
+			Else,
+			LocalGet(0),
+			I32Const(WasmLayout.STRING_DATA_OFFSET),
+			I32Add,
+			LocalSet(1),
+			End,
+			LocalGet(1),
+			Return
+		]));
 	}
 
 	static function addBytesAlloc(module:WasmModule, name:String, allocator:Int):Int {
@@ -1157,7 +1186,7 @@ class WasmBackend implements Backend {
 		return module.addFunction(new WasmFunction(name, {parameters: [I32], results: [I32]}, [],
 			[LocalGet(0), I32Load(WasmLayout.STRING_LENGTH_OFFSET), Return]));
 
-	static function addBytesCompare(module:WasmModule, name:String):Int {
+	static function addBytesCompare(module:WasmModule, name:String, bytesDataPointer:Int):Int {
 		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32], results: [I32]},
 			[{type: I32}, {type: I32}, {type: I32}, {type: I32}, {type: I32}, {type: I32}], [
 				LocalGet(0),
@@ -1183,15 +1212,13 @@ class WasmBackend implements Backend {
 				I32Or,
 				BrIf(1),
 				LocalGet(0),
-				I32Const(WasmLayout.STRING_DATA_OFFSET),
-				I32Add,
+				Call(bytesDataPointer),
 				LocalGet(4),
 				I32Add,
 				I32Load8U(0),
 				LocalSet(6),
 				LocalGet(1),
-				I32Const(WasmLayout.STRING_DATA_OFFSET),
-				I32Add,
+				Call(bytesDataPointer),
 				LocalGet(4),
 				I32Add,
 				I32Load8U(0),
@@ -1244,22 +1271,44 @@ class WasmBackend implements Backend {
 			]));
 	}
 
-	static function addBytesData(module:WasmModule, name:String):Int
-		return module.addFunction(new WasmFunction(name, {parameters: [I32], results: [I32]}, [],
-			[LocalGet(0), I32Const(WasmLayout.STRING_DATA_OFFSET), I32Add, Return]));
+	static function addBytesData(module:WasmModule, name:String, bytesDataPointer:Int):Int
+		return module.addFunction(new WasmFunction(name, {parameters: [I32], results: [I32]}, [], [LocalGet(0), Call(bytesDataPointer), Return]));
 
-	static function addBytesIdentity(module:WasmModule, name:String):Int
-		return module.addFunction(new WasmFunction(name, {parameters: [I32], results: [I32]}, [], [LocalGet(0), Return]));
-
-	static function addBytesLoad(module:WasmModule, name:String, result:WasmValueType, instruction:WasmInstruction, ?after:Array<WasmInstruction>):Int {
-		var body:Array<WasmInstruction> = [
+	static function addBytesToString(module:WasmModule, name:String, allocator:Int, bytesDataPointer:Int):Int {
+		return module.addFunction(new WasmFunction(name, {parameters: [I32], results: [I32]}, [{type: I32}], [
 			LocalGet(0),
+			I32Load(WasmLayout.STRING_LENGTH_OFFSET),
 			I32Const(WasmLayout.STRING_DATA_OFFSET),
 			I32Add,
+			Call(allocator),
+			LocalSet(1),
 			LocalGet(1),
+			I32Const(typeId(Bytes)),
+			I32Store(0),
+			LocalGet(1),
+			LocalGet(0),
+			I32Load(WasmLayout.STRING_LENGTH_OFFSET),
+			I32Store(WasmLayout.STRING_LENGTH_OFFSET),
+			LocalGet(1),
+			LocalGet(0),
+			I32Load(WasmLayout.STRING_LENGTH_OFFSET),
+			I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
+			LocalGet(1),
+			I32Const(WasmLayout.STRING_DATA_OFFSET),
 			I32Add,
-			instruction
-		];
+			LocalGet(0),
+			Call(bytesDataPointer),
+			LocalGet(0),
+			I32Load(WasmLayout.STRING_LENGTH_OFFSET),
+			MemoryCopy,
+			LocalGet(1),
+			Return
+		]));
+	}
+
+	static function addBytesLoad(module:WasmModule, name:String, result:WasmValueType, instruction:WasmInstruction, bytesDataPointer:Int,
+			?after:Array<WasmInstruction>):Int {
+		var body:Array<WasmInstruction> = [LocalGet(0), Call(bytesDataPointer), LocalGet(1), I32Add, instruction];
 		if (after != null)
 			for (item in after)
 				body.push(item);
@@ -1267,14 +1316,9 @@ class WasmBackend implements Backend {
 		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32], results: [result]}, [], body));
 	}
 
-	static function addBytesStore(module:WasmModule, name:String, valueType:WasmValueType, instruction:WasmInstruction, ?before:Array<WasmInstruction>):Int {
-		var body:Array<WasmInstruction> = [
-			LocalGet(0),
-			I32Const(WasmLayout.STRING_DATA_OFFSET),
-			I32Add,
-			LocalGet(1),
-			I32Add
-		];
+	static function addBytesStore(module:WasmModule, name:String, valueType:WasmValueType, instruction:WasmInstruction, bytesDataPointer:Int,
+			?before:Array<WasmInstruction>):Int {
+		var body:Array<WasmInstruction> = [LocalGet(0), Call(bytesDataPointer), LocalGet(1), I32Add];
 		body.push(LocalGet(2));
 		if (before != null)
 			for (item in before)
@@ -1284,8 +1328,9 @@ class WasmBackend implements Backend {
 		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32, valueType], results: []}, [], body));
 	}
 
-	static function addBytesSlice(module:WasmModule, name:String, allocator:Int):Int {
-		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32, I32], results: [I32]}, [{type: I32}], [
+	static function addBytesSlice(module:WasmModule, name:String, allocator:Int, bytesDataPointer:Int):Int {
+		var body = bytesRangeCheck(0, 1, 2);
+		body = body.concat([
 			LocalGet(2),
 			I32Const(WasmLayout.STRING_DATA_OFFSET),
 			I32Add,
@@ -1304,18 +1349,99 @@ class WasmBackend implements Backend {
 			I32Const(WasmLayout.STRING_DATA_OFFSET),
 			I32Add,
 			LocalGet(0),
-			I32Const(WasmLayout.STRING_DATA_OFFSET),
-			I32Add,
+			Call(bytesDataPointer),
 			LocalGet(1),
 			I32Add,
 			LocalGet(2),
 			MemoryCopy,
 			LocalGet(3),
 			Return
-		]));
+		]);
+		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32, I32], results: [I32]}, [{type: I32}], body));
 	}
 
-	static function addBytesPrefix(module:WasmModule, name:String, allocator:Int):Int {
+	static function addBytesView(module:WasmModule, name:String, allocator:Int):Int {
+		var body = bytesRangeCheck(0, 1, 2);
+		body = body.concat([
+			LocalGet(0),
+			I32Load(WasmLayout.BYTES_VIEW_MARKER_OFFSET),
+			I32Const(WasmLayout.BYTES_VIEW_MAGIC),
+			I32Eq,
+			If(null),
+			LocalGet(0),
+			I32Load(WasmLayout.BYTES_VIEW_OWNER_OFFSET),
+			LocalSet(3),
+			LocalGet(0),
+			I32Load(WasmLayout.BYTES_VIEW_DATA_OFFSET),
+			LocalGet(1),
+			I32Add,
+			LocalSet(4),
+			Else,
+			LocalGet(0),
+			LocalSet(3),
+			LocalGet(1),
+			LocalSet(4),
+			End,
+			I32Const(WasmLayout.BYTES_VIEW_SIZE),
+			Call(allocator),
+			LocalSet(5),
+			LocalGet(5),
+			I32Const(typeId(Bytes)),
+			I32Store(0),
+			LocalGet(5),
+			I32Const(WasmLayout.BYTES_VIEW_MAGIC),
+			I32Store(WasmLayout.BYTES_VIEW_MARKER_OFFSET),
+			LocalGet(5),
+			LocalGet(2),
+			I32Store(WasmLayout.STRING_LENGTH_OFFSET),
+			LocalGet(5),
+			LocalGet(2),
+			I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
+			LocalGet(5),
+			LocalGet(3),
+			I32Store(WasmLayout.BYTES_VIEW_OWNER_OFFSET),
+			LocalGet(5),
+			LocalGet(4),
+			I32Store(WasmLayout.BYTES_VIEW_DATA_OFFSET),
+			LocalGet(5),
+			Return
+		]);
+		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32, I32], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}], body));
+	}
+
+	static function bytesRangeCheck(bytes:Int, offset:Int, length:Int):Array<WasmInstruction>
+		return [
+			LocalGet(offset),
+			I32Const(0),
+			I32LtS,
+			If(null),
+			Unreachable,
+			End,
+			LocalGet(length),
+			I32Const(0),
+			I32LtS,
+			If(null),
+			Unreachable,
+			End,
+			LocalGet(bytes),
+			I32Load(WasmLayout.STRING_LENGTH_OFFSET),
+			LocalGet(offset),
+			I32LtS,
+			If(null),
+			Unreachable,
+			End,
+			LocalGet(bytes),
+			I32Load(WasmLayout.STRING_LENGTH_OFFSET),
+			LocalGet(offset),
+			I32Sub,
+			LocalGet(length),
+			I32LtS,
+			If(null),
+			Unreachable,
+			End
+		];
+
+	static function addBytesPrefix(module:WasmModule, name:String, allocator:Int, bytesDataPointer:Int):Int {
 		return module.addFunction(new WasmFunction(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}], [
 			LocalGet(1),
 			I32Const(WasmLayout.STRING_DATA_OFFSET),
@@ -1335,8 +1461,7 @@ class WasmBackend implements Backend {
 			I32Const(WasmLayout.STRING_DATA_OFFSET),
 			I32Add,
 			LocalGet(0),
-			I32Const(WasmLayout.STRING_DATA_OFFSET),
-			I32Add,
+			Call(bytesDataPointer),
 			LocalGet(1),
 			MemoryCopy,
 			LocalGet(2),
@@ -4123,11 +4248,22 @@ class WasmBackend implements Backend {
 		body.push(Return);
 		body.push(End);
 
-		// Primitive boxes and byte payloads are leaves. Other known layouts are
-		// traced from their declared reference fields, not by scanning scalars.
-		var leafTypes:Array<IrType> = [Bytes, I32, Bool, I64, F64];
+		// Primitive boxes and inline byte payloads are leaves. A byte view traces
+		// its backing owner; other known layouts use their declared reference fields.
+		var leafTypes:Array<IrType> = [I32, Bool, I64, F64];
 		for (leaf in leafTypes)
 			appendGcTraceCase(body, typeId(leaf), []);
+		appendGcTraceCase(body, typeId(Bytes), [
+			LocalGet(0),
+			I32Load(WasmLayout.BYTES_VIEW_MARKER_OFFSET),
+			I32Const(WasmLayout.BYTES_VIEW_MAGIC),
+			I32Eq,
+			If(null),
+			LocalGet(0),
+			I32Load(WasmLayout.BYTES_VIEW_OWNER_OFFSET),
+			Call(mark),
+			End
+		]);
 		for (object in program.objects) {
 			var references = [];
 			for (field in layout.object(object.name).fields)
@@ -6282,8 +6418,11 @@ class WasmFunctionLower {
 				if (represented != null)
 					emit(body, represented);
 				else {
+					var bytesDataPointer = functions.get("__haxeon_bytes_data_pointer");
+					if (bytesDataPointer == null)
+						throw "Wasm byte data pointer helper is missing";
 					for (argument in arguments)
-						nativeArgument(body, argument, values);
+						nativeArgument(body, argument, values, bytesDataPointer);
 					body.push(Call(importIndex));
 					if (output.type != Void)
 						body.push(LocalSet(requiredLocal(values, output.id)));
@@ -6389,10 +6528,12 @@ class WasmFunctionLower {
 		return true;
 	}
 
-	static function nativeArgument(body:Array<WasmInstruction>, argument:IrValue, values:Map<Int, Int>):Void {
+	static function nativeArgument(body:Array<WasmInstruction>, argument:IrValue, values:Map<Int, Int>, bytesDataPointer:Int):Void {
 		body.push(LocalGet(requiredLocal(values, argument.id)));
 		switch argument.type {
-			case Bytes, ManagedBytes, Abstract("realtime_bytes"):
+			case Bytes:
+				body.push(Call(bytesDataPointer));
+			case ManagedBytes, Abstract("realtime_bytes"):
 				body.push(I32Const(WasmLayout.STRING_DATA_OFFSET));
 				body.push(I32Add);
 			case _:

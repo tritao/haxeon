@@ -10,9 +10,8 @@ if [[ ! -x "$haxe_bin" ]]; then
 	exit 1
 fi
 
-# The full GC Bytes fixture also checks aliasing Bytes.view, which Linear32
-# still copies. Keep that runtime-only case separate and compare shared Bytes
-# ordering semantics here.
+# The broader GC Bytes fixture includes GC-specific bounds behavior. The shared
+# bytes-view fixture checks portable aliasing and copy semantics on both targets.
 cases=(objects arrays enums closures dynamic exceptions strings)
 for case_name in "${cases[@]}"; do
 	source="tests/programs/wasm-gc-$case_name.hx"
@@ -41,7 +40,7 @@ shared_cases=(add expression-lambda switch-expression-block member-range trailin
 	multiple-implements captured-method anonymous-record array-comprehension filtered-array-comprehension range-iteration cast-expression optional-argument-forwarding
 	default-parameter-inference generic-functions generic-abstract bounded-generic generic-class inheritance-class override-method virtual-dispatch array-iterator-wasm array-slice-index array-growth-wasm array-alias-growth array-index-growth array-resize array-expression-mutation array-field-mutation
 	array-copy-concat array-unshift array-insert array-splice array-remove array-object-mutation array-reverse dynamic-equality numeric-promotion function-wrapper std-is-of-type
-	map-basic map-int map-primitive-types map-literal map-object map-anonymous-enum map-for-in map-key-value-for-in map-comprehension map-nullable-get nullable-map-get map-string-equality
+	map-basic map-int map-primitive-types map-literal map-object map-anonymous-enum map-for-in map-key-value-for-in map-comprehension map-nullable-get nullable-map-get map-string-equality bytes-view
 	try-catch try-nested try-array-bounds concise-try try-typed-class try-typed-mismatch try-typed-int try-multiple-catches reflect-compare-sort generic-contextual-callback)
 for case_name in "${shared_cases[@]}"; do
 	for target in wasm32 wasm-gc; do
@@ -50,6 +49,10 @@ for case_name in "${shared_cases[@]}"; do
 			--entry="$case_name" --root=tests/programs "tests/programs/$case_name.hx"
 	done
 done
+
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --wasm-gc-stress --output=out/wasm-parity-wasm32-bytes-view-stress.wasm \
+	--entry=bytes-view --root=tests/programs tests/programs/bytes-view.hx
 
 cases+=(bytes-compare "${shared_cases[@]}")
 
@@ -89,6 +92,10 @@ const expectedResults = { "array-object-mutation": 8, "array-field-mutation": 11
     if (results.wasm32 !== results["wasm-gc"])
       throw new Error(`${name}: Wasm32 returned ${results.wasm32}, Wasm GC returned ${results["wasm-gc"]}`);
   }
+  const stressBytes = fs.readFileSync(path.join(root, "out", "wasm-parity-wasm32-bytes-view-stress.wasm"));
+  const stressInstance = await WebAssembly.instantiate(stressBytes, {});
+  if (stressInstance.instance.exports.main() !== 42)
+    throw new Error("bytes-view (wasm32 stress GC): view failed to retain and alias its source");
   console.log(`PASS: ${cases.length} Haxe fixtures agree across Wasm32 and Wasm GC`);
 })().catch(error => {
   console.error(error);

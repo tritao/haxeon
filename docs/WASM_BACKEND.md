@@ -1,8 +1,8 @@
 # Haxeon WebAssembly backend
 
-The Wasm backend is a target of canonical Haxeon SSA IR. It does not lower from
-HashLink registers and it does not put Wasm locals, linear-memory offsets, or
-table slots into the language IR.
+The Wasm backend lowers canonical Haxeon SSA IR. It does not lower from
+HashLink registers or put Wasm locals, linear-memory offsets, or table slots
+into the language IR.
 
 ```text
 frontend / typer
@@ -16,171 +16,151 @@ canonical Haxeon IR
             |
             +-- CFG analysis / region structuring
             +-- phi edge lowering / value placement
+            +-- linear or GC representation
             +-- target Wasm instruction model
             `-- binary encoder
 ```
 
-## Current target contract
+## Executable targets
 
-The current executable target is `wasm32` with linear memory. Managed values
-are 32-bit references at this layer; scalar `Int`/`Bool` values are `i32` and
-`Float` values are `f64`. `WasmLayout` is the only owner of object, array,
-enum, closure, and string offsets.
+Haxeon currently emits two executable Wasm targets:
 
-Map operations are also implemented by the linear-memory runtime. Maps use a
-fixed header plus pointer-backed entry storage, linear key lookup, capacity
-growth, compact removal, and typed `keys()`/`values()` projections. Primitive
-`get()` results are boxed into the existing dynamic-value layout so nullable
-map reads retain the canonical IR semantics.
+- `wasm32` uses linear memory. Managed references are 32-bit pointers, and
+  `WasmLayout` owns object, array, enum, closure, string, and byte offsets.
+- `wasm-gc` (also spelled `wasmgc`) uses native WebAssembly GC references,
+  structs, and arrays. `WasmGcTypePlan` reserves nominal and recursive type
+  groups before function lowering; it does not use `WasmLayout` for managed
+  objects.
 
-Array-backed `Iterator<T>` creation, `hasNext()`, and `next()` are explicit
-typed IR operations. HashLink adapts them to its existing dynamic native ABI;
-Wasm stores the source array and cursor in a GC-managed iterator record and
-loads each item using its statically known element type. This keeps iteration
-typed on Wasm without per-element dynamic boxing. The cursor observes the
-array's current length on each `hasNext()`, and separate iterators over one
-array maintain independent positions.
+Both targets share canonical IR, CFG lowering, arithmetic, calls, exceptions,
+and the target-independent function and patch metadata. The GC target uses the
+engine's tracing collector for managed references and emits no Haxeon
+mark/sweep collector or shadow-root stack. Its ordinary modules need no linear
+memory. Linear memory can still be added for raw-memory FFI operations.
 
-The backend emits the WebAssembly exception tag/try/catch instructions for
-programs with Haxeon exception edges. Exception-bearing functions currently
-use the explicit CFG dispatcher so handler state and rethrow behavior remain
-correct while structured exception regions mature; ordinary reducible scalar
-CFGs use the structured lowering path, with the dispatcher retained as a
-correctness fallback.
+The GC type plan covers the currently supported object and inheritance,
+enum, array, map, iterator, closure, dynamic-value, string, and byte layouts.
+The supported IR subset is still growing; unsupported operations and native
+signatures fail explicitly during compilation. `scripts/test-wasm-gc-parity.sh`
+compiles shared language fixtures for both targets and checks their results.
 
-The module exports `main` and `memory`. It also carries versioned custom
-sections:
+## Wasm32 linear memory and collector
 
-When the module is embedded into a host-owned memory, the compiler accepts
-`--wasm-import-memory --wasm-memory-contract=<path>`. The JSON contract is
-validated at compile time and copied into the `haxeon.memory.contract` custom
-section. Hosts must compare that section with their own contract before calling
-the guest.
+Wasm32 modules export `main` and `memory` by default. The runtime uses a
+non-moving mark/sweep collector with precise static and shadow-frame roots.
+Each aligned heap block has an inline 16-byte header containing its physical
+size, state and trace flags, payload-owner pointer, and auxiliary link. For
+reference-bearing array or map storage, the link identifies the owner while
+the block is allocated; for free blocks it links the free list. Marking
+resolves a pointer directly to its header. Sweeping walks the heap, merges
+adjacent dead blocks, and rebuilds the free list without an out-of-line
+allocation metadata table.
 
-- `haxeon.gc.roots` contains precise SSA liveness at allocation/call
-  safepoints. Generated functions also maintain typed shadow frames in a
-  reserved linear-memory root area, so the runtime has an actual root chain,
-  not just an offline map. The current collector is a non-moving mark/sweep
-  collector with precise static/shadow-frame roots. Every aligned heap block
-  has an inline 16-byte header containing its physical size, state/trace flags,
-  an exact payload-owner pointer, and an auxiliary link. While a block is
-  allocated, the link identifies the owning array or map for reference-bearing
-  backing stores; while free, it links the free list. Marking resolves a
-  reference directly to that header; sweeping walks the heap linearly and
-  merges adjacent dead/free blocks while rebuilding the free list. This avoids
-  a separate fixed-capacity allocation-metadata table.
-  Shadow frames publish a dense snapshot of the references live at the current
-  safepoint; rooted functions restore their frame chain on tagged exception
-  unwinding. The fixed shadow-root reservation is bounds-checked and traps on
-  exhaustion. First-fit free-list reuse unlinks the selected block without
-  dropping earlier nodes and splits blocks when the remainder can hold a full
-  block header.
-  Known layouts are traced by type: objects visit declared reference fields,
-  enums visit reference fields in the active case, arrays visit only elements
-  below their logical length, and maps visit typed keys and values below their
-  live count. Array/map backing blocks link to their owner to recover those
-  logical bounds. Closures and iterators visit their receiver/array; scalar
-  boxes and `Bytes` are leaves. Only opaque layouts use conservative word
-  scanning. Marking is iterative: newly marked blocks are queued in temporary
-  linear memory above `heap_top`, growing Wasm memory only when that queue needs
-  more room. Queue entries are cleared as they are consumed, so later heap
-  growth still observes zero-initialized memory. Normal allocation
-  consumes a byte budget (at least 256 KiB, scaled with heap size) between
-  collections and forces collection plus a free-list retry before growing Wasm
-  memory. `--wasm-gc-stress` restores collection-before-every-allocation for
-  collector tests. Recycled blocks are zero-filled before reuse,
-  preserving Haxe's default values for fields, array elements, and byte storage
-  just as newly grown Wasm memory does. The legacy `metadata_base` and
-  `metadata_top` diagnostic exports remain temporarily available and report an
-  empty region for hosts that still display those counters. Run
-  `scripts/benchmark-wasm-gc.sh [samples]` for a non-gating comparison of
-  stress versus budgeted allocation and deep/wide graph tracing; it reports
-  timings alongside allocation, collection, and linear-memory counters.
-  `--wasm-memory-stats` also exports the shadow-root stack's base, current top,
-  and limit so hosts can distinguish root exhaustion from linear-memory growth,
-  plus the largest individual allocation request for diagnosing heap spikes.
-- `haxeon.patch` contains stable function identities and semantic signatures
-  for validating replacement table entries. `haxeon.patch.slots` maps those
-  stable names to exported function-table slots. `WasmBackend.compilePatch`
-  produces a validated replacement artifact and filtered manifest; the host
-  can instantiate it and publish changed table entries atomically.
+Generated functions publish dense snapshots of live references at allocation
+and call safepoints. Their shadow frames restore the root chain during tagged
+exception unwinding. The reserved root area is bounds-checked and traps on
+exhaustion. The collector traces known layouts precisely: declared object
+fields, active enum payloads, live array elements, map keys and values, closure
+receivers, iterator arrays, and the owner retained by a `Bytes.view`. It uses
+conservative word scanning only for opaque layouts. Marking is iterative; its
+temporary work queue grows linear memory only when required. Normal
+allocations collect according to a byte budget, retry the free list, then grow
+memory. Reused blocks are zero-filled. `--wasm-gc-stress` collects before each
+allocation for collector tests.
 
-Static closures use stable table entries. Bound method closures use a small
-linear-memory environment containing the function slot and receiver. Direct
-object calls and interface calls remain semantic until Wasm lowering; virtual
-calls dispatch through the object type ID in the managed header.
+`--wasm-memory-stats` adds exports for heap, root-stack, allocation, and
+collection counters. The legacy `metadata_base` and `metadata_top` exports
+remain temporarily available and report an empty region. Run
+`scripts/benchmark-wasm-gc.sh [samples]` for a non-gating comparison of stress
+and budgeted collection, including deep and wide graph tracing.
 
-Ordinary `@:cNative` declarations are emitted as typed WebAssembly function
-imports. The import module is the declared native library (or `env` when the
-library is empty), and the import field is the declared symbol. Pointer-like
-Haxeon IR values use the linear-memory reference representation; no native
-call is silently treated as a HashLink runtime function.
+## Wasm GC references and linear memory
+
+`wasm-gc` relies on Wasm references to keep managed parameters, locals, globals,
+and object fields alive. It does not create `__haxeon_alloc`, collector helper
+functions, a linear managed object heap, root-stack globals, or
+`haxeon.gc.roots` metadata. Its nominal type planner preserves the Haxe object
+and enum relationships needed by generated code while Haxe runtime type IDs
+remain available for reflection and dispatch.
+
+An ordinary Wasm-GC module exports `main` and does not export linear memory.
+The current FFI boundary can add memory when needed: scalar C-native arguments
+use typed Wasm imports, while declared byte-slice inputs and outputs are copied
+through guest scratch memory. Returned native byte pointers also require guest
+memory. Other aggregate and raw-memory ABI forms remain unsupported. Wasm-GC
+compilation rejects the Wasm32 memory import, base, contract, and statistics
+options.
+
+Wasm32 accepts `--wasm-import-memory --wasm-memory-contract=<path>` for a
+host-owned memory. The JSON contract is validated at compile time and copied
+into the `haxeon.memory.contract` custom section. Hosts should compare that
+section with their own contract before calling the guest. This option applies
+only to `wasm32`.
+
+Both targets emit `haxeon.patch` and `haxeon.patch.slots` custom sections with
+stable function identities, semantic signatures, and table slots.
+`WasmBackend.compilePatch` validates replacement artifacts against the
+semantic ABI and returns a filtered manifest for atomic host publication.
+Wasm32 uses linear-memory closure environments; Wasm GC stores closure
+environments in GC-managed structs. Both retain the current function-table
+dispatch model.
+
+Wasm exception tags carry the backend's managed exception representation:
+linear pointers for Wasm32 and GC references for Wasm GC. Exception-bearing
+functions currently use the explicit CFG dispatcher so handler state and
+rethrow behavior remain correct. Ordinary reducible scalar CFGs use structured
+lowering, with the dispatcher retained as a correctness fallback.
 
 ## Building and testing
 
-Bootstrap the pinned local tools once:
+Bootstrap the pinned local compiler tools once:
 
 ```sh
 ./scripts/bootstrap-tools.sh
 ```
 
-Run the focused backend and Node execution tests:
+Run the focused backend tests and Wasm32/GC parity suite:
 
 ```sh
 ./scripts/test-wasm-backend.sh
+./scripts/test-wasm-gc-parity.sh
 ```
 
-The command-line compiler accepts `--target=wasm32` and writes a `.wasm`
-module plus a function manifest:
+The command-line compiler accepts `--target=wasm32` and `--target=wasm-gc`:
 
 ```sh
 .tools/haxe/haxe --cwd . -cp src --run compiler.tools.HaxeonCompiler \
-  --target=wasm32 --output=out/main.wasm --entry=add \
+  --target=wasm-gc --output=out/main.wasm --entry=add \
   --root=stdlib --root=tests/programs tests/programs/add.hx
 ```
 
-The driver also supplies target defines before source analysis. Every build
-gets `haxeon` and `target=<target>`; `wasm32` adds `wasm` and `wasm32`, while
-the HashLink target adds `hl` and `sys`. Project-specific defines can be added
-with repeated `--define=NAME` or `--define=NAME=value` options:
-
-```sh
-... --target=wasm32 --define=nativekit_web --define=feature=on ...
-```
-
-Target defines are reserved and are applied after command-line project
-defines, so the selected compiler target remains authoritative. Keep
-platform-specific entry loops in small host classes; use conditional
-compilation in shared code only for genuinely target-sensitive behavior.
+The driver supplies `haxeon` and `target=<target>` to every build. `wasm32`
+adds `wasm` and `wasm32`; `wasm-gc` adds `wasm` and `wasmgc`. The HashLink
+target adds `hl` and `sys`. Project defines can be added with repeated
+`--define=NAME` or `--define=NAME=value` options. Target defines are reserved
+and applied after project defines so the selected backend stays authoritative.
 
 The same compile can publish the verified target-neutral IR container with
-`--ir-output=out/main.hir`. The HIR is versioned, preserves SSA value identity,
+`--ir-output=out/main.hir`. HIR is versioned, preserves SSA value identity,
 CFG edges, semantic runtime declarations, and typed native contracts, and can
-be decoded independently before any Wasm or HashLink lowering.
+be decoded independently before Wasm or HashLink lowering.
 
 ## Architectural invariants
 
 - Haxeon IR owns semantic types and operations.
 - Backend lowering owns physical representations.
 - Wasm encoding owns binary sections and opcodes.
-- GC roots are derived from SSA reference types and SSA liveness metadata, not
-  conservative native-stack scans; generated shadow frames are the runtime
-  root-chain boundary.
+- Wasm32 root maps come from SSA reference types and liveness, not native-stack
+  scans; generated shadow frames form the runtime root chain.
 - Runtime ABI decisions use semantic declarations, not byte offsets.
-- Stable closures use exported table slots and versioned patch metadata; a
-  patch decision is made from `RuntimeAbi`, never from Wasm code offsets.
-- CFG normalization is an explicit pass; the dispatcher is only a correctness
-  fallback for CFGs the current region builder cannot structure.
+- Patch decisions use `RuntimeAbi`, not Wasm code offsets.
+- CFG normalization is explicit; the dispatcher is a correctness fallback
+  for CFGs the region builder cannot structure.
 
 ## Deliberate boundaries
 
-`Wasm64` and Wasm GC are accepted as explicit target requests so capability
-errors occur at the Wasm backend boundary, but are not enabled by this
-bring-up yet. C-native signatures that require
-multi-value aggregates or unsupported scalar representations still fail
-explicitly during Wasm lowering; those need a versioned ABI extension rather
-than an implicit representation guess.
-
-`WasmTarget` already models linear32, linear64, and Wasm-GC reference modes.
-Those modes remain below IR; adding them must not change `IrType` or
-`IrInstruction`.
+`wasm64` is accepted by the CLI but is not implemented by the backend yet.
+Wasm-GC support is a real executable target, but the GC-compatible IR and FFI
+subsets are still narrower than the complete Wasm32 backend. Unsupported
+operations fail at the Wasm backend boundary instead of receiving guessed
+representations.

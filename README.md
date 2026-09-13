@@ -36,7 +36,8 @@ untouched.
 - Persistent compiler identity across compiler and editor restarts
 - Reclamation of superseded JIT allocations after protected calls finish
 - Standard `.hl` output for ordinary HashLink compatibility
-- Experimental self-hosted `wasm32` backend from canonical SSA IR
+- Experimental self-hosted WebAssembly backend for `wasm32` and `wasm-gc`,
+  lowered from canonical SSA IR
 
 ## 🧭 What Haxeon is
 
@@ -100,9 +101,9 @@ phi nodes. The HashLink backend eliminates those phis on incoming edges with
 parallel-copy snapshots, emits real `OLabel` block markers, and leaves no SSA
 constructs in the serialized bytecode module or patch.
 
-The same canonical IR can also be emitted as experimental `wasm32`; see
-[`docs/WASM_BACKEND.md`](docs/WASM_BACKEND.md) for the backend boundary,
-linear-memory contract, root metadata, and focused test command.
+The same canonical IR can also be emitted as experimental `wasm32` or `wasm-gc`;
+see [`docs/WASM_BACKEND.md`](docs/WASM_BACKEND.md) for the representation
+boundary, linear-memory and collector contracts, GC target, and test commands.
 
 ## 🧩 Language support
 

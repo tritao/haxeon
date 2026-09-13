@@ -3659,27 +3659,51 @@ class WasmGcRepresentation implements WasmRepresentation {
 		return body;
 	}
 
-	function managedBytesToString(bytesLocal:Int, destination:Int):Array<WasmInstruction>
+	function managedBytesToString(bytesLocal:Int, destination:Int):Array<WasmInstruction> {
+		var length = allocateLocal(I32),
+			storage = allocateLocal(Ref({nullable: false, heap: Type(plan.byteArrayTypeIndex)}));
 		return [
+			LocalGet(bytesLocal),
+			StructGet(plan.managedBytesTypeIndex, 2),
+			LocalSet(length),
+			LocalGet(length),
+			ArrayNewDefault(plan.byteArrayTypeIndex),
+			LocalSet(storage),
+			LocalGet(storage),
+			I32Const(0),
 			LocalGet(bytesLocal),
 			StructGet(plan.managedBytesTypeIndex, 0),
 			LocalGet(bytesLocal),
 			StructGet(plan.managedBytesTypeIndex, 1),
-			LocalGet(bytesLocal),
-			StructGet(plan.managedBytesTypeIndex, 2),
+			LocalGet(length),
+			ArrayCopy(plan.byteArrayTypeIndex, plan.byteArrayTypeIndex),
+			LocalGet(storage),
+			I32Const(0),
+			LocalGet(length),
 			StructNew(plan.bytesTypeIndex),
 			LocalSet(destination)
 		];
+	}
 
 	function managedBytesGetString(bytesLocal:Int, offsetLocal:Int, lengthLocal:Int, destination:Int):Array<WasmInstruction> {
-		var body = checkedByteRange(plan.managedBytesTypeIndex, bytesLocal, offsetLocal, lengthLocal);
+		var body = checkedByteRange(plan.managedBytesTypeIndex, bytesLocal, offsetLocal, lengthLocal),
+			storage = allocateLocal(Ref({nullable: false, heap: Type(plan.byteArrayTypeIndex)}));
 		body = body.concat([
+			LocalGet(lengthLocal),
+			ArrayNewDefault(plan.byteArrayTypeIndex),
+			LocalSet(storage),
+			LocalGet(storage),
+			I32Const(0),
 			LocalGet(bytesLocal),
 			StructGet(plan.managedBytesTypeIndex, 0),
 			LocalGet(bytesLocal),
 			StructGet(plan.managedBytesTypeIndex, 1),
 			LocalGet(offsetLocal),
 			I32Add,
+			LocalGet(lengthLocal),
+			ArrayCopy(plan.byteArrayTypeIndex, plan.byteArrayTypeIndex),
+			LocalGet(storage),
+			I32Const(0),
 			LocalGet(lengthLocal),
 			StructNew(plan.bytesTypeIndex),
 			LocalSet(destination)
