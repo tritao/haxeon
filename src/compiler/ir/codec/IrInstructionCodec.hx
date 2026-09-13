@@ -11,13 +11,14 @@ import compiler.ir.codec.IrValueTableCodec;
 
 /** Closed, versioned encoding for every persisted IR instruction operand. */
 class IrInstructionCodec {
-	static inline final VERSION = 3;
+	static inline final VERSION = 4;
 	static final CONSTRUCTORS:Map<String, Bool> = [
 		"Phi" => true,
 		"ConstVoid" => true,
 		"ConstInt" => true,
 		"ConstFloat" => true,
 		"ConstString" => true,
+		"StaticDataAddress" => true,
 		"ConstBool" => true,
 		"ConstNull" => true,
 		"TypeValue" => true,
@@ -118,6 +119,10 @@ class IrInstructionCodec {
 				begin(output, "ConstString", 2);
 				writeValue(output, value);
 				writeText(output, constant);
+			case StaticDataAddress(value, bytes):
+				begin(output, "StaticDataAddress", 2);
+				writeValue(output, value);
+				writeBytes(output, bytes);
 			case ConstBool(value, constant):
 				begin(output, "ConstBool", 2);
 				writeValue(output, value);
@@ -284,6 +289,9 @@ class IrInstructionCodec {
 			case "ConstString":
 				arity(2);
 				ConstString(readValue(input, values), readText(input, totalLength));
+			case "StaticDataAddress":
+				arity(2);
+				StaticDataAddress(readValue(input, values), readBytes(input, totalLength));
 			case "ConstBool":
 				arity(2);
 				ConstBool(readValue(input, values), readBool(input));
@@ -458,6 +466,14 @@ class IrInstructionCodec {
 		return readString(input, total);
 	}
 
+	static function readBytes(input:BytesInput, total:Int):Array<Int> {
+		expectTag(input, 8);
+		var count = input.readInt32();
+		if (count <= 0 || count > total || count > 0x100000)
+			throw "Invalid IR byte array";
+		return [for (_ in 0...count) input.readByte()];
+	}
+
 	static function readValues(input:BytesInput, values:Map<Int, IrValue>):Array<IrValue> {
 		expectTag(input, 5);
 		var count = input.readInt32();
@@ -515,6 +531,18 @@ class IrInstructionCodec {
 	static function writeText(output:BytesOutput, value:String):Void {
 		output.writeByte(4);
 		writeString(output, value);
+	}
+
+	static function writeBytes(output:BytesOutput, values:Array<Int>):Void {
+		if (values.length == 0 || values.length > 0x100000)
+			throw "Invalid IR byte array";
+		output.writeByte(8);
+		output.writeInt32(values.length);
+		for (value in values) {
+			if (value < 0 || value > 255)
+				throw "Invalid IR byte value";
+			output.writeByte(value);
+		}
 	}
 
 	static function writeType(output:BytesOutput, value:IrType):Void {

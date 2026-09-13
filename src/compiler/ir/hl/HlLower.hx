@@ -398,6 +398,10 @@ class HlLower {
 						instructions.push(HlInstruction.LoadFloat(defineRegister(output, registers, registerTypes), symbols.internFloat(value)));
 					case ConstString(output, value):
 						instructions.push(HlInstruction.LoadString(defineRegister(output, registers, registerTypes), internString(value)));
+					case StaticDataAddress(output, _):
+						// RuntimeData is a Wasm-only intrinsic. The HashLink shadow module is
+						// still assembled for a Wasm compilation, but never executes this path.
+						instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes), internInt(0)));
 					case ConstBool(output, value):
 						instructions.push(HlInstruction.LoadBool(defineRegister(output, registers, registerTypes), value));
 					case ConstNull(output):

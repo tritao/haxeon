@@ -77,6 +77,14 @@ class CfgVerifier {
 				case ConstString(out, _):
 					expect(out, Bytes);
 					define(out, defined, available, block.id);
+				case StaticDataAddress(out, bytes):
+					expect(out, I32);
+					if (bytes.length == 0 || (bytes.length & 3) != 0)
+						throw "CFG static data must contain complete 32-bit words";
+					for (byte in bytes)
+						if (byte < 0 || byte > 255)
+							throw "CFG static data contains a value outside the byte range";
+					define(out, defined, available, block.id);
 				case ConstBool(out, _):
 					expect(out, Bool);
 					define(out, defined, available, block.id);
@@ -139,27 +147,37 @@ class CfgVerifier {
 						|| (!sameType(a.type, I32) && !sameType(a.type, I64) && !sameType(a.type, F64)))
 						throw "CFG arithmetic requires matching numeric values";
 					define(out, defined, available, block.id);
-				case Mod(out, a, b), BitAnd(out, a, b), BitXor(out, a, b), BitOr(out, a, b), ShiftLeft(out, a, b), ShiftRight(out, a, b),
-					UnsignedShiftRight(out, a, b):
+				case Mod(out, a, b):
 					require(a, available, block.id);
 					require(b, available, block.id);
-					expect(out, I32);
-					expect(a, I32);
-					expect(b, I32);
+					if (!sameType(out.type, a.type) || !sameType(a.type, b.type) || (a.type != I32 && a.type != I64))
+						throw "CFG modulo requires matching integer values";
+					define(out, defined, available, block.id);
+				case BitAnd(out, a, b), BitXor(out, a, b), BitOr(out, a, b):
+					require(a, available, block.id);
+					require(b, available, block.id);
+					if (!sameType(out.type, a.type) || !sameType(a.type, b.type) || (a.type != I32 && a.type != I64))
+						throw "CFG bitwise operation requires matching integer values";
+					define(out, defined, available, block.id);
+				case ShiftLeft(out, a, b), ShiftRight(out, a, b), UnsignedShiftRight(out, a, b):
+					require(a, available, block.id);
+					require(b, available, block.id);
+					if (!sameType(out.type, a.type) || (a.type != I32 && a.type != I64) || b.type != I32)
+						throw "CFG shift requires an Int or Int64 value and an Int count";
 					define(out, defined, available, block.id);
 				case Less(out, a, b), LessEqual(out, a, b):
 					require(a, available, block.id);
 					require(b, available, block.id);
 					expect(out, Bool);
-					if (!sameType(a.type, b.type) || (a.type != I32 && a.type != F64))
-						throw "CFG ordered comparison requires matching Int or Float values";
+					if (!sameType(a.type, b.type) || (a.type != I32 && a.type != I64 && a.type != F64))
+						throw "CFG ordered comparison requires matching numeric values";
 					define(out, defined, available, block.id);
 				case Equal(out, a, b):
 					require(a, available, block.id);
 					require(b, available, block.id);
 					expect(out, Bool);
 					if (!sameType(a.type, b.type)
-						|| (!sameType(a.type, I32) && !sameType(a.type, F64) && !sameType(a.type, Bool) && !isReference(a.type)))
+						|| (!sameType(a.type, I32) && !sameType(a.type, I64) && !sameType(a.type, F64) && !sameType(a.type, Bool) && !isReference(a.type)))
 						throw 'CFG equality requires matching primitive or reference values';
 					define(out, defined, available, block.id);
 				case Call(out, _, arguments), CNativeCall(out, _, arguments):

@@ -19,6 +19,21 @@ bash "$root_dir/scripts/test-wasm-gc-invariants.sh"
 	--target=wasm32 --output=out/wasm-cli-source-root.wasm --entry=Main \
 	--root=tests/fixtures/source_root tests/fixtures/source_root/Main.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --output=out/wasm-cli-runtime-source.wasm --entry=wasm-runtime-source-link \
+	--root=tests/programs tests/programs/wasm-runtime-source-link.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm-gc --output=out/wasm-gc-cli-runtime-source.wasm --entry=wasm-runtime-source-link \
+	--root=tests/programs tests/programs/wasm-runtime-source-link.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --output=out/wasm-cli-typed-std-dependency.wasm --entry=wasm-typed-std-dependency \
+	--root=tests/programs tests/programs/wasm-typed-std-dependency.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --output=out/wasm-cli-ryu-source.wasm --entry=wasm-ryu-source \
+	--export=wasm-ryu-source.stringifyFloat --root=tests/programs tests/programs/wasm-ryu-source.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm-gc --output=out/wasm-gc-cli-ryu-source.wasm --entry=wasm-ryu-source \
+	--root=tests/programs tests/programs/wasm-ryu-source.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm32 --output=out/wasm-cli-dynamic.wasm --entry=dynamic-equality \
 	--root=tests/programs tests/programs/dynamic-equality.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
@@ -127,10 +142,9 @@ const cases = [
   ["out/wasm-backend-array-ops.wasm", 42],
   ["out/wasm-backend-array-mutation.wasm", 42],
   ["out/wasm-backend-string.wasm", 6],
-	["out/wasm-backend-string-ops.wasm", 42],
-	["out/wasm-backend-std-string.wasm", 42],
-	["out/wasm-backend-std-string-i64.wasm", 42],
-	["out/wasm-backend-std-string-f64.wasm", 42],
+  ["out/wasm-backend-string-ops.wasm", 42],
+  ["out/wasm-backend-std-string.wasm", 42],
+  ["out/wasm-backend-std-string-i64.wasm", 42],
   ["out/wasm-backend-method.wasm", 42],
   ["out/wasm-backend-global.wasm", 42],
   ["out/wasm-backend-float-global.wasm", 42],
@@ -139,18 +153,23 @@ const cases = [
   ["out/wasm-backend-inherited-field.wasm", 42],
   ["out/wasm-backend-large-array.wasm", 20000],
   ["out/wasm-cli-backend.wasm", 42],
-	["out/wasm-cli-source-root.wasm", 42],
+  ["out/wasm-cli-source-root.wasm", 42],
+  ["out/wasm-cli-runtime-source.wasm", 42],
+  ["out/wasm-gc-cli-runtime-source.wasm", 42],
+  ["out/wasm-cli-typed-std-dependency.wasm", 42],
+  ["out/wasm-cli-ryu-source.wasm", 42],
+  ["out/wasm-gc-cli-ryu-source.wasm", 42],
   ["out/wasm-cli-dynamic.wasm", 42],
   ["out/wasm-cli-function-wrapper.wasm", 42],
   ["out/wasm-cli-type-test.wasm", 42],
-	["out/wasm-cli-numeric-promotion.wasm", 42],
+  ["out/wasm-cli-numeric-promotion.wasm", 42],
   ["out/wasm-cli-array-slice.wasm", 42],
-	["out/wasm-cli-array-mutation.wasm", 42],
-	["out/wasm-cli-array-growth.wasm", 42],
-	["out/wasm-cli-array-iterator.wasm", 42],
-	["out/wasm-cli-map-basic.wasm", 42],
-	["out/wasm-cli-map-int.wasm", 42],
-	["out/wasm-cli-map-primitive-types.wasm", 42],
+  ["out/wasm-cli-array-mutation.wasm", 42],
+  ["out/wasm-cli-array-growth.wasm", 42],
+  ["out/wasm-cli-array-iterator.wasm", 42],
+  ["out/wasm-cli-map-basic.wasm", 42],
+  ["out/wasm-cli-map-int.wasm", 42],
+  ["out/wasm-cli-map-primitive-types.wasm", 42],
 	["out/wasm-cli-map-for-in.wasm", 52],
 	["out/wasm-cli-map-key-value-for-in.wasm", 42],
 	["out/wasm-cli-map-object.wasm", 42],
@@ -345,8 +364,11 @@ const cases = [
       const compiled = new WebAssembly.Module(bytes);
       const ffiBytes = relative.endsWith("wasm-cli-gc-ffi-bytes.wasm");
       const shortStruct = relative.endsWith("wasm-cli-gc-ffi-short-struct.wasm");
+      const staticDataRuntime = relative.endsWith("wasm-gc-cli-runtime-source.wasm")
+        || relative.endsWith("wasm-gc-cli-ryu-source.wasm");
       const hasMemory = WebAssembly.Module.exports(compiled).some(entry => entry.name === "memory");
-      if ((!ffiBytes && !shortStruct && (WebAssembly.Module.imports(compiled).length !== 0 || hasMemory))
+      if ((!ffiBytes && !shortStruct && WebAssembly.Module.imports(compiled).length !== 0)
+          || (!ffiBytes && !shortStruct && !staticDataRuntime && hasMemory)
           || (ffiBytes && (WebAssembly.Module.imports(compiled).length !== 26 || !hasMemory))
           || (shortStruct && (WebAssembly.Module.imports(compiled).length !== 1 || !hasMemory))
           || WebAssembly.Module.customSections(compiled, "haxeon.gc.roots").length !== 0)
@@ -400,7 +422,7 @@ const cases = [
       throw new Error(`Std.string(Int64(${high}, ${low})): expected ${expected}, got ${actual}`);
   }
   const floatModule = (await WebAssembly.instantiate(
-    fs.readFileSync(`${root}/out/wasm-backend-std-string-f64.wasm`))).instance;
+    fs.readFileSync(`${root}/out/wasm-cli-ryu-source.wasm`))).instance;
   const floatCases = [
     [0, "0"], [40.5, "40.5"], [-42.25, "-42.25"], [0.1, "0.1"], [-0, "0"],
     [1e-6, "0.000001"], [1e-7, "1e-7"], [1e20, "100000000000000000000"], [1e21, "1e+21"],
@@ -408,7 +430,7 @@ const cases = [
     [Infinity, "Infinity"], [-Infinity, "-Infinity"], [NaN, "NaN"]
   ];
   for (const [value, expected] of floatCases) {
-    const pointer = floatModule.exports.stringifyFloat(value) >>> 0;
+    const pointer = floatModule.exports["wasm-ryu-source.stringifyFloat"](value) >>> 0;
     const view = new DataView(floatModule.exports.memory.buffer);
     const length = view.getUint32(pointer + 8, true);
     const actual = new TextDecoder().decode(new Uint8Array(view.buffer, pointer + 16, length));
@@ -427,7 +449,7 @@ const cases = [
     floatBits &= floatMask;
     floatBitView.setBigUint64(0, floatBits, true);
     const value = floatBitView.getFloat64(0, true);
-    const pointer = floatModule.exports.stringifyFloat(value) >>> 0;
+    const pointer = floatModule.exports["wasm-ryu-source.stringifyFloat"](value) >>> 0;
     const view = new DataView(floatModule.exports.memory.buffer);
     const length = view.getUint32(pointer + 8, true);
     const actual = new TextDecoder().decode(new Uint8Array(view.buffer, pointer + 16, length));

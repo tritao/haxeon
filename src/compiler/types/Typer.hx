@@ -67,6 +67,7 @@ typedef TyperPhaseMetrics = {
 typedef MeasuredTypedProgram = {
 	final program:TypedProgram;
 	final metrics:TyperPhaseMetrics;
+	final runtimeDependencies:Array<{final functionName:String; final target:String;}>;
 }
 
 private typedef ResolvedInlineConstant = {
@@ -93,6 +94,7 @@ class Typer {
 	final genericSpecializations:GenericSpecializationRegistry;
 	final emittedGenericBodies:Map<String, Bool> = [];
 	final noReturnFunctions:Map<String, Bool> = [];
+	final runtimeDependencies:Map<String, Map<String, Bool>> = [];
 	final cNativeFunctions:Map<String, Bool> = [];
 	final inlineConstants:Map<String, ResolvedInlineConstant> = [];
 	final inlineConstantsInProgress:Map<String, Bool> = [];
@@ -313,8 +315,18 @@ class Typer {
 		var assemblyDoneAt = Sys.time() * 1000.0;
 		semantic.lifecycle.advanceAll(Finalized);
 		var finalizationDoneAt = Sys.time() * 1000.0;
+		var typedRuntimeDependencies = [
+			for (functionName => targets in runtimeDependencies)
+				for (target in targets.keys())
+					{functionName: functionName, target: target}
+		];
+		typedRuntimeDependencies.sort(function(left, right) {
+			var functionOrder = Reflect.compare(left.functionName, right.functionName);
+			return functionOrder == 0 ? Reflect.compare(left.target, right.target) : functionOrder;
+		});
 		return {
 			program: result,
+			runtimeDependencies: typedRuntimeDependencies,
 			metrics: {
 				declarationMs: semantic.lifecycleMetrics.declarationMs,
 				shapeConnectionMs: semantic.lifecycleMetrics.shapeConnectionMs,
@@ -2770,6 +2782,17 @@ class Typer {
 			case Call(name, arguments, span):
 				if (name == "super")
 					return typeSuperCall(arguments, span, scope);
+				if (name == "RuntimeData.address" || name == "runtime.RuntimeData.address") {
+					if (arguments.length != 1)
+						fail("E1008", 'RuntimeData.address expects 1 argument, got ${arguments.length}', span);
+					return new TypedExpression(TRuntimeDataAddress(runtimeDataBytes(arguments[0], span)), TInt, span);
+				}
+				if (name == "RuntimeData.loadI32" || name == "runtime.RuntimeData.loadI32") {
+					if (arguments.length != 1)
+						fail("E1008", 'RuntimeData.loadI32 expects 1 argument, got ${arguments.length}', span);
+					var address = coerce(typeExpression(arguments[0], scope), TInt, "runtime data address", "E1002");
+					return new TypedExpression(TCall("runtime.RuntimeData.loadI32", [address]), TInt, span);
+				}
 				if (name == "Std.isOfType") {
 					if (arguments.length != 2)
 						fail("E1008", 'Function "Std.isOfType" expects 2 arguments, got ${arguments.length}', span);
@@ -4518,8 +4541,8 @@ class Typer {
 			return new TypedExpression(TAdd(left, right), TString, span);
 		}
 		if (!isNumeric(left.type) || !isNumeric(right.type))
-			fail("E1010", "Arithmetic requires matching Int or Float operands", span);
-		var promoted = promoteNumericOperands(left, right);
+			fail("E1010", "Arithmetic requires matching numeric operands", span);
+		var promoted = promoteNumericOperands(left, right, span);
 		return new TypedExpression(add ? TAdd(promoted.left, promoted.right) : TSub(promoted.left, promoted.right), promoted.type, span);
 	}
 
@@ -4533,9 +4556,52 @@ class Typer {
 	function stringify(value:TypedExpression):TypedExpression {
 		if (isStringConvertible(value.type))
 			return coerce(value, TString, "string concatenation", "E1010");
+		if (sameType(value.type, TFloat) || sameType(value.type, TDynamic)) {
+			var functionName = context.name,
+				dependencies = runtimeDependencies.get(functionName);
+			if (dependencies == null) {
+				dependencies = [];
+				runtimeDependencies.set(functionName, dependencies);
+			}
+			dependencies.set("Std", true);
+			var dynamicValue = coerce(value, TDynamic, "string concatenation", "E1010");
+			return new TypedExpression(TCall("Std.string", [dynamicValue]), TString, value.span);
+		}
 		var dynamicValue = coerce(value, TDynamic, "string concatenation", "E1010");
 		return new TypedExpression(TCall("__std_string", [dynamicValue]), TString, value.span);
 	}
+
+	function runtimeDataBytes(expression:AstExpression, span:SourceSpan):Array<Int> {
+		var chunks = switch expression {
+			case ArrayLiteral(values, _): values;
+			default:
+				fail("E1009", "RuntimeData.address requires an array of hexadecimal string literals", span);
+				[];
+		};
+		var hex = new StringBuf();
+		for (chunk in chunks)
+			switch chunk {
+				case StringLiteral(value, _):
+					hex.add(value);
+				default:
+					fail("E1009", "RuntimeData.address requires an array of hexadecimal string literals", span);
+			}
+		var encoded = hex.toString();
+		if (encoded.length == 0 || (encoded.length & 7) != 0)
+			fail("E1009", "RuntimeData.address data must contain complete 32-bit hexadecimal words", span);
+		var result:Array<Int> = [];
+		for (index in 0...Std.int(encoded.length / 2)) {
+			var high = runtimeDataHexDigit(encoded.charCodeAt(index * 2)),
+				low = runtimeDataHexDigit(encoded.charCodeAt(index * 2 + 1));
+			if (high < 0 || low < 0)
+				fail("E1009", "RuntimeData.address data contains a non-hexadecimal character", span);
+			result.push((high << 4) | low);
+		}
+		return result;
+	}
+
+	static function runtimeDataHexDigit(code:Int):Int
+		return code >= 48 && code <= 57 ? code - 48 : code >= 65 && code <= 70 ? code - 55 : code >= 97 && code <= 102 ? code - 87 : -1;
 
 	function logical(a:AstExpression, b:AstExpression, scope:Scope, and:Bool, span:SourceSpan):TypedExpression {
 		var left = typeExpression(a, scope),
@@ -4549,46 +4615,65 @@ class Typer {
 	function numeric(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan):TypedExpression {
 		var left = typeExpression(a, scope), right = typeExpression(b, scope);
 		if (!isNumeric(left.type) || !isNumeric(right.type))
-			fail("E1010", "Arithmetic requires matching Int or Float operands", span);
-		var promoted = promoteNumericOperands(left, right, operation != 2);
+			fail("E1010", "Arithmetic requires matching numeric operands", span);
+		var promoted = promoteNumericOperands(left, right, span, operation != 2);
 		return new TypedExpression(operation == 2 ? TMul(promoted.left, promoted.right) : TDiv(promoted.left, promoted.right), promoted.type, span);
 	}
 
 	function isNumeric(type:CompilerType):Bool
-		return sameType(type, TInt) || sameType(type, TFloat);
+		return sameType(type, TInt) || sameType(type, TInt64) || sameType(type, TFloat);
 
-	function promoteNumericOperands(left:TypedExpression, right:TypedExpression, forceFloat:Bool = false):{
+	function promoteNumericOperands(left:TypedExpression, right:TypedExpression, span:SourceSpan, forceFloat:Bool = false):{
 		left:TypedExpression,
 		right:TypedExpression,
 		type:CompilerType
 	} {
-		var type = forceFloat || sameType(left.type, TFloat) || sameType(right.type, TFloat) ? TFloat : TInt;
+		var hasInt64 = sameType(left.type, TInt64) || sameType(right.type, TInt64);
+		var hasFloat = sameType(left.type, TFloat) || sameType(right.type, TFloat);
+		if (hasInt64 && hasFloat)
+			fail("E1010", "Int64 and Float arithmetic requires an explicit conversion", span);
+		var type = hasInt64 ? TInt64 : forceFloat || hasFloat ? TFloat : TInt;
 		return {left: coerce(left, type, "numeric operand", "E1010"), right: coerce(right, type, "numeric operand", "E1010"), type: type};
 	}
 
 	function modulo(a:AstExpression, b:AstExpression, scope:Scope, span:SourceSpan):TypedExpression {
 		var left = typeExpression(a, scope), right = typeExpression(b, scope);
 		if (!isNumeric(left.type) || !isNumeric(right.type))
-			fail("E1010", "Modulo requires matching Int or Float operands", span);
-		var promoted = promoteNumericOperands(left, right);
-		return sameType(promoted.type,
-			TInt) ? new TypedExpression(TMod(promoted.left, promoted.right), TInt,
+			fail("E1010", "Modulo requires matching numeric operands", span);
+		var promoted = promoteNumericOperands(left, right, span);
+		return sameType(promoted.type, TInt)
+			|| sameType(promoted.type,
+				TInt64) ? new TypedExpression(TMod(promoted.left, promoted.right), promoted.type,
 				span) : new TypedExpression(TCall("__math_fmod", [promoted.left, promoted.right]), TFloat, span);
 	}
 
 	function bitwise(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan):TypedExpression {
 		var left = typeExpression(a, scope), right = typeExpression(b, scope);
-		if (!sameType(left.type, TInt) || !sameType(right.type, TInt))
-			fail("E1010", "Bitwise operators require Int operands", span);
+		if (operation >= 3) {
+			if (!sameType(left.type, TInt) && !sameType(left.type, TInt64))
+				fail("E1010", "Shift operators require an Int or Int64 value", span);
+			if (!sameType(right.type, TInt))
+				fail("E1010", "Shift counts must be Int values", span);
+			var shift:TypedExpressionKind = switch operation {
+				case 3: TShiftLeft(left, right);
+				case 4: TShiftRight(left, right);
+				default: TUnsignedShiftRight(left, right);
+			};
+			return new TypedExpression(shift, left.type, span);
+		}
+
+		if ((!sameType(left.type, TInt) && !sameType(left.type, TInt64)) || (!sameType(right.type, TInt) && !sameType(right.type, TInt64)))
+			fail("E1010", "Bitwise operators require integer operands", span);
+		var operandType = sameType(left.type, TInt64) || sameType(right.type, TInt64) ? TInt64 : TInt;
+		left = coerce(left, operandType, "bitwise operand", "E1010");
+		right = coerce(right, operandType, "bitwise operand", "E1010");
 		var expression:TypedExpressionKind = switch operation {
 			case 0: TBitAnd(left, right);
 			case 1: TBitXor(left, right);
 			case 2: TBitOr(left, right);
-			case 3: TShiftLeft(left, right);
-			case 4: TShiftRight(left, right);
-			default: TUnsignedShiftRight(left, right);
+			default: throw "Unknown bitwise operation";
 		};
-		return new TypedExpression(expression, TInt, span);
+		return new TypedExpression(expression, operandType, span);
 	}
 
 	function comparison(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan):TypedExpression {
@@ -4646,8 +4731,8 @@ class Typer {
 				default:
 			}
 		if (!isNumeric(left.type) || !isNumeric(right.type))
-			fail("E1011", "Comparison requires matching Int or Float operands", span);
-		var promoted = promoteNumericOperands(left, right);
+			fail("E1011", "Comparison requires matching numeric operands", span);
+		var promoted = promoteNumericOperands(left, right, span);
 		left = promoted.left;
 		right = promoted.right;
 		return new TypedExpression(switch operation {

@@ -134,8 +134,24 @@ class WasmLinearRepresentation implements WasmRepresentation {
 	public function beginFunction(allocateLocal:WasmValueType->Int, exceptionTag:Null<Int>, irFunction:Null<IrFunction>):Void {}
 
 	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
-			argumentLocals:Array<Int>):Null<Array<WasmInstruction>>
+			argumentLocals:Array<Int>):Null<Array<WasmInstruction>> {
+		if (name == "__wasm_memory_load_i32") {
+			if (output.type != I32 || arguments.length != 1 || arguments[0].type != I32 || argumentLocals.length != 1)
+				throw "Invalid Wasm runtime memory.load i32 signature";
+			return [LocalGet(argumentLocals[0]), I32Load(0), LocalSet(outputLocal)];
+		}
+		if (name == "__f64_to_i64_bits") {
+			if (output.type != I64 || arguments.length != 1 || arguments[0].type != F64 || argumentLocals.length != 1)
+				throw "Invalid Wasm FloatBits.toInt64 signature";
+			return [LocalGet(argumentLocals[0]), I64ReinterpretF64, LocalSet(outputLocal)];
+		}
+		if (name == "__i64_to_f64_bits") {
+			if (output.type != F64 || arguments.length != 1 || arguments[0].type != I64 || argumentLocals.length != 1)
+				throw "Invalid Wasm FloatBits.fromInt64 signature";
+			return [LocalGet(argumentLocals[0]), F64ReinterpretI64, LocalSet(outputLocal)];
+		}
 		return null;
+	}
 
 	public function lowerCNativeCall(native:IrCNative, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>, importIndex:Int,
 			pointerLengthImportIndex:Int, pointerReleaseImportIndex:Int):Null<Array<WasmInstruction>>
@@ -533,7 +549,7 @@ class WasmGcRepresentation implements WasmRepresentation {
 		]);
 		body = body.concat(stringLiteral("Object", outputLocal));
 		body = body.concat(dynamicIntegerString(valueLocal, outputLocal));
-		body = body.concat(dynamicFloatString(valueLocal, outputLocal));
+		body = body.concat(rejectDynamicFloatString(valueLocal));
 		body = body.concat(dynamicBooleanString(valueLocal, outputLocal));
 		for (enumDecl in plan.program.enums)
 			for (index in 0...enumDecl.cases.length) {
@@ -659,201 +675,15 @@ class WasmGcRepresentation implements WasmRepresentation {
 		return body;
 	}
 
-	function dynamicFloatString(valueLocal:Int, outputLocal:Int):Array<WasmInstruction> {
-		var boxType = plan.boxedPrimitiveType(F64),
-			value = allocateLocal(F64),
-			negative = allocateLocal(I32),
-			absolute = allocateLocal(F64),
-			whole = allocateLocal(I32),
-			fraction = allocateLocal(I32),
-			fractionDigits = allocateLocal(I32),
-			wholeString = allocateLocal(valueType(Bytes)),
-			storage = allocateLocal(Ref({
-				nullable: false,
-				heap: Type(plan.byteArrayTypeIndex)
-			})),
-			writeIndex = allocateLocal(I32),
-			index = allocateLocal(I32),
-			divisor = allocateLocal(I32),
-			body:Array<WasmInstruction> = [
-				LocalGet(valueLocal),
-				RefTest({
-					nullable: false,
-					heap: Type(boxType)
-				}),
-				If(null),
-				LocalGet(valueLocal),
-				RefCast({nullable: false, heap: Type(boxType)}),
-				StructGet(boxType, 0),
-				LocalSet(value),
-				LocalGet(value),
-				F64Const(0),
-				F64Lt,
-				LocalSet(negative),
-				LocalGet(negative),
-				If(F64),
-				F64Const(0),
-				LocalGet(value),
-				F64Sub,
-				Else,
-				LocalGet(value),
-				End,
-				LocalSet(absolute),
-				LocalGet(absolute),
-				F64Const(2147483648.0),
-				F64Lt,
-				If(null),
-				LocalGet(absolute),
-				I32TruncF64S,
-				LocalSet(whole)
-			];
-		body = body.concat(integerValueString(whole, wholeString));
-		body = body.concat([
-			LocalGet(absolute),
-			LocalGet(whole),
-			F64ConvertI32S,
-			F64Sub,
-			F64Const(1000000),
-			F64Mul,
-			I32TruncF64S,
-			LocalSet(fraction),
-			I32Const(6),
-			LocalSet(fractionDigits),
-			Block(null),
-			Loop(null),
-			LocalGet(fraction),
-			I32Const(10),
-			I32RemS,
-			I32Eqz,
-			LocalGet(fraction),
-			I32Eqz,
-			I32Eqz,
-			I32And,
-			I32Eqz,
-			BrIf(1),
-			LocalGet(fraction),
-			I32Const(10),
-			I32DivS,
-			LocalSet(fraction),
-			LocalGet(fractionDigits),
-			I32Const(1),
-			I32Sub,
-			LocalSet(fractionDigits),
-			Br(0),
-			End,
-			End,
-			I32Const(24),
-			ArrayNewDefault(plan.byteArrayTypeIndex),
-			LocalSet(storage),
-			I32Const(0),
-			LocalSet(writeIndex),
-			LocalGet(negative),
+	function rejectDynamicFloatString(valueLocal:Int):Array<WasmInstruction> {
+		var boxType = plan.boxedPrimitiveType(F64);
+		return [
+			LocalGet(valueLocal),
+			RefTest({nullable: false, heap: Type(boxType)}),
 			If(null),
-			LocalGet(storage),
-			LocalGet(writeIndex),
-			I32Const(45),
-			ArraySet(plan.byteArrayTypeIndex),
-			LocalGet(writeIndex),
-			I32Const(1),
-			I32Add,
-			LocalSet(writeIndex),
-			End,
-			LocalGet(storage),
-			LocalGet(writeIndex),
-			LocalGet(wholeString),
-			StructGet(plan.bytesTypeIndex, 0),
-			LocalGet(wholeString),
-			StructGet(plan.bytesTypeIndex, 1),
-			LocalGet(wholeString),
-			StructGet(plan.bytesTypeIndex, 2),
-			ArrayCopy(plan.byteArrayTypeIndex, plan.byteArrayTypeIndex),
-			LocalGet(writeIndex),
-			LocalGet(wholeString),
-			StructGet(plan.bytesTypeIndex, 2),
-			I32Add,
-			LocalSet(writeIndex),
-			LocalGet(fraction),
-			I32Eqz,
-			If(null),
-			Else,
-			LocalGet(storage),
-			LocalGet(writeIndex),
-			I32Const(46),
-			ArraySet(plan.byteArrayTypeIndex),
-			LocalGet(writeIndex),
-			I32Const(1),
-			I32Add,
-			LocalSet(writeIndex),
-			I32Const(1),
-			LocalSet(divisor),
-			I32Const(1),
-			LocalSet(index),
-			Block(null),
-			Loop(null),
-			LocalGet(index),
-			LocalGet(fractionDigits),
-			I32LtS,
-			I32Eqz,
-			BrIf(1),
-			LocalGet(divisor),
-			I32Const(10),
-			I32Mul,
-			LocalSet(divisor),
-			LocalGet(index),
-			I32Const(1),
-			I32Add,
-			LocalSet(index),
-			Br(0),
-			End,
-			End,
-			I32Const(0),
-			LocalSet(index),
-			Block(null),
-			Loop(null),
-			LocalGet(index),
-			LocalGet(fractionDigits),
-			I32LtS,
-			I32Eqz,
-			BrIf(1),
-			LocalGet(storage),
-			LocalGet(writeIndex),
-			LocalGet(fraction),
-			LocalGet(divisor),
-			I32DivS,
-			I32Const(10),
-			I32RemS,
-			I32Const(48),
-			I32Add,
-			ArraySet(plan.byteArrayTypeIndex),
-			LocalGet(fraction),
-			LocalGet(divisor),
-			I32RemS,
-			LocalSet(fraction),
-			LocalGet(divisor),
-			I32Const(10),
-			I32DivS,
-			LocalSet(divisor),
-			LocalGet(writeIndex),
-			I32Const(1),
-			I32Add,
-			LocalSet(writeIndex),
-			LocalGet(index),
-			I32Const(1),
-			I32Add,
-			LocalSet(index),
-			Br(0),
-			End,
-			End,
-			End,
-			LocalGet(storage),
-			I32Const(0),
-			LocalGet(writeIndex),
-			StructNew(plan.bytesTypeIndex),
-			LocalSet(outputLocal),
-			End,
+			Unreachable,
 			End
-		]);
-		return body;
+		];
 	}
 
 	function dynamicBooleanString(valueLocal:Int, outputLocal:Int):Array<WasmInstruction> {
@@ -1075,6 +905,21 @@ class WasmGcRepresentation implements WasmRepresentation {
 
 	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
 			argumentLocals:Array<Int>):Null<Array<WasmInstruction>> {
+		if (name == "__wasm_memory_load_i32") {
+			if (output.type != I32 || arguments.length != 1 || arguments[0].type != I32 || argumentLocals.length != 1)
+				throw "Invalid Wasm GC runtime memory.load i32 signature";
+			return [LocalGet(argumentLocals[0]), I32Load(0), LocalSet(outputLocal)];
+		}
+		if (name == "__f64_to_i64_bits") {
+			if (output.type != I64 || arguments.length != 1 || arguments[0].type != F64 || argumentLocals.length != 1)
+				throw "Invalid Wasm GC FloatBits.toInt64 signature";
+			return [LocalGet(argumentLocals[0]), I64ReinterpretF64, LocalSet(outputLocal)];
+		}
+		if (name == "__i64_to_f64_bits") {
+			if (output.type != F64 || arguments.length != 1 || arguments[0].type != I64 || argumentLocals.length != 1)
+				throw "Invalid Wasm GC FloatBits.fromInt64 signature";
+			return [LocalGet(argumentLocals[0]), F64ReinterpretI64, LocalSet(outputLocal)];
+		}
 		if (name == "structGetPointer") {
 			if (!isNativePointerType(output.type) || arguments.length != 3 || arguments[0].type != ManagedBytes || arguments[1].type != I32
 				|| arguments[2].type != Bool || argumentLocals.length != 3)

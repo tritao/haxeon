@@ -36,7 +36,6 @@ class WasmLinearContext {
 	public var traceFunction:Int = -1;
 	public var collectorFunction:Int = -1;
 	public var allocatorFunction:Int = -1;
-	public var ryuTableBase:Int = -1;
 	public var exceptionTag:Null<Int> = null;
 
 	public function new(module:WasmModule, program:IrProgram, layout:WasmLayout, options:BackendOptions) {

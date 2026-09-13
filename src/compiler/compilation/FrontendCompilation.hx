@@ -91,10 +91,12 @@ class FrontendCompilation {
 				semantic = previousSemantic.replaceTopLevelBodies(canonicalProgram, selected);
 			else
 				semantic = SemanticProgram.analyze(canonicalProgram);
-			context.cachedSemanticProgram = semantic;
 			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, context.nativeSignatures(), entryPoint, genericSpecializations);
 			typedNew = typedResult.program;
 			typerMetrics = typedResult.metrics;
+			if (includeTypedRuntimeDependencies(context, typedResult.runtimeDependencies, typedNew, owners, names, rollbackModules))
+				return run(context, entryModule, token, rollbackModules, snapshotDoneAt, lowerToIr, indexSemantics);
+			context.cachedSemanticProgram = semantic;
 		} catch (error:CompileError) {
 			for (name in names) {
 				var state:compiler.modules.ModuleState = modules.get(name);
@@ -343,6 +345,34 @@ class FrontendCompilation {
 		owners.set(fn.name, module);
 		visiting.remove(fn.name);
 		return module;
+	}
+
+	static function includeTypedRuntimeDependencies(context:CompilationContext, dependencies:Array<{final functionName:String; final target:String;}>,
+			typed:TypedProgram, owners:Map<String, String>, names:Array<String>, rollbackModules:Map<String, ModuleState>):Bool {
+		var typedByName:Map<String, compiler.types.TypedAst.TypedFunction> = [];
+		for (fn in typed.functions)
+			typedByName.set(fn.name, fn);
+		var changed = false;
+		for (dependency in dependencies) {
+			if (names.indexOf(dependency.target) >= 0)
+				continue;
+			var target = context.loadSourceModuleDependency(dependency.target);
+			if (target == null)
+				throw 'Typed runtime dependency "${dependency.target}" from "${dependency.functionName}" has no source module';
+			if (names.indexOf(target) >= 0)
+				continue;
+			var fn = typedByName.get(dependency.functionName);
+			if (fn == null)
+				throw 'Typed runtime dependency from unknown function "${dependency.functionName}"';
+			var owner = resolveFunctionModule(fn, owners, typedByName, []),
+				state = context.writableState(owner, rollbackModules);
+			if (state.dependencies.indexOf(target) < 0) {
+				state.dependencies.push(target);
+				state.dependencies.sort(Reflect.compare);
+				changed = true;
+			}
+		}
+		return changed;
 	}
 
 	static function indexTypedInitializers(context:CompilationContext, typed:TypedProgram, reindexedModules:Map<String, Bool>):Void {

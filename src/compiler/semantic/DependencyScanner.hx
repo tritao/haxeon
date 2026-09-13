@@ -63,7 +63,10 @@ class DependencyScanner {
 
 	public static function scanExpression(e:AstExpression, dependencies:Map<String, Bool>):Void
 		switch e {
-			case Add(a, b, _), Sub(a, b, _), Mul(a, b, _), Div(a, b, _), Mod(a, b, _), BitAnd(a, b, _), BitXor(a, b, _), BitOr(a, b, _), ShiftLeft(a, b, _),
+			case Add(a, b, _):
+				scanExpression(a, dependencies);
+				scanExpression(b, dependencies);
+			case Sub(a, b, _), Mul(a, b, _), Div(a, b, _), Mod(a, b, _), BitAnd(a, b, _), BitXor(a, b, _), BitOr(a, b, _), ShiftLeft(a, b, _),
 				ShiftRight(a, b, _), UnsignedShiftRight(a, b, _), Less(a, b, _), LessEqual(a, b, _), Greater(a, b, _), GreaterEqual(a, b, _), Equal(a, b, _),
 				NotEqual(a, b, _):
 				scanExpression(a, dependencies);

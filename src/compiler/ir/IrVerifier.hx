@@ -193,6 +193,13 @@ class IrVerifier {
 				expect(out, F64);
 			case ConstString(out, _):
 				expect(out, Bytes);
+			case StaticDataAddress(out, bytes):
+				expect(out, I32);
+				if (bytes.length == 0 || (bytes.length & 3) != 0)
+					throw "IR static data must contain complete 32-bit words";
+				for (byte in bytes)
+					if (byte < 0 || byte > 255)
+						throw "IR static data contains a value outside the byte range";
 			case ConstBool(out, _):
 				expect(out, Bool);
 			case ConstNull(out):
@@ -245,17 +252,25 @@ class IrVerifier {
 					throw "IR arithmetic requires matching numeric values";
 				require(values, a);
 				require(values, b);
-			case Mod(out, a, b), BitAnd(out, a, b), BitXor(out, a, b), BitOr(out, a, b), ShiftLeft(out, a, b), ShiftRight(out, a, b),
-				UnsignedShiftRight(out, a, b):
-				expect(out, I32);
-				expect(a, I32);
-				expect(b, I32);
+			case Mod(out, a, b):
+				if (!sameType(out.type, a.type) || !sameType(a.type, b.type) || (a.type != I32 && a.type != I64))
+					throw "IR modulo requires matching integer values";
+				require(values, a);
+				require(values, b);
+			case BitAnd(out, a, b), BitXor(out, a, b), BitOr(out, a, b):
+				if (!sameType(out.type, a.type) || !sameType(a.type, b.type) || (a.type != I32 && a.type != I64))
+					throw "IR bitwise operation requires matching integer values";
+				require(values, a);
+				require(values, b);
+			case ShiftLeft(out, a, b), ShiftRight(out, a, b), UnsignedShiftRight(out, a, b):
+				if (!sameType(out.type, a.type) || (a.type != I32 && a.type != I64) || b.type != I32)
+					throw "IR shift requires an Int or Int64 value and an Int count";
 				require(values, a);
 				require(values, b);
 			case Less(out, a, b), LessEqual(out, a, b):
 				expect(out, Bool);
-				if (!sameType(a.type, b.type) || (a.type != I32 && a.type != F64))
-					throw 'IR ordered comparison requires matching Int or Float values';
+				if (!sameType(a.type, b.type) || (a.type != I32 && a.type != I64 && a.type != F64))
+					throw 'IR ordered comparison requires matching numeric values';
 				require(values, a);
 				require(values, b);
 			case Equal(out, a, b):
@@ -263,7 +278,7 @@ class IrVerifier {
 				require(values, a);
 				require(values, b);
 				if (!sameType(a.type, b.type)
-					|| (!sameType(a.type, I32) && !sameType(a.type, F64) && !sameType(a.type, Bool) && !isReference(a.type)))
+					|| (!sameType(a.type, I32) && !sameType(a.type, I64) && !sameType(a.type, F64) && !sameType(a.type, Bool) && !isReference(a.type)))
 					throw 'IR equality requires matching primitive or reference values';
 			case Call(out, name, args), CNativeCall(out, name, args):
 				if (!signatures.exists(name))

@@ -230,6 +230,12 @@ class CfgBuilder {
 		return out;
 	}
 
+	public function staticDataAddress(bytes:Array<Int>):CfgValue {
+		var out = temporary(I32);
+		emit(StaticDataAddress(out, bytes));
+		return out;
+	}
+
 	public function constBool(value:Bool):CfgValue {
 		var out = temporary(Bool);
 		emit(ConstBool(out, value));

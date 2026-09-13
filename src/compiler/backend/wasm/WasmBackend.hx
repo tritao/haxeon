@@ -117,20 +117,16 @@ class WasmBackend implements Backend {
 							}
 						default:
 					}
-		for (value in ["null", "true", "false", "NaN", "Infinity", "-Infinity", "0"])
+		for (value in ["null", "true", "false"])
 			if (!strings.exists(value)) {
 				var bytes = stringBytes(value), offset = nextData;
 				module.data.push({offset: offset, bytes: bytes});
 				strings.set(value, offset);
 				nextData = align(offset + bytes.length, 8);
 			}
-		var ryuTableBase = -1;
-		if (usedNatives.exists("__std_string")) {
-			var ryuTable = WasmRyuTables.bytes();
-			ryuTableBase = nextData;
-			module.data.push({offset: nextData, bytes: ryuTable});
-			nextData = align(nextData + ryuTable.length, 8);
-		}
+		var staticData = placeStaticData(program, module, nextData, reachable);
+		nextData = staticData.end;
+		WasmFunctionLower.setStaticDataAddresses(staticData.addresses);
 		module.memoryMin = 1;
 		module.exportMemory = !importMemory;
 		var rootBase = align(Std.int(Math.max(1024, nextData)), 8),
@@ -196,7 +192,6 @@ class WasmBackend implements Backend {
 		linear.globals = globals;
 		linear.rootGlobals = rootGlobals;
 		linear.strings = strings;
-		linear.ryuTableBase = ryuTableBase;
 		addCNativeImports(module, functions, program, usedCNatives);
 		WasmLinearRuntime.addImports(linear, usedNatives);
 		WasmLinearGc.build(linear);
@@ -313,6 +308,9 @@ class WasmBackend implements Backend {
 						case Value:
 					}
 			}
+		for (native in program.natives)
+			if (usedNatives.exists(native.name) && native.symbol == "__wasm_memory_load_i32")
+				requiresLinearMemory = true;
 
 		var plan = new WasmGcTypePlan(program),
 			gcRepresentation = new WasmGcRepresentation(plan),
@@ -322,14 +320,17 @@ class WasmBackend implements Backend {
 			functions:Map<String, Int> = [],
 			methods:Map<String, String> = [];
 		plan.addTo(module);
+		var staticData = placeStaticData(program, module, 8, reachable),
+			hasStaticData = staticData.addresses.iterator().hasNext();
+		WasmFunctionLower.setStaticDataAddresses(staticData.addresses);
 		var scratchTop = -1;
-		if (requiresScratchMemory || requiresLinearMemory) {
-			module.memoryMin = 1;
-			module.exportMemory = true;
+		if (requiresScratchMemory || requiresLinearMemory || hasStaticData) {
+			module.memoryMin = memoryPages(staticData.end);
+			module.exportMemory = requiresScratchMemory || requiresLinearMemory;
 		}
 		if (requiresScratchMemory) {
 			scratchTop = module.globals.length;
-			module.globals.push({type: I32, mutable: true, init: [I32Const(8)]});
+			module.globals.push({type: I32, mutable: true, init: [I32Const(staticData.end)]});
 		}
 		addGcCNativeImports(module, functions, program, usedCNatives);
 		gcRepresentation.configureNativePointerReleases(gcPointerReleaseFunctionIndices(program, reachable, functions));
@@ -438,7 +439,7 @@ class WasmBackend implements Backend {
 							Equal(_, _, _), NewObject(_, _), FieldGet(_, _, _), FieldSet(_, _, _), ArrayGet(_, _, _), ArraySet(_, _, _), ArraySize(_, _),
 							IteratorNew(_, _), IteratorHasNext(_, _), IteratorNext(_, _), MakeEnum(_, _, _, _), EnumIndex(_, _), EnumField(_, _, _, _),
 							IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _), BeginTry(_, _), EndTry(_), Catch(_):
-						case ConstString(_, _):
+						case ConstString(_, _), StaticDataAddress(_, _):
 						case ToDyn(_, _), SafeCast(_, _), ToVirtual(_, _):
 						case Call(_, name, _) if (declaredFunctions.exists(name) || isSupportedGcNative(program, name)):
 						case CNativeCall(_, name, _) if (declaredCNatives.exists(name)):
@@ -523,7 +524,8 @@ class WasmBackend implements Backend {
 				"__array_index_of_i32", "__array_index_of_bool", "__array_index_of_f64", "__array_index_of_bytes", "__array_index_of_ref",
 				"__array_slice_i32", "__array_slice_bool", "__array_slice_f64", "__array_slice_bytes", "__array_slice_ref", "__array_join_bytes",
 				"__math_ceil", "Math.mathIsNaN", "__math_is_nan", "__std_int_f64", "__std_int_dynamic", "__std_string", "__std_is_of_type",
-				"__exception_matches", "__reflect_is_object", "__dynamic_equal", "__bytes_alloc", "__bytes_of_string", "__bytes_length", "__bytes_get",
+				"__exception_matches", "__reflect_is_object", "__dynamic_equal", "__f64_to_i64_bits", "__i64_to_f64_bits", "haxe.Int64.ushr",
+				"haxe.Int64.compare", "haxe.Int64.make", "haxe.Int64.toInt", "__bytes_alloc", "__bytes_of_string", "__bytes_length", "__bytes_get",
 				"__bytes_set", "__bytes_get_i32", "__bytes_set_i32", "getI32", "setI32", "__bytes_view", "__bytes_sub", "__bytes_compare",
 				"__bytes_to_string", "__bytes_get_string", "structSlice", "__bytes_input_new", "__bytes_input_position", "__bytes_input_big_endian",
 				"__bytes_input_set_big_endian", "__bytes_input_read_byte", "__bytes_input_read_i32", "__bytes_input_read_f64", "__bytes_input_read_string",
@@ -532,7 +534,7 @@ class WasmBackend implements Backend {
 				"__bytes_output_get_bytes", "structGetPointer", "native_pointer_close", "native_pointer_is_closed", "native_pointer_owned_from_slot",
 				"__string_length", "__string_char_at", "__string_char_code_at", "__string_concat", "__string_equal", "__string_compare_full",
 				"__string_index_of", "__string_index_of_from", "__string_last_index_of", "__string_last_index_of_from", "__string_to_lower_case",
-				"__string_to_upper_case", "__string_split", "__string_substring", "__string_from_char_code": true;
+				"__string_to_upper_case", "__string_split", "__string_substring", "__string_from_char_code", "__wasm_memory_load_i32": true;
 			default: false;
 		};
 	}
@@ -1108,6 +1110,38 @@ class WasmBackend implements Backend {
 	public static function align(value:Int, boundary:Int):Int
 		return (value + boundary - 1) & ~(boundary - 1);
 
+	static function placeStaticData(program:IrProgram, module:WasmModule, start:Int, reachable:Map<String, Bool>):{addresses:Map<String, Int>, end:Int} {
+		var addresses:Map<String, Int> = [], next = start;
+		for (fn in program.functions)
+			if (reachable.exists(fn.name))
+				for (block in fn.blocks)
+					for (located in block.instructions)
+						switch located.value {
+							case StaticDataAddress(_, bytes):
+								var key = staticDataKey(bytes);
+								if (!addresses.exists(key)) {
+									var offset = align(next, 8),
+										data = HaxeBytes.alloc(bytes.length);
+									for (index in 0...bytes.length)
+										data.set(index, bytes[index]);
+									module.data.push({offset: offset, bytes: data});
+									addresses.set(key, offset);
+									next = offset + data.length;
+								}
+							default:
+						}
+		return {addresses: addresses, end: align(next, 8)};
+	}
+
+	public static function staticDataKey(bytes:Array<Int>):String {
+		var digits = "0123456789abcdef", key = new StringBuf();
+		for (byte in bytes) {
+			key.add(digits.charAt(byte >>> 4));
+			key.add(digits.charAt(byte & 15));
+		}
+		return key.toString();
+	}
+
 	static function hasFunction(program:IrProgram, name:String):Bool {
 		for (fn in program.functions)
 			if (fn.name == name)
@@ -1266,6 +1300,7 @@ class WasmFunctionLower {
 	static var activeProgram:IrProgram;
 	static var activeRepresentation:WasmRepresentation;
 	static var activeTableSlots:Map<String, Int>;
+	static var activeStaticDataAddresses:Map<String, Int>;
 	static var activeElidedDynamicArrayCasts:Map<Int, IrValue>;
 	static var activeArrayTemps:{
 		len:Int,
@@ -1289,6 +1324,9 @@ class WasmFunctionLower {
 		live:Map<Int, Map<Int, Array<Int>>>,
 		size:Int
 	}>;
+
+	public static function setStaticDataAddresses(addresses:Map<String, Int>):Void
+		activeStaticDataAddresses = addresses;
 
 	static function requiredLocal(locals:Map<Int, Int>, valueId:Int):Int {
 		if (!locals.exists(valueId))
@@ -2001,6 +2039,11 @@ class WasmFunctionLower {
 						throw 'Wasm string literal was not placed in a data segment';
 					emit(body, [I32Const(pointer), LocalSet(requiredLocal(values, output.id))]);
 				}
+			case StaticDataAddress(output, bytes):
+				var address = activeStaticDataAddresses.get(WasmBackend.staticDataKey(bytes));
+				if (address == null)
+					throw "Wasm static data address was not placed in the data section";
+				emit(body, [I32Const(address), LocalSet(requiredLocal(values, output.id))]);
 			case MakeEnum(output, typeName, constructor, arguments):
 				var represented = activeRepresentation.makeEnum(typeName, constructor, arguments, requiredLocal(values, output.id),
 					[for (argument in arguments) requiredLocal(values, argument.id)]);
@@ -2351,11 +2394,11 @@ class WasmFunctionLower {
 			case BitOr(output, left, right):
 				binary(body, output, left, right, values, arithmeticInstruction(left.type, I32Or, I64Or, I32Or));
 			case ShiftLeft(output, left, right):
-				binary(body, output, left, right, values, arithmeticInstruction(left.type, I32Shl, I64Shl, I32Shl));
+				shift(body, output, left, right, values, arithmeticInstruction(left.type, I32Shl, I64Shl, I32Shl));
 			case ShiftRight(output, left, right):
-				binary(body, output, left, right, values, arithmeticInstruction(left.type, I32ShrS, I64ShrS, I32ShrS));
+				shift(body, output, left, right, values, arithmeticInstruction(left.type, I32ShrS, I64ShrS, I32ShrS));
 			case UnsignedShiftRight(output, left, right):
-				binary(body, output, left, right, values, arithmeticInstruction(left.type, I32ShrU, I64ShrU, I32ShrU));
+				shift(body, output, left, right, values, arithmeticInstruction(left.type, I32ShrU, I64ShrU, I32ShrU));
 			case Less(output, left, right):
 				binary(body, output, left, right, values, comparisonInstruction(left.type, F64Lt, I64LtS, I32LtS));
 			case LessEqual(output, left, right):
@@ -2441,6 +2484,14 @@ class WasmFunctionLower {
 	}
 
 	static function lowerInt64Native(body:Array<WasmInstruction>, output:IrValue, name:String, arguments:Array<IrValue>, values:Map<Int, Int>):Bool {
+		if (name == "haxe.Int64.toInt") {
+			if (arguments.length != 1 || output.type != I32)
+				throw "Invalid haxe.Int64.toInt Wasm native signature";
+			body.push(LocalGet(requiredLocal(values, arguments[0].id)));
+			body.push(I32WrapI64);
+			body.push(LocalSet(requiredLocal(values, output.id)));
+			return true;
+		}
 		if (name == "haxe.Int64.compare") {
 			if (arguments.length != 2 || output.type != I32)
 				throw "Invalid haxe.Int64.compare Wasm native signature";
@@ -2725,6 +2776,15 @@ class WasmFunctionLower {
 		]);
 	}
 
+	static function shift(body:Array<WasmInstruction>, output:IrValue, left:IrValue, right:IrValue, values:Map<Int, Int>, op:WasmInstruction):Void {
+		body.push(LocalGet(requiredLocal(values, left.id)));
+		body.push(LocalGet(requiredLocal(values, right.id)));
+		if (left.type == I64 && right.type == I32)
+			body.push(I64ExtendI32U);
+		body.push(op);
+		body.push(LocalSet(requiredLocal(values, output.id)));
+	}
+
 	static function arithmeticInstruction(type:IrType, f64:WasmInstruction, i64:WasmInstruction, i32:WasmInstruction):WasmInstruction
 		return switch type {
 			case F64: f64;
@@ -2823,13 +2883,13 @@ class WasmFunctionLower {
 
 	static function outputOf(instruction:IrInstruction):Null<IrValue>
 		return switch instruction {
-			case Phi(output, _), ConstVoid(output), ConstInt(output, _), ConstFloat(output, _), ConstString(output, _), ConstBool(output, _),
-				ConstNull(output), TypeValue(output, _), ToDyn(output, _), IntToFloat(output, _), IntToInt64(output, _), FloatToInt(output, _),
-				SafeCast(output, _), Catch(output), GlobalGet(output, _), Add(output, _, _), Sub(output, _, _), Mul(output, _, _), Div(output, _, _),
-				Mod(output, _, _), BitAnd(output, _, _), BitXor(output, _, _), BitOr(output, _, _), ShiftLeft(output, _, _), ShiftRight(output, _, _),
-				UnsignedShiftRight(output, _, _), Less(output, _, _), LessEqual(output, _, _), Equal(output, _, _), Call(output, _, _),
-				CNativeCall(output, _, _), StaticClosure(output, _), InstanceClosure(output, _, _), CallClosure(output, _, _), ToVirtual(output, _),
-				MethodCall(output, _, _, _), NewObject(output, _), FieldGet(output, _, _), ArrayGet(output, _, _), ArraySize(output, _),
+			case Phi(output, _), ConstVoid(output), ConstInt(output, _), ConstFloat(output, _), ConstString(output, _), StaticDataAddress(output, _),
+				ConstBool(output, _), ConstNull(output), TypeValue(output, _), ToDyn(output, _), IntToFloat(output, _), IntToInt64(output, _),
+				FloatToInt(output, _), SafeCast(output, _), Catch(output), GlobalGet(output, _), Add(output, _, _), Sub(output, _, _), Mul(output, _, _),
+				Div(output, _, _), Mod(output, _, _), BitAnd(output, _, _), BitXor(output, _, _), BitOr(output, _, _), ShiftLeft(output, _, _),
+				ShiftRight(output, _, _), UnsignedShiftRight(output, _, _), Less(output, _, _), LessEqual(output, _, _), Equal(output, _, _),
+				Call(output, _, _), CNativeCall(output, _, _), StaticClosure(output, _), InstanceClosure(output, _, _), CallClosure(output, _, _),
+				ToVirtual(output, _), MethodCall(output, _, _, _), NewObject(output, _), FieldGet(output, _, _), ArrayGet(output, _, _), ArraySize(output, _),
 				IteratorNew(output, _), IteratorHasNext(output, _), IteratorNext(output, _), MakeEnum(output, _, _, _), EnumIndex(output, _),
 				EnumField(output, _, _, _): output;
 			case BeginTry(_, _), EndTry(_), GlobalSet(_, _), FieldSet(_, _, _), ArraySet(_, _, _): null;

@@ -339,6 +339,9 @@ class SsaBuilder {
 				case ConstString(out, value):
 					var result = define(out);
 					emit(target, ConstString(result, value), provenance);
+				case StaticDataAddress(out, bytes):
+					var result = define(out);
+					emit(target, StaticDataAddress(result, bytes), provenance);
 				case ConstBool(out, value):
 					var result = define(out);
 					emit(target, ConstBool(result, value), provenance);

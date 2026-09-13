@@ -289,6 +289,9 @@ class ModuleAnalyzer {
 		}
 	}
 
+	public function loadSourceModuleDependency(path:String):Null<String>
+		return sourceModuleForDependency(path);
+
 	static function isPlatformDependency(path:String):Bool {
 		var root = QualifiedName.first(path);
 		return root == "haxe" || root == "sys" || root == "hl" || root == "Array" || root == "String" || root == "Math" || root == "Reflect"

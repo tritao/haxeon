@@ -651,6 +651,7 @@ class IrGenerator {
 			case TIntLiteral(value): builder.constInt(value, lowerType(expression.type));
 			case TFloatLiteral(value): builder.constFloat(value);
 			case TStringLiteral(value): builder.constString(value);
+			case TRuntimeDataAddress(bytes): builder.staticDataAddress(bytes);
 			case TBoolLiteral(value): builder.constBool(value);
 			case TEnumLiteral(name, index): builder.makeEnum(name, index, []);
 			case TEnumConstruct(name, index, arguments): builder.makeEnum(name, index, lowerOperands(arguments, builder, localTypes));

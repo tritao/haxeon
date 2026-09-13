@@ -48,6 +48,7 @@ enum IrInstruction {
 	ConstInt(output:IrValue, value:Int);
 	ConstFloat(output:IrValue, value:Float);
 	ConstString(output:IrValue, value:String);
+	StaticDataAddress(output:IrValue, bytes:Array<Int>);
 	ConstBool(output:IrValue, value:Bool);
 	ConstNull(output:IrValue);
 	TypeValue(output:IrValue, type:IrType);

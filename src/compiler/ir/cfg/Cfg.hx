@@ -28,6 +28,7 @@ enum CfgInstruction {
 	ConstInt(output:CfgValue, value:Int);
 	ConstFloat(output:CfgValue, value:Float);
 	ConstString(output:CfgValue, value:String);
+	StaticDataAddress(output:CfgValue, bytes:Array<Int>);
 	ConstBool(output:CfgValue, value:Bool);
 	ConstNull(output:CfgValue);
 	TypeValue(output:CfgValue, type:IrType);

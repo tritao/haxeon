@@ -17,6 +17,9 @@ extern class Int64 {
 	@:hlNative("haxeon_runtime", "__int64_make")
 	public static function make(high:Int, low:Int):haxe.Int64;
 
+	@:hlNative("haxeon_runtime", "__int64_to_int")
+	public static function toInt(value:haxe.Int64):Int;
+
 	@:hlNative("haxeon_runtime", "__int64_add")
 	public static function add(left:haxe.Int64, right:haxe.Int64):haxe.Int64;
 

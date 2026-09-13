@@ -232,8 +232,8 @@ class IrFunctionStateCodec {
 				collectValue(output, values);
 				for (input in inputs)
 					collectValue(input.value, values);
-			case ConstVoid(output), ConstInt(output, _), ConstFloat(output, _), ConstString(output, _), ConstBool(output, _), ConstNull(output),
-				TypeValue(output, _), Catch(output), GlobalGet(output, _), StaticClosure(output, _), NewObject(output, _):
+			case ConstVoid(output), ConstInt(output, _), ConstFloat(output, _), ConstString(output, _), StaticDataAddress(output, _), ConstBool(output, _),
+				ConstNull(output), TypeValue(output, _), Catch(output), GlobalGet(output, _), StaticClosure(output, _), NewObject(output, _):
 				collectValue(output, values);
 			case ToDyn(output, value), IntToFloat(output, value), IntToInt64(output, value), FloatToInt(output, value), SafeCast(output, value),
 				InstanceClosure(output, _, value), ToVirtual(output, value), ArraySize(output, value), IteratorNew(output, value),

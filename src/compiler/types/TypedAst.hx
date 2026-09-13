@@ -22,6 +22,7 @@ enum TypedExpressionKind {
 	TIntLiteral(value:Int);
 	TFloatLiteral(value:Float);
 	TStringLiteral(value:String);
+	TRuntimeDataAddress(bytes:Array<Int>);
 	TBoolLiteral(value:Bool);
 	TEnumLiteral(name:String, index:Int);
 	TEnumConstruct(name:String, index:Int, arguments:Array<TypedExpression>);

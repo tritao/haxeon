@@ -54,6 +54,9 @@ class CompilationContext {
 	public function addTypeDependencies(state:ModuleState):Void
 		moduleAnalyzer.addTypeDependencies(state);
 
+	public function loadSourceModuleDependency(path:String):Null<String>
+		return moduleAnalyzer.loadSourceModuleDependency(path);
+
 	public function importAliases(imports:Array<String>, explicit:Map<String, String>):Map<String, String>
 		return moduleAnalyzer.importAliases(imports, explicit);
 

@@ -19,6 +19,11 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  * IN THE SOFTWARE.
  */
+
+#if wasm
+import runtime.Ryu;
+#end
+
 @:hlNative("haxeon_runtime", "__std_parse_int")
 extern function stdParseInt(value:String):Int;
 
@@ -37,6 +42,10 @@ extern function stdString(value:Dynamic):String;
 /** Supported core conversions backed by the stable runtime ABI. */
 class Std {
 	public static inline function string(value:Dynamic):String {
+		#if wasm
+		if (Std.isOfType(value, Float))
+			return Ryu.format(cast value);
+		#end
 		return stdString(value);
 	}
 

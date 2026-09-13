@@ -20,6 +20,7 @@ HL_PRIM vbyte *HL_NAME(__int64_to_string)(int64_t value) {
 HL_PRIM int64_t HL_NAME(__int64_of_int)(int value) { return (int64_t)value; }
 HL_PRIM int64_t HL_NAME(__int64_from_float)(double value) { return (int64_t)value; }
 HL_PRIM int64_t HL_NAME(__int64_make)(int high, int low) { return (int64_t)(((uint64_t)(uint32_t)high << 32) | (uint32_t)low); }
+HL_PRIM int HL_NAME(__int64_to_int)(int64_t value) { return (int)value; }
 HL_PRIM int64_t HL_NAME(__int64_add)(int64_t left, int64_t right) { return left + right; }
 HL_PRIM int64_t HL_NAME(__int64_sub)(int64_t left, int64_t right) { return left - right; }
 HL_PRIM int64_t HL_NAME(__int64_and)(int64_t left, int64_t right) { return left & right; }
