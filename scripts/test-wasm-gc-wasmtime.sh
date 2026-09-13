@@ -26,7 +26,7 @@ mkdir -p "$root_dir/out"
 	--target=wasm-gc --output=out/wasm-gc-wasmtime-bytes.wasm --entry=wasm-gc-bytes \
 	--root=tests/programs tests/programs/wasm-gc-bytes.hx
 
-for case_name in add array-iterator-wasm array-slice-index array-growth-wasm array-alias-growth array-index-growth array-resize array-expression-mutation array-field-mutation array-copy-concat array-unshift array-insert array-splice array-remove array-object-mutation array-reverse dynamic-equality numeric-promotion function-wrapper std-is-of-type map-basic map-int map-primitive-types map-literal map-object map-anonymous-enum map-for-in map-key-value-for-in map-comprehension map-nullable-get nullable-map-get map-string-equality string-concat-mixed string-split string-split-edge bytes-codec bytes-stream-edge reflect-compare-sort generic-interface interface-dispatch interface-inheritance interface-upcast interface-field try-catch try-nested try-array-bounds concise-try try-typed-class try-typed-mismatch try-typed-int try-multiple-catches enum-argument-string string-interpolation std-string-dynamic; do
+for case_name in add array-iterator-wasm array-slice-index array-growth-wasm array-alias-growth array-index-growth array-resize array-expression-mutation array-field-mutation array-copy-concat array-unshift array-insert array-splice array-remove array-object-mutation array-reverse dynamic-equality numeric-promotion function-wrapper std-is-of-type map-basic map-int map-primitive-types map-literal map-object map-anonymous-enum map-for-in map-key-value-for-in map-comprehension map-nullable-get nullable-map-get map-string-equality string-concat-mixed string-split string-split-edge bytes-codec bytes-stream-edge reflect-compare-sort generic-interface generic-contextual-callback interface-dispatch interface-inheritance interface-upcast interface-field try-catch try-nested try-array-bounds concise-try try-typed-class try-typed-mismatch try-typed-int try-multiple-catches enum-argument-string string-interpolation std-string-dynamic; do
 	"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 		--target=wasm-gc --output="out/wasm-gc-wasmtime-$case_name.wasm" --entry="$case_name" \
 		--root=tests/programs "tests/programs/$case_name.hx"
@@ -87,6 +87,7 @@ for artifact in \
 	wasm-gc-wasmtime-bytes-stream-edge \
 	wasm-gc-wasmtime-reflect-compare-sort \
 	wasm-gc-wasmtime-generic-interface \
+	wasm-gc-wasmtime-generic-contextual-callback \
 	wasm-gc-wasmtime-interface-dispatch \
 	wasm-gc-wasmtime-interface-inheritance \
 	wasm-gc-wasmtime-interface-upcast \

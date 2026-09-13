@@ -89,9 +89,10 @@ class WasmBackend implements Backend {
 			throw 'Wasm memory base must be a non-negative 8-byte-aligned value, got $memoryBase';
 		module.importMemory = importMemory;
 		var preferredEntry = hasFunction(program, "main") ? "main" : hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint,
-			reachable = reachableFunctions(program, preferredEntry, exportedFunctions);
+			roots = exportedFunctions.copy();
 		if (hasFunction(program, "__init"))
-			reachable.set("__init", true);
+			roots.push("__init");
+		var reachable = reachableFunctions(program, preferredEntry, roots);
 		var usedCNatives = reachableCNatives(program, reachable),
 			usedNatives = reachableNatives(program, reachable);
 		var layout = new WasmLayout(program);
@@ -270,9 +271,10 @@ class WasmBackend implements Backend {
 		IrVerifier.verify(program);
 		var preferredEntry = hasFunction(program, "main") ? "main" : hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint,
 			exportedFunctions = options.exports == null ? [] : options.exports,
-			reachable = reachableFunctions(program, preferredEntry, exportedFunctions);
+			roots = exportedFunctions.copy();
 		if (hasFunction(program, "__init"))
-			reachable.set("__init", true);
+			roots.push("__init");
+		var reachable = reachableFunctions(program, preferredEntry, roots);
 		validateGcSubset(program, reachable, preferredEntry);
 		var usedNatives = reachableNatives(program, reachable),
 			usedCNatives = reachableGcCNatives(program, reachable),
