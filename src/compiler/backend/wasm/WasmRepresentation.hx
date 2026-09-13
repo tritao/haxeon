@@ -1145,6 +1145,8 @@ class WasmGcRepresentation implements WasmRepresentation {
 		}
 		if (name == "__string_char_code_at")
 			return stringCharCodeAt(output, arguments, outputLocal, argumentLocals);
+		if (name == "__string_from_char_code")
+			return stringFromCharCode(output, arguments, outputLocal, argumentLocals);
 		if (name == "__string_char_at")
 			return stringCharAt(output, arguments, outputLocal, argumentLocals);
 		if (name == "__string_concat")
@@ -3769,6 +3771,41 @@ class WasmGcRepresentation implements WasmRepresentation {
 			ArrayGetUnsigned(plan.byteArrayTypeIndex),
 			LocalSet(destination)
 		]);
+		return body;
+	}
+
+	function stringFromCharCode(output:IrValue, arguments:Array<IrValue>, destination:Int, argumentLocals:Array<Int>):Array<WasmInstruction> {
+		if (output.type != Bytes || arguments.length != 1 || argumentLocals.length != 1 || arguments[0].type != I32)
+			throw "Invalid Wasm GC string fromCharCode signature";
+		var code = allocateLocal(I32),
+			storage = allocateLocal(Ref({nullable: false, heap: Type(plan.byteArrayTypeIndex)})),
+			body:Array<WasmInstruction> = [
+				LocalGet(argumentLocals[0]),
+				I32Const(255),
+				I32And,
+				LocalTee(code),
+				I32Eqz,
+				If(null),
+				I32Const(0),
+				ArrayNewDefault(plan.byteArrayTypeIndex),
+				I32Const(0),
+				I32Const(0),
+				StructNew(plan.bytesTypeIndex),
+				LocalSet(destination),
+				Else,
+				I32Const(1),
+				ArrayNewDefault(plan.byteArrayTypeIndex),
+				LocalTee(storage),
+				I32Const(0),
+				LocalGet(code),
+				ArraySet(plan.byteArrayTypeIndex),
+				LocalGet(storage),
+				I32Const(0),
+				I32Const(1),
+				StructNew(plan.bytesTypeIndex),
+				LocalSet(destination),
+				End
+			];
 		return body;
 	}
 
