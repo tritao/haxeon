@@ -42,6 +42,7 @@ class WasmGcTypePlan {
 	public final boxedPrimitiveTypeIndices:Map<String, Int> = [];
 	public var byteArrayTypeIndex(default, null):Int = -1;
 	public var bytesTypeIndex(default, null):Int = -1;
+	public var managedBytesTypeIndex(default, null):Int = -1;
 	public var closureTypeIndex(default, null):Int = -1;
 
 	final objectDeclarations:Map<String, IrObject> = [];
@@ -179,7 +180,7 @@ class WasmGcTypePlan {
 			case Iterator(element): Ref(nullableType(iteratorType(element)));
 			case Function(_, _): Ref(nullableType(closureTypeIndex));
 			case Bytes: Ref(nullableType(bytesTypeIndex));
-			case ManagedBytes: Ref(nullableType(byteArrayTypeIndex));
+			case ManagedBytes: Ref(nullableType(managedBytesTypeIndex));
 			// Abstracts and virtual interfaces retain Haxe's existing dispatch metadata and begin as opaque anyrefs.
 			case Dyn, Abstract(_), Virtual(_): Ref({nullable: true, heap: Any});
 		};
@@ -428,6 +429,7 @@ class WasmGcTypePlan {
 	function reserveRuntimeTypes():Void {
 		byteArrayTypeIndex = reserveType();
 		bytesTypeIndex = reserveType();
+		managedBytesTypeIndex = reserveType();
 		closureTypeIndex = reserveType();
 		boxedPrimitiveTypeIndices.set("i32", reserveType());
 		boxedPrimitiveTypeIndices.set("bool", reserveType());
@@ -487,6 +489,11 @@ class WasmGcTypePlan {
 	function defineRuntimeTypes():Void {
 		setType(byteArrayTypeIndex, true, [], Array({type: I8, mutable: true}));
 		setType(bytesTypeIndex, true, [], Struct([
+			{type: Value(Ref({nullable: false, heap: Type(byteArrayTypeIndex)})), mutable: true},
+			{type: Value(I32), mutable: true},
+			{type: Value(I32), mutable: true}
+		]));
+		setType(managedBytesTypeIndex, true, [], Struct([
 			{type: Value(Ref({nullable: false, heap: Type(byteArrayTypeIndex)})), mutable: true},
 			{type: Value(I32), mutable: true},
 			{type: Value(I32), mutable: true}

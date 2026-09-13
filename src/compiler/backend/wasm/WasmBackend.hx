@@ -328,7 +328,7 @@ class WasmBackend implements Backend {
 		var usedNatives = reachableNatives(program, reachable),
 			usedCNatives = reachableCNatives(program, reachable);
 		for (native in program.natives)
-			if (usedNatives.exists(native.name) && !isSupportedGcRuntimeNative(native.name))
+			if (usedNatives.exists(native.name) && !isSupportedGcNative(program, native.name))
 				throw 'Wasm GC lowering does not support runtime native "${native.name}" yet';
 		for (native in program.cNatives)
 			if (usedCNatives.exists(native.name))
@@ -351,7 +351,7 @@ class WasmBackend implements Backend {
 							IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _), BeginTry(_, _), EndTry(_), Catch(_):
 						case ConstString(_, _):
 						case ToDyn(_, _), SafeCast(_, _), ToVirtual(_, _):
-						case Call(_, name, _) if (declaredFunctions.exists(name) || isSupportedGcRuntimeNative(name)):
+						case Call(_, name, _) if (declaredFunctions.exists(name) || isSupportedGcNative(program, name)):
 						case StaticClosure(_, name) if (declaredFunctions.exists(name)):
 						case InstanceClosure(_, name, receiver) if (declaredFunctions.exists(name) && isObjectReference(receiver.type)):
 						case CallClosure(_, closure, _) if (isFunctionType(closure.type)):
@@ -383,10 +383,20 @@ class WasmBackend implements Backend {
 	static function isSupportedGcRuntimeNative(name:String):Bool
 		return switch name {
 			case "__array_alloc_i32", "__array_alloc_bool", "__array_alloc_f64", "__array_alloc_bytes", "__array_alloc_ref", "__array_push_i32",
-				"__array_push_bool", "__array_push_f64", "__array_push_bytes", "__array_push_ref", "__dynamic_equal", "__string_length",
-				"__string_char_code_at", "__string_concat", "__string_equal": true;
+				"__array_push_bool", "__array_push_f64", "__array_push_bytes", "__array_push_ref", "__dynamic_equal", "__bytes_alloc", "__bytes_of_string",
+				"__bytes_length", "__bytes_get", "__bytes_set", "__bytes_get_i32", "__bytes_set_i32", "__bytes_view", "__bytes_sub", "__bytes_compare",
+				"__bytes_to_string", "__bytes_get_string", "__string_length", "__string_char_code_at", "__string_concat", "__string_equal": true;
 			default: false;
 		};
+
+	static function isSupportedGcNative(program:IrProgram, name:String):Bool {
+		if (isSupportedGcRuntimeNative(name))
+			return true;
+		for (native in program.natives)
+			if (native.name == name)
+				return isSupportedGcRuntimeNative(native.symbol);
+		return false;
+	}
 
 	static function addMemoryStatExport(module:WasmModule, name:String, body:Array<WasmInstruction>):Void {
 		var index = module.addFunction(new WasmFunction(name, {parameters: [], results: [I32]}, [], body));
@@ -5586,8 +5596,12 @@ class WasmFunctionLower {
 				emit(body,
 					activeRepresentation.equal(requiredLocal(values, output.id), left, right, requiredLocal(values, left.id), requiredLocal(values, right.id)));
 			case Call(output, name, arguments):
+				var runtimeName = name;
+				for (native in activeProgram.natives)
+					if (native.name == name)
+						runtimeName = native.symbol;
 				var outputLocal = output.type == Void ? -1 : requiredLocal(values, output.id),
-					represented = activeRepresentation.lowerRuntimeCall(name, output, arguments, outputLocal,
+					represented = activeRepresentation.lowerRuntimeCall(runtimeName, output, arguments, outputLocal,
 						[for (argument in arguments) requiredLocal(values, argument.id)]);
 				if (represented != null)
 					emit(body, represented);

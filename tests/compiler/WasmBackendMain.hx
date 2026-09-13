@@ -530,13 +530,14 @@ class WasmBackendMain {
 			case Ref(ref): ref.nullable && isAnyHeapType(ref.heap);
 			default: false;
 		};
-		var managedBytesIsByteArray = switch plan.valueType(ManagedBytes) {
-			case Ref(ref): ref.nullable && isTypeHeap(ref.heap, plan.byteArrayTypeIndex);
+		var managedBytesIsWrapper = switch plan.valueType(ManagedBytes) {
+			case Ref(ref): ref.nullable && isTypeHeap(ref.heap, plan.managedBytesTypeIndex);
 			default: false;
 		};
 		if (!dynamicIsAnyRef
 			|| plan.valueType(TypeRef) != I32
-			|| !managedBytesIsByteArray
+			|| !managedBytesIsWrapper
+			|| plan.managedBytesTypeIndex == plan.byteArrayTypeIndex
 			|| plan.boxedPrimitiveType(Bool) == plan.boxedPrimitiveType(I32))
 			throw "Wasm GC value and box types must preserve the planned representations";
 
