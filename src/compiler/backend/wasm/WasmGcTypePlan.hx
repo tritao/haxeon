@@ -99,6 +99,15 @@ class WasmGcTypePlan {
 		return fields.get(fieldName);
 	}
 
+	/** Returns class type indices that can satisfy a Haxe virtual interface cast. */
+	public function interfaceImplementors(interfaceName:String):Array<Int> {
+		var result:Array<Int> = [];
+		for (object in orderedObjects)
+			if (objectImplementsInterface(object.name, interfaceName))
+				result.push(objectType(object.name));
+		return result;
+	}
+
 	public function enumType(name:String):Int
 		return requireIndex(enumTypeIndices, name, 'Unknown Wasm GC enum type "$name"');
 
@@ -182,6 +191,7 @@ class WasmGcTypePlan {
 			case Bool: "bool";
 			case I64: "i64";
 			case F64: "f64";
+			case TypeRef: "type-ref";
 			default: throw 'No Wasm GC primitive box exists for $type';
 		};
 		return requireIndex(boxedPrimitiveTypeIndices, key, 'Missing Wasm GC box type "$key"');
@@ -232,6 +242,27 @@ class WasmGcTypePlan {
 		var states:Map<String, Int> = [];
 		for (object in program.objects)
 			visitObject(object, states);
+	}
+
+	function objectImplementsInterface(objectName:String, interfaceName:String):Bool {
+		var object = objectDeclarations.get(objectName);
+		if (object == null)
+			return false;
+		for (implemented in object.interfaces)
+			if (interfaceExtends(implemented, interfaceName))
+				return true;
+		return object.base != null && objectImplementsInterface(object.base, interfaceName);
+	}
+
+	function interfaceExtends(actual:String, expected:String):Bool {
+		if (actual == expected)
+			return true;
+		for (interfaceDecl in program.interfaces)
+			if (interfaceDecl.name == actual)
+				for (base in interfaceDecl.bases)
+					if (interfaceExtends(base, expected))
+						return true;
+		return false;
 	}
 
 	function visitObject(object:IrObject, states:Map<String, Int>):Void {
@@ -402,6 +433,7 @@ class WasmGcTypePlan {
 		boxedPrimitiveTypeIndices.set("bool", reserveType());
 		boxedPrimitiveTypeIndices.set("i64", reserveType());
 		boxedPrimitiveTypeIndices.set("f64", reserveType());
+		boxedPrimitiveTypeIndices.set("type-ref", reserveType());
 	}
 
 	function reserveGenericTypes():Void {
@@ -467,7 +499,8 @@ class WasmGcTypePlan {
 			{key: "i32", type: I32},
 			{key: "bool", type: I32},
 			{key: "i64", type: I64},
-			{key: "f64", type: F64}
+			{key: "f64", type: F64},
+			{key: "type-ref", type: I32}
 		])
 			setType(boxedPrimitiveTypeIndices.get(entry.key), true, [], Struct([{type: Value(entry.type), mutable: false}]));
 	}

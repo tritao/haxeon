@@ -325,7 +325,7 @@ class WasmBackend implements Backend {
 		var usedNatives = reachableNatives(program, reachable),
 			usedCNatives = reachableCNatives(program, reachable);
 		for (native in program.natives)
-			if (usedNatives.exists(native.name) && !isSupportedGcArrayNative(native.name))
+			if (usedNatives.exists(native.name) && !isSupportedGcRuntimeNative(native.name))
 				throw 'Wasm GC lowering does not support runtime native "${native.name}" yet';
 		for (native in program.cNatives)
 			if (usedCNatives.exists(native.name))
@@ -347,11 +347,12 @@ class WasmBackend implements Backend {
 							Equal(_, _, _), NewObject(_, _), FieldGet(_, _, _), FieldSet(_, _, _), ArrayGet(_, _, _), ArraySet(_, _, _), ArraySize(_, _),
 							IteratorNew(_, _), IteratorHasNext(_, _), IteratorNext(_, _), MakeEnum(_, _, _, _), EnumIndex(_, _), EnumField(_, _, _, _),
 							IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _):
-						case Call(_, name, _) if (declaredFunctions.exists(name) || isSupportedGcArrayNative(name)):
+						case ToDyn(_, _), SafeCast(_, _), ToVirtual(_, _):
+						case Call(_, name, _) if (declaredFunctions.exists(name) || isSupportedGcRuntimeNative(name)):
 						case StaticClosure(_, name) if (declaredFunctions.exists(name)):
 						case InstanceClosure(_, name, receiver) if (declaredFunctions.exists(name) && isObjectReference(receiver.type)):
 						case CallClosure(_, closure, _) if (isFunctionType(closure.type)):
-						case MethodCall(_, receiver, _, _) if (isObjectReference(receiver.type)):
+						case MethodCall(_, receiver, _, _) if (isObjectReference(receiver.type) || isVirtualReference(receiver.type)):
 						default:
 							throw 'Wasm GC lowering does not support instruction ${Std.string(located.value)} in "${fn.name}" yet';
 					}
@@ -364,16 +365,22 @@ class WasmBackend implements Backend {
 			default: false;
 		};
 
+	static function isVirtualReference(type:IrType):Bool
+		return switch type {
+			case Virtual(_): true;
+			default: false;
+		};
+
 	static function isFunctionType(type:IrType):Bool
 		return switch type {
 			case Function(_, _): true;
 			default: false;
 		};
 
-	static function isSupportedGcArrayNative(name:String):Bool
+	static function isSupportedGcRuntimeNative(name:String):Bool
 		return switch name {
 			case "__array_alloc_i32", "__array_alloc_bool", "__array_alloc_f64", "__array_alloc_bytes", "__array_alloc_ref", "__array_push_i32",
-				"__array_push_bool", "__array_push_f64", "__array_push_bytes", "__array_push_ref": true;
+				"__array_push_bool", "__array_push_f64", "__array_push_bytes", "__array_push_ref", "__dynamic_equal": true;
 			default: false;
 		};
 
@@ -4967,68 +4974,76 @@ class WasmFunctionLower {
 			case TypeValue(output, type):
 				emit(body, [I32Const(typeId(type)), LocalSet(requiredLocal(values, output.id))]);
 			case ToDyn(output, value):
-				switch value.type {
-					case I32, Bool:
-						emit(body, [
-							I32Const(WasmLayout.DYN_I32_SIZE),
-							Call(allocator),
-							LocalTee(requiredLocal(values, output.id)),
-							I32Const(typeId(value.type)),
-							I32Store(0),
-							LocalGet(requiredLocal(values, output.id)),
-							LocalGet(requiredLocal(values, value.id)),
-							I32Store(WasmLayout.DYN_PAYLOAD_OFFSET)
-						]);
-					case F64:
-						emit(body, [
-							I32Const(WasmLayout.DYN_F64_SIZE),
-							Call(allocator),
-							LocalTee(requiredLocal(values, output.id)),
-							I32Const(typeId(F64)),
-							I32Store(0),
-							LocalGet(requiredLocal(values, output.id)),
-							LocalGet(requiredLocal(values, value.id)),
-							F64Store(WasmLayout.DYN_PAYLOAD_OFFSET)
-						]);
-					case I64:
-						emit(body, [
-							I32Const(WasmLayout.DYN_I64_SIZE),
-							Call(allocator),
-							LocalTee(requiredLocal(values, output.id)),
-							I32Const(typeId(I64)),
-							I32Store(0),
-							LocalGet(requiredLocal(values, output.id)),
-							LocalGet(requiredLocal(values, value.id)),
-							I64Store(WasmLayout.DYN_PAYLOAD_OFFSET)
-						]);
-					default:
-						emit(body, [
-							LocalGet(requiredLocal(values, value.id)),
-							LocalSet(requiredLocal(values, output.id))
-						]);
-				}
+				var represented = activeRepresentation.toDynamic(value, requiredLocal(values, output.id), requiredLocal(values, value.id));
+				if (represented != null)
+					emit(body, represented);
+				else
+					switch value.type {
+						case I32, Bool:
+							emit(body, [
+								I32Const(WasmLayout.DYN_I32_SIZE),
+								Call(allocator),
+								LocalTee(requiredLocal(values, output.id)),
+								I32Const(typeId(value.type)),
+								I32Store(0),
+								LocalGet(requiredLocal(values, output.id)),
+								LocalGet(requiredLocal(values, value.id)),
+								I32Store(WasmLayout.DYN_PAYLOAD_OFFSET)
+							]);
+						case F64:
+							emit(body, [
+								I32Const(WasmLayout.DYN_F64_SIZE),
+								Call(allocator),
+								LocalTee(requiredLocal(values, output.id)),
+								I32Const(typeId(F64)),
+								I32Store(0),
+								LocalGet(requiredLocal(values, output.id)),
+								LocalGet(requiredLocal(values, value.id)),
+								F64Store(WasmLayout.DYN_PAYLOAD_OFFSET)
+							]);
+						case I64:
+							emit(body, [
+								I32Const(WasmLayout.DYN_I64_SIZE),
+								Call(allocator),
+								LocalTee(requiredLocal(values, output.id)),
+								I32Const(typeId(I64)),
+								I32Store(0),
+								LocalGet(requiredLocal(values, output.id)),
+								LocalGet(requiredLocal(values, value.id)),
+								I64Store(WasmLayout.DYN_PAYLOAD_OFFSET)
+							]);
+						default:
+							emit(body, [
+								LocalGet(requiredLocal(values, value.id)),
+								LocalSet(requiredLocal(values, output.id))
+							]);
+					}
 			case SafeCast(output, value):
-				switch output.type {
-					case I32, Bool, I64, F64 if (value.type == Dyn):
-						emit(body, [
-							LocalGet(requiredLocal(values, value.id)),
-							I32Load(0),
-							I32Const(typeId(output.type)),
-							I32Eq,
-							If(null),
-							LocalGet(requiredLocal(values, value.id)),
-							load(output.type, WasmLayout.DYN_PAYLOAD_OFFSET),
-							LocalSet(requiredLocal(values, output.id)),
-							Else,
-							Unreachable,
-							End
-						]);
-					default:
-						emit(body, [
-							LocalGet(requiredLocal(values, value.id)),
-							LocalSet(requiredLocal(values, output.id))
-						]);
-				}
+				var represented = activeRepresentation.safeCast(output, value, requiredLocal(values, output.id), requiredLocal(values, value.id));
+				if (represented != null)
+					emit(body, represented);
+				else
+					switch output.type {
+						case I32, Bool, I64, F64 if (value.type == Dyn):
+							emit(body, [
+								LocalGet(requiredLocal(values, value.id)),
+								I32Load(0),
+								I32Const(typeId(output.type)),
+								I32Eq,
+								If(null),
+								LocalGet(requiredLocal(values, value.id)),
+								load(output.type, WasmLayout.DYN_PAYLOAD_OFFSET),
+								LocalSet(requiredLocal(values, output.id)),
+								Else,
+								Unreachable,
+								End
+							]);
+						default:
+							emit(body, [
+								LocalGet(requiredLocal(values, value.id)),
+								LocalSet(requiredLocal(values, output.id))
+							]);
+					}
 			case BeginTry(catchBlock, _):
 				if (exceptionState == null)
 					throw 'Wasm exception lowering has no active exception state';
@@ -5141,10 +5156,14 @@ class WasmFunctionLower {
 						I32Store(WasmLayout.CLOSURE_RECEIVER_OFFSET)
 					]);
 			case ToVirtual(output, value):
-				emit(body, [
-					LocalGet(requiredLocal(values, value.id)),
-					LocalSet(requiredLocal(values, output.id))
-				]);
+				var represented = activeRepresentation.toVirtual(value, requiredLocal(values, output.id), requiredLocal(values, value.id));
+				if (represented != null)
+					emit(body, represented);
+				else
+					emit(body, [
+						LocalGet(requiredLocal(values, value.id)),
+						LocalSet(requiredLocal(values, output.id))
+					]);
 			case MethodCall(output, object, methodName, arguments):
 				switch object.type {
 					case Obj(objectName):
@@ -5161,28 +5180,32 @@ class WasmFunctionLower {
 						var targets = virtualTargets(activeProgram, interfaceName, methodName, functions);
 						if (targets.length == 0)
 							throw 'Wasm interface method "$interfaceName.$methodName" has no implementations';
-						for (index in 0...targets.length) {
-							var target = targets[index];
-							emit(body, [
-								LocalGet(requiredLocal(values, object.id)),
-								I32Load(0),
-								I32Const(typeId(Obj(target.typeName))),
-								I32Eq,
-								If(null),
-								LocalGet(requiredLocal(values, object.id))
-							]);
-							for (argument in arguments)
-								body.push(LocalGet(requiredLocal(values, argument.id)));
-							body.push(Call(target.functionIndex));
-							if (output.type != Void)
-								body.push(LocalSet(requiredLocal(values, output.id)));
-							if (index < targets.length - 1)
-								body.push(Else);
-							else
-								emit(body, [Else, Unreachable]);
+						var represented = activeRepresentation.virtualCall(output, object, arguments, targets, requiredLocal(values, object.id),
+							output.type == Void ? -1 : requiredLocal(values, output.id), [for (argument in arguments) requiredLocal(values, argument.id)]);
+						if (represented != null) emit(body, represented); else {
+							for (index in 0...targets.length) {
+								var target = targets[index];
+								emit(body, [
+									LocalGet(requiredLocal(values, object.id)),
+									I32Load(0),
+									I32Const(typeId(Obj(target.typeName))),
+									I32Eq,
+									If(null),
+									LocalGet(requiredLocal(values, object.id))
+								]);
+								for (argument in arguments)
+									body.push(LocalGet(requiredLocal(values, argument.id)));
+								body.push(Call(target.functionIndex));
+								if (output.type != Void)
+									body.push(LocalSet(requiredLocal(values, output.id)));
+								if (index < targets.length - 1)
+									body.push(Else);
+								else
+									emit(body, [Else, Unreachable]);
+							}
+							for (_ in targets)
+								body.push(End);
 						}
-						for (_ in targets)
-							body.push(End);
 					default:
 						throw 'Wasm method call requires an object or virtual receiver';
 				}
@@ -5728,7 +5751,15 @@ class WasmFunctionLower {
 					result.push({typeName: object.name, functionIndex: functionIndex});
 			}
 		}
+		result.sort(function(left, right) return objectInheritanceDepth(program, right.typeName) - objectInheritanceDepth(program, left.typeName));
 		return result;
+	}
+
+	static function objectInheritanceDepth(program:IrProgram, typeName:String):Int {
+		for (object in program.objects)
+			if (object.name == typeName)
+				return object.base == null ? 0 : objectInheritanceDepth(program, object.base) + 1;
+		return 0;
 	}
 
 	static function findMethod(program:IrProgram, objectName:String, methodName:String):Null<String> {
