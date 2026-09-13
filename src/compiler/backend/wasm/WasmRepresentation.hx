@@ -463,6 +463,11 @@ class WasmGcRepresentation implements WasmRepresentation {
 
 	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
 			argumentLocals:Array<Int>):Null<Array<WasmInstruction>> {
+		if (name == "__math_ceil") {
+			if (output.type != I32 || arguments.length != 1 || arguments[0].type != F64 || argumentLocals.length != 1)
+				throw "Invalid Wasm GC Math.ceil signature";
+			return [LocalGet(argumentLocals[0]), F64Ceil, I32TruncF64S, LocalSet(outputLocal)];
+		}
 		if (name == "__dynamic_equal") {
 			if (output.type != Bool || arguments.length != 2 || argumentLocals.length != 2 || arguments[0].type != Dyn || arguments[1].type != Dyn)
 				throw "Invalid Wasm GC dynamic equality signature";

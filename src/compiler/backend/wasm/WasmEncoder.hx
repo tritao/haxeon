@@ -543,6 +543,8 @@ class WasmEncoder {
 					output.writeByte(0xa2);
 				case F64Div:
 					output.writeByte(0xa3);
+				case F64Ceil:
+					output.writeByte(0x9b);
 				case F64Eq:
 					output.writeByte(0x61);
 				case F64Lt:
