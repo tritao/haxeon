@@ -26,7 +26,7 @@ mkdir -p "$root_dir/out"
 	--target=wasm-gc --output=out/wasm-gc-wasmtime-bytes.wasm --entry=wasm-gc-bytes \
 	--root=tests/programs tests/programs/wasm-gc-bytes.hx
 
-for case_name in add array-iterator-wasm array-slice-index array-growth-wasm array-alias-growth array-index-growth array-copy-concat array-unshift array-insert array-splice array-remove array-object-mutation array-reverse dynamic-equality numeric-promotion function-wrapper std-is-of-type try-catch try-nested try-array-bounds; do
+for case_name in add array-iterator-wasm array-slice-index array-growth-wasm array-alias-growth array-index-growth array-resize array-expression-mutation array-field-mutation array-copy-concat array-unshift array-insert array-splice array-remove array-object-mutation array-reverse dynamic-equality numeric-promotion function-wrapper std-is-of-type try-catch try-nested try-array-bounds; do
 	"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 		--target=wasm-gc --output="out/wasm-gc-wasmtime-$case_name.wasm" --entry="$case_name" \
 		--root=tests/programs "tests/programs/$case_name.hx"
@@ -54,6 +54,9 @@ for artifact in \
 	wasm-gc-wasmtime-array-growth-wasm \
 	wasm-gc-wasmtime-array-alias-growth \
 	wasm-gc-wasmtime-array-index-growth \
+	wasm-gc-wasmtime-array-resize \
+	wasm-gc-wasmtime-array-expression-mutation \
+	wasm-gc-wasmtime-array-field-mutation \
 	wasm-gc-wasmtime-array-copy-concat \
 	wasm-gc-wasmtime-array-unshift \
 	wasm-gc-wasmtime-array-insert \
@@ -78,6 +81,8 @@ for artifact in \
 	expected=42
 	if [[ "$artifact" == "wasm-gc-wasmtime-array-object-mutation" ]]; then
 		expected=8
+	elif [[ "$artifact" == "wasm-gc-wasmtime-array-field-mutation" ]]; then
+		expected=11
 	fi
 	if [[ "$result" != "$expected" ]]; then
 		cat "$root_dir/out/wasmtime-stderr.txt" >&2
