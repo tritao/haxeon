@@ -11,6 +11,7 @@ import compiler.ir.Ir.IrValue;
 import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrCNative;
 import compiler.ir.Ir.IrCNativeArgumentMode;
+import compiler.ir.Ir.IrNative;
 import compiler.ir.Ir.IrTerminator;
 import compiler.ir.Ir.IrBlock;
 import compiler.ir.IrVerifier;
@@ -30,6 +31,7 @@ import compiler.backend.wasm.WasmGcRoots.WasmSafepoint;
 import compiler.backend.wasm.WasmRepresentation.WasmRepresentation;
 import compiler.backend.wasm.WasmRepresentation.WasmLinearRepresentation;
 import compiler.backend.wasm.WasmRepresentation.WasmGcRepresentation;
+import compiler.backend.wasm.WasmGcMaps;
 
 private typedef WasmClosureTypes = {
 	final staticType:Int;
@@ -272,7 +274,8 @@ class WasmBackend implements Backend {
 		if (hasFunction(program, "__init"))
 			reachable.set("__init", true);
 		validateGcSubset(program, reachable, preferredEntry);
-		var usedCNatives = reachableGcCNatives(program, reachable),
+		var usedNatives = reachableNatives(program, reachable),
+			usedCNatives = reachableGcCNatives(program, reachable),
 			requiresScratchMemory = false,
 			requiresLinearMemory = false;
 		for (native in program.cNatives)
@@ -305,6 +308,8 @@ class WasmBackend implements Backend {
 			module.globals.push({type: I32, mutable: true, init: [I32Const(8)]});
 		}
 		addGcCNativeImports(module, functions, program, usedCNatives);
+		addGcMapRuntimeFunctions(module, functions, plan, program, usedNatives);
+		addGcMapProjectionFunctions(module, functions, plan, program, reachable);
 		if (requiresScratchMemory) {
 			var scratchAllocator = addGcScratchAllocator(module, scratchTop);
 			gcRepresentation.configureCNativeScratch(scratchTop, scratchAllocator);
@@ -433,7 +438,19 @@ class WasmBackend implements Backend {
 			default: false;
 		};
 
-	static function isSupportedGcRuntimeNative(name:String):Bool
+	static function addGcMapRuntimeFunctions(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, program:IrProgram,
+			used:Map<String, Bool>):Void {
+		for (native in program.natives)
+			if (used.exists(native.name)) {
+				var parts = mapNativeParts(native.name);
+				if (parts != null)
+					functions.set(native.name, WasmGcMaps.add(module, functions, plan, native, parts.mapName, parts.operation));
+			}
+	}
+
+	static function isSupportedGcRuntimeNative(name:String):Bool {
+		if (mapNativeParts(name) != null)
+			return true;
 		return switch name {
 			case "__array_alloc_i32", "__array_alloc_bool", "__array_alloc_f64", "__array_alloc_bytes", "__array_alloc_ref", "__array_push_i32",
 				"__array_copy_i32", "__array_copy_bool", "__array_copy_f64", "__array_copy_bytes", "__array_copy_ref", "__array_concat_i32",
@@ -453,6 +470,7 @@ class WasmBackend implements Backend {
 				"__string_concat", "__string_equal": true;
 			default: false;
 		};
+	}
 
 	static function validateGcCNative(native:IrCNative):Void {
 		if (native.argumentModes.length != native.arguments.length)
@@ -495,6 +513,34 @@ class WasmBackend implements Backend {
 					throw 'Wasm GC C native "${native.name}" requires borrowed or owned pointer metadata';
 			case _:
 				throw 'Wasm GC C native "${native.name}" has unsupported result type ${Std.string(native.result)}';
+		}
+	}
+
+	static function addGcMapProjectionFunctions(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, program:IrProgram,
+			reachable:Map<String, Bool>):Void {
+		for (fn in program.functions) {
+			if (!reachable.exists(fn.name))
+				continue;
+			var cfg = new WasmCfgAnalysis(fn);
+			for (blockId in cfg.graph.order)
+				for (located in cfg.graph.block(blockId).instructions)
+					switch located.value {
+						case Call(output, name, _) if (output.type != Void):
+							var parts = mapNativeParts(name);
+							if (parts != null && (parts.operation == "keys" || parts.operation == "values")) {
+								var native:Null<IrNative> = null;
+								for (candidate in program.natives)
+									if (candidate.name == name)
+										native = candidate;
+								if (native == null)
+									throw 'Wasm GC map projection "$name" has no runtime declaration';
+								var projectionName = WasmGcMaps.projectionName(name, output.type);
+								if (!functions.exists(projectionName))
+									functions.set(projectionName,
+										WasmGcMaps.addProjectionForCall(module, plan, native, parts.mapName, parts.operation, output.type));
+							}
+						default:
+					}
 		}
 	}
 
@@ -1413,7 +1459,7 @@ class WasmBackend implements Backend {
 		]));
 	}
 
-	static function mapNativeParts(name:String):Null<{mapName:String, operation:String}> {
+	public static function mapNativeParts(name:String):Null<{mapName:String, operation:String}> {
 		if (!StringTools.startsWith(name, "__map_"))
 			return null;
 		var separator = name.lastIndexOf("_");
@@ -6005,6 +6051,12 @@ class WasmFunctionLower {
 					for (argument in arguments)
 						body.push(LocalGet(requiredLocal(values, argument.id)));
 					var functionIndex = functions.get(name);
+					var mapParts = WasmBackend.mapNativeParts(name);
+					if (mapParts != null && output.type != Void && (mapParts.operation == "keys" || mapParts.operation == "values")) {
+						var projectionIndex = functions.get(WasmGcMaps.projectionName(name, output.type));
+						if (projectionIndex != null)
+							functionIndex = projectionIndex;
+					}
 					if (functionIndex == null)
 						throw 'Wasm call to unsupported native or missing function "$name"';
 					body.push(Call(functionIndex));

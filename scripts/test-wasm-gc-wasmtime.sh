@@ -26,7 +26,7 @@ mkdir -p "$root_dir/out"
 	--target=wasm-gc --output=out/wasm-gc-wasmtime-bytes.wasm --entry=wasm-gc-bytes \
 	--root=tests/programs tests/programs/wasm-gc-bytes.hx
 
-for case_name in add array-iterator-wasm array-slice-index array-growth-wasm array-alias-growth array-index-growth array-resize array-expression-mutation array-field-mutation array-copy-concat array-unshift array-insert array-splice array-remove array-object-mutation array-reverse dynamic-equality numeric-promotion function-wrapper std-is-of-type try-catch try-nested try-array-bounds; do
+for case_name in add array-iterator-wasm array-slice-index array-growth-wasm array-alias-growth array-index-growth array-resize array-expression-mutation array-field-mutation array-copy-concat array-unshift array-insert array-splice array-remove array-object-mutation array-reverse dynamic-equality numeric-promotion function-wrapper std-is-of-type map-basic map-int map-primitive-types map-literal map-object map-anonymous-enum map-for-in map-key-value-for-in map-comprehension map-nullable-get nullable-map-get map-string-equality try-catch try-nested try-array-bounds; do
 	"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 		--target=wasm-gc --output="out/wasm-gc-wasmtime-$case_name.wasm" --entry="$case_name" \
 		--root=tests/programs "tests/programs/$case_name.hx"
@@ -68,6 +68,18 @@ for artifact in \
 	wasm-gc-wasmtime-numeric-promotion \
 	wasm-gc-wasmtime-function-wrapper \
 	wasm-gc-wasmtime-std-is-of-type \
+	wasm-gc-wasmtime-map-basic \
+	wasm-gc-wasmtime-map-int \
+	wasm-gc-wasmtime-map-primitive-types \
+	wasm-gc-wasmtime-map-literal \
+	wasm-gc-wasmtime-map-object \
+	wasm-gc-wasmtime-map-anonymous-enum \
+	wasm-gc-wasmtime-map-for-in \
+	wasm-gc-wasmtime-map-key-value-for-in \
+	wasm-gc-wasmtime-map-comprehension \
+	wasm-gc-wasmtime-map-nullable-get \
+	wasm-gc-wasmtime-nullable-map-get \
+	wasm-gc-wasmtime-map-string-equality \
 	wasm-gc-wasmtime-try-catch \
 	wasm-gc-wasmtime-try-nested \
 	wasm-gc-wasmtime-try-array-bounds \
@@ -83,6 +95,8 @@ for artifact in \
 		expected=8
 	elif [[ "$artifact" == "wasm-gc-wasmtime-array-field-mutation" ]]; then
 		expected=11
+	elif [[ "$artifact" == "wasm-gc-wasmtime-map-for-in" ]]; then
+		expected=52
 	fi
 	if [[ "$result" != "$expected" ]]; then
 		cat "$root_dir/out/wasmtime-stderr.txt" >&2

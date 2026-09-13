@@ -31,6 +31,7 @@ done
 
 shared_cases=(add array-iterator-wasm array-slice-index array-growth-wasm array-alias-growth array-index-growth array-resize array-expression-mutation array-field-mutation
 	array-copy-concat array-unshift array-insert array-splice array-remove array-object-mutation array-reverse dynamic-equality numeric-promotion function-wrapper std-is-of-type
+	map-basic map-int map-primitive-types map-literal map-object map-anonymous-enum map-for-in map-key-value-for-in map-comprehension map-nullable-get nullable-map-get map-string-equality
 	try-catch try-nested try-array-bounds)
 for case_name in "${shared_cases[@]}"; do
 	for target in wasm32 wasm-gc; do
@@ -47,7 +48,7 @@ const fs = require("fs");
 const path = require("path");
 const root = process.argv[2];
 const cases = process.argv.slice(3);
-const expectedResults = { "array-object-mutation": 8, "array-field-mutation": 11 };
+const expectedResults = { "array-object-mutation": 8, "array-field-mutation": 11, "map-for-in": 52 };
 
 (async () => {
   for (const name of cases) {

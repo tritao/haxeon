@@ -24,6 +24,12 @@ typedef WasmGcArrayTypePlan = {
 	final storageTypeIndex:Int;
 }
 
+typedef WasmGcMapTypePlan = {
+	final wrapperTypeIndex:Int;
+	final keyType:IrType;
+	final valueType:IrType;
+}
+
 /**
 	Plans nominal GC types for an IR program independently from Linear32 byte offsets.
 	The planned types are emitted as one recursive group so mutually referring Haxe types
@@ -37,6 +43,7 @@ class WasmGcTypePlan {
 	public final enumTypeIndices:Map<String, Int> = [];
 	public final enumConstructorTypeIndices:Map<String, Array<Int>> = [];
 	public final arrayTypes:Map<String, WasmGcArrayTypePlan> = [];
+	public final mapTypes:Map<String, WasmGcMapTypePlan> = [];
 	public final iteratorTypeIndices:Map<String, Int> = [];
 	public final functionTypeIndices:Map<String, Int> = [];
 	public final boxedPrimitiveTypeIndices:Map<String, Int> = [];
@@ -72,6 +79,7 @@ class WasmGcTypePlan {
 		defineNamedTypes();
 		defineRuntimeTypes();
 		defineGenericTypes();
+		defineMapTypes();
 		defineFunctionTypes();
 		typeGroups = [RecGroup(subtypes.copy())];
 	}
@@ -135,6 +143,12 @@ class WasmGcTypePlan {
 	public function arrayStorageType(element:IrType):Int
 		return arrayPlan(element).storageTypeIndex;
 
+	public function mapType(name:String):Int
+		return requireMapPlan(name).wrapperTypeIndex;
+
+	public function mapPlan(name:String):WasmGcMapTypePlan
+		return requireMapPlan(name);
+
 	/** Returns every concrete array wrapper planned for this program. */
 	public function arrayWrapperTypes():Array<Int> {
 		var keys = [for (key in arrayTypes.keys()) key];
@@ -188,6 +202,7 @@ class WasmGcTypePlan {
 			case Function(_, _): Ref(nullableType(closureTypeIndex));
 			case Bytes: Ref(nullableType(bytesTypeIndex));
 			case ManagedBytes: Ref(nullableType(managedBytesTypeIndex));
+			case Abstract(name) if (mapTypes.exists(name)): Ref(nullableType(mapType(name)));
 			// Abstracts and virtual interfaces retain Haxe's existing dispatch metadata and begin as opaque anyrefs.
 			case Dyn, Abstract(_), Virtual(_): Ref({nullable: true, heap: Any});
 		};
@@ -443,6 +458,20 @@ class WasmGcTypePlan {
 		boxedPrimitiveTypeIndices.set("i64", reserveType());
 		boxedPrimitiveTypeIndices.set("f64", reserveType());
 		boxedPrimitiveTypeIndices.set("type-ref", reserveType());
+		var mapNames:Map<String, Bool> = [];
+		for (native in program.natives) {
+			var mapName = mapNameFromNative(native.name);
+			if (mapName != null)
+				mapNames.set(mapName, true);
+		}
+		var orderedMapNames = [for (name in mapNames.keys()) name];
+		orderedMapNames.sort(Reflect.compare);
+		for (mapName in orderedMapNames)
+			mapTypes.set(mapName, {
+				wrapperTypeIndex: reserveType(),
+				keyType: mapName.indexOf("map_string_") == 0 ? Bytes : I32,
+				valueType: mapValueIrType(mapName)
+			});
 	}
 
 	function reserveGenericTypes():Void {
@@ -539,6 +568,18 @@ class WasmGcTypePlan {
 		}
 	}
 
+	function defineMapTypes():Void {
+		for (mapName in mapTypes.keys()) {
+			var map = mapTypes.get(mapName);
+			setType(map.wrapperTypeIndex, true, [], Struct([
+				{type: Value(I32), mutable: true},
+				{type: Value(I32), mutable: true},
+				{type: Value(Ref({nullable: false, heap: Type(arrayType(map.keyType))})), mutable: true},
+				{type: Value(Ref({nullable: false, heap: Type(arrayType(map.valueType))})), mutable: true}
+			]));
+		}
+	}
+
 	function defineFunctionTypes():Void {
 		for (key in plannedFunctionTypes.keys())
 			setType(functionTypeIndices.get(key), true, [], Func(plannedFunctionTypes.get(key)));
@@ -549,6 +590,28 @@ class WasmGcTypePlan {
 		if (plan == null)
 			throw 'Array element type $element was not present when the Wasm GC type plan was built';
 		return plan;
+	}
+
+	function requireMapPlan(name:String):WasmGcMapTypePlan {
+		var plan = mapTypes.get(name);
+		if (plan == null)
+			throw 'Unknown Wasm GC map type "$name"';
+		return plan;
+	}
+
+	static function mapNameFromNative(name:String):Null<String> {
+		if (!StringTools.startsWith(name, "__map_"))
+			return null;
+		var separator = name.lastIndexOf("_");
+		return separator <= 6 || separator == name.length - 1 ? null : name.substring(2, separator);
+	}
+
+	static function mapValueIrType(mapName:String):IrType {
+		return if (StringTools.endsWith(mapName,
+			"_i32")) I32 else if (StringTools.endsWith(mapName,
+			"_bool")) Bool else if (StringTools.endsWith(mapName,
+			"_f64")) F64 else if (StringTools.endsWith(mapName,
+			"_bytes")) Bytes else if (StringTools.endsWith(mapName, "_ref")) Dyn else throw 'Unknown Wasm GC map value type "$mapName"';
 	}
 
 	function reserveType():Int {
