@@ -7,6 +7,7 @@ import sys.io.File;
 /** Lazily materializes source modules from configured filesystem roots. */
 class ModuleSourceLoader {
 	static final caseSensitiveFileSystem:Bool = Sys.systemName() != "Windows" && Sys.systemName() != "Mac";
+
 	final roots:Array<String> = [];
 
 	public function new() {}

@@ -76,9 +76,11 @@ class HxiCallMain {
 			+ '\textern fn i64Check(value: i64) -> i32 @symbol("native_fixture_i64_check");\n'
 			+ '\textern fn owned(value: i32) -> ptr<fixture_context> @symbol("native_fixture_owned") @owned("native_fixture_release");\n'
 			+ '\textern fn releaseOwnedContext(value: ptr<void>) -> void @symbol("native_fixture_release");\n'
-			+ '\textern fn ownedOut(value: i32, result: ptr<nullable<ptr<fixture_context>>> @out @owned("native_fixture_out_release")) -> void @symbol("native_fixture_owned_out");\n'
+			+
+			'\textern fn ownedOut(value: i32, result: ptr<nullable<ptr<fixture_context>>> @out @owned("native_fixture_out_release")) -> void @symbol("native_fixture_owned_out");\n'
 			+ '\textern fn releaseOwnedOut(value: ptr<void>) -> void @symbol("native_fixture_out_release");\n'
-			+ '\textern fn borrowedOut(present: i32, result: ptr<nullable<ptr<fixture_context>>> @out @borrowed) -> void @symbol("native_fixture_borrowed_out");\n'
+			+
+			'\textern fn borrowedOut(present: i32, result: ptr<nullable<ptr<fixture_context>>> @out @borrowed) -> void @symbol("native_fixture_borrowed_out");\n'
 			+ '\textern fn outWasReleased() -> i32 @symbol("native_fixture_out_was_released");\n'
 			+ '\textern fn borrowed() -> ptr<fixture_context> @symbol("native_fixture_borrowed") @borrowed;\n'
 			+ '\textern fn maybeBorrowed(present: i32) -> nullable<ptr<fixture_context>> @symbol("native_fixture_maybe_borrowed") @borrowed;\n'

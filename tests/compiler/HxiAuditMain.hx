@@ -21,8 +21,8 @@ class HxiAuditMain {
 		var canonical = HxiParser.parse("canonical.hxi", HxiAudit.canonical("tests/ffi/audit_portable.h", targets[0], ["tests/ffi"]));
 		if (canonical.target != "portable-abi64" || HxiAbi.forInterface(canonical).pointerBits != 64)
 			throw "canonical audit output should carry the portable 64-bit target contract";
-		var canonical32 = HxiParser.parse("canonical32.hxi", HxiAudit.canonical("tests/ffi/audit_portable.h", portable32Targets[0], ["tests/ffi"], null,
-			null, null, null, null, "portable-abi32"));
+		var canonical32 = HxiParser.parse("canonical32.hxi",
+			HxiAudit.canonical("tests/ffi/audit_portable.h", portable32Targets[0], ["tests/ffi"], null, null, null, null, null, "portable-abi32"));
 		if (canonical32.target != "portable-abi32" || HxiAbi.forInterface(canonical32).pointerBits != 32)
 			throw "canonical audit output should carry the portable 32-bit target contract";
 		if (canonical.documentation.get("audit_open").raw.indexOf("fixture handle") < 0)

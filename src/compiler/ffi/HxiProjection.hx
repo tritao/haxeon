@@ -129,8 +129,8 @@ class HxiProjection {
 						if (Lambda.exists(parameters, parameter -> switch parameter.ownership {
 							case Owned(_): true;
 							case Borrowed | Unspecified: false;
-					}))
-						hasOwnedPointerOutputs = true;
+						}))
+							hasOwnedPointerOutputs = true;
 					case Constant(_, _, _):
 						hasConstants = true;
 					case _:
@@ -160,8 +160,7 @@ class HxiProjection {
 					var members:Map<String, String> = [],
 						prefix = enumValuePrefix(values, profile);
 					for (value in values)
-						addProjectedName(path, 'enum "$name"', enumValueName(value.name, prefix, name, profile),
-							'enum value "$name.${value.name}"', members);
+						addProjectedName(path, 'enum "$name"', enumValueName(value.name, prefix, name, profile), 'enum value "$name.${value.name}"', members);
 				case Opaque(name, _):
 					addProjectedName(path, "module", projectedTypeName(name, profile), 'opaque type "$name"', moduleNames);
 					addProjectedName(path, "module", ownedTypeName(name, profile), 'owned opaque type "$name"', moduleNames);
@@ -387,7 +386,10 @@ class HxiProjection {
 			declarations:Map<String, HxiDeclaration> = [],
 			opaqueDeclarations:Array<HxiDeclaration> = [],
 			functions:Map<String, HxiDeclaration> = [],
-			constants:Array<{name:String, value:String}> = [],
+			constants:Array<{
+				name:String,
+				value:String
+			}> = [],
 			callbackDeclarations:Array<HxiDeclaration> = [],
 			enumDeclarations:Array<HxiDeclaration> = [],
 			handleDeclarations:Array<HxiDeclaration> = [],
@@ -790,7 +792,8 @@ class HxiProjection {
 					case Function(_, _, _, symbol, _, _, _, _): symbol == null ? fn.name : symbol;
 					case _: fn.name;
 				};
-				var array = outputArray(parameters), buffer = outputBuffer(parameters);
+				var array = outputArray(parameters),
+					buffer = outputBuffer(parameters);
 				if (array != null)
 					emitOutputArrayWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, array, abi, profile,
 						model.documentation.get(fn.name));
@@ -837,14 +840,20 @@ class HxiProjection {
 	}
 
 	static function hasGeneratedOutputResult(parameters:Array<compiler.ffi.HxiModel.HxiParameter>, result:compiler.ffi.HxiModel.HxiType):Bool {
-		var outputCount = 0, hasBuffer = false, array = outputArray(parameters);
+		var outputCount = 0,
+			hasBuffer = false,
+			array = outputArray(parameters);
 		for (parameter in parameters)
 			switch parameter.direction {
-				case Out: outputCount++;
-				case InOut if (array == null || parameter.name != array.countParameter): outputCount++;
+				case Out:
+					outputCount++;
+				case InOut if (array == null || parameter.name != array.countParameter):
+					outputCount++;
 				case InOut:
-				case OutBuffer(_): hasBuffer = true;
-				case OutArray(_): outputCount++;
+				case OutBuffer(_):
+					hasBuffer = true;
+				case OutArray(_):
+					outputCount++;
 				case In | InArray(_):
 			}
 		var isVoid = switch result {
@@ -1001,9 +1010,9 @@ class HxiProjection {
 					var expression = if (info.opaquePointer) {
 						if (info.owned) {
 							var release = switch parameter.ownership {
-							case Owned(symbol): symbol;
-							case _: "";
-						};
+								case Owned(symbol): symbol;
+								case _: "";
+							};
 							'$pointerOwnedSlotHelper($local, 0, "${escape(library)}", "${escape(nativeSymbol)}", "${escape(signature)}", "${escape(release)}", ${info.nullable})';
 						} else
 							'__hxi_struct_get_pointer($local, 0, ${info.nullable})';
@@ -1151,11 +1160,15 @@ class HxiProjection {
 		return result;
 	}
 
-	static function emitOutputArrayWrapper(output:StringBuf, nativeName:String, publicName:String,
-			parameters:Array<compiler.ffi.HxiModel.HxiParameter>, rawArgumentTypes:Array<String>, resultType:String,
-			array:{name:String, countParameter:String}, abi:HxiAbi, profile:HxiProjectionProfile,
+	static function emitOutputArrayWrapper(output:StringBuf, nativeName:String, publicName:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>,
+			rawArgumentTypes:Array<String>, resultType:String, array:{
+			name:String,
+			countParameter:String
+		}, abi:HxiAbi, profile:HxiProjectionProfile,
 			documentation:Null<HxiDocumentation>):Void {
-		var arguments:Array<String> = [], queryArguments:Array<String> = [], fillArguments:Array<String> = [];
+		var arguments:Array<String> = [],
+			queryArguments:Array<String> = [],
+			fillArguments:Array<String> = [];
 		for (index in 0...parameters.length) {
 			var parameter = parameters[index];
 			switch parameter.direction {

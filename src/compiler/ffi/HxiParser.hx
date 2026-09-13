@@ -166,18 +166,28 @@ class HxiParser {
 			do {
 				var start = current().span, name = identifier();
 				expect(":");
-				var type = parseType(),
-					metadata = parseMetadata(["out", "inout", "out_buffer", "in_array", "out_array", "borrowed", "owned", "retained"]),
-					out = metadataFlag(metadata, "out"),
-					inout = metadataFlag(metadata, "inout"),
-					borrowed = metadataFlag(metadata, "borrowed"),
-					retained = metadataFlag(metadata, "retained"),
-					owned = metadataValue(metadata, "owned", false),
-					bufferSize = metadataValue(metadata, "out_buffer", false),
-					arrayCount = metadataValue(metadata, "in_array", false),
-					outputArrayCount = metadataValue(metadata, "out_array", false),
-					direction = out ? Out : inout ? InOut : bufferSize != null ? OutBuffer(bufferSize) : arrayCount != null ? InArray(arrayCount) : outputArrayCount != null ? OutArray(outputArrayCount) : In;
-				if ((out ? 1 : 0) + (inout ? 1 : 0) + (bufferSize == null ? 0 : 1) + (arrayCount == null ? 0 : 1)
+				var type = parseType(), metadata = parseMetadata([
+					"out",
+					"inout",
+					"out_buffer",
+					"in_array",
+					"out_array",
+					"borrowed",
+					"owned",
+					"retained"
+				]), out = metadataFlag(metadata,
+					"out"), inout = metadataFlag(metadata,
+						"inout"), borrowed = metadataFlag(metadata,
+						"borrowed"), retained = metadataFlag(metadata,
+						"retained"), owned = metadataValue(metadata, "owned",
+						false), bufferSize = metadataValue(metadata, "out_buffer",
+						false), arrayCount = metadataValue(metadata, "in_array",
+						false), outputArrayCount = metadataValue(metadata, "out_array",
+						false), direction = out ? Out : inout ? InOut : bufferSize != null ? OutBuffer(bufferSize) : arrayCount != null ? InArray(arrayCount) : outputArrayCount != null ? OutArray(outputArrayCount) : In;
+				if ((out ? 1 : 0)
+					+ (inout ? 1 : 0)
+					+ (bufferSize == null ? 0 : 1)
+					+ (arrayCount == null ? 0 : 1)
 					+ (outputArrayCount == null ? 0 : 1) > 1)
 					fail('Parameter "$name" cannot combine output direction metadata', start);
 				if (borrowed && owned != null)
@@ -562,10 +572,10 @@ class HxiParser {
 					for (parameter in parameters) {
 						validateType(parameter.type, names, declarationsByName, parameter.span, false);
 						if (parameter.retained)
-						switch abi.classify(parameter.type) {
-							case CallbackValue(_, _, _, _):
-							case _: fail('Parameter "${parameter.name}" can use @retained only with a callback type', parameter.span);
-						}
+							switch abi.classify(parameter.type) {
+								case CallbackValue(_, _, _, _):
+								case _: fail('Parameter "${parameter.name}" can use @retained only with a callback type', parameter.span);
+							}
 						switch parameter.direction {
 							case OutBuffer(sizeParameter):
 								if (outputBuffer != null)
@@ -787,7 +797,7 @@ class HxiParser {
 				case InOut if (parameter.name == size.name):
 				case _:
 					fail('Function "$functionName" cannot mix an output buffer with unrelated output parameters', span);
-		}
+			}
 	}
 
 	static function validateOutputArray(functionName:String, array:{name:String, countParameter:String, span:SourceSpan}, parameters:Array<HxiParameter>,
@@ -803,7 +813,8 @@ class HxiParser {
 		};
 		switch abi.classify(pointee) {
 			case IntegerValue(32, Unsigned):
-			case _: fail('Output array count parameter "${count.name}" must be ptr<u32>', count.span);
+			case _:
+				fail('Output array count parameter "${count.name}" must be ptr<u32>', count.span);
 		}
 		for (parameter in parameters)
 			switch parameter.direction {

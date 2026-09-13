@@ -894,8 +894,20 @@ class WasmBackendMain {
 			text = new IrValue(4, "text", Bytes),
 			provenance = SourceProvenance.generated("wasm-std-string-test");
 		program.natives = program.natives.concat([
-			{name: "haxe.Int64.make", library: "haxeon_runtime", symbol: "__int64_make", arguments: [I32, I32], result: I64},
-			{name: "__std_string", library: "haxeon_runtime", symbol: "__std_string", arguments: [Dyn], result: Bytes}
+			{
+				name: "haxe.Int64.make",
+				library: "haxeon_runtime",
+				symbol: "__int64_make",
+				arguments: [I32, I32],
+				result: I64
+			},
+			{
+				name: "__std_string",
+				library: "haxeon_runtime",
+				symbol: "__std_string",
+				arguments: [Dyn],
+				result: Bytes
+			}
 		]);
 		block.instructions.push(new Located(Call(wide, "haxe.Int64.make", [high, low]), provenance));
 		block.instructions.push(new Located(ToDyn(boxed, wide), provenance));

@@ -61,8 +61,9 @@ class FfiAuditMain {
 			Sys.exit(1);
 		if (output != null) {
 			var temporary = output + ".tmp." + Std.int(Sys.time() * 1000000);
-			File.saveContent(temporary, HxiAudit.canonical(paths[0], targets[0], includes, library, interfaceName, sourceLabel, excludedHeaders, dependencies,
-				profile == null ? "portable-abi64" : profile));
+			File.saveContent(temporary,
+				HxiAudit.canonical(paths[0], targets[0], includes, library, interfaceName, sourceLabel, excludedHeaders, dependencies,
+					profile == null ? "portable-abi64" : profile));
 			FileSystem.rename(temporary, output);
 			Sys.println('wrote canonical ABI -> $output');
 		}

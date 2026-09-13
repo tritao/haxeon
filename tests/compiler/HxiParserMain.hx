@@ -351,7 +351,8 @@ class HxiParserMain {
 		var retainedCallbackSource = HxiProjection.source(retainedCallbacks);
 		switch retainedCallbacks.declarations[1] {
 			case Function(_, [parameter], _, _, _, _, _, _) if (parameter.retained):
-			case _: throw "retained callback metadata should be represented in the HXI model";
+			case _:
+				throw "retained callback metadata should be represented in the HXI model";
 		}
 		expect(retainedCallbackSource.indexOf("Native retains this callback beyond the call") >= 0,
 			"retained callback lifetime should remain visible in the projected binding");

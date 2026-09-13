@@ -82,10 +82,10 @@ class DocumentationTools {
 	}
 
 	public static function empty():Documentation
-	return {
-		raw: "",
-		lines: [],
-		markdown: "",
+		return {
+			raw: "",
+			lines: [],
+			markdown: "",
 			parameters: [],
 			deprecated: false
 		};
@@ -126,10 +126,10 @@ class DocumentationTools {
 		}
 		trimEmpty(body);
 		trimEmpty(normalized);
-	return {
-		raw: normalized.join("\n"),
-		lines: normalized,
-		markdown: body.join("\n"),
+		return {
+			raw: normalized.join("\n"),
+			lines: normalized,
+			markdown: body.join("\n"),
 			parameters: parameters,
 			deprecated: deprecated
 		};

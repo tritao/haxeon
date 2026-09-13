@@ -337,7 +337,8 @@ class Compiler {
 		// Parsing discovers the interface's dependency list. Validate the composed
 		// model once against exactly those declared dependencies.
 		HxiParser.validate(model, dependencyDeclarations);
-		var composition = buildFfiComposition(model), profile = ffiProjectionProfiles.get(model.name);
+		var composition = buildFfiComposition(model),
+			profile = ffiProjectionProfiles.get(model.name);
 		if (profile != null)
 			HxiProjection.validateProfile(ffiProjectionPaths.get(model.name), model, composition.omitted, composition.declarations, profile);
 		ffiInterfaceModels.set(model.name, model);

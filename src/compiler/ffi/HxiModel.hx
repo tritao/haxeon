@@ -33,8 +33,10 @@ typedef HxiParameter = {
 	final type:HxiType;
 	final direction:HxiParameterDirection;
 	final ownership:HxiPointerOwnership;
+
 	/** The native callee keeps this callback after the call returns. */
 	final retained:Bool;
+
 	final span:SourceSpan;
 }
 

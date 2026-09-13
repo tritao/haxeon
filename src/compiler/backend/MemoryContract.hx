@@ -53,14 +53,16 @@ class MemoryContractCodec {
 			throw 'Unsupported Wasm memory address model "${contract.addressModel}"';
 		if (contract.pageSize != 65536)
 			throw 'Wasm memory contract page size must be 65536, got ${contract.pageSize}';
-		if (contract.hostBase != 0 || contract.hostBase % 8 != 0 || contract.hostLimit % 8 != 0 ||
-			contract.guestBase % 8 != 0 || contract.guestLimit % 8 != 0)
+		if (contract.hostBase != 0 || contract.hostBase % 8 != 0 || contract.hostLimit % 8 != 0 || contract.guestBase % 8 != 0 || contract.guestLimit % 8 != 0)
 			throw "Wasm memory contract boundaries must be non-negative 8-byte aligned values";
-		if (contract.hostBase >= contract.hostLimit || contract.hostLimit != contract.guestBase ||
-			contract.guestBase >= contract.guestLimit || contract.guestLimit != contract.memorySize)
+		if (contract.hostBase >= contract.hostLimit
+			|| contract.hostLimit != contract.guestBase
+			|| contract.guestBase >= contract.guestLimit
+			|| contract.guestLimit != contract.memorySize)
 			throw "Wasm memory contract partitions are not contiguous and ordered";
-		if (contract.hostLimit % contract.pageSize != 0 || contract.guestBase % contract.pageSize != 0 ||
-			contract.guestLimit % contract.pageSize != 0)
+		if (contract.hostLimit % contract.pageSize != 0
+			|| contract.guestBase % contract.pageSize != 0
+			|| contract.guestLimit % contract.pageSize != 0)
 			throw "Wasm memory contract boundaries must be Wasm-page aligned";
 	}
 
