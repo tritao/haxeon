@@ -461,6 +461,8 @@ class WasmEncoder {
 					output.writeByte(0x51);
 				case I64LtS:
 					output.writeByte(0x53);
+				case I64LtU:
+					output.writeByte(0x54);
 				case I64LeS:
 					output.writeByte(0x57);
 				case F64Add:
@@ -493,6 +495,8 @@ class WasmEncoder {
 					output.writeByte(0xa7);
 				case I32TruncF64S:
 					output.writeByte(0xaa);
+				case I64ReinterpretF64:
+					output.writeByte(0xbd);
 			}
 	}
 

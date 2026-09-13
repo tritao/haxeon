@@ -89,7 +89,8 @@ class WasmValidator {
 		var stack:Array<WasmValueType> = [],
 			controls:Array<WasmControl> = [],
 			reachable = true;
-		for (instruction in fn.body) {
+		for (instructionIndex in 0...fn.body.length) {
+			var instruction = fn.body[instructionIndex];
 			switch instruction {
 				case Unreachable:
 					reachable = false;
@@ -106,7 +107,9 @@ class WasmValidator {
 					if (controls.length == 0 || controls[controls.length - 1].kind != 2)
 						throw 'Wasm function ${fn.name} has an invalid else frame';
 					var frame = controls[controls.length - 1];
-					reset(stack, frame.height, frame.result, reachable, fn);
+					reset(stack, frame.height, frame.result, reachable, fn, instructionIndex);
+					if (reachable && frame.result != null)
+						stack.pop();
 					reachable = true;
 				case Catch(tag):
 					if (tagType == null)
@@ -114,14 +117,14 @@ class WasmValidator {
 					if (controls.length == 0 || controls[controls.length - 1].kind != 3)
 						throw 'Wasm function ${fn.name} has a catch without a try';
 					var catchFrame = controls[controls.length - 1];
-					reset(stack, catchFrame.height, catchFrame.result, reachable, fn);
+					reset(stack, catchFrame.height, catchFrame.result, reachable, fn, instructionIndex);
 					stack.push(I32);
 					reachable = true;
 				case End:
 					if (controls.length == 0)
 						continue;
 					var frame = controls.pop();
-					reset(stack, frame.height, frame.result, reachable, fn);
+					reset(stack, frame.height, frame.result, reachable, fn, instructionIndex);
 					reachable = true;
 				case Br(depth):
 					validateBranch(controls, depth, fn);
@@ -253,7 +256,7 @@ class WasmValidator {
 					binary(stack, I32, I32, fn);
 				case I64Add, I64Sub, I64Mul, I64DivS, I64RemS, I64And, I64Xor, I64Or, I64Shl, I64ShrS, I64ShrU:
 					binary(stack, I64, I64, fn);
-				case I64Eq, I64LtS, I64LeS:
+				case I64Eq, I64LtS, I64LtU, I64LeS:
 					binary(stack, I64, I32, fn);
 				case F64Add, F64Sub, F64Mul, F64Div:
 					binary(stack, F64, F64, fn);
@@ -295,11 +298,22 @@ class WasmValidator {
 					pop(stack, F64, fn);
 					if (reachable)
 						stack.push(I32);
+				case I64ReinterpretF64:
+					pop(stack, F64, fn);
+					if (reachable)
+						stack.push(I64);
 				case Nop:
 			}
 		}
 		if (controls.length != 0)
 			throw 'Wasm function ${fn.name} has unclosed stack control frames';
+		if (reachable) {
+			if (stack.length != fn.type.results.length)
+				throw 'Wasm function ${fn.name} falls through with ${stack.length} stack values; expected ${fn.type.results.length}';
+			for (index in 0...fn.type.results.length)
+				if (!sameValueType(stack[index], fn.type.results[index]))
+					throw 'Wasm function ${fn.name} falls through with ${stack[index]} at result $index; expected ${fn.type.results[index]}';
+		}
 	}
 
 	static function binary(stack:Array<WasmValueType>, input:WasmValueType, output:WasmValueType, fn:WasmFunction):Void {
@@ -340,9 +354,15 @@ class WasmValidator {
 		return stack.pop();
 	}
 
-	static function reset(stack:Array<WasmValueType>, height:Int, result:Null<WasmValueType>, reachable:Bool, fn:WasmFunction):Void {
-		if (reachable && stack.length < height)
-			throw 'Wasm function ${fn.name} ended a control frame with too few values';
+	static function reset(stack:Array<WasmValueType>, height:Int, result:Null<WasmValueType>, reachable:Bool, fn:WasmFunction, instructionIndex:Int):Void {
+		var expectedHeight = height + (result == null ? 0 : 1);
+		if (reachable && stack.length != expectedHeight) {
+			var start = instructionIndex > 8 ? instructionIndex - 8 : 0,
+				context = [for (index in start...instructionIndex + 1) Std.string(fn.body[index])].join(", ");
+			throw 'Wasm function ${fn.name} ended a control frame at instruction $instructionIndex with ${stack.length - height} values; expected ${expectedHeight - height} (height $height, stack ${stack}). Near: $context';
+		}
+		if (reachable && result != null && !sameValueType(stack[stack.length - 1], result))
+			throw 'Wasm function ${fn.name} ended a control frame at instruction $instructionIndex with ${stack[stack.length - 1]}; expected $result';
 		while (stack.length > height)
 			stack.pop();
 		if (reachable)

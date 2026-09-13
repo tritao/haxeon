@@ -276,6 +276,7 @@ class WasmBackendMain {
 		});
 		var stdString = new WasmBackend().compile(stdStringProgram, {target: Wasm32, debugNames: true}).bytes;
 		var stdStringInt64 = new WasmBackend().compile(int64StringProgram(), {target: Wasm32, debugNames: true, exports: ["stringifyInt64"]}).bytes;
+		var stdStringFloat = new WasmBackend().compile(floatStringProgram(), {target: Wasm32, debugNames: true, exports: ["stringifyFloat"]}).bytes;
 		var method = compile("class Counter { public var value:Int; public function new() { value = 40; } public function add(delta:Int):Int return value + delta; } function main():Int { var counter = new Counter(); return counter.add(2); }");
 		var global = compile("class State { public static var value:Int = 40; } function main():Int { State.value = State.value + 2; return State.value; }");
 		var floatGlobal = compile("class FloatState { public static var value:Float = 40.0; } function main():Int return FloatState.value == 40.0 ? 42 : 0;");
@@ -298,6 +299,7 @@ class WasmBackendMain {
 		File.saveBytes("out/wasm-backend-string-ops.wasm", stringOps);
 		File.saveBytes("out/wasm-backend-std-string.wasm", stdString);
 		File.saveBytes("out/wasm-backend-std-string-i64.wasm", stdStringInt64);
+		File.saveBytes("out/wasm-backend-std-string-f64.wasm", stdStringFloat);
 		File.saveBytes("out/wasm-backend-method.wasm", method);
 		File.saveBytes("out/wasm-backend-global.wasm", global);
 		File.saveBytes("out/wasm-backend-float-global.wasm", floatGlobal);
@@ -348,6 +350,27 @@ class WasmBackendMain {
 		block.instructions.push(new Located(Call(text, "__std_string", [boxed]), provenance));
 		block.terminator = new Located(Return(text), provenance);
 		program.functions.push(new IrFunction("stringifyInt64", [high, low], Bytes, [block]));
+		return program;
+	}
+
+	static function floatStringProgram():IrProgram {
+		var program = Frontend.compile("function main():Int return 42;"),
+			block = new IrBlock(0),
+			value = new IrValue(0, "value", F64),
+			boxed = new IrValue(1, "boxed", Dyn),
+			text = new IrValue(2, "text", Bytes),
+			provenance = SourceProvenance.generated("wasm-std-string-test");
+		program.natives.push({
+			name: "__std_string",
+			library: "haxeon_runtime",
+			symbol: "__std_string",
+			arguments: [Dyn],
+			result: Bytes
+		});
+		block.instructions.push(new Located(ToDyn(boxed, value), provenance));
+		block.instructions.push(new Located(Call(text, "__std_string", [boxed]), provenance));
+		block.terminator = new Located(Return(text), provenance);
+		program.functions.push(new IrFunction("stringifyFloat", [value], Bytes, [block]));
 		return program;
 	}
 

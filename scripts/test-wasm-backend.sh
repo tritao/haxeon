@@ -96,6 +96,7 @@ const cases = [
 	["out/wasm-backend-string-ops.wasm", 42],
 	["out/wasm-backend-std-string.wasm", 42],
 	["out/wasm-backend-std-string-i64.wasm", 42],
+	["out/wasm-backend-std-string-f64.wasm", 42],
   ["out/wasm-backend-method.wasm", 42],
   ["out/wasm-backend-global.wasm", 42],
   ["out/wasm-backend-float-global.wasm", 42],
@@ -173,6 +174,43 @@ const cases = [
     const actual = new TextDecoder().decode(new Uint8Array(view.buffer, pointer + 16, length));
     if (actual !== expected)
       throw new Error(`Std.string(Int64(${high}, ${low})): expected ${expected}, got ${actual}`);
+  }
+  const floatModule = (await WebAssembly.instantiate(
+    fs.readFileSync(`${root}/out/wasm-backend-std-string-f64.wasm`))).instance;
+  const floatCases = [
+    [0, "0"], [40.5, "40.5"], [-42.25, "-42.25"], [0.1, "0.1"], [-0, "0"],
+    [1e-6, "0.000001"], [1e-7, "1e-7"], [1e20, "100000000000000000000"], [1e21, "1e+21"],
+    [Number.MIN_VALUE, "5e-324"], [Number.MAX_VALUE, "1.7976931348623157e+308"],
+    [Infinity, "Infinity"], [-Infinity, "-Infinity"], [NaN, "NaN"]
+  ];
+  for (const [value, expected] of floatCases) {
+    const pointer = floatModule.exports.stringifyFloat(value) >>> 0;
+    const view = new DataView(floatModule.exports.memory.buffer);
+    const length = view.getUint32(pointer + 8, true);
+    const actual = new TextDecoder().decode(new Uint8Array(view.buffer, pointer + 16, length));
+    if (actual !== expected)
+      throw new Error(`Std.string(Float(${value})): expected ${expected}, got ${actual}`);
+  }
+  let floatBits = 0x9e3779b97f4a7c15n;
+  const floatMask = (1n << 64n) - 1n;
+  const floatRaw = new ArrayBuffer(8);
+  const floatBitView = new DataView(floatRaw);
+  const significantDigits = value => value.split(/[eE]/, 1)[0].replace(/[^0-9]/g, "").replace(/^0+/, "").length;
+  for (let index = 0; index < 10000; index++) {
+    floatBits ^= floatBits << 13n;
+    floatBits ^= floatBits >> 7n;
+    floatBits ^= floatBits << 17n;
+    floatBits &= floatMask;
+    floatBitView.setBigUint64(0, floatBits, true);
+    const value = floatBitView.getFloat64(0, true);
+    const pointer = floatModule.exports.stringifyFloat(value) >>> 0;
+    const view = new DataView(floatModule.exports.memory.buffer);
+    const length = view.getUint32(pointer + 8, true);
+    const actual = new TextDecoder().decode(new Uint8Array(view.buffer, pointer + 16, length));
+    const expected = String(value);
+    const roundTrips = Number.isNaN(value) ? Number.isNaN(Number(actual)) : Number(actual) === value;
+    if (!roundTrips || significantDigits(actual) !== significantDigits(expected))
+      throw new Error(`Std.string(Float bits 0x${floatBits.toString(16)}): expected shortest round-trip ${expected}, got ${actual}`);
   }
   console.log("PASS: Wasm modules validate and execute");
 })().catch(error => {

@@ -87,6 +87,7 @@ enum WasmInstruction {
 	I64Eqz;
 	I64Eq;
 	I64LtS;
+	I64LtU;
 	I64LeS;
 	F64Add;
 	F64Sub;
@@ -103,4 +104,5 @@ enum WasmInstruction {
 	F32DemoteF64;
 	I32WrapI64;
 	I32TruncF64S;
+	I64ReinterpretF64;
 }

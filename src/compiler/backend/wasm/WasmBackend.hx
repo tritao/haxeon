@@ -102,13 +102,20 @@ class WasmBackend implements Backend {
 							}
 						default:
 					}
-		for (value in ["null", "true", "false"])
+		for (value in ["null", "true", "false", "NaN", "Infinity", "-Infinity", "0"])
 			if (!strings.exists(value)) {
 				var bytes = stringBytes(value), offset = nextData;
 				module.data.push({offset: offset, bytes: bytes});
 				strings.set(value, offset);
 				nextData = align(offset + bytes.length, 8);
 			}
+		var ryuTableBase = -1;
+		if (usedNatives.exists("__std_string")) {
+			var ryuTable = WasmRyuTables.bytes();
+			ryuTableBase = nextData;
+			module.data.push({offset: nextData, bytes: ryuTable});
+			nextData = align(nextData + ryuTable.length, 8);
+		}
 		module.memoryMin = 1;
 		module.exportMemory = !importMemory;
 		var rootBase = align(Std.int(Math.max(1024, nextData)), 8),
@@ -161,7 +168,7 @@ class WasmBackend implements Backend {
 		var allocator = addAllocator(module, collector, heapStart, heapTop, freeHead, gcBudget, options.wasmGcStress == true, allocationCount,
 			allocationBytes, largestAllocation);
 		functions.set("__haxeon_alloc", allocator);
-		addRuntimeFunctions(module, functions, program, allocator, strings);
+		addRuntimeFunctions(module, functions, program, allocator, strings, ryuTableBase);
 		for (native in program.natives) {
 			var stride = arrayStrideForNative(native.name);
 			if (stride != null)
@@ -428,7 +435,7 @@ class WasmBackend implements Backend {
 			body.push(instruction);
 
 	static function addRuntimeFunctions(module:WasmModule, functions:Map<String, Int>, program:IrProgram, allocator:Int,
-			strings:Map<String, Int>):Void {
+			strings:Map<String, Int>, ryuTableBase:Int):Void {
 		for (native in program.natives) {
 			var runtimeFunction = addRuntimeNativeFunction(module, native, allocator);
 			if (runtimeFunction != null)
@@ -458,7 +465,7 @@ class WasmBackend implements Backend {
 						case "__reflect_is_object":
 							functions.set(native.name, addDynamicIsObject(module, native.name, program));
 						case "__std_string":
-							functions.set(native.name, addDynamicString(module, native.name, allocator, strings));
+							functions.set(native.name, addDynamicString(module, native.name, allocator, strings, ryuTableBase));
 						case "__dynamic_equal":
 							// Emitted after the native scan so the string helper has an index.
 						case "__std_is_of_type", "__exception_matches":
@@ -1918,9 +1925,12 @@ class WasmBackend implements Backend {
 		], body));
 	}
 
-	static function addDynamicString(module:WasmModule, name:String, allocator:Int, strings:Map<String, Int>):Int {
+	static function addDynamicString(module:WasmModule, name:String, allocator:Int, strings:Map<String, Int>, ryuTableBase:Int):Int {
 		var integerString = addIntToString(module, "__haxeon_i32_to_string", allocator),
 			int64String = addInt64ToString(module, "__haxeon_i64_to_string", allocator),
+			floatString = WasmNumericString.addFloatToString(module, "__haxeon_f64_to_string", allocator, typeId(Bytes), ryuTableBase,
+				requiredStringOffset(strings, "NaN"), requiredStringOffset(strings, "Infinity"), requiredStringOffset(strings, "-Infinity"),
+				requiredStringOffset(strings, "0")),
 			nullString = requiredStringOffset(strings, "null"),
 			trueString = requiredStringOffset(strings, "true"),
 			falseString = requiredStringOffset(strings, "false"),
@@ -1939,6 +1949,16 @@ class WasmBackend implements Backend {
 				LocalGet(0),
 				I64Load(WasmLayout.DYN_PAYLOAD_OFFSET),
 				Call(int64String),
+				Return,
+				End,
+				LocalGet(0),
+				I32Load(0),
+				I32Const(typeId(F64)),
+				I32Eq,
+				If(null),
+				LocalGet(0),
+				F64Load(WasmLayout.DYN_PAYLOAD_OFFSET),
+				Call(floatString),
 				Return,
 				End,
 				LocalGet(0),
