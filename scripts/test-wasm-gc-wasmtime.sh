@@ -26,7 +26,7 @@ mkdir -p "$root_dir/out"
 	--target=wasm-gc --output=out/wasm-gc-wasmtime-bytes.wasm --entry=wasm-gc-bytes \
 	--root=tests/programs tests/programs/wasm-gc-bytes.hx
 
-for case_name in add array-iterator-wasm array-slice-index array-growth-wasm array-unshift array-insert array-splice array-remove dynamic-equality numeric-promotion function-wrapper try-catch try-nested try-array-bounds; do
+for case_name in add array-iterator-wasm array-slice-index array-growth-wasm array-copy-concat array-unshift array-insert array-splice array-remove dynamic-equality numeric-promotion function-wrapper try-catch try-nested try-array-bounds; do
 	"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 		--target=wasm-gc --output="out/wasm-gc-wasmtime-$case_name.wasm" --entry="$case_name" \
 		--root=tests/programs "tests/programs/$case_name.hx"
@@ -52,6 +52,7 @@ for artifact in \
 	wasm-gc-wasmtime-array-iterator-wasm \
 	wasm-gc-wasmtime-array-slice-index \
 	wasm-gc-wasmtime-array-growth-wasm \
+	wasm-gc-wasmtime-array-copy-concat \
 	wasm-gc-wasmtime-array-unshift \
 	wasm-gc-wasmtime-array-insert \
 	wasm-gc-wasmtime-array-splice \

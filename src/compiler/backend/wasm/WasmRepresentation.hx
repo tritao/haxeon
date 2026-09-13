@@ -589,6 +589,28 @@ class WasmGcRepresentation implements WasmRepresentation {
 				LocalSet(outputLocal)
 			];
 		}
+		if (StringTools.startsWith(name, "__array_copy_")) {
+			if (arguments.length != 1 || argumentLocals.length != 1)
+				throw 'Invalid Wasm GC array copy signature for "$name"';
+			var element = requireArrayElement(arguments[0].type),
+				resultElement = requireArrayElement(output.type),
+				suffix = arrayNativeSuffix(element);
+			if (name != "__array_copy_" + suffix || WasmGcTypePlan.typeKey(resultElement) != WasmGcTypePlan.typeKey(element))
+				throw 'Wasm GC array copy "$name" does not match its $element array';
+			return arrayCopy(element, argumentLocals[0], outputLocal);
+		}
+		if (StringTools.startsWith(name, "__array_concat_")) {
+			if (arguments.length != 2 || argumentLocals.length != 2)
+				throw 'Invalid Wasm GC array concat signature for "$name"';
+			var element = requireArrayElement(arguments[0].type),
+				resultElement = requireArrayElement(output.type),
+				suffix = arrayNativeSuffix(element);
+			if (name != "__array_concat_" + suffix
+				|| WasmGcTypePlan.typeKey(requireArrayElement(arguments[1].type)) != WasmGcTypePlan.typeKey(element)
+				|| WasmGcTypePlan.typeKey(resultElement) != WasmGcTypePlan.typeKey(element))
+				throw 'Wasm GC array concat "$name" does not match its $element arrays';
+			return arrayConcat(element, argumentLocals[0], argumentLocals[1], outputLocal);
+		}
 		if (StringTools.startsWith(name, "__array_push_")) {
 			if (arguments.length != 2 || argumentLocals.length != 2 || output.type != I32)
 				throw 'Invalid Wasm GC array push signature for "$name"';
@@ -826,6 +848,66 @@ class WasmGcRepresentation implements WasmRepresentation {
 			StructNew(wrapperType),
 			LocalSet(destination)
 		]);
+		return body;
+	}
+
+	function arrayCopy(element:IrType, arrayLocal:Int, destination:Int):Array<WasmInstruction> {
+		var wrapperType = plan.arrayType(element),
+			length = allocateLocal(I32),
+			start = allocateLocal(I32),
+			body:Array<WasmInstruction> = [
+				LocalGet(arrayLocal),
+				StructGet(wrapperType, WasmGcTypePlan.arrayLengthFieldIndex()),
+				LocalSet(length),
+				I32Const(0),
+				LocalSet(start)
+			];
+		return body.concat(arraySlice(element, arrayLocal, start, length, destination));
+	}
+
+	function arrayConcat(element:IrType, leftLocal:Int, rightLocal:Int, destination:Int):Array<WasmInstruction> {
+		var wrapperType = plan.arrayType(element),
+			storageType = plan.arrayStorageType(element),
+			leftLength = allocateLocal(I32),
+			rightLength = allocateLocal(I32),
+			totalLength = allocateLocal(I32),
+			storage = allocateLocal(Ref({
+				nullable: false,
+				heap: Type(storageType)
+			})),
+			body:Array<WasmInstruction> = [
+				LocalGet(leftLocal),
+				StructGet(wrapperType, WasmGcTypePlan.arrayLengthFieldIndex()),
+				LocalSet(leftLength),
+				LocalGet(rightLocal),
+				StructGet(wrapperType, WasmGcTypePlan.arrayLengthFieldIndex()),
+				LocalSet(rightLength),
+				LocalGet(leftLength),
+				LocalGet(rightLength),
+				I32Add,
+				LocalSet(totalLength),
+				LocalGet(totalLength),
+				ArrayNewDefault(storageType),
+				LocalSet(storage),
+				LocalGet(storage),
+				I32Const(0),
+				LocalGet(leftLocal),
+				StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+				I32Const(0),
+				LocalGet(leftLength),
+				ArrayCopy(storageType, storageType),
+				LocalGet(storage),
+				LocalGet(leftLength),
+				LocalGet(rightLocal),
+				StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+				I32Const(0),
+				LocalGet(rightLength),
+				ArrayCopy(storageType, storageType),
+				LocalGet(totalLength),
+				LocalGet(storage),
+				StructNew(wrapperType),
+				LocalSet(destination)
+			];
 		return body;
 	}
 
