@@ -1065,6 +1065,15 @@ class WasmGcRepresentation implements WasmRepresentation {
 				throw "Invalid Wasm GC string equality signature";
 			return bytesEqual(outputLocal, argumentLocals[0], argumentLocals[1]);
 		}
+		if (name == "__string_split") {
+			if (!Type.enumEq(output.type, Array(Bytes))
+				|| arguments.length != 2
+				|| argumentLocals.length != 2
+				|| arguments[0].type != Bytes
+				|| arguments[1].type != Bytes)
+				throw "Invalid Wasm GC String.split signature";
+			return stringSplit(argumentLocals[0], argumentLocals[1], outputLocal);
+		}
 		if (name == "__array_join_bytes") {
 			if (output.type != Bytes
 				|| arguments.length != 2
@@ -3043,6 +3052,200 @@ class WasmGcRepresentation implements WasmRepresentation {
 				LocalSet(destination)
 			];
 		return body;
+	}
+
+	function stringSplit(sourceLocal:Int, separatorLocal:Int, destination:Int):Array<WasmInstruction> {
+		var arrayType = plan.arrayType(Bytes),
+			arrayStorage = plan.arrayStorageType(Bytes),
+			sourceLength = allocateLocal(I32),
+			separatorLength = allocateLocal(I32),
+			sourceStorage = allocateLocal(Ref({
+				nullable: false,
+				heap: Type(plan.byteArrayTypeIndex)
+			})),
+			separatorStorage = allocateLocal(Ref({nullable: false, heap: Type(plan.byteArrayTypeIndex)})),
+			result = allocateLocal(valueType(Array(Bytes))),
+			capacity = allocateLocal(I32),
+			count = allocateLocal(I32),
+			scan = allocateLocal(I32),
+			start = allocateLocal(I32),
+			separatorIndex = allocateLocal(I32),
+			step = allocateLocal(I32),
+			firstByte = allocateLocal(I32),
+			body:Array<WasmInstruction> = [
+				LocalGet(sourceLocal),
+				StructGet(plan.bytesTypeIndex, 2),
+				LocalSet(sourceLength),
+				LocalGet(separatorLocal),
+				StructGet(plan.bytesTypeIndex, 2),
+				LocalSet(separatorLength),
+				LocalGet(sourceLocal),
+				StructGet(plan.bytesTypeIndex, 0),
+				LocalSet(sourceStorage),
+				LocalGet(separatorLocal),
+				StructGet(plan.bytesTypeIndex, 0),
+				LocalSet(separatorStorage),
+				LocalGet(sourceLength),
+				I32Const(1),
+				I32Add,
+				LocalSet(capacity),
+				I32Const(0),
+				LocalGet(capacity),
+				ArrayNewDefault(arrayStorage),
+				StructNew(arrayType),
+				LocalSet(result),
+				I32Const(0),
+				LocalSet(count),
+				I32Const(0),
+				LocalSet(scan),
+				I32Const(0),
+				LocalSet(start),
+				LocalGet(separatorLength),
+				I32Eqz,
+				If(null),
+				Block(null),
+				Loop(null),
+				LocalGet(scan),
+				LocalGet(sourceLength),
+				I32LtS,
+				I32Eqz,
+				BrIf(1),
+				LocalGet(sourceStorage),
+				LocalGet(sourceLocal),
+				StructGet(plan.bytesTypeIndex, 1),
+				LocalGet(scan),
+				I32Add,
+				ArrayGetUnsigned(plan.byteArrayTypeIndex),
+				LocalTee(firstByte),
+				I32Const(240),
+				I32LtS,
+				I32Eqz,
+				If(I32),
+				I32Const(4),
+				Else,
+				LocalGet(firstByte),
+				I32Const(224),
+				I32LtS,
+				I32Eqz,
+				If(I32),
+				I32Const(3),
+				Else,
+				LocalGet(firstByte),
+				I32Const(192),
+				I32LtS,
+				I32Eqz,
+				If(I32),
+				I32Const(2),
+				Else,
+				I32Const(1),
+				End,
+				End,
+				End,
+				LocalSet(step),
+				LocalGet(scan),
+				LocalSet(start),
+				LocalGet(scan),
+				LocalGet(step),
+				I32Add,
+				LocalSet(scan)
+			];
+		appendSplitPart(body, plan, arrayType, arrayStorage, sourceLocal, result, count, start, scan);
+		body = body.concat([Br(0), End, End, Else, I32Const(0), LocalSet(scan), Block(null), Loop(null)]);
+		body = body.concat([
+			LocalGet(scan),
+			LocalGet(separatorLength),
+			I32Add,
+			LocalGet(sourceLength),
+			I32LeS,
+			I32Eqz,
+			BrIf(1),
+			I32Const(0),
+			LocalSet(separatorIndex),
+			Block(null),
+			Loop(null),
+			LocalGet(separatorIndex),
+			LocalGet(separatorLength),
+			I32LtS,
+			I32Eqz,
+			BrIf(1),
+			LocalGet(sourceStorage),
+			LocalGet(sourceLocal),
+			StructGet(plan.bytesTypeIndex, 1),
+			LocalGet(scan),
+			I32Add,
+			LocalGet(separatorIndex),
+			I32Add,
+			ArrayGetUnsigned(plan.byteArrayTypeIndex),
+			LocalGet(separatorStorage),
+			LocalGet(separatorLocal),
+			StructGet(plan.bytesTypeIndex, 1),
+			LocalGet(separatorIndex),
+			I32Add,
+			ArrayGetUnsigned(plan.byteArrayTypeIndex),
+			I32Eq,
+			I32Eqz,
+			BrIf(1),
+			LocalGet(separatorIndex),
+			I32Const(1),
+			I32Add,
+			LocalSet(separatorIndex),
+			Br(0),
+			End,
+			End,
+			LocalGet(separatorIndex),
+			LocalGet(separatorLength),
+			I32Eq,
+			If(null)
+		]);
+		appendSplitPart(body, plan, arrayType, arrayStorage, sourceLocal, result, count, start, scan);
+		body = body.concat([
+			LocalGet(scan),
+			LocalGet(separatorLength),
+			I32Add,
+			LocalSet(scan),
+			LocalGet(scan),
+			LocalSet(start),
+			Else,
+			LocalGet(scan),
+			I32Const(1),
+			I32Add,
+			LocalSet(scan),
+			End,
+			Br(0),
+			End,
+			End
+		]);
+		appendSplitPart(body, plan, arrayType, arrayStorage, sourceLocal, result, count, start, sourceLength);
+		body.push(End);
+		body = body.concat([LocalGet(result), LocalSet(destination)]);
+		return body;
+	}
+
+	static function appendSplitPart(body:Array<WasmInstruction>, plan:WasmGcTypePlan, arrayType:Int, arrayStorage:Int, sourceLocal:Int, resultLocal:Int,
+			countLocal:Int, startLocal:Int, endLocal:Int):Void {
+		body.push(LocalGet(resultLocal));
+		body.push(StructGet(arrayType, WasmGcTypePlan.arrayDataFieldIndex()));
+		body.push(LocalGet(countLocal));
+		body.push(LocalGet(sourceLocal));
+		body.push(StructGet(plan.bytesTypeIndex, 0));
+		body.push(LocalGet(sourceLocal));
+		body.push(StructGet(plan.bytesTypeIndex, 1));
+		body.push(LocalGet(startLocal));
+		body.push(I32Add);
+		body.push(LocalGet(endLocal));
+		body.push(LocalGet(startLocal));
+		body.push(I32Sub);
+		body.push(StructNew(plan.bytesTypeIndex));
+		body.push(ArraySet(arrayStorage));
+		body.push(LocalGet(resultLocal));
+		body.push(LocalGet(countLocal));
+		body.push(I32Const(1));
+		body.push(I32Add);
+		body.push(StructSet(arrayType, WasmGcTypePlan.arrayLengthFieldIndex()));
+		body.push(LocalGet(countLocal));
+		body.push(I32Const(1));
+		body.push(I32Add);
+		body.push(LocalSet(countLocal));
 	}
 
 	function arrayJoinBytes(arrayLocal:Int, separatorLocal:Int, destination:Int):Array<WasmInstruction> {
