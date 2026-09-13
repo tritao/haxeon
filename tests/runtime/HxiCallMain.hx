@@ -1,5 +1,6 @@
 import compiler.Compiler;
 import compiler.hl.HlWriter;
+import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
 class HxiCallMain {
@@ -7,6 +8,7 @@ class HxiCallMain {
 		var output = Sys.args()[0],
 			library = Sys.args()[1],
 			compiler = new Compiler();
+		CompilerIntrinsics.register(compiler);
 		compiler.addSourceRoot(Sys.getCwd() + "/stdlib");
 		compiler.addFfiInterface("fixture.hxi",
 			'interface Fixture @target("x86_64-linux-gnu") @library("$library") {\n'
