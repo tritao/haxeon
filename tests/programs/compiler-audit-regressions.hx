@@ -217,5 +217,8 @@ function main():Int {
 		return 23;
 	if ("xabcx".substring(1, 4).indexOf("b") != 1)
 		return 24;
+	var nullable:String = null;
+	if (nullable != null || !(nullable == null))
+		return 25;
 	return 42;
 }
