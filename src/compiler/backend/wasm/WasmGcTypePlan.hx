@@ -50,6 +50,8 @@ class WasmGcTypePlan {
 	public var byteArrayTypeIndex(default, null):Int = -1;
 	public var bytesTypeIndex(default, null):Int = -1;
 	public var managedBytesTypeIndex(default, null):Int = -1;
+	public var bytesInputTypeIndex(default, null):Int = -1;
+	public var bytesOutputTypeIndex(default, null):Int = -1;
 	public var closureTypeIndex(default, null):Int = -1;
 
 	final objectDeclarations:Map<String, IrObject> = [];
@@ -202,6 +204,8 @@ class WasmGcTypePlan {
 			case Function(_, _): Ref(nullableType(closureTypeIndex));
 			case Bytes: Ref(nullableType(bytesTypeIndex));
 			case ManagedBytes: Ref(nullableType(managedBytesTypeIndex));
+			case Abstract("realtime_bytes_input"): Ref(nullableType(bytesInputTypeIndex));
+			case Abstract("realtime_bytes_output"): Ref(nullableType(bytesOutputTypeIndex));
 			case Abstract(name) if (mapTypes.exists(name)): Ref(nullableType(mapType(name)));
 			// Abstracts and virtual interfaces retain Haxe's existing dispatch metadata and begin as opaque anyrefs.
 			case Dyn, Abstract(_), Virtual(_): Ref({nullable: true, heap: Any});
@@ -452,6 +456,8 @@ class WasmGcTypePlan {
 		byteArrayTypeIndex = reserveType();
 		bytesTypeIndex = reserveType();
 		managedBytesTypeIndex = reserveType();
+		bytesInputTypeIndex = reserveType();
+		bytesOutputTypeIndex = reserveType();
 		closureTypeIndex = reserveType();
 		boxedPrimitiveTypeIndices.set("i32", reserveType());
 		boxedPrimitiveTypeIndices.set("bool", reserveType());
@@ -532,6 +538,17 @@ class WasmGcTypePlan {
 		setType(managedBytesTypeIndex, true, [], Struct([
 			{type: Value(Ref({nullable: false, heap: Type(byteArrayTypeIndex)})), mutable: true},
 			{type: Value(I32), mutable: true},
+			{type: Value(I32), mutable: true}
+		]));
+		setType(bytesInputTypeIndex, true, [], Struct([
+			{type: Value(Ref({nullable: true, heap: Type(managedBytesTypeIndex)})), mutable: false},
+			{type: Value(I32), mutable: true},
+			{type: Value(I32), mutable: true}
+		]));
+		setType(bytesOutputTypeIndex, true, [], Struct([
+			{type: Value(I32), mutable: true},
+			{type: Value(I32), mutable: true},
+			{type: Value(Ref({nullable: false, heap: Type(byteArrayTypeIndex)})), mutable: true},
 			{type: Value(I32), mutable: true}
 		]));
 		setType(closureTypeIndex, true, [], Struct([

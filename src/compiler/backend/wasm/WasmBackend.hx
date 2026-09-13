@@ -467,6 +467,10 @@ class WasmBackend implements Backend {
 				"__math_ceil", "__std_int_f64", "__std_int_dynamic", "__std_string", "__std_is_of_type", "__exception_matches", "__reflect_is_object",
 				"__dynamic_equal", "__bytes_alloc", "__bytes_of_string", "__bytes_length", "__bytes_get", "__bytes_set", "__bytes_get_i32", "__bytes_set_i32",
 				"getI32", "setI32", "__bytes_view", "__bytes_sub", "__bytes_compare", "__bytes_to_string", "__bytes_get_string", "structSlice",
+				"__bytes_input_new", "__bytes_input_position", "__bytes_input_big_endian", "__bytes_input_set_big_endian", "__bytes_input_read_byte",
+				"__bytes_input_read_i32", "__bytes_input_read_f64", "__bytes_input_read_string", "__bytes_input_read", "__bytes_output_new",
+				"__bytes_output_big_endian", "__bytes_output_set_big_endian", "__bytes_output_write_byte", "__bytes_output_write_i32",
+				"__bytes_output_write_f64", "__bytes_output_write_string", "__bytes_output_write", "__bytes_output_write_range", "__bytes_output_get_bytes",
 				"__string_length", "__string_char_code_at", "__string_concat", "__string_equal", "__string_split": true;
 			default: false;
 		};

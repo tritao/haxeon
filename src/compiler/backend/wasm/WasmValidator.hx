@@ -508,6 +508,10 @@ class WasmValidator {
 					pop(stack, F64, fn);
 					if (reachable)
 						stack.push(I64);
+				case F64ReinterpretI64:
+					pop(stack, I64, fn);
+					if (reachable)
+						stack.push(F64);
 				case RefNull(heapType):
 					if (reachable)
 						stack.push(Ref({nullable: true, heap: heapType}));

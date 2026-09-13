@@ -946,6 +946,12 @@ class WasmGcRepresentation implements WasmRepresentation {
 
 	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
 			argumentLocals:Array<Int>):Null<Array<WasmInstruction>> {
+		var bytesInput = lowerBytesInputRuntimeCall(name, output, arguments, outputLocal, argumentLocals);
+		if (bytesInput != null)
+			return bytesInput;
+		var bytesOutput = lowerBytesOutputRuntimeCall(name, output, arguments, outputLocal, argumentLocals);
+		if (bytesOutput != null)
+			return bytesOutput;
 		if (name == "__math_ceil") {
 			if (output.type != I32 || arguments.length != 1 || arguments[0].type != F64 || argumentLocals.length != 1)
 				throw "Invalid Wasm GC Math.ceil signature";
@@ -1241,6 +1247,649 @@ class WasmGcRepresentation implements WasmRepresentation {
 			return arraySlice(element, argumentLocals[0], argumentLocals[1], argumentLocals[2], outputLocal);
 		}
 		return null;
+	}
+
+	function lowerBytesInputRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
+			argumentLocals:Array<Int>):Null<Array<WasmInstruction>> {
+		switch name {
+			case "__bytes_input_new":
+				if (!isNamedAbstract(output.type, "realtime_bytes_input")
+					|| arguments.length != 1
+					|| arguments[0].type != ManagedBytes
+					|| argumentLocals.length != 1)
+					throw "Invalid Wasm GC BytesInput constructor signature";
+				var length = allocateLocal(I32),
+					storage = allocateLocal(Ref({nullable: false, heap: Type(plan.byteArrayTypeIndex)})),
+					snapshot = allocateLocal(Ref({nullable: false, heap: Type(plan.managedBytesTypeIndex)}));
+				return [
+					LocalGet(argumentLocals[0]),
+					StructGet(plan.managedBytesTypeIndex, 2),
+					LocalSet(length),
+					LocalGet(length),
+					ArrayNewDefault(plan.byteArrayTypeIndex),
+					LocalSet(storage),
+					LocalGet(storage),
+					I32Const(0),
+					LocalGet(argumentLocals[0]),
+					StructGet(plan.managedBytesTypeIndex, 0),
+					LocalGet(argumentLocals[0]),
+					StructGet(plan.managedBytesTypeIndex, 1),
+					LocalGet(length),
+					ArrayCopy(plan.byteArrayTypeIndex, plan.byteArrayTypeIndex),
+					LocalGet(storage),
+					I32Const(0),
+					LocalGet(length),
+					StructNew(plan.managedBytesTypeIndex),
+					LocalSet(snapshot),
+					LocalGet(snapshot),
+					I32Const(0),
+					I32Const(1),
+					StructNew(plan.bytesInputTypeIndex),
+					LocalSet(outputLocal)
+				];
+			case "__bytes_input_position", "__bytes_input_big_endian":
+				if ((name == "__bytes_input_position" && output.type != I32)
+					|| (name == "__bytes_input_big_endian" && output.type != Bool)
+					|| arguments.length != 1
+					|| !isNamedAbstract(arguments[0].type, "realtime_bytes_input")
+					|| argumentLocals.length != 1)
+					throw 'Invalid Wasm GC $name signature';
+				return [
+					LocalGet(argumentLocals[0]),
+					RefCast({nullable: false, heap: Type(plan.bytesInputTypeIndex)}),
+					StructGet(plan.bytesInputTypeIndex, name == "__bytes_input_position" ? 1 : 2),
+					LocalSet(outputLocal)
+				];
+			case "__bytes_input_set_big_endian":
+				if (output.type != Void
+					|| arguments.length != 2
+					|| !isNamedAbstract(arguments[0].type, "realtime_bytes_input")
+					|| arguments[1].type != Bool
+					|| argumentLocals.length != 2)
+					throw "Invalid Wasm GC BytesInput endian setter signature";
+				return [
+					LocalGet(argumentLocals[0]),
+					RefCast({nullable: false, heap: Type(plan.bytesInputTypeIndex)}),
+					LocalGet(argumentLocals[1]),
+					StructSet(plan.bytesInputTypeIndex, 2)
+				];
+			case "__bytes_input_read_byte":
+				if (output.type != I32
+					|| arguments.length != 1
+					|| !isNamedAbstract(arguments[0].type, "realtime_bytes_input")
+					|| argumentLocals.length != 1)
+					throw "Invalid Wasm GC BytesInput.readByte signature";
+				var bytes = allocateLocal(Ref({nullable: false, heap: Type(plan.managedBytesTypeIndex)})),
+					position = allocateLocal(I32),
+					body:Array<WasmInstruction> = inputReadLocals(argumentLocals[0], bytes, position, null);
+				body = body.concat(managedByteGet(bytes, position, outputLocal));
+				body = body.concat(inputAdvanceConstant(argumentLocals[0], position, 1));
+				return body;
+			case "__bytes_input_read_i32":
+				if (output.type != I32
+					|| arguments.length != 1
+					|| !isNamedAbstract(arguments[0].type, "realtime_bytes_input")
+					|| argumentLocals.length != 1)
+					throw "Invalid Wasm GC BytesInput.readInt32 signature";
+				var bytes = allocateLocal(Ref({nullable: false, heap: Type(plan.managedBytesTypeIndex)})),
+					position = allocateLocal(I32),
+					endian = allocateLocal(I32),
+					byteLocals = [for (_ in 0...4) allocateLocal(I32)],
+					body:Array<WasmInstruction> = inputReadLocals(argumentLocals[0], bytes, position, endian);
+				for (index in 0...4) {
+					var byteIndex = allocateLocal(I32);
+					body = body.concat([LocalGet(position), I32Const(index), I32Add, LocalSet(byteIndex)]);
+					body = body.concat(managedByteGet(bytes, byteIndex, byteLocals[index]));
+				}
+				body = body.concat(combineInputBytes(byteLocals, endian, false, outputLocal));
+				body = body.concat(inputAdvanceConstant(argumentLocals[0], position, 4));
+				return body;
+			case "__bytes_input_read_f64":
+				if (output.type != F64
+					|| arguments.length != 1
+					|| !isNamedAbstract(arguments[0].type, "realtime_bytes_input")
+					|| argumentLocals.length != 1)
+					throw "Invalid Wasm GC BytesInput.readDouble signature";
+				var bytes = allocateLocal(Ref({nullable: false, heap: Type(plan.managedBytesTypeIndex)})),
+					position = allocateLocal(I32),
+					endian = allocateLocal(I32),
+					bits = allocateLocal(I64),
+					byteLocals = [for (_ in 0...8) allocateLocal(I32)],
+					body:Array<WasmInstruction> = inputReadLocals(argumentLocals[0], bytes, position, endian);
+				for (index in 0...8) {
+					var byteIndex = allocateLocal(I32);
+					body = body.concat([LocalGet(position), I32Const(index), I32Add, LocalSet(byteIndex)]);
+					body = body.concat(managedByteGet(bytes, byteIndex, byteLocals[index]));
+				}
+				body = body.concat(combineInputBytes(byteLocals, endian, true, bits));
+				body = body.concat([LocalGet(bits), F64ReinterpretI64, LocalSet(outputLocal)]);
+				body = body.concat(inputAdvanceConstant(argumentLocals[0], position, 8));
+				return body;
+			case "__bytes_input_read_string":
+				if (output.type != Bytes
+					|| arguments.length != 2
+					|| !isNamedAbstract(arguments[0].type, "realtime_bytes_input")
+					|| arguments[1].type != I32
+					|| argumentLocals.length != 2)
+					throw "Invalid Wasm GC BytesInput.readString signature";
+				var bytes = allocateLocal(Ref({nullable: false, heap: Type(plan.managedBytesTypeIndex)})),
+					position = allocateLocal(I32),
+					body:Array<WasmInstruction> = inputReadLocals(argumentLocals[0], bytes, position, null);
+				body = body.concat(managedBytesGetString(bytes, position, argumentLocals[1], outputLocal));
+				body = body.concat(inputAdvance(argumentLocals[0], position, argumentLocals[1]));
+				return body;
+			case "__bytes_input_read":
+				if (output.type != ManagedBytes
+					|| arguments.length != 2
+					|| !isNamedAbstract(arguments[0].type, "realtime_bytes_input")
+					|| arguments[1].type != I32
+					|| argumentLocals.length != 2)
+					throw "Invalid Wasm GC BytesInput.read signature";
+				var source = allocateLocal(Ref({nullable: false, heap: Type(plan.managedBytesTypeIndex)})),
+					position = allocateLocal(I32),
+					length = argumentLocals[1],
+					storage = allocateLocal(Ref({nullable: false, heap: Type(plan.byteArrayTypeIndex)})),
+					body:Array<WasmInstruction> = inputReadLocals(argumentLocals[0], source, position, null);
+				body = body.concat(checkedByteRange(plan.managedBytesTypeIndex, source, position, length));
+				body = body.concat([
+					LocalGet(length),
+					ArrayNewDefault(plan.byteArrayTypeIndex),
+					LocalSet(storage),
+					LocalGet(storage),
+					I32Const(0),
+					LocalGet(source),
+					StructGet(plan.managedBytesTypeIndex, 0),
+					LocalGet(source),
+					StructGet(plan.managedBytesTypeIndex, 1),
+					LocalGet(position),
+					I32Add,
+					LocalGet(length),
+					ArrayCopy(plan.byteArrayTypeIndex, plan.byteArrayTypeIndex),
+					LocalGet(storage),
+					I32Const(0),
+					LocalGet(length),
+					StructNew(plan.managedBytesTypeIndex),
+					LocalSet(outputLocal)
+				]);
+				body = body.concat(inputAdvance(argumentLocals[0], position, length));
+				return body;
+			default:
+				return null;
+		}
+	}
+
+	function inputReadLocals(inputLocal:Int, bytesLocal:Int, positionLocal:Int, endianLocal:Null<Int>):Array<WasmInstruction> {
+		var body:Array<WasmInstruction> = [
+			LocalGet(inputLocal),
+			RefCast({nullable: false, heap: Type(plan.bytesInputTypeIndex)}),
+			StructGet(plan.bytesInputTypeIndex, 0),
+			RefCast({nullable: false, heap: Type(plan.managedBytesTypeIndex)}),
+			LocalSet(bytesLocal),
+			LocalGet(inputLocal),
+			RefCast({nullable: false, heap: Type(plan.bytesInputTypeIndex)}),
+			StructGet(plan.bytesInputTypeIndex, 1),
+			LocalSet(positionLocal)
+		];
+		if (endianLocal != null)
+			body = body.concat([
+				LocalGet(inputLocal),
+				RefCast({nullable: false, heap: Type(plan.bytesInputTypeIndex)}),
+				StructGet(plan.bytesInputTypeIndex, 2),
+				LocalSet(endianLocal)
+			]);
+		return body;
+	}
+
+	function inputAdvance(inputLocal:Int, positionLocal:Int, amountLocal:Int):Array<WasmInstruction> {
+		return [
+			LocalGet(inputLocal),
+			RefCast({nullable: false, heap: Type(plan.bytesInputTypeIndex)}),
+			LocalGet(positionLocal),
+			LocalGet(amountLocal),
+			I32Add,
+			StructSet(plan.bytesInputTypeIndex, 1)
+		];
+	}
+
+	function inputAdvanceConstant(inputLocal:Int, positionLocal:Int, amount:Int):Array<WasmInstruction> {
+		return [
+			LocalGet(inputLocal),
+			RefCast({nullable: false, heap: Type(plan.bytesInputTypeIndex)}),
+			LocalGet(positionLocal),
+			I32Const(amount),
+			I32Add,
+			StructSet(plan.bytesInputTypeIndex, 1)
+		];
+	}
+
+	function combineInputBytes(bytes:Array<Int>, endian:Int, wide:Bool, destination:Int):Array<WasmInstruction> {
+		var width = wide ? I64 : I32,
+			body:Array<WasmInstruction> = [LocalGet(endian), If(width)];
+		body = body.concat(combineInputByteOrder(bytes, wide, true));
+		body.push(Else);
+		body = body.concat(combineInputByteOrder(bytes, wide, false));
+		body = body.concat([End, LocalSet(destination)]);
+		return body;
+	}
+
+	function combineInputByteOrder(bytes:Array<Int>, wide:Bool, bigEndian:Bool):Array<WasmInstruction> {
+		var body:Array<WasmInstruction> = [],
+			indices = bigEndian ? [for (index in 0...bytes.length) index] : [for (index in 0...bytes.length) bytes.length - index - 1], first = true;
+		for (index in indices) {
+			if (!first) {
+				body.push(wide ? I64Const(8) : I32Const(8));
+				body.push(wide ? I64Shl : I32Shl);
+			}
+			body.push(LocalGet(bytes[index]));
+			if (wide)
+				body.push(I64ExtendI32U);
+			if (!first)
+				body.push(wide ? I64Or : I32Or);
+			first = false;
+		}
+		return body;
+	}
+
+	function lowerBytesOutputRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
+			argumentLocals:Array<Int>):Null<Array<WasmInstruction>> {
+		switch name {
+			case "__bytes_output_new":
+				if (!isNamedAbstract(output.type, "realtime_bytes_output") || arguments.length != 0 || argumentLocals.length != 0)
+					throw 'Invalid Wasm GC BytesOutput constructor signature: output=${Std.string(output.type)}, arguments=${arguments.length}, locals=${argumentLocals.length}';
+				return [
+					I32Const(0),
+					I32Const(0),
+					I32Const(0),
+					ArrayNewDefault(plan.byteArrayTypeIndex),
+					I32Const(1),
+					StructNew(plan.bytesOutputTypeIndex),
+					LocalSet(outputLocal)
+				];
+			case "__bytes_output_big_endian":
+				if (output.type != Bool
+					|| arguments.length != 1
+					|| !isNamedAbstract(arguments[0].type, "realtime_bytes_output")
+					|| argumentLocals.length != 1)
+					throw "Invalid Wasm GC BytesOutput endian getter signature";
+				return [
+					LocalGet(argumentLocals[0]),
+					RefCast({nullable: false, heap: Type(plan.bytesOutputTypeIndex)}),
+					StructGet(plan.bytesOutputTypeIndex, 3),
+					LocalSet(outputLocal)
+				];
+			case "__bytes_output_set_big_endian":
+				if (output.type != Void
+					|| arguments.length != 2
+					|| !isNamedAbstract(arguments[0].type, "realtime_bytes_output")
+					|| arguments[1].type != Bool
+					|| argumentLocals.length != 2)
+					throw "Invalid Wasm GC BytesOutput endian setter signature";
+				return [
+					LocalGet(argumentLocals[0]),
+					RefCast({nullable: false, heap: Type(plan.bytesOutputTypeIndex)}),
+					LocalGet(argumentLocals[1]),
+					StructSet(plan.bytesOutputTypeIndex, 3)
+				];
+			case "__bytes_output_write_byte":
+				if (output.type != Void
+					|| arguments.length != 2
+					|| !isNamedAbstract(arguments[0].type, "realtime_bytes_output")
+					|| arguments[1].type != I32
+					|| argumentLocals.length != 2)
+					throw "Invalid Wasm GC BytesOutput.writeByte signature";
+				return outputWriteByte(argumentLocals[0], argumentLocals[1]);
+			case "__bytes_output_write_i32":
+				if (output.type != Void
+					|| arguments.length != 2
+					|| !isNamedAbstract(arguments[0].type, "realtime_bytes_output")
+					|| arguments[1].type != I32
+					|| argumentLocals.length != 2)
+					throw "Invalid Wasm GC BytesOutput.writeInt32 signature";
+				return outputWriteI32(argumentLocals[0], argumentLocals[1]);
+			case "__bytes_output_write_f64":
+				if (output.type != Void
+					|| arguments.length != 2
+					|| !isNamedAbstract(arguments[0].type, "realtime_bytes_output")
+					|| arguments[1].type != F64
+					|| argumentLocals.length != 2)
+					throw "Invalid Wasm GC BytesOutput.writeDouble signature";
+				return outputWriteF64(argumentLocals[0], argumentLocals[1]);
+			case "__bytes_output_write_string":
+				if (output.type != Void
+					|| arguments.length != 2
+					|| !isNamedAbstract(arguments[0].type, "realtime_bytes_output")
+					|| arguments[1].type != Bytes
+					|| argumentLocals.length != 2)
+					throw "Invalid Wasm GC BytesOutput.writeString signature";
+				var offset = allocateLocal(I32),
+					length = allocateLocal(I32),
+					body:Array<WasmInstruction> = [LocalGet(argumentLocals[1]), RefIsNull, If(null)];
+				body.push(Else);
+				body = body.concat([
+					LocalGet(argumentLocals[1]),
+					StructGet(plan.bytesTypeIndex, 1),
+					LocalSet(offset),
+					LocalGet(argumentLocals[1]),
+					StructGet(plan.bytesTypeIndex, 2),
+					LocalSet(length)
+				]);
+				body = body.concat(outputAppendRange(argumentLocals[0], plan.bytesTypeIndex, argumentLocals[1], offset, length));
+				body.push(End);
+				return body;
+			case "__bytes_output_write":
+				if (output.type != Void
+					|| arguments.length != 2
+					|| !isNamedAbstract(arguments[0].type, "realtime_bytes_output")
+					|| arguments[1].type != ManagedBytes
+					|| argumentLocals.length != 2)
+					throw "Invalid Wasm GC BytesOutput.write signature";
+				var offset = allocateLocal(I32),
+					length = allocateLocal(I32),
+					body:Array<WasmInstruction> = [
+						I32Const(0),
+						LocalSet(offset),
+						LocalGet(argumentLocals[1]),
+						StructGet(plan.managedBytesTypeIndex, 2),
+						LocalSet(length)
+					];
+				return body.concat(outputAppendRange(argumentLocals[0], plan.managedBytesTypeIndex, argumentLocals[1], offset, length));
+			case "__bytes_output_write_range":
+				if (output.type != I32
+					|| arguments.length != 4
+					|| !isNamedAbstract(arguments[0].type, "realtime_bytes_output")
+					|| arguments[1].type != ManagedBytes
+					|| arguments[2].type != I32
+					|| arguments[3].type != I32
+					|| argumentLocals.length != 4)
+					throw "Invalid Wasm GC BytesOutput.writeBytes signature";
+				var body = outputAppendRange(argumentLocals[0], plan.managedBytesTypeIndex, argumentLocals[1], argumentLocals[2], argumentLocals[3]);
+				body = body.concat([LocalGet(argumentLocals[3]), LocalSet(outputLocal)]);
+				return body;
+			case "__bytes_output_get_bytes":
+				if (output.type != ManagedBytes
+					|| arguments.length != 1
+					|| !isNamedAbstract(arguments[0].type, "realtime_bytes_output")
+					|| argumentLocals.length != 1)
+					throw "Invalid Wasm GC BytesOutput.getBytes signature";
+				var length = allocateLocal(I32),
+					storage = allocateLocal(Ref({nullable: false, heap: Type(plan.byteArrayTypeIndex)}));
+				return [
+					LocalGet(argumentLocals[0]),
+					RefCast({nullable: false, heap: Type(plan.bytesOutputTypeIndex)}),
+					StructGet(plan.bytesOutputTypeIndex, 0),
+					LocalSet(length),
+					LocalGet(length),
+					ArrayNewDefault(plan.byteArrayTypeIndex),
+					LocalSet(storage),
+					LocalGet(storage),
+					I32Const(0),
+					LocalGet(argumentLocals[0]),
+					RefCast({
+						nullable: false,
+						heap: Type(plan.bytesOutputTypeIndex)
+					}),
+					StructGet(plan.bytesOutputTypeIndex, 2),
+					I32Const(0),
+					LocalGet(length),
+					ArrayCopy(plan.byteArrayTypeIndex, plan.byteArrayTypeIndex),
+					LocalGet(storage),
+					I32Const(0),
+					LocalGet(length),
+					StructNew(plan.managedBytesTypeIndex),
+					LocalSet(outputLocal)
+				];
+			default:
+				return null;
+		}
+	}
+
+	function outputWriteByte(outputLocal:Int, valueLocal:Int):Array<WasmInstruction> {
+		var length = allocateLocal(I32),
+			required = allocateLocal(I32),
+			body:Array<WasmInstruction> = [
+				LocalGet(outputLocal),
+				RefCast({nullable: false, heap: Type(plan.bytesOutputTypeIndex)}),
+				StructGet(plan.bytesOutputTypeIndex, 0),
+				LocalSet(length),
+				LocalGet(length),
+				I32Const(1),
+				I32Add,
+				LocalSet(required)
+			];
+		body = body.concat(outputEnsureCapacity(outputLocal, required));
+		body = body.concat([
+			LocalGet(outputLocal),
+			RefCast({nullable: false, heap: Type(plan.bytesOutputTypeIndex)}),
+			StructGet(plan.bytesOutputTypeIndex, 2),
+			LocalGet(length),
+			LocalGet(valueLocal),
+			ArraySet(plan.byteArrayTypeIndex),
+			LocalGet(outputLocal),
+			RefCast({nullable: false, heap: Type(plan.bytesOutputTypeIndex)}),
+			LocalGet(required),
+			StructSet(plan.bytesOutputTypeIndex, 0)
+		]);
+		return body;
+	}
+
+	function outputWriteI32(outputLocal:Int, valueLocal:Int):Array<WasmInstruction> {
+		var length = allocateLocal(I32),
+			required = allocateLocal(I32),
+			endian = allocateLocal(I32),
+			body:Array<WasmInstruction> = [
+				LocalGet(outputLocal),
+				RefCast({
+					nullable: false,
+					heap: Type(plan.bytesOutputTypeIndex)
+				}),
+				StructGet(plan.bytesOutputTypeIndex, 0),
+				LocalSet(length),
+				LocalGet(outputLocal),
+				RefCast({nullable: false, heap: Type(plan.bytesOutputTypeIndex)}),
+				StructGet(plan.bytesOutputTypeIndex, 3),
+				LocalSet(endian),
+				LocalGet(length),
+				I32Const(4),
+				I32Add,
+				LocalSet(required)
+			];
+		body = body.concat(outputEnsureCapacity(outputLocal, required));
+		for (index in 0...4) {
+			body = body.concat([
+				LocalGet(outputLocal),
+				RefCast({nullable: false, heap: Type(plan.bytesOutputTypeIndex)}),
+				StructGet(plan.bytesOutputTypeIndex, 2),
+				LocalGet(length),
+				I32Const(index),
+				I32Add,
+				LocalGet(valueLocal),
+				LocalGet(endian),
+				If(I32),
+				I32Const(24 - index * 8),
+				Else,
+				I32Const(index * 8),
+				End,
+				I32ShrU,
+				I32Const(255),
+				I32And,
+				ArraySet(plan.byteArrayTypeIndex)
+			]);
+		}
+		body = body.concat([
+			LocalGet(outputLocal),
+			RefCast({nullable: false, heap: Type(plan.bytesOutputTypeIndex)}),
+			LocalGet(required),
+			StructSet(plan.bytesOutputTypeIndex, 0)
+		]);
+		return body;
+	}
+
+	function outputWriteF64(outputLocal:Int, valueLocal:Int):Array<WasmInstruction> {
+		var length = allocateLocal(I32),
+			required = allocateLocal(I32),
+			endian = allocateLocal(I32),
+			bits = allocateLocal(I64),
+			body:Array<WasmInstruction> = [
+				LocalGet(valueLocal),
+				I64ReinterpretF64,
+				LocalSet(bits),
+				LocalGet(outputLocal),
+				RefCast({
+					nullable: false,
+					heap: Type(plan.bytesOutputTypeIndex)
+				}),
+				StructGet(plan.bytesOutputTypeIndex, 0),
+				LocalSet(length),
+				LocalGet(outputLocal),
+				RefCast({nullable: false, heap: Type(plan.bytesOutputTypeIndex)}),
+				StructGet(plan.bytesOutputTypeIndex, 3),
+				LocalSet(endian),
+				LocalGet(length),
+				I32Const(8),
+				I32Add,
+				LocalSet(required)
+			];
+		body = body.concat(outputEnsureCapacity(outputLocal, required));
+		for (index in 0...8) {
+			body = body.concat([
+				LocalGet(outputLocal),
+				RefCast({nullable: false, heap: Type(plan.bytesOutputTypeIndex)}),
+				StructGet(plan.bytesOutputTypeIndex, 2),
+				LocalGet(length),
+				I32Const(index),
+				I32Add,
+				LocalGet(bits),
+				LocalGet(endian),
+				If(I64),
+				I64Const(56 - index * 8),
+				Else,
+				I64Const(index * 8),
+				End,
+				I64ShrU,
+				I32WrapI64,
+				I32Const(255),
+				I32And,
+				ArraySet(plan.byteArrayTypeIndex)
+			]);
+		}
+		body = body.concat([
+			LocalGet(outputLocal),
+			RefCast({nullable: false, heap: Type(plan.bytesOutputTypeIndex)}),
+			LocalGet(required),
+			StructSet(plan.bytesOutputTypeIndex, 0)
+		]);
+		return body;
+	}
+
+	function outputAppendRange(outputLocal:Int, sourceType:Int, sourceLocal:Int, sourceOffsetLocal:Int, sourceLengthLocal:Int):Array<WasmInstruction> {
+		var outputOffset = allocateLocal(I32),
+			required = allocateLocal(I32),
+			body = checkedByteRange(sourceType, sourceLocal, sourceOffsetLocal, sourceLengthLocal);
+		body = body.concat([
+			LocalGet(outputLocal),
+			RefCast({nullable: false, heap: Type(plan.bytesOutputTypeIndex)}),
+			StructGet(plan.bytesOutputTypeIndex, 0),
+			LocalSet(outputOffset),
+			LocalGet(outputOffset),
+			LocalGet(sourceLengthLocal),
+			I32Add,
+			LocalSet(required)
+		]);
+		body = body.concat(outputEnsureCapacity(outputLocal, required));
+		body = body.concat([
+			LocalGet(outputLocal),
+			RefCast({nullable: false, heap: Type(plan.bytesOutputTypeIndex)}),
+			StructGet(plan.bytesOutputTypeIndex, 2),
+			LocalGet(outputOffset),
+			LocalGet(sourceLocal),
+			StructGet(sourceType, 0),
+			LocalGet(sourceLocal),
+			StructGet(sourceType, 1),
+			LocalGet(sourceOffsetLocal),
+			I32Add,
+			LocalGet(sourceLengthLocal),
+			ArrayCopy(plan.byteArrayTypeIndex, plan.byteArrayTypeIndex),
+			LocalGet(outputLocal),
+			RefCast({
+				nullable: false,
+				heap: Type(plan.bytesOutputTypeIndex)
+			}),
+			LocalGet(required),
+			StructSet(plan.bytesOutputTypeIndex, 0)
+		]);
+		return body;
+	}
+
+	function outputEnsureCapacity(outputLocal:Int, requiredLocal:Int):Array<WasmInstruction> {
+		var capacity = allocateLocal(I32),
+			newCapacity = allocateLocal(I32),
+			oldLength = allocateLocal(I32),
+			oldStorage = allocateLocal(Ref({nullable: false, heap: Type(plan.byteArrayTypeIndex)})),
+			newStorage = allocateLocal(Ref({nullable: false, heap: Type(plan.byteArrayTypeIndex)})),
+			body:Array<WasmInstruction> = [
+				LocalGet(outputLocal),
+				RefCast({nullable: false, heap: Type(plan.bytesOutputTypeIndex)}),
+				StructGet(plan.bytesOutputTypeIndex, 1),
+				LocalSet(capacity),
+				LocalGet(requiredLocal),
+				LocalGet(capacity),
+				I32LeS,
+				If(null)
+			];
+		body.push(Else);
+		body = body.concat([
+			LocalGet(capacity),
+			I32Eqz,
+			If(null),
+			LocalGet(requiredLocal),
+			LocalSet(newCapacity),
+			Else,
+			LocalGet(capacity),
+			I32Const(2),
+			I32Mul,
+			LocalSet(newCapacity),
+			LocalGet(newCapacity),
+			LocalGet(requiredLocal),
+			I32LtS,
+			If(null),
+			LocalGet(requiredLocal),
+			LocalSet(newCapacity),
+			End,
+			End,
+			LocalGet(outputLocal),
+			RefCast({
+				nullable: false,
+				heap: Type(plan.bytesOutputTypeIndex)
+			}),
+			StructGet(plan.bytesOutputTypeIndex, 0),
+			LocalSet(oldLength),
+			LocalGet(outputLocal),
+			RefCast({nullable: false, heap: Type(plan.bytesOutputTypeIndex)}),
+			StructGet(plan.bytesOutputTypeIndex, 2),
+			LocalSet(oldStorage),
+			LocalGet(newCapacity),
+			ArrayNewDefault(plan.byteArrayTypeIndex),
+			LocalSet(newStorage),
+			LocalGet(newStorage),
+			I32Const(0),
+			LocalGet(oldStorage),
+			I32Const(0),
+			LocalGet(oldLength),
+			ArrayCopy(plan.byteArrayTypeIndex, plan.byteArrayTypeIndex),
+			LocalGet(outputLocal),
+			RefCast({
+				nullable: false,
+				heap: Type(plan.bytesOutputTypeIndex)
+			}),
+			LocalGet(newCapacity),
+			StructSet(plan.bytesOutputTypeIndex, 1),
+			LocalGet(outputLocal),
+			RefCast({nullable: false, heap: Type(plan.bytesOutputTypeIndex)}),
+			LocalGet(newStorage),
+			StructSet(plan.bytesOutputTypeIndex, 2),
+			End
+		]);
+		return body;
 	}
 
 	function arrayIndexOf(element:IrType, arrayLocal:Int, valueLocal:Int, destination:Int):Array<WasmInstruction> {
@@ -3385,6 +4034,12 @@ class WasmGcRepresentation implements WasmRepresentation {
 
 	static function requireInstructions(instructions:Null<Array<WasmInstruction>>):Array<WasmInstruction>
 		return if (instructions == null) throw "Wasm GC array operation was not lowered" else instructions;
+
+	static function isNamedAbstract(type:IrType, name:String):Bool
+		return switch type {
+			case Abstract(abstractName): abstractName == name;
+			default: false;
+		};
 
 	static function requireArrayElement(type:IrType):IrType
 		return switch type {

@@ -569,6 +569,8 @@ class WasmEncoder {
 					output.writeByte(0xaa);
 				case I64ReinterpretF64:
 					output.writeByte(0xbd);
+				case F64ReinterpretI64:
+					output.writeByte(0xbf);
 				case RefNull(heapType):
 					output.writeByte(0xd0);
 					writeHeapType(output, heapType);
