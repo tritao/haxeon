@@ -337,6 +337,7 @@ class HxiProjection {
 							isConstPointer(parameters[index].type) ? BytesInput(lengthIndex) : BytesInputOutput(lengthIndex);
 						}
 					case OutBuffer(lengthName): BytesOutput(parameterIndex(parameters, lengthName));
+					case OutArray(_): Output;
 					case Out: Output;
 					case InOut if (outputBufferSizes.exists(parameters[index].name)): BytesSize;
 					case InOut: InputOutput;
