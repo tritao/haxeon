@@ -113,6 +113,19 @@ class HxiParserMain {
 		expect(nativeNameSource.indexOf("enum abstract Result(Int)") >= 0
 			&& nativeNameSource.indexOf("extern function check(arg0:Result):Result") >= 0,
 			"snake-case enum names should project to concise PascalCase");
+		var builtinValueEnums = HxiParser.parse("builtin-enum-values.hxi",
+			'interface builtin_enum_values @target("x86_64-linux-gnu") @library("builtin_enum_values") { ' +
+			'enum nkgpu_vertex_format : u32 { NKGPU_VERTEXFORMAT_FLOAT = 1; NKGPU_VERTEXFORMAT_FLOAT2 = 2; } ' +
+			'enum nkgpu_uniform_type : u32 { NKGPU_UNIFORMTYPE_FLOAT = 1; NKGPU_UNIFORMTYPE_INT = 5; } }');
+		var builtinValueSource = HxiProjection.source(builtinValueEnums),
+			builtinValueProfile = HxiProjectionProfile.parse("builtin-enum-values.hxmap",
+				'{"interface":"builtin_enum_values","enumValueNames":{"nkgpu_uniform_type":{"NKGPU_UNIFORMTYPE_FLOAT":"Float","NKGPU_UNIFORMTYPE_INT":"Int"}}}'),
+			builtinValueMappedSource = HxiProjection.source(builtinValueEnums, null, null, null, builtinValueProfile);
+		expect(builtinValueSource.indexOf("var Float = 1") >= 0
+			&& builtinValueSource.indexOf("var Int = 5") >= 0
+			&& builtinValueMappedSource.indexOf("var Float = 1") >= 0
+			&& builtinValueMappedSource.indexOf("var Int = 5") >= 0,
+			"enum members may share names with built-in Haxe types while projected type names remain distinct");
 		var genericProfile = HxiProjectionProfile.parse("generic.hxmap",
 			'{"interface":"generic","typePrefix":"lib_","enumValuePrefixes":["LIB_"],"functionNames":{"check":"validate"},"fieldNames":{"lib_point":{"color":"shade"}},"constantNames":{"LIB_VERSION":"version"}}');
 		var genericModel = HxiParser.parse("generic.hxi",

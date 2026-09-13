@@ -71,7 +71,7 @@ class HxiProjection {
 			for (valueName in sortedKeys(profile.enumValueNames.get(enumName))) {
 				if (!valueNames.exists(valueName))
 					profileError(path, '$entry.$valueName references an unknown enum value');
-				validateIdentifier(path, '$entry.$valueName', profile.enumValueNames.get(enumName).get(valueName));
+				validateEnumValueIdentifier(path, '$entry.$valueName', profile.enumValueNames.get(enumName).get(valueName));
 			}
 		}
 		for (name in sortedKeys(profile.functionNames)) {
@@ -160,7 +160,8 @@ class HxiProjection {
 					var members:Map<String, String> = [],
 						prefix = enumValuePrefix(values, profile);
 					for (value in values)
-						addProjectedName(path, 'enum "$name"', enumValueName(value.name, prefix, name, profile), 'enum value "$name.${value.name}"', members);
+						addProjectedName(path, 'enum "$name"', enumValueName(value.name, prefix, name, profile), 'enum value "$name.${value.name}"', members,
+							true);
 				case Opaque(name, _):
 					addProjectedName(path, "module", projectedTypeName(name, profile), 'opaque type "$name"', moduleNames);
 					addProjectedName(path, "module", ownedTypeName(name, profile), 'owned opaque type "$name"', moduleNames);
@@ -231,11 +232,15 @@ class HxiProjection {
 		if (parts.length == 0 || (isLocal && parts.length != 1))
 			profileError(path, '$entry must be an unqualified type name for a declaration emitted by this interface');
 		for (part in parts)
-			if (!isHaxeIdentifier(part))
+			if (!isHaxeTypeIdentifier(part))
 				profileError(path, '$entry projects to invalid Haxe type name "$projected"');
 	}
 
 	static function validateIdentifier(path:String, entry:String, projected:String):Void
+		if (!isHaxeIdentifier(projected) || isHaxeBuiltinTypeName(projected))
+			profileError(path, '$entry projects to invalid Haxe identifier "$projected"');
+
+	static function validateEnumValueIdentifier(path:String, entry:String, projected:String):Void
 		if (!isHaxeIdentifier(projected))
 			profileError(path, '$entry projects to invalid Haxe identifier "$projected"');
 
@@ -259,12 +264,25 @@ class HxiProjection {
 			case "abstract" | "break" | "case" | "cast" | "catch" | "class" | "continue" | "default" | "do" | "dynamic" | "else" | "enum" | "extends" |
 				"extern" | "false" | "final" | "for" | "from" | "function" | "if" | "implements" | "import" | "in" | "inline" | "interface" | "macro" |
 				"new" | "null" | "operator" | "overload" | "override" | "package" | "private" | "public" | "return" | "static" | "super" | "switch" | "this" |
-				"throw" | "to" | "true" | "try" | "typedef" | "untyped" | "using" | "var" | "while" | "Bool" | "Float" | "Int" | "String" | "Void": true;
+				"throw" | "to" | "true" | "try" | "typedef" | "untyped" | "using" | "var" | "while": true;
 			case _: false;
 		};
 
-	static function addProjectedName(path:String, scope:String, projected:String, origin:String, names:Map<String, String>):Void {
-		validateIdentifier(path, '$scope.$origin', projected);
+	static function isHaxeBuiltinTypeName(value:String):Bool
+		return switch value {
+			case "Bool" | "Float" | "Int" | "String" | "Void": true;
+			case _: false;
+		};
+
+	static function isHaxeTypeIdentifier(value:String):Bool
+		return isHaxeIdentifier(value) && !isHaxeBuiltinTypeName(value);
+
+	static function addProjectedName(path:String, scope:String, projected:String, origin:String, names:Map<String, String>,
+			allowBuiltinTypeName:Bool = false):Void {
+		if (allowBuiltinTypeName)
+			validateEnumValueIdentifier(path, '$scope.$origin', projected);
+		else
+			validateIdentifier(path, '$scope.$origin', projected);
 		var previous = names.get(projected);
 		if (previous != null)
 			profileError(path, '$scope collision: $origin and $previous both project to "$projected"');
