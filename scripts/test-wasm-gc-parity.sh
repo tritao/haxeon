@@ -29,7 +29,16 @@ for target in wasm32 wasm-gc; do
 		--entry=wasm-bytes-compare --root=tests/programs tests/programs/wasm-bytes-compare.hx
 done
 
-cases+=(bytes-compare)
+shared_cases=(add array-iterator-wasm try-catch try-nested try-array-bounds)
+for case_name in "${shared_cases[@]}"; do
+	for target in wasm32 wasm-gc; do
+		"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+			--target="$target" --output="out/wasm-parity-$target-$case_name.wasm" \
+			--entry="$case_name" --root=tests/programs "tests/programs/$case_name.hx"
+	done
+done
+
+cases+=(bytes-compare "${shared_cases[@]}")
 
 node - "$root_dir" "${cases[@]}" <<'JS'
 const fs = require("fs");
