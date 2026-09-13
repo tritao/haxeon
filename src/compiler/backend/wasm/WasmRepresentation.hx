@@ -595,9 +595,9 @@ class WasmGcRepresentation implements WasmRepresentation {
 				throw "Invalid Wasm GC Std.int(Dynamic) signature";
 			return dynamicInt(argumentLocals[0], outputLocal);
 		}
-		if (name == "__std_is_of_type") {
+		if (name == "__std_is_of_type" || name == "__exception_matches") {
 			if (output.type != Bool || arguments.length != 2 || arguments[0].type != Dyn || arguments[1].type != TypeRef || argumentLocals.length != 2)
-				throw "Invalid Wasm GC Std.isOfType signature";
+				throw 'Invalid Wasm GC $name signature';
 			return dynamicTypeTest(argumentLocals[0], argumentLocals[1], outputLocal);
 		}
 		if (name == "__reflect_is_object") {
