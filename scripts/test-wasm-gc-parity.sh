@@ -29,7 +29,14 @@ for target in wasm32 wasm-gc; do
 		--entry=wasm-bytes-compare --root=tests/programs tests/programs/wasm-bytes-compare.hx
 done
 
-shared_cases=(add call-many function-call function-value lambda single-argument-lambda contextual-callbacks enum-array-pattern anonymous-function enum-abstract computed-property
+shared_cases=(add expression-lambda switch-expression-block member-range trailing-object-comma block-comprehension transparent-abstract computed-field-assignment
+	assignment-expression literal-postfix bitwise bitwise-comparison-precedence type-annotation local-function switch-guard callback-method bound-method name-collision
+	bool-if fib while-arithmetic branch-assignment static-class static-field static-field-init instance-class instance-field-init instance-field-init-constructor
+	default-constructor-class enum-basic enum-payload enum-payload-pattern generic-enum-field nullable-guard-return nullable-array-guard native-abstract-null nullable-enum-switch
+	array-mutation wasm-gc-invariants increment logical-comparisons negation switch-subject-binding enum-exhaustive try-return try-branch try-loop-control try-outer-local
+	try-branch-local try-call-local local-shadowing captured-shadowing dynamic-argument switch-expression string-switch-statement switch-inline-final throw-expression
+	array-literal empty-array-flow-inference do-while postfix-increment optional-enum-parameter
+	call-many function-call function-value lambda single-argument-lambda contextual-callbacks enum-array-pattern anonymous-function enum-abstract computed-property
 	mutable-capture nested-mutable-capture captured-lambda captured-this nullable-basic nullable-compound object-array for-in loop-control modulo switch-enum
 	multiple-implements captured-method anonymous-record array-comprehension filtered-array-comprehension range-iteration cast-expression optional-argument-forwarding
 	default-parameter-inference generic-functions generic-abstract bounded-generic generic-class inheritance-class override-method virtual-dispatch array-iterator-wasm array-slice-index array-growth-wasm array-alias-growth array-index-growth array-resize array-expression-mutation array-field-mutation
@@ -51,7 +58,7 @@ const fs = require("fs");
 const path = require("path");
 const root = process.argv[2];
 const cases = process.argv.slice(3);
-const expectedResults = { "array-object-mutation": 8, "array-field-mutation": 11, "single-argument-lambda": 43, "mutable-capture": 78, "nested-mutable-capture": 3, "inheritance-class": 43, "map-for-in": 52, "virtual-dispatch": 71 };
+const expectedResults = { "array-object-mutation": 8, "array-field-mutation": 11, "single-argument-lambda": 43, "mutable-capture": 78, "nested-mutable-capture": 3, "static-field": 81, "fib": 55, "inheritance-class": 43, "map-for-in": 52, "virtual-dispatch": 71 };
 
 (async () => {
   for (const name of cases) {
