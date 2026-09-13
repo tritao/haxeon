@@ -11,7 +11,7 @@ import compiler.ir.Ir.IrCNativeArgumentMode;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.IrFunction;
 import compiler.ir.IrVerifier;
-import compiler.backend.wasm.WasmBackend.WasmClosureTypes;
+import compiler.backend.wasm.WasmModuleSupport.WasmClosureTypes;
 import compiler.backend.wasm.WasmFunctionLower;
 import compiler.backend.wasm.WasmCfgAnalysis;
 import compiler.backend.wasm.WasmEncoder;
@@ -38,14 +38,14 @@ class WasmGcModuleBuilder {
 			|| options.wasmMemoryStats == true)
 			throw "Wasm GC lowering does not use linear-memory options";
 		IrVerifier.verify(program);
-		var preferredEntry = WasmBackend.hasFunction(program, "main") ? "main" : WasmBackend.hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint,
+		var preferredEntry = WasmModuleSupport.hasFunction(program, "main") ? "main" : WasmModuleSupport.hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint,
 			exportedFunctions = options.exports == null ? [] : options.exports,
 			roots = exportedFunctions.copy();
-		if (WasmBackend.hasFunction(program, "__init"))
+		if (WasmModuleSupport.hasFunction(program, "__init"))
 			roots.push("__init");
-		var reachable = WasmBackend.reachableFunctions(program, preferredEntry, roots);
+		var reachable = WasmModuleSupport.reachableFunctions(program, preferredEntry, roots);
 		validateGcSubset(program, reachable, preferredEntry);
-		var usedNatives = WasmBackend.reachableNatives(program, reachable),
+		var usedNatives = WasmModuleSupport.reachableNatives(program, reachable),
 			usedCNatives = reachableGcCNatives(program, reachable),
 			requiresScratchMemory = false,
 			requiresLinearMemory = false;
@@ -73,12 +73,12 @@ class WasmGcModuleBuilder {
 			functions:Map<String, Int> = [],
 			methods:Map<String, String> = [];
 		plan.addTo(module);
-		var staticData = WasmBackend.placeStaticData(program, module, 8, reachable),
+		var staticData = WasmModuleSupport.placeStaticData(program, module, 8, reachable),
 			hasStaticData = staticData.addresses.iterator().hasNext();
 		WasmFunctionLower.setStaticDataAddresses(staticData.addresses);
 		var scratchTop = -1;
 		if (requiresScratchMemory || requiresLinearMemory || hasStaticData) {
-			module.memoryMin = WasmBackend.memoryPages(staticData.end);
+			module.memoryMin = WasmModuleSupport.memoryPages(staticData.end);
 			module.exportMemory = requiresScratchMemory || requiresLinearMemory;
 		}
 		if (requiresScratchMemory) {
@@ -94,7 +94,7 @@ class WasmGcModuleBuilder {
 			var scratchAllocator = addGcScratchAllocator(module, scratchTop);
 			gcRepresentation.configureCNativeScratch(scratchTop, scratchAllocator);
 		}
-		var exceptionTagType:Null<Int> = WasmBackend.hasExceptions(program) ? module.typeIndex({parameters: [representation.values.valueType(Dyn)], results: []}) : null,
+		var exceptionTagType:Null<Int> = WasmModuleSupport.hasExceptions(program) ? module.typeIndex({parameters: [representation.values.valueType(Dyn)], results: []}) : null,
 			exceptionTag:Null<Int> = exceptionTagType == null ? null : 0;
 		module.exceptionTagType = exceptionTagType;
 		for (field in program.staticFields) {
@@ -112,12 +112,12 @@ class WasmGcModuleBuilder {
 		}
 		var closureTypes = collectGcClosureTypes(module, plan, program);
 		addGcClosureThunks(module, plan, functions, program, reachable);
-		var tableSlots = WasmBackend.buildTableSlots(module, functions);
+		var tableSlots = WasmModuleSupport.buildTableSlots(module, functions);
 
 		for (fn in program.functions) {
 			if (!reachable.exists(fn.name) || (fn.name == "__entry" && preferredEntry != "__entry"))
 				continue;
-			var functionIndex = WasmBackend.requiredFunctionIndex(functions, fn.name);
+			var functionIndex = WasmModuleSupport.requiredFunctionIndex(functions, fn.name);
 			module.setFunction(functionIndex,
 				WasmFunctionLower.lower(fn, functions, module.functionType(functionIndex), null, -1, 0, 0, 0, globals, [], methods, closureTypes, tableSlots,
 					exceptionTag, [], program, representation));
@@ -128,7 +128,7 @@ class WasmGcModuleBuilder {
 		var entry = functions.get(preferredEntry);
 		if (entry == null)
 			throw 'Wasm GC entry point $preferredEntry was not emitted';
-		if (WasmBackend.hasFunction(program, "__init"))
+		if (WasmModuleSupport.hasFunction(program, "__init"))
 			module.start = functions.get("__init");
 		module.exports.push({name: "main", functionIndex: entry});
 		for (exported in exportedFunctions) {
@@ -142,8 +142,8 @@ class WasmGcModuleBuilder {
 	}
 
 	static function validateGcSubset(program:IrProgram, reachable:Map<String, Bool>, preferredEntry:String):Void {
-		var usedNatives = WasmBackend.reachableNatives(program, reachable),
-			directCNatives = WasmBackend.reachableCNatives(program, reachable),
+		var usedNatives = WasmModuleSupport.reachableNatives(program, reachable),
+			directCNatives = WasmModuleSupport.reachableCNatives(program, reachable),
 			usedCNatives = reachableGcCNatives(program, reachable);
 		for (native in program.natives)
 			if (usedNatives.exists(native.name) && !isSupportedGcNative(program, native.name)) {
@@ -157,7 +157,7 @@ class WasmGcModuleBuilder {
 					validateGcPointerReleaseImport(native);
 				else
 					validateGcCNative(native);
-				if (isGcNativePointerType(native.result) && native.pointerOwnership == "owned") {
+				if (WasmModuleSupport.isGcNativePointerType(native.result) && native.pointerOwnership == "owned") {
 					if (native.pointerRelease == null)
 						throw 'Wasm GC C native "${native.name}" is missing its owned pointer release symbol';
 					validateGcPointerRelease(native, requiredCNativeBySymbol(program, native.pointerRelease));
@@ -228,7 +228,7 @@ class WasmGcModuleBuilder {
 			used:Map<String, Bool>):Void {
 		for (native in program.natives)
 			if (used.exists(native.name)) {
-				var parts = WasmBackend.mapNativeParts(native.name);
+				var parts = WasmModuleSupport.mapNativeParts(native.name);
 				if (parts != null)
 					functions.set(native.name, WasmGcMaps.add(module, functions, plan, native, parts.mapName, parts.operation));
 			}
@@ -264,7 +264,7 @@ class WasmGcModuleBuilder {
 	}
 
 	static function isSupportedGcRuntimeNative(name:String):Bool {
-		if (WasmBackend.mapNativeParts(name) != null)
+		if (WasmModuleSupport.mapNativeParts(name) != null)
 			return true;
 		return switch name {
 			case "__array_alloc_i32", "__array_alloc_bool", "__array_alloc_f64", "__array_alloc_bytes", "__array_alloc_ref", "__array_push_i32",
@@ -377,7 +377,7 @@ class WasmGcModuleBuilder {
 				for (located in cfg.graph.block(blockId).instructions)
 					switch located.value {
 						case Call(output, name, _) if (output.type != Void):
-							var parts = WasmBackend.mapNativeParts(name);
+							var parts = WasmModuleSupport.mapNativeParts(name);
 							if (parts != null && (parts.operation == "keys" || parts.operation == "values")) {
 								var native:Null<IrNative> = null;
 								for (candidate in program.natives)
@@ -523,14 +523,14 @@ class WasmGcModuleBuilder {
 	}
 
 	static function reachableGcCNatives(program:IrProgram, reachable:Map<String, Bool>):Map<String, Bool> {
-		var result = WasmBackend.reachableCNatives(program, reachable);
+		var result = WasmModuleSupport.reachableCNatives(program, reachable);
 		for (native in program.cNatives)
 			if (result.exists(native.name)) {
 				if (native.result == ManagedBytes && native.pointerLength != null) {
 					result.set(requiredCNativeBySymbol(program, native.pointerLength).name, true);
 					if (native.pointerOwnership == "owned" && native.pointerRelease != null)
 						result.set(requiredCNativeBySymbol(program, native.pointerRelease).name, true);
-				} else if (isGcNativePointerType(native.result) && native.pointerOwnership == "owned" && native.pointerRelease != null)
+				} else if (WasmModuleSupport.isGcNativePointerType(native.result) && native.pointerOwnership == "owned" && native.pointerRelease != null)
 					result.set(requiredCNativeBySymbol(program, native.pointerRelease).name, true);
 			}
 		for (symbol in gcPointerReleaseSymbols(program, reachable).keys())
@@ -543,7 +543,7 @@ class WasmGcModuleBuilder {
 			if (native.pointerOwnership == "owned"
 				&& native.pointerRelease == candidate.symbol
 				&& ((native.result == ManagedBytes && native.pointerLength != null)
-					|| (isGcNativePointerType(native.result) && native.pointerLength == null)))
+					|| (WasmModuleSupport.isGcNativePointerType(native.result) && native.pointerLength == null)))
 				return true;
 		return false;
 	}
@@ -656,21 +656,14 @@ class WasmGcModuleBuilder {
 	public static inline function gcClosureThunkName(target:String):String
 		return "__haxeon_gc_closure_thunk_" + target;
 
-	public static function isGcNativePointerType(type:IrType):Bool
-		return switch type {
-			case Abstract("native_pointer"): true;
-			case _: false;
-		};
-
-
 	static function gcPointerReleaseSymbols(program:IrProgram, reachable:Map<String, Bool>):Map<String, Bool> {
 		var result:Map<String, Bool> = [],
-			usedCNatives = WasmBackend.reachableCNatives(program, reachable);
+			usedCNatives = WasmModuleSupport.reachableCNatives(program, reachable);
 		for (native in program.cNatives)
 			if (usedCNatives.exists(native.name)
 				&& native.pointerOwnership == "owned"
 				&& native.pointerRelease != null
-				&& ((isGcNativePointerType(native.result) && native.pointerLength == null)
+				&& ((WasmModuleSupport.isGcNativePointerType(native.result) && native.pointerLength == null)
 					|| (native.result == ManagedBytes && native.pointerLength != null)))
 				result.set(native.pointerRelease, true);
 		for (fn in program.functions)

@@ -10,7 +10,7 @@ import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmFunctionBuilder.WasmFunctionBuilder;
 import compiler.backend.wasm.WasmFunctionBuilder.WasmLocalRef;
-import compiler.backend.wasm.WasmBackend;
+import compiler.backend.wasm.WasmModuleSupport;
 
 class WasmLinearRuntime {
 	public static function addImports(context:WasmLinearContext, used:Map<String, Bool>):Void {
@@ -36,7 +36,7 @@ class WasmLinearRuntime {
 		var importModule = native.library == null || native.library == "" ? "env" : native.library,
 			importName = native.symbol == null || native.symbol == "" ? native.name : native.symbol;
 		return module.addImport(importModule, importName,
-			{parameters: [for (argument in native.arguments) WasmBackend.requireValueType(argument)], results: resultTypes(native.result)});
+			{parameters: [for (argument in native.arguments) WasmModuleSupport.requireValueType(argument)], results: resultTypes(native.result)});
 	}
 
 	static function runtimeImportIndex(module:WasmModule, native:compiler.ir.Ir.IrNative):Null<Int> {
@@ -63,7 +63,7 @@ class WasmLinearRuntime {
 			if (runtimeFunction != null)
 				functions.set(native.name, runtimeFunction);
 			else {
-				var mapParts = WasmBackend.mapNativeParts(native.name);
+				var mapParts = WasmModuleSupport.mapNativeParts(native.name);
 				if (mapParts != null)
 					functions.set(native.name, addMapRuntimeFunction(module, functions, native.name, mapParts.mapName, mapParts.operation, allocator));
 				else
@@ -235,7 +235,7 @@ class WasmLinearRuntime {
 			Call(allocator),
 			LocalSet(1),
 			LocalGet(1),
-			I32Const(WasmBackend.typeId(Bytes)),
+			I32Const(WasmModuleSupport.typeId(Bytes)),
 			I32Store(0),
 			LocalGet(1),
 			LocalGet(0),
@@ -281,7 +281,7 @@ class WasmLinearRuntime {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(result);
 		builder.localGet(result);
-		builder.i32Const(WasmBackend.typeId(Bytes));
+		builder.i32Const(WasmModuleSupport.typeId(Bytes));
 		builder.emit(I32Store(0));
 		builder.localGet(result);
 		builder.localGet(length);
@@ -333,7 +333,7 @@ class WasmLinearRuntime {
 			Call(allocator),
 			LocalSet(1),
 			LocalGet(1),
-			I32Const(WasmBackend.typeId(Bytes)),
+			I32Const(WasmModuleSupport.typeId(Bytes)),
 			I32Store(0),
 			LocalGet(1),
 			LocalGet(0),
@@ -501,7 +501,7 @@ class WasmLinearRuntime {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(result);
 		builder.localGet(result);
-		builder.i32Const(WasmBackend.typeId(Bytes));
+		builder.i32Const(WasmModuleSupport.typeId(Bytes));
 		builder.emit(I32Store(0));
 		builder.localGet(result);
 		builder.localGet(bytes);
@@ -571,7 +571,7 @@ class WasmLinearRuntime {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(result);
 		builder.localGet(result);
-		builder.i32Const(WasmBackend.typeId(Bytes));
+		builder.i32Const(WasmModuleSupport.typeId(Bytes));
 		builder.emit(I32Store(0));
 		builder.localGet(result);
 		builder.localGet(length);
@@ -625,7 +625,7 @@ class WasmLinearRuntime {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(result);
 		builder.localGet(result);
-		builder.i32Const(WasmBackend.typeId(Bytes));
+		builder.i32Const(WasmModuleSupport.typeId(Bytes));
 		builder.emit(I32Store(0));
 		builder.localGet(result);
 		builder.i32Const(WasmLayout.BYTES_VIEW_MAGIC);
@@ -681,7 +681,7 @@ class WasmLinearRuntime {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(result);
 		builder.localGet(result);
-		builder.i32Const(WasmBackend.typeId(Bytes));
+		builder.i32Const(WasmModuleSupport.typeId(Bytes));
 		builder.emit(I32Store(0));
 		builder.localGet(result);
 		builder.localGet(length);
@@ -800,7 +800,7 @@ class WasmLinearRuntime {
 			builder.call(builder.functionRef(allocator));
 			builder.localSet(result);
 			builder.localGet(result);
-			builder.i32Const(WasmBackend.typeId(Bytes));
+			builder.i32Const(WasmModuleSupport.typeId(Bytes));
 			builder.emit(I32Store(0));
 			builder.localGet(result);
 			builder.localGet(index);
@@ -843,7 +843,7 @@ class WasmLinearRuntime {
 				Call(allocator),
 				LocalSet(6),
 				LocalGet(6),
-				I32Const(WasmBackend.typeId(Bytes)),
+				I32Const(WasmModuleSupport.typeId(Bytes)),
 				I32Store(0),
 				LocalGet(6),
 				LocalGet(5),
@@ -937,7 +937,7 @@ class WasmLinearRuntime {
 			I32Const(WasmLayout.MAP_HEADER_SIZE),
 			Call(allocator),
 			LocalTee(0),
-			I32Const(WasmBackend.typeId(Abstract(mapName))),
+			I32Const(WasmModuleSupport.typeId(Abstract(mapName))),
 			I32Store(0),
 			LocalGet(0),
 			I32Const(0),
@@ -987,7 +987,7 @@ class WasmLinearRuntime {
 
 	static function addMapFind(module:WasmModule, name:String, keyType:IrType, valueType:IrType, stringEqual:Int):Int {
 		var entrySize = mapEntrySize(valueType),
-			builder = new WasmFunctionBuilder(name, {parameters: [I32, WasmBackend.requireValueType(keyType)], results: [I32]}),
+			builder = new WasmFunctionBuilder(name, {parameters: [I32, WasmModuleSupport.requireValueType(keyType)], results: [I32]}),
 			map = builder.parameter("map", 0),
 			key = builder.parameter("key", 1),
 			index = builder.local("index", I32),
@@ -1037,8 +1037,8 @@ class WasmLinearRuntime {
 		var type:WasmFunctionType = {
 			parameters: [
 				I32,
-				WasmBackend.requireValueType(keyType),
-				WasmBackend.requireValueType(valueType)
+				WasmModuleSupport.requireValueType(keyType),
+				WasmModuleSupport.requireValueType(valueType)
 			],
 			results: []
 		};
@@ -1166,12 +1166,12 @@ class WasmLinearRuntime {
 	}
 
 	static function addMapExists(module:WasmModule, name:String, keyType:IrType, valueType:IrType, stringEqual:Int, find:Int):Int
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, WasmBackend.requireValueType(keyType)], results: [I32]}, [],
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, WasmModuleSupport.requireValueType(keyType)], results: [I32]}, [],
 			[LocalGet(0), LocalGet(1), Call(find), I32Const(-1), I32Eq, I32Eqz, Return]));
 
 	static function addMapGet(module:WasmModule, name:String, keyType:IrType, valueType:IrType, entrySize:Int, valueOffset:Int, allocator:Int,
 			stringEqual:Int, find:Int):Int {
-		var type:WasmFunctionType = {parameters: [I32, WasmBackend.requireValueType(keyType)], results: [I32]},
+		var type:WasmFunctionType = {parameters: [I32, WasmModuleSupport.requireValueType(keyType)], results: [I32]},
 			builder = new WasmFunctionBuilder(name, type),
 			map = builder.parameter("map", 0),
 			key = builder.parameter("key", 1),
@@ -1197,7 +1197,7 @@ class WasmLinearRuntime {
 				builder.call(builder.functionRef(allocator));
 				builder.localSet(result);
 				builder.localGet(result);
-				builder.i32Const(WasmBackend.typeId(valueType));
+				builder.i32Const(WasmModuleSupport.typeId(valueType));
 				builder.emit(I32Store(0));
 				builder.localGet(result);
 				builder.localGet(entries);
@@ -1212,7 +1212,7 @@ class WasmLinearRuntime {
 				builder.call(builder.functionRef(allocator));
 				builder.localSet(result);
 				builder.localGet(result);
-				builder.i32Const(WasmBackend.typeId(F64));
+				builder.i32Const(WasmModuleSupport.typeId(F64));
 				builder.emit(I32Store(0));
 				builder.localGet(result);
 				builder.localGet(entries);
@@ -1288,7 +1288,7 @@ class WasmLinearRuntime {
 	}
 
 	static function addMapRemove(module:WasmModule, name:String, keyType:IrType, valueType:IrType, entrySize:Int, stringEqual:Int, find:Int):Int {
-		var builder = new WasmFunctionBuilder(name, {parameters: [I32, WasmBackend.requireValueType(keyType)], results: [I32]}),
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, WasmModuleSupport.requireValueType(keyType)], results: [I32]}),
 			map = builder.parameter("map", 0),
 			key = builder.parameter("key", 1),
 			index = builder.local("index", I32),
@@ -1369,7 +1369,7 @@ class WasmLinearRuntime {
 		for (type in dynamicTypes) {
 			builder.localGet(value);
 			builder.emit(I32Load(0));
-			builder.i32Const(WasmBackend.typeId(type));
+			builder.i32Const(WasmModuleSupport.typeId(type));
 			builder.emit(I32Eq);
 			builder.if_(function(builder) {
 				builder.localGet(value);
@@ -1379,7 +1379,7 @@ class WasmLinearRuntime {
 		}
 		builder.localGet(value);
 		builder.emit(I32Load(0));
-		builder.i32Const(WasmBackend.typeId(F64));
+		builder.i32Const(WasmModuleSupport.typeId(F64));
 		builder.emit(I32Eq);
 		builder.if_(function(builder) {
 			builder.localGet(value);
@@ -1389,7 +1389,7 @@ class WasmLinearRuntime {
 		});
 		builder.localGet(value);
 		builder.emit(I32Load(0));
-		builder.i32Const(WasmBackend.typeId(I64));
+		builder.i32Const(WasmModuleSupport.typeId(I64));
 		builder.emit(I32Eq);
 		builder.if_(function(builder) {
 			builder.localGet(value);
@@ -1406,7 +1406,7 @@ class WasmLinearRuntime {
 			value = builder.parameter("value", 0);
 		for (object in program.objects) {
 			builder.localGet(value);
-			builder.i32Const(WasmBackend.typeId(Obj(object.name)));
+			builder.i32Const(WasmModuleSupport.typeId(Obj(object.name)));
 			builder.emit(I32Eq);
 			builder.if_(function(builder) {
 				builder.i32Const(1);
@@ -1415,7 +1415,7 @@ class WasmLinearRuntime {
 		}
 		for (enumDecl in program.enums) {
 			builder.localGet(value);
-			builder.i32Const(WasmBackend.typeId(Enum(enumDecl.name)));
+			builder.i32Const(WasmModuleSupport.typeId(Enum(enumDecl.name)));
 			builder.emit(I32Eq);
 			builder.if_(function(builder) {
 				builder.i32Const(1);
@@ -1437,11 +1437,11 @@ class WasmLinearRuntime {
 		});
 		for (typeId in [
 			WasmLayout.CLOSURE_TYPE_ID,
-			WasmBackend.typeId(I32),
-			WasmBackend.typeId(Bool),
-			WasmBackend.typeId(I64),
-			WasmBackend.typeId(F64),
-			WasmBackend.typeId(Bytes)
+			WasmModuleSupport.typeId(I32),
+			WasmModuleSupport.typeId(Bool),
+			WasmModuleSupport.typeId(I64),
+			WasmModuleSupport.typeId(F64),
+			WasmModuleSupport.typeId(Bytes)
 		]) {
 			builder.localGet(value);
 			builder.emit(I32Load(0));
@@ -1474,10 +1474,10 @@ class WasmLinearRuntime {
 			builder.emit(I32Eq);
 			builder.localSet(result);
 			for (object in program.objects) {
-				var accepted = [WasmBackend.typeId(Obj(object.name))];
+				var accepted = [WasmModuleSupport.typeId(Obj(object.name))];
 				var base = object.base;
 				while (base != null) {
-					accepted.push(WasmBackend.typeId(Obj(base)));
+					accepted.push(WasmModuleSupport.typeId(Obj(base)));
 					var next:Null<String> = null;
 					for (candidate in program.objects)
 						if (candidate.name == base)
@@ -1485,10 +1485,10 @@ class WasmLinearRuntime {
 					base = next;
 				}
 				for (interfaceName in object.interfaces)
-					accepted.push(WasmBackend.typeId(Virtual(interfaceName)));
+					accepted.push(WasmModuleSupport.typeId(Virtual(interfaceName)));
 				builder.localGet(value);
 				builder.emit(I32Load(0));
-				builder.i32Const(WasmBackend.typeId(Obj(object.name)));
+				builder.i32Const(WasmModuleSupport.typeId(Obj(object.name)));
 				builder.emit(I32Eq);
 				builder.if_(function(builder) {
 					for (index in 0...accepted.length) {
@@ -1535,7 +1535,7 @@ class WasmLinearRuntime {
 			Call(allocator),
 			LocalSet(4),
 			LocalGet(4),
-			I32Const(WasmBackend.typeId(Bytes)),
+			I32Const(WasmModuleSupport.typeId(Bytes)),
 			I32Store(0),
 			LocalGet(4),
 			I32Const(WasmLayout.STRING_DATA_OFFSET),
@@ -1611,7 +1611,7 @@ class WasmLinearRuntime {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(result);
 		builder.localGet(result);
-		builder.i32Const(WasmBackend.typeId(Bytes));
+		builder.i32Const(WasmModuleSupport.typeId(Bytes));
 		builder.emit(I32Store(0));
 		builder.localGet(result);
 		builder.localGet(digitCount);
@@ -1748,7 +1748,7 @@ class WasmLinearRuntime {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(result);
 		builder.localGet(result);
-		builder.i32Const(WasmBackend.typeId(Bytes));
+		builder.i32Const(WasmModuleSupport.typeId(Bytes));
 		builder.emit(I32Store(0));
 		builder.localGet(result);
 		builder.localGet(length);
@@ -1825,7 +1825,7 @@ class WasmLinearRuntime {
 		for (type in dynamicTypes) {
 			builder.localGet(value);
 			builder.emit(I32Load(0));
-			builder.i32Const(WasmBackend.typeId(type));
+			builder.i32Const(WasmModuleSupport.typeId(type));
 			builder.emit(I32Eq);
 			builder.if_(function(builder) {
 				builder.localGet(value);
@@ -1845,7 +1845,7 @@ class WasmLinearRuntime {
 		}
 		builder.localGet(value);
 		builder.emit(I32Load(0));
-		builder.i32Const(WasmBackend.typeId(Bool));
+		builder.i32Const(WasmModuleSupport.typeId(Bool));
 		builder.emit(I32Eq);
 		builder.if_(function(builder) {
 			builder.localGet(value);
@@ -2050,7 +2050,7 @@ class WasmLinearRuntime {
 			}, function(builder) {
 				builder.localGet(left);
 				builder.emit(I32Load(0));
-				builder.i32Const(WasmBackend.typeId(F64));
+				builder.i32Const(WasmModuleSupport.typeId(F64));
 				builder.emit(I32Eq);
 				builder.ifElse(function(builder) {
 					builder.localGet(left);
@@ -2082,7 +2082,7 @@ class WasmLinearRuntime {
 					builder.emit(I32Eq);
 					builder.ifElse(function(builder) {
 						builder.localGet(leftType);
-						builder.i32Const(WasmBackend.typeId(Bytes));
+						builder.i32Const(WasmModuleSupport.typeId(Bytes));
 						builder.emit(I32Eq);
 						builder.ifElse(function(builder) {
 							builder.localGet(left);
@@ -2091,7 +2091,7 @@ class WasmLinearRuntime {
 							builder.localSet(result);
 						}, function(builder) {
 							builder.localGet(leftType);
-							builder.i32Const(WasmBackend.typeId(I32));
+							builder.i32Const(WasmModuleSupport.typeId(I32));
 							builder.emit(I32Eq);
 							builder.ifElse(function(builder) {
 								builder.localGet(left);
@@ -2102,7 +2102,7 @@ class WasmLinearRuntime {
 								builder.localSet(result);
 							}, function(builder) {
 								builder.localGet(leftType);
-								builder.i32Const(WasmBackend.typeId(Bool));
+								builder.i32Const(WasmModuleSupport.typeId(Bool));
 								builder.emit(I32Eq);
 								builder.ifElse(function(builder) {
 									builder.localGet(left);
@@ -2113,7 +2113,7 @@ class WasmLinearRuntime {
 									builder.localSet(result);
 								}, function(builder) {
 									builder.localGet(leftType);
-									builder.i32Const(WasmBackend.typeId(F64));
+									builder.i32Const(WasmModuleSupport.typeId(F64));
 									builder.emit(I32Eq);
 									builder.ifElse(function(builder) {
 										builder.localGet(left);
@@ -2124,7 +2124,7 @@ class WasmLinearRuntime {
 										builder.localSet(result);
 									}, function(builder) {
 										builder.localGet(leftType);
-										builder.i32Const(WasmBackend.typeId(I64));
+										builder.i32Const(WasmModuleSupport.typeId(I64));
 										builder.emit(I32Eq);
 										builder.ifElse(function(builder) {
 											builder.localGet(left);
@@ -2155,5 +2155,5 @@ class WasmLinearRuntime {
 	}
 
 	static function resultTypes(type:IrType):Array<WasmValueType>
-		return type == Void ? [] : [WasmBackend.requireValueType(type)];
+		return type == Void ? [] : [WasmModuleSupport.requireValueType(type)];
 }

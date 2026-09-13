@@ -33,7 +33,7 @@ class WasmLinearArrays {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(copy);
 		builder.localGet(copy);
-		builder.i32Const(WasmBackend.typeId(Array(Dyn)));
+		builder.i32Const(WasmModuleSupport.typeId(Array(Dyn)));
 		builder.emit(I32Store(0));
 		builder.localGet(copy);
 		builder.localGet(sourceLength);
@@ -83,7 +83,7 @@ class WasmLinearArrays {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(result);
 		builder.localGet(result);
-		builder.i32Const(WasmBackend.typeId(Bytes));
+		builder.i32Const(WasmModuleSupport.typeId(Bytes));
 		builder.emit(I32Store(0));
 		builder.localGet(result);
 		builder.i32Const(0);
@@ -257,7 +257,7 @@ class WasmLinearArrays {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(result);
 		builder.localGet(result);
-		builder.i32Const(WasmBackend.typeId(Array(Dyn)));
+		builder.i32Const(WasmModuleSupport.typeId(Array(Dyn)));
 		builder.emit(I32Store(0));
 		builder.localGet(result);
 		builder.localGet(length);
@@ -324,7 +324,7 @@ class WasmLinearArrays {
 			I32Add,
 			I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
 			LocalGet(4),
-			I32Const(WasmBackend.typeId(Array(Dyn))),
+			I32Const(WasmModuleSupport.typeId(Array(Dyn))),
 			I32Store(0),
 			LocalGet(2),
 			LocalGet(3),
@@ -1081,7 +1081,7 @@ class WasmLinearArrays {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(removed);
 		builder.localGet(removed);
-		builder.i32Const(WasmBackend.typeId(Array(Dyn)));
+		builder.i32Const(WasmModuleSupport.typeId(Array(Dyn)));
 		builder.emit(I32Store(0));
 		builder.localGet(removed);
 		builder.localGet(deleteCount);
@@ -1160,7 +1160,7 @@ class WasmLinearArrays {
 			Call(allocator),
 			LocalSet(1),
 			LocalGet(1),
-			I32Const(WasmBackend.typeId(Array(Dyn))),
+			I32Const(WasmModuleSupport.typeId(Array(Dyn))),
 			I32Store(0),
 			LocalGet(1),
 			LocalGet(0),

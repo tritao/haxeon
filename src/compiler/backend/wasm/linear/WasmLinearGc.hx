@@ -49,7 +49,7 @@ class WasmLinearGc {
 		locals.push({type: I32});
 		if (exceptionTag != null)
 			locals.push({type: I32});
-		var frameSize = WasmBackend.align(12 + rootSlots.length * 4, 8),
+		var frameSize = WasmModuleSupport.align(12 + rootSlots.length * 4, 8),
 			guardBuilder = new WasmFunctionBuilder(fn.name, fn.type);
 		guardBuilder.emit(GlobalGet(rootTop));
 		guardBuilder.emit(I32Const(frameSize));
@@ -298,7 +298,7 @@ class WasmLinearGc {
 		builder.localSet(header);
 		var mapNames:Array<String> = [];
 		for (native in program.natives) {
-			var parts = WasmBackend.mapNativeParts(native.name);
+			var parts = WasmModuleSupport.mapNativeParts(native.name);
 			if (parts != null && parts.operation == "alloc" && mapNames.indexOf(parts.mapName) < 0)
 				mapNames.push(parts.mapName);
 		}
@@ -311,11 +311,11 @@ class WasmLinearGc {
 		builder.localTee(backingType);
 		builder.i32Eqz();
 		builder.ifElse(function(_) {}, function(builder) {
-			appendGcBackingTraceCase(builder, backingType, WasmBackend.typeId(Array(Dyn)), function(builder) {
+			appendGcBackingTraceCase(builder, backingType, WasmModuleSupport.typeId(Array(Dyn)), function(builder) {
 				appendGcArrayContents(builder, value, backingType, entryCount, entryIndex, mark);
 			});
 			for (mapName in mapNames)
-				appendGcBackingTraceCase(builder, backingType, WasmBackend.typeId(Abstract(mapName)), function(builder) {
+				appendGcBackingTraceCase(builder, backingType, WasmModuleSupport.typeId(Abstract(mapName)), function(builder) {
 					appendGcMapContents(builder, value, backingType, entryCount, entryIndex, mark, mapName);
 				});
 			appendGcConservativeTrace(builder, value, header, entryCount, entryIndex, mark);
@@ -326,8 +326,8 @@ class WasmLinearGc {
 		// known layouts are traced from declared reference fields.
 		var leafTypes:Array<IrType> = [I32, Bool, I64, F64];
 		for (leaf in leafTypes)
-			appendGcTraceCase(builder, value, WasmBackend.typeId(leaf), function(_) {});
-		appendGcTraceCase(builder, value, WasmBackend.typeId(Bytes), function(builder) {
+			appendGcTraceCase(builder, value, WasmModuleSupport.typeId(leaf), function(_) {});
+		appendGcTraceCase(builder, value, WasmModuleSupport.typeId(Bytes), function(builder) {
 			builder.localGet(value);
 			builder.emit(I32Load(WasmLayout.BYTES_VIEW_MARKER_OFFSET));
 			builder.i32Const(WasmLayout.BYTES_VIEW_MAGIC);
@@ -339,7 +339,7 @@ class WasmLinearGc {
 			});
 		});
 		for (object in program.objects)
-			appendGcTraceCase(builder, value, WasmBackend.typeId(Obj(object.name)), function(builder) {
+			appendGcTraceCase(builder, value, WasmModuleSupport.typeId(Obj(object.name)), function(builder) {
 				for (field in layout.object(object.name).fields)
 					if (WasmTarget.isReference(field.type)) {
 						builder.localGet(value);
@@ -351,7 +351,7 @@ class WasmLinearGc {
 			var enumLayout = layout.enumType(enumDecl.name);
 			builder.localGet(value);
 			builder.emit(I32Load(0));
-			builder.i32Const(WasmBackend.typeId(Enum(enumDecl.name)));
+			builder.i32Const(WasmModuleSupport.typeId(Enum(enumDecl.name)));
 			builder.emit(I32Eq);
 			builder.if_(function(builder) {
 				builder.localGet(value);
@@ -377,17 +377,17 @@ class WasmLinearGc {
 			});
 		}
 		for (mapName in mapNames)
-			appendGcTraceCase(builder, value, WasmBackend.typeId(Abstract(mapName)), function(builder) {
+			appendGcTraceCase(builder, value, WasmModuleSupport.typeId(Abstract(mapName)), function(builder) {
 				builder.localGet(value);
 				builder.emit(I32Load(WasmLayout.MAP_ENTRIES_OFFSET));
 				builder.call(builder.functionRef(mark));
 			});
-		appendGcTraceCase(builder, value, WasmBackend.typeId(Array(Dyn)), function(builder) {
+		appendGcTraceCase(builder, value, WasmModuleSupport.typeId(Array(Dyn)), function(builder) {
 			builder.localGet(value);
 			builder.emit(I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET));
 			builder.call(builder.functionRef(mark));
 		});
-		appendGcTraceCase(builder, value, WasmBackend.typeId(Abstract("realtime_iterator")), function(builder) {
+		appendGcTraceCase(builder, value, WasmModuleSupport.typeId(Abstract("realtime_iterator")), function(builder) {
 			builder.localGet(value);
 			builder.emit(I32Load(WasmLayout.ITERATOR_ARRAY_OFFSET));
 			builder.call(builder.functionRef(mark));

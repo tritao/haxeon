@@ -119,7 +119,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	}
 
 	public function valueType(type:IrType):WasmValueType
-		return WasmBackend.requireValueType(type);
+		return WasmModuleSupport.requireValueType(type);
 
 	public function zeroValue(type:IrType):Array<WasmInstruction>
 		return switch type {
@@ -140,7 +140,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 			I32Const(layout.object(typeName).size),
 			Call(allocator),
 			LocalTee(destination),
-			I32Const(WasmBackend.typeId(Obj(typeName))),
+			I32Const(WasmModuleSupport.typeId(Obj(typeName))),
 			I32Store(0)
 		];
 	}
@@ -796,7 +796,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 
 	function appendTypeTest(body:Array<WasmInstruction>, valueLocal:Int, typeLocal:Int, outputLocal:Int, haxeType:IrType, wasmType:Int):Void {
 		body.push(LocalGet(typeLocal));
-		body.push(I32Const(WasmBackend.typeId(haxeType)));
+		body.push(I32Const(WasmModuleSupport.typeId(haxeType)));
 		body.push(I32Eq);
 		body.push(If(null));
 		body.push(LocalGet(valueLocal));
@@ -807,7 +807,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 
 	function appendArrayTypeTest(body:Array<WasmInstruction>, valueLocal:Int, typeLocal:Int, outputLocal:Int):Void {
 		body.push(LocalGet(typeLocal));
-		body.push(I32Const(WasmBackend.typeId(Array(Dyn))));
+		body.push(I32Const(WasmModuleSupport.typeId(Array(Dyn))));
 		body.push(I32Eq);
 		body.push(If(null));
 		body.push(I32Const(0));
@@ -822,7 +822,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 
 	function appendInterfaceTypeTest(body:Array<WasmInstruction>, valueLocal:Int, typeLocal:Int, outputLocal:Int, interfaceName:String):Void {
 		body.push(LocalGet(typeLocal));
-		body.push(I32Const(WasmBackend.typeId(Virtual(interfaceName))));
+		body.push(I32Const(WasmModuleSupport.typeId(Virtual(interfaceName))));
 		body.push(I32Eq);
 		body.push(If(null));
 		body.push(I32Const(0));

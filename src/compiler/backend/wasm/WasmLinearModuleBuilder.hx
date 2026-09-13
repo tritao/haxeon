@@ -4,7 +4,7 @@ import compiler.backend.Backend.BackendOptions;
 import compiler.backend.Backend.BackendResult;
 import compiler.backend.MemoryContract.MemoryContract;
 import compiler.backend.MemoryContract.MemoryContractCodec;
-import compiler.backend.wasm.WasmBackend.WasmClosureTypes;
+import compiler.backend.wasm.WasmModuleSupport.WasmClosureTypes;
 import compiler.backend.wasm.WasmFunctionLower;
 import compiler.backend.wasm.WasmEncoder;
 import compiler.backend.wasm.WasmGcRoots;
@@ -106,13 +106,13 @@ class WasmLinearModuleBuilder {
 		if (memoryBase < 0 || (memoryBase & 7) != 0)
 			throw 'Wasm memory base must be a non-negative 8-byte-aligned value, got $memoryBase';
 		module.importMemory = importMemory;
-		preferredEntry = WasmBackend.hasFunction(program, "main") ? "main" : WasmBackend.hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint;
+		preferredEntry = WasmModuleSupport.hasFunction(program, "main") ? "main" : WasmModuleSupport.hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint;
 		var roots = exportedFunctions.copy();
-		if (WasmBackend.hasFunction(program, "__init"))
+		if (WasmModuleSupport.hasFunction(program, "__init"))
 			roots.push("__init");
-		reachable = WasmBackend.reachableFunctions(program, preferredEntry, roots);
-		usedCNatives = WasmBackend.reachableCNatives(program, reachable);
-		usedNatives = WasmBackend.reachableNatives(program, reachable);
+		reachable = WasmModuleSupport.reachableFunctions(program, preferredEntry, roots);
+		usedCNatives = WasmModuleSupport.reachableCNatives(program, reachable);
+		usedNatives = WasmModuleSupport.reachableNatives(program, reachable);
 		layout = new WasmLayout(program);
 		strings = [];
 		var nextData = memoryBase + WasmLayout.STRING_DATA_OFFSET;
@@ -122,33 +122,34 @@ class WasmLinearModuleBuilder {
 					switch located.value {
 						case ConstString(_, value):
 							if (!strings.exists(value)) {
-								var bytes = WasmBackend.stringBytes(value);
+								var bytes = WasmModuleSupport.stringBytes(value);
 								var offset = nextData;
 								module.data.push({offset: offset, bytes: bytes});
 								strings.set(value, offset);
-								nextData = WasmBackend.align(offset + bytes.length, 8);
+								nextData = WasmModuleSupport.align(offset + bytes.length, 8);
 							}
 						default:
 					}
 		for (value in ["null", "true", "false"])
 			if (!strings.exists(value)) {
-				var bytes = WasmBackend.stringBytes(value), offset = nextData;
+				var bytes = WasmModuleSupport.stringBytes(value),
+					offset = nextData;
 				module.data.push({offset: offset, bytes: bytes});
 				strings.set(value, offset);
-				nextData = WasmBackend.align(offset + bytes.length, 8);
+				nextData = WasmModuleSupport.align(offset + bytes.length, 8);
 			}
-		var staticData = WasmBackend.placeStaticData(program, module, nextData, reachable);
+		var staticData = WasmModuleSupport.placeStaticData(program, module, nextData, reachable);
 		nextData = staticData.end;
 		WasmFunctionLower.setStaticDataAddresses(staticData.addresses);
 		module.memoryMin = 1;
 		module.exportMemory = !importMemory;
-		rootBase = WasmBackend.align(Std.int(Math.max(1024, nextData)), 8);
+		rootBase = WasmModuleSupport.align(Std.int(Math.max(1024, nextData)), 8);
 		var rootReserve = WasmLayout.ROOT_RESERVE;
 		rootLimit = rootBase + rootReserve;
 		heapStart = rootLimit;
 		if (contract != null && heapStart > contract.guestLimit)
 			throw 'Wasm guest layout exceeds memory contract guest limit ${contract.guestLimit}';
-		module.memoryMin = contract == null ? WasmBackend.memoryPages(heapStart) : WasmBackend.memoryPages(contract.memorySize);
+		module.memoryMin = contract == null ? WasmModuleSupport.memoryPages(heapStart) : WasmModuleSupport.memoryPages(contract.memorySize);
 		heapTop = module.globals.length;
 		module.globals.push({type: I32, mutable: true, init: [I32Const(heapStart)]});
 		rootTop = module.globals.length;
@@ -182,9 +183,9 @@ class WasmLinearModuleBuilder {
 		rootGlobals = [];
 		for (field in program.staticFields) {
 			globals.set(field.name, module.globals.length);
-			module.globals.push({type: WasmBackend.requireValueType(field.type), mutable: true, init: WasmBackend.zeroValue(field.type)});
+			module.globals.push({type: WasmModuleSupport.requireValueType(field.type), mutable: true, init: WasmModuleSupport.zeroValue(field.type)});
 			if (WasmTarget.isReference(field.type))
-				rootGlobals.push(WasmBackend.requiredGlobal(globals, field.name));
+				rootGlobals.push(WasmModuleSupport.requiredGlobal(globals, field.name));
 		}
 		functions = [];
 		var linearState:WasmLinearContextState = {
@@ -210,7 +211,7 @@ class WasmLinearModuleBuilder {
 	}
 
 	function buildRuntime():Void {
-		WasmBackend.addCNativeImports(module, functions, program, usedCNatives);
+		WasmModuleSupport.addCNativeImports(module, functions, program, usedCNatives);
 		WasmLinearRuntime.addImports(linear, usedNatives);
 		WasmLinearGc.build(linear);
 		allocator = WasmLinearAllocator.build(linear);
@@ -233,21 +234,21 @@ class WasmLinearModuleBuilder {
 			var parameters:Array<WasmValueType> = [];
 			for (argument in fn.arguments)
 				try
-					parameters.push(WasmBackend.requireValueType(argument.type))
+					parameters.push(WasmModuleSupport.requireValueType(argument.type))
 				catch (error:Dynamic)
 					throw 'Wasm function ${fn.name} has an unsupported parameter type: $error';
 			var results:Array<WasmValueType> = [];
 			try
-				results = WasmBackend.resultTypes(fn.result)
+				results = WasmModuleSupport.resultTypes(fn.result)
 			catch (error:Dynamic)
 				throw 'Wasm function ${fn.name} has an unsupported result type: $error';
 			var type:WasmFunctionType = {parameters: parameters, results: results};
 			functions.set(fn.name, module.addFunction(new WasmFunction(fn.name, type)));
 		}
-		closureTypes = WasmBackend.collectClosureTypes(module, program);
+		closureTypes = WasmModuleSupport.collectClosureTypes(module, program);
 		representation = WasmRepresentationSet.linear(new WasmLinearRepresentation(layout, allocator));
-		tableSlots = WasmBackend.buildTableSlots(module, functions);
-		var exceptionTagType:Null<Int> = WasmBackend.hasExceptions(program) ? module.typeIndex({
+		tableSlots = WasmModuleSupport.buildTableSlots(module, functions);
+		var exceptionTagType:Null<Int> = WasmModuleSupport.hasExceptions(program) ? module.typeIndex({
 			parameters: [I32],
 			results: []
 		}) : null; // The module declares one tag; instruction immediates use its tag index, not this type index.
@@ -262,7 +263,7 @@ class WasmLinearModuleBuilder {
 		return WasmGcRoots.encodeAndVisit(program, function(fn, rootPoints) {
 			if (!reachable.exists(fn.name) || (fn.name == "__entry" && preferredEntry != "__entry"))
 				return;
-			var functionIndex = WasmBackend.requiredFunctionIndex(functions, fn.name);
+			var functionIndex = WasmModuleSupport.requiredFunctionIndex(functions, fn.name);
 			module.setFunction(functionIndex,
 				WasmFunctionLower.lower(fn, functions, module.functionType(functionIndex), layout, allocator, rootTop, rootFrameTop, rootLimit, globals,
 					strings, methods, closureTypes, tableSlots, exceptionTag, rootPoints, program, representation));
@@ -281,7 +282,7 @@ class WasmLinearModuleBuilder {
 		var entry = functions.get(preferredEntry);
 		if (entry == null)
 			throw 'Wasm entry point $preferredEntry was not emitted';
-		if (WasmBackend.hasFunction(program, "__init"))
+		if (WasmModuleSupport.hasFunction(program, "__init"))
 			module.start = functions.get("__init");
 		module.exports.push({name: "main", functionIndex: entry});
 		for (exported in exportedFunctions) {
@@ -291,19 +292,19 @@ class WasmLinearModuleBuilder {
 			module.exports.push({name: exported, functionIndex: exportIndex});
 		}
 		if (options.wasmMemoryStats == true) {
-			WasmBackend.addMemoryStatExport(module, "haxeon.memory.heap_base", [I32Const(heapStart)]);
-			WasmBackend.addMemoryStatExport(module, "haxeon.memory.heap_top", [GlobalGet(heapTop)]);
-			WasmBackend.addMemoryStatExport(module, "haxeon.memory.root_base", [I32Const(rootBase)]);
-			WasmBackend.addMemoryStatExport(module, "haxeon.memory.root_top", [GlobalGet(rootTop)]);
-			WasmBackend.addMemoryStatExport(module, "haxeon.memory.root_limit", [I32Const(rootLimit)]);
+			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.heap_base", [I32Const(heapStart)]);
+			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.heap_top", [GlobalGet(heapTop)]);
+			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.root_base", [I32Const(rootBase)]);
+			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.root_top", [GlobalGet(rootTop)]);
+			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.root_limit", [I32Const(rootLimit)]);
 			// Kept temporarily for hosts that still display the old metadata counters.
 			// In-block headers make out-of-line GC metadata a zero-sized region.
-			WasmBackend.addMemoryStatExport(module, "haxeon.memory.metadata_base", [I32Const(heapStart)]);
-			WasmBackend.addMemoryStatExport(module, "haxeon.memory.metadata_top", [I32Const(heapStart)]);
-			WasmBackend.addMemoryStatExport(module, "haxeon.memory.allocation_count", [GlobalGet(allocationCount)]);
-			WasmBackend.addMemoryStatExport(module, "haxeon.memory.allocated_bytes", [GlobalGet(allocationBytes)]);
-			WasmBackend.addMemoryStatExport(module, "haxeon.memory.largest_allocation_bytes", [GlobalGet(largestAllocation)]);
-			WasmBackend.addMemoryStatExport(module, "haxeon.memory.collection_count", [GlobalGet(collectionCount)]);
+			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.metadata_base", [I32Const(heapStart)]);
+			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.metadata_top", [I32Const(heapStart)]);
+			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.allocation_count", [GlobalGet(allocationCount)]);
+			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.allocated_bytes", [GlobalGet(allocationBytes)]);
+			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.largest_allocation_bytes", [GlobalGet(largestAllocation)]);
+			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.collection_count", [GlobalGet(collectionCount)]);
 		}
 	}
 }

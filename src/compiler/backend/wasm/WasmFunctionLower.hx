@@ -10,7 +10,7 @@ import compiler.ir.Ir.IrBlock;
 import compiler.ir.IrFunction;
 import compiler.ir.IrOperands;
 import haxe.io.Bytes as HaxeBytes;
-import compiler.backend.wasm.WasmBackend.WasmClosureTypes;
+import compiler.backend.wasm.WasmModuleSupport.WasmClosureTypes;
 import compiler.backend.wasm.WasmCfgAnalysis;
 import compiler.backend.wasm.WasmGcMaps;
 import compiler.backend.wasm.WasmGcRoots.WasmSafepoint;
@@ -768,7 +768,7 @@ class WasmFunctionLower {
 					emit(body, [I32Const(pointer), LocalSet(requiredLocal(values, output.id))]);
 				}
 			case StaticDataAddress(output, bytes):
-				var address = activeStaticDataAddresses.get(WasmBackend.staticDataKey(bytes));
+				var address = activeStaticDataAddresses.get(WasmModuleSupport.staticDataKey(bytes));
 				if (address == null)
 					throw "Wasm static data address was not placed in the data section";
 				emit(body, [I32Const(address), LocalSet(requiredLocal(values, output.id))]);
@@ -1131,7 +1131,7 @@ class WasmFunctionLower {
 					for (argument in arguments)
 						body.push(LocalGet(requiredLocal(values, argument.id)));
 					var functionIndex = functions.get(name);
-					var mapParts = WasmBackend.mapNativeParts(name);
+					var mapParts = WasmModuleSupport.mapNativeParts(name);
 					if (mapParts != null && output.type != Void && (mapParts.operation == "keys" || mapParts.operation == "values")) {
 						var projectionIndex = functions.get(WasmGcMaps.projectionName(name, output.type));
 						if (projectionIndex != null)
@@ -1156,7 +1156,7 @@ class WasmFunctionLower {
 				var pointerLengthImportIndex = -1,
 					pointerReleaseImportIndex = -1;
 				if ((native.result == ManagedBytes && native.pointerLength != null)
-					|| (WasmBackend.isGcNativePointerType(native.result) && native.pointerOwnership == "owned")) {
+					|| (WasmModuleSupport.isGcNativePointerType(native.result) && native.pointerOwnership == "owned")) {
 					var lengthNative:Null<IrCNative> = null;
 					if (native.result == ManagedBytes && native.pointerLength != null) {
 						for (candidate in activeProgram.cNatives)
