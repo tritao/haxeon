@@ -4880,7 +4880,10 @@ class WasmBackend implements Backend {
 							enqueueFunction(target, byName, pending);
 						case MethodCall(_, object, method, _):
 							switch object.type {
-								case Obj(objectName): enqueueFunction(findMethod(program, objectName, method), byName, pending);
+								case Obj(objectName):
+									for (candidate in program.objects)
+										if (isObjectSubtype(program, candidate.name, objectName))
+											enqueueFunction(findMethod(program, candidate.name, method), byName, pending);
 								case Virtual(interfaceName):
 									for (candidate in program.objects)
 										if (implementsInterface(program, candidate.name, interfaceName))
@@ -4906,6 +4909,15 @@ class WasmBackend implements Backend {
 				return object.base == null ? null : findMethod(program, object.base, methodName);
 			}
 		return null;
+	}
+
+	static function isObjectSubtype(program:IrProgram, actual:String, expected:String):Bool {
+		if (actual == expected)
+			return true;
+		for (object in program.objects)
+			if (object.name == actual)
+				return object.base != null && isObjectSubtype(program, object.base, expected);
+		return false;
 	}
 
 	static function implementsInterface(program:IrProgram, objectName:String, interfaceName:String):Bool {
@@ -5755,15 +5767,45 @@ class WasmFunctionLower {
 			case MethodCall(output, object, methodName, arguments):
 				switch object.type {
 					case Obj(objectName):
-						var functionName = findMethod(activeProgram, objectName, methodName),
-							functionIndex = functionName == null ? null : functions.get(functionName);
-						if (functionIndex == null)
-							throw 'Wasm method target "$objectName.$methodName" is not emitted';
-						body.push(LocalGet(requiredLocal(values, object.id)));
-						for (argument in arguments)
-							body.push(LocalGet(requiredLocal(values, argument.id)));
-						body.push(Call(functionIndex));
-						if (output.type != Void) body.push(LocalSet(requiredLocal(values, output.id)));
+						var targets = classVirtualTargets(activeProgram, objectName, methodName, functions),
+							represented = targets.length == 0 ? null : activeRepresentation.virtualCall(output, object, arguments, targets,
+								requiredLocal(values, object.id), output.type == Void ? -1 : requiredLocal(values, output.id),
+								[for (argument in arguments) requiredLocal(values, argument.id)]);
+						if (represented != null) emit(body, represented); else if (targets.length == 0) {
+							var functionName = findMethod(activeProgram, objectName, methodName),
+								functionIndex = functionName == null ? null : functions.get(functionName);
+							if (functionIndex == null)
+								throw 'Wasm method target "$objectName.$methodName" is not emitted';
+							body.push(LocalGet(requiredLocal(values, object.id)));
+							for (argument in arguments)
+								body.push(LocalGet(requiredLocal(values, argument.id)));
+							body.push(Call(functionIndex));
+							if (output.type != Void)
+								body.push(LocalSet(requiredLocal(values, output.id)));
+						} else {
+							for (index in 0...targets.length) {
+								var target = targets[index];
+								emit(body, [
+									LocalGet(requiredLocal(values, object.id)),
+									I32Load(0),
+									I32Const(typeId(Obj(target.typeName))),
+									I32Eq,
+									If(null),
+									LocalGet(requiredLocal(values, object.id))
+								]);
+								for (argument in arguments)
+									body.push(LocalGet(requiredLocal(values, argument.id)));
+								body.push(Call(target.functionIndex));
+								if (output.type != Void)
+									body.push(LocalSet(requiredLocal(values, output.id)));
+								if (index < targets.length - 1)
+									body.push(Else);
+								else
+									emit(body, [Else, Unreachable]);
+							}
+							for (_ in targets)
+								body.push(End);
+						}
 					case Virtual(interfaceName):
 						var targets = virtualTargets(activeProgram, interfaceName, methodName, functions);
 						if (targets.length == 0)
@@ -6410,6 +6452,53 @@ class WasmFunctionLower {
 		}
 		result.sort(function(left, right) return objectInheritanceDepth(program, right.typeName) - objectInheritanceDepth(program, left.typeName));
 		return result;
+	}
+
+	static function classVirtualTargets(program:IrProgram, staticType:String, methodName:String, functions:Map<String, Int>):Array<{
+		typeName:String,
+		functionIndex:Int,
+		argumentTypes:Array<IrType>,
+		resultType:IrType
+	}> {
+		var result:Array<{
+			typeName:String,
+			functionIndex:Int,
+			argumentTypes:Array<IrType>,
+			resultType:IrType
+		}> = [];
+		for (object in program.objects) {
+			if (!isObjectSubtype(program, object.name, staticType))
+				continue;
+			var functionName = findMethod(program, object.name, methodName);
+			if (functionName != null) {
+				var functionIndex = functions.get(functionName),
+					targetFunction:Null<IrFunction> = null;
+				for (candidate in program.functions)
+					if (candidate.name == functionName)
+						targetFunction = candidate;
+				if (functionIndex != null) {
+					if (targetFunction == null)
+						throw 'Wasm class target "$functionName" has no Haxe function signature';
+					result.push({
+						typeName: object.name,
+						functionIndex: functionIndex,
+						argumentTypes: [for (argument in targetFunction.arguments) argument.type],
+						resultType: targetFunction.result
+					});
+				}
+			}
+		}
+		result.sort(function(left, right) return objectInheritanceDepth(program, right.typeName) - objectInheritanceDepth(program, left.typeName));
+		return result;
+	}
+
+	static function isObjectSubtype(program:IrProgram, actual:String, expected:String):Bool {
+		if (actual == expected)
+			return true;
+		for (object in program.objects)
+			if (object.name == actual)
+				return object.base != null && isObjectSubtype(program, object.base, expected);
+		return false;
 	}
 
 	static function objectInheritanceDepth(program:IrProgram, typeName:String):Int {
