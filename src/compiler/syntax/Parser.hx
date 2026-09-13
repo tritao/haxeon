@@ -905,8 +905,9 @@ class Parser {
 			var condition = parseExpression();
 			consume(TokenKind.RightParen);
 			var thenBranch = parseStatementOrBlock();
-			var elseBranch = match(TokenKind.Else) ? parseStatementOrBlock() : [];
-			var end = elseBranch.length > 0 ? statementSpan(elseBranch[elseBranch.length - 1]) : statementSpan(thenBranch[thenBranch.length - 1]);
+			var hasElse = match(TokenKind.Else),
+				elseBranch = hasElse ? parseStatementOrBlock() : [];
+			var end = statementEnd(hasElse ? elseBranch : thenBranch);
 			return If(condition, thenBranch, elseBranch, start.merge(end));
 		}
 		if (match(TokenKind.While)) {
@@ -915,7 +916,7 @@ class Parser {
 			var condition = parseExpression();
 			consume(TokenKind.RightParen);
 			var body = parseStatementOrBlock();
-			var end = statementSpan(body[body.length - 1]);
+			var end = statementEnd(body);
 			return While(condition, body, start.merge(end));
 		}
 		if (match(TokenKind.Do)) {
@@ -939,8 +940,7 @@ class Parser {
 			consume(TokenKind.In);
 			var iterable = parseExpression();
 			consume(TokenKind.RightParen);
-			var body = parseStatementOrBlock(),
-				end = statementSpan(body[body.length - 1]);
+			var body = parseStatementOrBlock(), end = statementEnd(body);
 			return ForIn(name, valueName, iterable, body, start.merge(end));
 		}
 		var expression = parseExpression(), end = expressionEnd(expression);
@@ -1697,7 +1697,7 @@ class Parser {
 	static function statementTerminates(statement:AstStatement):Bool
 		return switch statement {
 			case Return(_, _), ReturnVoid(_), Throw(_, _), Break(_), Continue(_): true;
-			case If(_, yes, no, _): no.length > 0 && statementTerminates(yes[yes.length - 1]) && statementTerminates(no[no.length - 1]);
+			case If(_, yes, no, _): yes.length > 0 && no.length > 0 && statementTerminates(yes[yes.length - 1]) && statementTerminates(no[no.length - 1]);
 			default: false;
 		};
 
@@ -1899,6 +1899,9 @@ class Parser {
 		consume(TokenKind.RightBrace);
 		return statements;
 	}
+
+	function statementEnd(statements:Array<AstStatement>):SourceSpan
+		return statements.length == 0 ? previous().span : statementSpan(statements[statements.length - 1]);
 
 	inline function match(kind:TokenKind):Bool {
 		if (tokens[position].kind != kind)

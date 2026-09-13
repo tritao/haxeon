@@ -155,6 +155,8 @@ class TestMain {
 		Frontend.compile('typedef Result = { values:Array<Int> }; function values():Result { var values = []; return { values: values }; } function main():Int return values().values.length;');
 		new Parser(new Lexer(new SourceFile("expression-block-statements.hx",
 			'function main():Int return if (true) { var value = 0; if (true) value = 21; else value = 0; value + 21; } else 0;')).tokenize()).parseProgram();
+		Frontend.compile('class PollingQueue { public function new() {} public function poll():Bool return false; } function main():Int { var events = new PollingQueue(); if (false) {} else {} while (events.poll()) {} for (value in [0]) {} return 42; }');
+		Frontend.compile('function main():Int return switch 0 { case 0: if (false) {} else return 1; 42; default: 42; };');
 		var privateAlias = new Parser(new Lexer(new SourceFile("private-alias.hx", "private typedef Internal = Int;")).tokenize()).parseProgram();
 		if (!privateAlias.aliases[0].isPrivate)
 			throw "Private type alias visibility was not preserved";
