@@ -229,6 +229,10 @@ class WasmGcRepresentation implements WasmRepresentation {
 	public function constantString(value:String, destination:Int, strings:Map<String, Int>):Null<Array<WasmInstruction>> {
 		if (value == "Reached compiler-generated unreachable block")
 			return [Unreachable];
+		return stringLiteral(value, destination);
+	}
+
+	function stringLiteral(value:String, destination:Int):Array<WasmInstruction> {
 		var bytes = HaxeBytes.ofString(value),
 			storage = allocateLocal(Ref({nullable: false, heap: Type(plan.byteArrayTypeIndex)})),
 			body:Array<WasmInstruction> = [
@@ -478,6 +482,368 @@ class WasmGcRepresentation implements WasmRepresentation {
 		return body;
 	}
 
+	function dynamicString(valueLocal:Int, outputLocal:Int):Array<WasmInstruction> {
+		var body:Array<WasmInstruction> = [
+			RefNull(Type(plan.bytesTypeIndex)),
+			LocalSet(outputLocal),
+			LocalGet(valueLocal),
+			RefIsNull,
+			If(null)
+		];
+		body = body.concat(stringLiteral("null", outputLocal));
+		body = body.concat([
+			Else,
+			LocalGet(valueLocal),
+			RefTest({nullable: false, heap: Type(plan.bytesTypeIndex)}),
+			If(null)
+		]);
+		body = body.concat([
+			LocalGet(valueLocal),
+			RefCast({nullable: false, heap: Type(plan.bytesTypeIndex)}),
+			LocalSet(outputLocal),
+			Else
+		]);
+		body = body.concat(stringLiteral("Object", outputLocal));
+		body = body.concat(dynamicIntegerString(valueLocal, outputLocal));
+		body = body.concat(dynamicFloatString(valueLocal, outputLocal));
+		body = body.concat(dynamicBooleanString(valueLocal, outputLocal));
+		for (enumDecl in plan.program.enums)
+			for (index in 0...enumDecl.cases.length) {
+				var constructor = enumDecl.cases[index];
+				if (constructor.params.length == 0) {
+					body = body.concat([
+						LocalGet(valueLocal),
+						RefTest({nullable: false, heap: Type(plan.enumConstructorType(enumDecl.name, index))}),
+						If(null)
+					]);
+					body = body.concat(stringLiteral(constructor.name, outputLocal));
+					body.push(End);
+				}
+			}
+		body = body.concat([End, End]);
+		return body;
+	}
+
+	function dynamicIntegerString(valueLocal:Int, outputLocal:Int):Array<WasmInstruction> {
+		var boxType = plan.boxedPrimitiveType(I32),
+			body:Array<WasmInstruction> = [LocalGet(valueLocal), RefTest({nullable: false, heap: Type(boxType)}), If(null)];
+		body = body.concat(integerString(valueLocal, boxType, outputLocal));
+		body.push(End);
+		return body;
+	}
+
+	function integerString(valueLocal:Int, boxType:Int, outputLocal:Int):Array<WasmInstruction> {
+		var value = allocateLocal(I32);
+		return [
+			LocalGet(valueLocal),
+			RefCast({nullable: false, heap: Type(boxType)}),
+			StructGet(boxType, 0),
+			LocalSet(value)
+		].concat(integerValueString(value, outputLocal));
+	}
+
+	function integerValueString(value:Int, outputLocal:Int):Array<WasmInstruction> {
+		var negative = allocateLocal(I32),
+			position = allocateLocal(I32),
+			digit = allocateLocal(I32),
+			storage = allocateLocal(Ref({nullable: false, heap: Type(plan.byteArrayTypeIndex)})),
+			body:Array<WasmInstruction> = [
+				LocalGet(value),
+				I32Const(0),
+				I32LtS,
+				LocalSet(negative),
+				I32Const(11),
+				ArrayNewDefault(plan.byteArrayTypeIndex),
+				LocalSet(storage),
+				I32Const(10),
+				LocalSet(position),
+				LocalGet(value),
+				I32Eqz,
+				If(null),
+				LocalGet(storage),
+				LocalGet(position),
+				I32Const(48),
+				ArraySet(plan.byteArrayTypeIndex),
+				LocalGet(position),
+				I32Const(1),
+				I32Sub,
+				LocalSet(position),
+				Else,
+				Block(null),
+				Loop(null),
+				LocalGet(value),
+				I32Eqz,
+				BrIf(1),
+				LocalGet(value),
+				I32Const(10),
+				I32RemS,
+				LocalSet(digit),
+				LocalGet(digit),
+				I32Const(0),
+				I32LtS,
+				If(I32),
+				I32Const(0),
+				LocalGet(digit),
+				I32Sub,
+				Else,
+				LocalGet(digit),
+				End,
+				I32Const(48),
+				I32Add,
+				LocalSet(digit),
+				LocalGet(storage),
+				LocalGet(position),
+				LocalGet(digit),
+				ArraySet(plan.byteArrayTypeIndex),
+				LocalGet(position),
+				I32Const(1),
+				I32Sub,
+				LocalSet(position),
+				LocalGet(value),
+				I32Const(10),
+				I32DivS,
+				LocalSet(value),
+				Br(0),
+				End,
+				End,
+				End,
+				LocalGet(negative),
+				If(null),
+				LocalGet(storage),
+				LocalGet(position),
+				I32Const(45),
+				ArraySet(plan.byteArrayTypeIndex),
+				LocalGet(position),
+				I32Const(1),
+				I32Sub,
+				LocalSet(position),
+				End,
+				LocalGet(storage),
+				LocalGet(position),
+				I32Const(1),
+				I32Add,
+				I32Const(10),
+				LocalGet(position),
+				I32Sub,
+				StructNew(plan.bytesTypeIndex),
+				LocalSet(outputLocal)
+			];
+		return body;
+	}
+
+	function dynamicFloatString(valueLocal:Int, outputLocal:Int):Array<WasmInstruction> {
+		var boxType = plan.boxedPrimitiveType(F64),
+			value = allocateLocal(F64),
+			negative = allocateLocal(I32),
+			absolute = allocateLocal(F64),
+			whole = allocateLocal(I32),
+			fraction = allocateLocal(I32),
+			fractionDigits = allocateLocal(I32),
+			wholeString = allocateLocal(valueType(Bytes)),
+			storage = allocateLocal(Ref({
+				nullable: false,
+				heap: Type(plan.byteArrayTypeIndex)
+			})),
+			writeIndex = allocateLocal(I32),
+			index = allocateLocal(I32),
+			divisor = allocateLocal(I32),
+			body:Array<WasmInstruction> = [
+				LocalGet(valueLocal),
+				RefTest({
+					nullable: false,
+					heap: Type(boxType)
+				}),
+				If(null),
+				LocalGet(valueLocal),
+				RefCast({nullable: false, heap: Type(boxType)}),
+				StructGet(boxType, 0),
+				LocalSet(value),
+				LocalGet(value),
+				F64Const(0),
+				F64Lt,
+				LocalSet(negative),
+				LocalGet(negative),
+				If(F64),
+				F64Const(0),
+				LocalGet(value),
+				F64Sub,
+				Else,
+				LocalGet(value),
+				End,
+				LocalSet(absolute),
+				LocalGet(absolute),
+				F64Const(2147483648.0),
+				F64Lt,
+				If(null),
+				LocalGet(absolute),
+				I32TruncF64S,
+				LocalSet(whole)
+			];
+		body = body.concat(integerValueString(whole, wholeString));
+		body = body.concat([
+			LocalGet(absolute),
+			LocalGet(whole),
+			F64ConvertI32S,
+			F64Sub,
+			F64Const(1000000),
+			F64Mul,
+			I32TruncF64S,
+			LocalSet(fraction),
+			I32Const(6),
+			LocalSet(fractionDigits),
+			Block(null),
+			Loop(null),
+			LocalGet(fraction),
+			I32Const(10),
+			I32RemS,
+			I32Eqz,
+			LocalGet(fraction),
+			I32Eqz,
+			I32Eqz,
+			I32And,
+			I32Eqz,
+			BrIf(1),
+			LocalGet(fraction),
+			I32Const(10),
+			I32DivS,
+			LocalSet(fraction),
+			LocalGet(fractionDigits),
+			I32Const(1),
+			I32Sub,
+			LocalSet(fractionDigits),
+			Br(0),
+			End,
+			End,
+			I32Const(24),
+			ArrayNewDefault(plan.byteArrayTypeIndex),
+			LocalSet(storage),
+			I32Const(0),
+			LocalSet(writeIndex),
+			LocalGet(negative),
+			If(null),
+			LocalGet(storage),
+			LocalGet(writeIndex),
+			I32Const(45),
+			ArraySet(plan.byteArrayTypeIndex),
+			LocalGet(writeIndex),
+			I32Const(1),
+			I32Add,
+			LocalSet(writeIndex),
+			End,
+			LocalGet(storage),
+			LocalGet(writeIndex),
+			LocalGet(wholeString),
+			StructGet(plan.bytesTypeIndex, 0),
+			LocalGet(wholeString),
+			StructGet(plan.bytesTypeIndex, 1),
+			LocalGet(wholeString),
+			StructGet(plan.bytesTypeIndex, 2),
+			ArrayCopy(plan.byteArrayTypeIndex, plan.byteArrayTypeIndex),
+			LocalGet(writeIndex),
+			LocalGet(wholeString),
+			StructGet(plan.bytesTypeIndex, 2),
+			I32Add,
+			LocalSet(writeIndex),
+			LocalGet(fraction),
+			I32Eqz,
+			If(null),
+			Else,
+			LocalGet(storage),
+			LocalGet(writeIndex),
+			I32Const(46),
+			ArraySet(plan.byteArrayTypeIndex),
+			LocalGet(writeIndex),
+			I32Const(1),
+			I32Add,
+			LocalSet(writeIndex),
+			I32Const(1),
+			LocalSet(divisor),
+			I32Const(1),
+			LocalSet(index),
+			Block(null),
+			Loop(null),
+			LocalGet(index),
+			LocalGet(fractionDigits),
+			I32LtS,
+			I32Eqz,
+			BrIf(1),
+			LocalGet(divisor),
+			I32Const(10),
+			I32Mul,
+			LocalSet(divisor),
+			LocalGet(index),
+			I32Const(1),
+			I32Add,
+			LocalSet(index),
+			Br(0),
+			End,
+			End,
+			I32Const(0),
+			LocalSet(index),
+			Block(null),
+			Loop(null),
+			LocalGet(index),
+			LocalGet(fractionDigits),
+			I32LtS,
+			I32Eqz,
+			BrIf(1),
+			LocalGet(storage),
+			LocalGet(writeIndex),
+			LocalGet(fraction),
+			LocalGet(divisor),
+			I32DivS,
+			I32Const(10),
+			I32RemS,
+			I32Const(48),
+			I32Add,
+			ArraySet(plan.byteArrayTypeIndex),
+			LocalGet(fraction),
+			LocalGet(divisor),
+			I32RemS,
+			LocalSet(fraction),
+			LocalGet(divisor),
+			I32Const(10),
+			I32DivS,
+			LocalSet(divisor),
+			LocalGet(writeIndex),
+			I32Const(1),
+			I32Add,
+			LocalSet(writeIndex),
+			LocalGet(index),
+			I32Const(1),
+			I32Add,
+			LocalSet(index),
+			Br(0),
+			End,
+			End,
+			End,
+			LocalGet(storage),
+			I32Const(0),
+			LocalGet(writeIndex),
+			StructNew(plan.bytesTypeIndex),
+			LocalSet(outputLocal),
+			End,
+			End
+		]);
+		return body;
+	}
+
+	function dynamicBooleanString(valueLocal:Int, outputLocal:Int):Array<WasmInstruction> {
+		var boxType = plan.boxedPrimitiveType(Bool),
+			body:Array<WasmInstruction> = [LocalGet(valueLocal), RefTest({nullable: false, heap: Type(boxType)}), If(null)];
+		body = body.concat([
+			LocalGet(valueLocal),
+			RefCast({nullable: false, heap: Type(boxType)}),
+			StructGet(boxType, 0),
+			If(null)
+		]);
+		body = body.concat(stringLiteral("true", outputLocal));
+		body = body.concat([Else]);
+		body = body.concat(stringLiteral("false", outputLocal));
+		body = body.concat([End, End]);
+		return body;
+	}
+
 	function appendTypeTest(body:Array<WasmInstruction>, valueLocal:Int, typeLocal:Int, outputLocal:Int, haxeType:IrType, wasmType:Int):Void {
 		body.push(LocalGet(typeLocal));
 		body.push(I32Const(WasmBackend.typeId(haxeType)));
@@ -594,6 +960,11 @@ class WasmGcRepresentation implements WasmRepresentation {
 			if (output.type != I32 || arguments.length != 1 || arguments[0].type != Dyn || argumentLocals.length != 1)
 				throw "Invalid Wasm GC Std.int(Dynamic) signature";
 			return dynamicInt(argumentLocals[0], outputLocal);
+		}
+		if (name == "__std_string") {
+			if (output.type != Bytes || arguments.length != 1 || arguments[0].type != Dyn || argumentLocals.length != 1)
+				throw "Invalid Wasm GC Std.string signature";
+			return dynamicString(argumentLocals[0], outputLocal);
 		}
 		if (name == "__std_is_of_type" || name == "__exception_matches") {
 			if (output.type != Bool || arguments.length != 2 || arguments[0].type != Dyn || arguments[1].type != TypeRef || argumentLocals.length != 2)

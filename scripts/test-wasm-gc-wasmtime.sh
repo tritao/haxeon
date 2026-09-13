@@ -26,7 +26,7 @@ mkdir -p "$root_dir/out"
 	--target=wasm-gc --output=out/wasm-gc-wasmtime-bytes.wasm --entry=wasm-gc-bytes \
 	--root=tests/programs tests/programs/wasm-gc-bytes.hx
 
-for case_name in add array-iterator-wasm array-slice-index array-growth-wasm array-alias-growth array-index-growth array-resize array-expression-mutation array-field-mutation array-copy-concat array-unshift array-insert array-splice array-remove array-object-mutation array-reverse dynamic-equality numeric-promotion function-wrapper std-is-of-type map-basic map-int map-primitive-types map-literal map-object map-anonymous-enum map-for-in map-key-value-for-in map-comprehension map-nullable-get nullable-map-get map-string-equality try-catch try-nested try-array-bounds concise-try try-typed-class try-typed-mismatch try-typed-int try-multiple-catches; do
+for case_name in add array-iterator-wasm array-slice-index array-growth-wasm array-alias-growth array-index-growth array-resize array-expression-mutation array-field-mutation array-copy-concat array-unshift array-insert array-splice array-remove array-object-mutation array-reverse dynamic-equality numeric-promotion function-wrapper std-is-of-type map-basic map-int map-primitive-types map-literal map-object map-anonymous-enum map-for-in map-key-value-for-in map-comprehension map-nullable-get nullable-map-get map-string-equality string-concat-mixed try-catch try-nested try-array-bounds concise-try try-typed-class try-typed-mismatch try-typed-int try-multiple-catches enum-argument-string string-interpolation std-string-dynamic; do
 	"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 		--target=wasm-gc --output="out/wasm-gc-wasmtime-$case_name.wasm" --entry="$case_name" \
 		--root=tests/programs "tests/programs/$case_name.hx"
@@ -80,6 +80,7 @@ for artifact in \
 	wasm-gc-wasmtime-map-nullable-get \
 	wasm-gc-wasmtime-nullable-map-get \
 	wasm-gc-wasmtime-map-string-equality \
+	wasm-gc-wasmtime-string-concat-mixed \
 	wasm-gc-wasmtime-try-catch \
 	wasm-gc-wasmtime-try-nested \
 	wasm-gc-wasmtime-try-array-bounds \
@@ -88,6 +89,9 @@ for artifact in \
 	wasm-gc-wasmtime-try-typed-mismatch \
 	wasm-gc-wasmtime-try-typed-int \
 	wasm-gc-wasmtime-try-multiple-catches \
+	wasm-gc-wasmtime-enum-argument-string \
+	wasm-gc-wasmtime-string-interpolation \
+	wasm-gc-wasmtime-std-string-dynamic \
 	wasm-gc-wasmtime-bytes-compare; do
 	wasm_file="$root_dir/out/$artifact.wasm"
 	result=$("$wasmtime_bin" run --invoke main "$wasm_file" 2>"$root_dir/out/wasmtime-stderr.txt") || {

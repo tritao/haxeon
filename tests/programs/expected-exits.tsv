@@ -39,6 +39,7 @@ nested-mutable-capture	3
 trace	42
 string-interpolation	42
 string-concat-mixed	42
+std-string-dynamic	42
 string-split	42
 reflect-compare-sort	42
 array-index-growth	42
@@ -100,6 +101,7 @@ wasm-bytes-compare	42
 map-for-in	52
 map-key-value-for-in	42
 map-nullable-get	42
+map-string-equality	42
 loop-control	42
 increment	42
 logical-comparisons	42
