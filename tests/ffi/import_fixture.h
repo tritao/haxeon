@@ -11,12 +11,15 @@
 #define HXI_UTF8 __attribute__((annotate("hxi:utf8")))
 #define HXI_NULLABLE_UTF8 __attribute__((annotate("hxi:nullable_utf8")))
 #define HXI_BORROWED __attribute__((annotate("hxi:borrowed")))
+#define HXI_OWNED __attribute__((annotate("hxi:owned")))
 #define HXI_LENGTH_FIELD(size) __attribute__((annotate("hxi:length_field")))
 #define HXI_HANDLE __attribute__((annotate("hxi:handle")))
+#define HXI_HANDLE_DESTROY(symbol) __attribute__((annotate("hxi:handle_destroy")))
 #define HXI_DECLARE_HANDLE(name) typedef struct name { uint32_t id; } name HXI_HANDLE
 #define HXI_FLAGS(name) __attribute__((annotate("hxi:flags:" #name))) name##_flags_enum
 
 typedef uint32_t sample_handle HXI_HANDLE;
+typedef uint32_t sample_owned_handle HXI_HANDLE HXI_HANDLE_DESTROY(sample_owned_handle_destroy);
 HXI_DECLARE_HANDLE(sample_resource);
 typedef const char *hxi_utf8;
 typedef const char *hxi_nullable_utf8;
@@ -72,6 +75,9 @@ typedef struct sample_event {
 } sample_event;
 
 int32_t sample_create(const sample_options *options, sample_handle *output HXI_OUT);
+sample_owned_handle sample_create_owned(void) HXI_OWNED;
+void sample_create_owned_out(sample_owned_handle *output HXI_OUT HXI_OWNED);
+void sample_owned_handle_destroy(sample_owned_handle handle);
 int32_t sample_use_resource(sample_resource resource);
 int32_t sample_options_many(const sample_options *options HXI_IN_ARRAY(count), uint32_t count);
 int32_t sample_paths_many(const char *const *paths HXI_IN_UTF8_ARRAY(count), uint32_t count);

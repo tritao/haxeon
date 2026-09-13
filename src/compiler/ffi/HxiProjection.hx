@@ -10,7 +10,7 @@ import compiler.ffi.HxiModel.HxiEnumValue;
 import compiler.ir.Ir.IrCNative;
 import compiler.ir.Ir.IrCNativeArgumentMode;
 import compiler.ir.Ir.IrType;
-import compiler.ffi.HxiModel.HxiPointerOwnership;
+import compiler.ffi.HxiModel.HxiOwnership;
 import compiler.ffi.HxiModel.HxiParameter;
 import compiler.ffi.HxiModel.HxiParameterDirection;
 import compiler.ffi.HxiModel.HxiType;
@@ -129,7 +129,7 @@ class HxiProjection {
 					case Function(_, parameters, _, _, _, _, _, _):
 						if (Lambda.exists(parameters, parameter -> switch parameter.ownership {
 							case Owned(_): true;
-							case Borrowed | Unspecified: false;
+							case Borrowed | Unspecified | OwnedHandle: false;
 						}))
 							hasOwnedPointerOutputs = true;
 					case Constant(_, _, _):
@@ -166,12 +166,16 @@ class HxiProjection {
 				case Opaque(name, _):
 					addProjectedName(path, "module", projectedTypeName(name, profile), 'opaque type "$name"', moduleNames);
 					addProjectedName(path, "module", ownedTypeName(name, profile), 'owned opaque type "$name"', moduleNames);
-				case Handle(name, _, _) | Structure(name, _, _, _, _):
+				case Handle(name, _, destroySymbol, _):
 					addProjectedName(path, "module", projectedTypeName(name, profile), 'type "$name"', moduleNames);
-					var fields = switch declaration {
-						case Structure(_, _, _, fields, _): fields;
-						case _: [];
-					};
+					if (destroySymbol != null) {
+						addProjectedName(path, "module", ownedTypeName(name, profile), 'owned value handle "$name"', moduleNames);
+						var destroyName = functionNameForSymbol(model.declarations, destroySymbol);
+						if (isOmitted(omitted, destroyName))
+							profileError(path, 'cannot omit destroy function "$destroyName" while projecting owned value handle "$name"');
+					}
+				case Structure(name, _, _, fields, _):
+					addProjectedName(path, "module", projectedTypeName(name, profile), 'type "$name"', moduleNames);
 					var members:Map<String, String> = [];
 					for (field in fields)
 						addProjectedName(path, 'structure "$name"', projectedFieldName(name, field.name, profile), 'structure field "$name.${field.name}"',
@@ -194,9 +198,26 @@ class HxiProjection {
 
 	static function declarationName(declaration:HxiDeclaration):String
 		return switch declaration {
-			case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _) | Constant(name, _, _) | Structure(name, _, _, _, _) |
+			case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _, _) | Constant(name, _, _) | Structure(name, _, _, _, _) |
 				Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _, _): name;
 		};
+
+	static function functionNameForSymbol(declarations:Array<HxiDeclaration>, symbol:String):String {
+		return switch functionDeclarationForSymbol(declarations, symbol) {
+			case Function(name, _, _, _, _, _, _, _): name;
+			case _: throw 'Native symbol "$symbol" is not an HXI function';
+		};
+	}
+
+	static function functionDeclarationForSymbol(declarations:Array<HxiDeclaration>, symbol:String):HxiDeclaration {
+		for (declaration in declarations)
+			switch declaration {
+				case Function(name, _, _, declaredSymbol, _, _, _, _) if ((declaredSymbol == null ? name : declaredSymbol) == symbol):
+					return declaration;
+				case _:
+			}
+		throw 'Missing HXI function for native symbol "$symbol"';
+	}
 
 	static function sortedKeys<T>(values:Map<String, T>):Array<String> {
 		var result = [for (name in values.keys()) name];
@@ -206,7 +227,7 @@ class HxiProjection {
 
 	static function isProjectedType(declaration:HxiDeclaration):Bool
 		return switch declaration {
-			case Opaque(_, _) | Handle(_, _, _) | Structure(_, _, _, _, _) | Enumeration(_, _, _, _, _) | Callback(_, _, _, _, _): true;
+			case Opaque(_, _) | Handle(_, _, _, _) | Structure(_, _, _, _, _) | Enumeration(_, _, _, _, _) | Callback(_, _, _, _, _): true;
 			case _: false;
 		};
 
@@ -311,11 +332,11 @@ class HxiProjection {
 				declarations.set(name, declaration);
 		for (declaration in model.declarations)
 			switch declaration {
-				case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _) |
+				case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _) |
 					Callback(name, _, _, _, _):
 					declarations.set(name, declaration);
-				case Function(name, parameters, result, _, _, _, _, _):
-					directed.set(name, hasOutput(parameters));
+				case Function(name, parameters, result, _, _, _, resultPolicy, _):
+					directed.set(name, hasOutput(parameters) || resultPolicy.ownership == OwnedHandle || structureType(result, declarations, profile) != null);
 					functionParameters.set(name, parameters);
 					functionResultTypes.set(name, result);
 				case _:
@@ -395,6 +416,7 @@ class HxiProjection {
 				case Unspecified: {kind: "unspecified", release: null};
 				case Borrowed: {kind: "borrowed", release: null};
 				case Owned(release): {kind: "owned", release: release};
+				case OwnedHandle: {kind: "unspecified", release: null};
 			};
 			if (supported && returnValue != null)
 				result.push({
@@ -476,7 +498,7 @@ class HxiProjection {
 					declarations.set(name, declaration);
 					if (!isOmitted(omitted, name))
 						enumDeclarations.push(declaration);
-				case Handle(name, _, _):
+				case Handle(name, _, _, _):
 					declarations.set(name, declaration);
 					if (!isOmitted(omitted, name))
 						handleDeclarations.push(declaration);
@@ -617,7 +639,7 @@ class HxiProjection {
 			}
 		for (declaration in handleDeclarations)
 			switch declaration {
-				case Handle(name, _, _):
+				case Handle(name, _, destroySymbol, _):
 					var projectedName = projectedTypeName(name, profile);
 					emitDocumentation(output, model, name);
 					// Keep handles nominal at the Haxe boundary. Explicit construction and
@@ -629,6 +651,50 @@ class HxiProjection {
 					output.add('\tpublic inline function isValid():Bool return cast(this, Int) != 0;\n');
 					output.add('\tpublic inline function rawValue():Int return cast this;\n');
 					output.add('}\n');
+					if (destroySymbol != null) {
+						var destroyFunction = functionDeclarationForSymbol(model.declarations, destroySymbol),
+							destroyName = switch destroyFunction {
+								case Function(value, _, _, _, _, _, _, _): value;
+								case _: throw 'Native symbol "$destroySymbol" is not an HXI function';
+							},
+							destroyResult = switch destroyFunction {
+								case Function(_, _, value, _, _, _, _, _): value;
+								case _: throw 'Native symbol "$destroySymbol" is not an HXI function';
+							},
+							closeResultValue = switch abi.classify(destroyResult, true) {
+								case VoidValue: null;
+								case value:
+									var projected = project(value, true, profile);
+									if (projected == null)
+										throw 'Unsupported destroy result for handle "$name"';
+									projected.haxeType;
+							},
+							ownedName = ownedTypeName(name, profile),
+							destroyFunctionName = projectedFunctionName(destroyName, profile),
+							closeReturnType = closeResultValue == null ? "Bool" : 'Null<$closeResultValue>';
+						output.add('class $ownedName {\n');
+						output.add('\tprivate var __handle:$projectedName;\n');
+						output.add('\tprivate var __closed:Bool = false;\n');
+						output.add('\tprivate function new(handle:$projectedName) this.__handle = handle;\n');
+						output.add('\tpublic static function adopt(handle:$projectedName):$ownedName return new $ownedName(handle);\n');
+						output.add('\tpublic function borrow():$projectedName return this.__handle;\n');
+						output.add('\tpublic function rawValue():Int return this.__handle.rawValue();\n');
+						output.add('\tpublic function isClosed():Bool return this.__closed;\n');
+						output.add('\tpublic function close():$closeReturnType {\n');
+						output.add('\t\tif (this.__closed) return ${closeResultValue == null ? "false" : "null"};\n');
+						output.add('\t\tthis.__closed = true;\n');
+						output.add('\t\tvar __value = this.__handle;\n');
+						output.add('\t\tthis.__handle = $projectedName.invalid();\n');
+						if (closeResultValue == null) {
+							output.add('\t\tif (__value.isValid()) ${model.name}.$destroyFunctionName(__value);\n');
+							output.add('\t\treturn true;\n');
+						} else {
+							output.add('\t\tif (__value.isValid()) return ${model.name}.$destroyFunctionName(__value);\n');
+							output.add('\t\treturn null;\n');
+						}
+						output.add('\t}\n');
+						output.add('}\n');
+					}
 				case _:
 			}
 		for (declaration in structureDeclarations)
@@ -827,9 +893,11 @@ class HxiProjection {
 			if (!supported || result == null)
 				continue;
 			var signature = callSignature(codes.join(",") + ">" + abiDescriptor(fn.result, declarations, abi, aggregateDescriptors), fn.callConvention);
-			var directed = hasOutput(parameters),
-				rawName = directed ? "__hxi_raw_" + fn.name : publicName;
-			if (!directed)
+			var ownedHandleResult = ownedValueHandleType(fn.result, fn.resultPolicy.ownership, profile),
+				hasOutputs = hasOutput(parameters),
+				needsRawName = hasOutputs || ownedHandleResult != null,
+				rawName = needsRawName ? "__hxi_raw_" + fn.name : publicName;
+			if (!needsRawName)
 				emitDocumentation(output, model, fn.name);
 			for (parameter in parameters)
 				if (parameter.retained)
@@ -846,13 +914,13 @@ class HxiProjection {
 						case PointerValue(_, nullable, opaquePointee, _) if (opaquePointee != null):
 							resultType = switch fn.resultPolicy.ownership {
 								case Owned(_): nullable ? 'Null<${ownedTypeName(opaquePointee, profile)}>' : ownedTypeName(opaquePointee, profile);
-								case Borrowed | Unspecified: result.haxeType;
+								case Borrowed | Unspecified | OwnedHandle: result.haxeType;
 							};
 						case _:
 							resultType = result.nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">';
 					}
 			output.add('):$resultType;\n');
-			if (directed) {
+			if (hasOutputs) {
 				var nativeSymbol = switch functions.get(fn.name) {
 					case Function(_, _, _, symbol, _, _, _, _): symbol == null ? fn.name : symbol;
 					case _: fn.name;
@@ -864,14 +932,18 @@ class HxiProjection {
 						model.documentation.get(fn.name));
 				else if (buffer == null)
 					emitOutputWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, abi, profile, library, nativeSymbol, signature,
-						pointerOwnedSlotHelper, model.documentation.get(fn.name));
+						pointerOwnedSlotHelper, model.documentation.get(fn.name), ownedHandleResult);
 				else
 					emitBufferWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, buffer, model.documentation.get(fn.name));
+			} else if (ownedHandleResult != null) {
+				emitOwnedHandleResultWrapper(output, publicName, rawName, argumentTypes, ownedHandleResult, model.documentation.get(fn.name));
 			}
 			var byteIndex = byteArrayParameter(parameters);
-			if (byteIndex != null)
-				emitByteSliceWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType,
-					directed ? outputWrapperResult(publicName, parameters, resultType, abi, profile) : resultType, abi, byteIndex, profile);
+			if (byteIndex != null) {
+				var byteWrapperResult = hasOutputs ? outputWrapperResult(publicName, parameters, resultType, abi,
+					profile) : ownedHandleResult == null ? resultType : ownedHandleResult;
+				emitByteSliceWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, byteWrapperResult, abi, byteIndex, profile);
+			}
 		}
 		return output.toString();
 	}
@@ -951,13 +1023,27 @@ class HxiProjection {
 	static inline function outputArrayType():String
 		return "Array<Null<String>>";
 
+	static function ownedValueHandleType(type:HxiAbiValue, ownership:HxiOwnership, profile:HxiProjectionProfile):Null<String> {
+		return switch ownership {
+			case OwnedHandle:
+				switch type {
+					case HandleValue(name): ownedTypeName(name, profile);
+					case _: throw "Validated owned HXI value handle did not classify as a handle";
+				}
+			case _:
+				null;
+		};
+	}
+
 	static function outputInfo(parameter:compiler.ffi.HxiModel.HxiParameter, abi:HxiAbi, profile:HxiProjectionProfile):{
 		haxeType:String,
+		rawHaxeType:String,
 		code:Int,
 		size:Int,
 		alignment:Int,
 		structure:Bool,
 		handle:Bool,
+		ownedValueHandle:Bool,
 		opaquePointer:Bool,
 		nullable:Bool,
 		owned:Bool
@@ -973,22 +1059,30 @@ class HxiProjection {
 		return switch classified {
 			case AggregateValue(name, size, alignment): {
 					haxeType: projectedTypeName(name, profile),
+					rawHaxeType: projectedTypeName(name, profile),
 					code: 12,
 					size: size,
 					alignment: alignment,
 					structure: true,
 					handle: false,
+					ownedValueHandle: false,
 					opaquePointer: false,
 					nullable: false,
 					owned: false
 				};
-			case HandleValue(_): {
-					haxeType: projected.haxeType,
+			case HandleValue(name):
+				var ownedValueHandle = parameter.ownership == OwnedHandle,
+					projectedName = projectedTypeName(name, profile),
+					haxeName = ownedValueHandle ? ownedTypeName(name, profile) : projectedName;
+				{
+					haxeType: haxeName,
+					rawHaxeType: projectedName,
 					code: projected.code,
 					size: 4,
 					alignment: 4,
 					structure: false,
 					handle: true,
+					ownedValueHandle: ownedValueHandle,
 					opaquePointer: false,
 					nullable: false,
 					owned: false
@@ -999,11 +1093,13 @@ class HxiProjection {
 					throw "HXI output parameter has an unsupported scalar type";
 				{
 					haxeType: projected.haxeType,
+					rawHaxeType: projected.haxeType,
 					code: projected.code,
 					size: size,
 					alignment: size,
 					structure: false,
 					handle: false,
+					ownedValueHandle: false,
 					opaquePointer: false,
 					nullable: false,
 					owned: false
@@ -1011,16 +1107,18 @@ class HxiProjection {
 			case PointerValue(_, nullable, opaquePointee, _) if (opaquePointee != null):
 				var owned = switch parameter.ownership {
 					case Owned(_): true;
-					case Borrowed: false;
+					case Borrowed | OwnedHandle: false;
 					case Unspecified: throw 'Opaque pointer output parameter "${parameter.name}" requires an ownership contract';
 				}, typeName = owned ? ownedTypeName(opaquePointee, profile) : projectedTypeName(opaquePointee, profile);
 				{
 					haxeType: nullable ? 'Null<$typeName>' : typeName,
+					rawHaxeType: nullable ? 'Null<${projectedTypeName(opaquePointee, profile)}>' : projectedTypeName(opaquePointee, profile),
 					code: 11,
 					size: Std.int(abi.pointerBits / 8),
 					alignment: Std.int(abi.pointerBits / 8),
 					structure: false,
 					handle: false,
+					ownedValueHandle: false,
 					opaquePointer: true,
 					nullable: nullable,
 					owned: owned
@@ -1057,7 +1155,7 @@ class HxiProjection {
 					var result = switch declarations.get(name) {
 						case Alias(_, target, _): pointerFreeValue(target, declarations, visiting);
 						case Structure(_, _, _, fields, _): Lambda.foreach(fields, field -> pointerFreeValue(field.type, declarations, visiting));
-						case Handle(_, _, _) | Enumeration(_, _, _, _, _): true;
+					case Handle(_, _, _, _) | Enumeration(_, _, _, _, _): true;
 						case _: false;
 					};
 					visiting.remove(name);
@@ -1066,9 +1164,17 @@ class HxiProjection {
 		};
 	}
 
+	static function emitOwnedHandleResultWrapper(output:StringBuf, publicName:String, rawName:String, argumentTypes:Array<String>, ownedType:String,
+			documentation:Null<HxiDocumentation>):Void {
+		var arguments = [for (index in 0...argumentTypes.length) 'arg$index:${argumentTypes[index]}'],
+			callArguments = [for (index in 0...argumentTypes.length) 'arg$index'];
+		emitDocumentationValue(output, documentation);
+		output.add('function $publicName(${arguments.join(", ")}):$ownedType return $ownedType.adopt($rawName(${callArguments.join(", ")}));\n');
+	}
+
 	static function emitOutputWrapper(output:StringBuf, nativeName:String, publicName:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>,
 			rawArgumentTypes:Array<String>, resultType:String, abi:HxiAbi, profile:HxiProjectionProfile, library:String, nativeSymbol:String,
-			signature:String, pointerOwnedSlotHelper:String, documentation:Null<HxiDocumentation>):Void {
+			signature:String, pointerOwnedSlotHelper:String, documentation:Null<HxiDocumentation>, ?ownedHandleResult:String):Void {
 		var arguments:Array<String> = [],
 			callArguments:Array<String> = [],
 			setup:Array<String> = [],
@@ -1120,6 +1226,7 @@ class HxiProjection {
 						if (info.owned) {
 							var release = switch parameter.ownership {
 								case Owned(symbol): symbol;
+								case OwnedHandle: throw 'Owned value handle output parameter "${parameter.name}" cannot use pointer output storage';
 								case _: "";
 							};
 							'$pointerOwnedSlotHelper($local, 0, "${escape(library)}", "${escape(nativeSymbol)}", "${escape(signature)}", "${escape(release)}", ${info.nullable})';
@@ -1127,9 +1234,11 @@ class HxiProjection {
 							'__hxi_struct_get_pointer($local, 0, ${info.nullable})';
 					} else
 						info.structure ? local : info.code == 15 ? '__hxi_struct_get${structAccess(info.code)}($local, 0) != 0' : '__hxi_struct_get${structAccess(info.code)}($local, 0)';
-					if (info.handle)
-						expression = 'cast($expression, ${info.haxeType})';
-					else if (info.opaquePointer)
+					if (info.handle) {
+						expression = 'cast($expression, ${info.rawHaxeType})';
+						if (info.ownedValueHandle)
+							expression = '${info.haxeType}.adopt($expression)';
+					} else if (info.opaquePointer)
 						expression = 'cast($expression, ${info.haxeType})';
 					values.push({
 						name: parameter.name,
@@ -1142,14 +1251,15 @@ class HxiProjection {
 					throw "Output buffers require their dedicated wrapper";
 			}
 		}
-		var direct = resultType == "Void" && values.length == 1,
+		var managedResultType = ownedHandleResult == null ? resultType : ownedHandleResult,
+			direct = resultType == "Void" && values.length == 1,
 			resultOnly = values.length == 0;
-		var wrapperResult = direct ? values[0].type : resultOnly ? resultType : upperFirst(publicName) + "OutResult";
+		var wrapperResult = direct ? values[0].type : resultOnly ? managedResultType : upperFirst(publicName) + "OutResult";
 		if (!direct && !resultOnly) {
 			output.add('class $wrapperResult {\n');
 			var fields:Array<{name:String, type:String}> = [];
 			if (resultType != "Void")
-				fields.push({name: "status", type: resultType});
+				fields.push({name: ownedHandleResult == null ? "status" : "result", type: managedResultType});
 			for (value in values)
 				fields.push({name: value.name, type: value.type});
 			for (field in fields)
@@ -1168,13 +1278,15 @@ class HxiProjection {
 			output.add('\t$call;\n');
 		else
 			output.add('\tvar __status = $call;\n');
+		if (ownedHandleResult != null)
+			output.add('\tvar __managed_result = $ownedHandleResult.adopt(__status);\n');
 		if (resultOnly) {
 			if (resultType != "Void")
-				output.add('\treturn __status;\n');
+				output.add('\treturn ${ownedHandleResult == null ? "__status" : "__managed_result"};\n');
 		} else if (direct)
 			output.add('\treturn ${values[0].expression};\n');
 		else {
-			var resultValues = resultType == "Void" ? [] : ["__status"];
+			var resultValues = resultType == "Void" ? [] : [ownedHandleResult == null ? "__status" : "__managed_result"];
 			for (value in values)
 				resultValues.push(value.expression);
 			output.add('\treturn new $wrapperResult(${resultValues.join(", ")});\n');
@@ -1764,7 +1876,7 @@ class HxiProjection {
 			case Named(name):
 				switch declarations.get(name) {
 					case Alias(_, target, _): abiLayout(target, declarations, abi);
-					case Handle(_, _, _): {size: 4, align: 4};
+					case Handle(_, _, _, _): {size: 4, align: 4};
 					case _: valueLayout(abi.classify(type), abi);
 				}
 			case _: valueLayout(abi.classify(type), abi);

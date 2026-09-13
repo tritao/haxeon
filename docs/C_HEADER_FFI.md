@@ -35,21 +35,33 @@ HXI declarations rather than ordinary structs:
 
 ```c
 #define NK_HANDLE __attribute__((annotate("hxi:handle")))
+#define NK_HANDLE_DESTROY(symbol) __attribute__((annotate("hxi:handle_destroy")))
+#define NK_OWNED __attribute__((annotate("hxi:owned")))
 #define NK_DECLARE_HANDLE(name) \
     typedef struct name { uint32_t id; } name NK_HANDLE
 
-NK_DECLARE_HANDLE(nkui_resource);
+typedef uint32_t nkui_resource NK_HANDLE NK_HANDLE_DESTROY(nkui_resource_destroy);
+nkui_resource nkui_resource_create(void) NK_OWNED;
+void nkui_resource_destroy(nkui_resource resource);
 ```
 
 ```hxi
-handle nkui_resource : u32;
+handle nkui_resource : u32 @destroy("nkui_resource_destroy");
+extern fn nkui_resource_create() -> nkui_resource @owned;
 ```
 
 Handles remain named and type-distinct at the Haxe boundary while retaining a
 four-byte value ABI. Their generated Haxe abstracts are copyable, comparable,
 hashable, and provide `invalid()`, `isValid()`, and `rawValue()` helpers; the
 backing value is not exposed as a writable struct field. A zero value is the
-invalid handle convention. This preserves subsystem-specific C types without
+invalid handle convention. A handle's optional `@destroy` names an explicit
+by-value release function that accepts that handle and returns `void` or an
+integer/enum status; the importer never infers it from a function name. A
+function result or `@out` slot only becomes an owned Haxe value when it also
+has an explicit bare `@owned` annotation. Those projections return a
+generated closeable owner with idempotent `close()`, `isClosed()`, `borrow()`,
+and deliberate `rawValue()` access. Unannotated results and output slots remain
+non-owning handles. This preserves subsystem-specific C types without
 collapsing every handle into one universal `nk_handle` parameter type.
 
 An interface may compose declarations from an already registered interface with
@@ -141,14 +153,18 @@ unsafe approximation.
 Raw HXI is the generated ABI interchange layer. Imported headers leave pointer
 ownership unspecified for later review. Handwritten or enriched HXI can mark
 pointer results with `@borrowed` or `@owned("release_symbol")`, and byte-like
-pointer results with `@length("length_symbol")`. Haxeon parses these policies
-alongside opaque types and `@symbol`/`@leaf` function metadata.
+pointer results with `@length("length_symbol")`. Value handles can name their
+release function on the handle declaration and use bare `@owned` on a returned
+handle or `@out` handle slot. Haxeon parses these policies alongside opaque
+types and `@symbol`/`@leaf` function metadata.
 
-The symbols named by `@owned` and `@length` must also be declared as functions
-in the same HXI interface, with matching `@symbol` metadata where the C name
-differs from the HXI name. An owned-result release function must use the C
-calling convention and have the shape `void release(pointer)`, where the
-pointer accepts the result's pointee type or `void *`. A length function must
+Functions named by pointer `@owned("release_symbol")`, handle `@destroy`, and
+`@length("length_symbol")` must be declared in the same HXI interface, with
+matching `@symbol` metadata where the C name differs from the HXI name. An
+owned opaque-pointer release function must use the C calling convention and
+have the shape `void release(pointer)`, where the pointer accepts the result's
+pointee type or `void *`. A value-handle destroy function must use the C
+calling convention and accept the handle by value. A length function must
 use the result function's calling convention and argument types, and return an
 unsigned target-sized integer (`usize` or `c_size`). These contracts are
 validated before projection rather than deferred to runtime symbol lookup.
@@ -273,22 +289,26 @@ directed parameter. A void function with one directed parameter returns that
 value directly. Structure `@inout` values are updated in place and also appear
 in the result. The outer pointer that represents an output slot cannot be
 nullable. Callback directions and `@inout` pointer-to-pointer slots remain
-unsupported. Opaque handle output slots are supported when their ownership is
-explicit:
+unsupported. Opaque pointer and nominal value-handle output slots are
+supported when their ownership is explicit:
 
 ```hxi
 opaque context;
 extern fn create_context(
     result: ptr<nullable<ptr<context>>> @out @owned("context_release")
 ) -> void;
+
+handle window : u32 @destroy("window_destroy");
+extern fn create_window(result: ptr<window> @out @owned) -> void;
 ```
 
 For an opaque `T *` written through a `T **` slot, use `@borrowed` or
 `@owned("release_symbol")` on the `@out` parameter. The inner
 `nullable<ptr<T>>` controls whether the slot may contain `NULL`; for a `void`
-function with one output, the Haxe wrapper returns `Null<T>` or the nullable
-generated owned-handle type, respectively. Owned slot values are adopted into
-the same closeable handle type as owned pointer results. Scalar and
+function with one opaque-pointer output, the Haxe wrapper returns `Null<T>` or
+the nullable generated owned-pointer type, respectively. Owned pointer slot
+values are adopted into the same closeable type as owned pointer results. An
+owned value-handle slot returns its generated owned value-handle type. Scalar and
 fixed-structure outputs keep their existing contracts; unannotated or
 non-opaque pointer slots remain rejected.
 

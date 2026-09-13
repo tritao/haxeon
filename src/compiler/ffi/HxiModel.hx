@@ -23,7 +23,7 @@ typedef HxiField = {
 	final name:String;
 	final type:HxiType;
 	final offset:Null<Int>;
-	final ownership:HxiPointerOwnership;
+	final ownership:HxiOwnership;
 	final lengthField:Null<String>;
 	final structSize:Bool;
 	final span:SourceSpan;
@@ -33,7 +33,7 @@ typedef HxiParameter = {
 	final name:String;
 	final type:HxiType;
 	final direction:HxiParameterDirection;
-	final ownership:HxiPointerOwnership;
+	final ownership:HxiOwnership;
 
 	/** The native callee keeps this callback after the call returns. */
 	final retained:Bool;
@@ -50,14 +50,17 @@ enum HxiParameterDirection {
 	OutBuffer(sizeParameter:String);
 }
 
-enum HxiPointerOwnership {
+enum HxiOwnership {
 	Unspecified;
 	Borrowed;
 	Owned(releaseSymbol:String);
+
+	/** Explicit ownership of a nominal 32-bit value handle with @destroy metadata. */
+	OwnedHandle;
 }
 
 typedef HxiResultPolicy = {
-	final ownership:HxiPointerOwnership;
+	final ownership:HxiOwnership;
 	final length:Null<String>;
 }
 
@@ -73,7 +76,7 @@ typedef HxiEnumValue = {
 enum HxiDeclaration {
 	Opaque(name:String, span:SourceSpan);
 	Alias(name:String, type:HxiType, span:SourceSpan);
-	Handle(name:String, representation:HxiType, span:SourceSpan);
+	Handle(name:String, representation:HxiType, destroySymbol:Null<String>, span:SourceSpan);
 	Constant(name:String, value:String, span:SourceSpan);
 	Structure(name:String, size:Int, align:Int, fields:Array<HxiField>, span:SourceSpan);
 	Enumeration(name:String, representation:HxiType, flags:Bool, values:Array<HxiEnumValue>, span:SourceSpan);

@@ -127,7 +127,7 @@ class HxiAudit {
 			switch declaration {
 				case Alias(name, type, _):
 					auditType(type, target, 'alias "$name"', issues);
-				case Handle(name, representation, _):
+				case Handle(name, representation, _, _):
 					auditType(representation, target, 'handle "$name"', issues);
 				case Structure(name, _, _, fields, _):
 					for (field in fields)

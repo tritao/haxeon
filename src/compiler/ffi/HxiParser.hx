@@ -13,7 +13,7 @@ import compiler.ffi.HxiModel.HxiDocumentation;
 import compiler.ffi.HxiModel.HxiParameter;
 import compiler.ffi.HxiModel.HxiParameterDirection;
 import compiler.ffi.HxiModel.HxiType;
-import compiler.ffi.HxiModel.HxiPointerOwnership;
+import compiler.ffi.HxiModel.HxiOwnership;
 import compiler.ffi.HxiAbi.HxiAbiValue;
 import compiler.documentation.Documentation.DocumentationComment;
 import compiler.documentation.Documentation.DocumentationTools;
@@ -142,8 +142,11 @@ class HxiParser {
 		advance();
 		var name = identifier();
 		expect(":");
-		var representation = parseType(), end = expect(";").span;
-		return Handle(name, representation, start.merge(end));
+		var representation = parseType(),
+			metadata = parseMetadata(["destroy"]),
+			destroySymbol = metadataValue(metadata, "destroy", false),
+			end = expect(";").span;
+		return Handle(name, representation, destroySymbol, start.merge(end));
 	}
 
 	function parseCallback(start:SourceSpan):HxiDeclaration {
@@ -180,8 +183,8 @@ class HxiParser {
 					"out"), inout = metadataFlag(metadata,
 						"inout"), borrowed = metadataFlag(metadata,
 						"borrowed"), retained = metadataFlag(metadata,
-						"retained"), owned = metadataValue(metadata, "owned",
-						false), bufferSize = metadataValue(metadata, "out_buffer",
+						"retained"), ownership = metadataOwnership(metadata,
+						"owned"), bufferSize = metadataValue(metadata, "out_buffer",
 						false), arrayCount = metadataValue(metadata, "in_array",
 						false), outputArrayCount = metadataValue(metadata, "out_array",
 						false), direction = out ? Out : inout ? InOut : bufferSize != null ? OutBuffer(bufferSize) : arrayCount != null ? InArray(arrayCount) : outputArrayCount != null ? OutArray(outputArrayCount) : In;
@@ -191,19 +194,19 @@ class HxiParser {
 					+ (arrayCount == null ? 0 : 1)
 					+ (outputArrayCount == null ? 0 : 1) > 1)
 					fail('Parameter "$name" cannot combine output direction metadata', start);
-				if (borrowed && owned != null)
+				if (borrowed && ownership != Unspecified)
 					fail('Parameter "$name" cannot combine @borrowed and @owned', start);
-				if (!allowDirections && (direction != In || borrowed || owned != null))
+				if (!allowDirections && (direction != In || borrowed || ownership != Unspecified))
 					fail('Callback parameter "$name" cannot use output direction metadata', start);
 				if (!allowDirections && retained)
 					fail('Callback parameter "$name" cannot use @retained', start);
-				if ((borrowed || owned != null) && direction != Out)
+				if ((borrowed || ownership != Unspecified) && direction != Out)
 					fail('Parameter "$name" can use @borrowed or @owned only with @out', start);
 				parameters.push({
 					name: name,
 					type: type,
 					direction: direction,
-					ownership: owned != null ? Owned(owned) : borrowed ? Borrowed : Unspecified,
+					ownership: ownership != Unspecified ? ownership : borrowed ? Borrowed : Unspecified,
 					retained: retained,
 					span: start.merge(previous().span)
 				});
@@ -359,18 +362,18 @@ class HxiParser {
 				fieldMetadata = parseMetadata(["offset", "borrowed", "owned", "length_field", "struct_size"]),
 				offset = metadataInteger(fieldMetadata, "offset", true),
 				borrowed = metadataFlag(fieldMetadata, "borrowed"),
-				owned = metadataValue(fieldMetadata, "owned", false),
+				ownership = metadataOwnership(fieldMetadata, "owned"),
 				lengthField = metadataValue(fieldMetadata, "length_field", false),
 				structSize = metadataFlag(fieldMetadata, "struct_size"),
 				end = expect(";").span;
-			if (borrowed && owned != null)
+			if (borrowed && ownership != Unspecified)
 				fail('Field "$fieldName" cannot combine @borrowed and @owned', fieldStart);
 			var fieldSpan = fieldStart.merge(end);
 			fields.push({
 				name: fieldName,
 				type: type,
 				offset: offset,
-				ownership: owned != null ? Owned(owned) : borrowed ? Borrowed : Unspecified,
+				ownership: ownership != Unspecified ? ownership : borrowed ? Borrowed : Unspecified,
 				lengthField: lengthField,
 				structSize: structSize,
 				span: fieldSpan
@@ -392,16 +395,16 @@ class HxiParser {
 			symbol = metadataValue(metadata, "symbol", false),
 			leaf = metadataFlag(metadata, "leaf"),
 			borrowed = metadataFlag(metadata, "borrowed"),
-			owned = metadataValue(metadata, "owned", false),
+			ownership = metadataOwnership(metadata, "owned"),
 			length = metadataValue(metadata, "length", false),
 			callConvention = metadataValue(metadata, "callconv", false),
 			end = expect(";").span;
-		if (borrowed && owned != null)
+		if (borrowed && ownership != Unspecified)
 			fail('Function "$name" cannot combine @borrowed and @owned', start);
-		if ((borrowed || owned != null || length != null) && !pointerLike(result))
-			fail('Pointer result metadata on "$name" requires a pointer return type', start);
+		if (length != null && !pointerLike(result))
+			fail('@length on "$name" requires a pointer return type', start);
 		return Function(name, parameters, result, symbol, leaf, callConvention == null ? "cdecl" : callConvention, {
-			ownership: owned != null ? Owned(owned) : borrowed ? Borrowed : Unspecified,
+			ownership: ownership != Unspecified ? ownership : borrowed ? Borrowed : Unspecified,
 			length: length
 		}, start.merge(end));
 	}
@@ -465,12 +468,14 @@ class HxiParser {
 				case Opaque(_, _) | Constant(_, _, _):
 				case Alias(_, type, span):
 					validateType(type, names, declarationsByName, span, false);
-				case Handle(name, representation, span):
+				case Handle(name, representation, destroySymbol, span):
 					validateType(representation, names, declarationsByName, span, false);
 					switch abi.classify(representation) {
 						case IntegerValue(32, Unsigned):
 						case _: fail('Handle "$name" requires an unsigned 32-bit representation', span);
 					}
+					if (destroySymbol != null)
+						validateValueHandleDestroy(value, name, destroySymbol, declarationsByName, abi, span);
 				case Structure(name, size, align, fields, span):
 					if (size <= 0 || align <= 0 || (align & (align - 1)) != 0 || size % align != 0)
 						fail('Struct "$name" has invalid layout', span);
@@ -516,7 +521,8 @@ class HxiParser {
 							}
 						}
 						switch field.ownership {
-							case Owned(_): fail('Owned pointer field "${field.name}" is not supported; keep ownership in a separate handle', field.span);
+							case Owned(_) | OwnedHandle: fail('Owned pointer field "${field.name}" is not supported; keep ownership in a separate handle',
+									field.span);
 							case Borrowed:
 								if (field.lengthField == null
 									&& !opaquePointerLike(field.type,
@@ -614,7 +620,7 @@ class HxiParser {
 										case _: false;
 									})
 									fail('Output parameter "${parameter.name}" cannot be nullable', parameter.span);
-								validateOutputType(parameter.name, parameter.type, parameter.ownership, abi, parameter.span);
+								validateOutputType(parameter.name, parameter.type, parameter.ownership, abi, declarationsByName, parameter.span);
 							case InArray(countParameter):
 								if (structurePointerType(parameter.type, declarationsByName) == null
 									&& !utf8ArrayPointer(parameter.type)
@@ -653,8 +659,20 @@ class HxiParser {
 				case Function(name, parameters, result, _, _, callConvention, resultPolicy, span):
 					switch resultPolicy.ownership {
 						case Owned(releaseSymbol):
-							validateReleaseFunction(value, name, result, releaseSymbol, declarations, span);
-						case Borrowed | Unspecified:
+							switch abi.classify(result, true) {
+								case HandleValue(_): fail('@owned("release_symbol") on value handle result "$name" is invalid; use bare @owned and declare @destroy on the handle',
+										span);
+								case _: validateReleaseFunction(value, name, result, releaseSymbol, declarations, span);
+							}
+						case OwnedHandle:
+							validateOwnedValueHandle(name, result, declarations, abi, span);
+						case Borrowed:
+							switch abi.classify(result, true) {
+								case PointerValue(_, _, _, _) | Utf8Value(_):
+								case HandleValue(_):
+								case _: fail('@borrowed on "$name" requires a pointer return type or value handle', span);
+							}
+						case Unspecified:
 					}
 					for (parameter in parameters)
 						switch parameter.ownership {
@@ -663,6 +681,11 @@ class HxiParser {
 								if (outputValue == null)
 									fail('Owned output parameter "${parameter.name}" must point to a typed opaque pointer', parameter.span);
 								validateReleaseFunction(value, '$name.${parameter.name}', outputValue, releaseSymbol, declarations, parameter.span);
+							case OwnedHandle:
+								var outputValue = pointerPointee(parameter.type, declarations);
+								if (outputValue == null)
+									fail('Owned output parameter "${parameter.name}" must point to a typed value handle', parameter.span);
+								validateOwnedValueHandle('$name.${parameter.name}', outputValue, declarations, abi, parameter.span);
 							case Borrowed | Unspecified:
 						}
 					if (resultPolicy.length != null)
@@ -760,7 +783,8 @@ class HxiParser {
 			case Array(element, length): 'array<${canonicalTypeKey(element, declarations)},$length>';
 		};
 
-	static function validateOutputType(name:String, type:HxiType, ownership:HxiPointerOwnership, abi:HxiAbi, span:SourceSpan):Void {
+	static function validateOutputType(name:String, type:HxiType, ownership:HxiOwnership, abi:HxiAbi, declarations:Map<String, HxiDeclaration>,
+			span:SourceSpan):Void {
 		var pointee = switch type {
 			case Pointer(value):
 				switch value {
@@ -774,16 +798,59 @@ class HxiParser {
 			VoidValue;
 		};
 		switch classified {
-			case IntegerValue(_, _) | EnumerationValue(_, _, _) | HandleValue(_) | Boolean32Value | FloatValue(_) | AggregateValue(_, _, _):
+			case HandleValue(handleName):
+				switch ownership {
+					case Unspecified | Borrowed:
+					case OwnedHandle: requireValueHandleDestroy(name, handleName, declarations, span);
+					case Owned(_): fail('Owned value handle output parameter "$name" uses @owned without arguments; its handle declares @destroy', span);
+				}
+			case IntegerValue(_, _) | EnumerationValue(_, _, _) | Boolean32Value | FloatValue(_) | AggregateValue(_, _, _):
 				if (ownership != Unspecified)
 					fail('Output parameter "$name" ownership metadata requires a pointer to an opaque handle', span);
 			case PointerValue(_, _, opaquePointee, _) if (opaquePointee != null):
 				switch ownership {
 					case Borrowed | Owned(_):
+					case OwnedHandle: fail('Owned opaque pointer output parameter "$name" requires @owned("release_symbol")', span);
 					case Unspecified: fail('Opaque pointer output parameter "$name" requires @borrowed or @owned("release_symbol")', span);
 				}
 			case _:
 				fail('Output parameter "$name" currently requires a scalar, fixed-structure, or explicitly owned opaque-pointer pointee', span);
+		}
+	}
+
+	static function validateOwnedValueHandle(owner:String, type:HxiType, declarations:Map<String, HxiDeclaration>, abi:HxiAbi, span:SourceSpan):Void {
+		switch abi.classify(type) {
+			case HandleValue(name):
+				requireValueHandleDestroy(owner, name, declarations, span);
+			case _:
+				fail('@owned without a release symbol on "$owner" requires a typed value handle with @destroy', span);
+		}
+	}
+
+	static function requireValueHandleDestroy(owner:String, handleName:String, declarations:Map<String, HxiDeclaration>, span:SourceSpan):String {
+		return switch declarations.get(handleName) {
+			case Handle(_, _, destroySymbol, _) if (destroySymbol != null): destroySymbol;
+			case _: fail('Owned value handle "$owner" requires handle "$handleName" to declare @destroy("...")', span);
+		};
+	}
+
+	static function validateValueHandleDestroy(value:HxiInterface, name:String, destroySymbol:String, declarations:Map<String, HxiDeclaration>, abi:HxiAbi,
+			span:SourceSpan):Void {
+		var destroy = referencedFunction(value, name, "destroy", destroySymbol, span);
+		switch destroy {
+			case Function(functionName, parameters, result, _, _, callConvention, _, functionSpan):
+				var acceptsHandle = parameters.length == 1
+					&& parameters[0].direction == In
+					&& canonicalTypeKey(parameters[0].type, declarations) == canonicalTypeKey(Named(name), declarations),
+					returnsSupported = switch abi.classify(result, true) {
+						case VoidValue | IntegerValue(_, _) | EnumerationValue(_, _, _) | Boolean32Value: true;
+						case _: false;
+					};
+				if (callConvention != "cdecl" || !acceptsHandle || !returnsSupported)
+					fail('Destroy function "$functionName" for value handle "$name" must be cdecl, accept that handle by value, and return void or an integer/enum status',
+						functionSpan);
+			case _:
+				fail('Internal error resolving destroy symbol "$destroySymbol"', span);
 		}
 	}
 
@@ -900,7 +967,7 @@ class HxiParser {
 					resolving.set(name, true);
 					var result = switch declarations.get(name) {
 						case Alias(_, target, _): typeLayout(target, abi, declarations, resolving);
-						case Handle(_, _, _): {size: 4, align: 4};
+						case Handle(_, _, _, _): {size: 4, align: 4};
 						case Enumeration(_, representation, _, _, _): typeLayout(representation, abi, declarations, resolving);
 						case Structure(_, size, align, _, _): {size: size, align: align};
 						case _: null;
@@ -1048,7 +1115,7 @@ class HxiParser {
 
 	static function declarationName(value:HxiDeclaration):{name:String, span:SourceSpan}
 		return switch value {
-			case Opaque(name, span) | Alias(name, _, span) | Handle(name, _, span) | Constant(name, _, span) | Structure(name, _, _, _, span) |
+			case Opaque(name, span) | Alias(name, _, span) | Handle(name, _, _, span) | Constant(name, _, span) | Structure(name, _, _, _, span) |
 				Enumeration(name, _, _, _, span) | Callback(name, _, _, _, span) | Function(name, _, _, _, _, _, _, span):
 				{name: name, span: span};
 		}
@@ -1107,6 +1174,17 @@ class HxiParser {
 		if (!StringTools.startsWith(entry[0], '"'))
 			fail('@$name requires a string value', current().span);
 		return entry[0].substring(1, entry[0].length - 1);
+	}
+
+	function metadataOwnership(values:Map<String, Array<String>>, name:String):HxiOwnership {
+		var entry = values.get(name);
+		if (entry == null)
+			return Unspecified;
+		if (entry.length == 0)
+			return OwnedHandle;
+		if (entry.length != 1 || !StringTools.startsWith(entry[0], '"'))
+			fail('@$name accepts no value for a typed value handle or one string release symbol for an opaque pointer', current().span);
+		return Owned(entry[0].substring(1, entry[0].length - 1));
 	}
 
 	function metadataStrings(values:Map<String, Array<String>>, name:String):Array<String> {

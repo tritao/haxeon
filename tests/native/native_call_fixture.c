@@ -39,9 +39,32 @@ static native_fixture_binary_callback native_fixture_retained_callback;
 static int32_t native_fixture_utf8_release_count;
 static const char native_fixture_utf8_value[] = "ol\xC3\xA1 \xE2\x9C\x93";
 static const char native_fixture_invalid_utf8[] = {(char)0xC0, (char)0xAF, 0};
+static uint32_t native_fixture_value_handle_next = 1;
+static uint32_t native_fixture_value_handle_release_total;
 
 FIXTURE_API int32_t native_fixture_add( int32_t left, int32_t right ) {
 	return left + right;
+}
+
+FIXTURE_API uint32_t native_fixture_value_handle_create( void ) {
+	return native_fixture_value_handle_next++;
+}
+
+FIXTURE_API void native_fixture_value_handle_create_out( uint32_t *handle ) {
+	*handle = native_fixture_value_handle_next++;
+}
+
+FIXTURE_API uint32_t native_fixture_value_handle_borrowed( void ) {
+	return native_fixture_value_handle_next - 1;
+}
+
+FIXTURE_API void native_fixture_value_handle_destroy( uint32_t handle ) {
+	if( handle != 0 )
+		native_fixture_value_handle_release_total++;
+}
+
+FIXTURE_API uint32_t native_fixture_value_handle_release_count( void ) {
+	return native_fixture_value_handle_release_total;
 }
 
 FIXTURE_API int32_t native_fixture_check_utf8( const char *value ) {

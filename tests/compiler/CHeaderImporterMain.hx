@@ -28,6 +28,11 @@ class CHeaderImporterMain {
 			&& first.indexOf('paths: ptr<utf8> @in_array("count"), count: u32') >= 0,
 			"paired structure and UTF-8 input arrays should retain their count parameter");
 		expect(first.indexOf("handle sample_handle : u32") >= 0, "annotated fixed-width handles should use nominal HXI handles");
+		expect(first.indexOf('handle sample_owned_handle : u32 @destroy("sample_owned_handle_destroy")') >= 0,
+			"annotated handle destroy symbols should survive C-to-HXI import");
+		expect(first.indexOf('extern fn sample_create_owned() -> sample_owned_handle @owned') >= 0
+			&& first.indexOf('output: ptr<sample_owned_handle> @out @owned') >= 0,
+			"C ownership-transfer annotations should mark returned and output value handles explicitly");
 		expect(first.indexOf("handle sample_resource : u32") >= 0 && first.indexOf("struct sample_resource") < 0,
 			"annotated one-field handle records should use nominal HXI handles");
 		expect(first.indexOf("callback sample_binary_callback = fn(arg0: i32, arg1: i32) -> i32") >= 0,
@@ -65,6 +70,9 @@ class CHeaderImporterMain {
 		expect(parsed.target == "x86_64-linux-gnu", "generated HXI should satisfy the validated parser contract");
 		var named = CHeaderImporter.importHeader("tests/ffi/import_fixture.h", "x86_64-linux-gnu", ["tests/ffi"], "clang", "sample", "Sample");
 		var projected = HxiProjection.source(HxiParser.parse("import_fixture.hxi", named));
+		expect(projected.indexOf("class Ownedsample_owned_handle") >= 0
+			&& projected.indexOf("Sample.sample_owned_handle_destroy(__value)") >= 0,
+			"C handle lifecycle annotations should produce a managed owned value handle");
 		expect(projected.indexOf("static inline function size():Int return 32") >= 0, "projected structures should expose their generated ABI size");
 		expect(projected.indexOf("function set_title(value:Null<String>)") >= 0 && projected.indexOf("structSetUtf8") >= 0,
 			"UTF-8 structure fields should project managed accessors");

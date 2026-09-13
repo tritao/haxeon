@@ -3,7 +3,6 @@ import compiler.Diagnostic.CompileError;
 import compiler.Compiler;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiType;
-import compiler.ffi.HxiModel.HxiPointerOwnership;
 import compiler.ffi.HxiModel.HxiParameterDirection;
 import compiler.ffi.HxiParser;
 import compiler.ffi.HxiProjection;
@@ -422,7 +421,7 @@ class HxiParserMain {
 		var handle = HxiParser.parse("handle.hxi",
 			'interface handles @target("x86_64-linux-gnu") @library("handles") { handle resource : u32; extern fn create() -> resource; extern fn use(value: resource) -> resource; }');
 		switch handle.declarations[0] {
-			case Handle("resource", Primitive("u32"), _):
+			case Handle("resource", Primitive("u32"), null, _):
 			case _:
 				throw "handle declarations should retain their fixed-width representation";
 		}
@@ -436,6 +435,65 @@ class HxiParserMain {
 		handleCompiler.update("HandleMain.hx",
 			"import handles; function main():Int { var value:resource = new resource(); value = handles.create(); var raw:Int = value.rawValue(); var reconstructed:resource = new resource(raw); return reconstructed.isValid() ? reconstructed.rawValue() : 0; }");
 		handleCompiler.compile("HandleMain");
+		var ownedValueHandle = HxiParser.parse("owned-value-handles.hxi",
+			'interface owned_values @target("x86_64-linux-gnu") @library("owned_values") { handle resource : u32 @destroy("resource_destroy"); extern fn create_resource() -> resource @owned; extern fn lookup_resource() -> resource; extern fn create_resource_out(value: ptr<resource> @out @owned) -> i32; extern fn destroy_resource(value: resource) -> void @symbol("resource_destroy"); extern fn use_resource(value: resource) -> i32; }'),
+			ownedValueHandleSource = HxiProjection.source(ownedValueHandle);
+		expect(ownedValueHandleSource.indexOf("class Ownedresource") >= 0
+			&& ownedValueHandleSource.indexOf("public function close():Bool") >= 0
+			&& ownedValueHandleSource.indexOf("if (this.__closed) return false") >= 0
+			&& ownedValueHandleSource.indexOf("owned_values.destroy_resource(__value)") >= 0
+			&& ownedValueHandleSource.indexOf("function create_resource(arg0") < 0
+			&& ownedValueHandleSource.indexOf("function create_resource():Ownedresource") >= 0,
+			"an owned value handle should project as an explicit, idempotently closable owner");
+		var ownedValueNatives = HxiProjection.cNatives(ownedValueHandle),
+			createResourceNative = Lambda.find(ownedValueNatives, native -> native.name == "owned_values.__hxi_raw_create_resource");
+		expect(createResourceNative != null
+			&& createResourceNative.pointerOwnership == "unspecified"
+			&& createResourceNative.signature == ">6",
+			"value-handle ownership should not alter the raw 32-bit C ABI result");
+		var ownedHandleCompiler = new Compiler();
+		ownedHandleCompiler.addSourceRoot("stdlib");
+		ownedHandleCompiler.addFfiInterface("owned_values.hxi",
+			'interface owned_values @target("x86_64-linux-gnu") @library("owned_values") { handle resource : u32 @destroy("resource_destroy"); extern fn create_resource() -> resource @owned; extern fn lookup_resource() -> resource; extern fn create_resource_out(value: ptr<resource> @out @owned) -> i32; extern fn destroy_resource(value: resource) -> void @symbol("resource_destroy"); extern fn use_resource(value: resource) -> i32; }');
+		ownedHandleCompiler.update("OwnedValueHandleMain.hx",
+			"import owned_values; function main():Int { var borrowed:resource = owned_values.lookup_resource(); var owner:Ownedresource = owned_values.create_resource(); var view:resource = owner.borrow(); var raw:Int = owner.rawValue(); var out = owned_values.create_resource_out(); var outOwner:Ownedresource = out.value; owned_values.use_resource(view); owner.close(); owner.close(); outOwner.close(); return borrowed.isValid() && raw >= 0 && owner.isClosed() ? 0 : 1; }");
+		ownedHandleCompiler.compile("OwnedValueHandleMain");
+		var borrowedValueCloseCompiler = new Compiler();
+		borrowedValueCloseCompiler.addFfiInterface("owned_values.hxi",
+			'interface owned_values @target("x86_64-linux-gnu") @library("owned_values") { handle resource : u32 @destroy("resource_destroy"); extern fn lookup_resource() -> resource; extern fn destroy_resource(value: resource) -> void @symbol("resource_destroy"); }');
+		borrowedValueCloseCompiler.update("OwnedValueHandleMain.hx",
+			"import owned_values; function main():Int { return owned_values.lookup_resource().close() ? 1 : 0; }");
+		var borrowedValueCloseRejected = false;
+		try {
+			borrowedValueCloseCompiler.compile("OwnedValueHandleMain");
+		} catch (_:CompileError)
+			borrowedValueCloseRejected = true;
+		expect(borrowedValueCloseRejected, "borrowed value handles must not expose close()");
+		var implicitValueOwnerCompiler = new Compiler();
+		implicitValueOwnerCompiler.addFfiInterface("owned_values.hxi",
+			'interface owned_values @target("x86_64-linux-gnu") @library("owned_values") { handle resource : u32 @destroy("resource_destroy"); extern fn lookup_resource() -> resource; extern fn destroy_resource(value: resource) -> void @symbol("resource_destroy"); }');
+		implicitValueOwnerCompiler.update("OwnedValueHandleMain.hx",
+			"import owned_values; function main():Int { var owner:Ownedresource = owned_values.lookup_resource(); return owner.rawValue(); }");
+		var implicitValueOwnerRejected = false;
+		try {
+			implicitValueOwnerCompiler.compile("OwnedValueHandleMain");
+		} catch (_:CompileError)
+			implicitValueOwnerRejected = true;
+		expect(implicitValueOwnerRejected, "ordinary value-handle returns must remain borrowed unless @owned is explicit");
+		var statusOwnedValue = HxiParser.parse("status-owned-value.hxi",
+			'interface status_owned @target("x86_64-linux-gnu") @library("status_owned") { handle window : u32 @destroy("window_destroy"); enum Result : i32 { OK = 0; FAILED = -1; } extern fn create_window() -> window @owned; extern fn window_destroy(value: window) -> Result @symbol("window_destroy"); }'),
+			statusOwnedSource = HxiProjection.source(statusOwnedValue);
+		expect(statusOwnedSource.indexOf("public function close():Null<Result>") >= 0
+			&& statusOwnedSource.indexOf("return status_owned.window_destroy(__value)") >= 0,
+			"status-returning destroy functions should preserve their ABI result in an idempotent owner close");
+		var statusOwnerCompiler = new Compiler();
+		statusOwnerCompiler.addFfiInterface("status_owned.hxi",
+			'interface status_owned @target("x86_64-linux-gnu") @library("status_owned") { handle window : u32 @destroy("window_destroy"); enum Result : i32 { OK = 0; FAILED = -1; } extern fn create_window() -> window @owned; extern fn window_destroy(value: window) -> Result @symbol("window_destroy"); }');
+		statusOwnerCompiler.update("StatusOwnerMain.hx",
+			"import status_owned; function main():Int { var owner = status_owned.create_window(); var result:Null<Result> = owner.close(); owner.close(); return owner.isClosed() ? 0 : 1; }");
+		statusOwnerCompiler.compile("StatusOwnerMain");
+		expectError('interface bad @target("x86_64-linux-gnu") @library("bad") { handle resource : u32; extern fn create() -> resource @owned; }',
+			'requires handle "resource" to declare @destroy');
 		var handleMismatchCompiler = new Compiler();
 		handleMismatchCompiler.addFfiInterface("typed_handles.hxi",
 			'interface typed_handles @target("x86_64-linux-gnu") @library("typed_handles") { handle window : u32; handle monitor : u32; extern fn use_window(value: window) -> i32; }');
