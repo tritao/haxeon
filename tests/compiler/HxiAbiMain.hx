@@ -44,10 +44,10 @@ class HxiAbiMain {
 				throw "handle ABI did not retain its nominal type";
 		}
 		var handleSource = HxiProjection.source(handleModel);
-		expect(handleSource.indexOf("abstract resource(Int) from Int to Int") >= 0
+		expect(handleSource.indexOf("abstract resource(Int) {") >= 0
 			&& handleSource.indexOf("function new(value:Int = 0)") >= 0
-			&& handleSource.indexOf("function isValid():Bool return this != 0") >= 0
-			&& handleSource.indexOf("function rawValue():Int") >= 0
+			&& handleSource.indexOf("function isValid():Bool return cast(this, Int) != 0") >= 0
+			&& handleSource.indexOf("function rawValue():Int return cast this") >= 0
 			&& handleSource.indexOf("\tid:") < 0,
 			"handles should project as opaque value abstracts");
 		switch linux.functions()[0] {

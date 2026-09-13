@@ -381,13 +381,42 @@ class HxiParserMain {
 			case _:
 				throw "handle declarations should retain their fixed-width representation";
 		}
+		var handleSource = HxiProjection.source(handle);
+		expect(handleSource.indexOf("abstract resource(Int) {") >= 0 && handleSource.indexOf("abstract resource(Int) from Int to Int") < 0,
+			"generated resource handles should not implicitly convert through their shared integer representation");
 		expectError('interface bad @target("x86_64-linux-gnu") { handle resource : u64; }', "requires an unsigned 32-bit representation");
 		var handleCompiler = new Compiler();
 		handleCompiler.addFfiInterface("handles.hxi",
 			'interface handles @target("x86_64-linux-gnu") @library("handles") { handle resource : u32; extern fn create() -> resource; }');
 		handleCompiler.update("HandleMain.hx",
-			"import handles; function main():Int { var value:resource = new resource(); value = handles.create(); var raw:Int = value; var reconstructed:resource = raw; return reconstructed.isValid() ? reconstructed.rawValue() : 0; }");
+			"import handles; function main():Int { var value:resource = new resource(); value = handles.create(); var raw:Int = value.rawValue(); var reconstructed:resource = new resource(raw); return reconstructed.isValid() ? reconstructed.rawValue() : 0; }");
 		handleCompiler.compile("HandleMain");
+		var handleMismatchCompiler = new Compiler();
+		handleMismatchCompiler.addFfiInterface("typed_handles.hxi",
+			'interface typed_handles @target("x86_64-linux-gnu") @library("typed_handles") { handle window : u32; handle monitor : u32; extern fn use_window(value: window) -> i32; }');
+		handleMismatchCompiler.update("HandleMismatchMain.hx",
+			"import typed_handles; function main():Int { var monitor:monitor = new monitor(); return typed_handles.use_window(monitor); }");
+		var mismatchedHandleRejected = false;
+		try {
+			handleMismatchCompiler.compile("HandleMismatchMain");
+		} catch (_:CompileError)
+			mismatchedHandleRejected = true;
+		expect(mismatchedHandleRejected, "a monitor handle must not be accepted by an API requiring a window handle");
+		var abiBoolean = HxiParser.parse("abi-bool.hxi",
+			'interface abi_bool @target("x86_64-linux-gnu") @library("abi_bool") { type nk_bool = bool32; struct options @layout(8, 4) { struct_size: u32 @offset(0) @struct_size; enabled: nk_bool @offset(4); } extern fn get_enabled() -> nk_bool; extern fn set_enabled(value: nk_bool) -> i32; extern fn get_enabled_out(value: ptr<nk_bool> @out) -> i32; }');
+		var abiBooleanSource = HxiProjection.source(abiBoolean);
+		expect(abiBooleanSource.indexOf("function get_enabled():Bool") >= 0
+			&& abiBooleanSource.indexOf("__hxi_struct_setI32(bytes, 0, 8)") >= 0
+			&& abiBooleanSource.indexOf("value ? 1 : 0") >= 0
+			&& abiBooleanSource.indexOf("getI32(this, 4) != 0") >= 0,
+			"32-bit ABI booleans should project as Bool and versioned struct_size fields should initialize from their HXI layout");
+		var abiBooleanCompiler = new Compiler();
+		abiBooleanCompiler.addSourceRoot("stdlib");
+		abiBooleanCompiler.addFfiInterface("abi_bool.hxi",
+			'interface abi_bool @target("x86_64-linux-gnu") @library("abi_bool") { type nk_bool = bool32; struct options @layout(8, 4) { struct_size: u32 @offset(0) @struct_size; enabled: nk_bool @offset(4); } extern fn get_enabled() -> nk_bool; extern fn set_enabled(value: nk_bool) -> i32; }');
+		abiBooleanCompiler.update("AbiBoolMain.hx",
+			"import abi_bool; function main():Int { var value:options = cast haxe.io.Bytes.alloc(8); value.set_enabled(true); return value.get_enabled() ? 1 : 0; }");
+		abiBooleanCompiler.compile("AbiBoolMain");
 		var opaqueCompiler = new Compiler();
 		opaqueCompiler.addSourceRoot("stdlib");
 		opaqueCompiler.addFfiInterface("opaque_handles.hxi",

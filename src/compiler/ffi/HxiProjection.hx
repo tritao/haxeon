@@ -573,11 +573,14 @@ class HxiProjection {
 				case Handle(name, _, _):
 					var projectedName = projectedTypeName(name, profile);
 					emitDocumentation(output, model, name);
-					output.add('abstract $projectedName(Int) from Int to Int {\n');
+					// Keep handles nominal at the Haxe boundary. Explicit construction and
+					// rawValue() provide deliberate escape hatches without allowing two
+					// unrelated resource handles to flow through their shared Int ABI.
+					output.add('abstract $projectedName(Int) {\n');
 					output.add('\tpublic inline function new(value:Int = 0) this = value;\n');
 					output.add('\tpublic static inline function invalid():$projectedName return new $projectedName();\n');
-					output.add('\tpublic inline function isValid():Bool return this != 0;\n');
-					output.add('\tpublic inline function rawValue():Int return this;\n');
+					output.add('\tpublic inline function isValid():Bool return cast(this, Int) != 0;\n');
+					output.add('\tpublic inline function rawValue():Int return cast this;\n');
 					output.add('}\n');
 				case _:
 			}
@@ -591,7 +594,9 @@ class HxiProjection {
 					output.add('\tpublic static inline function size():Int return $size;\n');
 					output.add('\tpublic static function array(values:Array<$projectedName>):$projectedName { var bytes = ${model.name}.__hxi_struct_alloc(values.length * $size); for (index in 0...values.length) ${model.name}.__hxi_struct_copy(bytes, index * $size, values[index], $size); return cast bytes; }\n');
 					usesNestedStructures = true;
-					output.add('\tpublic inline function new() { var bytes = haxe.io.Bytes.alloc($size); for (index in 0...$size) bytes.set(index, 0); this = bytes; }\n');
+					var sizeField = Lambda.find(fields, field -> field.structSize),
+						sizeInitialization = sizeField == null ? "" : ' ${model.name}.__hxi_struct_setI32(bytes, ${sizeField.offset}, $size);';
+					output.add('\tpublic inline function new() { var bytes = haxe.io.Bytes.alloc($size); for (index in 0...$size) bytes.set(index, 0);$sizeInitialization this = bytes; }\n');
 					for (field in fields) {
 						var fieldName = projectedFieldName(name, field.name, profile);
 						if (field.lengthField != null) {
@@ -634,10 +639,13 @@ class HxiProjection {
 								stride = structSize(element.code);
 							if (arrayAccess == null || stride == 0)
 								continue;
-							structAccesses.set(arrayAccess, {type: element.haxeType, setterType: element.haxeType});
+							var arrayIsHandle = isHandleAbi(abi.classify(array.element)),
+								arrayRead = arrayIsHandle ? 'cast ${model.name}.__hxi_struct_get${arrayAccess}(this, ${field.offset} + index * $stride)' : '${model.name}.__hxi_struct_get${arrayAccess}(this, ${field.offset} + index * $stride)',
+								arrayWrite = arrayIsHandle ? "value.rawValue()" : "value";
+							structAccesses.set(arrayAccess, {type: structAccessHaxeType(arrayAccess), setterType: structAccessHaxeType(arrayAccess)});
 							emitDocumentation(output, model, '$name.${field.name}', "\t");
-							output.add('\tpublic inline function get_${fieldName}(index:Int):${element.haxeType} { if (index < 0 || index >= ${array.length}) throw "HXI array index out of bounds"; return ${model.name}.__hxi_struct_get${arrayAccess}(this, ${field.offset} + index * $stride); }\n');
-							output.add('\tpublic inline function set_${fieldName}(index:Int, value:${element.haxeType}):Void { if (index < 0 || index >= ${array.length}) throw "HXI array index out of bounds"; ${model.name}.__hxi_struct_set${arrayAccess}(this, ${field.offset} + index * $stride, value); }\n');
+							output.add('\tpublic inline function get_${fieldName}(index:Int):${element.haxeType} { if (index < 0 || index >= ${array.length}) throw "HXI array index out of bounds"; return $arrayRead; }\n');
+							output.add('\tpublic inline function set_${fieldName}(index:Int, value:${element.haxeType}):Void { if (index < 0 || index >= ${array.length}) throw "HXI array index out of bounds"; ${model.name}.__hxi_struct_set${arrayAccess}(this, ${field.offset} + index * $stride, $arrayWrite); }\n');
 							if (element.code == 1 || element.code == 2) {
 								usesNestedStructures = true;
 								output.add('\tpublic inline function get_${fieldName}_bytes():haxe.io.Bytes return ${model.name}.__hxi_struct_slice(this, ${field.offset}, ${array.length});\n');
@@ -654,6 +662,13 @@ class HxiProjection {
 							continue;
 						}
 						var value = project(abi.classify(field.type), false, profile);
+						if (value != null && value.code == 15) {
+							structAccesses.set("I32", {type: "Int", setterType: "Int"});
+							emitDocumentation(output, model, '$name.${field.name}', "\t");
+							output.add('\tpublic inline function get_$fieldName():Bool return ${model.name}.__hxi_struct_getI32(this, ${field.offset}) != 0;\n');
+							output.add('\tpublic inline function set_$fieldName(value:Bool):Void ${model.name}.__hxi_struct_setI32(this, ${field.offset}, value ? 1 : 0);\n');
+							continue;
+						}
 						if (value != null && value.code == 13) {
 							usesUtf8Fields = true;
 							emitDocumentation(output, model, '$name.${field.name}', "\t");
@@ -673,10 +688,13 @@ class HxiProjection {
 						var access = structAccess(value.code);
 						if (access == null)
 							continue;
-						structAccesses.set(access, {type: value.haxeType, setterType: value.haxeType});
+						var isHandle = isHandleAbi(abi.classify(field.type)),
+							readExpression = isHandle ? 'cast ${model.name}.__hxi_struct_get${access}(this, ${field.offset})' : '${model.name}.__hxi_struct_get${access}(this, ${field.offset})',
+							writeExpression = isHandle ? "value.rawValue()" : "value";
+						structAccesses.set(access, {type: structAccessHaxeType(access), setterType: structAccessHaxeType(access)});
 						emitDocumentation(output, model, '$name.${field.name}', "\t");
-						output.add('\tpublic inline function get_$fieldName():${value.haxeType} return ${model.name}.__hxi_struct_get${access}(this, ${field.offset});\n');
-						output.add('\tpublic inline function set_$fieldName(value:${value.haxeType}):Void ${model.name}.__hxi_struct_set${access}(this, ${field.offset}, value);\n');
+						output.add('\tpublic inline function get_$fieldName():${value.haxeType} return $readExpression;\n');
+						output.add('\tpublic inline function set_$fieldName(value:${value.haxeType}):Void ${model.name}.__hxi_struct_set${access}(this, ${field.offset}, $writeExpression);\n');
 					}
 					output.add('}\n');
 				case _:
@@ -694,7 +712,7 @@ class HxiProjection {
 										usesOwnedPointerSlots = true;
 								} else if (!value.structure) {
 									var access = structAccess(value.code);
-									structAccesses.set(access, {type: value.haxeType, setterType: value.haxeType});
+									structAccesses.set(access, {type: structAccessHaxeType(access), setterType: structAccessHaxeType(access)});
 								}
 							case OutBuffer(_) | InArray(_):
 								usesNestedStructures = true;
@@ -925,7 +943,7 @@ class HxiProjection {
 					nullable: false,
 					owned: false
 				};
-			case IntegerValue(_, _) | EnumerationValue(_, _, _) | FloatValue(_):
+			case IntegerValue(_, _) | EnumerationValue(_, _, _) | Boolean32Value | FloatValue(_):
 				var size = structSize(projected.code);
 				if (size == 0)
 					throw "HXI output parameter has an unsupported scalar type";
@@ -1003,8 +1021,10 @@ class HxiProjection {
 						setup.push('var $local:${info.haxeType} = ${parameter.direction == InOut ? parameter.name : "new " + info.haxeType + "()"};');
 					else {
 						setup.push('var $local = haxe.io.Bytes.alloc(${info.size});');
-						if (parameter.direction == InOut)
-							setup.push('__hxi_struct_set${structAccess(info.code)}($local, 0, ${parameter.name});');
+						if (parameter.direction == InOut) {
+							var nativeValue = info.handle ? '${parameter.name}.rawValue()' : info.code == 15 ? '(${parameter.name} ? 1 : 0)' : parameter.name;
+							setup.push('__hxi_struct_set${structAccess(info.code)}($local, 0, $nativeValue);');
+						}
 					}
 					callArguments.push(local);
 					var expression = if (info.opaquePointer) {
@@ -1016,7 +1036,8 @@ class HxiProjection {
 							'$pointerOwnedSlotHelper($local, 0, "${escape(library)}", "${escape(nativeSymbol)}", "${escape(signature)}", "${escape(release)}", ${info.nullable})';
 						} else
 							'__hxi_struct_get_pointer($local, 0, ${info.nullable})';
-					} else info.structure ? local : '__hxi_struct_get${structAccess(info.code)}($local, 0)';
+					} else
+						info.structure ? local : info.code == 15 ? '__hxi_struct_get${structAccess(info.code)}($local, 0) != 0' : '__hxi_struct_get${structAccess(info.code)}($local, 0)';
 					if (info.handle)
 						expression = 'cast($expression, ${info.haxeType})';
 					else if (info.opaquePointer)
@@ -1515,6 +1536,12 @@ class HxiProjection {
 					nativePointer: false,
 					nullable: false
 				};
+			case Boolean32Value: {
+					haxeType: "Bool",
+					code: 15,
+					nativePointer: false,
+					nullable: false
+				};
 			case Utf8Value(nullable): {
 					haxeType: nullable ? "Null<String>" : "String",
 					code: 13,
@@ -1602,6 +1629,7 @@ class HxiProjection {
 					case _: sign == Signed ? 5 : 6;
 				});
 			case HandleValue(_): "6";
+			case Boolean32Value: "6";
 			case FloatValue(32): "9";
 			case FloatValue(64): "10";
 			case FloatValue(bits): throw 'Unsupported $bits-bit floating-point ABI value';
@@ -1658,6 +1686,7 @@ class HxiProjection {
 			case IntegerValue(bits, _) | EnumerationValue(_, bits, _) | FloatValue(bits):
 				var size = Std.int(bits / 8);
 				{size: size, align: Std.int(Math.min(size, abi.pointerBits / 8))};
+			case Boolean32Value: {size: 4, align: 4};
 			case PointerValue(_, _, _, _) | CallbackValue(_, _, _, _):
 				var size = Std.int(abi.pointerBits / 8);
 				{size: size, align: size};
@@ -1701,6 +1730,7 @@ class HxiProjection {
 			case 3: "I16";
 			case 4: "U16";
 			case 5 | 6: "I32";
+			case 15: "I32";
 			case 7 | 8: "I64";
 			case 9: "F32";
 			case 10: "F64";
@@ -1711,9 +1741,22 @@ class HxiProjection {
 		return switch code {
 			case 1 | 2: 1;
 			case 3 | 4: 2;
-			case 5 | 6 | 9: 4;
+			case 5 | 6 | 9 | 15: 4;
 			case 7 | 8 | 10: 8;
 			case _: 0;
+		};
+
+	static function structAccessHaxeType(access:String):String
+		return switch access {
+			case "I64": "haxe.Int64";
+			case "F32" | "F64": "Float";
+			case _: "Int";
+		};
+
+	static function isHandleAbi(value:HxiAbiValue):Bool
+		return switch value {
+			case HandleValue(_): true;
+			case _: false;
 		};
 
 	static function arrayType(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>):Null<{
@@ -1776,6 +1819,7 @@ class HxiProjection {
 	static function irType(code:Int, result:Bool = false, nativeAbstract:Null<String> = null):IrType
 		return switch code {
 			case 0: Void;
+			case 15: Bool;
 			case 7 | 8: I64;
 			case 9 | 10: F64;
 			case 11: result ? Abstract("native_pointer") : nativeAbstract == null ? ManagedBytes : Abstract(nativeAbstract);

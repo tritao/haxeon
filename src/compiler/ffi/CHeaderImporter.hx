@@ -180,7 +180,12 @@ class CHeaderImporter {
 			case "TypedefDecl":
 				var qualified:String = field(type, "qualType");
 				var callback = functionPointer(qualified);
-				if (handleNames.exists(name)) {
+				if (hasAnnotation(node, "hxi:bool32")) {
+					if (mapType(qualified) != "u32")
+						throw '${declarationLocation(node)}: ABI bool typedef "$name" must use uint32_t storage';
+					emitDocumentation(node, output);
+					output.add('\ttype $name = bool32;\n');
+				} else if (handleNames.exists(name)) {
 					validateHandle(name, qualified, layouts, handleRecords);
 					emitDocumentation(node, output);
 					output.add('\thandle $name : u32;\n');
@@ -216,7 +221,8 @@ class CHeaderImporter {
 					if (StringTools.endsWith(qualifiedType, "[]"))
 						throw '${declarationLocation(entry)}: unsupported flexible array field "$fieldName"';
 					emitDocumentation(entry, output, "\t\t");
-					output.add('\t\t$fieldName: ${fieldTypeProjection(entry, qualifiedType)}${offset == null ? "" : " @offset(" + offset + ")"}${fieldPolicy(entry)};\n');
+					var structSize = hasAnnotation(entry, "hxi:struct_size") ? " @struct_size" : "";
+					output.add('\t\t$fieldName: ${fieldTypeProjection(entry, qualifiedType)}${offset == null ? "" : " @offset(" + offset + ")"}${fieldPolicy(entry)}$structSize;\n');
 				}
 				output.add("\t}\n");
 			case "FunctionDecl":

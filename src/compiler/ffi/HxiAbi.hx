@@ -16,6 +16,7 @@ enum HxiAbiValue {
 	IntegerValue(bits:Int, sign:HxiIntegerSign);
 	EnumerationValue(name:String, bits:Int, sign:HxiIntegerSign);
 	HandleValue(name:String);
+	Boolean32Value;
 	CallbackValue(name:String, arguments:Array<HxiAbiValue>, result:HxiAbiValue, nullable:Bool);
 	FloatValue(bits:Int);
 	PointerValue(bits:Int, nullable:Bool, opaquePointee:Null<String>, structure:Null<String>);
@@ -109,6 +110,7 @@ class HxiAbi {
 				if (!allowVoid)
 					throw "Void has no value ABI";
 				VoidValue;
+			case Primitive("bool32"): Boolean32Value;
 			case Primitive(name): classifyPrimitive(name);
 			case Pointer(element): PointerValue(pointerBits, false, opaquePointee(element), structurePointee(element));
 			case Nullable(element):

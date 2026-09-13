@@ -40,6 +40,7 @@ class HxiParser {
 		"u32",
 		"i64",
 		"u64",
+		"bool32",
 		"isize",
 		"usize",
 		"f32",
@@ -355,11 +356,12 @@ class HxiParser {
 			var fieldStart = current().span, fieldName = identifier();
 			expect(":");
 			var type = parseType(),
-				fieldMetadata = parseMetadata(["offset", "borrowed", "owned", "length_field"]),
+				fieldMetadata = parseMetadata(["offset", "borrowed", "owned", "length_field", "struct_size"]),
 				offset = metadataInteger(fieldMetadata, "offset", true),
 				borrowed = metadataFlag(fieldMetadata, "borrowed"),
 				owned = metadataValue(fieldMetadata, "owned", false),
 				lengthField = metadataValue(fieldMetadata, "length_field", false),
+				structSize = metadataFlag(fieldMetadata, "struct_size"),
 				end = expect(";").span;
 			if (borrowed && owned != null)
 				fail('Field "$fieldName" cannot combine @borrowed and @owned', fieldStart);
@@ -370,6 +372,7 @@ class HxiParser {
 				offset: offset,
 				ownership: owned != null ? Owned(owned) : borrowed ? Borrowed : Unspecified,
 				lengthField: lengthField,
+				structSize: structSize,
 				span: fieldSpan
 			});
 			rememberDocumentation('$name.$fieldName', fieldSpan);
@@ -472,11 +475,21 @@ class HxiParser {
 					if (size <= 0 || align <= 0 || (align & (align - 1)) != 0 || size % align != 0)
 						fail('Struct "$name" has invalid layout', span);
 					var fieldNames:Map<String, Bool> = [];
+					var structSizeFields = 0;
 					var ranges:Array<{start:Int, end:Int, name:String}> = [];
 					for (field in fields) {
 						if (fieldNames.exists(field.name))
 							fail('Duplicate field "${field.name}" in struct "$name"', field.span);
 						fieldNames.set(field.name, true);
+						if (field.structSize) {
+							structSizeFields++;
+							switch abi.classify(field.type) {
+								case IntegerValue(32, Unsigned):
+								case _: fail('@struct_size field "${field.name}" in struct "$name" must use an unsigned 32-bit integer', field.span);
+							}
+							if (field.offset != 0)
+								fail('@struct_size field "${field.name}" in struct "$name" must be at offset zero', field.span);
+						}
 						var layout = typeLayout(field.type, abi, declarationsByName, []);
 						if (layout == null)
 							fail('Field "${field.name}" in struct "$name" has no fixed C layout', field.span);
@@ -511,6 +524,8 @@ class HxiParser {
 							case Unspecified:
 						}
 					}
+					if (structSizeFields > 1)
+						fail('Struct "$name" cannot declare more than one @struct_size field', span);
 				case Enumeration(name, representation, flags, values, span):
 					validateType(representation, names, declarationsByName, span, false);
 					var integer = switch abi.classify(representation) {
@@ -759,7 +774,7 @@ class HxiParser {
 			VoidValue;
 		};
 		switch classified {
-			case IntegerValue(_, _) | EnumerationValue(_, _, _) | HandleValue(_) | FloatValue(_) | AggregateValue(_, _, _):
+			case IntegerValue(_, _) | EnumerationValue(_, _, _) | HandleValue(_) | Boolean32Value | FloatValue(_) | AggregateValue(_, _, _):
 				if (ownership != Unspecified)
 					fail('Output parameter "$name" ownership metadata requires a pointer to an opaque handle', span);
 			case PointerValue(_, _, opaquePointee, _) if (opaquePointee != null):
@@ -846,7 +861,7 @@ class HxiParser {
 		try {
 			switch abi.classify(type, allowVoid) {
 				case VoidValue if (allowVoid):
-				case IntegerValue(_, _) | EnumerationValue(_, _, _) | HandleValue(_) | FloatValue(_) | AggregateValue(_, _, _) | Utf8Value(_):
+				case IntegerValue(_, _) | EnumerationValue(_, _, _) | HandleValue(_) | Boolean32Value | FloatValue(_) | AggregateValue(_, _, _) | Utf8Value(_):
 				case PointerValue(_, _, _, _) if (!allowVoid):
 				case _:
 					fail("Callbacks support scalar, aggregate, and pointer arguments with scalar, aggregate, or void results", span);
@@ -871,6 +886,7 @@ class HxiParser {
 					case IntegerValue(bits, _):
 						var size = Std.int(bits / 8);
 						{size: size, align: Std.int(Math.min(size, abi.pointerBits / 8))};
+					case Boolean32Value: {size: 4, align: 4};
 					case EnumerationValue(_, bits, _):
 						var size = Std.int(bits / 8);
 						{size: size, align: Std.int(Math.min(size, abi.pointerBits / 8))};
