@@ -68,6 +68,12 @@ typedef WasmFunctionType = {
 	final results:Array<WasmValueType>;
 }
 
+/** Exception-table clauses branch to a surrounding label when their tag matches. */
+enum WasmCatchClause {
+	Tag(tag:Int, label:Int);
+	CatchAll(label:Int);
+}
+
 /** Small, target-level instruction vocabulary. It deliberately knows no Haxeon IR. */
 enum WasmInstruction {
 	Unreachable;
@@ -75,6 +81,7 @@ enum WasmInstruction {
 	Block(result:Null<WasmValueType>);
 	Loop(result:Null<WasmValueType>);
 	Try(result:Null<WasmValueType>);
+	TryTable(result:Null<WasmValueType>, catches:Array<WasmCatchClause>);
 	If(result:Null<WasmValueType>);
 	Else;
 	Catch(tag:Int);

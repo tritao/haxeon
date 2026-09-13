@@ -22,16 +22,22 @@ fi
 
 mkdir -p "$root_dir/out"
 "$haxe_bin" --cwd "$root_dir" -cp src -cp tests/compiler --run WasmBackendMain
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm-gc --output=out/wasm-gc-wasmtime-bytes.wasm --entry=wasm-gc-bytes \
+	--root=tests/programs tests/programs/wasm-gc-bytes.hx
 
 for artifact in \
 	wasm-gc-model \
+	wasm-eh-try-table \
 	wasm-gc-type-plan \
 	wasm-gc-objects \
 	wasm-gc-arrays \
 	wasm-gc-enums \
 	wasm-gc-closures \
 	wasm-gc-dynamic \
-	wasm-gc-strings; do
+	wasm-gc-exceptions \
+	wasm-gc-strings \
+	wasm-gc-wasmtime-bytes; do
 	wasm_file="$root_dir/out/$artifact.wasm"
 	result=$("$wasmtime_bin" run --invoke main "$wasm_file" 2>"$root_dir/out/wasmtime-stderr.txt") || {
 		cat "$root_dir/out/wasmtime-stderr.txt" >&2
@@ -45,5 +51,4 @@ for artifact in \
 	fi
 done
 
-echo "NOTE: GC EH and operations that synthesize EH remain covered by Node until lowering uses standardized try_table instructions"
 echo "PASS: Wasm GC modules validate and execute under $wasmtime_version"

@@ -1,6 +1,7 @@
 package compiler.backend.wasm;
 
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
+import compiler.backend.wasm.WasmTypes.WasmCatchClause;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmTypes.WasmRefType;
@@ -17,6 +18,8 @@ private typedef WasmControl = {
 	final kind:Int;
 	final result:Null<WasmValueType>;
 	final height:Int;
+	final hasCatch:Bool;
+	var catchTypes:Null<Array<WasmValueType>>;
 }
 
 /** Target-level structural validation before bytes reach an embedding runtime. */
@@ -127,7 +130,7 @@ class WasmValidator {
 
 	static function validateFunction(fn:WasmFunction, functions:Array<WasmFunctionType>, globals:Array<WasmGlobal>, module:WasmModule, tableMin:Null<Int>,
 			tagType:Null<Int>):Void {
-		var labels:Array<Bool> = [],
+		var labels:Array<{isIf:Bool, result:Null<WasmValueType>}> = [],
 			localCount = fn.type.parameters.length + fn.locals.length;
 		for (result in fn.type.results)
 			validateValueType(result, module, module.typeCount());
@@ -138,13 +141,34 @@ class WasmValidator {
 				case Block(result), Loop(result), Try(result):
 					if (result != null)
 						validateValueType(result, module, module.typeCount());
-					labels.push(false);
+					labels.push({isIf: false, result: result});
+				case TryTable(result, catches):
+					if (result != null)
+						validateValueType(result, module, module.typeCount());
+					for (clause in catches)
+						switch clause {
+							case Tag(tag, label):
+								if (tagType == null || tag != 0)
+									throw 'Wasm function ${fn.name} references an invalid exception tag $tag';
+								validateDepth(fn, label, labels.length);
+								var parameters = module.functionTypeAt(tagType).parameters,
+									target = labels[labels.length - label - 1];
+								if (parameters.length != (target.result == null ? 0 : 1)
+									|| (target.result != null
+										&& !isValueSubtype(parameters[0], target.result,
+											module))) throw 'Wasm function ${fn.name} has an exception catch incompatible with label $label';
+							case CatchAll(label):
+								validateDepth(fn, label, labels.length);
+								if (labels[labels.length - label - 1].result != null)
+									throw 'Wasm function ${fn.name} has a catch-all incompatible with label $label';
+						}
+					labels.push({isIf: false, result: result});
 				case If(result):
 					if (result != null)
 						validateValueType(result, module, module.typeCount());
-					labels.push(true);
+					labels.push({isIf: true, result: result});
 				case Else:
-					if (labels.length == 0 || !labels[labels.length - 1])
+					if (labels.length == 0 || !labels[labels.length - 1].isIf)
 						throw 'Wasm function ${fn.name} has an else without an if';
 				case Catch(tag):
 					if (tagType == null || tag != 0)
@@ -214,14 +238,61 @@ class WasmValidator {
 				case Unreachable:
 					reachable = false;
 				case Block(result):
-					controls.push({kind: 0, result: result, height: stack.length});
+					controls.push({
+						kind: 0,
+						result: result,
+						height: stack.length,
+						hasCatch: false,
+						catchTypes: null
+					});
 				case Loop(result):
-					controls.push({kind: 1, result: result, height: stack.length});
+					controls.push({
+						kind: 1,
+						result: result,
+						height: stack.length,
+						hasCatch: false,
+						catchTypes: null
+					});
 				case Try(result):
-					controls.push({kind: 3, result: result, height: stack.length});
+					controls.push({
+						kind: 3,
+						result: result,
+						height: stack.length,
+						hasCatch: false,
+						catchTypes: null
+					});
+				case TryTable(result, catches):
+					for (clause in catches) {
+						var label = switch clause {
+							case Tag(_, label) | CatchAll(label): label;
+						}, targetIndex = controls.length - label - 1;
+						if (label < 0 || targetIndex < 0 || targetIndex >= controls.length)
+							throw 'Wasm function ${fn.name} has an invalid exception catch label $label';
+						var target = controls[targetIndex];
+						target.catchTypes = switch clause {
+							case Tag(_, _):
+								if (tagType == null)
+									throw 'Wasm function ${fn.name} has a catch without an exception tag';
+								module.functionTypeAt(tagType).parameters.copy();
+							case CatchAll(_): [];
+						};
+					}
+					controls.push({
+						kind: 4,
+						result: result,
+						height: stack.length,
+						hasCatch: catches.length > 0,
+						catchTypes: null
+					});
 				case If(result):
 					pop(stack, I32, fn);
-					controls.push({kind: 2, result: result, height: stack.length});
+					controls.push({
+						kind: 2,
+						result: result,
+						height: stack.length,
+						hasCatch: false,
+						catchTypes: null
+					});
 				case Else:
 					if (controls.length == 0 || controls[controls.length - 1].kind != 2)
 						throw 'Wasm function ${fn.name} has an invalid else frame';
@@ -242,8 +313,18 @@ class WasmValidator {
 					if (controls.length == 0)
 						continue;
 					var frame = controls.pop();
-					reset(stack, frame.height, frame.result, reachable, fn, module, true);
-					reachable = true;
+					if (frame.kind == 4 && frame.hasCatch && !reachable) {
+						reset(stack, frame.height, frame.result, false, fn, module, false);
+						reachable = false;
+					} else if (!reachable && frame.catchTypes != null) {
+						reset(stack, frame.height, frame.result, false, fn, module, false);
+						for (catchType in frame.catchTypes)
+							stack.push(catchType);
+						reachable = true;
+					} else {
+						reset(stack, frame.height, frame.result, reachable, fn, module, true);
+						reachable = true;
+					}
 				case Br(depth):
 					validateBranch(controls, depth, fn);
 					reachable = false;
@@ -765,7 +846,7 @@ class WasmValidator {
 		if (reachable) {
 			var resultCount = result == null ? 0 : 1;
 			if (stack.length < height + resultCount)
-				throw 'Wasm function ${fn.name} ended a control frame with too few values';
+				throw 'Wasm function ${fn.name} ended a control frame with too few values (stack ${stack.length}, height $height, result $result)';
 			if (stack.length > height + resultCount)
 				throw 'Wasm function ${fn.name} ended a control frame with too many values (${stack.length}, expected ${height + resultCount})';
 			if (result != null && !isValueSubtype(stack[height], result, module))

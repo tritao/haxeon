@@ -352,6 +352,7 @@ class WasmBackend implements Backend {
 				throw 'Wasm GC export "$exported" is not a reachable function';
 			module.exports.push({name: exported, functionIndex: exportIndex});
 		}
+		WasmExceptionLowering.lower(module);
 		return {target: options.target, bytes: WasmEncoder.encode(module)};
 	}
 

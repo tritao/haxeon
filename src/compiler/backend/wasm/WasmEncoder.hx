@@ -3,6 +3,7 @@ package compiler.backend.wasm;
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
+import compiler.backend.wasm.WasmTypes.WasmCatchClause;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmTypes.WasmRefType;
@@ -327,6 +328,20 @@ class WasmEncoder {
 				case Try(result):
 					output.writeByte(0x06);
 					writeBlockType(output, result);
+				case TryTable(result, catches):
+					output.writeByte(0x1f);
+					writeBlockType(output, result);
+					writeU32(output, catches.length);
+					for (clause in catches)
+						switch clause {
+							case Tag(tag, label):
+								output.writeByte(0x00);
+								writeU32(output, tag);
+								writeU32(output, label);
+							case CatchAll(label):
+								output.writeByte(0x02);
+								writeU32(output, label);
+						}
 				case If(result):
 					output.writeByte(0x04);
 					writeBlockType(output, result);

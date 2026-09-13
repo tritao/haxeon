@@ -17,6 +17,7 @@ import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
+import compiler.backend.wasm.WasmTypes.WasmCatchClause;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmTypes.WasmHeapType;
 import compiler.backend.wasm.WasmTypes.WasmStorageType;
@@ -324,6 +325,7 @@ class WasmBackendMain {
 		File.saveBytes("out/wasm-backend-virtual.wasm", virtualCall);
 		validateGcModelRejectsInvalidModules();
 		File.saveBytes("out/wasm-gc-model.wasm", compileGcTypeModel());
+		File.saveBytes("out/wasm-eh-try-table.wasm", compileTryTableProgram());
 		File.saveBytes("out/wasm-gc-type-plan.wasm", compileGcTypePlan());
 		File.saveBytes("out/wasm-gc-objects.wasm", compileGcObjectProgram());
 		File.saveBytes("out/wasm-gc-arrays.wasm", compileGcArrayProgram());
@@ -795,6 +797,39 @@ class WasmBackendMain {
 			{type: Ref({nullable: false, heap: Type(intArrayType)})},
 			{type: Ref({nullable: false, heap: Type(byteArrayType)})}
 		], body));
+		module.exports.push({name: "main", functionIndex: 0});
+		return WasmEncoder.encode(module);
+	}
+
+	static function compileTryTableProgram():haxe.io.Bytes {
+		var module = new WasmModule("WasmTryTableMain"),
+			tagType = module.typeIndex({parameters: [I32], results: []}),
+			signature:WasmFunctionType = {parameters: [], results: [I32]},
+			body:Array<WasmInstruction> = [
+				Block(I32),
+				TryTable(I32, [Tag(0, 0)]),
+				I32Const(1),
+				If(I32),
+				I32Const(39),
+				Throw(0),
+				Else,
+				I32Const(1),
+				End,
+				End,
+				End,
+				LocalSet(0),
+				LocalGet(0),
+				I32Const(39),
+				I32Eq,
+				If(null),
+				I32Const(42),
+				Return,
+				End,
+				I32Const(0),
+				Return
+			];
+		module.exceptionTagType = tagType;
+		module.addFunction(new WasmFunction("main", signature, [{type: I32}], body));
 		module.exports.push({name: "main", functionIndex: 0});
 		return WasmEncoder.encode(module);
 	}
