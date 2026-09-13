@@ -21,7 +21,7 @@ import haxe.io.BytesOutput;
 
 /** Stable target-neutral container for the complete verified Haxeon IR. */
 class CanonicalIrCodec {
-	public static inline final VERSION:Int = 5;
+	public static inline final VERSION:Int = 6;
 	static inline final MAGIC = "HIR";
 	static inline final MAX_ITEMS = 0x100000;
 
@@ -122,6 +122,8 @@ class CanonicalIrCodec {
 					case BytesInputOutput(lengthArgument):
 						output.writeByte(5);
 						writeCount(output, lengthArgument);
+					case BytesSize:
+						output.writeByte(6);
 				}
 			IrTypeCodec.writeType(output, native.result, 0);
 		}
@@ -154,6 +156,7 @@ class CanonicalIrCodec {
 						case 3: Output;
 						case 4: InputOutput;
 						case 5: BytesInputOutput(readCount(input));
+						case 6 if (version >= 6): BytesSize;
 						case _: throw "Invalid canonical IR C native argument mode";
 					});
 			} else {

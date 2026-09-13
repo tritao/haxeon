@@ -1,4 +1,5 @@
 interface GcBytes @target("portable-abi32") @library("gc_bytes") {
 	extern fn inspect(data: ptr<const<u8>> @in_array("length"), length: u32) -> i32 @symbol("inspect_bytes");
 	extern fn mutate(data: ptr<u8> @in_array("length"), length: u32) -> i32 @symbol("mutate_bytes");
+	extern fn read(seed: i32, data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout) -> i32 @symbol("read_bytes");
 }

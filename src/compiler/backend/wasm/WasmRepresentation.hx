@@ -498,23 +498,24 @@ class WasmGcRepresentation implements WasmRepresentation {
 				throw "Invalid Wasm GC Bytes.set signature";
 			return managedByteSet(argumentLocals[0], argumentLocals[1], argumentLocals[2]);
 		}
-		if (name == "__bytes_get_i32") {
+		if (name == "__bytes_get_i32" || name == "getI32") {
 			if (output.type != I32 || arguments.length != 2 || arguments[0].type != ManagedBytes || arguments[1].type != I32 || argumentLocals.length != 2)
 				throw "Invalid Wasm GC Bytes.getInt32 signature";
 			return managedByteGetI32(argumentLocals[0], argumentLocals[1], outputLocal);
 		}
-		if (name == "__bytes_set_i32") {
+		if (name == "__bytes_set_i32" || name == "setI32") {
 			if (output.type != Void || arguments.length != 3 || arguments[0].type != ManagedBytes || arguments[1].type != I32 || arguments[2].type != I32
 				|| argumentLocals.length != 3)
 				throw "Invalid Wasm GC Bytes.setInt32 signature";
 			return managedByteSetI32(argumentLocals[0], argumentLocals[1], argumentLocals[2]);
 		}
-		if (name == "__bytes_view" || name == "__bytes_sub") {
+		if (name == "__bytes_view" || name == "structSlice" || name == "__bytes_sub") {
 			if (output.type != ManagedBytes || arguments.length != 3 || arguments[0].type != ManagedBytes || arguments[1].type != I32
 				|| arguments[2].type != I32 || argumentLocals.length != 3)
 				throw 'Invalid Wasm GC $name signature';
-			return name == "__bytes_view" ? managedBytesView(argumentLocals[0], argumentLocals[1], argumentLocals[2],
-				outputLocal) : managedBytesSub(argumentLocals[0], argumentLocals[1], argumentLocals[2], outputLocal);
+			return name == "__bytes_view"
+				|| name == "structSlice" ? managedBytesView(argumentLocals[0], argumentLocals[1], argumentLocals[2],
+					outputLocal) : managedBytesSub(argumentLocals[0], argumentLocals[1], argumentLocals[2], outputLocal);
 		}
 		if (name == "__bytes_compare") {
 			if (output.type != I32 || arguments.length != 2 || arguments[0].type != ManagedBytes || arguments[1].type != ManagedBytes
@@ -595,21 +596,21 @@ class WasmGcRepresentation implements WasmRepresentation {
 
 	public function lowerCNativeCall(native:IrCNative, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>,
 			importIndex:Int):Null<Array<WasmInstruction>> {
-		var hasByteInputs = false;
+		var usesScratchBridge = false;
 		for (mode in native.argumentModes)
 			switch mode {
-				case BytesInput(_) | BytesInputOutput(_):
-					hasByteInputs = true;
+				case BytesInput(_) | BytesInputOutput(_) | BytesOutput(_) | BytesSize:
+					usesScratchBridge = true;
 				case Value:
-				case BytesOutput(_) | Output | InputOutput:
-					throw 'Wasm GC C native "${native.name}" supports input byte slices only so far';
+				case Output | InputOutput:
+					throw 'Wasm GC C native "${native.name}" requires byte-backed pointer directions';
 			}
-		if (hasByteInputs && (scratchAllocator < 0 || scratchTop < 0))
+		if (usesScratchBridge && (scratchAllocator < 0 || scratchTop < 0))
 			throw 'Wasm GC C native "${native.name}" requires a configured linear scratch bridge';
 		var body:Array<WasmInstruction> = [],
-			savedTop = hasByteInputs ? allocateLocal(I32) : -1,
+			savedTop = usesScratchBridge ? allocateLocal(I32) : -1,
 			bytePointers:Array<Null<Int>> = [];
-		if (hasByteInputs)
+		if (usesScratchBridge)
 			body = body.concat([GlobalGet(scratchTop), LocalSet(savedTop)]);
 		for (index in 0...arguments.length)
 			switch native.argumentModes[index] {
@@ -617,43 +618,66 @@ class WasmGcRepresentation implements WasmRepresentation {
 					if (arguments[index].type != ManagedBytes)
 						throw 'Wasm GC C native "${native.name}" byte input $index has type ${Std.string(arguments[index].type)}';
 					var bytesLocal = argumentLocals[index],
-						pointer = allocateLocal(I32),
-						position = allocateLocal(I32);
+						pointer = allocateLocal(I32);
 					bytePointers[index] = pointer;
 					body = body.concat([
 						LocalGet(bytesLocal),
 						StructGet(plan.managedBytesTypeIndex, 2),
 						Call(scratchAllocator),
-						LocalSet(pointer),
+						LocalSet(pointer)
+					]);
+					body = body.concat(copyGcBytesToLinear(bytesLocal, pointer));
+				case BytesOutput(sizeArgument):
+					if (arguments[index].type != ManagedBytes)
+						throw 'Wasm GC C native "${native.name}" byte output $index has type ${Std.string(arguments[index].type)}';
+					var bytesLocal = argumentLocals[index],
+						sizeLocal = argumentLocals[sizeArgument],
+						sizeOffset = allocateLocal(I32),
+						capacity = allocateLocal(I32),
+						pointer = allocateLocal(I32);
+					bytePointers[index] = pointer;
+					body = body.concat([
+						LocalGet(bytesLocal),
+						RefIsNull,
+						If(null),
 						I32Const(0),
-						LocalSet(position),
-						Block(null),
-						Loop(null),
-						LocalGet(position),
+						LocalSet(pointer),
+						Else,
+						I32Const(0),
+						LocalSet(sizeOffset)
+					]);
+					body = body.concat(requireGcBytesLength(sizeLocal, 4));
+					body = body.concat(managedByteGetI32(sizeLocal, sizeOffset, capacity));
+					body = body.concat([
+						LocalGet(capacity),
 						LocalGet(bytesLocal),
 						StructGet(plan.managedBytesTypeIndex, 2),
-						I32LtS,
+						I32Eq,
 						I32Eqz,
-						BrIf(1),
-						LocalGet(pointer),
-						LocalGet(position),
-						I32Add,
-						LocalGet(bytesLocal),
-						StructGet(plan.managedBytesTypeIndex, 0),
-						LocalGet(bytesLocal),
-						StructGet(plan.managedBytesTypeIndex, 1),
-						LocalGet(position),
-						I32Add,
-						ArrayGetUnsigned(plan.byteArrayTypeIndex),
-						I32Store8(0),
-						LocalGet(position),
-						I32Const(1),
-						I32Add,
-						LocalSet(position),
-						Br(0),
+						If(null),
+						Unreachable,
 						End,
-						End
+						LocalGet(bytesLocal),
+						StructGet(plan.managedBytesTypeIndex, 2),
+						Call(scratchAllocator),
+						LocalSet(pointer)
 					]);
+					body = body.concat(copyGcBytesToLinear(bytesLocal, pointer));
+					body.push(End);
+				case BytesSize:
+					if (arguments[index].type != ManagedBytes)
+						throw 'Wasm GC C native "${native.name}" byte size $index has type ${Std.string(arguments[index].type)}';
+					var bytesLocal = argumentLocals[index],
+						pointer = allocateLocal(I32);
+					bytePointers[index] = pointer;
+					body = body.concat(requireGcBytesLength(bytesLocal, 4));
+					body = body.concat([
+						LocalGet(bytesLocal),
+						StructGet(plan.managedBytesTypeIndex, 2),
+						Call(scratchAllocator),
+						LocalSet(pointer)
+					]);
+					body = body.concat(copyGcBytesToLinear(bytesLocal, pointer));
 				case Value:
 					bytePointers[index] = null;
 				case _:
@@ -669,50 +693,105 @@ class WasmGcRepresentation implements WasmRepresentation {
 			body.push(LocalSet(resultLocal));
 		for (index in 0...arguments.length)
 			switch native.argumentModes[index] {
-				case BytesInputOutput(_):
+				case BytesInputOutput(_) | BytesSize:
 					var pointer = bytePointers[index];
 					if (pointer == null)
-						throw 'Wasm GC C native "${native.name}" mutable byte input $index has no scratch pointer';
-					var bytesLocal = argumentLocals[index],
-						position = allocateLocal(I32);
-					body = body.concat([
-						I32Const(0),
-						LocalSet(position),
-						Block(null),
-						Loop(null),
-						LocalGet(position),
-						LocalGet(bytesLocal),
-						StructGet(plan.managedBytesTypeIndex, 2),
-						I32LtS,
-						I32Eqz,
-						BrIf(1),
-						LocalGet(bytesLocal),
-						StructGet(plan.managedBytesTypeIndex, 0),
-						LocalGet(bytesLocal),
-						StructGet(plan.managedBytesTypeIndex, 1),
-						LocalGet(position),
-						I32Add,
-						LocalGet(pointer),
-						LocalGet(position),
-						I32Add,
-						I32Load8U(0),
-						ArraySet(plan.byteArrayTypeIndex),
-						LocalGet(position),
-						I32Const(1),
-						I32Add,
-						LocalSet(position),
-						Br(0),
-						End,
-						End
-					]);
+						throw 'Wasm GC C native "${native.name}" byte argument $index has no scratch pointer';
+					body = body.concat(copyLinearToGcBytes(argumentLocals[index], pointer));
+				case BytesOutput(_):
+					var pointer = bytePointers[index];
+					if (pointer == null)
+						throw 'Wasm GC C native "${native.name}" byte output $index has no scratch pointer';
+					body = body.concat([LocalGet(argumentLocals[index]), RefIsNull, If(null), Else]);
+					body = body.concat(copyLinearToGcBytes(argumentLocals[index], pointer));
+					body.push(End);
 				case _:
 			}
-		if (hasByteInputs)
+		if (usesScratchBridge)
 			body = body.concat([LocalGet(savedTop), GlobalSet(scratchTop)]);
 		if (resultLocal >= 0)
 			body = body.concat([LocalGet(resultLocal), LocalSet(outputLocal)]);
 		return body;
 	}
+
+	function copyGcBytesToLinear(bytesLocal:Int, pointer:Int):Array<WasmInstruction> {
+		var position = allocateLocal(I32);
+		return [
+			I32Const(0),
+			LocalSet(position),
+			Block(null),
+			Loop(null),
+			LocalGet(position),
+			LocalGet(bytesLocal),
+			StructGet(plan.managedBytesTypeIndex, 2),
+			I32LtS,
+			I32Eqz,
+			BrIf(1),
+			LocalGet(pointer),
+			LocalGet(position),
+			I32Add,
+			LocalGet(bytesLocal),
+			StructGet(plan.managedBytesTypeIndex, 0),
+			LocalGet(bytesLocal),
+			StructGet(plan.managedBytesTypeIndex, 1),
+			LocalGet(position),
+			I32Add,
+			ArrayGetUnsigned(plan.byteArrayTypeIndex),
+			I32Store8(0),
+			LocalGet(position),
+			I32Const(1),
+			I32Add,
+			LocalSet(position),
+			Br(0),
+			End,
+			End
+		];
+	}
+
+	function copyLinearToGcBytes(bytesLocal:Int, pointer:Int):Array<WasmInstruction> {
+		var position = allocateLocal(I32);
+		return [
+			I32Const(0),
+			LocalSet(position),
+			Block(null),
+			Loop(null),
+			LocalGet(position),
+			LocalGet(bytesLocal),
+			StructGet(plan.managedBytesTypeIndex, 2),
+			I32LtS,
+			I32Eqz,
+			BrIf(1),
+			LocalGet(bytesLocal),
+			StructGet(plan.managedBytesTypeIndex, 0),
+			LocalGet(bytesLocal),
+			StructGet(plan.managedBytesTypeIndex, 1),
+			LocalGet(position),
+			I32Add,
+			LocalGet(pointer),
+			LocalGet(position),
+			I32Add,
+			I32Load8U(0),
+			ArraySet(plan.byteArrayTypeIndex),
+			LocalGet(position),
+			I32Const(1),
+			I32Add,
+			LocalSet(position),
+			Br(0),
+			End,
+			End
+		];
+	}
+
+	function requireGcBytesLength(bytesLocal:Int, minimum:Int):Array<WasmInstruction>
+		return [
+			LocalGet(bytesLocal),
+			StructGet(plan.managedBytesTypeIndex, 2),
+			I32Const(minimum),
+			I32LtS,
+			If(null),
+			Unreachable,
+			End
+		];
 
 	public function arrayGet(array:IrValue, index:IrValue, destination:Int, arrayLocal:Int, indexLocal:Int):Null<Array<WasmInstruction>> {
 		var element = requireArrayElement(array.type),

@@ -9,7 +9,9 @@ import compiler.ffi.HxiParser;
 import compiler.ffi.HxiProjection;
 import compiler.ffi.HxiProjectionProfile;
 import compiler.ir.Ir.IrType;
+import compiler.ir.Ir.IrCNativeArgumentMode;
 import compiler.ir.Ir.IrInstruction;
+import compiler.ir.codec.CanonicalIrCodec;
 
 class HxiParserMain {
 	static final valid = '// generated ABI\n'
@@ -316,6 +318,15 @@ class HxiParserMain {
 			&& bufferSource.indexOf("__hxi_raw_read(seed, null, __out_size)") >= 0
 			&& bufferSource.indexOf("haxe.io.Bytes.alloc(__capacity)") >= 0,
 			"output buffers should project a bounded size-query and fill wrapper");
+		var bufferNatives = HxiProjection.cNatives(buffers),
+			bufferProgram = compiler.Frontend.compile("function main():Int return 0;");
+		bufferProgram.cNatives = bufferNatives;
+		var restoredBufferNative = CanonicalIrCodec.decode(CanonicalIrCodec.encode(bufferProgram)).cNatives[0];
+		expect(Type.enumEq(bufferNatives[0].argumentModes[1], BytesOutput(2))
+			&& bufferNatives[0].argumentModes[2] == BytesSize
+			&& Type.enumEq(restoredBufferNative.argumentModes[1], BytesOutput(2))
+			&& restoredBufferNative.argumentModes[2] == BytesSize,
+			"output buffer and size-pointer ABI modes should round-trip through canonical IR");
 		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(data: ptr<u8> @out_buffer("size"), size: ptr<u32> @inout) -> void; }',
 			"must be nullable");
 		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(data: nullable<ptr<u8>> @out_buffer("missing"), size: ptr<u32> @inout) -> void; }',

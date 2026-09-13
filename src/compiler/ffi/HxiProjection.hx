@@ -309,6 +309,14 @@ class HxiProjection {
 				codes:Array<String> = [],
 				parameters = functionParameters.get(fn.name),
 				supported = parameters != null && parameters.length == fn.arguments.length;
+			var outputBufferSizes:Map<String, Bool> = [];
+			if (parameters != null)
+				for (parameter in parameters)
+					switch parameter.direction {
+						case OutBuffer(sizeName):
+							outputBufferSizes.set(sizeName, true);
+						case _:
+					}
 			for (index in 0...fn.arguments.length) {
 				var argument = fn.arguments[index];
 				var value = project(argument, false);
@@ -330,6 +338,7 @@ class HxiProjection {
 						}
 					case OutBuffer(lengthName): BytesOutput(parameterIndex(parameters, lengthName));
 					case Out: Output;
+					case InOut if (outputBufferSizes.exists(parameters[index].name)): BytesSize;
 					case InOut: InputOutput;
 				};
 				argumentModes.push(mode);

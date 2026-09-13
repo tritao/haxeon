@@ -204,6 +204,19 @@ const cases = [
           actual[0] = 84;
           actual[7] = 33;
           return 17;
+        },
+        read_bytes: (seed, pointer, sizePointer) => {
+          const memory = moduleInstance.exports.memory;
+          const view = new DataView(memory.buffer);
+          if (pointer === 0) {
+            view.setUint32(sizePointer, 8, true);
+            return 0;
+          }
+          if (seed !== 7 || view.getUint32(sizePointer, true) < 5)
+            return 0;
+          new Uint8Array(memory.buffer, pointer, 5).set([104, 101, 108, 108, 111]);
+          view.setUint32(sizePointer, 5, true);
+          return 9;
         }
       };
     if (relative.includes("hxi-retained"))
@@ -218,7 +231,7 @@ const cases = [
       const ffiBytes = relative.endsWith("wasm-cli-gc-ffi-bytes.wasm");
       const hasMemory = WebAssembly.Module.exports(compiled).some(entry => entry.name === "memory");
       if ((!ffiBytes && (WebAssembly.Module.imports(compiled).length !== 0 || hasMemory))
-          || (ffiBytes && (WebAssembly.Module.imports(compiled).length !== 2 || !hasMemory))
+          || (ffiBytes && (WebAssembly.Module.imports(compiled).length !== 3 || !hasMemory))
           || WebAssembly.Module.customSections(compiled, "haxeon.gc.roots").length !== 0)
         throw new Error("Wasm GC object module unexpectedly includes linear memory or custom root metadata");
       moduleInstance = new WebAssembly.Instance(compiled, imports);

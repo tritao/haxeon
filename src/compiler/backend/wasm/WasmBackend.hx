@@ -278,9 +278,9 @@ class WasmBackend implements Backend {
 			if (usedCNatives.exists(native.name))
 				for (mode in native.argumentModes)
 					switch mode {
-						case BytesInput(_) | BytesInputOutput(_):
+						case BytesInput(_) | BytesInputOutput(_) | BytesOutput(_) | BytesSize:
 							requiresScratchMemory = true;
-						case Value | BytesOutput(_) | Output | InputOutput:
+						case Value | Output | InputOutput:
 					}
 
 		var plan = new WasmGcTypePlan(program),
@@ -413,8 +413,9 @@ class WasmBackend implements Backend {
 		return switch name {
 			case "__array_alloc_i32", "__array_alloc_bool", "__array_alloc_f64", "__array_alloc_bytes", "__array_alloc_ref", "__array_push_i32",
 				"__array_push_bool", "__array_push_f64", "__array_push_bytes", "__array_push_ref", "__dynamic_equal", "__bytes_alloc", "__bytes_of_string",
-				"__bytes_length", "__bytes_get", "__bytes_set", "__bytes_get_i32", "__bytes_set_i32", "__bytes_view", "__bytes_sub", "__bytes_compare",
-				"__bytes_to_string", "__bytes_get_string", "__string_length", "__string_char_code_at", "__string_concat", "__string_equal": true;
+				"__bytes_length", "__bytes_get", "__bytes_set", "__bytes_get_i32", "__bytes_set_i32", "getI32", "setI32", "__bytes_view", "__bytes_sub",
+				"__bytes_compare", "__bytes_to_string", "__bytes_get_string", "structSlice", "__string_length", "__string_char_code_at", "__string_concat",
+				"__string_equal": true;
 			default: false;
 		};
 
@@ -437,8 +438,18 @@ class WasmBackend implements Backend {
 						|| lengthArgument >= native.arguments.length
 						|| native.arguments[lengthArgument] != I32)
 						throw 'Wasm GC C native "${native.name}" requires mutable byte input followed by an I32 length';
-				case BytesOutput(_) | Output | InputOutput:
-					throw 'Wasm GC C native "${native.name}" supports input byte slices only so far';
+				case BytesOutput(sizeArgument):
+					if (native.arguments[index] != ManagedBytes
+						|| sizeArgument < 0
+						|| sizeArgument >= native.arguments.length
+						|| native.arguments[sizeArgument] != ManagedBytes
+						|| native.argumentModes[sizeArgument] != BytesSize)
+						throw 'Wasm GC C native "${native.name}" requires a GC byte size pointer for output buffers';
+				case BytesSize:
+					if (native.arguments[index] != ManagedBytes)
+						throw 'Wasm GC C native "${native.name}" requires a GC byte view for output size pointers';
+				case Output | InputOutput:
+					throw 'Wasm GC C native "${native.name}" supports byte slices and HXI output buffers only so far';
 			}
 		switch native.result {
 			case Void:
@@ -464,7 +475,7 @@ class WasmBackend implements Backend {
 			var parameters:Array<WasmValueType> = [];
 			for (index in 0...native.arguments.length)
 				parameters.push(switch native.argumentModes[index] {
-					case BytesInput(_) | BytesInputOutput(_): I32;
+					case BytesInput(_) | BytesInputOutput(_) | BytesOutput(_) | BytesSize: I32;
 					case Value: gcCNativeValueType(native.arguments[index]);
 					case _: throw 'Wasm GC C native "${native.name}" has unsupported argument direction';
 				});

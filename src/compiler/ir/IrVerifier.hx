@@ -74,6 +74,9 @@ class IrVerifier {
 						|| sizeArgument >= native.arguments.length
 						|| native.arguments[sizeArgument] != ManagedBytes)
 						throw 'C native "${native.name}" has invalid output-buffer argument metadata';
+				case BytesSize:
+					if (native.arguments[index] != ManagedBytes)
+						throw 'C native "${native.name}" has invalid output-buffer size metadata';
 				case Value | Output | InputOutput:
 			}
 	}

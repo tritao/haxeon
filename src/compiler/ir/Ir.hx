@@ -130,6 +130,7 @@ enum IrCNativeArgumentMode {
 	BytesInput(lengthArgument:Int);
 	BytesInputOutput(lengthArgument:Int);
 	BytesOutput(lengthArgument:Int);
+	BytesSize;
 	Output;
 	InputOutput;
 }
