@@ -52,6 +52,7 @@ import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiAbi;
 import compiler.ffi.HxiParser;
+import compiler.ffi.HxiValidator;
 import compiler.ffi.HxiProjection;
 import compiler.ffi.HxiProjectionProfile;
 
@@ -320,23 +321,16 @@ class Compiler {
 	function registerFfiInterface(path:String, source:String, enforceFreeze:Bool):Void {
 		if (enforceFreeze && compiledOnce)
 			throw "FFI interfaces are frozen after the first compilation";
-		var model = HxiParser.parseUnvalidated(path, source);
+		var model = HxiParser.parse(path, source);
 		if (ffiInterfaceModels.exists(model.name))
 			throw 'FFI interface "${model.name}" is already registered';
-		for (dependency in model.dependencies)
-			if (!ffiInterfaceModels.exists(dependency))
-				throw 'FFI interface "${model.name}" depends on unknown interface "$dependency"';
-		var dependencyDeclarations:Array<HxiDeclaration> = [];
+		var dependencies:Array<HxiInterface> = [];
 		for (dependencyName in model.dependencies) {
-			var dependencyModel = ffiInterfaceModels.get(dependencyName);
-			if (dependencyModel == null)
-				throw 'FFI interface "${model.name}" depends on unknown interface "$dependencyName"';
-			for (declaration in dependencyModel.declarations)
-				dependencyDeclarations.push(declaration);
+			var dependency = ffiInterfaceModels.get(dependencyName);
+			if (dependency != null)
+				dependencies.push(dependency);
 		}
-		// Parsing discovers the interface's dependency list. Validate the composed
-		// model once against exactly those declared dependencies.
-		HxiParser.validate(model, dependencyDeclarations);
+		HxiValidator.validateComposition(model, dependencies);
 		var composition = buildFfiComposition(model),
 			profile = ffiProjectionProfiles.get(model.name);
 		if (profile != null)

@@ -1,12 +1,17 @@
 import compiler.ffi.CHeaderImporter;
 import compiler.ffi.HxiParser;
+import compiler.ffi.HxiWriter;
+import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiProjection;
 import sys.FileSystem;
 
 class CHeaderImporterMain {
 	static function main():Void {
-		var first = CHeaderImporter.importHeader("tests/ffi/import_fixture.h", "x86_64-linux-gnu", ["tests/ffi"]),
-			second = CHeaderImporter.importHeader("tests/ffi/import_fixture.h", "x86_64-linux-gnu", ["tests/ffi"]);
+		var firstModel = CHeaderImporter.importHeader("tests/ffi/import_fixture.h", "x86_64-linux-gnu", ["tests/ffi"]),
+			first = HxiWriter.write(firstModel, generatedHeader("tests/ffi/import_fixture.h", "x86_64-linux-gnu")),
+			second = importHeaderText("tests/ffi/import_fixture.h", "x86_64-linux-gnu", ["tests/ffi"]);
+		expect(Std.isOfType(firstModel, HxiInterface)
+			&& firstModel.name == "import_fixture_h", "C header importer should return a typed HXI interface");
 		expect(first == second, "C header import must be deterministic");
 		expect(first.indexOf("struct sample_options @layout(32, 8)") >= 0, "record layout should come from Clang");
 		expect(first.indexOf("title: nullable<utf8> @offset(8)") >= 0, "annotated UTF-8 field offsets should be preserved");
@@ -68,7 +73,7 @@ class CHeaderImporterMain {
 		expect(first.indexOf("int_fast16_t") < 0, "system-header declarations should not leak into imported HXI");
 		var parsed = HxiParser.parse("import_fixture.hxi", first);
 		expect(parsed.target == "x86_64-linux-gnu", "generated HXI should satisfy the validated parser contract");
-		var named = CHeaderImporter.importHeader("tests/ffi/import_fixture.h", "x86_64-linux-gnu", ["tests/ffi"], "clang", "sample", "Sample");
+		var named = importHeaderText("tests/ffi/import_fixture.h", "x86_64-linux-gnu", ["tests/ffi"], "clang", "sample", "Sample");
 		var projected = HxiProjection.source(HxiParser.parse("import_fixture.hxi", named));
 		expect(projected.indexOf("class Ownedsample_owned_handle") >= 0
 			&& projected.indexOf("Sample.sample_owned_handle_destroy(__value)") >= 0,
@@ -82,42 +87,41 @@ class CHeaderImporterMain {
 			"C header flags should project to nominal Haxe bitmasks at both integer widths");
 		expect(named.indexOf('interface Sample @target("x86_64-linux-gnu") @library("sample")') >= 0,
 			"callers should be able to select a stable projected interface name");
-		var dependent = CHeaderImporter.importHeader("tests/ffi/import_fixture.h", "x86_64-linux-gnu", ["tests/ffi"], "clang", "sample", "Dependent",
-			["Sample"]);
+		var dependent = importHeaderText("tests/ffi/import_fixture.h", "x86_64-linux-gnu", ["tests/ffi"], "clang", "sample", "Dependent", ["Sample"]);
 		expect(dependent.indexOf('@depends("Sample")') >= 0, "header importer should preserve HXI dependency metadata");
 		var dependencyHeader = FileSystem.fullPath("tests/ffi/import_fixture.h"),
-			filtered = CHeaderImporter.importHeader("tests/ffi/dependency_wrapper.h", "x86_64-linux-gnu", ["tests/ffi"], "clang", "sample", "Filtered",
-				["Sample"], null, [dependencyHeader]);
+			filtered = importHeaderText("tests/ffi/dependency_wrapper.h", "x86_64-linux-gnu", ["tests/ffi"], "clang", "sample", "Filtered", ["Sample"], null,
+				[dependencyHeader]);
 		expect(filtered.indexOf("handle sample_handle") < 0 && filtered.indexOf("struct sample_options") < 0,
 			"excluded dependency headers should not be projected into the dependent HXI");
 		expect(filtered.indexOf("struct dependency_extra") >= 0 && filtered.indexOf("extern fn dependency_use(value: sample_handle") >= 0,
 			"dependent headers should retain their own declarations and dependency references");
-		var windows = CHeaderImporter.importHeader("tests/ffi/import_fixture.h", "i686-w64-windows-gnu", ["tests/ffi"]);
+		var windows = importHeaderText("tests/ffi/import_fixture.h", "i686-w64-windows-gnu", ["tests/ffi"]);
 		expect(windows.indexOf('callback sample_stdcall_callback = fn(arg0: i32) -> i32 @callconv("stdcall")') >= 0
 			&& windows.indexOf('extern fn sample_stdcall_function(value: i32) -> i32 @callconv("stdcall")') >= 0,
 			"Clang calling conventions should survive callback and function import");
 		HxiParser.parse("import_fixture-windows.hxi", windows);
-		var orderAb = CHeaderImporter.importHeader("tests/ffi/import_order_ab.h", "x86_64-linux-gnu", ["tests/ffi"], "clang", "sample", "Order"),
-			orderBa = CHeaderImporter.importHeader("tests/ffi/import_order_ba.h", "x86_64-linux-gnu", ["tests/ffi"], "clang", "sample", "Order");
+		var orderAb = importHeaderText("tests/ffi/import_order_ab.h", "x86_64-linux-gnu", ["tests/ffi"], "clang", "sample", "Order"),
+			orderBa = importHeaderText("tests/ffi/import_order_ba.h", "x86_64-linux-gnu", ["tests/ffi"], "clang", "sample", "Order");
 		var bodyAb = orderAb.substring(orderAb.indexOf("interface ")),
 			bodyBa = orderBa.substring(orderBa.indexOf("interface "));
 		expect(bodyAb == bodyBa && bodyAb.indexOf("extern fn import_order_a") >= 0 && bodyAb.indexOf("extern fn import_order_b") >= 0,
 			"included declarations should be complete and deterministic regardless of include order");
 		var diagnostic = "";
 		try
-			CHeaderImporter.importHeader("tests/ffi/unsupported_fixture.h", "x86_64-linux-gnu", ["tests/ffi"])
+			importHeaderText("tests/ffi/unsupported_fixture.h", "x86_64-linux-gnu", ["tests/ffi"])
 		catch (error:Dynamic)
 			diagnostic = Std.string(error);
 		expect(diagnostic.indexOf("unsupported_fixture.h:1:") >= 0 && diagnostic.indexOf("unsupported variadic function") >= 0,
 			'unsupported declarations should report their source location: $diagnostic');
-		var documented = CHeaderImporter.importHeader("tests/ffi/documentation_fixture.h", "x86_64-linux-gnu", ["tests/ffi"], "clang", "docs", "Docs");
+		var documented = importHeaderText("tests/ffi/documentation_fixture.h", "x86_64-linux-gnu", ["tests/ffi"], "clang", "docs", "Docs");
 		expect(documented.indexOf("/**") >= 0
 			&& documented.indexOf("An opaque resource identifier used by the documentation fixture.") >= 0,
 			"Doxygen comments should be preserved in generated HXI");
 		expect(documented.indexOf("@param options Creation options; the label is copied before returning.") >= 0,
 			"Doxygen parameter comments should be preserved in generated HXI");
-		var labeled = CHeaderImporter.importHeader(FileSystem.fullPath("tests/ffi/documentation_fixture.h"), "x86_64-linux-gnu", ["tests/ffi"], "clang",
-			"docs", "Docs", null, "tests/ffi/documentation_fixture.h");
+		var labeled = importHeaderText(FileSystem.fullPath("tests/ffi/documentation_fixture.h"), "x86_64-linux-gnu", ["tests/ffi"], "clang", "docs", "Docs",
+			null, "tests/ffi/documentation_fixture.h");
 		expect(labeled.indexOf("// Generated by Haxeon from tests/ffi/documentation_fixture.h") == 0,
 			"generated HXI source labels should be stable and path-independent");
 		var documentedModel = HxiParser.parse("documentation_fixture.hxi", documented),
@@ -137,6 +141,16 @@ class CHeaderImporterMain {
 		expect(documentedProjection.indexOf("Number of entries to reserve.") >= 0, "structure field documentation should reach generated Haxe accessors");
 		Sys.println("PASS: Clang C headers import into deterministic raw HXI");
 	}
+
+	static function importHeaderText(header:String, target:String, includes:Array<String>, clang:String = "clang", ?library:String, ?interfaceName:String,
+			?dependencies:Array<String>, ?sourceLabel:String, ?excludedHeaders:Array<String>):String {
+		var model = CHeaderImporter.importHeader(header, target, includes, clang, library, interfaceName, dependencies, excludedHeaders),
+			label = sourceLabel == null ? header : sourceLabel;
+		return HxiWriter.write(model, generatedHeader(label, target));
+	}
+
+	static function generatedHeader(label:String, target:String):String
+		return '// Generated by Haxeon from $label for $target. Do not edit.';
 
 	static function expect(condition:Bool, message:String):Void {
 		if (!condition)

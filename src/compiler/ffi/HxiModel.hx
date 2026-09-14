@@ -26,6 +26,7 @@ typedef HxiField = {
 	final ownership:HxiOwnership;
 	final lengthField:Null<String>;
 	final structSize:Bool;
+	final metadata:Map<String, Array<String>>;
 	final span:SourceSpan;
 }
 
@@ -37,6 +38,8 @@ typedef HxiParameter = {
 
 	/** The native callee keeps this callback after the call returns. */
 	final retained:Bool;
+
+	final metadata:Map<String, Array<String>>;
 
 	final span:SourceSpan;
 }
@@ -62,6 +65,7 @@ enum HxiOwnership {
 typedef HxiResultPolicy = {
 	final ownership:HxiOwnership;
 	final length:Null<String>;
+	final metadata:Map<String, Array<String>>;
 }
 
 typedef HxiEnumValue = {

@@ -2,6 +2,7 @@ import compiler.ffi.HxiAbi;
 import compiler.ffi.HxiAbi.HxiAbiValue;
 import compiler.ffi.HxiAbi.HxiIntegerSign;
 import compiler.ffi.HxiParser;
+import compiler.ffi.HxiValidator;
 import compiler.ffi.HxiProjection;
 import compiler.ffi.HxiProjectionProfile;
 import compiler.ir.Ir.IrType;
@@ -142,7 +143,7 @@ class HxiAbiMain {
 		var cycle = 'interface bad @target("x86_64-linux-gnu") { type a = b; type b = a; }';
 		var rejected = false;
 		try
-			HxiParser.parse("cycle.hxi", cycle)
+			HxiValidator.validate(HxiParser.parse("cycle.hxi", cycle), [])
 		catch (_:Dynamic)
 			rejected = true;
 		expect(rejected, "cyclic aliases should be rejected before ABI classification");

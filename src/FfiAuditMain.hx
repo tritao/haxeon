@@ -1,5 +1,7 @@
 import compiler.ffi.HxiAudit;
 import compiler.ffi.HxiParser;
+import compiler.ffi.HxiValidator;
+import compiler.ffi.HxiModel.HxiInterface;
 import haxe.Json;
 import sys.FileSystem;
 import sys.io.File;
@@ -48,8 +50,13 @@ class FfiAuditMain {
 				paths.push(argument);
 		if (paths.length != 1 || targets.length < 2 || (format != "text" && format != "json"))
 			throw "Usage: haxeon-ffi-audit --target=<triple> --target=<triple> [--profile=portable-abi64|portable-abi32] [--format=text|json] [--output=<file>] [--library=<name>] [--interface=<name>] [--depends=<interface>] [--dependency-hxi=<path>] [--include=<dir>] [--source-label=<path>] [--exclude-header=<path>] <header>";
-		var dependencyInterfaces = [for (path in dependencyPaths) HxiParser.parse(path, File.getContent(path))],
-			report = HxiAudit.audit(paths[0], targets, includes, profile, library, interfaceName, dependencies, excludedHeaders, dependencyInterfaces);
+		var dependencyInterfaces:Array<HxiInterface> = [];
+		for (path in dependencyPaths) {
+			var model = HxiParser.parse(path, File.getContent(path));
+			HxiValidator.validateComposition(model, dependencyInterfaces);
+			dependencyInterfaces.push(model);
+		}
+		var report = HxiAudit.audit(paths[0], targets, includes, profile, library, interfaceName, dependencies, excludedHeaders, dependencyInterfaces);
 		if (format == "json")
 			Sys.println(Json.stringify(report, null, "  "));
 		else {

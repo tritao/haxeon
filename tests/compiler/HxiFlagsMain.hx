@@ -1,6 +1,7 @@
 import haxe.Int64;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiParser;
+import compiler.ffi.HxiValidator;
 import compiler.ffi.HxiProjection;
 
 class HxiFlagsMain {
@@ -43,7 +44,7 @@ class HxiFlagsMain {
 	static function expectError(source:String, message:String):Void {
 		var error = "";
 		try
-			HxiParser.parse("invalid-flags.hxi", source)
+			HxiValidator.validate(HxiParser.parse("invalid-flags.hxi", source), [])
 		catch (caught:Dynamic)
 			error = Std.string(caught);
 		if (error.indexOf(message) < 0)

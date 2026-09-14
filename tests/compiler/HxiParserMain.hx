@@ -5,6 +5,9 @@ import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiType;
 import compiler.ffi.HxiModel.HxiParameterDirection;
 import compiler.ffi.HxiParser;
+import compiler.ffi.HxiValidator;
+import compiler.ffi.HxiModel.HxiInterface;
+import compiler.ffi.HxiWriter;
 import compiler.ffi.HxiProjection;
 import compiler.ffi.HxiProjectionProfile;
 import compiler.ir.Ir.IrType;
@@ -28,16 +31,27 @@ class HxiParserMain {
 		+ '}\n';
 
 	static function main():Void {
-		var parsed = HxiParser.parse("nativekit.hxi", valid);
+		var rawSource = 'interface raw @target("x86_64-linux-gnu") { extern fn invalid(value: i32 @out) -> void; }',
+			raw = HxiParser.parse("raw.hxi", rawSource);
+		switch raw.declarations[0] {
+			case Function("invalid", [{direction: Out, metadata: metadata}], _, _, _, _, _, _):
+				expect(metadata.exists("out"), "raw parsing should retain the annotation that validation will reject");
+			case _:
+				throw "expected parser to retain an invalid raw parameter model";
+		}
+		expectError(rawSource, "Output parameter");
+		var parsed = parseValidated("nativekit.hxi", valid);
+		var serialized = HxiWriter.write(parsed);
+		expect(HxiWriter.write(HxiParser.parse("roundtrip.hxi", serialized)) == serialized, "HXI serialization should be deterministic");
 		expect(parsed.name == "nativekit" && parsed.target == "x86_64-linux-gnu" && parsed.library == "nativekit", "interface metadata should parse");
-		var dependencyParsed = HxiParser.parse("dependent.hxi",
+		var dependencyParsed = parseValidated("dependent.hxi",
 			'interface dependent @target("x86_64-linux-gnu") @library("dependent") @depends("nativekit", "platform") { extern fn draw() -> void; }');
 		expect(dependencyParsed.dependencies.length == 2
 			&& dependencyParsed.dependencies[0] == "nativekit"
 			&& dependencyParsed.dependencies[1] == "platform",
 			"HXI dependencies should parse in declaration order");
-		var dependencyTypes = HxiParser.parse("dependency-types.hxi", 'interface dependency_types @target("x86_64-linux-gnu") { opaque external_handle; }');
-		HxiParser.parse("visible-dependency.hxi",
+		var dependencyTypes = parseValidated("dependency-types.hxi", 'interface dependency_types @target("x86_64-linux-gnu") { opaque external_handle; }');
+		parseValidated("visible-dependency.hxi",
 			'interface visible_dependency @target("x86_64-linux-gnu") @depends("dependency_types") { extern fn use_handle(value: ptr<external_handle>) -> void; }',
 			dependencyTypes.declarations);
 		expect(parsed.declarations.length == 7, "all declarations should parse");
@@ -57,7 +71,7 @@ class HxiParserMain {
 				throw "expected symbol-bound function";
 		}
 		expectError(StringTools.replace(valid, "ptr<nk_context>", "ptr<missing>"), 'Unknown HXI type "missing"');
-		var enumerations = HxiParser.parse("enums.hxi",
+		var enumerations = parseValidated("enums.hxi",
 			'interface enums @target("x86_64-linux-gnu") @library("enums") { enum Result : i32 { OK = 0; ERROR = -1; } flags Options : u32 { NONE = 0; FIRST = 1; SECOND = 1 << 1; BOTH = 1 | (1 << 1); HIGH = 0x80000000; } extern fn check(value: Result, options: Options) -> Result; }');
 		switch enumerations.declarations[1] {
 			case Enumeration("Options", _, true, values, _):
@@ -79,7 +93,7 @@ class HxiParserMain {
 			+ 'flags WordFlags : u32 { NONE = 0; FIRST = 1; SECOND = 2; BOTH = 3; } '
 			+ 'flags WideFlags : u64 { NONE = 0; FIRST = 1; HIGH = 1 << 63; BOTH = (1 << 63) | 1; } '
 			+ 'extern fn check_wide(value: WideFlags) -> WideFlags; }';
-		var flagWidths = HxiParser.parse("flag-widths.hxi", flagWidthsSource),
+		var flagWidths = parseValidated("flag-widths.hxi", flagWidthsSource),
 			flagWidthsProjection = HxiProjection.source(flagWidths),
 			flagWidthsNatives = HxiProjection.cNatives(flagWidths);
 		expect(flagWidthsProjection.indexOf("enum abstract ByteFlags(Int)") >= 0
@@ -99,20 +113,20 @@ class HxiParserMain {
 		expectError('interface bad @target("x86_64-linux-gnu") { flags value : u32 { FIRST = 1; UNKNOWN = 5; } }', "not declared by a single-bit flag");
 		expectError('interface bad @target("x86_64-linux-gnu") { flags value : u32 { FIRST = 1; DUPLICATE = 1; } }', "duplicates");
 		expectError('interface bad @target("x86_64-linux-gnu") { flags value : u64 { A = 1 << 64; } }', "between 0 and 63");
-		var mixedCaseEnum = HxiParser.parse("mixed-case-enum.hxi",
+		var mixedCaseEnum = parseValidated("mixed-case-enum.hxi",
 			'interface mixed @target("x86_64-linux-gnu") @library("mixed") { enum FixtureResult : i32 { FIXTURE_OK = 0; } extern fn check(value: FixtureResult) -> FixtureResult; }');
 		var mixedCaseSource = HxiProjection.source(mixedCaseEnum);
 		expect(mixedCaseSource.indexOf("enum abstract FixtureResult(Int)") >= 0
 			&& mixedCaseSource.indexOf("extern function check(arg0:FixtureResult):FixtureResult") >= 0,
 			"already mixed-case enum names should retain their spelling in the Haxe projection");
-		var nativeNames = HxiParser.parse("native-names.hxi",
+		var nativeNames = parseValidated("native-names.hxi",
 			'interface native_names @target("x86_64-linux-gnu") @library("native_names") { enum nk_result : i32 { NK_OK = 0; NK_ERROR_INVALID_ARGUMENT = -2; } extern fn check(value: nk_result) -> nk_result; }');
 		var nativeProfile = HxiProjectionProfile.parse("native-names.hxmap", '{"interface":"native_names","typePrefix":"nk_","enumValuePrefixes":["NK_"]}');
 		var nativeNameSource = HxiProjection.source(nativeNames, null, null, null, nativeProfile);
 		expect(nativeNameSource.indexOf("enum abstract Result(Int)") >= 0
 			&& nativeNameSource.indexOf("extern function check(arg0:Result):Result") >= 0,
 			"snake-case enum names should project to concise PascalCase");
-		var builtinValueEnums = HxiParser.parse("builtin-enum-values.hxi",
+		var builtinValueEnums = parseValidated("builtin-enum-values.hxi",
 			'interface builtin_enum_values @target("x86_64-linux-gnu") @library("builtin_enum_values") { ' +
 			'enum nkgpu_vertex_format : u32 { NKGPU_VERTEXFORMAT_FLOAT = 1; NKGPU_VERTEXFORMAT_FLOAT2 = 2; } ' +
 			'enum nkgpu_uniform_type : u32 { NKGPU_UNIFORMTYPE_FLOAT = 1; NKGPU_UNIFORMTYPE_INT = 5; } }');
@@ -127,7 +141,7 @@ class HxiParserMain {
 			"enum members may share names with built-in Haxe types while projected type names remain distinct");
 		var genericProfile = HxiProjectionProfile.parse("generic.hxmap",
 			'{"interface":"generic","typePrefix":"lib_","enumValuePrefixes":["LIB_"],"functionNames":{"check":"validate"},"fieldNames":{"lib_point":{"color":"shade"}},"constantNames":{"LIB_VERSION":"version"}}');
-		var genericModel = HxiParser.parse("generic.hxi",
+		var genericModel = parseValidated("generic.hxi",
 			'interface generic @target("x86_64-linux-gnu") @library("generic") { const LIB_VERSION = 1; enum lib_color : i32 { LIB_RED = 1; } handle lib_handle : u32; struct lib_point @layout(4, 4) { color: lib_color @offset(0); } extern fn check(value: lib_point) -> lib_handle; }');
 		var genericSource = HxiProjection.source(genericModel, null, null, null, genericProfile),
 			genericNatives = HxiProjection.cNatives(genericModel, null, null, null, genericProfile);
@@ -139,7 +153,7 @@ class HxiParserMain {
 			&& genericSource.indexOf("public static inline final version:Int = 1") >= 0
 			&& genericNatives[0].name == "generic.validate",
 			"projection policies should rename types, fields, functions, constants, and native references consistently");
-		var resultPolicyModel = HxiParser.parse("result-policy.hxi",
+		var resultPolicyModel = parseValidated("result-policy.hxi",
 			'interface result_policy @target("x86_64-linux-gnu") @library("result_policy") { enum nk_result : i32 { NK_OK = 0; NK_ERROR = -1; } extern fn nk_last_error() -> utf8 @borrowed; extern fn nk_run(seed: u32) -> nk_result; extern fn nk_create(seed: u32, output: ptr<u32> @out) -> nk_result; }'),
 			resultPolicyProfile = HxiProjectionProfile.parse("result-policy.hxmap",
 				'{"interface":"result_policy","typePrefix":"nk_","enumValuePrefixes":["NK_"],"resultPolicies":{"nk_result":{"successValue":"NK_OK","diagnosticFunction":"nk_last_error","errorType":"ProjectionError"}}}'),
@@ -177,7 +191,7 @@ class HxiParserMain {
 			"checked result wrappers should typecheck without adding native symbols or hiding raw status calls");
 		var styleProfile = HxiProjectionProfile.parse("style.hxmap",
 			'{"interface":"style","typePrefix":"lib_","functionPrefix":"lib_","functionCase":"camel","fieldCase":"camel","constantPrefix":"LIB_","constantCase":"camel"}');
-		var styleModel = HxiParser.parse("style.hxi",
+		var styleModel = parseValidated("style.hxi",
 			'interface style @target("x86_64-linux-gnu") @library("style") { const LIB_VERSION = 1; struct lib_point @layout(4, 4) { text_value: i32 @offset(0); } extern fn lib_check_value(value: lib_point) -> i32; }');
 		var styleSource = HxiProjection.source(styleModel, null, null, null, styleProfile),
 			styleNatives = HxiProjection.cNatives(styleModel, null, null, null, styleProfile);
@@ -279,7 +293,7 @@ class HxiParserMain {
 			"transactional compiler candidates should preserve projected native names while retaining the C symbol");
 		var forkedProjectionValidation = forkedProjectionCompiler.validate("ProfileForkMain.hx", forkedProjectionMain, "ProfileForkMain");
 		expect(forkedProjectionValidation.valid, "forked compiler validation should retain Haxe projection names and their matching native registrations");
-		var enumField = HxiParser.parse("enum-field.hxi",
+		var enumField = parseValidated("enum-field.hxi",
 			'interface enums @target("x86_64-linux-gnu") @library("enums") { enum result : c_int { OK = 0; ERROR = -1; } struct Status @layout(4, 4) { result: result @offset(0); } }');
 		var enumFieldSource = HxiProjection.source(enumField);
 		expect(enumFieldSource.indexOf("enum abstract Result(Int)") >= 0 && enumFieldSource.indexOf("function get_result():Result") >= 0,
@@ -293,7 +307,7 @@ class HxiParserMain {
 		expectError('interface bad @target("x86_64-linux-gnu") { enum value : u8 { A = 256; } }', "outside the representation");
 		expectError('interface bad @target("x86_64-linux-gnu") { enum value : i32 { A = 0; B = 0; } }', "duplicates");
 		expectError('interface bad @target("x86_64-linux-gnu") { enum value : i32 { A = 1 << 32; } }', "shift count");
-		var outputs = HxiParser.parse("outputs.hxi",
+		var outputs = parseValidated("outputs.hxi",
 			'interface outputs @target("x86_64-linux-gnu") @library("outputs") { struct point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); } extern fn read(seed: i32, value: ptr<i32> @out, point: ptr<point> @out) -> i32; extern fn double(value: ptr<i32> @inout) -> void; }');
 		switch outputs.declarations[1] {
 			case Function(_, [_, {direction: Out}, {direction: Out}], _, _, _, _, _, _):
@@ -313,7 +327,7 @@ class HxiParserMain {
 		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(value: ptr<const<i32>> @out) -> void; }', "cannot point to const data");
 		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(value: ptr<ptr<i32>> @out) -> void; }',
 			"requires a scalar, fixed-structure, or explicitly owned opaque-pointer pointee");
-		var pointerOutputs = HxiParser.parse("pointer-outputs.hxi",
+		var pointerOutputs = parseValidated("pointer-outputs.hxi",
 			'interface pointer_outputs @target("x86_64-linux-gnu") @library("pointer_outputs") { opaque Context; extern fn create_owned(value: ptr<nullable<ptr<Context>>> @out @owned("destroy_context")) -> void; extern fn create_borrowed(value: ptr<nullable<ptr<Context>>> @out @borrowed) -> void; extern fn create_required(value: ptr<ptr<Context>> @out @borrowed) -> void; extern fn create_owned_status(result: ptr<nullable<ptr<Context>>> @out @owned("destroy_context")) -> i32; extern fn destroy_context(value: ptr<void>) -> void @symbol("destroy_context"); struct Sample @layout(4,4) { value: i32 @offset(0); } }');
 		switch pointerOutputs.declarations[1] {
 			case Function("create_owned", [{direction: Out, ownership: Owned("destroy_context")}], _, _, _, _, _, _):
@@ -343,7 +357,7 @@ class HxiParserMain {
 		expectError('interface bad @target("x86_64-linux-gnu") { opaque Context; extern fn create(value: ptr<ptr<Context>> @out @owned("release")) -> void; extern fn release(value: ptr<i32>) -> void @symbol("release"); }',
 			"compatible input pointer");
 		expectError('interface bad @target("x86_64-linux-gnu") { callback Read = fn(value: ptr<i32> @out) -> void; }', "cannot use output direction");
-		var buffers = HxiParser.parse("buffers.hxi",
+		var buffers = parseValidated("buffers.hxi",
 			'interface buffers @target("x86_64-linux-gnu") @library("buffers") { extern fn read(seed: i32, data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout) -> i32; }');
 		switch buffers.declarations[0] {
 			case Function(_, [_, {direction: OutBuffer("size")}, {direction: InOut}], _, _, _, _, _, _):
@@ -364,7 +378,7 @@ class HxiParserMain {
 			&& Type.enumEq(restoredBufferNative.argumentModes[1], BytesOutput(2))
 			&& restoredBufferNative.argumentModes[2] == BytesSize,
 			"output buffer and size-pointer ABI modes should round-trip through canonical IR");
-		var fixedOutputs = HxiParser.parse("fixed-outputs.hxi",
+		var fixedOutputs = parseValidated("fixed-outputs.hxi",
 			'interface fixed_outputs @target("x86_64-linux-gnu") @library("fixed_outputs") { struct position @layout(16, 16) { x: i32 @offset(0); y: i32 @offset(4); } extern fn write(value: ptr<position> @out) -> void; extern fn update(value: ptr<position> @inout) -> void; }'),
 			fixedOutputNatives = HxiProjection.cNatives(fixedOutputs),
 			fixedOutputProgram = compiler.Frontend.compile("function main():Int return 0;");
@@ -376,12 +390,12 @@ class HxiParserMain {
 			&& Type.enumEq(restoredFixedOutputs[1].argumentModes[0], FixedInputOutput(16, 16, true))
 			&& restoredFixedOutputs[0].pointerSize == 8,
 			"fixed-layout HXI output pointers should preserve size and alignment through canonical IR");
-		var pointerFieldOutput = HxiParser.parse("pointer-field-output.hxi",
+		var pointerFieldOutput = parseValidated("pointer-field-output.hxi",
 			'interface pointer_field_output @target("x86_64-linux-gnu") @library("pointer_field_output") { opaque Context; struct holder @layout(8, 8) { context: ptr<Context> @offset(0) @borrowed; } extern fn read(value: ptr<holder> @out) -> void; }'),
 			pointerFieldMode = HxiProjection.cNatives(pointerFieldOutput)[0].argumentModes[0];
 		expect(Type.enumEq(pointerFieldMode, FixedOutput(8, 8, false)),
 			"fixed-layout output metadata should flag structures with raw pointer fields for backend-specific validation");
-		var fixedCalls = HxiParser.parse("fixed-calls.hxi",
+		var fixedCalls = parseValidated("fixed-calls.hxi",
 			'interface fixed_calls @target("portable-abi32") @library("fixed_calls") { struct position @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); } extern fn read_pointer(value: ptr<const<position>>) -> i32; extern fn sum_value(value: position) -> i32; extern fn make_value(seed: i32) -> position; }'),
 			fixedCallNatives = HxiProjection.cNatives(fixedCalls),
 			fixedCallProgram = compiler.Frontend.compile("function main():Int return 0;");
@@ -401,7 +415,7 @@ class HxiParserMain {
 			"references missing size parameter");
 		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u64> @inout) -> void; }',
 			"must be ptr<u32>");
-		var pointerArrays = HxiParser.parse("pointer-arrays.hxi",
+		var pointerArrays = parseValidated("pointer-arrays.hxi",
 			'interface pointer_arrays @target("portable-abi64") @library("pointer_arrays") { extern fn read(seed: i32, values: nullable<ptr<utf8>> @out_array("count"), count: ptr<u32> @inout) -> i32; }');
 		var pointerArraySource = HxiProjection.source(pointerArrays);
 		expect(pointerArraySource.indexOf("function read(seed:Int):ReadOutResult") >= 0
@@ -414,7 +428,7 @@ class HxiParserMain {
 			"must use @inout");
 		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(values: nullable<ptr<u8>> @out_array("count"), count: ptr<u32> @inout) -> i32; }',
 			"UTF-8 pointer array");
-		var callbacks = HxiParser.parse("callbacks.hxi",
+		var callbacks = parseValidated("callbacks.hxi",
 			'interface callbacks @target("x86_64-linux-gnu") @library("callbacks") { callback Binary = fn(left: i32, right: i32) -> i32; extern fn apply(callback: Binary, left: i32, right: i32) -> i32; }');
 		var callbackSource = HxiProjection.source(callbacks);
 		expect(callbackSource.indexOf("typedef Binary = (left:Int, right:Int)->Int") >= 0
@@ -422,11 +436,11 @@ class HxiParserMain {
 			&& callbackSource.indexOf("function takeError():Null<haxe.io.Bytes>") >= 0
 			&& callbackSource.indexOf("extern function apply(arg0:BinaryCallback") >= 0,
 			"callbacks should project typed functions behind explicitly owned native handles");
-		var nullableCallbacks = HxiParser.parse("nullable-callbacks.hxi",
+		var nullableCallbacks = parseValidated("nullable-callbacks.hxi",
 			'interface callbacks @target("x86_64-linux-gnu") @library("callbacks") { callback Binary = fn(value: i32) -> i32; extern fn set(callback: nullable<Binary>) -> void; }');
 		expect(HxiProjection.source(nullableCallbacks).indexOf("extern function set(arg0:Null<BinaryCallback>):Void") >= 0,
 			"nullable callback parameters should project as nullable managed handles");
-		var retainedCallbacks = HxiParser.parse("retained-callbacks.hxi",
+		var retainedCallbacks = parseValidated("retained-callbacks.hxi",
 			'interface callbacks @target("x86_64-linux-gnu") @library("callbacks") { callback Frame = fn() -> void; extern fn set(callback: nullable<Frame> @retained) -> void; }');
 		var retainedCallbackSource = HxiProjection.source(retainedCallbacks);
 		switch retainedCallbacks.declarations[1] {
@@ -438,7 +452,7 @@ class HxiParserMain {
 			"retained callback lifetime should remain visible in the projected binding");
 		expectError('interface bad @target("x86_64-linux-gnu") { extern fn set(value: i32 @retained) -> void; }',
 			'can use @retained only with a callback type');
-		var conventions = HxiParser.parse("conventions.hxi",
+		var conventions = parseValidated("conventions.hxi",
 			'interface conventions @target("i686-pc-windows-msvc") @library("calls") { callback Hook = fn(value: i32) -> i32 @callconv("stdcall"); extern fn invoke(hook: Hook) -> i32 @callconv("system"); }');
 		var conventionSource = HxiProjection.source(conventions);
 		expect(conventionSource.indexOf('haxe.io.Bytes.ofString("5>5@stdcall")') >= 0
@@ -454,7 +468,7 @@ class HxiParserMain {
 		callbackCompiler.update("CallbackMain.hx",
 			"import callbacks; function main():Int { var callback = new BinaryCallback(function(left:Int, right:Int) return left + right); return callbacks.apply(callback); }");
 		callbackCompiler.analyze("CallbackMain");
-		var handle = HxiParser.parse("handle.hxi",
+		var handle = parseValidated("handle.hxi",
 			'interface handles @target("x86_64-linux-gnu") @library("handles") { handle resource : u32; extern fn create() -> resource; extern fn use(value: resource) -> resource; }');
 		switch handle.declarations[0] {
 			case Handle("resource", Primitive("u32"), null, _):
@@ -471,7 +485,7 @@ class HxiParserMain {
 		handleCompiler.update("HandleMain.hx",
 			"import handles; function main():Int { var value:resource = new resource(); value = handles.create(); var raw:Int = value.rawValue(); var reconstructed:resource = new resource(raw); return reconstructed.isValid() ? reconstructed.rawValue() : 0; }");
 		handleCompiler.compile("HandleMain");
-		var ownedValueHandle = HxiParser.parse("owned-value-handles.hxi",
+		var ownedValueHandle = parseValidated("owned-value-handles.hxi",
 			'interface owned_values @target("x86_64-linux-gnu") @library("owned_values") { handle resource : u32 @destroy("resource_destroy"); extern fn create_resource() -> resource @owned; extern fn lookup_resource() -> resource; extern fn create_resource_out(value: ptr<resource> @out @owned) -> i32; extern fn destroy_resource(value: resource) -> void @symbol("resource_destroy"); extern fn use_resource(value: resource) -> i32; }'),
 			ownedValueHandleSource = HxiProjection.source(ownedValueHandle);
 		expect(ownedValueHandleSource.indexOf("class Ownedresource") >= 0
@@ -516,7 +530,7 @@ class HxiParserMain {
 		} catch (_:CompileError)
 			implicitValueOwnerRejected = true;
 		expect(implicitValueOwnerRejected, "ordinary value-handle returns must remain borrowed unless @owned is explicit");
-		var statusOwnedValue = HxiParser.parse("status-owned-value.hxi",
+		var statusOwnedValue = parseValidated("status-owned-value.hxi",
 			'interface status_owned @target("x86_64-linux-gnu") @library("status_owned") { handle window : u32 @destroy("window_destroy"); enum Result : i32 { OK = 0; FAILED = -1; } extern fn create_window() -> window @owned; extern fn window_destroy(value: window) -> Result @symbol("window_destroy"); }'),
 			statusOwnedSource = HxiProjection.source(statusOwnedValue);
 		expect(statusOwnedSource.indexOf("public function close():Null<Result>") >= 0
@@ -541,7 +555,7 @@ class HxiParserMain {
 		} catch (_:CompileError)
 			mismatchedHandleRejected = true;
 		expect(mismatchedHandleRejected, "a monitor handle must not be accepted by an API requiring a window handle");
-		var abiBoolean = HxiParser.parse("abi-bool.hxi",
+		var abiBoolean = parseValidated("abi-bool.hxi",
 			'interface abi_bool @target("x86_64-linux-gnu") @library("abi_bool") { type nk_bool = bool32; struct options @layout(8, 4) { struct_size: u32 @offset(0) @struct_size; enabled: nk_bool @offset(4); } extern fn get_enabled() -> nk_bool; extern fn set_enabled(value: nk_bool) -> i32; extern fn get_enabled_out(value: ptr<nk_bool> @out) -> i32; }');
 		var abiBooleanSource = HxiProjection.source(abiBoolean);
 		expect(abiBooleanSource.indexOf("function get_enabled():Bool") >= 0
@@ -612,20 +626,20 @@ class HxiParserMain {
 		} catch (_:CompileError)
 			genericOpaqueRejected = true;
 		expect(genericOpaqueRejected, "opaque handles should not implicitly erase their nominal type");
-		var pointerCallback = HxiParser.parse("pointer-callback.hxi",
+		var pointerCallback = parseValidated("pointer-callback.hxi",
 			'interface pointers @target("x86_64-linux-gnu") @library("pointers") { opaque Context; callback Visit = fn(context: nullable<ptr<Context>>) -> void; }');
 		expect(HxiProjection.source(pointerCallback).indexOf('abstract Context(hl.Abstract<"native_pointer">)') >= 0
 			&& HxiProjection.source(pointerCallback).indexOf("context:Null<Context>") >= 0,
 			"callback pointer arguments should project as borrowed typed handles");
 		expectError('interface bad @target("x86_64-linux-gnu") { callback Invalid = fn() -> ptr<void>; }',
 			"Callbacks support scalar, aggregate, and pointer arguments");
-		var aggregateCallbacks = HxiParser.parse("aggregate-callbacks.hxi",
+		var aggregateCallbacks = parseValidated("aggregate-callbacks.hxi",
 			'interface aggregates @target("x86_64-linux-gnu") @library("aggregates") { struct point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); } callback Transform = fn(value: point) -> point; }');
 		var aggregateCallbackSource = HxiProjection.source(aggregateCallbacks);
 		expect(aggregateCallbackSource.indexOf("typedef Transform = (value:point)->point") >= 0
 			&& aggregateCallbackSource.indexOf("{8;4;5,5}>{8;4;5,5}") >= 0,
 			"aggregate callbacks should retain their recursive ABI descriptor");
-		var strings = HxiParser.parse("strings.hxi",
+		var strings = parseValidated("strings.hxi",
 			'interface strings @target("x86_64-linux-gnu") @library("strings") { callback Filter = fn(value: utf8) -> nullable<utf8>; extern fn check(value: utf8, optional: nullable<utf8>) -> i32; extern fn current() -> utf8 @borrowed; extern fn copy() -> utf8 @owned("release"); extern fn release(value: ptr<void>) -> void @symbol("release"); }');
 		var stringSource = HxiProjection.source(strings),
 			stringNatives = HxiProjection.cNatives(strings);
@@ -646,7 +660,7 @@ class HxiParserMain {
 		expectError(StringTools.replace(valid, "@leaf", "@leaf(1)"), "does not accept values");
 		expectError(StringTools.replace(valid, "@leaf", "@unknown"), "Unsupported @unknown metadata");
 		expectError(StringTools.replace(valid, "ptr<const<nk_options>>", "nullable<i32>"), "nullable<> requires a pointer or callback type");
-		var pointerPolicies = HxiParser.parse("pointers.hxi",
+		var pointerPolicies = parseValidated("pointers.hxi",
 			'interface pointers @target("x86_64-linux-gnu") @library("pointers") { opaque context; extern fn create() -> ptr<u8> @owned("context_destroy") @length("context_size"); extern fn current() -> nullable<ptr<context>> @borrowed; extern fn destroy(value: ptr<void>) -> void @symbol("context_destroy"); extern fn size() -> c_size @symbol("context_size"); }');
 		switch pointerPolicies.declarations[1] {
 			case Function(_, _, _, _, _, "cdecl", {ownership: Owned("context_destroy"), length: "context_size"}, _):
@@ -708,12 +722,12 @@ class HxiParserMain {
 			&& projection.source.text.indexOf('@:cNative("nativekit", "nk_open_v1", "11>6")') >= 0
 			&& projection.source.text.indexOf('extern function nk_version():Int;') >= 0,
 			"compiler should expose bridgeable HXI functions through a generated source module");
-		var nested = HxiParser.parse("nested.hxi",
+		var nested = parseValidated("nested.hxi",
 			'interface nested @target("x86_64-linux-gnu") @library("nested") { struct point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); } struct box @layout(16, 4) { start: point @offset(0); end: point @offset(8); } }');
 		var nestedSource = HxiProjection.source(nested);
 		expect(nestedSource.indexOf("function get_start():point") >= 0 && nestedSource.indexOf("__hxi_struct_copy") >= 0,
 			"nested fixed-layout structs should project typed copy accessors");
-		var pointerFields = HxiParser.parse("pointer-fields.hxi",
+		var pointerFields = parseValidated("pointer-fields.hxi",
 			'interface fields @target("x86_64-linux-gnu") @library("fields") { opaque context; struct holder @layout(8, 8) { context: nullable<ptr<context>> @offset(0) @borrowed; } }');
 		switch pointerFields.declarations[1] {
 			case Structure(_, _, _, [{ownership: Borrowed}], _):
@@ -721,14 +735,14 @@ class HxiParserMain {
 				throw "borrowed pointer field policy was not retained";
 		}
 		expect(HxiProjection.source(pointerFields).indexOf("function set_context") >= 0, "borrowed opaque pointer fields should project typed accessors");
-		var arrays = HxiParser.parse("arrays.hxi",
+		var arrays = parseValidated("arrays.hxi",
 			'interface arrays @target("x86_64-linux-gnu") @library("arrays") { struct point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); } struct values @layout(24, 4) { bytes: array<u8, 4> @offset(0); numbers: array<i32, 3> @offset(4); points: array<point, 1> @offset(16); } }');
 		var arraySource = HxiProjection.source(arrays);
 		expect(arraySource.indexOf("function get_numbers(index:Int):Int") >= 0
 			&& arraySource.indexOf("function set_bytes_bytes") >= 0
 			&& arraySource.indexOf("function get_points(index:Int):point") >= 0,
 			"fixed scalar, byte, and nested structure arrays should project typed accessors");
-		var unnatural = HxiParser.parse("unnatural.hxi",
+		var unnatural = parseValidated("unnatural.hxi",
 			'interface bad @target("x86_64-linux-gnu") @library("bad") { struct values @layout(12, 4) { byte: u8 @offset(0); number: i32 @offset(8); } extern fn consume(value: values) -> void; }');
 		var unnaturalRejected = false;
 		try
@@ -739,7 +753,7 @@ class HxiParserMain {
 		expectError('interface bad @target("x86_64-linux-gnu") { struct values @layout(12, 4) { numbers: array<i32, 2> @offset(2); } }', "invalid offset");
 		expectError('interface bad @target("x86_64-linux-gnu") { opaque context; struct holder @layout(8, 8) { context: ptr<context> @offset(0) @owned("destroy"); } }',
 			"Owned pointer field");
-		var borrowedBuffer = HxiParser.parse("borrowed-buffer.hxi",
+		var borrowedBuffer = parseValidated("borrowed-buffer.hxi",
 			'interface buffers @target("x86_64-linux-gnu") @library("buffers") { struct holder @layout(16, 8) { data: ptr<const<void>> @offset(0) @borrowed @length_field("size"); size: u64 @offset(8); } }');
 		var borrowedBufferSource = HxiProjection.source(borrowedBuffer);
 		expect(borrowedBufferSource.indexOf("function get_data_bytes():haxe.io.Bytes") >= 0
@@ -747,7 +761,7 @@ class HxiParserMain {
 			&& borrowedBufferSource.indexOf("function set_data_bytes(value:haxe.io.Bytes)") >= 0
 			&& borrowedBufferSource.indexOf("__hxi_struct_get_roots(this)[1] = value") >= 0,
 			"borrowed structure buffers should project bounded copying accessors and retained setters");
-		var borrowedArray = HxiParser.parse("borrowed-array.hxi",
+		var borrowedArray = parseValidated("borrowed-array.hxi",
 			'interface arrays @target("x86_64-linux-gnu") @library("arrays") { struct item @layout(8, 8) { name: utf8 @offset(0); } struct holder @layout(16, 8) { items: ptr<const<item>> @offset(0) @borrowed @length_field("count"); count: u32 @offset(8); } }');
 		var borrowedArraySource = HxiProjection.source(borrowedArray);
 		expect(borrowedArraySource.indexOf("static function array(values:Array<item>)") >= 0
@@ -756,7 +770,7 @@ class HxiParserMain {
 			&& borrowedArraySource.indexOf("__hxi_struct_get_roots(this)[1] = bytes") >= 0
 			&& borrowedArraySource.indexOf("__hxi_struct_setI32(this, 8, values.length)") >= 0,
 			"borrowed structure arrays should pack elements, set their count, and retain the packed bytes");
-		var borrowedStrings = HxiParser.parse("borrowed-strings.hxi",
+		var borrowedStrings = parseValidated("borrowed-strings.hxi",
 			'interface strings @target("x86_64-linux-gnu") @library("strings") { struct holder @layout(16, 8) { paths: ptr<utf8> @offset(0) @borrowed @length_field("count"); count: u32 @offset(8); } }');
 		var borrowedStringsSource = HxiProjection.source(borrowedStrings);
 		expect(borrowedStringsSource.indexOf("function set_paths(values:Array<String>)") >= 0
@@ -764,7 +778,7 @@ class HxiParserMain {
 			&& borrowedStringsSource.indexOf("__hxi_struct_utf8_copy(values[index])") >= 0
 			&& borrowedStringsSource.indexOf("roots[index + 1] = __text") >= 0,
 			"borrowed UTF-8 pointer tables should expose managed string arrays with retained backing storage");
-		var inputArrays = HxiParser.parse("input-arrays.hxi",
+		var inputArrays = parseValidated("input-arrays.hxi",
 			'interface inputs @target("x86_64-linux-gnu") @library("inputs") { struct item @layout(8, 8) { name: utf8 @offset(0); } extern fn send(items: ptr<const<item>> @in_array("count"), count: u32) -> i32; extern fn paths(items: ptr<utf8> @in_array("count"), count: u32) -> i32; extern fn bytes(data: ptr<const<u8>> @in_array("size"), size: u32) -> i32; }');
 		var inputArraySource = HxiProjection.source(inputArrays);
 		expect(inputArraySource.indexOf("function send(items:Array<item>):Int") >= 0
@@ -814,12 +828,18 @@ class HxiParserMain {
 		catch (_:Dynamic)
 			duplicateRejected = true;
 		expect(duplicateRejected, "compiler should reject duplicate FFI interface names");
-		Sys.println("PASS: raw HXI parses into a validated ABI model");
+		Sys.println("PASS: HXI parsing and semantic validation are separate stages");
+	}
+
+	static function parseValidated(path:String, text:String, ?visible:Array<HxiDeclaration>):HxiInterface {
+		var model = HxiParser.parse(path, text);
+		HxiValidator.validate(model, visible == null ? [] : visible);
+		return model;
 	}
 
 	static function expectError(text:String, message:String):Void {
 		try {
-			HxiParser.parse("invalid.hxi", text);
+			parseValidated("invalid.hxi", text);
 			throw 'expected "$message"';
 		} catch (error:CompileError) {
 			expect(error.diagnostic.code == "E3001"
