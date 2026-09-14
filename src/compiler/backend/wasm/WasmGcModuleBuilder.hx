@@ -19,6 +19,7 @@ import compiler.backend.wasm.WasmExceptionLowering;
 import compiler.backend.wasm.WasmGcMaps;
 import compiler.backend.wasm.WasmGcTypePlan;
 import compiler.backend.wasm.gc.WasmGcContext;
+import compiler.backend.wasm.gc.WasmGcInterop;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmLocal;
 import compiler.backend.wasm.WasmModule.WasmModule;
@@ -73,7 +74,8 @@ class WasmGcModuleBuilder {
 			methods:Map<String, String> = [],
 			gcContext = new WasmGcContext(module, plan, functions, globals, methods),
 			gcRepresentation = new WasmGcRepresentation(gcContext),
-			representation:WasmRepresentationSet = WasmRepresentationSet.gc(gcRepresentation);
+			gcInterop = new WasmGcInterop(gcContext),
+			representation:WasmRepresentationSet = WasmRepresentationSet.gc(gcContext, gcRepresentation, gcInterop);
 		plan.addTo(module);
 		var staticData = WasmModuleSupport.placeStaticData(program, module, 8, reachable),
 			hasStaticData = staticData.addresses.iterator().hasNext();
@@ -88,13 +90,13 @@ class WasmGcModuleBuilder {
 			module.globals.push({type: I32, mutable: true, init: [I32Const(staticData.end)]});
 		}
 		addGcCNativeImports(module, functions, program, usedCNatives);
-		gcContext.configureNativePointerReleases(gcPointerReleaseFunctionIndices(program, reachable, functions));
+		gcInterop.configureNativePointerReleases(gcPointerReleaseFunctionIndices(program, reachable, functions));
 		addGcMapRuntimeFunctions(module, functions, plan, program, usedNatives);
 		addGcRuntimeNativeFunctions(module, functions, plan, gcRepresentation, program, usedNatives);
 		addGcMapProjectionFunctions(module, functions, plan, program, reachable);
 		if (requiresScratchMemory) {
 			var scratchAllocator = addGcScratchAllocator(module, scratchTop);
-			gcContext.configureCNativeScratch(scratchTop, scratchAllocator);
+			gcInterop.configureCNativeScratch(scratchTop, scratchAllocator);
 		}
 		var exceptionTagType:Null<Int> = WasmModuleSupport.hasExceptions(program) ? module.typeIndex({parameters: [representation.values.valueType(Dyn)], results: []}) : null,
 			exceptionTag:Null<Int> = exceptionTagType == null ? null : 0;
