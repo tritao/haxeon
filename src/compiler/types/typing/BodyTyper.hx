@@ -47,6 +47,10 @@ import compiler.Source.SourceSpan;
 @:allow(compiler.types.typing.ProgramTyper)
 class BodyTyper {
 	final session:TypingSession;
+	final expressionTyper:ExpressionTyper;
+	final statementTyper:StatementTyper;
+	final conversionResolver:ConversionResolver;
+	final callResolver:CallResolver;
 	var context(get, never):TypingContext;
 
 	inline function get_context():TypingContext
@@ -61,6 +65,22 @@ class BodyTyper {
 	public function new(externals:Null<Map<String, {arguments:Array<CompilerType>, result:CompilerType}>>,
 			specializations:Null<GenericSpecializationRegistry>) {
 		this.session = new TypingSession(externals, specializations);
+		this.conversionResolver = new ConversionResolver(session);
+		this.expressionTyper = new ExpressionTyper(session,
+			function(expression, scope, expected, inferDynamicLambdaResult) return this.typeExpression(expression, scope, expected, inferDynamicLambdaResult),
+			function(value, expected, context, code) return this.coerce(value, expected, context, code));
+		this.statementTyper = new StatementTyper(session,
+			function(expression, scope, expected, inferDynamicLambdaResult) return this.typeExpression(expression, scope, expected, inferDynamicLambdaResult),
+			function(value, expected, context, code) return this.coerce(value, expected, context, code),
+			function(name, initializer, statements, start) return this.expectedInitializerType(name, initializer, statements, start),
+			function(name, span, scope, type) this.bindCell(name, span, scope, type));
+		this.callResolver = new CallResolver(session,
+			function(expression, scope, expected, inferDynamicLambdaResult) return this.typeExpression(expression, scope, expected, inferDynamicLambdaResult),
+			function(value, expected, context, code) return this.coerce(value, expected, context, code),
+			function(argument, substitutions) return this.argumentType(argument, substitutions), function(span) return this.posInfosExpression(span),
+			function(expression, expected, declarationName) return this.typeDefaultExpression(expression, expected, declarationName), functionTypeParameters,
+			function(pattern, actual, parameters, substitutions, span) this.inferTypeParameters(pattern, actual, parameters, substitutions, span),
+			inheritanceName);
 	}
 
 	static function declarationTypeSubstitutions(owner:String, parameters:Array<String>):Map<String, CompilerType> {
@@ -556,68 +576,25 @@ class BodyTyper {
 					continue;
 				fail("E1012", "Unreachable statement", statementSpan(statement));
 			}
+			var simpleStatement = statementTyper.typeSimpleStatement(statement, scope, result, statements, statementIndex);
+			if (simpleStatement != null) {
+				for (typedStatement in simpleStatement)
+					output.push(typedStatement);
+				continue;
+			}
 			switch statement {
 				case ErrorStatement(_):
-					continue;
-				case UninitializedDeclaration(name, declared, span):
-					var declaredType = lowerType(declared);
-					var declarationKey = LexicalStorageAnalysis.key(name, span);
-					if (context.storage.hasCandidate(declarationKey) && context.storage.candidateKind(declarationKey) == MutableCapture)
-						fail("E1023", 'Captured local "$name" must be initialized at its declaration', span);
-					scope.define(name, declaredType, span, false);
-					bindCell(name, span, scope, declaredType);
-					output.push(TDeclare(scope.requireId(name), declaredType, span));
-				case VarDeclaration(name, declared, initializer, span):
-					var declaredType:Null<CompilerType>;
-					if (declared == null)
-						declaredType = expectedInitializerType(name, initializer, statements, statementIndex + 1);
-					else
-						declaredType = lowerType(declared);
-					var predeclared = false;
-					if (declaredType != null)
-						switch initializer {
-							case Lambda(_, _, _):
-								scope.define(name, declaredType, span);
-								predeclared = true;
-							default:
-						}
-					var value = typeExpression(initializer, scope, declaredType);
-					if (declaredType != null) {
-						value = coerce(value, declaredType, 'local "$name"', "E1002");
-					} else if (sameType(value.type, TNull)) {
-						fail("E1002", 'Null requires an explicit nullable type for local "$name"', span);
-					}
-					if (!predeclared)
-						scope.define(name, value.type, span);
-					bindCell(name, span, scope, value.type);
-					output.push(TVar(scope.requireId(name), value, span));
+					throw "Simple statement was not dispatched";
+				case UninitializedDeclaration(_, _, _):
+					throw "Simple statement was not dispatched";
+				case VarDeclaration(_, _, _, _):
+					throw "Simple statement was not dispatched";
 				case Return(expression, span):
-					var expected = result == null ? context.inferredResult : result;
-					var value = typeExpression(expression, scope, expected);
-					if (expected != null && expected == TVoid && context.contextualVoidLambda) {
-						output.push(TExpression(value, span));
-						output.push(TReturnVoid(span));
-						continue;
-					}
-					if (expected == null)
-						context.inferredResult = value.type;
-					else
-						value = coerce(value, expected, "return", "E1003");
-					output.push(TReturn(value, span));
+					throw "Simple statement was not dispatched";
 				case ReturnVoid(span):
-					var expected = result == null ? context.inferredResult : result;
-					if (expected == null)
-						context.inferredResult = TVoid;
-					else if (expected != TVoid)
-						fail("E1003", "Return type mismatch", span);
-					output.push(TReturnVoid(span));
+					throw "Simple statement was not dispatched";
 				case Throw(expression, span):
-					var value = typeExpression(expression, scope);
-					if (sameType(value.type, TVoid))
-						fail("E1021", "Cannot throw a Void value", span);
-					if (sameType(value.type, TNull))
-						fail("E1021", "Cannot throw null", span);
-					output.push(TThrow(value, span));
+					throw "Simple statement was not dispatched";
 				case Try(tryBranch, catches, span):
 					var typedCatches:Array<TypedCatch> = [],
 						catchScopes:Array<Scope> = [],
@@ -657,17 +634,9 @@ class BodyTyper {
 					scope.mergeAssignmentsFrom(continuing);
 					scope.mergeRefinementsFrom(continuing);
 				case Break(span):
-					if (context.loopDepth == 0)
-						fail("E1017", "break is only valid inside a loop", span);
-					if (!context.loopEarlyExits[context.loopDepth - 1])
-						fail("E1017", "break in do-while is not supported by the current CFG backend", span);
-					output.push(TBreak(span));
+					throw "Simple statement was not dispatched";
 				case Continue(span):
-					if (context.loopDepth == 0)
-						fail("E1017", "continue is only valid inside a loop", span);
-					if (!context.loopEarlyExits[context.loopDepth - 1])
-						fail("E1017", "continue in do-while is not supported by the current CFG backend", span);
-					output.push(TContinue(span));
+					throw "Simple statement was not dispatched";
 				case Increment(name, delta, span):
 					var current = scope.resolve(name);
 					if (current != null && !scope.isAssigned(name))
@@ -993,7 +962,7 @@ class BodyTyper {
 						continuing.push(scope);
 					scope.mergeAssignmentsFrom(continuing);
 				case Expression(expression, span):
-					output.push(TExpression(typeExpression(expression, scope), span));
+					throw "Simple statement was not dispatched";
 			}
 		}
 		return output;
@@ -1643,15 +1612,8 @@ class BodyTyper {
 
 	function typeExpression(expression:AstExpression, scope:Scope, ?expectedType:CompilerType, inferDynamicLambdaResult:Bool = false):TypedExpression
 		return switch expression {
-			case IntegerLiteral(value, span):
-				var type = expectedType == TInt64 ? TInt64 : TInt;
-				new TypedExpression(TIntLiteral(value), type, span);
-			case FloatLiteral(value, span): new TypedExpression(TFloatLiteral(value), TFloat, span);
-			case StringLiteral(value, span): new TypedExpression(TStringLiteral(value), TString, span);
-			case BoolLiteral(value, span): new TypedExpression(TBoolLiteral(value), TBool, span);
-			case NullLiteral(span): new TypedExpression(TNullLiteral, TNull, span);
-			case Unreachable(span): new TypedExpression(TUnreachable, TNever, span);
-			case ErrorExpression(span): new TypedExpression(TNullLiteral, TDynamic, span);
+			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_), ErrorExpression(_):
+				expressionTyper.typeLiteral(expression, expectedType);
 			case Variable(name, span):
 				var type = scope.resolve(name);
 				if (type != null) {
@@ -1959,37 +1921,37 @@ class BodyTyper {
 					lambdaResult;
 				}
 			case Member(object, name, span): typeMember(object, name, span, scope);
-			case Add(left, right, span): arithmetic(left, right, scope, true, span, expectedType);
-			case Sub(left, right, span): arithmetic(left, right, scope, false, span, expectedType);
-			case Mul(left, right, span): numeric(left, right, scope, 2, span);
-			case Div(left, right, span): numeric(left, right, scope, 3, span);
-			case Mod(left, right, span): modulo(left, right, scope, span);
-			case BitAnd(left, right, span): bitwise(left, right, scope, 0, span);
-			case BitXor(left, right, span): bitwise(left, right, scope, 1, span);
-			case BitOr(left, right, span): bitwise(left, right, scope, 2, span);
-			case ShiftLeft(left, right, span): bitwise(left, right, scope, 3, span);
-			case ShiftRight(left, right, span): bitwise(left, right, scope, 4, span);
-			case UnsignedShiftRight(left, right, span): bitwise(left, right, scope, 5, span);
+			case Add(left, right, span): expressionTyper.arithmetic(left, right, scope, true, span, expectedType);
+			case Sub(left, right, span): expressionTyper.arithmetic(left, right, scope, false, span, expectedType);
+			case Mul(left, right, span): expressionTyper.numeric(left, right, scope, 2, span);
+			case Div(left, right, span): expressionTyper.numeric(left, right, scope, 3, span);
+			case Mod(left, right, span): expressionTyper.modulo(left, right, scope, span);
+			case BitAnd(left, right, span): expressionTyper.bitwise(left, right, scope, 0, span);
+			case BitXor(left, right, span): expressionTyper.bitwise(left, right, scope, 1, span);
+			case BitOr(left, right, span): expressionTyper.bitwise(left, right, scope, 2, span);
+			case ShiftLeft(left, right, span): expressionTyper.bitwise(left, right, scope, 3, span);
+			case ShiftRight(left, right, span): expressionTyper.bitwise(left, right, scope, 4, span);
+			case UnsignedShiftRight(left, right, span): expressionTyper.bitwise(left, right, scope, 5, span);
 			case Negate(value, span):
 				var typedValue = typeExpression(value, scope, expectedType == TInt64 ? TInt64 : null);
-				if (!sameType(typedValue.type, TInt) && !sameType(typedValue.type, TInt64) && !sameType(typedValue.type, TFloat))
+				if (!expressionTyper.isNumeric(typedValue.type))
 					fail("E1010", "Numeric negation requires an Int, Int64, or Float operand", span);
 				new TypedExpression(TNegate(typedValue), typedValue.type, span);
-			case Less(left, right, span): comparison(left, right, scope, 0, span);
-			case LessEqual(left, right, span): comparison(left, right, scope, 1, span);
-			case Greater(left, right, span): comparison(right, left, scope, 0, span);
-			case GreaterEqual(left, right, span): comparison(right, left, scope, 1, span);
-			case Equal(left, right, span): comparison(left, right, scope, 2, span);
+			case Less(left, right, span): expressionTyper.comparison(left, right, scope, 0, span);
+			case LessEqual(left, right, span): expressionTyper.comparison(left, right, scope, 1, span);
+			case Greater(left, right, span): expressionTyper.comparison(right, left, scope, 0, span);
+			case GreaterEqual(left, right, span): expressionTyper.comparison(right, left, scope, 1, span);
+			case Equal(left, right, span): expressionTyper.comparison(left, right, scope, 2, span);
 			case NotEqual(left, right, span):
-				var equality = comparison(left, right, scope, 2, span);
+				var equality = expressionTyper.comparison(left, right, scope, 2, span);
 				new TypedExpression(TNot(equality), TBool, span);
 			case Not(value, span):
 				var typedValue = typeExpression(value, scope);
 				if (!sameType(typedValue.type, TBool))
 					fail("E1011", "Logical negation requires a Bool operand", span);
 				new TypedExpression(TNot(typedValue), TBool, span);
-			case And(left, right, span): logical(left, right, scope, true, span);
-			case Or(left, right, span): logical(left, right, scope, false, span);
+			case And(left, right, span): expressionTyper.logical(left, right, scope, true, span);
+			case Or(left, right, span): expressionTyper.logical(left, right, scope, false, span);
 			case Conditional(predicate, whenTrue, whenFalse, span):
 				var typedCondition = typeExpression(predicate, scope, TBool);
 				if (!sameType(typedCondition.type, TBool))
@@ -2036,7 +1998,7 @@ class BodyTyper {
 				if (targetType == null)
 					fail("E1003", "Untyped cast requires an expected type", span);
 				var typedValue = typeExpression(value, scope);
-				functionAdapter(typedValue, targetType, span);
+				conversionResolver.adaptFunction(typedValue, targetType, span);
 			case PostfixIncrement(target, delta, span):
 				var typedTarget = typeExpression(target, scope);
 				if (!sameType(typedTarget.type, TInt) && !sameType(typedTarget.type, TFloat))
@@ -2816,18 +2778,7 @@ class BodyTyper {
 		arguments:Array<TypedExpression>,
 		substitutions:Map<String, CompilerType>
 	} {
-		var parameters = functionTypeParameters(fn),
-			substitutions:Map<String, CompilerType> = [],
-			typed:Array<TypedExpression> = [];
-		for (index in 0...arguments.length) {
-			var expected:Null<CompilerType> = null;
-			if (allTypeParametersBound(parameters, substitutions))
-				expected = session.declarations.resolve(fn.arguments[index].type, fn.arguments[index].span, substitutions);
-			var argument = typeExpression(arguments[index], scope, expected, expected != null);
-			inferTypeParameters(fn.arguments[index].type, argument.type, parameters, substitutions, argument.span);
-			typed.push(argument);
-		}
-		return {arguments: typed, substitutions: substitutions};
+		return callResolver.typeGenericCallArguments(fn, arguments, scope, span);
 	}
 
 	function typedMemberWithFlow(object:TypedExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression {
@@ -3668,44 +3619,16 @@ class BodyTyper {
 		return TFunction([for (argument in fn.arguments) argumentType(argument)], lowerType(fn.result));
 
 	function coerceArguments(arguments:Array<TypedExpression>, expected:Array<CompilerType>, name:String):Array<TypedExpression> {
-		var output:Array<TypedExpression> = [];
-		for (i in 0...arguments.length)
-			output.push(coerce(arguments[i], expected[i], 'argument ${i + 1} to "$name"'));
-		return output;
+		return callResolver.coerceArguments(arguments, expected, name);
 	}
 
 	function typeCallArguments(arguments:Array<AstExpression>, expected:Array<CompilerType>, scope:Scope, name:String):Array<TypedExpression> {
-		var typed = [for (i in 0...arguments.length) typeExpression(arguments[i], scope, expected[i])];
-		return coerceArguments(typed, expected, name);
+		return callResolver.typeCallArguments(arguments, expected, scope, name);
 	}
 
 	function typeDeclaredCallArguments(arguments:Array<AstExpression>, parameters:Array<compiler.syntax.Ast.AstArgument>, scope:Scope, name:String,
 			span:SourceSpan, ?substitutions:Map<String, CompilerType>):Array<TypedExpression> {
-		var required = parameters.length;
-		while (required > 0 && parameters[required - 1].optional == true)
-			required--;
-		if (arguments.length < required || arguments.length > parameters.length) {
-			var expected = required == parameters.length ? '$required' : '$required to ${parameters.length}';
-			fail("E1008", 'Function "$name" expects $expected arguments, got ${arguments.length}', span);
-		}
-		var typed:Array<TypedExpression> = [];
-		for (i in 0...arguments.length) {
-			var supplied = argumentType(parameters[i], substitutions),
-				value = typeExpression(arguments[i], scope, supplied);
-			typed.push(coerce(value, supplied, 'argument ${i + 1} to "$name"'));
-		}
-		for (i in arguments.length...parameters.length) {
-			var parameter = parameters[i],
-				expected = argumentType(parameter, substitutions),
-				defaultValue = parameter.defaultValue;
-			if (isPosInfosParameter(parameter))
-				typed.push(coerce(typeExpression(posInfosExpression(span), scope, expected), expected, 'position argument ${i + 1} to "$name"'));
-			else if (defaultValue == null)
-				typed.push(coerce(new TypedExpression(TNullLiteral, TNull, span), expected, 'default argument ${i + 1} to "$name"'));
-			else
-				typed.push(coerce(typeDefaultExpression(defaultValue, expected, name), expected, 'default argument ${i + 1} to "$name"'));
-		}
-		return coerceArguments(typed, [for (parameter in parameters) argumentType(parameter, substitutions)], name);
+		return callResolver.typeDeclaredCallArguments(arguments, parameters, scope, name, span, substitutions);
 	}
 
 	function typeInferredClassConstruction(typeName:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
@@ -3826,10 +3749,7 @@ class BodyTyper {
 	}
 
 	static function isPosInfosParameter(argument:compiler.syntax.Ast.AstArgument):Bool
-		return argument.optional == true && switch argument.type {
-			case NamedType("haxe.PosInfos"): true;
-			default: false;
-		};
+		return CallResolver.isPosInfosParameter(argument);
 
 	function typeDefaultExpression(expression:AstExpression, expected:CompilerType, declarationName:String):TypedExpression {
 		var body = enterBody("$default:" + declarationName, null, parentPath(declarationName));
@@ -3877,103 +3797,7 @@ class BodyTyper {
 		};
 
 	function coerce(value:TypedExpression, expected:CompilerType, context:String, code:String = "E1009"):TypedExpression {
-		if (value.type == TNever)
-			return new TypedExpression(value.expression, expected, value.span);
-		switch expected {
-			case TNullable(element) if (value.type != TNull && !isNullable(value.type)):
-				var converted = coerce(value, element, context, code);
-				return new TypedExpression(TNullableWrap(converted), expected, value.span);
-			default:
-		}
-		return switch session.relations.conversion(value.type, expected) {
-			case Identity: value;
-			case IntToFloat:
-				new TypedExpression(TIntToFloat(value), TFloat, value.span);
-			case IntToInt64:
-				new TypedExpression(TIntToInt64(value), TInt64, value.span);
-			case FromDynamic:
-				new TypedExpression(TCast(value), expected, value.span);
-			case ReferenceCast:
-				functionAdapter(value, expected, value.span);
-			case AbstractCast:
-				new TypedExpression(TAbiCast(value), expected, value.span);
-			case ToDynamic:
-				new TypedExpression(TToDynamic(value), expected, value.span);
-			case ToInterface(name):
-				new TypedExpression(TToInterface(value, name), expected, value.span);
-			case WrapNullable:
-				new TypedExpression(TNullableWrap(value), expected, value.span);
-			case UnwrapNullable:
-				new TypedExpression(TCast(value), expected, value.span);
-			case Incompatible:
-				fail(code, 'Type mismatch for $context', value.span);
-				value;
-		};
-	}
-
-	function functionAdapter(value:TypedExpression, expected:CompilerType, span:SourceSpan):TypedExpression {
-		var sourceSignature = expectedFunctionType(value.type),
-			targetSignature = expectedFunctionType(expected);
-		if (sourceSignature == null || targetSignature == null)
-			return new TypedExpression(TCast(value), expected, span);
-		var sourceArguments = sourceSignature.arguments,
-			sourceResult = sourceSignature.result,
-			targetArguments = targetSignature.arguments,
-			targetResult = targetSignature.result;
-		if (sourceArguments.length != targetArguments.length || sameType(value.type, expected))
-			return new TypedExpression(TCast(value), expected, span);
-		var adapterId = session.functionAdapterCounter++, adapterName = '$' + 'function-adapter:${context.name}:$adapterId',
-			environmentName = '$' + 'function-adapter-env:${context.name}:$adapterId', captureName = '__adapted_callable', arguments = [
-				for (index in 0...targetArguments.length)
-					{
-						name: '$' + 'adapter_arg_$index',
-						type: targetArguments[index]
-					}
-			], captures:Array<TypedCapture> = [
-				{
-					field: captureName,
-					bindingId: captureName,
-					type: value.type,
-					source: CaptureExpression(value)
-				}
-			], callable = new TypedExpression(TCaptured(captureName), value.type, span), callArguments = [
-				for (index in 0...arguments.length)
-					adaptFunctionValue(new TypedExpression(TLocal(arguments[index].name), arguments[index].type, span), sourceArguments[index], span)
-			], call = new TypedExpression(TClosureCall(callable, callArguments), sourceResult, span), statements:Array<TypedStatement> = [];
-		if (targetResult == TVoid) {
-			statements.push(TExpression(call, span));
-			statements.push(TReturnVoid(span));
-		} else if (sourceResult != TVoid)
-			statements.push(TReturn(adaptFunctionValue(call, targetResult, span), span));
-		else
-			return new TypedExpression(TCast(value), expected, span);
-		session.closureConversion.addEnvironment(environmentName, captures);
-		session.closureConversion.addFunction({
-			name: adapterName,
-			genericOrigin: context.name,
-			owner: environmentName,
-			isStatic: false,
-			isConstructor: false,
-			arguments: arguments,
-			result: targetResult,
-			statements: statements,
-			cells: [],
-			cellCaptures: [],
-			span: span
-		});
-		return new TypedExpression(TLambda(adapterName, environmentName, captures), expected, span);
-	}
-
-	function adaptFunctionValue(value:TypedExpression, target:CompilerType, span:SourceSpan):TypedExpression {
-		if (sameType(value.type, target))
-			return value;
-		if (value.type == TInt && target == TFloat)
-			return new TypedExpression(TIntToFloat(value), TFloat, span);
-		if (value.type == TInt && target == TInt64)
-			return new TypedExpression(TIntToInt64(value), TInt64, span);
-		if (value.type == TFloat && target == TInt)
-			return new TypedExpression(TFloatToInt(value), TInt, span);
-		return new TypedExpression(TCast(value), target, span);
+		return conversionResolver.coerce(value, expected, context, code);
 	}
 
 	static function assignmentFlowType(source:CompilerType, stored:CompilerType):CompilerType
@@ -3990,28 +3814,7 @@ class BodyTyper {
 	}
 
 	function findMethod(className:String, name:String):Null<SemanticMethodInfo> {
-		var results:Array<SemanticMethodInfo> = [];
-		findMethods(className, name, results);
-		return results.length == 0 ? null : results[0];
-	}
-
-	function findMethods(className:String, name:String, results:Array<SemanticMethodInfo>):Void {
-		if (results.length > 0)
-			return;
-		var key = className + "." + name;
-		if (session.methodInfo.exists(key)) {
-			results.push(requiredMapValue(session.methodInfo, key));
-			return;
-		}
-		if (session.classDecls.exists(className)) {
-			var base = requiredMapValue(session.classDecls, className).base;
-			if (base != null)
-				findMethods(inheritanceName(base), name, results);
-			return;
-		}
-		if (session.interfaceDecls.exists(className))
-			for (base in requiredMapValue(session.interfaceDecls, className).bases)
-				findMethods(inheritanceName(base), name, results);
+		return callResolver.findMethod(className, name);
 	}
 
 	function enumCaseInfo(name:String):Null<{
@@ -4176,54 +3979,6 @@ class BodyTyper {
 			default: null;
 		};
 
-	function arithmetic(a:AstExpression, b:AstExpression, scope:Scope, add:Bool, span:SourceSpan, expected:Null<CompilerType>):TypedExpression {
-		var left = typeExpression(a, scope), right = typeExpression(b, scope);
-		if (expected != null && isNumeric(expected)) {
-			if (left.type == TDynamic)
-				left = coerce(left, expected, "arithmetic operand", "E1010");
-			if (right.type == TDynamic)
-				right = coerce(right, expected, "arithmetic operand", "E1010");
-		}
-		if (left.type == TNever && isNumeric(right.type))
-			left = coerce(left, right.type, "arithmetic operand");
-		if (right.type == TNever && isNumeric(left.type))
-			right = coerce(right, left.type, "arithmetic operand");
-		if (add && (isStringConvertible(left.type) || isStringConvertible(right.type))) {
-			left = stringify(left);
-			right = stringify(right);
-			return new TypedExpression(TAdd(left, right), TString, span);
-		}
-		if (!isNumeric(left.type) || !isNumeric(right.type))
-			fail("E1010", "Arithmetic requires matching numeric operands", span);
-		var promoted = promoteNumericOperands(left, right, span);
-		return new TypedExpression(add ? TAdd(promoted.left, promoted.right) : TSub(promoted.left, promoted.right), promoted.type, span);
-	}
-
-	function isStringConvertible(type:CompilerType):Bool
-		return switch type {
-			case TString: true;
-			case TAbstract(_, _, _): isAssignable(type, TString);
-			default: false;
-		};
-
-	function stringify(value:TypedExpression):TypedExpression {
-		if (isStringConvertible(value.type))
-			return coerce(value, TString, "string concatenation", "E1010");
-		if (sameType(value.type, TFloat) || sameType(value.type, TDynamic)) {
-			var functionName = context.name,
-				dependencies = session.runtimeDependencies.get(functionName);
-			if (dependencies == null) {
-				dependencies = [];
-				session.runtimeDependencies.set(functionName, dependencies);
-			}
-			dependencies.set("Std", true);
-			var dynamicValue = coerce(value, TDynamic, "string concatenation", "E1010");
-			return new TypedExpression(TCall("Std.string", [dynamicValue]), TString, value.span);
-		}
-		var dynamicValue = coerce(value, TDynamic, "string concatenation", "E1010");
-		return new TypedExpression(TCall("__std_string", [dynamicValue]), TString, value.span);
-	}
-
 	function runtimeDataBytes(expression:AstExpression, span:SourceSpan):Array<Int> {
 		var chunks = switch expression {
 			case ArrayLiteral(values, _): values;
@@ -4255,145 +4010,6 @@ class BodyTyper {
 
 	static function runtimeDataHexDigit(code:Int):Int
 		return code >= 48 && code <= 57 ? code - 48 : code >= 65 && code <= 70 ? code - 55 : code >= 97 && code <= 102 ? code - 87 : -1;
-
-	function logical(a:AstExpression, b:AstExpression, scope:Scope, and:Bool, span:SourceSpan):TypedExpression {
-		var left = typeExpression(a, scope),
-			rightScope = FlowAnalysis.narrowedScope(scope, left, and),
-			right = typeExpression(b, rightScope);
-		if (!sameType(left.type, TBool) || !sameType(right.type, TBool))
-			fail("E1011", "Logical operators require Bool operands", span);
-		return new TypedExpression(and ? TAnd(left, right) : TOr(left, right), TBool, span);
-	}
-
-	function numeric(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan):TypedExpression {
-		var left = typeExpression(a, scope), right = typeExpression(b, scope);
-		if (!isNumeric(left.type) || !isNumeric(right.type))
-			fail("E1010", "Arithmetic requires matching numeric operands", span);
-		var promoted = promoteNumericOperands(left, right, span, operation != 2);
-		return new TypedExpression(operation == 2 ? TMul(promoted.left, promoted.right) : TDiv(promoted.left, promoted.right), promoted.type, span);
-	}
-
-	function isNumeric(type:CompilerType):Bool
-		return sameType(type, TInt) || sameType(type, TInt64) || sameType(type, TFloat);
-
-	function promoteNumericOperands(left:TypedExpression, right:TypedExpression, span:SourceSpan, forceFloat:Bool = false):{
-		left:TypedExpression,
-		right:TypedExpression,
-		type:CompilerType
-	} {
-		var hasInt64 = sameType(left.type, TInt64) || sameType(right.type, TInt64);
-		var hasFloat = sameType(left.type, TFloat) || sameType(right.type, TFloat);
-		if (hasInt64 && hasFloat)
-			fail("E1010", "Int64 and Float arithmetic requires an explicit conversion", span);
-		var type = hasInt64 ? TInt64 : forceFloat || hasFloat ? TFloat : TInt;
-		return {left: coerce(left, type, "numeric operand", "E1010"), right: coerce(right, type, "numeric operand", "E1010"), type: type};
-	}
-
-	function modulo(a:AstExpression, b:AstExpression, scope:Scope, span:SourceSpan):TypedExpression {
-		var left = typeExpression(a, scope), right = typeExpression(b, scope);
-		if (!isNumeric(left.type) || !isNumeric(right.type))
-			fail("E1010", "Modulo requires matching numeric operands", span);
-		var promoted = promoteNumericOperands(left, right, span);
-		return sameType(promoted.type, TInt)
-			|| sameType(promoted.type,
-				TInt64) ? new TypedExpression(TMod(promoted.left, promoted.right), promoted.type,
-				span) : new TypedExpression(TCall("__math_fmod", [promoted.left, promoted.right]), TFloat, span);
-	}
-
-	function bitwise(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan):TypedExpression {
-		var left = typeExpression(a, scope), right = typeExpression(b, scope);
-		if (operation >= 3) {
-			if (!sameType(left.type, TInt) && !sameType(left.type, TInt64))
-				fail("E1010", "Shift operators require an Int or Int64 value", span);
-			if (!sameType(right.type, TInt))
-				fail("E1010", "Shift counts must be Int values", span);
-			var shift:TypedExpressionKind = switch operation {
-				case 3: TShiftLeft(left, right);
-				case 4: TShiftRight(left, right);
-				default: TUnsignedShiftRight(left, right);
-			};
-			return new TypedExpression(shift, left.type, span);
-		}
-
-		if ((!sameType(left.type, TInt) && !sameType(left.type, TInt64)) || (!sameType(right.type, TInt) && !sameType(right.type, TInt64)))
-			fail("E1010", "Bitwise operators require integer operands", span);
-		var operandType = sameType(left.type, TInt64) || sameType(right.type, TInt64) ? TInt64 : TInt;
-		left = coerce(left, operandType, "bitwise operand", "E1010");
-		right = coerce(right, operandType, "bitwise operand", "E1010");
-		var expression:TypedExpressionKind = switch operation {
-			case 0: TBitAnd(left, right);
-			case 1: TBitXor(left, right);
-			case 2: TBitOr(left, right);
-			default: throw "Unknown bitwise operation";
-		};
-		return new TypedExpression(expression, operandType, span);
-	}
-
-	function comparison(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan):TypedExpression {
-		var left = typeExpression(a, scope),
-			right = typeExpression(b, scope, left.type);
-		if (operation == 2) {
-			if (sameType(left.type, TNull) && isNullable(right.type))
-				left = coerce(left, right.type, "null comparison");
-			else if (sameType(right.type, TNull) && isNullable(left.type))
-				right = coerce(right, left.type, "null comparison");
-		}
-		if (operation == 2 && sameType(left.type, TString) && sameType(right.type, TString))
-			return new TypedExpression(TEqual(left, right), TBool, span);
-		if (operation == 2 && sameType(left.type, TBool) && sameType(right.type, TBool))
-			return new TypedExpression(TEqual(left, right), TBool, span);
-		if (operation == 2 && isAssignable(left.type, right.type)) {
-			left = coerce(left, right.type, "equality comparison", "E1011");
-			return new TypedExpression(TEqual(left, right), TBool, span);
-		}
-		if (operation == 2 && isAssignable(right.type, left.type)) {
-			right = coerce(right, left.type, "equality comparison", "E1011");
-			return new TypedExpression(TEqual(left, right), TBool, span);
-		}
-		if (operation == 2
-			&& ((sameType(left.type, TNull) && TypeRelations.isReference(right.type))
-				|| (sameType(right.type, TNull) && TypeRelations.isReference(left.type)))) {
-			if (sameType(left.type, TNull))
-				left = new TypedExpression(TNullableWrap(left), right.type, left.span);
-			else
-				right = new TypedExpression(TNullableWrap(right), left.type, right.span);
-			return new TypedExpression(TEqual(left, right), TBool, span);
-		}
-		if (operation == 2 && (sameType(left.type, TNull) || sameType(right.type, TNull))) {
-			var nullableComparison = switch left.type {
-				case TNull:
-					switch right.type {
-						case TNullable(_): true;
-						default: false;
-					}
-				case TNullable(_):
-					switch right.type {
-						case TNull, TNullable(_): true;
-						default: false;
-					}
-				default: false;
-			};
-			if (nullableComparison)
-				return new TypedExpression(TEqual(left, right), TBool, span);
-		}
-		if (operation == 2 && sameType(left.type, right.type))
-			switch left.type {
-				case TDynamic, TNativeAbstract(_), TAbstract(_, _, _), TInstance(Class, _, []), TInstance(Interface, _, []), TInstance(Enum, _, _),
-					TNullable(_), TArray(_), TIterator(_), TMap(_, _), TFunction(_, _), TAnonymous(_, _):
-					return new TypedExpression(TEqual(left, right), TBool, span);
-				default:
-			}
-		if (!isNumeric(left.type) || !isNumeric(right.type))
-			fail("E1011", "Comparison requires matching numeric operands", span);
-		var promoted = promoteNumericOperands(left, right, span);
-		left = promoted.left;
-		right = promoted.right;
-		return new TypedExpression(switch operation {
-			case 0: TLess(left, right);
-			case 1: TLessEqual(left, right);
-			default: TEqual(left, right);
-		}, TBool, span);
-	}
 
 	function exhaustiveEnum(type:CompilerType, cases:Array<TypedSwitchCase>):Bool {
 		var enumName = switch type {
