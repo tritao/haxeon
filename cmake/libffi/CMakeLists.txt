@@ -96,6 +96,7 @@ add_library(ffi STATIC
 )
 set_target_properties(ffi PROPERTIES OUTPUT_NAME ffi)
 target_compile_definitions(ffi PUBLIC FFI_STATIC_BUILD)
+target_compile_options(ffi PRIVATE "$<$<CONFIG:Debug>:/O2>")
 target_include_directories(ffi
   PUBLIC
     "$<BUILD_INTERFACE:${LIBFFI_GENERATED_INCLUDE_DIR}>"

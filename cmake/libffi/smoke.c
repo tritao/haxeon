@@ -19,8 +19,14 @@ add(int left, int right)
 static void
 add_callback(ffi_cif *cif, void *result, void **arguments, void *user_data)
 {
+	int left = *(int *)arguments[0];
+	int right = *(int *)arguments[1];
+	int bias = *(int *)user_data;
+
 	(void)cif;
-	*(int *)result = *(int *)arguments[0] + *(int *)arguments[1] + *(int *)user_data;
+	if (left + right + bias != 43)
+		fprintf(stderr, "libffi callback received %d, %d, and bias %d\n", left, right, bias);
+	*(int *)result = left + right + bias;
 }
 
 int
