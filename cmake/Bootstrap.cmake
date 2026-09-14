@@ -61,6 +61,12 @@ endfunction()
 run_checked("Submodule initialization"
   "${GIT_EXECUTABLE}" submodule update --init vendor/hashlink vendor/hashlink-debugger vendor/utest vendor/libffi)
 
+if(NOT CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
+  find_program(BASH_EXECUTABLE bash REQUIRED)
+  run_checked("Build pinned libffi"
+    "${BASH_EXECUTABLE}" "${HAXEON_ROOT}/scripts/build-libffi.sh")
+endif()
+
 if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
   set(haxe_archive "${TOOLS_DIR}/haxe-${HAXE_VERSION}-win64.zip")
   set(haxe_url "https://github.com/HaxeFoundation/haxe/releases/download/${HAXE_VERSION}/haxe-${HAXE_VERSION}-win64.zip")
