@@ -208,6 +208,7 @@ class HlSymbolTable {
 			throw 'Object type "$type" must be registered before use';
 		types.push(switch type {
 			case ManagedBytes: HlTypeDef.Abstract(internString("realtime_bytes"));
+			case RawPtr: HlTypeDef.Simple(HlType.Bytes);
 			case Abstract(name): HlTypeDef.Abstract(internString(name));
 			case Iterator(_): HlTypeDef.Abstract(internString("realtime_iterator"));
 			default: HlTypeDef.Simple(switch type {
@@ -215,8 +216,10 @@ class HlSymbolTable {
 					case I32: HlType.I32;
 					case I64: HlType.I64;
 					case Bool: HlType.Bool;
+					case F32: HlType.F32;
 					case F64: HlType.F64;
 					case Bytes: HlType.Bytes;
+					case RawPtr: HlType.Bytes;
 					case ManagedBytes: throw 'Managed byte type must be handled by the outer type switch';
 					case Dyn: HlType.Dyn;
 					case TypeRef: HlType.Type;
@@ -449,8 +452,10 @@ class HlSymbolTable {
 			case I32: "i32";
 			case I64: "i64";
 			case Bool: "bool";
+			case F32: "f32";
 			case F64: "f64";
 			case Bytes: "bytes";
+			case RawPtr: "raw-pointer";
 			case ManagedBytes: "abstract:realtime_bytes";
 			case Dyn: "dyn";
 			case TypeRef: "type";

@@ -7,6 +7,7 @@ import compiler.syntax.Ast.AstFunction;
 import compiler.types.analysis.ClosureConversion;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedExpression;
+import compiler.types.TypedAst.TypedNativeLayout;
 
 typedef ResolvedInlineConstant = {
 	final initializer:TypedExpression;
@@ -29,6 +30,8 @@ class TypingSession {
 	public final bodyContexts:Array<TypingContext> = [new TypingContext("")];
 	public final anonymousTypes:Map<String, Array<compiler.types.Type.AnonymousField>> = [];
 	public final genericSpecializations:GenericSpecializationRegistry;
+	public final nativeAbiTarget:String;
+	public final nativeLayoutsByName:Map<String, TypedNativeLayout> = [];
 	public final emittedGenericBodies:Map<String, Bool> = [];
 	public final noReturnFunctions:Map<String, Bool> = [];
 	public final runtimeDependencyTracker = new RuntimeDependencyTracker();
@@ -43,9 +46,10 @@ class TypingSession {
 		return bodyContexts[bodyContexts.length - 1];
 
 	public function new(externals:Null<Map<String, {arguments:Array<CompilerType>, result:CompilerType}>>,
-			specializations:Null<GenericSpecializationRegistry>) {
+			specializations:Null<GenericSpecializationRegistry>, ?nativeAbiTarget:String) {
 		this.externals = externals == null ? [] : externals;
 		this.genericSpecializations = specializations == null ? new GenericSpecializationRegistry() : specializations;
+		this.nativeAbiTarget = nativeAbiTarget == null ? "portable-abi64" : nativeAbiTarget;
 	}
 
 	public function bindSemantic(semantic:SemanticProgram):Void {

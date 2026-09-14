@@ -31,7 +31,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	public function zeroValue(type:IrType):Array<WasmInstruction>
 		return switch type {
 			case I64: [I64Const(0)];
-			case F64: [F64Const(0)];
+			case F32 | F64: [F64Const(0)];
 			case Void: [];
 			default: [I32Const(0)];
 		};
@@ -74,7 +74,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	public function equal(output:Int, left:IrValue, right:IrValue, leftLocal:Int, rightLocal:Int):Array<WasmInstruction> {
 		var instruction = switch left.type {
 			case I64: I64Eq;
-			case F64: F64Eq;
+			case F32 | F64: F64Eq;
 			default: I32Eq;
 		};
 		return [LocalGet(leftLocal), LocalGet(rightLocal), instruction, LocalSet(output)];
@@ -143,14 +143,14 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	static function load(type:IrType, offset:Int):WasmInstruction
 		return switch type {
 			case I64: I64Load(offset);
-			case F64: F64Load(offset);
+			case F32 | F64: F64Load(offset);
 			default: I32Load(offset);
 		};
 
 	static function store(type:IrType, offset:Int):WasmInstruction
 		return switch type {
 			case I64: I64Store(offset);
-			case F64: F64Store(offset);
+			case F32 | F64: F64Store(offset);
 			default: I32Store(offset);
 		};
 }

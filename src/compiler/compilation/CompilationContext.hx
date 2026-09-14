@@ -66,6 +66,9 @@ class CompilationContext {
 	public function nativeSignatures():Map<String, {arguments:Array<CompilerType>, result:CompilerType}>
 		return owner.nativeSignatures();
 
+	public function nativeLayoutTarget():String
+		return owner.nativeLayoutTarget();
+
 	public function resolveSemanticSymbol(name:String):Null<SemanticSymbolId>
 		return owner.semanticWorkspace.resolveSymbolId(name);
 

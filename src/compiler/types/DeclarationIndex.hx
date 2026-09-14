@@ -160,6 +160,30 @@ class DeclarationIndex {
 					case "Dynamic", "Any": TDynamic;
 					case "haxe.Int64", "Int64": TInt64;
 					case "haxe.io.Bytes": TBytes;
+					case "hl.Bytes": THlBytes;
+					case "Int8": TNativeScalar("i8");
+					case "UInt8": TNativeScalar("u8");
+					case "Int16": TNativeScalar("i16");
+					case "UInt16": TNativeScalar("u16");
+					case "Int32": TNativeScalar("i32");
+					case "UInt32": TNativeScalar("u32");
+					case "UInt64": TNativeScalar("u64");
+					case "Float32": TNativeScalar("f32");
+					case "Float64": TNativeScalar("f64");
+					case "CChar": TNativeScalar("c_char");
+					case "CSignedChar": TNativeScalar("c_schar");
+					case "CUChar": TNativeScalar("c_uchar");
+					case "CBool": TNativeScalar("c_bool");
+					case "CShort": TNativeScalar("c_short");
+					case "CUShort": TNativeScalar("c_ushort");
+					case "CInt": TNativeScalar("c_int");
+					case "CUInt": TNativeScalar("c_uint");
+					case "CLong": TNativeScalar("c_long");
+					case "CULong": TNativeScalar("c_ulong");
+					case "CLongLong": TNativeScalar("c_long_long");
+					case "CULongLong": TNativeScalar("c_ulong_long");
+					case "CSize": TNativeScalar("c_size");
+					case "CWChar": TNativeScalar("c_wchar");
 					default: resolveNamedType(name, span, resolving, substitutions);
 				}
 			case AppliedType(name, arguments):
@@ -201,7 +225,11 @@ class DeclarationIndex {
 					var declaration:{typeParameters:Array<String>, typeConstraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>, kind:NominalKind};
 					if (classes.exists(name)) {
 						var found = classes.get(name);
-						declaration = {typeParameters: found.typeParameters, typeConstraints: found.typeConstraints, kind: NominalKind.Class};
+						declaration = {
+							typeParameters: found.typeParameters,
+							typeConstraints: found.typeConstraints,
+							kind: isNativeValueClass(found) ? NominalKind.NativeValue : NominalKind.Class
+						};
 					} else if (interfaces.exists(name)) {
 						var found = interfaces.get(name);
 						declaration = {typeParameters: found.typeParameters, typeConstraints: found.typeConstraints, kind: NominalKind.Interface};
@@ -300,7 +328,7 @@ class DeclarationIndex {
 			return resolveBareNominal(name, NominalKind.Enum, enumDecl.typeParameters.length, span);
 		var classDecl = classes.get(name);
 		if (classDecl != null)
-			return resolveBareNominal(name, NominalKind.Class, classDecl.typeParameters.length, span);
+			return resolveBareNominal(name, isNativeValueClass(classDecl) ? NominalKind.NativeValue : NominalKind.Class, classDecl.typeParameters.length, span);
 		return if (PlatformAbi.isType(name)) PlatformAbi.valueType(name); else {
 			fail('Unknown type "$name"', span);
 			TVoid;
@@ -364,9 +392,10 @@ class DeclarationIndex {
 	static function nullable(type:CompilerType):CompilerType
 		return switch type {
 			case TNullable(_): type;
-			case TInt, TInt64, TBool, TFloat, TString, TDynamic, TNativeAbstract(_), TInstance(_, _, _), TAnonymous(_, _), TArray(_), TIterator(_),
-				TFunction(_, _), TMap(_, _):
+			case TInt, TInt64, TBool, TFloat, TString, TDynamic, TNativeAbstract(_), TAnonymous(_, _), TArray(_), TIterator(_), TFunction(_, _), TMap(_, _):
 				TNullable(type);
+			case TInstance(NominalKind.NativeValue, _, _): type;
+			case TInstance(_, _, _): TNullable(type);
 			default: type;
 		};
 
@@ -381,6 +410,7 @@ class DeclarationIndex {
 			case THlBytes: "hl.Bytes";
 			case TDynamic: "Dynamic";
 			case TNativeAbstract(name): 'hl.Abstract<$name>';
+			case TNativeScalar(abiName): 'native-scalar:$abiName';
 			case TNever: "Never";
 			case TRange: "Range";
 			case TVoid: "Void";
@@ -568,6 +598,17 @@ class DeclarationIndex {
 			case TInstance(_, name, _): name;
 			default: null;
 		};
+
+	static function isNativeValueClass(declaration:AstClass):Bool {
+		for (entry in declaration.metadata)
+			if (entry.name == "repr" && entry.arguments.length == 1)
+				switch entry.arguments[0] {
+					case StringLiteral("C", _):
+						return true;
+					case _:
+				}
+		return false;
+	}
 
 	static function requiredNominalName(type:CompilerType):String {
 		var name = nominalName(type);

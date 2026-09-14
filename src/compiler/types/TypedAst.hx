@@ -245,11 +245,34 @@ typedef TypedField = {
 typedef TypedClass = {
 	final name:String;
 	final isValue:Bool;
+
+	/** C-layout record with no HashLink object or value-structure representation. */
+	final isNativeValue:Bool;
+
+	/** Portable and selected-target layouts retained for compile-time layout queries. */
+	final nativeLayouts:Array<TypedNativeLayout>;
+
 	final base:Null<String>;
 	final interfaces:Array<String>;
 	final fields:Array<TypedField>;
 	final methods:Array<TypedFunction>;
 	final span:SourceSpan;
+}
+
+/** Computed layout for one portable target ABI. */
+typedef TypedNativeLayout = {
+	final target:String;
+	final size:Int;
+	final alignment:Int;
+	final fields:Array<TypedNativeFieldLayout>;
+}
+
+/** Byte placement of one field in a native record. */
+typedef TypedNativeFieldLayout = {
+	final name:String;
+	final offset:Int;
+	final size:Int;
+	final alignment:Int;
 }
 
 /** Resolved callable contract required by an interface. */

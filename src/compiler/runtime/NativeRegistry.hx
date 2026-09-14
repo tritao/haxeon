@@ -96,11 +96,17 @@ class NativeRegistry {
 
 	static function irType(type:CompilerType):IrType
 		return switch type {
+			case TAbstract(declaration, _, _) if (StringTools.endsWith(Std.string(declaration), "RawPtr")): RawPtr;
 			case TAbstract(_, _, representation): irType(representation);
 			case TInt: I32;
 			case TInt64: I64;
 			case TBool: Bool;
 			case TFloat: F64;
+			case TNativeScalar("f32"): F32;
+			case TNativeScalar("f64"): F64;
+			case TNativeScalar("i64" | "u64" | "c_long" | "c_ulong" | "c_long_long" | "c_ulong_long" | "c_size"): I64;
+			case TNativeScalar("c_bool"): Bool;
+			case TNativeScalar(_): I32;
 			case TString: IrType.Bytes;
 			case TBytes: ManagedBytes;
 			case THlBytes: IrType.Bytes;
@@ -115,6 +121,7 @@ class NativeRegistry {
 					case NominalKind.Class: Obj(name);
 					case NominalKind.Interface: Virtual(name);
 					case NominalKind.Enum: Enum(name);
+					case NominalKind.NativeValue: throw 'Native value record "$name" cannot be lowered as a managed value';
 					default: throw 'Unknown nominal kind $kind';
 				}
 			case TMap(_, _): Abstract("map_string_i32");

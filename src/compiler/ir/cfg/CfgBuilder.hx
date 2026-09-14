@@ -218,8 +218,8 @@ class CfgBuilder {
 		return out;
 	}
 
-	public function constFloat(value:Float):CfgValue {
-		var out = temporary(F64);
+	public function constFloat(value:Float, type:IrType = F64):CfgValue {
+		var out = temporary(type);
 		emit(ConstFloat(out, value));
 		return out;
 	}
@@ -235,6 +235,21 @@ class CfgBuilder {
 		emit(StaticDataAddress(out, bytes));
 		return out;
 	}
+
+	public function pointerOffset(pointer:CfgValue, byteOffset:CfgValue):CfgValue {
+		var out = temporary(RawPtr);
+		emit(PointerOffset(out, pointer, byteOffset));
+		return out;
+	}
+
+	public function memoryLoad(pointer:CfgValue, type:IrType, size:Int, signed:Bool):CfgValue {
+		var out = temporary(type);
+		emit(MemoryLoad(out, pointer, size, signed));
+		return out;
+	}
+
+	public function memoryStore(pointer:CfgValue, value:CfgValue, size:Int):Void
+		emit(MemoryStore(pointer, value, size));
 
 	public function constBool(value:Bool):CfgValue {
 		var out = temporary(Bool);

@@ -194,8 +194,9 @@ class WasmGcTypePlan {
 		return switch type {
 			case Void:
 				throw "Void has no Wasm GC value type";
-			case I32, Bool: I32;
+			case I32, Bool, RawPtr: I32;
 			case I64: I64;
+			case F32: F64;
 			case F64: F64;
 			case TypeRef: I32;
 			case Obj(name): Ref(nullableType(objectType(name)));
@@ -219,7 +220,9 @@ class WasmGcTypePlan {
 		var key = switch type {
 			case I32: "i32";
 			case Bool: "bool";
+			case RawPtr: "i32";
 			case I64: "i64";
+			case F32: "f64";
 			case F64: "f64";
 			case TypeRef: "type-ref";
 			default: throw 'No Wasm GC primitive box exists for $type';
@@ -233,7 +236,9 @@ class WasmGcTypePlan {
 			case I32: "i";
 			case I64: "l";
 			case Bool: "b";
+			case F32: "f";
 			case F64: "d";
+			case RawPtr: "p";
 			case Bytes: "B";
 			case ManagedBytes: "M";
 			case Dyn: "D";

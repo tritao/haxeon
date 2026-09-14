@@ -66,6 +66,8 @@ class HlLower {
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
+						case PointerOffset(_, _, _):
+							ensureNative(runtimeNatives, "__hl_bytes_offset", [IrType.RawPtr, IrType.I32], IrType.RawPtr, "std", "bytes_offset");
 						case IteratorNew(_, _):
 							ensureNative(runtimeNatives, "__iterator_new", [IrType.Dyn], IrType.Abstract("realtime_iterator"));
 						case IteratorHasNext(_, _):
@@ -289,10 +291,15 @@ class HlLower {
 			default: true;
 		};
 
-	static function ensureNative(natives:Array<IrNative>, name:String, arguments:Array<IrType>, result:IrType):Void {
+	static function ensureNative(natives:Array<IrNative>, name:String, arguments:Array<IrType>, result:IrType, ?library:String, ?symbol:String):Void {
+		var nativeLibrary = library == null ? "haxeon_runtime" : library,
+			nativeSymbol = symbol == null ? name : symbol;
 		for (native in natives)
 			if (native.name == name) {
-				if (native.arguments.length != arguments.length || Std.string(native.result) != Std.string(result))
+				if (native.arguments.length != arguments.length
+					|| Std.string(native.result) != Std.string(result)
+					|| native.library != nativeLibrary
+					|| native.symbol != nativeSymbol)
 					throw 'Conflicting HashLink runtime native signature for "$name": ${native.arguments} -> ${native.result}, expected $arguments -> $result';
 				for (index in 0...arguments.length)
 					if (Std.string(native.arguments[index]) != Std.string(arguments[index]))
@@ -301,8 +308,8 @@ class HlLower {
 			}
 		natives.push({
 			name: name,
-			library: "haxeon_runtime",
-			symbol: name,
+			library: nativeLibrary,
+			symbol: nativeSymbol,
 			arguments: arguments,
 			result: result
 		});
@@ -402,6 +409,35 @@ class HlLower {
 						// RuntimeData is a Wasm-only intrinsic. The HashLink shadow module is
 						// still assembled for a Wasm compilation, but never executes this path.
 						instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes), internInt(0)));
+					case PointerOffset(output, pointer, byteOffset):
+						instructions.push(HlInstruction.Call2(defineRegister(output, registers, registerTypes), requireFunction("__hl_bytes_offset"),
+							requireRegister(pointer, registers), requireRegister(byteOffset, registers)));
+					case MemoryLoad(output, pointer, size, signed):
+						var destination = defineRegister(output, registers, registerTypes),
+							zeroOffset = temporaryRegister(IrType.I32, registerTypes);
+						instructions.push(HlInstruction.LoadInt(zeroOffset, internInt(0)));
+						if (size == 1)
+							instructions.push(HlInstruction.GetI8(destination, requireRegister(pointer, registers), zeroOffset));
+						else if (size == 2)
+							instructions.push(HlInstruction.GetI16(destination, requireRegister(pointer, registers), zeroOffset));
+						else
+							instructions.push(HlInstruction.GetMem(destination, requireRegister(pointer, registers), zeroOffset));
+						if (signed && size < 4) {
+							var shift = temporaryRegister(IrType.I32, registerTypes),
+								shiftCount = internInt(size == 1 ? 24 : 16);
+							instructions.push(HlInstruction.LoadInt(shift, shiftCount));
+							instructions.push(HlInstruction.ShiftLeft(destination, destination, shift));
+							instructions.push(HlInstruction.ShiftRight(destination, destination, shift));
+						}
+					case MemoryStore(pointer, value, size):
+						var zeroOffset = temporaryRegister(IrType.I32, registerTypes);
+						instructions.push(HlInstruction.LoadInt(zeroOffset, internInt(0)));
+						if (size == 1)
+							instructions.push(HlInstruction.SetI8(requireRegister(pointer, registers), zeroOffset, requireRegister(value, registers)));
+						else if (size == 2)
+							instructions.push(HlInstruction.SetI16(requireRegister(pointer, registers), zeroOffset, requireRegister(value, registers)));
+						else
+							instructions.push(HlInstruction.SetMem(requireRegister(pointer, registers), zeroOffset, requireRegister(value, registers)));
 					case ConstBool(output, value):
 						instructions.push(HlInstruction.LoadBool(defineRegister(output, registers, registerTypes), value));
 					case ConstNull(output):
@@ -843,14 +879,15 @@ class HlLower {
 
 	static function unsupportedCDispatchArgument(type:IrType):Bool
 		return switch type {
-			case I32, I64, IrType.Bool, F64, IrType.Bytes, IrType.ManagedBytes, IrType.Abstract("realtime_bytes"), IrType.Abstract("native_pointer"),
-				IrType.Abstract("native_callback"): false;
+			case I32, I64, IrType.Bool, F32, F64, IrType.Bytes, IrType.RawPtr, IrType.ManagedBytes, IrType.Abstract("realtime_bytes"),
+				IrType.Abstract("native_pointer"), IrType.Abstract("native_callback"): false;
 			default: true;
 		};
 
 	static function unsupportedCDispatchResult(type:IrType):Bool
 		return switch type {
-			case I32, I64, IrType.Bool, F64, IrType.Bytes, IrType.ManagedBytes, IrType.Abstract("native_pointer"), IrType.Abstract("realtime_bytes"): false;
+			case I32, I64, IrType.Bool, F32, F64, IrType.Bytes, IrType.RawPtr, IrType.ManagedBytes, IrType.Abstract("native_pointer"),
+				IrType.Abstract("realtime_bytes"): false;
 			default: true;
 		};
 

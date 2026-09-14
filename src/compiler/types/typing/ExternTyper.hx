@@ -3,6 +3,7 @@ package compiler.types.typing;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
+import compiler.ffi.NativeLayout;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstType;
@@ -65,12 +66,18 @@ class ExternTyper {
 		var arguments = [for (argument in fn.arguments) argumentType(argument)];
 		if (receiverType != null)
 			arguments.unshift(receiverType);
+		for (argument in arguments)
+			if (NativeLayout.containsNativeLayoutType(argument))
+				fail("E1022", 'Native layout types cannot cross a foreign function boundary by value yet', fn.span);
+		var result = resultOverride == null ? lowerType(fn.result) : resultOverride;
+		if (NativeLayout.containsNativeLayoutType(result))
+			fail("E1022", 'Native layout types cannot cross a foreign function boundary by value yet', fn.span);
 		return {
 			name: externalName == null ? fn.name : externalName,
 			library: library,
 			symbol: symbol,
 			arguments: arguments,
-			result: resultOverride == null ? lowerType(fn.result) : resultOverride,
+			result: result,
 			convention: convention
 		};
 	}

@@ -15,7 +15,8 @@ class HlOpcodeSchema {
 				HlOpcode.JTrue, HlOpcode.Call0, HlOpcode.EnumAlloc, HlOpcode.EnumIndex: 2;
 			case HlOpcode.Add, HlOpcode.Sub, HlOpcode.Mul, HlOpcode.SDiv, HlOpcode.SMod, HlOpcode.Shl, HlOpcode.SShr, HlOpcode.UShr, HlOpcode.And,
 				HlOpcode.Or, HlOpcode.Xor, HlOpcode.Call1, HlOpcode.InstanceClosure, HlOpcode.Field, HlOpcode.SetField, HlOpcode.GetArray, HlOpcode.SetArray,
-				HlOpcode.JSLt, HlOpcode.JSLte, HlOpcode.JEq: 3;
+				HlOpcode.GetI8, HlOpcode.GetI16, HlOpcode.GetMem, HlOpcode.SetI8, HlOpcode.SetI16, HlOpcode.SetMem, HlOpcode.JSLt, HlOpcode.JSLte,
+				HlOpcode.JEq: 3;
 			case HlOpcode.Call2, HlOpcode.EnumField: 4;
 			case HlOpcode.CallN, HlOpcode.CallMethod, HlOpcode.CallThis, HlOpcode.CallClosure, HlOpcode.MakeEnum: VARIABLE_ARITY;
 			default: UNSUPPORTED;

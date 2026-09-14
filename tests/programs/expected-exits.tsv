@@ -163,3 +163,4 @@ compiler-audit-regressions	42
 dynamic-equality	42
 # Std.isOfType lowers type expressions through the native runtime type ABI.
 std-is-of-type	42
+native-memory	42

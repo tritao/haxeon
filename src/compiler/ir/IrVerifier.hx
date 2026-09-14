@@ -190,7 +190,8 @@ class IrVerifier {
 					default: throw 'IR integer constant ${out.id} must produce I32 or I64';
 				}
 			case ConstFloat(out, _):
-				expect(out, F64);
+				if (out.type != F64 && out.type != F32)
+					throw 'IR float constant ${out.id} must produce F32 or F64';
 			case ConstString(out, _):
 				expect(out, Bytes);
 			case StaticDataAddress(out, bytes):
@@ -200,6 +201,23 @@ class IrVerifier {
 				for (byte in bytes)
 					if (byte < 0 || byte > 255)
 						throw "IR static data contains a value outside the byte range";
+			case PointerOffset(out, pointer, byteOffset):
+				require(values, pointer);
+				require(values, byteOffset);
+				expect(pointer, RawPtr);
+				expect(byteOffset, I32);
+				expect(out, RawPtr);
+			case MemoryLoad(out, pointer, size, _):
+				require(values, pointer);
+				expect(pointer, RawPtr);
+				if (size != 1 && size != 2 && size != 4 && size != 8)
+					throw 'Unsupported IR memory load size $size';
+			case MemoryStore(pointer, value, size):
+				require(values, pointer);
+				require(values, value);
+				expect(pointer, RawPtr);
+				if (size != 1 && size != 2 && size != 4 && size != 8)
+					throw 'Unsupported IR memory store size $size';
 			case ConstBool(out, _):
 				expect(out, Bool);
 			case ConstNull(out):
@@ -248,7 +266,7 @@ class IrVerifier {
 			case Add(out, a, b), Sub(out, a, b), Mul(out, a, b), Div(out, a, b):
 				if (!sameType(out.type, a.type)
 					|| !sameType(a.type, b.type)
-					|| (!sameType(a.type, I32) && !sameType(a.type, I64) && !sameType(a.type, F64)))
+					|| (!sameType(a.type, I32) && !sameType(a.type, I64) && !sameType(a.type, F32) && !sameType(a.type, F64)))
 					throw "IR arithmetic requires matching numeric values";
 				require(values, a);
 				require(values, b);
@@ -269,7 +287,7 @@ class IrVerifier {
 				require(values, b);
 			case Less(out, a, b), LessEqual(out, a, b):
 				expect(out, Bool);
-				if (!sameType(a.type, b.type) || (a.type != I32 && a.type != I64 && a.type != F64))
+				if (!sameType(a.type, b.type) || (a.type != I32 && a.type != I64 && a.type != F32 && a.type != F64))
 					throw 'IR ordered comparison requires matching numeric values';
 				require(values, a);
 				require(values, b);
@@ -278,7 +296,8 @@ class IrVerifier {
 				require(values, a);
 				require(values, b);
 				if (!sameType(a.type, b.type)
-					|| (!sameType(a.type, I32) && !sameType(a.type, I64) && !sameType(a.type, F64) && !sameType(a.type, Bool) && !isReference(a.type)))
+					|| (!sameType(a.type, I32) && !sameType(a.type, I64) && !sameType(a.type, F32) && !sameType(a.type, F64) && !sameType(a.type, Bool)
+						&& !isReference(a.type)))
 					throw 'IR equality requires matching primitive or reference values';
 			case Call(out, name, args), CNativeCall(out, name, args):
 				if (!signatures.exists(name))
@@ -606,7 +625,7 @@ class IrVerifier {
 
 	static function isReference(type:IrType):Bool
 		return switch type {
-			case Bytes, ManagedBytes, Dyn, Obj(_), Enum(_), Abstract(_), Virtual(_), Array(_), Iterator(_), Function(_, _): true;
+			case Bytes, RawPtr, ManagedBytes, Dyn, Obj(_), Enum(_), Abstract(_), Virtual(_), Array(_), Iterator(_), Function(_, _): true;
 			default: false;
 		};
 
@@ -653,7 +672,7 @@ class IrVerifier {
 					case Dyn: true;
 					default: false;
 				};
-			case Bytes, Function(_, _): switch expected {
+			case Bytes, RawPtr, Function(_, _): switch expected {
 					case Dyn: true;
 					default: false;
 				};

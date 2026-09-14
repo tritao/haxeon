@@ -65,7 +65,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return switch valueType(type) {
 			case I32: [I32Const(0)];
 			case I64: [I64Const(0)];
-			case F32: throw "The IR does not define an F32 zero value";
+			case F32: [F64Const(0)];
 			case F64: [F64Const(0)];
 			case Ref(ref): [RefNull(ref.heap)];
 		};
@@ -73,6 +73,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 	public function nullValue(type:IrType, destination:Int):Array<WasmInstruction>
 		return switch valueType(type) {
 			case Ref(ref): [RefNull(ref.heap), LocalSet(destination)];
+			case I32 if (type == RawPtr): [I32Const(0), LocalSet(destination)];
 			default: throw 'Wasm GC null value requires a reference type, got $type';
 		};
 
@@ -128,7 +129,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		if (isNativePointerType(value.type))
 			throw "Wasm GC cannot convert a borrowed native pointer to Dynamic";
 		var boxed = switch value.type {
-			case I32, Bool, I64, F64, TypeRef: plan.boxedPrimitiveType(value.type);
+			case I32, Bool, I64, F32, F64, TypeRef, RawPtr: plan.boxedPrimitiveType(value.type);
 			default: null;
 		};
 		if (boxed == null)
@@ -145,7 +146,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		if (isNativePointerType(output.type) && value.type == Dyn)
 			throw "Wasm GC cannot cast Dynamic to a borrowed native pointer";
 		var boxType = switch output.type {
-			case I32, Bool, I64, F64, TypeRef if (value.type == Dyn): plan.boxedPrimitiveType(output.type);
+			case I32, Bool, I64, F32, F64, TypeRef, RawPtr if (value.type == Dyn): plan.boxedPrimitiveType(output.type);
 			default: null;
 		};
 		if (boxType != null)
@@ -211,11 +212,11 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				[LocalGet(leftLocal), LocalGet(rightLocal), RefEq, LocalSet(output)];
 			case I64:
 				[LocalGet(leftLocal), LocalGet(rightLocal), I64Eq, LocalSet(output)];
-			case F64:
+			case F32 | F64:
 				[LocalGet(leftLocal), LocalGet(rightLocal), F64Eq, LocalSet(output)];
 			case Abstract("native_pointer"):
 				nativePointerRaw(leftLocal).concat(nativePointerRaw(rightLocal)).concat([I32Eq, LocalSet(output)]);
-			case I32, Bool, TypeRef:
+			case I32, Bool, TypeRef, RawPtr:
 				[LocalGet(leftLocal), LocalGet(rightLocal), I32Eq, LocalSet(output)];
 			case Dyn, Abstract(_), Virtual(_):
 				[
@@ -4320,6 +4321,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return switch type {
 			case I32: "i32";
 			case Bool: "bool";
+			case RawPtr: "i32";
+			case F32: "f64";
 			case F64: "f64";
 			case Bytes: "bytes";
 			case ManagedBytes: "ref";

@@ -58,8 +58,8 @@ class BodyTyper {
 		session.leaveBody(body);
 
 	public function new(externals:Null<Map<String, {arguments:Array<CompilerType>, result:CompilerType}>>,
-			specializations:Null<GenericSpecializationRegistry>) {
-		this.session = new TypingSession(externals, specializations);
+			specializations:Null<GenericSpecializationRegistry>, ?nativeAbiTarget:String) {
+		this.session = new TypingSession(externals, specializations, nativeAbiTarget);
 		this.conversionResolver = new ConversionResolver(session);
 		this.inlineConstantResolver = new InlineConstantResolver(session, function(owner, name) return this.findStaticFieldNullable(owner, name),
 			function(expression, owner, name, expected, typeParameters) return this.typeInlineInitializer(expression, owner, name, expected, typeParameters),
@@ -273,6 +273,14 @@ class BodyTyper {
 	function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool = false, ?substitutions:Map<String, CompilerType>, ?specializedName:String,
 			?abstractReceiver:CompilerType):TypedFunction {
 		var functionName = specializedName == null ? (owner == null ? fn.name : owner + "." + fn.name) : specializedName;
+		for (argument in fn.arguments) {
+			var argumentValueType = argumentType(argument, substitutions);
+			if (compiler.ffi.NativeLayout.containsNativeLayoutType(argumentValueType))
+				fail("E1022", 'Native layout type "$argumentValueType" cannot be passed or stored as a Haxe runtime value yet', argument.span);
+		}
+		var result = substitutions == null ? lowerType(fn.result) : session.declarations.resolve(fn.result, fn.span, substitutions);
+		if (compiler.ffi.NativeLayout.containsNativeLayoutType(result))
+			fail("E1022", 'Native layout type "$result" cannot be returned as a Haxe runtime value yet', fn.span);
 		var functionContext = enterBody(functionName, substitutions, specializedName == null ? null : owner);
 		var storage = CaptureAnalysis.analyze(fn.statements, [for (argument in fn.arguments) argument.name]);
 		var lexicalStorage = LexicalStorageAnalysis.analyze(fn.statements, fn.arguments);
@@ -306,7 +314,6 @@ class BodyTyper {
 			bindCell(argument.name, argument.span, scope, type);
 			arguments.push({name: scope.requireId(argument.name), type: type});
 		}
-		var result = lowerType(fn.result);
 		context.expectedReturnType = result;
 		inferBodyLocalTypes(fn.statements, result);
 		var statements = typeStatements(fn.statements, scope, result);

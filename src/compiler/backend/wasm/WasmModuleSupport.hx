@@ -200,7 +200,7 @@ class WasmModuleSupport {
 	public static function zeroValue(type:IrType):Array<WasmInstruction>
 		return switch type {
 			case I64: [I64Const(0)];
-			case F64: [F64Const(0.0)];
+			case F32 | F64: [F64Const(0.0)];
 			case Void: [];
 			default: [I32Const(0)];
 		};
@@ -356,8 +356,9 @@ class WasmModuleSupport {
 		return switch type {
 			case I32, Bool: I32;
 			case I64: I64;
+			case F32: F64;
 			case F64: F64;
-			case Bytes, ManagedBytes, Dyn, TypeRef, Array(_), Enum(_), Obj(_), Abstract(_), Virtual(_), Iterator(_), Function(_, _): I32;
+			case RawPtr, Bytes, ManagedBytes, Dyn, TypeRef, Array(_), Enum(_), Obj(_), Abstract(_), Virtual(_), Iterator(_), Function(_, _): I32;
 			default: throw 'Wasm scalar backend does not yet support IR type ${Std.string(type)}';
 		};
 }

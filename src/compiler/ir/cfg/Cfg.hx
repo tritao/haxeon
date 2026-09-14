@@ -29,6 +29,9 @@ enum CfgInstruction {
 	ConstFloat(output:CfgValue, value:Float);
 	ConstString(output:CfgValue, value:String);
 	StaticDataAddress(output:CfgValue, bytes:Array<Int>);
+	PointerOffset(output:CfgValue, pointer:CfgValue, byteOffset:CfgValue);
+	MemoryLoad(output:CfgValue, pointer:CfgValue, size:Int, signed:Bool);
+	MemoryStore(pointer:CfgValue, value:CfgValue, size:Int);
 	ConstBool(output:CfgValue, value:Bool);
 	ConstNull(output:CfgValue);
 	TypeValue(output:CfgValue, type:IrType);

@@ -147,6 +147,14 @@ strict parser validates types, layouts, symbols, and ABI metadata before use. Se
 The runtime also contains a restricted libffi-based ordinary-C symbol bridge;
 it remains deliberately separate from HashLink's `@:hlNative` convention.
 
+The native-memory model keeps GC-managed Haxe objects separate from fixed-layout
+native records. See [native values and memory](docs/NATIVE_MEMORY.md) for the
+representation contract and implementation sequence. The frontend recognizes
+`@:value @:repr("C")` records, shares ABI layout rules with HXI, and folds
+`sizeof`, `alignof`, and `offsetof` queries to constants. HashLink now lowers
+typed `RawPtr<T>` memory operations to SSA loads, stores, and offsets, and the
+Haxeon `Arena` provides stable bump-allocated native blocks.
+
 ### Source-declared HashLink bindings
 
 Target functions can be declared without a Haxe body by combining `extern`

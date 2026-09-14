@@ -91,7 +91,8 @@ class FrontendCompilation {
 				semantic = previousSemantic.replaceTopLevelBodies(canonicalProgram, selected);
 			else
 				semantic = SemanticProgram.analyze(canonicalProgram);
-			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, context.nativeSignatures(), entryPoint, genericSpecializations);
+			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, context.nativeSignatures(), entryPoint, genericSpecializations,
+				context.nativeLayoutTarget());
 			typedNew = typedResult.program;
 			typerMetrics = typedResult.metrics;
 			if (includeTypedRuntimeDependencies(context, typedResult.runtimeDependencies, typedNew, owners, names, rollbackModules))

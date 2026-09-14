@@ -24,6 +24,9 @@ enum HxiAbiValue {
 	AggregateValue(name:String, size:Int, align:Int);
 }
 
+/** Concrete size and alignment of one fixed-layout ABI type, in bytes. */
+typedef HxiTypeLayout = {size:Int, align:Int}
+
 /** Resolves target-dependent C types without conflating them with fixed-width types. */
 class HxiAbi {
 	public final target:String;
@@ -32,18 +35,22 @@ class HxiAbi {
 	public final wcharBits:Int;
 
 	final declarations:Map<String, HxiDeclaration> = [];
-	final model:HxiInterface;
+	final model:Null<HxiInterface>;
 	final classifications:Map<String, HxiAbiValue> = [];
 	final voidClassifications:Map<String, HxiAbiValue> = [];
 	var cachedFunctions:Null<Array<HxiFunctionAbi>>;
 
 	public static function forInterface(model:HxiInterface, ?visibleDeclarations:Map<String, HxiDeclaration>):HxiAbi
-		return new HxiAbi(model, visibleDeclarations);
+		return new HxiAbi(model, model.target, visibleDeclarations);
 
-	function new(model:HxiInterface, visibleDeclarations:Null<Map<String, HxiDeclaration>>) {
+	/** Create an ABI classifier for source-declared native records. */
+	public static function forTarget(target:String, ?visibleDeclarations:Map<String, HxiDeclaration>):HxiAbi
+		return new HxiAbi(null, target, visibleDeclarations);
+
+	function new(model:Null<HxiInterface>, target:String, visibleDeclarations:Null<Map<String, HxiDeclaration>>) {
 		this.model = model;
-		target = model.target.toLowerCase();
-		var architecture = switch target {
+		this.target = target.toLowerCase();
+		var architecture = switch this.target {
 			case "portable-abi64": "portable64";
 			case "portable-abi32": "portable32";
 			default: target.split("-")[0];
@@ -55,22 +62,73 @@ class HxiAbi {
 			case "portable64": 64;
 			default: throw 'Unsupported HXI target architecture "$architecture"';
 		}
-		var windows = target.indexOf("windows") >= 0 || target.indexOf("mingw") >= 0 || target.indexOf("msvc") >= 0;
+		var windows = this.target.indexOf("windows") >= 0 || this.target.indexOf("mingw") >= 0 || this.target.indexOf("msvc") >= 0;
 		longBits = windows ? 32 : pointerBits;
 		wcharBits = windows ? 16 : 32;
 		if (visibleDeclarations != null)
 			for (name => declaration in visibleDeclarations)
 				declarations.set(name, declaration);
-		for (declaration in model.declarations)
-			declarations.set(nameOf(declaration), declaration);
+		if (model != null)
+			for (declaration in model.declarations)
+				declarations.set(nameOf(declaration), declaration);
 	}
 
 	public function functions():Array<HxiFunctionAbi> {
 		if (cachedFunctions != null)
 			return cachedFunctions;
+		if (model == null)
+			throw "A target-only HXI ABI has no function declarations";
 		cachedFunctions = HxiNativeSignature.lower(model, this, declarations);
 		return cachedFunctions;
 	}
+
+	/** Resolve the shared HXI/native-record size and alignment model. */
+	public function layout(type:HxiType):Null<HxiTypeLayout>
+		return typeLayout(type, []);
+
+	function typeLayout(type:HxiType, resolving:Map<String, Bool>):Null<HxiTypeLayout>
+		return switch type {
+			case Const(element): typeLayout(element, resolving);
+			case Nullable(element): pointerLike(element) ? typeLayout(element, resolving) : null;
+			case Pointer(_): {size: Std.int(pointerBits / 8), align: Std.int(pointerBits / 8)};
+			case Primitive("utf8"): {size: Std.int(pointerBits / 8), align: Std.int(pointerBits / 8)};
+			case Array(element, length): var item = typeLayout(element,
+					resolving); item == null || length < 0 || (length != 0
+					&& item.size > Std.int(0x7FFFFFFF / length)) ? null : {size: item.size * length, align: item.align};
+			case Primitive(_):
+				switch classify(type) {
+					case IntegerValue(bits, _), EnumerationValue(_, bits, _), FloatValue(bits):
+						var size = Std.int(bits / 8);
+						{size: size, align: Std.int(Math.min(size, pointerBits / 8))};
+					case Boolean32Value: {size: 4, align: 4};
+					case HandleValue(_): {size: 4, align: 4};
+					case PointerValue(_, _, _, _) | Utf8Value(_): {size: Std.int(pointerBits / 8), align: Std.int(pointerBits / 8)};
+					case CallbackValue(_, _, _, _): {size: Std.int(pointerBits / 8), align: Std.int(pointerBits / 8)};
+					case AggregateValue(_, size, align): {size: size, align: align};
+					case _: null;
+				}
+			case Named(name):
+				if (resolving.exists(name)) null; else {
+					resolving.set(name, true);
+					var result = switch declarations.get(name) {
+						case Alias(_, target, _): typeLayout(target, resolving);
+						case Handle(_, _, _, _): {size: 4, align: 4};
+						case Enumeration(_, representation, _, _, _): typeLayout(representation, resolving);
+						case Structure(_, size, align, _, _): {size: size, align: align};
+						case Callback(_, _, _, _, _): {size: Std.int(pointerBits / 8), align: Std.int(pointerBits / 8)};
+						case _: null;
+					};
+					resolving.remove(name);
+					result;
+				}
+		};
+
+	function pointerLike(type:HxiType):Bool
+		return switch type {
+			case Pointer(_), Primitive("utf8"): true;
+			case Nullable(element) | Const(element): pointerLike(element);
+			case _: false;
+		};
 
 	public function semanticDeclarations():Map<String, HxiDeclaration>
 		return declarations.copy();

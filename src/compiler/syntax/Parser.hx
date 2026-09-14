@@ -13,6 +13,7 @@ import compiler.syntax.Ast.AstAbstract;
 import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstType;
+import compiler.syntax.Ast.NativeLayoutQueryKind;
 import compiler.Source.SourceSpan;
 import compiler.syntax.Token.TokenKind;
 import compiler.Diagnostic.CompileError;
@@ -1450,6 +1451,10 @@ class Parser {
 			var end = consume(TokenKind.RightBrace).span;
 			return parsePostfix(ObjectLiteral(fields, start.merge(end)));
 		}
+		if (check(TokenKind.Identifier)
+			&& peekKind(1) == TokenKind.Less
+			&& (current().text == "sizeof" || current().text == "alignof" || current().text == "offsetof"))
+			return parseNativeLayoutQuery();
 		if (isNameToken(current().kind)) {
 			var nameToken = consumeName(), name = nameToken.text, start = nameToken.span, end = start;
 			while (check(TokenKind.Dot) && peekKind(1) != TokenKind.Dot) {
@@ -1477,6 +1482,26 @@ class Parser {
 		}
 		fail(current(), "Expected expression");
 		return null;
+	}
+
+	function parseNativeLayoutQuery():AstExpression {
+		var name = consume(TokenKind.Identifier), kind = switch name.text {
+			case "sizeof": SizeOf;
+			case "alignof": AlignOf;
+			case "offsetof": OffsetOf;
+			default: throw "Invalid native layout query";
+		};
+		consume(TokenKind.Less);
+		var type = parseType();
+		consume(TokenKind.Greater);
+		consume(TokenKind.LeftParen);
+		var field:Null<String> = null;
+		if (kind == OffsetOf) {
+			var token = consume(TokenKind.StringLiteral);
+			field = decodeString(token.text);
+		}
+		var end = consume(TokenKind.RightParen).span;
+		return parsePostfix(NativeLayoutQuery(kind, type, field, name.span.merge(end)));
 	}
 
 	static function isExpressionTerminator(kind:TokenKind):Bool
@@ -2039,9 +2064,9 @@ class Parser {
 				Mod(_, _, span), BitAnd(_, _, span), BitXor(_, _, span), BitOr(_, _, span), ShiftLeft(_, _, span), ShiftRight(_, _, span),
 				UnsignedShiftRight(_, _, span), Negate(_, span), Less(_, _, span), LessEqual(_, _, span), Greater(_, _, span), GreaterEqual(_, _, span),
 				Equal(_, _, span), NotEqual(_, _, span), Not(_, span), Call(_, _, span), ClosureCall(_, _, span), MethodCall(_, _, _, span), New(_, _, span),
-				NewGeneric(_, _, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span), PostfixIncrement(_, _, span), Lambda(_, _, span),
-				And(_, _, span), Or(_, _, span), Conditional(_, _, _, span), BlockExpression(_, _, span), ThrowExpression(_, span),
-				SwitchExpression(_, _, _, span), Cast(_, _, span): span;
+				NewGeneric(_, _, _, span), NativeLayoutQuery(_, _, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span),
+				PostfixIncrement(_, _, span), Lambda(_, _, span), And(_, _, span), Or(_, _, span), Conditional(_, _, _, span), BlockExpression(_, _, span),
+				ThrowExpression(_, span), SwitchExpression(_, _, _, span), Cast(_, _, span): span;
 			case ObjectLiteral(_, span), ArrayLiteral(_, span), MapLiteral(_, span), ArrayComprehension(_, _, _, _, _, span),
 				MapComprehension(_, _, _, _, _, _, span), Range(_, _, span): span;
 		}

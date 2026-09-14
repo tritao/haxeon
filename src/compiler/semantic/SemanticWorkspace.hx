@@ -498,6 +498,7 @@ class SemanticWorkspace {
 				switch kind {
 					case NominalKind.Class: classMember(declaration, name, visiting);
 					case NominalKind.Interface: interfaceMember(declaration, name, visiting);
+					case NominalKind.NativeValue: classMember(declaration, name, visiting);
 					default: null;
 				}
 			default: null;

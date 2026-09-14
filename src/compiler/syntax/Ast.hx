@@ -184,6 +184,7 @@ enum AstExpression {
 		span:SourceSpan);
 	Range(start:AstExpression, end:AstExpression, span:SourceSpan);
 	Call(name:String, arguments:Array<AstExpression>, span:SourceSpan);
+	NativeLayoutQuery(kind:NativeLayoutQueryKind, type:AstType, field:Null<String>, span:SourceSpan);
 	ClosureCall(callee:AstExpression, arguments:Array<AstExpression>, span:SourceSpan);
 	MethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan);
 	New(typeName:String, arguments:Array<AstExpression>, span:SourceSpan);
@@ -193,6 +194,13 @@ enum AstExpression {
 	Index(array:AstExpression, index:AstExpression, span:SourceSpan);
 	PostfixIncrement(target:AstExpression, delta:Int, span:SourceSpan);
 	Lambda(arguments:Array<AstArgument>, statements:Array<AstStatement>, span:SourceSpan);
+}
+
+/** Compile-time query over a fixed native ABI layout. */
+enum NativeLayoutQueryKind {
+	SizeOf;
+	AlignOf;
+	OffsetOf;
 }
 
 /** Named value supplied by an object-literal expression. */

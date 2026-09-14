@@ -82,6 +82,12 @@ enum HlInstruction {
 	FieldSet(object:Int, field:Int, source:Int);
 	ArrayGet(destination:Int, array:Int, index:Int);
 	ArraySet(array:Int, index:Int, source:Int);
+	GetI8(destination:Int, pointer:Int, offset:Int);
+	GetI16(destination:Int, pointer:Int, offset:Int);
+	GetMem(destination:Int, pointer:Int, offset:Int);
+	SetI8(pointer:Int, offset:Int, source:Int);
+	SetI16(pointer:Int, offset:Int, source:Int);
+	SetMem(pointer:Int, offset:Int, source:Int);
 	ArraySize(destination:Int, array:Int);
 	MakeEnum(destination:Int, constructor:Int, arguments:Array<Int>);
 	EnumIndex(destination:Int, value:Int);

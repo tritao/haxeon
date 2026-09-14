@@ -165,7 +165,7 @@ class HxiValidator {
 							if (field.offset != 0)
 								fail('@struct_size field "${field.name}" in struct "$name" must be at offset zero', field.span);
 						}
-						var layout = typeLayout(field.type, abi, declarationsByName, []);
+						var layout = abi.layout(field.type);
 						if (layout == null)
 							fail('Field "${field.name}" in struct "$name" has no fixed C layout', field.span);
 						if (field.offset == null || field.offset < 0 || layout.align > align || field.offset % layout.align != 0
@@ -619,46 +619,6 @@ class HxiValidator {
 		} catch (error:Dynamic) {
 			fail(Std.string(error), span);
 		}
-
-	static function typeLayout(type:HxiType, abi:HxiAbi, declarations:Map<String, HxiDeclaration>, resolving:Map<String, Bool>):Null<{
-		size:Int,
-		align:Int
-	}>
-		return switch type {
-			case Const(element): typeLayout(element, abi, declarations, resolving);
-			case Nullable(element): pointerLike(element) ? typeLayout(element, abi, declarations, resolving) : null;
-			case Pointer(_): {size: Std.int(abi.pointerBits / 8), align: Std.int(abi.pointerBits / 8)};
-			case Primitive("utf8"): {size: Std.int(abi.pointerBits / 8), align: Std.int(abi.pointerBits / 8)};
-			case Array(element, length): var item = typeLayout(element, abi, declarations,
-					resolving); item == null || item.size > Std.int(0x7FFFFFFF / length) ? null : {size: item.size * length, align: item.align};
-			case Primitive(_):
-				switch abi.classify(type) {
-					case IntegerValue(bits, _):
-						var size = Std.int(bits / 8);
-						{size: size, align: Std.int(Math.min(size, abi.pointerBits / 8))};
-					case Boolean32Value: {size: 4, align: 4};
-					case EnumerationValue(_, bits, _):
-						var size = Std.int(bits / 8);
-						{size: size, align: Std.int(Math.min(size, abi.pointerBits / 8))};
-					case FloatValue(bits):
-						var size = Std.int(bits / 8);
-						{size: size, align: Std.int(Math.min(size, abi.pointerBits / 8))};
-					case _: null;
-				}
-			case Named(name):
-				if (resolving.exists(name)) null; else {
-					resolving.set(name, true);
-					var result = switch declarations.get(name) {
-						case Alias(_, target, _): typeLayout(target, abi, declarations, resolving);
-						case Handle(_, _, _, _): {size: 4, align: 4};
-						case Enumeration(_, representation, _, _, _): typeLayout(representation, abi, declarations, resolving);
-						case Structure(_, size, align, _, _): {size: size, align: align};
-						case _: null;
-					};
-					resolving.remove(name);
-					result;
-				}
-		};
 
 	static function validateAliasCycles(declarations:Array<HxiDeclaration>):Void {
 		var aliases:Map<String, {type:HxiType, span:SourceSpan}> = [];

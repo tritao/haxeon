@@ -1,6 +1,8 @@
 package compiler.types.typing;
 
 import compiler.semantic.SemanticProgram;
+import compiler.ffi.HxiModel.HxiDeclaration;
+import compiler.ffi.NativeLayout;
 import compiler.semantic.DeclarationLifecycle.DeclarationStage;
 import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstFunction;
@@ -17,6 +19,7 @@ import compiler.types.TypedAst.TypedField;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedInterface;
 import compiler.types.TypedAst.TypedNative;
+import compiler.types.TypedAst.TypedNativeLayout;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.analysis.Scope;
@@ -144,6 +147,25 @@ class ProgramTyper {
 				if (classDecl.isExtern != true
 					&& externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null) typeClass(classDecl, selected)
 			], typedFunctions:Array<TypedFunction> = [];
+		for (enumDecl in typedEnums)
+			for (caseDecl in enumDecl.cases)
+				for (parameter in caseDecl.params)
+					if (NativeLayout.containsNativeLayoutType(parameter))
+						BodyTyper.fail("E1022", 'Native layout types cannot be stored in a Haxe enum yet', caseDecl.span);
+		for (interfaceIndex in 0...typedInterfaces.length) {
+			var interfaceDecl = typedInterfaces[interfaceIndex],
+				parsed = program.interfaces[interfaceIndex];
+			for (methodIndex in 0...interfaceDecl.methods.length) {
+				var method = interfaceDecl.methods[methodIndex],
+					parsedMethod = parsed.methods[methodIndex];
+				for (argument in method.arguments)
+					if (NativeLayout.containsNativeLayoutType(argument))
+						BodyTyper.fail("E1022", 'Native layout types cannot be passed by value in an interface yet', parsedMethod.span);
+				if (NativeLayout.containsNativeLayoutType(method.result))
+					BodyTyper.fail("E1022", 'Native layout types cannot be returned by value in an interface yet', parsedMethod.span);
+			}
+		}
+		typedClasses = layoutNativeClasses(typedClasses);
 		var metadataDoneAt = Sys.time() * 1000.0;
 		for (fn in program.functions)
 			if (fn.isExtern != true && !BodyTyper.isGeneric(fn) && (selected == null || selected.exists(fn.name)))
@@ -191,11 +213,26 @@ class ProgramTyper {
 	}
 
 	function typeClass(classDecl:AstClass, selected:Null<Map<String, Bool>>):TypedClass {
-		var isValue = hasMetadata(classDecl.metadata, "value");
-		if (isValue && classDecl.base != null)
+		var requestedValue = hasMetadata(classDecl.metadata, "value"),
+			isNativeValue = validateRepresentationMetadata(classDecl.metadata, requestedValue),
+			isValue = requestedValue && !isNativeValue;
+		if ((isValue || isNativeValue) && classDecl.base != null)
 			BodyTyper.fail("E1022", 'Value class "${classDecl.name}" cannot extend another class', classDecl.span);
-		if (isValue && classDecl.interfaces.length > 0)
+		if ((isValue || isNativeValue) && classDecl.interfaces.length > 0)
 			BodyTyper.fail("E1022", 'Value class "${classDecl.name}" cannot implement interfaces', classDecl.span);
+		if (isNativeValue && classDecl.typeParameters.length > 0)
+			BodyTyper.fail("E1022", 'Native value record "${classDecl.name}" cannot be generic', classDecl.span);
+		if (isNativeValue) {
+			for (field in classDecl.fields) {
+				if (field.isStatic)
+					BodyTyper.fail("E1022", 'Native value record "${classDecl.name}" cannot declare static fields', field.span);
+				if (field.initializer != null)
+					BodyTyper.fail("E1022", 'Native value field "${classDecl.name}.${field.name}" cannot have an initializer', field.span);
+			}
+			for (method in classDecl.methods)
+				if (!method.isStatic)
+					BodyTyper.fail("E1022", 'Native value record "${classDecl.name}" cannot declare instance methods or constructors', method.span);
+		}
 		var fields:Array<TypedField> = [],
 			fieldNames:Map<String, Bool> = [],
 			erasedSubstitutions:Map<String, CompilerType> = [];
@@ -211,6 +248,8 @@ class ProgramTyper {
 			var type = session.declarations.resolve(session.declarations.resolvedFieldType(classDecl.name, field), field.span, erasedSubstitutions);
 			if (type == TVoid)
 				BodyTyper.fail("E1002", 'Field "${classDecl.name}.${field.name}" cannot have type Void', field.span);
+			if (!isNativeValue && NativeLayout.containsNativeLayoutType(type))
+				BodyTyper.fail("E1022", 'Native layout types can only appear in native value record fields', field.span);
 			var initializer:Null<TypedExpression> = null,
 				inlineValue:Null<TypedExpression> = null,
 				parsedInitializer = field.initializer;
@@ -299,6 +338,8 @@ class ProgramTyper {
 		return {
 			name: classDecl.name,
 			isValue: isValue,
+			isNativeValue: isNativeValue,
+			nativeLayouts: [],
 			base: baseName,
 			interfaces: [
 				for (interfaceType in classDecl.interfaces)
@@ -308,6 +349,84 @@ class ProgramTyper {
 			methods: typedMethods,
 			span: classDecl.span
 		};
+	}
+
+	function layoutNativeClasses(classes:Array<TypedClass>):Array<TypedClass> {
+		var byName:Map<String, TypedClass> = [],
+			layoutsByTarget:Map<String, Map<String, TypedNativeLayout>> = [],
+			targets = ["portable-abi32", "portable-abi64"];
+		if (targets.indexOf(session.nativeAbiTarget) < 0)
+			targets.push(session.nativeAbiTarget);
+		for (classDecl in classes)
+			byName.set(classDecl.name, classDecl);
+		for (target in targets) {
+			var layouts:Map<String, TypedNativeLayout> = [];
+			for (classDecl in classes)
+				if (classDecl.isNativeValue)
+					computeNativeLayout(classDecl.name, target, byName, layouts, []);
+			layoutsByTarget.set(target, layouts);
+		}
+		return [
+			for (classDecl in classes) {
+				var nativeLayouts = classDecl.isNativeValue ? [for (target in targets) layoutsByTarget.get(target).get(classDecl.name)] : [];
+				if (classDecl.isNativeValue) session.nativeLayoutsByName.set(classDecl.name, layoutsByTarget.get(session.nativeAbiTarget).get(classDecl.name));
+				{
+					name: classDecl.name,
+					isValue: classDecl.isValue,
+					isNativeValue: classDecl.isNativeValue,
+					nativeLayouts: nativeLayouts,
+					base: classDecl.base,
+					interfaces: classDecl.interfaces,
+					fields: classDecl.fields,
+					methods: classDecl.methods,
+					span: classDecl.span
+				}
+			}
+		];
+	}
+
+	function computeNativeLayout(name:String, target:String, classes:Map<String, TypedClass>, layouts:Map<String, TypedNativeLayout>,
+			visiting:Map<String, Bool>):TypedNativeLayout {
+		var cached = layouts.get(name);
+		if (cached != null)
+			return cached;
+		var key = target + ":" + name, declaration = classes.get(name);
+		if (declaration == null || !declaration.isNativeValue)
+			throw 'Missing native value record "$name"';
+		if (visiting.exists(key))
+			BodyTyper.fail("E1022", 'Native value record "$name" contains a by-value layout cycle', declaration.span);
+		if (declaration.fields.length == 0)
+			BodyTyper.fail("E1022", 'Native value record "$name" must declare at least one field', declaration.span);
+		visiting.set(key, true);
+		var nativeDeclarations:Map<String, HxiDeclaration> = [];
+		for (field in declaration.fields)
+			collectNestedNativeDeclarations(field.type, target, classes, layouts, visiting, nativeDeclarations, field.span);
+		var layout:TypedNativeLayout = try NativeLayout.record(target, name, [
+			for (field in declaration.fields)
+				{name: field.name, type: field.type, span: field.span}
+		], nativeDeclarations, declaration.span) catch (error:Dynamic) {
+			visiting.remove(key);
+			BodyTyper.fail("E1022", 'Invalid native value record "$name": ${Std.string(error)}', declaration.span);
+			cast null;
+		};
+		visiting.remove(key);
+		layouts.set(name, layout);
+		return layout;
+	}
+
+	function collectNestedNativeDeclarations(type:CompilerType, target:String, classes:Map<String, TypedClass>, layouts:Map<String, TypedNativeLayout>,
+			visiting:Map<String, Bool>, result:Map<String, HxiDeclaration>, span:SourceSpan):Void {
+		switch type {
+			case TAbstract(_, _, representation):
+				collectNestedNativeDeclarations(representation, target, classes, layouts, visiting, result, span);
+			case TInstance(NominalKind.NativeValue, name, arguments):
+				if (arguments.length != 0)
+					BodyTyper.fail("E1022", 'Generic native value field "$name" has no fixed layout', span);
+				var nested = computeNativeLayout(name, target, classes, layouts, visiting),
+					nestedClass = classes.get(name);
+				result.set(name, NativeLayout.nestedDeclaration(name, nested, nestedClass.span));
+			case _:
+		}
 	}
 
 	function erasureType(declaration:compiler.syntax.Ast.AstInterface, type:compiler.syntax.Ast.AstType, span:SourceSpan):CompilerType {
@@ -324,25 +443,58 @@ class ProgramTyper {
 		return false;
 	}
 
-	function methodSignature(method:AstFunction, owner:String, ?substitutions:Map<String, CompilerType>):TypedFunction
+	function validateRepresentationMetadata(metadata:Array<compiler.syntax.Ast.AstMetadata>, isValue:Bool):Bool {
+		var hasRepresentation = false;
+		for (entry in metadata)
+			if (entry.name == "repr") {
+				if (hasRepresentation)
+					BodyTyper.fail("E1022", 'Duplicate @:repr metadata', entry.span);
+				hasRepresentation = true;
+				if (entry.arguments.length != 1)
+					BodyTyper.fail("E1022", '@:repr requires exactly one string argument', entry.span);
+				var representation:Null<String> = null;
+				switch entry.arguments[0] {
+					case StringLiteral(value, _):
+						representation = value;
+					case _:
+						BodyTyper.fail("E1022", '@:repr requires exactly one string argument', entry.span);
+				}
+				if (representation == null)
+					BodyTyper.fail("E1022", '@:repr requires exactly one string argument', entry.span);
+				if (representation != "C")
+					BodyTyper.fail("E1022", 'Unsupported native representation "$representation"', entry.span);
+				if (!isValue)
+					BodyTyper.fail("E1022", '@:repr("C") requires @:value', entry.span);
+			}
+		return hasRepresentation;
+	}
+
+	function methodSignature(method:AstFunction, owner:String, ?substitutions:Map<String, CompilerType>):TypedFunction {
+		var arguments = [
+			for (argument in method.arguments)
+				{
+					name: argument.name,
+					type: bodyTyper.argumentType(argument, substitutions)
+				}
+		], result = substitutions == null ? bodyTyper.lowerType(method.result) : session.declarations.resolve(method.result, method.span, substitutions);
+		for (argument in arguments)
+			if (NativeLayout.containsNativeLayoutType(argument.type))
+				BodyTyper.fail("E1022", 'Native layout types cannot be passed by value in function "${owner}.${method.name}" yet', method.span);
+		if (NativeLayout.containsNativeLayoutType(result))
+			BodyTyper.fail("E1022", 'Native layout types cannot be returned by value from function "${owner}.${method.name}" yet', method.span);
 		return {
 			name: owner + "." + method.name,
 			owner: owner,
 			isStatic: method.isStatic,
 			isConstructor: method.name == "new",
-			arguments: [
-				for (argument in method.arguments)
-					{
-						name: argument.name,
-						type: bodyTyper.argumentType(argument, substitutions)
-					}
-			],
-			result: substitutions == null ? bodyTyper.lowerType(method.result) : session.declarations.resolve(method.result, method.span, substitutions),
+			arguments: arguments,
+			result: result,
 			statements: [],
 			cells: [],
 			cellCaptures: [],
 			span: method.span
 		};
+	}
 
 	function prependInstanceInitializers(method:TypedFunction, className:String, fields:Array<TypedField>):TypedFunction {
 		var statements = instanceInitializerStatements(fields, className);

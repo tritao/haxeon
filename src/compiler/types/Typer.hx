@@ -17,8 +17,8 @@ class Typer {
 		return new ProgramTyper(new BodyTyper(null, null)).typeProgramMeasured(SemanticProgram.analyze(program), null, true, null).program;
 
 	/** Type a reusable module without requiring an executable main function. */
-	public static function typeLibrary(program:AstProgram):TypedProgram
-		return new ProgramTyper(new BodyTyper(null, null)).typeProgramMeasured(SemanticProgram.analyze(program), null, false, null).program;
+	public static function typeLibrary(program:AstProgram, ?nativeAbiTarget:String):TypedProgram
+		return new ProgramTyper(new BodyTyper(null, null, nativeAbiTarget)).typeProgramMeasured(SemanticProgram.analyze(program), null, false, null).program;
 
 	public static function typeSelected(program:AstProgram, selected:Map<String, Bool>,
 			?externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>, ?entryPoint:String):TypedProgram
@@ -29,7 +29,7 @@ class Typer {
 		return typeAnalyzedMeasured(semantic, selected, externals, entryPoint).program;
 
 	public static function typeAnalyzedMeasured(semantic:SemanticProgram, selected:Map<String, Bool>,
-			?externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>, ?entryPoint:String,
-			?specializations:GenericSpecializationRegistry):MeasuredTypedProgram
-		return new ProgramTyper(new BodyTyper(externals, specializations)).typeProgramMeasured(semantic, selected, true, entryPoint);
+			?externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>, ?entryPoint:String, ?specializations:GenericSpecializationRegistry,
+			?nativeAbiTarget:String):MeasuredTypedProgram
+		return new ProgramTyper(new BodyTyper(externals, specializations, nativeAbiTarget)).typeProgramMeasured(semantic, selected, true, entryPoint);
 }

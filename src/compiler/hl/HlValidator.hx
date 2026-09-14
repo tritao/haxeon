@@ -266,6 +266,14 @@ class HlValidator {
 					requireRegister(fn, array);
 					requireRegister(fn, index);
 					requireRegister(fn, source);
+				case GetI8(destination, pointer, offset), GetI16(destination, pointer, offset), GetMem(destination, pointer, offset):
+					requireRegister(fn, destination);
+					requireRegister(fn, pointer);
+					requireRegister(fn, offset);
+				case SetI8(pointer, offset, source), SetI16(pointer, offset, source), SetMem(pointer, offset, source):
+					requireRegister(fn, pointer);
+					requireRegister(fn, offset);
+					requireRegister(fn, source);
 				case ArraySize(destination, array):
 					requireRegister(fn, destination);
 					requireRegister(fn, array);

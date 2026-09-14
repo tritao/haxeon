@@ -145,27 +145,28 @@ class IrProgramAssembler {
 
 	public static function objectsFrom(typed:TypedProgram):Array<IrObject> {
 		var objects:Array<IrObject> = [];
-		for (classDecl in typed.classes) {
-			var fields:Array<IrObjectField> = [];
-			for (field in classDecl.fields)
-				if (!field.isStatic && hasPhysicalStorage(field))
-					fields.push({name: field.name, type: IrGenerator.lowerType(field.type)});
-			var methods:Array<IrObjectMethod> = [];
-			for (methodDecl in classDecl.methods)
-				if (!methodDecl.isStatic && !methodDecl.isConstructor) {
-					var functionName = methodDecl.name;
-					var separator = lastSeparator(functionName);
-					methods.push({name: functionName.substring(separator + 1, functionName.length), functionName: functionName});
-				}
-			objects.push({
-				name: classDecl.name,
-				isValue: classDecl.isValue,
-				base: classDecl.base,
-				interfaces: classDecl.interfaces,
-				fields: fields,
-				methods: methods
-			});
-		}
+		for (classDecl in typed.classes)
+			if (!classDecl.isNativeValue) {
+				var fields:Array<IrObjectField> = [];
+				for (field in classDecl.fields)
+					if (!field.isStatic && hasPhysicalStorage(field))
+						fields.push({name: field.name, type: IrGenerator.lowerType(field.type)});
+				var methods:Array<IrObjectMethod> = [];
+				for (methodDecl in classDecl.methods)
+					if (!methodDecl.isStatic && !methodDecl.isConstructor) {
+						var functionName = methodDecl.name;
+						var separator = lastSeparator(functionName);
+						methods.push({name: functionName.substring(separator + 1, functionName.length), functionName: functionName});
+					}
+				objects.push({
+					name: classDecl.name,
+					isValue: classDecl.isValue,
+					base: classDecl.base,
+					interfaces: classDecl.interfaces,
+					fields: fields,
+					methods: methods
+				});
+			}
 		for (cell in typed.closurePlan.storage)
 			objects.push({
 				name: cell.name,

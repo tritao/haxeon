@@ -11,7 +11,7 @@ import compiler.ir.codec.IrValueTableCodec;
 
 /** Closed, versioned encoding for every persisted IR instruction operand. */
 class IrInstructionCodec {
-	static inline final VERSION = 4;
+	static inline final VERSION = 5;
 	static final CONSTRUCTORS:Map<String, Bool> = [
 		"Phi" => true,
 		"ConstVoid" => true,
@@ -19,6 +19,9 @@ class IrInstructionCodec {
 		"ConstFloat" => true,
 		"ConstString" => true,
 		"StaticDataAddress" => true,
+		"PointerOffset" => true,
+		"MemoryLoad" => true,
+		"MemoryStore" => true,
 		"ConstBool" => true,
 		"ConstNull" => true,
 		"TypeValue" => true,
@@ -123,6 +126,22 @@ class IrInstructionCodec {
 				begin(output, "StaticDataAddress", 2);
 				writeValue(output, value);
 				writeBytes(output, bytes);
+			case PointerOffset(value, pointer, byteOffset):
+				begin(output, "PointerOffset", 3);
+				writeValue(output, value);
+				writeValue(output, pointer);
+				writeValue(output, byteOffset);
+			case MemoryLoad(value, pointer, size, signed):
+				begin(output, "MemoryLoad", 4);
+				writeValue(output, value);
+				writeValue(output, pointer);
+				writeInt(output, size);
+				writeBool(output, signed);
+			case MemoryStore(pointer, value, size):
+				begin(output, "MemoryStore", 3);
+				writeValue(output, pointer);
+				writeValue(output, value);
+				writeInt(output, size);
 			case ConstBool(value, constant):
 				begin(output, "ConstBool", 2);
 				writeValue(output, value);
@@ -292,6 +311,15 @@ class IrInstructionCodec {
 			case "StaticDataAddress":
 				arity(2);
 				StaticDataAddress(readValue(input, values), readBytes(input, totalLength));
+			case "PointerOffset":
+				arity(3);
+				PointerOffset(readValue(input, values), readValue(input, values), readValue(input, values));
+			case "MemoryLoad":
+				arity(4);
+				MemoryLoad(readValue(input, values), readValue(input, values), readInt(input), readBool(input));
+			case "MemoryStore":
+				arity(3);
+				MemoryStore(readValue(input, values), readValue(input, values), readInt(input));
 			case "ConstBool":
 				arity(2);
 				ConstBool(readValue(input, values), readBool(input));

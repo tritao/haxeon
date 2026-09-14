@@ -151,13 +151,13 @@ class WasmLayout {
 	public static function sizeOf(type:IrType):Int
 		return switch type {
 			case I64: 8;
-			case F64: 8;
+			case F32 | F64: 8;
 			case Void: 0;
 			default: 4;
 		};
 
 	public static function arrayStride(type:IrType):Int
-		return type == F64 || type == I64 ? 8 : 4;
+		return type == F32 || type == F64 || type == I64 ? 8 : 4;
 
 	public static function arrayAllocationSize(type:IrType, length:Int):Int
 		return ARRAY_HEADER_SIZE + arrayStride(type) * length;
@@ -178,7 +178,7 @@ class WasmLayout {
 	public static inline final CLOSURE_TYPE_ID = 0x484C4346;
 
 	public static function alignmentOf(type:IrType):Int
-		return type == F64 || type == I64 ? 8 : 4;
+		return type == F32 || type == F64 || type == I64 ? 8 : 4;
 
 	static function align(value:Int, boundary:Int):Int
 		return (value + boundary - 1) & ~(boundary - 1);

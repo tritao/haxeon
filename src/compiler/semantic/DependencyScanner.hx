@@ -2,6 +2,7 @@ package compiler.semantic;
 
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstStatement;
+import compiler.syntax.Ast.AstType;
 
 /** Collects qualified source dependencies referenced by syntax trees. */
 class DependencyScanner {
@@ -154,6 +155,8 @@ class DependencyScanner {
 					scanExpression(a, dependencies);
 			case NewArray(_, length, _):
 				scanExpression(length, dependencies);
+			case NativeLayoutQuery(_, type, _, _):
+				scanType(type, dependencies);
 			case NewMap(_, _, _):
 			default:
 		}
@@ -161,6 +164,25 @@ class DependencyScanner {
 	static function scanQualifiedDependency(name:String, dependencies:Map<String, Bool>):Void {
 		addQualifiedOwner(name, dependencies);
 	}
+
+	static function scanType(type:AstType, dependencies:Map<String, Bool>):Void
+		switch type {
+			case NamedType(name) | AppliedType(name, _):
+				dependencies.set(name, true);
+			case ArrayType(element) | NullableType(element):
+				scanType(element, dependencies);
+			case MapType(key, value):
+				scanType(key, dependencies);
+				scanType(value, dependencies);
+			case FunctionType(arguments, result):
+				for (argument in arguments)
+					scanType(argument, dependencies);
+				scanType(result, dependencies);
+			case AnonymousType(fields):
+				for (field in fields)
+					scanType(field.type, dependencies);
+			case _:
+		}
 
 	static function addQualifiedOwner(name:String, dependencies:Map<String, Bool>):Void {
 		var length = name.length, segmentStart = 0, hasSeparator = false;

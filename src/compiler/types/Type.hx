@@ -7,6 +7,7 @@ enum abstract NominalKind(String) {
 	var Class = "class";
 	var Interface = "interface";
 	var Enum = "enum";
+	var NativeValue = "native-value";
 }
 
 /**
@@ -25,6 +26,10 @@ enum CompilerType {
 	THlBytes;
 	TDynamic;
 	TNativeAbstract(name:String);
+
+	/** Fixed-width or target-defined scalar used only in native memory layouts. */
+	TNativeScalar(abiName:String);
+
 	TNever;
 	TRange;
 	TVoid;

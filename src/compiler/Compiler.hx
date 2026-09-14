@@ -769,6 +769,28 @@ class Compiler {
 		return natives.signatures();
 	}
 
+	/** Select the C ABI used by native-layout queries and source records. */
+	public function nativeLayoutTarget():String {
+		var configured = defines.get("native-abi-target");
+		if (configured != null)
+			return configured;
+		var interfaceTarget:Null<String> = null;
+		for (model in ffiInterfaces()) {
+			if (interfaceTarget == null)
+				interfaceTarget = model.target;
+			else if (interfaceTarget != model.target)
+				throw 'Native layout queries require one HXI target, found "$interfaceTarget" and "${model.target}"';
+		}
+		if (interfaceTarget != null)
+			return interfaceTarget;
+		return switch (defines.get("target")) {
+			case "wasm32" | "wasmgc" | "wasm-gc": "portable-abi32";
+			case "wasm64": "portable-abi64";
+			case "hl" | null: "portable-abi64";
+			case target: target;
+		}
+	}
+
 	function irNatives():Array<IrNative>
 		return natives.irNatives();
 

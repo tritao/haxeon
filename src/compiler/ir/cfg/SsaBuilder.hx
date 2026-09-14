@@ -342,6 +342,14 @@ class SsaBuilder {
 				case StaticDataAddress(out, bytes):
 					var result = define(out);
 					emit(target, StaticDataAddress(result, bytes), provenance);
+				case PointerOffset(out, pointer, byteOffset):
+					var result = define(out);
+					emit(target, PointerOffset(result, resolve(pointer), resolve(byteOffset)), provenance);
+				case MemoryLoad(out, pointer, size, signed):
+					var result = define(out);
+					emit(target, MemoryLoad(result, resolve(pointer), size, signed), provenance);
+				case MemoryStore(pointer, value, size):
+					emit(target, MemoryStore(resolve(pointer), resolve(value), size), provenance);
 				case ConstBool(out, value):
 					var result = define(out);
 					emit(target, ConstBool(result, value), provenance);

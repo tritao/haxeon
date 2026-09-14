@@ -649,7 +649,7 @@ class IrGenerator {
 	static function lowerExpressionAt(expression:TypedExpression, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue
 		return switch expression.expression {
 			case TIntLiteral(value): builder.constInt(value, lowerType(expression.type));
-			case TFloatLiteral(value): builder.constFloat(value);
+			case TFloatLiteral(value): builder.constFloat(value, lowerType(expression.type));
 			case TStringLiteral(value): builder.constString(value);
 			case TRuntimeDataAddress(bytes): builder.staticDataAddress(bytes);
 			case TBoolLiteral(value): builder.constBool(value);
@@ -784,6 +784,35 @@ class IrGenerator {
 				lowerType(a.type) == Bytes ? builder.call("__string_equal", [left, right],
 					Bool) : lowerType(a.type) == Dyn
 				|| lowerType(b.type) == Dyn ? builder.call("__dynamic_equal", [left, right], Bool) : builder.equal(left, right);
+			case TCall("$rawptr.isNull", [pointer]):
+				var value = lowerExpression(pointer, builder, localTypes);
+				builder.equal(value, builder.constNull(RawPtr));
+			case TCall("$rawptr.load", [pointer, size, signed]):
+				var width = switch size.expression {
+					case TIntLiteral(value): value;
+					default: throw "RawPtr.load width must be constant";
+				}, isSigned = switch signed.expression {
+					case TBoolLiteral(value): value;
+					default: throw "RawPtr.load signedness must be constant";
+				};
+				builder.memoryLoad(lowerExpression(pointer, builder, localTypes), lowerType(expression.type), width, isSigned);
+			case TCall("$rawptr.store", [pointer, value, size]):
+				var width = switch size.expression {
+					case TIntLiteral(value): value;
+					default: throw "RawPtr.store width must be constant";
+				};
+				{
+					builder.memoryStore(lowerExpression(pointer, builder, localTypes), lowerExpression(value, builder, localTypes), width);
+					builder.constVoid();
+				}
+			case TCall("$rawptr.offset", [pointer, count, stride]):
+				var elementSize = switch stride.expression {
+					case TIntLiteral(value): value;
+					default: throw "RawPtr.offset stride must be constant";
+				}, byteOffset = builder.mul(lowerExpression(count, builder, localTypes), builder.constInt(elementSize));
+				builder.pointerOffset(lowerExpression(pointer, builder, localTypes), byteOffset);
+			case TCall("$rawptr.byteOffset", [pointer, count]):
+				builder.pointerOffset(lowerExpression(pointer, builder, localTypes), lowerExpression(count, builder, localTypes));
 			case TCall("__iterator_new", [source]): builder.iteratorNew(lowerExpression(iteratorArraySource(source), builder, localTypes));
 			case TCall("__iterator_has_next", [iterator]): builder.iteratorHasNext(lowerExpression(iterator, builder, localTypes));
 			case TCall("__iterator_next", [iterator]): builder.iteratorNext(lowerExpression(iterator, builder, localTypes), lowerType(expression.type));
@@ -1567,11 +1596,17 @@ class IrGenerator {
 
 	public static function lowerType(type:CompilerType):IrType
 		return switch type {
+			case TAbstract(declaration, _, _) if (isRawPointer(declaration)): RawPtr;
 			case TAbstract(_, _, representation): lowerType(representation);
 			case TInt: I32;
 			case TInt64: I64;
 			case TBool: Bool;
 			case TFloat: F64;
+			case TNativeScalar("f32"): F32;
+			case TNativeScalar("f64"): F64;
+			case TNativeScalar("i64" | "u64" | "c_long" | "c_ulong" | "c_long_long" | "c_ulong_long" | "c_size"): I64;
+			case TNativeScalar("c_bool"): Bool;
+			case TNativeScalar(_): I32;
 			case TString: Bytes;
 			case TBytes: ManagedBytes;
 			case THlBytes: Bytes;
@@ -1586,6 +1621,7 @@ class IrGenerator {
 					case NominalKind.Class: Std.string(name) == "haxe.io.Eof" ? Dyn : Obj(name);
 					case NominalKind.Interface: Virtual(name);
 					case NominalKind.Enum: Enum(name);
+					case NominalKind.NativeValue: throw 'Native value record "$name" cannot be lowered as a managed value';
 					default: throw 'Unknown nominal kind $kind';
 				}
 			case TMap(key, value): Abstract(RuntimeType.requireMapName(key, value));
@@ -1596,6 +1632,9 @@ class IrGenerator {
 			case TFunction(arguments, result): Function([for (argument in arguments) lowerType(argument)], lowerType(result));
 			case TAnonymous(name, _): Obj(name);
 		};
+
+	static function isRawPointer(declaration:compiler.types.DeclarationIndex.DeclarationId):Bool
+		return StringTools.endsWith(Std.string(declaration), "RawPtr");
 
 	static function unreachableValue(type:IrType, builder:CfgBuilder):CfgValue
 		return switch type {

@@ -28,6 +28,7 @@ class SemanticSignature {
 			case THlBytes: "hl.Bytes";
 			case TDynamic: "Dynamic";
 			case TNativeAbstract(name): 'hl.Abstract<"$name">';
+			case TNativeScalar(name): 'native-scalar:$name';
 			case TNever: "Never";
 			case TRange: "Range";
 			case TVoid: "Void";
@@ -38,6 +39,7 @@ class SemanticSignature {
 					case NominalKind.Class: "class";
 					case NominalKind.Interface: "interface";
 					case NominalKind.Enum: "enum";
+					case NominalKind.NativeValue: "native-value";
 					default: throw 'Unknown nominal kind $kind';
 				};
 				'$prefix:$name<${[for (argument in arguments) type(argument)].join(",")}>';

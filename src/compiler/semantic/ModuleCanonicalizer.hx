@@ -426,6 +426,7 @@ class ModuleCanonicalizer {
 				else if (name.indexOf(".") < 0 && locals.exists(name))
 					resolved = module == entry && name == "main" ? "main" : module + "." + name;
 				Call(resolved, [for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
+			case NativeLayoutQuery(kind, type, field, s): NativeLayoutQuery(kind, canonicalType(type, aliases), field, s);
 			case ClosureCall(callee, args, s):
 				ClosureCall(canonicalExpression(callee, module, entry, locals, aliases),
 					[for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);

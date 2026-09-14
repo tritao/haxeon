@@ -27,8 +27,8 @@ class IrBuilder {
 		return out;
 	}
 
-	public function constFloat(value:Float):IrValue {
-		var out = temporary(F64);
+	public function constFloat(value:Float, type:IrType = F64):IrValue {
+		var out = temporary(type);
 		emit(ConstFloat(out, value));
 		return out;
 	}

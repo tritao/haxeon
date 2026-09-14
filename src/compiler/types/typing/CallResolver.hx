@@ -3,6 +3,10 @@ package compiler.types.typing;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
+import compiler.ffi.HxiAbi;
+import compiler.ffi.HxiAbi.HxiAbiValue;
+import compiler.ffi.HxiAbi.HxiIntegerSign;
+import compiler.ffi.NativeLayout;
 import compiler.runtime.PlatformAbi;
 import compiler.runtime.RuntimeType;
 import compiler.syntax.Ast.AstArgument;
@@ -101,6 +105,11 @@ class CallResolver {
 	public function typeMethodCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>, platformFirst:Bool = true, receiverName:Null<String> = null,
 			contextualGenericArguments:Bool = true):TypedExpression {
+		if (isRawPointerType(receiver.type)) {
+			var rawPointerCall = typeRawPointerMethod(receiver, name, arguments, span, scope, expectedType);
+			if (rawPointerCall != null)
+				return rawPointerCall;
+		}
 		var platformMethod = PlatformAbi.method(receiver.type, name);
 		if (platformFirst && platformMethod != null) {
 			var typed = typeCallArguments(arguments, platformMethod.arguments, scope, name);
@@ -127,6 +136,114 @@ class CallResolver {
 			return fieldCall;
 		return resolveInstanceMethod(receiver, name, arguments, span, scope, expectedType, receiverName, contextualGenericArguments);
 	}
+
+	public function typeRawPointerNullCall(name:String, arguments:Array<AstExpression>, span:SourceSpan,
+			expectedType:Null<CompilerType>):Null<TypedExpression> {
+		if (name != "RawPtr.nullPtr" && !StringTools.endsWith(name, ".RawPtr.nullPtr"))
+			return null;
+		if (arguments.length != 0)
+			fail("E1008", 'RawPtr.nullPtr expects no arguments, got ${arguments.length}', span);
+		return switch expectedType {
+			case TAbstract(declaration, typeArguments, _) if (isRawPointerAbstract(declaration) && typeArguments.length == 1):
+				new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), expectedType, span);
+			case _:
+				fail("E1009", "RawPtr.nullPtr needs an expected RawPtr<T> type", span);
+				null;
+		};
+	}
+
+	function typeRawPointerMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
+			expectedType:Null<CompilerType>):Null<TypedExpression> {
+		var typeArguments = switch receiver.type {
+			case TAbstract(declaration, arguments, _) if (isRawPointerAbstract(declaration)): arguments;
+			case _: return null;
+		};
+		if (typeArguments.length != 1)
+			fail("E1022", "RawPtr<T> requires exactly one pointee type", span);
+		var pointee = typeArguments[0];
+		switch name {
+			case "isNull":
+				if (arguments.length != 0)
+					fail("E1008", "RawPtr.isNull expects no arguments", span);
+				return new TypedExpression(TCall("$rawptr.isNull", [receiver]), TBool, span);
+			case "load":
+				if (arguments.length != 0)
+					fail("E1008", "RawPtr.load expects no arguments", span);
+				if (NativeLayout.isNativeValue(pointee))
+					fail("E1022", "Native records are address-only and cannot be loaded by value", span);
+				var layout = nativeMemoryLayout(pointee, span);
+				return new TypedExpression(TCall("$rawptr.load", [
+					receiver,
+					new TypedExpression(TIntLiteral(layout.size), TInt, span),
+					new TypedExpression(TBoolLiteral(layout.signed), TBool, span)
+				]), pointee, span);
+			case "store":
+				if (arguments.length != 1)
+					fail("E1008", "RawPtr.store expects one value", span);
+				if (NativeLayout.isNativeValue(pointee))
+					fail("E1022", "Native records are address-only and cannot be stored by value", span);
+				var layout = nativeMemoryLayout(pointee, span),
+					value = coerce(typeExpression(arguments[0], scope, pointee, false), pointee, "RawPtr.store value", "E1002");
+				return new TypedExpression(TCall("$rawptr.store", [receiver, value, new TypedExpression(TIntLiteral(layout.size), TInt, span)]), TVoid, span);
+			case "offset":
+				if (arguments.length != 1)
+					fail("E1008", "RawPtr.offset expects one element count", span);
+				var layout = nativeMemoryLayout(pointee, span),
+					count = coerce(typeExpression(arguments[0], scope, TInt, false), TInt, "RawPtr.offset count", "E1002");
+				return new TypedExpression(TCall("$rawptr.offset", [receiver, count, new TypedExpression(TIntLiteral(layout.size), TInt, span)]),
+					receiver.type, span);
+			case "byteOffset":
+				if (arguments.length != 1)
+					fail("E1008", "RawPtr.byteOffset expects one byte count", span);
+				var count = coerce(typeExpression(arguments[0], scope, TInt, false), TInt, "RawPtr.byteOffset count", "E1002");
+				return new TypedExpression(TCall("$rawptr.byteOffset", [receiver, count]), receiver.type, span);
+			case "castTo":
+				if (arguments.length != 0)
+					fail("E1008", "RawPtr.castTo expects no arguments", span);
+				return switch expectedType {
+					case TAbstract(declaration, castArguments, _) if (isRawPointerAbstract(declaration) && castArguments.length == 1):
+						new TypedExpression(TAbiCast(receiver), expectedType, span);
+					case _:
+						fail("E1009", "RawPtr.castTo needs an expected RawPtr<U> type", span);
+						null;
+				};
+			case _:
+				return null;
+		}
+	}
+
+	function nativeMemoryLayout(type:CompilerType, span:SourceSpan):{size:Int, signed:Bool} {
+		if (NativeLayout.isNativeValue(type)) {
+			var name = switch type {
+				case TInstance(NominalKind.NativeValue, name, _): name;
+				case _: throw "Native value type check lost its nominal type";
+			};
+			var layout = session.nativeLayoutsByName.get(name);
+			if (layout == null)
+				fail("E1022", 'Native value "$name" has no layout for ABI target "${session.nativeAbiTarget}"', span);
+			return {size: layout.size, signed: false};
+		}
+		var hxiType = try NativeLayout.fieldType(type) catch (_:Dynamic) {
+			fail("E1022", 'Type "$type" has no fixed native memory layout', span);
+			cast null;
+		}, abi = HxiAbi.forTarget(session.nativeAbiTarget), layout = abi.layout(hxiType);
+		if (layout == null)
+			fail("E1022", 'Type "$type" has no fixed native memory layout for "${session.nativeAbiTarget}"', span);
+		var signed = switch abi.classify(hxiType) {
+			case IntegerValue(_, HxiIntegerSign.Signed) | EnumerationValue(_, _, HxiIntegerSign.Signed): true;
+			case _: false;
+		};
+		return {size: layout.size, signed: signed};
+	}
+
+	static function isRawPointerType(type:CompilerType):Bool
+		return switch type {
+			case TAbstract(name, _, _) if (isRawPointerAbstract(name)): true;
+			case _: false;
+		};
+
+	static function isRawPointerAbstract(declaration:String):Bool
+		return declaration == "RawPtr" || StringTools.endsWith(declaration, ".RawPtr");
 
 	function typeExpressionValue(expression:AstExpression, scope:Scope, ?expectedType:CompilerType):TypedExpression
 		return typeExpression(expression, scope, expectedType, false);

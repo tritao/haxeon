@@ -3,6 +3,10 @@ package compiler.types.typing;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
+import compiler.ffi.HxiAbi;
+import compiler.ffi.HxiAbi.HxiAbiValue;
+import compiler.ffi.HxiAbi.HxiIntegerSign;
+import compiler.ffi.NativeLayout;
 import compiler.runtime.RuntimeType;
 import compiler.semantic.SemanticSignature;
 import compiler.syntax.Ast.AstMapEntry;
@@ -137,6 +141,7 @@ class ExpressionTyper {
 			case MapComprehension(keyName, valueName, iterable, predicate, key, value, span):
 				typeMapComprehension(keyName, valueName, iterable, predicate, key, value, span, scope, expectedType);
 			case Range(start, rangeEnd, span): typeRange(start, rangeEnd, span, scope);
+			case NativeLayoutQuery(kind, type, field, span): typeNativeLayoutQuery(kind, type, field, span);
 			case NewGeneric(typeName, typeArguments, arguments, span):
 				callResolver.typeConstruction(typeName, typeArguments, arguments, span, scope, expectedType, true);
 			case New(typeName, arguments, span): callResolver.typeConstruction(typeName, [], arguments, span, scope, expectedType, false);
@@ -144,6 +149,9 @@ class ExpressionTyper {
 			case NewMap(key, value, span): typeNewMap(key, value, span, lowerType);
 			case Index(array, offset, span): typeIndex(array, offset, span, scope);
 			case Call(name, arguments, span):
+				var rawPointerCall = callResolver.typeRawPointerNullCall(name, arguments, span, expectedType);
+				if (rawPointerCall != null)
+					return rawPointerCall;
 				if (name == "super")
 					return callResolver.typeSuperCall(arguments, span, scope);
 				var runtimeDataCall = callResolver.typeRuntimeDataCall(name, arguments, span, scope);
@@ -159,6 +167,46 @@ class ExpressionTyper {
 				scope.invalidateAllExpressions();
 				call;
 		};
+
+	function typeNativeLayoutQuery(kind:compiler.syntax.Ast.NativeLayoutQueryKind, type:AstType, field:Null<String>, span:SourceSpan):TypedExpression {
+		var resolved = session.declarations.resolve(type, span, session.currentContext.typeSubstitutions), size:Int;
+		switch resolved {
+			case TInstance(NominalKind.NativeValue, name, _):
+				var layout = session.nativeLayoutsByName.get(name);
+				if (layout == null)
+					fail("E1022", 'Native value "$name" has no layout for ABI target "${session.nativeAbiTarget}"', span);
+				switch kind {
+					case SizeOf: size = layout.size;
+					case AlignOf: size = layout.alignment;
+					case OffsetOf:
+						if (field == null)
+							fail("E1022", "offsetof requires a field name", span);
+						var found:Null<Int> = null;
+						for (candidate in layout.fields)
+							if (candidate.name == field)
+								found = candidate.offset;
+						if (found == null)
+							fail("E1022", 'Native value "$name" has no field "$field"', span);
+						size = cast found;
+				}
+			case _:
+				if (kind == OffsetOf)
+					fail("E1022", "offsetof requires a native value record type", span);
+				var hxiType = try NativeLayout.fieldType(resolved) catch (_:Dynamic) {
+					fail("E1022", 'Type "$resolved" has no fixed native ABI layout', span);
+					cast null;
+				},
+					layout = HxiAbi.forTarget(session.nativeAbiTarget).layout(hxiType);
+				if (layout == null)
+					fail("E1022", 'Type "$resolved" has no fixed native ABI layout for "${session.nativeAbiTarget}"', span);
+				size = switch kind {
+					case SizeOf: layout.size;
+					case AlignOf: layout.align;
+					case OffsetOf: 0;
+				};
+		}
+		return new TypedExpression(TIntLiteral(size), TInt, span);
+	}
 
 	public function typeObjectLiteral(fields:Array<AstObjectField>, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		var objectExpected = objectLiteralExpectation(expectedType),
@@ -618,9 +666,18 @@ class ExpressionTyper {
 	public function typeLiteral(expression:AstExpression, expectedType:Null<CompilerType>):TypedExpression
 		return switch expression {
 			case IntegerLiteral(value, span):
-				var type = expectedType == TInt64 ? TInt64 : TInt;
+				var type = switch expectedType {
+					case TInt64: TInt64;
+					case TNativeScalar(name) if (name != "f32" && name != "f64"): expectedType;
+					case _: TInt;
+				};
 				new TypedExpression(TIntLiteral(value), type, span);
-			case FloatLiteral(value, span): new TypedExpression(TFloatLiteral(value), TFloat, span);
+			case FloatLiteral(value, span):
+				var type = switch expectedType {
+					case TNativeScalar("f32") | TNativeScalar("f64"): expectedType;
+					case _: TFloat;
+				};
+				new TypedExpression(TFloatLiteral(value), type, span);
 			case StringLiteral(value, span): new TypedExpression(TStringLiteral(value), TString, span);
 			case BoolLiteral(value, span): new TypedExpression(TBoolLiteral(value), TBool, span);
 			case NullLiteral(span): new TypedExpression(TNullLiteral, TNull, span);

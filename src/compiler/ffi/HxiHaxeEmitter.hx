@@ -1952,37 +1952,12 @@ class HxiHaxeEmitter {
 		return descriptor;
 	}
 
-	static function abiLayout(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>, abi:HxiAbi):{size:Int, align:Int}
-		return switch type {
-			case Const(element): abiLayout(element, declarations, abi);
-			case Array(element, length):
-				var item = abiLayout(element, declarations, abi);
-				{size: item.size * length, align: item.align};
-			case Named(name):
-				switch declarations.get(name) {
-					case Alias(_, target, _): abiLayout(target, declarations, abi);
-					case Handle(_, _, _, _): {size: 4, align: 4};
-					case _: valueLayout(abi.classify(type), abi);
-				}
-			case _: valueLayout(abi.classify(type), abi);
-		};
-
-	static function valueLayout(value:HxiAbiValue, abi:HxiAbi):{size:Int, align:Int}
-		return switch value {
-			case IntegerValue(bits, _) | EnumerationValue(_, bits, _) | FloatValue(bits):
-				var size = Std.int(bits / 8);
-				{size: size, align: Std.int(Math.min(size, abi.pointerBits / 8))};
-			case Boolean32Value: {size: 4, align: 4};
-			case PointerValue(_, _, _, _) | CallbackValue(_, _, _, _):
-				var size = Std.int(abi.pointerBits / 8);
-				{size: size, align: size};
-			case Utf8Value(_):
-				var size = Std.int(abi.pointerBits / 8);
-				{size: size, align: size};
-			case HandleValue(_): {size: 4, align: 4};
-			case AggregateValue(_, size, align): {size: size, align: align};
-			case VoidValue: throw "Void field has no C layout";
-		};
+	static function abiLayout(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>, abi:HxiAbi):{size:Int, align:Int} {
+		var layout = abi.layout(type);
+		if (layout == null)
+			throw 'HXI type $type has no fixed ABI layout';
+		return {size: layout.size, align: layout.align};
+	}
 
 	static function fieldDescriptors(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>, abi:HxiAbi,
 			aggregateDescriptors:Null<Map<String, String>> = null):Array<String>

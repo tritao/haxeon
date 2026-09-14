@@ -72,7 +72,8 @@ class CfgVerifier {
 					}
 					define(out, defined, available, block.id);
 				case ConstFloat(out, _):
-					expect(out, F64);
+					if (out.type != F64 && out.type != F32)
+						throw 'CFG float constant ${out.id} must produce F32 or F64';
 					define(out, defined, available, block.id);
 				case ConstString(out, _):
 					expect(out, Bytes);
@@ -85,6 +86,25 @@ class CfgVerifier {
 						if (byte < 0 || byte > 255)
 							throw "CFG static data contains a value outside the byte range";
 					define(out, defined, available, block.id);
+				case PointerOffset(out, pointer, byteOffset):
+					require(pointer, available, block.id);
+					require(byteOffset, available, block.id);
+					expect(pointer, RawPtr);
+					expect(byteOffset, I32);
+					expect(out, RawPtr);
+					define(out, defined, available, block.id);
+				case MemoryLoad(out, pointer, size, _):
+					require(pointer, available, block.id);
+					expect(pointer, RawPtr);
+					if (size != 1 && size != 2 && size != 4 && size != 8)
+						throw 'Unsupported CFG memory load size $size';
+					define(out, defined, available, block.id);
+				case MemoryStore(pointer, value, size):
+					require(pointer, available, block.id);
+					require(value, available, block.id);
+					expect(pointer, RawPtr);
+					if (size != 1 && size != 2 && size != 4 && size != 8)
+						throw 'Unsupported CFG memory store size $size';
 				case ConstBool(out, _):
 					expect(out, Bool);
 					define(out, defined, available, block.id);
@@ -144,7 +164,7 @@ class CfgVerifier {
 					require(b, available, block.id);
 					if (!sameType(out.type, a.type)
 						|| !sameType(a.type, b.type)
-						|| (!sameType(a.type, I32) && !sameType(a.type, I64) && !sameType(a.type, F64)))
+						|| (!sameType(a.type, I32) && !sameType(a.type, I64) && !sameType(a.type, F32) && !sameType(a.type, F64)))
 						throw "CFG arithmetic requires matching numeric values";
 					define(out, defined, available, block.id);
 				case Mod(out, a, b):
@@ -169,7 +189,7 @@ class CfgVerifier {
 					require(a, available, block.id);
 					require(b, available, block.id);
 					expect(out, Bool);
-					if (!sameType(a.type, b.type) || (a.type != I32 && a.type != I64 && a.type != F64))
+					if (!sameType(a.type, b.type) || (a.type != I32 && a.type != I64 && a.type != F32 && a.type != F64))
 						throw "CFG ordered comparison requires matching numeric values";
 					define(out, defined, available, block.id);
 				case Equal(out, a, b):
@@ -177,7 +197,8 @@ class CfgVerifier {
 					require(b, available, block.id);
 					expect(out, Bool);
 					if (!sameType(a.type, b.type)
-						|| (!sameType(a.type, I32) && !sameType(a.type, I64) && !sameType(a.type, F64) && !sameType(a.type, Bool) && !isReference(a.type)))
+						|| (!sameType(a.type, I32) && !sameType(a.type, I64) && !sameType(a.type, F32) && !sameType(a.type, F64) && !sameType(a.type, Bool)
+							&& !isReference(a.type)))
 						throw 'CFG equality requires matching primitive or reference values';
 					define(out, defined, available, block.id);
 				case Call(out, _, arguments), CNativeCall(out, _, arguments):
@@ -405,7 +426,7 @@ class CfgVerifier {
 
 	static function isReference(type:IrType):Bool
 		return switch type {
-			case Bytes, ManagedBytes, Dyn, Obj(_), Enum(_), Abstract(_), Virtual(_), Array(_), Iterator(_), Function(_, _): true;
+			case Bytes, RawPtr, ManagedBytes, Dyn, Obj(_), Enum(_), Abstract(_), Virtual(_), Array(_), Iterator(_), Function(_, _): true;
 			default: false;
 		};
 }

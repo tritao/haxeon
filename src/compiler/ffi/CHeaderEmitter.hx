@@ -62,8 +62,10 @@ class CHeaderEmitter {
 			case I32: "int";
 			case I64: "int64_t";
 			case Bool: "bool";
+			case F32: "float";
 			case F64: "double";
 			case Bytes: "vbyte *";
+			case RawPtr: "void *";
 			case ManagedBytes: "void *";
 			case Dyn: "vdynamic *";
 			case TypeRef: "hl_type *";
@@ -78,8 +80,10 @@ class CHeaderEmitter {
 			case I32: "_I32";
 			case I64: "_I64";
 			case Bool: "_BOOL";
+			case F32: "_F32";
 			case F64: "_F64";
 			case Bytes: "_BYTES";
+			case RawPtr: "_BYTES";
 			case ManagedBytes: "_ABSTRACT(realtime_bytes)";
 			case Dyn: "_DYN";
 			case TypeRef: "_TYPE";
@@ -94,8 +98,10 @@ class CHeaderEmitter {
 			case I32: "Int";
 			case I64: "haxe.Int64";
 			case Bool: "Bool";
+			case F32: "Float32";
 			case F64: "Float";
 			case Bytes: "Bytes";
+			case RawPtr: "RawPtr";
 			case ManagedBytes: "haxe.io.Bytes";
 			case Dyn: "Dynamic";
 			case TypeRef: "Type";

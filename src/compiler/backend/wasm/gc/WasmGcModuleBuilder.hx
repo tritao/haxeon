@@ -362,7 +362,7 @@ class WasmGcModuleBuilder {
 			}
 		switch native.result {
 			case Void:
-			case I32, Bool, I64, F64:
+			case I32, Bool, I64, F32, F64:
 				gcCNativeValueType(native.result);
 			case ManagedBytes if (native.fixedResult != null):
 			case ManagedBytes if (native.pointerLength != null):
@@ -444,6 +444,7 @@ class WasmGcModuleBuilder {
 		return switch type {
 			case I32, Bool: I32;
 			case I64: I64;
+			case F32: F64;
 			case F64: F64;
 			case Abstract("native_pointer"): I32;
 			case _: throw 'Wasm GC C ABI supports scalar arguments only, got ${Std.string(type)}';

@@ -440,6 +440,18 @@ class HlWriter {
 					{opcode: HlOpcode.GetArray, operands: [destination, array, index]};
 				case ArraySet(array, index, source):
 					{opcode: HlOpcode.SetArray, operands: [array, index, source]};
+				case GetI8(destination, pointer, offset):
+					{opcode: HlOpcode.GetI8, operands: [destination, pointer, offset]};
+				case GetI16(destination, pointer, offset):
+					{opcode: HlOpcode.GetI16, operands: [destination, pointer, offset]};
+				case GetMem(destination, pointer, offset):
+					{opcode: HlOpcode.GetMem, operands: [destination, pointer, offset]};
+				case SetI8(pointer, offset, source):
+					{opcode: HlOpcode.SetI8, operands: [pointer, offset, source]};
+				case SetI16(pointer, offset, source):
+					{opcode: HlOpcode.SetI16, operands: [pointer, offset, source]};
+				case SetMem(pointer, offset, source):
+					{opcode: HlOpcode.SetMem, operands: [pointer, offset, source]};
 				case ArraySize(destination, array):
 					{opcode: HlOpcode.ArraySize, operands: [destination, array]};
 				case MakeEnum(destination, constructor, arguments):

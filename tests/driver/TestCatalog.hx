@@ -57,6 +57,8 @@ class TestCatalog {
 		"HxiParserMain",
 		"ManagedBytesMain",
 		"HxiAbiMain",
+		"NativeLayoutMain",
+		"NativeMemoryMain",
 	];
 
 	static final toolingMains = [

@@ -6,7 +6,7 @@ import haxe.io.BytesOutput;
 
 /** Deterministic, strictly validated persistence for IR types. */
 class IrTypeCodec {
-	static inline final VERSION = 3;
+	static inline final VERSION = 5;
 	static inline final MAX_DEPTH = 64;
 	static inline final MAX_ARGUMENTS = 0x10000;
 	static inline final MAX_STRING_BYTES = 0x100000;
@@ -82,6 +82,10 @@ class IrTypeCodec {
 				writeType(output, result, depth + 1);
 			case I64:
 				output.writeByte(13);
+			case RawPtr:
+				output.writeByte(16);
+			case F32:
+				output.writeByte(17);
 		}
 	}
 
@@ -109,6 +113,8 @@ class IrTypeCodec {
 					throw "Invalid IR function type argument count";
 				Function([for (_ in 0...count) readType(input, totalLength, depth + 1)], readType(input, totalLength, depth + 1));
 			case 13: I64;
+			case 16: RawPtr;
+			case 17: F32;
 			default: throw "Unknown IR type tag";
 		};
 	}

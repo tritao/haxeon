@@ -8,8 +8,12 @@ enum IrType {
 	I32;
 	I64;
 	Bool;
+	F32;
 	F64;
 	Bytes;
+
+	/** Unmanaged address carried in one target pointer register. */
+	RawPtr;
 
 	/** GC-managed byte storage used by haxe.io.Bytes and projected HXI structs. */
 	ManagedBytes;
@@ -49,6 +53,9 @@ enum IrInstruction {
 	ConstFloat(output:IrValue, value:Float);
 	ConstString(output:IrValue, value:String);
 	StaticDataAddress(output:IrValue, bytes:Array<Int>);
+	PointerOffset(output:IrValue, pointer:IrValue, byteOffset:IrValue);
+	MemoryLoad(output:IrValue, pointer:IrValue, size:Int, signed:Bool);
+	MemoryStore(pointer:IrValue, value:IrValue, size:Int);
 	ConstBool(output:IrValue, value:Bool);
 	ConstNull(output:IrValue);
 	TypeValue(output:IrValue, type:IrType);
