@@ -12,6 +12,7 @@ import compiler.ffi.HxiModel.HxiDocumentation;
 import compiler.ffi.HxiModel.HxiField;
 import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiModel.HxiOwnership;
+import compiler.ffi.HxiModel.HxiHandleDisposition;
 import compiler.ffi.HxiModel.HxiParameter;
 import compiler.ffi.HxiModel.HxiParameterDirection;
 import compiler.ffi.HxiModel.HxiResultPolicy;
@@ -224,6 +225,7 @@ class CHeaderImporter {
 							type: typeFromProjection(mapType(callback.arguments[index])),
 							direction: In,
 							ownership: Unspecified,
+							handleDisposition: Unspecified,
 							retained: false,
 							metadata: [],
 							span: sourceSpan(node)
@@ -272,6 +274,7 @@ class CHeaderImporter {
 						type: typeFromProjection(typeName),
 						offset: offset,
 						ownership: borrowed ? Borrowed : Unspecified,
+						handleDisposition: Unspecified,
 						lengthField: lengthField,
 						structSize: structSize,
 						metadata: metadata,
@@ -292,7 +295,8 @@ class CHeaderImporter {
 				addDocumentation(documentation, name, node);
 				var modelParameters:Array<HxiParameter> = [for (parameter in parameters) parameterModel(parameter)],
 					resultMetadata:Map<String, Array<String>> = [],
-					ownership = Unspecified;
+					ownership:HxiOwnership = Unspecified,
+					handleDisposition:HxiHandleDisposition = Unspecified;
 				if (callConvention != "cdecl")
 					resultMetadata.set("callconv", ['"$callConvention"']);
 				if (borrowedUtf8) {
@@ -300,10 +304,15 @@ class CHeaderImporter {
 					resultMetadata.set("borrowed", []);
 				}
 				if (owned) {
-					ownership = OwnedHandle;
+					handleDisposition = Owned;
 					resultMetadata.set("owned", []);
 				}
-				var policy:HxiResultPolicy = {ownership: ownership, length: null, metadata: resultMetadata};
+				var policy:HxiResultPolicy = {
+					ownership: ownership,
+					handleDisposition: handleDisposition,
+					length: null,
+					metadata: resultMetadata
+				};
 				return Function(name, modelParameters, typeFromProjection(borrowedUtf8 ? "utf8" : mapType(result)), null, false, callConvention, policy,
 					sourceSpan(node));
 			case _:
@@ -352,7 +361,8 @@ class CHeaderImporter {
 			name: field(parameter, "name"),
 			type: typeFromProjection(projected),
 			direction: direction.direction,
-			ownership: owned ? OwnedHandle : Unspecified,
+			ownership: Unspecified,
+			handleDisposition: owned ? Owned : Unspecified,
 			retained: retained,
 			metadata: metadata,
 			span: sourceSpan(parameter)

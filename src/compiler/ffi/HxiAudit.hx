@@ -32,9 +32,16 @@ class HxiAudit {
 				var model = CHeaderImporter.importHeader(header, target, includes, "clang", library, interfaceName, dependencies, excludedHeaders),
 					source = HxiWriter.write(model, generatedHeader(header, target));
 				HxiValidator.validateComposition(model, dependencyInterfaces == null ? [] : dependencyInterfaces);
+				var visibleDeclarations:Map<String, HxiDeclaration> = [];
+				if (dependencyInterfaces != null)
+					for (dependency in dependencyInterfaces)
+						for (declaration in dependency.declarations)
+							visibleDeclarations.set(declarationName(declaration), declaration);
+				var abi = HxiAbi.forInterface(model, visibleDeclarations);
+				HxiNativeSignature.lower(model, abi, visibleDeclarations);
 				var normalized = normalize(source, target, profile);
 				if (profile != null)
-					auditPortable(model, target, issues, profile);
+					auditPortable(model, target, issues, profile, abi);
 				if (baseline == null)
 					baseline = normalized;
 				else if (baseline != normalized) {
@@ -119,10 +126,17 @@ class HxiAudit {
 		return 'declaration count differs (${a.length} versus ${b.length} lines)';
 	}
 
-	static function auditPortable(model:HxiInterface, target:String, issues:Array<HxiAuditIssue>, profile:String):Void {
+	static function auditPortable(model:HxiInterface, target:String, issues:Array<HxiAuditIssue>, profile:String, abi:HxiAbi):Void {
 		var requiredBits = profile == "portable-abi32" ? 32 : 64;
-		if (HxiAbi.forInterface(model).pointerBits != requiredBits)
+		if (abi.pointerBits != requiredBits)
 			issues.push({target: target, kind: "non-portable-target", message: '$profile requires $requiredBits-bit pointers'});
+		for (fn in abi.functions())
+			if (fn.semantics.parameters.length != fn.arguments.length)
+				issues.push({
+					target: target,
+					kind: "invalid-native-signature",
+					message: 'function "${fn.name}" has inconsistent semantic and ABI argument counts'
+				});
 		for (declaration in model.declarations)
 			switch declaration {
 				case Alias(name, type, _):
@@ -145,6 +159,12 @@ class HxiAudit {
 				case Opaque(_, _) | Constant(_, _, _):
 			}
 	}
+
+	static function declarationName(value:HxiDeclaration):String
+		return switch value {
+			case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _, _) | Constant(name, _, _) | Structure(name, _, _, _, _) |
+				Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _, _): name;
+		};
 
 	static function auditType(type:HxiType, target:String, context:String, issues:Array<HxiAuditIssue>):Void
 		switch type {

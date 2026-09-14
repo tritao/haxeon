@@ -12,6 +12,7 @@ import compiler.ffi.HxiModel.HxiParameter;
 import compiler.ffi.HxiModel.HxiParameterDirection;
 import compiler.ffi.HxiModel.HxiType;
 import compiler.ffi.HxiModel.HxiOwnership;
+import compiler.ffi.HxiModel.HxiHandleDisposition;
 import compiler.ffi.HxiAbi.HxiAbiValue;
 
 /** Performs semantic checks over raw HXI models and their visible dependency declarations. */
@@ -54,12 +55,26 @@ class HxiValidator {
 			fail('Parameter "${parameter.name}" cannot combine output direction metadata', parameter.span);
 		if (metadata.exists("borrowed") && metadata.exists("owned"))
 			fail('Parameter "${parameter.name}" cannot combine @borrowed and @owned', parameter.span);
+		validateOwnershipMetadata(metadata, 'Parameter "${parameter.name}"', parameter.span);
 		if (callback && (outputCount > 0 || metadata.exists("borrowed") || metadata.exists("owned")))
 			fail('Callback parameter "${parameter.name}" cannot use output direction metadata', parameter.span);
 		if (callback && metadata.exists("retained"))
 			fail('Callback parameter "${parameter.name}" cannot use @retained', parameter.span);
 		if ((metadata.exists("borrowed") || metadata.exists("owned")) && parameter.direction != Out)
 			fail('Parameter "${parameter.name}" can use @borrowed or @owned only with @out', parameter.span);
+	}
+
+	static function validateOwnershipMetadata(metadata:Map<String, Array<String>>, owner:String, span:SourceSpan):Void {
+		var borrowed = metadata.get("borrowed"), owned = metadata.get("owned");
+		if (borrowed != null && borrowed.length != 0)
+			fail('@borrowed on $owner does not accept values', span);
+		if (owned != null
+			&& owned.length > 0
+			&& (owned.length != 1
+				|| !StringTools.startsWith(owned[0], '"')
+				|| !StringTools.endsWith(owned[0], '"')
+				|| owned[0].length <= 2))
+			fail('@owned on $owner accepts no value for a value handle or one non-empty string release symbol for an opaque pointer', span);
 	}
 
 	static function validateArrayLengths(declarations:Array<HxiDeclaration>):Void {
@@ -135,6 +150,7 @@ class HxiValidator {
 					var structSizeFields = 0;
 					var ranges:Array<{start:Int, end:Int, name:String}> = [];
 					for (field in fields) {
+						validateOwnershipMetadata(field.metadata, 'field "${field.name}"', field.span);
 						if (field.metadata.exists("borrowed") && field.metadata.exists("owned"))
 							fail('Field "${field.name}" cannot combine @borrowed and @owned', field.span);
 						if (fieldNames.exists(field.name))
@@ -176,14 +192,15 @@ class HxiValidator {
 							}
 						}
 						switch field.ownership {
-							case Owned(_) | OwnedHandle: fail('Owned pointer field "${field.name}" is not supported; keep ownership in a separate handle',
-									field.span);
+							case Owned(_): fail('Owned pointer field "${field.name}" is not supported; keep ownership in a separate handle', field.span);
 							case Borrowed:
 								if (field.lengthField == null
 									&& !opaquePointerLike(field.type,
 										declarationsByName)) fail('@borrowed field "${field.name}" requires a pointer to an opaque type', field.span);
 							case Unspecified:
 						}
+						if (field.handleDisposition == Owned)
+							fail('Owned value handle field "${field.name}" is not supported; keep ownership in a separate handle', field.span);
 					}
 					if (structSizeFields > 1)
 						fail('Struct "$name" cannot declare more than one @struct_size field', span);
@@ -245,6 +262,7 @@ class HxiValidator {
 					validateCallbackType(result, abi, span, true);
 				case Function(name, parameters, result, _, _, callConvention, resultPolicy, span):
 					validateCallConvention(name, callConvention, abi, span);
+					validateOwnershipMetadata(resultPolicy.metadata, 'result of function "$name"', span);
 					if (resultPolicy.metadata.exists("borrowed") && resultPolicy.metadata.exists("owned"))
 						fail('Function "$name" cannot combine @borrowed and @owned', span);
 					var outputBuffer:Null<{name:String, sizeParameter:String, span:SourceSpan}> = null,
@@ -280,7 +298,8 @@ class HxiValidator {
 										case _: false;
 									})
 									fail('Output parameter "${parameter.name}" cannot be nullable', parameter.span);
-								validateOutputType(parameter.name, parameter.type, parameter.ownership, abi, declarationsByName, parameter.span);
+								validateOutputType(parameter.name, parameter.type, parameter.ownership, parameter.handleDisposition, abi, declarationsByName,
+									parameter.span);
 							case InArray(countParameter):
 								if (structurePointerType(parameter.type, declarationsByName) == null
 									&& !utf8ArrayPointer(parameter.type)
@@ -324,8 +343,6 @@ class HxiValidator {
 										span);
 								case _: validateReleaseFunction(value, name, result, releaseSymbol, declarations, span);
 							}
-						case OwnedHandle:
-							validateOwnedValueHandle(name, result, declarations, abi, span);
 						case Borrowed:
 							switch abi.classify(result, true) {
 								case PointerValue(_, _, _, _) | Utf8Value(_):
@@ -334,6 +351,8 @@ class HxiValidator {
 							}
 						case Unspecified:
 					}
+					if (resultPolicy.handleDisposition == Owned)
+						validateOwnedValueHandle(name, result, declarations, abi, span);
 					for (parameter in parameters)
 						switch parameter.ownership {
 							case Owned(releaseSymbol):
@@ -341,12 +360,14 @@ class HxiValidator {
 								if (outputValue == null)
 									fail('Owned output parameter "${parameter.name}" must point to a typed opaque pointer', parameter.span);
 								validateReleaseFunction(value, '$name.${parameter.name}', outputValue, releaseSymbol, declarations, parameter.span);
-							case OwnedHandle:
-								var outputValue = pointerPointee(parameter.type, declarations);
-								if (outputValue == null)
-									fail('Owned output parameter "${parameter.name}" must point to a typed value handle', parameter.span);
-								validateOwnedValueHandle('$name.${parameter.name}', outputValue, declarations, abi, parameter.span);
 							case Borrowed | Unspecified:
+						}
+					for (parameter in parameters)
+						if (parameter.handleDisposition == Owned) {
+							var outputValue = pointerPointee(parameter.type, declarations);
+							if (outputValue == null)
+								fail('Owned output parameter "${parameter.name}" must point to a typed value handle', parameter.span);
+							validateOwnedValueHandle('$name.${parameter.name}', outputValue, declarations, abi, parameter.span);
 						}
 					if (resultPolicy.length != null)
 						validateLengthFunction(value, name, parameters, callConvention, resultPolicy.length, declarations, abi, span);
@@ -443,8 +464,8 @@ class HxiValidator {
 			case Array(element, length): 'array<${canonicalTypeKey(element, declarations)},$length>';
 		};
 
-	static function validateOutputType(name:String, type:HxiType, ownership:HxiOwnership, abi:HxiAbi, declarations:Map<String, HxiDeclaration>,
-			span:SourceSpan):Void {
+	static function validateOutputType(name:String, type:HxiType, ownership:HxiOwnership, handleDisposition:HxiHandleDisposition, abi:HxiAbi,
+			declarations:Map<String, HxiDeclaration>, span:SourceSpan):Void {
 		var pointee = switch type {
 			case Pointer(value):
 				switch value {
@@ -461,18 +482,20 @@ class HxiValidator {
 			case HandleValue(handleName):
 				switch ownership {
 					case Unspecified | Borrowed:
-					case OwnedHandle: requireValueHandleDestroy(name, handleName, declarations, span);
 					case Owned(_): fail('Owned value handle output parameter "$name" uses @owned without arguments; its handle declares @destroy', span);
 				}
+				if (handleDisposition == Owned)
+					requireValueHandleDestroy(name, handleName, declarations, span);
 			case IntegerValue(_, _) | EnumerationValue(_, _, _) | Boolean32Value | FloatValue(_) | AggregateValue(_, _, _):
-				if (ownership != Unspecified)
+				if (ownership != Unspecified || handleDisposition != Unspecified)
 					fail('Output parameter "$name" ownership metadata requires a pointer to an opaque handle', span);
 			case PointerValue(_, _, opaquePointee, _) if (opaquePointee != null):
 				switch ownership {
 					case Borrowed | Owned(_):
-					case OwnedHandle: fail('Owned opaque pointer output parameter "$name" requires @owned("release_symbol")', span);
 					case Unspecified: fail('Opaque pointer output parameter "$name" requires @borrowed or @owned("release_symbol")', span);
 				}
+				if (handleDisposition == Owned)
+					fail('Owned opaque pointer output parameter "$name" requires @owned("release_symbol")', span);
 			case _:
 				fail('Output parameter "$name" currently requires a scalar, fixed-structure, or explicitly owned opaque-pointer pointee', span);
 		}

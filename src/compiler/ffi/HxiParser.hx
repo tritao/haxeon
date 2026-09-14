@@ -15,6 +15,7 @@ import compiler.ffi.HxiModel.HxiParameter;
 import compiler.ffi.HxiModel.HxiParameterDirection;
 import compiler.ffi.HxiModel.HxiType;
 import compiler.ffi.HxiModel.HxiOwnership;
+import compiler.ffi.HxiModel.HxiHandleDisposition;
 import compiler.documentation.Documentation.DocumentationComment;
 import compiler.documentation.Documentation.DocumentationTools;
 
@@ -173,6 +174,7 @@ class HxiParser {
 					type: type,
 					direction: direction,
 					ownership: ownership != Unspecified ? ownership : borrowed ? Borrowed : Unspecified,
+					handleDisposition: metadataHandleDisposition(metadata, "owned"),
 					retained: retained,
 					metadata: metadata,
 					span: start.merge(previous().span)
@@ -339,6 +341,7 @@ class HxiParser {
 				type: type,
 				offset: offset,
 				ownership: ownership != Unspecified ? ownership : borrowed ? Borrowed : Unspecified,
+				handleDisposition: metadataHandleDisposition(fieldMetadata, "owned"),
 				lengthField: lengthField,
 				structSize: structSize,
 				metadata: fieldMetadata,
@@ -367,6 +370,7 @@ class HxiParser {
 			end = expect(";").span;
 		return Function(name, parameters, result, symbol, leaf, callConvention == null ? "cdecl" : callConvention, {
 			ownership: ownership != Unspecified ? ownership : borrowed ? Borrowed : Unspecified,
+			handleDisposition: metadataHandleDisposition(metadata, "owned"),
 			length: length,
 			metadata: metadata
 		}, start.merge(end));
@@ -462,11 +466,14 @@ class HxiParser {
 		var entry = values.get(name);
 		if (entry == null)
 			return Unspecified;
-		if (entry.length == 0)
-			return OwnedHandle;
-		if (entry.length != 1 || !StringTools.startsWith(entry[0], '"'))
-			fail('@$name accepts no value for a typed value handle or one string release symbol for an opaque pointer', current().span);
-		return Owned(entry[0].substring(1, entry[0].length - 1));
+		if (entry.length == 1 && StringTools.startsWith(entry[0], '"') && StringTools.endsWith(entry[0], '"'))
+			return Owned(entry[0].substring(1, entry[0].length - 1));
+		return Unspecified;
+	}
+
+	function metadataHandleDisposition(values:Map<String, Array<String>>, name:String):HxiHandleDisposition {
+		var entry = values.get(name);
+		return entry != null && entry.length == 0 ? Owned : Unspecified;
 	}
 
 	function metadataStrings(values:Map<String, Array<String>>, name:String):Array<String> {

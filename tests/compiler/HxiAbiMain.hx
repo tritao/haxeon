@@ -5,6 +5,8 @@ import compiler.ffi.HxiParser;
 import compiler.ffi.HxiValidator;
 import compiler.ffi.HxiProjection;
 import compiler.ffi.HxiProjectionProfile;
+import compiler.ffi.HxiSemantics.HxiSemanticParameterKind;
+import compiler.ffi.HxiSemantics.HxiSemanticResultKind;
 import compiler.ir.Ir.IrType;
 
 class HxiAbiMain {
@@ -43,6 +45,35 @@ class HxiAbiMain {
 			case {arguments: [HandleValue("resource")], result: HandleValue("resource")}:
 			case _:
 				throw "handle ABI did not retain its nominal type";
+		}
+		var ownedModel = HxiParser.parse("owned.hxi",
+			'interface owned @target("x86_64-linux-gnu") @library("owned") { handle resource : u32 @destroy("resource_destroy"); extern fn create() -> resource @owned; extern fn create_out(value: ptr<resource> @out @owned) -> i32; extern fn destroy(value: resource) -> void @symbol("resource_destroy"); }');
+		HxiValidator.validate(ownedModel, []);
+		var ownedFunctions = HxiAbi.forInterface(ownedModel).functions();
+		switch ownedFunctions[0].semantics.result {
+			case OwnedHandle("resource", "resource_destroy"):
+			case _:
+				throw "owned value handle result was not normalized with its destructor";
+		}
+		switch ownedFunctions[1].semantics.parameters[0].kind {
+			case OutputHandle("resource", true, null):
+			case _:
+				throw "owned value handle output was not normalized independently of pointer ownership";
+		}
+		expect(ownedModel.declarations.length == 4, "owned handle fixture should parse all declarations");
+		var semanticModel = HxiParser.parse("semantic.hxi",
+			'interface semantic @target("x86_64-linux-gnu") @library("semantic") { callback Frame = fn() -> void; extern fn send(data: ptr<const<u8>> @in_array("size"), size: u32) -> i32; extern fn set(callback: nullable<Frame> @retained) -> void; }');
+		HxiValidator.validate(semanticModel, []);
+		var semanticFunctions = HxiAbi.forInterface(semanticModel).functions();
+		switch semanticFunctions[0].semantics.parameters[0].kind {
+			case InputBytes("size"):
+			case _:
+				throw "byte arrays were not normalized as counted input bytes";
+		}
+		switch semanticFunctions[1].semantics.parameters[0].kind {
+			case RetainedCallback(_):
+			case _:
+				throw "retained callback semantics were not resolved";
 		}
 		var handleSource = HxiProjection.source(handleModel);
 		expect(handleSource.indexOf("abstract resource(Int) {") >= 0

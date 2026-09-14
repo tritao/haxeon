@@ -24,6 +24,7 @@ typedef HxiField = {
 	final type:HxiType;
 	final offset:Null<Int>;
 	final ownership:HxiOwnership;
+	final handleDisposition:HxiHandleDisposition;
 	final lengthField:Null<String>;
 	final structSize:Bool;
 	final metadata:Map<String, Array<String>>;
@@ -35,6 +36,7 @@ typedef HxiParameter = {
 	final type:HxiType;
 	final direction:HxiParameterDirection;
 	final ownership:HxiOwnership;
+	final handleDisposition:HxiHandleDisposition;
 
 	/** The native callee keeps this callback after the call returns. */
 	final retained:Bool;
@@ -57,13 +59,17 @@ enum HxiOwnership {
 	Unspecified;
 	Borrowed;
 	Owned(releaseSymbol:String);
+}
 
-	/** Explicit ownership of a nominal 32-bit value handle with @destroy metadata. */
-	OwnedHandle;
+/** Whether a value handle passed or returned by value transfers its disposition. */
+enum HxiHandleDisposition {
+	Unspecified;
+	Owned;
 }
 
 typedef HxiResultPolicy = {
 	final ownership:HxiOwnership;
+	final handleDisposition:HxiHandleDisposition;
 	final length:Null<String>;
 	final metadata:Map<String, Array<String>>;
 }

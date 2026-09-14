@@ -11,10 +11,13 @@ import compiler.ir.Ir.IrCNative;
 import compiler.ir.Ir.IrCNativeArgumentMode;
 import compiler.ir.Ir.IrType;
 import compiler.ffi.HxiModel.HxiOwnership;
+import compiler.ffi.HxiModel.HxiHandleDisposition;
 import compiler.ffi.HxiModel.HxiParameter;
 import compiler.ffi.HxiModel.HxiParameterDirection;
 import compiler.ffi.HxiModel.HxiType;
 import compiler.ffi.HxiProjectionProfile.HxiResultErrorProjection;
+import compiler.ffi.HxiSemantics.HxiSemanticParameterKind;
+import compiler.ffi.HxiSemantics.HxiSemanticResultKind;
 
 /** Projects bridgeable HXI functions into a synthetic, source-visible module. */
 class HxiProjection {
@@ -166,7 +169,7 @@ class HxiProjection {
 					case Function(_, parameters, _, _, _, _, _, _):
 						if (Lambda.exists(parameters, parameter -> switch parameter.ownership {
 							case Owned(_): true;
-							case Borrowed | Unspecified | OwnedHandle: false;
+							case Borrowed | Unspecified: false;
 						}))
 							hasOwnedPointerOutputs = true;
 					case Constant(_, _, _):
@@ -375,10 +378,8 @@ class HxiProjection {
 				case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _) |
 					Callback(name, _, _, _, _):
 					declarations.set(name, declaration);
-				case Function(name, parameters, result, _, _, _, resultPolicy, _):
-					directed.set(name, hasOutput(parameters)
-						|| resultPolicy.ownership == OwnedHandle
-						|| structureType(result, declarations, profile) != null);
+				case Function(name, parameters, result, _, _, _, _, _):
+					directed.set(name, hasOutput(parameters) || structureType(result, declarations, profile) != null);
 					functionParameters.set(name, parameters);
 					functionResultTypes.set(name, result);
 				case _:
@@ -390,6 +391,12 @@ class HxiProjection {
 				case _:
 			}
 		var abi = providedAbi == null ? HxiAbi.forInterface(model, declarations) : providedAbi;
+		for (fn in abi.functions())
+			switch fn.semantics.result {
+				case OwnedHandle(_, _):
+					directed.set(fn.name, true);
+				case _:
+			}
 		for (fn in abi.functions()) {
 			if (isOmitted(omitted, fn.name))
 				continue;
@@ -419,8 +426,8 @@ class HxiProjection {
 					case _: value.nativePointer ? "native_pointer" : null;
 				};
 				arguments.push(irType(value.code, false, nativeAbstract));
-				var mode = switch parameters[index].direction {
-					case In:
+				var mode = switch fn.semantics.parameters[index].kind {
+					case InputValue(_):
 						switch abiArguments[index] {
 							case AggregateValue(_, size, alignment):
 								FixedValue(size, alignment, pointerFreeValue(parameters[index].type, declarations, []));
@@ -429,22 +436,22 @@ class HxiProjection {
 								layout == null ? Value : FixedInput(layout.size, layout.alignment, pointerFreeOutput(parameters[index].type, declarations));
 							case _: Value;
 						}
-					case InArray(lengthName):
-						if (!isByteArray(parameters[index].type)) Value; else {
-							var lengthIndex = parameterIndex(parameters, lengthName);
-							isConstPointer(parameters[index].type) ? BytesInput(lengthIndex) : BytesInputOutput(lengthIndex);
-						}
-					case OutBuffer(lengthName): BytesOutput(parameterIndex(parameters, lengthName));
-					case OutArray(_): Output;
-					case Out:
+					case InputArray(_, _): Value;
+					case InputBytes(lengthName):
+						var lengthIndex = parameterIndex(parameters, lengthName);
+						isConstPointer(parameters[index].type) ? BytesInput(lengthIndex) : BytesInputOutput(lengthIndex);
+					case OutputBuffer(lengthName): BytesOutput(parameterIndex(parameters, lengthName));
+					case OutputArray(_, _): Output;
+					case OutputValue(_) | OutputHandle(_, _, _):
 						var info = outputInfo(parameters[index], abi, profile);
 						(info.structure || info.opaquePointer) ? FixedOutput(info.size,
 							info.alignment, info.opaquePointer || pointerFreeOutput(parameters[index].type, declarations)) : Output;
-					case InOut if (outputBufferSizes.exists(parameters[index].name)): BytesSize;
-					case InOut:
+					case InOutValue(_) if (outputBufferSizes.exists(parameters[index].name)): BytesSize;
+					case InOutValue(_):
 						var info = outputInfo(parameters[index], abi, profile);
 						(info.structure || info.opaquePointer) ? FixedInputOutput(info.size,
 							info.alignment, info.opaquePointer || pointerFreeOutput(parameters[index].type, declarations)) : InputOutput;
+					case RetainedCallback(_): Value;
 				};
 				argumentModes.push(mode);
 				codes.push(abiDescriptor(argument, declarations, abi, aggregateDescriptors));
@@ -459,12 +466,36 @@ class HxiProjection {
 						};
 					case _: null;
 				};
-			var managedBytes = fn.resultPolicy.length != null;
-			var ownership:{kind:String, release:Null<String>} = switch fn.resultPolicy.ownership {
-				case Unspecified: {kind: "unspecified", release: null};
-				case Borrowed: {kind: "borrowed", release: null};
-				case Owned(release): {kind: "owned", release: release};
-				case OwnedHandle: {kind: "unspecified", release: null};
+			var resultContract:{
+				managedBytes:Bool,
+				length:Null<String>,
+				ownership:String,
+				release:Null<String>
+			} = switch fn.semantics.result {
+				case ManagedBytes(length, _, pointerOwnership, _): {
+						managedBytes: true,
+						length: length,
+						ownership: pointerOwnershipName(pointerOwnership),
+						release: ownershipRelease(pointerOwnership)
+					};
+				case OwnedPointer(_, release): {
+						managedBytes: false,
+						length: null,
+						ownership: "owned",
+						release: release
+					};
+				case BorrowedPointer(_) | BorrowedHandle(_): {
+						managedBytes: false,
+						length: null,
+						ownership: "borrowed",
+						release: null
+					};
+				case OwnedHandle(_, _) | PlainValue(_): {
+						managedBytes: false,
+						length: null,
+						ownership: "unspecified",
+						release: null
+					};
 			};
 			if (supported && returnValue != null)
 				result.push({
@@ -474,10 +505,10 @@ class HxiProjection {
 					signature: callSignature(codes.join(",") + ">" + abiDescriptor(fn.result, declarations, abi, aggregateDescriptors), fn.callConvention),
 					arguments: arguments,
 					argumentModes: argumentModes,
-					result: managedBytes || fixedResult != null ? ManagedBytes : irType(returnValue.code, true),
-					pointerOwnership: ownership.kind,
-					pointerRelease: ownership.release,
-					pointerLength: fn.resultPolicy.length,
+					result: resultContract.managedBytes || fixedResult != null ? ManagedBytes : irType(returnValue.code, true),
+					pointerOwnership: resultContract.ownership,
+					pointerRelease: resultContract.release,
+					pointerLength: resultContract.length,
 					pointerNullable: returnValue.nullable,
 					pointerSize: Std.int(abi.pointerBits / 8),
 					fixedResult: fixedResult
@@ -994,7 +1025,7 @@ class HxiProjection {
 					case _: throw 'Missing HXI function "${fn.name}"';
 				},
 				aggregateResult = structureType(declaredResult, declarations, profile);
-			var ownedHandleResult = ownedValueHandleType(fn.result, fn.resultPolicy.ownership, profile),
+			var ownedHandleResult = ownedValueHandleType(fn.result, fn.resultPolicy.handleDisposition, profile),
 				hasOutputs = hasOutput(parameters),
 				needsRawName = hasOutputs || ownedHandleResult != null || aggregateResult != null,
 				rawName = needsRawName ? "__hxi_raw_" + fn.name : publicName;
@@ -1015,7 +1046,7 @@ class HxiProjection {
 						case PointerValue(_, nullable, opaquePointee, _) if (opaquePointee != null):
 							resultType = switch fn.resultPolicy.ownership {
 								case Owned(_): nullable ? 'Null<${ownedTypeName(opaquePointee, profile)}>' : ownedTypeName(opaquePointee, profile);
-								case Borrowed | Unspecified | OwnedHandle: result.haxeType;
+								case Borrowed | Unspecified: result.haxeType;
 							};
 						case _:
 							resultType = result.nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">';
@@ -1243,14 +1274,27 @@ class HxiProjection {
 	static inline function outputArrayType():String
 		return "Array<Null<String>>";
 
-	static function ownedValueHandleType(type:HxiAbiValue, ownership:HxiOwnership, profile:HxiProjectionProfile):Null<String> {
-		return switch ownership {
-			case OwnedHandle:
+	static function pointerOwnershipName(value:HxiOwnership):String
+		return switch value {
+			case Unspecified: "unspecified";
+			case Borrowed: "borrowed";
+			case Owned(_): "owned";
+		};
+
+	static function ownershipRelease(value:HxiOwnership):Null<String>
+		return switch value {
+			case Owned(release): release;
+			case Borrowed | Unspecified: null;
+		};
+
+	static function ownedValueHandleType(type:HxiAbiValue, disposition:HxiHandleDisposition, profile:HxiProjectionProfile):Null<String> {
+		return switch disposition {
+			case Owned:
 				switch type {
 					case HandleValue(name): ownedTypeName(name, profile);
 					case _: throw "Validated owned HXI value handle did not classify as a handle";
 				}
-			case _:
+			case Unspecified:
 				null;
 		};
 	}
@@ -1291,7 +1335,7 @@ class HxiProjection {
 					owned: false
 				};
 			case HandleValue(name):
-				var ownedValueHandle = parameter.ownership == OwnedHandle,
+				var ownedValueHandle = parameter.handleDisposition == Owned,
 					projectedName = projectedTypeName(name, profile),
 					haxeName = ownedValueHandle ? ownedTypeName(name, profile) : projectedName;
 				{
@@ -1327,7 +1371,7 @@ class HxiProjection {
 			case PointerValue(_, nullable, opaquePointee, _) if (opaquePointee != null):
 				var owned = switch parameter.ownership {
 					case Owned(_): true;
-					case Borrowed | OwnedHandle: false;
+					case Borrowed: false;
 					case Unspecified: throw 'Opaque pointer output parameter "${parameter.name}" requires an ownership contract';
 				}, typeName = owned ? ownedTypeName(opaquePointee, profile) : projectedTypeName(opaquePointee, profile);
 				{
@@ -1456,10 +1500,11 @@ class HxiProjection {
 					callArguments.push(local);
 					var expression = if (info.opaquePointer) {
 						if (info.owned) {
+							if (parameter.handleDisposition == Owned)
+								throw 'Owned value handle output parameter "${parameter.name}" cannot use pointer output storage';
 							var release = switch parameter.ownership {
 								case Owned(symbol): symbol;
-								case OwnedHandle: throw 'Owned value handle output parameter "${parameter.name}" cannot use pointer output storage';
-								case _: "";
+								case Borrowed | Unspecified: "";
 							};
 							'$pointerOwnedSlotHelper($local, 0, "${escape(library)}", "${escape(nativeSymbol)}", "${escape(signature)}", "${escape(release)}", ${info.nullable})';
 						} else

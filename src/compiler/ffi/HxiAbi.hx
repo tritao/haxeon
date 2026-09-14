@@ -3,7 +3,7 @@ package compiler.ffi;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiModel.HxiType;
-import compiler.ffi.HxiModel.HxiResultPolicy;
+import compiler.ffi.HxiNativeSignature.HxiFunctionAbi;
 
 enum HxiIntegerSign {
 	Signed;
@@ -22,17 +22,6 @@ enum HxiAbiValue {
 	PointerValue(bits:Int, nullable:Bool, opaquePointee:Null<String>, structure:Null<String>);
 	Utf8Value(nullable:Bool);
 	AggregateValue(name:String, size:Int, align:Int);
-}
-
-typedef HxiFunctionAbi = {
-	final name:String;
-	final symbol:String;
-	final library:Null<String>;
-	final arguments:Array<HxiAbiValue>;
-	final result:HxiAbiValue;
-	final leaf:Bool;
-	final callConvention:String;
-	final resultPolicy:HxiResultPolicy;
 }
 
 /** Resolves target-dependent C types without conflating them with fixed-width types. */
@@ -79,25 +68,12 @@ class HxiAbi {
 	public function functions():Array<HxiFunctionAbi> {
 		if (cachedFunctions != null)
 			return cachedFunctions;
-		var result:Array<HxiFunctionAbi> = [];
-		for (declaration in model.declarations)
-			switch declaration {
-				case Function(name, parameters, returnType, symbol, leaf, callConvention, resultPolicy, _):
-					result.push({
-						name: name,
-						symbol: symbol == null ? name : symbol,
-						library: model.library,
-						arguments: [for (parameter in parameters) classify(parameter.type, false)],
-						result: classify(returnType, true),
-						leaf: leaf,
-						callConvention: callConvention,
-						resultPolicy: resultPolicy
-					});
-				default:
-			}
-		cachedFunctions = result;
-		return result;
+		cachedFunctions = HxiNativeSignature.lower(model, this, declarations);
+		return cachedFunctions;
 	}
+
+	public function semanticDeclarations():Map<String, HxiDeclaration>
+		return declarations.copy();
 
 	public function classify(type:HxiType, allowVoid:Bool = false):HxiAbiValue {
 		var key = typeKey(type),

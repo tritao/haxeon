@@ -9,6 +9,7 @@ import compiler.ffi.HxiModel.HxiParameter;
 import compiler.ffi.HxiModel.HxiResultPolicy;
 import compiler.ffi.HxiModel.HxiType;
 import compiler.ffi.HxiModel.HxiOwnership;
+import compiler.ffi.HxiModel.HxiHandleDisposition;
 
 /** Serializes typed HXI models in a stable declaration and annotation order. */
 class HxiWriter {
@@ -99,6 +100,7 @@ class HxiWriter {
 			if (field.offset != null)
 				output.add(' @offset(${field.offset})');
 			writeOwnership(output, field.ownership);
+			writeHandleDisposition(output, field.handleDisposition);
 			if (field.lengthField != null)
 				output.add(' @length_field("${field.lengthField}")');
 			if (field.structSize)
@@ -126,6 +128,7 @@ class HxiWriter {
 				case In:
 			}
 			writeOwnership(output, parameter.ownership);
+			writeHandleDisposition(output, parameter.handleDisposition);
 			if (parameter.retained)
 				output.add(" @retained");
 		} else
@@ -146,6 +149,7 @@ class HxiWriter {
 		if (callConvention != "cdecl")
 			output.add(' @callconv("$callConvention")');
 		writeOwnership(output, policy.ownership);
+		writeHandleDisposition(output, policy.handleDisposition);
 		if (policy.length != null)
 			output.add(' @length("${policy.length}")');
 	}
@@ -167,7 +171,12 @@ class HxiWriter {
 				output.add(" @borrowed");
 			case Owned(release):
 				output.add(' @owned("$release")');
-			case OwnedHandle:
+			case Unspecified:
+		}
+
+	static function writeHandleDisposition(output:StringBuf, disposition:HxiHandleDisposition):Void
+		switch disposition {
+			case Owned:
 				output.add(" @owned");
 			case Unspecified:
 		}
