@@ -61,7 +61,25 @@ endfunction()
 run_checked("Submodule initialization"
   "${GIT_EXECUTABLE}" submodule update --init vendor/hashlink vendor/hashlink-debugger vendor/utest vendor/libffi)
 
-if(NOT CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
+if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
+  find_program(CTEST_EXECUTABLE ctest REQUIRED)
+  foreach(libffi_config IN ITEMS Release Debug)
+    string(TOLOWER "${libffi_config}" libffi_config_lower)
+    set(libffi_build_dir "${HAXEON_ROOT}/out/libffi/msvc-x64-static-${libffi_config_lower}")
+    set(libffi_install_dir "${HAXEON_ROOT}/.tools/libffi-static/msvc-${libffi_config_lower}")
+    run_checked("Configure pinned libffi ${libffi_config}"
+      "${CMAKE_COMMAND}" -S "${HAXEON_ROOT}/cmake/libffi" -B "${libffi_build_dir}"
+      -G Ninja
+      "-DCMAKE_BUILD_TYPE=${libffi_config}"
+      "-DCMAKE_INSTALL_PREFIX=${libffi_install_dir}")
+    run_checked("Build pinned libffi ${libffi_config}"
+      "${CMAKE_COMMAND}" --build "${libffi_build_dir}" --parallel)
+    run_checked("Test pinned libffi ${libffi_config}"
+      "${CTEST_EXECUTABLE}" --test-dir "${libffi_build_dir}" --output-on-failure -C "${libffi_config}")
+    run_checked("Install pinned libffi ${libffi_config}"
+      "${CMAKE_COMMAND}" --install "${libffi_build_dir}")
+  endforeach()
+else()
   find_program(BASH_EXECUTABLE bash REQUIRED)
   run_checked("Build pinned libffi"
     "${BASH_EXECUTABLE}" "${HAXEON_ROOT}/scripts/build-libffi.sh")
