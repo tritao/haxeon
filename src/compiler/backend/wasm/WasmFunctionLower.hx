@@ -20,7 +20,7 @@ import compiler.backend.wasm.WasmModule.WasmLocal;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmStructurer.WasmLoopInfo;
 import compiler.backend.wasm.WasmRepresentation.WasmRepresentationSet;
-import compiler.backend.wasm.WasmRepresentation.WasmFunctionRepresentationContext;
+import compiler.backend.wasm.WasmFunctionLowerContext.WasmFunctionGcRootState;
 import compiler.backend.wasm.WasmRepresentation.WasmLoweringKind;
 import compiler.backend.wasm.WasmRepresentation.WasmLoweringResult;
 import compiler.backend.wasm.gc.WasmGcRepresentation;
@@ -29,36 +29,11 @@ import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 
 class WasmFunctionLower {
-	static var activeProgram:IrProgram;
-	static var activeRepresentation:WasmRepresentationSet;
-	static var activeTableSlots:Map<String, Int>;
-	static var activeStaticDataAddresses:Map<String, Int>;
-	static var activeElidedDynamicArrayCasts:Map<Int, IrValue>;
-	static var activeArrayTemps:{
-		len:Int,
-		capacity:Int,
-		data:Int,
-		required:Int
-	};
-	static var activeExceptionState:Null<{
-		handler:Int,
-		exception:Int,
-		saved:Map<Int, Int>,
-		blocks:Map<Int, Int>,
-		tag:Int
-	}>;
+	final context:WasmFunctionLowerContext;
 
-	public static function setStaticDataAddresses(addresses:Map<String, Int>):Void
-		activeStaticDataAddresses = addresses;
-	static var activeGcRootState:Null<{
-		frame:Int,
-		top:Int,
-		frameTop:Int,
-		slots:Array<Int>,
-		slotByValue:Map<Int, Int>,
-		live:Map<Int, Map<Int, Array<Int>>>,
-		size:Int
-	}>;
+	function new(context:WasmFunctionLowerContext) {
+		this.context = context;
+	}
 
 	static function requiredLocal(locals:Map<Int, Int>, valueId:Int):Int {
 		if (!locals.exists(valueId))
@@ -110,49 +85,28 @@ class WasmFunctionLower {
 		return blocks.get(blockId);
 	}
 
-	public static function lower(fn:IrFunction, functions:Map<String, Int>, type:WasmFunctionType, layout:WasmLayout, allocator:Int, rootTop:Int,
+	public static function lower(module:WasmModule, fn:IrFunction, functions:Map<String, Int>, type:WasmFunctionType, layout:WasmLayout, allocator:Int, rootTop:Int,
 			rootFrameTop:Int, rootLimit:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
 			closureTypes:Map<String, WasmClosureTypes>, tableSlots:Map<String, Int>, exceptionTag:Null<Int>, rootPoints:Array<WasmSafepoint>,
-			program:IrProgram, representation:WasmRepresentationSet):WasmFunction {
-		var lowered:WasmFunction;
-		try {
-			lowered = lowerFunction(fn, functions, type, layout, allocator, rootTop, rootFrameTop, rootLimit, globals, strings, methods, closureTypes,
-				tableSlots, exceptionTag, rootPoints, program, representation);
-		} catch (error:Dynamic) {
-			activeRepresentation = null;
-			throw error;
-		}
-		activeRepresentation = null;
-		return lowered;
+			program:IrProgram, representation:WasmRepresentationSet, staticDataAddresses:Map<String, Int>):WasmFunction {
+		var context = new WasmFunctionLowerContext(module, fn, program, representation, tableSlots, staticDataAddresses, exceptionTag, rootPoints);
+		return new WasmFunctionLower(context).lowerFunction(functions, type, layout, allocator, rootTop, rootFrameTop, rootLimit, globals, strings,
+			methods, closureTypes);
 	}
 
-	static function lowerFunction(fn:IrFunction, functions:Map<String, Int>, type:WasmFunctionType, layout:WasmLayout, allocator:Int, rootTop:Int,
-			rootFrameTop:Int, rootLimit:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
-			closureTypes:Map<String, WasmClosureTypes>, tableSlots:Map<String, Int>, exceptionTag:Null<Int>, rootPoints:Array<WasmSafepoint>,
-			program:IrProgram, representation:WasmRepresentationSet):WasmFunction {
-		activeProgram = program;
-		activeTableSlots = tableSlots;
-		var analysis = new WasmCfgAnalysis(fn),
-			placement = new WasmValuePlacement(fn, representation.values),
-			valueLocals = placement.values,
-			locals = placement.locals;
-		var functionContext:WasmFunctionRepresentationContext = {
-			allocateLocal: function(type) return placement.allocate(type),
-			exceptionTag: exceptionTag,
-			irFunction: fn
-		};
-		activeRepresentation = representation.forFunction(functionContext);
-		activeElidedDynamicArrayCasts = elidedDynamicArrayCasts(fn, activeRepresentation);
-		activeArrayTemps = {
-			len: placement.allocate(I32),
-			capacity: placement.allocate(I32),
-			data: placement.allocate(I32),
-			required: placement.allocate(I32)
-		};
+	function lowerFunction(functions:Map<String, Int>, type:WasmFunctionType, layout:WasmLayout, allocator:Int, rootTop:Int, rootFrameTop:Int,
+			rootLimit:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
+			closureTypes:Map<String, WasmClosureTypes>):WasmFunction {
+		var fn = context.irFunction,
+			analysis = new WasmCfgAnalysis(fn),
+			placement = context.placement,
+			valueLocals = context.valueLocals,
+			locals = context.locals;
+		context.elidedDynamicArrayCasts = elidedDynamicArrayCasts(fn, context.representation);
 		var rootLocals:Array<Int> = [],
 			rootIds:Map<Int, Bool> = [],
 			live:Map<Int, Map<Int, Array<Int>>> = [];
-		for (point in rootPoints) {
+		for (point in context.rootPoints) {
 			var blockLive = live.get(point.block);
 			if (blockLive == null) {
 				blockLive = [];
@@ -171,7 +125,7 @@ class WasmFunctionLower {
 			rootLocals.push(requiredLocal(valueLocals, rootValueIds[index]));
 		}
 		var rootFrame = rootLocals.length == 0 ? null : placement.allocate(I32);
-		activeGcRootState = rootFrame == null ? null : {
+		context.gcRootState = rootFrame == null ? null : {
 			frame: rootFrame,
 			top: rootTop,
 			frameTop: rootFrameTop,
@@ -180,8 +134,8 @@ class WasmFunctionLower {
 			live: live,
 			size: align(12 + rootLocals.length * 4, 8)
 		};
-		activeExceptionState = null;
-		if (exceptionTag != null) {
+		context.exceptionState = null;
+		if (context.exceptionTag != null) {
 			var blocks:Map<Int, Int> = [], orderIndex = 0;
 			for (id in analysis.graph.order)
 				blocks.set(id, orderIndex++);
@@ -194,18 +148,18 @@ class WasmFunctionLower {
 								saved.set(catchBlock, placement.allocate(I32));
 						default:
 					}
-			activeExceptionState = {
+			context.exceptionState = {
 				handler: placement.allocate(I32),
-				exception: placement.allocate(activeRepresentation.values.valueType(Dyn)),
+				exception: placement.allocate(context.representation.values.valueType(Dyn)),
 				saved: saved,
 				blocks: blocks,
-				tag: exceptionTag
+				tag: context.exceptionTag
 			};
 		}
 		var predecessor = placement.allocate(I32);
 		var structurer = new WasmStructurer(fn),
 			body:Array<WasmInstruction> = null;
-		if (activeExceptionState == null && structurer.canUseStructured())
+		if (context.exceptionState == null && structurer.canUseStructured())
 			try
 				body = lowerStructured(fn, structurer, functions, valueLocals, predecessor, layout, allocator, globals, strings, methods, closureTypes)
 			catch (_:Dynamic) {}
@@ -213,17 +167,17 @@ class WasmFunctionLower {
 			var pc = placement.allocate(I32);
 			body = lowerDispatcher(fn, analysis, functions, valueLocals, pc, predecessor, layout, allocator, globals, strings, methods, closureTypes);
 		}
-		var rootState = activeGcRootState;
+		var rootState = context.gcRootState;
 		if (rootState != null) {
 			var rooted:Array<WasmInstruction> = rootPrologue(rootState, rootLimit);
 			rooted = rooted.concat(body);
-			if (exceptionTag != null) {
-				var exceptionLocal = placement.allocate(activeRepresentation.values.valueType(Dyn)),
+			if (context.exceptionTag != null) {
+				var exceptionLocal = placement.allocate(context.representation.values.valueType(Dyn)),
 					protectedBody:Array<WasmInstruction> = [Try(null)];
 				protectedBody = protectedBody.concat(rooted);
-				protectedBody = protectedBody.concat([Catch(exceptionTag), LocalSet(exceptionLocal)]);
+				protectedBody = protectedBody.concat([Catch(context.exceptionTag), LocalSet(exceptionLocal)]);
 				restoreRoots(protectedBody);
-				protectedBody = protectedBody.concat([LocalGet(exceptionLocal), Throw(exceptionTag), End, Unreachable]);
+				protectedBody = protectedBody.concat([LocalGet(exceptionLocal), Throw(context.exceptionTag), End, Unreachable]);
 				rooted = protectedBody;
 			}
 			body = rooted;
@@ -232,7 +186,7 @@ class WasmFunctionLower {
 		return new WasmFunction(fn.name, type, locals, body);
 	}
 
-	static function lowerStructured(fn:IrFunction, structurer:WasmStructurer, functions:Map<String, Int>, values:Map<Int, Int>, predecessor:Int,
+	function lowerStructured(fn:IrFunction, structurer:WasmStructurer, functions:Map<String, Int>, values:Map<Int, Int>, predecessor:Int,
 			layout:WasmLayout, allocator:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
 			closureTypes:Map<String, WasmClosureTypes>):Array<WasmInstruction> {
 		var body:Array<WasmInstruction> = [];
@@ -244,7 +198,7 @@ class WasmFunctionLower {
 		return body;
 	}
 
-	static function emitPath(body:Array<WasmInstruction>, start:Int, stop:Null<Int>, activeLoop:Null<Int>, loopDepth:Int, structurer:WasmStructurer,
+	function emitPath(body:Array<WasmInstruction>, start:Int, stop:Null<Int>, activeLoop:Null<Int>, loopDepth:Int, structurer:WasmStructurer,
 			functions:Map<String, Int>, values:Map<Int, Int>, predecessor:Int, visited:Array<Int>, layout:WasmLayout, allocator:Int, globals:Map<String, Int>,
 			strings:Map<String, Int>, methods:Map<String, String>, closureTypes:Map<String, WasmClosureTypes>):Bool {
 		var current = start;
@@ -309,7 +263,7 @@ class WasmFunctionLower {
 		return true;
 	}
 
-	static function emitLoop(body:Array<WasmInstruction>, block:IrBlock, loop:WasmLoopInfo, structurer:WasmStructurer, functions:Map<String, Int>,
+	function emitLoop(body:Array<WasmInstruction>, block:IrBlock, loop:WasmLoopInfo, structurer:WasmStructurer, functions:Map<String, Int>,
 			values:Map<Int, Int>, predecessor:Int, visited:Array<Int>, layout:WasmLayout, allocator:Int, globals:Map<String, Int>, strings:Map<String, Int>,
 			methods:Map<String, String>, closureTypes:Map<String, WasmClosureTypes>):Bool {
 		if (block.terminator == null)
@@ -346,7 +300,7 @@ class WasmFunctionLower {
 		return true;
 	}
 
-	static function emitBlockInstructions(body:Array<WasmInstruction>, block:IrBlock, values:Map<Int, Int>, functions:Map<String, Int>, predecessor:Int,
+	function emitBlockInstructions(body:Array<WasmInstruction>, block:IrBlock, values:Map<Int, Int>, functions:Map<String, Int>, predecessor:Int,
 			layout:WasmLayout, allocator:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
 			closureTypes:Map<String, WasmClosureTypes>):Void {
 		for (index in 0...block.instructions.length) {
@@ -362,14 +316,14 @@ class WasmFunctionLower {
 		}
 	}
 
-	static function lowerDispatcher(fn:IrFunction, analysis:WasmCfgAnalysis, functions:Map<String, Int>, values:Map<Int, Int>, pc:Int, predecessor:Int,
+	function lowerDispatcher(fn:IrFunction, analysis:WasmCfgAnalysis, functions:Map<String, Int>, values:Map<Int, Int>, pc:Int, predecessor:Int,
 			layout:WasmLayout, allocator:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
 			closureTypes:Map<String, WasmClosureTypes>):Array<WasmInstruction> {
 		var body:Array<WasmInstruction> = [], blockIndex:Map<Int, Int> = [];
 		var next = 0;
 		for (id in analysis.graph.order)
 			blockIndex.set(id, next++);
-		var exceptionState = activeExceptionState;
+		var exceptionState = context.exceptionState;
 		emit(body, [
 			I32Const(requiredBlockIndex(blockIndex, fn.blocks[0].id)),
 			LocalSet(pc),
@@ -441,10 +395,10 @@ class WasmFunctionLower {
 		return false;
 	}
 
-	static function lowerBlock(body:Array<WasmInstruction>, block:IrBlock, values:Map<Int, Int>, functions:Map<String, Int>, pc:Int, predecessor:Int,
+	function lowerBlock(body:Array<WasmInstruction>, block:IrBlock, values:Map<Int, Int>, functions:Map<String, Int>, pc:Int, predecessor:Int,
 			blockIndex:Map<Int, Int>, layout:WasmLayout, allocator:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
 			closureTypes:Map<String, WasmClosureTypes>):Void {
-		var exceptionState = activeExceptionState;
+		var exceptionState = context.exceptionState;
 		for (index in 0...block.instructions.length) {
 			var located = block.instructions[index];
 			snapshotRoots(body, block.id, index);
@@ -483,18 +437,18 @@ class WasmFunctionLower {
 		emit(body, [I32Const(sourceBlock), LocalSet(predecessor), I32Const(target), LocalSet(pc)]);
 	}
 
-	static function trapOrThrow():Array<WasmInstruction> {
-		var exceptionState = activeExceptionState;
-		return exceptionState == null ? [Unreachable] : activeRepresentation.values.zeroValue(Dyn).concat([Throw(exceptionState.tag)]);
+	function trapOrThrow():Array<WasmInstruction> {
+		var exceptionState = context.exceptionState;
+		return exceptionState == null ? [Unreachable] : context.representation.values.zeroValue(Dyn).concat([Throw(exceptionState.tag)]);
 	}
 
 	static function setPredecessor(body:Array<WasmInstruction>, predecessor:Int, sourceBlock:Int):Void
 		emit(body, [I32Const(sourceBlock), LocalSet(predecessor)]);
 
-	static function lowerInstruction(body:Array<WasmInstruction>, instruction:IrInstruction, values:Map<Int, Int>, functions:Map<String, Int>,
+	function lowerInstruction(body:Array<WasmInstruction>, instruction:IrInstruction, values:Map<Int, Int>, functions:Map<String, Int>,
 			layout:WasmLayout, allocator:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
 			closureTypes:Map<String, WasmClosureTypes>):Void {
-		var exceptionState = activeExceptionState;
+		var exceptionState = context.exceptionState;
 		switch instruction {
 			case Phi(_, _):
 			case ConstInt(output, value):
@@ -507,14 +461,14 @@ class WasmFunctionLower {
 			case ConstFloat(output, value):
 				emit(body, [F64Const(value), LocalSet(requiredLocal(values, output.id))]);
 			case ConstNull(output):
-				emit(body, activeRepresentation.values.nullValue(output.type, requiredLocal(values, output.id)));
+				emit(body, context.representation.values.nullValue(output.type, requiredLocal(values, output.id)));
 			case ConstVoid(_):
 			case TypeValue(output, type):
 				emit(body, [I32Const(typeId(type)), LocalSet(requiredLocal(values, output.id))]);
 			case ToDyn(output, value):
-				var original = activeElidedDynamicArrayCasts.get(value.id),
+				var original = context.elidedDynamicArrayCasts.get(value.id),
 					dynamicValue = original == null ? value : original,
-					represented = activeRepresentation.values.toDynamic(dynamicValue, requiredLocal(values, output.id), requiredLocal(values, dynamicValue.id));
+					represented = context.representation.values.toDynamic(dynamicValue, requiredLocal(values, output.id), requiredLocal(values, dynamicValue.id));
 				if (emitIfHandled(body, represented)) {} else
 					switch value.type {
 						case I32, Bool:
@@ -557,8 +511,8 @@ class WasmFunctionLower {
 							]);
 					}
 			case SafeCast(output, value):
-				if (!activeElidedDynamicArrayCasts.exists(output.id)) {
-					var represented = activeRepresentation.values.safeCast(output, value, requiredLocal(values, output.id), requiredLocal(values, value.id));
+				if (!context.elidedDynamicArrayCasts.exists(output.id)) {
+					var represented = context.representation.values.safeCast(output, value, requiredLocal(values, output.id), requiredLocal(values, value.id));
 					if (emitIfHandled(body, represented)) {} else
 						switch output.type {
 							case I32, Bool, I64, F64 if (value.type == Dyn):
@@ -616,18 +570,18 @@ class WasmFunctionLower {
 				var functionIndex = functions.get(name);
 				if (functionIndex == null)
 					throw 'Wasm closure target "$name" is not emitted';
-				var tableSlot = activeTableSlots.get(name);
+				var tableSlot = context.tableSlots.get(name);
 				if (tableSlot == null)
 					throw 'Wasm closure target "$name" has no stable table slot';
-				var calls = activeRepresentation.calls,
-					represented = calls == null ? UseDefault : calls.staticClosure(name, activeTableSlots, requiredLocal(values, output.id));
+				var calls = context.representation.calls,
+					represented = calls == null ? UseDefault : calls.staticClosure(name, context.tableSlots, requiredLocal(values, output.id));
 				if (emitIfHandled(body, represented)) {} else
 					emit(body, [I32Const(tableSlot * 2 + 1), LocalSet(requiredLocal(values, output.id))]);
 			case CallClosure(output, closure, arguments):
 				var typeInfo = closureTypes.get(Std.string(closure.type));
 				if (typeInfo == null)
 					throw 'Wasm closure type ${Std.string(closure.type)} has no indirect signature';
-				var calls = activeRepresentation.calls,
+				var calls = context.representation.calls,
 					instanceType = typeInfo.instanceType,
 					destination = output.type == Void ? -1 : requiredLocal(values, output.id),
 					represented = calls == null ? UseDefault : calls.callClosure(typeInfo.staticType, instanceType, arguments,
@@ -670,11 +624,11 @@ class WasmFunctionLower {
 				var functionIndex = functions.get(name);
 				if (functionIndex == null)
 					throw 'Wasm instance closure target "$name" is not emitted';
-				var tableSlot = activeTableSlots.get(name);
+				var tableSlot = context.tableSlots.get(name);
 				if (tableSlot == null)
 					throw 'Wasm instance closure target "$name" has no stable table slot';
-				var calls = activeRepresentation.calls,
-					represented = calls == null ? UseDefault : calls.instanceClosure(name, activeTableSlots, requiredLocal(values, receiver.id),
+				var calls = context.representation.calls,
+					represented = calls == null ? UseDefault : calls.instanceClosure(name, context.tableSlots, requiredLocal(values, receiver.id),
 						requiredLocal(values, output.id));
 				if (emitIfHandled(body, represented)) {} else
 					emit(body, [
@@ -691,7 +645,7 @@ class WasmFunctionLower {
 						I32Store(WasmLayout.CLOSURE_RECEIVER_OFFSET)
 					]);
 			case ToVirtual(output, value):
-				var represented = activeRepresentation.values.toVirtual(value, requiredLocal(values, output.id), requiredLocal(values, value.id));
+				var represented = context.representation.values.toVirtual(value, requiredLocal(values, output.id), requiredLocal(values, value.id));
 				if (emitIfHandled(body, represented)) {} else
 					emit(body, [
 						LocalGet(requiredLocal(values, value.id)),
@@ -700,14 +654,14 @@ class WasmFunctionLower {
 			case MethodCall(output, object, methodName, arguments):
 				switch object.type {
 					case Obj(objectName):
-						var targets = classVirtualTargets(activeProgram, objectName, methodName, functions),
-							calls = activeRepresentation.calls,
+						var targets = classVirtualTargets(context.program, objectName, methodName, functions),
+							calls = context.representation.calls,
 							represented = targets.length == 0
 								|| calls == null ? UseDefault : calls.virtualCall(output, object, arguments, targets, requiredLocal(values, object.id),
 									output.type == Void ? -1 : requiredLocal(values, output.id),
 									[for (argument in arguments) requiredLocal(values, argument.id)]);
 						if (emitIfHandled(body, represented)) {} else if (targets.length == 0) {
-							var functionName = findMethod(activeProgram, objectName, methodName),
+							var functionName = findMethod(context.program, objectName, methodName),
 								functionIndex = functionName == null ? null : functions.get(functionName);
 							if (functionIndex == null)
 								throw 'Wasm method target "$objectName.$methodName" is not emitted';
@@ -742,10 +696,10 @@ class WasmFunctionLower {
 								body.push(End);
 						}
 					case Virtual(interfaceName):
-						var targets = virtualTargets(activeProgram, interfaceName, methodName, functions);
+						var targets = virtualTargets(context.program, interfaceName, methodName, functions);
 						if (targets.length == 0)
 							throw 'Wasm interface method "$interfaceName.$methodName" has no implementations';
-						var calls = activeRepresentation.calls,
+						var calls = context.representation.calls,
 							represented = calls == null ? UseDefault : calls.virtualCall(output, object, arguments, targets, requiredLocal(values, object.id),
 								output.type == Void ? -1 : requiredLocal(values, output.id), [for (argument in arguments) requiredLocal(values, argument.id)]);
 						if (emitIfHandled(body, represented)) {} else {
@@ -776,7 +730,7 @@ class WasmFunctionLower {
 						throw 'Wasm method call requires an object or virtual receiver';
 				}
 			case ConstString(output, value):
-				var represented = activeRepresentation.values.constantString(value, requiredLocal(values, output.id), strings);
+				var represented = context.representation.values.constantString(value, requiredLocal(values, output.id), strings);
 				if (emitIfHandled(body, represented)) {} else {
 					var pointer = strings.get(value);
 					if (pointer == null)
@@ -784,12 +738,12 @@ class WasmFunctionLower {
 					emit(body, [I32Const(pointer), LocalSet(requiredLocal(values, output.id))]);
 				}
 			case StaticDataAddress(output, bytes):
-				var address = activeStaticDataAddresses.get(WasmModuleSupport.staticDataKey(bytes));
+				var address = context.staticDataAddresses.get(WasmModuleSupport.staticDataKey(bytes));
 				if (address == null)
 					throw "Wasm static data address was not placed in the data section";
 				emit(body, [I32Const(address), LocalSet(requiredLocal(values, output.id))]);
 			case MakeEnum(output, typeName, constructor, arguments):
-				var represented = activeRepresentation.aggregates.makeEnum(typeName, constructor, arguments, requiredLocal(values, output.id),
+				var represented = context.representation.aggregates.makeEnum(typeName, constructor, arguments, requiredLocal(values, output.id),
 					[for (argument in arguments) requiredLocal(values, argument.id)]);
 				if (emitIfHandled(body, represented)) {} else {
 					var enumLayout = layout.enumType(typeName);
@@ -817,7 +771,7 @@ class WasmFunctionLower {
 					}
 				}
 			case EnumIndex(output, value):
-				var represented = activeRepresentation.aggregates.enumIndex(value, requiredLocal(values, output.id), requiredLocal(values, value.id));
+				var represented = context.representation.aggregates.enumIndex(value, requiredLocal(values, output.id), requiredLocal(values, value.id));
 				if (emitIfHandled(body, represented)) {} else
 					emit(body, [
 						LocalGet(requiredLocal(values, value.id)),
@@ -825,7 +779,7 @@ class WasmFunctionLower {
 						LocalSet(requiredLocal(values, output.id))
 					]);
 			case EnumField(output, value, constructor, field):
-				var represented = activeRepresentation.aggregates.enumField(value, constructor, field, requiredLocal(values, output.id),
+				var represented = context.representation.aggregates.enumField(value, constructor, field, requiredLocal(values, output.id),
 					requiredLocal(values, value.id));
 				if (emitIfHandled(body, represented)) {} else {
 					var enumType = switch value.type {
@@ -860,13 +814,13 @@ class WasmFunctionLower {
 					LocalSet(requiredLocal(values, output.id))
 				]);
 			case NewObject(output, typeName):
-				emit(body, activeRepresentation.aggregates.newObject(typeName, requiredLocal(values, output.id)));
+				emit(body, context.representation.aggregates.newObject(typeName, requiredLocal(values, output.id)));
 			case FieldGet(output, object, fieldName):
-				emit(body, activeRepresentation.aggregates.fieldGet(object, fieldName, requiredLocal(values, output.id), requiredLocal(values, object.id)));
+				emit(body, context.representation.aggregates.fieldGet(object, fieldName, requiredLocal(values, output.id), requiredLocal(values, object.id)));
 			case FieldSet(object, fieldName, value):
-				emit(body, activeRepresentation.aggregates.fieldSet(object, fieldName, requiredLocal(values, object.id), requiredLocal(values, value.id)));
+				emit(body, context.representation.aggregates.fieldSet(object, fieldName, requiredLocal(values, object.id), requiredLocal(values, value.id)));
 			case ArrayGet(output, array, index):
-				var represented = activeRepresentation.aggregates.arrayGet(array, index, requiredLocal(values, output.id), requiredLocal(values, array.id),
+				var represented = context.representation.aggregates.arrayGet(array, index, requiredLocal(values, output.id), requiredLocal(values, array.id),
 					requiredLocal(values, index.id));
 				if (emitIfHandled(body, represented)) {} else {
 					var element = arrayElement(array),
@@ -895,7 +849,7 @@ class WasmFunctionLower {
 					emit(body, arrayBody);
 				}
 			case ArraySet(array, index, value):
-				var represented = activeRepresentation.aggregates.arraySet(array, index, value, requiredLocal(values, array.id),
+				var represented = context.representation.aggregates.arraySet(array, index, value, requiredLocal(values, array.id),
 					requiredLocal(values, index.id), requiredLocal(values, value.id));
 				if (emitIfHandled(body, represented)) {} else {
 					var element = arrayElement(array),
@@ -922,12 +876,12 @@ class WasmFunctionLower {
 					arrayBody = arrayBody.concat([
 						LocalGet(requiredLocal(values, array.id)),
 						I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
-						LocalSet(activeArrayTemps.len),
+						LocalSet(context.arrayTemps.len),
 						LocalGet(requiredLocal(values, index.id)),
 						I32Const(1),
 						I32Add,
-						LocalSet(activeArrayTemps.required),
-						LocalGet(activeArrayTemps.required),
+						LocalSet(context.arrayTemps.required),
+						LocalGet(context.arrayTemps.required),
 						LocalGet(requiredLocal(values, array.id)),
 						I32Load(WasmLayout.ARRAY_CAPACITY_OFFSET),
 						I32LeS,
@@ -937,51 +891,51 @@ class WasmFunctionLower {
 						I32Load(WasmLayout.ARRAY_CAPACITY_OFFSET),
 						I32Const(2),
 						I32Mul,
-						LocalSet(activeArrayTemps.capacity),
-						LocalGet(activeArrayTemps.capacity),
-						LocalGet(activeArrayTemps.required),
+						LocalSet(context.arrayTemps.capacity),
+						LocalGet(context.arrayTemps.capacity),
+						LocalGet(context.arrayTemps.required),
 						I32LtS,
 						If(null),
-						LocalGet(activeArrayTemps.required),
-						LocalSet(activeArrayTemps.capacity),
+						LocalGet(context.arrayTemps.required),
+						LocalSet(context.arrayTemps.capacity),
 						End,
-						LocalGet(activeArrayTemps.capacity),
+						LocalGet(context.arrayTemps.capacity),
 						I32Const(stride),
 						I32Mul,
 						Call(allocator),
-						LocalSet(activeArrayTemps.data),
-						LocalGet(activeArrayTemps.data),
+						LocalSet(context.arrayTemps.data),
+						LocalGet(context.arrayTemps.data),
 						LocalGet(requiredLocal(values, array.id)),
 						I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
-						LocalGet(activeArrayTemps.len),
+						LocalGet(context.arrayTemps.len),
 						I32Const(stride),
 						I32Mul,
 						MemoryCopy,
 						LocalGet(requiredLocal(values, array.id)),
-						LocalGet(activeArrayTemps.data),
+						LocalGet(context.arrayTemps.data),
 						I32Store(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
 						LocalGet(requiredLocal(values, array.id)),
-						LocalGet(activeArrayTemps.capacity),
+						LocalGet(context.arrayTemps.capacity),
 						I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
 						End,
 						Block(null),
 						Loop(null),
-						LocalGet(activeArrayTemps.len),
-						LocalGet(activeArrayTemps.required),
+						LocalGet(context.arrayTemps.len),
+						LocalGet(context.arrayTemps.required),
 						I32LtS,
 						If(null),
 						LocalGet(requiredLocal(values, array.id)),
 						I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
-						LocalGet(activeArrayTemps.len),
+						LocalGet(context.arrayTemps.len),
 						I32Const(stride),
 						I32Mul,
 						I32Add,
 						element == F64 ? F64Const(0.0) : I32Const(0),
 						element == F64 ? F64Store(0) : I32Store(0),
-						LocalGet(activeArrayTemps.len),
+						LocalGet(context.arrayTemps.len),
 						I32Const(1),
 						I32Add,
-						LocalSet(activeArrayTemps.len),
+						LocalSet(context.arrayTemps.len),
 						Br(1),
 						Else,
 						Br(2),
@@ -997,7 +951,7 @@ class WasmFunctionLower {
 						LocalGet(requiredLocal(values, value.id)),
 						store(element, 0),
 						LocalGet(requiredLocal(values, array.id)),
-						LocalGet(activeArrayTemps.required),
+						LocalGet(context.arrayTemps.required),
 						I32Store(WasmLayout.ARRAY_LENGTH_OFFSET),
 						End,
 						End
@@ -1005,7 +959,7 @@ class WasmFunctionLower {
 					emit(body, arrayBody);
 				}
 			case ArraySize(output, array):
-				var represented = activeRepresentation.aggregates.arraySize(array, requiredLocal(values, output.id), requiredLocal(values, array.id));
+				var represented = context.representation.aggregates.arraySize(array, requiredLocal(values, output.id), requiredLocal(values, array.id));
 				if (emitIfHandled(body, represented)) {} else
 					emit(body, [
 						LocalGet(requiredLocal(values, array.id)),
@@ -1014,7 +968,7 @@ class WasmFunctionLower {
 					]);
 			case IteratorNew(output, array):
 				var iteratorLocal = requiredLocal(values, output.id),
-					represented = activeRepresentation.aggregates.iteratorNew(array, iteratorLocal, requiredLocal(values, array.id));
+					represented = context.representation.aggregates.iteratorNew(array, iteratorLocal, requiredLocal(values, array.id));
 				if (emitIfHandled(body, represented)) {} else
 					emit(body, [
 						I32Const(WasmLayout.ITERATOR_SIZE),
@@ -1034,7 +988,7 @@ class WasmFunctionLower {
 					]);
 			case IteratorHasNext(output, iterator):
 				var iteratorLocal = requiredLocal(values, iterator.id),
-					represented = activeRepresentation.aggregates.iteratorHasNext(iterator, requiredLocal(values, output.id), iteratorLocal);
+					represented = context.representation.aggregates.iteratorHasNext(iterator, requiredLocal(values, output.id), iteratorLocal);
 				if (emitIfHandled(body, represented)) {} else {
 					var arrayOffset = WasmLayout.ITERATOR_ARRAY_OFFSET,
 						positionOffset = WasmLayout.ITERATOR_POSITION_OFFSET;
@@ -1063,7 +1017,7 @@ class WasmFunctionLower {
 				}
 			case IteratorNext(output, iterator):
 				var iteratorLocal = requiredLocal(values, iterator.id),
-					represented = activeRepresentation.aggregates.iteratorNext(iterator, output, requiredLocal(values, output.id), iteratorLocal);
+					represented = context.representation.aggregates.iteratorNext(iterator, output, requiredLocal(values, output.id), iteratorLocal);
 				if (emitIfHandled(body, represented)) {} else {
 					var arrayOffset = WasmLayout.ITERATOR_ARRAY_OFFSET,
 						positionOffset = WasmLayout.ITERATOR_POSITION_OFFSET,
@@ -1132,20 +1086,20 @@ class WasmFunctionLower {
 				binary(body, output, left, right, values, comparisonInstruction(left.type, F64Le, I64LeS, I32LeS));
 			case Equal(output, left, right):
 				emit(body,
-					activeRepresentation.values.equal(requiredLocal(values, output.id), left, right, requiredLocal(values, left.id),
+					context.representation.values.equal(requiredLocal(values, output.id), left, right, requiredLocal(values, left.id),
 						requiredLocal(values, right.id)));
 			case Call(output, name, arguments):
 				var runtimeName = name;
-				for (native in activeProgram.natives)
+				for (native in context.program.natives)
 					if (native.name == name)
 						runtimeName = native.symbol;
 				var outputLocal = output.type == Void ? -1 : requiredLocal(values, output.id),
-					interop = activeRepresentation.interop,
+					interop = context.representation.interop,
 					represented = interop == null ? UseDefault : interop.lowerRuntimeCall(runtimeName, output, arguments, outputLocal,
 						[for (argument in arguments) requiredLocal(values, argument.id)]);
 				if (emitIfHandled(body, represented)) {} else {
-					var gcRuntime:WasmLoweringResult = Std.isOfType(activeRepresentation.values, WasmGcRepresentation)
-						? cast(activeRepresentation.values, WasmGcRepresentation).lowerRuntimeCall(runtimeName, output, arguments, outputLocal,
+					var gcRuntime:WasmLoweringResult = Std.isOfType(context.representation.values, WasmGcRepresentation)
+						? cast(context.representation.values, WasmGcRepresentation).lowerRuntimeCall(runtimeName, output, arguments, outputLocal,
 							[for (argument in arguments) requiredLocal(values, argument.id)])
 						: UseDefault;
 					if (!emitIfHandled(body, gcRuntime) && !lowerInt64Native(body, output, name, arguments, values)) {
@@ -1167,7 +1121,7 @@ class WasmFunctionLower {
 				}
 			case CNativeCall(output, name, arguments):
 				var native:Null<IrCNative> = null;
-				for (candidate in activeProgram.cNatives)
+				for (candidate in context.program.cNatives)
 					if (candidate.name == name)
 						native = candidate;
 				if (native == null)
@@ -1181,7 +1135,7 @@ class WasmFunctionLower {
 					|| (WasmModuleSupport.isGcNativePointerType(native.result) && native.pointerOwnership == "owned")) {
 					var lengthNative:Null<IrCNative> = null;
 					if (native.result == ManagedBytes && native.pointerLength != null) {
-						for (candidate in activeProgram.cNatives)
+						for (candidate in context.program.cNatives)
 							if (candidate.symbol == native.pointerLength)
 								lengthNative = candidate;
 						if (lengthNative != null) {
@@ -1191,7 +1145,7 @@ class WasmFunctionLower {
 						}
 					}
 					if (native.pointerOwnership == "owned" && native.pointerRelease != null)
-						for (candidate in activeProgram.cNatives)
+						for (candidate in context.program.cNatives)
 							if (candidate.symbol == native.pointerRelease) {
 								var importedRelease = functions.get(candidate.name);
 								if (importedRelease != null)
@@ -1199,7 +1153,7 @@ class WasmFunctionLower {
 							}
 				}
 				var outputLocal = output.type == Void ? -1 : requiredLocal(values, output.id),
-					interop = activeRepresentation.interop,
+					interop = context.representation.interop,
 					represented = interop == null ? UseDefault : interop.lowerCNativeCall(native, arguments, outputLocal,
 						[for (argument in arguments) requiredLocal(values, argument.id)], importIndex, pointerLengthImportIndex, pointerReleaseImportIndex);
 				if (emitIfHandled(body, represented)) {} else {
@@ -1531,15 +1485,7 @@ class WasmFunctionLower {
 			default: i32;
 		};
 
-	static function rootPrologue(state:{
-		frame:Int,
-		top:Int,
-		frameTop:Int,
-		slots:Array<Int>,
-		slotByValue:Map<Int, Int>,
-		live:Map<Int, Map<Int, Array<Int>>>,
-		size:Int
-	}, rootLimit:Int):Array<WasmInstruction> {
+	static function rootPrologue(state:WasmFunctionGcRootState, rootLimit:Int):Array<WasmInstruction> {
 		var result:Array<WasmInstruction> = [
 			GlobalGet(state.top),
 			I32Const(state.size),
@@ -1570,8 +1516,8 @@ class WasmFunctionLower {
 		return result;
 	}
 
-	static function snapshotRoots(body:Array<WasmInstruction>, ?block:Int = -1, ?instruction:Int = -1):Void {
-		var rootState = activeGcRootState;
+	function snapshotRoots(body:Array<WasmInstruction>, ?block:Int = -1, ?instruction:Int = -1):Void {
+		var rootState = context.gcRootState;
 		if (rootState == null || block < 0 || instruction < 0)
 			return;
 		var state = rootState;
@@ -1597,8 +1543,8 @@ class WasmFunctionLower {
 		}
 	}
 
-	static function restoreRoots(body:Array<WasmInstruction>):Void {
-		var rootState = activeGcRootState;
+	function restoreRoots(body:Array<WasmInstruction>):Void {
+		var rootState = context.gcRootState;
 		if (rootState != null) {
 			body.push(LocalGet(rootState.frame));
 			body.push(I32Load(WasmLayout.ROOT_PREVIOUS_TOP_OFFSET));

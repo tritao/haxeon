@@ -76,7 +76,6 @@ class WasmGcModuleBuilder {
 		plan.addTo(module);
 		var staticData = WasmModuleSupport.placeStaticData(program, module, 8, reachable),
 			hasStaticData = staticData.addresses.iterator().hasNext();
-		WasmFunctionLower.setStaticDataAddresses(staticData.addresses);
 		var scratchTop = -1;
 		if (requiresScratchMemory || requiresLinearMemory || hasStaticData) {
 			module.memoryMin = WasmModuleSupport.memoryPages(staticData.end);
@@ -128,9 +127,9 @@ class WasmGcModuleBuilder {
 				continue;
 			var functionIndex = WasmModuleSupport.requiredFunctionIndex(functions, fn.name);
 			module.setFunction(functionIndex,
-				WasmFunctionLower.lower(fn, gcContext.functions, module.functionType(functionIndex), null, -1, 0, 0, 0, gcContext.globals, [],
+				WasmFunctionLower.lower(module, fn, gcContext.functions, module.functionType(functionIndex), null, -1, 0, 0, 0, gcContext.globals, [],
 					gcContext.methods, closureTypes, tableSlots,
-					exceptionTag, [], program, representation));
+					exceptionTag, [], program, representation, staticData.addresses));
 		}
 		module.exportTable = module.tableMin != null;
 		module.customSections.push({name: "haxeon.patch", bytes: WasmPatch.manifest(program, patchChanged)});

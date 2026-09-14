@@ -63,6 +63,7 @@ class WasmLinearModuleBuilder {
 	var allocator:Int;
 	var runtimeFunctionCount:Int;
 	var methods:Map<String, String>;
+	var staticDataAddresses:Map<String, Int>;
 	var closureTypes:Map<String, WasmClosureTypes>;
 	var representation:WasmRepresentationSet;
 	var tableSlots:Map<String, Int>;
@@ -138,7 +139,7 @@ class WasmLinearModuleBuilder {
 			}
 		var staticData = WasmModuleSupport.placeStaticData(program, module, nextData, reachable);
 		nextData = staticData.end;
-		WasmFunctionLower.setStaticDataAddresses(staticData.addresses);
+		staticDataAddresses = staticData.addresses;
 		module.memoryMin = 1;
 		module.exportMemory = !importMemory;
 		rootBase = WasmModuleSupport.align(Std.int(Math.max(1024, nextData)), 8);
@@ -264,8 +265,8 @@ class WasmLinearModuleBuilder {
 				return;
 			var functionIndex = WasmModuleSupport.requiredFunctionIndex(functions, fn.name);
 			module.setFunction(functionIndex,
-				WasmFunctionLower.lower(fn, functions, module.functionType(functionIndex), layout, allocator, rootTop, rootFrameTop, rootLimit, globals,
-					strings, methods, closureTypes, tableSlots, exceptionTag, rootPoints, program, representation));
+				WasmFunctionLower.lower(module, fn, functions, module.functionType(functionIndex), layout, allocator, rootTop, rootFrameTop, rootLimit, globals,
+					strings, methods, closureTypes, tableSlots, exceptionTag, rootPoints, program, representation, staticDataAddresses));
 		});
 	}
 
