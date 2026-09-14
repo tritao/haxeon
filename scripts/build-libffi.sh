@@ -5,13 +5,17 @@ root_dir=$(cd "$(dirname "$0")/.." && pwd)
 submodule_dir="$root_dir/vendor/libffi"
 install_dir="$root_dir/.tools/libffi"
 mode=${1:-native}
+git_safe_directory_args=(
+	-c "safe.directory=$root_dir"
+	-c "safe.directory=$submodule_dir"
+)
 
 if [[ ! -f "$submodule_dir/configure.ac" ]]; then
 	echo "pinned libffi submodule is missing; initialize vendor/libffi first" >&2
 	exit 1
 fi
 
-revision=$(git -C "$submodule_dir" rev-parse HEAD)
+revision=$(git "${git_safe_directory_args[@]}" -C "$submodule_dir" rev-parse HEAD)
 source_dir="$root_dir/out/libffi/source-$revision"
 case "$mode" in
 	native)
@@ -44,7 +48,7 @@ done
 
 if [[ ! -f "$source_dir/configure.ac" ]]; then
 	mkdir -p "$source_dir"
-	git -C "$submodule_dir" archive HEAD | tar -x -C "$source_dir"
+	git "${git_safe_directory_args[@]}" -C "$submodule_dir" archive HEAD | tar -x -C "$source_dir"
 fi
 cp "$root_dir/scripts/libffi-libtool-compat.m4" "$source_dir/m4/haxeon-libtool-compat.m4"
 if ! grep -Fq 'haxeon-libtool-compat.m4' "$source_dir/acinclude.m4"; then
