@@ -44,6 +44,7 @@ class TestCatalog {
 		"SemanticModelMain",
 		"SemanticWorkspaceMain",
 		"SemanticProgramMain",
+		"TyperBoundaryMain",
 		"AbiMatrixMain",
 		"ParserRecoveryMain",
 		"ParserRecoveryFuzzMain",

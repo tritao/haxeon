@@ -31,7 +31,7 @@ class TypingSession {
 	public final genericSpecializations:GenericSpecializationRegistry;
 	public final emittedGenericBodies:Map<String, Bool> = [];
 	public final noReturnFunctions:Map<String, Bool> = [];
-	public final runtimeDependencies:Map<String, Map<String, Bool>> = [];
+	public final runtimeDependencyTracker = new RuntimeDependencyTracker();
 	public final cNativeFunctions:Map<String, Bool> = [];
 	public final inlineConstants:Map<String, ResolvedInlineConstant> = [];
 	public final inlineConstantsInProgress:Map<String, Bool> = [];

@@ -60,18 +60,8 @@ class TypedProgramAssembler {
 		};
 	}
 
-	public function runtimeDependencies():Array<{final functionName:String; final target:String;}> {
-		var dependencies = [
-			for (functionName => targets in session.runtimeDependencies)
-				for (target in targets.keys())
-					{functionName: functionName, target: target}
-		];
-		dependencies.sort(function(left, right) {
-			var functionOrder = Reflect.compare(left.functionName, right.functionName);
-			return functionOrder == 0 ? Reflect.compare(left.target, right.target) : functionOrder;
-		});
-		return dependencies;
-	}
+	public function runtimeDependencies():Array<{final functionName:String; final target:String;}>
+		return session.runtimeDependencyTracker.ordered();
 
 	function orderedAnonymousTypes():Array<compiler.types.TypedAst.TypedAnonymous> {
 		var names = [for (name in session.anonymousTypes.keys()) name];

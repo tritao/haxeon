@@ -2,16 +2,23 @@ package compiler.types.typing;
 
 import compiler.semantic.SemanticProgram;
 import compiler.semantic.DeclarationLifecycle.DeclarationStage;
+import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstFunction;
+import compiler.Source.SourceSpan;
+import compiler.types.Type.NominalKind;
+import compiler.types.TypeRelations;
 import compiler.types.typing.TypingMetrics.MeasuredTypedProgram;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.NativeConvention;
 import compiler.types.TypedAst.TypedClass;
+import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedEnum;
+import compiler.types.TypedAst.TypedField;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedInterface;
 import compiler.types.TypedAst.TypedNative;
 import compiler.types.TypedAst.TypedProgram;
+import compiler.types.TypedAst.TypedStatement;
 import compiler.types.analysis.Scope;
 
 /** Coordinates the program-level typing phases and their lifecycle transitions. */
@@ -126,16 +133,16 @@ class ProgramTyper {
 								name: method.name,
 								arguments: [
 									for (argument in method.arguments)
-										bodyTyper.erasedInterfaceType(interfaceDecl, argument.type, argument.span)
+										erasureType(interfaceDecl, argument.type, argument.span)
 								],
-								result: bodyTyper.erasedInterfaceType(interfaceDecl, method.result, method.span)
+								result: erasureType(interfaceDecl, method.result, method.span)
 							}
 					]
 				}
 			], typedClasses:Array<TypedClass> = [
 			for (classDecl in program.classes)
 				if (classDecl.isExtern != true
-					&& externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null) bodyTyper.typeClass(classDecl, session.classDecls, selected)
+					&& externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null) typeClass(classDecl, selected)
 			], typedFunctions:Array<TypedFunction> = [];
 		var metadataDoneAt = Sys.time() * 1000.0;
 		for (fn in program.functions)
@@ -181,5 +188,230 @@ class ProgramTyper {
 				finalizationMs: finalizationDoneAt - assemblyDoneAt
 			}
 		};
+	}
+
+	function typeClass(classDecl:AstClass, selected:Null<Map<String, Bool>>):TypedClass {
+		var isValue = hasMetadata(classDecl.metadata, "value");
+		if (isValue && classDecl.base != null)
+			BodyTyper.fail("E1022", 'Value class "${classDecl.name}" cannot extend another class', classDecl.span);
+		if (isValue && classDecl.interfaces.length > 0)
+			BodyTyper.fail("E1022", 'Value class "${classDecl.name}" cannot implement interfaces', classDecl.span);
+		var fields:Array<TypedField> = [],
+			fieldNames:Map<String, Bool> = [],
+			erasedSubstitutions:Map<String, CompilerType> = [];
+		for (parameter in classDecl.typeParameters)
+			erasedSubstitutions.set(parameter, TDynamic);
+		for (field in classDecl.fields) {
+			if (fieldNames.exists(field.name))
+				BodyTyper.fail("E1000", 'Duplicate field "${classDecl.name}.${field.name}"', field.span);
+			if (field.isInline && !field.isStatic)
+				BodyTyper.fail("E1002", 'Inline field "${classDecl.name}.${field.name}" must be static', field.span);
+			if (field.isInline && field.initializer == null)
+				BodyTyper.fail("E1002", 'Inline field "${classDecl.name}.${field.name}" requires an initializer', field.span);
+			var type = session.declarations.resolve(session.declarations.resolvedFieldType(classDecl.name, field), field.span, erasedSubstitutions);
+			if (type == TVoid)
+				BodyTyper.fail("E1002", 'Field "${classDecl.name}.${field.name}" cannot have type Void', field.span);
+			var initializer:Null<TypedExpression> = null,
+				inlineValue:Null<TypedExpression> = null,
+				parsedInitializer = field.initializer;
+			if (parsedInitializer != null) {
+				if (field.isInline) {
+					var resolved = bodyTyper.resolveInlineConstant(classDecl.name, field.name, field.span);
+					if (resolved == null)
+						BodyTyper.fail("E1002", 'Unable to resolve inline constant "${classDecl.name}.${field.name}"', field.span);
+					initializer = resolved.initializer;
+					inlineValue = resolved.value;
+				} else {
+					var initializerContext = bodyTyper.enterBody(classDecl.name + ".__init", erasedSubstitutions),
+						scope = new Scope();
+					if (!field.isStatic)
+						scope.defineReceiver(TInstance(NominalKind.Class, classDecl.name, []), field.span);
+					try {
+						initializer = bodyTyper.coerce(bodyTyper.typeExpression(parsedInitializer, scope, type), type,
+							(field.isStatic ? 'static field "${classDecl.name}.${field.name}"' : 'field "${classDecl.name}.${field.name}"'), "E1002");
+					} catch (error:Dynamic) {
+						bodyTyper.leaveBody(initializerContext);
+						throw error;
+					}
+					bodyTyper.leaveBody(initializerContext);
+				}
+			}
+			fieldNames.set(field.name, true);
+			fields.push({
+				name: field.name,
+				type: type,
+				initializer: initializer,
+				inlineValue: inlineValue,
+				readAccess: field.readAccess,
+				writeAccess: field.writeAccess,
+				isStatic: field.isStatic,
+				isInline: field.isInline,
+				isFinal: field.isFinal,
+				span: field.span
+			});
+		}
+		var classSemanticSubstitutions:Map<String, CompilerType> = [];
+		for (parameter in classDecl.typeParameters)
+			classSemanticSubstitutions.set(parameter, TTypeParameter(classDecl.name, parameter));
+		for (interfaceType in classDecl.interfaces) {
+			var interfaceInstance = session.declarations.resolve(interfaceType, classDecl.span, classSemanticSubstitutions),
+				interfaceName = BodyTyper.inheritanceName(interfaceType);
+			if (!session.interfaceDecls.exists(interfaceName))
+				BodyTyper.fail("E1007", 'Unknown interface "$interfaceName"', classDecl.span);
+			validateInterfaceImplementation(classDecl, interfaceInstance, classSemanticSubstitutions, classDecl.span);
+		}
+		var typedMethods:Array<TypedFunction> = [],
+			instanceInitializers:Array<TypedField> = [],
+			hasConstructor = false;
+		for (field in fields)
+			if (!field.isStatic && field.initializer != null)
+				instanceInitializers.push(field);
+		for (method in classDecl.methods) {
+			if (BodyTyper.isGeneric(method))
+				continue;
+			var qualified = classDecl.name + "." + method.name,
+				typeBody = selected == null || selected.exists(qualified),
+				typedMethod = typeBody ? bodyTyper.typeFunction(method, classDecl.name, method.isStatic,
+					erasedSubstitutions) : methodSignature(method, classDecl.name, erasedSubstitutions);
+			if (method.name == "new") {
+				hasConstructor = true;
+				if (typeBody && instanceInitializers.length > 0)
+					typedMethod = prependInstanceInitializers(typedMethod, classDecl.name, instanceInitializers);
+			}
+			typedMethods.push(typedMethod);
+		}
+		if (!hasConstructor && instanceInitializers.length > 0 && (selected == null || selected.exists(classDecl.name + ".new")))
+			typedMethods.push({
+				name: classDecl.name + ".new",
+				owner: classDecl.name,
+				isStatic: false,
+				isConstructor: true,
+				arguments: [],
+				result: TVoid,
+				statements: instanceInitializerStatements(instanceInitializers, classDecl.name),
+				cells: [],
+				cellCaptures: [],
+				span: classDecl.span
+			});
+		var parsedBase = classDecl.base, baseName:Null<String> = null;
+		if (parsedBase != null)
+			baseName = BodyTyper.inheritanceName(parsedBase);
+		return {
+			name: classDecl.name,
+			isValue: isValue,
+			base: baseName,
+			interfaces: [
+				for (interfaceType in classDecl.interfaces)
+					BodyTyper.inheritanceName(interfaceType)
+			],
+			fields: fields,
+			methods: typedMethods,
+			span: classDecl.span
+		};
+	}
+
+	function erasureType(declaration:compiler.syntax.Ast.AstInterface, type:compiler.syntax.Ast.AstType, span:SourceSpan):CompilerType {
+		var substitutions:Map<String, CompilerType> = [];
+		for (parameter in declaration.typeParameters)
+			substitutions.set(parameter, TDynamic);
+		return session.declarations.resolve(type, span, substitutions);
+	}
+
+	static function hasMetadata(metadata:Array<compiler.syntax.Ast.AstMetadata>, name:String):Bool {
+		for (entry in metadata)
+			if (entry.name == name)
+				return true;
+		return false;
+	}
+
+	function methodSignature(method:AstFunction, owner:String, ?substitutions:Map<String, CompilerType>):TypedFunction
+		return {
+			name: owner + "." + method.name,
+			owner: owner,
+			isStatic: method.isStatic,
+			isConstructor: method.name == "new",
+			arguments: [
+				for (argument in method.arguments)
+					{
+						name: argument.name,
+						type: bodyTyper.argumentType(argument, substitutions)
+					}
+			],
+			result: substitutions == null ? bodyTyper.lowerType(method.result) : session.declarations.resolve(method.result, method.span, substitutions),
+			statements: [],
+			cells: [],
+			cellCaptures: [],
+			span: method.span
+		};
+
+	function prependInstanceInitializers(method:TypedFunction, className:String, fields:Array<TypedField>):TypedFunction {
+		var statements = instanceInitializerStatements(fields, className);
+		return {
+			name: method.name,
+			owner: method.owner,
+			isStatic: method.isStatic,
+			isConstructor: method.isConstructor,
+			arguments: method.arguments,
+			result: method.result,
+			statements: statements.concat(method.statements),
+			cells: method.cells,
+			cellCaptures: method.cellCaptures,
+			span: method.span
+		};
+	}
+
+	static function instanceInitializerStatements(fields:Array<TypedField>, className:String):Array<TypedStatement> {
+		var statements:Array<TypedStatement> = [];
+		for (field in fields) {
+			var initializer = field.initializer;
+			if (initializer == null)
+				throw 'Missing initializer for "$className.${field.name}"';
+			statements.push(TFieldAssign(new TypedExpression(TLocal("this"), TInstance(NominalKind.Class, className, []), field.span), field.name,
+				initializer, field.span));
+		}
+		return statements;
+	}
+
+	function validateInterfaceImplementation(classDecl:AstClass, interfaceInstance:CompilerType, classSubstitutions:Map<String, CompilerType>,
+			span:SourceSpan):Void {
+		var interfaceName = switch interfaceInstance {
+			case TInstance(Interface, name, _): name;
+			default:
+				BodyTyper.fail("E1007", "Implemented type must be an interface", span);
+				return;
+		};
+		if (!session.interfaceDecls.exists(interfaceName))
+			return;
+		var interfaceDecl = session.interfaceDecls.get(interfaceName),
+			interfaceSubstitutions = bodyTyper.nominalSubstitutions(interfaceInstance);
+		for (baseType in interfaceDecl.bases) {
+			var baseInstance = session.declarations.resolve(baseType, interfaceDecl.span, interfaceSubstitutions),
+				base = BodyTyper.inheritanceName(baseType);
+			if (!session.interfaceDecls.exists(base))
+				BodyTyper.fail("E1007", 'Unknown interface "$base"', span);
+			validateInterfaceImplementation(classDecl, baseInstance, classSubstitutions, span);
+		}
+		for (method in interfaceDecl.methods) {
+			var implementation = bodyTyper.findMethod(classDecl.name, method.name);
+			if (implementation == null || implementation.isStatic)
+				BodyTyper.fail("E1007", 'Class "${classDecl.name}" does not implement "$interfaceName.${method.name}"', span);
+			var implementationName = implementation.owner + "." + method.name;
+			if (!session.signatures.exists(implementationName)
+				|| !sameSignature(BodyTyper.requiredMapValue(session.signatures, implementationName), method, classSubstitutions, interfaceSubstitutions))
+				BodyTyper.fail("E1003", 'Method "${classDecl.name}.${method.name}" does not match interface "$interfaceName"', span);
+		}
+	}
+
+	function sameSignature(left:AstFunction, right:AstFunction, ?leftSubstitutions:Map<String, CompilerType>,
+			?rightSubstitutions:Map<String, CompilerType>):Bool {
+		if (left.arguments.length != right.arguments.length
+			|| !TypeRelations.equals(session.declarations.resolve(left.result, left.span, leftSubstitutions),
+				session.declarations.resolve(right.result, right.span, rightSubstitutions)))
+			return false;
+		for (i in 0...left.arguments.length)
+			if (!TypeRelations.equals(session.declarations.resolve(left.arguments[i].type, left.arguments[i].span, leftSubstitutions),
+				session.declarations.resolve(right.arguments[i].type, right.arguments[i].span, rightSubstitutions)))
+				return false;
+		return true;
 	}
 }
