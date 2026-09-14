@@ -1,6 +1,6 @@
 package compiler.backend.wasm.gc;
 
-import compiler.backend.wasm.WasmGcTypePlan;
+import compiler.backend.wasm.gc.WasmGcTypePlan;
 import compiler.backend.wasm.WasmRepresentation.WasmInteropRepresentation;
 import compiler.backend.wasm.WasmRepresentation.WasmLoweringKind;
 import compiler.backend.wasm.WasmRepresentation.WasmLoweringResult;

@@ -1,4 +1,4 @@
-package compiler.backend.wasm;
+package compiler.backend.wasm.linear;
 
 import compiler.backend.Backend.BackendOptions;
 import compiler.backend.Backend.BackendResult;
@@ -7,16 +7,15 @@ import compiler.backend.MemoryContract.MemoryContractCodec;
 import compiler.backend.wasm.WasmModuleSupport.WasmClosureTypes;
 import compiler.backend.wasm.WasmFunctionLower;
 import compiler.backend.wasm.WasmEncoder;
-import compiler.backend.wasm.WasmGcRoots;
+import compiler.backend.wasm.gc.WasmGcRoots;
 import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmPatch;
-import compiler.backend.wasm.WasmRepresentation.WasmLinearRepresentation;
+import compiler.backend.wasm.linear.WasmLinearRepresentation;
 import compiler.backend.wasm.WasmRepresentation.WasmRepresentationSet;
 import compiler.backend.wasm.WasmTarget.WasmTargetConfig;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
-import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.backend.wasm.linear.WasmLinearAllocator;
 import compiler.backend.wasm.linear.WasmLinearArrays;
@@ -24,7 +23,6 @@ import compiler.backend.wasm.linear.WasmLinearContext;
 import compiler.backend.wasm.linear.WasmLinearContext.WasmLinearContextState;
 import compiler.backend.wasm.linear.WasmLinearGc;
 import compiler.backend.wasm.linear.WasmLinearRuntime;
-import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.IrVerifier;
 
@@ -246,7 +244,8 @@ class WasmLinearModuleBuilder {
 			functions.set(fn.name, module.addFunction(new WasmFunction(fn.name, type)));
 		}
 		closureTypes = WasmModuleSupport.collectClosureTypes(module, program);
-		representation = WasmRepresentationSet.linear(new WasmLinearRepresentation(layout, allocator));
+		var linearRepresentation = new WasmLinearRepresentation(layout, allocator);
+		representation = new WasmRepresentationSet(linearRepresentation, linearRepresentation, null, linearRepresentation, null);
 		tableSlots = WasmModuleSupport.buildTableSlots(module, functions);
 		var exceptionTagType:Null<Int> = WasmModuleSupport.hasExceptions(program) ? module.typeIndex({
 			parameters: [I32],

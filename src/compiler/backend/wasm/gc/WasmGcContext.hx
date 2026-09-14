@@ -1,6 +1,6 @@
 package compiler.backend.wasm.gc;
 
-import compiler.backend.wasm.WasmGcTypePlan;
+import compiler.backend.wasm.gc.WasmGcTypePlan;
 import compiler.backend.wasm.WasmModule.WasmModule;
 
 /** Module-lifetime configuration and indices for native Wasm GC lowering. */

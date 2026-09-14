@@ -1,6 +1,6 @@
-package compiler.backend.wasm;
+package compiler.backend.wasm.gc;
 
-import compiler.backend.wasm.WasmGcTypePlan.WasmGcMapTypePlan;
+import compiler.backend.wasm.gc.WasmGcTypePlan.WasmGcMapTypePlan;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;

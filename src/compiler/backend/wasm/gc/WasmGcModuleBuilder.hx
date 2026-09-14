@@ -1,13 +1,11 @@
-package compiler.backend.wasm;
+package compiler.backend.wasm.gc;
 
 import compiler.backend.Backend.BackendOptions;
 import compiler.backend.Backend.BackendResult;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
-import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrCNative;
-import compiler.ir.Ir.IrCNativeArgumentMode;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.IrFunction;
 import compiler.ir.IrVerifier;
@@ -16,15 +14,16 @@ import compiler.backend.wasm.WasmFunctionLower;
 import compiler.backend.wasm.WasmCfgAnalysis;
 import compiler.backend.wasm.WasmEncoder;
 import compiler.backend.wasm.WasmExceptionLowering;
-import compiler.backend.wasm.WasmGcMaps;
-import compiler.backend.wasm.WasmGcTypePlan;
+import compiler.backend.wasm.gc.WasmGcMaps;
+import compiler.backend.wasm.gc.WasmGcTypePlan;
 import compiler.backend.wasm.gc.WasmGcContext;
+import compiler.backend.wasm.gc.WasmGcFunctionContext;
 import compiler.backend.wasm.gc.WasmGcInterop;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmLocal;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmPatch;
-import compiler.backend.wasm.WasmRepresentation.WasmGcRepresentation;
+import compiler.backend.wasm.gc.WasmGcRepresentation;
 import compiler.backend.wasm.WasmRepresentation.WasmLoweringKind;
 import compiler.backend.wasm.WasmRepresentation.WasmRepresentationSet;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
@@ -97,7 +96,13 @@ class WasmGcModuleBuilder {
 		}
 		var gcInterop = new WasmGcInterop(gcContext, scratchTop, scratchAllocator,
 			gcPointerReleaseFunctionIndices(program, reachable, functions)),
-			representation:WasmRepresentationSet = WasmRepresentationSet.gc(gcContext, gcRepresentation, gcInterop);
+			representation:WasmRepresentationSet = new WasmRepresentationSet(gcRepresentation, gcRepresentation, gcRepresentation, gcInterop,
+				function(context) {
+					var functionContext = new WasmGcFunctionContext(gcContext, context.irFunction, context.exceptionTag, context.allocateLocal),
+						functionRepresentation = gcRepresentation.forFunctionContext(functionContext),
+						functionInterop = gcInterop.forFunctionContext(functionContext);
+					return new WasmRepresentationSet(functionRepresentation, functionRepresentation, functionRepresentation, functionInterop, null);
+				});
 		var exceptionTagType:Null<Int> = WasmModuleSupport.hasExceptions(program) ? module.typeIndex({parameters: [representation.values.valueType(Dyn)], results: []}) : null,
 			exceptionTag:Null<Int> = exceptionTagType == null ? null : 0;
 		module.exceptionTagType = exceptionTagType;

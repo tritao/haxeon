@@ -1,4 +1,4 @@
-package compiler.backend.wasm;
+package compiler.backend.wasm.gc;
 
 import compiler.ir.Ir.IrEnum;
 import compiler.ir.Ir.IrEnumCase;

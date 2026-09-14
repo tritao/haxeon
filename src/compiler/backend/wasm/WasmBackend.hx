@@ -6,6 +6,8 @@ import compiler.backend.Backend.BackendResult;
 import compiler.ir.Ir.IrProgram;
 import compiler.backend.wasm.WasmPatch.WasmPatchArtifact;
 import compiler.backend.wasm.WasmPatch;
+import compiler.backend.wasm.gc.WasmGcModuleBuilder;
+import compiler.backend.wasm.linear.WasmLinearModuleBuilder;
 
 /** First self-hosted Wasm backend: scalar lowering with explicit CFG fallback. */
 class WasmBackend implements Backend {

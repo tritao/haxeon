@@ -1,4 +1,4 @@
-package compiler.backend.wasm;
+package compiler.backend.wasm.gc;
 
 import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrValue;
