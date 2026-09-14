@@ -667,8 +667,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return [LocalSet(temporary)].concat(requireHandled(converted));
 	}
 
-	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
-			argumentLocals:Array<Int>):WasmLoweringResult {
+	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>):WasmLoweringResult {
 		if (name == "__runtime_string_from_ascii" || name == "runtime.RuntimeData.stringFromAscii") {
 			if (output.type != Bytes
 				|| arguments.length != 3

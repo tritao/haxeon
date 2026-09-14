@@ -39,7 +39,8 @@ class WasmGcModuleBuilder {
 			|| options.wasmMemoryStats == true)
 			throw "Wasm GC lowering does not use linear-memory options";
 		IrVerifier.verify(program);
-		var preferredEntry = WasmModuleSupport.hasFunction(program, "main") ? "main" : WasmModuleSupport.hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint,
+		var preferredEntry = WasmModuleSupport.hasFunction(program,
+			"main") ? "main" : WasmModuleSupport.hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint,
 			exportedFunctions = options.exports == null ? [] : options.exports,
 			roots = exportedFunctions.copy();
 		if (WasmModuleSupport.hasFunction(program, "__init"))
@@ -93,16 +94,18 @@ class WasmGcModuleBuilder {
 		if (requiresScratchMemory) {
 			scratchAllocator = addGcScratchAllocator(module, scratchTop);
 		}
-		var gcInterop = new WasmGcInterop(gcContext, scratchTop, scratchAllocator,
-			gcPointerReleaseFunctionIndices(program, reachable, functions)),
+		var gcInterop = new WasmGcInterop(gcContext, scratchTop, scratchAllocator, gcPointerReleaseFunctionIndices(program, reachable, functions)),
 			representation:WasmRepresentationSet = new WasmRepresentationSet(gcRepresentation, gcRepresentation, gcRepresentation, gcInterop,
 				function(context) {
-					var functionContext = new WasmGcFunctionContext(gcContext, context.irFunction, context.exceptionTag, context.allocateLocal),
-						functionRepresentation = gcRepresentation.forFunctionContext(functionContext),
+					var functionContext = new WasmGcFunctionContext(gcContext, context.irFunction, context.exceptionTag,
+						context.allocateLocal), functionRepresentation = gcRepresentation.forFunctionContext(functionContext),
 						functionInterop = gcInterop.forFunctionContext(functionContext);
 					return new WasmRepresentationSet(functionRepresentation, functionRepresentation, functionRepresentation, functionInterop, null);
 				});
-		var exceptionTagType:Null<Int> = WasmModuleSupport.hasExceptions(program) ? module.typeIndex({parameters: [representation.values.valueType(Dyn)], results: []}) : null,
+		var exceptionTagType:Null<Int> = WasmModuleSupport.hasExceptions(program) ? module.typeIndex({
+			parameters: [representation.values.valueType(Dyn)],
+			results: []
+		}) : null,
 			exceptionTag:Null<Int> = exceptionTagType == null ? null : 0;
 		module.exceptionTagType = exceptionTagType;
 		for (field in program.staticFields) {
@@ -128,8 +131,7 @@ class WasmGcModuleBuilder {
 			var functionIndex = WasmModuleSupport.requiredFunctionIndex(functions, fn.name);
 			module.setFunction(functionIndex,
 				WasmFunctionLower.lower(module, fn, gcContext.functions, module.functionType(functionIndex), null, -1, 0, 0, 0, gcContext.globals, [],
-					gcContext.methods, closureTypes, tableSlots,
-					exceptionTag, [], program, representation, staticData.addresses));
+					gcContext.methods, closureTypes, tableSlots, exceptionTag, [], program, representation, staticData.addresses));
 		}
 		module.exportTable = module.tableMin != null;
 		module.customSections.push({name: "haxeon.patch", bytes: WasmPatch.manifest(program, patchChanged)});
@@ -292,15 +294,15 @@ class WasmGcModuleBuilder {
 				"__exception_matches", "__reflect_is_object", "__dynamic_equal", "__f64_to_i64_bits", "__i64_to_f64_bits", "haxe.Int64.ushr",
 				"haxe.Int64.compare", "haxe.Int64.make", "haxe.Int64.toInt", "__bytes_alloc", "__bytes_of_string", "__bytes_length", "__bytes_get",
 				"__bytes_set", "__bytes_get_i32", "__bytes_set_i32", "getI32", "setI32", "__bytes_view", "__bytes_sub", "__bytes_compare",
-				"__bytes_to_string", "__bytes_get_string", "structSlice", "structWithRoots", "structGetRoots", "__bytes_input_new", "__bytes_input_position", "__bytes_input_big_endian",
-				"__bytes_input_set_big_endian", "__bytes_input_read_byte", "__bytes_input_read_i32", "__bytes_input_read_f64", "__bytes_input_read_string",
-				"__bytes_input_read", "__bytes_output_new", "__bytes_output_big_endian", "__bytes_output_set_big_endian", "__bytes_output_write_byte",
-				"__bytes_output_write_i32", "__bytes_output_write_f64", "__bytes_output_write_string", "__bytes_output_write", "__bytes_output_write_range",
-				"__bytes_output_get_bytes", "structGetPointer", "native_pointer_close", "native_pointer_is_closed", "native_pointer_owned_from_slot",
-				"__string_length", "__string_char_at", "__string_char_code_at", "__string_concat", "__string_equal", "__string_compare_full",
-				"__string_index_of", "__string_index_of_from", "__string_last_index_of", "__string_last_index_of_from", "__string_to_lower_case",
-				"__string_to_upper_case", "__string_split", "__string_substring", "__string_from_char_code", "__wasm_memory_load_i32",
-				"__runtime_string_from_ascii": true;
+				"__bytes_to_string", "__bytes_get_string", "structSlice", "structWithRoots", "structGetRoots", "__bytes_input_new", "__bytes_input_position",
+				"__bytes_input_big_endian", "__bytes_input_set_big_endian", "__bytes_input_read_byte", "__bytes_input_read_i32", "__bytes_input_read_f64",
+				"__bytes_input_read_string", "__bytes_input_read", "__bytes_output_new", "__bytes_output_big_endian", "__bytes_output_set_big_endian",
+				"__bytes_output_write_byte", "__bytes_output_write_i32", "__bytes_output_write_f64", "__bytes_output_write_string", "__bytes_output_write",
+				"__bytes_output_write_range", "__bytes_output_get_bytes", "structGetPointer", "native_pointer_close", "native_pointer_is_closed",
+				"native_pointer_owned_from_slot", "__string_length", "__string_char_at", "__string_char_code_at", "__string_concat", "__string_equal",
+				"__string_compare_full", "__string_index_of", "__string_index_of_from", "__string_last_index_of", "__string_last_index_of_from",
+				"__string_to_lower_case", "__string_to_upper_case", "__string_split", "__string_substring", "__string_from_char_code",
+				"__wasm_memory_load_i32", "__runtime_string_from_ascii": true;
 			default: false;
 		};
 	}
@@ -539,7 +541,9 @@ class WasmGcModuleBuilder {
 					result.set(requiredCNativeBySymbol(program, native.pointerLength).name, true);
 					if (native.pointerOwnership == "owned" && native.pointerRelease != null)
 						result.set(requiredCNativeBySymbol(program, native.pointerRelease).name, true);
-				} else if (WasmModuleSupport.isGcNativePointerType(native.result) && native.pointerOwnership == "owned" && native.pointerRelease != null)
+				} else if (WasmModuleSupport.isGcNativePointerType(native.result)
+					&& native.pointerOwnership == "owned"
+					&& native.pointerRelease != null)
 					result.set(requiredCNativeBySymbol(program, native.pointerRelease).name, true);
 			}
 		for (symbol in gcPointerReleaseSymbols(program, reachable).keys())
@@ -700,14 +704,12 @@ class WasmGcModuleBuilder {
 		return result;
 	}
 
-
 	static function runtimeNativeSymbol(program:IrProgram, name:String):String {
 		for (native in program.natives)
 			if (native.name == name)
 				return native.symbol;
 		return name;
 	}
-
 
 	static function gcPointerReleaseFunctionIndices(program:IrProgram, reachable:Map<String, Bool>, functions:Map<String, Int>):Map<String, Int> {
 		var result:Map<String, Int> = [],
@@ -722,5 +724,4 @@ class WasmGcModuleBuilder {
 		}
 		return result;
 	}
-
 }

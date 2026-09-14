@@ -54,8 +54,8 @@ class WasmFunctionLowerContext {
 	public var exceptionState:Null<WasmFunctionExceptionState>;
 	public var gcRootState:Null<WasmFunctionGcRootState>;
 
-	public function new(module:WasmModule, fn:IrFunction, program:IrProgram, moduleRepresentation:WasmRepresentationSet,
-			tableSlots:Map<String, Int>, staticDataAddresses:Map<String, Int>, exceptionTag:Null<Int>, rootPoints:Array<WasmSafepoint>) {
+	public function new(module:WasmModule, fn:IrFunction, program:IrProgram, moduleRepresentation:WasmRepresentationSet, tableSlots:Map<String, Int>,
+			staticDataAddresses:Map<String, Int>, exceptionTag:Null<Int>, rootPoints:Array<WasmSafepoint>) {
 		this.module = module;
 		this.irFunction = fn;
 		this.program = program;

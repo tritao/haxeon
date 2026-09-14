@@ -83,8 +83,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	public function dynamicEqual(output:Int, leftLocal:Int, rightLocal:Int):WasmLoweringResult
 		return UseDefault;
 
-	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
-			argumentLocals:Array<Int>):WasmLoweringResult {
+	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>):WasmLoweringResult {
 		if (name == "__wasm_memory_load_i32") {
 			if (output.type != I32 || arguments.length != 1 || arguments[0].type != I32 || argumentLocals.length != 1)
 				throw "Invalid Wasm runtime memory.load i32 signature";
@@ -106,7 +105,6 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	public function lowerCNativeCall(native:IrCNative, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>, importIndex:Int,
 			pointerLengthImportIndex:Int, pointerReleaseImportIndex:Int):WasmLoweringResult
 		return UseDefault;
-
 
 	public function arrayGet(array:IrValue, index:IrValue, destination:Int, arrayLocal:Int, indexLocal:Int):WasmLoweringResult
 		return UseDefault;

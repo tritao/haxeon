@@ -37,8 +37,24 @@ set_target_properties(hl PROPERTIES ENABLE_EXPORTS ON)
 add_library(haxeon_runtime SHARED native/runtime.c)
 target_include_directories(haxeon_runtime PRIVATE vendor/hashlink/src)
 target_link_libraries(haxeon_runtime PRIVATE libhl hl)
-find_library(HAXEON_LIBFFI_LIBRARY NAMES ffi REQUIRED)
-target_link_libraries(haxeon_runtime PRIVATE "${HAXEON_LIBFFI_LIBRARY}" ${CMAKE_DL_LIBS})
+if(WIN32)
+  find_package(unofficial-libffi CONFIG REQUIRED)
+  target_link_libraries(haxeon_runtime PRIVATE unofficial::libffi::libffi)
+else()
+  find_path(HAXEON_LIBFFI_INCLUDE_DIR NAMES ffi.h
+    HINTS ENV LIBFFI_ROOT
+    PATH_SUFFIXES include
+    REQUIRED
+  )
+  find_library(HAXEON_LIBFFI_LIBRARY NAMES ffi
+    HINTS ENV LIBFFI_ROOT
+    PATH_SUFFIXES lib lib64
+    REQUIRED
+  )
+  target_include_directories(haxeon_runtime PRIVATE "${HAXEON_LIBFFI_INCLUDE_DIR}")
+  target_link_libraries(haxeon_runtime PRIVATE "${HAXEON_LIBFFI_LIBRARY}")
+endif()
+target_link_libraries(haxeon_runtime PRIVATE ${CMAKE_DL_LIBS})
 if(APPLE)
   # The runtime bridge resolves HashLink's host-owned runtime API from the
   # executable that loads it. Apple ld requires this to be explicit for a

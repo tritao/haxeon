@@ -85,18 +85,17 @@ class WasmFunctionLower {
 		return blocks.get(blockId);
 	}
 
-	public static function lower(module:WasmModule, fn:IrFunction, functions:Map<String, Int>, type:WasmFunctionType, layout:WasmLayout, allocator:Int, rootTop:Int,
-			rootFrameTop:Int, rootLimit:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
+	public static function lower(module:WasmModule, fn:IrFunction, functions:Map<String, Int>, type:WasmFunctionType, layout:WasmLayout, allocator:Int,
+			rootTop:Int, rootFrameTop:Int, rootLimit:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
 			closureTypes:Map<String, WasmClosureTypes>, tableSlots:Map<String, Int>, exceptionTag:Null<Int>, rootPoints:Array<WasmSafepoint>,
 			program:IrProgram, representation:WasmRepresentationSet, staticDataAddresses:Map<String, Int>):WasmFunction {
 		var context = new WasmFunctionLowerContext(module, fn, program, representation, tableSlots, staticDataAddresses, exceptionTag, rootPoints);
-		return new WasmFunctionLower(context).lowerFunction(functions, type, layout, allocator, rootTop, rootFrameTop, rootLimit, globals, strings,
-			methods, closureTypes);
+		return new WasmFunctionLower(context).lowerFunction(functions, type, layout, allocator, rootTop, rootFrameTop, rootLimit, globals, strings, methods,
+			closureTypes);
 	}
 
-	function lowerFunction(functions:Map<String, Int>, type:WasmFunctionType, layout:WasmLayout, allocator:Int, rootTop:Int, rootFrameTop:Int,
-			rootLimit:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
-			closureTypes:Map<String, WasmClosureTypes>):WasmFunction {
+	function lowerFunction(functions:Map<String, Int>, type:WasmFunctionType, layout:WasmLayout, allocator:Int, rootTop:Int, rootFrameTop:Int, rootLimit:Int,
+			globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>, closureTypes:Map<String, WasmClosureTypes>):WasmFunction {
 		var fn = context.irFunction,
 			analysis = new WasmCfgAnalysis(fn),
 			placement = context.placement,
@@ -186,8 +185,8 @@ class WasmFunctionLower {
 		return new WasmFunction(fn.name, type, locals, body);
 	}
 
-	function lowerStructured(fn:IrFunction, structurer:WasmStructurer, functions:Map<String, Int>, values:Map<Int, Int>, predecessor:Int,
-			layout:WasmLayout, allocator:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
+	function lowerStructured(fn:IrFunction, structurer:WasmStructurer, functions:Map<String, Int>, values:Map<Int, Int>, predecessor:Int, layout:WasmLayout,
+			allocator:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
 			closureTypes:Map<String, WasmClosureTypes>):Array<WasmInstruction> {
 		var body:Array<WasmInstruction> = [];
 		emit(body, [I32Const(-1), LocalSet(predecessor)]);
@@ -445,9 +444,8 @@ class WasmFunctionLower {
 	static function setPredecessor(body:Array<WasmInstruction>, predecessor:Int, sourceBlock:Int):Void
 		emit(body, [I32Const(sourceBlock), LocalSet(predecessor)]);
 
-	function lowerInstruction(body:Array<WasmInstruction>, instruction:IrInstruction, values:Map<Int, Int>, functions:Map<String, Int>,
-			layout:WasmLayout, allocator:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
-			closureTypes:Map<String, WasmClosureTypes>):Void {
+	function lowerInstruction(body:Array<WasmInstruction>, instruction:IrInstruction, values:Map<Int, Int>, functions:Map<String, Int>, layout:WasmLayout,
+			allocator:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>, closureTypes:Map<String, WasmClosureTypes>):Void {
 		var exceptionState = context.exceptionState;
 		switch instruction {
 			case Phi(_, _):
@@ -468,7 +466,8 @@ class WasmFunctionLower {
 			case ToDyn(output, value):
 				var original = context.elidedDynamicArrayCasts.get(value.id),
 					dynamicValue = original == null ? value : original,
-					represented = context.representation.values.toDynamic(dynamicValue, requiredLocal(values, output.id), requiredLocal(values, dynamicValue.id));
+					represented = context.representation.values.toDynamic(dynamicValue, requiredLocal(values, output.id),
+						requiredLocal(values, dynamicValue.id));
 				if (emitIfHandled(body, represented)) {} else
 					switch value.type {
 						case I32, Bool:
@@ -1098,10 +1097,9 @@ class WasmFunctionLower {
 					represented = interop == null ? UseDefault : interop.lowerRuntimeCall(runtimeName, output, arguments, outputLocal,
 						[for (argument in arguments) requiredLocal(values, argument.id)]);
 				if (emitIfHandled(body, represented)) {} else {
-					var gcRuntime:WasmLoweringResult = Std.isOfType(context.representation.values, WasmGcRepresentation)
-						? cast(context.representation.values, WasmGcRepresentation).lowerRuntimeCall(runtimeName, output, arguments, outputLocal,
-							[for (argument in arguments) requiredLocal(values, argument.id)])
-						: UseDefault;
+					var gcRuntime:WasmLoweringResult = Std.isOfType(context.representation.values,
+						WasmGcRepresentation) ? cast(context.representation.values, WasmGcRepresentation).lowerRuntimeCall(runtimeName, output, arguments,
+							outputLocal, [for (argument in arguments) requiredLocal(values, argument.id)]) : UseDefault;
 					if (!emitIfHandled(body, gcRuntime) && !lowerInt64Native(body, output, name, arguments, values)) {
 						for (argument in arguments)
 							body.push(LocalGet(requiredLocal(values, argument.id)));
@@ -1569,13 +1567,13 @@ class WasmFunctionLower {
 
 	static function outputOf(instruction:IrInstruction):Null<IrValue>
 		return switch instruction {
-			case Phi(output, _), ConstVoid(output), ConstInt(output, _), ConstFloat(output, _), ConstString(output, _), StaticDataAddress(output, _), ConstBool(output, _),
-				ConstNull(output), TypeValue(output, _), ToDyn(output, _), IntToFloat(output, _), IntToInt64(output, _), FloatToInt(output, _),
-				SafeCast(output, _), Catch(output), GlobalGet(output, _), Add(output, _, _), Sub(output, _, _), Mul(output, _, _), Div(output, _, _),
-				Mod(output, _, _), BitAnd(output, _, _), BitXor(output, _, _), BitOr(output, _, _), ShiftLeft(output, _, _), ShiftRight(output, _, _),
-				UnsignedShiftRight(output, _, _), Less(output, _, _), LessEqual(output, _, _), Equal(output, _, _), Call(output, _, _),
-				CNativeCall(output, _, _), StaticClosure(output, _), InstanceClosure(output, _, _), CallClosure(output, _, _), ToVirtual(output, _),
-				MethodCall(output, _, _, _), NewObject(output, _), FieldGet(output, _, _), ArrayGet(output, _, _), ArraySize(output, _),
+			case Phi(output, _), ConstVoid(output), ConstInt(output, _), ConstFloat(output, _), ConstString(output, _), StaticDataAddress(output, _),
+				ConstBool(output, _), ConstNull(output), TypeValue(output, _), ToDyn(output, _), IntToFloat(output, _), IntToInt64(output, _),
+				FloatToInt(output, _), SafeCast(output, _), Catch(output), GlobalGet(output, _), Add(output, _, _), Sub(output, _, _), Mul(output, _, _),
+				Div(output, _, _), Mod(output, _, _), BitAnd(output, _, _), BitXor(output, _, _), BitOr(output, _, _), ShiftLeft(output, _, _),
+				ShiftRight(output, _, _), UnsignedShiftRight(output, _, _), Less(output, _, _), LessEqual(output, _, _), Equal(output, _, _),
+				Call(output, _, _), CNativeCall(output, _, _), StaticClosure(output, _), InstanceClosure(output, _, _), CallClosure(output, _, _),
+				ToVirtual(output, _), MethodCall(output, _, _, _), NewObject(output, _), FieldGet(output, _, _), ArrayGet(output, _, _), ArraySize(output, _),
 				IteratorNew(output, _), IteratorHasNext(output, _), IteratorNext(output, _), MakeEnum(output, _, _, _), EnumIndex(output, _),
 				EnumField(output, _, _, _): output;
 			case BeginTry(_, _), EndTry(_), GlobalSet(_, _), FieldSet(_, _, _), ArraySet(_, _, _): null;

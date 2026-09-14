@@ -13,7 +13,7 @@ jobs:
         with:
           submodules: recursive
       - name: Install build dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential curl unzip nodejs gdb libpcre2-dev libuv1-dev
+        run: sudo apt-get update && sudo apt-get install -y build-essential curl unzip nodejs gdb libffi-dev libpcre2-dev libuv1-dev
       - name: Bootstrap pinned tools
         run: scripts/bootstrap-tools.sh
       - name: Set up Node.js runtime
@@ -63,7 +63,7 @@ jobs:
       - name: Verify ARM64 runner
         run: test "$(uname -m)" = aarch64
       - name: Install build dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build curl unzip nodejs gdb qemu-user libc6-amd64-cross libpcre2-dev libuv1-dev
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build curl unzip nodejs gdb qemu-user libc6-amd64-cross libffi-dev libpcre2-dev libuv1-dev
       - name: Bootstrap pinned tools
         run: scripts/bootstrap-tools.sh
       - name: Compiler, differential, and runtime gates
@@ -83,6 +83,17 @@ jobs:
         with:
           submodules: recursive
       - uses: ilammy/msvc-dev-cmd@v1
+      - name: Install libffi
+        shell: pwsh
+        run: |
+          $vcpkg = (Get-Command vcpkg -ErrorAction Stop).Source
+          $vcpkgRoot = Split-Path -Parent $vcpkg
+          & $vcpkg install libffi:x64-windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $libffiRoot = Join-Path $vcpkgRoot "installed/x64-windows"
+          Add-Content -Path $env:GITHUB_ENV -Value "LIBFFI_ROOT=$libffiRoot"
+          Add-Content -Path $env:GITHUB_ENV -Value "CMAKE_PREFIX_PATH=$libffiRoot"
+          Add-Content -Path $env:GITHUB_PATH -Value (Join-Path $libffiRoot "bin")
       - name: Bootstrap pinned tools and native runtime
         shell: pwsh
         run: ./scripts/setup.ps1
@@ -112,7 +123,9 @@ jobs:
         with:
           submodules: recursive
       - name: Install build dependencies
-        run: brew install cmake ninja node
+        run: |
+          brew install cmake ninja node libffi
+          echo "LIBFFI_ROOT=$(brew --prefix libffi)" >> "$GITHUB_ENV"
       - name: Bootstrap pinned tools and native runtime
         run: ./scripts/bootstrap-tools.sh
       - name: Compiler, differential, and runtime gates
@@ -132,7 +145,9 @@ jobs:
       - name: Verify Apple Silicon runner
         run: test "$(uname -m)" = arm64
       - name: Install build dependencies
-        run: brew install cmake ninja node
+        run: |
+          brew install cmake ninja node libffi
+          echo "LIBFFI_ROOT=$(brew --prefix libffi)" >> "$GITHUB_ENV"
       - name: Bootstrap pinned tools and native runtime
         run: ./scripts/bootstrap-tools.sh
       - name: Compiler, differential, and runtime gates

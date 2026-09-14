@@ -81,7 +81,8 @@ class WasmModuleSupport {
 							case StaticDataAddress(_, bytes):
 								var key = staticDataKey(bytes);
 								if (!addresses.exists(key)) {
-									var offset = align(next, 8), data = HaxeBytes.alloc(bytes.length);
+									var offset = align(next, 8),
+										data = HaxeBytes.alloc(bytes.length);
 									for (index in 0...bytes.length)
 										data.set(index, bytes[index]);
 									module.data.push({offset: offset, bytes: data});

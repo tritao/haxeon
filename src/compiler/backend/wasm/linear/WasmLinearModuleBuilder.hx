@@ -105,7 +105,8 @@ class WasmLinearModuleBuilder {
 		if (memoryBase < 0 || (memoryBase & 7) != 0)
 			throw 'Wasm memory base must be a non-negative 8-byte-aligned value, got $memoryBase';
 		module.importMemory = importMemory;
-		preferredEntry = WasmModuleSupport.hasFunction(program, "main") ? "main" : WasmModuleSupport.hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint;
+		preferredEntry = WasmModuleSupport.hasFunction(program,
+			"main") ? "main" : WasmModuleSupport.hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint;
 		var roots = exportedFunctions.copy();
 		if (WasmModuleSupport.hasFunction(program, "__init"))
 			roots.push("__init");
@@ -265,8 +266,8 @@ class WasmLinearModuleBuilder {
 				return;
 			var functionIndex = WasmModuleSupport.requiredFunctionIndex(functions, fn.name);
 			module.setFunction(functionIndex,
-				WasmFunctionLower.lower(module, fn, functions, module.functionType(functionIndex), layout, allocator, rootTop, rootFrameTop, rootLimit, globals,
-					strings, methods, closureTypes, tableSlots, exceptionTag, rootPoints, program, representation, staticDataAddresses));
+				WasmFunctionLower.lower(module, fn, functions, module.functionType(functionIndex), layout, allocator, rootTop, rootFrameTop, rootLimit,
+					globals, strings, methods, closureTypes, tableSlots, exceptionTag, rootPoints, program, representation, staticDataAddresses));
 		});
 	}
 

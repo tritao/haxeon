@@ -23,8 +23,8 @@ class WasmGcInterop implements WasmInteropRepresentation {
 	final nativePointerReleaseIndices:Array<Int>;
 	final nativePointerReleaseBySymbol:Map<String, Int>;
 
-	public function new(gc:WasmGcContext, scratchTop:Int, scratchAllocator:Int, pointerReleases:Map<String, Int>,
-			?functionContext:WasmGcFunctionContext, ?moduleInterop:WasmGcInterop) {
+	public function new(gc:WasmGcContext, scratchTop:Int, scratchAllocator:Int, pointerReleases:Map<String, Int>, ?functionContext:WasmGcFunctionContext,
+			?moduleInterop:WasmGcInterop) {
 		this.gc = gc;
 		this.plan = gc.plan;
 		this.functionContext = functionContext;
@@ -61,8 +61,7 @@ class WasmGcInterop implements WasmInteropRepresentation {
 			case _: false;
 		};
 
-	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
-			argumentLocals:Array<Int>):WasmLoweringResult {
+	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>):WasmLoweringResult {
 		if (name == "structGetPointer") {
 			if (!isNativePointerType(output.type) || arguments.length != 3 || arguments[0].type != ManagedBytes || arguments[1].type != I32
 				|| arguments[2].type != Bool || argumentLocals.length != 3)
@@ -75,8 +74,17 @@ class WasmGcInterop implements WasmInteropRepresentation {
 			if (output.type != Bool || arguments.length != 1 || !isNativePointerType(arguments[0].type) || argumentLocals.length != 1)
 				throw "Invalid Wasm GC native pointer status signature";
 			var pointer = argumentLocals[0];
-			return [LocalGet(pointer), RefIsNull, If(I32), I32Const(1), Else, LocalGet(pointer), StructGet(plan.nativePointerTypeIndex, 2), End,
-				LocalSet(outputLocal)];
+			return [
+				LocalGet(pointer),
+				RefIsNull,
+				If(I32),
+				I32Const(1),
+				Else,
+				LocalGet(pointer),
+				StructGet(plan.nativePointerTypeIndex, 2),
+				End,
+				LocalSet(outputLocal)
+			];
 		}
 		if (name == "native_pointer_close") {
 			if (output.type != Bool || arguments.length != 1 || !isNativePointerType(arguments[0].type) || argumentLocals.length != 1)
@@ -86,11 +94,30 @@ class WasmGcInterop implements WasmInteropRepresentation {
 				body:Array<WasmInstruction> = [I32Const(0), LocalSet(outputLocal), LocalGet(pointer), RefIsNull, If(null)];
 			body.push(Else);
 			body = body.concat([LocalGet(pointer), StructGet(plan.nativePointerTypeIndex, 2), I32Eqz, If(null)]);
-			body = body.concat([LocalGet(pointer), StructGet(plan.nativePointerTypeIndex, 1), LocalSet(releaseFunction)]);
+			body = body.concat([
+				LocalGet(pointer),
+				StructGet(plan.nativePointerTypeIndex, 1),
+				LocalSet(releaseFunction)
+			]);
 			for (index in moduleInterop.nativePointerReleaseIndices) {
-				body = body.concat([LocalGet(releaseFunction), I32Const(index), I32Eq, If(null), LocalGet(pointer),
-					StructGet(plan.nativePointerTypeIndex, 0), Call(index), LocalGet(pointer), I32Const(0), StructSet(plan.nativePointerTypeIndex, 0),
-					LocalGet(pointer), I32Const(1), StructSet(plan.nativePointerTypeIndex, 2), I32Const(1), LocalSet(outputLocal), End]);
+				body = body.concat([
+					LocalGet(releaseFunction),
+					I32Const(index),
+					I32Eq,
+					If(null),
+					LocalGet(pointer),
+					StructGet(plan.nativePointerTypeIndex, 0),
+					Call(index),
+					LocalGet(pointer),
+					I32Const(0),
+					StructSet(plan.nativePointerTypeIndex, 0),
+					LocalGet(pointer),
+					I32Const(1),
+					StructSet(plan.nativePointerTypeIndex, 2),
+					I32Const(1),
+					LocalSet(outputLocal),
+					End
+				]);
 			}
 			body = body.concat([End, End]);
 			return body;
@@ -110,15 +137,32 @@ class WasmGcInterop implements WasmInteropRepresentation {
 			return body.concat(wrapNativePointer(pointer, releaseFunction, argumentLocals[6], true, outputLocal));
 		}
 		if (name == "structWithRoots") {
-			if (output.type != ManagedBytes || arguments.length != 2 || arguments[0].type != ManagedBytes
-				|| !Type.enumEq(arguments[1].type, Array(ManagedBytes)) || argumentLocals.length != 2)
+			if (output.type != ManagedBytes
+				|| arguments.length != 2
+				|| arguments[0].type != ManagedBytes
+				|| !Type.enumEq(arguments[1].type, Array(ManagedBytes))
+				|| argumentLocals.length != 2)
 				throw "Invalid Wasm GC HXI structure root attachment signature";
-			return [LocalGet(argumentLocals[0]), LocalGet(argumentLocals[1]), StructSet(plan.managedBytesTypeIndex, 3), LocalGet(argumentLocals[0]), LocalSet(outputLocal)];
+			return [
+				LocalGet(argumentLocals[0]),
+				LocalGet(argumentLocals[1]),
+				StructSet(plan.managedBytesTypeIndex, 3),
+				LocalGet(argumentLocals[0]),
+				LocalSet(outputLocal)
+			];
 		}
 		if (name == "structGetRoots") {
-			if (!Type.enumEq(output.type, Array(ManagedBytes)) || arguments.length != 1 || arguments[0].type != ManagedBytes || argumentLocals.length != 1)
+			if (!Type.enumEq(output.type, Array(ManagedBytes))
+				|| arguments.length != 1
+				|| arguments[0].type != ManagedBytes
+				|| argumentLocals.length != 1)
 				throw "Invalid Wasm GC HXI structure root query signature";
-			return [LocalGet(argumentLocals[0]), StructGet(plan.managedBytesTypeIndex, 3), RefCast({nullable: false, heap: Type(plan.arrayType(ManagedBytes))}), LocalSet(outputLocal)];
+			return [
+				LocalGet(argumentLocals[0]),
+				StructGet(plan.managedBytesTypeIndex, 3),
+				RefCast({nullable: false, heap: Type(plan.arrayType(ManagedBytes))}),
+				LocalSet(outputLocal)
+			];
 		}
 		return UseDefault;
 	}
@@ -325,7 +369,7 @@ class WasmGcInterop implements WasmInteropRepresentation {
 		var nativePointerResult = isNativePointerType(native.result),
 			resultLocal = native.result == Void ? -1 : allocateLocal(bytePointerResult
 				|| fixedAggregateResult
-			|| nativePointerResult ? I32 : plan.valueType(native.result));
+				|| nativePointerResult ? I32 : plan.valueType(native.result));
 		body.push(Call(importIndex));
 		if (resultLocal >= 0)
 			body.push(LocalSet(resultLocal));
@@ -619,5 +663,4 @@ class WasmGcInterop implements WasmInteropRepresentation {
 		var exceptionTag = functionState().exceptionTag;
 		return exceptionTag == null ? [Unreachable] : [RefNull(Any), Throw(exceptionTag)];
 	}
-
 }
