@@ -509,7 +509,8 @@ class HxiParser {
 						if (field.lengthField != null) {
 							if (field.ownership != Borrowed
 								|| (!bytePointerLike(field.type, declarationsByName)
-									&& structurePointerType(field.type, declarationsByName) == null))
+									&& structurePointerType(field.type, declarationsByName) == null
+									&& !utf8ArrayPointer(field.type)))
 								fail('@length_field on "${field.name}" requires a borrowed byte, void, or structure pointer', field.span);
 							var length = Lambda.find(fields, candidate -> candidate.name == field.lengthField);
 							if (length == null)

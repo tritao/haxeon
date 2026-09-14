@@ -18,6 +18,25 @@ typedef struct native_fixture_options {
 	int16_t delta;
 } native_fixture_options;
 
+typedef struct native_fixture_item {
+	const char *name;
+} native_fixture_item;
+
+typedef struct native_fixture_retained_options {
+	const native_fixture_item *items;
+	uint32_t item_count;
+	const char *const *paths;
+	uint32_t path_count;
+	const uint8_t *data;
+	uint32_t size;
+} native_fixture_retained_options;
+
+typedef struct native_fixture_retained_container {
+	native_fixture_retained_options value;
+	const native_fixture_retained_options *options;
+	uint32_t count;
+} native_fixture_retained_container;
+
 typedef struct native_fixture_point { int32_t x, y; } native_fixture_point;
 typedef struct native_fixture_box { native_fixture_point start, end; } native_fixture_box;
 typedef struct native_fixture_holder { void *required, *optional; } native_fixture_holder;
@@ -209,6 +228,24 @@ FIXTURE_API int32_t native_fixture_call_retained_callback( int32_t left, int32_t
 FIXTURE_API int32_t native_fixture_check_options( const native_fixture_options *options ) {
 	return options != NULL && options->count == 40 && options->scale == 1.5
 		&& options->token == INT64_C(0x10000002A) && options->delta == 2 ? 42 : 0;
+}
+
+static int32_t native_fixture_retained_options_valid( const native_fixture_retained_options *options ) {
+	static const uint8_t expected[] = {'b', 'u', 'f', 'f', 'e', 'r', '!'};
+	return options != NULL && options->item_count == 1 && options->items != NULL
+		&& options->items[0].name != NULL && strcmp(options->items[0].name,"retained-entry") == 0
+		&& options->path_count == 2 && options->paths != NULL
+		&& strcmp(options->paths[0],"alpha") == 0 && strcmp(options->paths[1],"beta") == 0
+		&& options->size == sizeof(expected) && options->data != NULL
+		&& memcmp(options->data,expected,sizeof(expected)) == 0;
+}
+
+FIXTURE_API int32_t native_fixture_check_retained_container( const native_fixture_retained_container *container,
+	const native_fixture_retained_options *extracted ) {
+	return container != NULL && container->count == 1 && container->options != NULL
+		&& native_fixture_retained_options_valid(&container->value)
+		&& native_fixture_retained_options_valid(&container->options[0])
+		&& native_fixture_retained_options_valid(extracted) ? 42 : 0;
 }
 
 FIXTURE_API int32_t native_fixture_check_box( const native_fixture_box *box ) {

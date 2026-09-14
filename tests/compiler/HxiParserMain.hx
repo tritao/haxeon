@@ -287,7 +287,7 @@ class HxiParserMain {
 		var pointerOutputSource = HxiProjection.source(pointerOutputs),
 			pointerOutputNative = HxiProjection.cNatives(pointerOutputs)[0];
 		expect(pointerOutputSource.indexOf("function new() { var bytes = haxe.io.Bytes.alloc(") >= 0
-			&& pointerOutputSource.indexOf("bytes.set(index, 0); this = bytes;") >= 0
+			&& pointerOutputSource.indexOf("roots[0] = bytes; this = pointer_outputs.__hxi_struct_with_roots(bytes, roots);") >= 0
 			&& pointerOutputSource.indexOf("function create_owned():Null<OwnedContext>") >= 0
 			&& pointerOutputSource.indexOf("function create_borrowed():Null<Context>") >= 0
 			&& pointerOutputSource.indexOf("function create_required():Context") >= 0
@@ -650,11 +650,14 @@ class HxiParserMain {
 		var dependentProjection = composed.modules.get("dependent");
 		expect(dependentProjection != null
 			&& dependentProjection.source.text.indexOf("abstract point(") < 0
-			&& dependentProjection.source.text.indexOf("extern function draw(arg0:point):point;") >= 0
+			&& dependentProjection.source.text.indexOf("extern function __hxi_raw_draw(arg0:point):point;") >= 0
+			&& dependentProjection.source.text.indexOf("function draw(arg0:point):point return point.__hxi_attach(__hxi_raw_draw(arg0));") >= 0
 			&& dependentProjection.source.text.indexOf("function open(") < 0,
 			"dependent HXI projections should reuse shared declarations and omit duplicate natives");
 		var composedNatives = composed.irCNatives();
-		expect(composedNatives.length == 2 && composedNatives[0].name == "base.open" && composedNatives[1].name == "dependent.draw",
+		expect(composedNatives.length == 2
+			&& composedNatives[0].name == "base.__hxi_raw_open"
+			&& composedNatives[1].name == "dependent.__hxi_raw_draw",
 			"dependent HXI interfaces should contribute only their owned native functions");
 		var unknownDependencyRejected = false;
 		try {
@@ -704,15 +707,27 @@ class HxiParserMain {
 			'interface buffers @target("x86_64-linux-gnu") @library("buffers") { struct holder @layout(16, 8) { data: ptr<const<void>> @offset(0) @borrowed @length_field("size"); size: u64 @offset(8); } }');
 		var borrowedBufferSource = HxiProjection.source(borrowedBuffer);
 		expect(borrowedBufferSource.indexOf("function get_data_bytes():haxe.io.Bytes") >= 0
-			&& borrowedBufferSource.indexOf("__hxi_struct_copy_pointer(this, 0, 8, 8)") >= 0,
-			"borrowed structure buffers should project bounded copying accessors");
+			&& borrowedBufferSource.indexOf("__hxi_struct_copy_pointer(this, 0, 8, 8)") >= 0
+			&& borrowedBufferSource.indexOf("function set_data_bytes(value:haxe.io.Bytes)") >= 0
+			&& borrowedBufferSource.indexOf("__hxi_struct_get_roots(this)[1] = value") >= 0,
+			"borrowed structure buffers should project bounded copying accessors and retained setters");
 		var borrowedArray = HxiParser.parse("borrowed-array.hxi",
 			'interface arrays @target("x86_64-linux-gnu") @library("arrays") { struct item @layout(8, 8) { name: utf8 @offset(0); } struct holder @layout(16, 8) { items: ptr<const<item>> @offset(0) @borrowed @length_field("count"); count: u32 @offset(8); } }');
 		var borrowedArraySource = HxiProjection.source(borrowedArray);
 		expect(borrowedArraySource.indexOf("static function array(values:Array<item>)") >= 0
-			&& borrowedArraySource.indexOf("function set_items(value:item)") >= 0
-			&& borrowedArraySource.indexOf("structSetBorrowedBytes") >= 0,
-			"borrowed structure arrays should project contiguous packing and pointer accessors");
+			&& borrowedArraySource.indexOf("function set_items(values:Array<item>)") >= 0
+			&& borrowedArraySource.indexOf("__hxi_struct_set_borrowed_bytes(this, 0, bytes)") >= 0
+			&& borrowedArraySource.indexOf("__hxi_struct_get_roots(this)[1] = bytes") >= 0
+			&& borrowedArraySource.indexOf("__hxi_struct_setI32(this, 8, values.length)") >= 0,
+			"borrowed structure arrays should pack elements, set their count, and retain the packed bytes");
+		var borrowedStrings = HxiParser.parse("borrowed-strings.hxi",
+			'interface strings @target("x86_64-linux-gnu") @library("strings") { struct holder @layout(16, 8) { paths: ptr<utf8> @offset(0) @borrowed @length_field("count"); count: u32 @offset(8); } }');
+		var borrowedStringsSource = HxiProjection.source(borrowedStrings);
+		expect(borrowedStringsSource.indexOf("function set_paths(values:Array<String>)") >= 0
+			&& borrowedStringsSource.indexOf("function get_paths():Array<String>") >= 0
+			&& borrowedStringsSource.indexOf("__hxi_struct_utf8_copy(values[index])") >= 0
+			&& borrowedStringsSource.indexOf("roots[index + 1] = __text") >= 0,
+			"borrowed UTF-8 pointer tables should expose managed string arrays with retained backing storage");
 		var inputArrays = HxiParser.parse("input-arrays.hxi",
 			'interface inputs @target("x86_64-linux-gnu") @library("inputs") { struct item @layout(8, 8) { name: utf8 @offset(0); } extern fn send(items: ptr<const<item>> @in_array("count"), count: u32) -> i32; extern fn paths(items: ptr<utf8> @in_array("count"), count: u32) -> i32; extern fn bytes(data: ptr<const<u8>> @in_array("size"), size: u32) -> i32; }');
 		var inputArraySource = HxiProjection.source(inputArrays);

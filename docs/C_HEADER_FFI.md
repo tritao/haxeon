@@ -219,9 +219,12 @@ their generated accessors read and write `NativePointer` handles and preserve
 may read the structure field. Owned pointer fields are rejected because a
 managed-byte structure cannot retain their destructor safely. A borrowed
 `ptr<struct>` field paired with an unsigned count through `@length_field`
-accepts storage produced by the element structure's generated `array()` packer.
-The owner of that storage must remain reachable through the synchronous native
-call; bindings should retain it alongside the containing options structure.
+projects as an `Array<T>` setter. It packs contiguous element storage, writes the
+paired count, and retains the packed storage in the containing generated struct.
+Borrowed byte buffers and UTF-8 pointer tables use the same explicit relationship
+to retain their packed storage. Nested structure copies and generated struct arrays
+carry these retained references forward. Native pointers derived from the structure
+remain call-scoped; unannotated pointer fields receive no inferred retention.
 Unannotated pointer fields remain in the ABI model but receive no unsafe
 generated accessors. Naturally laid-out structures can also be passed and returned by
 value. Their recursive field layout is encoded in the native call descriptor,

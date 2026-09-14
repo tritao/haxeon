@@ -422,6 +422,9 @@ DEFINE_PRIM(_ABSTRACT(realtime_bytes),__bytes_sub,_ABSTRACT(realtime_bytes) _I32
 DEFINE_PRIM(_ABSTRACT(realtime_bytes),structSlice,_ABSTRACT(realtime_bytes) _I32 _I32);
 DEFINE_PRIM(_VOID,structCopy,_ABSTRACT(realtime_bytes) _I32 _ABSTRACT(realtime_bytes) _I32);
 DEFINE_PRIM(_ABSTRACT(realtime_bytes),structCopyPointer,_ABSTRACT(realtime_bytes) _I32 _I32 _I32);
+DEFINE_PRIM(_ABSTRACT(realtime_bytes),structWithRoots,_ABSTRACT(realtime_bytes) _ARR);
+DEFINE_PRIM(_ARR,structGetRoots,_ABSTRACT(realtime_bytes));
+DEFINE_PRIM(_ABSTRACT(realtime_bytes),structUtf8Copy,_BYTES);
 DEFINE_PRIM(_I32,__bytes_compare,_ABSTRACT(realtime_bytes) _ABSTRACT(realtime_bytes));
 DEFINE_PRIM(_BYTES,__bytes_to_string,_ABSTRACT(realtime_bytes));
 DEFINE_PRIM(_BYTES,__bytes_get_string,_ABSTRACT(realtime_bytes) _I32 _I32);

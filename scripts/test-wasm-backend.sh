@@ -353,11 +353,70 @@ const cases = [
       };
     if (relative.endsWith("wasm-cli-gc-ffi-short-struct.wasm"))
       imports.gc_bytes = {shift_point: () => { shortStructImportCalled = true; }};
-    if (relative.includes("hxi-retained"))
-      imports.retained = {retained_check: pointer => {
-        const view = new DataView((memory == null ? moduleInstance.exports.memory : memory).buffer);
-        return view.getInt32(pointer, true) + view.getInt32(pointer + 4, true);
-      }};
+    if (relative.includes("hxi-retained")) {
+      const retainedMemory = () => memory == null ? moduleInstance.exports.memory : memory;
+      const validOptions = pointer => {
+        const buffer = retainedMemory().buffer;
+        const view = new DataView(buffer);
+        const bytes = new Uint8Array(buffer);
+        const text = address => {
+          if (address === 0)
+            return null;
+          let end = address;
+          while (bytes[end] !== 0)
+            end++;
+          return new TextDecoder().decode(bytes.subarray(address, end));
+        };
+        const points = view.getUint32(pointer, true);
+        const pointCount = view.getUint32(pointer + 4, true);
+        const paths = view.getUint32(pointer + 8, true);
+        const pathCount = view.getUint32(pointer + 12, true);
+        const data = view.getUint32(pointer + 16, true);
+        const size = view.getUint32(pointer + 20, true);
+        return pointCount === 2
+          && points !== 0
+          && view.getInt32(points, true) === 10
+          && view.getInt32(points + 4, true) === 11
+          && view.getInt32(points + 8, true) === 20
+          && view.getInt32(points + 12, true) === 21
+          && pathCount === 2
+          && paths !== 0
+          && text(view.getUint32(paths, true)) === "alpha"
+          && text(view.getUint32(paths + 4, true)) === "βeta"
+          && size === 7
+          && data !== 0
+          && new TextDecoder().decode(bytes.subarray(data, data + size)) === "payload";
+      };
+      imports.retained = {
+        retained_check: pointer => {
+          const view = new DataView(retainedMemory().buffer);
+          return view.getInt32(pointer, true) + view.getInt32(pointer + 4, true);
+        },
+        retained_check_options: pointer => validOptions(pointer) ? 42 : 0,
+        retained_check_paths: (paths, count) => {
+          const buffer = retainedMemory().buffer;
+          const view = new DataView(buffer);
+          const bytes = new Uint8Array(buffer);
+          const text = address => {
+            if (address === 0)
+              return null;
+            let end = address;
+            while (bytes[end] !== 0)
+              end++;
+            return new TextDecoder().decode(bytes.subarray(address, end));
+          };
+          return count === 2
+            && text(view.getUint32(paths, true)) === "alpha"
+            && text(view.getUint32(paths + 4, true)) === "βeta" ? 42 : 0;
+        },
+        retained_check_container: (pointer, extracted) => {
+          const view = new DataView(retainedMemory().buffer);
+          const options = view.getUint32(pointer + 24, true);
+          const count = view.getUint32(pointer + 28, true);
+          return count === 1 && options !== 0 && validOptions(pointer) && validOptions(options) && validOptions(extracted) ? 42 : 0;
+        }
+      };
+    }
     if (importedMemory)
       imports.env = {memory};
     if (relative.includes("gc-")) {

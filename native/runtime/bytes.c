@@ -8,6 +8,10 @@ static void realtime_bytes_finalize( void *value ) {
 	} else {
 		free(bytes->data);
 	}
+	if( bytes->roots != NULL ) {
+		hl_remove_root(&bytes->roots);
+		bytes->roots = NULL;
+	}
 	bytes->data = NULL;
 }
 
@@ -32,6 +36,7 @@ static realtime_bytes *realtime_bytes_make( int length ) {
 	bytes->owned_utf8_count = 0;
 	bytes->owned_utf8_capacity = 0;
 	bytes->owner = NULL;
+	bytes->roots = NULL;
 	bytes->data = length == 0 ? NULL : (vbyte *)calloc((size_t)length, 1);
 	if( length > 0 && bytes->data == NULL ) hl_error("Could not allocate bytes");
 	return bytes;
@@ -52,8 +57,23 @@ HL_PRIM realtime_bytes *HL_NAME(__bytes_view)( realtime_bytes *bytes, int offset
 	result->owned_utf8_count = 0;
 	result->owned_utf8_capacity = 0;
 	result->owner = bytes;
+	result->roots = NULL;
 	hl_add_root(&result->owner);
 	return result;
+}
+
+HL_PRIM realtime_bytes *HL_NAME(structWithRoots)( realtime_bytes *bytes, varray *roots ) {
+	if( bytes == NULL || roots == NULL || roots->size < 1 || hl_type_size(roots->at) != (int)sizeof(void *) )
+		hl_error("HXI structure root storage is invalid");
+	realtime_bytes *result = HL_NAME(__bytes_view)(bytes,0,bytes->length);
+	result->roots = roots;
+	hl_add_root(&result->roots);
+	return result;
+}
+
+HL_PRIM varray *HL_NAME(structGetRoots)( realtime_bytes *bytes ) {
+	if( bytes == NULL || bytes->roots == NULL ) hl_error("HXI structure has no managed root storage");
+	return bytes->roots;
 }
 
 static void realtime_bytes_output_reserve( realtime_bytes_output *output, int extra ) {
@@ -80,6 +100,17 @@ HL_PRIM realtime_bytes *HL_NAME(__bytes_of_string)( vbyte *value ) {
 	int length = (int)strlen(utf8);
 	realtime_bytes *bytes = realtime_bytes_make(length);
 	if( length > 0 ) memcpy(bytes->data, utf8, (size_t)length);
+	return bytes;
+}
+
+HL_PRIM realtime_bytes *HL_NAME(structUtf8Copy)( vbyte *value ) {
+	if( value == NULL ) hl_error("Cannot pack a NULL HXI UTF-8 array element");
+	const char *utf8 = hl_to_utf8((const uchar *)value);
+	size_t length = strlen(utf8);
+	if( length >= 0x7FFFFFFF ) hl_error("HXI UTF-8 array element is too large");
+	realtime_bytes *bytes = realtime_bytes_make((int)length + 1);
+	memcpy(bytes->data,utf8,length);
+	bytes->data[length] = 0;
 	return bytes;
 }
 

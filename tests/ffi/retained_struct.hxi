@@ -3,5 +3,21 @@ interface Retained @target("portable-abi32") @library("retained") {
 		x: i32 @offset(0);
 		y: i32 @offset(4);
 	}
+	struct retained_options @layout(24, 4) {
+		points: ptr<const<retained_point>> @offset(0) @borrowed @length_field("point_count");
+		point_count: u32 @offset(4);
+		paths: ptr<utf8> @offset(8) @borrowed @length_field("path_count");
+		path_count: u32 @offset(12);
+		data: ptr<const<u8>> @offset(16) @borrowed @length_field("size");
+		size: u32 @offset(20);
+	}
+	struct retained_container @layout(32, 4) {
+		value: retained_options @offset(0);
+		options: ptr<const<retained_options>> @offset(24) @borrowed @length_field("count");
+		count: u32 @offset(28);
+	}
 	extern fn check(point: ptr<const<retained_point>>) -> i32 @symbol("retained_check");
+	extern fn check_options(options: ptr<const<retained_options>>) -> i32 @symbol("retained_check_options");
+	extern fn check_container(container: ptr<const<retained_container>>, extracted: ptr<const<retained_options>>) -> i32 @symbol("retained_check_container");
+	extern fn check_paths(paths: ptr<utf8> @in_array("count"), count: u32) -> i32 @symbol("retained_check_paths");
 }

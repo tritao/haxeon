@@ -79,6 +79,7 @@ typedef struct realtime_bytes {
 	int owned_utf8_count;
 	int owned_utf8_capacity;
 	struct realtime_bytes *owner;
+	varray *roots;
 } realtime_bytes;
 
 typedef struct {

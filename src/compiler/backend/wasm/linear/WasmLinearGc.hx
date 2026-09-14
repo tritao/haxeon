@@ -336,6 +336,9 @@ class WasmLinearGc {
 				builder.localGet(value);
 				builder.emit(I32Load(WasmLayout.BYTES_VIEW_OWNER_OFFSET));
 				builder.call(builder.functionRef(mark));
+				builder.localGet(value);
+				builder.emit(I32Load(WasmLayout.BYTES_VIEW_ROOTS_OFFSET));
+				builder.call(builder.functionRef(mark));
 			});
 		});
 		for (object in program.objects)

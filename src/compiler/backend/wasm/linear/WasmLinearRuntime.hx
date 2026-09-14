@@ -216,13 +216,16 @@ class WasmLinearRuntime {
 			case "__bytes_to_string": addBytesToString(module, native.name, allocator, bytesDataPointer);
 			case "__bytes_get_string": addBytesSlice(module, native.name, allocator, bytesDataPointer);
 			case "__string_from_bytes": addBytesPrefix(module, native.name, allocator, bytesDataPointer);
-			case "structCopy": addStructCopy(module, native.name);
-			case "structCopyPointer": addStructCopyPointer(module, native.name, allocator);
-			case "structSetBorrowedBytes": addStructSetBorrowedBytes(module, native.name);
-			case "structGetPointer": addStructGetPointer(module, native.name);
-			case "structSetPointer": addStructSetPointer(module, native.name);
-			case "structGetUtf8": addStructGetUtf8(module, native.name, allocator);
-			case "structSetUtf8": addStructSetUtf8(module, native.name);
+			case "structCopy": addStructCopy(module, native.name, bytesDataPointer);
+			case "structCopyPointer": addStructCopyPointer(module, native.name, allocator, bytesDataPointer);
+			case "structSetBorrowedBytes": addStructSetBorrowedBytes(module, native.name, bytesDataPointer);
+			case "structWithRoots": addStructWithRoots(module, native.name, allocator, bytesDataPointer);
+			case "structGetRoots": addStructGetRoots(module, native.name);
+			case "structUtf8Copy": addStructUtf8Copy(module, native.name, allocator, bytesDataPointer);
+			case "structGetPointer": addStructGetPointer(module, native.name, bytesDataPointer);
+			case "structSetPointer": addStructSetPointer(module, native.name, bytesDataPointer);
+			case "structGetUtf8": addStructGetUtf8(module, native.name, allocator, bytesDataPointer);
+			case "structSetUtf8": addStructSetUtf8(module, native.name, bytesDataPointer);
 			default: null;
 		};
 	}
@@ -600,6 +603,7 @@ class WasmLinearRuntime {
 			length = builder.parameter("length", 2),
 			owner = builder.local("owner", I32),
 			dataOffset = builder.local("dataOffset", I32),
+			roots = builder.local("roots", I32),
 			result = builder.local("result", I32);
 		bytesRangeCheck(builder, bytes, offset, length);
 		builder.localGet(bytes);
@@ -615,6 +619,9 @@ class WasmLinearRuntime {
 			builder.localGet(offset);
 			builder.i32Add();
 			builder.localSet(dataOffset);
+			builder.localGet(bytes);
+			builder.emit(I32Load(WasmLayout.BYTES_VIEW_ROOTS_OFFSET));
+			builder.localSet(roots);
 		}, function(builder) {
 			builder.localGet(bytes);
 			builder.localSet(owner);
@@ -642,6 +649,9 @@ class WasmLinearRuntime {
 		builder.localGet(result);
 		builder.localGet(dataOffset);
 		builder.emit(I32Store(WasmLayout.BYTES_VIEW_DATA_OFFSET));
+		builder.localGet(result);
+		builder.localGet(roots);
+		builder.emit(I32Store(WasmLayout.BYTES_VIEW_ROOTS_OFFSET));
 		builder.localGet(result);
 		builder.return_();
 		return module.addFunction(builder.finish());
@@ -701,46 +711,123 @@ class WasmLinearRuntime {
 		return module.addFunction(builder.finish());
 	}
 
-	static function addStructCopy(module:WasmModule, name:String):Int {
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32, I32, I32], results: []}, [], [
+	static function addStructCopy(module:WasmModule, name:String, bytesDataPointer:Int):Int {
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32, I32, I32], results: []}, [{type: I32}, {type: I32}], [
 			LocalGet(0),
-			I32Const(WasmLayout.STRING_DATA_OFFSET),
-			I32Add,
+			Call(bytesDataPointer),
 			LocalGet(1),
 			I32Add,
+			LocalSet(4),
 			LocalGet(2),
-			I32Const(WasmLayout.STRING_DATA_OFFSET),
-			I32Add,
+			Call(bytesDataPointer),
+			LocalSet(5),
+			LocalGet(4),
+			LocalGet(5),
 			LocalGet(3),
 			MemoryCopy,
 			Return
 		]));
 	}
 
-	static function addStructSetBorrowedBytes(module:WasmModule, name:String):Int {
+	static function addStructSetBorrowedBytes(module:WasmModule, name:String, bytesDataPointer:Int):Int {
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32, I32], results: []}, [], [
-			LocalGet(0), I32Const(WasmLayout.STRING_DATA_OFFSET), I32Add, LocalGet(1), I32Add,
-			LocalGet(2), I32Const(WasmLayout.STRING_DATA_OFFSET), I32Add, I32Store(0), Return
+			LocalGet(0), Call(bytesDataPointer), LocalGet(1), I32Add,
+			LocalGet(2), Call(bytesDataPointer), I32Store(0), Return
 		]));
 	}
 
-	static function addStructGetPointer(module:WasmModule, name:String):Int {
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32, I32], results: [I32]}, [], [
+	static function addStructWithRoots(module:WasmModule, name:String, allocator:Int, bytesDataPointer:Int):Int {
+		var builder = WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}, {type: I32}], [
 			LocalGet(0),
+			I32Load(WasmLayout.STRING_LENGTH_OFFSET),
+			LocalSet(2),
+			I32Const(WasmLayout.BYTES_VIEW_SIZE),
+			Call(allocator),
+			LocalSet(3),
+			LocalGet(3),
+			I32Const(WasmBackend.typeId(Bytes)),
+			I32Store(0),
+			LocalGet(3),
+			I32Const(WasmLayout.BYTES_VIEW_MAGIC),
+			I32Store(WasmLayout.BYTES_VIEW_MARKER_OFFSET),
+			LocalGet(3),
+			LocalGet(2),
+			I32Store(WasmLayout.STRING_LENGTH_OFFSET),
+			LocalGet(3),
+			LocalGet(2),
+			I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
+			LocalGet(3),
+			LocalGet(0),
+			I32Store(WasmLayout.BYTES_VIEW_OWNER_OFFSET),
+			LocalGet(3),
+			I32Const(0),
+			I32Store(WasmLayout.BYTES_VIEW_DATA_OFFSET),
+			LocalGet(3),
+			LocalGet(1),
+			I32Store(WasmLayout.BYTES_VIEW_ROOTS_OFFSET),
+			LocalGet(3),
+			Return
+		]);
+		return module.addFunction(builder);
+	}
+
+	static function addStructGetRoots(module:WasmModule, name:String):Int {
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [],
+			[LocalGet(0), I32Load(WasmLayout.BYTES_VIEW_ROOTS_OFFSET), Return]));
+	}
+
+	static function addStructUtf8Copy(module:WasmModule, name:String, allocator:Int, bytesDataPointer:Int):Int {
+		var builder = WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}], [
+			LocalGet(0),
+			I32Load(WasmLayout.STRING_LENGTH_OFFSET),
+			LocalSet(1),
+			LocalGet(1),
+			I32Const(1),
+			I32Add,
+			LocalSet(2),
+			LocalGet(2),
+			I32Const(WasmLayout.STRING_DATA_OFFSET),
+			I32Add,
+			Call(allocator),
+			LocalSet(3),
+			LocalGet(3),
+			I32Const(WasmBackend.typeId(Bytes)),
+			I32Store(0),
+			LocalGet(3),
+			LocalGet(2),
+			I32Store(WasmLayout.STRING_LENGTH_OFFSET),
+			LocalGet(3),
+			LocalGet(2),
+			I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
+			LocalGet(3),
+			I32Const(WasmLayout.STRING_DATA_OFFSET),
+			I32Add,
+			LocalGet(0),
+			Call(bytesDataPointer),
+			LocalGet(1),
+			MemoryCopy,
+			LocalGet(3),
 			I32Const(WasmLayout.STRING_DATA_OFFSET),
 			I32Add,
 			LocalGet(1),
 			I32Add,
-			I32Load(0),
+			I32Const(0),
+			I32Store8(0),
+			LocalGet(3),
 			Return
-		]));
+		]);
+		return module.addFunction(builder);
 	}
 
-	static function addStructSetPointer(module:WasmModule, name:String):Int {
+	static function addStructGetPointer(module:WasmModule, name:String, bytesDataPointer:Int):Int {
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32, I32], results: [I32]}, [],
+			[LocalGet(0), Call(bytesDataPointer), LocalGet(1), I32Add, I32Load(0), Return]));
+	}
+
+	static function addStructSetPointer(module:WasmModule, name:String, bytesDataPointer:Int):Int {
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32, I32, I32], results: []}, [], [
 			LocalGet(0),
-			I32Const(WasmLayout.STRING_DATA_OFFSET),
-			I32Add,
+			Call(bytesDataPointer),
 			LocalGet(1),
 			I32Add,
 			LocalGet(2),
@@ -749,14 +836,14 @@ class WasmLinearRuntime {
 		]));
 	}
 
-	static function addStructSetUtf8(module:WasmModule, name:String):Int {
+	static function addStructSetUtf8(module:WasmModule, name:String, bytesDataPointer:Int):Int {
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32, I32, I32], results: []}, [], [
-			LocalGet(0), I32Const(WasmLayout.STRING_DATA_OFFSET), I32Add, LocalGet(1), I32Add,
-			LocalGet(2), I32Const(WasmLayout.STRING_DATA_OFFSET), I32Add, I32Store(0), Return
+			LocalGet(0), Call(bytesDataPointer), LocalGet(1), I32Add,
+			LocalGet(2), Call(bytesDataPointer), I32Store(0), Return
 		]));
 	}
 
-	static function addStructGetUtf8(module:WasmModule, name:String, allocator:Int):Int {
+	static function addStructGetUtf8(module:WasmModule, name:String, allocator:Int, bytesDataPointer:Int):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32, I32], results: [I32]}),
 			value = builder.parameter("value", 0),
 			offset = builder.parameter("offset", 1),
@@ -765,8 +852,7 @@ class WasmLinearRuntime {
 			index = builder.local("index", I32),
 			_unused = builder.local("unused", I32);
 		builder.localGet(value);
-		builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
-		builder.i32Add();
+		builder.call(builder.functionRef(bytesDataPointer));
 		builder.localGet(offset);
 		builder.i32Add();
 		builder.emit(I32Load(0));
@@ -820,19 +906,17 @@ class WasmLinearRuntime {
 		return module.addFunction(builder.finish());
 	}
 
-	static function addStructCopyPointer(module:WasmModule, name:String, allocator:Int):Int {
+	static function addStructCopyPointer(module:WasmModule, name:String, allocator:Int, bytesDataPointer:Int):Int {
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32, I32, I32], results: [I32]},
 			[{type: I32}, {type: I32}, {type: I32}], [
 				LocalGet(0),
-				I32Const(WasmLayout.STRING_DATA_OFFSET),
-				I32Add,
+				Call(bytesDataPointer),
 				LocalGet(1),
 				I32Add,
 				I32Load(0),
 				LocalSet(4),
 				LocalGet(0),
-				I32Const(WasmLayout.STRING_DATA_OFFSET),
-				I32Add,
+				Call(bytesDataPointer),
 				LocalGet(2),
 				I32Add,
 				I32Load(0),
