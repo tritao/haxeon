@@ -18,34 +18,33 @@ class WasmGcInterop implements WasmInteropRepresentation {
 	final functionContext:Null<WasmGcFunctionContext>;
 	final moduleInterop:WasmGcInterop;
 
-	var scratchTop:Int = -1;
-	var scratchAllocator:Int = -1;
-	final nativePointerReleaseIndices:Array<Int> = [];
-	final nativePointerReleaseBySymbol:Map<String, Int> = [];
+	final scratchTop:Int;
+	final scratchAllocator:Int;
+	final nativePointerReleaseIndices:Array<Int>;
+	final nativePointerReleaseBySymbol:Map<String, Int>;
 
-	public function new(gc:WasmGcContext, ?functionContext:WasmGcFunctionContext, ?moduleInterop:WasmGcInterop) {
+	public function new(gc:WasmGcContext, scratchTop:Int, scratchAllocator:Int, pointerReleases:Map<String, Int>,
+			?functionContext:WasmGcFunctionContext, ?moduleInterop:WasmGcInterop) {
 		this.gc = gc;
 		this.plan = gc.plan;
 		this.functionContext = functionContext;
 		this.moduleInterop = moduleInterop == null ? this : moduleInterop;
+		if (moduleInterop == null) {
+			this.scratchTop = scratchTop;
+			this.scratchAllocator = scratchAllocator;
+			this.nativePointerReleaseBySymbol = pointerReleases.copy();
+			this.nativePointerReleaseIndices = [for (symbol in pointerReleases.keys()) pointerReleases.get(symbol)];
+			this.nativePointerReleaseIndices.sort((left, right) -> left - right);
+		} else {
+			this.scratchTop = -1;
+			this.scratchAllocator = -1;
+			this.nativePointerReleaseBySymbol = [];
+			this.nativePointerReleaseIndices = [];
+		}
 	}
 
 	public function forFunctionContext(context:WasmGcFunctionContext):WasmGcInterop
-		return new WasmGcInterop(gc, context, moduleInterop);
-
-	public function configureCNativeScratch(scratchTop:Int, scratchAllocator:Int):Void {
-		moduleInterop.scratchTop = scratchTop;
-		moduleInterop.scratchAllocator = scratchAllocator;
-	}
-
-	public function configureNativePointerReleases(releases:Map<String, Int>):Void {
-		for (symbol in releases.keys()) {
-			var index = releases.get(symbol);
-			moduleInterop.nativePointerReleaseBySymbol.set(symbol, index);
-			moduleInterop.nativePointerReleaseIndices.push(index);
-		}
-		moduleInterop.nativePointerReleaseIndices.sort((left, right) -> left - right);
-	}
+		return new WasmGcInterop(gc, -1, -1, [], context, moduleInterop);
 
 	function allocateLocal(type:WasmValueType):Int
 		return functionState().allocateLocal(type);

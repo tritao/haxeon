@@ -73,9 +73,7 @@ class WasmGcModuleBuilder {
 			functions:Map<String, Int> = [],
 			methods:Map<String, String> = [],
 			gcContext = new WasmGcContext(module, plan, functions, globals, methods),
-			gcRepresentation = new WasmGcRepresentation(gcContext),
-			gcInterop = new WasmGcInterop(gcContext),
-			representation:WasmRepresentationSet = WasmRepresentationSet.gc(gcContext, gcRepresentation, gcInterop);
+			gcRepresentation = new WasmGcRepresentation(gcContext);
 		plan.addTo(module);
 		var staticData = WasmModuleSupport.placeStaticData(program, module, 8, reachable),
 			hasStaticData = staticData.addresses.iterator().hasNext();
@@ -90,14 +88,16 @@ class WasmGcModuleBuilder {
 			module.globals.push({type: I32, mutable: true, init: [I32Const(staticData.end)]});
 		}
 		addGcCNativeImports(module, functions, program, usedCNatives);
-		gcInterop.configureNativePointerReleases(gcPointerReleaseFunctionIndices(program, reachable, functions));
 		addGcMapRuntimeFunctions(module, functions, plan, program, usedNatives);
 		addGcRuntimeNativeFunctions(module, functions, plan, gcRepresentation, program, usedNatives);
 		addGcMapProjectionFunctions(module, functions, plan, program, reachable);
+		var scratchAllocator = -1;
 		if (requiresScratchMemory) {
-			var scratchAllocator = addGcScratchAllocator(module, scratchTop);
-			gcInterop.configureCNativeScratch(scratchTop, scratchAllocator);
+			scratchAllocator = addGcScratchAllocator(module, scratchTop);
 		}
+		var gcInterop = new WasmGcInterop(gcContext, scratchTop, scratchAllocator,
+			gcPointerReleaseFunctionIndices(program, reachable, functions)),
+			representation:WasmRepresentationSet = WasmRepresentationSet.gc(gcContext, gcRepresentation, gcInterop);
 		var exceptionTagType:Null<Int> = WasmModuleSupport.hasExceptions(program) ? module.typeIndex({parameters: [representation.values.valueType(Dyn)], results: []}) : null,
 			exceptionTag:Null<Int> = exceptionTagType == null ? null : 0;
 		module.exceptionTagType = exceptionTagType;
