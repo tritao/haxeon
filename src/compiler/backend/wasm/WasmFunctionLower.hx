@@ -1170,6 +1170,14 @@ class WasmFunctionLower {
 	}
 
 	static function lowerInt64Native(body:Array<WasmInstruction>, output:IrValue, name:String, arguments:Array<IrValue>, values:Map<Int, Int>):Bool {
+		if (name == "haxe.Int64.ofInt") {
+			if (arguments.length != 1 || arguments[0].type != I32 || output.type != I64)
+				throw "Invalid haxe.Int64.ofInt Wasm native signature";
+			body.push(LocalGet(requiredLocal(values, arguments[0].id)));
+			body.push(I64ExtendI32S);
+			body.push(LocalSet(requiredLocal(values, output.id)));
+			return true;
+		}
 		if (name == "haxe.Int64.toInt") {
 			if (arguments.length != 1 || output.type != I32)
 				throw "Invalid haxe.Int64.toInt Wasm native signature";

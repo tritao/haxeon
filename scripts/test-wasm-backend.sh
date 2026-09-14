@@ -28,6 +28,12 @@ bash "$root_dir/scripts/test-wasm-gc-invariants.sh"
 	--target=wasm32 --output=out/wasm-cli-typed-std-dependency.wasm --entry=wasm-typed-std-dependency \
 	--root=tests/programs tests/programs/wasm-typed-std-dependency.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --output=out/wasm-cli-int64-of-int.wasm --entry=wasm-int64-of-int \
+	--root=tests/programs tests/programs/wasm-int64-of-int.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm-gc --output=out/wasm-gc-cli-int64-of-int.wasm --entry=wasm-int64-of-int \
+	--root=tests/programs tests/programs/wasm-int64-of-int.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm32 --output=out/wasm-cli-ryu-source.wasm --entry=wasm-ryu-source \
 	--export=wasm-ryu-source.stringifyFloat --root=tests/programs tests/programs/wasm-ryu-source.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
@@ -157,6 +163,8 @@ const cases = [
   ["out/wasm-cli-runtime-source.wasm", 42],
   ["out/wasm-gc-cli-runtime-source.wasm", 42],
   ["out/wasm-cli-typed-std-dependency.wasm", 42],
+  ["out/wasm-cli-int64-of-int.wasm", 42],
+  ["out/wasm-gc-cli-int64-of-int.wasm", 42],
   ["out/wasm-cli-ryu-source.wasm", 42],
   ["out/wasm-gc-cli-ryu-source.wasm", 42],
   ["out/wasm-cli-dynamic.wasm", 42],
