@@ -37,10 +37,14 @@ main(void)
 
 	if (ffi_prep_cif(&cif, FFI_DEFAULT_ABI, 2, &ffi_type_sint, argument_types) != FFI_OK)
 		return 1;
+	fputs("libffi smoke: calling through ffi_call\n", stderr);
+	fflush(stderr);
 	ffi_call(&cif, FFI_FN(add), &result, arguments);
 	if (result != 42)
 		return 2;
 
+	fputs("libffi smoke: preparing executable callback\n", stderr);
+	fflush(stderr);
 	closure = (ffi_closure *)ffi_closure_alloc(sizeof(*closure), &closure_code);
 	if (closure == NULL || closure_code == NULL)
 		return 3;
@@ -48,11 +52,14 @@ main(void)
 		ffi_closure_free(closure);
 		return 4;
 	}
+	fputs("libffi smoke: invoking executable callback\n", stderr);
+	fflush(stderr);
 	result = ((binary_function)closure_code)(left, right);
 	ffi_closure_free(closure);
 	if (result != 43) {
 		fprintf(stderr, "libffi closure returned %d, expected 43\n", result);
 		return 5;
 	}
+	fputs("libffi smoke: ffi_call and callback passed\n", stderr);
 	return 0;
 }

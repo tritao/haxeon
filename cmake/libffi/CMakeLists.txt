@@ -16,6 +16,13 @@ if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
   message(FATAL_ERROR "The Haxeon Windows libffi build currently supports x64 only")
 endif()
 
+# CMake's MSVC Debug defaults add /RTC1. libffi's Windows backend uses
+# hand-built call frames (and explicitly disables stack checks around them in
+# ffiw64.c); keep the Debug CRT (/MDd), but match upstream's no-RTC compilation.
+string(REPLACE "/RTC1" "" LIBFFI_DEBUG_C_FLAGS "${CMAKE_C_FLAGS_DEBUG}")
+set(CMAKE_C_FLAGS_DEBUG "${LIBFFI_DEBUG_C_FLAGS}" CACHE STRING
+  "MSVC Debug flags for the pinned libffi build" FORCE)
+
 set(LIBFFI_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}/../../vendor/libffi")
 set(LIBFFI_GENERATED_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/include")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
