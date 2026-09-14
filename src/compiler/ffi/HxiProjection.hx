@@ -14,6 +14,7 @@ import compiler.ffi.HxiModel.HxiOwnership;
 import compiler.ffi.HxiModel.HxiParameter;
 import compiler.ffi.HxiModel.HxiParameterDirection;
 import compiler.ffi.HxiModel.HxiType;
+import compiler.ffi.HxiProjectionProfile.HxiResultErrorProjection;
 
 /** Projects bridgeable HXI functions into a synthetic, source-visible module. */
 class HxiProjection {
@@ -112,6 +113,42 @@ class HxiProjection {
 				profileError(path, '$entry does not refer to a constant projected by this interface');
 			validateIdentifier(path, entry, profile.constantNames.get(name));
 		}
+		for (name in sortedKeys(profile.resultPolicies)) {
+			var entry = 'resultPolicies.$name',
+				declaration = local.get(name),
+				policy = profile.resultPolicies.get(name),
+				values = switch declaration {
+					case Enumeration(_, _, _, values, _): values;
+					case null:
+						profileError(path, '$entry references an unknown result enum in this interface');
+						[];
+					case _:
+						profileError(path, '$entry does not refer to an enum in this interface');
+						[];
+				};
+			if (!Lambda.exists(values, value -> value.name == policy.successValue))
+				profileError(path, '$entry.successValue references an unknown enum value');
+			if (!Lambda.exists(model.declarations, declaration -> switch declaration {
+				case Function(_, _, Named(resultName), _, _, _, _, _) if (resultName == name): true;
+				case _: false;
+			}))
+				profileError(path, '$entry does not match the result type of any function in this interface');
+			if (policy.checkedSuffix.length == 0)
+				profileError(path, '$entry.checkedSuffix must not be empty');
+			validateTypePath(path, '$entry.errorType', policy.errorType, false);
+			if (policy.diagnosticFunction != null) {
+				if (isOmitted(omitted, policy.diagnosticFunction))
+					profileError(path, '$entry cannot use omitted diagnostic function "${policy.diagnosticFunction}"');
+				var diagnostic = local.get(policy.diagnosticFunction);
+				switch diagnostic {
+					case Function(_, parameters, Primitive("utf8"), _, _, _, _, _) if (parameters.length == 0):
+					case null:
+						profileError(path, '$entry.diagnosticFunction references an unknown function in this interface');
+					case _:
+						profileError(path, '$entry.diagnosticFunction must be a zero-argument UTF-8 function in this interface');
+				}
+			}
+		}
 
 		var moduleNames:Map<String, String> = [],
 			constantMembers:Map<String, String> = [],
@@ -183,6 +220,9 @@ class HxiProjection {
 				case Function(name, parameters, result, _, _, _, _, _):
 					var publicName = projectedFunctionName(name, profile);
 					addProjectedName(path, "module", publicName, 'function "$name"', moduleNames);
+					var resultPolicy = resultErrorProjection(result, profile);
+					if (resultPolicy != null)
+						addProjectedName(path, "module", publicName + resultPolicy.checkedSuffix, 'checked result wrapper for "$name"', moduleNames);
 					if (hasOutput(parameters))
 						addProjectedName(path, "module", '__hxi_raw_$name', 'raw wrapper for "$name"', moduleNames);
 					if (hasGeneratedOutputResult(parameters, result))
@@ -1005,6 +1045,9 @@ class HxiProjection {
 					profile) : ownedHandleResult == null ? aggregateResult == null ? resultType : aggregateResult.name : ownedHandleResult;
 				emitByteSliceWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, byteWrapperResult, abi, byteIndex, profile);
 			}
+			var resultProjection = resultErrorProjection(declaredResult, profile);
+			if (resultProjection != null)
+				emitCheckedResultWrapper(output, model, fn.name, publicName, parameters, argumentTypes, resultProjection, abi, profile);
 		}
 		return output.toString();
 	}
@@ -1029,6 +1072,120 @@ class HxiProjection {
 
 	static inline function isOmitted(omitted:Null<Map<String, Bool>>, name:String):Bool
 		return omitted != null && omitted.get(name) == true;
+
+	static function resultErrorProjection(type:HxiType, profile:Null<HxiProjectionProfile>):Null<HxiResultErrorProjection>
+		return if (profile == null) null else switch type {
+			case Named(name): profile.resultPolicies.get(name);
+			case _: null;
+		};
+
+	static function emitCheckedResultWrapper(output:StringBuf, model:HxiInterface, nativeName:String, publicName:String,
+			parameters:Array<compiler.ffi.HxiModel.HxiParameter>, rawArgumentTypes:Array<String>, policy:HxiResultErrorProjection, abi:HxiAbi,
+			profile:HxiProjectionProfile):Void {
+		var array = outputArray(parameters),
+			buffer = outputBuffer(parameters),
+			arrayCounts:Map<String, String> = [],
+			arguments:Array<String> = [],
+			callArguments:Array<String> = [];
+		for (parameter in parameters)
+			switch parameter.direction {
+				case InArray(count):
+					arrayCounts.set(count, parameter.name);
+				case _:
+			}
+		for (index in 0...parameters.length) {
+			var parameter = parameters[index];
+			switch parameter.direction {
+				case In:
+					if (!arrayCounts.exists(parameter.name)) {
+						arguments.push('${parameter.name}:${rawArgumentTypes[index]}');
+						callArguments.push(parameter.name);
+					}
+				case InArray(_):
+					var utf8 = utf8ArrayPointer(parameter.type),
+						elementType = rawArgumentTypes[index],
+						argumentType = elementType == "haxe.io.Bytes"
+							&& !utf8 ? "haxe.io.Bytes" : 'Array<${utf8 ? "String" : elementType}>';
+					arguments.push('${parameter.name}:$argumentType');
+					callArguments.push(parameter.name);
+				case InOut:
+					if ((array == null || parameter.name != array.countParameter)
+						&& (buffer == null || parameter.name != buffer.sizeParameter)) {
+						var info = outputInfo(parameter, abi, profile);
+						arguments.push('${parameter.name}:${info.haxeType}');
+						callArguments.push(parameter.name);
+					}
+				case Out | OutArray(_) | OutBuffer(_):
+			}
+		}
+
+		var outputFields:Array<{name:String, type:String}> = [],
+			statusField = "__result";
+		if (array != null)
+			outputFields.push({name: array.name, type: outputArrayType()});
+		else if (buffer != null)
+			outputFields.push({name: buffer.name, type: "haxe.io.Bytes"});
+		else
+			for (parameter in parameters)
+				switch parameter.direction {
+					case Out | InOut:
+						var info = outputInfo(parameter, abi, profile);
+						outputFields.push({name: parameter.name, type: info.haxeType});
+					case In | InArray(_) | OutArray(_) | OutBuffer(_):
+				}
+
+		var hasOutputs = outputFields.length > 0,
+			returnType = if (!hasOutputs) "Void" else if (outputFields.length == 1) outputFields[0].type else "{"
+				+ [for (field in outputFields) field.name + ":" + field.type].join(", ") + "}",
+			returnExpression = if (outputFields.length == 1) '__result.${outputFields[0].name}' else if (outputFields.length > 1) "{"
+				+ [for (field in outputFields) field.name + ": __result." + field.name].join(", ") + "}" else "",
+			resultName = switch nativeFunctionResult(model.declarations, nativeName) {
+				case Named(name): name;
+				case _: throw 'Result policy applied to non-enum result for "$nativeName"';
+			},
+			success = resultSuccessMember(model.declarations, resultName, policy.successValue, profile),
+			diagnostic = policy.diagnosticFunction == null ? "null" : projectedFunctionName(policy.diagnosticFunction, profile),
+			checkedName = publicName + policy.checkedSuffix;
+
+		output.add('/** Calls $publicName and throws the configured error type when its result is not successful. */\n');
+		output.add('function $checkedName(${arguments.join(", ")}):$returnType {\n');
+		output.add('\tvar __result = $publicName(${callArguments.join(", ")});\n');
+		if (hasOutputs) {
+			output.add('\tvar __status = __result.status;\n');
+			statusField = "__status";
+		}
+		output.add('\tif ($statusField != ${enumTypeName(resultName, profile)}.$success) {\n');
+		if (policy.diagnosticFunction != null)
+			output.add('\t\tvar __diagnostic = $diagnostic();\n');
+		output.add('\t\tthrow new ${policy.errorType}($statusField, "${escape(publicName)}", ${policy.diagnosticFunction == null ? "null" : "__diagnostic"});\n');
+		output.add('\t}\n');
+		if (hasOutputs)
+			output.add('\treturn $returnExpression;\n');
+		output.add('}\n');
+	}
+
+	static function nativeFunctionResult(declarations:Array<HxiDeclaration>, name:String):HxiType {
+		for (declaration in declarations)
+			switch declaration {
+				case Function(functionName, _, result, _, _, _, _, _) if (functionName == name):
+					return result;
+				case _:
+			}
+		throw 'Missing HXI function "$name"';
+	}
+
+	static function resultSuccessMember(declarations:Array<HxiDeclaration>, enumName:String, nativeValue:String, profile:HxiProjectionProfile):String {
+		for (declaration in declarations)
+			switch declaration {
+				case Enumeration(name, _, _, values, _) if (name == enumName):
+					var prefix = enumValuePrefix(values, profile);
+					for (value in values)
+						if (value.name == nativeValue)
+							return enumValueName(value.name, prefix, name, profile);
+				case _:
+			}
+		throw 'Missing success enum value "$enumName.$nativeValue"';
+	}
 
 	static function hasOutput(parameters:Array<compiler.ffi.HxiModel.HxiParameter>):Bool {
 		for (parameter in parameters)

@@ -139,6 +139,32 @@ native C spelling. This keeps C headers and generated ABI snapshots
 language-neutral while allowing each target language to define its own naming
 policy.
 
+A projection can also define a conventional checked-result surface without
+changing the raw result-returning ABI function:
+
+```json
+{
+  "interface": "NativeKit",
+  "resultPolicies": {
+    "nk_result": {
+      "successValue": "NK_OK",
+      "diagnosticFunction": "nk_last_error",
+      "errorType": "NativeKitError",
+      "checkedSuffix": "_checked"
+    }
+  }
+}
+```
+
+For an HXI function returning `nk_result`, the generated module keeps
+`nk_window_show(...) : Result` and adds `nk_window_show_checked(...) : Void`.
+The checked helper throws the configured Haxe error type on failure. Its
+constructor accepts `(result, operation, diagnostic)`. For functions with
+annotated output values, the checked helper returns those values after success;
+the raw status remains available through the original projected function.
+`resultPolicies` belongs to `.hxmap` because success conventions, diagnostics,
+and exception classes are language-facing policy, not ABI facts.
+
 The ABI classifier currently recognizes x86, x86-64, ARM, AArch64, RISC-V 64,
 and WebAssembly target triples. It preserves the Windows LLP64 distinction
 (`c_long` is 32-bit even with 64-bit pointers), represents plain `c_char`

@@ -139,6 +139,42 @@ class HxiParserMain {
 			&& genericSource.indexOf("public static inline final version:Int = 1") >= 0
 			&& genericNatives[0].name == "generic.validate",
 			"projection policies should rename types, fields, functions, constants, and native references consistently");
+		var resultPolicyModel = HxiParser.parse("result-policy.hxi",
+			'interface result_policy @target("x86_64-linux-gnu") @library("result_policy") { enum nk_result : i32 { NK_OK = 0; NK_ERROR = -1; } extern fn nk_last_error() -> utf8 @borrowed; extern fn nk_run(seed: u32) -> nk_result; extern fn nk_create(seed: u32, output: ptr<u32> @out) -> nk_result; }'),
+			resultPolicyProfile = HxiProjectionProfile.parse("result-policy.hxmap",
+				'{"interface":"result_policy","typePrefix":"nk_","enumValuePrefixes":["NK_"],"resultPolicies":{"nk_result":{"successValue":"NK_OK","diagnosticFunction":"nk_last_error","errorType":"ProjectionError"}}}'),
+			resultPolicySource = HxiProjection.source(resultPolicyModel, null, null, null, resultPolicyProfile);
+		HxiProjection.validateProfile("result-policy.hxmap", resultPolicyModel, null, null, resultPolicyProfile);
+		expect(resultPolicySource.indexOf("extern function nk_run(arg0:Int):Result") >= 0
+			&& resultPolicySource.indexOf("function nk_run_checked(seed:Int):Void") >= 0
+			&& resultPolicySource.indexOf("throw new ProjectionError(__result, \"nk_run\", __diagnostic)") >= 0
+			&& resultPolicySource.indexOf("function nk_create_checked(seed:Int):Int") >= 0
+			&& resultPolicySource.indexOf("return __result.output;") >= 0,
+			"result projection policies should preserve raw status calls and generate checked calls with typed output values");
+		var invalidSuccessPolicy = HxiProjectionProfile.parse("bad-result-policy.hxmap",
+			'{"interface":"result_policy","resultPolicies":{"nk_result":{"successValue":"NK_MISSING","errorType":"ProjectionError"}}}');
+		expectProfileError(function() HxiProjection.validateProfile("bad-result-policy.hxmap", resultPolicyModel, null, null, invalidSuccessPolicy),
+			"resultPolicies.nk_result.successValue");
+		expectProfileError(function() HxiProjection.validateProfile("omitted-diagnostic.hxmap", resultPolicyModel, ["nk_last_error" => true], null,
+			resultPolicyProfile),
+			"cannot use omitted diagnostic function");
+		var resultPolicyCompiler = new Compiler();
+		resultPolicyCompiler.addFfiProjection("result-policy.hxmap",
+			'{"interface":"result_policy","typePrefix":"nk_","enumValuePrefixes":["NK_"],"resultPolicies":{"nk_result":{"successValue":"NK_OK","diagnosticFunction":"nk_last_error","errorType":"ProjectionError"}}}');
+		resultPolicyCompiler.addFfiInterface("result-policy.hxi",
+			'interface result_policy @target("x86_64-linux-gnu") @library("result_policy") { enum nk_result : i32 { NK_OK = 0; NK_ERROR = -1; } extern fn nk_last_error() -> utf8 @borrowed; extern fn nk_run(seed: u32) -> nk_result; extern fn nk_create(seed: u32, output: ptr<u32> @out) -> nk_result; }');
+		resultPolicyCompiler.addSourceRoot("stdlib");
+		resultPolicyCompiler.update("ProjectionError.hx",
+			'class ProjectionError { public final result:result_policy.Result; public final operation:String; public final diagnostic:Null<String>; public function new(result:result_policy.Result, operation:String, diagnostic:Null<String>) { this.result = result; this.operation = operation; this.diagnostic = diagnostic; } }');
+		var resultPolicyMain = 'import result_policy; function main():Int { result_policy.nk_run_checked(1); return result_policy.nk_create_checked(1); }';
+		resultPolicyCompiler.update("ResultPolicyMain.hx", resultPolicyMain);
+		resultPolicyCompiler.analyze("ResultPolicyMain");
+		var resultPolicyCompile = resultPolicyCompiler.compile("ResultPolicyMain");
+		expect(resultPolicyCompile.ir.cNatives.length == 3
+			&& resultPolicyCompile.ir.cNatives[0].symbol == "nk_last_error"
+			&& resultPolicyCompile.ir.cNatives[1].symbol == "nk_run"
+			&& resultPolicyCompile.ir.cNatives[2].symbol == "nk_create",
+			"checked result wrappers should typecheck without adding native symbols or hiding raw status calls");
 		var styleProfile = HxiProjectionProfile.parse("style.hxmap",
 			'{"interface":"style","typePrefix":"lib_","functionPrefix":"lib_","functionCase":"camel","fieldCase":"camel","constantPrefix":"LIB_","constantCase":"camel"}');
 		var styleModel = HxiParser.parse("style.hxi",

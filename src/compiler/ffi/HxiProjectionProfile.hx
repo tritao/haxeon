@@ -2,6 +2,13 @@ package compiler.ffi;
 
 import haxe.Json;
 
+typedef HxiResultErrorProjection = {
+	final successValue:String;
+	final diagnosticFunction:Null<String>;
+	final errorType:String;
+	final checkedSuffix:String;
+}
+
 /**
  * Haxe-facing naming policy layered on top of a generated HXI ABI model.
  *
@@ -23,11 +30,13 @@ class HxiProjectionProfile {
 	public final functionNames:Map<String, String>;
 	public final fieldNames:Map<String, String>;
 	public final constantNames:Map<String, String>;
+	public final resultPolicies:Map<String, HxiResultErrorProjection>;
 
 	public function new(?interfaceName:Null<String>, ?typePrefix:Null<String>, ?enumValuePrefixes:Array<String>, ?typeNames:Map<String, String>,
 			?enumNames:Map<String, String>, ?enumValueNames:Map<String, Map<String, String>>, ?functionNames:Map<String, String>,
 			?fieldNames:Map<String, String>, ?constantNames:Map<String, String>, ?functionPrefix:Null<String>, functionCase:String = "preserve",
-			fieldCase:String = "preserve", ?constantPrefix:Null<String>, constantCase:String = "preserve") {
+			fieldCase:String = "preserve", ?constantPrefix:Null<String>, constantCase:String = "preserve",
+			?resultPolicies:Map<String, HxiResultErrorProjection>) {
 		this.interfaceName = interfaceName;
 		this.typePrefix = typePrefix;
 		this.functionPrefix = functionPrefix;
@@ -42,6 +51,7 @@ class HxiProjectionProfile {
 		this.functionNames = functionNames == null ? [] : functionNames;
 		this.fieldNames = fieldNames == null ? [] : fieldNames;
 		this.constantNames = constantNames == null ? [] : constantNames;
+		this.resultPolicies = resultPolicies == null ? [] : resultPolicies;
 	}
 
 	public static function empty():HxiProjectionProfile
@@ -72,9 +82,52 @@ class HxiProjectionProfile {
 			enumValueNames = nestedStringMap(value, "enumValueNames", path),
 			functionNames = stringMap(value, "functionNames", path),
 			fieldNames = nestedStringMap(value, "fieldNames", path),
-			constantNames = stringMap(value, "constantNames", path);
+			constantNames = stringMap(value, "constantNames", path),
+			resultPolicies = resultPolicyMap(value, "resultPolicies", path);
 		return new HxiProjectionProfile(interfaceName, typePrefix, enumValuePrefixes, typeNames, enumNames, enumValueNames, functionNames,
-			flattenFieldNames(fieldNames), constantNames, functionPrefix, functionCase, fieldCase, constantPrefix, constantCase);
+			flattenFieldNames(fieldNames), constantNames, functionPrefix, functionCase, fieldCase, constantPrefix, constantCase, resultPolicies);
+	}
+
+	static function resultPolicyMap(value:Dynamic, field:String, path:String):Map<String, HxiResultErrorProjection> {
+		if (!Reflect.hasField(value, field))
+			return [];
+		var raw = Reflect.field(value, field);
+		if (raw == null || !Reflect.isObject(raw) || Std.isOfType(raw, Array))
+			throw 'Invalid Haxe projection profile "$path": "$field" must be an object';
+		var result:Map<String, HxiResultErrorProjection> = [];
+		for (resultType in Reflect.fields(raw)) {
+			var item = Reflect.field(raw, resultType);
+			if (item == null || !Reflect.isObject(item) || Std.isOfType(item, Array))
+				throw 'Invalid Haxe projection profile "$path": "$field.$resultType" must be an object';
+			var policyPath = '$field.$resultType',
+				successValue = requiredPolicyString(item, "successValue", policyPath, path),
+				diagnosticFunction = optionalPolicyString(item, "diagnosticFunction", policyPath, path),
+				errorType = requiredPolicyString(item, "errorType", policyPath, path),
+				checkedSuffix = optionalPolicyString(item, "checkedSuffix", policyPath, path);
+			result.set(resultType, {
+				successValue: successValue,
+				diagnosticFunction: diagnosticFunction,
+				errorType: errorType,
+				checkedSuffix: checkedSuffix == null ? "_checked" : checkedSuffix
+			});
+		}
+		return result;
+	}
+
+	static function requiredPolicyString(value:Dynamic, field:String, policyPath:String, path:String):String {
+		var result = optionalPolicyString(value, field, policyPath, path);
+		if (result == null || result.length == 0)
+			throw 'Invalid Haxe projection profile "$path": "$policyPath.$field" is required';
+		return result;
+	}
+
+	static function optionalPolicyString(value:Dynamic, field:String, policyPath:String, path:String):Null<String> {
+		if (!Reflect.hasField(value, field) || Reflect.field(value, field) == null)
+			return null;
+		var result = Reflect.field(value, field);
+		if (!Std.isOfType(result, String))
+			throw 'Invalid Haxe projection profile "$path": "$policyPath.$field" must be a string';
+		return result;
 	}
 
 	static function optionalCase(value:Dynamic, field:String, path:String):String {
