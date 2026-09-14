@@ -376,7 +376,9 @@ class HxiProjection {
 					Callback(name, _, _, _, _):
 					declarations.set(name, declaration);
 				case Function(name, parameters, result, _, _, _, resultPolicy, _):
-					directed.set(name, hasOutput(parameters) || resultPolicy.ownership == OwnedHandle || structureType(result, declarations, profile) != null);
+					directed.set(name, hasOutput(parameters)
+						|| resultPolicy.ownership == OwnedHandle
+						|| structureType(result, declarations, profile) != null);
 					functionParameters.set(name, parameters);
 					functionResultTypes.set(name, result);
 				case _:
@@ -1373,7 +1375,7 @@ class HxiProjection {
 					var result = switch declarations.get(name) {
 						case Alias(_, target, _): pointerFreeValue(target, declarations, visiting);
 						case Structure(_, _, _, fields, _): Lambda.foreach(fields, field -> pointerFreeValue(field.type, declarations, visiting));
-					case Handle(_, _, _, _) | Enumeration(_, _, _, _, _): true;
+						case Handle(_, _, _, _) | Enumeration(_, _, _, _, _): true;
 						case _: false;
 					};
 					visiting.remove(name);

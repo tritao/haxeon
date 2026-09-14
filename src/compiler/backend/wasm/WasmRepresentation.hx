@@ -1104,6 +1104,34 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				throw "Invalid Wasm GC Bytes.alloc signature";
 			return bytesAlloc(argumentLocals[0], outputLocal);
 		}
+		if (name == "structWithRoots") {
+			if (output.type != ManagedBytes
+				|| arguments.length != 2
+				|| arguments[0].type != ManagedBytes
+				|| !Type.enumEq(arguments[1].type, Array(ManagedBytes))
+				|| argumentLocals.length != 2)
+				throw "Invalid Wasm GC HXI structure root attachment signature";
+			return [
+				LocalGet(argumentLocals[0]),
+				LocalGet(argumentLocals[1]),
+				StructSet(plan.managedBytesTypeIndex, 3),
+				LocalGet(argumentLocals[0]),
+				LocalSet(outputLocal)
+			];
+		}
+		if (name == "structGetRoots") {
+			if (!Type.enumEq(output.type, Array(ManagedBytes))
+				|| arguments.length != 1
+				|| arguments[0].type != ManagedBytes
+				|| argumentLocals.length != 1)
+				throw "Invalid Wasm GC HXI structure root query signature";
+			return [
+				LocalGet(argumentLocals[0]),
+				StructGet(plan.managedBytesTypeIndex, 3),
+				RefCast({nullable: false, heap: Type(plan.arrayType(ManagedBytes))}),
+				LocalSet(outputLocal)
+			];
+		}
 		if (name == "__bytes_of_string") {
 			if (output.type != ManagedBytes || arguments.length != 1 || arguments[0].type != Bytes || argumentLocals.length != 1)
 				throw "Invalid Wasm GC Bytes.ofString signature";
@@ -1439,6 +1467,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 					LocalGet(storage),
 					I32Const(0),
 					LocalGet(length),
+					RefNull(Any),
 					StructNew(plan.managedBytesTypeIndex),
 					LocalSet(snapshot),
 					LocalGet(snapshot),
@@ -1568,6 +1597,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 					LocalGet(storage),
 					I32Const(0),
 					LocalGet(length),
+					RefNull(Any),
 					StructNew(plan.managedBytesTypeIndex),
 					LocalSet(outputLocal)
 				]);
@@ -1795,6 +1825,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 					LocalGet(storage),
 					I32Const(0),
 					LocalGet(length),
+					RefNull(Any),
 					StructNew(plan.managedBytesTypeIndex),
 					LocalSet(outputLocal)
 				];
@@ -3121,6 +3152,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				LocalGet(storage),
 				I32Const(0),
 				I32Const(layout.size),
+				RefNull(Any),
 				StructNew(plan.managedBytesTypeIndex),
 				LocalSet(outputLocal)
 			];
@@ -3178,6 +3210,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			LocalGet(storage),
 			I32Const(0),
 			LocalGet(length),
+			RefNull(Any),
 			StructNew(plan.managedBytesTypeIndex),
 			LocalSet(outputLocal)
 		]);
@@ -3590,6 +3623,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			ArrayNewDefault(plan.byteArrayTypeIndex),
 			I32Const(0),
 			LocalGet(lengthLocal),
+			RefNull(Any),
 			StructNew(plan.managedBytesTypeIndex),
 			LocalSet(destination)
 		]);
@@ -3617,6 +3651,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			LocalGet(storage),
 			I32Const(0),
 			LocalGet(length),
+			RefNull(Any),
 			StructNew(plan.managedBytesTypeIndex),
 			LocalSet(destination)
 		];
@@ -3706,6 +3741,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			LocalGet(offsetLocal),
 			I32Add,
 			LocalGet(lengthLocal),
+			RefNull(Any),
 			StructNew(plan.managedBytesTypeIndex),
 			LocalSet(destination)
 		]);
@@ -3732,6 +3768,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			LocalGet(storage),
 			I32Const(0),
 			LocalGet(lengthLocal),
+			RefNull(Any),
 			StructNew(plan.managedBytesTypeIndex),
 			LocalSet(destination)
 		]);
@@ -5071,7 +5108,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			case I32: "i32";
 			case Bool: "bool";
 			case F64: "f64";
-			case Bytes, ManagedBytes: "bytes";
+			case Bytes: "bytes";
+			case ManagedBytes: "ref";
 			default: "ref";
 		};
 

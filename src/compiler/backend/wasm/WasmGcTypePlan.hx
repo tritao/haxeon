@@ -542,7 +542,8 @@ class WasmGcTypePlan {
 		setType(managedBytesTypeIndex, true, [], Struct([
 			{type: Value(Ref({nullable: false, heap: Type(byteArrayTypeIndex)})), mutable: true},
 			{type: Value(I32), mutable: true},
-			{type: Value(I32), mutable: true}
+			{type: Value(I32), mutable: true},
+			{type: Value(Ref({nullable: true, heap: Any})), mutable: true}
 		]));
 		setType(nativePointerTypeIndex, true, [], Struct([
 			{type: Value(I32), mutable: true}, // Raw host pointer value.
