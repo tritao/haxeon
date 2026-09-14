@@ -837,6 +837,17 @@ class TestMain {
 			throw "Wasm GC stress mode was accepted for HashLink";
 		if (!memoryStatsRejectedForHashLink)
 			throw "Compiler CLI accepted Wasm allocator statistics for a non-Wasm target";
+		var gcExportRequest = CompilerArguments.parse(["--target=wasm-gc", "--export=wasm-ryu-benchmark.formatLength", "source/Main.hx"]);
+		if (gcExportRequest.exports.join(",") != "wasm-ryu-benchmark.formatLength")
+			throw "Compiler CLI rejected a Wasm GC function export";
+		var exportsRejectedForHashLink = false;
+		try {
+			CompilerArguments.parse(["--export=Main.run", "source/Main.hx"]);
+		} catch (error:Dynamic) {
+			exportsRejectedForHashLink = true;
+		}
+		if (!exportsRejectedForHashLink)
+			throw "Compiler CLI accepted function exports for HashLink";
 		var wasmDefines = CompilerDriver.targetDefines("wasm32"),
 			hlDefines = CompilerDriver.targetDefines("hl");
 		if (wasmDefines.join(",") != "haxeon,target=wasm32,wasm,wasm32" || hlDefines.join(",") != "haxeon,target=hl,hl,sys")
