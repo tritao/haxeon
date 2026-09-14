@@ -16,10 +16,11 @@ import compiler.runtime.RuntimeType;
 import compiler.runtime.PlatformAbi;
 import compiler.semantic.GenericSpecializationRegistry;
 import compiler.semantic.GenericSpecializationPolicy;
-import compiler.types.analysis.BodyContext;
+import compiler.types.typing.TypingContext;
+import compiler.types.typing.TypingSession;
+import compiler.types.typing.TypingSession.ResolvedInlineConstant;
 import compiler.types.analysis.CaptureAnalysis;
 import compiler.types.analysis.AbstractConstructorNormalizer;
-import compiler.types.analysis.ClosureConversion;
 import compiler.types.analysis.ControlFlow;
 import compiler.types.analysis.FlowAnalysis;
 import compiler.types.analysis.LexicalStorageAnalysis;
@@ -70,51 +71,19 @@ typedef MeasuredTypedProgram = {
 	final runtimeDependencies:Array<{final functionName:String; final target:String;}>;
 }
 
-private typedef ResolvedInlineConstant = {
-	final initializer:TypedExpression;
-	final value:TypedExpression;
-}
-
 /** Resolves bindings and converts parsed syntax into the typed semantic tree. */
 class Typer {
-	var signatures:Map<String, AstFunction> = [];
-	var methodInfo:Map<String, SemanticMethodInfo> = [];
-	final externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>;
-	var classDecls:Map<String, AstClass> = [];
-	var interfaceDecls:Map<String, AstInterface> = [];
-	var enumDecls:Map<String, AstEnum> = [];
-	var enumAbstractDecls:Map<String, compiler.syntax.Ast.AstEnumAbstract> = [];
-	var declarations:DeclarationIndex;
-	var relations:TypeRelations;
-	final closureConversion = new ClosureConversion();
-	final lambdaCache:Map<String, TypedExpression> = [];
-	final bodyContexts:Array<BodyContext> = [new BodyContext("")];
-	var context(get, never):BodyContext;
-	final anonymousTypes:Map<String, Array<compiler.types.Type.AnonymousField>> = [];
-	final genericSpecializations:GenericSpecializationRegistry;
-	final emittedGenericBodies:Map<String, Bool> = [];
-	final noReturnFunctions:Map<String, Bool> = [];
-	final runtimeDependencies:Map<String, Map<String, Bool>> = [];
-	final cNativeFunctions:Map<String, Bool> = [];
-	final inlineConstants:Map<String, ResolvedInlineConstant> = [];
-	final inlineConstantsInProgress:Map<String, Bool> = [];
-	var functionAdapterCounter = 0;
+	final session:TypingSession;
+	var context(get, never):TypingContext;
 
-	inline function get_context():BodyContext
-		return bodyContexts[bodyContexts.length - 1];
+	inline function get_context():TypingContext
+		return session.currentContext;
 
-	function enterBody(name:String, ?typeSubstitutions:Map<String, CompilerType>, ?ownerOverride:String):BodyContext {
-		var owner = ownerOverride != null ? ownerOverride : StringTools.startsWith(name, "$lambda:") ? context.lexicalOwner : parentPath(name),
-			body = new BodyContext(name, typeSubstitutions, owner);
-		bodyContexts.push(body);
-		return body;
-	}
+	inline function enterBody(name:String, ?typeSubstitutions:Map<String, CompilerType>, ?ownerOverride:String):TypingContext
+		return session.enterBody(name, typeSubstitutions, ownerOverride);
 
-	function leaveBody(body:BodyContext):Void {
-		if (context != body)
-			throw "Body typing contexts must be left in stack order";
-		bodyContexts.pop();
-	}
+	inline function leaveBody(body:TypingContext):Void
+		session.leaveBody(body);
 
 	public static function type(program:AstProgram):TypedProgram
 		return new Typer(null, null).typeProgramMeasured(SemanticProgram.analyze(program), null, true, null).program;
@@ -137,28 +106,21 @@ class Typer {
 		return new Typer(externals, specializations).typeProgramMeasured(semantic, selected, true, entryPoint);
 
 	function new(externals:Null<Map<String, {arguments:Array<CompilerType>, result:CompilerType}>>, specializations:Null<GenericSpecializationRegistry>) {
-		this.externals = externals == null ? [] : externals;
-		this.genericSpecializations = specializations == null ? new GenericSpecializationRegistry() : specializations;
+		this.session = new TypingSession(externals, specializations);
 	}
 
 	function typeProgramMeasured(semantic:SemanticProgram, selected:Null<Map<String, Bool>>, requireMain:Bool, entryPoint:Null<String>):MeasuredTypedProgram {
 		var startedAt = Sys.time() * 1000.0;
 		semantic.lifecycle.requireAtLeast(SignatureTyped);
+		session.bindSemantic(semantic);
 		var program = semantic.program;
-		declarations = semantic.declarations;
-		relations = semantic.relations;
-		signatures = semantic.signatures;
-		methodInfo = semantic.methodInfo;
-		enumDecls = declarations.enums;
-		enumAbstractDecls = declarations.enumAbstracts;
 		for (decl in program.enumAbstracts) {
 			var emptySubstitutions:Map<String, CompilerType> = [];
-			var underlying = declarations.resolve(decl.underlying, null, emptySubstitutions);
+			var underlying = session.declarations.resolve(decl.underlying, null, emptySubstitutions);
 			for (value in decl.values)
 				coerce(typeExpression(value.value, new Scope(), underlying), underlying, 'enum abstract value "${decl.name}.${value.name}"', "E1002");
 		}
-		interfaceDecls = declarations.interfaces;
-		classDecls = declarations.classes;
+		session.bindNominalDeclarations();
 		for (alias in program.aliases) {
 			if (alias.typeParameters.length == 0) {
 				var aliasType = lowerType(alias.type);
@@ -167,7 +129,7 @@ class Typer {
 		}
 		var typedNatives:Array<compiler.types.TypedAst.TypedNative> = [];
 		for (fn in program.functions) {
-			if (externals.exists(fn.name))
+			if (session.externals.exists(fn.name))
 				fail("E1000", 'Function "${fn.name}" conflicts with a registered native', fn.span);
 			if (fn.isExtern == true)
 				typedNatives.push(typeExtern(fn));
@@ -189,9 +151,9 @@ class Typer {
 				for (method in abstractDecl.methods) {
 					var nativeName = method.name.indexOf(".") >= 0 ? method.name : abstractDecl.name + "." + method.name;
 					var receiverType = method.isStatic
-						|| method.name == "new" ? null : declarations.resolve(abstractDecl.underlying, abstractDecl.span,
+						|| method.name == "new" ? null : session.declarations.resolve(abstractDecl.underlying, abstractDecl.span,
 							declarationTypeSubstitutions(abstractDecl.name, abstractDecl.typeParameters));
-					var resultOverride = method.name == "new" ? declarations.resolve(abstractDecl.underlying, abstractDecl.span,
+					var resultOverride = method.name == "new" ? session.declarations.resolve(abstractDecl.underlying, abstractDecl.span,
 						declarationTypeSubstitutions(abstractDecl.name, abstractDecl.typeParameters)) : null;
 					typedNatives.push(typeExtern(method, nativeName, receiverType, defaultLibrary, resultOverride));
 				}
@@ -199,7 +161,7 @@ class Typer {
 		for (native in typedNatives)
 			switch native.convention {
 				case CNative(_):
-					cNativeFunctions.set(native.name, true);
+					session.cNativeFunctions.set(native.name, true);
 				case HashLinkNative:
 			}
 		var setupDoneAt = Sys.time() * 1000.0;
@@ -207,12 +169,12 @@ class Typer {
 		var noReturnDoneAt = Sys.time() * 1000.0;
 		if (requireMain) {
 			var main:AstFunction;
-			if (entryPoint != null && signatures.exists(entryPoint))
-				main = requiredMapValue(signatures, entryPoint);
-			else if (entryPoint == null && signatures.exists("main"))
-				main = requiredMapValue(signatures, "main");
-			else if (entryPoint == null && signatures.exists("Main.main"))
-				main = requiredMapValue(signatures, "Main.main");
+			if (entryPoint != null && session.signatures.exists(entryPoint))
+				main = requiredMapValue(session.signatures, entryPoint);
+			else if (entryPoint == null && session.signatures.exists("main"))
+				main = requiredMapValue(session.signatures, "main");
+			else if (entryPoint == null && session.signatures.exists("Main.main"))
+				main = requiredMapValue(session.signatures, "Main.main");
 			else
 				throw 'Program must define executable entry point "${entryPoint == null ? "main" : entryPoint}"';
 			if (main.arguments.length != 0 || (lowerType(main.result) != TInt && lowerType(main.result) != TVoid))
@@ -255,7 +217,7 @@ class Typer {
 			], typedClasses:Array<TypedClass> = [
 			for (classDecl in program.classes)
 				if (classDecl.isExtern != true
-					&& nativeLibrary(classDecl.name, classDecl.metadata) == null) typeClass(classDecl, classDecls, selected)
+					&& nativeLibrary(classDecl.name, classDecl.metadata) == null) typeClass(classDecl, session.classDecls, selected)
 			], typedFunctions:Array<TypedFunction> = [];
 		var metadataDoneAt = Sys.time() * 1000.0;
 		for (fn in program.functions)
@@ -271,11 +233,11 @@ class Typer {
 				var name = abstractDecl.name + "." + method.name;
 				if (abstractDecl.isExtern != true
 					&& method.isStatic
-					&& !isGeneric(requiredMapValue(signatures, name))
+					&& !isGeneric(requiredMapValue(session.signatures, name))
 					&& (selected == null || selected.exists(name)))
-					typedFunctions.push(typeFunction(requiredMapValue(signatures, name), abstractDecl.name, true));
+					typedFunctions.push(typeFunction(requiredMapValue(session.signatures, name), abstractDecl.name, true));
 			}
-		for (lambda in closureConversion.generatedFunctions())
+		for (lambda in session.closureConversion.generatedFunctions())
 			typedFunctions.push(lambda);
 		for (fn in typedFunctions) {
 			for (argument in fn.arguments)
@@ -308,7 +270,7 @@ class Typer {
 			interfaces: typedInterfaces,
 			classes: typedClasses,
 			functions: typedFunctions,
-			closurePlan: closureConversion.plan(),
+			closurePlan: session.closureConversion.plan(),
 			anonymousTypes: orderedAnonymousTypes(),
 			natives: typedNatives
 		};
@@ -316,7 +278,7 @@ class Typer {
 		semantic.lifecycle.advanceAll(Finalized);
 		var finalizationDoneAt = Sys.time() * 1000.0;
 		var typedRuntimeDependencies = [
-			for (functionName => targets in runtimeDependencies)
+			for (functionName => targets in session.runtimeDependencies)
 				for (target in targets.keys())
 					{functionName: functionName, target: target}
 		];
@@ -433,16 +395,16 @@ class Typer {
 		var substitutions:Map<String, CompilerType> = [];
 		for (parameter in declaration.typeParameters)
 			substitutions.set(parameter, TDynamic);
-		return declarations.resolve(type, span, substitutions);
+		return session.declarations.resolve(type, span, substitutions);
 	}
 
 	function inferNoReturnFunctions():Void {
 		var changed = true;
 		while (changed) {
 			changed = false;
-			for (name => fn in signatures)
-				if (!noReturnFunctions.exists(name) && astStatementsDoNotReturn(fn.statements, name)) {
-					noReturnFunctions.set(name, true);
+			for (name => fn in session.signatures)
+				if (!session.noReturnFunctions.exists(name) && astStatementsDoNotReturn(fn.statements, name)) {
+					session.noReturnFunctions.set(name, true);
 					changed = true;
 				}
 		}
@@ -455,7 +417,7 @@ class Typer {
 					return true;
 				case Expression(expression, _):
 					switch expression {
-						case Call(name, _, _): return noReturnFunctions.exists(qualifiedLocalCall(name, functionName));
+						case Call(name, _, _): return session.noReturnFunctions.exists(qualifiedLocalCall(name, functionName));
 						default: return false;
 					}
 				case If(_, yes, no, _) if (no.length > 0
@@ -623,7 +585,7 @@ class Typer {
 				fail("E1002", 'Inline field "${classDecl.name}.${field.name}" must be static', field.span);
 			if (field.isInline && field.initializer == null)
 				fail("E1002", 'Inline field "${classDecl.name}.${field.name}" requires an initializer', field.span);
-			var type = declarations.resolve(declarations.resolvedFieldType(classDecl.name, field), field.span, erasedSubstitutions);
+			var type = session.declarations.resolve(session.declarations.resolvedFieldType(classDecl.name, field), field.span, erasedSubstitutions);
 			if (type == TVoid)
 				fail("E1002", 'Field "${classDecl.name}.${field.name}" cannot have type Void', field.span);
 			var initializer:Null<TypedExpression> = null,
@@ -669,9 +631,9 @@ class Typer {
 		for (parameter in classDecl.typeParameters)
 			classSemanticSubstitutions.set(parameter, TTypeParameter(classDecl.name, parameter));
 		for (interfaceType in classDecl.interfaces) {
-			var interfaceInstance = declarations.resolve(interfaceType, classDecl.span, classSemanticSubstitutions),
+			var interfaceInstance = session.declarations.resolve(interfaceType, classDecl.span, classSemanticSubstitutions),
 				interfaceName = inheritanceName(interfaceType);
-			if (!interfaceDecls.exists(interfaceName))
+			if (!session.interfaceDecls.exists(interfaceName))
 				fail("E1007", 'Unknown interface "$interfaceName"', classDecl.span);
 			validateInterfaceImplementation(classDecl, interfaceInstance, classSemanticSubstitutions, classDecl.span);
 		}
@@ -742,7 +704,7 @@ class Typer {
 						type: argumentType(argument, substitutions)
 					}
 			],
-			result: substitutions == null ? lowerType(method.result) : declarations.resolve(method.result, method.span, substitutions),
+			result: substitutions == null ? lowerType(method.result) : session.declarations.resolve(method.result, method.span, substitutions),
 			statements: [],
 			cells: [],
 			cellCaptures: [],
@@ -785,14 +747,14 @@ class Typer {
 				fail("E1007", "Implemented type must be an interface", span);
 				return;
 		};
-		if (!interfaceDecls.exists(interfaceName))
+		if (!session.interfaceDecls.exists(interfaceName))
 			return;
-		var interfaceDecl = interfaceDecls.get(interfaceName),
+		var interfaceDecl = session.interfaceDecls.get(interfaceName),
 			interfaceSubstitutions = nominalSubstitutions(interfaceInstance);
 		for (baseType in interfaceDecl.bases) {
-			var baseInstance = declarations.resolve(baseType, interfaceDecl.span, interfaceSubstitutions),
+			var baseInstance = session.declarations.resolve(baseType, interfaceDecl.span, interfaceSubstitutions),
 				base = inheritanceName(baseType);
-			if (!interfaceDecls.exists(base))
+			if (!session.interfaceDecls.exists(base))
 				fail("E1007", 'Unknown interface "$base"', span);
 			validateInterfaceImplementation(classDecl, baseInstance, classSubstitutions, span);
 		}
@@ -801,8 +763,8 @@ class Typer {
 			if (implementation == null || implementation.isStatic)
 				fail("E1007", 'Class "${classDecl.name}" does not implement "$interfaceName.${method.name}"', span);
 			var implementationName = implementation.owner + "." + method.name;
-			if (!signatures.exists(implementationName)
-				|| !sameSignature(requiredMapValue(signatures, implementationName), method, classSubstitutions, interfaceSubstitutions))
+			if (!session.signatures.exists(implementationName)
+				|| !sameSignature(requiredMapValue(session.signatures, implementationName), method, classSubstitutions, interfaceSubstitutions))
 				fail("E1003", 'Method "${classDecl.name}.${method.name}" does not match interface "$interfaceName"', span);
 		}
 	}
@@ -810,12 +772,12 @@ class Typer {
 	function sameSignature(left:AstFunction, right:AstFunction, ?leftSubstitutions:Map<String, CompilerType>,
 			?rightSubstitutions:Map<String, CompilerType>):Bool {
 		if (left.arguments.length != right.arguments.length
-			|| !TypeRelations.equals(declarations.resolve(left.result, left.span, leftSubstitutions),
-				declarations.resolve(right.result, right.span, rightSubstitutions)))
+			|| !TypeRelations.equals(session.declarations.resolve(left.result, left.span, leftSubstitutions),
+				session.declarations.resolve(right.result, right.span, rightSubstitutions)))
 			return false;
 		for (i in 0...left.arguments.length)
-			if (!TypeRelations.equals(declarations.resolve(left.arguments[i].type, left.arguments[i].span, leftSubstitutions),
-				declarations.resolve(right.arguments[i].type, right.arguments[i].span, rightSubstitutions)))
+			if (!TypeRelations.equals(session.declarations.resolve(left.arguments[i].type, left.arguments[i].span, leftSubstitutions),
+				session.declarations.resolve(right.arguments[i].type, right.arguments[i].span, rightSubstitutions)))
 				return false;
 		return true;
 	}
@@ -835,16 +797,18 @@ class Typer {
 			context.storage.request(binding, '$' + 'cell:' + context.name + ':' + binding, ExceptionEdge);
 		}
 		var scope = new Scope();
-		var isConstructor = owner != null && classDecls.exists(owner) && fn.name == "new";
+		context.scope = scope;
+		var isConstructor = owner != null && session.classDecls.exists(owner) && fn.name == "new";
 		if (abstractReceiver != null) {
 			scope.defineReceiver(abstractReceiver, fn.span);
 		} else if (owner != null && !isStatic) {
 			var receiverArguments:Array<CompilerType> = [];
-			if (classDecls.exists(owner))
-				for (parameter in classDecls.get(owner).typeParameters)
+			if (session.classDecls.exists(owner))
+				for (parameter in session.classDecls.get(owner).typeParameters)
 					receiverArguments.push(context.typeSubstitutions.exists(parameter) ? context.typeSubstitutions.get(parameter) : TDynamic);
 			scope.defineReceiver(TInstance(NominalKind.Class, owner, receiverArguments), fn.span);
 		}
+		context.receiver = scope.resolve("this");
 		var arguments = [];
 		if (abstractReceiver != null)
 			arguments.push({name: "this", type: abstractReceiver});
@@ -855,7 +819,7 @@ class Typer {
 			arguments.push({name: scope.requireId(argument.name), type: type});
 		}
 		var result = lowerType(fn.result);
-		context.resultType = result;
+		context.expectedReturnType = result;
 		inferBodyLocalTypes(fn.statements, result);
 		var statements = typeStatements(fn.statements, scope, result);
 		if (result != TVoid && !ControlFlow.alwaysReturns(statements, function(type, cases) return this.exhaustiveEnum(type, cases)))
@@ -887,7 +851,7 @@ class Typer {
 		};
 		for (name in context.storage.cells.keys()) {
 			if (context.storage.types.exists(name) && context.storage.kinds.exists(name))
-				closureConversion.addCell(requiredMapValue(context.storage.cells, name), requiredMapValue(context.storage.types, name),
+				session.closureConversion.addCell(requiredMapValue(context.storage.cells, name), requiredMapValue(context.storage.types, name),
 					requiredMapValue(context.storage.kinds, name));
 		}
 		leaveBody(functionContext);
@@ -1325,8 +1289,8 @@ class Typer {
 					if (isEnum(typedExpression.type) && !hasDefault && !seenCases.exists("$catchall")) {
 						var enumName = Std.string(enumName(typedExpression.type));
 						var missing:Array<String> = [];
-						if (enumDecls.exists(enumName)) {
-							var enumDecl = enumDecls.get(enumName);
+						if (session.enumDecls.exists(enumName)) {
+							var enumDecl = session.enumDecls.get(enumName);
 							for (index in 0...enumDecl.cases.length)
 								if (!seenCases.exists('enum:$enumName:$index'))
 									missing.push(enumDecl.cases[index].name);
@@ -1467,7 +1431,7 @@ class Typer {
 				var info = enumCaseInfo(name);
 				if (info == null && name.indexOf(".") < 0) {
 					var matchedName:Null<String> = null;
-					for (enumName => declaration in enumDecls)
+					for (enumName => declaration in session.enumDecls)
 						for (enumCase in declaration.cases)
 							if (enumCase.name == name
 								&& arguments.length >= requiredEnumParameters(enumCase.params)
@@ -1548,8 +1512,8 @@ class Typer {
 				} homogeneous && element != null ? TArray(element) : null;
 			case Range(_, _, _): TRange;
 			case New(typeName, _, span):
-				if (declarations.abstracts.exists(typeName)) declarations.resolve(NamedType(typeName),
-					span); else classDecls.exists(typeName) ? TInstance(NominalKind.Class, typeName, []) : null;
+				if (session.declarations.abstracts.exists(typeName)) session.declarations.resolve(NamedType(typeName),
+					span); else session.classDecls.exists(typeName) ? TInstance(NominalKind.Class, typeName, []) : null;
 			default: null;
 		};
 
@@ -1567,9 +1531,9 @@ class Typer {
 
 	function knownCallType(name:String):Null<CompilerType> {
 		var signatureName = resolvedCallName(name);
-		if (!signatures.exists(signatureName))
+		if (!session.signatures.exists(signatureName))
 			return null;
-		var signature = requiredMapValue(signatures, signatureName);
+		var signature = requiredMapValue(session.signatures, signatureName);
 		return isGeneric(signature) ? null : lowerType(signature.result);
 	}
 
@@ -1685,8 +1649,8 @@ class Typer {
 					}
 				else {
 					var signatureName = resolvedCallName(name);
-					if (signatures.exists(signatureName)) {
-						var signature = requiredMapValue(signatures, signatureName);
+					if (session.signatures.exists(signatureName)) {
+						var signature = requiredMapValue(session.signatures, signatureName);
 						if (!isGeneric(signature))
 							for (index in 0...arguments.length) {
 								if (index >= signature.arguments.length)
@@ -1933,14 +1897,14 @@ class Typer {
 
 	function enumAbstractPatternName(type:AstType):Null<String>
 		return switch type {
-			case NamedType(name), AppliedType(name, _): enumAbstractDecls.exists(name) ? name : null;
+			case NamedType(name), AppliedType(name, _): session.enumAbstractDecls.exists(name) ? name : null;
 			default: null;
 		};
 
 	function enumAbstractPatternConstant(abstractName:Null<String>, name:String):Null<String> {
 		if (abstractName == null)
 			return null;
-		var declaration = enumAbstractDecls.get(abstractName);
+		var declaration = session.enumAbstractDecls.get(abstractName);
 		if (declaration == null)
 			return null;
 		var memberName = lastPathSegment(name);
@@ -2035,12 +1999,12 @@ class Typer {
 						&& sameType(expectedFunction.arguments[1], TString)
 						&& sameType(expectedFunction.result, TInt))
 						new TypedExpression(TFunctionRef("__string_compare_full"), TFunction([TString, TString], TInt), span);
-					else if (signatures.exists(functionName))
-						new TypedExpression(TFunctionRef(functionName), functionType(requiredMapValue(signatures, functionName)), span);
-					else if (externals.exists(name)) {
-						var external = externals.get(name);
+					else if (session.signatures.exists(functionName))
+						new TypedExpression(TFunctionRef(functionName), functionType(requiredMapValue(session.signatures, functionName)), span);
+					else if (session.externals.exists(name)) {
+						var external = session.externals.get(name);
 						new TypedExpression(TFunctionRef(name), TFunction(external.arguments, external.result), span);
-					} else if (classDecls.exists(name) || enumAbstractDecls.exists(name) || PlatformAbi.isType(name))
+					} else if (session.classDecls.exists(name) || session.enumAbstractDecls.exists(name) || PlatformAbi.isType(name))
 						new TypedExpression(TClassRef(name), TInstance(NominalKind.Class, name, []), span);
 					else {
 						var owner = context.lexicalOwner,
@@ -2054,8 +2018,8 @@ class Typer {
 						var dot = name.indexOf(".");
 						if (dot <= 0) {
 							var expectedEnumName = enumName(expectedType);
-							if (expectedEnumName != null && enumDecls.exists(expectedEnumName)) {
-								var expectedEnum = enumDecls.get(expectedEnumName);
+							if (expectedEnumName != null && session.enumDecls.exists(expectedEnumName)) {
+								var expectedEnum = session.enumDecls.get(expectedEnumName);
 								for (index in 0...expectedEnum.cases.length) {
 									var enumCase = expectedEnum.cases[index];
 									if (enumCase.name == name && enumCase.params.length == 0) {
@@ -2080,9 +2044,9 @@ class Typer {
 								case TAbstract(declaration, _, _): declaration;
 								default: null;
 							};
-							var expectedAbstract = expectedAbstractName == null ? null : enumAbstractDecls.get(expectedAbstractName);
+							var expectedAbstract = expectedAbstractName == null ? null : session.enumAbstractDecls.get(expectedAbstractName);
 							if (expectedAbstract == null && expectedAbstractName != null)
-								for (candidateName => candidate in enumAbstractDecls)
+								for (candidateName => candidate in session.enumAbstractDecls)
 									if (lastPathSegment(candidateName) == lastPathSegment(expectedAbstractName)) {
 										expectedAbstract = candidate;
 										break;
@@ -2093,7 +2057,7 @@ class Typer {
 										return typeExpression(value.value, new Scope(), lowerType(expectedAbstract.underlying));
 							}
 							var unqualifiedAbstract:Null<compiler.syntax.Ast.AstEnumAbstract> = null;
-							for (candidate in enumAbstractDecls)
+							for (candidate in session.enumAbstractDecls)
 								for (value in candidate.values)
 									if (value.name == name) {
 										if (unqualifiedAbstract != null)
@@ -2117,14 +2081,14 @@ class Typer {
 								fieldName = parts[1],
 								enumName = pathBeforeLast(name),
 								enumCaseName = lastPathSegment(name);
-							if (enumAbstractDecls.exists(enumName)) {
-								var enumAbstract = enumAbstractDecls.get(enumName);
+							if (session.enumAbstractDecls.exists(enumName)) {
+								var enumAbstract = session.enumAbstractDecls.get(enumName);
 								for (value in enumAbstract.values)
 									if (value.name == enumCaseName)
 										return typeExpression(value.value, new Scope(), lowerType(enumAbstract.underlying));
 							}
-							if (enumDecls.exists(enumName)) {
-								var enumDecl = enumDecls.get(enumName);
+							if (session.enumDecls.exists(enumName)) {
+								var enumDecl = session.enumDecls.get(enumName);
 								var index = -1;
 								for (i in 0...enumDecl.cases.length)
 									if (enumDecl.cases[i].name == enumCaseName)
@@ -2153,7 +2117,9 @@ class Typer {
 							var classEnd = parts.length - 1;
 							while (classEnd > 0) {
 								var className = parts.slice(0, classEnd).join(".");
-								if (classDecls.exists(className) || enumAbstractDecls.exists(className) || PlatformAbi.isType(className)) {
+								if (session.classDecls.exists(className)
+									|| session.enumAbstractDecls.exists(className)
+									|| PlatformAbi.isType(className)) {
 									var classObject = new TypedExpression(TClassRef(className), TInstance(NominalKind.Class, className, []), span);
 									for (index in classEnd...parts.length)
 										classObject = typedMember(classObject, parts[index], span);
@@ -2170,7 +2136,7 @@ class Typer {
 				}
 			case Lambda(arguments, body, span):
 				var lambdaKey = '${context.name}:${span.file.path}:${span.start}';
-				if (lambdaCache.exists(lambdaKey)) lambdaCache.get(lambdaKey) else {
+				if (session.lambdaCache.exists(lambdaKey)) session.lambdaCache.get(lambdaKey) else {
 					var expectedFunction = expectedFunctionType(expectedType),
 						inferContextualResult = expectedFunction != null && expectedFunction.result == TDynamic && inferDynamicLambdaResult;
 					if (expectedFunction != null && expectedFunction.arguments.length != arguments.length)
@@ -2256,7 +2222,9 @@ class Typer {
 					var outerContext = context,
 						lambdaName = '$' + 'lambda:${outerContext.name}:${span.start}',
 						lambdaContext = enterBody(lambdaName, outerContext.typeSubstitutions);
-					context.resultType = expectedFunction == null || inferContextualResult ? TVoid : expectedFunction.result;
+					context.scope = typedBodyScope;
+					context.receiver = typedBodyScope.resolve("this");
+					context.expectedReturnType = expectedFunction == null || inferContextualResult ? TVoid : expectedFunction.result;
 					context.contextualVoidLambda = expectedFunction != null && expectedFunction.result == TVoid;
 					CaptureAnalysis.collectAssignedLocals(body, context.assigned);
 					var lambdaStorage = LexicalStorageAnalysis.analyze(body, arguments);
@@ -2276,7 +2244,7 @@ class Typer {
 						var contextualResult = context.inferredResult;
 						inferredResult = contextualResult == null ? CompilerType.TVoid : contextualResult;
 					}
-					context.resultType = inferredResult;
+					context.expectedReturnType = inferredResult;
 					var lambdaCells = copyMap(context.storage.cells),
 						lambdaCellTypes = copyMap(context.storage.types),
 						lambdaCellKinds = copyMap(context.storage.kinds);
@@ -2288,8 +2256,8 @@ class Typer {
 					if (captures.length > 0)
 						environment = '$' + 'lambda-env:${context.name}:${span.start}';
 					if (environment != null)
-						closureConversion.addEnvironment(environment, captures);
-					closureConversion.addFunction({
+						session.closureConversion.addEnvironment(environment, captures);
+					session.closureConversion.addFunction({
 						name: lambdaName,
 						genericOrigin: outerContext.name,
 						owner: environment,
@@ -2304,11 +2272,11 @@ class Typer {
 					});
 					for (name in lambdaCells.keys())
 						if (lambdaCellTypes.exists(name) && lambdaCellKinds.exists(name))
-							closureConversion.addCell(requiredMapValue(lambdaCells, name), requiredMapValue(lambdaCellTypes, name),
+							session.closureConversion.addCell(requiredMapValue(lambdaCells, name), requiredMapValue(lambdaCellTypes, name),
 								requiredMapValue(lambdaCellKinds, name));
 					var lambdaResult = new TypedExpression(TLambda(lambdaName, environment, captures),
 						TFunction([for (argument in lambdaArguments) argument.type], inferredResult), span);
-					lambdaCache.set(lambdaKey, lambdaResult);
+					session.lambdaCache.set(lambdaKey, lambdaResult);
 					lambdaResult;
 				}
 			case Member(object, name, span): typeMember(object, name, span, scope);
@@ -2373,7 +2341,7 @@ class Typer {
 				new TypedExpression(TConditional(typedCondition, typedTrue, typedFalse), resultType, span);
 			case BlockExpression(statements, result, span):
 				var blockScope = new Scope(scope),
-					typedStatements = typeStatements(statements, blockScope, context.resultType);
+					typedStatements = typeStatements(statements, blockScope, context.expectedReturnType);
 				if (ControlFlow.alwaysExits(typedStatements, function(type, cases) return this.exhaustiveEnum(type, cases)))
 					return new TypedExpression(TBlockExpression(typedStatements, new TypedExpression(TUnreachable, TNever, span)), TNever, span);
 				var typedResult = typeExpression(result, blockScope, expectedType);
@@ -2495,8 +2463,8 @@ class Typer {
 				if (isEnum(typedSubject.type) && typedDefault == null && !seenCases.exists("$catchall")) {
 					var enumName = Std.string(enumName(typedSubject.type)),
 						missing:Array<String> = [];
-					if (enumDecls.exists(enumName)) {
-						var enumDecl = enumDecls.get(enumName);
+					if (session.enumDecls.exists(enumName)) {
+						var enumDecl = session.enumDecls.get(enumName);
 						for (index in 0...enumDecl.cases.length)
 							if (!seenCases.exists('enum:$enumName:$index'))
 								missing.push(enumDecl.cases[index].name);
@@ -2703,48 +2671,48 @@ class Typer {
 					fail("E1014", "Range bounds must be Int values", span);
 				new TypedExpression(TRange(typedStart, typedEnd), TRange, span);
 			case NewGeneric(typeName, typeArguments, arguments, span):
-				if (declarations.abstracts.exists(typeName))
+				if (session.declarations.abstracts.exists(typeName))
 					return typeAbstractConstruction(typeName, typeArguments, arguments, span, scope);
-				if (!classDecls.exists(typeName) || interfaceDecls.exists(typeName))
+				if (!session.classDecls.exists(typeName) || session.interfaceDecls.exists(typeName))
 					fail("E1007", 'Unknown class "$typeName"', span);
-				var classDecl = requiredMapValue(classDecls, typeName),
-					valueType = declarations.resolve(AppliedType(typeName, typeArguments), span),
+				var classDecl = requiredMapValue(session.classDecls, typeName),
+					valueType = session.declarations.resolve(AppliedType(typeName, typeArguments), span),
 					substitutions = nominalSubstitutions(valueType),
 					constructorName = typeName + ".new",
-					hasConstructor = signatures.exists(constructorName),
+					hasConstructor = session.signatures.exists(constructorName),
 					implicitConstructor = !hasConstructor && [
 						for (field in classDecl.fields)
 							if (!field.isStatic && field.initializer != null) field
 					].length > 0;
 				if (!hasConstructor && arguments.length != 0)
 					fail("E1008", 'Constructor "$typeName" expects 0 arguments, got ${arguments.length}', span);
-				var semanticArguments = hasConstructor ? typeDeclaredCallArguments(arguments, requiredMapValue(signatures, constructorName).arguments, scope,
-					constructorName, span, substitutions) : [];
+				var semanticArguments = hasConstructor ? typeDeclaredCallArguments(arguments, requiredMapValue(session.signatures, constructorName).arguments,
+					scope, constructorName, span, substitutions) : [];
 				var typed = [for (argument in semanticArguments) abiBoundaryCast(argument, TDynamic)];
 				new TypedExpression(TNew(typeName, typed, hasConstructor || implicitConstructor), valueType, span);
 			case New(typeName, arguments, span):
-				if (declarations.abstracts.exists(typeName))
+				if (session.declarations.abstracts.exists(typeName))
 					return typeAbstractConstruction(typeName, [], arguments, span, scope);
-				if ((!classDecls.exists(typeName) && !PlatformAbi.isType(typeName)) || interfaceDecls.exists(typeName))
+				if ((!session.classDecls.exists(typeName) && !PlatformAbi.isType(typeName)) || session.interfaceDecls.exists(typeName))
 					fail("E1007", 'Unknown class "$typeName"', span);
-				var classDecl = classDecls.exists(typeName) ? requiredMapValue(classDecls, typeName) : null;
+				var classDecl = session.classDecls.exists(typeName) ? requiredMapValue(session.classDecls, typeName) : null;
 				if (classDecl != null && classDecl.typeParameters.length > 0)
 					return typeInferredClassConstruction(typeName, arguments, span, scope, expectedType);
 				var constructorName = typeName + ".new",
-					hasConstructor = signatures.exists(constructorName),
+					hasConstructor = session.signatures.exists(constructorName),
 					implicitConstructor = !hasConstructor && classDecl != null && [
 						for (field in classDecl.fields)
 							if (!field.isStatic && field.initializer != null) field
 					].length > 0;
 				var expected = hasConstructor ? [
-					for (argument in requiredMapValue(signatures, constructorName).arguments)
+					for (argument in requiredMapValue(session.signatures, constructorName).arguments)
 						argumentType(argument)
 				] : PlatformAbi.constructorArguments(typeName), resolvedExpected:Array<CompilerType> = [];
 				if (expected != null)
 					resolvedExpected = expected;
 				if (!hasConstructor && arguments.length != resolvedExpected.length)
 					fail("E1008", 'Constructor "$typeName" expects ${resolvedExpected.length} arguments, got ${arguments.length}', span);
-				var typed = hasConstructor ? typeDeclaredCallArguments(arguments, requiredMapValue(signatures, constructorName).arguments, scope,
+				var typed = hasConstructor ? typeDeclaredCallArguments(arguments, requiredMapValue(session.signatures, constructorName).arguments, scope,
 					constructorName, span) : typeCallArguments(arguments, resolvedExpected, scope, constructorName);
 				var nativeConstructor = PlatformAbi.constructorNative(typeName),
 					valueType = PlatformAbi.valueType(typeName);
@@ -2811,9 +2779,11 @@ class Typer {
 						case "String": TString;
 						case "Array": TArray(TDynamic);
 						default:
-							if (!classDecls.exists(targetName) && !interfaceDecls.exists(targetName) && !enumDecls.exists(targetName))
+							if (!session.classDecls.exists(targetName)
+								&& !session.interfaceDecls.exists(targetName)
+								&& !session.enumDecls.exists(targetName))
 								fail("E1007", 'Unknown type "$targetName"', span);
-							declarations.resolve(NamedType(targetName), span);
+							session.declarations.resolve(NamedType(targetName), span);
 					};
 					var value = coerce(typeExpression(arguments[0], scope), TDynamic, "Std.isOfType value", "E1002"),
 						target = new TypedExpression(TClassRef(targetName), targetType, span);
@@ -2926,7 +2896,7 @@ class Typer {
 						var implicitMethod = lexicalMethod(name);
 						if (implicitMethod != null) {
 							var methodKey = implicitMethod.owner + "." + name,
-								method = signatures.get(methodKey);
+								method = session.signatures.get(methodKey);
 							if (method == null)
 								fail("E1007", 'Missing signature for method "$methodKey"', span);
 							if (isGeneric(method)) {
@@ -2955,7 +2925,7 @@ class Typer {
 								var genericArguments = contextual ? [
 									for (index in 0...arguments.length)
 										typeExpression(arguments[index], scope,
-											declarations.resolve(method.arguments[index].type, method.arguments[index].span, typingSubstitutions), true)
+											session.declarations.resolve(method.arguments[index].type, method.arguments[index].span, typingSubstitutions), true)
 								] : [for (argument in arguments) typeExpression(argument, scope)];
 								var specialized = specializeGeneric(methodKey, method, genericArguments, span, scope, implicitMethod.owner,
 									implicitMethod.isStatic, preset, receiver);
@@ -2978,7 +2948,7 @@ class Typer {
 						methodName:Null<String> = null;
 					if (parts.length >= 2) {
 						methodName = parts[parts.length - 1];
-						if (!signatures.exists(name)) {
+						if (!session.signatures.exists(name)) {
 							var resolvedReceiverName = parts[0];
 							receiverName = resolvedReceiverName;
 							receiver = resolveReceiver(resolvedReceiverName, span, scope);
@@ -3061,7 +3031,7 @@ class Typer {
 						if (methodInfoResult == null || methodInfoResult.isStatic)
 							fail("E1007", 'Unknown instance method "$className.$methodName"', span);
 						var methodKey = methodInfoResult.owner + "." + resolvedMethodName;
-						var method = signatures.get(methodKey);
+						var method = session.signatures.get(methodKey);
 						if (method == null)
 							fail("E1007", 'Missing signature for method "$methodKey"', span);
 						if (isGeneric(method)) {
@@ -3084,7 +3054,7 @@ class Typer {
 							var genericArguments = contextual ? [
 								for (index in 0...arguments.length)
 									typeExpression(arguments[index], scope,
-										declarations.resolve(method.arguments[index].type, method.arguments[index].span, typingSubstitutions), true)
+										session.declarations.resolve(method.arguments[index].type, method.arguments[index].span, typingSubstitutions), true)
 							] : [for (argument in arguments) typeExpression(argument, scope)];
 							var specialized = specializeGeneric(methodKey, method, genericArguments, span, scope, methodInfoResult.owner,
 								methodInfoResult.isStatic, preset, methodInfoResult.isStatic ? null : resolvedReceiver);
@@ -3093,18 +3063,18 @@ class Typer {
 						var methodOwnerType = projectNominal(receiverType, methodInfoResult.owner),
 							substitutions = nominalSubstitutions(methodOwnerType),
 							typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span, substitutions),
-							semanticResult = declarations.resolve(method.result, method.span, substitutions),
+							semanticResult = session.declarations.resolve(method.result, method.span, substitutions),
 							physicalResult = isGenericNominal(methodOwnerType) ? TDynamic : semanticResult,
 							call = new TypedExpression(TMethodCall(resolvedReceiver, methodKey, typed), physicalResult, span);
 						applyCallEffect(abiBoundaryCast(call, semanticResult), methodKey, scope);
 					} else {
-						var hasSignature = signatures.exists(name);
-						if (hasSignature && isGeneric(requiredMapValue(signatures, name))) {
-							var signature = requiredMapValue(signatures, name),
+						var hasSignature = session.signatures.exists(name);
+						if (hasSignature && isGeneric(requiredMapValue(session.signatures, name))) {
+							var signature = requiredMapValue(session.signatures, name),
 								infoOwner:Null<String> = null,
 								infoStatic = true;
-							if (methodInfo.exists(name)) {
-								var resolvedInfo = requiredMapValue(methodInfo, name);
+							if (session.methodInfo.exists(name)) {
+								var resolvedInfo = requiredMapValue(session.methodInfo, name);
 								infoOwner = resolvedInfo.owner;
 								infoStatic = resolvedInfo.isStatic;
 							}
@@ -3116,21 +3086,22 @@ class Typer {
 						var expectedArguments:Array<CompilerType> = [],
 							result:CompilerType = TVoid;
 						if (hasSignature) {
-							var signature = requiredMapValue(signatures, name);
+							var signature = requiredMapValue(session.signatures, name);
 							expectedArguments = [for (argument in signature.arguments) argumentType(argument)];
 							result = lowerType(signature.result);
-						} else if (externals.exists(name)) {
-							var external = requiredMapValue(externals, name);
+						} else if (session.externals.exists(name)) {
+							var external = requiredMapValue(session.externals, name);
 							expectedArguments = external.arguments;
 							result = external.result;
 						} else
 							fail("E1007", 'Unknown function "$name"', span);
 						if (!hasSignature && arguments.length != expectedArguments.length)
 							fail("E1008", 'Function "$name" expects ${expectedArguments.length} arguments, got ${arguments.length}', span);
-						var typed = hasSignature ? typeDeclaredCallArguments(arguments, requiredMapValue(signatures, name).arguments, scope, name,
+						var typed = hasSignature ? typeDeclaredCallArguments(arguments, requiredMapValue(session.signatures, name).arguments, scope, name,
 							span) : typeCallArguments(arguments, expectedArguments, scope, name);
-						applyCallEffect(new TypedExpression(cNativeFunctions.exists(name) ? TCNativeCall(name, typed) : TCall(name, typed), result, span),
-							name, scope);
+						applyCallEffect(new TypedExpression(session.cNativeFunctions.exists(name) ? TCNativeCall(name, typed) : TCall(name, typed), result,
+							span), name,
+							scope);
 					}
 				}
 			case ClosureCall(callee, arguments, span):
@@ -3172,7 +3143,7 @@ class Typer {
 		for (index in 0...arguments.length) {
 			var expected:Null<CompilerType> = null;
 			if (allTypeParametersBound(parameters, substitutions))
-				expected = declarations.resolve(fn.arguments[index].type, fn.arguments[index].span, substitutions);
+				expected = session.declarations.resolve(fn.arguments[index].type, fn.arguments[index].span, substitutions);
 			var argument = typeExpression(arguments[index], scope, expected, expected != null);
 			inferTypeParameters(fn.arguments[index].type, argument.type, parameters, substitutions, argument.span);
 			typed.push(argument);
@@ -3196,10 +3167,11 @@ class Typer {
 	}
 
 	function typeAbstractConstruction(name:String, typeArguments:Array<AstType>, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
-		var decl = requiredMapValue(declarations.abstracts, name),
-			valueType = typeArguments.length == 0 ? declarations.resolve(NamedType(name), span) : declarations.resolve(AppliedType(name, typeArguments), span),
+		var decl = requiredMapValue(session.declarations.abstracts, name),
+			valueType = typeArguments.length == 0 ? session.declarations.resolve(NamedType(name),
+				span) : session.declarations.resolve(AppliedType(name, typeArguments), span),
 			constructorName = name + ".new",
-			constructor = signatures.get(constructorName);
+			constructor = session.signatures.get(constructorName);
 		if (constructor == null)
 			fail("E1007", 'Abstract "$name" has no constructor', span);
 		if (decl.isExtern == true) {
@@ -3236,27 +3208,27 @@ class Typer {
 	function applyCallEffect(call:TypedExpression, name:String, ?scope:Scope):TypedExpression {
 		if (scope != null)
 			scope.invalidateAllExpressions();
-		return noReturnFunctions.exists(name) ? new TypedExpression(TNoReturn(call), TNever, call.span) : call;
+		return session.noReturnFunctions.exists(name) ? new TypedExpression(TNoReturn(call), TNever, call.span) : call;
 	}
 
 	function typeSuperCall(arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
 		var owner = context.lexicalOwner, baseType:Null<AstType> = null;
-		if (owner != null && classDecls.exists(owner))
-			baseType = requiredMapValue(classDecls, owner).base;
+		if (owner != null && session.classDecls.exists(owner))
+			baseType = requiredMapValue(session.classDecls, owner).base;
 		if (baseType == null)
 			fail("E1007", "super() requires a base-class constructor", span);
-		var baseInstance = declarations.resolve(baseType, span, context.typeSubstitutions),
+		var baseInstance = session.declarations.resolve(baseType, span, context.typeSubstitutions),
 			resolvedBase = nominalName(baseInstance),
 			substitutions = nominalSubstitutions(baseInstance),
 			constructorName = resolvedBase + ".new",
-			hasConstructor = signatures.exists(constructorName),
+			hasConstructor = session.signatures.exists(constructorName),
 			expected = PlatformAbi.constructorArguments(resolvedBase),
 			resolvedExpected:Array<CompilerType> = [];
 		if (expected != null)
 			resolvedExpected = expected;
 		if (!hasConstructor && arguments.length != resolvedExpected.length)
 			fail("E1008", 'Constructor "$resolvedBase" expects ${resolvedExpected.length} arguments, got ${arguments.length}', span);
-		var semanticArguments = hasConstructor ? typeDeclaredCallArguments(arguments, requiredMapValue(signatures, constructorName).arguments, scope,
+		var semanticArguments = hasConstructor ? typeDeclaredCallArguments(arguments, requiredMapValue(session.signatures, constructorName).arguments, scope,
 			constructorName, span, substitutions) : typeCallArguments(arguments, resolvedExpected, scope, constructorName),
 			physicalArguments = isGenericNominal(baseInstance) ? [for (argument in semanticArguments) abiBoundaryCast(argument, TDynamic)] : semanticArguments;
 		return new TypedExpression(TSuperCall(resolvedBase, physicalArguments), TVoid, span);
@@ -3285,7 +3257,7 @@ class Typer {
 		if (constraints != null)
 			for (constraint in constraints) {
 				var actual = requiredMapValue(substitutions, constraint.parameter),
-					expected = declarations.resolve(constraint.type, constraint.span, substitutions);
+					expected = session.declarations.resolve(constraint.type, constraint.span, substitutions);
 				if (!isAssignable(actual, expected))
 					fail("E1003", 'Type argument for "${constraint.parameter}" does not satisfy constraint "${SemanticSignature.type(expected)}"', span);
 			}
@@ -3305,7 +3277,7 @@ class Typer {
 				arguments.push(coerce(typeDefaultExpression(defaultValue, expected, baseName), expected, 'default argument ${index + 1} to "$baseName"'));
 		}
 		var semanticArguments = coerceArguments(arguments, semanticExpected, baseName),
-			result = declarations.resolve(fn.result, fn.span, substitutions),
+			result = session.declarations.resolve(fn.result, fn.span, substitutions),
 			representationSubstitutions:Map<String, CompilerType> = [];
 		var specializationPolicies:Array<String> = [];
 		for (parameter in parameters) {
@@ -3319,18 +3291,18 @@ class Typer {
 		], typed = [
 			for (index in 0...semanticArguments.length)
 				abiBoundaryCast(semanticArguments[index], representationExpected[index])
-			], representationResult = declarations.resolve(fn.result, fn.span, representationSubstitutions), representationArguments = [
+			], representationResult = session.declarations.resolve(fn.result, fn.span, representationSubstitutions), representationArguments = [
 			for (parameter in parameters)
 				requiredMapValue(representationSubstitutions, parameter)
-			], specialization = genericSpecializations.request(baseName, representationArguments, specializationPolicies);
+			], specialization = session.genericSpecializations.request(baseName, representationArguments, specializationPolicies);
 		var representationReceiver:Null<CompilerType> = null;
 		if (receiver != null)
-			representationReceiver = declarations.abstracts.exists(requiredString(owner)) ? abstractReceiverType(requiredString(owner),
+			representationReceiver = session.declarations.abstracts.exists(requiredString(owner)) ? abstractReceiverType(requiredString(owner),
 				representationSubstitutions) : receiver.type;
-		if (!emittedGenericBodies.exists(specialization.name)) {
-			emittedGenericBodies.set(specialization.name, true);
-			closureConversion.addFunction(typeFunction(fn, owner, receiver == null ? isStatic : true, representationSubstitutions, specialization.name,
-				representationReceiver));
+		if (!session.emittedGenericBodies.exists(specialization.name)) {
+			session.emittedGenericBodies.set(specialization.name, true);
+			session.closureConversion.addFunction(typeFunction(fn, owner, receiver == null ? isStatic : true, representationSubstitutions,
+				specialization.name, representationReceiver));
 		}
 		if (receiver != null) {
 			var receiverType = representationReceiver;
@@ -3343,10 +3315,10 @@ class Typer {
 	}
 
 	function abstractReceiverType(name:String, substitutions:Map<String, CompilerType>):CompilerType {
-		var decl = requiredMapValue(declarations.abstracts, name), arguments = [
+		var decl = requiredMapValue(session.declarations.abstracts, name), arguments = [
 			for (parameter in decl.typeParameters)
 				requiredMapValue(substitutions, parameter)
-		], representation = declarations.resolve(decl.underlying, decl.span, substitutions);
+		], representation = session.declarations.resolve(decl.underlying, decl.span, substitutions);
 		return TAbstract(name, arguments, representation);
 	}
 
@@ -3419,7 +3391,7 @@ class Typer {
 
 	/** Resolve and memoize an inline field so every use shares its typed value. */
 	function resolveInlineConstant(owner:String, name:String, span:SourceSpan):Null<ResolvedInlineConstant> {
-		var classDecl = classDecls.get(owner);
+		var classDecl = session.classDecls.get(owner);
 		if (classDecl == null)
 			return null;
 		var field:Null<compiler.syntax.Ast.AstField> = null;
@@ -3434,12 +3406,12 @@ class Typer {
 		if (staticField == null)
 			return null;
 		var key = staticField.owner + "." + name,
-			cached = inlineConstants.get(key);
+			cached = session.inlineConstants.get(key);
 		if (cached != null)
 			return cached;
-		if (inlineConstantsInProgress.exists(key))
+		if (session.inlineConstantsInProgress.exists(key))
 			fail("E1002", 'Cyclic inline constant reference through "$key"', span);
-		inlineConstantsInProgress.set(key, true);
+		session.inlineConstantsInProgress.set(key, true);
 		var body = enterBody(staticField.owner + ".__inline", declarationTypeSubstitutions(staticField.owner, classDecl.typeParameters), staticField.owner),
 			resolved:ResolvedInlineConstant;
 		try {
@@ -3454,12 +3426,12 @@ class Typer {
 			};
 		} catch (error:Dynamic) {
 			leaveBody(body);
-			inlineConstantsInProgress.remove(key);
+			session.inlineConstantsInProgress.remove(key);
 			throw error;
 		}
 		leaveBody(body);
-		inlineConstantsInProgress.remove(key);
-		inlineConstants.set(key, resolved);
+		session.inlineConstantsInProgress.remove(key);
+		session.inlineConstants.set(key, resolved);
 		return resolved;
 	}
 
@@ -3477,8 +3449,8 @@ class Typer {
 		}
 		switch typedObject.expression {
 			case TClassRef(className):
-				if (enumAbstractDecls.exists(className)) {
-					var abstractDecl = requiredMapValue(enumAbstractDecls, className);
+				if (session.enumAbstractDecls.exists(className)) {
+					var abstractDecl = requiredMapValue(session.enumAbstractDecls, className);
 					for (value in abstractDecl.values)
 						if (value.name == name)
 							return typeExpression(value.value, new Scope(), lowerType(abstractDecl.underlying));
@@ -3505,24 +3477,24 @@ class Typer {
 			return new TypedExpression(TCall(platformField.get, [typedObject]), platformField.type, span);
 		var getter = instancePropertyAccessor(typedObject.type, name, true);
 		if (getter != null) {
-			var method = requiredMapValue(signatures, getter);
+			var method = requiredMapValue(session.signatures, getter);
 			return new TypedExpression(TMethodCall(typedObject, getter, []),
-				declarations.resolve(method.result, method.span, nominalSubstitutions(typedObject.type)), span);
+				session.declarations.resolve(method.result, method.span, nominalSubstitutions(typedObject.type)), span);
 		}
 		var owner = switch typedObject.type {
 			case TInstance(Class, className, _), TInstance(Interface, className, _): className;
 			default: null;
 		};
 		if (owner != null) {
-			var methodInfo = findMethod(owner, name);
-			if (methodInfo != null && !methodInfo.isStatic) {
-				var methodKey = methodInfo.owner + "." + name,
-					method = requiredMapValue(signatures, methodKey);
+			var resolvedMethodInfo = findMethod(owner, name);
+			if (resolvedMethodInfo != null && !resolvedMethodInfo.isStatic) {
+				var methodKey = resolvedMethodInfo.owner + "." + name,
+					method = requiredMapValue(session.signatures, methodKey);
 				if (isGeneric(method))
 					fail("E1007", "Generic instance method values are not supported yet", span);
-				var substitutions = nominalSubstitutions(projectNominal(typedObject.type, methodInfo.owner)),
+				var substitutions = nominalSubstitutions(projectNominal(typedObject.type, resolvedMethodInfo.owner)),
 					arguments = [for (argument in method.arguments) argumentType(argument, substitutions)],
-					result = declarations.resolve(method.result, method.span, substitutions);
+					result = session.declarations.resolve(method.result, method.span, substitutions);
 				return new TypedExpression(TMethodRef(typedObject, methodKey), TFunction(arguments, result), span);
 			}
 		}
@@ -3539,8 +3511,8 @@ class Typer {
 
 	function instancePropertyAccessor(type:CompilerType, name:String, read:Bool):Null<String>
 		return switch type {
-			case TInstance(Class, className, _) if (classDecls.exists(className)):
-				var declaration = requiredMapValue(classDecls, className),
+			case TInstance(Class, className, _) if (session.classDecls.exists(className)):
+				var declaration = requiredMapValue(session.classDecls, className),
 					accessor:Null<String> = null;
 				for (field in declaration.fields)
 					if (field.name == name && !field.isStatic) {
@@ -3548,23 +3520,23 @@ class Typer {
 						if (usesAccessor)
 							accessor = className + "." + (read ? "get_" : "set_") + name;
 					}
-				if (accessor != null) accessor; else if (declaration.base != null) instancePropertyAccessor(declarations.resolve(declaration.base,
+				if (accessor != null) accessor; else if (declaration.base != null) instancePropertyAccessor(session.declarations.resolve(declaration.base,
 					declaration.span, nominalSubstitutions(type)), name, read); else null;
 			default: null;
 		};
 
 	function fieldRepresentationType(type:CompilerType, name:String, span:SourceSpan):CompilerType
 		return switch type {
-			case TInstance(NominalKind.Class, className, _) if (classDecls.exists(className)):
-				var declaration = requiredMapValue(classDecls, className),
+			case TInstance(NominalKind.Class, className, _) if (session.classDecls.exists(className)):
+				var declaration = requiredMapValue(session.classDecls, className),
 					substitutions:Map<String, CompilerType> = [];
 				for (parameter in declaration.typeParameters)
 					substitutions.set(parameter, TDynamic);
 				var result:Null<CompilerType> = null;
 				for (field in declaration.fields)
 					if (field.name == name && !field.isStatic)
-						result = declarations.resolve(declarations.resolvedFieldType(className, field), field.span, substitutions);
-				if (result != null) result; else if (declaration.base != null) fieldRepresentationType(declarations.resolve(declaration.base,
+						result = session.declarations.resolve(session.declarations.resolvedFieldType(className, field), field.span, substitutions);
+				if (result != null) result; else if (declaration.base != null) fieldRepresentationType(session.declarations.resolve(declaration.base,
 					declaration.span, substitutions), name, span); else fieldType(type, name, span);
 			default: fieldType(type, name, span);
 		};
@@ -3583,18 +3555,18 @@ class Typer {
 	}
 
 	function findStaticFieldNullable(className:String, name:String):Null<{owner:String, type:CompilerType}> {
-		if (!classDecls.exists(className))
+		if (!session.classDecls.exists(className))
 			return null;
-		var classDecl = requiredMapValue(classDecls, className);
+		var classDecl = requiredMapValue(session.classDecls, className);
 		for (field in classDecl.fields)
 			if (field.name == name && field.isStatic)
-				return {owner: className, type: lowerType(declarations.resolvedFieldType(className, field))};
+				return {owner: className, type: lowerType(session.declarations.resolvedFieldType(className, field))};
 		var base = classDecl.base;
 		return base == null ? null : findStaticFieldNullable(inheritanceName(base), name);
 	}
 
 	function rejectInlineFieldMutation(owner:String, name:String, span:SourceSpan):Void {
-		var classDecl = classDecls.get(owner);
+		var classDecl = session.classDecls.get(owner);
 		if (classDecl == null)
 			return;
 		for (field in classDecl.fields)
@@ -3637,7 +3609,7 @@ class Typer {
 		var methodOwnerType = projectNominal(receiver.type, methodInfoResult.owner),
 			substitutions = nominalSubstitutions(methodOwnerType),
 			methodKey = methodInfoResult.owner + "." + name,
-			method = signatures.get(methodKey);
+			method = session.signatures.get(methodKey);
 		if (method == null)
 			fail("E1007", 'Missing signature for method "$methodKey"', span);
 		if (isGeneric(method)) {
@@ -3652,12 +3624,12 @@ class Typer {
 			var genericArguments = [
 				for (index in 0...arguments.length)
 					typeExpression(arguments[index], scope,
-						declarations.resolve(method.arguments[index].type, method.arguments[index].span, typingSubstitutions), true)
+						session.declarations.resolve(method.arguments[index].type, method.arguments[index].span, typingSubstitutions), true)
 			];
 			return specializeGeneric(methodKey, method, genericArguments, span, scope, methodInfoResult.owner, false, preset, receiver);
 		}
 		var typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span, substitutions);
-		var semanticResult = declarations.resolve(method.result, method.span, substitutions),
+		var semanticResult = session.declarations.resolve(method.result, method.span, substitutions),
 			physicalResult = isGenericNominal(methodOwnerType) ? TDynamic : semanticResult,
 			call = new TypedExpression(TMethodCall(receiver, methodKey, typed), physicalResult, span);
 		return applyCallEffect(abiBoundaryCast(call, semanticResult), methodKey, scope);
@@ -3692,7 +3664,7 @@ class Typer {
 			default:
 				return null;
 		}
-		var decl = requiredMapValue(declarations.abstracts, abstractName),
+		var decl = requiredMapValue(session.declarations.abstracts, abstractName),
 			method:Null<AstFunction> = null;
 		for (candidate in decl.methods)
 			if (candidate.name == name && !candidate.isStatic && candidate.name != "new")
@@ -3700,18 +3672,18 @@ class Typer {
 		if (method == null)
 			fail("E1007", 'Unknown abstract method "$abstractName.$name"', span);
 		var methodKey = abstractName + "." + name,
-			signature = requiredMapValue(signatures, methodKey),
+			signature = requiredMapValue(session.signatures, methodKey),
 			substitutions:Map<String, CompilerType> = [];
 		for (index in 0...decl.typeParameters.length)
 			substitutions.set(decl.typeParameters[index], typeArguments[index]);
 		if (decl.isExtern == true) {
 			var typed = typeDeclaredCallArguments(arguments, signature.arguments, scope, methodKey, span, substitutions),
 				callArguments:Array<TypedExpression> = [
-					abiBoundaryCast(receiver, declarations.resolve(decl.underlying, decl.span, substitutions))
+					abiBoundaryCast(receiver, session.declarations.resolve(decl.underlying, decl.span, substitutions))
 				];
 			for (argument in typed)
 				callArguments.push(argument);
-			return new TypedExpression(TCall(methodKey, callArguments), declarations.resolve(signature.result, signature.span, substitutions), span);
+			return new TypedExpression(TCall(methodKey, callArguments), session.declarations.resolve(signature.result, signature.span, substitutions), span);
 		}
 		var typedArguments = [for (argument in arguments) typeExpression(argument, scope)];
 		return specializeGeneric(methodKey, signature, typedArguments, span, scope, abstractName, false, substitutions, receiver);
@@ -3934,8 +3906,8 @@ class Typer {
 		return switch type {
 			case TInstance(Class, className, []):
 				var found = false;
-				if (classDecls.exists(className)) {
-					var classDecl = requiredMapValue(classDecls, className);
+				if (session.classDecls.exists(className)) {
+					var classDecl = requiredMapValue(session.classDecls, className);
 					for (field in classDecl.fields)
 						if (field.name == name && !field.isStatic)
 							found = true;
@@ -4059,7 +4031,7 @@ class Typer {
 
 	function typeInferredClassConstruction(typeName:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>):TypedExpression {
-		var declaration = requiredMapValue(classDecls, typeName),
+		var declaration = requiredMapValue(session.classDecls, typeName),
 			parameters = declaration.typeParameters,
 			substitutions:Map<String, CompilerType> = [];
 		var constructorExpectation = switch expectedType {
@@ -4079,7 +4051,7 @@ class Typer {
 					substitutions.set(parameters[index], contextualArguments[index]);
 
 		var constructorName = typeName + ".new",
-			hasConstructor = signatures.exists(constructorName),
+			hasConstructor = session.signatures.exists(constructorName),
 			implicitConstructor = !hasConstructor && [
 				for (field in declaration.fields)
 					if (!field.isStatic && field.initializer != null) field
@@ -4088,7 +4060,7 @@ class Typer {
 			if (arguments.length != 0)
 				fail("E1008", 'Constructor "$typeName" expects 0 arguments, got ${arguments.length}', span);
 		} else {
-			var constructor = requiredMapValue(signatures, constructorName),
+			var constructor = requiredMapValue(session.signatures, constructorName),
 				required = constructor.arguments.length;
 			while (required > 0 && constructor.arguments[required - 1].optional == true)
 				required--;
@@ -4099,11 +4071,11 @@ class Typer {
 		}
 
 		var typed:Array<TypedExpression> = [],
-			constructor = hasConstructor ? requiredMapValue(signatures, constructorName) : null;
+			constructor = hasConstructor ? requiredMapValue(session.signatures, constructorName) : null;
 		for (index in 0...arguments.length) {
 			var expectedArgument:Null<CompilerType> = null;
 			if (allTypeParametersBound(parameters, substitutions) && constructor != null)
-				expectedArgument = declarations.resolve(constructor.arguments[index].type, constructor.arguments[index].span, substitutions);
+				expectedArgument = session.declarations.resolve(constructor.arguments[index].type, constructor.arguments[index].span, substitutions);
 			var argument = typeExpression(arguments[index], scope, expectedArgument);
 			if (constructor != null)
 				inferTypeParameters(constructor.arguments[index].type, argument.type, parameters, substitutions, argument.span);
@@ -4160,7 +4132,7 @@ class Typer {
 			return;
 		for (constraint in constraints) {
 			var actual = requiredMapValue(substitutions, constraint.parameter),
-				expected = declarations.resolve(constraint.type, constraint.span, substitutions);
+				expected = session.declarations.resolve(constraint.type, constraint.span, substitutions);
 			if (!isAssignable(actual, expected))
 				fail("E1003", 'Type argument for "${constraint.parameter}" on "$name" does not satisfy constraint "${SemanticSignature.type(expected)}"', span);
 		}
@@ -4170,7 +4142,7 @@ class Typer {
 		var type = if (argument.type == InferredType && argument.defaultValue != null) {
 			var inferred = knownExpressionType(argument.defaultValue);
 			inferred == null ? TDynamic : inferred;
-		} else substitutions == null ? lowerType(argument.type) : declarations.resolve(argument.type, argument.span, substitutions);
+		} else substitutions == null ? lowerType(argument.type) : session.declarations.resolve(argument.type, argument.span, substitutions);
 		return argument.optional == true && argument.defaultValue == null ? CompilerType.TNullable(type) : type;
 	}
 
@@ -4205,11 +4177,11 @@ class Typer {
 	}
 
 	function nominalSubstitutions(type:CompilerType):Map<String, CompilerType> {
-		return declarations.inheritance.substitutions(type);
+		return session.declarations.inheritance.substitutions(type);
 	}
 
 	function projectNominal(type:CompilerType, target:String):CompilerType {
-		var projected = declarations.inheritance.project(type, target);
+		var projected = session.declarations.inheritance.project(type, target);
 		return projected == null ? type : projected;
 	}
 
@@ -4234,7 +4206,7 @@ class Typer {
 				return new TypedExpression(TNullableWrap(converted), expected, value.span);
 			default:
 		}
-		return switch relations.conversion(value.type, expected) {
+		return switch session.relations.conversion(value.type, expected) {
 			case Identity: value;
 			case IntToFloat:
 				new TypedExpression(TIntToFloat(value), TFloat, value.span);
@@ -4271,7 +4243,7 @@ class Typer {
 			targetResult = targetSignature.result;
 		if (sourceArguments.length != targetArguments.length || sameType(value.type, expected))
 			return new TypedExpression(TCast(value), expected, span);
-		var adapterId = functionAdapterCounter++, adapterName = '$' + 'function-adapter:${context.name}:$adapterId',
+		var adapterId = session.functionAdapterCounter++, adapterName = '$' + 'function-adapter:${context.name}:$adapterId',
 			environmentName = '$' + 'function-adapter-env:${context.name}:$adapterId', captureName = '__adapted_callable', arguments = [
 				for (index in 0...targetArguments.length)
 					{
@@ -4296,8 +4268,8 @@ class Typer {
 			statements.push(TReturn(adaptFunctionValue(call, targetResult, span), span));
 		else
 			return new TypedExpression(TCast(value), expected, span);
-		closureConversion.addEnvironment(environmentName, captures);
-		closureConversion.addFunction({
+		session.closureConversion.addEnvironment(environmentName, captures);
+		session.closureConversion.addFunction({
 			name: adapterName,
 			genericOrigin: context.name,
 			owner: environmentName,
@@ -4335,7 +4307,7 @@ class Typer {
 		};
 
 	function isAssignable(actual:CompilerType, expected:CompilerType):Bool {
-		return relations.isAssignable(actual, expected);
+		return session.relations.isAssignable(actual, expected);
 	}
 
 	function findMethod(className:String, name:String):Null<SemanticMethodInfo> {
@@ -4348,18 +4320,18 @@ class Typer {
 		if (results.length > 0)
 			return;
 		var key = className + "." + name;
-		if (methodInfo.exists(key)) {
-			results.push(requiredMapValue(methodInfo, key));
+		if (session.methodInfo.exists(key)) {
+			results.push(requiredMapValue(session.methodInfo, key));
 			return;
 		}
-		if (classDecls.exists(className)) {
-			var base = requiredMapValue(classDecls, className).base;
+		if (session.classDecls.exists(className)) {
+			var base = requiredMapValue(session.classDecls, className).base;
 			if (base != null)
 				findMethods(inheritanceName(base), name, results);
 			return;
 		}
-		if (interfaceDecls.exists(className))
-			for (base in requiredMapValue(interfaceDecls, className).bases)
+		if (session.interfaceDecls.exists(className))
+			for (base in requiredMapValue(session.interfaceDecls, className).bases)
 				findMethods(inheritanceName(base), name, results);
 	}
 
@@ -4373,9 +4345,9 @@ class Typer {
 		if (parent == null)
 			return null;
 		var enumName = parent, caseName = lastPathSegment(name);
-		if (!enumDecls.exists(enumName))
+		if (!session.enumDecls.exists(enumName))
 			return null;
-		var declaration = requiredMapValue(enumDecls, enumName);
+		var declaration = requiredMapValue(session.enumDecls, enumName);
 		for (index in 0...declaration.cases.length)
 			if (declaration.cases[index].name == caseName)
 				return {
@@ -4400,7 +4372,7 @@ class Typer {
 				}
 			substitutions.set(typeParameters[index], argument);
 		}
-		var resolved = declarations.resolve(parameter.type, parameter.span, substitutions);
+		var resolved = session.declarations.resolve(parameter.type, parameter.span, substitutions);
 		return parameter.optional ? TNullable(resolved) : resolved;
 	}
 
@@ -4413,7 +4385,7 @@ class Typer {
 		var substitutions:Map<String, CompilerType> = [];
 		for (name in typeParameters)
 			substitutions.set(name, TDynamic);
-		var type = declarations.resolve(parameter.type, parameter.span, substitutions);
+		var type = session.declarations.resolve(parameter.type, parameter.span, substitutions);
 		return parameter.optional ? TNullable(type) : type;
 	}
 
@@ -4442,14 +4414,15 @@ class Typer {
 						return field.type;
 				throw new CompileError(new Diagnostic("E1005", 'Unknown anonymous field "$name"', span));
 			case TInstance(Class, className, arguments):
-				if (classDecls.exists(className)) {
-					var classDecl = requiredMapValue(classDecls, className);
+				if (session.classDecls.exists(className)) {
+					var classDecl = requiredMapValue(session.classDecls, className);
 					for (field in classDecl.fields)
 						if (field.name == name && !field.isStatic)
-							return declarations.resolve(declarations.resolvedFieldType(className, field), field.span, nominalSubstitutions(type));
+							return session.declarations.resolve(session.declarations.resolvedFieldType(className, field), field.span,
+								nominalSubstitutions(type));
 					var base = classDecl.base;
 					if (base != null)
-						return fieldType(declarations.resolve(base, classDecl.span, nominalSubstitutions(type)), name, span);
+						return fieldType(session.declarations.resolve(base, classDecl.span, nominalSubstitutions(type)), name, span);
 				}
 				throw new CompileError(new Diagnostic("E1005", 'Unknown field "$className.$name"', span));
 			default:
@@ -4459,9 +4432,9 @@ class Typer {
 
 	function expectedEnumLiteral(name:String, expectedType:Null<CompilerType>, span:SourceSpan):Null<TypedExpression> {
 		var expectedEnumName = enumName(expectedType);
-		if (expectedEnumName == null || !enumDecls.exists(expectedEnumName))
+		if (expectedEnumName == null || !session.enumDecls.exists(expectedEnumName))
 			return null;
-		var declaration = enumDecls.get(expectedEnumName),
+		var declaration = session.enumDecls.get(expectedEnumName),
 			caseName = lastPathSegment(name);
 		for (index in 0...declaration.cases.length) {
 			var enumCase = declaration.cases[index];
@@ -4510,14 +4483,15 @@ class Typer {
 				found;
 			case TInstance(Class, className, arguments):
 				var found:Null<CompilerType> = null;
-				if (classDecls.exists(className)) {
-					var classDecl = requiredMapValue(classDecls, className);
+				if (session.classDecls.exists(className)) {
+					var classDecl = requiredMapValue(session.classDecls, className);
 					for (field in classDecl.fields)
 						if (field.name == name && !field.isStatic)
-							found = declarations.resolve(declarations.resolvedFieldType(className, field), field.span, nominalSubstitutions(type));
+							found = session.declarations.resolve(session.declarations.resolvedFieldType(className, field), field.span,
+								nominalSubstitutions(type));
 					var base = classDecl.base;
 					if (found == null && base != null)
-						found = findFieldType(declarations.resolve(base, classDecl.span, nominalSubstitutions(type)), name);
+						found = findFieldType(session.declarations.resolve(base, classDecl.span, nominalSubstitutions(type)), name);
 				}
 				found;
 			default: null;
@@ -4558,10 +4532,10 @@ class Typer {
 			return coerce(value, TString, "string concatenation", "E1010");
 		if (sameType(value.type, TFloat) || sameType(value.type, TDynamic)) {
 			var functionName = context.name,
-				dependencies = runtimeDependencies.get(functionName);
+				dependencies = session.runtimeDependencies.get(functionName);
 			if (dependencies == null) {
 				dependencies = [];
-				runtimeDependencies.set(functionName, dependencies);
+				session.runtimeDependencies.set(functionName, dependencies);
 			}
 			dependencies.set("Std", true);
 			var dynamicValue = coerce(value, TDynamic, "string concatenation", "E1010");
@@ -4747,9 +4721,9 @@ class Typer {
 			case TInstance(Enum, name, _): name;
 			default: return false;
 		};
-		if (!enumDecls.exists(enumName))
+		if (!session.enumDecls.exists(enumName))
 			return false;
-		var enumDecl = requiredMapValue(enumDecls, enumName);
+		var enumDecl = requiredMapValue(session.enumDecls, enumName);
 		var seen:Map<Int, Bool> = [];
 		for (switchCase in cases)
 			if (switchCase.isCatchAll || switchCase.subjectBinding != null)
@@ -4763,7 +4737,7 @@ class Typer {
 	}
 
 	function lowerType(type:AstType):CompilerType
-		return declarations.resolve(type, null, context.typeSubstitutions);
+		return session.declarations.resolve(type, null, context.typeSubstitutions);
 
 	static function copyMap<T>(source:Map<String, T>):Map<String, T> {
 		var result:Map<String, T> = [];
@@ -4857,9 +4831,9 @@ class Typer {
 	function registerAnonymousTypes(type:CompilerType):Void
 		switch type {
 			case TAnonymous(name, fields):
-				if (anonymousTypes.exists(name))
+				if (session.anonymousTypes.exists(name))
 					return;
-				anonymousTypes.set(name, fields);
+				session.anonymousTypes.set(name, fields);
 				for (field in fields)
 					registerAnonymousTypes(field.type);
 			case TNullable(element), TArray(element), TIterator(element):
@@ -4875,9 +4849,9 @@ class Typer {
 		}
 
 	function orderedAnonymousTypes():Array<compiler.types.TypedAst.TypedAnonymous> {
-		var names = [for (name in anonymousTypes.keys()) name];
+		var names = [for (name in session.anonymousTypes.keys()) name];
 		names.sort(Reflect.compare);
-		return [for (name in names) {name: name, fields: anonymousTypes.get(name)}];
+		return [for (name in names) {name: name, fields: session.anonymousTypes.get(name)}];
 	}
 
 	static function statementSpan(statement:AstStatement):SourceSpan

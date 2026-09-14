@@ -151,6 +151,18 @@ class TestMain {
 		Frontend.compile('function fail():Void throw "failure"; function value():String return if (true) "value" else { fail(); null; }; function main():Int return 42;');
 		Typer.typeLibrary(new Parser(new Lexer(new SourceFile("infinite-loop.hx",
 			"function parse():Int { while (true) { continue; } }")).tokenize()).parseProgram());
+		var selectedMain:Map<String, Bool> = ["dynamicText" => true, "main" => true],
+			runtimeDependencyProgram = new Parser(new Lexer(new SourceFile("runtime-dependency.hx",
+				'function dynamicText(value:Dynamic):String return "value: " + value; function main():Int { dynamicText("typed"); return 0; }')).tokenize())
+				.parseProgram(),
+			runtimeDependencyResult = Typer.typeAnalyzedMeasured(compiler.semantic.SemanticProgram.analyze(runtimeDependencyProgram), selectedMain),
+			plainProgram = new Parser(new Lexer(new SourceFile("plain-session.hx", "function main():Int return 0;")).tokenize()).parseProgram(),
+			plainResult = Typer.typeAnalyzedMeasured(compiler.semantic.SemanticProgram.analyze(plainProgram), selectedMain);
+		if (runtimeDependencyResult.runtimeDependencies.length != 1
+			|| runtimeDependencyResult.runtimeDependencies[0].functionName != "dynamicText"
+			|| runtimeDependencyResult.runtimeDependencies[0].target != "Std"
+			|| plainResult.runtimeDependencies.length != 0)
+			throw "Typing session runtime dependencies were incorrect or leaked between programs";
 		Frontend.compile('function values():Array<Int> { var result = []; result.push(42); return result; } function main():Int { return values()[0]; }');
 		Frontend.compile('typedef Result = { values:Array<Int> }; function values():Result { var values = []; return { values: values }; } function main():Int return values().values.length;');
 		new Parser(new Lexer(new SourceFile("expression-block-statements.hx",
