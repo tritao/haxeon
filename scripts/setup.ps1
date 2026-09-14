@@ -7,16 +7,13 @@ if (-not (Test-Path $CygwinBash)) {
 }
 
 $env:HAXEON_WORKSPACE = $RootDir
-& $CygwinBash --login --norc -eo pipefail -o igncr -c `
-	'cd "$(cygpath -u "$HAXEON_WORKSPACE")" && ./scripts/build-libffi.sh --msvc'
-if ($LASTEXITCODE -ne 0) {
-	exit $LASTEXITCODE
-}
-
-$LibffiBin = Join-Path $RootDir ".tools/libffi/bin"
-$env:PATH = "$LibffiBin;$env:PATH"
-if ($env:GITHUB_PATH) {
-	Add-Content -Path $env:GITHUB_PATH -Value $LibffiBin -Encoding utf8
+$BuildLibffiCommand = 'cd "$(cygpath -u "$HAXEON_WORKSPACE")" && ./scripts/build-libffi.sh'
+foreach ($Mode in @("--msvc", "--msvc-debug")) {
+	& $CygwinBash --login --norc -eo pipefail -o igncr -c `
+		"$BuildLibffiCommand $Mode"
+	if ($LASTEXITCODE -ne 0) {
+		exit $LASTEXITCODE
+	}
 }
 
 cmake -P (Join-Path $RootDir "cmake/Bootstrap.cmake")

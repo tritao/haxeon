@@ -55,19 +55,58 @@ if(CMAKE_C_COMPILER_ID STREQUAL "MSVC")
   # MSVC gates its C11 <stdatomic.h> implementation behind this opt-in.
   target_compile_options(haxeon_runtime PRIVATE /experimental:c11atomics)
 endif()
-set(HAXEON_LIBFFI_ROOT "${CMAKE_SOURCE_DIR}/.tools/libffi" CACHE PATH "Pinned libffi installation prefix")
-find_path(HAXEON_PINNED_LIBFFI_INCLUDE_DIR NAMES ffi.h
-  PATHS "${HAXEON_LIBFFI_ROOT}/include"
-  NO_DEFAULT_PATH
-  REQUIRED
+set(HAXEON_STATIC_LIBFFI_ROOT "${CMAKE_SOURCE_DIR}/.tools/libffi-static")
+if(WIN32)
+  # The runtime has both /MD and /MDd configurations, so its static libffi
+  # archive must use the matching MSVC CRT for each configuration.
+  set(HAXEON_LIBFFI_RELEASE_ROOT "${HAXEON_STATIC_LIBFFI_ROOT}/msvc-release")
+  set(HAXEON_LIBFFI_DEBUG_ROOT "${HAXEON_STATIC_LIBFFI_ROOT}/msvc-debug")
+  find_path(HAXEON_VENDORED_LIBFFI_INCLUDE_DIR NAMES ffi.h
+    PATHS "${HAXEON_LIBFFI_RELEASE_ROOT}/include" "${HAXEON_LIBFFI_DEBUG_ROOT}/include"
+    NO_DEFAULT_PATH
+    REQUIRED
+  )
+  find_library(HAXEON_VENDORED_LIBFFI_RELEASE_LIBRARY NAMES ffi libffi ffi-8 libffi-8
+    PATHS "${HAXEON_LIBFFI_RELEASE_ROOT}/lib"
+    NO_DEFAULT_PATH
+    REQUIRED
+  )
+  find_library(HAXEON_VENDORED_LIBFFI_DEBUG_LIBRARY NAMES ffi libffi ffi-8 libffi-8
+    PATHS "${HAXEON_LIBFFI_DEBUG_ROOT}/lib"
+    NO_DEFAULT_PATH
+    REQUIRED
+  )
+  add_library(haxeon_pinned_libffi STATIC IMPORTED GLOBAL)
+  set_target_properties(haxeon_pinned_libffi PROPERTIES
+    IMPORTED_CONFIGURATIONS "DEBUG;RELEASE;RELWITHDEBINFO;MINSIZEREL"
+    IMPORTED_LOCATION_DEBUG "${HAXEON_VENDORED_LIBFFI_DEBUG_LIBRARY}"
+    IMPORTED_LOCATION_RELEASE "${HAXEON_VENDORED_LIBFFI_RELEASE_LIBRARY}"
+    IMPORTED_LOCATION_RELWITHDEBINFO "${HAXEON_VENDORED_LIBFFI_RELEASE_LIBRARY}"
+    IMPORTED_LOCATION_MINSIZEREL "${HAXEON_VENDORED_LIBFFI_RELEASE_LIBRARY}"
+  )
+else()
+  find_path(HAXEON_VENDORED_LIBFFI_INCLUDE_DIR NAMES ffi.h
+    PATHS "${HAXEON_STATIC_LIBFFI_ROOT}/include"
+    NO_DEFAULT_PATH
+    REQUIRED
+  )
+  find_library(HAXEON_VENDORED_LIBFFI_LIBRARY NAMES ffi libffi ffi-8 libffi-8
+    PATHS "${HAXEON_STATIC_LIBFFI_ROOT}/lib" "${HAXEON_STATIC_LIBFFI_ROOT}/lib64"
+    NO_DEFAULT_PATH
+    REQUIRED
+  )
+  add_library(haxeon_pinned_libffi STATIC IMPORTED GLOBAL)
+  set_target_properties(haxeon_pinned_libffi PROPERTIES
+    IMPORTED_LOCATION "${HAXEON_VENDORED_LIBFFI_LIBRARY}"
+  )
+endif()
+set_target_properties(haxeon_pinned_libffi PROPERTIES
+  INTERFACE_INCLUDE_DIRECTORIES "${HAXEON_VENDORED_LIBFFI_INCLUDE_DIR}"
 )
-find_library(HAXEON_PINNED_LIBFFI_LIBRARY NAMES ffi libffi ffi-8 libffi-8
-  PATHS "${HAXEON_LIBFFI_ROOT}/lib" "${HAXEON_LIBFFI_ROOT}/lib64"
-  NO_DEFAULT_PATH
-  REQUIRED
-)
-target_include_directories(haxeon_runtime PRIVATE "${HAXEON_PINNED_LIBFFI_INCLUDE_DIR}")
-target_link_libraries(haxeon_runtime PRIVATE "${HAXEON_PINNED_LIBFFI_LIBRARY}")
+target_link_libraries(haxeon_runtime PRIVATE haxeon_pinned_libffi)
+if(MSVC)
+  target_compile_definitions(haxeon_runtime PRIVATE FFI_STATIC_BUILD)
+endif()
 target_link_libraries(haxeon_runtime PRIVATE ${CMAKE_DL_LIBS})
 if(APPLE)
   # The runtime bridge resolves HashLink's host-owned runtime API from the
@@ -93,7 +132,7 @@ set_target_properties(hl libhl PROPERTIES
 
 if(UNIX)
   set_target_properties(haxeon_runtime PROPERTIES
-    BUILD_RPATH "${CMAKE_SOURCE_DIR}/.tools/hashlink;${HAXEON_LIBFFI_ROOT}/lib"
+    BUILD_RPATH "${CMAKE_SOURCE_DIR}/.tools/hashlink"
   )
 endif()
 
