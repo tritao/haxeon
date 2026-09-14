@@ -534,7 +534,8 @@ class WasmBackend implements Backend {
 				"__bytes_output_get_bytes", "structGetPointer", "native_pointer_close", "native_pointer_is_closed", "native_pointer_owned_from_slot",
 				"__string_length", "__string_char_at", "__string_char_code_at", "__string_concat", "__string_equal", "__string_compare_full",
 				"__string_index_of", "__string_index_of_from", "__string_last_index_of", "__string_last_index_of_from", "__string_to_lower_case",
-				"__string_to_upper_case", "__string_split", "__string_substring", "__string_from_char_code", "__wasm_memory_load_i32": true;
+				"__string_to_upper_case", "__string_split", "__string_substring", "__string_from_char_code", "__wasm_memory_load_i32",
+				"__runtime_string_from_ascii": true;
 			default: false;
 		};
 	}

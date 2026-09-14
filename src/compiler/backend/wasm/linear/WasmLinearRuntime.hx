@@ -192,6 +192,7 @@ class WasmLinearRuntime {
 			case "sys_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit":
 				runtimeImportIndex(module, native);
 			case "__bytes_alloc": addBytesAlloc(module, native.name, allocator);
+			case "__runtime_string_from_ascii": addStringFromAscii(module, native.name, allocator);
 			case "__bytes_of_string": addBytesFromString(module, native.name, allocator);
 			case "__bytes_view": addBytesView(module, native.name, allocator);
 			case "__bytes_sub", "structSlice": addBytesSlice(module, native.name, allocator, bytesDataPointer);
@@ -245,6 +246,82 @@ class WasmLinearRuntime {
 			LocalGet(1),
 			Return
 		]));
+	}
+
+	static function addStringFromAscii(module:WasmModule, name:String, allocator:Int):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32, I32], results: [I32]}),
+			chars = builder.parameter("chars", 0),
+			offset = builder.parameter("offset", 1),
+			length = builder.parameter("length", 2),
+			arrayLength = builder.local("arrayLength", I32),
+			data = builder.local("data", I32),
+			result = builder.local("result", I32),
+			index = builder.local("index", I32);
+		builder.localGet(chars);
+		builder.emit(I32Load(WasmLayout.ARRAY_LENGTH_OFFSET));
+		builder.localSet(arrayLength);
+		for (value in [offset, length]) {
+			builder.localGet(value);
+			builder.i32Const(0);
+			builder.emit(I32LtS);
+			builder.ifElse(function(builder) builder.emit(Unreachable), function(_) {});
+		}
+		builder.localGet(arrayLength);
+		builder.localGet(length);
+		builder.i32Sub();
+		builder.localGet(offset);
+		builder.emit(I32LtS);
+		builder.ifElse(function(builder) builder.emit(Unreachable), function(_) {});
+		builder.localGet(chars);
+		builder.emit(I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET));
+		builder.localSet(data);
+		builder.localGet(length);
+		builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+		builder.i32Add();
+		builder.call(builder.functionRef(allocator));
+		builder.localSet(result);
+		builder.localGet(result);
+		builder.i32Const(WasmBackend.typeId(Bytes));
+		builder.emit(I32Store(0));
+		builder.localGet(result);
+		builder.localGet(length);
+		builder.emit(I32Store(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localGet(result);
+		builder.localGet(length);
+		builder.emit(I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET));
+		builder.i32Const(0);
+		builder.localSet(index);
+		builder.block(function(builder) {
+			builder.loop(function(builder) {
+				builder.localGet(index);
+				builder.localGet(length);
+				builder.emit(I32LtS);
+				builder.ifElse(function(builder) {
+					builder.localGet(result);
+					builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+					builder.i32Add();
+					builder.localGet(index);
+					builder.i32Add();
+					builder.localGet(data);
+					builder.localGet(offset);
+					builder.localGet(index);
+					builder.i32Add();
+					builder.i32Const(4);
+					builder.emit(I32Mul);
+					builder.i32Add();
+					builder.emit(I32Load(0));
+					builder.emit(I32Store8(0));
+					builder.localGet(index);
+					builder.i32Const(1);
+					builder.i32Add();
+					builder.localSet(index);
+					builder.emit(Br(1));
+				}, function(builder) builder.emit(Br(0)));
+			});
+		});
+		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
 	}
 
 	static function addBytesFromString(module:WasmModule, name:String, allocator:Int):Int {

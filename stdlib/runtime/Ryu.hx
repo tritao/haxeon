@@ -214,63 +214,56 @@ class Ryu {
 			default:
 		}
 
-		var digits:Array<Int> = [];
+		var characters:Array<Int> = [];
 		var remaining = decimal.significand;
 		while (remaining > wide(0, 0)) {
 			var quotient = remaining / wide(0, 10);
-			digits.push(haxe.Int64.toInt(remaining - quotient * wide(0, 10)));
+			characters.push("0".code + haxe.Int64.toInt(remaining - quotient * wide(0, 10)));
 			remaining = quotient;
 		}
-		if (digits.length == 0)
-			digits.push(0);
+		if (characters.length == 0)
+			characters.push("0".code);
+		characters.reverse();
 
-		var digitCount = digits.length;
+		var digitCount = characters.length;
 		var decimalPointPosition = digitCount + decimal.exponent;
 		var useScientificNotation = decimalPointPosition > 21 || decimalPointPosition <= -6;
-		var output = new StringBuf();
-		if (decimal.kind == KIND_NEGATIVE)
-			output.add("-");
 
 		if (useScientificNotation) {
-			appendDigit(output, digits, digitCount, 0);
-			if (digitCount > 1) {
-				output.add(".");
-				for (index in 1...digitCount)
-					appendDigit(output, digits, digitCount, index);
-			}
+			if (digitCount > 1)
+				characters.insert(1, ".".code);
 			var exponent = decimalPointPosition - 1;
-			output.add("e");
+			characters.push("e".code);
 			if (exponent < 0) {
-				output.add("-");
+				characters.push("-".code);
 				exponent = -exponent;
 			} else {
-				output.add("+");
+				characters.push("+".code);
 			}
-			output.add(exponent);
+			appendUnsignedInt(characters, exponent);
 		} else if (decimalPointPosition <= 0) {
-			output.add("0");
-			output.add(".");
+			characters.insert(0, ".".code);
+			characters.insert(0, "0".code);
 			for (_ in 0... - decimalPointPosition)
-				output.add("0");
-			for (index in 0...digitCount)
-				appendDigit(output, digits, digitCount, index);
+				characters.insert(2, "0".code);
 		} else if (decimalPointPosition < digitCount) {
-			for (index in 0...decimalPointPosition)
-				appendDigit(output, digits, digitCount, index);
-			output.add(".");
-			for (index in decimalPointPosition...digitCount)
-				appendDigit(output, digits, digitCount, index);
+			characters.insert(decimalPointPosition, ".".code);
 		} else {
-			for (index in 0...digitCount)
-				appendDigit(output, digits, digitCount, index);
 			for (_ in digitCount...decimalPointPosition)
-				output.add("0");
+				characters.push("0".code);
 		}
-		return output.toString();
+		if (decimal.kind == KIND_NEGATIVE)
+			characters.insert(0, "-".code);
+		return RuntimeData.stringFromAscii(characters, 0, characters.length);
 	}
 
-	static inline function appendDigit(output:StringBuf, digits:Array<Int>, digitCount:Int, index:Int):Void
-		output.add(digits[digitCount - index - 1]);
+	static function appendUnsignedInt(output:Array<Int>, value:Int):Void {
+		if (value >= 100)
+			output.push("0".code + Std.int(value / 100));
+		if (value >= 10)
+			output.push("0".code + Std.int(value / 10) % 10);
+		output.push("0".code + value % 10);
+	}
 
 	static function multiplyShiftAll(significand:haxe.Int64, tableAddress:Int, tableIndex:Int, bitShift:Int,
 			mmShift:Int):{low:haxe.Int64, high:haxe.Int64, top:haxe.Int64} {

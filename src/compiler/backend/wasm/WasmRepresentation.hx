@@ -905,6 +905,16 @@ class WasmGcRepresentation implements WasmRepresentation {
 
 	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
 			argumentLocals:Array<Int>):Null<Array<WasmInstruction>> {
+		if (name == "__runtime_string_from_ascii") {
+			if (output.type != Bytes
+				|| arguments.length != 3
+				|| !Type.enumEq(arguments[0].type, Array(I32))
+				|| arguments[1].type != I32
+				|| arguments[2].type != I32
+				|| argumentLocals.length != 3)
+				throw "Invalid Wasm GC runtime string.fromAscii signature";
+			return stringFromAscii(argumentLocals[0], argumentLocals[1], argumentLocals[2], outputLocal);
+		}
 		if (name == "__wasm_memory_load_i32") {
 			if (output.type != I32 || arguments.length != 1 || arguments[0].type != I32 || argumentLocals.length != 1)
 				throw "Invalid Wasm GC runtime memory.load i32 signature";
@@ -3809,6 +3819,79 @@ class WasmGcRepresentation implements WasmRepresentation {
 			StructNew(plan.bytesTypeIndex),
 			LocalSet(destination)
 		];
+	}
+
+	function stringFromAscii(charsLocal:Int, offsetLocal:Int, lengthLocal:Int, destination:Int):Array<WasmInstruction> {
+		var arrayType = plan.arrayType(I32),
+			storageType = plan.arrayStorageType(I32),
+			arrayLength = allocateLocal(I32),
+			chars = allocateLocal(Ref({nullable: false, heap: Type(storageType)})),
+			storage = allocateLocal(Ref({nullable: false, heap: Type(plan.byteArrayTypeIndex)})),
+			index = allocateLocal(I32),
+			body:Array<WasmInstruction> = [LocalGet(offsetLocal), I32Const(0), I32LtS, If(null)];
+		body = body.concat(trapInstructions());
+		body = body.concat([End, LocalGet(lengthLocal), I32Const(0), I32LtS, If(null)]);
+		body = body.concat(trapInstructions());
+		body = body.concat([
+			End,
+			LocalGet(charsLocal),
+			StructGet(arrayType, WasmGcTypePlan.arrayLengthFieldIndex()),
+			LocalSet(arrayLength),
+			LocalGet(arrayLength),
+			LocalGet(lengthLocal),
+			I32LtS,
+			If(null)
+		]);
+		body = body.concat(trapInstructions());
+		body = body.concat([
+			End,
+			LocalGet(arrayLength),
+			LocalGet(lengthLocal),
+			I32Sub,
+			LocalGet(offsetLocal),
+			I32LtS,
+			If(null)
+		]);
+		body = body.concat(trapInstructions());
+		body = body.concat([
+			End,
+			LocalGet(charsLocal),
+			StructGet(arrayType, WasmGcTypePlan.arrayDataFieldIndex()),
+			LocalSet(chars),
+			LocalGet(lengthLocal),
+			ArrayNewDefault(plan.byteArrayTypeIndex),
+			LocalSet(storage),
+			I32Const(0),
+			LocalSet(index),
+			Loop(null),
+			LocalGet(index),
+			LocalGet(lengthLocal),
+			I32LtS,
+			If(null),
+			LocalGet(storage),
+			LocalGet(index),
+			LocalGet(chars),
+			LocalGet(offsetLocal),
+			LocalGet(index),
+			I32Add,
+			ArrayGet(storageType),
+			I32Const(255),
+			I32And,
+			ArraySet(plan.byteArrayTypeIndex),
+			LocalGet(index),
+			I32Const(1),
+			I32Add,
+			LocalSet(index),
+			Br(1),
+			End,
+			End,
+			LocalGet(storage),
+			I32Const(0),
+			LocalGet(lengthLocal),
+			StructNew(plan.bytesTypeIndex),
+			LocalSet(destination)
+		]);
+		return body;
 	}
 
 	function managedBytesGetString(bytesLocal:Int, offsetLocal:Int, lengthLocal:Int, destination:Int):Array<WasmInstruction> {
