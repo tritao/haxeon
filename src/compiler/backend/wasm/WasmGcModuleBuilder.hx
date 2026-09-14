@@ -18,6 +18,7 @@ import compiler.backend.wasm.WasmEncoder;
 import compiler.backend.wasm.WasmExceptionLowering;
 import compiler.backend.wasm.WasmGcMaps;
 import compiler.backend.wasm.WasmGcTypePlan;
+import compiler.backend.wasm.gc.WasmGcContext;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmLocal;
 import compiler.backend.wasm.WasmModule.WasmModule;
@@ -66,12 +67,13 @@ class WasmGcModuleBuilder {
 				requiresLinearMemory = true;
 
 		var plan = new WasmGcTypePlan(program),
-			gcRepresentation = new WasmGcRepresentation(plan),
-			representation:WasmRepresentationSet = WasmRepresentationSet.gc(gcRepresentation),
 			module = new WasmModule(options.debugNames ? "haxeon" : null),
 			globals:Map<String, Int> = [],
 			functions:Map<String, Int> = [],
-			methods:Map<String, String> = [];
+			methods:Map<String, String> = [],
+			gcContext = new WasmGcContext(module, plan, functions, globals, methods),
+			gcRepresentation = new WasmGcRepresentation(gcContext),
+			representation:WasmRepresentationSet = WasmRepresentationSet.gc(gcRepresentation);
 		plan.addTo(module);
 		var staticData = WasmModuleSupport.placeStaticData(program, module, 8, reachable),
 			hasStaticData = staticData.addresses.iterator().hasNext();
@@ -86,13 +88,13 @@ class WasmGcModuleBuilder {
 			module.globals.push({type: I32, mutable: true, init: [I32Const(staticData.end)]});
 		}
 		addGcCNativeImports(module, functions, program, usedCNatives);
-		gcRepresentation.configureNativePointerReleases(gcPointerReleaseFunctionIndices(program, reachable, functions));
+		gcContext.configureNativePointerReleases(gcPointerReleaseFunctionIndices(program, reachable, functions));
 		addGcMapRuntimeFunctions(module, functions, plan, program, usedNatives);
 		addGcRuntimeNativeFunctions(module, functions, plan, gcRepresentation, program, usedNatives);
 		addGcMapProjectionFunctions(module, functions, plan, program, reachable);
 		if (requiresScratchMemory) {
 			var scratchAllocator = addGcScratchAllocator(module, scratchTop);
-			gcRepresentation.configureCNativeScratch(scratchTop, scratchAllocator);
+			gcContext.configureCNativeScratch(scratchTop, scratchAllocator);
 		}
 		var exceptionTagType:Null<Int> = WasmModuleSupport.hasExceptions(program) ? module.typeIndex({parameters: [representation.values.valueType(Dyn)], results: []}) : null,
 			exceptionTag:Null<Int> = exceptionTagType == null ? null : 0;
@@ -119,7 +121,8 @@ class WasmGcModuleBuilder {
 				continue;
 			var functionIndex = WasmModuleSupport.requiredFunctionIndex(functions, fn.name);
 			module.setFunction(functionIndex,
-				WasmFunctionLower.lower(fn, functions, module.functionType(functionIndex), null, -1, 0, 0, 0, globals, [], methods, closureTypes, tableSlots,
+				WasmFunctionLower.lower(fn, gcContext.functions, module.functionType(functionIndex), null, -1, 0, 0, 0, gcContext.globals, [],
+					gcContext.methods, closureTypes, tableSlots,
 					exceptionTag, [], program, representation));
 		}
 		module.exportTable = module.tableMin != null;

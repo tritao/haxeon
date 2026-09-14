@@ -114,6 +114,22 @@ class WasmFunctionLower {
 			rootFrameTop:Int, rootLimit:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
 			closureTypes:Map<String, WasmClosureTypes>, tableSlots:Map<String, Int>, exceptionTag:Null<Int>, rootPoints:Array<WasmSafepoint>,
 			program:IrProgram, representation:WasmRepresentationSet):WasmFunction {
+		var lowered:WasmFunction;
+		try {
+			lowered = lowerFunction(fn, functions, type, layout, allocator, rootTop, rootFrameTop, rootLimit, globals, strings, methods, closureTypes,
+				tableSlots, exceptionTag, rootPoints, program, representation);
+		} catch (error:Dynamic) {
+			activeRepresentation = null;
+			throw error;
+		}
+		activeRepresentation = null;
+		return lowered;
+	}
+
+	static function lowerFunction(fn:IrFunction, functions:Map<String, Int>, type:WasmFunctionType, layout:WasmLayout, allocator:Int, rootTop:Int,
+			rootFrameTop:Int, rootLimit:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
+			closureTypes:Map<String, WasmClosureTypes>, tableSlots:Map<String, Int>, exceptionTag:Null<Int>, rootPoints:Array<WasmSafepoint>,
+			program:IrProgram, representation:WasmRepresentationSet):WasmFunction {
 		activeProgram = program;
 		activeTableSlots = tableSlots;
 		var analysis = new WasmCfgAnalysis(fn),

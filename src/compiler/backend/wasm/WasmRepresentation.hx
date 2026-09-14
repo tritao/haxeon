@@ -11,6 +11,8 @@ import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.WasmLayout.WasmFieldLayout;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
+import compiler.backend.wasm.gc.WasmGcContext;
+import compiler.backend.wasm.gc.WasmGcFunctionContext;
 
 typedef WasmFunctionRepresentationContext = {
 	final allocateLocal:WasmValueType->Int;
@@ -253,56 +255,29 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 /** Native Wasm GC representation: engine references and declared struct/array fields. */
 class WasmGcRepresentation implements WasmValueRepresentation implements WasmAggregateRepresentation implements WasmCallRepresentation
 		implements WasmInteropRepresentation {
+	final gc:WasmGcContext;
 	final plan:WasmGcTypePlan;
-	final arrayReferenceLocals:Map<String, Int> = [];
-	final functionContext:Null<WasmFunctionRepresentationContext>;
-	final exceptionTag:Null<Int>;
-	var requiredArrayLengthLocal:Null<Int>;
-	var arrayCapacityLocal:Null<Int>;
-	var scratchAllocator:Int = -1;
-	var scratchTop:Int = -1;
-	var nativePointerReleaseIndices:Array<Int> = [];
-	var nativePointerReleaseBySymbol:Map<String, Int> = [];
-	var functionStringConstants:Map<Int, String> = [];
+	final functionContext:Null<WasmGcFunctionContext>;
 
-	public function new(plan:WasmGcTypePlan, ?functionContext:WasmFunctionRepresentationContext, ?scratchTop:Int = -1, ?scratchAllocator:Int = -1) {
-		this.plan = plan;
+	public function new(gc:WasmGcContext, ?functionContext:WasmGcFunctionContext) {
+		this.gc = gc;
+		this.plan = gc.plan;
 		this.functionContext = functionContext;
-		this.exceptionTag = functionContext == null ? null : functionContext.exceptionTag;
-		this.scratchTop = scratchTop;
-		this.scratchAllocator = scratchAllocator;
 	}
 
 	public function forFunction(context:WasmFunctionRepresentationContext):WasmGcRepresentation {
-		var functionRepresentation = new WasmGcRepresentation(plan, context, scratchTop, scratchAllocator);
-		functionRepresentation.nativePointerReleaseIndices = nativePointerReleaseIndices.copy();
-		functionRepresentation.nativePointerReleaseBySymbol = nativePointerReleaseBySymbol.copy();
-		if (context.irFunction != null)
-			for (block in context.irFunction.blocks)
-				for (located in block.instructions)
-					switch located.value {
-						case ConstString(output, value):
-							functionRepresentation.functionStringConstants.set(output.id, value);
-						case _:
-					}
-		return functionRepresentation;
+		var functionContext = new WasmGcFunctionContext(gc, context.irFunction, context.exceptionTag, context.allocateLocal);
+		return new WasmGcRepresentation(gc, functionContext);
 	}
 
 	function allocateLocal(type:WasmValueType):Int {
+		return functionState().allocateLocal(type);
+	}
+
+	function functionState():WasmGcFunctionContext {
 		if (functionContext == null)
 			throw "Wasm GC operation requires a function representation context";
-		return functionContext.allocateLocal(type);
-	}
-
-	public function configureCNativeScratch(scratchTop:Int, scratchAllocator:Int):Void {
-		this.scratchTop = scratchTop;
-		this.scratchAllocator = scratchAllocator;
-	}
-
-	public function configureNativePointerReleases(releases:Map<String, Int>):Void {
-		nativePointerReleaseBySymbol = releases;
-		nativePointerReleaseIndices = [for (index in releases) index];
-		nativePointerReleaseIndices.sort((left, right) -> left - right);
+		return functionContext;
 	}
 
 	function nativePointerRaw(pointerLocal:Int):Array<WasmInstruction>
@@ -1010,7 +985,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				StructGet(plan.nativePointerTypeIndex, 1),
 				LocalSet(releaseFunction)
 			]);
-			for (index in nativePointerReleaseIndices) {
+			for (index in gc.nativePointerReleaseIndices) {
 				body = body.concat([
 					LocalGet(releaseFunction),
 					I32Const(index),
@@ -1037,10 +1012,10 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			if (!isNativePointerType(output.type) || arguments.length != 7 || arguments[0].type != ManagedBytes || arguments[1].type != I32
 				|| arguments[5].type != Bytes || arguments[6].type != Bool || argumentLocals.length != 7)
 				throw "Invalid Wasm GC owned pointer slot helper signature";
-			var releaseSymbol = functionStringConstants.get(arguments[5].id);
+			var releaseSymbol = functionState().functionStringConstants.get(arguments[5].id);
 			if (releaseSymbol == null)
 				throw "Wasm GC owned pointer slot release symbol must be a literal";
-			var releaseFunction = nativePointerReleaseBySymbol.get(releaseSymbol);
+			var releaseFunction = gc.nativePointerReleaseBySymbol.get(releaseSymbol);
 			if (releaseFunction == null)
 				throw 'Wasm GC owned pointer slot has no imported release function "$releaseSymbol"';
 			var pointer = allocateLocal(I32),
@@ -2899,7 +2874,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 					usesScratchBridge = true;
 				case Value:
 			}
-		if (usesScratchBridge && (scratchAllocator < 0 || scratchTop < 0))
+		if (usesScratchBridge && (gc.scratchAllocator < 0 || gc.scratchTop < 0))
 			throw 'Wasm GC C native "${native.name}" requires a configured linear scratch bridge';
 		var bytePointerResult = native.result == ManagedBytes && native.pointerLength != null;
 		if (bytePointerResult && pointerLengthImportIndex < 0)
@@ -2911,7 +2886,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			savedTop = usesScratchBridge ? allocateLocal(I32) : -1,
 			bytePointers:Array<Null<Int>> = [];
 		if (usesScratchBridge)
-			body = body.concat([GlobalGet(scratchTop), LocalSet(savedTop)]);
+			body = body.concat([GlobalGet(gc.scratchTop), LocalSet(savedTop)]);
 		for (index in 0...arguments.length)
 			switch native.argumentModes[index] {
 				case BytesInput(_) | BytesInputOutput(_):
@@ -2924,7 +2899,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 						LocalGet(bytesLocal),
 						StructGet(plan.managedBytesTypeIndex, 2),
 						I32Const(8),
-						Call(scratchAllocator),
+						Call(gc.scratchAllocator),
 						LocalSet(pointer)
 					]);
 					body = body.concat(copyGcBytesToLinear(bytesLocal, pointer));
@@ -2945,7 +2920,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 						End,
 						I32Const(size),
 						I32Const(alignment),
-						Call(scratchAllocator),
+						Call(gc.scratchAllocator),
 						LocalSet(pointer)
 					]);
 					body = body.concat(copyGcBytesToLinear(bytesLocal, pointer));
@@ -2959,7 +2934,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 						LocalGet(bytesLocal),
 						StructGet(plan.managedBytesTypeIndex, 2),
 						I32Const(8),
-						Call(scratchAllocator),
+						Call(gc.scratchAllocator),
 						LocalSet(pointer)
 					]);
 					// HXI zeroes @out buffers and seeds @inout buffers before this call.
@@ -2983,7 +2958,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 						End,
 						I32Const(size),
 						I32Const(alignment),
-						Call(scratchAllocator),
+						Call(gc.scratchAllocator),
 						LocalSet(pointer)
 					]);
 					// HXI constructs zeroed @out aggregates and supplies the current @inout layout.
@@ -3021,7 +2996,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 						LocalGet(bytesLocal),
 						StructGet(plan.managedBytesTypeIndex, 2),
 						I32Const(8),
-						Call(scratchAllocator),
+						Call(gc.scratchAllocator),
 						LocalSet(pointer)
 					]);
 					body = body.concat(copyGcBytesToLinear(bytesLocal, pointer));
@@ -3037,7 +3012,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 						LocalGet(bytesLocal),
 						StructGet(plan.managedBytesTypeIndex, 2),
 						I32Const(8),
-						Call(scratchAllocator),
+						Call(gc.scratchAllocator),
 						LocalSet(pointer)
 					]);
 					body = body.concat(copyGcBytesToLinear(bytesLocal, pointer));
@@ -3090,7 +3065,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				case _:
 			}
 		if (usesScratchBridge)
-			body = body.concat([LocalGet(savedTop), GlobalSet(scratchTop)]);
+			body = body.concat([LocalGet(savedTop), GlobalSet(gc.scratchTop)]);
 		if (bytePointerResult)
 			body = body.concat(copyNativeBytesResult(native, argumentLocals, resultLocal, outputLocal, pointerLengthImportIndex, pointerReleaseImportIndex));
 		else if (fixedAggregateResult)
@@ -3573,25 +3548,28 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 	}
 
 	function arrayReferenceLocal(element:IrType):Int {
-		var key = WasmGcTypePlan.typeKey(element),
-			local = arrayReferenceLocals.get(key);
+		var context = functionState(),
+			key = WasmGcTypePlan.typeKey(element),
+			local = context.arrayReferenceLocals.get(key);
 		if (local == null) {
 			local = allocateLocal(Ref({nullable: false, heap: Type(plan.arrayStorageType(element))}));
-			arrayReferenceLocals.set(key, local);
+			context.arrayReferenceLocals.set(key, local);
 		}
 		return local;
 	}
 
 	function requiredArrayLength():Int {
-		if (requiredArrayLengthLocal == null)
-			requiredArrayLengthLocal = allocateLocal(I32);
-		return requiredArrayLengthLocal;
+		var functionState = functionState();
+		if (functionState.requiredArrayLengthLocal == null)
+			functionState.requiredArrayLengthLocal = allocateLocal(I32);
+		return functionState.requiredArrayLengthLocal;
 	}
 
 	function arrayCapacity():Int {
-		if (arrayCapacityLocal == null)
-			arrayCapacityLocal = allocateLocal(I32);
-		return arrayCapacityLocal;
+		var functionState = functionState();
+		if (functionState.arrayCapacityLocal == null)
+			functionState.arrayCapacityLocal = allocateLocal(I32);
+		return functionState.arrayCapacityLocal;
 	}
 
 	function checkedIndex(indexLocal:Int, arrayLocal:Int, wrapperType:Int):Array<WasmInstruction> {
@@ -3611,8 +3589,10 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
-	function trapInstructions():Array<WasmInstruction>
+	function trapInstructions():Array<WasmInstruction> {
+		var exceptionTag = functionState().exceptionTag;
 		return exceptionTag == null ? [Unreachable] : [RefNull(Any), Throw(exceptionTag)];
+	}
 
 	function bytesAlloc(lengthLocal:Int, destination:Int):Array<WasmInstruction> {
 		var body:Array<WasmInstruction> = [LocalGet(lengthLocal), I32Const(0), I32LtS, If(null)];
