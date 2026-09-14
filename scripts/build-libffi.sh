@@ -97,6 +97,7 @@ if [[ "$mode" == --msvc || "$mode" == --msvc-debug ]]; then
 	CPPFLAGS="$msvc_cppflags" \
 	CFLAGS="$msvc_cppflags" \
 	AR="$source_dir/.ci/ar-lib lib" \
+	RANLIB=: \
 	NM='dumpbin -symbols' \
 	STRIP=: \
 		"$source_dir/configure" \

@@ -145,7 +145,9 @@ keeps system-header implementation details out of the generated interface. A
 strict parser validates types, layouts, symbols, and ABI metadata before use. See
 [C header FFI import](docs/C_HEADER_FFI.md) for usage and the supported subset.
 The runtime also contains a restricted libffi-based ordinary-C symbol bridge;
-it remains deliberately separate from HashLink's `@:hlNative` convention.
+the pinned vendored libffi is statically linked into the runtime library, with
+no separate libffi runtime dependency. This remains deliberately separate from
+HashLink's `@:hlNative` convention.
 
 The native-memory model keeps GC-managed Haxe objects separate from fixed-layout
 native records. See [native values and memory](docs/NATIVE_MEMORY.md) for the

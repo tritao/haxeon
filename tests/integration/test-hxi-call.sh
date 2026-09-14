@@ -5,14 +5,13 @@ repo_dir=$(cd "$(dirname "$0")/../.." && pwd)
 mkdir -p "$repo_dir/out"
 
 "$repo_dir/scripts/build-native.sh"
-cc -shared -fPIC "$repo_dir/tests/native/native_call_fixture.c" -o "$repo_dir/out/libnative_call_fixture.so"
+fixture_path=$(bash "$repo_dir/tests/integration/build-native-call-fixture.sh")
 "$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/tests/runtime" --run HxiCallMain \
-	"$repo_dir/out/hxi-call-test.hl" native_call_fixture
+	"$repo_dir/out/hxi-call-test.hl" "$fixture_path"
 (
 	cd "$repo_dir/out"
 	set +e
-	LD_LIBRARY_PATH="$repo_dir/out:$repo_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-		"$repo_dir/.tools/hashlink/hl" hxi-call-test.hl
+	"$repo_dir/.tools/hashlink/hl" hxi-call-test.hl
 	status=$?
 	set -e
 	if [[ $status -ne 42 ]]; then
@@ -22,12 +21,11 @@ cc -shared -fPIC "$repo_dir/tests/native/native_call_fixture.c" -o "$repo_dir/ou
 )
 
 "$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/tests/runtime" --run HxiValueHandleMain \
-	"$repo_dir/out/hxi-value-handle-test.hl" native_call_fixture
+	"$repo_dir/out/hxi-value-handle-test.hl" "$fixture_path"
 (
 	cd "$repo_dir/out"
 	set +e
-	LD_LIBRARY_PATH="$repo_dir/out:$repo_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-		"$repo_dir/.tools/hashlink/hl" hxi-value-handle-test.hl
+	"$repo_dir/.tools/hashlink/hl" hxi-value-handle-test.hl
 	status=$?
 	set -e
 	if [[ $status -ne 42 ]]; then
@@ -37,12 +35,11 @@ cc -shared -fPIC "$repo_dir/tests/native/native_call_fixture.c" -o "$repo_dir/ou
 )
 
 "$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/tests/runtime" --run HxiRetainedMain \
-	"$repo_dir/out/hxi-retained-test.hl" native_call_fixture
+	"$repo_dir/out/hxi-retained-test.hl" "$fixture_path"
 (
 	cd "$repo_dir/out"
 	set +e
-	LD_LIBRARY_PATH="$repo_dir/out:$repo_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-		"$repo_dir/.tools/hashlink/hl" hxi-retained-test.hl
+	"$repo_dir/.tools/hashlink/hl" hxi-retained-test.hl
 	status=$?
 	set -e
 	if [[ $status -ne 42 ]]; then
@@ -55,8 +52,7 @@ invalid_output="$repo_dir/out/hxi-invalid-null.txt"
 set +e
 (
 	cd "$repo_dir/out"
-	LD_LIBRARY_PATH="$repo_dir/out:$repo_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-		"$repo_dir/.tools/hashlink/hl" hxi-call-test.hl.invalid-null
+	"$repo_dir/.tools/hashlink/hl" hxi-call-test.hl.invalid-null
 ) >"$invalid_output" 2>&1
 invalid_status=$?
 set -e
