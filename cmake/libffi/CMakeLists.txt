@@ -115,6 +115,7 @@ install(FILES
 
 enable_testing()
 add_executable(libffi-smoke smoke.c)
+target_compile_options(libffi-smoke PRIVATE "$<$<CONFIG:Debug>:/O2>")
 target_link_libraries(libffi-smoke PRIVATE ffi)
 add_test(NAME libffi-smoke COMMAND libffi-smoke)
 set_tests_properties(libffi-smoke PROPERTIES TIMEOUT 30)
