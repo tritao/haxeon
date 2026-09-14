@@ -2,16 +2,17 @@
 set -euo pipefail
 
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
-source_dir="$root_dir/vendor/libffi"
+submodule_dir="$root_dir/vendor/libffi"
 install_dir="$root_dir/.tools/libffi"
 mode=${1:-native}
 
-if [[ ! -f "$source_dir/configure.ac" ]]; then
+if [[ ! -f "$submodule_dir/configure.ac" ]]; then
 	echo "pinned libffi submodule is missing; initialize vendor/libffi first" >&2
 	exit 1
 fi
 
-revision=$(git -C "$source_dir" rev-parse HEAD)
+revision=$(git -C "$submodule_dir" rev-parse HEAD)
+source_dir="$root_dir/out/libffi/source-$revision"
 case "$mode" in
 	native)
 		build_dir="$root_dir/out/libffi/native"
@@ -34,19 +35,25 @@ if [[ -f "$stamp_file" && -f "$install_dir/include/ffi.h" ]] \
 	exit 0
 fi
 
-for tool in autoreconf make; do
+for tool in autoreconf make tar; do
 	if ! command -v "$tool" >/dev/null 2>&1; then
 		echo "missing required libffi build tool: $tool" >&2
 		exit 1
 	fi
 done
 
-if [[ ! -x "$source_dir/configure" ]]; then
-	(
-		cd "$source_dir"
-		./autogen.sh
-	)
+if [[ ! -f "$source_dir/configure.ac" ]]; then
+	mkdir -p "$source_dir"
+	git -C "$submodule_dir" archive HEAD | tar -x -C "$source_dir"
 fi
+cp "$root_dir/scripts/libffi-libtool-compat.m4" "$source_dir/m4/haxeon-libtool-compat.m4"
+if ! grep -Fq 'haxeon-libtool-compat.m4' "$source_dir/acinclude.m4"; then
+	printf '\nm4_include([m4/haxeon-libtool-compat.m4])\n' >> "$source_dir/acinclude.m4"
+fi
+(
+	cd "$source_dir"
+	autoreconf -f -v -i
+)
 
 mkdir -p "$build_dir" "$install_dir"
 cd "$build_dir"

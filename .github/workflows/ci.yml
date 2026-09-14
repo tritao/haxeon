@@ -84,7 +84,7 @@ jobs:
           submodules: recursive
       - uses: egor-tensin/setup-cygwin@v4
         with:
-          packages: make autoconf automake libtool texinfo
+          packages: git make autoconf automake libtool texinfo
       - uses: ilammy/msvc-dev-cmd@v1
       - name: Bootstrap pinned tools and native runtime
         shell: pwsh
