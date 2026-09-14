@@ -796,6 +796,7 @@ class TestMain {
 			"--ir-output=out/sample.hir",
 			"--entry=sample.Main",
 			"--root=source",
+			"--package-root=library=vendor/library/src",
 			"--define=feature",
 			"--define=version=3.0",
 			"--dump-function=42",
@@ -817,6 +818,9 @@ class TestMain {
 			|| !compilerRequest.wasmMemoryStats
 			|| !compilerRequest.wasmGcStress
 			|| compilerRequest.roots.length != 1
+			|| compilerRequest.packageRoots.length != 1
+			|| compilerRequest.packageRoots[0].packageName != "library"
+			|| compilerRequest.packageRoots[0].path != "vendor/library/src"
 			|| compilerRequest.paths.length != 1
 			|| compilerRequest.ffiInterfaces.join(",") != "generated/nativekit.hxi,generated/system.hxi"
 			|| compilerRequest.ffiLibrary != "sample")

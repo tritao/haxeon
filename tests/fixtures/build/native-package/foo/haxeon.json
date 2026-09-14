@@ -1,0 +1,11 @@
+{
+	"version": 1,
+	"package": {
+		"name": "foo"
+	},
+	"sourceRoots": ["src"],
+	"native": {
+		"sources": ["native/foo.c", "native/extra.c"],
+		"includeDirs": ["native/include"]
+	}
+}

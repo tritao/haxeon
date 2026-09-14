@@ -246,6 +246,8 @@ is available on Unix-like systems and Windows:
 ./scripts/haxeon doctor
 ./scripts/haxeon platforms
 ./scripts/haxeon build
+./scripts/haxeon build --plan
+./scripts/haxeon build --jobs 8
 ./scripts/haxeon run
 ./scripts/haxeon build --target wasm32
 ./scripts/haxeon init --target android
@@ -260,6 +262,7 @@ creates `src/Main.hx` and a project file like this:
 ```json
 {
   "version": 1,
+  "package": { "name": "my-app" },
   "entry": "Main",
   "sources": ["src/Main.hx"],
   "sourceRoots": ["src"],
@@ -293,6 +296,45 @@ running program after `--`:
 ```sh
 ./scripts/haxeon run -- --verbose
 ```
+
+Host builds resolve local path dependencies declared by package name. A
+dependency can provide Haxe sources and optional C sources; C sources are
+compiled into a static archive and a HashLink native library as part of the
+same build:
+
+```json
+{
+  "version": 1,
+  "package": { "name": "my-app" },
+  "entry": "Main",
+  "sourceRoots": ["src"],
+  "dependencies": {
+    "foo": { "path": "../foo" }
+  },
+  "target": "host",
+  "outputDir": "build"
+}
+```
+
+The `foo` package can list native inputs in its own manifest:
+
+```json
+{
+  "version": 1,
+  "package": { "name": "foo" },
+  "sourceRoots": ["src"],
+  "native": {
+    "sources": ["native/foo.c"],
+    "includeDirs": ["native/include"]
+  }
+}
+```
+
+`haxeon build --plan` prints the deterministic artifact and action plans.
+`--jobs COUNT` controls the number of independent ready actions the executor
+may run at once. Native outputs and action fingerprints live below the
+application's `outputDir`; unchanged native actions are skipped on later builds.
+This local-package/native-provider path currently targets the host platform.
 
 The `doctor` command checks the local compiler, HashLink runtime, and Android
 SDK tools. `platforms` lists CLI targets, and `devices` reports connected

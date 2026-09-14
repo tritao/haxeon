@@ -58,7 +58,13 @@ class TestCatalog {
 		"HxiAbiMain",
 	];
 
-	static final toolingMains = ["LanguageServiceMain", "ProtocolMain", "LspProtocolMain", "UtestDiscoveryMain"];
+	static final toolingMains = [
+		"LanguageServiceMain",
+		"ProtocolMain",
+		"LspProtocolMain",
+		"UtestDiscoveryMain",
+		"BuildSystemMain"
+	];
 	static final runtimeMains = ["RuntimeDomainMain"];
 
 	public static function namedCases():Array<NamedCase> {

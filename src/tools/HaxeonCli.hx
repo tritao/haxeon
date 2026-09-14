@@ -2,6 +2,9 @@ package tools;
 
 import haxe.Json;
 import haxe.io.Path;
+import build.HaxeonProjectBuild;
+import build.execution.ProcessRunner;
+import project.ProjectDiscovery;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -23,6 +26,8 @@ private typedef BuildOptions = {
 	final device:Null<String>;
 	final defines:Array<String>;
 	final runtimeArguments:Array<String>;
+	final plan:Bool;
+	final jobs:Int;
 }
 
 private typedef CommandCapture = {
@@ -112,6 +117,7 @@ class HaxeonCli {
 			defines: [],
 			outputDir: "build",
 		};
+		Reflect.setField(config, "package", {name: Path.withoutDirectory(FileSystem.fullPath(projectDirectory))});
 		if (target == "android")
 			Reflect.setField(config, "android", {applicationId: "org.haxeon.android", label: "Haxeon"});
 		File.saveContent(configPath, Json.stringify(config, null, "\t") + "\n");
@@ -181,18 +187,43 @@ class HaxeonCli {
 		var projectDirectory = Path.directory(projectConfigPath);
 		if (projectDirectory == "")
 			projectDirectory = Sys.getCwd();
-		var config = loadConfig(projectConfigPath);
-		var target = options.target == null ? config.target : options.target;
+		var project = ProjectDiscovery.discover(projectConfigPath),
+			target = options.target == null ? project.manifest.target : options.target;
 		if (target != "host" && target != "wasm32" && target != "android")
 			throw 'Unsupported CLI target "$target". Supported targets are "host", "wasm32", and "android".';
 		if (launch && target == "wasm32")
 			throw 'The "$target" target can be built, but this CLI has no runner for it yet.';
+		if (options.plan && launch)
+			throw 'Option "--plan" is only valid with "haxeon build"';
 		if (!launch && options.device != null)
 			throw 'Option "--device" is only valid with "haxeon run --target android"';
 		if (target != "android" && options.device != null)
 			throw 'Option "--device" requires "--target android"';
 
 		var home = haxeonHome();
+		if (target == "host" && project.manifest.target == "host") {
+			var output = options.output == null ? resolvePath(Path.join([project.manifest.outputDir, "host", "main.hl"]),
+				project.root) : resolvePath(options.output, project.root);
+			var buildStatus = HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs, options.plan);
+			if (buildStatus != 0 || !launch)
+				return buildStatus;
+			var hashlink = Path.join([home, ".tools", "hashlink", "hl" + executableSuffix()]);
+			if (!FileSystem.exists(hashlink))
+				throw 'HashLink is missing: $hashlink (run scripts/bootstrap-tools.sh)';
+			var nativeDirectories = [
+				for (resolvedPackage in project.packages.packages)
+					if (resolvedPackage.nativeSources.length > 0) Path.join([project.root, project.manifest.outputDir, "host", "native", resolvedPackage.name])
+			];
+			configureRuntimeLibraryPath(home, nativeDirectories);
+			Sys.println('Launching $output');
+			return ProcessRunner.run(hashlink, [output].concat(options.runtimeArguments), project.root, new Map());
+		}
+		if (options.plan)
+			throw 'Plan output is currently available for host builds only';
+		for (resolvedPackage in project.packages.packages)
+			if (resolvedPackage.nativeSources.length > 0)
+				throw 'Native C package "${resolvedPackage.name}" requires target "host"; target "$target" is not supported yet';
+		var config = loadConfig(projectConfigPath);
 		if (target == "android") {
 			var androidOutput = options.output == null ? defaultOutput(config, projectDirectory, "android") : resolvePath(options.output, projectDirectory);
 			var status = buildAndroid(home, projectConfigPath, config, androidOutput);
@@ -227,16 +258,13 @@ class HaxeonCli {
 			compilerArguments.push(absoluteSource);
 		}
 
-		var previousDirectory = Sys.getCwd(), compileStatus:Int;
+		var compileStatus:Int;
 		try {
 			// CompilerDriver resolves Haxeon's bundled stdlib relative to the repo.
-			Sys.setCwd(home);
-			compileStatus = Sys.command(compiler, compilerArguments);
+			compileStatus = ProcessRunner.run(compiler, compilerArguments, home, new Map());
 		} catch (error:Dynamic) {
-			Sys.setCwd(previousDirectory);
 			throw error;
 		}
-		Sys.setCwd(previousDirectory);
 		if (compileStatus != 0)
 			return compileStatus;
 		if (!launch) {
@@ -249,8 +277,7 @@ class HaxeonCli {
 			throw 'HashLink is missing: $hashlink (run scripts/bootstrap-tools.sh)';
 		configureRuntimeLibraryPath(home);
 		Sys.println('Launching $output');
-		Sys.setCwd(projectDirectory);
-		return Sys.command(hashlink, [output].concat(options.runtimeArguments));
+		return ProcessRunner.run(hashlink, [output].concat(options.runtimeArguments), projectDirectory, new Map());
 	}
 
 	static function buildAndroid(home:String, projectConfigPath:String, config:ProjectConfig, output:String):Int {
@@ -275,7 +302,7 @@ class HaxeonCli {
 			"-PhaxeonApplicationId=" + config.androidApplicationId,
 			"-PhaxeonAppLabel=" + config.androidAppLabel
 		];
-		var status = Sys.command(javaExecutable(), arguments);
+		var status = ProcessRunner.run(javaExecutable(), arguments, Sys.getCwd(), new Map());
 		if (status != 0)
 			return status;
 
@@ -310,12 +337,12 @@ class HaxeonCli {
 				throw 'Android device "$device" is not online; run "haxeon devices" to inspect connected devices.';
 		}
 
-		var status = Sys.command(adb, ["-s", device, "install", "-r", apk]);
+		var status = ProcessRunner.run(adb, ["-s", device, "install", "-r", apk], Sys.getCwd(), new Map());
 		if (status != 0)
 			return status;
-		Sys.command(adb, ["-s", device, "shell", "am", "force-stop", applicationId]);
+		ProcessRunner.run(adb, ["-s", device, "shell", "am", "force-stop", applicationId], Sys.getCwd(), new Map());
 		Sys.println('Launching $applicationId on $device');
-		return Sys.command(adb, ["-s", device, "shell", "monkey", "-p", applicationId, "1"]);
+		return ProcessRunner.run(adb, ["-s", device, "shell", "monkey", "-p", applicationId, "1"], Sys.getCwd(), new Map());
 	}
 
 	static function onlineAndroidDevices(adb:String):Array<{serial:String, state:String}> {
@@ -384,7 +411,8 @@ class HaxeonCli {
 	}
 
 	static function parseBuildOptions(arguments:Array<String>):BuildOptions {
-		var projectPath = CONFIG_FILE, target:Null<String> = null, output:Null<String> = null, device:Null<String> = null, defines = [], runtimeArguments = [];
+		var projectPath = CONFIG_FILE, target:Null<String> = null, output:Null<String> = null, device:Null<String> = null, defines = [],
+			runtimeArguments = [], plan = false, jobs = 4;
 		var index = 0;
 		while (index < arguments.length) {
 			var argument = arguments[index++];
@@ -392,7 +420,10 @@ class HaxeonCli {
 				runtimeArguments = arguments.slice(index);
 				break;
 			}
-			if (argument == "--project" || argument == "--target" || argument == "--output" || argument == "--define" || argument == "--device") {
+			if (argument == "--plan")
+				plan = true;
+			else if (argument == "--project" || argument == "--target" || argument == "--output" || argument == "--define" || argument == "--device"
+				|| argument == "--jobs") {
 				if (index >= arguments.length)
 					throw 'Option "$argument" requires a value';
 				var value = arguments[index++];
@@ -407,6 +438,11 @@ class HaxeonCli {
 						defines.push(value);
 					case "--device":
 						device = value;
+					case "--jobs":
+						var parsedJobs = Std.parseInt(value);
+						if (parsedJobs == null || parsedJobs < 1)
+							throw 'Option "--jobs" requires a positive integer';
+						jobs = parsedJobs;
 					case _:
 				}
 			} else if (StringTools.startsWith(argument, "--project="))
@@ -417,7 +453,12 @@ class HaxeonCli {
 				output = argument.substr("--output=".length);
 			else if (StringTools.startsWith(argument, "--device="))
 				device = argument.substr("--device=".length);
-			else if (StringTools.startsWith(argument, "--define="))
+			else if (StringTools.startsWith(argument, "--jobs=")) {
+				var parsedJobs = Std.parseInt(argument.substr("--jobs=".length));
+				if (parsedJobs == null || parsedJobs < 1)
+					throw 'Option "--jobs" requires a positive integer';
+				jobs = parsedJobs;
+			} else if (StringTools.startsWith(argument, "--define="))
 				defines.push(argument.substr("--define=".length));
 			else
 				throw 'Unknown build option "$argument"';
@@ -430,7 +471,9 @@ class HaxeonCli {
 			output: output,
 			device: device,
 			defines: defines,
-			runtimeArguments: runtimeArguments
+			runtimeArguments: runtimeArguments,
+			plan: plan,
+			jobs: jobs
 		};
 	}
 
@@ -536,8 +579,10 @@ class HaxeonCli {
 		return resolvePath(Path.join([config.outputDir, target, output]), projectDirectory);
 	}
 
-	static function configureRuntimeLibraryPath(home:String):Void {
+	static function configureRuntimeLibraryPath(home:String, ?extraDirectories:Array<String>):Void {
 		var directories = [Path.join([home, "out"]), Path.join([home, ".tools", "hashlink"])];
+		if (extraDirectories != null)
+			directories = directories.concat(extraDirectories);
 		var variable = switch Sys.systemName() {
 			case "Windows": "PATH";
 			case "Mac": "DYLD_LIBRARY_PATH";
@@ -580,6 +625,7 @@ class HaxeonCli {
 		Sys.println("  platforms                      Show targets exposed by this CLI");
 		Sys.println("  devices                        List connected Android devices");
 		Sys.println("  build [--target TARGET]        Build project in haxeon.json (host, wasm32, android)");
+		Sys.println("       [--plan] [--jobs COUNT]   Inspect the host build plan or set worker count");
 		Sys.println("  run [--target TARGET] [-- args] Build and launch (host or Android)");
 		Sys.println("  --device SERIAL                Select Android device for run");
 		Sys.println("  --project PATH                 Select a haxeon.json file");

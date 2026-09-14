@@ -1,0 +1,15 @@
+{
+	"version": 1,
+	"package": {
+		"name": "app"
+	},
+	"entry": "app.Main",
+	"sourceRoots": ["src"],
+	"dependencies": {
+		"foo": {
+			"path": "../foo"
+		}
+	},
+	"target": "host",
+	"outputDir": "build"
+}

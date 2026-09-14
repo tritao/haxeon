@@ -1,5 +1,7 @@
 package compiler.tools;
 
+import compiler.tools.CompilerRequest.PackageSourceRoot;
+
 /** Parses and validates the stable command-line build interface. */
 class CompilerArguments {
 	public static function parse(arguments:Array<String>):CompilerRequest {
@@ -7,6 +9,7 @@ class CompilerArguments {
 			dumpFunction = -1, importMemory = false, memoryBase = 0, memoryContract:Null<String> = null, wasmMemoryStats = false, wasmGcStress = false,
 			exports:Array<String> = [], ffiHeader:Null<String> = null, ffiLibrary:Null<String> = null, ffiInterfaces:Array<String> = [],
 			ffiProjections:Array<String> = [], roots:Array<String> = [], defines:Array<String> = [], paths:Array<String> = [];
+		var packageRoots:Array<PackageSourceRoot> = [];
 		var index = 0;
 		while (index < arguments.length) {
 			var argument = arguments[index++];
@@ -28,6 +31,8 @@ class CompilerArguments {
 				irOutput = value(argument, "--ir-output=");
 			else if (StringTools.startsWith(argument, "--root="))
 				roots.push(value(argument, "--root="));
+			else if (StringTools.startsWith(argument, "--package-root="))
+				packageRoots.push(packageRoot(value(argument, "--package-root=")));
 			else if (StringTools.startsWith(argument, "--ffi-header="))
 				ffiHeader = value(argument, "--ffi-header=");
 			else if (StringTools.startsWith(argument, "--ffi-library="))
@@ -94,6 +99,7 @@ class CompilerArguments {
 			ffiInterfaces: ffiInterfaces,
 			ffiProjections: ffiProjections,
 			roots: roots,
+			packageRoots: packageRoots,
 			paths: paths
 		};
 	}
@@ -103,6 +109,13 @@ class CompilerArguments {
 		if (result.length == 0)
 			throw 'Compiler option "$prefix" requires a value';
 		return result;
+	}
+
+	static function packageRoot(value:String):PackageSourceRoot {
+		var separator = value.indexOf("=");
+		if (separator <= 0 || separator == value.length - 1)
+			throw 'Invalid package source root "$value"; expected NAME=PATH';
+		return {packageName: value.substr(0, separator), path: value.substr(separator + 1)};
 	}
 
 	static function parseIndex(value:String):Int {

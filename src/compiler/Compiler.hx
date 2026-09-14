@@ -450,6 +450,12 @@ class Compiler {
 		sourceGeneration++;
 	}
 
+	/** Add a package-scoped source root for a resolved local dependency. */
+	public function addPackageSourceRoot(packageName:String, path:String):Void {
+		sourceLoader.addPackageRoot(packageName, path);
+		sourceGeneration++;
+	}
+
 	public function compact(entryModule:String):CompileResult {
 		var result = new CompilationTransaction(this, entryModule, null, new HlModuleAssembler(assembler.cache.stableIds)).run();
 		rememberCompile(entryModule, result);

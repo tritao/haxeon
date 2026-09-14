@@ -1,13 +1,25 @@
 package build;
 
 import haxe.io.Path;
+import build.BuildEnvironment;
+import build.BuildPlanner;
+import build.execution.ActionId;
+import build.execution.ExecutionAction;
+import build.execution.ExecutionAction.ActionKind;
+import build.execution.ExecutionPlan;
+import build.execution.Executor;
+import build.execution.ProcessRunner;
+import build.lowering.PlanLowerer;
 import sys.FileSystem;
 import sys.io.File;
-import sys.io.Process;
 
 /** Cross-platform entry point for Haxeon's build and bootstrap workflow. */
 class HaxeonBuild {
+	static var environment:BuildEnvironment;
+	static var processActionNumber = 0;
+
 	public static function main():Void {
+		environment = BuildEnvironment.fromCurrentDirectory("out");
 		var arguments = Sys.args();
 		var command = arguments.length == 0 ? "help" : arguments.shift();
 		var status = switch command {
@@ -26,8 +38,10 @@ class HaxeonBuild {
 
 	static function native(arguments:Array<String>):Int {
 		var preset = arguments.length == 0 ? (Sys.systemName() == "Windows" ? "windows-msvc" : "release") : arguments[0];
-		var configured = run("cmake", ["--preset", preset, "-S", root()]);
-		return configured == 0 ? run("cmake", ["--build", "--preset", preset]) : configured;
+		var plan = BuildPlanner.nativeRuntime(environment, preset),
+			execution = PlanLowerer.lower(plan, environment, preset),
+			result = new Executor(environment, 1).execute(execution);
+		return result.exitCode;
 	}
 
 	static function bootstrap(selfOnly:Bool):Int {
@@ -170,20 +184,25 @@ class HaxeonBuild {
 		return Path.join([root()].concat(parts));
 
 	static function run(command:String, arguments:Array<String>, inherit:Bool = true):Int {
+		if (!inherit)
+			try {
+				return ProcessRunner.run(command, arguments, root(), new Map(), false);
+			} catch (_:Dynamic) {
+				return 127;
+			}
 		try {
-			if (inherit)
-				return Sys.command(command, arguments);
-			var process = new Process(command, arguments);
-			var status = process.exitCode();
-			process.close();
-			return status;
+			processActionNumber++;
+			var action = new ExecutionAction(new ActionId('build-command-$processActionNumber'), [], [], [], '$command ${arguments.join(" ")}',
+				Process(command, arguments, root(), new Map())),
+				result = new Executor(environment, 1).execute(new ExecutionPlan([action]));
+			return result.exitCode;
 		} catch (_:Dynamic) {
 			return 127;
 		}
 	}
 
 	static function root():String
-		return FileSystem.fullPath(Sys.getCwd());
+		return environment.projectRoot;
 
 	static function usage(status:Int = 0):Int {
 		Sys.println("Usage: haxe -cp src --run build.HaxeonBuild <command>");

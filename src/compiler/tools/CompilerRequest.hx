@@ -1,5 +1,10 @@
 package compiler.tools;
 
+typedef PackageSourceRoot = {
+	final packageName:String;
+	final path:String;
+}
+
 typedef CompilerRequest = {
 	final target:String;
 	final defines:Array<String>;
@@ -19,5 +24,6 @@ typedef CompilerRequest = {
 	final ffiInterfaces:Array<String>;
 	final ffiProjections:Array<String>;
 	final roots:Array<String>;
+	final packageRoots:Array<PackageSourceRoot>;
 	final paths:Array<String>;
 }

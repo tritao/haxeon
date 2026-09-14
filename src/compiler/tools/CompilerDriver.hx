@@ -38,7 +38,9 @@ class CompilerDriver {
 		compiler.addSourceRoot("stdlib");
 		for (root in request.roots)
 			compiler.addSourceRoot(root);
-		SourceManifestLoader.load(compiler, request.roots, request.paths);
+		for (root in request.packageRoots)
+			compiler.addPackageSourceRoot(root.packageName, root.path);
+		SourceManifestLoader.load(compiler, request.roots, request.paths, request.packageRoots);
 		report("compiling entry " + request.entry);
 		var result = compiler.compile(request.entry, null, false);
 		if (request.dumpFunction >= 0)

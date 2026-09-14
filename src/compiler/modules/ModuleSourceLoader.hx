@@ -8,7 +8,7 @@ import sys.io.File;
 class ModuleSourceLoader {
 	static final caseSensitiveFileSystem:Bool = Sys.systemName() != "Windows" && Sys.systemName() != "Mac";
 
-	final roots:Array<String> = [];
+	final roots:Array<{path:String, packagePrefix:Null<String>}> = [];
 
 	public function new() {}
 
@@ -16,8 +16,23 @@ class ModuleSourceLoader {
 		var normalized = normalizeRoot(path);
 		if (!FileSystem.exists(normalized) || !FileSystem.isDirectory(normalized))
 			throw 'Source root "$path" is not a directory';
-		if (roots.indexOf(normalized) < 0)
-			roots.push(normalized);
+		addRootMapping(normalized, null);
+	}
+
+	public function addPackageRoot(packageName:String, path:String):Void {
+		if (packageName == null || packageName.length == 0)
+			throw "Package source root requires a package name";
+		var normalized = normalizeRoot(path);
+		if (!FileSystem.exists(normalized) || !FileSystem.isDirectory(normalized))
+			throw 'Package source root "$path" is not a directory';
+		addRootMapping(normalized, packageName);
+	}
+
+	function addRootMapping(path:String, packagePrefix:Null<String>):Void {
+		for (root in roots)
+			if (root.path == path && root.packagePrefix == packagePrefix)
+				return;
+		roots.push({path: path, packagePrefix: packagePrefix});
 	}
 
 	public function load(name:String, modules:Map<String, ModuleState>):Null<ModuleState> {
@@ -25,7 +40,20 @@ class ModuleSourceLoader {
 			return modules.get(name);
 		var relative = name.split(".").join("/") + ".hx";
 		for (root in roots) {
-			var path = exactPath(root, relative);
+			var candidates = [relative];
+			if (root.packagePrefix != null) {
+				var prefix = root.packagePrefix + ".";
+				if (StringTools.startsWith(name, prefix))
+					candidates.push(name.substr(prefix.length).split(".").join("/") + ".hx");
+				else
+					continue;
+			}
+			var path:Null<String> = null;
+			for (candidate in candidates) {
+				path = exactPath(root.path, candidate);
+				if (path != null)
+					break;
+			}
 			if (path == null)
 				continue;
 			var state = new ModuleState(name, new SourceFile(path, File.getContent(path)));
@@ -61,7 +89,7 @@ class ModuleSourceLoader {
 	public function copy():ModuleSourceLoader {
 		var result = new ModuleSourceLoader();
 		for (root in roots)
-			result.roots.push(root);
+			result.roots.push({path: root.path, packagePrefix: root.packagePrefix});
 		return result;
 	}
 
