@@ -114,7 +114,8 @@ class HxiSemantics {
 			value = abi.classify(valueType);
 		return switch value {
 			case HandleValue(name):
-				OutputHandle(name, parameter.handleDisposition == Owned, null);
+				var owned = parameter.handleDisposition == Owned;
+				OutputHandle(name, owned, owned ? handleDestroy(name, declarations) : null);
 			case PointerValue(_, _, opaquePointee, _) if (opaquePointee != null):
 				var release = switch parameter.ownership {
 					case Owned(symbol): symbol;

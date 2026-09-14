@@ -56,7 +56,7 @@ class HxiAbiMain {
 				throw "owned value handle result was not normalized with its destructor";
 		}
 		switch ownedFunctions[1].semantics.parameters[0].kind {
-			case OutputHandle("resource", true, null):
+			case OutputHandle("resource", true, "resource_destroy"):
 			case _:
 				throw "owned value handle output was not normalized independently of pointer ownership";
 		}
@@ -75,6 +75,24 @@ class HxiAbiMain {
 			case _:
 				throw "retained callback semantics were not resolved";
 		}
+		var nativeKitModel = HxiParser.parse("nativekit.hxi",
+			'interface NativeKit @target("x86_64-linux-gnu") @library("nativekit") { enum nk_result : i32 { NK_OK = 0; NK_ERROR = -1; } handle nk_window : u32 @destroy("nk_window_destroy"); extern fn nk_window_create(out_window: ptr<nk_window> @out @owned) -> nk_result; extern fn nk_window_destroy(window: nk_window) -> nk_result @symbol("nk_window_destroy"); extern fn nk_last_error() -> utf8; }');
+		HxiValidator.validate(nativeKitModel, []);
+		var nativeKitProfile = HxiProjectionProfile.parse("nativekit.hxmap",
+			'{"interface":"NativeKit","typePrefix":"nk_","typeNames":{"nk_window":"WindowHandle"},"resultPolicies":{"nk_result":{"successValue":"NK_OK","diagnosticFunction":"nk_last_error","errorType":"NativeKitError","checkedSuffix":"_checked"}}}'),
+			nativeKitPlan = HxiProjection.plan("nativekit.hxmap", nativeKitModel, null, null, null, nativeKitProfile),
+			windowCreate = Lambda.find(nativeKitPlan.functions, fn -> fn.nativeName == "nk_window_create");
+		if (windowCreate == null)
+			throw "projection planner omitted nk_window_create";
+		expect(windowCreate.outputs.length == 1
+			&& windowCreate.outputs[0].type == "OwnedWindowHandle"
+			&& windowCreate.outputs[0].owned
+			&& windowCreate.outputs[0].destroy == "nk_window_destroy",
+			"owned nk_window output planning should resolve its projected owner type and destructor");
+		if (windowCreate.checked == null
+			|| windowCreate.checked.name != "nk_window_create_checked"
+			|| windowCreate.checked.returnType != "OwnedWindowHandle")
+			throw "checked nk_window_create should return the planned owned handle value";
 		var handleSource = HxiProjection.source(handleModel);
 		expect(handleSource.indexOf("abstract resource(Int) {") >= 0
 			&& handleSource.indexOf("function new(value:Int = 0)") >= 0
