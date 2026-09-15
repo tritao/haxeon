@@ -55,10 +55,30 @@ class HlTypeBuilder {
 		return type;
 	}
 
-	public function functionType(arguments:Array<RawPtr<HlType>>, returnType:RawPtr<HlType>):RawPtr<HlType> {
-		var nargs = arguments.length;
-		var functionData = arena.allocTypeFunction();
-		var nativeArguments:RawPtr<RawPtr<HlType>>;
+	/** Allocate a function type header before its signature is known. */
+	public function functionTypeSkeleton():RawPtr<HlType> {
+		var type = allocateType(HlTypeKind.Function), functionData = arena.allocTypeFunction();
+		functionData.ref.args = RawPtr.nullPtr();
+		functionData.ref.ret = RawPtr.nullPtr();
+		functionData.ref.nargs = 0;
+		functionData.ref.parent = RawPtr.nullPtr();
+		functionData.ref.closureType.ref.kind = cast HlTypeKind.VoidType;
+		functionData.ref.closureType.ref.pointer = RawPtr.nullPtr();
+		functionData.ref.closure.ref.args = RawPtr.nullPtr();
+		functionData.ref.closure.ref.ret = RawPtr.nullPtr();
+		functionData.ref.closure.ref.nargs = 0;
+		functionData.ref.closure.ref.parent = RawPtr.nullPtr();
+		type.ref.data.ref.fun = functionData;
+		return type;
+	}
+
+	/** Complete a function type skeleton after all recursive signature types are available. */
+	public function defineFunctionType(type:RawPtr<HlType>, arguments:Array<RawPtr<HlType>>, returnType:RawPtr<HlType>):Void {
+		var kind:HlTypeKind = cast type.ref.kind;
+		if (kind != HlTypeKind.Function && kind != HlTypeKind.Method)
+			throw "HashLink function definition requires a function type skeleton";
+		var nargs = arguments.length, functionData = type.ref.data.ref.fun,
+			nativeArguments:RawPtr<RawPtr<HlType>>;
 		if (nargs == 0)
 			nativeArguments = RawPtr.nullPtr();
 		else {
@@ -76,8 +96,11 @@ class HlTypeBuilder {
 		functionData.ref.closure.ref.ret = returnType;
 		functionData.ref.closure.ref.nargs = cast nargs;
 		functionData.ref.closure.ref.parent = RawPtr.nullPtr();
-		var type = allocateType(HlTypeKind.Function);
-		type.ref.data.ref.fun = functionData;
+	}
+
+	public function functionType(arguments:Array<RawPtr<HlType>>, returnType:RawPtr<HlType>):RawPtr<HlType> {
+		var type = functionTypeSkeleton();
+		defineFunctionType(type, arguments, returnType);
 		return type;
 	}
 
@@ -145,49 +168,65 @@ class HlTypeBuilder {
 		return context;
 	}
 
-	public function enumType(name:RawPtr<UInt16>, constructs:Array<HlEnumConstructSpec>, globalValue:RawPtr<RawPtr<UInt8>>):RawPtr<HlType> {
-		var enumData = arena.allocTypeEnum(),
-			nativeConstructs:RawPtr<HlEnumConstruct>;
-		enumData.ref.name = name;
-		enumData.ref.nconstructs = cast constructs.length;
-		enumData.ref.globalValue = globalValue;
-		if (constructs.length == 0)
-			nativeConstructs = RawPtr.nullPtr();
-		else {
-			nativeConstructs = arena.allocEnumConstructArray(constructs.length);
-			for (index in 0...constructs.length) {
-				var source = constructs[index], destination = nativeConstructs.offset(index),
-					parameters:RawPtr<RawPtr<HlType>> = source.parameters.length == 0 ? RawPtr.nullPtr() : arena.allocTypePointerArray(source.parameters.length),
-					offsets:RawPtr<Int32> = source.offsets.length == 0 ? RawPtr.nullPtr() : arena.allocInt32Array(source.offsets.length);
-				if (source.parameters.length != 0)
-					for (parameterIndex in 0...source.parameters.length)
-						parameters.offset(parameterIndex).store(source.parameters[parameterIndex]);
-				if (source.offsets.length != 0)
-					for (offsetIndex in 0...source.offsets.length)
-						offsets.offset(offsetIndex).store(cast source.offsets[offsetIndex]);
-				destination.ref.name = source.name;
-				destination.ref.nparams = cast source.parameters.length;
-				destination.ref.params = parameters;
-				destination.ref.size = cast source.size;
-				destination.ref.hasPtr = source.hasPtr;
-				destination.ref.offsets = offsets;
-			}
-		}
-		enumData.ref.constructs = nativeConstructs;
-		var type = allocateType(HlTypeKind.Enum);
+	/** Allocate an enum type header before its constructors are known. */
+	public function enumTypeSkeleton():RawPtr<HlType> {
+		var type = allocateType(HlTypeKind.Enum), enumData = arena.allocTypeEnum();
+		enumData.ref.name = RawPtr.nullPtr();
+		enumData.ref.nconstructs = 0;
+		enumData.ref.constructs = RawPtr.nullPtr();
+		enumData.ref.globalValue = RawPtr.nullPtr();
 		type.ref.data.ref.enumType = enumData;
 		return type;
 	}
 
-	public function virtualType(fields:Array<HlObjectFieldSpec>, dataSize:Int, indexes:Array<Int>, lookup:RawPtr<UInt8>):RawPtr<HlType> {
-		var virtualData = arena.allocTypeVirtual();
+	/** Complete an enum type skeleton after all recursive constructor types are available. */
+	public function defineEnumType(type:RawPtr<HlType>, name:RawPtr<UInt16>, constructs:Array<HlEnumConstructSpec>,
+			globalValue:RawPtr<RawPtr<UInt8>>):Void {
+		var kind:HlTypeKind = cast type.ref.kind;
+		if (kind != HlTypeKind.Enum)
+			throw "HashLink enum definition requires an enum type skeleton";
+		var enumData = type.ref.data.ref.enumType;
+		enumData.ref.name = name;
+		enumData.ref.nconstructs = cast constructs.length;
+		enumData.ref.globalValue = globalValue;
+		enumData.ref.constructs = enumConstructs(constructs);
+	}
+
+	public function enumType(name:RawPtr<UInt16>, constructs:Array<HlEnumConstructSpec>, globalValue:RawPtr<RawPtr<UInt8>>):RawPtr<HlType> {
+		var type = enumTypeSkeleton();
+		defineEnumType(type, name, constructs, globalValue);
+		return type;
+	}
+
+	/** Allocate a virtual type header before its fields are known. */
+	public function virtualTypeSkeleton():RawPtr<HlType> {
+		var type = allocateType(HlTypeKind.Virtual), virtualData = arena.allocTypeVirtual();
+		virtualData.ref.fields = RawPtr.nullPtr();
+		virtualData.ref.nfields = 0;
+		virtualData.ref.dataSize = 0;
+		virtualData.ref.indexes = RawPtr.nullPtr();
+		virtualData.ref.lookup = RawPtr.nullPtr();
+		type.ref.data.ref.virtualType = virtualData;
+		return type;
+	}
+
+	/** Complete a virtual type skeleton after all recursive field types are available. */
+	public function defineVirtualType(type:RawPtr<HlType>, fields:Array<HlObjectFieldSpec>, dataSize:Int, indexes:Array<Int>,
+			lookup:RawPtr<UInt8>):Void {
+		var kind:HlTypeKind = cast type.ref.kind;
+		if (kind != HlTypeKind.Virtual)
+			throw "HashLink virtual definition requires a virtual type skeleton";
+		var virtualData = type.ref.data.ref.virtualType;
 		virtualData.ref.fields = objectFields(fields);
 		virtualData.ref.nfields = cast fields.length;
 		virtualData.ref.dataSize = cast dataSize;
 		virtualData.ref.indexes = int32Values(indexes);
 		virtualData.ref.lookup = lookup;
-		var type = allocateType(HlTypeKind.Virtual);
-		type.ref.data.ref.virtualType = virtualData;
+	}
+
+	public function virtualType(fields:Array<HlObjectFieldSpec>, dataSize:Int, indexes:Array<Int>, lookup:RawPtr<UInt8>):RawPtr<HlType> {
+		var type = virtualTypeSkeleton();
+		defineVirtualType(type, fields, dataSize, indexes, lookup);
 		return type;
 	}
 
@@ -226,6 +265,30 @@ class HlTypeBuilder {
 			var source = values[index];
 			result.offset(index * 2).store(cast source.fieldIndex);
 			result.offset(index * 2 + 1).store(cast source.functionIndex);
+		}
+		return result;
+	}
+
+	function enumConstructs(values:Array<HlEnumConstructSpec>):RawPtr<HlEnumConstruct> {
+		if (values.length == 0)
+			return RawPtr.nullPtr();
+		var result = arena.allocEnumConstructArray(values.length);
+		for (index in 0...values.length) {
+			var source = values[index], destination = result.offset(index),
+				parameters:RawPtr<RawPtr<HlType>> = source.parameters.length == 0 ? RawPtr.nullPtr() : arena.allocTypePointerArray(source.parameters.length),
+				offsets:RawPtr<Int32> = source.offsets.length == 0 ? RawPtr.nullPtr() : arena.allocInt32Array(source.offsets.length);
+			if (source.parameters.length != 0)
+				for (parameterIndex in 0...source.parameters.length)
+					parameters.offset(parameterIndex).store(source.parameters[parameterIndex]);
+			if (source.offsets.length != 0)
+				for (offsetIndex in 0...source.offsets.length)
+					offsets.offset(offsetIndex).store(cast source.offsets[offsetIndex]);
+			destination.ref.name = source.name;
+			destination.ref.nparams = cast source.parameters.length;
+			destination.ref.params = parameters;
+			destination.ref.size = cast source.size;
+			destination.ref.hasPtr = source.hasPtr;
+			destination.ref.offsets = offsets;
 		}
 		return result;
 	}

@@ -65,6 +65,23 @@ function main():Int {
 	builder.defineObjectType(recursiveObject, builder.utf16Name("RecursiveObject"), RawPtr.nullPtr(),
 		[{name: builder.utf16Name("next"), type: recursiveObject, hashedName: 29}], [], [], RawPtr.nullPtr(), module, RawPtr.nullPtr());
 	var recursiveObjectData = recursiveObject.ref.data.ref.obj,
+		recursiveFunction = builder.functionTypeSkeleton();
+	builder.defineFunctionType(recursiveFunction, [recursiveFunction], recursiveFunction);
+	var recursiveEnum = builder.enumTypeSkeleton();
+	builder.defineEnumType(recursiveEnum, builder.utf16Name("RecursiveEnum"), [
+		{
+			name: builder.utf16Name("self"),
+			parameters: [recursiveEnum],
+			size: 0,
+			hasPtr: true,
+			offsets: [0]
+		}
+	], RawPtr.nullPtr());
+	var recursiveVirtual = builder.virtualTypeSkeleton();
+	builder.defineVirtualType(recursiveVirtual, [{name: builder.utf16Name("value"), type: recursiveVirtual, hashedName: 31}], 0, [0], RawPtr.nullPtr());
+	var recursiveFunctionData = recursiveFunction.ref.data.ref.fun,
+		recursiveEnumData = recursiveEnum.ref.data.ref.enumType,
+		recursiveVirtualData = recursiveVirtual.ref.data.ref.virtualType,
 		builtEnum = builder.enumType(RawPtr.nullPtr(), [
 			{
 				name: RawPtr.nullPtr(),
@@ -134,7 +151,11 @@ function main():Int {
 		&& !objectData.ref.runtime.ref.bindings.offset(0).ref.pointer.isNull()
 		&& objectData.ref.runtime.ref.bindings.offset(0).ref.fieldId == 0
 		&& recursiveObjectData.ref.fields.offset(0).ref.type == recursiveObject
-		&& recursiveObjectData.ref.fields.offset(0).ref.name.offset(0).load() == 110;
+		&& recursiveObjectData.ref.fields.offset(0).ref.name.offset(0).load() == 110
+		&& recursiveFunctionData.ref.args.offset(0).load() == recursiveFunction
+		&& recursiveFunctionData.ref.ret == recursiveFunction
+		&& recursiveEnumData.ref.constructs.offset(0).ref.params.offset(0).load() == recursiveEnum
+		&& recursiveVirtualData.ref.fields.offset(0).ref.type == recursiveVirtual;
 	HlTypeBridge.native_type_initialize_object(recursiveObject);
 	nativeObjectCorrect = nativeObjectCorrect
 		&& !recursiveObjectData.ref.runtime.isNull()
