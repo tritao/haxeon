@@ -70,6 +70,20 @@ class SemanticWorkspace {
 	public function member(type:CompilerType, name:String):Null<WorkspaceDeclaration>
 		return memberInner(type, name, []);
 
+	/** Resolve an inherited or direct member to its authoritative semantic identity. */
+	public function memberSymbolId(type:CompilerType, name:String):Null<SemanticSymbolId> {
+		var declaration = member(type, name);
+		if (declaration == null)
+			return null;
+		var model = effectiveModel(declaration.state);
+		if (model == null)
+			return null;
+		for (symbol in model.index.symbols)
+			if (sameSpan(symbol.declaration, declaration.span))
+				return symbol.id;
+		return null;
+	}
+
 	public function resolveSymbolId(name:String):Null<SemanticSymbolId> {
 		ensureResolutionIndexes();
 		return symbolResolutionIndex.get(name);

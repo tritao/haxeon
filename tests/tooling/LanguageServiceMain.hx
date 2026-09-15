@@ -220,7 +220,7 @@ class LanguageServiceMain {
 				hasImportedMember = true;
 		if (!hasImportedMember || !importedMemberCompletion.isIncomplete)
 			throw "recovered imported module completion failed";
-		var importedClassSource = "package editor.util; class Widget { public var ready:Int; public function reset():Void return; } function main():Void return;";
+		var importedClassSource = "package editor.util; class Base { public var inherited:Int; } class Widget extends Base { public var ready:Int; public function reset():Void return; } function main():Void return;";
 		importService.update("editor/util/Widget.hx", importedClassSource);
 		var importedClassRecoverySource = "package editor; import editor.util.Widget; function main():Void { var widget:Widget = new Widget(); widget.";
 		importService.update("editor/ClassMain.hx", importedClassRecoverySource);
@@ -245,6 +245,12 @@ class LanguageServiceMain {
 			|| importedMemberDefinition.path != "editor/util/Widget.hx"
 			|| importedMemberReferences.length != 2)
 			throw "recovered imported class member navigation did not use the authoritative identity";
+		var importedInheritedUseSource = "package editor; import editor.util.Widget; function main():Void { var widget:Widget = new Widget(); widget.inherited; }";
+		importService.update("editor/InheritedMain.hx", importedInheritedUseSource);
+		var importedInheritedUse = importedInheritedUseSource.lastIndexOf("inherited"),
+			importedInheritedDefinition = importService.definition("editor/InheritedMain.hx", importedInheritedUse + 1);
+		if (importedInheritedDefinition == null || importedInheritedDefinition.path != "editor/util/Widget.hx")
+			throw "recovered imported inherited member navigation did not resolve through the workspace";
 		var aliasedMemberSource = "package editor; import editor.util.Math as M; function main():Int { return M.";
 		importService.update("editor/Main.hx", aliasedMemberSource);
 		var aliasedMemberCompletion = importService.complete("editor/Main.hx", aliasedMemberSource.length),

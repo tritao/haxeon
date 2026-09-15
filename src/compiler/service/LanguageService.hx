@@ -16,6 +16,7 @@ import compiler.semantic.SemanticIndex.SemanticCompletionContextKind;
 import compiler.semantic.SemanticModel;
 import compiler.Compiler.CompileResult;
 import compiler.types.Type.CompilerType;
+import compiler.types.Type.NominalKind;
 import compiler.types.DeclarationIndex.DeclarationKind;
 import compiler.types.TypeRelations;
 import compiler.types.Typer;
@@ -340,6 +341,8 @@ class LanguageService {
 		for (importPath in program.imports) {
 			if (importQualifier(program, importPath) == qualifier) {
 				var imported = compiler.semanticWorkspace.resolveSymbolId(importPath + "." + suffix);
+				if (imported == null)
+					imported = compiler.semanticWorkspace.memberSymbolId(TInstance(NominalKind.Class, importPath, []), suffix);
 				if (imported != null)
 					return imported;
 			}
