@@ -3,6 +3,7 @@ package compiler.hl;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlValidator;
 import compiler.hl.HlOpcode;
+import compiler.hl.HlFunction.HlDebugLocation;
 import compiler.hl.HlWriter;
 import runtime.hashlink.HlMetadataGeneration;
 import runtime.hashlink.HlTypeBuilder;
@@ -30,6 +31,7 @@ class HlNativeMetadataBuilder {
 				functionTypes = dispatchTypes(code, typePointers, functionCount),
 				module = generation.defineModule(pointers, functionTypes),
 				globals = generation.defineGlobalTypes([for (global in code.globals) typePointers[global]]);
+			generation.defineDebugFiles(debugFilePaths(code));
 			for (index in 0...code.types.length)
 				generation.addType(typePointers[index]);
 			defineTypes(code, generation, typePointers, module, globals);
@@ -168,21 +170,79 @@ class HlNativeMetadataBuilder {
 				ops:RawPtr<runtime.hashlink.HlOpcode> = encoded.length == 0 ? RawPtr.nullPtr() : generation.arena.allocOpcodeArray(encoded.length);
 			for (index in 0...encoded.length)
 				writeOpcode(ops.offset(index), encoded[index], generation);
+			var debug:RawPtr<Int32> = encoded.length == 0
+				|| generation.debugFileCountOf() == 0 ? RawPtr.nullPtr() : generation.arena.allocInt32Array(encoded.length * 2);
+			if (!debug.isNull())
+				for (index in 0...encoded.length) {
+					var location = debugLocation(fn, index);
+					debug.offset(index * 2).store(cast generation.debugFileIndex(location.path));
+					debug.offset(index * 2 + 1).store(cast location.line);
+				}
+			var assigns:RawPtr<Int32> = fn.debugAssignments.length == 0 ? RawPtr.nullPtr() : generation.arena.allocInt32Array(fn.debugAssignments.length * 3);
+			for (index in 0...fn.debugAssignments.length) {
+				var assignment = fn.debugAssignments[index];
+				if (assignment.name < 0 || assignment.name >= code.strings.length)
+					throw 'HashLink function ${fn.functionIndex} has an invalid debug assignment name';
+				assigns.offset(index * 3).store(cast assignment.name);
+				assigns.offset(index * 3 + 1).store(cast assignment.position);
+				assigns.offset(index * 3 + 2).store(cast assignment.scopeEnd);
+			}
 			generation.addFunctionDescriptor({
 				findex: fn.functionIndex,
 				nregs: fn.registers.length,
 				nops: encoded.length,
 				reference: 0,
-				nassigns: 0,
+				nassigns: fn.debugAssignments.length,
 				type: types[fn.type],
 				regs: registers,
 				ops: ops,
-				debug: RawPtr.nullPtr(),
-				assigns: RawPtr.nullPtr(),
+				debug: debug,
+				assigns: assigns,
 				object: RawPtr.nullPtr(),
 				fieldName: RawPtr.nullPtr(),
 				fieldReference: RawPtr.nullPtr()
 			});
+		}
+	}
+
+	static function debugLocation(fn:HlFunction, index:Int):HlDebugLocation {
+		if (fn.debugLocations.length == 0)
+			return {
+				path: "<generated>",
+				line: 1,
+				column: 1,
+				endLine: 1,
+				endColumn: 1,
+				sourceHash: 0,
+				start: null,
+				end: null,
+				flags: 1
+			};
+		return fn.debugLocations[index];
+	}
+
+	static function debugFilePaths(code:HlCode):Array<String> {
+		var result:Array<String> = [], seen:Map<String, Bool> = [];
+		var hasDebug = false;
+		for (fn in code.functions)
+			if (fn.debugLocations.length != 0)
+				hasDebug = true;
+		if (!hasDebug)
+			return result;
+		for (fn in code.functions) {
+			if (fn.debugLocations.length == 0)
+				addDebugFile(result, seen, "<generated>");
+			else
+				for (location in fn.debugLocations)
+					addDebugFile(result, seen, location.path);
+		}
+		return result;
+	}
+
+	static function addDebugFile(result:Array<String>, seen:Map<String, Bool>, path:String):Void {
+		if (!seen.exists(path)) {
+			seen.set(path, true);
+			result.push(path);
 		}
 	}
 

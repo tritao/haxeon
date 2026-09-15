@@ -58,6 +58,10 @@ class HlTypeBuilder {
 		return result;
 	}
 
+	/** Return the encoded byte length used by HashLink's native string tables. */
+	public static function utf8Length(value:String):Int
+		return utf8Bytes(value).length;
+
 	/** Hash a HashLink UTF-16 field name using the VM's stable name hash. */
 	public static function hashUtf16(value:String):Int {
 		var hash = 0;

@@ -21,6 +21,9 @@ typedef HlMetadataPublication = {
 	final nativeDescriptors:RawPtr<HlNative>;
 	final nativeDescriptorCount:Int;
 	final nativeDescriptorCapacity:Int;
+	final debugFiles:RawPtr<RawPtr<UInt8>>;
+	final debugFileLengths:RawPtr<Int32>;
+	final debugFileCount:Int;
 	final globalTypes:RawPtr<RawPtr<HlType>>;
 	final globals:RawPtr<RawPtr<UInt8>>;
 	final globalCount:Int;
@@ -43,6 +46,11 @@ class HlMetadataGeneration {
 	var globals:RawPtr<RawPtr<UInt8>> = RawPtr.nullPtr();
 	var globalCount:Int = 0;
 	var globalsDefined:Bool = false;
+	var debugFiles:RawPtr<RawPtr<UInt8>> = RawPtr.nullPtr();
+	var debugFileLengths:RawPtr<Int32> = RawPtr.nullPtr();
+	var debugFileCount:Int = 0;
+	var debugFileIndices:Map<String, Int> = [];
+	var debugFilesDefined:Bool = false;
 	var published:Bool = false;
 	var publishedContiguousTypeCount:Int = 0;
 	var publishedUsesContiguousTypes:Bool = false;
@@ -137,6 +145,40 @@ class HlMetadataGeneration {
 		return moduleContext;
 	}
 
+	/** Define the stable UTF-8 debug-file table referenced by native function records. */
+	public function defineDebugFiles(paths:Array<String>):Void {
+		requireBuilding();
+		if (paths == null)
+			throw "HashLink metadata debug files are required";
+		if (debugFilesDefined)
+			throw "HashLink metadata debug-file table is already defined";
+		debugFilesDefined = true;
+		debugFileCount = paths.length;
+		if (debugFileCount == 0)
+			return;
+		debugFiles = arena.allocNativePointerArray(debugFileCount);
+		debugFileLengths = arena.allocInt32Array(debugFileCount);
+		for (index in 0...debugFileCount) {
+			var path = paths[index];
+			if (path == null || debugFileIndices.exists(path))
+				throw "HashLink metadata debug-file paths must be non-null and unique";
+			debugFileIndices.set(path, index);
+			debugFiles.offset(index).store(builder.utf8Name(path));
+			debugFileLengths.offset(index).store(cast HlTypeBuilder.utf8Length(path));
+		}
+	}
+
+	/** Return the native debug-file index for one published source path. */
+	public function debugFileIndex(path:String):Int {
+		requireOpen();
+		if (!debugFilesDefined || path == null || !debugFileIndices.exists(path))
+			throw 'HashLink metadata has no debug-file index for "$path"';
+		return debugFileIndices.get(path);
+	}
+
+	public inline function debugFileCountOf():Int
+		return debugFileCount;
+
 	/** Allocate the shared 1-based global-value slot table used by HLB types. */
 	public function defineGlobals(count:Int):RawPtr<RawPtr<UInt8>> {
 		requireBuilding();
@@ -191,8 +233,11 @@ class HlMetadataGeneration {
 		if (moduleContext.isNull())
 			throw "HashLink metadata generation requires a module context before publication";
 		validateDescriptorTables();
+		HlTypeBridge.native_metadata_validate_debug_files(debugFiles, debugFileCount);
 		for (functionIndex in 0...functionDescriptors.length())
 			HlTypeBridge.native_metadata_validate_function_code(functionDescriptors.get(functionIndex));
+		for (functionIndex in 0...functionDescriptors.length())
+			HlTypeBridge.native_metadata_validate_function_debug(functionDescriptors.get(functionIndex), debugFileCount);
 		HlTypeBridge.native_metadata_validate_global_types(globalTypes, globalCount, globals);
 		HlTypeLayout.initialize(typeTable.pointer(), typeTable.length(), arena);
 		var contiguousTypes = arena.typePointer(), usesContiguousTypes = typeTable.isContiguousPrefix(contiguousTypes);
@@ -229,6 +274,9 @@ class HlMetadataGeneration {
 			nativeDescriptors: nativeDescriptors.pointer(),
 			nativeDescriptorCount: nativeDescriptors.length(),
 			nativeDescriptorCapacity: nativeDescriptors.capacityOf(),
+			debugFiles: debugFiles,
+			debugFileLengths: debugFileLengths,
+			debugFileCount: debugFileCount,
 			globalTypes: globalTypes,
 			globals: globals,
 			globalCount: globalCount,
