@@ -27,14 +27,7 @@ function buildGeneration(changed:Bool, extraType:Bool, stableId:Int = 7):BuiltHo
 	metadata.defineModule([RawPtr.nullPtr()], [functionType]);
 	return {
 		metadata: metadata,
-		functions: new HlFunctionVersionTable([
-			{
-				stableId: stableId,
-				slot: 0,
-				typeIndex: 2,
-				entrypoint: RawPtr.nullPtr()
-			}
-		])
+		functions: HlFunctionVersionTable.fromMetadata(metadata, [stableId])
 	};
 }
 

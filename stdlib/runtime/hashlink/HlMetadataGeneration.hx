@@ -70,6 +70,12 @@ class HlMetadataGeneration {
 		return requireFunctionTable().typeAt(index);
 	}
 
+	/** Read one module function entrypoint slot without changing its ownership. */
+	public function functionPointer(index:Int):RawPtr<UInt8> {
+		requireOpen();
+		return requireFunctionTable().functionAt(index);
+	}
+
 	/** Define the function dispatch tables used by HashLink-derived metadata. */
 	public function defineModule(functions:Array<RawPtr<UInt8>>, functionTypes:Array<RawPtr<HlType>>):RawPtr<HlModuleContext> {
 		requireBuilding();

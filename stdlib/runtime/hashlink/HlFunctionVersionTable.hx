@@ -66,6 +66,33 @@ class HlFunctionVersionTable {
 		}
 	}
 
+	/**
+		Build the stable-ID view from a metadata generation's native function table.
+
+		Stable IDs are supplied in module slot order by the loader/compiler; entrypoint
+		addresses and signature indices are read from the same generation, preventing
+		the policy table from drifting away from the native metadata table.
+	*/
+	public static function fromMetadata(metadata:HlMetadataGeneration, stableIds:Array<Int>, ?generation:Int = 0):HlFunctionVersionTable {
+		if (metadata == null || stableIds == null)
+			throw "HashLink function versions require metadata and stable IDs";
+		if (stableIds.length != metadata.functionCount())
+			throw "HashLink stable IDs and metadata function slots have different lengths";
+		var entries:Array<HlFunctionVersionEntry> = [];
+		for (slot in 0...stableIds.length) {
+			var signature = metadata.functionType(slot), typeIndex = metadata.typeIndex(signature);
+			if (typeIndex < 0)
+				throw 'HashLink function signature at slot $slot is external to its metadata generation';
+			entries.push({
+				stableId: stableIds[slot],
+				slot: slot,
+				typeIndex: typeIndex,
+				entrypoint: metadata.functionPointer(slot)
+			});
+		}
+		return new HlFunctionVersionTable(entries, generation);
+	}
+
 	public inline function length():Int
 		return versions.length;
 
