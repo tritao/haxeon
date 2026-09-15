@@ -117,6 +117,8 @@ class SemanticIndex {
 	final module:String;
 	var cancellation:Null<CancellationToken>;
 	var currentRecoveredTypeParameters:Map<String, CompilerType> = [];
+	/** Function key used to keep recovered lambda locals distinct and stable. */
+	var currentRecoveredFunctionKey:String = "";
 	final recoveredTypeParameterNames:Map<String, Bool> = [];
 	var recoveryResolve:Null<String->Null<SemanticSymbolId>>;
 	var recoveryResolveEnumCase:Null<(String, Int) -> Null<SemanticSymbolId>>;
@@ -460,6 +462,7 @@ class SemanticIndex {
 
 	function indexRecoveredFunction(fn:AstFunction, owner:Null<String>, ?ownerTypeParameters:Array<String>):Void {
 		var functionKey = (owner == null ? "" : owner + ".") + fn.name;
+		currentRecoveredFunctionKey = functionKey;
 		currentRecoveredTypeParameters = [];
 		if (ownerTypeParameters != null)
 			for (name in ownerTypeParameters)
@@ -494,6 +497,7 @@ class SemanticIndex {
 				bindRecoveredLocal(token.text, token.span);
 		}
 		currentCaller = null;
+		currentRecoveredFunctionKey = "";
 		currentRecoveredTypeParameters = [];
 	}
 
@@ -602,64 +606,66 @@ class SemanticIndex {
 		addCompletionLocal(name, type, declaration, scope, depth);
 	}
 
-	function indexRecoveredStatementUses(statements:Array<AstStatement>, ?expectedReturn:CompilerType):Void {
+	function indexRecoveredStatementUses(statements:Array<AstStatement>, ?expectedReturn:CompilerType, ?functionKey:String):Void {
+		var activeFunctionKey = functionKey == null ? currentRecoveredFunctionKey : functionKey;
 		for (statement in statements) {
 			checkpoint();
 			switch statement {
 				case VarDeclaration(_, type, value, span):
 					if (type != null)
 						completionTypes.push({span: span, type: recoveredType(type)});
-					indexRecoveredExpression(value, type == null ? null : recoveredType(type));
+					indexRecoveredExpression(value, type == null ? null : recoveredType(type), activeFunctionKey);
 				case Return(value, span):
-					indexRecoveredExpression(value, expectedReturn);
+					indexRecoveredExpression(value, expectedReturn, activeFunctionKey);
 				case Throw(value, _), Expression(value, _):
-					indexRecoveredExpression(value);
+					indexRecoveredExpression(value, null, activeFunctionKey);
 				case Assignment(name, value, span):
 					bindRecoveredLocal(name, span);
-					indexRecoveredExpression(value, recoveredLocalType(name, span));
+					indexRecoveredExpression(value, recoveredLocalType(name, span), activeFunctionKey);
 				case Increment(name, _, span):
 					bindRecoveredLocal(name, span);
 				case IndexAssignment(array, offset, value, _):
-					indexRecoveredExpression(array);
-					indexRecoveredExpression(offset, TInt);
-					indexRecoveredExpression(value, indexedValueType(recoveredExpressionType(array)));
+					indexRecoveredExpression(array, null, activeFunctionKey);
+					indexRecoveredExpression(offset, TInt, activeFunctionKey);
+					indexRecoveredExpression(value, indexedValueType(recoveredExpressionType(array)), activeFunctionKey);
 				case FieldAssignment(object, field, value, span):
 					bindRecoveredMember(object, field, span);
-					indexRecoveredExpression(object);
-					indexRecoveredExpression(value, recoveredMemberType(object, field));
+					indexRecoveredExpression(object, null, activeFunctionKey);
+					indexRecoveredExpression(value, recoveredMemberType(object, field), activeFunctionKey);
 				case If(predicate, yes, no, _):
-					indexRecoveredExpression(predicate);
-					indexRecoveredStatementUses(yes, expectedReturn);
-					indexRecoveredStatementUses(no, expectedReturn);
+					indexRecoveredExpression(predicate, null, activeFunctionKey);
+					indexRecoveredStatementUses(yes, expectedReturn, activeFunctionKey);
+					indexRecoveredStatementUses(no, expectedReturn, activeFunctionKey);
 				case While(predicate, body, _):
-					indexRecoveredExpression(predicate);
-					indexRecoveredStatementUses(body, expectedReturn);
+					indexRecoveredExpression(predicate, null, activeFunctionKey);
+					indexRecoveredStatementUses(body, expectedReturn, activeFunctionKey);
 				case DoWhile(body, predicate, _):
-					indexRecoveredStatementUses(body, expectedReturn);
-					indexRecoveredExpression(predicate);
+					indexRecoveredStatementUses(body, expectedReturn, activeFunctionKey);
+					indexRecoveredExpression(predicate, null, activeFunctionKey);
 				case ForIn(_, _, iterable, body, _):
-					indexRecoveredExpression(iterable);
-					indexRecoveredStatementUses(body, expectedReturn);
+					indexRecoveredExpression(iterable, null, activeFunctionKey);
+					indexRecoveredStatementUses(body, expectedReturn, activeFunctionKey);
 				case Try(body, catches, _):
-					indexRecoveredStatementUses(body, expectedReturn);
+					indexRecoveredStatementUses(body, expectedReturn, activeFunctionKey);
 					for (caught in catches)
-						indexRecoveredStatementUses(caught.statements, expectedReturn);
+						indexRecoveredStatementUses(caught.statements, expectedReturn, activeFunctionKey);
 				case Switch(value, cases, fallback, _, _):
 					var expectedPattern = recoveredExpressionType(value);
-					indexRecoveredExpression(value);
+					indexRecoveredExpression(value, null, activeFunctionKey);
 					for (item in cases) {
-						indexRecoveredExpression(item.value, expectedPattern);
+						indexRecoveredExpression(item.value, expectedPattern, activeFunctionKey);
 						if (item.guard != null)
-							indexRecoveredExpression(item.guard);
-						indexRecoveredStatementUses(item.statements, expectedReturn);
+							indexRecoveredExpression(item.guard, null, activeFunctionKey);
+						indexRecoveredStatementUses(item.statements, expectedReturn, activeFunctionKey);
 					}
-					indexRecoveredStatementUses(fallback, expectedReturn);
+					indexRecoveredStatementUses(fallback, expectedReturn, activeFunctionKey);
 				default:
 			}
 		}
 	}
 
-	function indexRecoveredExpression(expression:AstExpression, ?expected:CompilerType):Void {
+	function indexRecoveredExpression(expression:AstExpression, ?expected:CompilerType, ?functionKey:String):Void {
+		var activeFunctionKey = functionKey == null ? currentRecoveredFunctionKey : functionKey;
 		checkpoint();
 		switch expression {
 			case ErrorExpression(span):
@@ -684,7 +690,7 @@ class SemanticIndex {
 						bindNamed(resolveRecoveredSymbol, name, span);
 				}
 			case Member(object, name, span):
-				indexRecoveredExpression(object);
+				indexRecoveredExpression(object, null, activeFunctionKey);
 				if (bindRecoveredMember(object, name, span) == null && name.length > 0 && !isKnownRecoveredMember(object, name))
 					recordUnresolved(name, span);
 			case Call(name, arguments, span):
@@ -703,7 +709,7 @@ class SemanticIndex {
 						recordUnresolved(memberName, span);
 					addCall(callee, span, memberName);
 					indexRecoveredCallArguments(arguments, method == null ? null : method.method, method == null ? null : method.substitutions,
-						method == null ? recoveredBuiltinMethodArguments(receiverType, memberName) : null);
+						method == null ? recoveredBuiltinMethodArguments(receiverType, memberName) : null, activeFunctionKey);
 				} else {
 					var local = bindRecoveredLocal(name, span);
 					if (local == null) {
@@ -716,14 +722,14 @@ class SemanticIndex {
 						} else
 							recordUnresolved(name, span);
 					}
-					indexRecoveredCallArguments(arguments, recoveredFunctionForCall(name), null, recoveredBuiltinCallArguments(name));
+					indexRecoveredCallArguments(arguments, recoveredFunctionForCall(name), null, recoveredBuiltinCallArguments(name), activeFunctionKey);
 				}
 			case ClosureCall(callee, arguments, _):
-				indexRecoveredExpression(callee);
+				indexRecoveredExpression(callee, null, activeFunctionKey);
 				for (index in 0...arguments.length)
-					indexRecoveredExpression(arguments[index], expectedFunctionArgument(recoveredExpressionType(callee), index));
+					indexRecoveredExpression(arguments[index], expectedFunctionArgument(recoveredExpressionType(callee), index), activeFunctionKey);
 			case MethodCall(object, name, arguments, span):
-				indexRecoveredExpression(object);
+				indexRecoveredExpression(object, null, activeFunctionKey);
 				var callee = bindRecoveredMember(object, name, span);
 				addCall(callee, span, name);
 				if (callee == null && !isKnownRecoveredMember(object, name))
@@ -732,63 +738,86 @@ class SemanticIndex {
 					owner = memberOwner(receiverType),
 					method = owner == null ? null : recoveredMethodWithSubstitutions(owner, name, [], recoveredTypeSubstitutions(receiverType));
 				indexRecoveredCallArguments(arguments, method == null ? null : method.method, method == null ? null : method.substitutions,
-					method == null ? recoveredBuiltinMethodArguments(receiverType, name) : null);
+					method == null ? recoveredBuiltinMethodArguments(receiverType, name) : null, activeFunctionKey);
 			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _),
 				BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _), UnsignedShiftRight(left, right, _),
 				Less(left, right, _), LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _),
 				NotEqual(left, right, _), And(left, right, _), Or(left, right, _):
-				indexRecoveredExpression(left);
-				indexRecoveredExpression(right);
+				indexRecoveredExpression(left, null, activeFunctionKey);
+				indexRecoveredExpression(right, null, activeFunctionKey);
 			case Index(array, offset, _):
-				indexRecoveredExpression(array);
-				indexRecoveredExpression(offset, TInt);
+				indexRecoveredExpression(array, null, activeFunctionKey);
+				indexRecoveredExpression(offset, TInt, activeFunctionKey);
 			case Range(start, finish, _):
-				indexRecoveredExpression(start);
-				indexRecoveredExpression(finish);
+				indexRecoveredExpression(start, null, activeFunctionKey);
+				indexRecoveredExpression(finish, null, activeFunctionKey);
 			case Negate(value, _), Not(value, _), ThrowExpression(value, _), PostfixIncrement(value, _, _):
-				indexRecoveredExpression(value);
+				indexRecoveredExpression(value, null, activeFunctionKey);
 			case Cast(value, target, _):
-				indexRecoveredExpression(value, target == null ? expected : recoveredType(target));
+				indexRecoveredExpression(value, target == null ? expected : recoveredType(target), activeFunctionKey);
 			case Conditional(predicate, yes, no, _):
-				indexRecoveredExpression(predicate);
-				indexRecoveredExpression(yes, expected);
-				indexRecoveredExpression(no, expected);
+				indexRecoveredExpression(predicate, null, activeFunctionKey);
+				indexRecoveredExpression(yes, expected, activeFunctionKey);
+				indexRecoveredExpression(no, expected, activeFunctionKey);
 			case BlockExpression(statements, result, _):
-				indexRecoveredStatementUses(statements, expected);
-				indexRecoveredExpression(result, expected);
+				indexRecoveredStatementUses(statements, expected, activeFunctionKey);
+				indexRecoveredExpression(result, expected, activeFunctionKey);
 			case ArrayLiteral(values, _):
 				for (value in values)
-					indexRecoveredExpression(value, indexedValueType(expected));
+					indexRecoveredExpression(value, indexedValueType(expected), activeFunctionKey);
 			case ObjectLiteral(fields, _):
 				for (field in fields)
-					indexRecoveredExpression(field.value, expectedFieldType(expected, field.name));
+					indexRecoveredExpression(field.value, expectedFieldType(expected, field.name), activeFunctionKey);
 			case MapLiteral(entries, _):
 				for (entry in entries) {
-					indexRecoveredExpression(entry.key, mapKeyType(expected));
-					indexRecoveredExpression(entry.value, mapValueType(expected));
+					indexRecoveredExpression(entry.key, mapKeyType(expected), activeFunctionKey);
+					indexRecoveredExpression(entry.value, mapValueType(expected), activeFunctionKey);
 				}
 			case New(name, arguments, _):
-				indexRecoveredCallArguments(arguments, recoveredFunctionForCall(name));
+				indexRecoveredCallArguments(arguments, recoveredFunctionForCall(name), null, null, activeFunctionKey);
 			case NewGeneric(name, typeArguments, arguments, _):
 				var receiverType = recoveredType(AppliedType(name, typeArguments));
-				indexRecoveredCallArguments(arguments, recoveredFunctionForCall(name), recoveredTypeSubstitutions(receiverType));
+				indexRecoveredCallArguments(arguments, recoveredFunctionForCall(name), recoveredTypeSubstitutions(receiverType), null, activeFunctionKey);
 			case NewArray(_, length, _):
-				indexRecoveredExpression(length, TInt);
-			case Lambda(_, body, _):
-				indexRecoveredStatementUses(body, functionResultType(expected));
+				indexRecoveredExpression(length, TInt, activeFunctionKey);
+			case Lambda(arguments, body, span):
+				indexRecoveredLambda(activeFunctionKey, arguments, body, span, expected);
 			case SwitchExpression(value, cases, fallback, _):
 				var expectedPattern = recoveredExpressionType(value);
-				indexRecoveredExpression(value);
+				indexRecoveredExpression(value, null, activeFunctionKey);
 				for (item in cases) {
-					indexRecoveredExpression(item.value, expectedPattern);
+					indexRecoveredExpression(item.value, expectedPattern, activeFunctionKey);
 					if (item.guard != null)
-						indexRecoveredExpression(item.guard);
-					indexRecoveredExpression(item.result, expected);
+						indexRecoveredExpression(item.guard, null, activeFunctionKey);
+					indexRecoveredExpression(item.result, expected, activeFunctionKey);
 				}
 				if (fallback != null)
-					indexRecoveredExpression(fallback, expected);
+					indexRecoveredExpression(fallback, expected, activeFunctionKey);
 			default:
 		}
+	}
+
+	/** Index a lambda as a nested lexical scope in the recovered editor model. */
+	function indexRecoveredLambda(parentFunctionKey:String, arguments:Array<compiler.syntax.Ast.AstArgument>, body:Array<AstStatement>,
+			span:SourceSpan, expected:Null<CompilerType>):Void {
+		var lambdaKey = parentFunctionKey + ":lambda:" + span.start,
+			expectedArguments:Array<CompilerType> = switch expected {
+				case TFunction(values, _): values;
+				case TNullable(TFunction(values, _)): values;
+				default: [];
+			};
+		for (index in 0...arguments.length) {
+			var argument = arguments[index],
+				argumentType:CompilerType = switch argument.type {
+					case InferredType if (index < expectedArguments.length): expectedArguments[index];
+					case InferredType: TUnknown;
+					default: recoveredType(argument.type);
+				};
+			if (argument.name != "_")
+				addRecoveredLocal(lambdaKey, argument.name, argumentType, argument.span, span, 1);
+		}
+		indexRecoveredStatements(lambdaKey, body, span, 1);
+		indexRecoveredStatementUses(body, functionResultType(expected), lambdaKey);
 	}
 
 	function bindRecoveredLocal(name:String, span:SourceSpan):Null<SemanticSymbolId> {
@@ -1260,13 +1289,13 @@ class SemanticIndex {
 	}
 
 	function indexRecoveredCallArguments(arguments:Array<AstExpression>, fn:Null<AstFunction>, ?substitutions:Map<String, CompilerType>,
-		?explicitExpected:Array<CompilerType>):Void {
+			?explicitExpected:Array<CompilerType>, ?functionKey:String):Void {
 		for (index in 0...arguments.length) {
 			checkpoint();
 			var argument = arguments[index];
 			var expected = explicitExpected != null && index < explicitExpected.length ? explicitExpected[index]
 				: fn == null || index >= fn.arguments.length ? null : recoveredType(fn.arguments[index].type, substitutions);
-			indexRecoveredExpression(argument, expected);
+			indexRecoveredExpression(argument, expected, functionKey);
 		}
 	}
 

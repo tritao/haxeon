@@ -804,6 +804,25 @@ class ParserRecoveryMain {
 		if (postErrorNames.indexOf("value") < 0)
 			throw "an expression error erased the known local type needed for member completion";
 
+		var lambdaService = new LanguageService(),
+			lambdaSource = "class Foo { public var member:Int; } function main():Void { var callback:(value:Foo)->Void = (value) -> { var local:Foo = value; local. }; }";
+		lambdaService.update("TolerantLambda.hx", lambdaSource);
+		var lambdaPosition = lambdaSource.indexOf("local.") + "local.".length,
+			lambdaContext = lambdaService.completionContext("TolerantLambda.hx", lambdaPosition),
+			lambdaNames = [for (item in lambdaService.complete("TolerantLambda.hx", lambdaPosition)) item.label],
+			hasLambdaValue = false,
+			hasLambdaLocal = false;
+		if (lambdaContext == null)
+			throw "recovered lambda did not expose a completion context";
+		for (local in lambdaContext.context.locals) {
+			if (local.name == "value")
+				hasLambdaValue = true;
+			if (local.name == "local")
+				hasLambdaLocal = true;
+		}
+		if (!hasLambdaValue || !hasLambdaLocal || lambdaNames.indexOf("member") < 0)
+			throw 'recovered lambda scope lost its parameter or local: locals=${[for (local in lambdaContext.context.locals) local.name].join(",")}, items=${lambdaNames.join(",")}';
+
 		var conditionalSource = new SourceFile("TolerantConditional.hx",
 			"class Foo { public var value:Int; } function main():Void { var foo = broken ? new Foo() : new Foo(); foo. }");
 		var conditionalProgram = new Parser(new Lexer(conditionalSource).tokenize()).parseProgramRecovering().program,
