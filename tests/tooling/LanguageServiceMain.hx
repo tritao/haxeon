@@ -625,6 +625,28 @@ class LanguageServiceMain {
 		hierarchyTypeService.update("types/Root.hx", rootTypeSource + " ");
 		if (hierarchyTypeService.isTypeHierarchyCurrent(preparedRoot.identity, preparedRoot.revision))
 			throw "language service accepted a stale type hierarchy item";
+		var recoveredHierarchyService = new LanguageService(),
+			recoveredHierarchySource = "class Root {} class Branch extends Root {} class Leaf extends Branch {} function add(value:Int):Int return value; function main():Int return add(1);";
+		recoveredHierarchyService.update("RecoveredHierarchy.hx", recoveredHierarchySource);
+		var recoveredRoot = recoveredHierarchyService.prepareTypeHierarchy("RecoveredHierarchy.hx", recoveredHierarchySource.indexOf("Root") + 1),
+			recoveredBranch = recoveredHierarchyService.prepareTypeHierarchy("RecoveredHierarchy.hx", recoveredHierarchySource.indexOf("Branch") + 1),
+			recoveredAdd = recoveredHierarchyService.prepareCallHierarchy("RecoveredHierarchy.hx", recoveredHierarchySource.indexOf("add") + 1),
+			recoveredMain = recoveredHierarchyService.prepareCallHierarchy("RecoveredHierarchy.hx", recoveredHierarchySource.lastIndexOf("main") + 1);
+		if (recoveredRoot == null || recoveredBranch == null || recoveredAdd == null || recoveredMain == null)
+			throw "language service did not prepare hierarchy items from a current recovered model";
+		var recoveredRootSubtypes = recoveredHierarchyService.typeSubtypes(recoveredRoot.identity, recoveredRoot.revision),
+			recoveredBranchSupertypes = recoveredHierarchyService.typeSupertypes(recoveredBranch.identity, recoveredBranch.revision),
+			recoveredIncoming = recoveredHierarchyService.incomingCalls(recoveredAdd.identity, recoveredAdd.revision),
+			recoveredOutgoing = recoveredHierarchyService.outgoingCalls(recoveredMain.identity, recoveredMain.revision);
+		if (recoveredRootSubtypes.length != 1
+			|| recoveredRootSubtypes[0].name != "Branch"
+			|| recoveredBranchSupertypes.length != 1
+			|| recoveredBranchSupertypes[0].name != "Root"
+			|| recoveredIncoming.length != 1
+			|| recoveredIncoming[0].item.name != "main"
+			|| recoveredOutgoing.length != 1
+			|| recoveredOutgoing[0].item.name != "add")
+			throw "language service hierarchy queries did not consume current recovered calls and types";
 		var typeService = new LanguageService();
 		typeService.update("domain/Entity.hx", "package domain; class Entity {}");
 		var typeSource = "package usecase; import domain.Entity; typedef EntityAlias = Entity; class Child extends Entity {} class Holder { public var entity:Entity; public function get():Entity return entity; } function identity(value:Entity):Entity return value; function main():Int return 0;";

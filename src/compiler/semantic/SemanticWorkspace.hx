@@ -183,6 +183,17 @@ class SemanticWorkspace {
 		return indexedSymbol(id);
 	}
 
+	/** Resolve a hierarchy item from current editor models without publishing them. */
+	public function editorSymbolById(id:SemanticSymbolId):Null<{state:ModuleState, symbol:IndexedSemanticSymbol}> {
+		for (state in orderedStates()) {
+			var model = editorModel(state),
+				symbol = model == null ? null : model.index.symbol(id);
+			if (symbol != null)
+				return {state: state, symbol: symbol};
+		}
+		return null;
+	}
+
 	public function indexedSignature(id:SemanticSymbolId):Null<SemanticSignatureInfo> {
 		for (state in orderedStates()) {
 			var model = effectiveModel(state),
@@ -201,6 +212,17 @@ class SemanticWorkspace {
 				return signature;
 		}
 		return indexedSignature(id);
+	}
+
+	/** Read a hierarchy signature from current editor models without publishing them. */
+	public function editorSignatureById(id:SemanticSymbolId):Null<SemanticSignatureInfo> {
+		for (state in orderedStates()) {
+			var model = editorModel(state),
+				signature = model == null ? null : model.index.signature(id);
+			if (signature != null)
+				return signature;
+		}
+		return null;
 	}
 
 	public function indexedLocations(id:SemanticSymbolId, ?token:CancellationToken, ?exclude:ModuleState):Array<{state:ModuleState, span:SourceSpan}> {
@@ -278,6 +300,82 @@ class SemanticWorkspace {
 		return result;
 	}
 
+	/** Call edges visible to an editor query, including current recovered models. */
+	public function editorCalls(?token:CancellationToken):Array<{state:ModuleState, edge:SemanticCallEdge}> {
+		var result = [];
+		for (state in orderedStates()) {
+			if (token != null)
+				token.check();
+			var model = editorModel(state);
+			if (model != null)
+				for (edge in model.index.calls())
+					result.push({state: state, edge: edge});
+		}
+		return result;
+	}
+
+	/** Direct nominal parents visible to an editor query. */
+	public function editorDirectTypeSupertypes(id:SemanticSymbolId, ?token:CancellationToken):Array<SemanticSymbolId> {
+		var resolved = editorSymbolById(id), result:Array<SemanticSymbolId> = [];
+		if (resolved == null || !isTypeKind(resolved.symbol.kind))
+			return result;
+		var model = editorModel(resolved.state),
+			parents:Array<compiler.syntax.Ast.AstType> = [];
+		if (model == null)
+			return result;
+		for (decl in model.program.classes)
+			if (sameSpan(decl.span, resolved.symbol.declaration)) {
+				if (decl.base != null)
+					parents.push(decl.base);
+				parents = parents.concat(decl.interfaces);
+			}
+		for (decl in model.program.interfaces)
+			if (sameSpan(decl.span, resolved.symbol.declaration))
+				parents = parents.concat(decl.bases);
+		for (parent in parents) {
+			if (token != null)
+				token.check();
+			var declaration = editorGlobal(resolved.state, ModuleCanonicalizer.astTypeName(parent)),
+				symbol = declaration == null ? null : editorSymbolAt(editorModel(declaration.state), declaration.span);
+			if (symbol != null)
+				addTypeIdentity(result, symbol.id);
+		}
+		result.sort(function(left, right) return Reflect.compare(Std.string(left), Std.string(right)));
+		return result;
+	}
+
+	/** Direct nominal children visible to an editor query. */
+	public function editorDirectTypeSubtypes(id:SemanticSymbolId, ?token:CancellationToken):Array<SemanticSymbolId> {
+		var resolved = editorSymbolById(id), result:Array<SemanticSymbolId> = [];
+		if (resolved == null || !isTypeKind(resolved.symbol.kind))
+			return result;
+		for (state in orderedStates()) {
+			if (token != null)
+				token.check();
+			var model = editorModel(state);
+			if (model == null)
+				continue;
+			for (decl in model.program.classes) {
+				var parents = decl.interfaces.copy();
+				if (decl.base != null)
+					parents.push(decl.base);
+				if (hasDirectEditorParent(state, parents, id, token)) {
+					var symbol = editorSymbolAt(model, decl.span);
+					if (symbol != null)
+						addTypeIdentity(result, symbol.id);
+				}
+			}
+			for (decl in model.program.interfaces)
+				if (hasDirectEditorParent(state, decl.bases, id, token)) {
+					var symbol = editorSymbolAt(model, decl.span);
+					if (symbol != null)
+						addTypeIdentity(result, symbol.id);
+				}
+		}
+		result.sort(function(left, right) return Reflect.compare(Std.string(left), Std.string(right)));
+		return result;
+	}
+
 	/** Direct nominal parents of a class or interface declaration. */
 	public function directTypeSupertypes(id:SemanticSymbolId, ?token:CancellationToken):Array<SemanticSymbolId> {
 		var resolved = indexedSymbol(id), result:Array<SemanticSymbolId> = [];
@@ -348,6 +446,57 @@ class SemanticWorkspace {
 				return true;
 		}
 		return false;
+	}
+
+	function hasDirectEditorParent(state:ModuleState, parents:Array<compiler.syntax.Ast.AstType>, target:SemanticSymbolId,
+		?token:CancellationToken):Bool {
+		for (parent in parents) {
+			if (token != null)
+				token.check();
+			var declaration = editorGlobal(state, ModuleCanonicalizer.astTypeName(parent)),
+				symbol = declaration == null ? null : editorSymbolAt(editorModel(declaration.state), declaration.span);
+			if (symbol != null && symbol.id == target)
+				return true;
+		}
+		return false;
+	}
+
+	function editorGlobal(from:ModuleState, name:String):Null<WorkspaceDeclaration> {
+		var local = editorDeclarationsIn(from, name);
+		if (local.length == 1)
+			return local[0];
+		if (local.length > 1)
+			return null;
+		var matches:Array<WorkspaceDeclaration> = [];
+		for (dependency in from.dependencies)
+			if (modules.exists(dependency)) {
+				var state = modules.get(dependency);
+				for (declaration in declarationsIn(state, name))
+					if (!contains(matches, declaration))
+						matches.push(declaration);
+			}
+		return matches.length == 1 ? matches[0] : null;
+	}
+
+	function editorDeclarationsIn(state:ModuleState, name:String):Array<WorkspaceDeclaration> {
+		var result:Array<WorkspaceDeclaration> = [],
+			model = editorModel(state);
+		if (model != null) {
+			var kinds:Array<DeclarationKind> = [
+				DeclarationKind.Alias,
+				DeclarationKind.Function,
+				DeclarationKind.Class,
+				DeclarationKind.Interface,
+				DeclarationKind.Enum,
+				DeclarationKind.Abstract
+			];
+			for (kind in kinds) {
+				var declaration = model.declarations.symbol(kind, name);
+				if (declaration != null)
+					result.push({state: state, key: declaration.id, span: declaration.span});
+			}
+		}
+		return result;
 	}
 
 	function symbolFor(declaration:WorkspaceDeclaration):Null<IndexedSemanticSymbol> {
@@ -701,4 +850,16 @@ class SemanticWorkspace {
 
 	static function effectiveModel(state:ModuleState):Null<compiler.semantic.SemanticModel>
 		return state.ast != null ? state.semanticModel : state.lastGoodSemanticModel;
+
+	static function editorModel(state:ModuleState):Null<compiler.semantic.SemanticModel>
+		return state.ast != null ? state.semanticModel : state.recoveredSemanticModel != null ? state.recoveredSemanticModel : state.lastGoodSemanticModel;
+
+	static function editorSymbolAt(model:Null<compiler.semantic.SemanticModel>, span:SourceSpan):Null<IndexedSemanticSymbol> {
+		if (model == null)
+			return null;
+		for (symbol in model.index.symbols)
+			if (sameSpan(symbol.declaration, span) && isTypeKind(symbol.kind))
+				return symbol;
+		return null;
+	}
 }

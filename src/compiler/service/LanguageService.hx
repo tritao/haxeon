@@ -988,10 +988,10 @@ class LanguageService {
 	}
 
 	function callHierarchyItem(identity:SemanticSymbolId):Null<CallHierarchyItem> {
-		var resolved = compiler.semanticWorkspace.indexedSymbol(identity);
+		var resolved = compiler.semanticWorkspace.editorSymbolById(identity);
 		if (resolved == null)
 			return null;
-		var signature = compiler.semanticWorkspace.indexedSignature(identity),
+		var signature = compiler.semanticWorkspace.editorSignatureById(identity),
 			kind = switch resolved.symbol.kind {
 				case DeclarationKind.Function: "function";
 				case DeclarationKind.Class: "class";
@@ -1019,7 +1019,7 @@ class LanguageService {
 			grouped:Map<String, CallHierarchyRelation> = [];
 		if (origin == null || origin.revision != revision)
 			return [];
-		for (located in compiler.semanticWorkspace.indexedCalls(token)) {
+		for (located in compiler.semanticWorkspace.editorCalls(token)) {
 			var edge = located.edge,
 				matches = incoming ? Std.string(edge.callee) == identity : Std.string(edge.caller) == identity;
 			if (!matches)
@@ -1043,7 +1043,7 @@ class LanguageService {
 	}
 
 	function typeHierarchyItem(identity:SemanticSymbolId):Null<TypeHierarchyItem> {
-		var resolved = compiler.semanticWorkspace.indexedSymbol(identity);
+		var resolved = compiler.semanticWorkspace.editorSymbolById(identity);
 		if (resolved == null)
 			return null;
 		var kind = switch resolved.symbol.kind {
@@ -1066,8 +1066,8 @@ class LanguageService {
 		var origin = typeHierarchyItem(cast identity);
 		if (origin == null || origin.revision != revision)
 			return [];
-		var identities = supertypes ? compiler.semanticWorkspace.directTypeSupertypes(cast identity,
-			token) : compiler.semanticWorkspace.directTypeSubtypes(cast identity, token),
+		var identities = supertypes ? compiler.semanticWorkspace.editorDirectTypeSupertypes(cast identity,
+			token) : compiler.semanticWorkspace.editorDirectTypeSubtypes(cast identity, token),
 			result:Array<TypeHierarchyItem> = [];
 		for (related in identities) {
 			var item = typeHierarchyItem(related);
