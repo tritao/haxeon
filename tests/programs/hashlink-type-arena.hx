@@ -10,7 +10,7 @@ import runtime.hashlink.HlFunctionTable;
 import runtime.memory.RawPtr;
 
 function main():Int {
-	var arena = new HlTypeArena(128),
+	var arena = new HlTypeArena(128, 32),
 		builder = new HlTypeBuilder(arena),
 		type = arena.allocType(),
 		functionType = arena.allocTypeFunction();
@@ -28,8 +28,8 @@ function main():Int {
 	arena.reset();
 	reused = arena.allocType();
 	reused.ref.kind = 7;
-	var correct = type.ref.kind == 7 && storedFunction == functionType && storedTypeParam == type && reused.ref.kind == 7 && nativeKind == 10
-		&& nativeSize == 8 && nativeArity == 2;
+	var correct = type.ref.kind == 7 && storedFunction == functionType && storedTypeParam == type && reused.ref.kind == 7 && reused == arena.typePointer()
+		&& arena.typeCapacityOf() == 32 && arena.typeCountOf() == 1 && nativeKind == 10 && nativeSize == 8 && nativeArity == 2;
 	arena.reset();
 	var voidType = builder.primitive(HlTypeKind.VoidType),
 		intType = builder.primitive(HlTypeKind.Int32Type),

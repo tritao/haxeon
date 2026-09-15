@@ -26,10 +26,22 @@ class HlMetadataGeneration {
 	var disposed:Bool = false;
 	var borrowers:Int = 0;
 
-	public function new(?blockSize:Int = 65536, ?initialTypeCapacity:Int = 8) {
-		arena = new HlTypeArena(blockSize);
+	public function new(?blockSize:Int = 65536, ?initialTypeCapacity:Int = 8, ?typeCapacity:Int = 65536) {
+		arena = new HlTypeArena(blockSize, typeCapacity);
 		builder = new HlTypeBuilder(arena);
 		typeTable = new HlTypeTable(arena, initialTypeCapacity);
+	}
+
+	/** Base of the contiguous Haxe-owned type-record slab. */
+	public function contiguousTypePointer():RawPtr<HlType> {
+		requireOpen();
+		return arena.typePointer();
+	}
+
+	/** Number of reserved slots in the contiguous type-record slab. */
+	public function contiguousTypeCapacity():Int {
+		requireOpen();
+		return arena.typeCapacityOf();
 	}
 
 	/** Append one type and return its stable module-local index. */

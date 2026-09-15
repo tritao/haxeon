@@ -18,13 +18,38 @@ import runtime.hashlink.HlRuntimeObject.HlFieldLookup;
 /** Owns stable unmanaged storage for Haxe-constructed HashLink metadata. */
 class HlTypeArena {
 	final storage:Arena;
+	final typeStorage:Arena;
+	final typeEntries:RawPtr<HlType>;
+	final typeCapacity:Int;
 	final moduleContexts:Array<RawPtr<HlModuleContext>> = [];
+	var typeCount:Int = 0;
 
-	public function new(?blockSize:Int = 65536)
+	public function new(?blockSize:Int = 65536, ?typeCapacity:Int = 65536) {
+		if (typeCapacity <= 0)
+			throw "HashLink type arena capacity must be positive";
 		storage = new Arena(blockSize);
+		typeStorage = new Arena(blockSize);
+		this.typeCapacity = typeCapacity;
+		typeEntries = typeStorage.alloc(typeCapacity);
+	}
 
-	public inline function allocType():RawPtr<HlType>
-		return storage.alloc();
+	public function allocType():RawPtr<HlType> {
+		if (typeCount >= typeCapacity)
+			throw 'HashLink type arena exhausted its $typeCapacity type-record slots';
+		return typeEntries.offset(typeCount++);
+	}
+
+	/** Base of the stable contiguous type-record slab. */
+	public inline function typePointer():RawPtr<HlType>
+		return typeEntries;
+
+	/** Reserved number of contiguous type-record slots. */
+	public inline function typeCapacityOf():Int
+		return typeCapacity;
+
+	/** Number of type records acquired from the contiguous slab. */
+	public inline function typeCountOf():Int
+		return typeCount;
 
 	public inline function allocTypeData():RawPtr<HlTypeData>
 		return storage.alloc();
@@ -98,12 +123,15 @@ class HlTypeArena {
 	public function reset():Void {
 		disposeModuleContexts();
 		storage.reset();
+		typeStorage.reset();
+		typeCount = 0;
 	}
 
 	/** Release all metadata storage. Repeated disposal is safe. */
 	public function dispose():Void {
 		disposeModuleContexts();
 		storage.dispose();
+		typeStorage.dispose();
 	}
 
 	function disposeModuleContexts():Void {

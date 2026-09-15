@@ -117,11 +117,15 @@ HashLink; it does not change the HashLink fork. HXI-imported records already
 share the native ABI layout classifier, while unifying their public pointer and
 record projections is still future work.
 
-HashLink metadata tables use `runtime.hashlink.HlTypeTable`. Adding a type
-allocates only a new pointer slot; the `hl_type` record itself remains in the
-arena at a stable address. When the table grows, `pointer()` changes to the new
-contiguous table and the previous table storage remains owned by the arena,
-allowing publication code to stage a replacement before exposing it.
+HashLink metadata tables use `runtime.hashlink.HlTypeTable`. Type records are
+reserved in a separate contiguous slab owned by `HlTypeArena`, matching
+HashLink's `hl_code.types` representation; nested descriptors and derived
+records remain in the ordinary arena. Adding a type allocates only a new
+pointer slot, while each `hl_type` record remains at a stable address. When the
+table grows, `pointer()` changes to the new contiguous pointer table and the
+previous table storage remains owned by the arena, allowing publication code to
+stage a replacement before exposing it. `HlMetadataGeneration` exposes the
+type-record slab bounds for the future loader handoff.
 `HlFunctionTable` applies the same ownership rule to module dispatch slots: its
 function addresses and signature pointers are stable native arrays, with slot
 replacement kept separate from table shape changes. A module context borrows
