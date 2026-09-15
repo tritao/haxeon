@@ -2077,12 +2077,18 @@ class LanguageService {
 			default: false;
 		};
 
-	function addInstanceMembers(type:CompilerType, prefix:String, result:Array<CompletionItem>, token:Null<CancellationToken>):Void {
+	function addInstanceMembers(type:CompilerType, prefix:String, result:Array<CompletionItem>, token:Null<CancellationToken>,
+		?visiting:Map<String, Bool>):Void {
 		if (token != null)
 			token.check();
+		var seen:Map<String, Bool> = visiting == null ? [] : visiting,
+			visitKey = compilerTypeName(type);
+		if (seen.exists(visitKey))
+			return;
+		seen.set(visitKey, true);
 		switch type {
 			case TNullable(element):
-				addInstanceMembers(element, prefix, result, token);
+				addInstanceMembers(element, prefix, result, token, seen);
 			case TInstance(Class, name, arguments):
 				for (state in compiler.modules) {
 					if (token != null)
@@ -2110,7 +2116,9 @@ class LanguageService {
 											prefix, result);
 								}
 								if (classDecl.base != null)
-									addInstanceMembers(compilerTypeFromAst(classDecl.base, substitutions), prefix, result, token);
+									addInstanceMembers(compilerTypeFromAst(classDecl.base, substitutions), prefix, result, token, seen);
+								for (interfaceType in classDecl.interfaces)
+									addInstanceMembers(compilerTypeFromAst(interfaceType, substitutions), prefix, result, token, seen);
 							}
 				}
 			case TInstance(Interface, name, arguments):
@@ -2128,10 +2136,12 @@ class LanguageService {
 								for (method in interfaceDecl.methods) {
 									if (token != null)
 										token.check();
-									addMember(method.name, "method",
-										'${method.name}(${[for (argument in method.arguments) typeNameSubstituted(argument.type, substitutions)].join(",")}):${typeNameSubstituted(method.result, substitutions)}',
-										prefix, result);
+										addMember(method.name, "method",
+											'${method.name}(${[for (argument in method.arguments) typeNameSubstituted(argument.type, substitutions)].join(",")}):${typeNameSubstituted(method.result, substitutions)}',
+											prefix, result);
 								}
+								for (baseType in interfaceDecl.bases)
+									addInstanceMembers(compilerTypeFromAst(baseType, substitutions), prefix, result, token, seen);
 							}
 				}
 			case TArray(_):
@@ -2806,7 +2816,7 @@ class LanguageService {
 		};
 	}
 
-	static function compilerTypeFromAst(type:AstType, substitutions:Map<String, String>):CompilerType {
+	function compilerTypeFromAst(type:AstType, substitutions:Map<String, String>):CompilerType {
 		return switch type {
 			case IntType: TInt;
 			case BoolType: TBool;
@@ -2814,7 +2824,7 @@ class LanguageService {
 			case StringType: TString;
 			case VoidType: TVoid;
 			case NamedType(name): compilerTypeFromName(substitutions.exists(name) ? substitutions.get(name) : name);
-			case AppliedType(name, arguments): TInstance(Class, name, [for (argument in arguments) compilerTypeFromAst(argument, substitutions)]);
+			case AppliedType(name, arguments): TInstance(nominalKindFor(name), name, [for (argument in arguments) compilerTypeFromAst(argument, substitutions)]);
 			case ArrayType(element): TArray(compilerTypeFromAst(element, substitutions));
 			case MapType(key, value): TMap(compilerTypeFromAst(key, substitutions), compilerTypeFromAst(value, substitutions));
 			case NullableType(element): TNullable(compilerTypeFromAst(element, substitutions));
@@ -2822,15 +2832,30 @@ class LanguageService {
 		};
 	}
 
-	static function compilerTypeFromName(name:String):CompilerType
+	function compilerTypeFromName(name:String):CompilerType
 		return switch name {
 			case "Int": TInt;
 			case "Bool": TBool;
 			case "Float": TFloat;
 			case "String": TString;
 			case "Void": TVoid;
-			default: TInstance(Class, name, []);
+			default: TInstance(nominalKindFor(name), name, []);
 		};
+
+	function nominalKindFor(name:String):NominalKind {
+		for (state in compiler.modules) {
+			var ast = effectiveAst(state);
+			if (ast == null)
+				continue;
+			for (interfaceDecl in ast.interfaces)
+				if (interfaceDecl.name == name)
+					return Interface;
+			for (classDecl in ast.classes)
+				if (classDecl.name == name)
+					return Class;
+		}
+		return Class;
+	}
 
 	static function compilerTypeName(type:CompilerType):String
 		return switch type {

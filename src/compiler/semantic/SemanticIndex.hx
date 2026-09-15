@@ -857,6 +857,13 @@ class SemanticIndex {
 			if (inherited != null)
 				return inherited;
 		}
+		if (classDecl != null)
+			for (interfaceAstType in classDecl.interfaces) {
+				var interfaceType = recoveredType(interfaceAstType, substitutions),
+					inherited = recoveredMemberSymbol(interfaceType, name, nextVisiting);
+				if (inherited != null)
+					return inherited;
+			}
 		var interfaceDecl = declarations.interfaces.get(owner);
 		if (interfaceDecl != null)
 			for (base in interfaceDecl.bases) {
@@ -1066,6 +1073,17 @@ class SemanticIndex {
 					return inherited;
 			}
 		}
+		if (classDecl != null)
+			for (interfaceAstType in classDecl.interfaces) {
+				var interfaceType = recoveredType(interfaceAstType, substitutions),
+					interfaceOwner = memberOwner(interfaceType);
+				if (interfaceOwner != null) {
+					var inherited = recoveredMethodWithSubstitutions(interfaceOwner, name, nextVisiting,
+						recoveredTypeSubstitutions(interfaceType));
+					if (inherited != null)
+						return inherited;
+				}
+			}
 		var interfaceDecl = declarations.interfaces.get(owner);
 		if (interfaceDecl != null)
 			for (baseType in interfaceDecl.bases) {

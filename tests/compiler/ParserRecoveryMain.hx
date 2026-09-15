@@ -480,6 +480,16 @@ class ParserRecoveryMain {
 			|| genericNavigationDefinition.span.start != genericNavigationSource.indexOf("var value")
 			|| genericNavigationReferences.length < 2)
 			throw "recovered inherited member navigation did not retain its current semantic identity";
+		var genericInterfaceService = new LanguageService(),
+			genericInterfaceSource = "interface Contract<T> { function get():T; } class Impl<U> implements Contract<U> {} function main():Void { var impl = new Impl<Int>(); impl.";
+		genericInterfaceService.update("GenericInterface.hx", genericInterfaceSource);
+		var genericInterfaceCompletion = genericInterfaceService.complete("GenericInterface.hx", genericInterfaceSource.length),
+			genericInterfaceGet:Null<String> = null;
+		for (item in genericInterfaceCompletion)
+			if (item.label == "get")
+				genericInterfaceGet = item.detail;
+		if (genericInterfaceGet != "get():Int")
+			throw 'generic interface member type was not substituted: $genericInterfaceGet';
 
 		var importService = new LanguageService();
 		importService.update("lib/Widget.hx", "class Widget {} function main():Void return;");
