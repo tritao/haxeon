@@ -24,6 +24,16 @@ class SemanticDependencyCollectorMain {
 		var entryDependencies = SemanticDependencyCollector.collectSemanticDependencies(entry, "Main", []);
 		expect(count(entryDependencies.get("main"), Body, "Main.helper") == 1, "entry-point ownership should remain canonical");
 
+		var genericSource = 'package demo; class Box<T> { public var value:T; public function convert<U>(value:U):T return this.value; } function identity<V>(value:V):V return value;',
+			genericFile = new SourceFile("demo/Box.hx", genericSource),
+			generic = new ModuleState("demo.Box", genericFile);
+		generic.ast = new Parser(new Lexer(genericFile).tokenize()).parseProgram();
+		var genericDependencies = SemanticDependencyCollector.collectSemanticDependencies(generic, "demo.Box", []);
+		expect(countTargets(genericDependencies, "demo.T") == 0
+			&& countTargets(genericDependencies, "demo.U") == 0
+			&& countTargets(genericDependencies, "demo.V") == 0,
+			"generic parameters must not become module dependencies");
+
 		Sys.println("PASS: semantic dependency collection");
 	}
 
@@ -32,6 +42,15 @@ class SemanticDependencyCollectorMain {
 		for (dependency in dependencies)
 			if (dependency.kind == kind && dependency.target == target)
 				result++;
+		return result;
+	}
+
+	static function countTargets(dependencies:Map<String, Array<compiler.modules.ModuleState.SemanticDependency>>, target:String):Int {
+		var result = 0;
+		for (entries in dependencies)
+			for (dependency in entries)
+				if (dependency.target == target)
+					result++;
 		return result;
 	}
 

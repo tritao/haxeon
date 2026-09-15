@@ -15,29 +15,32 @@ class SemanticDependencyCollector {
 			ast = state.parsedAst();
 		for (fn in ast.functions) {
 			var owner = state.name == entry && fn.name == "main" ? "main" : state.name + "." + fn.name;
+			var typeParameters = fn.typeParameters == null ? [] : fn.typeParameters;
 			for (argument in fn.arguments)
-				addTypeDependency(result, owner, SemanticDependencyKind.Signature, argument.type, typeAliases);
-			addTypeDependency(result, owner, SemanticDependencyKind.Signature, fn.result, typeAliases);
+				addTypeDependency(result, owner, SemanticDependencyKind.Signature, argument.type, typeAliases, typeParameters);
+			addTypeDependency(result, owner, SemanticDependencyKind.Signature, fn.result, typeAliases, typeParameters);
 			addBodyDependencies(result, owner, fn.statements, state.name, entry);
 		}
 		for (classDecl in ast.classes) {
 			var className = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name),
-				base = classDecl.base;
+				base = classDecl.base,
+				classTypeParameters = classDecl.typeParameters == null ? [] : classDecl.typeParameters;
 			if (base != null)
-				addTypeDependency(result, className, SemanticDependencyKind.Layout, base, typeAliases);
+				addTypeDependency(result, className, SemanticDependencyKind.Layout, base, typeAliases, classTypeParameters);
 			for (interfaceType in classDecl.interfaces)
-				addTypeDependency(result, className, SemanticDependencyKind.Layout, interfaceType, typeAliases);
+				addTypeDependency(result, className, SemanticDependencyKind.Layout, interfaceType, typeAliases, classTypeParameters);
 			for (field in classDecl.fields) {
-				addTypeDependency(result, className, SemanticDependencyKind.Layout, FieldInference.parsedType(field), typeAliases);
+				addTypeDependency(result, className, SemanticDependencyKind.Layout, FieldInference.parsedType(field), typeAliases, classTypeParameters);
 				var initializer = field.initializer;
 				if (initializer != null)
 					addExpressionDependencies(result, className + "." + field.name, SemanticDependencyKind.Initializer, initializer, state.name, entry);
 			}
 			for (method in classDecl.methods) {
-				var owner = className + "." + method.name;
+				var owner = className + "." + method.name,
+					methodTypeParameters = classTypeParameters.concat(method.typeParameters == null ? [] : method.typeParameters);
 				for (argument in method.arguments)
-					addTypeDependency(result, owner, SemanticDependencyKind.Signature, argument.type, typeAliases);
-				addTypeDependency(result, owner, SemanticDependencyKind.Signature, method.result, typeAliases);
+					addTypeDependency(result, owner, SemanticDependencyKind.Signature, argument.type, typeAliases, methodTypeParameters);
+				addTypeDependency(result, owner, SemanticDependencyKind.Signature, method.result, typeAliases, methodTypeParameters);
 				addBodyDependencies(result, owner, method.statements, state.name, entry);
 			}
 		}
@@ -45,28 +48,32 @@ class SemanticDependencyCollector {
 	}
 
 	public static function addTypeDependency(result:Map<String, Array<SemanticDependency>>, owner:String, kind:SemanticDependencyKind,
-			type:compiler.syntax.Ast.AstType, aliases:Map<String, String>):Void
+			type:compiler.syntax.Ast.AstType, aliases:Map<String, String>, ?typeParameters:Array<String>):Void
 		switch type {
 			case NativeAbstractType(declaration, _):
 				addDependency(result, owner, kind, ModuleCanonicalizer.resolveTypeName(declaration, aliases));
 			case NamedType(name):
+				if (typeParameters != null && typeParameters.indexOf(name) >= 0)
+					return;
 				addDependency(result, owner, kind, ModuleCanonicalizer.resolveTypeName(name, aliases));
 			case AppliedType(name, arguments):
+				if (typeParameters != null && typeParameters.indexOf(name) >= 0)
+					return;
 				addDependency(result, owner, kind, ModuleCanonicalizer.resolveTypeName(name, aliases));
 				for (argument in arguments)
-					addTypeDependency(result, owner, kind, argument, aliases);
+					addTypeDependency(result, owner, kind, argument, aliases, typeParameters);
 			case ArrayType(element), NullableType(element):
-				addTypeDependency(result, owner, kind, element, aliases);
+				addTypeDependency(result, owner, kind, element, aliases, typeParameters);
 			case MapType(key, value):
-				addTypeDependency(result, owner, kind, key, aliases);
-				addTypeDependency(result, owner, kind, value, aliases);
+				addTypeDependency(result, owner, kind, key, aliases, typeParameters);
+				addTypeDependency(result, owner, kind, value, aliases, typeParameters);
 			case FunctionType(arguments, returnType):
 				for (argument in arguments)
-					addTypeDependency(result, owner, kind, argument, aliases);
-				addTypeDependency(result, owner, kind, returnType, aliases);
+					addTypeDependency(result, owner, kind, argument, aliases, typeParameters);
+				addTypeDependency(result, owner, kind, returnType, aliases, typeParameters);
 			case AnonymousType(fields):
 				for (field in fields)
-					addTypeDependency(result, owner, kind, field.type, aliases);
+					addTypeDependency(result, owner, kind, field.type, aliases, typeParameters);
 			case IntType, BoolType, FloatType, StringType, VoidType, InferredType, ErrorType(_):
 		}
 
