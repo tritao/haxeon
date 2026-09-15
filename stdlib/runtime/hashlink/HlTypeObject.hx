@@ -11,7 +11,7 @@ class HlTypeObject {
 	public var nfields:Int32;
 	public var nproto:Int32;
 	public var nbindings:Int32;
-	public var name:RawPtr<UInt8>;
+	public var name:RawPtr<UInt16>;
 	public var superType:RawPtr<HlType>;
 	public var fields:RawPtr<HlObjectField>;
 	public var proto:RawPtr<HlObjectProto>;
@@ -24,7 +24,7 @@ class HlTypeObject {
 /** C-layout equivalent of HashLink's hl_obj_field metadata. */
 @:value @:repr("C")
 class HlObjectField {
-	public var name:RawPtr<UInt8>;
+	public var name:RawPtr<UInt16>;
 	public var type:RawPtr<HlType>;
 	public var hashedName:Int32;
 }
@@ -32,7 +32,7 @@ class HlObjectField {
 /** C-layout equivalent of HashLink's hl_obj_proto metadata. */
 @:value @:repr("C")
 class HlObjectProto {
-	public var name:RawPtr<UInt8>;
+	public var name:RawPtr<UInt16>;
 	public var findex:Int32;
 	public var pindex:Int32;
 	public var hashedName:Int32;
@@ -51,7 +51,7 @@ class HlTypeVirtual {
 /** C-layout equivalent of HashLink's hl_type_enum metadata. */
 @:value @:repr("C")
 class HlTypeEnum {
-	public var name:RawPtr<UInt8>;
+	public var name:RawPtr<UInt16>;
 	public var nconstructs:Int32;
 	public var constructs:RawPtr<HlEnumConstruct>;
 	public var globalValue:RawPtr<RawPtr<UInt8>>;
@@ -60,7 +60,7 @@ class HlTypeEnum {
 /** C-layout equivalent of HashLink's hl_enum_construct metadata. */
 @:value @:repr("C")
 class HlEnumConstruct {
-	public var name:RawPtr<UInt8>;
+	public var name:RawPtr<UInt16>;
 	public var nparams:Int32;
 	public var params:RawPtr<RawPtr<HlType>>;
 	public var size:Int32;

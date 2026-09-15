@@ -3,20 +3,20 @@ package runtime.hashlink;
 import runtime.memory.RawPtr;
 
 typedef HlObjectFieldSpec = {
-	final name:RawPtr<UInt8>;
+	final name:RawPtr<UInt16>;
 	final type:RawPtr<HlType>;
 	final hashedName:Int;
 }
 
 typedef HlObjectProtoSpec = {
-	final name:RawPtr<UInt8>;
+	final name:RawPtr<UInt16>;
 	final findex:Int;
 	final pindex:Int;
 	final hashedName:Int;
 }
 
 typedef HlEnumConstructSpec = {
-	final name:RawPtr<UInt8>;
+	final name:RawPtr<UInt16>;
 	final parameters:Array<RawPtr<HlType>>;
 	final size:Int;
 	final hasPtr:Bool;
@@ -67,7 +67,7 @@ class HlTypeBuilder {
 		return type;
 	}
 
-	public function objectType(name:RawPtr<UInt8>, superType:RawPtr<HlType>, fields:Array<HlObjectFieldSpec>, prototypes:Array<HlObjectProtoSpec>,
+	public function objectType(name:RawPtr<UInt16>, superType:RawPtr<HlType>, fields:Array<HlObjectFieldSpec>, prototypes:Array<HlObjectProtoSpec>,
 			bindings:Array<Int>, globalValue:RawPtr<RawPtr<UInt8>>, module:RawPtr<HlModuleContext>, runtime:RawPtr<HlRuntimeObject>):RawPtr<HlType> {
 		var objectData = arena.allocTypeObject();
 		objectData.ref.nfields = cast fields.length;
@@ -103,7 +103,7 @@ class HlTypeBuilder {
 		return context;
 	}
 
-	public function enumType(name:RawPtr<UInt8>, constructs:Array<HlEnumConstructSpec>, globalValue:RawPtr<RawPtr<UInt8>>):RawPtr<HlType> {
+	public function enumType(name:RawPtr<UInt16>, constructs:Array<HlEnumConstructSpec>, globalValue:RawPtr<RawPtr<UInt8>>):RawPtr<HlType> {
 		var enumData = arena.allocTypeEnum(),
 			nativeConstructs:RawPtr<HlEnumConstruct>;
 		enumData.ref.name = name;
