@@ -126,6 +126,66 @@ class SemanticWorkspace {
 		return typeResolutionIndex.get(name);
 	}
 
+	/**
+	 * Resolve a recovered editor name using the source module's visibility
+	 * rules. The authoritative workspace index is deliberately global, so a
+	 * short name from an unrelated module must not be enough to bind a recovery
+	 * reference.
+	 */
+	public function editorResolveSymbolId(from:ModuleState, name:String, ?sourceProgram:AstProgram,
+		?token:CancellationToken):Null<SemanticSymbolId> {
+		var matches:Array<SemanticSymbolId> = [];
+		for (candidate in editorSymbolCandidates(from, name, token, sourceProgram)) {
+			if (token != null)
+				token.check();
+			var resolved = editorSymbolById(candidate);
+			if (resolved == null || (resolved.state != from && indexedSymbol(candidate) == null))
+				continue;
+			addUniqueIdentity(matches, candidate);
+		}
+		if (matches.length == 1)
+			return matches[0];
+		if (matches.length > 1)
+			return null;
+		var direct = resolveSymbolId(name);
+		return direct != null && editorSymbolVisible(from, direct, sourceProgram, token) ? direct : null;
+	}
+
+	/** Resolve a recovered type name without bypassing editor visibility. */
+	public function editorResolveTypeSymbolId(from:ModuleState, name:String, ?sourceProgram:AstProgram,
+		?token:CancellationToken):Null<SemanticSymbolId> {
+		var matches:Array<SemanticSymbolId> = [];
+		for (candidate in editorSymbolCandidates(from, name, token, sourceProgram)) {
+			if (token != null)
+				token.check();
+			var resolved = editorSymbolById(candidate);
+			if (resolved == null || !isTypeKind(resolved.symbol.kind)
+				|| (resolved.state != from && indexedSymbol(candidate) == null))
+				continue;
+			addUniqueIdentity(matches, candidate);
+		}
+		if (matches.length == 1)
+			return matches[0];
+		if (matches.length > 1)
+			return null;
+		var direct = resolveTypeSymbolId(name);
+		return direct != null && editorSymbolVisible(from, direct, sourceProgram, token) ? direct : null;
+	}
+
+	/** Whether an existing identity is visible from a recovered editor module. */
+	public function editorSymbolVisible(from:ModuleState, id:SemanticSymbolId, ?sourceProgram:AstProgram,
+		?token:CancellationToken):Bool {
+		if (token != null)
+			token.check();
+		var resolved = editorSymbolById(id);
+		if (resolved == null || resolved.state == from)
+			return resolved != null;
+		var model = editorModel(from),
+			packageName = sourceProgram != null && sourceProgram.packageName != null ? Std.string(sourceProgram.packageName)
+				: model == null || model.program.packageName == null ? null : Std.string(model.program.packageName);
+		return editorModuleVisible(from, resolved.state, packageName, sourceProgram);
+	}
+
 	function ensureResolutionIndexes():Void {
 		if (resolutionIndexesValid)
 			return;
@@ -523,9 +583,10 @@ class SemanticWorkspace {
 		var model = editorModel(from),
 			program = sourceProgram == null && model != null ? model.program : sourceProgram,
 			resolvedPackage = packageName == null && program != null && program.packageName != null ? Std.string(program.packageName) : packageName;
+		var candidateModel = editorModel(candidate),
+			candidatePackage = candidateModel == null || candidateModel.program.packageName == null ? null : Std.string(candidateModel.program.packageName),
+			logicalCandidateName = candidatePackage == null ? candidate.name : candidatePackage + "." + moduleSourceName(candidate.name);
 		if (resolvedPackage != null) {
-			var candidateModel = editorModel(candidate),
-				candidatePackage = candidateModel == null || candidateModel.program.packageName == null ? null : Std.string(candidateModel.program.packageName);
 			if (candidatePackage == resolvedPackage)
 				return true;
 		}
@@ -534,7 +595,8 @@ class SemanticWorkspace {
 		for (importPath in program.imports) {
 			var wildcard = StringTools.endsWith(importPath, ".*"),
 				prefix = wildcard ? importPath.substring(0, importPath.length - 2) : importPath;
-			if (candidate.name == prefix || StringTools.startsWith(candidate.name, prefix + "."))
+			if (candidate.name == prefix || StringTools.startsWith(candidate.name, prefix + ".")
+				|| logicalCandidateName == prefix || StringTools.startsWith(logicalCandidateName, prefix + "."))
 				return true;
 		}
 		return false;
@@ -574,6 +636,10 @@ class SemanticWorkspace {
 	}
 
 	static function addTypeIdentity(result:Array<SemanticSymbolId>, identity:SemanticSymbolId):Void {
+		addUniqueIdentity(result, identity);
+	}
+
+	static function addUniqueIdentity(result:Array<SemanticSymbolId>, identity:SemanticSymbolId):Void {
 		for (existing in result)
 			if (existing == identity)
 				return;
@@ -697,6 +763,11 @@ class SemanticWorkspace {
 
 	static function sameSpan(left:SourceSpan, right:SourceSpan):Bool
 		return left.file.path == right.file.path && left.start == right.start && left.end == right.end;
+
+	static function moduleSourceName(name:String):String {
+		var separator = name.lastIndexOf(".");
+		return separator < 0 ? name : name.substring(separator + 1);
+	}
 
 	static function addImplementation(result:Array<WorkspaceDeclaration>, seen:Map<String, Bool>, state:ModuleState, key:String, span:SourceSpan):Void {
 		var identity = span.file.path + ":" + span.start + ":" + span.end;

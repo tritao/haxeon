@@ -1193,6 +1193,46 @@ class LanguageServiceMain {
 			throw "incomplete expression discarded its enclosing declaration";
 		if (completionNames.indexOf("argument") < 0 || completionNames.indexOf("available") < 0)
 			throw "recovered expression completion omitted current arguments or locals";
+		var contextualRecoveryService = new LanguageService(),
+			contextualRecoverySource = "class ExpectedValue { public var member:Int; } function take(value:ExpectedValue):Void return; function produce():ExpectedValue { return ",
+			contextualRecoveryPosition = contextualRecoverySource.length;
+		contextualRecoveryService.update("ContextualRecovery.hx", contextualRecoverySource);
+		var returnContext = contextualRecoveryService.completionContext("ContextualRecovery.hx", contextualRecoveryPosition);
+		if (returnContext == null || returnContext.context.expected == null
+			|| Std.string(returnContext.context.expected).indexOf("ExpectedValue") < 0)
+			throw "recovered return expression did not preserve the declared expected type";
+		var callRecoverySource = "class ExpectedArgument { public var member:Int; } function take(value:ExpectedArgument):Void return; function main():Void { take(";
+		contextualRecoveryService.update("ContextualRecovery.hx", callRecoverySource);
+		var callContext = contextualRecoveryService.completionContext("ContextualRecovery.hx", callRecoverySource.length);
+		if (callContext == null || callContext.context.expected == null
+			|| Std.string(callContext.context.expected).indexOf("ExpectedArgument") < 0)
+			throw "recovered call argument did not preserve the expected parameter type";
+		var localAfterErrorSource = "class RecoveredValue { public var member:Int; } function main():Void { var value:RecoveredValue = new RecoveredValue(); broken.unresolved().thing; value.";
+		contextualRecoveryService.update("ContextualRecovery.hx", localAfterErrorSource);
+		var localAfterErrorPosition = localAfterErrorSource.length,
+			localAfterErrorCompletion = contextualRecoveryService.completeResult("ContextualRecovery.hx", localAfterErrorPosition),
+			foundRecoveredMember = false;
+		for (item in localAfterErrorCompletion.items)
+			if (item.label == "member")
+				foundRecoveredMember = true;
+		if (!foundRecoveredMember)
+			throw "recovered local type was lost after an unrelated malformed expression";
+		var visibilityService = new LanguageService();
+		visibilityService.update("unrelated/Target.hx", "package unrelated; function target():Int return 1; function main():Void return;");
+		visibilityService.analyze("unrelated.Target");
+		var visibilitySource = "package visible; function main():Void { target(); }";
+		visibilityService.update("visible/Main.hx", visibilitySource);
+		var visibilityPosition = visibilitySource.indexOf("target") + 1,
+			visibilityDefinition = visibilityService.definition("visible/Main.hx", visibilityPosition),
+			visibilityReferences = visibilityService.references("visible/Main.hx", visibilityPosition);
+		if (visibilityDefinition != null || visibilityReferences.length != 0)
+			throw "recovered resolution bound a symbol from an invisible module";
+		var invisibleTypeSource = "package visible; function main():Void { var value:Target; }";
+		visibilityService.update("visible/TypeUse.hx", invisibleTypeSource);
+		var invisibleTypePosition = invisibleTypeSource.indexOf("Target") + 1,
+			invisibleTypeDefinition = visibilityService.typeDefinition("visible/TypeUse.hx", invisibleTypePosition);
+		if (invisibleTypeDefinition != null)
+			throw "recovered type resolution bound a type from an invisible module";
 		var transitionService = new LanguageService(),
 			validEditorSource = "class Foo { public var knownFoo:Int; } function main():Int { var foo:Foo = new Foo(); return foo.knownFoo; }";
 		transitionService.update("Transition.hx", validEditorSource);

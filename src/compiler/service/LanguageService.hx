@@ -392,10 +392,10 @@ class LanguageService {
 				recoveredTypedFunctionReuses += mapSize(reusedFunctions);
 			for (module in typingModules)
 				recoveredModel.index.indexRecoveredModule(module.program, module.declarations, module.qualifiers, token);
-			recoveredModel.index.indexRecoveredSyntax(recovered.program, token, recoveredModel.partialTypedProgram,
-				function(name) return resolveRecoveredSymbol(recovered.program, name),
-				function(name, index) return resolveRecoveredEnumCase(recovered.program, name, index),
-				function(name, arguments) return resolveRecoveredType(recovered.program, name, arguments),
+				recoveredModel.index.indexRecoveredSyntax(recovered.program, token, recoveredModel.partialTypedProgram,
+				function(name) return resolveRecoveredSymbol(state, recovered.program, name, token),
+				function(name, index) return resolveRecoveredEnumCase(state, recovered.program, name, index, token),
+				function(name, arguments) return resolveRecoveredType(state, recovered.program, name, arguments, token),
 				function(name) return compiler.semanticWorkspace.editorSymbolCandidates(state, name, token, recovered.program),
 				state.previousEditorSemanticModel != null ? state.previousEditorSemanticModel.index
 					: state.lastGoodSemanticModel == null ? null : state.lastGoodSemanticModel.index);
@@ -903,11 +903,11 @@ class LanguageService {
 		}
 	}
 
-	function resolveRecoveredSymbol(program:AstProgram, name:String):Null<SemanticSymbolId> {
+	function resolveRecoveredSymbol(state:ModuleState, program:AstProgram, name:String, ?token:CancellationToken):Null<SemanticSymbolId> {
 		var qualifiedName = packageQualifiedName(program, name),
-			direct = compiler.semanticWorkspace.resolveSymbolId(name);
+			direct = compiler.semanticWorkspace.editorResolveSymbolId(state, name, program, token);
 		if (direct == null && qualifiedName != name)
-			direct = compiler.semanticWorkspace.resolveSymbolId(qualifiedName);
+			direct = compiler.semanticWorkspace.editorResolveSymbolId(state, qualifiedName, program, token);
 		if (direct != null)
 			return direct;
 		var separator = name.indexOf(".");
@@ -915,6 +915,8 @@ class LanguageService {
 			for (importPath in program.imports)
 				if (importQualifier(program, importPath) == name) {
 					var importedType = compiler.semanticWorkspace.resolveSymbolId(importPath);
+					if (importedType != null && !compiler.semanticWorkspace.editorSymbolVisible(state, importedType, program, token))
+						importedType = null;
 					if (importedType != null)
 						return importedType;
 				}
@@ -925,6 +927,8 @@ class LanguageService {
 		for (importPath in program.imports) {
 			if (importQualifier(program, importPath) == qualifier) {
 				var imported = compiler.semanticWorkspace.resolveSymbolId(importPath + "." + suffix);
+				if (imported != null && !compiler.semanticWorkspace.editorSymbolVisible(state, imported, program, token))
+					imported = null;
 				if (imported == null)
 					imported = compiler.semanticWorkspace.memberSymbolId(TInstance(NominalKind.Class, importPath, []), suffix);
 				if (imported != null)
@@ -934,6 +938,8 @@ class LanguageService {
 		if (program.packageName != null && program.packageName.length > 0) {
 			var packageOwner = program.packageName + "." + qualifier,
 				packageMember = compiler.semanticWorkspace.resolveSymbolId(packageOwner + "." + suffix);
+			if (packageMember != null && !compiler.semanticWorkspace.editorSymbolVisible(state, packageMember, program, token))
+				packageMember = null;
 			if (packageMember == null)
 				packageMember = compiler.semanticWorkspace.memberSymbolId(TInstance(NominalKind.Class, packageOwner, []), suffix);
 			if (packageMember != null)
@@ -942,13 +948,18 @@ class LanguageService {
 		return null;
 	}
 
-	function resolveRecoveredEnumCase(program:AstProgram, name:String, index:Int):Null<SemanticSymbolId> {
+	function resolveRecoveredEnumCase(state:ModuleState, program:AstProgram, name:String, index:Int,
+		?token:CancellationToken):Null<SemanticSymbolId> {
 		var direct = compiler.semanticWorkspace.resolveEnumCaseId(name, index);
+		if (direct != null && !compiler.semanticWorkspace.editorSymbolVisible(state, direct, program, token))
+			direct = null;
 		if (direct != null)
 			return direct;
 		for (importPath in program.imports) {
 			if (importQualifier(program, importPath) == name) {
 				var imported = compiler.semanticWorkspace.resolveEnumCaseId(importPath, index);
+				if (imported != null && !compiler.semanticWorkspace.editorSymbolVisible(state, imported, program, token))
+					imported = null;
 				if (imported != null)
 					return imported;
 			}
@@ -956,11 +967,12 @@ class LanguageService {
 		return null;
 	}
 
-	function resolveRecoveredType(program:AstProgram, name:String, arguments:Array<CompilerType>):Null<CompilerType> {
+	function resolveRecoveredType(state:ModuleState, program:AstProgram, name:String, arguments:Array<CompilerType>,
+		?token:CancellationToken):Null<CompilerType> {
 		var qualifiedName = packageQualifiedName(program, name),
-			direct = compiler.semanticWorkspace.resolveTypeSymbolId(name);
+			direct = compiler.semanticWorkspace.editorResolveTypeSymbolId(state, name, program, token);
 		if (direct == null && qualifiedName != name)
-			direct = compiler.semanticWorkspace.resolveTypeSymbolId(qualifiedName);
+			direct = compiler.semanticWorkspace.editorResolveTypeSymbolId(state, qualifiedName, program, token);
 		if (direct != null)
 			return recoveredTypeForIdentity(direct, name, arguments);
 		for (importPath in program.imports) {
