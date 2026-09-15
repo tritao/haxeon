@@ -32,6 +32,9 @@ typedef HlMetadataPublication = {
 	final debugSections:RawPtr<HlDebugSection>;
 	final debugSectionCount:Int;
 	final debugSectionCapacity:Int;
+	final functionStableIds:RawPtr<Int32>;
+	final functionNames:RawPtr<RawPtr<UInt8>>;
+	final functionNameLengths:RawPtr<Int32>;
 	final ints:RawPtr<Int32>;
 	final intCount:Int;
 	final floats:RawPtr<Float>;
@@ -69,6 +72,9 @@ class HlMetadataGeneration {
 	var modulePools:HlModulePools;
 	var modulePoolsDefined:Bool = false;
 	var nativeCode:RawPtr<HlNativeCode> = RawPtr.nullPtr();
+	var functionStableIds:RawPtr<Int32> = RawPtr.nullPtr();
+	var functionNames:RawPtr<RawPtr<UInt8>> = RawPtr.nullPtr();
+	var functionNameLengths:RawPtr<Int32> = RawPtr.nullPtr();
 	final typeTable:HlTypeTable;
 	var functionTable:Null<HlFunctionTable>;
 	var moduleContext:RawPtr<HlModuleContext> = RawPtr.nullPtr();
@@ -142,6 +148,35 @@ class HlMetadataGeneration {
 	public function addFunctionDescriptor(spec:HlFunctionDescriptorSpec):RawPtr<HlFunction> {
 		requireBuilding();
 		return functionDescriptors.add(spec);
+	}
+
+	/** Define stable debugger identities in native function-descriptor order. */
+	public function defineFunctionIdentities(stableIds:Array<Int>, names:Array<String>):Void {
+		requireBuilding();
+		var count = functionDescriptors.length();
+		if (stableIds == null || names == null || stableIds.length != count || names.length != count)
+			throw "HashLink function identity arrays must match the function descriptor table";
+		if (count == 0)
+			return;
+		functionStableIds = arena.allocInt32Array(count);
+		functionNames = arena.allocNativePointerArray(count);
+		functionNameLengths = arena.allocInt32Array(count);
+		for (index in 0...count) {
+			if (stableIds[index] < 0)
+				throw "HashLink stable function identities must be non-negative";
+			for (previous in 0...index)
+				if (stableIds[previous] == stableIds[index])
+					throw 'Duplicate HashLink stable function identity ${stableIds[index]}';
+			functionStableIds.offset(index).store(cast stableIds[index]);
+			var name = names[index];
+			if (name == null || name.length == 0) {
+				functionNames.offset(index).store(RawPtr.nullPtr());
+				functionNameLengths.offset(index).store(cast 0);
+			} else {
+				functionNames.offset(index).store(builder.utf8Name(name));
+				functionNameLengths.offset(index).store(cast HlTypeBuilder.utf8Length(name));
+			}
+		}
 	}
 
 	/** Append one Haxe-owned HashLink native binding descriptor. */
@@ -317,9 +352,10 @@ class HlMetadataGeneration {
 		else
 			HlTypeBridge.native_metadata_bind_function_descriptors(typeTable.pointer(), typeTable.length(), functionDescriptors.pointer(), functionDescriptors.length(), moduleContext);
 		if (usesContiguousTypes)
-		HlTypeBridge.native_metadata_publish_contiguous_prototypes(contiguousTypes, typeTable.length(), moduleContext);
+			HlTypeBridge.native_metadata_publish_contiguous_prototypes(contiguousTypes, typeTable.length(), moduleContext);
 		else
 			HlTypeBridge.native_metadata_publish_prototypes(typeTable.pointer(), typeTable.length(), moduleContext);
+		ensureFunctionIdentities();
 		buildNativeCode();
 		HlTypeBridge.native_metadata_validate_code(nativeCode);
 		publishedContiguousTypeCount = arena.typeCountOf();
@@ -353,6 +389,9 @@ class HlMetadataGeneration {
 			debugSections: debugSectionDescriptors.pointer(),
 			debugSectionCount: debugSectionDescriptors.length(),
 			debugSectionCapacity: debugSectionDescriptors.capacityOf(),
+			functionStableIds: functionStableIds,
+			functionNames: functionNames,
+			functionNameLengths: functionNameLengths,
 			ints: modulePools.ints,
 			intCount: modulePools.intCount,
 			floats: modulePools.floats,
@@ -411,14 +450,28 @@ class HlMetadataGeneration {
 		code.ref.globals = globalTypes;
 		code.ref.natives = nativeDescriptors.pointer();
 		code.ref.functions = functionDescriptors.pointer();
-		code.ref.functionStableIds = RawPtr.nullPtr();
-		code.ref.functionNames = RawPtr.nullPtr();
-		code.ref.functionNameLengths = RawPtr.nullPtr();
+		code.ref.functionStableIds = functionStableIds;
+		code.ref.functionNames = functionNames;
+		code.ref.functionNameLengths = functionNameLengths;
 		code.ref.constants = constantDescriptors.pointer();
 		code.ref.debugSections = debugSectionDescriptors.pointer();
 		code.ref.alloc.ref.current = RawPtr.nullPtr();
 		code.ref.falloc.ref.current = RawPtr.nullPtr();
 		nativeCode = code;
+	}
+
+	function ensureFunctionIdentities():Void {
+		var count = functionDescriptors.length();
+		if (count == 0 || !functionStableIds.isNull())
+			return;
+		functionStableIds = arena.allocInt32Array(count);
+		functionNames = arena.allocNativePointerArray(count);
+		functionNameLengths = arena.allocInt32Array(count);
+		for (index in 0...count) {
+			functionStableIds.offset(index).store(functionDescriptors.get(index).ref.findex);
+			functionNames.offset(index).store(RawPtr.nullPtr());
+			functionNameLengths.offset(index).store(cast 0);
+		}
 	}
 
 	function validateModulePools():Void {

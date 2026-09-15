@@ -3,6 +3,7 @@ package compiler.hl;
 import haxe.io.Bytes;
 import haxe.io.BytesInput;
 import compiler.hl.HlCode.HlDebugSection;
+import compiler.hl.HlCode.HlFunctionIdentity;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction.HlDebugAssignment;
 import compiler.hl.HlFunction.HlDebugLocation;
@@ -71,6 +72,9 @@ class HlReader {
 				code.constants.push({global: global, fields: fields});
 			}
 			code.debugSections = version >= 7 ? readDebugSections(input) : [];
+			for (section in code.debugSections)
+				if (section.kind == HlWriter.FUNCTION_IDENTITIES && section.version == 1)
+					code.functionIdentities = decodeFunctionIdentities(section.payload);
 			if (input.position != bytes.length)
 				throw "Trailing HLB data";
 			HlValidator.validate(code);
@@ -458,6 +462,44 @@ class HlReader {
 			});
 		}
 		return result;
+	}
+
+	/** Decode HashLink's canonical function identity debug section. */
+	public static function decodeFunctionIdentities(bytes:Bytes):Array<HlFunctionIdentity> {
+		if (bytes == null)
+			throw "HashLink function identity data is required";
+		var input = new BytesInput(bytes);
+		input.bigEndian = false;
+		var result:Array<HlFunctionIdentity> = [];
+		for (_ in 0...readCount(input, "function identity")) {
+			var stableId = readUnsigned(input, "stable function identity"),
+				functionIndex = readUnsigned(input, "function identity function index"),
+				qualifiedName = readSizedString(input, "qualified function identity name"),
+				displayName = readSizedString(input, "display function identity name"),
+				sourcePath = readSizedString(input, "function identity source path"),
+				start = readIndex(input) - 1,
+				end = readIndex(input) - 1,
+				line = readUnsigned(input, "function identity line"),
+				flags = readUnsigned(input, "function identity flags");
+			result.push({
+				stableId: stableId,
+				functionIndex: functionIndex,
+				qualifiedName: qualifiedName,
+				displayName: displayName,
+				sourcePath: sourcePath,
+				start: start,
+				end: end,
+				line: line,
+				flags: flags
+			});
+		}
+		if (input.position != bytes.length)
+			throw "Trailing function identity data";
+		return result;
+	}
+
+	static function readSizedString(input:BytesInput, what:String):String {
+		return readBytesOfSize(input, readCount(input, what)).toString();
 	}
 
 	static function readCount(input:BytesInput, what:String):Int {

@@ -15,6 +15,7 @@ class HlCode {
 	public var globals:Array<Int> = [];
 	public var natives:Array<HlNative> = [];
 	public var functions:Array<HlFunction> = [];
+	public var functionIdentities:Array<HlFunctionIdentity> = [];
 	public var constants:Array<HlConstant> = [];
 	public var debugSections:Array<HlDebugSection> = [];
 	public var sourceSnapshots:Array<HlSourceSnapshot> = [];

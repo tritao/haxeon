@@ -239,6 +239,7 @@ HL_PRIM int HL_NAME(native_metadata_validate_debug_sections)( hl_debug_section *
 }
 
 HL_PRIM int HL_NAME(native_metadata_validate_code)( hl_code *code ) {
+	int i, j;
 	if( code == NULL )
 		hl_error("HashLink native code metadata must not be null");
 	if( code->version <= 1 || code->version > 7 || code->nints < 0 || code->nfloats < 0 || code->nstrings < 0
@@ -250,10 +251,20 @@ HL_PRIM int HL_NAME(native_metadata_validate_code)( hl_code *code ) {
 		|| (code->nstrings > 0 && (code->strings == NULL || code->strings_lens == NULL || code->ustrings == NULL))
 		|| (code->nbytes > 0 && (code->bytes == NULL || code->bytes_pos == NULL))
 		|| (code->ntypes > 0 && code->types == NULL) || (code->nglobals > 0 && code->globals == NULL)
-		|| (code->nnatives > 0 && code->natives == NULL) || (code->nfunctions > 0 && code->functions == NULL)
+		|| (code->nnatives > 0 && code->natives == NULL)
+		|| (code->nfunctions > 0 && (code->functions == NULL || code->function_stable_ids == NULL
+			|| code->function_names == NULL || code->function_names_lens == NULL))
 		|| (code->nconstants > 0 && code->constants == NULL) || (code->ndebugsections > 0 && code->debugsections == NULL)
 		|| (code->ndebugfiles > 0 && (code->debugfiles == NULL || code->debugfiles_lens == NULL)) )
 		hl_error("HashLink native code metadata contains incomplete tables");
+	for( i = 0; i < code->nfunctions; i++ ) {
+		if( code->function_stable_ids[i] < 0 || code->function_names_lens[i] < 0
+			|| (code->function_names_lens[i] > 0 && code->function_names[i] == NULL) )
+			hl_error("HashLink native code metadata contains an invalid function identity");
+		for( j = 0; j < i; j++ )
+			if( code->function_stable_ids[j] == code->function_stable_ids[i] )
+				hl_error("HashLink native code metadata contains duplicate function identities");
+	}
 	return code->ntypes;
 }
 

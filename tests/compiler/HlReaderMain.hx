@@ -152,12 +152,31 @@ function main():Void {
 		], [{name: 4, position: -1, scopeEnd: -1}])
 	];
 	code.constants = [{global: 0, fields: [0]}];
+	code.functionIdentities = [
+		{
+			stableId: 91,
+			functionIndex: 1,
+			qualifiedName: "Main.main",
+			displayName: "main",
+			sourcePath: "main.hx",
+			start: 0,
+			end: 8,
+			line: 1,
+			flags: 0
+		}
+	];
 	code.debugSections = [
 		{
 			kind: 7,
 			version: 1,
 			flags: 0,
 			payload: HaxeBytes.ofString("opaque")
+		},
+		{
+			kind: HlWriter.FUNCTION_IDENTITIES,
+			version: 1,
+			flags: 0,
+			payload: HlWriter.encodeFunctionIdentities(code.functionIdentities)
 		}
 	];
 	code.entryPoint = 1;
@@ -175,8 +194,15 @@ function main():Void {
 			throw "HLB method type did not decode as Method";
 	}
 	expect(decoded.constants.length == 1 && decoded.constants[0].global == 0 && decoded.constants[0].fields[0] == 0, "HLB constants did not decode");
-	expect(decoded.debugSections.length == 1 && decoded.debugSections[0].payload.compare(HaxeBytes.ofString("opaque")) == 0,
+	expect(decoded.debugSections.length == 2 && decoded.debugSections[0].payload.compare(HaxeBytes.ofString("opaque")) == 0,
 		"HLB debug sections did not decode");
+	expect(decoded.functionIdentities.length == 1
+		&& decoded.functionIdentities[0].stableId == 91
+		&& decoded.functionIdentities[0].functionIndex == 1
+		&& decoded.functionIdentities[0].qualifiedName == "Main.main"
+		&& decoded.functionIdentities[0].start == 0
+		&& decoded.functionIdentities[0].end == 8,
+		"HLB function identities did not decode");
 	switch decoded.functions[0].opcodes[1] {
 		case HlInstruction.ThisGet(_, field):
 			expect(field == 0, "HLB OGetThis did not preserve its field index");

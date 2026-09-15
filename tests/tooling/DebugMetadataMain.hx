@@ -1,6 +1,7 @@
 import compiler.Frontend;
 import compiler.Source.SourceFile;
 import compiler.hl.HlFunction.HlInstruction;
+import compiler.hl.HlReader;
 import compiler.hl.HlWriter;
 import compiler.hl.patch.HlPatchReader;
 import compiler.hl.patch.HlPatchWriter;
@@ -83,6 +84,11 @@ class DebugMetadataMain {
 
 		var bytes = HlWriter.encode(code),
 			suffix = encodedAssignmentSuffix(fn.debugAssignments);
+		var decoded = HlReader.decode(bytes);
+		if (decoded.functionIdentities.length != code.functionIdentities.length
+			|| decoded.functionIdentities[irIndex].stableId != code.functionIdentities[irIndex].stableId
+			|| decoded.functionIdentities[irIndex].qualifiedName != code.functionIdentities[irIndex].qualifiedName)
+			throw "HLB reader did not decode function identity metadata";
 		if (bytes.get(3) != 7
 			|| code.debugSections.length != 2
 			|| code.debugSections[0].kind != HlWriter.FUNCTION_IDENTITIES

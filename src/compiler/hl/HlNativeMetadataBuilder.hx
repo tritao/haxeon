@@ -1,6 +1,7 @@
 package compiler.hl;
 
 import compiler.hl.HlCode.HlTypeDef;
+import compiler.hl.HlCode.HlFunctionIdentity;
 import compiler.hl.HlValidator;
 import compiler.hl.HlOpcode;
 import compiler.hl.HlFunction.HlDebugLocation;
@@ -46,6 +47,7 @@ class HlNativeMetadataBuilder {
 				generation.addType(typePointers[index]);
 			defineTypes(code, generation, typePointers, module, globals);
 			addFunctionDescriptors(code, generation, typePointers);
+			defineFunctionIdentities(code, generation);
 			addNativeDescriptors(code, generation, typePointers);
 			addConstants(code, generation);
 			generation.publish();
@@ -214,6 +216,33 @@ class HlNativeMetadataBuilder {
 				fieldReference: RawPtr.nullPtr()
 			});
 		}
+	}
+
+	static function defineFunctionIdentities(code:HlCode, generation:HlMetadataGeneration):Void {
+		var stableIds:Array<Int> = [],
+			names:Array<String> = [],
+			assigned:Array<Bool> = [];
+		for (fn in code.functions) {
+			stableIds.push(fn.functionIndex);
+			names.push("");
+			assigned.push(false);
+		}
+		for (identity in code.functionIdentities) {
+			var target = -1;
+			for (index in 0...code.functions.length)
+				if (code.functions[index].functionIndex == identity.functionIndex) {
+					target = index;
+					break;
+				}
+			if (target < 0)
+				throw 'HashLink function identity references missing function ${identity.functionIndex}';
+			if (assigned[target])
+				throw 'HashLink function ${identity.functionIndex} has duplicate identity metadata';
+			stableIds[target] = identity.stableId;
+			names[target] = identity.qualifiedName;
+			assigned[target] = true;
+		}
+		generation.defineFunctionIdentities(stableIds, names);
 	}
 
 	static function debugLocation(fn:HlFunction, index:Int):HlDebugLocation {

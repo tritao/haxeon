@@ -206,6 +206,7 @@ class HlLower {
 				throw 'HashLink lowering failed for ${fn.name}: $error';
 			}
 		var identities = [for (fn in program.functions) functionIdentity(fn)];
+		code.functionIdentities = identities;
 		code.debugSections.push({
 			kind: HlWriter.FUNCTION_IDENTITIES,
 			version: 1,
