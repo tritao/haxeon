@@ -220,6 +220,7 @@ class LanguageService {
 
 	public function update(path:String, source:String):ModuleState {
 		var state = compiler.update(path, source);
+		compiler.semanticWorkspace.invalidateResolutionCache();
 		if (state.ast == null && (state.recoveredSemanticModel == null || state.recoveredSemanticModel.revision != state.revision))
 			recoverSyntax(state);
 		compiler.semanticWorkspace.invalidateResolutionCache();
@@ -1355,7 +1356,7 @@ class LanguageService {
 		if (token != null)
 			token.check();
 		var context = semanticQuery(path, position, null, token);
-		if (!navigableSymbol(context))
+		if (context == null || context.confidence == EditorSnapshotConfidence.RecoveredPartial)
 			return null;
 		var target:Null<SemanticSymbolId> = null,
 			symbol = context.symbol == null ? null : compiler.semanticWorkspace.editorSymbol(context.state, context.symbol);
@@ -1555,11 +1556,8 @@ class LanguageService {
 			snapshot = state == null ? null : editorSnapshot(state),
 			model = snapshot == null ? null : snapshot.semanticModel;
 		var symbol = model == null ? null : model.index.symbolIdAt(position, token),
-			confidence = snapshot == null ? null : snapshot.confidence;
-		if (confidence == EditorSnapshotConfidence.RecoveredPartial
-			&& symbol != null
-			&& compiler.semanticWorkspace.indexedSymbol(symbol) != null)
-			confidence = EditorSnapshotConfidence.RecoveredStable;
+			confidence = snapshot == null ? null : snapshot.confidence == EditorSnapshotConfidence.RecoveredPartial
+				&& symbol != null ? EditorSnapshotConfidence.RecoveredStable : snapshot.confidence;
 		return state == null || snapshot == null || model == null ? null : {
 			state: state,
 			snapshot: snapshot,

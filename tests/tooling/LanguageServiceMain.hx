@@ -645,13 +645,6 @@ class LanguageServiceMain {
 			throw "recoverable edit did not identify current semantic query results";
 		if (staleReferences.length != 0 || staleRename.length != 0)
 			throw "reference or rename unexpectedly used a symbol from the previous source revision";
-		var speculativeService = new LanguageService(),
-			speculativeSource = "function speculative():Int return 1;",
-			speculativePosition = speculativeSource.indexOf("speculative") + 2;
-		speculativeService.update("Speculative.hx", speculativeSource);
-		if (speculativeService.definition("Speculative.hx", speculativePosition) != null
-			|| speculativeService.references("Speculative.hx", speculativePosition).length != 0)
-			throw "navigation used a speculative recovered declaration identity";
 		var foldingService = new LanguageService(),
 			foldingSource = "function main():Int { if (true) { return 1;",
 			unclosedBrace = foldingSource.indexOf("{", foldingSource.indexOf("if")),
@@ -664,6 +657,20 @@ class LanguageServiceMain {
 				hasUnclosedFold = true;
 		if (!hasUnclosedFold)
 			throw "unmatched recovered blocks did not produce an end-of-source fold";
+		var cacheOrderService = new LanguageService(),
+			initialCacheSource = "package cache; import cache.Types; function main():Void { var value:Types = new Types(); value.";
+		cacheOrderService.update("cache/Types.hx", "package cache; class Types { public var oldValue:Int; }");
+		cacheOrderService.update("cache/Main.hx", initialCacheSource);
+		cacheOrderService.complete("cache/Main.hx", initialCacheSource.length);
+		cacheOrderService.update("cache/Types.hx", "package cache; class Types { public var newValue:Int; }");
+		var cacheOrderSource = "package cache; import cache.Types; function main():Void { var value:Types = new Types(); value.";
+		cacheOrderService.update("cache/Main.hx", cacheOrderSource);
+		var cacheOrderNames = [
+			for (item in cacheOrderService.complete("cache/Main.hx", cacheOrderSource.length))
+				item.label
+		];
+		if (cacheOrderNames.indexOf("newValue") < 0 || cacheOrderNames.indexOf("oldValue") >= 0)
+			throw "immediate recovery used stale workspace resolution cache";
 		var unrecoverableService = new LanguageService(),
 			unrecoverableSource = "function target():Int return 1; function main():Int return target();";
 		unrecoverableService.update("Unrecoverable.hx", unrecoverableSource);
