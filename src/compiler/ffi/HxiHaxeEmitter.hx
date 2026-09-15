@@ -326,7 +326,8 @@ class HxiHaxeEmitter {
 		var library = model.library;
 		if (library == null)
 			return "";
-		var pointerCloseHelper = '__hxi_${model.name}_native_pointer_close',
+		var callbackErrorType = profile != null && profile.callbackErrorType != null ? profile.callbackErrorType : "HxiCallbackError",
+			pointerCloseHelper = '__hxi_${model.name}_native_pointer_close',
 			pointerIsClosedHelper = '__hxi_${model.name}_native_pointer_is_closed',
 			pointerOwnedSlotHelper = '__hxi_${model.name}_native_pointer_owned_from_slot',
 			output = new StringBuf(),
@@ -401,7 +402,7 @@ class HxiHaxeEmitter {
 			output.add('}\n');
 		}
 		if (hasCallbacks)
-			output.add('enum abstract HxiCallbackError(Int) from Int to Int { var None = 0; var Exception = 1; var WrongThread = 2; var PointerContract = 3; var AggregateContract = 4; var StringContract = 5; }\n');
+			output.add('enum abstract $callbackErrorType(Int) from Int to Int { var None = 0; var Exception = 1; var WrongThread = 2; var PointerContract = 3; var AggregateContract = 4; var StringContract = 5; }\n');
 		for (declaration in opaqueDeclarations)
 			switch declaration {
 				case Opaque(name, _):
@@ -474,7 +475,7 @@ class HxiHaxeEmitter {
 					output.add('abstract ${projectedName}Callback(hl.Abstract<"native_callback">) {\n');
 					output.add('\tpublic inline function new(callback:$projectedName) this = ${model.name}.__hxi_callback_create(haxe.io.Bytes.ofString("$signature"), haxe.io.Bytes.ofString("${pointerSizes.join(",")}"), haxe.io.Bytes.ofString("${pointerNullable.join(",")}"), callback);\n');
 					output.add('\tpublic inline function close():Bool return ${model.name}.__hxi_callback_close_$name(this);\n');
-					output.add('\tpublic inline function errorKind():HxiCallbackError return ${model.name}.__hxi_callback_error_kind_$name(this);\n');
+					output.add('\tpublic inline function errorKind():$callbackErrorType return ${model.name}.__hxi_callback_error_kind_$name(this);\n');
 					output.add('\tpublic inline function takeError():Null<haxe.io.Bytes> return ${model.name}.__hxi_callback_take_error_$name(this);\n');
 					output.add('}\n');
 					output.add('@:hlNative("haxeon_runtime", "native_callback_close") extern function __hxi_callback_close_$name(callback:${projectedName}Callback):Bool;\n');

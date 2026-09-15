@@ -173,7 +173,10 @@ class HxiProjectionProfileValidator {
 					case _:
 				}
 		if (hasCallbacks)
-			HxiHaxeEmitter.addProjectedName(path, "module", "HxiCallbackError", "generated callback error type", moduleNames);
+			HxiHaxeEmitter.addProjectedName(path,
+				"module", profile != null && profile.callbackErrorType != null ? profile.callbackErrorType : "HxiCallbackError",
+				"generated callback error type",
+				moduleNames);
 		if (hasOpaqueTypes) {
 			HxiHaxeEmitter.addProjectedName(path, "module", '__hxi_${model.name}_native_pointer_close', "opaque handle close helper", moduleNames);
 			HxiHaxeEmitter.addProjectedName(path, "module", '__hxi_${model.name}_native_pointer_is_closed', "opaque handle state helper", moduleNames);
