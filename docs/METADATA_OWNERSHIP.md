@@ -7,7 +7,7 @@ module generation.
 | Category | Allocator | Owner | Borrowers | Retirement |
 | --- | --- | --- | --- | --- |
 | Module identity and stable IDs | Compiler HCS/HLI codecs | Compiler state, Haxeon `LoadedModule`, and `hl_runtime_module` copy | Host reconnect logic, stable-ID resolver | Compiler state deletion and runtime-module release |
-| Base bytecode metadata | HashLink code reader arena | `hl_module` | JIT code, globals, objects, closures, reflection | Runtime-module release after calls have quiesced |
+| Base bytecode metadata | HashLink code reader arena for the host facade; Haxeon metadata arena for `HlNativeModuleLoader.loadRuntime` | `hl_module` | JIT code, globals, objects, closures, reflection | Runtime-module release after calls have quiesced |
 | Type arena entries | Base code arena; patch type append allocations | `hl_module` | JIT code, heap values, globals, reflection | Runtime-module release; future GC pinning may permit earlier generation retirement |
 | Function dispatch slots | `hl_module` | Loaded module generation | Patchable calls and staged closures | Runtime-module release |
 | Base JIT image | HashLink executable allocator | `hl_module` | Dispatch slots, closures, active calls | Runtime-module release after calls quiesce |
@@ -65,6 +65,16 @@ Exhaustion therefore requests a new module generation through the normal reload
 path. Arena entries and their auxiliary allocations are reclaimed at module
 shutdown; borrower-aware reclamation within a live generation remains
 unverified and is intentionally not attempted.
+
+The Haxeon-native loader now exercises the external metadata boundary: it decodes
+HLB and HLI, builds the complete `hl_code` graph in `HlMetadataGeneration`, and
+passes that graph to `hl_runtime_module_load_code`. HashLink initializes its JIT
+and runtime wrapper from those Haxe-owned records without decoding a second copy
+of the module metadata. Haxeon owns HLI identity validation, initializer policy,
+and the shared stable-ID call-shape validator; the native wrapper retains only
+the JIT, managed allocation, and machine-facing execution mechanisms. The public
+host `Runtime.load` facade remains on the legacy native-decoder path until it can
+be compiled against the Haxeon-only native-memory classes.
 
 HashLink records module ownership when a managed allocation is created. A major
 collection removes records for dead allocations, and the runtime exposes the
