@@ -598,6 +598,34 @@ class ParserRecoveryMain {
 			|| exactAbstractReferences.length < 2)
 			throw "exact abstract member navigation did not resolve its authoritative identity";
 
+		var exactGenericService = new LanguageService(),
+			exactGenericSource = "function identity<T>(value:T):T return value; function main():Int return identity(1);";
+		exactGenericService.update("ExactGeneric.hx", exactGenericSource);
+		exactGenericService.analyze("ExactGeneric");
+		var exactGenericPosition = exactGenericSource.lastIndexOf("identity") + 1,
+			exactGenericDefinition = exactGenericService.definition("ExactGeneric.hx", exactGenericPosition),
+			exactGenericReferences = exactGenericService.references("ExactGeneric.hx", exactGenericPosition);
+		var exactGenericDeclaration = exactGenericSource.indexOf("identity");
+		if (exactGenericDefinition == null
+			|| exactGenericDefinition.span.start > exactGenericDeclaration
+			|| exactGenericDefinition.span.end < exactGenericDeclaration
+			|| exactGenericReferences.length < 2)
+			throw "exact generic function navigation did not resolve its source identity";
+
+		var exactInheritanceService = new LanguageService(),
+			exactInheritanceSource = "class Base { public var value:Int; } class Child extends Base {} function main():Int { var child:Child = new Child(); return child.value; }";
+		exactInheritanceService.update("ExactInheritance.hx", exactInheritanceSource);
+		exactInheritanceService.analyze("ExactInheritance");
+		var exactInheritanceUse = exactInheritanceSource.lastIndexOf("value"),
+			exactInheritanceDeclaration = exactInheritanceSource.indexOf("value"),
+			exactInheritanceDefinition = exactInheritanceService.definition("ExactInheritance.hx", exactInheritanceUse + 1),
+			exactInheritanceReferences = exactInheritanceService.references("ExactInheritance.hx", exactInheritanceUse + 1);
+		if (exactInheritanceDefinition == null
+			|| exactInheritanceDefinition.span.start > exactInheritanceDeclaration
+			|| exactInheritanceDefinition.span.end < exactInheritanceDeclaration
+			|| exactInheritanceReferences.length < 2)
+			throw 'exact inherited member navigation did not resolve its source identity: definition=${exactInheritanceDefinition == null ? "null" : exactInheritanceDefinition.span.start + "/" + exactInheritanceDefinition.span.end}, references=${exactInheritanceReferences.length}';
+
 		var importService = new LanguageService();
 		importService.update("lib/Widget.hx", "class Widget {} function main():Void return;");
 		try

@@ -95,7 +95,30 @@ class SemanticWorkspace {
 
 	public function resolveSymbolId(name:String):Null<SemanticSymbolId> {
 		ensureResolutionIndexes();
-		return symbolResolutionIndex.get(name);
+		var direct = symbolResolutionIndex.get(name);
+		if (direct != null || symbolResolutionIndex.exists(name))
+			return direct;
+		var separator = name.lastIndexOf(".");
+		return separator < 1 ? null : resolveMemberSymbolId(name.substring(0, separator), name.substring(separator + 1));
+	}
+
+	/**
+	 * Resolve a qualified member even when it is inherited rather than declared
+	 * directly on the named receiver type. This is intentionally authoritative:
+	 * only a unique type identity and a unique member declaration are returned.
+	 */
+	public function resolveMemberSymbolId(owner:String, name:String):Null<SemanticSymbolId> {
+		var typeId = resolveTypeSymbolId(owner),
+			resolved = typeId == null ? null : indexedSymbol(typeId);
+		if (resolved == null)
+			return null;
+		var type:CompilerType = switch resolved.symbol.kind {
+			case DeclarationKind.Class: TInstance(NominalKind.Class, owner, []);
+			case DeclarationKind.Interface: TInstance(NominalKind.Interface, owner, []);
+			case DeclarationKind.Abstract: TAbstract(owner, [], TUnknown);
+			default: return null;
+		};
+		return memberSymbolId(type, name);
 	}
 
 	public function resolveTypeSymbolId(name:String):Null<SemanticSymbolId> {
