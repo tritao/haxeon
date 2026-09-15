@@ -313,6 +313,16 @@ class LanguageServiceMain {
 					}
 		if (retainedOldInheritedType)
 			throw 'recovered typing reused a stale transitive declaration after dependency update: ${refreshedTypes.join(",")}';
+		var diagnosticRefreshService = new LanguageService();
+		diagnosticRefreshService.update("editor/base/Base.hx", "package editor.base; class Base { public var inherited:String; }");
+		diagnosticRefreshService.update("editor/util/Widget.hx", "package editor.util; import editor.base.Base; class Widget extends Base {}");
+		var diagnosticSource = "package editor; import editor.util.Widget; function main():Int { var widget:Widget = new Widget(); return widget.inherited; }";
+		diagnosticRefreshService.update("editor/Diagnostic.hx", diagnosticSource);
+		if (diagnosticRefreshService.diagnostics("editor/Diagnostic.hx").length == 0)
+			throw "recovered typing did not publish the initial dependent type diagnostic";
+		diagnosticRefreshService.update("editor/base/Base.hx", "package editor.base; class Base { public var inherited:Int; }");
+		if (diagnosticRefreshService.diagnostics("editor/Diagnostic.hx").length != 0)
+			throw "dependency recovery retained a stale semantic diagnostic";
 		importService.analyze("editor.util.Widget");
 		var importedMemberUseSource = "package editor; import editor.util.Widget; function main():Void { var widget:Widget = new Widget(); widget.ready; }";
 		importService.update("editor/ClassMain.hx", importedMemberUseSource);

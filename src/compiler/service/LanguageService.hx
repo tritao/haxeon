@@ -372,12 +372,34 @@ class LanguageService {
 				var candidateProgram = effectiveAst(candidate);
 				if (candidateProgram == null || !recoveryModuleVisible(candidateProgram, dependency, dependencyProgram))
 					continue;
+				clearRecoveredSnapshot(candidate);
 				recoverSyntax(candidate);
 				refreshed.set(candidate.name, true);
 				pending.push(candidate);
 			}
 		}
 	}
+
+	function clearRecoveredSnapshot(state:ModuleState):Void {
+		for (previous in state.recoveryDiagnostics) {
+			for (index in 0...state.diagnostics.length)
+				if (sameDiagnostic(state.diagnostics[index], previous)) {
+					state.diagnostics.splice(index, 1);
+					break;
+				}
+		}
+		state.recoveryDiagnostics = [];
+		state.recoveredAst = null;
+		state.recoveredTokens = [];
+		state.recoveredSemanticModel = null;
+	}
+
+	static function sameDiagnostic(left:Diagnostic, right:Diagnostic):Bool
+		return left.code == right.code
+			&& left.message == right.message
+			&& left.span.file.path == right.span.file.path
+			&& left.span.start == right.span.start
+			&& left.span.end == right.span.end;
 
 	/**
 	 * Supply tolerant typing with declarations from modules already known to the
