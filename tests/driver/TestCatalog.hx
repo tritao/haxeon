@@ -65,6 +65,7 @@ class TestCatalog {
 		"FormatterMain",
 		"FormatterGoldenMain",
 		"LanguageServiceMain",
+		"InteractiveEditMain",
 		"ProtocolMain",
 		"LspProtocolMain",
 		"UtestDiscoveryMain",
