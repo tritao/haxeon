@@ -1495,6 +1495,46 @@ class LanguageService {
 				});
 			}
 		}
+		for (enumAbstract in ast.enumAbstracts) {
+			if (token != null)
+				token.check();
+			result.push({
+				name: enumAbstract.name,
+				kind: "abstract",
+				detail: 'enum abstract ${enumAbstract.name}(${typeName(enumAbstract.underlying)})',
+				span: enumAbstract.span
+			});
+			for (value in enumAbstract.values) {
+				if (token != null)
+					token.check();
+				result.push({
+					name: value.name,
+					kind: "enumCase",
+					detail: value.name,
+					span: value.span
+				});
+			}
+		}
+		for (abstractDecl in ast.abstracts) {
+			if (token != null)
+				token.check();
+			result.push({
+				name: abstractDecl.name,
+				kind: "abstract",
+				detail: 'abstract ${abstractDecl.name}(${typeName(abstractDecl.underlying)})',
+				span: abstractDecl.span
+			});
+			for (method in abstractDecl.methods) {
+				if (token != null)
+					token.check();
+				result.push({
+					name: method.name,
+					kind: "method",
+					detail: '${method.name}():${typeName(method.result)}',
+					span: method.span
+				});
+			}
+		}
 		for (classDecl in ast.classes) {
 			if (token != null)
 				token.check();

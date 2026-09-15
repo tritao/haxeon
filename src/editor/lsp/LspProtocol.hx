@@ -1472,6 +1472,7 @@ class LspProtocol {
 	static function symbolKind(kind:String):Int
 		return switch kind {
 			case "class": 5;
+			case "abstract": 5;
 			case "method": 6;
 			case "field": 8;
 			case "function": 12;
@@ -1490,6 +1491,7 @@ class LspProtocol {
 			case "interface": 8;
 			case "enum": 13;
 			case "enumCase": 20;
+			case "abstract": 7;
 			default: 6;
 		};
 

@@ -1342,6 +1342,26 @@ class LanguageServiceMain {
 				foundNullableMember = true;
 		if (!foundNullableMember || nullableReceiver == null)
 			throw "recovered completion did not retain a nullable nested member receiver";
+		var genericMemberService = new LanguageService(),
+			genericMemberSource = "class Box<T> { public var value:T; } class Root { public var child:Box<String>; } function main():Void { var root:Root = new Root(); root.child.";
+		genericMemberService.update("GenericMember.hx", genericMemberSource);
+		var genericContext = genericMemberService.completionContext("GenericMember.hx", genericMemberSource.length),
+			foundGenericMember = false;
+		for (item in genericMemberService.completeResult("GenericMember.hx", genericMemberSource.length).items)
+			if (item.label == "value" && item.detail == "value:String")
+				foundGenericMember = true;
+		if (!foundGenericMember || genericContext == null || genericContext.context.receiver == null)
+			throw "recovered completion did not preserve generic nested member substitution";
+		var recoveredAbstractService = new LanguageService(),
+			recoveredAbstractSource = "abstract Value(Int) from Missing to";
+		recoveredAbstractService.update("RecoveredAbstract.hx", recoveredAbstractSource);
+		var recoveredAbstractState = recoveredAbstractService.compiler.modules.get("RecoveredAbstract"),
+			recoveredAbstractSymbols = recoveredAbstractService.documentSymbols("RecoveredAbstract.hx");
+		if (recoveredAbstractState.recoveredAst == null
+			|| recoveredAbstractState.recoveredSemanticModel == null
+			|| recoveredAbstractState.recoveredSemanticModel.partialTypedProgram == null
+			|| !containsDocumentSymbol(recoveredAbstractSymbols, "Value"))
+			throw "incomplete abstract conversion discarded its recovered declaration snapshot";
 		var nominalSignatureService = new LanguageService();
 		nominalSignatureService.update("nominal/a/Action.hx", "package nominal.a; class Action { public function run(value:Int):Int return value; }");
 		nominalSignatureService.update("nominal/b/Action.hx", "package nominal.b; class Action { public function run(value:String):String return value; }");

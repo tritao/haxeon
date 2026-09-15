@@ -26,25 +26,33 @@ class AbstractConversionGraph {
 				substitutions = abstractSubstitutions(decl.name, decl.typeParameters),
 				owner = abstractNode(decl.name, [for (index in 0...decl.typeParameters.length) '$' + '$index']);
 			spans.set(owner, decl.span);
-			for (type in decl.fromTypes)
-				fromEdges.push({source: node(declarations.resolve(type, decl.span, substitutions), decl.name, decl.typeParameters), target: owner});
-			for (type in decl.toTypes)
-				toEdges.push({source: owner, target: node(declarations.resolve(type, decl.span, substitutions), decl.name, decl.typeParameters)});
+			for (type in decl.fromTypes) {
+				var resolved = resolveConversionType(type, decl.span, substitutions);
+				if (resolved != null)
+					fromEdges.push({source: node(resolved, decl.name, decl.typeParameters), target: owner});
+			}
+			for (type in decl.toTypes) {
+				var resolved = resolveConversionType(type, decl.span, substitutions);
+				if (resolved != null)
+					toEdges.push({source: owner, target: node(resolved, decl.name, decl.typeParameters)});
+			}
 			for (method in decl.methods) {
 				var metadata = method.metadata;
 				if (metadata == null)
 					continue;
+				var fromType = method.arguments.length == 1 ? resolveConversionType(method.arguments[0].type, method.span, substitutions) : null,
+					toType = method.arguments.length == 0 ? resolveConversionType(method.result, method.span, substitutions) : null;
 				for (entry in metadata)
 					switch entry.name {
-						case "from" if (method.isStatic && method.arguments.length == 1):
+						case "from" if (method.isStatic && fromType != null):
 							fromEdges.push({
-								source: node(declarations.resolve(method.arguments[0].type, method.span, substitutions), decl.name, decl.typeParameters),
+								source: node(fromType, decl.name, decl.typeParameters),
 								target: owner
 							});
-						case "to" if (!method.isStatic && method.arguments.length == 0):
+						case "to" if (!method.isStatic && toType != null):
 							toEdges.push({
 								source: owner,
-								target: node(declarations.resolve(method.result, method.span, substitutions), decl.name, decl.typeParameters)
+								target: node(toType, decl.name, decl.typeParameters)
 							});
 						default:
 					}
@@ -75,16 +83,19 @@ class AbstractConversionGraph {
 			return false;
 		var decl = declarations.abstracts.get(name),
 			substitutions = appliedSubstitutions(decl.typeParameters, arguments);
-		for (type in decl.fromTypes)
-			if (TypeRelations.equals(actual, declarations.resolve(type, decl.span, substitutions)))
+		for (type in decl.fromTypes) {
+			var resolved = resolveConversionType(type, decl.span, substitutions);
+			if (resolved != null && TypeRelations.equals(actual, resolved))
 				return true;
+		}
 		for (method in decl.methods) {
 			var metadata = method.metadata;
 			if (metadata == null || !method.isStatic || method.arguments.length != 1)
 				continue;
+			var resolved = resolveConversionType(method.arguments[0].type, method.span, substitutions);
 			for (entry in metadata)
 				if (entry.name == "from"
-					&& TypeRelations.equals(actual, declarations.resolve(method.arguments[0].type, method.span, substitutions)))
+					&& resolved != null && TypeRelations.equals(actual, resolved))
 					return true;
 		}
 		return false;
@@ -95,18 +106,39 @@ class AbstractConversionGraph {
 			return false;
 		var decl = declarations.abstracts.get(name),
 			substitutions = appliedSubstitutions(decl.typeParameters, arguments);
-		for (type in decl.toTypes)
-			if (TypeRelations.equals(expected, declarations.resolve(type, decl.span, substitutions)))
+		for (type in decl.toTypes) {
+			var resolved = resolveConversionType(type, decl.span, substitutions);
+			if (resolved != null && TypeRelations.equals(expected, resolved))
 				return true;
+		}
 		for (method in decl.methods) {
 			var metadata = method.metadata;
 			if (metadata == null || method.isStatic || method.arguments.length != 0)
 				continue;
+			var resolved = resolveConversionType(method.result, method.span, substitutions);
 			for (entry in metadata)
-				if (entry.name == "to" && TypeRelations.equals(expected, declarations.resolve(method.result, method.span, substitutions)))
+				if (entry.name == "to" && resolved != null && TypeRelations.equals(expected, resolved))
 					return true;
 		}
 		return false;
+	}
+
+	/** Resolve conversion endpoints without allowing one incomplete endpoint to
+	 * abort construction of the rest of a recovered semantic index. */
+	function resolveConversionType(type:compiler.syntax.Ast.AstType, span:compiler.Source.SourceSpan,
+		substitutions:Map<String, CompilerType>):Null<CompilerType> {
+		try {
+			return declarations.resolve(type, span, substitutions);
+		}
+		catch (error:Dynamic) {
+			if (!declarations.isRecoveryMode())
+				throw error;
+			if (Std.isOfType(error, CompileError))
+				declarations.recordRecoveryDiagnostic((cast error : CompileError).diagnostic);
+			else
+				declarations.recordRecoveryDiagnostic(new Diagnostic("E0002", "Unable to resolve recovered abstract conversion", span));
+			return null;
+		}
 	}
 
 	function validateDirection(direction:String, edges:Array<ConversionEdge>):Void {

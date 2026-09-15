@@ -152,6 +152,22 @@ class DeclarationIndex {
 	public function symbol(kind:DeclarationKind, name:String):Null<DeclarationSymbol>
 		return symbols.get('$kind:$name');
 
+	/** Whether this index is allowed to retain incomplete declaration facts. */
+	public inline function isRecoveryMode():Bool
+		return recovery;
+
+	/** Record one deduplicated diagnostic produced while indexing recovery data. */
+	public function recordRecoveryDiagnostic(diagnostic:Diagnostic):Void {
+		for (existing in recoveryDiagnostics)
+			if (existing.code == diagnostic.code
+				&& existing.message == diagnostic.message
+				&& existing.span.file.path == diagnostic.span.file.path
+				&& existing.span.start == diagnostic.span.start
+				&& existing.span.end == diagnostic.span.end)
+				return;
+		recoveryDiagnostics.push(diagnostic);
+	}
+
 	function resolveInner(type:AstType, span:SourceSpan, resolving:Map<String, Bool>, substitutions:Map<String, CompilerType>):CompilerType
 		return switch type {
 			case ErrorType(_): TUnknown;
@@ -670,14 +686,7 @@ class DeclarationIndex {
 	}
 
 	function rememberRecoveryDiagnostic(code:String, message:String, span:SourceSpan):Void {
-		for (existing in recoveryDiagnostics)
-			if (existing.code == code
-				&& existing.message == message
-				&& existing.span.file.path == span.file.path
-				&& existing.span.start == span.start
-				&& existing.span.end == span.end)
-				return;
-		recoveryDiagnostics.push(new Diagnostic(code, message, span));
+		recordRecoveryDiagnostic(new Diagnostic(code, message, span));
 	}
 
 	static function firstSpan(program:AstProgram, emptySpan:Null<SourceSpan>):SourceSpan {
