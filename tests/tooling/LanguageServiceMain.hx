@@ -507,13 +507,21 @@ class LanguageServiceMain {
 		} catch (error:CompileError) {}
 		var recoveredSymbols = service.documentSymbols("Main.hx"),
 			recoveredCompletion = service.complete("Main.hx", 0),
+			staleReferences = service.references("Main.hx", methodPosition),
 			staleRename = service.rename("Main.hx", methodPosition, "display");
 		if (recoveredSymbols.length == 0 || recoveredCompletion.length == 0)
 			throw "failed edit discarded the last good language-service snapshot";
 		if (recoveredSymbols[0].stale || recoveredSymbols[0].revision != 2 || recoveredCompletion[0].stale)
 			throw "recoverable edit did not identify current semantic query results";
-		if (staleRename.length != 0)
-			throw "rename unexpectedly used a symbol from the previous source revision";
+		if (staleReferences.length != 0 || staleRename.length != 0)
+			throw "reference or rename unexpectedly used a symbol from the previous source revision";
+		var unrecoverableService = new LanguageService(),
+			unrecoverableSource = "function target():Int return 1; function main():Int return target();";
+		unrecoverableService.update("Unrecoverable.hx", unrecoverableSource);
+		unrecoverableService.compile("Unrecoverable");
+		unrecoverableService.update("Unrecoverable.hx", "function target():Int return \"");
+		if (unrecoverableService.references("Unrecoverable.hx", unrecoverableSource.indexOf("target") + 1).length != 0)
+			throw "references unexpectedly used a last-good snapshot after unrecoverable input";
 		var immediateService = new LanguageService();
 		immediateService.update("Immediate.hx", "function unfinished(value:Int,");
 		if (immediateService.compiler.modules.get("Immediate").recoveredAst == null

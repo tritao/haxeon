@@ -1179,7 +1179,7 @@ class LanguageService {
 
 	function indexedReferences(path:String, position:Int, ?token:CancellationToken):Null<Array<SymbolLocation>> {
 		var context = semanticQuery(path, position);
-		if (context == null)
+		if (context == null || context.confidence == EditorSnapshotConfidence.LastGood)
 			return null;
 		var id = context.symbol;
 		if (id == null)
