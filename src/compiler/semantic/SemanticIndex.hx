@@ -1228,7 +1228,7 @@ class SemanticIndex {
 	}
 
 	function isTypeContext(position:Int, ?token:CancellationToken):Bool {
-		var previous:Null<Token> = null;
+		var previous:Null<Token> = null, previousIndex = -1;
 		for (lexical in tokens) {
 			if (token != null)
 				token.check();
@@ -1237,11 +1237,75 @@ class SemanticIndex {
 			if (lexical.span.end > position)
 				break;
 			previous = lexical;
+			previousIndex++;
 		}
-		return previous != null && switch previous.kind {
-			case TokenKind.Colon, TokenKind.Extends, TokenKind.Implements, TokenKind.New: true;
+		if (previous == null)
+			return false;
+		return switch previous.kind {
+			case TokenKind.Colon: isTypeColon(previousIndex, token);
+			case TokenKind.Extends, TokenKind.Implements, TokenKind.New: true;
+			case TokenKind.Identifier, TokenKind.Comma: isTypeNameContext(previousIndex, token);
+			case TokenKind.Less: isGenericTypeContext(previousIndex, token);
 			default: false;
 		};
+	}
+
+	function isTypeColon(index:Int, ?token:CancellationToken):Bool {
+		var cursor = index - 1;
+		while (cursor >= 0) {
+			if (token != null)
+				token.check();
+			switch tokens[cursor].kind {
+				case TokenKind.Function, TokenKind.Var, TokenKind.For, TokenKind.Catch:
+					return true;
+				case TokenKind.Question, TokenKind.Case, TokenKind.Semicolon, TokenKind.LeftBrace, TokenKind.RightBrace, TokenKind.Assign,
+					TokenKind.Return, TokenKind.Arrow:
+					return false;
+				default:
+			}
+			cursor--;
+		}
+		return false;
+	}
+
+	function isTypeNameContext(index:Int, ?token:CancellationToken):Bool {
+		var cursor = index - 1;
+		while (cursor >= 0) {
+			if (token != null)
+				token.check();
+			switch tokens[cursor].kind {
+				case TokenKind.Colon:
+					return isTypeColon(cursor, token);
+				case TokenKind.Extends, TokenKind.Implements, TokenKind.New:
+					return true;
+				case TokenKind.Semicolon, TokenKind.LeftBrace, TokenKind.RightBrace, TokenKind.Assign, TokenKind.Return:
+					return false;
+				default:
+			}
+			cursor--;
+		}
+		return false;
+	}
+
+	function isGenericTypeContext(index:Int, ?token:CancellationToken):Bool {
+		var cursor = index, depth = 0;
+		while (cursor >= 0) {
+			if (token != null)
+				token.check();
+			switch tokens[cursor].kind {
+				case TokenKind.Greater:
+					depth++;
+				case TokenKind.Less:
+					if (depth == 0)
+						return isTypeNameContext(cursor, token);
+					depth--;
+				case TokenKind.Semicolon, TokenKind.LeftBrace, TokenKind.RightBrace, TokenKind.Assign, TokenKind.Return:
+					return false;
+				default:
+			}
+			cursor--;
+		}
+		return false;
 	}
 
 	function isImportContext(position:Int, ?cancellation:CancellationToken):Bool {

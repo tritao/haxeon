@@ -61,6 +61,28 @@ class ParserRecoveryMain {
 			throw "unfinished type annotation did not expose a type completion context";
 		if (locals.indexOf("Foo") < 0 || locals.indexOf("unfinished") >= 0)
 			throw "type completion mixed value locals into an incomplete type annotation";
+		var genericTypeService = new LanguageService(),
+			genericTypeSource = "class Foo {} function main():Void { var values:Array<Foo> = []; var item:Array<Fo";
+		genericTypeService.update("GenericType.hx", genericTypeSource);
+		var genericTypeModel = genericTypeService.compiler.modules.get("GenericType").recoveredSemanticModel,
+			genericTypeContext = genericTypeModel == null ? null : genericTypeModel.index.completionContext(genericTypeSource.length),
+			genericTypeNames = [for (item in genericTypeService.complete("GenericType.hx", genericTypeSource.length)) item.label];
+		if (genericTypeContext == null || genericTypeContext.kind != SemanticCompletionContextKind.Type || genericTypeNames.indexOf("Foo") < 0)
+			throw "unfinished generic type argument did not expose type completion";
+		var nestedGenericTypeService = new LanguageService(),
+			nestedGenericTypeSource = "class Foo {} function main():Void { var item:Map<String, Fo";
+		nestedGenericTypeService.update("NestedGenericType.hx", nestedGenericTypeSource);
+		var nestedGenericTypeModel = nestedGenericTypeService.compiler.modules.get("NestedGenericType").recoveredSemanticModel,
+			nestedGenericTypeContext = nestedGenericTypeModel == null ? null : nestedGenericTypeModel.index.completionContext(nestedGenericTypeSource.length);
+		if (nestedGenericTypeContext == null || nestedGenericTypeContext.kind != SemanticCompletionContextKind.Type)
+			throw "unfinished nested generic type argument was not classified as a type context";
+		var expressionContextService = new LanguageService(),
+			expressionContextSource = "function main():Void { true ? false : value; }";
+		expressionContextService.update("ExpressionContext.hx", expressionContextSource);
+		var expressionContextModel = expressionContextService.compiler.modules.get("ExpressionContext").recoveredSemanticModel,
+			expressionContext = expressionContextModel == null ? null : expressionContextModel.index.completionContext(expressionContextSource.length);
+		if (expressionContext == null || expressionContext.kind != SemanticCompletionContextKind.Expression)
+			throw "ternary expression was incorrectly classified as a type context";
 
 		for (tail in ["consume(", "values[", "true ?", "if (", "switch (", "(item:Int) ->"])
 			assertNestedRecovery(tail);
