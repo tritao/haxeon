@@ -793,9 +793,9 @@ class CHeaderImporter {
 			var fieldLine = ~/^\s*([0-9]+) \|\s+.+ ([A-Za-z_][A-Za-z0-9_]*)$/;
 			if (fieldLine.match(line))
 				offsets.set(fieldLine.matched(2), Std.parseInt(fieldLine.matched(1)));
-			var end = ~/\[sizeof=([0-9]+), align=([0-9]+)\]/;
-			if (end.match(line)) {
-				result.set(current, {size: Std.parseInt(end.matched(1)), align: Std.parseInt(end.matched(2)), offsets: offsets});
+			var size = ~/sizeof=([0-9]+)/, align = ~/align=([0-9]+)/;
+			if (size.match(line) && align.match(line)) {
+				result.set(current, {size: Std.parseInt(size.matched(1)), align: Std.parseInt(align.matched(1)), offsets: offsets});
 				current = null;
 			}
 		}
