@@ -510,10 +510,15 @@ class LanguageServiceMain {
 			staleRename = service.rename("Main.hx", methodPosition, "display");
 		if (recoveredSymbols.length == 0 || recoveredCompletion.length == 0)
 			throw "failed edit discarded the last good language-service snapshot";
-		if (!recoveredSymbols[0].stale || recoveredSymbols[0].revision != 1 || !recoveredCompletion[0].stale)
-			throw "failed edit did not identify stale semantic query results";
-		if (staleRename.length != 2 || !staleRename[0].stale || !staleRename[1].stale)
-			throw "rename did not preserve last-good semantic snapshot metadata";
+		if (recoveredSymbols[0].stale || recoveredSymbols[0].revision != 2 || recoveredCompletion[0].stale)
+			throw "recoverable edit did not identify current semantic query results";
+		if (staleRename.length != 0)
+			throw "rename unexpectedly used a symbol from the previous source revision";
+		var immediateService = new LanguageService();
+		immediateService.update("Immediate.hx", "function unfinished(value:Int,");
+		if (immediateService.compiler.modules.get("Immediate").recoveredAst == null
+			|| immediateService.documentSymbols("Immediate.hx").length != 1)
+			throw "editor update did not publish an immediate recovered snapshot";
 		var partialService = new LanguageService();
 		partialService.update("Partial.hx", "function broken(:Int {} function alsoBroken(:Int {} function visible():Int return 42;");
 		try {

@@ -218,8 +218,12 @@ class LanguageService {
 		compiler.addSourceRoot("stdlib");
 	}
 
-	public function update(path:String, source:String):ModuleState
-		return compiler.update(path, source);
+	public function update(path:String, source:String):ModuleState {
+		var state = compiler.update(path, source);
+		recoverSyntax(state);
+		compiler.semanticWorkspace.invalidateResolutionCache();
+		return state;
+	}
 
 	public function remove(path:String):Bool
 		return compiler.remove(path);
@@ -248,18 +252,25 @@ class LanguageService {
 		for (state in compiler.modules) {
 			if (state.ast != null)
 				continue;
-			try {
-				var conditional = ConditionalCompilation.process(state.source, editorDefines);
-				var tokens = new Lexer(state.source, conditional.text).tokenize();
-				var recovered = new Parser(tokens).parseProgramRecovering();
-				state.recoveredTokens = tokens;
-				state.recoveredAst = recovered.program;
-				state.recoveredSemanticModel = new SemanticModel(recovered.program, state.source, state.revision, tokens);
-				state.recoveredSemanticModel.index.indexRecoveredSyntax(recovered.program);
-				mergeRecoveryDiagnostics(state, recovered.diagnostics);
-			} catch (_:CompileError) {}
+			recoverSyntax(state);
 		}
 		compiler.semanticWorkspace.invalidateResolutionCache();
+	}
+
+	function recoverSyntax(state:ModuleState):Void {
+		try {
+			var conditional = ConditionalCompilation.process(state.source, editorDefines);
+			var tokens = new Lexer(state.source, conditional.text).tokenize();
+			var recovered = new Parser(tokens).parseProgramRecovering();
+			state.recoveredTokens = tokens;
+			state.recoveredAst = recovered.program;
+			state.recoveredSemanticModel = new SemanticModel(recovered.program, state.source, state.revision, tokens);
+			state.recoveredSemanticModel.index.indexRecoveredSyntax(recovered.program);
+			mergeRecoveryDiagnostics(state, recovered.diagnostics);
+		} catch (_:CompileError) {
+			// Lexer/parser recovery itself failed. Keep the last-good semantic
+			// snapshot available; do not destroy it.
+		}
 	}
 
 	function mergeRecoveryDiagnostics(state:ModuleState, diagnostics:Array<Diagnostic>):Void {
