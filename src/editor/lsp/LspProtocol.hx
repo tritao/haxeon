@@ -566,7 +566,7 @@ class LspProtocol {
 
 	function documentDiagnostic(request:Dynamic, token:CancellationToken):Dynamic {
 		var document = document(request);
-		ensureAnalyzed(document, token);
+		ensureAnalyzed(document, token, true);
 		token.check();
 		var path = compilerPath(document),
 			state = service.compiler.modules.get(ModulePath.fromFile(path));
@@ -1113,9 +1113,9 @@ class LspProtocol {
 		];
 	}
 
-	function ensureAnalyzed(document:LspDocument, token:CancellationToken):Void {
+	function ensureAnalyzed(document:LspDocument, token:CancellationToken, exact:Bool = false):Void {
 		var path = compilerPath(document);
-		if (service.isCurrent(path))
+		if (exact ? service.isCurrent(path) : service.isEditorSnapshotCurrent(path))
 			return;
 		if (!deferDiagnostics) {
 			var started = Sys.time();
@@ -1195,7 +1195,7 @@ class LspProtocol {
 
 	function prepareRename(request:Dynamic, token:CancellationToken):Dynamic {
 		var document = document(request);
-		ensureAnalyzed(document, token);
+		ensureAnalyzed(document, token, true);
 		requireExact(document);
 		var offset = positionOffset(document, position(request));
 		var state = service.compiler.modules.get(ModulePath.fromFile(compilerPath(document))),
@@ -1208,7 +1208,7 @@ class LspProtocol {
 
 	function rename(request:Dynamic, token:CancellationToken):Dynamic {
 		var document = document(request);
-		ensureAnalyzed(document, token);
+		ensureAnalyzed(document, token, true);
 		requireExact(document);
 		var params:Dynamic = required(request, "params"),
 			edits = service.rename(compilerPath(document), positionOffset(document, position(request)), requiredString(params, "newName")),

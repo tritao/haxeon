@@ -1100,6 +1100,30 @@ class LspProtocolMain {
 				foundRecoveredMember = true;
 		if (!foundRecoveredMember || !recoveredMemberCompletion.result.isIncomplete)
 			throw "LSP completion did not use the current recovered member context";
+		var immediateProtocol = new LspProtocol();
+		immediateProtocol.enableDeferredDiagnostics();
+		var immediateUri = "file:///workspace/ImmediateRecovery.hx",
+			immediateSource = "function main(:Int { return 0; }";
+		immediateProtocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: immediateUri,
+					languageId: "haxe",
+					version: 1,
+					text: immediateSource
+				}
+			}
+		}));
+		var immediateSymbols = request(immediateProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 9,
+			method: "textDocument/documentSymbol",
+			params: {textDocument: {uri: immediateUri}}
+		}));
+		if (immediateProtocol.lastForegroundAnalysisMs != 0.0 || immediateSymbols.result == null || immediateSymbols.result.length == 0)
+			throw "LSP structural query synchronously forced full analysis instead of using the recovered snapshot";
 		var deltaProtocol = new LspProtocol(),
 			deltaUri = "file:///workspace/Delta.hx",
 			deltaSource = "function main():Int { var a:Dynamic = 1; var b:Dynamic = 2; var c:Dynamic = 3; var d:Dynamic = 4; var e:Dynamic = 5; return 0; }";
