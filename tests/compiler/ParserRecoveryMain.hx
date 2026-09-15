@@ -211,6 +211,26 @@ class ParserRecoveryMain {
 			|| enumAbstractResult.program.functions[0].name != "visible")
 			throw "unfinished enum abstract header discarded the following declaration";
 
+		var abstractMemberSource = new SourceFile("AbstractMemberRecovery.hx",
+			"abstract Value(Int) { public malformed; public function visible():Int return 1; }");
+		var abstractMemberResult = new Parser(new Lexer(abstractMemberSource).tokenize()).parseProgramRecovering();
+		if (abstractMemberResult.program.abstracts.length != 1
+			|| abstractMemberResult.program.abstracts[0].methods.length != 1
+			|| abstractMemberResult.program.abstracts[0].methods[0].name != "visible")
+			throw "malformed abstract member discarded the following method";
+
+		var enumAbstractValueSource = new SourceFile("EnumAbstractValueRecovery.hx", "enum abstract Flags(Int) { var malformed = ; var visible = 1; }");
+		var enumAbstractValueResult = new Parser(new Lexer(enumAbstractValueSource).tokenize()).parseProgramRecovering();
+		if (enumAbstractValueResult.program.enumAbstracts.length != 1
+			|| enumAbstractValueResult.program.enumAbstracts[0].values.length != 2
+			|| enumAbstractValueResult.program.enumAbstracts[0].values[1].name != "visible")
+			throw "malformed enum abstract value discarded the following value";
+		switch enumAbstractValueResult.program.enumAbstracts[0].values[0].value {
+			case ErrorExpression(_):
+			default:
+				throw "malformed enum abstract value did not retain an error expression";
+		}
+
 		var controlSource = new SourceFile("Control.hx", "function main():Void { try { return; } for (");
 		var controlResult = new Parser(new Lexer(controlSource).tokenize()).parseProgramRecovering();
 		if (controlResult.program.functions.length != 1 || controlResult.program.functions[0].statements.length != 2)

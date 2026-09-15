@@ -231,19 +231,27 @@ class Parser {
 			};
 		}
 		consume(TokenKind.LeftBrace);
-		var methods = [];
+		var methods = [], bodyStart = position;
 		while (!check(TokenKind.RightBrace) && !recoveringAtEnd()) {
-			var methodMetadata = parseMetadata();
-			var isStatic = false;
-			while (check(TokenKind.Public) || check(TokenKind.Private) || check(TokenKind.Inline) || check(TokenKind.Static)) {
-				if (match(TokenKind.Static))
-					isStatic = true;
-				else
-					advance();
+			var memberStart = position;
+			try {
+				var methodMetadata = parseMetadata();
+				var isStatic = false;
+				while (check(TokenKind.Public) || check(TokenKind.Private) || check(TokenKind.Inline) || check(TokenKind.Static)) {
+					if (match(TokenKind.Static))
+						isStatic = true;
+					else
+						advance();
+				}
+				var functionStart = consume(TokenKind.Function).span,
+					methodName = check(TokenKind.New) ? advance().text : consumeDeclarationName("method");
+				methods.push(parseFunctionBody(functionStart, methodName, true, isStatic, isExtern, methodMetadata));
+			} catch (error:CompileError) {
+				if (!recovering)
+					throw error;
+				recordRecoveryDiagnostic(error.diagnostic);
+				synchronizeAbstractMember(bodyStart, memberStart);
 			}
-			var functionStart = consume(TokenKind.Function).span,
-				methodName = check(TokenKind.New) ? advance().text : consumeDeclarationName("method");
-			methods.push(parseFunctionBody(functionStart, methodName, true, isStatic, isExtern, methodMetadata));
 		}
 		var end = consume(TokenKind.RightBrace).span;
 		return {
@@ -300,14 +308,22 @@ class Parser {
 			};
 		}
 		consume(TokenKind.LeftBrace);
-		var values = [];
+		var values = [], bodyStart = position;
 		while (!check(TokenKind.RightBrace) && !recoveringAtEnd()) {
-			match(TokenKind.Var);
-			var valueName = consumeName();
-			consume(TokenKind.Assign);
-			var value = parseExpression(),
-				end = consume(TokenKind.Semicolon).span;
-			values.push({name: valueName.text, value: value, span: valueName.span.merge(end)});
+			var valueStart = position;
+			try {
+				match(TokenKind.Var);
+				var valueName = consumeName();
+				consume(TokenKind.Assign);
+				var value = parseExpression(),
+					end = consume(TokenKind.Semicolon).span;
+				values.push({name: valueName.text, value: value, span: valueName.span.merge(end)});
+			} catch (error:CompileError) {
+				if (!recovering)
+					throw error;
+				recordRecoveryDiagnostic(error.diagnostic);
+				synchronizeEnumAbstractValue(bodyStart, valueStart);
+			}
 		}
 		var end = consume(TokenKind.RightBrace).span;
 		return {
@@ -771,6 +787,75 @@ class Parser {
 			}
 		}
 	}
+
+	function synchronizeAbstractMember(bodyStart:Int, memberStart:Int):Void {
+		var braceDepth = 0;
+		for (index in bodyStart...position)
+			switch tokens[index].kind {
+				case TokenKind.LeftBrace:
+					braceDepth++;
+				case TokenKind.RightBrace:
+					if (braceDepth > 0)
+						braceDepth--;
+				default:
+			}
+		if (position <= memberStart && !check(TokenKind.Eof))
+			advance();
+		while (!check(TokenKind.Eof)) {
+			if (braceDepth == 0 && (check(TokenKind.RightBrace) || isAbstractMemberStart(current())))
+				return;
+			switch advance().kind {
+				case TokenKind.LeftBrace:
+					braceDepth++;
+				case TokenKind.RightBrace:
+					if (braceDepth > 0)
+						braceDepth--;
+				case TokenKind.Semicolon:
+					if (braceDepth == 0)
+						return;
+				default:
+			}
+		}
+	}
+
+	static function isAbstractMemberStart(token:Token):Bool
+		return switch token.kind {
+			case TokenKind.Function, TokenKind.Public, TokenKind.Private, TokenKind.Static, TokenKind.Inline, TokenKind.At: true;
+			default: false;
+		};
+
+	function synchronizeEnumAbstractValue(bodyStart:Int, valueStart:Int):Void {
+		var braceDepth = 0;
+		for (index in bodyStart...position)
+			switch tokens[index].kind {
+				case TokenKind.LeftBrace:
+					braceDepth++;
+				case TokenKind.RightBrace:
+					if (braceDepth > 0)
+						braceDepth--;
+				default:
+			}
+		if (position <= valueStart && !check(TokenKind.Eof))
+			advance();
+		while (!check(TokenKind.Eof)) {
+			if (braceDepth == 0 && (check(TokenKind.RightBrace) || isEnumAbstractValueStart(current())))
+				return;
+			switch advance().kind {
+				case TokenKind.LeftBrace:
+					braceDepth++;
+				case TokenKind.RightBrace:
+					if (braceDepth > 0)
+						braceDepth--;
+				case TokenKind.Semicolon:
+					if (braceDepth == 0)
+						return;
+				default:
+			}
+		}
+	}
+
+	static function isEnumAbstractValueStart(token:Token):Bool
+		return token.kind == TokenKind.Var || isNameToken(token.kind);
 
 	static function isClassMemberStart(token:Token):Bool
 		return switch token.kind {
