@@ -224,10 +224,19 @@ class ProgramTyper {
 			isNativeValue = validateRepresentationMetadata(classDecl.metadata, requestedValue),
 			isValue = requestedValue && !isNativeValue,
 			isNativeUnion = hasMetadata(classDecl.metadata, "union"),
+			nativeLayoutExpectation:Null<{
+				size:Int,
+				alignment:Int
+			}> = try NativeLayout.declaredLayout(classDecl.metadata) catch (error:Dynamic) {
+				BodyTyper.fail("E1022", Std.string(error), classDecl.span);
+				cast null;
+			},
 			nativeAlignment:Null<Int> = try parseNativeAlignment(classDecl.metadata) catch (error:Dynamic) {
 				BodyTyper.fail("E1022", Std.string(error), classDecl.span);
 				cast null;
 			};
+		if (nativeLayoutExpectation != null && !isNativeValue)
+			BodyTyper.fail("E1022", "@:layout requires @:repr(\"C\") on a native value record", classDecl.span);
 		if (isNativeUnion && !isNativeValue)
 			BodyTyper.fail("E1022", '@:union requires @:repr("C") on a native value record', classDecl.span);
 		if (nativeAlignment != null && !isNativeValue)
@@ -259,8 +268,14 @@ class ProgramTyper {
 				BodyTyper.fail("E1022", Std.string(error), field.span);
 				cast null;
 			};
+			var nativeOffset:Null<Int> = try NativeLayout.fixedFieldOffset(field.metadata) catch (error:Dynamic) {
+				BodyTyper.fail("E1022", Std.string(error), field.span);
+				cast null;
+			};
 			if (nativeArrayLength != null && !isNativeValue)
 				BodyTyper.fail("E1022", "@:array fields require a native value record", field.span);
+			if (nativeOffset != null && !isNativeValue)
+				BodyTyper.fail("E1022", "@:offset requires a native value record", field.span);
 			if (fieldNames.exists(field.name))
 				BodyTyper.fail("E1000", 'Duplicate field "${classDecl.name}.${field.name}"', field.span);
 			if (field.isInline && !field.isStatic)
@@ -302,6 +317,7 @@ class ProgramTyper {
 				name: field.name,
 				type: type,
 				nativeArrayLength: nativeArrayLength,
+				nativeOffset: nativeOffset,
 				initializer: initializer,
 				inlineValue: inlineValue,
 				readAccess: field.readAccess,
@@ -371,6 +387,7 @@ class ProgramTyper {
 			isNativeValue: isNativeValue,
 			isNativeUnion: isNativeUnion,
 			nativeAlignment: nativeAlignment,
+			nativeLayoutExpectation: nativeLayoutExpectation,
 			nativeLayouts: [],
 			base: baseName,
 			interfaces: [
@@ -415,6 +432,7 @@ class ProgramTyper {
 					isNativeValue: classDecl.isNativeValue,
 					isNativeUnion: classDecl.isNativeUnion,
 					nativeAlignment: classDecl.nativeAlignment,
+					nativeLayoutExpectation: classDecl.nativeLayoutExpectation,
 					nativeLayouts: nativeLayouts,
 					base: classDecl.base,
 					interfaces: classDecl.interfaces,
@@ -448,10 +466,13 @@ class ProgramTyper {
 					name: field.name,
 					type: field.type,
 					span: field.span,
-					arrayLength: field.nativeArrayLength
+					arrayLength: field.nativeArrayLength,
+					declaredOffset: field.nativeOffset
 				}
-		], nativeDeclarations, declaration.span,
-			declaration.isNativeUnion, declaration.nativeAlignment) catch (error:Dynamic) {
+		],
+			nativeDeclarations, declaration.span,
+			declaration.isNativeUnion, declaration.nativeAlignment == null && declaration.nativeLayoutExpectation != null ? declaration.nativeLayoutExpectation.alignment : declaration.nativeAlignment,
+			declaration.nativeLayoutExpectation == null ? null : declaration.nativeLayoutExpectation.size) catch (error:Dynamic) {
 			visiting.remove(key);
 			BodyTyper.fail("E1022", 'Invalid native value record "$name": ${Std.string(error)}', declaration.span);
 			cast null;

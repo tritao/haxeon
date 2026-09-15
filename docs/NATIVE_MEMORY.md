@@ -33,6 +33,11 @@ size and alignment are the target-specific maximum of those fields. Inline C
 arrays use `@:array(N)` on the element field and occupy `N` consecutive
 elements in the record.
 
+Imported HXI records add `@:layout(size, alignment)` and `@:offset(bytes)`
+metadata to this same source form. The compiler checks those Clang facts
+against its ABI-derived layout, including explicit C padding, before exposing
+the record through `RawPtr<T>`.
+
 ```haxe
 @:value
 @:repr("C")

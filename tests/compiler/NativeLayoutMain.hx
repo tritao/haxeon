@@ -18,6 +18,7 @@ class NativeLayoutMain {
 			+ '@:value @:repr("C") class Outer { public var first:Pair; public var second:Pair; } '
 			+ '@:value @:repr("C") @:union class Payload { public var value:Int64; public var tag:UInt8; } '
 			+ '@:value @:repr("C") class Fixed { @:array(3) public var values:UInt8; public var tail:Int32; } '
+			+ '@:value @:repr("C") @:layout(8, 4) class Explicit { @:offset(4) public var value:Int32; } '
 			+ '@:value @:repr("C") @:align(32) class OverAligned { public var value:Int32; } '
 			+ '@:value @:repr("C") class LongValue { public var value:CLong; } '
 			+ 'function pairSize():Int return sizeof<Pair>(); '
@@ -32,6 +33,7 @@ class NativeLayoutMain {
 			outer = requireClass(typed.classes, "Outer"),
 			payload = requireClass(typed.classes, "Payload"),
 			fixed = requireClass(typed.classes, "Fixed"),
+			explicit = requireClass(typed.classes, "Explicit"),
 			overAligned = requireClass(typed.classes, "OverAligned"),
 			longValue = requireClass(typed.classes, "LongValue");
 		if (!pair.isNativeValue || pair.isValue || pair.nativeLayouts.length != 2)
@@ -87,6 +89,10 @@ class NativeLayoutMain {
 			&& field(fixed64.fields, "values").size == 3
 			&& field(fixed64.fields, "tail").offset == 4,
 			"native fixed arrays must occupy inline element storage and preserve following alignment");
+		expect(requireLayout(explicit.nativeLayouts, "portable-abi32").size == 8
+			&& field(requireLayout(explicit.nativeLayouts, "portable-abi32").fields, "value").offset == 4
+			&& requireLayout(explicit.nativeLayouts, "portable-abi64").size == 8,
+			"explicit native offsets and imported layout assertions must preserve C padding");
 		expect(requireLayout(overAligned.nativeLayouts, "portable-abi32").size == 32
 			&& requireLayout(overAligned.nativeLayouts, "portable-abi32").alignment == 32
 			&& requireLayout(overAligned.nativeLayouts, "portable-abi64").size == 32
@@ -162,6 +168,7 @@ class NativeLayoutMain {
 		expectError('@:value @:repr("C") @:align(6) class Bad { public var value:Int32; }', "power of two");
 		expectError('@:align(32) class Bad { public var value:Int32; }', "@:align requires @:repr(\"C\")");
 		expectError('@:value @:repr("C") class Bad { @:array(0) public var values:UInt8; }', "positive integer argument");
+		expectError('@:value @:repr("C") @:layout(4, 4) class Bad { @:offset(4) public var value:Int32; }', "expected imported size 4");
 		expectError('class Bad { @:array(2) public var values:Int; }', "@:array fields require a native value record");
 		expectError('@:value @:repr("C") class Bad { public function new() {} }', "instance methods or constructors");
 		expectError('@:value @:repr("C") class Bad { public var self:Bad; }', "by-value layout cycle");

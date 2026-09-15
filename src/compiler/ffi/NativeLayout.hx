@@ -36,6 +36,47 @@ class NativeLayout {
 		return result;
 	}
 
+	/** Read an optional explicit native field byte offset. */
+	public static function fixedFieldOffset(metadata:Array<AstMetadata>):Null<Int> {
+		var result:Null<Int> = null;
+		for (entry in metadata)
+			if (entry.name == "offset") {
+				if (result != null)
+					throw "Duplicate @:offset metadata";
+				if (entry.arguments.length != 1)
+					throw "@:offset requires exactly one non-negative integer argument";
+				switch entry.arguments[0] {
+					case IntegerLiteral(value, _) if (value >= 0):
+						result = value;
+					case _:
+						throw "@:offset requires exactly one non-negative integer argument";
+				}
+			}
+		return result;
+	}
+
+	/** Read an optional imported C record size/alignment assertion. */
+	public static function declaredLayout(metadata:Array<AstMetadata>):Null<{size:Int, alignment:Int}> {
+		var result:Null<{size:Int, alignment:Int}> = null;
+		for (entry in metadata)
+			if (entry.name == "layout") {
+				if (result != null)
+					throw "Duplicate @:layout metadata";
+				if (entry.arguments.length != 2)
+					throw "@:layout requires size and alignment arguments";
+				var size = switch entry.arguments[0] {
+					case IntegerLiteral(value, _) if (value > 0): value;
+					case _: throw "@:layout requires a positive size and alignment";
+				};
+				var alignment = switch entry.arguments[1] {
+					case IntegerLiteral(value, _) if (value > 0 && value <= 0x40000000 && (value & (value - 1)) == 0): value;
+					case _: throw "@:layout requires a positive size and alignment";
+				};
+				result = {size: size, alignment: alignment};
+			}
+		return result;
+	}
+
 	/** Native memory access width and signedness used by RawPtr load/store lowering. */
 	public static function memoryAccess(type:CompilerType, target:String):{size:Int, signed:Bool} {
 		var hxiType = fieldType(type),
@@ -109,9 +150,11 @@ class NativeLayout {
 		name:String,
 		type:CompilerType,
 		span:SourceSpan,
-		arrayLength:Null<Int>
+		arrayLength:Null<Int>,
+		declaredOffset:Null<Int>
 	}>,
-			declarations:Map<String, HxiDeclaration>, span:SourceSpan, isUnion:Bool = false, requestedAlignment:Null<Int> = null):TypedNativeLayout {
+			declarations:Map<String, HxiDeclaration>, span:SourceSpan, isUnion:Bool = false, requestedAlignment:Null<Int> = null,
+			requestedSize:Null<Int> = null):TypedNativeLayout {
 		var abi = HxiAbi.forTarget(target, declarations), placed:Array<TypedNativeFieldLayout> = [], cursor = 0, recordAlignment = 1;
 		for (field in fields) {
 			var hxiType = fieldType(field.type), layout = abi.layout(hxiType);
@@ -120,17 +163,23 @@ class NativeLayout {
 			var fieldSize = field.arrayLength == null ? layout.size : layout.size * field.arrayLength;
 			if (fieldSize <= 0 || fieldSize > 0x7FFFFFFF)
 				throw 'Field "${field.name}" in native record "$name" exceeds the supported layout size';
-			if (!isUnion)
-				cursor = alignUp(cursor, layout.align);
+			var naturalOffset = isUnion ? 0 : alignUp(cursor, layout.align),
+				fieldOffset = field.declaredOffset == null ? naturalOffset : field.declaredOffset;
+			if (fieldOffset < 0)
+				throw 'Field "${field.name}" in native record "$name" has a negative offset';
+			if (isUnion && fieldOffset != 0)
+				throw 'Union field "${field.name}" in native record "$name" must have offset zero';
+			if (!isUnion && fieldOffset < naturalOffset)
+				throw 'Field "${field.name}" in native record "$name" overlaps the preceding field';
 			placed.push({
 				name: field.name,
-				offset: isUnion ? 0 : cursor,
+				offset: fieldOffset,
 				size: fieldSize,
 				alignment: layout.align
 			});
-			if (cursor > 0x7FFFFFFF - fieldSize)
+			if (fieldOffset > 0x7FFFFFFF - fieldSize)
 				throw 'Native record "$name" exceeds the supported layout size';
-			cursor = isUnion ? Std.int(Math.max(cursor, fieldSize)) : cursor + fieldSize;
+			cursor = isUnion ? Std.int(Math.max(cursor, fieldOffset + fieldSize)) : fieldOffset + fieldSize;
 			recordAlignment = Std.int(Math.max(recordAlignment, layout.align));
 		}
 		if (requestedAlignment != null) {
@@ -140,12 +189,15 @@ class NativeLayout {
 				throw 'Requested native alignment $requestedAlignment for "$name" must be a power of two';
 			recordAlignment = requestedAlignment;
 		}
-		return {
+		var result:TypedNativeLayout = {
 			target: target,
 			size: alignUp(cursor, recordAlignment),
 			alignment: recordAlignment,
 			fields: placed
 		};
+		if (requestedSize != null && result.size != requestedSize)
+			throw 'Native record "$name" has size ${result.size}, expected imported size $requestedSize';
+		return result;
 	}
 
 	static function alignUp(value:Int, alignment:Int):Int {

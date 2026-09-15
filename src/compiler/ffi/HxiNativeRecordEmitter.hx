@@ -32,14 +32,14 @@ class HxiNativeRecordEmitter {
 			output.add("\n");
 		for (declaration in model.declarations)
 			switch declaration {
-				case Structure(name, _, _, fields, _):
-					emitStructure(output, name, fields, declarations, structureNames, callbackNames, typePrefix, fieldNames);
+				case Structure(name, size, align, fields, _):
+					emitStructure(output, name, size, align, fields, declarations, structureNames, callbackNames, typePrefix, fieldNames);
 				case _:
 			}
 		return output.toString();
 	}
 
-	static function emitStructure(output:StringBuf, name:String, fields:Array<HxiField>, declarations:Map<String, HxiDeclaration>,
+	static function emitStructure(output:StringBuf, name:String, size:Int, align:Int, fields:Array<HxiField>, declarations:Map<String, HxiDeclaration>,
 			structureNames:Map<String, String>, callbackNames:Map<String, String>, typePrefix:String, fieldNames:Null<Map<String, String>>):Void {
 		var projectedName = structureNames.get(name),
 			unionFields = [for (field in fields) if (field.metadata.exists("union")) field];
@@ -51,25 +51,28 @@ class HxiNativeRecordEmitter {
 			var unionName = projectedName + "UnionData";
 			output.add('@:value @:repr("C") @:union\nclass $unionName {\n');
 			for (field in unionFields)
-				emitField(output, name, field, declarations, structureNames, callbackNames, fieldNames);
+				emitField(output, name, field, declarations, structureNames, callbackNames, fieldNames, false);
 			output.add('}\n\n');
 		}
-		output.add('@:value @:repr("C")\nclass $projectedName {\n');
+		output.add('@:value @:repr("C") @:layout($size, $align)\nclass $projectedName {\n');
 		var emittedUnion = false;
 		for (field in fields) {
 			if (field.metadata.exists("union")) {
 				if (emittedUnion)
 					continue;
 				emittedUnion = true;
+				if (field.offset == null)
+					throw 'Native record field "$name.${field.name}" is missing its ABI offset';
+				output.add('\t@:offset(${field.offset})\n');
 				output.add('\tpublic var ${uniqueUnionField(name, fields, fieldNames)}:$projectedName' + 'UnionData;\n');
 			} else
-				emitField(output, name, field, declarations, structureNames, callbackNames, fieldNames);
+				emitField(output, name, field, declarations, structureNames, callbackNames, fieldNames, true);
 		}
 		output.add('}\n\n');
 	}
 
 	static function emitField(output:StringBuf, owner:String, field:HxiField, declarations:Map<String, HxiDeclaration>, structureNames:Map<String, String>,
-			callbackNames:Map<String, String>, fieldNames:Null<Map<String, String>>):Void {
+			callbackNames:Map<String, String>, fieldNames:Null<Map<String, String>>, includeOffset:Bool):Void {
 		if (field.offset == null)
 			throw 'Native record field "$owner.${field.name}" is missing its ABI offset';
 		var name = projectedFieldName(owner, field.name, fieldNames),
@@ -80,6 +83,8 @@ class HxiNativeRecordEmitter {
 					element;
 				case value: value;
 			};
+		if (includeOffset)
+			output.add('\t@:offset(${field.offset})\n');
 		output.add(arrayLength == null ? "" : '\t@:array($arrayLength)\n');
 		output.add('\tpublic var $name:${renderType(type, declarations, structureNames, callbackNames, [])};\n');
 	}

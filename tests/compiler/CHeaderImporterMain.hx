@@ -185,6 +185,8 @@ class CHeaderImporterMain {
 		nativeRecordCompiler.compile("runtime.hashlink.generated.HashLinkNativeRecords");
 		expect(nativeRecordSource.indexOf("class NativeHlType") >= 0
 			&& nativeRecordSource.indexOf("class NativeHlTypeUnionData") >= 0
+			&& nativeRecordSource.indexOf("@:layout(40, 8)") >= 0
+			&& nativeRecordSource.indexOf("@:offset(8)") >= 0
 			&& nativeRecordSource.indexOf("public var unionData:NativeHlTypeUnionData") >= 0
 			&& nativeRecordSource.indexOf("public var vobj_proto:RawPtr<RawPtr<UInt8>>") >= 0,
 			"HXI structures should project into source-declared native records with RawPtr fields");
@@ -192,6 +194,8 @@ class CHeaderImporterMain {
 			'interface CallbackRecord @target("x86_64-linux-gnu") @library("callback") { callback binary = fn(left: i32, right: i32) -> i32; struct slot @layout(8, 8) { callback: binary @offset(0); } }'),
 			callbackRecordSource = HxiNativeRecordEmitter.emit(callbackRecord, "runtime.ffi.generated", "Native");
 		expect(callbackRecordSource.indexOf("typedef NativeBinary = (left:Int32, right:Int32)->Int32;") >= 0
+			&& callbackRecordSource.indexOf("@:layout(8, 8)") >= 0
+			&& callbackRecordSource.indexOf("@:offset(0)") >= 0
 			&& callbackRecordSource.indexOf("public var callback:NativeFunctionPointer<NativeBinary>") >= 0,
 			"HXI callback declarations should project into typed native function-pointer slots");
 		var callbackRecordCompiler = new Compiler();

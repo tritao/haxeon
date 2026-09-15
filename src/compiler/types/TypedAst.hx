@@ -232,6 +232,9 @@ typedef TypedField = {
 	/** Number of inline native array elements, or null for a scalar field. */
 	final nativeArrayLength:Null<Int>;
 
+	/** Imported C byte offset assertion, or null for ABI-derived placement. */
+	final nativeOffset:Null<Int>;
+
 	final initializer:Null<TypedExpression>;
 
 	/** Evaluated constant retained for compile-time inline-field substitution. */
@@ -258,6 +261,9 @@ typedef TypedClass = {
 
 	/** Explicit record alignment requested by native metadata, or null for the natural ABI alignment. */
 	final nativeAlignment:Null<Int>;
+
+	/** Imported C record size/alignment assertion, or null for source-derived layout. */
+	final nativeLayoutExpectation:Null<{size:Int, alignment:Int}>;
 
 	/** Portable and selected-target layouts retained for compile-time layout queries. */
 	final nativeLayouts:Array<TypedNativeLayout>;
