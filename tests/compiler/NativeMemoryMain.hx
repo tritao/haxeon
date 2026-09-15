@@ -60,6 +60,8 @@ class NativeMemoryMain {
 			"has no fixed native memory layout");
 		expectCompileError('import runtime.memory.RawPtr; @:value @:repr("C") class Pair { public var value:Int32; } function bad(pointer:RawPtr<Pair>):Void { pointer.store(null); } function main():Int return 0;',
 			"address-only and cannot be stored by value");
+		expectCompileError('import runtime.memory.RawPtr; function bad(pointer:RawPtr<Int>):Int return pointer.ref.value; function main():Int return 0;',
+			"RawPtr.ref requires a native value record pointee");
 	}
 
 	static function expectCompileError(source:String, expected:String):Void {

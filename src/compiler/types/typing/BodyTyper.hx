@@ -10,6 +10,7 @@ import compiler.syntax.Ast.AstEnum;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.Type.AnonymousField;
+import compiler.ffi.NativeLayout;
 import compiler.runtime.PlatformAbi;
 import compiler.semantic.GenericSpecializationRegistry;
 import compiler.semantic.GenericSpecializationPolicy;
@@ -30,6 +31,7 @@ import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypedAst.TypedSwitchBinding;
 import compiler.types.TypedAst.TypedSwitchPredicate;
 import compiler.types.TypedAst.TypedSwitchCase;
+import compiler.types.TypedAst.TypedNativeFieldLayout;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
@@ -131,6 +133,7 @@ class BodyTyper {
 				instancePropertyAccessor: function(type, name, read) return this.instancePropertyAccessor(type, name, read),
 				fieldType: function(type, name, span) return this.fieldType(type, name, span),
 				fieldRepresentationType: function(type, name, span) return this.fieldRepresentationType(type, name, span),
+				nativeField: function(object, name, span) return this.nativeField(object, name, span),
 				abiBoundaryCast: function(value, target) return this.abiBoundaryCast(value, target),
 				arrayElementType: function(type, span) return this.arrayElementType(type, span),
 				boundCell: function(name, scope) return this.boundCell(name, scope)
@@ -1301,6 +1304,22 @@ class BodyTyper {
 					fail("E1007", "String literal .code requires exactly one character", span);
 				default:
 			}
+		if (name == "ref") {
+			var pointee = rawPointerPointee(typedObject.type);
+			if (pointee == null || !NativeLayout.isNativeValue(pointee))
+				fail("E1022", "RawPtr.ref requires a native value record pointee", span);
+			return new TypedExpression(TCall("$rawptr.ref", [typedObject]), typedObject.type, span);
+		}
+		if (isRawPointerRef(typedObject)) {
+			var field = nativeField(typedObject, name, span);
+			if (field == null)
+				return null;
+			return new TypedExpression(TCall("$rawptr.load", [
+				field.pointer,
+				new TypedExpression(TIntLiteral(field.size), TInt, span),
+				new TypedExpression(TBoolLiteral(field.signed), TBool, span)
+			]), field.type, span);
+		}
 		var platformField = PlatformAbi.field(typedObject.type, name);
 		if (platformField != null)
 			return new TypedExpression(TCall(platformField.get, [typedObject]), platformField.type, span);
@@ -1369,6 +1388,76 @@ class BodyTyper {
 					declaration.span, substitutions), name, span); else fieldType(type, name, span);
 			default: fieldType(type, name, span);
 		};
+
+	function nativeField(object:TypedExpression, name:String, span:SourceSpan):Null<{
+		pointer:TypedExpression,
+		type:CompilerType,
+		size:Int,
+		signed:Bool
+	}> {
+		var pointer = switch object.expression {
+			case TCall("$rawptr.ref", [pointer]): pointer;
+			default: return null;
+		};
+		var recordName = switch rawPointerPointee(object.type) {
+			case TInstance(NominalKind.NativeValue, name, _): name;
+			default:
+				fail("E1022", "RawPtr.ref requires a native value record pointee", span);
+				return null;
+		};
+		var declaration = session.classDecls.get(recordName),
+			layout = session.nativeLayoutsByName.get(recordName);
+		if (declaration == null || layout == null) {
+			fail("E1022", 'Native value "$recordName" has no layout for ABI target "${session.nativeAbiTarget}"', span);
+			return null;
+		}
+		var fieldType:Null<CompilerType> = null;
+		for (candidate in declaration.fields)
+			if (candidate.name == name && !candidate.isStatic)
+				fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(recordName, candidate), candidate.span,
+					nominalSubstitutions(object.type));
+		var fieldLayout:Null<TypedNativeFieldLayout> = null;
+		for (candidate in layout.fields)
+			if (candidate.name == name)
+				fieldLayout = candidate;
+		if (fieldType == null || fieldLayout == null) {
+			fail("E1005", 'Unknown native field "$recordName.$name"', span);
+			return null;
+		}
+		if (NativeLayout.isNativeValue(fieldType)) {
+			fail("E1022", "Native records are address-only and cannot be loaded by value", span);
+			return null;
+		}
+		var access:Null<{size:Int, signed:Bool}> = null;
+		try {
+			access = NativeLayout.memoryAccess(fieldType, session.nativeAbiTarget);
+		} catch (_:Dynamic) {
+			fail("E1022", 'Native field "$recordName.$name" has no fixed native memory layout', span);
+			return null;
+		}
+		return {
+			pointer: new TypedExpression(TCall("$rawptr.byteOffset", [pointer, new TypedExpression(TIntLiteral(fieldLayout.offset), TInt, span)]),
+				pointer.type, span),
+			type: fieldType,
+			size: access.size,
+			signed: access.signed
+		};
+	}
+
+	static function isRawPointerRef(expression:TypedExpression):Bool
+		return switch expression.expression {
+			case TCall("$rawptr.ref", [_]): true;
+			case _: false;
+		};
+
+	static function rawPointerPointee(type:CompilerType):Null<CompilerType>
+		return switch type {
+			case TAbstract(declaration, arguments, _) if (isRawPointerAbstract(declaration) && arguments.length == 1): arguments[0];
+			case _: null;
+		};
+
+	static function isRawPointerAbstract(declaration:String):Bool
+		return declaration == "RawPtr" || StringTools.endsWith(declaration, ".RawPtr");
 
 	function isGenericNominal(type:CompilerType):Bool
 		return switch type {

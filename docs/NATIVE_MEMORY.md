@@ -28,7 +28,7 @@ passed, returned, or stored by value as Haxe runtime values. Supported record
 fields are fixed-width scalars, target-defined C scalar aliases, `Int`, `Float`,
 `Bool`, pointers, and nested native records. Strings, arrays, ordinary classes,
 closures, `Dynamic`, and all other GC-managed references are rejected. Fixed
-arrays and automatic field syntax are not implemented yet.
+arrays and unions are not implemented yet.
 
 ## Raw pointers
 
@@ -43,14 +43,17 @@ p.store(value)         // scalar or pointer pointee only
 p.offset(elements)
 p.byteOffset(bytes)
 p.castTo()             // requires a RawPtr<U> result context
+p.ref.field            // native-record field load
+p.ref.field = value    // native-record field store
 ```
 
 Pointer offsets and memory accesses are explicit SSA instructions. HL lowering
 uses HashLink's existing untyped memory opcodes; byte offsets use its existing
-`std.bytes_offset` operation. Native record fields are accessed by adding the
-constant returned by `offsetof<T>("field")` and casting to a pointer to the
-field type. For a pointer-valued field, that means a `RawPtr<RawPtr<U>>` to load
-or store the `RawPtr<U>` value.
+`std.bytes_offset` operation. `p.ref` is a compiler-only marker for a
+`RawPtr<@:repr("C")>` pointee; field access lowers to the same constant byte
+offset and `RawPtr` memory load/store operations as the explicit form. It does
+not introduce a second native memory model. For a pointer-valued field, the
+field load or store uses the pointer-sized native representation.
 
 Raw pointers do not own their targets, keep them alive, or prevent invalidation.
 The compiler does not infer ownership, borrowing, or lifetimes. A pointer becomes
@@ -102,7 +105,7 @@ record projections is still future work.
 
 The first foundation does not add general-purpose allocation, ownership or
 borrow checking, pinning, GC write barriers, atomics, TLS, executable memory,
-`unsafe {}` syntax, fixed arrays, automatic `p.ref.field` access, aggregate
+`unsafe {}` syntax, fixed arrays, arbitrary native function pointers, aggregate
 by-value calling conventions, or changes to the HashLink fork. The first
 acceptance point is a Haxe-declared, GC-free C record whose layout agrees with
 the ABI classifier, manipulated through `RawPtr<T>` in stable aligned arena

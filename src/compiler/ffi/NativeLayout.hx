@@ -3,6 +3,8 @@ package compiler.ffi;
 import compiler.Source.SourceSpan;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiType;
+import compiler.ffi.HxiAbi.HxiAbiValue;
+import compiler.ffi.HxiAbi.HxiIntegerSign;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedNativeLayout;
@@ -14,6 +16,20 @@ import compiler.types.TypedAst.TypedNativeFieldLayout;
  * same HxiAbi field-size/alignment rules to calculate those facts.
  */
 class NativeLayout {
+	/** Native memory access width and signedness used by RawPtr load/store lowering. */
+	public static function memoryAccess(type:CompilerType, target:String):{size:Int, signed:Bool} {
+		var hxiType = fieldType(type),
+			abi = HxiAbi.forTarget(target),
+			layout = abi.layout(hxiType);
+		if (layout == null)
+			throw 'Type "$type" has no fixed native memory layout for "$target"';
+		var signed = switch abi.classify(hxiType) {
+			case IntegerValue(_, HxiIntegerSign.Signed) | EnumerationValue(_, _, HxiIntegerSign.Signed): true;
+			case _: false;
+		};
+		return {size: layout.size, signed: signed};
+	}
+
 	public static function isNativeValue(type:CompilerType):Bool
 		return switch type {
 			case TInstance(NominalKind.NativeValue, _, _): true;

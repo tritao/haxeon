@@ -62,6 +62,12 @@ typedef AssignmentTypingRules = {
 	instancePropertyAccessor:(CompilerType, String, Bool) -> Null<String>,
 	fieldType:(CompilerType, String, SourceSpan) -> CompilerType,
 	fieldRepresentationType:(CompilerType, String, SourceSpan) -> CompilerType,
+	nativeField:(TypedExpression, String, SourceSpan) -> Null<{
+		pointer:TypedExpression,
+		type:CompilerType,
+		size:Int,
+		signed:Bool
+	}>,
 	abiBoundaryCast:(TypedExpression, CompilerType) -> TypedExpression,
 	arrayElementType:(CompilerType, SourceSpan) -> CompilerType,
 	boundCell:(String, Scope) -> Null<String>
@@ -267,21 +273,29 @@ class StatementTyper {
 				var value = coerce(typeExpression(expression, scope, staticField.type, false), staticField.type, 'field "$name"', "E1002");
 				TStaticFieldAssign(staticField.owner, fieldName, value, span);
 			default:
-				var platformField = PlatformAbi.field(object.type, fieldName),
-					expected = assignmentRules.fieldType(object.type, fieldName, span),
-					value = coerce(typeExpression(expression, scope, expected, false), expected, 'field "$name"', "E1002"),
-					setter:Null<String> = platformField == null ? null : platformField.set,
-					statement = if (setter != null) TExpression(new TypedExpression(TCall(setter, [object, value]), TVoid, span), span) else {
-						var propertySetter = assignmentRules.instancePropertyAccessor(object.type, fieldName, false);
-						propertySetter != null ? TExpression(new TypedExpression(TMethodCall(object, propertySetter, [value]), expected, span), span) : {
-							value = assignmentRules.abiBoundaryCast(value, assignmentRules.fieldRepresentationType(object.type, fieldName, span));
-							TFieldAssign(object, fieldName, value, span);
+				var native = assignmentRules.nativeField(object, fieldName, span);
+				if (native != null) {
+					var value = coerce(typeExpression(expression, scope, native.type, false), native.type, 'field "$name"', "E1002");
+					TExpression(new TypedExpression(TCall("$rawptr.store",
+						[native.pointer, value, new TypedExpression(TIntLiteral(native.size), TInt, span)]), TVoid, span),
+						span);
+				} else {
+					var platformField = PlatformAbi.field(object.type, fieldName),
+						expected = assignmentRules.fieldType(object.type, fieldName, span),
+						value = coerce(typeExpression(expression, scope, expected, false), expected, 'field "$name"', "E1002"),
+						setter:Null<String> = platformField == null ? null : platformField.set,
+						statement = if (setter != null) TExpression(new TypedExpression(TCall(setter, [object, value]), TVoid, span), span) else {
+							var propertySetter = assignmentRules.instancePropertyAccessor(object.type, fieldName, false);
+							propertySetter != null ? TExpression(new TypedExpression(TMethodCall(object, propertySetter, [value]), expected, span), span) : {
+								value = assignmentRules.abiBoundaryCast(value, assignmentRules.fieldRepresentationType(object.type, fieldName, span));
+								TFieldAssign(object, fieldName, value, span);
+							};
 						};
-					};
-				var objectPath = FlowAnalysis.accessPath(object);
-				if (objectPath != null)
-					scope.invalidateExpression(objectPath + "." + fieldName);
-				statement;
+					var objectPath = FlowAnalysis.accessPath(object);
+					if (objectPath != null)
+						scope.invalidateExpression(objectPath + "." + fieldName);
+					statement;
+				}
 		};
 	}
 
@@ -318,23 +332,31 @@ class StatementTyper {
 				value = coerce(value, staticField.type, 'field "$fieldName"', "E1002");
 				TStaticFieldAssign(staticField.owner, fieldName, value, span);
 			default:
-				var platformField = PlatformAbi.field(object.type, fieldName),
-					expected = assignmentRules.fieldType(object.type, fieldName, span);
-				value = coerce(value, expected, 'field "$fieldName"', "E1002");
-				var setter:Null<String> = platformField == null ? null : platformField.set;
-				var statement = if (setter != null) TExpression(new TypedExpression(TCall(setter, [object, value]), TVoid, span), span) else {
-					var propertySetter = assignmentRules.instancePropertyAccessor(object.type, fieldName, false);
-					if (propertySetter != null)
-						TExpression(new TypedExpression(TMethodCall(object, propertySetter, [value]), expected, span), span)
-					else {
-						value = assignmentRules.abiBoundaryCast(value, assignmentRules.fieldRepresentationType(object.type, fieldName, span));
-						TFieldAssign(object, fieldName, value, span);
-					}
-				};
-				var objectPath = FlowAnalysis.accessPath(object);
-				if (objectPath != null)
-					scope.invalidateExpression(objectPath + "." + fieldName);
-				statement;
+				var native = assignmentRules.nativeField(object, fieldName, span);
+				if (native != null) {
+					value = coerce(value, native.type, 'field "$fieldName"', "E1002");
+					TExpression(new TypedExpression(TCall("$rawptr.store",
+						[native.pointer, value, new TypedExpression(TIntLiteral(native.size), TInt, span)]), TVoid, span),
+						span);
+				} else {
+					var platformField = PlatformAbi.field(object.type, fieldName),
+						expected = assignmentRules.fieldType(object.type, fieldName, span);
+					value = coerce(value, expected, 'field "$fieldName"', "E1002");
+					var setter:Null<String> = platformField == null ? null : platformField.set;
+					var statement = if (setter != null) TExpression(new TypedExpression(TCall(setter, [object, value]), TVoid, span), span) else {
+						var propertySetter = assignmentRules.instancePropertyAccessor(object.type, fieldName, false);
+						if (propertySetter != null)
+							TExpression(new TypedExpression(TMethodCall(object, propertySetter, [value]), expected, span), span)
+						else {
+							value = assignmentRules.abiBoundaryCast(value, assignmentRules.fieldRepresentationType(object.type, fieldName, span));
+							TFieldAssign(object, fieldName, value, span);
+						}
+					};
+					var objectPath = FlowAnalysis.accessPath(object);
+					if (objectPath != null)
+						scope.invalidateExpression(objectPath + "." + fieldName);
+					statement;
+				}
 		};
 	}
 

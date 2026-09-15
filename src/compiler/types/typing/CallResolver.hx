@@ -223,17 +223,12 @@ class CallResolver {
 				fail("E1022", 'Native value "$name" has no layout for ABI target "${session.nativeAbiTarget}"', span);
 			return {size: layout.size, signed: false};
 		}
-		var hxiType = try NativeLayout.fieldType(type) catch (_:Dynamic) {
+		try {
+			return NativeLayout.memoryAccess(type, session.nativeAbiTarget);
+		} catch (_:Dynamic) {
 			fail("E1022", 'Type "$type" has no fixed native memory layout', span);
-			cast null;
-		}, abi = HxiAbi.forTarget(session.nativeAbiTarget), layout = abi.layout(hxiType);
-		if (layout == null)
-			fail("E1022", 'Type "$type" has no fixed native memory layout for "${session.nativeAbiTarget}"', span);
-		var signed = switch abi.classify(hxiType) {
-			case IntegerValue(_, HxiIntegerSign.Signed) | EnumerationValue(_, _, HxiIntegerSign.Signed): true;
-			case _: false;
-		};
-		return {size: layout.size, signed: signed};
+			return cast null;
+		}
 	}
 
 	static function isRawPointerType(type:CompilerType):Bool

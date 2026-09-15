@@ -787,6 +787,7 @@ class IrGenerator {
 			case TCall("$rawptr.isNull", [pointer]):
 				var value = lowerExpression(pointer, builder, localTypes);
 				builder.equal(value, builder.constNull(RawPtr));
+			case TCall("$rawptr.ref", [pointer]): lowerExpression(pointer, builder, localTypes);
 			case TCall("$rawptr.load", [pointer, size, signed]):
 				var width = switch size.expression {
 					case TIntLiteral(value): value;
