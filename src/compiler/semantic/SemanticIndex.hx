@@ -1154,6 +1154,8 @@ class SemanticIndex {
 				id = resolve(token.text);
 			if (id != null)
 				bind(id, token.span);
+			else
+				recordUnresolved(name, token.span);
 		}
 		bindings.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
 		checkpoint();

@@ -932,6 +932,16 @@ class LanguageServiceMain {
 				foundUnresolved = true;
 		if (!foundUnresolved || unresolvedService.unresolvedSymbolAt("Unresolved.hx", unresolvedSource.indexOf("unknownName") + 1) == null)
 			throw "recovered unresolved symbols were not exposed through the language service";
+		var unresolvedTypeSource = "function main():Void { var value:MissingType; }";
+		unresolvedService.update("UnresolvedType.hx", unresolvedTypeSource);
+		var unresolvedTypes = unresolvedService.unresolvedSymbols("UnresolvedType.hx"),
+			foundUnresolvedType = false;
+		for (symbol in unresolvedTypes)
+			if (symbol.name == "MissingType")
+				foundUnresolvedType = true;
+		if (!foundUnresolvedType
+			|| unresolvedService.unresolvedSymbolAt("UnresolvedType.hx", unresolvedTypeSource.indexOf("MissingType") + 1) == null)
+			throw "recovered unresolved type references were not exposed through the language service";
 		var removalService = new LanguageService();
 		removalService.update("removed/Helper.hx", "package removed; class Helper { public var obsolete:Int; } function main():Void return;");
 		var removalSource = "package removed; import removed.Helper; function main():Void { var helper:Helper = new Helper(); helper.";
