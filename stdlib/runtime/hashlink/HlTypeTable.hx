@@ -50,6 +50,14 @@ class HlTypeTable {
 		return entries.offset(index).load();
 	}
 
+	/** Return the module-local index of a type pointer, or -1 when it is external. */
+	public function indexOf(type:RawPtr<HlType>):Int {
+		for (index in 0...count)
+			if (entries.offset(index).load() == type)
+				return index;
+		return -1;
+	}
+
 	function ensureCapacity(required:Int):Void {
 		if (required <= capacity)
 			return;

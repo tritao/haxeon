@@ -16,11 +16,39 @@ class HlMetadataRegistry {
 	function get_retiredCount():Int
 		return retired.length;
 
-	/** Publish a newly built generation after its metadata has been initialized. */
+	/** Check whether a candidate can replace the current generation in place. */
+	public function compatibility(candidate:HlMetadataGeneration):HlMetadataDecision {
+		requireOpen();
+		return HlMetadataCompatibility.check(current, candidate);
+	}
+
+	/** Publish a newly built generation when its type prefix is patch-compatible. */
 	public function publish(candidate:HlMetadataGeneration):HlMetadataPublication {
 		requireOpen();
-		if (candidate == null)
-			throw "HashLink metadata registry cannot publish a null generation";
+		switch compatibility(candidate) {
+			case Compatible:
+			case RequiresReload(reason):
+				throw 'HashLink metadata generation requires a structural reload: $reason';
+		}
+		return commit(candidate);
+	}
+
+	/**
+		Publish a structurally changed generation through the explicit reload path.
+		The old generation remains retired until the caller drains it.
+	*/
+	public function reload(candidate:HlMetadataGeneration):HlMetadataPublication {
+		requireOpen();
+		switch compatibility(candidate) {
+			case Compatible if (current != null):
+				throw "HashLink metadata generation is compatible; use publish instead of reload";
+			case Compatible:
+			case RequiresReload(_):
+		}
+		return commit(candidate);
+	}
+
+	function commit(candidate:HlMetadataGeneration):HlMetadataPublication {
 		if (candidate == current)
 			throw "HashLink metadata generation is already current";
 		var publication = candidate.publish(), previous = current;

@@ -131,10 +131,15 @@ it owns the arena, appends the type table, defines the module context, lets
 HashLink initialize derived metadata, and returns a stable publication view.
 The view is ready for a future VM publication bridge; it does not yet replace
 the native module's contiguous `hl_code.types` array.
-`HlMetadataRegistry` adds the policy ring around generations: publishing a
-candidate first seals and validates it, then retires the previous generation
-without disposing it. Retired arenas are drained explicitly, leaving atomic
-publication and concurrent borrower tracking for the synchronization phase.
+`HlMetadataCompatibility` owns the first hot-reload policy ring: the existing
+type prefix and module function-table size must remain stable, while only
+primitive, abstract, and function descriptors may be appended in place. Object,
+enum, virtual, and signature/layout changes return a structural-reload reason.
+`HlMetadataRegistry.publish()` accepts only compatible candidates and seals them
+before switching publication; `reload()` is the explicit structural path.
+Both paths retire the previous generation without disposing it. Retired arenas
+are drained explicitly, leaving atomic publication and concurrent borrower
+tracking for the synchronization phase.
 
 ## Deliberate exclusions
 

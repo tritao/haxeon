@@ -17,6 +17,7 @@ class HlMetadataGeneration {
 	public final builder:HlTypeBuilder;
 	final typeTable:HlTypeTable;
 	var moduleContext:RawPtr<HlModuleContext> = RawPtr.nullPtr();
+	var moduleFunctionCount:Int = 0;
 	var published:Bool = false;
 	var disposed:Bool = false;
 
@@ -47,12 +48,25 @@ class HlMetadataGeneration {
 		return typeTable.get(index);
 	}
 
+	/** Return the module-local index of a type pointer, or -1 when it is external. */
+	public function typeIndex(type:RawPtr<HlType>):Int {
+		requireOpen();
+		return typeTable.indexOf(type);
+	}
+
+	/** Number of function dispatch slots in the module context. */
+	public function functionCount():Int {
+		requireOpen();
+		return moduleFunctionCount;
+	}
+
 	/** Define the function dispatch tables used by HashLink-derived metadata. */
 	public function defineModule(functions:Array<RawPtr<UInt8>>, functionTypes:Array<RawPtr<HlType>>):RawPtr<HlModuleContext> {
 		requireBuilding();
 		if (!moduleContext.isNull())
 			throw "HashLink metadata generation module context is already defined";
 		moduleContext = builder.moduleContext(functions, functionTypes);
+		moduleFunctionCount = functions.length;
 		return moduleContext;
 	}
 
