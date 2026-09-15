@@ -578,13 +578,25 @@ class ParserRecoveryMain {
 		var retainedSwitchLocal = false;
 		if (switchErrorTyped != null && switchErrorTyped.functions.length == 1)
 			switch switchErrorTyped.functions[0].statements[0] {
-				case TSwitch(_, cases, _, _, _):
+				case TSwitch(subject, cases, defaultBranch, hasDefault, _):
+					if (cases.length != 1 || !hasDefault)
+						throw 'malformed switch recovery retained ${cases.length} cases and default=$hasDefault';
+					switch subject.type {
+						case TUnknown, TError:
+						default:
+							throw "malformed switch subject was not represented as a recovery type";
+					}
 					for (switchCase in cases)
 						for (statement in switchCase.statements)
 							switch statement {
 								case TVar(_, _, _): retainedSwitchLocal = true;
 								default:
 							}
+					for (statement in defaultBranch)
+						switch statement {
+							case TVar(_, _, _): retainedSwitchLocal = true;
+							default:
+						}
 				default:
 			}
 		if (!retainedSwitchLocal)
@@ -717,6 +729,32 @@ class ParserRecoveryMain {
 			default:
 				throw 'invalid conditional predicate poisoned its known branch type: ${conditionalTyped.functions[0].statements[0]}';
 		}
+		var conditionalService = new LanguageService(),
+			conditionalEditorSource = "class Foo { public var value:Int; } function main():Void { var foo = broken ? new Foo() : new Foo(); foo. }";
+		conditionalService.update("TolerantConditional.hx", conditionalEditorSource);
+		var conditionalNames = [
+			for (item in conditionalService.complete("TolerantConditional.hx", conditionalEditorSource.length))
+				item.label
+		];
+		if (conditionalNames.indexOf("value") < 0)
+			throw "recovered indexing discarded a partial typed local in favor of an unknown AST type";
+
+		var switchSource = new SourceFile("TolerantSwitch.hx",
+			"function main():Int { var value = switch (broken) { case 1: 1; default: 2; }; return value; }");
+		var switchProgram = new Parser(new Lexer(switchSource).tokenize()).parseProgramRecovering().program,
+			switchTyped = Typer.typeRecovered(switchProgram);
+		if (switchTyped == null || switchTyped.functions.length != 1)
+			throw "tolerant typing discarded a switch with an invalid subject";
+		switch switchTyped.functions[0].statements[0] {
+			case TVar(_, value, _) if (value.type == TInt):
+				switch value.expression {
+					case TSwitchExpression(_, cases, defaultExpression) if (cases.length == 1 && defaultExpression != null):
+					default:
+						throw "invalid switch subject discarded its typed cases";
+				}
+			default:
+				throw "invalid switch subject poisoned its known result type";
+		}
 
 		var chainedErrorSource = new SourceFile("TolerantChainedError.hx",
 			"function main():Void { var value = broken.unresolved().thing; var after:Int = 1; }");
@@ -766,6 +804,75 @@ class ParserRecoveryMain {
 			case TCall(_, arguments) if (arguments.length == 2):
 			default:
 				throw "generic arity recovery discarded the typed call shape";
+		}
+
+		var closureAritySource = new SourceFile("TolerantClosureArity.hx",
+			"function main():Void { var callback = (value:Int) -> value; callback(1, 2); var after:Int = 1; }");
+		var closureArityProgram = new Parser(new Lexer(closureAritySource).tokenize()).parseProgramRecovering().program,
+			closureArityTyped = Typer.typeRecovered(closureArityProgram);
+		var closureArityMain = -1;
+		if (closureArityTyped != null)
+			for (index in 0...closureArityTyped.functions.length)
+				if (closureArityTyped.functions[index].name == "main")
+					closureArityMain = index;
+		if (closureArityTyped == null || closureArityMain < 0
+			|| closureArityTyped.functions[closureArityMain].statements.length != 3)
+			throw 'tolerant typing discarded locals around an over-applied closure: ${closureArityTyped == null ? "null" : closureArityTyped.functions.length + "/" + closureArityTyped.functions[closureArityMain].statements.length}';
+
+		var enumAritySource = new SourceFile("TolerantEnumArity.hx",
+			"enum Choice { Item(value:Int); } function main():Void { Choice.Item(1, 2); var after:Int = 1; }");
+		var enumArityProgram = new Parser(new Lexer(enumAritySource).tokenize()).parseProgramRecovering().program,
+			enumArityTyped = Typer.typeRecovered(enumArityProgram);
+		if (enumArityTyped == null || enumArityTyped.functions.length != 1
+			|| enumArityTyped.functions[0].statements.length != 2)
+			throw "tolerant typing discarded a declaration after an over-applied enum constructor";
+
+		var fieldAritySource = new SourceFile("TolerantFunctionFieldArity.hx",
+			"class Holder { public var callback:(value:Int)->Int; } function main():Void { var holder:Holder = new Holder(); holder.callback(1, 2); var after:Int = 1; }");
+		var fieldArityProgram = new Parser(new Lexer(fieldAritySource).tokenize()).parseProgramRecovering().program,
+			fieldArityTyped = Typer.typeRecovered(fieldArityProgram),
+			fieldArityMain = -1;
+		if (fieldArityTyped != null)
+			for (index in 0...fieldArityTyped.functions.length)
+				if (fieldArityTyped.functions[index].name == "main")
+					fieldArityMain = index;
+		if (fieldArityTyped == null || fieldArityMain < 0 || fieldArityTyped.functions[fieldArityMain].statements.length != 3)
+			throw "tolerant typing discarded locals around an over-applied function field";
+		switch fieldArityTyped.functions[fieldArityMain].statements[1] {
+			case TExpression(expression, _) :
+				switch expression.expression {
+					case TClosureCall(_, arguments) if (arguments.length == 2):
+					default:
+						throw "over-applied function field did not retain its typed call shape";
+				}
+			default:
+				throw "over-applied function field did not remain an expression statement";
+		}
+
+		var genericConstructorAritySource = new SourceFile("TolerantGenericConstructorArity.hx",
+			"class Box<T> { public function new(value:T) {} } function main():Void { var box = new Box(1, 2); var after:Int = 1; }");
+		var genericConstructorArityProgram = new Parser(new Lexer(genericConstructorAritySource).tokenize()).parseProgramRecovering().program,
+			genericConstructorArityDiagnostics = [],
+			genericConstructorArityTyped = Typer.typeRecovered(genericConstructorArityProgram, null, null, genericConstructorArityDiagnostics),
+			genericConstructorArityMain = -1;
+		if (genericConstructorArityTyped != null)
+			for (index in 0...genericConstructorArityTyped.functions.length)
+				if (genericConstructorArityTyped.functions[index].name == "main")
+					genericConstructorArityMain = index;
+		if (genericConstructorArityTyped == null || genericConstructorArityMain < 0
+			|| genericConstructorArityTyped.functions[genericConstructorArityMain].statements.length != 2)
+			throw "tolerant typing discarded locals around an over-applied generic constructor";
+		switch genericConstructorArityTyped.functions[genericConstructorArityMain].statements[0] {
+		case TVar(_, expression, _):
+			if (expression.type == TUnknown || expression.type == TError)
+				throw 'over-applied generic constructor lost its inferred result type: ${expression.type}; ${[for (diagnostic in genericConstructorArityDiagnostics) diagnostic.message].join("; ")}';
+				switch expression.expression {
+					case TNew(_, arguments, _) if (arguments.length == 2):
+					default:
+						throw "over-applied generic constructor did not retain its typed call shape";
+				}
+			default:
+			throw 'over-applied generic constructor lost its inferred result type: ${genericConstructorArityTyped.functions[genericConstructorArityMain].statements[0]}; ${[for (diagnostic in genericConstructorArityDiagnostics) diagnostic.message].join("; ")}';
 		}
 
 		var constructorSource = new SourceFile("TolerantConstructor.hx", "class Box { public function new(value:Int) {} } function main():Box return new Box(");

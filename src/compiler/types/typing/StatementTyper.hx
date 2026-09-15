@@ -528,28 +528,34 @@ class StatementTyper {
 	public function typeSwitch(expression:AstExpression, cases:Array<AstSwitchCase>, defaultBranch:Array<AstStatement>, hasDefault:Bool, span:SourceSpan,
 			scope:Scope, result:Null<CompilerType>):TypedStatement {
 		var typedExpression = typeExpression(expression, scope, null, false);
-		if (!TypeRelations.equals(typedExpression.type, TInt)
+		var invalidSubject = !TypeRelations.equals(typedExpression.type, TInt)
 			&& !TypeRelations.equals(typedExpression.type, TString)
 			&& !isNullableString(typedExpression.type)
 			&& !isArraySwitchable(typedExpression.type)
-			&& !switchRules.isEnum(typedExpression.type))
-			fail("E1019", "Switch requires an Int, String, array, or enum value", typedExpression.span);
+			&& !switchRules.isEnum(typedExpression.type);
+		if (invalidSubject) {
+			if (!session.tolerant)
+				fail("E1019", "Switch requires an Int, String, array, or enum value", typedExpression.span);
+			session.rememberRecoveryDiagnostic(new Diagnostic("E1019", "Switch requires an Int, String, array, or enum value", typedExpression.span));
+		}
 		var typedCases:Array<TypedSwitchCase> = [],
 			caseScopes:Array<Scope> = [],
 			seenCases:Map<String, Bool> = [];
 		for (switchCase in cases) {
 			var caseScope = new Scope(scope),
-				subjectBinding = switchRules.subjectBinding(switchCase.value, typedExpression.type, caseScope),
+				subjectBinding = invalidSubject ? null : switchRules.subjectBinding(switchCase.value, typedExpression.type, caseScope),
 				isCatchAll = switchRules.catchAll(switchCase.value),
-				arrayPattern = subjectBinding == null ? switchRules.arrayPattern(switchCase.value, typedExpression.type, caseScope) : null,
-				pattern = subjectBinding == null
+				arrayPattern = invalidSubject ? null : subjectBinding == null ? switchRules.arrayPattern(switchCase.value, typedExpression.type, caseScope) : null,
+				pattern = invalidSubject ? null : subjectBinding == null
 					&& arrayPattern == null ? switchRules.enumPattern(switchCase.value, typedExpression.type, caseScope) : null,
 				typedValue = isCatchAll
 					|| subjectBinding != null
-					|| arrayPattern != null ? typedExpression : pattern == null ? coerce(typeExpression(switchCase.value, scope, typedExpression.type, false),
-						typedExpression.type, "switch case", "E1019") : pattern.value;
+					|| arrayPattern != null ? typedExpression : pattern == null
+						? (invalidSubject ? typeExpression(switchCase.value, scope, null, false)
+							: coerce(typeExpression(switchCase.value, scope, typedExpression.type, false), typedExpression.type, "switch case", "E1019"))
+						: pattern.value;
 			var parsedGuard = switchCase.guard,
-				typedGuard = parsedGuard == null ? null : coerce(typeExpression(parsedGuard, caseScope, null, false), TBool, "switch guard", "E1003");
+				typedGuard = parsedGuard == null ? null : recoverCoerce(typeExpression(parsedGuard, caseScope, null, false), TBool, "switch guard", "E1003");
 			if (typedGuard != null)
 				caseScope = FlowAnalysis.narrowedScope(caseScope, typedGuard, true);
 			var typedBody = typeStatements(switchCase.statements, caseScope, result),
@@ -587,7 +593,7 @@ class StatementTyper {
 				span: switchCase.span
 			});
 		}
-		if (switchRules.isEnum(typedExpression.type) && !hasDefault && !seenCases.exists("$catchall")) {
+		if (!invalidSubject && switchRules.isEnum(typedExpression.type) && !hasDefault && !seenCases.exists("$catchall")) {
 			var enumName = Std.string(switchRules.enumName(typedExpression.type));
 			var missing:Array<String> = [],
 				coverageCases:Array<TypedSwitchCoverageCase> = [
@@ -638,6 +644,20 @@ class StatementTyper {
 			case TArray(_): true;
 			default: false;
 		};
+	function recoverCoerce(value:TypedExpression, expected:CompilerType, context:String, code:String):TypedExpression {
+		if (!session.tolerant)
+			return coerce(value, expected, context, code);
+		try {
+			return coerce(value, expected, context, code);
+		}
+		catch (error:Dynamic) {
+			if (Std.isOfType(error, compiler.service.CancellationError))
+				throw error;
+			if (Std.isOfType(error, CompileError))
+				session.rememberRecoveryDiagnostic((cast error : CompileError).diagnostic);
+			return new TypedExpression(TNullLiteral, TError, value.span);
+		}
+	}
 
 	static function fail(code:String, message:String, span:SourceSpan):Void
 		throw new CompileError(new Diagnostic(code, message, span));

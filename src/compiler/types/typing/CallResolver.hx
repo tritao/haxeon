@@ -466,13 +466,17 @@ class CallResolver {
 			return null;
 		return switch callableFieldType {
 			case TFunction(argumentTypes, result):
-				if (arguments.length != argumentTypes.length)
+				if (!session.tolerant && arguments.length != argumentTypes.length)
 					fail("E1008", 'Function field "$name" expects ${argumentTypes.length} arguments, got ${arguments.length}', span);
-				var typed = [
-					for (index in 0...arguments.length)
-						typeExpression(arguments[index], scope, argumentTypes[index], false)
-				];
-				typed = coerceArguments(typed, argumentTypes, name);
+				var typed = if (session.tolerant)
+					typeCallArguments(arguments, argumentTypes, scope, name)
+				else {
+					var strictTyped = [
+						for (index in 0...arguments.length)
+							typeExpression(arguments[index], scope, argumentTypes[index], false)
+					];
+					coerceArguments(strictTyped, argumentTypes, name);
+				};
 				new TypedExpression(TClosureCall(typeCallableField(receiver, name, span), typed), result, span);
 			default:
 				fail("E1007", 'Cannot call non-function field "$name"', span);
@@ -488,13 +492,17 @@ class CallResolver {
 		var fieldCallable = typeExpressionValue(Variable(name, span), scope);
 		return switch fieldCallable.type {
 			case TFunction(argumentTypes, result):
-				if (arguments.length != argumentTypes.length)
+				if (!session.tolerant && arguments.length != argumentTypes.length)
 					fail("E1008", 'Function field "$name" expects ${argumentTypes.length} arguments, got ${arguments.length}', span);
-				var typed = [
-					for (index in 0...arguments.length)
-						typeExpression(arguments[index], scope, argumentTypes[index], false)
-				];
-				typed = coerceArguments(typed, argumentTypes, name);
+				var typed = if (session.tolerant)
+					typeCallArguments(arguments, argumentTypes, scope, name)
+				else {
+					var strictTyped = [
+						for (index in 0...arguments.length)
+							typeExpression(arguments[index], scope, argumentTypes[index], false)
+					];
+					coerceArguments(strictTyped, argumentTypes, name);
+				};
 				new TypedExpression(TClosureCall(fieldCallable, typed), result, span);
 			default:
 				fail("E1007", 'Cannot call non-function field "$name"', span);
@@ -515,11 +523,15 @@ class CallResolver {
 			fail("E1008",
 				callableName == null ? 'Function expression expects ${functionType.arguments.length} arguments, got ${arguments.length}' : 'Function value "$callableName" expects ${functionType.arguments.length} arguments, got ${arguments.length}',
 				span);
-		var typedArguments = [
-			for (index in 0...arguments.length)
-				typeExpression(arguments[index], scope, functionType.arguments[index], false)
-		];
-		typedArguments = coerceArguments(typedArguments, functionType.arguments, callableName == null ? "function expression" : callableName);
+		var typedArguments = if (session.tolerant)
+			typeCallArguments(arguments, functionType.arguments, scope, callableName == null ? "function expression" : callableName)
+		else {
+			var strictTyped = [
+				for (index in 0...arguments.length)
+					typeExpression(arguments[index], scope, functionType.arguments[index], false)
+			];
+			coerceArguments(strictTyped, functionType.arguments, callableName == null ? "function expression" : callableName);
+		};
 		for (captured in session.currentContext.storage.candidateSourceNames())
 			scope.invalidate(captured);
 		if (invalidateAllExpressions)
@@ -690,8 +702,9 @@ class CallResolver {
 		} else
 			typedArguments = coerceArguments(typedArguments, expected, name);
 		for (index in 0...typedArguments.length)
-			typedArguments[index] = session.representation.boundaryCast(typedArguments[index],
-				session.representation.enumStorageType(enumCase.typeParameters, enumCase.params[index]));
+			if (index < enumCase.params.length)
+				typedArguments[index] = session.representation.boundaryCast(typedArguments[index],
+					session.representation.enumStorageType(enumCase.typeParameters, enumCase.params[index]));
 		var resultType:CompilerType = TInstance(NominalKind.Enum, enumCase.enumName, []);
 		if (expectedType != null && enumName(expectedType) == enumCase.enumName)
 			resultType = expectedType;
@@ -1398,10 +1411,11 @@ class CallResolver {
 			constructor = hasConstructor ? requiredMapValue(session.signatures, constructorName) : null;
 		for (index in 0...arguments.length) {
 			var expectedArgument:Null<CompilerType> = null;
-			if (allTypeParametersBound(parameters, substitutions) && constructor != null)
+			if (index < (constructor == null ? 0 : constructor.arguments.length)
+				&& allTypeParametersBound(parameters, substitutions) && constructor != null)
 				expectedArgument = session.declarations.resolve(constructor.arguments[index].type, constructor.arguments[index].span, substitutions);
 			var argument = typeExpressionValue(arguments[index], scope, expectedArgument);
-			if (constructor != null)
+			if (constructor != null && index < constructor.arguments.length)
 				inferTypeParameters(constructor.arguments[index].type, argument.type, parameters, substitutions, argument.span);
 			typed.push(argument);
 		}
@@ -1429,7 +1443,14 @@ class CallResolver {
 				else
 					typed.push(typeDefaultExpression(defaultValue, semanticExpected[index], constructorName));
 			}
-			typed = coerceArguments(typed, semanticExpected, constructorName);
+			typed = if (!session.tolerant)
+				coerceArguments(typed, semanticExpected, constructorName)
+			else [
+				for (index in 0...typed.length)
+					index < semanticExpected.length
+						? recoverCoerce(typed[index], semanticExpected[index], 'argument ${index + 1} to "$constructorName"')
+						: typed[index]
+			];
 		}
 		var typeArguments = [for (parameter in parameters) requiredMapValue(substitutions, parameter)],
 			valueType = TInstance(NominalKind.Class, typeName, typeArguments),

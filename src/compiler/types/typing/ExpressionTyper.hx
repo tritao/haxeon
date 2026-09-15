@@ -504,12 +504,16 @@ class ExpressionTyper {
 	public function typeSwitchExpression(expression:AstExpression, cases:Array<AstSwitchExpressionCase>, defaultExpression:Null<AstExpression>,
 			span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		var typedSubject = typeExpressionCallback(expression, scope, null, false);
-		if (!sameType(typedSubject.type, TInt)
+		var invalidSubject = !sameType(typedSubject.type, TInt)
 			&& !sameType(typedSubject.type, TString)
 			&& !isNullableString(typedSubject.type)
 			&& !isArraySwitchable(typedSubject.type)
-			&& !switchRules.isEnum(typedSubject.type))
-			fail("E1019", "Switch requires an Int, String, array, or enum value", typedSubject.span);
+			&& !switchRules.isEnum(typedSubject.type);
+		if (invalidSubject) {
+			if (!session.tolerant)
+				fail("E1019", "Switch requires an Int, String, array, or enum value", typedSubject.span);
+			session.rememberRecoveryDiagnostic(new Diagnostic("E1019", "Switch requires an Int, String, array, or enum value", typedSubject.span));
+		}
 		var typedCases:Array<TypedSwitchExpressionCase> = [],
 			deferredCaseResults:Map<Int, {expression:AstExpression, scope:Scope}> = [],
 			deferredDefault:Null<{expression:AstExpression, scope:Scope}> = null,
@@ -531,17 +535,19 @@ class ExpressionTyper {
 			resultType = typedDefault.type;
 		for (switchCase in cases) {
 			var caseScope = new Scope(scope),
-				subjectBinding = switchRules.subjectBinding(switchCase.value, typedSubject.type, caseScope),
+				subjectBinding = invalidSubject ? null : switchRules.subjectBinding(switchCase.value, typedSubject.type, caseScope),
 				isCatchAll = switchRules.catchAll(switchCase.value),
-				arrayPattern = subjectBinding == null ? switchRules.arrayPattern(switchCase.value, typedSubject.type, caseScope) : null,
-				pattern = subjectBinding == null
+				arrayPattern = invalidSubject ? null : subjectBinding == null ? switchRules.arrayPattern(switchCase.value, typedSubject.type, caseScope) : null,
+				pattern = invalidSubject ? null : subjectBinding == null
 					&& arrayPattern == null ? switchRules.enumPattern(switchCase.value, typedSubject.type, caseScope) : null,
 				typedValue = isCatchAll
 					|| subjectBinding != null
-					|| arrayPattern != null ? typedSubject : pattern == null ? coerce(typeExpressionCallback(switchCase.value, scope, typedSubject.type,
-						false), typedSubject.type, "switch case", "E1019") : pattern.value;
+					|| arrayPattern != null ? typedSubject : pattern == null
+						? (invalidSubject ? typeExpressionCallback(switchCase.value, scope, null, false)
+							: coerce(typeExpressionCallback(switchCase.value, scope, typedSubject.type, false), typedSubject.type, "switch case", "E1019"))
+						: pattern.value;
 			var parsedGuard = switchCase.guard,
-				typedGuard = parsedGuard == null ? null : coerce(typeExpressionCallback(parsedGuard, caseScope, null, false), TBool, "switch guard", "E1003"),
+				typedGuard = parsedGuard == null ? null : recoverCoerce(typeExpressionCallback(parsedGuard, caseScope, null, false), TBool, "switch guard", "E1003"),
 				caseIndex = typedCases.length,
 				typedResult:TypedExpression;
 			if (typedGuard != null)
@@ -595,8 +601,12 @@ class ExpressionTyper {
 				fail("E1003", "Switch branches must have matching types", span);
 			resultType = joined;
 		}
-		if (resultType == null)
-			fail("E1003", "Switch expression has no result branches", span);
+		if (resultType == null) {
+			if (!session.tolerant)
+				fail("E1003", "Switch expression has no result branches", span);
+			session.rememberRecoveryDiagnostic(new Diagnostic("E1003", "Switch expression has no result branches", span));
+			resultType = TUnknown;
+		}
 		typedCases = [
 			for (index in 0...typedCases.length) {
 				var switchCase = typedCases[index],
@@ -609,7 +619,7 @@ class ExpressionTyper {
 					span: switchCase.span,
 					isCatchAll: switchCase.isCatchAll,
 					guard: switchCase.guard,
-					result: coerce(result, resultType, "switch branch", "E1003"),
+					result: recoverCoerce(result, resultType, "switch branch", "E1003"),
 					enumName: switchCase.enumName,
 					constructorIndex: switchCase.constructorIndex,
 					bindings: switchCase.bindings,
@@ -620,10 +630,10 @@ class ExpressionTyper {
 		if (deferredDefault != null)
 			typedDefault = typeExpressionCallback(deferredDefault.expression, deferredDefault.scope, resultType, false);
 		if (typedDefault != null)
-			typedDefault = coerce(typedDefault, resultType, "switch branch", "E1003");
-		if (typedDefault == null && !switchRules.isEnum(typedSubject.type) && !seenCases.exists("$catchall"))
+			typedDefault = recoverCoerce(typedDefault, resultType, "switch branch", "E1003");
+		if (!invalidSubject && typedDefault == null && !switchRules.isEnum(typedSubject.type) && !seenCases.exists("$catchall"))
 			fail("E1021", "Switch expression requires a default branch", span);
-		if (switchRules.isEnum(typedSubject.type) && typedDefault == null && !seenCases.exists("$catchall")) {
+		if (!invalidSubject && switchRules.isEnum(typedSubject.type) && typedDefault == null && !seenCases.exists("$catchall")) {
 			var resolvedEnumName = Std.string(switchRules.enumName(typedSubject.type)),
 				missing:Array<String> = [],
 				coverageCases:Array<TypedSwitchCoverageCase> = [
@@ -762,6 +772,12 @@ class ExpressionTyper {
 			return right;
 		if (right == TNever || sameType(left, right))
 			return left;
+		if (session.tolerant) {
+			if (left == TUnknown || left == TError)
+				return right;
+			if (right == TUnknown || right == TError)
+				return left;
+		}
 		if ((left == TInt && right == TFloat) || (left == TFloat && right == TInt))
 			return TFloat;
 		switch left {
