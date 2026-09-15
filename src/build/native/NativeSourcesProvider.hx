@@ -48,7 +48,7 @@ class NativeSourcesProvider {
 					output = isStatic ? layout.nativeStaticLibraryPath(library.packageName,
 						library.packageName) : layout.haxeonNativeLibraryPath(library.packageName),
 					id = new ActionId('${isStatic ? "native-archive" : "native-link"}:${artifact.id.key()}'),
-					command = isStatic ? toolchain.archiveCommand() : toolchain.compileCommand(),
+					command = isStatic ? toolchain.archiveCommand() : toolchain.sharedCommand(),
 					arguments = isStatic ? toolchain.archiveArguments(output, objects) : toolchain.sharedArguments(output, objects);
 				actions.push(new ExecutionAction(id, dependencies, objects, [output],
 					'${isStatic ? "Archive" : "Link shared library"} ${library.packageName} -> $output',

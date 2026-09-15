@@ -2,6 +2,7 @@ package project;
 
 import haxe.Json;
 import haxe.io.Path;
+import build.Target;
 
 class NativeManifest {
 	public final sources:Array<String>;
@@ -88,8 +89,11 @@ class PackageManifest {
 			throw '$path requires a non-empty package name';
 		if (sourceRoots.length == 0)
 			throw '$path must list at least one path in "sourceRoots"';
-		if (target != "host" && target != "wasm32" && target != "android")
-			throw '$path target must be "host", "wasm32", or "android"';
+		try {
+			Target.parse(target);
+		} catch (error:Dynamic) {
+			throw '$path has an invalid target "$target": ${Std.string(error)}';
+		}
 		var rawDependencies:Dynamic = Reflect.field(raw, "dependencies");
 		if (rawDependencies != null) {
 			if (!isObject(rawDependencies))

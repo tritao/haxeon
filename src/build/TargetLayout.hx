@@ -10,22 +10,22 @@ class TargetLayout {
 		this.environment = environment;
 
 	public function packageRoot(packageName:String):String
-		return Path.join([environment.buildRoot, "host", "native", packageName]);
+		return Path.join([environment.buildRoot, targetDirectory(), "native", packageName]);
 
 	public function hashLinkModulePath(packageName:String):String
 		return Path.join([
 			environment.buildRoot,
-			"host",
+			targetDirectory(),
 			packageName == "" ? "main.hl" : packageName + ".hl"
 		]);
 
 	public function hashLinkPatchPath(packageName:String):String
-		return Path.join([environment.buildRoot, "host", packageName + ".hlp"]);
+		return Path.join([environment.buildRoot, targetDirectory(), packageName + ".hlp"]);
 
 	public function wasmModulePath(packageName:String):String
 		return Path.join([
 			environment.buildRoot,
-			"wasm32",
+			targetDirectory(),
 			packageName == "" ? "main.wasm" : packageName + ".wasm"
 		]);
 
@@ -51,4 +51,10 @@ class TargetLayout {
 
 	public function haxeonNativeLibraryPath(packageName:String):String
 		return Path.join([packageRoot(packageName), packageName + ".hdll"]);
+
+	public function targetDirectory():String {
+		if (environment.target.equals(Target.detectHost()))
+			return "host";
+		return environment.target.toString();
+	}
 }

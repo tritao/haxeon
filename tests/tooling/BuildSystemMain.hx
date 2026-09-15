@@ -1,6 +1,8 @@
 import build.Artifact;
 import build.ArtifactId;
 import build.BuildEnvironment;
+import build.BuildEnvironment.BuildProfile;
+import build.BuildEnvironment.ToolchainInfo;
 import build.BuildIntent;
 import build.BuildPlan;
 import build.BuildPlanner;
@@ -41,12 +43,38 @@ class BuildSystemMain {
 		testIndependentActionsRunConcurrently();
 		#end
 		testFingerprintsAndSkipping();
+		testTargetsAndToolchains();
 		testProjectDiscovery();
 		testPackageSourceModel();
 		testResolverDelegatesAcquisition();
 		testLockfileRoundTrip();
 		testNativeDependencyScanning();
-		Sys.println("PASS: build model, executor, fingerprints, demand-driven native outputs, and local package discovery");
+		Sys.println("PASS: build model, executor, fingerprints, target toolchains, demand-driven native outputs, and package discovery");
+	}
+
+	static function testTargetsAndToolchains():Void {
+		var windows = Target.parse("windows-x86_64-msvc"),
+			linux = Target.parse("linux-x86_64-gnu"),
+			mac = Target.parse("macos-aarch64"),
+			android = Target.parse("android-aarch64"),
+			wasm = Target.parse("wasm32");
+		expect(windows.toString() == "windows-x86_64-msvc", "Windows target triples should be canonical");
+		expect(linux.toString() == "linux-x86_64-gnu", "Linux target triples should be canonical");
+		expect(mac.toString() == "macos-arm64" && mac.equals(Target.parse("macos-arm64-darwin")), "Apple targets should accept architecture aliases");
+		expect(android.isAndroid() && android.toString() == "android-arm64", "Android targets should have a stable short identity");
+		expect(wasm.isWasm() && wasm.toString() == "wasm32", "Wasm should be a first-class target");
+		var androidToolchain = ToolchainInfo.detect(android),
+			wasmToolchain = ToolchainInfo.detect(wasm);
+		expect(androidToolchain.targetTriple == "aarch64-linux-android21" && androidToolchain.compileFlags[0] == "--target=aarch64-linux-android21",
+			"Android toolchains should centralize their ABI and compiler flags");
+		expect(wasmToolchain.targetTriple == "wasm32-wasi" && wasmToolchain.compileFlags[0] == "--target=wasm32-wasi",
+			"Wasm toolchains should centralize their target flags");
+		var root = temporaryDirectory("target-layout"),
+			environment = new BuildEnvironment(root, Path.join([root, "build"]), BuildProfile.Debug, android),
+			layout = new TargetLayout(environment);
+		expect(layout.targetDirectory() == "android-arm64" && layout.packageRoot("foo").indexOf("android-arm64") >= 0,
+			"non-host artifacts should be isolated by target");
+		removeTree(root);
 	}
 
 	static function testArtifactAndPlanDeterminism():Void {
