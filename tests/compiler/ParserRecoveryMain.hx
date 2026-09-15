@@ -384,6 +384,23 @@ class ParserRecoveryMain {
 		if (methodExpression == null || methodExpression.type != TInt)
 			throw "unfinished method call did not retain its resolved result type";
 
+		var constructorSource = new SourceFile("TolerantConstructor.hx", "class Box { public function new(value:Int) {} } function main():Box return new Box(");
+		var constructorProgram = new Parser(new Lexer(constructorSource).tokenize()).parseProgramRecovering().program,
+			constructorTyped = Typer.typeRecovered(constructorProgram);
+		if (constructorTyped == null || constructorTyped.functions.length != 2)
+			throw "tolerant typer discarded an unfinished constructor call";
+		var constructorExpression = switch constructorTyped.functions[0].statements[0] {
+			case TReturn(expression, _): expression;
+			default: null;
+		};
+		if (constructorExpression == null)
+			throw "unfinished constructor call produced no typed expression";
+		switch constructorExpression.type {
+			case TInstance(NominalKind.Class, "Box", _):
+			default:
+				throw 'unfinished constructor call did not retain its result type: ${constructorExpression.type}';
+		}
+
 		var incompleteParameter = new SourceFile("TolerantParameter.hx", "function main(value:)");
 		var parameterProgram = new Parser(new Lexer(incompleteParameter).tokenize()).parseProgramRecovering().program,
 			parameterTyped = Typer.typeRecovered(parameterProgram);

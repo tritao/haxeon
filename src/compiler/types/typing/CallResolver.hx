@@ -281,7 +281,7 @@ class CallResolver {
 		var required = parameters.length;
 		while (required > 0 && parameters[required - 1].optional == true)
 			required--;
-		if (arguments.length < required || arguments.length > parameters.length) {
+		if (!session.tolerant && (arguments.length < required || arguments.length > parameters.length)) {
 			var expected = required == parameters.length ? '$required' : '$required to ${parameters.length}';
 			fail("E1008", 'Function "$name" expects $expected arguments, got ${arguments.length}', span);
 		}
@@ -499,7 +499,7 @@ class CallResolver {
 			};
 		if (functionType == null)
 			fail("E1007", callableName == null ? "Cannot call non-function expression" : 'Cannot call non-function "$callableName"', span);
-		if (arguments.length != functionType.arguments.length)
+		if (!session.tolerant && arguments.length != functionType.arguments.length)
 			fail("E1008",
 				callableName == null ? 'Function expression expects ${functionType.arguments.length} arguments, got ${arguments.length}' : 'Function value "$callableName" expects ${functionType.arguments.length} arguments, got ${arguments.length}',
 				span);
@@ -658,15 +658,20 @@ class CallResolver {
 			for (parameter in enumCase.params)
 				enumParameterType(enumCase.typeParameters, parameter, expectedType)
 		], required = requiredEnumParameters(enumCase.params);
-		if (arguments.length < required || arguments.length > expected.length)
+		if (!session.tolerant && (arguments.length < required || arguments.length > expected.length))
 			fail("E1008", 'Enum constructor "$name" expects $required to ${expected.length} arguments, got ${arguments.length}', span);
 		var typedArguments = [
 			for (index in 0...arguments.length)
-				typeExpression(arguments[index], scope, expected[index], false)
+				typeExpression(arguments[index], scope, index < expected.length ? expected[index] : null, false)
 		];
-		while (typedArguments.length < expected.length)
+		while (!session.tolerant && typedArguments.length < expected.length)
 			typedArguments.push(new TypedExpression(TNullLiteral, TNull, span));
-		typedArguments = coerceArguments(typedArguments, expected, name);
+		if (session.tolerant) {
+			for (index in 0...typedArguments.length)
+				if (index < expected.length)
+					typedArguments[index] = recoverCoerce(typedArguments[index], expected[index], 'argument ${index + 1} to "$name"');
+		} else
+			typedArguments = coerceArguments(typedArguments, expected, name);
 		for (index in 0...typedArguments.length)
 			typedArguments[index] = session.representation.boundaryCast(typedArguments[index],
 				session.representation.enumStorageType(enumCase.typeParameters, enumCase.params[index]));
@@ -770,7 +775,7 @@ class CallResolver {
 			resolvedExpected:Array<CompilerType> = [];
 		if (expected != null)
 			resolvedExpected = expected;
-		if (!hasConstructor && arguments.length != resolvedExpected.length)
+		if (!session.tolerant && !hasConstructor && arguments.length != resolvedExpected.length)
 			fail("E1008", 'Constructor "$resolvedBase" expects ${resolvedExpected.length} arguments, got ${arguments.length}', span);
 		var semanticArguments = hasConstructor ? typeDeclaredCallArguments(arguments, requiredMapValue(session.signatures, constructorName).arguments, scope,
 			constructorName, span, substitutions) : typeCallArguments(arguments, resolvedExpected, scope, constructorName),
@@ -1359,14 +1364,14 @@ class CallResolver {
 					if (!field.isStatic && field.initializer != null) field
 			].length > 0;
 		if (!hasConstructor) {
-			if (arguments.length != 0)
+			if (!session.tolerant && arguments.length != 0)
 				fail("E1008", 'Constructor "$typeName" expects 0 arguments, got ${arguments.length}', span);
 		} else {
 			var constructor = requiredMapValue(session.signatures, constructorName),
 				required = constructor.arguments.length;
 			while (required > 0 && constructor.arguments[required - 1].optional == true)
 				required--;
-			if (arguments.length < required || arguments.length > constructor.arguments.length) {
+			if (!session.tolerant && (arguments.length < required || arguments.length > constructor.arguments.length)) {
 				var expected = required == constructor.arguments.length ? '$required' : '$required to ${constructor.arguments.length}';
 				fail("E1008", 'Function "$constructorName" expects $expected arguments, got ${arguments.length}', span);
 			}
@@ -1384,8 +1389,12 @@ class CallResolver {
 			typed.push(argument);
 		}
 		for (parameter in parameters)
-			if (!substitutions.exists(parameter))
-				fail("E1003", 'Cannot infer generic type parameter "$parameter" for constructor "$typeName"', span);
+			if (!substitutions.exists(parameter)) {
+				if (session.tolerant)
+					substitutions.set(parameter, TUnknown);
+				else
+					fail("E1003", 'Cannot infer generic type parameter "$parameter" for constructor "$typeName"', span);
+			}
 		validateTypeParameterConstraints(typeName, declaration.typeConstraints, substitutions, span);
 
 		if (constructor != null) {
@@ -1428,7 +1437,7 @@ class CallResolver {
 					for (field in classDecl.fields)
 						if (!field.isStatic && field.initializer != null) field
 				].length > 0;
-			if (!hasConstructor && arguments.length != 0)
+			if (!session.tolerant && !hasConstructor && arguments.length != 0)
 				fail("E1008", 'Constructor "$typeName" expects 0 arguments, got ${arguments.length}', span);
 			var constructor = hasConstructor ? requiredMapValue(session.signatures, constructorName) : null,
 				semanticArguments = constructor == null ? [] : typeDeclaredCallArguments(arguments, constructor.arguments, scope, constructorName, span,
@@ -1453,7 +1462,7 @@ class CallResolver {
 		] : PlatformAbi.constructorArguments(typeName), resolvedExpected:Array<CompilerType> = [];
 		if (expected != null)
 			resolvedExpected = expected;
-		if (!hasConstructor && arguments.length != resolvedExpected.length)
+		if (!session.tolerant && !hasConstructor && arguments.length != resolvedExpected.length)
 			fail("E1008", 'Constructor "$typeName" expects ${resolvedExpected.length} arguments, got ${arguments.length}', span);
 		var typed = hasConstructor ? typeDeclaredCallArguments(arguments, requiredMapValue(session.signatures, constructorName).arguments, scope,
 			constructorName, span) : typeCallArguments(arguments, resolvedExpected, scope, constructorName),
