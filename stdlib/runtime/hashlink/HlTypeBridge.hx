@@ -38,9 +38,6 @@ class HlTypeBridge {
 
 	public static function native_module_context_dispose(context:RawPtr<HlModuleContext>):Void {}
 
-	public static function native_metadata_validate_code(code:RawPtr<HlNativeCode>):Int
-		return 0;
-
 	/** Allocate the native HashLink module wrapper for an arena-owned code record. */
 	public static function native_metadata_module_alloc(code:RawPtr<HlNativeCode>):RawPtr<UInt8>
 		return RawPtr.nullPtr();

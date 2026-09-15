@@ -404,7 +404,7 @@ class HlMetadataGeneration {
 			HlTypeBridge.native_metadata_publish_prototypes(typeTable.pointer(), typeTable.length(), moduleContext);
 		ensureFunctionIdentities();
 		buildNativeCode();
-		HlTypeBridge.native_metadata_validate_code(nativeCode);
+		validateNativeCode();
 		publishedContiguousTypeCount = arena.typeCountOf();
 		publishedUsesContiguousTypes = usesContiguousTypes;
 		published = true;
@@ -511,6 +511,42 @@ class HlMetadataGeneration {
 		code.ref.alloc.ref.current = RawPtr.nullPtr();
 		code.ref.falloc.ref.current = RawPtr.nullPtr();
 		nativeCode = code;
+	}
+
+	/** Validate the complete Haxe-owned code record before handing it to HashLink. */
+	public function validateNativeCode():Int {
+		if (nativeCode.isNull())
+			throw "HashLink native code metadata must not be null";
+		var code = nativeCode, version:Int = cast code.ref.version, intCount:Int = cast code.ref.intCount, floatCount:Int = cast code.ref.floatCount,
+			stringCount:Int = cast code.ref.stringCount, bytePositionCount:Int = cast code.ref.bytePositionCount, typeCount:Int = cast code.ref.typeCount,
+			typeCapacity:Int = cast code.ref.typeCapacity, globalCount:Int = cast code.ref.globalCount, nativeCount:Int = cast code.ref.nativeCount,
+			functionCount:Int = cast code.ref.functionCount, constantCount:Int = cast code.ref.constantCount,
+			debugSectionCount:Int = cast code.ref.debugSectionCount, entryPoint:Int = cast code.ref.entryPoint, debugFileCount:Int = cast code.ref.debugFileCount;
+		if (version <= 1 || version > 7 || intCount < 0 || floatCount < 0 || stringCount < 0 || bytePositionCount < 0 || typeCount < 0
+			|| typeCapacity < typeCount || globalCount < 0 || nativeCount < 0 || functionCount < 0 || constantCount < 0 || debugSectionCount < 0
+			|| entryPoint < 0 || debugFileCount < 0)
+			throw "HashLink native code metadata contains invalid counts";
+		if ((intCount > 0 && code.ref.ints.isNull()) || (floatCount > 0 && code.ref.floats.isNull())
+			|| (stringCount > 0 && (code.ref.strings.isNull() || code.ref.stringLengths.isNull() || code.ref.ustrings.isNull()))
+			|| (bytePositionCount > 0 && (code.ref.bytes.isNull() || code.ref.bytePositions.isNull()))
+			|| (typeCount > 0 && code.ref.types.isNull()) || (globalCount > 0 && code.ref.globals.isNull())
+			|| (nativeCount > 0 && code.ref.natives.isNull())
+			|| (functionCount > 0 && (code.ref.functions.isNull() || code.ref.functionStableIds.isNull()
+				|| code.ref.functionNames.isNull() || code.ref.functionNameLengths.isNull()))
+			|| (constantCount > 0 && code.ref.constants.isNull()) || (debugSectionCount > 0 && code.ref.debugSections.isNull())
+			|| (debugFileCount > 0 && (code.ref.debugFiles.isNull() || code.ref.debugFileLengths.isNull())))
+			throw "HashLink native code metadata contains incomplete tables";
+		for (index in 0...functionCount) {
+			var stableId:Int = cast code.ref.functionStableIds.offset(index).load(), nameLength:Int = cast code.ref.functionNameLengths.offset(index).load();
+			if (stableId < 0 || nameLength < 0 || (nameLength > 0 && code.ref.functionNames.offset(index).load().isNull()))
+				throw "HashLink native code metadata contains an invalid function identity";
+			for (previous in 0...index) {
+				var previousStableId:Int = cast code.ref.functionStableIds.offset(previous).load();
+				if (previousStableId == stableId)
+					throw "HashLink native code metadata contains duplicate function identities";
+			}
+		}
+		return typeCount;
 	}
 
 	function ensureFunctionIdentities():Void {

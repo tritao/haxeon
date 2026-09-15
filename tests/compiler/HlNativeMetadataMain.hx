@@ -114,7 +114,7 @@ class HlNativeMetadataMain {
 			+ '&& publication.functionStableIds == publication.nativeCode.ref.functionStableIds && publication.functionStableIds.load() == 73 '
 			+ '&& publication.functionNames == publication.nativeCode.ref.functionNames && publication.functionNames.offset(0).load().offset(0).load() == 66 '
 			+ '&& publication.functionNameLengths == publication.nativeCode.ref.functionNameLengths && publication.functionNameLengths.load() == 11 '
-			+ '&& HlTypeBridge.native_metadata_validate_code(publication.nativeCode) == 12 '
+			+ '&& generation.validateNativeCode() == 12 '
 			+ '&& kernelInitialized && kernelUnloaded '
 			+
 			'&& generatedValue == 8 && generatedUnloaded && registryFirstLoaded && registrySecondLoaded && runtimeRegistry.generation == 2 && registryBlocked && registryReclaimed && registryValue == 8 && registryDisposed && loadedValue == 8 && loadedModuleUnloaded && externalValue == 8 && externalPatchedValue == 42 && externalTransactionCommitted && externalStaleRejected && externalRolledBack && externalLoaded.revision == 2 && externalPatchRejected && externalIdentityRejected && externalCallRejected && externalUnloaded && initializerRejected && patchRejected && patchFirst && patchSecond && patchValue == 42 && patchValueAgain == 43 && patchesUnloaded '
