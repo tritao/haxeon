@@ -2,6 +2,7 @@ import compiler.service.LanguageService;
 import compiler.service.LanguageService.DocumentSymbol;
 import compiler.service.CancellationToken;
 import compiler.service.SourceFormatter;
+import compiler.service.EditorSnapshot.EditorSnapshotConfidence;
 import compiler.Diagnostic.CompileError;
 
 class LanguageServiceMain {
@@ -604,6 +605,8 @@ class LanguageServiceMain {
 			staleFolds = unrecoverableService.foldingRanges("Unrecoverable.hx"),
 			staleSelections = unrecoverableService.selectionRanges("Unrecoverable.hx", [0]),
 			staleTokens = unrecoverableService.semanticTokens("Unrecoverable.hx");
+		if (unrecoverableService.editorSnapshotConfidence("Unrecoverable.hx") != EditorSnapshotConfidence.LastGood)
+			throw "unrecoverable input did not select the last-good snapshot confidence";
 		if (staleSource == null)
 			throw "unrecoverable input discarded the last-good source snapshot";
 		for (fold in staleFolds)
@@ -621,6 +624,8 @@ class LanguageServiceMain {
 		if (immediateService.compiler.modules.get("Immediate").recoveredAst == null
 			|| immediateService.documentSymbols("Immediate.hx").length != 1)
 			throw "editor update did not publish an immediate recovered snapshot";
+		if (immediateService.editorSnapshotConfidence("Immediate.hx") != EditorSnapshotConfidence.RecoveredPartial)
+			throw "recovered input did not select partial snapshot confidence";
 		if (immediateService.compiler.semanticWorkspace.resolveSymbolId("unfinished") != null)
 			throw "recovered declaration contaminated the authoritative semantic workspace";
 		var partialService = new LanguageService();
@@ -702,6 +707,8 @@ class LanguageServiceMain {
 			validId = transitionService.compiler.modules.get("Transition").semanticModel.index.symbolIdAt(validReceiverPosition);
 		if (validId == null || transitionService.completeResult("Transition.hx", validPosition).isIncomplete)
 			throw "valid editor snapshot was not complete before a recovery transition";
+		if (transitionService.editorSnapshotConfidence("Transition.hx") != EditorSnapshotConfidence.Exact)
+			throw "valid input did not select exact snapshot confidence";
 		var incompleteEditorSource = "class Foo { public var knownFoo:Int; } function main():Int { var foo:Foo = new Foo(); return foo. }";
 		transitionService.update("Transition.hx", incompleteEditorSource);
 		var recoveredPosition = incompleteEditorSource.indexOf("foo.") + "foo.".length,
@@ -710,6 +717,8 @@ class LanguageServiceMain {
 				.recoveredSemanticModel.index.symbolIdAt(incompleteEditorSource.indexOf("foo.") + 1);
 		if (!recoveredResult.isIncomplete || recoveredId == null || Std.string(recoveredId) != Std.string(validId))
 			throw 'recovery transition did not preserve the local semantic identity: valid=${Std.string(validId)} recovered=${Std.string(recoveredId)}';
+		if (transitionService.editorSnapshotConfidence("Transition.hx") != EditorSnapshotConfidence.RecoveredPartial)
+			throw "recovery transition did not select partial snapshot confidence";
 		transitionService.update("Transition.hx", validEditorSource);
 		transitionService.analyze("Transition");
 		var restored = transitionService.completeResult("Transition.hx", validPosition),
