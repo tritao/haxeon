@@ -1375,6 +1375,21 @@ class SemanticIndex {
 			case NullableType(element): TNullable(recoveredExpectedType(element, fn, substitutions, active));
 			case FunctionType(arguments, result): TFunction([for (argument in arguments)
 				recoveredExpectedType(argument, fn, substitutions, active)], recoveredExpectedType(result, fn, substitutions, active));
+			case AppliedType(name, arguments):
+				// Resolve the outer nominal type only after recursively replacing
+				// generic arguments.  Without this, `Box<T>` remains
+				// `Box<TUnknown>` even when T has a useful constraint such as
+				// `T:Bound`, which loses expected-type completion information.
+				var expectedArguments = [for (argument in arguments)
+					recoveredExpectedType(argument, fn, substitutions, active)],
+					resolvedSubstitutions:Map<String, CompilerType> = [];
+				for (parameter => value in substitutions)
+					resolvedSubstitutions.set(parameter, value);
+				if (fn.typeParameters != null)
+					for (index in 0...arguments.length)
+						if (index < expectedArguments.length)
+							inferRecoveredTypeParameters(arguments[index], expectedArguments[index], fn.typeParameters, resolvedSubstitutions);
+				recoveredType(AppliedType(name, arguments), resolvedSubstitutions);
 			case AnonymousType(fields):
 				var recoveredFields:Array<compiler.types.Type.AnonymousField> = [
 					for (field in fields)

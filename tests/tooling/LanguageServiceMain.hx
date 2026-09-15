@@ -1374,6 +1374,19 @@ class LanguageServiceMain {
 			};
 		if (boundedGenericExpectedName != "Bound")
 			throw 'recovered generic constraint did not provide an expected argument type: ${boundedGenericExpected == null ? "null" : Std.string(boundedGenericExpected)}';
+		var appliedBoundedGenericService = new LanguageService(),
+			appliedBoundedGenericSource = "class Bound {} class Box<T> {} function take<T:Bound>(value:Box<T>):Void return; function main():Void { take(";
+		appliedBoundedGenericService.update("AppliedBoundedGeneric.hx", appliedBoundedGenericSource);
+		var appliedBoundedGenericContext = appliedBoundedGenericService.completionContext("AppliedBoundedGeneric.hx", appliedBoundedGenericSource.length),
+			appliedBoundedGenericExpected = appliedBoundedGenericContext == null ? null : appliedBoundedGenericContext.context.expected,
+			appliedBoundedGenericExpectedName = switch appliedBoundedGenericExpected {
+				case TInstance(_, name, arguments) if (arguments.length == 1): Std.string(name) + "<" + Std.string(arguments[0]) + ">";
+				default: null;
+			};
+		if (appliedBoundedGenericExpectedName == null
+			|| appliedBoundedGenericExpectedName.indexOf("Box") < 0
+			|| appliedBoundedGenericExpectedName.indexOf("Bound") < 0)
+			throw 'recovered applied generic constraint did not provide its bounded argument type: ${appliedBoundedGenericExpected == null ? "null" : Std.string(appliedBoundedGenericExpected)}';
 		var objectFieldService = new LanguageService(),
 			objectFieldSource = "class ObjectValue {} function make():{value:ObjectValue} return {value:";
 		objectFieldService.update("ObjectField.hx", objectFieldSource);
