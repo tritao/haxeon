@@ -707,36 +707,51 @@ class IrGenerator {
 				abiBoundaryCast(builder, builder.load(name, type), lowerType(expression.type));
 			case TCellLocal(name, cellClass):
 				var cell = builder.load('$' + 'cell:$name', Obj(cellClass));
-				builder.fieldGet(cell, "value", lowerType(expression.type));
+				abiBoundaryCast(builder,
+					builder.fieldGet(cell, "value", lowerType(expression.storageType == null ? expression.type : expression.storageType)),
+					lowerType(expression.type));
 			case TCaptured(name):
 				var owner = requireLocalType(localTypes, "this", 'Captured value "$name" has no environment');
-				builder.fieldGet(builder.load("this", owner), name, lowerType(expression.type));
+				abiBoundaryCast(builder,
+					builder.fieldGet(builder.load("this", owner), name, lowerType(expression.storageType == null ? expression.type : expression.storageType)),
+					lowerType(expression.type));
 			case TCellCaptured(name, cellClass):
 				var owner = requireLocalType(localTypes, "this", 'Captured value "$name" has no environment');
 				var cell = builder.fieldGet(builder.load("this", owner), name, Obj(cellClass));
-				builder.fieldGet(cell, "value", lowerType(expression.type));
+				abiBoundaryCast(builder,
+					builder.fieldGet(cell, "value", lowerType(expression.storageType == null ? expression.type : expression.storageType)),
+					lowerType(expression.type));
 			case TFunctionRef(name): builder.staticClosure(name, lowerType(expression.type));
 			case TMethodRef(object, name): builder.instanceClosure(name, lowerExpression(object, builder, localTypes), lowerType(expression.type));
 			case TLambda(name, environment, captures):
 				if (environment == null) builder.staticClosure(name, lowerType(expression.type)); else {
 					var object = builder.newObject(environment);
 					for (capture in captures) {
+						var storageType = lowerType(capture.storageType),
+							fieldType = switch capture.source {
+								case CaptureCellLocal(_, cellClass), CaptureCellEnvironmentField(_, cellClass): Obj(cellClass);
+								default: storageType;
+							};
 						var value = switch capture.source {
-							case CaptureExpression(expression): lowerExpression(expression, builder, localTypes);
+							case CaptureExpression(expression): abiBoundaryCast(builder, lowerExpression(expression, builder, localTypes), storageType);
 							case CaptureLocal(bindingId):
-								builder.load(bindingId, requireLocalType(localTypes, bindingId, 'Missing captured binding "$bindingId"'));
+								abiBoundaryCast(builder,
+									builder.load(bindingId, requireLocalType(localTypes, bindingId, 'Missing captured binding "$bindingId"')), storageType);
 							case CaptureReceiver:
-								builder.load("this", requireLocalType(localTypes, "this", "Captured receiver has no ABI local"));
+								abiBoundaryCast(builder, builder.load("this", requireLocalType(localTypes, "this", "Captured receiver has no ABI local")),
+									storageType);
 							case CaptureCellLocal(localName, cellClass):
 								builder.load('$' + 'cell:$localName', Obj(cellClass));
 							case CaptureEnvironmentField(field):
-								builder.fieldGet(builder.load("this", requireLocalType(localTypes, "this", "Capture has no environment")), field,
+								abiBoundaryCast(builder,
+									builder.fieldGet(builder.load("this", requireLocalType(localTypes, "this", "Capture has no environment")), field,
+										storageType),
 									lowerType(capture.type));
 							case CaptureCellEnvironmentField(field, cellClass):
 								builder.fieldGet(builder.load("this", requireLocalType(localTypes, "this", "Capture has no environment")), field,
 									Obj(cellClass));
 						};
-						builder.fieldSet(object, capture.field, value);
+						builder.fieldSet(object, capture.field, sameIrType(fieldType, value.type) ? value : abiBoundaryCast(builder, value, fieldType));
 					}
 					builder.instanceClosure(name, object, lowerType(expression.type));
 				}
@@ -1518,7 +1533,13 @@ class IrGenerator {
 				var elementType = lowerType(elementPattern.type),
 					elementValue = builder.arrayGet(builder.load(subjectName, subjectType), builder.constInt(index), elementType);
 				if (elementPattern.constructorIndex >= 0) {
-					var elementName = '$' + 'switch-array-pattern:$caseIndex:$index';
+					// Include the subject local in the compiler-generated name.  Case and
+					// element indices restart for every switch, so using only those indices
+					// lets two array-pattern switches in one function alias the same mutable
+					// local.  The final local type then depends on whichever switch was
+					// lowered last, and CFG verification quite correctly rejects an earlier
+					// store with the wrong type.
+					var elementName = '$' + 'switch-array-pattern:$subjectName:$caseIndex:$index';
 					localTypes.set(elementName, elementType);
 					builder.store(elementName, elementValue);
 					var matches = builder.equal(builder.enumIndex(elementValue), builder.constInt(elementPattern.constructorIndex));

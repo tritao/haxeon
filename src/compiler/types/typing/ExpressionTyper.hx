@@ -890,7 +890,6 @@ class ExpressionTyper {
 				default:
 			}
 		if (!isNumeric(left.type) || !isNumeric(right.type)) {
-			Sys.println('DEBUG comparison operation=$operation ${left.type} ${right.type} at ${span.file.path}:${span.start}');
 			fail("E1011", "Comparison requires matching numeric operands", span);
 		}
 		var promoted = promoteNumericOperands(left, right, span);

@@ -26,6 +26,7 @@ class Scope {
 	final values:Map<String, ScopeValue> = [];
 	final assigned:Map<String, Bool> = [];
 	final captures:Map<String, Bool> = [];
+	final captureStorageTypes:Map<String, CompilerType> = [];
 	final cellCaptures:Map<String, Bool> = [];
 	final cellClasses:Map<String, String> = [];
 	final mapKeySources:Map<String, TypedExpression> = [];
@@ -132,9 +133,12 @@ class Scope {
 		}
 	}
 
-	public function defineCapture(name:String, type:CompilerType, span:SourceSpan, cell:Bool = false, ?cellClass:String, ?bindingId:String):Void {
+	public function defineCapture(name:String, type:CompilerType, span:SourceSpan, cell:Bool = false, ?cellClass:String, ?bindingId:String,
+			?storageType:CompilerType):Void {
 		define(name, type, span, true, bindingId);
 		captures.set(name, true);
+		if (storageType != null)
+			captureStorageTypes.set(requireId(name), storageType);
 		if (cell) {
 			cellCaptures.set(name, true);
 			if (cellClass != null)
@@ -207,8 +211,15 @@ class Scope {
 
 	public function resolveDeclared(name:String):Null<CompilerType> {
 		var value = resolveLocal(name);
-		return value == null ? null : value.declared;
+		if (value == null)
+			return null;
+		if (captureStorageTypes.exists(value.id))
+			return captureStorageTypes.get(value.id);
+		return parent == null ? value.declared : parent.resolveDeclaredById(value.id, value.declared);
 	}
+
+	function resolveDeclaredById(id:String, fallback:CompilerType):CompilerType
+		return captureStorageTypes.exists(id) ? captureStorageTypes.get(id) : (parent == null ? fallback : parent.resolveDeclaredById(id, fallback));
 
 	public function resolveId(name:String):Null<String> {
 		var value = resolveLocal(name);

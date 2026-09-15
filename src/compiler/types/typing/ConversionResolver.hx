@@ -109,9 +109,10 @@ class ConversionResolver {
 					field: captureName,
 					bindingId: captureName,
 					type: value.type,
+					storageType: value.type,
 					source: CaptureExpression(value)
 				}
-			], callable = new TypedExpression(TCaptured(captureName), value.type, span), callArguments = [
+			], callable = new TypedExpression(TCaptured(captureName), value.type, span, false, null, value.type), callArguments = [
 				for (index in 0...arguments.length)
 					adaptFunctionValue(new TypedExpression(TLocal(arguments[index].name), arguments[index].type, span), sourceArguments[index], span)
 			], call = new TypedExpression(TClosureCall(callable, callArguments), sourceResult, span), statements:Array<TypedStatement> = [];

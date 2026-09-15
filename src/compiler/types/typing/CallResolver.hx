@@ -211,6 +211,7 @@ class CallResolver {
 			case _:
 				return null;
 		}
+		return null;
 	}
 
 	function nativeMemoryLayout(type:CompilerType, span:SourceSpan):{size:Int, signed:Bool} {
@@ -574,12 +575,13 @@ class CallResolver {
 		if (receiver != null)
 			receiver = unwrapNullable(receiver);
 		var enumCase = enumCaseInfo(name);
-		if (enumCase == null && name.indexOf(".") < 0) {
+		if (enumCase == null) {
 			var expectedEnumName = enumName(expectedType);
+			var constructorName = name.indexOf(".") < 0 ? name : compiler.QualifiedName.last(name);
 			if (expectedEnumName != null)
-				enumCase = enumCaseInfo(expectedEnumName + "." + name);
-			if (enumCase == null)
-				enumCase = uniqueEnumCaseInfo(name, arguments.length);
+				enumCase = enumCaseInfo(expectedEnumName + "." + constructorName);
+			if (enumCase == null && name.indexOf(".") < 0)
+				enumCase = uniqueEnumCaseInfo(constructorName, arguments.length);
 		}
 		if (enumCase != null)
 			return typeEnumConstructor(name, arguments, expectedType, enumCase, span, scope);
@@ -757,7 +759,10 @@ class CallResolver {
 				rightValue = typeExpression(arguments[1], scope, leftValue.type, false),
 				left = coerce(leftValue, TDynamic, "Type.enumEq value", "E1002"),
 				right = coerce(rightValue, TDynamic, "Type.enumEq value", "E1002");
-			return new TypedExpression(TCall("Type.enumEq", [left, right]), TBool, span);
+			// Type.enumEq is a dynamic equality operation at runtime.  Keep the
+			// source-level builtin in the typer, but lower it through the shared
+			// intrinsic so every backend has one verified call signature.
+			return new TypedExpression(TCall("__dynamic_equal", [left, right]), TBool, span);
 		}
 		if (name == "Std.isOfType") {
 			if (arguments.length != 2)

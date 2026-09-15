@@ -14,12 +14,16 @@ class TypedExpression {
 	/** Map whose keys are represented by this array, when the value originated from Map.keys(). */
 	public final mapKeySource:Null<TypedExpression>;
 
-	public function new(expression, type, span, stableFlowValue:Bool = false, ?mapKeySource:TypedExpression) {
+	/** Declared storage type for a captured value whose flow type may be narrowed. */
+	public final storageType:Null<CompilerType>;
+
+	public function new(expression, type, span, stableFlowValue:Bool = false, ?mapKeySource:TypedExpression, ?storageType:CompilerType) {
 		this.expression = expression;
 		this.type = type;
 		this.span = span;
 		this.stableFlowValue = stableFlowValue;
 		this.mapKeySource = mapKeySource;
+		this.storageType = storageType;
 	}
 }
 
@@ -340,6 +344,7 @@ typedef TypedCapture = {
 	final field:String;
 	final bindingId:String;
 	final type:CompilerType;
+	final storageType:CompilerType;
 	final source:TypedCaptureSource;
 }
 

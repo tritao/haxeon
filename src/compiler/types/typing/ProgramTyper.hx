@@ -368,8 +368,12 @@ class ProgramTyper {
 		}
 		return [
 			for (classDecl in classes) {
-				var nativeLayouts = classDecl.isNativeValue ? [for (target in targets) layoutsByTarget.get(target).get(classDecl.name)] : [];
-				if (classDecl.isNativeValue) session.nativeLayoutsByName.set(classDecl.name, layoutsByTarget.get(session.nativeAbiTarget).get(classDecl.name));
+				var nativeLayouts:Array<TypedNativeLayout> = classDecl.isNativeValue ? [
+					for (target in targets)
+						requiredNativeLayout(layoutsByTarget, target, classDecl.name)
+				] : [];
+				if (classDecl.isNativeValue) session.nativeLayoutsByName.set(classDecl.name,
+					requiredNativeLayout(layoutsByTarget, session.nativeAbiTarget, classDecl.name));
 				{
 					name: classDecl.name,
 					isValue: classDecl.isValue,
@@ -383,6 +387,16 @@ class ProgramTyper {
 				}
 			}
 		];
+	}
+
+	static function requiredNativeLayout(layoutsByTarget:Map<String, Map<String, TypedNativeLayout>>, target:String, name:String):TypedNativeLayout {
+		var layouts = layoutsByTarget.get(target);
+		if (layouts == null)
+			throw 'Missing native layout target "$target"';
+		var layout = layouts.get(name);
+		if (layout == null)
+			throw 'Missing native layout for "$name" on target "$target"';
+		return layout;
 	}
 
 	function computeNativeLayout(name:String, target:String, classes:Map<String, TypedClass>, layouts:Map<String, TypedNativeLayout>,
@@ -424,6 +438,8 @@ class ProgramTyper {
 					BodyTyper.fail("E1022", 'Generic native value field "$name" has no fixed layout', span);
 				var nested = computeNativeLayout(name, target, classes, layouts, visiting),
 					nestedClass = classes.get(name);
+				if (nestedClass == null)
+					throw 'Missing native value record "$name"';
 				result.set(name, NativeLayout.nestedDeclaration(name, nested, nestedClass.span));
 			case _:
 		}

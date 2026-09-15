@@ -877,7 +877,7 @@ class Parser {
 					bindings = stabilized.bindings;
 				}
 				var operationSpan = expressionSpan(target).merge(expressionSpan(value)),
-					assigned = switch assignmentKind {
+					assigned:AstExpression = switch assignmentKind {
 						case 0: value;
 						case 1: Add(target, value, operationSpan);
 						case 2: Sub(target, value, operationSpan);

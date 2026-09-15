@@ -212,7 +212,7 @@ class IrInterpreter {
 			case "__std_int_dynamic": Std.int(arguments[0]);
 			case "__math_ceil": Std.int(Math.ceil(arguments[0]));
 			case "__std_string": Std.string(arguments[0]);
-			case "__dynamic_equal": arguments[0] == arguments[1];
+			case "__dynamic_equal": dynamicEqual(arguments[0], arguments[1]);
 			case "__reflect_is_object":
 				arguments[0] != null
 				&& !Std.isOfType(arguments[0], Bool)
@@ -222,6 +222,24 @@ class IrInterpreter {
 				&& !Reflect.isFunction(arguments[0]);
 			default: throw 'IR interpreter cannot execute native "$name"';
 		};
+	}
+
+	function dynamicEqual(left:Dynamic, right:Dynamic):Bool {
+		if (left == right)
+			return true;
+		if (Std.isOfType(left, InterpEnum) && Std.isOfType(right, InterpEnum)) {
+			var leftEnum:InterpEnum = cast left,
+				rightEnum:InterpEnum = cast right;
+			if (leftEnum.type != rightEnum.type
+				|| leftEnum.constructor != rightEnum.constructor
+				|| leftEnum.fields.length != rightEnum.fields.length)
+				return false;
+			for (index in 0...leftEnum.fields.length)
+				if (!dynamicEqual(leftEnum.fields[index], rightEnum.fields[index]))
+					return false;
+			return true;
+		}
+		return false;
 	}
 
 	function newObject(typeName:String):InterpObject {

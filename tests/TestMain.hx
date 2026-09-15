@@ -133,6 +133,12 @@ class TestMain {
 		var enumArrayPatternProgram = Frontend.compile('enum Kind { Single; Pair(value:Int); } function classify(values:Array<Kind>):Int return switch values { case [Kind.Pair(left), Kind.Pair(right)]: left + right; case [Kind.Single, Kind.Single]: 42; default: 0; } function main():Int return classify([Kind.Pair(20), Kind.Pair(22)]) == 42 && classify([Kind.Single, Kind.Single]) == 42 ? 42 : 0;');
 		if (new IrInterpreter(enumArrayPatternProgram).run("main") != 42)
 			throw "Array patterns did not match enum constructors or bind constructor payloads";
+		var repeatedArrayPatternSwitches = Frontend.compile('enum FirstTag { First; } enum SecondTag { Second; } function classify(first:Array<FirstTag>, second:Array<SecondTag>):Int { var firstResult = switch first { case [First]: 1; default: 0; }; var secondResult = switch second { case [Second]: 2; default: 0; }; return firstResult + secondResult; } function main():Int return classify([First], [Second]);');
+		if (new IrInterpreter(repeatedArrayPatternSwitches).run("main") != 3)
+			throw "Array-pattern temporaries from separate switches aliased each other";
+		var nullableBlockSwitchProgram = Frontend.compile('function choose(flag:Int):Null<String> return switch flag { case 1: { null; } default: "value"; } function main():Int return choose(1) == null && choose(0) == "value" ? 42 : 0;');
+		if (new IrInterpreter(nullableBlockSwitchProgram).run("main") != 42)
+			throw "A nullable block-expression result was not coerced through its contextual type";
 		Frontend.compile('function zero():haxe.Int64 return 0; function negative():haxe.Int64 return -1; function main():Int return 0;');
 		var int64Widening = Frontend.compile('function widen(value:Int):haxe.Int64 return value; function main():Int return 0;'),
 			wideningLowered = false;
@@ -189,7 +195,10 @@ class TestMain {
 		Frontend.compile('function main():Int { var values:Map<String, Bool> = []; values["answer"] = true; values.clear(); values["answer"] = true; return values.get("answer") ? 42 : 0; }');
 		Frontend.compile('function main():Int { var values:Map<String, Int> = ["answer" => 42]; var copied = values.copy(); copied.set("other", 17); return values.exists("answer") && copied.exists("answer") && !values.exists("other") && copied.exists("other") && values.size() == 1 && copied.size() == 2 ? 42 : 0; }');
 		Frontend.compile('function consume(values:Iterator<Int>):Int { var total = 0; while (values.hasNext()) total += values.next(); return total; } function main():Int { var values:Map<String, Int> = ["answer" => 42]; return consume(values.iterator()); }');
-		Frontend.compile('enum Marker { One(value:Int); } function same(left:Marker, right:Marker):Bool return Type.enumEq(left, right); function main():Int return same(One(1), One(1)) ? 42 : 0;');
+		var enumEqProgram = Frontend.compile('enum Marker { One(value:Int); } function same(left:Marker, right:Marker):Bool return Type.enumEq(left, right); function main():Int return same(One(1), One(1)) ? 42 : 0;');
+		if (new IrInterpreter(enumEqProgram).run("main") != 42)
+			throw "Type.enumEq did not lower through the dynamic equality intrinsic";
+		Frontend.compile('class GenericMap { public static function has<T>(values:Map<String, T>):Bool return values.keys().hasNext(); } function main():Int { var values:Map<String, Int> = ["answer" => 42]; return GenericMap.has(values) ? 42 : 0; }');
 		Frontend.compile('enum InferredConstructor { Value(value:Int); } function make():InferredConstructor { var result = Value(42); return result; } function main():Int return make() == Value(42) ? 42 : 0;');
 		Frontend.compile('function main():Int { var values:Map<String, Int> = ["answer" => 42]; for (key in values.keys()) return values.get(key); return 0; }');
 		Frontend.compile('function main():Int { var values:Map<String, Int> = ["answer" => 42]; var result = [for (key in values.keys()) values.get(key) ?? 0]; return result[0]; }');
@@ -386,6 +395,9 @@ class TestMain {
 		Frontend.compile('typedef Holder = { value:Null<String> }; function read(holder:Holder):Int return holder.value != null && holder.value.length > 0 ? 1 : 0; function main():Int return 0;');
 		Frontend.compile('typedef Location = { path:String, start:Null<Int> }; function contains(location:Location, path:String, minimum:Int):Bool return location.path == path && location.start != null && location.start >= minimum; function main():Int return 0;');
 		Frontend.compile('function nullablePrimitive(value:Int):Null<Int> return value; function main():Int return nullablePrimitive(42) == null ? 0 : 42;');
+		var nullablePrimitiveCaptureProgram = Frontend.compile('function capture(value:Null<Int>):Int { var callback = function() { return value == null ? 0 : value; }; return callback(); } function main():Int return capture(42);');
+		if (new IrInterpreter(nullablePrimitiveCaptureProgram).run("main") != 42)
+			throw "A flow-narrowed nullable primitive capture used the wrong closure storage type";
 		Frontend.compile('function invoke(?done:Void->Void):Void { var outer = function() { var inner = function() { if (done != null) done(); }; inner(); }; outer(); } function main():Int { invoke(); return 0; }');
 		Frontend.compile('function main():Int { var value = 0; var update = function() { value = 42; }; update(); return value; }');
 		expectCompileError('function invoke(?done:Void->Void):Void { var outer = function() { done(); }; outer(); } function main():Int { invoke(); return 0; }',

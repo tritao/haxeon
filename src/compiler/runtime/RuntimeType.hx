@@ -20,6 +20,7 @@ class RuntimeType {
 			case TFloat: "f64";
 			case TBool: "bool";
 			case TString: "bytes";
+			case TNullable(_): "ref";
 			default: isRuntimeReference(element) ? "ref" : null;
 		};
 

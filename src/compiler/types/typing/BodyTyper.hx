@@ -78,17 +78,17 @@ class BodyTyper {
 			function(statements, scope, result) return this.typeStatements(statements, scope, result),
 			function(statements) return ControlFlow.alwaysReturns(statements, function(type, cases) return this.exhaustiveEnum(type, cases)));
 		var switchRules = {
-			subjectBinding: function(value, expected, scope) return this.switchSubjectBinding(value, expected, scope),
-			catchAll: function(value) return isSwitchCatchAll(value),
-			enumPattern: function(value, expected, scope) return this.typeEnumPattern(value, expected, scope),
-			arrayPattern: function(value, expected, scope) return this.typeSwitchArrayPattern(value, expected, scope),
-			arrayPatternKey: function(pattern) return this.switchArrayPatternKey(pattern),
-			caseKey: function(value, predicates) return this.switchCaseKey(value, predicates),
-			enumCaseCovered: function(type, index, cases) return this.enumCaseCovered(type, index, cases),
-			enumLiteral: function(value) return enumLiteral(value),
-			isEnum: function(type) return isEnum(type),
-			isNullableEnum: function(type) return isNullableEnum(type),
-			enumName: function(type) return enumName(type)
+			subjectBinding: function(value:AstExpression, expected:CompilerType, scope:Scope) return this.switchSubjectBinding(value, expected, scope),
+			catchAll: function(value:AstExpression) return isSwitchCatchAll(value),
+			enumPattern: function(value:AstExpression, expected:CompilerType, scope:Scope) return this.typeEnumPattern(value, expected, scope),
+			arrayPattern: function(value:AstExpression, expected:CompilerType, scope:Scope) return this.typeSwitchArrayPattern(value, expected, scope),
+			arrayPatternKey: function(pattern:TypedSwitchArrayPattern) return this.switchArrayPatternKey(pattern),
+			caseKey: function(value:TypedExpression, predicates:Array<TypedSwitchPredicate>) return this.switchCaseKey(value, predicates),
+			enumCaseCovered: function(type:CompilerType, index:Int, cases:Array<TypedSwitchCoverageCase>) return this.enumCaseCovered(type, index, cases),
+			enumLiteral: function(value:TypedExpression) return enumLiteral(value),
+			isEnum: function(type:CompilerType) return isEnum(type),
+			isNullableEnum: function(type:CompilerType) return isNullableEnum(type),
+			enumName: function(type:CompilerType) return enumName(type)
 		};
 		this.genericInstantiation = new GenericInstantiation(session,
 			function(expression, scope, expected, inferDynamicLambdaResult) return this.typeExpression(expression, scope, expected, inferDynamicLambdaResult),
@@ -312,7 +312,7 @@ class BodyTyper {
 			scope.defineReceiver(TInstance(NominalKind.Class, owner, receiverArguments), fn.span);
 		}
 		context.receiver = scope.resolve("this");
-		var arguments = [];
+		var arguments:Array<{name:String, type:CompilerType}> = [];
 		if (abstractReceiver != null)
 			arguments.push({name: "this", type: abstractReceiver});
 		for (argument in fn.arguments) {
@@ -371,7 +371,7 @@ class BodyTyper {
 	}
 
 	function typeStatements(statements:Array<AstStatement>, scope:Scope, result:Null<CompilerType>):Array<TypedStatement> {
-		var output = [];
+		var output:Array<TypedStatement> = [];
 		for (statementIndex in 0...statements.length) {
 			var statement = statements[statementIndex];
 			if (ControlFlow.alwaysReturns(output, function(type, cases) return this.exhaustiveEnum(type, cases))) {
@@ -832,7 +832,7 @@ class BodyTyper {
 	}
 
 	function switchArrayPatternKey(pattern:TypedSwitchArrayPattern):Null<String> {
-		var keys = [];
+		var keys:Array<String> = [];
 		for (element in pattern.elements) {
 			if (element.isCatchAll || element.subjectBinding != null || element.value == null)
 				return null;
@@ -854,10 +854,11 @@ class BodyTyper {
 		return switch value {
 			case Call(name, arguments, span):
 				var info = enumCaseInfo(name);
-				if (info == null && name.indexOf(".") < 0) {
+				if (info == null) {
 					var expectedEnum = enumName(expected);
+					var constructorName = name.indexOf(".") < 0 ? name : lastPathSegment(name);
 					if (expectedEnum != null)
-						info = enumCaseInfo(expectedEnum + "." + name);
+						info = enumCaseInfo(expectedEnum + "." + constructorName);
 				}
 				if (info == null)
 					return null;
@@ -1172,7 +1173,7 @@ class BodyTyper {
 				scope.requireCellClass(name)) : TCaptured(name)) : (boundCell(name,
 					scope) != null ? TCellLocal(scope.requireId(name),
 						requiredString(boundCell(name, scope))) : TLocal(name == "this" ? name : scope.requireId(name))),
-				type, span, false, scope.mapKeySource(name));
+				type, span, false, scope.mapKeySource(name), scope.isCapture(name) ? scope.resolveDeclared(name) : null);
 		} else {
 			var enumLiteral = expectedEnumLiteral(name, expectedType, span);
 			if (enumLiteral != null)
@@ -1337,6 +1338,13 @@ class BodyTyper {
 		if (ControlFlow.alwaysExits(typedStatements, function(type, cases) return this.exhaustiveEnum(type, cases)))
 			return new TypedExpression(TBlockExpression(typedStatements, new TypedExpression(TUnreachable, TNever, span)), TNever, span);
 		var typedResult = typeExpression(result, blockScope, expectedType);
+		// The final expression of a block is an expression branch, not a return
+		// statement, so it does not pass through StatementTyper's return coercion.
+		// TNull is also used as the provisional result while a switch expression is
+		// still inferring its common branch type; defer coercion in that case so a
+		// later non-null branch can widen the result to Null<T>.
+		if (expectedType != null && expectedType != TNull && expectedType != TVoid && typedResult.type != TNever)
+			typedResult = coerce(typedResult, expectedType, "block expression", "E1003");
 		if (typedResult.type != TNever) {
 			scope.mergeAssignmentsFrom([blockScope]);
 			scope.mergeRefinementsFrom([blockScope]);
