@@ -352,6 +352,21 @@ class ParserRecoveryMain {
 			|| implementsTyped.classes.length != 1
 			|| implementsTyped.functions.length != 1)
 			throw "tolerant typing abandoned a program with an incomplete implements clause";
+
+		var fieldSource = new SourceFile("TolerantFieldDeclaration.hx",
+			"class Broken { var field:MissingType; public function visible():Void return; } function main():Void return;");
+		var fieldRecovered = new Parser(new Lexer(fieldSource).tokenize()).parseProgramRecovering().program,
+			fieldTyped = Typer.typeRecovered(fieldRecovered);
+		if (fieldTyped == null
+			|| fieldTyped.classes.length != 1
+			|| fieldTyped.classes[0].methods.length != 1
+			|| fieldTyped.functions.length != 2)
+			throw 'tolerant typing discarded class methods after an invalid field type: ${fieldTyped == null ? "null" : "classes=" + fieldTyped.classes.length + ", methods=" + (fieldTyped.classes.length == 0 ? 0 : fieldTyped.classes[0].methods.length) + ", functions=" + fieldTyped.functions.length}';
+		switch fieldTyped.classes[0].fields[0].type {
+			case TUnknown:
+			default:
+				throw 'invalid field type was not represented as TUnknown: ${fieldTyped.classes[0].fields[0].type}';
+		}
 	}
 
 	static function assertRecoveryCancellation():Void {

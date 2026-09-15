@@ -248,7 +248,21 @@ class ProgramTyper {
 				BodyTyper.fail("E1002", 'Inline field "${classDecl.name}.${field.name}" must be static', field.span);
 			if (field.isInline && field.initializer == null)
 				BodyTyper.fail("E1002", 'Inline field "${classDecl.name}.${field.name}" requires an initializer', field.span);
-			var type = session.representation.physicalType(session.declarations.resolvedFieldType(classDecl.name, field), field.span, erasedSubstitutions);
+<<<<<<< HEAD
+			var fieldType:AstType = try session.declarations.resolvedFieldType(classDecl.name, field) catch (error:Dynamic) {
+				if (!session.tolerant)
+					throw error;
+				ErrorType(field.span);
+			};
+			var type = session.representation.physicalType(fieldType, field.span, erasedSubstitutions);
+=======
+			var fieldType:AstType = try session.declarations.resolvedFieldType(classDecl.name, field) catch (error:Dynamic) {
+				if (!session.tolerant)
+					throw error;
+				ErrorType(field.span);
+			};
+			var type = bodyTyper.resolveType(fieldType, erasedSubstitutions);
+>>>>>>> d565bf01 (feat(typer): keep methods after invalid field types)
 			if (type == TVoid)
 				BodyTyper.fail("E1002", 'Field "${classDecl.name}.${field.name}" cannot have type Void', field.span);
 			if (!isNativeValue && NativeLayout.containsNativeLayoutType(type))
