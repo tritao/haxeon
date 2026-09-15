@@ -52,19 +52,7 @@ HL_PRIM void HL_NAME(native_type_initialize_object)( hl_type *type ) {
 	hl_get_obj_proto(type);
 }
 
-HL_PRIM void HL_NAME(native_type_initialize_enum)( hl_type *type, hl_module_context *context ) {
-	if( type == NULL || type->kind != HENUM || type->tenum == NULL || context == NULL )
-		hl_error("HashLink enum metadata initialization requires an enum and module context");
-	hl_init_enum(type,context);
-}
-
-HL_PRIM void HL_NAME(native_type_initialize_virtual)( hl_type *type, hl_module_context *context ) {
-	if( type == NULL || type->kind != HVIRTUAL || type->virt == NULL || context == NULL )
-		hl_error("HashLink virtual metadata initialization requires a virtual type and module context");
-	hl_init_virtual(type,context);
-}
-
-HL_PRIM void HL_NAME(native_metadata_initialize)( hl_type **types, int count, hl_module_context *context ) {
+HL_PRIM void HL_NAME(native_metadata_publish_prototypes)( hl_type **types, int count, hl_module_context *context ) {
 	int i;
 	if( count < 0 || (count > 0 && types == NULL) || context == NULL )
 		hl_error("HashLink metadata publication requires a type table and module context");

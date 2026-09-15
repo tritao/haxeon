@@ -1,6 +1,7 @@
 import runtime.hashlink.HlTypeArena;
 import runtime.hashlink.HlTypeBridge;
 import runtime.hashlink.HlTypeBuilder;
+import runtime.hashlink.HlTypeLayout;
 import runtime.hashlink.HlTypeTable;
 import runtime.hashlink.HlType;
 import runtime.hashlink.HlTypeKind;
@@ -103,8 +104,12 @@ function main():Int {
 		enumData = builtEnum.ref.data.ref.enumType,
 		builtVirtual = builder.virtualType([{name: RawPtr.nullPtr(), type: intType, hashedName: 23}], 4, [0], RawPtr.nullPtr()),
 		virtualData = builtVirtual.ref.data.ref.virtualType;
-	HlTypeBridge.native_type_initialize_enum(builtEnum, module);
-	HlTypeBridge.native_type_initialize_virtual(builtVirtual, module);
+	var derivedTable = new HlTypeTable(arena, 4);
+	derivedTable.add(builtObject);
+	derivedTable.add(recursiveObject);
+	derivedTable.add(builtEnum);
+	derivedTable.add(builtVirtual);
+	HlTypeLayout.initialize(derivedTable.pointer(), derivedTable.length(), arena);
 	var graphCorrect = HlTypeBridge.native_type_kind(builtObject) == 11
 		&& HlTypeBridge.native_type_object_field_count(builtObject) == 1
 		&& objectData.ref.nfields == 1

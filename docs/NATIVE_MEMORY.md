@@ -136,7 +136,8 @@ it owns the arena, appends the type table, defines the module context, lets
 same arena, and then hands the table to one small native publication call.
 Object prototype wiring remains native because it publishes executable method
 and closure pointers; enum and virtual layout construction no longer calls
-HashLink's native initializers. The resulting runtime records, field indexes,
+HashLink's native initializers, which are no longer exposed by the bridge. The
+resulting runtime records, field indexes,
 sorted lookups, binding slots, and mark-bit maps remain arena-owned and stable.
 The view is ready for a future VM publication bridge; it does not yet replace
 the native module's contiguous `hl_code.types` array.
