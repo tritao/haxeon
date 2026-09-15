@@ -48,6 +48,7 @@ enum SemanticCompletionContextKind {
 	Argument;
 	Import;
 	ObjectField;
+	Override;
 	Pattern;
 }
 
@@ -103,6 +104,7 @@ class SemanticIndex {
 	final declarationSymbolsBySpan:Map<String, SemanticSymbolId> = [];
 	final recoveredMembers:Map<String, SemanticSymbolId> = [];
 	final recoveredFunctions:Map<String, AstFunction> = [];
+	final recoveredClassBases:Map<String, CompilerType> = [];
 	final recoveredLocalNext:Map<String, Int> = [];
 	final unresolved:Array<UnresolvedSymbol> = [];
 	final declarations:DeclarationIndex;
@@ -255,6 +257,8 @@ class SemanticIndex {
 		}
 		for (owner in program.classes) {
 			checkpoint();
+			if (owner.base != null)
+				recoveredClassBases.set(owner.name, recoveredType(owner.base));
 			for (fn in owner.methods)
 				recoveredFunctions.set(owner.name + "." + fn.name, fn);
 		}
@@ -985,7 +989,8 @@ class SemanticIndex {
 		}
 		var locals = [for (local in visible) local];
 		locals.sort(function(left, right) return Reflect.compare(left.name, right.name));
-		var receiver:Null<CompilerType> = null;
+		var overrideContext = isOverrideContext(position, token),
+			receiver:Null<CompilerType> = null;
 		if (qualifier != null) {
 			if (qualifier == "this")
 				for (candidate in functionReceivers) {
@@ -1002,6 +1007,12 @@ class SemanticIndex {
 						receiver = local.type;
 				}
 		}
+		if (receiver == null && overrideContext)
+			for (owner in declarations.classes)
+				if (position >= owner.span.start && position <= owner.span.end && recoveredClassBases.exists(owner.name)) {
+					receiver = recoveredClassBases.get(owner.name);
+					break;
+				}
 		var expected:Null<CompilerType> = null, expectedWidth = 0x3fffffff;
 		for (candidate in completionTypes) {
 			if (token != null)
@@ -1014,7 +1025,7 @@ class SemanticIndex {
 				}
 			}
 		}
-		var kind = qualifier != null ? SemanticCompletionContextKind.Member : isImportContext(position,
+		var kind = qualifier != null ? SemanticCompletionContextKind.Member : overrideContext ? SemanticCompletionContextKind.Override : isImportContext(position,
 			token) ? SemanticCompletionContextKind.Import : expected != null
 			&& isObjectFieldContext(position,
 				token) ? SemanticCompletionContextKind.ObjectField : isTypeContext(position,
@@ -1124,6 +1135,13 @@ class SemanticIndex {
 			index--;
 		}
 		return false;
+	}
+
+	function isOverrideContext(position:Int, ?cancellation:CancellationToken):Bool {
+		var index = lastTokenBefore(position);
+		if (cancellation != null)
+			cancellation.check();
+		return index >= 0 && tokens[index].kind == TokenKind.Identifier && tokens[index].text == "override";
 	}
 
 	function lastTokenBefore(position:Int):Int {

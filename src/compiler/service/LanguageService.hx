@@ -871,6 +871,24 @@ class LanguageService {
 		var qualifier = memberQualifier(snapshot.source, position),
 			model = effectiveSemanticModel(state),
 			semanticContext = model == null ? null : model.index.completionContext(position, qualifier, token);
+		if (semanticContext != null && semanticContext.kind == SemanticCompletionContextKind.Override) {
+			var owner = typeDeclaration(semanticContext.receiver);
+			if (owner != null)
+				for (symbol in compiler.semanticWorkspace.editorVisibleSymbols(state, token)) {
+					if (token != null)
+						token.check();
+					var separator = symbol.name.lastIndexOf("."),
+						signature = compiler.semanticWorkspace.editorSignature(state, symbol.id);
+					if (symbol.kind == DeclarationKind.Member
+						&& separator > 0
+						&& symbol.name.substring(0, separator) == owner
+						&& signature != null)
+						addMember(sourceName(symbol.name), "method", signature.label, prefix, result, 0, sourceName(symbol.name) + "(", Std.string(symbol.id));
+				}
+			sortCompletion(result);
+			tagResults(result, state);
+			return completionResult(result, incompleteSnapshot);
+		}
 		if (semanticContext != null && semanticContext.kind == SemanticCompletionContextKind.Import) {
 			for (candidate in compiler.semanticWorkspace.importableSymbols(state, token))
 				addMember(candidate.symbol.name, completionDeclarationKind(candidate.symbol.kind), candidate.symbol.name, prefix, result, 0,

@@ -333,6 +333,27 @@ class ParserRecoveryMain {
 		if (patternNames.indexOf("One") < 0 || patternNames.indexOf("Two") < 0)
 			throw "switch pattern completion did not expose expected enum cases";
 
+		var overrideService = new LanguageService(),
+			overrideSource = "class Base { public function render(value:Int):Int return value; } class Child extends Base { override ";
+		overrideService.update("ExpectedOverride.hx", overrideSource);
+		var overrideModel = overrideService.compiler.modules.get("ExpectedOverride").recoveredSemanticModel;
+		if (overrideModel == null)
+			throw "missing recovered semantic model for override completion test";
+		var overrideContext = overrideModel.index.completionContext(overrideSource.length);
+		if (overrideContext.kind != SemanticCompletionContextKind.Override)
+			throw 'override completion was classified as ${overrideContext.kind} instead of Override';
+		switch overrideContext.receiver {
+			case TInstance(NominalKind.Class, "Base", _):
+			default:
+				throw 'override completion did not retain Base as its owner: ${overrideContext.receiver}';
+		}
+		var overrideNames = [
+			for (item in overrideService.complete("ExpectedOverride.hx", overrideSource.length))
+				item.label
+		];
+		if (overrideNames.indexOf("render") < 0)
+			throw "override completion did not expose the inherited method";
+
 		var importService = new LanguageService();
 		importService.update("lib/Widget.hx", "class Widget {} function main():Void return;");
 		try
