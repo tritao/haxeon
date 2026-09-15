@@ -38,11 +38,6 @@ class HlTypeBridge {
 
 	public static function native_module_context_dispose(context:RawPtr<HlModuleContext>):Void {}
 
-	/** Validate the Haxe-owned global type and value-slot tables as HashLink metadata. */
-	public static function native_metadata_validate_global_types(types:RawPtr<RawPtr<HlType>>, count:Int,
-		globals:RawPtr<RawPtr<UInt8>>):Int
-		return 0;
-
 	public static function native_metadata_validate_constants(constants:RawPtr<HlConstant>, count:Int, globalCount:Int):Int
 		return 0;
 

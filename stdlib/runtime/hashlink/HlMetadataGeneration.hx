@@ -352,6 +352,34 @@ class HlMetadataGeneration {
 		return globalTypes.offset(index).load();
 	}
 
+	/** Validate global type records and keep object/enum values inside this generation's slot table. */
+	public function validateGlobalTypes():Int {
+		if (globalCount < 0 || (globalCount > 0 && (globalTypes.isNull() || globals.isNull())))
+			throw "HashLink global metadata requires matching type and value tables";
+		for (index in 0...globalCount) {
+			var type = globalTypes.offset(index).load();
+			if (type.isNull())
+				throw 'HashLink global metadata contains an invalid type at index $index';
+			var kind:Int = cast type.ref.kind, minimumKind:Int = cast(HlTypeKind.VoidType, Int), maximumKind:Int = cast(HlTypeKind.Guid, Int);
+			if (kind < minimumKind || kind > maximumKind)
+				throw 'HashLink global metadata contains an invalid type at index $index';
+			if (kind == HlTypeKind.Object || kind == HlTypeKind.Struct) {
+				var object = type.ref.data.ref.obj;
+				if (object.isNull())
+					throw 'HashLink global metadata contains an invalid object type at index $index';
+				if (!object.ref.globalValue.isNull() && !containsGlobalSlot(object.ref.globalValue))
+					throw "HashLink object global value is outside the published value table";
+			} else if (kind == HlTypeKind.Enum) {
+				var enumData = type.ref.data.ref.enumType;
+				if (enumData.isNull())
+					throw 'HashLink global metadata contains an invalid enum type at index $index';
+				if (!enumData.ref.globalValue.isNull() && !containsGlobalSlot(enumData.ref.globalValue))
+					throw "HashLink enum global value is outside the published value table";
+			}
+		}
+		return globalCount;
+	}
+
 	/** Initialize HashLink-derived metadata and return its stable pointer-table view. */
 	public function publish():HlMetadataPublication {
 		requireBuilding();
@@ -363,7 +391,7 @@ class HlMetadataGeneration {
 			functionDescriptors.validateCodeAt(functionIndex);
 			functionDescriptors.validateDebugAt(functionIndex, debugFileCount);
 		}
-		HlTypeBridge.native_metadata_validate_global_types(globalTypes, globalCount, globals);
+		validateGlobalTypes();
 		constantDescriptors.validate(globalCount);
 		HlTypeBridge.native_metadata_validate_constants(constantDescriptors.pointer(), constantDescriptors.length(), globalCount);
 		HlTypeBridge.native_metadata_validate_debug_sections(debugSectionDescriptors.pointer(), debugSectionDescriptors.length());
@@ -516,6 +544,13 @@ class HlMetadataGeneration {
 			if (debugFiles.offset(index).load().isNull())
 				throw "HashLink debug metadata contains a null file name";
 		return debugFileCount;
+	}
+
+	function containsGlobalSlot(value:RawPtr<RawPtr<UInt8>>):Bool {
+		for (index in 0...globalCount)
+			if (globals.offset(index) == value)
+				return true;
+		return false;
 	}
 
 	/** Borrow the published view until the returned lease is released. */
