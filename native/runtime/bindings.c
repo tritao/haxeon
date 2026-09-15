@@ -144,6 +144,8 @@ DEFINE_PRIM(_I32,native_type_kind,_BYTES);
 DEFINE_PRIM(_I32,native_type_size,_BYTES);
 DEFINE_PRIM(_I32,native_type_data_size,_BYTES);
 DEFINE_PRIM(_I32,native_type_object_field_offset,_BYTES _I32);
+DEFINE_PRIM(_VOID,native_type_initialize_enum,_BYTES _BYTES);
+DEFINE_PRIM(_VOID,native_type_initialize_virtual,_BYTES _BYTES);
 DEFINE_PRIM(_VOID,native_module_context_dispose,_BYTES);
 DEFINE_PRIM(_I32,native_type_function_arity,_BYTES);
 DEFINE_PRIM(_I32,native_type_object_field_count,_BYTES);

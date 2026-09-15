@@ -73,6 +73,8 @@ function main():Int {
 		enumData = builtEnum.ref.data.ref.enumType,
 		builtVirtual = builder.virtualType([{name: RawPtr.nullPtr(), type: intType, hashedName: 23}], 4, [0], RawPtr.nullPtr()),
 		virtualData = builtVirtual.ref.data.ref.virtualType;
+	HlTypeBridge.native_type_initialize_enum(builtEnum, module);
+	HlTypeBridge.native_type_initialize_virtual(builtVirtual, module);
 	var graphCorrect = HlTypeBridge.native_type_kind(builtObject) == 11
 		&& HlTypeBridge.native_type_object_field_count(builtObject) == 1
 		&& objectData.ref.nfields == 1
@@ -84,12 +86,15 @@ function main():Int {
 		&& HlTypeBridge.native_type_enum_constructor_count(builtEnum) == 1
 		&& enumData.ref.nconstructs == 1
 		&& enumData.ref.constructs.offset(0).ref.params.offset(0).load() == intType
-		&& enumData.ref.constructs.offset(0).ref.size == 4
+		&& enumData.ref.constructs.offset(0).ref.size == 16
+		&& enumData.ref.constructs.offset(0).ref.offsets.offset(0).load() == 12
 		&& HlTypeBridge.native_type_kind(builtVirtual) == 15
 		&& HlTypeBridge.native_type_virtual_field_count(builtVirtual) == 1
 		&& virtualData.ref.nfields == 1
 		&& virtualData.ref.fields.offset(0).ref.type == intType
-		&& virtualData.ref.indexes.offset(0).load() == 0;
+		&& virtualData.ref.indexes.offset(0).load() == 32
+		&& virtualData.ref.dataSize == 4
+		&& !virtualData.ref.lookup.isNull();
 	var typeTable = new HlTypeTable(arena, 1),
 		firstIndex = typeTable.add(voidType),
 		secondIndex = typeTable.add(intType),
@@ -108,7 +113,7 @@ function main():Int {
 		&& objectData.ref.name.offset(3).load() == 0
 		&& objectData.ref.fields.offset(0).ref.name.offset(0).load() == 102
 		&& objectData.ref.fields.offset(0).ref.name.offset(5).load() == 0;
-	var moduleCorrect = module.ref.alloc.ref.current == RawPtr.nullPtr()
+	var moduleCorrect = !module.ref.alloc.ref.current.isNull()
 		&& module.ref.functionsPtrs.offset(0).load() == RawPtr.nullPtr()
 		&& module.ref.functionsTypes.offset(0).load() == intType;
 	var nativeObjectCorrect = HlTypeBridge.native_type_data_size(builtObject) == 16

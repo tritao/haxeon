@@ -25,6 +25,18 @@ HL_PRIM int HL_NAME(native_type_object_field_offset)( hl_type *type, int field )
 	return runtime->fields_indexes[field];
 }
 
+HL_PRIM void HL_NAME(native_type_initialize_enum)( hl_type *type, hl_module_context *context ) {
+	if( type == NULL || type->kind != HENUM || type->tenum == NULL || context == NULL )
+		hl_error("HashLink enum metadata initialization requires an enum and module context");
+	hl_init_enum(type,context);
+}
+
+HL_PRIM void HL_NAME(native_type_initialize_virtual)( hl_type *type, hl_module_context *context ) {
+	if( type == NULL || type->kind != HVIRTUAL || type->virt == NULL || context == NULL )
+		hl_error("HashLink virtual metadata initialization requires a virtual type and module context");
+	hl_init_virtual(type,context);
+}
+
 HL_PRIM void HL_NAME(native_module_context_dispose)( hl_module_context *context ) {
 	if( context == NULL ) return;
 	hl_free(&context->alloc);
