@@ -193,6 +193,7 @@ class HlMetadataGeneration {
 		validateDescriptorTables();
 		for (functionIndex in 0...functionDescriptors.length())
 			HlTypeBridge.native_metadata_validate_function_code(functionDescriptors.get(functionIndex));
+		HlTypeBridge.native_metadata_validate_global_types(globalTypes, globalCount, globals);
 		HlTypeLayout.initialize(typeTable.pointer(), typeTable.length(), arena);
 		var contiguousTypes = arena.typePointer(), usesContiguousTypes = typeTable.isContiguousPrefix(contiguousTypes);
 		if (usesContiguousTypes)

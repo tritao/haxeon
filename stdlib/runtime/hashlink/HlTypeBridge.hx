@@ -48,6 +48,11 @@ class HlTypeBridge {
 	public static function native_metadata_validate_function_code(descriptor:RawPtr<HlFunction>):Int
 		return 0;
 
+	/** Validate the Haxe-owned global type and value-slot tables as HashLink metadata. */
+	public static function native_metadata_validate_global_types(types:RawPtr<RawPtr<HlType>>, count:Int,
+		globals:RawPtr<RawPtr<UInt8>>):Int
+		return 0;
+
 	public static function native_type_function_arity(type:RawPtr<HlType>):Int
 		return 0;
 

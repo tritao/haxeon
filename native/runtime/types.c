@@ -132,6 +132,34 @@ HL_PRIM int HL_NAME(native_metadata_validate_function_code)( hl_function *functi
 	return function->nops;
 }
 
+static bool native_metadata_contains_global_slot( void **globals, int count, void **value ) {
+	int i;
+	for( i = 0; i < count; i++ )
+		if( value == globals + i ) return true;
+	return false;
+}
+
+HL_PRIM int HL_NAME(native_metadata_validate_global_types)( hl_type **types, int count, void **globals ) {
+	int i;
+	if( count < 0 || (count > 0 && (types == NULL || globals == NULL)) )
+		hl_error("HashLink global metadata requires matching type and value tables");
+	for( i = 0; i < count; i++ ) {
+		hl_type *type = types[i];
+		if( type == NULL || type->kind < HVOID || type->kind >= HLAST )
+			hl_error("HashLink global metadata contains an invalid type");
+		if( type->kind == HOBJ || type->kind == HSTRUCT ) {
+			if( type->obj == NULL ) hl_error("HashLink global metadata contains an invalid object type");
+			if( type->obj->global_value != NULL && !native_metadata_contains_global_slot(globals,count,type->obj->global_value) )
+				hl_error("HashLink object global value is outside the published value table");
+		} else if( type->kind == HENUM ) {
+			if( type->tenum == NULL ) hl_error("HashLink global metadata contains an invalid enum type");
+			if( type->tenum->global_value != NULL && !native_metadata_contains_global_slot(globals,count,type->tenum->global_value) )
+				hl_error("HashLink enum global value is outside the published value table");
+		}
+	}
+	return count;
+}
+
 HL_PRIM void HL_NAME(native_metadata_bind_function_descriptors)( hl_type **types, int count, hl_function *functions, int function_count, hl_module_context *context ) {
 	int i;
 	native_metadata_validate_publication(count,types,context);

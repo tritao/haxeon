@@ -31,6 +31,7 @@ class HlNativeMetadataMain {
 			+ '&& publication.globalTypes.offset(1).load() == generation.type(0) '
 			+ '&& object.ref.data.ref.obj.ref.globalValue == publication.globals '
 			+ '&& HlTypeBridge.native_metadata_validate_function_code(publication.functionDescriptors) == 5 '
+			+ '&& HlTypeBridge.native_metadata_validate_global_types(publication.globalTypes, publication.globalCount, publication.globals) == 2 '
 			+ '&& publication.functionDescriptors.ref.nops == 5 && publication.functionDescriptors.ref.ops.ref.op == 26 '
 			+ '&& publication.functionDescriptors.ref.ops.ref.p1 == 0 && publication.functionDescriptors.ref.ops.ref.p2 == 1 '
 			+ '&& publication.functionDescriptors.ref.ops.ref.p3 == 0 && !publication.functionDescriptors.ref.ops.ref.extra.isNull() '

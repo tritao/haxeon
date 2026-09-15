@@ -155,6 +155,7 @@ DEFINE_PRIM(_VOID,native_metadata_publish_prototypes,_BYTES _I32 _BYTES);
 DEFINE_PRIM(_VOID,native_metadata_publish_contiguous_prototypes,_BYTES _I32 _BYTES);
 DEFINE_PRIM(_VOID,native_module_context_dispose,_BYTES);
 DEFINE_PRIM(_I32,native_metadata_validate_function_code,_BYTES);
+DEFINE_PRIM(_I32,native_metadata_validate_global_types,_BYTES _I32 _BYTES);
 DEFINE_PRIM(_I32,native_type_function_arity,_BYTES);
 DEFINE_PRIM(_I32,native_type_object_field_count,_BYTES);
 DEFINE_PRIM(_I32,native_type_enum_constructor_count,_BYTES);
