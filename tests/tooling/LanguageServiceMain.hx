@@ -222,7 +222,7 @@ class LanguageServiceMain {
 				hasImportedMember = true;
 		if (!hasImportedMember || !importedMemberCompletion.isIncomplete)
 			throw "recovered imported module completion failed";
-		var importedClassSource = "package editor.util; class Base { public var inherited:Int; } class Widget extends Base { public var ready:Int; public function reset(value:Int):Void return; } function main():Void return;";
+		var importedClassSource = "package editor.util; class Base { public var inherited:Int; } class Widget extends Base { public var ready:Int; public static function create():Widget return new Widget(); public function reset(value:Int):Void return; } function main():Void return;";
 		importService.update("editor/util/Widget.hx", importedClassSource);
 		var importedClassRecoverySource = "package editor; import editor.util.Widget; function main():Void { var widget:Widget = new Widget(); widget.";
 		importService.update("editor/ClassMain.hx", importedClassRecoverySource);
@@ -237,6 +237,15 @@ class LanguageServiceMain {
 		}
 		if (!hasImportedField || !hasImportedMethod)
 			throw "recovered imported class typing did not expose instance members";
+		var importedStaticRecoverySource = "package editor; import editor.util.Widget; function main():Void { return Widget.";
+		importService.update("editor/StaticClassMain.hx", importedStaticRecoverySource);
+		var importedStaticCompletion = importService.complete("editor/StaticClassMain.hx", importedStaticRecoverySource.length),
+			hasImportedStaticMethod = false;
+		for (item in importedStaticCompletion)
+			if (item.label == "create")
+				hasImportedStaticMethod = true;
+		if (!hasImportedStaticMethod)
+			throw "recovered imported class typing did not expose static members";
 		var importedTypedSource = "package editor; import editor.util.Widget; function main():Void { var widget:Widget = new Widget(); return; }";
 		importService.update("editor/TypedClassMain.hx", importedTypedSource);
 		var importedTypedModel = importService.compiler.modules.get("editor.TypedClassMain").recoveredSemanticModel,

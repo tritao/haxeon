@@ -1924,7 +1924,7 @@ class LanguageService {
 			if (importQualifier(program, importPath) != qualifier)
 				continue;
 			var imported = importedModule(importPath),
-				importedAst = imported == null ? null : imported.ast != null ? imported.ast : imported.lastGoodAst;
+				importedAst = imported == null ? null : effectiveAst(imported);
 			if (imported == null || importedAst == null)
 				continue;
 			var importedPrefix = importPath + ".";
