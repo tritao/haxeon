@@ -63,21 +63,23 @@ class ModuleAnalyzer {
 			dependencies.set(dependency, true);
 		for (fn in ast.functions)
 			for (statement in fn.statements)
-				DependencyScanner.scanStatement(statement, dependencies);
+				DependencyScanner.scanStatement(statement, dependencies, fn.typeParameters == null ? [] : fn.typeParameters);
 		for (classDecl in ast.classes)
 			for (field in classDecl.fields) {
 				var initializer = field.initializer;
 				if (initializer != null)
-					DependencyScanner.scanExpression(initializer, dependencies);
+					DependencyScanner.scanExpression(initializer, dependencies, classDecl.typeParameters);
 			}
 		for (classDecl in ast.classes)
 			for (method in classDecl.methods)
 				for (statement in method.statements)
-					DependencyScanner.scanStatement(statement, dependencies);
+					DependencyScanner.scanStatement(statement, dependencies,
+						classDecl.typeParameters.concat(method.typeParameters == null ? [] : method.typeParameters));
 		for (abstractDecl in ast.abstracts)
 			for (method in abstractDecl.methods)
 				for (statement in method.statements)
-					DependencyScanner.scanStatement(statement, dependencies);
+					DependencyScanner.scanStatement(statement, dependencies,
+						abstractDecl.typeParameters.concat(method.typeParameters == null ? [] : method.typeParameters));
 		for (abstractDecl in ast.enumAbstracts)
 			for (value in abstractDecl.values)
 				DependencyScanner.scanExpression(value.value, dependencies);
@@ -104,7 +106,7 @@ class ModuleAnalyzer {
 				dependencies.remove(dependency);
 		var packageName = ast.packageName;
 		for (dependency in [for (dependency in dependencies.keys()) dependency]) {
-			var sourceModule = sourceModuleForDependency(dependency);
+			var sourceModule = sourceModuleForType(dependency, packageName);
 			if (sourceModule == null
 				&& (PlatformAbi.isType(dependency) || isPlatformDependency(dependency) && ast.imports.indexOf(dependency) < 0)) {
 				dependencies.remove(dependency);
@@ -248,7 +250,13 @@ class ModuleAnalyzer {
 			module = sourceModuleForDependency(qualified);
 		if (module != null)
 			return module;
-		return declarationOwners.get(qualified);
+		if (qualified != typeName) {
+			module = sourceModuleForDependency(typeName);
+			if (module != null)
+				return module;
+		}
+		var owner = declarationOwners.get(qualified);
+		return owner != null ? owner : declarationOwners.get(typeName);
 	}
 
 	function indexDeclarations(moduleName:String, ast:compiler.syntax.Ast.AstProgram):Void {
@@ -307,7 +315,8 @@ class ModuleAnalyzer {
 	static function isPlatformDependency(path:String):Bool {
 		var root = QualifiedName.first(path);
 		return root == "haxe" || root == "sys" || root == "hl" || root == "Array" || root == "String" || root == "Math" || root == "Reflect"
-			|| root == "Std" || root == "StringTools" || root == "Type";
+			|| root == "Std" || root == "StringTools" || root == "Type" || root == "Dynamic" || root == "Any" || root == "Int" || root == "Float"
+			|| root == "Bool" || root == "Void" || root == "UInt";
 	}
 
 	static function mergeChanges(target:Map<String, Bool>, source:Map<String, Bool>):Void

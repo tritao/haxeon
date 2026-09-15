@@ -190,19 +190,22 @@ class WasmModule {
 	}
 
 	function sameValueType(left:WasmValueType, right:WasmValueType):Bool {
-		return switch [left, right] {
-			case [I32, I32], [I64, I64], [F32, F32], [F64, F64]: true;
-			case [Ref(leftType), Ref(rightType)]: leftType.nullable == rightType.nullable && sameHeapType(leftType.heap, rightType.heap);
-			default: false;
+		return switch left {
+			case Ref(leftType): switch right {
+					case Ref(rightType): leftType.nullable == rightType.nullable && sameHeapType(leftType.heap, rightType.heap);
+					default: false;
+				};
+			default: left == right;
 		};
 	}
 
 	function sameHeapType(left:WasmTypes.WasmHeapType, right:WasmTypes.WasmHeapType):Bool {
-		return switch [left, right] {
-			case [Any, Any], [Eq, Eq], [I31, I31], [Struct, Struct], [Array, Array], [Func, Func], [Extern, Extern], [None, None], [NoExtern, NoExtern],
-				[NoFunc, NoFunc], [Exn, Exn], [NoExn, NoExn]: true;
-			case [Type(leftIndex), Type(rightIndex)]: leftIndex == rightIndex;
-			default: false;
+		return switch left {
+			case Type(leftIndex): switch right {
+					case Type(rightIndex): leftIndex == rightIndex;
+					default: false;
+				};
+			default: left == right;
 		};
 	}
 }

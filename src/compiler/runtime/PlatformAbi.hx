@@ -22,6 +22,7 @@ class PlatformAbi {
 
 	public static function constructorArguments(name:String):Null<Array<CompilerType>>
 		return switch name {
+			case "haxe.io.BytesInput": [CompilerType.TBytes];
 			default: null;
 		};
 
@@ -32,6 +33,7 @@ class PlatformAbi {
 
 	public static function constructorNative(name:String):Null<String>
 		return switch name {
+			case "haxe.io.BytesInput": "__bytes_input_new";
 			default: null;
 		};
 
@@ -55,6 +57,35 @@ class PlatformAbi {
 			case CompilerType.THlBytes:
 				name == "ucs2Length" ? {arguments: [CompilerType.TInt], result: CompilerType.TInt, nativeName: "__hl_bytes_ucs2_length"} : null;
 			case CompilerType.TAbstract(_, _, underlying): method(underlying, name);
+			case CompilerType.TNativeAbstract(kind): nativeAbstractMethod(kind, name);
+			default: null;
+		};
+
+	static function nativeAbstractMethod(kind:String, name:String):Null<{arguments:Array<CompilerType>, result:CompilerType, nativeName:String}>
+		return switch kind {
+			case "realtime_bytes_input":
+				switch name {
+					case "readByte": {arguments: [], result: CompilerType.TInt, nativeName: "__bytes_input_read_byte"};
+					case "readInt32": {arguments: [], result: CompilerType.TInt, nativeName: "__bytes_input_read_i32"};
+					case "readDouble": {arguments: [], result: CompilerType.TFloat, nativeName: "__bytes_input_read_f64"};
+					case "readString": {arguments: [CompilerType.TInt], result: CompilerType.TString, nativeName: "__bytes_input_read_string"};
+					case "read": {arguments: [CompilerType.TInt], result: CompilerType.TBytes, nativeName: "__bytes_input_read"};
+					default: null;
+				}
+			case "realtime_bytes_output":
+				switch name {
+					case "writeByte": {arguments: [CompilerType.TInt], result: CompilerType.TVoid, nativeName: "__bytes_output_write_byte"};
+					case "writeInt32": {arguments: [CompilerType.TInt], result: CompilerType.TVoid, nativeName: "__bytes_output_write_i32"};
+					case "writeDouble": {arguments: [CompilerType.TFloat], result: CompilerType.TVoid, nativeName: "__bytes_output_write_f64"};
+					case "writeString": {arguments: [CompilerType.TString], result: CompilerType.TVoid, nativeName: "__bytes_output_write_string"};
+					case "write": {arguments: [CompilerType.TBytes], result: CompilerType.TVoid, nativeName: "__bytes_output_write"};
+					case "writeBytes": {
+							arguments: [CompilerType.TBytes, CompilerType.TInt, CompilerType.TInt],
+							result: CompilerType.TInt,
+							nativeName: "__bytes_output_write_range"
+						};
+					default: null;
+				}
 			default: null;
 		};
 

@@ -112,39 +112,39 @@ class CanonicalIrCodec {
 			writeCount(output, native.argumentModes.length);
 			for (mode in native.argumentModes)
 				switch mode {
-					case Value:
+					case IrCNativeArgumentMode.Value:
 						output.writeByte(0);
-					case BytesInput(lengthArgument):
+					case IrCNativeArgumentMode.BytesInput(lengthArgument):
 						output.writeByte(1);
 						writeCount(output, lengthArgument);
-					case BytesOutput(lengthArgument):
+					case IrCNativeArgumentMode.BytesOutput(lengthArgument):
 						output.writeByte(2);
 						writeCount(output, lengthArgument);
-					case Output:
+					case IrCNativeArgumentMode.Output:
 						output.writeByte(3);
-					case InputOutput:
+					case IrCNativeArgumentMode.InputOutput:
 						output.writeByte(4);
-					case BytesInputOutput(lengthArgument):
+					case IrCNativeArgumentMode.BytesInputOutput(lengthArgument):
 						output.writeByte(5);
 						writeCount(output, lengthArgument);
-					case BytesSize:
+					case IrCNativeArgumentMode.BytesSize:
 						output.writeByte(6);
-					case FixedOutput(size, alignment, pointerFree):
+					case IrCNativeArgumentMode.FixedOutput(size, alignment, pointerFree):
 						output.writeByte(7);
 						output.writeInt32(size);
 						output.writeInt32(alignment);
 						output.writeByte(pointerFree ? 1 : 0);
-					case FixedInputOutput(size, alignment, pointerFree):
+					case IrCNativeArgumentMode.FixedInputOutput(size, alignment, pointerFree):
 						output.writeByte(8);
 						output.writeInt32(size);
 						output.writeInt32(alignment);
 						output.writeByte(pointerFree ? 1 : 0);
-					case FixedInput(size, alignment, pointerFree):
+					case IrCNativeArgumentMode.FixedInput(size, alignment, pointerFree):
 						output.writeByte(9);
 						output.writeInt32(size);
 						output.writeInt32(alignment);
 						output.writeByte(pointerFree ? 1 : 0);
-					case FixedValue(size, alignment, pointerFree):
+					case IrCNativeArgumentMode.FixedValue(size, alignment, pointerFree):
 						output.writeByte(10);
 						output.writeInt32(size);
 						output.writeInt32(alignment);
@@ -177,22 +177,22 @@ class CanonicalIrCodec {
 					throw "Canonical IR C native argument mode count does not match its signature";
 				for (_ in 0...modeCount)
 					argumentModes.push(switch input.readByte() {
-						case 0: Value;
-						case 1: BytesInput(readCount(input));
-						case 2: BytesOutput(readCount(input));
-						case 3: Output;
-						case 4: InputOutput;
-						case 5: BytesInputOutput(readCount(input));
-						case 6 if (version >= 6): BytesSize;
-						case 7 if (version >= 7): FixedOutput(input.readInt32(), input.readInt32(), readByteBool(input));
-						case 8 if (version >= 7): FixedInputOutput(input.readInt32(), input.readInt32(), readByteBool(input));
-						case 9 if (version >= 9): FixedInput(input.readInt32(), input.readInt32(), readByteBool(input));
-						case 10 if (version >= 9): FixedValue(input.readInt32(), input.readInt32(), readByteBool(input));
+						case 0: IrCNativeArgumentMode.Value;
+						case 1: IrCNativeArgumentMode.BytesInput(readCount(input));
+						case 2: IrCNativeArgumentMode.BytesOutput(readCount(input));
+						case 3: IrCNativeArgumentMode.Output;
+						case 4: IrCNativeArgumentMode.InputOutput;
+						case 5: IrCNativeArgumentMode.BytesInputOutput(readCount(input));
+						case 6 if (version >= 6): IrCNativeArgumentMode.BytesSize;
+						case 7 if (version >= 7): IrCNativeArgumentMode.FixedOutput(input.readInt32(), input.readInt32(), readByteBool(input));
+						case 8 if (version >= 7): IrCNativeArgumentMode.FixedInputOutput(input.readInt32(), input.readInt32(), readByteBool(input));
+						case 9 if (version >= 9): IrCNativeArgumentMode.FixedInput(input.readInt32(), input.readInt32(), readByteBool(input));
+						case 10 if (version >= 9): IrCNativeArgumentMode.FixedValue(input.readInt32(), input.readInt32(), readByteBool(input));
 						case _: throw "Invalid canonical IR C native argument mode";
 					});
 			} else {
 				for (_ in 0...arguments.length)
-					argumentModes.push(Value);
+					argumentModes.push(IrCNativeArgumentMode.Value);
 			}
 			result.push({
 				name: name,

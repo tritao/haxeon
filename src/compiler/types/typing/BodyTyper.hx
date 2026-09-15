@@ -35,6 +35,7 @@ import compiler.types.TypedAst.TypedNativeFieldLayout;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
+import compiler.types.typing.ExpressionTyper.ExpressionSwitchRules;
 
 /** Types function and expression bodies using the current compilation session. */
 @:allow(compiler.types.typing.ProgramTyper)
@@ -75,15 +76,15 @@ class BodyTyper {
 			function(name, span, scope, type) this.bindCell(name, span, scope, type),
 			function(statements, scope, result) return this.typeStatements(statements, scope, result),
 			function(statements) return ControlFlow.alwaysReturns(statements, function(type, cases) return this.exhaustiveEnum(type, cases)));
-		var switchRules = {
-			subjectBinding: function(value, expected, scope) return this.switchSubjectBinding(value, expected, scope),
-			catchAll: function(value) return isSwitchCatchAll(value),
-			enumPattern: function(value, expected, scope) return this.typeEnumPattern(value, expected, scope),
-			caseKey: function(value, predicates) return this.switchCaseKey(value, predicates),
-			enumLiteral: function(value) return enumLiteral(value),
-			isEnum: function(type) return isEnum(type),
-			isNullableEnum: function(type) return isNullableEnum(type),
-			enumName: function(type) return enumName(type)
+		var switchRules:ExpressionSwitchRules = {
+			subjectBinding: function(value:AstExpression, expected:CompilerType, scope:Scope) return this.switchSubjectBinding(value, expected, scope),
+			catchAll: function(value:AstExpression) return isSwitchCatchAll(value),
+			enumPattern: function(value:AstExpression, expected:CompilerType, scope:Scope) return this.typeEnumPattern(value, expected, scope),
+			caseKey: function(value:TypedExpression, predicates:Array<TypedSwitchPredicate>) return this.switchCaseKey(value, predicates),
+			enumLiteral: function(value:TypedExpression) return enumLiteral(value),
+			isEnum: function(type:CompilerType) return isEnum(type),
+			isNullableEnum: function(type:CompilerType) return isNullableEnum(type),
+			enumName: function(type:CompilerType) return enumName(type)
 		};
 		this.genericInstantiation = new GenericInstantiation(session,
 			function(expression, scope, expected, inferDynamicLambdaResult) return this.typeExpression(expression, scope, expected, inferDynamicLambdaResult),
@@ -107,7 +108,7 @@ class BodyTyper {
 			function(receiver, name, span, scope) return this.typedMemberWithFlow(receiver, name, span, scope));
 		this.expressionTyper = new ExpressionTyper(session, conversionResolver, callResolver,
 			function(expression, scope, expected, inferDynamicLambdaResult) return this.typeExpression(expression, scope, expected, inferDynamicLambdaResult),
-			function(value, expected, context, code) return this.coerce(value, expected, context, code), switchRules, anonymousTypeRegistry,
+			function(value, expected, context, code) return this.coerce(value, expected, context, code), cast switchRules, anonymousTypeRegistry,
 			function(type, span) return this.arrayElementType(type, span), function(type) return this.lowerType(type), {
 				variable: function(name, span, scope, expected) return this.typeVariableExpression(name, span, scope, expected),
 				lambda: function(arguments, body, span, scope, expected,
@@ -125,7 +126,7 @@ class BodyTyper {
 			function(name, span, scope, type) this.bindCell(name, span, scope, type),
 			function(statements, scope, result) return this.typeStatements(statements, scope, result),
 			function(type, cases) return this.exhaustiveEnum(type, cases), function(type) return this.lowerType(type), unwrapNullable,
-			CallResolver.mapKeyIteratorSource, switchRules, {
+			CallResolver.mapKeyIteratorSource, cast switchRules, {
 				findStaticField: function(owner, name) return this.findStaticFieldNullable(owner, name),
 				requireStaticField: function(owner, name, span) return this.findStaticField(owner, name, span),
 				rejectInlineFieldMutation: function(owner, name, span) this.rejectInlineFieldMutation(owner, name, span),
@@ -1439,13 +1440,14 @@ class BodyTyper {
 				fail("E1022", 'Native field "$recordName.$name" has no fixed native memory layout', span);
 				return null;
 			}
+		var resolvedAccess:{size:Int, signed:Bool} = cast access;
 		return {
 			pointer: new TypedExpression(TCall("$rawptr.byteOffset", [pointer, new TypedExpression(TIntLiteral(fieldLayout.offset), TInt, span)]),
 				arrayLength == null
 				&& !addressOnly ? pointer.type : rawPointerType(fieldType, span), span),
 			type: fieldType,
-			size: access.size,
-			signed: access.signed,
+			size: resolvedAccess.size,
+			signed: resolvedAccess.signed,
 			arrayLength: arrayLength,
 			addressOnly: addressOnly
 		};
@@ -1457,10 +1459,8 @@ class BodyTyper {
 			if (isRawPointerAbstract(name))
 				declarationName = name;
 		var declaration = declarationName == null ? null : session.declarations.abstracts.get(declarationName);
-		if (declaration == null || declarationName == null || declaration.typeParameters.length != 1) {
+		if (declaration == null || declarationName == null || declaration.typeParameters.length != 1)
 			fail("E1022", "RawPtr type declaration is unavailable", span);
-			return TDynamic;
-		}
 		var substitutions:Map<String, CompilerType> = [];
 		substitutions.set(declaration.typeParameters[0], pointee);
 		return TAbstract(declarationName, [pointee], session.declarations.resolve(declaration.underlying, declaration.span, substitutions));

@@ -140,14 +140,20 @@ class WasmGcTypePlan {
 		return field + 1;
 	}
 
-	public function arrayType(element:IrType):Int
-		return arrayPlan(element).wrapperTypeIndex;
+	public function arrayType(element:IrType):Int {
+		var plan = arrayPlan(element);
+		return plan.wrapperTypeIndex;
+	}
 
-	public function arrayStorageType(element:IrType):Int
-		return arrayPlan(element).storageTypeIndex;
+	public function arrayStorageType(element:IrType):Int {
+		var plan = arrayPlan(element);
+		return plan.storageTypeIndex;
+	}
 
-	public function mapType(name:String):Int
-		return requireMapPlan(name).wrapperTypeIndex;
+	public function mapType(name:String):Int {
+		var plan = requireMapPlan(name);
+		return plan.wrapperTypeIndex;
+	}
 
 	public function mapPlan(name:String):WasmGcMapTypePlan
 		return requireMapPlan(name);
@@ -156,7 +162,12 @@ class WasmGcTypePlan {
 	public function arrayWrapperTypes():Array<Int> {
 		var keys = [for (key in arrayTypes.keys()) key];
 		keys.sort(Reflect.compare);
-		return [for (key in keys) arrayTypes.get(key).wrapperTypeIndex];
+		var result:Array<Int> = [];
+		for (key in keys) {
+			var plan:WasmGcArrayTypePlan = cast arrayTypes.get(key);
+			result.push(plan.wrapperTypeIndex);
+		}
+		return result;
 	}
 
 	public static inline function arrayLengthFieldIndex():Int
@@ -511,7 +522,7 @@ class WasmGcTypePlan {
 
 	function defineNamedTypes():Void {
 		for (object in orderedObjects) {
-			var fields = flattenedObjectFields.get(object.name),
+			var fields:Array<IrObjectField> = cast flattenedObjectFields.get(object.name),
 				baseIndex = object.base == null ? null : objectTypeIndices.get(object.base),
 				supertypes:Array<Int> = baseIndex == null ? [] : [baseIndex],
 				wasmFields:Array<WasmFieldType> = [
@@ -571,13 +582,13 @@ class WasmGcTypePlan {
 			{type: Value(Ref({nullable: true, heap: Any})), mutable: true}
 		]));
 		for (entry in [
-			{key: "i32", type: I32},
-			{key: "bool", type: I32},
-			{key: "i64", type: I64},
-			{key: "f64", type: F64},
-			{key: "type-ref", type: I32}
+			{key: "i32", type: WasmValueType.I32},
+			{key: "bool", type: WasmValueType.I32},
+			{key: "i64", type: WasmValueType.I64},
+			{key: "f64", type: WasmValueType.F64},
+			{key: "type-ref", type: WasmValueType.I32}
 		])
-			setType(boxedPrimitiveTypeIndices.get(entry.key), true, [], Struct([{type: Value(entry.type), mutable: false}]));
+			setType(cast boxedPrimitiveTypeIndices.get(entry.key), true, [], Struct([{type: Value(entry.type), mutable: false}]));
 	}
 
 	function defineGenericTypes():Void {
@@ -602,7 +613,7 @@ class WasmGcTypePlan {
 
 	function defineMapTypes():Void {
 		for (mapName in mapTypes.keys()) {
-			var map = mapTypes.get(mapName);
+			var map:WasmGcMapTypePlan = cast mapTypes.get(mapName);
 			setType(map.wrapperTypeIndex, true, [], Struct([
 				{type: Value(I32), mutable: true},
 				{type: Value(I32), mutable: true},
@@ -613,22 +624,24 @@ class WasmGcTypePlan {
 	}
 
 	function defineFunctionTypes():Void {
-		for (key in plannedFunctionTypes.keys())
-			setType(functionTypeIndices.get(key), true, [], Func(plannedFunctionTypes.get(key)));
+		for (key in plannedFunctionTypes.keys()) {
+			var functionType:WasmFunctionType = cast plannedFunctionTypes.get(key);
+			setType(cast functionTypeIndices.get(key), true, [], Func(functionType));
+		}
 	}
 
 	function arrayPlan(element:IrType):WasmGcArrayTypePlan {
 		var key = typeKey(element), plan = arrayTypes.get(key);
 		if (plan == null)
 			throw 'Array element type $element was not present when the Wasm GC type plan was built';
-		return plan;
+		return cast plan;
 	}
 
 	function requireMapPlan(name:String):WasmGcMapTypePlan {
 		var plan = mapTypes.get(name);
 		if (plan == null)
 			throw 'Unknown Wasm GC map type "$name"';
-		return plan;
+		return cast plan;
 	}
 
 	static function mapNameFromNative(name:String):Null<String> {

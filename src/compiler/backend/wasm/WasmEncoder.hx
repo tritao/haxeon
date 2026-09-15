@@ -702,19 +702,85 @@ class WasmEncoder {
 	}
 
 	static function sameValueType(left:WasmValueType, right:WasmValueType):Bool {
-		return switch [left, right] {
-			case [I32, I32], [I64, I64], [F32, F32], [F64, F64]: true;
-			case [Ref(leftType), Ref(rightType)]: leftType.nullable == rightType.nullable && sameHeapType(leftType.heap, rightType.heap);
+		return switch left {
+			case I32: switch right {
+					case I32: true;
+					default: false;
+				};
+			case I64: switch right {
+					case I64: true;
+					default: false;
+				};
+			case F32: switch right {
+					case F32: true;
+					default: false;
+				};
+			case F64: switch right {
+					case F64: true;
+					default: false;
+				};
+			case Ref(leftType): switch right {
+					case Ref(rightType): leftType.nullable == rightType.nullable && sameHeapType(leftType.heap, rightType.heap);
+					default: false;
+				};
 			default: false;
 		};
 	}
 
 	static function sameHeapType(left:WasmHeapType, right:WasmHeapType):Bool {
-		return switch [left, right] {
-			case [Any, Any], [Eq, Eq], [I31, I31], [Struct, Struct], [Array, Array], [Func, Func], [Extern, Extern], [None, None], [NoExtern, NoExtern],
-				[NoFunc, NoFunc], [Exn, Exn], [NoExn, NoExn]: true;
-			case [Type(leftIndex), Type(rightIndex)]: leftIndex == rightIndex;
-			default: false;
+		return switch left {
+			case Any: switch right {
+					case Any: true;
+					default: false;
+				};
+			case Eq: switch right {
+					case Eq: true;
+					default: false;
+				};
+			case I31: switch right {
+					case I31: true;
+					default: false;
+				};
+			case Struct: switch right {
+					case Struct: true;
+					default: false;
+				};
+			case Array: switch right {
+					case Array: true;
+					default: false;
+				};
+			case Func: switch right {
+					case Func: true;
+					default: false;
+				};
+			case Extern: switch right {
+					case Extern: true;
+					default: false;
+				};
+			case None: switch right {
+					case None: true;
+					default: false;
+				};
+			case NoExtern: switch right {
+					case NoExtern: true;
+					default: false;
+				};
+			case NoFunc: switch right {
+					case NoFunc: true;
+					default: false;
+				};
+			case Exn: switch right {
+					case Exn: true;
+					default: false;
+				};
+			case NoExn: switch right {
+					case NoExn: true;
+					default: false;
+				};
+			case Type(leftIndex): switch right {
+					case Type(rightIndex): leftIndex == rightIndex;
+					default: false;
+				};
 		};
 	}
 

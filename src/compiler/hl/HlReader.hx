@@ -139,7 +139,7 @@ class HlReader {
 			case HlType.Enum:
 				var name = readIndex(input),
 					global = readUnsigned(input, "enum global"),
-					constructors:Array<HlCode.HlEnumConstructor> = [];
+					constructors:Array<compiler.hl.HlCode.HlEnumConstructor> = [];
 				for (_ in 0...readCount(input, "enum constructor")) {
 					var constructorName = readIndex(input), parameters = [
 						for (_ in 0...readCount(input, "enum parameter"))

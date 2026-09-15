@@ -693,48 +693,66 @@ class WasmValidator {
 
 	static function unpackedValue(type:WasmStorageType, mode:Int, fn:WasmFunction):WasmValueType {
 		return switch type {
-			case Value(value) if (mode == 0): value;
-			case I8 if (mode == 1 || mode == 2): I32;
-			case I16 if (mode == 1 || mode == 2): I32;
-			case I8, I16:
-				throw 'Wasm function ${fn.name} uses a packed-field access with the wrong signedness';
-			case Value(_):
-				throw 'Wasm function ${fn.name} uses a packed-field access on an unpacked field';
+			case Value(value):
+				if (mode == 0) value; else throw 'Wasm function ${fn.name} uses a packed-field access on an unpacked field';
+			case I8:
+				if (mode == 1 || mode == 2) I32; else throw 'Wasm function ${fn.name} uses a packed-field access with the wrong signedness';
+			case I16:
+				if (mode == 1 || mode == 2) I32; else throw 'Wasm function ${fn.name} uses a packed-field access with the wrong signedness';
 		};
 	}
 
 	static function isDefaultable(type:WasmStorageType):Bool
 		return switch type {
 			case I8, I16: true;
-			case Value(I32), Value(I64), Value(F32), Value(F64): true;
-			case Value(Ref(refType)): refType.nullable;
+			case Value(value): switch value {
+					case I32, I64, F32, F64: true;
+					case Ref(refType): refType.nullable;
+				};
 		};
 
 	static function isStorageSubtype(actual:WasmStorageType, expected:WasmStorageType, module:WasmModule):Bool {
-		return switch [actual, expected] {
-			case [I8, I8], [I16, I16]: true;
-			case [Value(actualType), Value(expectedType)]: isValueSubtype(actualType, expectedType, module);
-			default: false;
+		return switch actual {
+			case I8: switch expected {
+					case I8: true;
+					default: false;
+				};
+			case I16: switch expected {
+					case I16: true;
+					default: false;
+				};
+			case Value(actualType): switch expected {
+					case Value(expectedType): isValueSubtype(actualType, expectedType, module);
+					default: false;
+				};
 		};
 	}
 
 	static function isCompositeSubtype(actual:WasmCompositeType, expected:WasmCompositeType, module:WasmModule):Bool {
-		return switch [actual, expected] {
-			case [Struct(actualFields), Struct(expectedFields)]:
-				if (actualFields.length < expectedFields.length) false; else {
-					var matches = true;
-					for (index in 0...expectedFields.length)
-						if (!isFieldSubtype(actualFields[index], expectedFields[index], module))
-							matches = false;
-					matches;
-				}
-			case [Array(actualField), Array(expectedField)]: isFieldSubtype(actualField, expectedField, module);
-			case [Func(actualType), Func(expectedType)]:
-				actualType.parameters.length == expectedType.parameters.length
-				&& actualType.results.length == expectedType.results.length
-				&& resultTypesSubtype(expectedType.parameters, actualType.parameters, module)
-				&& resultTypesSubtype(actualType.results, expectedType.results, module);
-			default: false;
+		return switch actual {
+			case Struct(actualFields): switch expected {
+					case Struct(expectedFields):
+						if (actualFields.length < expectedFields.length) false; else {
+							var matches = true;
+							for (index in 0...expectedFields.length)
+								if (!isFieldSubtype(actualFields[index], expectedFields[index], module))
+									matches = false;
+							matches;
+						}
+					default: false;
+				};
+			case Array(actualField): switch expected {
+					case Array(expectedField): isFieldSubtype(actualField, expectedField, module);
+					default: false;
+				};
+			case Func(actualType): switch expected {
+					case Func(expectedType):
+						actualType.parameters.length == expectedType.parameters.length
+						&& actualType.results.length == expectedType.results.length
+						&& resultTypesSubtype(expectedType.parameters, actualType.parameters, module)
+						&& resultTypesSubtype(actualType.results, expectedType.results, module);
+					default: false;
+				};
 		};
 	}
 
@@ -779,11 +797,12 @@ class WasmValidator {
 	}
 
 	static function isValueSubtype(actual:WasmValueType, expected:WasmValueType, module:WasmModule):Bool {
-		return switch [actual, expected] {
-			case [I32, I32], [I64, I64], [F32, F32], [F64, F64]: true;
-			case [Ref(actualType), Ref(expectedType)]: (!actualType.nullable || expectedType.nullable) && isHeapSubtype(actualType.heap, expectedType.heap,
-					module);
-			default: false;
+		return switch actual {
+			case Ref(actualType): switch expected {
+					case Ref(expectedType): (!actualType.nullable || expectedType.nullable) && isHeapSubtype(actualType.heap, expectedType.heap, module);
+					default: false;
+				};
+			default: actual == expected;
 		};
 	}
 
@@ -828,18 +847,21 @@ class WasmValidator {
 	}
 
 	static function sameValueType(left:WasmValueType, right:WasmValueType):Bool
-		return switch [left, right] {
-			case [I32, I32], [I64, I64], [F32, F32], [F64, F64]: true;
-			case [Ref(leftType), Ref(rightType)]: (!leftType.nullable || rightType.nullable) && sameHeapType(leftType.heap, rightType.heap);
-			default: false;
+		return switch left {
+			case Ref(leftType): switch right {
+					case Ref(rightType): (!leftType.nullable || rightType.nullable) && sameHeapType(leftType.heap, rightType.heap);
+					default: false;
+				};
+			default: left == right;
 		};
 
 	static function sameHeapType(left:WasmHeapType, right:WasmHeapType):Bool {
-		return switch [left, right] {
-			case [Any, Any], [Eq, Eq], [I31, I31], [Struct, Struct], [Array, Array], [Func, Func], [Extern, Extern], [None, None], [NoExtern, NoExtern],
-				[NoFunc, NoFunc], [Exn, Exn], [NoExn, NoExn]: true;
-			case [Type(leftIndex), Type(rightIndex)]: leftIndex == rightIndex;
-			default: false;
+		return switch left {
+			case Type(leftIndex): switch right {
+					case Type(rightIndex): leftIndex == rightIndex;
+					default: false;
+				};
+			default: left == right;
 		};
 	}
 

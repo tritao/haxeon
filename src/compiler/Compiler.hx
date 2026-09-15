@@ -783,12 +783,14 @@ class Compiler {
 		}
 		if (interfaceTarget != null)
 			return interfaceTarget;
-		return switch (defines.get("target")) {
-			case "wasm32" | "wasmgc" | "wasm-gc": "portable-abi32";
-			case "wasm64": "portable-abi64";
-			case "hl" | null: "portable-abi64";
-			case target: target;
-		}
+		var target = defines.get("target");
+		if (target == null || target == "hl")
+			return "portable-abi64";
+		if (target == "wasm32" || target == "wasmgc" || target == "wasm-gc")
+			return "portable-abi32";
+		if (target == "wasm64")
+			return "portable-abi64";
+		return target;
 	}
 
 	function irNatives():Array<IrNative>

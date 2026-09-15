@@ -13,7 +13,7 @@ class WasmGcMaps {
 	public static function add(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, native:IrNative, mapName:String, operation:String):Int {
 		var map = plan.mapPlan(mapName),
 			mapType = plan.mapType(mapName),
-			mapReference = Ref({nullable: true, heap: Type(mapType)}),
+			mapReference = WasmValueType.Ref({nullable: true, heap: Type(mapType)}),
 			name = '__${mapName}_$operation';
 		return switch operation {
 			case "alloc": addAlloc(module, name, plan, map, mapType, mapReference);
@@ -37,7 +37,7 @@ class WasmGcMaps {
 			outputType:IrType):Int {
 		var map = plan.mapPlan(mapName),
 			mapType = plan.mapType(mapName),
-			mapReference = Ref({nullable: true, heap: Type(mapType)}),
+			mapReference = WasmValueType.Ref({nullable: true, heap: Type(mapType)}),
 			keys = operation == "keys";
 		if (operation != "keys" && operation != "values")
 			throw 'Wasm GC native ${native.name} is not a map projection';
@@ -51,7 +51,7 @@ class WasmGcMaps {
 			return result;
 		var map = plan.mapPlan(mapName),
 			mapType = plan.mapType(mapName),
-			mapReference = Ref({nullable: true, heap: Type(mapType)}),
+			mapReference = WasmValueType.Ref({nullable: true, heap: Type(mapType)}),
 			keyType = plan.arrayType(map.keyType),
 			keyStorage = plan.arrayStorageType(map.keyType),
 			stringEqual = map.keyType == Bytes ? ensureStringEqual(module, functions, plan) : -1,
@@ -259,8 +259,8 @@ class WasmGcMaps {
 			{parameters: [mapReference, plan.valueType(map.keyType), plan.valueType(map.valueType)], results: []}, [
 			{type: I32},
 			{type: I32},
-			{type: Ref({nullable: false, heap: Type(keyArray)})},
-			{type: Ref({nullable: false, heap: Type(valueArray)})}
+			{type: WasmValueType.Ref({nullable: false, heap: Type(keyArray)})},
+			{type: WasmValueType.Ref({nullable: false, heap: Type(valueArray)})}
 		], body));
 	}
 
@@ -289,7 +289,7 @@ class WasmGcMaps {
 				LocalGet(2),
 				ArrayGet(valueStorage)
 			],
-			resultType:WasmValueType = Ref({
+			resultType:WasmValueType = WasmValueType.Ref({
 				nullable: true,
 				heap: Any
 			});
@@ -395,7 +395,7 @@ class WasmGcMaps {
 		}
 		body = body.concat([LocalGet(1), Return]);
 		return module.addFunction(new WasmFunction(name, {parameters: [mapReference], results: [plan.valueType(outputType)]},
-			[{type: Ref({nullable: false, heap: Type(array)})}, {type: I32}], body));
+			[{type: WasmValueType.Ref({nullable: false, heap: Type(array)})}, {type: I32}], body));
 	}
 
 	static function addRemove(module:WasmModule, name:String, plan:WasmGcTypePlan, map:WasmGcMapTypePlan, mapType:Int, mapReference:WasmValueType,

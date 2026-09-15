@@ -59,13 +59,27 @@ class CompilerIntrinsics {
 		definitions.push(native("__bytes_get_string", "haxeon_runtime", "__bytes_get_string", [bytes, TInt, TInt], TString));
 
 		// Specialized BytesInput representation and operations.
+		definitions.push(native("__bytes_input_new", "haxeon_runtime", "__bytes_input_new", [bytes], input));
 		definitions.push(native("__bytes_input_position", "haxeon_runtime", "__bytes_input_position", [input], TInt));
 		definitions.push(native("__bytes_input_big_endian", "haxeon_runtime", "__bytes_input_big_endian", [input], TBool));
 		definitions.push(native("__bytes_input_set_big_endian", "haxeon_runtime", "__bytes_input_set_big_endian", [input, TBool], TVoid));
+		definitions.push(native("__bytes_input_read_byte", "haxeon_runtime", "__bytes_input_read_byte", [input], TInt));
+		definitions.push(native("__bytes_input_read_i32", "haxeon_runtime", "__bytes_input_read_i32", [input], TInt));
+		definitions.push(native("__bytes_input_read_f64", "haxeon_runtime", "__bytes_input_read_f64", [input], TFloat));
+		definitions.push(native("__bytes_input_read_string", "haxeon_runtime", "__bytes_input_read_string", [input, TInt], TString));
+		definitions.push(native("__bytes_input_read", "haxeon_runtime", "__bytes_input_read", [input, TInt], bytes));
 
 		// Specialized BytesOutput representation and operations.
+		definitions.push(native("__bytes_output_new", "haxeon_runtime", "__bytes_output_new", [], output));
 		definitions.push(native("__bytes_output_big_endian", "haxeon_runtime", "__bytes_output_big_endian", [output], TBool));
 		definitions.push(native("__bytes_output_set_big_endian", "haxeon_runtime", "__bytes_output_set_big_endian", [output, TBool], TVoid));
+		definitions.push(native("__bytes_output_write_byte", "haxeon_runtime", "__bytes_output_write_byte", [output, TInt], TVoid));
+		definitions.push(native("__bytes_output_write_i32", "haxeon_runtime", "__bytes_output_write_i32", [output, TInt], TVoid));
+		definitions.push(native("__bytes_output_write_f64", "haxeon_runtime", "__bytes_output_write_f64", [output, TFloat], TVoid));
+		definitions.push(native("__bytes_output_write_string", "haxeon_runtime", "__bytes_output_write_string", [output, TString], TVoid));
+		definitions.push(native("__bytes_output_write", "haxeon_runtime", "__bytes_output_write", [output, bytes], TVoid));
+		definitions.push(native("__bytes_output_write_range", "haxeon_runtime", "__bytes_output_write_range", [output, bytes, TInt, TInt], TInt));
+		definitions.push(native("__bytes_output_get_bytes", "haxeon_runtime", "__bytes_output_get_bytes", [output], bytes));
 		return definitions;
 	}
 

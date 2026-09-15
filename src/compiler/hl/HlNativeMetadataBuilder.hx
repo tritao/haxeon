@@ -158,7 +158,7 @@ class HlNativeMetadataBuilder {
 		return result;
 	}
 
-	static function enumConstructors(code:HlCode, generation:HlMetadataGeneration, constructors:Array<HlCode.HlEnumConstructor>,
+	static function enumConstructors(code:HlCode, generation:HlMetadataGeneration, constructors:Array<compiler.hl.HlCode.HlEnumConstructor>,
 			types:Array<RawPtr<runtime.hashlink.HlType>>):Array<runtime.hashlink.HlTypeBuilder.HlEnumConstructSpec> {
 		var result:Array<runtime.hashlink.HlTypeBuilder.HlEnumConstructSpec> = [];
 		for (constructor in constructors) {

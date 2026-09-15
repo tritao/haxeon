@@ -33,4 +33,5 @@ extern class Bytes {
 	/** Returns a zero-copy view over a validated byte range. */
 	@:hlNative("haxeon_runtime", "__bytes_view")
 	public static function view(bytes:Bytes, offset:Int, length:Int):Bytes;
+
 }

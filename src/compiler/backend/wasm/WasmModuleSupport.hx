@@ -105,7 +105,7 @@ class WasmModuleSupport {
 
 	public static function isGcNativePointerType(type:IrType):Bool
 		return switch type {
-			case Abstract("native_pointer"): true;
+			case IrType.Abstract("native_pointer"): true;
 			case _: false;
 		};
 
@@ -323,7 +323,7 @@ class WasmModuleSupport {
 
 	public static function typeId(type:IrType):Int {
 		var identity = switch type {
-			case Iterator(_): Abstract("realtime_iterator");
+			case Iterator(_): IrType.Abstract("realtime_iterator");
 			default: type;
 		}, text = Std.string(identity), hash:Int = -2128831035;
 		for (index in 0...text.length) {
@@ -358,7 +358,7 @@ class WasmModuleSupport {
 			case I64: I64;
 			case F32: F64;
 			case F64: F64;
-			case RawPtr, Bytes, ManagedBytes, Dyn, TypeRef, Array(_), Enum(_), Obj(_), Abstract(_), Virtual(_), Iterator(_), Function(_, _): I32;
+			case RawPtr, Bytes, ManagedBytes, Dyn, TypeRef, Array(_), Enum(_), Obj(_), IrType.Abstract(_), Virtual(_), Iterator(_), Function(_, _): I32;
 			default: throw 'Wasm scalar backend does not yet support IR type ${Std.string(type)}';
 		};
 }

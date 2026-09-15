@@ -6,6 +6,13 @@ import compiler.ffi.HxiProjectionProfile;
 
 /** Validates the Haxe presentation profile independently from native ABI semantics. */
 class HxiProjectionProfileValidator {
+	static function has<T>(values:Array<T>, predicate:T->Bool):Bool {
+		for (value in values)
+			if (predicate(value))
+				return true;
+		return false;
+	}
+
 	/** Validate Haxe naming rules against the declarations the profile can project. */
 	public static function validate(path:String, model:HxiInterface, ?omitted:Map<String, Bool>, ?visibleDeclarations:Map<String, HxiDeclaration>,
 			profile:HxiProjectionProfile):Void {
@@ -60,10 +67,11 @@ class HxiProjectionProfileValidator {
 			if (!local.exists(enumName) || HxiHaxeEmitter.isOmitted(omitted, enumName))
 				HxiHaxeEmitter.profileError(path, '$entry refers to an enum projected by a dependency; rename its values in that interface profile');
 			var valueNames:Map<String, Bool> = [for (value in values) value.name => true];
-			for (valueName in HxiHaxeEmitter.sortedKeys(profile.enumValueNames.get(enumName))) {
+			var projectedValueNames:Map<String, String> = cast profile.enumValueNames.get(enumName);
+			for (valueName in HxiHaxeEmitter.sortedKeys(projectedValueNames)) {
 				if (!valueNames.exists(valueName))
 					HxiHaxeEmitter.profileError(path, '$entry.$valueName references an unknown enum value');
-				HxiHaxeEmitter.validateEnumValueIdentifier(path, '$entry.$valueName', profile.enumValueNames.get(enumName).get(valueName));
+				HxiHaxeEmitter.validateEnumValueIdentifier(path, '$entry.$valueName', projectedValueNames.get(valueName));
 			}
 		}
 		for (name in HxiHaxeEmitter.sortedKeys(profile.functionNames)) {
@@ -82,7 +90,7 @@ class HxiProjectionProfileValidator {
 				declaration = local.get(typeName);
 			if (separator <= 0 || separator == key.length - 1)
 				HxiHaxeEmitter.profileError(path, 'fieldNames key "$key" must have the form "type.field"');
-			var fields = switch declaration {
+			var fields:Array<compiler.ffi.HxiModel.HxiField> = switch declaration {
 				case Structure(_, _, _, fields, _) if (!HxiHaxeEmitter.isOmitted(omitted, typeName)): fields;
 				case null:
 					HxiHaxeEmitter.profileError(path, '$entry references an unknown structure in this interface');
@@ -91,7 +99,11 @@ class HxiProjectionProfileValidator {
 					HxiHaxeEmitter.profileError(path, '$entry does not refer to a structure projected by this interface');
 					[];
 			};
-			if (!Lambda.exists(fields, field -> field.name == fieldName))
+			var fieldFound = false;
+			for (field in fields)
+				if (field.name == fieldName)
+					fieldFound = true;
+			if (!fieldFound)
 				HxiHaxeEmitter.profileError(path, '$entry references an unknown structure field');
 			HxiHaxeEmitter.validateIdentifier(path, entry, profile.fieldNames.get(key));
 		}
@@ -106,8 +118,8 @@ class HxiProjectionProfileValidator {
 		for (name in HxiHaxeEmitter.sortedKeys(profile.resultPolicies)) {
 			var entry = 'resultPolicies.$name',
 				declaration = local.get(name),
-				policy = profile.resultPolicies.get(name),
-				values = switch declaration {
+				policy:compiler.ffi.HxiProjectionProfile.HxiResultErrorProjection = cast profile.resultPolicies.get(name),
+				values:Array<compiler.ffi.HxiModel.HxiEnumValue> = switch declaration {
 					case Enumeration(_, _, _, values, _): values;
 					case null:
 						HxiHaxeEmitter.profileError(path, '$entry references an unknown result enum in this interface');
@@ -116,12 +128,23 @@ class HxiProjectionProfileValidator {
 						HxiHaxeEmitter.profileError(path, '$entry does not refer to an enum in this interface');
 						[];
 				};
-			if (!Lambda.exists(values, value -> value.name == policy.successValue))
+			var valueFound = false;
+			for (value in values)
+				if (value.name == policy.successValue)
+					valueFound = true;
+			if (!valueFound)
 				HxiHaxeEmitter.profileError(path, '$entry.successValue references an unknown enum value');
-			if (!Lambda.exists(model.declarations, declaration -> switch declaration {
-				case Function(_, _, Named(resultName), _, _, _, _, _) if (resultName == name): true;
-				case _: false;
-			}))
+			var resultMatches = false;
+			for (candidate in model.declarations)
+				switch candidate {
+					case Function(_, _, resultType, _, _, _, _, _):
+						switch resultType {
+							case Named(resultName) if (resultName == name): resultMatches = true;
+							case _:
+						};
+					case _:
+				}
+			if (!resultMatches)
 				HxiHaxeEmitter.profileError(path, '$entry does not match the result type of any function in this interface');
 			if (policy.checkedSuffix.length == 0)
 				HxiHaxeEmitter.profileError(path, '$entry.checkedSuffix must not be empty');
@@ -131,7 +154,13 @@ class HxiProjectionProfileValidator {
 					HxiHaxeEmitter.profileError(path, '$entry cannot use omitted diagnostic function "${policy.diagnosticFunction}"');
 				var diagnostic = local.get(policy.diagnosticFunction);
 				switch diagnostic {
-					case Function(_, parameters, Primitive("utf8"), _, _, _, _, _) if (parameters.length == 0):
+					case Function(_, parameters, resultType, _, _, _, _, _):
+						var isUtf8 = switch resultType {
+							case Primitive(name): name == "utf8";
+							case _: false;
+						};
+						if (parameters.length != 0 || !isUtf8)
+							HxiHaxeEmitter.profileError(path, '$entry.diagnosticFunction must be a zero-argument UTF-8 function in this interface');
 					case null:
 						HxiHaxeEmitter.profileError(path, '$entry.diagnosticFunction references an unknown function in this interface');
 					case _:
@@ -154,11 +183,11 @@ class HxiProjectionProfileValidator {
 					case Opaque(_, _):
 						hasOpaqueTypes = true;
 					case Function(_, parameters, _, _, _, _, _, _):
-						if (Lambda.exists(parameters, parameter -> switch parameter.ownership {
-							case Owned(_): true;
-							case Borrowed | Unspecified: false;
-						}))
-							hasOwnedPointerOutputs = true;
+						for (parameter in parameters)
+							switch parameter.ownership {
+								case Owned(_): hasOwnedPointerOutputs = true;
+								case Borrowed | Unspecified:
+							}
 					case Constant(_, _, _):
 						hasConstants = true;
 					case _:

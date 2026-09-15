@@ -52,14 +52,14 @@ class HlHotReloadLoader {
 		}
 	}
 
-	static function functionEntries(code:HlCode, metadata:HlMetadataGeneration):Array<runtime.hashlink.HlFunctionVersionEntry> {
+	static function functionEntries(code:HlCode, metadata:HlMetadataGeneration):Array<runtime.hashlink.HlFunctionVersionTable.HlFunctionVersionEntry> {
 		var identities:Map<Int, Int> = [];
 		for (identity in code.functionIdentities) {
 			if (identities.exists(identity.functionIndex))
 				throw 'HashLink function ${identity.functionIndex} has duplicate hot-reload identity metadata';
 			identities.set(identity.functionIndex, identity.stableId);
 		}
-		var result:Array<runtime.hashlink.HlFunctionVersionEntry> = [];
+		var result:Array<runtime.hashlink.HlFunctionVersionTable.HlFunctionVersionEntry> = [];
 		for (fn in code.functions) {
 			var mapped:Null<Int> = identities.get(fn.functionIndex),
 				stableId = mapped == null ? fn.functionIndex : mapped;

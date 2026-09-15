@@ -331,10 +331,14 @@ class ProgramTyper {
 		for (method in classDecl.methods) {
 			if (BodyTyper.isGeneric(method))
 				continue;
+			if (classDecl.typeParameters.length > 0 && !method.isStatic && method.name != "new")
+				continue;
 			var qualified = classDecl.name + "." + method.name,
 				typeBody = typeBodies && (selected == null || selected.exists(qualified)),
-				typedMethod = typeBody ? bodyTyper.typeFunction(method, classDecl.name, method.isStatic,
-					erasedSubstitutions) : methodSignature(method, classDecl.name, erasedSubstitutions);
+				typeGenericBody = classDecl.typeParameters.length == 0 || method.isStatic || method.name == "new",
+				typedMethod = typeBody
+					&& typeGenericBody ? bodyTyper.typeFunction(method, classDecl.name, method.isStatic,
+						erasedSubstitutions) : methodSignature(method, classDecl.name, erasedSubstitutions);
 			if (method.name == "new") {
 				hasConstructor = true;
 				if (typeBody && instanceInitializers.length > 0)
@@ -396,8 +400,15 @@ class ProgramTyper {
 		}
 		return [
 			for (classDecl in classes) {
-				var nativeLayouts = classDecl.isNativeValue ? [for (target in targets) layoutsByTarget.get(target).get(classDecl.name)] : [];
-				if (classDecl.isNativeValue) session.nativeLayoutsByName.set(classDecl.name, layoutsByTarget.get(session.nativeAbiTarget).get(classDecl.name));
+				var nativeLayouts:Array<TypedNativeLayout> = [];
+				if (classDecl.isNativeValue) for (target in targets) {
+					var targetLayouts:Map<String, TypedNativeLayout> = cast layoutsByTarget.get(target);
+					nativeLayouts.push(cast targetLayouts.get(classDecl.name));
+				}
+				if (classDecl.isNativeValue) {
+					var selectedLayouts:Map<String, TypedNativeLayout> = cast layoutsByTarget.get(session.nativeAbiTarget);
+					session.nativeLayoutsByName.set(classDecl.name, cast selectedLayouts.get(classDecl.name));
+				}
 				{
 					name: classDecl.name,
 					isValue: classDecl.isValue,
@@ -459,7 +470,7 @@ class ProgramTyper {
 				if (arguments.length != 0)
 					BodyTyper.fail("E1022", 'Generic native value field "$name" has no fixed layout', span);
 				var nested = computeNativeLayout(name, target, classes, layouts, visiting),
-					nestedClass = classes.get(name);
+					nestedClass:TypedClass = cast classes.get(name);
 				result.set(name, NativeLayout.nestedDeclaration(name, nested, nestedClass.span));
 			case _:
 		}

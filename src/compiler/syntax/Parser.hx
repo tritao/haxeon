@@ -683,6 +683,7 @@ class Parser {
 		consume(TokenKind.LeftBrace);
 		var methods = [];
 		while (!check(TokenKind.RightBrace)) {
+			match(TokenKind.Public);
 			var methodStart = consume(TokenKind.Function).span,
 				methodName = consume(TokenKind.Identifier).text;
 			var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
@@ -971,6 +972,11 @@ class Parser {
 			match(TokenKind.Semicolon);
 			return [Return(value, start.merge(expressionSpan(value)))];
 		}
+		if (!check(TokenKind.LeftBrace)) {
+			var value = parseExpression();
+			match(TokenKind.Semicolon);
+			return [Expression(value, expressionSpan(value))];
+		}
 		return parseStatementOrBlock();
 	}
 
@@ -982,6 +988,10 @@ class Parser {
 	}
 
 	function parseStatements():Array<AstStatement> {
+		if (check(TokenKind.LeftBrace)
+			&& peekKind(1) != TokenKind.RightBrace
+			&& !(peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon))
+			return parseStatementOrBlock();
 		if (!check(TokenKind.Var))
 			return [parseStatement()];
 		var start = advance().span, declarations = [];
@@ -1437,6 +1447,10 @@ class Parser {
 			var expression:AstExpression = Variable(name, start.merge(end));
 			return parsePostfix(expression);
 		}
+		if (check(TokenKind.LeftBrace)
+			&& peekKind(1) != TokenKind.RightBrace
+			&& !(peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon))
+			return parseExpressionBranch();
 		if (match(TokenKind.LeftBrace)) {
 			var start = previous().span, fields = [];
 			if (!check(TokenKind.RightBrace)) {
@@ -1566,7 +1580,7 @@ class Parser {
 				continue;
 			}
 			var saved = position, candidate = tryParseExpression();
-			if (candidate != null && check(TokenKind.RightBrace)) {
+			if (candidate != null && (check(TokenKind.RightBrace) || match(TokenKind.Semicolon)) && check(TokenKind.RightBrace)) {
 				var end = consume(TokenKind.RightBrace).span;
 				return BlockExpression(statements, candidate, start.merge(end));
 			}
@@ -1694,9 +1708,18 @@ class Parser {
 	function parseSwitchExpressionBranch():AstExpression {
 		var statements = [], start = current().span;
 		while (true) {
-			if (atSwitchBranchEnd() && statements.length > 0 && statementTerminates(statements[statements.length - 1])) {
-				var end = statementSpan(statements[statements.length - 1]);
-				return BlockExpression(statements, Unreachable(end), start.merge(end));
+			if (atSwitchBranchEnd() && statements.length > 0) {
+				var last = statements[statements.length - 1];
+				switch last {
+					case Expression(result, _):
+						statements.pop();
+						return BlockExpression(statements, result, start.merge(expressionSpan(result)));
+					default:
+						if (statementTerminates(last)) {
+							var end = statementSpan(last);
+							return BlockExpression(statements, Unreachable(end), start.merge(end));
+						}
+				}
 			}
 			if (isStatementOnlyStart(current().kind)) {
 				appendStatements(statements, parseStatements());
@@ -1839,11 +1862,18 @@ class Parser {
 			var fields = [];
 			while (!check(TokenKind.RightBrace)) {
 				var optional = false;
-				while (check(TokenKind.Question) || check(TokenKind.Final) || check(TokenKind.Var))
+				while (check(TokenKind.Question) || check(TokenKind.Final) || check(TokenKind.Var) || check(TokenKind.At))
 					if (match(TokenKind.Question)) {
 						if (optional)
 							fail(previous(), "Duplicate optional field marker");
 						optional = true;
+					} else if (check(TokenKind.At)) {
+						for (metadata in parseMetadata())
+							if (metadata.name == "optional") {
+								if (optional)
+									fail(current(), "Duplicate optional field marker");
+								optional = true;
+							}
 					} else
 						advance();
 				var name = consume(TokenKind.Identifier);

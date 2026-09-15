@@ -13,12 +13,14 @@ class NativeSlice<T> {
 	}
 
 	public inline function get(index:Int):T {
-		checkIndex(index);
+		if (index < 0 || index >= length)
+			throw 'Native slice index $index is outside 0...$length';
 		return pointer.offset(index).load();
 	}
 
 	public inline function set(index:Int, value:T):Void {
-		checkIndex(index);
+		if (index < 0 || index >= length)
+			throw 'Native slice index $index is outside 0...$length';
 		pointer.offset(index).store(value);
 	}
 
@@ -28,7 +30,4 @@ class NativeSlice<T> {
 		return new NativeSlice(pointer.byteOffset(start * sizeof<T>()), count);
 	}
 
-	function checkIndex(index:Int):Void
-		if (index < 0 || index >= length)
-			throw 'Native slice index $index is outside 0...$length';
 }

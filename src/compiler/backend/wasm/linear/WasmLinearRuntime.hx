@@ -1427,7 +1427,7 @@ class WasmLinearRuntime {
 			builder.i32Sub();
 			builder.emit(I32Store(WasmLayout.MAP_COUNT_OFFSET));
 			builder.i32Const(1);
-		}, I32);
+		}, WasmValueType.I32);
 		builder.return_();
 		return module.addFunction(builder.finish());
 	}
@@ -1792,7 +1792,7 @@ class WasmLinearRuntime {
 			builder.emit(I64Const(0));
 			builder.localGet(value);
 			builder.emit(I64Sub);
-		}, I64);
+		}, WasmValueType.I64);
 		builder.localSet(number);
 		builder.i32Const(1);
 		builder.localSet(digitCount);
@@ -1821,7 +1821,7 @@ class WasmLinearRuntime {
 			builder.emit(I64Const(0));
 			builder.localGet(value);
 			builder.emit(I64Sub);
-		}, I64);
+		}, WasmValueType.I64);
 		builder.localSet(number);
 		builder.localGet(digitCount);
 		builder.localGet(isNegative);
@@ -1938,7 +1938,7 @@ class WasmLinearRuntime {
 				builder.i32Const(trueString);
 			}, function(builder) {
 				builder.i32Const(falseString);
-			}, I32);
+			}, WasmValueType.I32);
 			builder.return_();
 		});
 		builder.emit(Unreachable);
@@ -2054,7 +2054,7 @@ class WasmLinearRuntime {
 			builder.localGet(leftLength);
 		}, function(builder) {
 			builder.localGet(rightLength);
-		}, I32);
+		}, WasmValueType.I32);
 		builder.localSet(limit);
 		builder.i32Const(0);
 		builder.localSet(index);

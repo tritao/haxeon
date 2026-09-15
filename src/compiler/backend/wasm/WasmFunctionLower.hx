@@ -63,7 +63,8 @@ class WasmFunctionLower {
 					if (candidates.exists(input.id))
 						switch located.value {
 							case ToDyn(_, value) if (value.id == input.id):
-								uses.set(input.id, (uses.get(input.id) ?? 0) + 1);
+								var previous = uses.get(input.id);
+								uses.set(input.id, (previous == null ? 0 : previous) + 1);
 							default:
 								invalid.set(input.id, true);
 						}
@@ -152,7 +153,7 @@ class WasmFunctionLower {
 				exception: placement.allocate(context.representation.values.valueType(Dyn)),
 				saved: saved,
 				blocks: blocks,
-				tag: context.exceptionTag
+				tag: cast context.exceptionTag
 			};
 		}
 		var predecessor = placement.allocate(I32);
@@ -174,9 +175,9 @@ class WasmFunctionLower {
 				var exceptionLocal = placement.allocate(context.representation.values.valueType(Dyn)),
 					protectedBody:Array<WasmInstruction> = [Try(null)];
 				protectedBody = protectedBody.concat(rooted);
-				protectedBody = protectedBody.concat([Catch(context.exceptionTag), LocalSet(exceptionLocal)]);
+				protectedBody = protectedBody.concat([Catch(cast context.exceptionTag), LocalSet(exceptionLocal)]);
 				restoreRoots(protectedBody);
-				protectedBody = protectedBody.concat([LocalGet(exceptionLocal), Throw(context.exceptionTag), End, Unreachable]);
+				protectedBody = protectedBody.concat([LocalGet(exceptionLocal), Throw(cast context.exceptionTag), End, Unreachable]);
 				rooted = protectedBody;
 			}
 			body = rooted;
@@ -975,7 +976,7 @@ class WasmFunctionLower {
 						I32Const(WasmLayout.ITERATOR_SIZE),
 						Call(allocator),
 						LocalTee(iteratorLocal),
-						I32Const(typeId(Abstract("realtime_iterator"))),
+						I32Const(typeId(IrType.Abstract("realtime_iterator"))),
 						I32Store(0),
 						LocalGet(iteratorLocal),
 						I32Const(WasmLayout.ITERATOR_SIZE),
@@ -1288,7 +1289,7 @@ class WasmFunctionLower {
 		switch argument.type {
 			case Bytes, ManagedBytes:
 				body.push(Call(bytesDataPointer));
-			case Abstract("realtime_bytes"):
+			case IrType.Abstract("realtime_bytes"):
 				body.push(I32Const(WasmLayout.STRING_DATA_OFFSET));
 				body.push(I32Add);
 			case _:
@@ -1448,7 +1449,7 @@ class WasmFunctionLower {
 
 	public static function typeId(type:IrType):Int {
 		var identity = switch type {
-			case Iterator(_): Abstract("realtime_iterator");
+			case Iterator(_): IrType.Abstract("realtime_iterator");
 			default: type;
 		}, text = Std.string(identity), hash:Int = -2128831035;
 		for (index in 0...text.length) {
@@ -1567,13 +1568,15 @@ class WasmFunctionLower {
 		for (instruction in instructions)
 			body.push(instruction);
 
-	static function emitIfHandled(body:Array<WasmInstruction>, result:WasmLoweringResult):Bool
-		return switch result {
+	static function emitIfHandled(body:Array<WasmInstruction>, result:WasmLoweringResult):Bool {
+		var kind:WasmLoweringKind = result;
+		return switch kind {
 			case Handled(instructions):
 				emit(body, instructions);
 				true;
 			case UseDefault: false;
 		};
+	}
 
 	static function outputOf(instruction:IrInstruction):Null<IrValue>
 		return switch instruction {

@@ -18,9 +18,9 @@ enum WasmLoweringKind {
 	UseDefault;
 }
 
-abstract WasmLoweringResult(WasmLoweringKind) from WasmLoweringKind {
-	@:from static function fromInstructions(instructions:Array<WasmInstruction>):WasmLoweringResult
-		return Handled(instructions);
+abstract WasmLoweringResult(WasmLoweringKind) from WasmLoweringKind to WasmLoweringKind {
+	@:from public static function fromInstructions(instructions:Array<WasmInstruction>):WasmLoweringResult
+		return WasmLoweringKind.Handled(instructions);
 }
 
 /** Value typing and representation-sensitive value operations. */

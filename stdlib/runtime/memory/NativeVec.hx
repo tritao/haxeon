@@ -7,6 +7,7 @@ class NativeVec<T> {
 	public var capacity(default, null):Int = 0;
 
 	var pointer:RawPtr<T>;
+	var minimumCapacity:Int;
 	var disposed:Bool = false;
 
 	public function new(?initialCapacity:Int = 8) {
@@ -14,8 +15,9 @@ class NativeVec<T> {
 			throw "Native vector capacity must be non-negative";
 		arena = new Arena();
 		pointer = RawPtr.nullPtr();
-		if (initialCapacity > 0)
-			reserve(initialCapacity);
+		minimumCapacity = initialCapacity;
+		// Growth is deferred until the first push so the erased generic constructor
+		// does not need to materialize T's native layout.
 	}
 
 	/** Address of the first element, or null when the vector is empty. */
@@ -23,7 +25,8 @@ class NativeVec<T> {
 		return pointer;
 
 	public function reserve(required:Int):Void {
-		requireOpen();
+		if (disposed)
+			throw "Native vector is already disposed";
 		if (required < 0)
 			throw "Native vector capacity must be non-negative";
 		if (required <= capacity)
@@ -42,22 +45,33 @@ class NativeVec<T> {
 	}
 
 	public function push(value:T):Void {
-		reserve(length + 1);
+		var required = length + 1;
+		if (required < minimumCapacity)
+			required = minimumCapacity;
+		minimumCapacity = 0;
+		this.reserve(required);
 		pointer.offset(length++).store(value);
 	}
 
 	public function get(index:Int):T {
-		checkIndex(index);
+		if (disposed)
+			throw "Native vector is already disposed";
+		if (index < 0 || index >= length)
+			throw 'Native vector index $index is outside 0...$length';
 		return pointer.offset(index).load();
 	}
 
 	public function set(index:Int, value:T):Void {
-		checkIndex(index);
+		if (disposed)
+			throw "Native vector is already disposed";
+		if (index < 0 || index >= length)
+			throw 'Native vector index $index is outside 0...$length';
 		pointer.offset(index).store(value);
 	}
 
 	public function pop():T {
-		requireOpen();
+		if (disposed)
+			throw "Native vector is already disposed";
 		if (length == 0)
 			throw "Cannot pop an empty native vector";
 		length--;
@@ -65,7 +79,8 @@ class NativeVec<T> {
 	}
 
 	public inline function clear():Void {
-		requireOpen();
+		if (disposed)
+			throw "Native vector is already disposed";
 		length = 0;
 	}
 
@@ -81,16 +96,8 @@ class NativeVec<T> {
 		pointer = RawPtr.nullPtr();
 		length = 0;
 		capacity = 0;
+		minimumCapacity = 0;
 		arena.dispose();
 	}
 
-	function checkIndex(index:Int):Void {
-		requireOpen();
-		if (index < 0 || index >= length)
-			throw 'Native vector index $index is outside 0...$length';
-	}
-
-	function requireOpen():Void
-		if (disposed)
-			throw "Native vector is already disposed";
 }

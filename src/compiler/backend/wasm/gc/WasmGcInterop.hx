@@ -32,8 +32,13 @@ class WasmGcInterop implements WasmInteropRepresentation {
 		if (moduleInterop == null) {
 			this.scratchTop = scratchTop;
 			this.scratchAllocator = scratchAllocator;
-			this.nativePointerReleaseBySymbol = pointerReleases.copy();
-			this.nativePointerReleaseIndices = [for (symbol in pointerReleases.keys()) pointerReleases.get(symbol)];
+			this.nativePointerReleaseBySymbol = [];
+			this.nativePointerReleaseIndices = [];
+			for (symbol in pointerReleases.keys()) {
+				var index = pointerReleases.get(symbol);
+				this.nativePointerReleaseBySymbol.set(symbol, index);
+				this.nativePointerReleaseIndices.push(cast index);
+			}
 			this.nativePointerReleaseIndices.sort((left, right) -> left - right);
 		} else {
 			this.scratchTop = -1;
@@ -68,13 +73,13 @@ class WasmGcInterop implements WasmInteropRepresentation {
 				throw "Invalid Wasm GC HXI pointer-field getter signature";
 			var pointer = allocateLocal(I32),
 				body = managedByteGetI32(argumentLocals[0], argumentLocals[1], pointer);
-			return body.concat(wrapNativePointer(pointer, -1, argumentLocals[2], true, outputLocal));
+			return WasmLoweringResult.fromInstructions(body.concat(wrapNativePointer(pointer, -1, argumentLocals[2], true, outputLocal)));
 		}
 		if (name == "native_pointer_is_closed") {
 			if (output.type != Bool || arguments.length != 1 || !isNativePointerType(arguments[0].type) || argumentLocals.length != 1)
 				throw "Invalid Wasm GC native pointer status signature";
 			var pointer = argumentLocals[0];
-			return [
+			return WasmLoweringResult.fromInstructions([
 				LocalGet(pointer),
 				RefIsNull,
 				If(I32),
@@ -84,7 +89,7 @@ class WasmGcInterop implements WasmInteropRepresentation {
 				StructGet(plan.nativePointerTypeIndex, 2),
 				End,
 				LocalSet(outputLocal)
-			];
+			]);
 		}
 		if (name == "native_pointer_close") {
 			if (output.type != Bool || arguments.length != 1 || !isNativePointerType(arguments[0].type) || argumentLocals.length != 1)
@@ -120,7 +125,7 @@ class WasmGcInterop implements WasmInteropRepresentation {
 				]);
 			}
 			body = body.concat([End, End]);
-			return body;
+			return WasmLoweringResult.fromInstructions(body);
 		}
 		if (name == "native_pointer_owned_from_slot") {
 			if (!isNativePointerType(output.type) || arguments.length != 7 || arguments[0].type != ManagedBytes || arguments[1].type != I32
@@ -134,38 +139,50 @@ class WasmGcInterop implements WasmInteropRepresentation {
 				throw 'Wasm GC owned pointer slot has no imported release function "' + releaseSymbol + '"';
 			var pointer = allocateLocal(I32),
 				body = managedByteGetI32(argumentLocals[0], argumentLocals[1], pointer);
-			return body.concat(wrapNativePointer(pointer, releaseFunction, argumentLocals[6], true, outputLocal));
+			return WasmLoweringResult.fromInstructions(body.concat(wrapNativePointer(pointer, releaseFunction, argumentLocals[6], true, outputLocal)));
 		}
 		if (name == "structWithRoots") {
 			if (output.type != ManagedBytes
 				|| arguments.length != 2
 				|| arguments[0].type != ManagedBytes
-				|| !Type.enumEq(arguments[1].type, Array(ManagedBytes))
+				|| !isArrayOf(arguments[1].type, ManagedBytes)
 				|| argumentLocals.length != 2)
 				throw "Invalid Wasm GC HXI structure root attachment signature";
-			return [
+			return WasmLoweringResult.fromInstructions([
 				LocalGet(argumentLocals[0]),
 				LocalGet(argumentLocals[1]),
 				StructSet(plan.managedBytesTypeIndex, 3),
 				LocalGet(argumentLocals[0]),
 				LocalSet(outputLocal)
-			];
+			]);
 		}
 		if (name == "structGetRoots") {
-			if (!Type.enumEq(output.type, Array(ManagedBytes))
+			if (!isArrayOf(output.type, ManagedBytes)
 				|| arguments.length != 1
 				|| arguments[0].type != ManagedBytes
 				|| argumentLocals.length != 1)
 				throw "Invalid Wasm GC HXI structure root query signature";
-			return [
+			return WasmLoweringResult.fromInstructions([
 				LocalGet(argumentLocals[0]),
 				StructGet(plan.managedBytesTypeIndex, 3),
 				RefCast({nullable: false, heap: Type(plan.arrayType(ManagedBytes))}),
 				LocalSet(outputLocal)
-			];
+			]);
 		}
 		return UseDefault;
 	}
+
+	static function isArrayOf(type:IrType, element:IrType):Bool
+		return switch type {
+			case Array(actual): switch element {
+					case ManagedBytes: switch actual {
+							case ManagedBytes: true;
+							default: false;
+						};
+					default: false;
+				};
+			default: false;
+		};
 
 	function nativePointerRaw(pointerLocal:Int):Array<WasmInstruction>
 		return [
@@ -219,7 +236,7 @@ class WasmGcInterop implements WasmInteropRepresentation {
 		var fixedAggregateResult = native.fixedResult != null;
 		var body:Array<WasmInstruction> = [],
 			savedTop = usesScratchBridge ? allocateLocal(I32) : -1,
-			bytePointers:Array<Null<Int>> = [];
+			bytePointers:Array<Int> = [for (_ in 0...arguments.length) -1];
 		if (usesScratchBridge)
 			body = body.concat([GlobalGet(moduleInterop.scratchTop), LocalSet(savedTop)]);
 		for (index in 0...arguments.length)
@@ -358,13 +375,13 @@ class WasmGcInterop implements WasmInteropRepresentation {
 						body = body.concat(nativePointerRaw(argumentLocals[index]));
 						body.push(LocalSet(pointer));
 					} else
-						bytePointers[index] = null;
+						bytePointers[index] = -1;
 				case _:
 					throw 'Wasm GC C native "${native.name}" has an unsupported argument direction';
 			}
 		for (index in 0...arguments.length) {
 			var pointer = bytePointers[index];
-			body.push(LocalGet(pointer == null ? argumentLocals[index] : pointer));
+			body.push(LocalGet(pointer < 0 ? argumentLocals[index] : pointer));
 		}
 		var nativePointerResult = isNativePointerType(native.result),
 			resultLocal = native.result == Void ? -1 : allocateLocal(bytePointerResult
@@ -377,22 +394,22 @@ class WasmGcInterop implements WasmInteropRepresentation {
 			switch native.argumentModes[index] {
 				case BytesInputOutput(_) | BytesSize:
 					var pointer = bytePointers[index];
-					if (pointer == null)
+					if (pointer < 0)
 						throw 'Wasm GC C native "${native.name}" byte argument $index has no scratch pointer';
 					body = body.concat(copyLinearToGcBytes(argumentLocals[index], pointer));
 				case Output | InputOutput:
 					var pointer = bytePointers[index];
-					if (pointer == null)
+					if (pointer < 0)
 						throw 'Wasm GC C native "${native.name}" scalar output pointer $index has no scratch pointer';
 					body = body.concat(copyLinearToGcBytes(argumentLocals[index], pointer));
 				case FixedOutput(_, _, _) | FixedInputOutput(_, _, _):
 					var pointer = bytePointers[index];
-					if (pointer == null)
+					if (pointer < 0)
 						throw 'Wasm GC C native "${native.name}" aggregate argument $index has no scratch pointer';
 					body = body.concat(copyLinearToGcBytes(argumentLocals[index], pointer));
 				case BytesOutput(_):
 					var pointer = bytePointers[index];
-					if (pointer == null)
+					if (pointer < 0)
 						throw 'Wasm GC C native "${native.name}" byte output $index has no scratch pointer';
 					body = body.concat([LocalGet(argumentLocals[index]), RefIsNull, If(null), Else]);
 					body = body.concat(copyLinearToGcBytes(argumentLocals[index], pointer));
@@ -410,7 +427,7 @@ class WasmGcInterop implements WasmInteropRepresentation {
 				native.pointerNullable, outputLocal));
 		else if (resultLocal >= 0)
 			body = body.concat([LocalGet(resultLocal), LocalSet(outputLocal)]);
-		return body;
+		return WasmLoweringResult.fromInstructions(body);
 	}
 
 	function copyNativeFixedResult(native:IrCNative, pointer:Int, outputLocal:Int):Array<WasmInstruction> {

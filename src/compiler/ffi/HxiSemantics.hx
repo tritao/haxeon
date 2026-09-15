@@ -163,7 +163,11 @@ class HxiSemantics {
 
 	static function pointeeType(type:HxiType):HxiType
 		return switch type {
-			case Pointer(element) | Nullable(Pointer(element)): element;
+			case Pointer(element): element;
+			case Nullable(element): switch element {
+					case Pointer(pointer): pointer;
+					default: throw "Expected pointer HXI type";
+				};
 			case Const(element): pointeeType(element);
 			case _: throw "Expected pointer HXI type";
 		};

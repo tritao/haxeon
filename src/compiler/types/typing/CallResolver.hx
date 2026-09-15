@@ -207,9 +207,8 @@ class CallResolver {
 						fail("E1009", "RawPtr.castTo needs an expected RawPtr<U> type", span);
 						null;
 				};
-			case _:
-				return null;
 		}
+		return null;
 	}
 
 	function nativeMemoryLayout(type:CompilerType, span:SourceSpan):{size:Int, signed:Bool} {
@@ -226,8 +225,7 @@ class CallResolver {
 		try {
 			return NativeLayout.memoryAccess(type, session.nativeAbiTarget);
 		} catch (_:Dynamic) {
-			fail("E1022", 'Type "$type" has no fixed native memory layout', span);
-			return cast null;
+			throw new CompileError(new Diagnostic("E1022", 'Type "$type" has no fixed native memory layout', span));
 		}
 	}
 
@@ -314,8 +312,10 @@ class CallResolver {
 			method = session.signatures.get(methodKey);
 		if (method == null)
 			fail("E1007", 'Missing signature for method "$methodKey"', span);
+		if (isConcreteGenericClass(methodOwnerType, methodInfo.owner))
+			method = genericClassMethod(method, methodInfo.owner);
 		if (functionTypeParameters(method).length > 0) {
-			var preset = contextualGenericArguments ? copyMap(substitutions) : new Map<String, CompilerType>(),
+			var preset = copyMap(substitutions),
 				parameters = functionTypeParameters(method),
 				hasLambda = false;
 			if (!contextualGenericArguments)
@@ -792,7 +792,7 @@ class CallResolver {
 					new TypedExpression(TIntLiteral(0), TInt, span);
 			};
 		}
-		if (name == "Std.stdString") {
+		if (name == "Std.string" || name == "Std.stdString") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "Std.string" expects 1 argument, got ${arguments.length}', span);
 			var value = coerce(typeExpressionValue(arguments[0], scope), TDynamic, "Std.string value", "E1002");
@@ -875,6 +875,40 @@ class CallResolver {
 			case TInstance(Class, _, arguments), TInstance(Interface, _, arguments): arguments.length > 0;
 			default: false;
 		};
+
+	function isConcreteGenericClass(type:CompilerType, owner:String):Bool {
+		if (!session.classDecls.exists(owner))
+			return false;
+		return switch type {
+			case TInstance(Class, _, arguments) if (arguments.length > 0):
+				for (argument in arguments)
+					switch argument {
+						case TDynamic, TTypeParameter(_, _): return false;
+						default:
+					}
+				true;
+			default: false;
+		};
+	}
+
+	function genericClassMethod(method:AstFunction, owner:String):AstFunction {
+		var declaration = requiredMapValue(session.classDecls, owner),
+			methodParameters = functionTypeParameters(method),
+			classConstraints = declaration.typeConstraints == null ? [] : declaration.typeConstraints,
+			methodConstraints = method.typeConstraints == null ? [] : method.typeConstraints;
+		return {
+			name: method.name,
+			isStatic: method.isStatic,
+			isExtern: method.isExtern,
+			metadata: method.metadata,
+			typeParameters: declaration.typeParameters.concat(methodParameters),
+			typeConstraints: classConstraints.concat(methodConstraints),
+			arguments: method.arguments,
+			result: method.result,
+			statements: method.statements,
+			span: method.span
+		};
+	}
 
 	static function abiBoundaryCast(value:TypedExpression, target:CompilerType):TypedExpression
 		return TypeRelations.equals(value.type, target) ? value : new TypedExpression(TAbiCast(value), target, value.span);
@@ -1317,6 +1351,13 @@ class CallResolver {
 	/** Resolves explicit and inferred class construction, including abstract constructors. */
 	public function typeConstruction(typeName:String, typeArguments:Array<AstType>, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>, hasExplicitTypeArguments:Bool):TypedExpression {
+		if (typeName == "haxe.io.BytesInput" || typeName == "BytesInput") {
+			if (arguments.length != 1)
+				fail("E1008", 'Constructor "haxe.io.BytesInput" expects 1 argument, got ${arguments.length}', span);
+			var bytes = coerce(typeExpression(arguments[0], scope, TBytes, false), TBytes, "byte input", "E1002");
+			var inputType = session.declarations.resolve(NamedType("haxe.io.BytesInput"), span);
+			return new TypedExpression(TCall("__bytes_input_new", [bytes]), inputType, span);
+		}
 		if (session.declarations.abstracts.exists(typeName))
 			return typeAbstractConstruction(typeName, typeArguments, arguments, span, scope);
 		if (hasExplicitTypeArguments) {
@@ -1325,6 +1366,7 @@ class CallResolver {
 			var classDecl = requiredMapValue(session.classDecls, typeName),
 				valueType = session.declarations.resolve(AppliedType(typeName, typeArguments), span),
 				substitutions = nominalSubstitutions(valueType),
+				erasedSubstitutions:Map<String, CompilerType> = [],
 				constructorName = typeName + ".new",
 				hasConstructor = session.signatures.exists(constructorName),
 				implicitConstructor = !hasConstructor && [
@@ -1335,7 +1377,15 @@ class CallResolver {
 				fail("E1008", 'Constructor "$typeName" expects 0 arguments, got ${arguments.length}', span);
 			var semanticArguments = hasConstructor ? typeDeclaredCallArguments(arguments, requiredMapValue(session.signatures, constructorName).arguments,
 				scope, constructorName, span, substitutions) : [];
-			var typed = [for (argument in semanticArguments) abiBoundaryCast(argument, TDynamic)];
+			for (parameter in classDecl.typeParameters)
+				erasedSubstitutions.set(parameter, TDynamic);
+			var representationArguments = hasConstructor ? [
+				for (parameter in requiredMapValue(session.signatures, constructorName).arguments)
+					session.declarations.resolve(parameter.type, parameter.span, erasedSubstitutions)
+			] : [], typed = [
+				for (index in 0...semanticArguments.length)
+					abiBoundaryCast(semanticArguments[index], representationArguments[index])
+				];
 			return new TypedExpression(TNew(typeName, typed, hasConstructor || implicitConstructor), valueType, span);
 		}
 		if ((!session.classDecls.exists(typeName) && !PlatformAbi.isType(typeName)) || session.interfaceDecls.exists(typeName))
@@ -1375,7 +1425,8 @@ class CallResolver {
 			fail("E1007", 'Abstract "$name" has no constructor', span);
 		if (decl.isExtern == true) {
 			var typed = typeDeclaredCallArguments(arguments, constructor.arguments, scope, constructorName, span);
-			return new TypedExpression(TCall(constructorName, typed), valueType, span);
+			var nativeConstructor = PlatformAbi.constructorNative(name);
+			return new TypedExpression(TCall(nativeConstructor == null ? constructorName : nativeConstructor, typed), valueType, span);
 		}
 		var substitutions:Map<String, CompilerType> = [],
 			representation:CompilerType = TVoid;

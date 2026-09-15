@@ -76,7 +76,11 @@ class WasmGcModuleBuilder {
 			gcRepresentation = new WasmGcRepresentation(gcContext);
 		plan.addTo(module);
 		var staticData = WasmModuleSupport.placeStaticData(program, module, 8, reachable),
-			hasStaticData = staticData.addresses.iterator().hasNext();
+			hasStaticData = false;
+		for (_ in staticData.addresses.keys()) {
+			hasStaticData = true;
+			break;
+		}
 		var scratchTop = -1;
 		if (requiresScratchMemory || requiresLinearMemory || hasStaticData) {
 			module.memoryMin = WasmModuleSupport.memoryPages(staticData.end);
@@ -261,13 +265,14 @@ class WasmGcModuleBuilder {
 				var arguments = [
 					for (index in 0...native.arguments.length)
 						new IrValue(index, native.name + "_argument_" + index, native.arguments[index])
-				], result = new IrValue(-1, native.name + "_result", native.result), resultLocal = allocateLocal(plan.valueType(native.result)),
-					bodyResult = functionRepresentation.lowerRuntimeCall(native.name, result, arguments, resultLocal,
-						[for (index in 0...arguments.length) index]),
-					body = switch bodyResult {
-						case Handled(instructions): instructions;
-						case UseDefault: throw 'Wasm GC runtime native "${native.name}" has no wrapper implementation';
-					};
+				], result = new IrValue(-1, native.name + "_result", native.result), resultLocal = allocateLocal(plan.valueType(native.result));
+				var bodyResult = functionRepresentation.lowerRuntimeCall(native.name, result, arguments, resultLocal,
+					[for (index in 0...arguments.length) index]),
+					bodyKind:WasmLoweringKind = bodyResult;
+				var body = switch bodyKind {
+					case Handled(instructions): instructions;
+					case UseDefault: throw 'Wasm GC runtime native "${native.name}" has no wrapper implementation';
+				};
 				body.push(LocalGet(resultLocal));
 				body.push(Return);
 				functions.set(native.name, module.addFunction(new WasmFunction(native.name, functionType, locals, body)));
@@ -410,7 +415,7 @@ class WasmGcModuleBuilder {
 		if (length.result != I32 || pointer.arguments.length != length.arguments.length)
 			throw 'Wasm GC C native "${pointer.name}" has an incompatible byte-result length import';
 		for (index in 0...pointer.arguments.length)
-			if (!Type.enumEq(pointer.arguments[index], length.arguments[index])
+			if (pointer.arguments[index] != length.arguments[index]
 				|| pointer.argumentModes[index] != Value
 				|| length.argumentModes[index] != Value)
 				throw 'Wasm GC C native "${pointer.name}" requires scalar value arguments for its byte-result length import';
@@ -601,7 +606,7 @@ class WasmGcModuleBuilder {
 		}
 		if (includeInstance) {
 			var instanceType = module.typeIndex({
-				parameters: [Ref({nullable: true, heap: Any})].concat([for (argument in arguments) plan.valueType(argument)]),
+				parameters: [WasmValueType.Ref({nullable: true, heap: Any})].concat([for (argument in arguments) plan.valueType(argument)]),
 				results: switch resultType {
 					case Void: [];
 					default: [plan.valueType(resultType)];
@@ -640,13 +645,15 @@ class WasmGcModuleBuilder {
 				throw 'Wasm GC instance closure target "$targetName" is not reachable';
 			if (functions.exists(thunkName))
 				throw 'Wasm GC closure thunk name collides with function "$thunkName"';
-			var parameters = [Ref({nullable: true, heap: Any})].concat([for (argument in target.arguments.slice(1)) plan.valueType(argument.type)]),
-				results = switch target.result {
-					case Void: [];
-					default: [plan.valueType(target.result)];
-				},
-				type:WasmFunctionType = {parameters: parameters, results: results},
-				thunkIndex = module.addFunction(new WasmFunction(thunkName, type));
+			var parameters = [
+				WasmValueType.Ref({
+					nullable: true,
+					heap: Any
+				})
+			].concat([for (argument in target.arguments.slice(1)) plan.valueType(argument.type)]), results = switch target.result {
+				case Void: [];
+				default: [plan.valueType(target.result)];
+			}, type:WasmFunctionType = {parameters: parameters, results: results}, thunkIndex = module.addFunction(new WasmFunction(thunkName, type));
 			functions.set(thunkName, thunkIndex);
 			var body:Array<WasmInstruction> = [
 				LocalGet(0),

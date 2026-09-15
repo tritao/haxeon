@@ -19,11 +19,11 @@ function main():Int {
 	try {
 		values.pop();
 		return 4;
-	} catch (_) {}
+	} catch (_:Dynamic) {}
 	values.dispose();
 	try {
 		values.push(29);
 		return 5;
-	} catch (_) {}
+	} catch (_:Dynamic) {}
 	return 42;
 }

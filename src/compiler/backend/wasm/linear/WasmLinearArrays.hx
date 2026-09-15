@@ -132,7 +132,8 @@ class WasmLinearArrays {
 	}
 
 	public static function addArrayIndexOf(module:WasmModule, name:String, stride:Int, elementType:WasmValueType, stringEqual:Null<Int>):Int {
-		var compare = stringEqual == null ? (elementType == F64 ? F64Eq : I32Eq) : null;
+		var stringEqualFunction:Int = stringEqual == null ? -1 : cast stringEqual,
+			compare:WasmInstruction = elementType == F64 ? F64Eq : I32Eq;
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32, elementType], results: [I32]}),
 			array = builder.parameter("array", 0),
 			searched = builder.parameter("searched", 1),
@@ -157,7 +158,7 @@ class WasmLinearArrays {
 					builder.i32Add();
 					builder.emit(elementType == F64 ? F64Load(0) : I32Load(0));
 					builder.localGet(searched);
-					builder.emit(stringEqual == null ? compare : Call(stringEqual));
+					builder.emit(stringEqualFunction < 0 ? compare : Call(stringEqualFunction));
 					builder.if_(function(builder) {
 						builder.localGet(index);
 						builder.localSet(foundIndex);
@@ -853,8 +854,13 @@ class WasmLinearArrays {
 	}
 
 	public static function addArrayRemove(module:WasmModule, name:String, stride:Int, elementType:WasmValueType, stringEqual:Null<Int>):Int {
-		var compare = stringEqual == null ? (elementType == F64 ? F64Eq : I32Eq) : null,
-			builder = new WasmFunctionBuilder(name, {parameters: [I32, elementType], results: [I32]}),
+		var stringEqualFunction:Int = stringEqual == null ? -1 : cast stringEqual,
+			compare:WasmInstruction = elementType == F64 ? F64Eq : I32Eq,
+			builder = new WasmFunctionBuilder(name,
+				{
+					parameters: [I32, elementType],
+					results: [I32]
+				}),
 			array = builder.parameter("array", 0),
 			searched = builder.parameter("searched", 1),
 			length = builder.local("length", I32),
@@ -881,7 +887,7 @@ class WasmLinearArrays {
 					builder.i32Add();
 					builder.emit(elementType == F64 ? F64Load(0) : I32Load(0));
 					builder.localGet(searched);
-					builder.emit(stringEqual == null ? compare : Call(stringEqual));
+					builder.emit(stringEqualFunction < 0 ? compare : Call(stringEqualFunction));
 					builder.if_(function(builder) {
 						builder.localGet(index);
 						builder.localSet(foundIndex);

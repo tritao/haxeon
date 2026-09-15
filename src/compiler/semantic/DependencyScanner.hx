@@ -6,11 +6,21 @@ import compiler.syntax.Ast.AstType;
 
 /** Collects qualified source dependencies referenced by syntax trees. */
 class DependencyScanner {
-	public static function scanStatement(s:AstStatement, dependencies:Map<String, Bool>):Void
+	static var activeTypeParameters:Null<Array<String>>;
+
+	public static function scanStatement(s:AstStatement, dependencies:Map<String, Bool>, ?typeParameters:Array<String>):Void {
+		var previousTypeParameters = activeTypeParameters;
+		if (typeParameters != null)
+			activeTypeParameters = typeParameters;
 		switch s {
 			case ErrorStatement(_):
-			case UninitializedDeclaration(_, _, _):
-			case VarDeclaration(_, _, e, _), Assignment(_, e, _), Return(e, _), Throw(e, _):
+			case UninitializedDeclaration(_, type, _):
+				scanType(type, dependencies, activeTypeParameters);
+			case VarDeclaration(_, type, e, _):
+				if (type != null)
+					scanType(type, dependencies, activeTypeParameters);
+				scanExpression(e, dependencies);
+			case Assignment(_, e, _), Return(e, _), Throw(e, _):
 				scanExpression(e, dependencies);
 			case Try(tryBranch, catches, _):
 				for (x in tryBranch)
@@ -61,8 +71,13 @@ class DependencyScanner {
 			case Expression(e, _):
 				scanExpression(e, dependencies);
 		}
+		activeTypeParameters = previousTypeParameters;
+	}
 
-	public static function scanExpression(e:AstExpression, dependencies:Map<String, Bool>):Void
+	public static function scanExpression(e:AstExpression, dependencies:Map<String, Bool>, ?typeParameters:Array<String>):Void {
+		var previousTypeParameters = activeTypeParameters;
+		if (typeParameters != null)
+			activeTypeParameters = typeParameters;
 		switch e {
 			case Add(a, b, _):
 				scanExpression(a, dependencies);
@@ -89,8 +104,10 @@ class DependencyScanner {
 				scanExpression(value, dependencies);
 			case ThrowExpression(value, _):
 				scanExpression(value, dependencies);
-			case Cast(value, _, _):
+			case Cast(value, target, _):
 				scanExpression(value, dependencies);
+				if (target != null)
+					scanType(target, dependencies, activeTypeParameters);
 			case SwitchExpression(subject, cases, fallback, _):
 				scanExpression(subject, dependencies);
 				for (switchCase in cases) {
@@ -149,38 +166,60 @@ class DependencyScanner {
 				scanExpression(callee, dependencies);
 				for (a in args)
 					scanExpression(a, dependencies);
-			case New(typeName, args, _), NewGeneric(typeName, _, args, _):
+			case New(typeName, args, _):
 				dependencies.set(typeName, true);
 				for (a in args)
 					scanExpression(a, dependencies);
-			case NewArray(_, length, _):
+			case NewGeneric(typeName, typeArguments, args, _):
+				dependencies.set(typeName, true);
+				for (type in typeArguments)
+					scanType(type, dependencies, activeTypeParameters);
+				for (a in args)
+					scanExpression(a, dependencies);
+			case NewArray(element, length, _):
+				scanType(element, dependencies, activeTypeParameters);
 				scanExpression(length, dependencies);
 			case NativeLayoutQuery(_, type, _, _):
-				scanType(type, dependencies);
-			case NewMap(_, _, _):
+				scanType(type, dependencies, activeTypeParameters);
+			case NewMap(key, value, _):
+				scanType(key, dependencies, activeTypeParameters);
+				scanType(value, dependencies, activeTypeParameters);
+			case Lambda(arguments, statements, _):
+				for (argument in arguments)
+					scanType(argument.type, dependencies, activeTypeParameters);
+				for (statement in statements)
+					scanStatement(statement, dependencies);
 			default:
 		}
+		activeTypeParameters = previousTypeParameters;
+	}
 
 	static function scanQualifiedDependency(name:String, dependencies:Map<String, Bool>):Void {
 		addQualifiedOwner(name, dependencies);
 	}
 
-	static function scanType(type:AstType, dependencies:Map<String, Bool>):Void
+	static function scanType(type:AstType, dependencies:Map<String, Bool>, ?typeParameters:Array<String>):Void
 		switch type {
-			case NamedType(name) | AppliedType(name, _):
-				dependencies.set(name, true);
+			case NamedType(name):
+				if (typeParameters == null || typeParameters.indexOf(name) < 0)
+					dependencies.set(name, true);
+			case AppliedType(name, arguments):
+				if (typeParameters == null || typeParameters.indexOf(name) < 0)
+					dependencies.set(name, true);
+				for (argument in arguments)
+					scanType(argument, dependencies, typeParameters);
 			case ArrayType(element) | NullableType(element):
-				scanType(element, dependencies);
+				scanType(element, dependencies, typeParameters);
 			case MapType(key, value):
-				scanType(key, dependencies);
-				scanType(value, dependencies);
+				scanType(key, dependencies, typeParameters);
+				scanType(value, dependencies, typeParameters);
 			case FunctionType(arguments, result):
 				for (argument in arguments)
-					scanType(argument, dependencies);
-				scanType(result, dependencies);
+					scanType(argument, dependencies, typeParameters);
+				scanType(result, dependencies, typeParameters);
 			case AnonymousType(fields):
 				for (field in fields)
-					scanType(field.type, dependencies);
+					scanType(field.type, dependencies, typeParameters);
 			case _:
 		}
 

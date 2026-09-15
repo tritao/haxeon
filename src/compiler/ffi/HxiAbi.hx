@@ -130,8 +130,12 @@ class HxiAbi {
 			case _: false;
 		};
 
-	public function semanticDeclarations():Map<String, HxiDeclaration>
-		return declarations.copy();
+	public function semanticDeclarations():Map<String, HxiDeclaration> {
+		var result:Map<String, HxiDeclaration> = [];
+		for (name in declarations.keys())
+			result.set(name, declarations.get(name));
+		return result;
+	}
 
 	public function classify(type:HxiType, allowVoid:Bool = false):HxiAbiValue {
 		var key = typeKey(type),

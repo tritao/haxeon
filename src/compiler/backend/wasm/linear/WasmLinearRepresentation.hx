@@ -87,17 +87,17 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		if (name == "__wasm_memory_load_i32") {
 			if (output.type != I32 || arguments.length != 1 || arguments[0].type != I32 || argumentLocals.length != 1)
 				throw "Invalid Wasm runtime memory.load i32 signature";
-			return [LocalGet(argumentLocals[0]), I32Load(0), LocalSet(outputLocal)];
+			return WasmLoweringResult.fromInstructions([LocalGet(argumentLocals[0]), I32Load(0), LocalSet(outputLocal)]);
 		}
 		if (name == "__f64_to_i64_bits" || name == "runtime.FloatBits.toInt64") {
 			if (output.type != I64 || arguments.length != 1 || arguments[0].type != F64 || argumentLocals.length != 1)
 				throw "Invalid Wasm FloatBits.toInt64 signature";
-			return [LocalGet(argumentLocals[0]), I64ReinterpretF64, LocalSet(outputLocal)];
+			return WasmLoweringResult.fromInstructions([LocalGet(argumentLocals[0]), I64ReinterpretF64, LocalSet(outputLocal)]);
 		}
 		if (name == "__i64_to_f64_bits" || name == "runtime.FloatBits.fromInt64") {
 			if (output.type != F64 || arguments.length != 1 || arguments[0].type != I64 || argumentLocals.length != 1)
 				throw "Invalid Wasm FloatBits.fromInt64 signature";
-			return [LocalGet(argumentLocals[0]), F64ReinterpretI64, LocalSet(outputLocal)];
+			return WasmLoweringResult.fromInstructions([LocalGet(argumentLocals[0]), F64ReinterpretI64, LocalSet(outputLocal)]);
 		}
 		return UseDefault;
 	}

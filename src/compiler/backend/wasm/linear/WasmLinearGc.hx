@@ -33,7 +33,7 @@ class WasmLinearGc {
 		var rootTop = context.rootTop,
 			rootFrameTop = context.rootFrameTop,
 			rootLimit = context.rootLimit,
-			exceptionTag = context.exceptionTag;
+			exceptionTag:Int = context.exceptionTag == null ? -1 : cast context.exceptionTag;
 		var rootSlots:Array<Int> = [];
 		for (index in 0...fn.type.parameters.length)
 			if (fn.type.parameters[index] == I32)
@@ -47,7 +47,7 @@ class WasmLinearGc {
 			locals = fn.locals.copy(),
 			exceptionLocal = frame + 1;
 		locals.push({type: I32});
-		if (exceptionTag != null)
+		if (exceptionTag >= 0)
 			locals.push({type: I32});
 		var frameSize = WasmModuleSupport.align(12 + rootSlots.length * 4, 8),
 			guardBuilder = new WasmFunctionBuilder(fn.name, fn.type);
@@ -91,7 +91,7 @@ class WasmLinearGc {
 		// consumes root-stack space until a later call traps at rootLimit.
 		if (fn.body.length == 0 || fn.body[fn.body.length - 1] != Return)
 			emitRuntimeRootFrameRestore(body, frame, context);
-		if (exceptionTag != null) {
+		if (exceptionTag >= 0) {
 			var wrapper = new WasmFunctionBuilder(fn.name, fn.type);
 			for (index in 0...locals.length)
 				wrapper.local('local_$index', locals[index].type);
