@@ -484,9 +484,18 @@ class ExpressionTyper {
 			&& !switchRules.isEnum(typedSubject.type))
 			fail("E1019", "Switch requires an Int, String, array, or enum value", typedSubject.span);
 		var typedCases:Array<TypedSwitchExpressionCase> = [],
+			deferredCaseResults:Map<Int, {expression:AstExpression, scope:Scope}> = [],
+			deferredDefault:Null<{expression:AstExpression, scope:Scope}> = null,
 			seenCases:Map<String, Bool> = [],
 			resultType = expectedType,
-			typedDefault = defaultExpression == null ? null : typeExpressionCallback(defaultExpression, new Scope(scope), expectedType, false);
+			defaultScope = new Scope(scope),
+			typedDefault:Null<TypedExpression> = null;
+		if (defaultExpression != null) {
+			if (expectedType == null && isEmptyArrayLiteral(defaultExpression))
+				deferredDefault = {expression: defaultExpression, scope: defaultScope};
+			else
+				typedDefault = typeExpressionCallback(defaultExpression, defaultScope, expectedType, false);
+		}
 		// A switch arm can need the inferred result type to resolve an enum constructor
 		// (for example, `case A: SomeConstructor(...); default: value;`). Seed that
 		// context from the fallback before typing the arms; the normal branch join below
@@ -505,11 +514,17 @@ class ExpressionTyper {
 					|| arrayPattern != null ? typedSubject : pattern == null ? coerce(typeExpressionCallback(switchCase.value, scope, typedSubject.type,
 						false), typedSubject.type, "switch case", "E1019") : pattern.value;
 			var parsedGuard = switchCase.guard,
-				typedGuard = parsedGuard == null ? null : coerce(typeExpressionCallback(parsedGuard, caseScope, null, false), TBool, "switch guard", "E1003");
+				typedGuard = parsedGuard == null ? null : coerce(typeExpressionCallback(parsedGuard, caseScope, null, false), TBool, "switch guard", "E1003"),
+				caseIndex = typedCases.length,
+				typedResult:TypedExpression;
 			if (typedGuard != null)
 				caseScope = FlowAnalysis.narrowedScope(caseScope, typedGuard, true);
-			var typedResult = typeExpressionCallback(switchCase.result, caseScope, expectedType == null ? resultType : expectedType, false),
-				enumName:Null<String> = pattern == null ? null : pattern.enumName,
+			if (expectedType == null && resultType == null && isEmptyArrayLiteral(switchCase.result)) {
+				deferredCaseResults.set(caseIndex, {expression: switchCase.result, scope: caseScope});
+				typedResult = new TypedExpression(TUnreachable, TNever, switchCase.span);
+			} else
+				typedResult = typeExpressionCallback(switchCase.result, caseScope, expectedType == null ? resultType : expectedType, false);
+			var enumName:Null<String> = pattern == null ? null : pattern.enumName,
 				constructorIndex = pattern == null ? -1 : pattern.index,
 				predicates:Array<TypedSwitchPredicate> = pattern == null ? [] : pattern.predicates;
 			if (expectedType == null && typedResult.type != TNever) {
@@ -556,7 +571,10 @@ class ExpressionTyper {
 		if (resultType == null)
 			fail("E1003", "Switch expression has no result branches", span);
 		typedCases = [
-			for (switchCase in typedCases)
+			for (index in 0...typedCases.length) {
+				var switchCase = typedCases[index],
+					deferred = deferredCaseResults.get(index),
+					result = deferred == null ? switchCase.result : typeExpressionCallback(deferred.expression, deferred.scope, resultType, false);
 				{
 					value: switchCase.value,
 					subjectBinding: switchCase.subjectBinding,
@@ -564,13 +582,16 @@ class ExpressionTyper {
 					span: switchCase.span,
 					isCatchAll: switchCase.isCatchAll,
 					guard: switchCase.guard,
-					result: coerce(switchCase.result, resultType, "switch branch", "E1003"),
+					result: coerce(result, resultType, "switch branch", "E1003"),
 					enumName: switchCase.enumName,
 					constructorIndex: switchCase.constructorIndex,
 					bindings: switchCase.bindings,
 					predicates: switchCase.predicates
 				}
+			}
 		];
+		if (deferredDefault != null)
+			typedDefault = typeExpressionCallback(deferredDefault.expression, deferredDefault.scope, resultType, false);
 		if (typedDefault != null)
 			typedDefault = coerce(typedDefault, resultType, "switch branch", "E1003");
 		if (typedDefault == null && !switchRules.isEnum(typedSubject.type) && !seenCases.exists("$catchall"))
@@ -602,6 +623,12 @@ class ExpressionTyper {
 		}
 		return new TypedExpression(TSwitchExpression(typedSubject, typedCases, typedDefault), resultType, span);
 	}
+
+	static function isEmptyArrayLiteral(expression:AstExpression):Bool
+		return switch expression {
+			case ArrayLiteral(values, _): values.length == 0;
+			default: false;
+		};
 
 	static function isNullableString(type:CompilerType):Bool
 		return switch type {

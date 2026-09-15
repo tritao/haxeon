@@ -1594,6 +1594,8 @@ class IrGenerator {
 			var field = builder.enumField(builder.load(subjectName, subjectType), constructorIndex, predicate.index, lowerType(predicate.fieldStorageType));
 			for (access in predicate.nestedPath ?? [])
 				field = builder.enumField(field, access.constructorIndex, access.fieldIndex, lowerType(access.storageType));
+			for (access in predicate.objectPath ?? [])
+				field = builder.fieldGet(field, access.name, lowerType(access.storageType));
 			if (predicate.arrayIndex >= 0)
 				field = builder.arrayGet(field, builder.constInt(predicate.arrayIndex), lowerType(predicate.storageType));
 			field = abiBoundaryCast(builder, field, lowerType(predicate.type));

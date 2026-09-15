@@ -1256,7 +1256,16 @@ class Parser {
 			return Conditional(condition, whenTrue, whenFalse, start.merge(expressionSpan(whenFalse)));
 		}
 		if (match(TokenKind.Minus)) {
-			var start = previous().span, value = parsePrimary();
+			var start = previous().span;
+			if (check(TokenKind.Integer)) {
+				var token = advance(),
+					magnitude = integerMagnitude(token.text);
+				if (!isHexInteger(token.text) && magnitude == 2147483648.0)
+					return parsePostfix(IntegerLiteral(-2147483648, start.merge(token.span)));
+				var value = IntegerLiteral(parseIntegerToken(token), token.span);
+				return Negate(value, start.merge(token.span));
+			}
+			var value = parsePrimary();
 			return Negate(value, start.merge(expressionSpan(value)));
 		}
 		if (match(TokenKind.Not)) {
@@ -1267,8 +1276,10 @@ class Parser {
 			var start = previous().span, value = parsePrimary();
 			return BitXor(value, IntegerLiteral(-1, start), start.merge(expressionSpan(value)));
 		}
-		if (match(TokenKind.Integer))
-			return parsePostfix(IntegerLiteral(Std.parseInt(previous().text), previous().span));
+		if (match(TokenKind.Integer)) {
+			var token = previous();
+			return parsePostfix(IntegerLiteral(parseIntegerToken(token), token.span));
+		}
 		if (match(TokenKind.Float))
 			return parsePostfix(FloatLiteral(Std.parseFloat(previous().text), previous().span));
 		if (match(TokenKind.StringLiteral))
@@ -2134,6 +2145,32 @@ class Parser {
 
 	function fail(token:Token, message:String):Void
 		throw new CompileError(new Diagnostic("E0002", message, token.span));
+
+	static function parseIntegerToken(token:Token):Int {
+		var text = token.text, magnitude = integerMagnitude(text);
+		if (isHexInteger(text)) {
+			if (magnitude > 4294967295.0)
+				throw new CompileError(new Diagnostic("E0002", 'Integer literal "${text}" is outside the signed 32-bit range', token.span));
+			return magnitude >= 2147483648.0 ? Std.int(magnitude - 4294967296.0) : Std.int(magnitude);
+		}
+		if (magnitude > 2147483647.0)
+			throw new CompileError(new Diagnostic("E0002", 'Integer literal "${text}" is outside the signed 32-bit range', token.span));
+		return Std.int(magnitude);
+	}
+
+	static function isHexInteger(text:String):Bool
+		return text.length > 2 && text.charAt(0) == "0" && (text.charAt(1) == "x" || text.charAt(1) == "X");
+
+	static function integerMagnitude(text:String):Float {
+		var hex = isHexInteger(text), start = hex ? 2 : 0, base = hex ? 16.0 : 10.0, value = 0.0;
+		for (index in start...text.length) {
+			var code = text.charCodeAt(index),
+				digit = if (code >= "0".code && code <= "9".code) code - "0".code else if (code >= "a".code && code <= "f".code) code - "a".code + 10 else code
+					- "A".code + 10;
+			value = value * base + digit;
+		}
+		return value;
+	}
 
 	static function expressionSpan(expression:AstExpression):SourceSpan
 		return switch expression {

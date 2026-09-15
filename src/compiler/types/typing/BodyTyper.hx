@@ -34,6 +34,7 @@ import compiler.types.TypedAst.TypedSwitchCase;
 import compiler.types.TypedAst.TypedSwitchCoverageCase;
 import compiler.types.TypedAst.TypedSwitchArrayPattern;
 import compiler.types.TypedAst.TypedSwitchArrayElement;
+import compiler.types.TypedAst.TypedSwitchObjectFieldAccess;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
@@ -933,6 +934,7 @@ class BodyTyper {
 										index: index,
 										arrayIndex: predicate.arrayIndex,
 										nestedPath: nestedPath,
+										objectPath: predicate.objectPath,
 										nestedConstructorIndex: predicate.nestedConstructorIndex
 									});
 								}
@@ -956,6 +958,40 @@ class BodyTyper {
 										nestedPath: nestedPath
 									});
 								}
+							}
+						case ObjectLiteral(fields, patternSpan):
+							switch parameterType {
+								case TAnonymous(_, expectedFields):
+									for (field in fields) {
+										var expectedField = ExpressionTyper.anonymousField(expectedFields, field.name);
+										if (expectedField == null)
+											fail("E1019", 'Unknown anonymous field "${field.name}" in enum pattern', field.span);
+										switch field.value {
+											case Variable("_", _):
+											default:
+												var typed = coerce(typeExpression(field.value, new Scope(), expectedField.type), expectedField.type,
+													"enum object payload pattern", "E1019");
+												if (constantPatternKey(typed) == null)
+													fail("E1019", "Enum object payload patterns must be constants or '_'", patternSpan);
+												predicates.push({
+													value: typed,
+													arrayLength: -1,
+													type: expectedField.type,
+													storageType: expectedField.type,
+													fieldStorageType: storageType,
+													index: index,
+													arrayIndex: -1,
+													objectPath: [
+														{
+															name: field.name,
+															storageType: expectedField.type
+														}
+													]
+												});
+										}
+									}
+								default:
+									fail("E1019", "Anonymous object payload patterns require an anonymous value", patternSpan);
 							}
 						case ArrayLiteral(values, patternSpan):
 							switch parameterType {
@@ -1122,14 +1158,17 @@ class BodyTyper {
 			for (access in predicate.nestedPath ?? [])
 				'${access.constructorIndex}.${access.fieldIndex}'
 		].join("/");
+		var objectPath = [for (access in predicate.objectPath ?? []) access.name].join("/");
 		if (predicate.nestedConstructorIndex != null)
-			return 'enum:${path}:${predicate.nestedConstructorIndex}';
+			return 'enum:${path}:${objectPath}:${predicate.nestedConstructorIndex}';
 		if (predicate.arrayLength >= 0)
-			return path.length == 0 ? 'array-length:${predicate.arrayLength}' : 'path:${path}:array-length:${predicate.arrayLength}';
+			return path.length == 0
+				&& objectPath.length == 0 ? 'array-length:${predicate.arrayLength}' : 'path:${path}:${objectPath}:array-length:${predicate.arrayLength}';
 		var value = predicate.value;
 		if (value == null)
 			throw "Equality payload predicate has no value";
-		return path.length == 0 ? Std.string(constantPatternKey(value)) : 'path:${path}:${Std.string(constantPatternKey(value))}';
+		return path.length == 0
+			&& objectPath.length == 0 ? Std.string(constantPatternKey(value)) : 'path:${path}:${objectPath}:${Std.string(constantPatternKey(value))}';
 	}
 
 	function switchCaseKey(value:TypedExpression, predicates:Array<TypedSwitchPredicate>):Null<String>

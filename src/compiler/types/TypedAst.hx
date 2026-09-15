@@ -214,6 +214,9 @@ typedef TypedSwitchBinding = {
 /** One enum payload field traversed while matching a nested constructor pattern. */
 typedef TypedSwitchFieldAccess = {final constructorIndex:Int; final fieldIndex:Int; final storageType:CompilerType;}
 
+/** One anonymous-object field traversed while matching an enum payload pattern. */
+typedef TypedSwitchObjectFieldAccess = {final name:String; final storageType:CompilerType;}
+
 /** Constant or structural constraint applied to one enum payload position. */
 typedef TypedSwitchPredicate = {
 	final value:Null<TypedExpression>;
@@ -224,6 +227,7 @@ typedef TypedSwitchPredicate = {
 	final index:Int;
 	final arrayIndex:Int;
 	final ?nestedPath:Array<TypedSwitchFieldAccess>;
+	final ?objectPath:Array<TypedSwitchObjectFieldAccess>;
 	final ?nestedConstructorIndex:Int;
 }
 

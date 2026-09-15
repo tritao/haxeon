@@ -407,7 +407,8 @@ class WasmGcInterop implements WasmInteropRepresentation {
 			body.push(LocalGet(pointer == null ? argumentLocals[index] : pointer));
 		}
 		var nativePointerResult = isNativePointerType(native.result),
-			resultLocal = native.result == Void ? -1 : allocateLocal(bytePointerResult || byteStringResult
+			resultLocal = native.result == Void ? -1 : allocateLocal(bytePointerResult
+				|| byteStringResult
 				|| fixedAggregateResult
 				|| nativePointerResult ? I32 : plan.valueType(native.result));
 		body.push(Call(importIndex));
@@ -712,14 +713,20 @@ class WasmGcInterop implements WasmInteropRepresentation {
 			rootsLocal = allocateLocal(plan.valueType(Array(ManagedBytes))),
 			rootIndexLocal = allocateLocal(I32),
 			rootValueLocal = allocateLocal(plan.valueType(ManagedBytes)),
-			sourceLocal = allocateLocal(Ref({nullable: false, heap: Type(plan.managedBytesTypeIndex)})),
+			sourceLocal = allocateLocal(Ref({
+				nullable: false,
+				heap: Type(plan.managedBytesTypeIndex)
+			})),
 			tokenLocal = allocateLocal(I32),
 			offsetLocal = allocateLocal(I32),
 			targetLocal = allocateLocal(I32),
 			body:Array<WasmInstruction> = [
 				LocalGet(bytesLocal),
 				StructGet(plan.managedBytesTypeIndex, 3),
-				RefCast({nullable: false, heap: Type(rootsType)}),
+				RefCast({
+					nullable: false,
+					heap: Type(rootsType)
+				}),
 				LocalSet(rootsLocal),
 				I32Const(1),
 				LocalSet(rootIndexLocal),
@@ -755,7 +762,10 @@ class WasmGcInterop implements WasmInteropRepresentation {
 			If(null),
 			Else,
 			LocalGet(rootValueLocal),
-			RefCast({nullable: false, heap: Type(plan.managedBytesTypeIndex)}),
+			RefCast({
+				nullable: false,
+				heap: Type(plan.managedBytesTypeIndex)
+			}),
 			LocalSet(sourceLocal),
 			LocalGet(aggregatePointer),
 			LocalGet(offsetLocal),

@@ -94,11 +94,33 @@ class TestMain {
 		var hexTokens = new Lexer(new SourceFile("hex.hx", "0x2A 0Xff")).tokenize();
 		if (hexTokens[0].text != "0x2A" || hexTokens[1].text != "0Xff")
 			throw "Hexadecimal integer literals were not tokenized";
+		var scientificTokens = new Lexer(new SourceFile("scientific.hx", "1e3 1.5E-2")).tokenize();
+		if (scientificTokens[0].kind != compiler.syntax.Token.TokenKind.Float
+			|| scientificTokens[1].kind != compiler.syntax.Token.TokenKind.Float
+			|| scientificTokens[0].text != "1e3"
+			|| scientificTokens[1].text != "1.5E-2")
+			throw "Scientific-notation literals were not tokenized";
 		var nullCoalesceTokens = new Lexer(new SourceFile("null-coalesce.hx", "value ?? fallback")).tokenize();
 		if (nullCoalesceTokens[1].kind != compiler.syntax.Token.TokenKind.NullCoalesce)
 			throw "Null-coalescing operator was not tokenized";
 		Frontend.compile('function main():Int return "=".code;');
 		Frontend.compile('function main():Int { return 0x2A; }');
+		var signedMinimumProgram = Frontend.compile('function main():Int return -2147483648;');
+		if (new IrInterpreter(signedMinimumProgram).run("main") != -2147483648)
+			throw "The signed 32-bit minimum integer literal did not preserve its value";
+		var hexSignBitProgram = Frontend.compile('function main():Int return 0x80000000;');
+		if (new IrInterpreter(hexSignBitProgram).run("main") != -2147483648)
+			throw "Hexadecimal sign-bit integer literals did not use two's-complement Int semantics";
+		var outOfRangeInteger = false;
+		try {
+			Frontend.compile('function main():Int return 2147483648;');
+		} catch (error:CompileError)
+			outOfRangeInteger = error.diagnostic.message.indexOf("outside the signed 32-bit range") >= 0;
+		if (!outOfRangeInteger)
+			throw "Out-of-range decimal integer literals did not produce a parser diagnostic";
+		var scientificLiteralProgram = Frontend.compile('function main():Int return 1.0e3 == 1000 ? 42 : 0;');
+		if (new IrInterpreter(scientificLiteralProgram).run("main") != 42)
+			throw "Scientific-notation literals did not parse or type as Float values";
 		Frontend.compile('class NullableIntegerField { public var value:Null<Int>; public function new(value:Null<Int>) this.value = value; } function main():Int { var box = new NullableIntegerField(42); if (box.value != null) { var required:Int = box.value; return required; } return 0; }');
 		var nullableFieldAssignmentProgram = Frontend.compile('class NullableFieldCache { public var value:Null<Int>; public function new() {} public function get():Int { if (value == null) value = 42; return value; } } function main():Int return new NullableFieldCache().get();');
 		if (new IrInterpreter(nullableFieldAssignmentProgram).run("main") != 42)
@@ -170,6 +192,9 @@ class TestMain {
 		var nestedEnumPayloadProgram = Frontend.compile('enum ReferenceKind { NullRef; TypeRef(index:Int); } enum Storage { Value(reference:ReferenceKind); } function index(value:Storage):Int return switch value { case Value(TypeRef(number)): number; default: 0; } function main():Int return index(Value(TypeRef(42)));');
 		if (new IrInterpreter(nestedEnumPayloadProgram).run("main") != 42)
 			throw "Nested enum constructor patterns did not check the tag and bind the nested payload";
+		var partialAnonymousEnumPatternProgram = Frontend.compile('enum HeapKind { Any; Type(index:Int); } enum Reference { Ref(value:{nullable:Bool, heap:HeapKind}); } function classify(value:Reference):Int return switch value { case Ref({heap:Any}): 42; default: 0; } function main():Int return classify(Ref({nullable: false, heap: Any}));');
+		if (new IrInterpreter(partialAnonymousEnumPatternProgram).run("main") != 42)
+			throw "Partial anonymous-object enum payload patterns did not type and lower their field path";
 		var exhaustiveNestedEnumSwitchProgram = Frontend.compile('enum NumberKind { I32; I64; F32; F64; Ref(index:Int); } enum Storage { Value(kind:NumberKind); I8; I16; } function classify(value:Storage):Int return switch value { case I8: 8; case I16: 16; case Value(I32): 1; case Value(I64): 2; case Value(F32): 3; case Value(F64): 4; case Value(Ref(_)): 5; } function main():Int return classify(Value(Ref(42)));');
 		if (new IrInterpreter(exhaustiveNestedEnumSwitchProgram).run("main") != 5)
 			throw "Exhaustive nested enum patterns were rejected or lowered incorrectly";
