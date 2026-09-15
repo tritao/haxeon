@@ -13,4 +13,13 @@ class HlTypeBridge {
 
 	public static function native_type_function_arity(type:RawPtr<HlType>):Int
 		return 0;
+
+	public static function native_type_object_field_count(type:RawPtr<HlType>):Int
+		return 0;
+
+	public static function native_type_enum_constructor_count(type:RawPtr<HlType>):Int
+		return 0;
+
+	public static function native_type_virtual_field_count(type:RawPtr<HlType>):Int
+		return 0;
 }

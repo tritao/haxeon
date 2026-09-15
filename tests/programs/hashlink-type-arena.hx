@@ -66,16 +66,19 @@ function main():Int {
 		builtVirtual = builder.virtualType([{name: RawPtr.nullPtr(), type: intType, hashedName: 23}], 4, [0], RawPtr.nullPtr()),
 		virtualData = builtVirtual.ref.data.ref.virtualType;
 	var graphCorrect = HlTypeBridge.native_type_kind(builtObject) == 11
+		&& HlTypeBridge.native_type_object_field_count(builtObject) == 1
 		&& objectData.ref.nfields == 1
 		&& objectData.ref.fields.offset(0).ref.type == intType
 		&& objectData.ref.fields.offset(0).ref.hashedName == 17
 		&& objectData.ref.proto.offset(0).ref.findex == 3
 		&& objectData.ref.bindings.offset(0).load() == 7
 		&& HlTypeBridge.native_type_kind(builtEnum) == 18
+		&& HlTypeBridge.native_type_enum_constructor_count(builtEnum) == 1
 		&& enumData.ref.nconstructs == 1
 		&& enumData.ref.constructs.offset(0).ref.params.offset(0).load() == intType
 		&& enumData.ref.constructs.offset(0).ref.size == 4
 		&& HlTypeBridge.native_type_kind(builtVirtual) == 15
+		&& HlTypeBridge.native_type_virtual_field_count(builtVirtual) == 1
 		&& virtualData.ref.nfields == 1
 		&& virtualData.ref.fields.offset(0).ref.type == intType
 		&& virtualData.ref.indexes.offset(0).load() == 0;
