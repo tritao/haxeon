@@ -21,6 +21,8 @@ typedef HlMetadataPublication = {
 	final nativeDescriptors:RawPtr<HlNative>;
 	final nativeDescriptorCount:Int;
 	final nativeDescriptorCapacity:Int;
+	final globals:RawPtr<RawPtr<UInt8>>;
+	final globalCount:Int;
 	final functions:RawPtr<RawPtr<UInt8>>;
 	final functionTypes:RawPtr<RawPtr<HlType>>;
 	final functionCount:Int;
@@ -36,6 +38,9 @@ class HlMetadataGeneration {
 	final typeTable:HlTypeTable;
 	var functionTable:Null<HlFunctionTable>;
 	var moduleContext:RawPtr<HlModuleContext> = RawPtr.nullPtr();
+	var globals:RawPtr<RawPtr<UInt8>> = RawPtr.nullPtr();
+	var globalCount:Int = 0;
+	var globalsDefined:Bool = false;
 	var published:Bool = false;
 	var publishedContiguousTypeCount:Int = 0;
 	var publishedUsesContiguousTypes:Bool = false;
@@ -130,6 +135,33 @@ class HlMetadataGeneration {
 		return moduleContext;
 	}
 
+	/** Allocate the shared 1-based global-value slot table used by HLB types. */
+	public function defineGlobals(count:Int):RawPtr<RawPtr<UInt8>> {
+		requireBuilding();
+		if (count < 0)
+			throw "HashLink metadata global count must be non-negative";
+		if (globalsDefined)
+			throw "HashLink metadata global table is already defined";
+		globalsDefined = true;
+		globalCount = count;
+		if (count == 0)
+			return globals;
+		globals = arena.allocNativePointerArray(count);
+		for (index in 0...count)
+			globals.offset(index).store(RawPtr.nullPtr());
+		return globals;
+	}
+
+	/** Return the arena-owned slot for a 1-based HLB global index. */
+	public function globalPointer(index:Int):RawPtr<RawPtr<UInt8>> {
+		requireOpen();
+		if (index == 0)
+			return RawPtr.nullPtr();
+		if (!globalsDefined || index < 0 || index > globalCount)
+			throw 'HashLink metadata global index $index is outside 1...$globalCount';
+		return globals.offset(index - 1);
+	}
+
 	/** Initialize HashLink-derived metadata and return its stable pointer-table view. */
 	public function publish():HlMetadataPublication {
 		requireBuilding();
@@ -171,6 +203,8 @@ class HlMetadataGeneration {
 			nativeDescriptors: nativeDescriptors.pointer(),
 			nativeDescriptorCount: nativeDescriptors.length(),
 			nativeDescriptorCapacity: nativeDescriptors.capacityOf(),
+			globals: globals,
+			globalCount: globalCount,
 			functions: requireFunctionTable().functionPointer(),
 			functionTypes: requireFunctionTable().typePointer(),
 			functionCount: requireFunctionTable().length(),

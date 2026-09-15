@@ -31,6 +31,15 @@ function buildFunctionGeneration(changed:Bool):HlMetadataGeneration {
 	return generation;
 }
 
+function buildGlobalGeneration(count:Int):HlMetadataGeneration {
+	var generation = new HlMetadataGeneration(128, 1),
+		type = generation.builder.primitive(HlTypeKind.Int32Type);
+	generation.addType(type);
+	generation.defineModule([RawPtr.nullPtr()], [type]);
+	generation.defineGlobals(count);
+	return generation;
+}
+
 function buildObjectGeneration(fieldKind:HlTypeKind):HlMetadataGeneration {
 	var generation = new HlMetadataGeneration(128, 1),
 		intType = generation.builder.primitive(HlTypeKind.Int32Type),
@@ -103,6 +112,11 @@ function main():Int {
 			&& registry.revision == 3
 			&& registry.retiredCount == 2
 			&& structuralPublication.types.offset(2).load() == structural.type(2);
+	var globalBefore = buildGlobalGeneration(0),
+		globalAfter = buildGlobalGeneration(1),
+		globalShapeChanged = requiresReload(HlMetadataCompatibility.check(globalBefore, globalAfter));
+	globalBefore.dispose();
+	globalAfter.dispose();
 	var objectBefore = buildObjectGeneration(HlTypeKind.Int32Type),
 		objectAfter = buildObjectGeneration(HlTypeKind.Float32Type),
 		objectChanged = requiresReload(HlMetadataCompatibility.check(objectBefore, objectAfter));
@@ -190,6 +204,7 @@ function main():Int {
 	currentLease.release();
 	transactionRegistry.dispose();
 	registry.dispose();
-	return switched && rejectionStable && reloaded && disposed && firstReleased && objectChanged && nativeNamesMatch && nativeChanged && functionChanged
-		&& derivedStateIgnored && transactionReloaded && reloadRetiredDisposed && releasedRetiredDisposed && transactionStates && disposeBlocked ? 42 : 1;
+	return switched && rejectionStable && reloaded && globalShapeChanged && disposed && firstReleased && objectChanged && nativeNamesMatch && nativeChanged
+		&& functionChanged && derivedStateIgnored && transactionReloaded && reloadRetiredDisposed && releasedRetiredDisposed && transactionStates
+		&& disposeBlocked ? 42 : 1;
 }

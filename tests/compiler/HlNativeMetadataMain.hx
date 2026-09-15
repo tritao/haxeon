@@ -26,6 +26,7 @@ class HlNativeMetadataMain {
 			+
 			'var generation = HlNativeMetadataBuilder.build(code), publication = generation.snapshot(), object = generation.type(9), native = publication.nativeDescriptors; '
 			+ 'var correct = publication.typeCount == 12 && publication.usesContiguousTypes && publication.functionCount == 2 '
+			+ '&& publication.globalCount == 2 && object.ref.data.ref.obj.ref.globalValue == publication.globals '
 			+ '&& object.ref.kind == 11 && !object.ref.data.ref.obj.ref.runtime.isNull() '
 			+ '&& object.ref.data.ref.obj.ref.fields.offset(1).ref.type.ref.kind == 22 '
 			+ '&& native.ref.library.offset(3).load() == 226 && native.ref.library.offset(6).load() == 0 '

@@ -25,6 +25,8 @@ class HlMetadataCompatibility {
 			throw "HashLink metadata compatibility cannot inspect a null generation";
 		if (previous == null)
 			return Compatible;
+		if (previous.globalCount != candidate.globalCount)
+			return RequiresReload("module global table changed");
 		if (previous.functionCount() != candidate.functionCount())
 			return RequiresReload("module function table changed");
 		for (index in 0...previous.functionCount())

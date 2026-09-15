@@ -32,10 +32,11 @@ class HlNativeMetadataBuilder {
 				functionCount = dispatchSlotCount(code),
 				pointers = dispatchPointers(functionCount, functionPointers),
 				functionTypes = dispatchTypes(code, typePointers, functionCount),
-				module = generation.defineModule(pointers, functionTypes);
+				module = generation.defineModule(pointers, functionTypes),
+				globals = generation.defineGlobals(code.globals.length);
 			for (index in 0...code.types.length)
 				generation.addType(typePointers[index]);
-			defineTypes(code, generation, typePointers, module);
+			defineTypes(code, generation, typePointers, module, globals);
 			addFunctionDescriptors(code, generation, typePointers);
 			addNativeDescriptors(code, generation, typePointers);
 			generation.publish();
@@ -77,7 +78,7 @@ class HlNativeMetadataBuilder {
 	}
 
 	static function defineTypes(code:HlCode, generation:HlMetadataGeneration, types:Array<RawPtr<runtime.hashlink.HlType>>,
-			module:RawPtr<runtime.hashlink.HlModuleContext>):Void {
+			module:RawPtr<runtime.hashlink.HlModuleContext>, globals:RawPtr<RawPtr<UInt8>>):Void {
 		for (index in 0...code.types.length)
 			switch code.types[index] {
 				case Simple(_):
@@ -87,21 +88,21 @@ class HlNativeMetadataBuilder {
 				case Function(arguments, result), Method(arguments, result):
 					generation.builder.defineFunctionType(types[index], typePointers(types, arguments), types[result]);
 				case Object(name, base, global, fields, methods, bindings):
-					defineObject(code, generation, types[index], name, base, global, fields, methods, bindings, module, false, types);
+					defineObject(code, generation, types[index], name, base, global, fields, methods, bindings, module, globals, false, types);
 				case Structure(name, global, fields, methods, bindings):
-					defineObject(code, generation, types[index], name, -1, global, fields, methods, bindings, module, true, types);
+					defineObject(code, generation, types[index], name, -1, global, fields, methods, bindings, module, globals, true, types);
 				case Virtual(fields):
 					generation.builder.defineVirtualType(types[index], objectFields(code, generation.builder, fields, types), 0, [for (_ in fields) 0],
 						RawPtr.nullPtr());
 				case Enum(name, global, constructors):
 					generation.builder.defineEnumType(types[index], generation.builder.utf16Name(code.strings[name]),
-						enumConstructors(code, generation, constructors, types), globalPointer(generation, global));
+						enumConstructors(code, generation, constructors, types), generation.globalPointer(global));
 			}
 	}
 
 	static function defineObject(code:HlCode, generation:HlMetadataGeneration, type:RawPtr<runtime.hashlink.HlType>, name:Int, base:Int, global:Int,
 			fields:Array<HlCode.HlObjectField>, methods:Array<HlCode.HlObjectMethod>, bindings:Array<Int>, module:RawPtr<runtime.hashlink.HlModuleContext>,
-			structure:Bool, types:Array<RawPtr<runtime.hashlink.HlType>>):Void {
+			globals:RawPtr<RawPtr<UInt8>>, structure:Bool, types:Array<RawPtr<runtime.hashlink.HlType>>):Void {
 		if (bindings.length % 2 != 0)
 			throw 'HashLink object type $name has an incomplete binding pair';
 		var objectBindings:Array<runtime.hashlink.HlTypeBuilder.HlObjectBindingSpec> = [];
@@ -118,7 +119,7 @@ class HlNativeMetadataBuilder {
 			throw "HashLink object definition kind does not match its type skeleton";
 		generation.builder.defineObjectType(type, generation.builder.utf16Name(code.strings[name]), base < 0 ? RawPtr.nullPtr() : types[base],
 			objectFields(code, generation.builder, fields, types), objectPrototypes(code, generation.builder, methods), objectBindings,
-			globalPointer(generation, global), module, RawPtr.nullPtr());
+			global == 0 ? RawPtr.nullPtr() : globals.offset(global - 1), module, RawPtr.nullPtr());
 	}
 
 	static function objectFields(code:HlCode, builder:HlTypeBuilder, fields:Array<HlCode.HlObjectField>,
@@ -230,14 +231,6 @@ class HlNativeMetadataBuilder {
 		var result:Array<RawPtr<runtime.hashlink.HlType>> = [];
 		for (index in indices)
 			result.push(types[index]);
-		return result;
-	}
-
-	static function globalPointer(generation:HlMetadataGeneration, index:Int):RawPtr<RawPtr<UInt8>> {
-		if (index == 0)
-			return RawPtr.nullPtr();
-		var result = generation.arena.allocNativePointerArray(1);
-		result.offset(0).store(RawPtr.nullPtr());
 		return result;
 	}
 
