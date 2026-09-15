@@ -233,9 +233,14 @@ class LanguageServiceMain {
 		var importedRecoveryPosition = importedRecoverySource.lastIndexOf("add") + 1,
 			importedRecoveryDefinition = importService.definition("editor/Main.hx", importedRecoveryPosition),
 			importedRecoveryReferences = importService.references("editor/Main.hx", importedRecoveryPosition);
+		var staleCurrentReference = false;
+		for (reference in importedRecoveryReferences)
+			if (reference.path == "editor/Main.hx" && reference.stale)
+				staleCurrentReference = true;
 		if (importedRecoveryDefinition == null
 			|| importedRecoveryDefinition.path != "editor/util/Math.hx"
-			|| importedRecoveryReferences.length < 1)
+			|| importedRecoveryReferences.length != 2
+			|| staleCurrentReference)
 			throw "recovered imported symbol resolution failed";
 		var enumService = new LanguageService();
 		enumService.update("model/Kind.hx", "package model; enum Kind { One; Two(value:Int); }");

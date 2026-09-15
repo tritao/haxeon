@@ -189,11 +189,13 @@ class SemanticWorkspace {
 		return indexedSignature(id);
 	}
 
-	public function indexedLocations(id:SemanticSymbolId, ?token:CancellationToken):Array<{state:ModuleState, span:SourceSpan}> {
+	public function indexedLocations(id:SemanticSymbolId, ?token:CancellationToken, ?exclude:ModuleState):Array<{state:ModuleState, span:SourceSpan}> {
 		var result = [];
 		for (state in orderedStates()) {
 			if (token != null)
 				token.check();
+			if (exclude != null && state == exclude)
+				continue;
 			var model = effectiveModel(state);
 			if (model != null)
 				for (span in model.index.locations(id))
@@ -211,9 +213,11 @@ class SemanticWorkspace {
 					token.check();
 				recovered.push({state: state, span: span});
 			}
-		if (state.recoveredSemanticModel == null || state.recoveredSemanticModel.index.symbol(id) != null)
+		if (state.ast != null || state.recoveredSemanticModel == null)
+			return indexedLocations(id, token);
+		if (state.recoveredSemanticModel.index.symbol(id) != null)
 			return recovered.length == 0 ? indexedLocations(id, token) : recovered;
-		var result = indexedLocations(id, token);
+		var result = indexedLocations(id, token, state);
 		for (location in recovered) {
 			var duplicate = false;
 			for (existing in result)
