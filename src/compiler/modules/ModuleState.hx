@@ -51,6 +51,10 @@ class ModuleState {
 	public var conditionalDefines:Array<String> = [];
 	public var semanticDependencies:Map<String, Array<SemanticDependency>> = [];
 	public var diagnostics:Array<Diagnostic> = [];
+
+	/** Diagnostics owned by the current editor recovery snapshot. */
+	public var recoveryDiagnostics:Array<Diagnostic> = [];
+
 	public var signatureFingerprints:Map<String, String> = [];
 	public var interfaceFingerprints:Map<String, String> = [];
 	public var aliasFingerprints:Map<String, String> = [];
@@ -100,6 +104,7 @@ class ModuleState {
 		semanticModel = null;
 		conditionalDefines = [];
 		diagnostics = [];
+		recoveryDiagnostics = [];
 		dirty = true;
 	}
 
@@ -123,6 +128,7 @@ class ModuleState {
 		result.conditionalDefines = conditionalDefines.copy();
 		result.semanticDependencies = copyDependencyMap(semanticDependencies);
 		result.diagnostics = diagnostics.copy();
+		result.recoveryDiagnostics = recoveryDiagnostics.copy();
 		result.signatureFingerprints = copyMap(signatureFingerprints);
 		result.interfaceFingerprints = copyMap(interfaceFingerprints);
 		result.aliasFingerprints = copyMap(aliasFingerprints);

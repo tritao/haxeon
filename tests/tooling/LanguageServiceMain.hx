@@ -682,6 +682,11 @@ class LanguageServiceMain {
 		immediateService.update("Immediate.hx", "function unfinished(value:Int,");
 		if (immediateService.recoveredSnapshotBuilds != immediateRecoveryBuilds)
 			throw "duplicate editor updates rebuilt an unchanged recovery snapshot";
+		try
+			immediateService.analyze("Immediate")
+		catch (_:CompileError) {}
+		if (immediateService.recoveredSnapshotBuilds != immediateRecoveryBuilds)
+			throw "background analysis rebuilt an unchanged recovery snapshot";
 		if (immediateService.compiler.semanticWorkspace.resolveSymbolId("unfinished") != null)
 			throw "recovered declaration contaminated the authoritative semantic workspace";
 		var partialService = new LanguageService();
@@ -698,7 +703,7 @@ class LanguageServiceMain {
 		if (!foundVisible)
 			throw "parser recovery did not preserve a valid declaration after malformed declarations";
 		if (partialService.diagnostics("Partial.hx").length != 2)
-			throw "parser recovery did not collect multiple declaration diagnostics";
+			throw 'parser recovery did not collect multiple declaration diagnostics: ${[for (diagnostic in partialService.diagnostics("Partial.hx")) diagnostic.message].join(" | ")}';
 		var delimiterService = new LanguageService();
 		delimiterService.update("Delimiter.hx", "function first():Int return 1 function second():Int return 2;");
 		try {

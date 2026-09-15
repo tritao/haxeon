@@ -258,6 +258,10 @@ class LanguageService {
 		for (state in compiler.modules) {
 			if (state.ast != null)
 				continue;
+			if (state.recoveredSemanticModel != null && state.recoveredSemanticModel.revision == state.revision) {
+				mergeRecoveryDiagnostics(state, state.recoveryDiagnostics);
+				continue;
+			}
 			recoverSyntax(state, token);
 		}
 		compiler.semanticWorkspace.invalidateResolutionCache();
@@ -266,13 +270,14 @@ class LanguageService {
 	function recoverSyntax(state:ModuleState, ?token:CancellationToken):Void {
 		if (token != null)
 			token.check();
+		state.recoveryDiagnostics = [];
 		var conditional:ConditionalSource;
 		try
 			conditional = ConditionalCompilation.process(state.source, editorDefines)
 		catch (error:CompileError) {
 			state.conditionalDefines = [];
 			error.diagnostic.origin = DiagnosticOrigin.ParserRecovery;
-			mergeRecoveryDiagnostics(state, [error.diagnostic]);
+			publishRecoveryDiagnostics(state, [error.diagnostic]);
 			return;
 		}
 		state.conditionalDefines = conditional.defines;
@@ -282,7 +287,7 @@ class LanguageService {
 			tokens = new Lexer(state.source, conditional.text, checkpoint).tokenize()
 		catch (error:CompileError) {
 			error.diagnostic.origin = DiagnosticOrigin.Lexical;
-			mergeRecoveryDiagnostics(state, [error.diagnostic]);
+			publishRecoveryDiagnostics(state, [error.diagnostic]);
 			return;
 		}
 		try {
@@ -297,14 +302,18 @@ class LanguageService {
 			state.recoveredAst = recovered.program;
 			state.recoveredSemanticModel = recoveredModel;
 			recoveredSnapshotBuilds++;
-			mergeRecoveryDiagnostics(state, recovered.diagnostics);
-			mergeRecoveryDiagnostics(state, typingDiagnostics);
+			publishRecoveryDiagnostics(state, recovered.diagnostics.concat(typingDiagnostics));
 		} catch (error:CompileError) {
 			error.diagnostic.origin = DiagnosticOrigin.ParserRecovery;
 			// Parser recovery itself failed. Keep the last-good semantic snapshot
 			// available; do not destroy it.
-			mergeRecoveryDiagnostics(state, [error.diagnostic]);
+			publishRecoveryDiagnostics(state, [error.diagnostic]);
 		}
+	}
+
+	function publishRecoveryDiagnostics(state:ModuleState, diagnostics:Array<Diagnostic>):Void {
+		state.recoveryDiagnostics = diagnostics.copy();
+		mergeRecoveryDiagnostics(state, state.recoveryDiagnostics);
 	}
 
 	function mergeRecoveryDiagnostics(state:ModuleState, diagnostics:Array<Diagnostic>):Void {
