@@ -474,10 +474,13 @@ class ParserRecoveryMain {
 		var genericInheritanceCallSource = genericInheritanceSource.substring(0, genericInheritanceSource.length - "child.".length) + "child.get(",
 			genericInheritanceCallPosition = genericInheritanceCallSource.length;
 		genericInheritanceService.update("GenericInheritance.hx", genericInheritanceCallSource);
-		var genericInheritanceCompletionContext = genericInheritanceService.completionContext("GenericInheritance.hx", genericInheritanceCallPosition, "child"),
-			genericInheritanceSignature = genericInheritanceService.signatureHelp("GenericInheritance.hx", genericInheritanceCallPosition);
+		var genericInheritanceSignature = genericInheritanceService.signatureHelp("GenericInheritance.hx", genericInheritanceCallPosition);
 		if (genericInheritanceSignature == null || genericInheritanceSignature.label != "get():Int")
-			throw 'generic inherited signature did not retain the receiver type: ${genericInheritanceSignature == null ? "null" : genericInheritanceSignature.label}, context=${genericInheritanceCompletionContext == null ? "null" : Std.string(genericInheritanceCompletionContext.context.receiver)}';
+			throw 'generic inherited signature did not retain the receiver type: ${genericInheritanceSignature == null ? "null" : genericInheritanceSignature.label}';
+		var genericInheritanceHoverPosition = genericInheritanceCallSource.indexOf("child.get") + "child.".length + 1,
+			genericInheritanceHover = genericInheritanceService.hover("GenericInheritance.hx", genericInheritanceHoverPosition);
+		if (genericInheritanceHover != "get():Int")
+			throw 'generic inherited hover did not retain the receiver type: $genericInheritanceHover';
 		var genericNavigationSource = genericInheritanceSource.substring(0, genericInheritanceSource.length - "child.".length) + "child.value;",
 			genericNavigationPosition = genericNavigationSource.lastIndexOf("child.value") + "child.".length + 1;
 		genericInheritanceService.update("GenericInheritance.hx", genericNavigationSource);

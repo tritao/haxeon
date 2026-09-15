@@ -1649,19 +1649,26 @@ class LanguageService {
 			return null;
 		var model = snapshot.semanticModel,
 			indexedId = model == null ? null : model.index.symbolIdAt(position, token),
-			indexedSignature = indexedId == null ? null : compiler.semanticWorkspace.editorSignature(state, indexedId);
+			indexedSignature = indexedId == null ? null : compiler.semanticWorkspace.editorSignature(state, indexedId),
+			indexed = indexedId == null || model == null ? null : model.index.symbol(indexedId),
+			name = indexed == null ? identifierPrefix(snapshot.source, position) : sourceName(indexed.name),
+			qualifier = memberQualifier(snapshot.source, position);
+		if (snapshot.recovered && model != null && qualifier != null && name.length > 0) {
+			var context = model.index.completionContext(position, qualifier, token),
+				owner = context == null ? null : typeDeclaration(context.receiver),
+				recoveredSignature = owner == null ? null : model.index.recoveredSignature(owner + "." + name, context.receiver);
+			if (recoveredSignature != null)
+				return recoveredSignature.label;
+		}
 		if (indexedSignature != null)
 			return indexedSignature.label;
 		if (indexedId != null && model != null) {
-			var indexed = model.index.symbol(indexedId),
-				indexedType = model.index.typeAt(position, token);
+			var indexedType = model.index.typeAt(position, token);
 			if (indexed != null && indexedType != null)
 				return indexed.name + ":" + compilerTypeName(indexedType);
 		}
-		var name = identifierPrefix(snapshot.source, position);
 		if (name.length == 0)
 			return null;
-		var qualifier = memberQualifier(snapshot.source, position);
 		if (qualifier != null) {
 			for (enumDecl in ast.enums) {
 				if (token != null)
