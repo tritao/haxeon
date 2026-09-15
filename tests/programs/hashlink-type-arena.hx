@@ -133,15 +133,21 @@ function main():Int {
 		generationVoid = generation.builder.primitive(HlTypeKind.VoidType),
 		generationInt = generation.builder.primitive(HlTypeKind.Int32Type),
 		generationFunction = generation.builder.functionType([generationInt], generationVoid);
+	var generationModule = generation.defineModule([RawPtr.nullPtr()], [generationFunction]),
+		generationObject = generation.builder.objectType(generation.builder.utf16Name("GenerationObject"), RawPtr.nullPtr(), [], [], [], RawPtr.nullPtr(),
+			generationModule, RawPtr.nullPtr()),
+		generationObjectData = generationObject.ref.data.ref.obj;
 	generation.addType(generationVoid);
 	generation.addType(generationFunction);
-	var generationModule = generation.defineModule([RawPtr.nullPtr()], [generationFunction]),
-		publication = generation.publish();
-	var generationCorrect = publication.typeCount == 2
-		&& publication.typeCapacity == 2
+	generation.addType(generationObject);
+	var publication = generation.publish();
+	var generationCorrect = publication.typeCount == 3
+		&& publication.typeCapacity == 4
 		&& publication.moduleContext == generationModule
 		&& publication.types.offset(0).load() == generationVoid
 		&& publication.types.offset(1).load() == generationFunction
+		&& publication.types.offset(2).load() == generationObject
+		&& !generationObjectData.ref.runtime.isNull()
 		&& generation.type(1) == generationFunction;
 	var generationSealed = false;
 	try
