@@ -222,7 +222,7 @@ class LanguageServiceMain {
 				hasImportedMember = true;
 		if (!hasImportedMember || !importedMemberCompletion.isIncomplete)
 			throw "recovered imported module completion failed";
-		var importedClassSource = "package editor.util; class Base { public var inherited:Int; } class Widget extends Base { public var ready:Int; public function reset():Void return; } function main():Void return;";
+		var importedClassSource = "package editor.util; class Base { public var inherited:Int; } class Widget extends Base { public var ready:Int; public function reset(value:Int):Void return; } function main():Void return;";
 		importService.update("editor/util/Widget.hx", importedClassSource);
 		var importedClassRecoverySource = "package editor; import editor.util.Widget; function main():Void { var widget:Widget = new Widget(); widget.";
 		importService.update("editor/ClassMain.hx", importedClassRecoverySource);
@@ -257,8 +257,11 @@ class LanguageServiceMain {
 		var importedSignatureSource = "package editor; import editor.util.Widget; function main():Void { var widget:Widget = new Widget(); widget.reset(";
 		importService.update("editor/ImportedSignature.hx", importedSignatureSource);
 		var importedSignature = importService.signatureHelp("editor/ImportedSignature.hx", importedSignatureSource.length);
-		if (importedSignature == null || importedSignature.label != "reset():Void" || importedSignature.activeParameter != 0)
+		if (importedSignature == null || importedSignature.label != "reset(value:Int):Void" || importedSignature.activeParameter != 0)
 			throw "recovered signature help did not use an imported module's temporary signature";
+		var importedArgumentContext = importService.completionContext("editor/ImportedSignature.hx", importedSignatureSource.length);
+		if (importedArgumentContext == null || importedArgumentContext.context.expected != TInt)
+			throw "recovered imported signature did not preserve the expected argument type";
 		var transitiveService = new LanguageService();
 		transitiveService.update("editor/base/Base.hx", "package editor.base; class Base { public var inherited:Int; }");
 		transitiveService.update("editor/util/Widget.hx", "package editor.util; import editor.base.Base; class Widget extends Base {}");
