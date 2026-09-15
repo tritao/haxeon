@@ -169,6 +169,13 @@ private typedef StructuralIndexEntry = {
 	final containers:Array<SourceSpan>;
 }
 
+private typedef RecoveredTypingModuleCache = {
+	final revision:Int;
+	final valid:Bool;
+	final program:AstProgram;
+	final declarations:DeclarationIndex;
+}
+
 private typedef WorkspaceIndexEntry = {
 	final revision:Int;
 	final symbols:Array<WorkspaceSymbol>;
@@ -231,11 +238,13 @@ class LanguageService {
 
 	public final compiler:Compiler;
 	public var recoveredSnapshotBuilds(default, null):Int = 0;
+	public var recoveredTypingModuleBuilds(default, null):Int = 0;
 
 	final workspaceIndex:Map<String, WorkspaceIndexEntry> = [];
 	final documentationIndex:Map<String, DocumentationIndexEntry> = [];
 	final structuralIndex:Map<String, StructuralIndexEntry> = [];
-	final recoveredCompletionPrograms:Map<String, {revision:Int, program:AstProgram}> = [];
+	final recoveredCompletionPrograms:Map<String, {revision:Int, valid:Bool, program:AstProgram}> = [];
+	final recoveredTypingModules:Map<String, RecoveredTypingModuleCache> = [];
 	var editorDefines:Map<String, String> = [];
 	var editorScopeIdentity = "default";
 
@@ -267,6 +276,7 @@ class LanguageService {
 		documentationIndex.remove(name);
 		structuralIndex.remove(name);
 		recoveredCompletionPrograms.remove(name);
+		recoveredTypingModules.remove(name);
 		compiler.semanticWorkspace.invalidateResolutionCache();
 		refreshAllRecovery();
 		return true;
@@ -289,6 +299,7 @@ class LanguageService {
 		documentationIndex.clear();
 		structuralIndex.clear();
 		recoveredCompletionPrograms.clear();
+		recoveredTypingModules.clear();
 		compiler.configure(identity, scopeIdentity, defines);
 	}
 
@@ -508,10 +519,27 @@ class LanguageService {
 				model = effectiveSemanticModel(candidate);
 			if (model == null)
 				continue;
-			var recoveredProgram = SignatureInference.inferProgram(model.program);
+			var valid = candidate.ast != null,
+				cached = recoveredTypingModules.get(candidate.name),
+				recoveredProgram:AstProgram,
+				declarations:DeclarationIndex;
+			if (cached != null && cached.revision == candidate.revision && cached.valid == valid) {
+				recoveredProgram = cached.program;
+				declarations = cached.declarations;
+			} else {
+				recoveredProgram = recoveredCompletionProgram(candidate, model.program);
+				declarations = DeclarationIndex.forModule(recoveredProgram, candidate.source);
+				recoveredTypingModules.set(candidate.name, {
+					revision: candidate.revision,
+					valid: valid,
+					program: recoveredProgram,
+					declarations: declarations
+				});
+				recoveredTypingModuleBuilds++;
+			}
 			result.push({
 				program: recoveredProgram,
-				declarations: DeclarationIndex.forModule(recoveredProgram, candidate.source),
+				declarations: declarations,
 				qualifiers: recoveryModuleQualifiers(program, candidate, recoveredProgram)
 			});
 			for (nested in compiler.modules) {
@@ -1528,11 +1556,12 @@ class LanguageService {
 	}
 
 	function recoveredCompletionProgram(state:ModuleState, ast:AstProgram):AstProgram {
-		var cached = recoveredCompletionPrograms.get(state.name);
-		if (cached != null && cached.revision == state.revision)
+		var cached = recoveredCompletionPrograms.get(state.name),
+			valid = state.ast != null;
+		if (cached != null && cached.revision == state.revision && cached.valid == valid)
 			return cached.program;
 		var program = SignatureInference.inferProgram(ast);
-		recoveredCompletionPrograms.set(state.name, {revision: state.revision, program: program});
+		recoveredCompletionPrograms.set(state.name, {revision: state.revision, valid: valid, program: program});
 		return program;
 	}
 

@@ -944,15 +944,22 @@ class LanguageServiceMain {
 		if (!hasRecoveredTopLevelSignature)
 			throw "recovered top-level completion lost signature metadata before analysis";
 		var cacheOrderService = new LanguageService(),
-			initialCacheSource = "package cache; import cache.Types; function main():Void { var value:Types = new Types(); value.";
-		cacheOrderService.update("cache/Types.hx", "package cache; class Types { public var oldValue:Int; }");
-		cacheOrderService.update("cache/Main.hx", initialCacheSource);
-		cacheOrderService.complete("cache/Main.hx", initialCacheSource.length);
-		cacheOrderService.update("cache/Types.hx", "package cache; class Types { public var newValue:Int; }");
-		var cacheOrderSource = "package cache; import cache.Types; function main():Void { var value:Types = new Types(); value.";
-		cacheOrderService.update("cache/Main.hx", cacheOrderSource);
+			initialCacheSource = "package cache.app; import cache.types.Types; function main():Void { var value:Types = new Types(); value.";
+		cacheOrderService.update("cache/types/Types.hx", "package cache.types; class Types { public var oldValue:Int; }");
+		cacheOrderService.update("cache/app/Main.hx", initialCacheSource);
+		cacheOrderService.complete("cache/app/Main.hx", initialCacheSource.length);
+		var initialTypingModuleBuilds = cacheOrderService.recoveredTypingModuleBuilds,
+			unchangedDependencySource = "package cache.app; import cache.types.Types; function main():Void { var value:Types = new Types(); value.n";
+		cacheOrderService.update("cache/app/Main.hx", unchangedDependencySource);
+		if (cacheOrderService.recoveredTypingModuleBuilds != initialTypingModuleBuilds)
+			throw 'recovered typing rebuilt an unchanged dependency module: initial=$initialTypingModuleBuilds current=${cacheOrderService.recoveredTypingModuleBuilds}';
+		cacheOrderService.update("cache/types/Types.hx", "package cache.types; class Types { public var newValue:Int; }");
+		if (cacheOrderService.recoveredTypingModuleBuilds <= initialTypingModuleBuilds)
+			throw "dependency revision did not invalidate cached recovered typing artifacts";
+		var cacheOrderSource = "package cache.app; import cache.types.Types; function main():Void { var value:Types = new Types(); value.";
+		cacheOrderService.update("cache/app/Main.hx", cacheOrderSource);
 		var cacheOrderNames = [
-			for (item in cacheOrderService.complete("cache/Main.hx", cacheOrderSource.length))
+			for (item in cacheOrderService.complete("cache/app/Main.hx", cacheOrderSource.length))
 				item.label
 		];
 		if (cacheOrderNames.indexOf("newValue") < 0 || cacheOrderNames.indexOf("oldValue") >= 0)
