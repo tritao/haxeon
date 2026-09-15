@@ -81,9 +81,32 @@ class HlTypeBuilder {
 		return type;
 	}
 
-	public function objectType(name:RawPtr<UInt16>, superType:RawPtr<HlType>, fields:Array<HlObjectFieldSpec>, prototypes:Array<HlObjectProtoSpec>,
-			bindings:Array<HlObjectBindingSpec>, globalValue:RawPtr<RawPtr<UInt8>>, module:RawPtr<HlModuleContext>, runtime:RawPtr<HlRuntimeObject>):RawPtr<HlType> {
-		var objectData = arena.allocTypeObject();
+	/** Allocate an object type header before its fields are known. */
+	public function objectTypeSkeleton():RawPtr<HlType> {
+		var type = allocateType(HlTypeKind.Object), objectData = arena.allocTypeObject();
+		objectData.ref.nfields = 0;
+		objectData.ref.nproto = 0;
+		objectData.ref.nbindings = 0;
+		objectData.ref.name = RawPtr.nullPtr();
+		objectData.ref.superType = RawPtr.nullPtr();
+		objectData.ref.fields = RawPtr.nullPtr();
+		objectData.ref.proto = RawPtr.nullPtr();
+		objectData.ref.bindings = RawPtr.nullPtr();
+		objectData.ref.globalValue = RawPtr.nullPtr();
+		objectData.ref.module = RawPtr.nullPtr();
+		objectData.ref.runtime = RawPtr.nullPtr();
+		type.ref.data.ref.obj = objectData;
+		return type;
+	}
+
+	/** Complete an object type skeleton after all recursive pointees are available. */
+	public function defineObjectType(type:RawPtr<HlType>, name:RawPtr<UInt16>, superType:RawPtr<HlType>, fields:Array<HlObjectFieldSpec>,
+			prototypes:Array<HlObjectProtoSpec>, bindings:Array<HlObjectBindingSpec>, globalValue:RawPtr<RawPtr<UInt8>>,
+			module:RawPtr<HlModuleContext>, runtime:RawPtr<HlRuntimeObject>):Void {
+		var kind:HlTypeKind = cast type.ref.kind;
+		if (kind != HlTypeKind.Object && kind != HlTypeKind.Struct)
+			throw "HashLink object definition requires an object type skeleton";
+		var objectData = type.ref.data.ref.obj;
 		objectData.ref.nfields = cast fields.length;
 		objectData.ref.nproto = cast prototypes.length;
 		objectData.ref.nbindings = cast bindings.length;
@@ -95,8 +118,12 @@ class HlTypeBuilder {
 		objectData.ref.globalValue = globalValue;
 		objectData.ref.module = module;
 		objectData.ref.runtime = runtime;
-		var type = allocateType(HlTypeKind.Object);
-		type.ref.data.ref.obj = objectData;
+	}
+
+	public function objectType(name:RawPtr<UInt16>, superType:RawPtr<HlType>, fields:Array<HlObjectFieldSpec>, prototypes:Array<HlObjectProtoSpec>,
+			bindings:Array<HlObjectBindingSpec>, globalValue:RawPtr<RawPtr<UInt8>>, module:RawPtr<HlModuleContext>, runtime:RawPtr<HlRuntimeObject>):RawPtr<HlType> {
+		var type = objectTypeSkeleton();
+		defineObjectType(type, name, superType, fields, prototypes, bindings, globalValue, module, runtime);
 		return type;
 	}
 

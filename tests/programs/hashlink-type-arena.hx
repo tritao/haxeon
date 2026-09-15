@@ -60,7 +60,11 @@ function main():Int {
 		}
 	],
 		[{fieldIndex: 0, functionIndex: 3}], RawPtr.nullPtr(), module, RawPtr.nullPtr()),
-		objectData = builtObject.ref.data.ref.obj,
+		objectData = builtObject.ref.data.ref.obj;
+	var recursiveObject = builder.objectTypeSkeleton();
+	builder.defineObjectType(recursiveObject, builder.utf16Name("RecursiveObject"), RawPtr.nullPtr(),
+		[{name: builder.utf16Name("next"), type: recursiveObject, hashedName: 29}], [], [], RawPtr.nullPtr(), module, RawPtr.nullPtr());
+	var recursiveObjectData = recursiveObject.ref.data.ref.obj,
 		builtEnum = builder.enumType(RawPtr.nullPtr(), [
 			{
 				name: RawPtr.nullPtr(),
@@ -128,7 +132,13 @@ function main():Int {
 		&& objectData.ref.runtime.ref.nmethods == 1
 		&& objectData.ref.runtime.ref.nbindings == 1
 		&& !objectData.ref.runtime.ref.bindings.offset(0).ref.pointer.isNull()
-		&& objectData.ref.runtime.ref.bindings.offset(0).ref.fieldId == 0;
+		&& objectData.ref.runtime.ref.bindings.offset(0).ref.fieldId == 0
+		&& recursiveObjectData.ref.fields.offset(0).ref.type == recursiveObject
+		&& recursiveObjectData.ref.fields.offset(0).ref.name.offset(0).load() == 110;
+	HlTypeBridge.native_type_initialize_object(recursiveObject);
+	nativeObjectCorrect = nativeObjectCorrect
+		&& !recursiveObjectData.ref.runtime.isNull()
+		&& HlTypeBridge.native_type_data_size(recursiveObject) == 16;
 	var generation = new HlMetadataGeneration(128, 1),
 		generationVoid = generation.builder.primitive(HlTypeKind.VoidType),
 		generationInt = generation.builder.primitive(HlTypeKind.Int32Type),
