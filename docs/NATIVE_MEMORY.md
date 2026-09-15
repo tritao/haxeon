@@ -106,12 +106,13 @@ arena.dispose();
 The pointee type is inferred from the expected `RawPtr<T>` type. `reset()` makes
 all existing pointers invalid and allows the blocks to be reused. `dispose()`
 releases every block and is safe to call repeatedly. Allocation count must be
-positive, and the current implementation supports alignments up to 16 bytes.
-There is no individual `free` operation.
+positive. Native records may request a larger power-of-two alignment with
+`@:align(N)`; blocks whose base alignment is too small are not reused for
+those records. There is no individual `free` operation.
 
 Haxeon performs layout-based alignment, bump advancement, block growth, and
-reset. The only new native runtime operations acquire and release raw backing
-blocks with `malloc` and `free`. This implementation currently targets
+reset. The native runtime acquires aligned raw backing blocks and releases
+them. This implementation currently targets
 HashLink; it does not change the HashLink fork. HXI-imported records already
 share the native ABI layout classifier, while unifying their public pointer and
 record projections is still future work.

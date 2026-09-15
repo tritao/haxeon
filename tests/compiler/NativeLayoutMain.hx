@@ -18,10 +18,13 @@ class NativeLayoutMain {
 			+ '@:value @:repr("C") class Outer { public var first:Pair; public var second:Pair; } '
 			+ '@:value @:repr("C") @:union class Payload { public var value:Int64; public var tag:UInt8; } '
 			+ '@:value @:repr("C") class Fixed { @:array(3) public var values:UInt8; public var tail:Int32; } '
+			+ '@:value @:repr("C") @:align(32) class OverAligned { public var value:Int32; } '
 			+ '@:value @:repr("C") class LongValue { public var value:CLong; } '
 			+ 'function pairSize():Int return sizeof<Pair>(); '
 			+ 'function pairAlignment():Int return alignof<Pair>(); '
 			+ 'function valueOffset():Int return offsetof<Pair>("value"); '
+			+ 'function alignedSize():Int return sizeof<OverAligned>(); '
+			+ 'function alignedAlignment():Int return alignof<OverAligned>(); '
 			+ 'function longSize():Int return sizeof<CLong>();',
 			program = new Parser(new Lexer(new SourceFile("native-layout.hx", source)).tokenize()).parseProgram(),
 			typed = Typer.typeLibrary(program),
@@ -29,6 +32,7 @@ class NativeLayoutMain {
 			outer = requireClass(typed.classes, "Outer"),
 			payload = requireClass(typed.classes, "Payload"),
 			fixed = requireClass(typed.classes, "Fixed"),
+			overAligned = requireClass(typed.classes, "OverAligned"),
 			longValue = requireClass(typed.classes, "LongValue");
 		if (!pair.isNativeValue || pair.isValue || pair.nativeLayouts.length != 2)
 			throw "C-represented values must be distinct typed declarations with per-ABI layouts";
@@ -83,17 +87,26 @@ class NativeLayoutMain {
 			&& field(fixed64.fields, "values").size == 3
 			&& field(fixed64.fields, "tail").offset == 4,
 			"native fixed arrays must occupy inline element storage and preserve following alignment");
+		expect(requireLayout(overAligned.nativeLayouts, "portable-abi32").size == 32
+			&& requireLayout(overAligned.nativeLayouts, "portable-abi32").alignment == 32
+			&& requireLayout(overAligned.nativeLayouts, "portable-abi64").size == 32
+			&& requireLayout(overAligned.nativeLayouts, "portable-abi64").alignment == 32,
+			"native records must preserve explicit alignment beyond the platform pointer width");
 		var typed32 = Typer.typeLibrary(program, "portable-abi32"),
 			typed64 = Typer.typeLibrary(program, "portable-abi64"),
 			windows64 = Typer.typeLibrary(program, "x86_64-pc-windows-msvc");
 		expect(constantReturn(typed32.functions, "pairSize") == 16
 			&& constantReturn(typed32.functions, "pairAlignment") == 4
 			&& constantReturn(typed32.functions, "valueOffset") == 4
+			&& constantReturn(typed32.functions, "alignedSize") == 32
+			&& constantReturn(typed32.functions, "alignedAlignment") == 32
 			&& constantReturn(typed32.functions, "longSize") == 4,
 			"native layout intrinsics must fold to the selected 32-bit ABI facts");
 		expect(constantReturn(typed64.functions, "pairSize") == 24
 			&& constantReturn(typed64.functions, "pairAlignment") == 8
 			&& constantReturn(typed64.functions, "valueOffset") == 8
+			&& constantReturn(typed64.functions, "alignedSize") == 32
+			&& constantReturn(typed64.functions, "alignedAlignment") == 32
 			&& constantReturn(typed64.functions, "longSize") == 8,
 			"native layout intrinsics must fold to the selected 64-bit ABI facts");
 		expect(constantReturn(windows64.functions, "pairSize") == 24
@@ -146,6 +159,8 @@ class NativeLayoutMain {
 		expectError('@:value @:repr("C") class Bad { public var label:String; }', "not an unmanaged native field type");
 		expectError('@:value @:repr("C") class Bad { public var values:Array<Int>; }', "not an unmanaged native field type");
 		expectError('@:union class Bad { public var value:Int32; }', '@:union requires @:repr("C")');
+		expectError('@:value @:repr("C") @:align(6) class Bad { public var value:Int32; }', "power of two");
+		expectError('@:align(32) class Bad { public var value:Int32; }', "@:align requires @:repr(\"C\")");
 		expectError('@:value @:repr("C") class Bad { @:array(0) public var values:UInt8; }', "positive integer argument");
 		expectError('class Bad { @:array(2) public var values:Int; }', "@:array fields require a native value record");
 		expectError('@:value @:repr("C") class Bad { public function new() {} }', "instance methods or constructors");

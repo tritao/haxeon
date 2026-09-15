@@ -256,6 +256,9 @@ typedef TypedClass = {
 	/** Native record whose fields occupy one overlapping C union storage slot. */
 	final isNativeUnion:Bool;
 
+	/** Explicit record alignment requested by native metadata, or null for the natural ABI alignment. */
+	final nativeAlignment:Null<Int>;
+
 	/** Portable and selected-target layouts retained for compile-time layout queries. */
 	final nativeLayouts:Array<TypedNativeLayout>;
 

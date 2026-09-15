@@ -5,6 +5,7 @@ import runtime.memory.RawPtr;
 /** Stable, non-moving bump allocation for unmanaged, GC-free native values. */
 class Arena {
 	static inline final DEFAULT_BLOCK_SIZE = 65536;
+	static inline final MIN_BLOCK_ALIGNMENT = 16;
 
 	final defaultBlockSize:Int;
 	final blocks:Array<ArenaBlock> = [];
@@ -20,20 +21,19 @@ class Arena {
 	public function alloc<T>(?count:Int = 1):RawPtr<T> {
 		if (count <= 0)
 			throw "Arena allocation count must be positive";
-		var elementSize = sizeof<T>(), alignment = alignof<T>();
+		var elementSize = sizeof<T>(), alignment = alignof<T>(), blockAlignment = alignment < MIN_BLOCK_ALIGNMENT ? MIN_BLOCK_ALIGNMENT : alignment;
 		if (elementSize <= 0 || alignment <= 0)
 			throw "Arena allocation type must have a fixed native layout";
-		if (alignment > 16)
-			throw "Arena currently supports native alignments up to 16 bytes";
 		if (count > Std.int(0x7FFFFFFF / elementSize))
 			throw "Arena allocation size exceeds the supported range";
 		var size = elementSize * count, block:ArenaBlock = null, offset = 0;
-		if (size > 0x7FFFFFFF - (alignment - 1))
+		if (size > 0x7FFFFFFF - (blockAlignment - 1))
 			throw "Arena allocation size exceeds the supported range";
 		while (blockCursor < blocks.length) {
 			var candidate = blocks[blockCursor],
 				candidateOffset = alignUp(candidate.used, alignment);
-			if (candidateOffset >= candidate.used && candidateOffset <= candidate.capacity - size) {
+			if (candidate.baseAlignment >= alignment && candidate.baseAlignment % alignment == 0 && candidateOffset >= candidate.used
+				&& candidateOffset <= candidate.capacity - size) {
 				block = candidate;
 				offset = candidateOffset;
 				block.used = offset + size;
@@ -42,10 +42,10 @@ class Arena {
 			blockCursor++;
 		}
 		if (block == null) {
-			var required = size + alignment - 1,
+			var required = size + blockAlignment - 1,
 				capacity = nextBlockSize(required),
-				memory = ArenaNativeMemory.native_alloc(capacity);
-			block = new ArenaBlock(memory, capacity);
+				memory = ArenaNativeMemory.native_alloc(capacity, blockAlignment);
+			block = new ArenaBlock(memory, capacity, blockAlignment);
 			block.used = size;
 			blocks.push(block);
 			blockCursor = blocks.length - 1;
@@ -68,6 +68,10 @@ class Arena {
 		blockCursor = 0;
 	}
 
+	/** Check the address alignment of a live allocation. */
+	public static inline function isAligned<T>(pointer:RawPtr<T>):Bool
+		return ArenaNativeMemory.native_is_aligned(pointer.castTo(), alignof<T>());
+
 	function nextBlockSize(required:Int):Int {
 		var capacity = defaultBlockSize;
 		for (block in blocks)
@@ -85,20 +89,25 @@ class Arena {
 /** Private HashLink boundary; Arena owns every block returned by these calls. */
 @:hlNative("haxeon_runtime")
 private class ArenaNativeMemory {
-	public static function native_alloc(size:Int):RawPtr<UInt8>
+	public static function native_alloc(size:Int, alignment:Int):RawPtr<UInt8>
 		return cast null;
 
 	public static function native_free(pointer:RawPtr<UInt8>):Void {}
+
+	public static function native_is_aligned(pointer:RawPtr<UInt8>, alignment:Int):Bool
+		return false;
 }
 
 /** One backing allocation retained by an Arena until dispose. */
 class ArenaBlock {
 	public final memory:RawPtr<UInt8>;
 	public final capacity:Int;
+	public final baseAlignment:Int;
 	public var used:Int = 0;
 
-	public function new(memory:RawPtr<UInt8>, capacity:Int) {
+	public function new(memory:RawPtr<UInt8>, capacity:Int, baseAlignment:Int) {
 		this.memory = memory;
 		this.capacity = capacity;
+		this.baseAlignment = baseAlignment;
 	}
 }

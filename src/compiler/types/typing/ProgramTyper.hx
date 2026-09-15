@@ -223,9 +223,15 @@ class ProgramTyper {
 		var requestedValue = hasMetadata(classDecl.metadata, "value"),
 			isNativeValue = validateRepresentationMetadata(classDecl.metadata, requestedValue),
 			isValue = requestedValue && !isNativeValue,
-			isNativeUnion = hasMetadata(classDecl.metadata, "union");
+			isNativeUnion = hasMetadata(classDecl.metadata, "union"),
+			nativeAlignment:Null<Int> = try parseNativeAlignment(classDecl.metadata) catch (error:Dynamic) {
+				BodyTyper.fail("E1022", Std.string(error), classDecl.span);
+				cast null;
+			};
 		if (isNativeUnion && !isNativeValue)
 			BodyTyper.fail("E1022", '@:union requires @:repr("C") on a native value record', classDecl.span);
+		if (nativeAlignment != null && !isNativeValue)
+			BodyTyper.fail("E1022", '@:align requires @:repr("C") on a native value record', classDecl.span);
 		if ((isValue || isNativeValue) && classDecl.base != null)
 			BodyTyper.fail("E1022", 'Value class "${classDecl.name}" cannot extend another class', classDecl.span);
 		if ((isValue || isNativeValue) && classDecl.interfaces.length > 0)
@@ -360,6 +366,7 @@ class ProgramTyper {
 			isValue: isValue,
 			isNativeValue: isNativeValue,
 			isNativeUnion: isNativeUnion,
+			nativeAlignment: nativeAlignment,
 			nativeLayouts: [],
 			base: baseName,
 			interfaces: [
@@ -396,6 +403,7 @@ class ProgramTyper {
 					isValue: classDecl.isValue,
 					isNativeValue: classDecl.isNativeValue,
 					isNativeUnion: classDecl.isNativeUnion,
+					nativeAlignment: classDecl.nativeAlignment,
 					nativeLayouts: nativeLayouts,
 					base: classDecl.base,
 					interfaces: classDecl.interfaces,
@@ -432,7 +440,7 @@ class ProgramTyper {
 					arrayLength: field.nativeArrayLength
 				}
 		], nativeDeclarations, declaration.span,
-			declaration.isNativeUnion) catch (error:Dynamic) {
+			declaration.isNativeUnion, declaration.nativeAlignment) catch (error:Dynamic) {
 			visiting.remove(key);
 			BodyTyper.fail("E1022", 'Invalid native value record "$name": ${Std.string(error)}', declaration.span);
 			cast null;
@@ -469,6 +477,24 @@ class ProgramTyper {
 			if (entry.name == name)
 				return true;
 		return false;
+	}
+
+	static function parseNativeAlignment(metadata:Array<compiler.syntax.Ast.AstMetadata>):Null<Int> {
+		var result:Null<Int> = null;
+		for (entry in metadata)
+			if (entry.name == "align") {
+				if (result != null)
+					throw "Duplicate @:align metadata";
+				if (entry.arguments.length != 1)
+					throw "@:align requires exactly one positive integer argument";
+				switch entry.arguments[0] {
+					case IntegerLiteral(value, _) if (value > 0 && value <= 0x40000000):
+						result = value;
+					case _:
+						throw "@:align requires exactly one positive integer argument";
+				}
+			}
+		return result;
 	}
 
 	function validateRepresentationMetadata(metadata:Array<compiler.syntax.Ast.AstMetadata>, isValue:Bool):Bool {

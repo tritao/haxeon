@@ -99,8 +99,8 @@ class NativeLayout {
 		type:CompilerType,
 		span:SourceSpan,
 		arrayLength:Null<Int>
-	}>, declarations:Map<String, HxiDeclaration>, span:SourceSpan,
-			isUnion:Bool = false):TypedNativeLayout {
+	}>,
+			declarations:Map<String, HxiDeclaration>, span:SourceSpan, isUnion:Bool = false, requestedAlignment:Null<Int> = null):TypedNativeLayout {
 		var abi = HxiAbi.forTarget(target, declarations), placed:Array<TypedNativeFieldLayout> = [], cursor = 0, recordAlignment = 1;
 		for (field in fields) {
 			var hxiType = fieldType(field.type), layout = abi.layout(hxiType);
@@ -121,6 +121,13 @@ class NativeLayout {
 				throw 'Native record "$name" exceeds the supported layout size';
 			cursor = isUnion ? Std.int(Math.max(cursor, fieldSize)) : cursor + fieldSize;
 			recordAlignment = Std.int(Math.max(recordAlignment, layout.align));
+		}
+		if (requestedAlignment != null) {
+			if (requestedAlignment < recordAlignment)
+				throw 'Requested native alignment $requestedAlignment for "$name" is smaller than its natural alignment $recordAlignment';
+			if ((requestedAlignment & (requestedAlignment - 1)) != 0)
+				throw 'Requested native alignment $requestedAlignment for "$name" must be a power of two';
+			recordAlignment = requestedAlignment;
 		}
 		return {
 			target: target,
