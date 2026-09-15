@@ -16,6 +16,7 @@ import build.execution.ExecutionPlan;
 import build.execution.Executor;
 import build.lowering.LoweringContext;
 import build.lowering.PlanLowerer;
+import build.native.NativeDependencyScanner;
 import haxe.io.Path;
 import project.ProjectDiscovery;
 import sys.FileSystem;
@@ -34,6 +35,7 @@ class BuildSystemMain {
 		#end
 		testFingerprintsAndSkipping();
 		testProjectDiscovery();
+		testNativeDependencyScanning();
 		Sys.println("PASS: build model, executor, fingerprints, demand-driven native outputs, and local package discovery");
 	}
 
@@ -260,6 +262,22 @@ class BuildSystemMain {
 		writePackage(cycle, '{"version":1,"package":{"name":"cycle"},"dependencies":{"child":{"path":"child"}}}', []);
 		writePackage(child, '{"version":1,"package":{"name":"child"},"dependencies":{"cycle":{"path":".."}}}', []);
 		expectThrows(() -> ProjectDiscovery.discover(Path.join([cycle, "haxeon.json"])), "path dependency cycles should be reported");
+		removeTree(root);
+	}
+
+	static function testNativeDependencyScanning():Void {
+		var root = temporaryDirectory("native-dependencies"),
+			includeDirectory = Path.join([root, "include"]),
+			source = Path.join([root, "source.c"]),
+			first = Path.join([includeDirectory, "first.h"]),
+			second = Path.join([includeDirectory, "second.h"]);
+		ensureDirectory(includeDirectory);
+		File.saveContent(source, '#include "first.h"\nint value(void) { return SECOND; }\n');
+		File.saveContent(first, '#include "second.h"\n');
+		File.saveContent(second, '#define SECOND 42\n');
+		var dependencies = NativeDependencyScanner.dependencies(source, [includeDirectory]);
+		expect(dependencies.length == 2 && dependencies[0].indexOf("first.h") >= 0 && dependencies[1].indexOf("second.h") >= 0,
+			"native dependency scanning should follow recursive local includes");
 		removeTree(root);
 	}
 

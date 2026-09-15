@@ -29,9 +29,10 @@ class NativeSourcesProvider {
 				var sourceRelative = artifact.details.get("source"),
 					source = Path.join([resolvedPackage.root, sourceRelative]),
 					output = layout.objectPath(library.packageName, sourceRelative),
-					id = new ActionId('native-compile:${artifact.id.key()}');
+					id = new ActionId('native-compile:${artifact.id.key()}'),
+					inputs = [source].concat(NativeDependencyScanner.dependencies(source, includeDirs));
 				objectPaths.set(artifact.id.key(), output);
-				actions.push(new ExecutionAction(id, [], [source].concat(includeDirs), [output], 'Compile C $source -> $output',
+				actions.push(new ExecutionAction(id, [], inputs, [output], 'Compile C $source -> $output',
 					Process(toolchain.compileCommand(), toolchain.compileArguments(source, output, includeDirs), resolvedPackage.root, new Map())));
 				artifactActions.set(artifact.id.key(), [id]);
 			}
