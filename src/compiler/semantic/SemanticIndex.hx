@@ -1212,8 +1212,8 @@ class SemanticIndex {
 				}
 			}
 		}
-		var kind = qualifier != null ? SemanticCompletionContextKind.Member : overrideContext ? SemanticCompletionContextKind.Override : isImportContext(position,
-			token) ? SemanticCompletionContextKind.Import : expected != null
+		var kind = isImportContext(position, token) ? SemanticCompletionContextKind.Import : qualifier != null ? SemanticCompletionContextKind.Member : overrideContext
+			? SemanticCompletionContextKind.Override : expected != null
 			&& isObjectFieldContext(position,
 				token) ? SemanticCompletionContextKind.ObjectField : isTypeContext(position,
 				token) ? SemanticCompletionContextKind.Type : expected != null

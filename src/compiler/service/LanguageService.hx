@@ -177,6 +177,13 @@ private typedef DocumentationIndexEntry = {
 	final comments:Array<DocumentationComment>;
 }
 
+private typedef RecoveredCompletionCandidate = {
+	final kind:String;
+	final detail:String;
+	final insertText:Null<String>;
+	final importPath:String;
+}
+
 /** Source location returned by a semantic navigation query. */
 typedef SymbolLocation = {
 	final ?revision:Int;
@@ -1258,6 +1265,7 @@ class LanguageService {
 				if (candidate.name != state.name)
 					addMember(candidate.name, "module", candidate.name, prefix, result, 1);
 			}
+			addRecoveredImportableCompletions(state, prefix, result, token);
 			sortCompletion(result);
 			tagResults(result, state);
 			return completionResult(result, incompleteSnapshot);
@@ -1461,6 +1469,51 @@ class LanguageService {
 					fn.name + "(", identityFor(fn.name));
 			}
 		}
+	}
+
+	/** Add unique top-level declarations from modules that only have editor snapshots. */
+	function addRecoveredImportableCompletions(state:ModuleState, prefix:String, result:Array<CompletionItem>,
+			token:Null<CancellationToken>):Void {
+		var candidates:Map<String, RecoveredCompletionCandidate> = [],
+			counts:Map<String, Int> = [];
+		for (candidate in compiler.modules) {
+			if (token != null)
+				token.check();
+			if (candidate == state)
+				continue;
+			var ast = effectiveAst(candidate);
+			if (ast == null)
+				continue;
+			var completionAst = recoveredCompletionProgram(candidate, ast),
+				add = function(name:String, kind:String, detail:String, insertText:Null<String>):Void {
+					if (name.length == 0)
+						return;
+					counts.set(name, (counts.exists(name) ? counts.get(name) : 0) + 1);
+					if (!candidates.exists(name))
+						candidates.set(name, {kind: kind, detail: detail, insertText: insertText, importPath: candidate.name});
+				};
+			for (alias in completionAst.aliases)
+				add(alias.name, "type", 'typedef ${alias.name}=${typeName(alias.type)}', alias.name);
+			for (decl in completionAst.enums)
+				add(decl.name, "enum", 'enum ${decl.name}', null);
+			for (decl in completionAst.enumAbstracts)
+				add(decl.name, "abstract", 'abstract ${decl.name}', null);
+			for (decl in completionAst.abstracts)
+				add(decl.name, "abstract", 'abstract ${decl.name}', null);
+			for (decl in completionAst.interfaces)
+				add(decl.name, "interface", 'interface ${decl.name}', null);
+			for (decl in completionAst.classes)
+				add(decl.name, "class", 'class ${decl.name}', null);
+			for (fn in completionAst.functions)
+				add(fn.name, "function", '${fn.name}(${[for (argument in fn.arguments) typeName(argument.type)].join(",")}):${typeName(fn.result)}', fn.name + "(");
+		}
+		for (name in candidates.keys())
+			if (counts.get(name) == 1) {
+				if (token != null)
+					token.check();
+				var candidate = candidates.get(name);
+				addMember(name, candidate.kind, candidate.detail, prefix, result, 1, candidate.insertText, null, candidate.importPath);
+			}
 	}
 
 	function recoveredCompletionProgram(state:ModuleState, ast:AstProgram):AstProgram {

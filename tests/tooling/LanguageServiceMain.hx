@@ -343,6 +343,17 @@ class LanguageServiceMain {
 				hasRecoveredWildcardType = true;
 		if (!hasRecoveredWildcardType)
 			throw "wildcard type completion did not expose a recovered imported class";
+		var recoveredImportService = new LanguageService();
+		recoveredImportService.update("recovered/lib/Widget.hx", "package recovered.lib; class Widget {}");
+		var recoveredImportSource = "package recovered; import recovered.lib.Wid";
+		recoveredImportService.update("recovered/Main.hx", recoveredImportSource);
+		var recoveredImportCompletion = recoveredImportService.completeResult("recovered/Main.hx", recoveredImportSource.length),
+			hasRecoveredImport = false;
+		for (item in recoveredImportCompletion.items)
+			if (item.label == "Widget" && item.kind == "class" && item.identity == null)
+				hasRecoveredImport = true;
+		if (!hasRecoveredImport || !recoveredImportCompletion.isIncomplete)
+			throw "import completion did not expose an editor-only recovered declaration";
 		var transitiveService = new LanguageService();
 		transitiveService.update("editor/base/Base.hx",
 			"package editor.base; class Base { public var inherited:Int; public function inheritedMethod(value:String):String return value; }");
