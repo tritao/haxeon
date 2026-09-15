@@ -99,6 +99,17 @@ function main():Int {
 		objectChanged = requiresReload(HlMetadataCompatibility.check(objectBefore, objectAfter));
 	objectBefore.dispose();
 	objectAfter.dispose();
+	var nativeBefore = buildPrimitiveGeneration(false),
+		nativeAfter = buildPrimitiveGeneration(false);
+	nativeBefore.addNativeDescriptor({
+		library: RawPtr.nullPtr(),
+		name: RawPtr.nullPtr(),
+		type: nativeBefore.type(0),
+		findex: 0
+	});
+	var nativeChanged = requiresReload(HlMetadataCompatibility.check(nativeBefore, nativeAfter));
+	nativeBefore.dispose();
+	nativeAfter.dispose();
 	var functionBefore = buildFunctionGeneration(false),
 		functionAfter = buildFunctionGeneration(true),
 		functionChanged = requiresReload(HlMetadataCompatibility.check(functionBefore, functionAfter));
@@ -155,6 +166,6 @@ function main():Int {
 	currentLease.release();
 	transactionRegistry.dispose();
 	registry.dispose();
-	return switched && rejectionStable && reloaded && disposed && firstReleased && objectChanged && functionChanged && derivedStateIgnored
+	return switched && rejectionStable && reloaded && disposed && firstReleased && objectChanged && nativeChanged && functionChanged && derivedStateIgnored
 		&& transactionReloaded && reloadRetiredDisposed && releasedRetiredDisposed && transactionStates && disposeBlocked ? 42 : 1;
 }

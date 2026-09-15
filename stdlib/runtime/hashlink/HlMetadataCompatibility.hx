@@ -30,6 +30,16 @@ class HlMetadataCompatibility {
 		for (index in 0...previous.functionCount())
 			if (!sameType(previous, candidate, previous.functionType(index), candidate.functionType(index)))
 				return RequiresReload('function signature changed at slot $index');
+		if (previous.nativeDescriptors.length() != candidate.nativeDescriptors.length())
+			return RequiresReload("native binding table changed");
+		for (index in 0...previous.nativeDescriptors.length()) {
+			var previousNative = previous.nativeDescriptors.get(index), candidateNative = candidate.nativeDescriptors.get(index);
+			if (previousNative.ref.findex != candidateNative.ref.findex
+				|| !sameType(previous, candidate, previousNative.ref.type, candidateNative.ref.type)
+				|| !sameCString(previousNative.ref.library, candidateNative.ref.library)
+				|| !sameCString(previousNative.ref.name, candidateNative.ref.name))
+				return RequiresReload('native binding changed at index $index');
+		}
 
 		var previousCount = previous.typeCount(), candidateCount = candidate.typeCount();
 		if (candidateCount < previousCount)
@@ -216,6 +226,20 @@ class HlMetadataCompatibility {
 			if (leftCode != rightCode)
 				return false;
 			if (leftCode == 0)
+				return true;
+			index++;
+		}
+	}
+
+	static function sameCString(left:RawPtr<UInt8>, right:RawPtr<UInt8>):Bool {
+		if (left.isNull() || right.isNull())
+			return left.isNull() && right.isNull();
+		var index = 0;
+		while (true) {
+			var leftByte = left.offset(index).load(), rightByte = right.offset(index).load();
+			if (leftByte != rightByte)
+				return false;
+			if (leftByte == 0)
 				return true;
 			index++;
 		}
