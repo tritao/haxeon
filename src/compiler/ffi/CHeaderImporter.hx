@@ -785,7 +785,10 @@ class CHeaderImporter {
 			// of the host line ending so the record marker and size trailer are
 			// still parsed before they reach the HXI model.
 			var line = StringTools.endsWith(rawLine, "\r") ? rawLine.substring(0, rawLine.length - 1) : rawLine;
-			var record = ~/^\s*[0-9]+\s*\|\s*(?:struct|class|union)\s+([A-Za-z_][A-Za-z0-9_]*)/;
+			// A top-level record marker has one space after the separator. Field
+			// lines are indented further; otherwise a by-value nested record field
+			// would replace the layout currently being collected.
+			var record = ~/^\s*[0-9]+\s*\|\s(?:struct|class|union)\s+([A-Za-z_][A-Za-z0-9_]*)/;
 			if (record.match(line)) {
 				current = record.matched(1);
 				offsets = [];
