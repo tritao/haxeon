@@ -1,6 +1,7 @@
 package runtime;
 
 import haxe.io.Bytes;
+import compiler.hl.HlModule;
 import sys.thread.Mutex;
 
 /** Private declarations for the native module lifecycle and invocation ABI. */
@@ -109,11 +110,17 @@ class Runtime {
 	}
 
 	public static function load(bytes:Bytes, identity:Bytes):LoadedModule {
+		var model:HlModule;
+		try {
+			model = HlModule.decode(bytes);
+		} catch (error:Dynamic) {
+			throw new RuntimeError(RuntimeStatus.BadFormat, 'Haxeon rejected the HLB module: ${Std.string(error)}');
+		}
 		retryRetirements();
 		var module = RuntimeNative.load(bytes.getData(), bytes.length, identity.getData(), identity.length);
 		if (module == null)
 			throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the module bytes");
-		return new LoadedModule(module);
+		return new LoadedModule(module, model);
 	}
 
 	public static function callInt(module:LoadedModule, stableIndex:Int):Int
