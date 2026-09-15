@@ -58,6 +58,10 @@ class HlTypeDefStateCodec {
 					output.writeByte(2);
 					writeInts(output, arguments);
 					output.writeInt32(result);
+				case Method(arguments, result):
+					output.writeByte(8);
+					writeInts(output, arguments);
+					output.writeInt32(result);
 				case Object(name, base, global, fields, methods, bindings):
 					output.writeByte(3);
 					output.writeInt32(name);
@@ -121,6 +125,7 @@ class HlTypeDefStateCodec {
 					Simple(cast kind);
 				case 1: Abstract(input.readInt32());
 				case 2: Function(readInts(input), input.readInt32());
+				case 8: Method(readInts(input), input.readInt32());
 				case 3:
 					var name = input.readInt32(),
 						base = input.readInt32(),
@@ -171,6 +176,10 @@ class HlTypeDefStateCodec {
 				case Abstract(name):
 					validateStringReference(name, strings);
 				case Function(arguments, result):
+					for (argument in arguments)
+						validateTypeReference(argument, types.length);
+					validateTypeReference(result, types.length);
+				case Method(arguments, result):
 					for (argument in arguments)
 						validateTypeReference(argument, types.length);
 					validateTypeReference(result, types.length);

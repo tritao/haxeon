@@ -173,6 +173,8 @@ class HlPatchReader {
 			throw "Virtual type patches require a structural reload";
 		if (tag == HlType.Enum)
 			throw "Enum type patches require a structural reload";
+		if (tag == HlType.Method)
+			throw "Method type patches require a structural reload";
 		if (tag == HlType.Abstract)
 			return Abstract(readIndex(input));
 		if (tag == HlType.Ref || tag == HlType.Null)

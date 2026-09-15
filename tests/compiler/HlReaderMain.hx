@@ -38,6 +38,7 @@ function main():Void {
 	code.types = [
 		Simple(HlType.I32),
 		Function([0], 0),
+		Method([0], 0),
 		Object(2, -1, 0, [{name: 3, type: 0}], [], [])
 	];
 	code.globals = [2];
@@ -130,7 +131,13 @@ function main():Void {
 	expect(HlWriter.encode(decoded).compare(encoded) == 0, "HLB reader/writer round trip changed canonical bytes");
 	expect(decoded.ints[0] == 41 && decoded.floats[0] == 1.5 && decoded.strings[1] == "native", "HLB scalar pools did not decode");
 	expect(decoded.bytes.compare(code.bytes) == 0 && decoded.bytePositions[1] == 4, "HLB byte pool did not decode");
-	expect(decoded.types.length == 3 && decoded.globals[0] == 2 && decoded.natives[0].functionIndex == 0, "HLB metadata tables did not decode");
+	expect(decoded.types.length == 4 && decoded.globals[0] == 2 && decoded.natives[0].functionIndex == 0, "HLB metadata tables did not decode");
+	switch decoded.types[2] {
+		case Method(arguments, result):
+			expect(arguments.length == 1 && arguments[0] == 0 && result == 0, "HLB method type did not decode");
+		case _:
+			throw "HLB method type did not decode as Method";
+	}
 	expect(decoded.constants.length == 1 && decoded.constants[0].global == 0 && decoded.constants[0].fields[0] == 0, "HLB constants did not decode");
 	expect(decoded.debugSections.length == 1 && decoded.debugSections[0].payload.compare(HaxeBytes.ofString("opaque")) == 0,
 		"HLB debug sections did not decode");

@@ -119,6 +119,9 @@ class HlReader {
 			case HlType.Fun:
 				var argumentCount = input.readByte();
 				Function([for (_ in 0...argumentCount) readIndex(input)], readIndex(input));
+			case HlType.Method:
+				var argumentCount = input.readByte();
+				Method([for (_ in 0...argumentCount) readIndex(input)], readIndex(input));
 			case HlType.Obj:
 				readObjectType(input, false);
 			case HlType.Struct:
@@ -150,8 +153,6 @@ class HlReader {
 		var lastTag:Int = cast HlType.Guid;
 		if (tag < 0 || tag > lastTag)
 			throw 'Invalid HLB type tag $tag';
-		if (tag == HlType.Method)
-			throw "HLB method types are not representable in the current module model";
 		return Simple(cast tag);
 	}
 

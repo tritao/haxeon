@@ -249,6 +249,14 @@ class HlWriter {
 				for (argument in arguments)
 					writeIndex(argument);
 				writeIndex(result);
+			case Method(arguments, result):
+				if (arguments.length > 255)
+					throw "HL method types support at most 255 arguments";
+				output.writeByte(HlType.Method);
+				output.writeByte(arguments.length);
+				for (argument in arguments)
+					writeIndex(argument);
+				writeIndex(result);
 			case Object(name, base, global, fields, methods, bindings):
 				output.writeByte(HlType.Obj);
 				writeObjectType(name, base, global, fields, methods, bindings);

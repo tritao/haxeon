@@ -251,6 +251,12 @@ class HlPatchWriter {
 					for (a in args)
 						h = hashBytes(intBytes(a), h);
 					h = hashBytes(intBytes(result), h);
+				case Method(args, result):
+					h = hashBytes(intBytes(HashLinkType.Method), h);
+					h = hashBytes(intBytes(args.length), h);
+					for (a in args)
+						h = hashBytes(intBytes(a), h);
+					h = hashBytes(intBytes(result), h);
 				case Object(name, base, global, fields, methods, bindings):
 					h = hashBytes(intBytes(HashLinkType.Obj), h);
 					h = hashBytes(intBytes(name), h);
@@ -335,6 +341,8 @@ class HlPatchWriter {
 				for (a in args)
 					writeSignedIndex(out, a);
 				writeSignedIndex(out, result);
+			case Method(_, _):
+				throw "Method type patches require a structural reload";
 			case Object(_, _, _, _, _, _):
 				throw "Object type patches require a structural reload";
 			case Structure(_, _, _, _, _):

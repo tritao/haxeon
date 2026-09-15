@@ -45,6 +45,10 @@ class HlValidator {
 					for (argument in arguments)
 						requireType(code, argument, "function type argument");
 					requireType(code, result, "function type result");
+				case Method(arguments, result):
+					for (argument in arguments)
+						requireType(code, argument, "method type argument");
+					requireType(code, result, "method type result");
 				case Object(name, base, global, fields, methods, bindings):
 					requireString(code, name, "object name");
 					if (base >= 0)
