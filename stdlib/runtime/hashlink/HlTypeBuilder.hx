@@ -151,17 +151,17 @@ class HlTypeBuilder {
 	}
 
 	public function moduleContext(functions:Array<RawPtr<UInt8>>, types:Array<RawPtr<HlType>>):RawPtr<HlModuleContext> {
-		if (functions.length != types.length)
-			throw "HashLink module function and type tables must have equal lengths";
+		return moduleContextFromTable(new HlFunctionTable(arena, functions, types));
+	}
+
+	/** Bind a Haxe-owned function table into a HashLink module context. */
+	public function moduleContextFromTable(table:HlFunctionTable):RawPtr<HlModuleContext> {
+		if (table.arena != arena)
+			throw "HashLink function table and module context must share an arena";
 		var context = arena.allocModuleContext(),
-			nativeFunctions:RawPtr<RawPtr<UInt8>> = functions.length == 0 ? RawPtr.nullPtr() : arena.allocNativePointerArray(functions.length),
-			nativeTypes:RawPtr<RawPtr<HlType>> = types.length == 0 ? RawPtr.nullPtr() : arena.allocTypePointerArray(types.length);
+			nativeFunctions = table.functionPointer(),
+			nativeTypes = table.typePointer();
 		context.ref.alloc.ref.current = RawPtr.nullPtr();
-		if (functions.length != 0)
-			for (index in 0...functions.length) {
-				nativeFunctions.offset(index).store(functions[index]);
-				nativeTypes.offset(index).store(types[index]);
-			}
 		context.ref.functionsPtrs = nativeFunctions;
 		context.ref.functionsTypes = nativeTypes;
 		arena.ownModuleContext(context);

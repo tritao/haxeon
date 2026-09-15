@@ -27,6 +27,9 @@ class HlMetadataCompatibility {
 			return Compatible;
 		if (previous.functionCount() != candidate.functionCount())
 			return RequiresReload("module function table changed");
+		for (index in 0...previous.functionCount())
+			if (!sameType(previous, candidate, previous.functionType(index), candidate.functionType(index)))
+				return RequiresReload('function signature changed at slot $index');
 
 		var previousCount = previous.typeCount(), candidateCount = candidate.typeCount();
 		if (candidateCount < previousCount)

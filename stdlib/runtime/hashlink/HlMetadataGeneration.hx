@@ -8,6 +8,9 @@ typedef HlMetadataPublication = {
 	final types:RawPtr<RawPtr<HlType>>;
 	final typeCount:Int;
 	final typeCapacity:Int;
+	final functions:RawPtr<RawPtr<UInt8>>;
+	final functionTypes:RawPtr<RawPtr<HlType>>;
+	final functionCount:Int;
 	final moduleContext:RawPtr<HlModuleContext>;
 }
 
@@ -16,8 +19,8 @@ class HlMetadataGeneration {
 	public final arena:HlTypeArena;
 	public final builder:HlTypeBuilder;
 	final typeTable:HlTypeTable;
+	var functionTable:Null<HlFunctionTable>;
 	var moduleContext:RawPtr<HlModuleContext> = RawPtr.nullPtr();
-	var moduleFunctionCount:Int = 0;
 	var published:Bool = false;
 	var disposed:Bool = false;
 
@@ -57,7 +60,13 @@ class HlMetadataGeneration {
 	/** Number of function dispatch slots in the module context. */
 	public function functionCount():Int {
 		requireOpen();
-		return moduleFunctionCount;
+		return requireFunctionTable().length();
+	}
+
+	/** Read one module function signature slot. */
+	public function functionType(index:Int):RawPtr<HlType> {
+		requireOpen();
+		return requireFunctionTable().typeAt(index);
 	}
 
 	/** Define the function dispatch tables used by HashLink-derived metadata. */
@@ -65,8 +74,8 @@ class HlMetadataGeneration {
 		requireBuilding();
 		if (!moduleContext.isNull())
 			throw "HashLink metadata generation module context is already defined";
-		moduleContext = builder.moduleContext(functions, functionTypes);
-		moduleFunctionCount = functions.length;
+		functionTable = new HlFunctionTable(arena, functions, functionTypes);
+		moduleContext = builder.moduleContextFromTable(functionTable);
 		return moduleContext;
 	}
 
@@ -90,6 +99,9 @@ class HlMetadataGeneration {
 			types: typeTable.pointer(),
 			typeCount: typeTable.length(),
 			typeCapacity: typeTable.capacityOf(),
+			functions: requireFunctionTable().functionPointer(),
+			functionTypes: requireFunctionTable().typePointer(),
+			functionCount: requireFunctionTable().length(),
 			moduleContext: moduleContext
 		};
 	}
@@ -122,5 +134,11 @@ class HlMetadataGeneration {
 	function requireOpen():Void {
 		if (disposed)
 			throw "HashLink metadata generation has been disposed";
+	}
+
+	function requireFunctionTable():HlFunctionTable {
+		if (functionTable == null)
+			throw "HashLink metadata generation has no module function table";
+		return functionTable;
 	}
 }

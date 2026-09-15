@@ -122,6 +122,10 @@ allocates only a new pointer slot; the `hl_type` record itself remains in the
 arena at a stable address. When the table grows, `pointer()` changes to the new
 contiguous table and the previous table storage remains owned by the arena,
 allowing publication code to stage a replacement before exposing it.
+`HlFunctionTable` applies the same ownership rule to module dispatch slots: its
+function addresses and signature pointers are stable native arrays, with slot
+replacement kept separate from table shape changes. A module context borrows
+those arrays rather than allocating a second copy.
 Module contexts created by `HlTypeBuilder` are also owned by the arena. If
 HashLink derives runtime object metadata through a context, `reset()` and
 `dispose()` release those native allocator blocks before invalidating the

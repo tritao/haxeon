@@ -5,6 +5,7 @@ import runtime.hashlink.HlTypeTable;
 import runtime.hashlink.HlType;
 import runtime.hashlink.HlTypeKind;
 import runtime.hashlink.HlMetadataGeneration;
+import runtime.hashlink.HlFunctionTable;
 import runtime.memory.RawPtr;
 
 function main():Int {
@@ -51,6 +52,13 @@ function main():Int {
 		RawPtr.nullPtr(),
 		RawPtr.nullPtr()
 	], [intType, builtFunction, builtFunction, builtFunction, builtFunction]);
+	var functionTable = new HlFunctionTable(arena, [RawPtr.nullPtr()], [builtFunction]),
+		tableModule = builder.moduleContextFromTable(functionTable),
+		functionTableCorrect = functionTable.length() == 1
+			&& functionTable.functionAt(0) == RawPtr.nullPtr()
+			&& functionTable.typeAt(0) == builtFunction
+			&& tableModule.ref.functionsPtrs == functionTable.functionPointer()
+			&& tableModule.ref.functionsTypes == functionTable.typePointer();
 	var builtObject = builder.objectType(RawPtr.nullPtr(), RawPtr.nullPtr(), [{name: RawPtr.nullPtr(), type: builtFunction, hashedName: 17}], [
 		{
 			name: RawPtr.nullPtr(),
@@ -174,7 +182,10 @@ function main():Int {
 	var publication = generation.publish();
 	var generationCorrect = publication.typeCount == 3
 		&& publication.typeCapacity == 4
+		&& publication.functionCount == 1
 		&& publication.moduleContext == generationModule
+		&& publication.functions.offset(0).load() == RawPtr.nullPtr()
+		&& publication.functionTypes.offset(0).load() == generationFunction
 		&& publication.types.offset(0).load() == generationVoid
 		&& publication.types.offset(1).load() == generationFunction
 		&& publication.types.offset(2).load() == generationObject
@@ -188,6 +199,6 @@ function main():Int {
 	generation.dispose();
 	arena.dispose();
 	arena.dispose();
-	return correct && builtCorrect && graphCorrect && tableCorrect && namesCorrect && moduleCorrect && nativeObjectCorrect && generationCorrect
-		&& generationSealed ? 42 : 1;
+	return correct && builtCorrect && graphCorrect && tableCorrect && functionTableCorrect && namesCorrect && moduleCorrect && nativeObjectCorrect
+		&& generationCorrect && generationSealed ? 42 : 1;
 }
