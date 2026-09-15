@@ -131,9 +131,11 @@ those records. There is no individual `free` operation.
 Haxeon performs layout-based alignment, bump advancement, block growth, and
 reset. The native runtime acquires aligned raw backing blocks and releases
 them. This implementation currently targets
-HashLink; it does not change the HashLink fork. HXI-imported records already
-share the native ABI layout classifier, while unifying their public pointer and
-record projections is still future work.
+HashLink; it does not change the HashLink fork. HXI-imported records can be
+projected as fresh native records or bound to an existing canonical Haxe
+native declaration with `HxiNativeRecordEmitter`. The binding form emits a
+type alias, so the imported declaration and the canonical declaration share
+one `RawPtr<T>` representation instead of creating duplicate record types.
 
 HashLink metadata tables use `runtime.hashlink.HlTypeTable`. Type records are
 reserved in a separate contiguous slab owned by `HlTypeArena`, matching

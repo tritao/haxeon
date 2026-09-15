@@ -190,6 +190,36 @@ class CHeaderImporterMain {
 			&& nativeRecordSource.indexOf("public var unionData:NativeHlTypeUnionData") >= 0
 			&& nativeRecordSource.indexOf("public var vobj_proto:RawPtr<RawPtr<UInt8>>") >= 0,
 			"HXI structures should project into source-declared native records with RawPtr fields");
+		var nativeTypeNames:Map<String, String> = [];
+		for (binding in [
+			{native: "hl_alloc", haxe: "runtime.hashlink.HlAllocation"},
+			{native: "hl_field_lookup", haxe: "runtime.hashlink.HlFieldLookup"},
+			{native: "hl_module_context", haxe: "runtime.hashlink.HlModuleContext"},
+			{native: "hl_obj_field", haxe: "runtime.hashlink.HlObjectField"},
+			{native: "hl_obj_proto", haxe: "runtime.hashlink.HlObjectProto"},
+			{native: "hl_runtime_binding", haxe: "runtime.hashlink.HlRuntimeBinding"},
+			{native: "hl_runtime_obj", haxe: "runtime.hashlink.HlRuntimeObject"},
+			{native: "hl_type", haxe: "runtime.hashlink.HlType"},
+			{native: "hl_type_enum", haxe: "runtime.hashlink.HlTypeEnum"},
+			{native: "hl_type_fun", haxe: "runtime.hashlink.HlTypeFunction"},
+			{native: "hl_type_fun_closure", haxe: "runtime.hashlink.HlTypeClosure"},
+			{native: "hl_type_fun_closure_type", haxe: "runtime.hashlink.HlTypeClosureType"},
+			{native: "hl_type_obj", haxe: "runtime.hashlink.HlTypeObject"},
+			{native: "hl_type_virtual", haxe: "runtime.hashlink.HlTypeVirtual"},
+			{native: "hl_enum_construct", haxe: "runtime.hashlink.HlEnumConstruct"}
+		])
+			nativeTypeNames.set(binding.native, binding.haxe);
+		var boundRecordSource = HxiNativeRecordEmitter.emit(parsedHashlink, "runtime.hashlink.bound", "Native", null, nativeTypeNames),
+			boundRecordCompiler = new Compiler();
+		CompilerIntrinsics.register(boundRecordCompiler);
+		boundRecordCompiler.addSourceRoot("stdlib");
+		boundRecordCompiler.update("runtime/hashlink/bound/HashLinkNativeBindings.hx",
+			boundRecordSource +
+			'function main():Int { var arena = new runtime.memory.Arena(); var pointer:RawPtr<NativeHlType> = arena.alloc(); pointer.ref.kind = 3; return sizeof<NativeHlType>() == 40 && offsetof<NativeHlType>("data") == 8 && pointer.ref.kind == 3 ? 42 : 1; }');
+		boundRecordCompiler.compile("runtime.hashlink.bound.HashLinkNativeBindings");
+		expect(boundRecordSource.indexOf("typedef NativeHlType = runtime.hashlink.HlType;") >= 0
+			&& boundRecordSource.indexOf("class NativeHlType {") < 0,
+			"HXI records should bind to the canonical Haxe native record without duplicating it");
 		var callbackRecord = HxiParser.parse("callback-record.hxi",
 			'interface CallbackRecord @target("x86_64-linux-gnu") @library("callback") { callback binary = fn(left: i32, right: i32) -> i32; struct slot @layout(8, 8) { callback: binary @offset(0); } }'),
 			callbackRecordSource = HxiNativeRecordEmitter.emit(callbackRecord, "runtime.ffi.generated", "Native");

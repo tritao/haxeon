@@ -72,6 +72,12 @@ field access, and layout queries as hand-written native records. Anonymous HXI
 union members become one nested `@:union` record so their C storage remains
 overlapping without introducing a second memory model.
 
+When a runtime already has a canonical Haxe native record, pass its qualified
+type name as a binding to `HxiNativeRecordEmitter`. The generated HXI source
+then emits a typedef alias instead of a second record declaration. This lets
+an imported `struct hl_type`, for example, use the same `RawPtr<HlType>` and
+field layout as the runtime-owned `HlType` declaration.
+
 NativeKit-style C handles are annotated with `hxi:handle` and must have a
 fixed unsigned 32-bit representation. The importer emits them as nominal raw
 HXI declarations rather than ordinary structs:

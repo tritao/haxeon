@@ -8,15 +8,28 @@ import compiler.ffi.HxiModel.HxiType;
 
 /** Emits source-declared native records from an HXI structure model. */
 class HxiNativeRecordEmitter {
-	public static function emit(model:HxiInterface, packageName:String, ?typePrefix:String = "Native", ?fieldNames:Map<String, String>):String {
+	/**
+		Emit native records, optionally binding imported structures and opaque
+		pointees to existing Haxe native declarations.
+
+		Bindings emit type aliases instead of duplicate record declarations. This
+		keeps the HXI ABI model and the canonical Haxe `@:repr("C")` declaration
+		on one `RawPtr<T>` representation while still allowing generated source to
+		be used for imported-only records.
+	 */
+	public static function emit(model:HxiInterface, packageName:String, ?typePrefix:String = "Native", ?fieldNames:Map<String, String>,
+			?nativeTypeNames:Map<String, String>):String {
 		var declarations:Map<String, HxiDeclaration> = [],
 			structureNames:Map<String, String> = [],
+			opaqueNames:Map<String, String> = [],
 			callbackNames:Map<String, String> = [];
 		for (declaration in model.declarations) {
 			var name = declarationName(declaration);
 			declarations.set(name, declaration);
 			if (isStructure(declaration))
-				structureNames.set(name, className(name, typePrefix));
+				structureNames.set(name, nativeTypeName(name, typePrefix, nativeTypeNames));
+			if (isOpaque(declaration) && nativeTypeNames != null && nativeTypeNames.exists(name))
+				opaqueNames.set(name, nativeTypeNames.get(name));
 			if (isCallback(declaration))
 				callbackNames.set(name, className(name, typePrefix));
 		}
@@ -25,7 +38,15 @@ class HxiNativeRecordEmitter {
 		for (declaration in model.declarations)
 			switch declaration {
 				case Callback(name, parameters, result, _, _):
-					output.add('typedef ${callbackNames.get(name)} = ${callbackSignature(parameters, result, declarations, structureNames, callbackNames, [])};\n');
+					output.add('typedef ${callbackNames.get(name)} = ${callbackSignature(parameters, result, declarations, structureNames, opaqueNames, callbackNames, [])};\n');
+				case _:
+			}
+		for (declaration in model.declarations)
+			switch declaration {
+				case Structure(name, _, _, _, _) if (nativeTypeNames != null && nativeTypeNames.exists(name)):
+					output.add('typedef ${className(name, typePrefix)} = ${nativeTypeNames.get(name)};\n');
+				case Opaque(name, _) if (nativeTypeNames != null && nativeTypeNames.exists(name)):
+					output.add('typedef ${className(name, typePrefix)} = ${nativeTypeNames.get(name)};\n');
 				case _:
 			}
 		if (model.declarations.length > 0)
@@ -33,14 +54,16 @@ class HxiNativeRecordEmitter {
 		for (declaration in model.declarations)
 			switch declaration {
 				case Structure(name, size, align, fields, _):
-					emitStructure(output, name, size, align, fields, declarations, structureNames, callbackNames, typePrefix, fieldNames);
+					if (nativeTypeNames == null || !nativeTypeNames.exists(name))
+						emitStructure(output, name, size, align, fields, declarations, structureNames, opaqueNames, callbackNames, typePrefix, fieldNames);
 				case _:
 			}
 		return output.toString();
 	}
 
 	static function emitStructure(output:StringBuf, name:String, size:Int, align:Int, fields:Array<HxiField>, declarations:Map<String, HxiDeclaration>,
-			structureNames:Map<String, String>, callbackNames:Map<String, String>, typePrefix:String, fieldNames:Null<Map<String, String>>):Void {
+			structureNames:Map<String, String>, opaqueNames:Map<String, String>, callbackNames:Map<String, String>, typePrefix:String,
+			fieldNames:Null<Map<String, String>>):Void {
 		var projectedName = structureNames.get(name),
 			unionFields = [for (field in fields) if (field.metadata.exists("union")) field];
 		if (unionFields.length > 0) {
@@ -51,7 +74,7 @@ class HxiNativeRecordEmitter {
 			var unionName = projectedName + "UnionData";
 			output.add('@:value @:repr("C") @:union\nclass $unionName {\n');
 			for (field in unionFields)
-				emitField(output, name, field, declarations, structureNames, callbackNames, fieldNames, false);
+				emitField(output, name, field, declarations, structureNames, opaqueNames, callbackNames, fieldNames, false);
 			output.add('}\n\n');
 		}
 		output.add('@:value @:repr("C") @:layout($size, $align)\nclass $projectedName {\n');
@@ -66,13 +89,13 @@ class HxiNativeRecordEmitter {
 				output.add('\t@:offset(${field.offset})\n');
 				output.add('\tpublic var ${uniqueUnionField(name, fields, fieldNames)}:$projectedName' + 'UnionData;\n');
 			} else
-				emitField(output, name, field, declarations, structureNames, callbackNames, fieldNames, true);
+				emitField(output, name, field, declarations, structureNames, opaqueNames, callbackNames, fieldNames, true);
 		}
 		output.add('}\n\n');
 	}
 
 	static function emitField(output:StringBuf, owner:String, field:HxiField, declarations:Map<String, HxiDeclaration>, structureNames:Map<String, String>,
-			callbackNames:Map<String, String>, fieldNames:Null<Map<String, String>>, includeOffset:Bool):Void {
+			opaqueNames:Map<String, String>, callbackNames:Map<String, String>, fieldNames:Null<Map<String, String>>, includeOffset:Bool):Void {
 		if (field.offset == null)
 			throw 'Native record field "$owner.${field.name}" is missing its ABI offset';
 		var name = projectedFieldName(owner, field.name, fieldNames),
@@ -86,14 +109,14 @@ class HxiNativeRecordEmitter {
 		if (includeOffset)
 			output.add('\t@:offset(${field.offset})\n');
 		output.add(arrayLength == null ? "" : '\t@:array($arrayLength)\n');
-		output.add('\tpublic var $name:${renderType(type, declarations, structureNames, callbackNames, [])};\n');
+		output.add('\tpublic var $name:${renderType(type, declarations, structureNames, opaqueNames, callbackNames, [])};\n');
 	}
 
-	static function renderType(type:HxiType, declarations:Map<String, HxiDeclaration>, structureNames:Map<String, String>, callbackNames:Map<String, String>,
-			resolving:Map<String, Bool>):String {
+	static function renderType(type:HxiType, declarations:Map<String, HxiDeclaration>, structureNames:Map<String, String>, opaqueNames:Map<String, String>,
+			callbackNames:Map<String, String>, resolving:Map<String, Bool>):String {
 		return switch type {
-			case Const(element) | Nullable(element): renderType(element, declarations, structureNames, callbackNames, resolving);
-			case Pointer(element): 'RawPtr<${renderPointee(element, declarations, structureNames, callbackNames, resolving)}>';
+			case Const(element) | Nullable(element): renderType(element, declarations, structureNames, opaqueNames, callbackNames, resolving);
+			case Pointer(element): 'RawPtr<${renderPointee(element, declarations, structureNames, opaqueNames, callbackNames, resolving)}>';
 			case Array(_, _): throw "Nested native arrays are not supported by the Haxe native-record projection";
 			case Primitive(name): primitiveType(name);
 			case Named(name):
@@ -103,8 +126,8 @@ class HxiNativeRecordEmitter {
 				var result = switch declarations.get(name) {
 					case Structure(_, _, _, _, _): structureNames.get(name);
 					case Enumeration(_, representation, _, _, _) | Alias(_, representation, _):
-						renderType(representation, declarations, structureNames, callbackNames, resolving);
-					case Handle(_, representation, _, _): renderType(representation, declarations, structureNames, callbackNames, resolving);
+						renderType(representation, declarations, structureNames, opaqueNames, callbackNames, resolving);
+					case Handle(_, representation, _, _): renderType(representation, declarations, structureNames, opaqueNames, callbackNames, resolving);
 					case Callback(_, _, _, _, _): 'NativeFunctionPointer<${callbackNames.get(name)}>';
 					case Opaque(_, _): throw 'Opaque HXI type "$name" must be behind a pointer';
 					case _: throw 'HXI declaration "$name" cannot appear in a native record field';
@@ -114,27 +137,31 @@ class HxiNativeRecordEmitter {
 		};
 	}
 
-	static function renderPointee(type:HxiType, declarations:Map<String, HxiDeclaration>, structureNames:Map<String, String>,
+	static function renderPointee(type:HxiType, declarations:Map<String, HxiDeclaration>, structureNames:Map<String, String>, opaqueNames:Map<String, String>,
 			callbackNames:Map<String, String>, resolving:Map<String, Bool>):String {
 		return switch type {
-			case Const(element) | Nullable(element): renderPointee(element, declarations, structureNames, callbackNames, resolving);
+			case Const(element) | Nullable(element): renderPointee(element, declarations, structureNames, opaqueNames, callbackNames, resolving);
 			case Primitive("void"): "UInt8";
 			case Named(name):
 				switch declarations.get(name) {
-					case Opaque(_, _) | Callback(_, _, _, _, _): "UInt8";
-					case _: renderType(type, declarations, structureNames, callbackNames, resolving);
+					case Opaque(_, _): opaqueNames.get(name) == null ? "UInt8" : opaqueNames.get(name);
+					case Callback(_, _, _, _, _): "UInt8";
+					case _: renderType(type, declarations, structureNames, opaqueNames, callbackNames, resolving);
 				};
-			case _: renderType(type, declarations, structureNames, callbackNames, resolving);
+			case _: renderType(type, declarations, structureNames, opaqueNames, callbackNames, resolving);
 		};
 	}
 
 	static function callbackSignature(parameters:Array<HxiParameter>, result:HxiType, declarations:Map<String, HxiDeclaration>,
-			structureNames:Map<String, String>, callbackNames:Map<String, String>, resolving:Map<String, Bool>):String {
+			structureNames:Map<String, String>, opaqueNames:Map<String, String>, callbackNames:Map<String, String>, resolving:Map<String, Bool>):String {
 		var parameterTypes = [
 			for (parameter in parameters)
-				parameter.name + ":" + renderType(parameter.type, declarations, structureNames, callbackNames, resolving)
+				parameter.name + ":" + renderType(parameter.type, declarations, structureNames, opaqueNames, callbackNames, resolving)
 		];
-		return "(" + parameterTypes.join(", ") + ")->" + renderType(result, declarations, structureNames, callbackNames, resolving);
+		return "("
+			+ parameterTypes.join(", ")
+			+ ")->"
+			+ renderType(result, declarations, structureNames, opaqueNames, callbackNames, resolving);
 	}
 
 	static function primitiveType(name:String):String {
@@ -214,4 +241,13 @@ class HxiNativeRecordEmitter {
 			case Callback(_, _, _, _, _): true;
 			case _: false;
 		};
+
+	static function isOpaque(declaration:HxiDeclaration):Bool
+		return switch declaration {
+			case Opaque(_, _): true;
+			case _: false;
+		};
+
+	static function nativeTypeName(name:String, prefix:String, nativeTypeNames:Null<Map<String, String>>):String
+		return nativeTypeNames != null && nativeTypeNames.exists(name) ? nativeTypeNames.get(name) : className(name, prefix);
 }
