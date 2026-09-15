@@ -34,6 +34,8 @@ enum abstract HlOpcode(Int) from Int to Int {
 	var SetGlobal = 37;
 	var Field = 38;
 	var SetField = 39;
+	var GetThis = 40;
+	var SetThis = 41;
 	var GetArray = 77;
 	var GetI8 = 74;
 	var GetI16 = 75;

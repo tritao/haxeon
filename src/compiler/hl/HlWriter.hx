@@ -416,6 +416,10 @@ class HlWriter {
 					{opcode: HlOpcode.GetGlobal, operands: [destination, global]};
 				case GlobalSet(global, source):
 					{opcode: HlOpcode.SetGlobal, operands: [global, source]};
+				case ThisGet(destination, field):
+					{opcode: HlOpcode.GetThis, operands: [destination, field]};
+				case ThisSet(field, source):
+					{opcode: HlOpcode.SetThis, operands: [field, source]};
 				case Add(destination, left, right):
 					{opcode: HlOpcode.Add, operands: [destination, left, right]};
 				case Sub(destination, left, right):
@@ -475,6 +479,8 @@ class HlWriter {
 					{opcode: HlOpcode.ArraySize, operands: [destination, array]};
 				case MakeEnum(destination, constructor, arguments):
 					{opcode: HlOpcode.MakeEnum, operands: [destination, constructor, arguments.length].concat(arguments)};
+				case EnumAlloc(destination, constructor):
+					{opcode: HlOpcode.EnumAlloc, operands: [destination, constructor]};
 				case EnumIndex(destination, value):
 					{opcode: HlOpcode.EnumIndex, operands: [destination, value]};
 				case EnumField(destination, value, constructor, field):

@@ -283,6 +283,8 @@ class HlReader {
 			case HlOpcode.CallMethod: CallMethod(operands[0], operands[1], operands.slice(3));
 			case HlOpcode.GetGlobal: GlobalGet(operands[0], operands[1]);
 			case HlOpcode.SetGlobal: GlobalSet(operands[0], operands[1]);
+			case HlOpcode.GetThis: ThisGet(operands[0], operands[1]);
+			case HlOpcode.SetThis: ThisSet(operands[0], operands[1]);
 			case HlOpcode.Field: FieldGet(operands[0], operands[1], operands[2]);
 			case HlOpcode.SetField: FieldSet(operands[0], operands[1], operands[2]);
 			case HlOpcode.GetArray: ArrayGet(operands[0], operands[1], operands[2]);
@@ -300,6 +302,7 @@ class HlReader {
 			case HlOpcode.ArraySize: ArraySize(operands[0], operands[1]);
 			case HlOpcode.Type: LoadType(operands[0], operands[1]);
 			case HlOpcode.MakeEnum: MakeEnum(operands[0], operands[1], operands.slice(3));
+			case HlOpcode.EnumAlloc: EnumAlloc(operands[0], operands[1]);
 			case HlOpcode.EnumIndex: EnumIndex(operands[0], operands[1]);
 			case HlOpcode.EnumField: EnumField(operands[0], operands[1], operands[2], operands[3]);
 			case HlOpcode.JTrue: JumpTrue(operands[0], requireLabel(labels, position + 1 + operands[1], functionIndex));

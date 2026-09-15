@@ -210,6 +210,14 @@ class HlValidator {
 				case GlobalSet(global, source):
 					requireGlobal(code, global, 'function ${fn.functionIndex}');
 					requireRegister(fn, source);
+				case ThisGet(destination, field):
+					requireRegister(fn, destination);
+					if (field < 0)
+						throw 'Invalid this field $field in function ${fn.functionIndex}';
+				case ThisSet(field, source):
+					requireRegister(fn, source);
+					if (field < 0)
+						throw 'Invalid this field $field in function ${fn.functionIndex}';
 				case Add(destination, left, right):
 					requireRegister(fn, destination);
 					requireRegister(fn, left);
@@ -303,6 +311,10 @@ class HlValidator {
 						throw 'Invalid enum constructor $constructor in function ${fn.functionIndex}';
 					for (argument in arguments)
 						requireRegister(fn, argument);
+				case EnumAlloc(destination, constructor):
+					requireRegister(fn, destination);
+					if (constructor < 0)
+						throw 'Invalid enum constructor $constructor in function ${fn.functionIndex}';
 				case EnumIndex(destination, value):
 					requireRegister(fn, destination);
 					requireRegister(fn, value);

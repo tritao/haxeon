@@ -53,6 +53,9 @@ function main():Void {
 	code.functions = [
 		new compiler.hl.HlFunction(1, 1, [0], [
 			HlInstruction.LoadBytes(0, 1),
+			HlInstruction.ThisGet(0, 0),
+			HlInstruction.ThisSet(0, 0),
+			HlInstruction.EnumAlloc(0, 0),
 			HlInstruction.JumpTrue(0, "done"),
 			HlInstruction.LoadInt(0, 0),
 			HlInstruction.Label("done"),
@@ -112,6 +115,39 @@ function main():Void {
 				start: null,
 				end: null,
 				flags: 1
+			},
+			{
+				path: "main.hx",
+				line: 6,
+				column: 1,
+				endLine: 6,
+				endColumn: 1,
+				sourceHash: 0,
+				start: null,
+				end: null,
+				flags: 1
+			},
+			{
+				path: "main.hx",
+				line: 7,
+				column: 1,
+				endLine: 7,
+				endColumn: 1,
+				sourceHash: 0,
+				start: null,
+				end: null,
+				flags: 1
+			},
+			{
+				path: "main.hx",
+				line: 8,
+				column: 1,
+				endLine: 8,
+				endColumn: 1,
+				sourceHash: 0,
+				start: null,
+				end: null,
+				flags: 1
 			}
 		], [{name: 4, position: -1, scopeEnd: -1}])
 	];
@@ -142,8 +178,26 @@ function main():Void {
 	expect(decoded.debugSections.length == 1 && decoded.debugSections[0].payload.compare(HaxeBytes.ofString("opaque")) == 0,
 		"HLB debug sections did not decode");
 	switch decoded.functions[0].opcodes[1] {
+		case HlInstruction.ThisGet(_, field):
+			expect(field == 0, "HLB OGetThis did not preserve its field index");
+		case _:
+			throw "HLB OGetThis did not decode as ThisGet";
+	}
+	switch decoded.functions[0].opcodes[2] {
+		case HlInstruction.ThisSet(field, source):
+			expect(field == 0 && source == 0, "HLB OSetThis did not preserve its operands");
+		case _:
+			throw "HLB OSetThis did not decode as ThisSet";
+	}
+	switch decoded.functions[0].opcodes[3] {
+		case HlInstruction.EnumAlloc(destination, constructor):
+			expect(destination == 0 && constructor == 0, "HLB OEnumAlloc did not preserve its operands");
+		case _:
+			throw "HLB OEnumAlloc did not decode as EnumAlloc";
+	}
+	switch decoded.functions[0].opcodes[4] {
 		case HlInstruction.JumpTrue(_, target):
-			expect(target == "L3", "HLB relative jump did not become a symbolic label");
+			expect(target == "L6", "HLB relative jump did not become a symbolic label");
 		case _:
 			throw "HLB jump opcode did not decode as JumpTrue";
 	}
@@ -153,7 +207,7 @@ function main():Void {
 		case _:
 			throw "HLB byte opcode did not decode as LoadBytes";
 	}
-	expect(decoded.functions[0].debugLocations.length == 5
+	expect(decoded.functions[0].debugLocations.length == 8
 		&& decoded.functions[0].debugLocations[4].line == 5, "HLB debug locations did not decode");
 	expect(decoded.functions[0].debugAssignments[0].position == -1 && decoded.functions[0].debugAssignments[0].scopeEnd == -1,
 		"HLB debug assignments did not decode");

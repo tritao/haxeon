@@ -58,6 +58,8 @@ enum HlInstruction {
 	EndTrap(destination:Int);
 	GlobalGet(destination:Int, global:Int);
 	GlobalSet(global:Int, source:Int);
+	ThisGet(destination:Int, field:Int);
+	ThisSet(field:Int, source:Int);
 	Add(destination:Int, left:Int, right:Int);
 	Sub(destination:Int, left:Int, right:Int);
 	Mul(destination:Int, left:Int, right:Int);
@@ -91,6 +93,7 @@ enum HlInstruction {
 	SetMem(pointer:Int, offset:Int, source:Int);
 	ArraySize(destination:Int, array:Int);
 	MakeEnum(destination:Int, constructor:Int, arguments:Array<Int>);
+	EnumAlloc(destination:Int, constructor:Int);
 	EnumIndex(destination:Int, value:Int);
 	EnumField(destination:Int, value:Int, constructor:Int, field:Int);
 	JumpSignedLessOrEqual(left:Int, right:Int, target:String);
