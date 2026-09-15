@@ -190,7 +190,6 @@ DEFINE_PRIM(_VOID,native_type_initialize_object,_BYTES);
 DEFINE_PRIM(_VOID,native_metadata_publish_prototypes,_BYTES _I32 _BYTES);
 DEFINE_PRIM(_VOID,native_metadata_publish_contiguous_prototypes,_BYTES _I32 _BYTES);
 DEFINE_PRIM(_VOID,native_module_context_dispose,_BYTES);
-DEFINE_PRIM(_I32,native_metadata_validate_constants,_BYTES _I32 _I32);
 DEFINE_PRIM(_I32,native_metadata_validate_module_pools,_BYTES _I32 _BYTES _I32 _BYTES _BYTES _I32 _BYTES _I32 _BYTES _I32 _I32);
 DEFINE_PRIM(_I32,native_metadata_validate_debug_sections,_BYTES _I32);
 DEFINE_PRIM(_I32,native_metadata_validate_code,_BYTES);

@@ -49,7 +49,7 @@ class HlConstantTable {
 		return capacity;
 
 	/** Validate global indices and field storage against a module global table. */
-	public function validate(globalCount:Int):Void {
+	public function validate(globalCount:Int):Int {
 		if (globalCount < 0)
 			throw "HashLink constant descriptors require a non-negative global count";
 		for (index in 0...count) {
@@ -58,7 +58,13 @@ class HlConstantTable {
 				throw 'HashLink constant descriptor $index references global $global outside the module table';
 			if (nfields < 0 || nfields > 0 && descriptor.ref.fields.isNull())
 				throw 'HashLink constant descriptor $index contains incomplete field storage';
+			for (fieldIndex in 0...nfields) {
+				var field:Int = cast descriptor.ref.fields.offset(fieldIndex).load();
+				if (field < 0)
+					throw 'HashLink constant descriptor $index contains an invalid field index';
+			}
 		}
+		return count;
 	}
 
 	public function get(index:Int):RawPtr<HlConstant> {

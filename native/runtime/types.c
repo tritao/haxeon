@@ -83,20 +83,6 @@ static hl_function *native_metadata_find_function( hl_function *functions, int c
 	return NULL;
 }
 
-HL_PRIM int HL_NAME(native_metadata_validate_constants)( hl_constant *constants, int count, int global_count ) {
-	int i, j;
-	if( count < 0 || global_count < 0 || (count > 0 && constants == NULL) )
-		hl_error("HashLink constant metadata requires a descriptor table and global count");
-	for( i = 0; i < count; i++ ) {
-		hl_constant *constant = constants + i;
-		if( constant->global < 0 || constant->global >= global_count || constant->nfields < 0 || (constant->nfields > 0 && constant->fields == NULL) )
-			hl_error("HashLink constant metadata contains invalid storage metadata");
-		for( j = 0; j < constant->nfields; j++ )
-			if( constant->fields[j] < 0 ) hl_error("HashLink constant metadata contains an invalid field index");
-	}
-	return count;
-}
-
 HL_PRIM int HL_NAME(native_metadata_validate_module_pools)( int *ints, int int_count, double *floats, int float_count, char **strings, int *string_lengths,
 	int string_count, uchar *bytes, int byte_count, int *byte_positions, int byte_position_count, int entrypoint ) {
 	int i;

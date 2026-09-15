@@ -121,7 +121,7 @@ class HlNativeMetadataMain {
 			+ '&& hotValue == 8 && hotLoaded && bytecodeVersions.length() == 1 && bytecodeVersions.at(101).slot == 0 '
 			+ '&& publication.constantCount == 1 && publication.constants.ref.global == 0 && publication.constants.ref.nfields == 2 '
 			+ '&& publication.constants.ref.fields.load() == 0 && publication.constants.ref.fields.offset(1).load() == 1 '
-			+ '&& HlTypeBridge.native_metadata_validate_constants(publication.constants, publication.constantCount, publication.globalCount) == 1 '
+			+ '&& generation.constantDescriptors.validate(publication.globalCount) == 1 '
 			+
 			'&& publication.debugFileCount == 1 && publication.debugFiles.offset(0).load().offset(0).load() == 109 && publication.debugFileLengths.load() == 11 '
 			+ '&& generation.validateDebugFiles() == 1 '

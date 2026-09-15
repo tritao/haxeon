@@ -393,7 +393,6 @@ class HlMetadataGeneration {
 		}
 		validateGlobalTypes();
 		constantDescriptors.validate(globalCount);
-		HlTypeBridge.native_metadata_validate_constants(constantDescriptors.pointer(), constantDescriptors.length(), globalCount);
 		HlTypeBridge.native_metadata_validate_debug_sections(debugSectionDescriptors.pointer(), debugSectionDescriptors.length());
 		validateModulePools();
 		HlTypeLayout.initialize(typeTable.pointer(), typeTable.length(), arena);

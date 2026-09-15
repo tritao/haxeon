@@ -38,9 +38,6 @@ class HlTypeBridge {
 
 	public static function native_module_context_dispose(context:RawPtr<HlModuleContext>):Void {}
 
-	public static function native_metadata_validate_constants(constants:RawPtr<HlConstant>, count:Int, globalCount:Int):Int
-		return 0;
-
 	public static function native_metadata_validate_module_pools(ints:RawPtr<Int32>, intCount:Int, floats:RawPtr<Float>, floatCount:Int,
 		strings:RawPtr<RawPtr<UInt8>>, stringLengths:RawPtr<Int32>, stringCount:Int, bytes:RawPtr<UInt8>, byteCount:Int,
 		bytePositions:RawPtr<Int32>, bytePositionCount:Int, entryPoint:Int):Int
