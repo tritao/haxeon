@@ -144,7 +144,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   where safe. Completion reports incomplete results while recovery is active.
 - [~] Definition and references require a bound compiler identity; rename and
   stale fallback edits remain conservative and reject speculative or stale
-  symbols. Full type-aware navigation and global reference precision remain.
+  symbols. Implementation lookup now reads current recovered candidate classes
+  only for authoritative targets, and ambiguous recovered inheritance names are
+  rejected. Full type-aware navigation and global reference precision remain.
 - [x] A small JSON-lines protocol adapter for Pragtical; it exposes diagnostics,
   semantic queries, transactional validation, and base64 HLB/HLP payloads with
   runtime identity, plus a caller-owned cancellation token and `cancel` method.

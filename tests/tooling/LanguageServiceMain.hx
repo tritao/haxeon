@@ -623,6 +623,12 @@ class LanguageServiceMain {
 			|| recoveredImplementations[0].path != "recovered/impl/Current.hx"
 			|| recoveredImplementations[0].stale)
 			throw 'language service implementation navigation did not use the current recovered candidate: count=${recoveredImplementations.length}';
+		var recoveredMethodImplementations = recoveredImplementationService.implementations("recovered/api/Contract.hx",
+			recoveredContractSource.indexOf("run") + 1);
+		if (recoveredMethodImplementations.length != 1
+			|| recoveredMethodImplementations[0].path != "recovered/impl/Current.hx"
+			|| recoveredMethodImplementations[0].stale)
+			throw 'language service method implementation navigation did not use the current recovered candidate: count=${recoveredMethodImplementations.length}';
 		recoveredImplementationService.update("recovered/other/Contract.hx",
 			"package recovered.other; interface Contract { function run():Int; } function main():Int return 0;");
 		recoveredImplementationService.update("recovered/impl/Ambiguous.hx",
