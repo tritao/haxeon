@@ -1284,6 +1284,16 @@ class LanguageServiceMain {
 				foundRecoveredMember = true;
 		if (!foundRecoveredMember)
 			throw "recovered local type was lost after an unrelated malformed expression";
+		var incompleteGenericService = new LanguageService(),
+			incompleteGenericSource = "class GenericBox<T> { public var value:T; } function main():Void { var incomplete:GenericBox<>; var known:GenericBox<Int> = new GenericBox<Int>(); known.";
+		incompleteGenericService.update("IncompleteGeneric.hx", incompleteGenericSource);
+		var incompleteGenericCompletion = incompleteGenericService.completeResult("IncompleteGeneric.hx", incompleteGenericSource.length),
+			foundIncompleteGenericMember = false;
+		for (item in incompleteGenericCompletion.items)
+			if (item.label == "value" && item.detail == "value:Int")
+				foundIncompleteGenericMember = true;
+		if (!foundIncompleteGenericMember || incompleteGenericService.diagnostics("IncompleteGeneric.hx").length == 0)
+			throw "incomplete generic type recovery discarded later typed locals";
 		var visibilityService = new LanguageService();
 		visibilityService.update("unrelated/Target.hx", "package unrelated; function target():Int return 1; function main():Void return;");
 		visibilityService.analyze("unrelated.Target");

@@ -218,36 +218,45 @@ class DeclarationIndex {
 			case AppliedType(name, arguments):
 				if (name == "List") {
 					if (arguments.length != 1)
-						fail('Type "List" expects 1 type argument, got ${arguments.length}', span);
-					TArray(resolveInner(arguments[0], span, resolving, substitutions));
+						recoverTypeArity('Type "List" expects 1 type argument, got ${arguments.length}', span);
+					TArray(arguments.length == 0 ? TUnknown : resolveInner(arguments[0], span, resolving, substitutions));
 				} else if (name == "Iterator") {
 					if (arguments.length != 1)
-						fail('Type "Iterator" expects 1 type argument, got ${arguments.length}', span);
-					TIterator(resolveInner(arguments[0], span, resolving, substitutions));
+						recoverTypeArity('Type "Iterator" expects 1 type argument, got ${arguments.length}', span);
+					TIterator(arguments.length == 0 ? TUnknown : resolveInner(arguments[0], span, resolving, substitutions));
 				} else if (aliases.exists(name)) {
 					var alias = aliases.get(name);
 					if (arguments.length != alias.typeParameters.length)
-						fail('Type "$name" expects ${alias.typeParameters.length} type arguments, got ${arguments.length}', span);
+						recoverTypeArity('Type "$name" expects ${alias.typeParameters.length} type arguments, got ${arguments.length}', span);
 					var resolvedArguments = [
 						for (argument in arguments)
 							resolveInner(argument, span, resolving, substitutions)
 					];
 					var aliasSubstitutions = [for (parameter => value in substitutions) parameter => value];
 					for (i in 0...alias.typeParameters.length)
-						aliasSubstitutions.set(alias.typeParameters[i], resolvedArguments[i]);
+						aliasSubstitutions.set(alias.typeParameters[i], i < resolvedArguments.length ? resolvedArguments[i] : TUnknown);
 					validateTypeArguments(name, alias.typeConstraints, aliasSubstitutions, span);
 					resolveAlias(alias, resolving, aliasSubstitutions);
 				} else if (abstracts.exists(name)) {
 					var decl = abstracts.get(name);
 					if (arguments.length != decl.typeParameters.length)
-						fail('Type "$name" expects ${decl.typeParameters.length} type arguments, got ${arguments.length}', span);
+						recoverTypeArity('Type "$name" expects ${decl.typeParameters.length} type arguments, got ${arguments.length}', span);
 					var abstractSubstitutions = [for (parameter => value in substitutions) parameter => value];
 					for (index in 0...arguments.length)
-						abstractSubstitutions.set(decl.typeParameters[index], resolveInner(arguments[index], span, resolving, substitutions));
+						if (index < decl.typeParameters.length)
+							abstractSubstitutions.set(decl.typeParameters[index], resolveInner(arguments[index], span, resolving, substitutions));
+					for (index in arguments.length...decl.typeParameters.length)
+						abstractSubstitutions.set(decl.typeParameters[index], TUnknown);
 					var resolvedArguments = [
 						for (argument in arguments)
 							resolveInner(argument, span, resolving, substitutions)
 					];
+					if (recovery) {
+						if (resolvedArguments.length > decl.typeParameters.length)
+							resolvedArguments = resolvedArguments.slice(0, decl.typeParameters.length);
+						while (resolvedArguments.length < decl.typeParameters.length)
+							resolvedArguments.push(TUnknown);
+					}
 					validateTypeArguments(name, decl.typeConstraints, abstractSubstitutions, span);
 					TAbstract(name, resolvedArguments, resolveAbstract(decl, span, resolving, abstractSubstitutions));
 				} else if (classes.exists(name) || interfaces.exists(name) || enums.exists(name)) {
@@ -271,11 +280,17 @@ class DeclarationIndex {
 					var parameters = declaration.typeParameters,
 						constraints = declaration.typeConstraints;
 					if (arguments.length != parameters.length)
-						fail('Type "$name" expects ${parameters.length} type arguments, got ${arguments.length}', span);
+						recoverTypeArity('Type "$name" expects ${parameters.length} type arguments, got ${arguments.length}', span);
 					var resolvedArguments = [
 						for (argument in arguments)
 							resolveInner(argument, span, resolving, substitutions)
 					];
+					if (recovery) {
+						if (resolvedArguments.length > parameters.length)
+							resolvedArguments = resolvedArguments.slice(0, parameters.length);
+						while (resolvedArguments.length < parameters.length)
+							resolvedArguments.push(TUnknown);
+					}
 					var applied = declarationSubstitutions(name, parameters);
 					for (index in 0...parameters.length)
 						applied.set(parameters[index], resolvedArguments[index]);
@@ -337,7 +352,13 @@ class DeclarationIndex {
 		var alias = aliases.get(name);
 		if (alias != null) {
 			if (alias.typeParameters.length != 0)
-				fail('Type "$name" expects ${alias.typeParameters.length} type arguments, got 0', span);
+				recoverTypeArity('Type "$name" expects ${alias.typeParameters.length} type arguments, got 0', span);
+			if (recovery && alias.typeParameters.length != 0) {
+				var aliasSubstitutions:Map<String, CompilerType> = [for (parameter => value in substitutions) parameter => value];
+				for (parameter in alias.typeParameters)
+					aliasSubstitutions.set(parameter, TUnknown);
+				return resolveAlias(alias, resolving, aliasSubstitutions);
+			}
 			return resolveAlias(alias, resolving, substitutions);
 		}
 		var enumAbstract = enumAbstracts.get(name);
@@ -346,7 +367,13 @@ class DeclarationIndex {
 		var decl = abstracts.get(name);
 		if (decl != null) {
 			if (decl.typeParameters.length != 0)
-				fail('Type "$name" expects ${decl.typeParameters.length} type arguments, got 0', span);
+				recoverTypeArity('Type "$name" expects ${decl.typeParameters.length} type arguments, got 0', span);
+			if (recovery && decl.typeParameters.length != 0) {
+				var abstractSubstitutions:Map<String, CompilerType> = [for (parameter => value in substitutions) parameter => value];
+				for (parameter in decl.typeParameters)
+					abstractSubstitutions.set(parameter, TUnknown);
+				return TAbstract(name, [for (_ in decl.typeParameters) TUnknown], resolveAbstract(decl, span, resolving, abstractSubstitutions));
+			}
 			return TAbstract(name, [], resolveAbstract(decl, span, resolving, substitutions));
 		}
 		var interfaceDecl = interfaces.get(name);
@@ -365,9 +392,19 @@ class DeclarationIndex {
 	}
 
 	function resolveBareNominal(name:String, kind:compiler.types.Type.NominalKind, arity:Int, span:SourceSpan):CompilerType {
-		if (arity != 0)
-			fail('Type "$name" expects $arity type arguments, got 0', span);
+		if (arity != 0) {
+			recoverTypeArity('Type "$name" expects $arity type arguments, got 0', span);
+			if (recovery)
+				return TInstance(kind, name, [for (_ in 0...arity) TUnknown]);
+		}
 		return TInstance(kind, name, []);
+	}
+
+	function recoverTypeArity(message:String, span:SourceSpan):Void {
+		if (recovery)
+			rememberRecoveryDiagnostic("E1020", message, span);
+		else
+			fail(message, span);
 	}
 
 	function resolveAlias(alias:AstTypeAlias, resolving:Map<String, Bool>, substitutions:Map<String, CompilerType>):CompilerType {

@@ -137,8 +137,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 	positions in recovered source.
 - [~] Recovered typing propagates `TUnknown`/`TError` locally, preserves
   scopes and local types around unrelated failures, records expected argument
-  types, and exposes unresolved names and compiler-owned completion contexts.
-  Full error-tolerant type resolution remains.
+  types, retains nominal receivers with unknown generic arguments, and exposes
+  unresolved names and compiler-owned completion contexts. Full error-tolerant
+  type resolution remains.
 - [~] Completion, symbols, folding, selection ranges, links, highlights,
   semantic tokens, hover, and signature help consume current recovered source
   where safe. Completion reports incomplete results while recovery is active.
