@@ -14,6 +14,7 @@ import runtime.hashlink.HlTypeObject;
 import runtime.hashlink.HlModuleContext;
 import runtime.hashlink.HlRuntimeObject;
 import runtime.hashlink.HlRuntimeObject.HlFieldLookup;
+import runtime.hashlink.HlFunction;
 
 /** Owns stable unmanaged storage for Haxe-constructed HashLink metadata. */
 class HlTypeArena {

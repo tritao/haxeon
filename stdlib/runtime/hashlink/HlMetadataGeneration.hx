@@ -3,6 +3,7 @@ package runtime.hashlink;
 import runtime.memory.RawPtr;
 import runtime.hashlink.HlTypeBridge;
 import runtime.hashlink.HlTypeLayout;
+import runtime.hashlink.HlFunction;
 
 /** Stable native view handed to a future HashLink publication boundary. */
 typedef HlMetadataPublication = {
@@ -123,6 +124,10 @@ class HlMetadataGeneration {
 			throw "HashLink metadata generation requires a module context before publication";
 		HlTypeLayout.initialize(typeTable.pointer(), typeTable.length(), arena);
 		var contiguousTypes = arena.typePointer(), usesContiguousTypes = typeTable.isContiguousPrefix(contiguousTypes);
+		if (usesContiguousTypes)
+			HlTypeBridge.native_metadata_bind_contiguous_function_descriptors(contiguousTypes, typeTable.length(), functionDescriptors.pointer(), functionDescriptors.length(), moduleContext);
+		else
+			HlTypeBridge.native_metadata_bind_function_descriptors(typeTable.pointer(), typeTable.length(), functionDescriptors.pointer(), functionDescriptors.length(), moduleContext);
 		if (usesContiguousTypes)
 			HlTypeBridge.native_metadata_publish_contiguous_prototypes(contiguousTypes, typeTable.length(), moduleContext);
 		else

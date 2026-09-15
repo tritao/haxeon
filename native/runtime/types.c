@@ -76,6 +76,67 @@ static void native_metadata_validate_publication( int count, void *types, hl_mod
 		hl_error("HashLink metadata publication requires a type table and module context");
 }
 
+static hl_function *native_metadata_find_function( hl_function *functions, int count, int findex ) {
+	int i;
+	for( i = 0; i < count; i++ )
+		if( functions[i].findex == findex ) return functions + i;
+	return NULL;
+}
+
+static void native_metadata_bind_function_descriptors_for_type( hl_type *type, hl_function *functions, int function_count, hl_module_context *context ) {
+	hl_type_obj *object;
+	int i;
+	if( type->kind != HOBJ && type->kind != HSTRUCT ) return;
+	object = type->obj;
+	if( object == NULL ) hl_error("HashLink function descriptor binding contains an invalid object");
+	if( (object->nproto > 0 && object->proto == NULL) || (object->nbindings > 0 && object->bindings == NULL) )
+		hl_error("HashLink function descriptor binding contains incomplete object metadata");
+	object->m = context;
+	for( i = 0; i < object->nproto; i++ ) {
+		hl_obj_proto *prototype = object->proto + i;
+		hl_function *function = native_metadata_find_function(functions,function_count,prototype->findex);
+		if( function == NULL ) hl_error("HashLink function descriptor binding references an unknown prototype");
+		function->obj = object;
+		function->field.name = prototype->name;
+	}
+	for( i = 0; i < object->nbindings; i++ ) {
+		int field_id = object->bindings[i << 1];
+		int function_id = object->bindings[(i << 1) | 1];
+		hl_obj_field *field = hl_obj_field_fetch(type,field_id);
+		if( field == NULL ) hl_error("HashLink function descriptor binding references an unknown field");
+		if( field->t == NULL ) hl_error("HashLink function descriptor binding references a field without a type");
+		if( field->t->kind == HFUN || field->t->kind == HDYN ) {
+			hl_function *function = native_metadata_find_function(functions,function_count,function_id);
+			if( function == NULL ) hl_error("HashLink function descriptor binding references an unknown method");
+			function->obj = object;
+			function->field.name = field->name;
+		}
+	}
+}
+
+static void native_metadata_validate_function_descriptors( int count, hl_function *functions ) {
+	if( count < 0 || (count > 0 && functions == NULL) )
+		hl_error("HashLink function descriptor binding requires a descriptor table");
+}
+
+HL_PRIM void HL_NAME(native_metadata_bind_function_descriptors)( hl_type **types, int count, hl_function *functions, int function_count, hl_module_context *context ) {
+	int i;
+	native_metadata_validate_publication(count,types,context);
+	native_metadata_validate_function_descriptors(function_count,functions);
+	for( i = 0; i < count; i++ ) {
+		if( types[i] == NULL ) hl_error("HashLink metadata contains a null type");
+		native_metadata_bind_function_descriptors_for_type(types[i],functions,function_count,context);
+	}
+}
+
+HL_PRIM void HL_NAME(native_metadata_bind_contiguous_function_descriptors)( hl_type *types, int count, hl_function *functions, int function_count, hl_module_context *context ) {
+	int i;
+	native_metadata_validate_publication(count,types,context);
+	native_metadata_validate_function_descriptors(function_count,functions);
+	for( i = 0; i < count; i++ )
+		native_metadata_bind_function_descriptors_for_type(types + i,functions,function_count,context);
+}
+
 HL_PRIM void HL_NAME(native_metadata_publish_prototypes)( hl_type **types, int count, hl_module_context *context ) {
 	int i;
 	native_metadata_validate_publication(count,types,context);

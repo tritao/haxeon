@@ -1,6 +1,7 @@
 package runtime.hashlink;
 
 import runtime.memory.RawPtr;
+import runtime.hashlink.HlFunction;
 
 /** Input used to construct one Haxe-owned HashLink function descriptor. */
 typedef HlFunctionDescriptorSpec = {
