@@ -1290,14 +1290,77 @@ class SemanticIndex {
 
 	function indexRecoveredCallArguments(arguments:Array<AstExpression>, fn:Null<AstFunction>, ?substitutions:Map<String, CompilerType>,
 			?explicitExpected:Array<CompilerType>, ?functionKey:String):Void {
+		var inferredSubstitutions:Map<String, CompilerType> = [];
+		if (substitutions != null)
+			for (name => type in substitutions)
+				inferredSubstitutions.set(name, type);
+		if (fn != null && fn.typeParameters != null)
+			for (index in 0...arguments.length)
+				if (index < fn.arguments.length) {
+					var actual = recoveredExpressionType(arguments[index]);
+					if (!isRecoveryType(actual))
+						inferRecoveredTypeParameters(fn.arguments[index].type, actual, fn.typeParameters, inferredSubstitutions);
+				}
 		for (index in 0...arguments.length) {
 			checkpoint();
 			var argument = arguments[index];
 			var expected = explicitExpected != null && index < explicitExpected.length ? explicitExpected[index]
-				: fn == null || index >= fn.arguments.length ? null : recoveredType(fn.arguments[index].type, substitutions);
+				: fn == null || index >= fn.arguments.length ? null : recoveredType(fn.arguments[index].type, inferredSubstitutions);
 			indexRecoveredExpression(argument, expected, functionKey);
 		}
 	}
+
+	/** Infer only concrete generic arguments that are already evident in source. */
+	function inferRecoveredTypeParameters(pattern:AstType, actual:CompilerType, parameters:Array<String>,
+			substitutions:Map<String, CompilerType>):Void {
+		switch pattern {
+			case NamedType(name) if (parameters.indexOf(name) >= 0):
+				var previous = substitutions.get(name);
+				if (previous == null || isRecoveryType(previous))
+					substitutions.set(name, actual);
+			case ArrayType(element):
+				switch actual {
+					case TArray(value): inferRecoveredTypeParameters(element, value, parameters, substitutions);
+					case TIterator(value): inferRecoveredTypeParameters(element, value, parameters, substitutions);
+					case _:
+				}
+			case MapType(key, value):
+				switch actual {
+					case TMap(actualKey, actualValue):
+						inferRecoveredTypeParameters(key, actualKey, parameters, substitutions);
+						inferRecoveredTypeParameters(value, actualValue, parameters, substitutions);
+					case _:
+				}
+			case NullableType(element):
+				switch actual {
+					case TNullable(value): inferRecoveredTypeParameters(element, value, parameters, substitutions);
+					case _: inferRecoveredTypeParameters(element, actual, parameters, substitutions);
+				}
+			case FunctionType(arguments, result):
+				switch actual {
+					case TFunction(actualArguments, actualResult):
+						for (index in 0...arguments.length)
+							if (index < actualArguments.length)
+								inferRecoveredTypeParameters(arguments[index], actualArguments[index], parameters, substitutions);
+						inferRecoveredTypeParameters(result, actualResult, parameters, substitutions);
+					case _:
+				}
+			case AppliedType(name, arguments):
+				var actualArguments = recoveredNominalArguments(actual, name);
+				if (actualArguments != null)
+					for (index in 0...arguments.length)
+						if (index < actualArguments.length)
+							inferRecoveredTypeParameters(arguments[index], actualArguments[index], parameters, substitutions);
+			case _:
+			}
+	}
+
+	function recoveredNominalArguments(type:CompilerType, name:String):Null<Array<CompilerType>>
+		return switch type {
+			case TInstance(_, declaration, arguments) if (sourceName(declaration) == sourceName(name) || declaration == name): arguments;
+			case TAbstract(declaration, arguments, _) if (sourceName(declaration) == sourceName(name) || declaration == name): arguments;
+			case _: null;
+		};
 
 	function recoveredBuiltinCallArguments(name:String):Null<Array<CompilerType>> {
 		return switch name {

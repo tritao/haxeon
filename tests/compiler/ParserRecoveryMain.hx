@@ -862,6 +862,13 @@ class ParserRecoveryMain {
 		if (assignmentInferenceNames.indexOf("member") < 0)
 			throw "recovered indexing did not expose members after assignment-based local inference";
 
+		var genericExpectedService = new LanguageService(),
+			genericExpectedSource = "function pair<T>(first:T, second:T):T return first; function main():Void return pair(1, ";
+		genericExpectedService.update("TolerantGenericExpected.hx", genericExpectedSource);
+		var genericExpectedContext = genericExpectedService.completionContext("TolerantGenericExpected.hx", genericExpectedSource.length);
+		if (genericExpectedContext == null || genericExpectedContext.context.expected != TInt)
+			throw 'recovered generic call did not infer the later argument type: ${genericExpectedContext == null ? "null" : Std.string(genericExpectedContext.context.expected)}';
+
 		var conditionalSource = new SourceFile("TolerantConditional.hx",
 			"class Foo { public var value:Int; } function main():Void { var foo = broken ? new Foo() : new Foo(); foo. }");
 		var conditionalProgram = new Parser(new Lexer(conditionalSource).tokenize()).parseProgramRecovering().program,
