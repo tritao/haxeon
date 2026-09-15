@@ -354,7 +354,7 @@ class LanguageService {
 		for (state in compiler.modules) {
 			if (token != null)
 				token.check();
-			for (symbol in indexedWorkspaceSymbols(state))
+			for (symbol in indexedWorkspaceSymbols(state, token))
 				if (normalized.length == 0 || symbol.name.toLowerCase().indexOf(normalized) >= 0)
 					result.push(symbol);
 		}
@@ -454,9 +454,9 @@ class LanguageService {
 		return item != null && item.revision == revision;
 	}
 
-	public function foldingRanges(path:String):Array<FoldingRegion> {
+	public function foldingRanges(path:String, ?token:CancellationToken):Array<FoldingRegion> {
 		var state = stateFor(path);
-		return state == null ? [] : indexedStructure(state).folds.copy();
+		return state == null ? [] : indexedStructure(state, token).folds.copy();
 	}
 
 	public function format(path:String, start:Int, end:Int, tabSize:Int, insertSpaces:Bool):Array<TextEdit> {
@@ -489,20 +489,23 @@ class LanguageService {
 		];
 	}
 
-	public function selectionRanges(path:String, positions:Array<Int>):Array<Array<SourceSpan>> {
+	public function selectionRanges(path:String, positions:Array<Int>, ?token:CancellationToken):Array<Array<SourceSpan>> {
 		var state = stateFor(path), result:Array<Array<SourceSpan>> = [];
 		if (state == null)
 			return result;
-		var structure = indexedStructure(state),
+		var structure = indexedStructure(state, token),
 			tokens = effectiveTokens(state);
 		for (position in positions) {
+			if (token != null)
+				token.check();
 			var spans:Array<SourceSpan> = [];
-			if (tokens != null)
+			if (tokens != null) {
 				for (token in tokens)
 					if (token.kind != Eof && position >= token.span.start && position <= token.span.end) {
 						spans.push(token.span);
 						break;
 					}
+			}
 			for (span in structure.containers)
 				if (position >= span.start && position <= span.end)
 					spans.push(span);
@@ -686,77 +689,101 @@ class LanguageService {
 		return snapshot == null ? null : snapshot.confidence;
 	}
 
-	public function documentSymbols(path:String):Array<DocumentSymbol> {
+	public function documentSymbols(path:String, ?token:CancellationToken):Array<DocumentSymbol> {
 		var state = stateFor(path),
 			result:Array<DocumentSymbol> = [],
 			ast = state == null ? null : effectiveAst(state);
 		if (state == null || ast == null)
 			return result;
-		for (fn in ast.functions)
+		for (fn in ast.functions) {
+			if (token != null)
+				token.check();
 			result.push({
 				name: fn.name,
 				kind: "function",
 				detail: '${fn.name}():${typeName(fn.result)}',
 				span: fn.span
 			});
-		for (alias in ast.aliases)
+		}
+		for (alias in ast.aliases) {
+			if (token != null)
+				token.check();
 			result.push({
 				name: alias.name,
 				kind: "type",
 				detail: 'typedef ${alias.name}${alias.typeParameters.length == 0 ? "" : "<" + alias.typeParameters.join(",") + ">"}=${typeName(alias.type)}',
 				span: alias.span
 			});
+		}
 		for (interfaceDecl in ast.interfaces) {
+			if (token != null)
+				token.check();
 			result.push({
 				name: interfaceDecl.name,
 				kind: "interface",
 				detail: 'interface ${interfaceDecl.name}',
 				span: interfaceDecl.span
 			});
-			for (method in interfaceDecl.methods)
+			for (method in interfaceDecl.methods) {
+				if (token != null)
+					token.check();
 				result.push({
 					name: method.name,
 					kind: "method",
 					detail: '${method.name}():${typeName(method.result)}',
 					span: method.span
 				});
+			}
 		}
 		for (enumDecl in ast.enums) {
+			if (token != null)
+				token.check();
 			result.push({
 				name: enumDecl.name,
 				kind: "enum",
 				detail: 'enum ${enumDecl.name}',
 				span: enumDecl.span
 			});
-			for (caseDecl in enumDecl.cases)
+			for (caseDecl in enumDecl.cases) {
+				if (token != null)
+					token.check();
 				result.push({
 					name: caseDecl.name,
 					kind: "enumCase",
 					detail: '${enumDecl.name}.${caseDecl.name}(${[for (param in caseDecl.params) (param.optional ? "?" : "") + typeName(param.type)].join(",")})',
 					span: caseDecl.span
 				});
+			}
 		}
 		for (classDecl in ast.classes) {
+			if (token != null)
+				token.check();
 			result.push({
 				name: classDecl.name,
 				kind: "class",
 				detail: 'class ${classDecl.name}',
 				span: classDecl.span
 			});
-			for (field in classDecl.fields)
+			for (field in classDecl.fields) {
+				if (token != null)
+					token.check();
 				result.push({
 					name: field.name,
 					kind: "field",
 					detail: '${field.name}:${typeName(field.type)}',
 					span: field.span
 				});
-			for (method in classDecl.methods)
+			}
+			for (method in classDecl.methods) {
+				if (token != null)
+					token.check();
 				result.push({
 					name: method.name,
 					kind: "method",
 					detail: '${method.name}():${typeName(method.result)}',
 					span: method.span
 				});
+			}
 		}
 		result.sort(function(a, b) return Reflect.compare(a.name, b.name));
 		tagResults(result, state);
@@ -1671,7 +1698,9 @@ class LanguageService {
 		});
 	}
 
-	function indexedWorkspaceSymbols(state:ModuleState):Array<WorkspaceSymbol> {
+	function indexedWorkspaceSymbols(state:ModuleState, ?token:CancellationToken):Array<WorkspaceSymbol> {
+		if (token != null)
+			token.check();
 		var cached = workspaceIndex.get(state.name);
 		if (cached != null && cached.revision == state.revision)
 			return cached.symbols;
@@ -1683,26 +1712,50 @@ class LanguageService {
 			} catch (_:CompileError) {}
 		var result:Array<WorkspaceSymbol> = [];
 		if (ast != null) {
-			for (fn in ast.functions)
+			for (fn in ast.functions) {
+				if (token != null)
+					token.check();
 				addWorkspaceSymbol(result, state, fn.name, "function", null, '${fn.name}():${typeName(fn.result)}', fn.span);
-			for (alias in ast.aliases)
+			}
+			for (alias in ast.aliases) {
+				if (token != null)
+					token.check();
 				addWorkspaceSymbol(result, state, alias.name, "type", null, 'typedef ${alias.name}=${typeName(alias.type)}', alias.span);
+			}
 			for (decl in ast.interfaces) {
+				if (token != null)
+					token.check();
 				addWorkspaceSymbol(result, state, decl.name, "interface", null, 'interface ${decl.name}', decl.span);
-				for (method in decl.methods)
+				for (method in decl.methods) {
+					if (token != null)
+						token.check();
 					addWorkspaceSymbol(result, state, method.name, "method", decl.name, '${method.name}():${typeName(method.result)}', method.span);
+				}
 			}
 			for (decl in ast.enums) {
+				if (token != null)
+					token.check();
 				addWorkspaceSymbol(result, state, decl.name, "enum", null, 'enum ${decl.name}', decl.span);
-				for (item in decl.cases)
+				for (item in decl.cases) {
+					if (token != null)
+						token.check();
 					addWorkspaceSymbol(result, state, item.name, "enumCase", decl.name, decl.name + "." + item.name, item.span);
+				}
 			}
 			for (decl in ast.classes) {
+				if (token != null)
+					token.check();
 				addWorkspaceSymbol(result, state, decl.name, "class", null, 'class ${decl.name}', decl.span);
-				for (field in decl.fields)
+				for (field in decl.fields) {
+					if (token != null)
+						token.check();
 					addWorkspaceSymbol(result, state, field.name, "field", decl.name, '${field.name}:${typeName(field.type)}', field.span);
-				for (method in decl.methods)
+				}
+				for (method in decl.methods) {
+					if (token != null)
+						token.check();
 					addWorkspaceSymbol(result, state, method.name, "method", decl.name, '${method.name}():${typeName(method.result)}', method.span);
+				}
 			}
 		}
 		workspaceIndex.set(state.name, {revision: state.revision, symbols: result});
@@ -1718,7 +1771,9 @@ class LanguageService {
 		return DocumentationTools.forSpan(state.source, cached.comments, span);
 	}
 
-	function indexedStructure(state:ModuleState):StructuralIndexEntry {
+	function indexedStructure(state:ModuleState, ?token:CancellationToken):StructuralIndexEntry {
+		if (token != null)
+			token.check();
 		var cached = structuralIndex.get(state.name);
 		if (cached != null && cached.revision == state.revision)
 			return cached;
@@ -1731,47 +1786,55 @@ class LanguageService {
 				firstImport:Null<Int> = null,
 				lastImport:Null<Int> = null,
 				inImport = false;
-			for (token in tokens)
-				switch token.kind {
+			for (lexicalToken in tokens) {
+				if (token != null)
+					token.check();
+				switch lexicalToken.kind {
 					case LeftBrace:
-						braces.push(token);
+						braces.push(lexicalToken);
 					case RightBrace:
 						if (braces.length > 0) {
 							var open = braces.pop(),
-								span = source.span(open.span.start, token.span.end);
+								span = source.span(open.span.start, lexicalToken.span.end);
 							folds.push({span: span, kind: "region"});
 							containers.push(span);
 						}
 					case Import:
 						inImport = true;
 						if (firstImport == null)
-							firstImport = token.span.start;
+							firstImport = lexicalToken.span.start;
 					case Semicolon:
 						if (inImport) {
-							lastImport = token.span.end;
+							lastImport = lexicalToken.span.end;
 							inImport = false;
 						}
 					default:
 				}
+			}
 			if (firstImport != null && lastImport != null)
 				folds.push({span: source.span(firstImport, lastImport), kind: "imports"});
 		}
-		for (span in commentSpans(source.text, source)) {
+		for (span in commentSpans(source.text, source, token)) {
 			folds.push({span: span, kind: "comment"});
 			containers.push(span);
 		}
-		addConditionalFolds(source, folds, containers);
-		for (symbol in indexedWorkspaceSymbols(state))
+		addConditionalFolds(source, folds, containers, token);
+		for (symbol in indexedWorkspaceSymbols(state, token)) {
+			if (token != null)
+				token.check();
 			containers.push(symbol.span);
+		}
 		containers.push(source.span(0, source.bytes.length));
 		folds.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
 		structuralIndex.set(state.name, cached = {revision: state.revision, folds: folds, containers: containers});
 		return cached;
 	}
 
-	static function commentSpans(text:String, file:compiler.Source.SourceFile):Array<SourceSpan> {
+	static function commentSpans(text:String, file:compiler.Source.SourceFile, ?token:CancellationToken):Array<SourceSpan> {
 		var result:Array<SourceSpan> = [], position = 0;
 		while (position + 1 < text.length) {
+			if (token != null)
+				token.check();
 			var quote = text.charAt(position);
 			if (quote == "\"" || quote == "'") {
 				position++;
@@ -1797,9 +1860,12 @@ class LanguageService {
 		return result;
 	}
 
-	static function addConditionalFolds(file:compiler.Source.SourceFile, folds:Array<FoldingRegion>, containers:Array<SourceSpan>):Void {
+	static function addConditionalFolds(file:compiler.Source.SourceFile, folds:Array<FoldingRegion>, containers:Array<SourceSpan>,
+			?token:CancellationToken):Void {
 		var source = file.text, offset = 0, stack:Array<Int> = [];
 		while (offset < source.length) {
+			if (token != null)
+				token.check();
 			var newline = source.indexOf("\n", offset),
 				end = newline < 0 ? source.length : newline + 1,
 				line = StringTools.trim(source.substring(offset, end));

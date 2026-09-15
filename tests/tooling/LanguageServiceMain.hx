@@ -449,7 +449,11 @@ class LanguageServiceMain {
 			throw "semantic indexing timing was not recorded";
 		var cancelled = new CancellationToken();
 		cancelled.cancel();
-		var completionCancelled = false, referencesCancelled = false;
+		var completionCancelled = false,
+			referencesCancelled = false,
+			symbolsCancelled = false,
+			foldingCancelled = false,
+			selectionCancelled = false;
 		try
 			largeService.complete("Large.hx", largeText.length, cancelled)
 		catch (_:compiler.service.CancellationError)
@@ -458,7 +462,19 @@ class LanguageServiceMain {
 			service.references("Main.hx", methodPosition, cancelled)
 		catch (_:compiler.service.CancellationError)
 			referencesCancelled = true;
-		if (!completionCancelled || !referencesCancelled)
+		try
+			largeService.documentSymbols("Large.hx", cancelled)
+		catch (_:compiler.service.CancellationError)
+			symbolsCancelled = true;
+		try
+			largeService.foldingRanges("Large.hx", cancelled)
+		catch (_:compiler.service.CancellationError)
+			foldingCancelled = true;
+		try
+			largeService.selectionRanges("Large.hx", [largeText.length], cancelled)
+		catch (_:compiler.service.CancellationError)
+			selectionCancelled = true;
+		if (!completionCancelled || !referencesCancelled || !symbolsCancelled || !foldingCancelled || !selectionCancelled)
 			throw "language-service queries ignored cancellation";
 		var configuredService = new LanguageService();
 		configuredService.update("Configured.hx", "function main():Int return 42;");

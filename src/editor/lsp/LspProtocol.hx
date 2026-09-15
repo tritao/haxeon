@@ -647,7 +647,7 @@ class LspProtocol {
 		ensureAnalyzed(document, token);
 		requireCurrent(document);
 		return [
-			for (symbol in service.documentSymbols(compilerPath(document)))
+			for (symbol in service.documentSymbols(compilerPath(document), token))
 				{
 					name: symbol.name,
 					kind: symbolKind(symbol.kind),
@@ -962,7 +962,7 @@ class LspProtocol {
 		ensureAnalyzed(document, token);
 		requireCurrent(document);
 		var result:Array<Dynamic> = [];
-		for (fold in service.foldingRanges(compilerPath(document))) {
+		for (fold in service.foldingRanges(compilerPath(document), token)) {
 			token.check();
 			var start:Dynamic = document.position(fold.span.start),
 				end:Dynamic = document.position(fold.span.end);
@@ -1007,7 +1007,7 @@ class LspProtocol {
 			offsets.push(positionOffset(document, position));
 		}
 		return [
-			for (spans in service.selectionRanges(compilerPath(document), offsets))
+			for (spans in service.selectionRanges(compilerPath(document), offsets, token))
 				selectionRange(document, spans)
 		];
 	}
