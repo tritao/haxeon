@@ -9,6 +9,7 @@ import compiler.types.DeclarationIndex.DeclarationKind;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedStatement;
+import compiler.types.TypedAst.TypedProgram;
 import compiler.types.Type.CompilerType;
 import compiler.syntax.Ast.AstType;
 import compiler.syntax.Ast.AstProgram;
@@ -238,7 +239,7 @@ class SemanticIndex {
 	}
 
 	/** Index usable local facts from a recovered syntax tree without requiring successful typing. */
-	public function indexRecoveredSyntax(program:AstProgram, ?token:CancellationToken):Void {
+	public function indexRecoveredSyntax(program:AstProgram, ?token:CancellationToken, ?typedProgram:TypedProgram):Void {
 		cancellation = token;
 		if (token != null)
 			token.check();
@@ -297,6 +298,12 @@ class SemanticIndex {
 			for (fn in owner.methods)
 				indexRecoveredFunction(fn, owner.name);
 		}
+		if (typedProgram != null)
+			for (fn in typedProgram.functions) {
+				checkpoint();
+				indexTypedFunction(fn, resolveRecoveredSymbol, resolveRecoveredEnumCase, token);
+				cancellation = token;
+			}
 		bindings.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
 		checkpoint();
 		cancellation = null;
@@ -337,6 +344,16 @@ class SemanticIndex {
 		for (symbol in symbols)
 			if (symbol.name == name && Std.string(symbol.id).indexOf(":local:") < 0)
 				return symbol.id;
+		return null;
+	}
+
+	function resolveRecoveredSymbol(name:String):Null<SemanticSymbolId>
+		return recoveredDeclaredSymbol(name);
+
+	function resolveRecoveredEnumCase(name:String, index:Int):Null<SemanticSymbolId> {
+		for (declaration in declarations.enums)
+			if (declaration.name == name && index >= 0 && index < declaration.cases.length)
+				return recoveredDeclaredSymbol(name + "." + declaration.cases[index].name);
 		return null;
 	}
 

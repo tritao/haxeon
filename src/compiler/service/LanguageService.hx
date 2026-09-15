@@ -278,7 +278,7 @@ class LanguageService {
 			var recovered = new Parser(tokens, checkpoint).parseProgramRecovering();
 			var recoveredModel = new SemanticModel(recovered.program, state.source, state.revision, tokens);
 			recoveredModel.partialTypedProgram = Typer.typeRecovered(recovered.program, null, checkpoint);
-			recoveredModel.index.indexRecoveredSyntax(recovered.program, token);
+			recoveredModel.index.indexRecoveredSyntax(recovered.program, token, recoveredModel.partialTypedProgram);
 			state.recoveredTokens = tokens;
 			state.recoveredAst = recovered.program;
 			state.recoveredSemanticModel = recoveredModel;
