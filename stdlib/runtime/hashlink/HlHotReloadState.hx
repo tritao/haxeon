@@ -178,7 +178,8 @@ class HlHotReloadState {
 		requireOpen();
 		if (metadata.revision != revision)
 			throw 'HashLink metadata registry advanced outside hot-reload state (expected revision $revision, got ${metadata.revision})';
-		candidate.publish();
+		if (!candidate.isPublished())
+			candidate.publish();
 		var nativeModule:HlNativeModule;
 		try {
 			nativeModule = new HlNativeModule(candidate, flags);

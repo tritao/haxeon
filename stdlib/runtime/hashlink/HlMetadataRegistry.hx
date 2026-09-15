@@ -1,5 +1,8 @@
 package runtime.hashlink;
 
+import runtime.hashlink.HlMetadataCompatibility;
+import runtime.hashlink.HlMetadataCompatibility.HlMetadataDecision;
+
 /**
 	Owns the Haxe-side publication and retirement policy for metadata generations.
 	The registry is intentionally single-threaded until the runtime gains atomic
