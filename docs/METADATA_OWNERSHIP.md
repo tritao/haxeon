@@ -71,10 +71,12 @@ HLB and HLI, builds the complete `hl_code` graph in `HlMetadataGeneration`, and
 passes that graph to `hl_runtime_module_load_code`. HashLink initializes its JIT
 and runtime wrapper from those Haxe-owned records without decoding a second copy
 of the module metadata. Haxeon owns HLI identity validation, initializer policy,
-and the shared stable-ID call-shape validator; the native wrapper retains only
-the JIT, managed allocation, and machine-facing execution mechanisms. The public
-host `Runtime.load` facade remains on the legacy native-decoder path until it can
-be compiled against the Haxeon-only native-memory classes.
+stable-ID call-shape validation, and the external wrapper's revision state. Its
+HLP operation preflights the fixed module-ID and revision header before handing
+the bytes to HashLink; the native patch kernel still performs complete wire,
+operand, symbol, and live-compatibility validation. The public host `Runtime.load`
+facade remains on the legacy native-decoder path until it can be compiled against
+the Haxeon-only native-memory classes.
 
 HashLink records module ownership when a managed allocation is created. A major
 collection removes records for dead allocations, and the runtime exposes the

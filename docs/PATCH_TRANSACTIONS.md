@@ -6,11 +6,14 @@ resolution and remain locked until the call returns. Two patches based on the
 same revision therefore serialize; the first may publish and the second observes
 the new revision and fails as stale.
 
-Before native staging, the Haxeon runtime boundary decodes the complete HLP
-wire model and rejects malformed sections, unsupported patch opcodes, truncated
-payloads, invalid debug metadata, and invalid source snapshots. This makes the
-serialized patch representation available to Haxeon before any native state is
-touched.
+Before native staging, the host `Runtime.patchSet` boundary decodes the complete
+HLP wire model and rejects malformed sections, unsupported patch opcodes,
+truncated payloads, invalid debug metadata, and invalid source snapshots. The
+Haxe-built `HlNativeModuleLoader.loadRuntime` path currently performs the
+Haxe-owned fixed-header preflight (module identity and revision), then delegates
+the complete byte-level validation to the native patch kernel. Keeping that
+external bridge narrow avoids duplicating a second mutable patch representation
+while its Haxe-owned module model remains the base generation.
 
 Native staging then validates module identity, revision and symbol bases,
 prefix hashes, the complete appended-type delta, stable function identity,
