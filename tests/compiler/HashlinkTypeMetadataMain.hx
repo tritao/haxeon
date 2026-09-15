@@ -45,24 +45,138 @@ class HashlinkTypeMetadataMain {
 		var imported = HxiParser.parse("HashLinkMetadata.hxi", File.getContent("stdlib/runtime/hashlink/HashLinkMetadata.hxi"));
 		HxiValidator.validate(imported, []);
 		var importedAbi = HxiAbi.forInterface(imported), layoutPairs = [
-			{nativeName: "hl_alloc", haxeName: "runtime.hashlink.HlAllocation"},
-			{nativeName: "hl_module_context", haxeName: "runtime.hashlink.HlModuleContext"},
-			{nativeName: "hl_type_fun_closure_type", haxeName: "runtime.hashlink.HlTypeClosureType"},
-			{nativeName: "hl_type_fun_closure", haxeName: "runtime.hashlink.HlTypeClosure"},
-			{nativeName: "hl_type_fun", haxeName: "runtime.hashlink.HlTypeFunction"},
-			{nativeName: "hl_obj_field", haxeName: "runtime.hashlink.HlObjectField"},
-			{nativeName: "hl_obj_proto", haxeName: "runtime.hashlink.HlObjectProto"},
-			{nativeName: "hl_type_obj", haxeName: "runtime.hashlink.HlTypeObject"},
-			{nativeName: "hl_type_virtual", haxeName: "runtime.hashlink.HlTypeVirtual"},
-			{nativeName: "hl_enum_construct", haxeName: "runtime.hashlink.HlEnumConstruct"},
-			{nativeName: "hl_type_enum", haxeName: "runtime.hashlink.HlTypeEnum"},
-			{nativeName: "hl_type", haxeName: "runtime.hashlink.HlType"}
+			{
+				nativeName: "hl_alloc",
+				haxeName: "runtime.hashlink.HlAllocation",
+				fields: [{nativeName: "cur", haxeName: "current"}]
+			},
+			{
+				nativeName: "hl_module_context",
+				haxeName: "runtime.hashlink.HlModuleContext",
+				fields: [
+					{nativeName: "alloc", haxeName: "alloc"},
+					{nativeName: "functions_ptrs", haxeName: "functionsPtrs"},
+					{nativeName: "functions_types", haxeName: "functionsTypes"}
+				]
+			},
+			{
+				nativeName: "hl_type_fun_closure_type",
+				haxeName: "runtime.hashlink.HlTypeClosureType",
+				fields: [{nativeName: "kind", haxeName: "kind"}, {nativeName: "p", haxeName: "pointer"}]
+			},
+			{
+				nativeName: "hl_type_fun_closure",
+				haxeName: "runtime.hashlink.HlTypeClosure",
+				fields: [
+					{nativeName: "args", haxeName: "args"},
+					{nativeName: "ret", haxeName: "ret"},
+					{nativeName: "nargs", haxeName: "nargs"},
+					{nativeName: "parent", haxeName: "parent"}
+				]
+			},
+			{
+				nativeName: "hl_type_fun",
+				haxeName: "runtime.hashlink.HlTypeFunction",
+				fields: [
+					{nativeName: "args", haxeName: "args"},
+					{nativeName: "ret", haxeName: "ret"},
+					{nativeName: "nargs", haxeName: "nargs"},
+					{nativeName: "parent", haxeName: "parent"},
+					{nativeName: "closure_type", haxeName: "closureType"},
+					{nativeName: "closure", haxeName: "closure"}
+				]
+			},
+			{
+				nativeName: "hl_obj_field",
+				haxeName: "runtime.hashlink.HlObjectField",
+				fields: [
+					{nativeName: "name", haxeName: "name"},
+					{nativeName: "t", haxeName: "type"},
+					{nativeName: "hashed_name", haxeName: "hashedName"}
+				]
+			},
+			{
+				nativeName: "hl_obj_proto",
+				haxeName: "runtime.hashlink.HlObjectProto",
+				fields: [
+					{nativeName: "name", haxeName: "name"},
+					{nativeName: "findex", haxeName: "findex"},
+					{nativeName: "pindex", haxeName: "pindex"},
+					{nativeName: "hashed_name", haxeName: "hashedName"}
+				]
+			},
+			{
+				nativeName: "hl_type_obj",
+				haxeName: "runtime.hashlink.HlTypeObject",
+				fields: [
+					{nativeName: "nfields", haxeName: "nfields"},
+					{nativeName: "nproto", haxeName: "nproto"},
+					{nativeName: "nbindings", haxeName: "nbindings"},
+					{nativeName: "name", haxeName: "name"},
+					{nativeName: "super", haxeName: "superType"},
+					{nativeName: "fields", haxeName: "fields"},
+					{nativeName: "proto", haxeName: "proto"},
+					{nativeName: "bindings", haxeName: "bindings"},
+					{nativeName: "global_value", haxeName: "globalValue"},
+					{nativeName: "m", haxeName: "module"},
+					{nativeName: "rt", haxeName: "runtime"}
+				]
+			},
+			{
+				nativeName: "hl_type_virtual",
+				haxeName: "runtime.hashlink.HlTypeVirtual",
+				fields: [
+					{nativeName: "fields", haxeName: "fields"},
+					{nativeName: "nfields", haxeName: "nfields"},
+					{nativeName: "dataSize", haxeName: "dataSize"},
+					{nativeName: "indexes", haxeName: "indexes"},
+					{nativeName: "lookup", haxeName: "lookup"}
+				]
+			},
+			{
+				nativeName: "hl_enum_construct",
+				haxeName: "runtime.hashlink.HlEnumConstruct",
+				fields: [
+					{nativeName: "name", haxeName: "name"},
+					{nativeName: "nparams", haxeName: "nparams"},
+					{nativeName: "params", haxeName: "params"},
+					{nativeName: "size", haxeName: "size"},
+					{nativeName: "hasptr", haxeName: "hasPtr"},
+					{nativeName: "offsets", haxeName: "offsets"}
+				]
+			},
+			{
+				nativeName: "hl_type_enum",
+				haxeName: "runtime.hashlink.HlTypeEnum",
+				fields: [
+					{nativeName: "name", haxeName: "name"},
+					{nativeName: "nconstructs", haxeName: "nconstructs"},
+					{nativeName: "constructs", haxeName: "constructs"},
+					{nativeName: "global_value", haxeName: "globalValue"}
+				]
+			},
+			{
+				nativeName: "hl_type",
+				haxeName: "runtime.hashlink.HlType",
+				fields: [
+					{nativeName: "kind", haxeName: "kind"},
+					{nativeName: "vobj_proto", haxeName: "vobjProto"},
+					{nativeName: "mark_bits", haxeName: "markBits"},
+					{nativeName: "gc_owner", haxeName: "gcOwner"}
+				]
+			}
 		];
 		for (pair in layoutPairs) {
 			var importedLayout = importedAbi.layout(HxiType.Named(pair.nativeName)),
 				haxeLayout = requireLayout(requireClass(compiler.lastTypedProgram.classes, pair.haxeName).nativeLayouts, "portable-abi64");
 			expect(importedLayout != null && importedLayout.size == haxeLayout.size && importedLayout.align == haxeLayout.alignment,
 				'${pair.haxeName} must match the header-derived HXI layout for ${pair.nativeName}');
+			for (fieldPair in pair.fields) {
+				var importedOffset = importedFieldOffset(imported, pair.nativeName, fieldPair.nativeName),
+					haxeOffset = requireField(haxeLayout.fields, fieldPair.haxeName).offset;
+				expect(importedOffset == haxeOffset,
+					'${pair.haxeName}.${fieldPair.haxeName} must match the header-derived offset for ${pair.nativeName}.${fieldPair.nativeName}');
+			}
 		}
 		expect(constantReturn(functions, "HashlinkTypeMetadata.typeSize") == 40, "hl_type must match the 64-bit C header size");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.typeDataSize") == 8, "hl_type's anonymous union must be pointer-sized");
@@ -111,6 +225,25 @@ class HashlinkTypeMetadataMain {
 			if (layout.target == target)
 				return layout;
 		throw 'Missing native layout for "$target"';
+	}
+
+	static function requireField(fields:Array<compiler.types.TypedAst.TypedNativeFieldLayout>, name:String):compiler.types.TypedAst.TypedNativeFieldLayout {
+		for (field in fields)
+			if (field.name == name)
+				return field;
+		throw 'Missing native field "$name"';
+	}
+
+	static function importedFieldOffset(model:compiler.ffi.HxiModel.HxiInterface, structureName:String, fieldName:String):Int {
+		for (declaration in model.declarations)
+			switch declaration {
+				case compiler.ffi.HxiModel.HxiDeclaration.Structure(name, _, _, fields, _) if (name == structureName):
+					for (field in fields)
+						if (field.name == fieldName && field.offset != null)
+							return field.offset;
+				case _:
+			}
+		throw 'Missing imported offset for "$structureName.$fieldName"';
 	}
 
 	static function expectError(source:String, expected:String):Void {
