@@ -25,6 +25,12 @@ HL_PRIM int HL_NAME(native_type_object_field_offset)( hl_type *type, int field )
 	return runtime->fields_indexes[field];
 }
 
+HL_PRIM void HL_NAME(native_type_initialize_object)( hl_type *type ) {
+	if( type == NULL || (type->kind != HOBJ && type->kind != HSTRUCT) || type->obj == NULL || type->obj->m == NULL )
+		hl_error("HashLink object metadata initialization requires an object with a module context");
+	hl_get_obj_proto(type);
+}
+
 HL_PRIM void HL_NAME(native_type_initialize_enum)( hl_type *type, hl_module_context *context ) {
 	if( type == NULL || type->kind != HENUM || type->tenum == NULL || context == NULL )
 		hl_error("HashLink enum metadata initialization requires an enum and module context");

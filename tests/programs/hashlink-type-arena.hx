@@ -51,7 +51,7 @@ function main():Int {
 		RawPtr.nullPtr(),
 		RawPtr.nullPtr()
 	], [intType, builtFunction, builtFunction, builtFunction, builtFunction]);
-	var builtObject = builder.objectType(RawPtr.nullPtr(), RawPtr.nullPtr(), [{name: RawPtr.nullPtr(), type: intType, hashedName: 17}], [
+	var builtObject = builder.objectType(RawPtr.nullPtr(), RawPtr.nullPtr(), [{name: RawPtr.nullPtr(), type: builtFunction, hashedName: 17}], [
 		{
 			name: RawPtr.nullPtr(),
 			findex: 3,
@@ -59,7 +59,7 @@ function main():Int {
 			hashedName: 19
 		}
 	],
-		[{fieldIndex: 7, functionIndex: 8}], RawPtr.nullPtr(), module, RawPtr.nullPtr()),
+		[{fieldIndex: 0, functionIndex: 3}], RawPtr.nullPtr(), module, RawPtr.nullPtr()),
 		objectData = builtObject.ref.data.ref.obj,
 		builtEnum = builder.enumType(RawPtr.nullPtr(), [
 			{
@@ -79,12 +79,12 @@ function main():Int {
 	var graphCorrect = HlTypeBridge.native_type_kind(builtObject) == 11
 		&& HlTypeBridge.native_type_object_field_count(builtObject) == 1
 		&& objectData.ref.nfields == 1
-		&& objectData.ref.fields.offset(0).ref.type == intType
+		&& objectData.ref.fields.offset(0).ref.type == builtFunction
 		&& objectData.ref.fields.offset(0).ref.hashedName == 17
 		&& objectData.ref.proto.offset(0).ref.findex == 3
 		&& objectData.ref.nbindings == 1
-		&& objectData.ref.bindings.offset(0).load() == 7
-		&& objectData.ref.bindings.offset(1).load() == 8
+		&& objectData.ref.bindings.offset(0).load() == 0
+		&& objectData.ref.bindings.offset(1).load() == 3
 		&& HlTypeBridge.native_type_kind(builtEnum) == 18
 		&& HlTypeBridge.native_type_enum_constructor_count(builtEnum) == 1
 		&& enumData.ref.nconstructs == 1
@@ -110,6 +110,7 @@ function main():Int {
 		fieldName = builder.utf16Name("field");
 	objectData.ref.name = objectName;
 	objectData.ref.fields.offset(0).ref.name = fieldName;
+	HlTypeBridge.native_type_initialize_object(builtObject);
 	var namesCorrect = objectData.ref.name.offset(0).load() == 79
 		&& objectData.ref.name.offset(1).load() == 98
 		&& objectData.ref.name.offset(2).load() == 106
@@ -121,7 +122,13 @@ function main():Int {
 		&& module.ref.functionsTypes.offset(0).load() == intType;
 	var nativeObjectCorrect = HlTypeBridge.native_type_data_size(builtObject) == 16
 		&& HlTypeBridge.native_type_object_field_offset(builtObject, 0) == 8
-		&& objectData.ref.module == module;
+		&& objectData.ref.module == module
+		&& !builtObject.ref.vobjProto.isNull()
+		&& !objectData.ref.runtime.isNull()
+		&& objectData.ref.runtime.ref.nmethods == 1
+		&& objectData.ref.runtime.ref.nbindings == 1
+		&& !objectData.ref.runtime.ref.bindings.offset(0).ref.pointer.isNull()
+		&& objectData.ref.runtime.ref.bindings.offset(0).ref.fieldId == 0;
 	var generation = new HlMetadataGeneration(128, 1),
 		generationVoid = generation.builder.primitive(HlTypeKind.VoidType),
 		generationInt = generation.builder.primitive(HlTypeKind.Int32Type),

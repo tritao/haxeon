@@ -34,5 +34,5 @@ class HlRuntimeObject {
 class HlRuntimeBinding {
 	public var pointer:RawPtr<UInt8>;
 	public var closure:RawPtr<HlType>;
-	public var functionId:Int32;
+	public var fieldId:Int32;
 }

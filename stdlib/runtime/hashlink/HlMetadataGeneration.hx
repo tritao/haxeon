@@ -91,7 +91,7 @@ class HlMetadataGeneration {
 	function initialize(type:RawPtr<HlType>):Void {
 		var kind:HlTypeKind = cast type.ref.kind;
 		if (kind == HlTypeKind.Object || kind == HlTypeKind.Struct)
-			HlTypeBridge.native_type_data_size(type);
+			HlTypeBridge.native_type_initialize_object(type);
 		else if (kind == HlTypeKind.Enum)
 			HlTypeBridge.native_type_initialize_enum(type, moduleContext);
 		else if (kind == HlTypeKind.Virtual)

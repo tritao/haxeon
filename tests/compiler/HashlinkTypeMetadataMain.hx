@@ -113,7 +113,7 @@ class HashlinkTypeMetadataMain {
 				fields: [
 					{nativeName: "ptr", haxeName: "pointer"},
 					{nativeName: "closure", haxeName: "closure"},
-					{nativeName: "fid", haxeName: "functionId"}
+					{nativeName: "fid", haxeName: "fieldId"}
 				]
 			},
 			{

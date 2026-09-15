@@ -17,6 +17,8 @@ class HlTypeBridge {
 	public static function native_type_object_field_offset(type:RawPtr<HlType>, field:Int):Int
 		return 0;
 
+	public static function native_type_initialize_object(type:RawPtr<HlType>):Void {}
+
 	public static function native_type_initialize_enum(type:RawPtr<HlType>, context:RawPtr<HlModuleContext>):Void {}
 
 	public static function native_type_initialize_virtual(type:RawPtr<HlType>, context:RawPtr<HlModuleContext>):Void {}
