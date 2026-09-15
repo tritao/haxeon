@@ -991,6 +991,43 @@ class SemanticWorkspace {
 		return editorMembers(type, token);
 	}
 
+	/** Resolve one static member through a visible editor type identity. */
+	public function editorStaticMemberForContext(from:ModuleState, ownerName:String, memberName:String,
+		program:AstProgram, ?token:CancellationToken):Null<EditorMember> {
+		var identity = editorResolveTypeSymbolId(from, ownerName, program, token),
+			resolved = identity == null ? null : editorSymbolById(identity);
+		if (resolved == null || !isTypeKind(resolved.symbol.kind))
+			return null;
+		var model = editorModel(resolved.state);
+		if (model == null)
+			return null;
+		for (decl in model.program.classes)
+			if (sameSpan(decl.span, resolved.symbol.declaration)) {
+				for (field in decl.fields)
+					if (field.isStatic && field.name == memberName)
+						return {name: field.name, kind: "field", detail: field.name + ":" + editorAstTypeName(field.type, [])};
+				for (method in decl.methods)
+					if (method.isStatic && method.name == memberName)
+						return {
+							name: method.name,
+							kind: "method",
+							detail: method.name + "(" + [for (argument in method.arguments) editorAstTypeName(argument.type, [])].join(",") + "):"
+								+ editorAstTypeName(method.result, [])
+						};
+			}
+		for (decl in model.program.abstracts)
+			if (sameSpan(decl.span, resolved.symbol.declaration))
+				for (method in decl.methods)
+					if (method.isStatic && method.name == memberName)
+						return {
+							name: method.name,
+							kind: "method",
+							detail: method.name + "(" + [for (argument in method.arguments) editorAstTypeName(argument.type, [])].join(",") + "):"
+								+ editorAstTypeName(method.result, [])
+						};
+		return null;
+	}
+
 	function editorMembersForIdentity(type:CompilerType, identity:SemanticSymbolId,
 		?token:CancellationToken):Array<EditorMember> {
 		if (editorSymbolById(identity) == null)

@@ -2029,6 +2029,9 @@ class LanguageService {
 		if (name.length == 0)
 			return null;
 		if (qualifier != null) {
+			var staticMember = compiler.semanticWorkspace.editorStaticMemberForContext(state, qualifier, name, ast, token);
+			if (staticMember != null)
+				return staticMember.detail;
 			for (enumDecl in ast.enums) {
 				if (token != null)
 					token.check();

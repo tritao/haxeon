@@ -1265,6 +1265,16 @@ class LanguageServiceMain {
 		var nominalHoverPosition = nominalHoverSource.lastIndexOf("shared") + "shared".length;
 		if (nominalHoverService.hover("nominal/app/Hover.hx", nominalHoverPosition) != "shared:String")
 			throw "recovered nominal typing lost the imported type identity during hover";
+		var nominalStaticService = new LanguageService();
+		nominalStaticService.update("nominal/a/StaticValue.hx", "package nominal.a; class StaticValue { public static var shared:Int; }");
+		nominalStaticService.update("nominal/b/StaticValue.hx", "package nominal.b; class StaticValue { public static var shared:String; } function main():Void return;");
+		nominalStaticService.analyze("nominal.b.StaticValue");
+		var nominalStaticSource = "package nominal.app; import nominal.b.StaticValue; function main():Void { StaticValue.shared; }";
+		nominalStaticService.update("nominal/app/StaticUse.hx", nominalStaticSource);
+		var nominalStaticPosition = nominalStaticSource.lastIndexOf("shared") + "shared".length;
+		var nominalStaticHover = nominalStaticService.hover("nominal/app/StaticUse.hx", nominalStaticPosition);
+		if (nominalStaticHover != "shared:String")
+			throw 'recovered nominal typing lost the imported type identity during static-member hover: ${nominalStaticHover == null ? "null" : nominalStaticHover}';
 		var nominalSignatureService = new LanguageService();
 		nominalSignatureService.update("nominal/a/Action.hx", "package nominal.a; class Action { public function run(value:Int):Int return value; }");
 		nominalSignatureService.update("nominal/b/Action.hx", "package nominal.b; class Action { public function run(value:String):String return value; }");
