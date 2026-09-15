@@ -173,14 +173,14 @@ class Parser {
 	}
 
 	function parseAbstract(start:SourceSpan, isExtern:Bool = false, ?metadata:Array<compiler.syntax.Ast.AstMetadata>):AstAbstract {
-		var name = consume(TokenKind.Identifier).text,
+		var name = consumeDeclarationName("abstract"),
 			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
 		consume(TokenKind.LeftParen);
 		var underlying = parseType();
 		consume(TokenKind.RightParen);
 		var fromTypes = [], toTypes = [];
-		while (!check(TokenKind.LeftBrace)) {
+		while (!check(TokenKind.LeftBrace) && !recoveringAtEnd()) {
 			var conversion = consume(TokenKind.Identifier);
 			if (conversion.text != "from" && conversion.text != "to")
 				fail(conversion, 'Expected "from" or "to"');
@@ -192,7 +192,7 @@ class Parser {
 		}
 		consume(TokenKind.LeftBrace);
 		var methods = [];
-		while (!check(TokenKind.RightBrace)) {
+		while (!check(TokenKind.RightBrace) && !recoveringAtEnd()) {
 			var methodMetadata = parseMetadata();
 			var isStatic = false;
 			while (check(TokenKind.Public) || check(TokenKind.Private) || check(TokenKind.Inline) || check(TokenKind.Static)) {
@@ -202,7 +202,7 @@ class Parser {
 					advance();
 			}
 			var functionStart = consume(TokenKind.Function).span,
-				methodName = check(TokenKind.New) ? advance().text : consume(TokenKind.Identifier).text;
+				methodName = check(TokenKind.New) ? advance().text : consumeDeclarationName("method");
 			methods.push(parseFunctionBody(functionStart, methodName, true, isStatic, isExtern, methodMetadata));
 		}
 		var end = consume(TokenKind.RightBrace).span;
@@ -221,12 +221,12 @@ class Parser {
 	}
 
 	function parseEnumAbstract(start:SourceSpan):AstEnumAbstract {
-		var name = consume(TokenKind.Identifier).text;
+		var name = consumeDeclarationName("enum abstract");
 		consume(TokenKind.LeftParen);
 		var underlying = parseType();
 		consume(TokenKind.RightParen);
 		var fromTypes = [], toTypes = [];
-		while (!check(TokenKind.LeftBrace)) {
+		while (!check(TokenKind.LeftBrace) && !recoveringAtEnd()) {
 			var conversion = consume(TokenKind.Identifier);
 			if (conversion.text != "from" && conversion.text != "to")
 				fail(conversion, 'Expected "from" or "to"');
@@ -238,7 +238,7 @@ class Parser {
 		}
 		consume(TokenKind.LeftBrace);
 		var values = [];
-		while (!check(TokenKind.RightBrace)) {
+		while (!check(TokenKind.RightBrace) && !recoveringAtEnd()) {
 			match(TokenKind.Var);
 			var valueName = consumeName();
 			consume(TokenKind.Assign);
@@ -258,7 +258,7 @@ class Parser {
 	}
 
 	function parseTypeAlias(start:SourceSpan, isPrivate:Bool):AstTypeAlias {
-		var name = consume(TokenKind.Identifier).text,
+		var name = consumeDeclarationName("typedef"),
 			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
 		consume(TokenKind.Assign);
@@ -281,10 +281,10 @@ class Parser {
 	}
 
 	function parseEnum(start:SourceSpan, metadata:Array<compiler.syntax.Ast.AstMetadata>):AstEnum {
-		var name = consume(TokenKind.Identifier).text, typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
+		var name = consumeDeclarationName("enum"), typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints), cases = [];
 		consume(TokenKind.LeftBrace);
-		while (!check(TokenKind.RightBrace)) {
+		while (!check(TokenKind.RightBrace) && !recoveringAtEnd()) {
 			var caseMetadata = parseMetadata(),
 				caseToken = consumeName(),
 				params:Array<compiler.syntax.Ast.AstEnumParameter> = [];
@@ -764,13 +764,13 @@ class Parser {
 	function parseStatement():AstStatement {
 		if (match(TokenKind.Function)) {
 			var start = previous().span,
-				name = consume(TokenKind.Identifier).text;
+				name = consumeDeclarationName("local function");
 			consume(TokenKind.LeftParen);
 			var arguments = [];
 			if (!check(TokenKind.RightParen))
 				do {
 					var optional = match(TokenKind.Question),
-						argument = consume(TokenKind.Identifier),
+						argument = consumeDeclarationToken("parameter"),
 						type = match(TokenKind.Colon) ? parseType() : InferredType,
 						defaultValue = match(TokenKind.Assign) ? parseExpression() : null;
 					arguments.push({
@@ -799,7 +799,7 @@ class Parser {
 		}
 		if (match(TokenKind.Var)) {
 			var start = previous().span;
-			var name = consume(TokenKind.Identifier).text;
+			var name = consumeDeclarationName("local");
 			var type = match(TokenKind.Colon) ? parseType() : null;
 			consume(TokenKind.Assign);
 			var initializer = parseExpression();
@@ -828,7 +828,7 @@ class Parser {
 			do {
 				var catchStart = consume(TokenKind.Catch).span;
 				consume(TokenKind.LeftParen);
-				var catchName = consume(TokenKind.Identifier).text;
+				var catchName = consumeDeclarationName("catch binding");
 				consume(TokenKind.Colon);
 				var catchType = parseType();
 				consume(TokenKind.RightParen);
@@ -966,10 +966,10 @@ class Parser {
 			var start = previous().span;
 			consume(TokenKind.LeftParen);
 			match(TokenKind.Var);
-			var name = consume(TokenKind.Identifier).text, valueName = null;
+			var name = consumeDeclarationName("for binding"), valueName = null;
 			if (match(TokenKind.Assign)) {
 				consume(TokenKind.Greater);
-				valueName = consume(TokenKind.Identifier).text;
+				valueName = consumeDeclarationName("for value binding");
 			}
 			consume(TokenKind.In);
 			var iterable = parseExpression();
@@ -1019,7 +1019,7 @@ class Parser {
 			return [parseStatement()];
 		var start = advance().span, declarations = [];
 		do {
-			var nameToken = consume(TokenKind.Identifier),
+			var nameToken = consumeDeclarationToken("local"),
 				type = match(TokenKind.Colon) ? parseType() : null;
 			if (match(TokenKind.Assign)) {
 				var initializer = parseExpression();
@@ -1244,7 +1244,7 @@ class Parser {
 			if (!check(TokenKind.RightParen))
 				do {
 					var optional = match(TokenKind.Question),
-						argument = consume(TokenKind.Identifier),
+						argument = consumeDeclarationToken("parameter"),
 						type = match(TokenKind.Colon) ? parseType() : InferredType,
 						defaultValue = match(TokenKind.Assign) ? parseExpression() : null;
 					arguments.push({
@@ -1325,11 +1325,11 @@ class Parser {
 			var start = previous().span, values = [];
 			if (match(TokenKind.For)) {
 				consume(TokenKind.LeftParen);
-				var keyName = consume(TokenKind.Identifier).text,
+				var keyName = consumeDeclarationName("comprehension key"),
 					valueName = null;
 				if (match(TokenKind.Assign)) {
 					consume(TokenKind.Greater);
-					valueName = consume(TokenKind.Identifier).text;
+					valueName = consumeDeclarationName("comprehension value");
 				}
 				consume(TokenKind.In);
 				var iterable = parseExpression();
@@ -1456,7 +1456,7 @@ class Parser {
 				do {
 					var optional = match(TokenKind.Question),
 						argumentStart = current().span,
-						argumentName = consume(TokenKind.Identifier).text;
+					argumentName = consumeDeclarationName("parameter");
 					var argumentType = match(TokenKind.Colon) ? parseType() : InferredType;
 					arguments.push({
 						name: argumentName,
@@ -1495,7 +1495,7 @@ class Parser {
 			var start = previous().span, fields = [];
 			if (!check(TokenKind.RightBrace)) {
 				while (true) {
-					var name = consume(TokenKind.Identifier);
+					var name = consumeDeclarationToken("object field");
 					consume(TokenKind.Colon);
 					var value = parseExpression();
 					fields.push({name: name.text, value: value, span: name.span.merge(expressionSpan(value))});
@@ -1593,10 +1593,10 @@ class Parser {
 
 	function parseNestedArrayComprehension(start:SourceSpan):AstExpression {
 		consume(TokenKind.LeftParen);
-		var keyName = consume(TokenKind.Identifier).text, valueName = null;
+		var keyName = consumeDeclarationName("comprehension key"), valueName = null;
 		if (match(TokenKind.Assign)) {
 			consume(TokenKind.Greater);
-			valueName = consume(TokenKind.Identifier).text;
+			valueName = consumeDeclarationName("comprehension value");
 		}
 		consume(TokenKind.In);
 		var iterable = parseExpression();
@@ -1965,7 +1965,7 @@ class Parser {
 						optional = true;
 					} else
 						advance();
-				var name = consume(TokenKind.Identifier);
+				var name = consumeDeclarationToken("anonymous field");
 				consume(TokenKind.Colon);
 				var type = parseType();
 				fields.push({

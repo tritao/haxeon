@@ -69,6 +69,11 @@ class ParserRecoveryMain {
 	}
 
 	static function assertIncompleteDeclarations():Void {
+		var missingFunctionName = new SourceFile("MissingFunction.hx", "function (");
+		var missingFunctionResult = new Parser(new Lexer(missingFunctionName).tokenize()).parseProgramRecovering();
+		if (missingFunctionResult.program.functions.length != 1 || missingFunctionResult.program.functions[0].name != "<missing>")
+			throw "missing function name discarded the incomplete declaration";
+
 		var parameterSource = new SourceFile("Parameter.hx", "function test(a:Int,");
 		var parameterResult = new Parser(new Lexer(parameterSource).tokenize()).parseProgramRecovering();
 		if (parameterResult.program.functions.length != 1
@@ -101,6 +106,28 @@ class ParserRecoveryMain {
 			default:
 				throw "unfinished member access did not retain a missing member node";
 		}
+
+		var blockSource = new SourceFile("Block.hx", "function main():Void if (condition) {");
+		var blockResult = new Parser(new Lexer(blockSource).tokenize()).parseProgramRecovering();
+		if (blockResult.program.functions.length != 1 || blockResult.program.functions[0].statements.length != 1)
+			throw "unfinished block discarded the enclosing function";
+		switch blockResult.program.functions[0].statements[0] {
+			case If(_, thenBranch, _, _):
+				if (thenBranch.length != 0)
+					throw "unfinished block unexpectedly changed its statement shape";
+			default:
+				throw "unfinished block did not retain the conditional node";
+		}
+
+		var callSource = new SourceFile("Call.hx", "function main():Void return new Foo(");
+		var callResult = new Parser(new Lexer(callSource).tokenize()).parseProgramRecovering();
+		if (callResult.program.functions.length != 1 || callResult.program.functions[0].statements.length != 1)
+			throw "unfinished constructor call discarded the enclosing function";
+
+		var enumSource = new SourceFile("Enum.hx", "enum Choice {");
+		var enumResult = new Parser(new Lexer(enumSource).tokenize()).parseProgramRecovering();
+		if (enumResult.program.enums.length != 1)
+			throw "unfinished enum declaration was abandoned at EOF";
 	}
 
 	static function assertPartialTypeFacts():Void {
@@ -208,9 +235,9 @@ class ParserRecoveryMain {
 		var statementFile = new SourceFile("ErrorStatement.hx", "function main():Void { var = ; return; }"),
 			statementProgram = new Parser(new Lexer(statementFile).tokenize()).parseProgramRecovering().program;
 		switch statementProgram.functions[0].statements[0] {
-			case ErrorStatement(_):
+			case VarDeclaration("<missing>", _, ErrorExpression(_), _):
 			default:
-				throw "malformed statement did not produce an ErrorStatement";
+				throw "malformed local declaration did not preserve a missing name and expression";
 		}
 	}
 }
