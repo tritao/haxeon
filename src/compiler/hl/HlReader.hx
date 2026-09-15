@@ -243,8 +243,8 @@ class HlReader {
 	static function jumpTarget(instruction:RawInstruction):Null<Int> {
 		return switch instruction.opcode {
 			case HlOpcode.JAlways: instruction.operands[0];
-			case HlOpcode.JTrue: instruction.operands[1];
-			case HlOpcode.JSLt | HlOpcode.JSLte | HlOpcode.JEq: instruction.operands[2];
+			case HlOpcode.JTrue | HlOpcode.JFalse | HlOpcode.JNull | HlOpcode.JNotNull: instruction.operands[1];
+			case HlOpcode.JSLt | HlOpcode.JSGte | HlOpcode.JSGt | HlOpcode.JSLte | HlOpcode.JULt | HlOpcode.JUGte | HlOpcode.JNotLt | HlOpcode.JNotGte | HlOpcode.JEq | HlOpcode.JNotEq: instruction.operands[2];
 			case HlOpcode.Trap: instruction.operands[1];
 			default: null;
 		};
@@ -316,9 +316,19 @@ class HlReader {
 			case HlOpcode.EnumIndex: EnumIndex(operands[0], operands[1]);
 			case HlOpcode.EnumField: EnumField(operands[0], operands[1], operands[2], operands[3]);
 			case HlOpcode.JTrue: JumpTrue(operands[0], requireLabel(labels, position + 1 + operands[1], functionIndex));
+			case HlOpcode.JFalse: JumpFalse(operands[0], requireLabel(labels, position + 1 + operands[1], functionIndex));
+			case HlOpcode.JNull: JumpNull(operands[0], requireLabel(labels, position + 1 + operands[1], functionIndex));
+			case HlOpcode.JNotNull: JumpNotNull(operands[0], requireLabel(labels, position + 1 + operands[1], functionIndex));
 			case HlOpcode.JSLt: JumpSignedLess(operands[0], operands[1], requireLabel(labels, position + 1 + operands[2], functionIndex));
+			case HlOpcode.JSGte: JumpSignedGreaterOrEqual(operands[0], operands[1], requireLabel(labels, position + 1 + operands[2], functionIndex));
+			case HlOpcode.JSGt: JumpSignedGreater(operands[0], operands[1], requireLabel(labels, position + 1 + operands[2], functionIndex));
 			case HlOpcode.JSLte: JumpSignedLessOrEqual(operands[0], operands[1], requireLabel(labels, position + 1 + operands[2], functionIndex));
+			case HlOpcode.JULt: JumpUnsignedLess(operands[0], operands[1], requireLabel(labels, position + 1 + operands[2], functionIndex));
+			case HlOpcode.JUGte: JumpUnsignedGreaterOrEqual(operands[0], operands[1], requireLabel(labels, position + 1 + operands[2], functionIndex));
+			case HlOpcode.JNotLt: JumpNotLess(operands[0], operands[1], requireLabel(labels, position + 1 + operands[2], functionIndex));
+			case HlOpcode.JNotGte: JumpNotGreater(operands[0], operands[1], requireLabel(labels, position + 1 + operands[2], functionIndex));
 			case HlOpcode.JEq: JumpEqual(operands[0], operands[1], requireLabel(labels, position + 1 + operands[2], functionIndex));
+			case HlOpcode.JNotEq: JumpNotEqual(operands[0], operands[1], requireLabel(labels, position + 1 + operands[2], functionIndex));
 			case HlOpcode.JAlways: Jump(requireLabel(labels, position + 1 + operands[0], functionIndex));
 			case HlOpcode.Ret: Return(operands[0]);
 			case HlOpcode.ToDyn: ToDyn(operands[0], operands[1]);

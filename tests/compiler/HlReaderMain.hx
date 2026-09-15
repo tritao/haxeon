@@ -248,6 +248,34 @@ function main():Void {
 		callDecoded = HlReader.decode(callBytes);
 	expect(HlWriter.encode(callDecoded).compare(callBytes) == 0 && callDecoded.functions[0].opcodes.length == 5,
 		"HLB call and closure opcode extensions did not round trip");
+	var branches = new HlCode();
+	branches.types = [Simple(HlType.I32)];
+	branches.functions = [
+		new compiler.hl.HlFunction(0, 0, [0], [
+			JumpTrue(0, "done"),
+			JumpFalse(0, "done"),
+			JumpNull(0, "done"),
+			JumpNotNull(0, "done"),
+			JumpSignedLess(0, 0, "done"),
+			JumpSignedGreaterOrEqual(0, 0, "done"),
+			JumpSignedGreater(0, 0, "done"),
+			JumpSignedLessOrEqual(0, 0, "done"),
+			JumpUnsignedLess(0, 0, "done"),
+			JumpUnsignedGreaterOrEqual(0, 0, "done"),
+			JumpNotLess(0, 0, "done"),
+			JumpNotGreater(0, 0, "done"),
+			JumpEqual(0, 0, "done"),
+			JumpNotEqual(0, 0, "done"),
+			Jump("done"),
+			Label("done"),
+			Return(0)
+		])
+	];
+	branches.entryPoint = 0;
+	var branchBytes = HlWriter.encode(branches),
+		branchDecoded = HlReader.decode(branchBytes);
+	expect(HlWriter.encode(branchDecoded).compare(branchBytes) == 0 && branchDecoded.functions[0].opcodes.length == 17,
+		"HLB conditional branch family did not round trip");
 	expect(expectFailure(() -> HlReader.decode(encoded.sub(0, encoded.length - 1))), "truncated HLB data was accepted");
 	expect(expectFailure(() -> HlReader.decode(withTrailingByte(encoded))), "trailing HLB data was accepted");
 	var compiler = new Compiler();

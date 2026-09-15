@@ -509,12 +509,42 @@ class HlWriter {
 				case JumpSignedLess(left, right, target):
 					var targetPosition = requireLabel(labels, target);
 					{opcode: HlOpcode.JSLt, operands: [left, right, targetPosition - (result.length + 1)]};
+				case JumpSignedGreaterOrEqual(left, right, target):
+					var targetPosition = requireLabel(labels, target);
+					{opcode: HlOpcode.JSGte, operands: [left, right, targetPosition - (result.length + 1)]};
+				case JumpSignedGreater(left, right, target):
+					var targetPosition = requireLabel(labels, target);
+					{opcode: HlOpcode.JSGt, operands: [left, right, targetPosition - (result.length + 1)]};
 				case JumpEqual(left, right, target):
 					var targetPosition = requireLabel(labels, target);
 					{opcode: HlOpcode.JEq, operands: [left, right, targetPosition - (result.length + 1)]};
+				case JumpUnsignedLess(left, right, target):
+					var targetPosition = requireLabel(labels, target);
+					{opcode: HlOpcode.JULt, operands: [left, right, targetPosition - (result.length + 1)]};
+				case JumpUnsignedGreaterOrEqual(left, right, target):
+					var targetPosition = requireLabel(labels, target);
+					{opcode: HlOpcode.JUGte, operands: [left, right, targetPosition - (result.length + 1)]};
+				case JumpNotLess(left, right, target):
+					var targetPosition = requireLabel(labels, target);
+					{opcode: HlOpcode.JNotLt, operands: [left, right, targetPosition - (result.length + 1)]};
+				case JumpNotGreater(left, right, target):
+					var targetPosition = requireLabel(labels, target);
+					{opcode: HlOpcode.JNotGte, operands: [left, right, targetPosition - (result.length + 1)]};
+				case JumpNotEqual(left, right, target):
+					var targetPosition = requireLabel(labels, target);
+					{opcode: HlOpcode.JNotEq, operands: [left, right, targetPosition - (result.length + 1)]};
 				case JumpTrue(condition, target):
 					var targetPosition = requireLabel(labels, target);
 					{opcode: HlOpcode.JTrue, operands: [condition, targetPosition - (result.length + 1)]};
+				case JumpFalse(condition, target):
+					var targetPosition = requireLabel(labels, target);
+					{opcode: HlOpcode.JFalse, operands: [condition, targetPosition - (result.length + 1)]};
+				case JumpNull(value, target):
+					var targetPosition = requireLabel(labels, target);
+					{opcode: HlOpcode.JNull, operands: [value, targetPosition - (result.length + 1)]};
+				case JumpNotNull(value, target):
+					var targetPosition = requireLabel(labels, target);
+					{opcode: HlOpcode.JNotNull, operands: [value, targetPosition - (result.length + 1)]};
 				case Jump(target):
 					var targetPosition = requireLabel(labels, target);
 					{opcode: HlOpcode.JAlways, operands: [targetPosition - (result.length + 1)]};
