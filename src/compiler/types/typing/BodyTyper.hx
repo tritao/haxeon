@@ -1639,11 +1639,12 @@ class BodyTyper {
 		return typedMemberWithFlow(typedObject, name, span, scope);
 	}
 
-	function typeGenericCallArguments(fn:AstFunction, arguments:Array<AstExpression>, scope:Scope, span:SourceSpan):{
+	function typeGenericCallArguments(fn:AstFunction, arguments:Array<AstExpression>, scope:Scope, span:SourceSpan,
+			expectedResult:Null<CompilerType> = null):{
 		arguments:Array<TypedExpression>,
 		substitutions:Map<String, CompilerType>
 	} {
-		return callResolver.typeGenericCallArguments(fn, arguments, scope, span);
+		return callResolver.typeGenericCallArguments(fn, arguments, scope, span, expectedResult);
 	}
 
 	function typedMemberWithFlow(object:TypedExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression {

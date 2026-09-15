@@ -1133,6 +1133,24 @@ class ParserRecoveryMain {
 				throw 'unfinished generic construction did not retain its nominal result: ${genericExpression.type}';
 		}
 
+		var genericResultSource = new SourceFile("TolerantGenericResult.hx",
+			"class Expected {} function identity<T>(value:T):T return value; function main():Expected return identity(");
+		var genericResultProgram = new Parser(new Lexer(genericResultSource).tokenize()).parseProgramRecovering().program,
+			genericResultTyped = Typer.typeRecovered(genericResultProgram);
+		if (genericResultTyped == null || genericResultTyped.functions.length != 2)
+			throw "tolerant typer discarded a generic call whose result supplies the expected type";
+		var genericResultExpression = switch genericResultTyped.functions[0].statements[0] {
+			case TReturn(expression, _): expression;
+			default: null;
+		};
+		if (genericResultExpression == null)
+			throw "expected-result generic call produced no typed expression";
+		switch genericResultExpression.type {
+			case TInstance(NominalKind.Class, "Expected", _):
+			default:
+				throw 'expected-result generic call did not infer its result type: ${genericResultExpression.type}; function result ${genericResultTyped.functions[0].result}';
+		}
+
 		var incompleteParameter = new SourceFile("TolerantParameter.hx", "function main(value:)");
 		var parameterProgram = new Parser(new Lexer(incompleteParameter).tokenize()).parseProgramRecovering().program,
 			parameterTyped = Typer.typeRecovered(parameterProgram);

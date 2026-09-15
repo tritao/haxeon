@@ -351,13 +351,16 @@ class CallResolver {
 		return typed;
 	}
 
-	public function typeGenericCallArguments(fn:AstFunction, arguments:Array<AstExpression>, scope:Scope, span:SourceSpan):{
+	public function typeGenericCallArguments(fn:AstFunction, arguments:Array<AstExpression>, scope:Scope, span:SourceSpan,
+			expectedResult:Null<CompilerType> = null):{
 		arguments:Array<TypedExpression>,
 		substitutions:Map<String, CompilerType>
 	} {
 		var parameters = functionTypeParameters(fn),
 			substitutions:Map<String, CompilerType> = [],
 			typed:Array<TypedExpression> = [];
+		if (expectedResult != null && !isRecoveryType(expectedResult))
+			inferTypeParameters(fn.result, expectedResult, parameters, substitutions, span);
 		for (index in 0...arguments.length) {
 			var expected:Null<CompilerType> = null;
 			if (index < fn.arguments.length && allTypeParametersBound(parameters, substitutions))
@@ -544,7 +547,8 @@ class CallResolver {
 		return new TypedExpression(TClosureCall(typedCallee, typedArguments), functionType.result, span);
 	}
 
-	public function resolveFunctionCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
+	public function resolveFunctionCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
+			expectedType:Null<CompilerType> = null):TypedExpression {
 		var hasSignature = session.signatures.exists(name);
 		if (hasSignature && functionTypeParameters(requiredMapValue(session.signatures, name)).length > 0) {
 			var signature = requiredMapValue(session.signatures, name),
@@ -555,7 +559,7 @@ class CallResolver {
 				infoOwner = resolvedInfo.owner;
 				infoStatic = resolvedInfo.isStatic;
 			}
-			var prepared = typeGenericCallArguments(signature, arguments, scope, span);
+			var prepared = typeGenericCallArguments(signature, arguments, scope, span, expectedType);
 			return genericInstantiation.specialize(name, signature, prepared.arguments, span, scope, infoOwner, infoStatic, prepared.substitutions);
 		}
 		var expectedArguments:Array<CompilerType> = [],
@@ -683,7 +687,7 @@ class CallResolver {
 			return typeEnumConstructor(name, arguments, expectedType, enumCase, span, scope);
 		if (receiver != null && methodName != null)
 			return typeMethodCall(receiver, methodName, arguments, span, scope, expectedType, false, receiverName, false);
-		return resolveFunctionCall(name, arguments, span, scope);
+		return resolveFunctionCall(name, arguments, span, scope, expectedType);
 	}
 
 	function typeEnumConstructor(name:String, arguments:Array<AstExpression>, expectedType:Null<CompilerType>, enumCase:EnumConstructorInfo, span:SourceSpan,
