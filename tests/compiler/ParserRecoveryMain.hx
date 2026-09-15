@@ -1,6 +1,7 @@
 import compiler.service.LanguageService;
 import compiler.service.CancellationError;
 import compiler.service.CancellationToken;
+import compiler.semantic.SemanticModel;
 import compiler.Diagnostic.CompileError;
 import compiler.Diagnostic.DiagnosticOrigin;
 import compiler.Source.SourceFile;
@@ -8,6 +9,7 @@ import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.semantic.SemanticIndex.SemanticCompletionContextKind;
 import compiler.types.Typer;
+import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 
 class ParserRecoveryMain {
@@ -679,6 +681,61 @@ class ParserRecoveryMain {
 			case TVar(_, value, _) if (value.type == TUnknown || value.type == TError):
 			default:
 				throw "failed initializer did not retain a declaration-shaped recovery node";
+		}
+
+		var recoveredExpressionSource = new SourceFile("TolerantRecoveredExpressions.hx",
+			"function main():Void { var arithmetic = missing + 1; var values = []; var typed:Array<Int> = [missing, 2]; var after:Int = 1; }");
+		var recoveredExpressionProgram = new Parser(new Lexer(recoveredExpressionSource).tokenize()).parseProgramRecovering().program,
+			recoveredExpressionTyped = Typer.typeRecovered(recoveredExpressionProgram);
+		if (recoveredExpressionTyped == null || recoveredExpressionTyped.functions.length != 1
+			|| recoveredExpressionTyped.functions[0].statements.length != 4)
+			throw "tolerant expression recovery discarded declarations around malformed collection values";
+		switch recoveredExpressionTyped.functions[0].statements[0] {
+			case TVar(_, value, _):
+				switch value.expression {
+					case TAdd(_, _):
+					default: throw "malformed arithmetic lost its recovered binary expression shape";
+				}
+			default: throw "malformed arithmetic did not remain a typed declaration";
+		}
+		switch recoveredExpressionTyped.functions[0].statements[1] {
+			case TVar(_, value, _):
+				switch value.type {
+					case TArray(TUnknown):
+					default: throw 'empty recovered array did not retain an unknown element type: ${value.type}';
+				}
+			default: throw "empty recovered array did not remain a typed declaration";
+		}
+		switch recoveredExpressionTyped.functions[0].statements[2] {
+			case TVar(_, value, _):
+				switch value.type {
+					case TArray(TInt):
+					default: throw 'invalid array element poisoned its known collection type: ${value.type}';
+				}
+			default: throw "invalid array element did not remain a typed declaration";
+		}
+
+		var astOnlySource = new SourceFile("TolerantAstOnlyIndex.hx",
+			"function main(text:String):Void { var result = text.indexOf(; var conditional = missing ? 1 : 2; var after:Int = 1; }");
+		var astOnlyProgram = new Parser(new Lexer(astOnlySource).tokenize()).parseProgramRecovering().program,
+			astOnlyModel = new SemanticModel(astOnlyProgram, astOnlySource, 1);
+		astOnlyModel.index.indexRecoveredSyntax(astOnlyProgram);
+		var astOnlyContext = astOnlyModel.index.completionContext(astOnlySource.text.length),
+			astOnlyResultType:Null<CompilerType> = null,
+			astOnlyConditionalType:Null<CompilerType> = null;
+		for (local in astOnlyContext.locals) {
+			if (local.name == "result")
+				astOnlyResultType = local.type;
+			if (local.name == "conditional")
+				astOnlyConditionalType = local.type;
+		}
+		switch astOnlyResultType {
+			case TInt:
+			default: throw 'AST-only recovery lost the built-in method result type: $astOnlyResultType';
+		}
+		switch astOnlyConditionalType {
+			case TInt:
+			default: throw 'AST-only recovery lost the conditional branch type: $astOnlyConditionalType';
 		}
 
 		var callSource = new SourceFile("TolerantCall.hx", "function take(value:Int):Void return; function main():Void return take(");

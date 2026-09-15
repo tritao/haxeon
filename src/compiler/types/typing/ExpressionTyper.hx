@@ -221,23 +221,32 @@ class ExpressionTyper {
 			seen:Map<String, Bool> = [],
 			typedFields:Array<TypedObjectField> = [];
 		for (field in fields) {
-			if (seen.exists(field.name))
-				fail("E1001", 'Duplicate object field "${field.name}"', field.span);
+			if (seen.exists(field.name)) {
+				if (!session.tolerant)
+					fail("E1001", 'Duplicate object field "${field.name}"', field.span);
+				session.rememberRecoveryDiagnostic(new Diagnostic("E1001", 'Duplicate object field "${field.name}"', field.span));
+			}
 			seen.set(field.name, true);
 			var expectedField = anonymousField(expectedFields, field.name);
-			if (expectedFields != null && expectedField == null)
-				fail("E1002", 'Unexpected object field "${field.name}"', field.span);
+			if (expectedFields != null && expectedField == null) {
+				if (!session.tolerant)
+					fail("E1002", 'Unexpected object field "${field.name}"', field.span);
+				session.rememberRecoveryDiagnostic(new Diagnostic("E1002", 'Unexpected object field "${field.name}"', field.span));
+			}
 			var value = typeExpressionCallback(field.value, scope, expectedField == null ? null : expectedField.type, false);
 			if (expectedField != null)
-				value = coerce(value, expectedField.type, 'object field "${field.name}"', "E1002");
+				value = recoverCoerce(value, expectedField.type, 'object field "${field.name}"', "E1002");
 			else if (value.type == TNull)
-				value = coerce(value, TDynamic, 'object field "${field.name}"', "E1002");
+				value = recoverCoerce(value, TDynamic, 'object field "${field.name}"', "E1002");
 			typedFields.push({name: field.name, value: value});
 		}
 		if (expectedFields != null)
 			for (field in expectedFields)
-				if (!field.optional && !seen.exists(field.name))
-					fail("E1002", 'Missing object field "${field.name}"', span);
+				if (!field.optional && !seen.exists(field.name)) {
+					if (!session.tolerant)
+						fail("E1002", 'Missing object field "${field.name}"', span);
+					session.rememberRecoveryDiagnostic(new Diagnostic("E1002", 'Missing object field "${field.name}"', span));
+				}
 		var resolvedResult:CompilerType;
 		if (objectExpected == null) {
 			var inferred:Array<AnonymousField> = [
@@ -261,8 +270,11 @@ class ExpressionTyper {
 		if (values.length == 0 && expectedMap != null)
 			return new TypedExpression(TMapLiteral([]), TMap(expectedMap.key, expectedMap.value), span);
 		var expectedElement = arrayElementExpectation(expectedType);
-		if (values.length == 0 && expectedElement == null)
-			fail("E1003", "Empty array literal requires an expected element type", span);
+		if (values.length == 0 && expectedElement == null) {
+			if (!session.tolerant)
+				fail("E1003", "Empty array literal requires an expected element type", span);
+			return new TypedExpression(TArrayLiteral([]), TArray(TUnknown), span);
+		}
 		var typedValues:Array<TypedExpression> = [],
 			elementType = expectedElement;
 		for (value in values) {
@@ -273,10 +285,10 @@ class ExpressionTyper {
 				elementType = resolvedElement;
 			} else
 				resolvedElement = elementType;
-			typedValues.push(coerce(typedValue, resolvedElement, "array element", "E1003"));
+			typedValues.push(recoverCoerce(typedValue, resolvedElement, "array element", "E1003"));
 		}
 		if (elementType == null)
-			throw "Array element type was not resolved";
+			elementType = TUnknown;
 		return new TypedExpression(TArrayLiteral(typedValues), TArray(elementType), span);
 	}
 
@@ -300,12 +312,19 @@ class ExpressionTyper {
 				valueType = resolvedValue;
 			} else
 				resolvedValue = valueType;
-			typedEntries.push({key: coerce(key, resolvedKey, "map key", "E1003"), value: coerce(value, resolvedValue, "map value", "E1003")});
+			typedEntries.push({key: recoverCoerce(key, resolvedKey, "map key", "E1003"), value: recoverCoerce(value, resolvedValue, "map value", "E1003")});
 		}
-		if (keyType == null || valueType == null)
-			throw "Map key/value types were not resolved";
-		if (session.mapName(keyType, valueType) == null)
-			fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+		if (keyType == null || valueType == null) {
+			if (!session.tolerant)
+				throw "Map key/value types were not resolved";
+			keyType = keyType == null ? TUnknown : keyType;
+			valueType = valueType == null ? TUnknown : valueType;
+		}
+		if (session.mapName(keyType, valueType) == null) {
+			if (!session.tolerant)
+				fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+			session.rememberRecoveryDiagnostic(new Diagnostic("E1016", "This map key/value type has no compiler-owned runtime ABI", span));
+		}
 		return new TypedExpression(TMapLiteral(typedEntries), TMap(keyType, valueType), span);
 	}
 
@@ -327,18 +346,26 @@ class ExpressionTyper {
 			case TRange:
 				if (valueName != null)
 					fail("E1014", "Key/value array comprehension requires a Map", span);
-				keyType = TInt;
+					keyType = TInt;
 			case TMap(key, mapValue):
-				if (session.mapName(key, mapValue) == null)
-					fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+				if (session.mapName(key, mapValue) == null) {
+					if (!session.tolerant)
+						fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+					session.rememberRecoveryDiagnostic(new Diagnostic("E1016", "This map key/value type has no compiler-owned runtime ABI", span));
+				}
 				keyType = valueName == null ? mapValue : key;
 				if (valueName == null)
 					typedIterable = new TypedExpression(TCollectionCall(typedIterable, "values", []), TArray(mapValue), span);
+			case TUnknown, TError if (session.tolerant):
+				keyType = TUnknown;
 			default:
-				fail("E1014", "Array comprehension iterable must be an Array, Iterator, or Map", span);
+				if (!session.tolerant)
+					fail("E1014", "Array comprehension iterable must be an Array, Iterator, or Map", span);
+				session.rememberRecoveryDiagnostic(new Diagnostic("E1014", "Array comprehension iterable must be an Array, Iterator, or Map", span));
+				keyType = TUnknown;
 		}
 		if (keyType == null)
-			throw "Array comprehension item type was not resolved";
+			keyType = TUnknown;
 		loopScope.define(keyName, keyType, span);
 		if (valueName != null)
 			switch originalIterable.type {
@@ -361,18 +388,19 @@ class ExpressionTyper {
 					}
 			}
 		}
-		var typedCondition = predicate == null ? null : typeExpressionCallback(predicate, loopScope, TBool, false);
-		if (typedCondition != null && typedCondition.type != TBool)
+		var typedCondition = predicate == null ? null : recoverCoerce(typeExpressionCallback(predicate, loopScope, TBool, false), TBool,
+			"array comprehension condition", "E1004");
+		if (typedCondition != null && typedCondition.type != TBool && !session.tolerant)
 			fail("E1004", "Array comprehension condition must be Bool", span);
 		var expectedElement = arrayElementExpectation(expectedType),
 			typedValue = typeExpressionCallback(value, loopScope, expectedElement, false),
 			flattenedElement = switch typedValue.expression {
-				case TArrayComprehension(_, _, _, _, _): arrayElementType(typedValue.type, span);
+				case TArrayComprehension(_, _, _, _, _) if (!isRecoveryType(typedValue.type)): arrayElementType(typedValue.type, span);
 				case _: null;
 			},
 			elementType = expectedElement == null ? (flattenedElement == null ? typedValue.type : flattenedElement) : expectedElement;
 		if (flattenedElement == null)
-			typedValue = coerce(typedValue, elementType, "array comprehension value", "E1003");
+			typedValue = recoverCoerce(typedValue, elementType, "array comprehension value", "E1003");
 		return new TypedExpression(TArrayComprehension(loopScope.requireId(keyName), valueName == null ? null : loopScope.requireId(valueName),
 			valueName == null ? typedIterable : originalIterable, typedCondition, typedValue),
 			TArray(elementType), span, false, map);
@@ -396,18 +424,26 @@ class ExpressionTyper {
 			case TRange:
 				if (valueName != null)
 					fail("E1014", "Key/value map comprehension requires a Map", span);
-				itemType = TInt;
+					itemType = TInt;
 			case TMap(mapKey, mapValue):
-				if (session.mapName(mapKey, mapValue) == null)
-					fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+				if (session.mapName(mapKey, mapValue) == null) {
+					if (!session.tolerant)
+						fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+					session.rememberRecoveryDiagnostic(new Diagnostic("E1016", "This map key/value type has no compiler-owned runtime ABI", span));
+				}
 				itemType = valueName == null ? mapValue : mapKey;
 				if (valueName == null)
 					typedIterable = new TypedExpression(TCollectionCall(typedIterable, "values", []), TArray(mapValue), span);
+			case TUnknown, TError if (session.tolerant):
+				itemType = TUnknown;
 			default:
-				fail("E1014", "Map comprehension iterable must be an Array, Iterator, or Map", span);
+				if (!session.tolerant)
+					fail("E1014", "Map comprehension iterable must be an Array, Iterator, or Map", span);
+				session.rememberRecoveryDiagnostic(new Diagnostic("E1014", "Map comprehension iterable must be an Array, Iterator, or Map", span));
+				itemType = TUnknown;
 		}
 		if (itemType == null)
-			throw "Map comprehension item type was not resolved";
+			itemType = TUnknown;
 		loopScope.define(keyName, itemType, span);
 		if (valueName != null)
 			switch originalIterable.type {
@@ -415,18 +451,22 @@ class ExpressionTyper {
 					loopScope.define(valueName, mapValue, span);
 				default:
 			}
-		var typedCondition = predicate == null ? null : typeExpressionCallback(predicate, loopScope, TBool, false);
-		if (typedCondition != null && typedCondition.type != TBool)
+		var typedCondition = predicate == null ? null : recoverCoerce(typeExpressionCallback(predicate, loopScope, TBool, false), TBool,
+			"map comprehension condition", "E1004");
+		if (typedCondition != null && typedCondition.type != TBool && !session.tolerant)
 			fail("E1004", "Map comprehension condition must be Bool", span);
 		var expected = mapExpectation(expectedType),
 			typedKey = typeExpressionCallback(key, loopScope, expected == null ? null : expected.key, false),
 			typedValue = typeExpressionCallback(value, loopScope, expected == null ? null : expected.value, false),
 			resultKey = expected == null ? typedKey.type : expected.key,
 			resultValue = expected == null ? typedValue.type : expected.value;
-		typedKey = coerce(typedKey, resultKey, "map comprehension key", "E1003");
-		typedValue = coerce(typedValue, resultValue, "map comprehension value", "E1003");
-		if (session.mapName(resultKey, resultValue) == null)
-			fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+		typedKey = recoverCoerce(typedKey, resultKey, "map comprehension key", "E1003");
+		typedValue = recoverCoerce(typedValue, resultValue, "map comprehension value", "E1003");
+		if (session.mapName(resultKey, resultValue) == null) {
+			if (!session.tolerant)
+				fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+			session.rememberRecoveryDiagnostic(new Diagnostic("E1016", "This map key/value type has no compiler-owned runtime ABI", span));
+		}
 		return new TypedExpression(TMapComprehension(loopScope.requireId(keyName), valueName == null ? null : loopScope.requireId(valueName),
 			valueName == null ? typedIterable : originalIterable, typedCondition, typedKey, typedValue),
 			TMap(resultKey, resultValue), span);
@@ -720,22 +760,31 @@ class ExpressionTyper {
 	public function typeCast(value:AstExpression, target:Null<AstType>, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>,
 			lowerType:LowerExpressionTypeCallback):TypedExpression {
 		var targetType = target == null ? expectedType : lowerType(target);
-		if (targetType == null)
+		if (targetType == null) {
+			if (session.tolerant)
+				return new TypedExpression(TCast(typeExpressionCallback(value, scope, null, false)), TUnknown, span);
 			fail("E1003", "Untyped cast requires an expected type", span);
+		}
 		return conversionResolver.adaptFunction(typeExpressionCallback(value, scope, null, false), targetType, span);
 	}
 
 	public function negate(value:AstExpression, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		var typedValue = typeExpressionCallback(value, scope, expectedType == TInt64 ? TInt64 : null, false);
-		if (!isNumeric(typedValue.type))
+		if (!isNumeric(typedValue.type)) {
+			if (session.tolerant && isRecoveryType(typedValue.type))
+				return new TypedExpression(TNegate(typedValue), expectedType != null && isNumeric(expectedType) ? expectedType : TUnknown, span);
 			fail("E1010", "Numeric negation requires an Int, Int64, or Float operand", span);
+		}
 		return new TypedExpression(TNegate(typedValue), typedValue.type, span);
 	}
 
 	public function logicalNot(value:AstExpression, span:SourceSpan, scope:Scope):TypedExpression {
 		var typedValue = typeExpressionCallback(value, scope, null, false);
-		if (!sameType(typedValue.type, TBool))
+		if (!sameType(typedValue.type, TBool)) {
+			if (session.tolerant && isRecoveryType(typedValue.type))
+				return new TypedExpression(TNot(typedValue), TBool, span);
 			fail("E1011", "Logical negation requires a Bool operand", span);
+		}
 		return new TypedExpression(TNot(typedValue), TBool, span);
 	}
 
@@ -744,7 +793,8 @@ class ExpressionTyper {
 
 	public function postfixIncrement(target:AstExpression, delta:Int, span:SourceSpan, scope:Scope):TypedExpression {
 		var typedTarget = typeExpressionCallback(target, scope, null, false);
-		if (!sameType(typedTarget.type, TInt) && !sameType(typedTarget.type, TFloat))
+		if (!sameType(typedTarget.type, TInt) && !sameType(typedTarget.type, TFloat)
+			&& (!session.tolerant || !isRecoveryType(typedTarget.type)))
 			fail("E1018", "Postfix increment requires a numeric target", span);
 		var operation:TypedExpressionKind = switch typedTarget.expression {
 			case TLocal(name): TPostfixLocal(name, delta);
@@ -843,8 +893,12 @@ class ExpressionTyper {
 			right = stringify(right);
 			return new TypedExpression(TAdd(left, right), TString, span);
 		}
-		if (!isNumeric(left.type) || !isNumeric(right.type))
+		if (!isNumeric(left.type) || !isNumeric(right.type)) {
+			if (session.tolerant && (isRecoveryType(left.type) || isRecoveryType(right.type)))
+				return new TypedExpression(add ? TAdd(left, right) : TSub(left, right),
+					expected != null && !isRecoveryType(expected) ? expected : TUnknown, span);
 			fail("E1010", "Arithmetic requires matching numeric operands", span);
+		}
 		var promoted = promoteNumericOperands(left, right, span);
 		return new TypedExpression(add ? TAdd(promoted.left, promoted.right) : TSub(promoted.left, promoted.right), promoted.type, span);
 	}
@@ -853,6 +907,9 @@ class ExpressionTyper {
 		var left = typeExpressionCallback(a, scope, null, false),
 			rightScope = FlowAnalysis.narrowedScope(scope, left, and),
 			right = typeExpressionCallback(b, rightScope, null, false);
+		if ((!sameType(left.type, TBool) || !sameType(right.type, TBool))
+			&& session.tolerant && (isRecoveryType(left.type) || isRecoveryType(right.type)))
+			return new TypedExpression(and ? TAnd(left, right) : TOr(left, right), TBool, span);
 		if (!sameType(left.type, TBool) || !sameType(right.type, TBool))
 			fail("E1011", "Logical operators require Bool operands", span);
 		return new TypedExpression(and ? TAnd(left, right) : TOr(left, right), TBool, span);
@@ -861,8 +918,11 @@ class ExpressionTyper {
 	public function numeric(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan):TypedExpression {
 		var left = typeExpressionCallback(a, scope, null, false),
 			right = typeExpressionCallback(b, scope, null, false);
-		if (!isNumeric(left.type) || !isNumeric(right.type))
+		if (!isNumeric(left.type) || !isNumeric(right.type)) {
+			if (session.tolerant && (isRecoveryType(left.type) || isRecoveryType(right.type)))
+				return new TypedExpression(operation == 2 ? TMul(left, right) : TDiv(left, right), TUnknown, span);
 			fail("E1010", "Arithmetic requires matching numeric operands", span);
+		}
 		var promoted = promoteNumericOperands(left, right, span, operation != 2);
 		return new TypedExpression(operation == 2 ? TMul(promoted.left, promoted.right) : TDiv(promoted.left, promoted.right), promoted.type, span);
 	}
@@ -870,8 +930,11 @@ class ExpressionTyper {
 	public function modulo(a:AstExpression, b:AstExpression, scope:Scope, span:SourceSpan):TypedExpression {
 		var left = typeExpressionCallback(a, scope, null, false),
 			right = typeExpressionCallback(b, scope, null, false);
-		if (!isNumeric(left.type) || !isNumeric(right.type))
+		if (!isNumeric(left.type) || !isNumeric(right.type)) {
+			if (session.tolerant && (isRecoveryType(left.type) || isRecoveryType(right.type)))
+				return new TypedExpression(TMod(left, right), TUnknown, span);
 			fail("E1010", "Modulo requires matching numeric operands", span);
+		}
 		var promoted = promoteNumericOperands(left, right, span);
 		return sameType(promoted.type, TInt)
 			|| sameType(promoted.type,
@@ -882,6 +945,18 @@ class ExpressionTyper {
 	public function bitwise(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan):TypedExpression {
 		var left = typeExpressionCallback(a, scope, null, false),
 			right = typeExpressionCallback(b, scope, null, false);
+		if (session.tolerant && (isRecoveryType(left.type) || isRecoveryType(right.type))) {
+			var recoveredOperation:TypedExpressionKind = switch operation {
+				case 0: TBitAnd(left, right);
+				case 1: TBitXor(left, right);
+				case 2: TBitOr(left, right);
+				case 3: TShiftLeft(left, right);
+				case 4: TShiftRight(left, right);
+				case 5: TUnsignedShiftRight(left, right);
+				default: throw "Unknown bitwise operation";
+			};
+			return new TypedExpression(recoveredOperation, TUnknown, span);
+		}
 		if (operation >= 3) {
 			if (!sameType(left.type, TInt) && !sameType(left.type, TInt64))
 				fail("E1010", "Shift operators require an Int or Int64 value", span);
@@ -912,6 +987,14 @@ class ExpressionTyper {
 	public function comparison(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan):TypedExpression {
 		var left = typeExpressionCallback(a, scope, null, false),
 			right = typeExpressionCallback(b, scope, left.type, false);
+		if (session.tolerant && (isRecoveryType(left.type) || isRecoveryType(right.type))) {
+			var recoveredOperation:TypedExpressionKind = switch operation {
+				case 0: TLess(left, right);
+				case 1: TLessEqual(left, right);
+				default: TEqual(left, right);
+			};
+			return new TypedExpression(recoveredOperation, TBool, span);
+		}
 		if (operation == 2
 			&& ((sameType(left.type, TNull) && !isNullable(right.type) && right.type != TNull && !TypeRelations.isReference(right.type))
 				|| (sameType(right.type, TNull) && !isNullable(left.type) && left.type != TNull && !TypeRelations.isReference(left.type))))
@@ -1077,6 +1160,9 @@ class ExpressionTyper {
 			case TNullable(_): true;
 			default: false;
 		};
+
+	static function isRecoveryType(type:CompilerType):Bool
+		return type == TUnknown || type == TError;
 
 	function recoverCoerce(value:TypedExpression, expected:CompilerType, context:String, code:String):TypedExpression {
 		if (!session.tolerant)

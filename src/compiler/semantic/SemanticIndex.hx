@@ -11,6 +11,7 @@ import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.Type.CompilerType;
+import compiler.types.TypeRelations;
 import compiler.syntax.Ast.AstType;
 import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Ast.AstFunction;
@@ -910,23 +911,152 @@ class SemanticIndex {
 			case Member(object, name, _): recoveredMemberType(object, name);
 			case MethodCall(object, name, _, _):
 				var receiverType = recoveredExpressionBindingType(object),
+					builtinResult = recoveredBuiltinMethodResult(receiverType, name),
 					owner = memberOwner(receiverType);
-				owner == null ? TUnknown : recoveredFunctionResult(owner + "." + name, recoveredTypeSubstitutions(receiverType));
+				builtinResult != null ? builtinResult : owner == null ? TUnknown : recoveredFunctionResult(owner + "." + name, recoveredTypeSubstitutions(receiverType));
 			case Call(name, _, span):
 				var separator = name.lastIndexOf(".");
 				if (separator > 0) {
 					var receiverName = name.substring(0, separator),
 						memberName = name.substring(separator + 1),
 						receiverType = recoveredExpressionBindingType(Variable(receiverName, span)),
+						builtinResult = recoveredBuiltinMethodResult(receiverType, memberName),
 						owner = memberOwner(receiverType);
-					owner == null ? TUnknown : recoveredFunctionResult(owner + "." + memberName, recoveredTypeSubstitutions(receiverType));
-				} else recoveredFunctionResult(name);
+					builtinResult != null ? builtinResult : owner == null ? recoveredBuiltinCallResult(name) : recoveredFunctionResult(owner + "." + memberName,
+						recoveredTypeSubstitutions(receiverType));
+				} else recoveredBuiltinCallResult(name);
+			case ClosureCall(callee, _, _):
+				var result = functionResultType(recoveredExpressionType(callee));
+				result == null ? TUnknown : result;
+			case Add(left, right, _): recoveredArithmeticType(left, right, true);
+			case Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _): recoveredArithmeticType(left, right, false);
+			case BitAnd(left, right, _), BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _),
+				UnsignedShiftRight(left, right, _): recoveredIntegerOperationType(left, right);
+			case Less(_, _, _), LessEqual(_, _, _), Greater(_, _, _), GreaterEqual(_, _, _), Equal(_, _, _), NotEqual(_, _, _), And(_, _, _), Or(_, _, _):
+				TBool;
+			case Negate(value, _): recoveredExpressionType(value);
+			case Not(_, _): TBool;
+			case PostfixIncrement(value, _, _): recoveredExpressionType(value);
+			case Conditional(_, whenTrue, whenFalse, _): recoveredCommonType(recoveredExpressionType(whenTrue), recoveredExpressionType(whenFalse));
+			case BlockExpression(_, result, _): recoveredExpressionType(result);
+			case ThrowExpression(_, _): TNever;
+			case Cast(value, target, _): target == null ? recoveredExpressionType(value) : recoveredType(target);
+			case Index(array, _, _):
+				var indexed = indexedValueType(recoveredExpressionBindingType(array));
+				indexed == null ? TUnknown : indexed;
+			case Range(_, _, _): TRange;
 			case ArrayLiteral(values, _): TArray(recoveredArrayElementType(values));
-			case MapLiteral(_, _): TMap(TUnknown, TUnknown);
+			case MapLiteral(entries, _): recoveredMapLiteralType(entries);
+			case ArrayComprehension(_, _, _, _, value, _): TArray(recoveredExpressionType(value));
+			case MapComprehension(_, _, _, _, key, value, _): TMap(recoveredExpressionType(key), recoveredExpressionType(value));
 			case New(name, _, _): TInstance(compiler.types.Type.NominalKind.Class, name, []);
 			case NewGeneric(name, typeArguments, _, _): recoveredType(AppliedType(name, typeArguments));
+			case NewArray(element, _, _): TArray(recoveredType(element));
+			case NewMap(key, value, _): TMap(recoveredType(key), recoveredType(value));
+			case Lambda(arguments, _, _): TFunction([for (argument in arguments) recoveredType(argument.type)], TUnknown);
+			case NativeLayoutQuery(_, _, _, _): TInt;
 			default: TUnknown;
 		};
+
+	function recoveredBuiltinCallResult(name:String):CompilerType {
+		return switch name {
+			case "Std.isOfType", "Reflect.isObject": TBool;
+			case "Reflect.compare", "Math.ceil", "Std.int", "Std.stdIntFloat": TInt;
+			case "Std.stdString", "String.fromCharCode": TString;
+			case "haxe.io.Bytes.ofString": TBytes;
+			default: recoveredFunctionResult(name);
+		};
+	}
+
+	function recoveredBuiltinMethodResult(receiver:CompilerType, name:String):Null<CompilerType> {
+		return switch receiver {
+			case TString:
+				switch name {
+					case "toLowerCase", "toUpperCase", "substring", "substr", "charAt": TString;
+					case "indexOf", "lastIndexOf", "charCodeAt": TInt;
+					case "split": TArray(TString);
+					default: null;
+				};
+			case TArray(element):
+				switch name {
+					case "push", "add", "unshift", "indexOf": TInt;
+					case "iterator": TIterator(element);
+					case "pop", "shift": element;
+					case "resize", "insert", "reverse", "sort": TVoid;
+					case "remove", "contains": TBool;
+					case "copy", "concat", "slice", "splice": TArray(element);
+					case "join": TString;
+					default: null;
+				};
+			case TMap(key, value):
+				switch name {
+					case "set", "clear": TVoid;
+					case "keys": TIterator(key);
+					case "values": TIterator(value);
+					case "size": TInt;
+					case "exists", "remove": TBool;
+					case "get": nullableRecoveredValue(value);
+					default: null;
+				};
+			case TNullable(element): recoveredBuiltinMethodResult(element, name);
+			default: null;
+		};
+	}
+
+	static function nullableRecoveredValue(type:CompilerType):CompilerType
+		return switch type {
+			case TNullable(_): type;
+			default: TNullable(type);
+		};
+
+	function recoveredArithmeticType(left:AstExpression, right:AstExpression, add:Bool):CompilerType {
+		var leftType = recoveredExpressionType(left),
+			rightType = recoveredExpressionType(right);
+		if (add && (TypeRelations.equals(leftType, TString) || TypeRelations.equals(rightType, TString)))
+			return TString;
+		if (leftType == TUnknown || leftType == TError || rightType == TUnknown || rightType == TError)
+			return TUnknown;
+		if ((TypeRelations.equals(leftType, TInt) && TypeRelations.equals(rightType, TFloat))
+			|| (TypeRelations.equals(leftType, TFloat) && TypeRelations.equals(rightType, TInt)))
+			return TFloat;
+		return TypeRelations.equals(leftType, rightType) && (TypeRelations.equals(leftType, TInt)
+			|| TypeRelations.equals(leftType, TInt64) || TypeRelations.equals(leftType, TFloat)) ? leftType : TUnknown;
+	}
+
+	function recoveredIntegerOperationType(left:AstExpression, right:AstExpression):CompilerType {
+		var leftType = recoveredExpressionType(left),
+			rightType = recoveredExpressionType(right);
+		if (leftType == TUnknown || leftType == TError || rightType == TUnknown || rightType == TError)
+			return TUnknown;
+		return TypeRelations.equals(leftType, TInt64) || TypeRelations.equals(rightType, TInt64) ? TInt64 : TInt;
+	}
+
+	function recoveredCommonType(left:CompilerType, right:CompilerType):CompilerType {
+		if (TypeRelations.equals(left, right))
+			return left;
+		if (left == TUnknown || left == TError)
+			return right;
+		if (right == TUnknown || right == TError)
+			return left;
+		if ((TypeRelations.equals(left, TInt) && TypeRelations.equals(right, TFloat))
+			|| (TypeRelations.equals(left, TFloat) && TypeRelations.equals(right, TInt)))
+			return TFloat;
+		return TUnknown;
+	}
+
+	function recoveredMapLiteralType(entries:Array<compiler.syntax.Ast.AstMapEntry>):CompilerType {
+		var key:CompilerType = TUnknown,
+			value:CompilerType = TUnknown;
+		for (entry in entries) {
+			var entryKey = recoveredExpressionType(entry.key),
+				entryValue = recoveredExpressionType(entry.value);
+			if (key == TUnknown && entryKey != TUnknown && entryKey != TError)
+				key = entryKey;
+			if (value == TUnknown && entryValue != TUnknown && entryValue != TError)
+				value = entryValue;
+		}
+		return TMap(key, value);
+	}
 
 	function recordUnresolved(name:String, span:SourceSpan):Void {
 		if (name.length == 0)
