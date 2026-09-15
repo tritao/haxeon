@@ -1201,6 +1201,18 @@ class LanguageServiceMain {
 			recoveredIdentity = stableIdentityService.compiler.modules.get("StableIdentity").recoveredSemanticModel.index.symbolIdAt(insertedIdentityUse + 1);
 		if (recoveredIdentity == null || Std.string(recoveredIdentity) != Std.string(stableIdentity))
 			throw 'recovery renumbered an unaffected local identity: baseline=${Std.string(stableIdentity)} recovered=${Std.string(recoveredIdentity)}';
+		var introducedIdentitySource = "class StableType { public var member:Int; } function main():Void { var introduced:Int = 0; var target:StableType = new StableType(); target.";
+		stableIdentityService.update("StableIdentity.hx", introducedIdentitySource);
+		var introducedIdentityPosition = introducedIdentitySource.indexOf("introduced"),
+			introducedIdentity = stableIdentityService.compiler.modules.get("StableIdentity").recoveredSemanticModel.index.symbolIdAt(introducedIdentityPosition + 1);
+		if (introducedIdentity == null)
+			throw "new recovered local identity was not indexed";
+		var secondRecoverySource = "class StableType { public var member:Int; } function main():Void { var another:Int = 0; var introduced:Int = 0; var target:StableType = new StableType(); target.";
+		stableIdentityService.update("StableIdentity.hx", secondRecoverySource);
+		var secondIntroducedPosition = secondRecoverySource.indexOf("introduced"),
+			secondIntroducedIdentity = stableIdentityService.compiler.modules.get("StableIdentity").recoveredSemanticModel.index.symbolIdAt(secondIntroducedPosition + 1);
+		if (secondIntroducedIdentity == null || Std.string(secondIntroducedIdentity) != Std.string(introducedIdentity))
+			throw 'consecutive recovery edits churned a recovered local identity: first=${Std.string(introducedIdentity)} second=${Std.string(secondIntroducedIdentity)}';
 		var noSnapshotCompletionService = new LanguageService();
 		noSnapshotCompletionService.update("NoSnapshotCompletion.hx", "function main():Void return \"");
 		if (!noSnapshotCompletionService.completeResult("NoSnapshotCompletion.hx", 0).isIncomplete)

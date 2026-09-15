@@ -42,6 +42,8 @@ class ModuleState {
 	public var recoveredTokens:Array<Token> = [];
 	public var recoveredSemanticModel:Null<SemanticModel>;
 	public var semanticModel:Null<SemanticModel>;
+	/** Previous editor snapshot used only to preserve identities across edits. */
+	public var previousEditorSemanticModel:Null<SemanticModel>;
 	public var lastGoodTokens:Array<Token> = [];
 	public var lastGoodAst:Null<AstProgram>;
 	public var lastGoodSemanticModel:Null<SemanticModel>;
@@ -94,6 +96,7 @@ class ModuleState {
 	}
 
 	public function update(source:SourceFile):Void {
+		previousEditorSemanticModel = ast != null ? semanticModel : recoveredSemanticModel;
 		this.source = source;
 		revision++;
 		tokens = [];
@@ -119,6 +122,7 @@ class ModuleState {
 		result.recoveredTokens = recoveredTokens;
 		result.recoveredSemanticModel = recoveredSemanticModel;
 		result.semanticModel = semanticModel;
+		result.previousEditorSemanticModel = previousEditorSemanticModel;
 		result.lastGoodTokens = lastGoodTokens;
 		result.lastGoodAst = lastGoodAst;
 		result.lastGoodSemanticModel = lastGoodSemanticModel;

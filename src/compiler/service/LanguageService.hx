@@ -359,11 +359,12 @@ class LanguageService {
 			for (module in typingModules)
 				recoveredModel.index.indexRecoveredModule(module.program, module.declarations, module.qualifiers, token);
 			recoveredModel.index.indexRecoveredSyntax(recovered.program, token, recoveredModel.partialTypedProgram,
-			function(name) return resolveRecoveredSymbol(recovered.program, name),
-			function(name, index) return resolveRecoveredEnumCase(recovered.program, name, index),
-			function(name, arguments) return resolveRecoveredType(recovered.program, name, arguments),
-			function(name) return compiler.semanticWorkspace.editorSymbolCandidates(state, name, token, recovered.program),
-			state.lastGoodSemanticModel == null ? null : state.lastGoodSemanticModel.index);
+				function(name) return resolveRecoveredSymbol(recovered.program, name),
+				function(name, index) return resolveRecoveredEnumCase(recovered.program, name, index),
+				function(name, arguments) return resolveRecoveredType(recovered.program, name, arguments),
+				function(name) return compiler.semanticWorkspace.editorSymbolCandidates(state, name, token, recovered.program),
+				state.previousEditorSemanticModel != null ? state.previousEditorSemanticModel.index
+					: state.lastGoodSemanticModel == null ? null : state.lastGoodSemanticModel.index);
 			state.recoveredTokens = tokens;
 			state.recoveredAst = recovered.program;
 			state.recoveredSemanticModel = recoveredModel;
