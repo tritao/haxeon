@@ -117,6 +117,12 @@ HashLink; it does not change the HashLink fork. HXI-imported records already
 share the native ABI layout classifier, while unifying their public pointer and
 record projections is still future work.
 
+HashLink metadata tables use `runtime.hashlink.HlTypeTable`. Adding a type
+allocates only a new pointer slot; the `hl_type` record itself remains in the
+arena at a stable address. When the table grows, `pointer()` changes to the new
+contiguous table and the previous table storage remains owned by the arena,
+allowing publication code to stage a replacement before exposing it.
+
 ## Deliberate exclusions
 
 The first foundation does not add general-purpose allocation, ownership or

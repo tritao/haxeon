@@ -1,6 +1,7 @@
 import runtime.hashlink.HlTypeArena;
 import runtime.hashlink.HlTypeBridge;
 import runtime.hashlink.HlTypeBuilder;
+import runtime.hashlink.HlTypeTable;
 import runtime.hashlink.HlType;
 import runtime.hashlink.HlTypeKind;
 import runtime.memory.RawPtr;
@@ -82,6 +83,14 @@ function main():Int {
 		&& virtualData.ref.nfields == 1
 		&& virtualData.ref.fields.offset(0).ref.type == intType
 		&& virtualData.ref.indexes.offset(0).load() == 0;
+	var typeTable = new HlTypeTable(arena, 1),
+		firstIndex = typeTable.add(voidType),
+		secondIndex = typeTable.add(intType),
+		thirdIndex = typeTable.add(builtFunction);
+	var tableCorrect = firstIndex == 0 && secondIndex == 1 && thirdIndex == 2 && typeTable.length() == 3 && typeTable.capacityOf() == 4
+		&& typeTable.get(0) == voidType && typeTable.get(1) == intType && typeTable.get(2) == builtFunction;
+	typeTable.set(1, builtParameter);
+	tableCorrect = tableCorrect && typeTable.get(1) == builtParameter;
 	var objectName = builder.utf16Name("Obj"),
 		fieldName = builder.utf16Name("field"),
 		module = builder.moduleContext([RawPtr.nullPtr()], [intType]);
@@ -98,5 +107,5 @@ function main():Int {
 		&& module.ref.functionsTypes.offset(0).load() == intType;
 	arena.dispose();
 	arena.dispose();
-	return correct && builtCorrect && graphCorrect && namesCorrect && moduleCorrect ? 42 : 1;
+	return correct && builtCorrect && graphCorrect && tableCorrect && namesCorrect && moduleCorrect ? 42 : 1;
 }
