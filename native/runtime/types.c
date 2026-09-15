@@ -257,6 +257,27 @@ HL_PRIM int HL_NAME(native_metadata_validate_code)( hl_code *code ) {
 	return code->ntypes;
 }
 
+HL_PRIM vbyte * HL_NAME(native_metadata_module_alloc)( hl_code *code ) {
+	if( code == NULL )
+		hl_error("HashLink native module allocation requires a code record");
+	return (vbyte*)hl_module_alloc(code);
+}
+
+HL_PRIM bool HL_NAME(native_metadata_module_init)( vbyte *module, int flags ) {
+	if( module == NULL )
+		hl_error("HashLink native module initialization requires a module");
+	return hl_module_init((hl_module*)module,flags) != 0;
+}
+
+HL_PRIM bool HL_NAME(native_metadata_module_unload)( vbyte *module ) {
+	if( module == NULL ) return false;
+	return hl_module_unload((hl_module*)module) != 0;
+}
+
+HL_PRIM void HL_NAME(native_metadata_module_free_shutdown)( vbyte *module ) {
+	if( module != NULL ) hl_module_free_shutdown((hl_module*)module);
+}
+
 HL_PRIM void HL_NAME(native_metadata_bind_function_descriptors)( hl_type **types, int count, hl_function *functions, int function_count, hl_module_context *context ) {
 	int i;
 	native_metadata_validate_publication(count,types,context);

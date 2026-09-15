@@ -14,6 +14,7 @@ class HlNativeMetadataMain {
 		compiler.update("HlNativeMetadataAdapter.hx",
 			'import compiler.hl.HlCode; import compiler.hl.HlCode.HlTypeDef; import compiler.hl.HlNativeMetadataBuilder; '
 			+ 'import compiler.hl.HlType; import runtime.hashlink.HlTypeBuilder; import runtime.hashlink.HlTypeKind; import runtime.hashlink.HlTypeBridge; '
+			+ 'import runtime.hashlink.HlMetadataGeneration; import runtime.memory.RawPtr; '
 			+ 'function main():Int { '
 			+ 'var code = new HlCode(); '
 			+ 'code.strings = ["Abstract", "BuilderObject", "value", "run", "BuilderEnum", "BuilderStruct", "Value", "std✓", "native"]; '
@@ -34,6 +35,19 @@ class HlNativeMetadataMain {
 			+ 'code.natives = [{library: 7, name: 8, type: 2, functionIndex: 1}]; code.constants = [{global: 0, fields: [0, 1]}]; code.entryPoint = 0; '
 			+
 			'var generation = HlNativeMetadataBuilder.build(code), publication = generation.snapshot(), object = generation.type(9), native = publication.nativeDescriptors; '
+			+ 'var kernel = new HlMetadataGeneration(128, 1), kernelInt = kernel.builder.primitive(HlTypeKind.Int32Type), '
+			+
+			'kernelFunction = kernel.builder.functionType([kernelInt], kernelInt), kernelRegs = kernel.arena.allocTypePointerArray(1), kernelOps = kernel.arena.allocOpcodeArray(1); '
+			+
+			'kernelRegs.store(kernelInt); kernelOps.ref.op = 67; kernelOps.ref.p1 = 0; kernelOps.ref.p2 = 0; kernelOps.ref.p3 = 0; kernelOps.ref.extra = RawPtr.nullPtr(); '
+			+
+			'kernel.addType(kernelInt); kernel.addType(kernelFunction); kernel.defineModule([RawPtr.nullPtr()], [kernelFunction]); kernel.defineGlobalTypes([kernelInt]); '
+			+ 'kernel.addFunctionDescriptor({findex: 0, nregs: 1, nops: 1, reference: 0, nassigns: 0, type: kernelFunction, regs: kernelRegs, ops: kernelOps, '
+			+ 'debug: RawPtr.nullPtr(), assigns: RawPtr.nullPtr(), object: RawPtr.nullPtr(), fieldName: RawPtr.nullPtr(), fieldReference: RawPtr.nullPtr()}); '
+			+ 'var kernelPublication = kernel.publish(), kernelModule = HlTypeBridge.native_metadata_module_alloc(kernelPublication.nativeCode), '
+			+ 'kernelInitialized = !kernelModule.isNull() && HlTypeBridge.native_metadata_module_init(kernelModule, 0), '
+			+ 'kernelUnloaded = kernelInitialized && HlTypeBridge.native_metadata_module_unload(kernelModule); '
+			+ 'if (!kernelModule.isNull() && !kernelUnloaded) HlTypeBridge.native_metadata_module_free_shutdown(kernelModule); kernel.dispose(); '
 			+ 'var correct = publication.typeCount == 12 && publication.usesContiguousTypes && publication.functionCount == 2 '
 			+ '&& publication.globalCount == 2 && publication.globalTypes.offset(0).load() == generation.type(0) '
 			+ '&& publication.globalTypes.offset(1).load() == generation.type(0) '
@@ -50,6 +64,7 @@ class HlNativeMetadataMain {
 			'&& publication.nativeCode.ref.natives == publication.nativeDescriptors && publication.nativeCode.ref.functions == publication.functionDescriptors '
 			+ '&& publication.nativeCode.ref.debugSections == publication.debugSections '
 			+ '&& HlTypeBridge.native_metadata_validate_code(publication.nativeCode) == 12 '
+			+ '&& kernelInitialized && kernelUnloaded '
 			+ '&& publication.constantCount == 1 && publication.constants.ref.global == 0 && publication.constants.ref.nfields == 2 '
 			+ '&& publication.constants.ref.fields.load() == 0 && publication.constants.ref.fields.offset(1).load() == 1 '
 			+ '&& HlTypeBridge.native_metadata_validate_constants(publication.constants, publication.constantCount, publication.globalCount) == 1 '

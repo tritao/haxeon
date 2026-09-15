@@ -73,6 +73,21 @@ class HlTypeBridge {
 	public static function native_metadata_validate_code(code:RawPtr<HlNativeCode>):Int
 		return 0;
 
+	/** Allocate the native HashLink module wrapper for an arena-owned code record. */
+	public static function native_metadata_module_alloc(code:RawPtr<HlNativeCode>):RawPtr<UInt8>
+		return RawPtr.nullPtr();
+
+	/** Initialize the native JIT/module machinery for an arena-owned code record. */
+	public static function native_metadata_module_init(module:RawPtr<UInt8>, flags:Int):Bool
+		return false;
+
+	/** Retire and free an initialized native HashLink module. */
+	public static function native_metadata_module_unload(module:RawPtr<UInt8>):Bool
+		return false;
+
+	/** Free a native module whose initialization failed before it entered the registry. */
+	public static function native_metadata_module_free_shutdown(module:RawPtr<UInt8>):Void {}
+
 	public static function native_type_function_arity(type:RawPtr<HlType>):Int
 		return 0;
 
