@@ -1,0 +1,7 @@
+#if missing
+function first():Int { return 1; }
+#elseif alsoMissing
+function second():Int { return 2; }
+#else
+function third():Int { return 3; }
+#end

@@ -1,0 +1,5 @@
+/// Documentation for main
+function main():Int {
+  var value = 1; // keep this trailing comment
+  return value;
+}

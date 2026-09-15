@@ -62,6 +62,8 @@ class TestCatalog {
 	];
 
 	static final toolingMains = [
+		"FormatterMain",
+		"FormatterGoldenMain",
 		"LanguageServiceMain",
 		"ProtocolMain",
 		"LspProtocolMain",

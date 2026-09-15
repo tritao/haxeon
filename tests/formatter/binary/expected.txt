@@ -1,0 +1,6 @@
+function main():Int {
+  var value = firstCondition
+    && secondCondition
+    && thirdCondition;
+  return value;
+}

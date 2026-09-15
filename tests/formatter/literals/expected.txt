@@ -1,0 +1,14 @@
+function main():Int {
+  var values = [
+    firstValue,
+    secondValue,
+    thirdValue,
+    fourthValue
+  ];
+  var value = {
+    firstValue: firstValue,
+    secondValue: secondValue,
+    thirdValue: thirdValue
+  };
+  return values[0];
+}
