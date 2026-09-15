@@ -53,6 +53,9 @@ class Math {
 	public static inline function max(left:Float, right:Float):Float
 		return left > right ? left : right;
 
+	public static inline function abs(value:Float):Float
+		return value < 0 ? -value : value;
+
 	public static inline function isNaN(value:Float):Bool
 		return mathIsNaN(value);
 
