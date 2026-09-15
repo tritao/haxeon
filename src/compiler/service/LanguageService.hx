@@ -333,12 +333,7 @@ class LanguageService {
 		var qualifier = name.substring(0, separator),
 			suffix = name.substring(separator + 1, name.length);
 		for (importPath in program.imports) {
-			var importedName = importPath.substring(importPath.lastIndexOf(".") + 1, importPath.length),
-				alias = importedName;
-			for (candidate in program.importAliases.keys())
-				if (candidate == qualifier)
-					alias = candidate;
-			if (alias == qualifier) {
+			if (importQualifier(program, importPath) == qualifier) {
 				var imported = compiler.semanticWorkspace.resolveSymbolId(importPath + "." + suffix);
 				if (imported != null)
 					return imported;
@@ -352,8 +347,7 @@ class LanguageService {
 		if (direct != null)
 			return direct;
 		for (importPath in program.imports) {
-			var importedName = importPath.substring(importPath.lastIndexOf(".") + 1, importPath.length);
-			if (importedName == name) {
+			if (importQualifier(program, importPath) == name) {
 				var imported = compiler.semanticWorkspace.resolveEnumCaseId(importPath, index);
 				if (imported != null)
 					return imported;
