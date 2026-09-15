@@ -950,9 +950,7 @@ class LanguageService {
 
 	function resolveRecoveredEnumCase(state:ModuleState, program:AstProgram, name:String, index:Int,
 		?token:CancellationToken):Null<SemanticSymbolId> {
-		var direct = compiler.semanticWorkspace.resolveEnumCaseId(name, index);
-		if (direct != null && !compiler.semanticWorkspace.editorSymbolVisible(state, direct, program, token))
-			direct = null;
+		var direct = compiler.semanticWorkspace.editorResolveEnumCaseId(state, name, index, program, token);
 		if (direct != null)
 			return direct;
 		for (importPath in program.imports) {
@@ -2058,7 +2056,7 @@ class LanguageService {
 				context = model == null ? null : model.index.completionContext(position, qualifier, token),
 				members:Array<CompletionItem> = [];
 			if (context != null && context.receiver != null) {
-				for (member in compiler.semanticWorkspace.editorMembers(context.receiver, token))
+				for (member in compiler.semanticWorkspace.editorMembersForContext(state, ast, context.receiver, token))
 					addMember(member.name, member.kind, member.detail, name, members);
 				if (members.length > 0)
 					return members[0].detail;

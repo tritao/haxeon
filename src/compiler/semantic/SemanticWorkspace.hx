@@ -248,6 +248,44 @@ class SemanticWorkspace {
 		return result;
 	}
 
+	/**
+	 * Resolve a recovered enum case using the source module's visible editor
+	 * modules. A global enum-name lookup is not sufficient here: an unrelated
+	 * package may declare an enum with the same short name while the current
+	 * package has an unambiguous declaration.
+	 */
+	public function editorResolveEnumCaseId(from:ModuleState, enumName:String, index:Int,
+		?sourceProgram:AstProgram, ?token:CancellationToken):Null<SemanticSymbolId> {
+		if (index < 0)
+			return null;
+		var fromModel = editorModel(from),
+			packageName = sourceProgram != null && sourceProgram.packageName != null ? Std.string(sourceProgram.packageName)
+				: fromModel == null || fromModel.program.packageName == null ? null : Std.string(fromModel.program.packageName),
+			matches:Array<SemanticSymbolId> = [];
+		for (state in orderedStates()) {
+			if (token != null)
+				token.check();
+			var model = editorModel(state);
+			if (model == null || state != from && !editorModuleVisible(from, state, packageName, sourceProgram))
+				continue;
+			var packagePrefix = model.program.packageName == null ? "" : Std.string(model.program.packageName) + ".";
+			for (declaration in model.program.enums) {
+				if (token != null)
+					token.check();
+				if (declaration.name != enumName && packagePrefix + declaration.name != enumName)
+					continue;
+				if (index >= declaration.cases.length)
+					continue;
+				var symbolName = declaration.name + "." + declaration.cases[index].name;
+				for (symbol in model.index.symbols)
+					if (symbol.name == symbolName) {
+						addUniqueIdentity(matches, symbol.id);
+					}
+			}
+		}
+		return matches.length == 1 ? matches[0] : null;
+	}
+
 	public function invalidateResolutionCache():Void {
 		resolutionIndexesValid = false;
 		symbolResolutionIndex.clear();

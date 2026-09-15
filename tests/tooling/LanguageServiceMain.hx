@@ -1257,6 +1257,32 @@ class LanguageServiceMain {
 		}
 		if (!foundImportedMember || foundInvisibleMember)
 			throw "recovered nominal typing lost the imported type identity during member completion";
+		var nominalHoverService = new LanguageService();
+		nominalHoverService.update("nominal/a/Value.hx", "package nominal.a; class Value { public var shared:Int; }");
+		nominalHoverService.update("nominal/b/Value.hx", "package nominal.b; class Value { public var shared:String; }");
+		var nominalHoverSource = "package nominal.app; import nominal.b.Value; function main():Void { var value:Value = new Value(); value.shared; }";
+		nominalHoverService.update("nominal/app/Hover.hx", nominalHoverSource);
+		var nominalHoverPosition = nominalHoverSource.lastIndexOf("shared") + "shared".length;
+		if (nominalHoverService.hover("nominal/app/Hover.hx", nominalHoverPosition) != "shared:String")
+			throw "recovered nominal typing lost the imported type identity during hover";
+		var nominalSignatureService = new LanguageService();
+		nominalSignatureService.update("nominal/a/Action.hx", "package nominal.a; class Action { public function run(value:Int):Int return value; }");
+		nominalSignatureService.update("nominal/b/Action.hx", "package nominal.b; class Action { public function run(value:String):String return value; }");
+		var nominalSignatureSource = "package nominal.app; import nominal.b.Action; function main():Void { var action:Action = new Action(); action.run(";
+		nominalSignatureService.update("nominal/app/Signature.hx", nominalSignatureSource);
+		var nominalSignature = nominalSignatureService.signatureHelp("nominal/app/Signature.hx", nominalSignatureSource.length);
+		if (nominalSignature == null || nominalSignature.label != "run(value:String):String")
+			throw 'recovered nominal typing lost the imported type identity during signature help: ${nominalSignature == null ? "null" : nominalSignature.label}';
+		var scopedEnumService = new LanguageService();
+		scopedEnumService.update("nominal/other/Kind.hx", "package nominal.other; enum Kind { Value; }");
+		scopedEnumService.update("nominal/app/Kind.hx", "package nominal.app; enum Kind { Value; } function main():Void return;");
+		scopedEnumService.analyze("nominal.app.Kind");
+		var scopedEnumSource = "package nominal.app; function main():Void { Kind.Value; }";
+		scopedEnumService.update("nominal/app/EnumUse.hx", scopedEnumSource);
+		var scopedEnumPosition = scopedEnumSource.indexOf("Value") + 1,
+			scopedEnumDefinition = scopedEnumService.definition("nominal/app/EnumUse.hx", scopedEnumPosition);
+		if (scopedEnumDefinition == null || scopedEnumDefinition.path != "nominal/app/Kind.hx")
+			throw "recovered enum-case resolution did not prefer the visible same-package enum";
 		var transitionService = new LanguageService(),
 			validEditorSource = "class Foo { public var knownFoo:Int; } function main():Int { var foo:Foo = new Foo(); return foo.knownFoo; }";
 		transitionService.update("Transition.hx", validEditorSource);

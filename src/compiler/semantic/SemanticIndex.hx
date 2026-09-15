@@ -631,8 +631,11 @@ class SemanticIndex {
 
 	function resolveRecoveredEnumCase(name:String, index:Int):Null<SemanticSymbolId> {
 		for (declaration in declarations.enums)
-			if (declaration.name == name && index >= 0 && index < declaration.cases.length)
-				return recoveredDeclaredSymbol(name + "." + declaration.cases[index].name);
+			if (declaration.name == name && index >= 0 && index < declaration.cases.length) {
+				var local = recoveredDeclaredSymbol(name + "." + declaration.cases[index].name);
+				if (local != null)
+					return local;
+			}
 		return recoveryResolveEnumCase == null ? null : recoveryResolveEnumCase(name, index);
 	}
 
