@@ -318,7 +318,7 @@ class LanguageService {
 				typingModules = recoveryTypingModules(state, recovered.program, token);
 			recoveredModel.partialTypedProgram = Typer.typeRecovered(recovered.program, null, checkpoint, typingDiagnostics, typingModules);
 			for (module in typingModules)
-				recoveredModel.index.indexRecoveredModule(module.program, module.qualifiers, token);
+				recoveredModel.index.indexRecoveredModule(module.program, module.declarations, module.qualifiers, token);
 			recoveredModel.index.indexRecoveredSyntax(recovered.program, token, recoveredModel.partialTypedProgram,
 				function(name) return resolveRecoveredSymbol(recovered.program, name),
 				function(name, index) return resolveRecoveredEnumCase(recovered.program, name, index),

@@ -277,6 +277,9 @@ class LanguageServiceMain {
 					}
 		if (!transitiveInheritedType)
 			throw "recovered typing did not follow an imported module's inherited declaration closure";
+		for (unresolved in transitiveService.unresolvedSymbols("editor/Transitive.hx"))
+			if (unresolved.name == "inherited")
+				throw "recovered known inherited member was incorrectly reported as unresolved";
 		importService.analyze("editor.util.Widget");
 		var importedMemberUseSource = "package editor; import editor.util.Widget; function main():Void { var widget:Widget = new Widget(); widget.ready; }";
 		importService.update("editor/ClassMain.hx", importedMemberUseSource);

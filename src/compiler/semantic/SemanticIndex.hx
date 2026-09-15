@@ -104,6 +104,7 @@ class SemanticIndex {
 	final declarationTypes:Map<SemanticSymbolId, CompilerType> = [];
 	final declarationSymbolsBySpan:Map<String, SemanticSymbolId> = [];
 	final recoveredMembers:Map<String, SemanticSymbolId> = [];
+	final knownRecoveredMembers:Map<String, Bool> = [];
 	final recoveredFunctions:Map<String, AstFunction> = [];
 	final recoveredClassBases:Map<String, CompilerType> = [];
 	final recoveredLocalNext:Map<String, Int> = [];
@@ -342,8 +343,26 @@ class SemanticIndex {
 	}
 
 	/** Index signatures from a visible module for editor-only recovery queries. */
-	public function indexRecoveredModule(program:AstProgram, qualifiers:Array<String>, ?token:CancellationToken):Void {
+	public function indexRecoveredModule(program:AstProgram, external:DeclarationIndex, qualifiers:Array<String>, ?token:CancellationToken):Void {
 		cancellation = token;
+		for (name => declaration in external.aliases)
+			if (!declarations.aliases.exists(name))
+				declarations.aliases.set(name, declaration);
+		for (name => declaration in external.enums)
+			if (!declarations.enums.exists(name))
+				declarations.enums.set(name, declaration);
+		for (name => declaration in external.enumAbstracts)
+			if (!declarations.enumAbstracts.exists(name))
+				declarations.enumAbstracts.set(name, declaration);
+		for (name => declaration in external.abstracts)
+			if (!declarations.abstracts.exists(name))
+				declarations.abstracts.set(name, declaration);
+		for (name => declaration in external.interfaces)
+			if (!declarations.interfaces.exists(name))
+				declarations.interfaces.set(name, declaration);
+		for (name => declaration in external.classes)
+			if (!declarations.classes.exists(name))
+				declarations.classes.set(name, declaration);
 		for (fn in program.functions) {
 			checkpoint();
 			addRecoveredFunction(fn.name, fn);
@@ -352,18 +371,26 @@ class SemanticIndex {
 		}
 		for (decl in program.interfaces) {
 			checkpoint();
-			for (method in decl.methods)
+			for (method in decl.methods) {
 				indexRecoveredMethod(decl.name, method, qualifiers);
+				knownRecoveredMembers.set(decl.name + "." + method.name, true);
+			}
 		}
 		for (decl in program.classes) {
 			checkpoint();
-			for (method in decl.methods)
+			for (field in decl.fields)
+				knownRecoveredMembers.set(decl.name + "." + field.name, true);
+			for (method in decl.methods) {
 				indexRecoveredMethod(decl.name, method, qualifiers);
+				knownRecoveredMembers.set(decl.name + "." + method.name, true);
+			}
 		}
 		for (decl in program.abstracts) {
 			checkpoint();
-			for (method in decl.methods)
+			for (method in decl.methods) {
 				indexRecoveredMethod(decl.name, method, qualifiers);
+				knownRecoveredMembers.set(decl.name + "." + method.name, true);
+			}
 		}
 	}
 
@@ -604,7 +631,7 @@ class SemanticIndex {
 				}
 			case Member(object, name, span):
 				indexRecoveredExpression(object);
-				if (bindRecoveredMember(object, name, span) == null && name.length > 0)
+				if (bindRecoveredMember(object, name, span) == null && name.length > 0 && !isKnownRecoveredMember(object, name))
 					recordUnresolved(name, span);
 			case Call(name, arguments, span):
 				var separator = name.lastIndexOf(".");
@@ -616,7 +643,7 @@ class SemanticIndex {
 					if (callee == null)
 						callee = bindNamed(resolveRecoveredSymbol, name, span);
 					var owner = memberOwner(recoveredExpressionBindingType(receiver));
-					if (callee == null)
+					if (callee == null && !isKnownRecoveredMember(receiver, memberName))
 						recordUnresolved(memberName, span);
 					addCall(callee, span, memberName);
 					indexRecoveredCallArguments(arguments, owner == null ? null : recoveredFunctions.get(owner + "." + memberName));
@@ -642,7 +669,7 @@ class SemanticIndex {
 				indexRecoveredExpression(object);
 				var callee = bindRecoveredMember(object, name, span);
 				addCall(callee, span, name);
-				if (callee == null)
+				if (callee == null && !isKnownRecoveredMember(object, name))
 					recordUnresolved(name, span);
 				var owner = memberOwner(recoveredExpressionBindingType(object));
 				indexRecoveredCallArguments(arguments, owner == null ? null : recoveredFunctions.get(owner + "." + name));
@@ -743,6 +770,14 @@ class SemanticIndex {
 		if (token != null)
 			bind(id, token.span);
 		return id;
+	}
+
+	function isKnownRecoveredMember(object:AstExpression, name:String):Bool {
+		var owner = switch recoveredExpressionBindingType(object) {
+			case TNullable(element): memberOwner(element);
+			case type: memberOwner(type);
+		};
+		return owner != null && knownRecoveredMembers.exists(owner + "." + name);
 	}
 
 	function recoveredExpressionBindingType(expression:AstExpression):CompilerType
