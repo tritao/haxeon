@@ -240,6 +240,7 @@ class LanguageService {
 		try
 			return compiler.analyze(entryModule, token)
 		catch (error:CompileError) {
+			error.diagnostic.origin = DiagnosticOrigin.ParserRecovery;
 			recoverCurrentSyntax(token);
 			throw error;
 		}
@@ -303,8 +304,13 @@ class LanguageService {
 			}
 			if (duplicate < 0)
 				state.diagnostics.push(diagnostic);
-			else if (state.diagnostics[duplicate].fixes.length == 0 && diagnostic.fixes.length > 0)
-				state.diagnostics[duplicate] = diagnostic;
+			else {
+				var existing = state.diagnostics[duplicate];
+				if (existing.fixes.length == 0 && diagnostic.fixes.length > 0)
+					state.diagnostics[duplicate] = diagnostic;
+				else if (existing.origin == DiagnosticOrigin.Semantic && diagnostic.origin == DiagnosticOrigin.ParserRecovery)
+					existing.origin = diagnostic.origin;
+			}
 		}
 	}
 

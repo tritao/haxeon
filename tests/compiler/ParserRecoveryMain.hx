@@ -268,6 +268,12 @@ class ParserRecoveryMain {
 		var parserDiagnostics = parserService.diagnostics("ParserDiagnostic.hx");
 		if (parserDiagnostics.length == 0 || parserDiagnostics[0].origin != DiagnosticOrigin.ParserRecovery)
 			throw "recovery diagnostics did not retain parser provenance";
+		try
+			parserService.analyze("ParserDiagnostic")
+		catch (_:CompileError) {}
+		parserDiagnostics = parserService.diagnostics("ParserDiagnostic.hx");
+		if (parserDiagnostics.length == 0 || parserDiagnostics[0].origin != DiagnosticOrigin.ParserRecovery)
+			throw 'background analysis obscured parser recovery provenance: ${[for (diagnostic in parserDiagnostics) diagnostic.message + "/" + Std.string(diagnostic.origin)].join(", ")}';
 
 		var lexicalService = new LanguageService();
 		lexicalService.update("LexicalDiagnostic.hx", "function main():Void return \"");
