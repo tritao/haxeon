@@ -23,6 +23,7 @@ import compiler.types.DeclarationIndex;
 import compiler.types.TypeRelations;
 import compiler.types.Typer;
 import compiler.types.Typer.RecoveryTypingModule;
+import compiler.types.SignatureInference;
 import compiler.service.EditorSnapshot.EditorSnapshot;
 import compiler.service.EditorSnapshot.EditorSnapshotConfidence;
 import compiler.runtime.CompilerIntrinsics;
@@ -430,10 +431,11 @@ class LanguageService {
 				model = effectiveSemanticModel(candidate);
 			if (model == null)
 				continue;
+			var recoveredProgram = SignatureInference.inferProgram(model.program);
 			result.push({
-				program: model.program,
-				declarations: DeclarationIndex.forModule(model.program, candidate.source),
-				qualifiers: recoveryModuleQualifiers(program, candidate, model.program)
+				program: recoveredProgram,
+				declarations: DeclarationIndex.forModule(recoveredProgram, candidate.source),
+				qualifiers: recoveryModuleQualifiers(program, candidate, recoveredProgram)
 			});
 			for (nested in compiler.modules) {
 				if (token != null)

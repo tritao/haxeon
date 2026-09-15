@@ -280,6 +280,23 @@ class LanguageServiceMain {
 		var importedArgumentContext = importService.completionContext("editor/ImportedSignature.hx", importedSignatureSource.length);
 		if (importedArgumentContext == null || importedArgumentContext.context.expected != TInt)
 			throw "recovered imported signature did not preserve the expected argument type";
+		var inferredExternalService = new LanguageService();
+		inferredExternalService.update("editor/util/Inferred.hx", "package editor.util; function value() return \"known\";");
+		var inferredExternalSource = "package editor; import editor.util.Inferred; function main():String { return value(); }";
+		inferredExternalService.update("editor/InferredMain.hx", inferredExternalSource);
+		var inferredExternalModel = inferredExternalService.compiler.modules.get("editor.InferredMain").recoveredSemanticModel,
+			inferredExternalResult = false;
+		if (inferredExternalModel != null && inferredExternalModel.partialTypedProgram != null)
+			for (fn in inferredExternalModel.partialTypedProgram.functions)
+				for (statement in fn.statements)
+					switch statement {
+						case TReturn(expression, _):
+							if (expression.type == compiler.types.Type.CompilerType.TString)
+								inferredExternalResult = true;
+						default:
+					}
+		if (!inferredExternalResult)
+			throw "recovered typing did not infer an external function's result type";
 		var transitiveService = new LanguageService();
 		transitiveService.update("editor/base/Base.hx",
 			"package editor.base; class Base { public var inherited:Int; public function inheritedMethod(value:String):String return value; }");
