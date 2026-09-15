@@ -271,6 +271,11 @@ class SemanticIndex {
 
 	function indexRecoveredFunction(fn:AstFunction, owner:Null<String>):Void {
 		var functionKey = (owner == null ? "" : owner + ".") + fn.name;
+		var functionId = recoveredDeclaredSymbol(functionKey);
+		if (functionId != null) {
+			var parameters = [for (argument in fn.arguments) argument.name + ":" + displayAstType(argument.type)];
+			setDeclaredSignature(functionKey, fn.name + "(" + parameters.join(", ") + "):" + displayAstType(fn.result), parameters, displayAstType(fn.result));
+		}
 		for (argument in fn.arguments)
 			addRecoveredLocal(functionKey, argument.name, recoveredType(argument.type), argument.span, fn.span, 0);
 		if (owner != null)

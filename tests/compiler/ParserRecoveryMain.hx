@@ -127,6 +127,13 @@ class ParserRecoveryMain {
 				}
 		if (!foundError)
 			throw "incomplete initializer did not retain an explicit error type";
+
+		var signatureService = new LanguageService(),
+			signatureSource = "function take(value:Int):Void return; function main():Void return take(";
+		signatureService.update("SignatureRecovery.hx", signatureSource);
+		var signature = signatureService.signatureHelp("SignatureRecovery.hx", signatureSource.length);
+		if (signature == null || signature.label != "take(value:Int):Void" || signature.activeParameter != 0)
+			throw "recovered call did not expose signature help context";
 	}
 
 	static function assertNestedRecovery(tail:String):Void {
