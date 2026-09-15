@@ -34,6 +34,7 @@
 #include "runtime/processes.c"
 #include "runtime/native_call.c"
 #include "runtime/memory.c"
+#include "runtime/atomics.c"
 #include "runtime/types.c"
 #include "runtime/module_runtime.c"
 #include "runtime/bindings.c"
