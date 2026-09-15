@@ -17,11 +17,15 @@ class SemanticModel {
 	/** Optional partial typed output owned only by a recovered editor model. */
 	public var partialTypedProgram:Null<TypedProgram>;
 
+	/** Signature-inferred program retained for reuse by dependent recovery queries. */
+	public var recoveredSignatureProgram:Null<AstProgram>;
+
 	public function new(program:AstProgram, source:SourceFile, revision:Int, ?tokens:Array<Token>) {
 		this.revision = revision;
 		this.program = program;
 		this.declarations = DeclarationIndex.forModule(program, source);
 		this.index = new SemanticIndex(source.path, revision, declarations, tokens == null ? new Lexer(source).tokenize() : tokens);
 		this.partialTypedProgram = null;
+		this.recoveredSignatureProgram = null;
 	}
 }

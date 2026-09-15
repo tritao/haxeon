@@ -387,12 +387,14 @@ class LanguageService {
 		}
 		try {
 			var recovered = new Parser(tokens, checkpoint).parseProgramRecovering();
-			var recoveredModel = new SemanticModel(recovered.program, state.source, state.revision, tokens),
+			var inferredProgram = SignatureInference.inferProgram(recovered.program, checkpoint),
+				recoveredModel = new SemanticModel(recovered.program, state.source, state.revision, tokens),
 				typingDiagnostics:Array<Diagnostic> = [],
 				typingModules = recoveryTypingModules(state, recovered.program, token),
 				reusedFunctions = recoveredTypedFunctionReuse(state, recovered.program, externalChangedBodies, forceNoReuse);
+			recoveredModel.recoveredSignatureProgram = inferredProgram;
 			recoveredModel.partialTypedProgram = Typer.typeRecovered(recovered.program, null, checkpoint, typingDiagnostics, typingModules,
-				reusedFunctions);
+				reusedFunctions, inferredProgram);
 			if (recoveredModel.partialTypedProgram != null)
 				recoveredTypedFunctionReuses += mapSize(reusedFunctions);
 			for (module in typingModules)
@@ -1931,7 +1933,10 @@ class LanguageService {
 			valid = state.ast != null;
 		if (cached != null && cached.revision == state.revision && cached.valid == valid)
 			return cached.program;
-		var program = SignatureInference.inferProgram(ast, token == null ? null : token.check);
+		var recoveredModel = !valid ? state.recoveredSemanticModel : null,
+			program = recoveredModel == null || recoveredModel.recoveredSignatureProgram == null
+				? SignatureInference.inferProgram(ast, token == null ? null : token.check)
+				: recoveredModel.recoveredSignatureProgram;
 		recoveredCompletionPrograms.set(state.name, {revision: state.revision, valid: valid, program: program});
 		return program;
 	}

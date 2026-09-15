@@ -34,10 +34,10 @@ class Typer {
 
 	/** Type a recovery tree while keeping failures local to the smallest body. */
 	public static function typeRecovered(program:AstProgram, ?nativeAbiTarget:String, ?checkpoint:Void->Void, ?diagnostics:Array<Diagnostic>,
-			?modules:Array<RecoveryTypingModule>, ?reusedFunctions:Map<String, TypedFunction>):Null<TypedProgram> {
+			?modules:Array<RecoveryTypingModule>, ?reusedFunctions:Map<String, TypedFunction>, ?inferredProgram:AstProgram):Null<TypedProgram> {
 		var bodyTyper = new BodyTyper(null, null, nativeAbiTarget, true, checkpoint);
 		try {
-			var semantic = SemanticProgram.analyzeRecovered(program, checkpoint);
+			var semantic = SemanticProgram.analyzeRecovered(program, checkpoint, inferredProgram);
 			appendRecoveryDiagnostics(diagnostics, semantic.declarations.recoveryDiagnostics);
 			if (modules != null)
 				for (module in modules)
