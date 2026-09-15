@@ -6,6 +6,7 @@ import compiler.types.DeclarationIndex.DeclarationKind;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.syntax.Ast.AstProgram;
+import compiler.syntax.Ast.AstType;
 import compiler.semantic.SemanticIndex.IndexedSemanticSymbol;
 import compiler.semantic.SemanticIndex.SemanticSymbolId;
 import compiler.semantic.SemanticIndex.SemanticSignatureInfo;
@@ -23,6 +24,13 @@ typedef ImportableSymbol = {
 	final state:ModuleState;
 	final symbol:IndexedSemanticSymbol;
 	final importPath:String;
+}
+
+/** Instance member candidate exposed to editor queries. */
+typedef EditorMember = {
+	final name:String;
+	final kind:String;
+	final detail:String;
 }
 
 /** A lookup either identifies one declaration, no declaration, or an ambiguous set. */
@@ -812,6 +820,234 @@ class SemanticWorkspace {
 		}
 		result.sort(function(left, right) return Reflect.compare(left.name, right.name));
 		return result;
+	}
+
+	/**
+	 * Enumerate members from the editor-visible type snapshots. This deliberately
+	 * consumes current recovered declarations when available, while keeping all
+	 * type/AST traversal in the semantic workspace instead of the protocol layer.
+	 */
+	public function editorMembers(type:CompilerType, ?token:CancellationToken):Array<EditorMember> {
+		var result:Array<EditorMember> = [],
+			seen:Map<String, Bool> = [];
+		collectEditorMembers(type, result, seen, token);
+		result.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		return result;
+	}
+
+	function collectEditorMembers(type:CompilerType, result:Array<EditorMember>, seen:Map<String, Bool>, ?token:CancellationToken):Void {
+		if (token != null)
+			token.check();
+		var key = Std.string(type);
+		if (seen.exists(key))
+			return;
+		seen.set(key, true);
+		switch type {
+			case TNullable(element):
+				collectEditorMembers(element, result, seen, token);
+			case TInstance(NominalKind.Class, name, arguments), TInstance(NominalKind.NativeValue, name, arguments):
+				for (state in orderedStates()) {
+					if (token != null)
+						token.check();
+					var model = editorModel(state);
+					if (model == null)
+						continue;
+					for (classDecl in model.program.classes)
+						if (ownsType(state, model, classDecl.name, name)) {
+							var substitutions = editorTypeSubstitutions(classDecl.typeParameters, arguments);
+							for (field in classDecl.fields) {
+								if (token != null)
+									token.check();
+								if (!field.isStatic)
+									addEditorMember(result, seen, field.name, "field",
+										field.name + ":" + editorAstTypeName(field.type, substitutions));
+							}
+							for (method in classDecl.methods) {
+								if (token != null)
+									token.check();
+								if (!method.isStatic)
+									addEditorMember(result, seen, method.name, "method",
+										method.name + "(" + [for (argument in method.arguments)
+											editorAstTypeName(argument.type, substitutions)].join(",") + "):"
+										+ editorAstTypeName(method.result, substitutions));
+							}
+							if (classDecl.base != null)
+								collectEditorMembers(editorTypeFromAst(classDecl.base, substitutions), result, seen, token);
+							for (interfaceType in classDecl.interfaces)
+								collectEditorMembers(editorTypeFromAst(interfaceType, substitutions), result, seen, token);
+						}
+				}
+			case TInstance(NominalKind.Interface, name, arguments):
+				for (state in orderedStates()) {
+					if (token != null)
+						token.check();
+					var model = editorModel(state);
+					if (model == null)
+						continue;
+					for (interfaceDecl in model.program.interfaces)
+						if (ownsType(state, model, interfaceDecl.name, name)) {
+							var substitutions = editorTypeSubstitutions(interfaceDecl.typeParameters, arguments);
+							for (method in interfaceDecl.methods) {
+								if (token != null)
+									token.check();
+								addEditorMember(result, seen, method.name, "method",
+									method.name + "(" + [for (argument in method.arguments)
+										editorAstTypeName(argument.type, substitutions)].join(",") + "):"
+									+ editorAstTypeName(method.result, substitutions));
+							}
+							for (baseType in interfaceDecl.bases)
+								collectEditorMembers(editorTypeFromAst(baseType, substitutions), result, seen, token);
+						}
+				}
+			case TAbstract(name, arguments, _):
+				for (state in orderedStates()) {
+					if (token != null)
+						token.check();
+					var model = editorModel(state);
+					if (model == null)
+						continue;
+					for (abstractDecl in model.program.abstracts)
+						if (ownsType(state, model, abstractDecl.name, name)) {
+							var substitutions = editorTypeSubstitutions(abstractDecl.typeParameters, arguments);
+							for (method in abstractDecl.methods)
+								if (!method.isStatic) {
+									if (token != null)
+										token.check();
+									addEditorMember(result, seen, method.name, "method",
+										method.name + "(" + [for (argument in method.arguments)
+											editorAstTypeName(argument.type, substitutions)].join(",") + "):"
+										+ editorAstTypeName(method.result, substitutions));
+								}
+						}
+				}
+			case TArray(_):
+				addEditorMember(result, seen, "length", "field", "length:Int");
+				addEditorMember(result, seen, "copy", "method", "copy():Array");
+				addEditorMember(result, seen, "concat", "method", "concat(other):Array");
+				addEditorMember(result, seen, "slice", "method", "slice(start,end):Array");
+				addEditorMember(result, seen, "indexOf", "method", "indexOf(value):Int");
+				addEditorMember(result, seen, "push", "method", "push(value):Int");
+				addEditorMember(result, seen, "pop", "method", "pop():Element");
+				addEditorMember(result, seen, "shift", "method", "shift():Element");
+			case TMap(_, _):
+				addEditorMember(result, seen, "set", "method", "set(key,value):Void");
+				addEditorMember(result, seen, "exists", "method", "exists(key):Bool");
+				addEditorMember(result, seen, "keys", "method", "keys():Array");
+				addEditorMember(result, seen, "values", "method", "values():Array");
+				addEditorMember(result, seen, "remove", "method", "remove(key):Bool");
+				addEditorMember(result, seen, "clear", "method", "clear():Void");
+				addEditorMember(result, seen, "size", "field", "size:Int");
+			case TString:
+				addEditorMember(result, seen, "length", "field", "length:Int");
+				addEditorMember(result, seen, "indexOf", "method", "indexOf(needle):Int");
+				addEditorMember(result, seen, "substring", "method", "substring(start,end):String");
+			default:
+		}
+	}
+
+	static function addEditorMember(result:Array<EditorMember>, seen:Map<String, Bool>, name:String, kind:String, detail:String):Void {
+		if (seen.exists("member:" + name))
+			return;
+		seen.set("member:" + name, true);
+		result.push({name: name, kind: kind, detail: detail});
+	}
+
+	static function editorTypeSubstitutions(parameters:Array<String>, arguments:Array<CompilerType>):Map<String, String> {
+		var result:Map<String, String> = [];
+		for (index in 0...parameters.length)
+			if (index < arguments.length)
+				result.set(parameters[index], editorCompilerTypeName(arguments[index]));
+		return result;
+	}
+
+	static function editorAstTypeName(type:Null<AstType>, substitutions:Map<String, String>):String {
+		if (type == null)
+			return "_";
+		return switch type {
+			case ErrorType(_): "_";
+			case IntType: "Int";
+			case BoolType: "Bool";
+			case FloatType: "Float";
+			case StringType: "String";
+			case VoidType: "Void";
+			case InferredType: "_";
+			case NativeAbstractType(declaration, tag): '$declaration<"$tag">';
+			case NamedType(name): substitutions.exists(name) ? substitutions.get(name) : name;
+			case AppliedType(name, arguments): '$name<${[for (argument in arguments) editorAstTypeName(argument, substitutions)].join(",")}>';
+			case ArrayType(element): 'Array<${editorAstTypeName(element, substitutions)}>';
+			case MapType(key, value): 'Map<${editorAstTypeName(key, substitutions)},${editorAstTypeName(value, substitutions)}>';
+			case NullableType(element): 'Null<${editorAstTypeName(element, substitutions)}>';
+			case FunctionType(arguments, result): '(${[for (argument in arguments) editorAstTypeName(argument, substitutions)].join(",")})->${editorAstTypeName(result, substitutions)}';
+			case AnonymousType(fields): '{${[for (field in fields) (field.optional ? "?" : "") + field.name + ":" + editorAstTypeName(field.type, substitutions)].join(",")}}';
+		};
+	}
+
+	static function editorCompilerTypeName(type:CompilerType):String
+		return switch type {
+			case TInt: "Int";
+			case TInt64: "haxe.Int64";
+			case TFloat: "Float";
+			case TBool: "Bool";
+			case TString: "String";
+			case TUnknown: "Unknown";
+			case TError: "Error";
+			case TVoid: "Void";
+			case TArray(element): 'Array<${editorCompilerTypeName(element)}>';
+			case TIterator(element): 'Iterator<${editorCompilerTypeName(element)}>';
+			case TMap(key, value): 'Map<${editorCompilerTypeName(key)},${editorCompilerTypeName(value)}>';
+			case TNullable(element): 'Null<${editorCompilerTypeName(element)}>';
+			case TFunction(arguments, result): '(${[for (argument in arguments) editorCompilerTypeName(argument)].join(",")})->${editorCompilerTypeName(result)}';
+			case TInstance(_, name, arguments): arguments.length == 0 ? name : '$name<${[for (argument in arguments) editorCompilerTypeName(argument)].join(",")}>';
+			case TAbstract(name, arguments, _): arguments.length == 0 ? name : '$name<${[for (argument in arguments) editorCompilerTypeName(argument)].join(",")}>';
+			case TTypeParameter(_, name): name;
+			case TDynamic: "Dynamic";
+			case TNativeAbstract(name): name;
+			case TNativeScalar(name): name;
+			case THlBytes: "hl.Bytes";
+			case TBytes: "haxe.io.Bytes";
+			case TNever: "Never";
+			case TRange: "IntIterator";
+			case TNull: "null";
+			case TAnonymous(name, _): name;
+		};
+
+	function editorTypeFromAst(type:AstType, substitutions:Map<String, String>):CompilerType {
+		return switch type {
+			case IntType: TInt;
+			case BoolType: TBool;
+			case FloatType: TFloat;
+			case StringType: TString;
+			case VoidType: TVoid;
+			case NamedType(name): editorTypeFromName(substitutions.exists(name) ? substitutions.get(name) : name);
+			case AppliedType(name, arguments): TInstance(editorNominalKind(name), name,
+				[for (argument in arguments) editorTypeFromAst(argument, substitutions)]);
+			case ArrayType(element): TArray(editorTypeFromAst(element, substitutions));
+			case MapType(key, value): TMap(editorTypeFromAst(key, substitutions), editorTypeFromAst(value, substitutions));
+			case NullableType(element): TNullable(editorTypeFromAst(element, substitutions));
+			default: TUnknown;
+		};
+	}
+
+	function editorTypeFromName(name:String):CompilerType
+		return switch name {
+			case "Int": TInt;
+			case "Bool": TBool;
+			case "Float": TFloat;
+			case "String": TString;
+			case "Void": TVoid;
+			default: TInstance(editorNominalKind(name), name, []);
+		};
+
+	function editorNominalKind(name:String):NominalKind {
+		for (state in orderedStates()) {
+			var model = editorModel(state);
+			if (model == null)
+				continue;
+			for (interfaceDecl in model.program.interfaces)
+				if (ownsType(state, model, interfaceDecl.name, name))
+					return NominalKind.Interface;
+		}
+		return NominalKind.Class;
 	}
 
 	function memberInner(type:CompilerType, name:String, visiting:Map<String, Bool>):Null<WorkspaceDeclaration> {

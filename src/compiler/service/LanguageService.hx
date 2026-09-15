@@ -1331,7 +1331,8 @@ class LanguageService {
 		}
 		if (qualifier != null) {
 			if (semanticContext != null && semanticContext.receiver != null)
-				addInstanceMembers(semanticContext.receiver, prefix, result, token);
+				for (member in compiler.semanticWorkspace.editorMembers(semanticContext.receiver, token))
+					addMember(member.name, member.kind, member.detail, prefix, result);
 			addImportedMembers(ast, qualifier, prefix, result, token);
 			if (model != null)
 				for (symbol in compiler.semanticWorkspace.editorVisibleSymbols(state, token)) {
@@ -1765,7 +1766,8 @@ class LanguageService {
 				context = model == null ? null : model.index.completionContext(position, qualifier, token),
 				members:Array<CompletionItem> = [];
 			if (context != null && context.receiver != null) {
-				addInstanceMembers(context.receiver, name, members, token);
+				for (member in compiler.semanticWorkspace.editorMembers(context.receiver, token))
+					addMember(member.name, member.kind, member.detail, name, members);
 				if (members.length > 0)
 					return members[0].detail;
 			}
@@ -2156,120 +2158,6 @@ class LanguageService {
 				DeclarationKind.TypeParameter: true;
 			default: false;
 		};
-
-	function addInstanceMembers(type:CompilerType, prefix:String, result:Array<CompletionItem>, token:Null<CancellationToken>,
-		?visiting:Map<String, Bool>):Void {
-		if (token != null)
-			token.check();
-		var seen:Map<String, Bool> = visiting == null ? [] : visiting,
-			visitKey = compilerTypeName(type);
-		if (seen.exists(visitKey))
-			return;
-		seen.set(visitKey, true);
-		switch type {
-			case TNullable(element):
-				addInstanceMembers(element, prefix, result, token, seen);
-			case TInstance(Class, name, arguments):
-				for (state in compiler.modules) {
-					if (token != null)
-						token.check();
-					var ast = effectiveAst(state);
-					if (ast != null)
-						for (classDecl in ast.classes)
-							if (classDecl.name == name) {
-								var substitutions:Map<String, String> = [];
-								for (index in 0...classDecl.typeParameters.length)
-									if (index < arguments.length)
-										substitutions.set(classDecl.typeParameters[index], compilerTypeName(arguments[index]));
-								for (field in classDecl.fields) {
-									if (token != null)
-										token.check();
-									if (!field.isStatic)
-										addMember(field.name, "field", '${field.name}:${typeNameSubstituted(field.type, substitutions)}', prefix, result);
-								}
-								for (method in classDecl.methods) {
-									if (token != null)
-										token.check();
-									if (!method.isStatic)
-										addMember(method.name, "method",
-											'${method.name}(${[for (argument in method.arguments) typeNameSubstituted(argument.type, substitutions)].join(",")}):${typeNameSubstituted(method.result, substitutions)}',
-											prefix, result);
-								}
-								if (classDecl.base != null)
-									addInstanceMembers(compilerTypeFromAst(classDecl.base, substitutions), prefix, result, token, seen);
-								for (interfaceType in classDecl.interfaces)
-									addInstanceMembers(compilerTypeFromAst(interfaceType, substitutions), prefix, result, token, seen);
-							}
-				}
-			case TInstance(Interface, name, arguments):
-				for (state in compiler.modules) {
-					if (token != null)
-						token.check();
-					var ast = effectiveAst(state);
-					if (ast != null)
-						for (interfaceDecl in ast.interfaces)
-							if (interfaceDecl.name == name) {
-								var substitutions:Map<String, String> = [];
-								for (index in 0...interfaceDecl.typeParameters.length)
-									if (index < arguments.length)
-										substitutions.set(interfaceDecl.typeParameters[index], compilerTypeName(arguments[index]));
-								for (method in interfaceDecl.methods) {
-									if (token != null)
-										token.check();
-										addMember(method.name, "method",
-											'${method.name}(${[for (argument in method.arguments) typeNameSubstituted(argument.type, substitutions)].join(",")}):${typeNameSubstituted(method.result, substitutions)}',
-											prefix, result);
-								}
-								for (baseType in interfaceDecl.bases)
-									addInstanceMembers(compilerTypeFromAst(baseType, substitutions), prefix, result, token, seen);
-							}
-				}
-			case TAbstract(name, arguments, _):
-				for (state in compiler.modules) {
-					if (token != null)
-						token.check();
-					var ast = effectiveAst(state);
-					if (ast != null)
-						for (abstractDecl in ast.abstracts)
-							if (abstractDecl.name == name) {
-								var substitutions:Map<String, String> = [];
-								for (index in 0...abstractDecl.typeParameters.length)
-									if (index < arguments.length)
-										substitutions.set(abstractDecl.typeParameters[index], compilerTypeName(arguments[index]));
-								for (method in abstractDecl.methods) {
-									if (token != null)
-										token.check();
-									if (!method.isStatic)
-										addMember(method.name, "method",
-											'${method.name}(${[for (argument in method.arguments) typeNameSubstituted(argument.type, substitutions)].join(",")}):${typeNameSubstituted(method.result, substitutions)}',
-											prefix, result);
-								}
-							}
-				}
-			case TArray(_):
-				addMember("length", "field", "length:Int", prefix, result);
-				addMember("copy", "method", "copy():Array", prefix, result);
-				addMember("concat", "method", "concat(other):Array", prefix, result);
-				addMember("slice", "method", "slice(start,end):Array", prefix, result);
-				addMember("indexOf", "method", "indexOf(value):Int", prefix, result);
-				addMember("push", "method", "push(value):Int", prefix, result);
-				addMember("pop", "method", "pop():Element", prefix, result);
-				addMember("shift", "method", "shift():Element", prefix, result);
-			case TMap(_, _):
-				addMember("set", "method", "set(key,value):Void", prefix, result);
-				addMember("exists", "method", "exists(key):Bool", prefix, result);
-				addMember("keys", "method", "keys():Array", prefix, result);
-				addMember("values", "method", "values():Array", prefix, result);
-				addMember("remove", "method", "remove(key):Bool", prefix, result);
-				addMember("clear", "method", "clear():Void", prefix, result);
-				addMember("size", "method", "size():Int", prefix, result);
-			case TString:
-				addMember("length", "field", "length:Int", prefix, result);
-				addMember("indexOf", "method", "indexOf(needle):Int", prefix, result);
-				addMember("substring", "method", "substring(start,end):String", prefix, result);
-			default:
-		}
-	}
 
 	function addImportedMembers(program:compiler.syntax.Ast.AstProgram, qualifier:String, prefix:String, result:Array<CompletionItem>,
 			token:Null<CancellationToken>):Void {
@@ -2901,63 +2789,6 @@ class LanguageService {
 			case FunctionType(arguments, result): '(${[for (argument in arguments) typeName(argument)].join(",")})->${typeName(result)}';
 			case AnonymousType(fields): '{${[for (field in fields) (field.optional ? "?" : "") + field.name + ":" + typeName(field.type)].join(",")}}';
 		};
-
-	static function typeNameSubstituted(type:Null<AstType>, substitutions:Map<String, String>):String {
-		if (type == null)
-			return "_";
-
-		return switch type {
-			case NamedType(name): substitutions.exists(name) ? substitutions.get(name) : name;
-			case AppliedType(name, arguments): '$name<${[for (argument in arguments) typeNameSubstituted(argument, substitutions)].join(",")}>';
-			case ArrayType(element): 'Array<${typeNameSubstituted(element, substitutions)}>';
-			case MapType(key, value): 'Map<${typeNameSubstituted(key, substitutions)},${typeNameSubstituted(value, substitutions)}>';
-			case NullableType(element): 'Null<${typeNameSubstituted(element, substitutions)}>';
-			case FunctionType(arguments, result): '(${[for (argument in arguments) typeNameSubstituted(argument, substitutions)].join(",")})->${typeNameSubstituted(result, substitutions)}';
-			case AnonymousType(fields): '{${[for (field in fields) (field.optional ? "?" : "") + field.name + ":" + typeNameSubstituted(field.type, substitutions)].join(",")}}';
-			default: typeName(type);
-		};
-	}
-
-	function compilerTypeFromAst(type:AstType, substitutions:Map<String, String>):CompilerType {
-		return switch type {
-			case IntType: TInt;
-			case BoolType: TBool;
-			case FloatType: TFloat;
-			case StringType: TString;
-			case VoidType: TVoid;
-			case NamedType(name): compilerTypeFromName(substitutions.exists(name) ? substitutions.get(name) : name);
-			case AppliedType(name, arguments): TInstance(nominalKindFor(name), name, [for (argument in arguments) compilerTypeFromAst(argument, substitutions)]);
-			case ArrayType(element): TArray(compilerTypeFromAst(element, substitutions));
-			case MapType(key, value): TMap(compilerTypeFromAst(key, substitutions), compilerTypeFromAst(value, substitutions));
-			case NullableType(element): TNullable(compilerTypeFromAst(element, substitutions));
-			default: TUnknown;
-		};
-	}
-
-	function compilerTypeFromName(name:String):CompilerType
-		return switch name {
-			case "Int": TInt;
-			case "Bool": TBool;
-			case "Float": TFloat;
-			case "String": TString;
-			case "Void": TVoid;
-			default: TInstance(nominalKindFor(name), name, []);
-		};
-
-	function nominalKindFor(name:String):NominalKind {
-		for (state in compiler.modules) {
-			var ast = effectiveAst(state);
-			if (ast == null)
-				continue;
-			for (interfaceDecl in ast.interfaces)
-				if (interfaceDecl.name == name)
-					return Interface;
-			for (classDecl in ast.classes)
-				if (classDecl.name == name)
-					return Class;
-		}
-		return Class;
-	}
 
 	static function compilerTypeName(type:CompilerType):String
 		return switch type {
