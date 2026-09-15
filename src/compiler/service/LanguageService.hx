@@ -61,6 +61,14 @@ typedef CompletionResult = {
 	final isIncomplete:Bool;
 }
 
+/** Confidence attached to an editor semantic snapshot or query. */
+enum EditorSnapshotConfidence {
+	Exact;
+	RecoveredStable;
+	RecoveredPartial;
+	LastGood;
+}
+
 /** A same-document semantic occurrence, classified for LSP highlighting. */
 typedef DocumentHighlight = {
 	final span:SourceSpan;
@@ -189,6 +197,7 @@ private typedef SemanticQueryContext = {
 	final symbol:Null<SemanticSymbolId>;
 	final completion:SemanticCompletionContext;
 	final stale:Bool;
+	final confidence:EditorSnapshotConfidence;
 }
 
 private typedef EditorSnapshot = {
@@ -199,6 +208,7 @@ private typedef EditorSnapshot = {
 	final revision:Int;
 	final stale:Bool;
 	final recovered:Bool;
+	final confidence:EditorSnapshotConfidence;
 }
 
 /** Read-only editor queries backed by the persistent compiler state. */
@@ -656,6 +666,11 @@ class LanguageService {
 		return snapshot != null && !snapshot.stale;
 	}
 
+	public function editorSnapshotConfidence(path:String):Null<EditorSnapshotConfidence> {
+		var state = stateFor(path), snapshot = state == null ? null : editorSnapshot(state);
+		return snapshot == null ? null : snapshot.confidence;
+	}
+
 	public function documentSymbols(path:String):Array<DocumentSymbol> {
 		var state = stateFor(path),
 			result:Array<DocumentSymbol> = [],
@@ -741,9 +756,11 @@ class LanguageService {
 			token.check();
 		var state = stateFor(path),
 			result:Array<CompletionItem> = [],
-			ast = state == null ? null : effectiveAst(state);
+			snapshot = state == null ? null : editorSnapshot(state),
+			ast = snapshot == null ? null : snapshot.ast;
 		if (state == null || ast == null)
 			return completionResult(result);
+		var incompleteSnapshot = snapshot.recovered || snapshot.stale;
 		var prefix = identifierPrefix(state.source, position);
 		var qualifier = memberQualifier(state.source, position),
 			model = effectiveSemanticModel(state),
@@ -789,7 +806,7 @@ class LanguageService {
 			if (result.length > 0) {
 				sortCompletion(result);
 				tagResults(result, state);
-				return completionResult(result);
+				return completionResult(result, incompleteSnapshot);
 			}
 		}
 		if (semanticContext != null)
@@ -838,7 +855,7 @@ class LanguageService {
 			addMember(symbol.name, symbol.kind, symbol.detail, prefix, result);
 		sortCompletion(result);
 		tagResults(result, state);
-		return completionResult(result);
+		return completionResult(result, incompleteSnapshot);
 	}
 
 	public function resolveCompletion(path:String, identity:String, revision:Int, ?importPath:String):Null<ResolvedCompletion> {
@@ -1182,7 +1199,7 @@ class LanguageService {
 			indexedId = context == null ? null : context.symbol,
 			name = symbolAt(path, position),
 			result:Array<TextEdit> = [];
-		if (indexedId == null || name == null || !isIdentifier(replacement) || replacement == name)
+		if (!stableSymbol(context) || name == null || !isIdentifier(replacement) || replacement == name)
 			return result;
 		var targetReferences = references(path, position);
 		if (indexedRenameCollides(indexedId, replacement, targetReferences))
@@ -1269,15 +1286,23 @@ class LanguageService {
 		var state = stateFor(path),
 			snapshot = state == null ? null : editorSnapshot(state),
 			model = snapshot == null ? null : snapshot.semanticModel;
+		var symbol = model == null ? null : model.index.symbolIdAt(position),
+			confidence = snapshot == null ? null : snapshot.confidence == EditorSnapshotConfidence.RecoveredPartial && symbol != null
+				? EditorSnapshotConfidence.RecoveredStable : snapshot.confidence;
 		return state == null || snapshot == null || model == null ? null : {
 			state: state,
 			snapshot: snapshot,
 			model: model,
-			symbol: model.index.symbolIdAt(position),
+			symbol: symbol,
 			completion: model.index.completionContext(position, qualifier),
-			stale: snapshot.stale
+			stale: snapshot.stale,
+			confidence: confidence
 		};
 	}
+
+	static function stableSymbol(context:Null<SemanticQueryContext>):Bool
+		return context != null && context.symbol != null
+			&& (context.confidence == EditorSnapshotConfidence.Exact || context.confidence == EditorSnapshotConfidence.RecoveredStable);
 
 	static function sourceName(name:String):String {
 		var separator = name.lastIndexOf(".");
@@ -1399,8 +1424,8 @@ class LanguageService {
 	static function sortCompletion(result:Array<CompletionItem>):Void
 		result.sort(function(left, right) return Reflect.compare(left.sortText, right.sortText));
 
-	static function completionResult(result:Array<CompletionItem>):CompletionResult {
-		var incomplete = result.length > MAX_COMPLETION_ITEMS;
+	static function completionResult(result:Array<CompletionItem>, incompleteSnapshot:Bool = false):CompletionResult {
+		var incomplete = incompleteSnapshot || result.length > MAX_COMPLETION_ITEMS;
 		return {items: incomplete ? result.slice(0, MAX_COMPLETION_ITEMS) : result, isIncomplete: incomplete};
 	}
 
@@ -1772,7 +1797,8 @@ class LanguageService {
 				semanticModel: state.semanticModel,
 				revision: state.revision,
 				stale: false,
-				recovered: false
+				recovered: false,
+				confidence: EditorSnapshotConfidence.Exact
 			};
 
 		if (state.recoveredAst != null)
@@ -1783,7 +1809,8 @@ class LanguageService {
 				semanticModel: state.recoveredSemanticModel,
 				revision: state.revision,
 				stale: false,
-				recovered: true
+				recovered: true,
+				confidence: EditorSnapshotConfidence.RecoveredPartial
 			};
 
 		if (state.lastGoodAst != null && state.lastGoodSource != null && state.lastGoodSemanticModel != null)
@@ -1794,7 +1821,8 @@ class LanguageService {
 				semanticModel: state.lastGoodSemanticModel,
 				revision: state.lastGoodRevision,
 				stale: true,
-				recovered: false
+				recovered: false,
+				confidence: EditorSnapshotConfidence.LastGood
 			};
 
 		return null;

@@ -13,8 +13,11 @@ class ParserRecoveryMain {
 		try
 			service.analyze("Main")
 		catch (_:CompileError) {}
-		var completion = service.complete("Main.hx", source.length),
+		var completionResult = service.completeResult("Main.hx", source.length),
+			completion = completionResult.items,
 			names = [for (item in completion) item.label];
+		if (!completionResult.isIncomplete)
+			throw "recovered completion did not request a follow-up query";
 		if (names.indexOf("value") < 0 || names.indexOf("read") < 0)
 			throw "incomplete member access did not retain recovered receiver completion";
 		for (item in completion)
