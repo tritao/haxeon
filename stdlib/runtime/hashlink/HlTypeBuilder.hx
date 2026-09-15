@@ -90,11 +90,13 @@ class HlTypeBuilder {
 		functionData.ref.ret = returnType;
 		functionData.ref.nargs = cast nargs;
 		functionData.ref.parent = RawPtr.nullPtr();
+		// HashLink derives the closure view lazily in hl_get_closure_type().
+		// Keep this cache zeroed so native closure allocation remains authoritative.
 		functionData.ref.closureType.ref.kind = cast HlTypeKind.VoidType;
 		functionData.ref.closureType.ref.pointer = RawPtr.nullPtr();
-		functionData.ref.closure.ref.args = nativeArguments;
-		functionData.ref.closure.ref.ret = returnType;
-		functionData.ref.closure.ref.nargs = cast nargs;
+		functionData.ref.closure.ref.args = RawPtr.nullPtr();
+		functionData.ref.closure.ref.ret = RawPtr.nullPtr();
+		functionData.ref.closure.ref.nargs = 0;
 		functionData.ref.closure.ref.parent = RawPtr.nullPtr();
 	}
 

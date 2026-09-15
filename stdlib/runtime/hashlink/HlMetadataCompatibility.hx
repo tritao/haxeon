@@ -88,18 +88,12 @@ class HlMetadataCompatibility {
 		right:RawPtr<HlTypeFunction>):Bool {
 		if (left.isNull() || right.isNull())
 			return left.isNull() && right.isNull();
-		var nargs:Int = cast(left.ref.nargs, Int), closureNargs:Int = cast(left.ref.closure.ref.nargs, Int);
+		var nargs:Int = cast(left.ref.nargs, Int);
 		if (left.ref.nargs != right.ref.nargs
 			|| !sameType(previous, candidate, left.ref.ret, right.ref.ret)
-			|| !sameType(previous, candidate, left.ref.parent, right.ref.parent)
-			|| left.ref.closureType.ref.kind != right.ref.closureType.ref.kind
-			|| left.ref.closureType.ref.pointer.isNull() != right.ref.closureType.ref.pointer.isNull()
-			|| left.ref.closure.ref.nargs != right.ref.closure.ref.nargs
-			|| !sameType(previous, candidate, left.ref.closure.ref.ret, right.ref.closure.ref.ret)
-			|| !sameType(previous, candidate, left.ref.closure.ref.parent, right.ref.closure.ref.parent))
+			|| !sameType(previous, candidate, left.ref.parent, right.ref.parent))
 			return false;
-		if (!sameTypeArray(previous, candidate, left.ref.args, right.ref.args, nargs)
-			|| !sameTypeArray(previous, candidate, left.ref.closure.ref.args, right.ref.closure.ref.args, closureNargs))
+		if (!sameTypeArray(previous, candidate, left.ref.args, right.ref.args, nargs))
 			return false;
 		return true;
 	}
@@ -183,11 +177,9 @@ class HlMetadataCompatibility {
 		if (left.isNull() || right.isNull())
 			return left.isNull() && right.isNull();
 		var nfields:Int = cast(left.ref.nfields, Int);
-		if (left.ref.nfields != right.ref.nfields || left.ref.dataSize != right.ref.dataSize
-			|| left.ref.lookup.isNull() != right.ref.lookup.isNull())
+		if (left.ref.nfields != right.ref.nfields)
 			return false;
-		return sameFields(previous, candidate, left.ref.fields, right.ref.fields, nfields)
-			&& sameInts(left.ref.indexes, right.ref.indexes, nfields);
+		return sameFields(previous, candidate, left.ref.fields, right.ref.fields, nfields);
 	}
 
 	static function sameTypeArray(previous:HlMetadataGeneration, candidate:HlMetadataGeneration, left:RawPtr<RawPtr<HlType>>,

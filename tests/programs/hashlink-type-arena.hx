@@ -38,8 +38,8 @@ function main():Int {
 	var builtCorrect = builtData.ref.ret == voidType
 		&& builtData.ref.args.offset(0).load() == voidType
 		&& builtData.ref.args.offset(1).load() == intType
-		&& builtData.ref.closure.ref.ret == voidType
-		&& builtData.ref.closure.ref.args.offset(2).load() == voidType
+		&& builtData.ref.closure.ref.ret.isNull()
+		&& builtData.ref.closure.ref.args.isNull()
 		&& builtParameter.ref.data.ref.typeParam == voidType
 		&& HlTypeBridge.native_type_kind(voidType) == 0
 		&& HlTypeBridge.native_type_kind(builtFunction) == 10

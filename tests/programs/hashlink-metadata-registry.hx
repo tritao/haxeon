@@ -107,8 +107,16 @@ function main():Int {
 	var functionBefore = buildFunctionGeneration(false),
 		functionAfter = buildFunctionGeneration(true),
 		functionChanged = requiresReload(HlMetadataCompatibility.check(functionBefore, functionAfter));
+	var derivedFunction = functionBefore.type(2).ref.data.ref.fun;
+	derivedFunction.ref.closureType.ref.kind = cast HlTypeKind.Function;
+	derivedFunction.ref.closure.ref.args = derivedFunction.ref.args;
+	derivedFunction.ref.closure.ref.ret = derivedFunction.ref.ret;
+	derivedFunction.ref.closure.ref.nargs = derivedFunction.ref.nargs;
+	var equivalentFunction = buildFunctionGeneration(false),
+		derivedStateIgnored = isCompatible(HlMetadataCompatibility.check(functionBefore, equivalentFunction));
 	functionBefore.dispose();
 	functionAfter.dispose();
+	equivalentFunction.dispose();
 	var reloadCandidate = buildObjectGeneration(HlTypeKind.Int32Type),
 		reloadTransaction = new HlMetadataTransaction(registry, reloadCandidate, true),
 		reloadPublication = reloadTransaction.commit(),
@@ -132,6 +140,6 @@ function main():Int {
 		&& staleTransaction.state == HlMetadataTransactionState.RolledBack;
 	transactionRegistry.dispose();
 	registry.dispose();
-	return switched && rejectionStable && reloaded && disposed && firstReleased && objectChanged && functionChanged && transactionReloaded
-		&& reloadRetiredDisposed && transactionStates ? 42 : 1;
+	return switched && rejectionStable && reloaded && disposed && firstReleased && objectChanged && functionChanged && derivedStateIgnored
+		&& transactionReloaded && reloadRetiredDisposed && transactionStates ? 42 : 1;
 }
