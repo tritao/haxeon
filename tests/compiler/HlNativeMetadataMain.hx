@@ -12,7 +12,7 @@ class HlNativeMetadataMain {
 		compiler.addSourceRoot("stdlib");
 		compiler.addSourceRoot("src");
 		compiler.update("HlNativeMetadataAdapter.hx",
-			'import compiler.hl.HlCode; import compiler.hl.HlCode.HlTypeDef; import compiler.hl.HlHotReloadLoader; import compiler.hl.HlNativeMetadataBuilder; import compiler.hl.HlNativeModuleLoader; import compiler.hl.HlReader; import compiler.hl.HlWriter; '
+			'import compiler.Compiler; import compiler.runtime.CompilerIntrinsics; import compiler.hl.HlCode; import compiler.hl.HlCode.HlTypeDef; import compiler.hl.HlHotReloadLoader; import compiler.hl.HlNativeMetadataBuilder; import compiler.hl.HlNativeModuleLoader; import compiler.hl.HlReader; import compiler.hl.HlWriter; '
 			+ 'import compiler.hl.patch.HlPatchWriter; '
 			+ 'import compiler.hl.HlType; import runtime.hashlink.HlTypeBuilder; import runtime.hashlink.HlTypeKind; import runtime.hashlink.HlTypeBridge; '
 			+
@@ -46,6 +46,8 @@ class HlNativeMetadataMain {
 			'loadCode.functionIdentities = [{stableId: 101, functionIndex: 0, qualifiedName: "Loaded.main", displayName: "main", sourcePath: "loaded.hx", start: 0, end: 0, line: 1, flags: 0}]; '
 			+
 			'loadCode.debugSections = [{kind: 1, version: 1, flags: 0, payload: HlWriter.encodeFunctionIdentities(loadCode.functionIdentities)}]; loadCode.entryPoint = 0; '
+			+
+			'var generatedCompiler = new Compiler(); CompilerIntrinsics.register(generatedCompiler); generatedCompiler.update("Generated.hx", "function main():Int return 8;"); var generatedResult = generatedCompiler.compile("Generated"), generatedLoaded = HlNativeModuleLoader.loadRuntime(HlWriter.encode(generatedResult.module), generatedResult.runtimeIdentity), generatedValue = generatedLoaded.callI32(cast generatedResult.functionIds.get("main")), generatedUnloaded = generatedLoaded.unload(); '
 			+
 			'var loadedModule = HlNativeModuleLoader.load(HlWriter.encode(loadCode)), loadedValue = loadedModule.callI32(0), loadedModuleUnloaded = loadedModule.unload(); '
 			+
@@ -110,7 +112,7 @@ class HlNativeMetadataMain {
 			+ '&& HlTypeBridge.native_metadata_validate_code(publication.nativeCode) == 12 '
 			+ '&& kernelInitialized && kernelUnloaded '
 			+
-			'&& loadedValue == 8 && loadedModuleUnloaded && externalValue == 8 && externalPatchedValue == 42 && externalLoaded.revision == 2 && externalPatchRejected && externalIdentityRejected && externalCallRejected && externalUnloaded && initializerRejected && patchRejected && patchFirst && patchSecond && patchValue == 42 && patchValueAgain == 43 && patchesUnloaded '
+			'&& generatedValue == 8 && generatedUnloaded && loadedValue == 8 && loadedModuleUnloaded && externalValue == 8 && externalPatchedValue == 42 && externalLoaded.revision == 2 && externalPatchRejected && externalIdentityRejected && externalCallRejected && externalUnloaded && initializerRejected && patchRejected && patchFirst && patchSecond && patchValue == 42 && patchValueAgain == 43 && patchesUnloaded '
 			+ '&& hotValue == 8 && hotLoaded && bytecodeVersions.length() == 1 && bytecodeVersions.at(101).slot == 0 '
 			+ '&& publication.constantCount == 1 && publication.constants.ref.global == 0 && publication.constants.ref.nfields == 2 '
 			+ '&& publication.constants.ref.fields.load() == 0 && publication.constants.ref.fields.offset(1).load() == 1 '
