@@ -833,6 +833,7 @@ class SemanticIndex {
 						method == null ? recoveredBuiltinMethodArguments(receiverType, memberName) : null, activeFunctionKey, expected);
 				} else {
 					var local = bindRecoveredLocal(name, span);
+					var localType:Null<CompilerType> = local == null ? null : recoveredLocalType(name, span);
 					if (local == null) {
 						var callee = resolvedRecoveredSymbol(name);
 						if (callee != null) {
@@ -843,7 +844,11 @@ class SemanticIndex {
 						} else
 							recordUnresolved(name, span);
 					}
-					indexRecoveredCallArguments(arguments, recoveredFunctionForCall(name), null, recoveredBuiltinCallArguments(name), activeFunctionKey, expected);
+					if (localType != null)
+						for (index in 0...arguments.length)
+							indexRecoveredExpression(arguments[index], expectedFunctionArgument(localType, index), activeFunctionKey);
+					else
+						indexRecoveredCallArguments(arguments, recoveredFunctionForCall(name), null, recoveredBuiltinCallArguments(name), activeFunctionKey, expected);
 				}
 			case ClosureCall(callee, arguments, _):
 				indexRecoveredExpression(callee, null, activeFunctionKey);
@@ -1050,7 +1055,11 @@ class SemanticIndex {
 				var id = bindRecoveredLocal(name, span);
 				if (id != null && declarationTypes.exists(id)) declarationTypes.get(id); else if (declarations.classes.exists(name))
 					TInstance(compiler.types.Type.NominalKind.Class, name,
-					[]); else if (declarations.interfaces.exists(name)) TInstance(compiler.types.Type.NominalKind.Interface, name, []); else TUnknown;
+					[]); else if (declarations.interfaces.exists(name)) TInstance(compiler.types.Type.NominalKind.Interface, name, []);
+				else {
+					var functionType = recoveredFunctionType(name);
+					functionType == null ? TUnknown : functionType;
+				}
 			case New(name, _, _): TInstance(compiler.types.Type.NominalKind.Class, name, []);
 			case NewGeneric(name, typeArguments, _, _): recoveredType(AppliedType(name, typeArguments));
 			default: recoveredExpressionType(expression);
@@ -1409,14 +1418,23 @@ class SemanticIndex {
 	function recoveredFunctionType(name:String, ?substitutions:Map<String, CompilerType>):Null<CompilerType> {
 		var fn = recoveredFunctions.get(name);
 		if (fn != null)
-			return TFunction([for (argument in fn.arguments) recoveredType(argument.type, substitutions)], recoveredType(fn.result, substitutions));
+			return recoveredCallableType(fn, substitutions);
 		var separator = name.lastIndexOf(".");
 		if (separator < 1)
 			return null;
 		var method = recoveredMethodWithSubstitutions(name.substring(0, separator), name.substring(separator + 1), [],
 			substitutions == null ? [] : substitutions);
-		return method == null ? null : TFunction([for (argument in method.method.arguments) recoveredType(argument.type, method.substitutions)],
-			recoveredType(method.method.result, method.substitutions));
+		return method == null ? null : recoveredCallableType(method.method, method.substitutions);
+	}
+
+	/** Build a callable recovery type, retaining generic constraints as bounds. */
+	function recoveredCallableType(fn:AstFunction, ?substitutions:Map<String, CompilerType>):CompilerType {
+		var resolved:Map<String, CompilerType> = [];
+		if (substitutions != null)
+			for (name => type in substitutions)
+				resolved.set(name, type);
+		return TFunction([for (argument in fn.arguments) recoveredExpectedType(argument.type, fn, resolved)],
+			recoveredExpectedType(fn.result, fn, resolved));
 	}
 
 	function recoveredMemberType(object:AstExpression, name:String):CompilerType {

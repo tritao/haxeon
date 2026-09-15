@@ -1398,6 +1398,17 @@ class LanguageServiceMain {
 			};
 		if (anonymousBoundedGenericExpectedName == null || anonymousBoundedGenericExpectedName.indexOf("Bound") < 0)
 			throw 'recovered anonymous generic constraint did not provide its bounded field type: ${anonymousBoundedGenericExpected == null ? "null" : Std.string(anonymousBoundedGenericExpected)}';
+		var recoveredFunctionValueService = new LanguageService(),
+			recoveredFunctionValueSource = "class Bound {} function identity<T:Bound>(value:T):T return value; function main():Void { var callback = identity; callback(";
+		recoveredFunctionValueService.update("RecoveredFunctionValue.hx", recoveredFunctionValueSource);
+		var recoveredFunctionValueContext = recoveredFunctionValueService.completionContext("RecoveredFunctionValue.hx", recoveredFunctionValueSource.length),
+			recoveredFunctionValueExpected = recoveredFunctionValueContext == null ? null : recoveredFunctionValueContext.context.expected,
+			recoveredFunctionValueExpectedName = switch recoveredFunctionValueExpected {
+				case TInstance(_, name, _): Std.string(name);
+				default: null;
+			};
+		if (recoveredFunctionValueExpectedName != "Bound")
+			throw 'recovered function values did not retain a bounded callable parameter type: ${recoveredFunctionValueExpected == null ? "null" : Std.string(recoveredFunctionValueExpected)}';
 		var objectFieldService = new LanguageService(),
 			objectFieldSource = "class ObjectValue {} function make():{value:ObjectValue} return {value:";
 		objectFieldService.update("ObjectField.hx", objectFieldSource);
