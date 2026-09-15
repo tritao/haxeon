@@ -568,6 +568,16 @@ class LanguageServiceMain {
 			|| aliasDefinition == null
 			|| aliasDefinition.span.start > hierarchySource.indexOf("class Parent"))
 			throw "language service did not resolve inheritance and alias navigation";
+		var callPrecisionService = new LanguageService(),
+			callPrecisionSource = "function run():Int return 1; class Worker { public function run():Int return 2; } function main():Int { new Worker().run(); return run(); }";
+		callPrecisionService.update("CallPrecision.hx", callPrecisionSource);
+		callPrecisionService.compile("CallPrecision");
+		var topLevelRunPosition = callPrecisionSource.lastIndexOf("return run") + "return ".length + 1,
+			memberRunPosition = callPrecisionSource.indexOf(".run") + 2,
+			topLevelRunReferences = callPrecisionService.references("CallPrecision.hx", topLevelRunPosition),
+			memberRunReferences = callPrecisionService.references("CallPrecision.hx", memberRunPosition);
+		if (topLevelRunReferences.length != 2 || memberRunReferences.length != 2)
+			throw 'language service call reference precision failed: top=${topLevelRunReferences.length}, member=${memberRunReferences.length}';
 		var implementationService = new LanguageService(),
 			contractSource = "package api; interface Plugin { function run():Int; }",
 			baseSource = "package base; import api.Plugin; class Base implements Plugin { public function run():Int return 1; }",
@@ -1057,6 +1067,14 @@ class LanguageServiceMain {
 			|| localRecoveredTypeDefinition.path != "LocalRecovered.hx"
 			|| localRecoveredTypeReferences.length < 2)
 			throw "recovered same-module type identity was lost around a malformed statement";
+		var externalAliasService = new LanguageService(),
+			externalAliasSource = "package alias.app; import alias.types.Alias; function main():Void { var value:Alias; value.";
+		externalAliasService.update("alias/types/Foo.hx", "package alias.types; class Foo { public var member:Int; } function main():Void return;");
+		externalAliasService.update("alias/types/Alias.hx", "package alias.types; typedef Alias = Foo; function main():Void return;");
+		externalAliasService.update("alias/app/Main.hx", externalAliasSource);
+		var externalAliasNames = [for (item in externalAliasService.complete("alias/app/Main.hx", externalAliasSource.length)) item.label];
+		if (externalAliasNames.indexOf("member") < 0)
+			throw "recovered external type aliases did not preserve the aliased receiver type";
 		var duplicateRecoveryService = new LanguageService();
 		duplicateRecoveryService.update("DuplicateRecovered.hx",
 			"function same():Void return; function same():Void return; function usable():Void return;");

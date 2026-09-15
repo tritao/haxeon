@@ -2454,6 +2454,7 @@ class SemanticIndex {
 				break;
 			if (token.span.end > fn.span.end
 				|| token.kind != TokenKind.Identifier
+				|| index > 1 && tokens[index - 2].kind == TokenKind.Dot
 				|| index >= tokens.length
 				|| tokens[index].kind != TokenKind.LeftParen
 				|| declaration != null
