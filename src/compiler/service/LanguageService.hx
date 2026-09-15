@@ -1732,18 +1732,17 @@ class LanguageService {
 		if (callee < 0)
 			return null;
 		var id = model.index.symbolIdAt(tokens[callee].span.start + 1),
-			signature = id == null ? null : compiler.semanticWorkspace.editorSignature(state, id);
-		if (signature == null) {
-			var qualifier = memberQualifier(snapshot.source, tokens[callee].span.end),
-				calleeName = tokens[callee].text,
-				recoveredName = qualifier == null ? calleeName : qualifier + "." + calleeName;
-			signature = model.index.recoveredSignature(recoveredName);
-			if (signature == null && qualifier != null) {
-				var context = model.index.completionContext(position, qualifier, token),
-					owner = context == null ? null : typeDeclaration(context.receiver);
-				if (owner != null)
-					signature = model.index.recoveredSignature(owner + "." + calleeName);
-			}
+			signature = id == null ? null : compiler.semanticWorkspace.editorSignature(state, id),
+			qualifier = memberQualifier(snapshot.source, tokens[callee].span.end),
+			calleeName = tokens[callee].text,
+			recoveredName = qualifier == null ? calleeName : qualifier + "." + calleeName,
+			context = qualifier == null ? null : model.index.completionContext(position, qualifier, token);
+		if (snapshot.recovered)
+			signature = model.index.recoveredSignature(recoveredName, context == null ? null : context.receiver);
+		if (signature == null && qualifier != null) {
+			var owner = context == null ? null : typeDeclaration(context.receiver);
+			if (owner != null)
+				signature = model.index.recoveredSignature(owner + "." + calleeName, context.receiver);
 		}
 		if (signature == null)
 			return null;

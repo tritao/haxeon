@@ -471,6 +471,13 @@ class ParserRecoveryMain {
 		}
 		if (genericInheritanceValue != "value:Int" || genericInheritanceGet != "get():Int")
 			throw 'generic inherited member types were not substituted: value=$genericInheritanceValue, get=$genericInheritanceGet';
+		var genericInheritanceCallSource = genericInheritanceSource.substring(0, genericInheritanceSource.length - "child.".length) + "child.get(",
+			genericInheritanceCallPosition = genericInheritanceCallSource.length;
+		genericInheritanceService.update("GenericInheritance.hx", genericInheritanceCallSource);
+		var genericInheritanceCompletionContext = genericInheritanceService.completionContext("GenericInheritance.hx", genericInheritanceCallPosition, "child"),
+			genericInheritanceSignature = genericInheritanceService.signatureHelp("GenericInheritance.hx", genericInheritanceCallPosition);
+		if (genericInheritanceSignature == null || genericInheritanceSignature.label != "get():Int")
+			throw 'generic inherited signature did not retain the receiver type: ${genericInheritanceSignature == null ? "null" : genericInheritanceSignature.label}, context=${genericInheritanceCompletionContext == null ? "null" : Std.string(genericInheritanceCompletionContext.context.receiver)}';
 		var genericNavigationSource = genericInheritanceSource.substring(0, genericInheritanceSource.length - "child.".length) + "child.value;",
 			genericNavigationPosition = genericNavigationSource.lastIndexOf("child.value") + "child.".length + 1;
 		genericInheritanceService.update("GenericInheritance.hx", genericNavigationSource);

@@ -421,20 +421,32 @@ class SemanticIndex {
 	}
 
 	/** Return a signature retained for a current or visible recovered module. */
-	public function recoveredSignature(name:String):Null<SemanticSignatureInfo> {
-		var fn = recoveredFunction(name);
+	public function recoveredSignature(name:String, ?receiverType:CompilerType):Null<SemanticSignatureInfo> {
+		var substitutions:Null<Map<String, CompilerType>> = receiverType == null ? null : recoveredTypeSubstitutions(receiverType),
+			fn:Null<AstFunction> = null,
+			separator = name.lastIndexOf(".");
+		if (receiverType != null && separator > 0) {
+			var resolved = recoveredMethodWithSubstitutions(name.substring(0, separator), name.substring(separator + 1), [],
+				substitutions == null ? [] : substitutions);
+			if (resolved != null) {
+				fn = resolved.method;
+				substitutions = resolved.substitutions;
+			}
+		}
+		if (fn == null)
+			fn = recoveredFunction(name);
 		if (fn == null)
 			fn = recoveredFunction(name + ".new");
 		if (fn == null)
 			return null;
 		var parameters = [
 			for (argument in fn.arguments)
-				argument.name + ":" + displayAstType(argument.type)
+				argument.name + ":" + (substitutions == null ? displayAstType(argument.type) : displayType(recoveredType(argument.type, substitutions)))
 		];
 		return {
-			label: sourceName(name) + "(" + parameters.join(",") + "):" + displayAstType(fn.result),
+			label: sourceName(name) + "(" + parameters.join(",") + "):" + (substitutions == null ? displayAstType(fn.result) : displayType(recoveredType(fn.result, substitutions))),
 			parameters: parameters,
-			result: displayAstType(fn.result)
+			result: substitutions == null ? displayAstType(fn.result) : displayType(recoveredType(fn.result, substitutions))
 		};
 	}
 
