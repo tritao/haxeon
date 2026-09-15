@@ -11,6 +11,18 @@ class HlTypeBridge {
 	public static function native_type_size(type:RawPtr<HlType>):Int
 		return 0;
 
+	public static function native_type_pad_struct(type:RawPtr<HlType>, size:Int):Int
+		return 0;
+
+	public static function native_type_is_ptr(type:RawPtr<HlType>):Bool
+		return false;
+
+	public static function native_type_mark_size(size:Int):Int
+		return 0;
+
+	public static function native_pointer_size():Int
+		return 0;
+
 	public static function native_type_data_size(type:RawPtr<HlType>):Int
 		return 0;
 

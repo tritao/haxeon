@@ -3,6 +3,22 @@ package runtime.hashlink;
 import runtime.memory.RawPtr;
 import runtime.hashlink.HlType;
 
+/** C-layout equivalent of HashLink's sorted field-lookup entry. */
+@:value @:repr("C")
+class HlFieldLookup {
+	public var type:RawPtr<HlType>;
+	public var hashedName:Int32;
+	public var fieldIndex:Int32;
+}
+
+/** C-layout equivalent of the header preceding a virtual value's fields. */
+@:value @:repr("C")
+class HlVirtualValue {
+	public var type:RawPtr<HlType>;
+	public var value:RawPtr<UInt8>;
+	public var next:RawPtr<HlVirtualValue>;
+}
+
 /** C-layout equivalent of HashLink's runtime object metadata. */
 @:value @:repr("C")
 class HlRuntimeObject {
@@ -25,7 +41,7 @@ class HlRuntimeObject {
 	public var getFieldFun:RawPtr<UInt8>;
 	public var nlookup:Int32;
 	public var ninterfaces:Int32;
-	public var lookup:RawPtr<UInt8>;
+	public var lookup:RawPtr<HlFieldLookup>;
 	public var interfaces:RawPtr<Int32>;
 }
 

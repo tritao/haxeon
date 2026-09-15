@@ -132,8 +132,12 @@ HashLink derives runtime object metadata through a context, `reset()` and
 arena's records.
 `HlMetadataGeneration` combines these pieces into one build/publish lifecycle:
 it owns the arena, appends the type table, defines the module context, lets
-HashLink initialize derived metadata through one native table publication call,
-and returns a stable publication view.
+`HlTypeLayout` construct the derived object, enum, and virtual metadata in that
+same arena, and then hands the table to one small native publication call.
+Object prototype wiring remains native because it publishes executable method
+and closure pointers; enum and virtual layout construction no longer calls
+HashLink's native initializers. The resulting runtime records, field indexes,
+sorted lookups, binding slots, and mark-bit maps remain arena-owned and stable.
 The view is ready for a future VM publication bridge; it does not yet replace
 the native module's contiguous `hl_code.types` array.
 `HlMetadataCompatibility` owns the first hot-reload policy ring: the existing

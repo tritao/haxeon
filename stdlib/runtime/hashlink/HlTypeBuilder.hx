@@ -214,7 +214,7 @@ class HlTypeBuilder {
 
 	/** Complete a virtual type skeleton after all recursive field types are available. */
 	public function defineVirtualType(type:RawPtr<HlType>, fields:Array<HlObjectFieldSpec>, dataSize:Int, indexes:Array<Int>,
-			lookup:RawPtr<UInt8>):Void {
+			lookup:RawPtr<HlFieldLookup>):Void {
 		var kind:HlTypeKind = cast type.ref.kind;
 		if (kind != HlTypeKind.Virtual)
 			throw "HashLink virtual definition requires a virtual type skeleton";
@@ -226,7 +226,7 @@ class HlTypeBuilder {
 		virtualData.ref.lookup = lookup;
 	}
 
-	public function virtualType(fields:Array<HlObjectFieldSpec>, dataSize:Int, indexes:Array<Int>, lookup:RawPtr<UInt8>):RawPtr<HlType> {
+	public function virtualType(fields:Array<HlObjectFieldSpec>, dataSize:Int, indexes:Array<Int>, lookup:RawPtr<HlFieldLookup>):RawPtr<HlType> {
 		var type = virtualTypeSkeleton();
 		defineVirtualType(type, fields, dataSize, indexes, lookup);
 		return type;

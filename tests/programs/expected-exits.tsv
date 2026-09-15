@@ -165,5 +165,6 @@ dynamic-equality	42
 std-is-of-type	42
 native-memory	42
 hashlink-type-arena	42
+hashlink-type-layout	42
 hashlink-metadata-registry	42
 hashlink-hot-reload-state	42

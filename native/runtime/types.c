@@ -1,3 +1,5 @@
+HL_API int hl_mark_size( int data_size );
+
 HL_PRIM int HL_NAME(native_type_kind)( hl_type *type ) {
 	if( type == NULL ) hl_error("HashLink type metadata pointer must not be null");
 	return (int)type->kind;
@@ -6,6 +8,25 @@ HL_PRIM int HL_NAME(native_type_kind)( hl_type *type ) {
 HL_PRIM int HL_NAME(native_type_size)( hl_type *type ) {
 	if( type == NULL ) hl_error("HashLink type metadata pointer must not be null");
 	return hl_type_size(type);
+}
+
+HL_PRIM int HL_NAME(native_type_pad_struct)( hl_type *type, int size ) {
+	if( type == NULL || size < 0 ) hl_error("HashLink type layout padding requires a type and non-negative size");
+	return hl_pad_struct(size,type);
+}
+
+HL_PRIM bool HL_NAME(native_type_is_ptr)( hl_type *type ) {
+	if( type == NULL ) hl_error("HashLink type metadata pointer must not be null");
+	return hl_is_ptr(type);
+}
+
+HL_PRIM int HL_NAME(native_type_mark_size)( int size ) {
+	if( size < 0 ) hl_error("HashLink mark-bit size must be non-negative");
+	return hl_mark_size(size);
+}
+
+HL_PRIM int HL_NAME(native_pointer_size)() {
+	return (int)sizeof(void*);
 }
 
 HL_PRIM int HL_NAME(native_type_data_size)( hl_type *type ) {
@@ -59,11 +80,9 @@ HL_PRIM void HL_NAME(native_metadata_initialize)( hl_type **types, int count, hl
 			break;
 		case HENUM:
 			if( type->tenum == NULL ) hl_error("HashLink metadata publication contains an invalid enum");
-			hl_init_enum(type,context);
 			break;
 		case HVIRTUAL:
 			if( type->virt == NULL ) hl_error("HashLink metadata publication contains an invalid virtual type");
-			hl_init_virtual(type,context);
 			break;
 		default:
 			break;

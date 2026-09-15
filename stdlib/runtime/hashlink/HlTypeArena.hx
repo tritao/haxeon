@@ -13,6 +13,7 @@ import runtime.hashlink.HlTypeObject.HlEnumConstruct;
 import runtime.hashlink.HlTypeObject;
 import runtime.hashlink.HlModuleContext;
 import runtime.hashlink.HlRuntimeObject;
+import runtime.hashlink.HlRuntimeObject.HlFieldLookup;
 
 /** Owns stable unmanaged storage for Haxe-constructed HashLink metadata. */
 class HlTypeArena {
@@ -52,6 +53,9 @@ class HlTypeArena {
 	public inline function allocInt32Array(count:Int):RawPtr<Int32>
 		return storage.alloc(count);
 
+	public inline function allocUInt32Array(count:Int):RawPtr<UInt32>
+		return storage.alloc(count);
+
 	public inline function allocUtf16Array(count:Int):RawPtr<UInt16>
 		return storage.alloc(count);
 
@@ -78,6 +82,12 @@ class HlTypeArena {
 
 	public inline function allocRuntimeObject():RawPtr<HlRuntimeObject>
 		return storage.alloc();
+
+	public inline function allocRuntimeBindingArray(count:Int):RawPtr<HlRuntimeBinding>
+		return storage.alloc(count);
+
+	public inline function allocFieldLookupArray(count:Int):RawPtr<HlFieldLookup>
+		return storage.alloc(count);
 
 	/** Register a module context whose derived HashLink allocations share this arena's lifetime. */
 	@:allow(runtime.hashlink.HlTypeBuilder)

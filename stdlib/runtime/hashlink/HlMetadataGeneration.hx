@@ -2,6 +2,7 @@ package runtime.hashlink;
 
 import runtime.memory.RawPtr;
 import runtime.hashlink.HlTypeBridge;
+import runtime.hashlink.HlTypeLayout;
 
 /** Stable native view handed to a future HashLink publication boundary. */
 typedef HlMetadataPublication = {
@@ -91,6 +92,7 @@ class HlMetadataGeneration {
 		requireBuilding();
 		if (moduleContext.isNull())
 			throw "HashLink metadata generation requires a module context before publication";
+		HlTypeLayout.initialize(typeTable.pointer(), typeTable.length(), arena);
 		HlTypeBridge.native_metadata_initialize(typeTable.pointer(), typeTable.length(), moduleContext);
 		published = true;
 		return snapshot();

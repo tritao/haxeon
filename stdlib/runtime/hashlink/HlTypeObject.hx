@@ -45,7 +45,7 @@ class HlTypeVirtual {
 	public var nfields:Int32;
 	public var dataSize:Int32;
 	public var indexes:RawPtr<Int32>;
-	public var lookup:RawPtr<UInt8>;
+	public var lookup:RawPtr<HlFieldLookup>;
 }
 
 /** C-layout equivalent of HashLink's hl_type_enum metadata. */
