@@ -259,6 +259,24 @@ class LanguageServiceMain {
 		var importedSignature = importService.signatureHelp("editor/ImportedSignature.hx", importedSignatureSource.length);
 		if (importedSignature == null || importedSignature.label != "reset():Void" || importedSignature.activeParameter != 0)
 			throw "recovered signature help did not use an imported module's temporary signature";
+		var transitiveService = new LanguageService();
+		transitiveService.update("editor/base/Base.hx", "package editor.base; class Base { public var inherited:Int; }");
+		transitiveService.update("editor/util/Widget.hx", "package editor.util; import editor.base.Base; class Widget extends Base {}");
+		var transitiveSource = "package editor; import editor.util.Widget; function main():Int { var widget:Widget = new Widget(); return widget.inherited; }";
+		transitiveService.update("editor/Transitive.hx", transitiveSource);
+		var transitiveModel = transitiveService.compiler.modules.get("editor.Transitive").recoveredSemanticModel,
+			transitiveInheritedType = false;
+		if (transitiveModel != null && transitiveModel.partialTypedProgram != null)
+			for (fn in transitiveModel.partialTypedProgram.functions)
+				for (statement in fn.statements)
+					switch statement {
+						case TReturn(expression, _):
+							if (expression.type == TInt)
+								transitiveInheritedType = true;
+						default:
+					}
+		if (!transitiveInheritedType)
+			throw "recovered typing did not follow an imported module's inherited declaration closure";
 		importService.analyze("editor.util.Widget");
 		var importedMemberUseSource = "package editor; import editor.util.Widget; function main():Void { var widget:Widget = new Widget(); widget.ready; }";
 		importService.update("editor/ClassMain.hx", importedMemberUseSource);

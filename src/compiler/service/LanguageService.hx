@@ -351,20 +351,45 @@ class LanguageService {
 	 * only; the authoritative workspace index remains unchanged.
 	 */
 	function recoveryTypingModules(state:ModuleState, program:AstProgram, ?token:CancellationToken):Array<RecoveryTypingModule> {
-		var result:Array<RecoveryTypingModule> = [];
+		var result:Array<RecoveryTypingModule> = [],
+			pending:Array<ModuleState> = [],
+			queued:Map<String, Bool> = [];
 		for (candidate in compiler.modules) {
 			if (token != null)
 				token.check();
-			if (candidate == state)
-				continue;
 			var model = effectiveSemanticModel(candidate);
-			if (model == null || !recoveryModuleVisible(program, candidate, model.program))
+			if (candidate == state
+				|| model == null
+				|| !recoveryModuleVisible(program, candidate, model.program)
+				|| queued.exists(candidate.name))
+				continue;
+			queued.set(candidate.name, true);
+			pending.push(candidate);
+		}
+		var pendingIndex = 0;
+		while (pendingIndex < pending.length) {
+			if (token != null)
+				token.check();
+			var candidate = pending[pendingIndex++],
+				model = effectiveSemanticModel(candidate);
+			if (model == null)
 				continue;
 			result.push({
 				program: model.program,
 				declarations: model.declarations,
 				qualifiers: recoveryModuleQualifiers(program, candidate, model.program)
 			});
+			for (nested in compiler.modules) {
+				if (token != null)
+					token.check();
+				if (nested == state || queued.exists(nested.name))
+					continue;
+				var nestedModel = effectiveSemanticModel(nested);
+				if (nestedModel == null || !recoveryModuleVisible(model.program, nested, nestedModel.program))
+					continue;
+				queued.set(nested.name, true);
+				pending.push(nested);
+			}
 		}
 		return result;
 	}
