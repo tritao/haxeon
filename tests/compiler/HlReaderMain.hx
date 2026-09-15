@@ -199,6 +199,7 @@ function main():Void {
 	expect(modelNative != null && modelNative.functionIndex == 0 && modelNative.name == decoded.natives[0].name,
 		"HLB module model must index native dispatch slots");
 	expect(modelIdentity != null && modelIdentity.stableId == 91, "HLB module model must index function identities");
+	expect(model.stableIdAt(1) == 91 && model.stableIdAt(0) == 0, "HLB module model must own stable identity fallback");
 	expect(model.dispatchSlots().join(",") == "0,1", "HLB module model must order dispatch slots");
 	expect(decoded.ints[0] == 41 && decoded.floats[0] == 1.5 && decoded.strings[1] == "native", "HLB scalar pools did not decode");
 	expect(decoded.bytes.compare(code.bytes) == 0 && decoded.bytePositions[1] == 4, "HLB byte pool did not decode");
@@ -393,6 +394,56 @@ function main():Void {
 	}
 	expect(expectFailure(() -> HlReader.decode(encoded.sub(0, encoded.length - 1))), "truncated HLB data was accepted");
 	expect(expectFailure(() -> HlReader.decode(withTrailingByte(encoded))), "trailing HLB data was accepted");
+	var missingIdentity = new HlCode();
+	missingIdentity.types = [Simple(HlType.I32)];
+	missingIdentity.functions = [new compiler.hl.HlFunction(0, 0, [0], [Return(0)])];
+	missingIdentity.functionIdentities = [
+		{
+			stableId: 1,
+			functionIndex: 9,
+			qualifiedName: "Missing",
+			displayName: "Missing",
+			sourcePath: "main.hx",
+			start: 0,
+			end: 0,
+			line: 1,
+			flags: 0
+		}
+	];
+	missingIdentity.entryPoint = 0;
+	expect(expectFailure(() -> new HlModule(missingIdentity)), "HLB module accepted an identity for a missing function");
+	var duplicateIdentity = new HlCode();
+	duplicateIdentity.types = [Simple(HlType.I32)];
+	duplicateIdentity.functions = [
+		new compiler.hl.HlFunction(0, 0, [0], [Return(0)]),
+		new compiler.hl.HlFunction(0, 1, [0], [Return(0)])
+	];
+	duplicateIdentity.functionIdentities = [
+		{
+			stableId: 1,
+			functionIndex: 0,
+			qualifiedName: "First",
+			displayName: "First",
+			sourcePath: "main.hx",
+			start: 0,
+			end: 0,
+			line: 1,
+			flags: 0
+		},
+		{
+			stableId: 1,
+			functionIndex: 1,
+			qualifiedName: "Second",
+			displayName: "Second",
+			sourcePath: "main.hx",
+			start: 0,
+			end: 0,
+			line: 1,
+			flags: 0
+		}
+	];
+	duplicateIdentity.entryPoint = 0;
+	expect(expectFailure(() -> new HlModule(duplicateIdentity)), "HLB module accepted duplicate stable function IDs");
 	var compiler = new Compiler();
 	compiler.update("Main.hx", "function main():Int return 42;");
 	var compiled = compiler.compile("Main").module,

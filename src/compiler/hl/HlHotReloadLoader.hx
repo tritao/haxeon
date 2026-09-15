@@ -46,7 +46,7 @@ class HlHotReloadLoader {
 		var module = HlModule.decode(bytes),
 			metadata = HlNativeMetadataBuilder.buildModule(module, functionPointers);
 		try {
-			var functions = new HlFunctionVersionTable(functionEntries(module.code, metadata));
+			var functions = new HlFunctionVersionTable(functionEntries(module, metadata));
 			return new HlStagedHotReloadModule(module, metadata, functions, state.stage(metadata, functions, structuralReload));
 		} catch (error:Dynamic) {
 			metadata.dispose();
@@ -54,19 +54,11 @@ class HlHotReloadLoader {
 		}
 	}
 
-	static function functionEntries(code:HlCode, metadata:HlMetadataGeneration):Array<runtime.hashlink.HlFunctionVersionTable.HlFunctionVersionEntry> {
-		var identities:Map<Int, Int> = [];
-		for (identity in code.functionIdentities) {
-			if (identities.exists(identity.functionIndex))
-				throw 'HashLink function ${identity.functionIndex} has duplicate hot-reload identity metadata';
-			identities.set(identity.functionIndex, identity.stableId);
-		}
+	static function functionEntries(module:HlModule, metadata:HlMetadataGeneration):Array<runtime.hashlink.HlFunctionVersionTable.HlFunctionVersionEntry> {
 		var result:Array<runtime.hashlink.HlFunctionVersionTable.HlFunctionVersionEntry> = [];
-		for (fn in code.functions) {
-			var mapped:Null<Int> = identities.get(fn.functionIndex),
-				stableId = mapped == null ? fn.functionIndex : mapped;
+		for (fn in module.code.functions) {
 			result.push({
-				stableId: stableId,
+				stableId: module.stableIdAt(fn.functionIndex),
 				slot: fn.functionIndex,
 				typeIndex: fn.type,
 				entrypoint: metadata.functionPointer(fn.functionIndex)

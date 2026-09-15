@@ -36,7 +36,7 @@ class HlNativeMetadataBuilder {
 				functionCount = dispatchSlotCount(code),
 				pointers = dispatchPointers(functionCount, functionPointers),
 				functionTypes = dispatchTypes(code, typePointers, functionCount),
-				module = generation.defineModule(pointers, functionTypes),
+				moduleContext = generation.defineModule(pointers, functionTypes),
 				globals = generation.defineGlobalTypes([for (global in code.globals) typePointers[global]]);
 			generation.defineModulePools(new runtime.hashlink.HlModulePools(generation.arena, generation.builder, code.ints, code.floats, code.strings,
 				code.bytes, code.bytePositions, code.entryPoint));
@@ -50,9 +50,9 @@ class HlNativeMetadataBuilder {
 				});
 			for (index in 0...code.types.length)
 				generation.addType(typePointers[index]);
-			defineTypes(code, generation, typePointers, module, globals);
+			defineTypes(code, generation, typePointers, moduleContext, globals);
 			addFunctionDescriptors(code, generation, typePointers);
-			defineFunctionIdentities(code, generation);
+			defineFunctionIdentities(module, generation);
 			addNativeDescriptors(code, generation, typePointers);
 			addConstants(code, generation);
 			generation.publish();
@@ -223,29 +223,12 @@ class HlNativeMetadataBuilder {
 		}
 	}
 
-	static function defineFunctionIdentities(code:HlCode, generation:HlMetadataGeneration):Void {
-		var stableIds:Array<Int> = [],
-			names:Array<String> = [],
-			assigned:Array<Bool> = [];
-		for (fn in code.functions) {
-			stableIds.push(fn.functionIndex);
-			names.push("");
-			assigned.push(false);
-		}
-		for (identity in code.functionIdentities) {
-			var target = -1;
-			for (index in 0...code.functions.length)
-				if (code.functions[index].functionIndex == identity.functionIndex) {
-					target = index;
-					break;
-				}
-			if (target < 0)
-				throw 'HashLink function identity references missing function ${identity.functionIndex}';
-			if (assigned[target])
-				throw 'HashLink function ${identity.functionIndex} has duplicate identity metadata';
-			stableIds[target] = identity.stableId;
-			names[target] = identity.qualifiedName;
-			assigned[target] = true;
+	static function defineFunctionIdentities(module:HlModule, generation:HlMetadataGeneration):Void {
+		var stableIds:Array<Int> = [], names:Array<String> = [];
+		for (fn in module.code.functions) {
+			var identity = module.identityAt(fn.functionIndex);
+			stableIds.push(module.stableIdAt(fn.functionIndex));
+			names.push(identity == null ? "" : identity.qualifiedName);
 		}
 		generation.defineFunctionIdentities(stableIds, names);
 	}

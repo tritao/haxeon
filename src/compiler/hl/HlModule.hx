@@ -19,6 +19,7 @@ class HlModule {
 	final functionsBySlot:Map<Int, HlFunction> = [];
 	final nativesBySlot:Map<Int, HlNative> = [];
 	final identitiesBySlot:Map<Int, HlFunctionIdentity> = [];
+	final identitiesByStableId:Map<Int, Bool> = [];
 
 	public function new(code:HlCode) {
 		if (code == null)
@@ -42,9 +43,16 @@ class HlModule {
 				maximumSlot = fn.functionIndex;
 		}
 		for (identity in code.functionIdentities) {
+			if (identity.stableId < 0)
+				throw 'HashLink function identity ${identity.functionIndex} has a negative stable ID';
+			if (!functionsBySlot.exists(identity.functionIndex))
+				throw 'HashLink function identity references missing bytecode function ${identity.functionIndex}';
 			if (identitiesBySlot.exists(identity.functionIndex))
 				throw 'HashLink module has duplicate function identity slot ${identity.functionIndex}';
+			if (identitiesByStableId.exists(identity.stableId))
+				throw 'HashLink module has duplicate stable function ID ${identity.stableId}';
 			identitiesBySlot.set(identity.functionIndex, identity);
+			identitiesByStableId.set(identity.stableId, true);
 		}
 		dispatchSlotCount = maximumSlot + 1;
 	}
@@ -75,6 +83,12 @@ class HlModule {
 	/** Return stable function identity metadata for a dispatch slot, if present. */
 	public function identityAt(slot:Int):Null<HlFunctionIdentity>
 		return identitiesBySlot.get(slot);
+
+	/** Return the stable identity for a bytecode slot, defaulting to its slot. */
+	public function stableIdAt(slot:Int):Int {
+		var identity = identityAt(slot);
+		return identity == null ? slot : identity.stableId;
+	}
 
 	/** Return all occupied dispatch slots in deterministic order. */
 	public function dispatchSlots():Array<Int> {
