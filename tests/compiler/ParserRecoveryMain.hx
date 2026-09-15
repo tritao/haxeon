@@ -136,6 +136,14 @@ class ParserRecoveryMain {
 			|| interfaceMethodResult.program.interfaces[0].methods[0].name != "unfinished")
 			throw "unfinished interface method declaration discarded the interface member";
 
+		var importSource = new SourceFile("Import.hx", "import model.\nfunction visible():Void return;");
+		var importResult = new Parser(new Lexer(importSource).tokenize()).parseProgramRecovering();
+		if (importResult.program.imports.length != 1
+			|| importResult.program.imports[0] != "model"
+			|| importResult.program.functions.length != 1
+			|| importResult.program.functions[0].name != "visible")
+			throw "unfinished import path discarded the following declaration";
+
 		var genericSource = new SourceFile("Generic.hx", "function main():Void { var values:Array<");
 		var genericResult = new Parser(new Lexer(genericSource).tokenize()).parseProgramRecovering();
 		if (genericResult.program.functions.length != 1 || genericResult.program.functions[0].statements.length != 1)

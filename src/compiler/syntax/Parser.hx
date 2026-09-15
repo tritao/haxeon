@@ -48,13 +48,19 @@ class Parser {
 		}
 		while (match(TokenKind.Import)) {
 			var path = parseQualifiedName();
+			if (recovering && check(TokenKind.Dot)) {
+				advance();
+				recordExpected("import name");
+			}
 			imports.push(path);
 			if (check(TokenKind.Identifier) && current().text == "as") {
 				advance();
-				var alias = consume(TokenKind.Identifier).text;
-				if (importAliases.exists(alias))
-					fail(previous(), 'Duplicate import alias "$alias"');
-				importAliases.set(alias, path);
+				var alias = consumeDeclarationToken("import alias");
+				if (alias.text != "<missing>") {
+					if (importAliases.exists(alias.text))
+						fail(alias, 'Duplicate import alias "${alias.text}"');
+					importAliases.set(alias.text, path);
+				}
 			}
 			consume(TokenKind.Semicolon);
 		}
