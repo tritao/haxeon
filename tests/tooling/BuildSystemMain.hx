@@ -6,6 +6,7 @@ import build.BuildPlan;
 import build.BuildPlanner;
 import build.Target;
 import build.TargetLayout;
+import build.NativeArtifactDemand.NativeArtifactDemand;
 import build.execution.ActionFingerprint;
 import build.execution.ActionId;
 import build.execution.ActionResult;
@@ -32,7 +33,7 @@ class BuildSystemMain {
 		#end
 		testFingerprintsAndSkipping();
 		testProjectDiscovery();
-		Sys.println("PASS: build model, executor, fingerprints, and local package discovery");
+		Sys.println("PASS: build model, executor, fingerprints, demand-driven native outputs, and local package discovery");
 	}
 
 	static function testArtifactAndPlanDeterminism():Void {
@@ -214,16 +215,23 @@ class BuildSystemMain {
 		expect(project.rootPackage.sources.length == 1 && project.rootPackage.sources[0].indexOf("Main.hx") >= 0,
 			"source roots should expand into a deterministic Haxe source manifest");
 		var environment = new BuildEnvironment(project.root, Path.join([project.root, "build"])),
-			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target),
+			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Shared),
 			execution = PlanLowerer.lower(plan, environment, null, project, new TargetLayout(environment).hashLinkModulePath("main"), project.root),
 			executionText = execution.toDebugString();
-		expect(plan.toDebugString().indexOf("foo:NativeStaticLibrary") >= 0, "the package build plan should require its native archive");
+		expect(plan.toDebugString().indexOf("foo:NativeSharedLibrary") >= 0, "the package build plan should require its shared native library");
+		expect(plan.toDebugString().indexOf("foo:NativeStaticLibrary") < 0, "the package build plan should not create an unrequested native archive");
 		expect(executionText.indexOf("Compile C") >= 0
-			&& executionText.indexOf("Archive foo") >= 0
+			&& executionText.indexOf("Archive foo") < 0
+			&& executionText.indexOf("Link shared library foo") >= 0
 			&& executionText.indexOf("Compile Haxe package") >= 0,
-			"native sources, archive, and Haxe compilation should lower to concrete actions");
+			"native sources, the requested shared library, and Haxe compilation should lower to concrete actions");
 		expect(execution.actions[execution.actions.length - 1].description.indexOf("Compile Haxe package") >= 0,
 			"the Haxe compiler request must follow native package actions");
+
+		var staticPlan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Static),
+			staticPlanText = staticPlan.toDebugString();
+		expect(staticPlanText.indexOf("foo:NativeStaticLibrary") >= 0 && staticPlanText.indexOf("foo:NativeSharedLibrary") < 0,
+			"an explicit static native demand should create only the archive");
 
 		var missing = Path.join([root, "missing-app"]);
 		writePackage(missing, '{"version":1,"package":{"name":"missing-app"},"entry":"Main","dependencies":{"foo":{"path":"../absent"}}}', ["src/Main.hx"]);

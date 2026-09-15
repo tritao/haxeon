@@ -19,13 +19,14 @@ run_cli() {
 }
 
 plan_output=$(run_cli build --project "$project_dir/app/haxeon.json" --plan)
-[[ "$plan_output" == *"foo:NativeStaticLibrary"* ]]
+[[ "$plan_output" == *"foo:NativeSharedLibrary"* ]]
+[[ "$plan_output" != *"foo:NativeStaticLibrary"* ]]
 [[ "$plan_output" == *"Compile C"* ]]
+[[ "$plan_output" == *"Link shared library foo"* ]]
 [[ "$plan_output" == *"Compile Haxe package"* ]]
 
 run_cli build --project "$project_dir/app/haxeon.json" --jobs 4
 test -s "$project_dir/app/build/host/main.hl"
-test -s "$project_dir/app/build/host/native/foo/libfoo.a"
 test -s "$project_dir/app/build/host/native/foo/foo.hdll"
 test -s "$project_dir/app/build/host/native/foo/foo.o"
 test -s "$project_dir/app/build/host/native/foo/extra.o"
@@ -42,14 +43,12 @@ fi
 sed -i 's/return Foo.answer()/return Foo.answer() + 1/' "$project_dir/app/src/Main.hx"
 haxe_edit_output=$(run_cli build --project "$project_dir/app/haxeon.json")
 [[ "$haxe_edit_output" == *"native-compile:"*"clean (fingerprint match)"* ]]
-[[ "$haxe_edit_output" == *"native-archive:"*"clean (fingerprint match)"* ]]
 [[ "$haxe_edit_output" == *"native-link:"*"clean (fingerprint match)"* ]]
 
 sed -i 's/return 42/return 41/' "$project_dir/foo/native/foo.c"
 native_edit_output=$(run_cli build --project "$project_dir/app/haxeon.json")
 [[ "$native_edit_output" == *"Compile C"* ]]
 [[ "$native_edit_output" == *"native/extra.c] clean (fingerprint match)"* ]]
-[[ "$native_edit_output" == *"Archive foo"* ]]
 [[ "$native_edit_output" == *"Link shared library foo"* ]]
 
 sed -i 's/return 41/return (/' "$project_dir/foo/native/foo.c"

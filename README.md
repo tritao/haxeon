@@ -318,8 +318,7 @@ running program after `--`:
 
 Host builds resolve local path dependencies declared by package name. A
 dependency can provide Haxe sources and optional C sources; C sources are
-compiled into a static archive and a HashLink native library as part of the
-same build:
+compiled into the HashLink native library requested by the build:
 
 ```json
 {
@@ -353,7 +352,9 @@ The `foo` package can list native inputs in its own manifest:
 `--jobs COUNT` controls the number of independent ready actions the executor
 may run at once. Native outputs and action fingerprints live below the
 application's `outputDir`; unchanged native actions are skipped on later builds.
-This local-package/native-provider path currently targets the host platform.
+The normal host build requests the shared HashLink library; static archives are
+available to other build consumers without being produced unnecessarily. This
+local-package/native-provider path currently targets the host platform.
 
 The `doctor` command checks the local compiler, HashLink runtime, and Android
 SDK tools. `platforms` lists CLI targets, and `devices` reports connected

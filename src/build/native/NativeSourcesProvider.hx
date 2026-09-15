@@ -10,7 +10,7 @@ import build.execution.ExecutionAction.ActionKind;
 import haxe.io.Path;
 import project.ResolvedPackage;
 
-/** Lowers C sources to object files, a static archive, and a HashLink HDLL. */
+/** Lowers C sources to object files and only the native library artifacts in the plan. */
 class NativeSourcesProvider {
 	public static function lowerPackage(resolvedPackage:ResolvedPackage, artifacts:Array<Artifact>, environment:BuildEnvironment, layout:TargetLayout,
 			compilerHome:String):{

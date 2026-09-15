@@ -8,7 +8,7 @@ import build.Artifact.ArtifactKind.NativeObject;
 import build.Artifact.ArtifactKind.NativeSharedLibrary;
 import build.Artifact.ArtifactKind.NativeStaticLibrary;
 import build.Artifact.ArtifactKind.WasmModule;
-import project.ProjectManifest;
+import build.NativeArtifactDemand.NativeArtifactDemand;
 import project.ResolvedPackage;
 import project.ResolvedProject;
 
@@ -24,7 +24,8 @@ class BuildPlanner {
 		return new BuildPlan([id], [new Artifact(id, dependencies)]);
 	}
 
-	public static function project(project:ResolvedProject, intent:BuildIntent, target:Target):BuildPlan {
+	public static function project(project:ResolvedProject, intent:BuildIntent, target:Target,
+		nativeDemand:NativeArtifactDemand):BuildPlan {
 		var artifacts:Array<Artifact> = [],
 			nativeShared = new Map<String, ArtifactId>(),
 			nativeStatic = new Map<String, ArtifactId>();
@@ -38,12 +39,16 @@ class BuildPlanner {
 					artifacts.push(new Artifact(id, [], details));
 					objects.push(id);
 				}
-				var staticId = new ArtifactId(resolvedPackage.name, NativeStaticLibrary, target),
-					sharedId = new ArtifactId(resolvedPackage.name, NativeSharedLibrary, target);
-				nativeStatic.set(resolvedPackage.name, staticId);
-				nativeShared.set(resolvedPackage.name, sharedId);
-				artifacts.push(new Artifact(staticId, objects, ["library" => resolvedPackage.name]));
-				artifacts.push(new Artifact(sharedId, objects, ["library" => resolvedPackage.name]));
+				if (NativeArtifactDemands.includes(nativeDemand, NativeStaticLibrary)) {
+					var staticId = new ArtifactId(resolvedPackage.name, NativeStaticLibrary, target);
+					nativeStatic.set(resolvedPackage.name, staticId);
+					artifacts.push(new Artifact(staticId, objects, ["library" => resolvedPackage.name]));
+				}
+				if (NativeArtifactDemands.includes(nativeDemand, NativeSharedLibrary)) {
+					var sharedId = new ArtifactId(resolvedPackage.name, NativeSharedLibrary, target);
+					nativeShared.set(resolvedPackage.name, sharedId);
+					artifacts.push(new Artifact(sharedId, objects, ["library" => resolvedPackage.name]));
+				}
 			}
 
 		var libraryRequirements:Array<ArtifactId> = [];
