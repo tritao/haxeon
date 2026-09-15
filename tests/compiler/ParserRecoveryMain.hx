@@ -401,6 +401,24 @@ class ParserRecoveryMain {
 				throw 'unfinished constructor call did not retain its result type: ${constructorExpression.type}';
 		}
 
+		var genericSource = new SourceFile("TolerantGeneric.hx", "class Box<T> { public function new(value:T) {} } function main():Box<Int> return new Box<");
+		var genericResult = new Parser(new Lexer(genericSource).tokenize()).parseProgramRecovering(),
+			genericProgram = genericResult.program,
+			genericTyped = Typer.typeRecovered(genericProgram);
+		if (genericTyped == null || genericTyped.functions.length != 2)
+			throw 'tolerant typer discarded an unfinished generic construction: ${genericTyped == null ? "null" : [for (fn in genericTyped.functions) fn.name].join(",")}';
+		var genericExpression = switch genericTyped.functions[0].statements[0] {
+			case TReturn(expression, _): expression;
+			default: null;
+		};
+		if (genericExpression == null)
+			throw "unfinished generic construction produced no typed expression";
+		switch genericExpression.type {
+			case TInstance(NominalKind.Class, "Box", _):
+			default:
+				throw 'unfinished generic construction did not retain its nominal result: ${genericExpression.type}';
+		}
+
 		var incompleteParameter = new SourceFile("TolerantParameter.hx", "function main(value:)");
 		var parameterProgram = new Parser(new Lexer(incompleteParameter).tokenize()).parseProgramRecovering().program,
 			parameterTyped = Typer.typeRecovered(parameterProgram);

@@ -84,6 +84,8 @@ class TypeRelations {
 			return true;
 		if (equals(actual, expected))
 			return true;
+		if (compatibleRecoveredType(actual, expected))
+			return true;
 		if (actual == TDynamic)
 			return switch expected {
 				case TNull, TVoid, TNever: false;
@@ -248,6 +250,32 @@ class TypeRelations {
 				}
 			default: false;
 		};
+
+	/**
+	 * Recovered generic arguments are intentionally incomplete. Keep a nominal
+	 * value usable against its contextual type when only those arguments are
+	 * unknown; strict typing never produces these placeholders.
+	 */
+	static function compatibleRecoveredType(actual:CompilerType, expected:CompilerType):Bool {
+		if (actual == TUnknown || actual == TError || expected == TUnknown || expected == TError)
+			return true;
+		return switch [actual, expected] {
+			case [
+				TInstance(actualKind, actualName, actualArguments),
+				TInstance(expectedKind, expectedName, expectedArguments)
+			]:
+				if (actualKind != expectedKind
+					|| actualName != expectedName
+					|| actualArguments.length != expectedArguments.length) false; else {
+					var compatible = true;
+					for (index in 0...actualArguments.length)
+						if (!compatibleRecoveredType(actualArguments[index], expectedArguments[index]))
+							compatible = false;
+					compatible;
+				}
+			default: false;
+		};
+	}
 
 	public static function isReference(type:CompilerType):Bool
 		return switch type {

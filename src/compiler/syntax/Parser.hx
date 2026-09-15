@@ -485,10 +485,14 @@ class Parser {
 		var result = [];
 		if (!match(TokenKind.Less))
 			return result;
-		while (!check(TokenKind.Greater) && !recoveringAtEnd()) {
-			result.push(parseType());
-			if (!match(TokenKind.Comma))
-				break;
+		if (recovering && (isExpressionTerminator(current().kind) || isDeclarationBoundary(current())))
+			result.push(missingType("type argument"));
+		else {
+			while (!check(TokenKind.Greater) && !recoveringAtEnd()) {
+				result.push(parseType());
+				if (!match(TokenKind.Comma))
+					break;
+			}
 		}
 		consume(TokenKind.Greater);
 		return result;
@@ -1466,6 +1470,12 @@ class Parser {
 			}
 			var typeName = parseQualifiedName();
 			var typeArguments = parseTypeArguments();
+			if (recovering && (recoveringAtEnd() || isDeclarationBoundary(current()))) {
+				recordExpected("left parenthesis");
+				var end = current().span;
+				return parsePostfix(typeArguments.length == 0 ? New(typeName, [],
+					start.merge(end)) : NewGeneric(typeName, typeArguments, [], start.merge(end)));
+			}
 			consume(TokenKind.LeftParen);
 			var arguments = [];
 			if (!check(TokenKind.RightParen)) {
