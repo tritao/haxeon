@@ -351,7 +351,10 @@ class LanguageService {
 	}
 
 	function resolveRecoveredSymbol(program:AstProgram, name:String):Null<SemanticSymbolId> {
-		var direct = compiler.semanticWorkspace.resolveSymbolId(name);
+		var qualifiedName = packageQualifiedName(program, name),
+			direct = compiler.semanticWorkspace.resolveSymbolId(name);
+		if (direct == null && qualifiedName != name)
+			direct = compiler.semanticWorkspace.resolveSymbolId(qualifiedName);
 		if (direct != null)
 			return direct;
 		var separator = name.indexOf(".");
@@ -375,6 +378,14 @@ class LanguageService {
 					return imported;
 			}
 		}
+		if (program.packageName != null && program.packageName.length > 0) {
+			var packageOwner = program.packageName + "." + qualifier,
+				packageMember = compiler.semanticWorkspace.resolveSymbolId(packageOwner + "." + suffix);
+			if (packageMember == null)
+				packageMember = compiler.semanticWorkspace.memberSymbolId(TInstance(NominalKind.Class, packageOwner, []), suffix);
+			if (packageMember != null)
+				return packageMember;
+		}
 		return null;
 	}
 
@@ -393,7 +404,10 @@ class LanguageService {
 	}
 
 	function resolveRecoveredType(program:AstProgram, name:String, arguments:Array<CompilerType>):Null<CompilerType> {
-		var direct = compiler.semanticWorkspace.resolveTypeSymbolId(name);
+		var qualifiedName = packageQualifiedName(program, name),
+			direct = compiler.semanticWorkspace.resolveTypeSymbolId(name);
+		if (direct == null && qualifiedName != name)
+			direct = compiler.semanticWorkspace.resolveTypeSymbolId(qualifiedName);
 		if (direct != null)
 			return recoveredTypeForIdentity(direct, name, arguments);
 		for (importPath in program.imports) {
@@ -413,7 +427,27 @@ class LanguageService {
 				if (decl.name == sourceName(importPath))
 					return TInstance(NominalKind.Enum, decl.name, arguments);
 		}
+		if (program.packageName != null && program.packageName.length > 0)
+			for (candidate in compiler.modules) {
+				var candidateAst = candidate.ast != null ? candidate.ast : candidate.recoveredAst != null ? candidate.recoveredAst : candidate.lastGoodAst;
+				if (candidateAst == null || candidateAst.packageName != program.packageName)
+					continue;
+				for (decl in candidateAst.classes)
+					if (decl.name == name)
+						return TInstance(NominalKind.Class, name, arguments);
+				for (decl in candidateAst.interfaces)
+					if (decl.name == name)
+						return TInstance(NominalKind.Interface, name, arguments);
+				for (decl in candidateAst.enums)
+					if (decl.name == name)
+						return TInstance(NominalKind.Enum, name, arguments);
+			}
 		return null;
+	}
+
+	static function packageQualifiedName(program:AstProgram, name:String):String {
+		var packageName = program.packageName;
+		return name.indexOf(".") < 0 && packageName != null && packageName.length > 0 ? packageName + "." + name : name;
 	}
 
 	function recoveredTypeForIdentity(id:SemanticSymbolId, name:String, arguments:Array<CompilerType>):CompilerType {

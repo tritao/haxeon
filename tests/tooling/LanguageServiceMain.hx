@@ -671,6 +671,16 @@ class LanguageServiceMain {
 		];
 		if (cacheOrderNames.indexOf("newValue") < 0 || cacheOrderNames.indexOf("oldValue") >= 0)
 			throw "immediate recovery used stale workspace resolution cache";
+		var samePackageService = new LanguageService(),
+			samePackageSource = "package same; function main():Void { var value:Types = new Types(); value.";
+		samePackageService.update("same/Types.hx", "package same; class Types { public var current:Int; }");
+		samePackageService.update("same/Main.hx", samePackageSource);
+		var samePackageNames = [
+			for (item in samePackageService.complete("same/Main.hx", samePackageSource.length))
+				item.label
+		];
+		if (samePackageNames.indexOf("current") < 0)
+			throw "same-package recovery did not resolve the current type shape";
 		var unrecoverableService = new LanguageService(),
 			unrecoverableSource = "function target():Int return 1; function main():Int return target();";
 		unrecoverableService.update("Unrecoverable.hx", unrecoverableSource);
