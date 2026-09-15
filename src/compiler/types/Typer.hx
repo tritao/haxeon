@@ -7,6 +7,7 @@ import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.typing.BodyTyper;
 import compiler.types.typing.ProgramTyper;
+import compiler.Diagnostic.CompileError;
 
 typedef TyperPhaseMetrics = compiler.types.typing.TypingMetrics.TyperPhaseMetrics;
 typedef MeasuredTypedProgram = compiler.types.typing.TypingMetrics.MeasuredTypedProgram;
@@ -19,6 +20,16 @@ class Typer {
 	/** Type a reusable module without requiring an executable main function. */
 	public static function typeLibrary(program:AstProgram, ?nativeAbiTarget:String):TypedProgram
 		return new ProgramTyper(new BodyTyper(null, null, nativeAbiTarget)).typeProgramMeasured(SemanticProgram.analyze(program), null, false, null).program;
+
+	/** Type a recovery tree while keeping failures local to the smallest body. */
+	public static function typeRecovered(program:AstProgram, ?nativeAbiTarget:String):Null<TypedProgram> {
+		try {
+			return new ProgramTyper(new BodyTyper(null, null, nativeAbiTarget, true))
+				.typeProgramMeasured(SemanticProgram.analyze(program), null, false, null).program;
+		} catch (_:CompileError) {
+			return null;
+		}
+	}
 
 	public static function typeSelected(program:AstProgram, selected:Map<String, Bool>,
 			?externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>, ?entryPoint:String):TypedProgram

@@ -63,8 +63,8 @@ class BodyTyper {
 		session.leaveBody(body);
 
 	public function new(externals:Null<Map<String, {arguments:Array<CompilerType>, result:CompilerType}>>,
-			specializations:Null<GenericSpecializationRegistry>, ?nativeAbiTarget:String) {
-		this.session = new TypingSession(externals, specializations, nativeAbiTarget);
+			specializations:Null<GenericSpecializationRegistry>, ?nativeAbiTarget:String, tolerant:Bool = false) {
+		this.session = new TypingSession(externals, specializations, nativeAbiTarget, tolerant);
 		this.conversionResolver = new ConversionResolver(session);
 		this.inlineConstantResolver = new InlineConstantResolver(session, function(owner, name) return this.findStaticFieldNullable(owner, name),
 			function(expression, owner, name, expected, typeParameters) return this.typeInlineInitializer(expression, owner, name, expected, typeParameters),
@@ -321,7 +321,7 @@ class BodyTyper {
 		context.expectedReturnType = result;
 		inferBodyLocalTypes(fn.statements, result);
 		var statements = typeStatements(fn.statements, scope, result);
-		if (result != TVoid && !ControlFlow.alwaysReturns(statements, function(type, cases) return this.exhaustiveEnum(type, cases)))
+		if (!session.tolerant && result != TVoid && !ControlFlow.alwaysReturns(statements, function(type, cases) return this.exhaustiveEnum(type, cases)))
 			fail("E1006", 'Function ${fn.name} does not return on every path', fn.span);
 		var typeArguments:Null<Array<CompilerType>> = null,
 			typeParameters = fn.typeParameters;
@@ -368,7 +368,37 @@ class BodyTyper {
 	}
 
 	function typeStatements(statements:Array<AstStatement>, scope:Scope, result:Null<CompilerType>):Array<TypedStatement> {
+		if (session.tolerant)
+			return typeStatementsRecovering(statements, scope, result);
+		return typeStatementsStrict(statements, scope, result);
+	}
+
+	function typeStatementsRecovering(statements:Array<AstStatement>, scope:Scope, result:Null<CompilerType>):Array<TypedStatement> {
 		var output:Array<TypedStatement> = [];
+		for (statement in statements) {
+			try {
+				output = output.concat(typeStatementsStrict([statement], scope, result));
+			} catch (_:CompileError) {
+				retainRecoveredDeclaration(statement, scope);
+				var span = statementSpan(statement);
+				output.push(TExpression(new TypedExpression(TNullLiteral, TError, span), span));
+			}
+		}
+		return output;
+	}
+
+	function retainRecoveredDeclaration(statement:AstStatement, scope:Scope):Void {
+		switch statement {
+			case UninitializedDeclaration(name, _, span), VarDeclaration(name, _, _, span):
+				try {
+					scope.define(name, TUnknown, span);
+				} catch (_:Dynamic) {}
+			default:
+		}
+	}
+
+	function typeStatementsStrict(statements:Array<AstStatement>, scope:Scope, result:Null<CompilerType>):Array<TypedStatement> {
+		var output = [];
 		for (statementIndex in 0...statements.length) {
 			var statement = statements[statementIndex];
 			if (ControlFlow.alwaysReturns(output, function(type, cases) return this.exhaustiveEnum(type, cases))) {
@@ -1196,8 +1226,15 @@ class BodyTyper {
 			default: null;
 		};
 
-	function typeExpression(expression:AstExpression, scope:Scope, ?expectedType:CompilerType, inferDynamicLambdaResult:Bool = false):TypedExpression
-		return expressionTyper.typeExpression(expression, scope, expectedType, inferDynamicLambdaResult);
+	function typeExpression(expression:AstExpression, scope:Scope, ?expectedType:CompilerType, inferDynamicLambdaResult:Bool = false):TypedExpression {
+		try {
+			return expressionTyper.typeExpression(expression, scope, expectedType, inferDynamicLambdaResult);
+		} catch (error:CompileError) {
+			if (!session.tolerant)
+				throw error;
+			return new TypedExpression(TNullLiteral, TError, expressionSpan(expression));
+		}
+	}
 
 	function typeVariableExpression(name:String, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		var type = scope.resolve(name);
@@ -1879,8 +1916,15 @@ class BodyTyper {
 		return true;
 	}
 
-	function lowerType(type:AstType):CompilerType
-		return session.representation.semanticType(type, null, context.typeSubstitutions);
+	function lowerType(type:AstType):CompilerType {
+		try {
+			return session.representation.semanticType(type, null, context.typeSubstitutions);
+		} catch (error:CompileError) {
+			if (!session.tolerant)
+				throw error;
+			return TUnknown;
+		}
+	}
 
 	static function copyMap<T>(source:Map<String, T>):Map<String, T> {
 		var result:Map<String, T> = [];
@@ -1978,6 +2022,20 @@ class BodyTyper {
 				FieldAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), Throw(_, span), Try(_, _, span), If(_, _, _, span), While(_, _, span),
 				DoWhile(_, _,
 					span), ForIn(_, _, _, _, span), Break(span), Continue(span), Switch(_, _, _, _, span), Increment(_, _, span), Expression(_, span): span;
+		}
+
+	static function expressionSpan(expression:AstExpression):SourceSpan
+		return switch expression {
+			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), BoolLiteral(_, span), NullLiteral(span), Unreachable(span),
+				ErrorExpression(span), Variable(_, span), Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span), Div(_, _, span),
+				Mod(_, _, span), BitAnd(_, _, span), BitXor(_, _, span), BitOr(_, _, span), ShiftLeft(_, _, span), ShiftRight(_, _, span),
+				UnsignedShiftRight(_, _, span), Negate(_, span), Less(_, _, span), LessEqual(_, _, span), Greater(_, _, span), GreaterEqual(_, _, span),
+				Equal(_, _, span), NotEqual(_, _, span), Not(_, span), Call(_, _, span), ClosureCall(_, _, span), MethodCall(_, _, _, span), New(_, _, span),
+				NewGeneric(_, _, _, span), NativeLayoutQuery(_, _, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span),
+				PostfixIncrement(_, _, span), Lambda(_, _, span), And(_, _, span), Or(_, _, span), Conditional(_, _, _, span), BlockExpression(_, _, span),
+				ThrowExpression(_, span), SwitchExpression(_, _, _, span), Cast(_, _, span): span;
+			case ObjectLiteral(_, span), ArrayLiteral(_, span), MapLiteral(_, span), ArrayComprehension(_, _, _, _, _, span),
+				MapComprehension(_, _, _, _, _, _, span), Range(_, _, span): span;
 		}
 
 	static function fail(code:String, message:String, span:SourceSpan):Void

@@ -16,6 +16,7 @@ import compiler.Compiler.CompileResult;
 import compiler.types.Type.CompilerType;
 import compiler.types.DeclarationIndex.DeclarationKind;
 import compiler.types.TypeRelations;
+import compiler.types.Typer;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
@@ -275,6 +276,7 @@ class LanguageService {
 			state.recoveredTokens = tokens;
 			state.recoveredAst = recovered.program;
 			state.recoveredSemanticModel = new SemanticModel(recovered.program, state.source, state.revision, tokens);
+			state.recoveredSemanticModel.partialTypedProgram = Typer.typeRecovered(recovered.program);
 			state.recoveredSemanticModel.index.indexRecoveredSyntax(recovered.program);
 			mergeRecoveryDiagnostics(state, recovered.diagnostics);
 		} catch (_:CompileError) {

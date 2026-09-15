@@ -773,7 +773,7 @@ class ExpressionTyper {
 			case NullLiteral(span): new TypedExpression(TNullLiteral, TNull, span);
 			case Unreachable(span): new TypedExpression(TUnreachable, TNever, span);
 			case EmptyExpression(span): new TypedExpression(TVoidLiteral, TVoid, span);
-			case ErrorExpression(span): new TypedExpression(TNullLiteral, TDynamic, span);
+			case ErrorExpression(span): new TypedExpression(TNullLiteral, session.tolerant ? TError : TDynamic, span);
 			default: throw "ExpressionTyper.typeLiteral requires a literal expression";
 		};
 

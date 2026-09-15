@@ -3,6 +3,7 @@ import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceFile;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
+import compiler.types.Typer;
 import compiler.types.Type.NominalKind;
 
 class ParserRecoveryMain {
@@ -58,6 +59,7 @@ class ParserRecoveryMain {
 			assertNestedRecovery(tail);
 		assertIncompleteDeclarations();
 		assertPartialTypeFacts();
+		assertTolerantTypedSnapshot();
 		assertTruncationRecovery();
 		Sys.println("PASS: incomplete member and type recovery support completion");
 	}
@@ -148,6 +150,25 @@ class ParserRecoveryMain {
 			throw 'nested recovery discarded its enclosing function for "$tail"';
 		if (service.diagnostics("Nested.hx").length > 20)
 			throw 'nested recovery exceeded its diagnostic budget for "$tail"';
+	}
+
+	static function assertTolerantTypedSnapshot():Void {
+		var source = new SourceFile("Tolerant.hx",
+			"function main():Void { var first:Int = 1; broken.unresolved().thing; var second:Int = first; }");
+		var recovered = new Parser(new Lexer(source).tokenize()).parseProgramRecovering().program,
+			typed = Typer.typeRecovered(recovered);
+		if (typed == null || typed.functions.length != 1)
+			throw "tolerant typer did not produce a partial typed program";
+		var functionBody = typed.functions[0].statements;
+		if (functionBody.length != 3)
+			throw 'tolerant typer discarded statements around an expression error: ${functionBody.length}';
+		switch functionBody[2] {
+			case TVar(name, _, _):
+				if (name.indexOf(":second") < 0)
+					throw 'tolerant typer retained the wrong local: $name';
+			default:
+				throw 'tolerant typer did not retain the local after an expression error: ${Type.enumConstructor(functionBody[2])}';
+		}
 	}
 
 	static function assertTruncationRecovery():Void {
