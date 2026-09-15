@@ -11,6 +11,10 @@ try {
     Push-Location $ProjectDir
     & $Cli init
     if ($LASTEXITCODE -ne 0) { throw "haxeon init failed with $LASTEXITCODE" }
+    $Manifest = Get-Content -Raw -Path "haxeon.json" | ConvertFrom-Json
+    if ($null -eq $Manifest.package -or [string]::IsNullOrEmpty($Manifest.package.name)) {
+        throw "haxeon init did not write a non-empty package name"
+    }
 
     Set-Content -NoNewline -Path "src/Main.hx" -Value "function main():Int return Sys.args().length == 1 ? 42 : 43;`n"
     & $Cli doctor

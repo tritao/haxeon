@@ -117,7 +117,11 @@ class HaxeonCli {
 			defines: [],
 			outputDir: "build",
 		};
-		Reflect.setField(config, "package", {name: Path.withoutDirectory(FileSystem.fullPath(projectDirectory))});
+		var normalizedProjectDirectory = Path.normalize(FileSystem.fullPath(projectDirectory)),
+			packageName = Path.withoutDirectory(normalizedProjectDirectory);
+		if (packageName.length == 0)
+			throw 'Could not derive a package name from project directory $normalizedProjectDirectory';
+		Reflect.setField(config, "package", {name: packageName});
 		if (target == "android")
 			Reflect.setField(config, "android", {applicationId: "org.haxeon.android", label: "Haxeon"});
 		File.saveContent(configPath, Json.stringify(config, null, "\t") + "\n");
