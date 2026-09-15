@@ -370,7 +370,8 @@ class SemanticIndex {
 	}
 
 	function indexRecoveredStatements(functionKey:String, statements:Array<AstStatement>, scope:SourceSpan, depth:Int):Void {
-		for (statement in statements)
+		for (statement in statements) {
+			checkpoint();
 			switch statement {
 				case UninitializedDeclaration(name, type, span):
 					addRecoveredLocal(functionKey, name, recoveredType(type), span, scope, depth);
@@ -396,6 +397,7 @@ class SemanticIndex {
 					indexRecoveredStatements(functionKey, fallback, span, depth + 1);
 				default:
 			}
+		}
 	}
 
 	function addRecoveredLocal(functionKey:String, name:String, type:CompilerType, declaration:SourceSpan, scope:SourceSpan, depth:Int):Void {
@@ -419,7 +421,8 @@ class SemanticIndex {
 	}
 
 	function indexRecoveredStatementUses(statements:Array<AstStatement>, ?expectedReturn:CompilerType):Void {
-		for (statement in statements)
+		for (statement in statements) {
+			checkpoint();
 			switch statement {
 				case VarDeclaration(_, type, value, span):
 					if (type != null)
@@ -470,9 +473,11 @@ class SemanticIndex {
 					indexRecoveredStatementUses(fallback, expectedReturn);
 				default:
 			}
+		}
 	}
 
 	function indexRecoveredExpression(expression:AstExpression, ?expected:CompilerType):Void {
+		checkpoint();
 		switch expression {
 			case ErrorExpression(span):
 				if (expected != null)
@@ -595,7 +600,8 @@ class SemanticIndex {
 
 	function bindRecoveredLocal(name:String, span:SourceSpan):Null<SemanticSymbolId> {
 		var found:Null<SemanticCompletionLocal> = null;
-		for (local in completionLocals)
+		for (local in completionLocals) {
+			checkpoint();
 			if (local.name == name
 				&& local.declaration.start <= span.start
 				&& span.start >= local.scope.start
@@ -605,6 +611,7 @@ class SemanticIndex {
 					|| local.depth == found.depth
 					&& local.declaration.start > found.declaration.start))
 				found = local;
+		}
 		if (found == null)
 			return null;
 		for (symbol in symbols)
@@ -673,9 +680,11 @@ class SemanticIndex {
 	function recordUnresolved(name:String, span:SourceSpan):Void {
 		if (name.length == 0)
 			return;
-		for (existing in unresolved)
+		for (existing in unresolved) {
+			checkpoint();
 			if (existing.name == name && existing.span.start == span.start && existing.span.end == span.end)
 				return;
+		}
 		var candidates:Array<SemanticSymbolId> = [];
 		for (symbol in symbols)
 			if (symbol.name == name || sourceName(symbol.name) == name)
@@ -714,22 +723,27 @@ class SemanticIndex {
 	}
 
 	function recoveredMemberType(object:AstExpression, name:String):CompilerType {
+		checkpoint();
 		var owner = memberOwner(recoveredExpressionBindingType(object));
 		if (owner == null)
 			return TUnknown;
 		var classDecl = declarations.classes.get(owner);
 		if (classDecl != null) {
-			for (field in classDecl.fields)
+			for (field in classDecl.fields) {
+				checkpoint();
 				if (field.name == name)
 					return field.type == null ? (field.initializer == null ? TUnknown : recoveredExpressionType(field.initializer)) : recoveredType(field.type);
+			}
 		}
 		var interfaceDecl = declarations.interfaces.get(owner);
 		if (interfaceDecl != null)
-			for (method in interfaceDecl.methods)
+			for (method in interfaceDecl.methods) {
+				checkpoint();
 				if (method.name == name) {
 					var methodType = recoveredFunctionType(owner + "." + name);
 					return methodType == null ? TUnknown : methodType;
 				}
+			}
 		var functionType = recoveredFunctionType(owner + "." + name);
 		if (functionType != null)
 			return functionType;
@@ -747,6 +761,7 @@ class SemanticIndex {
 
 	function indexRecoveredCallArguments(arguments:Array<AstExpression>, fn:Null<AstFunction>):Void {
 		for (index in 0...arguments.length) {
+			checkpoint();
 			var argument = arguments[index];
 			var expected = fn == null || index >= fn.arguments.length ? null : recoveredType(fn.arguments[index].type);
 			indexRecoveredExpression(argument, expected);
