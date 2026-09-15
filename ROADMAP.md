@@ -150,13 +150,16 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   runtime identity, plus a caller-owned cancellation token and `cancel` method.
   There is no second typechecker.
 - [~] `benchmarks/editor-benchmark.hxml` measures edit-to-recovery,
-	completion, signature-help, hover, definition, background-analysis latency,
-	recovered-snapshot publication, and process-memory growth under rapid
-	incomplete edits, including a multi-module malformed-source scenario. Its
-	opt-in `--check-budgets` gate defines the representative small-workspace
-	budgets: 100 ms p95 for editor recovery and interactive queries, 500 ms p95
-	for background analysis, and 32 MiB maximum RSS growth. Larger-workspace
-	budgets and long-lived memory measurements remain.
+  completion, signature-help, hover, definition, background-analysis latency,
+  recovered-snapshot publication, and process-memory growth under rapid
+  incomplete edits, including multi-module malformed-source scenarios. Its
+  opt-in `--check-budgets` gate defines representative budgets: 100 ms p95 for
+  small-workspace editor recovery and interactive queries, 500 ms p95 for
+  background analysis and scaled 64-module recovery/queries, 32 MiB maximum
+  small-workspace RSS growth, and 128 MiB maximum RSS growth across 250 edits
+  on one long-lived 64-module service. Use `--scale-modules` and
+  `--endurance-edits` to reproduce or enlarge the workload; broader
+  production-workspace validation remains.
 - [x] Representative multi-module plugin workload with an editor facade,
 	interface lifecycle, arrays/maps, callbacks, incremental body patching, and
 	class-layout reload classification (`tests/hxml/plugin-test.hxml`).

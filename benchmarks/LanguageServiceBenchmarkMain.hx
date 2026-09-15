@@ -27,6 +27,11 @@ private typedef Percentiles = {
 	final p99:Float;
 }
 
+private typedef ScaledSample = {
+	final updateMs:Float;
+	final completionMs:Float;
+}
+
 /** Measures editor recovery latency and memory growth under rapid edits. */
 class LanguageServiceBenchmarkMain {
 	static final prefix = "class Foo { public function bar(value:Int):Int return value; }\n" + "function main():Void { var foo:Foo = new Foo(); ";
@@ -46,18 +51,23 @@ class LanguageServiceBenchmarkMain {
 		var args = Sys.args(),
 			iterations = intArg(args, "--iterations", 100),
 			warmup = intArg(args, "--warmup", 10),
+			scaleIterations = intArg(args, "--scale-iterations", 3),
+			scaleModules = intArg(args, "--scale-modules", 64),
+			enduranceEdits = intArg(args, "--endurance-edits", 250),
 			output = stringArg(args, "--json", "out/editor-benchmark.json"),
 			checkBudgets = hasFlag(args, "--check-budgets");
-		if (iterations < 1 || warmup < 0)
-			throw "iterations must be positive and warmup cannot be negative";
+		if (iterations < 1 || warmup < 0 || scaleIterations < 1 || scaleModules < 1 || enduranceEdits < 1)
+			throw "iterations and scale parameters must be positive; warmup cannot be negative";
 
 		for (_ in 0...warmup)
 			runIteration();
 		var before = processMemory(),
 			samples = [for (_ in 0...iterations) runIteration()],
-			after = processMemory();
+			after = processMemory(),
+			scaleSamples = [for (_ in 0...scaleIterations) runScaledWorkspaceScenario(scaleModules)],
+			longLivedMemoryGrowth = runLongLivedScenario(scaleModules, enduranceEdits);
 		var report = {
-			version: 3,
+			version: 4,
 			iterations: iterations,
 			warmup: warmup,
 			platform: Sys.systemName(),
@@ -74,6 +84,12 @@ class LanguageServiceBenchmarkMain {
 			workspaceCompletionMs: percentiles([for (sample in samples) sample.workspaceCompletionMs]),
 			malformedUpdateMs: percentiles([for (sample in samples) sample.malformedUpdateMs]),
 			malformedCompletionMs: percentiles([for (sample in samples) sample.malformedCompletionMs]),
+			scaleModules: scaleModules,
+			scaleIterations: scaleIterations,
+			scaledWorkspaceUpdateMs: percentiles([for (sample in scaleSamples) sample.updateMs]),
+			scaledWorkspaceCompletionMs: percentiles([for (sample in scaleSamples) sample.completionMs]),
+			enduranceEdits: enduranceEdits,
+			longLivedMemoryGrowthBytes: longLivedMemoryGrowth,
 			recoveredSnapshots: {
 				total: sumSnapshots(samples),
 				average: sumSnapshots(samples) / samples.length
@@ -98,6 +114,9 @@ class LanguageServiceBenchmarkMain {
 		Sys.println('Workspace completion median/p95/p99: ${format(report.workspaceCompletionMs.median)}/${format(report.workspaceCompletionMs.p95)}/${format(report.workspaceCompletionMs.p99)} ms');
 		Sys.println('Malformed update median/p95/p99: ${format(report.malformedUpdateMs.median)}/${format(report.malformedUpdateMs.p95)}/${format(report.malformedUpdateMs.p99)} ms');
 		Sys.println('Malformed completion median/p95/p99: ${format(report.malformedCompletionMs.median)}/${format(report.malformedCompletionMs.p95)}/${format(report.malformedCompletionMs.p99)} ms');
+		Sys.println('Scaled workspace (${scaleModules} modules) update median/p95/p99: ${format(report.scaledWorkspaceUpdateMs.median)}/${format(report.scaledWorkspaceUpdateMs.p95)}/${format(report.scaledWorkspaceUpdateMs.p99)} ms');
+		Sys.println('Scaled workspace completion median/p95/p99: ${format(report.scaledWorkspaceCompletionMs.median)}/${format(report.scaledWorkspaceCompletionMs.p95)}/${format(report.scaledWorkspaceCompletionMs.p99)} ms');
+		Sys.println('Long-lived memory growth after ${enduranceEdits} edits: ${report.longLivedMemoryGrowthBytes} bytes');
 		Sys.println('Recovered snapshots average: ${format(report.recoveredSnapshots.average)}');
 		if (checkBudgets) {
 			enforceBudgets(report);
@@ -122,9 +141,14 @@ class LanguageServiceBenchmarkMain {
 		checkBudget("workspace-completion", report.workspaceCompletionMs.p95, 100.0);
 		checkBudget("malformed-edit-to-recovery", report.malformedUpdateMs.p95, 100.0);
 		checkBudget("malformed-completion", report.malformedCompletionMs.p95, 100.0);
+		checkBudget("scaled-workspace-edit-to-recovery", report.scaledWorkspaceUpdateMs.p95, 500.0);
+		checkBudget("scaled-workspace-completion", report.scaledWorkspaceCompletionMs.p95, 500.0);
 		var memoryGrowth:Float = report.memoryGrowthBytes;
 		if (memoryGrowth >= 0 && memoryGrowth > 32.0 * 1024.0 * 1024.0)
 			throw 'Editor benchmark memory-growth budget exceeded: ${memoryGrowth} bytes > ${32 * 1024 * 1024} bytes';
+		var longLivedMemoryGrowth:Float = report.longLivedMemoryGrowthBytes;
+		if (longLivedMemoryGrowth >= 0 && longLivedMemoryGrowth > 128.0 * 1024.0 * 1024.0)
+			throw 'Long-lived editor memory-growth budget exceeded: ${longLivedMemoryGrowth} bytes > ${128 * 1024 * 1024} bytes';
 	}
 
 	static function checkBudget(name:String, value:Float, limit:Float):Void {
@@ -211,6 +235,44 @@ class LanguageServiceBenchmarkMain {
 			malformedUpdateMs: malformedUpdateMs,
 			malformedCompletionMs: malformedCompletionMs
 		};
+	}
+
+	static function runScaledWorkspaceScenario(moduleCount:Int):ScaledSample {
+		var service = prepareScaledWorkspace(moduleCount),
+			source = scaledSource(moduleCount, 0),
+			started = Sys.time();
+		service.update("scale/Main.hx", source);
+		var updateMs = (Sys.time() - started) * 1000.0;
+		started = Sys.time();
+		var completion = service.completeResult("scale/Main.hx", source.length),
+			completionMs = (Sys.time() - started) * 1000.0;
+		if (!completion.isIncomplete || !hasLabel(completion.items, "known0"))
+			throw 'scaled workspace recovery lost member completion across $moduleCount modules';
+		return {updateMs: updateMs, completionMs: completionMs};
+	}
+
+	static function runLongLivedScenario(moduleCount:Int, edits:Int):Float {
+		var service = prepareScaledWorkspace(moduleCount),
+			before = processMemory();
+		for (edit in 0...edits) {
+			var source = scaledSource(moduleCount, edit);
+			service.update("scale/Main.hx", source);
+			service.completeResult("scale/Main.hx", source.length);
+		}
+		var after = processMemory();
+		return before < 0 || after < 0 ? -1 : after - before;
+	}
+
+	static function prepareScaledWorkspace(moduleCount:Int):LanguageService {
+		var service = new LanguageService();
+		for (index in 0...moduleCount)
+			service.update('scale/Type$index.hx', 'package scale; class Type$index { public var known$index:Int; public function method$index(value:Int):Int return value; }');
+		return service;
+	}
+
+	static function scaledSource(moduleCount:Int, edit:Int):String {
+		var imports = [for (index in 0...moduleCount) 'import scale.Type$index;'].join(" ");
+		return 'package scale; $imports function main():Int { var value:Type0 = new Type0(); broken$edit.unresolved().thing; return value.';
 	}
 
 	static function hasLabel(items:Array<compiler.service.LanguageService.CompletionItem>, label:String):Bool {
