@@ -496,14 +496,16 @@ class Compiler {
 
 	/** Change semantic build context and invalidate every source-derived cache. */
 	public function configure(identity:String, scopeIdentity:String, values:Array<String>):Void {
-		if (identity == configurationIdentity)
-			return;
 		var nextDefines:Map<String, String> = [];
 		for (value in values) {
 			var separator = value.indexOf("="),
 				name = separator < 0 ? value : value.substr(0, separator);
 			nextDefines.set(name, separator < 0 ? "1" : value.substr(separator + 1));
 		}
+		if (identity == configurationIdentity
+			&& scopeIdentity == configurationScopeIdentity
+			&& sameDefines(defines, nextDefines))
+			return;
 		var changed:Map<String, Bool> = [];
 		for (name => value in defines)
 			if (nextDefines.get(name) != value)
@@ -527,6 +529,19 @@ class Compiler {
 				state.update(new SourceFile(state.source.path, state.source.text));
 		}
 		sourceGeneration++;
+	}
+
+	static function sameDefines(left:Map<String, String>, right:Map<String, String>):Bool {
+		var leftCount = 0;
+		for (name => value in left) {
+			leftCount++;
+			if (!right.exists(name) || right.get(name) != value)
+				return false;
+		}
+		var rightCount = 0;
+		for (_ in right)
+			rightCount++;
+		return leftCount == rightCount;
 	}
 
 	/** Update semantic state without assembling or publishing a runtime artifact. */

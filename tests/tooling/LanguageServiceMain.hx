@@ -772,6 +772,17 @@ class LanguageServiceMain {
 		configuredService.analyze("Configured");
 		if (defaultIndex == configuredService.compiler.modules.get("Configured").semanticModel.index)
 			throw "semantic index was reused across build configurations";
+		var sameIdentityConfigService = new LanguageService(),
+			sameIdentityConfigSource = "#if feature\nfunction featureOnly():Int return 1;\n#else\nfunction fallbackOnly():Int return 2;\n#end\nfunction main():Int return 0;";
+		sameIdentityConfigService.update("SameIdentityConfig.hx", sameIdentityConfigSource);
+		sameIdentityConfigService.configure("same-build", "same-scope", []);
+		sameIdentityConfigService.analyze("SameIdentityConfig");
+		if (!containsDocumentSymbol(sameIdentityConfigService.documentSymbols("SameIdentityConfig.hx"), "fallbackOnly"))
+			throw "same-identity configuration did not establish its initial defines";
+		sameIdentityConfigService.configure("same-build", "same-scope", ["feature"]);
+		sameIdentityConfigService.analyze("SameIdentityConfig");
+		if (!containsDocumentSymbol(sameIdentityConfigService.documentSymbols("SameIdentityConfig.hx"), "featureOnly"))
+			throw "same-identity define changes did not invalidate conditional analysis";
 		var immediateDefineService = new LanguageService();
 		immediateDefineService.configure("editor-defines", "shared-scope", ["feature", "version=3.0"]);
 		immediateDefineService.update("ImmediateConditional.hx",

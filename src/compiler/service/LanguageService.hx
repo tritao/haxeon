@@ -227,6 +227,7 @@ class LanguageService {
 	final structuralIndex:Map<String, StructuralIndexEntry> = [];
 	final recoveredCompletionPrograms:Map<String, {revision:Int, program:AstProgram}> = [];
 	var editorDefines:Map<String, String> = [];
+	var editorScopeIdentity = "default";
 
 	public function new(?identityState:haxe.io.Bytes) {
 		compiler = new Compiler(identityState, CompilerIntrinsics.configuration());
@@ -261,17 +262,36 @@ class LanguageService {
 	}
 
 	public function configure(identity:String, scopeIdentity:String, defines:Array<String>):Void {
-		editorDefines = [];
+		var nextDefines:Map<String, String> = [];
 		for (define in defines) {
 			var separator = define.indexOf("="),
 				name = separator < 0 ? define : define.substr(0, separator);
-			editorDefines.set(name, separator < 0 ? "1" : define.substr(separator + 1));
+			nextDefines.set(name, separator < 0 ? "1" : define.substr(separator + 1));
 		}
+		if (identity == compiler.configurationIdentity
+			&& scopeIdentity == editorScopeIdentity
+			&& sameDefines(editorDefines, nextDefines))
+			return;
+		editorDefines = nextDefines;
+		editorScopeIdentity = scopeIdentity;
 		workspaceIndex.clear();
 		documentationIndex.clear();
 		structuralIndex.clear();
 		recoveredCompletionPrograms.clear();
 		compiler.configure(identity, scopeIdentity, defines);
+	}
+
+	static function sameDefines(left:Map<String, String>, right:Map<String, String>):Bool {
+		var leftCount = 0;
+		for (name => value in left) {
+			leftCount++;
+			if (!right.exists(name) || right.get(name) != value)
+				return false;
+		}
+		var rightCount = 0;
+		for (_ in right)
+			rightCount++;
+		return leftCount == rightCount;
 	}
 
 	public function compile(entryModule:String, ?token:CancellationToken):CompileResult
