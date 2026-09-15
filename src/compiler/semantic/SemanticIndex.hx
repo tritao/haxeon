@@ -1327,7 +1327,43 @@ class SemanticIndex {
 			if (expected != null && !isRecoveryType(expected))
 				inferRecoveredTypeParameters(fn.result, expected, fn.typeParameters, inferred);
 		}
-		return recoveredType(fn.result, inferred);
+		return recoveredExpectedType(fn.result, fn, inferred);
+	}
+
+	/**
+	 * Resolve a generic signature for editor use, retaining an upper-bound when
+	 * inference has not received an argument yet. A missing argument in
+	 * `bounded(` should still expose the bounded type to completion rather than
+	 * degrading immediately to TUnknown.
+	 */
+	function recoveredExpectedType(type:AstType, fn:AstFunction, substitutions:Map<String, CompilerType>,
+		?visiting:Array<String>):CompilerType {
+		var active = visiting == null ? [] : visiting;
+		return switch type {
+			case NamedType(name) if (fn.typeParameters != null && fn.typeParameters.indexOf(name) >= 0):
+				var substitution = substitutions.get(name);
+				if (substitution != null && !isRecoveryType(substitution))
+					substitution;
+				else if (active.indexOf(name) >= 0)
+					TUnknown;
+				else {
+					var constraint:Null<AstType> = null;
+					if (fn.typeConstraints != null)
+						for (candidate in fn.typeConstraints)
+							if (candidate.parameter == name) {
+								constraint = candidate.type;
+								break;
+							}
+					constraint == null ? TUnknown : recoveredExpectedType(constraint, fn, substitutions, active.concat([name]));
+				}
+			case ArrayType(element): TArray(recoveredExpectedType(element, fn, substitutions, active));
+			case MapType(key, value): TMap(recoveredExpectedType(key, fn, substitutions, active),
+				recoveredExpectedType(value, fn, substitutions, active));
+			case NullableType(element): TNullable(recoveredExpectedType(element, fn, substitutions, active));
+			case FunctionType(arguments, result): TFunction([for (argument in arguments)
+				recoveredExpectedType(argument, fn, substitutions, active)], recoveredExpectedType(result, fn, substitutions, active));
+			case _: recoveredType(type, substitutions);
+		};
 	}
 
 	function recoveredFunctionType(name:String, ?substitutions:Map<String, CompilerType>):Null<CompilerType> {
@@ -1472,7 +1508,7 @@ class SemanticIndex {
 			checkpoint();
 			var argument = arguments[index];
 			var expected = explicitExpected != null && index < explicitExpected.length ? explicitExpected[index]
-				: fn == null || index >= fn.arguments.length ? null : recoveredType(fn.arguments[index].type, inferredSubstitutions);
+				: fn == null || index >= fn.arguments.length ? null : recoveredExpectedType(fn.arguments[index].type, fn, inferredSubstitutions);
 			indexRecoveredExpression(argument, expected, functionKey);
 		}
 	}

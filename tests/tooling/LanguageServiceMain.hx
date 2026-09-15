@@ -1363,6 +1363,17 @@ class LanguageServiceMain {
 		};
 		if (expectedArgumentName != "Foo")
 			throw 'recovered call did not retain the expected argument type: ${expectedArgument == null ? "null" : Std.string(expectedArgument)}';
+		var boundedGenericService = new LanguageService(),
+			boundedGenericSource = "class Bound {} function identity<T:Bound>(value:T):T return value; function main():Void { identity(";
+		boundedGenericService.update("BoundedGeneric.hx", boundedGenericSource);
+		var boundedGenericContext = boundedGenericService.completionContext("BoundedGeneric.hx", boundedGenericSource.length),
+			boundedGenericExpected = boundedGenericContext == null ? null : boundedGenericContext.context.expected,
+			boundedGenericExpectedName = switch boundedGenericExpected {
+				case TInstance(_, name, _): Std.string(name);
+				default: null;
+			};
+		if (boundedGenericExpectedName != "Bound")
+			throw 'recovered generic constraint did not provide an expected argument type: ${boundedGenericExpected == null ? "null" : Std.string(boundedGenericExpected)}';
 		var recoveredAbstractService = new LanguageService(),
 			recoveredAbstractSource = "abstract Value(Int) from Missing to";
 		recoveredAbstractService.update("RecoveredAbstract.hx", recoveredAbstractSource);
