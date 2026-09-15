@@ -347,7 +347,7 @@ class Parser {
 
 	function parseFunction(allowMissingReturn:Bool, isExtern:Bool = false, ?metadata:Array<compiler.syntax.Ast.AstMetadata>):AstFunction {
 		var start = consume(TokenKind.Function).span,
-			name = check(TokenKind.New) ? advance().text : consume(TokenKind.Identifier).text;
+			name = check(TokenKind.New) ? advance().text : consumeDeclarationName("function");
 		return parseFunctionBody(start, name, allowMissingReturn, false, isExtern, metadata);
 	}
 
@@ -357,20 +357,25 @@ class Parser {
 			typeParameters = parseTypeParameters(typeConstraints);
 		consume(TokenKind.LeftParen);
 		var arguments = [];
-		if (!check(TokenKind.RightParen) && !recoveringAtEnd()) {
-			do {
-				var optional = match(TokenKind.Question),
-					argumentToken = consume(TokenKind.Identifier);
-				var argumentType = match(TokenKind.Colon) ? parseType() : InferredType,
-					defaultValue = match(TokenKind.Assign) ? parseExpression() : null;
-				arguments.push({
-					name: argumentToken.text,
-					type: argumentType,
-					span: argumentToken.span.merge(previous().span),
-					optional: optional || defaultValue != null,
-					defaultValue: defaultValue
-				});
-			} while (match(TokenKind.Comma));
+		while (!check(TokenKind.RightParen) && !recoveringAtEnd() && !canInsert(TokenKind.RightParen)) {
+			if (check(TokenKind.Comma)) {
+				recordExpected("parameter");
+				advance();
+				continue;
+			}
+			var optional = match(TokenKind.Question),
+				argumentToken = consumeDeclarationToken("parameter");
+			var argumentType = match(TokenKind.Colon) ? parseType() : InferredType,
+				defaultValue = match(TokenKind.Assign) ? parseExpression() : null;
+			arguments.push({
+				name: argumentToken.text,
+				type: argumentType,
+				span: argumentToken.span.merge(previous().span),
+				optional: optional || defaultValue != null,
+				defaultValue: defaultValue
+			});
+			if (!match(TokenKind.Comma))
+				break;
 		}
 		consume(TokenKind.RightParen);
 		var result = match(TokenKind.Colon) ? parseType() : allowMissingReturn && name == "new" ? VoidType : InferredType;
@@ -448,8 +453,13 @@ class Parser {
 		var result = [];
 		if (!match(TokenKind.Less))
 			return result;
-		do {
-			var parameter = consume(TokenKind.Identifier);
+		while (!check(TokenKind.Greater) && !recoveringAtEnd()) {
+			if (check(TokenKind.Comma)) {
+				recordExpected("type parameter");
+				advance();
+				continue;
+			}
+			var parameter = consumeDeclarationToken("type parameter");
 			if (result.indexOf(parameter.text) >= 0)
 				fail(parameter, 'Duplicate type parameter "${parameter.text}"');
 			result.push(parameter.text);
@@ -463,7 +473,9 @@ class Parser {
 				if (grouped)
 					consume(TokenKind.RightParen);
 			}
-		} while (match(TokenKind.Comma));
+			if (!match(TokenKind.Comma))
+				break;
+		}
 		consume(TokenKind.Greater);
 		return result;
 	}
@@ -472,15 +484,18 @@ class Parser {
 		var result = [];
 		if (!match(TokenKind.Less))
 			return result;
-		do
-			result.push(parseType()) while (match(TokenKind.Comma));
+		while (!check(TokenKind.Greater) && !recoveringAtEnd()) {
+			result.push(parseType());
+			if (!match(TokenKind.Comma))
+				break;
+		}
 		consume(TokenKind.Greater);
 		return result;
 	}
 
 	function parseClass(isPrivate:Bool, metadata:Array<compiler.syntax.Ast.AstMetadata>, isExtern:Bool = false):AstClass {
 		var start = consume(TokenKind.Class).span,
-			name = consume(TokenKind.Identifier).text,
+			name = consumeDeclarationName("class"),
 			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints),
 			base:Null<AstType> = null,
@@ -529,12 +544,12 @@ class Parser {
 				}
 				if (match(TokenKind.Function)) {
 					var functionStart = previous().span,
-						methodName = check(TokenKind.New) ? advance().text : consume(TokenKind.Identifier).text;
+						methodName = check(TokenKind.New) ? advance().text : consumeDeclarationName("method");
 					methods.push(parseFunctionBody(functionStart, methodName, true, isStatic, isExtern, memberMetadata));
 				} else {
 					var fieldStart = current().span;
 					match(TokenKind.Var);
-					var fieldName = consume(TokenKind.Identifier).text;
+					var fieldName = consumeDeclarationName("field");
 					var readAccess = null, writeAccess = null;
 					if (match(TokenKind.LeftParen)) {
 						readAccess = parseFieldAccess();
@@ -681,7 +696,7 @@ class Parser {
 	}
 
 	function parseInterface():AstInterface {
-		var start = consume(TokenKind.Interface).span, name = consume(TokenKind.Identifier).text,
+		var start = consume(TokenKind.Interface).span, name = consumeDeclarationName("interface"),
 			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [], typeParameters = parseTypeParameters(typeConstraints), bases = [];
 		if (match(TokenKind.Extends)) {
 			bases.push(parseType());
@@ -690,31 +705,37 @@ class Parser {
 		}
 		consume(TokenKind.LeftBrace);
 		var methods = [];
-		while (!check(TokenKind.RightBrace)) {
+		while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof)) {
 			var methodMetadata = parseMetadata();
 			while (check(TokenKind.Public) || check(TokenKind.Private) || check(TokenKind.Static) || check(TokenKind.Inline))
 				advance();
 			var methodStart = consume(TokenKind.Function).span,
-				methodName = consume(TokenKind.Identifier).text;
+				methodName = consumeDeclarationName("interface method");
 			var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 				typeParameters = parseTypeParameters(typeConstraints);
 			consume(TokenKind.LeftParen);
 			var arguments = [];
-			if (!check(TokenKind.RightParen))
-				do {
-					var optional = match(TokenKind.Question),
-						argumentName = consume(TokenKind.Identifier).text;
-					consume(TokenKind.Colon);
-					arguments.push({
-						name: argumentName,
-						type: parseType(),
-						span: previous().span,
-						optional: optional,
-						defaultValue: null
-					});
-				} while (match(TokenKind.Comma));
+			while (!check(TokenKind.RightParen) && !recoveringAtEnd() && !canInsert(TokenKind.RightParen)) {
+				if (check(TokenKind.Comma)) {
+					recordExpected("parameter");
+					advance();
+					continue;
+				}
+				var optional = match(TokenKind.Question),
+					argumentName = consumeDeclarationName("parameter");
+				consume(TokenKind.Colon);
+				arguments.push({
+					name: argumentName,
+					type: parseType(),
+					span: previous().span,
+					optional: optional,
+					defaultValue: null
+				});
+				if (!match(TokenKind.Comma))
+					break;
+			}
 			consume(TokenKind.RightParen);
-			var result = match(TokenKind.Colon) ? parseType() : failType("Interface methods require a return type"),
+			var result = match(TokenKind.Colon) ? parseType() : recovering ? missingType("interface method return type") : failType("Interface methods require a return type"),
 				end = consume(TokenKind.Semicolon).span;
 			methods.push({
 				name: methodName,
@@ -1460,7 +1481,8 @@ class Parser {
 		}
 		if (match(TokenKind.This)) {
 			var start = previous().span, end = start, name = "this";
-			while (check(TokenKind.Dot) && peekKind(1) != TokenKind.Dot) {
+			while (check(TokenKind.Dot) && peekKind(1) != TokenKind.Dot
+				&& !(recovering && isExpressionTerminator(peekKind(1)))) {
 				advance();
 				var part = consumeName();
 				name += "." + part.text;
@@ -1490,7 +1512,8 @@ class Parser {
 			return parseNativeLayoutQuery();
 		if (isNameToken(current().kind)) {
 			var nameToken = consumeName(), name = nameToken.text, start = nameToken.span, end = start;
-			while (check(TokenKind.Dot) && peekKind(1) != TokenKind.Dot) {
+			while (check(TokenKind.Dot) && peekKind(1) != TokenKind.Dot
+				&& !(recovering && isExpressionTerminator(peekKind(1)))) {
 				advance();
 				var part = consumeName();
 				name += "." + part.text;
@@ -1862,6 +1885,7 @@ class Parser {
 				if (recovering && isExpressionTerminator(current().kind)) {
 					var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
 					recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expected member name", span));
+					expression = Member(expression, "", expressionSpan(expression).merge(span));
 					break;
 				}
 				var nameToken = consumeName(), name = nameToken.text;
@@ -1929,7 +1953,7 @@ class Parser {
 		}
 		if (match(TokenKind.LeftBrace)) {
 			var fields = [];
-			while (!check(TokenKind.RightBrace)) {
+			while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof)) {
 				var optional = false;
 				for (metadata in parseMetadata())
 					if (metadata.name == "optional")
@@ -2061,6 +2085,8 @@ class Parser {
 				|| check(TokenKind.Comma)
 				|| check(TokenKind.RightParen)
 				|| check(TokenKind.Eof);
+			case TokenKind.Greater:
+				check(TokenKind.Eof);
 			case TokenKind.Colon, TokenKind.LeftBrace:
 				check(TokenKind.Eof);
 			case TokenKind.RightBrace:
@@ -2089,6 +2115,11 @@ class Parser {
 		]));
 	}
 
+	function recordExpected(kind:String):Void {
+		var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
+		recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", 'Expected $kind', span));
+	}
+
 	function recordRecoveryDiagnostic(diagnostic:compiler.Diagnostic):Void {
 		if (recoveryDiagnostics.length < MAX_RECOVERY_DIAGNOSTICS)
 			recoveryDiagnostics.push(diagnostic);
@@ -2110,6 +2141,26 @@ class Parser {
 			fail(current(), 'Expected name, got ${current().kind}');
 			null;
 		};
+	}
+
+	function consumeDeclarationName(kind:String):String {
+		return consumeDeclarationToken(kind).text;
+	}
+
+	function consumeDeclarationToken(kind:String):Token {
+		if (isNameToken(current().kind))
+			return advance();
+		if (!recovering)
+			return consume(TokenKind.Identifier);
+		var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
+		recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", 'Expected Identifier, got ${current().kind}', span));
+		return new Token(TokenKind.Identifier, "<missing>", new SourceSpan(current().span.file, current().span.start, current().span.start));
+	}
+
+	function missingType(kind:String):AstType {
+		var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
+		recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", 'Expected $kind', span));
+		return ErrorType(span);
 	}
 
 	function expressionEnd(expression:AstExpression):SourceSpan {

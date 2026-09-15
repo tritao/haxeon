@@ -55,8 +55,44 @@ class ParserRecoveryMain {
 
 		for (tail in ["consume(", "values[", "true ?", "if (", "switch (", "(item:Int) ->"])
 			assertNestedRecovery(tail);
+		assertIncompleteDeclarations();
 		assertTruncationRecovery();
 		Sys.println("PASS: incomplete member and type recovery support completion");
+	}
+
+	static function assertIncompleteDeclarations():Void {
+		var parameterSource = new SourceFile("Parameter.hx", "function test(a:Int,");
+		var parameterResult = new Parser(new Lexer(parameterSource).tokenize()).parseProgramRecovering();
+		if (parameterResult.program.functions.length != 1
+			|| parameterResult.program.functions[0].name != "test"
+			|| parameterResult.program.functions[0].arguments.length != 1)
+			throw "unfinished parameter list discarded the function declaration";
+
+		var classSource = new SourceFile("Class.hx", "class Child extends");
+		var classResult = new Parser(new Lexer(classSource).tokenize()).parseProgramRecovering();
+		if (classResult.program.classes.length != 1 || classResult.program.classes[0].base == null)
+			throw "unfinished extends clause discarded the class declaration";
+
+		var methodSource = new SourceFile("Method.hx", "class Child { public function unfinished(");
+		var methodResult = new Parser(new Lexer(methodSource).tokenize()).parseProgramRecovering();
+		if (methodResult.program.classes.length != 1 || methodResult.program.classes[0].methods.length != 1
+			|| methodResult.program.classes[0].methods[0].name != "unfinished")
+			throw "unfinished method declaration discarded the class member";
+
+		var genericSource = new SourceFile("Generic.hx", "function main():Void { var values:Array<");
+		var genericResult = new Parser(new Lexer(genericSource).tokenize()).parseProgramRecovering();
+		if (genericResult.program.functions.length != 1 || genericResult.program.functions[0].statements.length != 1)
+			throw "unfinished generic type discarded the enclosing function";
+
+		var memberSource = new SourceFile("Member.hx", "function main():Void return value.");
+		var memberResult = new Parser(new Lexer(memberSource).tokenize()).parseProgramRecovering();
+		if (memberResult.program.functions.length != 1 || memberResult.program.functions[0].statements.length != 1)
+			throw 'unfinished member access discarded the function (${memberResult.program.functions.length}, ${memberResult.program.functions.length == 0 ? 0 : memberResult.program.functions[0].statements.length}): ${[for (diagnostic in memberResult.diagnostics) diagnostic.message].join("; ")}';
+		switch memberResult.program.functions[0].statements[0] {
+			case Return(Member(_, "", _), _):
+			default:
+				throw "unfinished member access did not retain a missing member node";
+		}
 	}
 
 	static function assertNestedRecovery(tail:String):Void {
