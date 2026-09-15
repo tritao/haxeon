@@ -24,6 +24,10 @@ enum CompilerType {
 	TString;
 	TBytes;
 	THlBytes;
+	/** A recovered expression whose type is not known yet. */
+	TUnknown;
+	/** A recovered expression with a local typing failure. */
+	TError;
 	TDynamic;
 	TNativeAbstract(name:String);
 

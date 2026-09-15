@@ -26,6 +26,8 @@ class SemanticSignature {
 			case TString: "String";
 			case TBytes: "Bytes";
 			case THlBytes: "hl.Bytes";
+			case TUnknown: "Unknown";
+			case TError: "Error";
 			case TDynamic: "Dynamic";
 			case TNativeAbstract(name): 'hl.Abstract<"$name">';
 			case TNativeScalar(name): 'native-scalar:$name';

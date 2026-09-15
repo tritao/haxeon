@@ -84,6 +84,8 @@ class SemanticIndex {
 	final declarationTypes:Map<SemanticSymbolId, CompilerType> = [];
 	final declarationSymbolsBySpan:Map<String, SemanticSymbolId> = [];
 	final recoveredMembers:Map<String, SemanticSymbolId> = [];
+	final recoveredFunctions:Map<String, AstFunction> = [];
+	final declarations:DeclarationIndex;
 	final tokens:Array<Token>;
 	final module:String;
 	var cancellation:Null<CancellationToken>;
@@ -95,6 +97,7 @@ class SemanticIndex {
 	public function new(path:String, revision:Int, declarations:DeclarationIndex, tokens:Array<Token>) {
 		module = ModulePath.fromFile(path);
 		this.revision = revision;
+		this.declarations = declarations;
 		this.tokens = tokens;
 		var keys = [for (key in declarations.symbols.keys()) key];
 		keys.sort(Reflect.compare);
@@ -216,6 +219,17 @@ class SemanticIndex {
 
 	/** Index usable local facts from a recovered syntax tree without requiring successful typing. */
 	public function indexRecoveredSyntax(program:AstProgram):Void {
+		for (fn in program.functions)
+			recoveredFunctions.set(fn.name, fn);
+		for (owner in program.classes)
+			for (fn in owner.methods)
+				recoveredFunctions.set(owner.name + "." + fn.name, fn);
+		for (owner in program.interfaces)
+			for (fn in owner.methods)
+				recoveredFunctions.set(owner.name + "." + fn.name, fn);
+		for (owner in program.abstracts)
+			for (fn in owner.methods)
+				recoveredFunctions.set(owner.name + "." + fn.name, fn);
 		for (owner in program.classes) {
 			for (field in owner.fields)
 				rememberRecoveredMember(owner.name, field.name, field.span);
@@ -248,7 +262,7 @@ class SemanticIndex {
 			functionReceivers.push({span: fn.span, type: TInstance(compiler.types.Type.NominalKind.Class, owner, [])});
 		indexRecoveredStatements(functionKey, fn.statements, fn.span, 0);
 		currentCaller = recoveredDeclaredSymbol(functionKey);
-		indexRecoveredStatementUses(fn.statements);
+		indexRecoveredStatementUses(fn.statements, recoveredType(fn.result));
 		for (token in tokens)
 			if (token.kind == TokenKind.Identifier && token.span.start >= fn.span.start && token.span.end <= fn.span.end)
 				bindRecoveredLocal(token.text, token.span);
@@ -268,7 +282,10 @@ class SemanticIndex {
 				case UninitializedDeclaration(name, type, span):
 					addRecoveredLocal(functionKey, name, recoveredType(type), span, scope, depth);
 				case VarDeclaration(name, type, initializer, span):
-					addRecoveredLocal(functionKey, name, type == null ? recoveredExpressionType(initializer) : recoveredType(type), span, scope, depth);
+					var localType = type == null ? recoveredExpressionType(initializer) : recoveredType(type);
+					addRecoveredLocal(functionKey, name, localType, span, scope, depth);
+					if (type != null)
+						completionTypes.push({span: span, type: localType});
 				case If(_, yes, no, span):
 					indexRecoveredStatements(functionKey, yes, span, depth + 1);
 					indexRecoveredStatements(functionKey, no, span, depth + 1);
@@ -306,10 +323,16 @@ class SemanticIndex {
 		addCompletionLocal(name, type, declaration, scope, depth);
 	}
 
-	function indexRecoveredStatementUses(statements:Array<AstStatement>):Void {
+	function indexRecoveredStatementUses(statements:Array<AstStatement>, ?expectedReturn:CompilerType):Void {
 		for (statement in statements)
 			switch statement {
-				case VarDeclaration(_, _, value, _), Return(value, _), Throw(value, _), Expression(value, _):
+				case VarDeclaration(_, type, value, span):
+					if (type != null)
+						completionTypes.push({span: span, type: recoveredType(type)});
+					indexRecoveredExpression(value, type == null ? null : recoveredType(type));
+				case Return(value, span):
+					indexRecoveredExpression(value, expectedReturn);
+				case Throw(value, _), Expression(value, _):
 					indexRecoveredExpression(value);
 				case Assignment(name, value, span):
 					bindRecoveredLocal(name, span);
@@ -326,37 +349,39 @@ class SemanticIndex {
 					indexRecoveredExpression(value);
 				case If(predicate, yes, no, _):
 					indexRecoveredExpression(predicate);
-					indexRecoveredStatementUses(yes);
-					indexRecoveredStatementUses(no);
+					indexRecoveredStatementUses(yes, expectedReturn);
+					indexRecoveredStatementUses(no, expectedReturn);
 				case While(predicate, body, _):
 					indexRecoveredExpression(predicate);
-					indexRecoveredStatementUses(body);
+					indexRecoveredStatementUses(body, expectedReturn);
 				case DoWhile(body, predicate, _):
-					indexRecoveredStatementUses(body);
+					indexRecoveredStatementUses(body, expectedReturn);
 					indexRecoveredExpression(predicate);
 				case ForIn(_, _, iterable, body, _):
 					indexRecoveredExpression(iterable);
-					indexRecoveredStatementUses(body);
+					indexRecoveredStatementUses(body, expectedReturn);
 				case Try(body, catches, _):
-					indexRecoveredStatementUses(body);
+					indexRecoveredStatementUses(body, expectedReturn);
 					for (caught in catches)
-						indexRecoveredStatementUses(caught.statements);
+						indexRecoveredStatementUses(caught.statements, expectedReturn);
 				case Switch(value, cases, fallback, _, _):
 					indexRecoveredExpression(value);
 					for (item in cases) {
 						indexRecoveredExpression(item.value);
 						if (item.guard != null)
 							indexRecoveredExpression(item.guard);
-						indexRecoveredStatementUses(item.statements);
+						indexRecoveredStatementUses(item.statements, expectedReturn);
 					}
-					indexRecoveredStatementUses(fallback);
-				default:
+					indexRecoveredStatementUses(fallback, expectedReturn);
+			default:
 			}
 	}
 
-	function indexRecoveredExpression(expression:AstExpression):Void {
+function indexRecoveredExpression(expression:AstExpression, ?expected:CompilerType):Void {
 		switch expression {
-			case ErrorExpression(_):
+			case ErrorExpression(span):
+				if (expected != null)
+					completionTypes.push({span: span, type: expected});
 			case Variable(name, span):
 				var separator = name.indexOf(".");
 				if (separator < 0)
@@ -381,8 +406,7 @@ class SemanticIndex {
 						addCall(callee, span, name);
 					}
 				}
-				for (argument in arguments)
-					indexRecoveredExpression(argument);
+				indexRecoveredCallArguments(arguments, recoveredFunctions.get(name));
 			case ClosureCall(callee, arguments, _):
 				indexRecoveredExpression(callee);
 				for (argument in arguments)
@@ -391,8 +415,8 @@ class SemanticIndex {
 				indexRecoveredExpression(object);
 				var callee = bindRecoveredMember(object, name, span);
 				addCall(callee, span, name);
-				for (argument in arguments)
-					indexRecoveredExpression(argument);
+				var owner = memberOwner(recoveredExpressionBindingType(object));
+				indexRecoveredCallArguments(arguments, owner == null ? null : recoveredFunctions.get(owner + "." + name));
 			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _),
 				BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _), UnsignedShiftRight(left, right, _),
 				Less(left, right, _), LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _),
@@ -483,25 +507,33 @@ class SemanticIndex {
 	function recoveredExpressionBindingType(expression:AstExpression):CompilerType
 		return switch expression {
 			case Variable(name, span): var id = bindRecoveredLocal(name,
-					span); id == null || !declarationTypes.exists(id) ? TDynamic : declarationTypes.get(id);
+					span); id == null || !declarationTypes.exists(id) ? TUnknown : declarationTypes.get(id);
 			case New(name, _, _), NewGeneric(name, _, _, _): TInstance(compiler.types.Type.NominalKind.Class, name, []);
 			default: recoveredExpressionType(expression);
 		};
 
-	static function recoveredExpressionType(expression:AstExpression):CompilerType
+	function recoveredExpressionType(expression:AstExpression):CompilerType
 		return switch expression {
+			case ErrorExpression(_): TError;
 			case IntegerLiteral(_, _): TInt;
 			case FloatLiteral(_, _): TFloat;
 			case StringLiteral(_, _): TString;
 			case BoolLiteral(_, _): TBool;
-			case ArrayLiteral(_, _): TArray(TDynamic);
-			case MapLiteral(_, _): TMap(TDynamic, TDynamic);
+			case Variable(name, span): recoveredExpressionBindingType(Variable(name, span));
+			case Member(object, name, _): recoveredMemberType(object, name);
+			case MethodCall(object, name, _, _):
+				var owner = memberOwner(recoveredExpressionBindingType(object));
+				owner == null ? TUnknown : recoveredFunctionResult(owner + "." + name);
+			case Call(name, _, _): recoveredFunctionResult(name);
+			case ArrayLiteral(values, _): TArray(recoveredArrayElementType(values));
+			case MapLiteral(_, _): TMap(TUnknown, TUnknown);
 			case New(name, _, _), NewGeneric(name, _, _, _): TInstance(compiler.types.Type.NominalKind.Class, name, []);
-			default: TDynamic;
+			default: TUnknown;
 		};
 
-	static function recoveredType(type:AstType):CompilerType
+	function recoveredType(type:AstType):CompilerType {
 		return switch type {
+			case ErrorType(_): TUnknown;
 			case IntType: TInt;
 			case BoolType: TBool;
 			case FloatType: TFloat;
@@ -510,9 +542,54 @@ class SemanticIndex {
 			case ArrayType(element): TArray(recoveredType(element));
 			case MapType(key, value): TMap(recoveredType(key), recoveredType(value));
 			case NullableType(element): TNullable(recoveredType(element));
-			case NamedType(name), AppliedType(name, _): TInstance(compiler.types.Type.NominalKind.Class, name, []);
-			default: TDynamic;
+			default:
+				try {
+					declarations.resolve(type);
+				} catch (_:Dynamic) {
+					TUnknown;
+				}
 		};
+	}
+
+	function recoveredFunctionResult(name:String):CompilerType {
+		var fn = recoveredFunctions.get(name);
+		return fn == null ? TUnknown : recoveredType(fn.result);
+	}
+
+	function recoveredMemberType(object:AstExpression, name:String):CompilerType {
+		var owner = memberOwner(recoveredExpressionBindingType(object));
+		if (owner == null)
+			return TUnknown;
+		var classDecl = declarations.classes.get(owner);
+		if (classDecl != null) {
+			for (field in classDecl.fields)
+				if (field.name == name)
+					return field.type == null ? (field.initializer == null ? TUnknown : recoveredExpressionType(field.initializer)) : recoveredType(field.type);
+		}
+		var interfaceDecl = declarations.interfaces.get(owner);
+		if (interfaceDecl != null)
+			for (method in interfaceDecl.methods)
+				if (method.name == name)
+					return recoveredFunctionResult(owner + "." + name);
+		return recoveredFunctionResult(owner + "." + name);
+	}
+
+	function recoveredArrayElementType(values:Array<AstExpression>):CompilerType {
+		for (value in values) {
+			var type = recoveredExpressionType(value);
+			if (type != TUnknown && type != TError)
+				return type;
+		}
+		return TUnknown;
+	}
+
+	function indexRecoveredCallArguments(arguments:Array<AstExpression>, fn:Null<AstFunction>):Void {
+		for (index in 0...arguments.length) {
+			var argument = arguments[index];
+			var expected = fn == null || index >= fn.arguments.length ? null : recoveredType(fn.arguments[index].type);
+			indexRecoveredExpression(argument, expected);
+		}
+	}
 
 	public function symbolIdAt(position:Int):Null<SemanticSymbolId> {
 		for (binding in bindings)

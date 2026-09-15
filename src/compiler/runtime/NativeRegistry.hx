@@ -115,6 +115,7 @@ class NativeRegistry {
 			case TString: IrType.Bytes;
 			case TBytes: ManagedBytes;
 			case THlBytes: IrType.Bytes;
+			case TUnknown, TError: Dyn;
 			case TDynamic: Dyn;
 			case TNativeAbstract(name): Abstract(name);
 			case TNever: throw "Never is not a runtime ABI type";

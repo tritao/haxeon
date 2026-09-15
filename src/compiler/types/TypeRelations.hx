@@ -28,6 +28,8 @@ class TypeRelations {
 	public function conversion(actual:CompilerType, expected:CompilerType):ConversionPlan {
 		if (equals(actual, expected))
 			return Identity;
+		if (actual == TUnknown || actual == TError || expected == TUnknown || expected == TError)
+			return Identity;
 		if (isNativeValue(actual) || isNativeValue(expected))
 			return Incompatible;
 		if (actual == TInt && expected == TFloat)
@@ -73,6 +75,8 @@ class TypeRelations {
 
 	public function isAssignable(actual:CompilerType, expected:CompilerType):Bool {
 		if (actual == TNever)
+			return true;
+		if (actual == TUnknown || actual == TError || expected == TUnknown || expected == TError)
 			return true;
 		if (isNativeValue(actual) || isNativeValue(expected))
 			return equals(actual, expected);
@@ -248,7 +252,7 @@ class TypeRelations {
 	public static function isReference(type:CompilerType):Bool
 		return switch type {
 			case TAbstract(_, _, representation): isReference(representation);
-			case TString, TBytes, THlBytes, TDynamic, TNativeAbstract(_), TAnonymous(_, _), TArray(_), TIterator(_), TFunction(_, _), TMap(_, _): true;
+			case TString, TBytes, THlBytes, TUnknown, TError, TDynamic, TNativeAbstract(_), TAnonymous(_, _), TArray(_), TIterator(_), TFunction(_, _), TMap(_, _): true;
 			case TInstance(kind, _, _): kind != NominalKind.NativeValue;
 			default: false;
 		};

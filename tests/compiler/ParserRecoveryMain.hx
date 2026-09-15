@@ -3,6 +3,7 @@ import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceFile;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
+import compiler.types.Type.NominalKind;
 
 class ParserRecoveryMain {
 	static function main():Void {
@@ -56,6 +57,7 @@ class ParserRecoveryMain {
 		for (tail in ["consume(", "values[", "true ?", "if (", "switch (", "(item:Int) ->"])
 			assertNestedRecovery(tail);
 		assertIncompleteDeclarations();
+		assertPartialTypeFacts();
 		assertTruncationRecovery();
 		Sys.println("PASS: incomplete member and type recovery support completion");
 	}
@@ -93,6 +95,38 @@ class ParserRecoveryMain {
 			default:
 				throw "unfinished member access did not retain a missing member node";
 		}
+	}
+
+	static function assertPartialTypeFacts():Void {
+		var expectedService = new LanguageService(),
+			source = "class Foo {} function take(value:Foo):Void return; function main():Void return take(";
+		expectedService.update("Expected.hx", source);
+		var expectedModel = expectedService.compiler.modules.get("Expected").recoveredSemanticModel;
+		if (expectedModel == null)
+			throw "missing recovered semantic model for expected-type test";
+		var expected = expectedModel.index.completionContext(source.length).expected;
+		switch expected {
+			case TInstance(NominalKind.Class, "Foo", _):
+			default:
+				throw 'unfinished call did not retain expected Foo argument type: $expected';
+		}
+
+		var errorService = new LanguageService(),
+			errorSource = "function main():Void { var broken =";
+		errorService.update("ErrorType.hx", errorSource);
+		var errorModel = errorService.compiler.modules.get("ErrorType").recoveredSemanticModel;
+		if (errorModel == null)
+			throw "missing recovered semantic model for error-type test";
+		var locals = errorModel.index.completionContext(errorSource.length).locals,
+			foundError = false;
+		for (local in locals)
+			if (local.name == "broken")
+				switch local.type {
+					case TError: foundError = true;
+					default:
+				}
+		if (!foundError)
+			throw "incomplete initializer did not retain an explicit error type";
 	}
 
 	static function assertNestedRecovery(tail:String):Void {

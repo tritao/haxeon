@@ -1839,6 +1839,7 @@ class IrGenerator {
 			case TString: Bytes;
 			case TBytes: ManagedBytes;
 			case THlBytes: Bytes;
+			case TUnknown, TError: Dyn;
 			case TDynamic: Dyn;
 			case TNativeAbstract(name): Abstract(name);
 			case TNever: throw "Never must be coerced before lowering";
