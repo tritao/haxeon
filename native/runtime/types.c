@@ -29,12 +29,6 @@ HL_PRIM int HL_NAME(native_pointer_size)() {
 	return (int)sizeof(void*);
 }
 
-HL_PRIM void HL_NAME(native_type_initialize_object)( hl_type *type ) {
-	if( type == NULL || (type->kind != HOBJ && type->kind != HSTRUCT) || type->obj == NULL || type->obj->m == NULL )
-		hl_error("HashLink object metadata initialization requires an object with a module context");
-	hl_get_obj_proto(type);
-}
-
 static void native_metadata_publish_prototype( hl_type *type ) {
 	switch( type->kind ) {
 	case HOBJ:

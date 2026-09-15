@@ -213,7 +213,7 @@ function main():Int {
 	var descriptorBindingCorrect = descriptor.ref.object == objectData
 		&& descriptor.ref.field.ref.name == fieldName
 		&& descriptorReference.ref.object.isNull();
-	HlTypeBridge.native_type_initialize_object(builtObject);
+	HlTypeBridge.native_metadata_publish_prototypes(derivedTable.pointer(), derivedTable.length(), module);
 	var namesCorrect = objectData.ref.name.offset(0).load() == 79
 		&& objectData.ref.name.offset(1).load() == 98
 		&& objectData.ref.name.offset(2).load() == 106
@@ -239,7 +239,6 @@ function main():Int {
 			&& recursiveFunctionData.ref.ret == recursiveFunction
 			&& recursiveEnumData.ref.constructs.offset(0).ref.params.offset(0).load() == recursiveEnum
 			&& recursiveVirtualData.ref.fields.offset(0).ref.type == recursiveVirtual;
-	HlTypeBridge.native_type_initialize_object(recursiveObject);
 	nativeObjectCorrect = nativeObjectCorrect
 		&& !recursiveObjectData.ref.runtime.isNull()
 		&& cast(recursiveObjectData.ref.runtime.ref.size, Int) == 16;

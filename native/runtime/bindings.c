@@ -184,7 +184,6 @@ DEFINE_PRIM(_I32,native_type_pad_struct,_BYTES _I32);
 DEFINE_PRIM(_BOOL,native_type_is_ptr,_BYTES);
 DEFINE_PRIM(_I32,native_type_mark_size,_I32);
 DEFINE_PRIM(_I32,native_pointer_size,);
-DEFINE_PRIM(_VOID,native_type_initialize_object,_BYTES);
 DEFINE_PRIM(_VOID,native_metadata_publish_prototypes,_BYTES _I32 _BYTES);
 DEFINE_PRIM(_VOID,native_metadata_publish_contiguous_prototypes,_BYTES _I32 _BYTES);
 DEFINE_PRIM(_VOID,native_module_context_dispose,_BYTES);
