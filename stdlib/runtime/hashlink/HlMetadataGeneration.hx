@@ -105,7 +105,10 @@ class HlMetadataGeneration {
 		if (moduleContext.isNull())
 			throw "HashLink metadata generation requires a module context before publication";
 		HlTypeLayout.initialize(typeTable.pointer(), typeTable.length(), arena);
-		HlTypeBridge.native_metadata_publish_prototypes(typeTable.pointer(), typeTable.length(), moduleContext);
+		if (typeTable.isContiguousPrefix(arena.typePointer()))
+			HlTypeBridge.native_metadata_publish_contiguous_prototypes(arena.typePointer(), typeTable.length(), moduleContext);
+		else
+			HlTypeBridge.native_metadata_publish_prototypes(typeTable.pointer(), typeTable.length(), moduleContext);
 		published = true;
 		return snapshot();
 	}

@@ -54,6 +54,7 @@ function main():Int {
 
 	var objectData = object.ref.data.ref.obj,
 		objectRuntime = objectData.ref.runtime,
+		typeBase = generation.contiguousTypePointer(),
 		enumData:RawPtr<HlTypeEnum> = enumType.ref.data.ref.enumType,
 		virtualData:RawPtr<HlTypeVirtual> = virtualType.ref.data.ref.virtualType,
 		objectMark = object.ref.markBits.isNull() ? 0 : cast(object.ref.markBits.offset(0).load(), Int),
@@ -63,6 +64,11 @@ function main():Int {
 		virtualHeaderSize = sizeof<HlVirtualValue>(),
 		virtualBase = virtualHeaderSize + pointerSize * 2;
 	var objectCorrect = !objectRuntime.isNull()
+		&& intType == typeBase
+		&& dynamicType == typeBase.offset(1)
+		&& object == typeBase.offset(2)
+		&& enumType == typeBase.offset(3)
+		&& virtualType == typeBase.offset(4)
 		&& objectRuntime.ref.nfields == 2
 		&& objectRuntime.ref.size == 24
 		&& objectRuntime.ref.fieldIndexes.offset(0).load() == 8

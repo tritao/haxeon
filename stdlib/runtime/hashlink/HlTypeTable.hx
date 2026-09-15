@@ -58,6 +58,16 @@ class HlTypeTable {
 		return -1;
 	}
 
+	/** Whether the table entries are the contiguous type-record prefix at base. */
+	public function isContiguousPrefix(base:RawPtr<HlType>):Bool {
+		if (count > 0 && base.isNull())
+			return false;
+		for (index in 0...count)
+			if (entries.offset(index).load() != base.offset(index))
+				return false;
+		return true;
+	}
+
 	function ensureCapacity(required:Int):Void {
 		if (required <= capacity)
 			return;

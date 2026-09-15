@@ -125,7 +125,9 @@ pointer slot, while each `hl_type` record remains at a stable address. When the
 table grows, `pointer()` changes to the new contiguous pointer table and the
 previous table storage remains owned by the arena, allowing publication code to
 stage a replacement before exposing it. `HlMetadataGeneration` exposes the
-type-record slab bounds for the future loader handoff.
+type-record slab bounds for the loader handoff and selects the direct contiguous
+publication bridge whenever its public table is an exact slab prefix; arbitrary
+subset tables continue through the pointer-table adapter.
 `HlFunctionTable` applies the same ownership rule to module dispatch slots: its
 function addresses and signature pointers are stable native arrays, with slot
 replacement kept separate from table shape changes. A module context borrows
