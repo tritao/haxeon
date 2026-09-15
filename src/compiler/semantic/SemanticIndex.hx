@@ -2046,7 +2046,7 @@ class SemanticIndex {
 
 	static function memberOwner(type:CompilerType):Null<String>
 		return switch type {
-			case TInstance(_, name, _): name;
+			case TInstance(_, name, _), TAbstract(name, _, _): name;
 			default: null;
 		};
 
@@ -2070,6 +2070,12 @@ class SemanticIndex {
 					for (index in 0...parameters.length)
 						if (index < arguments.length)
 							result.set(parameters[index], arguments[index]);
+			case TAbstract(name, arguments, _):
+				var abstractDecl = declarations.abstracts.get(name);
+				if (abstractDecl != null)
+					for (index in 0...abstractDecl.typeParameters.length)
+						if (index < arguments.length)
+							result.set(abstractDecl.typeParameters[index], arguments[index]);
 			default:
 		}
 		return result;

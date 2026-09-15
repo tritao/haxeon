@@ -500,6 +500,15 @@ class ParserRecoveryMain {
 				genericInterfaceGet = item.detail;
 		if (genericInterfaceGet != "get():Int")
 			throw 'generic interface member type was not substituted: $genericInterfaceGet';
+		var abstractMemberService = new LanguageService(),
+			abstractMemberSource = "abstract Box<T>(T) { public function get():T return this; } function main():Void { var box:Box<Int>; box.";
+		abstractMemberService.update("AbstractMember.hx", abstractMemberSource);
+		var abstractMemberGet:Null<String> = null;
+		for (item in abstractMemberService.complete("AbstractMember.hx", abstractMemberSource.length))
+			if (item.label == "get")
+				abstractMemberGet = item.detail;
+		if (abstractMemberGet != "get():Int")
+			throw 'recovered abstract member type was not substituted: $abstractMemberGet';
 
 		var importService = new LanguageService();
 		importService.update("lib/Widget.hx", "class Widget {} function main():Void return;");

@@ -2150,6 +2150,28 @@ class LanguageService {
 									addInstanceMembers(compilerTypeFromAst(baseType, substitutions), prefix, result, token, seen);
 							}
 				}
+			case TAbstract(name, arguments, _):
+				for (state in compiler.modules) {
+					if (token != null)
+						token.check();
+					var ast = effectiveAst(state);
+					if (ast != null)
+						for (abstractDecl in ast.abstracts)
+							if (abstractDecl.name == name) {
+								var substitutions:Map<String, String> = [];
+								for (index in 0...abstractDecl.typeParameters.length)
+									if (index < arguments.length)
+										substitutions.set(abstractDecl.typeParameters[index], compilerTypeName(arguments[index]));
+								for (method in abstractDecl.methods) {
+									if (token != null)
+										token.check();
+									if (!method.isStatic)
+										addMember(method.name, "method",
+											'${method.name}(${[for (argument in method.arguments) typeNameSubstituted(argument.type, substitutions)].join(",")}):${typeNameSubstituted(method.result, substitutions)}',
+											prefix, result);
+								}
+							}
+				}
 			case TArray(_):
 				addMember("length", "field", "length:Int", prefix, result);
 				addMember("copy", "method", "copy():Array", prefix, result);
