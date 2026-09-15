@@ -1374,6 +1374,17 @@ class LanguageServiceMain {
 			};
 		if (boundedGenericExpectedName != "Bound")
 			throw 'recovered generic constraint did not provide an expected argument type: ${boundedGenericExpected == null ? "null" : Std.string(boundedGenericExpected)}';
+		var objectFieldService = new LanguageService(),
+			objectFieldSource = "class ObjectValue {} function make():{value:ObjectValue} return {value:";
+		objectFieldService.update("ObjectField.hx", objectFieldSource);
+		var objectFieldContext = objectFieldService.completionContext("ObjectField.hx", objectFieldSource.length),
+			objectFieldExpected = objectFieldContext == null ? null : objectFieldContext.context.expected,
+			objectFieldExpectedName = switch objectFieldExpected {
+				case TInstance(_, name, _): Std.string(name);
+				default: null;
+			};
+		if (objectFieldExpectedName != "ObjectValue")
+			throw 'recovered object field did not retain its expected type: ${objectFieldExpected == null ? "null" : Std.string(objectFieldExpected)}';
 		var recoveredAbstractService = new LanguageService(),
 			recoveredAbstractSource = "abstract Value(Int) from Missing to";
 		recoveredAbstractService.update("RecoveredAbstract.hx", recoveredAbstractSource);

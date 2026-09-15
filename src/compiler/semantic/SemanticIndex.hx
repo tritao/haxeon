@@ -1260,6 +1260,19 @@ class SemanticIndex {
 			case ArrayType(element): TArray(recoveredType(element, substitutions));
 			case MapType(key, value): TMap(recoveredType(key, substitutions), recoveredType(value, substitutions));
 			case NullableType(element): TNullable(recoveredType(element, substitutions));
+			case FunctionType(arguments, result): TFunction([for (argument in arguments) recoveredType(argument, substitutions)],
+				recoveredType(result, substitutions));
+			case AnonymousType(fields):
+				var recoveredFields:Array<compiler.types.Type.AnonymousField> = [
+					for (field in fields)
+						{
+							name: field.name,
+							type: field.optional ? TNullable(recoveredType(field.type, substitutions)) : recoveredType(field.type, substitutions),
+							optional: field.optional
+						}
+				];
+				recoveredFields.sort(function(left, right) return Reflect.compare(left.name, right.name));
+				TAnonymous(SemanticSignature.anonymousTypeName(recoveredFields), recoveredFields);
 			case NamedType(name):
 				var substitution = substitutions == null ? null : substitutions.get(name),
 					parameter = currentRecoveredTypeParameters.get(name);
@@ -1362,6 +1375,17 @@ class SemanticIndex {
 			case NullableType(element): TNullable(recoveredExpectedType(element, fn, substitutions, active));
 			case FunctionType(arguments, result): TFunction([for (argument in arguments)
 				recoveredExpectedType(argument, fn, substitutions, active)], recoveredExpectedType(result, fn, substitutions, active));
+			case AnonymousType(fields):
+				var recoveredFields:Array<compiler.types.Type.AnonymousField> = [
+					for (field in fields)
+						{
+							name: field.name,
+							type: field.optional ? TNullable(recoveredType(field.type, substitutions)) : recoveredType(field.type, substitutions),
+							optional: field.optional
+						}
+				];
+				recoveredFields.sort(function(left, right) return Reflect.compare(left.name, right.name));
+				TAnonymous(SemanticSignature.anonymousTypeName(recoveredFields), recoveredFields);
 			case _: recoveredType(type, substitutions);
 		};
 	}
