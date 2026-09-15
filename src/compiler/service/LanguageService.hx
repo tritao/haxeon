@@ -1137,7 +1137,7 @@ class LanguageService {
 					for (local in context.locals)
 						if (local.name == name.text)
 							localType = local.type;
-					if (localType != null)
+					if (localType != null && !isRecoveryType(localType))
 						result.push({
 							position: name.span.end,
 							label: ": " + compilerTypeName(localType),
@@ -1153,6 +1153,9 @@ class LanguageService {
 		result.sort(function(left, right) return Reflect.compare(left.position, right.position));
 		return result;
 	}
+
+	static function isRecoveryType(type:CompilerType):Bool
+		return type == TUnknown || type == TError;
 
 	public function prepareCallHierarchy(path:String, position:Int, ?token:CancellationToken):Null<CallHierarchyItem> {
 		if (token != null)

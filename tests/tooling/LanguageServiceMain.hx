@@ -1523,6 +1523,19 @@ class LanguageServiceMain {
 		noSnapshotCompletionService.update("NoSnapshotCompletion.hx", "function main():Void return \"");
 		if (!noSnapshotCompletionService.completeResult("NoSnapshotCompletion.hx", 0).isIncomplete)
 			throw "completion did not request a retry when no editor snapshot was available";
+		var recoveryHintService = new LanguageService(),
+			recoveryHintSource = "function main():Void { var known = 1; var broken = ; var unresolved = missing; }";
+		recoveryHintService.update("RecoveryHints.hx", recoveryHintSource);
+		var recoveryHints = recoveryHintService.inlayHints("RecoveryHints.hx", 0, recoveryHintSource.length),
+			hasKnownHint = false;
+		for (hint in recoveryHints) {
+			if (hint.label == ": Int" && hint.position == recoveryHintSource.indexOf("known") + "known".length)
+				hasKnownHint = true;
+			if (hint.label == ": Unknown" || hint.label == ": Error")
+				throw 'recovery inlay hints exposed an unstable inferred type: ${hint.label}';
+		}
+		if (!hasKnownHint)
+			throw "recovery inlay hints omitted a stable inferred local type";
 		var incrementalRecoveryService = new LanguageService(),
 			incrementalSource = "function stable():Int { var value:Int = 1; return value; } function edited():Int { return 1; }";
 		incrementalRecoveryService.update("IncrementalRecovery.hx", incrementalSource);
