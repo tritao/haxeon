@@ -408,9 +408,9 @@ class SemanticIndex {
 
 	/** Return a signature retained for a current or visible recovered module. */
 	public function recoveredSignature(name:String):Null<SemanticSignatureInfo> {
-		var fn = recoveredFunctions.get(name);
+		var fn = recoveredFunction(name);
 		if (fn == null)
-			fn = recoveredFunctions.get(name + ".new");
+			fn = recoveredFunction(name + ".new");
 		if (fn == null)
 			return null;
 		var parameters = [
@@ -646,7 +646,7 @@ class SemanticIndex {
 					if (callee == null && !isKnownRecoveredMember(receiver, memberName))
 						recordUnresolved(memberName, span);
 					addCall(callee, span, memberName);
-					indexRecoveredCallArguments(arguments, owner == null ? null : recoveredFunctions.get(owner + "." + memberName));
+					indexRecoveredCallArguments(arguments, owner == null ? null : recoveredMethod(owner, memberName, []));
 				} else {
 					var local = bindRecoveredLocal(name, span);
 					if (local == null) {
@@ -672,7 +672,7 @@ class SemanticIndex {
 				if (callee == null && !isKnownRecoveredMember(object, name))
 					recordUnresolved(name, span);
 				var owner = memberOwner(recoveredExpressionBindingType(object));
-				indexRecoveredCallArguments(arguments, owner == null ? null : recoveredFunctions.get(owner + "." + name));
+				indexRecoveredCallArguments(arguments, owner == null ? null : recoveredMethod(owner, name, []));
 			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _),
 				BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _), UnsignedShiftRight(left, right, _),
 				Less(left, right, _), LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _),
@@ -777,7 +777,10 @@ class SemanticIndex {
 			case TNullable(element): memberOwner(element);
 			case type: memberOwner(type);
 		};
-		return owner != null && knownRecoveredMembers.exists(owner + "." + name);
+		return owner != null
+			&& (knownRecoveredMembers.exists(owner + "." + name)
+				|| recoveredFieldType(owner, name, []) != null
+				|| recoveredMethod(owner, name, []) != null);
 	}
 
 	function recoveredExpressionBindingType(expression:AstExpression):CompilerType
@@ -881,12 +884,12 @@ class SemanticIndex {
 	}
 
 	function recoveredFunctionResult(name:String):CompilerType {
-		var fn = recoveredFunctions.get(name);
+		var fn = recoveredFunction(name);
 		return fn == null ? TUnknown : recoveredType(fn.result);
 	}
 
 	function recoveredFunctionType(name:String):Null<CompilerType> {
-		var fn = recoveredFunctions.get(name);
+		var fn = recoveredFunction(name);
 		return fn == null ? null : TFunction([for (argument in fn.arguments) recoveredType(argument.type)], recoveredType(fn.result));
 	}
 
@@ -895,27 +898,75 @@ class SemanticIndex {
 		var owner = memberOwner(recoveredExpressionBindingType(object));
 		if (owner == null)
 			return TUnknown;
-		var classDecl = declarations.classes.get(owner);
-		if (classDecl != null) {
-			for (field in classDecl.fields) {
-				checkpoint();
-				if (field.name == name)
-					return field.type == null ? (field.initializer == null ? TUnknown : recoveredExpressionType(field.initializer)) : recoveredType(field.type);
-			}
-		}
-		var interfaceDecl = declarations.interfaces.get(owner);
-		if (interfaceDecl != null)
-			for (method in interfaceDecl.methods) {
-				checkpoint();
-				if (method.name == name) {
-					var methodType = recoveredFunctionType(owner + "." + name);
-					return methodType == null ? TUnknown : methodType;
-				}
-			}
+		var fieldType = recoveredFieldType(owner, name, []);
+		if (fieldType != null)
+			return fieldType;
 		var functionType = recoveredFunctionType(owner + "." + name);
 		if (functionType != null)
 			return functionType;
 		return recoveredFunctionResult(owner + "." + name);
+	}
+
+	function recoveredFieldType(owner:String, name:String, visiting:Array<String>):Null<CompilerType> {
+		if (visiting.indexOf(owner) >= 0)
+			return null;
+		var nextVisiting = visiting.copy();
+		nextVisiting.push(owner);
+		var classDecl = declarations.classes.get(owner);
+		if (classDecl != null) {
+			for (field in classDecl.fields) {
+				checkpoint();
+				if (field.name == name && !field.isStatic)
+					return field.type == null ? (field.initializer == null ? TUnknown : recoveredExpressionType(field.initializer)) : recoveredType(field.type);
+			}
+			if (classDecl.base != null) {
+				var base = memberOwner(recoveredType(classDecl.base));
+				if (base != null) {
+					var inherited = recoveredFieldType(base, name, nextVisiting);
+					if (inherited != null)
+						return inherited;
+				}
+			}
+		}
+		return null;
+	}
+
+	function recoveredMethod(owner:String, name:String, visiting:Array<String>):Null<AstFunction> {
+		if (visiting.indexOf(owner) >= 0)
+			return null;
+		var direct = recoveredFunctions.get(owner + "." + name);
+		if (direct != null)
+			return direct;
+		var nextVisiting = visiting.copy();
+		nextVisiting.push(owner);
+		var classDecl = declarations.classes.get(owner);
+		if (classDecl != null && classDecl.base != null) {
+			var base = memberOwner(recoveredType(classDecl.base));
+			if (base != null) {
+				var inherited = recoveredMethod(base, name, nextVisiting);
+				if (inherited != null)
+					return inherited;
+			}
+		}
+		var interfaceDecl = declarations.interfaces.get(owner);
+		if (interfaceDecl != null)
+			for (baseType in interfaceDecl.bases) {
+				var base = memberOwner(recoveredType(baseType));
+				if (base != null) {
+					var inherited = recoveredMethod(base, name, nextVisiting);
+					if (inherited != null)
+						return inherited;
+				}
+			}
+		return null;
+	}
+
+	function recoveredFunction(name:String):Null<AstFunction> {
+		var direct = recoveredFunctions.get(name);
+		if (direct != null)
+			return direct;
+		var separator = name.lastIndexOf(".");
+		return separator < 1 ? null : recoveredMethod(name.substring(0, separator), name.substring(separator + 1), []);
 	}
 
 	function recoveredArrayElementType(values:Array<AstExpression>):CompilerType {
@@ -999,8 +1050,8 @@ class SemanticIndex {
 		};
 
 	function recoveredFunctionForCall(name:String):Null<AstFunction> {
-		var fn = recoveredFunctions.get(name);
-		return fn == null ? recoveredFunctions.get(name + ".new") : fn;
+		var fn = recoveredFunction(name);
+		return fn == null ? recoveredFunction(name + ".new") : fn;
 	}
 
 	public function symbolIdAt(position:Int, ?token:CancellationToken):Null<SemanticSymbolId> {

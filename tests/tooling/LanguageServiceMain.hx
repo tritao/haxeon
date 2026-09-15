@@ -281,7 +281,8 @@ class LanguageServiceMain {
 		if (importedArgumentContext == null || importedArgumentContext.context.expected != TInt)
 			throw "recovered imported signature did not preserve the expected argument type";
 		var transitiveService = new LanguageService();
-		transitiveService.update("editor/base/Base.hx", "package editor.base; class Base { public var inherited:Int; }");
+		transitiveService.update("editor/base/Base.hx",
+			"package editor.base; class Base { public var inherited:Int; public function inheritedMethod(value:String):String return value; }");
 		transitiveService.update("editor/util/Widget.hx", "package editor.util; import editor.base.Base; class Widget extends Base {}");
 		var transitiveSource = "package editor; import editor.util.Widget; function main() { var widget:Widget = new Widget(); return widget.inherited; }";
 		transitiveService.update("editor/Transitive.hx", transitiveSource);
@@ -298,6 +299,13 @@ class LanguageServiceMain {
 					}
 		if (!transitiveInheritedType)
 			throw "recovered typing did not follow an imported module's inherited declaration closure";
+		var inheritedSignatureSource = "package editor; import editor.util.Widget; function main():Void { var widget:Widget = new Widget(); widget.inheritedMethod(";
+		transitiveService.update("editor/InheritedSignature.hx", inheritedSignatureSource);
+		var inheritedSignature = transitiveService.signatureHelp("editor/InheritedSignature.hx", inheritedSignatureSource.length);
+		if (inheritedSignature == null
+			|| inheritedSignature.label != "inheritedMethod(value:String):String"
+			|| inheritedSignature.activeParameter != 0)
+			throw "recovered signature help did not follow an imported inherited method";
 		for (unresolved in transitiveService.unresolvedSymbols("editor/Transitive.hx"))
 			if (unresolved.name == "inherited")
 				throw "recovered known inherited member was incorrectly reported as unresolved";
