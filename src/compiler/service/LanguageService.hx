@@ -26,6 +26,7 @@ import compiler.types.Typer.RecoveryTypingModule;
 import compiler.types.SignatureInference;
 import compiler.service.EditorSnapshot.EditorSnapshot;
 import compiler.service.EditorSnapshot.EditorSnapshotConfidence;
+import compiler.service.EditorSnapshot.EditorSnapshotTools;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
@@ -2692,43 +2693,7 @@ class LanguageService {
 		return compiler.modules.get(ModulePath.fromFile(path));
 
 	static function editorSnapshot(state:ModuleState):Null<EditorSnapshot> {
-		if (state.ast != null)
-			return {
-				source: state.source,
-				tokens: state.tokens,
-				ast: state.ast,
-				semanticModel: state.semanticModel,
-				revision: state.revision,
-				stale: false,
-				recovered: false,
-				confidence: EditorSnapshotConfidence.Exact
-			};
-
-		if (state.recoveredAst != null)
-			return {
-				source: state.source,
-				tokens: state.recoveredTokens,
-				ast: state.recoveredAst,
-				semanticModel: state.recoveredSemanticModel,
-				revision: state.revision,
-				stale: false,
-				recovered: true,
-				confidence: EditorSnapshotConfidence.RecoveredPartial
-			};
-
-		if (state.lastGoodAst != null && state.lastGoodSource != null && state.lastGoodSemanticModel != null)
-			return {
-				source: state.lastGoodSource,
-				tokens: state.lastGoodTokens,
-				ast: state.lastGoodAst,
-				semanticModel: state.lastGoodSemanticModel,
-				revision: state.lastGoodRevision,
-				stale: true,
-				recovered: false,
-				confidence: EditorSnapshotConfidence.LastGood
-			};
-
-		return null;
+		return EditorSnapshotTools.select(state);
 	}
 
 	static function effectiveAst(state:ModuleState):Null<compiler.syntax.Ast.AstProgram> {
