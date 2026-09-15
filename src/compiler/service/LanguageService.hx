@@ -2083,7 +2083,7 @@ class LanguageService {
 		switch type {
 			case TNullable(element):
 				addInstanceMembers(element, prefix, result, token);
-			case TInstance(Class, name, _):
+			case TInstance(Class, name, arguments):
 				for (state in compiler.modules) {
 					if (token != null)
 						token.check();
@@ -2091,39 +2091,48 @@ class LanguageService {
 					if (ast != null)
 						for (classDecl in ast.classes)
 							if (classDecl.name == name) {
+								var substitutions:Map<String, String> = [];
+								for (index in 0...classDecl.typeParameters.length)
+									if (index < arguments.length)
+										substitutions.set(classDecl.typeParameters[index], compilerTypeName(arguments[index]));
 								for (field in classDecl.fields) {
 									if (token != null)
 										token.check();
 									if (!field.isStatic)
-										addMember(field.name, "field", '${field.name}:${typeName(field.type)}', prefix, result);
+										addMember(field.name, "field", '${field.name}:${typeNameSubstituted(field.type, substitutions)}', prefix, result);
 								}
 								for (method in classDecl.methods) {
 									if (token != null)
 										token.check();
 									if (!method.isStatic)
 										addMember(method.name, "method",
-											'${method.name}(${[for (argument in method.arguments) typeName(argument.type)].join(",")}):${typeName(method.result)}',
+											'${method.name}(${[for (argument in method.arguments) typeNameSubstituted(argument.type, substitutions)].join(",")}):${typeNameSubstituted(method.result, substitutions)}',
 											prefix, result);
 								}
 								if (classDecl.base != null)
 									addInstanceMembers(TInstance(Class, ModuleCanonicalizer.astTypeName(classDecl.base), []), prefix, result, token);
 							}
 				}
-			case TInstance(Interface, name, _):
+			case TInstance(Interface, name, arguments):
 				for (state in compiler.modules) {
 					if (token != null)
 						token.check();
 					var ast = effectiveAst(state);
 					if (ast != null)
 						for (interfaceDecl in ast.interfaces)
-							if (interfaceDecl.name == name)
+							if (interfaceDecl.name == name) {
+								var substitutions:Map<String, String> = [];
+								for (index in 0...interfaceDecl.typeParameters.length)
+									if (index < arguments.length)
+										substitutions.set(interfaceDecl.typeParameters[index], compilerTypeName(arguments[index]));
 								for (method in interfaceDecl.methods) {
 									if (token != null)
 										token.check();
 									addMember(method.name, "method",
-										'${method.name}(${[for (argument in method.arguments) typeName(argument.type)].join(",")}):${typeName(method.result)}',
+										'${method.name}(${[for (argument in method.arguments) typeNameSubstituted(argument.type, substitutions)].join(",")}):${typeNameSubstituted(method.result, substitutions)}',
 										prefix, result);
 								}
+							}
 				}
 			case TArray(_):
 				addMember("length", "field", "length:Int", prefix, result);
@@ -2780,6 +2789,22 @@ class LanguageService {
 			case FunctionType(arguments, result): '(${[for (argument in arguments) typeName(argument)].join(",")})->${typeName(result)}';
 			case AnonymousType(fields): '{${[for (field in fields) (field.optional ? "?" : "") + field.name + ":" + typeName(field.type)].join(",")}}';
 		};
+
+	static function typeNameSubstituted(type:Null<AstType>, substitutions:Map<String, String>):String {
+		if (type == null)
+			return "_";
+
+		return switch type {
+			case NamedType(name): substitutions.exists(name) ? substitutions.get(name) : name;
+			case AppliedType(name, arguments): '$name<${[for (argument in arguments) typeNameSubstituted(argument, substitutions)].join(",")}>';
+			case ArrayType(element): 'Array<${typeNameSubstituted(element, substitutions)}>';
+			case MapType(key, value): 'Map<${typeNameSubstituted(key, substitutions)},${typeNameSubstituted(value, substitutions)}>';
+			case NullableType(element): 'Null<${typeNameSubstituted(element, substitutions)}>';
+			case FunctionType(arguments, result): '(${[for (argument in arguments) typeNameSubstituted(argument, substitutions)].join(",")})->${typeNameSubstituted(result, substitutions)}';
+			case AnonymousType(fields): '{${[for (field in fields) (field.optional ? "?" : "") + field.name + ":" + typeNameSubstituted(field.type, substitutions)].join(",")}}';
+			default: typeName(type);
+		};
+	}
 
 	static function compilerTypeName(type:CompilerType):String
 		return switch type {

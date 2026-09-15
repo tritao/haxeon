@@ -435,10 +435,21 @@ class ParserRecoveryMain {
 				throw 'generic expected type was not retained: ${genericContext.expected}';
 		}
 		var genericMemberService = new LanguageService(),
-			genericMemberSource = "class Box<T> { public var value:T; } function main():Void { var box:Box<Int> = new Box<Int>(); box.";
+			genericMemberSource = "class Box<T> { public var value:T; public function get():T return value; } function main():Void { var box:Box<Int> = new Box<Int>(); box.";
 		genericMemberService.update("GenericMember.hx", genericMemberSource);
-		var genericMemberNames = [for (item in genericMemberService.complete("GenericMember.hx", genericMemberSource.length)) item.label];
-		if (genericMemberNames.indexOf("value") < 0)
+		var genericMemberCompletion = genericMemberService.complete("GenericMember.hx", genericMemberSource.length),
+			genericMemberNames = [for (item in genericMemberCompletion) item.label],
+			genericValueDetail:Null<String> = null,
+			genericGetDetail:Null<String> = null;
+		for (item in genericMemberCompletion) {
+			if (item.label == "value")
+				genericValueDetail = item.detail;
+			if (item.label == "get")
+				genericGetDetail = item.detail;
+		}
+		if (genericMemberNames.indexOf("value") < 0
+			|| genericValueDetail != "value:Int"
+			|| genericGetDetail != "get():Int")
 			throw "generic recovered receiver did not retain member completion";
 
 		var importService = new LanguageService();
