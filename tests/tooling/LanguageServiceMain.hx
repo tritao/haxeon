@@ -1373,6 +1373,20 @@ class LanguageServiceMain {
 			|| recoveredAbstractState.recoveredSemanticModel.partialTypedProgram == null
 			|| !containsDocumentSymbol(recoveredAbstractSymbols, "Value"))
 			throw "incomplete abstract conversion discarded its recovered declaration snapshot";
+		var enumAbstractMemberService = new LanguageService(),
+			enumAbstractMemberSource = "enum abstract Flags(Int) { var Ready = 1; var Done = 2; } function main():Void { Flags.";
+		enumAbstractMemberService.update("EnumAbstractMembers.hx", enumAbstractMemberSource);
+		var enumAbstractItems = enumAbstractMemberService.completeResult("EnumAbstractMembers.hx", enumAbstractMemberSource.length).items,
+			foundEnumAbstractValue = false;
+		for (item in enumAbstractItems)
+			if (item.label == "Ready")
+				foundEnumAbstractValue = true;
+		var enumAbstractHoverSource = "enum abstract Flags(Int) { var Ready = 1; } function main():Void { Flags.Ready; }",
+			enumAbstractHoverPosition = enumAbstractHoverSource.lastIndexOf("Ready") + "Ready".length;
+		enumAbstractMemberService.update("EnumAbstractMembers.hx", enumAbstractHoverSource);
+		if (!foundEnumAbstractValue
+			|| enumAbstractMemberService.hover("EnumAbstractMembers.hx", enumAbstractHoverPosition) != "Ready:Int")
+			throw "recovered enum-abstract member completion or hover failed";
 		var nominalSignatureService = new LanguageService();
 		nominalSignatureService.update("nominal/a/Action.hx", "package nominal.a; class Action { public function run(value:Int):Int return value; }");
 		nominalSignatureService.update("nominal/b/Action.hx", "package nominal.b; class Action { public function run(value:String):String return value; }");

@@ -1059,6 +1059,10 @@ class SemanticWorkspace {
 							method.name + "(" + [for (argument in method.arguments)
 								editorAstTypeName(argument.type, substitutions)].join(",") + "):" + editorAstTypeName(method.result, substitutions));
 			}
+		for (decl in model.program.enumAbstracts)
+			if (sameSpan(decl.span, resolved.symbol.declaration))
+				for (value in decl.values)
+					addEditorMember(result, seen, value.name, "field", value.name + ":" + editorAstTypeName(decl.underlying, []));
 	}
 
 	function editorMembersForIdentity(type:CompilerType, identity:SemanticSymbolId,
