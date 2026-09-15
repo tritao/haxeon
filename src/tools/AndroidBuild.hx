@@ -15,6 +15,7 @@ import project.PackageResolver;
 import project.ProjectSourceAcquirer;
 import project.ResolvedProject;
 import project.SourceCache;
+import build.Target;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -39,7 +40,7 @@ class AndroidBuild {
 		var absoluteProjectPath = FileSystem.fullPath(projectPath),
 			lockPath = Path.join([Path.directory(absoluteProjectPath), "haxeon.lock"]),
 			lockfile = FileSystem.exists(lockPath) ? PackageLockfile.parse(lockPath, File.getContent(lockPath)) : null,
-			project = new PackageResolver(new ProjectSourceAcquirer(SourceCache.root())).resolve(absoluteProjectPath, lockfile, lockfile != null);
+			project = new PackageResolver(new ProjectSourceAcquirer(SourceCache.root())).resolve(absoluteProjectPath, lockfile, lockfile != null, Target.parse("android"));
 		buildResolved(project, outputPath);
 	}
 

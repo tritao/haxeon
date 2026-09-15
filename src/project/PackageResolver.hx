@@ -4,6 +4,7 @@ import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 import project.PackageLockfile.PackageLockEntry;
+import build.Target;
 
 /** Resolves a package graph independently of the source acquisition mechanism. */
 class PackageResolver {
@@ -14,12 +15,13 @@ class PackageResolver {
 	public function new(sourceAcquirer:SourceAcquirer)
 		this.sourceAcquirer = sourceAcquirer;
 
-	public function resolve(manifestPath:String, ?lockfile:PackageLockfile, locked:Bool = false):ResolvedProject {
+	public function resolve(manifestPath:String, ?lockfile:PackageLockfile, locked:Bool = false, ?target:Target):ResolvedProject {
 		if (locked && lockfile == null)
 			throw "haxeon.lock is required for --locked resolution";
 		var absoluteManifest = canonicalExistingFile(manifestPath, 'Project file not found: $manifestPath'),
 			projectRoot = Path.directory(absoluteManifest),
 			rootManifest = PackageManifest.parse(absoluteManifest, File.getContent(absoluteManifest)),
+			requestedTarget = target == null ? Target.parse(rootManifest.target) : target,
 			visited = new Map<String, ResolvedPackage>(),
 			active = new Map<String, Bool>(),
 			nameToRoot = new Map<String, String>(),
@@ -50,6 +52,7 @@ class PackageResolver {
 				return existing;
 			var manifest = PackageManifest.parse(resolvedManifest, File.getContent(resolvedManifest)),
 				priorRoot = nameToRoot.get(manifest.packageName);
+			manifest.compatibility.validate(manifest.packageName, requestedTarget);
 			if (priorRoot != null && priorRoot != resolvedRoot)
 				throw 'Duplicate package name "${manifest.packageName}" in $priorRoot and $resolvedRoot';
 			nameToRoot.set(manifest.packageName, resolvedRoot);

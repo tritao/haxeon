@@ -398,6 +398,19 @@ has no provider for a requested target, planning stops with the package and
 missing-provider chain—for example, `foo cannot be built for wasm32`—before
 compilation or linking begins.
 
+Packages can also gate resolution with compatibility metadata:
+
+```json
+"compatibility": {
+  "haxeon": ">=0.3",
+  "targets": ["host", "android"],
+  "runtimeAbi": "2"
+}
+```
+
+These requirements are checked while resolving the package graph, before any
+compiler or native action is planned.
+
 Android builds resolve the same package graph, compile `native.sources` with the
 Android NDK, and expose the resulting ABI-specific shared libraries to Gradle
 under `build/android-arm64/jniLibs/arm64-v8a`. A native package therefore gets

@@ -404,11 +404,12 @@ class HaxeonCli {
 		var projectDirectory = Path.directory(projectConfigPath);
 		if (projectDirectory == "")
 			projectDirectory = Sys.getCwd();
-		var resolveStarted = Date.now().getTime(),
-			project = discoverProject(projectConfigPath),
+		var requestedTarget:Null<Target> = options.target == null ? null : Target.parse(options.target),
+			resolveStarted = Date.now().getTime(),
+			project = discoverProject(projectConfigPath, requestedTarget),
 			resolutionMs = Date.now().getTime() - resolveStarted,
 			target = options.target == null ? project.manifest.target : options.target,
-			targetInfo = Target.parse(target);
+			targetInfo = requestedTarget == null ? Target.parse(target) : requestedTarget;
 		if (launch && targetInfo.isWasm())
 			throw 'The "$target" target can be built, but this CLI has no runner for it yet.';
 		if (options.plan && launch)
@@ -769,15 +770,15 @@ class HaxeonCli {
 		return {projectPath: projectPath, name: name, git: git, rev: rev};
 	}
 
-	static function discoverProject(manifestPath:String):ResolvedProject {
+	static function discoverProject(manifestPath:String, ?target:Target):ResolvedProject {
 		var lockPath = lockfilePath(manifestPath), lockfile = FileSystem.exists(lockPath)
 			? PackageLockfile.parse(lockPath, File.getContent(lockPath))
 			: null;
-		return resolveProject(manifestPath, lockfile, lockfile != null);
+		return resolveProject(manifestPath, lockfile, lockfile != null, target);
 	}
 
-	static function resolveProject(manifestPath:String, lockfile:Null<PackageLockfile>, locked:Bool):ResolvedProject {
-		return new PackageResolver(new ProjectSourceAcquirer(SourceCache.root())).resolve(manifestPath, lockfile, locked);
+	static function resolveProject(manifestPath:String, lockfile:Null<PackageLockfile>, locked:Bool, ?target:Target):ResolvedProject {
+		return new PackageResolver(new ProjectSourceAcquirer(SourceCache.root())).resolve(manifestPath, lockfile, locked, target);
 	}
 
 	static function lockfilePath(manifestPath:String):String

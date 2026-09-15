@@ -46,6 +46,7 @@ class BuildSystemMain {
 		testTargetsAndToolchains();
 		testProjectDiscovery();
 		testPackageSourceModel();
+		testPackageCompatibility();
 		testResolverDelegatesAcquisition();
 		testLockfileRoundTrip();
 		testNativeDependencyScanning();
@@ -338,6 +339,30 @@ class BuildSystemMain {
 			case project.PackageSource.Path(value): value == "../path-dependency";
 			case _: false;
 		}, "path dependency metadata should remain a path source declaration");
+	}
+
+	static function testPackageCompatibility():Void {
+		var manifest = PackageManifest.parse("/tmp/compatible/haxeon.json",
+			'{"package":{"name":"compatible"},"compatibility":{"haxeon":">=0.3","targets":["host"],"runtimeAbi":"2"}}');
+		manifest.compatibility.validate("compatible", Target.detectHost());
+		var rejected:Null<String> = null;
+		try {
+			manifest.compatibility.validate("compatible", Target.parse("wasm32"));
+		} catch (error:Dynamic) {
+			rejected = Std.string(error);
+		}
+		expect(rejected != null && rejected.indexOf("does not support target wasm32") >= 0,
+			"package compatibility should reject unsupported targets before compilation");
+		var badVersion = PackageManifest.parse("/tmp/incompatible/haxeon.json",
+			'{"package":{"name":"incompatible"},"compatibility":{"haxeon":">=0.4"}}');
+		rejected = null;
+		try {
+			badVersion.compatibility.validate("incompatible", Target.detectHost());
+		} catch (error:Dynamic) {
+			rejected = Std.string(error);
+		}
+		expect(rejected != null && rejected.indexOf("requires Haxeon") >= 0,
+			"package compatibility should reject incompatible Haxeon versions");
 	}
 
 	static function testResolverDelegatesAcquisition():Void {

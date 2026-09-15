@@ -44,10 +44,11 @@ class PackageManifest {
 	public final native:Null<NativeManifest>;
 	public final androidApplicationId:String;
 	public final androidAppLabel:String;
+	public final compatibility:PackageCompatibility;
 
 	function new(version:Int, packageName:String, entry:Null<String>, legacySources:Array<String>, sourceRoots:Array<String>, workspace:Array<String>, target:String,
 		defines:Array<String>, outputDir:String, dependencies:Map<String, PackageDependency>, native:Null<NativeManifest>, androidApplicationId:String,
-		androidAppLabel:String) {
+		androidAppLabel:String, compatibility:PackageCompatibility) {
 		this.version = version;
 		this.packageName = packageName;
 		this.packageId = new PackageId(packageName);
@@ -62,6 +63,7 @@ class PackageManifest {
 		this.native = native;
 		this.androidApplicationId = androidApplicationId;
 		this.androidAppLabel = androidAppLabel;
+		this.compatibility = compatibility;
 	}
 
 	public static function parse(path:String, content:String):PackageManifest {
@@ -86,6 +88,7 @@ class PackageManifest {
 			target = optionalString(raw, "target", "host", path),
 			defines = stringArray(raw, "defines", path, []),
 			outputDir = optionalString(raw, "outputDir", "build", path),
+			compatibility = PackageCompatibility.parse(Reflect.field(raw, "compatibility"), path),
 			dependencies:Map<String, PackageDependency> = new Map();
 		if (packageName.length == 0)
 			throw '$path requires a non-empty package name';
@@ -145,7 +148,7 @@ class PackageManifest {
 			androidAppLabel = optionalString(android, "label", androidAppLabel, path);
 		}
 		return new PackageManifest(version, packageName, entry, legacySources, sourceRoots, workspace, target, defines, outputDir, dependencies, native,
-			androidApplicationId, androidAppLabel);
+			androidApplicationId, androidAppLabel, compatibility);
 	}
 
 	static function isObject(value:Dynamic):Bool
