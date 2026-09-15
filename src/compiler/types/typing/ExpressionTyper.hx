@@ -281,7 +281,7 @@ class ExpressionTyper {
 			var typedValue = typeExpressionCallback(value, scope, elementType, false),
 				resolvedElement:CompilerType;
 			if (elementType == null) {
-				resolvedElement = typedValue.type;
+				resolvedElement = isRecoveryType(typedValue.type) ? TUnknown : typedValue.type;
 				elementType = resolvedElement;
 			} else
 				resolvedElement = elementType;
@@ -398,7 +398,7 @@ class ExpressionTyper {
 				case TArrayComprehension(_, _, _, _, _) if (!isRecoveryType(typedValue.type)): arrayElementType(typedValue.type, span);
 				case _: null;
 			},
-			elementType = expectedElement == null ? (flattenedElement == null ? typedValue.type : flattenedElement) : expectedElement;
+			elementType = expectedElement == null ? (flattenedElement == null ? (isRecoveryType(typedValue.type) ? TUnknown : typedValue.type) : flattenedElement) : expectedElement;
 		if (flattenedElement == null)
 			typedValue = recoverCoerce(typedValue, elementType, "array comprehension value", "E1003");
 		return new TypedExpression(TArrayComprehension(loopScope.requireId(keyName), valueName == null ? null : loopScope.requireId(valueName),
@@ -458,8 +458,8 @@ class ExpressionTyper {
 		var expected = mapExpectation(expectedType),
 			typedKey = typeExpressionCallback(key, loopScope, expected == null ? null : expected.key, false),
 			typedValue = typeExpressionCallback(value, loopScope, expected == null ? null : expected.value, false),
-			resultKey = expected == null ? typedKey.type : expected.key,
-			resultValue = expected == null ? typedValue.type : expected.value;
+			resultKey = expected == null ? (isRecoveryType(typedKey.type) ? TUnknown : typedKey.type) : expected.key,
+			resultValue = expected == null ? (isRecoveryType(typedValue.type) ? TUnknown : typedValue.type) : expected.value;
 		typedKey = recoverCoerce(typedKey, resultKey, "map comprehension key", "E1003");
 		typedValue = recoverCoerce(typedValue, resultValue, "map comprehension value", "E1003");
 		if (session.mapName(resultKey, resultValue) == null) {

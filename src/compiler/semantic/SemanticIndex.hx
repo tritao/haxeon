@@ -702,7 +702,8 @@ class SemanticIndex {
 					if (callee == null && !isKnownRecoveredMember(receiver, memberName))
 						recordUnresolved(memberName, span);
 					addCall(callee, span, memberName);
-					indexRecoveredCallArguments(arguments, method == null ? null : method.method, method == null ? null : method.substitutions);
+					indexRecoveredCallArguments(arguments, method == null ? null : method.method, method == null ? null : method.substitutions,
+						method == null ? recoveredBuiltinMethodArguments(receiverType, memberName) : null);
 				} else {
 					var local = bindRecoveredLocal(name, span);
 					if (local == null) {
@@ -715,7 +716,7 @@ class SemanticIndex {
 						} else
 							recordUnresolved(name, span);
 					}
-					indexRecoveredCallArguments(arguments, recoveredFunctionForCall(name));
+					indexRecoveredCallArguments(arguments, recoveredFunctionForCall(name), null, recoveredBuiltinCallArguments(name));
 				}
 			case ClosureCall(callee, arguments, _):
 				indexRecoveredExpression(callee);
@@ -730,7 +731,8 @@ class SemanticIndex {
 				var receiverType = recoveredExpressionBindingType(object),
 					owner = memberOwner(receiverType),
 					method = owner == null ? null : recoveredMethodWithSubstitutions(owner, name, [], recoveredTypeSubstitutions(receiverType));
-				indexRecoveredCallArguments(arguments, method == null ? null : method.method, method == null ? null : method.substitutions);
+				indexRecoveredCallArguments(arguments, method == null ? null : method.method, method == null ? null : method.substitutions,
+					method == null ? recoveredBuiltinMethodArguments(receiverType, name) : null);
 			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _),
 				BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _), UnsignedShiftRight(left, right, _),
 				Less(left, right, _), LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _),
@@ -1257,13 +1259,68 @@ class SemanticIndex {
 		return TUnknown;
 	}
 
-	function indexRecoveredCallArguments(arguments:Array<AstExpression>, fn:Null<AstFunction>, ?substitutions:Map<String, CompilerType>):Void {
+	function indexRecoveredCallArguments(arguments:Array<AstExpression>, fn:Null<AstFunction>, ?substitutions:Map<String, CompilerType>,
+		?explicitExpected:Array<CompilerType>):Void {
 		for (index in 0...arguments.length) {
 			checkpoint();
 			var argument = arguments[index];
-			var expected = fn == null || index >= fn.arguments.length ? null : recoveredType(fn.arguments[index].type, substitutions);
+			var expected = explicitExpected != null && index < explicitExpected.length ? explicitExpected[index]
+				: fn == null || index >= fn.arguments.length ? null : recoveredType(fn.arguments[index].type, substitutions);
 			indexRecoveredExpression(argument, expected);
 		}
+	}
+
+	function recoveredBuiltinCallArguments(name:String):Null<Array<CompilerType>> {
+		return switch name {
+			case "Std.isOfType": [TDynamic, TUnknown];
+			case "Reflect.compare": [TUnknown, TUnknown];
+			case "Reflect.isObject": [TDynamic];
+			case "Math.ceil": [TFloat];
+			case "haxe.io.Bytes.ofString": [TString, TUnknown];
+			case "Std.int", "Std.stdIntFloat": [TUnknown];
+			case "Std.stdString": [TDynamic];
+			case "String.__alloc__": [THlBytes, TInt];
+			case "String.fromCharCode": [TInt];
+			case "RuntimeData.address", "runtime.RuntimeData.address": [TArray(TString)];
+			case "RuntimeData.loadI32", "runtime.RuntimeData.loadI32": [TInt];
+			default: null;
+		};
+	}
+
+	function recoveredBuiltinMethodArguments(receiver:CompilerType, name:String):Null<Array<CompilerType>> {
+		return switch receiver {
+			case TString:
+				switch name {
+					case "toLowerCase", "toUpperCase": [];
+					case "indexOf", "lastIndexOf": [TString, TInt];
+					case "substring", "substr": [TInt, TInt];
+					case "charCodeAt", "charAt": [TInt];
+					case "split": [TString];
+					default: null;
+				};
+			case TArray(element):
+				switch name {
+					case "push", "add", "unshift", "remove", "indexOf", "contains": [element];
+					case "iterator", "pop", "shift", "reverse", "copy": [];
+					case "resize": [TInt];
+					case "insert": [TInt, element];
+					case "concat": [TArray(element)];
+					case "slice": [TInt, TInt];
+					case "splice": [TInt, TInt];
+					case "sort": [TFunction([element, element], TInt)];
+					case "join": [TString];
+					default: null;
+				};
+			case TMap(key, value):
+				switch name {
+					case "set": [key, value];
+					case "keys", "values", "clear", "size": [];
+					case "exists", "remove", "get": [key];
+					default: null;
+				};
+			case TNullable(element): recoveredBuiltinMethodArguments(element, name);
+			default: null;
+		};
 	}
 
 	function recoveredLocalType(name:String, span:SourceSpan):Null<CompilerType> {

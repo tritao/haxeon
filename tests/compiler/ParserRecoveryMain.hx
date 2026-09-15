@@ -363,6 +363,27 @@ class ParserRecoveryMain {
 				throw 'array literal did not retain expected Foo element type: $collectionExpected';
 		}
 
+		var builtinStringExpectedService = new LanguageService(),
+			builtinStringExpectedSource = "function main(value:String):Void return value.indexOf(";
+		builtinStringExpectedService.update("ExpectedStringMethod.hx", builtinStringExpectedSource);
+		var builtinStringExpected = builtinStringExpectedService.completionContext("ExpectedStringMethod.hx", builtinStringExpectedSource.length);
+		if (builtinStringExpected == null || builtinStringExpected.context.expected != TString)
+			throw 'String method argument did not retain its expected type: ${builtinStringExpected == null ? "null" : Std.string(builtinStringExpected.context.expected)}';
+
+		var builtinArrayExpectedService = new LanguageService(),
+			builtinArrayExpectedSource = "function main(values:Array<Int>):Void return values.push(";
+		builtinArrayExpectedService.update("ExpectedArrayMethod.hx", builtinArrayExpectedSource);
+		var builtinArrayExpected = builtinArrayExpectedService.completionContext("ExpectedArrayMethod.hx", builtinArrayExpectedSource.length);
+		if (builtinArrayExpected == null || builtinArrayExpected.context.expected != TInt)
+			throw 'Array method argument did not retain its expected type: ${builtinArrayExpected == null ? "null" : Std.string(builtinArrayExpected.context.expected)}';
+
+		var builtinMapExpectedService = new LanguageService(),
+			builtinMapExpectedSource = "function main(values:Map<String,Int>):Void return values.get(";
+		builtinMapExpectedService.update("ExpectedMapMethod.hx", builtinMapExpectedSource);
+		var builtinMapExpected = builtinMapExpectedService.completionContext("ExpectedMapMethod.hx", builtinMapExpectedSource.length);
+		if (builtinMapExpected == null || builtinMapExpected.context.expected != TString)
+			throw 'Map method argument did not retain its expected type: ${builtinMapExpected == null ? "null" : Std.string(builtinMapExpected.context.expected)}';
+
 		var objectService = new LanguageService(),
 			objectSource = "class Foo {} typedef Options = { value:Foo }; function main():Void { var options:Options = { value: ";
 		objectService.update("ExpectedObject.hx", objectSource);
