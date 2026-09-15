@@ -356,29 +356,33 @@ class Parser {
 			?metadata:Array<compiler.syntax.Ast.AstMetadata>):AstFunction {
 		var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
-		consume(TokenKind.LeftParen);
 		var arguments = [];
-		while (!check(TokenKind.RightParen) && !recoveringAtEnd() && !canInsert(TokenKind.RightParen)) {
-			if (check(TokenKind.Comma)) {
-				recordExpected("parameter");
-				advance();
-				continue;
+		if (recovering && (recoveringAtEnd() || isDeclarationBoundary(current())))
+			recordExpected("left parenthesis");
+		else {
+			consume(TokenKind.LeftParen);
+			while (!check(TokenKind.RightParen) && !recoveringAtEnd() && !canInsert(TokenKind.RightParen)) {
+				if (check(TokenKind.Comma)) {
+					recordExpected("parameter");
+					advance();
+					continue;
+				}
+				var optional = match(TokenKind.Question),
+					argumentToken = consumeDeclarationToken("parameter");
+				var argumentType = match(TokenKind.Colon) ? parseType() : InferredType,
+					defaultValue = match(TokenKind.Assign) ? parseExpression() : null;
+				arguments.push({
+					name: argumentToken.text,
+					type: argumentType,
+					span: argumentToken.span.merge(previous().span),
+					optional: optional || defaultValue != null,
+					defaultValue: defaultValue
+				});
+				if (!match(TokenKind.Comma))
+					break;
 			}
-			var optional = match(TokenKind.Question),
-				argumentToken = consumeDeclarationToken("parameter");
-			var argumentType = match(TokenKind.Colon) ? parseType() : InferredType,
-				defaultValue = match(TokenKind.Assign) ? parseExpression() : null;
-			arguments.push({
-				name: argumentToken.text,
-				type: argumentType,
-				span: argumentToken.span.merge(previous().span),
-				optional: optional || defaultValue != null,
-				defaultValue: defaultValue
-			});
-			if (!match(TokenKind.Comma))
-				break;
+			consume(TokenKind.RightParen);
 		}
-		consume(TokenKind.RightParen);
 		var result = match(TokenKind.Colon) ? parseType() : allowMissingReturn && name == "new" ? VoidType : InferredType;
 		var statements = [], end:SourceSpan;
 		if (isExtern) {

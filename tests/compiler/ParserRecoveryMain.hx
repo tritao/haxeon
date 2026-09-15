@@ -103,6 +103,13 @@ class ParserRecoveryMain {
 			|| adjacentParameterResult.program.functions[1].name != "second")
 			throw "unfinished parameter list absorbed an adjacent function declaration";
 
+		var missingParenthesisSource = new SourceFile("MissingParenthesis.hx", "function first\nfunction second():Void return;");
+		var missingParenthesisResult = new Parser(new Lexer(missingParenthesisSource).tokenize()).parseProgramRecovering();
+		if (missingParenthesisResult.program.functions.length != 2
+			|| missingParenthesisResult.program.functions[0].name != "first"
+			|| missingParenthesisResult.program.functions[1].name != "second")
+			throw "function without a parameter list absorbed an adjacent declaration";
+
 		var classSource = new SourceFile("Class.hx", "class Child extends");
 		var classResult = new Parser(new Lexer(classSource).tokenize()).parseProgramRecovering();
 		if (classResult.program.classes.length != 1 || classResult.program.classes[0].base == null)
