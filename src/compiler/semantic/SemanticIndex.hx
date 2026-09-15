@@ -120,8 +120,11 @@ class SemanticIndex {
 		for (key in keys) {
 			if (!declarations.symbols.exists(key))
 				throw 'Missing semantic declaration "$key"';
-			var declaration = declarations.symbols.get(key),
-				id = new SemanticSymbolId(module, declaration.id);
+			var declaration = declarations.symbols.get(key);
+			if (declaration.name == "<missing>")
+				continue;
+			var id = new SemanticSymbolId(module, declaration.id),
+				binding = declarationToken(tokens, declaration.span, sourceName(declaration.name));
 			symbols.set(id, {
 				id: id,
 				name: declaration.name,
@@ -129,7 +132,6 @@ class SemanticIndex {
 				declaration: declaration.span
 			});
 			declarationSymbolsBySpan.set(spanKey(declaration.span), id);
-			var binding = declarationToken(tokens, declaration.span, sourceName(declaration.name));
 			if (binding != null)
 				bind(id, binding.span);
 		}

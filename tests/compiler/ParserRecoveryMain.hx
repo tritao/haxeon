@@ -73,6 +73,14 @@ class ParserRecoveryMain {
 		var missingFunctionResult = new Parser(new Lexer(missingFunctionName).tokenize()).parseProgramRecovering();
 		if (missingFunctionResult.program.functions.length != 1 || missingFunctionResult.program.functions[0].name != "<missing>")
 			throw "missing function name discarded the incomplete declaration";
+		var placeholderService = new LanguageService();
+		placeholderService.update("MissingFunction.hx", "function (");
+		var placeholderModel = placeholderService.compiler.modules.get("MissingFunction").recoveredSemanticModel;
+		if (placeholderModel == null)
+			throw "missing-name recovery did not produce a semantic model";
+		for (symbol in placeholderModel.index.symbols)
+			if (symbol.name == "<missing>")
+				throw "synthetic missing declaration leaked into semantic identity maps";
 
 		var parameterSource = new SourceFile("Parameter.hx", "function test(a:Int,");
 		var parameterResult = new Parser(new Lexer(parameterSource).tokenize()).parseProgramRecovering();
