@@ -139,7 +139,7 @@ class HlReader {
 			case HlType.Enum:
 				var name = readIndex(input),
 					global = readUnsigned(input, "enum global"),
-					constructors = [];
+					constructors:Array<HlCode.HlEnumConstructor> = [];
 				for (_ in 0...readCount(input, "enum constructor")) {
 					var constructorName = readIndex(input), parameters = [
 						for (_ in 0...readCount(input, "enum parameter"))
@@ -261,7 +261,7 @@ class HlReader {
 			case HlOpcode.JSLt | HlOpcode.JSGte | HlOpcode.JSGt | HlOpcode.JSLte | HlOpcode.JULt | HlOpcode.JUGte | HlOpcode.JNotLt | HlOpcode.JNotGte | HlOpcode.JEq | HlOpcode.JNotEq: [instruction.operands[2]];
 			case HlOpcode.Trap: [instruction.operands[1]];
 			case HlOpcode.Switch:
-				var count = instruction.operands[1], result = [];
+				var count = instruction.operands[1], result:Array<Int> = [];
 				for (index in 0...count)
 					if (instruction.operands[index + 2] != 0)
 						result.push(instruction.operands[index + 2]);
@@ -368,13 +368,15 @@ class HlReader {
 			case HlOpcode.JNotEq: JumpNotEqual(operands[0], operands[1], requireLabel(labels, position + 1 + operands[2], functionIndex));
 			case HlOpcode.JAlways: Jump(requireLabel(labels, position + 1 + operands[0], functionIndex));
 			case HlOpcode.Switch:
-				var count = operands[1], targets:Array<Null<String>> = [];
+				var count = operands[1],
+					targets:Array<String> = [],
+					missing:String = cast missingLabel();
 				for (index in 0...count) {
 					var offset = operands[index + 2];
-					targets.push(offset == 0 ? null : requireLabel(labels, position + 1 + offset, functionIndex));
+					targets.push(offset == 0 ? missing : requireLabel(labels, position + 1 + offset, functionIndex));
 				}
 				var defaultOffset = operands[count + 2];
-				Switch(operands[0], targets, defaultOffset == 0 ? null : requireLabel(labels, position + 1 + defaultOffset, functionIndex));
+				Switch(operands[0], cast targets, defaultOffset == 0 ? missing : requireLabel(labels, position + 1 + defaultOffset, functionIndex));
 			case HlOpcode.Catch: Catch(operands[0]);
 			case HlOpcode.Ret: Return(operands[0]);
 			case HlOpcode.ToDyn: ToDyn(operands[0], operands[1]);
@@ -501,6 +503,9 @@ class HlReader {
 	static function readSizedString(input:BytesInput, what:String):String {
 		return readBytesOfSize(input, readCount(input, what)).toString();
 	}
+
+	static function missingLabel():Null<String>
+		return null;
 
 	static function readCount(input:BytesInput, what:String):Int {
 		var count = readUnsigned(input, what + " count");
