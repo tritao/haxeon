@@ -1271,6 +1271,8 @@ class LanguageService {
 			return completionResult(result, incompleteSnapshot);
 		}
 		if (semanticContext != null && semanticContext.kind == SemanticCompletionContextKind.Type) {
+			for (typeParameter in semanticContext.typeParameters)
+				addMember(typeParameter, "typeParameter", typeParameter, prefix, result, 0);
 			if (model != null)
 				for (symbol in compiler.semanticWorkspace.editorVisibleSymbols(state, token))
 					if (isTypeCompletionKind(symbol.kind)) {
@@ -2793,6 +2795,7 @@ class LanguageService {
 			case TIterator(element): 'Iterator<${compilerTypeName(element)}>';
 			case TMap(key, value): 'Map<${compilerTypeName(key)},${compilerTypeName(value)}>';
 			case TNullable(element): 'Null<${compilerTypeName(element)}>';
+			case TTypeParameter(_, name): name;
 			case TInstance(_, name, arguments): arguments.length == 0 ? name : name
 					+ "<"
 					+ [for (argument in arguments) compilerTypeName(argument)].join(",") + ">";

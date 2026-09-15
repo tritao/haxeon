@@ -418,6 +418,23 @@ class ParserRecoveryMain {
 		if (overrideNames.indexOf("render") < 0)
 			throw "override completion did not expose the inherited method";
 
+		var genericContextService = new LanguageService(),
+			genericContextSource = "class Foo {} function identity<T:Foo>(value:T):T { var result:T = value; return result; }";
+		genericContextService.update("GenericContext.hx", genericContextSource);
+		var genericContextModel = genericContextService.compiler.modules.get("GenericContext").recoveredSemanticModel,
+			genericTypePosition = genericContextSource.indexOf("result:T") + "result:T".length,
+			genericContext = genericContextModel == null ? null : genericContextModel.index.completionContext(genericTypePosition),
+			genericTypeNames = [for (item in genericContextService.complete("GenericContext.hx", genericTypePosition)) item.label];
+		if (genericContext == null
+			|| genericContext.typeParameters.indexOf("T") < 0
+			|| genericTypeNames.indexOf("T") < 0)
+			throw "generic type parameter was not retained in recovered type completion";
+		switch genericContext.expected {
+			case TTypeParameter(_, "T"):
+			default:
+				throw 'generic expected type was not retained: ${genericContext.expected}';
+		}
+
 		var importService = new LanguageService();
 		importService.update("lib/Widget.hx", "class Widget {} function main():Void return;");
 		try

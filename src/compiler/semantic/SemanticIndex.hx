@@ -54,6 +54,7 @@ enum SemanticCompletionContextKind {
 
 typedef SemanticCompletionContext = {
 	final locals:Array<SemanticCompletionLocal>;
+	final typeParameters:Array<String>;
 	final receiver:Null<CompilerType>;
 	final expected:Null<CompilerType>;
 	final kind:SemanticCompletionContextKind;
@@ -109,10 +110,13 @@ class SemanticIndex {
 	final recoveredClassBases:Map<String, CompilerType> = [];
 	final recoveredLocalNext:Map<String, Int> = [];
 	final unresolved:Array<UnresolvedSymbol> = [];
+	final recoveredTypeParameterScopes:Array<{name:String, span:SourceSpan}> = [];
 	final declarations:DeclarationIndex;
 	final tokens:Array<Token>;
 	final module:String;
 	var cancellation:Null<CancellationToken>;
+	var currentRecoveredTypeParameters:Map<String, CompilerType> = [];
+	final recoveredTypeParameterNames:Map<String, Bool> = [];
 	var recoveryResolve:Null<String->Null<SemanticSymbolId>>;
 	var recoveryResolveEnumCase:Null<(String, Int) -> Null<SemanticSymbolId>>;
 	var recoveryResolveType:Null<(String, Array<CompilerType>) -> Null<CompilerType>>;
@@ -277,6 +281,7 @@ class SemanticIndex {
 		}
 		for (owner in program.classes) {
 			checkpoint();
+			rememberRecoveredTypeParameters(owner.typeParameters, owner.span);
 			if (owner.base != null)
 				recoveredClassBases.set(owner.name, recoveredType(owner.base));
 			for (fn in owner.methods)
@@ -284,14 +289,18 @@ class SemanticIndex {
 		}
 		for (owner in program.interfaces) {
 			checkpoint();
+			rememberRecoveredTypeParameters(owner.typeParameters, owner.span);
 			for (fn in owner.methods)
 				recoveredFunctions.set(owner.name + "." + fn.name, fn);
 		}
 		for (owner in program.abstracts) {
 			checkpoint();
+			rememberRecoveredTypeParameters(owner.typeParameters, owner.span);
 			for (fn in owner.methods)
 				recoveredFunctions.set(owner.name + "." + fn.name, fn);
 		}
+		for (fn in program.functions)
+			rememberRecoveredTypeParameters(fn.typeParameters, fn.span);
 		for (owner in program.classes) {
 			checkpoint();
 			for (field in owner.fields)
@@ -316,17 +325,17 @@ class SemanticIndex {
 		for (owner in program.classes) {
 			checkpoint();
 			for (fn in owner.methods)
-				indexRecoveredFunction(fn, owner.name);
+				indexRecoveredFunction(fn, owner.name, owner.typeParameters);
 		}
 		for (owner in program.interfaces) {
 			checkpoint();
 			for (fn in owner.methods)
-				indexRecoveredFunction(fn, owner.name);
+				indexRecoveredFunction(fn, owner.name, owner.typeParameters);
 		}
 		for (owner in program.abstracts) {
 			checkpoint();
 			for (fn in owner.methods)
-				indexRecoveredFunction(fn, owner.name);
+				indexRecoveredFunction(fn, owner.name, owner.typeParameters);
 		}
 		if (typedProgram != null)
 			for (fn in typedProgram.functions) {
@@ -436,8 +445,17 @@ class SemanticIndex {
 				return;
 			}
 
-	function indexRecoveredFunction(fn:AstFunction, owner:Null<String>):Void {
+	function indexRecoveredFunction(fn:AstFunction, owner:Null<String>, ?ownerTypeParameters:Array<String>):Void {
 		var functionKey = (owner == null ? "" : owner + ".") + fn.name;
+		currentRecoveredTypeParameters = [];
+		if (ownerTypeParameters != null)
+			for (name in ownerTypeParameters)
+				currentRecoveredTypeParameters.set(name, TTypeParameter(owner, name));
+		if (fn.typeParameters != null)
+			for (name in fn.typeParameters) {
+				currentRecoveredTypeParameters.set(name, TTypeParameter(functionKey, name));
+				rememberRecoveredTypeParameter(name, fn.span);
+			}
 		recoveredLocalNext.set(functionKey, owner != null && !fn.isStatic ? 1 : 0);
 		var functionId = recoveredDeclaredSymbol(functionKey);
 		if (functionId != null) {
@@ -463,6 +481,24 @@ class SemanticIndex {
 				bindRecoveredLocal(token.text, token.span);
 		}
 		currentCaller = null;
+		currentRecoveredTypeParameters = [];
+	}
+
+	function rememberRecoveredTypeParameters(parameters:Null<Array<String>>, span:SourceSpan):Void {
+		if (parameters == null)
+			return;
+		for (name in parameters)
+			rememberRecoveredTypeParameter(name, span);
+	}
+
+	function rememberRecoveredTypeParameter(name:String, span:SourceSpan):Void {
+		if (name.length == 0)
+			return;
+		recoveredTypeParameterNames.set(name, true);
+		for (existing in recoveredTypeParameterScopes)
+			if (existing.name == name && existing.span.start == span.start && existing.span.end == span.end)
+				return;
+		recoveredTypeParameterScopes.push({name: name, span: span});
 	}
 
 	function recoveredDeclaredSymbol(name:String):Null<SemanticSymbolId> {
@@ -852,11 +888,12 @@ class SemanticIndex {
 			case MapType(key, value): TMap(recoveredType(key), recoveredType(value));
 			case NullableType(element): TNullable(recoveredType(element));
 			case NamedType(name):
-				try {
+				var parameter = currentRecoveredTypeParameters.get(name);
+				parameter == null ? try {
 					declarations.resolve(type);
 				} catch (_:Dynamic) {
 					recoveredExternalType(name, []);
-				}
+				} : parameter;
 			case AppliedType(name, arguments):
 				try {
 					declarations.resolve(type);
@@ -1154,7 +1191,7 @@ class SemanticIndex {
 				id = resolve(token.text);
 			if (id != null)
 				bind(id, token.span);
-			else
+			else if (!recoveredTypeParameterNames.exists(token.text))
 				recordUnresolved(name, token.span);
 		}
 		bindings.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
@@ -1183,6 +1220,11 @@ class SemanticIndex {
 		}
 		var locals = [for (local in visible) local];
 		locals.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		var typeParameters:Array<String> = [];
+		for (candidate in recoveredTypeParameterScopes)
+			if (position >= candidate.span.start && position <= candidate.span.end && typeParameters.indexOf(candidate.name) < 0)
+				typeParameters.push(candidate.name);
+		typeParameters.sort(Reflect.compare);
 		var overrideContext = isOverrideContext(position, token),
 			receiver:Null<CompilerType> = null;
 		if (qualifier != null) {
@@ -1228,6 +1270,7 @@ class SemanticIndex {
 				token) ? SemanticCompletionContextKind.Pattern : expected != null ? SemanticCompletionContextKind.Argument : SemanticCompletionContextKind.Expression;
 		return {
 			locals: locals,
+			typeParameters: typeParameters,
 			receiver: receiver,
 			expected: expected,
 			kind: kind
@@ -1962,6 +2005,7 @@ class SemanticIndex {
 			case TIterator(element): 'Iterator<${displayType(element)}>';
 			case TMap(key, value): 'Map<${displayType(key)},${displayType(value)}>';
 			case TNullable(element): 'Null<${displayType(element)}>';
+			case TTypeParameter(_, name): name;
 			case TInstance(_, name, arguments): arguments.length == 0 ? name : name
 					+ "<"
 					+ [for (argument in arguments) displayType(argument)].join(",") + ">";
