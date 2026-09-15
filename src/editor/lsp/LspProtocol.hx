@@ -1194,9 +1194,11 @@ class LspProtocol {
 	function prepareRename(request:Dynamic, token:CancellationToken):Dynamic {
 		var document = document(request);
 		ensureAnalyzed(document, token);
-		requireCurrent(document);
+		requireExact(document);
 		var offset = positionOffset(document, position(request));
-		for (token in service.compiler.modules.get(ModulePath.fromFile(compilerPath(document))).tokens)
+		var state = service.compiler.modules.get(ModulePath.fromFile(compilerPath(document))),
+			tokens = state.ast == null ? state.recoveredTokens : state.tokens;
+		for (token in tokens)
 			if (offset >= token.span.start && offset <= token.span.end && Std.string(token.kind) == "Identifier")
 				return {range: document.range(token.span.start, token.span.end), placeholder: token.text};
 		return null;
@@ -1205,7 +1207,7 @@ class LspProtocol {
 	function rename(request:Dynamic, token:CancellationToken):Dynamic {
 		var document = document(request);
 		ensureAnalyzed(document, token);
-		requireCurrent(document);
+		requireExact(document);
 		var params:Dynamic = required(request, "params"),
 			edits = service.rename(compilerPath(document), positionOffset(document, position(request)), requiredString(params, "newName")),
 			grouped:Map<String, Array<Dynamic>> = [],
@@ -1255,6 +1257,11 @@ class LspProtocol {
 		return documents.get(documentUri(request));
 
 	function requireCurrent(document:LspDocument):Void {
+		if (!service.isEditorSnapshotCurrent(compilerPath(document)))
+			throw new LspRequestError(-32801, "Semantic snapshot does not match the current document version");
+	}
+
+	function requireExact(document:LspDocument):Void {
 		if (!service.isCurrent(compilerPath(document)))
 			throw new LspRequestError(-32801, "Semantic snapshot does not match the current document version");
 	}

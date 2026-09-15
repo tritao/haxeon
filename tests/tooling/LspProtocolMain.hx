@@ -1059,6 +1059,22 @@ class LspProtocolMain {
 			method: "textDocument/didChange",
 			params: {textDocument: {uri: uri, version: 2}, contentChanges: [{text: broken}]}
 		}));
+		var recoveredSymbols = request(protocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 6,
+			method: "textDocument/documentSymbol",
+			params: {textDocument: {uri: uri}}
+		}));
+		if (recoveredSymbols.result == null || recoveredSymbols.result.length == 0)
+			throw "LSP structural query rejected a current recovered snapshot";
+		var recoveredCompletion = request(protocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 7,
+			method: "textDocument/completion",
+			params: {textDocument: {uri: uri}, position: {line: 0, character: broken.length}}
+		}));
+		if (!recoveredCompletion.result.isIncomplete)
+			throw "LSP completion did not mark recovered results incomplete";
 		var staleRename = protocol.handle(Json.stringify({
 			jsonrpc: "2.0",
 			id: 5,
