@@ -44,6 +44,10 @@ class HlTypeBridge {
 
 	public static function native_module_context_dispose(context:RawPtr<HlModuleContext>):Void {}
 
+	/** Validate that a Haxe-owned function descriptor exposes native opcode storage. */
+	public static function native_metadata_validate_function_code(descriptor:RawPtr<HlFunction>):Int
+		return 0;
+
 	public static function native_type_function_arity(type:RawPtr<HlType>):Int
 		return 0;
 

@@ -119,6 +119,19 @@ static void native_metadata_validate_function_descriptors( int count, hl_functio
 		hl_error("HashLink function descriptor binding requires a descriptor table");
 }
 
+HL_PRIM int HL_NAME(native_metadata_validate_function_code)( hl_function *function ) {
+	int i;
+	if( function == NULL )
+		hl_error("HashLink function code validation requires a function descriptor");
+	if( function->nops < 0 || (function->nops > 0 && function->ops == NULL) )
+		hl_error("HashLink function descriptor contains an incomplete opcode array");
+	for( i = 0; i < function->nops; i++ ) {
+		if( function->ops[i].op < 0 || function->ops[i].op >= OLast )
+			hl_error("HashLink function descriptor contains an invalid opcode");
+	}
+	return function->nops;
+}
+
 HL_PRIM void HL_NAME(native_metadata_bind_function_descriptors)( hl_type **types, int count, hl_function *functions, int function_count, hl_module_context *context ) {
 	int i;
 	native_metadata_validate_publication(count,types,context);

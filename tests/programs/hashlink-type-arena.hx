@@ -266,7 +266,7 @@ function main():Int {
 	var generationDescriptor = generation.addFunctionDescriptor({
 		findex: 0,
 		nregs: 1,
-		nops: 2,
+		nops: 0,
 		reference: 0,
 		nassigns: 0,
 		type: generationFunction,

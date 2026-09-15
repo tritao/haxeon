@@ -13,7 +13,7 @@ class HlNativeMetadataMain {
 		compiler.addSourceRoot("src");
 		compiler.update("HlNativeMetadataAdapter.hx",
 			'import compiler.hl.HlCode; import compiler.hl.HlCode.HlTypeDef; import compiler.hl.HlNativeMetadataBuilder; '
-			+ 'import compiler.hl.HlType; import runtime.hashlink.HlTypeBuilder; import runtime.hashlink.HlTypeKind; '
+			+ 'import compiler.hl.HlType; import runtime.hashlink.HlTypeBuilder; import runtime.hashlink.HlTypeKind; import runtime.hashlink.HlTypeBridge; '
 			+ 'function main():Int { '
 			+ 'var code = new HlCode(); '
 			+ 'code.strings = ["Abstract", "BuilderObject", "value", "run", "BuilderEnum", "BuilderStruct", "Value", "std✓", "native"]; '
@@ -30,6 +30,7 @@ class HlNativeMetadataMain {
 			+ '&& publication.globalCount == 2 && publication.globalTypes.offset(0).load() == generation.type(0) '
 			+ '&& publication.globalTypes.offset(1).load() == generation.type(0) '
 			+ '&& object.ref.data.ref.obj.ref.globalValue == publication.globals '
+			+ '&& HlTypeBridge.native_metadata_validate_function_code(publication.functionDescriptors) == 5 '
 			+ '&& publication.functionDescriptors.ref.nops == 5 && publication.functionDescriptors.ref.ops.ref.op == 26 '
 			+ '&& publication.functionDescriptors.ref.ops.ref.p1 == 0 && publication.functionDescriptors.ref.ops.ref.p2 == 1 '
 			+ '&& publication.functionDescriptors.ref.ops.ref.p3 == 0 && !publication.functionDescriptors.ref.ops.ref.extra.isNull() '

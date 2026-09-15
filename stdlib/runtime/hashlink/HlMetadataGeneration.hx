@@ -191,6 +191,8 @@ class HlMetadataGeneration {
 		if (moduleContext.isNull())
 			throw "HashLink metadata generation requires a module context before publication";
 		validateDescriptorTables();
+		for (functionIndex in 0...functionDescriptors.length())
+			HlTypeBridge.native_metadata_validate_function_code(functionDescriptors.get(functionIndex));
 		HlTypeLayout.initialize(typeTable.pointer(), typeTable.length(), arena);
 		var contiguousTypes = arena.typePointer(), usesContiguousTypes = typeTable.isContiguousPrefix(contiguousTypes);
 		if (usesContiguousTypes)
