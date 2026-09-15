@@ -14,6 +14,7 @@ import project.ProjectSourceAcquirer;
 import project.ResolvedPackage;
 import project.ResolvedProject;
 import project.SourceCache;
+import project.RegistryPublisher;
 import sys.FileSystem;
 import sys.io.File;
 import compiler.formatter.Formatter;
@@ -64,6 +65,12 @@ private typedef AddOptions = {
 	final rev:String;
 }
 
+private typedef PublishOptions = {
+	final projectPath:String;
+	final registry:String;
+	final version:String;
+}
+
 private typedef CommandCapture = {
 	final status:Int;
 	final output:String;
@@ -89,6 +96,7 @@ class HaxeonCli {
 				case "update": update(arguments);
 				case "tree": tree(arguments);
 				case "why": why(arguments);
+				case "publish": publish(arguments);
 				case "doctor": doctor(arguments);
 				case "platforms": platforms(arguments);
 				case "devices": devices(arguments);
@@ -304,6 +312,14 @@ class HaxeonCli {
 			project = resolveProject(manifestPath, null, false);
 		project.lockfile.save(lockfilePath(manifestPath));
 		Sys.println('Updated ${project.packages.packages.length} packages');
+		return 0;
+	}
+
+	static function publish(arguments:Array<String>):Int {
+		var options = parsePublishOptions(arguments),
+			manifestPath = resolvePath(options.projectPath, Sys.getCwd()),
+			checksum = RegistryPublisher.publish(manifestPath, options.registry, options.version, SourceCache.registryRoot());
+		Sys.println('Published ${options.version} from $manifestPath to ${options.registry} (checksum $checksum)');
 		return 0;
 	}
 
@@ -770,6 +786,36 @@ class HaxeonCli {
 		return {projectPath: projectPath, name: name, git: git, rev: rev};
 	}
 
+	static function parsePublishOptions(arguments:Array<String>):PublishOptions {
+		var projectPath = CONFIG_FILE, registry:Null<String> = null, version:Null<String> = null, index = 0;
+		while (index < arguments.length) {
+			var argument = arguments[index++];
+			if (argument == "--registry" || argument == "--version" || argument == "--project") {
+				if (index >= arguments.length)
+					throw 'Option "$argument" requires a value';
+				var value = arguments[index++];
+				switch argument {
+					case "--registry": registry = value;
+					case "--version": version = value;
+					case "--project": projectPath = value;
+					case _:
+				}
+			} else if (StringTools.startsWith(argument, "--registry="))
+				registry = argument.substr("--registry=".length);
+			else if (StringTools.startsWith(argument, "--version="))
+				version = argument.substr("--version=".length);
+			else if (StringTools.startsWith(argument, "--project="))
+				projectPath = argument.substr("--project=".length);
+			else
+				throw 'Unknown publish option "$argument"';
+		}
+		if (registry == null || registry.length == 0)
+			throw 'Option "--registry" requires a non-empty registry name';
+		if (version == null || version.length == 0)
+			throw 'Option "--version" requires an exact package version';
+		return {projectPath: projectPath, registry: registry, version: version};
+	}
+
 	static function discoverProject(manifestPath:String, ?target:Target):ResolvedProject {
 		var lockPath = lockfilePath(manifestPath), lockfile = FileSystem.exists(lockPath)
 			? PackageLockfile.parse(lockPath, File.getContent(lockPath))
@@ -979,6 +1025,7 @@ class HaxeonCli {
 		Sys.println("  add --git URL --rev REF [NAME]  Add a Git package dependency");
 		Sys.println("  install [--locked]              Resolve dependencies and write haxeon.lock");
 		Sys.println("  update                          Re-resolve refs and rewrite haxeon.lock");
+		Sys.println("  publish --registry NAME --version VERSION  Publish an immutable local release");
 		Sys.println("  tree                            Show the resolved package graph");
 		Sys.println("  why PACKAGE                     Explain a dependency path");
 		Sys.println("  doctor                         Check the local compiler and HashLink runtime");

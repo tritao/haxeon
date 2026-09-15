@@ -29,6 +29,7 @@ import project.PackageLockfile.PackageLockEntry;
 import project.PathSourceAcquirer;
 import project.HaxelibSourceAcquirer;
 import project.RegistrySourceAcquirer;
+import project.RegistryPublisher;
 import haxe.crypto.Sha256;
 import project.SourceAcquirer;
 import sys.FileSystem;
@@ -52,6 +53,7 @@ class BuildSystemMain {
 		testPackageCompatibility();
 		testHaxelibAdapter();
 		testRegistryAdapter();
+		testRegistryPublisher();
 		testResolverDelegatesAcquisition();
 		testLockfileRoundTrip();
 		testNativeDependencyScanning();
@@ -418,6 +420,20 @@ class BuildSystemMain {
 		expect(locked.packages.get("foo").source != null, "locked registry releases should resolve through the same adapter");
 		File.saveContent(Path.join([foo, ".haxeon-checksum"]), "tampered\n");
 		expectThrows(() -> resolver.resolve(Path.join([app, "haxeon.json"])), "registry source checksums should be verified on every use");
+		removeTree(root);
+	}
+
+	static function testRegistryPublisher():Void {
+		var root = temporaryDirectory("registry-publish"),
+			packageRoot = Path.join([root, "package"]),
+			registryRoot = Path.join([root, "registry"]);
+		writePackage(packageRoot, '{"package":{"name":"published"},"sourceRoots":["src"],"compatibility":{"targets":["host"]}}', ["src/Published.hx"]);
+		var checksum = RegistryPublisher.publish(Path.join([packageRoot, "haxeon.json"]), "local", "1.0.0", registryRoot),
+			destination = Path.join([registryRoot, Sha256.encode("local"), "published", "1.0.0"]);
+		expect(checksum.length == 64 && FileSystem.exists(Path.join([destination, ".haxeon-checksum"])),
+			"registry publication should create a checksum-marked immutable release");
+		expectThrows(() -> RegistryPublisher.publish(Path.join([packageRoot, "haxeon.json"]), "local", "1.0.0", registryRoot),
+			"registry publication should reject replacing an existing version");
 		removeTree(root);
 	}
 

@@ -369,11 +369,19 @@ Git dependencies can be added and installed reproducibly:
 ./scripts/haxeon update
 ./scripts/haxeon tree
 ./scripts/haxeon why foo
+./scripts/haxeon publish --registry local --version 1.0.0
 ```
 
 `install` records the requested source and resolved Git commit in
 `haxeon.lock`; `install --locked` rejects manifest changes and checks out the
 exact recorded revision.
+
+Registry sources use the same lockfile path. A registry index records immutable
+release checksums, SemVer versions, yanked status, compatibility metadata, and
+native provider metadata. For local development, `publish` writes an immutable
+release and index below `~/.haxeon/cache/sources/registry`; projects then use
+`{"registry":"local","version":"^1.0"}` and resolve through the normal
+package graph.
 
 Repositories can declare workspace members. A workspace member with the same
 package name overrides an external dependency source while retaining the same

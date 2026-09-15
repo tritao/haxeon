@@ -2,6 +2,9 @@ package project;
 
 import haxe.Json;
 import sys.io.File;
+import haxe.io.Path;
+import sys.FileSystem;
+import project.PackageManifest.NativeManifest;
 
 /** Immutable release metadata used by the registry source adapter. */
 class RegistryVersion {
@@ -72,6 +75,64 @@ class RegistryIndex {
 			packages.set(name, versions);
 		}
 		return new RegistryIndex(packages);
+	}
+
+	/** Append a release to a local registry index without replacing existing versions. */
+	public static function appendRelease(path:String, name:String, version:String, checksum:String,
+		compatibility:PackageCompatibility, native:Null<NativeManifest>):Void {
+		var raw:Dynamic;
+		if (FileSystem.exists(path)) {
+			try {
+				raw = Json.parse(File.getContent(path));
+			} catch (error:Dynamic) {
+				throw 'Could not parse registry index $path: ${Std.string(error)}';
+			}
+		} else {
+			raw = {version: 1, packages: {}};
+		}
+		var rawPackages:Dynamic = Reflect.field(raw, "packages");
+		if (!Reflect.isObject(rawPackages) || Std.isOfType(rawPackages, Array))
+			throw '$path "packages" must be an object';
+		var packageData:Dynamic = Reflect.field(rawPackages, name);
+		if (packageData == null) {
+			packageData = {versions: []};
+			Reflect.setField(rawPackages, name, packageData);
+		}
+		var rawVersions:Dynamic = Reflect.field(packageData, "versions");
+		if (!Std.isOfType(rawVersions, Array))
+			throw '$path package "$name" requires a versions array';
+		for (existing in (cast rawVersions : Array<Dynamic>))
+			if (Reflect.field(existing, "version") == version)
+				throw 'Registry release "$name@$version" is already published';
+		var release:Dynamic = {version: version, checksum: checksum, yanked: false};
+		if (compatibility.haxeon != null)
+			Reflect.setField(release, "haxeon", compatibility.haxeon);
+		if (compatibility.targets.length > 0)
+			Reflect.setField(release, "targets", compatibility.targets);
+		if (compatibility.runtimeAbi != null)
+			Reflect.setField(release, "runtimeAbi", compatibility.runtimeAbi);
+		if (native != null)
+			Reflect.setField(release, "native", nativeMetadata(native));
+		(cast rawVersions : Array<Dynamic>).push(release);
+		var names = Reflect.fields(rawPackages);
+		names.sort(Reflect.compare);
+		for (packageName in names) {
+			var versions:Array<Dynamic> = cast Reflect.field(rawPackages, packageName).versions;
+			versions.sort((left, right) -> compareVersions(cast Reflect.field(left, "version"), cast Reflect.field(right, "version")));
+		}
+		var directory = Path.directory(path);
+		if (directory != "" && directory != "." && !FileSystem.exists(directory))
+			FileSystem.createDirectory(directory);
+		File.saveContent(path, Json.stringify(raw, null, "\t") + "\n");
+	}
+
+	static function nativeMetadata(native:NativeManifest):Dynamic {
+		var value:Dynamic = {targets: native.supportedTargets};
+		if (native.sources.length > 0)
+			Reflect.setField(value, "provider", "sources");
+		if (native.cmake != null)
+			Reflect.setField(value, "cmake", {source: native.cmake.source, target: native.cmake.target});
+		return value;
 	}
 
 	static function isExactVersion(value:String):Bool

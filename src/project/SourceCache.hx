@@ -27,4 +27,7 @@ class SourceCache {
 		var sourceRoot = Path.directory(root());
 		return Path.join([sourceRoot, "downloads"]);
 	}
+
+	public static function registryDownloadsRoot():String
+		return Path.join([registryRoot(), "downloads"]);
 }
