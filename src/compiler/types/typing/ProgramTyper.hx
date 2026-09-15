@@ -145,7 +145,7 @@ class ProgramTyper {
 			], typedClasses:Array<TypedClass> = [
 			for (classDecl in program.classes)
 				if (classDecl.isExtern != true
-					&& externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null) typeClass(classDecl, selected)
+					&& externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null) typeClass(classDecl, selected, false)
 			], typedFunctions:Array<TypedFunction> = [];
 		for (enumDecl in typedEnums)
 			for (caseDecl in enumDecl.cases)
@@ -165,6 +165,13 @@ class ProgramTyper {
 					BodyTyper.fail("E1022", 'Native layout types cannot be returned by value in an interface yet', parsedMethod.span);
 			}
 		}
+		// Native layouts must be available before class bodies can instantiate layout-dependent generics.
+		typedClasses = layoutNativeClasses(typedClasses);
+		typedClasses = [
+			for (classDecl in program.classes)
+				if (classDecl.isExtern != true
+					&& externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null) typeClass(classDecl, selected, true)
+		];
 		typedClasses = layoutNativeClasses(typedClasses);
 		var metadataDoneAt = Sys.time() * 1000.0;
 		for (fn in program.functions)
@@ -212,7 +219,7 @@ class ProgramTyper {
 		};
 	}
 
-	function typeClass(classDecl:AstClass, selected:Null<Map<String, Bool>>):TypedClass {
+	function typeClass(classDecl:AstClass, selected:Null<Map<String, Bool>>, typeBodies:Bool):TypedClass {
 		var requestedValue = hasMetadata(classDecl.metadata, "value"),
 			isNativeValue = validateRepresentationMetadata(classDecl.metadata, requestedValue),
 			isValue = requestedValue && !isNativeValue,
@@ -262,7 +269,7 @@ class ProgramTyper {
 			var initializer:Null<TypedExpression> = null,
 				inlineValue:Null<TypedExpression> = null,
 				parsedInitializer = field.initializer;
-			if (parsedInitializer != null) {
+			if (parsedInitializer != null && typeBodies) {
 				if (field.isInline) {
 					var resolved = bodyTyper.resolveInlineConstant(classDecl.name, field.name, field.span);
 					if (resolved == null)
@@ -319,7 +326,7 @@ class ProgramTyper {
 			if (BodyTyper.isGeneric(method))
 				continue;
 			var qualified = classDecl.name + "." + method.name,
-				typeBody = selected == null || selected.exists(qualified),
+				typeBody = typeBodies && (selected == null || selected.exists(qualified)),
 				typedMethod = typeBody ? bodyTyper.typeFunction(method, classDecl.name, method.isStatic,
 					erasedSubstitutions) : methodSignature(method, classDecl.name, erasedSubstitutions);
 			if (method.name == "new") {
@@ -329,7 +336,10 @@ class ProgramTyper {
 			}
 			typedMethods.push(typedMethod);
 		}
-		if (!hasConstructor && instanceInitializers.length > 0 && (selected == null || selected.exists(classDecl.name + ".new")))
+		if (typeBodies
+			&& !hasConstructor
+			&& instanceInitializers.length > 0
+			&& (selected == null || selected.exists(classDecl.name + ".new")))
 			typedMethods.push({
 				name: classDecl.name + ".new",
 				owner: classDecl.name,
