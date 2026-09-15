@@ -20,6 +20,9 @@ class SourceCache {
 	public static function registryRoot():String
 		return Path.join([root(), "registry"]);
 
+	public static function haxelibRoot():String
+		return Path.join([root(), "haxelib"]);
+
 	public static function downloadsRoot():String {
 		var sourceRoot = Path.directory(root());
 		return Path.join([sourceRoot, "downloads"]);

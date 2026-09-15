@@ -27,6 +27,7 @@ import project.PackageResolver;
 import project.PackageLockfile;
 import project.PackageLockfile.PackageLockEntry;
 import project.PathSourceAcquirer;
+import project.HaxelibSourceAcquirer;
 import project.SourceAcquirer;
 import sys.FileSystem;
 import sys.io.File;
@@ -47,6 +48,7 @@ class BuildSystemMain {
 		testProjectDiscovery();
 		testPackageSourceModel();
 		testPackageCompatibility();
+		testHaxelibAdapter();
 		testResolverDelegatesAcquisition();
 		testLockfileRoundTrip();
 		testNativeDependencyScanning();
@@ -363,6 +365,29 @@ class BuildSystemMain {
 		}
 		expect(rejected != null && rejected.indexOf("requires Haxeon") >= 0,
 			"package compatibility should reject incompatible Haxeon versions");
+	}
+
+	static function testHaxelibAdapter():Void {
+		var root = temporaryDirectory("haxelib"),
+			app = Path.join([root, "app"]),
+			cache = Path.join([root, "cache"]),
+			foo = Path.join([cache, "foo", "1.0.0"]);
+		writePackage(app, '{"package":{"name":"app"},"dependencies":{"foo":{"haxelib":"foo","version":"1.0.0"}}}', []);
+		ensureDirectory(Path.join([foo, "src"]));
+		File.saveContent(Path.join([foo, "haxelib.json"]),
+			'{"name":"foo","version":"1.0.0","classPath":"src","dependencies":{}}\n');
+		File.saveContent(Path.join([foo, "src", "Foo.hx"]), "class Foo {}\n");
+		var project = new PackageResolver(new HaxelibSourceAcquirer(cache)).resolve(Path.join([app, "haxeon.json"]));
+		expect(project.packages.get("foo").source != null && FileSystem.exists(Path.join([foo, "haxeon.json"])),
+			"Haxelib metadata should be adapted into a cached Haxeon manifest");
+		var bad = Path.join([cache, "bad", "1.0.0"]);
+		ensureDirectory(bad);
+		File.saveContent(Path.join([bad, "haxelib.json"]), '{"name":"bad","version":"1.0.0","extraParams":["--macro","bad()"]}\n');
+		var badApp = Path.join([root, "bad-app"]);
+		writePackage(badApp, '{"package":{"name":"bad-app"},"dependencies":{"bad":{"haxelib":"bad","version":"1.0.0"}}}', []);
+		expectThrows(() -> new PackageResolver(new HaxelibSourceAcquirer(cache)).resolve(Path.join([badApp, "haxeon.json"])),
+			"unsupported Haxelib compiler parameters should be diagnosed");
+		removeTree(root);
 	}
 
 	static function testResolverDelegatesAcquisition():Void {

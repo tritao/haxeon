@@ -411,6 +411,13 @@ Packages can also gate resolution with compatibility metadata:
 These requirements are checked while resolving the package graph, before any
 compiler or native action is planned.
 
+Haxelib is an adapter, not Haxeon's package model. A pure-Haxe Haxelib release
+can be placed in the dedicated `~/.haxeon/cache/sources/haxelib/<name>/<version>`
+cache (or supplied as an archive under its downloads cache); its `haxelib.json`
+is translated to a normal Haxeon manifest. Haxeon does not read global
+`haxelib dev` state or execute `extraParams`, macros, or HXML compiler settings;
+unsupported settings fail with an explicit import diagnostic.
+
 Android builds resolve the same package graph, compile `native.sources` with the
 Android NDK, and expose the resulting ABI-specific shared libraries to Gradle
 under `build/android-arm64/jniLibs/arm64-v8a`. A native package therefore gets
