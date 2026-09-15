@@ -22,6 +22,8 @@ import project.ProjectDiscovery;
 import project.PackageManifest;
 import project.PackageSourceTools;
 import project.PackageResolver;
+import project.PackageLockfile;
+import project.PackageLockfile.PackageLockEntry;
 import project.PathSourceAcquirer;
 import project.SourceAcquirer;
 import sys.FileSystem;
@@ -42,6 +44,7 @@ class BuildSystemMain {
 		testProjectDiscovery();
 		testPackageSourceModel();
 		testResolverDelegatesAcquisition();
+		testLockfileRoundTrip();
 		testNativeDependencyScanning();
 		Sys.println("PASS: build model, executor, fingerprints, demand-driven native outputs, and local package discovery");
 	}
@@ -313,6 +316,22 @@ class BuildSystemMain {
 		removeTree(root);
 	}
 
+	static function testLockfileRoundTrip():Void {
+		var lock = new PackageLockfile([
+			new PackageLockEntry(new project.PackageId("app"), project.PackageSource.Path("."), null, null,
+				[new project.PackageId("foo")]),
+			new PackageLockEntry(new project.PackageId("foo"), project.PackageSource.Git("https://example.invalid/foo.git", "main"),
+				"0123456789012345678901234567890123456789")
+		]),
+			parsed = PackageLockfile.parse("haxeon.lock", lock.toJson());
+		lock.validateGraph(parsed);
+		expect(parsed.get("foo").resolvedRevision == "0123456789012345678901234567890123456789"
+			&& switch parsed.get("foo").resolvedSource() {
+				case project.PackageSource.Git(_, revision): revision == parsed.get("foo").resolvedRevision;
+				case _: false;
+			}, "lockfiles should round-trip immutable Git revisions and dependency edges");
+	}
+
 	static function action(id:String, dependencies:Array<ActionId>, description:String, invoke:Void->Int):ExecutionAction
 		return new ExecutionAction(new ActionId(id), dependencies, [], [], description, Compiler(description, invoke));
 
@@ -382,7 +401,7 @@ class RecordingSourceAcquirer implements SourceAcquirer {
 		delegate = new PathSourceAcquirer();
 	}
 
-	public function acquire(source:project.PackageSource, ownerRoot:String, packageId:project.PackageId):String {
+	public function acquire(source:project.PackageSource, ownerRoot:String, packageId:project.PackageId):project.AcquiredSource {
 		calls++;
 		return delegate.acquire(source, ownerRoot, packageId);
 	}

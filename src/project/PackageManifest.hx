@@ -83,7 +83,7 @@ class PackageManifest {
 			dependencyNames.sort(Reflect.compare);
 			for (name in dependencyNames) {
 				var dependency:Dynamic = Reflect.field(rawDependencies, name);
-				dependencies.set(name, new PackageDependency(new PackageId(name), parseSource(dependency, name, '$path dependency "$name"')));
+				dependencies.set(name, new PackageDependency(new PackageId(name), PackageSourceCodec.parse(dependency, name, '$path dependency "$name"')));
 			}
 		}
 		var nativeData:Dynamic = Reflect.field(raw, "native"),
@@ -108,25 +108,6 @@ class PackageManifest {
 		}
 		return new PackageManifest(version, packageName, entry, legacySources, sourceRoots, target, defines, outputDir, dependencies, native,
 			androidApplicationId, androidAppLabel);
-	}
-
-	static function parseSource(raw:Dynamic, name:String, path:String):PackageSource {
-		if (!isObject(raw))
-			throw '$path must be an object with a package source';
-		var pathValue:Dynamic = Reflect.field(raw, "path"),
-			gitValue:Dynamic = Reflect.field(raw, "git"),
-			registryValue:Dynamic = Reflect.field(raw, "registry"),
-			haxelibValue:Dynamic = Reflect.field(raw, "haxelib"),
-			count = (pathValue == null ? 0 : 1) + (gitValue == null ? 0 : 1) + (registryValue == null ? 0 : 1) + (haxelibValue == null ? 0 : 1);
-		if (count != 1)
-			throw '$path must declare exactly one of "path", "git", "registry", or "haxelib"';
-		if (pathValue != null)
-			return PackageSource.Path(requiredValueString(pathValue, "path", path));
-		if (gitValue != null)
-			return PackageSource.Git(requiredValueString(gitValue, "git", path), requiredString(raw, "rev", path));
-		if (registryValue != null)
-			return PackageSource.Registry(requiredValueString(registryValue, "registry", path), name, requiredString(raw, "version", path));
-		return PackageSource.Haxelib(requiredValueString(haxelibValue, "haxelib", path), requiredString(raw, "version", path));
 	}
 
 	static function isObject(value:Dynamic):Bool

@@ -3,6 +3,7 @@ package project;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
+import project.PackageLockfile.PackageLockEntry;
 
 /** Resolves a package graph independently of the source acquisition mechanism. */
 class PackageResolver {
@@ -13,16 +14,19 @@ class PackageResolver {
 	public function new(sourceAcquirer:SourceAcquirer)
 		this.sourceAcquirer = sourceAcquirer;
 
-	public function resolve(manifestPath:String):ResolvedProject {
+	public function resolve(manifestPath:String, ?lockfile:PackageLockfile, locked:Bool = false):ResolvedProject {
+		if (locked && lockfile == null)
+			throw "haxeon.lock is required for --locked resolution";
 		var absoluteManifest = canonicalExistingFile(manifestPath, 'Project file not found: $manifestPath'),
 			projectRoot = Path.directory(absoluteManifest),
 			visited = new Map<String, ResolvedPackage>(),
 			active = new Map<String, Bool>(),
 			nameToRoot = new Map<String, String>(),
-			ordered:Array<ResolvedPackage> = [];
+			ordered:Array<ResolvedPackage> = [],
+			lockEntries:Array<PackageLockEntry> = [];
 
-		function resolvePackage(root:String, source:PackageSource):ResolvedPackage {
-			var resolvedRoot = Path.normalize(FileSystem.fullPath(root)),
+		function resolvePackage(acquired:AcquiredSource, requestedSource:PackageSource):ResolvedPackage {
+			var resolvedRoot = Path.normalize(FileSystem.fullPath(acquired.root)),
 				resolvedManifest = canonicalExistingFile(Path.join([resolvedRoot, MANIFEST_NAME]),
 					'Project file not found: ${Path.join([resolvedRoot, MANIFEST_NAME])}');
 			if (active.exists(resolvedRoot))
@@ -57,22 +61,33 @@ class PackageResolver {
 				var dependency = manifest.dependencies.get(dependencyName);
 				if (dependency == null)
 					throw 'Package "${manifest.packageName}" dependency "$dependencyName" is missing source metadata';
-				var dependencyRoot = sourceAcquirer.acquire(dependency.source, resolvedRoot, dependency.id),
-					resolved = resolvePackage(dependencyRoot, dependency.source);
+				var lockEntry = locked ? lockfile.get(dependency.id.name) : null;
+				if (locked && lockEntry == null)
+					throw 'haxeon.lock has no entry for dependency "${dependency.id.name}"';
+				if (locked && !PackageSourceCodec.equal(lockEntry.source, dependency.source))
+					throw 'haxeon.lock source for "${dependency.id.name}" disagrees with the manifest';
+				var source = lockEntry == null ? dependency.source : lockEntry.resolvedSource(),
+					acquiredDependency = sourceAcquirer.acquire(source, resolvedRoot, dependency.id),
+					resolved = resolvePackage(acquiredDependency, dependency.source);
 				if (resolved.name != dependencyName)
 					throw 'Package "${manifest.packageName}" declares dependency "$dependencyName" but ${resolved.root}/$MANIFEST_NAME names package "${resolved.name}"';
 				resolvedDependencies.push(resolved.name);
 			}
 			active.remove(resolvedRoot);
 			var resolvedPackage = new ResolvedPackage(manifest.packageName, resolvedRoot, manifest, sourceRoots, sources, resolvedDependencies, nativeSources,
-				includeDirs, source);
+				includeDirs, acquired.source);
 			visited.set(resolvedRoot, resolvedPackage);
 			ordered.push(resolvedPackage);
+			lockEntries.push(new PackageLockEntry(manifest.packageId, requestedSource, acquired.resolvedRevision, null,
+				[for (dependencyName in resolvedDependencies) new PackageId(dependencyName)]));
 			return resolvedPackage;
 		}
 
-		var rootPackage = resolvePackage(projectRoot, PackageSource.Path(projectRoot));
-		return new ResolvedProject(projectRoot, absoluteManifest, rootPackage.manifest, rootPackage, new ResolvedPackageGraph(ordered));
+		var rootPackage = resolvePackage(new AcquiredSource(projectRoot, PackageSource.Path(".")), PackageSource.Path(".")),
+			resolvedLockfile = new PackageLockfile(lockEntries);
+		if (locked)
+			lockfile.validateGraph(resolvedLockfile);
+		return new ResolvedProject(projectRoot, absoluteManifest, rootPackage.manifest, rootPackage, new ResolvedPackageGraph(ordered), resolvedLockfile);
 	}
 
 	static function canonicalExistingFile(path:String, message:String):String {
