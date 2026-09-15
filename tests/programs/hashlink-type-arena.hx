@@ -4,6 +4,7 @@ import runtime.hashlink.HlTypeBuilder;
 import runtime.hashlink.HlTypeTable;
 import runtime.hashlink.HlType;
 import runtime.hashlink.HlTypeKind;
+import runtime.hashlink.HlMetadataGeneration;
 import runtime.memory.RawPtr;
 
 function main():Int {
@@ -119,13 +120,28 @@ function main():Int {
 	var nativeObjectCorrect = HlTypeBridge.native_type_data_size(builtObject) == 16
 		&& HlTypeBridge.native_type_object_field_offset(builtObject, 0) == 8
 		&& objectData.ref.module == module;
+	var generation = new HlMetadataGeneration(128, 1),
+		generationVoid = generation.builder.primitive(HlTypeKind.VoidType),
+		generationInt = generation.builder.primitive(HlTypeKind.Int32Type),
+		generationFunction = generation.builder.functionType([generationInt], generationVoid);
+	generation.addType(generationVoid);
+	generation.addType(generationFunction);
+	var generationModule = generation.defineModule([RawPtr.nullPtr()], [generationFunction]),
+		publication = generation.publish();
+	var generationCorrect = publication.typeCount == 2
+		&& publication.typeCapacity == 2
+		&& publication.moduleContext == generationModule
+		&& publication.types.offset(0).load() == generationVoid
+		&& publication.types.offset(1).load() == generationFunction
+		&& generation.type(1) == generationFunction;
+	var generationSealed = false;
+	try
+		generation.addType(generationInt)
+	catch (error:Dynamic)
+		generationSealed = true;
+	generation.dispose();
 	arena.dispose();
 	arena.dispose();
-	return correct
-		&& builtCorrect
-		&& graphCorrect
-		&& tableCorrect
-		&& namesCorrect
-		&& moduleCorrect
-		&& nativeObjectCorrect ? 42 : 1;
+	return correct && builtCorrect && graphCorrect && tableCorrect && namesCorrect && moduleCorrect && nativeObjectCorrect && generationCorrect
+		&& generationSealed ? 42 : 1;
 }

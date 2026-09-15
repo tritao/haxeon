@@ -126,6 +126,11 @@ Module contexts created by `HlTypeBuilder` are also owned by the arena. If
 HashLink derives runtime object metadata through a context, `reset()` and
 `dispose()` release those native allocator blocks before invalidating the
 arena's records.
+`HlMetadataGeneration` combines these pieces into one build/publish lifecycle:
+it owns the arena, appends the type table, defines the module context, lets
+HashLink initialize derived metadata, and returns a stable publication view.
+The view is ready for a future VM publication bridge; it does not yet replace
+the native module's contiguous `hl_code.types` array.
 
 ## Deliberate exclusions
 
