@@ -229,8 +229,16 @@ class LanguageService {
 		return state;
 	}
 
-	public function remove(path:String):Bool
-		return compiler.remove(path);
+	public function remove(path:String):Bool {
+		var name = ModulePath.fromFile(path), removed = compiler.remove(path);
+		if (!removed)
+			return false;
+		workspaceIndex.remove(name);
+		documentationIndex.remove(name);
+		structuralIndex.remove(name);
+		compiler.semanticWorkspace.invalidateResolutionCache();
+		return true;
+	}
 
 	public function configure(identity:String, scopeIdentity:String, defines:Array<String>):Void {
 		editorDefines = [];

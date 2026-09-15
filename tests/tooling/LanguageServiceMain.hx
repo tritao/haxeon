@@ -691,6 +691,23 @@ class LanguageServiceMain {
 				foundUnresolved = true;
 		if (!foundUnresolved || unresolvedService.unresolvedSymbolAt("Unresolved.hx", unresolvedSource.indexOf("unknownName") + 1) == null)
 			throw "recovered unresolved symbols were not exposed through the language service";
+		var removalService = new LanguageService();
+		removalService.update("removed/Helper.hx", "package removed; class Helper { public var obsolete:Int; } function main():Void return;");
+		var removalSource = "package removed; import removed.Helper; function main():Void { var helper:Helper = new Helper(); helper.";
+		removalService.update("removed/Main.hx", removalSource);
+		if ([
+			for (item in removalService.complete("removed/Main.hx", removalSource.length))
+				item.label
+		].indexOf("obsolete") < 0)
+			throw "dependency removal setup did not expose the recovered member";
+		removalService.analyze("removed.Helper");
+		if (removalService.compiler.semanticWorkspace.resolveTypeSymbolId("removed.Helper") == null)
+			throw "dependency removal setup did not publish the authoritative type";
+		if (!removalService.remove("removed/Helper.hx")
+			|| removalService.remove("removed/Helper.hx")
+			|| removalService.workspaceSymbols("obsolete").length != 0
+			|| removalService.compiler.semanticWorkspace.resolveTypeSymbolId("removed.Helper") != null)
+			throw "language-service removal did not invalidate deleted dependency state";
 		var unrecoverableService = new LanguageService(),
 			unrecoverableSource = "function target():Int return 1; function main():Int return target();";
 		unrecoverableService.update("Unrecoverable.hx", unrecoverableSource);
