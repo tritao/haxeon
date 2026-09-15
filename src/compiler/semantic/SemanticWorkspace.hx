@@ -218,35 +218,51 @@ class SemanticWorkspace {
 		return result;
 	}
 
-	/** Collect references from the current editor model without using its data as workspace state. */
+	/**
+	 * Collect references from current editor models without using recovery data
+	 * as authoritative workspace state. A recovered location is eligible only
+	 * when its identity is already authoritative elsewhere, or when it belongs
+	 * to the queried editor module itself.
+	 */
 	public function editorLocations(state:ModuleState, id:SemanticSymbolId, ?token:CancellationToken):Array<{state:ModuleState, span:SourceSpan}> {
-		var recovered:Array<{state:ModuleState, span:SourceSpan}> = [];
-		if (state.ast == null && state.recoveredSemanticModel != null)
+		var result:Array<{state:ModuleState, span:SourceSpan}> = [],
+			authoritative = indexedSymbol(id) != null;
+		for (candidate in orderedStates()) {
+			if (token != null)
+				token.check();
+			if (candidate == state)
+				continue;
+			if (candidate.ast != null) {
+				if (candidate.semanticModel != null)
+					for (span in candidate.semanticModel.index.locations(id))
+						addLocation(result, candidate, span);
+				continue;
+			}
+			if (candidate.recoveredSemanticModel != null && authoritative)
+				for (span in candidate.recoveredSemanticModel.index.locations(id)) {
+					if (token != null)
+						token.check();
+					addLocation(result, candidate, span);
+				}
+		}
+		if (state.ast != null) {
+			if (state.semanticModel != null)
+				for (span in state.semanticModel.index.locations(id))
+					addLocation(result, state, span);
+		} else if (state.recoveredSemanticModel != null)
 			for (span in state.recoveredSemanticModel.index.locations(id)) {
 				if (token != null)
 					token.check();
-				recovered.push({state: state, span: span});
+				addLocation(result, state, span);
 			}
-		if (state.ast != null || state.recoveredSemanticModel == null)
-			return indexedLocations(id, token);
-		// A recovered declaration may retain an authoritative identity from the
-		// last good revision. Keep current-file locations from recovery, but
-		// merge references from the rest of the valid workspace instead of
-		// silently dropping cross-module usages.
-		var result = indexedLocations(id, token, state);
-		if (state.recoveredSemanticModel.index.symbol(id) != null && result.length == 0)
-			return recovered.length == 0 ? indexedLocations(id, token) : recovered;
-		for (location in recovered) {
-			var duplicate = false;
-			for (existing in result)
-				if (sameSpan(existing.span, location.span)) {
-					duplicate = true;
-					break;
-				}
-			if (!duplicate)
-				result.push(location);
-		}
 		return result;
+	}
+
+	static function addLocation(result:Array<{state:ModuleState, span:SourceSpan}>, state:ModuleState, span:SourceSpan):Void {
+		for (existing in result)
+			if (sameSpan(existing.span, span))
+				return;
+		result.push({state: state, span: span});
 	}
 
 	public function indexedCalls(?token:CancellationToken):Array<{state:ModuleState, edge:SemanticCallEdge}> {

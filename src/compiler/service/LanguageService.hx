@@ -1930,6 +1930,13 @@ class LanguageService {
 			|| replacement == name)
 			return result;
 		var targetReferences = references(path, position, token);
+		for (reference in targetReferences) {
+			if (token != null)
+				token.check();
+			var referenceState = stateFor(reference.path);
+			if (reference.stale || referenceState == null || referenceState.ast == null)
+				return result;
+		}
 		if (indexedRenameCollides(indexedId, replacement, targetReferences, token))
 			return result;
 		for (reference in targetReferences)

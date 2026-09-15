@@ -475,6 +475,28 @@ class LanguageServiceMain {
 				crossModuleConsumerReference = true;
 		if (!crossModuleConsumerReference || crossModuleReferences.length < 2)
 			throw 'recovered declaration dropped authoritative cross-module references: ${[for (reference in crossModuleReferences) reference.path].join(", ")}';
+		var recoveredConsumer = "package refs; import refs.Target; class Consumer { public function read(target:Target):Int { broken = ; return target.value(); } } function main():Int return 0;";
+		crossModuleReferenceService.update("refs/Consumer.hx", recoveredConsumer);
+		var currentTargetReferences = crossModuleReferenceService.references("refs/Target.hx", crossModuleTarget.indexOf("value") + 1),
+			currentConsumerReference = false;
+		for (reference in currentTargetReferences)
+			if (reference.path == "refs/Consumer.hx" && !reference.stale)
+				currentConsumerReference = true;
+		if (!currentConsumerReference)
+			throw 'authoritative references did not include a current recovered consumer: ${[for (reference in currentTargetReferences) reference.path].join(", ")}';
+		var exactTargetReferenceService = new LanguageService(),
+			exactConsumer = "package refs; import refs.Target; class Consumer { public function read(target:Target):Int return target.value(); } function main():Int return 0;";
+		exactTargetReferenceService.update("refs/Target.hx", crossModuleTarget);
+		exactTargetReferenceService.update("refs/Consumer.hx", exactConsumer);
+		exactTargetReferenceService.compile("refs.Consumer");
+		exactTargetReferenceService.update("refs/Consumer.hx", recoveredConsumer);
+		var exactTargetReferences = exactTargetReferenceService.references("refs/Target.hx", crossModuleTarget.indexOf("value") + 1),
+			exactConsumerReference = false;
+		for (reference in exactTargetReferences)
+			if (reference.path == "refs/Consumer.hx" && !reference.stale)
+				exactConsumerReference = true;
+		if (!exactConsumerReference || exactTargetReferenceService.rename("refs/Target.hx", crossModuleTarget.indexOf("value") + 1, "renamed").length != 0)
+			throw "rename crossed into a recovered consumer snapshot";
 		var aliasedRecoverySource = "package editor; import editor.util.Math as M; function main():Int { return M.add(20,";
 		importService.update("editor/Main.hx", aliasedRecoverySource);
 		var aliasedRecoveryPosition = aliasedRecoverySource.lastIndexOf("add") + 1,
