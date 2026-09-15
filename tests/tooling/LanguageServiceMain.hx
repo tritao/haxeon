@@ -999,6 +999,13 @@ class LanguageServiceMain {
 			|| localRecoveredTypeDefinition.path != "LocalRecovered.hx"
 			|| localRecoveredTypeReferences.length < 2)
 			throw "recovered same-module type identity was lost around a malformed statement";
+		var duplicateRecoveryService = new LanguageService();
+		duplicateRecoveryService.update("DuplicateRecovered.hx",
+			"function same():Void return; function same():Void return; function usable():Void return;");
+		if (duplicateRecoveryService.compiler.modules.get("DuplicateRecovered").recoveredSemanticModel == null
+			|| duplicateRecoveryService.diagnostics("DuplicateRecovered.hx").length == 0
+			|| !containsDocumentSymbol(duplicateRecoveryService.documentSymbols("DuplicateRecovered.hx"), "usable"))
+			throw "recovered duplicate declarations lost the editor snapshot or semantic diagnostic";
 		var removalService = new LanguageService();
 		removalService.update("removed/Helper.hx", "package removed; class Helper { public var obsolete:Int; } function main():Void return;");
 		var removalSource = "package removed; import removed.Helper; function main():Void { var helper:Helper = new Helper(); helper.";

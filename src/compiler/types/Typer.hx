@@ -37,6 +37,7 @@ class Typer {
 		var bodyTyper = new BodyTyper(null, null, nativeAbiTarget, true, checkpoint);
 		try {
 			var semantic = SemanticProgram.analyzeRecovered(program);
+			appendRecoveryDiagnostics(diagnostics, semantic.declarations.recoveryDiagnostics);
 			if (modules != null)
 				for (module in modules)
 					semantic.includeRecoveredModule(module.program, module.declarations, module.qualifiers);

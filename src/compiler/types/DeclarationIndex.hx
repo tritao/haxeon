@@ -54,6 +54,7 @@ class DeclarationIndex {
 	public final symbols:Map<String, DeclarationSymbol> = [];
 	public final inheritance:NominalInheritance;
 	public final conversions:AbstractConversionGraph;
+	public final recoveryDiagnostics:Array<Diagnostic> = [];
 
 	final aliasSpans:Map<String, SourceSpan> = [];
 	final fallbackSpan:SourceSpan;
@@ -641,9 +642,10 @@ class DeclarationIndex {
 		];
 		for (existing in typeKinds)
 			if (symbols.exists('$existing:$name'))
-				if (recovery)
+				if (recovery) {
+					rememberRecoveryDiagnostic("E1020", 'Duplicate type name "$name"', span);
 					return false;
-				else
+				} else
 					fail('Duplicate type name "$name"', span);
 		return declare(kind, name, span);
 	}
@@ -651,8 +653,11 @@ class DeclarationIndex {
 	function declare(kind:DeclarationKind, name:String, span:SourceSpan):Bool {
 		var key = '$kind:$name';
 		if (symbols.exists(key)) {
-			if (recovery)
+			if (recovery) {
+				if (kind != DeclarationKind.Member)
+					rememberRecoveryDiagnostic("E1020", 'Duplicate declaration "$name"', span);
 				return false;
+			}
 			fail('Duplicate declaration "$name"', span);
 		}
 		symbols.set(key, {
@@ -662,6 +667,17 @@ class DeclarationIndex {
 			span: span
 		});
 		return true;
+	}
+
+	function rememberRecoveryDiagnostic(code:String, message:String, span:SourceSpan):Void {
+		for (existing in recoveryDiagnostics)
+			if (existing.code == code
+				&& existing.message == message
+				&& existing.span.file.path == span.file.path
+				&& existing.span.start == span.start
+				&& existing.span.end == span.end)
+				return;
+		recoveryDiagnostics.push(new Diagnostic(code, message, span));
 	}
 
 	static function firstSpan(program:AstProgram, emptySpan:Null<SourceSpan>):SourceSpan {

@@ -771,6 +771,15 @@ class ParserRecoveryMain {
 			|| duplicateFieldTyped.classes[0].methods.length != 1
 			|| duplicateFieldTyped.functions.length != 2)
 			throw 'tolerant typing abandoned a class after a duplicate field: ${duplicateFieldTyped == null ? "null" : "classes=" + duplicateFieldTyped.classes.length + ", methods=" + (duplicateFieldTyped.classes.length == 0 ? 0 : duplicateFieldTyped.classes[0].methods.length) + ", functions=" + duplicateFieldTyped.functions.length}, diagnostics=${[for (diagnostic in duplicateFieldDiagnostics) diagnostic.message].join(" | ")}';
+		var duplicateDeclarationSource = new SourceFile("TolerantDuplicateDeclaration.hx",
+			"function same():Void return; function same():Void return; function usable():Void return;");
+		var duplicateDeclarationProgram = new Parser(new Lexer(duplicateDeclarationSource).tokenize()).parseProgramRecovering().program,
+			duplicateDeclarationDiagnostics = [],
+			duplicateDeclarationTyped = Typer.typeRecovered(duplicateDeclarationProgram, null, null, duplicateDeclarationDiagnostics);
+		if (duplicateDeclarationTyped == null
+			|| duplicateDeclarationTyped.functions.length != 3
+			|| duplicateDeclarationDiagnostics.length == 0)
+			throw "tolerant typing did not report and retain duplicate top-level declarations";
 	}
 
 	static function assertTolerantDeclarationSnapshot():Void {
