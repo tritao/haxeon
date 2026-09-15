@@ -435,7 +435,7 @@ class ParserRecoveryMain {
 				throw 'generic expected type was not retained: ${genericContext.expected}';
 		}
 		var genericMemberService = new LanguageService(),
-			genericMemberSource = "class Box<T> { public var value:T; public function get():T return value; } function main():Void { var box:Box<Int> = new Box<Int>(); box.";
+			genericMemberSource = "class Box<T> { public var value:T; public function get():T return value; } function main():Void { var box = new Box<Int>(); box.";
 		genericMemberService.update("GenericMember.hx", genericMemberSource);
 		var genericMemberCompletion = genericMemberService.complete("GenericMember.hx", genericMemberSource.length),
 			genericMemberNames = [for (item in genericMemberCompletion) item.label],
@@ -451,6 +451,12 @@ class ParserRecoveryMain {
 			|| genericValueDetail != "value:Int"
 			|| genericGetDetail != "get():Int")
 			throw "generic recovered receiver did not retain member completion";
+		var genericArgumentService = new LanguageService(),
+			genericArgumentSource = "class Box<T> { public function set(value:T):Void return; } function main():Void { var box = new Box<Int>(); box.set(";
+		genericArgumentService.update("GenericArgument.hx", genericArgumentSource);
+		var genericArgumentContext = genericArgumentService.completionContext("GenericArgument.hx", genericArgumentSource.length);
+		if (genericArgumentContext == null || genericArgumentContext.context.expected != TInt)
+			throw 'generic method argument did not retain the inferred receiver type: ${genericArgumentContext == null ? "null" : Std.string(genericArgumentContext.context.expected)}';
 
 		var importService = new LanguageService();
 		importService.update("lib/Widget.hx", "class Widget {} function main():Void return;");

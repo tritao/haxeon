@@ -680,14 +680,15 @@ class SemanticIndex {
 					var receiverName = name.substring(0, separator),
 						memberName = name.substring(separator + 1),
 						receiver = Variable(receiverName, span),
+						receiverType = recoveredExpressionBindingType(receiver),
 						callee = bindRecoveredMember(receiver, memberName, span);
 					if (callee == null)
 						callee = bindNamed(resolveRecoveredSymbol, name, span);
-					var owner = memberOwner(recoveredExpressionBindingType(receiver));
+					var owner = memberOwner(receiverType);
 					if (callee == null && !isKnownRecoveredMember(receiver, memberName))
 						recordUnresolved(memberName, span);
 					addCall(callee, span, memberName);
-					indexRecoveredCallArguments(arguments, owner == null ? null : recoveredMethod(owner, memberName, []));
+					indexRecoveredCallArguments(arguments, owner == null ? null : recoveredMethod(owner, memberName, []), recoveredTypeSubstitutions(receiverType));
 				} else {
 					var local = bindRecoveredLocal(name, span);
 					if (local == null) {
@@ -712,8 +713,9 @@ class SemanticIndex {
 				addCall(callee, span, name);
 				if (callee == null && !isKnownRecoveredMember(object, name))
 					recordUnresolved(name, span);
-				var owner = memberOwner(recoveredExpressionBindingType(object));
-				indexRecoveredCallArguments(arguments, owner == null ? null : recoveredMethod(owner, name, []));
+				var receiverType = recoveredExpressionBindingType(object),
+					owner = memberOwner(receiverType);
+				indexRecoveredCallArguments(arguments, owner == null ? null : recoveredMethod(owner, name, []), recoveredTypeSubstitutions(receiverType));
 			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _),
 				BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _), UnsignedShiftRight(left, right, _),
 				Less(left, right, _), LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _),
@@ -748,8 +750,11 @@ class SemanticIndex {
 					indexRecoveredExpression(entry.key, mapKeyType(expected));
 					indexRecoveredExpression(entry.value, mapValueType(expected));
 				}
-			case New(name, arguments, _), NewGeneric(name, _, arguments, _):
+			case New(name, arguments, _):
 				indexRecoveredCallArguments(arguments, recoveredFunctionForCall(name));
+			case NewGeneric(name, typeArguments, arguments, _):
+				var receiverType = recoveredType(AppliedType(name, typeArguments));
+				indexRecoveredCallArguments(arguments, recoveredFunctionForCall(name), recoveredTypeSubstitutions(receiverType));
 			case NewArray(_, length, _):
 				indexRecoveredExpression(length, TInt);
 			case Lambda(_, body, _):
@@ -831,7 +836,8 @@ class SemanticIndex {
 				if (id != null && declarationTypes.exists(id)) declarationTypes.get(id); else if (declarations.classes.exists(name))
 					TInstance(compiler.types.Type.NominalKind.Class, name,
 					[]); else if (declarations.interfaces.exists(name)) TInstance(compiler.types.Type.NominalKind.Interface, name, []); else TUnknown;
-			case New(name, _, _), NewGeneric(name, _, _, _): TInstance(compiler.types.Type.NominalKind.Class, name, []);
+			case New(name, _, _): TInstance(compiler.types.Type.NominalKind.Class, name, []);
+			case NewGeneric(name, typeArguments, _, _): recoveredType(AppliedType(name, typeArguments));
 			default: recoveredExpressionType(expression);
 		};
 
@@ -845,19 +851,22 @@ class SemanticIndex {
 			case Variable(name, span): recoveredExpressionBindingType(Variable(name, span));
 			case Member(object, name, _): recoveredMemberType(object, name);
 			case MethodCall(object, name, _, _):
-				var owner = memberOwner(recoveredExpressionBindingType(object));
-				owner == null ? TUnknown : recoveredFunctionResult(owner + "." + name);
+				var receiverType = recoveredExpressionBindingType(object),
+					owner = memberOwner(receiverType);
+				owner == null ? TUnknown : recoveredFunctionResult(owner + "." + name, recoveredTypeSubstitutions(receiverType));
 			case Call(name, _, span):
 				var separator = name.lastIndexOf(".");
 				if (separator > 0) {
 					var receiverName = name.substring(0, separator),
 						memberName = name.substring(separator + 1),
-						owner = memberOwner(recoveredExpressionBindingType(Variable(receiverName, span)));
-					owner == null ? TUnknown : recoveredFunctionResult(owner + "." + memberName);
+						receiverType = recoveredExpressionBindingType(Variable(receiverName, span)),
+						owner = memberOwner(receiverType);
+					owner == null ? TUnknown : recoveredFunctionResult(owner + "." + memberName, recoveredTypeSubstitutions(receiverType));
 				} else recoveredFunctionResult(name);
 			case ArrayLiteral(values, _): TArray(recoveredArrayElementType(values));
 			case MapLiteral(_, _): TMap(TUnknown, TUnknown);
-			case New(name, _, _), NewGeneric(name, _, _, _): TInstance(compiler.types.Type.NominalKind.Class, name, []);
+			case New(name, _, _): TInstance(compiler.types.Type.NominalKind.Class, name, []);
+			case NewGeneric(name, typeArguments, _, _): recoveredType(AppliedType(name, typeArguments));
 			default: TUnknown;
 		};
 
@@ -876,7 +885,7 @@ class SemanticIndex {
 		unresolved.push({name: name, span: span, candidates: candidates});
 	}
 
-	function recoveredType(type:AstType):CompilerType {
+	function recoveredType(type:AstType, ?substitutions:Map<String, CompilerType>):CompilerType {
 		return switch type {
 			case ErrorType(_): TUnknown;
 			case IntType: TInt;
@@ -884,21 +893,22 @@ class SemanticIndex {
 			case FloatType: TFloat;
 			case StringType: TString;
 			case VoidType: TVoid;
-			case ArrayType(element): TArray(recoveredType(element));
-			case MapType(key, value): TMap(recoveredType(key), recoveredType(value));
-			case NullableType(element): TNullable(recoveredType(element));
+			case ArrayType(element): TArray(recoveredType(element, substitutions));
+			case MapType(key, value): TMap(recoveredType(key, substitutions), recoveredType(value, substitutions));
+			case NullableType(element): TNullable(recoveredType(element, substitutions));
 			case NamedType(name):
-				var parameter = currentRecoveredTypeParameters.get(name);
-				parameter == null ? try {
-					declarations.resolve(type);
+				var substitution = substitutions == null ? null : substitutions.get(name),
+					parameter = currentRecoveredTypeParameters.get(name);
+				substitution != null ? substitution : parameter == null ? try {
+					declarations.resolve(type, null, substitutions);
 				} catch (_:Dynamic) {
 					recoveredExternalType(name, []);
 				} : parameter;
 			case AppliedType(name, arguments):
 				try {
-					declarations.resolve(type);
+					declarations.resolve(type, null, substitutions);
 				} catch (_:Dynamic) {
-					recoveredExternalType(name, [for (argument in arguments) recoveredType(argument)]);
+					recoveredExternalType(name, [for (argument in arguments) recoveredType(argument, substitutions)]);
 				}
 			default: TUnknown;
 		};
@@ -925,31 +935,33 @@ class SemanticIndex {
 		return TUnknown;
 	}
 
-	function recoveredFunctionResult(name:String):CompilerType {
+	function recoveredFunctionResult(name:String, ?substitutions:Map<String, CompilerType>):CompilerType {
 		var fn = recoveredFunction(name);
-		return fn == null ? TUnknown : recoveredType(fn.result);
+		return fn == null ? TUnknown : recoveredType(fn.result, substitutions);
 	}
 
-	function recoveredFunctionType(name:String):Null<CompilerType> {
+	function recoveredFunctionType(name:String, ?substitutions:Map<String, CompilerType>):Null<CompilerType> {
 		var fn = recoveredFunction(name);
-		return fn == null ? null : TFunction([for (argument in fn.arguments) recoveredType(argument.type)], recoveredType(fn.result));
+		return fn == null ? null : TFunction([for (argument in fn.arguments) recoveredType(argument.type, substitutions)], recoveredType(fn.result, substitutions));
 	}
 
 	function recoveredMemberType(object:AstExpression, name:String):CompilerType {
 		checkpoint();
-		var owner = memberOwner(recoveredExpressionBindingType(object));
+		var receiverType = recoveredExpressionBindingType(object),
+			owner = memberOwner(receiverType),
+			substitutions = recoveredTypeSubstitutions(receiverType);
 		if (owner == null)
 			return TUnknown;
-		var fieldType = recoveredFieldType(owner, name, []);
+		var fieldType = recoveredFieldType(owner, name, [], substitutions);
 		if (fieldType != null)
 			return fieldType;
-		var functionType = recoveredFunctionType(owner + "." + name);
+		var functionType = recoveredFunctionType(owner + "." + name, substitutions);
 		if (functionType != null)
 			return functionType;
-		return recoveredFunctionResult(owner + "." + name);
+		return recoveredFunctionResult(owner + "." + name, substitutions);
 	}
 
-	function recoveredFieldType(owner:String, name:String, visiting:Array<String>):Null<CompilerType> {
+	function recoveredFieldType(owner:String, name:String, visiting:Array<String>, ?substitutions:Map<String, CompilerType>):Null<CompilerType> {
 		if (visiting.indexOf(owner) >= 0)
 			return null;
 		var nextVisiting = visiting.copy();
@@ -959,12 +971,12 @@ class SemanticIndex {
 			for (field in classDecl.fields) {
 				checkpoint();
 				if (field.name == name && !field.isStatic)
-					return field.type == null ? (field.initializer == null ? TUnknown : recoveredExpressionType(field.initializer)) : recoveredType(field.type);
+					return field.type == null ? (field.initializer == null ? TUnknown : recoveredExpressionType(field.initializer)) : recoveredType(field.type, substitutions);
 			}
 			if (classDecl.base != null) {
 				var base = memberOwner(recoveredType(classDecl.base));
 				if (base != null) {
-					var inherited = recoveredFieldType(base, name, nextVisiting);
+					var inherited = recoveredFieldType(base, name, nextVisiting, substitutions);
 					if (inherited != null)
 						return inherited;
 				}
@@ -1020,11 +1032,11 @@ class SemanticIndex {
 		return TUnknown;
 	}
 
-	function indexRecoveredCallArguments(arguments:Array<AstExpression>, fn:Null<AstFunction>):Void {
+	function indexRecoveredCallArguments(arguments:Array<AstExpression>, fn:Null<AstFunction>, ?substitutions:Map<String, CompilerType>):Void {
 		for (index in 0...arguments.length) {
 			checkpoint();
 			var argument = arguments[index];
-			var expected = fn == null || index >= fn.arguments.length ? null : recoveredType(fn.arguments[index].type);
+			var expected = fn == null || index >= fn.arguments.length ? null : recoveredType(fn.arguments[index].type, substitutions);
 			indexRecoveredExpression(argument, expected);
 		}
 	}
@@ -1942,6 +1954,31 @@ class SemanticIndex {
 			case TInstance(_, name, _): name;
 			default: null;
 		};
+
+	function recoveredTypeSubstitutions(type:CompilerType):Map<String, CompilerType> {
+		var result:Map<String, CompilerType> = [];
+		switch type {
+			case TNullable(element):
+				return recoveredTypeSubstitutions(element);
+			case TInstance(_, name, arguments):
+				var parameters:Null<Array<String>> = null,
+					classDecl = declarations.classes.get(name),
+					interfaceDecl = declarations.interfaces.get(name),
+					abstractDecl = declarations.abstracts.get(name);
+				if (classDecl != null)
+					parameters = classDecl.typeParameters;
+				else if (interfaceDecl != null)
+					parameters = interfaceDecl.typeParameters;
+				else if (abstractDecl != null)
+					parameters = abstractDecl.typeParameters;
+				if (parameters != null)
+					for (index in 0...parameters.length)
+						if (index < arguments.length)
+							result.set(parameters[index], arguments[index]);
+			default:
+		}
+		return result;
+	}
 
 	function localId(fn:TypedFunction, identity:String):SemanticSymbolId
 		return new SemanticSymbolId(module, 'local:${fn.name}:$identity');
