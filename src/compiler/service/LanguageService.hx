@@ -81,6 +81,8 @@ typedef EditorCompletionContext = {
 	final stale:Bool;
 	final recovered:Bool;
 	final confidence:EditorSnapshotConfidence;
+	/** True when the queried binding is usable in the selected current snapshot. */
+	final identityTrusted:Bool;
 }
 
 /** A same-document semantic occurrence, classified for LSP highlighting. */
@@ -219,6 +221,7 @@ private typedef SemanticQueryContext = {
 	final completion:SemanticCompletionContext;
 	final stale:Bool;
 	final confidence:EditorSnapshotConfidence;
+	final identityTrusted:Bool;
 }
 
 /** Read-only editor queries backed by the persistent compiler state. */
@@ -832,7 +835,7 @@ class LanguageService {
 		if (token != null)
 			token.check();
 		var context = semanticQuery(path, position, null, token);
-		if (context == null || context.symbol == null)
+		if (!navigableSymbol(context))
 			return null;
 		return callHierarchyItem(context.symbol);
 	}
@@ -852,7 +855,7 @@ class LanguageService {
 		if (token != null)
 			token.check();
 		var context = semanticQuery(path, position, null, token);
-		if (context == null || context.symbol == null)
+		if (!navigableSymbol(context))
 			return null;
 		return typeHierarchyItem(context.symbol);
 	}
@@ -1210,18 +1213,21 @@ class LanguageService {
 	public function completionContext(path:String, position:Int, ?qualifier:String, ?token:CancellationToken):Null<EditorCompletionContext> {
 		if (token != null)
 			token.check();
-		var state = stateFor(path),
-			snapshot = state == null ? null : editorSnapshot(state),
-			model = snapshot == null ? null : snapshot.semanticModel;
-		if (state == null || snapshot == null || model == null)
+		var snapshot = stateFor(path),
+			selected = snapshot == null ? null : editorSnapshot(snapshot);
+		if (snapshot == null || selected == null || selected.semanticModel == null)
 			return null;
-		var resolvedQualifier = qualifier == null ? memberQualifier(snapshot.source, position) : qualifier;
+		var resolvedQualifier = qualifier == null ? memberQualifier(selected.source, position) : qualifier,
+			query = semanticQuery(path, position, resolvedQualifier, token);
+		if (query == null)
+			return null;
 		return {
-			context: model.index.completionContext(position, resolvedQualifier, token),
-			revision: snapshot.revision,
-			stale: snapshot.stale,
-			recovered: snapshot.recovered,
-			confidence: snapshot.confidence
+			context: query.completion,
+			revision: query.snapshot.revision,
+			stale: query.snapshot.stale,
+			recovered: query.snapshot.recovered,
+			confidence: query.confidence,
+			identityTrusted: query.identityTrusted
 		};
 	}
 
@@ -1836,7 +1842,7 @@ class LanguageService {
 		if (token != null)
 			token.check();
 		var context = semanticQuery(path, position, null, token);
-		if (context == null || context.confidence == EditorSnapshotConfidence.RecoveredPartial)
+		if (!navigableSymbol(context))
 			return null;
 		var target:Null<SemanticSymbolId> = null,
 			symbol = context.symbol == null ? null : compiler.semanticWorkspace.editorSymbol(context.state, context.symbol);
@@ -2041,10 +2047,13 @@ class LanguageService {
 			token.check();
 		var state = stateFor(path),
 			snapshot = state == null ? null : editorSnapshot(state),
-			model = snapshot == null ? null : snapshot.semanticModel;
-		var symbol = model == null ? null : model.index.symbolIdAt(position, token),
+			model = snapshot == null ? null : snapshot.semanticModel,
+			symbol = model == null ? null : model.index.symbolIdAt(position, token),
+			authoritativeIdentity = symbol != null && compiler.semanticWorkspace.indexedSymbol(symbol) != null,
+			currentIdentity = symbol != null && model != null && snapshot != null && model.index.symbol(symbol) != null && !snapshot.stale,
 			confidence = snapshot == null ? null : snapshot.confidence == EditorSnapshotConfidence.RecoveredPartial
-				&& symbol != null ? EditorSnapshotConfidence.RecoveredStable : snapshot.confidence;
+				&& authoritativeIdentity ? EditorSnapshotConfidence.RecoveredStable : snapshot.confidence,
+			identityTrusted = symbol != null && snapshot != null && !snapshot.stale && (authoritativeIdentity || currentIdentity);
 		return state == null || snapshot == null || model == null ? null : {
 			state: state,
 			snapshot: snapshot,
@@ -2052,17 +2061,20 @@ class LanguageService {
 			symbol: symbol,
 			completion: model.index.completionContext(position, qualifier, token),
 			stale: snapshot.stale,
-			confidence: confidence
+			confidence: confidence,
+			identityTrusted: identityTrusted
 		};
 	}
 
 	static function stableSymbol(context:Null<SemanticQueryContext>):Bool
 		return context != null
 			&& context.symbol != null
-			&& (context.confidence == EditorSnapshotConfidence.Exact || context.confidence == EditorSnapshotConfidence.RecoveredStable);
+			&& context.identityTrusted
+			&& !context.stale;
 
 	static function navigableSymbol(context:Null<SemanticQueryContext>):Bool
-		return context != null && context.symbol != null && context.confidence != EditorSnapshotConfidence.RecoveredPartial;
+		return context != null && context.symbol != null
+			&& (context.identityTrusted || context.confidence == EditorSnapshotConfidence.LastGood);
 
 	static function sourceName(name:String):String {
 		var separator = name.lastIndexOf(".");

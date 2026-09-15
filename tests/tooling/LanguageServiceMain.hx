@@ -437,6 +437,11 @@ class LanguageServiceMain {
 			importedInheritedDefinition = importService.definition("editor/InheritedMain.hx", importedInheritedUse + 1);
 		if (importedInheritedDefinition == null || importedInheritedDefinition.path != "editor/util/Widget.hx")
 			throw "recovered imported inherited member navigation did not resolve through the workspace";
+		var importedInheritedContext = importService.completionContext("editor/InheritedMain.hx", importedInheritedUse + 1);
+		if (importedInheritedContext == null
+			|| importedInheritedContext.confidence != EditorSnapshotConfidence.RecoveredStable
+			|| !importedInheritedContext.identityTrusted)
+			throw "recovered authoritative member identity was not marked stable";
 		var aliasedMemberSource = "package editor; import editor.util.Math as M; function main():Int { return M.";
 		importService.update("editor/Main.hx", aliasedMemberSource);
 		var aliasedMemberCompletion = importService.complete("editor/Main.hx", aliasedMemberSource.length),
@@ -1079,6 +1084,12 @@ class LanguageServiceMain {
 			throw "editor update did not publish an immediate recovered snapshot";
 		if (immediateService.editorSnapshotConfidence("Immediate.hx") != EditorSnapshotConfidence.RecoveredPartial)
 			throw "recovered input did not select partial snapshot confidence";
+		var immediateIdentityPosition = "function unfinished(value:Int,".indexOf("unfinished") + 1,
+			immediateIdentityContext = immediateService.completionContext("Immediate.hx", immediateIdentityPosition);
+		if (immediateIdentityContext == null
+			|| immediateIdentityContext.confidence != EditorSnapshotConfidence.RecoveredPartial
+			|| !immediateIdentityContext.identityTrusted)
+			throw "new recovered source identity was incorrectly promoted to authoritative confidence";
 		var immediateRecoveryBuilds = immediateService.recoveredSnapshotBuilds;
 		immediateService.update("Immediate.hx", "function unfinished(value:Int,");
 		if (immediateService.recoveredSnapshotBuilds != immediateRecoveryBuilds)
