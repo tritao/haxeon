@@ -385,17 +385,17 @@ class SemanticIndex {
 					indexRecoveredExpression(value);
 				case Assignment(name, value, span):
 					bindRecoveredLocal(name, span);
-					indexRecoveredExpression(value);
+					indexRecoveredExpression(value, recoveredLocalType(name, span));
 				case Increment(name, _, span):
 					bindRecoveredLocal(name, span);
 				case IndexAssignment(array, offset, value, _):
 					indexRecoveredExpression(array);
-					indexRecoveredExpression(offset);
-					indexRecoveredExpression(value);
+					indexRecoveredExpression(offset, TInt);
+					indexRecoveredExpression(value, indexedValueType(recoveredExpressionType(array)));
 				case FieldAssignment(object, field, value, span):
 					bindRecoveredMember(object, field, span);
 					indexRecoveredExpression(object);
-					indexRecoveredExpression(value);
+					indexRecoveredExpression(value, recoveredMemberType(object, field));
 				case If(predicate, yes, no, _):
 					indexRecoveredExpression(predicate);
 					indexRecoveredStatementUses(yes, expectedReturn);
@@ -476,12 +476,12 @@ class SemanticIndex {
 						} else
 							recordUnresolved(name, span);
 					}
-					indexRecoveredCallArguments(arguments, recoveredFunctions.get(name));
+					indexRecoveredCallArguments(arguments, recoveredFunctionForCall(name));
 				}
 			case ClosureCall(callee, arguments, _):
 				indexRecoveredExpression(callee);
-				for (argument in arguments)
-					indexRecoveredExpression(argument);
+				for (index in 0...arguments.length)
+					indexRecoveredExpression(arguments[index], expectedFunctionArgument(recoveredExpressionType(callee), index));
 			case MethodCall(object, name, arguments, span):
 				indexRecoveredExpression(object);
 				var callee = bindRecoveredMember(object, name, span);
@@ -493,46 +493,53 @@ class SemanticIndex {
 			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _),
 				BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _), UnsignedShiftRight(left, right, _),
 				Less(left, right, _), LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _),
-				NotEqual(left, right, _), And(left, right, _), Or(left, right, _), Index(left, right, _), Range(left, right, _):
+				NotEqual(left, right, _), And(left, right, _), Or(left, right, _):
 				indexRecoveredExpression(left);
 				indexRecoveredExpression(right);
-			case Negate(value, _), Not(value, _), ThrowExpression(value, _), Cast(value, _, _), PostfixIncrement(value, _, _):
+			case Index(array, offset, _):
+				indexRecoveredExpression(array);
+				indexRecoveredExpression(offset, TInt);
+			case Range(start, finish, _):
+				indexRecoveredExpression(start);
+				indexRecoveredExpression(finish);
+			case Negate(value, _), Not(value, _), ThrowExpression(value, _), PostfixIncrement(value, _, _):
 				indexRecoveredExpression(value);
+			case Cast(value, target, _):
+				indexRecoveredExpression(value, target == null ? expected : recoveredType(target));
 			case Conditional(predicate, yes, no, _):
 				indexRecoveredExpression(predicate);
-				indexRecoveredExpression(yes);
-				indexRecoveredExpression(no);
+				indexRecoveredExpression(yes, expected);
+				indexRecoveredExpression(no, expected);
 			case BlockExpression(statements, result, _):
-				indexRecoveredStatementUses(statements);
-				indexRecoveredExpression(result);
+				indexRecoveredStatementUses(statements, expected);
+				indexRecoveredExpression(result, expected);
 			case ArrayLiteral(values, _):
 				for (value in values)
-					indexRecoveredExpression(value);
+					indexRecoveredExpression(value, indexedValueType(expected));
 			case ObjectLiteral(fields, _):
 				for (field in fields)
-					indexRecoveredExpression(field.value);
+					indexRecoveredExpression(field.value, expectedFieldType(expected, field.name));
 			case MapLiteral(entries, _):
 				for (entry in entries) {
-					indexRecoveredExpression(entry.key);
-					indexRecoveredExpression(entry.value);
+					indexRecoveredExpression(entry.key, mapKeyType(expected));
+					indexRecoveredExpression(entry.value, mapValueType(expected));
 				}
-			case New(_, arguments, _), NewGeneric(_, _, arguments, _):
-				for (argument in arguments)
-					indexRecoveredExpression(argument);
+			case New(name, arguments, _), NewGeneric(name, _, arguments, _):
+				indexRecoveredCallArguments(arguments, recoveredFunctionForCall(name));
 			case NewArray(_, length, _):
-				indexRecoveredExpression(length);
+				indexRecoveredExpression(length, TInt);
 			case Lambda(_, body, _):
-				indexRecoveredStatementUses(body);
+				indexRecoveredStatementUses(body, functionResultType(expected));
 			case SwitchExpression(value, cases, fallback, _):
 				indexRecoveredExpression(value);
 				for (item in cases) {
 					indexRecoveredExpression(item.value);
 					if (item.guard != null)
 						indexRecoveredExpression(item.guard);
-					indexRecoveredExpression(item.result);
+					indexRecoveredExpression(item.result, expected);
 				}
 				if (fallback != null)
-					indexRecoveredExpression(fallback);
+					indexRecoveredExpression(fallback, expected);
 			default:
 		}
 	}
@@ -600,7 +607,14 @@ class SemanticIndex {
 			case MethodCall(object, name, _, _):
 				var owner = memberOwner(recoveredExpressionBindingType(object));
 				owner == null ? TUnknown : recoveredFunctionResult(owner + "." + name);
-			case Call(name, _, _): recoveredFunctionResult(name);
+			case Call(name, _, span):
+				var separator = name.lastIndexOf(".");
+				if (separator > 0) {
+					var receiverName = name.substring(0, separator),
+						memberName = name.substring(separator + 1),
+						owner = memberOwner(recoveredExpressionBindingType(Variable(receiverName, span)));
+					owner == null ? TUnknown : recoveredFunctionResult(owner + "." + memberName);
+				} else recoveredFunctionResult(name);
 			case ArrayLiteral(values, _): TArray(recoveredArrayElementType(values));
 			case MapLiteral(_, _): TMap(TUnknown, TUnknown);
 			case New(name, _, _), NewGeneric(name, _, _, _): TInstance(compiler.types.Type.NominalKind.Class, name, []);
@@ -645,6 +659,11 @@ class SemanticIndex {
 		return fn == null ? TUnknown : recoveredType(fn.result);
 	}
 
+	function recoveredFunctionType(name:String):Null<CompilerType> {
+		var fn = recoveredFunctions.get(name);
+		return fn == null ? null : TFunction([for (argument in fn.arguments) recoveredType(argument.type)], recoveredType(fn.result));
+	}
+
 	function recoveredMemberType(object:AstExpression, name:String):CompilerType {
 		var owner = memberOwner(recoveredExpressionBindingType(object));
 		if (owner == null)
@@ -658,8 +677,13 @@ class SemanticIndex {
 		var interfaceDecl = declarations.interfaces.get(owner);
 		if (interfaceDecl != null)
 			for (method in interfaceDecl.methods)
-				if (method.name == name)
-					return recoveredFunctionResult(owner + "." + name);
+				if (method.name == name) {
+					var methodType = recoveredFunctionType(owner + "." + name);
+					return methodType == null ? TUnknown : methodType;
+				}
+		var functionType = recoveredFunctionType(owner + "." + name);
+		if (functionType != null)
+			return functionType;
 		return recoveredFunctionResult(owner + "." + name);
 	}
 
@@ -678,6 +702,73 @@ class SemanticIndex {
 			var expected = fn == null || index >= fn.arguments.length ? null : recoveredType(fn.arguments[index].type);
 			indexRecoveredExpression(argument, expected);
 		}
+	}
+
+	function recoveredLocalType(name:String, span:SourceSpan):Null<CompilerType> {
+		var found:Null<SemanticCompletionLocal> = null;
+		for (local in completionLocals)
+			if (local.name == name
+				&& local.declaration.start <= span.start
+				&& span.start >= local.scope.start
+				&& span.end <= local.scope.end
+				&& (found == null
+					|| local.depth > found.depth
+					|| local.depth == found.depth
+					&& local.declaration.start > found.declaration.start))
+				found = local;
+		return found == null ? null : found.type;
+	}
+
+	function indexedValueType(type:Null<CompilerType>):Null<CompilerType>
+		return switch type {
+			case TArray(element), TIterator(element): element;
+			case TMap(_, value): value;
+			case TNullable(element): indexedValueType(element);
+			default: null;
+		};
+
+	function mapKeyType(type:Null<CompilerType>):Null<CompilerType>
+		return switch type {
+			case TMap(key, _): key;
+			case TNullable(element): mapKeyType(element);
+			default: null;
+		};
+
+	function mapValueType(type:Null<CompilerType>):Null<CompilerType>
+		return switch type {
+			case TMap(_, value): value;
+			case TNullable(element): mapValueType(element);
+			default: null;
+		};
+
+	function expectedFieldType(type:Null<CompilerType>, name:String):Null<CompilerType>
+		return switch type {
+			case TAnonymous(_, fields):
+				for (field in fields)
+					if (field.name == name)
+						return field.type;
+				null;
+			case TNullable(element): expectedFieldType(element, name);
+			default: null;
+		};
+
+	function expectedFunctionArgument(type:Null<CompilerType>, index:Int):Null<CompilerType>
+		return switch type {
+			case TFunction(arguments, _): index < arguments.length ? arguments[index] : null;
+			case TNullable(element): expectedFunctionArgument(element, index);
+			default: null;
+		};
+
+	function functionResultType(type:Null<CompilerType>):Null<CompilerType>
+		return switch type {
+			case TFunction(_, result): result;
+			case TNullable(element): functionResultType(element);
+			default: null;
+		};
+
+	function recoveredFunctionForCall(name:String):Null<AstFunction> {
+		var fn = recoveredFunctions.get(name);
+		return fn == null ? recoveredFunctions.get(name + ".new") : fn;
 	}
 
 	public function symbolIdAt(position:Int):Null<SemanticSymbolId> {

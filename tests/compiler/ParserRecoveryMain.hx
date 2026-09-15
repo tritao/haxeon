@@ -168,6 +168,45 @@ class ParserRecoveryMain {
 				throw 'unfinished call did not retain expected Foo argument type: $expected';
 		}
 
+		var assignmentService = new LanguageService(),
+			assignmentSource = "class Foo {} function main():Void { var value:Foo = new Foo(); value = ";
+		assignmentService.update("ExpectedAssignment.hx", assignmentSource);
+		var assignmentModel = assignmentService.compiler.modules.get("ExpectedAssignment").recoveredSemanticModel;
+		if (assignmentModel == null)
+			throw "missing recovered semantic model for assignment expected-type test";
+		var assignmentExpected = assignmentModel.index.completionContext(assignmentSource.length).expected;
+		switch assignmentExpected {
+			case TInstance(NominalKind.Class, "Foo", _):
+			default:
+				throw 'assignment did not retain expected Foo type: $assignmentExpected';
+		}
+
+		var returnService = new LanguageService(),
+			returnSource = "class Foo {} function main():Foo return ";
+		returnService.update("ExpectedReturn.hx", returnSource);
+		var returnModel = returnService.compiler.modules.get("ExpectedReturn").recoveredSemanticModel;
+		if (returnModel == null)
+			throw "missing recovered semantic model for return expected-type test";
+		var returnExpected = returnModel.index.completionContext(returnSource.length).expected;
+		switch returnExpected {
+			case TInstance(NominalKind.Class, "Foo", _):
+			default:
+				throw 'return did not retain expected Foo type: $returnExpected';
+		}
+
+		var collectionService = new LanguageService(),
+			collectionSource = "class Foo {} function main():Void { var values:Array<Foo> = [";
+		collectionService.update("ExpectedCollection.hx", collectionSource);
+		var collectionModel = collectionService.compiler.modules.get("ExpectedCollection").recoveredSemanticModel;
+		if (collectionModel == null)
+			throw "missing recovered semantic model for collection expected-type test";
+		var collectionExpected = collectionModel.index.completionContext(collectionSource.length).expected;
+		switch collectionExpected {
+			case TInstance(NominalKind.Class, "Foo", _):
+			default:
+				throw 'array literal did not retain expected Foo element type: $collectionExpected';
+		}
+
 		var errorService = new LanguageService(),
 			errorSource = "function main():Void { var broken =";
 		errorService.update("ErrorType.hx", errorSource);
